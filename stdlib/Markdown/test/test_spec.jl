@@ -295,7 +295,7 @@ end
     input = "***\n---\n___\n"
     expected = "<hr />\n<hr />\n<hr />\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 44
     input = "+++\n"
@@ -337,13 +337,13 @@ end
     input = "_____________________________________\n"
     expected = "<hr />\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 51
     input = " - - -\n"
     expected = "<hr />\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 52
     input = " **  * ** * ** * **\n"
@@ -355,13 +355,13 @@ end
     input = "-     -      -      -\n"
     expected = "<hr />\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 54
     input = "- - - -    \n"
     expected = "<hr />\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 55
     input = "_ _ _ _ a\n\na------\n\n---a---\n"
@@ -385,7 +385,7 @@ end
     input = "Foo\n***\nbar\n"
     expected = "<p>Foo</p>\n<hr />\n<p>bar</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 59
     input = "Foo\n---\nbar\n"
