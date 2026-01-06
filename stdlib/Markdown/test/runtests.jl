@@ -1587,3 +1587,5 @@ end
     actual = sprint(show, MIME("text/plain"), m)
     @test expected == actual
 end
+
+include("test_spec.jl")
