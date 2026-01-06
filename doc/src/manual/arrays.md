@@ -551,7 +551,7 @@ julia> B[2, 4, 2, 3]
 71
 ```
 
-When indexing, set the indices from the right until you reach the $3 \times 4$ array you want to choose. In the example above, reading from the right, I first want to choose the $3^{rd}$ outer block. Put another way, I want to choose the $3^{rd}$ element along the fourth dimension. Within that, I want to choose the $2^{nd}$ inner block. Again, put another way, I want to choose the $2^{nd}$ element along the third dimension. This gives me the $3 \times 4$ array I want. Once I have that, I choose the row and column as before -- choose the $2^{nd}$ row and $4^{th}$ column. You can continue to read this from the right, i.e., select the $4^{th}$ element along the second dimension, and then finally select the $2^{nd}$ element along the first dimension. 
+When indexing, set the indices from the right until you reach the $3 \times 4$ array you want to choose. In the example above, reading from the right, I first want to choose the $3^{rd}$ outer block. Put another way, I want to choose the $3^{rd}$ element along the fourth dimension. Within that, I want to choose the $2^{nd}$ inner block. Again, put another way, I want to choose the $2^{nd}$ element along the third dimension. This gives me the $3 \times 4$ array I want. Once I have that, I choose the row and column as before -- choose the $2^{nd}$ row and $4^{th}$ column. You can continue to read this from the right, i.e., select the $4^{th}$ element along the second dimension, and then finally select the $2^{nd}$ element along the first dimension.
 
 We need to provide an index for each dimension, for `A`, we need to provide 2 numbers in the index, for `B` we need to provide 4 numbers in the index, and so on. Otherwise we'll get an error. Except, if you only provide a single number, in which case we'll get an element back. The reason for this is discussed in the [Linear Indexing](@ref) section. For now, remember that we need to provide an index for each dimension.
 
@@ -873,7 +873,7 @@ is internally represented in memory as -
 [ {\color{magenta}1 \; 2 \; 3} \; {\color{cyan}4 \; 5 \; 6} \; {\color{orange}7 \; 8 \; 9} ]
 ```
 
-In fact you can use the [`vec()`](@ref) function to reshape any multi-dimensional array into its column-major one-dimensional form. When only one scalar index is provied, that index no longer represents a location in a particular dimension of the array. Instead, it selects the corresponding element in the column major form of the array. This is known as _linear indexing_. 
+In fact you can use the [`vec()`](@ref) function to reshape any multi-dimensional array into its column-major one-dimensional form. When only one scalar index is provided, that index no longer represents a location in a particular dimension of the array. Instead, it selects the corresponding element in the column major form of the array. This is known as _linear indexing_. 
 
 ```jldoctest linindexing
 julia> A = [2 6; 4 7; 3 1]
@@ -1392,4 +1392,4 @@ optimized BLAS and LAPACK functions using just the pointer and strides.
 
 It is worth emphasizing that strides are about offsets in memory rather than indexing. If
 you are looking to convert between linear (single-index) indexing and cartesian
-(multi-index) indexing, see [`LinearIndices`](@ref) and [`CartesianIndices`](@ref). 
+(multi-index) indexing, see [`LinearIndices`](@ref) and [`CartesianIndices`](@ref).
