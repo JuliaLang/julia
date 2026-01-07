@@ -129,10 +129,8 @@ function print_value(io::IO, codeinfo::CodeInfo, @nospecialize(stmt), stable::Bo
         print_value(io, argument_name(codeinfo, stmt), stable)
     elseif stmt isa QuoteNode && stmt.value isa Symbol
         print_value(io, Base.repr(stmt.value), stable)  # Show :symbol with colon
-    elseif stmt isa Union{AbstractString, AbstractChar}
-        print_value(io, Base.repr(stmt), stable)  # Show "string" with quotes
     else
-        print_value(io, stmt, stable)
+        print_value(io, Base.repr(stmt), stable)
     end
 end
 
