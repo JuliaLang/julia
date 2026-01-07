@@ -953,19 +953,13 @@ function _optimize_lambda_vars!(ctx, ex)
             end
 
         elseif k == K"break_block"
-            # Similar to if - save/restore pattern
-            prev = copy(live)
+            # Skip the first child (break target label) - it's not a @goto target
+            # No save/restore needed: the body always executes (break just exits early)
             has_label = false
-            for child in children(e)
+            for child in children(e)[2:end]
                 has_label |= visit(child)
             end
-            if has_label
-                kill!()
-                return true
-            else
-                restore!(prev)
-                return false
-            end
+            return has_label
 
         else
             has_label = false

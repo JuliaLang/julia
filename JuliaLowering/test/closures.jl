@@ -252,6 +252,24 @@ begin
 end
 """) == 1
 
+# Variable declared outside loop, assigned inside - needs Box (issue #37690)
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_loop_capture()
+        local f
+        local x
+        for k = 1 : 2
+            x = k
+            if k == 1
+                f = () -> x
+            end
+        end
+        f()
+    end
+    f_loop_capture()
+end
+""") == 2
+
 # Label can be jumped to, bypassing assignment - needs Box
 @test_throws UndefVarError(:y, :local) JuliaLowering.include_string(test_mod, """
 let
