@@ -48,6 +48,10 @@ end
         Diagnostic(3, 4, :error, "`@` must appear on first or last macro name component")
     @test diagnostic("@M.(x)") ==
         Diagnostic(1, 3, :error, "dot call syntax not supported for macros")
+    @test diagnostic("a.[x]") ==
+        Diagnostic(1, 5, :error, "brackets are not allowed after `.`")
+    @test diagnostic("a.{x}") ==
+        Diagnostic(1, 5, :error, "brackets are not allowed after `.`")
 
     @test diagnostic("try x end") ==
         Diagnostic(1, 9, :error, "try without catch or finally")
