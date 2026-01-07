@@ -2797,7 +2797,7 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
         for n in kw_names
             # If not using slots for the keyword argument values, still declare
             # them for reflection purposes.
-            push!(kw_val_stmts, @ast ctx n [K"local" n])
+            push!(kw_val_stmts, @ast ctx n [K"local"(meta=CompileHints(:is_internal, true)) n])
         end
         kw_val_vars = SyntaxList(ctx)
         for val in kw_values
@@ -4090,7 +4090,7 @@ function expand_struct_def(ctx, ex, docs)
             # Needed for later constdecl to work, though plain global form may be removed soon.
             [K"global" global_struct_name]
             [K"block"
-                [K"local" struct_name]
+                [K"local"(meta=CompileHints(:is_internal, true)) struct_name]
                 [K"always_defined" struct_name]
                 typevar_stmts...
                 [K"="
