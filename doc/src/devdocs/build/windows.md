@@ -238,9 +238,8 @@ in 32-bit mode).
 ## Distribution to other machines
 
 If you intend to run this copy of Julia on a different x86-64 machine than it was compiled
-on, add `JULIA_CPU_TARGET=generic` to `Make.user`. A more specific target will produce
-more optimized code for more advanced CPUs; currently, x86-64 Julia distributions are built
-with `generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1);x86_64_v4,-rdrnd,base(1)`.
+on, add `JULIA_CPU_TARGET=` to `Make.user`. Currently, x86-64 Julia distributions are built
+with `JULIA_CPU_TARGET=generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1);x86_64_v4,-rdrnd,base(1)`.
 [See here for more on this environment variable.](https://docs.julialang.org/en/v1/manual/environment-variables/#JULIA_CPU_TARGET)
 
 ## Debugging a cross-compiled build under wine
