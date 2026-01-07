@@ -773,8 +773,16 @@ function _optimize_lambda_vars!(ctx, ex)
     candidates = Set{IdTag}()
     for (id, _) in lambda_bindings.locals_capt
         binfo = get_binding(ctx, id)
-        if binfo.is_captured && binfo.is_assigned_once && binfo.kind == :local
+        if (binfo.is_captured && binfo.is_assigned_once &&
+            (binfo.kind == :local || binfo.kind == :argument))
             push!(candidates, id)
+            # For arguments, reset is_always_defined so we can determine if the
+            # outer-scope assignment dominates the capture. Arguments start with
+            # is_always_defined=true, but if they're reassigned inside a closure
+            # (not in outer scope), we need the liveness analysis to decide.
+            if binfo.kind == :argument
+                binfo.is_always_defined = false
+            end
         end
     end
     isempty(candidates) && return

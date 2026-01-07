@@ -902,6 +902,50 @@ end
 23  (return %₂₂)
 
 ########################################
+# Argument reassigned in outer scope - no Box needed
+function f_arg_reassign(x)
+    x = 1
+    return ()->x
+end
+#---------------------
+1   (method TestMod.f_arg_reassign)
+2   latestworld
+3   (call core.svec :x)
+4   (call core.svec false)
+5   (call JuliaLowering.eval_closure_type TestMod :#f_arg_reassign#->##0 %₃ %₄)
+6   latestworld
+7   TestMod.#f_arg_reassign#->##0
+8   (call core.svec %₇)
+9   (call core.svec)
+10  SourceLocation::3:12
+11  (call core.svec %₈ %₉ %₁₀)
+12  --- method core.nothing %₁₁
+    slots: [slot₁/#self#(!read)]
+    1   (call core.getfield slot₁/#self# :x)
+    2   (return %₁)
+13  latestworld
+14  TestMod.f_arg_reassign
+15  (call core.Typeof %₁₄)
+16  (call core.svec %₁₅ core.Any)
+17  (call core.svec)
+18  SourceLocation::1:10
+19  (call core.svec %₁₆ %₁₇ %₁₈)
+20  --- method core.nothing %₁₉
+    slots: [slot₁/#self#(!read) slot₂/x(single_assign) slot₃/x(!read)]
+    1   (= slot₃/x slot₂/x)
+    2   (= slot₃/x 1)
+    3   TestMod.#f_arg_reassign#->##0
+    4   slot₃/x
+    5   (call core.typeof %₄)
+    6   (call core.apply_type %₃ %₅)
+    7   slot₃/x
+    8   (new %₆ %₇)
+    9   (return %₈)
+21  latestworld
+22  TestMod.f_arg_reassign
+23  (return %₂₂)
+
+########################################
 # Label can be jumped to, bypassing assignment - needs Box
 let
     @goto L

@@ -241,6 +241,17 @@ method_ex = lower_str(test_mod, "Base.Experimental.@opaque x -> 2x").args[1].cod
 @test method_ex.args[1] === nothing
 @test method_ex.args[4] isa LineNumberNode
 
+# Argument reassigned in outer scope - no Box needed
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_arg_reassign(x)
+        x = 1
+        return ()->x
+    end
+    f_arg_reassign(100)()
+end
+""") == 1
+
 # Label can be jumped to, bypassing assignment - needs Box
 @test_throws UndefVarError(:y, :local) JuliaLowering.include_string(test_mod, """
 let

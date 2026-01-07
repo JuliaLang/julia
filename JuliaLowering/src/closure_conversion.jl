@@ -306,12 +306,13 @@ function is_boxed(binfo::BindingInfo)
     # * :argument when it's not reassigned
     # * :static_parameter (these can't be reassigned)
     defined_but_not_assigned = binfo.is_always_defined && !binfo.is_assigned
-    # * Single-assigned LOCAL variables that are assigned before any closure captures them
+    # * Single-assigned variables (local or argument) assigned before any closure captures them
     #   (identified by liveness analysis in optimize_captured_vars!)
-    #   This optimization only applies to locals, not arguments, because n_assigned
-    #   counts assignments inside closures too, and arguments that are reassigned
-    #   inside closures still need boxing.
-    single_assigned_never_undef = binfo.kind == :local && binfo.is_always_defined && binfo.is_assigned_once
+    #   For arguments, the liveness analysis resets is_always_defined and only sets it back
+    #   if the outer-scope assignment dominates all captures. This distinguishes arguments
+    #   reassigned in outer scope (no box) from those reassigned only inside closures (needs box).
+    single_assigned_never_undef = binfo.kind in (:local, :argument) &&
+                                  binfo.is_always_defined && binfo.is_assigned_once
     return binfo.is_captured && !defined_but_not_assigned && !single_assigned_never_undef
 end
 
