@@ -387,7 +387,7 @@ end
         code1
 
         code2
-    """ |> html == "<pre><code>code1\n\ncode2</code></pre>\n" # single code block
+    """ |> html == "<pre><code>code1\n\ncode2\n</code></pre>\n" # single code block
 
     # @test md"""
     # - Foo
@@ -1100,7 +1100,8 @@ end
             """
             <ol>
             <li><p>A paragraph with two lines.</p>
-            <pre><code>indented code</code></pre>
+            <pre><code>indented code
+            </code></pre>
             <blockquote>
             <p>A block quote.</p>
             </blockquote>
@@ -1119,7 +1120,8 @@ end
             <ul>
             <li><p>baz</p>
             </li>
-            <li><pre><code>foo</code></pre>
+            <li><pre><code>foo
+            </code></pre>
             </li>
             </ul>
             <ol>
@@ -1492,7 +1494,8 @@ end
     <pre><code class="language-julia">domaths(x::Number) = x + 5
 
 
-    domath(x::Int) = x + 10</code></pre>
+    domath(x::Int) = x + 10
+    </code></pre>
     </li>
     <li><p>another entry, now testing code blocks without fences</p>
     <pre><code># this is a code block
@@ -1500,7 +1503,8 @@ end
 
 
     # Two empty lines don't interrupt the code
-    y = x * 3</code></pre>
+    y = x * 3
+    </code></pre>
     </li>
     <li><p>a final list entry</p>
     </li>
