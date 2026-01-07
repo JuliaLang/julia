@@ -36,6 +36,9 @@ echo "    end"
 echo "end"
 echo ""
 
+# Counter the user's git config to show the signature in logs.
+gitnosig="-c log.showSignature=false"
+
 cd $1
 
 # If the script didn't ask not to use git info
@@ -50,7 +53,7 @@ origin=$(git config -l 2>/dev/null | grep 'remote\.\w*\.url.*JuliaLang/julia' | 
 if [ -z "$origin" ]; then
     origin="origin/"
 fi
-git_time=$(git log -1 --pretty=format:%ct)
+git_time=$(git $gitnosig log -1 --pretty=format:%ct)
 
 #collect the contents
 commit=$(git rev-parse HEAD)
@@ -89,7 +92,7 @@ case $(uname) in
     fi
     ;;
   MINGW*)
-    git_time=$(git log -1 --pretty=format:%ci)
+    git_time=$(git $gitnosig log -1 --pretty=format:%ci)
     date_string="$(date --date="$git_time" -u '+%Y-%m-%d %H:%M %Z')"
     ;;
   *)
@@ -102,7 +105,7 @@ else
     tagged_commit="false"
 fi
 fork_master_distance=$(git rev-list HEAD ^"$(echo $origin)master" | wc -l | sed -e 's/[^[:digit:]]//g')
-fork_master_timestamp=$(git show -s $(git merge-base HEAD $(echo $origin)master) --format=format:"%ct")
+fork_master_timestamp=$(git $gitnosig show -s $(git merge-base HEAD $(echo $origin)master) --format=format:"%ct")
 
 # Check for errors and emit default value for missing numbers.
 if [ -z "$build_number" ]; then
