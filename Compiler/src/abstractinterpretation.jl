@@ -3665,6 +3665,9 @@ function abstract_eval_partition_load(interp::Union{AbstractInterpreter,Nothing}
             # inference results in an earlier world.
             return RTEffects(Any, UndefVarError, local_getglobal_effects)
         end
+        if isdepwarn
+            ccall(:jl_binding_deprecation_check, Cvoid, (Any,), binding)
+        end
         rt = Const(partition_restriction(partition))
         return RTEffects(rt, Union{}, Effects(EFFECTS_TOTAL,
             inaccessiblememonly=is_mutation_free_argtype(rt) ? ALWAYS_TRUE : ALWAYS_FALSE,
