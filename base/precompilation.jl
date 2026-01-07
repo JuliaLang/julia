@@ -560,6 +560,21 @@ function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
                    IOContext{IO}(io), fancyprint, manifest, ignore_loaded)
 end
 
+function _visit_indirect_deps!(direct_deps::Dict{PkgId, Vector{PkgId}}, visited::Set{PkgId},
+                               node::PkgId, all_deps::Set{PkgId})
+    if node in visited
+        return
+    end
+    push!(visited, node)
+    for dep in get(Set{PkgId}, direct_deps, node)
+        if !(dep in all_deps)
+            push!(all_deps, dep)
+            _visit_indirect_deps!(direct_deps, visited, dep, all_deps)
+        end
+    end
+    return
+end
+
 function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                          internal_call::Bool,
                          strict::Bool,
@@ -705,25 +720,12 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
 
     # A package depends on an extension if it (indirectly) depends on all extension triggers
     function expand_indirect_dependencies(direct_deps)
-        function visit!(visited, node, all_deps)
-            if node in visited
-                return
-            end
-            push!(visited, node)
-            for dep in get(Set{Base.PkgId}, direct_deps, node)
-                if !(dep in all_deps)
-                    push!(all_deps, dep)
-                    visit!(visited, dep, all_deps)
-                end
-            end
-        end
-
         local indirect_deps = Dict{Base.PkgId, Set{Base.PkgId}}()
         for package in keys(direct_deps)
             # Initialize a set to keep track of all dependencies for 'package'
             all_deps = Set{Base.PkgId}()
             visited = Set{Base.PkgId}()
-            visit!(visited, package, all_deps)
+            _visit_indirect_deps!(direct_deps, visited, package, all_deps)
             # Update direct_deps with the complete set of dependencies for 'package'
             indirect_deps[package] = all_deps
         end

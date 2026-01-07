@@ -1104,6 +1104,39 @@ function codeinst_as_edge(interp::AbstractInterpreter, sv::InferenceState, @nosp
     return ci
 end
 
+function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, result::InferenceResult,
+                                    method::Method, edge_ci::Union{Nothing,CodeInstance},
+                                    edgecycle::Bool, edgelimited::Bool)
+    mresult = Future{MethodCallResult}()
+    push!(caller.tasks, function get_infer_result(interp, caller)
+        update_valid_age!(caller, get_inference_world(interp), frame.valid_worlds)
+        isinferred = is_inferred(frame)
+        effects = nothing
+        edge = nothing
+        call_result = nothing
+        if isinferred
+            edge = result.ci
+            if edge_ci isa CodeInstance && codeinst_edges_sub(edge_ci, edge.min_world, edge.max_world, edge.edges)
+                edge = edge_ci # override the edge for tracking invalidation
+            end
+            result.ci_as_edge = edge # override the edge for tracking purposes
+            effects = result.ipo_effects # effects are adjusted already within `finish` for ipo_effects
+            call_result = result
+        else
+            effects = adjust_effects(effects_for_cycle(frame.ipo_effects), method)
+            add_cycle_backedge!(caller, frame)
+        end
+        bestguess = frame.bestguess
+        exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
+        # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
+        # note that this result is cached globally exclusively, so we can use this local result destructively
+        mresult[] = MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects,
+            edge, edgecycle, edgelimited, call_result)
+        return true
+    end)
+    return mresult
+end
+
 # compute (and cache) an inferred AST and return the current best estimate of the result type
 function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, caller::AbsIntState, edgecycle::Bool, edgelimited::Bool)
     mi = specialize_method(method, atype, sparams)
@@ -1204,35 +1237,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         assign_parentchild!(frame, caller)
         # the actual inference task for this edge is going to be scheduled within `typeinf_local` via the callstack queue
         # while splitting off the rest of the work for this caller into a separate workq thunk
-        let mresult = Future{MethodCallResult}()
-            push!(caller.tasks, function get_infer_result(interp, caller)
-                update_valid_age!(caller, get_inference_world(interp), frame.valid_worlds)
-                local isinferred = is_inferred(frame)
-                local effects
-                local edge = nothing
-                local call_result = nothing
-                if isinferred
-                    edge = result.ci
-                    if edge_ci isa CodeInstance && codeinst_edges_sub(edge_ci, edge.min_world, edge.max_world, edge.edges)
-                        edge = edge_ci # override the edge for tracking invalidation
-                    end
-                    result.ci_as_edge = edge # override the edge for tracking purposes
-                    effects = result.ipo_effects # effects are adjusted already within `finish` for ipo_effects
-                    call_result = result
-                else
-                    effects = adjust_effects(effects_for_cycle(frame.ipo_effects), method)
-                    add_cycle_backedge!(caller, frame)
-                end
-                local bestguess = frame.bestguess
-                local exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
-                # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
-                # note that this result is cached globally exclusively, so we can use this local result destructively
-                mresult[] = MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects,
-                    edge, edgecycle, edgelimited, call_result)
-                return true
-            end)
-            return mresult
-        end
+        return _schedule_edge_infer_task!(caller, frame, result, method, edge_ci, edgecycle, edgelimited)
     elseif frame === true
         # unresolvable cycle
         add_remark!(interp, caller, "[typeinf_edge] Unresolvable cycle")
