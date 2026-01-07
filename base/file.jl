@@ -771,13 +771,15 @@ function _win_mkstemp(temppath::AbstractString)
     lentname = something(findfirst(iszero, tname))
     @assert lentname > 0
     resize!(tname, lentname - 1)
-    return transcode(String, tname)
+    return lstrip(transcode(String, tname), '\\')
 end
 
 function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
+    absparent = joinpath(pwd(), parent)
     filename = _win_mkstemp(parent)
-    cleanup && temp_cleanup_later(filename)
-    return (filename, Base.open(filename, "r+"))
+    filepath = joinpath(absparent, filename)
+    cleanup && temp_cleanup_later(filepath)
+    return (filename, open(filepath, "r+"))
 end
 
 else # !windows
@@ -787,7 +789,8 @@ function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
     b = joinpath(parent, temp_prefix * "XXXXXX")
     p = ccall(:mkstemp, Int32, (Cstring,), b) # modifies b
     systemerror(:mktemp, p == -1)
-    cleanup && temp_cleanup_later(b)
+    filepath = joinpath(pwd(), b)
+    cleanup && temp_cleanup_later(filepath)
     return (b, fdio(p, true))
 end
 
