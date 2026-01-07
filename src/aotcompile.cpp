@@ -676,7 +676,6 @@ static Function *emit_pkg_plt_thunk(jl_codegen_output_t &out, jl_code_instance_t
                               out.make_name(JL_SYM_JLPLT, Name), &M);
     F->setCallingConv(CallSite->getCallingConv());
     AttrBuilder Attrs{Ctx};
-    Attrs.addAttribute(Attribute::NoInline);
     Attrs.addAttribute("frame-pointer", "none");
     Attrs.addAttribute("thunk");
 
@@ -686,13 +685,15 @@ static Function *emit_pkg_plt_thunk(jl_codegen_output_t &out, jl_code_instance_t
 
     if (Code) {
         Attrs.addAttribute(Attribute::Naked);
+        Attrs.addAttribute(Attribute::NoInline);
         auto AsmTy = FunctionType::get(Type::getVoidTy(Ctx), {PtrTy}, false);
         auto Call = B.CreateCall(InlineAsm::get(AsmTy, Code, "s", true, false), {GV});
         Call->addFnAttr(Attribute::NoReturn);
         B.CreateUnreachable();
     }
     else {
-        // Generic fallback that may be inefficient but won't mangle registers.
+        // Generic fallback that won't mangle registers, but may save and
+        // restore all registers even when it isn't necessary.
         auto FPtr = B.CreateAlignedLoad(PtrTy, GV, out.DL.getPointerABIAlignment(0));
         auto Call = B.CreateCall(FTy, FPtr, {});
         Call->setTailCallKind(CallInst::TCK_MustTail);
