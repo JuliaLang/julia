@@ -781,7 +781,11 @@ function _optimize_lambda_vars!(ctx, ex)
     seen = Set{IdTag}()
     decl = Set{IdTag}()
 
-    # When control flow is seen, move live variables back to unused
+    # At CFG merge points, we lose certainty about which path was taken,
+    # so variables assigned in one branch may not have been assigned.
+    # Move live variables back to unused to require re-assignment.
+    # NOTE: This is NOT needed at branch points (return/break/goto) because
+    # code after them is unreachable - only at merge points (if/while/label).
     function kill!()
         union!(unused, live)
         empty!(live)
@@ -890,11 +894,9 @@ function _optimize_lambda_vars!(ctx, ex)
 
         elseif k == K"return"
             has_label = numchildren(e) >= 1 ? visit(e[1]) : false
-            kill!()
             return has_label
 
         elseif k in KSet"break symbolic_goto"
-            kill!()
             return false
 
         elseif k == K"symbolic_label"
