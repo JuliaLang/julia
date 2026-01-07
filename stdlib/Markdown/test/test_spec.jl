@@ -136,7 +136,7 @@ end
     input = "<https://example.com?find=\\*>\n"
     expected = "<p><a href=\"https://example.com?find=%5C*\">https://example.com?find=\\*</a></p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 21
     input = "<a href=\"/bar\\/)\">\n"
@@ -2204,7 +2204,7 @@ end
     input = "<https://foo.bar.`baz>`\n"
     expected = "<p><a href=\"https://foo.bar.%60baz\">https://foo.bar.`baz</a>`</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 347
     input = "```foo``\n"
@@ -3154,7 +3154,7 @@ end
     input = "[link](foo\\bar)\n"
     expected = "<p><a href=\"foo%5Cbar\">link</a></p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 503
     input = "[link](foo%20b&auml;)\n"
@@ -3166,7 +3166,7 @@ end
     input = "[link](\"title\")\n"
     expected = "<p><a href=\"%22title%22\">link</a></p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 505
     input = "[link](/url \"title\")\n[link](/url 'title')\n[link](/url (title))\n"
@@ -3184,7 +3184,7 @@ end
     input = "[link](/url\uA0\"title\")\n"
     expected = "<p><a href=\"/url%C2%A0%22title%22\">link</a></p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 508
     input = "[link](/url \"title \"and\" title\")\n"
@@ -3774,7 +3774,7 @@ end
     input = "<https://example.com/\\[\\>\n"
     expected = "<p><a href=\"https://example.com/%5C%5B%5C\">https://example.com/\\[\\</a></p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 604
     input = "<foo@bar.example.com>\n"
