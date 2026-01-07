@@ -17,7 +17,7 @@ include("rich.jl")
 # URIs.jl package, but that is not an option for us, as it is not a stdlib...
 #
 # As a special affordance, we deviate from the "reserved" list in one way: we
-# do *not* excllude '[' and ']' from percent encoding, even thoug they are in
+# do *not* exclude '[' and ']' from percent encoding, even though they are in
 # the gen-delims set. They are only used to encode IPv6 literal addresses in
 # the URI, which is (still) rare. But they do occur in query strings and
 # indeed in the CommonMark spec tests.
