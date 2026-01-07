@@ -263,33 +263,34 @@ end
 7   SourceLocation::1:10
 8   (call core.svec %₅ %₆ %₇)
 9   --- method core.nothing %₈
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/tmp(!read) slot₄/tmp(!read)]
-    1   1
-    2   TestMod.Int
-    3   (= slot₃/tmp %₁)
-    4   slot₃/tmp
-    5   (call core.isa %₄ %₂)
-    6   (gotoifnot %₅ label₈)
-    7   (goto label₁₁)
-    8   slot₃/tmp
-    9   (call top.convert %₂ %₈)
-    10  (= slot₃/tmp (call core.typeassert %₉ %₂))
-    11  slot₃/tmp
-    12  (= slot₂/x %₁₁)
-    13  2.0
-    14  TestMod.Int
-    15  (= slot₄/tmp %₁₃)
-    16  slot₄/tmp
-    17  (call core.isa %₁₆ %₁₄)
-    18  (gotoifnot %₁₇ label₂₀)
-    19  (goto label₂₃)
-    20  slot₄/tmp
-    21  (call top.convert %₁₄ %₂₀)
-    22  (= slot₄/tmp (call core.typeassert %₂₁ %₁₄))
-    23  slot₄/tmp
-    24  (= slot₂/x %₂₃)
-    25  slot₂/x
-    26  (return %₂₅)
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/tmp(!read) slot₄/tmp(!read) slot₅/x(!read)]
+    1   (= slot₅/x slot₂/x)
+    2   1
+    3   TestMod.Int
+    4   (= slot₃/tmp %₂)
+    5   slot₃/tmp
+    6   (call core.isa %₅ %₃)
+    7   (gotoifnot %₆ label₉)
+    8   (goto label₁₂)
+    9   slot₃/tmp
+    10  (call top.convert %₃ %₉)
+    11  (= slot₃/tmp (call core.typeassert %₁₀ %₃))
+    12  slot₃/tmp
+    13  (= slot₅/x %₁₂)
+    14  2.0
+    15  TestMod.Int
+    16  (= slot₄/tmp %₁₄)
+    17  slot₄/tmp
+    18  (call core.isa %₁₇ %₁₅)
+    19  (gotoifnot %₁₈ label₂₁)
+    20  (goto label₂₄)
+    21  slot₄/tmp
+    22  (call top.convert %₁₅ %₂₁)
+    23  (= slot₄/tmp (call core.typeassert %₂₂ %₁₅))
+    24  slot₄/tmp
+    25  (= slot₅/x %₂₄)
+    26  slot₅/x
+    27  (return %₂₆)
 10  latestworld
 11  TestMod.f
 12  (return %₁₁)

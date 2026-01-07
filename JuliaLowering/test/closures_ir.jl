@@ -130,21 +130,24 @@ end
 18  SourceLocation::1:10
 19  (call core.svec %₁₆ %₁₇ %₁₈)
 20  --- method core.nothing %₁₉
-    slots: [slot₁/#self#(!read) slot₂/x(single_assign) slot₃/g(single_assign,called) slot₄/x(!read,maybe_undef)]
-    1   (= slot₂/x (call core.Box slot₂/x))
-    2   TestMod.#f#g##0
-    3   (new %₂ slot₂/x)
-    4   (= slot₃/g %₃)
-    5   slot₃/g
-    6   (call %₅)
-    7   slot₂/x
-    8   (call core.isdefined %₇ :contents)
-    9   (gotoifnot %₈ label₁₁)
-    10  (goto label₁₃)
-    11  (newvar slot₄/x)
-    12  slot₄/x
-    13  (call core.getfield %₇ :contents)
-    14  (return %₁₃)
+    slots: [slot₁/#self#(!read) slot₂/x(single_assign) slot₃/g(single_assign,called) slot₄/x(!read,maybe_undef) slot₅/x(!read)]
+    1   (= slot₅/x slot₂/x)
+    2   slot₅/x
+    3   (= slot₅/x (call core.Box %₂))
+    4   TestMod.#f#g##0
+    5   slot₅/x
+    6   (new %₄ %₅)
+    7   (= slot₃/g %₆)
+    8   slot₃/g
+    9   (call %₈)
+    10  slot₅/x
+    11  (call core.isdefined %₁₀ :contents)
+    12  (gotoifnot %₁₁ label₁₄)
+    13  (goto label₁₆)
+    14  (newvar slot₄/x)
+    15  slot₄/x
+    16  (call core.getfield %₁₀ :contents)
+    17  (return %₁₆)
 21  latestworld
 22  TestMod.f
 23  (return %₂₂)
