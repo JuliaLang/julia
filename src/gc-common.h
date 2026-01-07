@@ -24,7 +24,9 @@
 #include <malloc.h> // for malloc_trim
 #endif
 
+#ifdef MIMALLOC_ENABLED
 #include "mimalloc.h"
+#endif
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -189,7 +191,7 @@ STATIC_INLINE void *jl_realloc_aligned_wrapper(void *d, size_t sz, size_t oldsz,
     if (align <= 16)
         return realloc(d, sz);
 #endif
-    void *b = jl_malloc_aligned(sz, align);
+    void *b = jl_malloc_aligned_wrapper(sz, align);
     if (b != NULL) {
         memcpy(b, d, oldsz > sz ? sz : oldsz);
         free(d);

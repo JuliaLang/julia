@@ -64,6 +64,9 @@ USE_SYSTEM_P7ZIP:=0
 USE_SYSTEM_MIMALLOC:=0
 USE_SYSTEM_LLD:=0
 
+# Use mimalloc as the allocator (disable when using sanitizers)
+WITH_MIMALLOC := 1
+
 # Link libjulia-internal with static libgcc and libstdc++
 USE_RT_STATIC_LIBGCC:=1
 USE_RT_STATIC_LIBSTDCXX:=1
@@ -838,6 +841,8 @@ endif
 JCXXFLAGS += $(SANITIZE_OPTS)
 JCFLAGS += $(SANITIZE_OPTS)
 JLDFLAGS += $(SANITIZE_LDFLAGS)
+# Sanitizers need to intercept malloc/free, so disable mimalloc
+WITH_MIMALLOC := 0
 endif # SANITIZE
 
 TAR := $(shell which gtar 2>/dev/null || which tar 2>/dev/null)
@@ -1388,12 +1393,19 @@ else
   LIBUV_INC := $(build_includedir)
 endif
 
+ifeq ($(WITH_MIMALLOC), 1)
 ifeq ($(OS), WINNT)
 MIMALLOC := $(build_libdir)/libmimalloc-static.a
 else
 MIMALLOC := $(build_libdir)/libmimalloc.a
 endif
 MIMALLOC_INC := $(build_includedir)
+JCFLAGS += -DMIMALLOC_ENABLED
+JCXXFLAGS += -DMIMALLOC_ENABLED
+else
+MIMALLOC :=
+MIMALLOC_INC :=
+endif
 
 ifeq ($(USE_SYSTEM_UTF8PROC), 1)
   LIBUTF8PROC := -lutf8proc
