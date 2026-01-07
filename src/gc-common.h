@@ -91,7 +91,7 @@ extern jl_gc_callback_list_t *gc_cblist_notify_gc_pressure;
 // =========================================================================== //
 // malloc wrappers
 // =========================================================================== //
-#define MIMALLOC_ENABLED 1
+
 
 #ifdef MIMALLOC_ENABLED
 STATIC_INLINE void *jl_malloc_wrapper(size_t sz)

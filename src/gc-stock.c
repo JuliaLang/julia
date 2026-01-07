@@ -213,7 +213,7 @@ int under_pressure = 0;
 static int64_t live_bytes = 0;
 static int64_t promoted_bytes = 0;
 static int64_t last_live_bytes = 0; // live_bytes at last collection
-#ifdef __GLIBC__
+#if defined(__GLIBC__) || defined(MIMALLOC_ENABLED)
 // maxrss at last malloc_trim
 static int64_t last_trim_maxrss = 0;
 #endif

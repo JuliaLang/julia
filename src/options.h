@@ -79,6 +79,9 @@
 // GC_SMALL_PAGE allocates objects in 4k pages
 // #define GC_SMALL_PAGE
 
+// Use mimalloc instead of libc malloc
+#define MIMALLOC_ENABLED 1
+
 
 // method dispatch profiling --------------------------------------------------
 
