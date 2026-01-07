@@ -92,12 +92,12 @@ if Sys.isunix()
         # disable coredumps for this process
         p = open(pipeline(`$exename -e $script`, stderr=errp), "r")
         @test read(p, UInt8) == UInt8('r')
-        # The process might ignore the first SIGQUIT, since it will try to then run cleanup,
-        # which may fail for many reasons.
-        # The process will not ignore the second SIGQUIT, but the kernel might ignore it.
-        # So keep sending SIGQUIT every few seconds until the kernel delivers the second one
-        # and `p` exits.
-        t = Timer(0, interval=10) do t; Base.kill(p, Base.SIGQUIT); end
+        # The process may crash (SIGSEGV) during signal handler cleanup,
+        # or ignore the first SIGQUIT while running cleanup handlers.
+        # Keep sending SIGQUIT periodically until the process terminates.
+        t = Timer(0, interval=10) do _
+            Base.kill(p, Base.SIGQUIT)
+        end
         wait(p)
         close(t)
         err_s = readchomp(errp)
