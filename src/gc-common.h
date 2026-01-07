@@ -94,28 +94,28 @@ extern jl_gc_callback_list_t *gc_cblist_notify_gc_pressure;
 
 
 #ifdef MIMALLOC_ENABLED
-STATIC_INLINE void *jl_malloc_wrapper(size_t sz)
+STATIC_INLINE void *jl_malloc_wrapper(size_t sz) JL_NOTSAFEPOINT
 {
     return mi_malloc(sz);
 }
-STATIC_INLINE void *jl_calloc_wrapper(size_t nm, size_t sz)
+STATIC_INLINE void *jl_calloc_wrapper(size_t nm, size_t sz) JL_NOTSAFEPOINT
 {
     return mi_calloc(nm, sz);
 }
-STATIC_INLINE void *jl_realloc_wrapper(void *p, size_t sz)
+STATIC_INLINE void *jl_realloc_wrapper(void *p, size_t sz) JL_NOTSAFEPOINT
 {
     return mi_realloc(p, sz);
 }
-STATIC_INLINE void jl_free_wrapper(void *p)
+STATIC_INLINE void jl_free_wrapper(void *p) JL_NOTSAFEPOINT
 {
     mi_free(p);
 }
-STATIC_INLINE void *jl_malloc_aligned_wrapper(size_t sz, size_t align)
+STATIC_INLINE void *jl_malloc_aligned_wrapper(size_t sz, size_t align) JL_NOTSAFEPOINT
 {
     return mi_malloc_aligned(sz, align);
 }
 STATIC_INLINE void *jl_realloc_aligned_wrapper(void *p, size_t sz, size_t oldsz,
-                                       size_t align)
+                                       size_t align) JL_NOTSAFEPOINT
 {
     return mi_realloc_aligned(p, sz, align);
 }
@@ -124,28 +124,28 @@ STATIC_INLINE void jl_free_aligned_wrapper(void *p) JL_NOTSAFEPOINT
     mi_free(p);
 }
 #elif defined(_OS_WINDOWS_)
-STATIC_INLINE void *jl_malloc_wrapper(size_t sz)
+STATIC_INLINE void *jl_malloc_wrapper(size_t sz) JL_NOTSAFEPOINT
 {
     return malloc(sz);
 }
-STATIC_INLINE void *jl_calloc_wrapper(size_t nm, size_t sz)
+STATIC_INLINE void *jl_calloc_wrapper(size_t nm, size_t sz) JL_NOTSAFEPOINT
 {
     return calloc(nm, sz);
 }
-STATIC_INLINE void *jl_realloc_wrapper(void *p, size_t sz)
+STATIC_INLINE void *jl_realloc_wrapper(void *p, size_t sz) JL_NOTSAFEPOINT
 {
     return realloc(p, sz);
 }
-STATIC_INLINE void *jl_free_wrapper(void *p)
+STATIC_INLINE void jl_free_wrapper(void *p) JL_NOTSAFEPOINT
 {
     free(p);
 }
-STATIC_INLINE void *jl_malloc_aligned_wrapper(size_t sz, size_t align)
+STATIC_INLINE void *jl_malloc_aligned_wrapper(size_t sz, size_t align) JL_NOTSAFEPOINT
 {
     return _aligned_malloc(sz ? sz : 1, align);
 }
 STATIC_INLINE void *jl_realloc_aligned_wrapper(void *p, size_t sz, size_t oldsz,
-                                       size_t align)
+                                       size_t align) JL_NOTSAFEPOINT
 {
     (void)oldsz;
     return _aligned_realloc(p, sz ? sz : 1, align);
@@ -155,23 +155,23 @@ STATIC_INLINE void jl_free_aligned_wrapper(void *p) JL_NOTSAFEPOINT
     _aligned_free(p);
 }
 #else
-STATIC_INLINE void *jl_malloc_wrapper(size_t sz)
+STATIC_INLINE void *jl_malloc_wrapper(size_t sz) JL_NOTSAFEPOINT
 {
     return malloc(sz);
 }
-STATIC_INLINE void *jl_calloc_wrapper(size_t nm, size_t sz)
+STATIC_INLINE void *jl_calloc_wrapper(size_t nm, size_t sz) JL_NOTSAFEPOINT
 {
     return calloc(nm, sz);
 }
-STATIC_INLINE void *jl_realloc_wrapper(void *p, size_t sz)
+STATIC_INLINE void *jl_realloc_wrapper(void *p, size_t sz) JL_NOTSAFEPOINT
 {
     return realloc(p, sz);
 }
-STATIC_INLINE void *jl_free_wrapper(void *p)
+STATIC_INLINE void jl_free_wrapper(void *p) JL_NOTSAFEPOINT
 {
     free(p);
 }
-STATIC_INLINE void *jl_malloc_aligned_wrapper(size_t sz, size_t align)
+STATIC_INLINE void *jl_malloc_aligned_wrapper(size_t sz, size_t align) JL_NOTSAFEPOINT
 {
 #if defined(_P64) || defined(__APPLE__)
     if (align <= 16)
@@ -183,7 +183,7 @@ STATIC_INLINE void *jl_malloc_aligned_wrapper(size_t sz, size_t align)
     return ptr;
 }
 STATIC_INLINE void *jl_realloc_aligned_wrapper(void *d, size_t sz, size_t oldsz,
-                                       size_t align)
+                                       size_t align) JL_NOTSAFEPOINT
 {
 #if defined(_P64) || defined(__APPLE__)
     if (align <= 16)
