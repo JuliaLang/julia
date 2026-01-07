@@ -699,25 +699,33 @@ function resolve_scopes(ctx::ScopeResolutionContext, ex)
 end
 
 #-------------------------------------------------------------------------------
-# Tree-based liveness analysis to identify never-undef variables.
+# Syntactic-block-local dominance analysis to optimize Box allocations.
 #
-# Walks the AST tracking assignment order using save/restore for control flow.
-# Variables that are assigned before any closure captures them don't need Box.
-# This is similar to flisp's `lambda-optimize-vars!` function in julia-syntax.scm.
+# This analysis identifies captured variables that don't need Core.Box by
+# checking if assignments "dominate" closure captures within syntactic blocks.
+# Similar to flisp's `lambda-optimize-vars!` in julia-syntax.scm.
 #
-# The algorithm uses save/restore pattern to track variable liveness across
-# control flow constructs:
-# - `unused`: candidate variables not yet used (read) in current block
-# - `live`: variables that have been assigned in current block
-# - `seen`: all variables we've seen assigned
-# - `decl`: variables declared (local) - for loop handling
+# Key insight: Within a syntactic block, a statement dominates all statements
+# in any "inner" syntactic blocks that follow. This means:
+#   `x = 1; if c; f = ()->x; end`  - x=1 dominates the capture → no Box
+#   `if c; x = 1; end; f = ()->x`  - x=1 inside inner block, uncertain → Box
 #
-# When control flow is encountered, `live` is saved. After visiting branches,
-# `live` is restored to the pre-control-flow state. This treats assignments
-# inside control flow as "uncertain" (they may not execute), so only
-# assignments after control flow are considered definite. For example:
-#   `if c; x=1; end; ()->x` - x assigned inside if, may not execute → needs Box
-#   `if c; f(); end; x=1; ()->x` - x assigned after if, always executes → no Box
+# The save/restore pattern implements this by:
+# - Saving `live` set before entering control flow constructs
+# - Restoring after, so only outer-block assignments remain "live"
+#
+# Two conditions can break dominance:
+# 1. Labels (@label): Allow jumping into a block, bypassing prior assignments
+#    `@goto L; x = 1; @label L; f = ()->x` - x=1 can be skipped → Box
+# 2. Loops without `local`: Same variable instance gets multiple assignments
+#    `for i in 1:3; x = i; f = ()->x; end` - x reassigned after capture → Box
+#    `for i in 1:3; local x = i; f = ()->x; end` - fresh x each iteration → no Box
+#
+# State variables:
+# - `unused`: candidates not yet read in current block
+# - `live`: variables assigned in current block (cleared at control flow)
+# - `seen`: all variables ever assigned (for optimization marking)
+# - `decl`: variables with `local` declaration (for loop handling)
 
 """
     optimize_captured_vars!(ctx, ex)
