@@ -59,7 +59,7 @@ end
 @trigger '`' ->
 function inline_code(stream::IO, md::MD)
     withstream(stream) do
-        ticks = startswith(stream, r"^(`+)")
+        ticks = matchstart(stream, r"^(`+)").match
         result = readuntil(stream, ticks)
         if result === nothing
             nothing
@@ -123,11 +123,11 @@ end
 function footnote_link(stream::IO, md::MD)
     withstream(stream) do
         regex = r"^\[\^(\w+)\]"
-        str = startswith(stream, regex)
-        if isempty(str)
+        m = matchstart(stream, regex)
+        if m === nothing
             return
         else
-            ref = (match(regex, str)::AbstractMatch).captures[1]
+            ref = m.captures[1]
             return Footnote(ref, nothing)
         end
     end
