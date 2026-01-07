@@ -50,9 +50,6 @@
 // for Mac/aarch64 and Linux/aarch64.
 //#define JL_FORCE_JITLINK
 
-#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
-# define HAS_SANITIZER
-#endif
 // The sanitizers don't play well with our memory manager
 
 #if defined(JL_FORCE_JITLINK) || defined(_CPU_AARCH64_) || defined(HAS_SANITIZER)

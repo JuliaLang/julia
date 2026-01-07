@@ -79,9 +79,10 @@
 // GC_SMALL_PAGE allocates objects in 4k pages
 // #define GC_SMALL_PAGE
 
-// Use mimalloc instead of libc malloc
+// Use mimalloc instead of libc malloc but sanitizers want to intercept malloc/free so disable them there
+#if !defined(HAS_SANITIZER)
 #define MIMALLOC_ENABLED 1
-
+#endif
 
 // method dispatch profiling --------------------------------------------------
 
