@@ -902,6 +902,45 @@ end
 23  (return %₂₂)
 
 ########################################
+# Label can be jumped to, bypassing assignment - needs Box
+let
+    @goto L
+    y = 1
+    @label L
+    ()->y
+end
+#---------------------
+1   (= slot₁/y (call core.Box))
+2   (goto label₆)
+3   1
+4   slot₁/y
+5   (call core.setfield! %₄ :contents %₃)
+6   (call core.svec :y)
+7   (call core.svec true)
+8   (call JuliaLowering.eval_closure_type TestMod :#->##1 %₆ %₇)
+9   latestworld
+10  TestMod.#->##1
+11  slot₁/y
+12  (new %₁₀ %₁₁)
+13  TestMod.#->##1
+14  (call core.svec %₁₃)
+15  (call core.svec)
+16  SourceLocation::5:5
+17  (call core.svec %₁₄ %₁₅ %₁₆)
+18  --- method core.nothing %₁₇
+    slots: [slot₁/#self#(!read) slot₂/y(!read,maybe_undef)]
+    1   (call core.getfield slot₁/#self# :y)
+    2   (call core.isdefined %₁ :contents)
+    3   (gotoifnot %₂ label₅)
+    4   (goto label₇)
+    5   (newvar slot₂/y)
+    6   slot₂/y
+    7   (call core.getfield %₁ :contents)
+    8   (return %₇)
+19  latestworld
+20  (return %₁₂)
+
+########################################
 # Error: Closure outside any top level context
 # (Should only happen in a user-visible way when lowering code emitted
 #  from a `@generated` function code generator.)

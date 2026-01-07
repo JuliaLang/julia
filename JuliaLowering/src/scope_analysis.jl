@@ -860,6 +860,14 @@ function _optimize_lambda_vars!(ctx, ex)
             mark_used!(e.var_id)
             return false
 
+        elseif k == K"symbolic_label"
+            # Must check BEFORE is_leaf since symbolic_label is a leaf node
+            kill!()
+            return true
+
+        elseif k in KSet"break symbolic_goto"
+            return false
+
         elseif is_leaf(e) || is_quoted(e)
             return false
 
@@ -903,13 +911,6 @@ function _optimize_lambda_vars!(ctx, ex)
         elseif k == K"return"
             has_label = numchildren(e) >= 1 ? visit(e[1]) : false
             return has_label
-
-        elseif k in KSet"break symbolic_goto"
-            return false
-
-        elseif k == K"symbolic_label"
-            kill!()
-            return true
 
         elseif k in KSet"if elseif trycatchelse tryfinally"
             prev = copy(live)

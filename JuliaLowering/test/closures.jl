@@ -241,4 +241,15 @@ method_ex = lower_str(test_mod, "Base.Experimental.@opaque x -> 2x").args[1].cod
 @test method_ex.args[1] === nothing
 @test method_ex.args[4] isa LineNumberNode
 
+# Label can be jumped to, bypassing assignment - needs Box
+@test_throws UndefVarError(:y, :local) JuliaLowering.include_string(test_mod, """
+let
+    @goto L
+    y = 1
+    @label L
+    f = ()->y
+    f()
+end
+""")
+
 end
