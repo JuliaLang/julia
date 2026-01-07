@@ -590,14 +590,22 @@ JL_DLLEXPORT void jl_gc_scan_julia_exc_obj(void* obj_raw, void* closure, Process
 static void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT
 {
     assert(jl_is_genericmemory(m));
-    assert(jl_genericmemory_how(m) == 1 || jl_genericmemory_how(m) == 2);
+    assert(jl_genericmemory_how(m) == 1 || jl_genericmemory_how(m) == 4);
     char *d = (char*)m->ptr;
-    size_t freed_bytes = memory_block_usable_size(d, isaligned);
-    assert(freed_bytes != 0);
-    if (isaligned)
-        jl_free_aligned_wrapper(d);
-    else
+    size_t freed_bytes;
+    if (jl_genericmemory_how(m) == 4) {
+        size_t elsz = ((jl_datatype_t*)jl_typetagof(m))->layout->size;
+        freed_bytes = m->length * elsz;
+        assert(freed_bytes != 0);
         free(d);
+    } else {
+        freed_bytes = memory_block_usable_size(d, isaligned);
+        assert(freed_bytes != 0);
+        if (isaligned)
+            jl_free_aligned_wrapper(d);
+        else
+            jl_free_wrapper(d);
+    }
     gc_num.freed += freed_bytes;
     gc_num.freecall++;
 }
