@@ -197,6 +197,7 @@ end
 
 function htmlinline(io::IO, br::LineBreak)
     tag(io, :br)
+    println(io)
 end
 
 htmlinline(io::IO, x) = tohtml(io, x)

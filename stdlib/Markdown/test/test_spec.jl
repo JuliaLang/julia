@@ -112,7 +112,7 @@ end
     input = "foo\\\nbar\n"
     expected = "<p>foo<br />\nbar</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 17
     input = "`` \\[\\` ``\n"
@@ -3974,7 +3974,7 @@ end
     input = "foo\\\nbaz\n"
     expected = "<p>foo<br />\nbaz</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 635
     input = "foo       \nbaz\n"
@@ -4004,7 +4004,7 @@ end
     input = "*foo\\\nbar*\n"
     expected = "<p><em>foo<br />\nbar</em></p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 640
     input = "`code  \nspan`\n"
