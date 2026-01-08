@@ -40,6 +40,8 @@ if !Sys.iswindows()
 
         n_precompiles = count(r"precompile\(", tracecompile_out)
 
+        @show tracecompile_out
+
         @test n_precompiles <= expected_precompiles
 
         if n_precompiles == 0
