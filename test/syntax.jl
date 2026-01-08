@@ -1959,6 +1959,17 @@ let
     @test_throws UndefVarError(:y, :local) f()
 end
 
+# Argument reassigned inside loop needs Box (argument is implicitly declared outside loop)
+function f_arg_loop(x)
+    local f
+    for i in 1:2
+        x = i
+        i == 1 && (f = ()->x;)
+    end
+    f()
+end
+@test f_arg_loop(0) == 2
+
 # `_` should not create a global (or local)
 f30656(T) = (t, _)::Pair -> t >= T
 f30656(10)(11=>1)
