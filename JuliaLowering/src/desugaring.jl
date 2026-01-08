@@ -4008,9 +4008,7 @@ function expand_struct_def(ctx, ex, docs)
     if kind(type_body) != K"block"
         throw(LoweringError(type_body, "expected block for `struct` fields"))
     end
-    orig_struct_name, type_params, supertype = analyze_type_sig(ctx, type_sig)
-    # Create internal binding for struct name - language servers can safely ignore it
-    struct_name = new_local_binding(ctx, orig_struct_name, orig_struct_name.name_val)
+    struct_name, type_params, supertype = analyze_type_sig(ctx, type_sig)
     typevar_names, typevar_stmts = expand_typevars(ctx, type_params)
     field_names = SyntaxList(ctx)
     field_types = SyntaxList(ctx)
@@ -4026,8 +4024,8 @@ function expand_struct_def(ctx, ex, docs)
     hasprev = ssavar(ctx, ex, "hasprev")
     prev = ssavar(ctx, ex, "prev")
     newdef = ssavar(ctx, ex, "newdef")
-    layer = new_scope_layer(ctx, orig_struct_name)
-    global_struct_name = adopt_scope(orig_struct_name, layer)
+    layer = new_scope_layer(ctx, struct_name)
+    global_struct_name = adopt_scope(struct_name, layer)
     if !isempty(typevar_names)
         # Generate expression like `prev_struct.body.body.parameters`
         prev_typevars = global_struct_name
@@ -4092,6 +4090,7 @@ function expand_struct_def(ctx, ex, docs)
             # Needed for later constdecl to work, though plain global form may be removed soon.
             [K"global" global_struct_name]
             [K"block"
+                [K"local" struct_name]
                 [K"always_defined" struct_name]
                 typevar_stmts...
                 [K"="
@@ -4099,7 +4098,7 @@ function expand_struct_def(ctx, ex, docs)
                     [K"call"
                         "_structtype"::K"core"
                         ctx.mod::K"Value"
-                        orig_struct_name=>K"Symbol"
+                        struct_name=>K"Symbol"
                         [K"call"(type_sig) "svec"::K"core" typevar_names...]
                         [K"call"(type_body) "svec"::K"core" [n=>K"Symbol" for n in field_names]...]
                         [K"call"(type_body) "svec"::K"core" field_attrs...]
@@ -4112,7 +4111,7 @@ function expand_struct_def(ctx, ex, docs)
                 [K"=" hasprev
                       [K"&&" [K"call" "isdefinedglobal"::K"core"
                               ctx.mod::K"Value"
-                              orig_struct_name=>K"Symbol"
+                              struct_name=>K"Symbol"
                               false::K"Bool"]
                              [K"call" "_equiv_typedef"::K"core" global_struct_name newtype_var]
                        ]]
