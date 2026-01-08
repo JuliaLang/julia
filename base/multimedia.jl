@@ -16,17 +16,48 @@ export AbstractDisplay, display, pushdisplay, popdisplay, displayable, redisplay
 """
     MIME
 
-A type representing a standard internet data format. "MIME" stands for
-"Multipurpose Internet Mail Extensions", since the standard was originally
-used to describe multimedia attachments to email messages.
+A parametric type representing a content type/format, which is most commonly used to define [`show`](@ref)
+methods to output objects in different formats and allows [`display(x)`](@ref) to detect
+which formats are available for a given `x` in a particular display environment.
 
-A `MIME` object can be passed as the second argument to [`show`](@ref) to
-request output in that format.
+"MIME" stands for "Multipurpose Internet Mail Extensions", since the standard was originally
+used to describe multimedia attachments to email messages.
+The [current standard](https://www.iana.org/assignments/media-types/media-types.xhtml),
+maintained by the Internet Assigned Numbers Authority,
+now refers to "MIME types" as "media types".
+Each media type is defined as a string in the form `"<type>/<subtype>"`.
+There are over one thousand official media types, along with innumerable unofficial application-specific
+types (though in practice only a few are usually supported in any given `display` environment).
+Examples of common media types include `"text/plain"`, `"text/html"`, `"image/jpeg"`, `"video/mpeg"`.
+
+A specific singleton MIME **type** is constructed by passing the MIME string as a symbol,
+e.g. `MIME{Symbol("text/plain")}`.
+The string macro [`@MIME_str`](@ref) allows `MIME{Symbol("...")}` types to be specified more succinctly
+as `MIME"..."`, for example `MIME"text/plain"`.
+Singleton MIME types can be used to add new methods to the [`show`](@ref) function.
+
+A `MIME` **instance** is created by calling the MIME constructor, either directly,
+e.g. `MIME("text/plain")`, or after the string macro, e.g. `MIME"text/plain"()`.
+A `mime::MIME` instance can be passed as the second argument to [`show(io, mime, x)`](@ref)
+to request output in that format (if it is implemented for `x`), as well as to various other functions like
+[`showable`](@ref), [`repr`](@ref), and [`display`](@ref); most such functions also allow
+passing a string (e.g. `"text/plain"`) that will be converted to a `MIME` instance automatically.
 
 # Examples
 ```jldoctest
 julia> show(stdout, MIME("text/plain"), "hi")
 "hi"
+```
+
+```jldoctest
+julia> struct MyType
+           val
+       end
+
+julia> Base.show(io::IO, ::MIME"text/plain", x::MyType) = print(io, "My value is ", x.val);
+
+julia> show(stdout, MIME"text/plain"(), MyType(5))
+My value is 5
 ```
 """
 struct MIME{mime} end
