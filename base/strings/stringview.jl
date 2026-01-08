@@ -61,6 +61,11 @@ oneunit(::Union{T, Type{T}}) where {T <: StringView} = typemin(T)
 # Forward to optimised isascii(::AbstractVector{UInt8})
 isascii(s::StringViewAndSub) = isascii(codeunits(s))
 
+# For dense string views, pointer-based hashing is faster than array based.
+function hash(s::DenseStringViewAndSub, h::UInt)
+    GC.@preserve s hash_bytes(pointer(s), ncodeunits(s), UInt64(h), HASH_SECRET) % UInt
+end
+
 # The canonical binary representation of strings is simply their byte content.
 write(io::IO, s::StringViewAndSub) = write(io, codeunits(s))::Int
 print(io::IO, s::StringViewAndSub) = (write(io, s); nothing)
