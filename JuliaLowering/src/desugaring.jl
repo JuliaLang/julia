@@ -2797,7 +2797,7 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
         for n in kw_names
             # If not using slots for the keyword argument values, still declare
             # them for reflection purposes.
-            new_local_binding(ctx, n, n.name_val)
+            push!(kw_val_stmts, @ast ctx n [K"local"(meta=CompileHints(:is_internal, true)) n])
         end
         kw_val_vars = SyntaxList(ctx)
         for val in kw_values

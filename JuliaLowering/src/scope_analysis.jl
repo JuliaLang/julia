@@ -194,7 +194,11 @@ function _find_scope_decls!(ctx, scope, ex)
     if k === K"local" && kind(ex[1]) === K"Identifier"
         var_k = getmeta(ex, :is_destructured_arg, false) ?
             :destructured_arg : :local
-        maybe_declare_in_scope!(ctx, scope, ex[1], var_k)
+        if getmeta(ex, :is_internal, false)
+            declare_in_scope!(ctx, scope, ex[1], var_k; is_internal=true)
+        else
+            maybe_declare_in_scope!(ctx, scope, ex[1], var_k)
+        end
     elseif k === K"global" && kind(ex[1]) === K"Identifier"
         maybe_declare_in_scope!(ctx, scope, ex[1], :global)
     elseif k in KSet"= constdecl assign_or_constdecl_if_global function_decl"
@@ -365,12 +369,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         end
         ex_out
     elseif k == K"always_defined"
-        child = ex[1]
-        if kind(child) == K"BindingId"
-            get_binding(ctx, child).is_always_defined = true
-        else
-            resolve_name(ctx, child).is_always_defined = true
-        end
+        resolve_name(ctx, ex[1]).is_always_defined = true
         newleaf(ctx, ex, K"TOMBSTONE")
     elseif k == K"lambda"
         newscope = enter_scope!(ctx, ex)
