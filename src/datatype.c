@@ -728,7 +728,8 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             jl_value_t *fld = jl_field_type(st, i);
             int isatomic = jl_field_isatomic(st, i);
             jl_value_t *restfld = fld;
-            if (jl_is_uniontype(fld) && jl_is_datatype(((jl_uniontype_t*)fld)->a) && jl_is_datatype_singleton((jl_datatype_t*)((jl_uniontype_t*)fld)->a)) {
+            // TODO(jwn): remove !isatomic
+            if (!isatomic && jl_is_uniontype(fld) && jl_is_datatype(((jl_uniontype_t*)fld)->a) && jl_is_datatype_singleton((jl_datatype_t*)((jl_uniontype_t*)fld)->a)) {
                 restfld = ((jl_uniontype_t*)fld)->b;
             }
             size_t fsz = 0, al = 1;
@@ -2025,7 +2026,7 @@ jl_value_t *swap_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_
     jl_value_t *r;
     char *p = (char*)v + offs;
     enum jl_fieldkind_t kind = jl_field_kind(st, i);
-    if (kind == JL_FIELDKIND_ISPTR) { // jwn
+    if (kind == JL_FIELDKIND_ISPTR) {
         if (isatomic)
             r = jl_atomic_exchange((_Atomic(jl_value_t*)*)p, rhs);
         else
@@ -2036,7 +2037,8 @@ jl_value_t *swap_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_
         return r;
     }
     else {
-        uint8_t *psel = jl_is_uniontype(ty) ? (uint8_t*)&p[jl_field_size(st, i) - 1] : NULL;
+        uint8_t *psel = kind == JL_FIELDKIND_ISUNION ? (uint8_t*)&p[jl_field_size(st, i) - 1] : NULL;
+        assert(kind != JL_FIELDKIND_ISOTHER || jl_is_datatype(ty)); // jwn
         return swap_bits(ty, p, psel, v, rhs, isatomic ? isatomic_object : isatomic_none);
     }
 }
@@ -2173,11 +2175,12 @@ jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_valu
     jl_value_t *ty = jl_field_type_concrete(st, i);
     char *p = (char*)v + offs;
     enum jl_fieldkind_t kind = jl_field_kind(st, i);
-    if (kind == JL_FIELDKIND_ISPTR) { // jwn
+    if (kind == JL_FIELDKIND_ISPTR) {
         return modify_value(ty, (_Atomic(jl_value_t*)*)p, v, op, rhs, isatomic, NULL, NULL, NULL);
     }
     else {
-        uint8_t *psel = jl_is_uniontype(ty) ? (uint8_t*)&p[jl_field_size(st, i) - 1] : NULL;
+        uint8_t *psel = kind == JL_FIELDKIND_ISUNION ? (uint8_t*)&p[jl_field_size(st, i) - 1] : NULL;
+        assert(kind != JL_FIELDKIND_ISOTHER || jl_is_datatype(ty)); // jwn
         return modify_bits(ty, p, psel, v, op, rhs, isatomic ? isatomic_object : isatomic_none);
     }
 }
@@ -2283,13 +2286,12 @@ jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_val
     size_t offs = jl_field_offset(st, i);
     char *p = (char*)v + offs;
     enum jl_fieldkind_t kind = jl_field_kind(st, i);
-    if (kind == JL_FIELDKIND_ISPTR) { // jwn
+    if (kind == JL_FIELDKIND_ISPTR) {
         return replace_value(ty, (_Atomic(jl_value_t*)*)p, v, expected, rhs, isatomic, NULL, NULL);
     }
     else {
-        size_t fsz = jl_field_size(st, i);
-        int isunion = jl_is_uniontype(ty);
-        uint8_t *psel = isunion ? (uint8_t*)&p[fsz - 1] : NULL;
+        uint8_t *psel = kind == JL_FIELDKIND_ISUNION ? (uint8_t*)&p[jl_field_size(st, i) - 1] : NULL;
+        assert(kind != JL_FIELDKIND_ISOTHER || jl_is_datatype(ty)); // jwn
         return replace_bits(ty, p, psel, v, expected, rhs, isatomic ? isatomic_object : isatomic_none);
     }
 }
@@ -2325,7 +2327,7 @@ int set_nth_fieldonce(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rh
     int success;
     char *p = (char*)v + offs;
     enum jl_fieldkind_t kind = jl_field_kind(st, i);
-    if (kind == JL_FIELDKIND_ISPTR) { // jwn
+    if (kind == JL_FIELDKIND_ISPTR) {
         _Atomic(jl_value_t*) *px = (_Atomic(jl_value_t*)*)p;
         jl_value_t *r = NULL;
         success = isatomic ? jl_atomic_cmpswap(px, &r, rhs) : jl_atomic_cmpswap_release(px, &r, rhs);
@@ -2333,12 +2335,11 @@ int set_nth_fieldonce(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rh
             jl_gc_wb(v, rhs);
     }
     else {
-        int isunion = jl_is_uniontype(ty);
-        if (isunion)
+        if (kind == JL_FIELDKIND_ISUNION)
             return 0;
-        int hasptr = ((jl_datatype_t*)ty)->layout->first_ptr >= 0;
-        if (!hasptr)
+        if (kind != JL_FIELDKIND_ISOTHER)
             return 0;
+        assert(jl_is_datatype(ty)); // jwn
         assert(ty == jl_typeof(rhs));
         success = setonce_bits((jl_datatype_t*)ty, p, v, rhs, isatomic ? isatomic_object : isatomic_none);
     }

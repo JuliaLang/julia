@@ -1305,11 +1305,11 @@ static void record_memoryrefs_inside(jl_serializer_state *s, jl_datatype_t *t, s
     size_t i, nf = jl_datatype_nfields(t);
     for (i = 0; i < nf; i++) {
         size_t offset = jl_field_offset(t, i);
-        if (jl_field_isptr(t, i))
+        enum jl_fieldkind_t kind = jl_field_kind(t, i);
+        if (kind != JL_FIELDKIND_ISOTHER)
             continue;
         jl_value_t *ft = jl_field_type_concrete(t, i);
-        if (jl_is_uniontype(ft)) // TODO(jwn)
-            continue;
+        assert(jl_is_datatype(ft)); // TODO(jwn)
         if (jl_is_genericmemoryref_type(ft))
             record_memoryref(s, reloc_offset + offset, *(jl_genericmemoryref_t*)(data + offset));
         else
@@ -2924,19 +2924,23 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_datatype_t *st = (jl_datatype_t*)jl_typeof(val);
             size_t offs = jl_field_offset(st, field);
             char *fldaddr = (char*)val + offs;
-            if (jl_field_isptr(st, field)) {
+            enum jl_fieldkind_t kind = jl_field_kind(st, field);
+            if (kind == JL_FIELDKIND_ISPTR) {
                 record_field_change((jl_value_t**)fldaddr, newval);
             }
-            else if (jl_field_size(st, field) > 0) { // TODO(jwn)
+            else if (jl_field_size(st, field) > 0) {
                 // replace the bits
                 ptrhash_put(&bits_replace, (void*)fldaddr, newval);
                 // and any pointers inside
-                jl_datatype_t *rty = (jl_datatype_t*)jl_typeof(newval);
-                const jl_datatype_layout_t *layout = rty->layout;
-                size_t j, np = layout->npointers;
-                for (j = 0; j < np; j++) {
-                    uint32_t ptr = jl_ptr_offset(rty, j);
-                    record_field_change((jl_value_t**)fldaddr + ptr, *(((jl_value_t**)newval) + ptr));
+                if (kind == JL_FIELDKIND_ISOTHER) {
+                    jl_datatype_t *rty = (jl_datatype_t*)jl_typeof(newval);
+                    const jl_datatype_layout_t *layout = rty->layout;
+                    size_t j, np = layout->npointers;
+                    for (j = 0; j < np; j++) {
+                        uint32_t ptr = jl_ptr_offset(rty, j);
+                        record_field_change((jl_value_t**)fldaddr + ptr, *(((jl_value_t**)newval) + ptr));
+                    }
+                    // jwn
                 }
             }
         }
