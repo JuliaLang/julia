@@ -313,7 +313,7 @@ function list(stream::IO, block::MD)
                 # An ordered list with `1) ` style numbering.
                 Base.parse(Int, m.captures[2]), r"^ {0,3}(\d+)\)( |$)"
             else
-                # Failed to match any bullets. This branch shouldn't actually be needed
+                # Failed to match any list marker. This branch shouldn't actually be needed
                 # since the `NUM_OR_BULLETS` regex should cover this, but we include it
                 # simply for thoroughness.
                 return false
