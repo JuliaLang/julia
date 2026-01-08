@@ -14,18 +14,19 @@
 # - Saving `live` set before entering control flow constructs
 # - Restoring after, so only outer-block assignments remain "live"
 #
-# Two conditions can break dominance:
-# 1. Labels (@label): Allow jumping into a block, bypassing prior assignments
+# Two conditions require Box allocation:
+# 1. Dominance broken by labels (@label): Jumping into a block bypasses assignments
 #    `@goto L; x = 1; @label L; f = ()->x` - x=1 can be skipped → Box
-# 2. Loops without `local`: Same variable instance gets multiple assignments
-#    `for i in 1:3; x = i; f = ()->x; end` - x reassigned after capture → Box
-#    `for i in 1:3; local x = i; f = ()->x; end` - fresh x each iteration → no Box
+# 2. Dynamic single-assignment broken by loops: Dominance holds statically, but
+#    outer-scope variables get multiple assignments at runtime (once per iteration)
+#    `let x; for i in 1:3; x = i; f = ()->x; end; end` - x from outer scope → Box
+#    `for i in 1:3; x = i; f = ()->x; end` - x is loop-local, fresh each iteration → no Box
 #
 # State variables:
 # - `unused`: candidates not yet read in current block
 # - `live`: variables assigned in current block (cleared at control flow)
 # - `seen`: all variables ever assigned (for optimization marking)
-# - `decl`: variables with `local` declaration (for loop handling)
+# - `decl`: variables declared before loop (via `local` or outer scope)
 
 """
     analyze_def_and_use!(ctx, ex)
