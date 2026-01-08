@@ -34,7 +34,7 @@ let infos = typeinf_ext_toplevel(Any[Core.svec(Nothing, Tuple{typeof(finalizer),
     @test occursin(r"^unresolved finalizer registered from statement (Core\.)?finalizer\("s, repr)
     @test occursin(r"f::Any"s, repr)
     @test occursin(r"o::Any"s, repr)
-    @test occursin(r"::Nothing\nStacktrace:"s, repr)
+    @test occursin(r"::Nothing\n\nStacktrace:"s, repr)
     @test occursin(r"\[1\] finalizer\(f::Any, o::Any\)"s, repr)
 end
 
@@ -57,7 +57,7 @@ let infos = typeinf_ext_toplevel(Any[Core.svec(Base.CFunction, Tuple{typeof(make
     @test occursin("cfunction", desc.desc)
     repr = sprint(verify_print_error, desc, parents, is_warning)
     @test occursin(r"^unresolved cfunction from statement"s, repr)
-    @test occursin(r"::Base.CFunction\nStacktrace:"s, repr)
+    @test occursin(r"::Base.CFunction\n\nStacktrace:"s, repr)
     @test occursin(r"\[1\] make_cfunction_bad\(f::Any\)"s, repr)
     resize!(infos, 1)
     @test infos[1] isa Core.SimpleVector && infos[1][1] isa Type && infos[1][2] isa Type
