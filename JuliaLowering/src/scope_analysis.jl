@@ -728,42 +728,42 @@ end
 # - `decl`: variables with `local` declaration (for loop handling)
 
 """
-    optimize_captured_vars!(ctx, ex)
+    analyze_def_and_use!(ctx, ex)
 
-Perform tree-based liveness analysis to find captured variables that are
+Perform tree-based def-use analysis to find captured variables that are
 assigned before any closure captures them (never-undef). For such variables,
 we can mark them as `is_always_defined=true` to avoid unnecessary `Core.Box`
 allocations during closure conversion.
 
 This is called on the outermost lambda, and recursively processes nested lambdas.
 """
-function optimize_captured_vars!(ctx, ex)
+function analyze_def_and_use!(ctx, ex)
     k = kind(ex)
     if k != K"lambda"
         return
     end
 
-    # First, recursively optimize nested lambdas (depth-first)
+    # First, recursively analyze nested lambdas (depth-first)
     if numchildren(ex) >= 3
-        _optimize_nested_lambdas!(ctx, ex[3])
+        _analyze_nested_lambdas!(ctx, ex[3])
     end
 
-    # Now optimize this lambda
-    _optimize_lambda_vars!(ctx, ex)
+    # Now analyze this lambda
+    _analyze_lambda_vars!(ctx, ex)
 end
 
-function _optimize_nested_lambdas!(ctx, ex)
+function _analyze_nested_lambdas!(ctx, ex)
     k = kind(ex)
     if k == K"lambda"
-        optimize_captured_vars!(ctx, ex)
+        analyze_def_and_use!(ctx, ex)
     elseif !is_leaf(ex) && !is_quoted(ex)
         for child in children(ex)
-            _optimize_nested_lambdas!(ctx, child)
+            _analyze_nested_lambdas!(ctx, child)
         end
     end
 end
 
-function _optimize_lambda_vars!(ctx, ex)
+function _analyze_lambda_vars!(ctx, ex)
     lambda_bindings = ex.lambda_bindings
 
     # Collect candidate variables: captured and single-assigned
@@ -779,7 +779,7 @@ function _optimize_lambda_vars!(ctx, ex)
             # For arguments, reset is_always_defined so we can determine if the
             # outer-scope assignment dominates the capture. Arguments start with
             # is_always_defined=true, but if they're reassigned inside a closure
-            # (not in outer scope), we need the liveness analysis to decide.
+            # (not in outer scope), we need the def-use analysis to decide.
             if binfo.kind == :argument
                 binfo.is_always_defined = false
             end
@@ -787,7 +787,7 @@ function _optimize_lambda_vars!(ctx, ex)
     end
     isempty(candidates) && return
 
-    # flisp-compatible tables for tracking variable liveness:
+    # flisp-compatible tables for tracking variable def and use:
     # - unused: candidate variables not yet used (read) in current block
     # - live: variables that have been assigned in current block
     # - seen: all variables we've seen assigned
@@ -1025,6 +1025,6 @@ enclosing lambda form and information about variables captured by closures.
     ctx3 = VariableAnalysisContext(
         ctx2.graph, ctx2.bindings, ctx2.mod, ctx2.scopes, ex2.lambda_bindings)
     analyze_variables!(ctx3, ex2)
-    optimize_captured_vars!(ctx3, ex2)
+    analyze_def_and_use!(ctx3, ex2)
     ctx3, ex2
 end
