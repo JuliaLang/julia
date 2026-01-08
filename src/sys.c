@@ -714,16 +714,10 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
         free(pth16);
         return NULL;
     }
-    pth16[n16] = L'\0';
-    DWORD n8 = WideCharToMultiByte(CP_UTF8, 0, pth16, -1, NULL, 0, NULL, NULL);
-    if (n8 == 0) {
+    char *filepath = NULL;
+    size_t n8 = 0;
+    if (uv_utf16_to_wtf8((uint16_t*)pth16, n16, &filepath, &n8)) {
         free(pth16);
-        return NULL;
-    }
-    char *filepath = (char*)malloc_s(++n8);
-    if (!WideCharToMultiByte(CP_UTF8, 0, pth16, -1, filepath, n8, NULL, NULL)) {
-        free(pth16);
-        free(filepath);
         return NULL;
     }
     free(pth16);
