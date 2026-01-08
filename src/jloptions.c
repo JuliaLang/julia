@@ -155,6 +155,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         JL_TRIM_NO, // trim
                         0, // task_metrics
                         -1, // timeout_for_safepoint_straggler_s
+                        0, // compress_sysimage
     };
     jl_options_initialized = 1;
 }
@@ -305,7 +306,10 @@ static const char opts_hidden[]  =
     " --strip-metadata                              Remove docstrings and source location info from\n"
     "                                               system image\n"
     " --strip-ir                                    Remove IR (intermediate representation) of compiled\n"
-    "                                               functions\n\n"
+    "                                               functions\n"
+    " --compress-sysimage={yes|no*}                 Compress the sys/pkgimage heap at the expense of\n"
+    "                                               slightly increased load time.\n"
+    "\n"
 
     // compiler debugging and experimental (see the devdocs for tips on using these options)
     " --experimental                                Enable the use of experimental (alpha) features\n"
@@ -384,6 +388,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_permalloc_pkgimg,
            opt_trim,
            opt_experimental_features,
+           opt_compress_sysimage,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:";
     static const struct option longopts[] = {
@@ -452,6 +457,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "permalloc-pkgimg",required_argument, 0, opt_permalloc_pkgimg },
         { "heap-size-hint",  required_argument, 0, opt_heap_size_hint },
         { "trim",  optional_argument, 0, opt_trim },
+        { "compress-sysimage", required_argument, 0, opt_compress_sysimage },
         { 0, 0, 0, 0 }
     };
 
@@ -1013,6 +1019,12 @@ restart_switch:
                 jl_options.task_metrics = JL_OPTIONS_TASK_METRICS_ON;
             else
                 jl_errorf("julia: invalid argument to --task-metrics={yes|no} (%s)", optarg);
+            break;
+        case opt_compress_sysimage:
+            if (!strcmp(optarg,"yes"))
+                jl_options.compress_sysimage = 1;
+            else if (!strcmp(optarg,"no"))
+                jl_options.compress_sysimage = 0;
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"

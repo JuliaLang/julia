@@ -59,6 +59,7 @@ USE_SYSTEM_LIBGIT2:=0
 USE_SYSTEM_PATCHELF:=0
 USE_SYSTEM_LIBWHICH:=0
 USE_SYSTEM_ZLIB:=0
+USE_SYSTEM_ZSTD:=0
 USE_SYSTEM_P7ZIP:=0
 USE_SYSTEM_LLD:=0
 
@@ -263,7 +264,7 @@ JULIA_COMMIT := $(JULIA_VERSION)
 endif
 
 # Whether to use GPL libraries or not.
-USE_GPL_LIBS ?= 1
+USE_GPL_LIBS ?= 0
 
 # Whether to install Julia as a framework on Darwin (Apple) platforms.
 DARWIN_FRAMEWORK ?= 0
@@ -1344,6 +1345,14 @@ else
   UTF8PROC_INC := $(build_includedir)
 endif
 
+ifeq ($(USE_SYSTEM_ZSTD), 1)
+  LIBZSTD := -lzstd
+  ZSTD_INC := $(LOCALBASE)/include
+else
+  LIBZSTD := -L$(build_shlibdir) -lzstd
+  ZSTD_INC := $(build_includedir)
+endif
+
 # We need python for things like BB triplet recognition.  We don't really care
 # about version, generally, so just find something that works:
 PYTHON := $(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo not found)
@@ -1411,7 +1420,7 @@ CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.34|GLIBCXX_3\.5\.|GLIBCXX_4\.
 # Note: we explicitly _do not_ define `CSL` here, since it requires some more
 # advanced techniques to decide whether it should be installed from a BB source
 # or not.  See `deps/csl.mk` for more detail.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP LLD LIBTRACYCLIENT BOLT MMTK_JULIA
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB ZSTD P7ZIP LLD LIBTRACYCLIENT BOLT MMTK_JULIA
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
@@ -1560,7 +1569,7 @@ JLDFLAGS += -Wl,--stack,8388608 --disable-auto-import --disable-runtime-pseudo-r
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif
-JCPPFLAGS += -D_WIN32_WINNT=0x0502
+JCPPFLAGS += -D_WIN32_WINNT=0x0602
 UNTRUSTED_SYSTEM_LIBM := 1
 # Use hard links for files on windows, rather than soft links
 #   https://stackoverflow.com/questions/3648819/how-to-make-a-symbolic-link-with-cygwin-in-windows-7
