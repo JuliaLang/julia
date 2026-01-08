@@ -484,34 +484,37 @@
           (if (null? lno) e `(block ,@lno ,@(cdr e))))
       `(block ,@lno ,e)))
 
-(define (make-var-info name) (list name '(core Any) 0))
-(define vinfo:name car)
-(define vinfo:type cadr)
-(define (vinfo:set-type! v t) (set-car! (cdr v) t))
+(define-mutable-struct vinfo
+  (name
+   (type '(core Any))
+   (flags 0)))
 
-(define (vinfo:capt v) (< 0 (logand (caddr v) 1)))
-(define (vinfo:asgn v) (< 0 (logand (caddr v) 2)))
-(define (vinfo:never-undef v) (< 0 (logand (caddr v) 4)))
-(define (vinfo:read v) (< 0 (logand (caddr v) 8)))
-(define (vinfo:sa v) (< 0 (logand (caddr v) 16)))
-(define (vinfo:nospecialize v) (< 0 (logand (caddr v) 128)))
+(define (vinfo:capt v) (< 0 (logand (vinfo:flags v) 1)))
+(define (vinfo:asgn v) (< 0 (logand (vinfo:flags v) 2)))
+(define (vinfo:never-undef v) (< 0 (logand (vinfo:flags v) 4)))
+(define (vinfo:read v) (< 0 (logand (vinfo:flags v) 8)))
+(define (vinfo:sa v) (< 0 (logand (vinfo:flags v) 16)))
+(define (vinfo:nospecialize v) (< 0 (logand (vinfo:flags v) 128)))
 (define (set-bit x b val) (if val (logior x b) (logand x (lognot b))))
 ;; record whether var is captured
-(define (vinfo:set-capt! v c)  (set-car! (cddr v) (set-bit (caddr v) 1 c)))
+(define (vinfo:set-capt! v c)  (vinfo:set-flags! v (set-bit (vinfo:flags v) 1 c)))
 ;; whether var is assigned
-(define (vinfo:set-asgn! v a)  (set-car! (cddr v) (set-bit (caddr v) 2 a)))
+(define (vinfo:set-asgn! v a)  (vinfo:set-flags! v (set-bit (vinfo:flags v) 2 a)))
 ;; whether the assignments to var are known to dominate its usages
-(define (vinfo:set-never-undef! v a) (set-car! (cddr v) (set-bit (caddr v) 4 a)))
+(define (vinfo:set-never-undef! v a) (vinfo:set-flags! v (set-bit (vinfo:flags v) 4 a)))
 ;; whether var is ever read
-(define (vinfo:set-read! v a) (set-car! (cddr v) (set-bit (caddr v) 8 a)))
+(define (vinfo:set-read! v a) (vinfo:set-flags! v (set-bit (vinfo:flags v) 8 a)))
 ;; whether var is assigned once
-(define (vinfo:set-sa! v a)    (set-car! (cddr v) (set-bit (caddr v) 16 a)))
-;; occurs undef: mask 32
+(define (vinfo:set-sa! v a)    (vinfo:set-flags! v (set-bit (vinfo:flags v) 16 a)))
+;; occurs undef
+(define (vinfo:set-occurs-undef! v a) (vinfo:set-flags! v (set-bit (vinfo:flags v) 32 a)))
 ;; whether var is called (occurs in function call head position)
-(define (vinfo:set-called! v a)  (set-car! (cddr v) (set-bit (caddr v) 64 a)))
-(define (vinfo:set-nospecialize! v c)  (set-car! (cddr v) (set-bit (caddr v) 128 c)))
+(define (vinfo:set-called! v a)  (vinfo:set-flags! v (set-bit (vinfo:flags v) 64 a)))
+(define (vinfo:set-nospecialize! v c)  (vinfo:set-flags! v (set-bit (vinfo:flags v) 128 c)))
 
-(define var-info-for assq)
+;; symbol * list vinfo -> vinfo
+(define (var-info-for name vis)
+  (find (lambda (vi) (eq? (vinfo:name vi) name)) vis))
 
 (define (assignment-like? e)
   (and (pair? e) (is-prec-assignment? (car e))))
