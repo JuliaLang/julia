@@ -1970,6 +1970,23 @@ function f_arg_loop(x)
 end
 @test f_arg_loop(0) == 2
 
+# Variable in while-true loop with break needs Box
+function f_break_loop()
+    local f
+    local x
+    i = 1
+    while true
+        x = i
+        if i == 1
+            f = ()->x
+        end
+        i >= 3 && break
+        i += 1
+    end
+    f()
+end
+@test f_break_loop() == 3
+
 # `_` should not create a global (or local)
 f30656(T) = (t, _)::Pair -> t >= T
 f30656(10)(11=>1)

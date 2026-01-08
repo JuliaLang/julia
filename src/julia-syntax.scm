@@ -4008,6 +4008,12 @@ f(x) = yt(x)
                   (if (has? old-decls k)
                       (del! live k)))
                 (table.keys live))
+      ;; Also remove from unused - variables may have been moved there by kill
+      ;; inside the loop (e.g., in if branches)
+      (for-each (lambda (k)
+                  (if (and (has? old-decls k) (has? seen k))
+                      (del! unused k)))
+                (table.keys unused))
       (set! decl old-decls))
     (define (visit e)
       ;; returns whether e contained a symboliclabel
