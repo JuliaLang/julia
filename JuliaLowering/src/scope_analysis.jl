@@ -791,11 +791,19 @@ function _optimize_lambda_vars!(ctx, ex)
     # - unused: candidate variables not yet used (read) in current block
     # - live: variables that have been assigned in current block
     # - seen: all variables we've seen assigned
-    # - decl: variables declared (local) - for loop handling
+    # - decl: variables declared (local/argument) - for loop handling
     unused = candidates
     live = Set{IdTag}()
     seen = Set{IdTag}()
+
+    # Initialize decl with arguments since they're implicitly declared outside any loop
     decl = Set{IdTag}()
+    for id in candidates
+        binfo = get_binding(ctx, id)
+        if binfo.kind == :argument
+            push!(decl, id)
+        end
+    end
 
     # At CFG merge points, we lose certainty about which path was taken,
     # so variables assigned in one branch may not have been assigned.

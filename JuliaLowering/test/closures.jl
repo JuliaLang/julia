@@ -281,4 +281,19 @@ let
 end
 """)
 
+# Argument reassigned inside loop - needs Box (argument is implicitly declared outside loop) (issue #37690)
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_arg_loop(x)
+        local f
+        for i in 1:2
+            x = i
+            i == 1 && (f = ()->x;)
+        end
+        f()
+    end
+    f_arg_loop(0)
+end
+""") == 2
+
 end
