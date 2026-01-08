@@ -3948,9 +3948,11 @@ f(x) = yt(x)
   (let ((vi     (car (lam:vinfo lam)))
         (args   (lam:argnames lam))
         (decl   (table))
-        (unused (table))  ;; variables not (yet) used (read from) in the current block
-        (live   (table))  ;; variables that have been set in the current block
-        (seen   (table))) ;; all variables we've seen assignments to
+        (unused (table))       ;; variables not (yet) used (read from) in the current block
+        (live   (table))       ;; variables that have been set in the current block
+        (seen   (table))       ;; all variables we've seen assignments to
+        (after-label (table))  ;; variables assigned after a label (can't be optimized)
+        (seen-label #f))       ;; whether we've seen a symboliclabel
     ;; Collect candidate variables: those that are captured (and hence we want to optimize)
     ;; and only assigned once. This populates the initial `unused` table.
     (for-each (lambda (v)
@@ -3965,7 +3967,16 @@ f(x) = yt(x)
       (set! live old))
     (define (kill)
       ;; when we see control flow, empty live set back into unused set
+      (if seen-label
+          ;; Variables killed after seeing a label may have been assigned
+          ;; multiple times due to backward gotos
+          (table.foreach (lambda (k v) (put! after-label k #t)) live))
       (restore (table)))
+    (define (discard)
+      ;; Discard live variables without adding to unused.
+      ;; Used when has_label is true for additional cleanup.
+      (table.foreach (lambda (k v) (put! after-label k #t)) live)
+      (set! live (table)))
     (define (mark-used var)
       ;; remove variable from the unused table
       ;; Note arguments are only "used" for purposes of this analysis when
@@ -4012,6 +4023,7 @@ f(x) = yt(x)
              (kill)
              #f)
             ((eq? (car e) 'symboliclabel)
+             (set! seen-label #t)
              (kill)
              #t)
             ((memq (car e) '(if elseif trycatch tryfinally trycatchelse))
@@ -4029,7 +4041,7 @@ f(x) = yt(x)
                (let ((result (eager-any visit (cdr e))))
                  (leave-loop! decl-)
                  (if result
-                     #t
+                     (begin (discard) #t)
                      (begin (restore prev) #f)))))
             ((eq? (car e) '=)
              (begin0 (visit (caddr e))
@@ -4052,16 +4064,19 @@ f(x) = yt(x)
                    (assign! (cadr e))))
              #f)
             (else
-             (eager-any visit (cdr e))
-             ;; in all other cases there's nothing to do except assert that
-             ;; all expression heads have been handled.
-             #;(assert (memq (car e) '(foreigncall cfunction |::|))))))
+             (let ((result (eager-any visit (cdr e))))
+               (if result
+                   ;; Variables assigned in a labeled block could be assigned
+                   ;; multiple times due to backward gotos. Discard them.
+                   (begin (discard) #t)
+                   #f)))))
     (visit (lam:body lam))
     ;; Finally, variables can be marked never-undef if they were set in the first block,
     ;; or are currently live, or are back in the unused set (because we've left the only
     ;; block that uses them, or possibly because they have no uses at all).
+    ;; Exclude variables assigned after a label (could be multi-assigned due to gotos).
     (for-each (lambda (v)
-                (if (has? seen v)
+                (if (and (has? seen v) (not (has? after-label v)))
                     (let ((vv (assq v vi)))
                       (vinfo:set-never-undef! vv #t))))
               (append (table.keys live) (table.keys unused)))
