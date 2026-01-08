@@ -1706,4 +1706,10 @@ end
     @test typeof.(md) == [Markdown.Header{1}, Markdown.Paragraph, Markdown.List, Markdown.HorizontalRule, Markdown.Paragraph, Markdown.HorizontalRule]
 end
 
-include("test_spec.jl")
+include("test_spec_roundtrip_common.jl")
+include("test_spec_roundtrip_github.jl")
+include("test_spec_roundtrip_julia.jl")
+
+include("test_spec_html_common.jl")
+include("test_spec_html_github.jl")
+include("test_spec_html_julia.jl")
