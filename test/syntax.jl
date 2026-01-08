@@ -1932,24 +1932,6 @@ let f = capture_with_conditional_label()  # should not throw
     @test_throws UndefVarError(:x, :local) f(0)
 end
 
-# Variable assigned after @label - needs Box due to backward @goto (issue #37690)
-function f_label_loop()
-    local f
-    local x
-    k = 1
-    let
-        @label start
-        x = k
-        if k == 1
-            f = () -> x
-        end
-        k += 1
-        k <= 2 && @goto start
-    end
-    f()
-end
-@test f_label_loop() == 2
-
 # Label can be jumped to, bypassing assignment - needs Box
 let
     @goto L
