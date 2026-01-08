@@ -985,6 +985,105 @@ end
 20  (return %₁₂)
 
 ########################################
+# Local single-assigned after declaration - no Box needed
+function f_local_no_box()
+    local x
+    x = 1
+    ()->x
+end
+#---------------------
+1   (method TestMod.f_local_no_box)
+2   latestworld
+3   (call core.svec :x)
+4   (call core.svec false)
+5   (call JuliaLowering.eval_closure_type TestMod :#f_local_no_box#->##0 %₃ %₄)
+6   latestworld
+7   TestMod.#f_local_no_box#->##0
+8   (call core.svec %₇)
+9   (call core.svec)
+10  SourceLocation::4:5
+11  (call core.svec %₈ %₉ %₁₀)
+12  --- method core.nothing %₁₁
+    slots: [slot₁/#self#(!read)]
+    1   (call core.getfield slot₁/#self# :x)
+    2   (return %₁)
+13  latestworld
+14  TestMod.f_local_no_box
+15  (call core.Typeof %₁₄)
+16  (call core.svec %₁₅)
+17  (call core.svec)
+18  SourceLocation::1:10
+19  (call core.svec %₁₆ %₁₇ %₁₈)
+20  --- method core.nothing %₁₉
+    slots: [slot₁/#self#(!read) slot₂/x(single_assign)]
+    1   (= slot₂/x 1)
+    2   TestMod.#f_local_no_box#->##0
+    3   slot₂/x
+    4   (call core.typeof %₃)
+    5   (call core.apply_type %₂ %₄)
+    6   slot₂/x
+    7   (new %₅ %₆)
+    8   (return %₇)
+21  latestworld
+22  TestMod.f_local_no_box
+23  (return %₂₂)
+
+########################################
+# Typed local single-assigned after declaration - no Box needed
+function f_typed_local_no_box()
+    local x::Int
+    x = 1
+    ()->x
+end
+#---------------------
+1   (method TestMod.f_typed_local_no_box)
+2   latestworld
+3   (call core.svec :x)
+4   (call core.svec false)
+5   (call JuliaLowering.eval_closure_type TestMod :#f_typed_local_no_box#->##0 %₃ %₄)
+6   latestworld
+7   TestMod.#f_typed_local_no_box#->##0
+8   (call core.svec %₇)
+9   (call core.svec)
+10  SourceLocation::4:5
+11  (call core.svec %₈ %₉ %₁₀)
+12  --- method core.nothing %₁₁
+    slots: [slot₁/#self#(!read)]
+    1   (call core.getfield slot₁/#self# :x)
+    2   (return %₁)
+13  latestworld
+14  TestMod.f_typed_local_no_box
+15  (call core.Typeof %₁₄)
+16  (call core.svec %₁₅)
+17  (call core.svec)
+18  SourceLocation::1:10
+19  (call core.svec %₁₆ %₁₇ %₁₈)
+20  --- method core.nothing %₁₉
+    slots: [slot₁/#self#(!read) slot₂/x(single_assign) slot₃/tmp(!read)]
+    1   1
+    2   TestMod.Int
+    3   (= slot₃/tmp %₁)
+    4   slot₃/tmp
+    5   (call core.isa %₄ %₂)
+    6   (gotoifnot %₅ label₈)
+    7   (goto label₁₁)
+    8   slot₃/tmp
+    9   (call top.convert %₂ %₈)
+    10  (= slot₃/tmp (call core.typeassert %₉ %₂))
+    11  slot₃/tmp
+    12  (= slot₂/x %₁₁)
+    13  TestMod.#f_typed_local_no_box#->##0
+    14  slot₂/x
+    15  (call core.typeof %₁₄)
+    16  (call core.apply_type %₁₃ %₁₅)
+    17  slot₂/x
+    18  (new %₁₆ %₁₇)
+    19  (return %₁₈)
+21  latestworld
+22  TestMod.f_typed_local_no_box
+23  (return %₂₂)
+
+########################################
 # Error: Closure outside any top level context
 # (Should only happen in a user-visible way when lowering code emitted
 #  from a `@generated` function code generator.)

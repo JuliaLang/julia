@@ -909,10 +909,21 @@ function _optimize_lambda_vars!(ctx, ex)
 
         elseif k == K"local"
             # Track local declarations for loop handling
+            # Note: For typed locals like `local x::T`, the K"local" node only
+            # contains the BindingId after desugaring. The type info is in
+            # a separate K"decl" node. So we only need to handle K"BindingId" here.
             for child in children(e)
                 if kind(child) == K"BindingId"
                     declare!(child.var_id)
                 end
+            end
+            return false
+
+        elseif k == K"decl"
+            # Don't recurse into decl nodes - the BindingId is just a declaration,
+            # not a use. We only need to visit the type expression.
+            if numchildren(e) >= 2
+                return visit(e[2])
             end
             return false
 
