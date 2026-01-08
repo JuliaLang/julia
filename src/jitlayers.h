@@ -44,17 +44,18 @@
 // aarch64-darwin (macOS on ARM64), and not likely to ever be supported there
 // (see https://bugs.llvm.org/show_bug.cgi?id=52029).
 //
-// However, JITLink is a relatively young library and lags behind in platform
-// and feature support (e.g. Windows, JITEventListeners for various profilers,
-// etc.). Thus, we currently only use JITLink where absolutely required, that is,
-// for Mac/aarch64 and Linux/aarch64.
-//#define JL_FORCE_JITLINK
+// JITLink is now used on all platforms by default.  The support for RuntimeDyld
+// will be removed when we need the ability to manipulate JITLink LinkGraphs.
+//
+// Of the supported profilers, only OProfile has not been ported to JITLink.
 
 #if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
 # define HAS_SANITIZER
 #endif
 
+#ifndef JL_USE_OPROFILE_JITEVENTS
 #define JL_USE_JITLINK
+#endif
 
 # include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
 # include <llvm/ExecutionEngine/RTDyldMemoryManager.h>
