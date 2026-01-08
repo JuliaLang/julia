@@ -402,32 +402,55 @@ Julia applies the following order and associativity of operations, from highest 
 
 | Category       | Operators                                                                                         | Associativity              |
 |:-------------- |:------------------------------------------------------------------------------------------------- |:-------------------------- |
-| Syntax         | `.` followed by `::`                                                                              | Left                       |
-| Exponentiation | `^`                                                                                               | Right                      |
-| Unary          | `+ - ! ~ ¬ √ ∛ ∜ ⋆ ± ∓ <: >:`                                                                     | Right[^1]                  |
+| Syntax         | `.` followed by `::` followed by `'`                                                              | Left                       |
+| Exponentiation | `^` (`↑ ↓ ⇵ ⟰ ⟱ ⤈ ⤉ ⤊ ⤋ ⤒ ⤓`, etc.)                                                               | Right[^1]                  |
+| Unary          | `+ - ! ~ √ ∛ ∜ <: >:` (`¬ ⋆ ± ∓`)                                                                 | Right[^2]                  |
+| Juxtaposition  | Implicit multiplication by numeric literal coefficients; e.g., `2x` is parsed as `2*x`            | Non-associative            |
 | Bitshifts      | `<< >> >>>`                                                                                       | Left                       |
 | Fractions      | `//`                                                                                              | Left                       |
-| Multiplication | `* / % & \ ÷`                                                                                     | Left[^2]                   |
-| Addition       | `+ - \| ⊻`                                                                                        | Left[^2]                   |
-| Syntax         | `: ..`                                                                                            | Left                       |
+| Multiplication | `* / ÷ % & ∘ \ ∩ ⊼` (`⋅ × ⋆ ⊗ ⊘ ⊠ ⊡ ⊓ ∧`, etc.)                                                   | Left[^3]                   |
+| Addition       | `+ - \| ∪ ⊻ ⊽` (`± ∓ ⊕ ⊖ ⊞ ⊟ ⊔ ∨`, etc.)                                                          | Left[^3]                   |
+| Syntax         | `:` (`.. … ⁝ ⋮ ⋱ ⋰ ⋯`)                                                                            | Left                       |
 | Syntax         | `\|>`                                                                                             | Left                       |
 | Syntax         | `<\|`                                                                                             | Right                      |
-| Comparisons    | `> < >= <= == === != !== <:`                                                                      | Non-associative            |
-| Control flow   | `&&` followed by `\|\|` followed by `?`                                                           | Right                      |
+| Comparisons    | `in isa > < >= ≥ <= ≤ == === ≡ != ≠ !== ≢ ∈ ∉ ∋ ∌ ⊆ ⊈ ⊊ ≈ ≉ ⊇ ⊉ ⊋ <: >:` (`⊂ ⊄ ∝ ∥`, etc.)        | Non-associative[^4]        |
+| Control flow   | `&&` followed by `\|\|`                                                                           | Right                      |
+| Arrows         | (`← → ↔ ↚ ↛ ↢ ↣ ↦ ↤ ↮ ⇎ ⇍ ⇏ ⇐ ⇒ ⇔`, etc.)                                                         | Right                      |
+| Control flow   | `?`                                                                                               | Right                      |
 | Pair           | `=>`                                                                                              | Right                      |
-| Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            | Right                      |
+| Assignments    | `= += -= *= /= //= \= ^= ÷= %= <<= >>= >>>= \|= &= ⊻= ~` (`≔ ⩴ ≕ :=`)                             | Right                      |
 
 [^1]:
-    The unary operators `+` and `-` require explicit parentheses around their argument to disambiguate them from the operator `++`, etc. Other compositions of unary operators are parsed with right-associativity, e. g., `√√-a` as `√(√(-a))`.
+    Unary operators and juxtaposition of numeric literals take precedence over `^` only *within the exponent*.  For example, `2^-3`, `x^√2`, and `2^3x` are parsed as `2^(-3)`, `x^(√2)`, and `2^(3*x)`; whereas `-2^3`, `√x^2`, `2^3*x`, and `2x^3` are parsed as `-(2^3)`, `√(x^2)`, `(2^3)*x`, and `2*(x^3)`.
 [^2]:
+    Multiple applications of the unary operators `+` and `-` require explicit parentheses around their argument to disambiguate them from the operator `++`, etc. Other compositions of unary operators are parsed with right-associativity, e.g., `√√-a` as `√(√(-a))`.
+[^3]:
     The operators `+`, `++` and `*` are non-associative. `a + b + c` is parsed as `+(a, b, c)` not `+(+(a, b),
     c)`. However, the fallback methods for `+(a, b, c, d...)` and `*(a, b, c, d...)` both default to left-associative evaluation.
+[^4]:
+    Comparisons can be [chained](@ref "Chaining comparisons").  For example, `a < b < c` is essentially the same as `a < b && b < c`.  However, the order of evaluation is undefined.
 
-For a complete list of *every* Julia operator's precedence, see the top of this file:
-[`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm). Note that some of the operators there are not defined
-in the `Base` module but may be given definitions by standard libraries, packages or user code.
+Most of these [operators are functions](@ref Operators-Are-Functions).  They can also be used with either functional
+notation (e.g., `+(a, b)`) or "infix" notation (e.g., `a + b`).  Those listed outside of parentheses are already
+defined in the `Base` module; those listed inside parentheses are not currently defined in `Base`, but are available
+to be defined by standard libraries, packages, or user code.  For example, `⋅` and `×` are defined in the standard
+library's `LinearAlgebra` package.  Some of the latter lists are incomplete; for a complete listing of *every* Julia
+operator and its precedence, see the top of this file:
+[`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm).
 
-You can also find the numerical precedence for any given operator via the built-in function `Base.operator_precedence`, where higher numbers take precedence:
+It is also possible to define additional operators by appending suffixes to most of the binary operators.  The valid
+suffixes include the Unicode combining  characters, along with the subscripts, superscripts, and various primes
+(`′ ″ ‴ ⁗ ‵ ‶ ‷`) listed in
+[`src/flisp/julia_opsuffs.h`](https://github.com/JuliaLang/julia/blob/master/src/flisp/julia_opsuffs.h).  The
+resulting operators can be used with either functional or infix notation, and have the same precedence and
+associativity as the base operator.  For example, `⋆̂ᵝ₁′` could be defined as a function, and used as an infix operator
+with the same precedence and associativity as `⋆` and `*`.  However, operators ending with a subscript or superscript
+letter must be followed by a space when used in infix notation to distinguish them from variable names that begin
+with a subscript or superscript letter.  For example, if `+ᵃ` is an operator, then `+ᵃx` must be written as `+ᵃ x`
+to distinguish it from `+ ᵃx`.
+
+You can also find the numerical precedence for any binary or ternary operator via the
+built-in function `Base.operator_precedence`, where higher numbers take precedence:
 
 ```jldoctest
 julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
