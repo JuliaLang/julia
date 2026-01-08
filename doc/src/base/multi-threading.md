@@ -50,6 +50,8 @@ Base.Threads.atomic_xor!
 Base.Threads.atomic_max!
 Base.Threads.atomic_min!
 Base.Threads.atomic_fence
+Base.Threads.atomic_fence_heavy
+Base.Threads.atomic_fence_light
 ```
 
 ## ccall using a libuv threadpool (Experimental)

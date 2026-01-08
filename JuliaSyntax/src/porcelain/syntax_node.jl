@@ -82,11 +82,13 @@ function Base.:(==)(a::SyntaxData, b::SyntaxData)
 end
 
 """
-    SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead};
-               keep_parens=false, position::Integer=1)
+    SyntaxNode(source::SourceFile, cursor::RedTreeCursor,
+               raw::GreenNode{SyntaxHead}; keep_parens=false)
 
-An AST node with a similar layout to `Expr`. Typically constructed from source
-text by calling one of the parser API functions such as [`parseall`](@ref)
+A pointer-y AST constructed by removing all trivia from the raw parser output
+(see [`RawGreenNode`](@ref)).  The layout of `SyntaxNode` is different from that
+of `Expr` due to the invariant that each node's children are in the order they
+appeared in the source text.
 """
 const SyntaxNode = TreeNode{SyntaxData}
 

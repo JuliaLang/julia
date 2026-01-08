@@ -45,7 +45,7 @@ _numchildren(@nospecialize(ex)) = ex isa Expr ? length(ex.args) : 0
 _syntax_list(ctx::InterpolationContext) = SyntaxList(ctx)
 _syntax_list(ctx::ExprInterpolationContext) = Any[]
 
-_interp_makenode(ctx::InterpolationContext, ex, args) = makenode(ctx, ex, ex, args)
+_interp_makenode(ctx::InterpolationContext, ex, args) = mknode(ex, args)
 _interp_makenode(ctx::ExprInterpolationContext, ex, args) = Expr((ex::Expr).head, args...)
 
 _is_leaf(ex::SyntaxTree) = is_leaf(ex)
@@ -292,7 +292,7 @@ end
 struct GeneratedFunctionStub
     expr_compat_mode::Bool
     gen::Function
-    srcref::Union{SyntaxTree,LineNumberNode,SourceRef}
+    srcref::Union{LineNumberNode,SourceRef}
     argnames::Core.SimpleVector
     spnames::Core.SimpleVector
 end
@@ -343,7 +343,7 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
             ex0 = copy_ast(ctx1, ex0)
         end
     else
-        ex0 = @ast ctx1 g.srcref ex0::K"Value"
+        ex0 = newleaf(syntax_graph(ctx1), g.srcref, K"Value", ex0)
     end
     # Expand any macros emitted by the generator
     ex1 = expand_forms_1(ctx1, reparent(ctx1, ex0))

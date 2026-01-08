@@ -1,13 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-macro dotimes(n, body)
-    quote
-        for i = 1:$(esc(n))
-            $(esc(body))
-        end
-    end
-end
-
 const whitespace = " \t\r"
 
 """
@@ -92,16 +84,19 @@ function startswith(stream::IO, ss::Vector{<:AbstractString}; kws...)
     any(s->startswith(stream, s; kws...), ss)
 end
 
-function startswith(stream::IO, r::Regex; eat = true, padding = false)
+function matchstart(stream::IO, r::Regex; eat = true, padding = false)
     @assert Base.startswith(r.pattern, "^")
     start = position(stream)
     padding && skipwhitespace(stream)
     line = readline(stream)
     seek(stream, start)
     m = match(r, line)
-    m === nothing && return ""
-    eat && @dotimes length(m.match) read(stream, Char)
-    return m.match
+    if eat && m !== nothing
+        for i in 1:length(m.match)
+            read(stream, Char)
+        end
+    end
+    return m
 end
 
 """

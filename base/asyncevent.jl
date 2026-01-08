@@ -165,7 +165,7 @@ function _trywait(t::Union{Timer, AsyncCondition})
     set = t.set
     if set
         # full barrier now for AsyncCondition
-        t isa Timer || Core.Intrinsics.atomic_fence(:acquire_release)
+        t isa Timer || Core.Intrinsics.atomic_fence(:acquire_release, :system)
     else
         if !isopen(t)
             set = t.set

@@ -217,6 +217,12 @@ function parseargs!(retexpr::Expr, loc::LineNumberNode, cursor, source, txtbuf::
     return (firstchildhead, secondchildhead, firstchildrange)
 end
 
+function version_to_expr(node)
+    @assert kind(node) === K"VERSION"
+    nv = numeric_flags(flags(node))
+    return VersionNumber(1, nv ÷ 10, nv % 10)
+end
+
 _expr_leaf_val(node::SyntaxNode, _...) = node.val
 _expr_leaf_val(cursor::RedTreeCursor, txtbuf::Vector{UInt8}, txtbuf_offset::UInt32) =
     parse_julia_literal(txtbuf, head(cursor), byte_range(cursor) .+ txtbuf_offset)
@@ -238,14 +244,13 @@ function node_to_expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt
                 Expr(:error) :
                 Expr(:error, "$(_token_error_descriptions[k]): `$(source[srcrange])`")
         elseif k == K"VERSION"
-            nv = numeric_flags(flags(nodehead))
-            return VersionNumber(1, nv ÷ 10, nv % 10)
+            return version_to_expr(nodehead)
         else
             scoped_val = _expr_leaf_val(cursor, txtbuf, txtbuf_offset)
             val = @isexpr(scoped_val, :scope_layer) ? scoped_val.args[1] : scoped_val
             if val isa Union{Int128,UInt128,BigInt}
                 # Ignore the values of large integers and convert them back to
-                # symbolic/textural form for compatibility with the Expr
+                # symbolic/textual form for compatibility with the Expr
                 # representation of these.
                 str = replace(source[srcrange], '_'=>"")
                 macname = val isa Int128  ? Symbol("@int128_str")  :
@@ -547,7 +552,8 @@ end
                 retexpr.head = :(=)
             else
                 a1 = args[1]
-                if @isexpr(a1, :tuple)
+                if @isexpr(a1, :tuple) &&
+                    !has_flags(firstchildhead, TRAILING_COMMA_FLAG)
                     # Convert to weird Expr forms for long-form anonymous functions.
                     #
                     # (function (tuple (... xs)) body) ==> (function (... xs) body)

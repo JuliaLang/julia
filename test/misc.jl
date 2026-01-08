@@ -1560,6 +1560,9 @@ end
     @allocated _x = 1+2
     @test _x === 3
 
+    # test `@allocated` works for dotted operations
+    @test (@allocated 1 .+ 1) == 0
+
     n, m = 10, 20
     X = rand(n, m)
     treshape59278(X, n, m)

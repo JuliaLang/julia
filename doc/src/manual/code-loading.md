@@ -464,6 +464,17 @@ The syntax version for a package is determined by the loading mechanism in the f
 
 3. If neither is specified, the current Julia version is used.
 
+#### In scripts and the REPL
+
+Scripts and the REPL use the active project's syntax version. This determination happens:
+
+1. At startup after processing `--project`
+2. Before parsing any REPL input, once for each prompt
+
+In particular, a manual `set_active_project` in a script will not change the syntax versioned used
+for the rest of the script. However, doing so at the REPL (explicitly or implicitly via the Pkg
+REPL mode) will affect the syntax version used to parse the *next* REPL input.
+
 ## Conclusion
 
 Federated package management and precise software reproducibility are difficult but worthy goals in a package system. In combination, these goals lead to a more complex package loading mechanism than most dynamic languages have, but it also yields scalability and reproducibility that is more commonly associated with static languages. Typically, Julia users should be able to use the built-in package manager to manage their projects without needing a precise understanding of these interactions. A call to `Pkg.add("X")` will add to the appropriate project and manifest files, selected via `Pkg.activate("Y")`, so that a future call to `import X` will load `X` without further thought.

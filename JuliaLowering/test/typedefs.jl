@@ -313,4 +313,12 @@ end
 """) === nothing
 @test test_mod.X27269([[1,2]]) isa test_mod.X27269{Int, Vector{Int}}
 
+# Definition of type-alias with 2+ type-variables
+# See https://github.com/JuliaLang/JuliaLowering.jl/issues/123
+JuliaLowering.include_string(test_mod, """
+struct Foo{T,V,N}; end
+const Bar{T,V} = Foo{T,V,1}
+""")
+@test test_mod.Bar == (test_mod.Foo{T,V,1} where {T,V})
+
 end

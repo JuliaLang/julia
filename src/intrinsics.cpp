@@ -913,6 +913,15 @@ static jl_cgval_t emit_pointerarith(jl_codectx_t &ctx, intrinsic f,
 static jl_cgval_t emit_atomicfence(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
 {
     const jl_cgval_t &ord = argv[0];
+    const jl_cgval_t &ssid_arg = argv[1];
+    llvm::SyncScope::ID ssid = llvm::SyncScope::System;
+    if (!ssid_arg.constant || !jl_is_symbol(ssid_arg.constant) ||
+        ((jl_sym_t*)ssid_arg.constant != jl_singlethread_sym &&
+            (jl_sym_t*)ssid_arg.constant != jl_system_sym)) {
+        return emit_runtime_call(ctx, atomic_fence, argv, 2);
+    }
+    if ((jl_sym_t*)ssid_arg.constant == jl_singlethread_sym)
+        ssid = llvm::SyncScope::SingleThread;
     if (ord.constant && jl_is_symbol(ord.constant)) {
         enum jl_memory_order order = jl_get_atomic_order((jl_sym_t*)ord.constant, true, true);
         if (order == jl_memory_order_invalid) {
@@ -920,10 +929,10 @@ static jl_cgval_t emit_atomicfence(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
             return jl_cgval_t(); // unreachable
         }
         if (order > jl_memory_order_monotonic)
-            ctx.builder.CreateFence(get_llvm_atomic_order(order));
+            ctx.builder.CreateFence(get_llvm_atomic_order(order), ssid);
         return ghostValue(ctx, jl_nothing_type);
     }
-    return emit_runtime_call(ctx, atomic_fence, argv, 1);
+    return emit_runtime_call(ctx, atomic_fence, argv, 2);
 }
 
 static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
@@ -1225,15 +1234,17 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
             } else if (!y.isghost && y.V != NULL) {
                 y_ptr = maybe_decay_tracked(ctx, y.V);
             }
-            auto nroots = std::max(x.inline_roots.size(), y.inline_roots.size());
+            jl_gc_roots_t x_roots = x.inline_roots;
+            jl_gc_roots_t y_roots = y.inline_roots;
+            auto nroots = std::max(x_roots.size(), y_roots.size());
             Value *Vnull = Constant::getNullValue(ctx.types().T_prjlvalue);
             SmallVector<Value *, 0> ifelse_roots(nroots, Vnull);
             for (size_t i = 0; i < nroots; i++) {
                 Value *x_root = Vnull, *y_root = Vnull;
-                if (i < x.inline_roots.size())
-                    x_root = x.inline_roots[i];
-                if (i < y.inline_roots.size())
-                    y_root = y.inline_roots[i];
+                if (i < x_roots.size())
+                    x_root = x_roots.get(ctx, i);
+                if (i < y_roots.size())
+                    y_root = y_roots.get(ctx, i);
                 ifelse_roots[i] = ctx.builder.CreateSelect(isfalse, y_root, x_root);
             }
             MDNode *ifelse_tbaa;
@@ -1300,7 +1311,7 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                 tindex = ret;
                 setName(ctx.emission_context, tindex, "ifelse_tindex");
             }
-            jl_cgval_t ret = mark_julia_slot(ifelse_result, rt_hint, tindex, ifelse_tbaa, ifelse_roots);
+            jl_cgval_t ret = mark_julia_slot(ifelse_result, rt_hint, tindex, ifelse_tbaa, jl_gc_roots_t(std::move(ifelse_roots)));
             if (x_vboxed || y_vboxed) {
                 if (!x_vboxed)
                     x_vboxed = ConstantPointerNull::get(cast<PointerType>(y_vboxed->getType()));
@@ -1368,7 +1379,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
 
     case atomic_fence:
         ++Emitted_atomic_fence;
-        assert(nargs == 1);
+        assert(nargs == 2);
         return emit_atomicfence(ctx, argv);
     case atomic_pointerref:
         ++Emitted_atomic_pointerref;
