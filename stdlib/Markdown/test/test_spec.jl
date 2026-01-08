@@ -191,7 +191,7 @@ end
     input = "&nbsp &x; &#; &#x;\n&#87654321;\n&#abcdef0;\n&ThisIsNotDefined; &hi?;\n"
     expected = "<p>&amp;nbsp &amp;x; &amp;#; &amp;#x;\n&amp;#87654321;\n&amp;#abcdef0;\n&amp;ThisIsNotDefined; &amp;hi?;</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 29
     input = "&copy\n"
@@ -579,7 +579,7 @@ end
     input = "Foo\n= =\n\nFoo\n--- -\n"
     expected = "<p>Foo\n= =</p>\n<p>Foo</p>\n<hr />\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 89
     input = "Foo  \n-----\n"
@@ -675,13 +675,13 @@ end
     input = "Foo\nbar\n\n---\n\nbaz\n"
     expected = "<p>Foo\nbar</p>\n<hr />\n<p>baz</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 105
     input = "Foo\nbar\n* * *\nbaz\n"
     expected = "<p>Foo\nbar</p>\n<hr />\n<p>baz</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 106
     input = "Foo\nbar\n\\---\nbaz\n"
@@ -935,7 +935,7 @@ end
     input = "``` aa ```\nfoo\n"
     expected = "<p><code>aa</code>\nfoo</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 146
     input = "~~~ aa ``` ~~~\nfoo\n~~~\n"
@@ -1357,7 +1357,7 @@ end
     input = "Foo\n[bar]: /baz\n\n[bar]\n"
     expected = "<p>Foo\n[bar]: /baz</p>\n<p>[bar]</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 214
     input = "# [Foo]\n[foo]: /url\n> bar\n"
@@ -1406,7 +1406,7 @@ end
     input = "aaa\nbbb\n\nccc\nddd\n"
     expected = "<p>aaa\nbbb</p>\n<p>ccc\nddd</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 221
     input = "aaa\n\n\nbbb\n"
@@ -1430,7 +1430,7 @@ end
     input = "   aaa\nbbb\n"
     expected = "<p>aaa\nbbb</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 225
     input = "    aaa\nbbb\n"
@@ -1468,19 +1468,19 @@ end
     input = "> # Foo\n> bar\n> baz\n"
     expected = "<blockquote>\n<h1>Foo</h1>\n<p>bar\nbaz</p>\n</blockquote>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 229
     input = "># Foo\n>bar\n> baz\n"
     expected = "<blockquote>\n<h1>Foo</h1>\n<p>bar\nbaz</p>\n</blockquote>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 230
     input = "   > # Foo\n   > bar\n > baz\n"
     expected = "<blockquote>\n<h1>Foo</h1>\n<p>bar\nbaz</p>\n</blockquote>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 231
     input = "    > # Foo\n    > bar\n    > baz\n"
@@ -1558,7 +1558,7 @@ end
     input = "> foo\n> bar\n"
     expected = "<blockquote>\n<p>foo\nbar</p>\n</blockquote>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 244
     input = "> foo\n>\n> bar\n"
@@ -1625,7 +1625,7 @@ end
     input = "A paragraph\nwith two lines.\n\n    indented code\n\n> A block quote.\n"
     expected = "<p>A paragraph\nwith two lines.</p>\n<pre><code>indented code\n</code></pre>\n<blockquote>\n<p>A block quote.</p>\n</blockquote>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 254
     input = "1.  A paragraph\n    with two lines.\n\n        indented code\n\n    > A block quote.\n"
@@ -2499,7 +2499,7 @@ end
     input = "**Gomphocarpus (*Gomphocarpus physocarpus*, syn.\n*Asclepias physocarpa*)**\n"
     expected = "<p><strong>Gomphocarpus (<em>Gomphocarpus physocarpus</em>, syn.\n<em>Asclepias physocarpa</em>)</strong></p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 395
     input = "**foo \"*bar*\" foo**\n"
@@ -2565,7 +2565,7 @@ end
     input = "*foo\nbar*\n"
     expected = "<p><em>foo\nbar</em></p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 406
     input = "_foo __bar__ baz_\n"
@@ -2673,7 +2673,7 @@ end
     input = "**foo\nbar**\n"
     expected = "<p><strong>foo\nbar</strong></p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 424
     input = "__foo _bar_ baz__\n"
@@ -3082,7 +3082,7 @@ end
     input = "[link](foo\nbar)\n"
     expected = "<p>[link](foo\nbar)</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 491
     input = "[link](<foo\nbar>)\n"
@@ -3889,7 +3889,7 @@ end
     input = "< a><\nfoo><bar/ >\n<foo bar=baz\nbim!bop />\n"
     expected = "<p>&lt; a&gt;&lt;\nfoo&gt;&lt;bar/ &gt;\n&lt;foo bar=baz\nbim!bop /&gt;</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 622
     input = "<a href='bar'title=title>\n"
@@ -4016,7 +4016,7 @@ end
     input = "`code\\\nspan`\n"
     expected = "<p><code>code\\ span</code></p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 642
     input = "<a href=\"foo  \nbar\">\n"
@@ -4065,7 +4065,7 @@ end
     input = "foo\nbaz\n"
     expected = "<p>foo\nbaz</p>\n"
     actual = Markdown.html(Markdown.parse(input))
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 649
     input = "foo \n baz\n"

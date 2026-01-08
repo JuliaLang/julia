@@ -24,7 +24,7 @@ function paragraph(stream::IO, md::MD)
             elseif blankline(stream) || _parse(stream, md, breaking = true)
                 break
             else
-                write(buffer, ' ')
+                write(buffer, '\n')
             end
         else
             write(buffer, char)

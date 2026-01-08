@@ -60,11 +60,13 @@ end
 function inline_code(stream::IO, md::MD)
     withstream(stream) do
         ticks = matchstart(stream, r"^(`+)").match
-        result = readuntil(stream, ticks)
+        result = readuntil(stream, ticks; newlines=true)
         if result === nothing
             nothing
         else
             result = strip(result)
+            # in code spans, newlines are replaced by spaces
+            result = replace(result, '\n' => ' ')
             # An odd number of backticks wrapping the text will produce a `Code` node, while
             # an even number will result in a `LaTeX` node. This allows for arbitrary
             # backtick combinations to be embedded inside the resulting node, i.e.
