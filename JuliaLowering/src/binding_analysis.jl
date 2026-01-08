@@ -92,17 +92,19 @@ function _analyze_lambda_vars!(ctx, ex)
     # - unused: candidate variables not yet used (read) in current block
     # - live: variables that have been assigned in current block
     # - seen: all variables we've seen assigned
-    # - decl: variables declared (local/argument) - for loop handling
+    # - decl: variables declared before loop (via `local` or outer scope)
+    # - args: argument variables (never undefined, special handling in mark_used!)
     unused = candidates
     live = Set{IdTag}()
     seen = Set{IdTag}()
-
-    # Initialize decl with arguments since they're implicitly declared outside any loop
     decl = Set{IdTag}()
+    args = Set{IdTag}()
+    # Initialize decl and args with arguments since they're implicitly declared outside any loop
     for id in candidates
         binfo = get_binding(ctx, id)
         if binfo.kind == :argument
             push!(decl, id)
+            push!(args, id)
         end
     end
 
@@ -139,9 +141,11 @@ function _analyze_lambda_vars!(ctx, ex)
         union!(decl, old_decl)
     end
 
-    # When a variable is used (read), remove from unused
+    # When a variable is used (read), remove from unused.
+    # Note: arguments are only "used" for purposes of this analysis when
+    # they are captured, since they are never undefined.
     function mark_used!(var_id)
-        if var_id in unused
+        if var_id in unused && !(var_id in args)
             delete!(unused, var_id)
         end
     end

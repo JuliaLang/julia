@@ -252,6 +252,35 @@ begin
 end
 """) == 1
 
+# Argument reassigned in if-branch before capture - no Box needed (PR #60567 review)
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_arg_if_branch(x, cond)
+        if cond
+            x = 5
+            return ()->x
+        end
+        return x
+    end
+    # When closure is returned, it captures the reassigned value
+    f_arg_if_branch(100, true)()
+end
+""") == 5
+
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_arg_if_branch2(x, cond)
+        if cond
+            x = 5
+            return ()->x
+        end
+        return x
+    end
+    # When original value is returned
+    f_arg_if_branch2(100, false)
+end
+""") == 100
+
 # Variable declared outside loop, assigned inside - needs Box (issue #37690)
 @test JuliaLowering.include_string(test_mod, """
 begin
