@@ -39,10 +39,9 @@ end
 #---------------------
 1   1
 2   (= slot₁/x %₁)
-3   slot₁/x
-4   (call core.tuple %₃)
-5   (call JuliaLowering.interpolate_ast SyntaxTree (inert (. A ($ x))) %₄)
-6   (return %₅)
+3   (call core.tuple slot₁/x)
+4   (call JuliaLowering.interpolate_ast SyntaxTree (inert (. A ($ x))) %₃)
+5   (return %₄)
 
 ########################################
 # Error: Double escape
