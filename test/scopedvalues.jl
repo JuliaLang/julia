@@ -195,3 +195,52 @@ nothrow_scope()
         push!(ts, 2)
     end
 end
+
+using Base.ScopedValues: ScopedThunk, ScopedValue, with
+@noinline function test_59483()
+    sv = ScopedValue([])
+    ch = Channel{Bool}()
+
+    # Start a new scope, which we will capture in a ScopedThunk
+    thunk = with(sv=>Any[2]) do
+        # This scoped thunk performs GCs, which could free any unrooted scope below:
+        ScopedThunk(@noinline () -> begin
+            GC.gc()
+            GC.gc()
+            sv[]
+        end)
+    end
+    @test thunk() == Any[2]
+
+    # Spawn a child task, which inherits the parent's Scope
+    @noinline function inner_function()
+        # Block until the parent task has left the scope.
+        take!(ch)
+        # Now, per issue 59483, this task's scope is not rooted, except by the task itself.
+
+        # Now run the thunk, which will switch to the top scope, leaving the current
+        # scope possibly unrooted. When this thunk performs GCs, if the current scope is
+        # freed, then we can crash when we return. The fix for this issue made sure that the
+        # scope in this task remains rooted.
+        val = thunk()
+        @test val == Any[2]
+        # These GCs could crash:
+        GC.gc()
+        GC.gc()
+    end
+    @noinline function spawn_inner()
+        # Set a new Scope in the parent task - this is the scope that could be freed.
+        with(sv=>Any[1]) do
+            return @async inner_function()
+        end
+    end
+
+    # RUN THE TEST:
+    t = spawn_inner()
+    # Exit the scope, and let the child task proceed
+    put!(ch, true)
+    wait(t)
+end
+@testset "issue 59483" begin
+    test_59483()
+end
