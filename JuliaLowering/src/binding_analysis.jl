@@ -285,6 +285,16 @@ function _analyze_lambda_vars!(ctx, ex)
             end
             return has_label
 
+        elseif k in KSet"quote inert top core inert local meta inbounds boundscheck noinline
+                         loopinfo decl with_static_parameters toplevel_butfirst global globalref
+                         assign_or_constdecl_if_global extension const atomic isdefined toplevel
+                         module error gc_preserve_begin gc_preserve_end export public inline"
+                         # removed: lineinfo line llambda unnecessary copyast
+                         #          aliasscope popaliasscope thunk global-if-global isglobal
+                         #          thismodule thisfunction purity
+                         # (lambda-opt-ignored-exprs from flisp)
+            return false
+
         else
             has_label = false
             for child in children(e)
