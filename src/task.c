@@ -1216,6 +1216,8 @@ CFI_NORETURN
     jl_ptls_t ptls = ct->ptls;
     jl_value_t *res;
     assert(ptls->finalizers_inhibited == 0);
+    jl_value_t *scope = ct->scope;
+    JL_GC_PUSH1(&scope);
 
 #ifdef MIGRATE_TASKS
     jl_task_t *pt = ptls->previous_task;
