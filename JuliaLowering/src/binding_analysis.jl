@@ -301,17 +301,14 @@ function _analyze_lambda_vars!(ctx, ex)
             end
             return has_label
 
-        elseif is_leaf(e) || is_quoted(e)
-            return false
+        elseif is_leaf(e) || is_quoted(e) ||
+            k in KSet"local meta inbounds boundscheck noinline loopinfo decl
+                with_static_parameters toplevel_butfirst global globalref
+                extension constdecl atomic isdefined toplevel module error
+                gc_preserve_begin gc_preserve_end export public inline"
 
-        elseif k in KSet"quote inert top core inert local meta inbounds boundscheck noinline
-                         loopinfo decl with_static_parameters toplevel_butfirst global globalref
-                         assign_or_constdecl_if_global extension const atomic isdefined toplevel
-                         module error gc_preserve_begin gc_preserve_end export public inline"
-                         # removed: lineinfo line llambda unnecessary copyast
-                         #          aliasscope popaliasscope thunk global-if-global isglobal
-                         #          thismodule thisfunction purity
-                         # (lambda-opt-ignored-exprs from flisp)
+            # Forms that don't interact with locals or affect control flow (likely more than is necessary).
+            # flisp: `lambda-opt-ignored-exprs`
             return false
 
         else
