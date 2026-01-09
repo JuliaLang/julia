@@ -128,7 +128,7 @@ end
     expected = Markdown.parse(input; flavor=:github)
     new_input = Markdown.Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:github)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 17
     input = "`` \\[\\` ``\n"
@@ -4608,7 +4608,7 @@ end
     expected = Markdown.parse(input; flavor=:github)
     new_input = Markdown.Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:github)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 635
     input = "foo       \nbaz\n"
@@ -4629,7 +4629,7 @@ end
     expected = Markdown.parse(input; flavor=:github)
     new_input = Markdown.Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:github)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 638
     input = "*foo  \nbar*\n"
@@ -4643,7 +4643,7 @@ end
     expected = Markdown.parse(input; flavor=:github)
     new_input = Markdown.Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:github)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 640
     input = "`code  \nspan`\n"
@@ -4671,7 +4671,7 @@ end
     expected = Markdown.parse(input; flavor=:github)
     new_input = Markdown.Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:github)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 644
     input = "foo\\\n"

@@ -133,7 +133,7 @@ function plaininline(io::IO, md::Code)
     end
 end
 
-plaininline(io::IO, br::LineBreak) = println(io)
+plaininline(io::IO, br::LineBreak) = println(io, "\\")
 
 plaininline(io::IO, x) = show(io, MIME"text/plain"(), x)
 
