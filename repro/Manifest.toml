@@ -1,0 +1,342 @@
+# This file is machine-generated - editing it directly is not advised
+
+julia_version = "1.14.0-DEV"
+manifest_format = "2.1"
+project_hash = "0939c017e5c231b69a37e804bee04ec2a92b484f"
+
+[[deps.ArrayLayouts]]
+deps = ["FillArrays", "LinearAlgebra", "StaticArrays"]
+git-tree-sha1 = "e0b47732a192dd59b9d079a06d04235e2f833963"
+registries = "General"
+uuid = "4c555306-a7a7-4459-81d9-ec55ddd5c99a"
+version = "1.12.2"
+weakdeps = ["SparseArrays"]
+
+    [deps.ArrayLayouts.extensions]
+    ArrayLayoutsSparseArraysExt = "SparseArrays"
+
+    [deps.ArrayLayouts.syntax]
+    julia_version = "1.10.0"
+
+[[deps.Artifacts]]
+uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+version = "1.11.0"
+
+    [deps.Artifacts.syntax]
+    julia_version = "1.14.0-DEV.1462"
+
+[[deps.BandedMatrices]]
+deps = ["ArrayLayouts", "FillArrays", "LinearAlgebra", "PrecompileTools"]
+git-tree-sha1 = "02fa77c70ba84361b9bc9ff28523bd9d78519265"
+registries = "General"
+uuid = "aae01518-5342-5314-be14-df237901396f"
+version = "1.11.0"
+
+    [deps.BandedMatrices.extensions]
+    BandedMatricesSparseArraysExt = "SparseArrays"
+    CliqueTreesExt = "CliqueTrees"
+
+    [deps.BandedMatrices.syntax]
+    julia_version = "1.10.0"
+
+    [deps.BandedMatrices.weakdeps]
+    CliqueTrees = "60701a23-6482-424a-84db-faee86b9b1f8"
+    SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+
+[[deps.BlockArrays]]
+deps = ["ArrayLayouts", "FillArrays", "LinearAlgebra"]
+git-tree-sha1 = "0f606a9894e2bcda541ceb82a91a13c5d450ed97"
+registries = "General"
+uuid = "8e7c35d0-a365-5155-bbbb-fb81a777f24e"
+version = "1.9.3"
+
+    [deps.BlockArrays.extensions]
+    BlockArraysAdaptExt = "Adapt"
+    BlockArraysBandedMatricesExt = "BandedMatrices"
+
+    [deps.BlockArrays.syntax]
+    julia_version = "1.10.0"
+
+    [deps.BlockArrays.weakdeps]
+    Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
+    BandedMatrices = "aae01518-5342-5314-be14-df237901396f"
+
+[[deps.BlockBandedMatrices]]
+deps = ["ArrayLayouts", "BandedMatrices", "BlockArrays", "FillArrays", "LinearAlgebra", "MatrixFactorizations"]
+git-tree-sha1 = "4eef2d2793002ef8221fe561cc822eb252afa72f"
+registries = "General"
+uuid = "ffab5731-97b5-5995-9138-79e8c1846df0"
+version = "0.13.4"
+weakdeps = ["SparseArrays"]
+
+    [deps.BlockBandedMatrices.extensions]
+    BlockBandedMatricesSparseArraysExt = "SparseArrays"
+
+    [deps.BlockBandedMatrices.syntax]
+    julia_version = "1.10.0"
+
+[[deps.CompilerSupportLibraries_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
+version = "1.3.0+1"
+
+    [deps.CompilerSupportLibraries_jll.syntax]
+    julia_version = "1.6.0"
+
+[[deps.Dates]]
+deps = ["Printf"]
+uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
+version = "1.11.0"
+
+    [deps.Dates.syntax]
+    julia_version = "1.14.0-DEV.1462"
+
+[[deps.FillArrays]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "5bfcd42851cf2f1b303f51525a54dc5e98d408a3"
+registries = "General"
+uuid = "1a297f60-69ca-5386-bcde-b61e274b549b"
+version = "1.15.0"
+
+    [deps.FillArrays.extensions]
+    FillArraysPDMatsExt = "PDMats"
+    FillArraysSparseArraysExt = "SparseArrays"
+    FillArraysStatisticsExt = "Statistics"
+
+    [deps.FillArrays.syntax]
+    julia_version = "1.10.0"
+
+    [deps.FillArrays.weakdeps]
+    PDMats = "90014a1f-27ba-587c-ab20-58faa44d9150"
+    SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+    Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+
+[[deps.InfiniteArrays]]
+deps = ["ArrayLayouts", "FillArrays", "Infinities", "LazyArrays", "LinearAlgebra"]
+git-tree-sha1 = "6370db1acf00f5a41f572f1edec036e3cf03e470"
+registries = "General"
+uuid = "4858937d-0d70-526a-a4dd-2d5cb5dd786c"
+version = "0.15.11"
+
+    [deps.InfiniteArrays.extensions]
+    InfiniteArraysBandedMatricesExt = "BandedMatrices"
+    InfiniteArraysBlockArraysExt = "BlockArrays"
+    InfiniteArraysBlockBandedMatricesExt = "BlockBandedMatrices"
+    InfiniteArraysDSPExt = "DSP"
+    InfiniteArraysStatisticsExt = "Statistics"
+
+    [deps.InfiniteArrays.syntax]
+    julia_version = "1.10.0"
+
+    [deps.InfiniteArrays.weakdeps]
+    BandedMatrices = "aae01518-5342-5314-be14-df237901396f"
+    BlockArrays = "8e7c35d0-a365-5155-bbbb-fb81a777f24e"
+    BlockBandedMatrices = "ffab5731-97b5-5995-9138-79e8c1846df0"
+    DSP = "717857b8-e6f2-59f4-9121-6e50c889abd2"
+    Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+
+[[deps.Infinities]]
+git-tree-sha1 = "4495006c20b2fd27b8c453a1dd31d423654f3772"
+registries = "General"
+uuid = "e1ba4f0e-776d-440f-acd9-e1d2e9742647"
+version = "0.1.12"
+
+    [deps.Infinities.syntax]
+    julia_version = "1.10.0"
+
+[[deps.LazyArrays]]
+deps = ["ArrayLayouts", "FillArrays", "LinearAlgebra", "MacroTools", "SparseArrays"]
+git-tree-sha1 = "70ebe3bcf87d6a1e7435ef5182c13a91161ba9b8"
+registries = "General"
+uuid = "5078a376-72f3-5289-bfd5-ec5146d43c02"
+version = "2.9.4"
+weakdeps = ["BandedMatrices", "BlockArrays", "BlockBandedMatrices", "StaticArrays"]
+
+    [deps.LazyArrays.extensions]
+    LazyArraysBandedMatricesExt = "BandedMatrices"
+    LazyArraysBlockArraysExt = "BlockArrays"
+    LazyArraysBlockBandedMatricesExt = "BlockBandedMatrices"
+    LazyArraysStaticArraysExt = "StaticArrays"
+
+    [deps.LazyArrays.syntax]
+    julia_version = "1.10.0"
+
+[[deps.LazyBandedMatrices]]
+deps = ["ArrayLayouts", "BandedMatrices", "BlockArrays", "BlockBandedMatrices", "FillArrays", "LazyArrays", "LinearAlgebra", "MatrixFactorizations", "SparseArrays", "StaticArrays"]
+git-tree-sha1 = "6cf770e6443c9f8d91d5dd78de0336921df6976b"
+registries = "General"
+uuid = "d7e5e226-e90b-4449-9968-0f923699bf6f"
+version = "0.11.7"
+weakdeps = ["InfiniteArrays"]
+
+    [deps.LazyBandedMatrices.extensions]
+    LazyBandedMatricesInfiniteArraysExt = "InfiniteArrays"
+
+    [deps.LazyBandedMatrices.syntax]
+    julia_version = "1.10.0"
+
+[[deps.Libdl]]
+uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+version = "1.11.0"
+
+    [deps.Libdl.syntax]
+    julia_version = "1.14.0-DEV.1462"
+
+[[deps.LinearAlgebra]]
+deps = ["Libdl", "OpenBLAS_jll", "libblastrampoline_jll"]
+uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+version = "1.13.0"
+
+    [deps.LinearAlgebra.syntax]
+    julia_version = "1.14.0-DEV.1462"
+
+[[deps.MacroTools]]
+git-tree-sha1 = "1e0228a030642014fe5cfe68c2c0a818f9e3f522"
+registries = "General"
+uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+version = "0.5.16"
+
+    [deps.MacroTools.syntax]
+    julia_version = "1.6.0"
+
+[[deps.MatrixFactorizations]]
+deps = ["ArrayLayouts", "LinearAlgebra", "Printf", "Random"]
+git-tree-sha1 = "3bb3cf4685f1c90f22883f4c4bb6d203fa882b79"
+registries = "General"
+uuid = "a3b82374-2e81-5b9e-98ce-41277c0e4c87"
+version = "3.1.3"
+weakdeps = ["BandedMatrices"]
+
+    [deps.MatrixFactorizations.extensions]
+    MatrixFactorizationsBandedMatricesExt = "BandedMatrices"
+
+    [deps.MatrixFactorizations.syntax]
+    julia_version = "1.10.0"
+
+[[deps.OpenBLAS_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
+uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
+version = "0.3.29+0"
+
+    [deps.OpenBLAS_jll.syntax]
+    julia_version = "1.11.0"
+
+[[deps.PrecompileTools]]
+deps = ["Preferences"]
+git-tree-sha1 = "07a921781cab75691315adc645096ed5e370cb77"
+registries = "General"
+uuid = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
+version = "1.3.3"
+
+    [deps.PrecompileTools.syntax]
+    julia_version = "1.12.0"
+
+[[deps.Preferences]]
+deps = ["TOML"]
+git-tree-sha1 = "522f093a29b31a93e34eaea17ba055d850edea28"
+registries = "General"
+uuid = "21216c6a-2e73-6563-6e65-726566657250"
+version = "1.5.1"
+
+    [deps.Preferences.syntax]
+    julia_version = "1.0.0"
+
+[[deps.Printf]]
+deps = ["Unicode"]
+uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+version = "1.11.0"
+
+    [deps.Printf.syntax]
+    julia_version = "1.14.0-DEV.1462"
+
+[[deps.Random]]
+deps = ["SHA"]
+uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+version = "1.11.0"
+
+    [deps.Random.syntax]
+    julia_version = "1.14.0-DEV.1462"
+
+[[deps.SHA]]
+uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+version = "1.0.0"
+
+    [deps.SHA.syntax]
+    julia_version = "1.0.0"
+
+[[deps.Serialization]]
+uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+version = "1.11.0"
+
+    [deps.Serialization.syntax]
+    julia_version = "1.14.0-DEV.1462"
+
+[[deps.SparseArrays]]
+deps = ["Libdl", "LinearAlgebra", "Random", "Serialization", "SuiteSparse_jll"]
+uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+version = "1.13.0"
+
+    [deps.SparseArrays.syntax]
+    julia_version = "1.11.0"
+
+[[deps.StaticArrays]]
+deps = ["LinearAlgebra", "PrecompileTools", "Random", "StaticArraysCore"]
+git-tree-sha1 = "eee1b9ad8b29ef0d936e3ec9838c7ec089620308"
+registries = "General"
+uuid = "90137ffa-7385-5640-81b9-e52037218182"
+version = "1.9.16"
+
+    [deps.StaticArrays.extensions]
+    StaticArraysChainRulesCoreExt = "ChainRulesCore"
+    StaticArraysStatisticsExt = "Statistics"
+
+    [deps.StaticArrays.syntax]
+    julia_version = "1.6.0"
+
+    [deps.StaticArrays.weakdeps]
+    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+    Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+
+[[deps.StaticArraysCore]]
+git-tree-sha1 = "6ab403037779dae8c514bad259f32a447262455a"
+registries = "General"
+uuid = "1e83bf80-4336-4d27-bf5d-d5a4f845583c"
+version = "1.4.4"
+
+    [deps.StaticArraysCore.syntax]
+    julia_version = "1.6.0"
+
+[[deps.SuiteSparse_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl", "libblastrampoline_jll"]
+uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"
+version = "7.10.1+0"
+
+    [deps.SuiteSparse_jll.syntax]
+    julia_version = "1.13.0"
+
+[[deps.TOML]]
+deps = ["Dates"]
+uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+version = "1.0.3"
+
+    [deps.TOML.syntax]
+    julia_version = "1.6.0"
+
+[[deps.Unicode]]
+uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
+version = "1.11.0"
+
+    [deps.Unicode.syntax]
+    julia_version = "1.14.0-DEV.1462"
+
+[[deps.libblastrampoline_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
+version = "5.15.0+0"
+
+    [deps.libblastrampoline_jll.syntax]
+    julia_version = "1.13.0"
+
+[registries.General]
+url = "https://github.com/JuliaRegistries/General.git"
+uuid = "23338594-aafe-5451-b93e-139f81909106"
