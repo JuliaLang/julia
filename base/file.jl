@@ -779,7 +779,7 @@ function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
     filename = _win_mkstemp(parent)
     filepath = joinpath(absparent, filename)
     cleanup && temp_cleanup_later(filepath)
-    return (filename, open(filepath, "r+"))
+    return (filename, Base.open(filepath, "r+"))
 end
 
 else # !windows
