@@ -240,14 +240,14 @@ World""" |> Markdown.plain == "Hello\n\n---\n\nWorld\n"
 @test md"""
 > foo
 >
->   * bar
+> * bar
 >
 > ```
 > baz
 > ```""" |> Markdown.plain == """
 > foo
 >
->   * bar
+> * bar
 >
 > ```
 > baz
@@ -467,8 +467,8 @@ end
 
         Some **bolded**
 
-          * list1
-          * list2
+        * list1
+        * list2
         """
 
     out =
@@ -966,9 +966,9 @@ end
 
 
             !!! warning "custom title"
-                  * foo
-                  * bar
-                  * baz
+                * foo
+                * bar
+                * baz
 
                 foo bar baz
 
@@ -1085,18 +1085,18 @@ end
 
                > A block quote.
 
-              * one
+            * one
 
             two
 
-              * one
+            * one
 
-                two
+              two
 
-              * baz
-              * ```
-                foo
-                ```
+            * baz
+            * ```
+              foo
+              ```
 
             1. foo
             2. bar
@@ -1387,8 +1387,8 @@ end
             Misc:
             stuff
 
-              * line
-                break
+            * line
+              break
             """
     @test Markdown.html(s) ==
             raw"""
@@ -1576,21 +1576,21 @@ end
     expected = """
     An unordered list:
 
-      * top level
-        with an extra line
+    * top level
+      with an extra line
 
-          * second level
-            again with an extra line
+      * second level
+        again with an extra line
 
-              * third level
-                yet again with an extra line
+        * third level
+          yet again with an extra line
 
-                  * fourth level
-                    and another extra line
+          * fourth level
+            and another extra line
 
-                      * fifth level
-                        final extra line
-      * back to top level
+            * fifth level
+              final extra line
+    * back to top level
     """
 
     actual = Markdown.plain(m)
