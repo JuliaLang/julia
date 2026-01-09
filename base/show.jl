@@ -500,27 +500,79 @@ show(x) = show(stdout, x)
 
 # avoid inferring show_default on the type of `x`
 show_default(io::IO, @nospecialize(x)) = _show_default(io, inferencebarrier(x))
-
 function _show_default(io::IO, @nospecialize(x))
     t = typeof(x)
-    show(io, inferencebarrier(t)::DataType)
+    typebuff = IOBuffer()
+    typeio = IOContext(IOContext(typebuff, io), Pair{Symbol,Any}(:SHOWN_SET, x),
+                            Pair{Symbol,Any}(:typeinfo, Any))
+    show(typeio, inferencebarrier(t)::DataType)
+    seek(typebuff, 0)
+    print(io, readuntil(typebuff, "{"))
+    eof(typebuff) || printstyled(io, "{", readline(typebuff), color = :light_black)
     print(io, '(')
     nf = nfields(x)
     nb = sizeof(x)::Int
     if nf != 0 || nb == 0
+        iscompact = get(io, :compact, false)::Bool
         if !show_circular(io, x)
-            recur_io = IOContext(io, Pair{Symbol,Any}(:SHOWN_SET, x),
-                                 Pair{Symbol,Any}(:typeinfo, Any))
+            valsbuff = IOBuffer()
+            valsio = IOContext(IOContext(valsbuff, io), Pair{Symbol,Any}(:SHOWN_SET, x),
+                                    Pair{Symbol,Any}(:typeinfo, Any))
+            newline = false
             for i in 1:nf
+                buff = IOBuffer()
+                recur_io = IOContext(IOContext(buff, valsio), Pair{Symbol,Any}(:SHOWN_SET, x),
+                                    Pair{Symbol,Any}(:typeinfo, Any))
                 f = fieldname(t, i)
                 if !isdefined(x, f)
-                    print(io, undef_ref_str)
+                    if !iscompact && newline
+                        println(valsio)
+                        write(valsio, " " ^ 4)
+                        newline = false
+                    end
+                    print(valsio, undef_ref_str)
                 else
-                    show(recur_io, getfield(x, i))
+                    fx = getfield(x, i)
+                    show(recur_io, fx)
+                    seek(buff, 0)
+                    buffsize = length(read(buff, String))
+                    seek(buff, 0)
+                    is_complex_struct = any(isstructtype(inferencebarrier(typeof(getfield(fx, j)))) for j ∈ 1:nfields(fx))
+                    if !is_complex_struct && buffsize < displaysize()[2] ÷ 4
+                        if !iscompact && newline
+                            println(valsio)
+                            newline = false
+                        end
+                        write(valsio, buff)
+                    else
+                        if !iscompact
+                            i > 1 && println(valsio)
+                            for l ∈ readlines(buff; keep = true)
+                                write(valsio, l)
+                            end
+                            newline = true
+                        else
+                            for l ∈ readlines(buff; keep = true)
+                                write(valsio, l)
+                            end
+                        end
+                    end
                 end
                 if i < nf
-                    print(io, ", ")
+                    print(valsio, ", ")
                 end
+            end
+            # add indent and possibly initial line break
+            seek(valsbuff, 0)
+            lines = readlines(valsbuff; keep = true)
+            if length(lines) > 1
+                iscompact || println(io)
+                for l ∈ lines
+                    write(io, " " ^ 4)
+                    write(io, l)
+                end
+            elseif length(lines) == 1
+                write(io, lines[1])
             end
         end
     else
