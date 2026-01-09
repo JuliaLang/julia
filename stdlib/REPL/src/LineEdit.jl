@@ -2179,7 +2179,7 @@ let
     for (left, right) in bracket_pairs
         # Left bracket: insert both and move cursor between them
         bracket_insert_keymap[left] = (s::MIState, o...) -> begin
-            buf = buffer(s)
+            local buf = buffer(s)
             edit_insert(buf, left)
             if eof(buf) || peek(buf, Char) in right_brackets_ws
                 edit_insert(buf, right)
@@ -2190,7 +2190,7 @@ let
 
         # Right bracket: skip over if next char matches, otherwise insert
         bracket_insert_keymap[right] = (s::MIState, o...) -> begin
-            buf = buffer(s)
+            local buf = buffer(s)
             if !eof(buf) && peek(buf, Char) == right
                 edit_move_right(buf)
             else
@@ -2203,7 +2203,7 @@ let
     # Quote characters (need special handling for transpose detection)
     for quote_char in ('"', '\'', '`')
         bracket_insert_keymap[quote_char] = (s::MIState, o...) -> begin
-            buf = buffer(s)
+            local buf = buffer(s)
             if !eof(buf) && peek(buf, Char) == quote_char
                 # Skip over closing quote
                 edit_move_right(buf)
@@ -2231,15 +2231,14 @@ let
             repl = Base.active_repl
             mirepl = isdefined(repl, :mi) ? repl.mi : repl
             main_mode = mirepl.interface.modes[1]
-            buf = copy(buffer(s))
+            local buf = copy(buffer(s))
             transition(s, main_mode) do
                 state(s, main_mode).input_buffer = buf
             end
             return
         end
 
-        buf = buffer(s)
-        if try_remove_paired_delimiter(buf)
+        if try_remove_paired_delimiter(buffer(s))
             return refresh_line(s)
         end
         return edit_backspace(s)

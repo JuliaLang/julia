@@ -530,26 +530,27 @@ function repl_latex(io::IO, s0::String)
         print(io, "\"")
         printstyled(io, s, color=:cyan)
         print(io, "\" can be typed by ")
-        state::Char = '\0'
+        s_to_print = s
         with_output_color(:cyan, io) do io
-            for c in s
+            state::Char = '\0'
+            for c in s_to_print
                 cstr = string(c)
                 if haskey(symbols_latex, cstr)
-                    latex = symbols_latex[cstr]
-                    if length(latex) == 3 && latex[2] in ('^','_')
+                    latex_symbol = symbols_latex[cstr]
+                    if length(latex_symbol) == 3 && latex_symbol[2] in ('^','_')
                         # coalesce runs of sub/superscripts
-                        if state != latex[2]
+                        if state != latex_symbol[2]
                             '\0' != state && print(io, "<tab>")
-                            print(io, latex[1:2])
-                            state = latex[2]
+                            print(io, latex_symbol[1:2])
+                            state = latex_symbol[2]
                         end
-                        print(io, latex[3])
+                        print(io, latex_symbol[3])
                     else
                         if '\0' != state
                             print(io, "<tab>")
                             state = '\0'
                         end
-                        print(io, latex, "<tab>")
+                        print(io, latex_symbol, "<tab>")
                     end
                 else
                     if '\0' != state
@@ -600,13 +601,14 @@ function _repl(x, brief::Bool=true, mod::Module=Main, internal_accesses::Union{N
                     if kwarg isa Symbol
                         kwarg = :($kwarg::Any)
                     elseif isexpr(kwarg, :kw)
-                        lhs = kwarg.args[1]
-                        rhs = kwarg.args[2]
-                        if lhs isa Symbol
-                            if rhs isa Symbol
-                                kwarg.args[1] = :($lhs::(@isdefined($rhs) ? typeof($rhs) : Any))
-                            else
-                                kwarg.args[1] = :($lhs::typeof($rhs))
+                        let kw_lhs = kwarg.args[1],
+                            kw_rhs = kwarg.args[2]
+                            if kw_lhs isa Symbol
+                                if kw_rhs isa Symbol
+                                    kwarg.args[1] = :($kw_lhs::(@isdefined($kw_rhs) ? typeof($kw_rhs) : Any))
+                                else
+                                    kwarg.args[1] = :($kw_lhs::typeof($kw_rhs))
+                                end
                             end
                         end
                     end
@@ -616,13 +618,13 @@ function _repl(x, brief::Bool=true, mod::Module=Main, internal_accesses::Union{N
                 if kwargs === nothing
                     kwargs = Any[]
                 end
-                lhs = arg.args[1]
-                rhs = arg.args[2]
-                if lhs isa Symbol
-                    if rhs isa Symbol
-                        arg.args[1] = :($lhs::(@isdefined($rhs) ? typeof($rhs) : Any))
+                arg_lhs = arg.args[1]
+                arg_rhs = arg.args[2]
+                if arg_lhs isa Symbol
+                    if arg_rhs isa Symbol
+                        arg.args[1] = :($arg_lhs::(@isdefined($arg_rhs) ? typeof($arg_rhs) : Any))
                     else
-                        arg.args[1] = :($lhs::typeof($rhs))
+                        arg.args[1] = :($arg_lhs::typeof($arg_rhs))
                     end
                 end
                 push!(kwargs, arg)
