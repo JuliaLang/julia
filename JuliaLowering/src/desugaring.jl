@@ -4372,6 +4372,18 @@ end
 #-------------------------------------------------------------------------------
 # Expand docstring-annotated expressions
 
+function isquotedmacrocall(ex)
+    kind(ex) == K"call" || return false
+    numchildren(ex) == 3 || return false
+    let (f, ex) = (ex[1], ex[3])
+        kind(f) == K"Value" || return false
+        kind(ex) == K"inert" || return false
+        f.value === interpolate_ast || return false
+        kind(ex[1]) == K"macrocall" || return false
+        return true
+    end
+end
+
 function expand_doc(ctx, ex, docex, mod=ctx.mod)
     if kind(ex) in (K"Identifier", K".")
         expand_forms_2(ctx, @ast ctx docex [K"call"
@@ -4382,6 +4394,9 @@ function expand_doc(ctx, ex, docex, mod=ctx.mod)
             ::K"SourceLocation"(ex)
             Union{}::K"Value"
         ])
+    elseif isquotedmacrocall(ex)
+        # TODO: implement proper `doc!` support here
+        expand_forms_2(ctx, ex, docex)
     elseif is_eventually_call(ex)
         expand_function_def(ctx, @ast(ctx, ex, [K"function" ex [K"block"]]),
                             docex; doc_only=true)
