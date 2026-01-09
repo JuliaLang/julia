@@ -260,7 +260,7 @@ T[(x,y) for x in xs, y in ys]
 11  slot₃/next
 12  (call core.=== %₁₁ core.nothing)
 13  (call top.not_int %₁₂)
-14  (gotoifnot %₁₃ label₅₀)
+14  (gotoifnot %₁₃ label₄₉)
 15  slot₃/next
 16  (= slot₄/y (call core.getfield %₁₅ 1))
 17  (call core.getfield %₁₅ 2)
@@ -268,32 +268,31 @@ T[(x,y) for x in xs, y in ys]
 19  slot₂/next
 20  (call core.=== %₁₉ core.nothing)
 21  (call top.not_int %₂₀)
-22  (gotoifnot %₂₁ label₄₄)
+22  (gotoifnot %₂₁ label₄₃)
 23  slot₄/y
 24  (= slot₅/y %₂₃)
 25  slot₂/next
 26  (= slot₆/x (call core.getfield %₂₅ 1))
 27  (call core.getfield %₂₅ 2)
 28  slot₆/x
-29  slot₅/y
-30  (call core.tuple %₂₈ %₂₉)
-31  (gotoifnot %₅ label₃₄)
-32  (call top.push! %₇ %₃₀)
-33  (goto label₃₆)
-34  slot₁/idx
-35  (call top.setindex! %₇ %₃₀ %₃₄)
-36  slot₁/idx
-37  (= slot₁/idx (call top.add_int %₃₆ 1))
-38  (= slot₂/next (call top.iterate %₁ %₂₇))
-39  slot₂/next
-40  (call core.=== %₃₉ core.nothing)
-41  (call top.not_int %₄₀)
-42  (gotoifnot %₄₁ label₄₄)
-43  (goto label₂₃)
-44  (= slot₃/next (call top.iterate %₂ %₁₇))
-45  slot₃/next
-46  (call core.=== %₄₅ core.nothing)
-47  (call top.not_int %₄₆)
-48  (gotoifnot %₄₇ label₅₀)
-49  (goto label₁₅)
-50  (return %₇)
+29  (call core.tuple %₂₈ slot₅/y)
+30  (gotoifnot %₅ label₃₃)
+31  (call top.push! %₇ %₂₉)
+32  (goto label₃₅)
+33  slot₁/idx
+34  (call top.setindex! %₇ %₂₉ %₃₃)
+35  slot₁/idx
+36  (= slot₁/idx (call top.add_int %₃₅ 1))
+37  (= slot₂/next (call top.iterate %₁ %₂₇))
+38  slot₂/next
+39  (call core.=== %₃₈ core.nothing)
+40  (call top.not_int %₃₉)
+41  (gotoifnot %₄₀ label₄₃)
+42  (goto label₂₃)
+43  (= slot₃/next (call top.iterate %₂ %₁₇))
+44  slot₃/next
+45  (call core.=== %₄₄ core.nothing)
+46  (call top.not_int %₄₅)
+47  (gotoifnot %₄₆ label₄₉)
+48  (goto label₁₅)
+49  (return %₇)
