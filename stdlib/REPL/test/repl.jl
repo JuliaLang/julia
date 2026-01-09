@@ -1922,11 +1922,12 @@ end
 # Test syntax highlighting in REPL input
 @testset "Syntax highlighting" begin
     using StyledStrings
+    using JuliaSyntaxHighlighting
     using REPL.StylingPasses
 
     # Use withfaces to ensure consistent face definitions regardless of user config
-    StyledStrings.withfaces(:julia_keyword => StyledStrings.Face(foreground=:red),
-                            :julia_number => StyledStrings.Face(foreground=:blue)) do
+    StyledStrings.withfaces(StyledStrings.face"JuliaSyntaxHighlighting.keyword" => StyledStrings.Face(foreground=StyledStrings.face"red"),
+                            StyledStrings.face"JuliaSyntaxHighlighting.number" => StyledStrings.Face(foreground=StyledStrings.face"blue")) do
 
         # Test that julia_prompt has syntax highlighting passes
         fake_repl(options = REPL.Options(confirm_exit=false, style_input=true, auto_insert_closing_bracket=false)) do stdin_write, stdout_read, repl

@@ -39,7 +39,7 @@ public clear,
 
 import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo, StackFrame
 import Base: AnnotatedString
-using StyledStrings: @styled_str
+using StyledStrings: @styled_str, Face
 
 const nmeta = 4 # number of metadata fields per block (threadid, taskid, cpu_cycle_clock, thread_sleeping)
 
@@ -1011,7 +1011,7 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
     ndigline = ndigits(maximum(frame.frame.line for frame in frames)) + 6
     ntext = max(30, cols - ndigoverhead - nindent - ndigcounts - ndigline - 6)
     widthfile = 2*ntext÷5 # min 12
-    strs = Vector{AnnotatedString{String}}(undef, length(frames))
+    strs = Vector{AnnotatedString{String, Union{String, Face}}}(undef, length(frames))
     showextra = false
     if level > nindent
         nextra = level - nindent

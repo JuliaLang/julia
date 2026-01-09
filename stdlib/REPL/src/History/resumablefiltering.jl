@@ -49,25 +49,25 @@ const FILTER_SHORTHELP = S"""
  {bold,magenta:Interactive history search}
 
  Enter a search term at the prompt, and see matching candidates.
- A search term that is {italic:just} '{REPL_History_search_prefix:?}' brings up this help page.
+ A search term that is {italic:just} '{search_prefix:?}' brings up this help page.
 
- See more information on behaviour and keybindings with '{REPL_History_search_prefix:??}'.
+ See more information on behaviour and keybindings with '{search_prefix:??}'.
 
  By default, each word in the search string is looked for in any order.
- Should the search string start with {REPL_History_search_prefix:xyz>}, then only xyz-mode entries are considered.
+ Should the search string start with {search_prefix:xyz>}, then only xyz-mode entries are considered.
 
  Different search modes are available via prefixes, as follows:
- {emphasis:•} {REPL_History_search_prefix:=} looks for exact matches
- {emphasis:•} {REPL_History_search_prefix:!} {italic:excludes} exact matches
- {emphasis:•} {REPL_History_search_prefix:/} performs a regexp search
- {emphasis:•} {REPL_History_search_prefix:~} looks for fuzzy matches
- {emphasis:•} {REPL_History_search_prefix:`} looks for an initialism (text with matching initials)
+ {emphasis:•} {search_prefix:=} looks for exact matches
+ {emphasis:•} {search_prefix:!} {italic:excludes} exact matches
+ {emphasis:•} {search_prefix:/} performs a regexp search
+ {emphasis:•} {search_prefix:~} looks for fuzzy matches
+ {emphasis:•} {search_prefix:`} looks for an initialism (text with matching initials)
 
- You can also apply multiple restrictions with the separator '{REPL_History_search_separator:$FILTER_SEPARATOR}'.
+ You can also apply multiple restrictions with the separator '{search_separator:$FILTER_SEPARATOR}'.
 
- For example, {region:{REPL_History_search_prefix:/}^foo{REPL_History_search_separator:$FILTER_SEPARATOR}\
-{REPL_History_search_prefix:`}bar{REPL_History_search_separator:$FILTER_SEPARATOR}\
-{REPL_History_search_prefix:shell>}} will look for history entries that start with "{code:foo}",
+ For example, {region:{search_prefix:/}^foo{search_separator:$FILTER_SEPARATOR}\
+{search_prefix:`}bar{search_separator:$FILTER_SEPARATOR}\
+{search_prefix:shell>}} will look for history entries that start with "{code:foo}",
  contains "{code:b... a... r...}", {italic:and} are a shell history entry.
 """
 
@@ -76,12 +76,12 @@ const FILTER_LONGHELP = S"""
 
  Search your REPL history interactively by constructing filters.
 
- With no mode specified (see the basic help with '{REPL_History_search_prefix:?}'), entries are matched
+ With no mode specified (see the basic help with '{search_prefix:?}'), entries are matched
  if they contain all of the words in the search string, in any order.
 
  If the entire search string is lowercase, the search is case-insensitive.
 
- If you want to include the filter separator '{REPL_History_search_separator:$FILTER_SEPARATOR}' in a query, or start
+ If you want to include the filter separator '{search_separator:$FILTER_SEPARATOR}' in a query, or start
  a words filter with a prefix character, you may escape it with a backslash (e.g. {code:\\;}).
 
  Search results can be navigated with:

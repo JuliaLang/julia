@@ -630,7 +630,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
         end
     end
 
-    styled_buffer = AnnotatedString("")
+    styled_buffer = AnnotatedString{String, Face}("")
     if buf.size > 0 && buf.size <= max_highlight_size
         full_input = String(buf.data[1:buf.size])
         if !isempty(full_input)
