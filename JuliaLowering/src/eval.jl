@@ -383,7 +383,7 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     elseif k == K"gotoifnot"
         Core.GotoIfNot(_to_lowered_expr(ex[1], stmt_offset), ex[2].id + stmt_offset)
     elseif k == K"enter"
-        catch_idx = ex[1].id
+        catch_idx = ex[1].id + stmt_offset
         numchildren(ex) == 1 ?
             Core.EnterNode(catch_idx) :
             Core.EnterNode(catch_idx, _to_lowered_expr(ex[2], stmt_offset))
