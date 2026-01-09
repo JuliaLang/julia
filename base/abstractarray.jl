@@ -2390,7 +2390,7 @@ end
 function _typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N
     N < 0 &&
         throw(ArgumentError("concatenation dimension must be non-negative"))
-    return reshape([xs...], (ntuple(Returns(1), Val(N - 1))..., length(xs)))
+    return reshape(T[xs...], (ntuple(Returns(1), Val(N - 1))..., length(xs)))
 end
 
 function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
