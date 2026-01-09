@@ -194,7 +194,11 @@ function _find_scope_decls!(ctx, scope, ex)
     if k === K"local" && kind(ex[1]) === K"Identifier"
         var_k = getmeta(ex, :is_destructured_arg, false) ?
             :destructured_arg : :local
-        maybe_declare_in_scope!(ctx, scope, ex[1], var_k)
+        if getmeta(ex, :is_internal, false)
+            declare_in_scope!(ctx, scope, ex[1], var_k; is_internal=true)
+        else
+            maybe_declare_in_scope!(ctx, scope, ex[1], var_k)
+        end
     elseif k === K"global" && kind(ex[1]) === K"Identifier"
         maybe_declare_in_scope!(ctx, scope, ex[1], :global)
     elseif k in KSet"= constdecl assign_or_constdecl_if_global function_decl"

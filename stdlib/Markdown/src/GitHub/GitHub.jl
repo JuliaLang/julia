@@ -2,40 +2,6 @@
 
 include("table.jl")
 
-@breaking true ->
-function fencedcode(stream::IO, block::MD)
-    withstream(stream) do
-        startswith(stream, "~~~", padding = true) || startswith(stream, "```", padding = true) || return false
-        skip(stream, -1)
-        ch = read(stream, Char)
-        trailing = strip(readline(stream))
-        flavor = lstrip(trailing, ch)
-        n = 3 + length(trailing) - length(flavor)
-
-        # inline code block
-        ch in flavor && return false
-
-        buffer = IOBuffer()
-        while !eof(stream)
-            line_start = position(stream)
-            if startswith(stream, string(ch) ^ n)
-                if !startswith(stream, string(ch))
-                    if flavor == "math"
-                        push!(block, LaTeX(takestring!(buffer) |> chomp))
-                    else
-                        push!(block, Code(flavor, takestring!(buffer) |> chomp))
-                    end
-                    return true
-                else
-                    seek(stream, line_start)
-                end
-            end
-            write(buffer, readline(stream, keep=true))
-        end
-        return false
-    end
-end
-
 function github_paragraph(stream::IO, md::MD)
     skipwhitespace(stream)
     buffer = IOBuffer()
@@ -57,7 +23,7 @@ function github_paragraph(stream::IO, md::MD)
     return true
 end
 
-@flavor github [list, indentcode, blockquote, admonition, footnote, hashheader,
+@flavor github [horizontalrule, list, indentcode, blockquote, admonition, footnote, hashheader,
                 fencedcode, github_table, github_paragraph,
 
                 linebreak, escapes,

@@ -24,7 +24,7 @@ function paragraph(stream::IO, md::MD)
             elseif blankline(stream) || _parse(stream, md, breaking = true)
                 break
             else
-                write(buffer, ' ')
+                write(buffer, '\n')
             end
         else
             write(buffer, char)
@@ -56,7 +56,7 @@ function hashheader(stream::IO, md::MD)
 
         c = ' '
         # Allow empty headers, but require a space
-        !eof(stream) && (c = read(stream, Char); !(c in " \n")) &&
+        !eof(stream) && (c = read(stream, Char); !(c in " \t\n")) &&
             return false
 
         if c != '\n' # Empty header
@@ -120,6 +120,40 @@ function indentcode(stream::IO, block::MD)
     end
 end
 
+@breaking true ->
+function fencedcode(stream::IO, block::MD)
+    withstream(stream) do
+        startswith(stream, "~~~", padding = true) || startswith(stream, "```", padding = true) || return false
+        skip(stream, -1)
+        ch = read(stream, Char)
+        trailing = strip(readline(stream))
+        flavor = lstrip(trailing, ch)
+        n = 3 + length(trailing) - length(flavor)
+
+        # inline code block
+        ch in flavor && return false
+
+        buffer = IOBuffer()
+        while !eof(stream)
+            line_start = position(stream)
+            if startswith(stream, string(ch) ^ n)
+                if !startswith(stream, string(ch))
+                    if flavor == "math"
+                        push!(block, LaTeX(takestring!(buffer) |> chomp))
+                    else
+                        push!(block, Code(flavor, takestring!(buffer) |> chomp))
+                    end
+                    return true
+                else
+                    seek(stream, line_start)
+                end
+            end
+            write(buffer, readline(stream, keep=true))
+        end
+        return false
+    end
+end
+
 # --------
 # Footnote
 # --------
@@ -132,11 +166,11 @@ end
 function footnote(stream::IO, block::MD)
     withstream(stream) do
         regex = r"^\[\^(\w+)\]:"
-        str = startswith(stream, regex)
-        if isempty(str)
+        m = matchstart(stream, regex)
+        if m === nothing
             return false
         else
-            ref = (match(regex, str)::AbstractMatch).captures[1]
+            ref = m.captures[1]
             buffer = IOBuffer()
             write(buffer, readline(stream, keep=true))
             while !eof(stream)
@@ -248,7 +282,7 @@ end
 
 mutable struct List <: MarkdownElement
     items::Vector{Any}
-    ordered::Int # `-1` is unordered, `>= 0` is ordered.
+    ordered::Int # `-1` is unordered, `>= 0` is ordered and indicates the start index.
     loose::Bool # TODO: Renderers should use this field
 end
 List(x::AbstractVector, b::Integer) = List(x, b, false)
@@ -259,22 +293,25 @@ List(xs...) = List(vcat(xs...))
 isordered(list::List) = list.ordered >= 0
 
 const BULLETS = r"^ {0,3}(\*|\+|-)( |$)"
-const NUM_OR_BULLETS = r"^ {0,3}(\*|\+|-|\d+(\.|\)))( |$)"
+const NUM_OR_BULLETS = r"^ {0,3}(\*|\+|-|(\d+)(\.|\)))( |$)"
 
 @breaking true ->
 function list(stream::IO, block::MD)
     withstream(stream) do
-        bullet = startswith(stream, NUM_OR_BULLETS; eat = false)
-        indent = isempty(bullet) ? (return false) : length(bullet)
+        m = matchstart(stream, NUM_OR_BULLETS; eat = false)
+        isnothing(m) && return false
+        indent = length(m.match)
         # Calculate the starting number and regex to use for bullet matching.
         initial, regex =
-            if occursin(BULLETS, bullet)
+            if m.captures[3] == nothing
                 # An unordered list. Use `-1` to flag the list as unordered.
                 -1, BULLETS
-            elseif occursin(r"^ {0,3}\d+(\.|\))( |$)", bullet)
-                # An ordered list. Either with `1. ` or `1) ` style numbering.
-                r = occursin(".", bullet) ? r"^ {0,3}(\d+)\.( |$)" : r"^ {0,3}(\d+)\)( |$)"
-                Base.parse(Int, (match(r, bullet)::AbstractMatch).captures[1]), r
+            elseif m.captures[3] == "."
+                # An ordered list with `1. ` style numbering.
+                Base.parse(Int, m.captures[2]), r"^ {0,3}(\d+)\.( |$)"
+            elseif m.captures[3] == ")"
+                # An ordered list with `1) ` style numbering.
+                Base.parse(Int, m.captures[2]), r"^ {0,3}(\d+)\)( |$)"
             else
                 # Failed to match any bullets. This branch shouldn't actually be needed
                 # since the `NUM_OR_BULLETS` regex should cover this, but we include it
@@ -299,7 +336,7 @@ function list(stream::IO, block::MD)
                     # Skip any additional blank lines and check indentation
                     still_indented = false
                     while !eof(stream)
-                        if startswith(stream, "\n";eat = true)
+                        if startswith(stream, "\n"; eat = true)
                             continue
                         elseif startswith(stream, " "^indent; eat = false)
                             still_indented = true
@@ -328,8 +365,8 @@ function list(stream::IO, block::MD)
                     # Indented text that is part of the current list item.
                     print(buffer, readline(stream, keep=true))
                 else
-                    matched = startswith(stream, regex)
-                    if isempty(matched)
+                    matched = matchstart(stream, regex)
+                    if matched === nothing
                         # Unindented text meaning we have left the current list.
                         pushitem!(list, buffer)
                         break
@@ -358,20 +395,21 @@ pushitem!(list, buffer) = push!(list.items, parse(takestring!(buffer)).content)
 mutable struct HorizontalRule <: MarkdownElement
 end
 
+@breaking true ->
 function horizontalrule(stream::IO, block::MD)
    withstream(stream) do
        n, rule = 0, ' '
        for char in readeach(stream, Char)
            char == '\n' && break
            isspace(char) && continue
-           if n==0 || char==rule
+           if n == 0
                rule = char
-               n += 1
-           else
+           elseif char != rule
                return false
            end
+           n += 1
        end
-       is_hr = (n ≥ 3 && rule in "*-")
+       is_hr = (n ≥ 3 && rule in "*-_")
        is_hr && push!(block, HorizontalRule())
        return is_hr
    end

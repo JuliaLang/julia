@@ -4,12 +4,32 @@ include("rich.jl")
 
 # Utils
 
+
+# Handle URI encoding, poorly. The code here was initially copied from
+# Base.Filesystem, then modified. The original code implements RFC3986 Section
+# 2.1 and 2.2.
+#
+# We changed encode_uri_component to not encode characters declared as
+# "reserved" by RFC3986 Section 2.2 (i.e., those from the gen-delims and
+# sub-delims sets). Instead the user is expected to percent encode these (or
+# not) as needed -- the alternative would be implement full URI parsing, which
+# is non-trivial. That said, it would be better to do that, by e.g. using the
+# URIs.jl package, but that is not an option for us, as it is not a stdlib...
+#
+# As a special affordance, we deviate from the "reserved" list in one way: we
+# do *not* exclude '[' and ']' from percent encoding, even though they are in
+# the gen-delims set. They are only used to encode IPv6 literal addresses in
+# the URI, which is (still) rare. But they do occur in query strings and
+# indeed in the CommonMark spec tests.
+
+percent_escape(s) = '%' * join(map(b -> uppercase(string(b, base=16)), codeunits(s)), '%')
+encode_uri_component(s::AbstractString) = replace(s, r"[^A-Za-z0-9\-_.~/:?#@!$&'()*+,;=]+" => percent_escape)
+encode_uri_component(s::Symbol) = encode_uri_component(string(s))
+
 function withtag(f, io::IO, tag, attrs...)
     print(io, "<$tag")
     for (attr, value) in attrs
-        print(io, " ")
-        htmlesc(io, attr)
-        print(io, "=\"")
+        print(io, " ", attr, "=\"")
         htmlesc(io, value)
         print(io, "\"")
     end
@@ -63,7 +83,7 @@ function html(io::IO, code′::Code)
         maybe_lang = !isempty(code.language) ? Any[:class=>"language-$(code.language)"] : []
         withtag(io, :code, maybe_lang...) do
             htmlesc(io, code.code)
-            # TODO should print newline if this is longer than one line ?
+            !isempty(code.code) && println(io)
         end
     end
 end
@@ -159,7 +179,7 @@ function htmlinline(io::IO, md::Strikethrough)
 end
 
 function htmlinline(io::IO, md::Image)
-    tag(io, :img, :src=>md.url, :alt=>md.alt)
+    tag(io, :img, :src=>encode_uri_component(md.url), :alt=>md.alt)
 end
 
 
@@ -170,13 +190,14 @@ function htmlinline(io::IO, f::Footnote)
 end
 
 function htmlinline(io::IO, link::Link)
-    withtag(io, :a, :href=>link.url) do
+    withtag(io, :a, :href=>encode_uri_component(link.url)) do
         htmlinline(io, link.text)
     end
 end
 
 function htmlinline(io::IO, br::LineBreak)
     tag(io, :br)
+    println(io)
 end
 
 htmlinline(io::IO, x) = tohtml(io, x)

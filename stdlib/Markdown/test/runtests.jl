@@ -16,7 +16,7 @@ import Base: show
     @test md"foo ~bar~ baz" == MD(Paragraph(["foo ", Strikethrough("bar"), " baz"]))
     @test md"foo ~~bar~~ baz" == MD(Paragraph(["foo ", Strikethrough("bar"), " baz"]))
     @test md"""foo
-    bar""" == MD(Paragraph(["foo bar"]))
+    bar""" == MD(Paragraph(["foo\nbar"]))
     @test md"""foo\
     bar""" == MD(Paragraph(["foo", LineBreak(), "bar"]))
 
@@ -80,7 +80,7 @@ end
 @testset "linefeeds" begin
     @test isempty(Markdown.parse("\r"))
     @test Markdown.parse("hello\r") == MD(Paragraph(["hello"]))
-    @test Markdown.parse("hello\r*julia*") == MD(Paragraph(Any["hello ", Italic(Any["julia"])]))
+    @test Markdown.parse("hello\r*julia*") == MD(Paragraph(Any["hello\n", Italic(Any["julia"])]))
 end
 
 @testset "footnotes" begin
@@ -376,7 +376,7 @@ end
     @test md"<mailto://a@example.com>" |> html == """<p><a href="mailto://a@example.com">mailto://a@example.com</a></p>\n"""
     @test md"<https://julialang.org/not a link>" |> html == "<p>&lt;https://julialang.org/not a link&gt;</p>\n"
     @test md"""<https://julialang.org/nota
-    link>""" |> html == "<p>&lt;https://julialang.org/nota link&gt;</p>\n"
+    link>""" |> html == "<p>&lt;https://julialang.org/nota\nlink&gt;</p>\n"
     @test md"""Hello
 
     ---
@@ -387,7 +387,7 @@ end
         code1
 
         code2
-    """ |> html == "<pre><code>code1\n\ncode2</code></pre>\n" # single code block
+    """ |> html == "<pre><code>code1\n\ncode2\n</code></pre>\n" # single code block
 
     # @test md"""
     # - Foo
@@ -399,7 +399,14 @@ end
     h2
     ---
     not
-    == =""" |> html == "<h1>h1</h1>\n<h2>h2</h2>\n<p>not == =</p>\n"
+    == =""" |> html ==
+    """
+    <h1>h1</h1>
+    <h2>h2</h2>
+    <p>not
+    == =</p>
+    """
+
 end
 
 @testset "the 'book' example input" begin
@@ -634,7 +641,7 @@ end
     @test md"""
     no|table
     no error
-    """ == MD([Paragraph(Any["no|table no error"])])
+    """ == MD([Paragraph(Any["no|table\nno error"])])
 
     t = """a   |   b
     :-- | --:
@@ -1069,7 +1076,8 @@ end
     # Rendering tests.
     expected =
             """
-            1. A paragraph with two lines.
+            1. A paragraph
+               with two lines.
 
                ```
                indented code
@@ -1099,8 +1107,10 @@ end
     expected =
             """
             <ol>
-            <li><p>A paragraph with two lines.</p>
-            <pre><code>indented code</code></pre>
+            <li><p>A paragraph
+            with two lines.</p>
+            <pre><code>indented code
+            </code></pre>
             <blockquote>
             <p>A block quote.</p>
             </blockquote>
@@ -1119,7 +1129,8 @@ end
             <ul>
             <li><p>baz</p>
             </li>
-            <li><pre><code>foo</code></pre>
+            <li><pre><code>foo
+            </code></pre>
             </li>
             </ul>
             <ol>
@@ -1135,7 +1146,8 @@ end
 
     expected =
             """
-            1. A paragraph with two lines.
+            1. A paragraph
+               with two lines.
 
                .. code-block:: julia
 
@@ -1372,17 +1384,19 @@ end
             """ |> chomp
     @test Markdown.plain(s) ==
             raw"""
-            Misc:
+            Misc:\
             stuff
 
-              * line
+              * line\
                 break
             """
     @test Markdown.html(s) ==
             raw"""
-            <p>Misc:<br />stuff</p>
+            <p>Misc:<br />
+            stuff</p>
             <ul>
-            <li><p>line<br />break</p>
+            <li><p>line<br />
+            break</p>
             </li>
             </ul>
             """
@@ -1492,7 +1506,8 @@ end
     <pre><code class="language-julia">domaths(x::Number) = x + 5
 
 
-    domath(x::Int) = x + 10</code></pre>
+    domath(x::Int) = x + 10
+    </code></pre>
     </li>
     <li><p>another entry, now testing code blocks without fences</p>
     <pre><code># this is a code block
@@ -1500,7 +1515,8 @@ end
 
 
     # Two empty lines don't interrupt the code
-    y = x * 3</code></pre>
+    y = x * 3
+    </code></pre>
     </li>
     <li><p>a final list entry</p>
     </li>
@@ -1560,19 +1576,19 @@ end
     expected = """
     An unordered list:
 
-      * top level
+      * top level\\
         with an extra line
 
-          * second level
+          * second level\\
             again with an extra line
 
-              * third level
+              * third level\\
                 yet again with an extra line
 
-                  * fourth level
+                  * fourth level\\
                     and another extra line
 
-                      * fifth level
+                      * fifth level\\
                         final extra line
       * back to top level
     """
@@ -1630,21 +1646,21 @@ end
     expected = """
     An ordered list:
 
-    1. top level
+    1. top level\\
        with an extra line
 
-       1. second level
+       1. second level\\
           again with an extra line
 
-          999. third level
+          999. third level\\
                yet again with an extra line
 
-               1. fourth level
+               1. fourth level\\
                   and another extra line
 
-                  1. fifth level
+                  1. fifth level\\
                      final extra line
-          1000. more third level
+          1000. more third level\\
                 with an extra line
     2. back to top level
     """
@@ -1690,4 +1706,10 @@ end
     @test typeof.(md) == [Markdown.Header{1}, Markdown.Paragraph, Markdown.List, Markdown.HorizontalRule, Markdown.Paragraph, Markdown.HorizontalRule]
 end
 
-include("test_spec.jl")
+include("test_spec_roundtrip_common.jl")
+include("test_spec_roundtrip_github.jl")
+include("test_spec_roundtrip_julia.jl")
+
+include("test_spec_html_common.jl")
+include("test_spec_html_github.jl")
+include("test_spec_html_julia.jl")

@@ -466,122 +466,576 @@ julia> [(i, j) for i=1:3 for j=1:i if i+j == 4]
 
 ## [Indexing](@id man-array-indexing)
 
-The general syntax for indexing into an n-dimensional array `A` is:
+### Scalar Indices
 
-```
-X = A[I_1, I_2, ..., I_n]
-```
-
-where each `I_k` may be a scalar integer, an array of integers, or any other
-[supported index](@ref man-supported-index-types). This includes
-[`Colon`](@ref) (`:`) to select all indices within the entire dimension,
-ranges of the form `a:c` or `a:b:c` to select contiguous or strided
-subsections, and arrays of booleans to select elements at their `true` indices.
-
-If all the indices are scalars, then the result `X` is a single element from the array `A`. Otherwise,
-`X` is an array with the same number of dimensions as the sum of the dimensionalities of all the
-indices.
-
-If all indices `I_k` are vectors, for example, then the shape of `X` would be `(length(I_1), length(I_2), ..., length(I_n))`,
-with location `i_1, i_2, ..., i_n` of `X` containing the value `A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]`.
-
-Example:
+For a 2-dimensional array, we first choose the row, and then the column to get to the element we want to select.
 
 ```jldoctest
-julia> A = reshape(collect(1:16), (2, 2, 2, 2))
-2×2×2×2 Array{Int64, 4}:
+julia> A = reshape(1:35, 5, 7)
+5×7 reshape(::UnitRange{Int64}, 5, 7) with eltype Int64:
+ 1   6  11  16  21  26  31
+ 2   7  12  17  22  27  32
+ 3   8  13  18  23  28  33
+ 4   9  14  19  24  29  34
+ 5  10  15  20  25  30  35
+
+julia> A[2, 4]
+17
+```
+
+In the above example, we have a $5 \times 7$ array, and we want to select the element in the $2^{nd}$ row and $4^{th}$ column, which is $17$. The row is considered the first dimension with its axis going from 1 to 5, and the column is considered the second dimension with its axis going from 1 to 7.
+
+```jldoctest
+julia> A = reshape(1:35, 5, 7);
+
+julia> axes(A, 1)  # indices for the 1st dimension
+Base.OneTo(5)
+
+julia> axes(A, 2)  # indices for the 2nd dimension
+Base.OneTo(7)
+```
+
+![matrix with axes](./img/matrix-axes.png)
+
+We can also use the special keywords `begin` and `end` to specify the first and the last index along a specific dimension.
+
+```jldoctest
+julia> A = reshape(1:35, 5, 7);
+
+julia> A[begin+1, end-2]
+22
+```
+
+We got the $1 + 1 = 2^{nd}$ row, and within that, the $7 - 1 = 6^{th}$ column. At first glance, `begin` might seem  a bit redundant, but if somebody has a crazy implementation of `AbstractArray` where the indexing begins with $0$, or $42$, or something else, `begin` starts to make a lot more sense.
+
+Indexing into a multidimensional array is similar, we choose the block from each dimension that will lead us to the element we want to select. To understand this better, lets first create a $3 \times 4 \times 2 \times 3$ four-dimensional array.
+
+```jldoctest
+julia> B = reshape(1:3*4*2*3, 3, 4, 2, 3)
+3×4×2×3 reshape(::UnitRange{Int64}, 3, 4, 2, 3) with eltype Int64:
 [:, :, 1, 1] =
- 1  3
- 2  4
+ 1  4  7  10
+ 2  5  8  11
+ 3  6  9  12
 
 [:, :, 2, 1] =
- 5  7
- 6  8
+ 13  16  19  22
+ 14  17  20  23
+ 15  18  21  24
 
 [:, :, 1, 2] =
-  9  11
- 10  12
+ 25  28  31  34
+ 26  29  32  35
+ 27  30  33  36
 
 [:, :, 2, 2] =
- 13  15
- 14  16
+ 37  40  43  46
+ 38  41  44  47
+ 39  42  45  48
 
-julia> A[1, 2, 1, 1] # all scalar indices
-3
+[:, :, 1, 3] =
+ 49  52  55  58
+ 50  53  56  59
+ 51  54  57  60
 
-julia> A[[1, 2], [1], [1, 2], [1]] # all vector indices
-2×1×2×1 Array{Int64, 4}:
-[:, :, 1, 1] =
- 1
+[:, :, 2, 3] =
+ 61  64  67  70
+ 62  65  68  71
+ 63  66  69  72
+```
+
+One way to visualize this array is to think of it as having a bunch of two-dimensional ($3 \times 4$) arrays. I have $2$ such arrays in a block, and I have $3$ such blocks, to give me a total of $6$ two-dimensional arrays.
+
+![four dimensional array with axis of dim 3](./img/array-dim-3.png)
+
+![four dimensional array with axis of dim 4](./img/array-dim-4.png)
+
+```jldoctest
+julia> B = reshape(1:3*4*2*3, 3, 4, 2, 3);
+
+julia> B[2, 4, 2, 3]
+71
+```
+
+When indexing, set the indices from the right until you reach the $3 \times 4$ array you want to choose. In the example above, reading from the right, I first want to choose the $3^{rd}$ outer block. Put another way, I want to choose the $3^{rd}$ element along the fourth dimension. Within that, I want to choose the $2^{nd}$ inner block. Again, put another way, I want to choose the $2^{nd}$ element along the third dimension. This gives me the $3 \times 4$ array I want. Once I have that, I choose the row and column as before -- choose the $2^{nd}$ row and $4^{th}$ column. You can continue to read this from the right, i.e., select the $4^{th}$ element along the second dimension, and then finally select the $2^{nd}$ element along the first dimension.
+
+We need to provide an index for each dimension, for `A`, we need to provide 2 numbers in the index, for `B` we need to provide 4 numbers in the index, and so on. Otherwise we'll get an error. Except, if you only provide a single number, in which case we'll get an element back. The reason for this is discussed in the [Linear Indexing](@ref) section. For now, remember that we need to provide an index for each dimension.
+
+### Range Indices
+
+Instead of choosing specific elements along different dimensions, I can even choose a range of elements in that dimension. Going back to our 2-dimensional example -
+
+```jldoctest
+julia> A = reshape(1:35, 5, 7);
+
+julia> A[2, 2:4]
+3-element Vector{Int64}:
+  7
+ 12
+ 17
+```
+
+In this example, I am choosing the $2^{nd}$ row as before, but now I want all the elements in the $2^{nd}$ through $4^{th}$ columns. Below is a slightly more involved example where I want all the odd-numbered rows, and from those rows, I want all the elements in the $2^{nd}$ through $4^{th}$ columns.
+
+```jldoctest
+julia> A = reshape(1:35, 5, 7);
+
+julia> A[begin:2:end, 2:4]
+3×3 Matrix{Int64}:
+  6  11  16
+  8  13  18
+ 10  15  20
+```
+
+Range indices and some of the other indexing styles that we'll discuss below give us back another array. This is a **copy** of the original array. Modifying the returned array is not going to modify the original array in any way.
+
+### Array Indices
+
+What if the elements we want cannot be specified in a range? In this case we can "cherry-pick" the elements we want in a particular dimension by specifying them in a vector. In the example below, I am choosing the $2^{nd}$ and the $5^{th}$ rows, and in those rows I am choosing the first column.
+
+```jldoctest
+julia> A = reshape(1:35, 5, 7);
+
+julia> A[[2, 5], 1]
+2-element Vector{Int64}:
  2
-
-[:, :, 2, 1] =
  5
- 6
+```
 
-julia> A[[1, 2], [1], [1, 2], 1] # a mix of index types
-2×1×2 Array{Int64, 3}:
+We can cherry-pick elements along multiple dimensions. Lets go back to `B`, say we want to choose the $2^{nd}$ and the $3^{rd}$ elements from the fourth dimension, and within that, the $1^{st}$ element from the third dimension. This will give us the following two 2-D arrays.
+
+```math
+\begin{bmatrix}
+25 & 28 & 31 & 34 \\
+ {\color{green}
+ 26} & 29 & {\color{magenta} 32} & {\color {cyan}
+ 35} \\
+27 & 30 & 33 & 36  \\
+\end{bmatrix}
+```
+
+```math
+\begin{bmatrix}
+49 & 52 & 55 & 58 \\
+{\color{green} 50} & 53 & {\color{magenta} 56} & {\color{cyan} 59} \\
+51 & 54 & 57 & 60 \\
+\end{bmatrix}
+```
+
+From here, we want the $2^{nd}$ row from both the arrays, and within that the $[{\color{cyan} 4^{th}} ,\; {\color{green} 1^{st}}, \; {\color{magenta} 3^{rd}}, \; {\color{green} 1^{st}}]$ columns.
+
+```jldoctest
+julia> B = reshape(1:3*4*2*3, 3, 4, 2, 3);
+
+julia> B[2, [4, 1, 3, 1], 1, [2, 3]]
+4×2 Matrix{Int64}:
+ 35  59
+ 26  50
+ 32  56
+ 26  50
+```
+
+#### Output Dimensionality
+
+As can be seen, the result of using these vectorized indices is also an array. The dimensions of the resulting array are based on the dimensions of the input indices. Ignoring all the scalar indices, the resulting array's shape is the length of the vectorized indices. For example if `J` is a vector of indices, then `B[2, J, 1, 2]` is an array with `length(J)`, and its `j`th element is `B[1, J[j], 1, 2]`. More generally speaking, if $y = X[I_1, I_2, \cdots, I_n]$ and all $I_k$ indices are vectors, then $y$ will be an $n$-dimensional array its shape will be $(length(I_1), length(I_2), \cdots, length(I_n))$, with $y[i_1, i_2, \cdots, i_n] = X[\;I_1[i_1], I_2[i_2], \cdots, I_n[i_n]\;]$.
+
+But why stop at vectorized indices? Why not have matrices as indices?
+
+```jldoctest
+julia> B = reshape(1:3*4*2*3, 3, 4, 2, 3);
+
+julia> B[2, [4 1; 3 1], 1, [2, 3]]
+2×2×2 Array{Int64, 3}:
 [:, :, 1] =
- 1
- 2
+ 35  26
+ 32  26
 
 [:, :, 2] =
- 5
- 6
+ 59  50
+ 56  50
 ```
 
-Note how the size of the resulting array is different in the last two cases.
+This is still cherry picking the same 8 elements, but now they are just arranged differently. In the previous example with using vector indices, our output was two-dimensional. Here, with using matrix as one of our indices, our output is three-dimensional. Using a matrix added a dimension to our output. In our general example $y = X[I_1, I_2, \cdots, I_n]$, if one of the indices $I_k$ is a two-dimensional matrix instead of a one-dimensional vector, then $y$ will have $n+1$ dimensions and its shape of will be $(length(I_1), length(I_2), \cdots, size(I_k, 1), size(I_k, 2), \cdots, length(I_n))$, and $y[i_1, i_2, \cdots, i_{n+1}] = X[\; I_1[i_1], I_2[i_2], \cdots, I_k[i_k, i_{k+1}], \cdots, I_n[i_{n+1}] \;]$.
 
-If `I_1` is changed to a two-dimensional matrix, then `X` becomes an `n+1`-dimensional array of
-shape `(size(I_1, 1), size(I_1, 2), length(I_2), ..., length(I_n))`. The matrix adds a dimension.
+### Boolean Indices
 
-Example:
+What if the elements I want to select cannot be chosen as blocks along specific dimensions? Lets say I want to select the diagonal elements along our $5 \times 7$ two-dimensional matrix. I can create a boolean mask, which is an array similar in shape to my main array, but it is made up of boolean values. Coordinates of cells set to `true` in the mask will be used to select individual elements in our main array. This style of indexing is also known as Logical Indexing.
 
 ```jldoctest
-julia> A = reshape(collect(1:16), (2, 2, 2, 2));
+julia> A = reshape(1:35, 5, 7);
 
-julia> A[[1 2; 1 2]]
-2×2 Matrix{Int64}:
- 1  2
- 1  2
+julia> idx = [
+       true false false false false false false
+       false true false false false false false
+       false false true false false false false
+       false false false true false false false
+       false false false false true false false
+       ]
+5×7 Matrix{Bool}:
+ 1  0  0  0  0  0  0
+ 0  1  0  0  0  0  0
+ 0  0  1  0  0  0  0
+ 0  0  0  1  0  0  0
+ 0  0  0  0  1  0  0
 
-julia> A[[1 2; 1 2], 1, 2, 1]
-2×2 Matrix{Int64}:
- 5  6
- 5  6
+julia> A[idx]
+5-element Vector{Int64}:
+  1
+  7
+ 13
+ 19
+ 25
 ```
 
-The location `i_1, i_2, i_3, ..., i_{n+1}` contains the value at `A[I_1[i_1, i_2], I_2[i_3], ..., I_n[i_{n+1}]]`.
-All dimensions indexed with scalars are dropped. For example, if `J` is an array of indices, then the result of `A[2, J, 3]` is an
-array with size `size(J)`. Its `j`th element is populated by `A[2, J[j], 3]`.
-
-As a special part of this syntax, the `end` keyword may be used to represent the last index of
-each dimension within the indexing brackets, as determined by the size of the innermost array
-being indexed. Indexing syntax without the `end` keyword is equivalent to a call to [`getindex`](@ref):
-
-```
-X = getindex(A, I_1, I_2, ..., I_n)
-```
-
-Example:
+We can mix and match boolean indices with other types of indices that we have learnt so far. Lets  say we want to select `B[2, 4, 2, 3]` and `B[2, 4, 1, 2]`. The first two indices are the same, so we can conceivably index with something like `B[2, 4, mask]`.  We can define this boolean mask as -
 
 ```jldoctest
-julia> x = reshape(1:16, 4, 4)
+julia> mask = [
+       false true false
+       false false true
+       ]
+2×3 Matrix{Bool}:
+ 0  1  0
+ 0  0  1
+```
+
+Here, we can see that `mask[2, 3]` and `mask[1, 2]` are set to `true`, everything else is set to `false`. Using this as part of our index we get -
+
+```jldoctest
+julia> mask = [
+       false true false
+       false false true
+       ];
+
+julia> B = reshape(1:3*4*2*3, 3, 4, 2, 3);
+
+julia> B[2, 4, mask]
+2-element Vector{Int64}:
+ 35
+ 71
+```
+
+The output vector has its elements in the column order of the mask's coordinates, i.e., `B[2, 4, 1, 2]` shows up first and `B[2, 4, 2, 3]` shows up after.
+
+In previous sections on scalar indices, range indices, and array indices, we needed to provide an index for each dimension. However, this does not seem to hold for examples in this section. `A[idx]` has a single item in the index for a 2-dimensional array. `B[2, 4, mask]` are just 3 items, whereas `B` has 4 dimensions. So what gives? Remember, the boolean mask is expanded to the coordinates of all its `true` cells. `A[idx]` expands to `A[1, 1], A[2, 2], etc.`. Similarly `B[2, 4, mask]` expands to  `B[2, 4, 2, 3]` and `B[2, 4, 1, 2]`. We are stil providing an index for each dimension, its just...masked  ;-) For this reason the dimensions of the `mask` should match the dimensions that I am specifying. Remember, `B` is $3 \times 4 \times 2 \times 3$, i.e., its last two dimensions are $2 \times\ 3$, and because `mask` is trying to specify the coordinates of elements in these two dimensions, it must also be a $2 \times 3$ array. Of course this idea can be extended to any number of dimensions. If I want to specify the last three dimensions, then I need to use a $4 \times 2 \times 3$ mask, and so on.
+
+It seems pretty tedious to create boolean masks by hand, and indeed this is not the way boolean masks are used. We usually use some sort of a predicate function that will filter elements from our main array and use that predicate to create our mask. Lets say we have a two-dimensional matrix of integers. Further, lets say we want to select all the even elements from this matrix. We can use the [`iseven()`](@ref) function for this. However, this function only accepts a `Number`,  not an **array** of numbers. As you will see in the [Array and Vectorized Operators and Functions](@ref man-array-and-vectorized-operators-and-functions) section, we can use the dot-syntax to automatically apply this function to each element of the array.
+
+```jldoctest
+julia> R = [
+       55 69 87 3
+       10 78 89 9
+       47 54 46 85
+       52 89 49 64
+       ];
+
+julia> iseven.(R)
+4×4 BitMatrix:
+ 0  0  0  0
+ 1  1  0  0
+ 0  1  1  0
+ 1  0  0  1
+```
+
+The output is a boolean mask that we can use to index into our main array.
+
+```jldoctest
+julia> R = [
+       55 69 87 3
+       10 78 89 9
+       47 54 46 85
+       52 89 49 64
+       ];
+
+julia> R[iseven.(R)]
+6-element Vector{Int64}:
+ 10
+ 52
+ 78
+ 54
+ 46
+ 64
+```
+
+### Cartesian Indexing
+
+The indexing style we have been using so far is called Cartesian, because we specify the coordinates of the elements we want to select. The `CartesianIndex{N}` type formalizes this concept. It is parameterized by the number of dimensions we want to index with it.
+
+```jldoctest
+julia> idx = CartesianIndex(2, 4, 2, 3)
+CartesianIndex(2, 4, 2, 3)
+
+julia> typeof(idx)
+CartesianIndex{4}
+
+julia> B = reshape(1:3*4*2*3, 3, 4, 2, 3);
+
+julia> B[idx]
+71
+
+julia> B[2, 4, 2, 3]
+71
+```
+
+Considered alone, this may seem relatively trivial; `CartesianIndex` simply
+gathers multiple integers together into one object that represents a single
+multidimensional index. When combined with other indexing forms and iterators
+that yield `CartesianIndex`es, however, this can produce very elegant
+and efficient code. See [Iteration](@ref) below, and for some more advanced
+examples, see [this blog post on multidimensional algorithms and
+iteration](https://julialang.org/blog/2016/02/iteration).
+
+Here we are using a single index `idx` to index into a four-dimensional array, but just like we saw with boolean arrays, this is not violating our rule of having to specify as many indices as the number of dimensions. Think of the `CartesianIndex` object as expanding out its inner state and indexing our main array with 4 indices.
+
+As if one `CartesianIndex` object was not enough fun, we can have even more fun with a full vector of them :-). Lets go back to our motivating example for boolean indices -- selecting the diagonal elements from our two-dimensional array. Here, instead of using a boolean mask, we will use a vector of `CartesianIndex{2}` objects. This style of indexing is sometimes also referred to as pointwise indexing.
+
+```jldoctest
+julia> diag = [
+       CartesianIndex(1, 1),
+       CartesianIndex(2, 2),
+       CartesianIndex(3, 3),
+       CartesianIndex(4, 4),
+       CartesianIndex(5, 5)
+       ]
+5-element Vector{CartesianIndex{2}}:
+ CartesianIndex(1, 1)
+ CartesianIndex(2, 2)
+ CartesianIndex(3, 3)
+ CartesianIndex(4, 4)
+ CartesianIndex(5, 5)
+
+julia> A = reshape(1:35, 5, 7);
+
+julia> A[diag]
+5-element Vector{Int64}:
+  1
+  7
+ 13
+ 19
+ 25
+```
+
+If our main array is square, we can use [dot broadcasting](@ref man-vectorized) to create the `diag` vector more easily.
+
+```jldoctest
+julia> C = reshape(1:16, 4, 4)
 4×4 reshape(::UnitRange{Int64}, 4, 4) with eltype Int64:
  1  5   9  13
  2  6  10  14
  3  7  11  15
  4  8  12  16
 
-julia> x[2:3, 2:end-1]
-2×2 Matrix{Int64}:
- 6  10
- 7  11
+julia> diag = CartesianIndex.([1, 2, 3, 4], [1, 2, 3, 4])
+4-element Vector{CartesianIndex{2}}:
+ CartesianIndex(1, 1)
+ CartesianIndex(2, 2)
+ CartesianIndex(3, 3)
+ CartesianIndex(4, 4)
 
-julia> x[1, [2 3; 4 1]]
-2×2 Matrix{Int64}:
-  5  9
- 13  1
+julia> C[diag]
+4-element Vector{Int64}:
+  1
+  6
+ 11
+ 16
+```
+
+To make this even easier, we can use the `axes()` function and write all of this directly as the index -
+
+```jldoctest
+julia> C = reshape(1:16, 4, 4);
+
+julia> C[CartesianIndex.(axes(C, 1), axes(C, 2))]
+4-element Vector{Int64}:
+  1
+  6
+ 11
+ 16
+```
+
+The [`findall`](@ref) function returns a vector of `CartesianIndex` objects.
+
+```jldoctest
+julia> R = [
+       55 69 87 3
+       10 78 89 9
+       47 54 46 85
+       52 89 49 64
+       ];
+
+julia> findall(iseven, R)
+6-element Vector{CartesianIndex{2}}:
+ CartesianIndex(2, 1)
+ CartesianIndex(4, 1)
+ CartesianIndex(2, 2)
+ CartesianIndex(3, 2)
+ CartesianIndex(3, 3)
+ CartesianIndex(4, 4)
+```
+
+While technically you can do something like `R[findall(iseven, R)]`, however, using the boolean mask directly `R[iseven.(R)]` tends to be more efficient.
+
+We can mix and match using `CartesianIndex` objects with other indexing styles that we have seen so far -
+
+```jldoctest
+julia> B = reshape(1:3*4*2*3, 3, 4, 2, 3);
+
+julia> B[2, 4, [CartesianIndex(2, 3), CartesianIndex(1, 2)]]
+2-element Vector{Int64}:
+ 71
+ 35
+```
+
+The value of `N` in `CartesianIndex{N}` must be the number of dimensions it is representing. In the above example, even though `B` is a four-dimensional array, we are using `CartesianIndex{2}` to specify the last two dimensions.
+
+!!! warning
+
+    `CartesianIndex` and arrays of `CartesianIndex` are not compatible with the
+    `end` keyword to represent the last index of a dimension. Do not use `end`
+    in indexing expressions that may contain either `CartesianIndex` or arrays thereof.
+
+### Linear Indexing
+
+In Julia's default implementation, a multi-dimensional array is internally represented as one big contiguous single-dimensional array in column major form. For example, the following matrix
+
+```math
+\begin{bmatrix}
+{\color{magenta}1} & {\color{cyan}4} & {\color{orange}7} \\
+{\color{magenta}2} & {\color{cyan}5} & {\color{orange}8} \\
+{\color{magenta}3} & {\color{cyan}6} & {\color{orange}9} \\
+\end{bmatrix}
+```
+
+is internally represented in memory as -
+
+```math
+[ {\color{magenta}1 \; 2 \; 3} \; {\color{cyan}4 \; 5 \; 6} \; {\color{orange}7 \; 8 \; 9} ]
+```
+
+In fact you can use the [`vec()`](@ref) function to reshape any multi-dimensional array into its column-major one-dimensional form. When only one scalar index is provided, that index no longer represents a location in a particular dimension of the array. Instead, it selects the corresponding element in the column major form of the array. This is known as _linear indexing_.
+
+```jldoctest linindexing
+julia> A = [2 6; 4 7; 3 1]
+3×2 Matrix{Int64}:
+ 2  6
+ 4  7
+ 3  1
+
+julia> vec(A)
+6-element Vector{Int64}:
+ 2
+ 4
+ 3
+ 6
+ 7
+ 1
+
+julia> A[5]
+7
+```
+
+One thing to keep in mind about the `vec()` function is that it returns a pointer to the same underlying mutable memory as the main array. So any changes made to the returned output will be seen in the main array.
+
+A lone boolean vector works like a lone vector of `CartesianIndex{1}` objects, which performs linear indexing and replaces the linear index with 1 dimension of the number of `true`s. The boolean vector must have the same length as the linear index.
+
+```jldoctest
+julia> mask = [false, true, false, true, false, true]
+6-element Vector{Bool}:
+ 0
+ 1
+ 0
+ 1
+ 0
+ 1
+
+julia> A = [2 6; 4 7; 3 1];
+
+julia> A[mask]
+3-element Vector{Int64}:
+ 4
+ 6
+ 1
+```
+
+A linear index into the array `A` can be converted to a `CartesianIndex` for cartesian
+indexing with `CartesianIndices(A)[i]` (see [`CartesianIndices`](@ref)), and a set of
+`N` cartesian indices can be converted to a linear index with
+`LinearIndices(A)[i_1, i_2, ..., i_N]` (see [`LinearIndices`](@ref)).
+
+```jldoctest linindexing
+julia> A = [2 6; 4 7; 3 1];
+
+julia> CartesianIndices(A)[5]
+CartesianIndex(2, 2)
+
+julia> LinearIndices(A)[2, 2]
+5
+```
+
+It's important to note that there's a very large asymmetry in the performance
+of these conversions. Converting a linear index to a set of cartesian indices
+requires dividing and taking the remainder, whereas going the other way is just
+multiplies and adds. In modern processors, integer division can be 10-50 times
+slower than multiplication. While some arrays — like [`Array`](@ref) itself —
+are implemented using a linear chunk of memory and directly use a linear index
+in their implementations, other arrays — like [`Diagonal`](@ref) — need the
+full set of cartesian indices to do their lookup (see [`IndexStyle`](@ref) to
+introspect which is which).
+
+### Omitted and Extra Indices
+
+Keeping linear indexing aside, an `N`-dimensional array may be indexed with
+fewer or more than `N` indices in certain situations.
+
+Indices may be omitted if the trailing dimensions that are not indexed into are
+all length one. In other words, trailing indices can be omitted only if there
+is only one possible value that those omitted indices could be for an in-bounds
+indexing expression. For example, a four-dimensional array with size `(3, 4, 2,
+1)` may be indexed with only three indices as the dimension that gets skipped
+(the fourth dimension) has length one. Note that linear indexing takes
+precedence over this rule.
+
+```jldoctest
+julia> A = reshape(1:24, 3, 4, 2, 1)
+3×4×2×1 reshape(::UnitRange{Int64}, 3, 4, 2, 1) with eltype Int64:
+[:, :, 1, 1] =
+ 1  4  7  10
+ 2  5  8  11
+ 3  6  9  12
+
+[:, :, 2, 1] =
+ 13  16  19  22
+ 14  17  20  23
+ 15  18  21  24
+
+julia> A[1, 3, 2] # Omits the fourth dimension (length 1)
+19
+
+julia> A[1, 3] # Attempts to omit dimensions 3 & 4 (lengths 2 and 1)
+ERROR: BoundsError: attempt to access 3×4×2×1 reshape(::UnitRange{Int64}, 3, 4, 2, 1) with eltype Int64 at index [1, 3]
+
+julia> A[19] # Linear indexing
+19
+```
+
+When omitting _all_ indices with `A[]`, this semantic provides a simple idiom
+to retrieve the only element in an array and simultaneously ensure that there
+was only one element.
+
+Similarly, more than `N` indices may be provided if all the indices beyond the
+dimensionality of the array are `1` (or more generally are the first and only
+element of `axes(A, d)` where `d` is that particular dimension number). This
+allows vectors to be indexed like one-column matrices, for example:
+
+```jldoctest
+julia> A = [8, 6, 7]
+3-element Vector{Int64}:
+ 8
+ 6
+ 7
+
+julia> A[2, 1]
+6
 ```
 
 ## [Indexed Assignment](@id man-indexed-assignment)
@@ -714,248 +1168,6 @@ julia> A[:, 3:3]
  17
 ```
 
-### Cartesian indices
-
-The special `CartesianIndex{N}` object represents a scalar index that behaves
-like an `N`-tuple of integers spanning multiple dimensions. For example:
-
-```jldoctest cartesianindex
-julia> A = reshape(1:32, 4, 4, 2);
-
-julia> A[3, 2, 1]
-7
-
-julia> A[CartesianIndex(3, 2, 1)] == A[3, 2, 1] == 7
-true
-```
-
-Considered alone, this may seem relatively trivial; `CartesianIndex` simply
-gathers multiple integers together into one object that represents a single
-multidimensional index. When combined with other indexing forms and iterators
-that yield `CartesianIndex`es, however, this can produce very elegant
-and efficient code. See [Iteration](@ref) below, and for some more advanced
-examples, see [this blog post on multidimensional algorithms and
-iteration](https://julialang.org/blog/2016/02/iteration).
-
-Arrays of `CartesianIndex{N}` are also supported. They represent a collection
-of scalar indices that each span `N` dimensions, enabling a form of indexing
-that is sometimes referred to as pointwise indexing. For example, it enables
-accessing the diagonal elements from the first "page" of `A` from above:
-
-```jldoctest cartesianindex
-julia> page = A[:, :, 1]
-4×4 Matrix{Int64}:
- 1  5   9  13
- 2  6  10  14
- 3  7  11  15
- 4  8  12  16
-
-julia> page[[CartesianIndex(1, 1),
-             CartesianIndex(2, 2),
-             CartesianIndex(3, 3),
-             CartesianIndex(4, 4)]]
-4-element Vector{Int64}:
-  1
-  6
- 11
- 16
-```
-
-This can be expressed much more simply with [dot broadcasting](@ref man-vectorized)
-and by combining it with a normal integer index (instead of extracting the
-first `page` from `A` as a separate step). It can even be combined with a `:`
-to extract both diagonals from the two pages at the same time:
-
-```jldoctest cartesianindex
-julia> A[CartesianIndex.(axes(A, 1), axes(A, 2)), 1]
-4-element Vector{Int64}:
-  1
-  6
- 11
- 16
-
-julia> A[CartesianIndex.(axes(A, 1), axes(A, 2)), :]
-4×2 Matrix{Int64}:
-  1  17
-  6  22
- 11  27
- 16  32
-```
-
-!!! warning
-
-    `CartesianIndex` and arrays of `CartesianIndex` are not compatible with the
-    `end` keyword to represent the last index of a dimension. Do not use `end`
-    in indexing expressions that may contain either `CartesianIndex` or arrays thereof.
-
-### Logical indexing
-
-Often referred to as logical indexing or indexing with a logical mask, indexing
-by a boolean array selects elements at the indices where its values are `true`.
-Indexing by a boolean vector `B` is effectively the same as indexing by the
-vector of integers that is returned by [`findall(B)`](@ref). Similarly, indexing
-by a `N`-dimensional boolean array is effectively the same as indexing by the
-vector of `CartesianIndex{N}`s where its values are `true`. A logical index
-must be an array of the same shape as the dimension(s) it indexes into, or it
-must be the only index provided and match the shape of the one-dimensional
-reshaped view of the array it indexes into. It is generally more efficient
-to use boolean arrays as indices directly instead of first calling [`findall`](@ref).
-
-```jldoctest
-julia> x = reshape(1:12, 2, 3, 2)
-2×3×2 reshape(::UnitRange{Int64}, 2, 3, 2) with eltype Int64:
-[:, :, 1] =
- 1  3  5
- 2  4  6
-
-[:, :, 2] =
- 7   9  11
- 8  10  12
-
-julia> x[:, [true false; false true; true false]]
-2×3 Matrix{Int64}:
- 1  5   9
- 2  6  10
-
-julia> mask = map(ispow2, x)
-2×3×2 Array{Bool, 3}:
-[:, :, 1] =
- 1  0  0
- 1  1  0
-
-[:, :, 2] =
- 0  0  0
- 1  0  0
-
-julia> x[mask]
-4-element Vector{Int64}:
- 1
- 2
- 4
- 8
-
-julia> x[vec(mask)] == x[mask] # we can also index with a single Boolean vector
-true
-```
-
-### Number of indices
-
-#### Cartesian indexing
-
-The ordinary way to index into an `N`-dimensional array is to use exactly `N` indices; each
-index selects the position(s) in its particular dimension. For example, in the three-dimensional
-array `A = rand(4, 3, 2)`, `A[2, 3, 1]` will select the number in the second row of the third
-column in the first "page" of the array. This is often referred to as _cartesian indexing_.
-
-#### Linear indexing
-
-When exactly one index `i` is provided, that index no longer represents a location in a
-particular dimension of the array. Instead, it selects the `i`th element using the
-column-major iteration order that linearly spans the entire array. This is known as _linear
-indexing_. It essentially treats the array as though it had been reshaped into a
-one-dimensional vector with [`vec`](@ref).
-
-```jldoctest linindexing
-julia> A = [2 6; 4 7; 3 1]
-3×2 Matrix{Int64}:
- 2  6
- 4  7
- 3  1
-
-julia> A[5]
-7
-
-julia> vec(A)[5]
-7
-```
-
-A linear index into the array `A` can be converted to a `CartesianIndex` for cartesian
-indexing with `CartesianIndices(A)[i]` (see [`CartesianIndices`](@ref)), and a set of
-`N` cartesian indices can be converted to a linear index with
-`LinearIndices(A)[i_1, i_2, ..., i_N]` (see [`LinearIndices`](@ref)).
-
-```jldoctest linindexing
-julia> CartesianIndices(A)[5]
-CartesianIndex(2, 2)
-
-julia> LinearIndices(A)[2, 2]
-5
-```
-
-It's important to note that there's a very large asymmetry in the performance
-of these conversions. Converting a linear index to a set of cartesian indices
-requires dividing and taking the remainder, whereas going the other way is just
-multiplies and adds. In modern processors, integer division can be 10-50 times
-slower than multiplication. While some arrays — like [`Array`](@ref) itself —
-are implemented using a linear chunk of memory and directly use a linear index
-in their implementations, other arrays — like [`Diagonal`](@ref) — need the
-full set of cartesian indices to do their lookup (see [`IndexStyle`](@ref) to
-introspect which is which).
-
-!!! warning
-
-    When iterating over all the indices for an array, it is
-    better to iterate over [`eachindex(A)`](@ref) instead of `1:length(A)`.
-    Not only will this be faster in cases where `A` is `IndexCartesian`,
-    but it will also support arrays with custom indexing, such as [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl).
-    If only the values are needed, then is better to just iterate the array directly, i.e. `for a in A`.
-
-#### Omitted and extra indices
-
-In addition to linear indexing, an `N`-dimensional array may be indexed with
-fewer or more than `N` indices in certain situations.
-
-Indices may be omitted if the trailing dimensions that are not indexed into are
-all length one. In other words, trailing indices can be omitted only if there
-is only one possible value that those omitted indices could be for an in-bounds
-indexing expression. For example, a four-dimensional array with size `(3, 4, 2,
-1)` may be indexed with only three indices as the dimension that gets skipped
-(the fourth dimension) has length one. Note that linear indexing takes
-precedence over this rule.
-
-```jldoctest
-julia> A = reshape(1:24, 3, 4, 2, 1)
-3×4×2×1 reshape(::UnitRange{Int64}, 3, 4, 2, 1) with eltype Int64:
-[:, :, 1, 1] =
- 1  4  7  10
- 2  5  8  11
- 3  6  9  12
-
-[:, :, 2, 1] =
- 13  16  19  22
- 14  17  20  23
- 15  18  21  24
-
-julia> A[1, 3, 2] # Omits the fourth dimension (length 1)
-19
-
-julia> A[1, 3] # Attempts to omit dimensions 3 & 4 (lengths 2 and 1)
-ERROR: BoundsError: attempt to access 3×4×2×1 reshape(::UnitRange{Int64}, 3, 4, 2, 1) with eltype Int64 at index [1, 3]
-
-julia> A[19] # Linear indexing
-19
-```
-
-When omitting _all_ indices with `A[]`, this semantic provides a simple idiom
-to retrieve the only element in an array and simultaneously ensure that there
-was only one element.
-
-Similarly, more than `N` indices may be provided if all the indices beyond the
-dimensionality of the array are `1` (or more generally are the first and only
-element of `axes(A, d)` where `d` is that particular dimension number). This
-allows vectors to be indexed like one-column matrices, for example:
-
-```jldoctest
-julia> A = [8, 6, 7]
-3-element Vector{Int64}:
- 8
- 6
- 7
-
-julia> A[2, 1]
-6
-```
-
 ## Iteration
 
 The recommended ways to iterate over a whole array are
@@ -994,7 +1206,7 @@ i = CartesianIndex(3, 2)
 
     In contrast with `for i = 1:length(A)`, iterating with [`eachindex`](@ref) provides an efficient way to
     iterate over any array type. Besides, this also supports generic arrays with custom indexing such as
-    [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl).
+    [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl). If only values are needed, then it is better to just iterate over the array directly `for a in A`.
 
 ## Array traits
 
