@@ -65,7 +65,7 @@ WeakKeyDict(kv) = Base.dict_with_eltype((K, V) -> WeakKeyDict{K, V}, kv, eltype(
 function _cleanup_locked(h::WeakKeyDict)
     if h.dirty
         h.dirty = false
-        idx = skip_deleted_floor!(h.ht)
+        idx = skip_deleted(h.ht, 1)
         while idx != 0
             if h.ht.keys[idx].value === nothing
                 _delete!(h.ht, idx)
