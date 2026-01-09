@@ -450,6 +450,7 @@ Base.MissingException
 Core.OutOfMemoryError
 Core.ReadOnlyMemoryError
 Core.OverflowError
+Base.NotImplementedError
 Base.ProcessFailedException
 Base.TaskFailedException
 Core.StackOverflowError

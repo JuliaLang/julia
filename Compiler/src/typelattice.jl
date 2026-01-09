@@ -717,9 +717,9 @@ widenconst(::PartialTypeVar) = TypeVar
 widenconst(t::Core.PartialStruct) = t.typ
 widenconst(t::PartialOpaque) = t.typ
 @nospecializeinfer widenconst(@nospecialize t::Type) = t
-widenconst(::TypeVar) = error("unhandled TypeVar")
-widenconst(::TypeofVararg) = error("unhandled Vararg")
-widenconst(::LimitedAccuracy) = error("unhandled LimitedAccuracy")
+widenconst(::TypeVar) = throw(NotImplementedError(widenconst, (), TypeVar))
+widenconst(::TypeofVararg) = throw(NotImplementedError(widenconst, (), TypeofVararg))
+widenconst(::LimitedAccuracy) = throw(NotImplementedError(widenconst, (), LimitedAccuracy))
 
 ####################
 # state management #
