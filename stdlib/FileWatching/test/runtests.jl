@@ -429,7 +429,7 @@ if !Sys.isapple()
                 end
             end
         end
-        @test all(x -> (isa(x, Pair) && x[1] == F_PATH && (x[2].changed ⊻ x[2].renamed)), changes) || changes
+        @test all(x -> (isa(x, Pair) && x[1] == F_PATH && (x[2].changed ⊻ x[2].renamed)), changes) context=changes
     end
 end
 @test_throws(Base._UVError("FileMonitor (start)", Base.UV_ENOENT),

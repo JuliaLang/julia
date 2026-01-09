@@ -1395,3 +1395,177 @@ JL_DLLEXPORT int jl_repl_raise_sigtstp(void)
 {
     return raise(SIGTSTP);
 }
+
+#if !defined(_OS_DARWIN_)
+// Thread suspension based membarrier fallback.
+// This is a sound but slow implementation that suspends and resumes each thread
+// to force them to execute memory barriers via the signal handling mechanism.
+// This is used as a fallback when neither the membarrier syscall nor the mprotect
+// hack are available or working.
+static void jl_thread_suspend_membarrier(void)
+{
+    bt_context_t ctx;
+    // Suspend each thread and immediately resume it.
+    // The act of suspending/resuming forces a memory barrier via
+    // the signal handler mechanism.
+    // jl_thread_suspend tries to interrupt the thread for up to 1 second,
+    // so we retry in a loop until it succeeds or we determine the thread
+    // is no longer alive.
+    for (int tid = 0; tid < jl_atomic_load_acquire(&jl_n_threads); tid++) {
+        while (!jl_thread_suspend(tid, &ctx)) {
+            jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+            jl_task_t *ct2 = ptls2 ? jl_atomic_load_relaxed(&ptls2->current_task) : NULL;
+            if (ct2 == NULL) {
+                // this thread is not alive or already dead, move to next
+                goto next_thread;
+            }
+            // thread is alive but suspend failed, retry
+        }
+        jl_thread_resume(tid);
+next_thread:;
+    }
+}
+
+// Implementation of the `mprotect` based membarrier fallback.
+// This is a common fallback based on the observation that `mprotect` happens to
+// issue the necessary memory barriers. However, there is no spec that
+// guarantees this behavior. On AArch64, it is known not to work on either
+// Linux or FreeBSD, so we don't use it there. However, we use it as a fallback
+// here for older versions of Linux and FreeBSD on x86 where we know that it
+// happens to work.
+#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_)
+static pthread_mutex_t mprotect_barrier_lock = PTHREAD_MUTEX_INITIALIZER;
+static _Atomic(uint64_t) *mprotect_barrier_page = NULL;
+// Returns 1 on success, 0 on failure (e.g. mlock fails)
+static int jl_init_mprotect_membarrier(void)
+{
+    int result = pthread_mutex_lock(&mprotect_barrier_lock);
+    assert(result == 0);
+    if (mprotect_barrier_page == NULL) {
+        size_t pagesize = jl_getpagesize();
+
+        mprotect_barrier_page = (_Atomic(uint64_t) *)
+                                     mmap(NULL, pagesize, PROT_READ | PROT_WRITE,
+                                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (mprotect_barrier_page == MAP_FAILED) {
+            mprotect_barrier_page = NULL;
+            result = pthread_mutex_unlock(&mprotect_barrier_lock);
+            assert(result == 0);
+            return 0;
+        }
+        result = mlock(mprotect_barrier_page, pagesize);
+        if (result != 0) {
+            // mlock failed (e.g. RLIMIT_MEMLOCK too low), fall back to thread suspension
+            munmap(mprotect_barrier_page, pagesize);
+            mprotect_barrier_page = NULL;
+            result = pthread_mutex_unlock(&mprotect_barrier_lock);
+            assert(result == 0);
+            return 0;
+        }
+    }
+    result = pthread_mutex_unlock(&mprotect_barrier_lock);
+    assert(result == 0);
+    (void)result;
+    return 1;
+}
+
+static void jl_mprotect_membarrier(void)
+{
+    int result = pthread_mutex_lock(&mprotect_barrier_lock);
+    assert(result == 0);
+    size_t pagesize = jl_getpagesize();
+    result = mprotect(mprotect_barrier_page, pagesize, PROT_READ | PROT_WRITE);
+    jl_atomic_fetch_add_relaxed(mprotect_barrier_page, 1);
+    assert(result == 0);
+    result = mprotect(mprotect_barrier_page, pagesize, PROT_NONE);
+    assert(result == 0);
+    result = pthread_mutex_unlock(&mprotect_barrier_lock);
+    assert(result == 0);
+    (void)result;
+}
+#endif // !_CPU_AARCH64_ && !_CPU_ARM_
+
+// Membarrier implementation selection
+enum membarrier_implementation {
+    MEMBARRIER_IMPLEMENTATION_UNKNOWN        = 0,
+    MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER = 1,
+    MEMBARRIER_IMPLEMENTATION_MPROTECT       = 2,
+    MEMBARRIER_IMPLEMENTATION_THREAD_SUSPEND = 3
+};
+
+static _Atomic(enum membarrier_implementation) membarrier_impl = MEMBARRIER_IMPLEMENTATION_UNKNOWN;
+
+// Linux and FreeBSD have compatible membarrier syscall support
+#if defined(_OS_LINUX_)
+#   include <sys/syscall.h>
+#   if defined(__NR_membarrier)
+enum membarrier_cmd {
+    MEMBARRIER_CMD_QUERY                        = 0,
+    MEMBARRIER_CMD_PRIVATE_EXPEDITED            = (1 << 3),
+    MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED   = (1 << 4),
+};
+#    define membarrier(...) syscall(__NR_membarrier, __VA_ARGS__)
+#    define HAVE_MEMBARRIER_SYSCALL
+#  else
+#    warning "Missing linux kernel headers for membarrier syscall, support disabled"
+#  endif
+#elif defined(_OS_FREEBSD_)
+#  include <sys/param.h>
+#  if __FreeBSD_version >= 1401500
+#    include <sys/membarrier.h>
+#    define HAVE_MEMBARRIER_SYSCALL
+#  endif
+#endif
+
+static enum membarrier_implementation jl_init_membarrier(void) {
+#ifdef HAVE_MEMBARRIER_SYSCALL
+    int ret = membarrier(MEMBARRIER_CMD_QUERY, 0, 0);
+    int needed = MEMBARRIER_CMD_PRIVATE_EXPEDITED | MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED;
+    if (ret > 0 && ((ret & needed) == needed)) {
+        // supported
+        if (membarrier(MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED, 0, 0) == 0) {
+            // working
+            jl_atomic_store_relaxed(&membarrier_impl, MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER);
+            return MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER;
+        }
+    }
+#endif
+    // The mprotect fallback is known not to work on AArch64, so skip it there
+#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_)
+    if (jl_init_mprotect_membarrier()) {
+        jl_atomic_store_relaxed(&membarrier_impl, MEMBARRIER_IMPLEMENTATION_MPROTECT);
+        return MEMBARRIER_IMPLEMENTATION_MPROTECT;
+    }
+#endif
+    // Fall back to thread suspension (sound but slow)
+    jl_atomic_store_relaxed(&membarrier_impl, MEMBARRIER_IMPLEMENTATION_THREAD_SUSPEND);
+    return MEMBARRIER_IMPLEMENTATION_THREAD_SUSPEND;
+}
+
+JL_DLLEXPORT void jl_membarrier(void) {
+    enum membarrier_implementation impl = jl_atomic_load_relaxed(&membarrier_impl);
+    if (impl == MEMBARRIER_IMPLEMENTATION_UNKNOWN) {
+        impl = jl_init_membarrier();
+    }
+    switch (impl) {
+#ifdef HAVE_MEMBARRIER_SYSCALL
+    case MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER: {
+        int ret = membarrier(MEMBARRIER_CMD_PRIVATE_EXPEDITED, 0, 0);
+        assert(ret == 0);
+        (void)ret;
+        break;
+    }
+#endif
+#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_)
+    case MEMBARRIER_IMPLEMENTATION_MPROTECT:
+        jl_mprotect_membarrier();
+        break;
+#endif
+    case MEMBARRIER_IMPLEMENTATION_THREAD_SUSPEND:
+        jl_thread_suspend_membarrier();
+        break;
+    default:
+        abort();
+    }
+}
+#endif // !_OS_DARWIN_

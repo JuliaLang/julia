@@ -18,6 +18,14 @@ macro test_parseerror(str, msg)
     return ex
 end
 
+macro test_loweringerror(ex, msg, opt=nothing)
+    code = :(@test Meta.lower(@__MODULE__, $(esc(ex))) == Expr(:error, $msg))
+    code.args[2] = __source__
+    if opt === :broken
+        code.args[1] = :var"@test_broken"
+    end
+end
+
 macro test_parseerror(str)
     ex = :(@test_throws Meta.ParseError Meta.parse($(esc(str))))
     ex.args[2] = __source__
@@ -343,14 +351,14 @@ end
 @test_parseerror("if false\nelseif\nend", "missing condition in \"elseif\" at none:2")
 
 # issue #15828
-@test Meta.lower(Main, Meta.parse("x...")) == Expr(:error, "\"...\" expression outside call")
+@test_loweringerror(Meta.parse("x..."), "\"...\" expression outside call")
 
 # issue #57153 - malformed "..." expr
-@test Meta.lower(@__MODULE__, :(identity($(Expr(:(...), 1, 2, 3))))) ==
-    (Expr(:error, "wrong number of expressions following \"...\""))
+@test_loweringerror(:(identity($(Expr(:(...), 1, 2, 3)))),
+                    "wrong number of expressions following \"...\"")
 
 # issue #15830
-@test Meta.lower(Main, Meta.parse("foo(y = (global x)) = y")) == Expr(:error, "misplaced \"global\" declaration")
+@test_loweringerror(Meta.parse("foo(y = (global x)) = y"), "misplaced \"global\" declaration")
 
 # Using the value of a `global` declaration is allowed, provided that value came
 # from something that isn't another `global` declaration:
@@ -387,11 +395,14 @@ add_method_to_glob_fn!()
 @test_parseerror "function finally() end"
 
 # PR #16170
-@test Meta.lower(Main, Meta.parse("true(x) = x")) == Expr(:error, "\"true\" is not a valid function argument name")
-@test Meta.lower(Main, Meta.parse("false(x) = x")) == Expr(:error, "\"false\" is not a valid function argument name")
+@test_loweringerror(Meta.parse("true(x) = x"),
+                    "\"true\" is not a valid function argument name")
+@test_loweringerror(Meta.parse("false(x) = x"),
+                    "\"false\" is not a valid function argument name")
 
 # issue #16355
-@test Meta.lower(Main, :(f(d:Int...) = nothing)) == Expr(:error, "\"d:Int\" is not a valid function argument name")
+@test_loweringerror(:(f(d:Int...) = nothing),
+                    "\"d:Int\" is not a valid function argument name")
 
 # issue #16517
 @test (try error(); catch; 0; end) === 0
@@ -518,31 +529,31 @@ let m_error, error_out, filename = Base.source_path()
 end
 
 # issue #7272
-@test Meta.lower(Main, Meta.parse("let
-              global x = 2
-              local x = 1
-              end")) == Expr(:error, "variable \"x\" declared both local and global")
+@test_loweringerror(Meta.parse("""
+                        let
+                            global x = 2
+                            local x = 1
+                        end"""), "variable \"x\" declared both local and global")
 #=
-@test Meta.lower(Main, Meta.parse("let
+@test_loweringerror(Meta.parse("let
               local x = 2
               local x = 1
-              end")) == Expr(:error, "local \"x\" declared twice")
+              end"), "local \"x\" declared twice")
 
-@test Meta.lower(Main, Meta.parse("let x
+@test_loweringerror(Meta.parse("let x
                   local x = 1
-              end")) == Expr(:error, "local \"x\" declared twice")
+              end"), "local \"x\" declared twice")
 
-@test Meta.lower(Main, Meta.parse("let x = 2
+@test_loweringerror(Meta.parse("let x = 2
                   local x = 1
-              end")) == Expr(:error, "local \"x\" declared twice")
+              end"), "local \"x\" declared twice")
 =#
 # issue #23673
 @test :(let $([:(x=1),:(y=2)]...); x+y end) == :(let x = 1, y = 2; x+y end)
 
 # make sure front end can correctly print values to error messages
-let ex = Meta.lower(Main, Meta.parse("\"a\"=1"))
-    @test ex == Expr(:error, "invalid assignment location \"\"a\"\"")
-end
+@test_loweringerror(Meta.parse("\"a\"=1"),
+                    "invalid assignment location \"\"a\"\"")
 
 # make sure that incomplete tags are detected correctly
 # (i.e. error messages in src/julia-parser.scm must be matched correctly
@@ -654,11 +665,11 @@ for op in ["+", "-", "\$", "|", ".+", ".-", "*", ".*"]
 end
 
 # issue #17701
-@test Meta.lower(Main, :(i==3 && i+=1)) == Expr(:error, "invalid assignment location \"(i == 3) && i\"")
+@test_loweringerror(:(i==3 && i+=1), "invalid assignment location \"(i == 3) && i\"")
 
 # issue #18667
-@test Meta.lower(Main, :(true = 1)) == Expr(:error, "invalid assignment location \"true\"")
-@test Meta.lower(Main, :(false = 1)) == Expr(:error, "invalid assignment location \"false\"")
+@test_loweringerror(:(true = 1), "invalid assignment location \"true\"")
+@test_loweringerror(:(false = 1), "invalid assignment location \"false\"")
 
 # PR #15592
 let str = "[1] [2]"
@@ -887,8 +898,8 @@ end)(Tuple{Int8, Int16}) == Int16
 # issue #20541
 @test Meta.parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :.!, :b))
 
-@test Meta.lower(Main, :(a{1} = b)) == Expr(:error, "invalid type parameter name \"1\"")
-@test Meta.lower(Main, :(a{2<:Any} = b)) == Expr(:error, "invalid type parameter name \"2\"")
+@test_loweringerror(:(a{1} = b), "invalid type parameter name \"1\"")
+@test_loweringerror(:(a{2<:Any} = b), "invalid type parameter name \"2\"")
 
 # issue #20653
 @test_throws UndefVarError Base.call(::Int) = 1
@@ -910,13 +921,13 @@ macro m20729()
 end
 
 @test_throws ErrorException Core.eval(@__MODULE__, :(@m20729))
-@test Meta.lower(@__MODULE__, :(@m20729)) == Expr(:error, "undefined reference in AST")
+@test_loweringerror(:(@m20729), "undefined reference in AST")
 
 macro err20000()
     return Expr(:error, "oops!")
 end
 
-@test Meta.lower(@__MODULE__, :(@err20000)) == Expr(:error, "oops!")
+@test_loweringerror(:(@err20000), "oops!")
 
 # issue #20000
 @test Meta.parse("@m(a; b=c)") == Expr(:macrocall, Symbol("@m"), LineNumberNode(1, :none),
@@ -934,8 +945,9 @@ g21054(>:) = >:2
 @test g21054(-) == -2
 
 # issue #21168
-@test_broken Meta.lower(Main, :(a.[1])) == Expr(:error, "invalid syntax \"a.[1]\"")
-@test_broken Meta.lower(Main, :(a.{1})) == Expr(:error, "invalid syntax \"a.{1}\"")
+@test_loweringerror(:(a.[1]), "invalid syntax \"a.[1]\"", broken)
+@test_loweringerror(:(a.[1]), "invalid syntax \"a.[1]\"", broken)
+@test_loweringerror(:(a.{1}), "invalid syntax \"a.{1}\"", broken)
 
 # Issue #21225
 let abstr = Meta.parse("abstract type X end")
@@ -1045,8 +1057,8 @@ module Test21607
 end
 
 # issue #16937
-@test Meta.lower(Main, :(f(2, a=1, w=3, c=3, w=4, b=2))) ==
-    Expr(:error, "keyword argument \"w\" repeated in call to \"f\"")
+@test_loweringerror(:(f(2, a=1, w=3, c=3, w=4, b=2)),
+                    "keyword argument \"w\" repeated in call to \"f\"")
 
 let f(x) =
       g(x) = 1
@@ -1098,10 +1110,10 @@ end
 @test_parseerror "@ time"
 
 # issue #7479
-@test Meta.lower(Main, Meta.parse("(true &&& false)")) == Expr(:error, "invalid syntax &false")
+@test_loweringerror(Meta.parse("(true &&& false)"), "invalid syntax &false")
 
 # issue #34748
-@test Meta.lower(Main, :(&(1, 2))) == Expr(:error, "invalid syntax &(1, 2)")
+@test_loweringerror(:(&(1, 2)), "invalid syntax &(1, 2)")
 
 # if an indexing expression becomes a cat expression, `end` is not special
 @test_parseerror "a[end end]"
@@ -1143,12 +1155,15 @@ let
 end
 
 # issue #18730
-@test Meta.lower(Main, quote
+@test_loweringerror(
+    quote
         function f()
             local Int
             x::Int -> 2
         end
-    end) == Expr(:error, "local variable Int cannot be used in closure declaration")
+    end,
+    "local variable Int cannot be used in closure declaration"
+)
 
 # some issues with backquote
 # preserve QuoteNode and LineNumberNode
@@ -1206,11 +1221,11 @@ M24289.@m24289
 
 # misplaced top-level expressions
 @test_throws ErrorException("syntax: \"\$\" expression outside quote") Core.eval(@__MODULE__, Meta.parse("x->\$x"))
-@test Meta.lower(@__MODULE__, Expr(:$, :x)) == Expr(:error, "\"\$\" expression outside quote")
-@test Meta.lower(@__MODULE__, :(x->import Foo)) == Expr(:error, "\"import\" expression not at top level")
-@test Meta.lower(@__MODULE__, :(x->module Foo end)) == Expr(:error, "\"module\" expression not at top level")
-@test Meta.lower(@__MODULE__, :(x->struct Foo end)) == Expr(:error, "\"struct\" expression not at top level")
-@test Meta.lower(@__MODULE__, :(x->abstract type Foo end)) == Expr(:error, "\"abstract type\" expression not at top level")
+@test_loweringerror(Expr(:$, :x), "\"\$\" expression outside quote")
+@test_loweringerror(:(x->import Foo), "\"import\" expression not at top level")
+@test_loweringerror(:(x->module Foo end), "\"module\" expression not at top level")
+@test_loweringerror(:(x->struct Foo end), "\"struct\" expression not at top level")
+@test_loweringerror(:(x->abstract type Foo end), "\"abstract type\" expression not at top level")
 
 # caused by #24538. forms that lower to `call` should wrap with `call` before
 # recursively calling expand-forms.
@@ -1269,7 +1284,7 @@ end
                  "expected \"]\" or separator in arguments to \"[ ]\"; got \"1)\"")
 
 # issue #9972
-@test Meta.lower(@__MODULE__, :(f(;3))) == Expr(:error, "invalid keyword argument syntax \"3\"")
+@test_loweringerror(:(f(;3)), "invalid keyword argument syntax \"3\"")
 
 # issue #25055, make sure quote makes new Exprs
 function f25055()
@@ -1433,9 +1448,9 @@ end
 # Module name cannot be a reserved word.
 @test_parseerror "module module end"
 
-@test Meta.lower(@__MODULE__, :(global true)) == Expr(:error, "invalid syntax in \"global\" declaration")
-@test Meta.lower(@__MODULE__, :(let ccall end)) == Expr(:error, "invalid identifier name \"ccall\"")
-@test Meta.lower(@__MODULE__, :(cglobal = 0)) == Expr(:error, "invalid assignment location \"cglobal\"")
+@test_loweringerror(:(global true), "invalid syntax in \"global\" declaration")
+@test_loweringerror(:(let ccall end), "invalid identifier name \"ccall\"")
+@test_loweringerror(:(cglobal = 0), "invalid assignment location \"cglobal\"")
 
 # issue #26507
 @test Meta.parse("@try x") == Expr(:macrocall, Symbol("@try"), LineNumberNode(1,:none), :x)
@@ -1443,7 +1458,7 @@ end
 @test Meta.parse("@\$x") == Expr(:macrocall, Symbol("@\$"), LineNumberNode(1,:none), :x)
 
 # issue #26717
-@test Meta.lower(@__MODULE__, :( :(:) = 2 )) == Expr(:error, "invalid assignment location \":(:)\"")
+@test_loweringerror(:( :(:) = 2 ), "invalid assignment location \":(:)\"")
 
 # issue #27690
 # previously, this was allowed since it thought `end` was being used for indexing.
@@ -1451,7 +1466,7 @@ end
 @test_parseerror "Any[:(end)]"
 
 # issue #17781
-let ex = Meta.lower(@__MODULE__, Meta.parse("
+@test_loweringerror(Meta.parse("
     A = function (s, o...)
         f(a, b) do
         end
@@ -1459,31 +1474,23 @@ let ex = Meta.lower(@__MODULE__, Meta.parse("
     B = function (s, o...)
         f(a, b) do
         end
-    end"))
-    @test isa(ex, Expr) && ex.head === :error
-    @test ex.args[1] == """
+    end"), """
 invalid assignment location "function (s, o...)
     # none, line 2
     # none, line 3
     f(a, b) do
         # none, line 4
     end
-end\""""
-end
+end\"""")
 
-let ex = Meta.lower(@__MODULE__, :(function g end = 1))
-    @test isa(ex, Expr) && ex.head === :error
-    @test ex.args[1] == """
-invalid assignment location "function g
-end\""""
-end
-
+@test_loweringerror(:(function g end = 1),
+                    "invalid assignment location \"function g\nend\"")
 
 # issue #15229
-@test Meta.lower(@__MODULE__, :(function f(x); local x; 0; end)) ==
-    Expr(:error, "local variable name \"x\" conflicts with an argument")
-@test Meta.lower(@__MODULE__, :(function f(x); begin; local x; 0; end; end)) ==
-    Expr(:error, "local variable name \"x\" conflicts with an argument")
+@test_loweringerror(:(function f(x); local x; 0; end),
+                    "local variable name \"x\" conflicts with an argument")
+@test_loweringerror(:(function f(x); begin; local x; 0; end; end),
+                    "local variable name \"x\" conflicts with an argument")
 
 # issue #27964
 a27964(x) = Any[x for x in []]
@@ -1523,17 +1530,17 @@ catch e
     @test e.error isa MethodError
 end
 
-@test Meta.lower(@__MODULE__, :(if true; break; end for i = 1:1)) == Expr(:error, "break or continue outside loop")
-@test Meta.lower(@__MODULE__, :([if true; break; end for i = 1:1])) == Expr(:error, "break or continue outside loop")
-@test Meta.lower(@__MODULE__, :(Int[if true; break; end for i = 1:1])) == Expr(:error, "break or continue outside loop")
-@test Meta.lower(@__MODULE__, :([if true; continue; end for i = 1:1])) == Expr(:error, "break or continue outside loop")
-@test Meta.lower(@__MODULE__, :(Int[if true; continue; end for i = 1:1])) == Expr(:error, "break or continue outside loop")
+@test_loweringerror(:(if true; break; end for i = 1:1), "break or continue outside loop")
+@test_loweringerror(:([if true; break; end for i = 1:1]), "break or continue outside loop")
+@test_loweringerror(:(Int[if true; break; end for i = 1:1]), "break or continue outside loop")
+@test_loweringerror(:([if true; continue; end for i = 1:1]), "break or continue outside loop")
+@test_loweringerror(:(Int[if true; continue; end for i = 1:1]), "break or continue outside loop")
 
-@test Meta.lower(@__MODULE__, :(return 0 for i=1:2)) == Expr(:error, "\"return\" not allowed inside comprehension or generator")
-@test Meta.lower(@__MODULE__, :([ return 0 for i=1:2 ])) == Expr(:error, "\"return\" not allowed inside comprehension or generator")
-@test Meta.lower(@__MODULE__, :(Int[ return 0 for i=1:2 ])) == Expr(:error, "\"return\" not allowed inside comprehension or generator")
-@test Meta.lower(@__MODULE__, :([ $(Expr(:thisfunction)) for i=1:2 ])) == Expr(:error, "\"@__FUNCTION__\" not allowed inside comprehension or generator")
-@test Meta.lower(@__MODULE__, :($(Expr(:thisfunction)) for i=1:2)) == Expr(:error, "\"@__FUNCTION__\" not allowed inside comprehension or generator")
+@test_loweringerror(:(return 0 for i=1:2), "\"return\" not allowed inside comprehension or generator")
+@test_loweringerror(:([ return 0 for i=1:2 ]), "\"return\" not allowed inside comprehension or generator")
+@test_loweringerror(:(Int[ return 0 for i=1:2 ]), "\"return\" not allowed inside comprehension or generator")
+@test_loweringerror(:([ $(Expr(:thisfunction)) for i=1:2 ]), "\"@__FUNCTION__\" not allowed inside comprehension or generator")
+@test_loweringerror(:($(Expr(:thisfunction)) for i=1:2), "\"@__FUNCTION__\" not allowed inside comprehension or generator")
 @test [ ()->return 42 for i = 1:1 ][1]() == 42
 @test Function[ identity() do x; return 2x; end for i = 1:1 ][1](21) == 42
 @test @eval let f=[ ()->$(Expr(:thisfunction)) for i = 1:1 ][1]; f() === f; end
@@ -1635,20 +1642,20 @@ end
 @test A27807.@m()(1,1.0) === (1, 0.0)
 
 # issue #27896 / #29429
-@test Meta.lower(@__MODULE__, quote
+@test_loweringerror(quote
     function foo(a::A, b::B) where {A,B}
         B = eltype(A)
         return convert(B, b)
     end
-end) == Expr(:error, "local variable name \"B\" conflicts with a static parameter")
+end, "local variable name \"B\" conflicts with a static parameter")
 # issue #32620
-@test Meta.lower(@__MODULE__, quote
+@test_loweringerror(quote
     function foo(a::T) where {T}
         for i = 1:1
             T = 0
         end
     end
-end) == Expr(:error, "local variable name \"T\" conflicts with a static parameter")
+end, "local variable name \"T\" conflicts with a static parameter")
 function f32620(x::T) where T
     local y
     let T = 3
@@ -1678,7 +1685,7 @@ macro foo28244(sym)
 end
 @test @macroexpand(@foo28244(kw)) == Expr(:call, :bar, Expr(:kw))
 let x = @macroexpand @foo28244(var"let")
-    @test Meta.lower(@__MODULE__, x) == Expr(:error, "malformed expression")
+    @test_loweringerror(x, "malformed expression")
 end
 
 # #16356
@@ -1731,18 +1738,18 @@ end
 @test M22314.i == 0
 
 # #6080
-@test Meta.lower(@__MODULE__, :(ccall(:a, Cvoid, (Cint,), &x))) == Expr(:error, "invalid syntax &x")
+@test_loweringerror(:(ccall(:a, Cvoid, (Cint,), &x)), "invalid syntax &x")
 
-@test Meta.lower(@__MODULE__, :(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ())))) == Expr(:error, "ccall function name and library expression cannot reference local variables")
+@test_loweringerror(:(f(x) = (y = x + 1; ccall((:a, y), Cvoid, ()))), "ccall function name and library expression cannot reference local variables")
 
 @test_parseerror "x.'"
 @test_parseerror "0.+1"
 
 # #24221
-@test Meta.isexpr(Meta.lower(@__MODULE__, :(a=_)), :error)
+@test_loweringerror(:(a=_), "all-underscore identifiers are write-only and their values cannot be used in expressions")
 
 for ex in [:([x=1]), :(T{x=1})]
-    @test Meta.lower(@__MODULE__, ex) == Expr(:error, string("misplaced assignment statement in \"", ex, "\""))
+    @test_loweringerror(ex, "misplaced assignment statement in \"$ex\"")
 end
 
 # issue #28576
@@ -1893,10 +1900,8 @@ end
 @test_throws LoadError include_string(@__MODULE__, "1,\n")
 
 # issue #30062
-let er = Meta.lower(@__MODULE__, quote if false end, b+=2 end)
-    @test Meta.isexpr(er, :error)
-    @test startswith(er.args[1], "invalid multiple assignment location \"if")
-end
+@test_loweringerror(Base.remove_linenums!(quote if false end, b+=2 end),
+                    "invalid multiple assignment location \"if false\nend\"")
 
 # issue #30030
 let x = 0
@@ -1981,11 +1986,11 @@ f31404(a, b; kws...) = (a, b, values(kws))
 # issue #28992
 macro id28992(x) x end
 @test @id28992(1 .+ 2) == 3
-@test Meta.@lower(.+(a,b) = 0) == Expr(:error, "invalid function name \".+\"")
-@test Meta.@lower((.+)(a,b) = 0) == Expr(:error, "invalid function name \"(.+)\"")
+@test_loweringerror(:(.+(a,b) = 0), "invalid function name \".+\"")
+@test_loweringerror(:((.+)(a,b) = 0), "invalid function name \"(.+)\"")
 let m = @__MODULE__
-    @test Meta.lower(m, :($m.@id28992(.+(a,b) = 0))) == Expr(:error, "invalid function name \"$(nameof(m)).:.+\" around $(@__FILE__):$(@__LINE__)")
-    @test Meta.lower(m, :($m.@id28992((.+)(a,b) = 0))) == Expr(:error, "invalid function name \"(.$(nameof(m)).+)\" around $(@__FILE__):$(@__LINE__)")
+    @test_loweringerror(:($m.@id28992(.+(a,b) = 0)), "invalid function name \"$(nameof(m)).:.+\" around $(@__FILE__):$(@__LINE__)")
+    @test_loweringerror(:($m.@id28992((.+)(a,b) = 0)), "invalid function name \"(.$(nameof(m)).+)\" around $(@__FILE__):$(@__LINE__)")
 end
 @test @id28992([1] .< [2] .< [3]) == [true]
 @test @id28992(2 ^ -2) == 0.25
@@ -2008,8 +2013,10 @@ let
 end
 @test a32325(0) === a32325()
 
-@test Meta.lower(Main, :(struct A; A() = new{Int}(); end)) == Expr(:error, "too many type parameters specified in \"new{...}\"")
-@test Meta.lower(Main, :(struct A{T, S}; A() = new{Int}(); end)) == Expr(:error, "too few type parameters specified in \"new{...}\"")
+@test_loweringerror(:(struct A; A() = new{Int}(); end),
+                    "too many type parameters specified in \"new{...}\"")
+@test_loweringerror(:(struct A{T, S}; A() = new{Int}(); end),
+                    "too few type parameters specified in \"new{...}\"")
 
 # issue #32467
 let f = identity(identity() do
@@ -2072,14 +2079,14 @@ end
 @test Meta.isexpr(Meta.lower(Main, :((@label a; @goto a))), :thunk)
 
 # issue #33250
-@test Meta.lower(Main, :(f(b=b...))) == Expr(:error, "\"...\" expression cannot be used as keyword argument value")
-@test Meta.lower(Main, :(f(;a=a,b=b...))) == Expr(:error, "\"...\" expression cannot be used as keyword argument value")
-@test Meta.lower(Main, :((a=a,b=b...))) == Expr(:error, "\"...\" expression cannot be used as named tuple field value")
-@test Meta.lower(Main, :(f(;a...,b...)=0)) == Expr(:error, "invalid \"...\" on non-final keyword argument")
-@test Meta.lower(Main, :(f(;a...,b=0)=0)) == Expr(:error, "invalid \"...\" on non-final keyword argument")
+@test_loweringerror(:(f(b=b...)), "\"...\" expression cannot be used as keyword argument value")
+@test_loweringerror(:(f(;a=a,b=b...)), "\"...\" expression cannot be used as keyword argument value")
+@test_loweringerror(:((a=a,b=b...)), "\"...\" expression cannot be used as named tuple field value")
+@test_loweringerror(:(f(;a...,b...)=0), "invalid \"...\" on non-final keyword argument")
+@test_loweringerror(:(f(;a...,b=0)=0), "invalid \"...\" on non-final keyword argument")
 
 # issue #31547
-@test Meta.lower(Main, :(a := 1)) == Expr(:error, "unsupported assignment operator \":=\"")
+@test_loweringerror(:(a := 1), "unsupported assignment operator \":=\"")
 
 # issue #33841
 let a(; b) = b
@@ -2342,9 +2349,6 @@ end
         @test Meta.isexpr(Meta.parse("$imprt A, B"), imprt)
         @test Meta.isexpr(Meta.parse("$imprt A: x, y, z"), imprt)
 
-        err = Expr(
-            :error,
-        )
         @test_parseerror("$imprt A, B: x, y",
                          "\":\" in \"$imprt\" syntax can only be used when importing a single module. Split imports into multiple lines.")
         @test_parseerror("$imprt A: x, B: y",
@@ -2353,14 +2357,14 @@ end
 end
 
 # Syntax desugaring pass errors contain line numbers
-@test Meta.lower(@__MODULE__, Expr(:block, LineNumberNode(101, :some_file), :(f(x,x)=1))) ==
-    Expr(:error, "function argument name not unique: \"x\" around some_file:101")
+@test_loweringerror(Expr(:block, LineNumberNode(101, :some_file), :(f(x,x)=1)),
+                    "function argument name not unique: \"x\" around some_file:101")
 
-@test Meta.lower(@__MODULE__, Expr(:block, LineNumberNode(102, :some_file), :(function f(x) where T where T; x::T; end))) ==
-    Expr(:error, "function static parameter name not unique: \"T\" around some_file:102")
+@test_loweringerror(Expr(:block, LineNumberNode(102, :some_file), :(function f(x) where T where T; x::T; end)),
+                    "function static parameter name not unique: \"T\" around some_file:102")
 
-@test Meta.lower(@__MODULE__, Expr(:block, LineNumberNode(103, :some_file), :(function f(t) where t; x; end))) ==
-    Expr(:error, "function argument and static parameter name not distinct: \"t\" around some_file:103")
+@test_loweringerror(Expr(:block, LineNumberNode(103, :some_file), :(function f(t) where t; x; end)),
+                    "function argument and static parameter name not distinct: \"t\" around some_file:103")
 
 # Ensure file names don't leak between `eval`s
 eval(LineNumberNode(11, :incorrect_file))
@@ -2445,20 +2449,22 @@ end
 @test !@isdefined(_x_this_remains_undefined)
 
 module GlobalContainment
+import ..@test_loweringerror
 using Test
 @testset "scope of global declarations" begin
 
     # global declarations from the top level are not inherited by functions.
     # don't allow such a declaration to override an outer local, since it's not
     # clear what it should do.
-    @test Meta.lower(
-        Main,
+    @test_loweringerror(
         :(let
               x = 1
               let
                   global x
               end
-          end)) == Expr(:error, "`global x`: x is a local variable in its enclosing scope")
+          end),
+        "`global x`: x is a local variable in its enclosing scope"
+    )
 
     # a declared global can shadow a local in an outer scope
     @test let
@@ -2892,13 +2898,13 @@ end
 end
 
 @testset "issue #33460" begin
-    err = Expr(:error, "more than one semicolon in argument list")
-    @test Meta.lower(Main, :(f(a; b=1; c=2) = 2))  == err
-    @test Meta.lower(Main, :(f( ; b=1; c=2)))      == err
-    @test Meta.lower(Main, :(f(a; b=1; c=2)))      == err
-    @test Meta.lower(Main, :(f(a; b=1, c=2; d=3))) == err
-    @test Meta.lower(Main, :(f(a; b=1; c=2, d=3))) == err
-    @test Meta.lower(Main, :(f(a; b=1; c=2; d=3))) == err
+    err = "more than one semicolon in argument list"
+    @test_loweringerror(:(f(a; b=1; c=2) = 2),  err)
+    @test_loweringerror(:(f( ; b=1; c=2)),      err)
+    @test_loweringerror(:(f(a; b=1; c=2)),      err)
+    @test_loweringerror(:(f(a; b=1, c=2; d=3)), err)
+    @test_loweringerror(:(f(a; b=1; c=2, d=3)), err)
+    @test_loweringerror(:(f(a; b=1; c=2; d=3)), err)
 end
 
 @test eval(Expr(:if, Expr(:block, Expr(:&&, true, Expr(:call, :(===), 1, 1))), 1, 2)) == 1
@@ -3052,9 +3058,9 @@ Base.dotgetproperty(::A, ::Symbol) = [0, 0, 0]
     @test b == [1, 2, 3]
 end
 
-@test Meta.@lower((::T) = x) == Expr(:error, "invalid assignment location \"::T\"")
-@test Meta.@lower((::T,) = x) == Expr(:error, "invalid assignment location \"::T\"")
-@test Meta.@lower((; ::T) = x) == Expr(:error, "invalid assignment location \"::T\"")
+@test_loweringerror(:((::T) = x), "invalid assignment location \"::T\"")
+@test_loweringerror(:((::T,) = x), "invalid assignment location \"::T\"")
+@test_loweringerror(:((; ::T) = x), "invalid assignment location \"::T\"")
 
 # flisp conversion for quoted SSAValues
 @test eval(:(x = $(QuoteNode(Core.SSAValue(1))))) == Core.SSAValue(1)
@@ -3609,8 +3615,10 @@ f45162_2(f) = f([]...)
 @test_parseerror "const x::Int" "expected assignment after \"const\""
 # these cases have always been caught during lowering, since (const (global x)) is not
 # ambiguous with the lowered form (const x), but that could probably be changed.
-@test Meta.lower(@__MODULE__, Expr(:const, Expr(:global, :x))) == Expr(:error, "expected assignment after \"const\"")
-@test Meta.lower(@__MODULE__, Expr(:const, Expr(:global, Expr(:(::), :x, :Int)))) == Expr(:error, "expected assignment after \"const\"")
+@test_loweringerror(Expr(:const, Expr(:global, :x)),
+                    "expected assignment after \"const\"")
+@test_loweringerror(Expr(:const, Expr(:global, Expr(:(::), :x, :Int))),
+                    "expected assignment after \"const\"")
 
 @testset "issue 25072" begin
     @test '\xc0\x80' == reinterpret(Char, 0xc0800000)

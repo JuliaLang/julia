@@ -1566,6 +1566,7 @@ endif
 ifeq ($(OS), FreeBSD)
 JLDFLAGS += -Wl,-Bdynamic
 OSLIBS += -lelf -lkvm -lrt -lpthread -latomic
+HAVE_SSP := 1
 
 # Tweak order of libgcc_s in DT_NEEDED,
 # make it loaded first to

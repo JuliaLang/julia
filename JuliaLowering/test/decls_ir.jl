@@ -8,16 +8,14 @@ end
 2   1
 3   TestMod.T
 4   (= slot₂/tmp %₂)
-5   slot₂/tmp
-6   (call core.isa %₅ %₃)
-7   (gotoifnot %₆ label₉)
-8   (goto label₁₂)
-9   slot₂/tmp
-10  (call top.convert %₃ %₉)
-11  (= slot₂/tmp (call core.typeassert %₁₀ %₃))
-12  slot₂/tmp
-13  (= slot₁/x %₁₂)
-14  (return %₂)
+5   (call core.isa slot₂/tmp %₃)
+6   (gotoifnot %₅ label₈)
+7   (goto label₁₀)
+8   (call top.convert %₃ slot₂/tmp)
+9   (= slot₂/tmp (call core.typeassert %₈ %₃))
+10  slot₂/tmp
+11  (= slot₁/x %₁₀)
+12  (return %₂)
 
 ########################################
 # Error: Local declarations outside a scope are disallowed
@@ -102,17 +100,15 @@ const xx::T = 10
 #---------------------
 1   TestMod.T
 2   (= slot₁/tmp 10)
-3   slot₁/tmp
-4   (call core.isa %₃ %₁)
-5   (gotoifnot %₄ label₇)
-6   (goto label₁₀)
-7   slot₁/tmp
-8   (call top.convert %₁ %₇)
-9   (= slot₁/tmp (call core.typeassert %₈ %₁))
-10  slot₁/tmp
-11  (call core.declare_const TestMod :xx %₁₀)
-12  latestworld
-13  (return %₁₀)
+3   (call core.isa slot₁/tmp %₁)
+4   (gotoifnot %₃ label₆)
+5   (goto label₈)
+6   (call top.convert %₁ slot₁/tmp)
+7   (= slot₁/tmp (call core.typeassert %₆ %₁))
+8   slot₁/tmp
+9   (call core.declare_const TestMod :xx %₈)
+10  latestworld
+11  (return %₈)
 
 ########################################
 # Const tuple
@@ -141,27 +137,23 @@ const c0 = v0 = v1 = 123
 5   latestworld
 6   (call core.get_binding_type TestMod :v0)
 7   (= slot₁/tmp %₁)
-8   slot₁/tmp
-9   (call core.isa %₈ %₆)
-10  (gotoifnot %₉ label₁₂)
-11  (goto label₁₄)
+8   (call core.isa slot₁/tmp %₆)
+9   (gotoifnot %₈ label₁₁)
+10  (goto label₁₂)
+11  (= slot₁/tmp (call top.convert %₆ slot₁/tmp))
 12  slot₁/tmp
-13  (= slot₁/tmp (call top.convert %₆ %₁₂))
-14  slot₁/tmp
-15  (call core.setglobal! TestMod :v0 %₁₄)
-16  (call core.declare_global TestMod :v1 true)
-17  latestworld
-18  (call core.get_binding_type TestMod :v1)
-19  (= slot₂/tmp %₁)
-20  slot₂/tmp
-21  (call core.isa %₂₀ %₁₈)
-22  (gotoifnot %₂₁ label₂₄)
-23  (goto label₂₆)
-24  slot₂/tmp
-25  (= slot₂/tmp (call top.convert %₁₈ %₂₄))
-26  slot₂/tmp
-27  (call core.setglobal! TestMod :v1 %₂₆)
-28  (return %₁)
+13  (call core.setglobal! TestMod :v0 %₁₂)
+14  (call core.declare_global TestMod :v1 true)
+15  latestworld
+16  (call core.get_binding_type TestMod :v1)
+17  (= slot₂/tmp %₁)
+18  (call core.isa slot₂/tmp %₁₆)
+19  (gotoifnot %₁₈ label₂₁)
+20  (goto label₂₂)
+21  (= slot₂/tmp (call top.convert %₁₆ slot₂/tmp))
+22  slot₂/tmp
+23  (call core.setglobal! TestMod :v1 %₂₂)
+24  (return %₁)
 
 ########################################
 # Global assignment
@@ -171,15 +163,13 @@ xx = 10
 2   latestworld
 3   (call core.get_binding_type TestMod :xx)
 4   (= slot₁/tmp 10)
-5   slot₁/tmp
-6   (call core.isa %₅ %₃)
-7   (gotoifnot %₆ label₉)
-8   (goto label₁₁)
+5   (call core.isa slot₁/tmp %₃)
+6   (gotoifnot %₅ label₈)
+7   (goto label₉)
+8   (= slot₁/tmp (call top.convert %₃ slot₁/tmp))
 9   slot₁/tmp
-10  (= slot₁/tmp (call top.convert %₃ %₉))
-11  slot₁/tmp
-12  (call core.setglobal! TestMod :xx %₁₁)
-13  (return 10)
+10  (call core.setglobal! TestMod :xx %₉)
+11  (return 10)
 
 ########################################
 # Typed global assignment
@@ -194,15 +184,13 @@ global xx::T = 10
 7   latestworld
 8   (call core.get_binding_type TestMod :xx)
 9   (= slot₁/tmp 10)
-10  slot₁/tmp
-11  (call core.isa %₁₀ %₈)
-12  (gotoifnot %₁₁ label₁₄)
-13  (goto label₁₆)
+10  (call core.isa slot₁/tmp %₈)
+11  (gotoifnot %₁₀ label₁₃)
+12  (goto label₁₄)
+13  (= slot₁/tmp (call top.convert %₈ slot₁/tmp))
 14  slot₁/tmp
-15  (= slot₁/tmp (call top.convert %₈ %₁₄))
-16  slot₁/tmp
-17  (call core.setglobal! TestMod :xx %₁₆)
-18  (return 10)
+15  (call core.setglobal! TestMod :xx %₁₄)
+16  (return 10)
 
 ########################################
 # Error: x declared twice
@@ -263,33 +251,30 @@ end
 7   SourceLocation::1:10
 8   (call core.svec %₅ %₆ %₇)
 9   --- method core.nothing %₈
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/tmp(!read) slot₄/tmp(!read)]
-    1   1
-    2   TestMod.Int
-    3   (= slot₃/tmp %₁)
-    4   slot₃/tmp
-    5   (call core.isa %₄ %₂)
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/tmp(!read) slot₄/tmp(!read) slot₅/x(!read)]
+    1   (= slot₅/x slot₂/x)
+    2   1
+    3   TestMod.Int
+    4   (= slot₃/tmp %₂)
+    5   (call core.isa slot₃/tmp %₃)
     6   (gotoifnot %₅ label₈)
-    7   (goto label₁₁)
-    8   slot₃/tmp
-    9   (call top.convert %₂ %₈)
-    10  (= slot₃/tmp (call core.typeassert %₉ %₂))
-    11  slot₃/tmp
-    12  (= slot₂/x %₁₁)
-    13  2.0
-    14  TestMod.Int
-    15  (= slot₄/tmp %₁₃)
-    16  slot₄/tmp
-    17  (call core.isa %₁₆ %₁₄)
-    18  (gotoifnot %₁₇ label₂₀)
-    19  (goto label₂₃)
+    7   (goto label₁₀)
+    8   (call top.convert %₃ slot₃/tmp)
+    9   (= slot₃/tmp (call core.typeassert %₈ %₃))
+    10  slot₃/tmp
+    11  (= slot₅/x %₁₀)
+    12  2.0
+    13  TestMod.Int
+    14  (= slot₄/tmp %₁₂)
+    15  (call core.isa slot₄/tmp %₁₃)
+    16  (gotoifnot %₁₅ label₁₈)
+    17  (goto label₂₀)
+    18  (call top.convert %₁₃ slot₄/tmp)
+    19  (= slot₄/tmp (call core.typeassert %₁₈ %₁₃))
     20  slot₄/tmp
-    21  (call top.convert %₁₄ %₂₀)
-    22  (= slot₄/tmp (call core.typeassert %₂₁ %₁₄))
-    23  slot₄/tmp
-    24  (= slot₂/x %₂₃)
-    25  slot₂/x
-    26  (return %₂₅)
+    21  (= slot₅/x %₂₀)
+    22  slot₅/x
+    23  (return %₂₂)
 10  latestworld
 11  TestMod.f
 12  (return %₁₁)

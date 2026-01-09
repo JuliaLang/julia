@@ -149,7 +149,8 @@ end
     function wrapscope(ex, scope_type)
         g = JuliaLowering.ensure_attributes(ex._graph, scope_type=Symbol)
         ex = JuliaLowering.reparent(g, ex)
-        makenode(g, ex, K"scope_block", [ex._id], [:scope_type=>scope_type])
+        out = JuliaLowering.newnode(g, ex, K"scope_block", [ex._id])
+        setattr!(out, :scope_type, scope_type)
     end
     function use_soft(ex::SyntaxTree)
         @ast ex._graph ex [K"block" (::K"softscope") ex]

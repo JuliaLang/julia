@@ -85,9 +85,9 @@ function lock(l::AbstractSpinLock)
 end
 
 function trylock(l::AbstractSpinLock)
-    if l.owned == 0
+    if l.owned::Int == 0
         GC.disable_finalizers()
-        p = @atomicswap :acquire l.owned = 1
+        p = (@atomicswap :acquire l.owned = 1)::Int
         if p == 0
             return true
         end
@@ -97,7 +97,7 @@ function trylock(l::AbstractSpinLock)
 end
 
 function unlock(l::AbstractSpinLock)
-    if (@atomicswap :release l.owned = 0) == 0
+    if (@atomicswap :release l.owned = 0)::Int == 0
         error("unlock count must match lock count")
     end
     GC.enable_finalizers()
@@ -106,5 +106,5 @@ function unlock(l::AbstractSpinLock)
 end
 
 function islocked(l::AbstractSpinLock)
-    return (@atomic :monotonic l.owned) != 0
+    return (@atomic :monotonic l.owned)::Int != 0
 end

@@ -611,6 +611,8 @@ tests = [
         "macro \$f()    end"   =>  "(macro (call (\$ f)) (block))"
         "macro (\$f)()  end"   =>  "(macro (call (parens (\$ f))) (block))"
         "function (x) body end"=>  "(function (tuple-p x) (block body))"
+        "function (x)\n    body\nend"=>  "(function (tuple-p x) (block body))"
+        "function (x)\n() end" =>  "(function (tuple-p x) (block (tuple-p)))"
         "function (x,y) end"   =>  "(function (tuple-p x y) (block))"
         "function (x,y,) end"  =>  "(function (tuple-p-, x y) (block))"
         "function (x=1) end"   =>  "(function (tuple-p (= x 1)) (block))"

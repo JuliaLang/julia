@@ -32,9 +32,9 @@ end
 # We might consider changing at least the second of these choices, depending on
 # how we end up putting this into Base.
 
-struct LoweringIterator{GraphType}
+struct LoweringIterator{Attrs}
     expr_compat_mode::Bool # later stored in module?
-    todo::Vector{Tuple{SyntaxTree{GraphType}, Bool, Int}}
+    todo::Vector{Tuple{SyntaxTree{Attrs}, Bool, Int}}
 end
 
 function lower_init(ex::SyntaxTree{T};
@@ -435,6 +435,8 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
                k == K"="         ? :(=)        :
                k == K"leave"     ? :leave      :
                k == K"isdefined" ? :isdefined  :
+               k == K"loopinfo"  ? :loopinfo   :
+               k == K"boundscheck"       ? :boundscheck       :
                k == K"latestworld"       ? :latestworld       :
                k == K"pop_exception"     ? :pop_exception     :
                k == K"captured_local"    ? :captured_local    :

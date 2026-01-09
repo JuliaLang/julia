@@ -100,17 +100,15 @@ end
 3   (call %₂)
 4   TestMod.T
 5   (= slot₂/tmp %₃)
-6   slot₂/tmp
-7   (call core.isa %₆ %₄)
-8   (gotoifnot %₇ label₁₀)
-9   (goto label₁₃)
-10  slot₂/tmp
-11  (call top.convert %₄ %₁₀)
-12  (= slot₂/tmp (call core.typeassert %₁₁ %₄))
-13  slot₂/tmp
-14  (= slot₁/x %₁₃)
-15  slot₁/x
-16  (return %₁₅)
+6   (call core.isa slot₂/tmp %₄)
+7   (gotoifnot %₆ label₉)
+8   (goto label₁₁)
+9   (call top.convert %₄ slot₂/tmp)
+10  (= slot₂/tmp (call core.typeassert %₉ %₄))
+11  slot₂/tmp
+12  (= slot₁/x %₁₁)
+13  slot₁/x
+14  (return %₁₃)
 
 ########################################
 # "complex lhs" of `::T` => type-assert, not decl
@@ -136,15 +134,12 @@ X{T} = Y{T,T}
 #---------------------
 1   (call core.TypeVar :T)
 2   (= slot₁/T %₁)
-3   slot₁/T
-4   TestMod.Y
-5   slot₁/T
-6   slot₁/T
-7   (call core.apply_type %₄ %₅ %₆)
-8   (call core.UnionAll %₃ %₇)
-9   (call core.declare_const TestMod :X %₈)
-10  latestworld
-11  (return %₈)
+3   TestMod.Y
+4   (call core.apply_type %₃ slot₁/T slot₁/T)
+5   (call core.UnionAll slot₁/T %₄)
+6   (call core.declare_const TestMod :X %₅)
+7   latestworld
+8   (return %₅)
 
 ########################################
 # UnionAll expansion in local scope
@@ -154,14 +149,11 @@ end
 #---------------------
 1   (call core.TypeVar :T)
 2   (= slot₂/T %₁)
-3   slot₂/T
-4   TestMod.Y
-5   slot₂/T
-6   slot₂/T
-7   (call core.apply_type %₄ %₅ %₆)
-8   (call core.UnionAll %₃ %₇)
-9   (= slot₁/X %₈)
-10  (return %₈)
+3   TestMod.Y
+4   (call core.apply_type %₃ slot₂/T slot₂/T)
+5   (call core.UnionAll slot₂/T %₄)
+6   (= slot₁/X %₅)
+7   (return %₅)
 
 ########################################
 # Error: Invalid lhs in `=`

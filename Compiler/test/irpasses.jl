@@ -1499,11 +1499,10 @@ let code = Any[
     # Simulate the important results from inference
     interp = Compiler.NativeInterpreter()
     sv = Compiler.OptimizationState(mi, src, interp)
-    slot_id = 4
-    for block_id = 3:5
-        # (_4 !== nothing) conditional narrows the type, triggering PiNodes
-        sv.bb_vartables[block_id][slot_id] = VarState(Bool, #= maybe_undef =# false)
-    end
+    # (_4 !== nothing) conditional narrows the type, triggering PiNodes
+    sv.bb_vartables[#= block_id =# 3][#= slot_id =# 4] = VarState(Bool, #= def =# 5, #= maybe_undef =# false)
+    sv.bb_vartables[#= block_id =# 4][#= slot_id =# 4] = VarState(Bool, #= def =# 7, #= maybe_undef =# false)
+    sv.bb_vartables[#= block_id =# 5][#= slot_id =# 4] = VarState(Bool, #= def =# 7, #= maybe_undef =# false)
 
     ir = Compiler.convert_to_ircode(src, sv)
     ir = Compiler.slot2reg(ir, src, sv)

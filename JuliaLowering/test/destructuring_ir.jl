@@ -359,16 +359,14 @@ end
 3   (call top.getproperty %₂ :x)
 4   TestMod.T
 5   (= slot₂/tmp %₃)
-6   slot₂/tmp
-7   (call core.isa %₆ %₄)
-8   (gotoifnot %₇ label₁₀)
-9   (goto label₁₃)
-10  slot₂/tmp
-11  (call top.convert %₄ %₁₀)
-12  (= slot₂/tmp (call core.typeassert %₁₁ %₄))
-13  slot₂/tmp
-14  (= slot₁/x %₁₃)
-15  (return %₂)
+6   (call core.isa slot₂/tmp %₄)
+7   (gotoifnot %₆ label₉)
+8   (goto label₁₁)
+9   (call top.convert %₄ slot₂/tmp)
+10  (= slot₂/tmp (call core.typeassert %₉ %₄))
+11  slot₂/tmp
+12  (= slot₁/x %₁₁)
+13  (return %₂)
 
 ########################################
 # Error: Property destructuring with frankentuple

@@ -294,15 +294,13 @@ end
     1   TestMod.Int
     2   (gotoifnot slot₂/x label₃)
     3   (= slot₃/tmp 0xff)
-    4   slot₃/tmp
-    5   (call core.isa %₄ %₁)
-    6   (gotoifnot %₅ label₈)
-    7   (goto label₁₁)
-    8   slot₃/tmp
-    9   (call top.convert %₁ %₈)
-    10  (= slot₃/tmp (call core.typeassert %₉ %₁))
-    11  slot₃/tmp
-    12  (return %₁₁)
+    4   (call core.isa slot₃/tmp %₁)
+    5   (gotoifnot %₄ label₇)
+    6   (goto label₉)
+    7   (call top.convert %₁ slot₃/tmp)
+    8   (= slot₃/tmp (call core.typeassert %₇ %₁))
+    9   slot₃/tmp
+    10  (return %₉)
 10  latestworld
 11  TestMod.f
 12  (return %₁₁)
@@ -910,15 +908,13 @@ end
     slots: [slot₁/#self#(called) slot₂/x(!read) slot₃/tmp(!read)]
     1   TestMod.T
     2   (= slot₃/tmp core.nothing)
-    3   slot₃/tmp
-    4   (call core.isa %₃ %₁)
-    5   (gotoifnot %₄ label₇)
-    6   (goto label₁₀)
-    7   slot₃/tmp
-    8   (call top.convert %₁ %₇)
-    9   (= slot₃/tmp (call core.typeassert %₈ %₁))
-    10  slot₃/tmp
-    11  (return %₁₀)
+    3   (call core.isa slot₃/tmp %₁)
+    4   (gotoifnot %₃ label₆)
+    5   (goto label₈)
+    6   (call top.convert %₁ slot₃/tmp)
+    7   (= slot₃/tmp (call core.typeassert %₆ %₁))
+    8   slot₃/tmp
+    9   (return %₈)
 18  latestworld
 19  TestMod.f
 20  (return %₁₉)
