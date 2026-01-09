@@ -2728,7 +2728,7 @@ function __require_prelocked(pkg::PkgId, env)
         if !generating_output(#=incremental=#false)
             project = active_project()
             # spawn off a new incremental pre-compile task for recursive `require` calls
-            loaded = let path = path, reasons = reasons
+            loaded = let path = path, reasons = reasons, parallel_precompile_attempted = parallel_precompile_attempted
                 maybe_cachefile_lock(pkg, path) do
                     # double-check the search now that we have lock
                     m = _require_search_from_serialized(pkg, path, UInt128(0), true)
