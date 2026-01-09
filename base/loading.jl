@@ -185,9 +185,10 @@ const slug_chars = String(['A':'Z'; 'a':'z'; '0':'9'])
 
 function slug(x::UInt32, p::Int)
     sprint(sizehint=p) do io
+        y = x
         n = UInt32(length(slug_chars))
         for i = 1:p
-            x, d = divrem(x, n)
+            y, d = divrem(y, n)
             write(io, slug_chars[1+d])
         end
     end
@@ -1709,8 +1710,8 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
                             if length(entries) != 1
                                 error("expected a single entry for $(repr(dep_name)) in $(repr(project_file))")
                             end
-                            entry = first(entries)::Dict{String, Any}
-                            uuid = entry["uuid"]::String
+                            local entry = first(entries)::Dict{String, Any}
+                            local uuid = entry["uuid"]::String
                             deps′_expanded[dep_name] = uuid
                         end
                         return deps′_expanded
@@ -2857,7 +2858,7 @@ function __require_prelocked(pkg::PkgId, env)
     path = spec.path
     set_pkgorigin_version_path(pkg, path)
 
-    parallel_precompile_attempted = false # being safe to avoid getting stuck in a precompilepkgs loop
+    parallel_precompile_attempted = Ref(false) # being safe to avoid getting stuck in a precompilepkgs loop
     reasons = Dict{String,Int}()
     # attempt to load the module file via the precompile cache locations
     if JLOptions().use_compiled_modules != 0
@@ -2894,13 +2895,13 @@ function __require_prelocked(pkg::PkgId, env)
                     m = _require_search_from_serialized(pkg, spec, UInt128(0), true)
                     m isa Module && return m
 
-                    verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+                    local verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
                     @logmsg verbosity "Precompiling $(repr("text/plain", pkg))$(list_reasons(reasons))"
 
                     unlock(require_lock)
                     try
-                        if !generating_output() && !parallel_precompile_attempted && !disable_parallel_precompile && @isdefined(Precompilation)
-                            parallel_precompile_attempted = true
+                        if !generating_output() && !parallel_precompile_attempted[] && !disable_parallel_precompile && @isdefined(Precompilation)
+                            parallel_precompile_attempted[] = true
                             precompiled = Precompilation.precompilepkgs([pkg]; _from_loading=true, ignore_loaded=false)
                             # prcompiled returns either nothing, indicating it needs serial precompile,
                             # or the entry(ies) that it found would be best to load (possibly because it just created it)
@@ -2936,7 +2937,7 @@ function __require_prelocked(pkg::PkgId, env)
                 @goto load_from_cache # the new cachefile will have the newest mtime so will come first in the search
             elseif isa(loaded, Exception)
                 if precompilableerror(loaded)
-                    verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+                    local verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
                     @logmsg verbosity "Skipping precompilation due to precompilable error. Importing $(repr("text/plain", pkg))." exception=loaded
                 else
                     @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr("text/plain", pkg))" exception=loaded
@@ -3525,9 +3526,10 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             ocachefile = cache_objects ? ocachefile_from_cachefile(cachefile) : nothing
 
             # append checksum for so to the end of the .ji file:
-            crc_so = UInt32(0)
-            if cache_objects
-                crc_so = open(_crc32c, tmppath_so, "r")
+            crc_so = if cache_objects
+                open(_crc32c, tmppath_so, "r")
+            else
+                UInt32(0)
             end
 
             # append extra crc to the end of the .ji file:

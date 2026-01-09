@@ -731,7 +731,7 @@ for (codetype, all_ssa) in Any[
     local i
     for i = 1:length(code.ssavaluetypes)
         typ = code.ssavaluetypes[i]
-        @test isa(typ, Type) || isa(typ, Const) || isa(typ, Conditional) || typ
+        @test isa(typ, Type) || isa(typ, Const) || isa(typ, Conditional) context=typ
     end
     test_inferred_static(codetype, all_ssa)
 end
@@ -1298,7 +1298,7 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
                 continue
             end
         end
-        @test false || "Side effect expressions found $ex"
+        @test false context="Side effect expressions found $ex"
         return
     end
 end
@@ -1381,7 +1381,7 @@ let isa_tfunc(@nospecialize xs...) =
     @test isa_tfunc(typeof(Union{}), Union{}) === Union{} # any result is ok
     @test isa_tfunc(typeof(Union{}), Type{typeof(Union{})}) === Const(true)
     @test isa_tfunc(typeof(Union{}), Const(typeof(Union{}))) === Const(true)
-    let c = Conditional(0, Const(Union{}), Const(Union{}))
+    let c = Conditional(#= slot =# 0, #= ssadef =# 0, Const(Union{}), Const(Union{}))
         @test isa_tfunc(c, Const(Bool)) === Const(true)
         @test isa_tfunc(c, Type{Bool}) === Const(true)
         @test isa_tfunc(c, Const(Real)) === Const(true)
@@ -1433,7 +1433,7 @@ let subtype_tfunc(@nospecialize xs...) =
     @test subtype_tfunc(Type{Union{}}, Any) === Const(true) # Union{} <: Any
     @test subtype_tfunc(Type{Union{}}, Union{Type{Int64}, Type{Float64}}) === Const(true)
     @test subtype_tfunc(Type{Union{}}, Union{Type{T}, Type{Float64}} where T) === Const(true)
-    let c = Conditional(0, Const(Union{}), Const(Union{}))
+    let c = Conditional(#= slot =# 0, #= ssadef =# 0, Const(Union{}), Const(Union{}))
         @test subtype_tfunc(c, Const(Bool)) === Const(true) # any result is ok
     end
     @test subtype_tfunc(Type{Val{1}}, Type{Val{T}} where T) === Bool
@@ -1477,7 +1477,7 @@ let egal_tfunc
     @test egal_tfunc(Type{Union{Float32, Float64}}, Type{Union{Float32, Float64}}) === Bool
     @test egal_tfunc(typeof(Union{}), typeof(Union{})) === Bool # could be improved
     @test egal_tfunc(Const(typeof(Union{})), Const(typeof(Union{}))) === Const(true)
-    let c = Conditional(0, Const(Union{}), Const(Union{}))
+    let c = Conditional(#= slot =# 0, #= ssadef =# 0, Const(Union{}), Const(Union{}))
         @test egal_tfunc(c, Const(Bool)) === Const(false)
         @test egal_tfunc(c, Type{Bool}) === Const(false)
         @test egal_tfunc(c, Const(Real)) === Const(false)
@@ -1488,17 +1488,17 @@ let egal_tfunc
         @test egal_tfunc(c, Bool) === Bool
         @test egal_tfunc(c, Any) === Bool
     end
-    let c = Conditional(0, Union{}, Const(Union{})) # === Const(false)
-        @test egal_tfunc(c, Const(false)) === Conditional(c.slot, c.elsetype, Union{})
-        @test egal_tfunc(c, Const(true)) === Conditional(c.slot, Union{}, c.elsetype)
+    let c = Conditional(#= slot =# 0, #= ssadef =# 0, Union{}, Const(Union{})) # === Const(false)
+        @test egal_tfunc(c, Const(false)) === Conditional(c.slot, c.ssadef, c.elsetype, Union{})
+        @test egal_tfunc(c, Const(true)) === Conditional(c.slot, c.ssadef, Union{}, c.elsetype)
         @test egal_tfunc(c, Const(nothing)) === Const(false)
         @test egal_tfunc(c, Int) === Const(false)
         @test egal_tfunc(c, Bool) === Bool
         @test egal_tfunc(c, Any) === Bool
     end
-    let c = Conditional(0, Const(Union{}), Union{}) # === Const(true)
-        @test egal_tfunc(c, Const(false)) === Conditional(c.slot, Union{}, c.thentype)
-        @test egal_tfunc(c, Const(true)) === Conditional(c.slot, c.thentype, Union{})
+    let c = Conditional(#= slot =# 0, #= ssadef =# 0, Const(Union{}), Union{}) # === Const(true)
+        @test egal_tfunc(c, Const(false)) === Conditional(c.slot, c.ssadef, Union{}, c.thentype)
+        @test egal_tfunc(c, Const(true)) === Conditional(c.slot, c.ssadef, c.thentype, Union{})
         @test egal_tfunc(c, Const(nothing)) === Const(false)
         @test egal_tfunc(c, Int) === Const(false)
         @test egal_tfunc(c, Bool) === Bool
@@ -2299,21 +2299,21 @@ let 𝕃ᵢ = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance)
     isa_tfunc(@nospecialize xs...) = Compiler.isa_tfunc(𝕃ᵢ, xs...)
     ifelse_tfunc(@nospecialize xs...) = Compiler.ifelse_tfunc(𝕃ᵢ, xs...)
 
-    @test (MustAlias(2, AliasableField{Any}, 1, Int) ⊑ Int)
-    @test !(Int ⊑ MustAlias(2, AliasableField{Any}, 1, Int))
-    @test (Int ⊑ MustAlias(2, AliasableField{Any}, 1, Any))
-    @test (Const(42) ⊑ MustAlias(2, AliasableField{Any}, 1, Int))
-    @test !(MustAlias(2, AliasableField{Any}, 1, Any) ⊑ Int)
-    @test tmerge(MustAlias(2, AliasableField{Any}, 1, Any), Const(nothing)) === Any
-    @test tmerge(MustAlias(2, AliasableField{Any}, 1, Int), Const(nothing)) === Union{Int,Nothing}
-    @test tmerge(Const(nothing), MustAlias(2, AliasableField{Any}, 1, Any)) === Any
-    @test tmerge(Const(nothing), MustAlias(2, AliasableField{Any}, 1, Int)) === Union{Int,Nothing}
+    @test (MustAlias(2, 0, AliasableField{Any}, 1, Int) ⊑ Int)
+    @test !(Int ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Int))
+    @test (Int ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Any))
+    @test (Const(42) ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Int))
+    @test !(MustAlias(2, 0, AliasableField{Any}, 1, Any) ⊑ Int)
+    @test tmerge(MustAlias(2, 0, AliasableField{Any}, 1, Any), Const(nothing)) === Any
+    @test tmerge(MustAlias(2, 0, AliasableField{Any}, 1, Int), Const(nothing)) === Union{Int,Nothing}
+    @test tmerge(Const(nothing), MustAlias(2, 0, AliasableField{Any}, 1, Any)) === Any
+    @test tmerge(Const(nothing), MustAlias(2, 0, AliasableField{Any}, 1, Int)) === Union{Int,Nothing}
     tmerge(Const(AbstractVector{<:Any}), Const(AbstractVector{T} where {T}))  # issue #56913
-    @test isa_tfunc(MustAlias(2, AliasableField{Any}, 1, Bool), Const(Bool)) === Const(true)
-    @test isa_tfunc(MustAlias(2, AliasableField{Any}, 1, Bool), Type{Bool}) === Const(true)
-    @test isa_tfunc(MustAlias(2, AliasableField{Any}, 1, Int), Type{Bool}) === Const(false)
-    @test ifelse_tfunc(MustAlias(2, AliasableField{Any}, 1, Bool), Int, Int) === Int
-    @test ifelse_tfunc(MustAlias(2, AliasableField{Any}, 1, Int), Int, Int) === Union{}
+    @test isa_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Bool), Const(Bool)) === Const(true)
+    @test isa_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Bool), Type{Bool}) === Const(true)
+    @test isa_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Int), Type{Bool}) === Const(false)
+    @test ifelse_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Bool), Int, Int) === Int
+    @test ifelse_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Int), Int, Int) === Union{}
 end
 
 maybeget_mustalias_tmerge(x::AliasableField) = x.f
@@ -2472,7 +2472,7 @@ end |> only === Int
 # appropriate lattice order
 @test Base.return_types((AliasableField{Any},); interp=MustAliasInterpreter()) do x
     v = x.f        # ::MustAlias(2, AliasableField{Any}, 1, Any)
-    if isa(v, Int) # ::Conditional(3, Int, Any)
+    if isa(v, Int) # ::Conditional(3, _, Int, Any)
         v = v      # ::Int (∵ Int ⊑ MustAlias(2, AliasableField{Any}, 1, Any))
     else
         v = 42
@@ -6522,5 +6522,17 @@ function haskey_inference_test()
     return haskey(kwargs, :item) ? nothing : Any[]
 end
 @inferred haskey_inference_test()
+
+# JuliaLang/julia#55548: invalidate stale slot wrapper types in `ssavaluetypes`
+_issue55548_proj1(a, b) = a
+function issue55548(a)
+    a = Base.inferencebarrier(a)::Union{Int64,Float64}
+    if _issue55548_proj1(isa(a, Int64), (a = Base.inferencebarrier(1.0)::Union{Int64,Float64}; true))
+        return a
+    end
+    return 2
+end
+@test Float64 <: Base.infer_return_type(issue55548, (Int,))
+@test issue55548(Int64(0)) === 1.0
 
 end # module inference

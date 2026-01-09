@@ -194,7 +194,11 @@ function _find_scope_decls!(ctx, scope, ex)
     if k === K"local" && kind(ex[1]) === K"Identifier"
         var_k = getmeta(ex, :is_destructured_arg, false) ?
             :destructured_arg : :local
-        maybe_declare_in_scope!(ctx, scope, ex[1], var_k)
+        if getmeta(ex, :is_internal, false)
+            declare_in_scope!(ctx, scope, ex[1], var_k; is_internal=true)
+        else
+            maybe_declare_in_scope!(ctx, scope, ex[1], var_k)
+        end
     elseif k === K"global" && kind(ex[1]) === K"Identifier"
         maybe_declare_in_scope!(ctx, scope, ex[1], :global)
     elseif k in KSet"= constdecl assign_or_constdecl_if_global function_decl"
@@ -338,7 +342,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         record_lambda_var!(ctx, scope, get_binding(ctx, ex), capt=true)
         ex
     elseif k == K"softscope"
-        makeleaf(ctx, ex, K"TOMBSTONE")
+        newleaf(ctx, ex, K"TOMBSTONE")
     elseif !needs_resolution(ex)
         ex
     elseif k == K"local"
@@ -366,7 +370,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         ex_out
     elseif k == K"always_defined"
         resolve_name(ctx, ex[1]).is_always_defined = true
-        makeleaf(ctx, ex, K"TOMBSTONE")
+        newleaf(ctx, ex, K"TOMBSTONE")
     elseif k == K"lambda"
         newscope = enter_scope!(ctx, ex)
         arg_bindings = _resolve_scopes(ctx, ex[1], newscope)
@@ -452,7 +456,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
                 end
             end
             push!(stmts, locals_dict)
-            makenode(ctx, ex, K"block", stmts)
+            newnode(ctx, ex, K"block", stmts)
         end
     elseif k == K"assert"
         etype = extension_type(ex)
@@ -476,7 +480,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         else
             throw(LoweringError(ex, "Unknown syntax assertion"))
         end
-        makeleaf(ctx, ex, K"TOMBSTONE")
+        newleaf(ctx, ex, K"TOMBSTONE")
     elseif k == K"function_decl"
         resolved = mapchildren(e->_resolve_scopes(ctx, e, scope), ctx, ex)
         name = resolved[1]

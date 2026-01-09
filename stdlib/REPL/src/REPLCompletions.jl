@@ -210,14 +210,15 @@ function complete_symbol!(suggestions::Vector{Completion},
     end
 
     if @isdefined(mod) # lookup names available within the module
-        let modname = nameof(mod),
-            is_main = mod===Main
+        let mod_for_check = mod,
+            modname = nameof(mod_for_check),
+            is_main = mod_for_check === Main
             append_filtered_mod_names!(suggestions, mod, name, complete_internal_only) do s::Symbol
-                if Base.isdeprecated(mod, s)
+                if Base.isdeprecated(mod_for_check, s)
                     return false
                 elseif s === modname
                     return false # exclude `Main.Main.Main`, etc.
-                elseif complete_modules_only && !completes_module(mod, s)
+                elseif complete_modules_only && !completes_module(mod_for_check, s)
                     return false
                 elseif is_main && s === :MainInclude
                     return false
@@ -1385,9 +1386,10 @@ function complete_path_string(path, hint::Bool=false;
 
     # Expand '~' if the user hits TAB on a path ending in '/'.
     expanded && (hint || path != dir * "/") && (dir = contractuser(dir))
+    local dir_for_paths = dir
 
     map!(paths) do c::PathCompletion
-        p = joinpath_withsep(dir, c.path; dirsep)
+        p = joinpath_withsep(dir_for_paths, c.path; dirsep)
         PathCompletion(escape(p))
     end
     return sort!(paths, by=p->p.path), success

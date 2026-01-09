@@ -611,14 +611,15 @@ function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothi
         try
             if val !== nothing && show_value
                 Base.sigatomic_end() # allow display to be interrupted
+                val_to_show = val
                 val2, iserr = if specialdisplay === nothing
                     # display calls may require being run on the main thread
                     call_on_backend(backend) do
-                        __repl_entry_display(val)
+                        __repl_entry_display(val_to_show)
                     end
                 else
                     call_on_backend(backend) do
-                        __repl_entry_display(specialdisplay, val)
+                        __repl_entry_display(specialdisplay, val_to_show)
                     end
                 end
                 Base.sigatomic_begin()
@@ -675,21 +676,23 @@ end
 """
 function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task::Bool = true, backend = REPLBackend())
     backend_ref = REPLBackendRef(backend)
-    cleanup = @task try
+    get_module = () -> Base.active_module(repl)
+    cleanup_task(backend_ref, t) = @task try
             destroy(backend_ref, t)
         catch e
             Core.print(Core.stderr, "\nINTERNAL ERROR: ")
             Core.println(Core.stderr, e)
             Core.println(Core.stderr, catch_backtrace())
         end
-    get_module = () -> Base.active_module(repl)
     if backend_on_current_task
         t = @async run_frontend(repl, backend_ref)
+        cleanup = cleanup_task(backend_ref, t)
         errormonitor(t)
         Base._wait2(t, cleanup)
         start_repl_backend(backend, consumer; get_module)
     else
         t = @async start_repl_backend(backend, consumer; get_module)
+        cleanup = cleanup_task(backend_ref, t)
         errormonitor(t)
         Base._wait2(t, cleanup)
         run_frontend(repl, backend_ref)
@@ -1201,9 +1204,10 @@ function mode_keymap(julia_prompt::Prompt)
     AnyDict(
     '\b' => function (s::MIState,o...)
         if isempty(s) || position(LineEdit.buffer(s)) == 0
-            buf = copy(LineEdit.buffer(s))
-            transition(s, julia_prompt) do
-                LineEdit.state(s, julia_prompt).input_buffer = buf
+            let buf = copy(LineEdit.buffer(s))
+                transition(s, julia_prompt) do
+                    LineEdit.state(s, julia_prompt).input_buffer = buf
+                end
             end
         else
             buf = LineEdit.buffer(s)
@@ -1342,9 +1346,10 @@ function setup_interface(
                     for mode in repl.interface.modes
                         if mode isa LineEdit.Prompt && mode.complete isa REPLExt.PkgCompletionProvider
                             # pkg mode
-                            buf = copy(LineEdit.buffer(s))
-                            transition(s, mode) do
-                                LineEdit.state(s, mode).input_buffer = buf
+                            let buf = copy(LineEdit.buffer(s))
+                                transition(s, mode) do
+                                    LineEdit.state(s, mode).input_buffer = buf
+                                end
                             end
                         end
                     end
@@ -1400,9 +1405,10 @@ function setup_interface(
     repl_keymap = AnyDict(
         ';' => function (s::MIState,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
-                buf = copy(LineEdit.buffer(s))
-                transition(s, shell_mode) do
-                    LineEdit.state(s, shell_mode).input_buffer = buf
+                let buf = copy(LineEdit.buffer(s))
+                    transition(s, shell_mode) do
+                        LineEdit.state(s, shell_mode).input_buffer = buf
+                    end
                 end
             else
                 edit_insert(s, ';')
@@ -1411,9 +1417,10 @@ function setup_interface(
         end,
         '?' => function (s::MIState,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
-                buf = copy(LineEdit.buffer(s))
-                transition(s, help_mode) do
-                    LineEdit.state(s, help_mode).input_buffer = buf
+                let buf = copy(LineEdit.buffer(s))
+                    transition(s, help_mode) do
+                        LineEdit.state(s, help_mode).input_buffer = buf
+                    end
                 end
             else
                 edit_insert(s, '?')
@@ -1422,9 +1429,10 @@ function setup_interface(
         end,
         ']' => function (s::MIState,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
-                buf = copy(LineEdit.buffer(s))
-                transition(s, dummy_pkg_mode) do
-                    LineEdit.state(s, dummy_pkg_mode).input_buffer = buf
+                let buf = copy(LineEdit.buffer(s))
+                    transition(s, dummy_pkg_mode) do
+                        LineEdit.state(s, dummy_pkg_mode).input_buffer = buf
+                    end
                 end
                 # load Pkg on another thread if available so that typing in the dummy Pkg prompt
                 # isn't blocked, but instruct the main REPL task to do the transition via s.async_channel
@@ -1436,9 +1444,10 @@ function setup_interface(
                                 LineEdit.mode(s) === dummy_pkg_mode || return :ok
                                 for mode in repl.interface.modes
                                     if mode isa LineEdit.Prompt && mode.complete isa REPLExt.PkgCompletionProvider
-                                        buf = copy(LineEdit.buffer(s))
-                                        transition(s, mode) do
-                                            LineEdit.state(s, mode).input_buffer = buf
+                                        let buf = copy(LineEdit.buffer(s))
+                                            transition(s, mode) do
+                                                LineEdit.state(s, mode).input_buffer = buf
+                                            end
                                         end
                                         if !isempty(s)
                                             @invokelatest(LineEdit.check_show_hint(s))

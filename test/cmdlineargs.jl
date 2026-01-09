@@ -551,19 +551,19 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
         @test readchomp(`$cov_exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=user`) == "1"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
         @test readchomp(`$cov_exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=all`) == "2"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in specific file
         tfile = realpath(inputfile)
@@ -572,7 +572,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in directory
         tdir = dirname(realpath(inputfile))
@@ -581,7 +581,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in current directory
         tdir = dirname(realpath(inputfile))
@@ -593,7 +593,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in relative directory
         tdir = dirname(realpath(inputfile))
@@ -604,7 +604,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in relative directory with dot-dot notation
         tdir = dirname(realpath(inputfile))
@@ -615,7 +615,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in a different directory
         tdir = mktempdir() # a dir that contains no code
@@ -726,7 +726,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         end
         @test popfirst!(got) == "        - end"
         @test popfirst!(got) == "        - f(1.23)"
-        @test isempty(got) || got
+        @test isempty(got) context=got
     end
 
 

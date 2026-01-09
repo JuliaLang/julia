@@ -35,10 +35,11 @@ end
 
 function plain(io::IO, list::List)
     for (i, item) in enumerate(list.items)
-        print(io, isordered(list) ? "$(i + list.ordered - 1). " : "  * ")
+        bullet = isordered(list) ? "$(i + list.ordered - 1). " : "  * "
+        print(io, bullet)
         lines = split(rstrip(sprint(plain, item)), "\n")
         for (n, line) in enumerate(lines)
-            print(io, (n == 1 || isempty(line)) ? "" : "    ", line)
+            print(io, (n == 1 || isempty(line)) ? "" : (" "^length(bullet)), line)
             n < length(lines) && println(io)
         end
         println(io)
@@ -118,6 +119,8 @@ plaininline(io::IO, s::AbstractString) = print(io, s)
 plaininline(io::IO, md::Bold) = plaininline(io, "**", md.text, "**")
 
 plaininline(io::IO, md::Italic) = plaininline(io, "*", md.text, "*")
+
+plaininline(io::IO, md::Strikethrough) = plaininline(io, "~~", md.text, "~~")
 
 function plaininline(io::IO, md::Code)
     if occursin("`", md.code)

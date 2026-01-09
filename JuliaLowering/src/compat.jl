@@ -2,7 +2,7 @@ const JS = JuliaSyntax
 
 function _insert_tree_node(graph::SyntaxGraph, k::Kind, src::SourceAttrType,
                            attrs=[], flags::UInt16=0x0000)
-    id = newnode!(graph)
+    id = new_id!(graph)
     setattr!(graph, id, :kind, k)
     flags !== 0 && setattr!(graph, id, :syntax_flags, flags)
     setattr!(graph, id, :source, src)
@@ -656,18 +656,24 @@ end
 isa_lowering_ast_node(@nospecialize(e)) =
     e isa Symbol || e isa QuoteNode || e isa Expr # || e isa GlobalRef
 
+function is_expr_value(st::SyntaxTree)
+    k = kind(st)
+    return JuliaSyntax.is_literal(k) || k === K"Value" ||
+        k === K"core" && st.name_val === "nothing"
+end
+
 function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
     st = if e === Core.nothing
         # e.value can't be nothing in `K"Value"`, so represent with K"core"
-        setattr!(makeleaf(graph, src, K"core"), :name_val, "nothing")
+        setattr!(newleaf(graph, src, K"core"), :name_val, "nothing")
     elseif e isa Symbol
-        setattr!(makeleaf(graph, src, K"Identifier"), :name_val, String(e))
+        setattr!(newleaf(graph, src, K"Identifier"), :name_val, String(e))
     elseif e isa QuoteNode
         cid, _ = _expr_to_est(graph, e.value, src)
-        makenode(graph, src, K"inert", NodeId[cid])
+        newnode(graph, src, K"inert", NodeId[cid])
     elseif e isa Expr && e.head === :scope_layer
         @assert length(e.args) === 2 && e.args[1] isa Symbol
-        ident = makeleaf(graph, src, K"Identifier")
+        ident = newleaf(graph, src, K"Identifier")
         setattr!(ident, :name_val, String(e.args[1]))
         setattr!(ident, :scope_layer, e.args[2])
     elseif e isa Expr
@@ -685,14 +691,13 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
             end
         end
         if isnothing(st_k)
-            setattr!(makenode(graph, src, K"unknown_head", cs), :name_val, head_s)
+            setattr!(newnode(graph, src, K"unknown_head", cs), :name_val, head_s)
         else
-            makenode(graph, old_src, st_k, cs)
+            newnode(graph, old_src, st_k, cs)
         end
     # elseif e isa GlobalRef
         # TODO: Better-behaved as K"globalref", but lowering doesn't know this
     else
-        @assert !isa_lowering_ast_node(e)
         # We may want additional special cases for other types where
         # `Base.isa_ast_node(e)`, but `K"Value"` should be fine for most, since
         # most are produced in or after lowering
@@ -700,28 +705,29 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
             # linenode oustside of block or toplevel
             src = e
         end
-        setattr!(makeleaf(graph, src, K"Value"), :value, e)
+        setattr!(newleaf(graph, src, K"Value"), :value, e)
     end
+    @assert isa_lowering_ast_node(e) || is_expr_value(st)
 
     return st._id, src
 end
 
 function est_to_expr(st::SyntaxTree)
     k = kind(st)
-    return if k === K"Identifier"
+    return if k === K"core" && numchildren(st) === 0 && st.name_val === "nothing"
+        nothing
+    elseif is_leaf(st) && hasattr(st, :name_val)
         n = Symbol(st.name_val)
         hasattr(st, :scope_layer) ? Expr(:scope_layer, n, st.scope_layer) : n
-    elseif k === K"Value"
+    elseif is_leaf(st) && is_expr_value(st)
         v = st.value
-        # Let `kind(st) === K"Value"` with `st.value isa Symbol` (or other AST
-        # node).  Since we enforce that this is never produced by the reverse
-        # Expr->SyntaxTree transformation, there is no lonely Expr for which
-        # `st` is the only SyntaxTree representation.  This means we can pick
-        # some other expr this represents, namely Expr(`(inert ,st.value))
-        # rather than Expr(st.value).
+        # Let `st.value isa Symbol` (or other AST node).  Since we enforce that
+        # this is never produced by the reverse Expr->SyntaxTree transformation,
+        # there is no lonely Expr for which `st` is the only SyntaxTree
+        # representation.  This means we can pick some other expr this
+        # represents, namely Expr(`(inert ,st.value)) rather than
+        # Expr(st.value).
         isa_lowering_ast_node(v) ? QuoteNode(v) : v
-    elseif k === K"core" && numchildren(st) === 0 && st.name_val === "nothing"
-        nothing
     elseif k === K"inert"
         QuoteNode(est_to_expr(st[1]))
     else

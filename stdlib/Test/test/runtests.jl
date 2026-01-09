@@ -133,6 +133,116 @@ end
 # Test printing of Fail results
 include("nothrow_testset.jl")
 
+# Test @test_throws with broken/skip keywords
+@testset "@test_throws broken keyword" begin
+    # broken=false should behave normally
+    @test_throws ErrorException error("test") broken=false
+
+    # broken=true with no exception should record as Broken
+    let results = @testset NoThrowTestSet begin
+            @test_throws ErrorException 1+1 broken=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+        @test results[1].test_type === :test_throws
+    end
+
+    # broken=true with wrong exception type should record as Broken
+    let results = @testset NoThrowTestSet begin
+            @test_throws BoundsError error("wrong type") broken=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+    end
+
+    # broken=true with correct exception should record as Error (unexpected pass)
+    let results = @testset NoThrowTestSet begin
+            @test_throws ErrorException error("test") broken=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Error
+        @test results[1].test_type === :test_unbroken
+    end
+end
+
+@testset "@test_throws skip keyword" begin
+    # skip=true should record Broken(:skipped) and not execute
+    let results = @testset NoThrowTestSet begin
+            @test_throws ErrorException error("should not run") skip=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+        @test results[1].test_type === :skipped
+    end
+
+    # skip=false should behave normally
+    @test_throws ErrorException error("test") skip=false
+end
+
+@testset "@test_throws context keyword" begin
+    # context should be included in failure output
+    let fails = @testset NoThrowTestSet begin
+            @test_throws ErrorException 1+1 context="extra info"
+        end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].context == "\"extra info\""
+    end
+end
+
+@testset "@test_warn/@test_nowarn broken/skip keywords" begin
+    # @test_warn with broken=true when test fails (no warning) should be Broken
+    let results = @testset NoThrowTestSet begin
+            @test_warn "expected warning" 1+1 broken=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+    end
+
+    # @test_warn with broken=true when test passes should be Error (unexpected pass)
+    let results = @testset NoThrowTestSet begin
+            @test_warn "foo" (println(stderr, "foo"); 1) broken=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Error
+        @test results[1].test_type === :test_unbroken
+    end
+
+    # @test_nowarn with broken=true when test fails (has warning) should be Broken
+    let results = @testset NoThrowTestSet begin
+            @test_nowarn (println(stderr, "oops"); 1) broken=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+    end
+
+    # @test_nowarn with broken=true when test passes should be Error (unexpected pass)
+    let results = @testset NoThrowTestSet begin
+            @test_nowarn 1+1 broken=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Error
+        @test results[1].test_type === :test_unbroken
+    end
+
+    # skip=true should record Broken(:skipped) and not execute
+    let results = @testset NoThrowTestSet begin
+            @test_warn "foo" error("should not run") skip=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+        @test results[1].test_type === :skipped
+    end
+
+    let results = @testset NoThrowTestSet begin
+            @test_nowarn error("should not run") skip=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+        @test results[1].test_type === :skipped
+    end
+end
+
 let fails = @testset NoThrowTestSet begin
         # 1 - Fail - wrong exception
         @test_throws OverflowError error()
@@ -463,6 +573,82 @@ end
         @test length(fails) == 1
         @test fails[1] isa Test.Fail
         @test fails[1].test_type === :test_throws_wrong
+    end
+end
+
+# Tests for context keyword
+@testset "@test with context keyword" begin
+    # Test that context appears in Fail
+    let f = Test.Fail(:test, "false", nothing, "false", "(sin, Float64)", LineNumberNode(1), false)
+        @test occursin("Context: (sin, Float64)", sprint(show, f))
+    end
+
+    # Test that context is evaluated and shown in @test
+    let fails = @testset NoThrowTestSet begin
+            @test false context=(sin, Float64)
+        end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test occursin("(sin, Float64)", fails[1].context)
+    end
+
+    # Test context with broken=true (should record as Broken)
+    let results = @testset NoThrowTestSet begin
+            @test false context="info" broken=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+    end
+
+    # Test context with Error (exception thrown)
+    let errors = @testset NoThrowTestSet begin
+            @test error("boom") context="error info"
+        end
+        @test length(errors) == 1
+        @test errors[1] isa Test.Error
+        @test errors[1].context == "\"error info\""
+    end
+end
+
+@testset "@test_throws with context keyword" begin
+    # Test context appears when wrong exception thrown
+    let fails = @testset NoThrowTestSet begin
+            @test_throws ArgumentError error("wrong") context="extra info"
+        end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].context == "\"extra info\""
+    end
+
+    # Test context with three-arg form
+    let fails = @testset NoThrowTestSet begin
+            @test_throws ErrorException "pattern" error("wrong msg") context=(1, 2)
+        end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test occursin("(1, 2)", fails[1].context)
+    end
+
+    # Test context when no exception thrown
+    let fails = @testset NoThrowTestSet begin
+            @test_throws ErrorException 1 + 1 context="no throw info"
+        end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].test_type === :test_throws_nothing
+        @test fails[1].context == "\"no throw info\""
+    end
+end
+
+@testset "@test_broken with context keyword" begin
+    # Test context with @test_broken when test unexpectedly passes
+    let errors = @testset NoThrowTestSet begin
+            @test_broken true context="broken info"
+        end
+        @test length(errors) == 1
+        @test errors[1] isa Test.Error
+        @test errors[1].test_type === :test_unbroken
+        @test errors[1].context == "\"broken info\""
     end
 end
 
@@ -1112,6 +1298,51 @@ erronce() = @error "an error" maxlog=1
     @test startswith(fails[4].value, "ErrorException")
 end
 
+@testset "@test_logs broken/skip keywords" begin
+    # broken=true when logs don't match should be Broken
+    let results = @testset NoThrowTestSet begin
+            @test_logs (:warn,) broken=true @info "wrong level"
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+        @test results[1].test_type === :test
+    end
+
+    # broken=true when logs match should be Error (unexpected pass)
+    let results = @testset NoThrowTestSet begin
+            @test_logs (:info,) broken=true @info "correct"
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Error
+        @test results[1].test_type === :test_unbroken
+    end
+
+    # broken=true when expression errors should be Broken
+    let results = @testset NoThrowTestSet begin
+            @test_logs (:info,) broken=true error("test error")
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+    end
+
+    # skip=true should record Broken(:skipped)
+    let results = @testset NoThrowTestSet begin
+            @test_logs (:info,) skip=true error("should not run")
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+        @test results[1].test_type === :skipped
+    end
+
+    # broken and skip work with other kwargs
+    let results = @testset NoThrowTestSet begin
+            @test_logs (:debug,) min_level=Debug broken=true @info "wrong"
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+    end
+end
+
 let code = quote
         function newfunc()
             42
@@ -1131,6 +1362,31 @@ let code = quote
             @test length(fails) == 2
             @test fails[1] isa Test.LogTestFailure
             @test fails[2] isa Test.LogTestFailure
+        end
+
+        @testset "@test_deprecated broken/skip keywords" begin
+            # broken=true when deprecation warning is missing should be Broken
+            results = @testset NoThrowTestSet begin
+                @test_deprecated newfunc() broken=true
+            end
+            @test length(results) == 1
+            @test results[1] isa Test.Broken
+
+            # broken=true when deprecation warning is present should be Error
+            results = @testset NoThrowTestSet begin
+                @test_deprecated oldfunc() broken=true
+            end
+            @test length(results) == 1
+            @test results[1] isa Test.Error
+            @test results[1].test_type === :test_unbroken
+
+            # skip=true should record Broken(:skipped)
+            results = @testset NoThrowTestSet begin
+                @test_deprecated error("should not run") skip=true
+            end
+            @test length(results) == 1
+            @test results[1] isa Test.Broken
+            @test results[1].test_type === :skipped
         end
     end
     incl = "include($(repr(joinpath(@__DIR__, "nothrow_testset.jl"))))"

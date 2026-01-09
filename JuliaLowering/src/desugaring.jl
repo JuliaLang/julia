@@ -268,7 +268,7 @@ function lower_tuple_assignment(ctx, assignment_srcref, lhss, rhs)
             [K"call" "getfield"::K"core" tmp i::K"Integer"]
         ])
     end
-    makenode(ctx, assignment_srcref, K"block", stmts)
+    newnode(ctx, assignment_srcref, K"block", stmts)
 end
 
 # Implement destructuring with `lhs` a tuple expression (possibly with
@@ -279,9 +279,7 @@ end
 # right hand side is directly indexable.
 function _destructure(ctx, assignment_srcref, stmts, lhs, rhs, is_const)
     n_lhs = numchildren(lhs)
-    if n_lhs > 0
-        iterstate = new_local_binding(ctx, rhs, "iterstate")
-    end
+    iterstate = n_lhs > 0 ? new_local_binding(ctx, rhs, "iterstate") : nothing
 
     end_stmts = SyntaxList(ctx)
     wrap(asgn) = is_const ? (@ast ctx assignment_srcref [K"const" asgn]) : asgn
@@ -403,7 +401,7 @@ function expand_property_destruct(ctx, ex, is_const)
         ]))
     end
     push!(stmts, @ast ctx rhs1 [K"removable" rhs1])
-    makenode(ctx, ex, K"block", stmts)
+    newnode(ctx, ex, K"block", stmts)
 end
 
 # Expands all cases of general tuple destructuring, eg
@@ -444,7 +442,7 @@ function expand_tuple_destruct(ctx, ex, is_const)
     end
     _destructure(ctx, ex, stmts, lhs, rhs1, is_const)
     push!(stmts, @ast ctx rhs1 [K"removable" rhs1])
-    makenode(ctx, ex, K"block", stmts)
+    newnode(ctx, ex, K"block", stmts)
 end
 
 #-------------------------------------------------------------------------------
@@ -1481,7 +1479,7 @@ function expand_condition(ctx, ex)
         # jumps rather than first computing a bool and then jumping.
         cs = expand_cond_children(ctx, test)
         @assert length(cs) > 1
-        test = makenode(ctx, test, k, cs)
+        test = newnode(ctx, test, k, cs)
     else
         test = expand_forms_2(ctx, test)
     end
@@ -1620,7 +1618,7 @@ function expand_named_tuple(ctx, ex, kws, eq_is_kw;
     names = SyntaxList(ctx)
     values = SyntaxList(ctx)
     current_nt = nothing
-    for (i,kw) in enumerate(kws)
+    for kw in kws
         k = kind(kw)
         appended_nt = nothing
         name = nothing
@@ -2167,9 +2165,10 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
         # other Exprs that cannot be produced by the parser (tested by
         # test/precompile.jl #50538).
         if !isnothing(declmeta)
-            push!(stmts, makenode(ctx, ex, declkind, NodeId[ex._id], [:meta=>declmeta]))
+            push!(stmts, setattr!(newnode(ctx, ex, declkind, tree_ids(ex)),
+                                  :meta, declmeta))
         else
-            push!(stmts, makenode(ctx, ex, declkind, NodeId[ex._id]))
+            push!(stmts, newnode(ctx, ex, declkind, tree_ids(ex)))
         end
     elseif k == K"Placeholder"
         nothing
@@ -2178,7 +2177,7 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
             @chk numchildren(ex) == 2
             name = ex[1]
             if kind(name) == K"Identifier"
-                push!(stmts, makenode(ctx, ex, K"decl", NodeId[name._id, ex[2]._id]))
+                push!(stmts, newnode(ctx, ex, K"decl", tree_ids(name, ex[2])))
             else
                 # TODO: Currently, this ignores the LHS in `_::T = val`.
                 # We should probably do one of the following:
@@ -2222,7 +2221,7 @@ function expand_decls(ctx, ex)
             throw(LoweringError(ex, "invalid syntax in variable declaration"))
         end
     end
-    makenode(ctx, ex, K"block", stmts)
+    newnode(ctx, ex, K"block", stmts)
 end
 
 # Iterate over the variable names assigned to from a "fancy assignment left hand
@@ -2798,7 +2797,7 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
         for n in kw_names
             # If not using slots for the keyword argument values, still declare
             # them for reflection purposes.
-            push!(kw_val_stmts, @ast ctx n [K"local" n])
+            push!(kw_val_stmts, @ast ctx n [K"local"(meta=CompileHints(:is_internal, true)) n])
         end
         kw_val_vars = SyntaxList(ctx)
         for val in kw_values
@@ -3352,7 +3351,7 @@ end
 function _make_macro_name(ctx, ex)
     k = kind(ex)
     if k == K"Identifier" || k == K"Symbol"
-        name = mapleaf(ctx, ex, k)
+        name = setattr!(mkleaf(ex), :kind, k)
         name.name_val = "@$(ex.name_val)"
         name
     elseif is_valid_modref(ex)
@@ -3487,6 +3486,8 @@ function analyze_type_sig(ctx, ex)
         end
     end
     @isdefined(name) || throw(LoweringError(ex, "invalid type signature"))
+    @isdefined(type_params) || throw(LoweringError(ex, "invalid type signature"))
+    @isdefined(supertype) || throw(LoweringError(ex, "invalid type signature"))
 
     return (name, type_params, supertype)
 end
@@ -3523,8 +3524,8 @@ function expand_abstract_or_primitive_type(ctx, ex)
     else
         @assert kind(ex) == K"primitive"
         @chk numchildren(ex) == 2
-        nbits = ex[2]
     end
+    nbits = is_abstract ? nothing : ex[2]
     name, type_params, supertype = analyze_type_sig(ctx, ex[1])
     typevar_names, typevar_stmts = expand_typevars(ctx, type_params)
     newtype_var = ssavar(ctx, ex, "new_type")
@@ -4422,7 +4423,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         # structure. For now we attribute to the parent node.
         cond = length(cs) == 2 ?
             cs[1] :
-            makenode(ctx, ex, k, cs[1:end-1])
+            newnode(ctx, ex, k, cs[1:end-1])
         # This transformation assumes the type assertion `cond::Bool` will be
         # added by a later compiler pass (currently done in codegen)
         if k == K"&&"

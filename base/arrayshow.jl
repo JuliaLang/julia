@@ -295,7 +295,14 @@ function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Functio
                 ii = idxs[i]
                 ind = tailinds[i]
                 if length(ind) > 10
-                    if ii == ind[firstindex(ind)+3] && all(d->idxs[d]==first(tailinds[d]),1:i-1)
+                    all_first = true
+                    for d = 1:i-1
+                        if idxs[d] != first(tailinds[d])
+                            all_first = false
+                            break
+                        end
+                    end
+                    if ii == ind[firstindex(ind)+3] && all_first
                         for j=i+1:nd
                             szj = length(axs[j+2])
                             indj = tailinds[j]
