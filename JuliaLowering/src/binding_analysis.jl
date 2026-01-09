@@ -98,6 +98,7 @@ function _analyze_lambda_vars!(ctx, ex)
     live = Set{IdTag}()
     seen = Set{IdTag}()
     decl = Set{IdTag}()
+    decl_outside_loop = Set{IdTag}()
     args = Set{IdTag}()
     # Initialize decl and args with arguments since they're implicitly declared outside any loop
     for id in candidates
@@ -120,6 +121,14 @@ function _analyze_lambda_vars!(ctx, ex)
 
     # Restore live to a previous state, moving new additions back to unused
     function restore!(prev)
+        for id in decl_outside_loop
+            if (id in prev) && !(id in unused)
+                # This variable was 'used' inside this branch, but it's declared
+                # outside of a loop so it may see the dominating assignment execute
+                # multiple times. Invalidate it here for soundness.
+                delete!(prev, id)
+            end
+        end
         for id in live
             if !(id in prev)
                 push!(unused, id)
@@ -129,16 +138,18 @@ function _analyze_lambda_vars!(ctx, ex)
         union!(live, prev)
     end
 
-    # At the end of a loop, remove live variables that were declared outside,
-    # since those might be assigned multiple times (issue #37690 in Julia)
-    function leave_loop!(old_decl)
-        for id in collect(live)
-            if id in old_decl
-                delete!(live, id)
-            end
-        end
-        empty!(decl)
-        union!(decl, old_decl)
+    # At the beginning of a loop, move all active decls into the "decl_outside_loop" set.
+    function enter_loop!()
+        prev_decl_outside_loop = decl_outside_loop
+        decl_outside_loop = decl
+        decl = copy(decl)
+        return prev_decl_outside_loop
+    end
+
+    # At the end of a loop, restore the previous set of "declared" variables.
+    function leave_loop!(prev_decl_outside_loop)
+        decl = decl_outside_loop
+        decl_outside_loop = prev_decl_outside_loop
     end
 
     # When a variable is used (read), remove from unused.
@@ -186,10 +197,14 @@ function _analyze_lambda_vars!(ctx, ex)
             kill!()
             return true
 
-        elseif k in KSet"break symbolic_goto"
+        elseif k == K"label"
+            kill!()
             return false
 
-        elseif is_leaf(e) || is_quoted(e)
+        elseif k in KSet"break symbolic_goto"
+            # this kill!() is not required for soundness since these are branch points
+            # not merge points, but it's here for parity with flisp
+            kill!()
             return false
 
         elseif k == K"="
@@ -242,6 +257,7 @@ function _analyze_lambda_vars!(ctx, ex)
 
         elseif k == K"return"
             has_label = numchildren(e) >= 1 ? visit(e[1]) : false
+            kill!() # not necessary, but included for flisp parity
             return has_label
 
         elseif k in KSet"if elseif trycatchelse tryfinally"
@@ -262,7 +278,7 @@ function _analyze_lambda_vars!(ctx, ex)
 
         elseif k in KSet"_while _do_while"
             prev = copy(live)
-            old_decl = copy(decl)
+            old_decl = enter_loop!()
             has_label = false
             for child in children(e)
                 has_label |= visit(child)
@@ -284,6 +300,9 @@ function _analyze_lambda_vars!(ctx, ex)
                 has_label |= visit(child)
             end
             return has_label
+
+        elseif is_leaf(e) || is_quoted(e)
+            return false
 
         elseif k in KSet"quote inert top core inert local meta inbounds boundscheck noinline
                          loopinfo decl with_static_parameters toplevel_butfirst global globalref
