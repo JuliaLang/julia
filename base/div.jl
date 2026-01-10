@@ -380,7 +380,7 @@ end
 # Real
 # NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
 # so it is used here as the basis of float div().
-div(x::T, y::T, r::RoundingMode) where {T<:AbstractFloat} = convert(T, round((x - rem(x, y, r)) / y))
+div(x::T, y::T, r::RoundingMode) where {T<:AbstractFloat} = convert(T, round(x / y - rem(x, y, r) / y))
 
 # Vincent Lefèvre: "The Euclidean Division Implemented with a Floating-Point Division and a Floor"
 # https://inria.hal.science/inria-00070403
