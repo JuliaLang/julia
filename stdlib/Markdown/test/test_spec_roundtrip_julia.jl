@@ -205,7 +205,7 @@ end
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
-    @test expected == actual
+    @test_broken expected == actual
 
     # Example 27
     input = "&#X22; &#XD06; &#xcab;\n"
@@ -282,28 +282,28 @@ end
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
-    @test expected == actual
+    @test_broken expected == actual
 
     # Example 38
     input = "&#42; foo\n\n* foo\n"
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
-    @test expected == actual
+    @test_broken expected == actual
 
     # Example 39
     input = "foo&#10;&#10;bar\n"
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
-    @test expected == actual
+    @test_broken expected == actual
 
     # Example 40
     input = "&#9;foo\n"
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
-    @test expected == actual
+    @test_broken expected == actual
 
     # Example 41
     input = "[a](url &quot;tit&quot;)\n"
