@@ -24,6 +24,7 @@ macro test_loweringerror(ex, msg, opt=nothing)
     if opt === :broken
         code.args[1] = :var"@test_broken"
     end
+    code
 end
 
 macro test_parseerror(str)
