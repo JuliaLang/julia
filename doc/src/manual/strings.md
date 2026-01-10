@@ -772,10 +772,15 @@ are some examples of non-standard string literals. Users and packages may also d
 Further documentation is given in the [Metaprogramming](@ref meta-non-standard-string-literals) section.
 
 ## [Regular Expressions](@id man-regex-literals)
-Sometimes you are not looking for an exact string, but a particular *pattern*. For example, suppose you are trying to extract a single date from a large text file. You don’t know what that date is (that’s why you are searching for it), but you do know it will look something like `YYYY-MM-DD`. Regular expressions allow you to specify these patterns and search for them.
+Sometimes you are not looking for an exact string, but a particular *pattern*. For example, suppose
+you are trying to extract a single date from a large text file. You don’t know what that date is
+(that’s why you are searching for it), but you do know it will look something like `YYYY-MM-DD`.
+Regular expressions allow you to specify these patterns and search for them.
 
 Julia uses version 2 of Perl-compatible regular expressions (regexes), as provided by the [PCRE](https://www.pcre.org/)
-library (see the [PCRE2 syntax description](https://www.pcre.org/current/doc/html/pcre2syntax.html) for more details). Regular expressions are related to strings in two ways: the obvious connection is that
+library (see the [PCRE2 syntax description](https://www.pcre.org/current/doc/html/pcre2syntax.html)
+for more details). Regular expressions are related to strings in two ways: the obvious connection is
+that
 regular expressions are used to find regular patterns in strings; the other connection is that
 regular expressions are themselves input as strings, which are parsed into a state machine that
 can be used to efficiently search for patterns in strings. In Julia, regular expressions are input
@@ -905,8 +910,9 @@ julia> m.offsets
  2
 ```
 
-It is convenient to have captures returned as an array so that one can use destructuring syntax
-to bind them to local variables. As a convenience, the `RegexMatch` object implements iterator methods that pass through to the `captures` field, so you can destructure the match object directly:
+It is convenient to have captures returned as an array so that one can use destructuring syntax to
+bind them to local variables. As a convenience, the `RegexMatch` object implements iterator methods
+that pass through to the `captures` field, so you can destructure the match object directly:
 
 ```jldoctest acdmatch
 julia> first, second, third = m; first
@@ -1015,7 +1021,10 @@ ERROR: ParseError:
 Triple-quoted regex strings, of the form `r"""..."""`, are also supported (and may be convenient
 for regular expressions containing quotation marks or newlines).
 
-The `Regex()` constructor may be used to create a valid regex string programmatically. This permits using the contents of string variables and other string operations when constructing the regex string. Any of the regex codes above can be used within the single string argument to `Regex()`. Here are some examples:
+The `Regex()` constructor may be used to create a valid regex string programmatically. This permits
+using the contents of string variables and other string operations when constructing the regex
+string. Any of the regex codes above can be used within the single string argument to `Regex()`.
+Here are some examples:
 
 ```jldoctest
 julia> using Dates
