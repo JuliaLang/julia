@@ -605,7 +605,7 @@ end
         print(io, "$(r.ref) (see Julia docs)")
     Base.show(io::IO, m::MIME"text/html", r::Reference2) =
         Markdown.withtag(io, :a, :href=>"test") do
-            Markdown.htmlesc(io, Markdown.plaininline(r))
+            Markdown.htmlesc(io, sprint(Markdown.plaininline, r))
         end
     @test Markdown.html(sum_ref) == "<p>Behaves like <a href=\"test\">sum (see Julia docs)</a></p>\n"
 end

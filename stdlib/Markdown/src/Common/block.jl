@@ -133,6 +133,17 @@ function fencedcode(stream::IO, block::MD)
         # inline code block
         ch in flavor && return false
 
+        # according to the CommonMark specification, entities and escapes
+        # should be resolved inside of the "flavor" of a fenced code block;
+        # but in Julia, esp. in Documenter docstrings, we can't do that
+        # because additional parameters are placed in there which would clash.
+        # E.g. this kind of real-world docstring line would be mangled:
+        #
+        # ```jldoctest; setup = :(using Random; Random.seed!(1234)), filter = r"[0-9\.]+ seconds \(.*?\)"
+        #
+        # Thus the following line is deliberately disabled.
+        #flavor = replace_escapes_and_entities(flavor)
+
         buffer = IOBuffer()
         while !eof(stream)
             line_start = position(stream)

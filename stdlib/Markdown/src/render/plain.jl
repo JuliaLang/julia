@@ -115,15 +115,23 @@ end
 
 # Inline elements
 
-plaininline(x) = sprint(plaininline, x)
-
+# HACK TODO: instead of the following hack, we should have a `Text` node type
 function plaininline(io::IO, md...)
+    for (i, el) in enumerate(md)
+        if isodd(i)
+            @assert el isa AbstractString
+            print(io, el)
+        else
+            plaininline(io, el)
+        end
+    end
+end
+
+function plaininline(io::IO, md::Vector)
     for el in md
         plaininline(io, el)
     end
 end
-
-plaininline(io::IO, md::Vector) = !isempty(md) && plaininline(io, md...)
 
 plaininline(io::IO, f::Footnote) = print(io, "[^", f.id, "]")
 
