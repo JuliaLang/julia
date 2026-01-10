@@ -190,13 +190,14 @@ julia> str[end]
 '\n': ASCII/Unicode U+000A (category Cc: Other, control)
 ```
 
-Many Julia objects, including strings, can be indexed with integers. The index of the first
-element (the first character of a string) is returned by [`firstindex(str)`](@ref), and the index of the last element (character)
-with [`lastindex(str)`](@ref). The keywords `begin` and `end` can be used inside an indexing
-operation as shorthand for the first and last indices, respectively, along the given dimension.
-String indexing, like most indexing in Julia, is 1-based: `firstindex` always returns `1` for any `AbstractString`.
-As we will see below, however, `lastindex(str)` is *not* in general the same as `length(str)` for a string,
-because some Unicode characters can occupy multiple "code units".
+Many Julia objects, including strings, can be indexed with integers. The index of the
+first element (the first character of a string) is returned by [`firstindex(str)`](@ref),
+and the index of the last element (character) with [`lastindex(str)`](@ref). The keywords
+`begin` and `end` can be used inside an indexing operation as shorthand for the first and
+last indices, respectively, along the given dimension. String indexing, like most indexing
+in Julia, is 1-based: `firstindex` always returns `1` for any `AbstractString`. As we will
+see below, however, `lastindex(str)` is *not* in general the same as `length(str)` for a
+string, because some Unicode characters can occupy multiple "code units".
 
 You can perform arithmetic and other operations with [`end`](@ref), just like
 a normal value:
@@ -277,9 +278,9 @@ julia> s = "\u2200 x \u2203 y"
 Whether these Unicode characters are displayed as escapes or shown as special characters depends
 on your terminal's locale settings and its support for Unicode. String literals are encoded using
 the UTF-8 encoding. UTF-8 is a variable-width encoding, meaning that not all characters are encoded
-in the same number of bytes ("code units"). In UTF-8, ASCII characters — i.e. those with code points less than
-0x80 (128) -- are encoded as they are in ASCII, using a single byte, while code points 0x80 and
-above are encoded using multiple bytes — up to four per character.
+in the same number of bytes ("code units"). In UTF-8, ASCII characters — i.e. those with code points
+less than 0x80 (128) -- are encoded as they are in ASCII, using a single byte, while code points
+0x80 and above are encoded using multiple bytes — up to four per character.
 
 String indices in Julia refer to code units (= bytes for UTF-8), the fixed-width building blocks that
 are used to encode arbitrary characters (code points). This means that not every
@@ -402,8 +403,9 @@ julia> collect(eachindex(s))
 ```
 
 To access the raw code units (bytes for UTF-8) of the encoding, you can use the [`codeunit(s,i)`](@ref)
-function, where the index `i` runs consecutively from `1` to [`ncodeunits(s)`](@ref). The [`codeunits(s)`](@ref)
-function returns an `AbstractVector{UInt8}` wrapper that lets you access these raw codeunits (bytes) as an array.
+function, where the index `i` runs consecutively from `1` to [`ncodeunits(s)`](@ref). The
+[`codeunits(s)`](@ref) function returns an `AbstractVector{UInt8}` wrapper that lets you
+access these raw codeunits (bytes) as an array.
 
 Strings in Julia can contain invalid UTF-8 code unit sequences. This convention allows to
 treat any byte sequence as a `String`. In such situations a rule is that when parsing
@@ -477,9 +479,9 @@ julia> string(greet, ", ", whom, ".\n")
 "Hello, world.\n"
 ```
 
-It's important to be aware of potentially dangerous situations such as concatenation of invalid UTF-8 strings.
-The resulting string may contain different characters than the input strings,
-and its number of characters may be lower than sum of numbers of characters
+It's important to be aware of potentially dangerous situations such as concatenation of
+invalid UTF-8 strings. The resulting string may contain different characters than the
+input strings, and its number of characters may be lower than sum of numbers of characters
 of the concatenated strings, e.g.:
 
 ```jldoctest
@@ -531,9 +533,9 @@ implies commutativity.
 
 ## [Interpolation](@id string-interpolation)
 
-Constructing strings using concatenation can become a bit cumbersome, however. To reduce the need for these
-verbose calls to [`string`](@ref) or repeated multiplications, Julia allows interpolation into string literals
-using `$`, as in Perl:
+Constructing strings using concatenation can become a bit cumbersome, however. To reduce
+the need for these verbose calls to [`string`](@ref) or repeated multiplications, Julia
+allows interpolation into string literals using `$`, as in Perl:
 
 ```jldoctest
 julia> greet = "Hello"; whom = "world";
@@ -748,7 +750,8 @@ julia> join(["apples", "bananas", "pineapples"], ", ", " and ")
 
 Some other useful functions include:
 
-  * [`firstindex(str)`](@ref) gives the minimal (byte) index that can be used to index into `str` (always 1 for strings, not necessarily true for other containers).
+  * [`firstindex(str)`](@ref) gives the minimal (byte) index that can be used to index into `str`
+    (always 1 for strings, not necessarily true for other containers).
   * [`lastindex(str)`](@ref) gives the maximal (byte) index that can be used to index into `str`.
   * [`length(str)`](@ref) the number of characters in `str`.
   * [`length(str, i, j)`](@ref) the number of valid character indices in `str` from `i` to `j`.
@@ -772,12 +775,17 @@ are some examples of non-standard string literals. Users and packages may also d
 Further documentation is given in the [Metaprogramming](@ref meta-non-standard-string-literals) section.
 
 ## [Regular Expressions](@id man-regex-literals)
-Sometimes you are not looking for an exact string, but a particular *pattern*. For example, suppose you are trying to extract a single date from a large text file. You don’t know what that date is (that’s why you are searching for it), but you do know it will look something like `YYYY-MM-DD`. Regular expressions allow you to specify these patterns and search for them.
+Sometimes you are not looking for an exact string, but a particular *pattern*. For
+example, suppose you are trying to extract a single date from a large text file. You don’t
+know what that date is (that’s why you are searching for it), but you do know it will look
+something like `YYYY-MM-DD`. Regular expressions allow you to specify these patterns and
+search for them.
 
 Julia uses version 2 of Perl-compatible regular expressions (regexes), as provided by the [PCRE](https://www.pcre.org/)
-library (see the [PCRE2 syntax description](https://www.pcre.org/current/doc/html/pcre2syntax.html) for more details). Regular expressions are related to strings in two ways: the obvious connection is that
-regular expressions are used to find regular patterns in strings; the other connection is that
-regular expressions are themselves input as strings, which are parsed into a state machine that
+library (see the [PCRE2 syntax description](https://www.pcre.org/current/doc/html/pcre2syntax.html)
+for more details). Regular expressions are related to strings in two ways: the obvious connection
+is that regular expressions are used to find regular patterns in strings; the other connection is
+that regular expressions are themselves input as strings, which are parsed into a state machine that
 can be used to efficiently search for patterns in strings. In Julia, regular expressions are input
 using non-standard string literals prefixed with various identifiers beginning with `r`. The most
 basic regular expression literal without any options turned on just uses `r"..."`:
@@ -905,8 +913,10 @@ julia> m.offsets
  2
 ```
 
-It is convenient to have captures returned as an array so that one can use destructuring syntax
-to bind them to local variables. As a convenience, the `RegexMatch` object implements iterator methods that pass through to the `captures` field, so you can destructure the match object directly:
+It is convenient to have captures returned as an array so that one can use destructuring
+syntax to bind them to local variables. As a convenience, the `RegexMatch` object
+implements iterator methods that pass through to the `captures` field, so you can
+destructure the match object directly:
 
 ```jldoctest acdmatch
 julia> first, second, third = m; first
@@ -1015,7 +1025,10 @@ ERROR: ParseError:
 Triple-quoted regex strings, of the form `r"""..."""`, are also supported (and may be convenient
 for regular expressions containing quotation marks or newlines).
 
-The `Regex()` constructor may be used to create a valid regex string programmatically. This permits using the contents of string variables and other string operations when constructing the regex string. Any of the regex codes above can be used within the single string argument to `Regex()`. Here are some examples:
+The `Regex()` constructor may be used to create a valid regex string programmatically.
+This permits using the contents of string variables and other string operations when
+constructing the regex string. Any of the regex codes above can be used within the single
+string argument to `Regex()`. Here are some examples:
 
 ```jldoctest
 julia> using Dates
