@@ -3768,15 +3768,8 @@ JL_DLLEXPORT int32_t jl_invoke_api(jl_code_instance_t *codeinst)
     jl_callptr_t f = jl_atomic_load_relaxed(&codeinst->invoke);
     if (f == NULL)
         return 0;
-    if (f == &jl_fptr_args)
-        return 1;
-    if (f == &jl_fptr_const_return)
-        return 2;
-    if (f == &jl_fptr_sparam)
-        return 3;
-    if (f == &jl_fptr_interpret_call)
-        return 4;
-    return -1;
+    jl_invoke_api_t t = jl_callptr_invoke_api(f);
+    return t == JL_INVOKE_SPECSIG ? -1 : (int32_t)t;
 }
 
 JL_DLLEXPORT jl_value_t *jl_normalize_to_compilable_sig(jl_tupletype_t *ti, jl_svec_t *env, jl_method_t *m,
