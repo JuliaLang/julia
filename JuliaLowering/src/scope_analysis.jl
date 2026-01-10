@@ -714,5 +714,6 @@ enclosing lambda form and information about variables captured by closures.
     ctx3 = VariableAnalysisContext(
         ctx2.graph, ctx2.bindings, ctx2.mod, ctx2.scopes, ex2.lambda_bindings)
     analyze_variables!(ctx3, ex2)
+    analyze_def_and_use!(ctx3, ex2)
     ctx3, ex2
 end

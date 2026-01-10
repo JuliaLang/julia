@@ -302,13 +302,18 @@ function type_for_closure(ctx::ClosureConversionCtx, srcref, name_str, field_sym
 end
 
 function is_boxed(binfo::BindingInfo)
-    # True for
+    # No box needed for:
     # * :argument when it's not reassigned
     # * :static_parameter (these can't be reassigned)
     defined_but_not_assigned = binfo.is_always_defined && !binfo.is_assigned
-    # For now, we box almost everything but later we'll want to do dominance
-    # analysis on the untyped IR.
-    return binfo.is_captured && !defined_but_not_assigned
+    # * Single-assigned variables (local or argument) assigned before any closure captures them
+    #   (identified by liveness analysis in optimize_captured_vars!)
+    #   For arguments, the liveness analysis resets is_always_defined and only sets it back
+    #   if the outer-scope assignment dominates all captures. This distinguishes arguments
+    #   reassigned in outer scope (no box) from those reassigned only inside closures (needs box).
+    single_assigned_never_undef = binfo.kind in (:local, :argument) &&
+                                  binfo.is_always_defined && binfo.is_assigned_once
+    return binfo.is_captured && !defined_but_not_assigned && !single_assigned_never_undef
 end
 
 function is_boxed(ctx, x)
@@ -404,7 +409,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
     elseif k == K"local"
         var = ex[1]
         binfo = get_binding(ctx, var)
-        if binfo.is_captured
+        if is_boxed(binfo)
             @ast ctx ex [K"=" var [K"call" "Box"::K"core"]]
         elseif !binfo.is_always_defined
             @ast ctx ex [K"newvar" var]

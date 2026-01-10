@@ -241,4 +241,168 @@ method_ex = lower_str(test_mod, "Base.Experimental.@opaque x -> 2x").args[1].cod
 @test method_ex.args[1] === nothing
 @test method_ex.args[4] isa LineNumberNode
 
+# Argument reassigned in outer scope - no Box needed
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_arg_reassign(x)
+        x = 1
+        return ()->x
+    end
+    f_arg_reassign(100)()
+end
+""") == 1
+
+# Argument reassigned in if-branch before capture - no Box needed (PR #60567 review)
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_arg_if_branch(x, cond)
+        if cond
+            x = 5
+            return ()->x
+        end
+        return x
+    end
+    # When closure is returned, it captures the reassigned value
+    f_arg_if_branch(100, true)()
+end
+""") == 5
+
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_arg_if_branch2(x, cond)
+        if cond
+            x = 5
+            return ()->x
+        end
+        return x
+    end
+    # When original value is returned
+    f_arg_if_branch2(100, false)
+end
+""") == 100
+
+# Variable declared outside loop, assigned inside - needs Box (issue #37690)
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_loop_capture()
+        local f
+        local x
+        for k = 1 : 2
+            x = k
+            if k == 1
+                f = () -> x
+            end
+        end
+        f()
+    end
+    f_loop_capture()
+end
+""") == 2
+
+# Typed local declared outside loop, assigned inside - needs Box (issue #37690)
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_typed_local_loop()
+        local f
+        local x::Int
+        for k = 1:2
+            x = k
+            if k == 1
+                f = () -> x
+            end
+        end
+        f()
+    end
+    f_typed_local_loop()
+end
+""") == 2
+
+# Label can be jumped to, bypassing assignment - needs Box
+@test JuliaLowering.include_string(test_mod, """
+let
+    @goto L
+    y = 1
+    @label L
+    f = ()->y
+    f.y
+end
+""") isa Core.Box
+
+# Argument reassigned inside loop - needs Box (argument is implicitly declared outside loop) (issue #37690)
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_arg_loop(x)
+        local f
+        for i in 1:2
+            x = i
+            i == 1 && (f = ()->x;)
+        end
+        f()
+    end
+    f_arg_loop(0)
+end
+""") == 2
+
+# Variable in while-true loop with break - needs Box (issue #37690)
+let x = JuliaLowering.include_string(test_mod, """
+    begin
+        function f_break_loop()
+            local f
+            local x
+            i = 1
+            while true
+                x = i
+                if i == 1
+                    f = ()->x
+                end
+                i >= 3 && break
+                i += 1
+            end
+            f.x
+        end
+        f_break_loop()
+    end
+    """)
+    @test x isa Core.Box
+    @test x.contents == 3
+end
+
+# Variable in while-true loop with post-dominated capture (not captured in a branch) - no Box
+let x = JuliaLowering.include_string(test_mod, """
+    begin
+        function f_break_loop2()
+            local f
+            local x
+            i = 1
+            while true
+                x = i
+                f = ()->x
+                i >= 3 && break
+                i += 1
+            end
+            f.x
+        end
+        f_break_loop2()
+    end
+    """)
+    @test x isa Int
+    @test x === 3
+end
+
+let keep = JuliaLowering.include_string(test_mod, """
+    begin
+        function f_for_after_capture(cond)
+            if cond
+                keep = Set{Base.PkgId}()
+                return ()->keep
+            end
+            for x in 1:3; end
+        end
+        f_for_after_capture(true).keep
+    end
+    """)
+    @test keep isa Set{Base.PkgId}
+    @test keep == Set{Base.PkgId}()
+end
+
 end
