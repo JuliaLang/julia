@@ -298,7 +298,8 @@
             `(,@head ,las)))))
 
 (define (replace-vars e renames)
-  (cond ((symbol? e)      (lookup e renames e))
+  (cond ((underscore-symbol? e) e)
+        ((symbol? e)      (lookup e renames e))
         ((or (not (pair? e)) (quoted? e))  e)
         ((memq (car e) '(-> function scope-block)) e)
         (else
