@@ -17,12 +17,13 @@ function with_output_annotations(f::Function, io::AnnotIO, annots::Pair{Symbol, 
     @nospecialize annots
     aio = if io isa AnnotatedIOBuffer io else io.io end
     start = position(aio) + 1
-    f(io)
+    v = f(io)
     stop = position(aio)
     sortedindex = searchsortedlast(aio.annotations, (region=start:stop,), by=a -> a.region)
     for (i, annot) in enumerate(annots)
         insert!(aio.annotations, sortedindex + i, (start:stop, annot...))
     end
+    return v
 end
 
 """

@@ -244,34 +244,40 @@ function print_shell_escaped_posixly(io::IO, args::AbstractString...)
         first || print(io, ' ')
         # avoid printing quotes around simple enough strings
         # that any (reasonable) shell will definitely never consider them to be special
-        have_single::Bool = false
-        have_double::Bool = false
-        function isword(c::AbstractChar)
-            if '0' <= c <= '9' || 'a' <= c <= 'z' || 'A' <= c <= 'Z'
-                # word characters
-            elseif c == '_' || c == '/' || c == '+' || c == '-' || c == '.'
-                # other common characters
-            elseif c == '\''
-                have_single = true
-            elseif c == '"'
-                have_double && return false # switch to single quoting
-                have_double = true
-            elseif !first && c == '='
-                # equals is special if it is first (e.g. `env=val ./cmd`)
-            else
-                # anything else
-                return false
-            end
-            return true
-        end
         if isempty(arg)
             print(io, "''")
-        elseif all(isword, arg)
-            have_single && (arg = replace(arg, '\'' => "\\'"))
-            have_double && (arg = replace(arg, '"' => "\\\""))
-            print(io, arg)
         else
-            print(io, '\'', replace(arg, '\'' => "'\\''"), '\'')
+            have_single = false
+            have_double = false
+            isword = true
+            for c in arg
+                if '0' <= c <= '9' || 'a' <= c <= 'z' || 'A' <= c <= 'Z'
+                    # word characters
+                elseif c == '_' || c == '/' || c == '+' || c == '-' || c == '.'
+                    # other common characters
+                elseif c == '\''
+                    have_single = true
+                elseif c == '"'
+                    if have_double
+                        isword = false
+                        break # switch to single quoting
+                    end
+                    have_double = true
+                elseif !first && c == '='
+                    # equals is special if it is first (e.g. `env=val ./cmd`)
+                else
+                    # anything else
+                    isword = false
+                    break
+                end
+            end
+            if isword
+                have_single && (arg = replace(arg, '\'' => "\\'"))
+                have_double && (arg = replace(arg, '"' => "\\\""))
+                print(io, arg)
+            else
+                print(io, '\'', replace(arg, '\'' => "'\\''"), '\'')
+            end
         end
         first = false
     end

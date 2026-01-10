@@ -167,20 +167,22 @@ function lookup(ip::Base.InterpreterIP)
     if isempty(scopes)
         return [StackFrame(func, file, line, code, false, false, 0)]
     end
-    closure = let inlined::Bool = false, def = def
-        function closure_inner(lno)
-            if inlined
-                def = lno.method
-                def isa Union{Method,Core.CodeInstance,MethodInstance} || (def = nothing)
-            else
-                def = codeinfo
-            end
-            sf = StackFrame(IRShow.normalize_method_name(lno.method), lno.file, lno.line, def, false, inlined, 0)
-            inlined = true
-            return sf
+    res = Vector{StackFrame}(undef, length(scopes))
+    inlined = false
+    def_local = def
+    for i in eachindex(scopes)
+        lno = scopes[i]
+        if inlined
+            def_local = lno.method
+            def_local isa Union{Method,Core.CodeInstance,MethodInstance} || (def_local = nothing)
+        else
+            def_local = codeinfo
         end
+        res[i] = StackFrame(IRShow.normalize_method_name(lno.method), lno.file, lno.line,
+            def_local, false, inlined, 0)
+        inlined = true
     end
-    return map(closure, scopes)
+    return res
 end
 
 """
