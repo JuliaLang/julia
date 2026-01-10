@@ -132,10 +132,23 @@ function html(io::IO, md::List)
         for item in md.items
             println(io)
             withtag(io, :li) do
-                html(io, item)
+                if md.loose
+                    println(io)
+                    html(io, item)
+                else
+                    htmltight(io, item)
+                end
             end
         end
         println(io)
+    end
+end
+
+htmltight(io::IO, md) = html(io, md)
+htmltight(io::IO, md::Paragraph) = htmlinline(io, md.content)
+function htmltight(io::IO, content::Vector)
+    for md in content
+        htmltight(io, md)
     end
 end
 

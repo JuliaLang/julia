@@ -324,7 +324,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ul>\n<li>`one</li>\n<li>two`</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
 end
 
@@ -436,7 +436,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ul>\n<li>foo</li>\n</ul>\n<hr />\n<ul>\n<li>bar</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 58
     input = "Foo\n***\nbar\n"
@@ -709,7 +709,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ul>\n<li>Foo</li>\n</ul>\n<hr />\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 95
     input = "Foo\nBar\n---\n"
@@ -744,7 +744,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ul>\n<li>foo</li>\n</ul>\n<hr />\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 100
     input = "    foo\n---\n"
@@ -814,14 +814,14 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ul>\n<li>\n<p>foo</p>\n<p>bar</p>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 109
     input = "1.  foo\n\n    - bar\n"
     md = Markdown.parse(input; flavor=:github)
     expected = "<ol>\n<li>\n<p>foo</p>\n<ul>\n<li>bar</li>\n</ul>\n</li>\n</ol>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 110
     input = "    <a/>\n    *hi*\n\n    - one\n"
@@ -1745,7 +1745,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<blockquote>\n<ul>\n<li>foo</li>\n</ul>\n</blockquote>\n<ul>\n<li>bar</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 236
     input = ">     foo\n    bar\n"
@@ -1899,7 +1899,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ul>\n<li>\n<p>one</p>\n<p>two</p>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 257
     input = " -    one\n\n     two\n"
@@ -1913,14 +1913,14 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ul>\n<li>\n<p>one</p>\n<p>two</p>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 259
     input = "   > > 1.  one\n>>\n>>     two\n"
     md = Markdown.parse(input; flavor=:github)
     expected = "<blockquote>\n<blockquote>\n<ol>\n<li>\n<p>one</p>\n<p>two</p>\n</li>\n</ol>\n</blockquote>\n</blockquote>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 260
     input = ">>- one\n>>\n  >  > two\n"
@@ -1941,7 +1941,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ul>\n<li>\n<p>foo</p>\n<p>bar</p>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 263
     input = "1.  foo\n\n    ```\n    bar\n    ```\n\n    baz\n\n    > bam\n"
@@ -1955,14 +1955,14 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ul>\n<li>\n<p>Foo</p>\n<pre><code>bar\n\n\nbaz\n</code></pre>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 265
     input = "123456789. ok\n"
     md = Markdown.parse(input; flavor=:github)
     expected = "<ol start=\"123456789\">\n<li>ok</li>\n</ol>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 266
     input = "1234567890. not ok\n"
@@ -1983,7 +1983,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ol start=\"3\">\n<li>ok</li>\n</ol>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 269
     input = "-1. not ok\n"
@@ -1997,7 +1997,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ul>\n<li>\n<p>foo</p>\n<pre><code>bar\n</code></pre>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 271
     input = "  10.  foo\n\n           bar\n"
@@ -2018,14 +2018,14 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ol>\n<li>\n<pre><code>indented code\n</code></pre>\n<p>paragraph</p>\n<pre><code>more code\n</code></pre>\n</li>\n</ol>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 274
     input = "1.      indented code\n\n   paragraph\n\n       more code\n"
     md = Markdown.parse(input; flavor=:github)
     expected = "<ol>\n<li>\n<pre><code> indented code\n</code></pre>\n<p>paragraph</p>\n<pre><code>more code\n</code></pre>\n</li>\n</ol>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 275
     input = "   foo\n\nbar\n"
@@ -2046,7 +2046,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ul>\n<li>\n<p>foo</p>\n<p>bar</p>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 278
     input = "-\n  foo\n-\n  ```\n  bar\n  ```\n-\n      baz\n"
@@ -2060,7 +2060,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ul>\n<li>foo</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 280
     input = "-\n\n  foo\n"
@@ -2074,21 +2074,21 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ul>\n<li>foo</li>\n<li></li>\n<li>bar</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 282
     input = "- foo\n-   \n- bar\n"
     md = Markdown.parse(input; flavor=:github)
     expected = "<ul>\n<li>foo</li>\n<li></li>\n<li>bar</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 283
     input = "1. foo\n2.\n3. bar\n"
     md = Markdown.parse(input; flavor=:github)
     expected = "<ol>\n<li>foo</li>\n<li></li>\n<li>bar</li>\n</ol>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 284
     input = "*\n"
@@ -2186,7 +2186,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ol start=\"10\">\n<li>foo</li>\n</ol>\n<ul>\n<li>bar</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 298
     input = "- - foo\n"
@@ -2228,14 +2228,14 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ol>\n<li>foo</li>\n<li>bar</li>\n</ol>\n<ol start=\"3\">\n<li>baz</li>\n</ol>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 303
     input = "Foo\n- bar\n- baz\n"
     md = Markdown.parse(input; flavor=:github)
     expected = "<p>Foo</p>\n<ul>\n<li>bar</li>\n<li>baz</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 304
     input = "The number of windows in my house is\n14.  The number of doors is 6.\n"
@@ -2249,14 +2249,14 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<p>The number of windows in my house is</p>\n<ol>\n<li>The number of doors is 6.</li>\n</ol>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 306
     input = "- foo\n\n- bar\n\n\n- baz\n"
     md = Markdown.parse(input; flavor=:github)
     expected = "<ul>\n<li>\n<p>foo</p>\n</li>\n<li>\n<p>bar</p>\n</li>\n<li>\n<p>baz</p>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 307
     input = "- foo\n  - bar\n    - baz\n\n\n      bim\n"
@@ -2277,7 +2277,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ul>\n<li>\n<p>foo</p>\n<p>notcode</p>\n</li>\n<li>\n<p>foo</p>\n</li>\n</ul>\n<!-- -->\n<pre><code>code\n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 310
     input = "- a\n - b\n  - c\n   - d\n  - e\n - f\n- g\n"
@@ -2312,7 +2312,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ul>\n<li>\n<p>a</p>\n</li>\n<li>\n<p>b</p>\n</li>\n<li>\n<p>c</p>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 315
     input = "* a\n*\n\n* c\n"
@@ -2326,7 +2326,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ul>\n<li>\n<p>a</p>\n</li>\n<li>\n<p>b</p>\n<p>c</p>\n</li>\n<li>\n<p>d</p>\n</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 317
     input = "- a\n- b\n\n  [ref]: /url\n- d\n"
@@ -2368,7 +2368,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ul>\n<li>a</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 323
     input = "- a\n  - b\n"
@@ -2382,7 +2382,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ol>\n<li>\n<pre><code>foo\n</code></pre>\n<p>bar</p>\n</li>\n</ol>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 325
     input = "* foo\n  * bar\n\n  baz\n"
