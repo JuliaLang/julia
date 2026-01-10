@@ -775,7 +775,8 @@ function _win_mkstemp(temppath::AbstractString)
 end
 
 function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
-    absparent = joinpath(pwd(), parent)
+    # `pwd()` errors if it is deleted, so only call for relative path
+    absparent = isabspath(parent) ? parent : joinpath(pwd(), parent)
     filename = _win_mkstemp(parent)
     filepath = joinpath(absparent, filename)
     cleanup && temp_cleanup_later(filepath)
