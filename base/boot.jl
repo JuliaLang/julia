@@ -864,7 +864,7 @@ end
 # generated from the front end), but it can be justified for generators involving complex
 # code transformations, such as a Cassette-like system.
 abstract type CachedGenerator end
-
+Tuple() = ()
 NamedTuple() = NamedTuple{(),Tuple{}}(())
 
 eval(Core, :(NamedTuple{names}(args::Tuple) where {names} =
