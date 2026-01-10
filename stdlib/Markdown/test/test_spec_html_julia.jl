@@ -373,7 +373,7 @@ end
     md = Markdown.parse(input; flavor=:julia)
     expected = "<pre><code>***\n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 49
     input = "Foo\n    ***\n"

@@ -23,8 +23,8 @@ function github_paragraph(stream::IO, md::MD)
     return true
 end
 
-@flavor github [horizontalrule, list, indentcode, blockquote, admonition, footnote, hashheader,
-                fencedcode, github_table, github_paragraph,
+@flavor github [fencedcode, horizontalrule, list, indentcode, blockquote, admonition, footnote, hashheader,
+                github_table, github_paragraph,
 
                 linebreak, escapes,
                 en_or_em_dash, inline_code,

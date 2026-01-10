@@ -398,18 +398,18 @@ end
 @breaking true ->
 function horizontalrule(stream::IO, block::MD)
    withstream(stream) do
-       n, rule = 0, ' '
+       eatindent(stream) || return false
+       eof(stream) && return false
+       rule = read(stream, Char)
+       rule in "*-_" || return false
+       n = 1
        for char in readeach(stream, Char)
            char == '\n' && break
            isspace(char) && continue
-           if n == 0
-               rule = char
-           elseif char != rule
-               return false
-           end
+           char == rule || return false
            n += 1
        end
-       is_hr = (n ≥ 3 && rule in "*-_")
+       is_hr = n ≥ 3
        is_hr && push!(block, HorizontalRule())
        return is_hr
    end
