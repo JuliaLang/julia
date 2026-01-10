@@ -26,6 +26,13 @@ function term(io::IO, md::Paragraph, columns)
     end
 end
 
+function term(io::IO, md::HTML, columns)
+    for line in md.content[1:end-1]
+        println(io, line)
+    end
+    print(io, md.content[end])
+end
+
 function term(io::IO, md::BlockQuote, columns)
     content = annotprint(term, md.content, columns - 10)
     lines = wraplines(rstrip(content), columns - 10)

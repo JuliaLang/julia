@@ -6,7 +6,7 @@ include("block.jl")
 include("inline.jl")
 
 @flavor common [fencedcode, horizontalrule, list, indentcode, blockquote, admonition, footnote, hashheader,
-                setextheader, paragraph,
+                html_block, html_block_type7, setextheader, paragraph,
 
                 linebreak, escapes,
                 inline_code,
