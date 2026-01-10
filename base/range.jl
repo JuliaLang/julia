@@ -918,13 +918,21 @@ function iterate(r::Union{StepRangeLen,LinRange}, i::Integer=zero(length(r)))
     unsafe_getindex(r, i), i
 end
 
-iterate(r::OrdinalRange) = isempty(r) ? nothing : (first(r), first(r))
-
-function iterate(r::OrdinalRange{T}, i) where {T}
+_iterate(r::OrdinalRange{T}, i::Nothing) where {T} = isempty(r) ? nothing : (first(r), first(r))
+function _iterate(r::OrdinalRange{T}, i) where {T}
     @inline
     i == last(r) && return nothing
     next = convert(T, i + step(r))
     (next, next)
+end
+iterate(r::OrdinalRange, i = nothing) = _iterate(r, i)
+
+# optimized implementation that returns `nothing` for large offsets
+function iterate(r::AbstractOneTo, st = (first(r), zero(step(r))))
+    val, offset = st
+    offset < length(r) || return nothing
+    v = unsafe_getindex(r, val) # convert to eltype(r)
+    v, (val + step(r), oftype(step(r), v))
 end
 
 ## indexing
@@ -967,7 +975,7 @@ end
 # unsafe_getindex is separate to make it useful even when running with --check-bounds=yes
 # it assumes the index is inbounds but does not segfault even if the index is out of bounds.
 # it does not check if the index isa bool.
-unsafe_getindex(v::OneTo{T}, i::Integer) where T = convert(T, i)
+unsafe_getindex(v::AbstractOneTo{T}, i::Integer) where T = convert(T, i)
 unsafe_getindex(v::AbstractRange{T}, i::Integer) where T = convert(T, first(v) + (i - oneunit(i))*step_hp(v))
 function unsafe_getindex(r::StepRangeLen{T}, i::Integer) where T
     u = oftype(r.offset, i) - r.offset
