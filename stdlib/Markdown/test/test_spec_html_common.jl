@@ -163,7 +163,7 @@ end
     md = Markdown.parse(input; flavor=:common)
     expected = "<a href=\"/bar\\/)\">\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 22
     input = "[foo](/bar\\* \"ti\\*tle\")\n"
@@ -240,7 +240,7 @@ end
     md = Markdown.parse(input; flavor=:common)
     expected = "<a href=\"&ouml;&ouml;.html\">\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 32
     input = "[foo](/f&ouml;&ouml; \"f&ouml;&ouml;\")\n"
@@ -1115,133 +1115,133 @@ end
     md = Markdown.parse(input; flavor=:common)
     expected = "<table>\n  <tr>\n    <td>\n           hi\n    </td>\n  </tr>\n</table>\n<p>okay.</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 150
     input = " <div>\n  *hello*\n         <foo><a>\n"
     md = Markdown.parse(input; flavor=:common)
     expected = " <div>\n  *hello*\n         <foo><a>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 151
     input = "</div>\n*foo*\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "</div>\n*foo*\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 152
     input = "<DIV CLASS=\"foo\">\n\n*Markdown*\n\n</DIV>\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<DIV CLASS=\"foo\">\n<p><em>Markdown</em></p>\n</DIV>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 153
     input = "<div id=\"foo\"\n  class=\"bar\">\n</div>\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<div id=\"foo\"\n  class=\"bar\">\n</div>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 154
     input = "<div id=\"foo\" class=\"bar\n  baz\">\n</div>\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<div id=\"foo\" class=\"bar\n  baz\">\n</div>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 155
     input = "<div>\n*foo*\n\n*bar*\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<div>\n*foo*\n<p><em>bar</em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 156
     input = "<div id=\"foo\"\n*hi*\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<div id=\"foo\"\n*hi*\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 157
     input = "<div class\nfoo\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<div class\nfoo\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 158
     input = "<div *???-&&&-<---\n*foo*\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<div *???-&&&-<---\n*foo*\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 159
     input = "<div><a href=\"bar\">*foo*</a></div>\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<div><a href=\"bar\">*foo*</a></div>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 160
     input = "<table><tr><td>\nfoo\n</td></tr></table>\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<table><tr><td>\nfoo\n</td></tr></table>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 161
     input = "<div></div>\n``` c\nint x = 33;\n```\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<div></div>\n``` c\nint x = 33;\n```\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 162
     input = "<a href=\"foo\">\n*bar*\n</a>\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<a href=\"foo\">\n*bar*\n</a>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 163
     input = "<Warning>\n*bar*\n</Warning>\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<Warning>\n*bar*\n</Warning>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 164
     input = "<i class=\"foo\">\n*bar*\n</i>\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<i class=\"foo\">\n*bar*\n</i>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 165
     input = "</ins>\n*bar*\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "</ins>\n*bar*\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 166
     input = "<del>\n*foo*\n</del>\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<del>\n*foo*\n</del>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 167
     input = "<del>\n\n*foo*\n\n</del>\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<del>\n<p><em>foo</em></p>\n</del>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 168
     input = "<del>*foo*</del>\n"
@@ -1255,42 +1255,42 @@ end
     md = Markdown.parse(input; flavor=:common)
     expected = "<pre language=\"haskell\"><code>\nimport Text.HTML.TagSoup\n\nmain :: IO ()\nmain = print \$ parseTags tags\n</code></pre>\n<p>okay</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 170
     input = "<script type=\"text/javascript\">\n// JavaScript example\n\ndocument.getElementById(\"demo\").innerHTML = \"Hello JavaScript!\";\n</script>\nokay\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<script type=\"text/javascript\">\n// JavaScript example\n\ndocument.getElementById(\"demo\").innerHTML = \"Hello JavaScript!\";\n</script>\n<p>okay</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 171
     input = "<textarea>\n\n*foo*\n\n_bar_\n\n</textarea>\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<textarea>\n\n*foo*\n\n_bar_\n\n</textarea>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 172
     input = "<style\n  type=\"text/css\">\nh1 {color:red;}\n\np {color:blue;}\n</style>\nokay\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<style\n  type=\"text/css\">\nh1 {color:red;}\n\np {color:blue;}\n</style>\n<p>okay</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 173
     input = "<style\n  type=\"text/css\">\n\nfoo\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<style\n  type=\"text/css\">\n\nfoo\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 174
     input = "> <div>\n> foo\n\nbar\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<blockquote>\n<div>\nfoo\n</blockquote>\n<p>bar</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 175
     input = "- <div>\n- foo\n"
@@ -1304,77 +1304,77 @@ end
     md = Markdown.parse(input; flavor=:common)
     expected = "<style>p{color:red;}</style>\n<p><em>foo</em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 177
     input = "<!-- foo -->*bar*\n*baz*\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<!-- foo -->*bar*\n<p><em>baz</em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 178
     input = "<script>\nfoo\n</script>1. *bar*\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<script>\nfoo\n</script>1. *bar*\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 179
     input = "<!-- Foo\n\nbar\n   baz -->\nokay\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<!-- Foo\n\nbar\n   baz -->\n<p>okay</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 180
     input = "<?php\n\n  echo '>';\n\n?>\nokay\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<?php\n\n  echo '>';\n\n?>\n<p>okay</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 181
     input = "<!DOCTYPE html>\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<!DOCTYPE html>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 182
     input = "<![CDATA[\nfunction matchwo(a,b)\n{\n  if (a < b && a < 0) then {\n    return 1;\n\n  } else {\n\n    return 0;\n  }\n}\n]]>\nokay\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<![CDATA[\nfunction matchwo(a,b)\n{\n  if (a < b && a < 0) then {\n    return 1;\n\n  } else {\n\n    return 0;\n  }\n}\n]]>\n<p>okay</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 183
     input = "  <!-- foo -->\n\n    <!-- foo -->\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "  <!-- foo -->\n<pre><code>&lt;!-- foo --&gt;\n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 184
     input = "  <div>\n\n    <div>\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "  <div>\n<pre><code>&lt;div&gt;\n</code></pre>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 185
     input = "Foo\n<div>\nbar\n</div>\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<p>Foo</p>\n<div>\nbar\n</div>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 186
     input = "<div>\nbar\n</div>\n*foo*\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<div>\nbar\n</div>\n*foo*\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 187
     input = "Foo\n<a href=\"bar\">\nbaz\n"
@@ -1388,28 +1388,28 @@ end
     md = Markdown.parse(input; flavor=:common)
     expected = "<div>\n<p><em>Emphasized</em> text.</p>\n</div>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 189
     input = "<div>\n*Emphasized* text.\n</div>\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<div>\n*Emphasized* text.\n</div>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 190
     input = "<table>\n\n<tr>\n\n<td>\nHi\n</td>\n\n</tr>\n\n</table>\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<table>\n<tr>\n<td>\nHi\n</td>\n</tr>\n</table>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 191
     input = "<table>\n\n  <tr>\n\n    <td>\n      Hi\n    </td>\n\n  </tr>\n\n</table>\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<table>\n  <tr>\n<pre><code>&lt;td&gt;\n  Hi\n&lt;/td&gt;\n</code></pre>\n  </tr>\n</table>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
 end
 

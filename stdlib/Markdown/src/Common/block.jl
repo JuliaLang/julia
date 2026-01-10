@@ -414,3 +414,141 @@ function horizontalrule(stream::IO, block::MD)
        return is_hr
    end
 end
+
+
+# ––––––––––
+# HTML
+# ––––––––––
+
+mutable struct HTML <: MarkdownElement
+    content
+end
+
+HTML() = HTML([])
+
+# spaces, tabs, and up to one line ending
+const SPACES = "(?:[ \t]*(?:[ \t\n])[ \t]*)"
+
+# An unquoted attribute value is a nonempty string of characters not including
+# spaces, tabs, line endings, ", ', =, <, >, or `.
+const UNQUOTED_ATTRIBUTE_VALUE = "[^ \t\n\"'=<>`]"
+
+# A single-quoted attribute value consists of ', zero or more characters not
+# including ', and a final '.
+const SINGLE_QUOTED_ATTRIBUTE_VALUE = "'[^']*'"
+
+# A double-quoted attribute value consists of ", zero or more characters not
+# including ", and a final ".
+const DOUBLE_QUOTED_ATTRIBUTE_VALUE = "\"[^\"]*\""
+
+# An attribute value consists of an unquoted attribute value, a single-quoted
+# attribute value, or a double-quoted attribute value.
+const ATTRIBUTE_VALUE = "(?:(?:$UNQUOTED_ATTRIBUTE_VALUE)|(?:$SINGLE_QUOTED_ATTRIBUTE_VALUE)|(?:$DOUBLE_QUOTED_ATTRIBUTE_VALUE))"
+
+# An attribute value specification consists of optional spaces, tabs, and up
+# to one line ending, a = character, optional spaces, tabs, and up to one line
+# ending, and an attribute value.
+const ATTRIBUTE_VALUE_SPEC = "$SPACES?=$SPACES?$ATTRIBUTE_VALUE"
+
+# An attribute name consists of an ASCII letter, _, or :, followed by zero or
+# more ASCII letters, digits, _, ., :, or -. (Note: This is the XML
+# specification restricted to ASCII. HTML5 is laxer.)
+const ATTRIBUTE_NAME = "[a-zA-Z_:][a-zA-Z0-9_.:-]*"
+
+# An attribute consists of spaces, tabs, and up to one line ending, an attribute name, and an optional attribute value specification.
+const ATTRIBUTE = "$SPACES$ATTRIBUTE_NAME(?:$ATTRIBUTE_VALUE_SPEC)?"
+
+# A tag name consists of an ASCII letter followed by zero or more ASCII letters, digits, or hyphens (-).
+const TAG_NAME = "[a-zA-Z][a-zA-Z0-9-]*"
+
+# An open tag consists of a < character, a tag name, zero or more attributes, optional spaces, tabs,
+# and up to one line ending, an optional / character, and a > character.
+const OPEN_TAG = "<($TAG_NAME)((?:$ATTRIBUTE)*)$SPACES?/?>"
+
+# A closing tag consists of the string </, a tag name, optional spaces, tabs, and up to one line
+# ending, and the character >.
+const CLOSING_TAG = "</$TAG_NAME$SPACES?>"
+
+# Regex for a the HTML block start condition of type 7
+const TYPE_7_REGEX = Regex("^(?:(?:$OPEN_TAG)|(?:$CLOSING_TAG))[ \t]*\$")
+
+# Tag names allowed as tag names for type 6 HTML blocks
+const TYPE_6_TAGNAMES = "address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h1|h2|h3|h4|h5|h6|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul"
+
+# Regex for a the HTML block start condition of type 6
+const TYPE_6_REGEX = Regex("^<(?:$TYPE_6_TAGNAMES)(?:[ \t>]|/>|\$)", "i")
+
+# Regex for a the HTML block start condition of type 1
+const TYPE_1_REGEX = r"^<(?:pre|script|style|textarea)(?:[ \t>]|$)"i
+
+
+# All types of HTML blocks except type 7 may interrupt a paragraph.
+@breaking true ->
+function html_block(stream::IO, block::MD)
+    withstream(stream) do
+        pos = position(stream)
+
+        eatindent(stream) || return false
+        startswith(stream, "<"; eat=false) || return false
+
+        # CommonMark defines seven start/end conditions, we handle type 1-6 here
+        if startswith(stream, TYPE_1_REGEX)
+            endcond = r"</(?:pre|script|style|textarea)>"i
+        elseif startswith(stream, "<!--")
+            endcond = "-->"
+        elseif startswith(stream, "<?")
+            endcond = "?>"
+        elseif startswith(stream, r"^<![a-zA-Z]")
+            endcond = ">"
+        elseif startswith(stream, "<![CDATA[")
+            endcond = "]]>"
+        elseif startswith(stream, TYPE_6_REGEX)
+            # line is followed by a blank line
+            endcond = nothing
+        else
+            return false
+        end
+
+        html = HTML()
+
+        # return to start, and read line by line
+        seek(stream, pos)
+        if endcond === nothing
+            while !eof(stream)
+                line = readline(stream)
+                all(isspace, line) && break
+                push!(html.content, line)
+            end
+        else
+            while !eof(stream)
+                line = readline(stream)
+                push!(html.content, line)
+                contains(line, endcond) && break
+            end
+        end
+        push!(block, html)
+        return true
+    end
+end
+
+# Blocks of type 7 may not interrupt a paragraph.
+function html_block_type7(stream::IO, block::MD)
+    withstream(stream) do
+        pos = position(stream)
+
+        eatindent(stream) || return false
+        startswith(stream, TYPE_7_REGEX) || return false
+
+        html = HTML()
+
+        # return to start, and read line by line
+        seek(stream, pos)
+        while !eof(stream)
+            line = readline(stream)
+            all(isspace, line) && break
+            push!(html.content, line)
+        end
+        push!(block, html)
+        return true
+    end
+end

@@ -33,6 +33,12 @@ function plain(io::IO, p::Paragraph)
     println(io)
 end
 
+function plain(io::IO, md::HTML)
+    for line in md.content
+        println(io, line)
+    end
+end
+
 function plain(io::IO, list::List)
     for (i, item) in enumerate(list.items)
         list_marker = isordered(list) ? "$(i + list.ordered - 1). " : "  * "

@@ -99,8 +99,12 @@ function matchstart(stream::IO, r::Regex; eat = true, padding = false)
     return m
 end
 
+function startswith(stream::IO, r::Regex; kws...)
+    return matchstart(stream, r; kws...) !== nothing
+end
+
 """
-Executes the block of code, and if the return value is `nothing`,
+Executes the block of code, and if the return value is `nothing` or `false`,
 returns the stream to its initial position.
 """
 function withstream(f, stream)

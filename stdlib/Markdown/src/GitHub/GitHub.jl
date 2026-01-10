@@ -24,7 +24,7 @@ function github_paragraph(stream::IO, md::MD)
 end
 
 @flavor github [fencedcode, horizontalrule, list, indentcode, blockquote, admonition, footnote, hashheader,
-                github_table, github_paragraph,
+                html_block, html_block_type7, github_table, github_paragraph,
 
                 linebreak, escapes,
                 en_or_em_dash, inline_code,
