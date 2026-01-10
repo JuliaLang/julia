@@ -788,7 +788,7 @@ is that regular expressions are used to find regular patterns in strings; the ot
 that regular expressions are themselves input as strings, which are parsed into a state machine that
 can be used to efficiently search for patterns in strings. In Julia, regular expressions are input
 using non-standard string literals prefixed with various identifiers beginning with `r`. The most
-basic regular expression literal without any options turned on just uses `r"..."`:
+basic regular expression literal without any options turned on just uses [`r"..."`](@ref @r_str):
 
 ```jldoctest
 julia> re = r"^\s*(?:#|$)"
@@ -1064,7 +1064,7 @@ before inclusion in a regex.
 
 ## [Byte Array Literals](@id man-byte-array-literals)
 
-Another useful non-standard string literal is the byte-array string literal: `b"..."`. This
+Another useful non-standard string literal is the byte-array string literal: [`b"..."`](@ref @b_str). This
 form lets you use string notation to express read only literal byte arrays -- i.e. arrays of
 [`UInt8`](@ref) values. The type of those objects is `CodeUnits{UInt8, String}`.
 The rules for byte array literals are the following:
@@ -1199,7 +1199,7 @@ in the `Pkg` module, to specify packages versions and their dependencies.
 ## [Raw String Literals](@id man-raw-string-literals)
 
 Raw strings without interpolation or unescaping can be expressed with
-non-standard string literals of the form `raw"..."`. Raw string literals create
+non-standard string literals of the form [`raw"..."`](@ref @raw_str). Raw string literals create
 ordinary `String` objects which contain the enclosed contents exactly as
 entered with no interpolation or unescaping. This is useful for strings which
 contain code or markup in other languages which use `$` or `\` as special
