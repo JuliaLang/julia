@@ -123,7 +123,7 @@ function generate_test_file(io::IO, data, mode::Symbol; flavor::Symbol=:julia)
             println(io, "    actual = Markdown.html(md)");
         elseif mode == :roundtrip
             println(io, "    expected = Markdown.parse(input; flavor=:$(flavor))");
-            println(io, "    new_input = Markdown.Markdown.plain(expected)");
+            println(io, "    new_input = Markdown.plain(expected)");
             println(io, "    actual = Markdown.parse(new_input; flavor=:$(flavor))");
         else
             error("unsupported mode $mode")
