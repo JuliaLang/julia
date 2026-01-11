@@ -1,0 +1,6 @@
+[deps]
+BandedMatrices = "aae01518-5342-5314-be14-df237901396f"
+BlockArrays = "8e7c35d0-a365-5155-bbbb-fb81a777f24e"
+FillArrays = "1a297f60-69ca-5386-bcde-b61e274b549b"
+InfiniteArrays = "4858937d-0d70-526a-a4dd-2d5cb5dd786c"
+LazyBandedMatrices = "d7e5e226-e90b-4449-9968-0f923699bf6f"

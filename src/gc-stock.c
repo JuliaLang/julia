@@ -2057,6 +2057,15 @@ STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroot
                 if (new_obj < (jl_value_t*)((uintptr_t)jl_max_tags << 4))
                     continue;
             }
+#ifdef GC_ASSERT_PARENT_VALIDITY
+            // Check if the value looks like a stack pointer instead of a heap pointer
+            // Stack pointers fall within [lb, ub] bounds
+            if ((uintptr_t)new_obj >= lb && (uintptr_t)new_obj <= ub) {
+                jl_safe_printf("GC error: stack ptr %p in gcframe %p slot %u\n",
+                               (void *)new_obj, (void *)s, i);
+                abort();
+            }
+#endif
             gc_try_claim_and_push(mq, new_obj, NULL);
             gc_heap_snapshot_record_frame_to_object_edge(s, new_obj);
         }
