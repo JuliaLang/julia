@@ -1311,6 +1311,7 @@ K"doc",
 K"mutable",
 K"outer",
 K"primitive",
+K"recursive",
 K"type",
 K"var",
 K"VERSION"

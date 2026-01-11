@@ -245,6 +245,7 @@ register_kinds!(JuliaSyntax, 0, [
             "outer"
             "primitive"
             "public"
+            "recursive"
             "type"
             "var"
             "VERSION"
@@ -1053,6 +1054,8 @@ register_kinds!(JuliaSyntax, 0, [
         "comprehension"
         "typed_comprehension"
         "macro_name"
+        # Mutually recursive type definitions
+        "recursive_type"
         # Container for a single statement/atom plus any trivia and errors
         "wrapper"
     "END_SYNTAX_KINDS"
