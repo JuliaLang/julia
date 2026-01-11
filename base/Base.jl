@@ -191,7 +191,19 @@ const (√)=sqrt
 const (∛)=cbrt
 const (∜)=fourthroot
 
-# now switch to a simple, race-y TLS, relative include for the rest of Base
+# Compiler frontend is usable at this point in bootstrap - switch to that for
+# Meta.parse and for eval().
+include("compiler_frontend.jl")
+set_compiler_frontend!(Base, FlispCompilerFrontend())
+for m in methods(eval)
+    delete_method(m)
+end
+eval(x) = CompilerFrontend.eval(Base, x)
+eval(mod::Module, x) = CompilerFrontend.eval(mod, x)
+Core._setparser!(CompilerFrontend._parse_hook)
+Core._seteval!(CompilerFrontend.eval)
+
+# Switch to a simple, race-y TLS, relative include for the rest of Base
 delete_method(which(include, (Module, String)))
 let SOURCE_PATH = ""
     global function include(mod::Module, path::String)
@@ -201,7 +213,8 @@ let SOURCE_PATH = ""
         ccall(:jl_uv_flush, Nothing, (Ptr{Nothing},), Core.io_pointer(Core.stdout))
         push!(_included_files, (mod, abspath(path)))
         SOURCE_PATH = path
-        result = Core.include(mod, path)
+        text = read(path, String)
+        result = CompilerFrontend.include_string(mod, text; filename=path)
         SOURCE_PATH = prev
         return result
     end
@@ -304,8 +317,7 @@ end
 # various sysimg related invalidation scenarios.
 a_method_to_overwrite_in_test() = inferencebarrier(1)
 
-# These functions are duplicated in client.jl/include(::String) for
-# nicer stacktraces. Modifications here have to be backported there
+# Final public API for `Base.include()` always requires a module
 @noinline include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
 @noinline include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
 (this::IncludeInto)(fname::AbstractString) = include(identity, this.m, fname)
@@ -318,6 +330,16 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 # Compiler frontend
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
 include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
+Core.println("compiler_frontend_1.jl")
+include(@__MODULE__, "compiler_frontend_1.jl")
+function CompilerFrontend.compiler_frontend(syntax_version::VersionNumber)
+    DefaultCompilerFrontend(syntax_version)
+end
+function set_syntax_version(m::Module, ver::VersionNumber)
+    set_compiler_frontend!(m, compiler_frontend(ver))
+    nothing
+end
+set_compiler_frontend!(Base, compiler_frontend(NON_VERSIONED_SYNTAX))
 
 # May be replaced in incremental sysimage build after-the-fact
 const JuliaLowering = nothing
@@ -397,8 +419,8 @@ function __init__()
     _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
     delete!(ENV, "JULIA_WAIT_FOR_TRACY")
-    if get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
-        JuliaSyntax.enable_in_core!()
+    if get_bool_env("JULIA_USE_FLISP_PARSER", false) === true
+        set_compiler_frontend!(Base, FlispCompilerFrontend())
     end
     if JuliaLowering !== nothing && get_bool_env("JULIA_USE_FLISP_LOWERING", true) === false
         # This is not available by default, but JuliaLowering can be added to
