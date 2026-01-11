@@ -1,0 +1,9 @@
+# -*- makefile -*-
+## jll artifact
+MIMALLOC_JLL_NAME := mimalloc
+MIMALLOC_JLL_VER := 2.1.4+0
+
+## source build
+MIMALLOC_VER := 2.1.4
+MIMALLOC_BRANCH=v2.1.4
+MIMALLOC_SHA1=1b3cb0258fc475460ed19cdb78feaebd69cef0c6
