@@ -1239,6 +1239,11 @@ CFI_NORETURN
     jl_ptls_t ptls = ct->ptls;
     jl_value_t *res;
     assert(ptls->finalizers_inhibited == 0);
+    jl_value_t *scope = ct->scope;
+    // Need to root the scope so that it stays alive, even if a new scope is entered, since
+    // the exception-handler's reference to the scope isn't traced.
+    // NOTE: Don't need to pop when Task ends, as the whole gc stack will be freed.
+    JL_GC_PUSH1(&scope);
 
 #ifdef MIGRATE_TASKS
     jl_task_t *pt = ptls->previous_task;
