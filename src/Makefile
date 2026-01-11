@@ -112,6 +112,14 @@ ifeq ($(OS),WINNT)
 SRCS += win32_ucontext
 endif
 
+# Assembly sources for minimal setjmp (x86_64 Linux only for now)
+ASM_SRCS :=
+ifeq ($(OS),Linux)
+ifeq ($(ARCH),x86_64)
+ASM_SRCS += _jlsetjmp
+endif
+endif
+
 ifeq ($(WITH_DTRACE),1)
 DTRACE_HEADERS := uprobes.h.gen
 ifneq ($(OS),Darwin)
@@ -229,6 +237,12 @@ CG_RELEASE_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia -ljulia-internal
 OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 
+# Assembly object files
+ASM_OBJS := $(ASM_SRCS:%=$(BUILDDIR)/%.o)
+ASM_DOBJS := $(ASM_SRCS:%=$(BUILDDIR)/%.dbg.obj)
+OBJS += $(ASM_OBJS)
+DOBJS += $(ASM_DOBJS)
+
 CODEGEN_OBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.o)
 CODEGEN_DOBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.dbg.obj)
 
@@ -313,6 +327,11 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONF
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(SHIPFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) $(CXX_DISABLE_ASSERTION) -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.cpp $(SRCDIR)/llvm-version.h $(HEADERS) $(LLVM_CONFIG_ABSOLUTE) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(LLVM_CXXFLAGS) $(DEBUGFLAGS) $(JCPPFLAGS) $(JCXXFLAGS) -c $< -o $@)
+# Assembly source file rules
+$(BUILDDIR)/%.o: $(SRCDIR)/%.S | $(BUILDDIR)
+	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(SHIPFLAGS) -c $< -o $@)
+$(BUILDDIR)/%.dbg.obj: $(SRCDIR)/%.S | $(BUILDDIR)
+	@$(call PRINT_CC, $(CC) $(JCPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 $(BUILDDIR)/%.o : $(SRCDIR)/%.d
 	@$(call PRINT_DTRACE, $(DTRACE) -G -s $< -o $@)
 $(BUILDDIR)/%.dbg.obj : $(SRCDIR)/%.d
