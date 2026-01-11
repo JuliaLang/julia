@@ -8494,13 +8494,8 @@ static jl_llvm_functions_t
     }
     else if ((jl_value_t*)src->debuginfo != jl_nothing) {
         // look for the file and line info of the original start of this block, as reported by lowering
-        jl_debuginfo_t *debuginfo = src->debuginfo;
-        while ((jl_value_t*)debuginfo->linetable != jl_nothing)
-            debuginfo = debuginfo->linetable;
-        ctx.file = jl_debuginfo_file(debuginfo);
-        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo->codelocs, 0);
-        ctx.line = lineidx.line;
-        toplineno = std::max((int32_t)0, lineidx.line);
+        ctx.file = jl_debuginfo_firstline(src->debuginfo, &toplineno);
+        toplineno = std::max(0, toplineno);
     }
     if (ctx.file.empty())
         ctx.file = "<missing>";
