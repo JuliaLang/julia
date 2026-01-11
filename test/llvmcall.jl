@@ -205,6 +205,9 @@ end
 f34166(x) = Base.llvmcall("ret i$(Sys.WORD_SIZE) %0", Int, (Int,), x)
 @test_throws ErrorException f34166(1)
 
+# Test that ghost types (zero-size types) are rejected
+@test_throws ErrorException("llvmcall: argument 1 is a singleton or zero-size type and cannot be passed as an LLVM value") Base.llvmcall("ret i8 %0", Int8, Tuple{Nothing}, nothing)
+
 # Test that codegen can construct constant LLVMPtr #38864
 struct MyStruct
     kern::UInt64
