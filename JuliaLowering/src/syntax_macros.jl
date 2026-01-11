@@ -49,6 +49,23 @@ function Base.var"@label"(__context__::MacroContext, ex)
     @ast __context__ ex ex=>K"symbolic_label"
 end
 
+function Base.var"@label"(__context__::MacroContext, name, body)
+    # Handle `@label _ body` (anonymous) or `@label :name body` (named)
+    k = kind(name)
+    if k == K"Identifier" && name.name_val === :_
+        # `@label _ body` - anonymous block, keep _ as is
+    elseif k == K"quote" && numchildren(name) == 1 && kind(name[1]) == K"Identifier"
+        # `@label :name body` - named block, extract name from quote
+        name = name[1]
+    elseif k == K"Symbol"
+        # K"Symbol" comes from QuoteNode(:symbol) in Expr conversion
+        name = @ast __context__ name name.name_val::K"Identifier"
+    else
+        throw(MacroExpansionError(name, "Expected _ for anonymous block or :name for named block"))
+    end
+    @ast __context__ __context__.macrocall [K"symbolic_block" name body]
+end
+
 function Base.var"@goto"(__context__::MacroContext, ex)
     @chk kind(ex) == K"Identifier"
     @ast __context__ ex ex=>K"symbolic_goto"
