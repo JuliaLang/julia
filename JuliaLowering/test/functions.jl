@@ -422,6 +422,15 @@ end
     @test values(test_mod.f_kw_slurp_some(x = 1)) === (;)
     @test values(test_mod.f_kw_slurp_some()) === (;)
 
+    # Slurping with defaults depending on keyword names
+    JuliaLowering.include_string(test_mod, """
+    function f_kw_slurp_dep(; a=1, b=a, kws...)
+        (a, b, length(kws))
+    end
+    """)
+    @test test_mod.f_kw_slurp_dep(; a=1) == (1, 1, 0)
+    @test test_mod.f_kw_slurp_dep(; a=2, c=3) == (2, 2, 1)
+
     # Keyword defaults which depend on other keywords.
     JuliaLowering.include_string(test_mod, """
     begin
