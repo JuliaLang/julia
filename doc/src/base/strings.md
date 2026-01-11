@@ -39,6 +39,7 @@ Base.ismalformed
 Base.isoverlong
 Base.show_invalid
 Base.match
+Base.match(::Regex, ::Union{SubString{String}, String}, ::Ref{Int})
 Base.eachmatch
 Base.RegexMatch
 Base.keys(::RegexMatch)
