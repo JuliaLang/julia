@@ -318,7 +318,7 @@ function _parse_string(text::AbstractString, filename::AbstractString,
     if index < 1 || index > ncodeunits(text) + 1
         throw(BoundsError(text, index))
     end
-    ex, offset::Int = _parse(text, filename, lineno, index-1, options)
+    ex, offset::Int = Base.invokelatest(_parse, text, filename, lineno, index-1, options)
     ex, offset+1
 end
 
