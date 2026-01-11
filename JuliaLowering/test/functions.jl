@@ -173,6 +173,14 @@ begin
 end
 """) === ("fallback", (Number, Float64), (Int, Int), "fallback")
 
+# Static parameter may be undefined
+@test JuliaLowering.include_string(test_mod, """
+begin
+    func_undef_static_param(x::Union{T,Nothing}) where T = @isdefined(T)
+    (func_undef_static_param(nothing), func_undef_static_param(42))
+end
+""") === (false, true)
+
 Base.eval(test_mod,
 :(struct X1{T} end)
 )

@@ -405,4 +405,71 @@ let keep = JuliaLowering.include_string(test_mod, """
     @test keep == Set{Base.PkgId}()
 end
 
+# Function where arguments are captured into closure and assigned (boxed)
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_arg_captured_assigned(x)
+        function g()
+            x = 10
+        end
+        g()
+        x
+    end
+    f_arg_captured_assigned(1)
+end
+""") == 10
+
+# Closure declaration with no methods
+@test JuliaLowering.include_string(test_mod, """
+begin
+    local no_method_f
+    function no_method_f
+    end
+    no_method_f
+end
+""") isa Function
+
+# Closure with keyword arguments
+@test JuliaLowering.include_string(test_mod, """
+let y = 10
+    function f_kw_closure(; x=1)
+        x + y
+    end
+    (f_kw_closure(), f_kw_closure(x=5))
+end
+""") == (11, 15)
+
+# Anonymous function syntax with `function`
+@test JuliaLowering.include_string(test_mod, """
+begin
+    local y = 2
+    call_it(function (x) x + y end, 3)
+end
+""") == 5
+
+# Closure where static parameter is captured
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_static_param_capture(::T) where T
+        function g()
+            T
+        end
+        g()
+    end
+    f_static_param_capture(1)
+end
+""") == Int
+
+# Closure with static parameter that may be undefined
+JuliaLowering.include_string(test_mod, """
+function f_undef_static_param(x::Union{T,Nothing}) where T
+    function inner()
+        return T
+    end
+    inner
+end
+""")
+@test_throws UndefVarError test_mod.f_undef_static_param(nothing)()
+@test test_mod.f_undef_static_param(42)() == Int
+
 end

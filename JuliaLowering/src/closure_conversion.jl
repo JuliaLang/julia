@@ -302,9 +302,10 @@ function type_for_closure(ctx::ClosureConversionCtx, srcref, name_str, field_sym
 end
 
 function is_boxed(binfo::BindingInfo)
+    # Static parameters can't be reassigned, so they never need boxing
+    binfo.kind === :static_parameter && return false
     # No box needed for:
     # * :argument when it's not reassigned
-    # * :static_parameter (these can't be reassigned)
     defined_but_not_assigned = binfo.is_always_defined && !binfo.is_assigned
     # * Single-assigned variables (local or argument) assigned before any closure captures them
     #   (identified by liveness analysis in optimize_captured_vars!)
