@@ -105,7 +105,7 @@ _dash(width, align) =
 
 function plain(io::IO, md::Table)
     cells = mapmap(md.rows) do each
-        replace(plaininline(each), "|" => "\\|")
+        replace(sprint(plaininline, each), "|" => "\\|")
     end
     padcells!(cells, md.align, len = length, min = 3)
     for i = axes(cells,1)

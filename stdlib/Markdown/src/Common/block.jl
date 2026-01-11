@@ -133,6 +133,8 @@ function fencedcode(stream::IO, block::MD)
         # inline code block
         ch in flavor && return false
 
+        flavor = replace_escapes_and_entities(flavor)
+
         buffer = IOBuffer()
         while !eof(stream)
             line_start = position(stream)
