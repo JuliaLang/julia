@@ -460,10 +460,25 @@ round(::Type{Signed},   x::IEEEFloat, r::RoundingMode) = round(Int, x, r)
 round(::Type{Unsigned}, x::IEEEFloat, r::RoundingMode) = round(UInt, x, r)
 round(::Type{Integer},  x::IEEEFloat, r::RoundingMode) = round(Int, x, r)
 
-round(x::IEEEFloat, ::RoundingMode{:ToZero})  = trunc_llvm(x)
-round(x::IEEEFloat, ::RoundingMode{:Down})    = floor_llvm(x)
-round(x::IEEEFloat, ::RoundingMode{:Up})      = ceil_llvm(x)
-round(x::IEEEFloat, ::RoundingMode{:Nearest}) = rint_llvm(x)
+# Helper for round methods with keyword arguments
+function _round_kwargs(x, r::RoundingMode, digits, sigdigits, base)
+    if sigdigits !== nothing
+        digits !== nothing && throw(ArgumentError("`round` cannot use both `digits` and `sigdigits` arguments."))
+        isfinite(x) || return float(x)
+        return _round_sigdigits(x, r, sigdigits, base === nothing ? 10 : base)
+    else
+        isfinite(x) || return float(x)
+        return _round_digits(x, r, digits, base === nothing ? 10 : base)
+    end
+end
+
+for (R, f) in ((:ToZero, :trunc_llvm), (:Down, :floor_llvm), (:Up, :ceil_llvm), (:Nearest, :rint_llvm))
+    @eval function round(x::IEEEFloat, r::RoundingMode{$(QuoteNode(R))};
+                         digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base::Union{Nothing,Integer}=nothing)
+        digits === nothing && sigdigits === nothing && return $f(x)
+        _round_kwargs(x, r, digits, sigdigits, base)
+    end
+end
 
 rounds_up(x, ::RoundingMode{:Down}) = false
 rounds_up(x, ::RoundingMode{:Up}) = true

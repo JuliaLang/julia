@@ -2537,6 +2537,12 @@ function detect_ambiguities(mods::Module...;
     end
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
+            # Skip keyword sorter/stub methods, which live on `Core.kwcall` but
+            # keep the original function name in `Method.name`.
+            sig = Base.unwrap_unionall(m.sig)
+            if sig isa DataType && sig.parameters[1] === typeof(Core.kwcall)
+                continue
+            end
             is_in_mods(parentmodule(m), recursive, mods) || continue
             world = Base.get_world_counter()
             ambig = Ref{Int32}(0)
@@ -2586,6 +2592,12 @@ function detect_unbound_args(mods...;
     mods = collect(mods)::Vector{Module}
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
+            # Skip keyword sorter/stub methods, which live on `Core.kwcall` but
+            # keep the original function name in `Method.name`.
+            sig = Base.unwrap_unionall(m.sig)
+            if sig isa DataType && sig.parameters[1] === typeof(Core.kwcall)
+                continue
+            end
             is_in_mods(parentmodule(m), recursive, mods) || continue
             has_unbound_vars(m.sig) || continue
             tuple_sig = Base.unwrap_unionall(m.sig)::DataType

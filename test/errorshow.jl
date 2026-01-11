@@ -10,6 +10,7 @@ Base.Experimental.register_error_hint(Base.noncallable_number_hint_handler, Meth
 Base.Experimental.register_error_hint(Base.string_concatenation_hint_handler, MethodError)
 Base.Experimental.register_error_hint(Base.methods_on_iterable, MethodError)
 Base.Experimental.register_error_hint(Base.nonsetable_type_hint_handler, MethodError)
+Base.Experimental.register_error_hint(Base.kwcall_stub_hint_handler, MethodError)
 Base.Experimental.register_error_hint(Base.fielderror_listfields_hint_handler, FieldError)
 Base.Experimental.register_error_hint(Base.fielderror_dict_hint_handler, FieldError)
 @testset "SystemError" begin
@@ -198,7 +199,9 @@ let no_kwsorter_match, e
     no_kwsorter_match() = 0
     no_kwsorter_match(a;y=1) = y
     e = try no_kwsorter_match(y=1) catch ex; ex; end
-    @test occursin(Regex("no method matching.+\\(; y::$(Int)\\)"), sprint(showerror, e))
+    ex_str = sprint(showerror, e)
+    @test occursin("no_kwsorter_match", ex_str)
+    @test occursin("got unsupported keyword argument \"y\"", ex_str)
 end
 
 ac15639line = @__LINE__
@@ -689,6 +692,14 @@ end
     str = sprint(Base.showerror, MethodError(Core.kwcall, ((; a=3.0), +, 1.0, 2.0), Base.get_world_counter()))
     @test startswith(str, "MethodError: no method matching +(::Float64, ::Float64; a::Float64)")
     @test occursin("This method does not support all of the given keyword arguments", str)
+
+    # Ensure the kwcall-stub keyword error emits a targeted hint.
+    function kwstub_hint_test end
+    kwstub_hint_test(x::Integer; y=1) = 2
+    kwstub_hint_test(x::Int) = 1
+    str = @except_str kwstub_hint_test(1; y=1) MethodError
+    @test occursin("This method does not support all of the given keyword arguments", str)
+    @test occursin("Keyword arguments do not participate in method dispatch", str)
 
     @test_throws "MethodError: no method matching kwcall()" Core.kwcall()
 end
