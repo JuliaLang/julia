@@ -3956,6 +3956,10 @@ static void _generate_from_hint(jl_method_instance_t *mi, size_t world)
         if (jl_atomic_load_relaxed(&((jl_code_instance_t*)codeinst)->invoke) == jl_fptr_const_return)
             return; // probably not a good idea to generate code
         jl_atomic_store_relaxed(&((jl_code_instance_t*)codeinst)->precompile, 1);
+        // Ensure precompile() directives capture methods for pkgimages
+        // Even if the CodeInstance already existed, we need to add it to newly_inferred
+        // when tagging is enabled so it gets included in the package image
+        jl_push_newly_inferred(codeinst);
     }
 }
 
