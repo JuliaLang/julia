@@ -297,11 +297,11 @@ exp10_fast(x::Union{Float32,Float64}) = Base.Math.exp10_fast(x)
 
 # builtins
 
-@inline function pow_fast(x::T, y::Integer) where T <: IEEEFloat
+@inline function pow_fast(x::T, y::Integer) where T <: Base.IEEEFloat
     z = y % Int32
     z == y ? pow_fast(x, z) : x^y
 end
-pow_fast(x::T, y::Int32) where T <: IEEEFloat = ccall("llvm.powi", llvmcall, T, (T, Int32), x, y)
+pow_fast(x::T, y::Int32) where T <: Base.IEEEFloat = ccall("llvm.powi", llvmcall, T, (T, Int32), x, y)
 pow_fast(x::FloatTypes, ::Val{p}) where {p} = pow_fast(x, p) # inlines already via llvm.powi
 @inline pow_fast(x, v::Val) = Base.literal_pow(^, x, v)
 
