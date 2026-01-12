@@ -29,6 +29,36 @@ import Logging: Debug, Info, Warn, with_logger
     @test 'a' .. 'a'
     @test !('a' .. 'b')
 end
+
+
+module ClosureBoxTest
+    function boxed()
+        x = 1
+        inner() = (x += 1)
+        inner()
+    end
+
+    module Sub
+        function boxed_sub()
+            x = 0
+            inner() = (x += 1)
+            inner()
+        end
+    end
+end
+
+@testset "detect_closure_boxes" begin
+    boxes = Test.detect_closure_boxes(ClosureBoxTest)
+    @test any(entry -> entry[1].name === :boxed, boxes)
+    @test any(entry -> entry[1].name === :boxed_sub, boxes)
+
+    sub_boxes = Test.detect_closure_boxes(ClosureBoxTest.Sub)
+    @test any(entry -> entry[1].name === :boxed_sub, sub_boxes)
+    @test all(entry -> parentmodule(entry[1]) === ClosureBoxTest.Sub, sub_boxes)
+
+    @test isempty(Test.detect_closure_boxes())
+end
+
 @testset "@test with skip/broken kwargs" begin
     # Make sure the local variables can be used in conditions
     a = 1
