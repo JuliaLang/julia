@@ -472,4 +472,20 @@ end
 @test_throws UndefVarError test_mod.f_undef_static_param(nothing)()
 @test test_mod.f_undef_static_param(42)() == Int
 
+# https://github.com/JuliaLang/JuliaLowering.jl/issues/134#issuecomment-3739626003
+JuliaLowering.include_string(test_mod, """
+function f_update_outer_capture()
+    local response # declare outside closure
+    f = ()->begin
+        response = 1
+    end
+    f()
+    return (f, response)
+end
+""")
+let (f, response) = test_mod.f_update_outer_capture()
+    @test f.response isa Core.Box
+    @test response == 1
+end
+
 end
