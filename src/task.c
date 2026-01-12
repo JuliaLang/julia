@@ -1130,7 +1130,9 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     t->donenotify = completion_future;
     jl_atomic_store_relaxed(&t->_isexception, 0);
     // Inherit scope from parent task
-    t->scope = ct->scope;
+    jl_value_t *scope = ct->scope;
+    t->scope = scope;
+    jl_gc_wb(t, scope);
     // Fork task-local random state from parent
     jl_rng_split(t->rngState, ct->rngState);
     // there is no active exception handler available on this stack yet
