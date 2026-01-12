@@ -1367,6 +1367,90 @@ end
 34  (return %₃₃)
 
 ########################################
+# Keyword slurping with defaults depending on keyword names
+# This tests the case where use_ssa_kw_temps=false because a keyword default
+# depends on another keyword name. The slurp argument should not be included
+# in kw_val_vars to avoid creating an unwanted global binding.
+function f_kw_slurp_dep(; a=1, b=a, kws...)
+    (a, b, kws)
+end
+#---------------------
+1   (method TestMod.f_kw_slurp_dep)
+2   latestworld
+3   (method TestMod.#f_kw_slurp_dep#0)
+4   latestworld
+5   TestMod.#f_kw_slurp_dep#0
+6   (call core.Typeof %₅)
+7   (call top.pairs core.NamedTuple)
+8   TestMod.f_kw_slurp_dep
+9   (call core.Typeof %₈)
+10  (call core.svec %₆ core.Any core.Any %₇ %₉)
+11  (call core.svec)
+12  SourceLocation::1:10
+13  (call core.svec %₁₀ %₁₁ %₁₂)
+14  --- method core.nothing %₁₃
+    slots: [slot₁/#self#(!read) slot₂/a slot₃/b slot₄/kws slot₅/#self#]
+    1   (meta :nkw 3)
+    2   (call core.tuple slot₂/a slot₃/b slot₄/kws)
+    3   (return %₂)
+15  latestworld
+16  (call core.typeof core.kwcall)
+17  TestMod.f_kw_slurp_dep
+18  (call core.Typeof %₁₇)
+19  (call core.svec %₁₆ core.NamedTuple %₁₈)
+20  (call core.svec)
+21  SourceLocation::1:10
+22  (call core.svec %₁₉ %₂₀ %₂₁)
+23  --- method core.nothing %₂₂
+    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/kwtmp slot₅/a(single_assign) slot₆/b(single_assign)]
+    1   (call core.isdefined slot₂/kws :a)
+    2   (gotoifnot %₁ label₆)
+    3   (call core.getfield slot₂/kws :a)
+    4   (= slot₄/kwtmp %₃)
+    5   (goto label₇)
+    6   (= slot₄/kwtmp 1)
+    7   slot₄/kwtmp
+    8   (= slot₅/a %₇)
+    9   (call core.isdefined slot₂/kws :b)
+    10  (gotoifnot %₉ label₁₄)
+    11  (call core.getfield slot₂/kws :b)
+    12  (= slot₄/kwtmp %₁₁)
+    13  (goto label₁₆)
+    14  slot₅/a
+    15  (= slot₄/kwtmp %₁₄)
+    16  slot₄/kwtmp
+    17  (= slot₆/b %₁₆)
+    18  (call core.tuple :a :b)
+    19  (call core.apply_type core.NamedTuple %₁₈)
+    20  (call top.structdiff slot₂/kws %₁₉)
+    21  (call top.pairs %₂₀)
+    22  TestMod.#f_kw_slurp_dep#0
+    23  (call %₂₂ slot₅/a slot₆/b %₂₁ slot₃/#self#)
+    24  (return %₂₃)
+24  latestworld
+25  TestMod.f_kw_slurp_dep
+26  (call core.Typeof %₂₅)
+27  (call core.svec %₂₆)
+28  (call core.svec)
+29  SourceLocation::1:10
+30  (call core.svec %₂₇ %₂₈ %₂₉)
+31  --- method core.nothing %₃₀
+    slots: [slot₁/#self# slot₂/a(single_assign) slot₃/b(single_assign) slot₄/kws(single_assign)]
+    1   1
+    2   (= slot₂/a %₁)
+    3   slot₂/a
+    4   (= slot₃/b %₃)
+    5   (call core.NamedTuple)
+    6   (call top.pairs %₅)
+    7   (= slot₄/kws %₆)
+    8   TestMod.#f_kw_slurp_dep#0
+    9   (call %₈ slot₂/a slot₃/b slot₄/kws slot₁/#self#)
+    10  (return %₉)
+32  latestworld
+33  TestMod.f_kw_slurp_dep
+34  (return %₃₃)
+
+########################################
 # Static parameters used in keywords, with and without the static parameter
 # being present in positional argument types.
 #
