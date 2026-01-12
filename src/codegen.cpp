@@ -9733,7 +9733,7 @@ static jl_llvm_functions_t
                 Value *scope_ptr = get_scope_field(ctx);
                 LoadInst *current_scope = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, scope_ptr, ctx.types().alignof_ptr);
                 StoreInst *scope_store = ctx.builder.CreateAlignedStore(scope_boxed, scope_ptr, ctx.types().alignof_ptr);
-                emit_write_barrier(ctx, get_current_task(ctx), scope_boxed);
+                // NOTE: wb not needed here, due to store to current_task (always young)
                 jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe).decorateInst(current_scope);
                 jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe).decorateInst(scope_store);
                 // GC preserve the current_scope, since it is not rooted in the `jl_handler_t *`

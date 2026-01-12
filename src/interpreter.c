@@ -545,8 +545,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 // replaced later
                 JL_GC_PUSH1(&old_scope);
                 jl_value_t *scope = eval_value(jl_enternode_scope(stmt), s);
-                ct->scope = scope;
-                jl_gc_wb(ct, scope);
+                ct->scope = scope; // NOTE: wb not needed here, due to store to current_task (always young)
                 if (!jl_setjmp(__eh.eh_ctx, 0)) {
                     ct->eh = &__eh;
                     eval_body(stmts, s, next_ip, toplevel);
