@@ -2858,7 +2858,7 @@ function __require_prelocked(pkg::PkgId, env)
     path = spec.path
     set_pkgorigin_version_path(pkg, path)
 
-    parallel_precompile_attempted = false # being safe to avoid getting stuck in a precompilepkgs loop
+    parallel_precompile_attempted = Ref(false) # being safe to avoid getting stuck in a precompilepkgs loop
     reasons = Dict{String,Int}()
     # attempt to load the module file via the precompile cache locations
     if JLOptions().use_compiled_modules != 0
@@ -2889,7 +2889,7 @@ function __require_prelocked(pkg::PkgId, env)
     if JLOptions().use_compiled_modules == 1
         if !generating_output(#=incremental=#false)
             # spawn off a new incremental pre-compile task for recursive `require` calls
-            loaded = let spec = spec, reasons = reasons
+            loaded = let spec = spec, reasons = reasons, parallel_precompile_attempted = parallel_precompile_attempted
                 maybe_cachefile_lock(pkg, spec.path) do
                     # double-check the search now that we have lock
                     m = _require_search_from_serialized(pkg, spec, UInt128(0), true)
@@ -2900,8 +2900,8 @@ function __require_prelocked(pkg::PkgId, env)
 
                     unlock(require_lock)
                     try
-                        if !generating_output() && !parallel_precompile_attempted && !disable_parallel_precompile && @isdefined(Precompilation)
-                            parallel_precompile_attempted = true
+                        if !generating_output() && !parallel_precompile_attempted[] && !disable_parallel_precompile && @isdefined(Precompilation)
+                            parallel_precompile_attempted[] = true
                             precompiled = Precompilation.precompilepkgs([pkg]; _from_loading=true, ignore_loaded=false)
                             # prcompiled returns either nothing, indicating it needs serial precompile,
                             # or the entry(ies) that it found would be best to load (possibly because it just created it)
@@ -3526,9 +3526,10 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             ocachefile = cache_objects ? ocachefile_from_cachefile(cachefile) : nothing
 
             # append checksum for so to the end of the .ji file:
-            crc_so = UInt32(0)
-            if cache_objects
-                crc_so = open(_crc32c, tmppath_so, "r")
+            crc_so = if cache_objects
+                open(_crc32c, tmppath_so, "r")
+            else
+                UInt32(0)
             end
 
             # append extra crc to the end of the .ji file:

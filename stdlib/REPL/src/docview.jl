@@ -397,7 +397,7 @@ function find_readme(m::Module)::Union{String, Nothing}
     while true
         for entry in _readdirx(path; sort=true)
             isfile(entry) && (lowercase(entry.name) in ["readme.md", "readme"]) || continue
-            return entry.path
+            return joinpath(entry)
         end
         path == top_path && break # go no further than pkgdir
         path = dirname(path) # work up through nested modules

@@ -119,7 +119,7 @@ corresponding [`MD`](@ref) object.
 the manual section on [documentation](@ref man-documentation) for more information.
 
 # Examples
-```
+```jldoctest
 julia> s = doc"f(x) = 2*x"
   f(x) = 2*x
 
@@ -148,6 +148,7 @@ if Base.generating_output()
     **bold text**
     *italicized text*
     ***bold and italicized text***
+    ~~strikethrough effect~~
     > blockquote
     1. First item
     2. Second item

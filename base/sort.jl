@@ -1894,7 +1894,7 @@ julia> partialsortperm!(ix, v, 2:3)
  4
  3
 ```
- """
+"""
 function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
                           k::Union{Integer, OrdinalRange};
                           lt::Function=isless,

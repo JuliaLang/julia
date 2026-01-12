@@ -71,6 +71,7 @@ struct LinearIRContext{Attrs} <: AbstractLoweringContext
     next_label_id::Ref{Int}
     is_toplevel_thunk::Bool
     lambda_bindings::LambdaBindings
+    argmap::Dict{IdTag, IdTag}
     return_type::Union{Nothing, SyntaxTree{Attrs}}
     break_targets::Dict{String, JumpTarget{Attrs}}
     handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
@@ -87,7 +88,7 @@ function LinearIRContext(ctx, is_toplevel_thunk, lambda_bindings, return_type)
     rett = isnothing(return_type) ? nothing : reparent(graph, return_type)
     Attrs = typeof(graph.attributes)
     LinearIRContext(graph, SyntaxList(ctx), ctx.bindings, Ref(0),
-                    is_toplevel_thunk, lambda_bindings, rett,
+                    is_toplevel_thunk, lambda_bindings, Dict{IdTag,IdTag}(), rett,
                     Dict{String,JumpTarget{Attrs}}(), SyntaxList(ctx), SyntaxList(ctx),
                     Vector{FinallyHandler{Attrs}}(), Dict{String,JumpTarget{Attrs}}(),
                     Vector{JumpOrigin{Attrs}}(), Dict{Symbol, Any}(), ctx.mod)
@@ -102,7 +103,10 @@ function is_valid_body_ir_argument(ctx, ex)
         true
     elseif kind(ex) == K"BindingId"
         binfo = get_binding(ctx, ex)
-        binfo.kind == :argument && binfo.is_always_defined
+        # arguments are inherently always-defined, but the closure
+        # box analysis overrides this flag to mean "valid to leave
+        # unboxed" so we check for them specifically here
+        binfo.kind == :argument || binfo.is_always_defined
     else
         false
     end
@@ -576,13 +580,20 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     if k == K"BindingId" || is_literal(k) || k == K"quote" || k == K"inert" ||
             k == K"top" || k == K"core" || k == K"Value" || k == K"Symbol" ||
             k == K"SourceLocation" || k == K"static_eval"
+        ex1 = ex
+        if kind(ex1) == K"BindingId"
+            binfo = get_binding(ctx, ex1)
+            if haskey(ctx.argmap, binfo.id)
+                ex1 = setattr!(newleaf(ctx, ex1, K"BindingId"), :var_id, ctx.argmap[binfo.id])
+            end
+        end
         if in_tail_pos
-            emit_return(ctx, ex)
+            emit_return(ctx, ex1)
         elseif needs_value
-            ex
+            ex1
         else
-            if k == K"BindingId" && !is_ssa(ctx, ex)
-                emit(ctx, ex) # keep identifiers for undefined-var checking
+            if k == K"BindingId" && !is_ssa(ctx, ex1)
+                emit(ctx, ex1) # keep identifiers for undefined-var checking
             end
             nothing
         end
@@ -623,7 +634,12 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
                                    mod::K"Value" name::K"Symbol"])
         else
             rhs = compile(ctx, ex[2], true, false)
-            # TODO look up arg-map for renaming if lhs was reassigned
+            if kind(lhs) == K"BindingId"
+                binfo = get_binding(ctx, lhs)
+                if haskey(ctx.argmap, binfo.id)
+                    lhs = setattr!(newleaf(ctx, lhs, K"BindingId"), :var_id, ctx.argmap[binfo.id])
+                end
+            end
             if needs_value && !isnothing(rhs)
                 r = emit_assign_tmp(ctx, rhs)
                 emit_simple_assignment(ctx, ex, lhs, r, k)
@@ -918,7 +934,7 @@ function unnecessary_newvar_ids(ctx, stmts)
 end
 
 # flisp: compile-body
-function compile_body(ctx, ex)
+function compile_body(ctx::LinearIRContext, ex)
     compile(ctx, ex, true, true)
 
     # Fix up any symbolic gotos. (We can't do this earlier because the goto
@@ -1057,10 +1073,24 @@ function compile_lambda(outer_ctx, ex)
     lambda_args = ex[1]
     static_parameters = ex[2]
     ret_var = numchildren(ex) == 4 ? ex[4] : nothing
-    # TODO: Add assignments for reassigned arguments to body
     lambda_bindings = ex.lambda_bindings
     ctx = LinearIRContext(outer_ctx, ex.is_toplevel_thunk, lambda_bindings, ret_var)
+    for arg in children(lambda_args)
+        kind(arg) == K"Placeholder" && continue
+        @assert kind(arg) == K"BindingId"
+        id = arg.var_id
+        binfo = get_binding(ctx, id)
+        if binfo.is_assigned
+            @assert !haskey(ctx.argmap, binfo.id)
+            ctx.argmap[binfo.id] = new_local_binding(ctx, binding_ex(ctx, binfo), binfo.name).var_id
+        end
+    end
     compile_body(ctx, ex[3])
+    for (id, remapped) in pairs(ctx.argmap)
+        binding = binding_ex(ctx, id)
+        local_slot = binding_ex(ctx, remapped)
+        pushfirst!(ctx.code, @ast ctx binding [K"=" local_slot binding])
+    end
     slots = Vector{Slot}()
     slot_rewrites = Dict{IdTag,Int}()
     for arg in children(lambda_args)
@@ -1128,7 +1158,8 @@ loops, etc) to gotos and exception handling to enter/leave. We also convert
     # required to call reparent() ...
     Attrs = typeof(graph.attributes)
     _ctx = LinearIRContext(graph, SyntaxList(graph), ctx.bindings,
-                           Ref(0), false, LambdaBindings(), nothing,
+                           Ref(0), false, LambdaBindings(),
+                           Dict{IdTag,IdTag}(), nothing,
                            Dict{String,JumpTarget{Attrs}}(),
                            SyntaxList(graph), SyntaxList(graph),
                            Vector{FinallyHandler{Attrs}}(),
