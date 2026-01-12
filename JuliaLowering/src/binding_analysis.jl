@@ -66,14 +66,12 @@ function _analyze_lambda_vars!(ctx, ex)
     lambda_bindings = ex.lambda_bindings
 
     # Collect candidate variables: captured and single-assigned
-    # We check binfo.is_captured instead of lbinfo (is_capt) because for variables
-    # defined in this lambda and captured by inner lambdas, lbinfo may be false
-    # but binfo.is_captured will be true.
     candidates = Set{IdTag}()
-    for (id, _) in lambda_bindings.locals_capt
+    for (id, from_outer_lambda) in lambda_bindings.locals_capt
         binfo = get_binding(ctx, id)
-        if (binfo.is_captured && binfo.is_assigned_once &&
-            (binfo.kind == :local || binfo.kind == :argument))
+        maybe_boxed = binfo.is_captured && binfo.kind in (:local, :argument)
+        safe_to_analyze = binfo.is_assigned_once
+        if !from_outer_lambda && maybe_boxed && safe_to_analyze
             push!(candidates, id)
             # For arguments, reset is_always_defined so we can determine if the
             # outer-scope assignment dominates the capture. Arguments start with
