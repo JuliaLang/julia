@@ -9736,9 +9736,8 @@ static jl_llvm_functions_t
                 // NOTE: wb not needed here, due to store to current_task (always young)
                 jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe).decorateInst(current_scope);
                 jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe).decorateInst(scope_store);
-                // GC preserve the current_scope, since it is not rooted in the `jl_handler_t *`
-                // and may be removed from jl_current_task by any nested block and then
-                // replaced later
+                // GC preserve the current_scope, since it is not rooted in the `jl_handler_t *`,
+                // the newly entered scope is preserved through the current_task.
                 Value *scope_token = ctx.builder.CreateCall(prepare_call(gc_preserve_begin_func), {current_scope});
                 ctx.scope_restore[cursor] = std::make_pair(scope_token, current_scope);
             }
