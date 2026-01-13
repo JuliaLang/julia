@@ -26,7 +26,7 @@ export @test, @test_throws, @test_broken, @test_skip,
 
 export @testset
 export @inferred
-export detect_ambiguities, detect_unbound_args, detect_closure_boxes
+export detect_ambiguities, detect_unbound_args, detect_closure_boxes, detect_closure_boxes_all_modules
 export GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
 export TestSetException
 export TestLogger, LogRecord
@@ -2560,15 +2560,18 @@ end
 """
     detect_closure_boxes(mod1, mod2...)
 
-Return a vector of `(Method, varname)` pairs for methods defined in the specified
-modules (or their submodules) that allocate `Core.Box` in their lowered code.
-The returned `varname` is a `Symbol`, or `:unknown` when a slot name cannot be resolved.
+Return a sorted `Vector{Pair{Method, Vector{Symbol}}}` of methods defined in the
+specified modules (or their submodules) that allocate `Core.Box` in their lowered
+code, paired with the boxed variable names. Variable names are `:unknown` when a
+slot name cannot be resolved.
+
+See also [`detect_closure_boxes_all_modules`](@ref) to check all loaded modules.
 """
 function detect_closure_boxes(mods::Module...)
     @nospecialize
-    boxes = Tuple{Method,Symbol}[]
+    boxes = Dict{Method, Vector{Symbol}}()
     mods = Module[mods...]
-    isempty(mods) && return boxes
+    isempty(mods) && return Pair{Method, Vector{Symbol}}[]
 
     function is_box_call(@nospecialize expr)
         if !(expr isa Expr)
@@ -2607,10 +2610,10 @@ function detect_closure_boxes(mods::Module...)
                 lhs = stmt.args[1]
                 rhs = stmt.args[2]
                 if is_box_call(rhs)
-                    push!(boxes, (m, slot_name(ci, lhs)))
+                    push!(get!(Vector{Symbol}, boxes, m), slot_name(ci, lhs))
                 end
             elseif is_box_call(stmt)
-                    push!(boxes, (m, :unknown))
+                push!(get!(Vector{Symbol}, boxes, m), :unknown)
             end
         end
     end
@@ -2619,12 +2622,20 @@ function detect_closure_boxes(mods::Module...)
         scan_method!(m)
     end
 
-    sort!(boxes, by = entry -> begin
-        m, var = entry
-        (m.file, m.line, var, m.name, m.sig)
-    end)
-    return boxes
+    result = collect(boxes)
+    sort!(result, by = entry -> (entry.first.file, entry.first.line, entry.first.name))
+    return result
 end
+
+"""
+    ()
+
+Return a sorted `Vector{Pair{Method, Vector{Symbol}}}` of all methods in currently
+loaded modules that allocate `Core.Box` in their lowered code.
+
+See also [`detect_closure_boxes`](@ref) to check specific modules.
+"""
+detect_closure_boxes_all_modules() = detect_closure_boxes(Base.loaded_modules_array()...)
 
 """
     detect_unbound_args(mod1, mod2...; recursive=false, allowed_undefineds=nothing)

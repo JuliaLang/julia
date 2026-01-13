@@ -49,14 +49,18 @@ end
 
 @testset "detect_closure_boxes" begin
     boxes = Test.detect_closure_boxes(ClosureBoxTest)
-    @test any(entry -> entry[1].name === :boxed, boxes)
-    @test any(entry -> entry[1].name === :boxed_sub, boxes)
+    @test any(p -> p.first.name === :boxed, boxes)
+    @test any(p -> p.first.name === :boxed_sub, boxes)
 
     sub_boxes = Test.detect_closure_boxes(ClosureBoxTest.Sub)
-    @test any(entry -> entry[1].name === :boxed_sub, sub_boxes)
-    @test all(entry -> parentmodule(entry[1]) === ClosureBoxTest.Sub, sub_boxes)
+    @test any(p -> p.first.name === :boxed_sub, sub_boxes)
+    @test all(p -> parentmodule(p.first) === ClosureBoxTest.Sub, sub_boxes)
 
     @test isempty(Test.detect_closure_boxes())
+
+    # _all version checks all loaded modules
+    all_boxes = Test.detect_closure_boxes_all_modules()
+    @test any(p -> p.first.name === :boxed, all_boxes)
 end
 
 @testset "@test with skip/broken kwargs" begin
