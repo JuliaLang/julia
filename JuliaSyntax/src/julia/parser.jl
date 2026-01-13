@@ -3310,7 +3310,7 @@ function parse_brackets(after_parse::F,
                     space_sensitive=false,
                     where_enabled=true,
                     whitespace_newline=true,
-                    macro_whitespace_newline=true)
+                    macro_whitespace_newline=closing_kind==K")")
     params_positions = acquire_positions(ps.stream)
     num_subexprs = 0
     num_semis = 0
