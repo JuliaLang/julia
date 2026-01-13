@@ -366,9 +366,12 @@ tests = [
         "A.@.x"        =>  "(macrocall (. A (macro_name .)) x)"
 
         # newline macro calls
-        "(@foo x\n y)" => "(parens (macrocall (macro_name foo) x y))"
-        "(1 + @foo x\n y)" => "(parens (call-i 1 + (macrocall (macro_name foo) x y)))"
+        "(@foo x\n y)"                             => "(parens (macrocall (macro_name foo) x y))"
+        "(1 + @foo x\n y)"                         => "(parens (call-i 1 + (macrocall (macro_name foo) x y)))"
         "(@foo function bar()\n @baz \n x \n end)" => "(parens (macrocall (macro_name foo) (function (call bar) (block (macrocall (macro_name baz)) x))))"
+        # Don't change parsing rules for [] and {} cases!
+        "[x, @foo y\n z]" => "(vect x (macrocall (macro_name foo) y) (error-t z))"
+        "{@foo x\n y}"    => "(bracescat (macrocall (macro_name foo) x) y)"
 
         # Macro names
         "@! x"  => "(macrocall (macro_name !) x)"
