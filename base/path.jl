@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+module Filesystem
 
 import Base: StringVector, utf8units
 
@@ -158,6 +159,10 @@ first component is always the empty string.
 """
 splitdrive(path::AbstractString)
 
+# Average buffer size including null terminator for several filesystem operations.
+# On Windows we use the MAX_PATH = 260 value on Win32.
+const AVG_PATH = Sys.iswindows() ? 260 : 512
+
 """
     homedir()::String
 
@@ -172,7 +177,7 @@ See also [`Sys.username`](@ref).
 """
 function homedir()
     buf = Base.StringVector(AVG_PATH - 1) # space for null-terminator implied by StringVector
-    sz = RefValue{Csize_t}(length(buf) + 1) # total buffer size including null
+    sz = Base.RefValue{Csize_t}(length(buf) + 1) # total buffer size including null
     while true
         rc = ccall(:uv_os_homedir, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
         if rc == 0
@@ -834,3 +839,5 @@ else
 end
 
 uripath(path::AbstractString) = uripath(String(path)::String)
+
+end # module

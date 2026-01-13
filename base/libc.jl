@@ -266,9 +266,29 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
         throw(ArgumentError("invalid arguments"))
     end
     @static if Sys.isapple()
+        function shouldcallmktime(s::String)
+            c = codeunits(s)
+            N = length(c)
+            i = findfirst(==(UInt8('%')), c)
+
+            while true
+                isnothing(i) && break
+                i >= N && break
+                # Ignore % following after another %
+                if !(i >= firstindex(c)+1 && c[i-1] == UInt8('%'))
+                    # Detect %a, %A, %j, %w, %Ow
+                    if c[i+1] in b"aAjw" || (i <= N-2 && c[i+1:i+2] == b"Ow")
+                        return false
+                    end
+                end
+
+                i = findnext(==(UInt8('%')), c ,i+1)
+            end
+            return true
+        end
         # if we didn't explicitly parse the weekday or year day, use mktime
         # to fill them in automatically.
-        if !occursin(r"([^%]|^)%(a|A|j|w|Ow)"a, fmt)
+        if shouldcallmktime(fmt)
             ccall(:mktime, Int, (Ref{TmStruct},), tm)
         end
     end
