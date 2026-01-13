@@ -2980,6 +2980,16 @@ end
     @test ncalls_in_lowered(quote a, _... = (b...,) end, GlobalRef(Base, :rest)) == 0
 end
 
+@testset "all-underscore static params in signatures" begin
+    # historically buggy.  hits a special case where desugaring (`replace-vars`)
+    # does scope resolution
+    err_str = "all-underscore identifiers are write-only and their values cannot be used in expressions"
+    @test_loweringerror(:(function f60626(x::_) where _; x; end), err_str)
+    @test_loweringerror(:(function f60626(x::Vector{Vector{_}}) where _<:Number; x; end), err_str)
+    @test_loweringerror(:(function f60626(x, y; z::_) where _; x; end), err_str)
+    @test_loweringerror(:(((x::_) where _) -> 1), err_str)
+end
+
 # issue #38501
 @test :"a $b $("str") c" == Expr(:string, "a ", :b, " ", Expr(:string, "str"), " c")
 
