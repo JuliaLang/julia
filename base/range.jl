@@ -1042,8 +1042,11 @@ function getindex(r::StepRange, s::AbstractRange{T}) where {T<:Integer}
         start = oftype(f, f + (fs - firstindex(r)) * st)
         st *= step(s)
         len = length(s)
-        # mimic steprange_last_empty here, to try to avoid overflow
-        stop = oftype(f, start + (len - oneunit(len)) * (iszero(len) ? copysign(oneunit(st), st) : st))
+        # Handle empty slice without copysign (fixes #57056 for types like TimePeriod)
+        if iszero(len)
+            return range(start, step=st, length=0)
+        end
+        stop = oftype(f, start + (len - oneunit(len)) * st)
         return range(start, stop; step=st)
     end
 end

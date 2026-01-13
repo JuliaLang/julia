@@ -611,4 +611,12 @@ end
     @test_throws OverflowError StepRange(dmin, Day(1), dmax)
 end
 
+# Issue #57056 - 0-length index into StepRange of TimePeriod
+@testset "empty indexing into StepRange of TimePeriod" begin
+    r = Dates.Hour(1):Dates.Hour(1):Dates.Hour(2)
+    @test r[1:0] == Dates.Hour[]
+    @test isempty(r[1:0])
+    @test r[2:1] == Dates.Hour[]  # another empty slice
+end
+
 end  # RangesTest module
