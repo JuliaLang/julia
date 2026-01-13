@@ -688,7 +688,7 @@ typedef struct _jl_weakref_t {
 // in the new world age) from any partition kind to any other.
 //
 // However, not all transitions are allowed syntactically. We have the following rules for SYNTACTIC invalidation:
-// 1. It is always syntactically permissable to replace a weaker binding by a stronger binding
+// 1. It is always syntactically permissible to replace a weaker binding by a stronger binding
 // 2. Implicit bindings can be syntactically changed to other implicit bindings by changing the `using` set.
 // 3. Finally, we syntactically permit replacing one PARTITION_KIND_CONST(_IMPORT) by another of a different value.
 //

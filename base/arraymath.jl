@@ -15,7 +15,7 @@ end
 
 function _broadcast_preserving_zero_d(f, A::Array, B::Array, Cs::Array...)
     # we already know that the shapes are compatible.
-    # We just need to select the size corresponding to the higest ndims
+    # We just need to select the size corresponding to the highest ndims
     # and reshape all the arrays to that size
     arrays = (A, B, Cs...)
     sz = mapreduce(size, (x,y) -> length(x) > length(y) ? x : y, arrays)
