@@ -2430,42 +2430,18 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v
         Align align(julia_alignment(v.typ));
         Type *ty = julia_type_to_llvm(ctx, v.typ);
         AllocaInst *loc = emit_static_alloca(ctx, ty, align);
-        if (CountTrackedPointers(ty).count > 0) {
-            auto tracked = TrackCompositeType(ty);
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
-            Instruction *last_inserted = ctx.topalloca;
-            for (const auto &indices : tracked) {
-                // Walk through indices one at a time to find the field type,
-                // matching how TrackCompositeType traverses the type
-                Type *field_ty = ty;
-                for (unsigned idx : indices) {
-                    field_ty = GetElementPtrInst::getTypeAtIndex(field_ty, idx);
-                    assert(field_ty && "field_ty is null");
-                }
-                if (field_ty && field_ty->isPointerTy() &&
-                    field_ty->getPointerAddressSpace() == AddressSpace::Tracked) {
-                    Value *field_ptr;
-                    if (indices.empty()) {
-                        // Type itself is a tracked pointer, store directly to loc
-                        field_ptr = loc;
-                    } else {
-                        SmallVector<Value*, 4> gep_indices;
-                        gep_indices.push_back(ConstantInt::get(Type::getInt32Ty(ctx.builder.getContext()), 0));
-                        for (unsigned idx : indices) {
-                            gep_indices.push_back(ConstantInt::get(Type::getInt32Ty(ctx.builder.getContext()), idx));
-                        }
-                        auto *gep = GetElementPtrInst::CreateInBounds(ty, loc, gep_indices);
-                        gep->insertAfter(last_inserted);
-                        setName(ctx.emission_context, gep, "tracked_field_addr");
-                        last_inserted = gep;
-                        field_ptr = gep;
-                    }
-                    auto *store = new StoreInst(Constant::getNullValue(field_ty), field_ptr, false, Align(sizeof(void*)));
-                    store->insertAfter(last_inserted);
-                    ai.decorateInst(store);
-                    last_inserted = store;
-                }
+        jl_datatype_t *dt = (jl_datatype_t *)v.typ;
+        size_t npointers = dt->layout->first_ptr >= 0 ? dt->layout->npointers : 0;
+        if (npointers > 0) {
+            auto InsertPoint = ctx.builder.saveIP();
+            ctx.builder.SetInsertPoint(ctx.topalloca->getParent(), ++ctx.topalloca->getIterator());
+            for (size_t i = 0; i < npointers; i++) {
+                // make sure these are nullptr early from LLVM's perspective, in case it decides to SROA it
+                Value *ptr_field = emit_ptrgep(ctx, loc, jl_ptr_offset(dt, i) * sizeof(void *));
+                ctx.builder.CreateAlignedStore(
+                    Constant::getNullValue(ctx.types().T_prjlvalue), ptr_field, Align(sizeof(void *)));
             }
+            ctx.builder.restoreIP(InsertPoint);
         }
         auto tbaa = v.V == nullptr ? ctx.tbaa().tbaa_gcframe : ctx.tbaa().tbaa_stack;
         auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
