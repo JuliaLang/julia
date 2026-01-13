@@ -867,7 +867,7 @@ See also: [`mktemp`](@ref), [`mkdir`](@ref).
 """
 function mktempdir(parent::AbstractString=tempdir();
     prefix::AbstractString=temp_prefix, cleanup::Bool=true)
-    if isempty(parent) || occursin(path_separator_re, parent[end:end])
+    if isempty(parent) || isseparator(last(parent))
         # append a path_separator only if parent didn't already have one
         tpath = "$(parent)$(prefix)XXXXXX"
     else

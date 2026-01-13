@@ -4,12 +4,14 @@
 
 module PCRE
 
+using ..Libc.Libdl
+
 import ..RefValue
 
 # include($BUILDROOT/base/pcre_h.jl)
 include(string(Base.BUILDROOT, "pcre_h.jl"))
 
-const PCRE_LIB = "libpcre2-8"
+const PCRE_LIB = LazyLibrary(BundledLazyLibraryPath("libpcre2-8"))
 
 function create_match_context()
     JIT_STACK_START_SIZE = 32768

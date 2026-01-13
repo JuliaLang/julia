@@ -2,8 +2,6 @@
 
 ## File Operations (Libuv-based) ##
 
-module Filesystem
-
 """
     JL_O_APPEND
     JL_O_ASYNC
@@ -149,14 +147,9 @@ if Sys.iswindows()
     import .Base: cwstring
 end
 
-# Average buffer size including null terminator for several filesystem operations.
-# On Windows we use the MAX_PATH = 260 value on Win32.
-const AVG_PATH = Sys.iswindows() ? 260 : 512
-
 # helper function to clean up libuv request
 uv_fs_req_cleanup(req) = ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
 
-include("path.jl")
 include("stat.jl")
 include("file.jl")
 include(string(Base.BUILDROOT, "file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)
@@ -446,5 +439,3 @@ function iswritable(path::String)
 end
 iswritable(path::AbstractString) = iswritable(String(path)::String)
 
-
-end
