@@ -486,7 +486,14 @@ Nothing() = nothing
 getptls() = ccall(:jl_get_ptls_states, Ptr{Cvoid}, ())
 
 include(m::Module, fname::String) = (@noinline; ccall(:jl_load_, Any, (Any, Any), m, fname))
-eval(m::Module, @nospecialize(e)) = (@noinline; ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e))
+
+# Use an `_eval` binding so we can swap out the Core.eval() to support packages
+# which assume Core.eval() is a public API. (TODO: Bootstrap without the flisp
+# compiler in future)
+_bootstrap_eval(m::Module, @nospecialize(e)) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
+# Builtin flisp compiler frontend for bootstrap. 
+_eval = _bootstrap_eval
+eval(m::Module, @nospecialize(e)) = (@noinline; _eval(m, e))
 
 struct EvalInto <: Function
     m::Module
@@ -1097,6 +1104,7 @@ _parse = nothing
 # JuliaLowering (TBD).
 _lower = nothing
 
+_seteval!(eval) = setglobal!(Core, :_eval, eval)
 _setparser!(parser) = setglobal!(Core, :_parse, parser)
 _setlowerer!(lowerer) = setglobal!(Core, :_lower, lowerer)
 
