@@ -179,6 +179,8 @@ public:
 private:
   template <typename callback>
   static bool isJuliaType(callback f, QualType QT) {
+    if (QT->isReferenceType())
+      return isJuliaType(f, QT->getPointeeType().getUnqualifiedType());
     if (QT->isPointerType() || QT->isArrayType())
       return isJuliaType(
           f, clang::QualType(QT->getPointeeOrArrayElementType(), 0));
@@ -390,12 +392,12 @@ PDP GCChecker::SafepointBugVisitor::VisitNode(const ExplodedNode *N,
     if (OldSafepointDisabled == (unsigned)-1) {
       if (Ann) {
         Pos = PathDiagnosticLocation{Ann->getLoc(), BRC.getSourceManager()};
-        return MakePDP(Pos, "Tracking JL_NOT_SAFEPOINT annotation here.");
+        return MakePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
       } else {
         PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
             N->getLocationContext(), BRC.getSourceManager());
         if (Pos.isValid())
-          return MakePDP(Pos, "Tracking JL_NOT_SAFEPOINT annotation here.");
+          return MakePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
         //N->getLocation().dump();
       }
     } else if (NewSafepointDisabled == (unsigned)-1) {
@@ -857,7 +859,9 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.ends_with_insensitive("jl_stenv_t") ||
                    Name.ends_with_insensitive("jl_varbinding_t") ||
                    Name.ends_with_insensitive("set_world") ||
-                   Name.ends_with_insensitive("jl_codectx_t")) {
+                   Name.ends_with_insensitive("jl_codectx_t") ||
+                   Name.ends_with_insensitive("jl_codegen_params_t") ||
+                   Name.ends_with_insensitive("egal_set")) {
                  return true;
                }
                return false;

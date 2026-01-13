@@ -602,6 +602,7 @@ static void prepare_compile(jl_code_instance_t *codeinst) JL_NOTSAFEPOINT_LEAVE 
             assert(waiting == std::get<1>(it->second));
             std::get<1>(it->second) = 0;
             auto &params = std::get<0>(it->second);
+            JL_GC_PROMISE_ROOTED(&params);
             params.tsctx_lock = params.tsctx.getLock();
             waiting = jl_analyze_workqueue(codeinst, params, true); // may safepoint
             assert(!waiting); (void)waiting;
@@ -633,6 +634,7 @@ static void complete_emit(jl_code_instance_t *edge) JL_NOTSAFEPOINT_LEAVE JL_NOT
         assert(it != incompletemodules.end());
         if (--std::get<1>(it->second) == 0) {
             auto &params = std::get<0>(it->second);
+            JL_GC_PROMISE_ROOTED(&params);
             params.tsctx_lock = params.tsctx.getLock();
             assert(callee == it->first);
             orc::ThreadSafeModule &M = emittedmodules[callee];
