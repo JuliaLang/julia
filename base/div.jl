@@ -377,13 +377,8 @@ function div(x::T, y::T, ::typeof(RoundUp)) where T<:Integer
     return d + (((x > 0) == (y > 0)) & (d * y != x))
 end
 
-# Real
-# NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
-# so it is used here as the basis of float div().
-div(x::T, y::T, r::RoundingMode) where {T<:AbstractFloat} = convert(T, round(x / y - rem(x, y, r) / y))
-
-# Vincent Lefèvre: "The Euclidean Division Implemented with a Floating-Point Division and a Floor"
-# https://inria.hal.science/inria-00070403
-# Theorem 1 implies that the following are exact if eps(x/y) <= 1
-div(x::Float32, y::Float32, r::RoundingMode) = Float32(round(Float64(x) / Float64(y), r))
-div(x::Float16, y::Float16, r::RoundingMode) = Float16(round(Float32(x) / Float32(y), r))
+# Floats
+# NB. If eps(x/y) > 1, x/y rounds to an unsafe integer which can't be floored
+# or ceiled if it needs to since x/y ± 1 is not representable.
+# @see https://github.com/JuliaLang/julia/issues/49450#issuecomment-3694946121
+div(x::T, y::T, r::RoundingMode) where {T<:AbstractFloat} = round(x / y - rem(x, y, r) / y)
