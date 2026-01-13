@@ -543,8 +543,8 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 // GC preserve the old_scope, since it is not rooted in the `jl_handler_t *`,
                 // the newly entered scope is preserved through the current_task.
                 JL_GC_PUSH1(&old_scope);
-                jl_value_t *scope = eval_value(jl_enternode_scope(stmt), s);
-                ct->scope = scope; // NOTE: wb not needed here, due to store to current_task (always young)
+                ct->scope = eval_value(jl_enternode_scope(stmt), s);
+                jl_gc_wb_current_task(ct, ct->scope);
                 if (!jl_setjmp(__eh.eh_ctx, 0)) {
                     ct->eh = &__eh;
                     eval_body(stmts, s, next_ip, toplevel);

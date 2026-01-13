@@ -285,6 +285,11 @@ STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 // can be used to annotate that a write barrier would be required were it not for this property
 // (as opposed to somebody just having forgotten to think about write barriers).
 STATIC_INLINE void jl_gc_wb_fresh(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
+// The current_task is guaranteed to be in the young generation until the next safepoint,
+// so write barriers can be omitted until the next allocation. This function is a no-op that
+// can be used to annotate that a write barrier would be required were it not for this property
+// (as opposed to somebody just having forgotten to think about write barriers).
+STATIC_INLINE void jl_gc_wb_current_task(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
 // Used to annotate that a write barrier would be required, but may be omitted because `ptr`
 // is known to be an old object.
 STATIC_INLINE void jl_gc_wb_knownold(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
