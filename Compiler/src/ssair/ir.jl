@@ -1892,20 +1892,28 @@ function iterate_compact(compact::IncrementalCompact)
     (; cfg_transforms_enabled, bb_rename_succ) = compact.cfg_transform
     if cfg_transforms_enabled && active_bb > 1 && active_bb <= length(bb_rename_succ) && bb_rename_succ[active_bb] <= -1
         # Dead block, so kill the entire block.
+        # Mark all statements in this block as deleted in ssa_rename
+        for i in first(bb.stmts):last(bb.stmts)
+            compact.ssa_rename[i] = nothing
+        end
         compact.idx = last(bb.stmts)
-        # Pop any remaining insertion nodes
+        # Pop any remaining insertion nodes and mark them as deleted
         while compact.new_nodes_idx <= length(compact.perm)
-            entry = compact.ir.new_nodes.info[compact.perm[compact.new_nodes_idx]]
+            new_idx = compact.perm[compact.new_nodes_idx]
+            entry = compact.ir.new_nodes.info[new_idx]
             if !(entry.attach_after ? entry.pos <= compact.idx - 1 : entry.pos <= compact.idx)
                 break
             end
+            compact.ssa_rename[new_idx + length(compact.ir.stmts)] = nothing
             compact.new_nodes_idx += 1
         end
         while !isempty(compact.pending_perm)
-            info = compact.pending_nodes.info[compact.pending_perm[1]];
+            pending_idx = compact.pending_perm[1]
+            info = compact.pending_nodes.info[pending_idx]
             if !(info.attach_after ? info.pos <= compact.idx - 1 : info.pos <= compact.idx)
                 break
             end
+            compact.ssa_rename[length(compact.ir.stmts) + length(compact.ir.new_nodes) + pending_idx] = nothing
             heappop!(compact.pending_perm, By(x::Int -> compact.pending_nodes.info[x].pos))
         end
         # Move to next block
