@@ -339,6 +339,19 @@ end
     libname = LazyLibraryPath(private_libdir, "libccalllazyfoo.$(Libdl.dlext)")
     lazy_name_lazy_lib = LazyLibrary(libname)
     @test dlpath(lazy_name_lazy_lib) == realpath(string(libname))
+
+    # Test parallel loading doesn't return C_NULL (issue #60378)
+    script = """
+    using Libdl
+    ll = LazyLibrary(ARGS[1])
+    handles = Vector{Ptr{Cvoid}}(undef, 10)
+    @sync for i in 1:10
+        Threads.@spawn handles[i] = dlopen(ll)
+    end
+    @assert all(h -> h != C_NULL, handles) "Some handles were C_NULL"
+    @assert all(h -> h == handles[1], handles) "Handles were not all equal"
+    """
+    @test success(run(`$(Base.julia_cmd()) -t4 -e $script $lclf_path`))
 end
 
 @testset "Docstrings" begin

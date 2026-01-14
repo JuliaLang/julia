@@ -2,18 +2,14 @@ import Libdl
 
 # known precompilation failures under JL
 const INCOMPATIBLE_STDLIBS = String[
-    "InteractiveUtils"
-    "LazyArtifacts"
-    "LibGit2"
-    "Pkg"
-    "REPL"
-    "REPLExt"
-    "SparseArrays"
-    "SparseArraysExt"
-    "Statistics"
-    "SuiteSparse"
-    "TOML"
-    "Test"
+    "LibGit2", # op isa Symbol (JuliaLang/JuliaLowering.jl#126)
+    "SparseArrays", # type-alias bug (JuliaLang/JuliaLowering.jl#123)
+    "TOML", # @invokelatest / QuoteNode bug
+    "Test", # nested + destructured args splat (JuliaLang/JuliaLowering.jl#133)
+    "REPL", # infinite softscope (in REPL code)
+    "Pkg", # depends on TOML
+    "SuiteSparse", # depends on SparseArrays
+    "LazyArtifacts", # depends on Pkg
 ]
 
 const JULIA_EXECUTABLE = Base.unsafe_string(Base.JLOptions().julia_bin)

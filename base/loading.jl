@@ -185,9 +185,10 @@ const slug_chars = String(['A':'Z'; 'a':'z'; '0':'9'])
 
 function slug(x::UInt32, p::Int)
     sprint(sizehint=p) do io
+        y = x
         n = UInt32(length(slug_chars))
         for i = 1:p
-            x, d = divrem(x, n)
+            y, d = divrem(y, n)
             write(io, slug_chars[1+d])
         end
     end
@@ -271,7 +272,16 @@ struct LoadingCache
     located::Dict{Tuple{PkgId, Union{String, Nothing}}, Union{Tuple{PkgLoadSpec, String}, Nothing}}
 end
 const LOADING_CACHE = Ref{Union{LoadingCache, Nothing}}(nothing) # n.b.: all access to and through this are protected by require_lock
-LoadingCache() = LoadingCache(load_path(), Dict(), Dict(), Dict(), Set(), Dict(), Dict(), Dict())
+LoadingCache() = LoadingCache(
+    load_path(),
+    Dict{String, UUID}(),
+    Dict{String, Union{Bool, String}}(),
+    Dict{String, Union{Nothing, String}}(),
+    Set{String}(),
+    Dict{Tuple{PkgId, String}, Union{Nothing, Tuple{PkgId, String}}}(),
+    Dict{String, Union{Nothing, Tuple{PkgId, String}}}(),
+    Dict{Tuple{PkgId, Union{String, Nothing}}, Union{Tuple{PkgLoadSpec, String}, Nothing}}()
+)
 
 
 struct TOMLCache{Dates}
@@ -343,25 +353,22 @@ Same as [`Base.identify_package`](@ref) except that the path to the environment 
 is also returned, except when the identity is not identified.
 """
 identify_package_env(where::Module, name::String) = identify_package_env(PkgId(where), name)
-function identify_package_env(where::Union{PkgId, Nothing}, name::String)
+function identify_package_env(where::PkgId, name::String)
     # Special cases
-    if where !== nothing
-        if where.name === name
-            # Project tries to load itself
-            return (where, nothing)
-        elseif where.uuid === nothing
-            # Project without Project.toml - treat as toplevel load
-            where = nothing
-        end
+    if where.name === name
+        # Project tries to load itself
+        return (where, nothing)
+    elseif where.uuid === nothing
+        # Project without Project.toml - treat as toplevel load
+        return identify_package_env(nothing, name)
     end
 
     # Check if we have a cached answer for this
     assert_havelock(require_lock)
     cache = LOADING_CACHE[]
-    cache_key = where === nothing ? name : (where, name)
+    cache_key = (where, name)
     if cache !== nothing
-        env_cache = where === nothing ? cache.identified : cache.identified_where
-        pkg_env = get(env_cache, cache_key, missing)
+        pkg_env = get(cache.identified_where, cache_key, missing)
         pkg_env === missing || return pkg_env
     end
 
@@ -372,14 +379,14 @@ function identify_package_env(where::Union{PkgId, Nothing}, name::String)
         pkgid = environment_deps_get(env, where, name)
         # If we didn't find `where` at all, keep looking through the environment stack
         pkgid === nothing && continue
-        if pkgid.uuid !== nothing || where === nothing
-            pkg_env = pkgid, env
+        if pkgid.uuid !== nothing
+            pkg_env = (pkgid, env)
         end
         # If we don't have pkgid.uuid, still break here - this is a sentinel that indicates
         # that we've found `where` but it did not have the required dependency. We terminate the search.
         break
     end
-    if pkg_env === nothing && where !== nothing && is_stdlib(where)
+    if pkg_env === nothing && is_stdlib(where)
         # if not found it could be that manifests are from a different julia version/commit
         # where stdlib dependencies have changed, so look up deps based on the stdlib Project.toml
         # as a fallback
@@ -388,7 +395,33 @@ function identify_package_env(where::Union{PkgId, Nothing}, name::String)
 
     # Cache the result
     if cache !== nothing
-        env_cache[cache_key] = pkg_env
+        cache.identified_where[cache_key] = pkg_env
+    end
+    return pkg_env
+end
+function identify_package_env(where::Nothing, name::String)
+    # Check if we have a cached answer for this
+    assert_havelock(require_lock)
+    cache = LOADING_CACHE[]
+    if cache !== nothing
+        pkg_env = get(cache.identified, name, missing)
+        pkg_env === missing || return pkg_env
+    end
+
+    # Main part: Search through all environments in the load path to see if we have
+    # a matching entry.
+    pkg_env = nothing
+    for env in load_path()
+        pkgid = environment_deps_get(env, nothing, name)
+        # If we didn't find `where` at all, keep looking through the environment stack
+        pkgid === nothing && continue
+        pkg_env = (pkgid, env)
+        break
+    end
+
+    # Cache the result
+    if cache !== nothing
+        cache.identified[name] = pkg_env
     end
     return pkg_env
 end
@@ -954,6 +987,33 @@ function workspace_manifest(project_file)
         return project_file_manifest_path(base)
     end
     return nothing
+end
+
+struct VersionedParse
+    ver::VersionNumber
+end
+
+function (vp::VersionedParse)(code, filename::String, lineno::Int, offset::Int, options::Symbol)
+    if !isdefined(Base, :JuliaSyntax)
+        if vp.ver === VERSION
+            return Core._parse
+        end
+        error("JuliaSyntax module is required for syntax version $(vp.ver), but it is not loaded.")
+    end
+    Base.JuliaSyntax.core_parser_hook(code, filename, lineno, offset, options; syntax_version=vp.ver)
+end
+
+function parser_for_active_project()
+    project = active_project()
+    sv = VERSION
+    if project !== nothing && isfile(project)
+        try
+            sv = project_get_syntax_version(parsed_toml(project))
+        catch e
+            @warn "Failed to read project $project - defaulting to latest syntax. err=$e"
+        end
+    end
+    VersionedParse(sv)
 end
 
 # find project file's corresponding manifest file
@@ -1650,8 +1710,8 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
                             if length(entries) != 1
                                 error("expected a single entry for $(repr(dep_name)) in $(repr(project_file))")
                             end
-                            entry = first(entries)::Dict{String, Any}
-                            uuid = entry["uuid"]::String
+                            local entry = first(entries)::Dict{String, Any}
+                            local uuid = entry["uuid"]::String
                             deps′_expanded[dep_name] = uuid
                         end
                         return deps′_expanded
@@ -2798,7 +2858,7 @@ function __require_prelocked(pkg::PkgId, env)
     path = spec.path
     set_pkgorigin_version_path(pkg, path)
 
-    parallel_precompile_attempted = false # being safe to avoid getting stuck in a precompilepkgs loop
+    parallel_precompile_attempted = Ref(false) # being safe to avoid getting stuck in a precompilepkgs loop
     reasons = Dict{String,Int}()
     # attempt to load the module file via the precompile cache locations
     if JLOptions().use_compiled_modules != 0
@@ -2828,21 +2888,20 @@ function __require_prelocked(pkg::PkgId, env)
 
     if JLOptions().use_compiled_modules == 1
         if !generating_output(#=incremental=#false)
-            project = active_project()
             # spawn off a new incremental pre-compile task for recursive `require` calls
-            loaded = let spec = spec, reasons = reasons
+            loaded = let spec = spec, reasons = reasons, parallel_precompile_attempted = parallel_precompile_attempted
                 maybe_cachefile_lock(pkg, spec.path) do
                     # double-check the search now that we have lock
                     m = _require_search_from_serialized(pkg, spec, UInt128(0), true)
                     m isa Module && return m
 
-                    verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+                    local verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
                     @logmsg verbosity "Precompiling $(repr("text/plain", pkg))$(list_reasons(reasons))"
 
                     unlock(require_lock)
                     try
-                        if !generating_output() && !parallel_precompile_attempted && !disable_parallel_precompile && @isdefined(Precompilation)
-                            parallel_precompile_attempted = true
+                        if !generating_output() && !parallel_precompile_attempted[] && !disable_parallel_precompile && @isdefined(Precompilation)
+                            parallel_precompile_attempted[] = true
                             precompiled = Precompilation.precompilepkgs([pkg]; _from_loading=true, ignore_loaded=false)
                             # prcompiled returns either nothing, indicating it needs serial precompile,
                             # or the entry(ies) that it found would be best to load (possibly because it just created it)
@@ -2878,7 +2937,7 @@ function __require_prelocked(pkg::PkgId, env)
                 @goto load_from_cache # the new cachefile will have the newest mtime so will come first in the search
             elseif isa(loaded, Exception)
                 if precompilableerror(loaded)
-                    verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+                    local verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
                     @logmsg verbosity "Skipping precompilation due to precompilable error. Importing $(repr("text/plain", pkg))." exception=loaded
                 else
                     @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr("text/plain", pkg))" exception=loaded
@@ -2908,7 +2967,7 @@ function __require_prelocked(pkg::PkgId, env)
     if uuid !== old_uuid
         ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, uuid)
     end
-    __toplevel__._internal_julia_parse = Experimental.VersionedParse(spec.julia_syntax_version)
+    __toplevel__._internal_julia_parse = VersionedParse(spec.julia_syntax_version)
     unlock(require_lock)
     try
         include(__toplevel__, path)
@@ -3243,7 +3302,7 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
 
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), newly_inferred)
     # This one changes the parser behavior
-    __toplevel__._internal_julia_parse = Experimental.VersionedParse(syntax_version)
+    __toplevel__._internal_julia_parse = VersionedParse(syntax_version)
     # This one is the compatibility marker for cache loading
     __toplevel__._internal_syntax_version = cache_syntax_version(syntax_version)
     try
@@ -3467,9 +3526,10 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             ocachefile = cache_objects ? ocachefile_from_cachefile(cachefile) : nothing
 
             # append checksum for so to the end of the .ji file:
-            crc_so = UInt32(0)
-            if cache_objects
-                crc_so = open(_crc32c, tmppath_so, "r")
+            crc_so = if cache_objects
+                open(_crc32c, tmppath_so, "r")
+            else
+                UInt32(0)
             end
 
             # append extra crc to the end of the .ji file:

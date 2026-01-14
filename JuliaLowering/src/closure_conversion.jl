@@ -1,19 +1,20 @@
-struct ClosureInfo{GraphType}
+struct ClosureInfo{Attrs}
     # Global name of the type of the closure
-    type_name::SyntaxTree{GraphType}
+    type_name::SyntaxTree{Attrs}
     # Names of fields for use with getfield, in order
-    field_names::SyntaxList{GraphType}
+    field_names::SyntaxList{Attrs, Vector{NodeId}}
     # Map from the original BindingId of closed-over vars to the index of the
     # associated field in the closure type.
     field_inds::Dict{IdTag,Int}
 end
 
-struct ClosureConversionCtx{GraphType} <: AbstractLoweringContext
-    graph::GraphType
+struct ClosureConversionCtx{Attrs} <: AbstractLoweringContext
+    graph::SyntaxGraph{Attrs}
     bindings::Bindings
     mod::Module
     closure_bindings::Dict{IdTag,ClosureBindings}
-    capture_rewriting::Union{Nothing,ClosureInfo{GraphType},SyntaxList{GraphType}}
+    capture_rewriting::Union{Nothing,ClosureInfo{Attrs},
+                             SyntaxList{Attrs, Vector{NodeId}}}
     lambda_bindings::LambdaBindings
     # True if we're in a section of code which preserves top-level sequencing
     # such that closure types can be emitted inline with other code.
@@ -23,17 +24,17 @@ struct ClosureConversionCtx{GraphType} <: AbstractLoweringContext
     # functions to refer to globals that have already been declared, without
     # triggering the "function body AST not pure" error.
     toplevel_pure::Bool
-    toplevel_stmts::SyntaxList{GraphType}
-    closure_infos::Dict{IdTag,ClosureInfo{GraphType}}
+    toplevel_stmts::SyntaxList{Attrs, Vector{NodeId}}
+    closure_infos::Dict{IdTag,ClosureInfo{Attrs}}
 end
 
-function ClosureConversionCtx(graph::GraphType, bindings::Bindings,
+function ClosureConversionCtx(graph::SyntaxGraph{Attrs}, bindings::Bindings,
                               mod::Module, closure_bindings::Dict{IdTag,ClosureBindings},
-                              lambda_bindings::LambdaBindings) where {GraphType}
-    ClosureConversionCtx{GraphType}(
+                              lambda_bindings::LambdaBindings) where {Attrs}
+    ClosureConversionCtx{Attrs}(
         graph, bindings, mod, closure_bindings, nothing,
         lambda_bindings, false, true, SyntaxList(graph),
-        Dict{IdTag,ClosureInfo{GraphType}}())
+        Dict{IdTag,ClosureInfo{Attrs}}())
 end
 
 function current_lambda_bindings(ctx::ClosureConversionCtx)
@@ -301,13 +302,19 @@ function type_for_closure(ctx::ClosureConversionCtx, srcref, name_str, field_sym
 end
 
 function is_boxed(binfo::BindingInfo)
-    # True for
+    # Static parameters can't be reassigned, so they never need boxing
+    binfo.kind === :static_parameter && return false
+    # No box needed for:
     # * :argument when it's not reassigned
-    # * :static_parameter (these can't be reassigned)
     defined_but_not_assigned = binfo.is_always_defined && !binfo.is_assigned
-    # For now, we box almost everything but later we'll want to do dominance
-    # analysis on the untyped IR.
-    return binfo.is_captured && !defined_but_not_assigned
+    # * Single-assigned variables (local or argument) assigned before any closure captures them
+    #   (identified by liveness analysis in optimize_captured_vars!)
+    #   For arguments, the liveness analysis resets is_always_defined and only sets it back
+    #   if the outer-scope assignment dominates all captures. This distinguishes arguments
+    #   reassigned in outer scope (no box) from those reassigned only inside closures (needs box).
+    single_assigned_never_undef = binfo.kind in (:local, :argument) &&
+                                  binfo.is_always_defined && binfo.is_assigned_once
+    return binfo.is_captured && !defined_but_not_assigned && !single_assigned_never_undef
 end
 
 function is_boxed(ctx, x)
@@ -386,7 +393,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             # [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex]]
             make_globaldecl(ctx, ex, binfo.mod, binfo.name, true, _convert_closures(ctx, ex[2]))
         else
-            makeleaf(ctx, ex, K"TOMBSTONE")
+            newleaf(ctx, ex, K"TOMBSTONE")
         end
     elseif k == K"global"
         # Leftover `global` forms become weak globals.
@@ -403,12 +410,12 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
     elseif k == K"local"
         var = ex[1]
         binfo = get_binding(ctx, var)
-        if binfo.is_captured
+        if is_boxed(binfo)
             @ast ctx ex [K"=" var [K"call" "Box"::K"core"]]
         elseif !binfo.is_always_defined
             @ast ctx ex [K"newvar" var]
         else
-            makeleaf(ctx, ex, K"TOMBSTONE")
+            newleaf(ctx, ex, K"TOMBSTONE")
         end
     elseif k == K"lambda"
         closure_convert_lambda(ctx, ex)
@@ -591,7 +598,7 @@ function closure_convert_lambda(ctx, ex)
         push!(lambda_children, _convert_closures(ctx2, ex[4]))
     end
 
-    lam = makenode(ctx, ex, ex, lambda_children, [:lambda_bindings=>lambda_bindings])
+    lam = setattr!(mknode(ex, lambda_children), :lambda_bindings, lambda_bindings)
     if !isnothing(interpolations) && !isempty(interpolations)
         @ast ctx ex [K"call"
             replace_captured_locals!::K"Value"

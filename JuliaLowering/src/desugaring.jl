@@ -1,7 +1,7 @@
 # Lowering Pass 2 - syntax desugaring
 
-struct DesugaringContext{GraphType} <: AbstractLoweringContext
-    graph::GraphType
+struct DesugaringContext{Attrs} <: AbstractLoweringContext
+    graph::SyntaxGraph{Attrs}
     bindings::Bindings
     scope_layers::Vector{ScopeLayer}
     mod::Module
@@ -268,7 +268,7 @@ function lower_tuple_assignment(ctx, assignment_srcref, lhss, rhs)
             [K"call" "getfield"::K"core" tmp i::K"Integer"]
         ])
     end
-    makenode(ctx, assignment_srcref, K"block", stmts)
+    newnode(ctx, assignment_srcref, K"block", stmts)
 end
 
 # Implement destructuring with `lhs` a tuple expression (possibly with
@@ -279,9 +279,7 @@ end
 # right hand side is directly indexable.
 function _destructure(ctx, assignment_srcref, stmts, lhs, rhs, is_const)
     n_lhs = numchildren(lhs)
-    if n_lhs > 0
-        iterstate = new_local_binding(ctx, rhs, "iterstate")
-    end
+    iterstate = n_lhs > 0 ? new_local_binding(ctx, rhs, "iterstate") : nothing
 
     end_stmts = SyntaxList(ctx)
     wrap(asgn) = is_const ? (@ast ctx assignment_srcref [K"const" asgn]) : asgn
@@ -403,7 +401,7 @@ function expand_property_destruct(ctx, ex, is_const)
         ]))
     end
     push!(stmts, @ast ctx rhs1 [K"removable" rhs1])
-    makenode(ctx, ex, K"block", stmts)
+    newnode(ctx, ex, K"block", stmts)
 end
 
 # Expands all cases of general tuple destructuring, eg
@@ -444,7 +442,7 @@ function expand_tuple_destruct(ctx, ex, is_const)
     end
     _destructure(ctx, ex, stmts, lhs, rhs1, is_const)
     push!(stmts, @ast ctx rhs1 [K"removable" rhs1])
-    makenode(ctx, ex, K"block", stmts)
+    newnode(ctx, ex, K"block", stmts)
 end
 
 #-------------------------------------------------------------------------------
@@ -1113,7 +1111,7 @@ function flatten_ncat_rows!(flat_elems, nrow_spans, row_major, parent_layout_dim
         layout_dim = 1
         @chk parent_layout_dim != 1 (ex,"Badly nested rows in `ncat`")
     elseif k == K"nrow"
-        dim = numeric_flags(ex)
+        dim = JuliaSyntax.numeric_flags(ex)
         @chk dim > 0                (ex,"Unsupported dimension $dim in ncat")
         @chk !row_major || dim != 2 (ex,"2D `nrow` cannot be mixed with `row` in `ncat`")
         layout_dim = nrow_flipdim(row_major, dim)
@@ -1146,7 +1144,7 @@ end
 # - ragged column first or row first
 function expand_ncat(ctx, ex)
     is_typed = kind(ex) == K"typed_ncat"
-    outer_dim = numeric_flags(ex)
+    outer_dim = JuliaSyntax.numeric_flags(ex)
     @chk outer_dim > 0 (ex,"Unsupported dimension in ncat")
     eltype      = is_typed ? ex[1]     : nothing
     elements    = is_typed ? ex[2:end] : ex[1:end]
@@ -1251,7 +1249,7 @@ function expand_unionall_def(ctx, srcref, lhs, rhs, is_const=true)
     expand_forms_2(
         ctx,
         @ast ctx srcref [K"block"
-            rr := [K"where" rhs lhs[2:end]...]
+            rr := [K"where" rhs [K"braces" lhs[2:end]...]]
             [is_const ? K"constdecl" : K"assign_or_constdecl_if_global" name rr]
             [K"removable" rr]
         ]
@@ -1481,7 +1479,7 @@ function expand_condition(ctx, ex)
         # jumps rather than first computing a bool and then jumping.
         cs = expand_cond_children(ctx, test)
         @assert length(cs) > 1
-        test = makenode(ctx, test, k, cs)
+        test = newnode(ctx, test, k, cs)
     else
         test = expand_forms_2(ctx, test)
     end
@@ -1620,7 +1618,7 @@ function expand_named_tuple(ctx, ex, kws, eq_is_kw;
     names = SyntaxList(ctx)
     values = SyntaxList(ctx)
     current_nt = nothing
-    for (i,kw) in enumerate(kws)
+    for kw in kws
         k = kind(kw)
         appended_nt = nothing
         name = nothing
@@ -2167,9 +2165,10 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
         # other Exprs that cannot be produced by the parser (tested by
         # test/precompile.jl #50538).
         if !isnothing(declmeta)
-            push!(stmts, makenode(ctx, ex, declkind, NodeId[ex._id], [:meta=>declmeta]))
+            push!(stmts, setattr!(newnode(ctx, ex, declkind, tree_ids(ex)),
+                                  :meta, declmeta))
         else
-            push!(stmts, makenode(ctx, ex, declkind, NodeId[ex._id]))
+            push!(stmts, newnode(ctx, ex, declkind, tree_ids(ex)))
         end
     elseif k == K"Placeholder"
         nothing
@@ -2178,7 +2177,7 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
             @chk numchildren(ex) == 2
             name = ex[1]
             if kind(name) == K"Identifier"
-                push!(stmts, makenode(ctx, ex, K"decl", NodeId[name._id, ex[2]._id]))
+                push!(stmts, newnode(ctx, ex, K"decl", tree_ids(name, ex[2])))
             else
                 # TODO: Currently, this ignores the LHS in `_::T = val`.
                 # We should probably do one of the following:
@@ -2208,7 +2207,7 @@ function expand_decls(ctx, ex)
     bindings = children(ex)
     stmts = SyntaxList(ctx)
     for binding in bindings
-        if is_prec_assignment(kind(binding))
+        if JuliaSyntax.is_prec_assignment(kind(binding))
             @chk numchildren(binding) == 2
             # expand_assignment will create the type decls
             make_lhs_decls(ctx, stmts, declkind, declmeta, binding[1], false)
@@ -2222,7 +2221,7 @@ function expand_decls(ctx, ex)
             throw(LoweringError(ex, "invalid syntax in variable declaration"))
         end
     end
-    makenode(ctx, ex, K"block", stmts)
+    newnode(ctx, ex, K"block", stmts)
 end
 
 # Iterate over the variable names assigned to from a "fancy assignment left hand
@@ -2330,10 +2329,12 @@ function expand_function_arg(ctx, body_stmts, arg, is_last_arg, is_kw, arg_id)
         # Lowering should be able to use placeholder args as rvalues internally,
         # e.g. for kw method dispatch.  Duplicate positional placeholder names
         # should be allowed.
+        is_nospecialize = getmeta(ex, :nospecialize, false)
         name = if is_kw
             @ast ctx ex ex=>K"Identifier"
         else
-            new_local_binding(ctx, ex, "#arg$(string(arg_id))#"; kind=:argument)
+            new_local_binding(ctx, ex, "#arg$(string(arg_id))#"; kind=:argument,
+                              is_nospecialize=is_nospecialize)
         end
     elseif k == K"Identifier"
         name = ex
@@ -2796,7 +2797,7 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
         for n in kw_names
             # If not using slots for the keyword argument values, still declare
             # them for reflection purposes.
-            push!(kw_val_stmts, @ast ctx n [K"local" n])
+            push!(kw_val_stmts, @ast ctx n [K"local"(meta=CompileHints(:is_internal, true)) n])
         end
         kw_val_vars = SyntaxList(ctx)
         for val in kw_values
@@ -2804,7 +2805,16 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
             push!(kw_val_vars, v)
         end
     else
-        kw_val_vars = kw_names
+        # Use kw_names directly as the values, but exclude slurp if present
+        # because slurp is passed via remaining_kws
+        if has_kw_slurp
+            kw_val_vars = SyntaxList(ctx)
+            for i in 1:length(kw_names)-1
+                push!(kw_val_vars, kw_names[i])
+            end
+        else
+            kw_val_vars = kw_names
+        end
     end
 
     kwcall_body_tail = @ast ctx keywords [K"block"
@@ -3350,7 +3360,7 @@ end
 function _make_macro_name(ctx, ex)
     k = kind(ex)
     if k == K"Identifier" || k == K"Symbol"
-        name = mapleaf(ctx, ex, k)
+        name = setattr!(mkleaf(ex), :kind, k)
         name.name_val = "@$(ex.name_val)"
         name
     elseif is_valid_modref(ex)
@@ -3485,6 +3495,8 @@ function analyze_type_sig(ctx, ex)
         end
     end
     @isdefined(name) || throw(LoweringError(ex, "invalid type signature"))
+    @isdefined(type_params) || throw(LoweringError(ex, "invalid type signature"))
+    @isdefined(supertype) || throw(LoweringError(ex, "invalid type signature"))
 
     return (name, type_params, supertype)
 end
@@ -3521,8 +3533,8 @@ function expand_abstract_or_primitive_type(ctx, ex)
     else
         @assert kind(ex) == K"primitive"
         @chk numchildren(ex) == 2
-        nbits = ex[2]
     end
+    nbits = is_abstract ? nothing : ex[2]
     name, type_params, supertype = analyze_type_sig(ctx, ex[1])
     typevar_names, typevar_stmts = expand_typevars(ctx, type_params)
     newtype_var = ssavar(ctx, ex, "new_type")
@@ -4185,6 +4197,7 @@ function expand_where(ctx, srcref, lhs, rhs)
 end
 
 function expand_wheres(ctx, ex)
+    @chk numchildren(ex) == 2
     body = ex[1]
     rhs = ex[2]
     if kind(rhs) == K"braces"
@@ -4368,6 +4381,18 @@ end
 #-------------------------------------------------------------------------------
 # Expand docstring-annotated expressions
 
+function isquotedmacrocall(ex)
+    kind(ex) == K"call" || return false
+    numchildren(ex) == 3 || return false
+    let (f, ex) = (ex[1], ex[3])
+        kind(f) == K"Value" || return false
+        kind(ex) == K"inert" || return false
+        f.value === interpolate_ast || return false
+        kind(ex[1]) == K"macrocall" || return false
+        return true
+    end
+end
+
 function expand_doc(ctx, ex, docex, mod=ctx.mod)
     if kind(ex) in (K"Identifier", K".")
         expand_forms_2(ctx, @ast ctx docex [K"call"
@@ -4378,6 +4403,9 @@ function expand_doc(ctx, ex, docex, mod=ctx.mod)
             ::K"SourceLocation"(ex)
             Union{}::K"Value"
         ])
+    elseif isquotedmacrocall(ex)
+        # TODO: implement proper `doc!` support here
+        expand_forms_2(ctx, ex, docex)
     elseif is_eventually_call(ex)
         expand_function_def(ctx, @ast(ctx, ex, [K"function" ex [K"block"]]),
                             docex; doc_only=true)
@@ -4419,7 +4447,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         # structure. For now we attribute to the parent node.
         cond = length(cs) == 2 ?
             cs[1] :
-            makenode(ctx, ex, k, cs[1:end-1])
+            newnode(ctx, ex, k, cs[1:end-1])
         # This transformation assumes the type assertion `cond::Bool` will be
         # added by a later compiler pass (currently done in codegen)
         if k == K"&&"

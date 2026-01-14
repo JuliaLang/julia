@@ -33,12 +33,19 @@ function plain(io::IO, p::Paragraph)
     println(io)
 end
 
+function plain(io::IO, md::HTML)
+    for line in md.content
+        println(io, line)
+    end
+end
+
 function plain(io::IO, list::List)
     for (i, item) in enumerate(list.items)
-        print(io, isordered(list) ? "$(i + list.ordered - 1). " : "  * ")
+        list_marker = isordered(list) ? "$(i + list.ordered - 1). " : "  * "
+        print(io, list_marker)
         lines = split(rstrip(sprint(plain, item)), "\n")
         for (n, line) in enumerate(lines)
-            print(io, (n == 1 || isempty(line)) ? "" : "    ", line)
+            print(io, (n == 1 || isempty(line)) ? "" : " "^length(list_marker), line)
             n < length(lines) && println(io)
         end
         println(io)
@@ -119,6 +126,8 @@ plaininline(io::IO, md::Bold) = plaininline(io, "**", md.text, "**")
 
 plaininline(io::IO, md::Italic) = plaininline(io, "*", md.text, "*")
 
+plaininline(io::IO, md::Strikethrough) = plaininline(io, "~~", md.text, "~~")
+
 function plaininline(io::IO, md::Code)
     if occursin("`", md.code)
         n = maximum(length(m.match) for m in eachmatch(r"(`+)", md.code))
@@ -130,7 +139,7 @@ function plaininline(io::IO, md::Code)
     end
 end
 
-plaininline(io::IO, br::LineBreak) = println(io)
+plaininline(io::IO, br::LineBreak) = println(io, "\\")
 
 plaininline(io::IO, x) = show(io, MIME"text/plain"(), x)
 
