@@ -3082,7 +3082,7 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
         run_package_callbacks(this_uuidkey)
     else
         # if the user deleted their bundled depot, next try to load it completely normally
-        # if it is an extension, we first need to indicate where to find its parant via EXT_PRIMED
+        # if it is an extension, we first need to indicate where to find its parent via EXT_PRIMED
         ext isa String && (EXT_PRIMED[this_uuidkey] = PkgId[package_uuidkey])
         newm = _require_prelocked(this_uuidkey)
     end
@@ -3608,7 +3608,7 @@ function rename_unique_ocachefile(tmppath_so::String, ocachefile_orig::String, o
         end
         # Windows prevents renaming a file that is in use so if there is a Julia session started
         # with a package image loaded, we cannot rename that file.
-        # The code belows append a `_i` to the name of the cache file where `i` is the smallest number such that
+        # The code below appends a `_i` to the name of the cache file where `i` is the smallest number such that
         # that cache file does not exist.
         ocachename, ocacheext = splitext(ocachefile_orig)
         ocachefile_unique = ocachename * "_$num" * ocacheext

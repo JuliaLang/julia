@@ -830,7 +830,7 @@ static size_t jl_static_show_float(JL_STREAM *out, double v,
 {
     size_t n = 0;
     // TODO: non-canonical NaNs do not round-trip
-    // TOOD: BFloat16
+    // TODO: BFloat16
     const char *size_suffix = vt == jl_float16_type ? "16" :
                               vt == jl_float32_type ? "32" :
                                                       "";
