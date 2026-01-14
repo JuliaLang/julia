@@ -1384,17 +1384,19 @@ end
             """ |> chomp
     @test Markdown.plain(s) ==
             raw"""
-            Misc:
+            Misc:\
             stuff
 
-              * line
+              * line\
                 break
             """
     @test Markdown.html(s) ==
             raw"""
-            <p>Misc:<br />stuff</p>
+            <p>Misc:<br />
+            stuff</p>
             <ul>
-            <li><p>line<br />break</p>
+            <li><p>line<br />
+            break</p>
             </li>
             </ul>
             """
@@ -1574,19 +1576,19 @@ end
     expected = """
     An unordered list:
 
-      * top level
+      * top level\\
         with an extra line
 
-          * second level
+          * second level\\
             again with an extra line
 
-              * third level
+              * third level\\
                 yet again with an extra line
 
-                  * fourth level
+                  * fourth level\\
                     and another extra line
 
-                      * fifth level
+                      * fifth level\\
                         final extra line
       * back to top level
     """
@@ -1644,21 +1646,21 @@ end
     expected = """
     An ordered list:
 
-    1. top level
+    1. top level\\
        with an extra line
 
-       1. second level
+       1. second level\\
           again with an extra line
 
-          999. third level
+          999. third level\\
                yet again with an extra line
 
-               1. fourth level
+               1. fourth level\\
                   and another extra line
 
-                  1. fifth level
+                  1. fifth level\\
                      final extra line
-          1000. more third level
+          1000. more third level\\
                 with an extra line
     2. back to top level
     """
@@ -1704,4 +1706,10 @@ end
     @test typeof.(md) == [Markdown.Header{1}, Markdown.Paragraph, Markdown.List, Markdown.HorizontalRule, Markdown.Paragraph, Markdown.HorizontalRule]
 end
 
-include("test_spec.jl")
+include("test_spec_roundtrip_common.jl")
+include("test_spec_roundtrip_github.jl")
+include("test_spec_roundtrip_julia.jl")
+
+include("test_spec_html_common.jl")
+include("test_spec_html_github.jl")
+include("test_spec_html_julia.jl")

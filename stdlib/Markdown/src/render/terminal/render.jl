@@ -26,6 +26,13 @@ function term(io::IO, md::Paragraph, columns)
     end
 end
 
+function term(io::IO, md::HTML, columns)
+    for line in md.content[1:end-1]
+        println(io, line)
+    end
+    print(io, md.content[end])
+end
+
 function term(io::IO, md::BlockQuote, columns)
     content = annotprint(term, md.content, columns - 10)
     lines = wraplines(rstrip(content), columns - 10)
@@ -70,30 +77,30 @@ function term(io::IO, f::Footnote, columns)
     end
 end
 
-const _list_bullets = ("• ", "– ", "▪ ")
+const _bullets = ("• ", "– ", "▪ ")
 
 function term(io::IO, md::List, columns, depth::Int = 1)
     dterm(io, md, columns, _depth)      = term(io, md, columns)
     dterm(io, md::List, columns, depth) = term(io, md, columns, depth)
 
-    function make_bullet(i::Int)
-        bullet = if isordered(md)
+    function make_list_marker(i::Int)
+        list_marker = if isordered(md)
             string(lpad(i + md.ordered - 1, ndigits(length(md.items) + md.ordered - 1)), ". ")
         elseif depth == 1
-            first(_list_bullets)
+            first(_bullets)
         else
-            _list_bullets[2 + mod(depth, length(_list_bullets) - 1)]
+            _bullets[2 + mod(depth, length(_bullets) - 1)]
         end
     end
 
     # adjust column count to ensure word wrap works correctly; the last
     # label will be the widest (for ordered lists; for unordered lists they
     # are all the same anyway)
-    columns -= length(make_bullet(length(md.items)))
+    columns -= length(make_list_marker(length(md.items)))
 
     for (i, point) in enumerate(md.items)
-        bullet = make_bullet(i)
-        print(io, ' '^margin, styled"{markdown_list:$bullet}")
+        list_marker = make_list_marker(i)
+        print(io, ' '^margin, styled"{markdown_list:$list_marker}")
         buf = AnnotatedIOBuffer()
         if point isa Vector && !isempty(point)
             for (i, elt) in enumerate(point[1:end-1])
@@ -112,7 +119,7 @@ function term(io::IO, md::List, columns, depth::Int = 1)
              for line in Iterators.filter(!isempty, lines)),
             init=if isempty(lines) 0 else length(first(lines)) end)
         for (l, line) in enumerate(lines)
-            l > 1 && print(io, ' '^(margin + length(bullet)))
+            l > 1 && print(io, ' '^(margin + length(list_marker)))
             !isempty(line) && print(io, line[common_indent+1:end])
             l < length(lines) && println(io)
         end

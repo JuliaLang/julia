@@ -5,8 +5,8 @@ abstract type MarkdownElement end
 include("block.jl")
 include("inline.jl")
 
-@flavor common [horizontalrule, list, indentcode, blockquote, admonition, footnote, hashheader,
-                paragraph,
+@flavor common [fencedcode, horizontalrule, list, indentcode, blockquote, admonition, footnote, hashheader,
+                html_block, html_block_type7, setextheader, paragraph,
 
                 linebreak, escapes,
                 inline_code,

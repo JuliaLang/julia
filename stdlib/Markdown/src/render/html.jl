@@ -94,6 +94,13 @@ function html(io::IO, md::Paragraph)
     end
 end
 
+function html(io::IO, md::HTML)
+    for line in md.content[1:end-1]
+        println(io, line)
+    end
+    print(io, md.content[end])
+end
+
 function html(io::IO, md::BlockQuote)
     withtag(io, :blockquote) do
         println(io)
@@ -197,6 +204,7 @@ end
 
 function htmlinline(io::IO, br::LineBreak)
     tag(io, :br)
+    println(io)
 end
 
 htmlinline(io::IO, x) = tohtml(io, x)
