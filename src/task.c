@@ -499,7 +499,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
     // it was marked by an incremental collection
     // move the barrier back instead of walking the shadow stack again here to check if that is required
     // even if killed (dropping the stack) and just the scope field matters,
-    // let the gc figure out that out next time it does a quick mark
+    // let the gc figure that out next time it does a quick mark
     jl_gc_wb_back(lastt);
 
     // set up global state for new task and clear global state for old task
