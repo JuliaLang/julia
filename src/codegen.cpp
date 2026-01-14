@@ -1051,6 +1051,14 @@ static const auto jlenter_func = new JuliaFunction<>{
             {T_pjlvalue, getPointerTy(C)}, false); },
     nullptr,
 };
+static const auto jlentermin_func = new JuliaFunction<>{
+    XSTR(jl_enter_min_handler),
+    [](LLVMContext &C) {
+        auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
+        return FunctionType::get(getVoidTy(C),
+            {T_pjlvalue, getPointerTy(C)}, false); },
+    nullptr,
+};
 static const auto jl_current_exception_func = new JuliaFunction<>{
     XSTR(jl_current_exception),
     [](LLVMContext &C) { return FunctionType::get(JuliaType::get_prjlvalue_ty(C), {JuliaType::get_pjlvalue_ty(C)}, false); },
@@ -1256,6 +1264,17 @@ static const auto jl_object_id__func = new JuliaFunction<TypeFnContextAndSizeT>{
     [](LLVMContext &C, Type *T_size) { return FunctionType::get(T_size,
             {T_size, PointerType::get(C, AddressSpace::Derived)}, false); },
     nullptr,
+};
+static const auto setjmp_min_func = new JuliaFunction<TypeFnContextAndTriple>{
+    XSTR(jl_minimal_setjmp),
+    [](LLVMContext &C, const Triple &T) {
+        return FunctionType::get(getInt32Ty(C),
+            {getPointerTy(C)}, false);
+    },
+    [](LLVMContext &C) { return AttributeList::get(C,
+            Attributes(C, {Attribute::ReturnsTwice}),
+            AttributeSet(),
+            None); },
 };
 static const auto setjmp_func = new JuliaFunction<TypeFnContextAndTriple>{
     jl_setjmp_name,
@@ -6438,8 +6457,13 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
             }
         }
         ctx.builder.CreateCall(prepare_call(jlleave_noexcept_func), {get_current_task(ctx), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), handler_to_end.size())});
+#ifdef JL_HAVE_MIN_SETJMP
         auto *handler_sz64 = ConstantInt::get(Type::getInt64Ty(ctx.builder.getContext()),
-                  sizeof(jl_handler_t));
+                  sizeof(struct _jl_handler_min_setjmp));
+#else
+        auto *handler_sz64 = ConstantInt::get(Type::getInt64Ty(ctx.builder.getContext()),
+                  sizeof(struct _jl_handler_setjmp));
+#endif
         for (AllocaInst *handler : handler_to_end) {
             ctx.builder.CreateLifetimeEnd(handler, handler_sz64);
         }
@@ -9681,17 +9705,31 @@ static jl_llvm_functions_t
                 ctx.ssavalue_assigned[cursor] = true;
                 // Actually enter the exception frame
                 auto ct = get_current_task(ctx);
+#if JL_HAVE_MIN_SETJMP
                 auto *handler_sz64 = ConstantInt::get(Type::getInt64Ty(ctx.builder.getContext()),
-                  sizeof(jl_handler_t));
-                AllocaInst* ehbuff = emit_static_alloca(ctx, sizeof(jl_handler_t), Align(16));
+                  sizeof(struct _jl_handler_min_setjmp));
+                AllocaInst* ehbuff = emit_static_alloca(ctx, sizeof(struct _jl_handler_min_setjmp), Align(16));
+#else
+                auto *handler_sz64 = ConstantInt::get(Type::getInt64Ty(ctx.builder.getContext()),
+                  sizeof(struct _jl_handler_setjmp));
+                AllocaInst* ehbuff = emit_static_alloca(ctx, sizeof(struct _jl_handler_setjmp), Align(16));
+#endif
                 ctx.eh_buffers[stmt] = ehbuff;
                 ctx.builder.CreateLifetimeStart(ehbuff, handler_sz64);
-                ctx.builder.CreateCall(prepare_call(jlenter_func), {ct, ehbuff});
                 CallInst *sj;
+#if JL_HAVE_MIN_SETJMP
+                ctx.builder.CreateCall(prepare_call(jlentermin_func), {ct, ehbuff});
+                Value *jmpbuf = emit_ptrgep(ctx, ehbuff, offsetof(struct _jl_handler_min_setjmp, min_eh_ctx));
+                sj = ctx.builder.CreateCall(prepare_call(setjmp_min_func), {jmpbuf});
+                sj->setCallingConv(CallingConv::PreserveNone);
+#else
+                Value *jmpbuf = emit_ptrgep(ctx, ehbuff, offsetof(struct _jl_handler_setjmp, eh_ctx));
+                ctx.builder.CreateCall(prepare_call(jlenter_func), {ct, ehbuff});
                 if (ctx.emission_context.TargetTriple.isOSWindows())
-                    sj = ctx.builder.CreateCall(prepare_call(setjmp_func), {ehbuff});
+                    sj = ctx.builder.CreateCall(prepare_call(setjmp_func), {jmpbuf});
                 else
-                    sj = ctx.builder.CreateCall(prepare_call(setjmp_func), {ehbuff, ConstantInt::get(Type::getInt32Ty(ctx.builder.getContext()), 0)});
+                    sj = ctx.builder.CreateCall(prepare_call(setjmp_func), {jmpbuf, ConstantInt::get(Type::getInt32Ty(ctx.builder.getContext()), 0)});
+#endif
                 // We need to mark this on the call site as well. See issue #6757
                 sj->setCanReturnTwice();
                 Value *isz = ctx.builder.CreateICmpEQ(sj, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
@@ -10312,6 +10350,9 @@ static void init_jit_functions(void)
     add_named_global(jlnew_func, &jl_new_structv);
     add_named_global(jlsplatnew_func, &jl_new_structt);
     add_named_global(setjmp_func, &jl_setjmp_f);
+#if JL_HAVE_MIN_SETJMP
+    add_named_global(setjmp_min_func, &jl_minimal_setjmp);
+#endif
     add_named_global(memcmp_func, &memcmp);
     add_named_global(jltypeerror_func, &jl_type_error);
     add_named_global(jlcheckassign_func, &jl_checked_assignment);
@@ -10327,6 +10368,7 @@ static void init_jit_functions(void)
     add_named_global(jlmethod_func, &jl_method_def);
     add_named_global(jlgenericfunction_func, &jl_declare_const_gf);
     add_named_global(jlenter_func, &jl_enter_handler);
+    add_named_global(jlentermin_func, &jl_enter_min_handler);
     add_named_global(jl_current_exception_func, &jl_current_exception);
     add_named_global(jlleave_noexcept_func, &jl_pop_handler_noexcept);
     add_named_global(jlleave_func, &jl_pop_handler);

@@ -773,6 +773,18 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
 #define pop_timings_stack() /* Nothing */
 #endif
 
+// Unified longjmp wrapper that handles both minimal and full buffers.
+// The min_jmp field in the handler indicates which type of buffer is in use.
+JL_DLLEXPORT void JL_NORETURN jl_eh_longjmp(jl_handler_t *eh)
+{
+#if JL_HAVE_MIN_SETJMP
+    if (eh->min_jmp) {
+        jl_minimal_longjmp(&((struct _jl_handler_min_setjmp*)eh)->min_eh_ctx, 1);
+    }
+#endif
+    jl_longjmp(((struct _jl_handler_setjmp*)eh)->eh_ctx, 1);
+}
+
 static void JL_NORETURN throw_internal(jl_task_t *ct, jl_value_t *exception JL_MAYBE_UNROOTED)
 {
     JL_GC_PUSH1(&exception);
@@ -791,8 +803,8 @@ static void JL_NORETURN throw_internal(jl_task_t *ct, jl_value_t *exception JL_M
     jl_handler_t *eh = ct->eh;
     if (eh != NULL) {
         pop_timings_stack()
-        asan_unpoison_task_stack(ct, &eh->eh_ctx);
-        jl_longjmp(eh->eh_ctx, 1);
+        asan_unpoison_eh_task_stack(ct, eh);
+        jl_eh_longjmp(eh);
     }
     else {
         jl_no_exc_handler(exception, ct);
