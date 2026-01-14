@@ -66,6 +66,8 @@ end
     for platform in platforms
         @test platform_name(P("x86_64", platform)) == platform
     end
+    # `validate_strict=false` with unrecognized OS/arch
+    @test platform_name(Platform("x86", "winnt")) == "winnt"
 
     # Test `arch()`
     arch_names = ("x86_64", "i686", "powerpc64le", "armv7l", "armv6l", "aarch64")
@@ -420,4 +422,10 @@ end
     @test !platforms_match(ac, bc)
     @test platforms_match(ac, ac)
     @test platforms_match(bc, bc)
+end
+
+@testset "Platform printing" begin
+    # Unrecognized OS without strict validation
+    weirdos = Platform("x86", "winnt")
+    @test sprint(show, MIME("text/plain"), weirdos) == "winnt x86"
 end
