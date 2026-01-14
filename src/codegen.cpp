@@ -5020,7 +5020,11 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
     AllocaInst *result = nullptr;
 
     if (returninfo.cc == jl_returninfo_t::SRet || returninfo.cc == jl_returninfo_t::Union) {
-        result = emit_static_alloca(ctx, returninfo.union_bytes, Align(returninfo.union_align));
+        if (returninfo.all_roots) {
+            result = emit_static_roots(ctx, returninfo.union_bytes / sizeof(void *));
+        } else {
+            result = emit_static_alloca(ctx, returninfo.union_bytes, Align(returninfo.union_align));
+        }
         setName(ctx.emission_context, result, "sret_box");
         argvals[idx] = result;
         idx++;
@@ -7881,6 +7885,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
             props.cc = jl_returninfo_t::SRet;
             props.union_bytes = jl_datatype_size(jlrettype);
             props.union_align = props.union_minalign = julia_alignment(jlrettype);
+            props.all_roots = tracked.all;
             // sret is always passed from alloca
             assert(M);
             fsig.push_back(rt->getPointerTo(M->getDataLayout().getAllocaAddrSpace()));
