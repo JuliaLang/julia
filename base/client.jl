@@ -174,7 +174,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
 end
 
 function _parse_input_line_core(s::String, filename::String, mod::Union{Module, Nothing})
-    ex = Meta.parseall(s; filename, mod)
+    ex = Meta.parseall(s; filename, _parse=invokelatest(Meta.parser_for_module, mod))
     if ex isa Expr && ex.head === :toplevel
         if isempty(ex.args)
             return nothing
