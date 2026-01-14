@@ -216,6 +216,7 @@ struct jl_returninfo_t {
     size_t union_align;
     size_t union_minalign;
     unsigned return_roots;
+    bool all_roots;
 };
 
 struct jl_codegen_call_target_t {

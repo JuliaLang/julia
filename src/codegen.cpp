@@ -5273,7 +5273,11 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
     AllocaInst *result = nullptr;
 
     if (returninfo.cc == jl_returninfo_t::SRet || returninfo.cc == jl_returninfo_t::Union) {
-        result = emit_static_alloca(ctx, returninfo.union_bytes, Align(returninfo.union_align));
+        if (returninfo.all_roots) {
+            result = emit_static_roots(ctx, returninfo.union_bytes / sizeof(void *));
+        } else {
+            result = emit_static_alloca(ctx, returninfo.union_bytes, Align(returninfo.union_align));
+        }
         setName(ctx.emission_context, result, "sret_box");
         argvals[idx] = result;
         idx++;
@@ -8180,7 +8184,6 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
     Type *rt = NULL;
     Type *srt = NULL;
     Type *T_prjlvalue = PointerType::get(M->getContext(), AddressSpace::Tracked);
-    bool all_roots = false;
     uint64_t tracked_count = 0;
     if (jlrettype == (jl_value_t*)jl_bottom_type) {
         rt = getVoidTy(M->getContext());
@@ -8200,8 +8203,8 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
             // convert all_roots to only union_bytes
             props.union_bytes = return_roots * sizeof(void*);
             props.union_minalign = props.union_align = sizeof(void*);
+            //props.all_roots = true;
             //return_roots = 0;
-            //all_roots = true;
         }
         props.return_roots = (int) return_roots;
         if (props.union_bytes) {
@@ -8226,7 +8229,6 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
         if (rt != getVoidTy(M->getContext()) && deserves_sret(jlrettype, rt)) {
             auto tracked = CountTrackedPointers(rt, true);
             assert(!tracked.derived);
-            all_roots = tracked.all;
             tracked_count = tracked.count;
             if (tracked.count && !tracked.all) {
                 props.return_roots = tracked.count;
@@ -8235,6 +8237,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
             props.cc = jl_returninfo_t::SRet;
             props.union_bytes = jl_datatype_size(jlrettype);
             props.union_align = props.union_minalign = julia_alignment(jlrettype);
+            props.all_roots = tracked.all;
             // sret is always passed from alloca
             assert(M);
             fsig.push_back(PointerType::get(M->getContext(), M->getDataLayout().getAllocaAddrSpace()));
@@ -8255,7 +8258,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
         assert(srt);
         AttrBuilder param(M->getContext());
         param.addStructRetAttr(srt);
-        if (all_roots) {
+        if (props.all_roots) {
             assert(!props.return_roots);
             param.addAttribute("julia.return_roots", std::to_string(tracked_count));
         }
@@ -8267,7 +8270,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
     }
     if (props.cc == jl_returninfo_t::Union) {
         AttrBuilder param(M->getContext());
-        if (all_roots) {
+        if (props.all_roots) {
             assert(!props.return_roots);
             param.addAttribute("julia.return_roots", std::to_string(tracked_count));
         }
