@@ -168,6 +168,7 @@ function Base.:(==)(a::Platform, b::Platform)
     return a.tags == b.tags && a.compare_strategies == b.compare_strategies
 end
 
+_other_tags(p) = sort!([k => v for (k, v) in tags(p) if k != "arch" && k != "os"]; by=first)
 
 # Allow us to easily serialize Platform objects
 function Base.show(io::IO, p::Platform)
@@ -175,20 +176,24 @@ function Base.show(io::IO, p::Platform)
     show(io, arch(p))
     print(io, ", ")
     show(io, os(p))
-    print(io, "; ")
-    join(io, ("$(k) = $(repr(v))" for (k, v) in tags(p) if k ∉ ("arch", "os")), ", ")
+    other_tags = _other_tags(p)
+    if !isempty(other_tags)
+        print(io, "; ")
+        join(io, (string(k, '=', repr(v)) for (k, v) in other_tags), ", ")
+    end
     print(io, ")")
 end
 
 # Make showing the platform a bit more palatable
 function Base.show(io::IO, ::MIME"text/plain", p::Platform)
-    str = string(platform_name(p), " ", arch(p))
+    print(io, platform_name(p), ' ', arch(p))
     # Add on all the other tags not covered by os/arch:
-    other_tags = sort!(filter!(kv -> kv[1] ∉ ("os", "arch"), collect(tags(p))))
+    other_tags = _other_tags(p)
     if !isempty(other_tags)
-        str = string(str, " {", join([string(k, "=", v) for (k, v) in other_tags], ", "), "}")
+        print(io, " {")
+        join(io, (string(k, '=', v) for (k, v) in other_tags), ", ")
+        print(io, "}")
     end
-    print(io, str)
 end
 
 function validate_tags(tags::Dict)
