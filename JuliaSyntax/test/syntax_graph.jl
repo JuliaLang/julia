@@ -117,17 +117,6 @@ end
         @test st[1][1].source == stu[1][1].source == stu[2][1].source
         @test stu[1][1]._id != stu[2][1]._id
 
-        # Try again with overlapping edge_ranges
-        g = testgraph([1:2, 3:3, 3:3, 0:-1], [2, 3, 4])
-        st = SyntaxTree(g, 1)
-        stu = JuliaSyntax.unalias_nodes(st)
-        @test st ≈ stu
-        @test length(stu._graph.edge_ranges) == 5
-        @test length(stu._graph.edges) == 4
-        @test 4 == stu[1][1].orig == stu[2][1].orig
-        @test st[1][1].source == stu[1][1].source == stu[2][1].source
-        @test stu[1][1]._id != stu[2][1]._id
-
         #           +-> 5
         #           |
         # 1 -+-> 2 -+---->>>-> 6

@@ -103,7 +103,6 @@ function setchildren!(graph::SyntaxGraph, id::NodeId,
                       children::AbstractVector{NodeId})
     n = length(graph.edges)
     graph.edge_ranges[id] = n+1:(n+length(children))
-    # TODO: Reuse existing edges if possible
     append!(graph.edges, children)
 end
 
@@ -772,13 +771,8 @@ function _unalias_nodes(graph::SyntaxGraph, id::NodeId,
     if id in seen
         id = copy_ast(graph, SyntaxTree(graph, id); copy_source=false)._id
     end
-    if !isempty(intersect(seen_edges, graph.edge_ranges[id]))
-        # someone is referencing our edges; run away so we can modify them
-        # (we don't produce this situation.  delete if we decide we never will)
-        next_edge = length(graph.edges) + 1
-        append!(graph.edges, children(graph, id))
-        graph.edge_ranges[id] = next_edge:lastindex(graph.edges)
-    end
+    # nodes may not share edges (SyntaxGraph invariant)
+    @assert isempty(intersect(seen_edges, graph.edge_ranges[id]))
     union!(seen_edges, graph.edge_ranges[id])
     push!(seen, id)
 
@@ -801,7 +795,7 @@ provenance back to the original parsed nodes, but no lowering-internal
 provenance.)  In any case, we still retain byte (or, from old macros,
 LineNumberNode) provenance.
 
-Provenance shrinkage: The green tree will be delete unless specified in `keep`.
+Provenance shrinkage: The green tree will be deleted unless specified in `keep`.
 If node A references node B as its `.source` and B is unreachable, A adopts the
 source of B.
 """
@@ -842,10 +836,8 @@ function prune(graph1_a::SyntaxGraph, entrypoints_a::Vector{NodeId})
     for attr in attrnames(graph1)
         attr === :source && continue
         for (n2, n1) in enumerate(nodes1)
-            if (begin
-                    attrval = get(graph1.attributes[attr], n1, nothing)
-                    !isnothing(attrval)
-                end)
+            attrval = get(graph1.attributes[attr], n1, nothing)
+            if !isnothing(attrval)
                 graph2.attributes[attr][n2] = attrval
             end
         end
