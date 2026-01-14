@@ -2134,3 +2134,6 @@ let src = code_typed1((Vector{Any},)) do xs
     end
     @test count(iscall((src, Core.svec)), src.code) == 1
 end
+
+f_57827(arr) = foldl((acc, x) -> ifelse(x > acc[1], (x,), (acc[1],)), arr, init = (-Inf,))
+@test f_57827([1, 20, 3, 4]) == (20,)
