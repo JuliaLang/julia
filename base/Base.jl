@@ -106,27 +106,6 @@ include("lock.jl")
 # strings & printing
 include("intfuncs.jl")
 include("strings/strings.jl")
-
-#=
-isdebugbuild is defined here as this is imported in libdl.jl (included in libc.jl)
-=#
-"""
-    isdebugbuild()
-
-Return `true` if julia is a debug version.
-"""
-function isdebugbuild()
-    return ccall(:jl_is_debugbuild, Cint, ()) != 0
-end
-
-# Enable dynamic library loading
-include("osinfo.jl") # Defines the module Sys, more added later
-include("path.jl") # Defines the module Filesystem, more content added later
-using .Filesystem 
-include("libc.jl") # Libdl (include in libc.jl) is required for regex.jl
-using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
-
-# More strings & printing
 include("regex.jl")
 include("parse.jl")
 include("shell.jl")
@@ -151,8 +130,16 @@ include("missing.jl")
 # version
 include("version.jl")
 
+#=
+isdebugbuild is defined here as this is imported in libdl.jl (included in libc.jl)
+The method is added in util.jl
+=#
+function isdebugbuild end
+
 # system & environment
-Core.eval(Sys, :(include("sysinfo.jl")))
+include("sysinfo.jl")
+include("libc.jl")
+using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
 
 const USING_STOCK_GC = occursin("stock", GC.gc_active_impl())
 
@@ -188,7 +175,8 @@ include("libuv.jl")
 include("asyncevent.jl")
 include("iostream.jl")
 include("stream.jl")
-Core.eval(Filesystem, :(include("filesystem.jl")))
+include("filesystem.jl")
+using .Filesystem
 include("cmd.jl")
 include("process.jl")
 include("terminfo.jl")
