@@ -1,5 +1,4 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-module Filesystem
 
 export
     abspath,
@@ -847,5 +846,3 @@ else
 end
 
 uripath(path::AbstractString) = uripath(String(path)::String)
-
-end # module
