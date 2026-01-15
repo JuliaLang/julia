@@ -752,6 +752,26 @@ void parseLLVMOptions(const char *options, PrintOptions &out) JL_NOTSAFEPOINT {
     SmallVector<const char *, 16> Argv;
     cl::TokenizeGNUCommandLine(options, Saver, Argv);
 
+    // Helper to match an option and get its value
+    // option should include trailing "=" (e.g., "-print-after=")
+    // Returns the value if matched, empty StringRef if no match
+    // Supports both "-option=value" and "-option value" syntax
+    auto getNextValue = [&](size_t &idx, StringRef Arg, StringRef option) -> StringRef {
+        StringRef optionName = option.drop_back(); // remove trailing "="
+        // Check for "-option=value" syntax
+        if (Arg.starts_with(option)) {
+            return Arg.substr(option.size());
+        }
+        // Check for "-option value" syntax (exact match on option name)
+        if (Arg == optionName) {
+            if (idx + 1 < Argv.size()) {
+                return StringRef(Argv[++idx]);
+            }
+            errs() << "Warning: " << optionName << " requires a value\n";
+        }
+        return StringRef();
+    };
+
     // Process each token
     for (size_t i = 0; i < Argv.size(); ++i) {
         StringRef Arg(Argv[i]);
@@ -762,14 +782,12 @@ void parseLLVMOptions(const char *options, PrintOptions &out) JL_NOTSAFEPOINT {
             out.print_before_all = true;
         } else if (Arg == "-print-module-scope") {
             out.print_module_scope = true;
-        } else if (Arg == "-print-changed") {
-            out.print_changed = true;
-        } else if (Arg.starts_with("-print-after=")) {
-            out.print_after = Arg.substr(13).str();
-        } else if (Arg.starts_with("-print-before=")) {
-            out.print_before = Arg.substr(14).str();
-        } else if (Arg.starts_with("-filter-print-funcs=")) {
-            out.filter_print_funcs = Arg.substr(20).str();
+        } else if (StringRef val = getNextValue(i, Arg, "-print-after="); !val.empty()) {
+            out.print_after = val.str();
+        } else if (StringRef val = getNextValue(i, Arg, "-print-before="); !val.empty()) {
+            out.print_before = val.str();
+        } else if (StringRef val = getNextValue(i, Arg, "-filter-print-funcs="); !val.empty()) {
+            out.filter_print_funcs = val.str();
         } else {
             errs() << "Warning: unknown llvm_options flag: " << Arg << "\n";
         }
@@ -829,7 +847,7 @@ void NewPM::run(Module &M) {
     //We must recreate the analysis managers every time
     //so that analyses from previous runs of the pass manager
     //do not hang around for the next run
-    StandardInstrumentations SI(M.getContext(), print_options.print_changed);
+    StandardInstrumentations SI(M.getContext(), /*DebugLogging=*/false);
     PassInstrumentationCallbacks PIC;
     adjustPIC(PIC);
     TimePasses.registerCallbacks(PIC);

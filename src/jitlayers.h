@@ -137,7 +137,9 @@ struct PrintOptions {
     bool print_before_all = false;
     bool print_after_all = false;
     bool print_module_scope = false;
-    bool print_changed = false;
+    // TODO: Add print_changed support. This would require integrating with LLVM's
+    // ChangedIRPrinter infrastructure to print IR only when passes modify it.
+    // See llvm/Passes/StandardInstrumentations.h for PrintChangedIRData.
     std::string print_before;  // specific pass name
     std::string print_after;   // specific pass name
     std::string filter_print_funcs;  // filter for function names

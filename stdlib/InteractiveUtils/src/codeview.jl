@@ -294,7 +294,7 @@ end
 struct LLVMFDump
     tsm::Ptr{Cvoid} # opaque
     f::Ptr{Cvoid} # opaque
-    pass_output::Ptr{UInt8} # LLVM pass instrumentation output (must be freed by caller)
+    pass_output::Cstring # LLVM pass instrumentation output (lifetime managed by jl_dump_function_ir)
 end
 
 function _dump_function_native_assembly(mi::Core.MethodInstance, src::Core.CodeInfo,
@@ -321,19 +321,10 @@ function _dump_function_llvm(
                              wrapper::Bool, optimize::Bool, llvm_options::Cstring,
                              params::CodegenParams)::Cvoid
     llvmf_dump[].f == C_NULL && error("could not compile the specified method")
-    # Capture pass instrumentation output before dumping IR (which frees the dump)
-    pass_output_ptr = llvmf_dump[].pass_output
-    pass_output = if pass_output_ptr != C_NULL
-        s = unsafe_string(pass_output_ptr)
-        ccall(:jl_free, Cvoid, (Ptr{Cvoid},), pass_output_ptr)
-        s
-    else
-        ""
-    end
+    # jl_dump_function_ir handles pass_output internally (prepends it and frees it)
     str = @ccall jl_dump_function_ir(llvmf_dump::Ptr{LLVMFDump}, strip_ir_metadata::Bool,
                                      dump_module::Bool, debuginfo::Ptr{UInt8})::Ref{String}
-    # Prepend pass output to final IR
-    return isempty(pass_output) ? str : pass_output * str
+    return str
 end
 
 """
@@ -351,10 +342,9 @@ The `llvm_options` keyword argument allows passing LLVM options to control the o
 Supported options include:
 - `-print-after-all`: Print IR after each pass
 - `-print-before-all`: Print IR before each pass
-- `-print-after=<passname>`: Print IR after a specific pass (e.g., `-print-after=loop-vectorize`)
+- `-print-after=<passname>`: Print IR after a specific pass (e.g., `-print-after=InstCombinePass`)
 - `-print-before=<passname>`: Print IR before a specific pass
 - `-print-module-scope`: Print entire module instead of just the function
-- `-print-changed`: Print IR only when it changes
 - `-filter-print-funcs=<name>`: Only print IR for functions matching the name
 
 See also: [`@code_llvm`](@ref), [`code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref), [`code_native`](@ref).
@@ -391,8 +381,9 @@ See also: [`@code_native`](@ref), [`code_warntype`](@ref), [`code_typed`](@ref),
 function code_native(io::IO, arginfo::ArgInfo;
                      dump_module::Bool=true, syntax::Symbol=:intel, raw::Bool=false,
                      debuginfo::Symbol=:default, binary::Bool=false,
+                     llvm_options::String="",
                      params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=raw, gcstack_arg=raw))
-    d = _dump_function(arginfo, true, false, raw, dump_module, syntax, true, debuginfo, binary, params)
+    d = _dump_function(arginfo, true, false, raw, dump_module, syntax, true, debuginfo, binary, llvm_options, params)
     if highlighting[:native] && get(io, :color, false)::Bool
         print_native(io, d)
     else

@@ -77,9 +77,6 @@ typedef struct {
     SmallVector<jl_code_instance_t*, 0> jl_external_to_llvm;
 } jl_native_code_desc_t;
 
-// Declare jl_malloc for use in pass output allocation (defined in gc-common.c)
-extern "C" JL_DLLEXPORT void *jl_malloc(size_t sz) JL_NOTSAFEPOINT;
-
 extern "C" JL_DLLEXPORT_CODEGEN
 void jl_get_function_id_impl(void *native_code, jl_code_instance_t *codeinst,
         int32_t *func_idx, int32_t *specfunc_idx)
@@ -2647,12 +2644,9 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                     //Safe b/c context lock is held by output
                     PM.run(*m.getModuleUnlocked());
                     assert(!verifyLLVMIR(*m.getModuleUnlocked()));
-                    // Capture pass output if any was produced
+                    // Capture pass output (caller frees with jl_free_llvmf_pass_output)
                     if (!pass_output_buffer.empty()) {
-                        size_t len = pass_output_buffer.size() + 1;
-                        char *buf = (char*)jl_malloc(len);
-                        memcpy(buf, pass_output_buffer.c_str(), len);
-                        dump->pass_output = buf;
+                        dump->pass_output = strdup(pass_output_buffer.c_str());
                     }
                 }
                 const std::string *fname;
