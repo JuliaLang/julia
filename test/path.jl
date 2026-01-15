@@ -255,11 +255,16 @@
 	    @test splitext(S("bar/foo/.baz")) == ("bar/foo/.baz", "")
 	    @test splitext(S("bar/foo.baz")) == ("bar/foo", ".baz")
         # If the second output is empty, remove a single \n from the first output
-        # unless that makes it end with a /. FIXME?
+        # unless that makes it empty or end with a /. FIXME?
         @test splitext("a\r\n") == ("a\r", "")
         @test splitext("a/\n") == ("a/\n", "") # keep \n in this case
         @test splitext("a\n.foo") == ("a\n", ".foo")
         @test splitext("a/\n.foo") == ("a/\n", ".foo")
+        @test splitext("\n") == ("\n", "") # keep \n in this case
+        if Sys.iswindows()
+            @test splitext("C:a\n") == ("C:a", "")
+            @test splitext("C:\n") == ("C:\n", "") # keep \n in this case
+        end
     end
 
     @testset "isabspath" begin

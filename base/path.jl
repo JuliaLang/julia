@@ -357,13 +357,13 @@ function splitext(path::String)::Tuple{String, String}
 		end
 	end
 	
-	# Essentially return (path, ""), but also remove one trailing \n, unless 
-    # that makes path end with a separator
-	if (ncodeunits(path) >= 2 && 
-		codeunit(path, ncodeunits(path)) === UInt8('\n') &&
-		!isseparator(codeunit(path, ncodeunits(path)-1))
+	# Essentially return (drive * p, ""), but also remove one trailing \n, unless 
+    # that makes p empty or end with a separator
+	if (ncodeunits(p) >= 2 && 
+		codeunit(p, ncodeunits(p)) === UInt8('\n') &&
+		!isseparator(codeunit(p, ncodeunits(p)-1))
 	)
-		return (chop(path, tail = 1), "")
+		return (drive * chop(p, tail = 1), "")
 	else
 		return (path, "")
 	end
