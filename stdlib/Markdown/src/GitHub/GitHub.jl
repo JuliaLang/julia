@@ -8,6 +8,11 @@ function github_paragraph(stream::IO, md::MD)
     p = Paragraph()
     push!(md, p)
     for char in readeach(stream, Char)
+        # handle Windows line ends
+        if char == '\r'
+            peek(stream, Char) == '\n' && read(stream, Char)
+            char = '\n'
+        end
         if char == '\n'
             eof(stream) && break
             if blankline(stream) || _parse(stream, md, breaking = true)

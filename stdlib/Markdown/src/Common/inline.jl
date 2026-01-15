@@ -184,7 +184,7 @@ mutable struct LineBreak <: MarkdownElement end
 
 @trigger '\\' ->
 function linebreak(stream::IO, md::MD)
-    if startswith(stream, "\\\n")
+    if startswith(stream, "\\\n") || startswith(stream, "\\\r\n") || startswith(stream, "\\\r")
         return LineBreak()
     end
 end

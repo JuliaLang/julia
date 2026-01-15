@@ -56,8 +56,14 @@ function hashheader(stream::IO, md::MD)
 
         c = ' '
         # Allow empty headers, but require a space
-        !eof(stream) && (c = read(stream, Char); !(c in " \t\n")) &&
+        !eof(stream) && (c = read(stream, Char); !(c in " \t\n\r")) &&
             return false
+
+        # handle Windows line ends
+        if c == '\r'
+            peek(stream, Char) == '\n' && read(stream, Char)
+            c = '\n'
+        end
 
         if c != '\n' # Empty header
             h = strip(readline(stream))
@@ -107,7 +113,8 @@ function indentcode(stream::IO, block::MD)
         buffer = IOBuffer()
         while !eof(stream)
             if startswith(stream, "    ") || startswith(stream, "\t")
-                write(buffer, readline(stream, keep=true))
+                write(buffer, readline(stream))
+                write(buffer, '\n')
             elseif blankline(stream)
                 write(buffer, '\n')
             else
@@ -148,7 +155,8 @@ function fencedcode(stream::IO, block::MD)
                     seek(stream, line_start)
                 end
             end
-            write(buffer, readline(stream, keep=true))
+            write(buffer, readline(stream))
+            write(buffer, '\n')
         end
         return false
     end

@@ -4,9 +4,12 @@ const whitespace = " \t\r"
 
 """
 Skip any leading whitespace. Returns io.
+If `newlines=true` then also skip line ends.
 """
 function skipwhitespace(io::IO; newlines = true)
-    while !eof(io) && (peek(io, Char) in whitespace || (newlines && peek(io) == UInt8('\n')))
+    while !eof(io)
+        c = peek(io, Char)
+        c in whitespace || (newlines && c == '\n') || break
         read(io, Char)
     end
     return io
