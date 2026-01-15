@@ -116,6 +116,15 @@ void jl_get_llvm_gvs_impl(void *native_code, arraylist_t *gvs)
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN
+void jl_get_llvm_gvs_globals_impl(void *native_code, arraylist_t *gvs)
+{
+    // map a memory location (jl_value_t or jl_binding_t) to a GlobalVariable
+    jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
+    arraylist_grow(gvs, data->jl_sysimg_gvars.size());
+    memcpy(gvs->items, data->jl_sysimg_gvars.data(), gvs->len * sizeof(void*));
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN
 void jl_get_llvm_external_fns_impl(void *native_code, arraylist_t *external_fns)
 {
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
