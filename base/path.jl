@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Base: StringVector, utf8units
+
 export
     abspath,
     basename,
@@ -780,9 +782,9 @@ for f in (:isdirpath, :splitdir, :splitdrive, :splitext, :normpath, :abspath, :i
     @eval $f(path::AbstractString) = $f(String(path)::String)
 end
 
-function encode_uri_component(s)
-    out = UInt8[]
-    for cu in codeunits(s)
+function encode_uri_component(s::AbstractString)
+    out = empty!(StringVector(sizeof(s)))
+    for cu in utf8units(s)
         # RFC3986 Section 2.3
         if (UInt8('A') <= cu <= UInt8('Z') || 
             UInt8('a') <= cu <= UInt8('z') || 
