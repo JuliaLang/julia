@@ -168,10 +168,12 @@ enum class CPU : uint32_t {
     apple_a16,
     apple_a17,
     apple_a18,
+    apple_a19,
     apple_m1,
     apple_m2,
     apple_m3,
     apple_m4,
+    apple_m5,
     apple_s4,
     apple_s5,
 
@@ -362,11 +364,13 @@ constexpr auto apple_a15 = armv8_6a_crypto | get_feature_masks(dotprod, fp16fml,
 constexpr auto apple_a16 = armv8_6a_crypto | get_feature_masks(dotprod, fp16fml, fullfp16, sha3);
 constexpr auto apple_a17 = armv8_6a_crypto | get_feature_masks(dotprod, fp16fml, fullfp16, sha3);
 constexpr auto apple_m4 = armv8_6a_crypto | get_feature_masks(dotprod, fp16fml, fullfp16, sha3);
+constexpr auto apple_m5 = armv8_6a_crypto | get_feature_masks(dotprod, fp16fml, fullfp16, sha3); // TODO arm8.7 once supported in Julia
 // Aliased definitions
 constexpr auto apple_m1 = apple_a14;
 constexpr auto apple_m2 = apple_a15;
 constexpr auto apple_m3 = apple_a16;
 constexpr auto apple_a18 = apple_m4;
+constexpr auto apple_a19 = apple_m5;
 
 // Features based on https://github.com/llvm/llvm-project/blob/82507f1798768280cf5d5aab95caaafbc7fe6f47/llvm/include/llvm/Support/AArch64TargetParser.def
 // and sysctl -a hw.optional
@@ -453,10 +457,12 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"apple-a16", CPU::apple_a16, CPU::apple_a14, 160000, Feature::apple_a16},
     {"apple-a17", CPU::apple_a17, CPU::apple_a16, 190000, Feature::apple_a17},
     {"apple-a18", CPU::apple_a18, CPU::apple_a17, 210000, Feature::apple_a18},
+    {"apple-a19", CPU::apple_a19, CPU::apple_a18, 220000, Feature::apple_a19},
     {"apple-m1", CPU::apple_m1, CPU::apple_a14, 130000, Feature::apple_m1},
     {"apple-m2", CPU::apple_m2, CPU::apple_m1, 160000, Feature::apple_m2},
     {"apple-m3", CPU::apple_m3, CPU::apple_m2, 180000, Feature::apple_m3},
     {"apple-m4", CPU::apple_m4, CPU::apple_m3, 190000, Feature::apple_m4},
+    {"apple-m5", CPU::apple_m5, CPU::apple_m4, 220000, Feature::apple_m5},
     {"apple-s4", CPU::apple_s4, CPU::generic, 100000, Feature::apple_s4},
     {"apple-s5", CPU::apple_s5, CPU::generic, 100000, Feature::apple_s5},
     {"thunderx3t110", CPU::marvell_thunderx3t110, CPU::cavium_thunderx2t99, 110000,
@@ -737,6 +743,8 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
         return std::make_pair((uint32_t)CPU::apple_m3, Feature::apple_m3);
     else if (cpu_name.find("M4") != StringRef ::npos)
         return std::make_pair((uint32_t)CPU::apple_m4, Feature::apple_m4);
+    else if (cpu_name.find("M5") != StringRef ::npos)
+        return std::make_pair((uint32_t)CPU::apple_m5, Feature::apple_m5);
     else
         return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
 }
@@ -1136,14 +1144,14 @@ static CPU get_cpu_name(CPUID cpuid)
         case 0x6a: // H17A Tupai e-Core used in Apple A18
         case 0x6b: // H17A Tupai p-Core used in Apple A18
             return CPU::apple_a18;
-        // case 0x62: // H17G Hidra e-Core used in Apple M5
-        // case 0x63: // H17G Hidra p-Core used in Apple M5
-        //     return CPU::apple_m5;
-        // case 0x70: // H18P Thera e-Core used in Apple A19 Pro
-        // case 0x71: // H18P Thera p-Core used in Apple A19 Pro
-        // case 0x7a: // H18A Tilos e-Core used in Apple A19
-        // case 0x7b: // H18A Tilos p-Core used in Apple A19
-        //     return CPU::apple_a19;
+        case 0x62: // H17G Hidra e-Core used in Apple M5
+        case 0x63: // H17G Hidra p-Core used in Apple M5
+            return CPU::apple_m5;
+        case 0x70: // H18P Thera e-Core used in Apple A19 Pro
+        case 0x71: // H18P Thera p-Core used in Apple A19 Pro
+        case 0x7a: // H18A Tilos e-Core used in Apple A19
+        case 0x7b: // H18A Tilos p-Core used in Apple A19
+            return CPU::apple_a19;
         default: return CPU::generic;
         }
     case 0x68: // 'h': Huaxintong Semiconductor
