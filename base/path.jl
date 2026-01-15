@@ -519,23 +519,22 @@ function _split_at_separators(path::AbstractString; keepempty = true)
 	# Equivalent to Base.split(path, r"/+"sa; keepempty) (r"[\\/]+"sa on windows)
 	# Since there is no split between consecutive separators, keepempty
 	# only has an effect on strings starting or ending with separators. 
-	chars::Vector = collect(path)
 	out = String[]
 	start = 1
 	
 	while true
-		nextsep = findnext(isseparator, chars, start)
+		nextsep = findnext(isseparator, path, start)
 
-		stop = isnothing(nextsep) ? lastindex(chars) : nextsep-1
+		stop = isnothing(nextsep) ? lastindex(path) : prevind(path, nextsep)
 	
-		substr = String(view(chars, start:stop))
+		substr = String(view(path, start:stop))
 		if keepempty || !isempty(substr)
 			push!(out, substr)
 		end
 
 		isnothing(nextsep) && break
 		
-		start = something(findnext(!isseparator, chars, nextsep+1), lastindex(chars)+1)
+		start = something(findnext(!isseparator, path, nextsep+1), nextind(path, lastindex(path)))
 	end
 	return out
 end
