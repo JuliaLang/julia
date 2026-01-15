@@ -62,6 +62,42 @@ str = String(take!(io))
 
 end # module ReflectionTest
 
+# code_llvm llvm_options parameter tests
+@testset "code_llvm llvm_options" begin
+    using InteractiveUtils: code_llvm
+
+    # Test that llvm_options parameter works without crashing
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="")
+    @test !isempty(String(take!(io)))
+
+    # Test print-after-all produces IR dump output
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after-all")
+    output = String(take!(io))
+    @test occursin("IR Dump After", output)
+    @test occursin("define", output)  # Final IR should also be present
+
+    # Test print-after with specific pass name
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after=AfterOptimization")
+    output = String(take!(io))
+    @test occursin("IR Dump After", output)
+    @test occursin("AfterOptimization", output)
+
+    # Test print-before-all
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-before-all")
+    output = String(take!(io))
+    @test occursin("IR Dump Before", output)
+
+    # Test print-module-scope shows module structure
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after=AfterOptimization -print-module-scope")
+    output = String(take!(io))
+    @test occursin("ModuleID", output) || occursin("source_filename", output)
+end
+
 # isbits, isbitstype
 
 @test !isbitstype(Array{Int})

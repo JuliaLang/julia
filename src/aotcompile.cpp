@@ -77,6 +77,9 @@ typedef struct {
     SmallVector<jl_code_instance_t*, 0> jl_external_to_llvm;
 } jl_native_code_desc_t;
 
+// Declare jl_malloc for use in pass output allocation (defined in gc-common.c)
+extern "C" JL_DLLEXPORT void *jl_malloc(size_t sz) JL_NOTSAFEPOINT;
+
 extern "C" JL_DLLEXPORT_CODEGEN
 void jl_get_function_id_impl(void *native_code, jl_code_instance_t *codeinst,
         int32_t *func_idx, int32_t *specfunc_idx)
@@ -2517,7 +2520,7 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instanc
     jl_printf(stream, "\n----\n");
 
     jl_printf(stream, "\n---- unoptimized IR ----\n");
-    jl_get_llvmf_defn(&llvmf_dump, mi, src, 0, false, jl_default_cgparams);
+    jl_get_llvmf_defn(&llvmf_dump, mi, src, 0, false, nullptr, jl_default_cgparams);
     if (llvmf_dump.F) {
         jl_value_t *ir = jl_dump_function_ir(&llvmf_dump, 0, 1, "source");
         if (ir != NULL && jl_is_string(ir))
@@ -2526,7 +2529,7 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instanc
     jl_printf(stream, "\n----\n");
 
     jl_printf(stream, "\n---- optimized IR ----\n");
-    jl_get_llvmf_defn(&llvmf_dump, mi, src, 0, true, jl_default_cgparams);
+    jl_get_llvmf_defn(&llvmf_dump, mi, src, 0, true, nullptr, jl_default_cgparams);
     if (llvmf_dump.F) {
         jl_value_t *ir = jl_dump_function_ir(&llvmf_dump, 0, 1, "source");
         if (ir != NULL && jl_is_string(ir))
@@ -2535,7 +2538,7 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instanc
     jl_printf(stream, "\n----\n");
 
     jl_printf(stream, "\n---- assembly ----\n");
-    jl_get_llvmf_defn(&llvmf_dump, mi, src, 0, true, jl_default_cgparams);
+    jl_get_llvmf_defn(&llvmf_dump, mi, src, 0, true, nullptr, jl_default_cgparams);
     if (llvmf_dump.F) {
         jl_value_t *ir = jl_dump_function_asm(&llvmf_dump, 0, "", "source", 0, true);
         if (ir != NULL && jl_is_string(ir))
@@ -2552,11 +2555,12 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instanc
 // for use in reflection from Julia.
 // This is paired with jl_dump_function_ir and jl_dump_function_asm, either of which will free all memory allocated here
 extern "C" JL_DLLEXPORT_CODEGEN
-void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_code_info_t *src, char getwrapper, char optimize, const jl_cgparams_t params)
+void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_code_info_t *src, char getwrapper, char optimize, const char *llvm_options, const jl_cgparams_t params)
 {
     // emit this function into a new llvm module
     dump->F = nullptr;
     dump->TSM = nullptr;
+    dump->pass_output = nullptr;
     if (src && jl_is_code_info(src)) {
         auto ctx = jl_ExecutionEngine->makeContext();
         const auto &DL = jl_ExecutionEngine->getDataLayout();
@@ -2632,10 +2636,24 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                     opts.sanitize_memory = params.sanitize_memory;
                     opts.sanitize_thread = params.sanitize_thread;
                     opts.sanitize_address = params.sanitize_address;
-                    NewPM PM{jl_ExecutionEngine->cloneTargetMachine(), getOptLevel(jl_options.opt_level), opts};
+                    PrintOptions print_opts;
+                    std::string pass_output_buffer;
+                    raw_string_ostream pass_output_stream(pass_output_buffer);
+                    if (llvm_options && llvm_options[0] != '\0') {
+                        parseLLVMOptions(llvm_options, print_opts);
+                        print_opts.out = &pass_output_stream;
+                    }
+                    NewPM PM{jl_ExecutionEngine->cloneTargetMachine(), getOptLevel(jl_options.opt_level), opts, print_opts};
                     //Safe b/c context lock is held by output
                     PM.run(*m.getModuleUnlocked());
                     assert(!verifyLLVMIR(*m.getModuleUnlocked()));
+                    // Capture pass output if any was produced
+                    if (!pass_output_buffer.empty()) {
+                        size_t len = pass_output_buffer.size() + 1;
+                        char *buf = (char*)jl_malloc(len);
+                        memcpy(buf, pass_output_buffer.c_str(), len);
+                        dump->pass_output = buf;
+                    }
                 }
                 const std::string *fname;
                 if (decls.functionObject == "jl_fptr_args" || decls.functionObject == "jl_fptr_sparam")
