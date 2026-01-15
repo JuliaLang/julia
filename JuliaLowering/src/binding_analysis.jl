@@ -76,30 +76,30 @@ Fields:
 - `args`: argument variables (never undefined, special handling in mark_used!)
 """
 mutable struct DefUseState
-    unused::Set{IdTag}
-    live::Set{IdTag}
-    seen::Set{IdTag}
+    const unused::Set{IdTag}
+    const live::Set{IdTag}
+    const seen::Set{IdTag}
     decl::Set{IdTag}
     decl_outside_loop::Set{IdTag}
-    args::Set{IdTag}
-end
+    const args::Set{IdTag}
 
-function _init_def_use_state(ctx, candidates)
-    unused = candidates
-    live = Set{IdTag}()
-    seen = Set{IdTag}()
-    decl = Set{IdTag}()
-    decl_outside_loop = Set{IdTag}()
-    args = Set{IdTag}()
-    # Initialize decl and args with arguments since they're implicitly declared outside any loop
-    for id in candidates
-        binfo = get_binding(ctx, id)
-        if binfo.kind == :argument
-            push!(decl, id)
-            push!(args, id)
+    function DefUseState(ctx, candidates)
+        unused = candidates
+        live = Set{IdTag}()
+        seen = Set{IdTag}()
+        decl = Set{IdTag}()
+        decl_outside_loop = Set{IdTag}()
+        args = Set{IdTag}()
+        # Initialize decl and args with arguments since they're implicitly declared outside any loop
+        for id in candidates
+            binfo = get_binding(ctx, id)
+            if binfo.kind == :argument
+                push!(decl, id)
+                push!(args, id)
+            end
         end
+        return new(unused, live, seen, decl, decl_outside_loop, args)
     end
-    return DefUseState(unused, live, seen, decl, decl_outside_loop, args)
 end
 
 # At CFG merge points, we lose certainty about which path was taken,
@@ -335,7 +335,7 @@ function _analyze_lambda_vars!(ctx, ex)
     end
     isempty(candidates) && return
 
-    state = _init_def_use_state(ctx, candidates)
+    state = DefUseState(ctx, candidates)
 
     # Visit the lambda body
     if numchildren(ex) >= 3
