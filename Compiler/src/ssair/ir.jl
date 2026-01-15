@@ -1421,7 +1421,7 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
         # Remove this edge from all phi nodes in `to` block
         # NOTE: It is possible for `to` to contain only `nothing` statements,
         #       so we must be careful to stop at its last statement
-        if to < active_bb
+        if to <= active_bb
             stmts = result_bbs[bb_rename_succ[to]].stmts
             idx = first(stmts)
             while idx <= last(stmts)
