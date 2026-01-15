@@ -514,9 +514,9 @@ julia> joinpath(["/home/myuser", "example.jl"])
 joinpath
 
 function _split_at_separators(path::AbstractString; keepempty = true)
-	# Essentially Base.split(path, isseparator; keepempty)
-	# with the extra condition that consecutive separators are
-	# treated as one separator.
+	# Equivalent to Base.split(path, r"/+"sa; keepempty) (r"[\\/]+"sa on windows)
+	# Since there is no split between consecutive separators, keepempty
+	# only has an effect on strings starting or ending with separators. 
 	chars::Vector = collect(path)
 	out = String[]
 	start = 1
