@@ -10,6 +10,8 @@ function _register_kinds()
             "atomic"
             # Flag for @generated parts of a function
             "generated"
+            # Like (function call body) but (generated_function call gen nongen)
+            "generated_function"
             # Temporary rooting of identifiers (GC.@preserve)
             "gc_preserve"
             "gc_preserve_begin"
