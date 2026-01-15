@@ -327,58 +327,24 @@ function list(stream::IO, block::MD)
         count = 0           # Count of list items. Used to check if we need to push remaining
                             # content in `buffer` after leaving the `while` loop.
         while !eof(stream)
-            if startswith(stream, "\n")
-                if newline
-                    # We have a double newline. Peek ahead to see if the next non-blank
-                    # line is indented. If so, continue the list item.
-                    saved_pos = position(stream)
-
-                    # Skip any additional blank lines and check indentation
-                    still_indented = false
-                    while !eof(stream)
-                        if startswith(stream, "\n"; eat = true)
-                            continue
-                        elseif startswith(stream, " "^indent; eat = false)
-                            still_indented = true
-                            break
-                        else
-                            break
-                        end
-                    end
-                    # Reset stream to position after the double newline we detected
-                    seek(stream, saved_pos)
-                    if still_indented
-                        # Multiple blank lines within indented content - allow it
-                        println(buffer)
-                    else
-                        # Double newline ends the current list
-                        pushitem!(list, buffer)
-                        break
-                    end
-                else
-                    newline = true
-                    println(buffer)
-                end
+            if blankline(stream)
+                println(buffer)
+                list.loose = true
+            elseif startswith(stream, " "^indent)
+                # Indented text that is part of the current list item.
+                print(buffer, readline(stream, keep=true))
             else
-                if startswith(stream, " "^indent)
-                    newline && (list.loose = true)
-                    # Indented text that is part of the current list item.
-                    print(buffer, readline(stream, keep=true))
-                else
-                    matched = matchstart(stream, regex)
-                    if matched === nothing
-                        # Unindented text meaning we have left the current list.
-                        pushitem!(list, buffer)
-                        break
-                    else
-                        # Start of a new list item.
-                        newline && (list.loose = true)
-                        count += 1
-                        count > 1 && pushitem!(list, buffer)
-                        print(buffer, readline(stream, keep=true))
-                    end
+                matched = matchstart(stream, regex)
+                if matched === nothing
+                    # Unindented text meaning we have left the current list.
+                    pushitem!(list, buffer)
+                    break
                 end
-                newline = false
+
+                # Start of a new list item.
+                count += 1
+                count > 1 && pushitem!(list, buffer)
+                print(buffer, readline(stream, keep=true))
             end
         end
         count == length(list.items) || pushitem!(list, buffer)
