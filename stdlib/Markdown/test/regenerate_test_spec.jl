@@ -90,7 +90,7 @@ function escape_spec_string(s::String)
     # avoid string interpolation
     s = replace(s, "\$" => raw"\$")
     # encode non-breaking whitespace to make contrib/check-whitespace.jl happy
-    s = replace(s, "\uA0" => raw"\uA0")
+    s = replace(s, "\uA0" => raw"\u00A0")
     return s
 end
 
