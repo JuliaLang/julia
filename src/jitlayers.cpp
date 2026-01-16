@@ -2116,48 +2116,54 @@ orc::SymbolStringPtr JuliaOJIT::linkCallTarget(jl_code_instance_t *CI, jl_invoke
 
     orc::SymbolStringPtr Result;
     CISymbolPtr Trampoline;
+    Function *F;                // JL_INVOKE_ARGS function in the *Out module
     std::unique_ptr<jl_codegen_output_t> Out;
-
-    if (!Sym) {
-        // The target CI was not compiled when we observed it, so generate a
-        // tojlinvoke trampoline that will cause it to be compiled.
-        // TODO: replace this with a GOT/PLT mechanism that avoids the jl_invoke
-        // after it has been compiled.
-        Out = std::make_unique<jl_codegen_output_t>("tojlinvoke", getDataLayout(),
+    auto GetOut = [this, &Out]() -> jl_codegen_output_t & {
+        if (Out)
+            return *Out;
+        Out = std::make_unique<jl_codegen_output_t>("linker_trampoline", getDataLayout(),
                                                     getTargetTriple());
-        Function *F = emit_tojlinvoke(CI, StringRef(), *Out);
+        return *Out;
+    };
+
+    // At present, call targets always have API == JL_INVOKE_ARGS or
+    // JL_INVOKE_SPECSIG (see jl_codegen_output_t::get_call_target).
+    assert(API == JL_INVOKE_ARGS || API == JL_INVOKE_SPECSIG);
+
+    // If !Sym: The target CI was not compiled, so generate a tojlinvoke
+    // trampoline that will cause it to be compiled.
+    // TODO: replace this with a GOT/PLT mechanism that avoids the jl_invoke
+    // after it has been compiled.
+    //
+    // We also generate a tojlinvoke to handle args1 -> specsig.
+    if (!Sym || Sym->invoke_api != API) {
+        F = emit_tojlinvoke(CI, StringRef(), GetOut());
+        F->setLinkage(GlobalValue::ExternalLinkage);
+        Trampoline.specptr = mangle(F->getName());
+        Trampoline.invoke_api = JL_INVOKE_ARGS;
         Sym = &Trampoline;
-        Trampoline.invoke_api = API;
-
-        if (API == JL_INVOKE_SPECSIG) {
-            // codegen may contain safepoints (such as jl_subtype calls)
-            int8_t GCState = jl_gc_unsafe_enter(jl_current_task->ptls);
-            Function *G = emit_specsig_to_fptr1(*Out, CI, F);
-            G->setLinkage(GlobalValue::ExternalLinkage);
-            jl_gc_unsafe_leave(jl_current_task->ptls, GCState);
-            Trampoline.specptr = mangle(G->getName());
-        } else if (API == JL_INVOKE_ARGS) {
-            F->setLinkage(GlobalValue::ExternalLinkage);
-            Trampoline.invoke_api = JL_INVOKE_ARGS;
-            Trampoline.specptr = mangle(F->getName());
-        } else {
-            abort();
-        }
     }
 
-    if (Sym && Sym->invoke_api == API) {
-        // If the CI has a compiled specptr, and this call site uses the same
-        // calling convention, link to it directly.
-        Result = Sym->specptr;
+    assert(Sym);
+    if (Sym->invoke_api == JL_INVOKE_ARGS && API == JL_INVOKE_SPECSIG) {
+        assert(F);
+        // codegen may contain safepoints (such as jl_subtype calls)
+        int8_t GCState = jl_gc_unsafe_enter(jl_current_task->ptls);
+        Function *G = emit_specsig_to_fptr1(GetOut(), CI, F);
+        G->setLinkage(GlobalValue::ExternalLinkage);
+        jl_gc_unsafe_leave(jl_current_task->ptls, GCState);
+        Trampoline.invoke_api = JL_INVOKE_SPECSIG;
+        Trampoline.specptr = mangle(G->getName());
     }
-    else {
-        // TODO: Check invariants to make sure this can't happen.
-        abort();
-    }
+
+    assert(Sym->invoke_api == API);
+    Result = Sym->specptr;
 
     // Trampolines shouldn't generate code that invokes other CodeInstances.
+    // JLMaterializationUnit will not acquire the LinkerMutex if no ci_funcs are
+    // defined in this output.
     if (Out) {
-        assert(Out->call_targets.empty());
+        assert(Out->call_targets.empty() && Out->ci_funcs.empty());
         addOutput(Out->finish(*ES.getSymbolStringPool()));
     }
 
