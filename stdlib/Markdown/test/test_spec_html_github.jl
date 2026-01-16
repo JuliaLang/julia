@@ -2221,7 +2221,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<ul>\n<li>foo</li>\n<li>bar</li>\n</ul>\n<ul>\n<li>baz</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 302
     input = "1. foo\n2. bar\n3) baz\n"

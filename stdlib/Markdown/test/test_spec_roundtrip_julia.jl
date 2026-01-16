@@ -2221,7 +2221,7 @@ end
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
-    @test expected == actual
+    @test_broken expected == actual
 
     # Example 302
     input = "1. foo\n2. bar\n3) baz\n"

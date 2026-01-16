@@ -316,7 +316,7 @@ function list(stream::IO, block::MD)
         initial, regex =
             if m.captures[3] == nothing
                 # An unordered list. Use `-1` to flag the list as unordered.
-                -1, BULLETS
+                -1, Regex("^ {0,3}(\\$(m.captures[1]))( |\$)")
             elseif m.captures[3] == "."
                 # An ordered list with `1. ` style numbering.
                 Base.parse(Int, m.captures[2]), r"^ {0,3}(\d+)\.( |$)"

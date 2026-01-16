@@ -1046,23 +1046,21 @@ end
 
     # Content and structure tests.
 
-    @test length(md) == 5
+    @test typeof.(md) == [Markdown.List, Markdown.List, Paragraph, Markdown.List, Markdown.List, Markdown.List]
     @test length(md[1].items) == 1
-    @test length(md[1].items[1]) == 3
-    @test isa(md[1].items[1][1], Markdown.Paragraph)
-    @test isa(md[1].items[1][2], Markdown.Code)
-    @test isa(md[1].items[1][3], Markdown.BlockQuote)
+    @test typeof.(md[1].items[1]) == [Markdown.Paragraph, Markdown.Code, Markdown.BlockQuote]
     @test length(md[2].items) == 1
     @test isa(md[2].items[1][1], Markdown.Paragraph)
     @test isa(md[3], Markdown.Paragraph)
-    @test length(md[4].items) == 3
+    @test length(md[4].items) == 2
     @test typeof.(md[4].items[1]) == [Paragraph, Paragraph]
     @test typeof.(md[4].items[2]) == [Paragraph]
-    @test typeof.(md[4].items[3]) == [Code]
-    @test length(md[5].items) == 3
-    @test md[5].items[1][1].content[1] == "foo"
-    @test md[5].items[2][1].content[1] == "bar"
-    @test md[5].items[3][1].content[1] == "baz"
+    @test length(md[5].items) == 1
+    @test typeof.(md[5].items[1]) == [Code]
+    @test length(md[6].items) == 3
+    @test md[6].items[1][1].content[1] == "foo"
+    @test md[6].items[2][1].content[1] == "bar"
+    @test md[6].items[3][1].content[1] == "baz"
 
     # Rendering tests.
     expected =
@@ -1084,6 +1082,7 @@ end
 
                 two
               * baz
+
               * ```
                 foo
                 ```
@@ -1121,6 +1120,8 @@ end
             <li>
             <p>baz</p>
             </li>
+            </ul>
+            <ul>
             <li>
             <pre><code>foo
             </code></pre>
@@ -1153,6 +1154,7 @@ end
 
               two
             * baz
+
             * .. code-block:: julia
 
                   foo
