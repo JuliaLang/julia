@@ -18,6 +18,18 @@ function check_commonmark_spec_html1(tst; report::Bool=false, flavor::Symbol=:ju
     parsed = Markdown.parse(input; flavor)
     expected = tst["html"]
     actual = Markdown.html(parsed)
+
+    # extra: check that replacing Unix line ends (a single "line feed" also known as LF, '\n' or U+000A)
+    # by classic macOS line ends (a single "carriage return", also known as CR, '\r' or U+000D) or
+    # by Windows line ends (CR+LF) does not change how we parse things
+    input2 = replace(input, "\n" => "\r\n")
+    parsed2 = Markdown.parse(input2; flavor)
+    parsed == parsed2 || println("test ", tst["example"], " is parsed differently with CRLF line ends")
+
+    input3 = replace(input, "\n" => "\r")
+    parsed3 = Markdown.parse(input2; flavor)
+    parsed == parsed3 || println("test ", tst["example"], " is parsed differently with CR line ends")
+
     if expected != actual && report
         printstyled("============================================\n"; color=:cyan)
         println("failed test ", tst["example"], ":")
