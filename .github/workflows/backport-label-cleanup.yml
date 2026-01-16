@@ -1,0 +1,64 @@
+name: Backport Label Cleanup
+# Runs automatically when a pull request to a release branch is merged
+# to remove backport labels from the merged PRs
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - 'release-*'
+
+jobs:
+  remove-backport-labels:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Extract version from branch
+        id: extract
+        run: |
+          BRANCH="${{ github.event.pull_request.base.ref }}"
+          if [[ "$BRANCH" =~ ^release-([0-9]+\.[0-9]+)$ ]]; then
+            echo "version=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          else
+            echo "Branch $BRANCH does not match release-X.Y pattern"
+            exit 0
+          fi
+
+      - name: Checkout Backporter
+        if: steps.extract.outputs.version != ''
+        uses: actions/checkout@v4
+        with:
+          repository: KristofferC/Backporter
+          ref: master
+          path: backporter
+
+      - name: Setup Julia
+        if: steps.extract.outputs.version != ''
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+
+      - name: Cache Julia packages
+        if: steps.extract.outputs.version != ''
+        uses: julia-actions/cache@v2
+        with:
+          cache-name: backporter
+
+      - name: Install dependencies
+        if: steps.extract.outputs.version != ''
+        run: |
+          cd backporter
+          julia --project -e 'using Pkg; Pkg.instantiate()'
+
+      - name: Run backport label cleanup
+        if: steps.extract.outputs.version != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd backporter
+          julia --project backporter.jl --audit \
+            -v ${{ steps.extract.outputs.version }} \
+            -r ${{ github.repository }} \
+            --cleanup-pr ${{ github.event.pull_request.number }}
