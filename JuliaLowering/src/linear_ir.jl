@@ -164,8 +164,8 @@ function compile_args(ctx, args)
         if isnothing(arg_val)
             # arguments that don't return a value, e.g. `f(return)`
             push!(args_out, nothing_(ctx, arg))
-        elseif (all_simple || is_const_read_arg(ctx, arg_val)) &&
-            is_valid_body_ir_argument(ctx, arg_val)
+        elseif ((all_simple || is_const_read_arg(ctx, arg_val)) &&
+                is_valid_body_ir_argument(ctx, arg_val))
             push!(args_out, arg_val)
         else
             push!(args_out, emit_assign_tmp(ctx, arg_val))
