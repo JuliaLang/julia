@@ -3994,20 +3994,21 @@ end
 
 # Let S be a struct we're defining in module M.  Below is a hack to allow its
 # field types to refer to S as M.S.  See #56497.
-function insert_struct_shim(ctx, fieldtypes, name)
-    function replace_type(ex)
-        if kind(ex) == K"." &&
-            numchildren(ex) == 2 &&
-            kind(ex[2]) == K"Symbol" &&
-            ex[2].name_val == name.name_val
-            @ast ctx ex [K"call" "struct_name_shim"::K"core" ex[1] ex[2] ctx.mod::K"Value" name]
-        elseif numchildren(ex) > 0
-            mapchildren(replace_type, ctx, ex)
-        else
-            ex
-        end
+function _insert_fieldtype_struct_shim(ctx, name, ex)
+    if kind(ex) == K"." &&
+        numchildren(ex) == 2 &&
+        kind(ex[2]) == K"Symbol" &&
+        ex[2].name_val == name.name_val
+        @ast ctx ex [K"call" "struct_name_shim"::K"core" ex[1] ex[2] ctx.mod::K"Value" name]
+    elseif numchildren(ex) > 0
+        mapchildren(e->_insert_fieldtype_struct_shim(ctx, name, e), ctx, ex)
+    else
+        ex
     end
-    map(replace_type, fieldtypes)
+end
+
+function insert_struct_shim(ctx, fieldtypes, name)
+    map(ex->_insert_fieldtype_struct_shim(ctx, name, ex), fieldtypes)
 end
 
 function expand_struct_def(ctx, ex, docs)
