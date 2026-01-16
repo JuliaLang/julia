@@ -56,6 +56,26 @@ static inline uintptr_t jmpbuf_sp(jl_jmp_buf *buf)
 {
     return demangle_ptr((uintptr_t)(*buf)[0].__jmpbuf[JB_RSP]);
 }
+#elif defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+/*
+ * jmpbuf layout:    see libplatform/src/setjmp/arm64/setjmp.s
+ * pointer mangling: see xnu/libsyscall/os/tsd.h
+ */
+static inline uintptr_t demangle_ptr(uintptr_t var)
+{
+    uintptr_t token, out;
+    asm ("mrs %0, TPIDRRO_EL0\n\t"
+         "bic %0, %0, #7\n\t"
+         "ldr %0, [%0, #56]\n\t"
+         "eor %1, %2, %0"
+         : "=&r"(token), "=r"(out)
+         : "r"(var));
+    return out;
+}
+static inline uintptr_t jmpbuf_sp(jl_jmp_buf *buf)
+{
+    return demangle_ptr(((uintptr_t*)buf)[12]);
+}
 #else
 #error Need to implement jmpbuf_sp for this architecture
 #endif

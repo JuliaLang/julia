@@ -135,6 +135,8 @@ else
     "-shared"
 end
 
+isasanbuild() = ccall(:jl_is_asanbuild, Cint, ()) == 1
+
 libdir() = abspath(Sys.BINDIR, Base.LIBDIR)
 private_libdir() = abspath(Sys.BINDIR, Base.PRIVATE_LIBDIR)
 if Sys.iswindows()
@@ -159,6 +161,15 @@ function link_image_cmd(path, out)
                 # libmingwex with ssp only being a stub. See #59020.
                 LIBS = (LIBS..., "-lmingwex", "-lkernel32")
             end
+        end
+    end
+
+    # When built with ASAN on macOS, link against the ASAN runtime
+    # (On Linux, ASAN symbols resolve from the Julia binary or standard paths)
+    # The ASAN runtime is installed to Julia's lib directory by deps/sanitizers.mk
+    @static if Sys.isapple()
+        if isasanbuild()
+            LIBS = (LIBS..., "-lclang_rt.asan_osx_dynamic")
         end
     end
 

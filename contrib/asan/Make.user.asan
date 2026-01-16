@@ -8,6 +8,12 @@ override CXX=$(TOOLDIR)/clang++
 override PATCHELF=$(TOOLDIR)/patchelf
 export ASAN_SYMBOLIZER_PATH=$(TOOLDIR)/llvm-symbolizer
 
+# On macOS, custom-built clang needs SDKROOT to find system headers
+MACOS_SDK_PATH := $(shell xcrun --show-sdk-path -sdk macosx 2>/dev/null)
+ifneq ($(MACOS_SDK_PATH),)
+export SDKROOT=$(MACOS_SDK_PATH)
+endif
+
 USE_BINARYBUILDER_LLVM=1
 
 override SANITIZE=1

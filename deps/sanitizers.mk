@@ -27,7 +27,12 @@ endef
 ifeq ($(USECLANG),1)
 
 ## Clang libraries
+# On Darwin, the sanitizer library naming is different: libclang_rt.asan_osx_dynamic.dylib
+ifeq ($(OS),Darwin)
+$(eval $(call copy_sanitizer_lib,libclang_rt.asan_osx_dynamic.dylib,libclang_rt.asan_osx_dynamic.dylib))
+else
 $(eval $(call copy_sanitizer_lib,$(call versioned_libname,libclang_rt.asan-*),$(call versioned_libname,libclang_rt.asan-%)))
+endif
 
 endif
 
