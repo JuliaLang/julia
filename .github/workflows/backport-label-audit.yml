@@ -22,3 +22,6 @@ on:
 jobs:
   audit:
     uses: JuliaLang/backporter-github-actions-workflows/.github/workflows/backport-label-audit.yml@main
+    with:
+      version: ${{ inputs.version }}
+      dry_run: ${{ inputs.dry_run }}
