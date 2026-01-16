@@ -22,6 +22,8 @@ on:
 jobs:
   audit:
     uses: JuliaLang/backporter-github-actions-workflows/.github/workflows/backport-label-audit.yml@fe307c87dc20e213a6c5f42cf96b2f363f62de02 # main
+    permissions:
+      pull-requests: write # necessary to be able to remove labels from PRs
     with:
       version: ${{ inputs.version }}
       dry_run: ${{ inputs.dry_run }}
