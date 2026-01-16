@@ -196,7 +196,7 @@ end
     # Example 25
     input = "&nbsp; &amp; &copy; &AElig; &Dcaron;\n&frac34; &HilbertSpace; &DifferentialD;\n&ClockwiseContourIntegral; &ngE;\n"
     md = Markdown.parse(input; flavor=:github)
-    expected = "<p>\uA0 &amp; © Æ Ď\n¾ ℋ ⅆ\n∲ ≧̸</p>\n"
+    expected = "<p>\u00A0 &amp; © Æ Ď\n¾ ℋ ⅆ\n∲ ≧̸</p>\n"
     actual = Markdown.html(md)
     @test expected == actual
 
@@ -2455,16 +2455,16 @@ end
     @test_broken expected == actual
 
     # Example 333
-    input = "`\uA0b\uA0`\n"
+    input = "`\u00A0b\u00A0`\n"
     md = Markdown.parse(input; flavor=:github)
-    expected = "<p><code>\uA0b\uA0</code></p>\n"
+    expected = "<p><code>\u00A0b\u00A0</code></p>\n"
     actual = Markdown.html(md)
     @test_broken expected == actual
 
     # Example 334
-    input = "`\uA0`\n`  `\n"
+    input = "`\u00A0`\n`  `\n"
     md = Markdown.parse(input; flavor=:github)
-    expected = "<p><code>\uA0</code>\n<code>  </code></p>\n"
+    expected = "<p><code>\u00A0</code>\n<code>  </code></p>\n"
     actual = Markdown.html(md)
     @test_broken expected == actual
 
@@ -2602,9 +2602,9 @@ end
     @test_broken expected == actual
 
     # Example 353
-    input = "*\uA0a\uA0*\n"
+    input = "*\u00A0a\u00A0*\n"
     md = Markdown.parse(input; flavor=:github)
-    expected = "<p>*\uA0a\uA0*</p>\n"
+    expected = "<p>*\u00A0a\u00A0*</p>\n"
     actual = Markdown.html(md)
     @test_broken expected == actual
 
@@ -3687,7 +3687,7 @@ end
     @test_broken expected == actual
 
     # Example 507
-    input = "[link](/url\uA0\"title\")\n"
+    input = "[link](/url\u00A0\"title\")\n"
     md = Markdown.parse(input; flavor=:github)
     expected = "<p><a href=\"/url%C2%A0%22title%22\">link</a></p>\n"
     actual = Markdown.html(md)
