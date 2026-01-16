@@ -1,0 +1,27 @@
+name: Backport Label Audit
+# Run this workflow manually to audit backport labels on pull requests
+# and remove labels from PRs that have already been backported.
+# Optionally specify a release version to limit the audit to that version
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version to audit (e.g., 1.13). Leave empty to audit all versions.'
+        required: false
+        type: string
+      dry_run:
+        description: 'Dry run (only report, do not modify)'
+        required: true
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+        default: 'true'
+
+jobs:
+  audit:
+    uses: JuliaLang/backporter-github-actions-workflows/.github/workflows/backport-label-audit.yml@fe307c87dc20e213a6c5f42cf96b2f363f62de02 # main
+    with:
+      version: ${{ inputs.version }}
+      dry_run: ${{ inputs.dry_run }}
