@@ -21,8 +21,7 @@ on:
 
 jobs:
   audit:
-    # TODO: Change from `main` to specific commit
-    uses: JuliaLang/backporter-github-actions-workflows/.github/workflows/backport-label-audit.yml@main
+    uses: JuliaLang/backporter-github-actions-workflows/.github/workflows/backport-label-audit.yml@fe307c87dc20e213a6c5f42cf96b2f363f62de02 # main
     with:
       version: ${{ inputs.version }}
       dry_run: ${{ inputs.dry_run }}
