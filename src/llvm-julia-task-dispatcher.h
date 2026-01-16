@@ -424,8 +424,7 @@ safelookup(ExecutionSession &ES,
            const JITDylibSearchOrder &SearchOrder,
            SymbolLookupSet Symbols, LookupKind K = LookupKind::Static,
            SymbolState RequiredState = SymbolState::Ready,
-           RegisterDependenciesFunction RegisterDependencies = NoDependenciesToRegister)
-JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE {
+           RegisterDependenciesFunction RegisterDependencies = NoDependenciesToRegister) JL_NOTSAFEPOINT {
   JuliaTaskDispatcher::future<MSVCPExpected<SymbolMap>> PromisedFuture;
   auto NotifyComplete = [PromisedResult = PromisedFuture.get_promise()](Expected<SymbolMap> R) {
     PromisedResult.set_value(std::move(R));
@@ -439,8 +438,7 @@ Expected<ExecutorSymbolDef>
 safelookup(ExecutionSession &ES,
            const JITDylibSearchOrder &SearchOrder,
            SymbolStringPtr Name,
-           SymbolState RequiredState = SymbolState::Ready)
-JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE {
+           SymbolState RequiredState = SymbolState::Ready) JL_NOTSAFEPOINT {
   SymbolLookupSet Names({Name});
 
   if (auto ResultMap = safelookup(ES, SearchOrder, std::move(Names), LookupKind::Static,
@@ -455,15 +453,13 @@ JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE {
 Expected<ExecutorSymbolDef>
 safelookup(ExecutionSession &ES,
            ArrayRef<JITDylib *> SearchOrder, SymbolStringPtr Name,
-           SymbolState RequiredState = SymbolState::Ready)
-JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE {
+           SymbolState RequiredState = SymbolState::Ready) JL_NOTSAFEPOINT {
   return safelookup(ES, makeJITDylibSearchOrder(SearchOrder), Name, RequiredState);
 }
 
 Expected<ExecutorSymbolDef>
 safelookup(ExecutionSession &ES,
            ArrayRef<JITDylib *> SearchOrder, StringRef Name,
-           SymbolState RequiredState = SymbolState::Ready)
-JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE {
+           SymbolState RequiredState = SymbolState::Ready) JL_NOTSAFEPOINT {
   return safelookup(ES, SearchOrder, ES.intern(Name), RequiredState);
 }

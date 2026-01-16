@@ -901,7 +901,6 @@ public:
     virtual StringRef getName() const override { return Obj->getBufferIdentifier(); }
 
     void materialize(std::unique_ptr<MaterializationResponsibility> R) override
-        JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE
     {
         auto G = jitlink::createLinkGraphFromObject(
             Obj->getMemBufferRef(), JIT.getExecutionSession().getSymbolStringPool());
@@ -2044,10 +2043,10 @@ CISymbolPtr JuliaOJIT::makeUniqueCIName(jl_code_instance_t *CI, const CISymbolPt
 // Convenience function to get a map from string pool symbols to symbols in this
 // LinkGraph that participate in linking (defined and external).
 static DenseMap<orc::SymbolStringPtr, jitlink::Symbol *>
-linkGraphSymbols(jitlink::LinkGraph &G) JL_NOTSAFEPOINT
+linkGraphSymbols(jitlink::LinkGraph &G)
 {
     DenseMap<orc::SymbolStringPtr, jitlink::Symbol *> Syms;
-    auto AddSyms = [&](auto Symbols) JL_NOTSAFEPOINT {
+    auto AddSyms = [&](auto Symbols) {
         for (auto S : Symbols)
             if (S->getName())
                 Syms[S->getName()] = S;
@@ -2064,8 +2063,9 @@ void JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
 
     // Rename the defined CI functions.
     std::lock_guard Lock{LinkerMutex};
-    auto RenameDef = [&](const SymbolStringPtr &Orig, const SymbolStringPtr &Dest)
-                         JL_NOTSAFEPOINT { Syms.at(Orig)->setName(Dest); };
+    auto RenameDef = [&](const SymbolStringPtr &Orig, const SymbolStringPtr &Dest) {
+        Syms.at(Orig)->setName(Dest);
+    };
     for (auto &[CI, Funcs] : Info->ci_funcs) {
         auto &S = CISymbols.at(CI);
         if (Funcs.invoke)
@@ -2120,7 +2120,7 @@ orc::SymbolStringPtr JuliaOJIT::linkCallTarget(jl_code_instance_t *CI, jl_invoke
     CISymbolPtr Trampoline;
     Function *F{};              // JL_INVOKE_ARGS function in the *Out module
     std::unique_ptr<jl_codegen_output_t> Out;
-    auto GetOut = [this, &Out]() JL_NOTSAFEPOINT -> jl_codegen_output_t & {
+    auto GetOut = [this, &Out]() -> jl_codegen_output_t & {
         if (Out)
             return *Out;
         Out = std::make_unique<jl_codegen_output_t>("linker_trampoline", getDataLayout(),

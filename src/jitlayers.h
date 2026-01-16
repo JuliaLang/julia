@@ -547,8 +547,7 @@ class JLDebuginfoPlugin : public orc::ObjectLinkingLayer::Plugin {
 public:
     void notifyMaterializingWithInfo(orc::MaterializationResponsibility &MR,
                                      jitlink::LinkGraph &G, MemoryBufferRef InputObject,
-                                     std::unique_ptr<jl_linker_info_t> LinkerInfo)
-        JL_NOTSAFEPOINT;
+                                     std::unique_ptr<jl_linker_info_t> LinkerInfo);
     Error notifyEmitted(orc::MaterializationResponsibility &MR) override;
     Error notifyFailed(orc::MaterializationResponsibility &MR) override;
     Error notifyRemovingResources(orc::JITDylib &JD, orc::ResourceKey K) override;
@@ -718,24 +717,17 @@ public:
     orc::ExecutionSession &getExecutionSession() JL_NOTSAFEPOINT { return ES; }
     orc::JITDylib &getExternalJITDylib() JL_NOTSAFEPOINT { return ExternalJD; }
 
-    Expected<llvm::orc::ExecutorSymbolDef>
-    findSymbol(StringRef Name,
-               bool ExportedSymbolsOnly) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
-    Expected<llvm::orc::ExecutorSymbolDef>
-    findUnmangledSymbol(StringRef Name) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
-    Expected<llvm::orc::ExecutorSymbolDef>
-    findExternalJDSymbol(StringRef Name,
-                         bool ExternalJDOnly) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
-    SmallVector<uint64_t>
-    findSymbols(ArrayRef<StringRef> Names) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
-    uint64_t
-    getGlobalValueAddress(StringRef Name) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
-    uint64_t getFunctionAddress(StringRef Name) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
+    Expected<llvm::orc::ExecutorSymbolDef> findSymbol(StringRef Name, bool ExportedSymbolsOnly) JL_NOTSAFEPOINT;
+    Expected<llvm::orc::ExecutorSymbolDef> findUnmangledSymbol(StringRef Name) JL_NOTSAFEPOINT;
+    Expected<llvm::orc::ExecutorSymbolDef> findExternalJDSymbol(StringRef Name, bool ExternalJDOnly) JL_NOTSAFEPOINT;
+    SmallVector<uint64_t> findSymbols(ArrayRef<StringRef> Names) JL_NOTSAFEPOINT;
+    uint64_t getGlobalValueAddress(StringRef Name) JL_NOTSAFEPOINT;
+    uint64_t getFunctionAddress(StringRef Name) JL_NOTSAFEPOINT;
 
     // Look up the symbols for each CI in the array, all of which have been
     // defined in a jl_emitted_output_t added with JuliaOJIT::addOutput.
     SmallVector<jl_codeinst_funcs_t<void *>>
-    findCIs(ArrayRef<jl_code_instance_t *> CIs) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
+    findCIs(ArrayRef<jl_code_instance_t *> CIs) JL_NOTSAFEPOINT;
 
     orc::ThreadSafeContext makeContext() JL_NOTSAFEPOINT;
     const DataLayout& getDataLayout() const JL_NOTSAFEPOINT;
@@ -779,9 +771,9 @@ protected:                      // Called from JLMaterializationUnit
 
     // Rename LinkGraph symbols to match the previously chosen names and
     // register debug info for defined symbols.
-    void linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferRef ObjBuf,
-                    jitlink::LinkGraph &G, std::unique_ptr<jl_linker_info_t> Info)
-        JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
+    void linkOutput(orc::MaterializationResponsibility &MR,
+                    MemoryBufferRef ObjBuf, jitlink::LinkGraph &G,
+                    std::unique_ptr<jl_linker_info_t> Info);
 
     // Return a symbol that should be linked to the call target.  The origin of
     // this symbol depends on the code instance:
@@ -793,8 +785,7 @@ protected:                      // Called from JLMaterializationUnit
     //   specialized function is expected but only a jlcall exists, or neither
     //   exists and we should go through jl_invoke), emit the trampoline into a
     //   new module and return a symbol for it.
-    orc::SymbolStringPtr linkCallTarget(jl_code_instance_t *CI, jl_invoke_api_t API)
-        JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
+    orc::SymbolStringPtr linkCallTarget(jl_code_instance_t *CI, jl_invoke_api_t API);
 
     // Create an ORC symbol and entry in CISymbols for the CI's specptr,
     // returning a pointer into CISymbols or NULL if the CI is not compiled.
