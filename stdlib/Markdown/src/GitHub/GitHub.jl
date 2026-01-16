@@ -26,7 +26,7 @@ end
 @flavor github [fencedcode, horizontalrule, list, indentcode, blockquote, admonition, footnote, hashheader,
                 html_block, html_block_type7, github_table, github_paragraph,
 
-                linebreak, escapes,
+                linebreak, escapes, entity,
                 en_or_em_dash, inline_code,
                 double_tilde_strikethrough, tilde_strikethrough,
                 asterisk_bold, underscore_bold,

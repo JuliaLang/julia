@@ -198,21 +198,21 @@ end
     md = Markdown.parse(input; flavor=:common)
     expected = "<p>\uA0 &amp; © Æ Ď\n¾ ℋ ⅆ\n∲ ≧̸</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 26
     input = "&#35; &#1234; &#992; &#0;\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<p># Ӓ Ϡ �</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 27
     input = "&#X22; &#XD06; &#xcab;\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<p>&quot; ആ ಫ</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 28
     input = "&nbsp &x; &#; &#x;\n&#87654321;\n&#abcdef0;\n&ThisIsNotDefined; &hi?;\n"
@@ -282,28 +282,28 @@ end
     md = Markdown.parse(input; flavor=:common)
     expected = "<p>*foo*\n<em>foo</em></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 38
     input = "&#42; foo\n\n* foo\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<p>* foo</p>\n<ul>\n<li>foo</li>\n</ul>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 39
     input = "foo&#10;&#10;bar\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<p>foo\n\nbar</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 40
     input = "&#9;foo\n"
     md = Markdown.parse(input; flavor=:common)
     expected = "<p>\tfoo</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 41
     input = "[a](url &quot;tit&quot;)\n"
@@ -3607,7 +3607,7 @@ end
     md = Markdown.parse(input; flavor=:common)
     expected = "<p><a href=\"(foo)\">link</a></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 496
     input = "[link](foo(and(bar)))\n"
