@@ -13,6 +13,14 @@ using JSON
 using Test
 using StyledStrings
 
+#
+# Some spec tests fail because of decisions made for Julia Markdown:
+#
+# - Even number of backticks in inline code for math mode: 17, 121, 329, 335, 336, 339, 349
+# - Two or more spaces at the end of a line do *not* indicate a hard line break (see
+#   <https://github.com/JuliaLang/julia/issues/16004>): 633, 635, 636, 638
+#
+
 function check_commonmark_spec_html1(tst; report::Bool=false, flavor::Symbol=:julia)
     input = tst["markdown"]
     parsed = Markdown.parse(input; flavor)
