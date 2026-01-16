@@ -264,6 +264,8 @@ function terminline(io::IO, tex::LaTeX)
     print(io, styled"{markdown_latex:$(tex.formula)}")
 end
 
+terminline(io::IO, md::HTMLInline) = print(io, md.content)
+
 function terminline(io::IO, md::MarkdownElement)
     a = IOContext(AnnotatedIOBuffer(), io)
     terminline(a, md)

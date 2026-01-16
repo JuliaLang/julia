@@ -227,6 +227,8 @@ function htmlinline(io::IO, br::LineBreak)
     println(io)
 end
 
+htmlinline(io::IO, md::HTMLInline) = print(io, md.content)
+
 htmlinline(io::IO, x) = tohtml(io, x)
 
 # API
