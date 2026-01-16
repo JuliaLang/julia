@@ -79,9 +79,9 @@ declare ptr addrspace(10) @external_function2()
 
 
 ; CHECK-LABEL: @legal_int_types
-; Test that allocations use alignment-sized chunks (i128 for 16-byte alignment)
-; A 12-byte allocation rounds up to 16 bytes, giving i128
-; CHECK: alloca i128, align 16
+; Test that allocations use i64 chunks (capped at 64 bits for backend compatibility)
+; A 12-byte allocation rounds up to 16 bytes, giving [2 x i64]
+; CHECK: alloca [2 x i64], align 16
 ; CHECK: call void @llvm.memset.p0.i64(ptr align 16 %var1,
 ; CHECK: ret void
 define void @legal_int_types() {
@@ -152,8 +152,8 @@ define void @lifetime_no_preserve_end(ptr noalias nocapture noundef nonnull sret
 
 
 ; CHECK-LABEL: @initializers
-; Small allocations (1, 2, 3 bytes) all round up to i128 with 16-byte alignment
-; CHECK-DAG: alloca i128, align 16
+; Small allocations (1, 2, 3 bytes) all round up to 8 bytes, giving i64
+; CHECK-DAG: alloca i64, align 16
 ; CHECK-DAG: call void @llvm.memset.p0.i64(ptr align 16 %var1,
 ; CHECK-DAG: call void @llvm.memset.p0.i64(ptr align 16 %var7,
 ; CHECK: ret void
@@ -269,9 +269,9 @@ define swiftcc i64 @"atomicrmw"(ptr nonnull swiftself "gcstack" %0) #0 {
 }
 
 ; Test that higher alignment from the original allocation is inherited
-; 8 bytes with 32-byte alignment rounds up to i256
+; 8 bytes with 32-byte alignment uses i64 (element size capped at 64 bits)
 ; CHECK-LABEL: @align_inherit
-; CHECK: alloca i256, align 32
+; CHECK: alloca i64, align 32
 ; CHECK: ret void
 define void @align_inherit() {
   %pgcstack = call ptr @julia.get_pgcstack()
@@ -284,9 +284,9 @@ define void @align_inherit() {
 }
 ; CHECK-LABEL: }{{$}}
 
-; Test that 8-byte allocation rounds up to i128 with GC alignment
+; Test that 8-byte allocation uses i64 with GC alignment
 ; CHECK-LABEL: @legal_int_i64
-; CHECK: alloca i128, align 16
+; CHECK: alloca i64, align 16
 ; CHECK: ret void
 define void @legal_int_i64() {
   %pgcstack = call ptr @julia.get_pgcstack()

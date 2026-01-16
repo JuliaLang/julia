@@ -701,11 +701,13 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
     else {
         // Use alignment-sized chunks so SROA splits the alloca into aligned pieces
         // which is better for performance and vectorization (see emit_static_alloca).
+        // Cap element size at 64 bits since not all backends support larger integers.
         Type *buffty;
-        if (alignTo(sz, align) == align.value())
-            buffty = Type::getIntNTy(pass.getLLVMContext(), align.value() * 8);
+        unsigned elsize = std::min(align.value(), (uint64_t)8);
+        if (alignTo(sz, elsize) == elsize)
+            buffty = Type::getIntNTy(pass.getLLVMContext(), elsize * 8);
         else
-            buffty = ArrayType::get(Type::getIntNTy(pass.getLLVMContext(), align.value() * 8), alignTo(sz, align) / align.value());
+            buffty = ArrayType::get(Type::getIntNTy(pass.getLLVMContext(), elsize * 8), alignTo(sz, elsize) / elsize);
         buff = prolog_builder.CreateAlloca(buffty);
         buff->setAlignment(align);
         ptr = cast<Instruction>(buff);
@@ -997,10 +999,12 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         else {
             // Use alignment-sized chunks so SROA splits the alloca into aligned pieces
             // which is better for performance and vectorization (see emit_static_alloca).
-            if (alignTo(field.size, align) == align.value())
-                allocty = Type::getIntNTy(pass.getLLVMContext(), align.value() * 8);
+            // Cap element size at 64 bits since not all backends support larger integers.
+            unsigned elsize = std::min(align.value(), (uint64_t)8);
+            if (alignTo(field.size, elsize) == elsize)
+                allocty = Type::getIntNTy(pass.getLLVMContext(), elsize * 8);
             else
-                allocty = ArrayType::get(Type::getIntNTy(pass.getLLVMContext(), align.value() * 8), alignTo(field.size, align) / align.value());
+                allocty = ArrayType::get(Type::getIntNTy(pass.getLLVMContext(), elsize * 8), alignTo(field.size, elsize) / elsize);
         }
         slot.slot = prolog_builder.CreateAlloca(allocty);
         slot.slot->setAlignment(align);
