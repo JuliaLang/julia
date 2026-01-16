@@ -2116,7 +2116,7 @@ orc::SymbolStringPtr JuliaOJIT::linkCallTarget(jl_code_instance_t *CI, jl_invoke
 
     orc::SymbolStringPtr Result;
     CISymbolPtr Trampoline;
-    Function *F;                // JL_INVOKE_ARGS function in the *Out module
+    Function *F{};              // JL_INVOKE_ARGS function in the *Out module
     std::unique_ptr<jl_codegen_output_t> Out;
     auto GetOut = [this, &Out]() JL_NOTSAFEPOINT -> jl_codegen_output_t & {
         if (Out)
