@@ -177,7 +177,14 @@ function htmlinline(io::IO, code′::Code)
 end
 
 function htmlinline(io::IO, md::Union{Symbol,AbstractString})
-    htmlesc(io, md)
+    htmlinline(io, String(md))
+end
+
+function htmlinline(io::IO, s::String)
+    # Spaces at the end of the line and beginning of the next line are removed
+    s = replace(s, r"[ \t]+\n" => "\n")
+    s = replace(s, r"\n[ \t]+" => "\n")
+    htmlesc(io, s)
 end
 
 function htmlinline(io::IO, md::Bold)
