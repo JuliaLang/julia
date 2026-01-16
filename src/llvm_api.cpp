@@ -43,7 +43,16 @@ public:
 typedef struct JLOpaqueJuliaOJIT *JuliaOJITRef;
 typedef struct LLVMOrcOpaqueIRCompileLayer *LLVMOrcIRCompileLayerRef;
 
-DEFINE_SIMPLE_CONVERSION_FUNCTIONS(JuliaOJIT, JuliaOJITRef)
+inline JuliaOJIT *unwrap(JuliaOJITRef P) JL_NOTSAFEPOINT
+{
+    return reinterpret_cast<JuliaOJIT *>(P);
+}
+
+inline JuliaOJITRef wrap(const JuliaOJIT *P) JL_NOTSAFEPOINT
+{
+    return reinterpret_cast<JuliaOJITRef>(const_cast<JuliaOJIT *>(P));
+}
+
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::JITDylib, LLVMOrcJITDylibRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ExecutionSession, LLVMOrcExecutionSessionRef)
 #if JL_LLVM_VERSION >= 180000
@@ -93,6 +102,7 @@ JL_DLLEXPORT_CODEGEN LLVMErrorRef JLJITAddLLVMIRModule_impl(
 JL_DLLEXPORT_CODEGEN LLVMErrorRef
 JLJITLookup_impl(JuliaOJITRef JIT, LLVMOrcExecutorAddress *Result,
                                    const char *Name, int ExternalJDOnly)
+    JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE
 {
     auto Sym = unwrap(JIT)->findExternalJDSymbol(Name, ExternalJDOnly);
     if (Sym) {
