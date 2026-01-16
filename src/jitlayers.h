@@ -717,17 +717,16 @@ public:
     orc::ExecutionSession &getExecutionSession() JL_NOTSAFEPOINT { return ES; }
     orc::JITDylib &getExternalJITDylib() JL_NOTSAFEPOINT { return ExternalJD; }
 
-    Expected<llvm::orc::ExecutorSymbolDef> findSymbol(StringRef Name, bool ExportedSymbolsOnly) JL_NOTSAFEPOINT;
-    Expected<llvm::orc::ExecutorSymbolDef> findUnmangledSymbol(StringRef Name) JL_NOTSAFEPOINT;
-    Expected<llvm::orc::ExecutorSymbolDef> findExternalJDSymbol(StringRef Name, bool ExternalJDOnly) JL_NOTSAFEPOINT;
-    SmallVector<uint64_t> findSymbols(ArrayRef<StringRef> Names) JL_NOTSAFEPOINT;
-    uint64_t getGlobalValueAddress(StringRef Name) JL_NOTSAFEPOINT;
-    uint64_t getFunctionAddress(StringRef Name) JL_NOTSAFEPOINT;
+    Expected<llvm::orc::ExecutorSymbolDef> findSymbol(StringRef Name, bool ExportedSymbolsOnly);
+    Expected<llvm::orc::ExecutorSymbolDef> findUnmangledSymbol(StringRef Name);
+    Expected<llvm::orc::ExecutorSymbolDef> findExternalJDSymbol(StringRef Name, bool ExternalJDOnly);
+    SmallVector<uint64_t> findSymbols(ArrayRef<StringRef> Names);
+    uint64_t getGlobalValueAddress(StringRef Name);
+    uint64_t getFunctionAddress(StringRef Name);
 
     // Look up the symbols for each CI in the array, all of which have been
     // defined in a jl_emitted_output_t added with JuliaOJIT::addOutput.
-    SmallVector<jl_codeinst_funcs_t<void *>>
-    findCIs(ArrayRef<jl_code_instance_t *> CIs) JL_NOTSAFEPOINT;
+    SmallVector<jl_codeinst_funcs_t<void *>> findCIs(ArrayRef<jl_code_instance_t *> CIs);
 
     orc::ThreadSafeContext makeContext() JL_NOTSAFEPOINT;
     const DataLayout& getDataLayout() const JL_NOTSAFEPOINT;

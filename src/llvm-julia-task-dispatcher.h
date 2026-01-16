@@ -424,7 +424,7 @@ safelookup(ExecutionSession &ES,
            const JITDylibSearchOrder &SearchOrder,
            SymbolLookupSet Symbols, LookupKind K = LookupKind::Static,
            SymbolState RequiredState = SymbolState::Ready,
-           RegisterDependenciesFunction RegisterDependencies = NoDependenciesToRegister) JL_NOTSAFEPOINT {
+           RegisterDependenciesFunction RegisterDependencies = NoDependenciesToRegister) {
   JuliaTaskDispatcher::future<MSVCPExpected<SymbolMap>> PromisedFuture;
   auto NotifyComplete = [PromisedResult = PromisedFuture.get_promise()](Expected<SymbolMap> R) {
     PromisedResult.set_value(std::move(R));
@@ -438,7 +438,7 @@ Expected<ExecutorSymbolDef>
 safelookup(ExecutionSession &ES,
            const JITDylibSearchOrder &SearchOrder,
            SymbolStringPtr Name,
-           SymbolState RequiredState = SymbolState::Ready) JL_NOTSAFEPOINT {
+           SymbolState RequiredState = SymbolState::Ready) {
   SymbolLookupSet Names({Name});
 
   if (auto ResultMap = safelookup(ES, SearchOrder, std::move(Names), LookupKind::Static,
@@ -453,13 +453,13 @@ safelookup(ExecutionSession &ES,
 Expected<ExecutorSymbolDef>
 safelookup(ExecutionSession &ES,
            ArrayRef<JITDylib *> SearchOrder, SymbolStringPtr Name,
-           SymbolState RequiredState = SymbolState::Ready) JL_NOTSAFEPOINT {
+           SymbolState RequiredState = SymbolState::Ready) {
   return safelookup(ES, makeJITDylibSearchOrder(SearchOrder), Name, RequiredState);
 }
 
 Expected<ExecutorSymbolDef>
 safelookup(ExecutionSession &ES,
            ArrayRef<JITDylib *> SearchOrder, StringRef Name,
-           SymbolState RequiredState = SymbolState::Ready) JL_NOTSAFEPOINT {
+           SymbolState RequiredState = SymbolState::Ready) {
   return safelookup(ES, SearchOrder, ES.intern(Name), RequiredState);
 }

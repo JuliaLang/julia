@@ -450,33 +450,39 @@ static void jl_do_dump_compile(jl_code_instance_t *codeinst, uint64_t time)
 // set the invoke field for codeinst (and all deps, and assist with other pending work from other threads) now
 static void jl_compile_codeinst_now(jl_code_instance_t *codeinst)
 {
-    jl_unique_gcsafe_lock lock{engine_lock};
-    if (jl_is_compiled_codeinst(codeinst))
-        return;
+    jl_unique_finalizers_lock finalizers_lock;
+    SmallVector<jl_code_instance_t *> cis;
 
-    threads_in_compiler_phase++;
-    while (!emitted_code.empty()) {
-        auto [ci, out] = emitted_code.pop_back_val();
-        lock.native.unlock();
-        uint64_t start_time = jl_hrtime();
-        // may safepoint
-        jl_ExecutionEngine->optimizeDLSyms(*out.module.getModuleUnlocked());
-        jl_ExecutionEngine->addOutput(std::move(out));
-        jl_do_dump_compile(ci, jl_hrtime() - start_time);
-        lock.native.lock();
-        compiled_code.push_back(ci);
+    {
+        jl_unique_gcsafe_lock lock{engine_lock};
+        if (jl_is_compiled_codeinst(codeinst))
+            return;
+
+        threads_in_compiler_phase++;
+        while (!emitted_code.empty()) {
+            auto [ci, out] = emitted_code.pop_back_val();
+            lock.native.unlock();
+            uint64_t start_time = jl_hrtime();
+            // may safepoint
+            jl_ExecutionEngine->optimizeDLSyms(*out.module.getModuleUnlocked());
+            jl_ExecutionEngine->addOutput(std::move(out));
+            jl_do_dump_compile(ci, jl_hrtime() - start_time);
+            lock.native.lock();
+            compiled_code.push_back(ci);
+        }
+
+        if (--threads_in_compiler_phase > 0) {
+            lock.wait(engine_wait);
+            return;
+        }
+
+        assert(emitted_code.empty());
+        std::swap(cis, compiled_code);
     }
 
-    if (--threads_in_compiler_phase > 0) {
-        lock.wait(engine_wait);
-        return;
-    }
-
-    assert(emitted_code.empty());
-    auto addrs = jl_ExecutionEngine->findCIs(compiled_code);
-    for (size_t i = 0; i < compiled_code.size(); i++)
-        jl_publish_compiled_ci(compiled_code[i], addrs[i]);
-    compiled_code.clear();
+    auto addrs = jl_ExecutionEngine->findCIs(cis);
+    for (size_t i = 0; i < cis.size(); i++)
+        jl_publish_compiled_ci(cis[i], addrs[i]);
     engine_wait.notify_all();
 }
 
@@ -905,9 +911,7 @@ public:
         auto G = jitlink::createLinkGraphFromObject(
             Obj->getMemBufferRef(), JIT.getExecutionSession().getSymbolStringPool());
         if (!G) {
-#ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the static analyzer thinks might be a safepoint
             R->getExecutionSession().reportError(G.takeError());
-#endif
             R->failMaterialization();
             return;
         }
@@ -2150,10 +2154,8 @@ orc::SymbolStringPtr JuliaOJIT::linkCallTarget(jl_code_instance_t *CI, jl_invoke
     if (Sym->invoke_api == JL_INVOKE_ARGS && API == JL_INVOKE_SPECSIG) {
         assert(F);
         // codegen may contain safepoints (such as jl_subtype calls)
-        int8_t GCState = jl_gc_unsafe_enter(jl_current_task->ptls);
         Function *G = emit_specsig_to_fptr1(GetOut(), CI, F);
         G->setLinkage(GlobalValue::ExternalLinkage);
-        jl_gc_unsafe_leave(jl_current_task->ptls, GCState);
         Trampoline.invoke_api = JL_INVOKE_SPECSIG;
         Trampoline.specptr = mangle(G->getName());
     }
