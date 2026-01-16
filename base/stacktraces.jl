@@ -167,20 +167,22 @@ function lookup(ip::Base.InterpreterIP)
     if isempty(scopes)
         return [StackFrame(func, file, line, code, false, false, 0)]
     end
-    closure = let inlined::Bool = false, def = def
-        function closure_inner(lno)
-            if inlined
-                def = lno.method
-                def isa Union{Method,Core.CodeInstance,MethodInstance} || (def = nothing)
-            else
-                def = codeinfo
-            end
-            sf = StackFrame(IRShow.normalize_method_name(lno.method), lno.file, lno.line, def, false, inlined, 0)
-            inlined = true
-            return sf
+    res = Vector{StackFrame}(undef, length(scopes))
+    inlined = false
+    def_local = def
+    for i in eachindex(scopes)
+        lno = scopes[i]
+        if inlined
+            def_local = lno.method
+            def_local isa Union{Method,Core.CodeInstance,MethodInstance} || (def_local = nothing)
+        else
+            def_local = codeinfo
         end
+        res[i] = StackFrame(IRShow.normalize_method_name(lno.method), lno.file, lno.line,
+            def_local, false, inlined, 0)
+        inlined = true
     end
-    return map(closure, scopes)
+    return res
 end
 
 """
@@ -283,7 +285,8 @@ function show_spec_linfo(io::IO, frame::StackFrame)
             else
                 # Equivalent to the default implementation of `show_custom_spec_sig`
                 # for `linfo isa CodeInstance`, but saves an extra dynamic dispatch.
-                show_spec_sig(io, def, frame_mi(frame).specTypes)
+                mi = frame_mi(frame)::MethodInstance
+                show_spec_sig(io, def::Method, mi.specTypes)
             end
         else
             m = linfo::Method
@@ -295,7 +298,8 @@ end
 # Can be extended by compiler packages to customize backtrace display of custom code instance frames
 function show_custom_spec_sig(io::IO, @nospecialize(owner), linfo::CodeInstance, frame::StackFrame)
     mi = Base.get_ci_mi(linfo)
-    return show_spec_sig(io, mi.def, mi.specTypes)
+    m = mi.def::Method # the case ::Module is handled in show_spec_linfo
+    return show_spec_sig(io, m, mi.specTypes)
 end
 
 function show_spec_sig(io::IO, m::Method, @nospecialize(sig::Type))

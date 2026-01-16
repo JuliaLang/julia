@@ -1,7 +1,7 @@
 # Lowering pass 1: Macro expansion, simple normalizations and quote expansion
 
-struct MacroExpansionContext{GraphType} <: AbstractLoweringContext
-    graph::GraphType
+struct MacroExpansionContext{Attrs} <: AbstractLoweringContext
+    graph::SyntaxGraph{Attrs}
     bindings::Bindings
     scope_layers::Vector{ScopeLayer}
     scope_layer_stack::Vector{LayerId}
@@ -195,19 +195,16 @@ function set_macro_arg_hygiene(ctx, ex, layer_ids, layer_idx)
     k = kind(ex)
     scope_layer = get(ex, :scope_layer, layer_ids[layer_idx])
     if is_leaf(ex)
-        makeleaf(ctx, ex, ex, [:scope_layer=>scope_layer])
+        setattr!(copy_node(ex), :scope_layer, scope_layer)
     else
-        inner_layer_idx = layer_idx
-        if k == K"escape"
-            inner_layer_idx = layer_idx - 1
-            if inner_layer_idx < 1
-                # If we encounter too many escape nodes, there's probably been
-                # an error in the previous macro expansion.
-                # todo: The error here isn't precise about that - maybe we
-                # should record that macro call expression with the scope layer
-                # if we want to report the error against the macro call?
-                throw(MacroExpansionError(ex, "`escape` node in outer context"))
-            end
+        inner_layer_idx = k == K"escape" ? layer_idx - 1 : layer_idx
+        if k == K"escape" && inner_layer_idx < 1
+            # If we encounter too many escape nodes, there's probably been
+            # an error in the previous macro expansion.
+            # todo: The error here isn't precise about that - maybe we
+            # should record that macro call expression with the scope layer
+            # if we want to report the error against the macro call?
+            throw(MacroExpansionError(ex, "`escape` node in outer context"))
         end
         node = mapchildren(e->set_macro_arg_hygiene(
             ctx, e, layer_ids, inner_layer_idx), ctx, ex)
@@ -356,19 +353,24 @@ function expand_macro(ctx, ex)
     return expanded
 end
 
+_unpack_srcref(graph, srcref::SyntaxTree) = _node_id(graph, srcref)
+_unpack_srcref(graph, srcref::Tuple)      = _node_ids(graph, srcref...)
+_unpack_srcref(graph, srcref)             = srcref
+
 # Add a secondary source of provenance to each expression in the tree `ex`.
 function append_sourceref(ctx, ex, secondary_prov)
     srcref = (ex, secondary_prov)
-    if !is_leaf(ex)
+    out = if !is_leaf(ex)
         if kind(ex) == K"macrocall"
-            makenode(ctx, srcref, ex, children(ex))
+            copy_node(ex)
         else
             cs = map(e->append_sourceref(ctx, e, secondary_prov)._id, children(ex))
-            makenode(ctx, srcref, ex, cs)
+            mknode(ex, cs)
         end
     else
-        makeleaf(ctx, srcref, ex)
+        copy_node(ex)
     end
+    setattr!(out, :source, _unpack_srcref(syntax_graph(ctx), srcref))
 end
 
 function remove_scope_layer!(ex)
@@ -377,7 +379,7 @@ function remove_scope_layer!(ex)
             remove_scope_layer!(c)
         end
     end
-    deleteattr!(ex, :scope_layer)
+    JuliaSyntax.deleteattr!(ex, :scope_layer)
     ex
 end
 
@@ -410,7 +412,9 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         else
             k = all(==('_'), name_str) ? K"Placeholder" : K"Identifier"
             scope_layer = get(ex, :scope_layer, current_layer_id(ctx))
-            makeleaf(ctx, ex, ex, [:kind=>k, :scope_layer=>scope_layer])
+            out = mkleaf(ex)
+            setattr!(out, :kind, k)
+            setattr!(out, :scope_layer, scope_layer)
         end
     elseif k == K"var" || k == K"char" || k == K"parens"
         # Strip "container" nodes

@@ -1168,6 +1168,17 @@ function ==(r::AbstractRange, s::AbstractRange)
     return true
 end
 
+function cmp(r1::T, r2::T) where {T <: AbstractRange}
+    firstindex(r1) == firstindex(r2) || return cmp(firstindex(r1), firstindex(r2))
+    (isempty(r1) || isempty(r2)) && return cmp(isempty(r2), isempty(r1))
+    first(r1) != first(r2) && return cmp(first(r1), first(r2))
+    # Assume that ranges are monotonic and use the last shared element as a high precision proxy for step.
+    n = min(lastindex(r1), lastindex(r2))
+    x1, x2 = r1[n], r2[n]
+    x1 != x2 && return cmp(x1, x2)
+    cmp(length(r1), length(r2))
+end
+
 intersect(r::OneTo, s::OneTo) = OneTo(min(r.stop,s.stop))
 union(r::OneTo, s::OneTo) = OneTo(max(r.stop,s.stop))
 

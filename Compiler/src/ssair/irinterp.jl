@@ -56,7 +56,7 @@ end
 
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, sstate::StatementState, irsv::IRInterpretationState)
     si = StmtInfo(true, sstate.saw_latestworld) # TODO better job here?
-    call = abstract_call(interp, arginfo, si, irsv)::Future
+    call = abstract_call(interp, arginfo, si, sstate.vtypes, irsv)::Future
     Future{Any}(call, interp, irsv) do call, interp, irsv
         irsv.ir.stmts[irsv.curridx][:info] = call.info
         nothing

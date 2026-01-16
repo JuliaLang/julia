@@ -622,10 +622,17 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
     return result;
 }
 
-JL_DLLEXPORT jl_value_t *jl_atomic_fence(jl_value_t *order_sym)
+JL_DLLEXPORT jl_value_t *jl_atomic_fence(jl_value_t *order_sym, jl_value_t *syncscope_sym)
 {
     JL_TYPECHK(fence, symbol, order_sym);
+    JL_TYPECHK(fence, symbol, syncscope_sym);
     enum jl_memory_order order = jl_get_atomic_order_checked((jl_sym_t*)order_sym, 1, 1);
+    if ((jl_sym_t*)syncscope_sym == jl_singlethread_sym) {
+        asm volatile ("" : : : "memory");
+        return jl_nothing;
+    } else if ((jl_sym_t*)syncscope_sym != jl_system_sym) {
+        jl_error("atomic_fence: invalid syncscope");
+    }
     if (order > jl_memory_order_monotonic)
         jl_fence();
     return jl_nothing;
