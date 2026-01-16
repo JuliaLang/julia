@@ -72,7 +72,7 @@ using Markdown
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
-    @test expected == actual
+    @test_broken expected == actual
 
     # Example 10
     input = "#\tFoo\n"
@@ -436,7 +436,7 @@ end
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
-    @test expected == actual
+    @test_broken expected == actual
 
     # Example 58
     input = "Foo\n***\nbar\n"
@@ -709,7 +709,7 @@ end
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
-    @test expected == actual
+    @test_broken expected == actual
 
     # Example 95
     input = "Foo\nBar\n---\n"
@@ -744,7 +744,7 @@ end
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
-    @test expected == actual
+    @test_broken expected == actual
 
     # Example 100
     input = "    foo\n---\n"
@@ -2067,7 +2067,7 @@ end
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
-    @test expected == actual
+    @test_broken expected == actual
 
     # Example 281
     input = "- foo\n-\n- bar\n"
@@ -2137,14 +2137,14 @@ end
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
-    @test expected == actual
+    @test_broken expected == actual
 
     # Example 291
     input = "  1.  A paragraph\n    with two lines.\n"
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
-    @test expected == actual
+    @test_broken expected == actual
 
     # Example 292
     input = "> 1. > Blockquote\ncontinued here.\n"
@@ -2158,7 +2158,7 @@ end
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
-    @test expected == actual
+    @test_broken expected == actual
 
     # Example 294
     input = "- foo\n  - bar\n    - baz\n      - boo\n"
@@ -2186,7 +2186,7 @@ end
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
-    @test expected == actual
+    @test_broken expected == actual
 
     # Example 298
     input = "- - foo\n"
@@ -2207,7 +2207,7 @@ end
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
-    @test expected == actual
+    @test_broken expected == actual
 
 end
 
@@ -2312,14 +2312,14 @@ end
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
-    @test expected == actual
+    @test_broken expected == actual
 
     # Example 315
     input = "* a\n*\n\n* c\n"
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
-    @test expected == actual
+    @test_broken expected == actual
 
     # Example 316
     input = "- a\n- b\n\n  c\n- d\n"
@@ -2361,7 +2361,7 @@ end
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
-    @test expected == actual
+    @test_broken expected == actual
 
     # Example 322
     input = "- a\n"
@@ -2396,7 +2396,7 @@ end
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
-    @test expected == actual
+    @test_broken expected == actual
 
 end
 

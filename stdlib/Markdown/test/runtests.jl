@@ -187,9 +187,7 @@ end
     1. pirate
     2. ninja
     3. zombie"""
-    @test length(doc) === 2
-    @test isa(doc[1], Markdown.List)
-    @test isa(doc[2], Markdown.List)
+    @test typeof.(doc) == [Markdown.List, Markdown.List]
     @test doc[1].items[1][1].content[1] == "one"
     @test doc[1].items[2][1].content[1] == "two"
     @test doc[2].items[1][1].content[1] == "pirate"
@@ -206,10 +204,7 @@ end
         ... another paragraph.
         """
     )
-    @test length(doc) === 3
-    @test isa(doc[1], Markdown.Paragraph)
-    @test isa(doc[2], Markdown.List)
-    @test isa(doc[3], Markdown.Paragraph)
+    @test typeof.(doc) == [Markdown.Paragraph, Markdown.List, Markdown.Paragraph]
 
     @test length(doc[2].items) === 2
     @test doc[2].items[1][1].content[1] == "one"
@@ -368,8 +363,8 @@ end
     @test md"###### h6" |> html == "<h6>h6</h6>\n"
     @test md"####### h7" |> html == "<p>####### h7</p>\n"
     @test md"   >" |> html == "<blockquote>\n</blockquote>\n"
-    @test md"1. Hello" |> html == "<ol>\n<li><p>Hello</p>\n</li>\n</ol>\n"
-    @test md"* World" |> html == "<ul>\n<li><p>World</p>\n</li>\n</ul>\n"
+    @test md"1. Hello" |> html == "<ol>\n<li>Hello</li>\n</ol>\n"
+    @test md"* World" |> html == "<ul>\n<li>World</li>\n</ul>\n"
     @test md"# title *blah*" |> html == "<h1>title <em>blah</em></h1>\n"
     @test md"## title *blah*" |> html == "<h2>title <em>blah</em></h2>\n"
     @test md"<https://julialang.org>" |> html == """<p><a href="https://julialang.org">https://julialang.org</a></p>\n"""
@@ -481,10 +476,8 @@ end
     <h2>Section <em>important</em></h2>
     <p>Some <strong>bolded</strong></p>
     <ul>
-    <li><p>list1</p>
-    </li>
-    <li><p>list2</p>
-    </li>
+    <li>list1</li>
+    <li>list2</li>
     </ul>
     </div>"""
     @test sprint(show, "text/html", book) == out
@@ -1053,7 +1046,7 @@ end
 
     # Content and structure tests.
 
-    @test length(md) == 6
+    @test length(md) == 5
     @test length(md[1].items) == 1
     @test length(md[1].items[1]) == 3
     @test isa(md[1].items[1][1], Markdown.Paragraph)
@@ -1062,16 +1055,14 @@ end
     @test length(md[2].items) == 1
     @test isa(md[2].items[1][1], Markdown.Paragraph)
     @test isa(md[3], Markdown.Paragraph)
-    @test length(md[4].items) == 1
-    @test isa(md[4].items[1][1], Paragraph)
-    @test isa(md[4].items[1][2], Paragraph)
-    @test length(md[5].items) == 2
-    @test isa(md[5].items[1][1], Markdown.Paragraph)
-    @test isa(md[5].items[2][1], Markdown.Code)
-    @test length(md[6].items) == 3
-    @test md[6].items[1][1].content[1] == "foo"
-    @test md[6].items[2][1].content[1] == "bar"
-    @test md[6].items[3][1].content[1] == "baz"
+    @test length(md[4].items) == 3
+    @test typeof.(md[4].items[1]) == [Paragraph, Paragraph]
+    @test typeof.(md[4].items[2]) == [Paragraph]
+    @test typeof.(md[4].items[3]) == [Code]
+    @test length(md[5].items) == 3
+    @test md[5].items[1][1].content[1] == "foo"
+    @test md[5].items[2][1].content[1] == "bar"
+    @test md[5].items[3][1].content[1] == "baz"
 
     # Rendering tests.
     expected =
@@ -1092,7 +1083,6 @@ end
               * one
 
                 two
-
               * baz
               * ```
                 foo
@@ -1107,7 +1097,8 @@ end
     expected =
             """
             <ol>
-            <li><p>A paragraph
+            <li>
+            <p>A paragraph
             with two lines.</p>
             <pre><code>indented code
             </code></pre>
@@ -1117,29 +1108,28 @@ end
             </li>
             </ol>
             <ul>
-            <li><p>one</p>
+            <li>
+            <p>one</p>
             </li>
             </ul>
             <p>two</p>
             <ul>
-            <li><p>one</p>
+            <li>
+            <p>one</p>
             <p>two</p>
             </li>
-            </ul>
-            <ul>
-            <li><p>baz</p>
+            <li>
+            <p>baz</p>
             </li>
-            <li><pre><code>foo
+            <li>
+            <pre><code>foo
             </code></pre>
             </li>
             </ul>
             <ol>
-            <li><p>foo</p>
-            </li>
-            <li><p>bar</p>
-            </li>
-            <li><p>baz</p>
-            </li>
+            <li>foo</li>
+            <li>bar</li>
+            <li>baz</li>
             </ol>
             """
     @test expected == Markdown.html(md)
@@ -1162,7 +1152,6 @@ end
             * one
 
               two
-
             * baz
             * .. code-block:: julia
 
@@ -1191,56 +1180,55 @@ end
         """
     md = Markdown.parse(text)
 
+    @test typeof.(md) == [Markdown.List, Markdown.List]
     @test md[1].ordered == 42
-    @test md[2].ordered == 1
-    @test md[3].ordered == -1
+    @test md[2].ordered == -1
 
     expected =
             """
             <ol start="42">
-            <li><p>foo</p>
+            <li>
+            <p>foo</p>
             </li>
-            <li><p>bar</p>
+            <li>
+            <p>bar</p>
             </li>
-            </ol>
-            <ol>
-            <li><p>foo</p>
+            <li>
+            <p>foo</p>
             </li>
-            <li><p>bar</p>
+            <li>
+            <p>bar</p>
             </li>
             </ol>
             <ul>
-            <li><p>foo</p>
-            </li>
-            <li><p>bar</p>
-            </li>
+            <li>foo</li>
+            <li>bar</li>
             </ul>
             """
     @test expected == Markdown.html(md)
 
     expected =
-            """
-            \\begin{itemize}
-            \\item[42. ] foo
+            raw"""
+            \begin{itemize}
+            \item[42. ] foo
 
 
-            \\item[43. ] bar
-
-            \\end{itemize}
-            \\begin{itemize}
-            \\item[1. ] foo
+            \item[43. ] bar
 
 
-            \\item[2. ] bar
-
-            \\end{itemize}
-            \\begin{itemize}
-            \\item foo
+            \item[44. ] foo
 
 
-            \\item bar
+            \item[45. ] bar
 
-            \\end{itemize}
+            \end{itemize}
+            \begin{itemize}
+            \item foo
+
+
+            \item bar
+
+            \end{itemize}
             """
     @test expected == Markdown.latex(md)
 end
@@ -1314,11 +1302,39 @@ end
 end
 
 @testset "issue #26598: loose lists" begin
-    v = Markdown.parse("foo\n\n- 1\n- 2\n\n- 3\n\n\n- 1\n- 2\n\nbar\n\n- 1\n\n  2\n- 4\n\nbuz\n\n- 1\n- 2\n  3\n- 4\n")
-    @test v[2].loose
-    @test !v[3].loose
-    @test v[5].loose
-    @test !v[7].loose
+    md = Markdown.parse(
+            """
+            foo
+
+            - 1
+            - 2
+
+            - 3
+
+
+            - 1
+            - 2
+
+            bar
+
+            - 1
+
+              2
+            - 4
+
+            buz
+
+            - 1
+            - 2
+              3
+            - 4
+            """)
+    @test typeof.(md) == [Markdown.Paragraph, Markdown.List,
+                          Markdown.Paragraph, Markdown.List,
+                          Markdown.Paragraph, Markdown.List]
+    @test md[2].loose
+    @test md[4].loose
+    @test !md[6].loose
 end
 
 @testset "issue #29995" begin
@@ -1395,9 +1411,8 @@ end
             <p>Misc:<br />
             stuff</p>
             <ul>
-            <li><p>line<br />
-            break</p>
-            </li>
+            <li>line<br />
+            break</li>
             </ul>
             """
     @test Markdown.latex(s) ==
@@ -1502,14 +1517,16 @@ end
     expected =
     """
     <ul>
-    <li><p>code block inside a list with more than one blank line with indentation works</p>
+    <li>
+    <p>code block inside a list with more than one blank line with indentation works</p>
     <pre><code class="language-julia">domaths(x::Number) = x + 5
 
 
     domath(x::Int) = x + 10
     </code></pre>
     </li>
-    <li><p>another entry, now testing code blocks without fences</p>
+    <li>
+    <p>another entry, now testing code blocks without fences</p>
     <pre><code># this is a code block
     x = 1 + 1
 
@@ -1518,7 +1535,8 @@ end
     y = x * 3
     </code></pre>
     </li>
-    <li><p>a final list entry</p>
+    <li>
+    <p>a final list entry</p>
     </li>
     </ul>
     <p>And now to something completely different!</p>
@@ -1573,22 +1591,18 @@ end
     # test Markdown rendering
     # FIXME: actually the hard breaks are *not* correctly round tripped,
     # but at least the indentation is correct now
-    expected = """
+    expected = raw"""
     An unordered list:
 
-      * top level\\
+      * top level\
         with an extra line
-
-          * second level\\
+          * second level\
             again with an extra line
-
-              * third level\\
+              * third level\
                 yet again with an extra line
-
-                  * fourth level\\
+                  * fourth level\
                     and another extra line
-
-                      * fifth level\\
+                      * fifth level\
                         final extra line
       * back to top level
     """
@@ -1643,24 +1657,20 @@ end
     # test Markdown rendering
     # FIXME: actually the hard breaks are *not* correctly round tripped,
     # but at least the indentation is correct now
-    expected = """
+    expected = raw"""
     An ordered list:
 
-    1. top level\\
+    1. top level\
        with an extra line
-
-       1. second level\\
+       1. second level\
           again with an extra line
-
-          999. third level\\
+          999. third level\
                yet again with an extra line
-
-               1. fourth level\\
+               1. fourth level\
                   and another extra line
-
-                  1. fifth level\\
+                  1. fifth level\
                      final extra line
-          1000. more third level\\
+          1000. more third level\
                 with an extra line
     2. back to top level
     """

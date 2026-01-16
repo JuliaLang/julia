@@ -717,6 +717,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
         initializeAlloca(builder, buff, allockind);
     }
     Instruction *new_inst = cast<Instruction>(ptr);
+    new_inst->copyMetadata(*orig_inst);
     new_inst->takeName(orig_inst);
 
     auto simple_replace = [&] (Instruction *orig_i, Instruction *new_i) {

@@ -96,6 +96,7 @@ function latex(io::IO, md::List)
     pad = ndigits(md.ordered + length(md.items)) + 2
     fmt = n -> (isordered(md) ? "[$(rpad("$(n + md.ordered - 1).", pad))]" : "")
     wrapblock(io, "itemize") do
+        # TODO: add support for tight vs. loose lists
         for (n, item) in enumerate(md.items)
             print(io, "\\item$(fmt(n)) ")
             latex(io, item)
