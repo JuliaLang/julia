@@ -114,7 +114,7 @@ end
     md = Markdown.parse(input; flavor=:common)
     expected = "<p>*not emphasized*\n&lt;br/&gt; not a tag\n[not a link](/foo)\n`not code`\n1. not a list\n* not a list\n# not a heading\n[foo]: /url &quot;not a reference&quot;\n&amp;ouml; not a character entity</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 15
     input = "\\\\*emphasis*\n"
@@ -2606,7 +2606,7 @@ end
     md = Markdown.parse(input; flavor=:common)
     expected = "<p>*\u00A0a\u00A0*</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 354
     input = "*\$*alpha.\n\n*£*bravo.\n\n*€*charlie.\n"
@@ -2823,7 +2823,7 @@ end
     md = Markdown.parse(input; flavor=:common)
     expected = "<p>__\nfoo bar__</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 385
     input = "a__\"foo\"__\n"
