@@ -380,7 +380,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<p>Foo\n***</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 50
     input = "_____________________________________\n"
@@ -534,7 +534,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<p>foo\n# bar</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 71
     input = "## foo ##\n  ###   bar    ###\n"
@@ -849,7 +849,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<p>Foo\nbar</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 114
     input = "    foo\nbar\n"
@@ -1640,14 +1640,14 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<p>aaa\nbbb</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 223
     input = "aaa\n             bbb\n                                       ccc\n"
     md = Markdown.parse(input; flavor=:github)
     expected = "<p>aaa\nbbb\nccc</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 224
     input = "   aaa\nbbb\n"
@@ -4006,7 +4006,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<p>[\n]</p>\n<p>[\n]: /uri</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 553
     input = "[foo][]\n\n[foo]: /url \"title\"\n"
@@ -4720,7 +4720,7 @@ end
     md = Markdown.parse(input; flavor=:github)
     expected = "<p>foo\nbaz</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
 end
 
