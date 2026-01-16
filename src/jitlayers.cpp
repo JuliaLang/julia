@@ -906,7 +906,9 @@ public:
         auto G = jitlink::createLinkGraphFromObject(
             Obj->getMemBufferRef(), JIT.getExecutionSession().getSymbolStringPool());
         if (!G) {
+#ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the static analyzer thinks might be a safepoint
             R->getExecutionSession().reportError(G.takeError());
+#endif
             R->failMaterialization();
             return;
         }
