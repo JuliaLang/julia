@@ -636,7 +636,7 @@ void jl_gc_reset_alloc_count(void) JL_NOTSAFEPOINT
 static void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT
 {
     assert(jl_is_genericmemory(m));
-    assert(jl_genericmemory_how(m) == 1 || jl_genericmemory_how(m) == 2);
+    assert(jl_genericmemory_how(m) == 1);
     char *d = (char*)m->ptr;
     size_t freed_bytes = memory_block_usable_size(d, isaligned);
     assert(freed_bytes != 0);
@@ -4130,11 +4130,6 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
 JL_DLLEXPORT size_t jl_gc_max_internal_obj_size(void)
 {
     return GC_MAX_SZCLASS;
-}
-
-JL_DLLEXPORT size_t jl_gc_external_obj_hdr_size(void)
-{
-    return sizeof(bigval_t);
 }
 
 JL_DLLEXPORT void jl_gc_schedule_foreign_sweepfunc(jl_ptls_t ptls, jl_value_t *obj)

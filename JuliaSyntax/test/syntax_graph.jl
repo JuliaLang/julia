@@ -1,4 +1,4 @@
-using .JuliaSyntax: SyntaxGraph, SyntaxTree, SyntaxList, freeze_attrs, unfreeze_attrs, ensure_attributes, ensure_attributes!, delete_attributes, copy_ast, attrdefs
+using .JuliaSyntax: SyntaxGraph, SyntaxTree, SyntaxList, freeze_attrs, unfreeze_attrs, ensure_attributes, ensure_attributes!, delete_attributes, copy_ast, attrdefs, @stm
 
 @testset "SyntaxGraph attrs" begin
     st = parsestmt(SyntaxTree, "function foo end")
@@ -98,5 +98,217 @@ end
         new_g = ensure_attributes!(SyntaxGraph(); attrdefs(g)...)
         # Disallow for now, since we can't prevent dangling sourcerefs
         @test_throws ErrorException copy_ast(new_g, st; copy_source=false)
+    end
+end
+
+@testset "@stm SyntaxTree pattern-matching" begin
+    st = parsestmt(SyntaxTree, "foo(a,b=1,c(d=2))")
+    # (call foo a (kw b 1) (call c (kw d 2)))
+
+    @testset "basic functionality" begin
+        @test @stm st begin
+            _ -> true
+        end
+
+        @test @stm st begin
+            x -> x isa SyntaxTree
+        end
+
+        @test @stm st begin
+            [K"function" f a b c] -> false
+            [K"call" f a b c] -> true
+        end
+
+        @test @stm st begin
+            [K"function" _ _ _ _] -> false
+            [K"call" _ _ _ _] -> true
+        end
+
+        @test @stm st begin
+            [K"call" f a b] -> false
+            [K"call" f a b c d] -> false
+            [K"call" f a b c] -> true
+        end
+
+        @test @stm st begin
+            [K"call" f a b c] ->
+                kind(f) === K"Identifier" &&
+                kind(b) === K"kw" &&
+                kind(c) === K"call"
+        end
+    end
+
+    @testset "errors" begin
+        # no match
+        @test_throws ErrorException @stm st begin
+            [K"Identifier"] -> false
+        end
+
+        # assuming we run this checker by default
+        @testset "_stm_check_usage" begin
+            bad = Expr[
+                :(@stm st begin
+                      [a] -> false
+                  end)
+                :(@stm st begin
+                      [K"None",a] -> false
+                  end)
+                :(@stm st begin
+                      [K"None" a a] -> false
+                  end)
+                :(@stm st begin
+                      x
+                  end)
+                :(@stm st begin
+                      x() -> false
+                  end)
+                :(@stm st begin
+                      (a, b=1) -> false
+                  end)
+                :(@stm st begin
+                      [K"None" a... b...] -> false
+                  end)
+            ]
+            for e in bad
+                Base.remove_linenums!(e)
+                @testset "$(string(e))" begin
+                @test_throws AssertionError macroexpand(@__MODULE__, e)
+                end
+            end
+        end
+    end
+
+    @testset "nested patterns" begin
+        @test 1 === @stm st begin
+            [K"call" [K"Identifier"] [K"Identifier"] [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"Identifier"] k2]]] -> 1
+            [K"call" [K"Identifier"] [K"Identifier"] [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" _ k2]]] -> 2
+            [K"call" [K"Identifier"] [K"Identifier"] [K"kw" _ k1] [K"call" _ _]] -> 3
+            [K"call" [K"Identifier"] [K"Identifier"] _ _ ] -> 4
+            [K"call" _ _ _ _] -> 5
+        end
+        @test 1 === @stm st begin
+            [K"call" _ _ [K"None" [K"Identifier"] k1] [K"None" [K"Identifier"] [K"None" [K"None"] k2]]] -> 5
+            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"None" [K"Identifier"] [K"None" [K"None"] k2]]] -> 4
+            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"None" [K"None"] k2]]] -> 3
+            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"None"] k2]]] -> 2
+            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"Identifier"] k2]]] -> 1
+        end
+        @test 1 === @stm st begin
+            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"Identifier"] k2] bad]] -> 4
+            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"Identifier"] k2 bad]]] -> 3
+            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"Identifier" bad] k2]]] -> 2
+            [K"call" _ _ [K"kw" [K"Identifier"] k1] [K"call" [K"Identifier"] [K"kw" [K"Identifier"] k2]]] -> 1
+        end
+    end
+
+    @testset "vcat form (newlines in pattern)" begin
+        @test @stm st begin
+            [K"call"
+             f
+             a
+             b
+             c] -> true
+        end
+        @test @stm st begin
+            [K"call"
+             f a b c] -> true
+        end
+        @test @stm st begin
+            [K"call"
+
+
+             f a b c] -> true
+        end
+        @test @stm st begin
+            [K"call"
+             [K"Identifier"] [K"Identifier"]
+             [K"kw" [K"Identifier"] k1]
+             [K"call"
+              [K"Identifier"]
+              [K"kw"
+               [K"Identifier"]
+               k2]]] -> true
+        end
+    end
+
+    @testset "SyntaxList splat matching" begin
+        # trailing splat
+        @test @stm st begin
+            [K"call" f _...] -> true
+        end
+        @test @stm st begin
+            [K"call" f args...] -> kind(f) === K"Identifier"
+        end
+        @test @stm st begin
+            [K"call" f args...] -> args isa SyntaxList && length(args) === 3
+        end
+        @test @stm st begin
+            [K"call" f args...] -> kind(args[1]) === K"Identifier" &&
+                kind(args[2]) === K"kw" &&
+                kind(args[3]) === K"call"
+        end
+        @test @stm st begin
+            [K"call" f a b c empty...] -> empty isa SyntaxList && length(empty) === 0
+        end
+
+        # binds after splat
+        @test @stm st begin
+            [K"call" f args... last] ->
+                args isa SyntaxList &&
+                length(args) === 2
+        end
+        @test @stm st begin
+            [K"call" f args... last] ->
+                kind(f) === K"Identifier" &&
+                kind(args[1]) === K"Identifier" &&
+                kind(args[2]) === K"kw" &&
+                kind(last) === K"call"
+        end
+        @test @stm st begin
+            [K"call" empty... f a b c] -> empty isa SyntaxList && length(empty) === 0
+        end
+    end
+
+    @testset "`when` clauses affect matching" begin
+        @test @stm st begin
+            (_, when=false) -> false
+            (_, when=true) -> true
+        end
+        @test @stm st begin
+            ([K"call" _...], when=false) -> false
+            ([K"call" _...], when=true) -> true
+        end
+        @test @stm st begin
+            ([K"call" _ _...], when=kind(st[1])===K"Identifier") -> true
+        end
+        @test @stm st begin
+            ([K"call" f _...], when=kind(f)===K"Identifier") -> true
+        end
+    end
+
+    @testset "effects of when=cond" begin
+        let x = Int[]
+            @test @stm st begin
+                (_, when=(push!(x, 1); true)) -> x == [1]
+            end
+            empty!(x)
+
+            @test @stm st begin
+                (_, when=(push!(x, 1); false)) -> false
+                (_, when=(push!(x, 2); false)) -> false
+                (_, when=(push!(x, 3); true)) -> x == [1, 2, 3]
+            end
+            empty!(x)
+
+            @test @stm st begin
+                ([K"block"], when=(push!(x, 123); false)) -> false
+                (_, when=(push!(x, 1); true)) -> x == [1]
+            end
+            empty!(x)
+
+            @test @stm st begin
+                (x_pat, when=((x_when = x_pat); true)) -> x_pat == x_when
+            end
+        end
     end
 end

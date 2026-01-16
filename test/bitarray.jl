@@ -19,7 +19,7 @@ bitcheck(x) = true
 function check_bitop_call(ret_type, func, args...; kwargs...)
     r2 = func(map(x->(isa(x, BitArray) ? Array(x) : x), args)...; kwargs...)
     r1 = func(args...; kwargs...)
-    ret_type ≢ nothing && (@test isa(r1, ret_type) || @show ret_type, typeof(r1))
+    ret_type ≢ nothing && @test isa(r1, ret_type) context=(; ret_type, actual=typeof(r1))
     @test tc(r1, r2)
     @test isequal(r1, r2)
     @test bitcheck(r1)

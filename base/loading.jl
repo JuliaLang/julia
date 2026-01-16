@@ -185,9 +185,10 @@ const slug_chars = String(['A':'Z'; 'a':'z'; '0':'9'])
 
 function slug(x::UInt32, p::Int)
     sprint(sizehint=p) do io
+        y = x
         n = UInt32(length(slug_chars))
         for i = 1:p
-            x, d = divrem(x, n)
+            y, d = divrem(y, n)
             write(io, slug_chars[1+d])
         end
     end
@@ -988,6 +989,33 @@ function workspace_manifest(project_file)
     return nothing
 end
 
+struct VersionedParse
+    ver::VersionNumber
+end
+
+function (vp::VersionedParse)(code, filename::String, lineno::Int, offset::Int, options::Symbol)
+    if !isdefined(Base, :JuliaSyntax)
+        if vp.ver === VERSION
+            return Core._parse
+        end
+        error("JuliaSyntax module is required for syntax version $(vp.ver), but it is not loaded.")
+    end
+    Base.JuliaSyntax.core_parser_hook(code, filename, lineno, offset, options; syntax_version=vp.ver)
+end
+
+function parser_for_active_project()
+    project = active_project()
+    sv = VERSION
+    if project !== nothing && isfile(project)
+        try
+            sv = project_get_syntax_version(parsed_toml(project))
+        catch e
+            @warn "Failed to read project $project - defaulting to latest syntax. err=$e"
+        end
+    end
+    VersionedParse(sv)
+end
+
 # find project file's corresponding manifest file
 function project_file_manifest_path(project_file::String)::Union{Nothing,String}
     @lock require_lock begin
@@ -1682,8 +1710,8 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
                             if length(entries) != 1
                                 error("expected a single entry for $(repr(dep_name)) in $(repr(project_file))")
                             end
-                            entry = first(entries)::Dict{String, Any}
-                            uuid = entry["uuid"]::String
+                            local entry = first(entries)::Dict{String, Any}
+                            local uuid = entry["uuid"]::String
                             deps′_expanded[dep_name] = uuid
                         end
                         return deps′_expanded
@@ -2830,7 +2858,7 @@ function __require_prelocked(pkg::PkgId, env)
     path = spec.path
     set_pkgorigin_version_path(pkg, path)
 
-    parallel_precompile_attempted = false # being safe to avoid getting stuck in a precompilepkgs loop
+    parallel_precompile_attempted = Ref(false) # being safe to avoid getting stuck in a precompilepkgs loop
     reasons = Dict{String,Int}()
     # attempt to load the module file via the precompile cache locations
     if JLOptions().use_compiled_modules != 0
@@ -2860,21 +2888,20 @@ function __require_prelocked(pkg::PkgId, env)
 
     if JLOptions().use_compiled_modules == 1
         if !generating_output(#=incremental=#false)
-            project = active_project()
             # spawn off a new incremental pre-compile task for recursive `require` calls
-            loaded = let spec = spec, reasons = reasons
+            loaded = let spec = spec, reasons = reasons, parallel_precompile_attempted = parallel_precompile_attempted
                 maybe_cachefile_lock(pkg, spec.path) do
                     # double-check the search now that we have lock
                     m = _require_search_from_serialized(pkg, spec, UInt128(0), true)
                     m isa Module && return m
 
-                    verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+                    local verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
                     @logmsg verbosity "Precompiling $(repr("text/plain", pkg))$(list_reasons(reasons))"
 
                     unlock(require_lock)
                     try
-                        if !generating_output() && !parallel_precompile_attempted && !disable_parallel_precompile && @isdefined(Precompilation)
-                            parallel_precompile_attempted = true
+                        if !generating_output() && !parallel_precompile_attempted[] && !disable_parallel_precompile && @isdefined(Precompilation)
+                            parallel_precompile_attempted[] = true
                             precompiled = Precompilation.precompilepkgs([pkg]; _from_loading=true, ignore_loaded=false)
                             # prcompiled returns either nothing, indicating it needs serial precompile,
                             # or the entry(ies) that it found would be best to load (possibly because it just created it)
@@ -2910,7 +2937,7 @@ function __require_prelocked(pkg::PkgId, env)
                 @goto load_from_cache # the new cachefile will have the newest mtime so will come first in the search
             elseif isa(loaded, Exception)
                 if precompilableerror(loaded)
-                    verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+                    local verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
                     @logmsg verbosity "Skipping precompilation due to precompilable error. Importing $(repr("text/plain", pkg))." exception=loaded
                 else
                     @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr("text/plain", pkg))" exception=loaded
@@ -2940,7 +2967,7 @@ function __require_prelocked(pkg::PkgId, env)
     if uuid !== old_uuid
         ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, uuid)
     end
-    __toplevel__._internal_julia_parse = Experimental.VersionedParse(spec.julia_syntax_version)
+    __toplevel__._internal_julia_parse = VersionedParse(spec.julia_syntax_version)
     unlock(require_lock)
     try
         include(__toplevel__, path)
@@ -3055,7 +3082,7 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
         run_package_callbacks(this_uuidkey)
     else
         # if the user deleted their bundled depot, next try to load it completely normally
-        # if it is an extension, we first need to indicate where to find its parant via EXT_PRIMED
+        # if it is an extension, we first need to indicate where to find its parent via EXT_PRIMED
         ext isa String && (EXT_PRIMED[this_uuidkey] = PkgId[package_uuidkey])
         newm = _require_prelocked(this_uuidkey)
     end
@@ -3275,7 +3302,7 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
 
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), newly_inferred)
     # This one changes the parser behavior
-    __toplevel__._internal_julia_parse = Experimental.VersionedParse(syntax_version)
+    __toplevel__._internal_julia_parse = VersionedParse(syntax_version)
     # This one is the compatibility marker for cache loading
     __toplevel__._internal_syntax_version = cache_syntax_version(syntax_version)
     try
@@ -3499,9 +3526,10 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::IO = stder
             ocachefile = cache_objects ? ocachefile_from_cachefile(cachefile) : nothing
 
             # append checksum for so to the end of the .ji file:
-            crc_so = UInt32(0)
-            if cache_objects
-                crc_so = open(_crc32c, tmppath_so, "r")
+            crc_so = if cache_objects
+                open(_crc32c, tmppath_so, "r")
+            else
+                UInt32(0)
             end
 
             # append extra crc to the end of the .ji file:
@@ -3580,7 +3608,7 @@ function rename_unique_ocachefile(tmppath_so::String, ocachefile_orig::String, o
         end
         # Windows prevents renaming a file that is in use so if there is a Julia session started
         # with a package image loaded, we cannot rename that file.
-        # The code belows append a `_i` to the name of the cache file where `i` is the smallest number such that
+        # The code below appends a `_i` to the name of the cache file where `i` is the smallest number such that
         # that cache file does not exist.
         ocachename, ocacheext = splitext(ocachefile_orig)
         ocachefile_unique = ocachename * "_$num" * ocacheext
