@@ -243,6 +243,71 @@ end
     end
 end
 
+@testset "@test_warn/@test_nowarn failure display" begin
+    # @test_warn with string pattern - failure shows expected and captured stderr
+    let results = @testset NoThrowTestSet begin
+            @test_warn "expected" println(stderr, "wrong")
+        end
+        @test length(results) == 1
+        fail = results[1]
+        @test fail isa Test.Fail
+        @test fail.test_type === :test_warn
+        @test fail.data == "\"expected\" (occursin)"
+        @test fail.value == "\"wrong\\n\""
+        str = sprint(show, fail)
+        @test occursin("Expected stderr:", str)
+        @test occursin("Captured stderr:", str)
+    end
+
+    # @test_warn with regex pattern
+    let results = @testset NoThrowTestSet begin
+            @test_warn r"expected" println(stderr, "wrong")
+        end
+        @test length(results) == 1
+        fail = results[1]
+        @test fail isa Test.Fail
+        @test fail.test_type === :test_warn
+        @test fail.data == "r\"expected\" (occursin)"
+    end
+
+    # @test_warn with array pattern
+    let results = @testset NoThrowTestSet begin
+            @test_warn ["foo", "bar"] println(stderr, "only foo")
+        end
+        @test length(results) == 1
+        fail = results[1]
+        @test fail isa Test.Fail
+        @test fail.test_type === :test_warn
+        @test occursin("(all, occursin)", fail.data)
+    end
+
+    # @test_warn with function pattern
+    let results = @testset NoThrowTestSet begin
+            @test_warn (s -> occursin("expected", s)) println(stderr, "wrong")
+        end
+        @test length(results) == 1
+        fail = results[1]
+        @test fail isa Test.Fail
+        @test fail.test_type === :test_warn
+        @test occursin("s->occursin(\"expected\", s)", fail.data)  # Shows the function expression
+    end
+
+    # @test_nowarn failure shows expected "" and captured stderr
+    let results = @testset NoThrowTestSet begin
+            @test_nowarn println(stderr, "oops")
+        end
+        @test length(results) == 1
+        fail = results[1]
+        @test fail isa Test.Fail
+        @test fail.test_type === :test_nowarn
+        @test fail.data == "\"\" (nowarn)"
+        @test fail.value == "\"oops\\n\""
+        str = sprint(show, fail)
+        @test occursin("Expected stderr: \"\" (nowarn)", str)
+        @test occursin("Captured stderr: \"oops\\n\"", str)
+    end
+end
+
 let fails = @testset NoThrowTestSet begin
         # 1 - Fail - wrong exception
         @test_throws OverflowError error()
