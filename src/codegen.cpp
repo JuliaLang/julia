@@ -2963,7 +2963,7 @@ static jl_cgval_t convert_julia_type_to_union(jl_codectx_t &ctx, const jl_cgval_
 
 std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &context,
                                               const DataLayout &DL, const Triple &triple,
-                                              bool toplevel) JL_NOTSAFEPOINT
+                                              Module *source) JL_NOTSAFEPOINT
 {
     ++ModulesCreated;
     auto m = std::make_unique<Module>(name, context);
@@ -2981,9 +2981,18 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
         m->setOverrideStackAlignment(16);
     }
 
-    // when this is a toplevel module, add additional flags.
-    // otherwise, these are inherited from the parent module when linking.
-    if (toplevel) {
+    if (source) {
+        // Copy module flags from source module
+        SmallVector<Module::ModuleFlagEntry, 8> Flags;
+        source->getModuleFlagsMetadata(Flags);
+        for (const auto &Flag : Flags) {
+            m->addModuleFlag(Flag.Behavior, Flag.Key->getString(), Flag.Val);
+        }
+        // Copy other module-level properties
+        m->setStackProtectorGuard(source->getStackProtectorGuard());
+        m->setOverrideStackAlignment(source->getOverrideStackAlignment());
+    } else {
+        // No source: set default Julia flags
         // According to clang darwin above 10.10 supports dwarfv4
         m->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 4);
         m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
