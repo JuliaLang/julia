@@ -116,13 +116,6 @@ JL_DLLEXPORT void jl_unlock_field(jl_mutex_t *v) JL_NOTSAFEPOINT;
 
 #include <mutex>
 #include <condition_variable>
-class jl_unique_finalizers_lock {
-public:
-    jl_unique_finalizers_lock() { jl_current_task->ptls->engine_nqueued++; }
-    jl_unique_finalizers_lock(jl_unique_finalizers_lock &) = delete;
-    jl_unique_finalizers_lock(jl_unique_finalizers_lock &&) = delete;
-    ~jl_unique_finalizers_lock() { jl_current_task->ptls->engine_nqueued--; }
-};
 
 // simple C++ shim around a std::unique_lock + gc-safe + disabled finalizers region
 // since we nearly always want that combination together

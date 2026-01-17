@@ -1421,10 +1421,8 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
   // These checks should have no effect on the surrounding environment
   // (globals should not be invalidated, etc), hence the use of evalCall.
   const CallExpr *CE = dyn_cast<CallExpr>(Call.getOriginExpr());
-  if (!CE)
-    return false;
   unsigned CurrentDepth = C.getState()->get<GCDepth>();
-  auto name = C.getCalleeName(CE);
+  auto name = CE ? C.getCalleeName(CE) : "";
   if (name == "JL_GC_POP") {
     if (CurrentDepth == 0) {
       report_error(C, "JL_GC_POP without corresponding push");

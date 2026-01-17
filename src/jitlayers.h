@@ -533,6 +533,7 @@ using CISymbolPtr = jl_codeinst_funcs_t<orc::SymbolStringPtr>;
 using CISymbolMap = DenseMap<jl_code_instance_t *, CISymbolPtr>;
 
 class JLMaterializationUnit;
+class JLTrampolineMaterializationUnit;
 
 struct JITObjectInfo {
     std::unique_ptr<MemoryBuffer> BackingBuffer;
@@ -547,7 +548,8 @@ class JLDebuginfoPlugin : public orc::ObjectLinkingLayer::Plugin {
 public:
     void notifyMaterializingWithInfo(orc::MaterializationResponsibility &MR,
                                      jitlink::LinkGraph &G, MemoryBufferRef InputObject,
-                                     std::unique_ptr<jl_linker_info_t> LinkerInfo);
+                                     std::unique_ptr<jl_linker_info_t> LinkerInfo)
+        JL_NOTSAFEPOINT;
     Error notifyEmitted(orc::MaterializationResponsibility &MR) override;
     Error notifyFailed(orc::MaterializationResponsibility &MR) override;
     Error notifyRemovingResources(orc::JITDylib &JD, orc::ResourceKey K) override;
@@ -559,6 +561,7 @@ public:
 
 class JuliaOJIT {
     friend JLMaterializationUnit;
+    friend JLTrampolineMaterializationUnit;
 private:
     // any verification the user wants to do when adding an OwningResource to the pool
     template <typename AnyT>
@@ -724,9 +727,7 @@ public:
     uint64_t getGlobalValueAddress(StringRef Name);
     uint64_t getFunctionAddress(StringRef Name);
 
-    // Look up the symbols for each CI in the array, all of which have been
-    // defined in a jl_emitted_output_t added with JuliaOJIT::addOutput.
-    SmallVector<jl_codeinst_funcs_t<void *>> findCIs(ArrayRef<jl_code_instance_t *> CIs);
+    void publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait=false);
 
     orc::ThreadSafeContext makeContext() JL_NOTSAFEPOINT;
     const DataLayout& getDataLayout() const JL_NOTSAFEPOINT;
@@ -760,7 +761,7 @@ public:
     // but may be called from inside safe-regions due to jit compilation locks
     void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER;
 
-protected:                      // Called from JLMaterializationUnit
+protected:
     // Choose globally unique names for the functions defined by the given CI
     // and register the mapping in CISymbols.
     CISymbolPtr makeUniqueCIName(jl_code_instance_t *CI,
@@ -770,9 +771,9 @@ protected:                      // Called from JLMaterializationUnit
 
     // Rename LinkGraph symbols to match the previously chosen names and
     // register debug info for defined symbols.
-    void linkOutput(orc::MaterializationResponsibility &MR,
-                    MemoryBufferRef ObjBuf, jitlink::LinkGraph &G,
-                    std::unique_ptr<jl_linker_info_t> Info);
+    void linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferRef ObjBuf,
+                    jitlink::LinkGraph &G,
+                    std::unique_ptr<jl_linker_info_t> Info) JL_NOTSAFEPOINT;
 
     // Return a symbol that should be linked to the call target.  The origin of
     // this symbol depends on the code instance:
@@ -784,7 +785,9 @@ protected:                      // Called from JLMaterializationUnit
     //   specialized function is expected but only a jlcall exists, or neither
     //   exists and we should go through jl_invoke), emit the trampoline into a
     //   new module and return a symbol for it.
-    orc::SymbolStringPtr linkCallTarget(jl_code_instance_t *CI, jl_invoke_api_t API);
+    orc::SymbolStringPtr linkCallTarget(orc::MaterializationResponsibility &MR,
+                                        jl_code_instance_t *CI,
+                                        jl_invoke_api_t API) JL_NOTSAFEPOINT;
 
     // Create an ORC symbol and entry in CISymbols for the CI's specptr,
     // returning a pointer into CISymbols or NULL if the CI is not compiled.
