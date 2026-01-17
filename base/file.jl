@@ -771,28 +771,35 @@ function _win_mkstemp(temppath::AbstractString)
     lentname = something(findfirst(iszero, tname))
     @assert lentname > 0
     resize!(tname, lentname - 1)
-    return lstrip(transcode(String, tname), '\\')
+    if isempty(temppath)
+        # strip leading slash
+        front = popfirst!(tname)
+        @assert front == '\\'
+    end
+    return transcode(String, tname)
 end
 
 function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
-    # `pwd()` errors if it is deleted, so only call for relative path
-    absparent = isabspath(parent) ? parent : joinpath(pwd(), parent)
-    filename = _win_mkstemp(parent)
-    filepath = joinpath(absparent, filename)
-    cleanup && temp_cleanup_later(filepath)
-    return (filename, Base.open(filepath, "r+"))
+    filepath = _win_mkstemp(parent)
+    if cleanup 
+        abspath = isabspath(parent) ? filepath : joinpath(pwd(), filepath)
+        temp_cleanup_later(abspath)
+    end
+    return (filepath, Base.open(filepath, "r+"))
 end
 
 else # !windows
 
 # Create and return the name of a temporary file along with an IOStream
 function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
-    b = joinpath(parent, temp_prefix * "XXXXXX")
-    p = ccall(:mkstemp, Int32, (Cstring,), b) # modifies b
+    filepath = joinpath(parent, temp_prefix * "XXXXXX")
+    p = ccall(:mkstemp, Int32, (Cstring,), filepath) # modifies filepath
     systemerror(:mktemp, p == -1)
-    filepath = joinpath(pwd(), b)
-    cleanup && temp_cleanup_later(filepath)
-    return (b, fdio(p, true))
+    if cleanup 
+        abspath = isabspath(parent) ? filepath : joinpath(pwd(), filepath)
+        temp_cleanup_later(abspath)
+    end
+    return (filepath, fdio(p, true))
 end
 
 end # os-test
