@@ -2991,7 +2991,8 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
         // Copy other module-level properties
         m->setStackProtectorGuard(source->getStackProtectorGuard());
         m->setOverrideStackAlignment(source->getOverrideStackAlignment());
-    } else {
+    }
+    else {
         // No source: set default Julia flags
         // According to clang darwin above 10.10 supports dwarfv4
         m->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 4);

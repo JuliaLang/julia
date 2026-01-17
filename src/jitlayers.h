@@ -696,8 +696,7 @@ inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafe
 
 Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
     if (!_shared_module) {
-        _shared_module =
-            jl_create_llvm_module("globals", getContext(), DL, TargetTriple);
+        _shared_module = jl_create_llvm_module("globals", getContext(), DL, TargetTriple);
     }
     return *_shared_module;
 }
