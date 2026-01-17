@@ -4308,29 +4308,41 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         const jl_cgval_t &argtypes = argv[2];
         if (func.constant && argtypes.constant && jl_is_code_instance(argtypes.constant)) {
             jl_code_instance_t *codeinst = (jl_code_instance_t*)argtypes.constant;
-            jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
+			auto invoke = jl_atomic_load_acquire(&codeinst->invoke);
+			if (invoke == NULL) {
+				jl_compile_codeinst(codeinst);
+				invoke = jl_atomic_load_acquire(&codeinst->invoke);
+			}
+			if (// If invoke is still null after trying to compile the codeinstance, we just fall back
+				// to the interpreter, which will handle errors, or falling back to the methodinstance.
+				(invoke != NULL)
+				// Check that the current compiler context lies within the worldage bounds of the
+				// codeinstance. If it lies outside, we'll let the interpretr take care of it.
+				&& (codeinst->min_world <= ctx.min_world) && (ctx.max_world <= codeinst->max_world)) {
+			  jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
 
-            // 1. Re-pack arguments for emit_invoke
-            // Builtin args are: [f, codeinst, arg1, arg2...]
-            // emit_invoke expects: lival=codeinst, argv=[f, arg1, arg2...]
-            SmallVector<jl_cgval_t, 4> invoke_args;
-            invoke_args.push_back(argv[1]); // f
-            for (size_t i = 3; i <= nargs; ++i) {
-              invoke_args.push_back(argv[i]);
-            }
+			  // 1. Re-pack arguments for emit_invoke
+			  // Builtin args are: [f, codeinst, arg1, arg2...]
+			  // emit_invoke expects: lival=codeinst, argv=[f, arg1, arg2...]
+			  SmallVector<jl_cgval_t, 4> invoke_args;
+			  invoke_args.push_back(argv[1]); // f
+			  for (size_t i = 3; i <= nargs; ++i) {
+				invoke_args.push_back(argv[i]);
+			  }
 
-            // 2. Emit Argument Type Assertions
-            // invoke() implies a type assertion against the CodeInstance's specTypes
-            jl_value_t *specTypes = mi->specTypes;
-            // specTypes includes (func_type, arg1_type...), matching invoke_args
-            for (size_t i = 0; i < invoke_args.size(); i++) {
-              jl_value_t *ty = jl_nth_slot_type(specTypes, i);
-              emit_typecheck(ctx, invoke_args[i], ty, "invoke");
-            }
+			  // 2. Emit Argument Type Assertions
+			  // invoke() implies a type assertion against the CodeInstance's specTypes
+			  jl_value_t *specTypes = mi->specTypes;
+			  // specTypes includes (func_type, arg1_type...), matching invoke_args
+			  for (size_t i = 0; i < invoke_args.size(); i++) {
+				jl_value_t *ty = jl_nth_slot_type(specTypes, i);
+				emit_typecheck(ctx, invoke_args[i], ty, "invoke");
+			  }
 
-            // 3. Delegate to emit_invoke for the actual call generation
-            *ret = emit_invoke(ctx, argtypes, invoke_args, invoke_args.size(), rt, false);
-            return true;
+			  // 3. Delegate to emit_invoke for the actual call generation
+			  *ret = emit_invoke(ctx, argtypes, invoke_args, invoke_args.size(), rt, false);
+			  return true;
+			}
         }
     }
 
