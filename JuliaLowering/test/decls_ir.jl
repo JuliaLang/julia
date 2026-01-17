@@ -83,7 +83,7 @@ y = global x
 #---------------------
 LoweringError:
 y = global x
-#          ╙ ── global declaration doesn't read the variable and can't return a value
+#   └──────┘ ── global declaration doesn't read the variable and can't return a value
 
 ########################################
 # const
@@ -212,7 +212,7 @@ const local x = 1
 #---------------------
 LoweringError:
 const local x = 1
-└───────────────┘ ── unsupported `const local` declaration
+#    └──────────┘ ── unsupported `const local` declaration
 
 ########################################
 # Error: Const not supported on locals
@@ -232,7 +232,7 @@ function (); global g; const g = 1; end
 #---------------------
 LoweringError:
 function (); global g; const g = 1; end
-#                           └────┘ ── unsupported `const` inside function
+#                      └─────────┘ ── unsupported `const` inside function
 
 ########################################
 # Type decl on function argument

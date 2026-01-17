@@ -852,7 +852,7 @@ function expand_generator(ctx, ex)
             iterspecs = iterspecs[1]
         end
         if kind(iterspecs) != K"iteration"
-            throw(LoweringError("""Expected `K"iteration"` iteration specification in generator"""))
+            throw(LoweringError(ex, """Expected `K"iteration"` iteration specification in generator"""))
         end
         iter_ranges = SyntaxList(ctx)
         iter_lhss = SyntaxList(ctx)
@@ -2302,7 +2302,9 @@ function expand_function_arg(ctx, body_stmts, arg, is_last_arg, is_kw, arg_id)
         @chk numchildren(ex) in (1,2)
         if numchildren(ex) == 1
             type = ex[1]
+            noname_meta = get(ex, :meta, nothing)
             ex = @ast ctx ex "_"::K"Placeholder"
+            !isnothing(noname_meta) && setattr!(ex, :meta, noname_meta)
         else
             type = ex[2]
             ex = ex[1]
@@ -4711,6 +4713,13 @@ end
 
 @fzone "JL: desugar" function expand_forms_2(ctx::MacroExpansionContext, ex::SyntaxTree)
     ctx1 = DesugaringContext(ctx, ctx.expr_compat_mode)
+    vr = valid_st1(ex)
+    # surface only one error until we have pretty-printing for multiple
+    if !vr.ok
+        # showerrors(vr)
+        throw(LoweringError(vr.errors[1].sts[1], vr.errors[1].msg))
+    end
+    ex = est_to_dst(ex)
     ex1 = expand_forms_2(ctx1, reparent(ctx1, ex))
     ctx1, ex1
 end

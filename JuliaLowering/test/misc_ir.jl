@@ -34,7 +34,7 @@ x."b"
 @ast_ [K"." "x"::K"Identifier" "a"::K"Identifier" 3::K"Integer"]
 #---------------------
 LoweringError:
-#= line 1 =# - `.` form requires either one or two children
+#= line 1 =# - invalid syntax: unknown form `.` or number of arguments 3
 
 ########################################
 # Error: Placeholder value used
@@ -148,7 +148,7 @@ LoweringError:
 #---------------------
 LoweringError:
 (a=1; b=2, c=3)
-#   └────────┘ ── unexpected semicolon in tuple - use `,` to separate tuple elements
+#└─┘ ── cannot mix tuple `(a,b,c)` and named tuple `(;a,b,c)` syntax
 
 ########################################
 # Error: Named tuple field dots in rhs
@@ -156,7 +156,8 @@ LoweringError:
 #---------------------
 LoweringError:
 (; a=xs...)
-#    └───┘ ── `...` cannot be used in a value for a named tuple field
+#    └───┘ ── unexpected `...`
+splatting can only be done into a `call`, `tuple`, `curly`, or array-like expression
 
 ########################################
 # Error: Named tuple field invalid lhs
@@ -164,7 +165,7 @@ LoweringError:
 #---------------------
 LoweringError:
 (; a[]=1)
-#  └─┘ ── invalid named tuple field name
+#  └───┘ ── invalid syntax: unknown form `kw` or number of arguments 2
 
 ########################################
 # Error: Named tuple element with weird dot syntax
@@ -209,7 +210,7 @@ function f()
 #   ┌───────
     module C
     end
-#─────┘ ── `module` is only allowed at top level
+#─────┘ ── this syntax is only allowed at top level
 end
 
 ########################################
@@ -235,7 +236,7 @@ LoweringError:
 #---------------------
 LoweringError:
 {x, y}
-└────┘ ── { } syntax is reserved for future use
+└────┘ ── `braces` outside of `where` is reserved for future use
 
 ########################################
 # Error: braces matrix syntax
@@ -243,7 +244,7 @@ LoweringError:
 #---------------------
 LoweringError:
 {x y; y z}
-└────────┘ ── { } syntax is reserved for future use
+└────────┘ ── `bracescat` is reserved for future use
 
 ########################################
 # Error: Test AST which has no source form and thus must have been constructed
@@ -251,7 +252,7 @@ LoweringError:
 @ast_ [K"if"]
 #---------------------
 LoweringError:
-#= line 1 =# - expected `numchildren(ex) >= 2`
+#= line 1 =# - expected (if cond body) or (if cond body else)
 
 ########################################
 # Error: @atomic in wrong position
@@ -260,7 +261,7 @@ let
 end
 #---------------------
 LoweringError:
-#= none:2 =# - unimplemented or unsupported atomic declaration
+#= none:2 =# - unimplemented or unsupported `atomic` declaration
 
 ########################################
 # GC.@preserve support
@@ -355,7 +356,7 @@ JuxtuposeTest.@emit_juxtupose
 # @cfunction expansion with global generic function as function argument
 @cfunction(callable, Int, (Int, Float64))
 #---------------------
-1   (cfunction Ptr{Nothing} (inert callable) (static_eval TestMod.Int) (static_eval (call core.svec TestMod.Int TestMod.Float64)) :ccall)
+1   (cfunction Ptr{Nothing} :callable (static_eval TestMod.Int) (static_eval (call core.svec TestMod.Int TestMod.Float64)) :ccall)
 2   (return %₁)
 
 ########################################
@@ -469,7 +470,7 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall foo("blah"::Cstring, "bad")::Int
-#                           └───┘ ── argument needs a type annotation
+#                            └─┘ ── argument needs a type annotation
 
 ########################################
 # Error: @ccall varags without one fixed argument
@@ -485,7 +486,7 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall foo(; x::Int; y::Float64)::Int
-#                  └──────────┘ ── Multiple parameter blocks not allowed
+#          └──────┘ ── C ABI prohibits varargs without one required argument
 
 ########################################
 # Error: Bad @ccall option
@@ -509,7 +510,7 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall foo(x::Int)::Int gc_safe="hi"
-#                               └──┘ ── gc_safe must be true or false
+#                                └┘ ── gc_safe must be true or false
 
 ########################################
 # Error: unary & syntax
@@ -517,7 +518,7 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 #---------------------
 LoweringError:
 &x
-└┘ ── invalid syntax
+└┘ ── invalid syntax: unknown form `&` or number of arguments 1
 
 ########################################
 # Error: $ outside quote/string
@@ -525,7 +526,7 @@ $x
 #---------------------
 LoweringError:
 $x
-└┘ ── `$` expression outside string or quote block
+└┘ ── `$` expression outside string or quote
 
 ########################################
 # Error: splat outside call
@@ -533,7 +534,8 @@ x...
 #---------------------
 LoweringError:
 x...
-└──┘ ── `...` expression outside call
+└──┘ ── unexpected `...`
+splatting can only be done into a `call`, `tuple`, `curly`, or array-like expression
 
 ########################################
 # `include` should increment world age

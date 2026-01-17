@@ -17,14 +17,13 @@
 
 function _apply_nospecialize(ctx, ex)
     k = kind(ex)
-    if k == K"Identifier" || k == K"Placeholder" || k == K"tuple"
+    if k == K"Identifier" || k == K"Placeholder" || k == K"tuple" ||
+        k == K"::" && numchildren(ex) == 1
         setmeta(ex, :nospecialize, true)
     elseif k == K"..." || k == K"::" || k == K"=" || k == K"kw"
         # The @nospecialize macro is responsible for converting K"=" to K"kw".
         # Desugaring uses this helper internally, so we may see K"kw" too.
-        if k == K"::" && numchildren(ex) == 1
-            ex = @ast ctx ex [K"::" "_"::K"Placeholder" ex[1]]
-        elseif k == K"=" && numchildren(ex) === 2
+        if k == K"=" && numchildren(ex) === 2
             ex = @ast ctx ex [K"kw" ex[1] ex[2]]
         end
         mapchildren(c->_apply_nospecialize(ctx, c), ctx, ex, 1:1)
@@ -46,7 +45,7 @@ end
 
 function Base.var"@label"(__context__::MacroContext, ex)
     @chk kind(ex) == K"Identifier"
-    @ast __context__ ex ex=>K"symbolic_label"
+    @ast __context__ ex [K"unknown_head"(name_val="symboliclabel") ex]
 end
 
 function Base.var"@label"(__context__::MacroContext, name, body)
@@ -80,7 +79,7 @@ end
 
 function Base.var"@goto"(__context__::MacroContext, ex)
     @chk kind(ex) == K"Identifier"
-    @ast __context__ ex ex=>K"symbolic_goto"
+    @ast __context__ ex [K"unknown_head"(name_val="symbolicgoto") ex]
 end
 
 function Base.var"@locals"(__context__::MacroContext)
@@ -95,7 +94,8 @@ function Base.var"@generated"(__context__::MacroContext)
     @ast __context__ __context__.macrocall [K"generated"]
 end
 function Base.var"@generated"(__context__::MacroContext, ex)
-    if kind(ex) != K"function"
+    if !(kind(ex) === K"function" ||
+        kind(ex) === K"=" && is_eventually_call(ex[1]))
         throw(LoweringError(ex, "Expected a function argument to `@generated`"))
     end
     @ast __context__ __context__.macrocall [K"function"
@@ -144,6 +144,8 @@ function Base.var"@cfunction"(__context__::MacroContext, callable, return_type, 
 end
 
 function ccall_macro_parse(ctx, ex, opts)
+    # Use desugaring's syntax for now
+    ex = est_to_dst(ex)
     gc_safe=false
     for opt in opts
         if kind(opt) != K"=" || numchildren(opt) != 2 ||
@@ -322,14 +324,14 @@ function _at_eval_code(ctx, srcref, mod, ex)
                 [K"call"
                     # TODO: Call "eval"::K"core" here
                     JuliaLowering.eval::K"Value"
-                    mod
-                    [K"quote" ex]
                     [K"parameters"
                         [K"kw"
                             "expr_compat_mode"::K"Identifier"
                             ctx.expr_compat_mode::K"Bool"
                         ]
                     ]
+                    mod
+                    [K"quote" ex]
                 ]
             ]
         ]

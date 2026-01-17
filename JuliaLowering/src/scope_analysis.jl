@@ -420,12 +420,14 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         pop!(ctx.scope_stack)
         @ast ctx ex [K"block" stmts...]
     elseif k == K"islocal"
-        b = resolve_name(ctx, ex[1])
-        islocal = !isnothing(b) && b.kind !== :global
+        e1 = ex[1]
+        islocal = kind(e1) == K"Identifier" &&
+            let b = resolve_name(ctx, e1)
+                !isnothing(b) && b.kind !== :global
+            end
         @ast ctx ex islocal::K"Bool"
     elseif k == K"isglobal"
         e1 = ex[1]
-        @chk kind(e1) in KSet"Identifier Placeholder"
         isglobal = kind(e1) == K"Identifier" &&
             let b = resolve_name(ctx, e1)
                 isnothing(b) || b.kind === :global

@@ -52,6 +52,9 @@ function _register_kinds()
             # Used for converting the old-style macro hygienic-scope form (gone
             # after macro expansion).
             "hygienic-scope"
+            # Only produced by flisp macro expansion (which Core.@doc (cursed)
+            # invokes manually)
+            "copyast"
             # An expression which will eventually be evaluated "statically" in
             # the context of a CodeInfo and thus allows access only to globals
             # and static parameters. Used for ccall, cfunction, cglobal

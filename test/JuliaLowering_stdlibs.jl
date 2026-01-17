@@ -2,12 +2,11 @@ import Libdl
 
 # known precompilation failures under JL
 const INCOMPATIBLE_STDLIBS = String[
-    "LibGit2", # op isa Symbol (JuliaLang/JuliaLowering.jl#126)
+    "LibGit2", # could not evaluate cfunction return type (it might depend on a local variable)
     "SparseArrays", # type-alias bug (JuliaLang/JuliaLowering.jl#123)
-    "TOML", # @invokelatest / QuoteNode bug
     "Test", # nested + destructured args splat (JuliaLang/JuliaLowering.jl#133)
     "REPL", # infinite softscope (in REPL code)
-    "Pkg", # depends on TOML
+    "Pkg", # depends on LibGit2
     "SuiteSparse", # depends on SparseArrays
     "LazyArtifacts", # depends on Pkg
 ]
