@@ -774,7 +774,7 @@ function _win_mkstemp(temppath::AbstractString)
     if isempty(temppath)
         # strip leading slash
         front = popfirst!(tname)
-        @assert front == '\\'
+        @assert front == UInt('\\')
     end
     return transcode(String, tname)
 end
