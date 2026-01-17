@@ -781,7 +781,7 @@ end
 
 function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
     filepath = _win_mkstemp(parent)
-    if cleanup 
+    if cleanup
         abspath = isabspath(parent) ? filepath : joinpath(pwd(), filepath)
         temp_cleanup_later(abspath)
     end
@@ -795,7 +795,7 @@ function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
     filepath = joinpath(parent, temp_prefix * "XXXXXX")
     p = ccall(:mkstemp, Int32, (Cstring,), filepath) # modifies filepath
     systemerror(:mktemp, p == -1)
-    if cleanup 
+    if cleanup
         abspath = isabspath(parent) ? filepath : joinpath(pwd(), filepath)
         temp_cleanup_later(abspath)
     end
