@@ -4339,10 +4339,10 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 emit_typecheck(ctx, invoke_args[i], ty, "invoke");
               }
 
-			  // 3. Delegate to emit_invoke for the actual call generation
-			  *ret = emit_invoke(ctx, argtypes, invoke_args, invoke_args.size(), rt, false);
-			  return true;
-			}
+              // 3. Delegate to emit_invoke for the actual call generation
+              *ret = emit_invoke(ctx, argtypes, invoke_args, invoke_args.size(), rt, false);
+              return true;
+            }
         }
     }
 
