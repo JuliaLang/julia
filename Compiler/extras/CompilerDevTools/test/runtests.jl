@@ -1,6 +1,6 @@
 using Test
-using Compiler: code_cache
-using Base: inferencebarrier
+using Compiler: code_cache, SOURCE_MODE_ABI, typeinf_ext_toplevel
+using Base: inferencebarrier, get_world_counter
 using CompilerDevTools
 using CompilerDevTools: lookup_method_instance, SplitCacheInterp
 
@@ -22,3 +22,16 @@ using CompilerDevTools: lookup_method_instance, SplitCacheInterp
   f_unknown_builtin() = Base.compilerbarrier(:type, isa)(1, Int)
   with_new_compiler(f_unknown_builtin, interp.owner) === true
 end;
+
+const cinst = let world = get_world_counter()
+    sig = Tuple{typeof(sin), Float64}
+    mi = lookup_method_instance(sin, 1.0)
+    typeinf_ext_toplevel(SplitCacheInterp(; world), mi, SOURCE_MODE_ABI)
+end
+
+@testset "" begin
+    f(x) = invoke(sin, cinst, x)
+    @test any(1:3) do _
+        @allocated(f(rand())) == 0
+    end
+end
