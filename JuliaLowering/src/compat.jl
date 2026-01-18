@@ -267,11 +267,12 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
             src = child_exprs[2]
         end
         deleteat!(child_exprs, 2)
-        if a1 isa Symbol && a1 === Symbol("@__dot__")
-            child_exprs[1] = Symbol("@.")
-        elseif a1 isa Expr && nargs === 2 && a1.args[2] === Symbol("@__dot__")
-            child_exprs[1] = Expr(a1.head, a1.args[1], Symbol("@."))
-        elseif a1 isa GlobalRef && a1.mod === Core
+        # [JETLS patch] https://github.com/aviatesk/JETLS.jl/issues/409
+        # if a1 isa Symbol && a1 === Symbol("@__dot__")
+        #     child_exprs[1] = Symbol("@.")
+        # elseif a1 isa Expr && nargs === 2 && a1.args[2] === Symbol("@__dot__")
+        #     child_exprs[1] = Expr(a1.head, a1.args[1], Symbol("@."))
+        if a1 isa GlobalRef && a1.mod === Core
             # Syntax-introduced macrocalls are listed here for reference.  We
             # probably don't need to convert these.
             if a1.name === Symbol("@cmd")
