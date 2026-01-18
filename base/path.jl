@@ -28,7 +28,7 @@ if Sys.isunix()
     splitdrive(path::String) = ("",path)
 elseif Sys.iswindows()
     const path_separator    = "\\"
-    @inline isseparator(c::Char) = c === '/' || c === '\\'	
+    @inline isseparator(c::Char) = c === '/' || c === '\\'
     @inline isseparator(c::UInt8) = c === UInt8('/') || c === UInt8('\\')
 
     @inline isdriveletter(c::Char) = isascii(c) && isdriveletter(UInt8(c))
@@ -39,96 +39,96 @@ elseif Sys.iswindows()
 
     function _split_longunc(s::String)::Tuple{String, String}
         # Long UNC path, e.g. `\\?\UNC\server\share`
-		# Based on previous implementation matching with regex
-		# S = raw"[\\/]"; N = raw"[^\\/]";
-		# r"^$(S)$(S)\?$(S)UNC$(S)$(N)+$(S)$(N)+"sa
-		
-        if (ncodeunits(s) >= 11 && 
-			isseparator(codeunit(s, 1)) &&
-			isseparator(codeunit(s, 2)) &&
-			codeunit(s, 3) === UInt8('?') && 
-			isseparator(codeunit(s, 4)) &&
-			codeunit(s, 5) === UInt8('U') &&
-			codeunit(s, 6) === UInt8('N') &&
-			codeunit(s, 7) === UInt8('C') &&
-			isseparator(codeunit(s, 8))
-	    )
-			# Ensure we have [sequence of non-delimiter] - delimiter - [sequence of non-delimiter]
-			i = findnext(isseparator, s, 9)
-			if (!isnothing(i) && 
-				i >= 10 && 
-				ncodeunits(s) > i && 
-				!isseparator(s[i+1]) # i+1 is a valid since separators are ascii
-		   	)
-				# Stop just before next delimiter if it exists, 
-				# otherwise the whole string is a drive
-				j = something(findnext(isseparator, s, i+1), lastindex(s)+1)
-				return s[1:prevind(s, j)], s[j:end]
-			end
+        # Based on previous implementation matching with regex
+        # S = raw"[\\/]"; N = raw"[^\\/]";
+        # r"^$(S)$(S)\?$(S)UNC$(S)$(N)+$(S)$(N)+"sa
+
+        if (ncodeunits(s) >= 11 &&
+            isseparator(codeunit(s, 1)) &&
+            isseparator(codeunit(s, 2)) &&
+            codeunit(s, 3) === UInt8('?') &&
+            isseparator(codeunit(s, 4)) &&
+            codeunit(s, 5) === UInt8('U') &&
+            codeunit(s, 6) === UInt8('N') &&
+            codeunit(s, 7) === UInt8('C') &&
+            isseparator(codeunit(s, 8))
+        )
+            # Ensure we have [sequence of non-delimiter] - delimiter - [sequence of non-delimiter]
+            i = findnext(isseparator, s, 9)
+            if (!isnothing(i) &&
+                i >= 10 &&
+                ncodeunits(s) > i &&
+                !isseparator(s[i+1]) # i+1 is a valid since separators are ascii
+            )
+                # Stop just before next delimiter if it exists,
+                # otherwise the whole string is a drive
+                j = something(findnext(isseparator, s, i+1), lastindex(s)+1)
+                return s[1:prevind(s, j)], s[j:end]
+            end
         end
         return "", s
     end
 
     function _split_longdriveletter(s::String)::Tuple{String, String}
         # Long drive letter, e.g. `\\?\C:`
-		# Based on implementation matching with regex
-		# S = raw"[\\/]"; N = raw"[^\\/]"; drive = "$(N):";
-		# r"$(S)$(S)\?$(S)$(drive)"sa
-		if (ncodeunits(s) >= 6 &&
-			isseparator(codeunit(s, 1)) &&
-			isseparator(codeunit(s, 2)) &&
-			codeunit(s, 3) === UInt8('?') &&
-			isseparator(codeunit(s, 4)) &&
-			!isseparator(codeunit(s, 5)) # All non-separator characters, including
-										 # non-ascii are considered drive letters. 
-		)			
-			# Check that a 6th character exists and is a colon
-			i = nextind(s, 5)
-			if checkbounds(Bool, s, i) && s[i] === ':'
-				return s[1:i], s[nextind(s, i):end]
-			end
+        # Based on implementation matching with regex
+        # S = raw"[\\/]"; N = raw"[^\\/]"; drive = "$(N):";
+        # r"$(S)$(S)\?$(S)$(drive)"sa
+        if (ncodeunits(s) >= 6 &&
+            isseparator(codeunit(s, 1)) &&
+            isseparator(codeunit(s, 2)) &&
+            codeunit(s, 3) === UInt8('?') &&
+            isseparator(codeunit(s, 4)) &&
+            !isseparator(codeunit(s, 5)) # All non-separator characters, including
+                                         # non-ascii are considered drive letters.
+        )
+            # Check that a 6th character exists and is a colon
+            i = nextind(s, 5)
+            if checkbounds(Bool, s, i) && s[i] === ':'
+                return s[1:i], s[nextind(s, i):end]
+            end
         end
         return "", s
     end
 
     function _split_uncpath(s::String)::Tuple{String, String}
         # UNC path, e.g. `\\server\share`
-		# Based on previous implementation matching with regex
-		# S = raw"[\\/]"; N = raw"[^\\/]";
-		# r"$(S)$(S)$(N)+$(S)$(N)+"sa
+        # Based on previous implementation matching with regex
+        # S = raw"[\\/]"; N = raw"[^\\/]";
+        # r"$(S)$(S)$(N)+$(S)$(N)+"sa
         if (ncodeunits(s) >= 5 && # Not shorter than `\\a\b`
-			isseparator(codeunit(s, 1)) &&
-			isseparator(codeunit(s, 2))
-	   	)
-			# Find [sequence of non-delimiter] - single delimiter - [sequence of non-delimiter]
-			i = findnext(isseparator, s, 3)
-			if (!isnothing(i) && 
-				i >= 4 && # Need at least one character of separation
-				ncodeunits(s) > i && 
-				!isseparator(codeunit(s, i+1)) # i+1 is a valid since separators are ascii
-		   	)
-				# Stop just before next delimiter if it exists, 
-				# otherwise the whole string is a drive
-				j = something(findnext(isseparator, s, i+1), lastindex(s)+1)
-				return s[1:prevind(s, j)], s[j:end]
-            end     
+            isseparator(codeunit(s, 1)) &&
+            isseparator(codeunit(s, 2))
+        )
+            # Find [sequence of non-delimiter] - single delimiter - [sequence of non-delimiter]
+            i = findnext(isseparator, s, 3)
+            if (!isnothing(i) &&
+                i >= 4 && # Need at least one character of separation
+                ncodeunits(s) > i &&
+                !isseparator(codeunit(s, i+1)) # i+1 is a valid since separators are ascii
+            )
+                # Stop just before next delimiter if it exists,
+                # otherwise the whole string is a drive
+                j = something(findnext(isseparator, s, i+1), lastindex(s)+1)
+                return s[1:prevind(s, j)], s[j:end]
+            end
         end
         return "", s
     end
-	
+
     function splitdrive(path::String)::Tuple{String, String}
         if !isempty(path)
             # Fast return if path does not contain a drive
-            if !isseparator(codeunit(path, 1)) && (codeunit(path, 1) < 0x80) 
-				# Drive letter, e.g. `C:`
-				# Any ascii char except separators passes as the drive letter
-				colonind = nextind(path, 1)
-				if checkbounds(Bool, path, colonind) && path[colonind] === ':'
-					return path[1:colonind], path[colonind+1:end]
-				end
-            elseif ncodeunits(path) >= 2 && isseparator(codeunit(path, 2)) 
-				# All other drive types must start with two separators
-				
+            if !isseparator(codeunit(path, 1)) && (codeunit(path, 1) < 0x80)
+                # Drive letter, e.g. `C:`
+                # Any ascii char except separators passes as the drive letter
+                colonind = nextind(path, 1)
+                if checkbounds(Bool, path, colonind) && path[colonind] === ':'
+                    return path[1:colonind], path[colonind+1:end]
+                end
+            elseif ncodeunits(path) >= 2 && isseparator(codeunit(path, 2))
+                # All other drive types must start with two separators
+
                 # Long UNC path, e.g. `\\?\UNC\server\share`
                 drive, rest = _split_longunc(path)
                 !isempty(drive) && return drive, rest
@@ -187,28 +187,28 @@ function homedir()
 end
 
 function isabspath(path::String)
-	isempty(path) && return false
-	# Paths starting with "/" are considered absolute also on windows
-	# This captures e.g. UNC paths, but does not guarantee a valid path. 
-	# Also note that isabspath(x) does not imply !isempty(splitdrive(x)[1])
-	isseparator(codeunit(path, 1) ) && return true
+    isempty(path) && return false
+    # Paths starting with "/" are considered absolute also on windows
+    # This captures e.g. UNC paths, but does not guarantee a valid path.
+    # Also note that isabspath(x) does not imply !isempty(splitdrive(x)[1])
+    isseparator(codeunit(path, 1) ) && return true
 
-	@static if Sys.iswindows()
-		# the letter before : in e.g. "C:\" must be a valid drive letter. 
-		# This differs from `splitdrive`, where any non-separator single codeunit char is 
-		# is accepted. 
-		firstsep = findfirst(isseparator, codeunits(path))
-		if (!isnothing(firstsep) && 
-			firstsep >= 3 && 
-			codeunit(path, firstsep-1) == UInt(':')
-		)
-			for b in codeunits(path)[1:firstsep-2]
-				!isdriveletter(b) && return false
-			end
-			return true
-		end
-	end
-	return false
+    @static if Sys.iswindows()
+        # the letter before : in e.g. "C:\" must be a valid drive letter.
+        # This differs from `splitdrive`, where any non-separator single codeunit char is
+        # is accepted.
+        firstsep = findfirst(isseparator, codeunits(path))
+        if (!isnothing(firstsep) &&
+            firstsep >= 3 &&
+            codeunit(path, firstsep-1) == UInt(':')
+        )
+            for b in codeunits(path)[1:firstsep-2]
+                !isdriveletter(b) && return false
+            end
+            return true
+        end
+    end
+    return false
 end
 
 """
@@ -242,10 +242,10 @@ true
 ```
 """
 function isdirpath(path::String)::Bool
-	# Reimplements occursin(r"(?:^|/)\.{0,2}$"sa, splitdrive(path)[2])
+    # Reimplements occursin(r"(?:^|/)\.{0,2}$"sa, splitdrive(path)[2])
 
-	_, after_last_separator = _splitdir_nodrive("", splitdrive(path)[2])
-	return after_last_separator in ("", ".", "..", "\n", ".\n", "..\n")
+    _, after_last_separator = _splitdir_nodrive("", splitdrive(path)[2])
+    return after_last_separator in ("", ".", "..", "\n", ".\n", "..\n")
 end
 
 """
@@ -268,7 +268,7 @@ end
 _splitdir_nodrive(path::String) = _splitdir_nodrive("", path)
 function _splitdir_nodrive(drive::String, path::String)::Tuple{String, String}
     lastsepind = findlast(isseparator, path)
-    
+
     isnothing(lastsepind) && return drive, path
 
     dir = path[1:something(findprev(!isseparator, path, lastsepind), 1)]
@@ -338,31 +338,31 @@ julia> splitext("/home/my.user/example")
 ```
 """
 function splitext(path::String)::Tuple{String, String}
-	drive, p = splitdrive(path)
-	lastdot = findlast('.', p)
-	if !isnothing(lastdot)
-		# No separator after the last dot
-		if isnothing(findnext(isseparator, p, lastdot))
-			# No separator just before the last dot
-			prev = prevind(p, lastdot)
-			if checkbounds(Bool, p, prev)
-				if !isseparator(p[prev])
-					return drive * p[1:prev], p[lastdot:end]
-				end
-			end
-		end
-	end
-	
-	# Essentially return (drive * p, ""), but also remove one trailing \n, unless 
+    drive, p = splitdrive(path)
+    lastdot = findlast('.', p)
+    if !isnothing(lastdot)
+        # No separator after the last dot
+        if isnothing(findnext(isseparator, p, lastdot))
+            # No separator just before the last dot
+            prev = prevind(p, lastdot)
+            if checkbounds(Bool, p, prev)
+                if !isseparator(p[prev])
+                    return drive * p[1:prev], p[lastdot:end]
+                end
+            end
+        end
+    end
+
+    # Essentially return (drive * p, ""), but also remove one trailing \n, unless
     # that makes p empty or end with a separator
-	if (ncodeunits(p) >= 2 && 
-		codeunit(p, ncodeunits(p)) === UInt8('\n') &&
-		!isseparator(codeunit(p, ncodeunits(p)-1))
-	)
-		return (drive * chop(p, tail = 1), "")
-	else
-		return (path, "")
-	end
+    if (ncodeunits(p) >= 2 &&
+        codeunit(p, ncodeunits(p)) === UInt8('\n') &&
+        !isseparator(codeunit(p, ncodeunits(p)-1))
+    )
+        return (drive * chop(p, tail = 1), "")
+    else
+        return (path, "")
+    end
 end
 
 # NOTE: deprecated in 1.4
@@ -447,9 +447,9 @@ function joinpath(paths::Union{Tuple, AbstractVector})::String
     end
 
     # add separator between UNC and non-absolute path
-    if (!isempty(p_path) && 
-        !isseparator(result_path[1]) && 
-        !isempty(result_drive) && 
+    if (!isempty(p_path) &&
+        !isseparator(result_path[1]) &&
+        !isempty(result_drive) &&
         result_drive[end] != ':'
     )
         return result_drive * "\\" * result_path
@@ -512,27 +512,27 @@ julia> joinpath(["/home/myuser", "example.jl"])
 joinpath
 
 function _split_at_separators(path::AbstractString; keepempty = true)
-	# Equivalent to Base.split(path, r"/+"sa; keepempty) (r"[\\/]+"sa on windows)
-	# Since there is no split between consecutive separators, keepempty
-	# only has an effect on strings starting or ending with separators. 
-	out = String[]
-	start = 1
-	
-	while true
-		nextsep = findnext(isseparator, path, start)
+    # Equivalent to Base.split(path, r"/+"sa; keepempty) (r"[\\/]+"sa on windows)
+    # Since there is no split between consecutive separators, keepempty
+    # only has an effect on strings starting or ending with separators.
+    out = String[]
+    start = 1
 
-		stop = isnothing(nextsep) ? lastindex(path) : prevind(path, nextsep)
-	
-		substr = String(view(path, start:stop))
-		if keepempty || !isempty(substr)
-			push!(out, substr)
-		end
+    while true
+        nextsep = findnext(isseparator, path, start)
 
-		isnothing(nextsep) && break
-		
-		start = something(findnext(!isseparator, path, nextsep+1), nextind(path, lastindex(path)))
-	end
-	return out
+        stop = isnothing(nextsep) ? lastindex(path) : prevind(path, nextsep)
+
+        substr = String(view(path, start:stop))
+        if keepempty || !isempty(substr)
+            push!(out, substr)
+        end
+
+        isnothing(nextsep) && break
+
+        start = something(findnext(!isseparator, path, nextsep+1), nextind(path, lastindex(path)))
+    end
+    return out
 end
 
 """
@@ -781,9 +781,9 @@ function encode_uri_component(s::AbstractString)
     out = empty!(StringVector(sizeof(s)))
     for cu in utf8units(s)
         # RFC3986 Section 2.3
-        if (UInt8('A') <= cu <= UInt8('Z') || 
-            UInt8('a') <= cu <= UInt8('z') || 
-            UInt8('0') <= cu <= UInt8('9') || 
+        if (UInt8('A') <= cu <= UInt8('Z') ||
+            UInt8('a') <= cu <= UInt8('z') ||
+            UInt8('0') <= cu <= UInt8('9') ||
             cu in map(UInt8, ('-', '_', '.', '~', '/'))
         )
             push!(out, cu)
