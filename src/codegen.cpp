@@ -4309,7 +4309,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (func.constant && argtypes.constant && jl_is_code_instance(argtypes.constant)) {
             jl_code_instance_t *codeinst = (jl_code_instance_t*)argtypes.constant;
             auto invoke = jl_atomic_load_acquire(&codeinst->invoke);
-            if (invoke == NULL) {
+			auto codeinst_min_world = jl_atomic_load_acquire(&codeinst->min_world);
+			auto codeinst_max_world = jl_atomic_load_acquire(&codeinst->max_world);
+			if (invoke == NULL) {
                 jl_compile_codeinst(codeinst);
                 invoke = jl_atomic_load_acquire(&codeinst->invoke);
             }
@@ -4318,7 +4320,8 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 (invoke != NULL)
                 // Check that the current compiler context lies within the worldage bounds of the
                 // codeinstance. If it lies outside, we'll let the interpretr take care of it.
-                && (codeinst->min_world <= ctx.min_world) && (ctx.max_world <= codeinst->max_world)) {
+                && (codeinst_min_world <= ctx.min_world)
+				&& (ctx.max_world <= codeinst_max_world)) {
               jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
 
               // 1. Re-pack arguments for emit_invoke
