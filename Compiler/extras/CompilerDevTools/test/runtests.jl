@@ -23,15 +23,27 @@ using CompilerDevTools: lookup_method_instance, SplitCacheInterp
   with_new_compiler(f_unknown_builtin, interp.owner) === true
 end;
 
+
 const cinst = let world = get_world_counter()
     sig = Tuple{typeof(sin), Float64}
     mi = lookup_method_instance(sin, 1.0)
     typeinf_ext_toplevel(SplitCacheInterp(; world), mi, SOURCE_MODE_ABI)
 end
-
-@testset "" begin
+@testset "No allocations when invoking CodeInstance" begin
     f(x) = invoke(sin, cinst, x)
     @test any(1:3) do _
         @allocated(f(rand())) == 0
     end
+end
+@testset "Recompile null `invoke` pointer" begin
+    @atomic cinst.invoke = C_NULL
+    f(x) = invoke(sin, cinst, x)
+    f(1.0)
+    @test cinst.invoke != C_NULL
+end
+@testset "worldage checks" begin
+    this_world = Base.get_world_counter()
+    f(x) = invoke(sin, cinst, x)
+    @atomic cinst.min_world = this_world + 10
+    @test_throws Exception f(1.0)
 end
