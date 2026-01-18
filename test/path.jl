@@ -53,7 +53,7 @@
         @test isdirpath(".\n")
         @test isdirpath("..\n")
         @test isdirpath("a/\n")
-        @test isdirpath("a/.\n") 
+        @test isdirpath("a/.\n")
         @test isdirpath("a/..\n")
         @test !isdirpath("a/..\n\n")
     end
@@ -194,17 +194,17 @@
             # only single characters followed by a colon are drives
             @test splitdrive(S("foo:bar")) ==
                 ("", "foo:bar")
-            
+
             # unicode
             @test splitdrive("\\\\α\\β\\γ") == ("\\\\α\\β", "\\γ")
-            @test splitdrive("\\\\?\\UNC\\α\\β\\γ") == ("\\\\?\\UNC\\α\\β", "\\γ")    
+            @test splitdrive("\\\\?\\UNC\\α\\β\\γ") == ("\\\\?\\UNC\\α\\β", "\\γ")
 
             # splitdrive currently allows any single codeunit char except separators as drive letters
             # while isabspath does not allow this. FIXME?
             @test splitdrive("::") == ("::", "")
             @test splitdrive("🍎:") != ("🍎:", "")
-            # The behavior is different for long baths, where he drive letter can 
-            # contain multiple codeunits (such as unicode chars or multiple chars) 
+            # The behavior is different for long baths, where he drive letter can
+            # contain multiple codeunits (such as unicode chars or multiple chars)
             # because it is captured as a UNC path with the server name ?. FIXME?
             @test splitdrive("\\\\?\\🍎:\\foobar") == ("\\\\?\\🍎:", "\\foobar")
             @test splitdrive("\\\\?\\CC:\\foobar") == ("\\\\?\\CC:", "\\foobar")
@@ -220,13 +220,13 @@
         @test splitdir("/foo/bar/baz") == ("/foo/bar", "baz")
         @test splitdir("/foo/bar/baz/") == ("/foo/bar/baz", "")
         @test splitdir("foo/bar/baz/") == ("foo/bar/baz", "")
-        # Multiple leading separators are reduced to one only when 
+        # Multiple leading separators are reduced to one only when
         # all separators are at the beginning. FIXME?
-        @test splitdir("///foo") == ("/", "foo") # why not ("///", "foo") ? 
+        @test splitdir("///foo") == ("/", "foo") # why not ("///", "foo") ?
         @test splitdir("///foo/bar") == ("///foo", "bar")
         if Sys.iswindows()
-            @test splitdir("/\\foo") == ("/", "foo") # why not ("/\\", "foo") ? 
-            @test splitdir("\\/foo") == ("\\", "foo") # why not ("\\/", "foo") ? 
+            @test splitdir("/\\foo") == ("/", "foo") # why not ("/\\", "foo") ?
+            @test splitdir("\\/foo") == ("\\", "foo") # why not ("\\/", "foo") ?
             @test splitdir("/\\/foo/bar") == ("/\\/foo", "bar")
             @test splitdir("///foo/bar/") == ("///foo/bar", "")
             @test splitdir("C:") == ("C:", "")
@@ -252,8 +252,8 @@
         @test_broken splitext(S(".foo...")) == (".foo", "...")
         @test splitext(S(".foo.bar")) == (".foo", ".bar")
         @test splitext(S("bar/.foo/baz")) == ("bar/.foo/baz", "")
-	    @test splitext(S("bar/foo/.baz")) == ("bar/foo/.baz", "")
-	    @test splitext(S("bar/foo.baz")) == ("bar/foo", ".baz")
+        @test splitext(S("bar/foo/.baz")) == ("bar/foo/.baz", "")
+        @test splitext(S("bar/foo.baz")) == ("bar/foo", ".baz")
         # If the second output is empty, remove a single \n from the first output
         # unless that makes it empty or end with a /. FIXME?
         @test splitext("a\r\n") == ("a\r", "")
@@ -287,10 +287,10 @@
             @test expanduser(S("~")) == "~"
         end
         if Sys.iswindows()
-			@test isabspath("\\\\?\\C:\\")
-            # Current behavior is to allow anything starting with a separator, 
-            # even if this is not a long path, nor a UNC path. 
-            @test isabspath("///a/b/") 
+            @test isabspath("\\\\?\\C:\\")
+            # Current behavior is to allow anything starting with a separator,
+            # even if this is not a long path, nor a UNC path.
+            @test isabspath("///a/b/")
             # Drive letters are currently treated differently in long path format. FIXME?
             @test isabspath("\\\\?\\α:\\") != isabspath("α:\\")
         end
