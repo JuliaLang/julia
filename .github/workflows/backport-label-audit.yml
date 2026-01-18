@@ -21,7 +21,7 @@ on:
 
 jobs:
   audit:
-    uses: JuliaLang/backporter-github-actions-workflows/.github/workflows/audit.yml@f0cf777a492c5ff31196822a7d643a17ee0efbd1 # main
+    uses: JuliaLang/backporter-github-actions-workflows/.github/workflows/audit.yml@7b57f4e1799a0f1d0e9df5d4b02d18962b62fba7
     permissions:
       pull-requests: write # necessary to be able to remove labels from PRs
     with:
