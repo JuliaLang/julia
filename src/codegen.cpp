@@ -8251,7 +8251,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
     }
     else if (!deserves_retbox(jlrettype)) {
         bool retboxed;
-        rt = _julia_type_to_llvm(&params, M->getContext(), jlrettype, &retboxed);
+        rt = _julia_type_to_llvm(&params, M->getContext(), jlrettype, &retboxed, /*noboxing*/false);
         assert(!retboxed);
         if (rt != getVoidTy(M->getContext()) && deserves_sret(jlrettype, rt)) {
             auto tracked = CountTrackedPointers(rt, true);
@@ -8339,7 +8339,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
             if (is_uniquerep_Type(jt))
                 continue;
             isboxed = deserves_argbox(jt);
-            et = isboxed ? T_prjlvalue : _julia_type_to_llvm(&params, M->getContext(), jt, nullptr);
+            et = isboxed ? T_prjlvalue : _julia_type_to_llvm(&params, M->getContext(), jt, nullptr, /*noboxing*/false);
             if (type_is_ghost(et))
                 continue;
         }
