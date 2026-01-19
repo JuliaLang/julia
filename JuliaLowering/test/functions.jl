@@ -222,6 +222,22 @@ end
 (f_return_in_value_pos(), x)
 """) === (42, 0)
 
+@test JuliaLowering.include_string(test_mod, """
+function f_return_in_call()
+    f_return_in_call(return 123)
+end
+
+f_return_in_call()
+""") === 123
+
+@test JuliaLowering.include_string(test_mod, raw"""
+function f_return_in_interpolation()
+    :(1 + $(return 123))
+end
+
+f_return_in_interpolation()
+""") === 123
+
 @testset "Default positional arguments" begin
     @test JuliaLowering.include_string(test_mod, """
     begin

@@ -252,8 +252,8 @@ function _expand_ast_tree(ctx, srcref, tree)
     elseif Meta.isexpr(tree, :call) && tree.args[1] === :(=>)
         # Leaf node with copied attributes
         kind = esc(tree.args[3])
-        srcref = esc(tree.args[2])
-        :(setattr!(mkleaf($srcref), :kind, $kind))
+        srcref2 = esc(tree.args[2])
+        :(setattr!(mkleaf($srcref2), :kind, $kind))
     elseif Meta.isexpr(tree, (:vcat, :hcat, :vect))
         # Interior node
         flatargs = []

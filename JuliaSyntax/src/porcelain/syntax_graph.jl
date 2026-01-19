@@ -103,7 +103,6 @@ function setchildren!(graph::SyntaxGraph, id::NodeId,
                       children::AbstractVector{NodeId})
     n = length(graph.edges)
     graph.edge_ranges[id] = n+1:(n+length(children))
-    # TODO: Reuse existing edges if possible
     append!(graph.edges, children)
 end
 
@@ -738,6 +737,153 @@ function _copy_ast(graph2::SyntaxGraph, graph1::SyntaxGraph,
         setchildren!(graph2, id2, cs)
     end
     return id2
+end
+
+"""
+    unalias_nodes(st::SyntaxTree)
+
+Return a tree where each descendent of `st` has exactly one parent in `st`.  The
+returned tree is identical to `st` in all but underlying representation, where
+every additional parent to a subtree generates a copy of that subtree.  Apart
+from achieving this, `unalias_nodes` should not allocate new nodes.
+
+    unalias_nodes(sl::SyntaxList)
+
+If a `SyntaxList` is given, every resulting tree will be unique with respect to
+each other as well as internally.  A duplicate entry will produce a copied tree.
+"""
+unalias_nodes(st::SyntaxTree) = SyntaxTree(
+    syntax_graph(st),
+    _unalias_nodes(syntax_graph(st), st._id, Set{NodeId}(), Set{Int}()))
+
+function unalias_nodes(sl::SyntaxList)
+    seen = Set{NodeId}()
+    seen_edges = Set{Int}()
+    SyntaxList(syntax_graph(sl),
+               map(id->_unalias_nodes(syntax_graph(sl), id, seen, seen_edges),
+                   sl.ids))
+end
+
+# Note that `seen_edges` is only needed for when edge ranges overlap, which is a
+# situation we don't produce yet.
+function _unalias_nodes(graph::SyntaxGraph, id::NodeId,
+                        seen::Set{NodeId}, seen_edges::Set{Int})
+    if id in seen
+        id = copy_ast(graph, SyntaxTree(graph, id); copy_source=false)._id
+    end
+    # nodes may not share edges (SyntaxGraph invariant)
+    @assert isempty(intersect(seen_edges, graph.edge_ranges[id]))
+    union!(seen_edges, graph.edge_ranges[id])
+    push!(seen, id)
+
+    for (c, i) in zip(children(graph, id), graph.edge_ranges[id])
+        c2 = _unalias_nodes(graph, c, seen, seen_edges)
+        # the new child should be the same in every way to the old one, so
+        # modify the edge instead of triggering copies with `mapchildren`
+        c !== c2 && (graph.edges[i] = c2)
+    end
+    return id
+end
+
+"""
+Return a tree where unreachable nodes (non-descendents of `st`) in its graph
+have been deleted, and where provenance data has been minimized.
+
+If `keep` is not nothing, also consider descendents of it reachable.  It's
+usually useful to provide `keep=your_parser_output` (so we have expression
+provenance back to the original parsed nodes, but no lowering-internal
+provenance.)  In any case, we still retain byte (or, from old macros,
+LineNumberNode) provenance.
+
+Provenance shrinkage: The green tree will be deleted unless specified in `keep`.
+If node A references node B as its `.source` and B is unreachable, A adopts the
+source of B.
+"""
+function prune(st::SyntaxTree;
+               keep::Union{SyntaxTree, SyntaxList, Nothing}=nothing)
+    entrypoints = NodeId[st._id]
+    keep isa SyntaxList && append!(entrypoints, keep.ids)
+    keep isa SyntaxTree && push!(entrypoints, keep._id)
+    prune(syntax_graph(st), unique(entrypoints))[1]
+end
+
+# This implementation unaliases nodes, which undoes a small amount of space
+# savings from the DAG representation, but it allows us to (1) omit the whole
+# `edges` array (TODO), and (2) make the pruning algorithm simpler.  The
+# invariant we win is having `edge_ranges` be one or more interleaved
+# level-order traversals where every node's set of children is contiguous, so
+# its entries can refer to itself instead of an external `edges` vector.
+function prune(graph1_a::SyntaxGraph, entrypoints_a::Vector{NodeId})
+    @assert length(entrypoints_a) === length(unique(entrypoints_a))
+    unaliased = unalias_nodes(SyntaxList(graph1_a, entrypoints_a))
+    (graph1, entrypoints) = (unaliased.graph, unaliased.ids)
+
+    nodes1 = copy(entrypoints)      # Current reachable subset of graph1
+    map12 = Dict{NodeId, Int}()     # graph1 => graph2 mapping
+    graph2 = ensure_attributes!(SyntaxGraph(); attrdefs(graph1)...)
+    while length(graph2.edge_ranges) < length(nodes1)
+        n2 = length(graph2.edge_ranges) + 1
+        n1 = nodes1[n2]
+        map12[n1] = n2
+        push!(graph2.edge_ranges, is_leaf(graph1, n1) ?
+            (0:-1) : (1:numchildren(graph1, n1)) .+ length(nodes1))
+        for c1 in children(graph1, n1)
+            push!(nodes1, c1)
+        end
+    end
+    graph2.edges = 1:length(nodes1) # our reward for unaliasing
+
+    for attr in attrnames(graph1)
+        attr === :source && continue
+        for (n2, n1) in enumerate(nodes1)
+            attrval = get(graph1.attributes[attr], n1, nothing)
+            if !isnothing(attrval)
+                graph2.attributes[attr][n2] = attrval
+            end
+        end
+    end
+
+    # Resolve provenance.  Tricky to avoid dangling `.source` references.
+    resolved_sources = Dict{NodeId, SourceAttrType}() # graph1 id => graph2 src
+    function get_resolved!(id1::NodeId)
+        out = get(resolved_sources, id1, nothing)
+        if isnothing(out)
+            src1 = graph1.source[id1]
+            out = if haskey(map12, src1)
+                map12[src1]
+            elseif src1 isa NodeId
+                get_resolved!(src1)
+            elseif src1 isa Tuple
+                map(get_resolved!, src1)
+            else
+                src1
+            end
+            resolved_sources[id1] = out
+        end
+        return out
+    end
+
+    for (n2, n1) in enumerate(nodes1)
+        graph2.source[n2] = get_resolved!(n1)
+    end
+
+    # The first n entries in nodes1 were our entrypoints, unique from unaliasing
+    return SyntaxList(graph2, 1:length(entrypoints))
+end
+
+"""
+Give each descendent of `st` a `parent::NodeId` attribute.
+"""
+function annotate_parent!(st::SyntaxTree)
+    g = unfreeze_attrs(syntax_graph(st))
+    st = unalias_nodes(SyntaxTree(g, st._id))
+    ensure_attributes!(g; parent=NodeId)
+    mapchildren(t->_annotate_parent!(t, st._id), syntax_graph(st), st)
+end
+
+function _annotate_parent!(st::SyntaxTree, pid::NodeId)
+    setattr!(st, :parent, pid)
+    mapchildren(t->_annotate_parent!(t, st._id), syntax_graph(st), st)
 end
 
 #-------------------------------------------------------------------------------

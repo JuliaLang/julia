@@ -1926,7 +1926,7 @@ JL_DLLEXPORT jl_typemap_entry_t *jl_mt_find_cache_entry(jl_methcache_t *mc JL_PR
     return entry;
 }
 
-static jl_method_instance_t *jl_mt_assoc_by_type(jl_methcache_t *mc JL_PROPAGATES_ROOT, jl_datatype_t *tt JL_MAYBE_UNROOTED, size_t world)
+static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_methcache_t *mc JL_PROPAGATES_ROOT, jl_datatype_t *tt JL_MAYBE_UNROOTED, size_t world)
 {
     jl_typemap_entry_t *entry = jl_mt_find_cache_entry(mc, tt, world);
     if (entry)
@@ -1943,11 +1943,11 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methcache_t *mc JL_PROPAGATE
     if (!mi) {
         size_t min_valid = 0;
         size_t max_valid = ~(size_t)0;
-        matc = _gf_invoke_lookup((jl_value_t*)tt, jl_method_table, world, 0, &min_valid, &max_valid);
+        matc = _gf_invoke_lookup((jl_value_t*)tt, mt, world, 0, &min_valid, &max_valid);
         if (matc) {
             jl_method_t *m = matc->method;
             jl_svec_t *env = matc->sparams;
-            mi = cache_method(jl_method_table, mc, &mc->cache, (jl_value_t*)mc, tt, m, world, min_valid, max_valid, env);
+            mi = cache_method(mt, mc, &mc->cache, (jl_value_t*)mc, tt, m, world, min_valid, max_valid, env);
             JL_GC_POP();
             return mi;
         }
@@ -3191,7 +3191,7 @@ JL_DLLEXPORT jl_value_t *jl_method_lookup_by_tt(jl_tupletype_t *tt, size_t world
         mt = (jl_methtable_t*) _mt;
     }
     jl_methcache_t *mc = mt->cache;
-    jl_method_instance_t *mi = jl_mt_assoc_by_type(mc, tt, world);
+    jl_method_instance_t *mi = jl_mt_assoc_by_type(mt, mc, tt, world);
     if (!mi)
         return jl_nothing;
     return (jl_value_t*) mi;
@@ -3206,7 +3206,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t na
     if (entry)
         return entry->func.linfo;
     jl_tupletype_t *tt = arg_type_tuple(args[0], &args[1], nargs);
-    return jl_mt_assoc_by_type(mc, tt, world);
+    return jl_mt_assoc_by_type(jl_method_table, mc, tt, world);
 }
 
 // return a Vector{Any} of svecs, each describing a method match:
@@ -4280,7 +4280,7 @@ have_entry:
         assert(tt);
         // cache miss case
         jl_methcache_t *mc = jl_method_table->cache;
-        mfunc = jl_mt_assoc_by_type(mc, tt, world);
+        mfunc = jl_mt_assoc_by_type(jl_method_table, mc, tt, world);
         if (jl_options.malloc_log)
             jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
         if (mfunc == NULL) {

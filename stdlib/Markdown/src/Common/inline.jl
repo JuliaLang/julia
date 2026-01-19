@@ -117,6 +117,7 @@ function link(stream::IO, md::MD)
         startswith(stream, '(') || return
         url = readuntil(stream, ')', match = '(')
         url ≡ nothing && return
+        url = replace_escapes_and_entities(url)
         return Link(parseinline(text, md), url)
     end
 end
@@ -184,7 +185,7 @@ mutable struct LineBreak <: MarkdownElement end
 
 @trigger '\\' ->
 function linebreak(stream::IO, md::MD)
-    if startswith(stream, "\\\n")
+    if startswith(stream, "\\\n") || startswith(stream, "\\\r\n") || startswith(stream, "\\\r")
         return LineBreak()
     end
 end
@@ -199,6 +200,10 @@ function en_or_em_dash(stream::IO, md::MD)
     end
 end
 
+# –––––––––––
+# Backslash escapes
+# –––––––––––
+
 const escape_chars = """!"#\$%&'()*+,-./:;<=>?@[\\]^_`{|}~"""
 
 @trigger '\\' ->
@@ -208,4 +213,65 @@ function escapes(stream::IO, md::MD)
             return string(c)
         end
     end
+end
+
+# –––––––––––
+# Entity and numeric character references
+# –––––––––––
+
+const DEC_OR_HEX_REGEX = r"^&#(([0-9]{1,7})|[xX]([0-9a-fA-F]{1,6}));"
+
+@trigger '&' ->
+function entity(stream::IO, md::MD)
+    entity(stream)
+end
+
+function entity(stream::IO)
+    # named entity?
+    m = matchstart(stream, r"^&([a-zA-Z][a-zA-Z0-9]*);")
+    if m !== nothing
+        chars = get(entities, m.match, nothing)
+        return chars !== nothing ? chars : string(m.match)
+    end
+    # decimal or hexadecimal entity?
+    m = matchstart(stream, DEC_OR_HEX_REGEX)
+    if m !== nothing
+        val = if m.captures[2] !== nothing
+            Base.parse(UInt, m.captures[2]; base=10)
+        else
+            Base.parse(UInt, m.captures[3]; base=16)
+        end
+        c = (val != 0 && isvalid(Char, val)) ? Char(val) : Char(0xFFFD)
+        #return c
+        return string(c)
+    end
+end
+
+
+function replace_escapes_and_entities(s::AbstractString)
+    # TODO: performance??? ugh
+    stream = IOBuffer(s)
+    out = IOBuffer()
+    while !eof(stream)
+        c = read(stream, Char)
+        if c == '\\'
+            if !eof(stream)
+                c = read(stream, Char)
+                c in escape_chars || write(out, '\\')
+                write(out, c)
+            end
+        elseif c == '&'
+            skip(stream, -1)
+            ent = entity(stream)
+            if ent === nothing
+                skip(stream, 1)
+                write(out, '&')
+            else
+                write(out, ent)
+            end
+        else
+            write(out, c)
+        end
+    end
+    return takestring!(out)
 end
