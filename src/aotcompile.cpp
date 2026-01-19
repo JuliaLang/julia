@@ -108,6 +108,24 @@ jl_get_llvm_mis_impl(void *native_code, size_t *num_elements, jl_method_instance
     }
 }
 
+extern "C" JL_DLLEXPORT_CODEGEN void
+jl_get_llvm_cis_impl(void *native_code, size_t *num_elements, jl_code_instance_t **data)
+{
+    jl_native_code_desc_t *desc = (jl_native_code_desc_t *)native_code;
+    auto &map = desc->jl_fvar_map;
+
+    if (data == NULL) {
+        *num_elements = map.size();
+        return;
+    }
+
+    assert(*num_elements == map.size());
+    size_t i = 0;
+    for (auto &ci : map) {
+        data[i++] = ci.first;
+    }
+}
+
 extern "C" JL_DLLEXPORT_CODEGEN void jl_get_llvm_gvs_impl(void *native_code,
                                                           size_t *num_elements, void **data)
 {
