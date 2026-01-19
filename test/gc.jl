@@ -110,3 +110,29 @@ end
 GC.enable(true); GC.gc(false) # incremental collection
 @test typeof(dims54422) == Vector{Any}
 @test isempty(dims54422)
+
+#this forces a an memory to be made by wrapping a malloc and then a string wrapping that memory. This should force a copy to avoid mixing allocators.
+mktemp() do path, io
+    write(path, "JuliaLang is a GitHub organization.JuliaLang is a GitHub
+  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
+  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
+  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
+  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
+  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
+  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
+  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
+  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
+  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
+  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
+  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
+  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
+  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
+  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
+  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
+  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
+  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub
+  organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.JuliaLang is a GitHub organization.");
+    readline(path)
+end
+
+GC.gc()
