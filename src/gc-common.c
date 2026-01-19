@@ -42,7 +42,7 @@ static void jl_gc_register_callback(jl_gc_callback_list_t **list,
             return;
         list = &((*list)->next);
     }
-    *list = (jl_gc_callback_list_t *)malloc_s(sizeof(jl_gc_callback_list_t));
+    *list = (jl_gc_callback_list_t *)jl_malloc_wrapper(sizeof(jl_gc_callback_list_t));
     (*list)->next = NULL;
     (*list)->func = func;
 }
@@ -54,7 +54,7 @@ static void jl_gc_deregister_callback(jl_gc_callback_list_t **list,
         if ((*list)->func == func) {
             jl_gc_callback_list_t *tmp = *list;
             (*list) = (*list)->next;
-            free(tmp);
+            jl_free_wrapper(tmp);
             return;
         }
         list = &((*list)->next);
@@ -117,11 +117,7 @@ JL_DLLEXPORT void jl_gc_set_cb_notify_gc_pressure(jl_gc_cb_notify_gc_pressure_t 
         jl_gc_deregister_callback(&gc_cblist_notify_gc_pressure, (jl_gc_cb_func_t)cb);
 }
 
-// =========================================================================== //
-// malloc wrappers, aligned allocation
-// =========================================================================== //
-
-#if defined(_OS_WINDOWS_)
+#if defined(_OS_WINDOWS_) && !defined(MIMALLOC_ENABLED)
 // helper function based partly on wine msvcrt80+ heap.c
 // but with several fixes to improve the correctness of the computation and remove unnecessary parameters
 #define SAVED_PTR(x) ((void *)((DWORD_PTR)((char *)x - sizeof(void *)) & \
@@ -136,7 +132,9 @@ static size_t _jl_aligned_msize(void *p)
 
 size_t memory_block_usable_size(void *p, int isaligned) JL_NOTSAFEPOINT
 {
-#if defined(_OS_WINDOWS_)
+#ifdef MIMALLOC_ENABLED
+    return mi_usable_size(p);
+#elif defined(_OS_WINDOWS_)
     if (isaligned)
         return _jl_aligned_msize(p);
     else
