@@ -83,8 +83,12 @@ USE_SYSTEM_ZLIB:=0
 USE_SYSTEM_ZSTD:=0
 USE_SYSTEM_LMDB:=0
 USE_SYSTEM_P7ZIP:=0
+USE_SYSTEM_MIMALLOC:=0
 USE_SYSTEM_LLD:=0
 USE_SYSTEM_LIBPICOSAT:=0
+
+# Use mimalloc as the allocator (disable when using sanitizers)
+WITH_MIMALLOC := 1
 
 # Link libjulia-internal with static libgcc and libstdc++
 USE_RT_STATIC_LIBGCC:=1
@@ -880,6 +884,8 @@ endif
 JCXXFLAGS += $(SANITIZE_OPTS)
 JCFLAGS += $(SANITIZE_OPTS)
 JLDFLAGS += $(SANITIZE_LDFLAGS)
+# Sanitizers need to intercept malloc/free, so disable mimalloc
+WITH_MIMALLOC := 0
 endif # SANITIZE
 
 TAR := $(shell which gtar 2>/dev/null || which tar 2>/dev/null)
@@ -1473,6 +1479,16 @@ else
   LIBUV_INC := $(build_includedir)
 endif
 
+ifeq ($(WITH_MIMALLOC), 1)
+MIMALLOC := $(build_libdir)/libmimalloc.a
+MIMALLOC_INC := $(build_includedir)
+JCFLAGS += -DMIMALLOC_ENABLED
+JCXXFLAGS += -DMIMALLOC_ENABLED
+else
+MIMALLOC :=
+MIMALLOC_INC :=
+endif
+
 ifeq ($(USE_SYSTEM_UTF8PROC), 1)
   LIBUTF8PROC := -lutf8proc
   UTF8PROC_INC := $(LOCALBASE)/include
@@ -1561,7 +1577,7 @@ CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.35|GLIBCXX_3\.5\.|GLIBCXX_4\.
 # Note: we explicitly _do not_ define `CSL` here, since it requires some more
 # advanced techniques to decide whether it should be installed from a BB source
 # or not.  See `deps/csl.mk` for more detail.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB ZSTD P7ZIP LLD LIBTRACYCLIENT BOLT LIBPICOSAT
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB ZSTD P7ZIP LLD LIBTRACYCLIENT BOLT LIBPICOSAT MIMALLOC
 
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
