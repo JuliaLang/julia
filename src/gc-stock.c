@@ -226,7 +226,7 @@ static int64_t old_live_after_full_sweep = 0;
 static int prev_sweep_full_auto = 0; // the last collection did a full sweep chosen by the heuristics
 static int prev_collection_forced = 0; // the last collection was a `JL_GC_FULL` request
 static int64_t last_live_bytes = 0; // live_bytes at last collection
-#ifdef __GLIBC__
+#if defined(__GLIBC__) || defined(MIMALLOC_ENABLED)
 // maxrss at last malloc_trim
 static int64_t last_trim_maxrss = 0;
 #endif
@@ -646,7 +646,7 @@ FORCE_INLINE size_t sweep_unlink_and_free_noaccount(bigval_t *v) JL_NOTSAFEPOINT
     memset(v, 0xbb, sz);
 #endif
     gc_invoke_callbacks(jl_gc_cb_notify_external_free_t, gc_cblist_notify_external_free, (v));
-    jl_free_aligned(v);
+    jl_free_aligned_wrapper(v);
     return sz;
 }
 
@@ -855,14 +855,23 @@ void jl_gc_reset_alloc_count(void)
 static size_t jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT
 {
     assert(jl_is_genericmemory(m));
-    assert(jl_genericmemory_how(m) == JL_GENERICMEMORY_GCMANAGED);
+    assert(jl_genericmemory_how(m) == JL_GENERICMEMORY_GCMANAGED ||
+           jl_genericmemory_how(m) == JL_GENERICMEMORY_LIBCALLOCATED);
     char *d = (char*)m->ptr;
-    size_t freed_bytes = memory_block_usable_size(d, isaligned);
-    assert(freed_bytes != 0);
-    if (isaligned)
-        jl_free_aligned(d);
-    else
+    size_t freed_bytes;
+    if (jl_genericmemory_how(m) == JL_GENERICMEMORY_LIBCALLOCATED) {
+        size_t elsz = ((jl_datatype_t*)jl_typetagof(m))->layout->size;
+        freed_bytes = m->length * elsz;
+        assert(freed_bytes != 0);
         free(d);
+    } else {
+        freed_bytes = memory_block_usable_size(d, isaligned);
+        assert(freed_bytes != 0);
+        if (isaligned)
+            jl_free_aligned_wrapper(d);
+        else
+            jl_free_wrapper(d);
+    }
     return freed_bytes;
 }
 
@@ -4004,13 +4013,17 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         }
     }
 
-#ifdef __GLIBC__
+#if defined(__GLIBC__) || defined(MIMALLOC_ENABLED)
     if (sweep_full) {
         // issue #30653
         // empirically, the malloc runaway seemed to occur within a growth gap
         // of about 20-25%
         if (jl_maxrss() > (last_trim_maxrss/4)*5) {
+#ifdef MIMALLOC_ENABLED
+            mi_collect(true);
+#else
             malloc_trim(0);
+#endif
             last_trim_maxrss = jl_maxrss();
         }
     }
@@ -4467,7 +4480,7 @@ JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void)
 // free passes the same size, and avoids looking up the block (slow on macOS).
 void *jl_gc_counted_malloc_(size_t sz, int usable)
 {
-    void *data = malloc(sz);
+    void *data = jl_malloc_wrapper(sz);
     jl_task_t *ct = jl_get_current_task();
     if (data != NULL && ct != NULL) {
         if (usable)
@@ -4485,7 +4498,7 @@ void *jl_gc_counted_malloc_(size_t sz, int usable)
 
 void *jl_gc_counted_calloc_(size_t nm, size_t sz, int usable)
 {
-    void *data = calloc(nm, sz);
+    void *data = jl_calloc_wrapper(nm, sz);
     jl_task_t *ct = jl_get_current_task();
     if (data != NULL && ct != NULL) {
         sz = usable ? memory_block_usable_size(data, 0) : nm * sz;
@@ -4507,11 +4520,11 @@ void *jl_gc_counted_realloc_(void *p, size_t old, size_t sz, int usable)
     int freeing = p != NULL && sz == 0;
     void *data;
     if (freeing) {
-        free(p);
+        jl_free_wrapper(p);
         data = NULL;
     }
     else {
-        data = realloc(p, sz);
+        data = jl_realloc_wrapper(p, sz);
     }
     jl_task_t *ct = jl_get_current_task();
     if ((data != NULL || freeing) && ct != NULL) {
@@ -4547,7 +4560,7 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 
 JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 {
-    free(p);
+    jl_free_wrapper(p);
     jl_task_t *ct = jl_get_current_task();
     if (p != NULL && ct != NULL)
         jl_batch_accum_free_size(ct->ptls, sz);
