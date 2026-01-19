@@ -3108,7 +3108,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             size_t num_mis;
             jl_get_llvm_mis(native_functions, &num_mis, NULL);
             arraylist_grow(&MIs, num_mis);
-            jl_get_llvm_mis(native_functions, &num_mis, (jl_method_instance_t*)MIs.items);
+            jl_get_llvm_mis(native_functions, &num_mis, (jl_method_instance_t**)MIs.items);
         }
     }
     if (jl_options.trim) {
