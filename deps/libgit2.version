@@ -10,4 +10,4 @@ LIBGIT2_SHA1=e6325351ceee58cf56f58bdce61b38907805544f
 # Specify the version of the Mozilla CA Certificate Store to obtain.
 # The versions of cacert.pem are identified by the date (YYYY-MM-DD) of their changes.
 # See https://curl.haxx.se/docs/caextract.html for more details.
-MOZILLA_CACERT_VERSION := 2023-01-10
+MOZILLA_CACERT_VERSION := 2025-12-02
