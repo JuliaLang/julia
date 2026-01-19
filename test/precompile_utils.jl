@@ -29,3 +29,14 @@ let original_depot_path = copy(Base.DEPOT_PATH)
         append!(Base.LOAD_PATH, original_load_path)
     end
 end
+
+function check_presence(mi, token)
+    ci = isdefined(mi, :cache) ? mi.cache : nothing
+    while ci !== nothing
+        if ci.owner === token && ci.max_world == typemax(UInt)
+            return ci
+        end
+        ci = isdefined(ci, :next) ? ci.next : nothing
+    end
+    return nothing
+end
