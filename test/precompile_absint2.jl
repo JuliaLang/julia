@@ -62,7 +62,6 @@ precompile_test_harness() do load_path
             TestAbsIntPrecompile2.Custom.PrecompileInterpreter())
         let m = only(methods(TestAbsIntPrecompile2.basic_callee))
             mi = only(Base.specializations(m))
-            
             ci = check_presence(mi, nothing)
             @test ci !== nothing
             @test ci.owner === nothing
