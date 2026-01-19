@@ -32,7 +32,8 @@ $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted: $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz
 checksum-mbedtls: $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz
 	$(JLCHECKSUM) $<
 
-$(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted
+# $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted
+$(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: $(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch14.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(MBEDTLS_OPTS)
@@ -95,3 +96,73 @@ else # USE_BINARYBUILDER_MBEDTLS
 $(eval $(call bb-install,mbedtls,MBEDTLS,false))
 
 endif
+
+### Patches
+# We carry eleven security patches from Debian (2.16.9)
+# The patches are numbered 01 through 13, but we skip numbers 06 and 07
+
+$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch01.patch-applied: $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted
+	cd $(SRCCACHE)/$(MBEDTLS_SRC) && \
+		patch -p1 -f < $(SRCDIR)/patches/mbedtls/01-CVE-2025-52496.patch
+	echo 1 > $@
+
+$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch02.patch-applied: $(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch01.patch-applied
+	cd $(SRCCACHE)/$(MBEDTLS_SRC) && \
+		patch -p1 -f < $(SRCDIR)/patches/mbedtls/02-CVE-2025-47917.patch
+	echo 1 > $@
+
+$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch03.patch-applied: $(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch02.patch-applied
+	cd $(SRCCACHE)/$(MBEDTLS_SRC) && \
+		patch -p1 -f < $(SRCDIR)/patches/mbedtls/03-CVE-2025-47917-test.patch
+	echo 1 > $@
+
+$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch04.patch-applied: $(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch03.patch-applied
+	cd $(SRCCACHE)/$(MBEDTLS_SRC) && \
+		patch -p1 -f < $(SRCDIR)/patches/mbedtls/04-CVE-2025-47917-2.patch
+	echo 1 > $@
+
+$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch05.patch-applied: $(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch04.patch-applied
+	cd $(SRCCACHE)/$(MBEDTLS_SRC) && \
+		patch -p1 -f < $(SRCDIR)/patches/mbedtls/05-CVE-2025-47917-2-test.patch
+	echo 1 > $@
+
+$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch08.patch-applied: $(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch05.patch-applied
+	cd $(SRCCACHE)/$(MBEDTLS_SRC) && \
+		patch -p1 -f < $(SRCDIR)/patches/mbedtls/08-CVE-2025-48965-1.patch
+	echo 1 > $@
+
+# We skip numbers 06 and 07
+
+$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch09.patch-applied: $(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch08.patch-applied
+	cd $(SRCCACHE)/$(MBEDTLS_SRC) && \
+		patch -p1 -f < $(SRCDIR)/patches/mbedtls/09-CVE-2025-48965-1-test.patch
+	echo 1 > $@
+
+$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch10.patch-applied: $(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch09.patch-applied
+	cd $(SRCCACHE)/$(MBEDTLS_SRC) && \
+		patch -p1 -f < $(SRCDIR)/patches/mbedtls/10-CVE-2025-52497-0-1.patch
+	echo 1 > $@
+
+$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch11.patch-applied: $(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch10.patch-applied
+	cd $(SRCCACHE)/$(MBEDTLS_SRC) && \
+		patch -p1 -f < $(SRCDIR)/patches/mbedtls/11-CVE-2025-52497-0-2.patch
+	echo 1 > $@
+
+$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch12.patch-applied: $(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch11.patch-applied
+	cd $(SRCCACHE)/$(MBEDTLS_SRC) && \
+		patch -p1 -f < $(SRCDIR)/patches/mbedtls/12-CVE-2025-52497.patch
+	echo 1 > $@
+
+$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch13.patch-applied: $(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch12.patch-applied
+	cd $(SRCCACHE)/$(MBEDTLS_SRC) && \
+		patch -p1 -f < $(SRCDIR)/patches/mbedtls/13-CVE-2025-52497-test.patch
+	echo 1 > $@
+
+# Patch 14 isn't a security patch.
+# We just need to edit CMakeLists.txt, because otherwise newer Cmakes will error with:
+# > Compatibility with CMake < 3.5 has been removed from CMake.
+$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch14.patch-applied: $(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-patch13.patch-applied
+	cd $(SRCCACHE)/$(MBEDTLS_SRC) && \
+		patch -p1 -f < $(SRCDIR)/patches/mbedtls/14-CMakeLists.patch
+
+	echo 1 > $@

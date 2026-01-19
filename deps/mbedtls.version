@@ -2,4 +2,7 @@
 MBEDTLS_JLL_NAME := MbedTLS
 
 ## source build
-MBEDTLS_VER := 2.28.2
+MBEDTLS_VER := 2.28.10
+
+# Our JLL version number is 2.28.1010, which is upstream 2.28.10 plus
+# Debian's (2.16.9) security patches.
