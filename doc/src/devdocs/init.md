@@ -18,12 +18,12 @@ or early initialization. Other options are handled later by [`exec_options()` in
 
 `jl_parse_opts()` stores command line options in the [global `jl_options` struct](https://github.com/JuliaLang/julia/blob/master/src/julia.h).
 
-## `julia_init()`
+## `jl_init_()`
 
-[`julia_init()` in `init.c`](https://github.com/JuliaLang/julia/blob/master/src/init.c) is called
-by `main()` and calls [`_julia_init()` in `init.c`](https://github.com/JuliaLang/julia/blob/master/src/init.c).
+[`jl_init_()` in `init.c`](https://github.com/JuliaLang/julia/blob/master/src/init.c) is called
+by `main()` and calls [`_finish_jl_init_()` in `init.c`](https://github.com/JuliaLang/julia/blob/master/src/init.c).
 
-`_julia_init()` begins by calling `libsupport_init()` again (it does nothing the second time).
+`_finish_jl_init_()` begins by calling `libsupport_init()` again (it does nothing the second time).
 
 [`restore_signals()`](https://github.com/JuliaLang/julia/blob/master/src/signals-unix.c) is called
 to zero the signal handler mask.
@@ -78,7 +78,7 @@ functions up to Julia function symbols. e.g. the symbol `Core.:(===)()` is bound
 [`jl_new_main_module()`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c) creates
 the global "Main" module and sets `jl_current_task->current_module = jl_main_module`.
 
-Note: `_julia_init()` [then sets](https://github.com/JuliaLang/julia/blob/master/src/init.c) `jl_root_task->current_module = jl_core_module`.
+Note: `_finish_jl_init_()` [then sets](https://github.com/JuliaLang/julia/blob/master/src/init.c) `jl_root_task->current_module = jl_core_module`.
 `jl_root_task` is an alias of `jl_current_task` at this point, so the `current_module` set by `jl_new_main_module()`
 above is overwritten.
 
@@ -102,14 +102,14 @@ jl_value_t *jl_box_uint8(uint32_t x)
 }
 ```
 
-[`_julia_init()` iterates](https://github.com/JuliaLang/julia/blob/master/src/init.c) over the
+[`_finish_jl_init_()` iterates](https://github.com/JuliaLang/julia/blob/master/src/init.c) over the
 `jl_core_module->bindings.table` looking for `jl_datatype_t` values and sets the type name's module
 prefix to `jl_core_module`.
 
 [`jl_add_standard_imports(jl_main_module)`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c)
 does "using Base" in the "Main" module.
 
-Note: `_julia_init()` now reverts to `jl_root_task->current_module = jl_main_module` as it was
+Note: `_finish_jl_init_()` now reverts to `jl_root_task->current_module = jl_main_module` as it was
 before being set to `jl_core_module` above.
 
 Platform specific signal handlers are initialized for `SIGSEGV` (OSX, Linux), and `SIGFPE` (Windows).
@@ -125,7 +125,7 @@ each deserialized module to run the `__init__()` function.
 Finally [`sigint_handler()`](https://github.com/JuliaLang/julia/blob/master/src/signals-unix.c)
 is hooked up to `SIGINT` and calls `jl_throw(jl_interrupt_exception)`.
 
-`_julia_init()` then returns [back to `main()` in `cli/loader_exe.c`](https://github.com/JuliaLang/julia/blob/master/cli/loader_exe.c)
+`_finish_jl_init_()` then returns [back to `main()` in `cli/loader_exe.c`](https://github.com/JuliaLang/julia/blob/master/cli/loader_exe.c)
 and `main()` calls `repl_entrypoint(argc, (char**)argv)`.
 
 !!! sidebar "sysimg"
@@ -221,8 +221,9 @@ the stack now rapidly unwinds back to `main()`.
 This calls `Base._atexit`, then calls [`jl_gc_run_all_finalizers()`](https://github.com/JuliaLang/julia/blob/master/src/gc.c)
 and cleans up libuv handles.
 
-## `julia_save()`
+## System Image Saving
 
-Finally, `main()` calls [`julia_save()`](https://github.com/JuliaLang/julia/blob/master/src/init.c),
-which if requested on the command line, saves the runtime state to a new system image. See [`jl_compile_all()`](https://github.com/JuliaLang/julia/blob/master/src/gf.c)
+If requested on the command line (e.g., with `--build`), the runtime state is saved to a new system image.
+This is handled by [`jl_create_system_image()`](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c),
+which is called from Julia code. See [`jl_compile_all()`](https://github.com/JuliaLang/julia/blob/master/src/gf.c)
 and [`jl_save_system_image()`](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c).
