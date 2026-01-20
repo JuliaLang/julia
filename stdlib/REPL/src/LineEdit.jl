@@ -275,7 +275,8 @@ end
 
 const COMMAND_GROUPS =
     Dict(:movement    => [:edit_move_left, :edit_move_right, :edit_move_word_left, :edit_move_word_right,
-                          :edit_move_up, :edit_move_down, :edit_exchange_point_and_mark],
+                          :edit_move_up, :edit_move_down, :edit_exchange_point_and_mark,
+                          :move_line_start, :move_line_end, :move_input_start, :move_input_end],
          :deletion    => [:edit_clear, :edit_backspace, :edit_delete, :edit_werase,
                           :edit_delete_prev_word,
                           :edit_delete_next_word,
