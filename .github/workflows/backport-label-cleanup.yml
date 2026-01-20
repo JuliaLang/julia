@@ -1,0 +1,20 @@
+name: Backport Label Cleanup
+# Runs automatically when a pull request to a release branch is merged
+# to remove backport labels from the merged PRs
+
+# In the caller repo (JuliaLang/julia or the stdlib repo):
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - 'release-*'
+
+jobs:
+  audit:
+    if: github.event.pull_request.merged == true
+    uses: JuliaLang/backporter-github-actions-workflows/.github/workflows/audit.yml@f0cf777a492c5ff31196822a7d643a17ee0efbd1 # main
+    permissions:
+      pull-requests: write # necessary to be able to remove labels from PRs
+    with:
+      pr_number: ${{ github.event.pull_request.number }}
+      pr_base_ref: ${{ github.event.pull_request.base.ref }}
