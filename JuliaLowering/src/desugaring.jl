@@ -59,7 +59,7 @@ end
 function contains_unquoted(f::Function, ex::SyntaxTree)
     if f(ex)
         return true
-    elseif !is_leaf(ex) && !(kind(ex) in KSet"quote inert meta")
+    elseif !is_leaf(ex) && !(kind(ex) in KSet"quote inert inert_syntaxtree meta")
         return any(contains_unquoted(f, e) for e in children(ex))
     else
         return false
@@ -73,7 +73,8 @@ function is_effect_free(ex)
     k = kind(ex)
     # TODO: metas
     is_literal(k) || is_identifier_like(ex) || k == K"Symbol" ||
-        k == K"inert" || k == K"top" || k == K"core" || k == K"Value"
+        k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
+        k == K"core" || k == K"Value"
     # flisp also includes `a.b` with simple `a`, but this seems like a bug
     # because this calls the user-defined getproperty?
 end
@@ -140,8 +141,9 @@ function tuple_to_assignments(ctx, ex, is_const)
             rh
         end
         k = kind(r)
-        if is_literal(k) || k == K"Symbol" || k == K"inert" || k == K"top" ||
-                k == K"core" || k == K"Value"
+        if is_literal(k) || k == K"Symbol" || k == K"inert" ||
+            k == K"inert_syntaxtree" || k == K"top" || k == K"core" ||
+            k == K"Value"
             # Effect-free and nothrow right hand sides do not need a temporary
             # (we require nothrow because the order of rhs terms is observable
             #  due to sequencing, thus identifiers are not allowed)
@@ -765,7 +767,7 @@ end
 function find_return(ex::SyntaxTree)
     if kind(ex) == K"return"
         return ex
-    elseif !is_leaf(ex) && !(kind(ex) in KSet"quote inert meta function ->")
+    elseif !is_leaf(ex) && !(kind(ex) in KSet"quote inert inert_syntaxtree meta function ->")
         for e in children(ex)
             r = find_return(e)
             if !isnothing(r)
@@ -3561,7 +3563,7 @@ function expand_abstract_or_primitive_type(ctx, ex)
                 [K"call" "_typebody!"::K"core" false::K"Bool" name]
             ]
         ]
-        [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex] ]
+        [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex] ]
         [K"global" name]
         [K"if"
             [K"&&"
@@ -4095,7 +4097,7 @@ function expand_struct_def(ctx, ex, docs)
     # typevars when "redefining" structs.
     # See https://github.com/JuliaLang/julia/pull/36121
     @ast ctx ex [K"block"
-        [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex] ]
+        [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex] ]
         [K"scope_block"(scope_type=:hard)
             # Needed for later constdecl to work, though plain global form may be removed soon.
             [K"global" global_struct_name]
@@ -4357,7 +4359,7 @@ function expand_import_or_using(ctx, ex)
         push!(stmts, @ast ctx ex (::K"latestworld"))
     end
     @ast ctx ex [K"block"
-        [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex]]
+        [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex]]
         stmts...
         [K"removable" "nothing"::K"core"]
     ]
@@ -4515,7 +4517,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         @ast ctx ex [K"block"
             [K"assert"
                 "global_toplevel_only"::K"Symbol"
-                [K"inert" ex]
+                [K"inert_syntaxtree" ex]
             ]
             expand_forms_2(ctx, expand_macro_def(ctx, ex))
         ]
@@ -4596,11 +4598,11 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         # The toplevel form can't be lowered here - it needs to just be quoted
         # and passed through to a call to eval.
         ex2 = @ast ctx ex [K"block"
-            [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex]]
+            [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex]]
             [K"call"
                 eval                  ::K"Value"
                 ctx.mod               ::K"Value"
-                [K"inert" ex]
+                [K"inert_syntaxtree" ex]
                 [K"parameters"
                     [K"kw"
                         "expr_compat_mode"::K"Identifier"
@@ -4635,7 +4637,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
                 ]
             ]
         ]
-    elseif k == K"inert"
+    elseif k == K"inert" || k == K"inert_syntaxtree"
         ex
     elseif k == K"gc_preserve"
         s = ssavar(ctx, ex)
