@@ -99,7 +99,25 @@ operation is not recursive, which is especially useful for arrays of non-numeric
 (where the recursive `transpose` would throw an error) and/or 2d arrays that do not represent
 linear operators.
 
-For 1d arrays, see [`permutedims(v::AbstractVector)`](@ref), which returns a 1-row “matrix”.
+For 1d arrays, see [`permutedims(v::AbstractVector)`](@ref), which returns a 1-row "matrix".
+
+# Aliasing Behavior
+
+The aliasing behavior of `permutedims` depends on the input type:
+
+- **Vectors**: `permutedims(v::AbstractVector)` uses [`reshape`](@ref), which shares memory
+with the original vector. Mutations to the result affect the original and vice versa.
+
+- **Arrays (Matrix, 3D, etc.)**: `permutedims(A::AbstractArray, perm)` creates a new array
+and copies data. The result is independent of the original; mutations do not affect each other.
+
+- **LinearAlgebra wrappers** (e.g., `Diagonal`, `SymTridiagonal`, `UpperTriangular`):
+These are treated as generic `AbstractArray` inputs, so `permutedims` copies data.
+
+- **SubArrays**: `permutedims` on a `SubArray` creates a new array and copies data.
+
+If you need guaranteed aliasing (a view that shares memory), use [`PermutedDimsArray`](@ref) instead.
+For matrices, [`transpose`](@ref) also returns a view that shares memory.
 
 See also [`permutedims!`](@ref), [`PermutedDimsArray`](@ref), [`transpose`](@ref), [`invperm`](@ref).
 
@@ -207,6 +225,12 @@ Reshape vector `v` into a `1 × length(v)` row matrix.
 Differs from [`transpose`](@ref) in that
 the operation is not recursive, which is especially useful for arrays of non-numeric values
 (where the recursive `transpose` might throw an error).
+
+# Aliasing Behavior
+
+`permutedims(v::AbstractVector)` uses [`reshape`](@ref), which shares memory with the original
+vector. Mutations to the result affect the original vector and vice versa. This is different
+from `permutedims(A::AbstractArray, perm)` for multi-dimensional arrays, which copies data.
 
 # Examples
 Unlike `transpose`, `permutedims` can be used on vectors of

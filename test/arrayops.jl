@@ -821,6 +821,87 @@ end
     z = TSlow([1 2; 3 4])
     x_slow = PermutedDimsArray(z, (2, 1))
     @test similar(x_slow, 3,3) isa TSlow
+
+    # Test aliasing vs copying behavior
+    @testset "permutedims aliasing behavior" begin
+        # Vector: permutedims uses reshape, which shares memory
+        v = [1, 2, 3, 4]
+        pv = permutedims(v)
+        @test pv !== v # Different objects
+        @test Base.mightalias(pv, v) # But share memory
+        original_v = copy(v)
+        pv[1] = 99
+        @test v[1] == 99 # Mutation affects original (aliasing)
+        v[2] = 88
+        @test pv[2] == 88 # Mutation in original affects result (aliasing)
+        v .= original_v # Restore
+
+        # Matrix: permutedims copies data
+        m = [1 2; 3 4]
+        pm = permutedims(m)
+        @test pm !== m # Different objects
+        @test !Base.mightalias(pm, m) # Do not share memory
+        original_m = copy(m)
+        pm[1, 1] = 99
+        @test m == original_m # Mutation does not affect original (copying)
+        m[1, 1] = 77
+        @test pm[1, 1] == 99 # Mutation in original does not affect result (copying)
+
+        # 3D Array: permutedims copies data
+        a3d = reshape(1:24, 2, 3, 4)
+        pa3d = permutedims(a3d, (3, 1, 2))
+        @test pa3d !== a3d
+        @test !Base.mightalias(pa3d, a3d)
+        original_a3d = copy(a3d)
+        pa3d[1, 1, 1] = 999
+        @test a3d == original_a3d # Mutation does not affect original (copying)
+
+        # LinearAlgebra wrappers: permutedims copies data
+        using LinearAlgebra
+        d = Diagonal([1, 2, 3])
+        pd = permutedims(d)
+        @test pd !== d
+        @test !Base.mightalias(pd, d)
+        original_d = copy(d)
+        pd[1, 1] = 99
+        @test d == original_d # Mutation does not affect original (copying)
+
+        st = SymTridiagonal([1, 2, 3], [4, 5])
+        pst = permutedims(st)
+        @test pst !== st
+        @test !Base.mightalias(pst, st)
+        original_st = copy(st)
+        pst[1, 1] = 99
+        @test st == original_st # Mutation does not affect original (copying)
+
+        ut = UpperTriangular([1 2; 3 4])
+        put = permutedims(ut)
+        @test put !== ut
+        @test !Base.mightalias(put, ut)
+        original_ut = copy(ut)
+        put[1, 1] = 99
+        @test ut == original_ut # Mutation does not affect original (copying)
+
+        # SubArray: permutedims copies data
+        parent_arr = [1 2 3; 4 5 6; 7 8 9]
+        sub = view(parent_arr, 1:2, 1:2)
+        psub = permutedims(sub)
+        @test psub !== sub
+        @test !Base.mightalias(psub, sub)
+        original_sub = copy(sub)
+        psub[1, 1] = 99
+        @test sub == original_sub # Mutation does not affect original (copying)
+
+        # PermutedDimsArray: always aliases (by design)
+        arr = [1 2; 3 4]
+        pda = PermutedDimsArray(arr, (2, 1))
+        @test pda !== arr
+        @test Base.mightalias(pda, arr) # Shares memory
+        original_arr = copy(arr)
+        pda[1, 1] = 99
+        @test arr[1, 1] == 99 # Mutation affects original (aliasing)
+        arr .= original_arr # Restore
+    end
 end
 
 @testset "circshift" begin
