@@ -56,9 +56,10 @@ _is_leaf(@nospecialize(ex)) = true
 function _interpolated_value(ctx::InterpolationContext, srcref, ex)
     if ex isa SyntaxTree
         if !is_compatible_graph(ctx, ex)
-            ex = copy_ast(ctx, ex)
+            append_sourceref(ctx, ex, srcref)
+        else
+            append_sourceref!(ctx, ex, srcref)
         end
-        append_sourceref(ctx, ex, srcref)
     elseif ex isa Symbol
         # Plain symbols become identifiers. This is an accommodation for
         # compatibility to allow `:x` (a Symbol) and `:(x)` (a SyntaxTree) to

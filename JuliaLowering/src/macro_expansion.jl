@@ -49,7 +49,7 @@ end
 function expand_quote(ctx, ex)
     unquoted = SyntaxList(ctx)
     collect_unquoted!(ctx, unquoted, ex, 0)
-    # Unlike user-defined macro expansion, we don't call append_sourceref for
+    # Unlike user-defined macro expansion, we don't call append_sourceref! for
     # the entire expression produced by `quote` expansion. We could, but it
     # seems unnecessary for `quote` because the surface syntax is a transparent
     # representation of the expansion process. However, it's useful to add the
@@ -299,12 +299,10 @@ function expand_macro(ctx, ex)
             rethrow(newexc)
         end
         if expanded isa SyntaxTree
-            if !is_compatible_graph(ctx, expanded)
-                # If the macro has produced syntax outside the macro context,
-                # copy it over. TODO: Do we expect this always to happen?  What
-                # is the API for access to the macro expansion context?
-                expanded = copy_ast(ctx, expanded)
-            end
+            # TODO: If the macro produces syntax inside the original tree, there
+            # shouldn't be a need for copying, unless we decide
+            # `append_sourceref!` should not mutate it
+            expanded = copy_ast(ctx, expanded)
         else
             expanded = @ast ctx ex expanded::K"Value"
         end
@@ -348,7 +346,7 @@ function expand_macro(ctx, ex)
     end
 
     if kind(expanded) != K"Value"
-        expanded = append_sourceref(ctx, expanded, ex)
+        expanded = append_sourceref!(ctx, expanded, ex)
         # Module scope for the returned AST is the module where this particular
         # method was defined (may be different from `parentmodule(macfunc)`)
         mod_for_ast = lookup_method_instance(macfunc, macro_args,
@@ -362,24 +360,28 @@ function expand_macro(ctx, ex)
     return expanded
 end
 
-_unpack_srcref(graph, srcref::SyntaxTree) = _node_id(graph, srcref)
-_unpack_srcref(graph, srcref::Tuple)      = _node_ids(graph, srcref...)
-_unpack_srcref(graph, srcref)             = srcref
-
 # Add a secondary source of provenance to each expression in the tree `ex`.
-function append_sourceref(ctx, ex, secondary_prov)
-    srcref = (ex, secondary_prov)
-    out = if !is_leaf(ex)
-        if kind(ex) == K"macrocall"
-            copy_node(ex)
-        else
-            cs = map(e->append_sourceref(ctx, e, secondary_prov)._id, children(ex))
-            mknode(ex, cs)
+function append_sourceref!(ctx, ex, secondary_prov::SyntaxTree)
+    @assert ex !== secondary_prov
+    if !is_leaf(ex) && kind(ex) !== K"macrocall"
+        for c in children(ex)
+            append_sourceref!(ctx, c, secondary_prov)
         end
-    else
-        copy_node(ex)
     end
-    setattr!(out, :source, _unpack_srcref(syntax_graph(ctx), srcref))
+    old_prov = ex.source
+    if !(old_prov isa Tuple || old_prov isa NodeId)
+        # create a dummy node, as only some code seems willing to deal with
+        # non-NodeId provenance in Tuples.
+        old_prov = ex._id
+        ex = copy_node(ex)
+    end
+    new_prov = old_prov isa Tuple ? (old_prov..., secondary_prov._id) :
+        (old_prov, secondary_prov._id)
+
+    setattr!(ex, :source, new_prov)
+end
+function append_sourceref(ctx, ex, secondary_prov)
+    append_sourceref!(ctx, copy_ast(ctx, ex), secondary_prov)
 end
 
 function remove_scope_layer!(ex)
