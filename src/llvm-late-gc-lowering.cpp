@@ -1208,6 +1208,13 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     auto tracked = CountTrackedPointers(ElT, true);
                     if (tracked.count) {
                         AllocaInst *SRet = dyn_cast<AllocaInst>((CI->arg_begin()[0])->stripInBoundsOffsets());
+                        if (!SRet) {
+                           llvm::errs() << "LLVMLateGCLowering: Expected AllocaInst, found" << *(CI->arg_begin()[0])->stripInBoundsOffsets() << "\n";
+                           llvm::errs() << " + CI: " << *CI << "\n";
+                           llvm::errs() << " + scope: " << *CI->getFunction() << "\n";
+                           llvm::errs() << " + callee: " << *CI->getCalledOperand() << "\n";
+                           llvm_unreachable("LLVMLateGCLowering: Expected AllocaInst");
+                        }
                         assert(SRet);
                         {
                             if (!(SRet->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
