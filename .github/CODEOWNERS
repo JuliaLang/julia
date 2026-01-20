@@ -5,6 +5,8 @@ CODEOWNERS @JuliaLang/github-actions
 /.github/workflows/rerun_failed.yml @DilumAluthge
 /.github/workflows/statuses.yml @DilumAluthge
 /.github/workflows/PrAssignee.yml @LilithHafner @DilumAluthge
+/.github/workflows/backport-label-audit.yml @IanButterworth @DilumAluthge
+/.github/workflows/backport-label-cleanup.yml @IanButterworth @DilumAluthge
 /base/special/ @oscardssmith
 /base/sort.jl @LilithHafner
 /test/sorting.jl @LilithHafner
