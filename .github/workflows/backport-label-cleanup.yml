@@ -12,7 +12,7 @@ on:
 jobs:
   audit:
     if: github.event.pull_request.merged == true
-    uses: JuliaLang/backporter-github-actions-workflows/.github/workflows/audit.yml@f0cf777a492c5ff31196822a7d643a17ee0efbd1 # main
+    uses: JuliaLang/backporter-github-actions-workflows/.github/workflows/cleanup.yml@a9b7af052707eefffbc8b3d5837c54174ae79477 # main
     permissions:
       pull-requests: write # necessary to be able to remove labels from PRs
     with:
