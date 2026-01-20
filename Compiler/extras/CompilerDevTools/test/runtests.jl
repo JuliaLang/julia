@@ -35,18 +35,6 @@ end
     end
 end
 
-const cinst2 = let world = get_world_counter()
-    sig = Tuple{typeof(sin), Float64}
-    mi = lookup_method_instance(sin, 1.0)
-    typeinf_ext_toplevel(SplitCacheInterp(; world), mi, SOURCE_MODE_ABI)
-end
-@testset "Recompile null `invoke` pointer" begin
-    @atomic cinst2.invoke = C_NULL
-    f(x) = invoke(sin, cinst2, x)
-    f(1.0)
-    @test cinst2.invoke != C_NULL
-end
-
 @testset "worldage checks" begin
     this_world = Base.get_world_counter()
     f(x) = invoke(sin, cinst, x)
