@@ -2271,13 +2271,12 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
             if @atomic(method_or_ci.invoke) == C_NULL
                 @ccall jl_compile_codeinst(method_or_ci::Any)::Nothing
             end
-            if @atomic(method_or_ci.invoke) == C_NULL
-                # if invoke is still null after trying to compile the codeinstance, we just fall back
-                # to the interpreter, which will handle errors, or falling back to the methodinstance.
-                return Future(CallMeta(Bottom, ErrorException, EFFECTS_THROWS, NoCallInfo()))
+            # if invoke is still null after trying to compile the codeinstance, we just fall back
+            # to the interpreter, which will handle errors, or falling back to the methodinstance.
+            if @atomic(method_or_ci.invoke) != C_NULL
+                return Future(CallMeta(method_or_ci.rettype, exct, Effects(decode_effects(method_or_ci.ipo_purity_bits), nothrow=(exct===Bottom)),
+                    InvokeCICallInfo(method_or_ci)))
             end
-            return Future(CallMeta(method_or_ci.rettype, exct, Effects(decode_effects(method_or_ci.ipo_purity_bits), nothrow=(exct===Bottom)),
-                InvokeCICallInfo(method_or_ci)))
         else
             method = method_or_ci::Method
             types = method # argument value
