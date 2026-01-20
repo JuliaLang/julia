@@ -8443,25 +8443,30 @@ let ms = Base._methods_by_ftype(Tuple{typeof(sin), Int}, OverlayModule.mt, 1, Ba
     @test isempty(ms)
 end
 
-# test that overlay method table caches don't perform fallback lookups in the global cache
-let world = Base.get_world_counter()
-    # method_instance should find overlay methods in custom MT
-    mi = Base.method_instance(sin, Tuple{Float64}; world, method_table=OverlayModule.mt)
-    @test mi isa Core.MethodInstance
-    @test mi.def.module === OverlayModule
+# fresh module to ensure uncached methods
+module OverlayMTTest
+    using Base.Experimental: @MethodTable, @overlay
+    @MethodTable(mt)
 
-    # method_instance with global MT should find Base method, not overlay
-    mi_global = Base.method_instance(sin, Tuple{Float64}; world, method_table=nothing)
-    @test mi_global isa Core.MethodInstance
-    @test mi_global.def.module === Base.Math
+    function overlay_only end
+    @overlay mt overlay_only(x::Int) = x * 2
 end
 
-# test that global methods do not leak in overlay method tables caches
+# #60702 & #60716: Overlay methods must be found without prior cache population
+let world = Base.get_world_counter()
+    mi = Base.method_instance(OverlayMTTest.overlay_only, Tuple{Int};
+                              world, method_table=OverlayMTTest.mt)
+    @test mi isa Core.MethodInstance
+    @test mi.def.module === OverlayMTTest
+end
+
+# #60712: Global-only methods must NOT be found via custom MT
 let
-    global_only_func(x) = x + 1  # defined in global MT only
+    @eval global_only_func(x::Int) = x + 1
     world = Base.get_world_counter()
-    mi = Base.method_instance(global_only_func, Tuple{Int}; world, method_table=OverlayModule.mt)
-    @test mi === nothing  # should NOT find global method via custom MT
+    mi = Base.method_instance(global_only_func, Tuple{Int};
+                              world, method_table=OverlayMTTest.mt)
+    @test mi === nothing
 end
 
 # precompilation
