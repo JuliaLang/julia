@@ -1111,9 +1111,91 @@ function is_builtin(𝕃ₒ::AbstractLattice, s::Signature)
     return false
 end
 
+# Check if a call expression is invoke with a CodeInstance as the second argument
+# Pattern: Expr(:call, invoke, f, ::CodeInstance, args...)
+function is_invoke_with_codeinstance(stmt::Expr, ir::IRCode)
+    # Must be a :call expression
+    stmt.head === :call || return false
+
+    # Need at least: invoke, f, CodeInstance, potentially more args
+    length(stmt.args) >= 3 || return false
+
+    # Check if first arg is the invoke function
+    ft = argextype(stmt.args[1], ir)
+    has_free_typevars(ft) && return false
+    f = singleton_type(ft)
+    f === Core.invoke || return false
+
+    # Check if third argument (second after invoke) is a CodeInstance
+    third_arg = stmt.args[3]
+
+    # Direct CodeInstance reference
+    if isa(third_arg, CodeInstance)
+        return true
+    end
+
+    # Could be an SSAValue or Argument that references a CodeInstance
+    third_arg_type = argextype(third_arg, ir)
+    if isa(third_arg_type, Const) && isa(third_arg_type.val, CodeInstance)
+        return true
+    end
+    return false
+end
+
+# Transform invoke call with CodeInstance to :invoke expression
+# Transforms: Expr(:call, invoke, f, ::CodeInstance, args...)
+# Into: Expr(:invoke, ::CodeInstance, f, args...)
+function transform_invoke_codeinstance!(ir::IRCode, idx::Int, stmt::Expr)
+    # Extract the CodeInstance from stmt.args[3]
+    ci_arg = stmt.args[3]
+
+    # Resolve to actual CodeInstance if needed
+    ci::CodeInstance = if isa(ci_arg, CodeInstance)
+        ci_arg
+    else
+        ci_type = argextype(ci_arg, ir)
+        if isa(ci_type, Const) && isa(ci_type.val, CodeInstance)
+            ci_type.val
+        else
+            return false
+        end
+    end
+    if @atomic(ci.invoke) == C_NULL
+        @ccall jl_compile_codeinst(ci::Any)::Nothing
+    end
+    if @atomic(ci.invoke) == C_NULL
+        # if invoke is still null after trying to compile the codeinstance, we just fall back
+        # to the interpreter, which will handle errors, or falling back to the methodinstance.
+        return false
+    end
+    if ir.valid_worlds.min_world < @atomic(ci.min_world) ||  @atomic(ci.max_world) < ir.valid_worlds.max_world
+        # If the code instance has a world range that's inappropriate for our IR, fall
+        # back to the interpreter which will raise an appropriate error
+        return false
+    end
+    # Rebuild as: Expr(:invoke, CodeInstance, f, args...)
+    stmt.head = :invoke
+    stmt.args = Any[ci, stmt.args[2], stmt.args[4:end]...]
+    return true
+end
+
 function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
     ir::IRCode, idx::Int, stmt::Expr, @nospecialize(info), flag::UInt32,
     sig::Signature, state::InliningState)
+
+    # Check for invoke with CodeInstance pattern and transform it
+    # This allows invoke calls with CodeInstance to be resolved at compile time
+    # Pattern: Expr(:call, invoke, f, ::CodeInstance, args...)
+    # Transformed into: Expr(:invoke, ::CodeInstance, f, args...)
+    if sig.f === Core.invoke && is_invoke_with_codeinstance(stmt, ir)
+        if transform_invoke_codeinstance!(ir, idx, stmt)
+            # Successfully transformed to :invoke, now handle it as such
+            handle_invoke_expr!(todo, ir, idx, stmt, info, flag, sig, state)
+            return nothing
+        end
+       # If transformation failed, fall through to normal invoke handling
+    end
+
     nspl = nsplit(info)
     nspl == 0 && return nothing # e.g. InvokeCICallInfo
     @assert nspl == 1
@@ -1558,78 +1640,6 @@ function inline_const_if_inlineable!(inst::Instruction)
     return false
 end
 
-
-
-
-# Check if a call expression is invoke with a CodeInstance as the second argument
-# Pattern: Expr(:call, invoke, f, ::CodeInstance, args...)
-function is_invoke_with_codeinstance(stmt::Expr, ir::IRCode)
-    # Must be a :call expression
-    stmt.head === :call || return false
-
-    # Need at least: invoke, f, CodeInstance, potentially more args
-    length(stmt.args) >= 3 || return false
-
-    # Check if first arg is the invoke function
-    ft = argextype(stmt.args[1], ir)
-    has_free_typevars(ft) && return false
-    f = singleton_type(ft)
-    f === Core.invoke || return false
-
-    # Check if third argument (second after invoke) is a CodeInstance
-    third_arg = stmt.args[3]
-
-    # Direct CodeInstance reference
-    if isa(third_arg, CodeInstance)
-        return true
-    end
-
-    # Could be an SSAValue or Argument that references a CodeInstance
-    third_arg_type = argextype(third_arg, ir)
-    if isa(third_arg_type, Const) && isa(third_arg_type.val, CodeInstance)
-        return true
-    end
-    return false
-end
-
-# Transform invoke call with CodeInstance to :invoke expression
-# Transforms: Expr(:call, invoke, f, ::CodeInstance, args...)
-# Into: Expr(:invoke, ::CodeInstance, f, args...)
-function transform_invoke_codeinstance!(ir::IRCode, idx::Int, stmt::Expr)
-    # Extract the CodeInstance from stmt.args[3]
-    ci_arg = stmt.args[3]
-
-    # Resolve to actual CodeInstance if needed
-    ci::CodeInstance = if isa(ci_arg, CodeInstance)
-        ci_arg
-    else
-        ci_type = argextype(ci_arg, ir)
-        if isa(ci_type, Const) && isa(ci_type.val, CodeInstance)
-            ci_type.val
-        else
-            return false
-        end
-    end
-    if @atomic(ci.invoke) == C_NULL
-        @ccall jl_compile_codeinst(ci::Any)::Nothing
-    end
-    if @atomic(ci.invoke) == C_NULL
-        # if invoke is still null after trying to compile the codeinstance, we just fall back
-        # to the interpreter, which will handle errors, or falling back to the methodinstance.
-        return false
-    end
-    if ir.valid_worlds.min_world < @atomic(ci.min_world) ||  @atomic(ci.max_world) < ir.valid_worlds.max_world
-        # If the code instance has a world range that's inappropriate for our IR, fall
-        # back to the interpreter which will raise an appropriate error
-        return false
-    end
-    # Rebuild as: Expr(:invoke, CodeInstance, f, args...)
-    stmt.head = :invoke
-    stmt.args = Any[ci, stmt.args[2], stmt.args[4:end]...]
-    return true
-end
-
-
 function assemble_inline_todo!(ir::IRCode, state::InliningState)
     todo = Pair{Int, Any}[]
 
@@ -1647,19 +1657,6 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         if isexpr(stmt, :invoke)
             handle_invoke_expr!(todo, ir, idx, stmt, info, flag, sig, state)
             continue
-        end
-
-        # Check for invoke with CodeInstance pattern and transform it
-        # This allows invoke calls with CodeInstance to be resolved at compile time
-        # Pattern: Expr(:call, invoke, f, ::CodeInstance, args...)
-        # Transformed into: Expr(:invoke, ::CodeInstance, f, args...)
-        if sig.f === Core.invoke && is_invoke_with_codeinstance(stmt, ir)
-            if transform_invoke_codeinstance!(ir, idx, stmt)
-                # Successfully transformed to :invoke, now handle it as such
-                handle_invoke_expr!(todo, ir, idx, stmt, info, flag, sig, state)
-                continue
-            end
-           # If transformation failed, fall through to normal invoke handling
         end
 
         # Check whether this call was @pure and evaluates to a constant
