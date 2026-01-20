@@ -8,6 +8,11 @@ function github_paragraph(stream::IO, md::MD)
     p = Paragraph()
     push!(md, p)
     for char in readeach(stream, Char)
+        # handle Windows line ends
+        if char == '\r'
+            peek(stream, Char) == '\n' && read(stream, Char)
+            char = '\n'
+        end
         if char == '\n'
             eof(stream) && break
             if blankline(stream) || _parse(stream, md, breaking = true)
@@ -26,7 +31,7 @@ end
 @flavor github [fencedcode, horizontalrule, list, indentcode, blockquote, admonition, footnote, hashheader,
                 html_block, html_block_type7, github_table, github_paragraph,
 
-                linebreak, escapes,
+                linebreak, escapes, entity,
                 en_or_em_dash, inline_code,
                 double_tilde_strikethrough, tilde_strikethrough,
                 asterisk_bold, underscore_bold,

@@ -58,7 +58,7 @@ for u in Any[
     Union{Tuple{Int, Int}, Tuple{Char, Int}, Nothing},
     Union{Missing, Nothing}
 ]
-    @test InteractiveUtils.is_expected_union(u)
+    @test Base.Compiler.IRShow.is_expected_union(u)
 end
 
 for u in Any[
@@ -66,7 +66,7 @@ for u in Any[
     Union{Missing, Array},
     Union{Int, Tuple{Any, Int}}
 ]
-    @test !InteractiveUtils.is_expected_union(u)
+    @test !Base.Compiler.IRShow.is_expected_union(u)
 end
 mutable struct Stable{T,N}
     A::Array{T,N}

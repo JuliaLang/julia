@@ -197,17 +197,14 @@ function set_macro_arg_hygiene(ctx, ex, layer_ids, layer_idx)
     if is_leaf(ex)
         setattr!(copy_node(ex), :scope_layer, scope_layer)
     else
-        inner_layer_idx = layer_idx
-        if k == K"escape"
-            inner_layer_idx = layer_idx - 1
-            if inner_layer_idx < 1
-                # If we encounter too many escape nodes, there's probably been
-                # an error in the previous macro expansion.
-                # todo: The error here isn't precise about that - maybe we
-                # should record that macro call expression with the scope layer
-                # if we want to report the error against the macro call?
-                throw(MacroExpansionError(ex, "`escape` node in outer context"))
-            end
+        inner_layer_idx = k == K"escape" ? layer_idx - 1 : layer_idx
+        if k == K"escape" && inner_layer_idx < 1
+            # If we encounter too many escape nodes, there's probably been
+            # an error in the previous macro expansion.
+            # todo: The error here isn't precise about that - maybe we
+            # should record that macro call expression with the scope layer
+            # if we want to report the error against the macro call?
+            throw(MacroExpansionError(ex, "`escape` node in outer context"))
         end
         node = mapchildren(e->set_macro_arg_hygiene(
             ctx, e, layer_ids, inner_layer_idx), ctx, ex)

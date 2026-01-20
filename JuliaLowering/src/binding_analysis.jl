@@ -62,6 +62,257 @@ function _analyze_nested_lambdas!(ctx, ex)
     end
 end
 
+"""
+    DefUseState
+
+State for def-use analysis (flisp-compatible tables for tracking variable def and use).
+
+Fields:
+- `unused`: candidate variables not yet used (read) in current block
+- `live`: variables that have been assigned in current block
+- `seen`: all variables we've seen assigned
+- `decl`: variables scoped in current scope (via `local` or an argument)
+- `decl_outside_loop`: variables scoped in scope outside loop (via `local` or an argument)
+- `args`: argument variables (never undefined, special handling in mark_used!)
+"""
+mutable struct DefUseState
+    const unused::Set{IdTag}
+    const live::Set{IdTag}
+    const seen::Set{IdTag}
+    decl::Set{IdTag}
+    decl_outside_loop::Set{IdTag}
+    const args::Set{IdTag}
+
+    function DefUseState(ctx, candidates)
+        unused = candidates
+        live = Set{IdTag}()
+        seen = Set{IdTag}()
+        decl = Set{IdTag}()
+        decl_outside_loop = Set{IdTag}()
+        args = Set{IdTag}()
+        # Initialize decl and args with arguments since they're implicitly declared outside any loop
+        for id in candidates
+            binfo = get_binding(ctx, id)
+            if binfo.kind == :argument
+                push!(decl, id)
+                push!(args, id)
+            end
+        end
+        return new(unused, live, seen, decl, decl_outside_loop, args)
+    end
+end
+
+# At CFG merge points, we lose certainty about which path was taken,
+# so variables assigned in one branch may not have been assigned.
+# Move live variables back to unused to require re-assignment.
+# NOTE: This is NOT needed at branch points (return/break/goto) because
+# code after them is unreachable - only at merge points (if/while/label).
+function du_kill!(state::DefUseState)
+    union!(state.unused, state.live)
+    empty!(state.live)
+end
+
+# Restore live to a previous state, moving new additions back to unused
+function du_restore!(state::DefUseState, prev)
+    for id in state.decl_outside_loop
+        if (id in prev) && !(id in state.unused)
+            # This variable was 'used' inside this branch, but it's declared
+            # outside of a loop so it may see the dominating assignment execute
+            # multiple times. Invalidate it here for soundness.
+            delete!(prev, id)
+        end
+    end
+    for id in state.live
+        if !(id in prev)
+            push!(state.unused, id)
+        end
+    end
+    empty!(state.live)
+    union!(state.live, prev)
+end
+
+# At the beginning of a loop, move all active decls into the "decl_outside_loop" set.
+function du_enter_loop!(state::DefUseState)
+    prev_decl_outside_loop = state.decl_outside_loop
+    state.decl_outside_loop = state.decl
+    state.decl = copy(state.decl)
+    return prev_decl_outside_loop
+end
+
+# At the end of a loop, restore the previous set of "declared" variables.
+function du_leave_loop!(state::DefUseState, prev_decl_outside_loop)
+    state.decl = state.decl_outside_loop
+    state.decl_outside_loop = prev_decl_outside_loop
+end
+
+# When a variable is used (read), remove from unused.
+# Note: arguments are only "used" for purposes of this analysis when
+# they are captured, since they are never undefined.
+function du_mark_used!(state::DefUseState, var_id)
+    if var_id in state.unused && !(var_id in state.args)
+        delete!(state.unused, var_id)
+    end
+end
+
+# When a variable is captured by a nested lambda before being assigned
+function du_mark_captured!(state::DefUseState, var_id)
+    if var_id in state.unused
+        delete!(state.unused, var_id)
+    end
+end
+
+# When a variable is assigned, move from unused to live
+function du_assign!(state::DefUseState, var_id)
+    if var_id in state.unused
+        push!(state.live, var_id)
+        push!(state.seen, var_id)
+        delete!(state.unused, var_id)
+    end
+end
+
+# Track local declarations for loop handling
+function du_declare!(state::DefUseState, var_id)
+    if var_id in state.unused
+        push!(state.decl, var_id)
+    end
+end
+
+# Returns whether e contained a symbolic_label
+function du_visit!(ctx, state::DefUseState, e)
+    k = kind(e)
+
+    if k == K"BindingId"
+        du_mark_used!(state, e.var_id)
+        return false
+
+    elseif k == K"symbolic_label"
+        # Must check BEFORE is_leaf since symbolic_label is a leaf node
+        du_kill!(state)
+        return true
+
+    elseif k == K"label"
+        du_kill!(state)
+        return false
+
+    elseif k in KSet"break symbolic_goto"
+        # this kill!() is not required for soundness since these are branch points
+        # not merge points, but it's here for parity with flisp
+        du_kill!(state)
+        return false
+
+    elseif k == K"="
+        # Visit RHS first, then record assignment
+        has_label = du_visit!(ctx, state, e[2])
+        lhs = e[1]
+        if kind(lhs) == K"BindingId"
+            du_assign!(state, lhs.var_id)
+        end
+        return has_label
+
+    elseif k == K"lambda"
+        # Check captures from nested lambda
+        nested_lb = e.lambda_bindings
+        for (id, is_capt) in nested_lb.locals_capt
+            if is_capt
+                du_mark_captured!(state, id)
+            end
+        end
+        # Don't recurse into nested lambdas - they have their own analysis
+        return false
+
+    elseif k == K"local"
+        # Track local declarations for loop handling
+        # Note: For typed locals like `local x::T`, the K"local" node only
+        # contains the BindingId after desugaring. The type info is in
+        # a separate K"decl" node. So we only need to handle K"BindingId" here.
+        for child in children(e)
+            if kind(child) == K"BindingId"
+                du_declare!(state, child.var_id)
+            end
+        end
+        return false
+
+    elseif k == K"decl"
+        # Don't recurse into decl nodes - the BindingId is just a declaration,
+        # not a use. We only need to visit the type expression.
+        if numchildren(e) >= 2
+            return du_visit!(ctx, state, e[2])
+        end
+        return false
+
+    elseif k == K"method_defs" || k == K"function_decl"
+        # Process nested lambdas within
+        has_label = false
+        for child in children(e)
+            has_label |= du_visit!(ctx, state, child)
+        end
+        return has_label
+
+    elseif k == K"return"
+        has_label = numchildren(e) >= 1 ? du_visit!(ctx, state, e[1]) : false
+        du_kill!(state) # not necessary, but included for flisp parity
+        return has_label
+
+    elseif k in KSet"if elseif trycatchelse tryfinally"
+        prev = copy(state.live)
+        has_label = false
+        for child in children(e)
+            has_label |= du_visit!(ctx, state, child)
+            du_kill!(state)
+        end
+        if has_label
+            # If there's a label inside, we could have skipped a prior
+            # variable initialization
+            return true
+        else
+            du_restore!(state, prev)
+            return false
+        end
+
+    elseif k in KSet"_while _do_while"
+        prev = copy(state.live)
+        old_decl = du_enter_loop!(state)
+        has_label = false
+        for child in children(e)
+            has_label |= du_visit!(ctx, state, child)
+        end
+        du_leave_loop!(state, old_decl)
+        if has_label
+            du_kill!(state)
+            return true
+        else
+            du_restore!(state, prev)
+            return false
+        end
+
+    elseif k == K"break_block"
+        # Skip the first child (break target label) - it's not a @goto target
+        # No save/restore needed: the body always executes (break just exits early)
+        has_label = false
+        for child in children(e)[2:end]
+            has_label |= du_visit!(ctx, state, child)
+        end
+        return has_label
+
+    elseif is_leaf(e) || is_quoted(e) ||
+        k in KSet"local meta inbounds boundscheck noinline loopinfo decl
+            with_static_parameters toplevel_butfirst global globalref
+            extension constdecl atomic isdefined toplevel module error
+            gc_preserve_begin gc_preserve_end export public inline"
+
+        # Forms that don't interact with locals or affect control flow (likely more than is necessary).
+        # flisp: `lambda-opt-ignored-exprs`
+        return false
+
+    else
+        has_label = false
+        for child in children(e)
+            has_label |= du_visit!(ctx, state, child)
+        end
+        return has_label
+    end
+end
+
 function _analyze_lambda_vars!(ctx, ex)
     lambda_bindings = ex.lambda_bindings
 
@@ -84,254 +335,23 @@ function _analyze_lambda_vars!(ctx, ex)
     end
     isempty(candidates) && return
 
-    # flisp-compatible tables for tracking variable def and use:
-    # - unused: candidate variables not yet used (read) in current block
-    # - live: variables that have been assigned in current block
-    # - seen: all variables we've seen assigned
-    # - decl: variables scoped in current scope (via `local` or an argument)
-    # - decl_outside_loop: variables scoped in scope outside loop (via `local` or an argument)
-    # - args: argument variables (never undefined, special handling in mark_used!)
-    unused = candidates
-    live = Set{IdTag}()
-    seen = Set{IdTag}()
-    decl = Set{IdTag}()
-    decl_outside_loop = Set{IdTag}()
-    args = Set{IdTag}()
-    # Initialize decl and args with arguments since they're implicitly declared outside any loop
-    for id in candidates
-        binfo = get_binding(ctx, id)
-        if binfo.kind == :argument
-            push!(decl, id)
-            push!(args, id)
-        end
-    end
-
-    # At CFG merge points, we lose certainty about which path was taken,
-    # so variables assigned in one branch may not have been assigned.
-    # Move live variables back to unused to require re-assignment.
-    # NOTE: This is NOT needed at branch points (return/break/goto) because
-    # code after them is unreachable - only at merge points (if/while/label).
-    function kill!()
-        union!(unused, live)
-        empty!(live)
-    end
-
-    # Restore live to a previous state, moving new additions back to unused
-    function restore!(prev)
-        for id in decl_outside_loop
-            if (id in prev) && !(id in unused)
-                # This variable was 'used' inside this branch, but it's declared
-                # outside of a loop so it may see the dominating assignment execute
-                # multiple times. Invalidate it here for soundness.
-                delete!(prev, id)
-            end
-        end
-        for id in live
-            if !(id in prev)
-                push!(unused, id)
-            end
-        end
-        empty!(live)
-        union!(live, prev)
-    end
-
-    # At the beginning of a loop, move all active decls into the "decl_outside_loop" set.
-    function enter_loop!()
-        prev_decl_outside_loop = decl_outside_loop
-        decl_outside_loop = decl
-        decl = copy(decl)
-        return prev_decl_outside_loop
-    end
-
-    # At the end of a loop, restore the previous set of "declared" variables.
-    function leave_loop!(prev_decl_outside_loop)
-        decl = decl_outside_loop
-        decl_outside_loop = prev_decl_outside_loop
-    end
-
-    # When a variable is used (read), remove from unused.
-    # Note: arguments are only "used" for purposes of this analysis when
-    # they are captured, since they are never undefined.
-    function mark_used!(var_id)
-        if var_id in unused && !(var_id in args)
-            delete!(unused, var_id)
-        end
-    end
-
-    # When a variable is captured by a nested lambda before being assigned
-    function mark_captured!(var_id)
-        if var_id in unused
-            delete!(unused, var_id)
-        end
-    end
-
-    # When a variable is assigned, move from unused to live
-    function assign!(var_id)
-        if var_id in unused
-            push!(live, var_id)
-            push!(seen, var_id)
-            delete!(unused, var_id)
-        end
-    end
-
-    # Track local declarations for loop handling
-    function declare!(var_id)
-        if var_id in unused
-            push!(decl, var_id)
-        end
-    end
-
-    # Returns whether e contained a symbolic_label
-    function visit(e)
-        k = kind(e)
-
-        if k == K"BindingId"
-            mark_used!(e.var_id)
-            return false
-
-        elseif k == K"symbolic_label"
-            # Must check BEFORE is_leaf since symbolic_label is a leaf node
-            kill!()
-            return true
-
-        elseif k == K"label"
-            kill!()
-            return false
-
-        elseif k in KSet"break symbolic_goto"
-            # this kill!() is not required for soundness since these are branch points
-            # not merge points, but it's here for parity with flisp
-            kill!()
-            return false
-
-        elseif k == K"="
-            # Visit RHS first, then record assignment
-            has_label = visit(e[2])
-            lhs = e[1]
-            if kind(lhs) == K"BindingId"
-                assign!(lhs.var_id)
-            end
-            return has_label
-
-        elseif k == K"lambda"
-            # Check captures from nested lambda
-            nested_lb = e.lambda_bindings
-            for (id, is_capt) in nested_lb.locals_capt
-                if is_capt
-                    mark_captured!(id)
-                end
-            end
-            # Don't recurse into nested lambdas - they have their own analysis
-            return false
-
-        elseif k == K"local"
-            # Track local declarations for loop handling
-            # Note: For typed locals like `local x::T`, the K"local" node only
-            # contains the BindingId after desugaring. The type info is in
-            # a separate K"decl" node. So we only need to handle K"BindingId" here.
-            for child in children(e)
-                if kind(child) == K"BindingId"
-                    declare!(child.var_id)
-                end
-            end
-            return false
-
-        elseif k == K"decl"
-            # Don't recurse into decl nodes - the BindingId is just a declaration,
-            # not a use. We only need to visit the type expression.
-            if numchildren(e) >= 2
-                return visit(e[2])
-            end
-            return false
-
-        elseif k == K"method_defs" || k == K"function_decl"
-            # Process nested lambdas within
-            has_label = false
-            for child in children(e)
-                has_label |= visit(child)
-            end
-            return has_label
-
-        elseif k == K"return"
-            has_label = numchildren(e) >= 1 ? visit(e[1]) : false
-            kill!() # not necessary, but included for flisp parity
-            return has_label
-
-        elseif k in KSet"if elseif trycatchelse tryfinally"
-            prev = copy(live)
-            has_label = false
-            for child in children(e)
-                has_label |= visit(child)
-                kill!()
-            end
-            if has_label
-                # If there's a label inside, we could have skipped a prior
-                # variable initialization
-                return true
-            else
-                restore!(prev)
-                return false
-            end
-
-        elseif k in KSet"_while _do_while"
-            prev = copy(live)
-            old_decl = enter_loop!()
-            has_label = false
-            for child in children(e)
-                has_label |= visit(child)
-            end
-            leave_loop!(old_decl)
-            if has_label
-                kill!()
-                return true
-            else
-                restore!(prev)
-                return false
-            end
-
-        elseif k == K"break_block"
-            # Skip the first child (break target label) - it's not a @goto target
-            # No save/restore needed: the body always executes (break just exits early)
-            has_label = false
-            for child in children(e)[2:end]
-                has_label |= visit(child)
-            end
-            return has_label
-
-        elseif is_leaf(e) || is_quoted(e) ||
-            k in KSet"local meta inbounds boundscheck noinline loopinfo decl
-                with_static_parameters toplevel_butfirst global globalref
-                extension constdecl atomic isdefined toplevel module error
-                gc_preserve_begin gc_preserve_end export public inline"
-
-            # Forms that don't interact with locals or affect control flow (likely more than is necessary).
-            # flisp: `lambda-opt-ignored-exprs`
-            return false
-
-        else
-            has_label = false
-            for child in children(e)
-                has_label |= visit(child)
-            end
-            return has_label
-        end
-    end
+    state = DefUseState(ctx, candidates)
 
     # Visit the lambda body
     if numchildren(ex) >= 3
         body = ex[3]
         if kind(body) == K"block"
             for stmt in children(body)
-                visit(stmt)
+                du_visit!(ctx, state, stmt)
             end
         else
-            visit(body)
+            du_visit!(ctx, state, body)
         end
     end
 
     # Variables in live or unused (that were seen assigned) are never-undef
-    for id in union(live, unused)
-        if id in seen
+    for id in union(state.live, state.unused)
+        if id in state.seen
             get_binding(ctx, id).is_always_defined = true
         end
     end

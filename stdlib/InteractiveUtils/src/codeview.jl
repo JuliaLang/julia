@@ -54,7 +54,7 @@ function warntype_type_printer(io::IO; @nospecialize(type), used::Bool, show_typ
     str = "::$type"
     if !highlighting[:warntype]
         print(io, str)
-    elseif type isa Union && is_expected_union(type)
+    elseif type isa Union && Base.Compiler.IRShow.is_expected_union(type)
         Base.emphasize(io, str, Base.warn_color()) # more mild user notification
     elseif type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
         Base.emphasize(io, str)
@@ -62,18 +62,6 @@ function warntype_type_printer(io::IO; @nospecialize(type), used::Bool, show_typ
         Base.printstyled(io, str, color=:cyan) # show the "good" type
     end
     return nothing
-end
-
-# True if one can be pretty certain that the compiler handles this union well,
-# i.e. must be small with concrete types.
-function is_expected_union(u::Union)
-    Base.unionlen(u) < 4 || return false
-    for x in Base.uniontypes(u)
-        if !Base.isdispatchelem(x) || x == Core.Box
-            return false
-        end
-    end
-    return true
 end
 
 function print_warntype_codeinfo(io::IO, src::Core.CodeInfo, @nospecialize(rettype), nargs::Int; lineprinter, label_dynamic_calls)
