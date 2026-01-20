@@ -65,8 +65,8 @@ impl Scanning<JuliaVM> for VMScanning {
                 if task_is_root {
                     // captures wrong root nodes before creating the work
                     debug_assert!(
-                        Address::from_ptr(task).as_usize() % 16 == 0
-                            || Address::from_ptr(task).as_usize() % 8 == 0,
+                        Address::from_ptr(task).is_aligned_to(16)
+                            || Address::from_ptr(task).is_aligned_to(8),
                         "root node {:?} is not aligned to 8 or 16",
                         Address::from_ptr(task)
                     );
@@ -120,8 +120,8 @@ impl Scanning<JuliaVM> for VMScanning {
 
                     // captures wrong root nodes before creating the work
                     debug_assert!(
-                        bt_entry_value.to_raw_address().as_usize() % 16 == 0
-                            || bt_entry_value.to_raw_address().as_usize() % 8 == 0,
+                        bt_entry_value.to_raw_address().is_aligned_to(16)
+                            || bt_entry_value.to_raw_address().is_aligned_to(8),
                         "root node {:?} is not aligned to 8 or 16",
                         bt_entry_value
                     );

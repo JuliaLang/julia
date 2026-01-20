@@ -35,6 +35,7 @@ pub mod julia_scanning;
 #[allow(non_upper_case_globals)]
 #[allow(non_snake_case)]
 #[allow(clippy::all)]
+#[rustfmt::skip]
 pub mod julia_types;
 
 #[derive(Default)]
