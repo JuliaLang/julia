@@ -2163,9 +2163,11 @@ static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, unsigned nb, Align alig
     // if it cannot find something better to do, which is terrible for performance.
     // However, if we emit this with an element size equal to the alignment, it will instead split it into aligned chunks
     // which is great for performance and vectorization.
-    if (alignTo(nb, align) == align.value()) // don't bother with making an array of length 1
-        return emit_static_alloca(ctx, ctx.builder.getIntNTy(align.value() * 8), align);
-    return emit_static_alloca(ctx, ArrayType::get(ctx.builder.getIntNTy(align.value() * 8), alignTo(nb, align) / align.value()), align);
+    // Cap element size at 64 bits since not all backends support larger integers.
+    unsigned elsize = std::min(align.value(), (uint64_t)8);
+    if (alignTo(nb, elsize) == elsize) // don't bother with making an array of length 1
+        return emit_static_alloca(ctx, ctx.builder.getIntNTy(elsize * 8), align);
+    return emit_static_alloca(ctx, ArrayType::get(ctx.builder.getIntNTy(elsize * 8), alignTo(nb, elsize) / elsize), align);
 }
 
 static AllocaInst *emit_static_roots(jl_codectx_t &ctx, unsigned nroots)
