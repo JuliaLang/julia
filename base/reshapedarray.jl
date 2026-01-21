@@ -361,16 +361,54 @@ compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{ReshapedRange
 substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedUnitRange, Vararg{Any}}) where N =
     (size_to_strides(strds[1], size(I[1])...)..., substrides(tail(strds), tail(I))...)
 
-# cconvert(::Type{<:Ptr}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {T,N,P} = V
+# This exists for backwards compatibility, normally the cconvert method below will be used
 function unsafe_convert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {S,T,N,P}
     parent = V.parent
-    p = cconvert(Ptr{T}, parent) # XXX: this should occur in cconvert, the result is not GC-rooted
     Δmem = if _checkcontiguous(Bool, parent)
         (first_index(V) - firstindex(parent)) * elsize(parent)
     else
         _memory_offset(parent, map(first, V.indices)...)
     end
-    return Ptr{S}(unsafe_convert(Ptr{T}, p) + Δmem)
+    return Ptr{S}(unsafe_convert(Ptr{T}, parent) + Δmem)
+end
+
+struct OffsetCConvert{T, C}
+    byte_offset::Int
+    cconv_parent::C
+end
+
+# Avoid unneeded nesting
+function _offset_cconvert(::Type{Ptr{T}}, byte_offset::Int, cconv_parent::OffsetCConvert{T}) where {T}
+    _offset_cconvert(
+        Ptr{T},
+        cconv_parent.byte_offset + byte_offset,
+        cconv_parent.cconv_parent,
+    )
+end
+function _offset_cconvert(::Type{Ptr{T}}, byte_offset::Int, cconv_parent::C) where {T,C}
+    OffsetCConvert{T,C}(
+        byte_offset,
+        cconv_parent,
+    )
+end
+
+function unsafe_convert(::Type{Ptr{S}}, c::OffsetCConvert{T}) where {S, T}
+    Ptr{S}(unsafe_convert(Ptr{T}, c.cconv_parent) + c.byte_offset)
+end
+
+function cconvert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {S,T,N,P}
+    parent = V.parent
+    p = cconvert(Ptr{T}, parent)
+    Δmem = if _checkcontiguous(Bool, parent)
+        (first_index(V) - firstindex(parent)) * elsize(parent)
+    else
+        _memory_offset(parent, map(first, V.indices)...)
+    end
+    _offset_cconvert(
+        Ptr{T},
+        Int(Δmem),
+        p,
+    )
 end
 
 _checkcontiguous(::Type{Bool}, A::AbstractArray) = false
