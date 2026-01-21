@@ -580,9 +580,12 @@ has_if_generated(st::SyntaxTree) = JuliaSyntax.@stm st begin
     _ -> any(has_if_generated, children(st))
 end
 split_generated(st::SyntaxTree, gen_part) = JuliaSyntax.@stm st begin
-    (_, when=is_leaf(st)) -> st
-    [K"if" [K"generated"] gen nongen] -> gen_part ?
-        @ast(st._graph, st, [K"$" gen]) : nongen
+    (_, when=is_leaf(st)||is_quoted(st)) -> st
+    [K"if" [K"generated"] gen nongen] -> if gen_part
+        @ast(st._graph, st, [K"$" gen])
+    else
+        nongen
+    end
     _ -> mapchildren(x->split_generated(x, gen_part), st._graph, st)
 end
 

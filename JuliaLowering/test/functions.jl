@@ -716,6 +716,21 @@ end
                              "first"::K"Identifier"]
                    "nongen"::K"Identifier"]
 
+    genfunc_quote_s = raw"""
+    begin
+        @eval function f_gen_quote_1(::Tuple{T}) where {T}
+            out = $(Expr(:quote, Expr(:call, :+, 1, Expr(:if, Expr(:generated), 1, 2))))
+            if @generated
+            else
+            end
+            return out
+        end
+        f_gen_quote_1((1,))
+    end
+    """
+    @test JuliaLowering.include_string(
+        test_mod, genfunc_quote_s; expr_compat_mode=true) ==
+            :(1 + $(Expr(:if, Expr(:generated), 1, 2)))
 
     # Test generated function edges to bindings
     # (see also https://github.com/JuliaLang/julia/pull/57230)
