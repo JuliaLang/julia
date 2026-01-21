@@ -1629,7 +1629,9 @@ end
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(!read) slot₄/x(nospecialize) slot₅/y(nospecialize)]
     1   TestMod.generator_code
     2   (call %₁ slot₄/x slot₅/y)
-    3   (return %₂)
+    3   (call core.tuple %₂)
+    4   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block ($ (block (call generator_code x y))))) %₃)
+    5   (return %₄)
 12  latestworld
 13  TestMod.f_only_generated
 14  (call core.Typeof %₁₃)
