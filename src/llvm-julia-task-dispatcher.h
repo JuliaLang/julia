@@ -25,11 +25,15 @@ struct JuliaTaskDispatcher : public TaskDispatcher {
     void dispatch(std::unique_ptr<Task> T) override;
     void shutdown() override;
     void work_until(future_base &F);
+
+protected:
+  void process_tasks(std::unique_lock<std::mutex> &Lock);
+
 private:
   /// C++ does not support non-static thread_local variables, so this needs to
   /// store both the task and the associated dispatcher queue so that shutdown
   /// can wait for the correct tasks to finish.
-  thread_local static SmallVector<std::pair<std::unique_ptr<Task>, JuliaTaskDispatcher*>> TaskQueue;
+  SmallVector<std::unique_ptr<Task>> TaskQueue;
   std::mutex DispatchMutex;
   std::condition_variable WorkFinishedCV;
   SmallVector<future_base *> WaitingFutures;
@@ -334,65 +338,21 @@ private:
 
 }; // class JuliaTaskDispatcher
 
-thread_local SmallVector<std::pair<std::unique_ptr<Task>, JuliaTaskDispatcher *>> JuliaTaskDispatcher::TaskQueue;
-
 void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) {
-  TaskQueue.push_back(std::pair(std::move(T), this));
+  std::unique_lock Lock{DispatchMutex};
+  TaskQueue.push_back(std::move(T));
 }
 
 void JuliaTaskDispatcher::shutdown() {
-  // Keep processing until no tasks belonging to this dispatcher remain
-  while (true) {
-    // Check if any task belongs to this dispatcher
-    auto it = std::find_if(
-        TaskQueue.begin(), TaskQueue.end(),
-        [this](const auto &TaskPair) { return TaskPair.second == this; });
-
-    // If no tasks belonging to this dispatcher, we're done
-    if (it == TaskQueue.end())
-      return;
-
-    // Create a future/promise pair to wait for completion of this task
-    future<void> taskFuture;
-    // Replace the task with a GenericNamedTask that wraps the original task
-    // with a notification of completion that this thread can work_until.
-    auto originalTask = std::move(it->first);
-    it->first = makeGenericNamedTask(
-        [originalTask = std::move(originalTask),
-         taskPromise = taskFuture.get_promise()]() {
-          originalTask->run();
-          taskPromise.set_value();
-        },
-        "Shutdown task marker");
-
-    // Wait for the task to complete
-    taskFuture.get(*this);
-  }
+  std::unique_lock Lock{DispatchMutex};
+  process_tasks(Lock);
+  WorkFinishedCV.wait(Lock, [this]() { return WaitingFutures.empty(); });
 }
 
 void JuliaTaskDispatcher::work_until(future_base &F) {
   while (!F.ready()) {
-    // First, process any tasks in our local queue
-    // Process in LIFO order (most recently added first) to avoid deadlocks
-    // when tasks have dependencies on each other
-    while (!TaskQueue.empty()) {
-      {
-        auto TaskPair = std::move(TaskQueue.back());
-        TaskQueue.pop_back();
-        TaskPair.first->run();
-      }
-
-      // Notify any threads that might be waiting for work to complete
-      {
-        std::lock_guard<std::mutex> Lock(DispatchMutex);
-        bool ShouldNotify = llvm::any_of(
-            WaitingFutures, [](future_base *F) { return F->ready(); });
-        if (ShouldNotify) {
-          WaitingFutures.clear();
-          WorkFinishedCV.notify_all();
-        }
-      }
-    }
+    std::unique_lock Lock{DispatchMutex};
+    process_tasks(Lock);
 
     // Check if our future is now ready
     if (F.ready())
@@ -401,10 +361,25 @@ void JuliaTaskDispatcher::work_until(future_base &F) {
     // If we get here, our queue is empty but the future isn't ready
     // We need to wait for other threads to finish work that should complete our
     // future
-    {
-      std::unique_lock<std::mutex> Lock(DispatchMutex);
-      WaitingFutures.push_back(&F);
-      WorkFinishedCV.wait(Lock, [&F]() { return F.ready(); });
+    WaitingFutures.push_back(&F);
+    WorkFinishedCV.wait(Lock, [&F]() { return F.ready(); });
+  }
+}
+
+void JuliaTaskDispatcher::process_tasks(std::unique_lock<std::mutex> &Lock) {
+  while (!TaskQueue.empty()) {
+    auto T = TaskQueue.pop_back_val();
+
+    Lock.unlock();
+    T->run();
+    Lock.lock();
+
+    // Notify any threads that might be waiting for work to complete
+    bool ShouldNotify =
+      llvm::any_of(WaitingFutures, [](future_base *F) { return F->ready(); });
+    if (ShouldNotify) {
+      WaitingFutures.clear();
+      WorkFinishedCV.notify_all();
     }
   }
 }
