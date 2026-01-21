@@ -119,7 +119,7 @@ end
 
 # Passes desugaring, but T is detected as unused and throws an error.
 # Is it clear whether this should be `f(x::T) where T` or `f(x::T where T)`?
-@test_broken JuliaLowering.include_string(test_mod, """
+@test JuliaLowering.include_string(test_mod, """
 let
     f = ((x::T) where T) -> x
     f(1)
@@ -173,6 +173,14 @@ begin
 end
 """) === ("fallback", (Number, Float64), (Int, Int), "fallback")
 
+# Static parameter may be undefined
+@test JuliaLowering.include_string(test_mod, """
+begin
+    func_undef_static_param(x::Union{T,Nothing}) where T = @isdefined(T)
+    (func_undef_static_param(nothing), func_undef_static_param(42))
+end
+""") === (false, true)
+
 Base.eval(test_mod,
 :(struct X1{T} end)
 )
@@ -213,6 +221,22 @@ end
 
 (f_return_in_value_pos(), x)
 """) === (42, 0)
+
+@test JuliaLowering.include_string(test_mod, """
+function f_return_in_call()
+    f_return_in_call(return 123)
+end
+
+f_return_in_call()
+""") === 123
+
+@test JuliaLowering.include_string(test_mod, raw"""
+function f_return_in_interpolation()
+    :(1 + $(return 123))
+end
+
+f_return_in_interpolation()
+""") === 123
 
 @testset "Default positional arguments" begin
     @test JuliaLowering.include_string(test_mod, """
@@ -325,6 +349,14 @@ end
     # flagged as nospecialize.
     @test only(methods(test_mod.f_nospecialize)).nospecialize == 0b10100
 
+    # @nospecialize on unnamed arguments (issue #44428)
+    JuliaLowering.include_string(test_mod, """
+    function f_nospecialize_unnamed(@nospecialize(::Any), @nospecialize(x::Any))
+        x
+    end
+    """)
+    @test only(methods(test_mod.f_nospecialize_unnamed)).nospecialize == 0b11
+
     JuliaLowering.include_string(test_mod, """
     function f_slotflags(x, y, f, z)
         f() + x + y
@@ -414,6 +446,15 @@ end
     @test values(test_mod.f_kw_slurp_some(x = 1)) === (;)
     @test values(test_mod.f_kw_slurp_some()) === (;)
 
+    # Slurping with defaults depending on keyword names
+    JuliaLowering.include_string(test_mod, """
+    function f_kw_slurp_dep(; a=1, b=a, kws...)
+        (a, b, length(kws))
+    end
+    """)
+    @test test_mod.f_kw_slurp_dep(; a=1) == (1, 1, 0)
+    @test test_mod.f_kw_slurp_dep(; a=2, c=3) == (2, 2, 1)
+
     # Keyword defaults which depend on other keywords.
     JuliaLowering.include_string(test_mod, """
     begin
@@ -497,6 +538,42 @@ end
         @testset "$f_str" begin
             @test JuliaLowering.include_string(test_mod, f_str) isa Function
         end
+    end
+end
+
+@testset "Assigned-to arguments" begin
+    # These examples are all macros, since they have specialized de-optimization
+    # behavior that sends un-optimized code straight to codegen. Normal compiled
+    # functions essentially always pass through SSA conversion on the way to the
+    # optimizer, erasing these slots (potentially hiding bugs in slot handling)
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    macro m_assigned_args_1(x)
+        x = x + 1
+        return x
+    end
+    var"@m_assigned_args_1"(LineNumberNode(0, nothing), Main, 2)
+    """; expr_compat_mode=true) == 3
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    macro m_assigned_args_2(x, y = 1)
+        (y, x) = (x + 1, y + 1)
+        return y - x
+    end
+    (
+        var"@m_assigned_args_2"(LineNumberNode(0, nothing), Main, 2),
+        var"@m_assigned_args_2"(LineNumberNode(0, nothing), Main, 1, 2),
+    )
+    """; expr_compat_mode=true) == (1, -1)
+
+    for expr_compat_mode in (false, true)
+        @test JuliaLowering.include_string(test_mod, raw"""
+        macro m_assigned_args(ex)
+            ex = Base.remove_linenums!(ex)
+            return ex
+        end
+        ((@m_assigned_args 1 + 1), @m_assigned_args 1)
+        """; expr_compat_mode) == (2, 1)
     end
 end
 

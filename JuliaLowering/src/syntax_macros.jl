@@ -18,10 +18,14 @@
 function _apply_nospecialize(ctx, ex)
     k = kind(ex)
     if k == K"Identifier" || k == K"Placeholder" || k == K"tuple"
-        setmeta(ex; nospecialize=true)
-    elseif k == K"..." || k == K"::" || k == K"="
+        setmeta(ex, :nospecialize, true)
+    elseif k == K"..." || k == K"::" || k == K"=" || k == K"kw"
+        # The @nospecialize macro is responsible for converting K"=" to K"kw".
+        # Desugaring uses this helper internally, so we may see K"kw" too.
         if k == K"::" && numchildren(ex) == 1
             ex = @ast ctx ex [K"::" "_"::K"Placeholder" ex[1]]
+        elseif k == K"=" && numchildren(ex) === 2
+            ex = @ast ctx ex [K"kw" ex[1] ex[2]]
         end
         mapchildren(c->_apply_nospecialize(ctx, c), ctx, ex, 1:1)
     else
@@ -51,7 +55,7 @@ function Base.var"@goto"(__context__::MacroContext, ex)
 end
 
 function Base.var"@locals"(__context__::MacroContext)
-    @ast __context__ __context__.macrocall [K"extension" "locals"::K"Symbol"]
+    @ast __context__ __context__.macrocall [K"locals"]
 end
 
 function Base.var"@isdefined"(__context__::MacroContext, ex)
@@ -92,8 +96,7 @@ function Base.var"@cfunction"(__context__::MacroContext, callable, return_type, 
         # Kinda weird semantics here - without `$`, the callable is a top level
         # expression evaluated within the module where the `@cfunction` is
         # expanded into.
-        fptr = @ast __context__ callable [K"inert"(
-                meta=CompileHints(:as_Expr, true))
+        fptr = @ast __context__ callable [K"inert"
             callable
         ]
         typ = Ptr{Cvoid}
@@ -293,7 +296,7 @@ function _at_eval_code(ctx, srcref, mod, ex)
                     mod
                     [K"quote" ex]
                     [K"parameters"
-                        [K"="
+                        [K"kw"
                             "expr_compat_mode"::K"Identifier"
                             ctx.expr_compat_mode::K"Bool"
                         ]
@@ -322,10 +325,7 @@ end
 # For now we have our own versions
 function var"@islocal"(__context__::MacroContext, ex)
     @chk kind(ex) == K"Identifier"
-    @ast __context__ __context__.macrocall [K"extension"
-        "islocal"::K"Symbol"
-        ex
-    ]
+    @ast __context__ __context__.macrocall [K"islocal" ex]
 end
 
 """

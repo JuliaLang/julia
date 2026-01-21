@@ -319,6 +319,8 @@ void jl_init_common_symbols(void)
     jl_atomic_sym = jl_symbol("atomic");
     jl_not_atomic_sym = jl_symbol("not_atomic");
     jl_unordered_sym = jl_symbol("unordered");
+    jl_singlethread_sym = jl_symbol("singlethread");
+    jl_system_sym = jl_symbol("system");
     jl_monotonic_sym = jl_symbol("monotonic");
     jl_acquire_sym = jl_symbol("acquire");
     jl_release_sym = jl_symbol("release");

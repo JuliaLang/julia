@@ -32,9 +32,9 @@ end
 # We might consider changing at least the second of these choices, depending on
 # how we end up putting this into Base.
 
-struct LoweringIterator{GraphType}
+struct LoweringIterator{Attrs}
     expr_compat_mode::Bool # later stored in module?
-    todo::Vector{Tuple{SyntaxTree{GraphType}, Bool, Int}}
+    todo::Vector{Tuple{SyntaxTree{Attrs}, Bool, Int}}
 end
 
 function lower_init(ex::SyntaxTree{T};
@@ -367,8 +367,9 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     elseif k == K"return"
         Core.ReturnNode(_to_lowered_expr(ex[1], stmt_offset))
     elseif k == K"inert"
-        e1 = ex[1]
-        getmeta(ex, :as_Expr, false) ? QuoteNode(Expr(e1)) : e1
+        QuoteNode(Expr(ex[1]))
+    elseif k == K"inert_syntaxtree"
+        ex[1]
     elseif k == K"code_info"
         ir = to_code_info(ex[1], ex.slots, ex.meta)
         if ex.is_toplevel_thunk
@@ -383,7 +384,7 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     elseif k == K"gotoifnot"
         Core.GotoIfNot(_to_lowered_expr(ex[1], stmt_offset), ex[2].id + stmt_offset)
     elseif k == K"enter"
-        catch_idx = ex[1].id
+        catch_idx = ex[1].id + stmt_offset
         numchildren(ex) == 1 ?
             Core.EnterNode(catch_idx) :
             Core.EnterNode(catch_idx, _to_lowered_expr(ex[2], stmt_offset))
@@ -435,6 +436,8 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
                k == K"="         ? :(=)        :
                k == K"leave"     ? :leave      :
                k == K"isdefined" ? :isdefined  :
+               k == K"loopinfo"  ? :loopinfo   :
+               k == K"boundscheck"       ? :boundscheck       :
                k == K"latestworld"       ? :latestworld       :
                k == K"pop_exception"     ? :pop_exception     :
                k == K"captured_local"    ? :captured_local    :
@@ -532,3 +535,5 @@ function include_string(mod::Module, code::AbstractString, filename::AbstractStr
                         expr_compat_mode=false)
     eval(mod, parseall(SyntaxTree, code; filename=filename); expr_compat_mode)
 end
+
+include(path::AbstractString) = include(JuliaLowering, path)

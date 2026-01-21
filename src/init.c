@@ -48,6 +48,7 @@ extern void jl_fin_stackwalk(void);
 jl_array_t *jl_module_init_order;
 
 JL_DLLEXPORT size_t jl_page_size;
+JL_DLLEXPORT size_t jl_hugepage_size;
 
 void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
 {
@@ -558,6 +559,7 @@ extern jl_mutex_t precomp_statement_out_lock;
 extern jl_mutex_t newly_inferred_mutex;
 extern jl_mutex_t global_roots_lock;
 extern jl_mutex_t profile_show_peek_cond_lock;
+extern jl_mutex_t jl_typeinf_lock;
 
 static void restore_fp_env(void)
 {
@@ -683,6 +685,7 @@ static void init_global_mutexes(void) {
     JL_MUTEX_INIT(&global_roots_lock, "global_roots_lock");
     JL_MUTEX_INIT(&typecache_lock, "typecache_lock");
     JL_MUTEX_INIT(&profile_show_peek_cond_lock, "profile_show_peek_cond_lock");
+    JL_MUTEX_INIT(&jl_typeinf_lock, "jl_typeinf_lock");
 }
 
 JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
@@ -715,6 +718,7 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
     libsupport_init();
     jl_safepoint_init();
     jl_page_size = jl_getpagesize();
+    jl_hugepage_size = (size_t)jl_gethugepagesize();
     htable_new(&jl_current_modules, 0);
     init_global_mutexes();
     jl_precompile_toplevel_module = NULL;

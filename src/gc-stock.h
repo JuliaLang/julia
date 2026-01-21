@@ -70,7 +70,7 @@ typedef struct {
 // large arrays that have not been scanned yet)
 
 typedef enum {
-    GC_empty_chunk = 0, // sentine value representing no chunk
+    GC_empty_chunk = 0, // sentinel value representing no chunk
     GC_objary_chunk,    // for chunk of object array
     GC_ary8_chunk,      // for chunk of array with 8 bit field descriptors
     GC_ary16_chunk,     // for chunk of array with 16 bit field descriptors
@@ -562,7 +562,8 @@ FORCE_INLINE void gc_big_object_link(bigval_t *sentinel_node, bigval_t *node) JL
 #define FULL_SWEEP_REASON_FORCED_FULL_SWEEP (1)
 #define FULL_SWEEP_REASON_USER_MAX_EXCEEDED (2)
 #define FULL_SWEEP_REASON_LARGE_PROMOTION_RATE (3)
-#define FULL_SWEEP_NUM_REASONS (4)
+#define FULL_SWEEP_REASON_LARGE_HEAP_GROWTH (4)
+#define FULL_SWEEP_NUM_REASONS (5)
 
 extern JL_DLLEXPORT uint64_t jl_full_sweep_reasons[FULL_SWEEP_NUM_REASONS];
 STATIC_INLINE void gc_record_full_sweep_reason(int reason) JL_NOTSAFEPOINT

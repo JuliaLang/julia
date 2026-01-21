@@ -1901,8 +1901,8 @@ module M58272_to end
     # Test explicit environments (packages loaded from Manifest.toml)
     old_load_path = copy(LOAD_PATH)
     old_active_project = Base.ACTIVE_PROJECT[]
+    explicit_env = joinpath(@__DIR__, "project", "SyntaxVersioning", "explicit")
     try
-        explicit_env = joinpath(@__DIR__, "project", "SyntaxVersioning", "explicit")
         Base.ACTIVE_PROJECT[] = joinpath(explicit_env, "Project.toml")
         empty!(LOAD_PATH)
         push!(LOAD_PATH, "@")
@@ -1916,4 +1916,12 @@ module M58272_to end
         Base.ACTIVE_PROJECT[] = old_active_project
         copy!(LOAD_PATH, old_load_path)
     end
+
+    # Test that the selected project affects code evaluation in `Main` for both `-e` and scripts
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep1")) -e 'print((Base.Experimental.@VERSION).syntax)'`, String)) == v"1.13"
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep2")) -e 'print((Base.Experimental.@VERSION).syntax)'`, String)) == v"1.14"
+
+    syntax_version_script = joinpath(@__DIR__, "testhelpers", "print_syntax_version.jl")
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep1")) $syntax_version_script`, String)) == v"1.13"
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep2")) $syntax_version_script`, String)) == v"1.14"
 end

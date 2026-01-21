@@ -51,7 +51,7 @@ end
 9   --- method core.nothing %₈
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/ex]
     1   (call core.tuple slot₃/ex)
-    2   (call JuliaLowering.interpolate_ast SyntaxTree (inert (block (call-i ($ ex) + 1))) %₁)
+    2   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (call-i ($ ex) + 1))) %₁)
     3   (return %₂)
 10  latestworld
 11  TestMod.@add_one
@@ -72,7 +72,7 @@ end
 7   SourceLocation::1:7
 8   (call core.svec %₅ %₆ %₇)
 9   --- method core.nothing %₈
-    slots: [slot₁/#self#(!read) slot₂/__context__ slot₃/ex(!read) slot₄/ctx(!read)]
+    slots: [slot₁/#self#(!read) slot₂/__context__ slot₃/ex(!read) slot₄/ctx(!read,single_assign)]
     1   slot₂/__context__
     2   (= slot₄/ctx %₁)
     3   (return %₁)
@@ -147,7 +147,7 @@ _never_exist = @m_not_exist 42
 #---------------------
 MacroExpansionError while expanding @m_not_exist in module Main.TestMod:
 _never_exist = @m_not_exist 42
-#               └─────────┘ ── Macro not found
+#              └──────────┘ ── Macro not found
 Caused by:
 UndefVarError: `@m_not_exist` not defined in `Main.TestMod`
 Suggestion: check for spelling errors or missing imports.

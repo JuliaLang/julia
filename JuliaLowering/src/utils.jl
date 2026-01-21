@@ -1,10 +1,113 @@
+attrsummary(name, value) = string(name)
+attrsummary(name, value::Number) = "$name=$value"
+
+function _value_string(ex)
+    k = kind(ex)
+    str = k == K"Identifier" || JuliaSyntax.is_operator(k) ? ex.name_val :
+          k == K"Placeholder" ? ex.name_val           :
+          k == K"SSAValue"    ? "%"                   :
+          k == K"BindingId"   ? "#"                   :
+          k == K"label"       ? "label"               :
+          k == K"core"        ? "core.$(ex.name_val)" :
+          k == K"top"         ? "top.$(ex.name_val)"  :
+          k == K"Symbol"      ? ":$(ex.name_val)" :
+          k == K"globalref"   ? "$(ex.mod).$(ex.name_val)" :
+          k == K"slot"        ? "slot" :
+          k == K"latestworld" ? "latestworld" :
+          k == K"static_parameter" ? "static_parameter" :
+          k == K"symbolic_label" ? "label:$(ex.name_val)" :
+          k == K"symbolic_goto" ? "goto:$(ex.name_val)" :
+          k == K"SourceLocation" ?
+              "SourceLocation:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
+          k == K"Value" && ex.value isa SourceRef ?
+              "SourceRef:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
+          repr(get(ex, :value, nothing))
+    id = get(ex, :var_id, nothing)
+    if isnothing(id)
+        id = get(ex, :id, nothing)
+    end
+    if !isnothing(id)
+        idstr = subscript_str(id)
+        str = "$(str)$idstr"
+    end
+    if k == K"slot" || k == K"BindingId"
+        p = provenance(ex)[1]
+        while p isa SyntaxTree
+            if kind(p) == K"Identifier"
+                str = "$(str)/$(p.name_val)"
+                break
+            end
+            p = provenance(p)[1]
+        end
+    end
+    return str
+end
+
+function _show_syntax_tree(io, ex, indent, show_kinds)
+    val = get(ex, :value, nothing)
+    nodestr = !is_leaf(ex) ? "[$(untokenize(head(ex)))]" : _value_string(ex)
+
+    treestr = rpad(string(indent, nodestr), 40)
+    if show_kinds && is_leaf(ex)
+        treestr = treestr*" :: "*string(kind(ex))
+    end
+
+    std_attrs = Set([:name_val,:value,:kind,:syntax_flags,:source,:var_id])
+    attrstr = join([attrsummary(n, getproperty(ex, n))
+                    for n in JuliaSyntax.attrnames(ex) if n ∉ std_attrs], ",")
+    treestr = string(rpad(treestr, 60), " │ $attrstr")
+
+    println(io, treestr)
+    if !is_leaf(ex)
+        new_indent = indent*"  "
+        for n in children(ex)
+            _show_syntax_tree(io, n, new_indent, show_kinds)
+        end
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", ex::SyntaxTree, show_kinds=true)
+    anames = join(string.(JuliaSyntax.attrnames(syntax_graph(ex))), ",")
+    println(io, "SyntaxTree with attributes $anames")
+    _show_syntax_tree(io, ex, "", show_kinds)
+end
+function _show_syntax_tree_sexpr(io, ex)
+    if is_leaf(ex)
+        if JuliaSyntax.is_error(ex)
+            print(io, "(", untokenize(head(ex)), ")")
+        else
+            print(io, _value_string(ex))
+        end
+    else
+        print(io, "(", untokenize(head(ex)))
+        first = true
+        for n in children(ex)
+            print(io, ' ')
+            _show_syntax_tree_sexpr(io, n)
+            first = false
+        end
+        print(io, ')')
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/x.sexpression", node::SyntaxTree)
+    _show_syntax_tree_sexpr(io, node)
+end
+
+function Base.show(io::IO, node::SyntaxTree)
+    _show_syntax_tree_sexpr(io, node)
+end
+
+#-------------------------------------------------------------------------------
 # Error handling
 
 TODO(msg::AbstractString) = throw(ErrorException("Lowering TODO: $msg"))
 TODO(ex::SyntaxTree, msg="") = throw(LoweringError(ex, "Lowering TODO: $msg"))
 
-# Errors found during lowering will result in LoweringError being thrown to
-# indicate the syntax causing the error.
+"""
+An error generated while lowering user code `ex` (flisp: `Expr(:error, msg)`).
+For errors in lowering itself, use `@assert`.
+"""
 struct LoweringError <: Exception
     ex::SyntaxTree
     msg::String
@@ -21,7 +124,6 @@ function Base.showerror(io::IO, exc::LoweringError; show_detail=true)
     end
 end
 
-#-------------------------------------------------------------------------------
 function _show_provtree(io::IO, ex::SyntaxTree, indent)
     print(io, ex, "\n")
     prov = provenance(ex)
@@ -183,4 +285,106 @@ else
     macro fzone(str, f)
         esc(f)
     end
+end
+
+#-------------------------------------------------------------------------------
+# @SyntaxTree(::Expr)
+
+function _find_SyntaxTree_macro(ex, line)
+    @assert !is_leaf(ex)
+    for c in children(ex)
+        rng = byte_range(c)
+        firstline = JuliaSyntax.source_line(sourcefile(c), first(rng))
+        lastline = JuliaSyntax.source_line(sourcefile(c), last(rng))
+        if line < firstline || lastline < line
+            continue
+        end
+        # We're in the line range. Either
+        if firstline == line && kind(c) == K"macrocall" && begin
+                    name = c[1]
+                    if kind(name) == K"."
+                        name = name[2]
+                    end
+                    @assert kind(name) == K"Identifier"
+                    name.name_val == "@SyntaxTree"
+                end
+            # We find the node we're looking for. NB: Currently assuming a max
+            # of one @SyntaxTree invocation per line. Though we could relax
+            # this with more heuristic matching of the Expr-AST...
+            @assert numchildren(c) == 2
+            return c[2]
+        elseif !is_leaf(c)
+            # Recurse
+            ex1 = _find_SyntaxTree_macro(c, line)
+            if !isnothing(ex1)
+                return ex1
+            end
+        end
+    end
+    return nothing # Will get here if multiple children are on the same line.
+end
+
+# Translate JuliaLowering hygiene to esc() for use in @SyntaxTree
+function _scope_layer_1_to_esc!(ex)
+    if ex isa Expr
+        if ex.head == :scope_layer
+            @assert ex.args[2] === 1
+            return esc(_scope_layer_1_to_esc!(ex.args[1]))
+        else
+            map!(_scope_layer_1_to_esc!, ex.args, ex.args)
+            return ex
+        end
+    else
+        return ex
+    end
+end
+
+"""
+Macro to construct quoted SyntaxTree literals (instead of quoted Expr literals)
+in normal Julia source code.
+
+Example:
+
+```julia
+tree1 = @SyntaxTree :(some_unique_identifier)
+tree2 = @SyntaxTree quote
+    x = 1
+    \$tree1 = x
+end
+```
+"""
+macro SyntaxTree(ex_old)
+    # The implementation here is hilarious and arguably very janky: we
+    # 1. Briefly check but throw away the Expr-AST
+    if !(Meta.isexpr(ex_old, :quote) || ex_old isa QuoteNode)
+        throw(ArgumentError("@SyntaxTree expects a `quote` block or `:`-quoted expression"))
+    end
+    # 2. Re-parse the current source file as SyntaxTree instead
+    fname = isnothing(__source__.file) ? error("No current file") : String(__source__.file)
+    if occursin(r"REPL\[\d+\]", fname)
+        # Assume we should look at last history entry in REPL
+        try
+            # Wow digging in like this is an awful hack but `@SyntaxTree` is
+            # already a hack so let's go for it I guess 😆
+            text = Base.active_repl.mistate.interface.modes[1].hist.history[end]
+            if !occursin("@SyntaxTree", text)
+                error("Text not found in last REPL history line")
+            end
+        catch
+            error("Text not found in REPL history")
+        end
+    else
+        text = read(fname, String)
+    end
+    full_ex = parseall(SyntaxTree, text)
+    # 3. Using the current file and line number, dig into the re-parsed tree and
+    # discover the piece of AST which should be returned.
+    ex = _find_SyntaxTree_macro(full_ex, __source__.line)
+    isnothing(ex) && error("_find_SyntaxTree_macro failed")
+    # 4. Do the first step of JuliaLowering's syntax lowering to get
+    # syntax interpolations to work
+    _, ex1 = expand_forms_1(__module__, ex, false, Base.tls_world_age())
+    @assert kind(ex1) == K"call" && ex1[1].value == interpolate_ast
+    Expr(:call, :interpolate_ast, SyntaxTree, ex1[3][1],
+         map(e->_scope_layer_1_to_esc!(Expr(e)), ex1[4:end])...)
 end

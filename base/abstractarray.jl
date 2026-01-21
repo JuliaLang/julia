@@ -3580,7 +3580,7 @@ push!(A, a, b, c...) = push!(push!(A, a, b), c...)
 pushfirst!(A, a, b) = pushfirst!(pushfirst!(A, b), a)
 pushfirst!(A, a, b, c...) = pushfirst!(pushfirst!(A, c...), a, b)
 
-# sizehint! does not nothing by default
+# sizehint! does nothing by default
 sizehint!(a::AbstractVector, _) = a
 
 # The semantics of `collect` are weird. Better to write our own

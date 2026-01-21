@@ -222,166 +222,17 @@ JL_DLLEXPORT const char * jl_get_libdir()
 #include <link.h>
 #include <sys/wait.h>
 
-// write(), but handle errors and avoid EINTR
-static void write_wrapper(int fd, const char *str, size_t len)
-{
-    size_t written_sofar = 0;
-    while (len) {
-        ssize_t bytes_written = write(fd, str + written_sofar, len);
-        if (bytes_written == -1 && errno == EINTR) continue;
-        if (bytes_written == -1 && errno != EINTR) {
-            perror("(julia) child libstdcxxprobe write");
-            _exit(1);
-        }
-        len -= bytes_written;
-        written_sofar += bytes_written;
-    }
-}
-
-// read(), but handle errors and avoid EINTR
-static void read_wrapper(int fd, char **ret, size_t *ret_len)
-{
-    // Allocate an initial buffer
-    size_t len = JL_PATH_MAX;
-    char *buf = (char *)malloc(len + 1);
-    if (!buf) {
-        perror("(julia) malloc");
-        exit(1);
-    }
-
-    // Read into it, reallocating as necessary
-    size_t have_read = 0;
-    while (1) {
-        ssize_t n = read(fd, buf + have_read, len - have_read);
-        if (n == 0) break;
-        if (n == -1 && errno != EINTR) {
-            perror("(julia) libstdcxxprobe read");
-            exit(1);
-        }
-        if (n == -1 && errno == EINTR) continue;
-        have_read += n;
-        if (have_read == len) {
-            buf = (char *)realloc(buf, 1 + (len *= 2));
-            if (!buf) {
-                perror("(julia) realloc");
-                exit(1);
-            }
-        }
-    }
-
-    *ret = buf;
-    *ret_len = have_read;
-}
-
 // Return the path to the libstdcxx to load.
 // If the path is found, return it.
 // Otherwise, print the error and exit.
 // The path returned must be freed.
-static char *libstdcxxprobe(void)
+static const char *libstdcxxprobe(void)
 {
-    // Create the pipe and child process.
-    int fork_pipe[2];
-    int ret = pipe(fork_pipe);
-    if (ret == -1) {
-        perror("(julia) Error during libstdcxxprobe: pipe");
-        exit(1);
-    }
-    pid_t pid = fork();
-    if (pid == -1)  {
-        perror("Error during libstdcxxprobe:\nfork");
-        exit(1);
-    }
-    if (pid == (pid_t) 0) { // Child process.
-        close(fork_pipe[0]);
+    void *handle = dlopen("libstdc++.so.6\0*", RTLD_LAZY | RTLD_LOCAL | RTLD_NOLOAD);
+    if (handle != NULL)
+        return NULL; // libstdc++ already loaded - nothing we can do
 
-        // Open the first available libstdc++.so.
-        // If it can't be found, report so by exiting zero.
-        // The star is there to prevent the compiler from merging constants
-        // with "\0*libstdc++.so.6", which we string replace inside the .so during
-        // make install.
-        void *handle = dlopen("libstdc++.so.6\0*", RTLD_LAZY);
-        if (!handle) {
-            _exit(0);
-        }
-
-        // See if the version is compatible
-        char *dlerr = dlerror(); // clear out dlerror
-        void *sym = dlsym(handle, GLIBCXX_LEAST_VERSION_SYMBOL);
-        (void)sym;
-        dlerr = dlerror();
-        if (dlerr) {
-            // We can't use the library that was found, so don't write anything.
-            // The main process will see that nothing was written,
-            // then exit the function and return null.
-            _exit(0);
-        }
-
-        // No error means the symbol was found, we can use this library.
-        // Get the path to it, and write it to the parent process.
-        struct link_map *lm;
-        ret = dlinfo(handle, RTLD_DI_LINKMAP, &lm);
-        if (ret == -1) {
-            char *errbuf = dlerror();
-            char *errdesc = (char*)"Error during libstdcxxprobe in child process:\ndlinfo: ";
-            write_wrapper(STDERR_FILENO, errdesc, strlen(errdesc));
-            write_wrapper(STDERR_FILENO, errbuf, strlen(errbuf));
-            write_wrapper(STDERR_FILENO, "\n", 1);
-            _exit(1);
-        }
-        char *libpath = lm->l_name;
-        write_wrapper(fork_pipe[1], libpath, strlen(libpath));
-        _exit(0);
-    }
-    else { // Parent process.
-        close(fork_pipe[1]);
-
-        // Read the absolute path to the lib from the child process.
-        char *path;
-        size_t pathlen;
-        read_wrapper(fork_pipe[0], &path, &pathlen);
-
-        // Close the read end of the pipe
-        close(fork_pipe[0]);
-
-        // Wait for the child to complete.
-        while (1) {
-            int wstatus;
-            pid_t npid = waitpid(pid, &wstatus, 0);
-            if (npid == -1) {
-                if (errno == EINTR) continue;
-                if (errno == ECHILD) {
-                    // SIGCHLD is set to SIG_IGN or has flag SA_NOCLDWAIT, so the child
-                    // did not become a zombie and wait for `waitpid` - it just exited.
-                    //
-                    // Assume that it exited successfully and use whatever libpath we
-                    // got out of the pipe, if any.
-                    break;
-                }
-                perror("Error during libstdcxxprobe in parent process:\nwaitpid");
-                exit(1);
-            }
-            else if (!WIFEXITED(wstatus)) {
-                const char *err_str = "Error during libstdcxxprobe in parent process:\n"
-                                      "The child process did not exit normally.\n";
-                size_t err_strlen = strlen(err_str);
-                write_wrapper(STDERR_FILENO, err_str, err_strlen);
-                exit(1);
-            }
-            else if (WEXITSTATUS(wstatus)) {
-                // The child has printed an error and exited, so the parent should exit too.
-                exit(1);
-            }
-            break;
-        }
-
-        if (!pathlen) {
-            free(path);
-            return NULL;
-        }
-        // Ensure that `path` is zero-terminated.
-        path[pathlen] = '\0';
-        return path;
-    }
+    return jl_loader_probe_system_library("libstdc++.so.6", GLIBCXX_LEAST_VERSION_SYMBOL);
 }
 #endif
 
@@ -480,7 +331,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
                         do_probe = 0;
                 }
                 if (do_probe) {
-                    char *cxxpath = libstdcxxprobe();
+                    const char *cxxpath = libstdcxxprobe();
                     if (cxxpath) {
                         void *cxx_handle = dlopen(cxxpath, RTLD_LAZY);
                         (void)cxx_handle;
@@ -490,7 +341,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
                             jl_loader_print_stderr3("Message: ", dlr, "\n");
                             exit(1);
                         }
-                        free(cxxpath);
+                        free((void *)cxxpath);
                         probe_successful = 1;
                     }
                 }
