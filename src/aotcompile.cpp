@@ -795,6 +795,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
     auto &out = *data->out;
 
     // compile all methods for the current world and type-inference world
+    DenseMap<jl_code_instance_t *, jl_code_info_t *> ci_infos;
     egal_set method_roots;
     out.params = &target_cgparams;
     assert(out.imaging_mode); // `_imaging_mode` controls if broken features like code-coverage are disabled
@@ -820,6 +821,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
 
             jl_code_info_t *src = (jl_code_info_t*)jl_array_ptr_ref(codeinfos, ++i);
             assert(jl_is_code_info(src));
+            ci_infos[codeinst] = src;
             if (jl_ir_inlining_cost((jl_value_t*)src) < UINT16_MAX)
                 out.safepoint_on_entry = false; // ensure we don't block ExpandAtomicModifyPass from inlining this code if applicable
             if (out.ci_funcs.contains(codeinst))
@@ -842,7 +844,8 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
         }
     }
 
-    emit_always_inline(out);
+    emit_always_inline(out,
+                       [&ci_infos](jl_code_instance_t *ci) { return ci_infos.lookup(ci); });
     emit_llvmcall_modules(out);
     // finally, make sure all referenced methods get fixed up, particularly if the user declined to compile them
     aot_link_output(out);
@@ -851,6 +854,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
     aot_optimize_roots(out, method_roots);
     out.temporary_roots = nullptr;
     out.temporary_roots_set.clear();
+    ci_infos.clear();
     JL_GC_POP();
 
     CreateNativeMethods += out.ci_funcs.size();
@@ -2407,7 +2411,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
             output.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
             JL_GC_PUSH1(&output.temporary_roots);
             std::optional<jl_llvm_functions_t> decls = jl_emit_code(output, mi, src, mi->specTypes, src->rettype);
-            emit_always_inline(output);
+            emit_always_inline(output, jl_get_method_ir);
             emit_llvmcall_modules(output);
             // while not required, also emit the cfunc thunks, based on the
             // inferred ABIs of their targets in the current latest world,

@@ -10073,8 +10073,9 @@ std::optional<jl_llvm_functions_t> jl_emit_codeinst(
     return decls;
 }
 
-static jl_code_info_t *jl_get_method_ir(jl_code_instance_t *ci, uint16_t max_cost = 0)
+jl_code_info_t *jl_get_method_ir(jl_code_instance_t *ci)
 {
+    uint16_t max_cost = UINT16_MAX;
     jl_value_t *src = jl_atomic_load_relaxed(&ci->inferred);
     jl_method_instance_t *mi = jl_get_ci_mi(ci);
     if (!src)
@@ -10087,7 +10088,8 @@ static jl_code_info_t *jl_get_method_ir(jl_code_instance_t *ci, uint16_t max_cos
     return nullptr;
 }
 
-void emit_always_inline(jl_codegen_output_t &out)
+void emit_always_inline(jl_codegen_output_t &out,
+                        unique_function<jl_code_info_t *(jl_code_instance_t *)> get_src)
 {
     SmallVector<std::tuple<jl_code_instance_t *, jl_invoke_api_t, jl_codegen_call_target_t &>>
         queue;
@@ -10119,7 +10121,7 @@ void emit_always_inline(jl_codegen_output_t &out)
                 decls = it->second;
             } else {
                 target.private_linkage = false;
-                src = jl_get_method_ir(ci, UINT16_MAX);
+                src = get_src(ci);
                 if (!src)
                     continue;
                 decls = *jl_emit_codeinst(out, ci, src); // contains safepoints

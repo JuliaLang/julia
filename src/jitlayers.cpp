@@ -461,7 +461,7 @@ jl_emit_codeinst_to_jit_impl(jl_code_instance_t *codeinst, jl_code_info_t *src)
 
     // contains safepoints
     jl_promote_method_roots(out, mi, out.get_module());
-    emit_always_inline(out); // contains safepoints
+    emit_always_inline(out, jl_get_method_ir); // contains safepoints
     emit_llvmcall_modules(out);
     out.temporary_roots = nullptr;
     out.temporary_roots_set.clear();

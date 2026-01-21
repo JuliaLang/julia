@@ -421,7 +421,9 @@ jl_llvm_functions_t jl_emit_codedecls(
         jl_codegen_output_t &out,
         jl_code_instance_t *codeinst);
 
-void emit_always_inline(jl_codegen_output_t &out);
+jl_code_info_t *jl_get_method_ir(jl_code_instance_t *ci);
+void emit_always_inline(jl_codegen_output_t &out,
+                        unique_function<jl_code_info_t *(jl_code_instance_t *)> get_src);
 void emit_llvmcall_modules(jl_codegen_output_t &out);
 
 enum CompilationPolicy {
