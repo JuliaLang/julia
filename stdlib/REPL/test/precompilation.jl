@@ -2,7 +2,7 @@
 ## Tests that compilation in the interactive session startup are as expected
 
 using Test
-Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
+Base.include(@__MODULE__, joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test", "testhelpers", "FakePTYs.jl"))
 import .FakePTYs: open_fake_pty
 
 if !Sys.iswindows()
@@ -15,19 +15,28 @@ if !Sys.iswindows()
     @testset "No interactive startup compilation" begin
         f, _ = mktemp()
 
-        # start an interactive session
-        cmd = `$(Base.julia_cmd()[1]) --trace-compile=$f -q --startup-file=no -i`
+        # start an interactive session, ensuring `TERM` is unset since it can trigger
+        # different amounts of precompilation stemming from `base/terminfo.jl` depending
+        # on the value, making the test here unreliable
+        cmd = addenv(`$(Base.julia_cmd()) --trace-compile=$f -q --startup-file=no -i`,
+                     Dict("TERM" => ""))
         pts, ptm = open_fake_pty()
         p = run(cmd, pts, pts, pts; wait=false)
         Base.close_stdio(pts)
         std = readuntil(ptm, "julia>")
         # check for newlines instead of equality with "julia>" because color may be on
         occursin("\n", std) && @info "There was output before the julia prompt:\n$std"
-        sleep(1) # sometimes precompiles output just after prompt appears
+        @async write(ptm, "\n")  # another prompt
+        readuntil(ptm, "julia>")
+        @async write(ptm, "\n")  # another prompt
+        readuntil(ptm, "julia>")
         tracecompile_out = read(f, String)
         close(ptm) # close after reading so we don't get precompiles from error shutdown
 
-        expected_precompiles = 1
+        # given this test checks that startup is snappy, it's best to add workloads to
+        # contrib/generate_precompile.jl rather than increase this number. But if that's not
+        # possible, it'd be helpful to add a comment with the statement and a reason below
+        expected_precompiles = 0
 
         n_precompiles = count(r"precompile\(", tracecompile_out)
 

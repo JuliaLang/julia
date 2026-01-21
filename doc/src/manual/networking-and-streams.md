@@ -31,7 +31,7 @@ For example, to read a simple byte array, we could do:
 
 ```julia-repl
 julia> x = zeros(UInt8, 4)
-4-element Array{UInt8,1}:
+4-element Vector{UInt8}:
  0x00
  0x00
  0x00
@@ -39,7 +39,7 @@ julia> x = zeros(UInt8, 4)
 
 julia> read!(stdin, x)
 abcd
-4-element Array{UInt8,1}:
+4-element Vector{UInt8}:
  0x61
  0x62
  0x63
@@ -52,7 +52,7 @@ example, we could have written the above as:
 ```julia-repl
 julia> read(stdin, 4)
 abcd
-4-element Array{UInt8,1}:
+4-element Vector{UInt8}:
  0x61
  0x62
  0x63
@@ -151,7 +151,7 @@ julia> f = open("hello.txt")
 IOStream(<file hello.txt>)
 
 julia> readlines(f)
-1-element Array{String,1}:
+1-element Vector{String}:
  "Hello, World!"
 ```
 
@@ -233,7 +233,7 @@ Let's first create a simple server:
 ```julia-repl
 julia> using Sockets
 
-julia> errormonitor(@async begin
+julia> errormonitor(Threads.@spawn begin
            server = listen(2000)
            while true
                sock = accept(server)
@@ -305,11 +305,11 @@ printed the message and waited for the next client. Reading and writing works in
 To see this, consider the following simple echo server:
 
 ```julia-repl
-julia> errormonitor(@async begin
+julia> errormonitor(Threads.@spawn begin
            server = listen(2001)
            while true
                sock = accept(server)
-               @async while isopen(sock)
+               Threads.@spawn while isopen(sock)
                    write(sock, readline(sock, keep=true))
                end
            end
@@ -319,7 +319,7 @@ Task (runnable) @0x00007fd31dc12e60
 julia> clientside = connect(2001)
 TCPSocket(RawFD(28) open, 0 bytes waiting)
 
-julia> errormonitor(@async while isopen(clientside)
+julia> errormonitor(Threads.@spawn while isopen(clientside)
            write(stdout, readline(clientside, keep=true))
        end)
 Task (runnable) @0x00007fd31dc11870
@@ -357,17 +357,17 @@ ip"74.125.226.225"
 
 All I/O operations exposed by [`Base.read`](@ref) and [`Base.write`](@ref) can be performed
 asynchronously through the use of [coroutines](@ref man-tasks). You can create a new coroutine to
-read from or write to a stream using the [`@async`](@ref) macro:
+read from or write to a stream using the [`Threads.@spawn`](@ref) macro:
 
 ```julia-repl
-julia> task = @async open("foo.txt", "w") do io
+julia> task = Threads.@spawn open("foo.txt", "w") do io
            write(io, "Hello, World!")
        end;
 
 julia> wait(task)
 
 julia> readlines("foo.txt")
-1-element Array{String,1}:
+1-element Vector{String}:
  "Hello, World!"
 ```
 
@@ -379,7 +379,7 @@ your program to block until all of the coroutines it wraps around have exited:
 julia> using Sockets
 
 julia> @sync for hostname in ("google.com", "github.com", "julialang.org")
-           @async begin
+           Threads.@spawn begin
                conn = connect(hostname, 80)
                write(conn, "GET / HTTP/1.1\r\nHost:$(hostname)\r\n\r\n")
                readline(conn, keep=true)

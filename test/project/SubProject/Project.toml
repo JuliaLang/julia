@@ -1,0 +1,13 @@
+name = "MyPkg"
+uuid = "0cafdeb2-d7a2-40d0-8d22-4411fcc2c4ee"
+
+[workspace]
+projects = ["sub", "PackageThatIsSub", "test", "nested/deep"]
+
+[deps]
+Devved = "cbce3a6e-7a3d-4e84-8e6d-b87208df7599"
+Devved2 = "08f74b90-50f5-462f-80b9-a72b1258a17b"
+
+[preferences]
+value = 1
+x = 1

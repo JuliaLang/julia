@@ -1,8 +1,6 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaLICM' -S %s | FileCheck %s --check-prefixes=CHECK,TYPED
-
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaLICM' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaLICM' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
 
 ; COM: This file contains functions that currently do not trigger allocations to be hoisted out of loops
 ; COM: i.e. they are missed optimizations
@@ -27,16 +25,12 @@ preheader:
   br label %loop
 ; CHECK: loop:
 loop:
-; TYPED-NEXT: %alloc = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task, i64 8, {} addrspace(10)* @tag)
 ; OPAQUE-NEXT: %alloc = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_obj(ptr nonnull %current_task, i64 8, ptr addrspace(10) @tag)
   %alloc = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task, i64 8, {} addrspace(10)* @tag)
-; TYPED-NEXT: %derived = addrspacecast {} addrspace(10)* %alloc to {} addrspace(11)*
 ; OPAQUE-NEXT: %derived = addrspacecast ptr addrspace(10) %alloc to ptr addrspace(11)
   %derived = addrspacecast {} addrspace(10)* %alloc to {} addrspace(11)*
-; TYPED-NEXT: %ptr = bitcast {} addrspace(11)* %derived to {} addrspace(10)* addrspace(11)*
 ; OPAQUE-NEXT: %ptr = bitcast ptr addrspace(11) %derived to ptr addrspace(11)
   %ptr = bitcast {} addrspace(11)* %derived to {} addrspace(10)* addrspace(11)*
-; TYPED-NEXT: store {} addrspace(10)* %obj, {} addrspace(10)* addrspace(11)* %ptr, align 8
 ; OPAQUE-NEXT: store ptr addrspace(10) %obj, ptr addrspace(11) %ptr, align 8
   store {} addrspace(10)* %obj, {} addrspace(10)* addrspace(11)* %ptr, align 8
   br i1 %ret, label %return, label %loop
@@ -61,13 +55,11 @@ preheader:
   br label %loop
 ; CHECK: loop:
 loop:
-; TYPED-NEXT: %alloc = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task, i64 8, {} addrspace(10)* @tag)
 ; OPAQUE-NEXT: %alloc = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_obj(ptr nonnull %current_task, i64 8, ptr addrspace(10) @tag)
   %alloc = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task, i64 8, {} addrspace(10)* @tag)
   br label %other
 ; CHECK: other:
 other:
-; TYPED-NEXT: %phi = phi {} addrspace(10)* [ %alloc, %loop ]
 ; OPAQUE-NEXT: %phi = phi ptr addrspace(10) [ %alloc, %loop ]
   %phi = phi {} addrspace(10)* [ %alloc, %loop ]
   br i1 %ret, label %return, label %loop
@@ -94,7 +86,7 @@ declare void @llvm.lifetime.end.p0i8(i64 immarg, i8* nocapture) #2
 declare void @ijl_gc_queue_root({} addrspace(10)*) #3
 
 ; Function Attrs: allocsize(1)
-declare noalias nonnull {} addrspace(10)* @ijl_gc_pool_alloc(i8*, i32, i32) #1
+declare noalias nonnull {} addrspace(10)* @ijl_gc_small_alloc(i8*, i32, i32, i8*) #1
 
 ; Function Attrs: allocsize(1)
 declare noalias nonnull {} addrspace(10)* @ijl_gc_big_alloc(i8*, i64) #1

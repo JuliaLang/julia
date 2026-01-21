@@ -1,6 +1,29 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using InteractiveUtils: code_llvm
 # fast math
+
+@testset "check fast present in LLVM" begin
+    for T in (Float16, Float32, Float64, ComplexF32, ComplexF64)
+        f(x) = @fastmath x + x + x
+        llvm = sprint(code_llvm, f, (T,))
+        @test occursin("fast", llvm)
+
+        g(x) = @fastmath x * x * x
+        llvm = sprint(code_llvm, g, (T,))
+        @test occursin("fast", llvm)
+    end
+
+    for T in (Float16, Float32, Float64)
+        f(x, y, z) = @fastmath min(x, y, z)
+        llvm = sprint(code_llvm, f, (T,T,T))
+        @test occursin("fast", llvm)
+
+        g(x, y, z) = @fastmath max(x, y, z)
+        llvm = sprint(code_llvm, g, (T,T,T))
+        @test occursin("fast", llvm)
+    end
+end
 
 @testset "check expansions" begin
     @test macroexpand(Main, :(@fastmath 1+2)) == :(Base.FastMath.add_fast(1,2))
@@ -256,6 +279,53 @@ end
 
 @testset "literal powers" begin
     @test @fastmath(2^-2) == @fastmath(2.0^-2) == 0.25
+    # Issue #53817
+    # Note that exponent -2^63 fails testing because of issue #53881
+    # Therefore we test with -(2^63-1). For Int == Int32 there is an analogue restriction.
+    # See also PR #53860.
+    if Int == Int64
+        @test @fastmath(2^-9223372036854775807) === 0.0
+        @test_throws DomainError @fastmath(2^-9223372036854775809)
+        @test @fastmath(1^-9223372036854775807) isa Float64
+        @test @fastmath(1^-9223372036854775809) isa Int
+    elseif Int == Int32
+        @test @fastmath(2^-2147483647) === 0.0
+        @test_throws DomainError @fastmath(2^-2147483649)
+        @test @fastmath(1^-2147483647) isa Float64
+        @test @fastmath(1^-2147483649) isa Int
+    end
+    @test_throws MethodError @fastmath(^(2))
+end
+# issue #53857
+@testset "fast_pow" begin
+    n = Int64(2)^52
+    @test @fastmath (1 + 1 / n) ^ n ≈ ℯ
+    @test @fastmath (1 + 1 / n) ^ 4503599627370496 ≈ ℯ
+end
+
+# Test that x^2 is inlined to fmul for all float types (issue #60639)
+@testset "pow_fast inlining for literal powers" begin
+    for T in (Float16, Float32, Float64)
+        f(x) = @fastmath x^2
+        llvm = sprint(code_llvm, f, (T,))
+        # Should be inlined to fmul, not call power_by_squaring
+        @test occursin("fmul", llvm)
+        @test !occursin("power_by_squaring", llvm)
+    end
+end
+
+# Test correctness of pow_fast for Float32/Float16 with various exponents (issue #60639)
+@testset "pow_fast correctness" begin
+    for T in (Float16, Float32)
+        x = T(2.5)
+        # Exponents that fit in Int32
+        @test (@fastmath x^2) ≈ x^2
+        @test (@fastmath x^10) ≈ x^10
+        @test (@fastmath x^(-3)) ≈ x^(-3)
+        # Exponents that don't fit in Int32
+        big_exp = Int64(2)^40
+        @test (@fastmath x^big_exp) ≈ x^big_exp
+    end
 end
 
 @testset "sincos fall-backs" begin
@@ -297,4 +367,10 @@ end
 @testset "@fastmath-related crash (#49907)" begin
     x = @fastmath maximum(Float16[1,2,3]; init = Float16(0))
     @test x == Float16(3)
+end
+
+@testset "Test promotion of >=3 arg fastmath" begin
+    # Bug caught in https://github.com/JuliaLang/julia/pull/54513#discussion_r1620553369
+    x = @fastmath 1. + 1. + 1f0
+    @test x == 3.0
 end

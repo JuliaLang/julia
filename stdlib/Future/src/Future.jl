@@ -28,7 +28,7 @@ copy!(dst::AbstractArray, src::AbstractArray) = Base.copy!(dst, src)
 ## randjump
 
 """
-    randjump(r::MersenneTwister, steps::Integer) -> MersenneTwister
+    randjump(r::MersenneTwister, steps::Integer)::MersenneTwister
 
 Create an initialized `MersenneTwister` object, whose state is moved forward
 (without generating numbers) from `r` by `steps` steps.

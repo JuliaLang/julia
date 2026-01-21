@@ -5,7 +5,7 @@ function GitReference(repo::GitRepo, refname::AbstractString)
     ref_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_reference_lookup, libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring),
-                   ref_ptr_ptr, repo.ptr, refname)
+                   ref_ptr_ptr, repo, refname)
     return GitReference(repo, ref_ptr_ptr[])
 end
 
@@ -15,7 +15,7 @@ function GitReference(repo::GitRepo, obj_oid::GitHash, refname::AbstractString =
     ref_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_reference_create, libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{UInt8}, Ptr{GitHash}, Cint, Cstring),
-                   ref_ptr_ptr, repo.ptr, refname, Ref(obj_oid), Cint(force),
+                   ref_ptr_ptr, repo, refname, Ref(obj_oid), Cint(force),
                    isempty(msg) ? C_NULL : msg)
     return GitReference(repo, ref_ptr_ptr[])
 end
@@ -29,12 +29,12 @@ to this branch will have no parents.
 function isorphan(repo::GitRepo)
     ensure_initialized()
     r = @check ccall((:git_repository_head_unborn, libgit2), Cint,
-                     (Ptr{Cvoid},), repo.ptr)
+                     (Ptr{Cvoid},), repo)
     r != 0
 end
 
 """
-    LibGit2.head(repo::GitRepo) -> GitReference
+    LibGit2.head(repo::GitRepo)::GitReference
 
 Return a `GitReference` to the current HEAD of `repo`.
 """
@@ -42,7 +42,7 @@ function head(repo::GitRepo)
     ensure_initialized()
     head_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_repository_head, libgit2), Cint,
-                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}), head_ptr_ptr, repo.ptr)
+                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}), head_ptr_ptr, repo)
     return GitReference(repo, head_ptr_ptr[])
 end
 
@@ -68,7 +68,7 @@ function shortname(ref::GitReference)
     isempty(ref) && return ""
     ensure_initialized()
     GC.@preserve ref begin
-        name_ptr = ccall((:git_reference_shorthand, libgit2), Cstring, (Ptr{Cvoid},), ref.ptr)
+        name_ptr = ccall((:git_reference_shorthand, libgit2), Cstring, (Ptr{Cvoid},), ref)
         name_ptr == C_NULL && return ""
         name = unsafe_string(name_ptr)
     end
@@ -76,7 +76,7 @@ function shortname(ref::GitReference)
 end
 
 """
-    LibGit2.reftype(ref::GitReference) -> Cint
+    LibGit2.reftype(ref::GitReference)::Cint
 
 Return a `Cint` corresponding to the type of `ref`:
   * `0` if the reference is invalid
@@ -85,7 +85,7 @@ Return a `Cint` corresponding to the type of `ref`:
 """
 function reftype(ref::GitReference)
     ensure_initialized()
-    return ccall((:git_reference_type, libgit2), Cint, (Ptr{Cvoid},), ref.ptr)
+    return ccall((:git_reference_type, libgit2), Cint, (Ptr{Cvoid},), ref)
 end
 
 """
@@ -139,7 +139,7 @@ function ishead(ref::GitReference)
     isempty(ref) && return false
     ensure_initialized()
     err = ccall((:git_branch_is_head, libgit2), Cint,
-                  (Ptr{Cvoid},), ref.ptr)
+                  (Ptr{Cvoid},), ref)
     return err == 1
 end
 
@@ -147,7 +147,7 @@ function isbranch(ref::GitReference)
     isempty(ref) && return false
     ensure_initialized()
     err = ccall((:git_reference_is_branch, libgit2), Cint,
-                  (Ptr{Cvoid},), ref.ptr)
+                  (Ptr{Cvoid},), ref)
     return err == 1
 end
 
@@ -155,7 +155,7 @@ function istag(ref::GitReference)
     isempty(ref) && return false
     ensure_initialized()
     err = ccall((:git_reference_is_tag, libgit2), Cint,
-                  (Ptr{Cvoid},), ref.ptr)
+                  (Ptr{Cvoid},), ref)
     return err == 1
 end
 
@@ -163,7 +163,7 @@ function isremote(ref::GitReference)
     isempty(ref) && return false
     ensure_initialized()
     err = ccall((:git_reference_is_remote, libgit2), Cint,
-                  (Ptr{Cvoid},), ref.ptr)
+                  (Ptr{Cvoid},), ref)
     return err == 1
 end
 
@@ -200,13 +200,13 @@ function peel(::Type{T}, ref::GitReference) where T<:GitObject
     ensure_initialized()
     obj_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_reference_peel, libgit2), Cint,
-                 (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cint), obj_ptr_ptr, ref.ptr, Consts.OBJECT(T))
+                 (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cint), obj_ptr_ptr, ref, Consts.OBJECT(T))
     return T(ref.owner, obj_ptr_ptr[])
 end
 peel(ref::GitReference) = peel(GitObject, ref)
 
 """
-    LibGit2.ref_list(repo::GitRepo) -> Vector{String}
+    LibGit2.ref_list(repo::GitRepo)::Vector{String}
 
 Get a list of all reference names in the `repo` repository.
 """
@@ -214,8 +214,8 @@ function ref_list(repo::GitRepo)
     ensure_initialized()
     sa_ref = Ref(StrArrayStruct())
     @check ccall((:git_reference_list, libgit2), Cint,
-                      (Ptr{StrArrayStruct}, Ptr{Cvoid}), sa_ref, repo.ptr)
-    res = convert(Vector{String}, sa_ref[])
+                      (Ptr{StrArrayStruct}, Ptr{Cvoid}), sa_ref, repo)
+    res = collect(sa_ref[])
     free(sa_ref)
     res
 end
@@ -237,7 +237,7 @@ function create_branch(repo::GitRepo,
     ref_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_branch_create, libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}, Cint),
-                   ref_ptr_ptr, repo.ptr, bname, commit_obj.ptr, Cint(force))
+                   ref_ptr_ptr, repo, bname, commit_obj, Cint(force))
     return GitReference(repo, ref_ptr_ptr[])
 end
 
@@ -248,11 +248,11 @@ Delete the branch pointed to by `branch`.
 """
 function delete_branch(branch::GitReference)
     ensure_initialized()
-    @check ccall((:git_branch_delete, libgit2), Cint, (Ptr{Cvoid},), branch.ptr)
+    @check ccall((:git_branch_delete, libgit2), Cint, (Ptr{Cvoid},), branch)
 end
 
 """
-    LibGit2.head!(repo::GitRepo, ref::GitReference) -> GitReference
+    LibGit2.head!(repo::GitRepo, ref::GitReference)::GitReference
 
 Set the HEAD of `repo` to the object pointed to by `ref`.
 """
@@ -260,12 +260,12 @@ function head!(repo::GitRepo, ref::GitReference)
     ensure_initialized()
     ref_name = name(ref)
     @check ccall((:git_repository_set_head, libgit2), Cint,
-                  (Ptr{Cvoid}, Cstring), repo.ptr, ref_name)
+                  (Ptr{Cvoid}, Cstring), repo, ref_name)
     return ref
 end
 
 """
-    lookup_branch(repo::GitRepo, branch_name::AbstractString, remote::Bool=false) -> Union{GitReference, Nothing}
+    lookup_branch(repo::GitRepo, branch_name::AbstractString, remote::Bool=false)::Union{GitReference, Nothing}
 
 Determine if the branch specified by `branch_name` exists in the repository `repo`.
 If `remote` is `true`, `repo` is assumed to be a remote git repository. Otherwise, it
@@ -282,7 +282,7 @@ function lookup_branch(repo::GitRepo,
     branch_type = remote ? Consts.BRANCH_REMOTE : Consts.BRANCH_LOCAL
     err = ccall((:git_branch_lookup, libgit2), Cint,
                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{UInt8}, Cint),
-                  ref_ptr_ptr, repo.ptr, branch_name, branch_type)
+                  ref_ptr_ptr, repo, branch_name, branch_type)
     if err != Int(Error.GIT_OK)
         if err == Int(Error.ENOTFOUND)
             return nothing
@@ -296,7 +296,7 @@ function lookup_branch(repo::GitRepo,
 end
 
 """
-    upstream(ref::GitReference) -> Union{GitReference, Nothing}
+    upstream(ref::GitReference)::Union{GitReference, Nothing}
 
 Determine if the branch containing `ref` has a specified upstream branch.
 
@@ -308,7 +308,7 @@ function upstream(ref::GitReference)
     ensure_initialized()
     ref_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     err = ccall((:git_branch_upstream, libgit2), Cint,
-                  (Ref{Ptr{Cvoid}}, Ptr{Cvoid},), ref_ptr_ptr, ref.ptr)
+                  (Ref{Ptr{Cvoid}}, Ptr{Cvoid},), ref_ptr_ptr, ref)
     if err != Int(Error.GIT_OK)
         if err == Int(Error.ENOTFOUND)
             return nothing
@@ -328,7 +328,7 @@ function target!(ref::GitReference, new_oid::GitHash; msg::AbstractString="")
     ref_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_reference_set_target, libgit2), Cint,
              (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{GitHash}, Cstring),
-             ref_ptr_ptr, ref.ptr, Ref(new_oid), isempty(msg) ? C_NULL : msg)
+             ref_ptr_ptr, ref, Ref(new_oid), isempty(msg) ? C_NULL : msg)
     return GitReference(ref.owner, ref_ptr_ptr[])
 end
 
@@ -336,7 +336,7 @@ function GitBranchIter(repo::GitRepo, flags::Cint=Cint(Consts.BRANCH_LOCAL))
     ensure_initialized()
     bi_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_branch_iterator_new, libgit2), Cint,
-                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cint), bi_ptr, repo.ptr, flags)
+                  (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cint), bi_ptr, repo, flags)
     return GitBranchIter(repo, bi_ptr[])
 end
 
@@ -346,7 +346,7 @@ function Base.iterate(bi::GitBranchIter, state=nothing)
     btype = Ref{Cint}()
     err = ccall((:git_branch_next, libgit2), Cint,
                  (Ptr{Ptr{Cvoid}}, Ptr{Cint}, Ptr{Cvoid}),
-                  ref_ptr_ptr, btype, bi.ptr)
+                  ref_ptr_ptr, btype, bi)
     if err == Cint(Error.GIT_OK)
         return ((GitReference(bi.owner, ref_ptr_ptr[]), btype[]), nothing)
     elseif err == Cint(Error.ITEROVER)

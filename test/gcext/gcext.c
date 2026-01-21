@@ -219,7 +219,6 @@ static uint64_t xorshift_rng(void)
 }
 
 static treap_t *bigvals;
-static size_t bigval_startoffset;
 
 // Hooks to allocate and free external objects (bigval_t's).
 
@@ -600,6 +599,13 @@ int main()
     jl_gc_set_cb_notify_external_alloc(alloc_bigval, 1);
     jl_gc_set_cb_notify_external_free(free_bigval, 1);
 
+    // single threaded mode
+    // Note: with -t1,1 a signal 10 occurs in task_scanner
+    jl_options.nthreadpools = 1;
+    jl_options.nthreads = 1;
+    int16_t ntpp[] = {jl_options.nthreads};
+    jl_options.nthreads_per_pool = ntpp;
+
     jl_init();
     if (jl_gc_enable_conservative_gc_support() < 0)
         abort();
@@ -642,8 +648,6 @@ int main()
             module,
             jl_symbol("StackDataLarge"),
             (jl_value_t *)datatype_stack_external);
-    // Remember the offset of external objects
-    bigval_startoffset = jl_gc_external_obj_hdr_size();
     // Run the actual tests
     checked_eval_string(
             "let dir = dirname(unsafe_string(Base.JLOptions().julia_bin))\n"

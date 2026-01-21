@@ -3,17 +3,18 @@
 using Test
 using Distributed
 using Dates
-import REPL
 using Printf: @sprintf
 using Base: Experimental
+using Base.ScopedValues
 
 include("choosetests.jl")
 include("testenv.jl")
 include("buildkitetestjson.jl")
 
-using .BuildKiteTestJSON
+const longrunning_delay = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_DELAY", "45")) * 60 # minutes
+const longrunning_interval = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_INTERVAL", "15")) * 60 # minutes
 
-(; tests, net_on, exit_on_error, use_revise, seed) = choosetests(ARGS)
+(; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(ARGS)
 tests = unique(tests)
 
 if Sys.islinux()
@@ -25,9 +26,19 @@ else
     global running_under_rr() = false
 end
 
+const rmwait_timeout = running_under_rr() ? 300 : 30
+
+ENV["JULIA_TEST_BUILDROOT"] = buildroot
 if use_revise
+    # First put this at the top of the DEPOT PATH to install revise if necessary.
+    # Once it's loaded, we swizzle it to the end, to avoid confusing any tests.
+    pushfirst!(DEPOT_PATH, joinpath(buildroot, "deps", "jlutilities", "depot"))
+    using Pkg
+    Pkg.activate(joinpath(@__DIR__, "..", "deps", "jlutilities", "revise"))
+    Pkg.instantiate()
     using Revise
     union!(Revise.stdlib_names, Symbol.(STDLIBS))
+    push!(DEPOT_PATH, popfirst!(DEPOT_PATH))
     # Remote-eval the following to initialize Revise in workers
     const revise_init_expr = quote
         using Revise
@@ -37,25 +48,17 @@ if use_revise
     end
 end
 
+if isempty(tests)
+    println("No tests selected. Exiting.")
+    exit()
+end
+
 const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
     parse(Int, ENV["JULIA_TEST_MAXRSS_MB"]) * 2^20
 else
     typemax(Csize_t)
 end
 limited_worker_rss = max_worker_rss != typemax(Csize_t)
-
-function test_path(test)
-    t = split(test, '/')
-    if t[1] in STDLIBS
-        if length(t) == 2
-            return joinpath(STDLIB_DIR, t[1], "test", t[2])
-        else
-            return joinpath(STDLIB_DIR, t[1], "test", "runtests")
-        end
-    else
-        return joinpath(@__DIR__, test)
-    end
-end
 
 # Check all test files exist
 isfiles = isfile.(test_path.(tests) .* ".jl")
@@ -114,7 +117,7 @@ cd(@__DIR__) do
     # multiple worker processes regardless of the value of `net_on`.
     # Otherwise, we use multiple worker processes if and only if `net_on` is true.
     if net_on || JULIA_TEST_USE_MULTIPLE_WORKERS
-        n = min(Sys.CPU_THREADS, length(tests))
+        n = min(Sys.EFFECTIVE_CPU_THREADS, length(tests))
         n > 1 && addprocs_with_testenv(n)
         LinearAlgebra.BLAS.set_num_threads(1)
     end
@@ -123,7 +126,7 @@ cd(@__DIR__) do
     @everywhere include("testdefs.jl")
 
     if use_revise
-        Base.invokelatest(revise_trackall)
+        @invokelatest revise_trackall()
         Distributed.remotecall_eval(Main, workers(), revise_init_expr)
     end
 
@@ -131,10 +134,12 @@ cd(@__DIR__) do
         Running parallel tests with:
           getpid() = $(getpid())
           nworkers() = $(nworkers())
-          nthreads() = $(Threads.threadpoolsize())
+          nthreads(:interactive) = $(Threads.threadpoolsize(:interactive))
+          nthreads(:default) = $(Threads.threadpoolsize(:default))
           Sys.CPU_THREADS = $(Sys.CPU_THREADS)
           Sys.total_memory() = $(Base.format_bytes(Sys.total_memory()))
           Sys.free_memory() = $(Base.format_bytes(Sys.free_memory()))
+          Sys.uptime() = $(Sys.uptime()) ($(round(Sys.uptime() / (60 * 60), digits=1)) hours)
         """)
 
     #pretty print the information about gc and mem usage
@@ -185,10 +190,10 @@ cd(@__DIR__) do
         at = lpad("($wrkr)", name_align - textwidth(name) + 1, " ")
         lock(print_lock)
         try
-            printstyled(name, at, " |", " "^elapsed_align,
-                    "started at $(now())",
+            printstyled(name, at, " |", " "^elapsed_align, color=:white)
+            printstyled("started at $(now())",
                     (pid > 0 ? " on pid $pid" : ""),
-                    "\n", color=:white)
+                    "\n", color=:light_black)
         finally
             unlock(print_lock)
         end
@@ -225,12 +230,16 @@ cd(@__DIR__) do
         # Monitor stdin and kill this task on ^C
         # but don't do this on Windows, because it may deadlock in the kernel
         running_tests = Dict{String, DateTime}()
+
+        # Track timeout timers for each test
+        test_timers = Dict{String, Timer}()
+
         if !Sys.iswindows() && isa(stdin, Base.TTY)
             t = current_task()
             stdin_monitor = @async begin
-                term = REPL.Terminals.TTYTerminal("xterm", stdin, stdout, stderr)
+                term = Base.Terminals.TTYTerminal("xterm", stdin, stdout, stderr)
                 try
-                    REPL.Terminals.raw!(term, true)
+                    Base.Terminals.raw!(term, true)
                     while true
                         c = read(term, Char)
                         if c == '\x3'
@@ -247,7 +256,7 @@ cd(@__DIR__) do
                 catch e
                     isa(e, InterruptException) || rethrow()
                 finally
-                    REPL.Terminals.raw!(term, false)
+                    Base.Terminals.raw!(term, false)
                 end
             end
         end
@@ -259,15 +268,46 @@ cd(@__DIR__) do
                         test = popfirst!(tests)
                         running_tests[test] = now()
                         wrkr = p
+
+                        # Create a timer for this test to report long-running status
+                        test_timers[test] = Timer(longrunning_delay, interval=longrunning_interval) do timer
+                            if haskey(running_tests, test)  # Check test is still running
+                                start_time = running_tests[test]
+                                elapsed = now() - start_time
+                                elapsed_minutes = elapsed.value ÷ (1000 * 60)
+
+                                elapsed_str = if elapsed_minutes >= 60
+                                    hours, mins = divrem(elapsed_minutes, 60)
+                                    "$(hours)h $(mins)m"
+                                else
+                                    "$(elapsed_minutes)m"
+                                end
+
+                                @lock print_lock begin
+                                    print(test)
+                                    print(lpad("($(wrkr))", name_align - textwidth(test) + 1, " "), " | ")
+                                    # Calculate total width of data columns: "Time (s) | GC (s) | GC % | Alloc (MB) | RSS (MB)"
+                                    # This is: elapsed_align + 3 + gc_align + 3 + percent_align + 3 + alloc_align + 3 + rss_align
+                                    data_width = elapsed_align + gc_align + percent_align + alloc_align + rss_align + 12  # 12 = 4 * " | "
+                                    message = "has been running for $(elapsed_str)"
+                                    centered_message = lpad(rpad(message, (data_width + textwidth(message)) ÷ 2), data_width)
+                                    printstyled(centered_message, "\n", color=:light_black)
+                                end
+                            end
+                        end
                         before = time()
                         resp, duration = try
-                                r = remotecall_fetch(runtests, wrkr, test, test_path(test); seed=seed)
+                                r = remotecall_fetch(@Base.world(runtests, ∞), wrkr, test, test_path(test); seed=seed)
                                 r, time() - before
                             catch e
                                 isa(e, InterruptException) && return
                                 Any[CapturedException(e, catch_backtrace())], time() - before
                             end
                         delete!(running_tests, test)
+                        if haskey(test_timers, test)
+                            close(test_timers[test])
+                            delete!(test_timers, test)
+                        end
                         push!(results, (test, resp, duration))
                         if length(resp) == 1
                             print_testworker_errored(test, wrkr, exit_on_error ? nothing : resp[1])
@@ -277,7 +317,7 @@ cd(@__DIR__) do
                             elseif n > 1
                                 # the worker encountered some failure, recycle it
                                 # so future tests get a fresh environment
-                                rmprocs(wrkr, waitfor=30)
+                                rmprocs(wrkr, waitfor=rmwait_timeout)
                                 p = addprocs_with_testenv(1)[1]
                                 remotecall_fetch(include, p, "testdefs.jl")
                                 if use_revise
@@ -290,7 +330,7 @@ cd(@__DIR__) do
                                 # the worker has reached the max-rss limit, recycle it
                                 # so future tests start with a smaller working set
                                 if n > 1
-                                    rmprocs(wrkr, waitfor=30)
+                                    rmprocs(wrkr, waitfor=rmwait_timeout)
                                     p = addprocs_with_testenv(1)[1]
                                     remotecall_fetch(include, p, "testdefs.jl")
                                     if use_revise
@@ -304,7 +344,7 @@ cd(@__DIR__) do
                     end
                     if p != 1
                         # Free up memory =)
-                        rmprocs(p, waitfor=30)
+                        rmprocs(p, waitfor=rmwait_timeout)
                     end
                 end
             end
@@ -321,7 +361,7 @@ cd(@__DIR__) do
             t == "SharedArrays" && (isolate = false)
             before = time()
             resp, duration = try
-                    r = Base.invokelatest(runtests, t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
+                    r = @invokelatest runtests(t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
                     r, time() - before
                 catch e
                     isa(e, InterruptException) && rethrow()
@@ -352,6 +392,9 @@ cd(@__DIR__) do
         if @isdefined stdin_monitor
             schedule(stdin_monitor, InterruptException(); error=true)
         end
+        if @isdefined test_timers
+            foreach(close, values(test_timers))
+        end
     end
 
     #=
@@ -376,71 +419,68 @@ cd(@__DIR__) do
     Errored, and execution continues until the summary at the end of the test
     run, where the test file is printed out as the "failed expression".
     =#
-    Test.TESTSET_PRINT_ENABLE[] = false
-    o_ts = Test.DefaultTestSet("Overall")
-    o_ts.time_end = o_ts.time_start + o_ts_duration # manually populate the timing
-    Test.push_testset(o_ts)
-    completed_tests = Set{String}()
-    for (testname, (resp,), duration) in results
-        push!(completed_tests, testname)
-        if isa(resp, Test.DefaultTestSet)
-            resp.time_end = resp.time_start + duration
-            Test.push_testset(resp)
-            Test.record(o_ts, resp)
-            Test.pop_testset()
-        elseif isa(resp, Test.TestSetException)
-            fake = Test.DefaultTestSet(testname)
-            fake.time_end = fake.time_start + duration
-            for i in 1:resp.pass
-                Test.record(fake, Test.Pass(:test, nothing, nothing, nothing, LineNumberNode(@__LINE__, @__FILE__)))
+    @with Test.TESTSET_PRINT_ENABLE=>false begin
+        o_ts = Test.DefaultTestSet("Overall")
+        @atomic o_ts.time_end = o_ts.time_start + o_ts_duration # manually populate the timing
+        BuildkiteTestJSON.write_testset_json_files(@__DIR__, o_ts)
+        Test.@with_testset o_ts begin
+            completed_tests = Set{String}()
+            for (testname, (resp,), duration) in results
+                push!(completed_tests, testname)
+                if isa(resp, Test.DefaultTestSet)
+                    @atomic resp.time_end = resp.time_start + duration
+                    Test.@with_testset resp begin
+                        Test.record(o_ts, resp)
+                    end
+                elseif isa(resp, Test.TestSetException)
+                    fake = Test.DefaultTestSet(testname)
+                    @atomic fake.time_end = fake.time_start + duration
+                    for i in 1:resp.pass
+                        Test.record(fake, Test.Pass(:test, nothing, nothing, nothing, LineNumberNode(@__LINE__, @__FILE__)))
+                    end
+                    for i in 1:resp.broken
+                        Test.record(fake, Test.Broken(:test, nothing))
+                    end
+                    for t in resp.errors_and_fails
+                        Test.record(fake, t)
+                    end
+                    Test.@with_testset fake begin
+                        Test.record(o_ts, fake)
+                    end
+                else
+                    if !isa(resp, Exception)
+                        resp = ErrorException(string("Unknown result type : ", typeof(resp)))
+                    end
+                    # If this test raised an exception that is not a remote testset exception,
+                    # i.e. not a RemoteException capturing a TestSetException that means
+                    # the test runner itself had some problem, so we may have hit a segfault,
+                    # deserialization errors or something similar.  Record this testset as Errored.
+                    fake = Test.DefaultTestSet(testname)
+                    @atomic fake.time_end = fake.time_start + duration
+                    Test.record(fake, Test.Error(:nontest_error, testname, nothing, Base.ExceptionStack(NamedTuple[(;exception = resp, backtrace = [])]), LineNumberNode(1), nothing))
+                    Test.@with_testset fake begin
+                        Test.record(o_ts, fake)
+                    end
+                end
             end
-            for i in 1:resp.broken
-                Test.record(fake, Test.Broken(:test, nothing))
+            for test in all_tests
+                (test in completed_tests) && continue
+                fake = Test.DefaultTestSet(test)
+                Test.record(fake, Test.Error(:test_interrupted, test, nothing, Base.ExceptionStack(NamedTuple[(;exception = "skipped", backtrace = [])]), LineNumberNode(1), nothing))
+                Test.@with_testset fake begin
+                    Test.record(o_ts, fake)
+                end
             end
-            for t in resp.errors_and_fails
-                Test.record(fake, t)
-            end
-            Test.push_testset(fake)
-            Test.record(o_ts, fake)
-            Test.pop_testset()
-        else
-            if !isa(resp, Exception)
-                resp = ErrorException(string("Unknown result type : ", typeof(resp)))
-            end
-            # If this test raised an exception that is not a remote testset exception,
-            # i.e. not a RemoteException capturing a TestSetException that means
-            # the test runner itself had some problem, so we may have hit a segfault,
-            # deserialization errors or something similar.  Record this testset as Errored.
-            fake = Test.DefaultTestSet(testname)
-            fake.time_end = fake.time_start + duration
-            Test.record(fake, Test.Error(:nontest_error, testname, nothing, Any[(resp, [])], LineNumberNode(1)))
-            Test.push_testset(fake)
-            Test.record(o_ts, fake)
-            Test.pop_testset()
         end
     end
-    for test in all_tests
-        (test in completed_tests) && continue
-        fake = Test.DefaultTestSet(test)
-        Test.record(fake, Test.Error(:test_interrupted, test, nothing, [("skipped", [])], LineNumberNode(1)))
-        Test.push_testset(fake)
-        Test.record(o_ts, fake)
-        Test.pop_testset()
-    end
 
-    if Base.get_bool_env("CI", false)
-        @info "Writing test result data to $(@__DIR__)"
-        write_testset_json_files(@__DIR__, o_ts)
-    end
-
-    Test.TESTSET_PRINT_ENABLE[] = true
     println()
     # o_ts.verbose = true # set to true to show all timings when successful
     Test.print_test_results(o_ts, 1)
-    if !o_ts.anynonpass
-        println("    \033[32;1mSUCCESS\033[0m")
+    if !Test.anynonpass(o_ts)
+        printstyled("    SUCCESS\n"; bold=true, color=:green)
     else
-        println("    \033[31;1mFAILURE\033[0m\n")
+        printstyled("    FAILURE\n\n"; bold=true, color=:red)
         skipped > 0 &&
             println("$skipped test", skipped > 1 ? "s were" : " was", " skipped due to failure.")
         println("The global RNG seed was 0x$(string(seed, base = 16)).\n")

@@ -23,10 +23,16 @@ end
 function rst(io::IO, code::Code)
     if code.language == "jldoctest"
         println(io, ".. doctest::\n")
-    elseif code.language != "rst"
+    elseif code.language in ("", "julia", "julia-repl")
         println(io, ".. code-block:: julia\n")
+    elseif code.language == "rst"
+    elseif code.language == "styled"
+        code = Code("", String(styled(code.code)))
+        println(io, "::\n")
+    else
+        println(io, "::\n")
     end
-    for l in lines(code.code)
+    for l in eachsplit(code.code, '\n')
         println(io, "    ", l)
     end
 end
@@ -38,11 +44,11 @@ end
 
 function rst(io::IO, list::List)
     for (i, item) in enumerate(list.items)
-        bullet = isordered(list) ? "$(i + list.ordered - 1). " : "* "
-        print(io, bullet)
+        list_marker = isordered(list) ? "$(i + list.ordered - 1). " : "* "
+        print(io, list_marker)
         lines = split(rstrip(sprint(rst, item)), '\n')
         for (n, line) in enumerate(lines)
-            print(io, (n == 1 || isempty(line)) ? "" : " "^length(bullet), line)
+            print(io, (n == 1 || isempty(line)) ? "" : " "^length(list_marker), line)
             n < length(lines) && println(io)
         end
         println(io)
@@ -90,7 +96,7 @@ end
 
 function rst(io::IO, l::LaTeX)
     println(io, ".. math::\n")
-    for line in lines(l.formula)
+    for line in eachsplit(l.formula, '\n')
         println(io, "    ", line)
     end
 end

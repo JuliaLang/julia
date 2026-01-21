@@ -178,6 +178,9 @@ JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len)
     return crc32c_sse42(crc, buf, len);
 }
 #  else
+#if defined(JL_CRC32C_USE_IFUNC) && defined(_COMPILER_CLANG_)
+JL_UNUSED
+#endif
 static crc32c_func_t crc32c_dispatch(void)
 {
     // When used in ifunc, we cannot call external functions (i.e. jl_cpuid)

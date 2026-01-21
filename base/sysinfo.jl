@@ -8,14 +8,17 @@ Provide methods for retrieving information about hardware and the operating syst
 export BINDIR,
        STDLIB,
        CPU_THREADS,
+       EFFECTIVE_CPU_THREADS,
        CPU_NAME,
        WORD_SIZE,
        ARCH,
        MACHINE,
        KERNEL,
        JIT,
+       PAGESIZE,
        cpu_info,
        cpu_summary,
+       sysimage_target,
        uptime,
        loadavg,
        free_memory,
@@ -33,10 +36,13 @@ export BINDIR,
        iswindows,
        isjsvm,
        isexecutable,
+       isreadable,
+       iswritable,
        username,
-       which
+       which,
+       detectwsl
 
-import ..Base: show
+import ..Base: DATAROOTDIR, show
 
 """
     Sys.BINDIR::String
@@ -50,7 +56,7 @@ global BINDIR::String = ccall(:jl_get_julia_bindir, Any, ())::String
 
 A string containing the full path to the directory containing the `stdlib` packages.
 """
-global STDLIB::String = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
+global STDLIB::String = "$BINDIR/$DATAROOTDIR/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
 # In case STDLIB change after julia is built, the variable below can be used
 # to update cached method locations to updated ones.
 const BUILD_STDLIB_PATH = STDLIB
@@ -66,8 +72,27 @@ CPU cores, for example, in the presence of
 [hyper-threading](https://en.wikipedia.org/wiki/Hyper-threading).
 
 See Hwloc.jl or CpuId.jl for extended information, including number of physical cores.
+
+See also: [`Sys.EFFECTIVE_CPU_THREADS`](@ref) for a container-aware CPU count that respects
+cgroup limits.
 """
 global CPU_THREADS::Int = 1 # for bootstrap, changed on startup
+
+"""
+    Sys.EFFECTIVE_CPU_THREADS::Int
+
+The effective number of logical CPU cores available to the Julia process, taking into
+account container limits (e.g., Docker `--cpus`, Kubernetes CPU limits, cgroup quotas).
+This is the minimum of the hardware CPU thread count and any imposed CPU limits.
+
+In non-containerized environments, this typically equals `Sys.CPU_THREADS`. In containerized
+environments, it respects cgroup CPU limits and provides a more accurate measure of
+available parallelism.
+
+Use this constant when determining default thread pool sizes or parallelism levels to
+ensure proper behavior in containerized deployments.
+"""
+global EFFECTIVE_CPU_THREADS::Int = 1 # for bootstrap, changed on startup
 
 """
     Sys.ARCH::Symbol
@@ -99,12 +124,10 @@ Standard word size on the current machine, in bits.
 const WORD_SIZE = Core.sizeof(Int) * 8
 
 """
-    Sys.SC_CLK_TCK:
+    Sys.SC_CLK_TCK::Clong
 
 The number of system "clock ticks" per second, corresponding to `sysconf(_SC_CLK_TCK)` on
 POSIX systems, or `0` if it is unknown.
-
-CPU times, e.g. as returned by `Sys.cpu_info()`, are in units of ticks, i.e. units of `1 / Sys.SC_CLK_TCK` seconds if `Sys.SC_CLK_TCK > 0`.
 """
 global SC_CLK_TCK::Clong
 
@@ -138,6 +161,13 @@ Note: Included in the detailed system information via `versioninfo(verbose=true)
 """
 global JIT::String
 
+"""
+    Sys.PAGESIZE::Clong
+
+A number providing the pagesize of the given OS.  Common values being 4kb or 64kb on Linux.
+"""
+global PAGESIZE::Clong
+
 function __init__()
     env_threads = nothing
     if haskey(ENV, "JULIA_CPU_THREADS")
@@ -145,7 +175,7 @@ function __init__()
     end
     global CPU_THREADS = if env_threads !== nothing
         env_threads = tryparse(Int, env_threads)
-        if !(env_threads isa Int && env_threads > 0)
+        if env_threads === nothing || env_threads <= 0
             env_threads = Int(ccall(:jl_cpu_threads, Int32, ()))
             Core.print(Core.stderr, "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $env_threads.\n")
         end
@@ -153,9 +183,11 @@ function __init__()
     else
         Int(ccall(:jl_cpu_threads, Int32, ()))
     end
+    global EFFECTIVE_CPU_THREADS = min(CPU_THREADS, Int(ccall(:jl_effective_threads, Int32, ())))
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
+    global PAGESIZE = Int(Sys.isunix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
     __init_build()
     nothing
 end
@@ -163,8 +195,8 @@ end
 # without pulling in anything unnecessary like `CPU_NAME`
 function __init_build()
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
-    vers = "v$(VERSION.major).$(VERSION.minor)"
-    global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
+    vers = "v$(string(VERSION.major)).$(string(VERSION.minor))"
+    global STDLIB = abspath(BINDIR, DATAROOTDIR, "julia", "stdlib", vers)
     nothing
 end
 
@@ -190,8 +222,7 @@ The `CPUinfo` type is a mutable struct with the following fields:
 - `cpu_times!idle::UInt64`: Time spent in idle mode. CPU state shows the CPU time that's not actively being used.
 - `cpu_times!irq::UInt64`: Time spent handling interrupts. CPU state shows the amount of time the CPU has been servicing hardware interrupts.
 
-The times are in units of `1/Sys.SC_CLK_TCK` seconds if `Sys.SC_CLK_TCK > 0`; otherwise they are in
-unknown units.
+The times are in units of milliseconds.
 
 Note: Included in the detailed system information via `versioninfo(verbose=true)`.
 """
@@ -212,7 +243,6 @@ CPUinfo(info::UV_cpu_info_t) = CPUinfo(unsafe_string(info.model), info.speed,
 public CPUinfo
 
 function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::AbstractString="    ")
-    tck = SC_CLK_TCK
     if header
         println(io, info.model, ": ")
         print(io, " "^length(prefix))
@@ -220,16 +250,13 @@ function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::Abs
                 lpad("sys", 9), "    ", lpad("idle", 9), "    ", lpad("irq", 9))
     end
     print(io, prefix)
-    unit = tck > 0 ? " s  " : "    "
-    tc = max(tck, 1)
+    ms_per_s = 1000
+    unit = " s  "
     d(i, unit=unit) = lpad(string(round(Int64,i)), 9) * unit
     print(io,
           lpad(string(info.speed), 5), " MHz  ",
-          d(info.cpu_times!user / tc), d(info.cpu_times!nice / tc), d(info.cpu_times!sys / tc),
-          d(info.cpu_times!idle / tc), d(info.cpu_times!irq / tc, tck > 0 ? " s" : "  "))
-    if tck <= 0
-        print(io, "ticks")
-    end
+          d(info.cpu_times!user / ms_per_s), d(info.cpu_times!nice / ms_per_s), d(info.cpu_times!sys / ms_per_s),
+          d(info.cpu_times!idle / ms_per_s), d(info.cpu_times!irq / ms_per_s))
 end
 
 show(io::IO, ::MIME"text/plain", info::CPUinfo) = _show_cpuinfo(io, info, true, "    ")
@@ -308,9 +335,26 @@ function cpu_info()
 end
 
 """
+    Sys.sysimage_target()
+
+Return the CPU target string that was used to build the current system image.
+
+This function returns the original CPU target specification that was passed to Julia
+when the system image was compiled. This can be useful for reproducing the same
+system image or for understanding what CPU features were enabled during compilation.
+
+If the system image was built with the default settings this will return `"native"`.
+
+See also [`JULIA_CPU_TARGET`](@ref).
+"""
+function sysimage_target()
+    return ccall(:jl_get_sysimage_cpu_target, Ref{String}, ())
+end
+
+"""
     Sys.uptime()
 
-Gets the current system uptime in seconds.
+Get the current system uptime in seconds.
 """
 function uptime()
     uptime_ = Ref{Float64}()
@@ -397,7 +441,7 @@ end
 
 Get the maximum resident set size utilized in bytes.
 See also:
-    - man page of `getrusage`(2) on Linux and FreeBSD.
+    - man page of `getrusage`(2) on Linux and BSD.
     - Windows API `GetProcessMemoryInfo`.
 """
 maxrss() = ccall(:jl_maxrss, Csize_t, ())
@@ -528,6 +572,27 @@ including e.g. a WebAssembly JavaScript embedding in a web browser.
 """
 isjsvm(os::Symbol) = (os === :Emscripten)
 
+"""
+    Sys.detectwsl()
+
+Runtime predicate for testing if Julia is running inside
+Windows Subsystem for Linux (WSL).
+
+!!! note
+    Unlike `Sys.iswindows`, `Sys.islinux` etc., this is a runtime test, and thus
+    cannot meaningfully be used in `@static if` constructs.
+
+!!! compat "Julia 1.12"
+    This function requires at least Julia 1.12.
+"""
+function detectwsl()
+    # We use the same approach as canonical/snapd do to detect WSL
+    islinux() && (
+        isfile("/proc/sys/fs/binfmt_misc/WSLInterop")
+        || isdir("/run/WSL")
+    )
+end
+
 for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
     @eval $f() = $(getfield(@__MODULE__, f)(KERNEL))
 end
@@ -551,24 +616,9 @@ windows_version
 
 const WINDOWS_VISTA_VER = v"6.0"
 
-"""
-    Sys.isexecutable(path::String)
-
-Return `true` if the given `path` has executable permissions.
-
-!!! note
-    Prior to Julia 1.6, this did not correctly interrogate filesystem
-    ACLs on Windows, therefore it would return `true` for any
-    file.  From Julia 1.6 on, it correctly determines whether the
-    file is marked as executable or not.
-"""
-function isexecutable(path::String)
-    # We use `access()` and `X_OK` to determine if a given path is
-    # executable by the current user.  `X_OK` comes from `unistd.h`.
-    X_OK = 0x01
-    return ccall(:jl_fs_access, Cint, (Ptr{UInt8}, Cint), path, X_OK) == 0
-end
-isexecutable(path::AbstractString) = isexecutable(String(path))
+const isexecutable = Base.isexecutable
+const isreadable   = Base.isreadable
+const iswritable   = Base.iswritable
 
 """
     Sys.which(program_name::String)
@@ -647,10 +697,10 @@ function which(program_name::String)
     # If we couldn't find anything, don't return anything
     nothing
 end
-which(program_name::AbstractString) = which(String(program_name))
+which(program_name::AbstractString) = which(String(program_name)::String)
 
 """
-    Sys.username() -> String
+    Sys.username()::String
 
 Return the username for the current user. If the username cannot be determined
 or is empty, this function throws an error.
