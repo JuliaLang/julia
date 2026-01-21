@@ -74,6 +74,7 @@
 #include <llvm/Target/TargetMachine.h>
 
 #include "llvm/Support/Path.h" // for llvm::sys::path
+#include <llvm/Support/TimeProfiler.h>
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Linker/Linker.h>
 #include <llvm/CodeGen/MachineModuleInfo.h>
@@ -10437,6 +10438,16 @@ char jl_using_perf_jitevents = 0;
 
 int jl_is_timing_passes = 0;
 
+cl::opt<bool> TimeTrace("time-trace", cl::desc("Record time trace"));
+cl::opt<unsigned> TimeTraceGranularity(
+    "time-trace-granularity",
+    cl::desc("Minimum time granularity (in microseconds) traced by time profiler"),
+    cl::init(500), cl::Hidden);
+cl::opt<std::string> TimeTraceFile(
+    "time-trace-file",
+    cl::desc("Specify time trace file destination"),
+    cl::value_desc("filename"));
+
 extern "C" void jl_init_llvm(void)
 {
     jl_page_size = jl_getpagesize();
@@ -10485,6 +10496,9 @@ extern "C" void jl_init_llvm(void)
     clopt = llvmopts.lookup("time-passes");
     if (clopt && clopt->getNumOccurrences() > 0)
         jl_is_timing_passes = 1;
+
+    if (TimeTrace)
+        timeTraceProfilerInitialize(TimeTraceGranularity, "julia");
 
     jl_ExecutionEngine = new JuliaOJIT();
 

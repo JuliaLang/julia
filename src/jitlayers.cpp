@@ -35,6 +35,7 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/FormattedStream.h>
+#include <llvm/Support/TimeProfiler.h>
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/Utils/Cloning.h>
@@ -2081,6 +2082,21 @@ JuliaOJIT::JuliaOJIT()
     asan_crt[mangle("___asan_globals_registered")] = {ExecutorAddr::fromPtr(&jl___asan_globals_registered), JITSymbolFlags::Common | JITSymbolFlags::Exported};
     cantFail(JD.define(orc::absoluteSymbols(asan_crt)));
 #endif
+
+    if (TimeTrace) {
+        PrintLLVMTimers.push_back([]() JL_NOTSAFEPOINT {
+            if (timeTraceProfilerEnabled()) {
+                StringRef FileName = TimeTraceFile.empty() ?
+                    StringRef("julia_time_trace.json") : StringRef(TimeTraceFile);
+                if (auto E = timeTraceProfilerWrite(FileName, "")) {
+                    handleAllErrors(std::move(E), [](const StringError &SE) {
+                        errs() << SE.getMessage() << "\n";
+                    });
+                }
+                timeTraceProfilerCleanup();
+            }
+        });
+    }
 }
 
 JuliaOJIT::~JuliaOJIT() = default;
