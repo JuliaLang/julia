@@ -2455,14 +2455,14 @@ end
     @test expected == actual
 
     # Example 333
-    input = "`\uA0b\uA0`\n"
+    input = "`\u00A0b\u00A0`\n"
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
     @test expected == actual
 
     # Example 334
-    input = "`\uA0`\n`  `\n"
+    input = "`\u00A0`\n`  `\n"
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
@@ -2602,7 +2602,7 @@ end
     @test expected == actual
 
     # Example 353
-    input = "*\uA0a\uA0*\n"
+    input = "*\u00A0a\u00A0*\n"
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
@@ -3687,7 +3687,7 @@ end
     @test expected == actual
 
     # Example 507
-    input = "[link](/url\uA0\"title\")\n"
+    input = "[link](/url\u00A0\"title\")\n"
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
