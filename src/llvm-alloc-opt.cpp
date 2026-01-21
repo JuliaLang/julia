@@ -681,6 +681,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
         IRBuilder<> builder(orig_inst);
         initializeAlloca(builder, buff, allockind);
     }
+    buff->copyMetadata(*orig_inst);
     Instruction *new_inst = cast<Instruction>(prolog_builder.CreateBitCast(ptr, JuliaType::get_pjlvalue_ty(prolog_builder.getContext(), buff->getType()->getPointerAddressSpace())));
     new_inst->takeName(orig_inst);
 
