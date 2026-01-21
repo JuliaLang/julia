@@ -288,7 +288,6 @@ reim(A::AbstractArray)
 
 -(A::AbstractArray) = broadcast_preserving_zero_d(-, A)
 
-#+(x::AbstractArray{<:Number}) = x
 +(x::AbstractArray) = broadcast_preserving_zero_d(+, x)
 *(x::AbstractArray{<:Number,2}) = x
 
