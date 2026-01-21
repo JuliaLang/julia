@@ -2,6 +2,12 @@
 
 # weak key dictionaries
 
+mutable struct WeakKeyDictFinalizer{T}
+    const d::T
+end
+(d::WeakKeyDictFinalizer)(k) = d.d.dirty = true
+
+
 """
     WeakKeyDict([itr])
 
@@ -16,15 +22,15 @@ object was unreferenced anywhere before insertion.
 See also [`WeakRef`](@ref).
 """
 mutable struct WeakKeyDict{K,V} <: AbstractDict{K,V}
-    ht::Dict{WeakRef,V}
-    lock::ReentrantLock
-    finalizer::Function
+    const ht::Dict{WeakRef,V}
+    const lock::ReentrantLock
     dirty::Bool
+    finalizer::WeakKeyDictFinalizer
 
     # Constructors mirror Dict's
-    function WeakKeyDict{K,V}() where V where K
-        t = new(Dict{WeakRef,V}(), ReentrantLock(), identity, 0)
-        t.finalizer = k -> t.dirty = true
+    function WeakKeyDict{K,V}() where {K, V}
+        t = new{K,V}(Dict{WeakRef,V}(), ReentrantLock(), false)
+        t.finalizer = WeakKeyDictFinalizer(t)
         return t
     end
 end
@@ -70,7 +76,7 @@ function _cleanup_locked(h::WeakKeyDict)
     return h
 end
 
-sizehint!(d::WeakKeyDict, newsz; shrink::Bool = true) = @lock d sizehint!(d.ht, newsz; shrink = shrink)
+sizehint!(d::WeakKeyDict, newsz::Integer; shrink::Bool = true) = @lock d sizehint!(d.ht, newsz; shrink = shrink)
 empty(d::WeakKeyDict, ::Type{K}, ::Type{V}) where {K, V} = WeakKeyDict{K, V}()
 
 IteratorSize(::Type{<:WeakKeyDict}) = SizeUnknown()
@@ -189,7 +195,7 @@ function length(t::WeakKeyDict)
 end
 
 function iterate(t::WeakKeyDict{K,V}, state...) where {K, V}
-    return lock(t) do
+    @lock t begin
         while true
             y = iterate(t.ht, state...)
             y === nothing && return nothing

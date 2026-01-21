@@ -170,7 +170,7 @@ let A = Tuple{Ref, Tuple{T}} where T,
 end
 
 # issue #22339
-let A = Tuple{T, Array{T, 1}} where T,
+let A = Tuple{T, Vector{T}} where T,
     B = Tuple{T} where T,
     C = Tuple{T} where T<:AbstractFloat
     @test args_morespecific(B, A)

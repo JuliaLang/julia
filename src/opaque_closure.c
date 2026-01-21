@@ -28,7 +28,7 @@ JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *sourc
 }
 
 static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
-    jl_value_t *source_, jl_value_t *captures, int do_compile)
+    jl_value_t *source_, jl_value_t *captures, int do_compile, size_t world)
 {
     if (!jl_is_tuple_type((jl_value_t*)argt)) {
         jl_error("OpaqueClosure argument tuple must be a tuple type");
@@ -61,18 +61,19 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
         }
     }
     jl_task_t *ct = jl_current_task;
-    size_t world = ct->world_age;
     jl_code_instance_t *ci = NULL;
     if (do_compile) {
         ci = jl_compile_method_internal(mi, world);
     }
 
-    jl_fptr_args_t invoke = (jl_fptr_args_t)jl_interpret_opaque_closure;
+    jl_fptr_args_t callptr = (jl_fptr_args_t)jl_interpret_opaque_closure;
     void *specptr = NULL;
 
     if (ci) {
-        invoke = (jl_fptr_args_t)jl_atomic_load_relaxed(&ci->invoke);
-        specptr = jl_atomic_load_relaxed(&ci->specptr.fptr);
+        uint8_t specsigflags;
+        jl_callptr_t invoke;
+        jl_read_codeinst_invoke(ci, &specsigflags, &invoke, &specptr, 1);
+        callptr = (jl_fptr_args_t)invoke; // codegen puts the object (or a jl_fptr_interpret_call token )here for us, even though it was the wrong type to put here
 
         selected_rt = ci->rettype;
         // If we're not allowed to generate a specsig with this, rt, fall
@@ -82,7 +83,7 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
             // TODO: It would be better to try to get a specialization with the
             // correct rt check here (or we could codegen a wrapper).
             specptr = NULL; // this will force codegen of the unspecialized version
-            invoke = (jl_fptr_args_t)jl_interpret_opaque_closure;
+            callptr = (jl_fptr_args_t)jl_interpret_opaque_closure;
             jl_value_t *ts[2] = {rt_lb, (jl_value_t*)ci->rettype};
             selected_rt = jl_type_union(ts, 2);
         }
@@ -90,18 +91,18 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
             // TODO: It would be better to try to get a specialization with the
             // correct rt check here (or we could codegen a wrapper).
             specptr = NULL; // this will force codegen of the unspecialized version
-            invoke = (jl_fptr_args_t)jl_interpret_opaque_closure;
+            callptr = (jl_fptr_args_t)jl_interpret_opaque_closure;
             selected_rt = jl_type_intersection(rt_ub, selected_rt);
         }
 
-        if (invoke == (jl_fptr_args_t) jl_fptr_interpret_call) {
-            invoke = (jl_fptr_args_t)jl_interpret_opaque_closure;
+        if (callptr == (jl_fptr_args_t)jl_fptr_interpret_call) {
+            callptr = (jl_fptr_args_t)jl_interpret_opaque_closure;
         }
-        else if (invoke == (jl_fptr_args_t)jl_fptr_args && specptr) {
-            invoke = (jl_fptr_args_t)specptr;
+        else if (callptr == (jl_fptr_args_t)jl_fptr_args && specptr != NULL) {
+            callptr = (jl_fptr_args_t)specptr;
         }
-        else if (invoke == (jl_fptr_args_t)jl_fptr_const_return) {
-            invoke = jl_isa(ci->rettype_const, selected_rt) ?
+        else if (callptr == (jl_fptr_args_t)jl_fptr_const_return) {
+            callptr = jl_isa(ci->rettype_const, selected_rt) ?
                 (jl_fptr_args_t)jl_fptr_const_opaque_closure :
                 (jl_fptr_args_t)jl_fptr_const_opaque_closure_typeerror;
             captures = ci->rettype_const;
@@ -116,15 +117,17 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
 
         // OC wrapper methods are not world dependent and have no edges or other info
         ci = jl_get_method_inferred(mi_generic, selected_rt, 1, ~(size_t)0, NULL, NULL);
-        if (!jl_atomic_load_acquire(&ci->invoke))
-            jl_compile_codeinst(ci); // confusing this actually calls jl_emit_oc_wrapper and never actually compiles ci (which would be impossible)
+        if (!jl_atomic_load_acquire(&ci->invoke)) {
+            jl_emit_codeinst_to_jit(ci, NULL); // confusing this actually calls jl_emit_oc_wrapper and never actually compiles ci (which would be impossible since it cannot have source)
+            jl_compile_codeinst(ci);
+        }
         specptr = jl_atomic_load_relaxed(&ci->specptr.fptr);
     }
     jl_opaque_closure_t *oc = (jl_opaque_closure_t*)jl_gc_alloc(ct->ptls, sizeof(jl_opaque_closure_t), oc_type);
     oc->source = source;
     oc->captures = captures;
     oc->world = world;
-    oc->invoke = invoke;
+    oc->invoke = callptr;
     oc->specptr = specptr;
 
     JL_GC_POP();
@@ -136,13 +139,13 @@ jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_
 {
     jl_value_t *captures = jl_f_tuple(NULL, env, nenv);
     JL_GC_PUSH1(&captures);
-    jl_opaque_closure_t *oc = new_opaque_closure(argt, rt_lb, rt_ub, source_, captures, do_compile);
+    jl_opaque_closure_t *oc = new_opaque_closure(argt, rt_lb, rt_ub, source_, captures, do_compile, jl_current_task->world_age);
     JL_GC_POP();
     return oc;
 }
 
-JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
-    jl_module_t *mod, jl_code_info_t *ci, int lineno, jl_value_t *file, int nargs, int isva, jl_value_t *env, int do_compile, int isinferred)
+JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info_in_world(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
+    jl_module_t *mod, jl_code_info_t *ci, int lineno, jl_value_t *file, int nargs, int isva, jl_value_t *env, int do_compile, int isinferred, size_t world)
 {
     jl_value_t *root = NULL, *sigtype = NULL;
     jl_code_instance_t *inst = NULL;
@@ -152,10 +155,8 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tuplet
     root = jl_new_struct(jl_linenumbernode_type, root, file);
     jl_method_t *meth = jl_make_opaque_closure_method(mod, jl_nothing, nargs, root, ci, isva, isinferred);
     root = (jl_value_t*)meth;
-    size_t world = jl_current_task->world_age;
     // these are only legal in the current world since they are not in any tables
     jl_atomic_store_release(&meth->primary_world, world);
-    jl_atomic_store_release(&meth->deleted_world, world);
 
     if (isinferred) {
         jl_value_t *argslotty = jl_array_ptr_ref(ci->slottypes, 0);
@@ -165,13 +166,19 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tuplet
         if (!jl_is_svec(edges))
             edges = jl_emptysvec; // OC doesn't really have edges, so just drop them for now
         inst = jl_new_codeinst(mi, jl_nothing, rt_ub, (jl_value_t*)jl_any_type, NULL, (jl_value_t*)ci,
-            0, world, world, 0, jl_nothing, 0, ci->debuginfo, edges);
+            0, world, world, 0, jl_nothing, ci->debuginfo, edges);
         jl_mi_cache_insert(mi, inst);
     }
 
-    jl_opaque_closure_t *oc = new_opaque_closure(argt, rt_lb, rt_ub, root, env, do_compile);
+    jl_opaque_closure_t *oc = new_opaque_closure(argt, rt_lb, rt_ub, root, env, do_compile, world);
     JL_GC_POP();
     return oc;
+}
+
+JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
+    jl_module_t *mod, jl_code_info_t *ci, int lineno, jl_value_t *file, int nargs, int isva, jl_value_t *env, int do_compile, int isinferred)
+{
+    return jl_new_opaque_closure_from_code_info_in_world(argt, rt_lb, rt_ub, mod, ci, lineno, file, nargs, isva, env, do_compile, isinferred, jl_current_task->world_age);
 }
 
 JL_CALLABLE(jl_new_opaque_closure_jlcall)

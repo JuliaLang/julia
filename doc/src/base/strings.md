@@ -29,11 +29,15 @@ Base.SubstitutionString
 Base.@s_str
 Base.@raw_str
 Base.@b_str
+Base.takestring!
 Base.Docs.@html_str
 Base.Docs.@text_str
 Base.isvalid(::Any)
 Base.isvalid(::Any, ::Any)
 Base.isvalid(::AbstractString, ::Integer)
+Base.ismalformed
+Base.isoverlong
+Base.show_invalid
 Base.match
 Base.eachmatch
 Base.RegexMatch

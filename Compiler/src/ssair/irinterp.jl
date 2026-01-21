@@ -1,12 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function collect_limitations!(@nospecialize(typ), ::IRInterpretationState)
-    @assert !isa(typ, LimitedAccuracy) "irinterp is unable to handle heavy recursion"
+    @assert !isa(typ, LimitedAccuracy) "irinterp is unable to handle heavy recursion correctly"
     return typ
 end
 
 function concrete_eval_invoke(interp::AbstractInterpreter, ci::CodeInstance, argtypes::Vector{Any}, parent::IRInterpretationState)
-    world = frame_world(parent)
+    world = get_inference_world(interp)
     effects = decode_effects(ci.ipo_purity_bits)
     if (is_foldable(effects) && is_all_const_arg(argtypes, #=start=#1) &&
         (is_nonoverlayed(interp) || is_nonoverlayed(effects)))
@@ -18,11 +18,12 @@ function concrete_eval_invoke(interp::AbstractInterpreter, ci::CodeInstance, arg
         end
         return Pair{Any,Tuple{Bool,Bool}}(Const(value), (true, true))
     else
-        mi = ci.def
+        mi = get_ci_mi(ci)
         if is_constprop_edge_recursed(mi, parent)
             return Pair{Any,Tuple{Bool,Bool}}(nothing, (is_nothrow(effects), is_noub(effects)))
         end
-        newirsv = IRInterpretationState(interp, ci, mi, argtypes, world)
+        src = ci_get_source(interp, ci)
+        newirsv = IRInterpretationState(interp, ci, mi, argtypes, src)
         if newirsv !== nothing
             assign_parentchild!(newirsv, parent)
             return ir_abstract_constant_propagation(interp, newirsv)
@@ -32,13 +33,13 @@ function concrete_eval_invoke(interp::AbstractInterpreter, ci::CodeInstance, arg
 end
 
 function abstract_eval_invoke_inst(interp::AbstractInterpreter, inst::Instruction, irsv::IRInterpretationState)
-    stmt = inst[:stmt]
+    stmt = inst[:stmt]::Expr
     ci = stmt.args[1]
     if ci isa MethodInstance
-        world = frame_world(irsv)
-        mi_cache = WorldView(code_cache(interp), world)
+        mi_cache = code_cache(interp)
         code = get(mi_cache, ci, nothing)
         code === nothing && return Pair{Any,Tuple{Bool,Bool}}(nothing, (false, false))
+        code isa InferenceResult && (code = code.ci) # COMBAK: we shouldn't discard the src so easily here, as we might not be able to get it back again
     else
         code = ci::CodeInstance
     end
@@ -55,7 +56,7 @@ end
 
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, sstate::StatementState, irsv::IRInterpretationState)
     si = StmtInfo(true, sstate.saw_latestworld) # TODO better job here?
-    call = abstract_call(interp, arginfo, si, irsv)::Future
+    call = abstract_call(interp, arginfo, si, sstate.vtypes, irsv)::Future
     Future{Any}(call, interp, irsv) do call, interp, irsv
         irsv.ir.stmts[irsv.curridx][:info] = call.info
         nothing
@@ -212,6 +213,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
     else
         rt = argextype(stmt, irsv.ir)
     end
+    @assert !(rt isa LimitedAccuracy)
     if rt !== nothing
         if has_flag(inst, IR_FLAG_UNUSED)
             # Don't bother checking the type if we know it's unused
@@ -293,7 +295,7 @@ end
 
 function populate_def_use_map!(tpdum::TwoPhaseDefUseMap, scanner::BBScanner)
     scan!(scanner, false) do inst::Instruction, lstmt::Int, bb::Int
-        for ur in userefs(inst)
+        for ur in userefs(inst[:stmt])
             val = ur[]
             if isa(val, SSAValue)
                 push!(tpdum[val.id], inst.idx)

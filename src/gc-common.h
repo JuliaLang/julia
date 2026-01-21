@@ -7,6 +7,9 @@
 #include "julia_internal.h"
 #ifndef _OS_WINDOWS_
 #include <sys/mman.h>
+#ifndef MADV_HUGEPAGE
+#define MADV_HUGEPAGE 14 //  Compatibility for kernels < 2.6.38 (as in numpy implementation)
+#endif
 #if defined(_OS_DARWIN_) && !defined(MAP_ANONYMOUS)
 #define MAP_ANONYMOUS MAP_ANON
 #endif
@@ -23,6 +26,32 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// =========================================================================== //
+// GC Big objects
+// =========================================================================== //
+
+// layout for big (>2k) objects
+JL_EXTENSION typedef struct _bigval_t {
+    struct _bigval_t *next;
+    struct _bigval_t *prev;
+    size_t sz;
+#ifdef _P64 // Add padding so that the value is 64-byte aligned
+    // (8 pointers of 8 bytes each) - (4 other pointers in struct)
+    void *_padding[8 - 4];
+#else
+    // (16 pointers of 4 bytes each) - (4 other pointers in struct)
+    void *_padding[16 - 4];
+#endif
+    //struct jl_taggedvalue_t <>;
+    union {
+        uintptr_t header;
+        struct {
+            uintptr_t gc:2;
+        } bits;
+    };
+    // must be 64-byte aligned here, in 32 & 64 bit modes
+} bigval_t;
 
 // =========================================================================== //
 // GC Callbacks
@@ -60,12 +89,6 @@ extern jl_gc_callback_list_t *gc_cblist_notify_gc_pressure;
 // =========================================================================== //
 // malloc wrappers, aligned allocation
 // =========================================================================== //
-
-// data structure for tracking malloc'd genericmemory.
-typedef struct _mallocmemory_t {
-    jl_genericmemory_t *a; // lowest bit is tagged if this is aligned memory
-    struct _mallocmemory_t *next;
-} mallocmemory_t;
 
 #if defined(_OS_WINDOWS_)
 STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
@@ -115,6 +138,7 @@ STATIC_INLINE void jl_free_aligned(void *p) JL_NOTSAFEPOINT
 #endif
 #define malloc_cache_align(sz) jl_malloc_aligned(sz, JL_CACHE_BYTE_ALIGNMENT)
 #define realloc_cache_align(p, sz, oldsz) jl_realloc_aligned(p, sz, oldsz, JL_CACHE_BYTE_ALIGNMENT)
+#define malloc_page_align(sz) jl_malloc_aligned(sz, jl_getpagesize())
 
 // =========================================================================== //
 // Pointer tagging
@@ -176,7 +200,7 @@ extern arraylist_t to_finalize;
 void schedule_finalization(void *o, void *f) JL_NOTSAFEPOINT;
 void run_finalizer(jl_task_t *ct, void *o, void *ff);
 void run_finalizers(jl_task_t *ct, int finalizers_thread);
-JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_function_t *f) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_value_t *f) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o);
 
 
@@ -192,5 +216,15 @@ extern jl_ptls_t* gc_all_tls_states;
 // =========================================================================== //
 
 extern int gc_logging_enabled;
+
+// =========================================================================== //
+// MISC
+// =========================================================================== //
+
+// number of stacks to always keep available per pool
+#define MIN_STACK_MAPPINGS_PER_POOL 5
+
+void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
+void sweep_mtarraylist_buffers(void) JL_NOTSAFEPOINT;
 
 #endif // JL_GC_COMMON_H
