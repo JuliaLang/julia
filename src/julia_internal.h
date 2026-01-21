@@ -1676,9 +1676,6 @@ JL_DLLIMPORT void *jl_jit_abi_converter(jl_task_t *ct, jl_abi_t from_abi, jl_cod
 #define JL_LIBJULIA_INTERNAL_DL_LIBNAME ((const char*)3)
 JL_DLLEXPORT const char *jl_dlfind(const char *name);
 
-// libuv wrappers:
-JL_DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
-
 // -- Runtime intrinsics -- //
 JL_DLLEXPORT const char *jl_intrinsic_name(int f) JL_NOTSAFEPOINT;
 JL_DLLEXPORT unsigned jl_intrinsic_nargs(int f) JL_NOTSAFEPOINT;

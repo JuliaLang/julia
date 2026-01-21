@@ -10656,9 +10656,10 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_value_t *jl_get_libllvm_impl(void) JL_NOTSAFE
     DWORD n16 = GetModuleFileNameW(mod, path16, MAX_PATH);
     if (n16 <= 0)
         return jl_nothing;
-    path16[n16++] = 0;
     char path8[MAX_PATH * 3];
-    if (!WideCharToMultiByte(CP_UTF8, 0, path16, n16, path8, MAX_PATH * 3, NULL, NULL))
+    char *path8_ptr = path8;
+    size_t path8_len = sizeof(path8) - 1;
+    if (uv_utf16_to_wtf8((uint16_t*)path16, n16, &path8_ptr, &path8_len))
         return jl_nothing;
     return (jl_value_t*) jl_symbol(path8);
 #else
