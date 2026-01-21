@@ -307,8 +307,8 @@ ParseError(msg::AbstractString) = ParseError(msg, nothing)
 # N.B.: Should match definition in src/ast.c:jl_parse
 function parser_for_module(mod::Union{Module, Nothing})
     mod === nothing && return Core._parse
-    isdefined(mod, :_internal_julia_parse) ?
-        getglobal(mod, :_internal_julia_parse) :
+    isdefined(mod, Symbol("#_internal_julia_parse")) ?
+        getglobal(mod, Symbol("#_internal_julia_parse")) :
         Core._parse
 end
 
