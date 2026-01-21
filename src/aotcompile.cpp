@@ -846,9 +846,12 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
                 continue; // skip any duplicates that accidentally made there way in here (or make this an error?)
             if (jl_ir_inlining_cost((jl_value_t*)src) < UINT16_MAX)
                 params.safepoint_on_entry = false; // ensure we don't block ExpandAtomicModifyPass from inlining this code if applicable
-            orc::ThreadSafeModule result_m = jl_create_ts_module(name_from_method_instance(jl_get_ci_mi(codeinst)),
-                    params.tsctx, clone.getModuleUnlocked()->getDataLayout(),
-                    Triple(clone.getModuleUnlocked()->getTargetTriple()));
+            orc::ThreadSafeModule result_m =
+                jl_create_ts_module(name_from_method_instance(jl_get_ci_mi(codeinst)),
+                                    params.tsctx,
+                                    clone.getModuleUnlocked()->getDataLayout(),
+                                    Triple(clone.getModuleUnlocked()->getTargetTriple()),
+                                    clone.getModuleUnlocked());
             jl_llvm_functions_t decls;
             if (!(params.params->force_emit_all) && jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr)
                 decls.functionObject = "jl_fptr_const_return";

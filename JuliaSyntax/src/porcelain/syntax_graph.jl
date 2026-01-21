@@ -103,7 +103,6 @@ function setchildren!(graph::SyntaxGraph, id::NodeId,
                       children::AbstractVector{NodeId})
     n = length(graph.edges)
     graph.edge_ranges[id] = n+1:(n+length(children))
-    # TODO: Reuse existing edges if possible
     append!(graph.edges, children)
 end
 
@@ -738,6 +737,415 @@ function _copy_ast(graph2::SyntaxGraph, graph1::SyntaxGraph,
         setchildren!(graph2, id2, cs)
     end
     return id2
+end
+
+"""
+    unalias_nodes(st::SyntaxTree)
+
+Return a tree where each descendent of `st` has exactly one parent in `st`.  The
+returned tree is identical to `st` in all but underlying representation, where
+every additional parent to a subtree generates a copy of that subtree.  Apart
+from achieving this, `unalias_nodes` should not allocate new nodes.
+
+    unalias_nodes(sl::SyntaxList)
+
+If a `SyntaxList` is given, every resulting tree will be unique with respect to
+each other as well as internally.  A duplicate entry will produce a copied tree.
+"""
+unalias_nodes(st::SyntaxTree) = SyntaxTree(
+    syntax_graph(st),
+    _unalias_nodes(syntax_graph(st), st._id, Set{NodeId}(), Set{Int}()))
+
+function unalias_nodes(sl::SyntaxList)
+    seen = Set{NodeId}()
+    seen_edges = Set{Int}()
+    SyntaxList(syntax_graph(sl),
+               map(id->_unalias_nodes(syntax_graph(sl), id, seen, seen_edges),
+                   sl.ids))
+end
+
+# Note that `seen_edges` is only needed for when edge ranges overlap, which is a
+# situation we don't produce yet.
+function _unalias_nodes(graph::SyntaxGraph, id::NodeId,
+                        seen::Set{NodeId}, seen_edges::Set{Int})
+    if id in seen
+        id = copy_ast(graph, SyntaxTree(graph, id); copy_source=false)._id
+    end
+    # nodes may not share edges (SyntaxGraph invariant)
+    @assert isempty(intersect(seen_edges, graph.edge_ranges[id]))
+    union!(seen_edges, graph.edge_ranges[id])
+    push!(seen, id)
+
+    for (c, i) in zip(children(graph, id), graph.edge_ranges[id])
+        c2 = _unalias_nodes(graph, c, seen, seen_edges)
+        # the new child should be the same in every way to the old one, so
+        # modify the edge instead of triggering copies with `mapchildren`
+        c !== c2 && (graph.edges[i] = c2)
+    end
+    return id
+end
+
+"""
+Return a tree where unreachable nodes (non-descendents of `st`) in its graph
+have been deleted, and where provenance data has been minimized.
+
+If `keep` is not nothing, also consider descendents of it reachable.  It's
+usually useful to provide `keep=your_parser_output` (so we have expression
+provenance back to the original parsed nodes, but no lowering-internal
+provenance.)  In any case, we still retain byte (or, from old macros,
+LineNumberNode) provenance.
+
+Provenance shrinkage: The green tree will be deleted unless specified in `keep`.
+If node A references node B as its `.source` and B is unreachable, A adopts the
+source of B.
+"""
+function prune(st::SyntaxTree;
+               keep::Union{SyntaxTree, SyntaxList, Nothing}=nothing)
+    entrypoints = NodeId[st._id]
+    keep isa SyntaxList && append!(entrypoints, keep.ids)
+    keep isa SyntaxTree && push!(entrypoints, keep._id)
+    prune(syntax_graph(st), unique(entrypoints))[1]
+end
+
+# This implementation unaliases nodes, which undoes a small amount of space
+# savings from the DAG representation, but it allows us to (1) omit the whole
+# `edges` array (TODO), and (2) make the pruning algorithm simpler.  The
+# invariant we win is having `edge_ranges` be one or more interleaved
+# level-order traversals where every node's set of children is contiguous, so
+# its entries can refer to itself instead of an external `edges` vector.
+function prune(graph1_a::SyntaxGraph, entrypoints_a::Vector{NodeId})
+    @assert length(entrypoints_a) === length(unique(entrypoints_a))
+    unaliased = unalias_nodes(SyntaxList(graph1_a, entrypoints_a))
+    (graph1, entrypoints) = (unaliased.graph, unaliased.ids)
+
+    nodes1 = copy(entrypoints)      # Current reachable subset of graph1
+    map12 = Dict{NodeId, Int}()     # graph1 => graph2 mapping
+    graph2 = ensure_attributes!(SyntaxGraph(); attrdefs(graph1)...)
+    while length(graph2.edge_ranges) < length(nodes1)
+        n2 = length(graph2.edge_ranges) + 1
+        n1 = nodes1[n2]
+        map12[n1] = n2
+        push!(graph2.edge_ranges, is_leaf(graph1, n1) ?
+            (0:-1) : (1:numchildren(graph1, n1)) .+ length(nodes1))
+        for c1 in children(graph1, n1)
+            push!(nodes1, c1)
+        end
+    end
+    graph2.edges = 1:length(nodes1) # our reward for unaliasing
+
+    for attr in attrnames(graph1)
+        attr === :source && continue
+        for (n2, n1) in enumerate(nodes1)
+            attrval = get(graph1.attributes[attr], n1, nothing)
+            if !isnothing(attrval)
+                graph2.attributes[attr][n2] = attrval
+            end
+        end
+    end
+
+    # Resolve provenance.  Tricky to avoid dangling `.source` references.
+    resolved_sources = Dict{NodeId, SourceAttrType}() # graph1 id => graph2 src
+    function get_resolved!(id1::NodeId)
+        out = get(resolved_sources, id1, nothing)
+        if isnothing(out)
+            src1 = graph1.source[id1]
+            out = if haskey(map12, src1)
+                map12[src1]
+            elseif src1 isa NodeId
+                get_resolved!(src1)
+            elseif src1 isa Tuple
+                map(get_resolved!, src1)
+            else
+                src1
+            end
+            resolved_sources[id1] = out
+        end
+        return out
+    end
+
+    for (n2, n1) in enumerate(nodes1)
+        graph2.source[n2] = get_resolved!(n1)
+    end
+
+    # The first n entries in nodes1 were our entrypoints, unique from unaliasing
+    return SyntaxList(graph2, 1:length(entrypoints))
+end
+
+"""
+Give each descendent of `st` a `parent::NodeId` attribute.
+"""
+function annotate_parent!(st::SyntaxTree)
+    g = unfreeze_attrs(syntax_graph(st))
+    st = unalias_nodes(SyntaxTree(g, st._id))
+    ensure_attributes!(g; parent=NodeId)
+    mapchildren(t->_annotate_parent!(t, st._id), syntax_graph(st), st)
+end
+
+function _annotate_parent!(st::SyntaxTree, pid::NodeId)
+    setattr!(st, :parent, pid)
+    mapchildren(t->_annotate_parent!(t, st._id), syntax_graph(st), st)
+end
+
+#-------------------------------------------------------------------------------
+# AST destructuring utilities
+
+raw"""
+Simple `SyntaxTree` pattern matching
+
+Returns the first result where its corresponding pattern matches `syntax_tree`
+and each extra `cond` is true.  Throws an error if no match is found.
+
+## Patterns
+
+A pattern is used as both a conditional (does this syntax tree have a certain
+structure?) and a `let` (bind trees to these names if so).  Each pattern uses a
+limited version of the @ast syntax:
+
+```
+<pattern> = <tree_identifier>
+          | [K"<kind>" <pattern>*]
+          | [K"<kind>" <pattern>* <list_identifier>... <pattern>*]
+
+# note "*" is the meta-operator meaning one or more, and "..." is literal
+```
+
+where a `[K"k" p1 p2 ps...]` form matches any tree with kind `k` and >=2
+children (bound to `p1` and `p2`), and `ps` is bound to the possibly-empty
+SyntaxList of children `3:end`.  Identifiers (except `_`) can't be re-used, but
+may check for some form of tree equivalence in a future implementation.
+
+## Extra condition: `when`
+
+Like an escape hatch to the structure-matching mechanism.  `when=cond` requires
+`cond` to evaluate to `true` for this branch to be taken.  `cond` may also bind
+variables or printf-debug the matching process, as it runs only when its pattern
+matches and no previous branch was taken.  `cond` may not mutate the object
+being matched.
+
+## Scope of variables
+
+Every `(pattern, when=cond) -> result` introduces a local scope.  Identifiers in
+the pattern are let-bound when evaluating `cond` and `result`. `cond` can
+introduce variables for use in `result`.  User code in `cond` and `result` (but
+not `pattern`) can refer to outer variables.
+
+## Example
+
+```
+julia> st = JuliaSyntax.parsestmt(
+    JuliaSyntax.SyntaxTree, "function foo(x,y,z); x; end")
+
+julia> JuliaSyntax.@stm st begin
+    [K"function" [K"call" fname [K"parameters" kws...]] body] ->
+        "no positional args, only kwargs: $(kws)"
+    [K"function" fname] ->
+        "zero-method function $fname"
+    [K"function" [K"call" fname args...] body] ->
+        "normal function $fname"
+    ([K"=" [K"call" _...] _...], when=(args=if_valid_get_args(st[1]); !isnothing(args))) ->
+        "deprecated call-equals form with args $args"
+    (_, when=(show("printf debugging is great"); true)) -> "something else"
+    _ -> "unreachable due to the case above"
+end
+"normal function foo"
+```
+
+See [Racket `match`](https://docs.racket-lang.org/reference/match.html) for the
+inspiration for this macro and an example of a much more featureful pattern
+language.
+"""
+macro stm(st, pats)
+    _stm(__source__, st, pats; debug=false)
+end
+
+"Like `@stm`, but prints a trace during matching."
+macro stm_debug(st, pats)
+    _stm(__source__, st, pats; debug=true)
+end
+
+# TODO: SyntaxList pattern matching could take similar syntax and use most of
+# the same machinery
+
+function _stm(line::LineNumberNode, st, pats; debug=false)
+    _stm_check_usage(pats)
+    # We leave most code untouched, so the user probably wants esc(output)
+    st_gs, result_gs, k_gs, nc_gs = gensym.("st", "result", "k", "nc")
+    out_blk = Expr(:let, Expr(:block, :($st_gs = $st::SyntaxTree),
+                              :($result_gs = nothing),
+                              :($k_gs = $kind($st_gs)),
+                              :($nc_gs = $numchildren($st_gs))),
+                   Expr(:if, false, nothing))
+    case_list_tail = out_blk.args[2].args
+    for pcr in pats.args
+        pcr isa LineNumberNode && (line = pcr; continue)
+        p, cond, result = _stm_destruct_pat(pcr)
+        pat_ok = p isa Symbol ? true : _stm_matches(p, st_gs, k_gs, nc_gs, debug)
+        # We need to let-bind patvars in both cond and the result, so result
+        # needs to live in the first argument of :if with the extra conditions.
+        case = Expr(:elseif,
+                    Expr(:&&, pat_ok,
+                         Expr(:let, _stm_assigns(p, st_gs),
+                              Expr(:&&, cond,
+                                   Expr(:block, line,
+                                        :($result_gs = $result), true)))),
+                    result_gs)
+        push!(case_list_tail, case)
+        case_list_tail = case_list_tail[3].args
+    end
+    push!(case_list_tail,
+          :(throw(ErrorException(string(
+              "No match found for `", $st_gs, "` at ", $(string(line)))))))
+    return esc(out_blk)
+end
+
+# recursively flatten `vcat` expressions
+function _stm_vcat_to_hcat(p::Expr)
+    if Meta.isexpr(p, :vcat)
+        out = Expr(:hcat)
+        for a in p.args
+            Meta.isexpr(a, :row) ? append!(out.args, a.args) : push!(out.args, a)
+        end
+    else
+        out = Expr(p.head, p.args...)
+    end
+    for i in eachindex(out.args)
+        out.args[i] = _stm_vcat_to_hcat(out.args[i])
+    end
+    return out
+end
+_stm_vcat_to_hcat(x) = x
+
+# return (pat_expr, when_expr|nothing, res_expr)
+function _stm_destruct_pat(pcr::Expr)
+    pc, r = pcr.args[1:2]
+    Base.remove_linenums!(pc) # errors in lhs of `->` are caught in usage check
+    (p_vcat, c) = Meta.isexpr(pc, :tuple) ?
+        (pc.args[1], pc.args[2].args[2]) : (pc, true)
+    return (_stm_vcat_to_hcat(p_vcat), c, r)
+end
+
+function _stm_matches_wrapper(p::Expr, st_ex, debug)
+    st_gs, k_gs, nc_gs = gensym.("st", "k", "nc")
+    Expr(:let, Expr(:block, :($st_gs = $st_ex),
+                          :($k_gs = $kind($st_gs)),
+                          :($nc_gs = $numchildren($st_gs))),
+               _stm_matches(p, st_gs, k_gs, nc_gs, debug))
+end
+
+function _stm_matches(p::Expr, st_gs::Symbol, k_gs::Symbol, nc_gs::Symbol, debug)
+    pat_k = Kind(p.args[1].args[3])
+    out = Expr(:&&, :($pat_k === $k_gs))
+    debug && push!(out.args, Expr(:block, :(printstyled(
+        string("[kind]: ", $k_gs, "\n"); color=:yellow)), true))
+
+    p_args = p.args[2:end]
+    dots_i = findfirst(x->Meta.isexpr(x, :(...)), p_args)
+    dots_start = something(dots_i, length(p_args) + 1)
+    n_after_dots = length(p_args) - dots_start # -1 if no dots
+
+    push!(out.args, isnothing(dots_i) ?
+        :($nc_gs === $(length(p_args))) :
+        :($nc_gs >= $(length(p_args) - 1)))
+    debug && push!(out.args, Expr(:block, :(printstyled(
+        string("[numc]: ", $nc_gs, "\n"); color=:yellow)), true))
+
+    for i in 1:dots_start-1
+        p_args[i] isa Symbol && continue
+        push!(out.args,
+              _stm_matches_wrapper(p_args[i], :($st_gs[$i]), debug))
+    end
+    for i in n_after_dots-1:-1:0
+        p_args[end-i] isa Symbol && continue
+        push!(out.args,
+              _stm_matches_wrapper(p_args[end-i], :($st_gs[end-$i]), debug))
+    end
+    debug && push!(out.args, Expr(:block, :(printstyled(
+        string("matched: ", $st_gs, " with ", $(QuoteNode(p)), "\n");
+        color=:green)), true))
+    return out
+end
+
+# Assuming _stm_matches, construct an Expr that assigns syms to SyntaxTrees.
+# Note st_rhs_expr is a ref-expr with a SyntaxTree/List value (in context).
+function _stm_assigns(p, st_rhs_expr; assigns=Expr(:block))
+    if p isa Symbol
+        p != :_ && push!(assigns.args, Expr(:(=), p, st_rhs_expr))
+        return assigns
+    elseif p isa Expr
+        p_args = p.args[2:end]
+        dots_i = findfirst(x->Meta.isexpr(x, :(...)), p_args)
+        dots_start = something(dots_i, length(p_args) + 1)
+        n_after_dots = length(p_args) - dots_start
+        for i in 1:dots_start-1
+            _stm_assigns(p_args[i], :($st_rhs_expr[$i]); assigns)
+        end
+        if !isnothing(dots_i)
+            _stm_assigns(p_args[dots_i].args[1],
+                         :($st_rhs_expr[$dots_i:end-$n_after_dots]); assigns)
+            for i in n_after_dots-1:-1:0
+                _stm_assigns(p_args[end-i], :($st_rhs_expr[end-$i]); assigns)
+            end
+        end
+        return assigns
+    end
+    @assert false "unexpected syntax; enable or fix `_stm_check_usage`"
+end
+
+# Check for correct pattern syntax.  Not needed outside of development.
+function _stm_check_usage(pats::Expr)
+    function _stm_check_pattern(p; syms=Set{Symbol}())
+        if Meta.isexpr(p, :(...), 1)
+            p = p.args[1]
+            @assert(p isa Symbol, "Expected symbol before `...` in $p")
+        end
+        if p isa Symbol
+            # No support for duplicate syms for now (user is either looking for
+            # some form of equality we don't implement, or they made a mistake)
+            dup = p in syms && p !== :_
+            push!(syms, p)
+            @assert(!dup, "invalid duplicate non-underscore identifier $p")
+            return nothing
+        elseif Meta.isexpr(p, :vect)
+            @assert(length(p.args) === 1,
+                    "use spaces, not commas, in @stm []-patterns")
+        elseif Meta.isexpr(p, :hcat)
+            @assert(length(p.args) >= 2)
+        elseif Meta.isexpr(p, :vcat)
+            p = _stm_vcat_to_hcat(p)
+            @assert(length(p.args) >= 2)
+        else
+            @assert(false, "malformed pattern $p")
+        end
+        @assert(count(x->Meta.isexpr(x, :(...)), p.args[2:end]) <= 1,
+                "Multiple `...` in a pattern is ambiguous")
+
+        # This exact `K"kind"` syntax is not necessary since the kind can't be
+        # provided by a variable, but requiring [K"kinds"] is consistent with
+        # `@ast` and allows us to implement list matching later.
+        @assert(Meta.isexpr(p.args[1], :macrocall, 3) &&
+            p.args[1].args[1] === Symbol("@K_str") &&
+            p.args[1].args[3] isa String, "first pattern elt must be K\"\"")
+
+        for subp in p.args[2:end]
+            _stm_check_pattern(subp; syms)
+        end
+    end
+
+    @assert Meta.isexpr(pats, :block) "Usage: @stm st begin; ...; end"
+    for pcr in filter(e->!isa(e, LineNumberNode), pats.args)
+        @assert(Meta.isexpr(pcr, :(->), 2), "Expected pat -> res, got malformed case: $pcr")
+        if Meta.isexpr(pcr.args[1], :tuple)
+            @assert(length(pcr.args[1].args) === 2,
+                    "Expected `pat` or `(pat, when=cond)`, got $(pcr.args[1])")
+            p = pcr.args[1].args[1]
+            c = pcr.args[1].args[2]
+            @assert(Meta.isexpr(c, :(=), 2) && c.args[1] === :when,
+                    "Expected `(when=cond)` in tuple pattern, got $(c)")
+        else
+            p = pcr.args[1]
+        end
+        _stm_check_pattern(p)
+    end
 end
 
 #-------------------------------------------------------------------------------

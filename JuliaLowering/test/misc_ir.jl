@@ -302,7 +302,7 @@ end
 5   (call %₃ %₄)
 6   TestMod.f
 7   (call core.tuple %₆)
-8   (call JuliaLowering.interpolate_ast SyntaxTree (inert (call ($ f) x y)) %₇)
+8   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (call ($ f) x y)) %₇)
 9   (= slot₁/eval_result (call core.kwcall %₅ %₁ TestMod %₈))
 10  latestworld
 11  slot₁/eval_result
@@ -320,7 +320,7 @@ end
 6   TestMod.mod
 7   TestMod.f
 8   (call core.tuple %₇)
-9   (call JuliaLowering.interpolate_ast SyntaxTree (inert (call ($ f) x y)) %₈)
+9   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (call ($ f) x y)) %₈)
 10  (= slot₁/eval_result (call core.kwcall %₅ %₁ %₆ %₉))
 11  latestworld
 12  slot₁/eval_result

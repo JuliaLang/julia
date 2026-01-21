@@ -367,8 +367,9 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     elseif k == K"return"
         Core.ReturnNode(_to_lowered_expr(ex[1], stmt_offset))
     elseif k == K"inert"
-        e1 = ex[1]
-        getmeta(ex, :as_Expr, false) ? QuoteNode(Expr(e1)) : e1
+        QuoteNode(Expr(ex[1]))
+    elseif k == K"inert_syntaxtree"
+        ex[1]
     elseif k == K"code_info"
         ir = to_code_info(ex[1], ex.slots, ex.meta)
         if ex.is_toplevel_thunk
@@ -383,7 +384,7 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     elseif k == K"gotoifnot"
         Core.GotoIfNot(_to_lowered_expr(ex[1], stmt_offset), ex[2].id + stmt_offset)
     elseif k == K"enter"
-        catch_idx = ex[1].id
+        catch_idx = ex[1].id + stmt_offset
         numchildren(ex) == 1 ?
             Core.EnterNode(catch_idx) :
             Core.EnterNode(catch_idx, _to_lowered_expr(ex[2], stmt_offset))
