@@ -392,11 +392,11 @@ void JuliaTaskDispatcher::work_until(future_base &F) {
           WorkFinishedCV.notify_all();
         }
       }
-
-      // Check if our future is now ready
-      if (F.ready())
-        return;
     }
+
+    // Check if our future is now ready
+    if (F.ready())
+      return;
 
     // If we get here, our queue is empty but the future isn't ready
     // We need to wait for other threads to finish work that should complete our
