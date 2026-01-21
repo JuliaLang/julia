@@ -365,7 +365,7 @@ function set_scope_layer(ctx, ex, layer_id, force)
     k = kind(ex)
     new_layer = force ? layer_id : get(ex, :scope_layer, layer_id)
 
-    ex2 = if k == K"module" || k == K"toplevel" || k == K"inert"
+    ex2 = if k == K"module" || k == K"toplevel" || k == K"inert" || k == K"inert_syntaxtree"
         mknode(ex, children(ex))
     elseif k == K"."
         cs = tree_ids(set_scope_layer(ctx, ex[1], layer_id, force), ex[2])
@@ -441,11 +441,11 @@ end
 
 function is_quoted(ex)
     kind(ex) in KSet"Symbol quote top core globalref break inert
-                     meta inbounds inline noinline loopinfo"
+                     inert_syntaxtree meta inbounds inline noinline loopinfo"
 end
 
 function extension_type(ex)
-    @assert kind(ex) == K"extension" || kind(ex) == K"assert"
+    @assert kind(ex) == K"assert"
     @chk numchildren(ex) >= 1
     @chk kind(ex[1]) == K"Symbol"
     ex[1].name_val

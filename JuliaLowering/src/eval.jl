@@ -367,8 +367,9 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     elseif k == K"return"
         Core.ReturnNode(_to_lowered_expr(ex[1], stmt_offset))
     elseif k == K"inert"
-        e1 = ex[1]
-        getmeta(ex, :as_Expr, false) ? QuoteNode(Expr(e1)) : e1
+        QuoteNode(Expr(ex[1]))
+    elseif k == K"inert_syntaxtree"
+        ex[1]
     elseif k == K"code_info"
         ir = to_code_info(ex[1], ex.slots, ex.meta)
         if ex.is_toplevel_thunk
