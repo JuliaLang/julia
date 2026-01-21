@@ -29,9 +29,10 @@ end
 function test_read_success(cmd::Cmd, expected_type::Type=String)
     success, out, err = readchomperrors(cmd)
     if !success
-        println("---- Command failed: $cmd")
-        println("stdout:$out")
-        println("stderr: $err")
+        println("---- Command failed: ")
+        show(cmd)
+        println("stdout:\n", out)
+        println("stderr:\n", err)
         println("----")
     end
     @test success
@@ -321,39 +322,36 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # --quiet, --banner
     let p = "print((Base.JLOptions().quiet, Base.JLOptions().banner))"
-        @test read(`$exename                    -e $p`, String) == "(0, -1)"
-        @test read(`$exename -q                 -e $p`, String) == "(1, 0)"
-        @test read(`$exename --quiet            -e $p`, String) == "(1, 0)"
-        @test read(`$exename --banner=auto      -e $p`, String) == "(0, -1)"
-        @test read(`$exename --banner=no        -e $p`, String) == "(0, 0)"
-        @test read(`$exename --banner=yes       -e $p`, String) == "(0, 1)"
-        @test read(`$exename --banner=full      -e $p`, String) == "(0, 1)"
-        @test read(`$exename -q --banner=no     -e $p`, String) == "(1, 0)"
-        @test read(`$exename -q --banner=yes    -e $p`, String) == "(1, 1)"
-        @test read(`$exename -q --banner=tiny   -e $p`, String) == "(1, 4)"
-        @test read(`$exename --banner=no  -q    -e $p`, String) == "(1, 0)"
-        @test read(`$exename --banner=yes -q    -e $p`, String) == "(1, 1)"
-        @test read(`$exename --banner=narrow -q -e $p`, String) == "(1, 2)"
-        @test read(`$exename --banner=short  -q -e $p`, String) == "(1, 3)"
-        @test read(`$exename --banner=tiny   -q -e $p`, String) == "(1, 4)"
+        @test read(`$exename                   -e $p`, String) == "(0, -1)"
+        @test read(`$exename -q                -e $p`, String) == "(1, 0)"
+        @test read(`$exename --quiet           -e $p`, String) == "(1, 0)"
+        @test read(`$exename --banner=no       -e $p`, String) == "(0, 0)"
+        @test read(`$exename --banner=yes      -e $p`, String) == "(0, 1)"
+        @test read(`$exename --banner=short    -e $p`, String) == "(0, 2)"
+        @test read(`$exename -q --banner=no    -e $p`, String) == "(1, 0)"
+        @test read(`$exename -q --banner=yes   -e $p`, String) == "(1, 1)"
+        @test read(`$exename -q --banner=short -e $p`, String) == "(1, 2)"
+        @test read(`$exename --banner=no  -q   -e $p`, String) == "(1, 0)"
+        @test read(`$exename --banner=yes -q   -e $p`, String) == "(1, 1)"
+        @test read(`$exename --banner=short -q -e $p`, String) == "(1, 2)"
     end
 
     # --home
-    @test success(`$exename -H $(Sys.BINDIR)`)
-    @test success(`$exename --home=$(Sys.BINDIR)`)
+    @test "" == test_read_success(`$exename -H $(Sys.BINDIR)`)
+    @test "" == test_read_success(`$exename --home=$(Sys.BINDIR)`)
 
     # --eval
-    @test  success(`$exename -e "exit(0)"`)
+    @test "" == test_read_success(`$exename -e "exit(0)"`)
     @test errors_not_signals(`$exename -e "exit(1)"`)
-    @test  success(`$exename --eval="exit(0)"`)
+    @test "" == test_read_success(`$exename --eval="exit(0)"`)
     @test errors_not_signals(`$exename --eval="exit(1)"`)
     @test errors_not_signals(`$exename -e`)
     @test errors_not_signals(`$exename --eval`)
     # --eval --interactive (replaced --post-boot)
-    @test  success(`$exename -i -e "exit(0)"`)
+    @test "" == test_read_success(`$exename -i -e "exit(0)"`)
     @test errors_not_signals(`$exename -i -e "exit(1)"`)
     # issue #34924
-    @test  success(`$exename -e 'const LOAD_PATH=1'`)
+    @test "" == test_read_success(`$exename -e 'const LOAD_PATH=1'`)
 
     # --print
     @test read(`$exename -E "1+1"`, String) == "2\n"
@@ -553,19 +551,19 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
         @test readchomp(`$cov_exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=user`) == "1"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
         @test readchomp(`$cov_exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=all`) == "2"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in specific file
         tfile = realpath(inputfile)
@@ -574,7 +572,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in directory
         tdir = dirname(realpath(inputfile))
@@ -583,7 +581,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in current directory
         tdir = dirname(realpath(inputfile))
@@ -595,7 +593,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in relative directory
         tdir = dirname(realpath(inputfile))
@@ -606,7 +604,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in relative directory with dot-dot notation
         tdir = dirname(realpath(inputfile))
@@ -617,7 +615,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in a different directory
         tdir = mktempdir() # a dir that contains no code
@@ -728,7 +726,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         end
         @test popfirst!(got) == "        - end"
         @test popfirst!(got) == "        - f(1.23)"
-        @test isempty(got) || got
+        @test isempty(got) context=got
     end
 
 
@@ -1099,10 +1097,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         cd(testdir) do
             rm(testdir)
             @test Base.current_project() === nothing
-            @test success(`$exename -e "exit(0)"`)
+            @test "" == test_read_success(`$exename -e "exit(0)"`)
             for load_path in ["", "@", "@."]
                 withenv("JULIA_LOAD_PATH" => load_path) do
-                    @test success(`$exename -e "exit(!(Base.load_path() == []))"`)
+                    @test "" == test_read_success(`$exename -e "exit(!(Base.load_path() == []))"`)
                 end
             end
         end
@@ -1299,7 +1297,7 @@ for yn in ("no", "yes")
 end
 
 # issue #39259, shadowing `ARGS`
-@test success(`$(Base.julia_cmd()) --startup-file=no -e 'ARGS=1'`)
+@test "" == test_read_success(`$(Base.julia_cmd()) --startup-file=no -e 'ARGS=1'`)
 
 @testset "- as program file reads from stdin" begin
     for args in (`- foo bar`, `-- - foo bar`)
@@ -1366,9 +1364,9 @@ end
 # test --bug-report=rr
 if Sys.islinux() && Sys.ARCH in (:i686, :x86_64) # rr is only available on these platforms
     mktempdir() do temp_trace_dir
-        @test success(pipeline(setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`,
-                                      "JULIA_RR_RECORD_ARGS" => "-n --nested=ignore",
-                                      "_RR_TRACE_DIR" => temp_trace_dir); #=stderr, stdout=#))
+        test_read_success(setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`,
+                                 "JULIA_RR_RECORD_ARGS" => "-n --nested=ignore",
+                                 "_RR_TRACE_DIR" => temp_trace_dir))
     end
 end
 
@@ -1456,7 +1454,7 @@ end
 
 @testset "--strip-metadata" begin
     mktempdir() do dir
-        @test success(pipeline(`$(Base.julia_cmd()) --strip-metadata -t1,0 --output-o $(dir)/sys.o.a -e 0`, stderr=stderr, stdout=stdout))
+        @test "" == test_read_success(`$(Base.julia_cmd()) --strip-metadata -t1,0 --output-o $(dir)/sys.o.a -e 0`)
         if isfile(joinpath(dir, "sys.o.a"))
             Base.Linking.link_image(joinpath(dir, "sys.o.a"), joinpath(dir, "sys.so"))
             @test readchomp(`$(Base.julia_cmd()) -t1,0 -J $(dir)/sys.so -E 'hasmethod(sort, (Vector{Int},), (:dims,))'`) == "true"
@@ -1465,4 +1463,4 @@ end
 end
 
 # https://github.com/JuliaLang/julia/issues/58229 Recursion in jitlinking with inline=no
-@test success(`$(Base.julia_cmd()) --inline=no -e 'Base.compilecache(Base.identify_package("Pkg"))'`)
+@test "" == test_read_success(`$(Base.julia_cmd()) --inline=no -e 'Base.compilecache(Base.identify_package("Pkg"))'`)

@@ -16,7 +16,7 @@ include("tempdepot.jl")
 # sanity tests that our built-in types are marked correctly for const fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:def, :owner, :rettype, :exctype, :rettype_const, :analysis_results, :time_infer_total, :time_infer_cache_saved, :time_infer_self]),
+        (Core.CodeInstance, [:def, :owner, :rettype, :exctype, :rettype_const, :time_infer_total, :time_infer_cache_saved, :time_infer_self]),
         (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :is_for_opaque_closure, :constprop=#]),
         (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals=#]),
         (Core.MethodTable, [:cache, :module, :name]),
@@ -462,12 +462,12 @@ end
 mutable struct A3890{T1}
     x::Matrix{Complex{T1}}
 end
-@test A3890{Float64}.types[1] === Array{ComplexF64,2}
+@test A3890{Float64}.types[1] === Matrix{ComplexF64}
 # make sure the field type Matrix{Complex{T1}} isn't cached
 mutable struct B3890{T2}
     x::Matrix{Complex{T2}}
 end
-@test B3890{Float64}.types[1] === Array{ComplexF64,2}
+@test B3890{Float64}.types[1] === Matrix{ComplexF64}
 
 # issue #786
 mutable struct Node{T}
@@ -3894,14 +3894,14 @@ f12092(x::Int, y::Int...) = 2
 
 # issue #12063
 # NOTE: should have > MAX_TUPLETYPE_LEN arguments
-f12063(tt, g, p, c, b, v, cu::T, d::AbstractArray{T, 2}, ve) where {T} = 1
+f12063(tt, g, p, c, b, v, cu::T, d::AbstractMatrix{T}, ve) where {T} = 1
 f12063(args...) = 2
 g12063() = f12063(0, 0, 0, 0, 0, 0, 0.0, zeros(0,0), Int[])
 @test g12063() == 1
 
 # issue #11587
 mutable struct Sampler11587{N}
-    clampedpos::Array{Int,2}
+    clampedpos::Matrix{Int}
     buf::Array{Float64,N}
 end
 function Sampler11587()
@@ -7435,9 +7435,9 @@ end
 @test repackage28445()
 
 # issue #28597
-@test_throws ArgumentError Array{Int, 2}(undef, 0, -10)
-@test_throws ArgumentError Array{Int, 2}(undef, -10, 0)
-@test_throws ArgumentError Array{Int, 2}(undef, -1, -1)
+@test_throws ArgumentError Matrix{Int}(undef, 0, -10)
+@test_throws ArgumentError Matrix{Int}(undef, -10, 0)
+@test_throws ArgumentError Matrix{Int}(undef, -1, -1)
 
 # issue #54244
 # test that zero sized array doesn't throw even with large axes
@@ -8441,6 +8441,32 @@ let ms = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, OverlayModule.mt, 1
 end
 let ms = Base._methods_by_ftype(Tuple{typeof(sin), Int}, OverlayModule.mt, 1, Base.get_world_counter())
     @test isempty(ms)
+end
+
+# fresh module to ensure uncached methods
+module OverlayMTTest
+    using Base.Experimental: @MethodTable, @overlay
+    @MethodTable(mt)
+
+    function overlay_only end
+    @overlay mt overlay_only(x::Int) = x * 2
+end
+
+# #60702 & #60716: Overlay methods must be found without prior cache population
+let world = Base.get_world_counter()
+    mi = Base.method_instance(OverlayMTTest.overlay_only, Tuple{Int};
+                              world, method_table=OverlayMTTest.mt)
+    @test mi isa Core.MethodInstance
+    @test mi.def.module === OverlayMTTest
+end
+
+# #60712: Global-only methods must NOT be found via custom MT
+let
+    @eval global_only_func(x::Int) = x + 1
+    world = Base.get_world_counter()
+    mi = Base.method_instance(global_only_func, Tuple{Int};
+                              world, method_table=OverlayMTTest.mt)
+    @test mi === nothing
 end
 
 # precompilation

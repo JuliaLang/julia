@@ -122,7 +122,7 @@ unsorted_names(m::Module; all::Bool=false, imported::Bool=false, usings::Bool=fa
 """
     isexported(m::Module, s::Symbol)::Bool
 
-Returns whether a symbol is exported from a module.
+Return whether a symbol is exported from a module.
 
 See also: [`ispublic`](@ref), [`names`](@ref)
 
@@ -148,7 +148,7 @@ isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any),
 """
     ispublic(m::Module, s::Symbol)::Bool
 
-Returns whether a symbol is marked as public in a module.
+Return whether a symbol is marked as public in a module.
 
 Exported symbols are considered public.
 
@@ -253,11 +253,14 @@ const PARTITION_KIND_BACKDATED_CONST    = 0xb
 const PARTITION_FLAG_EXPORTED     = 0x10
 const PARTITION_FLAG_DEPRECATED   = 0x20
 const PARTITION_FLAG_DEPWARN      = 0x40
+const PARTITION_FLAG_IMPLICITLY_EXPORTED = 0x80
 
 const PARTITION_MASK_KIND         = 0x0f
 const PARTITION_MASK_FLAG         = 0xf0
 
 const BINDING_FLAG_ANY_IMPLICIT_EDGES = 0x8
+
+const JL_MODULE_USING_REEXPORT = 0x1
 
 is_defined_const_binding(kind::UInt8) = (kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_BACKDATED_CONST)
 is_some_const_binding(kind::UInt8) = (is_defined_const_binding(kind) || kind == PARTITION_KIND_UNDEF_CONST)
@@ -995,7 +998,7 @@ iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union |
 """
     Base.isconcretedispatch(T)
 
-Returns true if `T` is a [concrete type](@ref isconcretetype) that could appear
+Return true if `T` is a [concrete type](@ref isconcretetype) that could appear
 as an element of a [dispatch tuple](@ref isdispatchtuple).
 
 See also: [`isdispatchtuple`](@ref).
@@ -1442,7 +1445,7 @@ max_world(m::Core.CodeInfo) = m.max_world
 """
     get_world_counter()
 
-Returns the current maximum world-age counter. This counter is monotonically
+Return the current maximum world-age counter. This counter is monotonically
 increasing.
 
 !!! warning
@@ -1456,7 +1459,7 @@ get_world_counter() = ccall(:jl_get_world_counter, UInt, ())
 """
     tls_world_age()
 
-Returns the world the [current_task()](@ref) is executing within.
+Return the world the [current_task()](@ref) is executing within.
 """
 tls_world_age() = ccall(:jl_get_tls_world_age, UInt, ())
 
@@ -1649,7 +1652,7 @@ ast_slotflag(@nospecialize(code), i) = ccall(:jl_ir_slotflag, UInt8, (Any, Csize
 """
     may_invoke_generator(method, atype, sparams)::Bool
 
-Computes whether or not we may invoke the generator for the given `method` on
+Compute whether or not we may invoke the generator for the given `method` on
 the given `atype` and `sparams`. For correctness, all generated function are
 required to return monotonic answers. However, since we don't expect users to
 be able to successfully implement this criterion, we only call generated
@@ -1797,9 +1800,6 @@ hasintersect(@nospecialize(a), @nospecialize(b)) = typeintersect(a, b) !== Botto
 # scoping #
 ###########
 
-_topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
-
-
 # high-level, more convenient method lookup functions
 
 function visit(f, mt::Core.MethodTable)
@@ -1874,11 +1874,11 @@ end
 length(specs::MethodSpecializations) = count(Returns(true), specs)
 
 function length(mt::Core.MethodTable)
-    n = 0
+    n = Ref(0)
     visit(mt) do m
-        n += 1
+        n[] += 1
     end
-    return n::Int
+    return n[]
 end
 isempty(mt::Core.MethodTable) = (mt.defs === nothing)
 

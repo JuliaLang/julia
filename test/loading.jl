@@ -623,9 +623,12 @@ function test_find(
 end
 
 @testset "find_package with one env in load path" begin
-    for (env, (_, _, roots, graph, paths)) in envs
-        push!(empty!(LOAD_PATH), env)
-        test_find(roots, graph, paths)
+    for idx in eachindex(envs)
+        @testset let idx=idx
+            (env, (_, _, roots, graph, paths)) = envs[idx]
+            push!(empty!(LOAD_PATH), env)
+            test_find(roots, graph, paths)
+        end
     end
 end
 
@@ -1487,10 +1490,8 @@ end
             """)
         write(joinpath(foo_path, "Manifest.toml"),
             """
-            # This file is machine-generated - editing it directly is not advised
-            julia_version = "1.13.0-DEV"
+            julia_version = "1.13.0"
             manifest_format = "2.0"
-            project_hash = "8699765aeeac181c3e5ddbaeb9371968e1f84d6b"
 
             [[deps.Foo51989]]
             path = "."
@@ -1533,13 +1534,23 @@ end
 end
 
 @testset "Fallback for stdlib deps if manifest deps aren't found" begin
+    s = Sys.iswindows() ? ';' : ':'
     mktempdir() do depot
         # This manifest has a LibGit2 entry that is missing LibGit2_jll, which should be
         # handled by falling back to the stdlib Project.toml for dependency truth.
-        badmanifest_test_dir = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps.jl")
+        badmanifest_test_dir = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps")
         @test success(addenv(
             `$(Base.julia_cmd()) --project=$badmanifest_test_dir --startup-file=no -e 'using LibGit2'`,
-            "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+            "JULIA_DEPOT_PATH" => string(depot * Base.Filesystem.pathsep(), s),
+        ))
+    end
+    mktempdir() do depot
+        # This manifest has a LibGit2 entry that has a LibGit2_jll with a git-tree-hash1
+        # which simulates an old manifest where LibGit2_jll was not a stdlib
+        badmanifest_test_dir2 = joinpath(@__DIR__, "project", "deps", "BadStdlibDeps2")
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$badmanifest_test_dir2 --startup-file=no -e 'using LibGit2'`,
+            "JULIA_DEPOT_PATH" => string(depot * Base.Filesystem.pathsep(), s),
         ))
     end
 end
@@ -1829,8 +1840,8 @@ end
         Base64_key = Base.PkgId(Base.UUID("2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"), "Base64")
         oldBase64 = Base.unreference_module(Base64_key)
         cc = Base.compilecache(Base64_key)
-        sourcepath = Base.locate_package(Base64_key)
-        @test Base.stale_cachefile(Base64_key, UInt128(0), sourcepath, cc[1]) !== true
+        sourcespec = Base.locate_package_load_spec(Base64_key)
+        @test Base.stale_cachefile(Base64_key, UInt128(0), sourcespec, cc[1]) !== true
         empty!(DEPOT_PATH)
         Base.require_stdlib(Base64_key)
         push!(DEPOT_PATH, depot_path)
@@ -1867,3 +1878,50 @@ end
 module M58272_to end
 @eval M58272_to import ..M58272_1: M58272_2.y, x
 @test @eval M58272_to x === 1
+
+@testset "Syntax Versioning" begin
+    old_load_path = copy(LOAD_PATH)
+    try
+        # Test implicit environments (packages loaded from directories)
+        push!(LOAD_PATH, joinpath(@__DIR__, "project", "SyntaxVersioning", "implicit"))
+        # Explicit syntax.julia_version = "1.13"
+        @test invokelatest(getglobal, (@eval (using Versioned1; Versioned1)), :ver) == v"1.13"
+        # Explicit syntax.julia_version = "1.14"
+        @test invokelatest(getglobal, (@eval (using Versioned2; Versioned2)), :ver) == v"1.14"
+        # Inherited from compat.julia = "1.13-2"
+        @test invokelatest(getglobal, (@eval (using Versioned3; Versioned3)), :ver) == v"1.13"
+        # No syntax.julia_version, falls back to current VERSION
+        @test invokelatest(getglobal, (@eval (using Versioned4; Versioned4)), :ver) == VersionNumber(VERSION.major, VERSION.minor)
+        # Inherited from compat.julia = "1.14-2"
+        @test invokelatest(getglobal, (@eval (using Versioned5; Versioned5)), :ver) == v"1.14"
+    finally
+        copy!(LOAD_PATH, old_load_path)
+    end
+
+    # Test explicit environments (packages loaded from Manifest.toml)
+    old_load_path = copy(LOAD_PATH)
+    old_active_project = Base.ACTIVE_PROJECT[]
+    explicit_env = joinpath(@__DIR__, "project", "SyntaxVersioning", "explicit")
+    try
+        Base.ACTIVE_PROJECT[] = joinpath(explicit_env, "Project.toml")
+        empty!(LOAD_PATH)
+        push!(LOAD_PATH, "@")
+        # syntax.julia_version from Manifest = "1.13"
+        @test invokelatest(getglobal, (@eval (using VersionedDep1; VersionedDep1)), :ver) == v"1.13"
+        # syntax.julia_version from Manifest = "1.14"
+        @test invokelatest(getglobal, (@eval (using VersionedDep2; VersionedDep2)), :ver) == v"1.14"
+        # syntax.julia_version from Manifest = "1.0" should be clamped to "1.13"
+        @test invokelatest(getglobal, (@eval (using VersionedDep3; VersionedDep3)), :ver) == v"1.13"
+    finally
+        Base.ACTIVE_PROJECT[] = old_active_project
+        copy!(LOAD_PATH, old_load_path)
+    end
+
+    # Test that the selected project affects code evaluation in `Main` for both `-e` and scripts
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep1")) -e 'print((Base.Experimental.@VERSION).syntax)'`, String)) == v"1.13"
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep2")) -e 'print((Base.Experimental.@VERSION).syntax)'`, String)) == v"1.14"
+
+    syntax_version_script = joinpath(@__DIR__, "testhelpers", "print_syntax_version.jl")
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep1")) $syntax_version_script`, String)) == v"1.13"
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep2")) $syntax_version_script`, String)) == v"1.14"
+end

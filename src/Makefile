@@ -203,18 +203,27 @@ LIBJULIA_PATH_REL := libjulia
 endif
 
 COMMON_LIBPATHS := -L$(build_libdir) -L$(build_shlibdir)
-RT_LIBS := $(WHOLE_ARCHIVE) $(LIBUV) $(WHOLE_ARCHIVE) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LIBUNWIND) $(RT_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI) -lzstd
+RT_LIBS := $(call whole_archive,$(LIBUV)) $(call whole_archive,$(LIBUTF8PROC)) $(LIBUNWIND) $(RT_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI) -lzstd
 # NB: CG needs uv_mutex_* symbols, but we expect to export them from libjulia-internal
 CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI)
+
+ifeq ($(USEGCC),1)
+ifeq ($(USE_RT_STATIC_LIBGCC),1)
+RT_LIBS += -static-libgcc
+endif
+ifeq ($(USE_RT_STATIC_LIBSTDCXX),1)
+RT_LIBS += -static-libstdc++
+endif
+endif
 
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
 RT_LIBS += $(MMTK_LIB)
 CG_LIBS += $(MMTK_LIB)
 endif
 
-RT_DEBUG_LIBS := $(COMMON_LIBPATHS) $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp-debug.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport-debug.a -ljulia-debug $(RT_LIBS)
+RT_DEBUG_LIBS := $(COMMON_LIBPATHS) $(call whole_archive,$(BUILDDIR)/flisp/libflisp-debug.a) $(call whole_archive,$(BUILDDIR)/support/libsupport-debug.a) -ljulia-debug $(RT_LIBS)
 CG_DEBUG_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia-debug -ljulia-internal-debug
-RT_RELEASE_LIBS := $(COMMON_LIBPATHS) $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport.a -ljulia $(RT_LIBS)
+RT_RELEASE_LIBS := $(COMMON_LIBPATHS) $(call whole_archive,$(BUILDDIR)/flisp/libflisp.a) $(call whole_archive,$(BUILDDIR)/support/libsupport.a) -ljulia $(RT_LIBS)
 CG_RELEASE_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia -ljulia-internal
 
 OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
@@ -256,10 +265,14 @@ else
 FLISP_EXECUTABLE := $(FLISP_EXECUTABLE_$(JULIA_BUILD_MODE))
 endif
 
+.PHONY: default
 default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
+
+.PHONY: all
 all: debug release
 
-release debug: %: libjulia-internal-% libjulia-codegen-% $(BUILDDIR)/compile_commands.json
+.PHONY: release debug
+release debug: %: libjulia-internal-% libjulia-codegen-% regenerate-compile_commands
 
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
@@ -273,19 +286,23 @@ $(BUILDDIR)/%.h.gen : $(SRCDIR)/%.d
 	sed 's/JULIA_/JL_PROBE_/' $@ > $@.tmp
 	mv $@.tmp $@
 
+# Generate `.inc` file that contains a list of `#define` macros to rename functions defined in `libjulia-internal`
+# to have a `ijl_` prefix instead of `jl_`, to denote that they are coming from `libjulia-internal`.  This avoids
+# potential confusion with debugging tools, when inspecting a process that has both `libjulia` and `libjulia-internal`
+# loaded at the same time.
 $(BUILDDIR)/jl_internal_funcs.inc: $(SRCDIR)/jl_exported_funcs.inc
-	# Generate `.inc` file that contains a list of `#define` macros to rename functions defined in `libjulia-internal`
-	# to have a `ijl_` prefix instead of `jl_`, to denote that they are coming from `libjulia-internal`.  This avoids
-	# potential confusion with debugging tools, when inspecting a process that has both `libjulia` and `libjulia-internal`
-	# loaded at the same time.
-	grep 'XX(..*)' $< | sed -E 's/.*XX\((.+)\).*/#define \1 i\1/g' >$@
+	@TMPFILE=$$(mktemp $(abspath $@.XXXXXX)); \
+	grep 'XX(..*)' $< | sed -E 's/.*XX\((.+)\).*/#define \1 i\1/g' > $$TMPFILE; \
+	mv $$TMPFILE $@
 
+# Generate `.inc` file that contains a list of `#define` macros to access global data through struct instances
 $(BUILDDIR)/jl_data_globals_defs.inc: $(SRCDIR)/jl_exported_data.inc
-	# Generate `.inc` file that contains a list of `#define` macros to access global data through struct instances
+	@TMPFILE=$$(mktemp $(abspath $@.XXXXXX)); \
 	{ \
 		grep 'XX(.*)' $< | sed -E 's/.*XX\(([^,]+), .*\).*/#define jl_\1 (sysimg_global.\1)/g'; \
 		grep 'YY(.*)' $< | sed -E 's/.*YY\(([^,]+), .*\).*/#define jl_\1 (const_globals.jl\1)/g'; \
-	} >$@
+	} > $$TMPFILE; \
+	mv $$TMPFILE $@
 
 # source file rules
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)
@@ -313,9 +330,13 @@ $(eval $(call dir_target,$(build_includedir)/julia/uv))
 $(build_includedir)/julia/uv/*.h: $(LIBUV_INC)/uv/*.h | $(build_includedir)/julia/uv
 	$(INSTALL_F) $^ $(build_includedir)/julia/uv
 
+.PHONY: libccalltest
 libccalltest: $(build_shlibdir)/libccalltest.$(SHLIB_EXT)
+.PHONY: libccalllazyfoo
 libccalllazyfoo: $(build_shlibdir)/libccalllazyfoo.$(SHLIB_EXT)
+.PHONY: libccalllazybar
 libccalllazybar: $(build_shlibdir)/libccalllazybar.$(SHLIB_EXT)
+.PHONY: libllvmcalltest
 libllvmcalltest: $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT)
 
 ifeq ($(OS), Linux)
@@ -347,18 +368,23 @@ $(build_shlibdir)/libccalllazybar.$(SHLIB_EXT): $(SRCDIR)/ccalllazybar.c $(build
 	@$(call PRINT_CC, $(CC) $(JCFLAGS) $(JCPPFLAGS) $(FLAGS_COMMON) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) $(COMMON_LIBPATHS) $(call SONAME_FLAGS,libccalllazybar.$(SHLIB_EXT)) -lccalllazyfoo)
 
 $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvmcalltest.cpp $(LLVM_CONFIG_ABSOLUTE)
-	@$(call PRINT_CC, $(CXX) $(JCXXFLAGS) $(LLVM_CXXFLAGS) $(FLAGS_COMMON) $(CPPFLAGS) $(CXXFLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) $(COMMON_LIBPATHS) $(NO_WHOLE_ARCHIVE) $(CG_LLVMLINK)) -lpthread
+	@$(call PRINT_CC, $(CXX) $(JCXXFLAGS) $(LLVM_CXXFLAGS) $(FLAGS_COMMON) $(CPPFLAGS) $(CXXFLAGS) -O3 $< $(fPIC) -shared -o $@ $(LDFLAGS) $(COMMON_LIBPATHS) $(CG_LLVMLINK)) -lpthread
 
+.PHONY: julia_flisp.boot.inc.phony
 julia_flisp.boot.inc.phony: $(BUILDDIR)/julia_flisp.boot.inc
 
 $(BUILDDIR)/julia_flisp.boot.inc: $(BUILDDIR)/julia_flisp.boot $(FLISP_EXECUTABLE_release)
-	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE_release)) $(call cygpath_w,$(SRCDIR)/bin2hex.scm) < $< > $@)
+	@$(call PRINT_FLISP, TMPFILE=$$(mktemp $(abspath $@.XXXXXX)); \
+	  $(call spawn,$(FLISP_EXECUTABLE_release)) $(call cygpath_w,$(SRCDIR)/bin2hex.scm) < $< > $$TMPFILE; \
+	  mv $$TMPFILE $@)
 
 $(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm flisp/aliases.scm flisp/profile.scm \
 		julia-parser.scm julia-syntax.scm match.scm utils.scm ast.scm macroexpand.scm mk_julia_flisp_boot.scm) \
 		$(FLISP_EXECUTABLE_release)
-	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE_release)) \
-		$(call cygpath_w,$(SRCDIR)/mk_julia_flisp_boot.scm) $(call cygpath_w,$(dir $<)) $(notdir $<) $(call cygpath_w,$@))
+	@$(call PRINT_FLISP, TMPFILE=$$(mktemp $(abspath $@.XXXXXX)); \
+	  $(call spawn,$(FLISP_EXECUTABLE_release)) \
+		$(call cygpath_w,$(SRCDIR)/mk_julia_flisp_boot.scm) $(call cygpath_w,$(dir $<)) $(notdir $<) $(call cygpath_w,$$TMPFILE); \
+	  mv $$TMPFILE $@)
 
 # additional dependency links
 $(BUILDDIR)/codegen-stubs.o $(BUILDDIR)/codegen-stubs.dbg.obj: $(addprefix $(SRCDIR)/,intrinsics.h llvm-julia-passes.inc)
@@ -427,23 +453,28 @@ $(BUILDDIR)/flisp/libflisp-debug.a: $(addprefix $(SRCDIR)/,flisp/*.h flisp/*.c) 
 	$(MAKE) -C $(SRCDIR)/flisp debug BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
 
 $(BUILDDIR)/julia_version.h: $(JULIAHOME)/VERSION
-	@echo "// This is an autogenerated header file" > $@.$(JULIA_BUILD_MODE).tmp
-	@echo "#ifndef JL_VERSION_H" >> $@.$(JULIA_BUILD_MODE).tmp
-	@echo "#define JL_VERSION_H" >> $@.$(JULIA_BUILD_MODE).tmp
-	@echo "#define JULIA_VERSION_STRING" \"$(JULIA_VERSION)\" >> $@.$(JULIA_BUILD_MODE).tmp
-	@echo $(JULIA_VERSION) | awk 'BEGIN {FS="[.,+-]"} \
-	{print "#define JULIA_VERSION_MAJOR " $$1 "\n" \
-	"#define JULIA_VERSION_MINOR " $$2 "\n" \
-	"#define JULIA_VERSION_PATCH " $$3 ; \
-	if (NF<4) print "#define JULIA_VERSION_IS_RELEASE 1" ; else print  "#define JULIA_VERSION_IS_RELEASE 0"}' >> $@.$(JULIA_BUILD_MODE).tmp
-	@echo "#endif" >> $@.$(JULIA_BUILD_MODE).tmp
-	mv $@.$(JULIA_BUILD_MODE).tmp $@
+	@TMPFILE=$$(mktemp $(abspath $@.XXXXXX)); \
+	{ \
+		echo "// This is an autogenerated header file"; \
+		echo "#ifndef JL_VERSION_H"; \
+		echo "#define JL_VERSION_H"; \
+		echo "#define JULIA_VERSION_STRING" \"$(JULIA_VERSION)\"; \
+		echo $(JULIA_VERSION) | awk 'BEGIN {FS="[.,+-]"} \
+			{print "#define JULIA_VERSION_MAJOR " $$1 "\n" \
+			"#define JULIA_VERSION_MINOR " $$2 "\n" \
+			"#define JULIA_VERSION_PATCH " $$3 ; \
+			if (NF<4) print "#define JULIA_VERSION_IS_RELEASE 1" ; else print  "#define JULIA_VERSION_IS_RELEASE 0"}'; \
+		echo "#endif"; \
+	} > $$TMPFILE; \
+	mv $$TMPFILE $@
 
 CXXLD = $(CXX) -shared
 
 $(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in $(JULIAHOME)/VERSION $(LLVM_CONFIG_ABSOLUTE)
-	sed <'$<' >'$@' -e "s/@JULIA_SHLIB_SYMBOL_VERSION@/JL_LIBJULIA_$(SOMAJOR)/" \
-		        -e "s/@LLVM_SHLIB_SYMBOL_VERSION@/$(LLVM_SHLIB_SYMBOL_VERSION)/"
+	@TMPFILE=$$(mktemp $(abspath $@.XXXXXX)); \
+	sed <'$<' >$$TMPFILE -e "s/@JULIA_SHLIB_SYMBOL_VERSION@/JL_LIBJULIA_$(SOMAJOR)/" \
+		        -e "s/@LLVM_SHLIB_SYMBOL_VERSION@/$(LLVM_SHLIB_SYMBOL_VERSION)/"; \
+	mv $$TMPFILE $@
 
 $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV)
 	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(SHIPFLAGS) $(JCXXFLAGS) $(CXXLDFLAGS) $(OBJS) $(RPATH_LIB) -o $@ \
@@ -551,20 +582,25 @@ INCLUDED_CXX_FILES := \
 	processor.cpp:processor_arm.cpp \
 	processor.cpp:processor_fallback.cpp
 
+.PHONY: clean
 clean:
 	-rm -fr $(build_shlibdir)/libjulia-internal* $(build_shlibdir)/libjulia-codegen*
 	-rm -rf $(build_shlibdir)/libccalltest* $(build_shlibdir)/libllvmcalltest* $(build_shlibdir)/libccalllazyfoo* $(build_shlibdir)/libccalllazybar*
-	-rm -f $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/julia_flisp.boot.inc $(BUILDDIR)/jl_internal_funcs.inc $(BUILDDIR)/jl_data_globals_defs.inc
+	-rm -f $(BUILDDIR)/julia_flisp.boot* $(BUILDDIR)/julia_flisp.boot.inc* $(BUILDDIR)/jl_internal_funcs.inc* $(BUILDDIR)/jl_data_globals_defs.inc*
 	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.dwo $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a $(BUILDDIR)/*.h.gen
 	-rm -f $(BUILDDIR)/julia.expmap
 	-rm -f $(BUILDDIR)/julia_version.h
+	-rm -f $(BUILDDIR)/compile_commands.json*
 
+.PHONY: clean-flisp
 clean-flisp:
 	-$(MAKE) -C $(SRCDIR)/flisp clean BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
 
+.PHONY: clean-support
 clean-support:
 	-$(MAKE) -C $(SRCDIR)/support clean BUILDDIR='$(abspath $(BUILDDIR)/support)'
 
+.PHONY: cleanall
 cleanall: clean clean-flisp clean-support clean-analyzegc
 
 $(build_shlibdir)/lib%Plugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/%.cpp $(LLVM_CONFIG_ABSOLUTE)
@@ -584,9 +620,11 @@ ANALYSIS_DEPS += llvmunwind
 else ifneq ($(OS),WINNT)
 ANALYSIS_DEPS += unwind
 endif
+.PHONY: install-analysis-deps
 install-analysis-deps:
 	$(MAKE) -C $(JULIAHOME)/deps $(addprefix install-,$(ANALYSIS_DEPS))
 
+.PHONY: analyzegc-deps-check
 analyzegc-deps-check: $(addprefix $(BUILDDIR)/,julia_version.h julia_flisp.boot.inc jl_internal_funcs.inc jl_data_globals_defs.inc)
 ifeq ($(USE_BINARYBUILDER_LLVM),0)
 ifneq ($(BUILD_LLVM_CLANG),1)
@@ -640,22 +678,29 @@ clang-tidy-%: $(SRCDIR)/%.cpp $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB
 		-- $(CLANG_TOOLING_CXX_FLAGS) -fcolor-diagnostics --system-header-prefix=llvm -Wno-deprecated-declarations -fno-caret-diagnostics -x c++)
 
 # Add C files as a target of `analyzesrc` and `analyzegc` and `tidysrc`
+.PHONY: tidysrc
 tidysrc: $(addprefix clang-tidy-,$(CODEGEN_SRCS) $(SRCS))
+.PHONY: analyzesrc
 analyzesrc: $(addprefix clang-sa-,$(CODEGEN_SRCS) $(SRCS))
+.PHONY: analyzegc
 analyzegc: $(addprefix clang-sagc-,$(filter-out $(basename $(SKIP_GC_CHECK)),$(CODEGEN_SRCS) $(SRCS)))
+.PHONY: analyze
 analyze: analyzesrc analyzegc tidysrc
 
 $(addprefix analyze-,$(CODEGEN_SRCS) $(SRCS)) : analyze-% : clang-sa-%
 $(addprefix analyze-,$(CODEGEN_SRCS) $(SRCS)) : analyze-% : clang-tidy-%
 $(addprefix analyze-,$(filter-out $(basename $(SKIP_GC_CHECK)),$(CODEGEN_SRCS) $(SRCS))) : analyze-% : clang-sagc-%
 
+.PHONY: clean-analyzegc
 clean-analyzegc:
 	rm -f $(build_shlibdir)/libGCCheckerPlugin.$(SHLIB_EXT)
 	rm -f $(build_shlibdir)/libImplicitAtomicsPlugin.$(SHLIB_EXT)
 
 # Compilation database generation using existing clang infrastructure
-$(BUILDDIR)/compile_commands.json:
-	@{ \
+.PHONY: regenerate-compile_commands
+regenerate-compile_commands:
+	@TMPFILE=$$(mktemp $(abspath $(BUILDDIR)/compile_commands.json.XXXXXX)); \
+	{ \
 		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(CLANG_TOOLING_C_FLAGS))"; \
 		CLANG_TOOLING_CXX_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(CLANG_TOOLING_CXX_FLAGS))"; \
 		echo "["; \
@@ -711,18 +756,18 @@ $(BUILDDIR)/compile_commands.json:
 			printf '{\n  "directory": "%s",\n  "file": "%s",\n  "arguments": [%s]\n}' "$(abspath $(SRCDIR))" "$$included_file" "$$cmd"; \
 		done; \
 		echo "]"; \
-	} > $@.tmp
-	@# This ensures we replace the file atomically, and avoid spurious rewrites
-	@if ! cmp -s $@.tmp $@; then \
-		mv $@.tmp $@; \
+	} > $$TMPFILE; \
+	if ! cmp -s $$TMPFILE $(BUILDDIR)/compile_commands.json; then \
+		mv $$TMPFILE $(BUILDDIR)/compile_commands.json; \
 	else \
-		rm -f $@.tmp; \
+		rm -f $$TMPFILE; \
 	fi
 
-compile-database: $(BUILDDIR)/compile_commands.json
+.PHONY: compile-database
+compile-database: regenerate-compile_commands
 	$(MAKE) -C $(SRCDIR)/flisp compile-database BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
 	$(MAKE) -C $(SRCDIR)/support compile-database BUILDDIR='$(abspath $(BUILDDIR)/support)'
-	@echo "Compilation database created: $<"
+	@echo "Compilation database created for src"
 
 .FORCE:
-.PHONY: default all debug release clean cleanall clean-* libccalltest libllvmcalltest julia_flisp.boot.inc.phony analyzegc analyzesrc compile-database $(BUILDDIR)/compile_commands.json .FORCE
+.PHONY: .FORCE

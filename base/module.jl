@@ -12,12 +12,12 @@ end
 function eval_import_path(at::Module, from::Union{Module, Nothing}, path::Expr, keyword::String)
     isempty(path.args) && error("malformed import statement")
 
-    i::Int = 1
+    i = RefValue(1)
     function next!()
         local v
-        i <= length(path.args) || error("invalid module path")
-        v = path.args[i]
-        i += 1
+        i[] <= length(path.args) || error("invalid module path")
+        v = path.args[i[]]
+        i[] += 1
         v isa Symbol || throw(TypeError(Symbol(keyword), "", Symbol, v))
         v
     end
@@ -36,7 +36,7 @@ function eval_import_path(at::Module, from::Union{Module, Nothing}, path::Expr, 
             m = require(at, v)
             m isa Module || error("failed to load module $v")
         end
-        i > lastindex(path.args) && return m, nothing
+        i[] > lastindex(path.args) && return m, nothing
         v = next!()
     else
         # `.A.B.C`: strip off leading dots by following parent links
@@ -48,7 +48,7 @@ function eval_import_path(at::Module, from::Union{Module, Nothing}, path::Expr, 
 
     while true
         v === :. && error("invalid $keyword path: \".\" in identifier path")
-        i > lastindex(path.args) && break
+        i[] > lastindex(path.args) && break
         m = getglobal(m, v)
         m isa Module || error("invalid $keyword path: \"$v\" does not name a module")
         v = next!()
@@ -133,9 +133,9 @@ using A.B            => _module_using(Main, Expr(:., :A, :B))
 
 See also [`_using`](@ref Core._using).
 """
-function _eval_using(to::Module, path::Expr)
+function _eval_using(to::Module, path::Expr, flags::UInt8=UInt8(0))
     from = eval_import_path_all(to, path, "using")
-    Core._using(to, from)
+    Core._using(to, from, flags)
     is_package = length(path.args) == 1 && path.args[1] !== :.
     if to == Main && is_package
         Core._import(to, from, nameof(from))

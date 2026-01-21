@@ -58,8 +58,8 @@ function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_contex
             temp_vars = Tuple{Int,Symbol}[]
             for j = 2:J
                 n = nx === 0 ? ni : :($nx + $ni)
-                exj, used = replace_ref_begin_end_!(__module__, ref_ex.args[j], (:($firstindex($S,$n)),:($lastindex($S,$n))), in_quote_context, escs)
-                used_S |= used
+                exj, used_arg = replace_ref_begin_end_!(__module__, ref_ex.args[j], (:($firstindex($S,$n)),:($lastindex($S,$n))), in_quote_context, escs)
+                used_S |= used_arg
                 ref_ex.args[j] = exj
                 ni += 1
                 if need_temps

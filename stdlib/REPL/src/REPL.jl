@@ -611,14 +611,15 @@ function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothi
         try
             if val !== nothing && show_value
                 Base.sigatomic_end() # allow display to be interrupted
+                val_to_show = val
                 val2, iserr = if specialdisplay === nothing
                     # display calls may require being run on the main thread
                     call_on_backend(backend) do
-                        __repl_entry_display(val)
+                        __repl_entry_display(val_to_show)
                     end
                 else
                     call_on_backend(backend) do
-                        __repl_entry_display(specialdisplay, val)
+                        __repl_entry_display(specialdisplay, val_to_show)
                     end
                 end
                 Base.sigatomic_begin()
@@ -675,21 +676,23 @@ end
 """
 function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task::Bool = true, backend = REPLBackend())
     backend_ref = REPLBackendRef(backend)
-    cleanup = @task try
+    get_module = () -> Base.active_module(repl)
+    cleanup_task(backend_ref, t) = @task try
             destroy(backend_ref, t)
         catch e
             Core.print(Core.stderr, "\nINTERNAL ERROR: ")
             Core.println(Core.stderr, e)
             Core.println(Core.stderr, catch_backtrace())
         end
-    get_module = () -> Base.active_module(repl)
     if backend_on_current_task
         t = @async run_frontend(repl, backend_ref)
+        cleanup = cleanup_task(backend_ref, t)
         errormonitor(t)
         Base._wait2(t, cleanup)
         start_repl_backend(backend, consumer; get_module)
     else
         t = @async start_repl_backend(backend, consumer; get_module)
+        cleanup = cleanup_task(backend_ref, t)
         errormonitor(t)
         Base._wait2(t, cleanup)
         run_frontend(repl, backend_ref)
@@ -740,7 +743,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
                     rethrow()
                 end
             end
-            ast = Base.parse_input_line(line)
+            ast = parse_repl_input_line(line, repl)
             (isa(ast,Expr) && ast.head === :incomplete) || break
         end
         if !isempty(line)
@@ -779,14 +782,18 @@ mutable struct LineEditREPL <: AbstractREPL
     interface::ModalInterface
     backendref::REPLBackendRef
     frontend_task::Task
+    # Optional event to notify when the prompt is ready (used by precompilation)
+    prompt_ready_event::Union{Nothing, Base.Event}
     function LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,pkg_color,history_file,in_shell,in_help,envcolors)
         opts = Options()
         opts.hascolor = hascolor
         if !hascolor
             opts.beep_colors = [""]
         end
-        new(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,pkg_color,history_file,in_shell,
+        r = new(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,pkg_color,history_file,in_shell,
             in_help,envcolors,false,nothing, opts, nothing, Tuple{String,Int}[])
+        r.prompt_ready_event = nothing
+        r
     end
 end
 outstream(r::LineEditREPL) = (t = r.t; t isa TTYTerminal ? t.out_stream : t)
@@ -814,7 +821,8 @@ REPLCompletionProvider() = REPLCompletionProvider(LineEdit.Modifiers())
 mutable struct ShellCompletionProvider <: CompletionProvider end
 struct LatexCompletions <: CompletionProvider end
 
-Base.active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : mistate.active_module
+Base.active_module(mistate::MIState) = mistate.active_module
+Base.active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : Base.active_module(mistate)
 Base.active_module(::AbstractREPL) = Main
 Base.active_module(d::REPLDisplay) = Base.active_module(d.repl)
 
@@ -1116,8 +1124,17 @@ function history_reset_state(hist::REPLHistoryProvider)
 end
 LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
+function parse_repl_input_line(line::String, repl; kwargs...)
+    # N.B.: This re-latches the syntax version for `Main`. If `Base.active_module` is not `Main`,
+    # then this does not affect the parser used for that module. We could probably skip this step
+    # in that case, but let's just be consistent on the off chance that the active module tries
+    # to `include(Main, ...)` or similar.
+    @Base.ScopedValues.with Base.MainInclude.main_parser=>Base.parser_for_active_project() Base.parse_input_line(line;
+        mod=Base.active_module(repl), kwargs...)
+end
+
 function return_callback(s)
-    ast = Base.parse_input_line(takestring!(copy(LineEdit.buffer(s))), depwarn=false)
+    ast = parse_repl_input_line(takestring!(copy(LineEdit.buffer(s))), s; depwarn=false)
     return !(isa(ast, Expr) && ast.head === :incomplete)
 end
 
@@ -1187,11 +1204,16 @@ function mode_keymap(julia_prompt::Prompt)
     AnyDict(
     '\b' => function (s::MIState,o...)
         if isempty(s) || position(LineEdit.buffer(s)) == 0
-            buf = copy(LineEdit.buffer(s))
-            transition(s, julia_prompt) do
-                LineEdit.state(s, julia_prompt).input_buffer = buf
+            let buf = copy(LineEdit.buffer(s))
+                transition(s, julia_prompt) do
+                    LineEdit.state(s, julia_prompt).input_buffer = buf
+                end
             end
         else
+            buf = LineEdit.buffer(s)
+            if LineEdit.try_remove_paired_delimiter(buf)
+                return LineEdit.refresh_line(s)
+            end
             LineEdit.edit_backspace(s)
         end
     end,
@@ -1286,7 +1308,7 @@ function setup_interface(
         repl = repl,
         complete = replc,
         # When we're done transform the entered line into a call to helpmode function
-        on_done = respond(line::String->helpmode(outstream(repl), line, repl.mistate.active_module),
+        on_done = respond(line::String->helpmode(outstream(repl), line, Base.active_module(repl)),
                           repl, julia_prompt, pass_empty=true, suppress_on_semicolon=false))
 
 
@@ -1324,9 +1346,10 @@ function setup_interface(
                     for mode in repl.interface.modes
                         if mode isa LineEdit.Prompt && mode.complete isa REPLExt.PkgCompletionProvider
                             # pkg mode
-                            buf = copy(LineEdit.buffer(s))
-                            transition(s, mode) do
-                                LineEdit.state(s, mode).input_buffer = buf
+                            let buf = copy(LineEdit.buffer(s))
+                                transition(s, mode) do
+                                    LineEdit.state(s, mode).input_buffer = buf
+                                end
                             end
                         end
                     end
@@ -1367,7 +1390,7 @@ function setup_interface(
     help_mode.hist = hp
     dummy_pkg_mode.hist = hp
 
-    julia_prompt.on_done = respond(x->Base.parse_input_line(x,filename=repl_filename(repl,hp)), repl, julia_prompt)
+    julia_prompt.on_done = respond(x->parse_repl_input_line(x, repl; filename=repl_filename(repl,hp)), repl, julia_prompt)
 
     shell_prompt_len = length(SHELL_PROMPT)
     help_prompt_len = length(HELP_PROMPT)
@@ -1382,9 +1405,10 @@ function setup_interface(
     repl_keymap = AnyDict(
         ';' => function (s::MIState,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
-                buf = copy(LineEdit.buffer(s))
-                transition(s, shell_mode) do
-                    LineEdit.state(s, shell_mode).input_buffer = buf
+                let buf = copy(LineEdit.buffer(s))
+                    transition(s, shell_mode) do
+                        LineEdit.state(s, shell_mode).input_buffer = buf
+                    end
                 end
             else
                 edit_insert(s, ';')
@@ -1393,9 +1417,10 @@ function setup_interface(
         end,
         '?' => function (s::MIState,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
-                buf = copy(LineEdit.buffer(s))
-                transition(s, help_mode) do
-                    LineEdit.state(s, help_mode).input_buffer = buf
+                let buf = copy(LineEdit.buffer(s))
+                    transition(s, help_mode) do
+                        LineEdit.state(s, help_mode).input_buffer = buf
+                    end
                 end
             else
                 edit_insert(s, '?')
@@ -1404,9 +1429,10 @@ function setup_interface(
         end,
         ']' => function (s::MIState,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
-                buf = copy(LineEdit.buffer(s))
-                transition(s, dummy_pkg_mode) do
-                    LineEdit.state(s, dummy_pkg_mode).input_buffer = buf
+                let buf = copy(LineEdit.buffer(s))
+                    transition(s, dummy_pkg_mode) do
+                        LineEdit.state(s, dummy_pkg_mode).input_buffer = buf
+                    end
                 end
                 # load Pkg on another thread if available so that typing in the dummy Pkg prompt
                 # isn't blocked, but instruct the main REPL task to do the transition via s.async_channel
@@ -1418,9 +1444,10 @@ function setup_interface(
                                 LineEdit.mode(s) === dummy_pkg_mode || return :ok
                                 for mode in repl.interface.modes
                                     if mode isa LineEdit.Prompt && mode.complete isa REPLExt.PkgCompletionProvider
-                                        buf = copy(LineEdit.buffer(s))
-                                        transition(s, mode) do
-                                            LineEdit.state(s, mode).input_buffer = buf
+                                        let buf = copy(LineEdit.buffer(s))
+                                            transition(s, mode) do
+                                                LineEdit.state(s, mode).input_buffer = buf
+                                            end
                                         end
                                         if !isempty(s)
                                             @invokelatest(LineEdit.check_show_hint(s))
@@ -1531,7 +1558,7 @@ function setup_interface(
                 dump_tail = false
                 nl_pos = findfirst('\n', input[oldpos:end])
                 if s.current_mode == julia_prompt
-                    ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false)
+                    ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false, mod=Base.active_module(s))
                     if (isa(ast, Expr) && (ast.head === :error || ast.head === :incomplete)) ||
                             (pos > ncodeunits(input) && !endswith(input, '\n'))
                         # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
@@ -1660,6 +1687,10 @@ function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     end
     repl.backendref = backend
     repl.mistate = LineEdit.init_state(terminal(repl), interface)
+    # Copy prompt_ready_event from repl to mistate (used by precompilation)
+    if isdefined(repl, :prompt_ready_event) && repl.prompt_ready_event !== nothing
+        repl.mistate.prompt_ready_event = repl.prompt_ready_event
+    end
     run_interface(terminal(repl), interface, repl.mistate)
     # Terminate Backend
     put!(backend.repl_channel, (nothing, -1))
@@ -1700,21 +1731,11 @@ function ends_with_semicolon(code)
     return semi
 end
 
-"""
-    banner(io::IO = stdout, preferred::Symbol = :full)
-
-Print the "Julia" informative banner to `io`, using the `preferred` variant
-if reasonable and known.
-
-!!! warning
-    The particular banner selected by `preferred` is liable to being changed
-    without warning. The current variants are: `:tiny`, `:short`, `:narrow`, and `:full`.
-"""
-function banner(io::IO = stdout, preferred::Symbol = :full)
-    commit_string = if Base.GIT_VERSION_INFO.tagged_commit
-        Base.AnnotatedString(TAGGED_RELEASE_BANNER, :face => :shadow)
+function banner(io::IO = stdout; short = false)
+    if Base.GIT_VERSION_INFO.tagged_commit
+        commit_string = Base.TAGGED_RELEASE_BANNER
     elseif isempty(Base.GIT_VERSION_INFO.commit)
-         styled""
+        commit_string = ""
     else
         days = Int(floor((ccall(:jl_clock_now, Float64, ()) - Base.GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
         days = max(0, days)
@@ -1723,65 +1744,60 @@ function banner(io::IO = stdout, preferred::Symbol = :full)
         commit = Base.GIT_VERSION_INFO.commit_short
 
         if distance == 0
-            styled"""Commit {grey:$commit} \
-                     ({warning:⌛ {italic:$days $unit}} old master)"""
+            commit_string = "Commit $(commit) ($(days) $(unit) old master)"
         else
             branch = Base.GIT_VERSION_INFO.branch
-            styled"""{emphasis:$branch}/{grey:$commit} \
-                     ({italic:{success:{bold,(slant=normal):↑} $distance commits}, \
-                     {warning:{(slant=normal):⌛} $days $unit}})"""
+            commit_string = "$(branch)/$(commit) (fork: $(distance) commits, $(days) $(unit))"
         end
     end
 
-    commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : styled" {light:($(split(Base.GIT_VERSION_INFO.date_string)[1]))}"
-    doclink = styled"{bold:Documentation:} {(underline=grey),link={https://docs.julialang.org}:https://docs.julialang.org}"
-    help = styled"Type {repl_prompt_help:?} for help, {repl_prompt_pkg:]?} for {(underline=grey),link={https://pkgdocs.julialang.org/}:Pkg} help."
+    commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
 
-    sizenames = (:tiny, :short, :narrow, :full)
-    maxsize = something(findfirst(==(preferred), sizenames), length(sizenames))
-    size = min(if     all(displaysize(io) .>= (8, 70)); 4 # Full size
-               elseif all(displaysize(io) .>= (8, 45)); 3 # Narrower
-               elseif all(displaysize(io) .>= (3, 50)); 2 # Tiny
-               else 1 end,
-               max(0, maxsize))
+    if get(io, :color, false)::Bool
+        c = Base.text_colors
+        tx = c[:normal] # text
+        jl = c[:normal] # julia
+        d1 = c[:bold] * c[:blue]    # first dot
+        d2 = c[:bold] * c[:red]     # second dot
+        d3 = c[:bold] * c[:green]   # third dot
+        d4 = c[:bold] * c[:magenta] # fourth dot
 
-    if size == 4 # Full size
-        print(io, styled"""
-                                 {bold,green:_}
-                     {bold,blue:_}       _ {bold:{red:_}{green:(_)}{magenta:_}}     {shadow:│}  $doclink
-                    {bold,blue:(_)}     | {bold:{red:(_)} {magenta:(_)}}    {shadow:│}
-                     _ _   _| |_  __ _   {shadow:│}  $help
-                    | | | | | | |/ _` |  {shadow:│}
-                    | | |_| | | | (_| |  {shadow:│}  Version {bold:$VERSION}$commit_date
-                   _/ |\\__'_|_|_|\\__'_|  {shadow:│}  $commit_string
-                  |__/                   {shadow:│}
-                  \n""")
-    elseif size == 3 # Rotated
-        print(io, styled"""
-                                 {bold,green:_}
-                     {bold,blue:_}       _ {bold:{red:_}{green:(_)}{magenta:_}}
-                    {bold,blue:(_)}     | {bold:{red:(_)} {magenta:(_)}}
-                     _ _   _| |_  __ _
-                    | | | | | | |/ _` |
-                    | | |_| | | | (_| |
-                   _/ |\\__'_|_|_|\\__'_|
-                  |__/
+        if short
+            print(io,"""
+              $(d3)o$(tx)  | Version $(VERSION)$(commit_date)
+             $(d2)o$(tx) $(d4)o$(tx) | $(commit_string)
+            """)
+        else
+            print(io,"""               $(d3)_$(tx)
+               $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
+              $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
+               $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
+              $(jl)| | | | | | |/ _` |$(tx)  |
+              $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
+             $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
+            $(jl)|__/$(tx)                   |
 
-                   $doclink
-                   $help
+            """)
+        end
+    else
+        if short
+            print(io,"""
+              o  |  Version $(VERSION)$(commit_date)
+             o o |  $(commit_string)
+            """)
+        else
+            print(io,"""
+                           _
+               _       _ _(_)_     |  Documentation: https://docs.julialang.org
+              (_)     | (_) (_)    |
+               _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
+              | | | | | | |/ _` |  |
+              | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
+             _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
+            |__/                   |
 
-                   Version {bold:$VERSION}$commit_date
-                   $commit_string
-                  \n""")
-    elseif size == 2 # Tiny
-        print(io, styled"""
-                     {bold,green:o}  {shadow:│} Version {bold:$VERSION}$commit_date
-                    {bold:{red:o} {magenta:o}} {shadow:│} $commit_string
-                   """, ifelse(displaysize(io) > (12, 0), "\n", ""))
-    elseif size == 1 && Base.GIT_VERSION_INFO.tagged_commit # Text only
-        print(io, styled"""{bold:{blue:∴} {magenta:Julia} $VERSION}$commit_date\n""")
-    elseif size == 1 # Text only
-        print(io, styled"""{bold:{blue:∴} {magenta:Julia} $VERSION}$commit_date $commit_string\n""")
+            """)
+        end
     end
 end
 
@@ -1802,7 +1818,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
         end
         line = readline(repl.stream, keep=true)
         if !isempty(line)
-            ast = Base.parse_input_line(line)
+            ast = parse_repl_input_line(line, repl)
             if have_color
                 print(repl.stream, Base.color_normal)
             end
