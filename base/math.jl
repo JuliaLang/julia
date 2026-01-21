@@ -703,10 +703,7 @@ fourthroot(x::Number) = sqrt(sqrt(x))
 Compute the hypotenuse ``\\sqrt{|x|^2+|y|^2}`` avoiding overflow and underflow.
 
 This code is an implementation of the algorithm described in:
-An Improved Algorithm for `hypot(a,b)`
-by Carlos F. Borges
-The article is available online at arXiv at the link
-  https://arxiv.org/abs/1904.09481
+[*An Improved Algorithm for `hypot(a,b)`* by Carlos F. Borges](https://arxiv.org/abs/1904.09481)
 
     hypot(x...)
 
