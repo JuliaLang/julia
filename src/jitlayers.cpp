@@ -432,6 +432,10 @@ static void jl_do_dump_compile(jl_code_instance_t *codeinst, uint64_t time)
             ios_printf(stream, "\"\n");
         }
     }
+
+    float orig_time = julia_half_to_float(jl_atomic_load_relaxed(&codeinst->time_compile));
+    jl_atomic_store_relaxed(&codeinst->time_compile,
+                            julia_double_to_half(orig_time + time * 1e-9));
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN void
