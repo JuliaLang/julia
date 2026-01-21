@@ -31,10 +31,11 @@ Base.:(//)
 Base.rationalize
 Base.numerator
 Base.denominator
-Base.:(<<)
-Base.:(>>)
-Base.:(>>>)
-Base.bitrotate
+```
+
+## Constructing Ranges
+
+```@docs
 Base.:(:)(::Any, ::Any, ::Any)
 Base.:(:)(::CartesianIndex, ::CartesianIndex, ::CartesianIndex)
 Base.range
@@ -42,6 +43,11 @@ Base.OneTo
 Base.StepRangeLen
 Base.logrange
 Base.LogRange
+```
+
+## Comparisons
+
+```@docs
 Base.:(==)
 Base.:(!=)
 Base.:(!==)
@@ -50,21 +56,35 @@ Base.:(<=)
 Base.:(>)
 Base.:(>=)
 Base.cmp
+Base.isapprox
+```
+
+## Bit Operators
+
+```@docs
+Base.:(<<)
+Base.:(>>)
+Base.:(>>>)
+Base.bitrotate
 Base.:(~)
 Base.:(&)
 Base.:(|)
 Base.xor
 Base.nand
 Base.nor
+```
+
+## Logical Operators
+
+```@docs
 Base.:(!)
 &&
 ||
 ```
 
-## Mathematical Functions
+## Trigonometry
 
 ```@docs
-Base.isapprox
 Base.sin(::Number)
 Base.cos(::Number)
 Base.sincos(::Float64)
@@ -112,6 +132,11 @@ Base.Math.cosc
 Base.Math.deg2rad
 Base.Math.rad2deg
 Base.Math.hypot
+```
+
+## Logarithms and Exponentiation
+
+```@docs
 Base.log(::Number)
 Base.log(::Number, ::Number)
 Base.log2
@@ -121,9 +146,13 @@ Base.Math.frexp
 Base.exp(::Float64)
 Base.exp2
 Base.exp10
-Base.Math.ldexp
-Base.Math.modf
 Base.expm1
+Base.Math.ldexp
+```
+
+## Rounding
+
+```@docs
 Base.round
 Base.Rounding.RoundingMode
 Base.Rounding.RoundNearest
@@ -138,12 +167,27 @@ Base.ceil
 Base.floor
 Base.trunc
 Base.unsafe_trunc
+Base.Math.modf
+```
+
+## Extrema
+
+```@docs
 Base.min
 Base.max
 Base.minmax
+```
+
+## Clamping
+
+```@docs
 Base.Math.clamp
 Base.Math.clamp!
-Base.abs
+```
+
+## Checked Operations
+
+```@docs
 Base.Checked
 Base.Checked.checked_abs
 Base.Checked.checked_neg
@@ -159,15 +203,35 @@ Base.Checked.checked_pow
 Base.Checked.add_with_overflow
 Base.Checked.sub_with_overflow
 Base.Checked.mul_with_overflow
+```
+
+## Signs
+
+```@docs
+Base.abs
 Base.abs2
+Base.uabs
+```
+
+```@docs
 Base.copysign
 Base.sign
 Base.signbit
 Base.flipsign
+```
+
+## Roots
+
+```@docs
 Base.sqrt(::Number)
 Base.isqrt
 Base.Math.cbrt(::AbstractFloat)
 Base.fourthroot(::Number)
+```
+
+## Complex Functions
+
+```@docs
 Base.real
 Base.imag
 Base.reim
@@ -175,6 +239,11 @@ Base.conj
 Base.angle
 Base.cis
 Base.cispi
+```
+
+## Combinatorics and Number Theory
+
+```@docs
 Base.binomial
 Base.factorial
 Base.gcd
@@ -186,9 +255,13 @@ Base.prevpow
 Base.nextprod
 Base.invmod
 Base.powermod
+```
+
+## Other Mathematical Functions
+
+```@docs
 Base.ndigits
 Base.add_sum
-Base.uabs
 Base.widemul
 Base.Math.evalpoly
 Base.Math.@evalpoly
