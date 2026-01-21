@@ -578,7 +578,7 @@ test_mod = Module()
         @test JuliaLowering.expr_to_syntaxtree(
             Expr(:macrocall, Expr(:var"hygienic-scope", Symbol("@mac"), :other, :args), nothing, :x)) ≈
             @ast_ [K"macrocall"
-                [K"hygienic_scope"
+                [K"hygienic-scope"
                     "@mac"::K"Identifier"
                     "other"::K"Identifier" # (<- normally a Module)
                     "args"::K"Identifier" # (<- normally a LineNumberNode)
@@ -600,7 +600,7 @@ test_mod = Module()
                  nothing,
                  :x)) ≈
             @ast_ [K"macrocall"
-                [K"hygienic_scope"
+                [K"hygienic-scope"
                     [K"escape"
                         "@mac"::K"Identifier"
                     ]

@@ -12,11 +12,4 @@ CODEOWNERS @JuliaLang/github-actions
 /base/binaryplatforms.jl @giordano
 /src/julia_gcext.h @fingolfin
 /test/gcext/gcext.c @fingolfin
-/src/gc-common.* @d-netto
-/src/gc-debug.c @d-netto
-/src/gc-interface.h @d-netto
-/src/gc-page-profiler.* @d-netto
-/src/gc-pages.c @d-netto
-/src/gc-stock.* @d-netto
-/src/gc-tls-common.h @d-netto
-/src/gc-tls-stock.h @d-netto
+/src/gc-* @udesou @qinsoon @d-netto

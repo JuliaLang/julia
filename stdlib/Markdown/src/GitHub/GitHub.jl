@@ -2,46 +2,17 @@
 
 include("table.jl")
 
-@breaking true ->
-function fencedcode(stream::IO, block::MD)
-    withstream(stream) do
-        startswith(stream, "~~~", padding = true) || startswith(stream, "```", padding = true) || return false
-        skip(stream, -1)
-        ch = read(stream, Char)
-        trailing = strip(readline(stream))
-        flavor = lstrip(trailing, ch)
-        n = 3 + length(trailing) - length(flavor)
-
-        # inline code block
-        ch in flavor && return false
-
-        buffer = IOBuffer()
-        while !eof(stream)
-            line_start = position(stream)
-            if startswith(stream, string(ch) ^ n)
-                if !startswith(stream, string(ch))
-                    if flavor == "math"
-                        push!(block, LaTeX(takestring!(buffer) |> chomp))
-                    else
-                        push!(block, Code(flavor, takestring!(buffer) |> chomp))
-                    end
-                    return true
-                else
-                    seek(stream, line_start)
-                end
-            end
-            write(buffer, readline(stream, keep=true))
-        end
-        return false
-    end
-end
-
 function github_paragraph(stream::IO, md::MD)
     skipwhitespace(stream)
     buffer = IOBuffer()
     p = Paragraph()
     push!(md, p)
     for char in readeach(stream, Char)
+        # handle Windows line ends
+        if char == '\r'
+            peek(stream, Char) == '\n' && read(stream, Char)
+            char = '\n'
+        end
         if char == '\n'
             eof(stream) && break
             if blankline(stream) || _parse(stream, md, breaking = true)
@@ -57,10 +28,10 @@ function github_paragraph(stream::IO, md::MD)
     return true
 end
 
-@flavor github [horizontalrule, list, indentcode, blockquote, admonition, footnote, hashheader,
-                fencedcode, github_table, github_paragraph,
+@flavor github [fencedcode, horizontalrule, list, indentcode, blockquote, admonition, footnote, hashheader,
+                html_block, html_block_type7, github_table, github_paragraph,
 
-                linebreak, escapes,
+                linebreak, escapes, entity,
                 en_or_em_dash, inline_code,
                 double_tilde_strikethrough, tilde_strikethrough,
                 asterisk_bold, underscore_bold,

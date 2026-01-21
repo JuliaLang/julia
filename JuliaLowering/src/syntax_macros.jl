@@ -55,7 +55,7 @@ function Base.var"@goto"(__context__::MacroContext, ex)
 end
 
 function Base.var"@locals"(__context__::MacroContext)
-    @ast __context__ __context__.macrocall [K"extension" "locals"::K"Symbol"]
+    @ast __context__ __context__.macrocall [K"locals"]
 end
 
 function Base.var"@isdefined"(__context__::MacroContext, ex)
@@ -96,8 +96,7 @@ function Base.var"@cfunction"(__context__::MacroContext, callable, return_type, 
         # Kinda weird semantics here - without `$`, the callable is a top level
         # expression evaluated within the module where the `@cfunction` is
         # expanded into.
-        fptr = @ast __context__ callable [K"inert"(
-                meta=CompileHints(:as_Expr, true))
+        fptr = @ast __context__ callable [K"inert"
             callable
         ]
         typ = Ptr{Cvoid}
@@ -326,10 +325,7 @@ end
 # For now we have our own versions
 function var"@islocal"(__context__::MacroContext, ex)
     @chk kind(ex) == K"Identifier"
-    @ast __context__ __context__.macrocall [K"extension"
-        "islocal"::K"Symbol"
-        ex
-    ]
+    @ast __context__ __context__.macrocall [K"islocal" ex]
 end
 
 """

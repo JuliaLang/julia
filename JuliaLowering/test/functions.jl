@@ -173,6 +173,14 @@ begin
 end
 """) === ("fallback", (Number, Float64), (Int, Int), "fallback")
 
+# Static parameter may be undefined
+@test JuliaLowering.include_string(test_mod, """
+begin
+    func_undef_static_param(x::Union{T,Nothing}) where T = @isdefined(T)
+    (func_undef_static_param(nothing), func_undef_static_param(42))
+end
+""") === (false, true)
+
 Base.eval(test_mod,
 :(struct X1{T} end)
 )
@@ -213,6 +221,22 @@ end
 
 (f_return_in_value_pos(), x)
 """) === (42, 0)
+
+@test JuliaLowering.include_string(test_mod, """
+function f_return_in_call()
+    f_return_in_call(return 123)
+end
+
+f_return_in_call()
+""") === 123
+
+@test JuliaLowering.include_string(test_mod, raw"""
+function f_return_in_interpolation()
+    :(1 + $(return 123))
+end
+
+f_return_in_interpolation()
+""") === 123
 
 @testset "Default positional arguments" begin
     @test JuliaLowering.include_string(test_mod, """
@@ -421,6 +445,15 @@ end
     @test values(test_mod.f_kw_slurp_some(z=3, x = 1, y = 2, w=4)) === (z=3, w=4)
     @test values(test_mod.f_kw_slurp_some(x = 1)) === (;)
     @test values(test_mod.f_kw_slurp_some()) === (;)
+
+    # Slurping with defaults depending on keyword names
+    JuliaLowering.include_string(test_mod, """
+    function f_kw_slurp_dep(; a=1, b=a, kws...)
+        (a, b, length(kws))
+    end
+    """)
+    @test test_mod.f_kw_slurp_dep(; a=1) == (1, 1, 0)
+    @test test_mod.f_kw_slurp_dep(; a=2, c=3) == (2, 2, 1)
 
     # Keyword defaults which depend on other keywords.
     JuliaLowering.include_string(test_mod, """

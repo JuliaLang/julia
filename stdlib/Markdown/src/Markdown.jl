@@ -119,7 +119,7 @@ corresponding [`MD`](@ref) object.
 the manual section on [documentation](@ref man-documentation) for more information.
 
 # Examples
-```
+```jldoctest
 julia> s = doc"f(x) = 2*x"
   f(x) = 2*x
 

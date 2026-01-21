@@ -1840,7 +1840,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
 end
 
 const _verify_trim_world_age = RefValue{UInt}(typemax(UInt))
-verify_typeinf_trim(codeinfos::Vector{Any}, onlywarn::Bool) = Core._call_in_world(_verify_trim_world_age[], verify_typeinf_trim, stdout, codeinfos, onlywarn)
+verify_typeinf_trim(codeinfos::Vector{Any}, onlywarn::Bool) = Core._call_in_world(_verify_trim_world_age[], verify_typeinf_trim, Base.stderr, codeinfos, onlywarn)
 
 function return_type(@nospecialize(f), t::DataType) # this method has a special tfunc
     world = tls_world_age()
