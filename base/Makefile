@@ -80,7 +80,7 @@ else
 endif
 ifeq ($(OS), Darwin)
 	@printf "%s\n" "const MACOS_PRODUCT_VERSION = \"$(shell sw_vers -productVersion)\"" >> $@
-	@printf "%s\n" "const MACOS_PLATFORM_VERSION = \"$(shell xcrun --show-sdk-version)\"" >> $@
+	@printf "%s\n" "const MACOS_PLATFORM_VERSION = \"$(shell xcrun --sdk macosx --show-sdk-version)\"" >> $@
 endif
 	@printf "%s\n" "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)\"" >> $@
 
