@@ -4075,14 +4075,15 @@ function expand_struct_def(ctx, ex, docs)
         end
     end
 
-    # User-defined inner constructors are placed in a separate scope_block
-    # outside the type parameter scope, matching flisp behavior. This ensures
-    # that assignments to variables with the same name as type parameters
-    # create new local variables rather than capturing the type parameters.
-    # See https://github.com/aviatesk/JETLS.jl/issues/508
+    # GlobalRef for use outside scope_block (for _defaultctors and inner constructors)
+    struct_globalref = GlobalRef(ctx.mod, Symbol(struct_name.name_val))
+
+    # User-defined inner constructors need to be rewritten to use proper type references.
+    # Use GlobalRef so we don't need a global declaration in their scope_block.
     if !isempty(inner_defs)
+        struct_globalref_node = @ast ctx ex struct_globalref::K"Value"
         map!(inner_defs, inner_defs) do def
-            rewrite_new_calls(ctx, def, struct_name, global_struct_name,
+            rewrite_new_calls(ctx, def, struct_name, struct_globalref_node,
                               typevar_names, field_names, field_types)
         end
     end
@@ -4146,27 +4147,21 @@ function expand_struct_def(ctx, ex, docs)
                     global_struct_name
                     newdef
                  ]
-                # Default constructors stay inside type parameter scope because
-                # `default_inner_constructors` uses field_types directly in function
-                # signatures (e.g., `f(x::T)` where T is a type parameter).
-                # In flisp, `_defaultctors` is called at runtime so this isn't needed,
-                # but JuliaLowering currently generates constructor code at compile time.
-                if isempty(inner_defs)
-                    default_inner_constructors(ctx, ex, global_struct_name,
-                                               typevar_names, typevar_stmts, field_names_2, field_types)
-                end
-                if need_outer_constructor
-                    default_outer_constructor(ctx, ex, global_struct_name,
-                                              typevar_names, typevar_stmts, field_names_2, field_types)
-                end
             ]
         ]
 
-        # User-defined inner constructors are placed in a separate scope_block
-        # outside the type parameter scope, matching flisp behavior.
-        if !isempty(inner_defs)
+        if isempty(inner_defs)
+            # Default constructors are generated at runtime by Core._defaultctors.
+            [K"call"
+                "_defaultctors"::K"core"
+                struct_globalref::K"Value"
+                ::K"SourceLocation"(ex)
+            ]
+        else
+            # User-defined inner constructors are placed in a separate scope_block
+            # so that helper functions defined in the struct body don't leak to
+            # the module's global scope.
             [K"scope_block"(scope_type=:hard)
-                [K"global" global_struct_name]
                 [K"block" inner_defs...]
             ]
         end
