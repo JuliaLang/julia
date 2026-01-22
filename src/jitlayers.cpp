@@ -1953,7 +1953,13 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
     {
         std::unique_lock Lock{LinkerMutex};
         for (auto CI : CIs) {
-            auto &CISym = CISymbols.at(CI);
+            auto It = CISymbols.find(CI);
+            if (It == CISymbols.end()) {
+                errs()
+                    << "Internal error: Attempted to publish code instance that was never successfully compiled.\n";
+                return;
+            }
+            auto CISym = It->second;
             if (CISym.invoke)
                 Exports.add(CISym.invoke);
             if (CISym.specptr)
@@ -1963,10 +1969,16 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
 
     JuliaTaskDispatcher::future<void> F;
     auto Callback = [this, CIs = SmallVector<jl_code_instance_t *, 1>(CIs),
-                     P = Wait ? std::optional(F.get_promise()) :
-                                std::nullopt](Expected<SymbolMap> SymsE) mutable {
+                     P = Wait ? std::optional(F.get_promise()) : std::nullopt,
+                     &Exports](Expected<SymbolMap> SymsE) mutable {
         std::unique_lock Lock{LinkerMutex};
-        auto Syms = cantFail(std::move(SymsE));
+        if (!SymsE) {
+            errs() << "Internal error: Lookup failed for symbols:\n";
+            for (auto &[S, _] : Exports)
+                errs() << "  " << *S << "\n";
+            return;
+        }
+        auto Syms = std::move(*SymsE);
         for (auto [i, CI] : llvm::enumerate(CIs)) {
             jl_codeinst_funcs_t<void *> Addrs{};
             const auto &S = CISymbols.at(CIs[i]);

@@ -10140,7 +10140,10 @@ void emit_always_inline(jl_codegen_output_t &out,
                 src = get_src(ci);
                 if (!src)
                     continue;
-                decls = *jl_emit_codeinst(out, ci, src); // contains safepoints
+                auto decls_opt = jl_emit_codeinst(out, ci, src); // contains safepoints
+                if (!decls_opt)
+                    break;
+                decls = *decls_opt;
                 auto linkage = target.external_linkage ?
                                    GlobalValue::AvailableExternallyLinkage :
                                    GlobalValue::PrivateLinkage;
