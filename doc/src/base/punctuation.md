@@ -1,6 +1,6 @@
 # [Punctuation](@id man-punctuation)
 
-Extended documentation for mathematical symbols & functions is [here](@ref math-ops).
+See also the [extended documentation for mathematical symbols & functions](@ref math-ops).
 
 | symbol      | meaning                                                                                     |
 |:----------- |:--------------------------------------------------------------------------------------------|
