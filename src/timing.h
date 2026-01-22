@@ -415,17 +415,6 @@ STATIC_INLINE void _jl_timing_suspend_destroy(jl_timing_suspend_t *suspend) JL_N
 #define _ITTAPI_COUNTER_MEMBER
 #endif
 
-#ifdef USE_NVTX
-#define _NVTX_COUNTER_MEMBER void * __nvtx_null;
-#else
-#define _NVTX_COUNTER_MEMBER
-#endif
-
-#ifdef USE_APPLE_OSLOG
-#define _APPLE_OSLOG_COUNTER_MEMBER void * _oslog_null;
-#else
-#define _APPLE_OSLOG_COUNTER_MEMBER
-#endif
 
 #ifdef USE_TRACY
 # define _TRACY_COUNTER_MEMBER jl_tracy_counter_t tracy_counter;
@@ -433,18 +422,11 @@ STATIC_INLINE void _jl_timing_suspend_destroy(jl_timing_suspend_t *suspend) JL_N
 # define _TRACY_COUNTER_MEMBER
 #endif
 
-#ifdef USE_TIMING_COUNTS
-#define _COUNTS_MEMBER _Atomic(uint64_t) basic_counter;
-#else
-#define _COUNTS_MEMBER
-#endif
 
 typedef struct {
     _ITTAPI_COUNTER_MEMBER
-    _NVTX_COUNTER_MEMBER
-    _APPLE_OSLOG_COUNTER_MEMBER
     _TRACY_COUNTER_MEMBER
-    _COUNTS_MEMBER
+    _Atomic(uint64_t) basic_counter;
 } jl_timing_counter_t;
 
 JL_DLLEXPORT extern jl_timing_counter_t jl_timing_counters[JL_TIMING_COUNTER_LAST];

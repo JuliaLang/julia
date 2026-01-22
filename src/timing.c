@@ -597,9 +597,13 @@ JL_DLLEXPORT void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_
 
     jl_static_show_config_t config = { /* quiet */ 1 };
     jl_static_show_func_sig_((JL_STREAM*)&buf, v, config);
-    if (buf.size == buf.maxsize)
-        memset(&buf.buf[IOS_INLSIZE - 3], '.', 3);
-    buf.buf[buf.size-1] = '\0'; // Ensure null-termination
+    if (buf.size == buf.maxsize) {
+        memset(&buf.buf[IOS_INLSIZE - 4], '.', 3);
+        buf.buf[buf.size-1] = '\0'; // Ensure null-termination
+    }
+    else {
+        buf.buf[buf.size] = '\0'; // Ensure null-termination
+    }
     jl_timing_puts(cur_block, buf.buf);
 #endif
 }
@@ -638,6 +642,7 @@ JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str)
 #endif
 #ifdef USE_APPLE_OSLOG
         // Buffer the metadata to be emitted with the interval end
+    assert(cur_block->oslog_metadata_len < sizeof(cur_block->oslog_metadata));
     size_t len = strlen(str);
     size_t remaining = sizeof(cur_block->oslog_metadata) - cur_block->oslog_metadata_len - 1;
     if (remaining > 0) {
