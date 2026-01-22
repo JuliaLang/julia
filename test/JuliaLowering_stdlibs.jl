@@ -2,7 +2,6 @@ import Libdl
 
 # known precompilation failures under JL
 const INCOMPATIBLE_STDLIBS = String[
-    "LibGit2", # could not evaluate cfunction return type (it might depend on a local variable)
     "SparseArrays", # type-alias bug (JuliaLang/JuliaLowering.jl#123)
     "Test", # nested + destructured args splat (JuliaLang/JuliaLowering.jl#133)
     "REPL", # infinite softscope (in REPL code)

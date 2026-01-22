@@ -406,15 +406,15 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
         Expr(:meta, args...)
     elseif k == K"static_eval"
         @assert numchildren(ex) == 1
-        if kind(ex[1]) === K"tuple"
-            # Should just be ccall library spec
-            @assert numchildren(ex[1]) === 2
-            Expr(:tuple, _to_lowered_expr(ex[1][1], stmt_offset),
-                 _to_lowered_expr(ex[1][2], stmt_offset))
-        elseif kind(ex[1]) === K"function"
-            QuoteNode(est_to_expr(ex))
-        else
-            _to_lowered_expr(ex[1], stmt_offset)
+        @stm ex[1] begin
+            # tuple should just be ccall library spec
+            [K"tuple" s lib] -> Expr(:tuple,
+                                     _to_lowered_expr(s, stmt_offset),
+                                     _to_lowered_expr(lib, stmt_offset))
+            [K"tuple" s] -> Expr(:tuple,
+                                 _to_lowered_expr(s, stmt_offset))
+            [K"function" _...] -> QuoteNode(est_to_expr(ex[1]))
+            _ -> _to_lowered_expr(ex[1], stmt_offset)
         end
     else
         # Allowed forms according to https://docs.julialang.org/en/v1/devdocs/ast/

@@ -306,9 +306,12 @@ vst1_value(
     [K"generated_function" callex gen nongen] ->
         vst1_function_calldecl(vcx, callex) &
         vst1_stmt(vcx, gen) & vst1_stmt(vcx, nongen)
-    # TODO: validated in lowering, but should be moved here
-    [K"foreigncall" _...] -> pass()
-    [K"cfunction" _ _ _ _ _] -> pass()
+    [K"foreigncall" _...] -> pass() # TODO (ccall also?)
+    [K"cfunction" [K"Value"] f rt at [K"inert" [K"Identifier"]]] ->
+        vst1_value(vcx, f) & vst1_value(vcx, rt) & vst1_value(vcx, at)
+    [K"cconv" tup nreq] -> (get(tup, :value, nothing) isa Tuple &&
+        get(nreq, :value, nothing) isa Int) ? pass() :
+        @fail(st, "expected (cconv convention_tuple n_req_args)")
     [K"tryfinally" t f _...] -> vst1_value(vcx, t) & vst1_value(vcx, f)
     [K"inline" _] -> pass()
     [K"noinline" _] -> pass()
@@ -341,6 +344,8 @@ vst1_value(
         @fail(st, "`Symbol` kind not valid until desugaring")
     [K"Placeholder"] ->
         @fail(st, "`Placeholder` kind not valid until desugaring")
+    [K"unknown_head" _...] ->
+        @fail(st, string("unknown expr head: ", st.name_val))
 
     (_, when=need_value && kind(st) in KSet"symbolic_label symbolic_goto") ->
         @fail(st, "this syntax does not have a value and cannot be read from")

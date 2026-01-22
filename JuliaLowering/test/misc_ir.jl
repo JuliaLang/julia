@@ -404,42 +404,30 @@ end
 @ccall foo(x::X, y::Y)::R
 #---------------------
 1   TestMod.X
-2   TestMod.x
-3   (= slot₁/arg1 (call Base.cconvert %₁ %₂))
-4   TestMod.Y
+2   TestMod.Y
+3   TestMod.x
+4   (call top.cconvert %₁ %₃)
 5   TestMod.y
-6   (= slot₂/arg2 (call Base.cconvert %₄ %₅))
-7   TestMod.X
-8   slot₁/arg1
-9   (call Base.unsafe_convert %₇ %₈)
-10  TestMod.Y
-11  slot₂/arg2
-12  (call Base.unsafe_convert %₁₀ %₁₁)
-13  slot₁/arg1
-14  slot₂/arg2
-15  (foreigncall :foo (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 0 :($(QuoteNode((:ccall, 0x0000, false)))) %₉ %₁₂ %₁₃ %₁₄)
-16  (return %₁₅)
+6   (call top.cconvert %₂ %₅)
+7   (call top.unsafe_convert %₁ %₄)
+8   (call top.unsafe_convert %₂ %₆)
+9   (foreigncall (static_eval (tuple :foo)) (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 0 (inert (:ccall, 0x0000, false)) %₇ %₈ %₄ %₆)
+10  (return %₉)
 
 ########################################
 # @ccall lowering with gc_safe
-@ccall foo(x::X; y::Y)::R gc_safe=true
+@ccall gc_safe=true foo(x::X; y::Y)::R
 #---------------------
 1   TestMod.X
-2   TestMod.x
-3   (= slot₁/arg1 (call Base.cconvert %₁ %₂))
-4   TestMod.Y
+2   TestMod.Y
+3   TestMod.x
+4   (call top.cconvert %₁ %₃)
 5   TestMod.y
-6   (= slot₂/arg2 (call Base.cconvert %₄ %₅))
-7   TestMod.X
-8   slot₁/arg1
-9   (call Base.unsafe_convert %₇ %₈)
-10  TestMod.Y
-11  slot₂/arg2
-12  (call Base.unsafe_convert %₁₀ %₁₁)
-13  slot₁/arg1
-14  slot₂/arg2
-15  (foreigncall :foo (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 1 :($(QuoteNode((:ccall, 0x0000, true)))) %₉ %₁₂ %₁₃ %₁₄)
-16  (return %₁₅)
+6   (call top.cconvert %₂ %₅)
+7   (call top.unsafe_convert %₁ %₄)
+8   (call top.unsafe_convert %₂ %₆)
+9   (foreigncall (static_eval (tuple :foo)) (static_eval TestMod.R) (static_eval (call core.svec TestMod.X TestMod.Y)) 1 (inert (:ccall, 0x0000, true)) %₇ %₈ %₄ %₆)
+10  (return %₉)
 
 ########################################
 # non-macro ccall with vararg in signature, but none provided
@@ -462,7 +450,7 @@ ccall(:fcntl, Cint, (RawFD, Cint, Cint...), s, F_GETFL)
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
 @ccall strlen("foo"::Cstring)
-#                            └ ── Expected a return type annotation `::SomeType`
+#                            └ ── expected a return type annotation `::SomeType`
 
 ########################################
 # Error: No argument type on @ccall
@@ -490,27 +478,27 @@ MacroExpansionError while expanding @ccall in module Main.TestMod:
 
 ########################################
 # Error: Bad @ccall option
-@ccall foo(x::Int)::Int bad_opt
+@ccall bad_opt foo(x::Int)::Int
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
-@ccall foo(x::Int)::Int bad_opt
-#                       └─────┘ ── Bad option to ccall
+@ccall bad_opt foo(x::Int)::Int
+#      └─────┘ ── bad option to ccall
 
 ########################################
 # Error: Unknown @ccall option name
-@ccall foo(x::Int)::Int bad_opt=true
+@ccall bad_opt=true foo(x::Int)::Int
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
-@ccall foo(x::Int)::Int bad_opt=true
-#                       └─────┘ ── Unknown option name for ccall
+@ccall bad_opt=true foo(x::Int)::Int
+#      └─────┘ ── unknown option name for ccall
 
 ########################################
 # Error: Unknown option type
-@ccall foo(x::Int)::Int gc_safe="hi"
+@ccall gc_safe="hi" foo(x::Int)::Int
 #---------------------
 MacroExpansionError while expanding @ccall in module Main.TestMod:
-@ccall foo(x::Int)::Int gc_safe="hi"
-#                                └┘ ── gc_safe must be true or false
+@ccall gc_safe="hi" foo(x::Int)::Int
+#               └┘ ── gc_safe must be true or false
 
 ########################################
 # Error: unary & syntax

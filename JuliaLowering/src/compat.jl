@@ -419,7 +419,7 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
             else
                 # Kick the can down the road (should only be simple atoms?)
                 out_cs = SyntaxList(g)
-                for v in vars
+                for v in vs
                     push!(out_cs, @ast g v [K"meta" s=>K"Symbol" v])
                 end
                 @ast g st [K"block" out_cs...]
@@ -456,6 +456,12 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
                     "macro-expansion and desugaring: ", st))
             end
         end
+        [K"cfunction" typ fptr rt at sym] -> @ast g st [K"cfunction"
+            rec(typ) rec(fptr)
+            [K"static_eval"(meta=name_hint("cfunction return type")) rec(rt)]
+            [K"static_eval"(meta=name_hint("cfunction argument type")) rec(at)]
+            rec(sym)
+        ]
 
         # avoid creating excess nodes
         _ -> let out_cs::Vector{NodeId} = map(x->rec(x)._id, children(st))

@@ -24,8 +24,10 @@ function _register_kinds()
             "inline"
             "noinline"
             "loopinfo"
-            # Call into foreign code. Emitted by `@ccall`
+            # Call into foreign code
             "foreigncall"
+            # ccall convention
+            "cconv"
             # Special form for constructing a function callable from C
             "cfunction"
             # Special form emitted by `Base.Experimental.@opaque`

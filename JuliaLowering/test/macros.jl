@@ -190,7 +190,7 @@ let err = try
 end
 
 @test JuliaLowering.include_string(test_mod, "@ccall strlen(\"foo\"::Cstring)::Csize_t") == 3
-@test JuliaLowering.include_string(test_mod, "@ccall strlen(\"asdf\"::Cstring)::Csize_t gc_safe=true") == 4
+@test JuliaLowering.include_string(test_mod, "@ccall gc_safe=true strlen(\"asdf\"::Cstring)::Csize_t") == 4
 @test JuliaLowering.include_string(test_mod, """
 begin
     buf = zeros(UInt8, 20)
@@ -205,7 +205,7 @@ let (err, st) = try
         e, stacktrace(catch_backtrace())
     end
     @test err isa JuliaLowering.MacroExpansionError
-    @test err.msg == "Expected a return type annotation `::SomeType`"
+    @test err.msg == "expected a return type annotation `::SomeType`"
     @test isnothing(err.err)
     # Check that `catch_backtrace` can capture the stacktrace of the macro function
     @test any(sf->sf.func===:ccall_macro_parse, st)

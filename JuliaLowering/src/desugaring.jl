@@ -1741,9 +1741,14 @@ function expand_ccall(ctx, ex)
     cfunc_name = ex[2]
     # Detect calling convention if present.
     known_conventions = ("cdecl", "stdcall", "fastcall", "thiscall", "llvmcall")
-    cconv = if any(is_same_identifier_like(ex[3], id) for id in known_conventions)
+    cconv = if kind(ex[3]) === K"cconv"
         ex[3]
+    elseif any(is_same_identifier_like(ex[3], id) for id in known_conventions)
+        ex[3]
+    else
+        nothing
     end
+
     if isnothing(cconv)
         rt_idx = 3
     else
@@ -1851,9 +1856,13 @@ function expand_ccall(ctx, ex)
                     expanded_types...
                 ]
             ]
-            (isnothing(vararg_type) ? 0 : length(arg_types))::K"Integer"
+            (cconv !== nothing && kind(cconv) === K"cconv" ? cconv[2].value :
+                isnothing(vararg_type) ? 0 :
+                length(arg_types))::K"Integer"
             if isnothing(cconv)
                 "ccall"::K"Symbol"
+            elseif kind(cconv) === K"cconv"
+                @ast ctx cconv [K"inert" cconv[1]]
             else
                 cconv=>K"Symbol"
             end
