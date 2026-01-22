@@ -3070,8 +3070,7 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
                 sourcepath = find_ext_path(normpath(joinpath(env, package_uuidkey.name)), ext)
             end
             set_pkgorigin_version_path(this_uuidkey, sourcepath)
-            # Use v"0" to indicate we should accept any syntax version from the bundled depot
-            newm = _require_search_from_serialized(this_uuidkey, PkgLoadSpec(sourcepath, v"0"), UInt128(0), false; DEPOT_PATH=depot_path)
+            newm = _require_search_from_serialized(this_uuidkey, PkgLoadSpec(sourcepath, VERSION), UInt128(0), false; DEPOT_PATH=depot_path)
         end
     finally
         end_loading(this_uuidkey, newm)
@@ -4287,8 +4286,7 @@ end
             record_reason(reasons, "different compilation options")
             return true
         end
-        # v"0" means accept any syntax version (used by require_stdlib for bundled depot)
-        if modspec.julia_syntax_version != v"0" && syntax_version != cache_syntax_version(modspec.julia_syntax_version)
+        if stalecheck && syntax_version != cache_syntax_version(modspec.julia_syntax_version)
             @debug "Rejecting cache file $cachefile for $modkey since it was parsed for a different Julia syntax version"
             record_reason(reasons, "different Julia syntax version")
             return true
