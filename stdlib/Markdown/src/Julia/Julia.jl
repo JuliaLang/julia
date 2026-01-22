@@ -8,10 +8,10 @@
 include("interp.jl")
 
 @flavor julia [blocktex, blockinterp,
-               horizontalrule, list, indentcode, blockquote, admonition, footnote, hashheader,
-               fencedcode, github_table, setextheader, paragraph,
+               fencedcode, horizontalrule, list, indentcode, blockquote, admonition, footnote, hashheader,
+               html_block, html_block_type7, github_table, setextheader, paragraph,
 
-               linebreak, escapes,
+               linebreak, escapes, entity,
                tex, interp,
                en_or_em_dash, inline_code,
                double_tilde_strikethrough, tilde_strikethrough,

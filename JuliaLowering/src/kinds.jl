@@ -10,6 +10,8 @@ function _register_kinds()
             "atomic"
             # Flag for @generated parts of a function
             "generated"
+            # Like (function call body) but (generated_function call gen nongen)
+            "generated_function"
             # Temporary rooting of identifiers (GC.@preserve)
             "gc_preserve"
             "gc_preserve_begin"
@@ -46,19 +48,16 @@ function _register_kinds()
             # invocations during macro expansion (gone after macro expansion)
             "escape"
             # Used for converting the old-style macro hygienic-scope form (gone
-            # after macro expansion)
-            "hygienic_scope"
+            # after macro expansion).
+            "hygienic-scope"
             # An expression which will eventually be evaluated "statically" in
             # the context of a CodeInfo and thus allows access only to globals
             # and static parameters. Used for ccall, cfunction, cglobal
             # TODO: Use this for GeneratedFunctionStub also?
             "static_eval"
-            # Catch-all for additional syntax extensions without the need to
-            # extend `Kind`. Known extensions include:
-            #   locals, islocal, isglobal
-            # The content of an assertion is not considered to be quoted, so
-            # use K"Symbol" or K"inert" inside where necessary.
-            "extension"
+            "islocal"
+            "isglobal"
+            "locals"
         "END_EXTENSION_KINDS"
 
         # The following kinds are internal to lowering

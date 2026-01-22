@@ -16,7 +16,7 @@ import Base: show
     @test md"foo ~bar~ baz" == MD(Paragraph(["foo ", Strikethrough("bar"), " baz"]))
     @test md"foo ~~bar~~ baz" == MD(Paragraph(["foo ", Strikethrough("bar"), " baz"]))
     @test md"""foo
-    bar""" == MD(Paragraph(["foo bar"]))
+    bar""" == MD(Paragraph(["foo\nbar"]))
     @test md"""foo\
     bar""" == MD(Paragraph(["foo", LineBreak(), "bar"]))
 
@@ -63,10 +63,9 @@ end
     @test code_in_code == MD(Code("```"))
     @test Markdown.plain(code_in_code) == "````\n```\n````\n"
 
-    let text = "Foo ```bar` ``baz`` ```\n",
-        md = Markdown.parse(text)
-        @test text == Markdown.plain(md)
-    end
+    text = "Foo ```bar` ``baz`` ```\n"
+    md = Markdown.parse(text)
+    @test text == Markdown.plain(md)
 
     @test md"""
     ````julia
@@ -80,7 +79,7 @@ end
 @testset "linefeeds" begin
     @test isempty(Markdown.parse("\r"))
     @test Markdown.parse("hello\r") == MD(Paragraph(["hello"]))
-    @test Markdown.parse("hello\r*julia*") == MD(Paragraph(Any["hello ", Italic(Any["julia"])]))
+    @test Markdown.parse("hello\r*julia*") == MD(Paragraph(Any["hello\n", Italic(Any["julia"])]))
 end
 
 @testset "footnotes" begin
@@ -187,9 +186,7 @@ end
     1. pirate
     2. ninja
     3. zombie"""
-    @test length(doc) === 2
-    @test isa(doc[1], Markdown.List)
-    @test isa(doc[2], Markdown.List)
+    @test typeof.(doc) == [Markdown.List, Markdown.List]
     @test doc[1].items[1][1].content[1] == "one"
     @test doc[1].items[2][1].content[1] == "two"
     @test doc[2].items[1][1].content[1] == "pirate"
@@ -206,10 +203,7 @@ end
         ... another paragraph.
         """
     )
-    @test length(doc) === 3
-    @test isa(doc[1], Markdown.Paragraph)
-    @test isa(doc[2], Markdown.List)
-    @test isa(doc[3], Markdown.Paragraph)
+    @test typeof.(doc) == [Markdown.Paragraph, Markdown.List, Markdown.Paragraph]
 
     @test length(doc[2].items) === 2
     @test doc[2].items[1][1].content[1] == "one"
@@ -222,57 +216,59 @@ end
     @test doc[2].items[2][2].items[2][1].content[1] == "four"
 end
 
-@test md"Foo [bar]" == MD(Paragraph("Foo [bar]"))
-@test md"Foo [bar](baz)" != MD(Paragraph("Foo [bar](baz)"))
-@test md"Foo \[bar](baz)" == MD(Paragraph("Foo [bar](baz)"))
+@testset "Links" begin
+    @test md"Foo [bar]" == MD(Paragraph("Foo [bar]"))
+    @test md"Foo [bar](baz)" != MD(Paragraph("Foo [bar](baz)"))
+    @test md"Foo \[bar](baz)" == MD(Paragraph("Foo [bar](baz)"))
+end
 
-# Basic plain (markdown) output
-@test md"foo" |> Markdown.plain == "foo\n"
-@test md"foo *bar* baz" |> Markdown.plain == "foo *bar* baz\n"
-@test md"# title" |> Markdown.plain == "# title\n"
-@test md"## section" |> Markdown.plain == "## section\n"
-@test md"## section `foo`" |> Markdown.plain == "## section `foo`\n"
-@test md"""Hello
+@testset "Basic plain (markdown) output" begin
+    @test md"foo" |> Markdown.plain == "foo\n"
+    @test md"foo *bar* baz" |> Markdown.plain == "foo *bar* baz\n"
+    @test md"# title" |> Markdown.plain == "# title\n"
+    @test md"## section" |> Markdown.plain == "## section\n"
+    @test md"## section `foo`" |> Markdown.plain == "## section `foo`\n"
+    @test md"""Hello
 
----
-World""" |> Markdown.plain == "Hello\n\n---\n\nWorld\n"
-@test md"[*a*](b)" |> Markdown.plain == "[*a*](b)\n"
-@test md"""
-> foo
->
->   * bar
->
-> ```
-> baz
-> ```""" |> Markdown.plain == """
-> foo
->
->   * bar
->
-> ```
-> baz
-> ```
+    ---
+    World""" |> Markdown.plain == "Hello\n\n---\n\nWorld\n"
+    @test md"[*a*](b)" |> Markdown.plain == "[*a*](b)\n"
+    @test md"""
+    > foo
+    >
+    >   * bar
+    >
+    > ```
+    > baz
+    > ```""" |> Markdown.plain == """
+    > foo
+    >
+    >   * bar
+    >
+    > ```
+    > baz
+    > ```
 
-"""
+    """
+end
 
-# Terminal (markdown) output
+@testset "Terminal (markdown) output" begin
+    # multiple whitespace is ignored
+    @test sprint(Markdown.term, md"a  b") == "  a b"
+    @test sprint(Markdown.term, md"[x](https://julialang.org)") == "  x"
+    @test sprint(Markdown.term, md"[x](@ref)") == "  x"
+    @test sprint(Markdown.term, md"[x](@ref something)") == "  x"
+    @test sprint(Markdown.term, md"![x](https://julialang.org)") == "  (Image: x)"
 
-# multiple whitespace is ignored
-@test sprint(Markdown.term, md"a  b") == "  a b"
-@test sprint(Markdown.term, md"[x](https://julialang.org)") == "  x"
-@test sprint(Markdown.term, md"[x](@ref)") == "  x"
-@test sprint(Markdown.term, md"[x](@ref something)") == "  x"
-@test sprint(Markdown.term, md"![x](https://julialang.org)") == "  (Image: x)"
+    # math (LaTeX)
+    @test sprint(Markdown.term, md"""
+    ```math
+    A = Q R
+    ```
+    """) == "  A = Q R"
 
-# math (LaTeX)
-@test sprint(Markdown.term, md"""
-```math
-A = Q R
-```
-""") == "  A = Q R"
-
-# enumeration is normalized
-let doc = Markdown.parse(
+    # enumeration is normalized
+    doc = Markdown.parse(
         """
         1. a
         3. b
@@ -281,63 +277,62 @@ let doc = Markdown.parse(
     @test occursin("1. ", sprint(Markdown.term, doc))
     @test occursin("2. ", sprint(Markdown.term, doc))
     @test !occursin("3. ", sprint(Markdown.term, doc))
-end
 
-# Testing margin when printing Tables to the terminal.
-@test sprint(Markdown.term, md"""
-| R |
-|---|
-| L |
-""") == "  R\n  –\n  L"
-
-@test sprint(Markdown.term, md"""
-!!! note "Tables in admonitions"
-
+    # Testing margin when printing Tables to the terminal.
+    @test sprint(Markdown.term, md"""
     | R |
     |---|
     | L |
-""") == "  │ Tables in admonitions\n  │\n  │  R\n  │  –\n  │  L"
+    """) == "  R\n  –\n  L"
 
-# Issue #38275
-function test_list_wrap(str, lenmin, lenmax)
-    strs = rstrip.(split(str, '\n'))
-    l = length.(strs)
-    for i = 1:length(l)-1
-        if l[i] != 0 && l[i+1] != 0    # the next line isn't blank, so this line should be "full"
-            lenmin <= l[i] <= lenmax || return false
-        else
-            l[i] <= lenmax || return false   # this line isn't too long (but there is no min)
-        end
-    end
+    @test sprint(Markdown.term, md"""
+    !!! note "Tables in admonitions"
 
-    # Check consistent indentation
-    # First, locate the list labels ends (position of bullet, or the "." at
-    # the end of a numeric label
-    labelends = findfirst.((r"[.•–▪] ",), strs)
-    # sanity checks: label end locations must be either equal or separated by at least one char
-    sorted_labels = unique(sort(filter(!isnothing, labelends)))
-    for i in 1:length(sorted_labels)-1
-        first(sorted_labels[i]) + 1 < first(sorted_labels[i+1]) || return false
-    end
-
-    # next check that after each label / bullet the following lines have the right indent
-    k = first(labelends[1])+1
-    rex = Regex('^' * " "^k * "\\w")
-    for (i, le) in enumerate(labelends)
-        if le === nothing
-            # every unlabeled line is indented to text in labeled lines
-            (isempty(strs[i]) || match(rex, strs[i]) !== nothing) || return false
-        else
-            # determine indent for following lines
-            k = first(le)+1
-            rex = Regex('^' * " "^k * "\\w")
-        end
-    end
-    return true
+        | R |
+        |---|
+        | L |
+    """) == "  │ Tables in admonitions\n  │\n  │  R\n  │  –\n  │  L"
 end
 
-let doc =
-    md"""
+@testset "Issue #38275" begin
+    function test_list_wrap(str, lenmin, lenmax)
+        strs = rstrip.(split(str, '\n'))
+        l = length.(strs)
+        for i = 1:length(l)-1
+            if l[i] != 0 && l[i+1] != 0    # the next line isn't blank, so this line should be "full"
+                lenmin <= l[i] <= lenmax || return false
+            else
+                l[i] <= lenmax || return false   # this line isn't too long (but there is no min)
+            end
+        end
+
+        # Check consistent indentation
+        # First, locate the list labels ends (position of bullet, or the "." at
+        # the end of a numeric label
+        labelends = findfirst.((r"[.•–▪] ",), strs)
+        # sanity checks: label end locations must be either equal or separated by at least one char
+        sorted_labels = unique(sort(filter(!isnothing, labelends)))
+        for i in 1:length(sorted_labels)-1
+            first(sorted_labels[i]) + 1 < first(sorted_labels[i+1]) || return false
+        end
+
+        # next check that after each label / bullet the following lines have the right indent
+        k = first(labelends[1])+1
+        rex = Regex('^' * " "^k * "\\w")
+        for (i, le) in enumerate(labelends)
+            if le === nothing
+                # every unlabeled line is indented to text in labeled lines
+                (isempty(strs[i]) || match(rex, strs[i]) !== nothing) || return false
+            else
+                # determine indent for following lines
+                k = first(le)+1
+                rex = Regex('^' * " "^k * "\\w")
+            end
+        end
+        return true
+    end
+
+    doc = md"""
     1. a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
 
        - a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij a bc def ghij
@@ -368,15 +363,15 @@ end
     @test md"###### h6" |> html == "<h6>h6</h6>\n"
     @test md"####### h7" |> html == "<p>####### h7</p>\n"
     @test md"   >" |> html == "<blockquote>\n</blockquote>\n"
-    @test md"1. Hello" |> html == "<ol>\n<li><p>Hello</p>\n</li>\n</ol>\n"
-    @test md"* World" |> html == "<ul>\n<li><p>World</p>\n</li>\n</ul>\n"
+    @test md"1. Hello" |> html == "<ol>\n<li>Hello</li>\n</ol>\n"
+    @test md"* World" |> html == "<ul>\n<li>World</li>\n</ul>\n"
     @test md"# title *blah*" |> html == "<h1>title <em>blah</em></h1>\n"
     @test md"## title *blah*" |> html == "<h2>title <em>blah</em></h2>\n"
     @test md"<https://julialang.org>" |> html == """<p><a href="https://julialang.org">https://julialang.org</a></p>\n"""
     @test md"<mailto://a@example.com>" |> html == """<p><a href="mailto://a@example.com">mailto://a@example.com</a></p>\n"""
     @test md"<https://julialang.org/not a link>" |> html == "<p>&lt;https://julialang.org/not a link&gt;</p>\n"
     @test md"""<https://julialang.org/nota
-    link>""" |> html == "<p>&lt;https://julialang.org/nota link&gt;</p>\n"
+            link>""" |> html == "<p>&lt;https://julialang.org/nota\nlink&gt;</p>\n"
     @test md"""Hello
 
     ---
@@ -399,7 +394,13 @@ end
     h2
     ---
     not
-    == =""" |> html == "<h1>h1</h1>\n<h2>h2</h2>\n<p>not == =</p>\n"
+    == =""" |> html ==
+    """
+    <h1>h1</h1>
+    <h2>h2</h2>
+    <p>not
+    == =</p>
+    """
 end
 
 @testset "the 'book' example input" begin
@@ -474,10 +475,8 @@ end
     <h2>Section <em>important</em></h2>
     <p>Some <strong>bolded</strong></p>
     <ul>
-    <li><p>list1</p>
-    </li>
-    <li><p>list2</p>
-    </li>
+    <li>list1</li>
+    <li>list2</li>
     </ul>
     </div>"""
     @test sprint(show, "text/html", book) == out
@@ -605,7 +604,7 @@ end
         print(io, "$(r.ref) (see Julia docs)")
     Base.show(io::IO, m::MIME"text/html", r::Reference2) =
         Markdown.withtag(io, :a, :href=>"test") do
-            Markdown.htmlesc(io, Markdown.plaininline(r))
+            Markdown.htmlesc(io, sprint(Markdown.plaininline, r))
         end
     @test Markdown.html(sum_ref) == "<p>Behaves like <a href=\"test\">sum (see Julia docs)</a></p>\n"
 end
@@ -634,7 +633,7 @@ end
     @test md"""
     no|table
     no error
-    """ == MD([Paragraph(Any["no|table no error"])])
+    """ == MD([Paragraph(Any["no|table\nno error"])])
 
     t = """a   |   b
     :-- | --:
@@ -1046,21 +1045,17 @@ end
 
     # Content and structure tests.
 
-    @test length(md) == 6
+    @test typeof.(md) == [Markdown.List, Markdown.List, Paragraph, Markdown.List, Markdown.List, Markdown.List]
     @test length(md[1].items) == 1
-    @test length(md[1].items[1]) == 3
-    @test isa(md[1].items[1][1], Markdown.Paragraph)
-    @test isa(md[1].items[1][2], Markdown.Code)
-    @test isa(md[1].items[1][3], Markdown.BlockQuote)
+    @test typeof.(md[1].items[1]) == [Markdown.Paragraph, Markdown.Code, Markdown.BlockQuote]
     @test length(md[2].items) == 1
     @test isa(md[2].items[1][1], Markdown.Paragraph)
     @test isa(md[3], Markdown.Paragraph)
-    @test length(md[4].items) == 1
-    @test isa(md[4].items[1][1], Paragraph)
-    @test isa(md[4].items[1][2], Paragraph)
-    @test length(md[5].items) == 2
-    @test isa(md[5].items[1][1], Markdown.Paragraph)
-    @test isa(md[5].items[2][1], Markdown.Code)
+    @test length(md[4].items) == 2
+    @test typeof.(md[4].items[1]) == [Paragraph, Paragraph]
+    @test typeof.(md[4].items[2]) == [Paragraph]
+    @test length(md[5].items) == 1
+    @test typeof.(md[5].items[1]) == [Code]
     @test length(md[6].items) == 3
     @test md[6].items[1][1].content[1] == "foo"
     @test md[6].items[2][1].content[1] == "bar"
@@ -1069,7 +1064,8 @@ end
     # Rendering tests.
     expected =
             """
-            1. A paragraph with two lines.
+            1. A paragraph
+               with two lines.
 
                ```
                indented code
@@ -1084,8 +1080,8 @@ end
               * one
 
                 two
-
               * baz
+
               * ```
                 foo
                 ```
@@ -1099,7 +1095,9 @@ end
     expected =
             """
             <ol>
-            <li><p>A paragraph with two lines.</p>
+            <li>
+            <p>A paragraph
+            with two lines.</p>
             <pre><code>indented code
             </code></pre>
             <blockquote>
@@ -1108,36 +1106,38 @@ end
             </li>
             </ol>
             <ul>
-            <li><p>one</p>
+            <li>
+            <p>one</p>
             </li>
             </ul>
             <p>two</p>
             <ul>
-            <li><p>one</p>
+            <li>
+            <p>one</p>
             <p>two</p>
+            </li>
+            <li>
+            <p>baz</p>
             </li>
             </ul>
             <ul>
-            <li><p>baz</p>
-            </li>
-            <li><pre><code>foo
+            <li>
+            <pre><code>foo
             </code></pre>
             </li>
             </ul>
             <ol>
-            <li><p>foo</p>
-            </li>
-            <li><p>bar</p>
-            </li>
-            <li><p>baz</p>
-            </li>
+            <li>foo</li>
+            <li>bar</li>
+            <li>baz</li>
             </ol>
             """
     @test expected == Markdown.html(md)
 
     expected =
             """
-            1. A paragraph with two lines.
+            1. A paragraph
+               with two lines.
 
                .. code-block:: julia
 
@@ -1152,8 +1152,8 @@ end
             * one
 
               two
-
             * baz
+
             * .. code-block:: julia
 
                   foo
@@ -1181,56 +1181,55 @@ end
         """
     md = Markdown.parse(text)
 
+    @test typeof.(md) == [Markdown.List, Markdown.List]
     @test md[1].ordered == 42
-    @test md[2].ordered == 1
-    @test md[3].ordered == -1
+    @test md[2].ordered == -1
 
     expected =
             """
             <ol start="42">
-            <li><p>foo</p>
+            <li>
+            <p>foo</p>
             </li>
-            <li><p>bar</p>
+            <li>
+            <p>bar</p>
             </li>
-            </ol>
-            <ol>
-            <li><p>foo</p>
+            <li>
+            <p>foo</p>
             </li>
-            <li><p>bar</p>
+            <li>
+            <p>bar</p>
             </li>
             </ol>
             <ul>
-            <li><p>foo</p>
-            </li>
-            <li><p>bar</p>
-            </li>
+            <li>foo</li>
+            <li>bar</li>
             </ul>
             """
     @test expected == Markdown.html(md)
 
     expected =
-            """
-            \\begin{itemize}
-            \\item[42. ] foo
+            raw"""
+            \begin{itemize}
+            \item[42. ] foo
 
 
-            \\item[43. ] bar
-
-            \\end{itemize}
-            \\begin{itemize}
-            \\item[1. ] foo
+            \item[43. ] bar
 
 
-            \\item[2. ] bar
-
-            \\end{itemize}
-            \\begin{itemize}
-            \\item foo
+            \item[44. ] foo
 
 
-            \\item bar
+            \item[45. ] bar
 
-            \\end{itemize}
+            \end{itemize}
+            \begin{itemize}
+            \item foo
+
+
+            \item bar
+
+            \end{itemize}
             """
     @test expected == Markdown.latex(md)
 end
@@ -1304,11 +1303,39 @@ end
 end
 
 @testset "issue #26598: loose lists" begin
-    v = Markdown.parse("foo\n\n- 1\n- 2\n\n- 3\n\n\n- 1\n- 2\n\nbar\n\n- 1\n\n  2\n- 4\n\nbuz\n\n- 1\n- 2\n  3\n- 4\n")
-    @test v[2].loose
-    @test !v[3].loose
-    @test v[5].loose
-    @test !v[7].loose
+    md = Markdown.parse(
+            """
+            foo
+
+            - 1
+            - 2
+
+            - 3
+
+
+            - 1
+            - 2
+
+            bar
+
+            - 1
+
+              2
+            - 4
+
+            buz
+
+            - 1
+            - 2
+              3
+            - 4
+            """)
+    @test typeof.(md) == [Markdown.Paragraph, Markdown.List,
+                          Markdown.Paragraph, Markdown.List,
+                          Markdown.Paragraph, Markdown.List]
+    @test md[2].loose
+    @test md[4].loose
+    @test !md[6].loose
 end
 
 @testset "issue #29995" begin
@@ -1374,18 +1401,19 @@ end
             """ |> chomp
     @test Markdown.plain(s) ==
             raw"""
-            Misc:
+            Misc:\
             stuff
 
-              * line
+              * line\
                 break
             """
     @test Markdown.html(s) ==
             raw"""
-            <p>Misc:<br />stuff</p>
+            <p>Misc:<br />
+            stuff</p>
             <ul>
-            <li><p>line<br />break</p>
-            </li>
+            <li>line<br />
+            break</li>
             </ul>
             """
     @test Markdown.latex(s) ==
@@ -1464,7 +1492,7 @@ end
     @test Markdown.insert_hlines(nothing) === nothing
 end
 
-@testset "#59967: indented code blocks with more than one blank line" begin
+@testset "issue #59967: indented code blocks with more than one blank line" begin
     # Test the broken case in issue: indented code block with multiple blank lines
     md = Markdown.parse("""
     - code block inside a list with more than one blank line with indentation works
@@ -1490,14 +1518,16 @@ end
     expected =
     """
     <ul>
-    <li><p>code block inside a list with more than one blank line with indentation works</p>
+    <li>
+    <p>code block inside a list with more than one blank line with indentation works</p>
     <pre><code class="language-julia">domaths(x::Number) = x + 5
 
 
     domath(x::Int) = x + 10
     </code></pre>
     </li>
-    <li><p>another entry, now testing code blocks without fences</p>
+    <li>
+    <p>another entry, now testing code blocks without fences</p>
     <pre><code># this is a code block
     x = 1 + 1
 
@@ -1506,7 +1536,8 @@ end
     y = x * 3
     </code></pre>
     </li>
-    <li><p>a final list entry</p>
+    <li>
+    <p>a final list entry</p>
     </li>
     </ul>
     <p>And now to something completely different!</p>
@@ -1561,22 +1592,18 @@ end
     # test Markdown rendering
     # FIXME: actually the hard breaks are *not* correctly round tripped,
     # but at least the indentation is correct now
-    expected = """
+    expected = raw"""
     An unordered list:
 
-      * top level
+      * top level\
         with an extra line
-
-          * second level
+          * second level\
             again with an extra line
-
-              * third level
+              * third level\
                 yet again with an extra line
-
-                  * fourth level
+                  * fourth level\
                     and another extra line
-
-                      * fifth level
+                      * fifth level\
                         final extra line
       * back to top level
     """
@@ -1631,24 +1658,20 @@ end
     # test Markdown rendering
     # FIXME: actually the hard breaks are *not* correctly round tripped,
     # but at least the indentation is correct now
-    expected = """
+    expected = raw"""
     An ordered list:
 
-    1. top level
+    1. top level\
        with an extra line
-
-       1. second level
+       1. second level\
           again with an extra line
-
-          999. third level
+          999. third level\
                yet again with an extra line
-
-               1. fourth level
+               1. fourth level\
                   and another extra line
-
-                  1. fifth level
+                  1. fifth level\
                      final extra line
-          1000. more third level
+          1000. more third level\
                 with an extra line
     2. back to top level
     """
@@ -1694,4 +1717,31 @@ end
     @test typeof.(md) == [Markdown.Header{1}, Markdown.Paragraph, Markdown.List, Markdown.HorizontalRule, Markdown.Paragraph, Markdown.HorizontalRule]
 end
 
-include("test_spec.jl")
+@testset "issue #46991: Preserve non-breaking space" begin
+    # reference: normal spaces
+    input = "abc\\\n    | def"
+    # and now with non-breaking space
+    # Julia's CI won't let us use non-breaking spaces in here directly,
+    # so we insert them manually
+    nbsp = "\u00a0"^4
+    input_nbsp = "abc\\\n$nbsp| def"
+
+    md = Markdown.parse(input)
+    md_nbsp = Markdown.parse(input_nbsp)
+
+    str = sprint(Markdown.term, md)
+    str_nbsp = sprint(Markdown.term, md_nbsp)
+
+    # regular version: four leading spaces got into a single one
+    @test str == "  abc\n   | def"
+    # non-breaking version: four leading spaces got preserved
+    @test str_nbsp == "  abc\n  $nbsp| def"
+end
+
+include("test_spec_roundtrip_common.jl")
+include("test_spec_roundtrip_github.jl")
+include("test_spec_roundtrip_julia.jl")
+
+include("test_spec_html_common.jl")
+include("test_spec_html_github.jl")
+include("test_spec_html_julia.jl")
