@@ -1612,7 +1612,10 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
         options.sanitize_thread = jl_options.target_sanitize_thread;
         options.sanitize_address = jl_options.target_sanitize_address;
         NewPM optimizer{std::move(PMTM), getOptLevel(jl_options.opt_level), options};
-        optimizer.run(M);
+        {
+            TimeTraceScope OptimizeScope("AOT Optimize", M.getModuleIdentifier());
+            optimizer.run(M);
+        }
         assert(!verifyLLVMIR(M));
         bool inject_aliases = false;
         for (auto &F : M.functions()) {
@@ -1677,6 +1680,7 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
 
     if (obj) {
         timers.obj.startTimer();
+        TimeTraceScope EmitScope("AOT Emit Object", M.getModuleIdentifier());
         raw_svector_ostream OS(out.obj);
         legacy::PassManager emitter;
         addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());

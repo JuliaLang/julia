@@ -1513,6 +1513,7 @@ namespace {
 
                 {
                     JL_TIMING(LLVM_JIT, JIT_Opt);
+                    TimeTraceScope OptimizeScope("JIT Optimize", M.getModuleIdentifier());
                     //Run the optimization
                     (****PMs[PoolIdx]).run(M);
                     assert(!verifyLLVMIR(M));
@@ -2089,7 +2090,7 @@ JuliaOJIT::JuliaOJIT()
                 StringRef FileName = jl_timing_trace_file.empty() ?
                     StringRef("julia_time_trace.json") : StringRef(jl_timing_trace_file);
                 if (auto E = timeTraceProfilerWrite(FileName, "")) {
-                    handleAllErrors(std::move(E), [](const StringError &SE) JL_NOTSAFEPOINT { 
+                    handleAllErrors(std::move(E), [](const StringError &SE) JL_NOTSAFEPOINT {
                         errs() << SE.getMessage() << "\n";
                     });
                 }
@@ -2136,6 +2137,7 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 
     // Treat this as if one of the passes might contain a safepoint
     // even though that shouldn't be the case and might be unwise
+    TimeTraceScope CompileScope("JIT Compile", M.getModuleIdentifier());
     Expected<std::unique_ptr<MemoryBuffer>> Obj = CompileLayer.getCompiler()(M);
     if (!Obj) {
 #ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the static analyzer thinks might be a safepoint
