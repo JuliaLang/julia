@@ -92,6 +92,19 @@ function single_stride_dim(A::Array)
 end
 single_stride_dim(@nospecialize(A)) = single_stride_dim(copy_to_array(A))
 
+function unsafe_strided_getindex(A::AbstractArray{T,N}, I::Vararg{Int, N})::T where {T, N}
+    A_cconv = Base.cconvert(Ptr{T}, A)
+    GC.@preserve A_cconv begin
+        A_ptr = Base.unsafe_convert(Ptr{T}, A_cconv)
+        for d in 1:N
+            stride_in_bytes = stride(A, d) * Base.elsize(typeof(A))
+            first_idx = first(axes(A, d))
+            A_ptr += (I[d] - first_idx) * stride_in_bytes
+        end
+        unsafe_load(A_ptr)
+    end
+end
+
 # Testing equality of AbstractArrays, using several different methods to access values
 function test_cartesian(@nospecialize(A), @nospecialize(B))
     isgood = true
@@ -99,7 +112,8 @@ function test_cartesian(@nospecialize(A), @nospecialize(B))
         @test A[IA] == B[IB]
         if A isa StridedArray
             v1 = GC.@preserve A unsafe_load(pointer(A.parent, sum((0,(strides(A) .* (IA.I .- 1))...))+Base.first_index(A)))
-            @test v1 == B[IB]
+            v2 = unsafe_strided_getindex(A, Tuple(IA)...)
+            @test v1 == v2 == B[IB]
         end
     end
 end
@@ -1154,4 +1168,47 @@ end
         @test array == [-3, 2, -1, 4, 5, -2, -4, 8]
         @test array2 == [-10, 2, -30, 4, -50, 6, -70, 8]
     end
+end
+
+@testset "strided array interface for subarrays" begin
+    # Create a type to test strided array interface edge cases.
+    # This array is memory backed, but the MyStridedTestArrayCConvert wrapper hides this.
+    struct MyStridedTestArray{T, N} <: AbstractArray{T, N}
+        a::Array{T, N}
+    end
+    Base.size(A::MyStridedTestArray) = size(A.a)
+    function Base.getindex(A::MyStridedTestArray{T, N}, I::Vararg{Int, N}) where {T, N}
+        getindex(A.a, I...)
+    end
+    struct MyStridedTestArrayCConvert{C}
+        c::C
+    end
+    function Base.cconvert(::Type{Ptr{T}}, A::MyStridedTestArray{T}) where T
+        MyStridedTestArrayCConvert(Base.cconvert(Ptr{T}, A.a))
+    end
+    function Base.unsafe_convert(::Type{Ptr{T}}, c::MyStridedTestArrayCConvert) where T
+        Base.unsafe_convert(Ptr{T}, c.c)
+    end
+    function Base.elsize(::Type{MyStridedTestArray{T, N}}) where {T, N}
+        Base.elsize(Array{T, N})
+    end
+    Base.strides(A::MyStridedTestArray) = Base.strides(A.a)
+    function test_strided_vs_getindex(A::AbstractArray)
+        @assert isbitstype(eltype(A))
+        for I in CartesianIndices(A)
+            @test unsafe_strided_getindex(A, Tuple(I)...) === A[I]
+        end
+    end
+
+    test_strided_vs_getindex(rand(10))
+    test_strided_vs_getindex(rand(3, 10))
+    test_strided_vs_getindex(rand(2, 3, 10))
+    test_strided_vs_getindex(view(rand(10, 10), 2:2:6, 1:3:9))
+    test_strided_vs_getindex(view(transpose(view(rand(10, 10), 2:2:6, 1:3:9)), 2:3, 3:-1:1))
+
+    test_strided_vs_getindex(MyStridedTestArray(rand(10)))
+    test_strided_vs_getindex(MyStridedTestArray(rand(3, 10)))
+    test_strided_vs_getindex(MyStridedTestArray(rand(2, 3, 10)))
+    test_strided_vs_getindex(view(MyStridedTestArray(rand(10, 10)), 2:2:6, 1:3:9))
+    test_strided_vs_getindex(view(transpose(view(MyStridedTestArray(rand(10, 10)), 2:2:6, 1:3:9)), 2:3, 3:-1:1))
 end

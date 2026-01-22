@@ -1629,7 +1629,9 @@ end
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(!read) slot₄/x(nospecialize) slot₅/y(nospecialize)]
     1   TestMod.generator_code
     2   (call %₁ slot₄/x slot₅/y)
-    3   (return %₂)
+    3   (call core.tuple %₂)
+    4   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block ($ (block (call generator_code x y))))) %₃)
+    5   (return %₄)
 12  latestworld
 13  TestMod.f_only_generated
 14  (call core.Typeof %₁₃)
@@ -1672,9 +1674,9 @@ end
 10  (call core.svec %₇ %₈ %₉)
 11  --- method core.nothing %₁₀
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(!read) slot₄/x(nospecialize,!read) slot₅/y(nospecialize,!read)]
-    1   (call JuliaLowering.interpolate_ast SyntaxTree (inert (block (= maybe_gen_stuff (call some_gen_stuff x y)))))
+    1   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= maybe_gen_stuff (call some_gen_stuff x y)))))
     2   (call core.tuple %₁)
-    3   (call JuliaLowering.interpolate_ast SyntaxTree (inert (block (block (= nongen_stuff (call bothgen x y)) ($ (block (call JuliaLowering.interpolate_ast SyntaxTree (inert (block (= maybe_gen_stuff (call some_gen_stuff x y))))))) (tuple-p nongen_stuff maybe_gen_stuff)))) %₂)
+    3   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (block (= nongen_stuff (call bothgen x y)) ($ (block (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= maybe_gen_stuff (call some_gen_stuff x y))))))) (tuple-p nongen_stuff maybe_gen_stuff)))) %₂)
     4   (return %₃)
 12  latestworld
 13  TestMod.f_partially_generated

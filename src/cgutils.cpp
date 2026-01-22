@@ -807,13 +807,13 @@ static unsigned convert_struct_offset(jl_codectx_t &ctx, Type *lty, unsigned byt
 
 static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed, bool llvmcall=false);
 
-static Type *_julia_type_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed)
+static Type *_julia_type_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed, bool no_boxing)
 {
     // this function converts a Julia Type into the equivalent LLVM type
     if (isboxed) *isboxed = false;
     if (jt == (jl_value_t*)jl_bottom_type || jt == (jl_value_t*)jl_typeofbottom_type || jt == (jl_value_t*)jl_typeofbottom_type->super)
         return getVoidTy(ctxt);
-    if (jl_is_concrete_immutable(jt)) {
+    if (jl_is_concrete_immutable(jt) || no_boxing) {
         if (jl_datatype_nbits(jt) == 0)
             return getVoidTy(ctxt);
         Type *t = _julia_struct_to_llvm(ctx, ctxt, jt, isboxed);
@@ -826,13 +826,20 @@ static Type *_julia_type_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, jl
 
 static Type *julia_type_to_llvm(jl_codectx_t &ctx, jl_value_t *jt, bool *isboxed)
 {
-    return _julia_type_to_llvm(&ctx.emission_context, ctx.builder.getContext(), jt, isboxed);
+    return _julia_type_to_llvm(&ctx.emission_context, ctx.builder.getContext(), jt, isboxed, false);
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN
 Type *jl_type_to_llvm_impl(jl_value_t *jt, LLVMContextRef ctxt, bool *isboxed)
 {
-    return _julia_type_to_llvm(NULL, *unwrap(ctxt), jt, isboxed);
+    return _julia_type_to_llvm(NULL, *unwrap(ctxt), jt, isboxed, false);
+}
+
+
+extern "C" JL_DLLEXPORT_CODEGEN
+Type *jl_struct_to_llvm_impl(jl_value_t *jt, LLVMContextRef ctxt, bool *isboxed)
+{
+    return _julia_type_to_llvm(NULL, *unwrap(ctxt), jt, isboxed, true);
 }
 
 

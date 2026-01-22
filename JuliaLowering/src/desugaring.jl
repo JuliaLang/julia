@@ -59,7 +59,7 @@ end
 function contains_unquoted(f::Function, ex::SyntaxTree)
     if f(ex)
         return true
-    elseif !is_leaf(ex) && !(kind(ex) in KSet"quote inert meta")
+    elseif !is_leaf(ex) && !(kind(ex) in KSet"quote inert inert_syntaxtree meta")
         return any(contains_unquoted(f, e) for e in children(ex))
     else
         return false
@@ -73,7 +73,8 @@ function is_effect_free(ex)
     k = kind(ex)
     # TODO: metas
     is_literal(k) || is_identifier_like(ex) || k == K"Symbol" ||
-        k == K"inert" || k == K"top" || k == K"core" || k == K"Value"
+        k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
+        k == K"core" || k == K"Value"
     # flisp also includes `a.b` with simple `a`, but this seems like a bug
     # because this calls the user-defined getproperty?
 end
@@ -140,8 +141,9 @@ function tuple_to_assignments(ctx, ex, is_const)
             rh
         end
         k = kind(r)
-        if is_literal(k) || k == K"Symbol" || k == K"inert" || k == K"top" ||
-                k == K"core" || k == K"Value"
+        if is_literal(k) || k == K"Symbol" || k == K"inert" ||
+            k == K"inert_syntaxtree" || k == K"top" || k == K"core" ||
+            k == K"Value"
             # Effect-free and nothrow right hand sides do not need a temporary
             # (we require nothrow because the order of rhs terms is observable
             #  due to sequencing, thus identifiers are not allowed)
@@ -765,7 +767,7 @@ end
 function find_return(ex::SyntaxTree)
     if kind(ex) == K"return"
         return ex
-    elseif !is_leaf(ex) && !(kind(ex) in KSet"quote inert meta function ->")
+    elseif !is_leaf(ex) && !(kind(ex) in KSet"quote inert inert_syntaxtree meta function ->")
         for e in children(ex)
             r = find_return(e)
             if !isnothing(r)
@@ -1644,7 +1646,7 @@ function expand_named_tuple(ctx, ex, kws, eq_is_kw;
             end
             name = to_symbol(ctx, kw[2])
             value = kw
-        elseif k == K"call" && is_infix_op_call(kw) && numchildren(kw) == 3 &&
+        elseif k == K"call" && numchildren(kw) == 3 &&
                 is_same_identifier_like(kw[1], "=>")
             # a=>b   ==>  $a=b
             appended_nt = _named_tuple_expr(ctx, kw, (kw[2],), (kw[3],))
@@ -2459,44 +2461,15 @@ function trim_used_typevars(ctx, arg_types, typevar_names, typevar_stmts)
     return trimmed_typevar_names
 end
 
-function is_if_generated(ex)
-    kind(ex) == K"if" && kind(ex[1]) == K"generated"
-end
-
-# Return true if a function body contains a code generator from `@generated` in
-# the form `[K"if" [K"generated"] ...]`
-function is_generated(ex)
-    if is_if_generated(ex)
-        return true
-    elseif is_quoted(ex) || kind(ex) == K"function"
-        return false
-    else
-        return any(is_generated, children(ex))
-    end
-end
-
-function split_generated(ctx, ex, gen_part)
-    if is_leaf(ex)
-        ex
-    elseif is_if_generated(ex)
-        gen_part ? @ast(ctx, ex, [K"$" ex[2]]) : ex[3]
-    else
-        mapchildren(e->split_generated(ctx, e, gen_part), ctx, ex)
-    end
-end
-
 # Split @generated function body into two parts:
 # * The code generator
 # * The non-generated function body
-function expand_function_generator(ctx, srcref, callex_srcref, func_name, func_name_str, body, arg_names, typevar_names)
-    gen_body = if is_if_generated(body)
-        body[2] # Simple case - don't need interpolation when the whole body is generated
-    else
-        expand_quote(ctx, @ast ctx body [K"block" split_generated(ctx, body, true)])
-    end
+function expand_function_generator(ctx, srcref, callex_srcref, func_name,
+                                   func_name_str, gen_body, nongen_body_orig,
+                                   arg_names, typevar_names)
     gen_name_str = reserve_module_binding_i(ctx.mod,
                         "#$(isnothing(func_name_str) ? "_" : func_name_str)@generator#")
-    gen_name = new_global_binding(ctx, body, gen_name_str, ctx.mod)
+    gen_name = new_global_binding(ctx, srcref, gen_name_str, ctx.mod)
 
     # Set up the arguments for the code generator
     gen_arg_names = SyntaxList(ctx)
@@ -2546,7 +2519,7 @@ function expand_function_generator(ctx, srcref, callex_srcref, func_name, func_n
     end
 
     # Extract non-generated body
-    nongen_body = @ast ctx body [K"block"
+    nongen_body = @ast ctx nongen_body_orig [K"block"
         # The Julia runtime associates the code generator with the
         # non-generated method by adding this meta to the body. This feels like
         # a hack though since the generator ultimately gets attached to the
@@ -2582,7 +2555,7 @@ function expand_function_generator(ctx, srcref, callex_srcref, func_name, func_n
                 ]
             ]
         ]
-        split_generated(ctx, body, false)
+        nongen_body_orig
     ]
 
     return gen_func_method_defs, nongen_body
@@ -2943,7 +2916,11 @@ function is_invalid_func_name(ex)
 end
 
 function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=identity; doc_only=false)
-    @chk numchildren(ex) in (1,2)
+    if kind(ex) === K"generated_function"
+        @assert numchildren(ex) === 3 && rewrite_body == identity
+    else
+        @chk numchildren(ex) in (1,2)
+    end
     name = ex[1]
     if numchildren(ex) == 1 && is_identifier_like(name)
         # Function declaration with no methods
@@ -3165,10 +3142,9 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     end
 
     gen_func_method_defs = nothing
-    if is_generated(body)
-        gen_func_method_defs, body =
-            expand_function_generator(ctx, ex, callex, name, name_str, body, arg_names, typevar_names)
-
+    if kind(ex) === K"generated_function"
+        gen_func_method_defs, body = expand_function_generator(
+            ctx, ex, callex, name, name_str, ex[2], ex[3], arg_names, typevar_names)
     end
 
     if isnothing(keywords)
@@ -3561,7 +3537,7 @@ function expand_abstract_or_primitive_type(ctx, ex)
                 [K"call" "_typebody!"::K"core" false::K"Bool" name]
             ]
         ]
-        [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex] ]
+        [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex] ]
         [K"global" name]
         [K"if"
             [K"&&"
@@ -3994,20 +3970,21 @@ end
 
 # Let S be a struct we're defining in module M.  Below is a hack to allow its
 # field types to refer to S as M.S.  See #56497.
-function insert_struct_shim(ctx, fieldtypes, name)
-    function replace_type(ex)
-        if kind(ex) == K"." &&
-            numchildren(ex) == 2 &&
-            kind(ex[2]) == K"Symbol" &&
-            ex[2].name_val == name.name_val
-            @ast ctx ex [K"call" "struct_name_shim"::K"core" ex[1] ex[2] ctx.mod::K"Value" name]
-        elseif numchildren(ex) > 0
-            mapchildren(replace_type, ctx, ex)
-        else
-            ex
-        end
+function _insert_fieldtype_struct_shim(ctx, name, ex)
+    if kind(ex) == K"." &&
+        numchildren(ex) == 2 &&
+        kind(ex[2]) == K"Symbol" &&
+        ex[2].name_val == name.name_val
+        @ast ctx ex [K"call" "struct_name_shim"::K"core" ex[1] ex[2] ctx.mod::K"Value" name]
+    elseif numchildren(ex) > 0
+        mapchildren(e->_insert_fieldtype_struct_shim(ctx, name, e), ctx, ex)
+    else
+        ex
     end
-    map(replace_type, fieldtypes)
+end
+
+function insert_struct_shim(ctx, fieldtypes, name)
+    map(ex->_insert_fieldtype_struct_shim(ctx, name, ex), fieldtypes)
 end
 
 function expand_struct_def(ctx, ex, docs)
@@ -4094,7 +4071,7 @@ function expand_struct_def(ctx, ex, docs)
     # typevars when "redefining" structs.
     # See https://github.com/JuliaLang/julia/pull/36121
     @ast ctx ex [K"block"
-        [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex] ]
+        [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex] ]
         [K"scope_block"(scope_type=:hard)
             # Needed for later constdecl to work, though plain global form may be removed soon.
             [K"global" global_struct_name]
@@ -4356,7 +4333,7 @@ function expand_import_or_using(ctx, ex)
         push!(stmts, @ast ctx ex (::K"latestworld"))
     end
     @ast ctx ex [K"block"
-        [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex]]
+        [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex]]
         stmts...
         [K"removable" "nothing"::K"core"]
     ]
@@ -4508,13 +4485,13 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         expand_forms_2(ctx, expand_generator(ctx, ex))
     elseif k == K"->" || k == K"do"
         expand_forms_2(ctx, expand_arrow(ctx, ex))
-    elseif k == K"function"
+    elseif k == K"function" || k == K"generated_function"
         expand_forms_2(ctx, expand_function_def(ctx, ex, docs))
     elseif k == K"macro"
         @ast ctx ex [K"block"
             [K"assert"
                 "global_toplevel_only"::K"Symbol"
-                [K"inert" ex]
+                [K"inert_syntaxtree" ex]
             ]
             expand_forms_2(ctx, expand_macro_def(ctx, ex))
         ]
@@ -4595,11 +4572,11 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         # The toplevel form can't be lowered here - it needs to just be quoted
         # and passed through to a call to eval.
         ex2 = @ast ctx ex [K"block"
-            [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex]]
+            [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex]]
             [K"call"
                 eval                  ::K"Value"
                 ctx.mod               ::K"Value"
-                [K"inert" ex]
+                [K"inert_syntaxtree" ex]
                 [K"parameters"
                     [K"kw"
                         "expr_compat_mode"::K"Identifier"
@@ -4634,7 +4611,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
                 ]
             ]
         ]
-    elseif k == K"inert"
+    elseif k == K"inert" || k == K"inert_syntaxtree"
         ex
     elseif k == K"gc_preserve"
         s = ssavar(ctx, ex)

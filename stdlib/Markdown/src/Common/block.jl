@@ -56,8 +56,14 @@ function hashheader(stream::IO, md::MD)
 
         c = ' '
         # Allow empty headers, but require a space
-        !eof(stream) && (c = read(stream, Char); !(c in " \t\n")) &&
+        !eof(stream) && (c = read(stream, Char); !(c in " \t\n\r")) &&
             return false
+
+        # handle Windows line ends
+        if c == '\r'
+            peek(stream, Char) == '\n' && read(stream, Char)
+            c = '\n'
+        end
 
         if c != '\n' # Empty header
             h = strip(readline(stream))
@@ -107,7 +113,8 @@ function indentcode(stream::IO, block::MD)
         buffer = IOBuffer()
         while !eof(stream)
             if startswith(stream, "    ") || startswith(stream, "\t")
-                write(buffer, readline(stream, keep=true))
+                write(buffer, readline(stream))
+                write(buffer, '\n')
             elseif blankline(stream)
                 write(buffer, '\n')
             else
@@ -133,6 +140,17 @@ function fencedcode(stream::IO, block::MD)
         # inline code block
         ch in flavor && return false
 
+        # according to the CommonMark specification, entities and escapes
+        # should be resolved inside of the "flavor" of a fenced code block;
+        # but in Julia, esp. in Documenter docstrings, we can't do that
+        # because additional parameters are placed in there which would clash.
+        # E.g. this kind of real-world docstring line would be mangled:
+        #
+        # ```jldoctest; setup = :(using Random; Random.seed!(1234)), filter = r"[0-9\.]+ seconds \(.*?\)"
+        #
+        # Thus the following line is deliberately disabled.
+        #flavor = replace_escapes_and_entities(flavor)
+
         buffer = IOBuffer()
         while !eof(stream)
             line_start = position(stream)
@@ -148,7 +166,8 @@ function fencedcode(stream::IO, block::MD)
                     seek(stream, line_start)
                 end
             end
-            write(buffer, readline(stream, keep=true))
+            write(buffer, readline(stream))
+            write(buffer, '\n')
         end
         return false
     end
@@ -305,7 +324,7 @@ function list(stream::IO, block::MD)
         initial, regex =
             if m.captures[3] == nothing
                 # An unordered list. Use `-1` to flag the list as unordered.
-                -1, BULLETS
+                -1, Regex("^ {0,3}(\\$(m.captures[1]))( |\$)")
             elseif m.captures[3] == "."
                 # An ordered list with `1. ` style numbering.
                 Base.parse(Int, m.captures[2]), r"^ {0,3}(\d+)\.( |$)"
@@ -327,58 +346,24 @@ function list(stream::IO, block::MD)
         count = 0           # Count of list items. Used to check if we need to push remaining
                             # content in `buffer` after leaving the `while` loop.
         while !eof(stream)
-            if startswith(stream, "\n")
-                if newline
-                    # We have a double newline. Peek ahead to see if the next non-blank
-                    # line is indented. If so, continue the list item.
-                    saved_pos = position(stream)
-
-                    # Skip any additional blank lines and check indentation
-                    still_indented = false
-                    while !eof(stream)
-                        if startswith(stream, "\n"; eat = true)
-                            continue
-                        elseif startswith(stream, " "^indent; eat = false)
-                            still_indented = true
-                            break
-                        else
-                            break
-                        end
-                    end
-                    # Reset stream to position after the double newline we detected
-                    seek(stream, saved_pos)
-                    if still_indented
-                        # Multiple blank lines within indented content - allow it
-                        println(buffer)
-                    else
-                        # Double newline ends the current list
-                        pushitem!(list, buffer)
-                        break
-                    end
-                else
-                    newline = true
-                    println(buffer)
-                end
+            if blankline(stream)
+                println(buffer)
+                list.loose = true
+            elseif startswith(stream, " "^indent)
+                # Indented text that is part of the current list item.
+                print(buffer, readline(stream, keep=true))
             else
-                if startswith(stream, " "^indent)
-                    newline && (list.loose = true)
-                    # Indented text that is part of the current list item.
-                    print(buffer, readline(stream, keep=true))
-                else
-                    matched = matchstart(stream, regex)
-                    if matched === nothing
-                        # Unindented text meaning we have left the current list.
-                        pushitem!(list, buffer)
-                        break
-                    else
-                        # Start of a new list item.
-                        newline && (list.loose = true)
-                        count += 1
-                        count > 1 && pushitem!(list, buffer)
-                        print(buffer, readline(stream, keep=true))
-                    end
+                matched = matchstart(stream, regex)
+                if matched === nothing
+                    # Unindented text meaning we have left the current list.
+                    pushitem!(list, buffer)
+                    break
                 end
-                newline = false
+
+                # Start of a new list item.
+                count += 1
+                count > 1 && pushitem!(list, buffer)
+                print(buffer, readline(stream, keep=true))
             end
         end
         count == length(list.items) || pushitem!(list, buffer)

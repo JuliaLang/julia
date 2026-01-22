@@ -409,55 +409,52 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         end
         pop!(ctx.scope_stack)
         @ast ctx ex [K"block" stmts...]
-    elseif k == K"extension"
-        etype = extension_type(ex)
-        if etype == "islocal"
-            b = resolve_name(ctx, ex[2])
-            islocal = !isnothing(b) && b.kind !== :global
-            @ast ctx ex islocal::K"Bool"
-        elseif etype == "isglobal"
-            e2 = ex[2]
-            @chk kind(e2) in KSet"Identifier Placeholder"
-            isglobal = kind(e2) == K"Identifier" &&
-                let b = resolve_name(ctx, e2)
-                    isnothing(b) || b.kind === :global
-                end
-            @ast ctx ex isglobal::K"Bool"
-        elseif etype == "locals"
-            stmts = SyntaxList(ctx)
-            locals_dict = ssavar(ctx, ex, "locals_dict")
-            push!(stmts, @ast ctx ex [K"="
-                locals_dict
-                [K"call"
-                    [K"call"
-                        "apply_type"::K"core"
-                        "Dict"::K"top"
-                        "Symbol"::K"core"
-                        "Any"::K"core"
-                    ]
-                ]
-            ])
-            for sid in ctx.scope_stack
-                for id in values(ctx.scopes[sid].vars)
-                    binfo = get_binding(ctx, id)
-                    if binfo.kind == :global || binfo.is_internal
-                        continue
-                    end
-                    binding = binding_ex(ctx, id)
-                    push!(stmts, @ast ctx ex [K"if"
-                        [K"isdefined" binding]
-                        [K"call"
-                            "setindex!"::K"top"
-                            locals_dict
-                            binding
-                            binfo.name::K"Symbol"
-                        ]
-                    ])
-                end
+    elseif k == K"islocal"
+        b = resolve_name(ctx, ex[1])
+        islocal = !isnothing(b) && b.kind !== :global
+        @ast ctx ex islocal::K"Bool"
+    elseif k == K"isglobal"
+        e1 = ex[1]
+        @chk kind(e1) in KSet"Identifier Placeholder"
+        isglobal = kind(e1) == K"Identifier" &&
+            let b = resolve_name(ctx, e1)
+                isnothing(b) || b.kind === :global
             end
-            push!(stmts, locals_dict)
-            newnode(ctx, ex, K"block", stmts)
+        @ast ctx ex isglobal::K"Bool"
+    elseif k == K"locals"
+        stmts = SyntaxList(ctx)
+        locals_dict = ssavar(ctx, ex, "locals_dict")
+        push!(stmts, @ast ctx ex [K"="
+            locals_dict
+            [K"call"
+                [K"call"
+                    "apply_type"::K"core"
+                    "Dict"::K"top"
+                    "Symbol"::K"core"
+                    "Any"::K"core"
+                ]
+            ]
+        ])
+        for sid in ctx.scope_stack
+            for id in values(ctx.scopes[sid].vars)
+                binfo = get_binding(ctx, id)
+                if binfo.kind == :global || binfo.is_internal
+                    continue
+                end
+                binding = binding_ex(ctx, id)
+                push!(stmts, @ast ctx ex [K"if"
+                    [K"isdefined" binding]
+                    [K"call"
+                        "setindex!"::K"top"
+                        locals_dict
+                        binding
+                        binfo.name::K"Symbol"
+                    ]
+                ])
+            end
         end
+        push!(stmts, locals_dict)
+        newnode(ctx, ex, K"block", stmts)
     elseif k == K"assert"
         etype = extension_type(ex)
         if etype == "require_existing_locals"

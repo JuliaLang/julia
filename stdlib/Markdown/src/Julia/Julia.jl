@@ -11,7 +11,7 @@ include("interp.jl")
                fencedcode, horizontalrule, list, indentcode, blockquote, admonition, footnote, hashheader,
                html_block, html_block_type7, github_table, setextheader, paragraph,
 
-               linebreak, escapes,
+               linebreak, escapes, entity,
                tex, interp,
                en_or_em_dash, inline_code,
                double_tilde_strikethrough, tilde_strikethrough,

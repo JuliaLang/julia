@@ -2143,13 +2143,14 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 Error JuliaOJIT::addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM, bool ShouldOptimize)
 {
     if (auto Err = TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT -> Error {
+            auto PostOptDL = TM->createDataLayout(); // excludes ni tags stripped by optzns
             if (M.getDataLayout().isDefault())
-                M.setDataLayout(DL);
-            if (M.getDataLayout() != DL)
+                M.setDataLayout(PostOptDL);
+            if (M.getDataLayout() != PostOptDL)
                 return make_error<StringError>(
                     "Added modules have incompatible data layouts: " +
                     M.getDataLayout().getStringRepresentation() + " (module) vs " +
-                    DL.getStringRepresentation() + " (jit)",
+                    PostOptDL.getStringRepresentation() + " (jit)",
                 inconvertibleErrorCode());
             // OrcJIT requires that all modules / files have unique names:
             M.setModuleIdentifier((M.getModuleIdentifier() + Twine("-") + Twine(jl_atomic_fetch_add_relaxed(&jitcounter, 1))).str());

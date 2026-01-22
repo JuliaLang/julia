@@ -216,6 +216,7 @@ struct jl_returninfo_t {
     size_t union_align;
     size_t union_minalign;
     unsigned return_roots;
+    bool all_roots;
 };
 
 struct jl_codegen_call_target_t {
@@ -681,10 +682,16 @@ private:
     OptSelLayerT OptSelLayer;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
-std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx, const DataLayout &DL, const Triple &triple) JL_NOTSAFEPOINT;
-inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafeContext ctx, const DataLayout &DL, const Triple &triple) JL_NOTSAFEPOINT {
+std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx,
+                                              const DataLayout &DL, const Triple &triple,
+                                              Module *source = nullptr) JL_NOTSAFEPOINT;
+inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafeContext ctx,
+                                                 const DataLayout &DL, const Triple &triple,
+                                                 Module *source = nullptr) JL_NOTSAFEPOINT
+{
     auto lock = ctx.getLock();
-    return orc::ThreadSafeModule(jl_create_llvm_module(name, *ctx.getContext(), DL, triple), ctx);
+    return orc::ThreadSafeModule(
+        jl_create_llvm_module(name, *ctx.getContext(), DL, triple, source), ctx);
 }
 
 Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {

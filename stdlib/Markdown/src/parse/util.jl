@@ -4,9 +4,12 @@ const whitespace = " \t\r"
 
 """
 Skip any leading whitespace. Returns io.
+If `newlines=true` then also skip line ends.
 """
 function skipwhitespace(io::IO; newlines = true)
-    while !eof(io) && (peek(io, Char) in whitespace || (newlines && peek(io) == UInt8('\n')))
+    while !eof(io)
+        c = peek(io, Char)
+        c in whitespace || (newlines && c == '\n') || break
         read(io, Char)
     end
     return io
@@ -178,12 +181,12 @@ function parse_inline_wrapper(stream::IO, delimiter::AbstractString; rep = false
         startswith(stream, delimiter^n) || return nothing
         while startswith(stream, delimiter); n += 1; end
         !rep && n > nmin && return nothing
-        !eof(stream) && peek(stream, Char) in whitespace && return nothing
+        !eof(stream) && isspace(peek(stream, Char)) && return nothing
 
         buffer = IOBuffer()
         for char in readeach(stream, Char)
             write(buffer, char)
-            if !(char in whitespace || char == '\n' || char in delimiter) && startswith(stream, delimiter^n)
+            if !(isspace(char) || char in delimiter) && startswith(stream, delimiter^n)
                 trailing = 0
                 while startswith(stream, delimiter); trailing += 1; end
                 trailing == 0 && return takestring!(buffer)
