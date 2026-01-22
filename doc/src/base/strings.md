@@ -4,17 +4,32 @@ This section gives a reference list of string related functions in Julia's `Base
 module. For a general introduction to strings in Julia language, please refer to the
 [Strings](@ref man-strings) section of the Julia language manual.
 
-## General
+## Characters
 
 ```@docs
-Core.AbstractString
+Core.AbstractChar
+Core.Char
+Base.codepoint
 ```
 
 ```@docs
-Base.:*(::Union{AbstractChar, AbstractString}, ::Union{AbstractChar, AbstractString}...)
-Base.:^(::Union{AbstractString, AbstractChar}, ::Integer)
-Base.repeat(::AbstractString, ::Integer)
-Base.repeat(::AbstractChar, ::Integer)
+Base.iscntrl
+Base.isdigit
+Base.isletter
+Base.islowercase
+Base.isnumeric
+Base.isprint
+Base.ispunct
+Base.isspace
+Base.isuppercase
+Base.isxdigit
+```
+
+## String Basics
+
+```@docs
+Core.AbstractString
+Core.String
 ```
 
 ```@docs
@@ -24,32 +39,46 @@ Core.String(::AbstractString)
 ```
 
 ```@docs
+Base.length(::AbstractString)
+Base.sizeof(::AbstractString)
+Base.textwidth
+```
+
+```@docs
+Base.SubString
+Base.LazyString
+```
+
+## Concatenation
+
+```@docs
+Base.:*(::Union{AbstractChar, AbstractString}, ::Union{AbstractChar, AbstractString}...)
+Base.:^(::Union{AbstractString, AbstractChar}, ::Integer)
+Base.repeat(::AbstractString, ::Integer)
+Base.repeat(::AbstractChar, ::Integer)
+```
+
+## Comparison
+
+```@docs
 Base.isless(::AbstractString, ::AbstractString)
 Base.:(==)(::AbstractString, ::AbstractString)
 Base.cmp(::AbstractString, ::AbstractString)
 ```
 
-## Characters and Encoding
+## Encoding
 
 ```@docs
-Core.AbstractChar
-Core.Char
 Base.transcode
 Base.ncodeunits(::AbstractString)
 Base.codeunit
 Base.codeunits
 Base.ascii
+Base.isascii
 ```
 
 ```@docs
 Base.unsafe_string
-```
-
-```@docs
-Base.codepoint
-Base.length(::AbstractString)
-Base.sizeof(::AbstractString)
-Base.textwidth
 ```
 
 ```@docs
@@ -67,40 +96,16 @@ Base.isoverlong
 Base.show_invalid
 ```
 
-## String and Character Predicates
+## Non-Standard String Literals
 
-```@docs
-Base.isascii
-Base.iscntrl
-Base.isdigit
-Base.isletter
-Base.islowercase
-Base.isnumeric
-Base.isprint
-Base.ispunct
-Base.isspace
-Base.isuppercase
-Base.isxdigit
-```
-
-## Additional String Types and Non-Standard String Literals
-
-TODO: also mention / link to Regex, SubstitutionString
-
-TODO: the `@b_str` docstring should link to "Byte Array Literals" section,
-or at the very least mention *that term*
-
-TODO
 This section describes several additional string types, and also
 [non-standard string literals](@ref non-standard-string-literals).
 The list here is not exhaustive, for example there are also
-[Version number literals](@ref man-version-number-literals) of the form [`v"..."`](@ref @v_str),
-[Markdown String Literals](@ref stdlib-markdown-literals) of the form `md"..."`, and
-regular expressions
+[version number literals](@ref man-version-number-literals) of the form [`v"..."`](@ref @v_str),
+[markdown string literals](@ref stdlib-markdown-literals) of the form `md"..."`, and
+[regular expressions and substitution string literals](@ref base-regex-literals).
 
 ```@docs
-Base.SubString
-Base.LazyString
 Base.@lazy_str
 Base.@raw_str
 Base.@b_str
