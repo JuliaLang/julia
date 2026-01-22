@@ -4075,6 +4075,18 @@ function expand_struct_def(ctx, ex, docs)
         end
     end
 
+    # User-defined inner constructors are placed in a separate scope_block
+    # outside the type parameter scope, matching flisp behavior. This ensures
+    # that assignments to variables with the same name as type parameters
+    # create new local variables rather than capturing the type parameters.
+    # See https://github.com/aviatesk/JETLS.jl/issues/508
+    if !isempty(inner_defs)
+        map!(inner_defs, inner_defs) do def
+            rewrite_new_calls(ctx, def, struct_name, global_struct_name,
+                              typevar_names, field_names, field_types)
+        end
+    end
+
     # The following lowering covers several subtle issues in the ordering of
     # typevars when "redefining" structs.
     # See https://github.com/JuliaLang/julia/pull/36121
@@ -4134,16 +4146,14 @@ function expand_struct_def(ctx, ex, docs)
                     global_struct_name
                     newdef
                  ]
-                # Default constructors
+                # Default constructors stay inside type parameter scope because
+                # `default_inner_constructors` uses field_types directly in function
+                # signatures (e.g., `f(x::T)` where T is a type parameter).
+                # In flisp, `_defaultctors` is called at runtime so this isn't needed,
+                # but JuliaLowering currently generates constructor code at compile time.
                 if isempty(inner_defs)
                     default_inner_constructors(ctx, ex, global_struct_name,
                                                typevar_names, typevar_stmts, field_names_2, field_types)
-                else
-                    map!(inner_defs, inner_defs) do def
-                        rewrite_new_calls(ctx, def, struct_name, global_struct_name,
-                                          typevar_names, field_names, field_types)
-                    end
-                    [K"block" inner_defs...]
                 end
                 if need_outer_constructor
                     default_outer_constructor(ctx, ex, global_struct_name,
@@ -4151,6 +4161,15 @@ function expand_struct_def(ctx, ex, docs)
                 end
             ]
         ]
+
+        # User-defined inner constructors are placed in a separate scope_block
+        # outside the type parameter scope, matching flisp behavior.
+        if !isempty(inner_defs)
+            [K"scope_block"(scope_type=:hard)
+                [K"global" global_struct_name]
+                [K"block" inner_defs...]
+            ]
+        end
 
         # Documentation
         if !isnothing(docs) || !isempty(field_docs)
