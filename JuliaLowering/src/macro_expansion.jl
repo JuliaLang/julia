@@ -393,7 +393,7 @@ function remove_scope_layer!(ex)
 end
 
 function remove_scope_layer(ctx, ex)
-    remove_scope_layer!(copy_ast(ctx, ex))
+    remove_scope_layer!(copy_ast(ctx, ex; copy_source=false))
 end
 
 """
