@@ -440,16 +440,11 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
             Expr::K"Value"
             [K"inert" ex]
         ]
-        [K"unknown_head" cs...] -> let
-            head = st.name_val
+        [K"symbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
+        [K"symboliclabel" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
+        [K"unknown_head" cs...] -> let head = st.name_val
             if head === "latestworld-if-toplevel"
                 newleaf(g, st, K"latestworld_if_toplevel")
-            elseif head === "symbolicgoto"
-                lab = cs[1].name_val
-                setattr!(newleaf(g, st, K"symbolic_goto"), :name_val, lab)
-            elseif head === "symboliclabel"
-                lab = cs[1].name_val
-                setattr!(newleaf(g, st, K"symbolic_label"), :name_val, lab)
             else
                 @assert(false, string(
                     "unknown expr head (corresponding to no kind) between",

@@ -194,11 +194,6 @@ vst1_value(
         head === "latestworld-if-toplevel" ?
             pass() : @fail(st, string("unknown expr head: ", head))
     end
-    [K"unknown_head" c1] -> let head = st.name_val
-        head in ("symbolicgoto", "symboliclabel") ?
-            vst1_ident(vcx, c1; lhs=true) :
-            @fail(st, string("unknown expr head: ", head))
-    end
     # flisp: (or (atom? x) (memq (car x) '(quote inert $)))
     ([K"." l r], when=kind(r)!==K"tuple") ->
         vst1_value(vcx, l) & vst1_simple_dot_rhs(vcx, r)
@@ -346,8 +341,9 @@ vst1_value(
         @fail(st, "`Placeholder` kind not valid until desugaring")
     [K"unknown_head" _...] ->
         @fail(st, string("unknown expr head: ", st.name_val))
+    [K"symbolic_block" x y] -> pass() # TODO
 
-    (_, when=need_value && kind(st) in KSet"symbolic_label symbolic_goto") ->
+    (_, when=need_value && kind(st) in KSet"symboliclabel symbolicgoto") ->
         @fail(st, "this syntax does not have a value and cannot be read from")
     _ -> let top_vr = vst1_toplevel_only_value(vcx, st)
         if vcx.toplevel
@@ -363,8 +359,8 @@ end
 
 vst1_stmt(vcx::Validation1Context, st::SyntaxTree) = @stm st begin
     [K"global" x] -> vst1_global_arg(vcx, st[1])
-    [K"symbolic_label"] -> pass()
-    [K"symbolic_goto"] -> pass()
+    [K"symboliclabel" [K"Identifier"]] -> pass()
+    [K"symbolicgoto" [K"Identifier"]] -> pass()
     [K"latestworld_if_toplevel"] -> pass()
 
     _ -> let top_vr = vst1_toplevel_only_nonvalue(vcx, st)

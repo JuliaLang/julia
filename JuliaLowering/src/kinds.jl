@@ -40,9 +40,9 @@ function _register_kinds()
             # be passed through lowering in a similar way to `isdefined`
             "throw_undef_if_not"
             # named labels for `@label` and `@goto`
-            "symbolic_label"
+            "symboliclabel"
             # Goto named label
-            "symbolic_goto"
+            "symbolicgoto"
             # Labeled block for `@label name expr` (block break)
             "symbolic_block"
             # Internal initializer for struct types, for inner constructors/functions

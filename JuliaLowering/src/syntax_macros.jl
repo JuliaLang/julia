@@ -45,7 +45,7 @@ end
 
 function Base.var"@label"(__context__::MacroContext, ex)
     @chk kind(ex) == K"Identifier"
-    @ast __context__ ex [K"unknown_head"(name_val="symboliclabel") ex]
+    @ast __context__ ex [K"symboliclabel" ex]
 end
 
 function Base.var"@label"(__context__::MacroContext, name, body)
@@ -79,7 +79,7 @@ end
 
 function Base.var"@goto"(__context__::MacroContext, ex)
     @chk kind(ex) == K"Identifier"
-    @ast __context__ ex [K"unknown_head"(name_val="symbolicgoto") ex]
+    @ast __context__ ex [K"symbolicgoto" ex]
 end
 
 function Base.var"@locals"(__context__::MacroContext)
