@@ -63,8 +63,8 @@
 
 using namespace llvm;
 
-extern cl::opt<bool> TimeTrace;
-extern cl::opt<std::string> TimeTraceFile;
+extern int jl_is_timing_trace;
+extern std::string jl_timing_trace_file;
 
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeContext, LLVMOrcThreadSafeContextRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeModule, LLVMOrcThreadSafeModuleRef)

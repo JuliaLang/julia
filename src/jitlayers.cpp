@@ -2083,13 +2083,13 @@ JuliaOJIT::JuliaOJIT()
     cantFail(JD.define(orc::absoluteSymbols(asan_crt)));
 #endif
 
-    if (TimeTrace) {
+    if (jl_is_timing_trace) {
         PrintLLVMTimers.push_back([]() JL_NOTSAFEPOINT {
             if (timeTraceProfilerEnabled()) {
-                StringRef FileName = TimeTraceFile.empty() ?
-                    StringRef("julia_time_trace.json") : StringRef(TimeTraceFile);
+                StringRef FileName = jl_timing_trace_file.empty() ?
+                    StringRef("julia_time_trace.json") : StringRef(jl_timing_trace_file);
                 if (auto E = timeTraceProfilerWrite(FileName, "")) {
-                    handleAllErrors(std::move(E), [](const StringError &SE) {
+                    handleAllErrors(std::move(E), [](const StringError &SE) JL_NOTSAFEPOINT { 
                         errs() << SE.getMessage() << "\n";
                     });
                 }

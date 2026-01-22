@@ -276,7 +276,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @testset "time-trace" begin
         mktempdir() do dir
             tracefile = joinpath(dir, "test_trace.json")
-            v = readchomperrors(setenv(`$exename -e "1+1"`, "JULIA_LLVM_ARGS" => "-time-trace -time-trace-file=$tracefile", "HOME" => homedir()))
+            # Use forward slashes on Windows to avoid LLVM command line parser issues with backslashes
+            tracefile_arg = Sys.iswindows() ? replace(tracefile, "\\" => "/") : tracefile
+            v = readchomperrors(setenv(`$exename -e "1+1"`, "JULIA_LLVM_ARGS" => "-time-trace -time-trace-file=$tracefile_arg", "HOME" => homedir()))
             @test v[1]
             @test isfile(tracefile)
             content = read(tracefile, String)
