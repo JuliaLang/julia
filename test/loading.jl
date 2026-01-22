@@ -1925,3 +1925,18 @@ module M58272_to end
     @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep1")) $syntax_version_script`, String)) == v"1.13"
     @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep2")) $syntax_version_script`, String)) == v"1.14"
 end
+
+@testset "require_stdlib with isolated depot" begin
+    # Test that require_stdlib works with JULIA_DEPOT_PATH not including bundled depot
+    tmpdir = mktempdir()
+    try
+        script = "Base.require_stdlib(Base.PkgId(Base.UUID(\"2a0f44e3-6c83-55bd-87e4-b1978d98bd5f\"), \"Base64\")); println(\"SUCCESS\")"
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`, "JULIA_DEPOT_PATH" => tmpdir, "JULIA_DEBUG" => "loading")
+        output = read(cmd, String)
+        # Should not precompile since it loads from bundled depot
+        @test !contains(output, "Precompiling")
+        @test contains(output, "SUCCESS")
+    finally
+        rm(tmpdir; recursive=true, force=true)
+    end
+end
