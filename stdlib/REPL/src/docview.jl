@@ -684,10 +684,16 @@ function fielddoc(binding::Binding, field::Symbol)
             end
         end
     end
-    fs = fieldnames(resolve(binding))
-    fields = isempty(fs) ? "no fields" : (length(fs) == 1 ? "field " : "fields ") *
-                                          join(("`$f`" for f in fs), ", ", ", and ")
-    Markdown.parse("`$(resolve(binding))` has $fields.")
+    resolved = resolve(binding)
+    return if isabstracttype(resolved)
+        # Avoid calling `fieldnames`, as that would throw (#60783)
+        Markdown.parse("`$resolved` does not have fields as it is an abstract type.")
+    else
+        fs = fieldnames(resolved)
+        fields = isempty(fs) ? "no fields" : (length(fs) == 1 ? "field " : "fields ") *
+                                            join(("`$f`" for f in fs), ", ", ", and ")
+        Markdown.parse("`$resolved` has $fields.")
+    end
 end
 
 # As with the additional `doc` methods, this converts an object to a `Binding` first.
