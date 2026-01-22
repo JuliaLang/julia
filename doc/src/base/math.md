@@ -33,18 +33,6 @@ Base.numerator
 Base.denominator
 ```
 
-## Constructing Ranges
-
-```@docs
-Base.:(:)(::Any, ::Any, ::Any)
-Base.:(:)(::CartesianIndex, ::CartesianIndex, ::CartesianIndex)
-Base.range
-Base.OneTo
-Base.StepRangeLen
-Base.logrange
-Base.LogRange
-```
-
 ## Comparisons
 
 ```@docs
