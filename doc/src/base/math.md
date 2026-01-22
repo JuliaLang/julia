@@ -171,7 +171,7 @@ Base.Math.rad2deg
 Base.Math.hypot
 ```
 
-## Logarithms and Exponentiation
+## Logarithms
 
 ```@docs
 Base.log(::Number)
@@ -179,12 +179,15 @@ Base.log(::Number, ::Number)
 Base.log2
 Base.log10
 Base.log1p
-Base.Math.frexp
+```
+
+## Exponentiation
+
+```@docs
 Base.exp(::Float64)
 Base.exp2
 Base.exp10
 Base.expm1
-Base.Math.ldexp
 ```
 
 ## Rounding
@@ -297,7 +300,6 @@ Base.powermod
 ## Other Mathematical Functions
 
 ```@docs
-Base.ndigits
 Base.add_sum
 Base.widemul
 Base.Math.evalpoly
