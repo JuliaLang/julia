@@ -2794,7 +2794,7 @@ register_root_module(Main)
 # to the loaded_modules table instead of getting bindings.
 baremodule __toplevel__
 using Base
-global _internal_julia_parse = Core._parse
+global var"#_internal_julia_parse" = Core._parse
 global _internal_julia_lower = Core._lower
 
 # Used for version checking of precompiled cache files only
@@ -2966,13 +2966,13 @@ function __require_prelocked(pkg::PkgId, env)
     if uuid !== old_uuid
         ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, uuid)
     end
-    __toplevel__._internal_julia_parse = VersionedParse(spec.julia_syntax_version)
+    __toplevel__.var"#_internal_julia_parse" = VersionedParse(spec.julia_syntax_version)
     unlock(require_lock)
     try
         include(__toplevel__, path)
         loaded = maybe_root_module(pkg)
     finally
-        __toplevel__._internal_julia_parse = Core._parse
+        __toplevel__.var"#_internal_julia_parse" = Core._parse
         lock(require_lock)
         if uuid !== old_uuid
             ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
@@ -3107,7 +3107,8 @@ function include_string(mapexpr::Function, mod::Module, code::AbstractString,
                         filename::AbstractString="string")
     loc = LineNumberNode(1, Symbol(filename))
     try
-        ast = Meta.parseall(code; filename, mod)
+        _parse = invokelatest(Meta.parser_for_module, mod)
+        ast = Meta.parseall(code; filename, _parse)
         if !Meta.isexpr(ast, :toplevel)
             @assert Core._lower != fl_lower
             # Only reached when JuliaLowering and alternate parse functions are activated
@@ -3301,7 +3302,7 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
 
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), newly_inferred)
     # This one changes the parser behavior
-    __toplevel__._internal_julia_parse = VersionedParse(syntax_version)
+    __toplevel__.var"#_internal_julia_parse" = VersionedParse(syntax_version)
     # This one is the compatibility marker for cache loading
     __toplevel__._internal_syntax_version = cache_syntax_version(syntax_version)
     try
