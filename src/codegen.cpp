@@ -10436,10 +10436,15 @@ char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
 char jl_using_perf_jitevents = 0;
 #endif
 
-int jl_is_timing_passes = 0;
-
-int jl_is_timing_trace = 0;
-std::string jl_timing_trace_file;
+static cl::opt<bool> TimeTrace("time-trace", cl::desc("Record time trace"));
+static cl::opt<unsigned> TimeTraceGranularity(
+    "time-trace-granularity",
+    cl::desc("Minimum time granularity (in microseconds) traced by time profiler"),
+    cl::init(500), cl::Hidden);
+static cl::opt<std::string> TimeTraceFile(
+    "time-trace-file",
+    cl::desc("Specify time trace file destination"),
+    cl::value_desc("filename"));
 
 extern "C" void jl_init_llvm(void)
 {
@@ -10490,19 +10495,11 @@ extern "C" void jl_init_llvm(void)
     if (clopt && clopt->getNumOccurrences() > 0)
         jl_is_timing_passes = 1;
 
-    clopt = llvmopts.lookup("time-trace");
-    if (clopt && clopt->getNumOccurrences() > 0) {
+    if (TimeTrace) {
         jl_is_timing_trace = 1;
-        unsigned granularity = 500;  // default
-        cl::Option *granopt = llvmopts.lookup("time-trace-granularity");
-        if (granopt && granopt->getNumOccurrences() > 0) {
-            granularity = static_cast<cl::opt<unsigned>*>(granopt)->getValue();
-        }
-        cl::Option *fileopt = llvmopts.lookup("time-trace-file");
-        if (fileopt && fileopt->getNumOccurrences() > 0) {
-            jl_timing_trace_file = static_cast<cl::opt<std::string>*>(fileopt)->getValue();
-        }
-        timeTraceProfilerInitialize(granularity, "julia");
+        jl_timing_trace_granularity = TimeTraceGranularity;
+        jl_timing_trace_file = TimeTraceFile;
+        timeTraceProfilerInitialize(jl_timing_trace_granularity, "julia");
     }
 
     jl_ExecutionEngine = new JuliaOJIT();
