@@ -479,7 +479,7 @@ julia> string(greet, ", ", whom, ".\n")
 "Hello, world.\n"
 ```
 
-It's important to be aware of potentially dangerous situations such as concatenation of
+It is important to be aware of potentially dangerous situations such as concatenation of
 invalid UTF-8 strings. The resulting string may contain different characters than the
 input strings, and its number of characters may be lower than sum of numbers of characters
 of the concatenated strings, e.g.:
@@ -1151,7 +1151,7 @@ data, whereas the latter escapes all represent Unicode code points with two-byte
 If this is all extremely confusing, try reading ["The Absolute Minimum Every
 Software Developer Absolutely, Positively Must Know About Unicode and Character
 Sets"](https://www.joelonsoftware.com/2003/10/08/the-absolute-minimum-every-software-developer-absolutely-positively-must-know-about-unicode-and-character-sets-no-excuses/).
-It's an excellent introduction to Unicode and UTF-8, and may help alleviate
+It is an excellent introduction to Unicode and UTF-8, and may help alleviate
 some confusion regarding the matter.
 
 ## [Version Number Literals](@id man-version-number-literals)
@@ -1177,7 +1177,7 @@ end
 ```
 
 Note that in the above example the non-standard version number `v"0.3-"` is used, with a trailing
-`-`: this notation is a Julia extension of the standard, and it's used to indicate a version which
+`-`: this notation is a Julia extension of the standard, and it is used to indicate a version which
 is lower than any `0.3` release, including all of its pre-releases. So in the above example the
 code would only run with stable `0.2` versions, and exclude such versions as `v"0.3.0-rc1"`. In
 order to also allow for unstable (i.e. pre-release) `0.2` versions, the lower bound check should
