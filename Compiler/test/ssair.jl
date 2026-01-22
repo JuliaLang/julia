@@ -109,6 +109,21 @@ let cfg = CFG(BasicBlock[
     @test length(compact.cfg_transform.result_bbs) == 4 && 0 in compact.cfg_transform.result_bbs[3].preds
 end
 
+# Test that removing a self-edge during compaction only scans compacted phi statements.
+let code = Any[
+        # Block 1
+        Compiler.GotoNode(2),
+        # Block 2
+        Core.PhiNode(Int32[1, 3], Any[1, 2]),
+        Compiler.GotoIfNot(true, 2),
+        # Block 3
+        Compiler.ReturnNode(0),
+    ]
+    ir = make_ircode(code)
+    ir = Compiler.compact!(ir, true)
+    @test Compiler.verify_ir(ir) === nothing
+end
+
 # Issue #32579 - Optimizer bug involving type constraints
 function f32579(x::Int, b::Bool)
     if b
