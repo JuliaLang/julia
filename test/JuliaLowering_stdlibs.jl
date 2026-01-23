@@ -2,10 +2,10 @@ import Libdl
 
 # known precompilation failures under JL
 const INCOMPATIBLE_STDLIBS = String[
-    "SparseArrays", # type-alias bug (JuliaLang/JuliaLowering.jl#123)
+    "SparseArrays", # closure static parameter bug (JuliaLang/JuliaLowering.jl#134)
     "Test", # nested + destructured args splat (JuliaLang/JuliaLowering.jl#133)
     "REPL", # infinite softscope (in REPL code)
-    "Pkg", # depends on LibGit2
+    "Pkg", # closure w/ kwarg bug (JuliaLang/JuliaLowering.jl#139)
     "SuiteSparse", # depends on SparseArrays
     "LazyArtifacts", # depends on Pkg
 ]

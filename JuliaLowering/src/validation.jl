@@ -1,46 +1,51 @@
-struct ValidationDiagnostic <: Exception
+struct ValidationDiagnostic
     sts::SyntaxList
     msg::String
-    loc::LineNumberNode
+    loc::LineNumberNode # for noting where failures come from in this file
 end
-ValidationDiagnostic1(st::SyntaxTree, msg, loc) =
+ValidationDiagnostic(st::SyntaxTree, msg, loc) =
     ValidationDiagnostic(
         SyntaxList(syntax_graph(st), NodeId[st._id]), msg, loc)
 
 """
 The type returned by all `vst` functions.  There are three answers this can
 represent:
-  - valid `(true, [])`
+  - valid `(true, nothing)`
   - known-invalid `(false, [errors...])`
-  - don't know/not my job `(false, [])`.
+  - don't know/not my job `(false, nothing)`.
 """
 struct ValidationResult
     ok::Bool
-    errors::Vector{ValidationDiagnostic}
+    errors::Union{Nothing, Vector{ValidationDiagnostic}}
 end
 
-is_known(vr::ValidationResult) = vr.ok || !isempty(vr.errors)
-
-pass() = ValidationResult(true, [])
-unknown() = ValidationResult(false, [])
+pass() = ValidationResult(true, nothing)
+unknown() = ValidationResult(false, nothing)
 fail(st::SyntaxTree, msg="invalid syntax", loc=nothing) =
-    ValidationResult(false, [ValidationDiagnostic1(
+    ValidationResult(false, [ValidationDiagnostic(
         st, msg, something(loc, LineNumberNode(0)))])
 macro fail(st, msg)
     esc(:($fail($st, $msg, $(QuoteNode(__source__)))))
 end
 
+is_known(vr::ValidationResult) = vr.ok || vr.errors !== nothing
+
 function Base.var"&"(vr1::ValidationResult, vr2::ValidationResult)
-    ValidationResult(vr1.ok & vr2.ok, union(vr1.errors, vr2.errors))
+    errors_out = isnothing(vr1.errors) ? vr2.errors :
+        isnothing(vr2.errors) ? vr1.errors :
+        union(vr1.errors, vr2.errors)
+    ValidationResult(vr1.ok & vr2.ok, errors_out)
 end
 
 function Base.var"|"(vr1::ValidationResult, vr2::ValidationResult)
     vr1.ok && return vr1
     vr2.ok && return vr2
-    ValidationResult(false, !isempty(vr1.errors) ? vr1.errors : vr2.errors)
+    ValidationResult(false, !isnothing(vr1.errors) ? vr1.errors : vr2.errors)
 end
 
-function allv(f, vcx, itr; kws...)
+abstract type ValidationContext end
+
+function Base.all(f::Function, vcx::ValidationContext, itr; kws...)
     ok = pass()
     for i in itr
         ok &= f(vcx, i; kws...)
@@ -48,7 +53,9 @@ function allv(f, vcx, itr; kws...)
     return ok
 end
 
+# TODO: pretty-printing
 function showerrors(vr::ValidationResult)
+    isnothing(vr.errors) && return
     for (i, e) in enumerate(vr.errors)
         printstyled("error $i:\n"; color=:red)
         showerror(stdout, LoweringError(e.sts[1], e.msg))
@@ -69,7 +76,7 @@ structures we're in.
 By default, assume we are validating a usual lowering input (top-level) that has
 been macroexpanded.
 """
-Base.@kwdef struct Validation1Context
+Base.@kwdef struct Validation1Context <: ValidationContext
     toplevel::Bool=true     # not in any lambda body
     in_gscope::Bool=true    # not in any scope; implies toplevel
     in_loop::Bool=false     # break/continue allowed
@@ -127,15 +134,17 @@ We don't check some other things:
   later in lowering.
 """
 function valid_st1(st::SyntaxTree)
-    vst1(Validation1Context(), st)
+    vr = vst1(Validation1Context(), st)
+    @assert is_known(vr)
+    return vr
 end
 
 vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"Identifier"] -> vst1_ident(vcx, st)
     (_, when=is_expr_value(st)) -> pass()
-    [K"block" xs...] -> allv(vst1, vcx, xs)
+    [K"block" xs...] -> all(vst1, vcx, xs)
     [K"let" [K"block" decls...] body] ->
-        allv(vst1_symdecl_or_assign, vcx, decls) &
+        all(vst1_symdecl_or_assign, vcx, decls) &
         vst1(with(vcx; in_gscope=false), body)
     [K"let" decl body] ->
         vst1_symdecl_or_assign(vcx, decl) &
@@ -185,7 +194,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"break"] -> vcx.in_loop ? pass() :
         @fail(st, "`break` outside of a `while` or `for` loop")
     [K"for" [K"block" is...] body] ->
-        allv(vst1_iter, vcx, is) &
+        all(vst1_iter, vcx, is) &
         vst1(with(vcx; in_loop=true, in_gscope=false), body)
     [K"for" iter1 body] ->
         vst1_iter(vcx, iter1) &
@@ -196,11 +205,11 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"tuple" _...] ->
         vst1_tuple(vcx, st)
     [K"curly" t tvs...] ->
-        vst1(vcx, t) & allv(vst1_curly_typevar, vcx, tvs)
+        vst1(vcx, t) & all(vst1_curly_typevar, vcx, tvs)
     [K"where" t tds...] ->
-        vst1(vcx, t) & allv(vst1_typevar_decl, vcx, tds)
+        vst1(vcx, t) & all(vst1_typevar_decl, vcx, tds)
     [K"string" xs...] ->
-        allv(vst1_splat_or_val, vcx, xs)
+        all(vst1_splat_or_val, vcx, xs)
     [K"->" _...] ->
         vst1_lam(vcx, st)
     [K"flatten" g] -> vst1_generator(vcx, g)
@@ -215,16 +224,17 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         length(xs) < 3 || iseven(length(xs)) ?
         @fail(st, "`comparison` expects n>=3 args and odd n") :
         # TODO: can we restrict xs[2:2:end] to identifier or .identifier?
-        allv(vst1, vcx, xs[2:2:end]) &
-        allv(vst1, vcx, xs[1:2:end])
+        all(vst1, vcx, xs[2:2:end]) &
+        all(vst1, vcx, xs[1:2:end])
     [K"<:" x] -> vst1(vcx, x)
     [K">:" x] -> vst1(vcx, x)
     [K"<:" x y] -> vst1(vcx, x) & vst1(vcx, y)
     [K">:" x y] -> vst1(vcx, x) & vst1(vcx, y)
     [K"-->" x y] -> vst1(vcx, x) & vst1(vcx, y)
     [K"::" x y] -> vst1(vcx, x) & vst1(vcx, y)
-    [K"&&" xs...] -> allv(vst1, vcx, xs)
-    [K"||" xs...] -> allv(vst1, vcx, xs)
+    # TODO: inner_cond on args[2:end]
+    [K"&&" xs...] -> all(vst1, vcx, xs)
+    [K"||" xs...] -> all(vst1, vcx, xs)
     [K".&&" x y] -> vst1(vcx, x) & vst1(vcx, y)
     [K".||" x y] -> vst1(vcx, x) & vst1(vcx, y)
     (_, when=(vr=vst1_arraylike(vcx, st); is_known(vr))) -> vr
@@ -234,8 +244,8 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"const" x] ->  !vcx.toplevel ?
         @fail(st, "unsupported `const` inside function") :
         vst1_const_assign(vcx, x)
-    [K"global" xs...] -> allv(vst1_global_arg, vcx, xs)
-    [K"local" xs...] -> allv(vst1_local_arg, vcx, xs)
+    [K"global" xs...] -> all(vst1_global_arg, vcx, xs)
+    [K"local" xs...] -> all(vst1_local_arg, vcx, xs)
     [K"macrocall" _...] -> vst0_macrocall(vcx, st)
     [K"quote" x] -> vcx.unexpanded ? vst0_quoted(vcx, x; quote_level=1) :
         @fail(st, "interpolating quote not valid syntax after macro expansion")
@@ -251,17 +261,17 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"meta" _...] -> pass() # TODO
     [K"toplevel" xs...] -> pass() # this will be validated when we lower it
     [K"opaque_closure" argt lb ub bool lam] ->
-        allv(vst1, vcx, [argt, lb, ub, bool]) & vst1_lam(vcx, lam)
+        all(vst1, vcx, [argt, lb, ub, bool]) & vst1_lam(vcx, lam)
     [K"symboliclabel" [K"Identifier"]] -> pass()
     [K"symbolicgoto" [K"Identifier"]] -> pass()
     [K"symbolic_block" x y] -> pass() # TODO
-    [K"gc_preserve" x ids...] -> vst1(vcx, x) & allv(vst1_ident, vcx, ids)
-    [K"gc_preserve_begin" ids...] -> allv(vst1_ident, vcx, ids)
-    [K"gc_preserve_end" ids...] -> allv(vst1_ident, vcx, ids)
+    [K"gc_preserve" x ids...] -> vst1(vcx, x) & all(vst1_ident, vcx, ids)
+    [K"gc_preserve_begin" ids...] -> all(vst1_ident, vcx, ids)
+    [K"gc_preserve_end" ids...] -> all(vst1_ident, vcx, ids)
     [K"isdefined" [K"Identifier"]] -> pass()
     [K"lambda" [K"block" b1...] [K"block" b2...] [K"->" _...]] ->
-        allv(vst1_ident, vcx, b1) &
-        allv(vst1_ident, vcx, b2) &
+        all(vst1_ident, vcx, b1) &
+        all(vst1_ident, vcx, b2) &
         vst1_lam(vcx, st[3])
     [K"softscope" _] -> pass()
     [K"softscope"] -> pass()
@@ -286,7 +296,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"islocal" _] -> pass()
     [K"isglobal" _] -> pass()
     [K"copyast" [K"inert" _]] -> pass()
-    [K"new" t args...] -> vst1(vcx, t) & allv(vst1, vcx, args)
+    [K"new" t args...] -> vst1(vcx, t) & all(vst1, vcx, args)
     [K"splatnew" t arg] -> vst1(vcx, t) & vst1(vcx, arg)
 
     #---------------------------------------------------------------------------
@@ -296,9 +306,9 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"parameters" _...] ->
         @fail(st, "unexpected semicolon")
     [K"braces" _...] ->
-        @fail(st, "`braces` outside of `where` is reserved for future use")
+        @fail(st, "`{ }` outside of `where` is reserved for future use")
     [K"bracescat" _...] ->
-        @fail(st, "`bracescat` is reserved for future use")
+        @fail(st, "`{ }` outside of `where` is reserved for future use")
     [K"atomic" _...] ->
         @fail(st, "unimplemented or unsupported `atomic` declaration")
     [K"::" x] ->
@@ -337,21 +347,21 @@ vst1_toplevel_only(vcx, st) = @stm st begin
     [K"struct" [K"Value"] sig [K"block" body...]] ->
         vst1_typesig(vcx, sig) & (
             !(st[1].value isa Bool) ? @fail(st[1], "expected mutable flag") :
-                allv(vst1_struct_arg, vcx, body))
+                all(vst1_struct_arg, vcx, body))
     [K"abstract" sig] ->
         vst1_typesig(vcx, sig)
     [K"primitive" sig n] ->
         vst1_typesig(vcx, sig) & vst1(vcx, n)
     [K"import" [K":" p1 ps...]] ->
         (vst1_importpath(vcx, p1; dots_ok=true) &
-        allv(vst1_importpath, vcx, ps; dots_ok=false))
+        all(vst1_importpath, vcx, ps; dots_ok=false))
     [K"using"  [K":" p1 ps...]] ->
         (vst1_importpath(vcx, p1; dots_ok=true) &
-        allv(vst1_importpath, vcx, ps; dots_ok=false))
-    [K"import" ps...] -> allv(vst1_importpath, vcx, ps; dots_ok=true)
-    [K"using"  ps...] -> allv(vst1_importpath, vcx, ps; dots_ok=true)
-    [K"public" xs...] -> allv(vst1_ident, vcx, xs)
-    [K"export" xs...] -> allv(vst1_ident, vcx, xs)
+        all(vst1_importpath, vcx, ps; dots_ok=false))
+    [K"import" ps...] -> all(vst1_importpath, vcx, ps; dots_ok=true)
+    [K"using"  ps...] -> all(vst1_importpath, vcx, ps; dots_ok=true)
+    [K"public" xs...] -> all(vst1_ident, vcx, xs)
+    [K"export" xs...] -> all(vst1_ident, vcx, xs)
     [K"latestworld"] -> pass()
     _ -> unknown()
 end
@@ -408,12 +418,12 @@ function vst1_importpath(vcx, st; dots_ok)
 end
 
 vst1_tuple(vcx, st) = @stm st begin
-    [K"tuple" [K"parameters" kws...]] -> allv(vst1_call_arg, vcx, kws)
+    [K"tuple" [K"parameters" kws...]] -> all(vst1_call_kwarg, vcx, kws)
     [K"tuple" [K"parameters" _ _...] _ _...] -> @fail(
         st[end], "cannot mix tuple `(a,b,c)` and named tuple `(;a,b,c)` syntax")
     ([K"tuple" args...], when=any(x->kind(x)===K"=", args)) ->
-        allv(vst1_call_arg, vcx, args)
-    [K"tuple" xs...] -> allv(vst1_splat_or_val, vcx, xs)
+        all(vst1_call_arg, vcx, args)
+    [K"tuple" xs...] -> all(vst1_splat_or_val, vcx, xs)
     _ -> @fail(st, "malformed tuple")
 end
 
@@ -512,28 +522,28 @@ end
 vst1_call(vcx, st) = @stm st begin
     [K"call" f [K"parameters" kwargs...] args...] ->
         vst1(vcx, f) &
-        allv(vst1_call_arg, vcx, args) &
-        allv(vst1_call_kwarg, vcx, kwargs)
+        all(vst1_call_arg, vcx, args) &
+        all(vst1_call_kwarg, vcx, kwargs)
     [K"call" f args...] ->
         vst1(vcx, f) &
-        allv(vst1_call_arg, vcx, args)
+        all(vst1_call_arg, vcx, args)
     [K"call" _...] -> @fail(st, "malformed `call`")
     _ -> unknown()
 end
 
 vst1_dotcall(vcx, st) = @stm st begin
     [K"." f [K"tuple" [K"parameters" kwargs...] args...]] ->
-        vst1(vcx, f) & allv(vst1_call_kwarg, vcx, kwargs) &
-        allv(vst1_call_arg, vcx, args)
+        vst1(vcx, f) & all(vst1_call_kwarg, vcx, kwargs) &
+        all(vst1_call_arg, vcx, args)
     [K"." f [K"tuple" args...]] ->
-        vst1(vcx, f) & allv(vst1_call_arg, vcx, args)
+        vst1(vcx, f) & all(vst1_call_arg, vcx, args)
     _ -> unknown()
 end
 
 # Arg to call (not function decl), pre-semicolon.  This can be anything, but
 # additionally allow `kw` and `...` forms.
 vst1_call_arg(vcx, st) = @stm st begin
-    [K"kw" [K"Identifier"] val] -> vst1(vcx, val)
+    [K"kw" id val] -> vst1_ident(vcx, id; lhs=true) & vst1(vcx, val)
     _ -> vst1_splat_or_val(vcx, st)
 end
 
@@ -541,11 +551,12 @@ end
 # than `vst1_call_arg`.
 vst1_call_kwarg(vcx, st) = @stm st begin
     [K"Identifier"] -> pass()
-    [K"kw" [K"Identifier"] val] -> vst1(vcx, val)
+    [K"kw" id val] -> vst1_ident(vcx, id; lhs=true) & vst1(vcx, val)
     [K"..." x] -> vst1(vcx, x)
-    ([K"call" [K"Identifier"] [K"inert" [K"Identifier"]] v],
-     when=(st[1].name_val==="=>")) -> vst1(vcx, v)
-    _ -> @fail(st, "malformed `parameters`; expected identifier, `=`, or, `...`")
+    [K"." x [K"inert" id]] -> vst1(vcx, x) & vst1_ident(vcx, id; lhs=true)
+    ([K"call" [K"Identifier"] symval v], when=(st[1].name_val==="=>")) ->
+        vst1(vcx, symval) & vst1(vcx, v)
+    _ -> @fail(st, "expected identifier, `=`, or, `...` after semicolon")
 end
 
 vst1_lam(vcx, st) = let
@@ -563,7 +574,7 @@ vst1_lam_lhs(vcx, st) = @stm st begin
     [K"tuple" ps...] ->
         _calldecl_positionals(vcx, ps, K"=")
     [K"where" ps tds...] ->
-        vst1_lam_lhs(vcx, ps) & allv(vst1_typevar_decl, vcx, tds)
+        vst1_lam_lhs(vcx, ps) & all(vst1_typevar_decl, vcx, tds)
     # syntax TODO: This is handled badly in the parser
     [K"block" p1 p2] -> pass()
     # unwrapped single arg
@@ -597,7 +608,7 @@ end
 
 vst1_function_calldecl(vcx, st) = @stm st begin
     [K"where" callex tds...] ->
-        vst1_function_calldecl(vcx, callex) & allv(vst1_typevar_decl, vcx, tds)
+        vst1_function_calldecl(vcx, callex) & all(vst1_typevar_decl, vcx, tds)
     [K"::" callex rt] ->
         vst1_simple_calldecl(vcx, callex) &
         vst1(with(vcx, in_param_t=true), rt)
@@ -642,7 +653,7 @@ vst1_calldecl_name(vcx, st) = @stm st begin
     [K"." _ _] ->
         vst1_dotsym(vcx, st)
     [K"curly" t tvs...] ->
-        vst1_calldecl_name(vcx, t) & allv(vst1, vcx, tvs)
+        vst1_calldecl_name(vcx, t) & all(vst1, vcx, tvs)
     [K"Value"] ->
         pass() # GlobalRef works. Function? Type?
 
@@ -653,7 +664,7 @@ vst1_calldecl_name(vcx, st) = @stm st begin
         vst1_param_simple_tuple(vcx, x) & vst1(vcx, t)
 
     [K"where" t tds...] ->
-        vst1(vcx, t) & allv(vst1_typevar_decl, vcx, tds)
+        vst1(vcx, t) & all(vst1_typevar_decl, vcx, tds)
     _ -> @fail(st, "invalid function name") | vst1_ident(vcx, st)
 end
 
@@ -718,8 +729,8 @@ end
 
 vst1_param_simple_tuple(vcx, st) = @stm st begin
     [K"Identifier"] -> pass()
-    [K"tuple" [K"parameters" kws...]] -> allv(vst1_ident, vcx, kws; lhs=true)
-    [K"tuple" xs...] -> allv(vst1_param_simple_tuple_or_splat, vcx, xs)
+    [K"tuple" [K"parameters" kws...]] -> all(vst1_ident, vcx, kws; lhs=true)
+    [K"tuple" xs...] -> all(vst1_param_simple_tuple_or_splat, vcx, xs)
     _ -> unknown()
 end
 
@@ -740,8 +751,8 @@ end
 
 vst1_calldecl_kws(vcx, st) = @stm st begin
     [K"parameters" kws... [K"..." varkw]] ->
-        allv(vst1_param_kw, vcx, kws) & vst1_param(vcx, varkw)
-    [K"parameters" kws...] -> allv(vst1_param_kw, vcx, kws)
+        all(vst1_param_kw, vcx, kws) & vst1_param(vcx, varkw)
+    [K"parameters" kws...] -> all(vst1_param_kw, vcx, kws)
     _ -> unknown()
 end
 
@@ -778,10 +789,10 @@ vst1_typesig(vcx, st) = @stm st begin
     [K"Identifier"] ->
         vst1_ident(vcx, st)
     [K"curly" t tvs...] ->
-        vst1_ident(vcx, t) & allv(vst1_typevar_decl, vcx, tvs)
+        vst1_ident(vcx, t) & all(vst1_typevar_decl, vcx, tvs)
     [K"<:" [K"curly" t tvs...] super] ->
         vst1_ident(vcx, t) & vst1(vcx, super) &
-        allv(vst1_typevar_decl, vcx, tvs)
+        all(vst1_typevar_decl, vcx, tvs)
     [K"<:" t super] ->
         vst1_ident(vcx, t) & vst1(vcx, super)
     _ -> @fail(st, "invalid type signature")
@@ -835,9 +846,9 @@ end
 vst1_assign_lhs(
     vcx, st; in_const=false, in_tuple=false, disallow_type=false
 ) = @stm st begin
-    [K"tuple" [K"parameters" xs...]] -> allv(vst1_symdecl, vcx, xs)
+    [K"tuple" [K"parameters" xs...]] -> all(vst1_symdecl, vcx, xs)
     [K"tuple" xs...] ->
-        allv(vst1_assign_lhs, vcx, xs; in_const, in_tuple=true) &
+        all(vst1_assign_lhs, vcx, xs; in_const, in_tuple=true) &
         (count(kind(x)===K"..." for x in xs) <= 1 ? pass() :
         @fail(st, "multiple `...` in destructuring assignment are ambiguous"))
     # type-annotated tuple segfaults, haha
@@ -865,9 +876,9 @@ vst1_assign_lhs_nontuple(
         vst1(vcx, x) & vst1_simple_dot_rhs(vcx, y)
     [K"ref" x is...] ->
         in_const ? @fail(st, "cannot declare this form constant") :
-        vst1(vcx, x) & allv(vst1_splat_or_val, vcx, is)
+        vst1(vcx, x) & all(vst1_splat_or_val, vcx, is)
     [K"curly" [K"Identifier"] tvs...] ->
-        allv(vst1_typevar_decl, vcx, tvs)
+        all(vst1_typevar_decl, vcx, tvs)
 
     [K"typed_hcat" _...] ->
         @fail(st, "invalid spacing in left side of indexed assignment")
@@ -884,19 +895,19 @@ vst1_dotassign_lhs(vcx, st) = vst1_assign_lhs(vcx, st) | vst1(vcx, st)
 
 # TODO: more validation is possible here, e.g. when row/nrow can show up in ncat
 vst1_arraylike(vcx, st) = @stm st begin
-    [K"vect" xs...] -> allv(vst1_splat_or_val, vcx, xs)
-    [K"hcat" xs...] -> allv(vst1_splat_or_val, vcx, xs)
-    [K"vcat" xs...] -> allv(vst1_splat_or_val, vcx, xs)
-    [K"ncat" [K"Value"] xs...] -> allv(vst1_splat_or_val, vcx, xs)
-    [K"ref" x is...] -> vst1(vcx, x) & allv(vst1_splat_or_val, vcx, is)
-    [K"row" xs...] -> allv(vst1_splat_or_val, vcx, xs)
-    [K"nrow" [K"Value"] xs...] -> allv(vst1_splat_or_val, vcx, xs)
+    [K"vect" xs...] -> all(vst1_splat_or_val, vcx, xs)
+    [K"hcat" xs...] -> all(vst1_splat_or_val, vcx, xs)
+    [K"vcat" xs...] -> all(vst1_splat_or_val, vcx, xs)
+    [K"ncat" [K"Value"] xs...] -> all(vst1_splat_or_val, vcx, xs)
+    [K"ref" x is...] -> vst1(vcx, x) & all(vst1_splat_or_val, vcx, is)
+    [K"row" xs...] -> all(vst1_splat_or_val, vcx, xs)
+    [K"nrow" [K"Value"] xs...] -> all(vst1_splat_or_val, vcx, xs)
     [K"typed_hcat" t xs...] ->
-        vst1(vcx, t) & allv(vst1_splat_or_val, vcx, xs)
+        vst1(vcx, t) & all(vst1_splat_or_val, vcx, xs)
     [K"typed_vcat" t xs...] ->
-        vst1(vcx, t) & allv(vst1_splat_or_val, vcx, xs)
+        vst1(vcx, t) & all(vst1_splat_or_val, vcx, xs)
     [K"typed_ncat" t xs...] ->
-        vst1(vcx, t) & allv(vst1_splat_or_val, vcx, xs)
+        vst1(vcx, t) & all(vst1_splat_or_val, vcx, xs)
     _ -> unknown()
 end
 
@@ -913,9 +924,9 @@ vst1_generator(vcx, st) = let
         [K"generator" val [K"filter" cond is...]] ->
             vst1(vcx, val) &
             vst1(vcx, cond) &
-            allv(vst1_iter, vcx, is)
+            all(vst1_iter, vcx, is)
         [K"generator" val is...] ->
-            vst1(vcx, val) & allv(vst1_iter, vcx, is)
+            vst1(vcx, val) & all(vst1_iter, vcx, is)
         _ -> unknown()
     end
 end
@@ -937,6 +948,7 @@ function valid_st0(st::SyntaxTree)
     vr = vst1(with(Validation1Context(), unexpanded=true), st)
     # hack: A macrocall can show up almost anywhere, so filter errors pointing
     # at macrocalls instead of adding cases to every function above.
+    isnothing(vr.errors) && return vr.ok
     vr2_errors = filter(vr.errors) do err
         isempty(err.sts) || !(kind(err.sts[1]) === K"macrocall")
     end
@@ -969,5 +981,5 @@ vst0_quoted(vcx, st; quote_level) = @stm st begin
         vst0_quoted(vcx, x; quote_level=quote_level-1)
     [K"quote" x] ->
         vst0_quoted(vcx, x; quote_level=quote_level+1)
-    _ -> allv(vst0_quoted, vcx, children(st); quote_level)
+    _ -> all(vst0_quoted, vcx, children(st); quote_level)
 end

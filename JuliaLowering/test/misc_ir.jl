@@ -165,7 +165,7 @@ splatting can only be done into a `call`, `tuple`, `curly`, or array-like expres
 #---------------------
 LoweringError:
 (; a[]=1)
-#  └───┘ ── invalid syntax: unknown form `kw` or number of arguments 2
+#  └─┘ ── expected identifier
 
 ########################################
 # Error: Named tuple element with weird dot syntax
@@ -173,7 +173,7 @@ LoweringError:
 #---------------------
 LoweringError:
 (; a."b")
-#  └───┘ ── invalid named tuple element
+#     ╙ ── expected identifier
 
 ########################################
 # Error: Named tuple element without valid name
@@ -181,7 +181,7 @@ LoweringError:
 #---------------------
 LoweringError:
 (; a=1, f())
-#       └─┘ ── Invalid named tuple element
+#       └─┘ ── expected identifier, `=`, or, `...` after semicolon
 
 ########################################
 # Error: Modules not allowed inside blocks
@@ -236,7 +236,7 @@ LoweringError:
 #---------------------
 LoweringError:
 {x, y}
-└────┘ ── `braces` outside of `where` is reserved for future use
+└────┘ ── `{ }` outside of `where` is reserved for future use
 
 ########################################
 # Error: braces matrix syntax
@@ -244,7 +244,7 @@ LoweringError:
 #---------------------
 LoweringError:
 {x y; y z}
-└────────┘ ── `bracescat` is reserved for future use
+└────────┘ ── `{ }` outside of `where` is reserved for future use
 
 ########################################
 # Error: Test AST which has no source form and thus must have been constructed
