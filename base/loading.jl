@@ -3070,7 +3070,11 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
                 sourcepath = find_ext_path(normpath(joinpath(env, package_uuidkey.name)), ext)
             end
             set_pkgorigin_version_path(this_uuidkey, sourcepath)
-            newm = _require_search_from_serialized(this_uuidkey, PkgLoadSpec(sourcepath, VERSION), UInt128(0), false; DEPOT_PATH=depot_path)
+            # Determine the syntax version from the stdlib's Project.toml
+            project_file = project_file_path(normpath(env, this_uuidkey.name))
+            project_file isa String || error("No Project.toml found for stdlib $(this_uuidkey.name) in expected location $(normpath(env, this_uuidkey.name))")
+            modspec = project_file_load_spec(project_file, this_uuidkey.name)
+            newm = _require_search_from_serialized(this_uuidkey, modspec, UInt128(0), false; DEPOT_PATH=depot_path)
         end
     finally
         end_loading(this_uuidkey, newm)
