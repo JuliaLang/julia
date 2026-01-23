@@ -308,7 +308,7 @@ function show_spec_sig(io::IO, m::Method, @nospecialize(sig::Type))
             io = IOContext(io, :displaysize => displaysize(io))
         end
     end
-    
+
     # Show module prefix when method extends a function from a different module
     func_module = let
         sig_types = Base.unwrap_unionall(m.sig)
