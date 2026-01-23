@@ -56,6 +56,7 @@ function union end
 
 union(s, sets...) = union!(emptymutable(s, promote_eltype(s, sets...)), s, sets...)
 union(s::AbstractSet) = copy(s)
+union(s::Generator) = union!(emptymutable(s, promote_eltype(s.iter)), s)
 
 const ∪ = union
 
