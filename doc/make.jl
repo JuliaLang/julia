@@ -505,12 +505,11 @@ function Documenter.Writers.HTMLWriter.expand_versions(dir::String, v::Versions)
         # Select candidates for the version immediately preceding the master/dev version
         # e.g. If master is 1.14-dev, we look for 1.13 prereleases
         filter!(x -> x.major == 1 && x.minor == master_version.minor - 1, vnums)
-        
         if !isempty(vnums)
             rc = maximum(vnums)
             # Check if it's a prerelease (alpha/beta/rc).
             # We select the highest one (rc > beta > alpha) due to maximum().
-            # Note: If a stable release (v1.13.0) exists, maximum() selects it, 
+            # Note: If a stable release (v1.13.0) exists, maximum() selects it,
             # and !isempty(prerelease) fails, correctly preventing duplicate entries.
             if !isempty(rc.prerelease)
                 src = "v$(rc)"
