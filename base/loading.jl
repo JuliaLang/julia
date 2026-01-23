@@ -2999,6 +2999,15 @@ end
 """
     require_stdlib(package_uuidkey::PkgId, [ext::String, from::Module])
 
+Load a standard library package from the bundled Julia depot, loading precompiled cache
+files without requiring source files to be present. This function is designed to load
+stdlib packages even when `JULIA_DEPOT_PATH` doesn't include the bundled depot directory,
+enabling stdlib usage in isolated or restricted environments.
+
+Unlike `require`, this function loads `.ji` cache files directly from the bundled depot
+without source staleness checks (since stdlibs are immutable for a given Julia version).
+If the bundled depot cache is unavailable, it falls back to normal package loading.
+
 !!! warning "May load duplicate copies of stdlib packages."
 
     This requires that all stdlib packages loaded are compatible with having concurrent
