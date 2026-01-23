@@ -514,6 +514,18 @@ jl_timing_block_t *jl_timing_block_task_exit(jl_task_t *ct, jl_ptls_t ptls)
     return blk;
 }
 
+static void _jl_timing_show_buf(jl_timing_block_t *cur_block, ios_t *buf)
+{
+    if (buf->size == buf->maxsize) {
+        memset(&buf->buf[IOS_INLSIZE - 4], '.', 3);
+        buf->buf[buf->size-1] = '\0'; // Ensure null-termination
+    }
+    else {
+        buf->buf[buf->size] = '\0'; // Ensure null-termination
+    }
+    jl_timing_puts(cur_block, buf->buf);
+}
+
 JL_DLLEXPORT void jl_timing_show(jl_value_t *v, jl_timing_block_t *cur_block)
 {
 #if defined(USE_TRACY) || defined(USE_APPLE_OSLOG)
@@ -522,10 +534,7 @@ JL_DLLEXPORT void jl_timing_show(jl_value_t *v, jl_timing_block_t *cur_block)
     buf.growable = 0; // Restrict to inline buffer to avoid allocation
 
     jl_static_show((JL_STREAM*)&buf, v);
-    if (buf.size == buf.maxsize)
-        memset(&buf.buf[IOS_INLSIZE - 3], '.', 3);
-
-    jl_timing_puts(cur_block, buf.buf);
+    _jl_timing_show_buf(cur_block, &buf);
 #endif
 }
 
@@ -597,14 +606,7 @@ JL_DLLEXPORT void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_
 
     jl_static_show_config_t config = { /* quiet */ 1 };
     jl_static_show_func_sig_((JL_STREAM*)&buf, v, config);
-    if (buf.size == buf.maxsize) {
-        memset(&buf.buf[IOS_INLSIZE - 4], '.', 3);
-        buf.buf[buf.size-1] = '\0'; // Ensure null-termination
-    }
-    else {
-        buf.buf[buf.size] = '\0'; // Ensure null-termination
-    }
-    jl_timing_puts(cur_block, buf.buf);
+    _jl_timing_show_buf(cur_block, &buf);
 #endif
 }
 
@@ -627,10 +629,7 @@ JL_DLLEXPORT void jl_timing_printf(jl_timing_block_t *cur_block, const char *for
     ios_mem(&buf, IOS_INLSIZE);
     buf.growable = 0; // Restrict to inline buffer to avoid allocation
     jl_vprintf((JL_STREAM*)&buf, format, args);
-    if (buf.size == buf.maxsize)
-        memset(&buf.buf[IOS_INLSIZE - 3], '.', 3);
-    buf.buf[buf.size] = '\0'; // Ensure null-termination
-    jl_timing_puts(cur_block, buf.buf);
+    _jl_timing_show_buf(cur_block, &buf);
 #endif
     va_end(args);
 }
