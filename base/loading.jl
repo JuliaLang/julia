@@ -3079,11 +3079,7 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
                 sourcepath = find_ext_path(normpath(joinpath(env, package_uuidkey.name)), ext)
             end
             set_pkgorigin_version_path(this_uuidkey, sourcepath)
-            # Determine the syntax version from the stdlib's Project.toml
-            project_file = project_file_path(normpath(env, this_uuidkey.name))
-            project_file isa String || error("No Project.toml found for stdlib $(this_uuidkey.name) in expected location $(normpath(env, this_uuidkey.name))")
-            modspec = project_file_load_spec(project_file, this_uuidkey.name)
-            newm = _require_search_from_serialized(this_uuidkey, modspec, UInt128(0), false; DEPOT_PATH=depot_path)
+            newm = _require_search_from_serialized(this_uuidkey, PkgLoadSpec(sourcepath, VERSION), UInt128(0), false; DEPOT_PATH=depot_path)
         end
     finally
         end_loading(this_uuidkey, newm)
@@ -4299,7 +4295,7 @@ end
             record_reason(reasons, "different compilation options")
             return true
         end
-        if syntax_version != cache_syntax_version(modspec.julia_syntax_version)
+        if stalecheck && syntax_version != cache_syntax_version(modspec.julia_syntax_version)
             @debug "Rejecting cache file $cachefile for $modkey since it was parsed for a different Julia syntax version"
             record_reason(reasons, "different Julia syntax version")
             return true
