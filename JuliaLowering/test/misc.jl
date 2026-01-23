@@ -143,7 +143,7 @@ let fl_ex = macroexpand(
     test_mod,
     :(cfun_flisp_thunk() = @cfunction(+, Cint, (Cint, Cint))))
 
-    fl_st = JL.expr_to_est(fl_ex)
+    fl_st = JuliaLowering.expr_to_est(fl_ex)
     fl_fn = JuliaLowering.eval(test_mod, fl_st)
     fl_cfn = @invokelatest fl_fn()
     @test fl_fn isa Function
@@ -155,7 +155,7 @@ let fl_ex = macroexpand(
     :(cfun_flisp_thunk() = @cfunction(function some_cfunc_add(x,y); x+y; end,
                                       Cint, (Cint, Cint))))
 
-    fl_st = JL.expr_to_est(fl_ex)
+    fl_st = JuliaLowering.expr_to_est(fl_ex)
     fl_fn = JuliaLowering.eval(test_mod, fl_st)
     fl_cfn = @invokelatest fl_fn()
     @test fl_fn isa Function
@@ -165,7 +165,7 @@ end
 let fl_ex = macroexpand(
     test_mod,
     :(@ccall(libccalltest_var.ctest((10+20im)::Complex{Int})::Complex{Int})))
-    fl_st = JL.expr_to_est(fl_ex)
+    fl_st = JuliaLowering.expr_to_est(fl_ex)
     @test JuliaLowering.eval(test_mod, fl_st) == 11 + 18im
 end
 
