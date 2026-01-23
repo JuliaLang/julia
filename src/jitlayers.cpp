@@ -60,7 +60,7 @@ using namespace llvm;
 #include "jitlayers.h"
 #include "julia_assert.h"
 #include "processor.h"
-#include "llvm-julia-task-dispatcher.h"
+#include "julia-task-dispatcher.h"
 
 #if JL_LLVM_VERSION >= 180000
 # include <llvm/ExecutionEngine/Orc/Debugging/DebuggerSupportPlugin.h>
@@ -867,22 +867,18 @@ public:
         return JLMaterializationUnit{JIT, OL, std::move(Out), std::move(I)};
     }
 
+    // During materializtion: finalizers disabled, GC safe
     void materialize(std::unique_ptr<MaterializationResponsibility> R) override
     {
         auto &ES = R->getExecutionSession();
-        jl_task_t *ct = jl_current_task;
 
-        ct->ptls->engine_nqueued++;
         /* {
             auto Lock = Out.module.getContext().getLock();
             optimizeDLSyms(*Out.module.getModuleUnlocked()); // May safepoint
         } */
-        int8_t state = jl_gc_safe_enter(ct->ptls);
         uint64_t start_time = jl_hrtime();
         auto Obj = JIT.compileModule(JIT.optimizeModule(std::move(Out.module)));
         uint64_t end_time = jl_hrtime();
-        jl_gc_safe_leave(ct->ptls, state);
-        ct->ptls->engine_nqueued--;
 
         for (auto [CI, _] : Out.linker_info->ci_funcs) {
             JL_GC_PROMISE_ROOTED(CI);
@@ -946,12 +942,17 @@ public:
         assert(API == JL_INVOKE_ARGS || API == JL_INVOKE_SPECSIG);
     };
 
+    // During materializtion: finalizers disabled, GC safe
     void materialize(std::unique_ptr<MaterializationResponsibility> R) override
     {
         jl_codegen_output_t Out{*Sym, JIT.getDataLayout(), JIT.getTargetTriple()};
+
+        jl_task_t *ct = jl_current_task;
+        uint8_t state = jl_gc_unsafe_enter(ct->ptls);
         Function *F = emit_tojlinvoke(CI, "", Out);
         if (API == JL_INVOKE_SPECSIG)
             F = emit_specsig_to_fptr1(Out, CI, F); // may safepoint
+        jl_gc_unsafe_leave(ct->ptls, state);
         F->setLinkage(GlobalValue::ExternalLinkage);
         F->setName(*Sym);
         if (auto Err = R->replace(
