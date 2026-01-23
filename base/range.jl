@@ -1710,6 +1710,12 @@ function show(io::IO, r::LogRange{T}) where {T}
     print(io, ')')
 end
 
+# to normalize ranges when used as indices
+_int(r::AbstractRange{Int}) = r
+_int(r::UnitRange{<:Integer}) = Int(first(r)):Int(last(r))
+_int(r::StepRange{<:Integer}) = Int(first(r)):Int(step(r)):Int(last(r))
+_int(r::AbstractOneTo{<:Integer}) = OneTo{Int}(last(r))
+
 # Implementation detail of @world
 # The rest of this is defined in essentials.jl, but UnitRange is not available
 function _resolve_in_world(worlds::UnitRange, gr::GlobalRef)
