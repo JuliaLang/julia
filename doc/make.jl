@@ -496,15 +496,34 @@ function Documenter.Writers.HTMLWriter.expand_versions(dir::String, v::Versions)
     cd(() -> filter!(!islink, available_folders), dir)
     filter!(x -> occursin(Base.VERSION_REGEX, x), available_folders)
 
-    # Look for docs for an "active" release candidate and insert it
+    # Look for docs for an "active" release candidate or beta and insert it
+    # We want to allow at most one prerelease automatically, specifically the "best" one
+    # for the minor version immediately preceding the current master/dev version.
     vnums = [VersionNumber(x) for x in available_folders]
-    master_version = maximum(vnums)
-    filter!(x -> x.major == 1 && x.minor == master_version.minor-1, vnums)
-    rc = maximum(vnums)
-    if !isempty(rc.prerelease) && occursin(r"^rc", rc.prerelease[1])
-        src = "v$(rc)"
-        @assert src ∈ available_folders
-        push!(v.versions, src => src, pop!(v.versions))
+    if !isempty(vnums)
+        master_version = maximum(vnums)
+        # Select candidates for the version immediately preceding the master/dev version
+        # e.g. If master is 1.14-dev, we look for 1.13 prereleases
+        filter!(x -> x.major == 1 && x.minor == master_version.minor - 1, vnums)
+        
+        if !isempty(vnums)
+            rc = maximum(vnums)
+            # Check if it's a prerelease (alpha/beta/rc).
+            # We select the highest one (rc > beta > alpha) due to maximum().
+            # Note: If a stable release (v1.13.0) exists, maximum() selects it, 
+            # and !isempty(prerelease) fails, correctly preventing duplicate entries.
+            if !isempty(rc.prerelease)
+                src = "v$(rc)"
+                # Ensure validation and thread-safety basics (don't pop empty)
+                if src in available_folders && !isempty(v.versions)
+                    # Inject the prerelease version before the dev version (assumed to be the last item)
+                    # This guarantees the order: Stable ... Prerelease Dev
+                    dev = pop!(v.versions)
+                    push!(v.versions, src => src)
+                    push!(v.versions, dev)
+                end
+            end
+        end
     end
 
     return Documenter.Writers.HTMLWriter.expand_versions(dir, v.versions)
