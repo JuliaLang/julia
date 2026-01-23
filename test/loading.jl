@@ -1932,7 +1932,7 @@ end
     try
         script = "Base.require_stdlib(Base.PkgId(Base.UUID(\"2a0f44e3-6c83-55bd-87e4-b1978d98bd5f\"), \"Base64\")); println(\"SUCCESS\")"
         cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`, "JULIA_DEPOT_PATH" => tmpdir, "JULIA_DEBUG" => "loading")
-        output = read(cmd, String)
+        output = read(pipeline(cmd, stderr=stdout), String)
         # Should not precompile since it loads from bundled depot
         @test !contains(output, "Precompiling")
         @test contains(output, "SUCCESS")
