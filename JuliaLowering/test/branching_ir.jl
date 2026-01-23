@@ -236,7 +236,7 @@ x = @label foo
 #---------------------
 LoweringError:
 x = @label foo
-#          └─┘ ── this syntax does not have a value and cannot be read from
+#          └─┘ ── misplaced label in value position
 
 ########################################
 # Labeled block with underscore label and valued break

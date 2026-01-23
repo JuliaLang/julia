@@ -35,10 +35,6 @@ end
 function test_each_in_path(test_f::Function, basedir)
     ran = 0
     for filepath in find_source_in_path(basedir)
-
-        # https://github.com/JuliaLang/julia/pull/60626
-        endswith(filepath, "arrayindexingtypes.jl") && continue
-
         @testset "$(relpath(filepath, basedir))" begin
             str = try
                 read(filepath, String)

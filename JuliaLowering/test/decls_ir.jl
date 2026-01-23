@@ -83,7 +83,7 @@ y = global x
 #---------------------
 LoweringError:
 y = global x
-#   └──────┘ ── global declaration doesn't read the variable and can't return a value
+#          ╙ ── global declaration doesn't read the variable and can't return a value
 
 ########################################
 # const
