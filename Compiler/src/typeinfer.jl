@@ -163,9 +163,6 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
                     resize!(inferred_result.slotnames, nslots)
                 end
                 inferred_result = maybe_compress_codeinfo(interp, mi, inferred_result)
-            elseif ci.owner === nothing
-                # The global cache can only handle objects that codegen understands
-                inferred_result = nothing
             end
         else
             result.src = nothing
