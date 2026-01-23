@@ -1331,7 +1331,7 @@ test_const_return(()->sizeof(Int), Tuple{}, sizeof(Int))
 test_const_return(()->sizeof(1), Tuple{}, sizeof(Int))
 test_const_return(()->sizeof(DataType), Tuple{}, sizeof(DataType))
 test_const_return(()->sizeof(1 < 2), Tuple{}, 1)
-test_const_return(()->fieldtype(Dict{Int64,Nothing}, :age), Tuple{}, UInt)
+test_const_return(()->fieldtype(Dict{Int64,Nothing}, :age), Tuple{}, UInt32)
 test_const_return(@eval(()->Core.sizeof($(Array{Int,0}(undef)))), Tuple{}, 2 * sizeof(Int))
 test_const_return(@eval(()->Core.sizeof($(Matrix{Float32}(undef, 2, 2)))), Tuple{}, 4 * sizeof(Int))
 # TODO: do we want to implement these?
