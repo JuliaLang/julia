@@ -36,7 +36,6 @@ private:
   SmallVector<std::unique_ptr<Task>> TaskQueue;
   std::mutex DispatchMutex;
   std::condition_variable WorkFinishedCV;
-  SmallVector<future_base *> WaitingFutures;
 
 public:
 
@@ -346,7 +345,6 @@ void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) {
 void JuliaTaskDispatcher::shutdown() {
   std::unique_lock Lock{DispatchMutex};
   process_tasks(Lock);
-  WorkFinishedCV.wait(Lock, [this]() { return WaitingFutures.empty(); });
 }
 
 void JuliaTaskDispatcher::work_until(future_base &F) {
@@ -361,8 +359,7 @@ void JuliaTaskDispatcher::work_until(future_base &F) {
     // If we get here, our queue is empty but the future isn't ready
     // We need to wait for other threads to finish work that should complete our
     // future
-    WaitingFutures.push_back(&F);
-    WorkFinishedCV.wait(Lock, [&F]() { return F.ready(); });
+    WorkFinishedCV.wait(Lock);
   }
 }
 
@@ -374,13 +371,7 @@ void JuliaTaskDispatcher::process_tasks(std::unique_lock<std::mutex> &Lock) {
     T->run();
     Lock.lock();
 
-    // Notify any threads that might be waiting for work to complete
-    bool ShouldNotify =
-      llvm::any_of(WaitingFutures, [](future_base *F) { return F->ready(); });
-    if (ShouldNotify) {
-      WaitingFutures.clear();
-      WorkFinishedCV.notify_all();
-    }
+    WorkFinishedCV.notify_all();
   }
 }
 
