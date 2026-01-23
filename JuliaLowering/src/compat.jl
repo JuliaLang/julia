@@ -361,14 +361,6 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
         else
             @ast g st [K"function" rec(l) rec(r)]
         end
-        # [K"module" ver defs name body] -> let
-        #     flags = JS.flags(st) | (_is_false(defs) ? JS.BARE_MODULE_FLAG : 0)
-        #     @ast g st [K"module"(syntax_flags=flags) ver rec(name) rec(body)]
-        # end
-        # [K"module" defs name body] -> let
-        #     flags = JS.flags(st) | (_is_false(defs) ? JS.BARE_MODULE_FLAG : 0)
-        #     @ast g st [K"module"(syntax_flags=flags) rec(name) rec(body)]
-        # end
         [K"do" [K"call" f args...] [K"->" do_args do_body]] -> let
             # Note desugaring expects first-arg do-expression, unlike RawGreenNode
             @ast g st [K"call"
@@ -435,6 +427,7 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
         [K"noinline" _] -> newleaf(g, st, K"TOMBSTONE")
         [K"inbounds" _] -> newleaf(g, st, K"TOMBSTONE")
         [K"core" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
+        [K"top" x] -> setattr!(mkleaf(st), :name_val, x.name_val)
         [K"copyast" [K"inert" ex]] -> @ast g st [K"call"
             interpolate_ast::K"Value"
             Expr::K"Value"

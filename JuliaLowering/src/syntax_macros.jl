@@ -301,7 +301,7 @@ function _at_eval_code(ctx, srcref, mod, ex)
                 ]
             ]
         ]
-        (::K"latestworld_if_toplevel")
+        [K"unknown_head"(name_val="latestworld-if-toplevel")]
         "eval_result"::K"Identifier"
     ]
 end
