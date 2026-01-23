@@ -1318,7 +1318,7 @@ jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
 {
     jl_value_t *parser = NULL;
     if (inmodule) {
-        parser = jl_get_global(inmodule, jl_symbol("_internal_julia_parse"));
+        parser = jl_get_global(inmodule, jl_symbol("#_internal_julia_parse"));
     }
     if ((!parser || parser == jl_nothing) && jl_core_module) {
         parser = jl_get_global(jl_core_module, jl_symbol("_parse"));

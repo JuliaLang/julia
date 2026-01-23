@@ -183,14 +183,14 @@ endif
 endef
 
 # libexec executables
-symlink_p7zip: $(build_bindir)/7z$(EXE)
+symlink_p7zip: $(build_private_libexecdir)/7z$(EXE)
 
 ifneq ($(USE_SYSTEM_P7ZIP),0)
 SYMLINK_SYSTEM_LIBRARIES += symlink_p7zip
 7Z_PATH := $(shell which 7z$(EXE))
 endif
 
-$(build_bindir)/7z$(EXE):
+$(build_private_libexecdir)/7z$(EXE):
 	[ -e "$(7Z_PATH)" ] && \
 	rm -f "$@" && \
 	ln -sf "$(7Z_PATH)" "$@"

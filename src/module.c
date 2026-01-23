@@ -1510,6 +1510,31 @@ int jl_module_public_(jl_module_t *from, jl_sym_t *s, int exported, size_t new_w
     return 0;
 }
 
+// Declare `symbols` in module `from` public or public+exported
+JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_value_t **symbols, size_t nsymbols, int exported)
+{
+    volatile int any_new = 0;
+    JL_LOCK(&world_counter_lock);
+    size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
+    JL_TRY {
+        for (size_t i = 0; i < nsymbols; i++) {
+            jl_sym_t *name = (jl_sym_t*)symbols[i];
+            JL_TYPECHK(jl_module_public, symbol, (jl_value_t*)name);
+            if (jl_module_public_(from, name, exported, new_world))
+                any_new = 1;
+        }
+    }
+    JL_CATCH {
+        if (any_new)
+            jl_atomic_store_release(&jl_world_counter, new_world);
+        JL_UNLOCK(&world_counter_lock);
+        jl_rethrow();
+    }
+    if (any_new)
+        jl_atomic_store_release(&jl_world_counter, new_world);
+    JL_UNLOCK(&world_counter_lock);
+}
+
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var, int allow_import) // unlike most queries here, this is currently seq_cst
 {
     jl_binding_t *b = jl_get_module_binding(m, var, allow_import);

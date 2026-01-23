@@ -236,6 +236,12 @@ end
     @test d |> string === "docstr12\n"
     @test d.meta[:results][1].data[:typesig] === Union{Tuple{Int, U, T}, Tuple{Int, U}} where {T, U<:Number}
 
+    # doc-strings on macrocalls (punned on quoted macrocall)
+    # TODO: implement and test `doc!` support for this
+    @test jeval(test_mod, """
+        "doc string"
+        :@test
+    """) isa Expr
 end
 
 # SyntaxTree @eval should pass along expr_compat_mode

@@ -94,6 +94,13 @@ function html(io::IO, md::Paragraph)
     end
 end
 
+function html(io::IO, md::HTMLBlock)
+    for line in md.content[1:end-1]
+        println(io, line)
+    end
+    print(io, md.content[end])
+end
+
 function html(io::IO, md::BlockQuote)
     withtag(io, :blockquote) do
         println(io)
@@ -125,10 +132,23 @@ function html(io::IO, md::List)
         for item in md.items
             println(io)
             withtag(io, :li) do
-                html(io, item)
+                if md.loose
+                    println(io)
+                    html(io, item)
+                else
+                    htmltight(io, item)
+                end
             end
         end
         println(io)
+    end
+end
+
+htmltight(io::IO, md) = html(io, md)
+htmltight(io::IO, md::Paragraph) = htmlinline(io, md.content)
+function htmltight(io::IO, content::Vector)
+    for md in content
+        htmltight(io, md)
     end
 end
 
@@ -157,7 +177,14 @@ function htmlinline(io::IO, code′::Code)
 end
 
 function htmlinline(io::IO, md::Union{Symbol,AbstractString})
-    htmlesc(io, md)
+    htmlinline(io, String(md))
+end
+
+function htmlinline(io::IO, s::String)
+    # Spaces at the end of the line and beginning of the next line are removed
+    s = replace(s, r"[ \t]+\n" => "\n")
+    s = replace(s, r"\n[ \t]+" => "\n")
+    htmlesc(io, s)
 end
 
 function htmlinline(io::IO, md::Bold)

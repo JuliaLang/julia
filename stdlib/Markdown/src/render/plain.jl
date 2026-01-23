@@ -33,16 +33,33 @@ function plain(io::IO, p::Paragraph)
     println(io)
 end
 
+function plain(io::IO, md::HTMLBlock)
+    for line in md.content
+        println(io, line)
+    end
+end
+
 function plain(io::IO, list::List)
     for (i, item) in enumerate(list.items)
-        bullet = isordered(list) ? "$(i + list.ordered - 1). " : "  * "
-        print(io, bullet)
-        lines = split(rstrip(sprint(plain, item)), "\n")
+        list_marker = isordered(list) ? "$(i + list.ordered - 1). " : "  * "
+        print(io, list_marker)
+        content = sprint(list.loose ? plain : plaintight, item)
+        lines = split(rstrip(content), "\n")
+
         for (n, line) in enumerate(lines)
-            print(io, (n == 1 || isempty(line)) ? "" : (" "^length(bullet)), line)
+            print(io, (n == 1 || isempty(line)) ? "" : " "^length(list_marker), line)
             n < length(lines) && println(io)
         end
         println(io)
+    end
+end
+
+plaintight(io::IO, md) = plain(io, md)
+plaintight(io::IO, md::Paragraph) = plaininline(io, md.content)
+function plaintight(io::IO, content::Vector)
+    for (i, md) in enumerate(content)
+        plaintight(io, md)
+        i < length(content) && println(io)
     end
 end
 
@@ -98,15 +115,23 @@ end
 
 # Inline elements
 
-plaininline(x) = sprint(plaininline, x)
-
+# HACK TODO: instead of the following hack, we should have a `Text` node type
 function plaininline(io::IO, md...)
+    for (i, el) in enumerate(md)
+        if isodd(i)
+            @assert el isa AbstractString
+            print(io, el)
+        else
+            plaininline(io, el)
+        end
+    end
+end
+
+function plaininline(io::IO, md::Vector)
     for el in md
         plaininline(io, el)
     end
 end
-
-plaininline(io::IO, md::Vector) = !isempty(md) && plaininline(io, md...)
 
 plaininline(io::IO, f::Footnote) = print(io, "[^", f.id, "]")
 
@@ -133,7 +158,7 @@ function plaininline(io::IO, md::Code)
     end
 end
 
-plaininline(io::IO, br::LineBreak) = println(io)
+plaininline(io::IO, br::LineBreak) = println(io, "\\")
 
 plaininline(io::IO, x) = show(io, MIME"text/plain"(), x)
 

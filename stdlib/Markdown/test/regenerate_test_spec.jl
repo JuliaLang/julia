@@ -13,11 +13,31 @@ using JSON
 using Test
 using StyledStrings
 
+#
+# Some spec tests fail because of decisions made for Julia Markdown:
+#
+# - Even number of backticks in inline code for math mode: 17, 121, 329, 335, 336, 339, 349
+# - Two or more spaces at the end of a line do *not* indicate a hard line break (see
+#   <https://github.com/JuliaLang/julia/issues/16004>): 633, 635, 636, 638
+#
+
 function check_commonmark_spec_html1(tst; report::Bool=false, flavor::Symbol=:julia)
     input = tst["markdown"]
     parsed = Markdown.parse(input; flavor)
     expected = tst["html"]
     actual = Markdown.html(parsed)
+
+    # extra: check that replacing Unix line ends (a single "line feed" also known as LF, '\n' or U+000A)
+    # by classic macOS line ends (a single "carriage return", also known as CR, '\r' or U+000D) or
+    # by Windows line ends (CR+LF) does not change how we parse things
+    input2 = replace(input, "\n" => "\r\n")
+    parsed2 = Markdown.parse(input2; flavor)
+    parsed == parsed2 || println("test ", tst["example"], " is parsed differently with CRLF line ends")
+
+    input3 = replace(input, "\n" => "\r")
+    parsed3 = Markdown.parse(input2; flavor)
+    parsed == parsed3 || println("test ", tst["example"], " is parsed differently with CR line ends")
+
     if expected != actual && report
         printstyled("============================================\n"; color=:cyan)
         println("failed test ", tst["example"], ":")
@@ -78,7 +98,7 @@ function escape_spec_string(s::String)
     # avoid string interpolation
     s = replace(s, "\$" => raw"\$")
     # encode non-breaking whitespace to make contrib/check-whitespace.jl happy
-    s = replace(s, "\uA0" => raw"\uA0")
+    s = replace(s, "\uA0" => raw"\u00A0")
     return s
 end
 
@@ -123,7 +143,7 @@ function generate_test_file(io::IO, data, mode::Symbol; flavor::Symbol=:julia)
             println(io, "    actual = Markdown.html(md)");
         elseif mode == :roundtrip
             println(io, "    expected = Markdown.parse(input; flavor=:$(flavor))");
-            println(io, "    new_input = Markdown.Markdown.plain(expected)");
+            println(io, "    new_input = Markdown.plain(expected)");
             println(io, "    actual = Markdown.parse(new_input; flavor=:$(flavor))");
         else
             error("unsupported mode $mode")

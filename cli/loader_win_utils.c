@@ -116,36 +116,170 @@ void JL_HIDDEN exit(int code) {
 
 
 /* Utilities to convert from Windows' wchar_t stuff to UTF-8 */
-char *wchar_to_utf8(const wchar_t * wstr) {
-    /* Fast-path empty strings, as WideCharToMultiByte() returns zero for them. */
-    if (wstr[0] == L'\0') {
-        char *str = malloc(1);
-        str[0] = '\0';
-        return str;
+
+/* Decode one WTF-8 code point from the input string, advancing the pointer.
+   Based on libuv's uv__wtf8_decode1. */
+static int wtf8_decode1(const char** input) {
+    unsigned int code_point;
+    unsigned char b1;
+    unsigned char b2;
+    unsigned char b3;
+    unsigned char b4;
+
+    b1 = **input;
+    if (b1 <= 0x7F)
+        return b1; /* ASCII code point */
+    if (b1 < 0xC2)
+        return -1; /* invalid: continuation byte */
+    code_point = b1;
+
+    b2 = *++*input;
+    if ((b2 & 0xC0) != 0x80)
+        return -1; /* invalid: not a continuation byte */
+    code_point = (code_point << 6) | (b2 & 0x3F);
+    if (b1 <= 0xDF)
+        return 0x7FF & code_point; /* two-byte character */
+
+    b3 = *++*input;
+    if ((b3 & 0xC0) != 0x80)
+        return -1; /* invalid: not a continuation byte */
+    code_point = (code_point << 6) | (b3 & 0x3F);
+    if (b1 <= 0xEF)
+        return 0xFFFF & code_point; /* three-byte character */
+
+    b4 = *++*input;
+    if ((b4 & 0xC0) != 0x80)
+        return -1; /* invalid: not a continuation byte */
+    code_point = (code_point << 6) | (b4 & 0x3F);
+    if (b1 <= 0xF4) {
+        code_point &= 0x1FFFFF;
+        if (code_point <= 0x10FFFF)
+            return code_point; /* four-byte character */
     }
-    size_t len = WideCharToMultiByte(CP_UTF8, 0, wstr, -1, NULL, 0, NULL, NULL);
-    if (!len)
-        return NULL;
-    char *str = (char *)malloc(len);
-    if (!WideCharToMultiByte(CP_UTF8, 0, wstr, -1, str, len, NULL, NULL))
-        return NULL;
-    return str;
+
+    /* code point too large */
+    return -1;
 }
 
-wchar_t *utf8_to_wchar(const char * str) {
-    /* Fast-path empty strings, as MultiByteToWideChar() returns zero for them. */
-    if (str[0] == '\0') {
-        wchar_t *wstr = malloc(sizeof(wchar_t));
-        wstr[0] = L'\0';
-        return wstr;
+/* Get the surrogate pair value from UTF-16 input.
+   Based on libuv's uv__get_surrogate_value. */
+static int get_surrogate_value(const wchar_t* w_source_ptr) {
+    unsigned short u;
+    unsigned short next;
+
+    u = w_source_ptr[0];
+    if (u >= 0xD800 && u <= 0xDBFF) {
+        next = w_source_ptr[1];
+        if (next >= 0xDC00 && next <= 0xDFFF)
+            return 0x10000 + ((u - 0xD800) << 10) + (next - 0xDC00);
     }
-    size_t len = MultiByteToWideChar(CP_UTF8, 0, str, -1, NULL, 0);
-    if (!len)
+    return u;
+}
+
+/* Convert UTF-16 to WTF-8, returning allocated string.
+   Based on libuv's uv_utf16_to_wtf8. */
+char *wchar_to_utf8(const wchar_t *wstr) {
+    const wchar_t *w_source_ptr;
+    size_t target_len;
+    int code_point;
+    char *target;
+    char *p;
+
+    /* First pass: calculate required length */
+    w_source_ptr = wstr;
+    target_len = 0;
+    while (1) {
+        code_point = get_surrogate_value(w_source_ptr);
+        if (code_point == 0)
+            break;
+        if (code_point < 0x80)
+            target_len += 1;
+        else if (code_point < 0x800)
+            target_len += 2;
+        else if (code_point < 0x10000)
+            target_len += 3;
+        else {
+            target_len += 4;
+            w_source_ptr++;
+        }
+        w_source_ptr++;
+    }
+
+    /* Allocate buffer */
+    target = (char *)malloc(target_len + 1);
+    if (!target)
         return NULL;
-    wchar_t *wstr = (wchar_t *)malloc(len * sizeof(wchar_t));
-    if (!MultiByteToWideChar(CP_UTF8, 0, str, -1, wstr, len))
+
+    /* Second pass: perform conversion */
+    w_source_ptr = wstr;
+    p = target;
+    while (1) {
+        code_point = get_surrogate_value(w_source_ptr);
+        if (code_point == 0)
+            break;
+        if (code_point < 0x80) {
+            *p++ = code_point;
+        } else if (code_point < 0x800) {
+            *p++ = 0xC0 | (code_point >> 6);
+            *p++ = 0x80 | (code_point & 0x3F);
+        } else if (code_point < 0x10000) {
+            *p++ = 0xE0 | (code_point >> 12);
+            *p++ = 0x80 | ((code_point >> 6) & 0x3F);
+            *p++ = 0x80 | (code_point & 0x3F);
+        } else {
+            *p++ = 0xF0 | (code_point >> 18);
+            *p++ = 0x80 | ((code_point >> 12) & 0x3F);
+            *p++ = 0x80 | ((code_point >> 6) & 0x3F);
+            *p++ = 0x80 | (code_point & 0x3F);
+            w_source_ptr++;
+        }
+        w_source_ptr++;
+    }
+    *p = '\0';
+
+    return target;
+}
+
+/* Convert WTF-8 to UTF-16, returning allocated string.
+   Based on libuv's uv_wtf8_to_utf16 and uv_wtf8_length_as_utf16. */
+wchar_t *utf8_to_wchar(const char *str) {
+    const char *source_ptr;
+    size_t w_target_len;
+    int code_point;
+    wchar_t *w_target;
+    wchar_t *p;
+
+    /* First pass: calculate required length */
+    source_ptr = str;
+    w_target_len = 0;
+    do {
+        code_point = wtf8_decode1(&source_ptr);
+        if (code_point < 0)
+            return NULL;
+        if (code_point > 0xFFFF)
+            w_target_len++;
+        w_target_len++;
+    } while (*source_ptr++);
+
+    /* Allocate buffer */
+    w_target = (wchar_t *)malloc(w_target_len * sizeof(wchar_t));
+    if (!w_target)
         return NULL;
-    return wstr;
+
+    /* Second pass: perform conversion */
+    source_ptr = str;
+    p = w_target;
+    do {
+        code_point = wtf8_decode1(&source_ptr);
+        if (code_point > 0xFFFF) {
+            *p++ = (((code_point - 0x10000) >> 10) + 0xD800);
+            *p++ = ((code_point - 0x10000) & 0x3FF) + 0xDC00;
+        } else {
+            *p++ = code_point;
+        }
+    } while (*source_ptr++);
+
+    return w_target;
 }
 
 size_t JL_HIDDEN strlen(const char * x) {
