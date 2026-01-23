@@ -1970,13 +1970,11 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
 
     JuliaTaskDispatcher::future<void> F;
     auto Callback = [this, CIs = SmallVector<jl_code_instance_t *, 1>(CIs),
-                     P = Wait ? std::optional(F.get_promise()) : std::nullopt,
-                     &Exports](Expected<SymbolMap> SymsE) mutable {
+                     P = Wait ? std::optional(F.get_promise()) :
+                                std::nullopt](Expected<SymbolMap> SymsE) mutable {
         std::unique_lock Lock{LinkerMutex};
         if (!SymsE) {
-            errs() << "Internal error: Lookup failed for symbols:\n";
-            for (auto &[S, _] : Exports)
-                errs() << "  " << *S << "\n";
+            errs() << "Internal error: Lookup failed\n";
             return;
         }
         auto Syms = std::move(*SymsE);
