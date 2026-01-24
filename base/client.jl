@@ -174,7 +174,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
 end
 
 function _parse_input_line_core(s::String, filename::String, mod::Union{Module, Nothing})
-    ex = Meta.parseall(s; filename, mod)
+    ex = Meta.parseall(s; filename, _parse=invokelatest(Meta.parser_for_module, mod))
     if ex isa Expr && ex.head === :toplevel
         if isempty(ex.args)
             return nothing
@@ -553,7 +553,7 @@ The thrown errors are collected in a stack of exceptions.
 global err = nothing
 
 const main_parser = Base.ScopedValues.ScopedValue{Any}(Core._parse)
-function _internal_julia_parse(args...)
+function var"#_internal_julia_parse"(args...)
     main_parser[](args...)
 end
 
@@ -562,7 +562,7 @@ global InteractiveUtils::Module
 global Distributed::Module
 
 # weakly exposes ans and err variables to Main
-export ans, err, _internal_julia_parse
+export ans, err, var"#_internal_julia_parse"
 end
 
 function should_use_main_entrypoint()

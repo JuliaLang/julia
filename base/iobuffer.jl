@@ -785,11 +785,13 @@ function take!(io::IOBuffer)
     return data
 end
 
-"Internal method. This method can be faster than takestring!, because it does not
+"""
+Internal method. This method can be faster than takestring!, because it does not
 reset the buffer to a usable state, and it does not check for io.reinit.
 Using the buffer after calling unsafe_takestring! may cause undefined behaviour.
 This function is meant to be used when the buffer is only used as a temporary
-string builder, which is discarded after the string is built."
+string builder, which is discarded after the string is built.
+"""
 function unsafe_takestring!(io::IOBuffer)
     used_span = get_used_span(io)
     nbytes = length(used_span)

@@ -1935,7 +1935,7 @@ To sort slices of an array, refer to [`sortslices`](@ref).
 
 # Examples
 ```jldoctest
-julia> v = [3, 1, 2];
+julia> v = [13, 11, 12];
 
 julia> p = sortperm(v)
 3-element Vector{Int64}:
@@ -1945,9 +1945,9 @@ julia> p = sortperm(v)
 
 julia> v[p]
 3-element Vector{Int64}:
- 1
- 2
- 3
+ 11
+ 12
+ 13
 
 julia> A = [8 7; 5 6]
 2×2 Matrix{Int64}:

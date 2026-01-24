@@ -11,7 +11,7 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, 
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
              sign, isodd, iseven, digits!, hash, hash_integer, top_set_bit,
-             ispositive, isnegative, clamp, unsafe_takestring
+             ispositive, isnegative, clamp
 
 import Core: Signed, Float16, Float32, Float64
 
