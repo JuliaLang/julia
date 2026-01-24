@@ -478,7 +478,7 @@ end
 
 end # os-test
 
-@noinline joinpath(paths::AbstractString...)::String = joinpath(paths)
+joinpath(paths::AbstractString...)::String = joinpath(paths)
 
 """
     joinpath(parts::AbstractString...)::String
@@ -586,7 +586,7 @@ end
 Convert a set of paths to a normalized path by joining them together and removing
 "." and ".." entries. Equivalent to `normpath(joinpath(path, paths...))`.
 """
-@noinline normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
+normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 
 """
     abspath(path::AbstractString)::String
@@ -604,7 +604,7 @@ Which gives a path like `"/home/JuliaUser/data/"`.
 
 See also [`joinpath`](@ref), [`pwd`](@ref), [`expanduser`](@ref).
 """
-function abspath(a::String)::String
+@noinline function abspath(a::String)::String
     if !isabspath(a)
         cwd = pwd()
         a_drive, a_nodrive = splitdrive(a)
@@ -624,7 +624,7 @@ end
 Convert a set of paths to an absolute path by joining them together and adding the
 current directory if necessary. Equivalent to `abspath(joinpath(path, paths...))`.
 """
-@noinline abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
+abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 
 if Sys.iswindows()
 
