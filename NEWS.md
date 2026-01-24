@@ -46,6 +46,9 @@ Standard library changes
 * `codepoint(c)` now succeeds for overlong encodings.  `Base.ismalformed`, `Base.isoverlong`, and
   `Base.show_invalid` are now `public` and documented (but not exported) ([#55152]).
 
+* Unary `+` on `AbstractArray`s now uses broadcasting. Consequently, `+` on `Bool` arrays now
+  returns `Int` arrays (#60767).
+
 #### JuliaSyntaxHighlighting
 
 #### LinearAlgebra
