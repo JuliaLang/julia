@@ -2,13 +2,15 @@ name: Labels
 
 permissions:
   contents: read
+
 on:
   pull_request:
     types: [labeled, unlabeled, opened, reopened, edited, synchronize]
+
 jobs:
   enforce-labels:
     name: Check for blocking labels
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     timeout-minutes: 2
     steps:
     - uses: yogevbd/enforce-label-action@a3c219da6b8fa73f6ba62b68ff09c469b3a1c024 # 2.2.2

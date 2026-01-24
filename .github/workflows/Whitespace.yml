@@ -11,7 +11,7 @@ on:
 jobs:
   whitespace:
     name: Check whitespace
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     timeout-minutes: 2
     steps:
       - name: Checkout the JuliaLang/julia repository
