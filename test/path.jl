@@ -196,49 +196,49 @@
                 ("", "foo:bar")
 
             # unicode
-            @test splitdrive("\\\\α\\β\\γ") == ("\\\\α\\β", "\\γ")
-            @test splitdrive("\\\\?\\UNC\\α\\β\\γ") == ("\\\\?\\UNC\\α\\β", "\\γ")
+            @test splitdrive(S("\\\\α\\β\\γ")) == ("\\\\α\\β", "\\γ")
+            @test splitdrive(S("\\\\?\\UNC\\α\\β\\γ")) == ("\\\\?\\UNC\\α\\β", "\\γ")
 
             # splitdrive currently allows any single codeunit char except separators as drive letters
             # while isabspath does not allow this. FIXME?
-            @test splitdrive("::") == ("::", "")
-            @test splitdrive("🍎:") != ("🍎:", "")
+            @test splitdrive(S("::")) == ("::", "")
+            @test splitdrive(S("🍎:")) != ("🍎:", "")
             # The behavior is different for long baths, where he drive letter can
             # contain multiple codeunits (such as unicode chars or multiple chars)
             # if it is followed by a delimiter, because it is then captured as a 
             # UNC path with the server name ?. FIXME?
-            @test splitdrive("\\\\?\\🍎:\\foobar") == ("\\\\?\\🍎:", "\\foobar")
-            @test splitdrive("\\\\?\\CC:\\foobar") == ("\\\\?\\CC:", "\\foobar")
+            @test splitdrive(S("\\\\?\\🍎:\\foobar")) == ("\\\\?\\🍎:", "\\foobar")
+            @test splitdrive(S("\\\\?\\CC:\\foobar")) == ("\\\\?\\CC:", "\\foobar")
             # If the path contains no delimiters after the path however, 
             # everything goes into the drive
             @test splitdrive("\\\\?\\🍎:foobar") == ("\\\\?\\🍎:foobar", "")
         end
 
-        @test splitdir("foo") == ("", "foo")
-        @test splitdir("foo/") == ("foo", "")
-        @test splitdir("/foo") == ("/", "foo")
-        @test splitdir("/foo/") == ("/foo", "")
-        @test splitdir("foo/bar") == ("foo", "bar")
-        @test splitdir("/foo/bar") == ("/foo", "bar")
-        @test splitdir("/foo/bar/") == ("/foo/bar", "")
-        @test splitdir("/foo/bar/baz") == ("/foo/bar", "baz")
-        @test splitdir("/foo/bar/baz/") == ("/foo/bar/baz", "")
-        @test splitdir("foo/bar/baz/") == ("foo/bar/baz", "")
+        @test splitdir(S("foo")) == ("", "foo")
+        @test splitdir(S("foo/")) == ("foo", "")
+        @test splitdir(S("/foo")) == ("/", "foo")
+        @test splitdir(S("/foo/")) == ("/foo", "")
+        @test splitdir(S("foo/bar")) == ("foo", "bar")
+        @test splitdir(S("/foo/bar")) == ("/foo", "bar")
+        @test splitdir(S("/foo/bar/")) == ("/foo/bar", "")
+        @test splitdir(S("/foo/bar/baz")) == ("/foo/bar", "baz")
+        @test splitdir(S("/foo/bar/baz/")) == ("/foo/bar/baz", "")
+        @test splitdir(S("foo/bar/baz/")) == ("foo/bar/baz", "")
         # Multiple leading separators are reduced to one only when
         # all separators are at the beginning. FIXME?
-        @test splitdir("///foo") == ("/", "foo") # why not ("///", "foo") ?
-        @test splitdir("///foo/bar") == ("///foo", "bar")
+        @test splitdir(S("///foo")) == ("/", "foo") # why not ("///", "foo") ?
+        @test splitdir(S("///foo/bar")) == ("///foo", "bar")
         if Sys.iswindows()
-            @test splitdir("/\\foo") == ("/", "foo") # why not ("/\\", "foo") ?
-            @test splitdir("\\/foo") == ("\\", "foo") # why not ("\\/", "foo") ?
-            @test splitdir("/\\/foo/bar") == ("/\\/foo", "bar")
-            @test splitdir("///foo/bar/") == ("///foo/bar", "")
-            @test splitdir("C:") == ("C:", "")
-            @test splitdir("C:\\") == ("C:\\", "")
-            @test splitdir("C:\\foo") == ("C:\\", "foo")
-            @test splitdir("C:\\foo\\bar") == ("C:\\foo", "bar")
-            @test splitdir("\\\\?\\C:\\foo\\bar") == ("\\\\?\\C:\\foo", "bar")
-            @test splitdir("\\\\?\\C:\\foo\\bar\\") == ("\\\\?\\C:\\foo\\bar", "")
+            @test splitdir(S("/\\foo")) == ("/", "foo") # why not ("/\\", "foo") ?
+            @test splitdir(S("\\/foo")) == ("\\", "foo") # why not ("\\/", "foo") ?
+            @test splitdir(S("/\\/foo/bar")) == ("/\\/foo", "bar")
+            @test splitdir(S("///foo/bar/")) == ("///foo/bar", "")
+            @test splitdir(S("C:")) == ("C:", "")
+            @test splitdir(S("C:\\")) == ("C:\\", "")
+            @test splitdir(S("C:\\foo")) == ("C:\\", "foo")
+            @test splitdir(S("C:\\foo\\bar")) == ("C:\\foo", "bar")
+            @test splitdir(S("\\\\?\\C:\\foo\\bar")) == ("\\\\?\\C:\\foo", "bar")
+            @test splitdir(S("\\\\?\\C:\\foo\\bar\\")) == ("\\\\?\\C:\\foo\\bar", "")
         end
 
         @test splitext(S("")) == ("", "")
@@ -260,14 +260,14 @@
         @test splitext(S("bar/foo.baz")) == ("bar/foo", ".baz")
         # If the second output is empty, remove a single \n from the first output
         # unless that makes it empty or end with a /. FIXME?
-        @test splitext("a\r\n") == ("a\r", "")
-        @test splitext("a/\n") == ("a/\n", "") # keep \n in this case
-        @test splitext("a\n.foo") == ("a\n", ".foo")
-        @test splitext("a/\n.foo") == ("a/\n", ".foo")
-        @test splitext("\n") == ("\n", "") # keep \n in this case
+        @test splitext(S("a\r\n")) == ("a\r", "")
+        @test splitext(S("a/\n")) == ("a/\n", "") # keep \n in this case
+        @test splitext(S("a\n.foo")) == ("a\n", ".foo")
+        @test splitext(S("a/\n.foo")) == ("a/\n", ".foo")
+        @test splitext(S("\n")) == ("\n", "") # keep \n in this case
         if Sys.iswindows()
-            @test splitext("C:a\n") == ("C:a", "")
-            @test splitext("C:\n") == ("C:\n", "") # keep \n in this case
+            @test splitext(S("C:a\n")) == ("C:a", "")
+            @test splitext(S("C:\n")) == ("C:\n", "") # keep \n in this case
         end
     end
 
@@ -291,12 +291,12 @@
             @test expanduser(S("~")) == "~"
         end
         if Sys.iswindows()
-            @test isabspath("\\\\?\\C:\\")
+            @test isabspath(S("\\\\?\\C:\\"))
             # Current behavior is to allow anything starting with a separator,
             # even if this is not a long path, nor a UNC path.
-            @test isabspath("///a/b/")
+            @test isabspath(S("///a/b/"))
             # Drive letters are currently treated differently in long path format. FIXME?
-            @test isabspath("\\\\?\\α:\\") != isabspath("α:\\")
+            @test isabspath(S("\\\\?\\α:\\")) != isabspath("α:\\")
         end
     end
 
