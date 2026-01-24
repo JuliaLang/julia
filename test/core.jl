@@ -8687,3 +8687,17 @@ primitive type ByteString58434 (18 * 8) end
 
 @test Base.datatype_isbitsegal(Tuple{ByteString58434}) == false
 @test Base.datatype_haspadding(Tuple{ByteString58434}) == (length(Base.padding(Tuple{ByteString58434})) > 0)
+
+# #60659 - Behavior of using'd ambiguous bindings
+module AmbiguousUsing60659
+    using Test
+    module A
+        export X
+        module B; struct X; end; export X; end
+        module C; struct X; end; export X; end
+        using .B, .C
+    end
+    module D; struct X; end; export X; end
+    using .D, .A
+    @test_throws UndefVarError X
+end
