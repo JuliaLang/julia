@@ -205,9 +205,13 @@
             @test splitdrive("🍎:") != ("🍎:", "")
             # The behavior is different for long baths, where he drive letter can
             # contain multiple codeunits (such as unicode chars or multiple chars)
-            # because it is captured as a UNC path with the server name ?. FIXME?
+            # if it is followed by a delimiter, because it is then captured as a 
+            # UNC path with the server name ?. FIXME?
             @test splitdrive("\\\\?\\🍎:\\foobar") == ("\\\\?\\🍎:", "\\foobar")
             @test splitdrive("\\\\?\\CC:\\foobar") == ("\\\\?\\CC:", "\\foobar")
+            # If the path contains no delimiters after the path however, 
+            # everything goes into the drive
+            @test splitdrive("\\\\?\\🍎:foobar") == ("\\\\?\\🍎:foobar", "")
         end
 
         @test splitdir("foo") == ("", "foo")
