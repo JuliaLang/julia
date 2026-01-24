@@ -79,14 +79,10 @@ elseif Sys.iswindows()
             isseparator(codeunit(s, 2)) &&
             codeunit(s, 3) === UInt8('?') &&
             isseparator(codeunit(s, 4)) &&
-            !isseparator(codeunit(s, 5)) # All non-separator characters, including
-                                         # non-ascii are considered drive letters.
+            !isseparator(codeunit(s, 5)) && # Any ascii char except separators passes as the drive letter
+            codeunit(s, 6) == UInt8(':') # This effectively limits codeunit(s, 5) to ascii
         )
-            # Check that a 6th character exists and is a colon
-            i = nextind(s, 5)
-            if checkbounds(Bool, s, i) && s[i] === ':'
-                return s[1:i], s[nextind(s, i):end]
-            end
+            return s[1:6], s[nextind(s, 6):end]
         end
         return "", s
     end
