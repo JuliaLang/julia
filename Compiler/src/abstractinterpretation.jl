@@ -453,7 +453,9 @@ end
 function from_interconditional(𝕃ᵢ::AbstractLattice, @nospecialize(rt), sv::AbsIntState,
                                arginfo::ArgInfo, @nospecialize(maybecondinfo), vtypes::Union{VarTable,Nothing})
     has_conditional(𝕃ᵢ, sv) || return widenconditional(rt)
-    (; fargs, argtypes) = arginfo
+    fargs = arginfo.fargs
+    argtypes = arginfo.argtypes
+
     fargs === nothing && return widenconditional(rt)
     if can_propagate_conditional(rt, argtypes)
         return propagate_conditional(rt, argtypes[rt.slot]::Conditional)
