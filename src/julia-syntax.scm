@@ -2862,10 +2862,42 @@
    'break
    (lambda (e)
      (if (pair? (cdr e))
-         e
+         ;; break with label - validate and unwrap quote/inert if needed
+         ;; Note: QuoteNode becomes (inert sym) when converted from Julia to flisp
+         (let* ((label-expr (cadr e))
+                (label (cond ((symbol? label-expr) label-expr)  ;; plain identifier (including _)
+                             ((and (pair? label-expr)
+                                   (memq (car label-expr) '(quote inert))
+                                   (symbol? (cadr label-expr)))
+                              (cadr label-expr))
+                             (else (error "invalid break label: expected identifier")))))
+           (if (length> e 2)
+               ;; (break label val) -> expand val
+               `(break ,label ,(expand-forms (caddr e)))
+               `(break ,label)))
          '(break loop-exit)))
 
-   'continue (lambda (e) '(break loop-cont))
+   'continue
+   (lambda (e)
+     (if (pair? (cdr e))
+         ;; continue with label - validate and unwrap quote/inert if needed
+         ;; Note: QuoteNode becomes (inert sym) when converted from Julia to flisp
+         (let* ((label-expr (cadr e))
+                (name (cond ((symbol? label-expr) label-expr)  ;; plain identifier (including _)
+                            ((and (pair? label-expr)
+                                  (memq (car label-expr) '(quote inert))
+                                  (symbol? (cadr label-expr)))
+                             (cadr label-expr))
+                            (else (error "invalid continue label: expected identifier")))))
+           ;; (continue name) -> (break name#cont)
+           `(break ,(symbol (string name "#cont"))))
+         '(break loop-cont)))
+
+   'symbolicblock
+   (lambda (e)
+     ;; (symbolicblock name body) -> expand body
+     ;; The @label macro inserts the continue block for loops, so we just expand the body
+     `(symbolicblock ,(cadr e) ,(expand-forms (caddr e))))
 
    'for
    (lambda (e)
@@ -3259,7 +3291,12 @@
 
 ;; returns lambdas in the form (lambda (args...) (locals...) body)
 (define (resolve-scopes- e scope (sp '()) (loc #f))
-  (cond ((symbol? e)
+  (cond ((and (pair? e) (eq? (car e) 'break))
+         ;; break may have a value that needs scope resolution
+         (if (length> e 2)
+             `(break ,(cadr e) ,(resolve-scopes- (caddr e) scope sp loc))
+             e))
+        ((symbol? e)
          (let ((val (and scope (get (scope:table scope) e #f))))
            (cond (val (car val))
                  ((underscore-symbol? e) e)
@@ -3428,6 +3465,9 @@
         ((eq? (car e) 'break-block)
          `(break-block ,(cadr e) ;; ignore type symbol of break-block expression
                        ,(resolve-scopes- (caddr e) scope '() loc))) ;; body of break-block expression
+        ((eq? (car e) 'symbolicblock)
+         `(symbolicblock ,(cadr e) ;; label name of symbolic block
+                         ,(resolve-scopes- (caddr e) scope '() loc))) ;; body of symbolic block
         ((eq? (car e) 'with-static-parameters)
          `(with-static-parameters
            ,(resolve-scopes- (cadr e) scope (cddr e) loc)
@@ -3472,6 +3512,7 @@
         ((symbol? e) (put! tab e #t))
         ((and (pair? e) (memq (car e) '(global globalref))) tab)
         ((and (pair? e) (eq? (car e) 'break-block)) (free-vars- (caddr e) tab))
+        ((and (pair? e) (eq? (car e) 'symbolicblock)) (free-vars- (caddr e) tab))
         ((and (pair? e) (eq? (car e) 'with-static-parameters)) (free-vars- (cadr e) tab))
         ((or (atom? e) (quoted? e)) tab)
         ((eq? (car e) 'lambda)
@@ -4015,6 +4056,8 @@ f(x) = yt(x)
              (eager-any visit (cdr e)))
             ((eq? (car e) 'break-block)
              (visit (caddr e)))
+            ((eq? (car e) 'symbolicblock)
+             (visit (caddr e)))
             ((eq? (car e) 'return)
              (begin0 (visit (cadr e))
                      (kill)))
@@ -4167,7 +4210,12 @@ f(x) = yt(x)
        ((atom? e) e)
        (else
         (case (car e)
-          ((quote top core globalref thismodule thisfunction lineinfo line break inert module toplevel null true false meta) e)
+          ((quote top core globalref thismodule thisfunction lineinfo line inert module toplevel null true false meta) e)
+          ((break)
+           ;; break may have a value that needs closure conversion
+           (if (length> e 2)
+               `(break ,(cadr e) ,(cl-convert (caddr e) fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals))
+               e))
           ((toplevel_pure)
            ;; Used to wrap the Expr returned from generation functions: do not
            ;; generate top-level side effects for this Expr (declare_global).
@@ -4990,11 +5038,49 @@ f(x) = yt(x)
                         #f #f)
                (mark-label endl))
              (if value (compile '(null) break-labels value tail)))
+            ((symbolicblock)
+             ;; Labeled block/loop that can be exited with `break name value`
+             (let* ((name (cadr e))
+                    (body (caddr e))
+                    (endl (make-label))
+                    (need-value (or value tail))
+                    ;; Create result-var if value is needed (for break name val support)
+                    (result-var (if need-value (new-mutable-var name) #f)))
+               ;; Register the symbolic block to prevent mixing with @goto
+               (if (has? label-nesting name)
+                   (error (string "label \"" name "\" defined multiple times")))
+               (put! label-nesting name 'symbolicblock)
+               ;; Initialize result-var to nothing (for break without value case)
+               (if result-var
+                   (emit `(= ,result-var (null))))
+               ;; Compile body with this block in break-labels
+               (let ((body-val (compile body
+                                        (cons (list name endl handler-token-stack catch-token-stack result-var)
+                                              break-labels)
+                                        need-value #f)))
+                 ;; If body produces a value and we haven't broken, assign it to result-var
+                 (if (and result-var body-val)
+                     (emit `(= ,result-var ,body-val))))
+               (mark-label endl)
+               ;; Return result-var if value is needed
+               (cond (tail  (emit-return tail result-var))
+                     (value result-var)
+                     (else  #f))))
             ((break)
              (let ((labl (assq (cadr e) break-labels)))
                (if (not labl)
                    (error "break or continue outside loop")
-                   (emit-break labl))))
+                   (begin
+                     ;; Check if this is a valued break (break name val)
+                     (if (length> e 2)
+                         ;; symbolicblock entries have 5 elements, regular break-block entries have 4
+                         (let ((result-var (and (length> labl 4) (list-ref labl 4))))
+                           (if (not result-var)
+                               (error (string "break with value not allowed for label \"" (cadr e) "\""))
+                               (let ((val (compile (caddr e) break-labels #t #f)))
+                                 (emit `(= ,result-var ,val))))))
+                     (emit-break labl)
+                     #f))))
             ((label symboliclabel)
              (if (eq? (car e) 'symboliclabel)
                  (if (has? label-nesting (cadr e))
@@ -5008,6 +5094,9 @@ f(x) = yt(x)
                    (emit-return tail '(null))
                    (if value (error "misplaced label")))))
             ((symbolicgoto)
+             ;; Check if target is a symbolicblock (not allowed)
+             (if (eq? (get label-nesting (cadr e) #f) 'symbolicblock)
+                 (error (string "cannot use @goto to jump to @label block \"" (cadr e) "\"")))
              (let* ((m (get label-map (cadr e) #f))
                     (m (or m (let ((l (make-label)))
                                (put! label-map (cadr e) l)
@@ -5272,6 +5361,9 @@ f(x) = yt(x)
                   (let ((target-nesting (get label-nesting lab #f)))
                     (if (not target-nesting)
                         (error (string "label \"" lab "\" referenced but not defined")))
+                    ;; Check if target is a symbolicblock (cannot use @goto to jump to @label block)
+                    (if (eq? target-nesting 'symbolicblock)
+                        (error (string "cannot use @goto to jump to @label block \"" lab "\"")))
                     (let ((target-handler-tokens (car target-nesting))
                           (target-catch-tokens (cadr target-nesting)))
                       (let ((plist (pop-handler-list src-handler-tokens target-handler-tokens lab)))

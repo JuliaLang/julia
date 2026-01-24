@@ -41,6 +41,8 @@ function _register_kinds()
             "symbolic_label"
             # Goto named label
             "symbolic_goto"
+            # Labeled block for `@label name expr` (block break)
+            "symbolic_block"
             # Internal initializer for struct types, for inner constructors/functions
             "new"
             "splatnew"

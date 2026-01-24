@@ -4449,10 +4449,40 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"="
         expand_assignment(ctx, ex)
     elseif k == K"break"
-        numchildren(ex) > 0 ? ex :
+        nc = numchildren(ex)
+        if nc == 0
             @ast ctx ex [K"break" "loop_exit"::K"symbolic_label"]
+        else
+            @chk nc <= 2 (ex, "Too many arguments to break")
+            label = ex[1]
+            label_kind = kind(label)
+            # Convert Symbol (from Expr conversion) to symbolic_label
+            if label_kind == K"Symbol"
+                label = @ast ctx label label.name_val::K"symbolic_label"
+            elseif !(label_kind == K"Identifier" || label_kind == K"symbolic_label" ||
+                     is_contextual_keyword(label_kind))
+                throw(LoweringError(label, "Invalid break label: expected identifier"))
+            end
+            if nc == 2
+                @ast ctx ex [K"break" label expand_forms_2(ctx, ex[2])]
+            else
+                @ast ctx ex [K"break" label]
+            end
+        end
     elseif k == K"continue"
-        @ast ctx ex [K"break" "loop_cont"::K"symbolic_label"]
+        nc = numchildren(ex)
+        if nc == 0
+            @ast ctx ex [K"break" "loop_cont"::K"symbolic_label"]
+        else
+            @chk nc == 1 (ex, "Too many arguments to continue")
+            label = ex[1]
+            label_kind = kind(label)
+            if !(label_kind == K"Identifier" || label_kind == K"Placeholder" ||
+                 label_kind == K"Symbol" || is_contextual_keyword(label_kind))
+                throw(LoweringError(label, "Invalid continue label: expected identifier"))
+            end
+            @ast ctx ex [K"break" string(label.name_val, "#cont")::K"symbolic_label"]
+        end
     elseif k == K"comparison"
         expand_forms_2(ctx, expand_compare_chain(ctx, ex))
     elseif k == K"doc"
@@ -4613,6 +4643,11 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         ]
     elseif k == K"inert" || k == K"inert_syntaxtree"
         ex
+    elseif k == K"symbolic_block"
+        # @label name body -> (symbolic_block name expanded_body)
+        # The @label macro inserts the continue block for loops, so we just expand the body
+        @chk numchildren(ex) == 2
+        @ast ctx ex [K"symbolic_block" ex[1] expand_forms_2(ctx, ex[2])]
     elseif k == K"gc_preserve"
         s = ssavar(ctx, ex)
         r = ssavar(ctx, ex)
