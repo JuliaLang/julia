@@ -8583,6 +8583,21 @@ f_invalidate_me() = 2
 @test_throws ErrorException invoke(f_invoke_me, f_invoke_me_ci)
 @test_throws ErrorException f_call_me()
 
+mysin(x::Float64) = sin(x)
+@test mysin(1.0) == sin(1.0)
+const mysin_ci = Base.specialize_method(Base._which(Tuple{typeof(mysin), Float64})).cache
+mysin2(x::Float64) = invoke(mysin, mysin_ci, x)
+@test mysin2(1.0) == sin(1.0)
+@test any(1:3) do _
+    @allocated(mysin2(rand())) == 0
+end
+let this_world = Base.get_world_counter()
+    f(x) = invoke(mysin, mysin_ci, x)
+    @atomic mysin_ci.min_world = this_world + 10
+    @test_throws ErrorException f(1.0)
+end
+
+
 myfun57023a(::Type{T}) where {T} = (x = @ccall mycfun()::Ptr{T}; x)
 @test only(code_lowered(myfun57023a)).has_fcall
 myfun57023b(::Type{T}) where {T} = (x = @cfunction myfun57023a Ptr{T} (Ref{T},); x)
