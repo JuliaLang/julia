@@ -5,6 +5,10 @@ EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/FileWatching/do
 # [File Events](@id lib-filewatching)
 
 ```@docs
+FileWatching.FileWatching
+```
+
+```@docs
 poll_fd
 poll_file
 watch_file

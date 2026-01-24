@@ -83,6 +83,7 @@ Base.big
 Base.signed
 Base.unsigned
 Base.float(::Any)
+Base.float(::AbstractArray)
 Base.Math.significand
 Base.Math.exponent
 Base.complex(::Complex)
@@ -100,7 +101,6 @@ Base.oneunit
 Base.zero
 Base.im
 Base.MathConstants.pi
-Base.MathConstants.ℯ
 Base.MathConstants.catalan
 Base.MathConstants.eulergamma
 Base.MathConstants.golden
@@ -140,6 +140,8 @@ Base.leading_zeros
 Base.leading_ones
 Base.trailing_zeros
 Base.trailing_ones
+Base.bitreverse
+Base.mul_hi
 Base.isodd
 Base.iseven
 Base.@int128_str

@@ -60,3 +60,21 @@ See also the [extended documentation for mathematical symbols & functions](@ref 
 | [`\|>`](@ref)       | pipe operator passes output from the left argument to input of the right argument, usually a [function](@ref Function-composition-and-piping) |
 | `∘`         | function composition operator (typed with \circ{tab}) combines two functions as though they are a single larger [function](@ref Function-composition-and-piping) |
 | `_`         | underscores may be assigned values which will not be saved, often used to ignore [multiple return values](@ref destructuring-assignment) or create repetitive [comprehensions](@ref man-comprehensions) |
+
+## Operators
+
+```@docs
+Base.:*(::(Union{AbstractChar, AbstractString, Regex}), ::Vararg{Union{AbstractChar, AbstractString, Regex}})
+Base.:^(::Regex, ::Integer)
+Base.:∋(::Any, ::Any)
+Base.:∋(::Any)
+Base.:∌
+Base.:⊆
+Base.:⊇(::Any)
+Base.:⊇
+Base.:⊉(::Any)
+Base.:⊉
+Base.:⊋(::Any)
+Base.:⊋
+Base.:≉
+```

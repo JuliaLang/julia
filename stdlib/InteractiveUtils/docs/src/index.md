@@ -4,6 +4,10 @@ EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/InteractiveUtil
 
 # [Interactive Utilities](@id man-interactive-utils)
 
+```@docs
+InteractiveUtils.InteractiveUtils
+```
+
 The `InteractiveUtils` module provides utilities for interactive use of Julia,
 such as code introspection and clipboard access.
 It is intended for interactive work and is loaded automatically in [interactive mode](@ref command-line-interface).
@@ -35,5 +39,7 @@ InteractiveUtils.@code_native
 InteractiveUtils.@time_imports
 InteractiveUtils.@trace_compile
 InteractiveUtils.@trace_dispatch
+InteractiveUtils.@activate
 InteractiveUtils.clipboard
+InteractiveUtils.peakflops
 ```

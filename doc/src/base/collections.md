@@ -88,6 +88,10 @@ Fully implemented by:
 ## Iterable Collections
 
 ```@docs
+Base.Generator
+```
+
+```@docs
 Base.in
 Base.:∉
 Base.hasfastin
@@ -119,15 +123,23 @@ Base.prod
 Base.prod!
 Base.any(::Any)
 Base.any(::AbstractArray, ::Any)
+Base.any(::Any, ::Any)
+Base.any(::AbstractArray)
+Base.any(::Function, ::AbstractArray)
 Base.any!
 Base.all(::Any)
 Base.all(::AbstractArray, ::Any)
+Base.all(::Any, ::Any)
+Base.all(::AbstractArray)
+Base.all(::Function, ::AbstractArray)
 Base.all!
 Base.count
+Base.count!(::AbstractArray, ::Union{Base.AbstractBroadcasted, AbstractArray})
 Base.foreach
 Base.map
 Base.map!
 Base.mapreduce(::Any, ::Any, ::Any)
+Base.mapreduce(::Any, ::Any, ::Union{Base.AbstractBroadcasted, AbstractArray})
 Base.mapfoldl(::Any, ::Any, ::Any)
 Base.mapfoldr(::Any, ::Any, ::Any)
 Base.first

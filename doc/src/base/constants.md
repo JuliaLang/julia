@@ -15,6 +15,19 @@ Base.Sys.WORD_SIZE
 Base.Sys.KERNEL
 Base.Sys.ARCH
 Base.Sys.MACHINE
+Base.Sys.CPU_NAME
+Base.Sys.PAGESIZE
+Base.Sys.JIT
+```
+
+## [Mathematical Constants](@id math-constants)
+
+```@docs
+Base.MathConstants
+Base.MathConstants.π
+Base.MathConstants.ℯ
+Base.MathConstants.γ
+Base.MathConstants.φ
 ```
 
 See also:

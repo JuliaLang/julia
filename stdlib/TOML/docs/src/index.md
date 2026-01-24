@@ -4,6 +4,10 @@ EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/TOML/docs/src/i
 
 # TOML
 
+```@docs
+TOML
+```
+
 TOML.jl is a Julia standard library for parsing and writing [TOML
 v1.0](https://toml.io/en/) files.
 
