@@ -478,7 +478,7 @@ end
 
 end # os-test
 
-joinpath(paths::AbstractString...)::String = joinpath(paths)
+@noinline joinpath(paths::AbstractString...)::String = joinpath(paths)
 
 """
     joinpath(parts::AbstractString...)::String
@@ -586,7 +586,7 @@ end
 Convert a set of paths to a normalized path by joining them together and removing
 "." and ".." entries. Equivalent to `normpath(joinpath(path, paths...))`.
 """
-normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
+@noinline normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 
 """
     abspath(path::AbstractString)::String
@@ -624,7 +624,7 @@ end
 Convert a set of paths to an absolute path by joining them together and adding the
 current directory if necessary. Equivalent to `abspath(joinpath(path, paths...))`.
 """
-abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
+@noinline abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 
 if Sys.iswindows()
 
