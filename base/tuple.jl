@@ -589,10 +589,13 @@ function hash(t::Tuple, h::UInt)
 end
 
 function <(t1::Tuple, t2::Tuple)
-    f(::Tuple{}, ::Tuple{}) = false
-    f(::Tuple{}, ::Tuple) = true
-    f(::Tuple, ::Tuple{}) = false
     function f(t1::Tuple, t2::Tuple)
+        if t2 === ()
+            return false
+        end
+        if t1 === ()
+            return true
+        end
         a, b = t1[1], t2[1]
         eq = (a == b)
         if ismissing(eq)
@@ -630,10 +633,13 @@ const _BitInteger = Union{
 Return `true` when `t1` is less than `t2` in lexicographic order.
 """
 function isless(t1::Tuple, t2::Tuple)
-    f(::Tuple{}, ::Tuple{}) = false
-    f(::Tuple{}, ::Tuple) = true
-    f(::Tuple, ::Tuple{}) = false
     function f(t1::Tuple, t2::Tuple)
+        if t2 === ()
+            return false
+        end
+        if t1 === ()
+            return true
+        end
         a, b = t1[1], t2[1]
         isless(a, b) || (isequal(a, b) && isless(tail(t1), tail(t2)))
     end
