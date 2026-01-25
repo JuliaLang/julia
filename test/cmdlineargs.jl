@@ -1362,13 +1362,22 @@ end
 @test readchomp(`$(Base.julia_cmd()) -e 'module Hello; export main; (@main)(args) = println("hello"); end; import .Hello'`) == ""
 
 # test --bug-report=rr
-if Sys.islinux() &&
-    Sys.ARCH in (:i686, :x86_64) && # rr is only available on these platforms
-    get(ENV, "JULIA_TEST_NO_RR_AVAILABLE", "0") != "1" # if this env var is set, skip rr tests -- rr is not always available
+if Sys.islinux() && Sys.ARCH in (:i686, :x86_64) # rr is only available on these platforms
     mktempdir() do temp_trace_dir
-        test_read_success(setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`,
-                                 "JULIA_RR_RECORD_ARGS" => "-n --nested=ignore",
-                                 "_RR_TRACE_DIR" => temp_trace_dir))
+        cmd = setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`,
+                     "JULIA_RR_RECORD_ARGS" => "-n --nested=ignore",
+                     "_RR_TRACE_DIR" => temp_trace_dir)
+        success, out, err = readchomperrors(cmd)
+        # rr cannot read perf counters if running in containers, allow it to fail in this case
+        allowed_failure = occursin("Unable to open performance counter", err)
+        if !success && !allowed_failure
+            println("---- Command failed: ")
+            show(cmd)
+            println("stdout:\n", out)
+            println("stderr:\n", err)
+            println("----")
+        end
+        @test success || allowed_failure
     end
 end
 
