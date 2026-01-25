@@ -705,14 +705,19 @@ empty(@nospecialize x::Tuple) = ()
 foreach(f, itr::Tuple) = foldl((_, x) -> (f(x); nothing), itr, init=nothing)
 foreach(f, itr::Tuple, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itr, itrs...), init=nothing)
 
-function circshift(t::Tuple, shift::Integer)
-    f((@nospecialize t::Union{Tuple{},Tuple{Any}}), @nospecialize _::Integer) = t
-    f(t::Tuple{Any,Any}, shift::Integer) = iseven(shift) ? t : reverse(t)
-    function f(x::Tuple{Any,Any,Any,Vararg{Any,N}}, shift::Integer) where {N}
-        @inline
-        len = N + 3
-        j = mod1(shift, len)
-        ntuple(k -> getindex(x, k-j+ifelse(k>j,0,len)), Val(len))::Tuple
+function circshift(x::Tuple, shift::Integer)
+    @inline
+    if (x === ()) || (x isa Tuple{Any})
+        return x
     end
-    f(t, shift)
+    if x isa Tuple{Any,Any}
+        return if iseven(shift)
+            x
+        else
+            reverse(x)
+        end
+    end
+    len = N + 3
+    j = mod1(shift, len)
+    ntuple(k -> getindex(x, k-j+ifelse(k>j,0,len)), Val(len))::Tuple
 end
