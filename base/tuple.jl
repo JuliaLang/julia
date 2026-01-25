@@ -717,7 +717,7 @@ function circshift(x::Tuple, shift::Integer)
             reverse(x)
         end
     end
-    len = N + 3
+    len = length(x)
     j = mod1(shift, len)
     ntuple(k -> getindex(x, k-j+ifelse(k>j,0,len)), Val(len))::Tuple
 end
