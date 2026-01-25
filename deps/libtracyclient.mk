@@ -27,7 +27,7 @@ $(LIBTRACYCLIENT_BUILDDIR)/cmake-patch-applied: $(LIBTRACYCLIENT_BUILDDIR)/sourc
 ifneq ($(OS),WINNT)
 	echo "target_compile_definitions(TracyClient PUBLIC __STDC_FORMAT_MACROS)" >> $(LIBTRACYCLIENT_BUILDDIR)/CMakeLists.txt
 else
-	echo "target_compile_definitions(TracyClient PUBLIC WINVER=0x0602 _WIN32_WINNT=0x0602)" >> $(LIBTRACYCLIENT_BUILDDIR)/CMakeLists.txt
+	echo "target_compile_definitions(TracyClient PUBLIC WINVER=0x0A00 _WIN32_WINNT=0x0A00)" >> $(LIBTRACYCLIENT_BUILDDIR)/CMakeLists.txt
 endif
 	echo 1 > $@
 
