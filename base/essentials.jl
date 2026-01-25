@@ -532,12 +532,10 @@ ERROR: ArgumentError: Cannot call tail on an empty tuple.
 ```
 """
 function tail(x::Tuple)
-    f(x::Tuple) = argtail(x...)
-    function f(::Tuple{})
-        @noinline
+    if x === ()
         throw(ArgumentError("Cannot call tail on an empty tuple."))
     end
-    f(x)
+    argtail(x...)
 end
 
 function unwrap_unionall(@nospecialize(a))

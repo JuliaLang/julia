@@ -266,12 +266,10 @@ end
 @eval split_rest(t::Tuple, n::Int, i=1) = ($(Expr(:meta, :aggressive_constprop)); _split_tuple(t, length(t)-n, Int(i)))
 
 function first(t::Tuple)
-    f(t::Tuple) = t[1]
-    function f(::Tuple{})
-        @noinline
+    if t === ()
         throw(ArgumentError("tuple must be non-empty"))
     end
-    f(t)
+    t[1]
 end
 
 # eltype
