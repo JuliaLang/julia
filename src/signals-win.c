@@ -409,7 +409,7 @@ JL_DLLEXPORT void jl_install_sigint_handler(void)
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 }
 
-static TIMECAPS timecaps;
+static HANDLE hTimer = NULL;
 static HANDLE hBtThread = 0;
 static uv_cond_t bt_data_prof_cond = CONDITION_VARIABLE_INIT;
 
@@ -586,14 +586,6 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
 {
     uv_mutex_lock(&bt_data_prof_lock);
     if (hBtThread == NULL) {
-        TIMECAPS _timecaps;
-        if (MMSYSERR_NOERROR != timeGetDevCaps(&_timecaps, sizeof(_timecaps))) {
-            uv_mutex_unlock(&bt_data_prof_lock);
-            jl_safe_fprintf(ios_safe_stderr, "failed to get timer resolution.\n");
-            return -2;
-        }
-        timecaps = _timecaps;
-
         hBtThread = CreateThread(
             NULL,                   // default security attributes
             0,                      // use default stack size
@@ -609,10 +601,12 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
         (void)SetThreadPriority(hBtThread, THREAD_PRIORITY_ABOVE_NORMAL);
     }
     if (profile_running == 0) {
-        // Failure to change the timer resolution is not fatal. However, it is important to
-        // ensure that the timeBeginPeriod/timeEndPeriod is paired.
-        if (TIMERR_NOERROR != timeBeginPeriod(timecaps.wPeriodMin))
-            timecaps.wPeriodMin = 0;
+        hTimer = CreateWaitableTimerExW(
+            NULL,                                  // default security attributes
+            NULL,                                  // no name
+            CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, // high resolution timer
+            TIMER_MODIFY_STATE                     // minimum access rights
+        );
     }
     profile_all_tasks = all_tasks;
     profile_running = 1; // set `profile_running` finally
@@ -623,8 +617,10 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
 JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
     uv_mutex_lock(&bt_data_prof_lock);
-    if (profile_running && timecaps.wPeriodMin)
-        timeEndPeriod(timecaps.wPeriodMin);
+    if (profile_running && hTimer != NULL){
+        CloseHandle(hTimer);
+        hTimer = NULL;
+    }
     profile_running = 0;
     profile_all_tasks = 0;
     uv_mutex_unlock(&bt_data_prof_lock);
