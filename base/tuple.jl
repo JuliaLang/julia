@@ -660,9 +660,7 @@ end
 ## functions ##
 
 function isempty(x::Tuple)
-    f(x::Tuple{}) = true
-    f(@nospecialize x::Tuple) = false
-    f(x)
+    x === ()
 end
 
 revargs() = ()
