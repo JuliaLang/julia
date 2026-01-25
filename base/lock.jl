@@ -21,7 +21,7 @@ const MAX_SPIN_ITERS = 40
 """
     ReentrantLock()
 
-Creates a re-entrant lock for synchronizing [`Task`](@ref)s. The same task can
+Create a re-entrant lock for synchronizing [`Task`](@ref)s. The same task can
 acquire the lock as many times as required (this is what the "Reentrant" part
 of the name means). Each [`lock`](@ref) must be matched with an [`unlock`](@ref).
 
@@ -366,7 +366,7 @@ This is similar to using [`lock`](@ref) with a `do` block, but avoids creating a
 and thus can improve the performance.
 
 !!! compat
-    `@lock` was added in Julia 1.3, and exported in Julia 1.10.
+    `@lock` was added in Julia 1.3, and exported in Julia 1.7.
 """
 macro lock(l, expr)
     quote
@@ -400,7 +400,7 @@ end
 """
     Lockable(value, lock = ReentrantLock())
 
-Creates a `Lockable` object that wraps `value` and
+Create a `Lockable` object that wraps `value` and
 associates it with the provided `lock`. This object
 supports [`@lock`](@ref), [`lock`](@ref), [`trylock`](@ref),
 [`unlock`](@ref). To access the value, index the lockable object while

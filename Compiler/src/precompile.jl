@@ -418,7 +418,7 @@ function compile_and_emit_native(worlds::Vector{UInt},
         isa(exc, Core.TrimFailure) || rethrow()
         # The verification check failed. The error message should already have
         # been printed, so give up here and exit (w/o a stack trace).
-        invokelatest(exit, 1)
+        invokelatest(invokelatest(getglobal, Base, :exit), 1)
     end
 
     return codeinfos
@@ -448,7 +448,7 @@ function add_entrypoint(types::Type)
     mi = ccall(:jl_get_compile_hint_specialization, Any,
                    (Any, Csize_t, Cint),
                    types, world, 1)
-    if mi == nothing
+    if mi === nothing
         return false
     end
     push!(_entrypoint_mis, mi::Core.MethodInstance)

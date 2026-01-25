@@ -688,7 +688,7 @@ typedef struct _jl_weakref_t {
 // in the new world age) from any partition kind to any other.
 //
 // However, not all transitions are allowed syntactically. We have the following rules for SYNTACTIC invalidation:
-// 1. It is always syntactically permissable to replace a weaker binding by a stronger binding
+// 1. It is always syntactically permissible to replace a weaker binding by a stronger binding
 // 2. Implicit bindings can be syntactically changed to other implicit bindings by changing the `using` set.
 // 3. Finally, we syntactically permit replacing one PARTITION_KIND_CONST(_IMPORT) by another of a different value.
 //
@@ -2048,7 +2048,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b JL
 JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *asname, jl_sym_t *s, int explici);
 JL_DLLEXPORT void jl_import_module(jl_task_t *ct, jl_module_t *m, jl_module_t *import, jl_sym_t *asname);
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from, size_t flags);
-int jl_module_public_(jl_module_t *from, jl_sym_t *s, int exported, size_t new_world);
+JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_value_t **symbols, size_t nsymbols, int exported);
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s);
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var);
 
@@ -2066,6 +2066,7 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_effective_threads(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT long jl_getpagesize(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT long jl_getallocationgranularity(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT long jl_gethugepagesize(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_is_debugbuild(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void) JL_NOTSAFEPOINT;
@@ -2641,6 +2642,7 @@ JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *) JL_NOTSAFEPOINT;
 // codegen interface ----------------------------------------------------------
 // The root propagation here doesn't have to be literal, but callers should
 // ensure that the return value outlives the MethodInstance
+// Must be kept in sync with `base/reflection.jl` (CodegenParams)
 typedef struct {
     int track_allocations;  // can we track allocations?
     int code_coverage;      // can we measure coverage?
@@ -2656,6 +2658,11 @@ typedef struct {
 
     int use_jlplt; // Whether to use the Julia PLT mechanism or emit symbols directly
     int force_emit_all; // Force emission of code for const return functions
+
+    // These options control the sanitizer passes and are used to AOT compile instrumented sysimages
+    int sanitize_memory;
+    int sanitize_thread;
+    int sanitize_address;
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;

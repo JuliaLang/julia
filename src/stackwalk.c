@@ -792,12 +792,17 @@ const char *jl_debuginfo_file1(jl_debuginfo_t *debuginfo)
     return "<unknown>";
 }
 
-const char *jl_debuginfo_file(jl_debuginfo_t *debuginfo)
+// File name and line number of first line
+const char *jl_debuginfo_firstline(jl_debuginfo_t *debuginfo, int* line)
 {
     jl_debuginfo_t *linetable = debuginfo->linetable;
     while ((jl_value_t*)linetable != jl_nothing) {
         debuginfo = linetable;
         linetable = debuginfo->linetable;
+    }
+    if (line) {
+        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo->codelocs, 0);
+        *line = lineidx.line;
     }
     return jl_debuginfo_file1(debuginfo);
 }
@@ -849,7 +854,7 @@ static void jl_fprint_debugloc(ios_t *s, jl_debuginfo_t *debuginfo, jl_value_t *
         if (ip2 < 0) // set broken debug info to ignored
             ip2 = 0;
         const char *func_name = jl_debuginfo_name(func);
-        const char *file = jl_debuginfo_file(debuginfo);
+        const char *file = jl_debuginfo_firstline(debuginfo, NULL);
         jl_safe_fprint_codeloc(s, func_name, file, ip2, inlined);
     }
 }
@@ -1417,15 +1422,13 @@ JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_b
     if (context == NULL && (!t->ctx.copy_stack && t->ctx.started && t->ctx.ctx != NULL)) {
         // need to read the context from the task stored state
         jl_jmp_buf *mctx = &t->ctx.ctx->uc_mcontext;
-#if defined(_OS_WINDOWS_)
+#if defined(JL_TASK_SWITCH_WINDOWS)
         memset(&c, 0, sizeof(c));
         if (jl_simulate_longjmp(*mctx, &c))
             context = &c;
-#elif defined(JL_HAVE_UNW_CONTEXT)
+#elif defined(JL_TASK_SWITCH_LIBUNWIND)
         context = t->ctx.ctx;
-#elif defined(JL_HAVE_UCONTEXT)
-        context = jl_to_bt_context(t->ctx.ctx);
-#elif defined(JL_HAVE_ASM)
+#elif defined(JL_TASK_SWITCH_ASM)
         memset(&c, 0, sizeof(c));
         if (jl_simulate_longjmp(*mctx, &c))
             context = &c;

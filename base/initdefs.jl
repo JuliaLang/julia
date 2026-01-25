@@ -97,7 +97,7 @@ const DEPOT_PATH = String[]
 function append_bundled_depot_path!(DEPOT_PATH)
     path = abspath(Sys.BINDIR, "..", "local", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
-    path = abspath(Sys.BINDIR, "..", "share", "julia")
+    path = abspath(Sys.BINDIR, Base.DATAROOTDIR, "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
     return DEPOT_PATH
 end
@@ -271,6 +271,19 @@ function init_active_project()
     )
 end
 
+function init_named_env!(path)
+    try
+        mkpath(dirname(path))
+        open(path, "w") do io
+            print(io, "syntax.julia_version = \"",VERSION,"\"")
+        end
+        return path
+    catch e
+        @warn "Failed to initialize named environment at $path: $e"
+        return nothing
+    end
+end
+
 ## load path expansion: turn LOAD_PATH entries into concrete paths ##
 cmd_suppresses_program(cmd) = cmd in ('e', 'E')
 
@@ -307,7 +320,8 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
             end
         end
         isempty(DEPOT_PATH) && return nothing
-        return abspath(DEPOT_PATH[1], "environments", name, project_names[end])
+        new_named_env_path = abspath(DEPOT_PATH[1], "environments", name, project_names[end])
+        return init_named_env!(new_named_env_path)
     end
     # otherwise, it's a path
     path = abspath(env)

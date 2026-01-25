@@ -103,7 +103,7 @@ struct CountTrackedPointers {
     CountTrackedPointers(llvm::Type *T, bool ignore_loaded=false);
 };
 
-llvm::SmallVector<llvm::Value*, 0> ExtractTrackedValues(llvm::Value *Src, llvm::Type *STy, bool isptr, llvm::IRBuilder<> &irbuilder, llvm::ArrayRef<unsigned> perm_offsets={});
+llvm::SmallVector<llvm::SmallVector<unsigned, 0>, 0> TrackCompositeType(llvm::Type *T);
 
 static inline void llvm_dump(llvm::Value *v)
 {
@@ -158,7 +158,7 @@ static inline llvm::Instruction *tbaa_decorate(llvm::MDNode *md, llvm::Instructi
     using namespace llvm;
     inst->setMetadata(llvm::LLVMContext::MD_tbaa, md);
     if (llvm::isa<llvm::LoadInst>(inst) && md && md == get_tbaa_const(md->getContext())) {
-        inst->setMetadata(llvm::LLVMContext::MD_invariant_load, llvm::MDNode::get(md->getContext(), std::nullopt));
+        inst->setMetadata(llvm::LLVMContext::MD_invariant_load, llvm::MDNode::get(md->getContext(), {}));
     }
     return inst;
 }

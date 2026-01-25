@@ -1,26 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-"""
-    struct InternalCodeCache
-
-Internally, each `MethodInstance` keep a unique global cache of code instances
-that have been created for the given method instance, stratified by world age
-ranges. This struct abstracts over access to this cache.
-"""
-struct InternalCodeCache
-    owner::Any # `jl_egal` is used for comparison
-end
-
-function setindex!(cache::InternalCodeCache, ci::CodeInstance, mi::MethodInstance)
-    @assert ci.owner === cache.owner
-    m = mi.def
-    if isa(m, Method)
-        ccall(:jl_push_newly_inferred, Cvoid, (Any,), ci)
-    end
-    ccall(:jl_mi_cache_insert, Cvoid, (Any, Any), mi, ci)
-    return cache
-end
-
 struct WorldRange
     min_world::UInt
     max_world::UInt
@@ -49,39 +28,43 @@ function union(a::WorldRange, b::WorldRange)
 end
 
 """
-    struct WorldView
+    struct InternalCodeCache
 
-Takes a given cache and provides access to the cache contents for the given
-range of world ages, rather than defaulting to the current active world age.
+Internally, each `MethodInstance` keep a unique global cache of code instances
+that have been created for the given method instance, stratified by world age
+ranges. This struct abstracts over access to this cache.
 """
-struct WorldView{Cache}
-    cache::Cache
+struct InternalCodeCache
+    owner::Any # `jl_egal` is used for comparison
     worlds::WorldRange
-    WorldView(cache::Cache, range::WorldRange) where Cache = new{Cache}(cache, range)
-end
-WorldView(cache, args...) = WorldView(cache, WorldRange(args...))
-WorldView(wvc::WorldView, wr::WorldRange) = WorldView(wvc.cache, wr)
-WorldView(wvc::WorldView, args...) = WorldView(wvc.cache, args...)
-
-function haskey(wvc::WorldView{InternalCodeCache}, mi::MethodInstance)
-    return ccall(:jl_rettype_inferred, Any, (Any, Any, UInt, UInt), wvc.cache.owner, mi, first(wvc.worlds), last(wvc.worlds)) !== nothing
+    InternalCodeCache(@nospecialize(owner), wr::WorldRange) = new(owner, wr)
+    InternalCodeCache(@nospecialize(owner), args...) = new(owner, WorldRange(args...))
 end
 
-function get(wvc::WorldView{InternalCodeCache}, mi::MethodInstance, default)
-    r = ccall(:jl_rettype_inferred, Any, (Any, Any, UInt, UInt), wvc.cache.owner, mi, first(wvc.worlds), last(wvc.worlds))
+function setindex!(cache::InternalCodeCache, ci::CodeInstance, mi::MethodInstance)
+    @assert ci.owner === cache.owner
+    m = mi.def
+    if isa(m, Method)
+        ccall(:jl_push_newly_inferred, Cvoid, (Any,), ci)
+    end
+    ccall(:jl_mi_cache_insert, Cvoid, (Any, Any), mi, ci)
+    return cache
+end
+
+function haskey(wvc::InternalCodeCache, mi::MethodInstance)
+    return ccall(:jl_rettype_inferred, Any, (Any, Any, UInt, UInt), wvc.owner, mi, first(wvc.worlds), last(wvc.worlds)) !== nothing
+end
+
+function get(wvc::InternalCodeCache, mi::MethodInstance, default)
+    r = ccall(:jl_rettype_inferred, Any, (Any, Any, UInt, UInt), wvc.owner, mi, first(wvc.worlds), last(wvc.worlds))
     if r === nothing
         return default
     end
     return r::CodeInstance
 end
 
-function getindex(wvc::WorldView{InternalCodeCache}, mi::MethodInstance)
+function getindex(wvc::InternalCodeCache, mi::MethodInstance)
     r = get(wvc, mi, nothing)
     r === nothing && throw(KeyError(mi))
     return r::CodeInstance
-end
-
-function setindex!(wvc::WorldView{InternalCodeCache}, ci::CodeInstance, mi::MethodInstance)
-    setindex!(wvc.cache, ci, mi)
-    return wvc
 end

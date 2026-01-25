@@ -3,9 +3,6 @@
 #include <cstdint>
 #include <pthread.h>
 #include <string>
-#include <fstream>
-#include <map>
-#include <vector>
 
 #include "llvm-version.h"
 #include <llvm/ADT/StringRef.h>
@@ -137,26 +134,20 @@ static void write_log_data(logdata_t &logData, const char *extension) JL_NOTSAFE
         if (!values.empty()) {
             if (!jl_isabspath(filename.c_str()))
                 filename = base + filename;
-            std::ifstream inf(filename.c_str());
-            if (!inf.is_open())
+            FILE *inf = fopen(filename.c_str(), "r");
+            if (!inf)
                 continue;
             std::string outfile = filename + extension;
-            std::ofstream outf(outfile.c_str(), std::ofstream::trunc | std::ofstream::out | std::ofstream::binary);
-            if (outf.is_open()) {
-                inf.exceptions(std::ifstream::badbit);
-                outf.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+            FILE *outf = fopen(outfile.c_str(), "wb");
+            if (outf) {
                 char line[1024];
                 int l = 1;
                 unsigned block = 0;
-                while (!inf.eof()) {
-                    inf.getline(line, sizeof(line));
-                    if (inf.fail()) {
-                        if (inf.eof())
-                            break; // no content on trailing line
-                        // Read through lines longer than sizeof(line)
-                        inf.clear();
-                        inf.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-                    }
+                int ret = 0;
+                while (ret != EOF && (ret = fscanf(inf, "%1023[^\n]", line)) != EOF) {
+                    // Skip n non-newline chars and a single trailing newline
+                    if ((ret = fscanf(inf, "%*[^\n]")) != EOF)
+                        ret = fscanf(inf, "%*1[\n]");
                     logdata_block *data = NULL;
                     if (block < values.size()) {
                         data = values[block];
@@ -166,24 +157,24 @@ static void write_log_data(logdata_t &logData, const char *extension) JL_NOTSAFE
                         l = 0;
                         block++;
                     }
-                    outf.width(9);
                     if (value == 0)
-                        outf << '-';
+                        fprintf(outf, "        -");
                     else
-                        outf << (value - 1);
-                    outf.width(0);
-                    outf << " " << line << '\n';
+                        fprintf(outf, "%9" PRIu64, value - 1);
+                    fprintf(outf, " %s\n", line);
+                    line[0] = 0;
                 }
-                outf.close();
+                fclose(outf);
             }
-            inf.close();
+            fclose(inf);
         }
     }
 }
 
 static void write_lcov_data(logdata_t &logData, const std::string &outfile) JL_NOTSAFEPOINT
 {
-    std::ofstream outf(outfile.c_str(), std::ofstream::ate | std::ofstream::out | std::ofstream::binary);
+    FILE *outf = fopen(outfile.c_str(), "ab");
+    if (!outf) return;
     //std::string base = std::string(jl_options.julia_bindir);
     //base = base + "/../share/julia/base/";
     logdata_t::iterator it = logData.begin();
@@ -191,7 +182,7 @@ static void write_lcov_data(logdata_t &logData, const std::string &outfile) JL_N
         StringRef filename = it->first();
         const SmallVector<logdata_block*, 0> &values = it->second;
         if (!values.empty()) {
-            outf << "SF:" << filename.str() << '\n';
+            fprintf(outf, "SF:%.*s\n", (int)filename.size(), filename.data());
             size_t n_covered = 0;
             size_t n_instrumented = 0;
             size_t lno = 0;
@@ -204,7 +195,7 @@ static void write_lcov_data(logdata_t &logData, const std::string &outfile) JL_N
                             n_instrumented++;
                             if (cov > 1)
                                 n_covered++;
-                            outf << "DA:" << lno << ',' << (cov - 1) << '\n';
+                            fprintf(outf, "DA:%zu,%" PRIu64 "\n", lno, cov - 1);
                         }
                         lno++;
                     }
@@ -213,12 +204,12 @@ static void write_lcov_data(logdata_t &logData, const std::string &outfile) JL_N
                     lno += logdata_blocksize;
                 }
             }
-            outf << "LH:" << n_covered << '\n';
-            outf << "LF:" << n_instrumented << '\n';
-            outf << "end_of_record\n";
+            fprintf(outf, "LH:%zu\n", n_covered);
+            fprintf(outf, "LF:%zu\n", n_instrumented);
+            fprintf(outf, "end_of_record\n");
         }
     }
-    outf.close();
+    fclose(outf);
 }
 
 extern "C" JL_DLLEXPORT void jl_write_coverage_data(const char *output) JL_NOTSAFEPOINT

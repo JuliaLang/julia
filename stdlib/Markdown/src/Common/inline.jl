@@ -36,6 +36,22 @@ function underscore_bold(stream::IO, md::MD)
     return result === nothing ? nothing : Bold(parseinline(result, md))
 end
 
+mutable struct Strikethrough <: MarkdownElement
+    text
+end
+
+@trigger '~' ->
+function tilde_strikethrough(stream::IO, md::MD)
+    result = parse_inline_wrapper(stream, "~")
+    return result === nothing ? nothing : Strikethrough(parseinline(result, md))
+end
+
+@trigger '~' ->
+function double_tilde_strikethrough(stream::IO, md::MD)
+    result = parse_inline_wrapper(stream, "~~")
+    return result === nothing ? nothing : Strikethrough(parseinline(result, md))
+end
+
 # ––––
 # Code
 # ––––
@@ -43,12 +59,14 @@ end
 @trigger '`' ->
 function inline_code(stream::IO, md::MD)
     withstream(stream) do
-        ticks = startswith(stream, r"^(`+)")
-        result = readuntil(stream, ticks)
+        ticks = matchstart(stream, r"^(`+)").match
+        result = readuntil(stream, ticks; newlines=true)
         if result === nothing
             nothing
         else
             result = strip(result)
+            # in code spans, newlines are replaced by spaces
+            result = replace(result, '\n' => ' ')
             # An odd number of backticks wrapping the text will produce a `Code` node, while
             # an even number will result in a `LaTeX` node. This allows for arbitrary
             # backtick combinations to be embedded inside the resulting node, i.e.
@@ -96,10 +114,10 @@ function link(stream::IO, md::MD)
         startswith(stream, '[') || return
         text = readuntil(stream, ']', match = '[')
         text ≡ nothing && return
-        skipwhitespace(stream)
         startswith(stream, '(') || return
         url = readuntil(stream, ')', match = '(')
         url ≡ nothing && return
+        url = replace_escapes_and_entities(url)
         return Link(parseinline(text, md), url)
     end
 end
@@ -108,11 +126,11 @@ end
 function footnote_link(stream::IO, md::MD)
     withstream(stream) do
         regex = r"^\[\^(\w+)\]"
-        str = startswith(stream, regex)
-        if isempty(str)
+        m = matchstart(stream, regex)
+        if m === nothing
             return
         else
-            ref = (match(regex, str)::AbstractMatch).captures[1]
+            ref = m.captures[1]
             return Footnote(ref, nothing)
         end
     end
@@ -126,6 +144,7 @@ function autolink(stream::IO, md::MD)
         url ≡ nothing && return
         _is_link(url) && return Link(url, url)
         _is_mailto(url) && return Link(url, url)
+        _is_email(url) && return Link(url, "mailto:" * url)
         return
     end
 end
@@ -146,9 +165,15 @@ function _is_link(s::AbstractString)
 end
 
 # non-normative regex from the HTML5 spec
-const _email_regex = r"^mailto\:[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
+const _email_regex_str = raw"""[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"""
+const _mailto_regex = Regex("^mailto\\:" * _email_regex_str)
+const _email_regex = Regex("^" * _email_regex_str)
 
 function _is_mailto(s::AbstractString)
+    return occursin(_mailto_regex, s)
+end
+
+function _is_email(s::AbstractString)
     return occursin(_email_regex, s)
 end
 
@@ -160,7 +185,7 @@ mutable struct LineBreak <: MarkdownElement end
 
 @trigger '\\' ->
 function linebreak(stream::IO, md::MD)
-    if startswith(stream, "\\\n")
+    if startswith(stream, "\\\n") || startswith(stream, "\\\r\n") || startswith(stream, "\\\r")
         return LineBreak()
     end
 end
@@ -175,7 +200,11 @@ function en_or_em_dash(stream::IO, md::MD)
     end
 end
 
-const escape_chars = "\\`*_#+-.!{}[]()\$"
+# –––––––––––
+# Backslash escapes
+# –––––––––––
+
+const escape_chars = """!"#\$%&'()*+,-./:;<=>?@[\\]^_`{|}~"""
 
 @trigger '\\' ->
 function escapes(stream::IO, md::MD)
@@ -184,4 +213,65 @@ function escapes(stream::IO, md::MD)
             return string(c)
         end
     end
+end
+
+# –––––––––––
+# Entity and numeric character references
+# –––––––––––
+
+const DEC_OR_HEX_REGEX = r"^&#(([0-9]{1,7})|[xX]([0-9a-fA-F]{1,6}));"
+
+@trigger '&' ->
+function entity(stream::IO, md::MD)
+    entity(stream)
+end
+
+function entity(stream::IO)
+    # named entity?
+    m = matchstart(stream, r"^&([a-zA-Z][a-zA-Z0-9]*);")
+    if m !== nothing
+        chars = get(entities, m.match, nothing)
+        return chars !== nothing ? chars : string(m.match)
+    end
+    # decimal or hexadecimal entity?
+    m = matchstart(stream, DEC_OR_HEX_REGEX)
+    if m !== nothing
+        val = if m.captures[2] !== nothing
+            Base.parse(UInt, m.captures[2]; base=10)
+        else
+            Base.parse(UInt, m.captures[3]; base=16)
+        end
+        c = (val != 0 && isvalid(Char, val)) ? Char(val) : Char(0xFFFD)
+        #return c
+        return string(c)
+    end
+end
+
+
+function replace_escapes_and_entities(s::AbstractString)
+    # TODO: performance??? ugh
+    stream = IOBuffer(s)
+    out = IOBuffer()
+    while !eof(stream)
+        c = read(stream, Char)
+        if c == '\\'
+            if !eof(stream)
+                c = read(stream, Char)
+                c in escape_chars || write(out, '\\')
+                write(out, c)
+            end
+        elseif c == '&'
+            skip(stream, -1)
+            ent = entity(stream)
+            if ent === nothing
+                skip(stream, 1)
+                write(out, '&')
+            else
+                write(out, ent)
+            end
+        else
+            write(out, c)
+        end
+    end
+    return takestring!(out)
 end

@@ -1118,7 +1118,7 @@ end
 function mightalias(A::SubArray, B::SubArray)
     # There are three ways that SubArrays might _problematically_ alias one another:
     #   1. The parents are the same we can conservatively check if the indices might overlap OR
-    #   2. The parents alias eachother in a more complicated manner (and we can't trace indices) OR
+    #   2. The parents alias each other in a more complicated manner (and we can't trace indices) OR
     #   3. One's parent is used in the other's indices
     # Note that it's ok for just the indices to alias each other as those should not be mutated,
     # so we can always do better than the default !_isdisjoint(dataids(A), dataids(B))

@@ -210,14 +210,15 @@ function complete_symbol!(suggestions::Vector{Completion},
     end
 
     if @isdefined(mod) # lookup names available within the module
-        let modname = nameof(mod),
-            is_main = mod===Main
+        let mod_for_check = mod,
+            modname = nameof(mod_for_check),
+            is_main = mod_for_check === Main
             append_filtered_mod_names!(suggestions, mod, name, complete_internal_only) do s::Symbol
-                if Base.isdeprecated(mod, s)
+                if Base.isdeprecated(mod_for_check, s)
                     return false
                 elseif s === modname
                     return false # exclude `Main.Main.Main`, etc.
-                elseif complete_modules_only && !completes_module(mod, s)
+                elseif complete_modules_only && !completes_module(mod_for_check, s)
                     return false
                 elseif is_main && s === :MainInclude
                     return false
@@ -288,13 +289,17 @@ function complete_from_list!(suggestions::Vector{Completion}, T::Type, list::Vec
     return suggestions
 end
 
-const sorted_keywords = [
-    "abstract type", "baremodule", "begin", "break", "catch", "ccall",
-    "const", "continue", "do", "else", "elseif", "end", "export",
-    "finally", "for", "function", "global", "if", "import",
-    "let", "local", "macro", "module", "mutable struct",
-    "primitive type", "quote", "return", "struct",
-    "try", "using", "while"]
+const sorted_keywords = let
+    keywords = map(string, Base.JuliaSyntax.Tokenize.kws)
+    excluded = ("type", "doc", "var", "VERSION")
+    filter!(∉(excluded), keywords)
+    compound = ("abstract", "mutable", "primitive")
+    filter!(∉(compound), keywords)
+    push!(keywords, "abstract type", "mutable struct", "primitive type")
+    # Register additional keywords, not in JuliaSyntax keywords
+    push!(keywords, "ccall")
+    sort!(keywords)
+end
 
 complete_keyword!(suggestions::Vector{Completion}, s::String) =
     complete_from_list!(suggestions, KeywordCompletion, sorted_keywords, s)
@@ -605,7 +610,7 @@ function CC.concrete_eval_eligible(interp::REPLInterpreter, @nospecialize(f),
     if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_stack_uncached(sv))
         neweffects = CC.Effects(result.effects; consistent=CC.ALWAYS_TRUE)
         result = CC.MethodCallResult(result.rt, result.exct, neweffects, result.edge,
-                                     result.edgecycle, result.edgelimited, result.volatile_inf_result)
+                                     result.edgecycle, result.edgelimited, result.call_result)
     end
     ret = @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter, f::Any,
                                             result::CC.MethodCallResult, arginfo::CC.ArgInfo,
@@ -993,6 +998,7 @@ end
 
 function completions(string::String, pos::Int, context_module::Module=Main, shift::Bool=true, hint::Bool=false)
     # filename needs to be string so macro can be evaluated
+    # TODO: JuliaSyntax version API here
     node = parseall(CursorNode, string, ignore_errors=true, keep_parens=true, filename="none")
     cur = @something seek_pos(node, pos) node
 
@@ -1021,8 +1027,8 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         if obj !== nothing
             # Skip leading whitespace inside brackets.
             i = @something findnext(!isspace, string, first(key)) nextind(string, last(key))
-            key = i:last(key)
-            s = string[intersect(key, 1:pos)]
+            key = intersect(i:last(key), 1:pos)
+            s = string[key]
             matches = find_dict_matches(obj, s)
             length(matches) == 1 && !closed && (matches[1] *= ']')
             if length(matches) > 0
@@ -1047,6 +1053,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     #  "~/example.txt TAB => "/home/user/example.txt"
     r, closed = find_str(cur)
     if r !== nothing
+        r = intersect(r, 1:pos)
         s = do_string_unescape(string[r])
         ret, success = complete_path_string(s, hint; string_escape=true,
                                             dirsep=Sys.iswindows() ? '\\' : '/')
@@ -1090,8 +1097,8 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         # Keyword argument completion:
         #   foo(ar TAB   => keyword arguments like `arg1=`
         elseif kind(cur) == K"Identifier"
-            r = char_range(cur)
-            s = string[intersect(r, 1:pos)]
+            r = intersect(char_range(cur), 1:pos)
+            s = string[r]
             # Return without adding more suggestions if kwargs only
             complete_keyword_argument!(suggestions, e, s, context_module, arg_pos; shift) &&
                 return sort_suggestions(), r, true
@@ -1129,7 +1136,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     if (n = find_parent(cur, K"importpath")) !== nothing
         # Given input lines like `using Foo|`, `import Foo, Bar|` and `using Foo.Bar, Baz, |`:
         # Let's look only for packages and modules we can reach from here
-        if prefix == nothing
+        if prefix === nothing
             complete_loading_candidates!(suggestions, s)
             return sort_suggestions(), r, true
         end
@@ -1379,9 +1386,10 @@ function complete_path_string(path, hint::Bool=false;
 
     # Expand '~' if the user hits TAB on a path ending in '/'.
     expanded && (hint || path != dir * "/") && (dir = contractuser(dir))
+    local dir_for_paths = dir
 
     map!(paths) do c::PathCompletion
-        p = joinpath_withsep(dir, c.path; dirsep)
+        p = joinpath_withsep(dir_for_paths, c.path; dirsep)
         PathCompletion(escape(p))
     end
     return sort!(paths, by=p->p.path), success
