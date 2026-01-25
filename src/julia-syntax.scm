@@ -5069,7 +5069,7 @@ f(x) = yt(x)
             ((break)
              (let ((labl (assq (cadr e) break-labels)))
                (if (not labl)
-                   (error "break or continue outside loop")
+                   (error (string "break expression is not in a loop named \"" (cadr e) "\""))
                    (begin
                      ;; Check if this is a valued break (break name val)
                      (if (length> e 2)

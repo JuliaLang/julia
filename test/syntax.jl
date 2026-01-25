@@ -215,6 +215,16 @@ macro test999_str(args...); args; end
 @test Meta.parse("(a=1, b=2)") == Expr(:tuple, Expr(:(=), :a, 1), Expr(:(=), :b, 2))
 @test_parseerror "(1 2)" # issue #15248
 
+@testset "break label error" begin
+    err = @test_throws Meta.ParseError Meta.parse("""
+        @label foo for i in 1:10
+            break bar
+        end
+    """)
+
+    @test occursin("break expression is not in a loop named \"bar\"", String(err))
+end
+
 @test Meta.parse("f(x;)") == Expr(:call, :f, Expr(:parameters), :x)
 
 @test Meta.parse("1 == 2|>3") == Expr(:call, :(==), 1, Expr(:call, :(|>), 2, 3))
