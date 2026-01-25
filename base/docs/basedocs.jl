@@ -1171,24 +1171,37 @@ kw"finally"
 
 """
     break
+    break name
+    break name expr
 
-Break out of a loop immediately.
+Break out of a loop immediately, evaluating and returning `expr`.
+
+If `expr` is not passed, `break` evaluates to `nothing`.
+
+If `name` is passed, break out of the loop named with the corresponding
+`@label name`. Otherwise, break out of the current, innermost loop.
+
+See also: [`@label`](@ref), [`continue`](@ref)
 
 # Examples
 ```jldoctest
-julia> i = 0
+julia> i = j = 0
 0
 
-julia> while true
+julia> @label outer_loop while true
            global i += 1
-           i > 5 && break
-           println(i)
+           for _ in 1:1000
+               global j += 1
+               i > 2 && break outer_loop "Done!"
+               println(i, " ", j)
+               j > 2 && break
+           end
        end
-1
-2
-3
-4
-5
+1 1
+1 2
+1 3
+2 4
+"Done!"
 ```
 
 Labeled break can be used to exit early from a labeled block created with [`@label`](@ref).
@@ -1212,18 +1225,27 @@ kw"break"
 
 """
     continue
+    continue name
 
-Skip the rest of the current loop iteration.
+Skip the rest of the current loop iteration of the loop named `name` by `@label`.
+If `label` is not passed, skip the rest of the current iteration of the
+innermost loop.
+
+See also: [`break`](@ref), [`@label`](@ref)
 
 # Examples
 ```jldoctest
-julia> for i = 1:6
-           iseven(i) && continue
-           println(i)
+julia> @label outer for i in 1:3
+           for j in 1:3
+               j == 2 && continue
+               i == 2 && continue outer
+               println(i, " ", j)
+           end
        end
-1
-3
-5
+1 1
+1 3
+3 1
+3 3
 ```
 
 Labeled continue can be used to skip to the next iteration of a labeled loop created with [`@label`](@ref).
