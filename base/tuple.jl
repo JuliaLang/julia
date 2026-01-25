@@ -161,7 +161,7 @@ end
 # this allows partial evaluation of bounded sequences of next() calls on tuples,
 # while reducing to plain next() for arbitrary iterables.
 indexed_iterate(t::Tuple, i::Int, state=1) = (@inline; (getfield(t, i), i+1))
-indexed_iterate(a::Array, i::Int, state=1) = (@inline; (a[i], i+1))
+indexed_iterate(a::Union{Array,Memory}, i::Int, state=1) = (@inline; (a[i], i+1))
 function indexed_iterate(I, i)
     x = iterate(I)
     x === nothing && throw(BoundsError(I, i))
@@ -207,8 +207,7 @@ julia> first, Base.rest(a, state)
 function rest end
 rest(t::Tuple) = t
 rest(t::Tuple, i::Int) = ntuple(x -> getfield(t, x+i-1), length(t)-i+1)
-rest(a::Array, i::Int=1) = a[i:end]
-rest(a::Core.SimpleVector, i::Int=1) = a[i:end]
+rest(a::Union{Array,Memory,Core.SimpleVector}, i::Int=1) = a[i:end]
 rest(itr, state...) = Iterators.rest(itr, state...)
 
 """
