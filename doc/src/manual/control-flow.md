@@ -1005,7 +1005,7 @@ into (typically indented) blocks.
 
 Such structured control flow is implemented using a lower-level instruction called a goto statement,
 which causes execution to jump directly from the goto statement statement to its destination,
-and coninue from there.
+and continue execution from there.
 
 Julia provides goto statements using the statement `@goto mylabel`, which jumps to a location
 marked by `@label mylabel`.
