@@ -531,6 +531,58 @@ negating the condition and placing the `println` call inside the `if` block. In 
 there is more code to be evaluated after the `continue`, and often there are multiple points from
 which one calls `continue`.
 
+When multiple loops are nested, `break` and `continue` will, by default, only break out of, or
+continue, the innermost loop:
+
+```jldoctest
+julia> for i in 1:3
+           for j in 1:2
+               println(j)
+               i > 1 && break
+           end
+       end
+1
+2
+1
+1
+```
+
+When working with nested loops, it is sometimes convenient to be able to use `break` or `continue`
+to target a different loop than the innermost one.
+This can be done by naming a code block with the `@label` macro, then using `continue name` or `break name`
+to target the named block:
+
+```jldoctest
+julia> @label outer for i in 1:3
+           for j in 1:2
+               i == 3 && break outer
+               println((i, j))
+           end
+       end
+(1, 1)
+(1, 2)
+(2, 1)
+(2, 2)
+```
+
+The combination of `@label` and named `break` can also be used to break out of code blocks other than loops.
+When doing so, the three argument `break name value` is particularly useful.
+This construct breaks out of the block named `name`, and makes the block evaluate to `value`.
+Three-valued `break` can often be used as a more structured alternative to [goto statements](@ref goto):
+
+```jldoctest
+julia> x = 3;
+
+julia> result = @label myblock begin
+           x > 5 && break myblock "big"
+           x > 0 && break myblock "positive"
+           "negative"
+       end;
+
+julia> result
+"positive"
+```
+
 Multiple nested `for` loops can be combined into a single outer loop, forming the cartesian product
 of its iterables:
 
@@ -946,7 +998,7 @@ Tasks are a control flow feature that allows computations to be suspended and re
 manner. We mention them here only for completeness; for a full discussion see
 [Asynchronous Programming](@ref man-asynchronous).
 
-## Low level control flow with goto
+## (Low level control flow with goto)[@id goto]
 The control flow constructs mentioned above, such as while- or for loop, and if/else statements
 are examples of *structured control flow*, where control is managed by structuring the source code
 into (typically indented) blocks.
