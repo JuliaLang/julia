@@ -945,3 +945,41 @@ julia> try
 Tasks are a control flow feature that allows computations to be suspended and resumed in a flexible
 manner. We mention them here only for completeness; for a full discussion see
 [Asynchronous Programming](@ref man-asynchronous).
+
+## Low level control flow with goto
+The control flow constructs mentioned above, such as while- or for loop, and if/else statements
+are examples of *structured control flow*, where control is managed by structuring the source code
+into (typically indented) blocks.
+
+Such structured control flow is implemented using a lower-level instruction called a goto statement,
+which causes execution to jump directly from the goto statement statement to its destination,
+and coninue from there.
+
+Julia provides goto statements using the statement `@goto mylabel`, which jumps to a location
+marked by `@label mylabel`.
+The `@label` statement, when executed, does nothing.
+
+For example, the following while loop:
+
+```julia
+while x < 10
+    x += 1
+end
+```
+
+May be expressed using `@label` and `@goto` pairs:
+
+```julia
+@label loop_start
+x < 10 || @goto loop_end
+x += 1
+@goto loop_start
+@label loop_end
+```
+
+Julia's `@goto` statements cannot jump to other top-level statements, e.g. from one function to another.
+
+Because structured control flow is easier to reason about than goto statements,
+goto statements should generally be avoided, and only reached for in the rare cases
+where the ordinary control flow mechanisms will not suffice.
+One such example is optimized state machines.
