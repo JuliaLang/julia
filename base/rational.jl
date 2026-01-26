@@ -244,21 +244,25 @@ julia> typeof(numerator(a))
 BigInt
 ```
 """
-function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
-    if tol < 0
-        throw(ArgumentError("negative tolerance $tol"))
-    end
-
+function rationalize(::Type{T}, x::AbstractFloat, tol::Real)::Rational{T} where T<:Integer
+    tol < 0 && throw(ArgumentError("negative tolerance $tol"))
     T<:Unsigned && x < 0 && __throw_negate_unsigned()
     isnan(x) && return T(x)//one(T)
     isinf(x) && return unsafe_rational(x < 0 ? -one(T) : one(T), zero(T))
+
+    r, a = modf(abs(x))
+    if r > tol && 1/r ≥ maxintfloat(x)
+        p = exponent(1/r) + 1
+        if p > precision(Float64)
+            return setprecision(() -> rationalize(T, BigFloat(x), tol), BigFloat, p)
+        end
+        x, a, r = Float64.((x, a, r))
+    end
 
     p,  q  = (x < 0 ? -one(T) : one(T)), zero(T)
     pp, qq = zero(T), one(T)
 
     x = abs(x)
-    a = trunc(x)
-    r = x-a
     y = one(x)
     tolx = oftype(x, tol)
     nt, t, tt = tolx, zero(tolx), tolx
