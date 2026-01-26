@@ -2,7 +2,7 @@
 
 #include "llvm-gc-interface-passes.h"
 
-#define DEBUG_TYPE "mmtk_final_gc_lowering"
+#define DEBUG_TYPE "final_gc_lowering"
 STATISTIC(GCAllocBytesCount, "Number of lowered GCAllocBytesFunc intrinsics");
 
 Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
@@ -120,7 +120,6 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 
 
 void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
-    State S(F);
     auto parent = target->getArgOperand(0);
     IRBuilder<> builder(target);
     builder.SetCurrentDebugLocation(target->getDebugLoc());

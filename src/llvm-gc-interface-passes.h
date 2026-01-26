@@ -416,7 +416,7 @@ private:
     bool shouldRunFinalGC();
 };
 
-// These are now used in LateLower and FinalLower
+// These are used by LateLower and FinalLower
 
 // Size of T is assumed to be `sizeof(void*)`
 inline Value *EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size, Value *V)
