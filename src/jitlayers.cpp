@@ -872,10 +872,13 @@ public:
     {
         auto &ES = R->getExecutionSession();
 
-        /* {
+        {
+            jl_task_t *ct = jl_current_task;
             auto Lock = Out.module.getContext().getLock();
-            optimizeDLSyms(*Out.module.getModuleUnlocked()); // May safepoint
-        } */
+            uint8_t state = jl_gc_unsafe_enter(ct->ptls);
+            JIT.optimizeDLSyms(*Out.module.getModuleUnlocked()); // May safepoint
+            jl_gc_unsafe_leave(ct->ptls, state);
+        }
         uint64_t start_time = jl_hrtime();
         auto Obj = JIT.compileModule(JIT.optimizeModule(std::move(Out.module)));
         uint64_t end_time = jl_hrtime();
