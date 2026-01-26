@@ -1370,14 +1370,9 @@ if Sys.islinux() && Sys.ARCH in (:i686, :x86_64) # rr is only available on these
         success, out, err = readchomperrors(cmd)
         # rr cannot read perf counters if running in containers, allow it to fail in this case
         allowed_failure = occursin("Unable to open performance counter", err)
-        if !success && !allowed_failure
-            println("---- Command failed: ")
-            show(cmd)
-            println("stdout:\n", out)
-            println("stderr:\n", err)
-            println("----")
+        @testset let cmd=cmd, stdout=out, stderr=err
+            @test success || allowed_failure
         end
-        @test success || allowed_failure
     end
 end
 
