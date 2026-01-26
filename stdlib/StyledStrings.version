@@ -1,4 +1,4 @@
-STYLEDSTRINGS_BRANCH = main
-STYLEDSTRINGS_SHA1 = 68bf7b1f83f334391dc05fda34f48267e04e2bd0
+STYLEDSTRINGS_BRANCH = release-1.13
+STYLEDSTRINGS_SHA1 = 24cd74a309a29dd0a240884c1ced9fef7f06ba64
 STYLEDSTRINGS_GIT_URL := https://github.com/JuliaLang/StyledStrings.jl.git
 STYLEDSTRINGS_TAR_URL = https://api.github.com/repos/JuliaLang/StyledStrings.jl/tarball/$1
