@@ -245,7 +245,7 @@ BigInt
 ```
 """
 function rationalize(::Type{T}, x::AbstractFloat, tol::Real)::Rational{T} where T<:Integer
-    tol < 0 && throw(ArgumentError("negative tolerance $tol"))
+    tol < 0 && throw(ArgumentError("Tolerance can not be negative. tol=$tol"))
     T<:Unsigned && x < 0 && __throw_negate_unsigned()
     isnan(x) && return T(x)//one(T)
     isinf(x) && return unsafe_rational(x < 0 ? -one(T) : one(T), zero(T))
