@@ -778,19 +778,18 @@ struct ImmutableDict{K,V} <: AbstractDict{K,V}
 end
 
 """
-    ImmutableDict(key1=>value1, key2=>value2, ...)
-
-`ImmutableDict{K,V}()`
-
 `ImmutableDict` is a dictionary implemented as an immutable linked
 list, used for small mappings with a few entries where the overhead
 of accessing a hash table is higher than that of a linear search of a
 linked list.
 
+    ImmutableDict(key1=>value1, key2=>value2, ...)
 
 `Base.ImmutableDict(key1=>value1, key2=>value2, ...)` constructs a linked
 list; the first argument sets the type of the keys and values. Keys
 are compared with `isequal`.
+
+    ImmutableDict{K,V}()
 
 `Base.ImmutableDict{K,V}()` constructs an empty list with keys of type
 K and values of type V.
