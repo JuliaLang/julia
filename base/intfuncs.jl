@@ -913,6 +913,20 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
     return str
 end
 
+"""
+turns UInt with 8 or fewer decimal digits to an NTuple{UInt8} with each entry is the character of the digit
+julia> Char.(to_bcd8(UInt(12345678)))
+('1', '2', '3', '4', '5', '6', '7', '8')
+found in https://github.com/vitaut/zmij/pull/7#issuecomment-3671493075
+"""
+function to_bcd8(abcdefgh::UInt32)
+    abcdefgh = UInt64(abcdefgh)
+    abcd_efgh = abcdefgh + (0x100000000 - 10000) * ((abcdefgh * 0x68db8bb) >> 40)
+    ab_cd_ef_gh = abcd_efgh + (0x10000 - 100) * (((abcd_efgh * 0x147b) >> 19) & 0x7f0000007f)
+    a_b_c_d_e_f_g_h = ab_cd_ef_gh + (0x100 - 10) * (((ab_cd_ef_gh * 0x67) >> 10) & 0xf000f000f000f) + 0x3030303030303030
+    return reinterpret(NTuple{8, UInt8}, bswap(a_b_c_d_e_f_g_h))
+end
+
 # 2-digit decimal characters ("00":"99")
 const _dec_d100 = UInt16[
 # generating expression: UInt16[(0x30 + i % 10) << 0x8 + (0x30 + i ÷ 10) for i = 0:99]
@@ -946,15 +960,12 @@ function append_c_digits(olength::Int, digits::Unsigned, buf, pos::Int)
     return pos + olength
 end
 
-function append_nine_digits(digits::Unsigned, buf, pos::Int)
-    if digits == 0
-        for _ = 1:9
-            @inbounds buf[pos] = UInt8('0')
-            pos += 1
-        end
-        return pos
+function append_eight_digits(digits::UInt32, buf, pos::Int)
+    digits = to_bcd8(digits)
+    for i = 1:8
+        @inbounds buf[pos] = digits[i]
+        pos += 1
     end
-    return @inline append_c_digits(9, digits, buf, pos) # force loop-unrolling on the length
 end
 
 function append_c_digits_fast(olength::Int, digits::Unsigned, buf, pos::Int)
@@ -962,15 +973,15 @@ function append_c_digits_fast(olength::Int, digits::Unsigned, buf, pos::Int)
     # n.b. olength may be larger than required to print all of `digits` (and will be padded
     # with zeros), but the printed number will be undefined if it is smaller, and may include
     # bits of both the high and low bytes.
-    maxpow10 = 0x3b9aca00 # 10e9 as UInt32
-    while i > 9 && digits > typemax(UInt)
+    maxpow10 = 0x05f5e100 # 10^8 as UInt32
+    while i >= 8
         # do everything in cheap math chunks, using the processor's native math size
         d, c = divrem(digits, maxpow10)
         digits = oftype(digits, d)
-        append_nine_digits(c % UInt32, buf, pos + i - 9)
-        i -= 9
+        append_eight_digits(c % UInt32, buf, pos + i - 8)
+        i -= 8
     end
-    append_c_digits(i, digits % UInt, buf, pos)
+    i != 0 && append_c_digits(i, digits % UInt, buf, pos)
     return pos + olength
 end
 
