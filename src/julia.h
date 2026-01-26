@@ -992,10 +992,20 @@ typedef struct {
     XX(addrspacecore) \
     XX(intrinsic) \
     /* AST objects */ \
-    /* XX(argument) */ \
+    XX(argument) \
     /* XX(newvarnode) */ \
     XX(slotnumber) \
     XX(ssavalue) \
+    XX(gotoifnot) \
+    XX(returnnode) \
+    XX(enternode) \
+    XX(pinode) \
+    XX(phinode) \
+    XX(phicnode) \
+    XX(upsilonnode) \
+    XX(globalref) \
+    XX(gotonode) \
+    XX(quotenode) \
     /* end of JL_SMALL_TYPEOF */
 enum jl_small_typeof_tags {
     jl_null_tag = 0,
@@ -1574,17 +1584,17 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_expr(v)        jl_typetagis(v,jl_expr_type)
 #define jl_is_binding(v)     jl_typetagis(v,jl_binding_type)
 #define jl_is_binding_partition(v) jl_typetagis(v,jl_binding_partition_type)
-#define jl_is_globalref(v)   jl_typetagis(v,jl_globalref_type)
-#define jl_is_gotonode(v)    jl_typetagis(v,jl_gotonode_type)
-#define jl_is_gotoifnot(v)   jl_typetagis(v,jl_gotoifnot_type)
-#define jl_is_returnnode(v)  jl_typetagis(v,jl_returnnode_type)
-#define jl_is_enternode(v)   jl_typetagis(v,jl_enternode_type)
-#define jl_is_argument(v)    jl_typetagis(v,jl_argument_type)
-#define jl_is_pinode(v)      jl_typetagis(v,jl_pinode_type)
-#define jl_is_phinode(v)     jl_typetagis(v,jl_phinode_type)
-#define jl_is_phicnode(v)    jl_typetagis(v,jl_phicnode_type)
-#define jl_is_upsilonnode(v) jl_typetagis(v,jl_upsilonnode_type)
-#define jl_is_quotenode(v)   jl_typetagis(v,jl_quotenode_type)
+#define jl_is_globalref(v)   jl_typetagis(v,jl_globalref_tag<<4)
+#define jl_is_gotonode(v)    jl_typetagis(v,jl_gotonode_tag<<4)
+#define jl_is_gotoifnot(v)   jl_typetagis(v,jl_gotoifnot_tag<<4)
+#define jl_is_returnnode(v)  jl_typetagis(v,jl_returnnode_tag<<4)
+#define jl_is_enternode(v)   jl_typetagis(v,jl_enternode_tag<<4)
+#define jl_is_argument(v)    jl_typetagis(v,jl_argument_tag<<4)
+#define jl_is_pinode(v)      jl_typetagis(v,jl_pinode_tag<<4)
+#define jl_is_phinode(v)     jl_typetagis(v,jl_phinode_tag<<4)
+#define jl_is_phicnode(v)    jl_typetagis(v,jl_phicnode_tag<<4)
+#define jl_is_upsilonnode(v) jl_typetagis(v,jl_upsilonnode_tag<<4)
+#define jl_is_quotenode(v)   jl_typetagis(v,jl_quotenode_tag<<4)
 #define jl_is_newvarnode(v)  jl_typetagis(v,jl_newvarnode_type)
 #define jl_is_linenode(v)    jl_typetagis(v,jl_linenumbernode_type)
 #define jl_is_linenumbernode(v) jl_typetagis(v,jl_linenumbernode_type)
