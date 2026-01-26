@@ -998,7 +998,7 @@ Tasks are a control flow feature that allows computations to be suspended and re
 manner. We mention them here only for completeness; for a full discussion see
 [Asynchronous Programming](@ref man-asynchronous).
 
-## (Low level control flow with goto)[@id goto]
+## [Low level control flow with goto](@id goto)
 The control flow constructs mentioned above, such as while loops, for loops, and if/else statements
 are examples of *structured control flow*, where control is managed by structuring source code
 into (typically indented) blocks.
