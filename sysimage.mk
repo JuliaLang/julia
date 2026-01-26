@@ -88,12 +88,12 @@ BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl -and -not -name s
              $(JULIAHOME)/Compiler/src/verifytrim.jl
 STDLIB_SRCS := $(JULIAHOME)/base/sysimg.jl $(SYSIMG_STDLIBS_SRCS)
 RELBUILDROOT := $(call rel_path,$(JULIAHOME)/base,$(BUILDROOT)/base)/ # <-- make sure this always has a trailing slash
-RELDATADIR := $(call rel_path,$(JULIAHOME)/base,$(build_datarootdir))/ # <-- make sure this always has a trailing slash
+RELPRIVATE_LIBDIR := $(call rel_path,$(JULIAHOME)/base,$(build_private_libdir))/ # <-- make sure this always has a trailing slash
 
 $(build_private_libdir)/basecompiler.ji: $(COMPILER_SRCS)
 	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
 	JULIA_NUM_THREADS=1 $(call spawn,$(JULIA_EXECUTABLE)) $(HEAPLIM) --output-ji $(call cygpath_w,$@).tmp \
-		--startup-file=no --warn-overwrite=yes --depwarn=error -g$(BOOTSTRAP_DEBUG_LEVEL) -O1 Base_compiler.jl --buildroot $(RELBUILDROOT) --dataroot $(RELDATADIR))
+		--startup-file=no --warn-overwrite=yes --depwarn=error -g$(BOOTSTRAP_DEBUG_LEVEL) -O1 Base_compiler.jl --buildroot $(RELBUILDROOT) --private-libdir $(RELPRIVATE_LIBDIR))
 	@mv $@.tmp $@
 
 define base_builder
@@ -102,7 +102,7 @@ $$(build_private_libdir)/basecompiler$1-o.a $$(build_private_libdir)/basecompile
 	WINEPATH="$$(call cygpath_w,$$(build_bindir));$$$$WINEPATH" \
 	JULIA_NUM_THREADS=1 \
 		$$(call spawn, $3) $2 -C "$$(JULIA_CPU_TARGET)" $$(HEAPLIM) --output-$$* $$(call cygpath_w,$$@).tmp \
-		--startup-file=no --warn-overwrite=yes --depwarn=error -g$$(BOOTSTRAP_DEBUG_LEVEL) Base_compiler.jl --buildroot $$(RELBUILDROOT) --dataroot $$(RELDATADIR))
+		--startup-file=no --warn-overwrite=yes --depwarn=error -g$$(BOOTSTRAP_DEBUG_LEVEL) Base_compiler.jl --buildroot $$(RELBUILDROOT) --private-libdir $$(RELPRIVATE_LIBDIR))
 	@mv $$@.tmp $$@
 $$(build_private_libdir)/sysbase$1.ji: $$(build_private_libdir)/basecompiler$1.$$(SHLIB_EXT) $$(JULIAHOME)/VERSION $$(BASE_SRCS) $$(STDLIB_SRCS)
 	@$$(call PRINT_JULIA, cd $$(JULIAHOME)/base && \
@@ -110,7 +110,7 @@ $$(build_private_libdir)/sysbase$1.ji: $$(build_private_libdir)/basecompiler$1.$
 	     WINEPATH="$$(call cygpath_w,$$(build_bindir));$$$$WINEPATH" \
 		 JULIA_NUM_THREADS=1 \
 			$$(call spawn, $$(JULIA_EXECUTABLE)) -g1 $2 -C "$$(JULIA_CPU_TARGET)" $$(HEAPLIM) --output-ji $$(call cygpath_w,$$@).tmp $$(JULIA_SYSIMG_BUILD_FLAGS) \
-			--startup-file=no --warn-overwrite=yes --depwarn=error --sysimage $$(call cygpath_w,$$<) sysimg.jl --buildroot $$(RELBUILDROOT) --dataroot $$(RELDATADIR); then \
+			--startup-file=no --warn-overwrite=yes --depwarn=error --sysimage $$(call cygpath_w,$$<) sysimg.jl --buildroot $$(RELBUILDROOT) --private-libdir $$(RELPRIVATE_LIBDIR); then \
 		echo '*** This error might be fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***'; \
 		false; \
 	fi )
@@ -125,7 +125,7 @@ $$(build_private_libdir)/sysbase$1-o.a $$(build_private_libdir)/sysbase$1-bc.a :
 	     WINEPATH="$$(call cygpath_w,$$(build_bindir));$$$$WINEPATH" \
 		 JULIA_NUM_THREADS=1 \
 			$$(call spawn, $$(JULIA_EXECUTABLE)) -g1 $2 -C "$$(JULIA_CPU_TARGET)" $$(HEAPLIM) --output-$$* $$(call cygpath_w,$$@).tmp $$(JULIA_SYSIMG_BUILD_FLAGS) \
-			--startup-file=no --warn-overwrite=yes --depwarn=error --sysimage $$(call cygpath_w,$$<) sysimg.jl --buildroot $$(RELBUILDROOT) --dataroot $$(RELDATADIR); then \
+			--startup-file=no --warn-overwrite=yes --depwarn=error --sysimage $$(call cygpath_w,$$<) sysimg.jl --buildroot $$(RELBUILDROOT) --private-libdir $$(RELPRIVATE_LIBDIR); then \
 		echo '*** This error might be fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***'; \
 		false; \
 	fi )
