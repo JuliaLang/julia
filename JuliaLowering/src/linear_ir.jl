@@ -308,8 +308,16 @@ function emit_break(ctx, ex)
     name = ex[1].name_val
     target = get(ctx.break_targets, name, nothing)
     if isnothing(target)
-        ty = name == "loop_exit" ? "break" : "continue"
-        throw(LoweringError(ex, "$ty must be used inside a `while` or `for` loop"))
+        if name == "loop_exit"
+            throw(LoweringError(ex, "`break` must be used inside a `while` or `for` loop"))
+        elseif name == "loop_cont"
+            throw(LoweringError(ex, "`continue` must be used inside a `while` or `for` loop"))
+        elseif endswith(name, "#cont")
+            label = name[1:end-5]
+            throw(LoweringError(ex, "`continue $label` is not inside a `@label $label` loop"))
+        else
+            throw(LoweringError(ex, "`break $name` is not inside a `@label $name` block"))
+        end
     end
     # Handle valued break (break name val)
     if numchildren(ex) >= 2
