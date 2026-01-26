@@ -4459,8 +4459,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             # Convert Symbol (from Expr conversion) to symbolic_label
             if label_kind == K"Symbol"
                 label = @ast ctx label label.name_val::K"symbolic_label"
-            elseif !(label_kind == K"Identifier" || label_kind == K"symbolic_label" ||
-                     is_contextual_keyword(label_kind))
+            elseif !(label_kind == K"Identifier" || label_kind == K"Placeholder" ||
+                     label_kind == K"symbolic_label" || is_contextual_keyword(label_kind))
                 throw(LoweringError(label, "Invalid break label: expected identifier"))
             end
             if nc == 2
