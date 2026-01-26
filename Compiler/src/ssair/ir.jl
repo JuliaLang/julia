@@ -1382,7 +1382,6 @@ function kill_edge!(ir::IRCode, from::Int, to::Int, callback=nothing)
     kill_edge!(ir.cfg.blocks, from, to, callback)
 end
 
-# N.B.: from and to are non-renamed indices
 @inline function compacted_stmt_range(compact::IncrementalCompact, bb::BasicBlock, active_bb::Int, to::Int)
     to == active_bb && return StmtRange(first(bb.stmts), compact.result_idx - 1)
     return bb.stmts
@@ -1393,7 +1392,7 @@ end
 
 Kill a CFG edge while compacting a terminator in `active_bb`. Assumes all PhiNode
 block statements in `to` have already been processed, so the active BB may only
-scan the compacted prefix when `to == active_bb`.
+scan the compacted prefix when `to == active_bb`. `from` and `to` are non-renamed indices.
 """
 function kill_edge_terminator!(compact::IncrementalCompact, active_bb::Int, from::Int, to::Int)
     # Note: We recursively kill as many edges as are obviously dead.
