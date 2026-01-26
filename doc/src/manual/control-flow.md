@@ -538,7 +538,7 @@ continue, the innermost loop:
 julia> for i in 1:3
            for j in 1:2
                println(j)
-               i > 1 && break
+               i > 1 && break # break `j` loop only
            end
        end
 1
@@ -565,7 +565,7 @@ julia> @label outer for i in 1:3
 (2, 2)
 ```
 
-The combination of `@label` and named `break` can also be used to break out of code blocks other than loops.
+The combination of `@label` and named `break` can be used to break out of several types of code blocks, not only loops.
 When doing so, the three argument `break name value` is particularly useful.
 This construct breaks out of the block named `name`, and makes the block evaluate to `value`.
 Three-valued `break` can often be used as a more structured alternative to [goto statements](@ref goto):
@@ -999,15 +999,15 @@ manner. We mention them here only for completeness; for a full discussion see
 [Asynchronous Programming](@ref man-asynchronous).
 
 ## (Low level control flow with goto)[@id goto]
-The control flow constructs mentioned above, such as while- or for loop, and if/else statements
-are examples of *structured control flow*, where control is managed by structuring the source code
+The control flow constructs mentioned above, such as while loops, for loops, and if/else statements
+are examples of *structured control flow*, where control is managed by structuring source code
 into (typically indented) blocks.
 
 Such structured control flow is implemented using a lower-level instruction called a goto statement,
 which causes execution to jump directly from the goto statement statement to its destination,
 and continue execution from there.
 
-Julia provides goto statements using the statement `@goto mylabel`, which jumps to a location
+Julia provides goto statements with the statement `@goto mylabel`, which jumps to a location
 marked by `@label mylabel`.
 The `@label` statement, when executed, does nothing.
 
@@ -1019,7 +1019,7 @@ while x < 10
 end
 ```
 
-May be expressed using `@label` and `@goto` pairs:
+May be expressed using `@label` and conditional `@goto`:
 
 ```julia
 @label loop_start
