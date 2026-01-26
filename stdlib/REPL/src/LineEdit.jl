@@ -2424,6 +2424,8 @@ move_input_end(s::Union{MIState,ModeState}) = (move_input_end(buffer(s)); nothin
 
 function move_line_start(s::MIState)
     set_action!(s, :move_line_start)
+    s.key_repeats = 0
+    empty!(s.previous_key)
     buf = buffer(s)
     curpos = position(buf)
     curpos == 0 && return
