@@ -1171,36 +1171,55 @@ kw"finally"
 
 """
     break
+
+Break out of the current, innermost loop immediately.
+
     break name
     break name expr
 
-Break out of a loop immediately, evaluating and returning `expr`.
+Break out of the enclosing code block named `@label name`,
+and make the code block evaluate to `expr`.
 
-If `expr` is not passed, `break` evaluates to `nothing`.
-
-If `name` is passed, break out of the loop named with the corresponding
-`@label name`. Otherwise, break out of the current, innermost loop.
+If `expr` is not passed, `break name` evaluates to `nothing`.
 
 See also: [`@label`](@ref), [`continue`](@ref)
 
+!!! compat "Julia 1.14"
+    Two-argument and three-argument `break` was added in Julia 1.14.
+
 # Examples
 ```jldoctest
-julia> i = j = 0
-0
+julia> i = 0;
 
-julia> @label outer_loop while true
+julia> while true
+           global i += 1
+           i > 3 && break
+           println(i)
+       end
+1
+2
+3
+
+julia> @label someblock begin
+           i > 2 && break someblock "Broke out"
+           "Did not break out"
+       end
+"Broke out"
+
+julia> i = j = 0;
+
+julia> result = @label outer_loop while true
            global i += 1
            for _ in 1:1000
                global j += 1
                i > 2 && break outer_loop "Done!"
-               println(i, " ", j)
+               print(i, ',', j, '-')
                j > 2 && break
            end
-       end
-1 1
-1 2
-1 3
-2 4
+       end;
+1,1-1,2-1,3-2,4-
+
+julia> result
 "Done!"
 ```
 
@@ -1232,6 +1251,9 @@ If `label` is not passed, skip the rest of the current iteration of the
 innermost loop.
 
 See also: [`break`](@ref), [`@label`](@ref)
+
+!!! compat "Julia 1.14"
+    Two-argument `continue` was added in Julia 1.14.
 
 # Examples
 ```jldoctest
