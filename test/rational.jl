@@ -39,6 +39,7 @@ using Test
     @test @inferred(rationalize(Int8, 1000//3)) === Rational{Int8}(1//0)
     @test @inferred(rationalize(Int8, 1000)) === Rational{Int8}(1//0)
     @test_throws OverflowError rationalize(UInt, -2.0)
+    @test_throws OverflowError rationalize(UInt, -2)
     @test_throws ArgumentError rationalize(Int, big(3.0), -1.)
     # issue 26823
     @test_throws InexactError rationalize(Int, NaN)

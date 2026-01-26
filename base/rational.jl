@@ -327,6 +327,7 @@ function rationalize(::Type{T}, x::Rational, tol::Real) where {T<:Integer}
 end
 rationalize(x::Integer; kvs...) = Rational(x)
 function rationalize(::Type{T}, x::Integer; kvs...) where {T<:Integer}
+    T<:Unsigned && x < 0 && __throw_negate_unsigned()
     if Base.hastypemax(T) # BigInt doesn't
         x < typemin(T) && return unsafe_rational(-one(T), zero(T))
         x > typemax(T) && return unsafe_rational(one(T), zero(T))
