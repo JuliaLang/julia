@@ -244,7 +244,7 @@ julia> typeof(numerator(a))
 BigInt
 ```
 """
-function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) where T<:Integer
+function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
     if tol < 0
         throw(ArgumentError("negative tolerance $tol"))
     end
@@ -309,7 +309,18 @@ rationalize(x::Real; kvs...) = rationalize(Int, x; kvs...)
 rationalize(::Type{T}, x::Complex; kvs...) where {T<:Integer} = Complex(rationalize(T, x.re; kvs...), rationalize(T, x.im; kvs...))
 rationalize(x::Complex; kvs...) = Complex(rationalize(Int, x.re; kvs...), rationalize(Int, x.im; kvs...))
 rationalize(::Type{T}, x::Rational; tol::Real = 0) where {T<:Integer} = rationalize(T, x, tol)
-rationalize(x::Rational; kvs...) = x
+rationalize(x::Rational{T}; kvs...) where {T<:Integer} = rationalize(T, x; kvs...)
+function rationalize(::Type{T}, x::Rational, tol::Real) where {T<:Integer}
+    T<:Unsigned && x < 0 && __throw_negate_unsigned()
+    if 0 ≤ tol ≤ eps(float(x))
+        try
+            return Rational{T}(x)
+        catch e
+            isa(e,InexactError) || rethrow()
+        end
+    end
+    return rationalize(T, float(x), tol)
+end
 rationalize(x::Integer; kvs...) = Rational(x)
 function rationalize(::Type{T}, x::Integer; kvs...) where {T<:Integer}
     if Base.hastypemax(T) # BigInt doesn't
