@@ -116,6 +116,15 @@ void jl_get_llvm_gvs_impl(void *native_code, arraylist_t *gvs)
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN
+void jl_get_llvm_gvs_globals_impl(void *native_code, arraylist_t *gvs)
+{
+    // map a memory location (jl_value_t or jl_binding_t) to a GlobalVariable
+    jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
+    arraylist_grow(gvs, data->jl_sysimg_gvars.size());
+    memcpy(gvs->items, data->jl_sysimg_gvars.data(), gvs->len * sizeof(void*));
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN
 void jl_get_llvm_external_fns_impl(void *native_code, arraylist_t *external_fns)
 {
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
@@ -715,7 +724,6 @@ static FunctionInfo getFunctionWeight(const Function &F)
 }
 
 struct ModuleInfo {
-    Triple triple;
     size_t globals;
     size_t funcs;
     size_t bbs;
@@ -726,7 +734,6 @@ struct ModuleInfo {
 
 ModuleInfo compute_module_info(Module &M) {
     ModuleInfo info;
-    info.triple = Triple(M.getTargetTriple());
     info.globals = 0;
     info.funcs = 0;
     info.bbs = 0;
@@ -1519,12 +1526,6 @@ static unsigned compute_image_thread_count(const ModuleInfo &info) {
 #endif
     if (jl_is_timing_passes) // LLVM isn't thread safe when timing the passes https://github.com/llvm/llvm-project/issues/44417
         return 1;
-    // COFF has limits on external symbols (even hidden) up to 65536. We reserve the last few
-    // for any of our other symbols that we insert during compilation.
-    if (info.triple.isOSBinFormatCOFF() && info.globals > 64000) {
-        LLVM_DEBUG(dbgs() << "COFF is restricted to a single thread for large images\n");
-        return 1;
-    }
     // This is not overridable because empty modules do occasionally appear, but they'll be very small and thus exit early to
     // known easy behavior. Plus they really don't warrant multiple threads
     if (info.weight < 1000) {
