@@ -107,8 +107,6 @@ function est_to_expr(st::SyntaxTree)
     k = kind(st)
     return if k === K"core" && numchildren(st) === 0 && st.name_val === "nothing"
         nothing
-    elseif k === K"core"
-        throw(LoweringError(st, "core!"))
     elseif is_leaf(st) && hasattr(st, :name_val)
         n = Symbol(st.name_val)
         hasattr(st, :scope_layer) ? Expr(:scope_layer, n, st.scope_layer) : n
