@@ -251,7 +251,7 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real)::Rational{T} where 
     isinf(x) && return unsafe_rational(x < 0 ? -one(T) : one(T), zero(T))
 
     r, a = modf(abs(x))
-    if r > tol && 1/r ≥ maxintfloat(x)
+    if r > tol && r ≤ inv(maxintfloat(x))
         p = exponent(1/r) + 1
         if p > precision(Float64)
             return setprecision(() -> rationalize(T, BigFloat(x), tol), BigFloat, p)
