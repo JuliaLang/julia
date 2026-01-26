@@ -79,7 +79,8 @@ been macroexpanded.
 Base.@kwdef struct Validation1Context <: ValidationContext
     toplevel::Bool=true     # not in any lambda body
     in_gscope::Bool=true    # not in any scope; implies toplevel
-    in_loop::Bool=false     # break/continue allowed
+    in_loop::Bool=false     # any break/continue allowed
+    in_symblock::Bool=false # labeled break allowed
     inner_cond::Bool=false  # methods not allowed in control flow in an outer
                             # function.  true in if (args 2-3), &&, || (arg 2+)
     return_ok::Bool=true    # yes usually (even outside of functions), no in
@@ -101,13 +102,14 @@ function with(vcx::Validation1Context;
               toplevel     =vcx.toplevel,
               in_gscope    =vcx.in_gscope,
               in_loop      =vcx.in_loop,
+              in_symblock  =vcx.in_symblock,
               inner_cond   =vcx.inner_cond,
               return_ok    =vcx.return_ok,
               in_param_t   =vcx.in_param_t,
               unexpanded   =vcx.unexpanded)
     Validation1Context(
-        toplevel, in_gscope, in_loop, inner_cond, return_ok, in_param_t,
-        unexpanded)
+        toplevel, in_gscope, in_loop, in_symblock, inner_cond, return_ok,
+        in_param_t, unexpanded)
 end
 
 """
@@ -189,10 +191,13 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         @fail(st, "`return` not allowed inside comprehension or generator")
     [K"return"] -> vcx.return_ok ? pass() :
         @fail(st, "`return` not allowed inside comprehension or generator")
-    [K"continue"] -> vcx.in_loop ? pass() :
-        @fail(st, "`continue` outside of a `while` or `for` loop")
-    [K"break"] -> vcx.in_loop ? pass() :
-        @fail(st, "`break` outside of a `while` or `for` loop")
+    ([K"continue"], when=vcx.in_loop) -> pass()
+    ([K"continue" lab], when=vcx.in_loop) -> vst1_ident(vcx, lab; lhs=true)
+    ([K"break"], when=vcx.in_loop) -> pass()
+    ([K"break" lab], when=vcx.in_loop||vcx.in_symblock) ->
+        vst1_ident(vcx, lab; lhs=true)
+    ([K"break" lab x], when=vcx.in_loop||vcx.in_symblock) ->
+        vst1_ident(vcx, lab; lhs=true) & vst1(vcx, x)
     [K"for" [K"block" is...] body] ->
         all(vst1_iter, vcx, is) &
         vst1(with(vcx; in_loop=true, in_gscope=false), body)
@@ -262,9 +267,10 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"toplevel" xs...] -> pass() # this will be validated when we lower it
     [K"opaque_closure" argt lb ub bool lam] ->
         all(vst1, vcx, [argt, lb, ub, bool]) & vst1_lam(vcx, lam)
-    [K"symboliclabel" [K"Identifier"]] -> pass()
-    [K"symbolicgoto" [K"Identifier"]] -> pass()
-    [K"symbolic_block" x y] -> pass() # TODO
+    [K"symboliclabel" lab] -> vst1_ident(vcx, lab; lhs=true)
+    [K"symbolicgoto" lab] -> vst1_ident(vcx, lab; lhs=true)
+    [K"symbolicblock" lab body] ->
+        vst1_ident(vcx, lab; lhs=true) & vst1(with(vcx; in_symblock=true), body)
     [K"gc_preserve" x ids...] -> vst1(vcx, x) & all(vst1_ident, vcx, ids)
     [K"gc_preserve_begin" ids...] -> all(vst1_ident, vcx, ids)
     [K"gc_preserve_end" ids...] -> all(vst1_ident, vcx, ids)
@@ -321,6 +327,12 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"unknown_head" _...] ->
         @fail(st, string("unknown expr head: ", st.name_val))
     [K"$" x] -> @fail(st, raw"`$` expression outside string or quote")
+    [K"continue" _...] ->
+        @fail(st, "`continue` outside of a `while` or `for` loop")
+    [K"break"] ->
+        @fail(st, "unlabeled `break` outside of a `while` or `for` loop")
+    [K"break" _...] ->
+        @fail(st, "labeled `break` outside of loop or symbolic block")
     _ -> let top_vr = vst1_toplevel_only(vcx, st)
         if vcx.toplevel
             top_vr

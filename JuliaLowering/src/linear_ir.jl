@@ -29,7 +29,7 @@ struct JumpTarget{Attrs}
     label::SyntaxTree{Attrs}
     handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
     catch_token_stack::SyntaxList{Attrs, Vector{NodeId}}
-    result_var::Union{SyntaxTree{Attrs}, Nothing}  # for symbolic_block valued breaks
+    result_var::Union{SyntaxTree{Attrs}, Nothing}  # for symbolicblock valued breaks
 end
 
 function JumpTarget(label::SyntaxTree{Attrs}, ctx, result_var=nothing) where {Attrs}
@@ -714,7 +714,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         if needs_value
             compile(ctx, nothing_(ctx, ex), needs_value, in_tail_pos)
         end
-    elseif k == K"symbolic_block"
+    elseif k == K"symbolicblock"
         name = ex[1].name_val
         if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
             throw(LoweringError(ex, "Label `$name` defined multiple times"))

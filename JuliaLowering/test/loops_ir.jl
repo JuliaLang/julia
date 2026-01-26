@@ -119,7 +119,7 @@ break
 #---------------------
 LoweringError:
 break
-└───┘ ── `break` outside of a `while` or `for` loop
+└───┘ ── unlabeled `break` outside of a `while` or `for` loop
 
 ########################################
 # Error: continue outside for/while

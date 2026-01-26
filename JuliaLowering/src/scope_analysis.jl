@@ -220,7 +220,7 @@ function _find_scope_decls!(ctx, scope, ex)
             k === K"constdecl" && numchildren(ex) == 2)
             _find_scope_decls!(ctx, scope, ex[2])
         end
-    elseif k === K"symbolic_block"
+    elseif k === K"symbolicblock"
         # Only recurse into the body (second child), not the label name (first child)
         _find_scope_decls!(ctx, scope, ex[2])
     elseif k === K"break" && numchildren(ex) >= 2
@@ -519,9 +519,9 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         @assert numchildren(ex) === 2
         assignment_kind = bk == :global ? K"constdecl" : K"="
         @ast ctx ex _resolve_scopes(ctx, [assignment_kind ex[1] ex[2]], scope)
-    elseif k == K"symbolic_block"
+    elseif k == K"symbolicblock"
         # Only recurse into the body (second child), not the label name (first child)
-        @ast ctx ex [K"symbolic_block" ex[1] _resolve_scopes(ctx, ex[2], scope)]
+        @ast ctx ex [K"symbolicblock" ex[1] _resolve_scopes(ctx, ex[2], scope)]
     else
         mapchildren(e->_resolve_scopes(ctx, e, scope), ctx, ex)
     end
@@ -696,7 +696,7 @@ function analyze_variables!(ctx, ex)
             ctx.graph, ctx.bindings, ctx.mod, ctx.scopes, lambda_bindings,
             ctx.method_def_stack, ctx.closure_bindings)
         foreach(e->analyze_variables!(ctx2, e), ex[3:end]) # body & return type
-    elseif k == K"symbolic_block"
+    elseif k == K"symbolicblock"
         # Only analyze the body (second child), not the label name (first child)
         analyze_variables!(ctx, ex[2])
     else

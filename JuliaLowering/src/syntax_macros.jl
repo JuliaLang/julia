@@ -62,19 +62,17 @@ function Base.var"@label"(__context__::MacroContext, name, body)
     # This allows `continue name` to work by breaking to `name#cont`
     body_kind = kind(body)
     if body_kind == K"for" || body_kind == K"while"
-        cont_name = string(name.name_val, "#cont")
+        cont_name = mkleaf(name) # use name's scope and attrs
+        setattr!(name, :kind, K"Identifier")
+        setattr!(name, :name_val, string(name.name_val, "#cont"))
         loop_body = body[2]
-        wrapped_body = @ast __context__ loop_body [K"symbolic_block"
-            cont_name::K"Identifier"
+        wrapped_body = @ast __context__ loop_body [K"symbolicblock"
+            cont_name
             loop_body
         ]
-        if body_kind == K"for"
-            body = @ast __context__ body [K"for" body[1] wrapped_body]
-        else  # while
-            body = @ast __context__ body [K"while" body[1] wrapped_body]
-        end
+        body = @ast __context__ body [body_kind body[1] wrapped_body]
     end
-    @ast __context__ __context__.macrocall [K"symbolic_block" name body]
+    @ast __context__ __context__.macrocall [K"symbolicblock" name body]
 end
 
 function Base.var"@goto"(__context__::MacroContext, ex)
