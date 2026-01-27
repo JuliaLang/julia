@@ -47,7 +47,7 @@ function TerminalMenus.pick(menu::MultiSelectWithSkipMenu, cursor::Int)
     return false
 end
 
-function TerminalMenus.writeline(buf::IOBuffer,
+function TerminalMenus.writeline(buf::IO,
                                  menu::MultiSelectWithSkipMenu,
                                  idx::Int, iscursor::Bool)
     if idx in menu.selected

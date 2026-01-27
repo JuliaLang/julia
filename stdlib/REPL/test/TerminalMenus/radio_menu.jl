@@ -11,6 +11,8 @@
 @test RadioMenu(string.(1:30), pagesize=-1, charset=:ascii).pagesize == 30
 @test RadioMenu(string.(1:4), pagesize=10, charset=:ascii).pagesize == 4
 @test RadioMenu(string.(1:100); charset=:ascii).pagesize == 10
+cursor, up_arrow, down_arrow = styled"{bold:>↑↓}"
+@test RadioMenu([styled"{red:one}", styled"{yellow:two}", styled"{green:three}"]; cursor, up_arrow, down_arrow) isa RadioMenu
 
 radio_menu = RadioMenu(string.(1:20); charset=:ascii)
 @test TerminalMenus.options(radio_menu) == string.(1:20)
@@ -50,5 +52,6 @@ radio_menu = RadioMenu(["single option"], charset=:ascii)
 @test simulate_input(radio_menu, :up, :up, :down, :up, :enter) == 1
 radio_menu = RadioMenu(string.(1:3), pagesize=1, charset=:ascii)
 @test simulate_input(radio_menu, :down, :down, :down, :down, :enter) == 3
-radio_menu = RadioMenu(["apple", "banana", "cherry"]; keybindings=collect('a':'c'), charset=:ascii)
+radio_menu = RadioMenu([styled"{green:apple}", styled"{yellow:banana}", styled"{red:cherry}"];
+    keybindings=collect('a':'c'), charset=:ascii)
 @test simulate_input(radio_menu, 'b') == 2

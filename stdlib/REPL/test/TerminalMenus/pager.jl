@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 content =
-    """
+    styled"""
     Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor
     incididunt ut labore et dolore magna aliqua. Arcu non sodales neque sodales.
     Placerat orci nulla pellentesque dignissim enim sit amet venenatis. Mauris
