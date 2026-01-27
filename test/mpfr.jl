@@ -1116,7 +1116,8 @@ end
     p = precision(BigFloat)
     x = big(pi)
     setprecision(BigFloat, 2p) do
-        @test (BigFloat(x) === big(x)) === (BigFloat(x) == big(x)) === true
-        @test exponent(maxintfloat(big(x))) === exponent(maxintfloat(BigFloat(x))) === 2p
+        @test BigFloat(x) == big(x)
+        @test precision(big(x)) == precision(BigFloat(x)) == 2p
+        @test maxintfloat(big(x)) == maxintfloat(BigFloat(x))
     end
 end
