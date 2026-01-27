@@ -9,7 +9,7 @@ mktempdir() do temp_dir
         download("https://httpbin.julialang.org")
         "https://httpbin.julialang.org"
     catch
-        "https://httpbingo.org"
+        "https://httpbingo.julialang.org/"
     end
     # Download a file
     file = joinpath(temp_dir, "ip")
