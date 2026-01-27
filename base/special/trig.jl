@@ -727,13 +727,13 @@ end
 
 # Uses minimax polynomial of sin(π * x) for π * x in [0, .25]
 @inline function sinpi_kernel(x::Float64)
-    _sinpi_kernel_polynomial_f64(x)
+    _sinpi_kernel_f64(x)
 end
 @inline function sinpi_kernel_wide(x::Float64)
-    _sinpi_kernel_polynomial_f64(x)
+    _sinpi_kernel_f64(x)
 end
 @inline function sinpi_kernel(x::Float32)
-    _sinpi_kernel_polynomial_f32(x)
+    _sinpi_kernel_f32(x)
 end
 @inline function sinpi_kernel_wide(x::Float32)
     x = Float64(x)
@@ -751,13 +751,13 @@ end
 
 # Uses minimax polynomial of cos(π * x) for π * x in [0, .25]
 @inline function cospi_kernel(x::Float64)
-    _cospi_kernel_polynomial_f64(x)
+    _cospi_kernel_f64(x)
 end
 @inline function cospi_kernel_wide(x::Float64)
-    _cospi_kernel_polynomial_f64(x)
+    _cospi_kernel_f64(x)
 end
 @inline function cospi_kernel(x::Float32)
-    _cospi_kernel_polynomial_f32(x)
+    _cospi_kernel_f32(x)
 end
 @inline function cospi_kernel_wide(x::Float32)
     x = Float64(x)
@@ -772,46 +772,7 @@ end
     return evalpoly(x*x, (1.0f0, -4.934802f0, 4.058712f0, -1.3352624f0, 0.23531426f0, -0.0255071f0))
 end
 
-struct CosPiEvaluationScheme{T <: AbstractFloat, Rest <: Tuple{T, Vararg{T}}}
-    """
-    Coefficient 0 of the polynomial.
-    """
-    c₀::T
-    """
-    Coefficient 2 of the polynomial, in double-word format (unevaluated sum of two floating-point numbers), stored as `(high, low)`.
-    """
-    c₂::NTuple{2, T}
-    """
-    Rest of the coefficients.
-    """
-    rest::Rest
-    function CosPiEvaluationScheme(;
-        c₀::AbstractFloat,
-        c₂::(NTuple{2, T} where {T <: AbstractFloat}),
-        rest::(Tuple{T, Vararg{T}} where {T <: AbstractFloat}),
-    )
-        new{eltype(rest), typeof(rest)}(c₀, c₂, rest)
-    end
-end
-
-struct SinPiEvaluationScheme{T <: AbstractFloat, Rest <: Tuple{T, Vararg{T}}}
-    """
-    Coefficient 1 of the polynomial, in double-word format (unevaluated sum of two floating-point numbers), stored as `(high, low)`.
-    """
-    c₁::NTuple{2, T}
-    """
-    Rest of the coefficients.
-    """
-    rest::Rest
-    function SinPiEvaluationScheme(;
-        c₁::(NTuple{2, T} where {T <: AbstractFloat}),
-        rest::(Tuple{T, Vararg{T}} where {T <: AbstractFloat}),
-    )
-        new{eltype(rest), typeof(rest)}(c₁, rest)
-    end
-end
-
-function (sch::CosPiEvaluationScheme)(x::AbstractFloat)
+function _cospi_kernel(x::AbstractFloat, sch)
     x² = x * x
     c₀ = sch.c₀
     (c₂, c₂_lo) = sch.c₂
@@ -825,7 +786,7 @@ function (sch::CosPiEvaluationScheme)(x::AbstractFloat)
     w + muladd(x², r, ((c₀ - w) - a_x²) - a_x²_lo)
 end
 
-function (sch::SinPiEvaluationScheme)(x::AbstractFloat)
+function _sinpi_kernel(x::AbstractFloat, sch)
     x² = x * x
     (c₁, c₁_lo) = sch.c₁
     (c₃, rest...) = sch.rest
@@ -917,7 +878,7 @@ Constrain the zeroth coefficient to `1` to achieve exact behavior for zero input
   ```
 =#
 
-const _cospi_kernel_polynomial_f32 = CosPiEvaluationScheme(;
+const _cospi_kernel_polynomial_f32 = (;
     c₀ = Float32(1),
     c₂ = (-4.934802f0, -1.1607644f-7),
     rest = (
@@ -926,7 +887,7 @@ const _cospi_kernel_polynomial_f32 = CosPiEvaluationScheme(;
         0.23138562f0,
     ),
 )
-const _sinpi_kernel_polynomial_f32 = SinPiEvaluationScheme(;
+const _sinpi_kernel_polynomial_f32 = (;
     c₁ = (3.1415927f0, -8.764345f-8),
     rest = (
         -5.1677127f0,
@@ -935,7 +896,7 @@ const _sinpi_kernel_polynomial_f32 = SinPiEvaluationScheme(;
         0.079937235f0,
     ),
 )
-const _cospi_kernel_polynomial_f64 = CosPiEvaluationScheme(;
+const _cospi_kernel_polynomial_f64 = (;
     c₀ = Float64(1),
     c₂ = (-4.934802200544679, -2.6451348079795815e-16),
     rest = (
@@ -947,7 +908,7 @@ const _cospi_kernel_polynomial_f64 = CosPiEvaluationScheme(;
         -0.00010356606727649327,
     ),
 )
-const _sinpi_kernel_polynomial_f64 = SinPiEvaluationScheme(;
+const _sinpi_kernel_polynomial_f64 = (;
     c₁ = (3.141592653589793, 1.2267151843884804e-16),
     rest = (
         -5.16771278004997,
@@ -959,6 +920,11 @@ const _sinpi_kernel_polynomial_f64 = SinPiEvaluationScheme(;
         -2.1925990105975317e-5,
     ),
 )
+
+const _cospi_kernel_f32 = Base.Fix2(_cospi_kernel, _cospi_kernel_polynomial_f32)
+const _cospi_kernel_f64 = Base.Fix2(_cospi_kernel, _cospi_kernel_polynomial_f64)
+const _sinpi_kernel_f32 = Base.Fix2(_sinpi_kernel, _sinpi_kernel_polynomial_f32)
+const _sinpi_kernel_f64 = Base.Fix2(_sinpi_kernel, _sinpi_kernel_polynomial_f64)
 
 """
     sinpi(x::T) where T -> float(T)
