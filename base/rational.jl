@@ -252,7 +252,7 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real)::Rational{T} where 
 
     r, a = modf(abs(x))
     if r > tol && r ≤ inv(maxintfloat(x))
-        p = exponent(1/r) + 1
+        p = 1 - exponent(r) 
         if p > precision(Float64)
             return setprecision(() -> rationalize(T, BigFloat(x), tol), BigFloat, p)
         end
