@@ -2432,6 +2432,8 @@ function move_line_start(s::MIState)
     else
         seek(buf, something(findprev(isequal(UInt8('\n')), buf.data, curpos), 0))
     end
+    s.key_repeats = 0
+    empty!(s.previous_key)
     nothing
 end
 
