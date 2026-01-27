@@ -37,6 +37,11 @@ function Base.var"&"(vr1::ValidationResult, vr2::ValidationResult)
     ValidationResult(vr1.ok & vr2.ok, errors_out)
 end
 
+"""
+Note that this, unlike `&`, is only a true `|` in the case that at least one
+argument is `ok` or at most one argument produces errors.  If both sides are
+`!ok` with errors, use the first argument's errors.
+"""
 function Base.var"|"(vr1::ValidationResult, vr2::ValidationResult)
     vr1.ok && return vr1
     vr2.ok && return vr2
