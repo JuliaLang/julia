@@ -4,7 +4,6 @@ import Libdl
 const INCOMPATIBLE_STDLIBS = String[
     "SparseArrays", # closure static parameter bug (JuliaLang/JuliaLowering.jl#134)
     "Test", # nested + destructured args splat (JuliaLang/JuliaLowering.jl#133)
-    "REPL", # infinite softscope (in REPL code)
     "Pkg", # closure w/ kwarg bug (JuliaLang/JuliaLowering.jl#139)
     "SuiteSparse", # depends on SparseArrays
     "LazyArtifacts", # depends on Pkg
