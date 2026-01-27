@@ -33,10 +33,10 @@ typedef struct {
 // initialize hash table, reserving space for `size` expected number of
 // elements. (Expect `h->size > size` for efficient occupancy factor.)
 htable_t *htable_new(htable_t *h, size_t size) JL_NOTSAFEPOINT;
-void htable_free(htable_t *h);
+void htable_free(htable_t *h) JL_NOTSAFEPOINT;
 
 // clear and (possibly) change size
-void htable_reset(htable_t *h, size_t sz);
+void htable_reset(htable_t *h, size_t sz) JL_NOTSAFEPOINT;
 
 // Lookup and mutation. See htable.inc for detail.
 #define HTPROT(HTNAME)                                                  \

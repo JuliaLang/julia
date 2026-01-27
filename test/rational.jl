@@ -203,6 +203,29 @@ end
     end
 
     @test Rational(rand_int, 3)/Complex(3, 2) == Complex(Rational(rand_int, 13), -Rational(rand_int*2, 39))
+    @test (1//1) / complex(0, 1) === 0//1 - 1//1*im
+    @test (0//1) / complex(0, 1) === 0//1 + 0//1*im
+    @test (0//1) / complex(1, 0) === 0//1 + 0//1*im
+    @test (0//1) / complex(1, 1) === 0//1 + 0//1*im
+    @test (1//1) / complex(1, 1) === 1//2 - 1//2*im
+    @test (0//1) / complex(1//1, 1//1) === 0//1 + 0//1*im
+    @test (1//1) / complex(1//1, 1//1) === 1//2 - 1//2*im
+    @test (0//1) / complex(1//0, 0//1) === 0//1 + 0//1*im
+    @test (1//1) / complex(1//1, 1//0) === 0//1 + 0//1*im
+    @test_throws DivideError (0//1) / complex(0, 0)
+    @test_throws DivideError (1//1) / complex(0, 0)
+    @test_throws DivideError (1//0) / complex(0, 0)
+    @test_throws DivideError complex(1//0) // complex(1//0, 1//0)
+    @test_throws DivideError 1 // complex(0, 0)
+    @test_throws DivideError 0 // complex(0, 0)
+    @test_throws DivideError complex(1) // complex(0, 0)
+    @test_throws DivideError complex(0) // complex(0, 0)
+
+    # 1//200 - 1//200*im cannot be represented as Complex{Rational{Int8}}
+    @test_throws OverflowError (Int8(1)//Int8(1)) / (Int8(100) + Int8(100)im)
+    @test_throws OverflowError (Int8(1)//Int8(1)) // (Int8(100) + Int8(100)im)
+    @test_throws OverflowError Int8(1) // (Int8(100) + Int8(100)im)
+    @test_throws OverflowError complex(Int8(1)) // (Int8(100) + Int8(100)im)
 
     @test Complex(rand_int, 0) == Rational(rand_int)
     @test Rational(rand_int) == Complex(rand_int, 0)
@@ -226,6 +249,14 @@ end
                 @test (a+b*im)//(c+d*im) == (a*c+b*d+(b*c-a*d)*im)//(c^2+d^2)
                 @test Complex(Rational(a)+b*im)//Complex(Rational(c)+d*im) == Complex(a+b*im)//Complex(c+d*im)
             end
+        end
+    end
+    @testset "exact division by an infinite complex number" begin
+        for y ∈ (1 // 0, -1 // 0)
+            @test (7 // complex(y)) == 0
+            @test (Rational(7) // complex(y)) == 0
+            @test (complex(7) // complex(y)) == 0
+            @test (complex(Rational(7)) // complex(y)) == 0
         end
     end
 end
@@ -611,6 +642,10 @@ end
 # issue #16282
 @test_throws MethodError 3 // 4.5im
 
+# issue #60137
+@test_throws MethodError 3.0 // (1 + 0im)
+@test_throws MethodError 3.0 // (1//0 + 0im)
+
 # issue #31396
 @test round(1//2, RoundNearestTiesUp) === 1//1
 
@@ -836,4 +871,11 @@ end
     @testset "do not overflow silently" begin
         @test_throws OverflowError numerator(Int8(1)//Int8(31) + Int8(8)im//Int8(3))
     end
+end
+
+@testset "Float-Rational comparison" begin
+    @test Float16(6.0e-8) == big(1//16777216) == 1//16777216
+    @test Float16(6.0e-8) == 1//16777216
+    @test 1.0 != big(1//0)
+    @test Inf == big(1//0)
 end

@@ -49,13 +49,16 @@ _sub(t::Tuple, s::Tuple) = _sub(tail(t), tail(s))
     dropdims(A; dims)
 
 Return an array with the same data as `A`, but with the dimensions specified by
-`dims` removed. `size(A,d)` must equal 1 for every `d` in `dims`,
-and repeated dimensions or numbers outside `1:ndims(A)` are forbidden.
+`dims` removed.
+
+Repeated dimensions or numbers outside `1:ndims(A)` are forbidden.
+Moreover `size(A,d)` must equal 1 for every `d` in `dims`.
 
 The result shares the same underlying data as `A`, such that the
 result is mutable if and only if `A` is mutable, and setting elements of one
 alters the values of the other.
 
+Inverse of [`insertdims`](@ref).
 See also: [`reshape`](@ref), [`vec`](@ref).
 
 # Examples
@@ -88,17 +91,22 @@ function _dropdims(A::AbstractArray, dims::Dims)
             dims[j] == dims[i] && throw(ArgumentError("dropped dims must be unique"))
         end
     end
+    ox = axes(A)
     ax = _foldoneto((ds, d) -> d in dims ? ds : (ds..., axes(A,d)), (), Val(ndims(A)))
-    reshape(A, ax::typeof(_sub(axes(A), dims)))
+    if isconcretetype(eltype(ox))
+        # if all the axes are the same type, we can use the tail as the
+        # axes of the result rather than extracting one at each index
+        return reshape(A, ax::typeof(_sub(ox, dims)))
+    else
+        return reshape(A, ax)
+    end
 end
 _dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
-
 
 """
     insertdims(A; dims)
 
-Inverse of [`dropdims`](@ref); return an array with new singleton dimensions
-at every dimension in `dims`.
+Return an array with new singleton dimensions at every dimension in `dims`.
 
 Repeated dimensions are forbidden and the largest entry in `dims` must be
 less than or equal than `ndims(A) + length(dims)`.
@@ -107,7 +115,9 @@ The result shares the same underlying data as `A`, such that the
 result is mutable if and only if `A` is mutable, and setting elements of one
 alters the values of the other.
 
-See also: [`dropdims`](@ref), [`reshape`](@ref), [`vec`](@ref).
+Inverse of [`dropdims`](@ref).
+See also: [`reshape`](@ref), [`vec`](@ref).
+
 # Examples
 ```jldoctest
 julia> x = [1 2 3; 4 5 6]

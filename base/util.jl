@@ -680,7 +680,7 @@ end
 # testing
 
 """
-    Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_THREADS / 2),
+    Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.EFFECTIVE_CPU_THREADS / 2),
                   exit_on_error=false, revise=false, propagate_project=true, [seed], [julia_args::Cmd])
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
@@ -694,7 +694,7 @@ If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
 The argument `julia_args` can be used to pass custom `julia` command line flags to the test process.
 """
-function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
+function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.EFFECTIVE_CPU_THREADS / 2),
                   exit_on_error::Bool=false,
                   revise::Bool=false,
                   propagate_project::Bool=false,
