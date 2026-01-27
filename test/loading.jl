@@ -1146,7 +1146,7 @@ end
         _ext = Base.get_extension(parent, ext)
         _ext isa Module || error("expected extension \$ext to be loaded")
         _pkgdir = pkgdir(_ext)
-        _pkgdir == pkgdir(parent) != nothing || error("unexpected extension \$ext pkgdir path: \$_pkgdir")
+        _pkgdir == pkgdir(parent) !== nothing || error("unexpected extension \$ext pkgdir path: \$_pkgdir")
         _pkgversion = pkgversion(_ext)
         _pkgversion == pkgversion(parent) || error("unexpected extension \$ext version: \$_pkgversion")
     end
@@ -1924,4 +1924,32 @@ module M58272_to end
     syntax_version_script = joinpath(@__DIR__, "testhelpers", "print_syntax_version.jl")
     @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep1")) $syntax_version_script`, String)) == v"1.13"
     @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep2")) $syntax_version_script`, String)) == v"1.14"
+
+    function include_world_age()
+       m = @eval(module IncludeWorldAgeTest end)
+       @test_nowarn @test include_string(m, "Base.Experimental.@VERSION").syntax == (Base.Experimental.@VERSION).syntax
+       @test_nowarn @test Core.include(m, joinpath(@__DIR__, "testhelpers", "return_syntax_version.jl")) == (Base.Experimental.@VERSION).syntax
+       Base.set_syntax_version(m, v"1.13")
+       @test_nowarn @test include_string(m, "Base.Experimental.@VERSION").syntax == v"1.13"
+       @test_nowarn @test Core.include(m, joinpath(@__DIR__, "testhelpers", "return_syntax_version.jl")) == v"1.13"
+    end
+    include_world_age()
+end
+
+@testset "require_stdlib with isolated depot" begin
+    # Test that require_stdlib works with JULIA_DEPOT_PATH not including bundled depot
+    tmpdir = mktempdir()
+    try
+        script = "Base.require_stdlib(Base.PkgId(Base.UUID(\"2a0f44e3-6c83-55bd-87e4-b1978d98bd5f\"), \"Base64\")); println(\"SUCCESS\")"
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`, "JULIA_DEPOT_PATH" => tmpdir, "JULIA_DEBUG" => "loading")
+        out = PipeBuffer()
+        run(pipeline(cmd, stdout=out, stderr=out))
+        output = read(out, String)
+        # Should not precompile since it loads from bundled depot
+        @test contains(output, "Loading object cache file")
+        @test !contains(output, "Precompiling")
+        @test contains(output, "SUCCESS")
+    finally
+        rm(tmpdir; recursive=true, force=true)
+    end
 end

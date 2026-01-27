@@ -443,14 +443,15 @@ so that e.g. `@test a ≈ b atol=ε` means `@test ≈(a, b, atol=ε)`.
 test_expr!(m, ex) = ex
 
 function test_expr!(m, ex, kws...)
-    ex isa Expr && ex.head === :call || @goto fail
-    for kw in kws
-        kw isa Expr && kw.head === :(=) || @goto fail
-        kw.head = :kw
-        push!(ex.args, kw)
+    @label fail begin
+        ex isa Expr && ex.head === :call || break fail
+        for kw in kws
+            kw isa Expr && kw.head === :(=) || break fail
+            kw.head = :kw
+            push!(ex.args, kw)
+        end
+        return ex
     end
-    return ex
-@label fail
     error("invalid test macro call: $m $ex $(join(kws," "))")
 end
 

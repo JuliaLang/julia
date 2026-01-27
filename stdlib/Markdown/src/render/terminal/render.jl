@@ -26,7 +26,7 @@ function term(io::IO, md::Paragraph, columns)
     end
 end
 
-function term(io::IO, md::HTML, columns)
+function term(io::IO, md::HTMLBlock, columns)
     for line in md.content[1:end-1]
         println(io, line)
     end

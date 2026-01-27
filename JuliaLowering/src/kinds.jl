@@ -10,6 +10,8 @@ function _register_kinds()
             "atomic"
             # Flag for @generated parts of a function
             "generated"
+            # Like (function call body) but (generated_function call gen nongen)
+            "generated_function"
             # Temporary rooting of identifiers (GC.@preserve)
             "gc_preserve"
             "gc_preserve_begin"
@@ -39,6 +41,8 @@ function _register_kinds()
             "symbolic_label"
             # Goto named label
             "symbolic_goto"
+            # Labeled block for `@label name expr` (block break)
+            "symbolic_block"
             # Internal initializer for struct types, for inner constructors/functions
             "new"
             "splatnew"

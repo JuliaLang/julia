@@ -380,7 +380,7 @@ end
 # utility function to extract the first line number and file of a block of code
 function debuginfo_firstline(debuginfo::Union{DebugInfo,DebugInfoStream})
     linetable = debuginfo.linetable
-    while linetable != nothing
+    while linetable !== nothing
         debuginfo = linetable
         linetable = debuginfo.linetable
     end

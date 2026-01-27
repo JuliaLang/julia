@@ -31,17 +31,11 @@ Base.:(//)
 Base.rationalize
 Base.numerator
 Base.denominator
-Base.:(<<)
-Base.:(>>)
-Base.:(>>>)
-Base.bitrotate
-Base.:(:)(::Any, ::Any, ::Any)
-Base.:(:)(::CartesianIndex, ::CartesianIndex, ::CartesianIndex)
-Base.range
-Base.OneTo
-Base.StepRangeLen
-Base.logrange
-Base.LogRange
+```
+
+## Comparisons
+
+```@docs
 Base.:(==)
 Base.:(!=)
 Base.:(!==)
@@ -50,80 +44,155 @@ Base.:(<=)
 Base.:(>)
 Base.:(>=)
 Base.cmp
+Base.isapprox
+```
+
+## Bit Operators
+
+```@docs
+Base.:(<<)
+Base.:(>>)
+Base.:(>>>)
+Base.bitrotate
 Base.:(~)
 Base.:(&)
 Base.:(|)
 Base.xor
 Base.nand
 Base.nor
+```
+
+## Logical Operators
+
+```@docs
 Base.:(!)
 &&
 ||
 ```
 
-## Mathematical Functions
+## Trigonometry
+
+### ... in Radians
 
 ```@docs
-Base.isapprox
 Base.sin(::Number)
 Base.cos(::Number)
 Base.sincos(::Float64)
 Base.tan(::Number)
+```
+
+```@docs
+Base.asin(::Number)
+Base.acos(::Number)
+Base.atan(::Number)
+```
+
+```@docs
+Base.Math.sec(::Number)
+Base.Math.csc(::Number)
+Base.Math.cot(::Number)
+```
+
+```@docs
+Base.Math.asec(::Number)
+Base.Math.acsc(::Number)
+Base.Math.acot(::Number)
+```
+
+### ... in Degrees
+
+```@docs
 Base.Math.sind
 Base.Math.cosd
 Base.Math.tand
 Base.Math.sincosd
+```
+
+```@docs
+Base.Math.asind
+Base.Math.acosd
+Base.Math.atand
+```
+
+```@docs
+Base.Math.secd
+Base.Math.cscd
+Base.Math.cotd
+```
+
+```@docs
+Base.Math.asecd
+Base.Math.acscd
+Base.Math.acotd
+```
+
+### ... in Multiples of π
+
+```@docs
 Base.Math.sinpi
 Base.Math.cospi
 Base.Math.tanpi
 Base.Math.sincospi
+```
+
+### Hyperbolic
+
+```@docs
 Base.sinh(::Number)
 Base.cosh(::Number)
 Base.tanh(::Number)
-Base.asin(::Number)
-Base.acos(::Number)
-Base.atan(::Number)
-Base.Math.asind
-Base.Math.acosd
-Base.Math.atand
-Base.Math.sec(::Number)
-Base.Math.csc(::Number)
-Base.Math.cot(::Number)
-Base.Math.secd
-Base.Math.cscd
-Base.Math.cotd
-Base.Math.asec(::Number)
-Base.Math.acsc(::Number)
-Base.Math.acot(::Number)
-Base.Math.asecd
-Base.Math.acscd
-Base.Math.acotd
-Base.Math.sech(::Number)
-Base.Math.csch(::Number)
-Base.Math.coth(::Number)
+```
+
+```@docs
 Base.asinh(::Number)
 Base.acosh(::Number)
 Base.atanh(::Number)
+```
+
+```@docs
+Base.Math.sech(::Number)
+Base.Math.csch(::Number)
+Base.Math.coth(::Number)
+```
+
+```@docs
 Base.Math.asech(::Number)
 Base.Math.acsch(::Number)
 Base.Math.acoth(::Number)
+```
+
+### Other Trigonometric Functions
+
+```@docs
 Base.Math.sinc
 Base.Math.cosc
 Base.Math.deg2rad
 Base.Math.rad2deg
 Base.Math.hypot
+```
+
+## Logarithms
+
+```@docs
 Base.log(::Number)
 Base.log(::Number, ::Number)
 Base.log2
 Base.log10
 Base.log1p
-Base.Math.frexp
+```
+
+## Exponentiation
+
+```@docs
 Base.exp(::Float64)
 Base.exp2
 Base.exp10
-Base.Math.ldexp
-Base.Math.modf
 Base.expm1
+```
+
+## Rounding
+
+```@docs
 Base.round
 Base.Rounding.RoundingMode
 Base.Rounding.RoundNearest
@@ -138,12 +207,27 @@ Base.ceil
 Base.floor
 Base.trunc
 Base.unsafe_trunc
+Base.Math.modf
+```
+
+## Extrema
+
+```@docs
 Base.min
 Base.max
 Base.minmax
+```
+
+## Clamping
+
+```@docs
 Base.Math.clamp
 Base.Math.clamp!
-Base.abs
+```
+
+## Checked Operations
+
+```@docs
 Base.Checked
 Base.Checked.checked_abs
 Base.Checked.checked_neg
@@ -159,15 +243,35 @@ Base.Checked.checked_pow
 Base.Checked.add_with_overflow
 Base.Checked.sub_with_overflow
 Base.Checked.mul_with_overflow
+```
+
+## Signs
+
+```@docs
+Base.abs
 Base.abs2
+Base.uabs
+```
+
+```@docs
 Base.copysign
 Base.sign
 Base.signbit
 Base.flipsign
+```
+
+## Roots
+
+```@docs
 Base.sqrt(::Number)
 Base.isqrt
 Base.Math.cbrt(::AbstractFloat)
 Base.fourthroot(::Number)
+```
+
+## Complex Functions
+
+```@docs
 Base.real
 Base.imag
 Base.reim
@@ -175,6 +279,11 @@ Base.conj
 Base.angle
 Base.cis
 Base.cispi
+```
+
+## Combinatorics and Number Theory
+
+```@docs
 Base.binomial
 Base.factorial
 Base.gcd
@@ -186,9 +295,12 @@ Base.prevpow
 Base.nextprod
 Base.invmod
 Base.powermod
-Base.ndigits
+```
+
+## Other Mathematical Functions
+
+```@docs
 Base.add_sum
-Base.uabs
 Base.widemul
 Base.Math.evalpoly
 Base.Math.@evalpoly

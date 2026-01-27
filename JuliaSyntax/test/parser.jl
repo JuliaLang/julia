@@ -551,6 +551,13 @@ tests = [
         # break/continue
         "break"    => "(break)"
         "continue" => "(continue)"
+        # break/continue with labels (plain identifiers only, requires 1.14+)
+        ((v=v"1.14",), "break _")  => "(break _)"
+        ((v=v"1.14",), "break _ x") => "(break _ x)"
+        ((v=v"1.14",), "break label") => "(break label)"
+        ((v=v"1.14",), "break label x") => "(break label x)"
+        ((v=v"1.14",), "continue _") => "(continue _)"
+        ((v=v"1.14",), "continue label") => "(continue label)"
         # module/baremodule
         "module A end"      =>  "(module A (block))"
         "baremodule A end"  =>  "(module-bare A (block))"

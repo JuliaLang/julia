@@ -393,7 +393,7 @@ function remove_scope_layer!(ex)
 end
 
 function remove_scope_layer(ctx, ex)
-    remove_scope_layer!(copy_ast(ctx, ex))
+    remove_scope_layer!(copy_ast(ctx, ex; copy_source=false))
 end
 
 """
@@ -543,16 +543,24 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
                 k = K"dotcall"
                 farg = farg[1]
             end
-            # Preserve call type flags (mostly ignored in the next pass as
-            # we've already reordered arguments.)
-            callflags = JuliaSyntax.call_type_flags(ex)
-            @ast ctx ex [k(syntax_flags=(callflags == 0 ? nothing : callflags))
+            @ast ctx ex [k
                 expand_forms_1(ctx, farg)
                 (expand_forms_1(ctx, a) for a in args)...
             ]
         end
     elseif is_leaf(ex)
         ex
+    elseif k === K"function" && numchildren(ex) === 2
+        # The (if (generated) gen nongen) form is troublesome because everything
+        # surrounding it is implicitly quoted (with `gen` interpolated into it),
+        # so doing anything to the body AST before quoting is incorrect.
+        e1 = expand_forms_1(ctx,ex[1])
+        e2 = expand_forms_1(ctx,ex[2])
+        has_if_generated(e2) || return @ast ctx ex [K"function" e1 e2]
+        gen = expand_forms_1(ctx, expand_quote(
+            ctx, @ast ctx e2 [K"block" split_generated(e2, true)]))
+        nongen = split_generated(e2, false)
+        @ast ctx ex [K"generated_function" e1 gen nongen]
     elseif k == K"<:" || k == K">:" || k == K"-->"
         # TODO: Should every form get layerid systematically? Or only the ones
         # which expand_forms_2 needs?
@@ -562,6 +570,23 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
     else
         mapchildren(e->expand_forms_1(ctx,e), ctx, ex)
     end
+end
+
+has_if_generated(st::SyntaxTree) = JuliaSyntax.@stm st begin
+    (_, when=is_leaf(st)||is_quoted(st)) -> false
+    [K"function" _...] -> false
+    ([K"=" call _], when=is_eventually_call(call)) -> false
+    [K"if" [K"generated"] _ _] -> true
+    _ -> any(has_if_generated, children(st))
+end
+split_generated(st::SyntaxTree, gen_part) = JuliaSyntax.@stm st begin
+    (_, when=is_leaf(st)||is_quoted(st)) -> st
+    [K"if" [K"generated"] gen nongen] -> if gen_part
+        @ast(st._graph, st, [K"$" gen])
+    else
+        nongen
+    end
+    _ -> mapchildren(x->split_generated(x, gen_part), st._graph, st)
 end
 
 function ensure_macro_attributes(graph)

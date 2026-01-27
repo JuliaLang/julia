@@ -1646,7 +1646,7 @@ function expand_named_tuple(ctx, ex, kws, eq_is_kw;
             end
             name = to_symbol(ctx, kw[2])
             value = kw
-        elseif k == K"call" && is_infix_op_call(kw) && numchildren(kw) == 3 &&
+        elseif k == K"call" && numchildren(kw) == 3 &&
                 is_same_identifier_like(kw[1], "=>")
             # a=>b   ==>  $a=b
             appended_nt = _named_tuple_expr(ctx, kw, (kw[2],), (kw[3],))
@@ -2461,44 +2461,15 @@ function trim_used_typevars(ctx, arg_types, typevar_names, typevar_stmts)
     return trimmed_typevar_names
 end
 
-function is_if_generated(ex)
-    kind(ex) == K"if" && kind(ex[1]) == K"generated"
-end
-
-# Return true if a function body contains a code generator from `@generated` in
-# the form `[K"if" [K"generated"] ...]`
-function is_generated(ex)
-    if is_if_generated(ex)
-        return true
-    elseif is_quoted(ex) || kind(ex) == K"function"
-        return false
-    else
-        return any(is_generated, children(ex))
-    end
-end
-
-function split_generated(ctx, ex, gen_part)
-    if is_leaf(ex)
-        ex
-    elseif is_if_generated(ex)
-        gen_part ? @ast(ctx, ex, [K"$" ex[2]]) : ex[3]
-    else
-        mapchildren(e->split_generated(ctx, e, gen_part), ctx, ex)
-    end
-end
-
 # Split @generated function body into two parts:
 # * The code generator
 # * The non-generated function body
-function expand_function_generator(ctx, srcref, callex_srcref, func_name, func_name_str, body, arg_names, typevar_names)
-    gen_body = if is_if_generated(body)
-        body[2] # Simple case - don't need interpolation when the whole body is generated
-    else
-        expand_quote(ctx, @ast ctx body [K"block" split_generated(ctx, body, true)])
-    end
+function expand_function_generator(ctx, srcref, callex_srcref, func_name,
+                                   func_name_str, gen_body, nongen_body_orig,
+                                   arg_names, typevar_names)
     gen_name_str = reserve_module_binding_i(ctx.mod,
                         "#$(isnothing(func_name_str) ? "_" : func_name_str)@generator#")
-    gen_name = new_global_binding(ctx, body, gen_name_str, ctx.mod)
+    gen_name = new_global_binding(ctx, srcref, gen_name_str, ctx.mod)
 
     # Set up the arguments for the code generator
     gen_arg_names = SyntaxList(ctx)
@@ -2548,7 +2519,7 @@ function expand_function_generator(ctx, srcref, callex_srcref, func_name, func_n
     end
 
     # Extract non-generated body
-    nongen_body = @ast ctx body [K"block"
+    nongen_body = @ast ctx nongen_body_orig [K"block"
         # The Julia runtime associates the code generator with the
         # non-generated method by adding this meta to the body. This feels like
         # a hack though since the generator ultimately gets attached to the
@@ -2584,7 +2555,7 @@ function expand_function_generator(ctx, srcref, callex_srcref, func_name, func_n
                 ]
             ]
         ]
-        split_generated(ctx, body, false)
+        nongen_body_orig
     ]
 
     return gen_func_method_defs, nongen_body
@@ -2945,7 +2916,11 @@ function is_invalid_func_name(ex)
 end
 
 function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=identity; doc_only=false)
-    @chk numchildren(ex) in (1,2)
+    if kind(ex) === K"generated_function"
+        @assert numchildren(ex) === 3 && rewrite_body == identity
+    else
+        @chk numchildren(ex) in (1,2)
+    end
     name = ex[1]
     if numchildren(ex) == 1 && is_identifier_like(name)
         # Function declaration with no methods
@@ -3167,10 +3142,9 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     end
 
     gen_func_method_defs = nothing
-    if is_generated(body)
-        gen_func_method_defs, body =
-            expand_function_generator(ctx, ex, callex, name, name_str, body, arg_names, typevar_names)
-
+    if kind(ex) === K"generated_function"
+        gen_func_method_defs, body = expand_function_generator(
+            ctx, ex, callex, name, name_str, ex[2], ex[3], arg_names, typevar_names)
     end
 
     if isnothing(keywords)
@@ -4475,10 +4449,40 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"="
         expand_assignment(ctx, ex)
     elseif k == K"break"
-        numchildren(ex) > 0 ? ex :
+        nc = numchildren(ex)
+        if nc == 0
             @ast ctx ex [K"break" "loop_exit"::K"symbolic_label"]
+        else
+            @chk nc <= 2 (ex, "Too many arguments to break")
+            label = ex[1]
+            label_kind = kind(label)
+            # Convert Symbol (from Expr conversion) to symbolic_label
+            if label_kind == K"Symbol"
+                label = @ast ctx label label.name_val::K"symbolic_label"
+            elseif !(label_kind == K"Identifier" || label_kind == K"Placeholder" ||
+                     label_kind == K"symbolic_label" || is_contextual_keyword(label_kind))
+                throw(LoweringError(label, "Invalid break label: expected identifier"))
+            end
+            if nc == 2
+                @ast ctx ex [K"break" label expand_forms_2(ctx, ex[2])]
+            else
+                @ast ctx ex [K"break" label]
+            end
+        end
     elseif k == K"continue"
-        @ast ctx ex [K"break" "loop_cont"::K"symbolic_label"]
+        nc = numchildren(ex)
+        if nc == 0
+            @ast ctx ex [K"break" "loop_cont"::K"symbolic_label"]
+        else
+            @chk nc == 1 (ex, "Too many arguments to continue")
+            label = ex[1]
+            label_kind = kind(label)
+            if !(label_kind == K"Identifier" || label_kind == K"Placeholder" ||
+                 label_kind == K"Symbol" || is_contextual_keyword(label_kind))
+                throw(LoweringError(label, "Invalid continue label: expected identifier"))
+            end
+            @ast ctx ex [K"break" string(label.name_val, "#cont")::K"symbolic_label"]
+        end
     elseif k == K"comparison"
         expand_forms_2(ctx, expand_compare_chain(ctx, ex))
     elseif k == K"doc"
@@ -4511,7 +4515,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         expand_forms_2(ctx, expand_generator(ctx, ex))
     elseif k == K"->" || k == K"do"
         expand_forms_2(ctx, expand_arrow(ctx, ex))
-    elseif k == K"function"
+    elseif k == K"function" || k == K"generated_function"
         expand_forms_2(ctx, expand_function_def(ctx, ex, docs))
     elseif k == K"macro"
         @ast ctx ex [K"block"
@@ -4639,6 +4643,11 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         ]
     elseif k == K"inert" || k == K"inert_syntaxtree"
         ex
+    elseif k == K"symbolic_block"
+        # @label name body -> (symbolic_block name expanded_body)
+        # The @label macro inserts the continue block for loops, so we just expand the body
+        @chk numchildren(ex) == 2
+        @ast ctx ex [K"symbolic_block" ex[1] expand_forms_2(ctx, ex[2])]
     elseif k == K"gc_preserve"
         s = ssavar(ctx, ex)
         r = ssavar(ctx, ex)
