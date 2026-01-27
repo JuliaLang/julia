@@ -5,11 +5,11 @@ module TestDownload
 using Test
 
 mktempdir() do temp_dir
-    try
+    url = try
         download("https://httpbin.julialang.org")
-        global url = "https://httpbin.julialang.org"
+        "https://httpbin.julialang.org"
     catch
-        global url = "https://httpbin.org"
+        "https://httpbin.org"
     end
     # Download a file
     file = joinpath(temp_dir, "ip")
