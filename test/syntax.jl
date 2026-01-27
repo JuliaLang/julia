@@ -5,6 +5,8 @@
 using Random
 using Base: remove_linenums!
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 using_JuliaSyntax = parentmodule(Core._parse) != Core.Compiler
 
 macro test_parseerror(str, msg)
@@ -2011,7 +2013,7 @@ end
     p = (2, 3, 4)
     @test p == (2, 3, 4)
     allocs = (() -> @allocated identity(p))()
-    @test allocs == 0
+    @test allocs == 0 broken=coverage_enabled
 end
 
 @test_throws UndefVarError eval(Symbol(""))

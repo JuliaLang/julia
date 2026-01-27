@@ -6,6 +6,8 @@ include("setup_Compiler.jl")
 include("irutils.jl")
 include("newinterp.jl")
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 # interpreter that performs abstract interpretation only
 # (semi-concrete interpretation should be disabled automatically)
 @newinterp AbsIntOnlyInterp1
@@ -117,19 +119,19 @@ Base.@assume_effects :terminates_locally function issue41694(x)
     end
     return res
 end
-@test Base.return_types(; interp=MTOverlayInterp()) do
+@test (Base.return_types(; interp=MTOverlayInterp()) do
     issue41694(3) == 6 ? nothing : missing
-end |> only === Nothing
+end |> only === Nothing) broken=coverage_enabled
 
 # disable partial concrete evaluation when tainted by any overlayed call
 Base.@assume_effects :total totalcall(f, args...) = f(args...)
-@test Base.return_types(; interp=MTOverlayInterp()) do
+@test (Base.return_types(; interp=MTOverlayInterp()) do
     if totalcall(strangesin, 1.0) == cos(1.0)
         return nothing
     else
         return missing
     end
-end |> only === Nothing
+end |> only === Nothing) broken=coverage_enabled
 
 # override `:native_executable` to allow concrete-eval for overlay-ed methods
 function myfactorial(x::Int, raise)
@@ -159,14 +161,14 @@ let effects = Base.infer_effects(gpu_factorial3, (Int,); interp=MTOverlayInterp(
     # check if `@consistent_overlay` together works with `@assume_effects`
     # N.B. the overlaid `raise_on_gpu3` is not :foldable otherwise since `error_on_gpu` is (intetionally) undefined.
     @test Compiler.is_consistent_overlay(effects)
-    @test Compiler.is_foldable(effects)
+    @test Compiler.is_foldable(effects) broken=coverage_enabled
 end
-@test Base.infer_return_type(; interp=MTOverlayInterp()) do
+@test (Base.infer_return_type(; interp=MTOverlayInterp()) do
     Val(gpu_factorial2(3))
-end == Val{6}
-@test Base.infer_return_type(; interp=MTOverlayInterp()) do
+end == Val{6}) broken=coverage_enabled
+@test (Base.infer_return_type(; interp=MTOverlayInterp()) do
     Val(gpu_factorial3(3))
-end == Val{6}
+end == Val{6}) broken=coverage_enabled
 
 # GPUCompiler needs accurate inference through kwfunc with the overlay of `Core.throw_inexacterror`
 # https://github.com/JuliaLang/julia/issues/48097
@@ -187,7 +189,7 @@ end
 issue48097(; kwargs...) = return 42
 @test fully_eliminated(; interp=Issue48097Interp(), retval=42) do
     issue48097(; a=1f0, b=1.0)
-end
+end broken=coverage_enabled
 
 # https://github.com/JuliaLang/julia/issues/52938
 @newinterp Issue52938Interp
@@ -195,7 +197,7 @@ end
 Compiler.method_table(interp::Issue52938Interp) = Compiler.OverlayMethodTable(Compiler.get_inference_world(interp), ISSUE_52938_MT)
 inner52938(x, types::Type, args...; kwargs...) = x
 outer52938(x) = @inline inner52938(x, Tuple{}; foo=Ref(42), bar=1)
-@test fully_eliminated(outer52938, (Any,); interp=Issue52938Interp(), retval=Argument(2))
+@test fully_eliminated(outer52938, (Any,); interp=Issue52938Interp(), retval=Argument(2)) broken=coverage_enabled
 
 # https://github.com/JuliaGPU/CUDA.jl/issues/2241
 @newinterp Cuda2241Interp
@@ -212,7 +214,7 @@ end
 const cuda_kernel_state = Ref{Any}()
 @consistent_overlay CUDA_2241_MT @inline Base.throw_boundserror(A, I) =
     (cuda_kernel_state[] = (A, I); error())
-@test fully_eliminated(outer2241, (Nothing,); interp=Cuda2241Interp(), retval=nothing)
+@test fully_eliminated(outer2241, (Nothing,); interp=Cuda2241Interp(), retval=nothing) broken=coverage_enabled
 
 # Should not concrete-eval overlayed methods in semi-concrete interpretation
 @newinterp OverlaySinInterp
