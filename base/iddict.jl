@@ -32,6 +32,9 @@ mutable struct IdDict{K,V} <: AbstractDict{K,V}
 
     function IdDict{K,V}(itr) where {K, V}
         d = IdDict{K,V}()
+        if IteratorSize(itr) isa Union{HasLength, HasShape}
+            sizehint!(d, length(itr))
+        end
         for (k,v) in itr; d[k] = v; end
         d
     end
