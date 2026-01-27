@@ -4,6 +4,23 @@ using Base: CoreLogging, PkgId, UUID, SHA1, parsed_toml, project_file_name_uuid,
             project_file_manifest_path, get_deps, preferences_names, isaccessibledir, isfile_casesensitive,
             base_project, isdefined
 
+# Background precompilation state
+mutable struct BackgroundPrecompileState
+    task::Union{Nothing, Task}
+    interrupt_requested::Bool
+    cancel_requested::Bool
+    monitoring::Bool
+    completed_at::Union{Nothing, Float64}
+    result::Union{Nothing, String}
+    return_value::Any
+    exception::Any
+    lock::ReentrantLock
+    task_done::Threads.Condition
+    signal_channels::Vector{Channel{Int32}}  # channels for broadcasting signals to all subprocesses
+end
+
+const BACKGROUND_PRECOMPILE = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[])
+
 # This is currently only used for pkgprecompile but the plan is to use this in code loading in the future
 # see the `kc/codeloading2.0` branch
 struct ExplicitEnv
@@ -389,7 +406,7 @@ function full_name(ext_to_parent::Dict{PkgId, PkgId}, pkg::PkgId)
     end
 end
 
-function excluded_circular_deps_explanation(io::IOContext{IO}, ext_to_parent::Dict{PkgId, PkgId}, circular_deps, cycles)
+function excluded_circular_deps_explanation(io::IOContext, ext_to_parent::Dict{PkgId, PkgId}, circular_deps, cycles)
     outer_deps = copy(circular_deps)
     cycles_names = ""
     for cycle in cycles
@@ -470,6 +487,201 @@ function collect_all_deps(direct_deps, dep, alldeps=Set{Base.PkgId}())
     return alldeps
 end
 
+function is_precompiling_in_background()
+    return lock(BACKGROUND_PRECOMPILE.lock) do
+        return BACKGROUND_PRECOMPILE.task !== nothing && !istaskdone(BACKGROUND_PRECOMPILE.task)
+    end
+end
+
+# Broadcast a signal to all active precompilation subprocesses.
+function broadcast_signal(sig::Int32)
+    lock(BACKGROUND_PRECOMPILE.lock) do
+        for ch in BACKGROUND_PRECOMPILE.signal_channels
+            try; isopen(ch) && put!(ch, sig); catch e; e isa InvalidStateException || rethrow(); end
+        end
+    end
+end
+broadcast_signal(sig::Integer) = broadcast_signal(Int32(sig))
+
+function stop_background_precompile(; graceful::Bool = true)
+    return lock(BACKGROUND_PRECOMPILE.lock) do
+        if BACKGROUND_PRECOMPILE.task !== nothing && !istaskdone(BACKGROUND_PRECOMPILE.task)
+            if graceful
+                BACKGROUND_PRECOMPILE.interrupt_requested = true
+            else
+                BACKGROUND_PRECOMPILE.cancel_requested = true
+                broadcast_signal(Base.SIGKILL)
+            end
+            return true
+        end
+        return false
+    end
+end
+
+function monitor_background_precompile(io::IO = stderr, detachable::Bool = true)
+    local completed_at::Union{Nothing, Float64}
+    local task
+
+    @lock BACKGROUND_PRECOMPILE.lock begin
+        completed_at = BACKGROUND_PRECOMPILE.completed_at
+        task = BACKGROUND_PRECOMPILE.task
+    end
+
+    if task === nothing || istaskdone(task)
+        if completed_at !== nothing
+            elapsed = time() - completed_at
+            time_str = if elapsed < 60
+                "$(round(Int, elapsed)) seconds ago"
+            elseif elapsed < 3600
+                "$(round(Int, elapsed / 60)) minutes ago"
+            elseif elapsed < 86400
+                "$(round(Int, elapsed / 3600)) hours ago"
+            else
+                "$(round(Int, elapsed / 86400)) days ago"
+            end
+            printpkgstyle(io, :Info, "Background precompilation completed $time_str", color = Base.info_color())
+            result = @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.result
+            if result !== nothing
+                println(io, "  ", result)
+            end
+        else
+            printpkgstyle(io, :Info, "No background precompilation is running or has been run in this session", color = Base.info_color())
+        end
+        return
+    end
+
+    # Enable output from do_precompile
+    @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.monitoring = true
+
+    exit_requested = Ref(false)
+    cancel_requested = Ref(false)
+    interrupt_requested = Ref(false)
+
+    # Start a task to listen for keypresses
+    key_task = if isinteractive() && stdin isa Base.TTY
+        Threads.@spawn :samepool try
+            term = Base.Terminals.TTYTerminal(get(ENV, "TERM", "dumb"), stdin, stdout, stderr)
+            Base.Terminals.raw!(term, true)
+            try
+                while true
+                    completed = @lock BACKGROUND_PRECOMPILE.lock (BACKGROUND_PRECOMPILE.completed_at !== nothing)
+                    if completed || exit_requested[] || cancel_requested[] || interrupt_requested[]
+                        break
+                    end
+                    Base.wait_readnb(stdin, 1)
+                    completed = @lock BACKGROUND_PRECOMPILE.lock (BACKGROUND_PRECOMPILE.completed_at !== nothing)
+                    if completed || exit_requested[] || cancel_requested[] || interrupt_requested[]
+                        break
+                    end
+                    bytesavailable(stdin) > 0 || continue
+                    c = read(stdin, Char)
+                    if c == 'c' || c == 'C'
+                        cancel_requested[] = true
+                        println(io)  # newline after keypress
+                        @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.cancel_requested = true
+                        broadcast_signal(Base.SIGKILL)
+                        break
+                    elseif detachable && (c == 'd' || c == 'D')
+                        exit_requested[] = true
+                        println(io)  # newline after keypress
+                        break
+                    elseif c == '\x03'  # Ctrl-C
+                        interrupt_requested[] = true
+                        println(io)  # newline after keypress
+                        # Send SIGINT to all workers and tell do_precompile to stop starting new ones
+                        @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.interrupt_requested = true
+                        broadcast_signal(Base.SIGINT)
+                        break
+                    elseif c == 'i' || c == 'I'
+                        broadcast_signal(Sys.isapple() ? Base.SIGINFO : Base.SIGUSR1)
+                    end
+                end
+            finally
+                Base.Terminals.raw!(term, false)
+            end
+        catch err
+            err isa EOFError && return
+            exit_requested[] = true
+            rethrow()
+        finally
+            Base.reseteof(stdin)
+            @lock BACKGROUND_PRECOMPILE.task_done notify(BACKGROUND_PRECOMPILE.task_done)
+        end
+    else
+        nothing
+    end
+
+    # Wake up key_task by signaling EOF on stdin so wait_readnb returns
+    wake_key_task = () -> begin
+        if key_task !== nothing && !istaskdone(key_task)
+            lock(stdin.cond)
+            try
+                stdin.status = Base.StatusEOF
+                notify(stdin.cond)
+            finally
+                unlock(stdin.cond)
+            end
+        end
+    end
+
+    return try
+        # Wait for task completion or user action
+        while !exit_requested[] && !cancel_requested[] && !interrupt_requested[]
+            @lock BACKGROUND_PRECOMPILE.task_done wait(BACKGROUND_PRECOMPILE.task_done)
+            completed = @lock BACKGROUND_PRECOMPILE.lock (BACKGROUND_PRECOMPILE.completed_at !== nothing)
+            completed && break
+        end
+
+        # If user requested cancel, stop the background task
+        if cancel_requested[]
+            @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.monitoring = false
+            key_task !== nothing && wait(key_task)
+            print(io, "\e[?25h\e[J")  # enable cursor + clear to end
+            printpkgstyle(io, :Info, "Canceling precompilation...\e[J", color = Base.info_color())
+            wait(task; throw=false)
+            return
+        end
+
+        # If user requested interrupt, wait for background task to finish cleanly
+        if interrupt_requested[]
+            key_task !== nothing && wait(key_task)
+            # Escalate to SIGKILL if background task doesn't finish promptly
+            escalation = Timer(5) do _
+                broadcast_signal(Base.SIGKILL)
+            end
+            wait(task; throw=false)
+            close(escalation)
+            return
+        end
+
+        # If user requested exit, clean up and return
+        if exit_requested[]
+            @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.monitoring = false
+            key_task !== nothing && wait(key_task)
+            print(io, "\e[?25h\e[J")  # enable cursor + clear to end
+            printpkgstyle(io, :Precompiling, "detached. Precompilation will continue in the background. Monitor with `precompile --monitor`.\e[J", color = Base.info_color())
+            return
+        end
+
+        # Normal completion - signal key_task to exit and wait
+        if key_task !== nothing
+            wake_key_task()
+            wait(key_task)
+        end
+
+        wait(task; throw=false)
+    catch e
+        # Clean up on error
+        @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.monitoring = false
+        if key_task !== nothing
+            exit_requested[] = true
+            wake_key_task()
+            try; wait(key_task); catch; end
+        end
+        rethrow()
+    end
+end
+
 
 """
     precompilepkgs(pkgs; kwargs...)
@@ -529,6 +741,25 @@ precompiles only the given packages and their dependencies (unless
   freshness checks. When `false` (not default), loaded package versions are considered when
   determining if cache files are fresh.
 
+- `detachable::Bool`: When `true` (not default), allows detaching from the
+  precompilation monitor with the `d` key, letting precompilation continue in
+  the background. The monitor can be reattached later via
+  [`Base.Precompilation.monitor_background_precompile`](@ref). Pkg.jl passes
+  `detachable=true` in interactive sessions.
+
+# Keyboard Controls
+
+When running interactively in a TTY, the following keys are available during
+precompilation:
+
+  - **`c`** — Cancel precompilation. Kills all subprocesses and suppresses output.
+  - **`d`** — Detach (only when `detachable=true`). Returns to the REPL while
+    precompilation continues in the background.
+  - **`i`** — Info. Sends a profiling signal (SIGINFO on macOS/BSD, SIGUSR1 on
+    Linux) to subprocesses, triggering a profile peek without interrupting
+    compilation.
+  - **Ctrl-C** — Interrupt. Sends SIGINT to subprocesses and displays their output.
+
 # Return
 - `Vector{String}`: Paths to cache files for the requested packages.
 - `Nothing`: precompilation should be skipped
@@ -552,12 +783,90 @@ function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
                         # asking for timing disables fancy mode, as timing is shown in non-fancy mode
                         fancyprint::Bool = can_fancyprint(io) && !timing,
                         manifest::Bool=false,
-                        ignore_loaded::Bool=true)
-    @debug "precompilepkgs called with" pkgs internal_call strict warn_loaded timing _from_loading configs fancyprint manifest ignore_loaded
+                        ignore_loaded::Bool=true,
+                        detachable::Bool=false)
+    @debug "precompilepkgs called with" pkgs internal_call strict warn_loaded timing _from_loading configs fancyprint manifest ignore_loaded detachable
     # monomorphize this to avoid latency problems
     _precompilepkgs(pkgs, internal_call, strict, warn_loaded, timing, _from_loading,
                    configs isa Vector{Config} ? configs : [configs],
-                   IOContext{IO}(io), fancyprint, manifest, ignore_loaded)
+                   io isa IOContext ? io : IOContext(io), fancyprint, manifest, ignore_loaded, detachable)
+end
+
+function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
+                                       internal_call::Bool,
+                                       strict::Bool,
+                                       warn_loaded::Bool,
+                                       timing::Bool,
+                                       _from_loading::Bool,
+                                       configs::Vector{Config},
+                                       io::IOContext,
+                                       fancyprint::Bool,
+                                       manifest::Bool,
+                                       ignore_loaded::Bool,
+                                       detachable::Bool)
+    # Stop any existing background precompilation
+    lock(BACKGROUND_PRECOMPILE.lock) do
+        if BACKGROUND_PRECOMPILE.task !== nothing && !istaskdone(BACKGROUND_PRECOMPILE.task)
+            BACKGROUND_PRECOMPILE.interrupt_requested = true
+            @lock BACKGROUND_PRECOMPILE.task_done notify(BACKGROUND_PRECOMPILE.task_done)
+        end
+    end
+
+    # Wait for previous task to complete
+    local old_task = lock(() -> BACKGROUND_PRECOMPILE.task, BACKGROUND_PRECOMPILE.lock)
+    if old_task !== nothing
+        wait(old_task)
+    end
+
+    lock(BACKGROUND_PRECOMPILE.lock) do
+        BACKGROUND_PRECOMPILE.interrupt_requested = false
+        BACKGROUND_PRECOMPILE.cancel_requested = false
+        empty!(BACKGROUND_PRECOMPILE.signal_channels)
+        BACKGROUND_PRECOMPILE.monitoring = true
+        BACKGROUND_PRECOMPILE.completed_at = nothing
+        BACKGROUND_PRECOMPILE.result = nothing
+        BACKGROUND_PRECOMPILE.return_value = nothing
+        BACKGROUND_PRECOMPILE.exception = nothing
+    end
+
+    # Capture necessary context for background task
+    pkg_names = pkgs isa Vector{String} ? copy(pkgs) : String[pkg.name for pkg in pkgs]
+
+    # Launch new background precompilation
+    lock(BACKGROUND_PRECOMPILE.lock) do
+        BACKGROUND_PRECOMPILE.task = Threads.@spawn :samepool begin
+            try
+                ret = do_precompile(pkg_names, internal_call, strict, warn_loaded, timing, _from_loading,
+                                    configs, io, fancyprint, manifest, ignore_loaded, detachable)
+
+                @lock BACKGROUND_PRECOMPILE.lock begin
+                    BACKGROUND_PRECOMPILE.return_value = ret
+                end
+            catch e
+                @lock BACKGROUND_PRECOMPILE.lock begin
+                    if BACKGROUND_PRECOMPILE.interrupt_requested || BACKGROUND_PRECOMPILE.cancel_requested
+                        BACKGROUND_PRECOMPILE.result = "Background precompilation was interrupted"
+                    else
+                        BACKGROUND_PRECOMPILE.exception = e
+                        BACKGROUND_PRECOMPILE.result = "Background precompilation failed: $(sprint(showerror, e))"
+                    end
+                end
+            finally
+                @lock BACKGROUND_PRECOMPILE.lock begin
+                    BACKGROUND_PRECOMPILE.task = nothing
+                    BACKGROUND_PRECOMPILE.interrupt_requested = false
+                    BACKGROUND_PRECOMPILE.cancel_requested = false
+                    foreach(close, BACKGROUND_PRECOMPILE.signal_channels)
+                    empty!(BACKGROUND_PRECOMPILE.signal_channels)
+                    BACKGROUND_PRECOMPILE.monitoring = false
+                    BACKGROUND_PRECOMPILE.completed_at = time()
+                    @lock BACKGROUND_PRECOMPILE.task_done notify(BACKGROUND_PRECOMPILE.task_done)
+                end
+            end
+        end
+    end
+
+    return nothing
 end
 
 function _visit_indirect_deps!(direct_deps::Dict{PkgId, Vector{PkgId}}, visited::Set{PkgId},
@@ -582,10 +891,54 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                          timing::Bool,
                          _from_loading::Bool,
                          configs::Vector{Config},
-                         io::IOContext{IO},
+                         io::IOContext,
                          fancyprint′::Bool,
                          manifest::Bool,
-                         ignore_loaded::Bool)
+                         ignore_loaded::Bool,
+                         detachable::Bool)
+    # Check if a background task is already running
+    local already_running = false
+    @lock BACKGROUND_PRECOMPILE.lock begin
+        if BACKGROUND_PRECOMPILE.task !== nothing && !istaskdone(BACKGROUND_PRECOMPILE.task)
+            already_running = true
+        end
+    end
+
+    if already_running
+        # Print message that a job is currently running
+        printpkgstyle(io.io, :Precompiling, "in the background already. Monitoring...", color = Base.info_color())
+    else
+        # Launch new background task
+        launch_background_precompile(pkgs, internal_call, strict, warn_loaded, timing, _from_loading,
+                                     configs, io, fancyprint′, manifest, ignore_loaded, detachable)
+    end
+
+    # Monitor (blocks until complete or user detaches)
+    monitor_background_precompile(io.io, detachable)
+
+    # Propagate return value or exception from do_precompile
+    local ret_val, ret_ex
+    @lock BACKGROUND_PRECOMPILE.lock begin
+        ret_val = BACKGROUND_PRECOMPILE.return_value
+        ret_ex = BACKGROUND_PRECOMPILE.exception
+    end
+    ret_ex !== nothing && throw(ret_ex)
+    return ret_val
+end
+
+# The actual precompilation implementation (mode-agnostic)
+function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
+                        internal_call::Bool,
+                        strict::Bool,
+                        warn_loaded::Bool,
+                        timing::Bool,
+                        _from_loading::Bool,
+                        configs::Vector{Config},
+                        io::IOContext,
+                        fancyprint′::Bool,
+                        manifest::Bool,
+                        ignore_loaded::Bool,
+                        detachable::Bool)
     requested_pkgs = copy(pkgs) # for understanding user intent
     pkg_names = pkgs isa Vector{String} ? copy(pkgs) : String[pkg.name for pkg in pkgs]
     if pkgs isa Vector{PkgId}
@@ -814,7 +1167,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         end
     end
     if !isempty(circular_deps)
-        @warn excluded_circular_deps_explanation(io, ext_to_parent, circular_deps, cycles)
+        printpkgstyle(io, :Warning, excluded_circular_deps_explanation(io, ext_to_parent, circular_deps, cycles), color=Base.warn_color())
     end
 
     # If you have a workspace and want to precompile all projects in it, look through all packages in the manifest
@@ -848,14 +1201,10 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         end
         filter!(d->in(first(d), keep), direct_deps)
         if isempty(direct_deps)
-            if _from_loading
-                # if called from loading precompilation it may be a package from another environment stack so
-                # don't error and allow serial precompilation to try
-                # TODO: actually handle packages from other envs in the stack
-                return
-            else
-                return
-            end
+            # if called from loading precompilation it may be a package from another environment stack so
+            # don't error and allow serial precompilation to try
+            # TODO: actually handle packages from other envs in the stack
+            return
         end
     end
 
@@ -865,7 +1214,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
             target[] = "for configuration $(join(only(configs)[1], " "))"
         end
     else
-        target[] = "for $nconfigs compilation configurations..."
+        target[] = "for $nconfigs compilation configurations"
     end
 
     pkg_queue = PkgConfig[]
@@ -876,6 +1225,29 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     first_started = Base.Event()
     printloop_should_exit = Ref{Bool}(!fancyprint) # exit print loop immediately if not fancy printing
     interrupted_or_done = Ref{Bool}(false)
+    function should_stop(interrupted)
+        local ir, cr
+        @lock BACKGROUND_PRECOMPILE.lock begin
+            ir = BACKGROUND_PRECOMPILE.interrupt_requested
+            cr = BACKGROUND_PRECOMPILE.cancel_requested
+        end
+        if ir || cr
+            interrupted[] = interrupted[] || ir
+            if !interrupted_or_done[]
+                interrupted_or_done[] = true
+                foreach(notify, values(was_processed))
+                notify(first_started)
+            end
+            return true
+        end
+        return interrupted_or_done[]
+    end
+    # Create a per-process channel registered in signal_channels, closed when compilecache finishes
+    function make_signal_channel()
+        ch = Channel{Int32}(32)
+        @lock BACKGROUND_PRECOMPILE.lock push!(BACKGROUND_PRECOMPILE.signal_channels, ch)
+        return ch
+    end
 
     ansi_moveup(n::Int) = string("\e[", n, "A")
     ansi_movecol1 = "\e[1G"
@@ -886,48 +1258,30 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     n_done = Ref(0)
     n_already_precomp = Ref(0)
     n_loaded = Ref(0)
-    interrupted = Ref(false)
+    interrupted::Ref{Bool} = Ref(false)
     t_print = Ref{Task}()
 
-    function handle_interrupt(err, in_printloop::Bool)
-        if err isa InterruptException
-            # record that this interrupted_or_done was from InterruptException
-            interrupted[] = true
-        end
-        interrupted_or_done[] = true
-        # notify all Event sources
-        for (pkg_config, evt) in was_processed
-            notify(evt)
-        end
-        notify(first_started)
-        in_printloop || (isassigned(t_print) && wait(t_print[])) # Wait to let the print loop cease first. This makes the printing incorrect, so we shouldn't wait here, but we do anyways.
-        if err isa InterruptException
-            @lock print_lock begin
-                println(io, " Interrupted: Exiting precompilation...", ansi_cleartoendofline)
-            end
-            return true
-        else
-            return false
-        end
-    end
     std_outputs = Dict{PkgConfig,IOBuffer}()
     taskwaiting = Set{PkgConfig}()
     pkgspidlocked = Dict{PkgConfig,String}()
     pkg_liveprinted = Ref{Union{Nothing, PkgId}}(nothing)
 
     ## fancy print loop
-    t_print[] = @async begin
+    t_print[] = Threads.@spawn :samepool begin
         try
             wait(first_started)
             (isempty(pkg_queue) || interrupted_or_done[]) && return
+            keyboard_tip = if fancyprint && isinteractive() && (stdin isa Base.TTY)
+                detachable ? "Press `c` to cancel, `d` to detach." : "Press `c` to cancel."
+            else
+                ""
+            end
             @lock print_lock begin
-                if target[] !== nothing
-                    printpkgstyle(logio, :Precompiling, target[])
-                end
-                if fancyprint
-                    print(logio, ansi_disablecursor)
+                if BACKGROUND_PRECOMPILE.monitoring && target[] !== nothing
+                    printpkgstyle(logio, :Precompiling, something(target[], ""))
                 end
             end
+            cursor_disabled = false
             t = Timer(0; interval=1/10)
             anim_chars = ["◐","◓","◑","◒"]
             i = 1
@@ -948,17 +1302,20 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     end
                     local i_local = i
                     local final_loop_local = final_loop
-                    str_ = sprint() do iostr
+                    str_ = sprint(; context=logio) do iostr
                         if i_local > 1
                             print(iostr, ansi_cleartoend)
                         end
                         bar.current = n_done[] - n_already_precomp[]
                         bar.max = n_total - n_already_precomp[]
-                        # when sizing to the terminal width subtract a little to give some tolerance to resizing the
-                        # window between print cycles
-                        termwidth = (displaysize(io)::Tuple{Int,Int})[2] - 4
+                        termwidth = (displaysize(logio)::Tuple{Int,Int})[2]
                         if !final_loop_local
-                            s = sprint(io -> show_progress(io, bar; termwidth, carriagereturn=false); context=logio)
+                            tip_width = isempty(keyboard_tip) ? 0 : textwidth(keyboard_tip) + 1
+                            bar_termwidth = termwidth - tip_width
+                            s = sprint(io -> show_progress(io, bar; termwidth=bar_termwidth, carriagereturn=false); context=logio)
+                            if !isempty(keyboard_tip)
+                                s = string(s, " ", keyboard_tip)
+                            end
                             print(iostr, Base._truncate_at_width_or_chars(true, s, termwidth), "\n")
                         end
                         for pkg_config in pkg_queue_show
@@ -972,10 +1329,10 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                                 string(color_string("  ✗ ", Base.error_color()), name)
                             elseif was_recompiled[pkg_config]
                                 !loaded && interrupted_or_done[] && continue
-                                loaded || @async begin # keep successful deps visible for short period
+                                loaded || Base.errormonitor(Threads.@spawn :samepool begin # keep successful deps visible for short period
                                     sleep(1);
                                     filter!(!isequal(pkg_config), pkg_queue)
-                                end
+                                end)
                                 string(color_string("  ✓ ", loaded ? Base.warn_color() : :green), name)
                             elseif started[pkg_config]
                                 # Offset each spinner animation using the first character in the package name as the seed.
@@ -999,21 +1356,28 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     end
                     last_length = length(pkg_queue_show)
                     n_print_rows = count("\n", str_)
-                    print(logio, str_)
                     printloop_should_exit[] = interrupted_or_done[] && final_loop
                     final_loop = interrupted_or_done[] # ensures one more loop to tidy last task after finish
                     i += 1
-                    printloop_should_exit[] || print(logio, ansi_moveup(n_print_rows), ansi_movecol1)
+                    if BACKGROUND_PRECOMPILE.monitoring
+                        if fancyprint && !cursor_disabled
+                            print(logio, ansi_disablecursor)
+                            cursor_disabled = true
+                        end
+                        if printloop_should_exit[]
+                            print(logio, str_)
+                        else
+                            print(logio, str_, ansi_moveup(n_print_rows), ansi_movecol1)
+                        end
+                    elseif cursor_disabled
+                        print(logio, ansi_enablecursor)
+                        cursor_disabled = false
+                    end
                 end
                 wait(t)
             end
-        catch err
-            # For debugging:
-            # println("Task failed $err")
-            # Base.display_error(ErrorException(""), Base.catch_backtrace())
-            handle_interrupt(err, true) || rethrow()
         finally
-            fancyprint && print(logio, ansi_enablecursor)
+            @isdefined(cursor_disabled) && cursor_disabled && print(logio, ansi_enablecursor)
         end
     end
 
@@ -1050,154 +1414,132 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                 continue
             end
             local flags, cacheflags = config
-            task = @async begin
-                try
-                    loaded = warn_loaded && haskey(Base.loaded_modules, pkg)
-                    for dep in deps # wait for deps to finish
-                        wait(was_processed[(dep,config)])
-                        if interrupted_or_done[]
+            task = Threads.@spawn :samepool try
+                loaded = warn_loaded && haskey(Base.loaded_modules, pkg)
+                for dep in deps # wait for deps to finish
+                    wait(was_processed[(dep,config)])
+                    if should_stop(interrupted)
+                        return
+                    end
+                end
+                circular = pkg in circular_deps
+                freshpath = Base.compilecache_freshest_path(pkg; ignore_loaded, stale_cache, cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
+                is_stale = freshpath === nothing
+                if !is_stale
+                    push!(freshpaths, freshpath)
+                end
+                if !circular && is_stale
+                    Base.acquire(parallel_limiter)
+                    is_serial_dep = pkg in serial_deps
+                    is_project_dep = pkg in project_deps
+
+                    # std monitoring
+                    std_pipe = Base.link_pipe!(Pipe(); reader_supports_async=true, writer_supports_async=true)
+                    t_monitor = Threads.@spawn :samepool _precompilepkgs_monitor_std(pkg_config, std_pipe,
+                        single_requested_pkg, ext_to_parent, hascolor, std_outputs, taskwaiting,
+                        pkg_liveprinted, print_lock, io, fancyprint, ansi_cleartoendofline)
+
+                    local name
+                    try
+                        name = describe_pkg(pkg, is_project_dep, is_serial_dep, flags, cacheflags)
+                        @lock print_lock begin
+                            if !fancyprint && isempty(pkg_queue) && BACKGROUND_PRECOMPILE.monitoring
+                                printpkgstyle(logio, :Precompiling, something(target[], "packages..."))
+                            end
+                        end
+                        push!(pkg_queue, pkg_config)
+                        started[pkg_config] = true
+                        fancyprint && notify(first_started)
+                        if should_stop(interrupted)
                             return
                         end
-                    end
-                    circular = pkg in circular_deps
-                    freshpath = Base.compilecache_freshest_path(pkg; ignore_loaded, stale_cache, cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
-                    is_stale = freshpath === nothing
-                    if !is_stale
-                        push!(freshpaths, freshpath)
-                    end
-                    if !circular && is_stale
-                        Base.acquire(parallel_limiter)
-                        is_serial_dep = pkg in serial_deps
-                        is_project_dep = pkg in project_deps
+                        # for extensions, any extension that can trigger it needs to be accounted for here (even stdlibs, which are excluded from direct_deps)
+                        loadable_exts = haskey(ext_to_parent, pkg) ? filter((dep)->haskey(ext_to_parent, dep), triggers[pkg]) : nothing
 
-                        # std monitoring
-                        std_pipe = Base.link_pipe!(Pipe(); reader_supports_async=true, writer_supports_async=true)
-                        t_monitor = @async _precompilepkgs_monitor_std(pkg_config, std_pipe,
-                            single_requested_pkg, ext_to_parent, hascolor, std_outputs, taskwaiting,
-                            pkg_liveprinted, print_lock, io, fancyprint, ansi_cleartoendofline)
-
-                        local name
-                        try
-                            name = describe_pkg(pkg, is_project_dep, is_serial_dep, flags, cacheflags)
-                            @lock print_lock begin
-                                if !fancyprint && isempty(pkg_queue)
-                                    printpkgstyle(logio, :Precompiling, something(target[], "packages..."))
-                                end
-                            end
-                            push!(pkg_queue, pkg_config)
-                            started[pkg_config] = true
-                            fancyprint && notify(first_started)
-                            if interrupted_or_done[]
-                                return
-                            end
-                            # for extensions, any extension that can trigger it needs to be accounted for here (even stdlibs, which are excluded from direct_deps)
-                            loadable_exts = haskey(ext_to_parent, pkg) ? filter((dep)->haskey(ext_to_parent, dep), triggers[pkg]) : nothing
-
-                            flags_ =if !isempty(deps)
-                                # if deps is empty, either it doesn't have any (so compiled-modules is
-                                # irrelevant) or we couldn't compute them (so we actually should attempt
-                                # serial compile, as the dependencies are not in the parallel list)
-                                `$flags --compiled-modules=strict`
-                            else
-                                flags
-                            end
-
-                            if _from_loading && pkg in requested_pkgids
-                                # loading already took the cachefile_lock and printed logmsg for its explicit requests
-                                t = @elapsed ret = begin
-                                    Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !ignore_loaded;
-                                                      flags=flags_, cacheflags, loadable_exts)
-                                end
-                            else
-                                # allows processes to wait if another process is precompiling a given package to
-                                # a functionally identical package cache (except for preferences, which may differ)
-                                fullname = full_name(ext_to_parent, pkg)
-                                t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(io, print_lock, fancyprint, pkg_config, pkgspidlocked, hascolor, parallel_limiter, fullname) do
-                                    # refresh and double-check the search now that we have global lock
-                                    if interrupted_or_done[]
-                                        return ErrorException("canceled")
-                                    end
-                                    local cachepaths = Base.find_all_in_cache_path(pkg)
-                                    local freshpath = Base.compilecache_freshest_path(pkg; ignore_loaded, stale_cache, cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
-                                    local is_stale = freshpath === nothing
-                                    if !is_stale
-                                        push!(freshpaths, freshpath)
-                                        return nothing # returning nothing indicates another process did the recompile
-                                    end
-                                    logcalls === CoreLogging.Debug && @lock print_lock begin
-                                        @debug "Precompiling $(repr("text/plain", pkg))"
-                                    end
-                                    Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !ignore_loaded;
-                                                      flags=flags_, cacheflags, loadable_exts)
-                                end
-                            end
-                            if ret isa Exception
-                                push!(precomperr_deps, pkg_config)
-                                !fancyprint && @lock print_lock begin
-                                    println(logio, _timing_string(t), color_string("  ? ", Base.warn_color()), name)
-                                end
-                            else
-                                !fancyprint && @lock print_lock begin
-                                    println(logio, _timing_string(t), color_string("  ✓ ", loaded ? Base.warn_color() : :green), name)
-                                end
-                                if ret !== nothing
-                                    was_recompiled[pkg_config] = true
-                                    cachefile, _ = ret::Tuple{String, Union{Nothing, String}}
-                                    push!(freshpaths, cachefile)
-                                    build_id, _ = Base.parse_cache_buildid(cachefile)
-                                    stale_cache_key = (pkg, build_id, sourcespec, cachefile, ignore_loaded, cacheflags)::StaleCacheKey
-                                    stale_cache[stale_cache_key] = false
-                                end
-                            end
-                            loaded && (n_loaded[] += 1)
-                        catch err
-                            close(std_pipe.in) # close pipe to end the std output monitor
-                            wait(t_monitor)
-                            if err isa ErrorException || (err isa ArgumentError && startswith(err.msg, "Invalid header in cache file"))
-                                failed_deps[pkg_config] = sprint(showerror, err)
-                                !fancyprint && @lock print_lock begin
-                                    println(logio, " "^12, color_string("  ✗ ", Base.error_color()), name)
-                                end
-                            else
-                                rethrow()
-                            end
-                        finally
-                            isopen(std_pipe.in) && close(std_pipe.in) # close pipe to end the std output monitor
-                            wait(t_monitor)
-                            Base.release(parallel_limiter)
+                        flags_ =if !isempty(deps)
+                            # if deps is empty, either it doesn't have any (so compiled-modules is
+                            # irrelevant) or we couldn't compute them (so we actually should attempt
+                            # serial compile, as the dependencies are not in the parallel list)
+                            `$flags --compiled-modules=strict`
+                        else
+                            flags
                         end
-                    else
-                        is_stale || (n_already_precomp[] += 1)
+
+                        if _from_loading && pkg in requested_pkgids
+                            # loading already took the cachefile_lock and printed logmsg for its explicit requests
+                            t = @elapsed ret = begin
+                                Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !ignore_loaded;
+                                                  flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel())
+                            end
+                        else
+                            # allows processes to wait if another process is precompiling a given package to
+                            # a functionally identical package cache (except for preferences, which may differ)
+                            fullname = full_name(ext_to_parent, pkg)
+                            t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(io, print_lock, fancyprint, pkg_config, pkgspidlocked, hascolor, parallel_limiter, fullname) do
+                                # refresh and double-check the search now that we have global lock
+                                if should_stop(interrupted)
+                                    return ErrorException("canceled")
+                                end
+                                local cachepaths = Base.find_all_in_cache_path(pkg)
+                                local freshpath = Base.compilecache_freshest_path(pkg; ignore_loaded, stale_cache, cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
+                                local is_stale = freshpath === nothing
+                                if !is_stale
+                                    push!(freshpaths, freshpath)
+                                    return nothing # returning nothing indicates another process did the recompile
+                                end
+                                logcalls === CoreLogging.Debug && @lock print_lock begin
+                                    @debug "Precompiling $(repr("text/plain", pkg))"
+                                end
+                                Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !ignore_loaded;
+                                                  flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel())
+                            end
+                        end
+                        if ret isa Exception
+                            push!(precomperr_deps, pkg_config)
+                            !fancyprint && BACKGROUND_PRECOMPILE.monitoring && @lock print_lock begin
+                                println(logio, _timing_string(t), color_string("  ? ", Base.warn_color()), name)
+                            end
+                        else
+                            !fancyprint && BACKGROUND_PRECOMPILE.monitoring && @lock print_lock begin
+                                println(logio, _timing_string(t), color_string("  ✓ ", loaded ? Base.warn_color() : :green), name)
+                            end
+                            if ret !== nothing
+                                was_recompiled[pkg_config] = true
+                                cachefile, _ = ret::Tuple{String, Union{Nothing, String}}
+                                push!(freshpaths, cachefile)
+                                build_id, _ = Base.parse_cache_buildid(cachefile)
+                                stale_cache_key = (pkg, build_id, sourcespec, cachefile, ignore_loaded, cacheflags)::StaleCacheKey
+                                stale_cache[stale_cache_key] = false
+                            end
+                        end
+                        loaded && (n_loaded[] += 1)
+                    catch err
+                        close(std_pipe.in) # close pipe to end the std output monitor
+                        wait(t_monitor)
+                        err isa InterruptException && rethrow()
+                        failed_deps[pkg_config] = sprint(showerror, err)
+                        !fancyprint && BACKGROUND_PRECOMPILE.monitoring && @lock print_lock begin
+                            println(logio, " "^12, color_string("  ✗ ", Base.error_color()), name)
+                        end
+                    finally
+                        isopen(std_pipe.in) && close(std_pipe.in) # close pipe to end the std output monitor
+                        wait(t_monitor)
+                        Base.release(parallel_limiter)
                     end
-                    n_done[] += 1
-                    notify(was_processed[pkg_config])
-                catch err_outer
-                    # For debugging:
-                    println("Task failed $err_outer")
-                    Base.display_error(ErrorException(""), Base.catch_backtrace())# logging doesn't show here
-                    handle_interrupt(err_outer, false)
-                    rethrow()
+                else
+                    is_stale || (n_already_precomp[] += 1)
                 end
+            finally
+                n_done[] += 1
+                notify(was_processed[pkg_config])
             end
             push!(tasks, task)
         end
     end
-    try
-        waitall(tasks; failfast=false, throw=false)
-        interrupted_or_done[] = true
-    catch err
-        # For debugging:
-        println("Task failed $err")
-        Base.display_error(ErrorException(""), Base.catch_backtrace())# logging doesn't show here
-        handle_interrupt(err, false) || rethrow()
-    finally
-        try
-            waitall(tasks; failfast=false, throw=false)
-        finally
-            @lock Base.require_lock begin
-                Base.LOADING_CACHE[] = nothing
-            end
-        end
+    waitall(tasks; failfast=false, throw=false)
+    interrupted_or_done[] = true
+    @lock Base.require_lock begin
+        Base.LOADING_CACHE[] = nothing
     end
     notify(first_started) # in cases of no-op or !fancyprint
     fancyprint && isassigned(t_print) && wait(t_print[])
@@ -1214,7 +1556,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     end
     # if every requested package succeeded, filter away output from failed packages
     # since it didn't contribute to the overall success and can be regenerated if that package is later required
-    if !strict && !requested_errs
+    if !strict && !requested_errs && !interrupted[]
         for (pkg_config, err) in failed_deps
             delete!(std_outputs, pkg_config)
         end
@@ -1255,8 +1597,23 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     )
                 end
             end
-            @lock print_lock begin
+            @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.result = logstr
+            BACKGROUND_PRECOMPILE.monitoring && @lock print_lock begin
                 println(logio, logstr)
+            end
+        elseif interrupted[]
+            istr = sprint(context=logio) do iostr
+                if fancyprint
+                    printpkgstyle(iostr, :Precompiling, "interrupted.")
+                end
+                n_failed = length(failed_deps)
+                print(iostr, "  $(ndeps) dependenc$(ndeps == 1 ? "y" : "ies") precompiled, ",
+                      color_string("$(n_failed)", Base.error_color()),
+                      " interrupted after $(seconds_elapsed) seconds")
+            end
+            @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.result = istr
+            BACKGROUND_PRECOMPILE.monitoring && @lock print_lock begin
+                println(logio, istr)
             end
         end
     end
@@ -1283,13 +1640,9 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                 end
             end
         end
-        isempty(str) || @lock print_lock begin
+        isempty(str) || BACKGROUND_PRECOMPILE.monitoring && @lock print_lock begin
             println(io, str)
         end
-    end
-    # Done cleanup and sub-process output, now ensure caller aborts too with the right error
-    if interrupted[]
-        throw(InterruptException())
     end
     # Fail noisily now with failed_deps if any.
     # Include all messages from compilecache since any might be relevant in the failure.
@@ -1311,6 +1664,10 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
             throw(PkgPrecompileError(err_msg))
         end
     end
+    # After all cleanup and output, throw InterruptException if user cancelled
+    if interrupted[]
+        throw(InterruptException())
+    end
     return collect(String, Iterators.flatten((v for (pkgid, v) in cachepath_cache if pkgid in requested_pkgids)))
 end
 
@@ -1318,38 +1675,32 @@ function _precompilepkgs_monitor_std(pkg_config, pipe, single_requested_pkg::Boo
     ext_to_parent, hascolor::Bool, std_outputs, taskwaiting, pkg_liveprinted, print_lock,
     io::IOContext, fancyprint::Bool, ansi_cleartoendofline::String)
     local pkg, config = pkg_config
-    try
-        local liveprinting = false
-        local thistaskwaiting = false
-        while !eof(pipe)
-            local str = readline(pipe, keep=true)
-            if single_requested_pkg && (liveprinting || !isempty(str))
-                @lock print_lock begin
-                    if !liveprinting
-                        liveprinting = true
-                        pkg_liveprinted[] = pkg
-                    end
-                    print(io, ansi_cleartoendofline, str)
+    local liveprinting = false
+    local thistaskwaiting = false
+    while !eof(pipe)
+        local str = readline(pipe, keep=true)
+        if single_requested_pkg && (liveprinting || !isempty(str))
+            BACKGROUND_PRECOMPILE.monitoring && @lock print_lock begin
+                if !liveprinting
+                    liveprinting = true
+                    pkg_liveprinted[] = pkg
                 end
-            end
-            write(get!(IOBuffer, std_outputs, pkg_config), str)
-            if thistaskwaiting
-                if occursin("Waiting for background task / IO / timer", str)
-                    thistaskwaiting = true
-                    !liveprinting && !fancyprint && @lock print_lock begin
-                        println(io, full_name(ext_to_parent, pkg), _color_string(str, Base.warn_color(), hascolor))
-                    end
-                    push!(taskwaiting, pkg_config)
-                end
-            else
-                # XXX: don't just re-enable IO for random packages without printing the context for them first
-                !liveprinting && !fancyprint && @lock print_lock begin
-                    print(io, ansi_cleartoendofline, str)
-                end
+                print(io, ansi_cleartoendofline, str)
             end
         end
-    catch err
-        err isa InterruptException || rethrow()
+        write(get!(IOBuffer, std_outputs, pkg_config), str)
+        if !thistaskwaiting && occursin("Waiting for background task / IO / timer", str)
+            thistaskwaiting = true
+            !liveprinting && !fancyprint && BACKGROUND_PRECOMPILE.monitoring && @lock print_lock begin
+                println(io, full_name(ext_to_parent, pkg), _color_string(str, Base.warn_color(), hascolor))
+            end
+            push!(taskwaiting, pkg_config)
+        elseif !thistaskwaiting
+            # XXX: don't just re-enable IO for random packages without printing the context for them first
+            !liveprinting && !fancyprint && BACKGROUND_PRECOMPILE.monitoring && @lock print_lock begin
+                print(io, ansi_cleartoendofline, str)
+            end
+        end
     end
 end
 
@@ -1391,7 +1742,7 @@ function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLo
         else
             "another machine (hostname: $hostname, pid: $pid, pidfile: $pidfile)"
         end
-        !fancyprint && @lock print_lock begin
+        !fancyprint && BACKGROUND_PRECOMPILE.monitoring && @lock print_lock begin
             println(io, "    ", fullname, _color_string(" Being precompiled by $(pkgspidlocked[pkg_config])", Base.info_color(), hascolor))
         end
         Base.release(parallel_limiter) # release so other work can be done while waiting

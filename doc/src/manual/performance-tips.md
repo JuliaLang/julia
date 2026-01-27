@@ -1611,6 +1611,16 @@ so will show which methods are precompiled and how long they took to precompile.
 
 There are also profiling options such as [using the external profiler Tracy to profile the precompilation process](@ref Profiling-package-precompilation-with-Tracy).
 
+### Keyboard controls during precompilation
+
+When package precompilation is running interactively, the following keyboard controls are available:
+
+  * **`c`** — Cancel. Kills all subprocesses and suppresses their output.
+  * **`d`** — Detach. Returns to the REPL while precompilation continues in the background
+    (only available when precompilation was started by Pkg or with `detachable=true`).
+  * **`i`** — Info. Sends a profiling signal to subprocesses for a profile peek without
+    interrupting compilation.
+  * **Ctrl-C** — Interrupt. Sends SIGINT to subprocesses and displays their output.
 
 ## Miscellaneous
 
