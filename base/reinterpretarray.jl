@@ -196,6 +196,13 @@ strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = siz
 stride(A::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, k::Integer) =
     k ≤ ndims(A) ? strides(A)[k] : length(A)
 
+has_strided_get(::Array) = true
+has_strided_set(::Array) = true
+has_strided_get(::Memory) = true
+has_strided_set(::Memory) = true
+has_strided_get(::CodeUnits{UInt8, <:Union{String, SubString{String}}}) = true
+has_strided_set(::CodeUnits{UInt8, <:Union{String, SubString{String}}}) = false
+
 function strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) where {T,S,IsReshaped}
     _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
     stp = strides(parent(a))
@@ -205,6 +212,41 @@ function strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) w
     stp[1] == 1 || throw(ArgumentError("Parent must be contiguous in the 1st dimension!"))
     st′ = _checked_strides(tail(stp), els, elp)
     return IsReshaped ? st′ : (1, st′...)
+end
+
+function has_strided_get(a::ReinterpretArray)::Bool
+    has_strided_get(parent(a)) && (a.readable) && _check_strides(a)
+end
+
+function has_strided_set(a::ReinterpretArray)::Bool
+    has_strided_set(parent(a)) && (a.writeable) && _check_strides(a)
+end
+
+# Return true if a is strided, assuming the parent is strided.
+function _check_strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped})::Bool where {T,S,IsReshaped}
+    els, elp = sizeof(T), sizeof(S)
+    elsize(parent(a)) != elp && return false
+    _checkcontiguous(Bool, a) && return true
+    els == elp && return true
+    stp = strides(parent(a))
+    if IsReshaped 
+        if els < elp
+            # The constructor ensures rem(elp, els) == 0
+            return true
+        end
+        if stp[1] != 1
+            return false
+        end
+    else
+        if stp[1] != 1
+            return false
+        end
+        if elp > els && rem(elp, els) == 0
+            return true
+        else
+            return all(i->iszero(rem(elp * i, els)), stp)
+        end
+    end
 end
 
 @inline function _checked_strides(stp::Tuple, els::Integer, elp::Integer)
