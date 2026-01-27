@@ -1366,6 +1366,11 @@ function _color_string(cstr::String, col::Union{Int64, Symbol}, hascolor)
 end
 
 # Can be merged with `maybe_cachefile_lock` in loading?
+# Wraps the precompilation function `f` with cachefile lock handling.
+# Returns the result from `f()`, which can be:
+#   - `nothing`: cache already existed
+#   - `Tuple{String, Union{Nothing, String}}`: this process just compiled
+#   - `Exception`: compilation failed
 function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLock, fancyprint::Bool, pkg_config, pkgspidlocked, hascolor, parallel_limiter::Base.Semaphore, fullname)
     if !(isdefined(Base, :mkpidlock_hook) && isdefined(Base, :trymkpidlock_hook) && Base.isdefined(Base, :parse_pidfile_hook))
         return f()
@@ -1392,7 +1397,7 @@ function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLo
         Base.release(parallel_limiter) # release so other work can be done while waiting
         try
             # wait until the lock is available
-            @invokelatest Base.mkpidlock_hook(() -> begin
+            cachefile = @invokelatest Base.mkpidlock_hook(() -> begin
                     delete!(pkgspidlocked, pkg_config)
                     Base.acquire(f, parallel_limiter)
                 end,
