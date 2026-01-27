@@ -429,6 +429,9 @@
            ((macrocall) e) ; invalid syntax anyways, so just act like it's quoted.
            ((symboliclabel) e)
            ((symbolicgoto) e)
+           ((symbolicblock)
+            ;; recursively expand the body of a symbolic block
+            `(symbolicblock ,(cadr e) ,(resolve-expansion-vars- (caddr e) env m lno parent-scope inarg)))
            ((struct)
             `(struct ,(cadr e) ,(resolve-expansion-vars- (caddr e) env m lno parent-scope inarg)
                      ,(map (lambda (x)
@@ -674,6 +677,27 @@
            (newlabel (if havelabel havelabel (named-gensy s))))
       (if (not havelabel) (put! relabels s newlabel))
       `(,(car e) ,newlabel)))
+   ((eq? (car e) 'symbolicblock)
+    ;; rename label and recurse into body
+    (let* ((s (cadr e))
+           (havelabel (if (or (null? parent-scope) (not (symbol? s))) s (get relabels s #f)))
+           (newlabel (if havelabel havelabel (named-gensy s))))
+      (if (not havelabel) (put! relabels s newlabel))
+      `(symbolicblock ,newlabel ,(rename-symbolic-labels- (caddr e) relabels parent-scope))))
+   ((and (eq? (car e) 'break) (pair? (cdr e)) (symbol? (cadr e)))
+    ;; rename break label if it exists in relabels
+    (let* ((s (cadr e))
+           (newlabel (if (null? parent-scope) s (get relabels s s))))
+      (if (length> e 2)
+          ;; break label val
+          `(break ,newlabel ,(rename-symbolic-labels- (caddr e) relabels parent-scope))
+          ;; break label
+          `(break ,newlabel))))
+   ((and (eq? (car e) 'continue) (pair? (cdr e)) (symbol? (cadr e)))
+    ;; rename continue label if it exists in relabels
+    (let* ((s (cadr e))
+           (newlabel (if (null? parent-scope) s (get relabels s s))))
+      `(continue ,newlabel)))
    (else
     (cons (car e)
           (map (lambda (x) (rename-symbolic-labels- x relabels parent-scope))

@@ -240,7 +240,7 @@ RegexMatch(match::SubString{S}, captures::Vector{Union{Nothing,SubString{S}}},
 
 Return a vector of keys for all capture groups of the underlying regex.
 A key is included even if the capture group fails to match.
-That is, `idx` will be in the return value even if `m[idx] == nothing`.
+That is, `idx` will be in the return value even if `m[idx] === nothing`.
 
 Unnamed capture groups will have integer keys corresponding to their index.
 Named capture groups will have string keys.
@@ -841,7 +841,7 @@ RegexMatch("Hello world")
 julia> r = r"a|b" * "c|d"
 r"(?:a|b)\\Qc|d\\E"
 
-julia> match(r, "ac") == nothing
+julia> match(r, "ac") === nothing
 true
 
 julia> match(r, "ac|d")
