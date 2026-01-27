@@ -626,7 +626,6 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         LineEdit.history_prev(s, hp)
         @test s.key_repeats == 0 "key_repeats should be reset after history recall"
         @test isempty(s.previous_key) "previous_key should be reset after history recall"
-        
         LineEdit.accept_result(s, prefix_mode)
     end
 end
