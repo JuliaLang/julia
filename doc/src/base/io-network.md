@@ -13,6 +13,7 @@ Base.open
 Base.IOStream
 Base.IOBuffer
 Base.take!(::Base.GenericIOBuffer)
+Base.takestring!
 Base.Pipe
 Base.link_pipe!
 Base.fdio

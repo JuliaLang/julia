@@ -448,7 +448,7 @@ function add_entrypoint(types::Type)
     mi = ccall(:jl_get_compile_hint_specialization, Any,
                    (Any, Csize_t, Cint),
                    types, world, 1)
-    if mi == nothing
+    if mi === nothing
         return false
     end
     push!(_entrypoint_mis, mi::Core.MethodInstance)

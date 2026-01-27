@@ -106,7 +106,6 @@ static void update_implicit_resolution(struct implicit_search_resolution *to_upd
         return;
     }
     if (to_update->ultimate_kind == PARTITION_KIND_GUARD) {
-        assert(resolution.binding_or_const);
         to_update->ultimate_kind = resolution.ultimate_kind;
         to_update->binding_or_const = resolution.binding_or_const;
         to_update->debug_only_import_from = resolution.debug_only_import_from;
@@ -329,6 +328,10 @@ struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t *b, mo
                 imp_resolution.binding_or_const = tempbpart->restriction;
                 imp_resolution.debug_only_ultimate_binding = tempb;
                 imp_resolution.ultimate_kind = PARTITION_KIND_IMPLICIT_CONST;
+            } else if (kind == PARTITION_KIND_FAILED) {
+                imp_resolution.binding_or_const = NULL;
+                imp_resolution.debug_only_ultimate_binding = tempb;
+                imp_resolution.ultimate_kind = PARTITION_KIND_FAILED;
             }
         }
         // If this using has the reexport flag, mark that the binding should be reexported
