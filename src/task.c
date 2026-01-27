@@ -1569,10 +1569,25 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
         ct->ctx.bufsz = ssize;
     }
 
-#ifdef USE_TRACY
+#if defined(USE_TRACY) || defined(USE_NVTX)
     char *unique_string = (char *)malloc(strlen("Root") + 1);
     strcpy(unique_string, "Root");
+#ifdef USE_TRACY
     ct->name = unique_string;
+#endif
+#ifdef USE_NVTX
+    nvtxEventAttributes_t nvtx_attrs = {0};
+    nvtx_attrs.version = NVTX_VERSION;
+    nvtx_attrs.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+
+    nvtx_attrs.messageType = NVTX_MESSAGE_TYPE_REGISTERED;
+    nvtx_attrs.message.registered = nvtxDomainRegisterStringA(jl_timing_nvtx_task_domain, unique_string);
+
+    nvtx_attrs.colorType = NVTX_COLOR_ARGB;
+    nvtx_attrs.color = 0;
+
+    ct->nvtx_attrs = nvtx_attrs;
+#endif
 #endif
     ct->ctx.started = 1;
     ct->next = jl_nothing;

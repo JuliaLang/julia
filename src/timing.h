@@ -121,6 +121,7 @@ typedef struct ___tracy_source_location_data TracySrcLocData;
 #pragma GCC visibility push(default)
 #include <nvtx3/nvToolsExt.h>
 #pragma GCC visibility pop
+#include <nvtx3/nvToolsExtPayload.h>
 #endif
 
 #ifdef __cplusplus
@@ -287,15 +288,47 @@ typedef struct _jl_timing_counts_t {
 
 
 #ifdef USE_NVTX
+
+extern nvtxDomainHandle_t jl_timing_nvtx_domain;
+extern nvtxDomainHandle_t jl_timing_nvtx_task_domain;
+
+typedef struct {
+    nvtxStringHandle_t sig;
+} jl_timing_nvtx_func_sig_t;
+
+typedef struct {
+    nvtxStringHandle_t name;
+    nvtxStringHandle_t root;
+} jl_timing_nvtx_module_t;
+
+typedef struct {
+    nvtxStringHandle_t file;
+    int line;
+} jl_timing_nvtx_location_t;
+
+#define JL_NVTX_PAYLOAD_FLAG_SIGNATURE (1)
+#define JL_NVTX_PAYLOAD_FLAG_MODULE    (1 << 1)
+#define JL_NVTX_PAYLOAD_FLAG_LOCATION  (1 << 2)
+
+#define JL_NVTX_MAX_PAYLOADS 3
+
+typedef struct {
+    nvtxStringHandle_t signature;
+    jl_timing_nvtx_module_t module;
+    jl_timing_nvtx_location_t location;
+    uint32_t flags;
+} jl_timing_nvtx_payload_t;
+
+#define _NVTX_MAX_PAYLOADS 4
 #define _NVTX_EVENT_MEMBER              nvtxEventAttributes_t nvtx_attrs;
-#define _NVTX_BLOCK_MEMBER              nvtxRangeId_t nvtx_rangeid;
-#define _NVTX_START(block)              (block)->nvtx_rangeid = nvtxDomainRangeStartEx(jl_timing_nvtx_domain, &(block)->event->nvtx_attrs)
-#define _NVTX_STOP(block)               nvtxDomainRangeEnd(jl_timing_nvtx_domain, (block)->nvtx_rangeid)
+#define _NVTX_BLOCK_MEMBER              jl_timing_nvtx_payload_t nvtx_payload;
+#define _NVTX_START(block)              nvtxDomainRangePushEx(jl_timing_nvtx_domain, &(block)->event->nvtx_attrs)
+//#define _NVTX_STOP(block)               nvtxRangePopPayload(jl_timing_nvtx_domain, 0, NULL)
 #else
 #define _NVTX_EVENT_MEMBER
 #define _NVTX_BLOCK_MEMBER
 #define _NVTX_START(block)
-#define _NVTX_STOP(block)
+//#define _NVTX_STOP(block)
 #endif
 
 

@@ -1,4 +1,4 @@
 # -*- makefile -*-
 ## source build
-NVTX_BRANCH=dev
-NVTX_SHA1=733fb419540bc1d152bc682d2ca066c7bb79da29
+NVTX_BRANCH=v3.4.0
+NVTX_SHA1=60147cb506070b6af9ac8f2ca6a09ae034fb8d5d

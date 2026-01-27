@@ -10,6 +10,10 @@
 #define DISABLE_FREQUENT_EVENTS
 #endif
 
+#ifdef USE_NVTX
+#include <nvtx3/nvToolsExtPayload.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -57,7 +61,14 @@ static jl_mutex_t jl_timing_ittapi_events_lock;
 #endif //USE_ITTAPI
 
 #ifdef USE_NVTX
-static nvtxDomainHandle_t jl_timing_nvtx_domain;
+
+nvtxDomainHandle_t jl_timing_nvtx_domain;
+nvtxDomainHandle_t jl_timing_nvtx_task_domain;
+
+static uint64_t jl_timing_nvtx_signature_schemaid;
+static uint64_t jl_timing_nvtx_module_schemaid;
+static uint64_t jl_timing_nvtx_location_schemaid;
+
 #endif
 
 #ifdef USE_TIMING_COUNTS
@@ -155,6 +166,82 @@ void jl_init_timing(void)
     for (int i = 0; i < JL_TIMING_SUBSYSTEM_LAST; i++) {
         nvtxDomainNameCategoryA(jl_timing_nvtx_domain, i + 1, jl_timing_subsystems[i]);
     }
+
+    nvtxPayloadSchemaEntry_t jl_timing_nvtx_signature_schema_entries[] = {
+        {
+            .flags = NVTX_PAYLOAD_ENTRY_FLAG_UNUSED,
+            .type = NVTX_PAYLOAD_ENTRY_TYPE_NVTX_REGISTERED_STRING_HANDLE,
+            .name = "signature",
+            .offset = 0,
+        }
+    };
+
+    nvtxPayloadSchemaAttr_t jl_timing_nvtx_signature_schema = {
+        .fieldMask = NVTX_PAYLOAD_SCHEMA_ATTR_FIELD_TYPE | NVTX_PAYLOAD_SCHEMA_ATTR_FIELD_FLAGS | NVTX_PAYLOAD_SCHEMA_ATTR_FIELD_ENTRIES | NVTX_PAYLOAD_SCHEMA_ATTR_FIELD_NUM_ENTRIES,
+        .type = NVTX_PAYLOAD_SCHEMA_TYPE_STATIC,
+        .flags = NVTX_PAYLOAD_SCHEMA_FLAG_NONE,
+        .entries = jl_timing_nvtx_signature_schema_entries,
+        .numEntries = 1,
+        .payloadStaticSize = sizeof(nvtxStringHandle_t),
+    };
+    jl_timing_nvtx_signature_schemaid = nvtxPayloadSchemaRegister(jl_timing_nvtx_domain, &jl_timing_nvtx_signature_schema);
+
+
+    nvtxPayloadSchemaEntry_t jl_timing_nvtx_module_schema_entries[] = {
+        {
+            .flags = NVTX_PAYLOAD_ENTRY_FLAG_UNUSED,
+            .type = NVTX_PAYLOAD_ENTRY_TYPE_NVTX_REGISTERED_STRING_HANDLE,
+            .name = "name",
+            .offset = offsetof(jl_timing_nvtx_module_t, name),
+        },
+        {
+            .flags = NVTX_PAYLOAD_ENTRY_FLAG_UNUSED,
+            .type = NVTX_PAYLOAD_ENTRY_TYPE_NVTX_REGISTERED_STRING_HANDLE,
+            .name = "root",
+            .offset = offsetof(jl_timing_nvtx_module_t, root),
+        },
+    };
+
+    nvtxPayloadSchemaAttr_t jl_timing_nvtx_module_schema = {
+        .fieldMask = NVTX_PAYLOAD_SCHEMA_ATTR_FIELD_NAME | NVTX_PAYLOAD_SCHEMA_ATTR_FIELD_TYPE | NVTX_PAYLOAD_SCHEMA_ATTR_FIELD_FLAGS | NVTX_PAYLOAD_SCHEMA_ATTR_FIELD_ENTRIES | NVTX_PAYLOAD_SCHEMA_ATTR_FIELD_NUM_ENTRIES,
+        .name = "module",
+        .type = NVTX_PAYLOAD_SCHEMA_TYPE_STATIC,
+        .flags = NVTX_PAYLOAD_SCHEMA_FLAG_NONE,
+        .entries = jl_timing_nvtx_module_schema_entries,
+        .numEntries = sizeof(jl_timing_nvtx_module_schema_entries) / sizeof(jl_timing_nvtx_module_schema_entries[0]),
+        .payloadStaticSize = sizeof(jl_timing_nvtx_module_t),
+    };
+    jl_timing_nvtx_module_schemaid = nvtxPayloadSchemaRegister(jl_timing_nvtx_domain, &jl_timing_nvtx_module_schema);
+
+    nvtxPayloadSchemaEntry_t jl_timing_nvtx_location_schema_entries[] = {
+        {
+            .flags = NVTX_PAYLOAD_ENTRY_FLAG_UNUSED,
+            .type = NVTX_PAYLOAD_ENTRY_TYPE_NVTX_REGISTERED_STRING_HANDLE,
+            .name = "file",
+            .offset = offsetof(jl_timing_nvtx_location_t, file),
+        },
+        {
+            .flags = NVTX_PAYLOAD_ENTRY_FLAG_UNUSED,
+            .type = NVTX_PAYLOAD_ENTRY_TYPE_INT,
+            .name = "line",
+            .offset = offsetof(jl_timing_nvtx_location_t, line),
+        }
+    };
+
+    nvtxPayloadSchemaAttr_t jl_timing_nvtx_location_schema = {
+        .fieldMask = NVTX_PAYLOAD_SCHEMA_ATTR_FIELD_NAME | NVTX_PAYLOAD_SCHEMA_ATTR_FIELD_TYPE | NVTX_PAYLOAD_SCHEMA_ATTR_FIELD_FLAGS | NVTX_PAYLOAD_SCHEMA_ATTR_FIELD_ENTRIES | NVTX_PAYLOAD_SCHEMA_ATTR_FIELD_NUM_ENTRIES,
+        .name = "location",
+        .type = NVTX_PAYLOAD_SCHEMA_TYPE_STATIC,
+        .flags = NVTX_PAYLOAD_SCHEMA_FLAG_NONE,
+        .entries = jl_timing_nvtx_location_schema_entries,
+        .numEntries = sizeof(jl_timing_nvtx_location_schema_entries) / sizeof(jl_timing_nvtx_location_schema_entries[0]),
+        .payloadStaticSize = sizeof(jl_timing_nvtx_location_t),
+    };
+    jl_timing_nvtx_location_schemaid = nvtxPayloadSchemaRegister(jl_timing_nvtx_domain, &jl_timing_nvtx_location_schema);
+
+
+
+    jl_timing_nvtx_task_domain = nvtxDomainCreateA("julia tasks");
 #endif
 
     int i __attribute__((unused)) = 0;
@@ -401,7 +488,18 @@ JL_DLLEXPORT void _jl_timing_block_end(jl_timing_block_t *block) {
     if (block->is_running) {
         uint64_t t = cycleclock(); (void)t;
         _ITTAPI_STOP(block);
-        _NVTX_STOP(block);
+#ifdef USE_NVTX
+        size_t nvtx_payload_count = 0;
+        nvtxPayloadData_t nvtx_payloads[JL_NVTX_MAX_PAYLOADS];
+
+        if (block->nvtx_payload.flags & JL_NVTX_PAYLOAD_FLAG_SIGNATURE)
+            nvtx_payloads[nvtx_payload_count++] = (nvtxPayloadData_t){jl_timing_nvtx_signature_schemaid, sizeof(nvtxStringHandle_t), &block->nvtx_payload.signature};
+        if (block->nvtx_payload.flags & JL_NVTX_PAYLOAD_FLAG_LOCATION)
+            nvtx_payloads[nvtx_payload_count++] = (nvtxPayloadData_t){jl_timing_nvtx_location_schemaid, sizeof(jl_timing_nvtx_location_t), &block->nvtx_payload.location};
+        if (block->nvtx_payload.flags & JL_NVTX_PAYLOAD_FLAG_MODULE)
+            nvtx_payloads[nvtx_payload_count++] = (nvtxPayloadData_t){jl_timing_nvtx_module_schemaid, sizeof(jl_timing_nvtx_module_t), &block->nvtx_payload.module};
+        nvtxRangePopPayload(jl_timing_nvtx_domain, nvtx_payloads, nvtx_payload_count);
+#endif
         _TRACY_STOP(block->tracy_ctx);
         _COUNTS_STOP(block, t);
 
@@ -432,6 +530,9 @@ void jl_timing_block_task_enter(jl_task_t *ct, jl_ptls_t ptls, jl_timing_block_t
         }
     }
 
+#ifdef USE_NVTX
+    nvtxDomainRangePushEx(jl_timing_nvtx_task_domain, &ct->nvtx_attrs);
+#endif
 #ifdef USE_TRACY
     TracyCFiberEnter(ct->name);
 #else
@@ -441,6 +542,9 @@ void jl_timing_block_task_enter(jl_task_t *ct, jl_ptls_t ptls, jl_timing_block_t
 
 jl_timing_block_t *jl_timing_block_task_exit(jl_task_t *ct, jl_ptls_t ptls)
 {
+#ifdef USE_NVTX
+    nvtxDomainRangePop(jl_timing_nvtx_task_domain);
+#endif
 #ifdef USE_TRACY
     // Tracy is fairly strict about not leaving a fiber that hasn't
     // been entered, which happens often when connecting to a running
@@ -483,14 +587,21 @@ JL_DLLEXPORT void jl_timing_show(jl_value_t *v, jl_timing_block_t *cur_block)
 
 JL_DLLEXPORT void jl_timing_show_module(jl_module_t *m, jl_timing_block_t *cur_block)
 {
-#ifdef USE_TRACY
+#if defined(USE_TRACY) || defined(USE_NVTX)
     jl_module_t *root = jl_module_root(m);
+#endif
+#ifdef USE_TRACY
     if (root == m || root == jl_main_module) {
         const char *module_name = jl_symbol_name(m->name);
         TracyCZoneText(cur_block->tracy_ctx, module_name, strlen(module_name));
     } else {
         jl_timing_printf(cur_block, "%s.%s", jl_symbol_name(root->name), jl_symbol_name(m->name));
     }
+#endif
+#ifdef USE_NVTX
+    cur_block->nvtx_payload.module.name = nvtxDomainRegisterStringA(jl_timing_nvtx_domain, jl_symbol_name(m->name));
+    cur_block->nvtx_payload.module.root = nvtxDomainRegisterStringA(jl_timing_nvtx_domain, jl_symbol_name(root->name));
+    cur_block->nvtx_payload.flags |= JL_NVTX_PAYLOAD_FLAG_MODULE;
 #endif
 }
 
@@ -500,12 +611,19 @@ JL_DLLEXPORT void jl_timing_show_filename(const char *path, jl_timing_block_t *c
     const char *filename = gnu_basename(path);
     TracyCZoneText(cur_block->tracy_ctx, filename, strlen(filename));
 #endif
+#ifdef USE_NVTX
+    cur_block->nvtx_payload.location.file = nvtxDomainRegisterStringA(jl_timing_nvtx_domain, path);
+    cur_block->nvtx_payload.location.line = 0;
+    cur_block->nvtx_payload.flags |= JL_NVTX_PAYLOAD_FLAG_LOCATION;
+#endif
 }
 
 JL_DLLEXPORT void jl_timing_show_location(const char *file, int line, jl_module_t* mod, jl_timing_block_t *cur_block)
 {
-#ifdef USE_TRACY
+#if defined(USE_TRACY) || defined(USE_NVTX)
     jl_module_t *root = jl_module_root(mod);
+#endif
+#ifdef USE_TRACY
     if (root == mod || root == jl_main_module) {
         jl_timing_printf(cur_block, "%s:%d in %s",
                          gnu_basename(file),
@@ -519,6 +637,13 @@ JL_DLLEXPORT void jl_timing_show_location(const char *file, int line, jl_module_
                          jl_symbol_name(root->name),
                          jl_symbol_name(mod->name));
     }
+#endif
+#ifdef USE_NVTX
+    cur_block->nvtx_payload.location.file = nvtxDomainRegisterStringA(jl_timing_nvtx_domain, file);
+    cur_block->nvtx_payload.location.line = line;
+    cur_block->nvtx_payload.module.name = nvtxDomainRegisterStringA(jl_timing_nvtx_domain, jl_symbol_name(mod->name));
+    cur_block->nvtx_payload.module.root = nvtxDomainRegisterStringA(jl_timing_nvtx_domain, jl_symbol_name(root->name));
+    cur_block->nvtx_payload.flags |= JL_NVTX_PAYLOAD_FLAG_LOCATION | JL_NVTX_PAYLOAD_FLAG_MODULE;
 #endif
 }
 
@@ -537,28 +662,45 @@ JL_DLLEXPORT void jl_timing_show_method_instance(jl_method_instance_t *mi, jl_ti
 JL_DLLEXPORT void jl_timing_show_method(jl_method_t *method, jl_timing_block_t *cur_block)
 {
     jl_timing_show((jl_value_t *)method, cur_block);
+    #ifdef USE_NVTX
+    // TODO: add signature to payload
+    #endif
     jl_timing_show_location(jl_symbol_name(method->file), method->line, method->module, cur_block);
 }
 
 JL_DLLEXPORT void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_block)
 {
-#ifdef USE_TRACY
+#if defined(USE_TRACY) || defined(USE_NVTX)
     ios_t buf;
     ios_mem(&buf, IOS_INLSIZE);
     buf.growable = 0; // Restrict to inline buffer to avoid allocation
 
     jl_static_show_config_t config = { /* quiet */ 1 };
     jl_static_show_func_sig_((JL_STREAM*)&buf, v, config);
+#endif
+#ifdef USE_TRACY
     if (buf.size == buf.maxsize)
         memset(&buf.buf[IOS_INLSIZE - 3], '.', 3);
-
     TracyCZoneText(cur_block->tracy_ctx, buf.buf, buf.size);
+#endif
+#ifdef USE_NVTX
+    if (buf.size == buf.maxsize) {
+        memset(&buf.buf[IOS_INLSIZE - 4], '.', 3);
+        memset(&buf.buf[buf.size-1], 0, 1);
+    } else {
+        memset(&buf.buf[buf.size], 0, 1);
+    }
+    cur_block->nvtx_payload.signature = nvtxDomainRegisterStringA(jl_timing_nvtx_domain, buf.buf);
+    cur_block->nvtx_payload.flags |= JL_NVTX_PAYLOAD_FLAG_SIGNATURE;
 #endif
 }
 
 JL_DLLEXPORT void jl_timing_show_macro(jl_method_instance_t *macro, jl_value_t* lno, jl_module_t* mod, jl_timing_block_t *cur_block)
 {
     jl_timing_printf(cur_block, "%s", jl_symbol_name(macro->def.method->name));
+    #ifdef USE_NVTX
+    // TODO: add macro to payload
+    #endif
     assert(jl_typetagis(lno, jl_linenumbernode_type));
     jl_timing_show_location(jl_symbol_name((jl_sym_t*)jl_fieldref(lno, 1)),
                             jl_unbox_int64(jl_fieldref(lno, 0)),
@@ -593,7 +735,7 @@ JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str)
 
 void jl_timing_task_init(jl_task_t *t)
 {
-#ifdef USE_TRACY
+#if defined(USE_TRACY) || defined(USE_NVTX)
     jl_value_t *start_type = jl_typeof(t->start);
     const char *start_name = "";
     if (jl_is_datatype(start_type))
@@ -622,8 +764,26 @@ void jl_timing_task_init(jl_task_t *t)
         snprintf(fiber_name, fiber_name_len,  "Task %d (\"%s\")",
                  task_id++, start_name);
     }
-
+#endif
+#ifdef USE_TRACY
     t->name = fiber_name;
+#endif
+#ifdef USE_NVTX
+    nvtxEventAttributes_t nvtx_attrs = {0};
+    nvtx_attrs.version = NVTX_VERSION;
+    nvtx_attrs.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+
+    nvtx_attrs.messageType = NVTX_MESSAGE_TYPE_REGISTERED;
+    nvtx_attrs.message.registered = nvtxDomainRegisterStringA(jl_timing_nvtx_task_domain, fiber_name);
+
+    // 0 is the default (unnamed) category
+    nvtx_attrs.payloadType = NVTX_PAYLOAD_TYPE_UNSIGNED_INT64;
+    nvtx_attrs.payload.ullValue = (uint64_t)t; // cast pointer to uint64_t for identification
+    // simple Knuth hash to get nice colors
+    nvtx_attrs.colorType = NVTX_COLOR_ARGB;
+    nvtx_attrs.color = (((nvtx_attrs.payload.ullValue >> 32) + (nvtx_attrs.payload.ullValue & 0xffffffff)) * 2654435769) >> 8;
+
+    t->nvtx_attrs = nvtx_attrs;
 #endif
 }
 
