@@ -58,7 +58,7 @@ The result shares the same underlying data as `A`, such that the
 result is mutable if and only if `A` is mutable, and setting elements of one
 alters the values of the other.
 
-Inverse of [`dropdims`](@ref).
+Inverse of [`insertdims`](@ref).
 See also: [`reshape`](@ref), [`vec`](@ref).
 
 # Examples
