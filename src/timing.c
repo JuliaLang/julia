@@ -518,7 +518,8 @@ static void _jl_timing_show_buf(jl_timing_block_t *cur_block, ios_t *buf)
 {
     if (buf->size == buf->maxsize) {
         memset(&buf->buf[IOS_INLSIZE - 4], '.', 3);
-        buf->buf[buf->size-1] = '\0'; // Ensure null-termination
+        buf->size -= 1;
+        buf->buf[buf->size] = '\0'; // Ensure null-termination
     }
     else {
         buf->buf[buf->size] = '\0'; // Ensure null-termination
