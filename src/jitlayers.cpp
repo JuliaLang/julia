@@ -872,6 +872,8 @@ public:
     {
         auto &ES = R->getExecutionSession();
 
+        // TODO: Tell GCChecker that materialize can have safepoints.
+#ifndef __clang_analyzer__
         {
             jl_task_t *ct = jl_current_task;
             auto Lock = Out.module.getContext().getLock();
@@ -879,6 +881,7 @@ public:
             JIT.optimizeDLSyms(*Out.module.getModuleUnlocked()); // May safepoint
             jl_gc_unsafe_leave(ct->ptls, state);
         }
+#endif
         uint64_t start_time = jl_hrtime();
         auto Obj = JIT.compileModule(JIT.optimizeModule(std::move(Out.module)));
         uint64_t end_time = jl_hrtime();
@@ -2190,7 +2193,9 @@ orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibilit
         auto Err = JD.define(std::make_unique<JLTrampolineMaterializationUnit>(
             *this, ObjectLayer, TSym, CI, API));
         if (Err) {
+#ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the static analyzer thinks might be a safepoint
             MR.getExecutionSession().reportError(std::move(Err));
+#endif
             MR.failMaterialization();
             return {};
         }
