@@ -1042,10 +1042,14 @@ JL_DLLEXPORT int jl_reinit_foreign_type(jl_datatype_t *dt,
     const jl_datatype_layout_t *layout = dt->layout;
     jl_fielddescdyn_t * desc =
       (jl_fielddescdyn_t *) ((char *)layout + sizeof(*layout));
-    assert(!desc->markfunc);
-    assert(!desc->sweepfunc);
-    desc->markfunc = markfunc;
-    desc->sweepfunc = sweepfunc;
+    if (desc->markfunc != markfunc) {
+        assert(!desc->markfunc);
+        desc->markfunc = markfunc;
+    }
+    if (desc->sweepfunc != sweepfunc) {
+        assert(!desc->sweepfunc);
+        desc->sweepfunc = sweepfunc;
+    }
     return 1;
 }
 
