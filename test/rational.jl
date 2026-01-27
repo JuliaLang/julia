@@ -895,9 +895,19 @@ end
 end
 
 @testset "rationalize(x) with tiny x (issue #49803, #49848)" begin
-    for (T, U) in ((Int32, Float16), (Int64, Float32), (BigInt, Float64), (BigInt, BigFloat))
+    for (T, U) in ((Int32, Float16), (Int64, Float32), (Int128, Float64), (BigInt, BigFloat))
         x = prevfloat(1/maxintfloat(U))
         r = rationalize(T, x, tol=0)
         @test abs(r - x) == 0
+        if U != BigFloat
+            # x subnormal
+            x = prevfloat(floatmin(U))
+            r = rationalize(widen(T), x, tol=0)
+            @test abs(r - x) == 0
+            # x subnormal, inv(x) infinite
+            x = inv(floatmax(U))
+            r = rationalize(BigInt, x, tol=0)
+            @test abs(r - x) == 0
+        end
     end
 end
