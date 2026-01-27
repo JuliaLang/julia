@@ -181,35 +181,12 @@ function elim_free_typevars(@nospecialize t)
     end
 end
 
-# Fast path: use index when cache is an InferenceCache
 function constprop_cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given_argtypes::Vector{Any}, cache::InferenceCache)
     nargtypes = length(given_argtypes)
     indices = get_indices(cache, mi)
     for idx in indices
         cached_result = cache.results[idx]
         cached_result.tombstone && continue # ignore deleted entries (due to LimitedAccuracy)
-        cache_argtypes = cached_result.argtypes
-        @assert length(cache_argtypes) == nargtypes "invalid `cache_argtypes` for `mi`"
-        cache_overridden_by_const = cached_result.overridden_by_const
-        cache_overridden_by_const === nothing && continue
-        cache_overridden_by_const = cache_overridden_by_const::BitVector
-        for i in 1:nargtypes
-            if !is_argtype_match(𝕃, given_argtypes[i], cache_argtypes[i], cache_overridden_by_const[i])
-                @goto next_cache
-            end
-        end
-        return cached_result
-        @label next_cache
-    end
-    return nothing
-end
-
-# Slow path: linear scan for backward compatibility with Vector{InferenceResult}
-function constprop_cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given_argtypes::Vector{Any}, cache::Vector{InferenceResult})
-    nargtypes = length(given_argtypes)
-    for cached_result in cache
-        cached_result.tombstone && continue # ignore deleted entries (due to LimitedAccuracy)
-        cached_result.linfo === mi || continue
         cache_argtypes = cached_result.argtypes
         @assert length(cache_argtypes) == nargtypes "invalid `cache_argtypes` for `mi`"
         cache_overridden_by_const = cached_result.overridden_by_const

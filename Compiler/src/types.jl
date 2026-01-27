@@ -190,7 +190,6 @@ end
 Base.length(cache::InferenceCache) = length(cache.results)
 Base.isempty(cache::InferenceCache) = isempty(cache.results)
 
-# For backward compatibility, allow iteration over the cache
 Base.iterate(cache::InferenceCache) = iterate(cache.results)
 Base.iterate(cache::InferenceCache, state) = iterate(cache.results, state)
 Base.eltype(::Type{InferenceCache}) = InferenceResult
@@ -549,37 +548,22 @@ typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.i
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
 optimizer_lattice(::AbstractInterpreter) = SimpleInferenceLattice.instance
 
-struct OverlayCodeCache{Cache, LocalCache}
+struct OverlayCodeCache{Cache}
     globalcache::Cache
-    localcache::LocalCache
+    localcache::InferenceCache
 end
 
 setindex!(cache::OverlayCodeCache, ci::CodeInstance, mi::MethodInstance) = (setindex!(cache.globalcache, ci, mi); cache)
 
 haskey(cache::OverlayCodeCache, mi::MethodInstance) = get(cache, mi, nothing) !== nothing
 
-# Fast path: use index when localcache is an InferenceCache
-function get(cache::OverlayCodeCache{<:Any, InferenceCache}, mi::MethodInstance, default)
+function get(cache::OverlayCodeCache, mi::MethodInstance, default)
     localcache = cache.localcache
     indices = get_indices(localcache, mi)
     # Iterate in reverse to get the most recent matching entry
     for i in length(indices):-1:1
         cached_result = localcache.results[indices[i]]
         cached_result.tombstone && continue # ignore deleted entries (due to LimitedAccuracy)
-        cached_result.overridden_by_const === nothing || continue
-        isdefined(cached_result, :ci) || continue
-        ci = cached_result.ci
-        isdefined(ci, :inferred) || continue
-        return cached_result
-    end
-    return get(cache.globalcache, mi, default)
-end
-
-# Slow path: linear scan for backward compatibility with Vector{InferenceResult}
-function get(cache::OverlayCodeCache{<:Any, <:AbstractVector}, mi::MethodInstance, default)
-    for cached_result in Iterators.reverse(cache.localcache)
-        cached_result.tombstone && continue # ignore deleted entries (due to LimitedAccuracy)
-        cached_result.linfo === mi || continue
         cached_result.overridden_by_const === nothing || continue
         isdefined(cached_result, :ci) || continue
         ci = cached_result.ci

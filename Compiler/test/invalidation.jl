@@ -14,12 +14,12 @@ struct InvalidationTester <: Compiler.AbstractInterpreter
     world::UInt
     inf_params::Compiler.InferenceParams
     opt_params::Compiler.OptimizationParams
-    inf_cache::Vector{Compiler.InferenceResult}
+    inf_cache::Compiler.InferenceCache
     function InvalidationTester(;
                                 world::UInt = Base.get_world_counter(),
                                 inf_params::Compiler.InferenceParams = Compiler.InferenceParams(),
                                 opt_params::Compiler.OptimizationParams = Compiler.OptimizationParams(),
-                                inf_cache::Vector{Compiler.InferenceResult} = Compiler.InferenceResult[])
+                                inf_cache::Compiler.InferenceCache = Compiler.InferenceCache())
         return new(world, inf_params, opt_params, inf_cache)
     end
 end

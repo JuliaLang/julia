@@ -2,6 +2,32 @@
 
 The Julia compiler is not part of the public interface of Julia's `Core`, and may change in non-breaking Julia releases. This page lists breaking changes introduced to the compiler to aid in adapting to those changes, intended for packages that do interface with the compiler. It is maintained on a best-effort basis and may be incomplete.
 
+## v1.14
+
+### `get_inference_cache` now returns `InferenceCache` instead of `Vector{InferenceResult}`
+
+Custom `AbstractInterpreter` implementations must now return an `InferenceCache` from `get_inference_cache` instead of a `Vector{InferenceResult}`. The `InferenceCache` type maintains an index for fast lookups by `MethodInstance`, improving inference performance for large compilation workloads.
+
+To migrate, change:
+```julia
+struct MyInterpreter <: AbstractInterpreter
+    inf_cache::Vector{InferenceResult}
+end
+MyInterpreter() = MyInterpreter(InferenceResult[])
+get_inference_cache(interp::MyInterpreter) = interp.inf_cache
+```
+
+To:
+```julia
+struct MyInterpreter <: AbstractInterpreter
+    inf_cache::InferenceCache
+end
+MyInterpreter() = MyInterpreter(InferenceCache())
+get_inference_cache(interp::MyInterpreter) = interp.inf_cache
+```
+
+The `InferenceCache` type supports `push!`, iteration, and indexing for compatibility with common usage patterns.
+
 ## v1.12
 
 ### Changes to the `IRCode` type
