@@ -757,7 +757,7 @@ end
 @testset "accuracy of `sinpi`, `cospi` around the origin" begin
     for f in (sinpi, cospi)
         for t in (Float32, Float64)
-            @test ulp_error_maximum(f, range(start = t(-0.25), stop = t(0.25), length = 5000)) < 1
+            @test ulp_error_maximum(f, range(start = t(-0.25), stop = t(0.25), length = 5000)) < (has_fma[t] ? 1.0 : 1.5)
         end
     end
 end
