@@ -1231,6 +1231,8 @@ void jl_init_llvm(void);
 void jl_init_runtime_ccall(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_intrinsic_properties(void);
+JL_DLLEXPORT void jl_init_incomplete_types(void);
+JL_DLLEXPORT jl_value_t *jl_resolve_incompletes(jl_module_t *module, jl_value_t *incompletes_tuple);
 void jl_init_tasks(void) JL_GC_DISABLED;
 void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo) JL_NOTSAFEPOINT;
 jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi);

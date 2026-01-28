@@ -3970,6 +3970,9 @@ void post_boot_hooks(void)
     jl_kwcall_type = (jl_datatype_t*)jl_typeof(kwcall_func);
     jl_atomic_store_relaxed(&jl_kwcall_type->name->max_args, 0);
 
+    // Initialize incomplete type references for mutually recursive types
+    jl_init_incomplete_types();
+
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
     jl_abioverride_type = (jl_datatype_t*)core("ABIOverride");

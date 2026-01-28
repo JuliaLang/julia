@@ -599,6 +599,10 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
         jl_global_roots_keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;
     }
 
+    // Initialize incomplete type references (needed for recursive type support)
+    // This must be called after Core module is available, whether from sysimage or boot.jl
+    jl_init_incomplete_types();
+
     jl_init_flisp();
     jl_init_serializer();
 
