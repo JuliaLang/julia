@@ -611,6 +611,10 @@ void jl_init_stackwalk(void)
 // Finalize stackwalk infrastructure
 void jl_fin_stackwalk(void)
 {
+    // To avoid deadlocks (due to suspending the main thread during `ExitProcess()`)
+    // and other misbehavior (due to missed DLL notifications during exit), take the
+    // profile lock here to effectively disable any active profiling threads.
+    jl_lock_profile_wr();
     if (dll_notification_cookie) {
         LdrUnregisterDllNotification(dll_notification_cookie);
         dll_notification_cookie = NULL;
