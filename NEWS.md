@@ -73,6 +73,10 @@ Standard library changes
 * `@test_throws`, `@test_warn`, `@test_nowarn`, `@test_logs`, and `@test_deprecated` now support
   `broken` and `skip` keyword arguments for consistency with `@test` ([#60543]).
 
+* New functions `detect_closure_boxes` and `detect_closure_boxes_all` find methods that
+  allocate `Core.Box` in their lowered code, which can indicate performance issues from
+  captured variables in closures.
+
 #### InteractiveUtils
 
 #### Dates
