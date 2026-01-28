@@ -273,6 +273,18 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             @test v[3] == "julia: for the --enable-tail-merge option: may only occur zero or one times!"
         end
     end
+    @testset "time-trace" begin
+        mktempdir() do dir
+            tracefile = joinpath(dir, "test_trace.json")
+            # Use forward slashes on Windows to avoid LLVM command line parser issues with backslashes
+            tracefile_arg = Sys.iswindows() ? replace(tracefile, "\\" => "/") : tracefile
+            v = readchomperrors(setenv(`$exename -e "1+1"`, "JULIA_LLVM_ARGS" => "-time-trace -time-trace-file=$tracefile_arg", "HOME" => homedir()))
+            @test v[1]
+            @test isfile(tracefile)
+            content = read(tracefile, String)
+            @test startswith(content, "{\"traceEvents\":")
+        end
+    end
 end
 
 let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`

@@ -35,6 +35,7 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/FormattedStream.h>
+#include <llvm/Support/TimeProfiler.h>
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/Utils/Cloning.h>
@@ -1514,6 +1515,7 @@ namespace {
 
                 {
                     JL_TIMING(LLVM_JIT, JIT_Opt);
+                    TimeTraceScope OptimizeScope("JIT Optimize", M.getModuleIdentifier());
                     //Run the optimization
                     (****PMs[PoolIdx]).run(M);
                     assert(!verifyLLVMIR(M));
@@ -2083,6 +2085,21 @@ JuliaOJIT::JuliaOJIT()
     asan_crt[mangle("___asan_globals_registered")] = {ExecutorAddr::fromPtr(&jl___asan_globals_registered), JITSymbolFlags::Common | JITSymbolFlags::Exported};
     cantFail(JD.define(orc::absoluteSymbols(asan_crt)));
 #endif
+
+    if (jl_is_timing_trace) {
+        PrintLLVMTimers.push_back([]() JL_NOTSAFEPOINT {
+            if (timeTraceProfilerEnabled()) {
+                StringRef FileName = jl_timing_trace_file.empty() ?
+                    StringRef("julia_time_trace.json") : StringRef(jl_timing_trace_file);
+                if (auto E = timeTraceProfilerWrite(FileName, "")) {
+                    handleAllErrors(std::move(E), [](const StringError &SE) JL_NOTSAFEPOINT {
+                        errs() << SE.getMessage() << "\n";
+                    });
+                }
+                timeTraceProfilerCleanup();
+            }
+        });
+    }
 }
 
 JuliaOJIT::~JuliaOJIT() = default;
@@ -2122,6 +2139,7 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 
     // Treat this as if one of the passes might contain a safepoint
     // even though that shouldn't be the case and might be unwise
+    TimeTraceScope CompileScope("JIT Compile", M.getModuleIdentifier());
     Expected<std::unique_ptr<MemoryBuffer>> Obj = CompileLayer.getCompiler()(M);
     if (!Obj) {
 #ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the static analyzer thinks might be a safepoint
