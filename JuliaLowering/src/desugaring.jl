@@ -4075,15 +4075,12 @@ function expand_struct_def(ctx, ex, docs)
         end
     end
 
-    # GlobalRef for use outside scope_block (for _defaultctors and inner constructors)
-    struct_globalref = GlobalRef(ctx.mod, Symbol(struct_name.name_val))
-
     # User-defined inner constructors need to be rewritten to use proper type references.
-    # Use GlobalRef so we don't need a global declaration in their scope_block.
+    # global_struct_name is used because it will be resolved via the top scope where
+    # the global declaration stores the binding.
     if !isempty(inner_defs)
-        struct_globalref_node = @ast ctx ex struct_globalref::K"Value"
         map!(inner_defs, inner_defs) do def
-            rewrite_new_calls(ctx, def, struct_name, struct_globalref_node,
+            rewrite_new_calls(ctx, def, struct_name, global_struct_name,
                               typevar_names, field_names, field_types)
         end
     end
@@ -4154,7 +4151,7 @@ function expand_struct_def(ctx, ex, docs)
             # Default constructors are generated at runtime by Core._defaultctors.
             [K"call"
                 "_defaultctors"::K"core"
-                struct_globalref::K"Value"
+                global_struct_name
                 ::K"SourceLocation"(ex)
             ]
         else
