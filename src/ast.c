@@ -1242,39 +1242,6 @@ JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_value_t *expr, jl_module_t *inmodule,
     return result;
 }
 
-// Main C entry point to lowering.  Calls jl_fl_lower during bootstrap, and
-// Core._lower otherwise (this is also jl_fl_lower unless we have JuliaLowering)
-JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
-                                  const char *filename, int line, size_t world, bool_t warn)
-{
-    jl_value_t *julia_lower = NULL;
-    if ((!julia_lower || julia_lower == jl_nothing) && jl_core_module)
-        julia_lower = jl_get_global_value(jl_core_module, jl_symbol("_lower"), jl_current_task->world_age);
-    if (!julia_lower || julia_lower == jl_nothing) {
-        return jl_fl_lower(expr, inmodule, filename, line, world, warn);
-    }
-    jl_value_t **args;
-    JL_GC_PUSHARGS(args, 7);
-    args[0] = julia_lower;
-    args[1] = expr;
-    args[2] = (jl_value_t*)inmodule;
-    args[3] = jl_cstr_to_string(filename);
-    args[4] = jl_box_ulong(line);
-    args[5] = jl_box_ulong(world);
-    args[6] = warn ? jl_true : jl_false;
-    jl_task_t *ct = jl_current_task;
-    size_t last_age = ct->world_age;
-    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-    jl_value_t *result = jl_apply(args, 7);
-    ct->world_age = last_age;
-    args[0] = result; // root during error check below
-    JL_TYPECHK(parse, simplevector, result);
-    if (jl_svec_len(result) < 1)
-        jl_error("Result from lowering should be `svec(a::Any, x::Any...)`");
-    JL_GC_POP();
-    return result;
-}
-
 jl_code_info_t *jl_outer_ctor_body(jl_value_t *thistype, size_t nfields, size_t nsparams, jl_module_t *inmodule, const char *file, int line)
 {
     JL_TIMING(LOWERING, LOWERING);

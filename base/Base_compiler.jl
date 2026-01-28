@@ -404,7 +404,6 @@ Compiler.bootstrap!()
 
 include("flfrontend.jl")
 Core._setparser!(fl_parse)
-Core._setlowerer!(fl_lower)
 
 # Further definition of Base will happen in Base.jl if loaded.
 

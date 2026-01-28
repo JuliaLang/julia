@@ -309,10 +309,12 @@ const install_packages_hooks = Any[]
 # We need to do this for both the actual eval and macroexpand, since the latter can cause custom macro
 # code to run (and error).
 __repl_entry_lower_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Csize_t}) =
-    Core._lower(ast, mod, toplevel_file[], toplevel_line[])[1]
+    Base.fl_lower(ast, mod, toplevel_file[], toplevel_line[])[1]
 __repl_entry_eval_expanded_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Csize_t}) =
     ccall(:jl_toplevel_eval_flex, Any, (Any, Any, Cint, Cint, Ptr{Ptr{UInt8}}, Ptr{Csize_t}), mod, ast, 1, 1, toplevel_file, toplevel_line)
 
+# TODO: Use CompilerFrontend iterator rather than the ad hoc top level
+# interpreter here. (Would also make the hooks work with top level module code)
 function toplevel_eval_with_hooks(mod::Module, @nospecialize(ast), toplevel_file=Ref{Ptr{UInt8}}(Base.unsafe_convert(Ptr{UInt8}, :REPL)), toplevel_line=Ref{Csize_t}(1))
     if !isexpr(ast, :toplevel)
         ast = invokelatest(__repl_entry_lower_with_loc, mod, ast, toplevel_file, toplevel_line)
