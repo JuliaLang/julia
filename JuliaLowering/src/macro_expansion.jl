@@ -188,7 +188,8 @@ function eval_macro_name(ctx::MacroExpansionContext, mctx::MacroContext, ex0::Sy
             ctx4, ex4 = convert_closures(ctx3, ex3)
             ctx5, ex5 = linearize_ir(ctx4, ex4)
             expr_form = to_lowered_expr(ex5)
-            ccall(:jl_toplevel_eval, Any, (Any, Any), mod, expr_form)
+            thunk = expr_form.args[1]::CodeInfo
+            @ccall jl_eval_thunk(mod::Any, thunk::Any, 1::Cint)::Any
         end
     catch err
         throw(MacroExpansionError(mctx, ex, "Macro not found", :all, err))
