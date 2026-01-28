@@ -74,6 +74,7 @@
 #include <llvm/Target/TargetMachine.h>
 
 #include "llvm/Support/Path.h" // for llvm::sys::path
+#include <llvm/Support/TimeProfiler.h>
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Linker/Linker.h>
 #include <llvm/CodeGen/MachineModuleInfo.h>
@@ -10435,8 +10436,6 @@ char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
 char jl_using_perf_jitevents = 0;
 #endif
 
-int jl_is_timing_passes = 0;
-
 extern "C" void jl_init_llvm(void)
 {
     jl_page_size = jl_getpagesize();
@@ -10464,6 +10463,20 @@ extern "C" void jl_init_llvm(void)
 
     // Parse command line flags after initialization
     StringMap<cl::Option*> &llvmopts = cl::getRegisteredOptions();
+
+    // Register time-trace options if not already present (e.g., when loaded as plugin by opt)
+    if (!llvmopts.lookup("time-trace")) {
+        new cl::opt<bool>("time-trace", cl::desc("Record time trace"));
+        new cl::opt<unsigned>(
+            "time-trace-granularity",
+            cl::desc("Minimum time granularity (in microseconds) traced by time profiler"),
+            cl::init(500), cl::Hidden);
+        new cl::opt<std::string>(
+            "time-trace-file",
+            cl::desc("Specify time trace file destination"),
+            cl::value_desc("filename"));
+    }
+
     const char *const argv[1] = {"julia"};
     cl::ParseCommandLineOptions(1, argv, "", nullptr, "JULIA_LLVM_ARGS");
 
@@ -10485,6 +10498,18 @@ extern "C" void jl_init_llvm(void)
     clopt = llvmopts.lookup("time-passes");
     if (clopt && clopt->getNumOccurrences() > 0)
         jl_is_timing_passes = 1;
+
+    clopt = llvmopts.lookup("time-trace");
+    if (clopt && clopt->getNumOccurrences() > 0) {
+        jl_is_timing_trace = 1;
+        clopt = llvmopts.lookup("time-trace-granularity");
+        if (clopt)
+            jl_timing_trace_granularity = static_cast<cl::opt<unsigned>*>(clopt)->getValue();
+        clopt = llvmopts.lookup("time-trace-file");
+        if (clopt && clopt->getNumOccurrences() > 0)
+            jl_timing_trace_file = static_cast<cl::opt<std::string>*>(clopt)->getValue();
+        timeTraceProfilerInitialize(jl_timing_trace_granularity, "julia");
+    }
 
     jl_ExecutionEngine = new JuliaOJIT();
 
