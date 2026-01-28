@@ -53,7 +53,7 @@ function varinfo(m::Module=Base.active_module(), pattern::Regex=r""; all::Bool =
             if !isdefined(m2, v) || !occursin(pattern, string(v))
                 continue
             end
-            value = getglobal(m2, v)
+            value = @invokelatest(getglobal(m2, v))
             isbuiltin = value === Base || value === Base.active_module() || value === Core
             if recursive && !isbuiltin && isa(value, Module) && value !== m2 && nameof(value) === v && parentmodule(value) === m2
                 push!(workqueue, (value, "$prep$v."))
@@ -233,7 +233,7 @@ function _methodswith(@nospecialize(t::Type), m::Module, supertypes::Bool)
     meths = Method[]
     for nm in names(m)
         if isdefinedglobal(m, nm)
-            f = getglobal(m, nm)
+            f = @invokelatest(getglobal(m, nm))
             if isa(f, Base.Callable)
                 methodswith(t, f, meths; supertypes = supertypes)
             end
@@ -265,7 +265,7 @@ function _subtypes_in!(mods::Array, x::Type)
         xt = xt::DataType
         for s in names(m, all = true)
             if !isdeprecated(m, s) && isdefinedglobal(m, s)
-                t = getglobal(m, s)
+                t = @invokelatest(getglobal(m, s))
                 dt = isa(t, UnionAll) ? unwrap_unionall(t) : t
                 if isa(dt, DataType)
                     if dt.name.name === s && dt.name.module == m && supertype(dt).name == xt.name
