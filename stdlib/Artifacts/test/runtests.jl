@@ -5,6 +5,8 @@ using Artifacts, Test, Base.BinaryPlatforms
 using Artifacts: with_artifacts_directory, pack_platform!, unpack_platform, load_overrides
 using TOML
 
+@test isempty(Test.detect_closure_boxes(Artifacts))
+
 # prepare for the package tests by ensuring the required artifacts are downloaded now
 artifacts_dir = mktempdir()
 run(addenv(`$(Base.julia_cmd()) --color=no $(joinpath(@__DIR__, "refresh_artifacts.jl")) $(artifacts_dir)`, "TERM"=>"dumb"))
