@@ -4,6 +4,8 @@ using Test, Markdown, StyledStrings
 import Markdown: MD, Paragraph, Header, Italic, Bold, Strikethrough, LineBreak, Table, Code, LaTeX, Footnote
 import Base: show
 
+@test isempty(Test.detect_closure_boxes(Markdown))
+
 # Basics
 # Equality is checked by making sure the HTML output is
 # the same – the structure itself may be different.

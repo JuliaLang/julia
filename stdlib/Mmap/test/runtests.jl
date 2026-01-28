@@ -2,6 +2,8 @@
 
 using Test, Mmap, Random
 
+@test isempty(Test.detect_closure_boxes(Mmap))
+
 file = tempname()
 write(file, "Hello World\n")
 t = b"Hello World"
