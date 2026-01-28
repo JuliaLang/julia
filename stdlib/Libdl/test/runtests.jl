@@ -3,6 +3,8 @@
 using Test
 using Libdl
 
+@test isempty(Test.detect_closure_boxes(Libdl))
+
 # these could fail on an embedded installation
 # but for now, we don't handle that case
 dlls = Libdl.dllist()
