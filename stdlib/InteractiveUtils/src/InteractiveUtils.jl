@@ -97,7 +97,7 @@ See also: [`VERSION`](@ref).
 """
 function versioninfo(io::IO=stdout; verbose::Bool=false)
     println(io, "Julia Version $VERSION")
-    if !isempty(Base.GIT_VERSION_INFO.commit_short)
+    if !isempty(Base.GIT_VERSION_INFO.commit_short_raw)
         println(io, "Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")
     end
     official_release = Base.TAGGED_RELEASE_BANNER == "Official https://julialang.org/ release"
@@ -115,7 +115,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
 
                     Note: This is an unofficial build, please report bugs to the project
                     responsible for this build and not to the Julia project unless you can
-                    reproduce the issue using official builds available at https://julialang.org/downloads
+                    reproduce the issue using official builds available at https://julialang.org
                 """
             )
         end

@@ -370,6 +370,15 @@ end
     @test isnan(exp(reinterpret(Float64, 0x7ffbb14880000000)))
 end
 
+@testset "issue #57463" begin
+    for T in (Int16, Int32, Int64, Int128)
+        @test iszero(1.1^typemin(T))
+        @test iszero(0.9^typemax(T))
+        @test isinf(1.1^typemax(T))
+        @test isinf(0.9^typemin(T))
+    end
+end
+
 @testset "test abstractarray trig functions" begin
     TAA = rand(2,2)
     TAA = (TAA + TAA')/2.
@@ -1453,6 +1462,33 @@ end
     # two cases where we have observed > 1 ULP in the past
     @test 0.0013653274095082324^-97.60372292227069 == 4.088393948750035e279
     @test 8.758520413376658e-5^70.55863059215994 == 5.052076767078296e-287
+
+    # issue #53881
+    c53881 = 2.2844135865398217e222 # check correctness within 2 ULPs
+    @test prevfloat(1.0) ^ -Int64(2)^62 ≈ c53881 atol=2eps(c53881)
+    @test 2.0 ^ typemin(Int) == 0.0
+    @test (-1.0) ^ typemin(Int) == 1.0
+    Z = Int64(2)
+    E = prevfloat(1.0)
+    @test E ^ (-Z^54) ≈ 7.38905609893065
+    @test E ^ (-Z^62) ≈ 2.2844135865231613e222
+    @test E ^ (-Z^63) == Inf
+    @test abs(E ^ (Z^62-1) * E ^ (-Z^62+1) - 1) <= eps(1.0)
+    n, x = -1065564664, 0.9999997040311492
+    @test abs(x^n - Float64(big(x)^n)) / eps(x^n) == 0 # ULPs
+    @test E ^ (big(2)^100 + 1) == 0
+    @test E ^ 6705320061009595392 == nextfloat(0.0)
+    n = Int64(1024 / log2(E))
+    @test E^n == Inf
+    @test E^float(n) == Inf
+end
+
+@testset "special function `::Real` fallback shouldn't recur without bound, issue #57789" begin
+    mutable struct Issue57789 <: Real end
+    Base.float(::Issue57789) = Issue57789()
+    for f ∈ (sin, sinpi, log, exp)
+        @test_throws MethodError f(Issue57789())
+    end
 end
 
 @testset "special function `::Real` fallback shouldn't recur without bound, issue #57789" begin
