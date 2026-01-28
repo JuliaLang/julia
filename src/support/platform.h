@@ -77,6 +77,10 @@
 #endif // __has_feature
 #define JL_NO_SANITIZE JL_NO_ASAN JL_NO_MSAN JL_NO_TSAN
 
+#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
+# define HAS_SANITIZER
+#endif
+
 /*******************************************************************************
 *                               OS                                             *
 *******************************************************************************/
