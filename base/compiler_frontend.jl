@@ -180,8 +180,8 @@ function eval(frontend::AbstractCompilerFrontend, mod::Module, ex; throw_load_er
         end
     catch exc
         # Ideally we'd remove LoadError as the information is reliably in the
-        # stacktrace. However many packages expect LoadError especially in
-        # their tests.
+        # stacktrace. However many packages expect LoadError to be thrown by
+        # include() especially in tests.
         if throw_load_error
             file, line = unpack_location(loc)
             rethrow(LoadError(file, line, exc))
