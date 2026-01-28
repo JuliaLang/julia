@@ -6,13 +6,13 @@ using Test
 
 mktempdir() do temp_dir
     url = try
-        download("https://httpbin.julialang.org")
-        "https://httpbin.julialang.org"
+        download("https://httpbingo.julialang.org")
+        "https://httpbingo.julialang.org"
     catch ex
         bt = catch_backtrace()
-        @info "Looks like there is a problem with a JuliaLang mirror of httpbin."
-        @info "Trying httpbingo" exception=(ex,bt)
-        "https://httpbingo.julialang.org/"
+        @info "Looks like there is a problem with a JuliaLang mirror of httpbingo"
+        @info "Trying httpbin" exception=(ex,bt)
+        "https://httpbin.julialang.org/"
     end
     # Download a file
     file = joinpath(temp_dir, "ip")
