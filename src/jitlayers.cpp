@@ -2186,7 +2186,7 @@ orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibilit
     // We also generate a tojlinvoke to handle args1 -> specsig.
     CISymbolPtr Trampoline;
     if (!Sym || Sym->invoke_api != API) {
-        auto TSym = ES.intern(Names("tojlinvoke#"));
+        auto TSym = ES.intern(Names("tojlinvoke#", name_from_method_instance(jl_get_ci_mi(CI)), "#"));
         Trampoline.specptr = mangle(*TSym);
         Trampoline.invoke_api = API;
         Sym = &Trampoline;
