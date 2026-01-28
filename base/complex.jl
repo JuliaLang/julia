@@ -8,7 +8,7 @@ Complex number type with real and imaginary part of type `T`.
 `ComplexF16`, `ComplexF32` and `ComplexF64` are aliases for
 `Complex{Float16}`, `Complex{Float32}` and `Complex{Float64}` respectively.
 
-See also: [`Real`](@ref), [`complex`](@ref), [`real`](@ref).
+See also [`Real`](@ref), [`complex`](@ref), [`real`](@ref).
 """
 struct Complex{T<:Real} <: Number
     re::T
@@ -22,7 +22,7 @@ Complex(x::Real) = Complex(x, zero(x))
 
 The imaginary unit.
 
-See also: [`imag`](@ref), [`angle`](@ref), [`complex`](@ref).
+See also [`imag`](@ref), [`angle`](@ref), [`complex`](@ref).
 
 # Examples
 ```jldoctest
@@ -61,7 +61,7 @@ float(::Type{Complex{T}}) where {T} = Complex{float(T)}
 
 Return the real part of the complex number `z`.
 
-See also: [`imag`](@ref), [`reim`](@ref), [`complex`](@ref), [`isreal`](@ref), [`Real`](@ref).
+See also [`imag`](@ref), [`reim`](@ref), [`complex`](@ref), [`isreal`](@ref), [`Real`](@ref).
 
 # Examples
 ```jldoctest
@@ -76,7 +76,7 @@ real(z::Complex) = z.re
 
 Return the imaginary part of the complex number `z`.
 
-See also: [`conj`](@ref), [`reim`](@ref), [`adjoint`](@ref), [`angle`](@ref).
+See also [`conj`](@ref), [`reim`](@ref), [`adjoint`](@ref), [`angle`](@ref).
 
 # Examples
 ```jldoctest
@@ -265,7 +265,7 @@ end
 
 Compute the complex conjugate of a complex number `z`.
 
-See also: [`angle`](@ref), [`adjoint`](@ref).
+See also [`angle`](@ref), [`adjoint`](@ref).
 
 # Examples
 ```jldoctest
@@ -621,7 +621,7 @@ Compute the phase angle in radians of a complex number `z`.
 Returns a number `-pi ≤ angle(z) ≤ pi`, and is thus discontinuous
 along the negative real axis.
 
-See also: [`atan`](@ref), [`cis`](@ref), [`rad2deg`](@ref).
+See also [`atan`](@ref), [`cis`](@ref), [`rad2deg`](@ref).
 
 # Examples
 ```jldoctest
