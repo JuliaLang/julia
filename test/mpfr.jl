@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Serialization
+using Test
 
 import Base.MPFR
 @testset "constructors" begin
@@ -1108,5 +1109,15 @@ end
 @testset "cconvert(Ref{BigFloat}, x)" begin
     for x in (1.0, big"1.0", Ref(big"1.0"))
         @test Base.cconvert(Ref{BigFloat}, x) isa Base.MPFR.BigFloatData
+    end
+end
+
+@testset "issue #60829" begin
+    p = precision(BigFloat)
+    x = big(pi)
+    setprecision(BigFloat, 2p) do
+        @test BigFloat(x) == big(x)
+        @test precision(big(x)) == precision(BigFloat(x)) == 2p
+        @test maxintfloat(big(x)) == maxintfloat(BigFloat(x))
     end
 end
