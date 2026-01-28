@@ -26,7 +26,7 @@ export @test, @test_throws, @test_broken, @test_skip,
 
 export @testset
 export @inferred
-export detect_ambiguities, detect_unbound_args
+export detect_ambiguities, detect_unbound_args, detect_closure_boxes, detect_closure_boxes_all_modules
 export GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
 export TestSetException
 export TestLogger, LogRecord
@@ -2615,7 +2615,7 @@ function detect_ambiguities(mods::Module...;
                             allowed_undefineds = nothing)
     @nospecialize
     ambs = Set{Tuple{Method,Method}}()
-    mods = collect(mods)::Vector{Module}
+    mods = Module[mods...]
     function sortdefs(m1::Method, m2::Method)
         ord12 = cmp(m1.file, m2.file)
         if ord12 == 0
@@ -2646,6 +2646,86 @@ function detect_ambiguities(mods::Module...;
 end
 
 """
+    detect_closure_boxes(mod1, mod2...)
+
+Return a sorted `Vector{Pair{Method, Vector{Symbol}}}` of methods defined in the
+specified modules (or their submodules) that allocate `Core.Box` in their lowered
+code, paired with the boxed variable names. Variable names are `:unknown` when a
+slot name cannot be resolved.
+
+See also [`detect_closure_boxes_all_modules`](@ref) to check all loaded modules.
+"""
+function detect_closure_boxes(mods::Module...)
+    @nospecialize
+    boxes = Dict{Method, Vector{Symbol}}()
+    mods = Module[mods...]
+    isempty(mods) && return Pair{Method, Vector{Symbol}}[]
+
+    function is_box_call(@nospecialize expr)
+        if !(expr isa Expr)
+            return false
+        end
+        if expr.head === :call || expr.head === :new
+            callee = expr.args[1]
+            return callee === Core.Box || (callee isa GlobalRef && callee.mod === Core && callee.name === :Box)
+        end
+        return false
+    end
+
+    function slot_name(ci, slot)::Symbol
+        if slot isa Core.SlotNumber
+            idx = Int(slot.id)
+            if 1 <= idx <= length(ci.slotnames)
+                return ci.slotnames[idx]
+            end
+        end
+        return Symbol(string(slot))
+    end
+
+    function matches_module(mod::Module)
+        return is_in_mods(mod, true, mods)
+    end
+
+    function scan_method!(m::Method)
+        matches_module(parentmodule(m)) || return
+        ci = try
+            Base.uncompressed_ast(m)
+        catch
+            return
+        end
+        for stmt in ci.code
+            if stmt isa Expr && stmt.head === :(=)
+                lhs = stmt.args[1]
+                rhs = stmt.args[2]
+                if is_box_call(rhs)
+                    push!(get!(Vector{Symbol}, boxes, m), slot_name(ci, lhs))
+                end
+            elseif is_box_call(stmt)
+                push!(get!(Vector{Symbol}, boxes, m), :unknown)
+            end
+        end
+    end
+
+    Base.visit(Core.methodtable) do m
+        scan_method!(m)
+    end
+
+    result = collect(boxes)
+    sort!(result, by = entry -> (entry.first.file, entry.first.line, entry.first.name))
+    return result
+end
+
+"""
+    ()
+
+Return a sorted `Vector{Pair{Method, Vector{Symbol}}}` of all methods in currently
+loaded modules that allocate `Core.Box` in their lowered code.
+
+See also [`detect_closure_boxes`](@ref) to check specific modules.
+"""
+detect_closure_boxes_all_modules() = detect_closure_boxes(Base.loaded_modules_array()...)
+
+"""
     detect_unbound_args(mod1, mod2...; recursive=false, allowed_undefineds=nothing)
 
 Return a vector of `Method`s which may have unbound type parameters.
@@ -2671,7 +2751,7 @@ function detect_unbound_args(mods...;
                              allowed_undefineds=nothing)
     @nospecialize mods
     ambs = Set{Method}()
-    mods = collect(mods)::Vector{Module}
+    mods = Module[mods...]
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
             is_in_mods(parentmodule(m), recursive, mods) || continue

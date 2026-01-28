@@ -197,7 +197,7 @@ let
         Symbol("@test_logs"), Symbol("@test_nowarn"), Symbol("@test_skip"), Symbol("@test_throws"),
         Symbol("@test_warn"), Symbol("@testset"), :GenericArray, :GenericDict, :GenericOrder,
         :GenericSet, :GenericString, :LogRecord, :Test, :TestLogger, :TestSetException,
-        :detect_ambiguities, :detect_unbound_args])
+        :detect_ambiguities, :detect_closure_boxes, :detect_closure_boxes_all_modules, :detect_unbound_args])
     usings_from_Base = delete!(Set(names(Module(); usings=true)), :anonymous) # the name of the anonymous module itself
     usings = Set(Symbol[:x36529, :TestModSub9475, :f54609]) ∪ usings_from_Test ∪ usings_from_Base
     @test Set(names(TestMod7648)) == defaultset

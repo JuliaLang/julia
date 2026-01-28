@@ -293,7 +293,7 @@ end
 
 partition_restriction(bpart::Core.BindingPartition) = ccall(:jl_bpart_get_restriction_value, Any, (Any,), bpart)
 
-binding_kind(bpart::Core.BindingPartition) = ccall(:jl_bpart_get_kind, UInt8, (Any,), bpart)
+binding_kind(bpart::Core.BindingPartition) = UInt8(bpart.kind & PARTITION_MASK_KIND)
 binding_kind(m::Module, s::Symbol) = binding_kind(lookup_binding_partition(tls_world_age(), GlobalRef(m, s)))
 
 """
