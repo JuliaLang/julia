@@ -673,7 +673,7 @@ Writing the original definition as
 g(f::F, x=1) where {F} = f(...)
 ```
 
-woudld solve this.
+would solve this.
 
 ### Write "type-stable" functions
 
