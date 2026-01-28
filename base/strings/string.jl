@@ -451,7 +451,8 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
 
 ## required core functionality ##
 
-@inline function iterate(s::String, i::Int=firstindex(s))
+@inline function iterate(s::String, i::Integer=firstindex(s))
+    i = i::Int
     (i % UInt) - 1 < ncodeunits(s) || return nothing
     b = @inbounds codeunit(s, i)
     u = UInt32(b) << 24
