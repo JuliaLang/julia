@@ -160,16 +160,8 @@ end
 
 # this allows partial evaluation of bounded sequences of next() calls on tuples,
 # while reducing to plain next() for arbitrary iterables.
-function indexed_iterate(t::Tuple, i, state=1)
-    @inline
-    i = i::Int
-    (getfield(t, i), i+1)
-end
-function indexed_iterate(a::Union{Array,Memory}, i, state=1)
-    @inline
-    i = i::Int
-    (a[i], i+1)
-end
+indexed_iterate(t::Tuple, i::Int, state=1) = (@inline; (getfield(t, i), i+1))
+indexed_iterate(a::Union{Array,Memory}, i::Int, state=1) = (@inline; (a[i], i+1))
 function indexed_iterate(I, i)
     x = iterate(I)
     x === nothing && throw(BoundsError(I, i))
