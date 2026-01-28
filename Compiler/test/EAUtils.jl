@@ -31,7 +31,7 @@ mutable struct EscapeAnalyzer <: AbstractInterpreter
     const world::UInt
     const inf_params::InferenceParams
     const opt_params::OptimizationParams
-    const inf_cache::Vector{InferenceResult}
+    const inf_cache::Compiler.InferenceCache
     const token::EscapeAnalyzerCacheToken
     const entry_mi::Union{Nothing,MethodInstance}
     result::EscapeResultForEntry
@@ -39,7 +39,7 @@ mutable struct EscapeAnalyzer <: AbstractInterpreter
                             entry_mi::Union{Nothing,MethodInstance}=nothing)
         inf_params = InferenceParams()
         opt_params = OptimizationParams()
-        inf_cache = InferenceResult[]
+        inf_cache = Compiler.InferenceCache()
         return new(world, inf_params, opt_params, inf_cache, cache_token, entry_mi)
     end
 end
