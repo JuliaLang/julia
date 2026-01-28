@@ -824,11 +824,14 @@ macro activate(what)
     if !(Component in allowed_components)
         error("Usage Error: Component $Component is not recognized. Expected one of $allowed_components")
     end
+    s = gensym()
     if Component === :Compiler && isempty(options)
         push!(options, :reflection)
     end
     options = map(options) do opt
         Expr(:kw, opt, true)
     end
-    return :(Base.require($__module__, $(QuoteNode(Component))).activate!(; $(options...)))
+    Expr(:toplevel,
+        esc(:(import $Component as $s)),
+        esc(:($s.activate!(;$(options...)))))
 end
