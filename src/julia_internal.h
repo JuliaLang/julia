@@ -902,6 +902,7 @@ jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl
 void jl_binding_set_type(jl_binding_t *b, jl_module_t *mod, jl_sym_t *sym, jl_value_t *ty);
 JL_DLLEXPORT void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, int strong);
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, enum jl_partition_kind, size_t new_world) JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_value_t *expr, jl_module_t *inmodule, const char *filename, int line, size_t world, bool_t warn);
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded, const char **toplevel_filename, int *toplevel_lineno);
 JL_DLLEXPORT jl_value_t *jl_eval_thunk(jl_module_t *JL_NONNULL m, jl_code_info_t *thk, int fast);
 int jl_module_public_(jl_module_t *from, jl_sym_t *s, int exported, size_t new_world);

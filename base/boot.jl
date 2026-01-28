@@ -1078,30 +1078,24 @@ function struct_name_shim(@nospecialize(x), name::Symbol, mod::Module, @nospecia
     return x === mod ? t : getfield(x, name)
 end
 
-# Bindings for the julia frontend.  The internal jl_parse and jl_lower will call
-# Core._parse and Core._lower respectively (if they are not `nothing`.)
+# Binding for the julia parser. The internal jl_parse will call Core._parse
+# if it is not `nothing`.
 
-#    Core._parse(text, filename, lineno, offset, options)
+#    Core._parse(text, filename, lineno, offset, options, versionctx)
 #
 # Parse Julia code from the buffer `text`, starting at `offset` and attributing
 # it to `filename`. `text` may be a `String` or `svec(ptr::Ptr{UInt8},
 # len::Int)` for a raw unmanaged buffer. `options` should be one of `:atom`,
 # `:statement` or `:all`, indicating how much the parser will consume.
+# `versionctx` determines which syntax version will be used and may be a module
+# or version number or `nothing`.
 #
 # `_parse` must return an `svec` containing an `Expr` and the new offset as an
 # `Int`.
 _parse = nothing
 
-#    Core._lower(code, module, filename="none", linenum=0, world=0xfff..., warn=false)
-#
-# Lower `code` (usually Expr), returning `svec(e::Any xs::Any...)` where `e` is
-# the lowered code, and `xs` is possible additional information from
-# JuliaLowering (TBD).
-_lower = nothing
-
 _seteval!(eval) = setglobal!(Core, :_eval, eval)
 _setparser!(parser) = setglobal!(Core, :_parse, parser)
-_setlowerer!(lowerer) = setglobal!(Core, :_lower, lowerer)
 
 # support for deprecated uses of builtin functions
 _apply(x...) = _apply_iterate(Main.Base.iterate, x...)
