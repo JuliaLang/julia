@@ -8,7 +8,9 @@ mktempdir() do temp_dir
     url = try
         download("https://httpbin.julialang.org")
         "https://httpbin.julialang.org"
-    catch
+    catch ex
+        bt = catch_backtrace()
+        @info "Looks like there is a problem with a JuliaLang mirror of httpbin(go)" exception=(ex,bt)
         "https://httpbingo.julialang.org/"
     end
     # Download a file
