@@ -12,7 +12,7 @@ import FileWatching
 using Markdown
 import REPL
 
-using .JuliaSyntax: sourcetext, set_numeric_flags
+using .JuliaSyntax: SourceAttrType, sourcetext, set_numeric_flags
 
 using .JuliaLowering:
     SyntaxGraph, new_id!, ensure_attributes!,
@@ -25,7 +25,7 @@ function _ast_test_graph()
     graph = SyntaxGraph()
     ensure_attributes!(graph,
                        kind=Kind, syntax_flags=UInt16,
-                       source=Union{SourceRef,NodeId,Tuple,LineNumberNode},
+                       source=SourceAttrType,
                        var_id=Int, value=Any, name_val=String, is_toplevel_thunk=Bool,
                        toplevel_pure=Bool)
 end
