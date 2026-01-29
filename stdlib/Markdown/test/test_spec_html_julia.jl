@@ -1248,7 +1248,7 @@ end
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><del><em>foo</em></del></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 169
     input = "<pre language=\"haskell\"><code>\nimport Text.HTML.TagSoup\n\nmain :: IO ()\nmain = print \$ parseTags tags\n</code></pre>\nokay\n"
@@ -1381,7 +1381,7 @@ end
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>Foo\n<a href=\"bar\">\nbaz</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 188
     input = "<div>\n\n*Emphasized* text.\n\n</div>\n"
@@ -1486,7 +1486,7 @@ end
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>[foo]: <bar>(baz)</p>\n<p>[foo]</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 202
     input = "[foo]: /url\\bar\\*baz \"foo\\\"bar\\baz\"\n\n[foo]\n"
@@ -2536,7 +2536,7 @@ end
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a href=\"`\">`</p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 345
     input = "`<https://foo.bar.`baz>`\n"
@@ -4454,14 +4454,14 @@ end
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a><bab><c2c></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 614
     input = "<a/><b2/>\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p><a/><b2/></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 615
     input = "<a  /><b2\ndata=\"foo\" >\n"
@@ -4482,7 +4482,7 @@ end
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>Foo <responsive-image src=\"foo.jpg\" /></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 618
     input = "<33> <__>\n"
@@ -4524,7 +4524,7 @@ end
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p></a></foo ></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 624
     input = "</a href=\"foo\">\n"
@@ -4573,14 +4573,14 @@ end
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>foo <a href=\"&ouml;\"></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 631
     input = "foo <a href=\"\\*\">\n"
     md = Markdown.parse(input; flavor=:julia)
     expected = "<p>foo <a href=\"\\*\"></p>\n"
     actual = Markdown.html(md)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 632
     input = "<a href=\"\\\"\">\n"
