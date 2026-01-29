@@ -3936,20 +3936,28 @@ function rewrite_new_calls(ctx, ex, struct_name, global_struct_name,
     else
         docs = nothing
     end
-    if kind(ex) != K"function"
+
+    if kind(ex) in KSet"global local"
+        stmts = SyntaxList(ctx)
+        make_lhs_decls(ctx, stmts, kind(ex), get(ex, :meta, nothing),
+                       ex[1][1], false)
+        @ast ctx ex [K"block"
+            stmts...
+            rewrite_new_calls(
+                ctx, ex[1], struct_name, global_struct_name, typevar_names,
+                field_names, field_types)
+        ]
+    elseif kind(ex) === K"function" && numchildren(ex) === 2
+        ctor_self = Ref{Union{Nothing,SyntaxTree}}(nothing)
+        expand_function_def(
+            ctx, ex, docs,
+            callex->_rewrite_ctor_sig(ctx, callex, struct_name, global_struct_name,
+                                      typevar_names, ctor_self),
+            body->_rewrite_ctor_new_calls(ctx, body, struct_name, global_struct_name,
+                                          ctor_self[], typevar_names, field_types))
+    else
         return ex
     end
-    if !(numchildren(ex) == 2 && is_eventually_call(ex[1]))
-        throw(LoweringError(ex, "Expected constructor or named inner function"))
-    end
-
-    ctor_self = Ref{Union{Nothing,SyntaxTree}}(nothing)
-    expand_function_def(ctx, ex, docs,
-        callex->_rewrite_ctor_sig(ctx, callex, struct_name,
-                                  global_struct_name, typevar_names, ctor_self),
-        body->_rewrite_ctor_new_calls(ctx, body, struct_name, global_struct_name,
-                                      ctor_self[], typevar_names, field_types)
-    )
 end
 
 function _constructor_min_initialized(ex::SyntaxTree)
