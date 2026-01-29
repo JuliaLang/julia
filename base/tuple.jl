@@ -575,8 +575,13 @@ end
 
 const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
 function hash(t::Tuple, h::UInt)
-    f(::Tuple{}, h::UInt) = h ⊻ tuplehash_seed
-    f(t::Tuple, h::UInt) = hash(t[1], hash(tail(t), h))
+    function f(t::Tuple, h::UInt)
+        if t === ()
+            h ⊻ tuplehash_seed
+        else
+            hash(t[1], hash(tail(t), h))
+        end
+    end
     function f(t::Any32, h::UInt)
         out = h ⊻ tuplehash_seed
         for i = length(t):-1:1
