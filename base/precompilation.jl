@@ -845,7 +845,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                 write(get!(IOBuffer, std_outputs, pkg_config), str)
                 if !in(pkg_config, taskwaiting) && occursin("waiting for IO to finish", str)
                     !fancyprint && @lock print_lock begin
-                        println(io, pkg.name, color_string(" Waiting for background task / IO / timer.", Base.warn_color()))
+                        println(io, full_name(ext_to_parent, pkg), color_string(" Waiting for background task / IO / timer.", Base.warn_color()))
                     end
                     push!(taskwaiting, pkg_config)
                 end
@@ -1015,7 +1015,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                         try
                             # allows processes to wait if another process is precompiling a given package to
                             # a functionally identical package cache (except for preferences, which may differ)
-                            t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(io, print_lock, fancyprint, pkg_config, pkgspidlocked, hascolor, parallel_limiter, ignore_loaded) do
+                            fullname = full_name(ext_to_parent, pkg)
+                            t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(io, print_lock, fancyprint, pkg_config, pkgspidlocked, hascolor, parallel_limiter, ignore_loaded, fullname) do
                                 Base.with_logger(Base.NullLogger()) do
                                     # whether to respect already loaded dependency versions
                                     keep_loaded_modules = !ignore_loaded
@@ -1094,7 +1095,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         str = sprint(context=io) do iostr
             if !quick_exit
                 if fancyprint # replace the progress bar
-                    what = isempty(requested_pkgids) ? "packages finished." : "$(join((p.name for p in requested_pkgids), ", ", " and ")) finished."
+                    what = isempty(requested_pkgids) ? "packages finished." : "$(join((full_name(ext_to_parent, p) for p in requested_pkgids), ", ", " and ")) finished."
                     printpkgstyle(iostr, :Precompiling, what)
                 end
                 plural = length(configs) > 1 ? "dependency configurations" : ndeps == 1 ? "dependency" : "dependencies"
@@ -1157,7 +1158,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         for (pkg_config, err) in failed_deps
             dep, config = pkg_config
             if strict || (dep in project_deps)
-                print(err_str, "\n", dep.name, " ")
+                print(err_str, "\n", full_name(ext_to_parent, dep), " ")
                 for cfg in config[1]
                     print(err_str, cfg, " ")
                 end
@@ -1205,7 +1206,7 @@ function _color_string(cstr::String, col::Union{Int64, Symbol}, hascolor)
 end
 
 # Can be merged with `maybe_cachefile_lock` in loading?
-function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLock, fancyprint::Bool, pkg_config, pkgspidlocked, hascolor, parallel_limiter::Base.Semaphore, ignore_loaded::Bool)
+function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLock, fancyprint::Bool, pkg_config, pkgspidlocked, hascolor, parallel_limiter::Base.Semaphore, ignore_loaded::Bool, fullname)
     if !(isdefined(Base, :mkpidlock_hook) && isdefined(Base, :trymkpidlock_hook) && Base.isdefined(Base, :parse_pidfile_hook))
         return f()
     end
@@ -1226,7 +1227,7 @@ function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLo
             "another machine (hostname: $hostname, pid: $pid, pidfile: $pidfile)"
         end
         !fancyprint && @lock print_lock begin
-            println(io, "    ", pkg.name, _color_string(" Being precompiled by $(pkgspidlocked[pkg_config])", Base.info_color(), hascolor))
+            println(io, "    ", fullname, _color_string(" Being precompiled by $(pkgspidlocked[pkg_config])", Base.info_color(), hascolor))
         end
         Base.release(parallel_limiter) # release so other work can be done while waiting
         try

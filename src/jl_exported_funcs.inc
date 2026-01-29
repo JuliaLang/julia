@@ -523,8 +523,10 @@
     YY(jl_get_LLVM_VERSION) \
     YY(jl_dump_native) \
     YY(jl_get_llvm_gvs) \
+    YY(jl_get_llvm_gvs_globals) \
     YY(jl_get_llvm_external_fns) \
     YY(jl_get_llvm_mis) \
+    YY(jl_get_llvm_cis) \
     YY(jl_dump_function_asm) \
     YY(jl_LLVMCreateDisasm) \
     YY(jl_LLVMDisasmInstruction) \
@@ -542,6 +544,7 @@
     YY(jl_dump_fptr_asm) \
     YY(jl_emit_native) \
     YY(jl_get_function_id) \
+    YY(jl_struct_to_llvm) \
     YY(jl_type_to_llvm) \
     YY(jl_getUnwindInfo) \
     YY(jl_get_libllvm) \

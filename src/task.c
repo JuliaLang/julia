@@ -203,10 +203,6 @@ static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt
     lastt->ctx.copy_stack = nb;
     lastt->sticky = 1;
     memcpy_stack_a16((uint64_t*)buf, (uint64_t*)frame_addr, nb);
-    // this task's stack could have been modified after
-    // it was marked by an incremental collection
-    // move the barrier back instead of walking it again here
-    jl_gc_wb_back(lastt);
 }
 
 JL_NO_ASAN static void NOINLINE JL_NORETURN restore_stack(jl_ucontext_t *t, jl_ptls_t ptls, char *p)
@@ -504,6 +500,12 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
             lastt->ctx.ctx = &lasttstate.ctx;
         }
     }
+    // this task's stack or scope field could have been modified after
+    // it was marked by an incremental collection
+    // move the barrier back instead of walking the shadow stack again here to check if that is required
+    // even if killed (dropping the stack) and just the scope field matters,
+    // let the gc figure that out next time it does a quick mark
+    jl_gc_wb_back(lastt);
 
     // set up global state for new task and clear global state for old task
     t->ptls = ptls;
@@ -1108,6 +1110,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     jl_atomic_store_relaxed(&t->_isexception, 0);
     // Inherit scope from parent task
     t->scope = ct->scope;
+    jl_gc_wb_fresh(t, t->scope);
     // Fork task-local random state from parent
     jl_rng_split(t->rngState, ct->rngState);
     // there is no active exception handler available on this stack yet
@@ -1573,6 +1576,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->donenotify = jl_nothing;
     jl_atomic_store_relaxed(&ct->_isexception, 0);
     ct->scope = jl_nothing;
+    jl_gc_wb_knownold(ct, ct->scope);
     ct->eh = NULL;
     ct->gcstack = NULL;
     ct->excstack = NULL;

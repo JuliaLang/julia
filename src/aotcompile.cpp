@@ -108,12 +108,46 @@ jl_get_llvm_mis_impl(void *native_code, size_t *num_elements, jl_method_instance
     }
 }
 
+extern "C" JL_DLLEXPORT_CODEGEN void
+jl_get_llvm_cis_impl(void *native_code, size_t *num_elements, jl_code_instance_t **data)
+{
+    jl_native_code_desc_t *desc = (jl_native_code_desc_t *)native_code;
+    auto &map = desc->jl_fvar_map;
+
+    if (data == NULL) {
+        *num_elements = map.size();
+        return;
+    }
+
+    assert(*num_elements == map.size());
+    size_t i = 0;
+    for (auto &ci : map) {
+        data[i++] = ci.first;
+    }
+}
+
 extern "C" JL_DLLEXPORT_CODEGEN void jl_get_llvm_gvs_impl(void *native_code,
                                                           size_t *num_elements, void **data)
 {
     // map a memory location (jl_value_t or jl_binding_t) to a GlobalVariable
     jl_native_code_desc_t *desc = (jl_native_code_desc_t *)native_code;
     auto &value_map = desc->jl_value_to_llvm;
+
+    if (data == NULL) {
+        *num_elements = value_map.size();
+        return;
+    }
+
+    assert(*num_elements == value_map.size());
+    memcpy(data, value_map.data(), *num_elements * sizeof(void *));
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN void jl_get_llvm_gvs_globals_impl(void *native_code,
+                                                          size_t *num_elements, void **data)
+{
+    // map a memory location (jl_value_t or jl_binding_t) to a GlobalVariable
+    jl_native_code_desc_t *desc = (jl_native_code_desc_t *)native_code;
+    auto &value_map = desc->jl_sysimg_gvars;
 
     if (data == NULL) {
         *num_elements = value_map.size();
