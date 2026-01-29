@@ -729,16 +729,8 @@ end
 @inline function sinpi_kernel(x::Float64)
     _sinpi_kernel_f64(x)
 end
-@inline function sinpi_kernel_wide(x::Float64)
-    _sinpi_kernel_f64(x)
-end
 @inline function sinpi_kernel(x::Float32)
     _sinpi_kernel_f32(x)
-end
-@inline function sinpi_kernel_wide(x::Float32)
-    x = Float64(x)
-    return x*evalpoly(x*x, (3.1415926535762266, -5.167712769188119,
-                            2.5501626483206374, -0.5992021090314925, 0.08100185277841528))
 end
 
 @inline function sinpi_kernel(x::Float16)
@@ -753,16 +745,8 @@ end
 @inline function cospi_kernel(x::Float64)
     _cospi_kernel_f64(x)
 end
-@inline function cospi_kernel_wide(x::Float64)
-    _cospi_kernel_f64(x)
-end
 @inline function cospi_kernel(x::Float32)
     _cospi_kernel_f32(x)
-end
-@inline function cospi_kernel_wide(x::Float32)
-    x = Float64(x)
-    return evalpoly(x*x, (1.0, -4.934802200541122, 4.058712123568637,
-                          -1.3352624040152927, 0.23531426791507182, -0.02550710082498761))
 end
 @inline function cospi_kernel(x::Float16)
     Float16(cospi_kernel_wide(x))
@@ -1059,7 +1043,7 @@ function tanpi(_x::T) where T<:IEEEFloat
     n = round(2*x)
     rx = float(muladd(T(-.5), n, x))
     n = Int64(n) & 3
-    si, co = sinpi_kernel_wide(rx), cospi_kernel_wide(rx)
+    si, co = sinpi_kernel(rx), cospi_kernel(rx)
     if n==0
         si, co = si, co
     elseif n==1
