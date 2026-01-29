@@ -356,12 +356,11 @@ function provenance(ex::SyntaxTree)
     end
 end
 
-
 function _sourceref(sources, id)
     i = 1
     while true
         i += 1
-        s = sources[id]
+        s = sources[id]::SourceAttrType
         if s isa NodeId
             id = s
         else
@@ -371,8 +370,8 @@ function _sourceref(sources, id)
 end
 
 function sourceref(ex::SyntaxTree)
-    sources = ex._graph.source
-    id::NodeId = ex._id
+    sources = ex._graph.source::Dict{NodeId,SourceAttrType}
+    id = ex._id
     while true
         s, _ = _sourceref(sources, id)
         if s isa Tuple
@@ -424,7 +423,7 @@ function is_ancestor(ex, ancestor)
     end
 end
 
-const SourceAttrType = Union{SourceRef,LineNumberNode,NodeId,Tuple}
+const SourceAttrType = Union{SourceRef,LineNumberNode,NodeId,Tuple{Vararg{NodeId}}}
 
 function reparent(ctx, ex::SyntaxTree)
     # Ensure `ex` has the same parent graph, in a somewhat loose sense.
