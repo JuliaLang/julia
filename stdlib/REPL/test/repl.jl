@@ -626,7 +626,7 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         # Navigate history (which bypasses update_key_repeats)
         LineEdit.history_prev(s, hp)
         # Cursor should be at line end after history navigation
-        @test position(LineEdit.buffer(s)) == sizeof("1 + 1")
+        @test position(LineEdit.buffer(s)) == endof(LineEdit.buffer(s))
         # Press Ctrl-A to move to line start - should move to the start of current line,
         # not jump to input start (which would happen if key_repeats was incorrectly > 0)
         LineEdit.move_line_start(s)
