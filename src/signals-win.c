@@ -582,18 +582,6 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
     return 0;
 }
 
-typedef union _LARGE_INTEGER {
-    struct {
-        DWORD LowPart;
-        LONG  HighPart;
-    } DUMMYSTRUCTNAME;
-    struct {
-        DWORD LowPart;
-        LONG  HighPart;
-    } u;
-    LONGLONG QuadPart;
-} LARGE_INTEGER;
-
 JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
 {
     uv_mutex_lock(&bt_data_prof_lock);
