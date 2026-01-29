@@ -1684,7 +1684,10 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 stmt = ssa_rename[stmt.id]
             end
         elseif isa(stmt, NewSSAValue)
-            stmt = SSAValue(stmt.id)
+            if stmt.id > 0
+                # Negative ids reference new_new_nodes and must remain NewSSAValue.
+                stmt = SSAValue(stmt.id)
+            end
         else
             # Constant assign, replace uses of this ssa value with its result
         end
