@@ -2134,3 +2134,19 @@ let src = code_typed1((Vector{Any},)) do xs
     end
     @test count(iscall((src, Core.svec)), src.code) == 1
 end
+
+# Negative NewSSAValue ids must be preserved during compaction
+function f_57827(op, init, x)
+    v = op(init, x)
+    i = 0
+    while i < 1
+        v = op(v, x)
+        i += 1
+    end
+    return v
+end
+let rf = (acc, x) -> ifelse(x > acc[1], (x,), (acc[1],))
+    @test f_57827(rf, (0.0,), 1) === (1,)
+    ir = first(only(Base.code_ircode(f_57827, (typeof(rf), Tuple{Float64}, Int64); optimize_until="CC: SROA")))
+    @test ir isa Compiler.IRCode
+end
