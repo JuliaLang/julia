@@ -1173,7 +1173,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     notify(was_processed[pkg_config])
                 catch err_outer
                     # For debugging:
-                    println("Task failed $err_outer")
+                    println("Task failed due to:")
+                    Base.display_error(err_outer)
                     Base.display_error(ErrorException(""), Base.catch_backtrace())# logging doesn't show here
                     handle_interrupt(err_outer, false)
                     rethrow()
@@ -1187,7 +1188,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         interrupted_or_done[] = true
     catch err
         # For debugging:
-        println("Task failed $err")
+        println("Task failed due to:")
+        Base.display_error(err)
         Base.display_error(ErrorException(""), Base.catch_backtrace())# logging doesn't show here
         handle_interrupt(err, false) || rethrow()
     finally
