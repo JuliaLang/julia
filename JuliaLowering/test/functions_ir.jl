@@ -1596,7 +1596,7 @@ end
 #---------------------
 LoweringError:
 function f_kw_destruct(; (x,y)=10)
-#                        └───┘ ── expected identifier or `::`
+#                        └───┘ ── expected identifier or `identifier::type`
 end
 
 ########################################
@@ -1606,7 +1606,7 @@ end
 #---------------------
 LoweringError:
 function f_kw_slurp_default(; kws...=def)
-#                             └────┘ ── expected identifier or `::`
+#                             └────┘ ── expected identifier or `identifier::type`
 end
 
 ########################################
@@ -1616,7 +1616,7 @@ end
 #---------------------
 LoweringError:
 function f_kw_slurp_type(; kws::T...)
-#                          └───────┘ ── keyword argument with `...` may not be given a type
+#                          └────┘ ── keyword parameter with `...` may not be given a type
 end
 
 ########################################
@@ -1626,7 +1626,7 @@ end
 #---------------------
 LoweringError:
 function f_kw_slurp_not_last(; kws..., x=1)
-#                              └────┘ ── `...` may only be used for the last keyword parameter
+#                              └────┘ ── `...` may only be used for the final keyword parameter
 end
 
 ########################################
