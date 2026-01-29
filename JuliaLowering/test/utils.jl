@@ -374,3 +374,7 @@ function reduce_any_failing_toplevel(mod::Module, filename::AbstractString; do_e
     end
     nothing
 end
+
+function reference_lower(mod::Module, x)
+    Base.fl_lower(x, mod, @__FILE__, @__LINE__, Base.get_world_counter())[1]
+end
