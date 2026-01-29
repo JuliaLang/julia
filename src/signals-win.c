@@ -630,7 +630,6 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
     uv_mutex_lock(&bt_data_prof_lock);
     if (profile_running && hProfileTimer != NULL){
-        
         CloseHandle(hProfileTimer);
         hProfileTimer = NULL;
     }
