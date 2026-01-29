@@ -618,6 +618,19 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         @test LineEdit.input_string(ps) == "wip"
         @test position(LineEdit.buffer(s)) == 3
         LineEdit.accept_result(s, prefix_mode)
+        # Regression test for Ctrl-A behavior after multiline history recall (#60779)
+        # When history navigation (e.g., Ctrl-Up) is used, key_repeats state must be
+        # normalized so that subsequent keypresses (e.g., Ctrl-A) behave correctly.
+        LineEdit.edit_insert(s, "test line 1\ntest line 2\ntest line 3")
+        seek(LineEdit.buffer(s), endof(LineEdit.buffer(s)))
+        # Navigate history (which bypasses update_key_repeats)
+        LineEdit.history_prev(s, hp)
+        # Cursor should be at line end after history navigation
+        @test position(LineEdit.buffer(s)) == sizeof("1 + 1")
+        # Press Ctrl-A to move to line start - should move to the start of current line,
+        # not jump to input start (which would happen if key_repeats was incorrectly > 0)
+        LineEdit.move_line_start(s)
+        @test position(LineEdit.buffer(s)) == 0
     end
 end
 

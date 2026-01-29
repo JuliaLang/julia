@@ -977,6 +977,11 @@ function history_prev(s::LineEdit.MIState, hist::REPLHistoryProvider,
         LineEdit.reset_key_repeats(s) do
             LineEdit.move_line_end(s)
         end
+        # Normalize key repeat state so the next keystroke resets properly.
+        # History navigation bypasses the normal key dispatch path, so we must
+        # explicitly normalize the state to prevent stale key_repeats from
+        # affecting subsequent keypresses (e.g., Ctrl-A after Ctrl-Up).
+        LineEdit.update_key_repeats(s, Char[])
         return LineEdit.refresh_line(s)
     elseif m === :skip
         return history_prev(s, hist, num+1, save_idx)
@@ -1003,6 +1008,11 @@ function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider,
     m = history_move(s, hist, cur_idx+num, save_idx)
     if m === :ok
         LineEdit.move_input_end(s)
+        # Normalize key repeat state so the next keystroke resets properly.
+        # History navigation bypasses the normal key dispatch path, so we must
+        # explicitly normalize the state to prevent stale key_repeats from
+        # affecting subsequent keypresses (e.g., Ctrl-A after Ctrl-Up).
+        LineEdit.update_key_repeats(s, Char[])
         return LineEdit.refresh_line(s)
     elseif m === :skip
         return history_next(s, hist, num+1, save_idx)
