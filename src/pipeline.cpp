@@ -487,6 +487,7 @@ static void buildScalarOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *
             FPM.addPass(CorrelatedValuePropagationPass());
             FPM.addPass(ADCEPass());
             FPM.addPass(MemCpyOptPass());
+            JULIA_PASS(FPM.addPass(NewSinkPass()));
             FPM.addPass(DSEPass());
             FPM.addPass(IRCEPass());
             FPM.addPass(JumpThreadingPass());
