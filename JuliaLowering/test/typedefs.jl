@@ -346,4 +346,24 @@ end
 @test test_mod.make_s131b() isa test_mod.S131b{Int}
 @test test_mod.make_s131b().x == 100
 
+# Inner constructor with local variable shadowing type parameter
+# See https://github.com/aviatesk/JETLS.jl/issues/508
+@test JuliaLowering.include_string(test_mod, """
+struct ShadowTypeParam{T}
+    x::T
+    function ShadowTypeParam(x)
+        T = typeof(x)  # This should be a new local variable, not capture the type param
+        return new{T}(x)
+    end
+end
+""") === nothing
+let s = test_mod.ShadowTypeParam(42)
+    @test s isa test_mod.ShadowTypeParam{Int}
+    @test s.x === 42
+end
+let s = test_mod.ShadowTypeParam("hello")
+    @test s isa test_mod.ShadowTypeParam{String}
+    @test s.x === "hello"
+end
+
 end
