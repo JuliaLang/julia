@@ -213,7 +213,7 @@ isopen(t::Union{Timer, AsyncCondition}) = @atomic :acquire t.isopen
 Close an object `t` and thus mark it as inactive. Once a timer or condition is inactive, it will not produce
 a new event.
 
-See also: [`isopen`](@ref)
+See also [`isopen`](@ref).
 """
 function close(t::Union{Timer, AsyncCondition})
     t.handle == C_NULL && !t.isopen && return # short-circuit path, :monotonic

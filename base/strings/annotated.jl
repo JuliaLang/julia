@@ -75,8 +75,8 @@ More specifically, this is a simple wrapper around any other
 [`AbstractChar`](@ref), which holds a list of arbitrary labelled annotations
 (`$Annotation`) with the wrapped character.
 
-See also: [`AnnotatedString`](@ref), [`annotatedstring`](@ref), `annotations`,
-and `annotate!`.
+See also [`AnnotatedString`](@ref), [`annotatedstring`](@ref), `annotations`,
+`annotate!`.
 
 # Constructors
 
@@ -228,7 +228,7 @@ Create a `AnnotatedString` from any number of `values` using their
 This acts like [`string`](@ref), but takes care to preserve any annotations
 present (in the form of [`AnnotatedString`](@ref) or [`AnnotatedChar`](@ref) values).
 
-See also [`AnnotatedString`](@ref) and [`AnnotatedChar`](@ref).
+See also [`AnnotatedString`](@ref), [`AnnotatedChar`](@ref).
 
 ## Examples
 
@@ -384,7 +384,7 @@ a vector of region–annotation tuples.
 In accordance with the semantics documented in [`AnnotatedString`](@ref), the
 order of annotations returned matches the order in which they were applied.
 
-See also: [`annotate!`](@ref).
+See also [`annotate!`](@ref).
 """
 annotations(s::AnnotatedString) = s.annotations
 

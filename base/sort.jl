@@ -325,7 +325,7 @@ searched value `x` as well as the values in `v`.
 The range is generally found using binary search, but there are optimized
 implementations for some inputs.
 
-See also: [`searchsortedfirst`](@ref), [`sort!`](@ref), [`insorted`](@ref), [`findall`](@ref).
+See also [`searchsortedfirst`](@ref), [`sort!`](@ref), [`insorted`](@ref), [`findall`](@ref).
 
 # Examples
 ```jldoctest
@@ -364,7 +364,7 @@ values in `v`.
 The index is generally found using binary search, but there are optimized
 implementations for some inputs.
 
-See also: [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
+See also [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -2248,7 +2248,7 @@ a linear ordering for `a, b <: typeof(x)`. Satisfies
 `isless(order, a, b) === (uint_map(a, order) < uint_map(b, order))`
 and `x === uint_unmap(typeof(x), uint_map(x, order), order)`
 
-See also: [`UIntMappable`](@ref) [`uint_unmap`](@ref)
+See also [`UIntMappable`](@ref), [`uint_unmap`](@ref).
 """
 function uint_map end
 
@@ -2258,7 +2258,7 @@ function uint_map end
 Reconstruct the unique value `x::T` that uint_maps to `u`. Satisfies
 `x === uint_unmap(T, uint_map(x::T, order), order)` for all `x <: T`.
 
-See also: [`uint_map`](@ref) [`UIntMappable`](@ref)
+See also [`uint_map`](@ref), [`UIntMappable`](@ref).
 """
 function uint_unmap end
 

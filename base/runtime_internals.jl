@@ -7,7 +7,7 @@
 
 Get a module's enclosing `Module`. `Main` is its own parent.
 
-See also: [`names`](@ref), [`nameof`](@ref), [`fullname`](@ref), [`@__MODULE__`](@ref).
+See also [`names`](@ref), [`nameof`](@ref), [`fullname`](@ref), [`@__MODULE__`](@ref).
 
 # Examples
 ```jldoctest
@@ -113,7 +113,7 @@ since it is not idiomatic to explicitly mark names from `Main` as public.
 !!! compat "Julia 1.12"
     The `usings` argument requires Julia 1.12 or later.
 
-See also: [`Base.isexported`](@ref), [`Base.ispublic`](@ref), [`Base.@locals`](@ref), [`@__MODULE__`](@ref).
+See also [`Base.isexported`](@ref), [`Base.ispublic`](@ref), [`Base.@locals`](@ref), [`@__MODULE__`](@ref).
 """
 names(m::Module; kwargs...) = sort!(unsorted_names(m; kwargs...))
 unsorted_names(m::Module; all::Bool=false, imported::Bool=false, usings::Bool=false) =
@@ -124,7 +124,7 @@ unsorted_names(m::Module; all::Bool=false, imported::Bool=false, usings::Bool=fa
 
 Return whether a symbol is exported from a module.
 
-See also: [`ispublic`](@ref), [`names`](@ref)
+See also [`ispublic`](@ref), [`names`](@ref).
 
 ```jldoctest
 julia> module Mod
@@ -155,7 +155,7 @@ Exported symbols are considered public.
 !!! compat "Julia 1.11"
     This function and the notion of publicity were added in Julia 1.11.
 
-See also: [`isexported`](@ref), [`names`](@ref)
+See also [`isexported`](@ref), [`names`](@ref).
 
 ```jldoctest
 julia> module Mod
@@ -1001,7 +1001,7 @@ iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union |
 Return true if `T` is a [concrete type](@ref isconcretetype) that could appear
 as an element of a [dispatch tuple](@ref isdispatchtuple).
 
-See also: [`isdispatchtuple`](@ref).
+See also [`isdispatchtuple`](@ref).
 
 # Examples
 ```jldoctest
@@ -1050,7 +1050,7 @@ If `T` is not a type, then return `false`.
     possible for a type `U` to exist such that `T == U`, `isconcretetype(T)`,
     but `!isconcretetype(U)`.
 
-See also: [`isbits`](@ref), [`isabstracttype`](@ref), [`issingletontype`](@ref).
+See also [`isbits`](@ref), [`isabstracttype`](@ref), [`issingletontype`](@ref).
 
 # Examples
 ```jldoctest
@@ -1093,7 +1093,7 @@ If `T` is not a type, then return `false`.
     vice versa, types can be neither concrete nor abstract (for example,
     `Vector` (a [`UnionAll`](@ref))).
 
-See also: [`isconcretetype`](@ref).
+See also [`isconcretetype`](@ref).
 
 # Examples
 ```jldoctest
@@ -1478,7 +1478,7 @@ of the documented interface of `x`.   If you want it to also return "private"
 property names intended for internal use, pass `true` for the optional second argument.
 REPL tab completion on `x.` shows only the `private=false` properties.
 
-See also: [`hasproperty`](@ref), [`hasfield`](@ref).
+See also [`hasproperty`](@ref), [`hasfield`](@ref).
 """
 propertynames(x) = fieldnames(typeof(x))
 propertynames(m::Module) = names(m)
@@ -1493,7 +1493,7 @@ Return a boolean indicating whether the object `x` has `s` as one of its own pro
 !!! compat "Julia 1.2"
      This function requires at least Julia 1.2.
 
-See also: [`propertynames`](@ref), [`hasfield`](@ref).
+See also [`propertynames`](@ref), [`hasfield`](@ref).
 """
 hasproperty(x, s::Symbol) = s in propertynames(x)
 
@@ -1546,7 +1546,7 @@ A list of modules can also be specified as an array or set.
 !!! compat "Julia 1.4"
     At least Julia 1.4 is required for specifying a module.
 
-See also: [`which`](@ref), [`@which`](@ref Main.InteractiveUtils.@which) and [`methodswith`](@ref Main.InteractiveUtils.methodswith).
+See also [`which`](@ref), [`@which`](@ref Main.InteractiveUtils.@which), [`methodswith`](@ref Main.InteractiveUtils.methodswith).
 """
 function methods(@nospecialize(f), @nospecialize(t),
                  mod::Union{Tuple{Module},AbstractArray{Module},AbstractSet{Module},Nothing}=nothing)

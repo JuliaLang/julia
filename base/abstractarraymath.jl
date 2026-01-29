@@ -59,7 +59,7 @@ result is mutable if and only if `A` is mutable, and setting elements of one
 alters the values of the other.
 
 Inverse of [`insertdims`](@ref).
-See also: [`reshape`](@ref), [`vec`](@ref).
+See also [`reshape`](@ref), [`vec`](@ref).
 
 # Examples
 ```jldoctest
@@ -116,7 +116,7 @@ result is mutable if and only if `A` is mutable, and setting elements of one
 alters the values of the other.
 
 Inverse of [`dropdims`](@ref).
-See also: [`reshape`](@ref), [`vec`](@ref).
+See also [`reshape`](@ref), [`vec`](@ref).
 
 # Examples
 ```jldoctest
@@ -304,7 +304,7 @@ Return a view of all the data of `A` where the index for dimension `d` equals `i
 
 Equivalent to `view(A,:,:,...,i,:,:,...)` where `i` is in position `d`.
 
-See also: [`eachslice`](@ref).
+See also [`eachslice`](@ref).
 
 # Examples
 ```jldoctest
@@ -346,7 +346,7 @@ first dimension.
 The generated code is most efficient when the shift amounts are known at compile-time, i.e.,
 compile-time constants.
 
-See also: [`circshift!`](@ref), [`circcopy!`](@ref), [`bitrotate`](@ref), [`<<`](@ref).
+See also [`circshift!`](@ref), [`circcopy!`](@ref), [`bitrotate`](@ref), [`<<`](@ref).
 
 # Examples
 ```jldoctest
@@ -419,7 +419,7 @@ end
 
 Construct an array by repeating array `A` a given number of times in each dimension, specified by `counts`.
 
-See also: [`fill`](@ref), [`Iterators.repeated`](@ref), [`Iterators.cycle`](@ref).
+See also [`fill`](@ref), [`Iterators.repeated`](@ref), [`Iterators.cycle`](@ref).
 
 # Examples
 ```jldoctest

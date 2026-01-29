@@ -879,7 +879,7 @@ Return a sorted vector of undocumented symbols in `module` (that is, lacking doc
 `export`, whereas `private=true` returns all symbols in the module (excluding
 compiler-generated hidden symbols starting with `#`).
 
-See also: [`names`](@ref), [`Docs.hasdoc`](@ref), [`Base.ispublic`](@ref).
+See also [`names`](@ref), [`Docs.hasdoc`](@ref), [`Base.ispublic`](@ref).
 """
 function undocumented_names(mod::Module; private::Bool=false)
     filter!(names(mod; all=true)) do sym

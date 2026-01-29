@@ -85,6 +85,8 @@ a Goertzel-like [^DK62] algorithm if `x` is complex.
 !!! compat "Julia 1.4"
     This function requires Julia 1.4 or later.
 
+See also [`@evalpoly`](@ref).
+
 # Examples
 ```jldoctest
 julia> evalpoly(2, (1, 2, 3))
@@ -254,7 +256,7 @@ end
 
 Convert `x` from radians to degrees.
 
-See also [`deg2rad`](@ref).
+See also [`deg2rad`](@ref), [`pi`](@ref).
 
 # Examples
 ```jldoctest
@@ -269,7 +271,7 @@ rad2deg(z::AbstractFloat) = z * _180_over_pi(z)
 
 Convert `x` from degrees to radians.
 
-See also [`rad2deg`](@ref), [`sind`](@ref), [`pi`](@ref).
+See also [`rad2deg`](@ref), [`pi`](@ref).
 
 # Examples
 ```jldoctest
@@ -290,6 +292,8 @@ log(b::T, x::T) where {T<:Number} = log(x)/log(b)
 
 Compute the base `b` logarithm of `x`. Throw a [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments.
+
+See also [`log2`](@ref), [`log10`](@ref).
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -335,7 +339,7 @@ const libm = Base.libm_name
 
 Compute hyperbolic sine of `x`.
 
-See also [`sin`](@ref).
+See also [`sin`](@ref), [`asinh`](@ref).
 """
 sinh(x::Number)
 
@@ -344,7 +348,7 @@ sinh(x::Number)
 
 Compute hyperbolic cosine of `x`.
 
-See also [`cos`](@ref).
+See also [`cos`](@ref), [`acosh`](@ref).
 """
 cosh(x::Number)
 
@@ -412,6 +416,8 @@ atan(x::Number)
     asinh(x)
 
 Compute the inverse hyperbolic sine of `x`.
+
+See also [`sinh`](@ref), [`asin`](@ref).
 """
 asinh(x::Number)
 
@@ -462,7 +468,7 @@ Compute cosine of `x`, where `x` is in radians.
 
 Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
 
-See also [`cosd`](@ref), [`cospi`](@ref), [`sincos`](@ref), [`cis`](@ref).
+See also [`cosd`](@ref), [`cospi`](@ref), [`sincos`](@ref), [`cis`](@ref), [`acos`](@ref).
 """
 cos(x::Number)
 
@@ -503,6 +509,8 @@ asin(x::Number)
 Compute the inverse cosine of `x`, where the output is in radians.
 
 Return a `T(NaN)` if `isnan(x)`.
+
+See also [`acosd`](@ref) for output in degrees.
 """
 acos(x::Number)
 
@@ -510,6 +518,8 @@ acos(x::Number)
     acosh(x)
 
 Compute the inverse hyperbolic cosine of `x`.
+
+See also [`cosh`](@ref), [`acos`](@ref).
 """
 acosh(x::Number)
 
@@ -517,6 +527,8 @@ acosh(x::Number)
     atanh(x)
 
 Compute the inverse hyperbolic tangent of `x`.
+
+See also [`tanh`](@ref), [`tanh`](@ref).
 """
 atanh(x::Number)
 
@@ -532,7 +544,7 @@ Use [`Complex`](@ref) arguments to obtain [`Complex`](@ref) results.
     `log` has a branch cut along the negative real axis; `-0.0im` is taken
     to be below the axis.
 
-See also [`ℯ`](@ref), [`log1p`](@ref), [`log2`](@ref), [`log10`](@ref).
+See also [`ℯ`](@ref), [`exp`](@ref), [`log1p`](@ref), [`log2`](@ref), [`log10`](@ref).
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -567,7 +579,7 @@ log(x::Number)
 Compute the logarithm of `x` to base 2. Throw a [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments.
 
-See also: [`exp2`](@ref), [`ldexp`](@ref), [`ispow2`](@ref).
+See also: [`exp2`](@ref), [`log`](@ref), [`ldexp`](@ref), [`ispow2`](@ref).
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -598,6 +610,8 @@ log2(x)
 
 Compute the logarithm of `x` to base 10.
 Throw a [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+
+See also: [`exp10`](@ref), [`log`](@ref).
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -660,7 +674,7 @@ The prefix operator `√` is equivalent to `sqrt`.
     `sqrt` has a branch cut along the negative real axis; `-0.0im` is taken
     to be below the axis.
 
-See also: [`hypot`](@ref).
+See also [`cbrt`](@ref), [`fourthroot`](@ref), [`hypot`](@ref).
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -693,7 +707,9 @@ sqrt(x)
 """
     fourthroot(x)
 
-Return the fourth root of `x` by applying `sqrt` twice successively.
+Return the fourth root of `x`.
+
+See also [`cbrt`](@ref), [`sqrt`](@ref).
 """
 fourthroot(x::Number) = sqrt(sqrt(x))
 

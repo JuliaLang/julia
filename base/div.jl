@@ -182,7 +182,7 @@ The quotient and remainder from Euclidean division.
 Equivalent to `(div(x, y, r), rem(x, y, r))`. Equivalently, with the default
 value of `r`, this call is equivalent to `(x ÷ y, x % y)`.
 
-See also: [`fldmod`](@ref), [`cld`](@ref).
+See also [`fldmod`](@ref), [`cld`](@ref).
 
 # Examples
 ```jldoctest
@@ -286,7 +286,7 @@ end
 The floored quotient and modulus after division. A convenience wrapper for
 `divrem(x, y, RoundDown)`. Equivalent to `(fld(x, y), mod(x, y))`.
 
-See also: [`fld`](@ref), [`cld`](@ref), [`fldmod1`](@ref).
+See also [`fld`](@ref), [`cld`](@ref), [`fldmod1`](@ref).
 """
 fldmod(x, y) = divrem(x, y, RoundDown)
 
