@@ -880,6 +880,126 @@ end
 22  (return %₂₁)
 
 ########################################
+# Error: multiple destructuring in destructured arg
+function f(_,(x...,y...)); end
+#---------------------
+LoweringError:
+function f(_,(x...,y...)); end
+#            └─────────┘ ── multiple `...` in destructured parameter is ambiguous
+
+########################################
+# Error: multiple destructuring in var-destructured arg
+function f(_,(x...,y...)...); end
+#---------------------
+LoweringError:
+function f(_,(x...,y...)...); end
+#            └─────────┘ ── multiple `...` in destructured parameter is ambiguous
+
+########################################
+# Error: type in destructured arg
+function f(_,(x,y::Int)); end
+#---------------------
+LoweringError:
+function f(_,(x,y::Int)); end
+#               └────┘ ── cannot have type in destructured argument
+
+########################################
+# Error: type in destructured arg, nested
+function f(_,(x,(y,(z::Int,)))...); end
+#---------------------
+LoweringError:
+function f(_,(x,(y,(z::Int,)))...); end
+#                   └────┘ ── cannot have type in destructured argument
+
+########################################
+# Error: type on splat
+function (_,((a,b)...)::Int); end
+#---------------------
+LoweringError:
+function (_,((a,b)...)::Int); end
+#           └─────────────┘ ── expected identifier or `identifier::type`
+
+########################################
+# Error: destructured arg with kw
+function f(_,(x,y=1)); end
+#---------------------
+LoweringError:
+function f(_,(x,y=1)); end
+#               └─┘ ── expected identifier or tuple
+
+########################################
+# Error: destructured arg with ;kw
+function f(_,(;x,y=1)); end
+#---------------------
+LoweringError:
+function f(_,(;x,y=1)); end
+#                └─┘ ── expected identifier
+
+########################################
+# Error: destructured arg with other lhs-likes after ; (call)
+function f(_,(;x,y())); end
+#---------------------
+LoweringError:
+function f(_,(;x,y())); end
+#                └─┘ ── expected identifier
+
+########################################
+# Error: destructured arg with other lhs-likes after ; (ref)
+function f(_,(;x,y())); end
+#---------------------
+LoweringError:
+function f(_,(;x,y())); end
+#                └─┘ ── expected identifier
+
+########################################
+# Error: destructured arg with other lhs-likes after ; (tuple)
+function f(_,(;x,(y,z))); end
+#---------------------
+LoweringError:
+function f(_,(;x,(y,z))); end
+#                └───┘ ── expected identifier
+
+########################################
+# Error: destructured arg with other lhs-likes after ; (...)
+function f(_,(;x,y...)); end
+#---------------------
+LoweringError:
+function f(_,(;x,y...)); end
+#                └──┘ ── expected identifier
+
+########################################
+# Error: destructuring mixed tuple
+function f(_,(x,;y=1)); end
+#---------------------
+LoweringError:
+function f(_,(x,;y=1)); end
+#               └──┘ ── cannot mix tuple `(a,b,c)` and named tuple `(;a,b,c)` syntax
+
+########################################
+# Error: ref in arg tuple (flisp allows this)
+function f(_,(_,x[])); end
+#---------------------
+LoweringError:
+function f(_,(_,x[])); end
+#               └─┘ ── expected identifier or tuple
+
+########################################
+# Error: call in arg tuple (flisp allows this; args ignored)
+function f(_,(_,x(y))); end
+#---------------------
+LoweringError:
+function f(_,(_,x(y))); end
+#               └──┘ ── expected identifier or tuple
+
+########################################
+# Error: curly in arg tuple (flisp allows this)
+function f(_,(_,x{y})); end
+#---------------------
+LoweringError:
+function f(_,(_,x{y})); end
+#               └──┘ ── expected identifier or tuple
+
+########################################
 # Function argument destructuring combined with splats, types and and defaults
 function f(x=default_x)::T
 end
