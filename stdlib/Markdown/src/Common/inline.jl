@@ -104,7 +104,7 @@ function image(stream::IO, md::MD)
 end
 
 mutable struct Link <: MarkdownElement
-    text
+    text::Vector
     url::String
 end
 
@@ -142,9 +142,9 @@ function autolink(stream::IO, md::MD)
         startswith(stream, '<') || return
         url = readuntil(stream, '>')
         url ≡ nothing && return
-        _is_link(url) && return Link(url, url)
-        _is_mailto(url) && return Link(url, url)
-        _is_email(url) && return Link(url, "mailto:" * url)
+        _is_link(url) && return Link([url], url)
+        _is_mailto(url) && return Link([url], url)
+        _is_email(url) && return Link([url], "mailto:" * url)
         return
     end
 end
