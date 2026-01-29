@@ -321,4 +321,29 @@ const Bar{T,V} = Foo{T,V,1}
 """)
 @test test_mod.Bar == (test_mod.Foo{T,V,1} where {T,V})
 
+# Global function with new() inside struct
+# See https://github.com/JuliaLang/JuliaLowering.jl/issues/131
+JuliaLowering.include_string(test_mod, """
+struct S131
+    x
+    global function make_s131()
+        new(42)
+    end
+end
+""")
+@test test_mod.make_s131() isa test_mod.S131
+@test test_mod.make_s131().x == 42
+
+JuliaLowering.include_string(test_mod, """
+struct S131b{T}
+    x::T
+    "documented global function"
+    global function make_s131b()
+        new{Int}(100)
+    end
+end
+""")
+@test test_mod.make_s131b() isa test_mod.S131b{Int}
+@test test_mod.make_s131b().x == 100
+
 end
