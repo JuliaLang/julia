@@ -190,6 +190,7 @@ T jl_atomic_exchange_explicit(std::atomic<T> *ptr, S desired, std::memory_order 
 {
      return std::atomic_exchange_explicit<T>(ptr, desired, order);
 }
+#define jl_atomic_exchange_acquire(ptr, val) jl_atomic_exchange_explicit(ptr, val, memory_order_acquire)
 #define jl_atomic_exchange_release(ptr, val) jl_atomic_exchange_explicit(ptr, val, memory_order_release)
 #define jl_atomic_exchange_relaxed(ptr, val) jl_atomic_exchange_explicit(ptr, val, memory_order_relaxed)
 extern "C" {
@@ -218,6 +219,8 @@ extern "C" {
 // TODO: Maybe add jl_atomic_cmpswap_weak for spin lock
 #  define jl_atomic_exchange(obj, desired)       \
     atomic_exchange(obj, desired)
+#  define jl_atomic_exchange_acquire(obj, desired)      \
+    atomic_exchange_explicit(obj, desired, memory_order_acquire)
 #  define jl_atomic_exchange_release(obj, desired)      \
     atomic_exchange_explicit(obj, desired, memory_order_release)
 #  define jl_atomic_exchange_relaxed(obj, desired)      \
@@ -266,6 +269,7 @@ extern "C" {
 #define _Atomic(T) T
 
 #undef jl_atomic_exchange
+#undef jl_atomic_exchange_acquire
 #undef jl_atomic_exchange_release
 #undef jl_atomic_exchange_relaxed
 #define jl_atomic_exchange(obj, desired) \
@@ -275,6 +279,7 @@ extern "C" {
             *p__analyzer__ = (desired); \
             temp__analyzer__; \
         }))
+#define jl_atomic_exchange_acquire jl_atomic_exchange
 #define jl_atomic_exchange_release jl_atomic_exchange
 #define jl_atomic_exchange_relaxed jl_atomic_exchange
 
