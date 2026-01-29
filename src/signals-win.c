@@ -582,6 +582,18 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
     return 0;
 }
 
+typedef union _LARGE_INTEGER {
+    struct {
+        DWORD LowPart;
+        LONG  HighPart;
+    } DUMMYSTRUCTNAME;
+    struct {
+        DWORD LowPart;
+        LONG  HighPart;
+    } u;
+    LONGLONG QuadPart;
+} LARGE_INTEGER;
+
 JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
 {
     uv_mutex_lock(&bt_data_prof_lock);
@@ -607,6 +619,18 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
             CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, // high resolution timer
             TIMER_MODIFY_STATE                     // minimum access rights
         );
+        if (hProfileTimer != NULL) {
+            LARGE_INTEGER liNoDelay;
+            liNoDelay.QuadPart = 0;
+            SetWaitableTimer(
+                hProfileTimer, // handle to timer object
+                &liNoDelay,    // due time
+                1,             // fire every 1 ms, minimum periodic resolution
+                NULL, NULL,    // no completion routine
+                0              // do not restore from suspended power state
+            );
+        }
+        // failure to create and set the timer is not fatal
     }
     profile_all_tasks = all_tasks;
     profile_running = 1; // set `profile_running` finally
@@ -618,6 +642,7 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
     uv_mutex_lock(&bt_data_prof_lock);
     if (profile_running && hProfileTimer != NULL){
+        
         CloseHandle(hProfileTimer);
         hProfileTimer = NULL;
     }
