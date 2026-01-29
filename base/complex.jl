@@ -593,7 +593,7 @@ More accurate method for `cis(pi*x)` (especially for large `x`).
 See also [`cis`](@ref), [`sincospi`](@ref), [`exp`](@ref), [`angle`](@ref).
 
 # Examples
-```jldoctest
+```julia-repl
 julia> cispi(10000)
 1.0 + 0.0im
 

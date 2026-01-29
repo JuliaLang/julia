@@ -727,18 +727,13 @@ end
 
 # Uses minimax polynomial of sin(π * x) for π * x in [0, .25]
 @inline function sinpi_kernel(x::Float64)
-    sinpi_kernel_wide(x)
+    _sinpi_kernel_f64(x)
 end
 @inline function sinpi_kernel_wide(x::Float64)
-    x² = x*x
-    x⁴ = x²*x²
-    r  = evalpoly(x², (2.5501640398773415, -0.5992645293202981, 0.08214588658006512,
-                       -7.370429884921779e-3, 4.662827319453555e-4, -2.1717412523382308e-5))
-    return muladd(3.141592653589793, x, x*muladd(-5.16771278004997,
-                  x², muladd(x⁴, r,  1.2245907532225998e-16)))
+    _sinpi_kernel_f64(x)
 end
 @inline function sinpi_kernel(x::Float32)
-    Float32(sinpi_kernel_wide(x))
+    _sinpi_kernel_f32(x)
 end
 @inline function sinpi_kernel_wide(x::Float32)
     x = Float64(x)
@@ -756,20 +751,13 @@ end
 
 # Uses minimax polynomial of cos(π * x) for π * x in [0, .25]
 @inline function cospi_kernel(x::Float64)
-    cospi_kernel_wide(x)
+    _cospi_kernel_f64(x)
 end
 @inline function cospi_kernel_wide(x::Float64)
-    x² = x*x
-    r = x²*evalpoly(x², (4.058712126416765, -1.3352627688537357, 0.23533063027900392,
-                         -0.025806887811869204, 1.9294917136379183e-3, -1.0368935675474665e-4))
-    a_x² = 4.934802200544679 * x²
-    a_x²lo = muladd(3.109686485461973e-16, x², muladd(4.934802200544679, x², -a_x²))
-
-    w  = 1.0-a_x²
-    return w + muladd(x², r, ((1.0-w)-a_x²) - a_x²lo)
+    _cospi_kernel_f64(x)
 end
 @inline function cospi_kernel(x::Float32)
-    Float32(cospi_kernel_wide(x))
+    _cospi_kernel_f32(x)
 end
 @inline function cospi_kernel_wide(x::Float32)
     x = Float64(x)
@@ -783,6 +771,160 @@ end
     x = Float32(x)
     return evalpoly(x*x, (1.0f0, -4.934802f0, 4.058712f0, -1.3352624f0, 0.23531426f0, -0.0255071f0))
 end
+
+function _cospi_kernel(x::AbstractFloat, sch)
+    x² = x * x
+    c₀ = sch.c₀
+    (c₂, c₂_lo) = sch.c₂
+    rest = sch.rest
+    c₂ = -c₂
+    c₂_lo = -c₂_lo
+    r = evalpoly(x², rest) * x²
+    a_x² = c₂ * x²
+    a_x²_lo = muladd(c₂_lo, x², muladd(c₂, x², -a_x²))
+    w = c₀ - a_x²
+    w + muladd(x², r, ((c₀ - w) - a_x²) - a_x²_lo)
+end
+
+function _sinpi_kernel(x::AbstractFloat, sch)
+    x² = x * x
+    (c₁, c₁_lo) = sch.c₁
+    (c₃, rest...) = sch.rest
+    if rest === ()
+        r = typeof(x)(0)
+    else
+        r = evalpoly(x², rest)
+    end
+    muladd(c₁, x, x * muladd(c₃, x², muladd(x² * x², r, c₁_lo)))
+end
+
+#=
+# Polynomial approximation for `cospi` and `sinpi` kernels
+
+## `cospi`
+
+Constrain the zeroth coefficient to `1` to achieve exact behavior for zero input.
+
+* `Float32`:
+
+  ```sollya
+  handTuned = 3;
+  prec = 500!;
+  accurate = cos(pi * x);
+  kernelDomain = [-2^-3, 2^-2];
+  constrainedPart = 1;
+  machinePrecision = 24;
+  doubleWordPrecision = 2 * machinePrecision + handTuned;
+  freeMonomials = [|2, 4, 6, 8|];
+  freeMonomialPrecisions = [|doubleWordPrecision, machinePrecision, machinePrecision, machinePrecision|];
+  polynomial = fpminimax(accurate, freeMonomials, freeMonomialPrecisions, kernelDomain, constrainedPart);
+  supnormPrecision = 2^-10;
+  sup(supnorm(polynomial, accurate, kernelDomain, relative, supnormPrecision));
+  polynomial;
+  ```
+
+* `Float64`:
+
+  ```sollya
+  handTuned = 1;
+  prec = 500!;
+  accurate = cos(pi * x);
+  kernelDomain = [-2^-3, 2^-2];
+  constrainedPart = 1;
+  machinePrecision = 53;
+  doubleWordPrecision = 2 * machinePrecision + handTuned;
+  freeMonomials = [|2, 4, 6, 8, 10, 12, 14|];
+  freeMonomialPrecisions = [|doubleWordPrecision, machinePrecision, machinePrecision, machinePrecision, machinePrecision, machinePrecision, machinePrecision|];
+  polynomial = fpminimax(accurate, freeMonomials, freeMonomialPrecisions, kernelDomain, constrainedPart);
+  supnormPrecision = 2^-10;
+  sup(supnorm(polynomial, accurate, kernelDomain, relative, supnormPrecision));
+  polynomial;
+  ```
+
+## `sinpi`
+
+* `Float32`:
+
+  ```sollya
+  handTuned = 5;
+  prec = 500!;
+  accurate = sin(pi * x);
+  kernelDomain = [-2^-3, 2^-2];
+  machinePrecision = 24;
+  doubleWordPrecision = 2 * machinePrecision + handTuned;
+  freeMonomials = [|1, 3, 5, 7, 9|];
+  freeMonomialPrecisions = [|doubleWordPrecision, machinePrecision, machinePrecision, machinePrecision, machinePrecision|];
+  polynomial = fpminimax(accurate, freeMonomials, freeMonomialPrecisions, kernelDomain);
+  supnormPrecision = 2^-10;
+  sup(supnorm(polynomial, accurate, kernelDomain, relative, supnormPrecision));
+  polynomial;
+  ```
+
+* `Float64`:
+
+  ```sollya
+  handTuned = 3;
+  prec = 500!;
+  accurate = sin(pi * x);
+  kernelDomain = [-2^-3, 2^-2];
+  machinePrecision = 53;
+  doubleWordPrecision = 2 * machinePrecision + handTuned;
+  freeMonomials = [|1, 3, 5, 7, 9, 11, 13, 15|];
+  freeMonomialPrecisions = [|doubleWordPrecision, machinePrecision, machinePrecision, machinePrecision, machinePrecision, machinePrecision, machinePrecision, machinePrecision|];
+  polynomial = fpminimax(accurate, freeMonomials, freeMonomialPrecisions, kernelDomain);
+  supnormPrecision = 2^-10;
+  sup(supnorm(polynomial, accurate, kernelDomain, relative, supnormPrecision));
+  polynomial;
+  ```
+=#
+
+const _cospi_kernel_polynomial_f32 = (;
+    c₀ = Float32(1),
+    c₂ = (-4.934802f0, -1.1607644f-7),
+    rest = (
+        4.0587077f0,
+        -1.3350532f0,
+        0.23138562f0,
+    ),
+)
+const _sinpi_kernel_polynomial_f32 = (;
+    c₁ = (3.1415927f0, -8.764345f-8),
+    rest = (
+        -5.1677127f0,
+        2.5501568f0,
+        -0.5990627f0,
+        0.079937235f0,
+    ),
+)
+const _cospi_kernel_polynomial_f64 = (;
+    c₀ = Float64(1),
+    c₂ = (-4.934802200544679, -2.6451348079795815e-16),
+    rest = (
+        4.058712126416749,
+        -1.3352627688519947,
+        0.2353306301924776,
+        -0.025806885661227713,
+        0.0019294656071154924,
+        -0.00010356606727649327,
+    ),
+)
+const _sinpi_kernel_polynomial_f64 = (;
+    c₁ = (3.141592653589793, 1.2267151843884804e-16),
+    rest = (
+        -5.16771278004997,
+        2.550164039877393,
+        -0.5992645293247603,
+        0.082145886770189,
+        -0.007370434116378644,
+        0.000466329949762989,
+        -2.1925990105975317e-5,
+    ),
+)
+
+const _cospi_kernel_f32 = Base.Fix2(_cospi_kernel, _cospi_kernel_polynomial_f32)
+const _cospi_kernel_f64 = Base.Fix2(_cospi_kernel, _cospi_kernel_polynomial_f64)
+const _sinpi_kernel_f32 = Base.Fix2(_sinpi_kernel, _sinpi_kernel_polynomial_f32)
+const _sinpi_kernel_f64 = Base.Fix2(_sinpi_kernel, _sinpi_kernel_polynomial_f64)
 
 """
     sinpi(x::T) where T -> float(T)

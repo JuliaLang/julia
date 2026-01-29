@@ -63,6 +63,11 @@
 
 using namespace llvm;
 
+inline int jl_is_timing_passes = 0;
+inline int jl_is_timing_trace = 0;
+inline unsigned jl_timing_trace_granularity = 500;
+inline std::string jl_timing_trace_file;
+
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeContext, LLVMOrcThreadSafeContextRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeModule, LLVMOrcThreadSafeModuleRef)
 

@@ -530,9 +530,6 @@ function _copyto_bitarray!(B::BitArray, A::AbstractArray)
     return B
 end
 
-reinterpret(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) where {N} = reinterpret(B, dims)
-reinterpret(B::BitArray, dims::NTuple{N,Int}) where {N} = reshape(B, dims)
-
 (::Type{T})(x::T) where {T<:BitArray} = copy(x)::T
 BitArray(x::BitArray) = copy(x)
 
