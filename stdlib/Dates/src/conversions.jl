@@ -40,15 +40,22 @@ Base.convert(::Type{Day},dt::Date) = Day(value(dt))            # Converts Date t
 const UNIXEPOCH = value(DateTime(1970)) #Rata Die milliseconds for 1970-01-01T00:00:00
 
 """
-    unix2datetime(x)::DateTime
+    unix2datetime(x::Real; localtime::Bool=false)::DateTime
 
-Take the number of seconds since unix epoch `1970-01-01T00:00:00` and convert to the
-corresponding `DateTime`.
+Take the number of seconds since unix epoch `1970-01-01T00:00:00` (UTC) and convert to the
+corresponding `DateTime`. If `localtime` is `true`, then the output is in the host
+system's local time zone, otherwise it is in UTC/GMT.
 """
-function unix2datetime(x)
+function unix2datetime(x::Real; localtime::Bool=false)
     # Rounding should match `now` below
-    rata = UNIXEPOCH + trunc(Int64, Int64(1000) * x)
-    return DateTime(UTM(rata))
+    ms = trunc(Int64, Int64(1000) * x)
+    if localtime
+        s, ms = divrem(ms, 1000)
+        return DateTime(Libc.TmStruct(s)) + Millisecond(ms)
+    else
+        rata = UNIXEPOCH + ms
+        return DateTime(UTM(rata))
+    end
 end
 
 """
