@@ -206,8 +206,15 @@ julia> first, Base.rest(a, state)
 """
 function rest end
 rest(t::Tuple) = t
-rest(t::Tuple, i::Int) = ntuple(x -> getfield(t, x+i-1), length(t)-i+1)
-rest(a::Union{Array,Memory,Core.SimpleVector}, i::Int=1) = a[i:end]
+function rest(t::Tuple, i)
+    let i = i::Int
+        ntuple(x -> getfield(t, x+i-1), length(t)-i+1)
+    end
+end
+function rest(a::Union{Array,Memory,Core.SimpleVector}, i = 1)
+    i = i::Int
+    a[i:end]
+end
 rest(itr, state...) = Iterators.rest(itr, state...)
 
 """
