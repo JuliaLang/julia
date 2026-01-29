@@ -321,4 +321,49 @@ const Bar{T,V} = Foo{T,V,1}
 """)
 @test test_mod.Bar == (test_mod.Foo{T,V,1} where {T,V})
 
+# Global function with new() inside struct
+# See https://github.com/JuliaLang/JuliaLowering.jl/issues/131
+JuliaLowering.include_string(test_mod, """
+struct S131
+    x
+    global function make_s131()
+        new(42)
+    end
+end
+""")
+@test test_mod.make_s131() isa test_mod.S131
+@test test_mod.make_s131().x == 42
+
+JuliaLowering.include_string(test_mod, """
+struct S131b{T}
+    x::T
+    "documented global function"
+    global function make_s131b()
+        new{Int}(100)
+    end
+end
+""")
+@test test_mod.make_s131b() isa test_mod.S131b{Int}
+@test test_mod.make_s131b().x == 100
+
+# Inner constructor with local variable shadowing type parameter
+# See https://github.com/aviatesk/JETLS.jl/issues/508
+@test JuliaLowering.include_string(test_mod, """
+struct ShadowTypeParam{T}
+    x::T
+    function ShadowTypeParam(x)
+        T = typeof(x)  # This should be a new local variable, not capture the type param
+        return new{T}(x)
+    end
+end
+""") === nothing
+let s = test_mod.ShadowTypeParam(42)
+    @test s isa test_mod.ShadowTypeParam{Int}
+    @test s.x === 42
+end
+let s = test_mod.ShadowTypeParam("hello")
+    @test s isa test_mod.ShadowTypeParam{String}
+    @test s.x === "hello"
+end
+
 end
