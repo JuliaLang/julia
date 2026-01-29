@@ -409,7 +409,7 @@ JL_DLLEXPORT void jl_install_sigint_handler(void)
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 }
 
-static HANDLE hTimer = NULL;
+static HANDLE hProfileTimer = NULL;
 static HANDLE hBtThread = 0;
 static uv_cond_t bt_data_prof_cond = CONDITION_VARIABLE_INIT;
 
@@ -601,7 +601,7 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
         (void)SetThreadPriority(hBtThread, THREAD_PRIORITY_ABOVE_NORMAL);
     }
     if (profile_running == 0) {
-        hTimer = CreateWaitableTimerExW(
+        hProfileTimer = CreateWaitableTimerExW(
             NULL,                                  // default security attributes
             NULL,                                  // no name
             CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, // high resolution timer
@@ -617,9 +617,9 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
 JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
     uv_mutex_lock(&bt_data_prof_lock);
-    if (profile_running && hTimer != NULL){
-        CloseHandle(hTimer);
-        hTimer = NULL;
+    if (profile_running && hProfileTimer != NULL){
+        CloseHandle(hProfileTimer);
+        hProfileTimer = NULL;
     }
     profile_running = 0;
     profile_all_tasks = 0;
