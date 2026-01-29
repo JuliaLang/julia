@@ -966,7 +966,7 @@ Compute ``\\cos(\\pi x)`` more accurately than `cos(pi*x)`, especially for large
 
 Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
 
-See also: [`cispi`](@ref), [`sincosd`](@ref), [`sinpi`](@ref).
+See also [`cispi`](@ref), [`sincosd`](@ref), [`sinpi`](@ref).
 """
 function cospi(x::T) where T<:IEEEFloat
     x = abs(x)
@@ -1002,7 +1002,7 @@ Throw a [`DomainError`](@ref) if `isinf(x)`, return a `(T(NaN), T(NaN))` tuple i
 !!! compat "Julia 1.6"
     This function requires Julia 1.6 or later.
 
-See also: [`cispi`](@ref), [`sincosd`](@ref), [`sinpi`](@ref).
+See also [`cispi`](@ref), [`sincosd`](@ref), [`sinpi`](@ref).
 """
 function sincospi(_x::T) where T<:IEEEFloat
     x = abs(_x)
