@@ -101,9 +101,11 @@ Base.show_invalid
 This section describes several additional string types, and also
 [non-standard string literals](@ref non-standard-string-literals).
 The list here is not exhaustive, for example there are also
-[version number literals](@ref man-version-number-literals) of the form [`v"..."`](@ref @v_str),
-[markdown string literals](@ref stdlib-markdown-literals) of the form `md"..."`, and
-[regular expressions and substitution string literals](@ref base-regex-literals).
+- [version number literals](@ref man-version-number-literals) of the form [`v"..."`](@ref @v_str),
+- [markdown string literals](@ref stdlib-markdown-literals) of the form `md"..."`,
+- [regular expressions and substitution string literals](@ref base-regex-literals), and
+- large integer literals for 128 bit constants of the form
+  [`int128"..."`](@ref Base.@int128_str) resp. [`uint128"..."`](@ref Base.@uint128_str).
 
 ```@docs
 Base.@lazy_str
