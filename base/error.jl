@@ -27,6 +27,9 @@ throw
 
 ## native julia error handling ##
 
+# NOTE It is important to always be able to infer the return type of `error` as `Union{}`,
+# see issue (JuliaLang/julia#54029). Ensure that method counts are small enough with
+# respect to the `max_methods` value of the function.
 function error end
 
 """
