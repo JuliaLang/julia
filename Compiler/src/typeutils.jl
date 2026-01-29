@@ -244,8 +244,9 @@ function _switchtupleunion(𝕃::AbstractLattice, t::Vector{Any}, i::Int, tunion
                 _switchtupleunion(𝕃, t, i - 1, tunion, origt)
             end
             t[i] = origti
-        elseif has_extended_unionsplit(𝕃) && !isa(ti, Const) && !isvarargtype(ti) && isa(widenconst(ti), Union)
-            for ty in uniontypes(ti)
+        elseif (has_extended_unionsplit(𝕃) && !isa(ti, Const) && !isvarargtype(ti) &&
+            (wty = widenconst(ti); isa(wty, Union)))
+            for ty in uniontypes(wty)
                 t[i] = ty
                 _switchtupleunion(𝕃, t, i - 1, tunion, origt)
             end
