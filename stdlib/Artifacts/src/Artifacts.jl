@@ -410,7 +410,7 @@ function artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String
         dl_dict = Dict{Platform,Dict{String,Any}}()
         for x in meta
             x = x::Dict{String, Any}
-            dl_dict[unpack_platform(x, name, artifacts_toml)] = x
+            dl_dict[unpack_platform(x, name, artifacts_toml)::Platform] = x
         end
         meta = select_platform(dl_dict, platform)
     # If it's NOT a dict, complain

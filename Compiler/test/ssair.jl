@@ -838,3 +838,15 @@ end
 let ir = Base.code_ircode(_worker_task57153, (), optimize_until="CC: COMPACT_2")[1].first
     @test findfirst(x->x==0, ir.cfg.blocks[1].preds) !== nothing
 end
+
+# codeinfo_for_const should set nargs and isva
+let
+    _const_return_func(@nospecialize(x)) = 42
+    mi = Compiler.specialize_method(only(methods(_const_return_func)), Tuple{typeof(_const_return_func), Int}, Core.svec())
+    ci = Compiler.codeinfo_for_const(Compiler.NativeInterpreter(), mi, 42)
+    @test ci.nargs == 2
+    @test ci.isva == false
+    # inflate_ir! should succeed now that nargs/isva are set
+    ir = Compiler.inflate_ir!(ci, mi)
+    @test ir isa Compiler.IRCode
+end
