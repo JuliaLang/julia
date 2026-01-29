@@ -77,7 +77,45 @@ function ssa_inlining_pass!(ir::IRCode, state::InliningState, propagate_inbounds
     isempty(todo) && return ir
     # Do the actual inlining for every call we identified
     @zone "CC: EXECUTION" ir = batch_inline!(ir, todo, propagate_inbounds, state.interp)
+    # After inlining, boundscheck expressions have been filled in with known values.
+    # Recompute effect flags for builtins that depend on boundscheck (e.g. getfield).
+    @zone "CC: REFINE" refine_inlined_builtin_flags!(ir, optimizer_lattice(state.interp))
     return ir
+end
+
+# After inlining fills in boundscheck values, recompute effect flags for builtin calls
+# that have boundscheck arguments pointing to known boundscheck expressions.
+# Handles the same builtins as iscall_with_boundscheck in optimize.jl.
+function refine_inlined_builtin_flags!(ir::IRCode, 𝕃ₒ::AbstractLattice)
+    for idx in 1:length(ir.stmts)
+        inst = ir.stmts[idx]
+        stmt = inst[:stmt]
+        isexpr(stmt, :call) || continue
+        # Identify builtins with boundscheck arguments (same pattern as iscall_with_boundscheck)
+        f = singleton_type(argextype(stmt.args[1], ir))
+        f === nothing && continue
+        if f === getfield
+            minargs = 4
+        elseif f === memoryrefnew
+            minargs = 3
+        elseif f === memoryrefget || f === memoryref_isassigned
+            minargs = 4
+        elseif f === memoryrefset!
+            minargs = 5
+        else
+            continue
+        end
+        length(stmt.args) >= minargs || continue
+        bc_arg = stmt.args[end]
+        widenconst(argextype(bc_arg, ir)) === Bool || continue
+        isa(bc_arg, SSAValue) || continue
+        # Check if boundscheck argument points to a known boundscheck expression
+        bc_stmt = ir.stmts[bc_arg.id][:stmt]
+        (isexpr(bc_stmt, :boundscheck) && length(bc_stmt.args) >= 1) || continue
+        # Recompute flags now that boundscheck value is known
+        flags = recompute_effects_flags(𝕃ₒ, stmt, inst[:type], ir)
+        add_flag!(inst, flags)
+    end
 end
 
 mutable struct CFGInliningState

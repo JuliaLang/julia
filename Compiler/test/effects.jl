@@ -1496,3 +1496,50 @@ function null_offset(offset)
     Ptr{UInt8}(C_NULL) + offset
 end
 @test null_offset(Int(100)) == Ptr{UInt8}(UInt(100))
+
+@testset "nothrow effects for boundscheck builtins after inlining" begin
+    access_inbounds(t::NTuple{4,Int}, i::Int) = @inbounds t[i]
+    access_bounds(t::NTuple{4,Int}, i::Int) = t[i]
+    access_const(t::NTuple{4,Int}) = t[1]
+
+    @test Compiler.is_nothrow(Base.infer_effects(access_inbounds, (NTuple{4,Int}, Int)))
+    @test !Compiler.is_nothrow(Base.infer_effects(access_bounds, (NTuple{4,Int}, Int)))
+    @test Compiler.is_nothrow(Base.infer_effects(access_const, (NTuple{4,Int},)))
+
+    @test !Compiler.is_noub(Base.infer_effects(access_inbounds, (NTuple{4,Int}, Int)))
+    @test Compiler.is_noub(Base.infer_effects(access_bounds, (NTuple{4,Int}, Int)))
+    @test Compiler.is_noub(Base.infer_effects(access_const, (NTuple{4,Int},)))
+
+    nested_inbounds(t::NTuple{2,NTuple{3,Int}}, i::Int, j::Int) = @inbounds t[i][j]
+    @test Compiler.is_nothrow(Base.infer_effects(nested_inbounds, (NTuple{2,NTuple{3,Int}}, Int, Int)))
+
+    large_inbounds(t::NTuple{100,Int}, i::Int) = @inbounds t[i]
+    @test Compiler.is_nothrow(Base.infer_effects(large_inbounds, (NTuple{100,Int}, Int)))
+
+    float_inbounds(t::NTuple{4,Float64}, i::Int) = @inbounds t[i]
+    @test Compiler.is_nothrow(Base.infer_effects(float_inbounds, (NTuple{4,Float64}, Int)))
+
+    mixed(t::NTuple{2,NTuple{3,Int}}, i::Int, j::Int) = (@inbounds t[i])[j]
+    @test !Compiler.is_nothrow(Base.infer_effects(mixed, (NTuple{2,NTuple{3,Int}}, Int, Int)))
+
+    memget_inbounds(m::Memory{Int}, i::Int) = @inbounds m[i]
+    memget_bounds(m::Memory{Int}, i::Int) = m[i]
+    @test Compiler.is_nothrow(Base.infer_effects(memget_inbounds, (Memory{Int}, Int)))
+    @test !Compiler.is_nothrow(Base.infer_effects(memget_bounds, (Memory{Int}, Int)))
+
+    memset_inbounds!(m::Memory{Int}, i::Int, v::Int) = @inbounds m[i] = v
+    memset_bounds!(m::Memory{Int}, i::Int, v::Int) = m[i] = v
+    @test Compiler.is_nothrow(Base.infer_effects(memset_inbounds!, (Memory{Int}, Int, Int)))
+    @test !Compiler.is_nothrow(Base.infer_effects(memset_bounds!, (Memory{Int}, Int, Int)))
+
+    memref_inbounds(m::Memory{Int}, i::Int) = @inbounds memoryref(m, i)
+    memref_bounds(m::Memory{Int}, i::Int) = memoryref(m, i)
+    @test Compiler.is_nothrow(Base.infer_effects(memref_inbounds, (Memory{Int}, Int)))
+    @test !Compiler.is_nothrow(Base.infer_effects(memref_bounds, (Memory{Int}, Int)))
+
+    t = (1, 2, 3, 4)
+    @test access_inbounds(t, 2) == 2
+    @test access_bounds(t, 2) == 2
+    @test access_const(t) == 1
+    @test_throws BoundsError access_bounds(t, 5)
+end

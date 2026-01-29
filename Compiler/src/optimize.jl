@@ -479,7 +479,11 @@ Use `widenconst(t)` to get the native Julia type of `x`.
 argextype(@nospecialize(x), ir::IRCode, sptypes::Vector{VarState} = ir.sptypes) =
     argextype(x, ir, sptypes, ir.argtypes)
 function argextype(@nospecialize(x), compact::IncrementalCompact, sptypes::Vector{VarState} = compact.ir.sptypes)
-    isa(x, AnySSAValue) && return types(compact)[x]
+    if isa(x, SSAValue)
+        return argextype_ssavalue(x, compact)
+    elseif isa(x, AnySSAValue)
+        return types(compact)[x]
+    end
     return argextype(x, compact, sptypes, compact.ir.argtypes)
 end
 function argextype(@nospecialize(x), src::CodeInfo, sptypes::Vector{VarState})
@@ -507,7 +511,7 @@ function argextype(
         (1 ≤ x.id ≤ length(slottypes)) || throw(InvalidIRError())
         return slottypes[x.id]
     elseif isa(x, SSAValue)
-        return abstract_eval_ssavalue(x, src)
+        return argextype_ssavalue(x, src)
     elseif isa(x, Argument)
         slottypes === nothing && return Any
         (1 ≤ x.n ≤ length(slottypes)) || throw(InvalidIRError())
@@ -534,6 +538,32 @@ function abstract_eval_ssavalue(s::SSAValue, src::CodeInfo)
     end
 end
 abstract_eval_ssavalue(s::SSAValue, src::Union{IRCode,IncrementalCompact}) = types(src)[s]
+
+# Refined version of argextype for SSAValue that checks for boundscheck expressions
+# with known Bool arguments (filled in after inlining from @inbounds context)
+function argextype_ssavalue(x::SSAValue, src::Union{IRCode,IncrementalCompact,CodeInfo})
+    stmt = nothing
+    if isa(src, CodeInfo)
+        (1 ≤ x.id ≤ length(src.code)) || throw(InvalidIRError())
+        stmt = src.code[x.id]
+    elseif isa(src, IRCode)
+        nstmts = length(src.stmts)
+        if 1 ≤ x.id ≤ nstmts
+            stmt = src.stmts[x.id][:stmt]
+        end
+    elseif isa(src, IncrementalCompact)
+        if x.id < src.result_idx
+            stmt = src.result[x.id][:stmt]
+        elseif 1 ≤ x.id ≤ length(src.ir.stmts)
+            stmt = src.ir.stmts[x.id][:stmt]
+        end
+    end
+    if stmt !== nothing && isexpr(stmt, :boundscheck) &&
+       length(stmt.args) >= 1 && isa(stmt.args[1], Bool)
+        return Const(stmt.args[1])
+    end
+    return abstract_eval_ssavalue(x, src)
+end
 
 """
     finishopt!(interp::AbstractInterpreter, opt::OptimizationState, ir::IRCode)
