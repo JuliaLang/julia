@@ -1,3 +1,7 @@
+using Test, JuliaLowering
+
+@test isempty(Test.detect_closure_boxes(JuliaLowering))
+
 include("utils.jl")
 
 @testset "JuliaLowering.jl" begin
