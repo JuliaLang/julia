@@ -16,7 +16,7 @@ module MacroMethods
 end
 
 macro strmac_str(ex, suff=nothing)
-    s = "$(ex[1].value) from strmac"
+    s = "$(ex.value) from strmac"
     if !isnothing(suff)
         s = "$s with suffix $(suff.value)"
     end
@@ -24,7 +24,7 @@ macro strmac_str(ex, suff=nothing)
 end
 
 macro cmdmac_cmd(ex, suff=nothing)
-    s = "$(ex[1].value) from cmdmac"
+    s = "$(ex.value) from cmdmac"
     if !isnothing(suff)
         s = "$s with suffix $(suff.value)"
     end
@@ -51,7 +51,7 @@ end
 9   --- method core.nothing %₈
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/ex]
     1   (call core.tuple slot₃/ex)
-    2   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (call-i ($ ex) + 1))) %₁)
+    2   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (call-i + ($ ex) 1))) %₁)
     3   (return %₂)
 10  latestworld
 11  TestMod.@add_one
@@ -98,7 +98,7 @@ end
 #---------------------
 LoweringError:
 macro mmm(a; b=2)
-#          └───┘ ── macros cannot accept keyword arguments
+#         ╙ ── macros cannot accept keyword arguments
 end
 
 ########################################
@@ -138,7 +138,7 @@ function f()
 #   ┌──────────
     macro foo()
     end
-#─────┘ ── macro is only allowed in global scope
+#─────┘ ── this syntax is only allowed at top level
 end
 
 ########################################

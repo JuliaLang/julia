@@ -51,7 +51,7 @@ end
 LoweringError:
 function f()
     import A: b
-#   └─────────┘ ── this syntax is only allowed in top level code
+#   └─────────┘ ── this syntax is only allowed at top level
 end
 
 ########################################

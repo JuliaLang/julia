@@ -94,8 +94,9 @@ let
     :(x.\$field_name)
 end
 """)
-@test kind(ex[2]) == K"Identifier"
-@test ex[2].name_val == "a"
+@test kind(ex[2]) == K"inert"
+@test kind(ex[2][1]) == K"Identifier"
+@test ex[2][1].name_val == "a"
 
 # Test quoted property access syntax like `Core.:(foo)` and `Core.:(!==)`
 @test JuliaLowering.include_string(test_mod, """
@@ -127,7 +128,7 @@ end
 # interpolations at multiple depths
 ex = JuliaLowering.include_string(test_mod, raw"""
 let
-    args = (:(x),:(y))
+    args = (:(x,x),:(y,y))
     quote
         x = 1
         y = 2
@@ -151,23 +152,23 @@ end
             [K"call"
                 "f"::K"Identifier"
                 [K"$"
-                    "x"::K"Identifier"
-                    "y"::K"Identifier"
+                    [K"tuple" "x"::K"Identifier" "x"::K"Identifier"]
+                    [K"tuple" "y"::K"Identifier" "y"::K"Identifier"]
                 ]
             ]
         ]
     ]
 ]
 @test sourcetext(ex[3][1][1][2]) == "\$\$(args...)"
-@test sourcetext(ex[3][1][1][2][1]) == "x"
-@test sourcetext(ex[3][1][1][2][2]) == "y"
+@test sourcetext(ex[3][1][1][2][1]) == "(x,x)"
+@test sourcetext(ex[3][1][1][2][2]) == "(y,y)"
 
 ex2 = JuliaLowering.eval(test_mod, ex)
-@test sourcetext(ex2[1][2]) == "x"
-@test sourcetext(ex2[1][3]) == "y"
+@test sourcetext(ex2[1][2]) == "(x,x)"
+@test sourcetext(ex2[1][3]) == "(y,y)"
 
 @test JuliaLowering.include_string(test_mod, ":x") isa Symbol
-@test JuliaLowering.include_string(test_mod, ":(x)") isa SyntaxTree
+@test JuliaLowering.include_string(test_mod, ":(x)") isa Symbol
 
 # Double interpolation
 double_interp_ex = JuliaLowering.include_string(test_mod, raw"""
@@ -209,16 +210,16 @@ catch exc
     sprint(io->Base.showerror(io, exc, show_detail=false))
 end == raw"""
 LoweringError:
-No source for expression
-└ ── More than one value in bare `$` expression"""
+#= none:0 =# - More than one value in bare `$` expression"""
 # ^ TODO: Improve error messages involving expr_to_syntaxtree!
 
 # Interpolation of SyntaxTree Identifier vs plain Symbol
-symbol_interp = JuliaLowering.include_string(test_mod, raw"""
+@eval test_mod using JuliaLowering
+symbol_interp = JuliaLowering.include_string(test_mod, """
 let
     x = :xx    # Plain Symbol
-    y = :(yy)  # SyntaxTree K"Identifier"
-    :(f($x, $y, z))
+    y = JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "yy")  # SyntaxTree K"Identifier"
+    :(f(\$x, \$y, z))
 end
 """)
 @test symbol_interp ≈ @ast_ [K"call"
@@ -245,7 +246,8 @@ end
     Expr(:call, :f, :x)::K"Value"
     # ^^ NB not [K"call" "f"::K"Identifier" "x"::K"Identifier"]
 ]
-@test Expr(expr_interp_is_value) == Expr(:call, :g, QuoteNode(Expr(:call, :f, :x)))
+@test JuliaLowering.est_to_expr(expr_interp_is_value) ==
+    Expr(:call, :g, QuoteNode(Expr(:call, :f, :x)))
 
 @testset "Interpolation in Expr compat mode" begin
     expr_interp = JuliaLowering.include_string(test_mod, raw"""

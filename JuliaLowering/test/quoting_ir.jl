@@ -6,7 +6,7 @@ end
 #---------------------
 1   TestMod.x
 2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (call-i ($ x) + 1))) %₂)
+3   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (call-i + ($ x) 1))) %₂)
 4   (return %₃)
 
 ########################################
@@ -28,7 +28,7 @@ end
 #---------------------
 1   TestMod.x
 2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (quote (block (call-i ($ ($ x)) + 1))))) %₂)
+3   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (quote (block (call-i + ($ ($ x)) 1))))) %₂)
 4   (return %₃)
 
 ########################################
@@ -40,7 +40,7 @@ end
 1   1
 2   (= slot₁/x %₁)
 3   (call core.tuple slot₁/x)
-4   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (. A ($ x))) %₃)
+4   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (. A (inert ($ x)))) %₃)
 5   (return %₄)
 
 ########################################
@@ -52,7 +52,7 @@ end
 LoweringError:
 quote
     $$x + 1
-#    └┘ ── `$` expression outside string or quote block
+#    └┘ ── `$` expression outside string or quote
 end
 
 ########################################

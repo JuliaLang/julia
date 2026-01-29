@@ -67,29 +67,11 @@ x^42.0
 4   (return %₃)
 
 ########################################
-# Error: infix call without enough arguments
-@ast_ [K"call"(syntax_flags=JuliaSyntax.INFIX_FLAG)
-    "x"::K"Identifier"
-]
-#---------------------
-LoweringError:
-#= line 1 =# - Postfix/infix operators must have at least two positional arguments
-
-########################################
-# Error: postfix call without enough arguments
-@ast_ [K"call"(syntax_flags=JuliaSyntax.POSTFIX_OP_FLAG)
-    "x"::K"Identifier"
-]
-#---------------------
-LoweringError:
-#= line 1 =# - Postfix/infix operators must have at least two positional arguments
-
-########################################
 # Error: Call with no function name
 @ast_ [K"call"]
 #---------------------
 LoweringError:
-#= line 1 =# - Call expressions must have a function name
+#= line 1 =# - malformed `call`
 
 ########################################
 # Simple broadcast
@@ -370,7 +352,7 @@ ccall((:strlen, libc), Csize_t, (Cstring,), "asdfg")
 1   TestMod.Cstring
 2   (call top.cconvert %₁ "asdfg")
 3   (call top.unsafe_convert %₁ %₂)
-4   (foreigncall (static_eval (tuple-p :strlen TestMod.libc)) (static_eval TestMod.Csize_t) (static_eval (call core.svec TestMod.Cstring)) 0 :ccall %₃ %₂)
+4   (foreigncall (static_eval (tuple :strlen TestMod.libc)) (static_eval TestMod.Csize_t) (static_eval (call core.svec TestMod.Cstring)) 0 :ccall %₃ %₂)
 5   (return %₄)
 
 ########################################
@@ -521,7 +503,7 @@ ccall(:foo, Csize_t, (Cstring..., Cstring...), "asdfg", "blah")
 cglobal((:sym, lib), Int)
 #---------------------
 1   TestMod.Int
-2   (call core.cglobal (static_eval (tuple-p :sym TestMod.lib)) %₁)
+2   (call core.cglobal (static_eval (tuple :sym TestMod.lib)) %₁)
 3   (return %₂)
 
 ########################################
@@ -661,4 +643,5 @@ tuple(((xs...)...)...)
 #---------------------
 LoweringError:
 (xs...)
-#└───┘ ── `...` expression outside call
+#└───┘ ── unexpected `...`
+splatting can only be done into a `call`, `tuple`, `curly`, or array-like expression

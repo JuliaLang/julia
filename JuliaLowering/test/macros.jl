@@ -51,7 +51,8 @@ module M
     end
 
     macro set_global_in_parent(ex)
-        e1 = adopt_scope(:(sym_introduced_from_M), __context__)
+        sym_ex = quote; sym_introduced_from_M; end
+        e1 = adopt_scope(sym_ex[1], __context__)
         quote
             $e1 = $ex
             nothing
@@ -59,7 +60,7 @@ module M
     end
 
     macro inner()
-        :(y)
+        :(y, z)
     end
 
     macro outer()
@@ -119,7 +120,7 @@ ctx, expanded = JuliaLowering.expand_forms_1(test_mod, ex, false, Base.get_world
 @test JuliaLowering.sourcetext.(JuliaLowering.flattened_provenance(expanded[2])) == [
     "M.@outer()"
     "@inner"
-    "y"
+    "(y, z)"
 ]
 
 @test JuliaLowering.include_string(test_mod, raw"""
@@ -138,26 +139,26 @@ Base.Experimental.@VERSION
 # World age support for macro expansion
 JuliaLowering.include_string(test_mod, raw"""
 macro world_age_test()
-    :(world1)
+    1
 end
 """)
 world1 = Base.get_world_counter()
 JuliaLowering.include_string(test_mod, raw"""
 macro world_age_test()
-    :(world2)
+    2
 end
 """)
 world2 = Base.get_world_counter()
 
 call_world_arg_test = JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "@world_age_test()")
-@test JuliaLowering.expand_forms_1(test_mod, call_world_arg_test, false, world1)[2] ≈
-    @ast_ "world1"::K"Identifier"
-@test JuliaLowering.expand_forms_1(test_mod, call_world_arg_test, false, world2)[2] ≈
-    @ast_ "world2"::K"Identifier"
+    @test JuliaLowering.expand_forms_1(test_mod, call_world_arg_test, false, world1)[2] ≈
+        @ast_ 1::K"Value"
+    @test JuliaLowering.expand_forms_1(test_mod, call_world_arg_test, false, world2)[2] ≈
+        @ast_ 2::K"Value"
 
 # Layer parenting
 @test expanded[1].scope_layer == 2
-@test expanded[2].scope_layer == 3
+@test expanded[2][1].scope_layer == 3
 @test getfield.(ctx.scope_layers, :parent_layer) == [0,1,2]
 
 JuliaLowering.include_string(test_mod, """
@@ -189,7 +190,7 @@ let err = try
 end
 
 @test JuliaLowering.include_string(test_mod, "@ccall strlen(\"foo\"::Cstring)::Csize_t") == 3
-@test JuliaLowering.include_string(test_mod, "@ccall strlen(\"asdf\"::Cstring)::Csize_t gc_safe=true") == 4
+@test JuliaLowering.include_string(test_mod, "@ccall gc_safe=true strlen(\"asdf\"::Cstring)::Csize_t") == 4
 @test JuliaLowering.include_string(test_mod, """
 begin
     buf = zeros(UInt8, 20)
@@ -204,7 +205,7 @@ let (err, st) = try
         e, stacktrace(catch_backtrace())
     end
     @test err isa JuliaLowering.MacroExpansionError
-    @test err.msg == "Expected a return type annotation `::SomeType`"
+    @test err.msg == "expected a return type annotation `::SomeType`"
     @test isnothing(err.err)
     # Check that `catch_backtrace` can capture the stacktrace of the macro function
     @test any(sf->sf.func===:ccall_macro_parse, st)
@@ -281,7 +282,7 @@ Some error in old style macro"""
 @test sprint(
     showerror,
     JuliaLowering.MacroExpansionError(
-        JuliaLowering.expr_to_syntaxtree(:(foo), LineNumberNode(1)),
+        JuliaLowering.expr_to_est(:(foo), LineNumberNode(1)),
         "fake error")) ==
             "MacroExpansionError:\n#= line 1 =# - fake error"
 
@@ -442,7 +443,7 @@ end
     end
     """) ≈ @ast_ [K"."
         "A"::K"Identifier"
-        "hi"::K"Identifier"
+        [K"inert" "hi"::K"Identifier"]
     ]
     # module
     @test JuliaLowering.include_string(test_mod, raw"""
@@ -452,10 +453,10 @@ end
         )
     end
     """) ≈ @ast_ [K"module"
-        v"1.14.0"::K"VERSION"
+        v"1.14.0"::K"Value"
+        true::K"Value"
         "AA"::K"Identifier"
-        [K"block"
-        ]
+        [K"block"]
     ]
 
     # In macro expansion, require that expressions passed in as macro
@@ -498,7 +499,7 @@ end
             $init
             ($y, x)
         end)
-        @ast q._graph q [K"inert" q]
+        @ast q._graph q [K"inert_syntaxtree" q]
     end
     """)
     code = JuliaLowering.include_string(test_mod, """@make_quoted_code(x="outer x", x)""")

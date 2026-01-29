@@ -132,7 +132,7 @@ end
 #---------------------
 LoweringError:
 function f(xs..., y)
-#          └───┘ ── `...` may only be used for the last positional argument
+#          └───┘ ── `...` may only be used on the final parameter
     body
 end
 
@@ -388,7 +388,7 @@ end
 #---------------------
 LoweringError:
 function (.+)(x,y)
-#        └───────┘ ── Cannot define function using `.` broadcast syntax
+#         └┘ ── invalid function name
 end
 
 ########################################
@@ -398,7 +398,7 @@ end
 #---------------------
 LoweringError:
 function f[](x,y)
-#        └─┘ ── Invalid function name
+#        └─┘ ── invalid function name
 end
 
 ########################################
@@ -744,7 +744,7 @@ end
 #---------------------
 LoweringError:
 function f(x=1, ys, z=2)
-#          └─┘ ── optional positional arguments must occur at end
+#               └┘ ── all function parameters after an optional parameter must also be optional
     ys
 end
 
@@ -1046,16 +1046,26 @@ end
 4   (call core.Typeof %₃)
 5   (call core.svec %₄)
 6   (call core.svec)
-7   SourceLocation::4:10
+7   SourceLocation:nothing:4:0
 8   (call core.svec %₅ %₆ %₇)
 9   --- method core.nothing %₈
     slots: [slot₁/#self#(!read)]
     1   (return core.nothing)
 10  latestworld
 11  TestMod.f
-12  (call JuliaLowering.bind_docs! %₁₁ "some docs\n" %₈)
-13  TestMod.f
-14  (return %₁₃)
+12  (= slot₁/val %₁₁)
+13  (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree f))
+14  (call Base.Docs.Binding TestMod %₁₃)
+15  (call Core.svec "some docs\n")
+16  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod)
+17  (call Base.Docs.docstr %₁₅ %₁₆)
+18  TestMod.Union
+19  TestMod.Tuple
+20  (call core.apply_type %₁₉)
+21  (call core.apply_type %₁₈ %₂₀)
+22  (call Base.Docs.doc! TestMod %₁₄ %₁₇ %₂₁)
+23  slot₁/val
+24  (return %₂₃)
 
 ########################################
 # Binding docs to callable type
@@ -1068,15 +1078,25 @@ end
 1   TestMod.T
 2   (call core.svec %₁)
 3   (call core.svec)
-4   SourceLocation::4:10
+4   SourceLocation:nothing:4:0
 5   (call core.svec %₂ %₃ %₄)
 6   --- method core.nothing %₅
     slots: [slot₁/x(!read)]
     1   (return core.nothing)
 7   latestworld
-8   TestMod.T
-9   (call JuliaLowering.bind_docs! %₈ "some docs\n" %₅)
-10  (return core.nothing)
+8   (= slot₁/val core.nothing)
+9   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree T))
+10  (call Base.Docs.Binding TestMod %₉)
+11  (call Core.svec "some docs\n")
+12  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod)
+13  (call Base.Docs.docstr %₁₁ %₁₂)
+14  TestMod.Union
+15  TestMod.Tuple
+16  (call core.apply_type %₁₅)
+17  (call core.apply_type %₁₄ %₁₆)
+18  (call Base.Docs.doc! TestMod %₁₀ %₁₃ %₁₇)
+19  slot₁/val
+20  (return %₁₉)
 
 ########################################
 # Keyword function with defaults.
@@ -1576,7 +1596,7 @@ end
 #---------------------
 LoweringError:
 function f_kw_destruct(; (x,y)=10)
-#                        └───┘ ── Invalid keyword name
+#                        └───┘ ── expected identifier or `::`
 end
 
 ########################################
@@ -1586,7 +1606,7 @@ end
 #---------------------
 LoweringError:
 function f_kw_slurp_default(; kws...=def)
-#                             └────────┘ ── keyword argument with `...` cannot have a default value
+#                             └────┘ ── expected identifier or `::`
 end
 
 ########################################
@@ -1606,7 +1626,7 @@ end
 #---------------------
 LoweringError:
 function f_kw_slurp_not_last(; kws..., x=1)
-#                              └────┘ ── `...` may only be used for the last keyword argument
+#                              └────┘ ── `...` may only be used for the last keyword parameter
 end
 
 ########################################

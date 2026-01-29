@@ -22,7 +22,7 @@ using .JuliaSyntax: highlight, Kind, @KSet_str, is_leaf, children, numchildren,
     setattr, setattr!, syntax_graph, is_compatible_graph,
     check_compatible_graph, copy_node, copy_ast, provenance, sourceref,
     reparent, mapchildren, flattened_provenance, mkleaf, mknode, newleaf,
-    newnode, tree_ids
+    newnode, tree_ids, @stm, mapsyntax
 
 _include("kinds.jl")
 _register_kinds()
@@ -30,6 +30,7 @@ _register_kinds()
 _include("ast.jl")
 _include("bindings.jl")
 _include("utils.jl")
+_include("validation.jl")
 
 _include("macro_expansion.jl")
 _include("desugaring.jl")

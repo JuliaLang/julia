@@ -119,7 +119,7 @@ break
 #---------------------
 LoweringError:
 break
-└───┘ ── `break` must be used inside a `while` or `for` loop
+└───┘ ── unlabeled `break` outside of a `while` or `for` loop
 
 ########################################
 # Error: continue outside for/while
@@ -127,7 +127,7 @@ continue
 #---------------------
 LoweringError:
 continue
-└──────┘ ── `continue` must be used inside a `while` or `for` loop
+└──────┘ ── `continue` outside of a `while` or `for` loop
 
 ########################################
 # Error: `outer` without outer local variable

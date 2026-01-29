@@ -117,7 +117,8 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
         # there's quite a lot of special cases. We could alternatively consider
         # calling sourcetext() though that won't work well if it's a
         # synthetically-generated macro name path.
-        macname_str = string(Expr(:macrocall, Expr(ctx.macrocall[1]), nothing))
+        macname_str = string(Expr(
+            :macrocall, est_to_expr(ctx.macrocall[1]), nothing))
         print(io, " while expanding ", macname_str,
               " in module ", ctx.scope_layer.mod)
     end
@@ -151,6 +152,9 @@ function _eval_dot(world::UInt, mod, ex::SyntaxTree)
     if kind(ex) === K"."
         mod = _eval_dot(world, mod, ex[1])
         ex = ex[2]
+    end
+    if kind(ex) === K"inert"
+        ex = ex[1]
     end
     kind(ex) in KSet"Identifier Symbol" && mod isa Module ?
         Base.invoke_in_world(world, getproperty, mod, Symbol(ex.name_val)) :
@@ -271,7 +275,7 @@ function expand_macro(ctx, ex)
     macname = ex[1]
     mctx = MacroContext(ctx.graph, ex, current_layer(ctx), ctx.expr_compat_mode)
     macfunc = eval_macro_name(ctx, mctx, macname)
-    raw_args = ex[2:end]
+    raw_args = ex[3:end]
     macro_loc = let loc = source_location(LineNumberNode, ex)
         # Some macros, e.g. @cmd, don't play nicely with file == nothing
         isnothing(loc.file) ? LineNumberNode(loc.line, :none) : loc
@@ -305,6 +309,8 @@ function expand_macro(ctx, ex)
                 # is the API for access to the macro expansion context?
                 expanded = copy_ast(ctx, expanded)
             end
+        elseif isnothing(expanded)
+            expanded = @ast ctx ex "nothing"::K"core"
         else
             expanded = @ast ctx ex expanded::K"Value"
         end
@@ -329,7 +335,7 @@ function expand_macro(ctx, ex)
             # new-style macros which call old-style macros. Instead of seeing
             # `Expr(:escape)` in such situations, old-style macros will now see
             # `Expr(:scope_layer)` inside `macro_args`.
-            kind(arg) !== K"VERSION" && push!(macro_args, Expr(arg))
+            kind(arg) !== K"VERSION" && push!(macro_args, est_to_expr(arg))
         end
         expanded = try
             Base.invoke_in_world(ctx.macro_world, macfunc, macro_args...)
@@ -344,7 +350,7 @@ function expand_macro(ctx, ex)
             end
             rethrow(MacroExpansionError(mctx, ex, "Error expanding macro", :all, exc))
         end
-        expanded = expr_to_syntaxtree(ctx, expanded, macro_loc)
+        expanded = expr_to_est(ex._graph, expanded, macro_loc)
     end
 
     if kind(expanded) != K"Value"
@@ -399,39 +405,17 @@ end
 """
 Lowering pass 1
 
-This pass contains some simple expansion to make the rest of desugaring easier
-to write and expands user defined macros. Macros see the surface syntax, so
-need to be dealt with before other lowering.
-
-* Does identifier normalization
-* Strips semantically irrelevant "container" nodes like parentheses
-* Expands macros
-* Processes quoted syntax turning `K"quote"` into `K"inert"` (eg, expanding
-  interpolations)
+This pass expands macros and quote (interpolations).  It also annotates every
+identifier with the expansion it came from.
 """
 function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
     k = kind(ex)
     if k == K"Identifier"
-        name_str = ex.name_val
-        if is_ccall_or_cglobal(name_str)
-            # Lower special identifiers `cglobal` and `ccall` to `K"core"`
-            # pseudo-refs very early so that cglobal and ccall can never be
-            # turned into normal bindings (eg, assigned to)
-            @ast ctx ex name_str::K"core"
-        else
-            k = all(==('_'), name_str) ? K"Placeholder" : K"Identifier"
-            scope_layer = get(ex, :scope_layer, current_layer_id(ctx))
-            out = mkleaf(ex)
-            setattr!(out, :kind, k)
-            setattr!(out, :scope_layer, scope_layer)
-        end
-    elseif k == K"var" || k == K"char" || k == K"parens"
-        # Strip "container" nodes
-        @chk numchildren(ex) == 1
-        expand_forms_1(ctx, ex[1])
+        scope_layer = get(ex, :scope_layer, current_layer_id(ctx))
+        out = mkleaf(ex)
+        setattr!(out, :scope_layer, scope_layer)
     elseif k == K"escape"
-        # For processing of old-style macros
-        @chk numchildren(ex) >= 1 "`escape` requires an argument"
+        @chk numchildren(ex) === 1 "`escape` requires one argument"
         if length(ctx.scope_layer_stack) === 1
             throw(MacroExpansionError(ex, "`escape` node in outer context"))
         end
@@ -440,7 +424,8 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         push!(ctx.scope_layer_stack, top_layer)
         escaped_ex
     elseif k == K"hygienic-scope"
-        @chk numchildren(ex) >= 2 && ex[2].value isa Module (ex,"`hygienic-scope` requires an AST and a module")
+        @chk(2 <= numchildren(ex) <= 3 && ex[2].value isa Module,
+             (ex,"`hygienic-scope` requires an AST and a module"))
         new_layer = ScopeLayer(length(ctx.scope_layers)+1, ex[2].value,
                                current_layer_id(ctx), true)
         push!(ctx.scope_layers, new_layer)
@@ -448,31 +433,9 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         hyg_ex = expand_forms_1(ctx, ex[1])
         pop!(ctx.scope_layer_stack)
         hyg_ex
-    elseif k == K"juxtapose"
-        layerid = get(ex, :scope_layer, current_layer_id(ctx))
-        @chk numchildren(ex) == 2
-        @ast ctx ex [K"call"
-            "*"::K"Identifier"(scope_layer=layerid)
-            expand_forms_1(ctx, ex[1])
-            expand_forms_1(ctx, ex[2])
-        ]
     elseif k == K"quote"
         @chk numchildren(ex) == 1
-        # TODO: Upstream should set a general flag for detecting parenthesized
-        # expressions so we don't need to dig into `green_tree` here. Ugh!
-        plain_symbol = has_flags(ex, JuliaSyntax.COLON_QUOTE) &&
-            kind(ex[1]) == K"Identifier" && (
-                prov = flattened_provenance(ex);
-                length(prov) >= 1 && kind(prov[end][end]) != K"parens")
-        if plain_symbol
-            # As a compromise for compatibility, we treat non-parenthesized
-            # colon quoted identifiers like `:x` as plain Symbol literals
-            # because these are ubiquitiously used in Julia programs as ad hoc
-            # enum-like entities rather than pieces of AST.
-            @ast ctx ex[1] ex[1]=>K"Symbol"
-        else
-            expand_forms_1(ctx, expand_quote(ctx, ex[1]))
-        end
+        expand_forms_1(ctx, expand_quote(ctx, ex[1]))
     elseif k == K"macrocall"
         expand_macro(ctx, ex)
     elseif k == K"toplevel" && length(ctx.scope_layer_stack) > 1
@@ -485,88 +448,25 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         # approximation but is incorrect in general. We need to revisit such
         # "deferred hygiene" situations (see https://github.com/c42f/JuliaLowering.jl/issues/111)
         remove_scope_layer(ctx, ex)
-    elseif k == K"." && numchildren(ex) == 2
-        # Handle quoted property access like `x.:(foo)` or `Core.:(!==)`
-        # Unwrap the quote to get the identifier before expansion
-        rhs = ex[2]
-        if kind(rhs) == K"quote" && numchildren(rhs) == 1
-            rhs = rhs[1]
-        end
-        e2 = expand_forms_1(ctx, rhs)
-        if kind(e2) == K"Identifier" || kind(e2) == K"Placeholder"
-            # FIXME: Do the K"Symbol" transformation in the parser??
-            e2 = @ast ctx e2 e2=>K"Symbol"
-        end
-        @ast ctx ex [K"." expand_forms_1(ctx, ex[1]) e2]
-    elseif k == K"cmdstring"
-        @chk numchildren(ex) == 1
-        e2 = @ast ctx ex [K"macrocall" "@cmd"::K"core" ex[1]]
-        expand_macro(ctx, e2)
-    elseif (k == K"call" || k == K"dotcall")
-        # Do some initial desugaring of call and dotcall here to simplify
-        # the later desugaring pass
-        args = SyntaxList(ctx)
-        if is_infix_op_call(ex) || is_postfix_op_call(ex)
-            @chk numchildren(ex) >= 2 "Postfix/infix operators must have at least two positional arguments"
-            farg = ex[2]
-            push!(args, ex[1])
-            append!(args, ex[3:end])
-        else
-            @chk numchildren(ex) > 0 "Call expressions must have a function name"
-            farg = ex[1]
-            append!(args, ex[2:end])
-        end
-        if !isempty(args)
-            if kind(args[end]) == K"do"
-                # move do block into first argument location
-                pushfirst!(args, pop!(args))
-            end
-        end
-        if length(args) == 2 && is_same_identifier_like(farg, "^") && kind(args[2]) == K"Integer"
-            # Do literal-pow expansion here as it's later used in both call and
-            # dotcall expansion.
-            @ast ctx ex [k
-                "literal_pow"::K"top"
-                expand_forms_1(ctx, farg)
-                expand_forms_1(ctx, args[1])
-                [K"call"
-                    [K"call"
-                        "apply_type"::K"core"
-                        "Val"::K"top"
-                        args[2]
-                    ]
-                ]
-            ]
-        else
-            if kind(farg) == K"." && numchildren(farg) == 1
-                # (.+)(x,y) is treated as a dotcall
-                k = K"dotcall"
-                farg = farg[1]
-            end
-            @ast ctx ex [k
-                expand_forms_1(ctx, farg)
-                (expand_forms_1(ctx, a) for a in args)...
-            ]
-        end
-    elseif is_leaf(ex)
-        ex
-    elseif k === K"function" && numchildren(ex) === 2
-        # The (if (generated) gen nongen) form is troublesome because everything
-        # surrounding it is implicitly quoted (with `gen` interpolated into it),
-        # so doing anything to the body AST before quoting is incorrect.
-        e1 = expand_forms_1(ctx,ex[1])
-        e2 = expand_forms_1(ctx,ex[2])
-        has_if_generated(e2) || return @ast ctx ex [K"function" e1 e2]
-        gen = expand_forms_1(ctx, expand_quote(
-            ctx, @ast ctx e2 [K"block" split_generated(e2, true)]))
-        nongen = split_generated(e2, false)
-        @ast ctx ex [K"generated_function" e1 gen nongen]
-    elseif k == K"<:" || k == K">:" || k == K"-->"
-        # TODO: Should every form get layerid systematically? Or only the ones
-        # which expand_forms_2 needs?
+    elseif k in KSet"<: >: --> ' unknown_head"
+        # if this is a form that requires resolving some identifier, add the
+        # scope layer.  if this is an unknown form to be cleaned up by AST
+        # conversion, save the scope layer just in case.
         layerid = get(ex, :scope_layer, current_layer_id(ctx))
         setattr(mapchildren(e->expand_forms_1(ctx,e), ctx, ex),
                 :scope_layer, layerid)
+    elseif is_leaf(ex)
+        ex
+    elseif k in KSet"function =" && numchildren(ex) === 2
+        # The (if (generated) gen nongen) form is troublesome because everything
+        # surrounding it is implicitly quoted (with `gen` interpolated into it),
+        # so converting the function's AST before proper quoting is incorrect.
+        ex1 = mapchildren(e->expand_forms_1(ctx,e), ctx, ex)
+        (is_eventually_call(ex1[1]) && has_if_generated(ex1[2])) || return ex1
+        gen = expand_forms_1(ctx, expand_quote(
+            ctx, @ast ctx ex1 [K"block" split_generated(ex1[2], true)]))
+        nongen = split_generated(ex1[2], false)
+        @ast ctx ex1 [K"generated_function" ex1[1] gen nongen]
     else
         mapchildren(e->expand_forms_1(ctx,e), ctx, ex)
     end

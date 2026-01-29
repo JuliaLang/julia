@@ -34,7 +34,7 @@
 #---------------------
 LoweringError:
 [10, 20; 30]
-#      └──┘ ── unexpected semicolon in array expression
+#      └──┘ ── unexpected semicolon
 
 ########################################
 # Error: vect syntax with embedded assignments
@@ -256,21 +256,26 @@ LoweringError:
 
 ########################################
 # Error: bad nrow nesting
-@ast_ [K"ncat"(syntax_flags=set_numeric_flags(3))
-    [K"nrow"(syntax_flags=set_numeric_flags(1))
-        [K"nrow"(syntax_flags=set_numeric_flags(1))
+@ast_ [K"ncat"
+    3::K"Value"
+    [K"nrow"
+        1::K"Value"
+        [K"nrow"
+            1::K"Integer"
             1::K"Integer"
         ]
     ]
 ]
 #---------------------
 LoweringError:
-#= line 1 =# - Badly nested rows in `ncat`
+#= line 1 =# - invalid syntax: unknown form `nrow` or number of arguments 2
 
 ########################################
 # Error: bad nrow nesting
-@ast_ [K"ncat"(syntax_flags=set_numeric_flags(3))
-    [K"nrow"(syntax_flags=set_numeric_flags(2))
+@ast_ [K"ncat"
+    3::K"Value"
+    [K"nrow"
+        2::K"Value"
         [K"row"
             1::K"Integer"
         ]
@@ -282,7 +287,8 @@ LoweringError:
 
 ########################################
 # Error: bad nrow nesting
-@ast_ [K"ncat"(syntax_flags=set_numeric_flags(3))
+@ast_ [K"ncat"
+    3::K"Value"
     [K"row"
         [K"row"
             1::K"Integer"
@@ -390,7 +396,7 @@ a[i, j; w=1]
 #---------------------
 LoweringError:
 a[i, j; w=1]
-#     └───┘ ── unexpected semicolon in array expression
+#     └───┘ ── unexpected semicolon
 
 ########################################
 # simple setindex!
