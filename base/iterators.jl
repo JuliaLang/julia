@@ -120,14 +120,6 @@ IteratorSize(::Type{Reverse{T}}) where {T} = IteratorSize(T)
 IteratorEltype(::Type{Reverse{T}}) where {T} = IteratorEltype(T)
 last(r::Reverse) = first(r.itr) # the first shall be last
 
-# reverse-order array iterators: assumes more-specialized Reverse for eachindex
-@propagate_inbounds function iterate(A::Reverse{<:AbstractArray}, state=(reverse(eachindex(A.itr)),))
-    y = iterate(state...)
-    y === nothing && return y
-    idx, itrs = y
-    (A.itr[idx], (state[1], itrs))
-end
-
 # Fallback method of `iterate(::Reverse{T})` which assumes the collection has `getindex(::T) and `reverse(eachindex(::T))`
 # don't propagate inbounds for this just in case
 function iterate(A::Reverse, state=(reverse(eachindex(A.itr)),))
