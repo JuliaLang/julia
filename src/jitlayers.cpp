@@ -35,6 +35,7 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/FormattedStream.h>
+#include <llvm/Support/TimeProfiler.h>
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/Utils/Cloning.h>
@@ -882,8 +883,13 @@ public:
             jl_gc_unsafe_leave(ct->ptls, state);
         }
 #endif
+        std::unique_ptr<MemoryBuffer> Obj;
         uint64_t start_time = jl_hrtime();
-        auto Obj = JIT.compileModule(JIT.optimizeModule(std::move(Out.module)));
+        {
+            TimeTraceScope CompileScope(
+                "JIT Compile", Out.module.getModuleUnlocked()->getModuleIdentifier());
+            Obj = JIT.compileModule(JIT.optimizeModule(std::move(Out.module)));
+        }
         uint64_t end_time = jl_hrtime();
 
         for (auto [CI, _] : Out.linker_info->ci_funcs) {
@@ -1247,6 +1253,7 @@ namespace {
 
                 {
                     JL_TIMING(LLVM_JIT, JIT_Opt);
+                    TimeTraceScope OptimizeScope("JIT Optimize", M.getModuleIdentifier());
                     //Run the optimization
                     (****PMs[PoolIdx]).run(M);
                     assert(!verifyLLVMIR(M));
@@ -1800,6 +1807,21 @@ JuliaOJIT::JuliaOJIT()
     asan_crt[mangle("___asan_globals_registered")] = {ExecutorAddr::fromPtr(&jl___asan_globals_registered), JITSymbolFlags::Common | JITSymbolFlags::Exported};
     cantFail(JD.define(orc::absoluteSymbols(asan_crt)));
 #endif
+
+    if (jl_is_timing_trace) {
+        PrintLLVMTimers.push_back([]() JL_NOTSAFEPOINT {
+            if (timeTraceProfilerEnabled()) {
+                StringRef FileName = jl_timing_trace_file.empty() ?
+                    StringRef("julia_time_trace.json") : StringRef(jl_timing_trace_file);
+                if (auto E = timeTraceProfilerWrite(FileName, "")) {
+                    handleAllErrors(std::move(E), [](const StringError &SE) JL_NOTSAFEPOINT {
+                        errs() << SE.getMessage() << "\n";
+                    });
+                }
+                timeTraceProfilerCleanup();
+            }
+        });
+    }
 }
 
 JuliaOJIT::~JuliaOJIT() = default;
@@ -1840,6 +1862,8 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 {
     JL_TIMING(LLVM_JIT, JIT_Total);
     ++ModulesAdded;
+    TimeTraceScope CompileScope("JIT Compile",
+                                TSM.getModuleUnlocked()->getModuleIdentifier());
     TSM = optimizeModule(std::move(TSM));
 #ifdef ENABLE_TIMINGS
     timing_print_module_names(JL_TIMING_DEFAULT_BLOCK, TSM);

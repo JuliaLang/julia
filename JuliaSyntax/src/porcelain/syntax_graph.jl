@@ -845,30 +845,33 @@ function prune(graph1_a::SyntaxGraph, entrypoints_a::Vector{NodeId})
 
     # Resolve provenance.  Tricky to avoid dangling `.source` references.
     resolved_sources = Dict{NodeId, SourceAttrType}() # graph1 id => graph2 src
-    function get_resolved!(id1::NodeId)
-        out = get(resolved_sources, id1, nothing)
-        if isnothing(out)
-            src1 = graph1.source[id1]
-            out = if haskey(map12, src1)
-                map12[src1]
-            elseif src1 isa NodeId
-                get_resolved!(src1)
-            elseif src1 isa Tuple
-                map(get_resolved!, src1)
-            else
-                src1
-            end
-            resolved_sources[id1] = out
-        end
-        return out
-    end
 
     for (n2, n1) in enumerate(nodes1)
-        graph2.source[n2] = get_resolved!(n1)
+        graph2.source[n2] = _prune_get_resolved!(n1, graph1, map12, resolved_sources)
     end
 
     # The first n entries in nodes1 were our entrypoints, unique from unaliasing
     return SyntaxList(graph2, 1:length(entrypoints))
+end
+
+function _prune_get_resolved!(id1::NodeId, graph1::SyntaxGraph,
+                              map12::Dict{NodeId, Int},
+                              resolved_sources::Dict{NodeId, SourceAttrType})
+    out = get(resolved_sources, id1, nothing)
+    if isnothing(out)
+        src1 = graph1.source[id1]
+        out = if haskey(map12, src1)
+            map12[src1]
+        elseif src1 isa NodeId
+            _prune_get_resolved!(src1, graph1, map12, resolved_sources)
+        elseif src1 isa Tuple
+            map(s -> _prune_get_resolved!(s, graph1, map12, resolved_sources), src1)
+        else
+            src1
+        end
+        resolved_sources[id1] = out
+    end
+    return out
 end
 
 """
@@ -1092,47 +1095,49 @@ function _stm_assigns(p, st_rhs_expr; assigns=Expr(:block))
 end
 
 # Check for correct pattern syntax.  Not needed outside of development.
-function _stm_check_usage(pats::Expr)
-    function _stm_check_pattern(p; syms=Set{Symbol}())
-        if Meta.isexpr(p, :(...), 1)
-            p = p.args[1]
-            @assert(p isa Symbol, "Expected symbol before `...` in $p")
-        end
-        if p isa Symbol
-            # No support for duplicate syms for now (user is either looking for
-            # some form of equality we don't implement, or they made a mistake)
-            dup = p in syms && p !== :_
-            push!(syms, p)
-            @assert(!dup, "invalid duplicate non-underscore identifier $p")
-            return nothing
-        elseif Meta.isexpr(p, :vect)
-            @assert(length(p.args) === 1,
-                    "use spaces, not commas, in @stm []-patterns")
-        elseif Meta.isexpr(p, :hcat)
-            @assert(length(p.args) >= 2)
-        elseif Meta.isexpr(p, :vcat)
-            p = _stm_vcat_to_hcat(p)
-            @assert(length(p.args) >= 2)
-        else
-            @assert(false, "malformed pattern $p")
-        end
-        @assert(count(x->Meta.isexpr(x, :(...)), p.args[2:end]) <= 1,
-                "Multiple `...` in a pattern is ambiguous")
-
-        # This exact `K"kind"` syntax is not necessary since the kind can't be
-        # provided by a variable, but requiring [K"kinds"] is consistent with
-        # `@ast` and allows us to implement list matching later.
-        @assert(Meta.isexpr(p.args[1], :macrocall, 3) &&
-            p.args[1].args[1] === Symbol("@K_str") &&
-            p.args[1].args[3] isa String, "first pattern elt must be K\"\"")
-
-        for subp in p.args[2:end]
-            _stm_check_pattern(subp; syms)
-        end
+function _stm_check_pattern(p, syms::Set{Symbol})
+    if Meta.isexpr(p, :(...), 1)
+        p = p.args[1]
+        @assert(p isa Symbol, "Expected symbol before `...` in $p")
     end
+    if p isa Symbol
+        # No support for duplicate syms for now (user is either looking for
+        # some form of equality we don't implement, or they made a mistake)
+        dup = p in syms && p !== :_
+        push!(syms, p)
+        @assert(!dup, "invalid duplicate non-underscore identifier $p")
+        return nothing
+    elseif Meta.isexpr(p, :vect)
+        @assert(length(p.args) === 1,
+                "use spaces, not commas, in @stm []-patterns")
+    elseif Meta.isexpr(p, :hcat)
+        @assert(length(p.args) >= 2)
+    elseif Meta.isexpr(p, :vcat)
+        p = _stm_vcat_to_hcat(p)
+        @assert(length(p.args) >= 2)
+    else
+        @assert(false, "malformed pattern $p")
+    end
+    @assert(count(x->Meta.isexpr(x, :(...)), p.args[2:end]) <= 1,
+            "Multiple `...` in a pattern is ambiguous")
 
+    # This exact `K"kind"` syntax is not necessary since the kind can't be
+    # provided by a variable, but requiring [K"kinds"] is consistent with
+    # `@ast` and allows us to implement list matching later.
+    @assert(Meta.isexpr(p.args[1], :macrocall, 3) &&
+        p.args[1].args[1] === Symbol("@K_str") &&
+        p.args[1].args[3] isa String, "first pattern elt must be K\"\"")
+
+    for subp in p.args[2:end]
+        _stm_check_pattern(subp, syms)
+    end
+    return nothing
+end
+
+function _stm_check_usage(pats::Expr)
     @assert Meta.isexpr(pats, :block) "Usage: @stm st begin; ...; end"
-    for pcr in filter(e->!isa(e, LineNumberNode), pats.args)
+    for pcr in pats.args
+        pcr isa LineNumberNode && continue
         @assert(Meta.isexpr(pcr, :(->), 2), "Expected pat -> res, got malformed case: $pcr")
         if Meta.isexpr(pcr.args[1], :tuple)
             @assert(length(pcr.args[1].args) === 2,
@@ -1144,7 +1149,7 @@ function _stm_check_usage(pats::Expr)
         else
             p = pcr.args[1]
         end
-        _stm_check_pattern(p)
+        _stm_check_pattern(p, Set{Symbol}())
     end
 end
 
