@@ -1,4 +1,4 @@
-# Multi-processing and Distributed Computing
+# Multiprocessing and Distributed Computing
 
 An implementation of distributed memory parallel computing is provided by module [`Distributed`](@ref man-distributed)
 as part of the standard library shipped with Julia.
