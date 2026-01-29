@@ -211,10 +211,7 @@ function rest(t::Tuple, i)
         ntuple(x -> getfield(t, x+i-1), length(t)-i+1)
     end
 end
-function rest(a::Union{Array,Memory,Core.SimpleVector}, i = 1)
-    i = i::Int
-    a[i:end]
-end
+rest(a::Union{Array,Memory,Core.SimpleVector}, i=1) = a[(i::Int):end]
 rest(itr, state...) = Iterators.rest(itr, state...)
 
 """
