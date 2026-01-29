@@ -2,19 +2,31 @@
 
 #include "llvm-gc-interface-passes.h"
 
-Value* LateLowerGCFrame::lowerGCAllocBytesLate(CallInst *target, Function &F)
+#define DEBUG_TYPE "final_gc_lowering"
+STATISTIC(GCAllocBytesCount, "Number of lowered GCAllocBytesFunc intrinsics");
+
+Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 {
-    assert(target->arg_size() == 3);
+    ++GCAllocBytesCount;
+    CallInst *newI;
 
     IRBuilder<> builder(target);
     auto ptls = target->getArgOperand(0);
     auto type = target->getArgOperand(2);
+    uint64_t derefBytes = 0;
     if (auto CI = dyn_cast<ConstantInt>(target->getArgOperand(1))) {
         size_t sz = (size_t)CI->getZExtValue();
         // This is strongly architecture and OS dependent
         int osize;
         int offset = jl_gc_classify_pools(sz, &osize);
-        if (offset >= 0) {
+        if (offset < 0) {
+            newI = builder.CreateCall(
+                bigAllocFunc,
+                { ptls, ConstantInt::get(T_size, sz + sizeof(void*)), type });
+            if (sz > 0)
+                derefBytes = sz;
+        }
+        else {
             // In this case instead of lowering julia.gc_alloc_bytes to jl_gc_small_alloc
             // We do a slowpath/fastpath check and lower it only on the slowpath, returning
             // the cursor and updating it in the fastpath.
@@ -91,6 +103,70 @@ Value* LateLowerGCFrame::lowerGCAllocBytesLate(CallInst *target, Function &F)
                 return phiNode;
             }
         }
+    } else {
+        auto size = builder.CreateZExtOrTrunc(target->getArgOperand(1), T_size);
+        // allocTypedFunc does not include the type tag in the allocation size!
+        newI = builder.CreateCall(allocTypedFunc, { ptls, size, type });
+        derefBytes = sizeof(void*);
     }
-    return target;
+    newI->setAttributes(newI->getCalledFunction()->getAttributes());
+    unsigned align = std::max((unsigned)target->getRetAlign().valueOrOne().value(), (unsigned)sizeof(void*));
+    newI->addRetAttr(Attribute::getWithAlignment(F.getContext(), Align(align)));
+    if (derefBytes > 0)
+        newI->addDereferenceableRetAttr(derefBytes);
+    newI->takeName(target);
+    return newI;
+}
+
+
+void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
+    auto parent = target->getArgOperand(0);
+    IRBuilder<> builder(target);
+    builder.SetCurrentDebugLocation(target->getDebugLoc());
+
+    // FIXME: Currently we call write barrier with the src object (parent).
+    // This works fine for object barrier for generational plans (such as stickyimmix), which does not use the target object at all.
+    // But for other MMTk plans, we need to be careful.
+    const bool INLINE_WRITE_BARRIER = true;
+    if (MMTK_NEEDS_WRITE_BARRIER == MMTK_OBJECT_BARRIER) {
+        if (INLINE_WRITE_BARRIER) {
+            auto i8_ty = Type::getInt8Ty(F.getContext());
+            auto intptr_ty = T_size;
+
+            // intptr_t addr = (intptr_t) (void*) src;
+            // uint8_t* meta_addr = (uint8_t*) (SIDE_METADATA_BASE_ADDRESS + (addr >> 6));
+            intptr_t metadata_base_address = reinterpret_cast<intptr_t>(MMTK_SIDE_LOG_BIT_BASE_ADDRESS);
+            auto metadata_base_val = ConstantInt::get(intptr_ty, metadata_base_address);
+            auto metadata_base_ptr = ConstantExpr::getIntToPtr(metadata_base_val, PointerType::get(i8_ty, 0));
+
+            auto parent_val = builder.CreatePtrToInt(parent, intptr_ty);
+            auto shr = builder.CreateLShr(parent_val, ConstantInt::get(intptr_ty, 6));
+            auto metadata_ptr = builder.CreateGEP(i8_ty, metadata_base_ptr, shr);
+
+            // intptr_t shift = (addr >> 3) & 0b111;
+            auto shift = builder.CreateAnd(builder.CreateLShr(parent_val, ConstantInt::get(intptr_ty, 3)), ConstantInt::get(intptr_ty, 7));
+            auto shift_i8 = builder.CreateTruncOrBitCast(shift, i8_ty);
+
+            // uint8_t byte_val = *meta_addr;
+            auto load_i8 = builder.CreateAlignedLoad(i8_ty, metadata_ptr, Align());
+
+            // if (((byte_val >> shift) & 1) == 1) {
+            auto shifted_load_i8 = builder.CreateLShr(load_i8, shift_i8);
+            auto masked = builder.CreateAnd(shifted_load_i8, ConstantInt::get(i8_ty, 1));
+            auto is_unlogged = builder.CreateICmpEQ(masked, ConstantInt::get(i8_ty, 1));
+
+            // object_reference_write_slow_call((void*) src, (void*) slot, (void*) target);
+            MDBuilder MDB(F.getContext());
+            SmallVector<uint32_t, 2> Weights{1, 9};
+
+            auto mayTriggerSlowpath = SplitBlockAndInsertIfThen(is_unlogged, target, false, MDB.createBranchWeights(Weights));
+            builder.SetInsertPoint(mayTriggerSlowpath);
+            builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), { parent });
+        } else {
+            Function *wb_func = getOrDeclare(jl_intrinsics::queueGCRoot);
+            builder.CreateCall(wb_func, { parent });
+        }
+    } else {
+        // Using a plan that does not need write barriers
+    }
 }
