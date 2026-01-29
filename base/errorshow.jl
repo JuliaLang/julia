@@ -238,7 +238,8 @@ function print_with_compare(io::IO, @nospecialize(a), @nospecialize(b), color::S
     end
 end
 
-function show_convert_error(io::IO, ex::MethodError, arg_types_param)
+function show_convert_error(io::IO, ex::NotImplementedError, arg_types_param)
+    # should maybe just be a new ConvertError.
     # See #13033
     T = striptype(ex.args[1])
     if T === nothing
@@ -252,7 +253,60 @@ function show_convert_error(io::IO, ex::MethodError, arg_types_param)
         printstyled(io, " to an object of type ")
         print_one_line || printstyled(io, "\n  ")
         print_with_compare(io, T, p2, :light_red)
+        printstyled(io, ".")
     end
+end
+
+function showerror(io::IO, ex::NotImplementedError)
+    print(io, "NotImplementedError")
+    if ex.f !== nothing || !isempty(ex.msg)
+        print(io, ": ")
+    end
+    if ex.f !== nothing
+        is_arg_types = isa(ex.args, DataType)
+        arg_types = (is_arg_types ? ex.args : typesof(ex.args...))::DataType
+        f, _, san_arg_types_param, kwargs = unwrap_kwcall(ex.f, ex.args, arg_types, is_arg_types)
+        print(io, "no implementation has been provided matching the signature ")
+        print_method_signature(io, f, arg_types, kwargs)
+        interfacestr = ex.interface == Any ?
+            "." :
+            " expected as part of the interface for $(ex.interface)."
+        print(io, interfacestr)
+    end
+    if f === Base.convert && length(san_arg_types_param) == 2 && !is_arg_types
+        print(io, " ")
+        show_convert_error(io, ex, san_arg_types_param)
+    end
+
+    !isempty(ex.msg) && print(io, " ", ex.msg)
+    println(io)
+end
+
+function print_method_signature(io::IO, f, arg_types, kwargs)
+    buf = IOBuffer()
+    iob = IOContext(buf, io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
+    show_signature_function(iob, Core.Typeof(f))
+    show_tuple_as_call(iob, :function, arg_types; hasfirst=false, kwargs = isempty(kwargs) ? nothing : kwargs)
+    str = takestring!(buf)
+    str = type_limited_string_from_context(io, str)
+    print(io, str)
+end
+
+function unwrap_kwcall(f, args, arg_types, is_arg_types)
+    arg_types_param::SimpleVector = (unwrap_unionall(arg_types)::DataType).parameters
+    san_arg_types_param = Any[rewrap_unionall(arg_types_param[i], arg_types) for i in 1:length(arg_types_param)]
+    kwargs = []
+    if f === Core.kwcall && length(arg_types_param) >= 2 && arg_types_param[1] <: NamedTuple && !is_arg_types
+        f = args[2]
+        ft = typeof(f)
+        kwt = typeof(args[1])
+        args = args[3:end::Int]
+        arg_types_param = arg_types_param[3:end]
+        san_arg_types_param = san_arg_types_param[3:end]
+        keys = kwt.parameters[1]::Tuple
+        kwargs = Any[(keys[i], fieldtype(kwt, i)) for i in eachindex(keys)]
+    end
+    return f, args, san_arg_types_param, kwargs
 end
 
 function showerror(io::IO, ex::MethodError)
@@ -261,37 +315,18 @@ function showerror(io::IO, ex::MethodError)
     # a tuple of the arguments otherwise.
     is_arg_types = !isa(ex.args, Tuple)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
-    arg_types_param::SimpleVector = (unwrap_unionall(arg_types)::DataType).parameters
-    san_arg_types_param = Any[rewrap_unionall(arg_types_param[i], arg_types) for i in 1:length(arg_types_param)]
     f = ex.f
     meth = methods_including_ambiguous(f, arg_types)
     if isa(meth, MethodList) && length(meth) > 1
         return showerror_ambiguous(io, meth, f, arg_types)
     end
     print(io, "MethodError: ")
+    f, args, san_arg_types_param, kwargs = unwrap_kwcall(f, ex.args, arg_types, is_arg_types)
+    ex = MethodError(f, args, ex.world)
     ft = typeof(f)
+    show_candidates = true
     f_is_function = false
-    kwargs = []
-    if f === Core.kwcall && length(arg_types_param) >= 2 && arg_types_param[1] <: NamedTuple && !is_arg_types
-        # if this is a kwcall, reformat it as a call with kwargs
-        # TODO: handle !is_arg_types here (aka invoke with kwargs), which needs a value for `f`
-        local kwt
-        let args = ex.args::Tuple
-            f = args[2]
-            ft = typeof(f)
-            kwt = typeof(args[1])
-            ex = MethodError(f, args[3:end], ex.world)
-        end
-        arg_types_param = arg_types_param[3:end]
-        san_arg_types_param = san_arg_types_param[3:end]
-        keys = kwt.parameters[1]::Tuple
-        kwargs = Any[(keys[i], fieldtype(kwt, i)) for i in eachindex(keys)]
-        arg_types = rewrap_unionall(Tuple{arg_types_param...}, arg_types)
-    end
-    if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
-        f_is_function = true
-        show_convert_error(io, ex, arg_types_param)
-    elseif isempty(methods(f)) && isa(f, DataType) && isabstracttype(f)
+    if isempty(methods(f)) && isa(f, DataType) && isabstracttype(f)
         print(io, "no constructors have been defined for ", f)
     elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
         println(io, "objects of type ", ft, " are not callable.")
@@ -306,13 +341,7 @@ function showerror(io::IO, ex::MethodError)
         else
             print(io, "no method matching ")
         end
-        buf = IOBuffer()
-        iob = IOContext(buf, io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
-        show_signature_function(iob, Core.Typeof(f))
-        show_tuple_as_call(iob, :function, arg_types; hasfirst=false, kwargs = isempty(kwargs) ? nothing : kwargs)
-        str = takestring!(buf)
-        str = type_limited_string_from_context(io, str)
-        print(io, str)
+        print_method_signature(io, f, arg_types, kwargs)
     end
     # catch the two common cases of element-wise addition and subtraction
     if (f === Base.:+ || f === Base.:-) && length(san_arg_types_param) == 2

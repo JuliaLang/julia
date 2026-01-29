@@ -425,7 +425,7 @@ end
 
 is_nonoverlayed(m::Method) = !isdefined(m, :external_mt)
 is_nonoverlayed(interp::AbstractInterpreter) = !isoverlayed(method_table(interp))
-isoverlayed(::MethodTableView) = error("unsatisfied MethodTableView interface")
+isoverlayed(::MethodTableView) = throw(NotImplementedError(isoverlayed, (), MethodTableView))
 isoverlayed(::InternalMethodTable) = false
 isoverlayed(::OverlayMethodTable) = true
 isoverlayed(mt::CachedMethodTable) = isoverlayed(mt.table)

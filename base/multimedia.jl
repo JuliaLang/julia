@@ -127,7 +127,7 @@ show(io::IO, m::AbstractString, x) = show(io, MIME(m), x)
 
 Return an `AbstractString` or `Vector{UInt8}` containing the representation of
 `x` in the requested `mime` type, as written by [`show(io, mime, x)`](@ref) (throwing a
-[`MethodError`](@ref) if no appropriate `show` is available). An `AbstractString` is
+[`NotImplementedError`](@ref) if no appropriate `show` is available). An `AbstractString` is
 returned for MIME types with textual representations (such as `"text/html"` or
 `"application/postscript"`), whereas binary data is returned as
 `Vector{UInt8}`. (The function `istextmime(mime)` returns whether or not Julia
@@ -212,7 +212,7 @@ end
 # (typically using show, repr, ..., to get the MIME
 # representation of x) and should also overload display(d::AbstractDisplay, x)
 # to display x in whatever MIME type is preferred by the AbstractDisplay and
-# is writable by x.  display(..., x) should throw a MethodError if x
+# is writable by x.  display(..., x) should throw a NotImplementedError if x
 # cannot be displayed.  The return value of display(...) is up to the
 # AbstractDisplay type.
 
@@ -257,7 +257,7 @@ display(d::TextDisplay, @nospecialize x) = display(d, MIME"text/plain"(), x)
 # if you explicitly call display("text/foo", x), it should work on a TextDisplay:
 displayable(d::TextDisplay, M::MIME) = istextmime(M)
 function display(d::TextDisplay, M::MIME, @nospecialize x)
-    displayable(d, M) || throw(MethodError(display, (d, M, x)))
+    displayable(d, M) || throw(NotImplementedError(display, (d, M, x)))
     show(d.io, M, x); println(d.io)
 end
 
@@ -276,7 +276,7 @@ const displays = AbstractDisplay[]
 
 Pushes a new display `d` on top of the global display-backend stack. Calling `display(x)` or
 `display(mime, x)` will display `x` on the topmost compatible backend in the stack (i.e.,
-the topmost backend that does not throw a [`MethodError`](@ref)).
+the topmost backend that does not throw a [`NotImplementedError`](@ref)).
 """
 function pushdisplay(d::AbstractDisplay)
     global displays
@@ -315,7 +315,7 @@ xdisplayable(D::AbstractDisplay, @nospecialize args...) = applicable(display, D,
 Display `x` using the topmost applicable display in the display stack, typically using the
 richest supported multimedia output for `x`, with plain-text [`stdout`](@ref) output as a fallback.
 The `display(d, x)` variant attempts to display `x` on the given display `d` only, throwing
-a [`MethodError`](@ref) if `d` cannot display objects of this type.
+a [`NotImplementedError`](@ref) if `d` cannot display objects of this type.
 
 In general, you cannot assume that `display` output goes to `stdout` (unlike [`print(x)`](@ref) or
 [`show(x)`](@ref)).  For example, `display(x)` may open up a separate window with an image.
@@ -325,7 +325,7 @@ If you want REPL-like text output that is guaranteed to go to `stdout`, use
 
 There are also two variants with a `mime` argument (a MIME type string, such as
 `"image/png"`), which attempt to display `x` using the requested MIME type *only*, throwing
-a `MethodError` if this type is not supported by either the display(s) or by `x`. With these
+a `NotImplementedError` if this type is not supported by either the display(s) or by `x`. With these
 variants, one can also supply the "raw" data in the requested MIME type by passing
 `x::AbstractString` (for MIME types with text-based storage, such as text/html or
 application/postscript) or `x::Vector{UInt8}` (for binary MIME types).
@@ -339,12 +339,12 @@ function display(@nospecialize x)
             try
                 return display(displays[i], x)
             catch e
-                isa(e, MethodError) && (e.f === display || e.f === show) ||
+                isa(e, NotImplementedError) && (e.f === display || e.f === show) ||
                     rethrow()
             end
         end
     end
-    throw(MethodError(display, (x,)))
+    throw(NotImplementedError(display, (x,)))
 end
 
 function display(m::MIME, @nospecialize x)
@@ -353,12 +353,12 @@ function display(m::MIME, @nospecialize x)
             try
                 return display(displays[i], m, x)
             catch e
-                isa(e, MethodError) && e.f == display ||
+                isa(e, NotImplementedError) && e.f == display ||
                     rethrow()
             end
         end
     end
-    throw(MethodError(display, (m, x)))
+    throw(NotImplementedError(display, (m, x)))
 end
 
 displayable(d::D, ::MIME{mime}) where {D<:AbstractDisplay,mime} =
@@ -398,12 +398,12 @@ function redisplay(@nospecialize x)
             try
                 return redisplay(displays[i], x)
             catch e
-                isa(e, MethodError) && e.f in (redisplay, display, show) ||
+                isa(e, NotImplementedError) && e.f in (redisplay, display, show) ||
                     rethrow()
             end
         end
     end
-    throw(MethodError(redisplay, (x,)))
+    throw(NotImplementedError(redisplay, (x,)))
 end
 
 function redisplay(m::Union{MIME,AbstractString}, @nospecialize x)
@@ -412,12 +412,12 @@ function redisplay(m::Union{MIME,AbstractString}, @nospecialize x)
             try
                 return redisplay(displays[i], m, x)
             catch e
-                isa(e, MethodError) && e.f in (redisplay, display) ||
+                isa(e, NotImplementedError) && e.f in (redisplay, display) ||
                     rethrow()
             end
         end
     end
-    throw(MethodError(redisplay, (m, x)))
+    throw(NotImplementedError(redisplay, (m, x)))
 end
 
 # default redisplay is simply to call display

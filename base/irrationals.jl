@@ -112,7 +112,7 @@ float(::Type{<:AbstractIrrational}) = Float64
 
 <(::Irrational{s}, ::Irrational{s}) where {s} = false
 function <(x::AbstractIrrational, y::AbstractIrrational)
-    Float64(x) != Float64(y) || throw(MethodError(<, (x, y)))
+    Float64(x) != Float64(y) || throw(NotImplementedError(<, (x, y), AbstractIrrational))
     return Float64(x) < Float64(y)
 end
 

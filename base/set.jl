@@ -869,10 +869,10 @@ replace(new::Callable, A; count::Integer=typemax(Int)) =
     _replace!(new, _similar_or_copy(A), A, check_count(count))
 
 # Handle ambiguities
-replace!(a::Callable, b::Pair; count::Integer=-1) = throw(MethodError(replace!, (a, b)))
-replace!(a::Callable, b::Pair, c::Pair; count::Integer=-1) = throw(MethodError(replace!, (a, b, c)))
-replace(a::Callable, b::Pair; count::Integer=-1) = throw(MethodError(replace, (a, b)))
-replace(a::Callable, b::Pair, c::Pair; count::Integer=-1) = throw(MethodError(replace, (a, b, c)))
+replace!(a::Callable, b::Pair; count::Integer=-1) = throw(ArgumentError("Invalid types."))
+replace!(a::Callable, b::Pair, c::Pair; count::Integer=-1) = throw(ArgumentError("Invalid types."))
+replace(a::Callable, b::Pair; count::Integer=-1) = throw(ArgumentError("Invalid types."))
+replace(a::Callable, b::Pair, c::Pair; count::Integer=-1) = throw(ArgumentError("Invalid types."))
 
 ### replace! for AbstractDict/AbstractSet
 

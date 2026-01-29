@@ -326,7 +326,7 @@ end
 Base.show(io::IO,x::CompoundPeriod) = print(io, string(x))
 
 Base.convert(::Type{T}, x::CompoundPeriod) where T<:Period =
-    isconcretetype(T) ? sum(T, x.periods; init = zero(T)) : throw(MethodError(convert,(T,x)))
+    isconcretetype(T) ? sum(T, x.periods; init = zero(T)) : throw(NotImplementedError(convert, (T, x)))
 
 # E.g. Year(1) + Day(1)
 (+)(x::Period,y::Period) = CompoundPeriod(Period[x, y])
@@ -436,8 +436,8 @@ function Base.hash(x::CompoundPeriod, h::UInt)
     return h
 end
 
-Base.isless(x::FixedPeriod, y::OtherPeriod) = throw(MethodError(isless, (x, y)))
-Base.isless(x::OtherPeriod, y::FixedPeriod) = throw(MethodError(isless, (x, y)))
+Base.isless(x::FixedPeriod, y::OtherPeriod) = throw(ArgumentError("Fixed periods cannot be ordered with other periods."))
+Base.isless(x::OtherPeriod, y::FixedPeriod) = throw(ArgumentError("Fixed periods cannot be ordered with other periods."))
 
 Base.isless(x::Period, y::CompoundPeriod) = CompoundPeriod(x) < y
 Base.isless(x::CompoundPeriod, y::Period) = x < CompoundPeriod(y)

@@ -92,7 +92,7 @@ if the corresponding [`iterate`](@ref) methods are defined, but some `itr` types
 may implement more specialized `Iterators.reverse` behaviors.)
 
 Not all iterator types `T` support reverse-order iteration.  If `T`
-doesn't, then iterating over `Iterators.reverse(itr::T)` will throw a [`MethodError`](@ref)
+doesn't, then iterating over `Iterators.reverse(itr::T)` will throw a [`NotImplementedError`](@ref)
 because of the missing `iterate` methods for `Iterators.Reverse{T}`.
 (To implement these methods, the original iterator
 `itr::T` can be obtained from an `r::Iterators.Reverse{T}` object by `r.itr`;

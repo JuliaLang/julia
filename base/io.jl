@@ -319,8 +319,8 @@ Base.RefValue{MyStruct}(MyStruct(42.0))
 """
 function write end
 
-read(s::IO, ::Type{UInt8}) = error(typeof(s)," does not support byte I/O")
-write(s::IO, x::UInt8) = error(typeof(s)," does not support byte I/O")
+read(s::IO, ::Type{UInt8}) = throw(NotImplementedError("$(typeof(s)) does not support byte I/O"))
+write(s::IO, x::UInt8) = throw(NotImplementedError("$(typeof(s)) does not support byte I/O"))
 
 """
     unsafe_write(io::IO, ref, nbytes::UInt)
@@ -805,7 +805,7 @@ isreadonly(s) = isreadable(s) && !iswritable(s)
 
 ## binary I/O ##
 
-write(io::IO, x) = throw(MethodError(write, (io, x)))
+write(io::IO, x) = throw(NotImplementedError("$(typeof(io)) does not support writes"))
 function write(io::IO, x1, xs...)
     written::Int = write(io, x1)
     for x in xs

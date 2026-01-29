@@ -431,7 +431,7 @@ function tuple_type_tail(T::Type)
     elseif isa(T, Union)
         return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
     else
-        T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
+        T.name === Tuple.name || throw(NotImplementedError(tuple_type_tail, (T,)))
         if isvatuple(T) && length(T.parameters) == 1
             va = unwrap_unionall(T.parameters[1])::Core.TypeofVararg
             (isdefined(va, :N) && isa(va.N, Int)) || return T
