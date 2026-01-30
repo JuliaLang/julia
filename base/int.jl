@@ -584,10 +584,10 @@ top_set_bit(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
 >>>(x::BitInteger, y::Int) =
     ifelse(0 <= y, x >>> unsigned(y), x << unsigned(-y))
 
-## native (unchecked) integer shifts ##
+## unsafe (unchecked) integer shifts ##
 
 """
-    nativeshift_left(x::BitInteger, y::BitUnsigned)
+    unsafe_shl(x::BitInteger, y::BitUnsigned)
 
 Left shift `x` by `y` bits using a single native CPU instruction.
 
@@ -599,21 +599,21 @@ behavior (typically the shift amount is masked to the lower bits, e.g.,
 Use this function when you can guarantee that the shift amount is valid,
 or when you explicitly want the native CPU behavior for performance.
 
-See also [`<<`](@ref), [`nativeshift_right`](@ref), [`nativeshift_right_logical`](@ref).
+See also [`<<`](@ref), [`unsafe_shr`](@ref), [`unsafe_lshr`](@ref).
 
 # Examples
 ```jldoctest
-julia> nativeshift_left(Int8(1), UInt8(2))
+julia> unsafe_shl(Int8(1), UInt8(2))
 4
 
-julia> nativeshift_left(Int8(1), UInt8(7))
+julia> unsafe_shl(Int8(1), UInt8(7))
 -128
 ```
 """
-nativeshift_left(x::BitInteger, y::BitUnsigned) = shl_int_native(x, y)
+unsafe_shl(x::BitInteger, y::BitUnsigned) = shl_int_native(x, y)
 
 """
-    nativeshift_right(x::BitInteger, y::BitUnsigned)
+    unsafe_shr(x::BitInteger, y::BitUnsigned)
 
 Right shift `x` by `y` bits using a single native CPU instruction.
 
@@ -627,22 +627,22 @@ behavior (typically the shift amount is masked to the lower bits).
 Use this function when you can guarantee that the shift amount is valid,
 or when you explicitly want the native CPU behavior for performance.
 
-See also [`>>`](@ref), [`nativeshift_left`](@ref), [`nativeshift_right_logical`](@ref).
+See also [`>>`](@ref), [`unsafe_shl`](@ref), [`unsafe_lshr`](@ref).
 
 # Examples
 ```jldoctest
-julia> nativeshift_right(Int8(-128), UInt8(2))
+julia> unsafe_shr(Int8(-128), UInt8(2))
 -32
 
-julia> nativeshift_right(UInt8(128), UInt8(2))
+julia> unsafe_shr(UInt8(128), UInt8(2))
 32
 ```
 """
-nativeshift_right(x::BitSigned, y::BitUnsigned) = ashr_int_native(x, y)
-nativeshift_right(x::BitUnsigned, y::BitUnsigned) = lshr_int_native(x, y)
+unsafe_shr(x::BitSigned, y::BitUnsigned) = ashr_int_native(x, y)
+unsafe_shr(x::BitUnsigned, y::BitUnsigned) = lshr_int_native(x, y)
 
 """
-    nativeshift_right_logical(x::BitInteger, y::BitUnsigned)
+    unsafe_lshr(x::BitInteger, y::BitUnsigned)
 
 Logical right shift `x` by `y` bits using a single native CPU instruction.
 
@@ -656,18 +656,18 @@ behavior (typically the shift amount is masked to the lower bits).
 Use this function when you can guarantee that the shift amount is valid,
 or when you explicitly want the native CPU behavior for performance.
 
-See also [`>>>`](@ref), [`nativeshift_left`](@ref), [`nativeshift_right`](@ref).
+See also [`>>>`](@ref), [`unsafe_shl`](@ref), [`unsafe_shr`](@ref).
 
 # Examples
 ```jldoctest
-julia> nativeshift_right_logical(Int8(-128), UInt8(2))
+julia> unsafe_lshr(Int8(-128), UInt8(2))
 32
 
-julia> nativeshift_right_logical(UInt8(128), UInt8(2))
+julia> unsafe_lshr(UInt8(128), UInt8(2))
 32
 ```
 """
-nativeshift_right_logical(x::BitInteger, y::BitUnsigned) = lshr_int_native(x, y)
+unsafe_lshr(x::BitInteger, y::BitUnsigned) = lshr_int_native(x, y)
 
 for to in BitInteger_types, from in (BitInteger_types..., Bool)
     if !(to === from)
