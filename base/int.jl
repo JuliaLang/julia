@@ -584,6 +584,91 @@ top_set_bit(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
 >>>(x::BitInteger, y::Int) =
     ifelse(0 <= y, x >>> unsigned(y), x << unsigned(-y))
 
+## native (unchecked) integer shifts ##
+
+"""
+    nativeshift_left(x::BitInteger, y::BitUnsigned)
+
+Left shift `x` by `y` bits using a single native CPU instruction.
+
+Unlike [`<<`](@ref), this function does not check whether the shift amount
+exceeds the bit width of `x`. If `y >= 8*sizeof(x)`, the result is undefined
+behavior (typically the shift amount is masked to the lower bits, e.g.,
+`y & (8*sizeof(x) - 1)` on most architectures).
+
+Use this function when you can guarantee that the shift amount is valid,
+or when you explicitly want the native CPU behavior for performance.
+
+See also [`<<`](@ref), [`nativeshift_right`](@ref), [`nativeshift_right_logical`](@ref).
+
+# Examples
+```jldoctest
+julia> nativeshift_left(Int8(1), UInt8(2))
+4
+
+julia> nativeshift_left(Int8(1), UInt8(7))
+-128
+```
+"""
+nativeshift_left(x::BitInteger, y::BitUnsigned) = shl_int_native(x, y)
+
+"""
+    nativeshift_right(x::BitInteger, y::BitUnsigned)
+
+Right shift `x` by `y` bits using a single native CPU instruction.
+
+For signed integers, this performs an arithmetic shift (sign-extending).
+For unsigned integers, this performs a logical shift (zero-extending).
+
+Unlike [`>>`](@ref), this function does not check whether the shift amount
+exceeds the bit width of `x`. If `y >= 8*sizeof(x)`, the result is undefined
+behavior (typically the shift amount is masked to the lower bits).
+
+Use this function when you can guarantee that the shift amount is valid,
+or when you explicitly want the native CPU behavior for performance.
+
+See also [`>>`](@ref), [`nativeshift_left`](@ref), [`nativeshift_right_logical`](@ref).
+
+# Examples
+```jldoctest
+julia> nativeshift_right(Int8(-128), UInt8(2))
+-32
+
+julia> nativeshift_right(UInt8(128), UInt8(2))
+32
+```
+"""
+nativeshift_right(x::BitSigned, y::BitUnsigned) = ashr_int_native(x, y)
+nativeshift_right(x::BitUnsigned, y::BitUnsigned) = lshr_int_native(x, y)
+
+"""
+    nativeshift_right_logical(x::BitInteger, y::BitUnsigned)
+
+Logical right shift `x` by `y` bits using a single native CPU instruction.
+
+This always performs a logical shift (zero-extending), regardless of whether
+`x` is signed or unsigned.
+
+Unlike [`>>>`](@ref), this function does not check whether the shift amount
+exceeds the bit width of `x`. If `y >= 8*sizeof(x)`, the result is undefined
+behavior (typically the shift amount is masked to the lower bits).
+
+Use this function when you can guarantee that the shift amount is valid,
+or when you explicitly want the native CPU behavior for performance.
+
+See also [`>>>`](@ref), [`nativeshift_left`](@ref), [`nativeshift_right`](@ref).
+
+# Examples
+```jldoctest
+julia> nativeshift_right_logical(Int8(-128), UInt8(2))
+32
+
+julia> nativeshift_right_logical(UInt8(128), UInt8(2))
+32
+```
+"""
+nativeshift_right_logical(x::BitInteger, y::BitUnsigned) = lshr_int_native(x, y)
+
 for to in BitInteger_types, from in (BitInteger_types..., Bool)
     if !(to === from)
         if Core.sizeof(to) < Core.sizeof(from)
