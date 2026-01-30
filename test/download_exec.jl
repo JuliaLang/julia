@@ -16,9 +16,11 @@ mktempdir() do temp_dir
         if !isempty(candidate)
             did_succeed = try
                 download(candidate)
+                true
             catch ex
                 bt = catch_backtrace()
                 @warn "Encountered error with server candidate" candidate exception=(ex,bt)
+                false
             end
             if did_succeed
                 url = candidate
