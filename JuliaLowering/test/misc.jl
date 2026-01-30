@@ -281,8 +281,6 @@ end
     end
 """; expr_compat_mode=true) === 1
 
-end
-
 @testset "tryfinally with scopedvalues" begin
     @eval test_mod scopedval = Base.ScopedValues.ScopedValue(1)
     @eval test_mod val_history = []
@@ -296,4 +294,6 @@ end
     @test test_mod.val_history == [2, 1]
     JuliaLowering.eval(test_mod, JuliaLowering.expr_to_est(ex))
     @test test_mod.val_history == [2, 1, 2, 1]
+end
+
 end
