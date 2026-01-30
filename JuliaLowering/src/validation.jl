@@ -687,7 +687,7 @@ vst1_calldecl_name(vcx, st) = @stm st begin
 end
 
 # Check mandatory and optional positional params:
-# `[pparam* pparam_and_default* pparam_va?]`
+# `[pparam* pparam_and_default* pparam_and_splatdefault? pparam_va?]`
 # TODO: add list matching to @stm
 function _calldecl_positionals(vcx, params_meta, kw_kind)
     isempty(params_meta) && return pass()
@@ -712,7 +712,11 @@ function _calldecl_positionals(vcx, params_meta, kw_kind)
     for p in params
         if kind(p) === kw_kind
             require_assign = true
-            ok[] &= vst1_pparam_and_default(vcx, p; kw_kind)
+            if p == params[end]
+                ok[] &= vst1_pparam_and_default(vcx, p; kw_kind, allow_val_splat=true)
+            else
+                ok[] &= vst1_pparam_and_default(vcx, p; kw_kind, allow_val_splat=false)
+            end
         elseif kind(p) === K"..."
             ok[] &= @fail(p, "`...` may only be used on the final parameter")
         elseif require_assign # TODO: multi-syntaxtree error
@@ -767,11 +771,21 @@ vst1_param(vcx, st) = @stm st begin
     _ -> @fail(st, "expected identifier or `identifier::type`")
 end
 
-vst1_pparam_and_default(vcx, st; kw_kind) = @stm st begin
+# allow_val_splat=true when this is the final optional param (even if there are
+# varargs after it).  See #50563
+vst1_pparam_and_default(vcx, st; kw_kind, allow_val_splat) = @stm st begin
     ([K"kw" id val], when=(kw_kind===K"kw")) ->
-        vst1_pparam_typed_tuple(vcx, id) & vst1(vcx, val)
+        vst1_pparam_typed_tuple(vcx, id) & @stm val begin
+            [K"..." v] -> allow_val_splat ? vst1(vcx, v) :
+                @fail(val, "splat only allowed on final positional default arg")
+            _ -> vst1(vcx, val)
+        end
     ([K"=" id val], when=(kw_kind===K"=")) ->
-        vst1_pparam_typed_tuple(vcx, id) & vst1(vcx, val)
+        vst1_pparam_typed_tuple(vcx, id) & @stm val begin
+            [K"..." v] -> allow_val_splat ? vst1(vcx, v) :
+                @fail(val, "splat only allowed on final positional default arg")
+            _ -> vst1(vcx, val)
+        end
     _ -> @fail(st, "malformed optional positional parameter; expected `=`")
 end
 

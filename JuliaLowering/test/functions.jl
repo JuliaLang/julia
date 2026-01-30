@@ -512,6 +512,44 @@ end
     @test cl(x = 20) == 21
 end
 
+@testset "pre-desugared arg::Vararg" begin
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        f_vararg_nosplat = function (x::Vararg{Int})
+            x
+        end
+        f_vararg_nosplat(1,2,3)
+    end
+    """) == (1, 2, 3)
+
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        f_vararg_nosplat = function ((a,b,c)::Vararg{Int})
+            (a,b,c)
+        end
+        f_vararg_nosplat(1,2,3)
+    end
+    """) == (1, 2, 3)
+
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        f_vararg_nosplat = function (((a,b)...,c)::Vararg{Int})
+            (a,b,c)
+        end
+        f_vararg_nosplat(1,2,3)
+    end
+    """) == (1, 2, 3)
+
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        f_vararg_nosplat = function (((a,b)...,c)::Vararg{Tuple{Vararg{Int}}})
+            (a,b,c)
+        end
+        f_vararg_nosplat((1,2),(3,),(4,))
+    end
+    """) == ((1, 2), (3,), (4,))
+end
+
 @testset "all known valid positional argument forms" begin
     make_defaults(x) = let (ps, vals) = x
         # (p1,p2,p3) => (v1,v2,v3) to
@@ -553,6 +591,8 @@ end
                 (((1,2),3),),
             (Expr(:tuple, Expr(:..., Expr(:tuple, :x, :y)), :z),) =>
                 ((1,2,3),),
+            (Expr(:tuple, Expr(:..., Expr(:tuple, :x, :y)), :z),) =>
+                ((1,2,3,4,5),),
             (:x,
              :y,
              Expr(:..., :z)) =>
@@ -593,11 +633,11 @@ end
         end
     end
 
-    # test vararg-tuples separately, as providing defaults must be done with a
-    # syntactic splat, and some variants are valid syntax but not callable (may
-    # later be disallowed)
+    # test vararg-tuples and splatted defaults separately, as providing defaults
+    # must be done with a syntactic splat, and some variants are valid syntax
+    # but not callable (may later be disallowed)
     @test JuliaLowering.include_string(test_mod, """
-    begin
+    let
         f_vararg_tuple = function ((x,y,z)...)
             (x,y,z)
         end
@@ -605,7 +645,7 @@ end
     end
     """) === ((1,2,3), (1,2,3))
     @test JuliaLowering.include_string(test_mod, """
-    begin
+    let
         f_vararg_tuple = function ((x,y,z)...=(1,2,3)...)
             (x,y,z)
         end
@@ -613,7 +653,7 @@ end
     end
     """) === ((4,5,6), (1,2,3))
     @test JuliaLowering.include_string(test_mod, """
-    begin
+    let
         f_vararg_tuple = function ((x,(y,z))...=(1,(2,3))...)
             (x,y,z)
         end
@@ -621,34 +661,56 @@ end
     end
     """) === ((4,5,6), (1,2,3))
     @test JuliaLowering.include_string(test_mod, """
-    begin
+    let
         f_vararg_tuple = function ((x,(y,z)...)...=(1,(2,3)...)...)
             (x,y,z)
         end
         f_vararg_tuple(4,5,6,7), f_vararg_tuple()
     end
     """) === ((4,5,6), (1,2,3))
+
+    # uncallable(?)
     @test JuliaLowering.include_string(test_mod, """
-    begin
+    let
         f_vararg_tuple = function ((x,y,z)::Tuple...)
             (x,y,z)
         end
     end
     """) isa Function
     @test JuliaLowering.include_string(test_mod, """
-    begin
+    let
         f_vararg_tuple = function ((;x,y,z)...)
             (x,y,z)
         end
     end
     """) isa Function
     @test JuliaLowering.include_string(test_mod, """
-    begin
+    let
         f_vararg_tuple = function ((;x,y,z)::NamedTuple...)
             (x,y,z)
         end
     end
     """) isa Function
+
+    # final default arg may always be splatted, even if no-op or followed by va
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        f = function (x=1...)
+            x
+        end
+        f(), f(2), try; f(9,9); catch e; "fail"; end
+    end
+    """) === (1, 2, "fail")
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        f = function (x=1..., args...)
+            x, args
+        end
+        f(), f(2), f(3,4,5)
+    end
+    """) === ((1, ()),
+              (2, ()),
+              (3, (4,5)))
 end
 
 @testset "Write-only placeholder function arguments" begin
