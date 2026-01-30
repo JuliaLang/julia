@@ -852,7 +852,7 @@ function expand_generator(ctx, ex)
             iterspecs = iterspecs[1]
         end
         if kind(iterspecs) != K"iteration"
-            throw(LoweringError("""Expected `K"iteration"` iteration specification in generator"""))
+            throw(LoweringError(ex, """Expected `K"iteration"` iteration specification in generator"""))
         end
         iter_ranges = SyntaxList(ctx)
         iter_lhss = SyntaxList(ctx)
@@ -1741,9 +1741,14 @@ function expand_ccall(ctx, ex)
     cfunc_name = ex[2]
     # Detect calling convention if present.
     known_conventions = ("cdecl", "stdcall", "fastcall", "thiscall", "llvmcall")
-    cconv = if any(is_same_identifier_like(ex[3], id) for id in known_conventions)
+    cconv = if kind(ex[3]) === K"cconv"
         ex[3]
+    elseif any(is_same_identifier_like(ex[3], id) for id in known_conventions)
+        ex[3]
+    else
+        nothing
     end
+
     if isnothing(cconv)
         rt_idx = 3
     else
@@ -1851,9 +1856,13 @@ function expand_ccall(ctx, ex)
                     expanded_types...
                 ]
             ]
-            (isnothing(vararg_type) ? 0 : length(arg_types))::K"Integer"
+            (cconv !== nothing && kind(cconv) === K"cconv" ? cconv[2].value :
+                isnothing(vararg_type) ? 0 :
+                length(arg_types))::K"Integer"
             if isnothing(cconv)
                 "ccall"::K"Symbol"
+            elseif kind(cconv) === K"cconv"
+                @ast ctx cconv [K"inert" cconv[1]]
             else
                 cconv=>K"Symbol"
             end
@@ -2028,7 +2037,7 @@ function expand_for(ctx, ex)
         body = if i == numchildren(iterspecs)
             # Innermost loop gets the continue label and copied vars
             @ast ctx ex [K"break_block"
-                "loop_cont"::K"symbolic_label"
+                "loop_cont"::K"symboliclabel"
                 [K"let"(scope_type=:neutral)
                      [K"block"
                          copied_vars...
@@ -2074,7 +2083,7 @@ function expand_for(ctx, ex)
         ]
     end
 
-    @ast ctx ex [K"break_block" "loop_exit"::K"symbolic_label"
+    @ast ctx ex [K"break_block" "loop_exit"::K"symboliclabel"
         loop
     ]
 end
@@ -2302,7 +2311,9 @@ function expand_function_arg(ctx, body_stmts, arg, is_last_arg, is_kw, arg_id)
         @chk numchildren(ex) in (1,2)
         if numchildren(ex) == 1
             type = ex[1]
+            noname_meta = get(ex, :meta, nothing)
             ex = @ast ctx ex "_"::K"Placeholder"
+            !isnothing(noname_meta) && setattr!(ex, :meta, noname_meta)
         else
             type = ex[2]
             ex = ex[1]
@@ -4470,16 +4481,16 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"break"
         nc = numchildren(ex)
         if nc == 0
-            @ast ctx ex [K"break" "loop_exit"::K"symbolic_label"]
+            @ast ctx ex [K"break" "loop_exit"::K"symboliclabel"]
         else
             @chk nc <= 2 (ex, "Too many arguments to break")
             label = ex[1]
             label_kind = kind(label)
-            # Convert Symbol (from Expr conversion) to symbolic_label
+            # Convert Symbol (from Expr conversion) to symboliclabel
             if label_kind == K"Symbol"
-                label = @ast ctx label label.name_val::K"symbolic_label"
+                label = @ast ctx label label.name_val::K"symboliclabel"
             elseif !(label_kind == K"Identifier" || label_kind == K"Placeholder" ||
-                     label_kind == K"symbolic_label" || is_contextual_keyword(label_kind))
+                     label_kind == K"symboliclabel" || is_contextual_keyword(label_kind))
                 throw(LoweringError(label, "Invalid break label: expected identifier"))
             end
             if nc == 2
@@ -4491,7 +4502,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"continue"
         nc = numchildren(ex)
         if nc == 0
-            @ast ctx ex [K"break" "loop_cont"::K"symbolic_label"]
+            @ast ctx ex [K"break" "loop_cont"::K"symboliclabel"]
         else
             @chk nc == 1 (ex, "Too many arguments to continue")
             label = ex[1]
@@ -4500,7 +4511,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
                  label_kind == K"Symbol" || is_contextual_keyword(label_kind))
                 throw(LoweringError(label, "Invalid continue label: expected identifier"))
             end
-            @ast ctx ex [K"break" string(label.name_val, "#cont")::K"symbolic_label"]
+            @ast ctx ex [K"break" string(label.name_val, "#cont")::K"symboliclabel"]
         end
     elseif k == K"comparison"
         expand_forms_2(ctx, expand_compare_chain(ctx, ex))
@@ -4650,10 +4661,10 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         expand_forms_2(ctx, expand_ncat(ctx, ex))
     elseif k == K"while"
         @chk numchildren(ex) == 2
-        @ast ctx ex [K"break_block" "loop_exit"::K"symbolic_label"
+        @ast ctx ex [K"break_block" "loop_exit"::K"symboliclabel"
             [K"_while"
                 expand_condition(ctx, ex[1])
-                [K"break_block" "loop_cont"::K"symbolic_label"
+                [K"break_block" "loop_cont"::K"symboliclabel"
                     [K"scope_block"(scope_type=:neutral)
                          expand_forms_2(ctx, ex[2])
                     ]
@@ -4662,11 +4673,11 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         ]
     elseif k == K"inert" || k == K"inert_syntaxtree"
         ex
-    elseif k == K"symbolic_block"
-        # @label name body -> (symbolic_block name expanded_body)
+    elseif k == K"symbolicblock"
+        # @label name body -> (symbolicblock name expanded_body)
         # The @label macro inserts the continue block for loops, so we just expand the body
         @chk numchildren(ex) == 2
-        @ast ctx ex [K"symbolic_block" ex[1] expand_forms_2(ctx, ex[2])]
+        @ast ctx ex [K"symbolicblock" ex[1] expand_forms_2(ctx, ex[2])]
     elseif k == K"gc_preserve"
         s = ssavar(ctx, ex)
         r = ssavar(ctx, ex)
@@ -4711,6 +4722,13 @@ end
 
 @fzone "JL: desugar" function expand_forms_2(ctx::MacroExpansionContext, ex::SyntaxTree)
     ctx1 = DesugaringContext(ctx, ctx.expr_compat_mode)
+    vr = valid_st1(ex)
+    # surface only one error until we have pretty-printing for multiple
+    if !vr.ok
+        # showerrors(vr)
+        throw(LoweringError(vr.errors[1].sts[1], vr.errors[1].msg))
+    end
+    ex = est_to_dst(ex)
     ex1 = expand_forms_2(ctx1, reparent(ctx1, ex))
     ctx1, ex1
 end
