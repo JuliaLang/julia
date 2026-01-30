@@ -720,7 +720,7 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.EFFECTIVE_CPU_THR
         nothing
     catch
         # evaluate versioninfo in the test environment so the listed env vars are the same
-        vinfo = read(setenv(`$(julia_cmd()) -e 'let InteractiveUtils = Base.require_stdlib(Base.PkgId(Base.UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils")); InteractiveUtils.versioninfo(); end'`, ENV2), String)
+        vinfo = read(setenv(`$(julia_cmd()) -e 'let InteractiveUtils = Base.require_stdlib(Base.PkgId(Base.UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils")); @invokelatest(InteractiveUtils.versioninfo()); end'`, ENV2), String)
         msg = "A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
               "including error messages above and the output of versioninfo():\n$(vinfo)"
         if isinteractive()
