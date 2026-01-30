@@ -1854,8 +1854,8 @@ struct KeyAlias
     KeyAlias(seq) = new(normalize_key(seq))
 end
 
-function match_input(f::Function, s::Union{Nothing,MIState}, term, cs::Vector{Char}, keymap)
-    update_key_repeats(s, cs)
+function match_input(f::Function, s::Union{Nothing,MIState}, term, cs::Vector{Char}, keymap; update_repeats::Bool=true)
+    update_repeats && update_key_repeats(s, cs)
     c = String(cs)
     return function (s, p)  # s::Union{Nothing,MIState}; p can be (at least) a LineEditREPL, PrefixSearchState, Nothing
         r = Base.invokelatest(f, s, p, c)
@@ -1867,11 +1867,11 @@ function match_input(f::Function, s::Union{Nothing,MIState}, term, cs::Vector{Ch
     end
 end
 
-match_input(k::Nothing, s, term, cs, keymap) = (s,p) -> return :ok
-match_input(k::KeyAlias, s::Union{Nothing,MIState}, term, cs, keymap::Dict{Char}) =
-    match_input(keymap, s, IOBuffer(k.seq), Char[], keymap)
+match_input(k::Nothing, s, term, cs, keymap; update_repeats::Bool=true) = (s,p) -> return :ok
+match_input(k::KeyAlias, s::Union{Nothing,MIState}, term, cs, keymap::Dict{Char}; update_repeats::Bool=true) =
+    match_input(keymap, s, IOBuffer(k.seq), Char[], keymap; update_repeats=update_repeats)
 
-function match_input(k::Dict{Char}, s::Union{Nothing,MIState}, term::Union{AbstractTerminal,IOBuffer}=terminal(s), cs::Vector{Char}=Char[], keymap::Dict{Char} = k)
+function match_input(k::Dict{Char}, s::Union{Nothing,MIState}, term::Union{AbstractTerminal,IOBuffer}=terminal(s), cs::Vector{Char}=Char[], keymap::Dict{Char} = k; update_repeats::Bool=true)
     # if we run out of characters to match before resolving an action,
     # return an empty keymap function
     eof(term) && return (s, p) -> :abort
@@ -1882,7 +1882,7 @@ function match_input(k::Dict{Char}, s::Union{Nothing,MIState}, term::Union{Abstr
     push!(cs, c)
     key = haskey(k, c) ? c : wildcard
     # if we don't match on the key, look for a default action then fallback on 'nothing' to ignore
-    return match_input(get(k, key, nothing), s, term, cs, keymap)
+    return match_input(get(k, key, nothing), s, term, cs, keymap; update_repeats=update_repeats)
 end
 
 update_key_repeats(s, keystroke) = nothing
@@ -2749,7 +2749,7 @@ const prefix_history_keymap = merge!(
             accept_result(s, data.histprompt);
             ps = state(s, mode(s))
             map = keymap(ps, mode(s))
-            match_input(map, s, IOBuffer(c))(s, keymap_data(ps, mode(s)))
+            match_input(map, s, IOBuffer(c); update_repeats=false)(s, keymap_data(ps, mode(s)))
         end,
         # match escape sequences for pass through
         "^x*" => "*",
