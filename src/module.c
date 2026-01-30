@@ -12,9 +12,6 @@
 extern "C" {
 #endif
 
-// In this translation unit and this translation unit only emit this symbol `extern` for use by julia
-EXTERN_INLINE_DEFINE uint8_t jl_bpart_get_kind(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT;
-
 static jl_binding_partition_t *new_binding_partition(void)
 {
     jl_binding_partition_t *bpart = (jl_binding_partition_t*)jl_gc_alloc(jl_current_task->ptls, sizeof(jl_binding_partition_t), jl_binding_partition_type);
@@ -106,7 +103,6 @@ static void update_implicit_resolution(struct implicit_search_resolution *to_upd
         return;
     }
     if (to_update->ultimate_kind == PARTITION_KIND_GUARD) {
-        assert(resolution.binding_or_const);
         to_update->ultimate_kind = resolution.ultimate_kind;
         to_update->binding_or_const = resolution.binding_or_const;
         to_update->debug_only_import_from = resolution.debug_only_import_from;
@@ -329,6 +325,10 @@ struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t *b, mo
                 imp_resolution.binding_or_const = tempbpart->restriction;
                 imp_resolution.debug_only_ultimate_binding = tempb;
                 imp_resolution.ultimate_kind = PARTITION_KIND_IMPLICIT_CONST;
+            } else if (kind == PARTITION_KIND_FAILED) {
+                imp_resolution.binding_or_const = NULL;
+                imp_resolution.debug_only_ultimate_binding = tempb;
+                imp_resolution.ultimate_kind = PARTITION_KIND_FAILED;
             }
         }
         // If this using has the reexport flag, mark that the binding should be reexported
