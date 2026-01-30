@@ -1000,6 +1000,22 @@ function f(_,(_,x{y})); end
 #               └──┘ ── expected identifier or tuple
 
 ########################################
+# Error: splat on non-final default positional arg
+function f(x=1...,y=2); end
+#---------------------
+LoweringError:
+function f(x=1...,y=2); end
+#            └──┘ ── splat only allowed on final positional default arg
+
+########################################
+# Error: splat on non-final default positional arg 2
+function f(x=(1,2)...,y=(3,4)...); end
+#---------------------
+LoweringError:
+function f(x=(1,2)...,y=(3,4)...); end
+#            └──────┘ ── splat only allowed on final positional default arg
+
+########################################
 # Function argument destructuring combined with splats, types and and defaults
 function f(x=default_x)::T
 end
