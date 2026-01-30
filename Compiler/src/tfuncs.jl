@@ -13,9 +13,7 @@ Adds `@nospecialize` annotation to non-annotated arguments of `def`.
                            x, ys
                        end
 :(function tfunc(\$(Expr(:meta, :specialize, :(𝕃::AbstractLattice))), x, y::Bool, zs...)
-      #= REPL[3]:1 =#
-      \$(Expr(:meta, :nospecialize, :x, :zs))
-      #= REPL[3]:2 =#
+      \$(Expr(:meta, :value, (:x, :zs), :nospecialize => true))
       (x, ys)
   end)
 ```

@@ -282,13 +282,13 @@ end
 function Typeof end
 ccall(:jl_toplevel_eval_in, Any, (Any, Any),
       Core, quote
-      (f::typeof(Typeof))(x) = ($(_expr(:meta,:nospecialize,:x)); isa(x,Type) ? Type{x} : typeof(x))
+      (f::typeof(Typeof))(x) = ($(_expr(:meta, :value, :x, :nospecialize => true)); isa(x,Type) ? Type{x} : typeof(x))
       end)
 
 function iterate end
 
 macro nospecialize(x)
-    _expr(:meta, :nospecialize, x)
+    _expr(:meta, :value, x, :nospecialize => true)
 end
 Expr(@nospecialize args...) = _expr(args...)
 

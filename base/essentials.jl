@@ -124,7 +124,7 @@ macro nospecialize(vars...)
             var.head = :kw
         end
     end
-    return Expr(:meta, :nospecialize, vars...)
+    return Expr(:meta, :value, vars, :nospecialize => true)
 end
 
 """

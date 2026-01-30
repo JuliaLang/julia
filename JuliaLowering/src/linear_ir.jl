@@ -1159,6 +1159,7 @@ function compile_lambda(outer_ctx, ex)
     for arg in children(lambda_args)
         if kind(arg) == K"Placeholder"
             # Unused functions arguments like: `_` or `::T`
+            # TODO(vchuravy)
             push!(slots, Slot(arg.name_val, :argument, getmeta(arg, :nospecialize, false),
                               false, false, false, false))
         else

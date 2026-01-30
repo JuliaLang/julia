@@ -119,6 +119,7 @@ function maybe_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
     old_k = isnothing(bid) ? nothing : get_binding(ctx, bid).kind
     if isnothing(old_k)
         if new_k === :argument
+            # TODO(vchuravy)
             declare_in_scope!(ctx, scope, ex, :argument;
                               is_nospecialize=getmeta(ex, :nospecialize, false))
         else

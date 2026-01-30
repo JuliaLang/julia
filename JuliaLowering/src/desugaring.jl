@@ -2335,6 +2335,7 @@ function expand_function_arg(ctx, body_stmts, arg, is_last_arg, is_kw, arg_id)
         name = if is_kw
             @ast ctx ex ex=>K"Identifier"
         else
+            # TODO (vchuravy)
             new_local_binding(ctx, ex, "#arg$(string(arg_id))#"; kind=:argument,
                               is_nospecialize=is_nospecialize)
         end

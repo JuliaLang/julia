@@ -246,7 +246,7 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
         if slot.is_nospecialize
             # Ideally this should be a slot flag instead
             add_ir_debug_info!(current_codelocs_stack, ex)
-            push!(stmts, Expr(:meta, :nospecialize, Core.SlotNumber(i)))
+            push!(stmts, Expr(:meta, :value, Core.SlotNumber(i)), :nospecialize => true)
         end
     end
 

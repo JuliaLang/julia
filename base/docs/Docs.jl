@@ -136,6 +136,7 @@ function argtype(expr::Expr)
     isexpr(expr, :(...)) && return :(Vararg{$(argtype(expr.args[1]))})
     if isexpr(expr, :meta) && length(expr.args) == 2
         a1 = expr.args[1]
+        # TODO(vchuravy)
         if a1 === :nospecialize || a1 === :specialize
             return argtype(expr.args[2])
         end

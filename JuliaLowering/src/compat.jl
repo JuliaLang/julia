@@ -462,18 +462,13 @@ function _insert_convert_expr(@nospecialize(e), graph::SyntaxGraph, src::SourceA
             child_exprs = [Expr(:quoted_symbol, :purity), Base.EffectsOverride(e.args[1].args...)]
         elseif nargs === 0
             # pass
-        elseif e.args[1] === :nospecialize
-            if nargs === 1
-                child_exprs[1] = Expr(:quoted_symbol, :nospecialize)
-            elseif nargs > 2
-                st_k = K"block"
-                # Kick the can down the road (should only be simple atoms?)
-                child_exprs = map(c->Expr(:meta, :nospecialize, c), child_exprs[2:end])
-            elseif nargs === 2
-                st_id, src = _insert_convert_expr(e.args[2], graph, src)
-                setmeta!(SyntaxTree(graph, st_id); nospecialize=true)
-                return st_id, src
-            end
+        elseif e.args[1] === :nospecialize && nargs == 1
+            child_exprs[1] = Expr(:quoted_symbol, :nospecialize)
+        elseif e.args[1] === :value && nargs == 3
+            # TODO: Handle e.args[2] being a tuple of symbols
+            st_id, src = _insert_convert_expr(e.args[2], graph, src)
+            setmeta!(SyntaxTree(graph, st_id); e.args[3]...)
+            return st_id, src
         elseif e.args[1] in (:inline, :noinline, :generated, :generated_only,
                              :max_methods, :optlevel, :toplevel, :push_loc, :pop_loc,
                              :no_constprop, :aggressive_constprop, :specialize, :compile, :infer,
