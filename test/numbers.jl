@@ -4,8 +4,6 @@ using Base.MathConstants
 using Random
 using LinearAlgebra
 
-using Test
-
 const ≣ = isequal # convenient for comparing NaNs
 
 @testset "basic booleans" begin
