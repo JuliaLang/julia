@@ -1565,7 +1565,7 @@ function guess_current_mode_name(s)
 end
 
 # edit current input in editor
-function edit_input(s, f = (filename, line, column) -> InteractiveUtils.edit(filename, line, column))
+function edit_input(s, f = (filename, line, column) -> InteractiveUtils.edit(filename, line, column; wait=true))
     mode_name = guess_current_mode_name(s)
     filename = tempname()
     if mode_name === :julia
