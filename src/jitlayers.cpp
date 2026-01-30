@@ -828,6 +828,8 @@ public:
 
 class JLMaterializationUnit : public orc::MaterializationUnit {
 public:
+    // Must hold LinkerMutex when calling Create and until the
+    // MaterializationUnit has been added to the JITDylib.
     static JLMaterializationUnit Create(JuliaOJIT &JIT, ObjectLinkingLayer &OL,
                                         jl_emitted_output_t Out) JL_NOTSAFEPOINT
     {
@@ -967,6 +969,8 @@ public:
         jl_gc_unsafe_leave(ct->ptls, state);
         F->setLinkage(GlobalValue::ExternalLinkage);
         F->setName(*Sym);
+
+        std::unique_lock Lock{JIT.LinkerMutex};
         if (auto Err = R->replace(
                 std::make_unique<JLMaterializationUnit>(JLMaterializationUnit::Create(
                     JIT, OL,
@@ -1886,6 +1890,7 @@ void JuliaOJIT::addOutput(jl_emitted_output_t O)
 #ifdef ENABLE_TIMINGS
     timing_print_module_names(JL_TIMING_DEFAULT_BLOCK, O.module);
 #endif
+    std::unique_lock Lock{LinkerMutex};
     auto MU = std::make_unique<JLMaterializationUnit>(
         JLMaterializationUnit::Create(*this, ObjectLayer, std::move(O)));
     ExitOnError check{"Failed to add objectfile to JIT!"};
@@ -2112,7 +2117,6 @@ std::string JuliaOJIT::getMangledName(const GlobalValue *GV)
 
 CISymbolPtr JuliaOJIT::makeUniqueCIName(jl_code_instance_t *CI, const CISymbolPtr &Funcs)
 {
-    std::unique_lock Lock{LinkerMutex};
     orc::SymbolStringPtr wrapper, specialized;
     if (Funcs.invoke)
         wrapper = ES.intern(Names(*Funcs.invoke, "#"));
@@ -2142,20 +2146,19 @@ linkGraphSymbols(jitlink::LinkGraph &G) JL_NOTSAFEPOINT
 void JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferRef ObjBuf,
                            jitlink::LinkGraph &G, std::unique_ptr<jl_linker_info_t> Info)
 {
+    std::unique_lock Lock{LinkerMutex};
+
     auto Syms = linkGraphSymbols(G);
 
     // Rename the defined CI functions.
-    {
-        std::unique_lock Lock{LinkerMutex};
-        auto RenameDef = [&](const SymbolStringPtr &Orig, const SymbolStringPtr &Dest)
+    auto RenameDef = [&](const SymbolStringPtr &Orig, const SymbolStringPtr &Dest)
                              JL_NOTSAFEPOINT { Syms.at(Orig)->setName(Dest); };
-        for (auto &[CI, Funcs] : Info->ci_funcs) {
-            auto &S = CISymbols.at(CI);
-            if (Funcs.invoke)
-                RenameDef(Funcs.invoke, S.invoke);
-            if (Funcs.specptr)
-                RenameDef(Funcs.specptr, S.specptr);
-        }
+    for (auto &[CI, Funcs] : Info->ci_funcs) {
+        auto &S = CISymbols.at(CI);
+        if (Funcs.invoke)
+            RenameDef(Funcs.invoke, S.invoke);
+        if (Funcs.specptr)
+            RenameDef(Funcs.specptr, S.specptr);
     }
 
     // Rename referenced CIs in the workqueue.
@@ -2195,12 +2198,9 @@ void JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
 orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibility &MR,
                                                jl_code_instance_t *CI, jl_invoke_api_t API)
 {
-    {
-        std::unique_lock Lock{LinkerMutex};
-        auto It = CISymbols.find(CI);
-        if (It != CISymbols.end())
-            return It->second.specptr;
-    }
+    auto It = CISymbols.find(CI);
+    if (It != CISymbols.end())
+        return It->second.specptr;
 
     CISymbolPtr *Sym = linkCISymbol(CI);
 
@@ -2260,11 +2260,8 @@ CISymbolPtr *JuliaOJIT::linkCISymbol(jl_code_instance_t *CI)
     }
     cantFail(JD.define(orc::absoluteSymbols(Symbols)));
 
-    {
-        std::unique_lock Lock{LinkerMutex};
-        auto &CISym = CISymbols[CI] = {API, InvokeSym, SpecSym};
-        return &CISym;
-    }
+    auto &CISym = CISymbols[CI] = {API, InvokeSym, SpecSym};
+    return &CISym;
 }
 
 orc::ThreadSafeModule JuliaOJIT::optimizeModule(orc::ThreadSafeModule TSM)
