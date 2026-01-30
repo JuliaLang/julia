@@ -830,5 +830,7 @@ macro activate(what)
     options = map(options) do opt
         Expr(:kw, opt, true)
     end
-    return :(Base.require($__module__, $(QuoteNode(Component))).activate!(; $(options...)))
+    return :(let M = Base.require($__module__, $(QuoteNode(Component)))
+                 @invokelatest M.activate!(; $(options...))
+             end)
 end
