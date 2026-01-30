@@ -260,6 +260,11 @@ Base.signbit
 Base.flipsign
 ```
 
+```@docs
+Base.ispositive
+Base.isnegative
+```
+
 ## Roots
 
 ```@docs
