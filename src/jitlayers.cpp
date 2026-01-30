@@ -2004,7 +2004,7 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
                                 std::nullopt](Expected<SymbolMap> SymsE) mutable {
         std::unique_lock Lock{LinkerMutex};
         if (!SymsE) {
-            errs() << "Internal error: Lookup failed\n";
+            errs() << "Internal error: Lookup failed: " << SymsE.takeError() << "\n";
             if (P)
                 P->set_value();
             return;
