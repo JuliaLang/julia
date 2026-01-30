@@ -176,6 +176,7 @@ end
 
 # User defined inner constructors and helper functions for structs without type params
 @test JuliaLowering.include_string(test_mod, """
+"struct docs"
 struct S6
     x
     S6_f() = new(42)
@@ -184,7 +185,7 @@ struct S6
     S6() = S6_f()
     S6(x) = new(x)
 end
-""") === nothing
+"""; expr_compat_mode=true) === nothing
 let s = test_mod.S6()
     @test s isa test_mod.S6
     @test s.x === 42
@@ -193,7 +194,7 @@ let s = test_mod.S6(2)
     @test s isa test_mod.S6
     @test s.x === 2
 end
-@test docstrings_equal(@doc(test_mod.S6), Markdown.doc"some docs")
+@test docstrings_equal(@doc(test_mod.S6), Markdown.doc"struct docs")
 
 # User defined inner constructors and helper functions for structs with type params
 @test JuliaLowering.include_string(test_mod, """
