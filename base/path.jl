@@ -54,7 +54,7 @@ elseif Sys.iswindows()
             isseparator(codeunit(s, 8))
         )
             # Ensure we have [sequence of non-separator] - single separator - [sequence of non-separator].
-            # Since the prefix raw"\\?\UNC\" is always 8 codeunits, we start at index 9. 
+            # Since the prefix raw"\\?\UNC\" is always 8 codeunits, we start at index 9.
             i = findnext(isseparator, s, 9)
             if (!isnothing(i) &&
                 i >= 10 && # implies !isseparator(s[9])
@@ -98,7 +98,7 @@ elseif Sys.iswindows()
             isseparator(codeunit(s, 2))
         )
             # Ensure we have [sequence of non-separator] - single separator - [sequence of non-separator].
-            # Since the prefix raw"\\" is always 2 codeunits, we start at index 3. 
+            # Since the prefix raw"\\" is always 2 codeunits, we start at index 3.
             i = findnext(isseparator, s, 3)
             if (!isnothing(i) &&
                 i >= 4 && # implies !isseparator(s[3])
@@ -243,7 +243,7 @@ function isdirpath(path::String)::Bool
     # Reimplements occursin(r"(?:^|/)\.{0,2}$"sa, splitdrive(path)[2])
 
     _, after_last_separator = _splitdir_nodrive("", splitdrive(path)[2])
-    # `$` in regex (multiline mode disabled) can match either end of 
+    # `$` in regex (multiline mode disabled) can match either end of
     # subject or everything before a newline at end of subject
     return after_last_separator in ("", ".", "..", "\n", ".\n", "..\n")
 end
