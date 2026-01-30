@@ -5,22 +5,31 @@ module TestDownload
 using Test
 
 mktempdir() do temp_dir
+    url = try
+        download("https://httpbingo.julialang.org")
+        "https://httpbingo.julialang.org"
+    catch ex
+        bt = catch_backtrace()
+        @info "Looks like there is a problem with a JuliaLang mirror of httpbingo"
+        @info "Trying httpbin" exception=(ex,bt)
+        "https://httpbin.julialang.org/"
+    end
     # Download a file
     file = joinpath(temp_dir, "ip")
-    @test download("https://httpbin.julialang.org/ip", file) == file
+    @test download("$url/ip", file) == file
     @test isfile(file)
     @test !isempty(read(file))
     ip = read(file, String)
 
     # Download an empty file
     empty_file = joinpath(temp_dir, "empty")
-    @test download("https://httpbin.julialang.org/status/200", empty_file) == empty_file
+    @test download("$url/status/200", empty_file) == empty_file
     @test isfile(empty_file)
     @test isempty(read(empty_file))
 
     # Make sure that failed downloads do not leave files around
     missing_file = joinpath(temp_dir, "missing")
-    @test_throws Exception download("https://httpbin.julialang.org/status/404", missing_file)
+    @test_throws Exception download("$url/status/404", missing_file)
     @test !isfile(missing_file)
 
     # Use a TEST-NET (192.0.2.0/24) address which shouldn't be bound
