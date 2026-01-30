@@ -447,7 +447,10 @@ function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted)
     end
 end
 
-mapreduce(f, op, a::Number) = mapreduce_first(f, op, a)
+function mapreduce(f, op, a::Number; kw...)
+    isempty(kw) && return mapreduce_first(f, op, a)
+    return mapreduce(f, op, (a,); kw...)
+end
 
 _mapreduce(f, op, ::IndexCartesian, A::AbstractArrayOrBroadcasted) = mapfoldl(f, op, A)
 
@@ -488,7 +491,10 @@ julia> reduce(*, Int[]; init=1)
 """
 reduce(op, itr; kw...) = mapreduce(identity, op, itr; kw...)
 
-reduce(op, a::Number) = a  # Do we want this?
+function reduce(op, a::Number; kw...)
+    isempty(kw) && return a
+    return reduce(op, (a,); kw...)
+end
 
 ###### Specific reduction functions ######
 

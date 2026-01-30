@@ -84,6 +84,7 @@ function kwarg_decl(m::Method, kwtype = nothing)
         kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, get_world_counter())
         if kwli !== nothing
             kwli = kwli::Method
+            kwli.is_kwcall_stub && return Symbol[]
             slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), kwli.slot_syms)
             kws = filter(x -> !(x === empty_sym || '#' in string(x)), slotnames[(kwli.nargs + 1):end])
             # ensure the kwarg... is always printed last. The order of the arguments are not
