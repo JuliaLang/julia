@@ -53,14 +53,15 @@ elseif Sys.iswindows()
             codeunit(s, 7) === UInt8('C') &&
             isseparator(codeunit(s, 8))
         )
-            # Ensure we have [sequence of non-delimiter] - delimiter - [sequence of non-delimiter]
+            # Ensure we have [sequence of non-separator] - single separator - [sequence of non-separator].
+            # Since the prefix raw"\\?\UNC\" is always 8 codeunits, we start at index 9. 
             i = findnext(isseparator, s, 9)
             if (!isnothing(i) &&
-                i >= 10 &&
-                ncodeunits(s) > i &&
-                !isseparator(s[i+1]) # i+1 is a valid since separators are ascii
+                i >= 10 && # implies !isseparator(s[9])
+                ncodeunits(s) > i && # Need something after the separator
+                !isseparator(codeunit(s, i+1)) # Consecutive separators does not count
             )
-                # Stop just before next delimiter if it exists,
+                # Stop just before next separator if it exists,
                 # otherwise the whole string is a drive
                 j = something(findnext(isseparator, s, i+1), lastindex(s)+1)
                 return s[1:prevind(s, j)], s[j:end]
@@ -96,14 +97,15 @@ elseif Sys.iswindows()
             isseparator(codeunit(s, 1)) &&
             isseparator(codeunit(s, 2))
         )
-            # Find [sequence of non-delimiter] - single delimiter - [sequence of non-delimiter]
+            # Ensure we have [sequence of non-separator] - single separator - [sequence of non-separator].
+            # Since the prefix raw"\\" is always 2 codeunits, we start at index 3. 
             i = findnext(isseparator, s, 3)
             if (!isnothing(i) &&
-                i >= 4 && # Need at least one character of separation
-                ncodeunits(s) > i &&
-                !isseparator(codeunit(s, i+1)) # i+1 is a valid since separators are ascii
+                i >= 4 && # implies !isseparator(s[3])
+                ncodeunits(s) > i && # Need something after the separator
+                !isseparator(codeunit(s, i+1)) # Consecutive separators does not count
             )
-                # Stop just before next delimiter if it exists,
+                # Stop just before next separator if it exists,
                 # otherwise the whole string is a drive
                 j = something(findnext(isseparator, s, i+1), lastindex(s)+1)
                 return s[1:prevind(s, j)], s[j:end]
@@ -241,6 +243,8 @@ function isdirpath(path::String)::Bool
     # Reimplements occursin(r"(?:^|/)\.{0,2}$"sa, splitdrive(path)[2])
 
     _, after_last_separator = _splitdir_nodrive("", splitdrive(path)[2])
+    # `$` in regex (multiline mode disabled) can match either end of 
+    # subject or everything before a newline at end of subject
     return after_last_separator in ("", ".", "..", "\n", ".\n", "..\n")
 end
 
