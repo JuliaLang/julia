@@ -3936,20 +3936,28 @@ function rewrite_new_calls(ctx, ex, struct_name, global_struct_name,
     else
         docs = nothing
     end
-    if kind(ex) != K"function"
+
+    if kind(ex) in KSet"global local"
+        stmts = SyntaxList(ctx)
+        make_lhs_decls(ctx, stmts, kind(ex), get(ex, :meta, nothing),
+                       ex[1][1], false)
+        @ast ctx ex [K"block"
+            stmts...
+            rewrite_new_calls(
+                ctx, ex[1], struct_name, global_struct_name, typevar_names,
+                field_names, field_types)
+        ]
+    elseif kind(ex) === K"function" && numchildren(ex) === 2
+        ctor_self = Ref{Union{Nothing,SyntaxTree}}(nothing)
+        expand_function_def(
+            ctx, ex, docs,
+            callex->_rewrite_ctor_sig(ctx, callex, struct_name, global_struct_name,
+                                      typevar_names, ctor_self),
+            body->_rewrite_ctor_new_calls(ctx, body, struct_name, global_struct_name,
+                                          ctor_self[], typevar_names, field_types))
+    else
         return ex
     end
-    if !(numchildren(ex) == 2 && is_eventually_call(ex[1]))
-        throw(LoweringError(ex, "Expected constructor or named inner function"))
-    end
-
-    ctor_self = Ref{Union{Nothing,SyntaxTree}}(nothing)
-    expand_function_def(ctx, ex, docs,
-        callex->_rewrite_ctor_sig(ctx, callex, struct_name,
-                                  global_struct_name, typevar_names, ctor_self),
-        body->_rewrite_ctor_new_calls(ctx, body, struct_name, global_struct_name,
-                                      ctor_self[], typevar_names, field_types)
-    )
 end
 
 function _constructor_min_initialized(ex::SyntaxTree)
@@ -4067,6 +4075,16 @@ function expand_struct_def(ctx, ex, docs)
         end
     end
 
+    # User-defined inner constructors need to be rewritten to use proper type references.
+    # global_struct_name is used because it will be resolved via the top scope where
+    # the global declaration stores the binding.
+    if !isempty(inner_defs)
+        map!(inner_defs, inner_defs) do def
+            rewrite_new_calls(ctx, def, struct_name, global_struct_name,
+                              typevar_names, field_names, field_types)
+        end
+    end
+
     # The following lowering covers several subtle issues in the ordering of
     # typevars when "redefining" structs.
     # See https://github.com/JuliaLang/julia/pull/36121
@@ -4126,23 +4144,24 @@ function expand_struct_def(ctx, ex, docs)
                     global_struct_name
                     newdef
                  ]
-                # Default constructors
-                if isempty(inner_defs)
-                    default_inner_constructors(ctx, ex, global_struct_name,
-                                               typevar_names, typevar_stmts, field_names_2, field_types)
-                else
-                    map!(inner_defs, inner_defs) do def
-                        rewrite_new_calls(ctx, def, struct_name, global_struct_name,
-                                          typevar_names, field_names, field_types)
-                    end
-                    [K"block" inner_defs...]
-                end
-                if need_outer_constructor
-                    default_outer_constructor(ctx, ex, global_struct_name,
-                                              typevar_names, typevar_stmts, field_names_2, field_types)
-                end
             ]
         ]
+
+        if isempty(inner_defs)
+            # Default constructors are generated at runtime by Core._defaultctors.
+            [K"call"
+                "_defaultctors"::K"core"
+                global_struct_name
+                ::K"SourceLocation"(ex)
+            ]
+        else
+            # User-defined inner constructors are placed in a separate scope_block
+            # so that helper functions defined in the struct body don't leak to
+            # the module's global scope.
+            [K"scope_block"(scope_type=:hard)
+                [K"block" inner_defs...]
+            ]
+        end
 
         # Documentation
         if !isnothing(docs) || !isempty(field_docs)

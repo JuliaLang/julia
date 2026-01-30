@@ -94,7 +94,7 @@ Atomically perform the operations to simultaneously get and set a `MemoryRef` va
 !!! compat "Julia 1.11"
     This function requires Julia 1.11 or later.
 
-See also [`swapproperty!`](@ref Base.swapproperty!) and [`Core.memoryrefset!`](@ref).
+See also [`swapproperty!`](@ref Base.swapproperty!), [`Core.memoryrefset!`](@ref).
 """
 Core.memoryrefswap!
 
@@ -107,7 +107,7 @@ the function `op`.
 !!! compat "Julia 1.11"
     This function requires Julia 1.11 or later.
 
-See also [`modifyproperty!`](@ref Base.modifyproperty!) and [`Core.memoryrefset!`](@ref).
+See also [`modifyproperty!`](@ref Base.modifyproperty!), [`Core.memoryrefset!`](@ref).
 """
 Core.memoryrefmodify!
 
@@ -120,7 +120,7 @@ Atomically perform the operations to get and conditionally set a `MemoryRef` val
 !!! compat "Julia 1.11"
     This function requires Julia 1.11 or later.
 
-See also [`replaceproperty!`](@ref Base.replaceproperty!) and [`Core.memoryrefset!`](@ref).
+See also [`replaceproperty!`](@ref Base.replaceproperty!), [`Core.memoryrefset!`](@ref).
 """
 Core.memoryrefreplace!
 
@@ -134,7 +134,7 @@ a given value, only if it was previously not set.
 !!! compat "Julia 1.11"
     This function requires Julia 1.11 or later.
 
-See also [`setpropertyonce!`](@ref Base.replaceproperty!) and [`Core.memoryrefset!`](@ref).
+See also [`setpropertyonce!`](@ref Base.replaceproperty!), [`Core.memoryrefset!`](@ref).
 """
 Core.memoryrefsetonce!
 
