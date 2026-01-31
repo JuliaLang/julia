@@ -1,4 +1,4 @@
-# Multi-processing and Distributed Computing
+# Multiprocessing and Distributed Computing
 
 An implementation of distributed memory parallel computing is provided by module [`Distributed`](@ref man-distributed)
 as part of the standard library shipped with Julia.
@@ -333,7 +333,7 @@ Expressions executed remotely via [`@spawnat`](@ref), or closures specified for 
 a little differently compared to global bindings in other modules. Consider the following code
 snippet:
 
-```julia-repl
+```julia
 A = rand(10,10)
 remotecall_fetch(()->sum(A), 2)
 ```
