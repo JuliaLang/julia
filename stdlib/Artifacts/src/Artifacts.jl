@@ -678,7 +678,7 @@ If `name` contains a forward or backward slash, all elements after the first sla
 be taken to be path names indexing into the artifact, allowing for an easy one-liner to
 access a single file/directory within an artifact.  Example:
 
-    ffmpeg_path = @artifact"FFMPEG/bin/ffmpeg"
+    ffmpeg_path = artifact"FFMPEG/bin/ffmpeg"
 
 !!! compat "Julia 1.3"
     This macro requires at least Julia 1.3.
@@ -689,7 +689,8 @@ access a single file/directory within an artifact.  Example:
 macro artifact_str(name, platform=nothing)
     # Find Artifacts.toml file we're going to load from
     srcfile = string(__source__.file)
-    if ((isinteractive() && startswith(srcfile, "REPL[")) || (!isinteractive() && srcfile == "none")) && !isfile(srcfile)
+    is_repl_or_ijulia = isinteractive() && (startswith(srcfile, "REPL[") || startswith(srcfile, "In["))
+    if (is_repl_or_ijulia || (!isinteractive() && srcfile == "none")) && !isfile(srcfile)
         srcfile = pwd()
     end
     local artifacts_toml = find_artifacts_toml(srcfile)
