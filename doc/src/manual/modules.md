@@ -163,6 +163,16 @@ You can combine multiple `using` and `import` statements of the same kind in a c
 julia> using LinearAlgebra, Random
 ```
 
+This is currently equivalent to the following:
+
+```jldoctest module_manual
+julia> using LinearAlgebra; using Random
+```
+
+However, this might change in future Julia versions to loading packages in parallel.
+Generally speaking, if something breaks when changing `using A, B` to `using B, A`
+that suggests a bug somewhere.
+
 ### `using` and `import` with specific identifiers, and adding methods
 
 When `using ModuleName:` or `import ModuleName:` is followed by a comma-separated list of names, the module is loaded, but *only those specific names are brought into the namespace* by the statement. For example,
