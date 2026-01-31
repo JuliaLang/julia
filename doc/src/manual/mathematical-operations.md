@@ -398,45 +398,45 @@ e.g. `sin.(A)` will compute the sine of each element of an array `A`.
 
 ## Operator Precedence and Associativity
 
-Julia recognizes a large list of characters (or strings of a few characters in some cases) as 
-operators, each with a defined precedence and associativity.  When an expression contains multiple 
-operators, the precedence and associativity determine how the expression is parsed into function 
-calls — though parentheses can always be used to explicitly specify the desired order of 
+Julia recognizes a large list of characters (or strings of a few characters in some cases) as
+operators, each with a defined precedence and associativity.  When an expression contains multiple
+operators, the precedence and associativity determine how the expression is parsed into function
+calls — though parentheses can always be used to explicitly specify the desired order of
 operations.
 
-Most of these [operators are functions](@ref Operators-Are-Functions).[^1]  They can be used with 
-either functional notation (e.g., `+(a, b)`) or "infix" notation (e.g., `a + b`) — the parser 
+Most of these [operators are functions](@ref Operators-Are-Functions).[^1]  They can be used with
+either functional notation (e.g., `+(a, b)`) or "infix" notation (e.g., `a + b`) — the parser
 essentially rewrites infix expressions as function calls.  In functional notation, the grouping of
-operations is explicit from the parentheses, so the expression is parsed unambiguously.  When 
-infix notation is used with more than one operator in an expression and parentheses do not 
+operations is explicit from the parentheses, so the expression is parsed unambiguously.  When
+infix notation is used with more than one operator in an expression and parentheses do not
 disambiguate the order, precedence and associativity rules determine how the expression is parsed.
 
 [^1]:
-    Some operators are parsed specially: `&& || = += -= *= /= //= \= ^= ÷= %= <<= >>= >>>= |= &= 
+    Some operators are parsed specially: `&& || = += -= *= /= //= \= ^= ÷= %= <<= >>= >>>= |= &=
     ⊻= := $= . ... -> $ & ::`, as well as the ternary conditional `a ? b : c`.
 
 In an expression with different operators, *precedence* determines the order.  For example, `*`
 has higher precedence than `+` when used as binary operators, so `1 + 2 * 3` is parsed as
-`1 + (2 * 3)`.  In an expression with the same operator used more than once, *associativity* 
+`1 + (2 * 3)`.  In an expression with the same operator used more than once, *associativity*
 determines the order.  For example, with a left-associative operator `a ⊗ₗ b ⊗ₗ c` is parsed as
 `(a ⊗ₗ b) ⊗ₗ c`; with a right-associative operator `a ⊗ᵣ b ⊗ᵣ c` is parsed as `a ⊗ᵣ (b ⊗ᵣ c)`.
 
-Some operators are neither left- nor right-associative.  As discussed [above](@ref 
-Chaining-comparisons), comparison operators such as `<` and `==` are *chaining* operators, with no 
-fixed order of evaluation.  Another such group is the [*varargs*](@ref Varargs-Functions) 
-operators `+`, `++`, and `*` (but not other addition or multiplication operators).  These are 
+Some operators are neither left- nor right-associative.  As discussed [above](@ref
+Chaining-comparisons), comparison operators such as `<` and `==` are *chaining* operators, with no
+fixed order of evaluation.  Another such group is the [*varargs*](@ref Varargs-Functions)
+operators `+`, `++`, and `*` (but not other addition or multiplication operators).  These are
 parsed as varargs calls when chained, rather than nested binary calls: `a + b + c` is parsed as
-`+(a, b, c)` and `a*b*c` is parsed as `*(a, b, c)`.  The `++` operator is also parsed in this 
-way, but note that it has no methods defined in `Base`.  Also note that juxtaposition of numeric 
-literal coefficients to denote multiplication — like `2x` to mean `2*x` — is more of a syntactic 
-form than an operator.  Describing its associativity doesn't make sense, except to state the 
+`+(a, b, c)` and `a*b*c` is parsed as `*(a, b, c)`.  The `++` operator is also parsed in this
+way, but note that it has no methods defined in `Base`.  Also note that juxtaposition of numeric
+literal coefficients to denote multiplication — like `2x` to mean `2*x` — is more of a syntactic
+form than an operator.  Describing its associativity doesn't make sense, except to state the
 obvious point that `24x` means `24*x` rather than `2*(4*x)` or `(2*4)*x`.
 
-The following table lists Julia's operators, from highest precedence to lowest.  Those listed 
-outside of parentheses are already defined in the `Base` module; those listed inside parentheses 
-are not currently defined in `Base`, but are available to be defined by standard libraries, 
-packages, or user code.  For example, `⋅` and `×` are defined in the standard library's 
-`LinearAlgebra` package.  Some of the latter lists are incomplete; for a complete listing of 
+The following table lists Julia's operators, from highest precedence to lowest.  Those listed
+outside of parentheses are already defined in the `Base` module; those listed inside parentheses
+are not currently defined in `Base`, but are available to be defined by standard libraries,
+packages, or user code.  For example, `⋅` and `×` are defined in the standard library's
+`LinearAlgebra` package.  Some of the latter lists are incomplete; for a complete listing of
 *every* Julia operator and its precedence, see the top of this file:
 [`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm).
 
