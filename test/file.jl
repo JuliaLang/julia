@@ -862,10 +862,10 @@ end
         touch(dst)
 
         # Case 1: dst exists, force=false
-        @test_throws ArgumentError cp(dst, dst; force=false, follow_symlinks=false)
+        @test_throws ArgumentError cp(dst, dst; force=false)
 
         # Case 2: dst exists, force=true, src == dst
-        @test_throws ArgumentError cp(dst, dst; force=true, follow_symlinks=false)
+        @test_throws ArgumentError cp(dst, dst; force=true)
     end
 end
 
