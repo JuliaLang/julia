@@ -5,6 +5,7 @@ module LineEdit
 import ..REPL
 using ..REPL: AbstractREPL, Options
 using ..REPL.StylingPasses: StylingPass, SyntaxHighlightPass, RegionHighlightPass, EnclosingParenHighlightPass, StylingContext, apply_styling_passes, merge_annotations
+using ..REPL: TermOSC.receive_osc
 using ..REPL: histsearch
 
 using ..Terminals
@@ -2681,7 +2682,9 @@ AnyDict(
     "\el" => (s::MIState,o...)->edit_lower_case(s),
     "\ec" => (s::MIState,o...)->edit_title_case(s),
     "\ee" => (s::MIState,o...) -> edit_input(s),
-    "\em" => (s::MIState, o...) -> activate_module(s)
+    "\em" => (s::MIState, o...) -> activate_module(s),
+    # Read OSC responses
+    "\e]" => (s::MIState, o...) -> receive_osc(terminal(s))
 )
 
 const history_keymap = AnyDict(
