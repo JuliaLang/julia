@@ -3697,33 +3697,44 @@ end
 
 function scan_specified_partitions(query::F1, walk_binding_partition::F2,
     interp::Union{AbstractInterpreter,Nothing}, g::GlobalRef, wwr::WorldWithRange) where {F1,F2}
-    local total_validity, rte, binding_partition
     binding = convert(Core.Binding, g)
     lookup_world = max_world(wwr.valid_worlds)
+    wwr_min = min_world(wwr.valid_worlds)
+    wwr_this = wwr.this
+
+    binding_partition = lookup_binding_partition(lookup_world, binding)
+    partition_validity, (leaf_binding, leaf_partition) = @inline walk_binding_partition(binding, binding_partition, lookup_world)
+    @assert lookup_world in partition_validity
+    rte = @inline query(interp, leaf_binding, leaf_partition)
+    total_validity = partition_validity
+    total_min = min_world(total_validity)
+    lookup_world = total_min - 1
+    total_min <= wwr_this && @goto out
+
     while true
-        # Partitions are ordered newest-to-oldest so start at the top
-        binding_partition = @isdefined(binding_partition) ?
-            lookup_binding_partition(lookup_world, binding, binding_partition) :
-            lookup_binding_partition(lookup_world, binding)
-        while lookup_world >= binding_partition.min_world && (!@isdefined(total_validity) || min_world(total_validity) > min_world(wwr.valid_worlds))
-            partition_validity, (leaf_binding, leaf_partition) = walk_binding_partition(binding, binding_partition, lookup_world)
-            @assert lookup_world in partition_validity
-            this_rte = query(interp, leaf_binding, leaf_partition)
-            if @isdefined(rte)
-                if this_rte === rte
-                    total_validity = union(total_validity, partition_validity)
-                    lookup_world = min_world(total_validity) - 1
-                    continue
-                end
-                if min_world(total_validity) <= wwr.this
-                    @goto out
-                end
-            end
-            total_validity = partition_validity
-            lookup_world = min_world(total_validity) - 1
-            rte = this_rte
+        if lookup_world < binding_partition.min_world
+            total_min > wwr_min || break
+            binding_partition = lookup_binding_partition(lookup_world, binding, binding_partition)
         end
-        min_world(total_validity) > min_world(wwr.valid_worlds) || break
+        while lookup_world >= binding_partition.min_world && total_min > wwr_min
+            partition_validity, (leaf_binding, leaf_partition) = @inline walk_binding_partition(binding, binding_partition, lookup_world)
+            @assert lookup_world in partition_validity
+            this_rte = @inline query(interp, leaf_binding, leaf_partition)
+            if this_rte === rte
+                total_validity = union(total_validity, partition_validity)
+                total_min = min_world(total_validity)
+                lookup_world = total_min - 1
+                total_min <= wwr_this && @goto out
+                continue
+            end
+            total_min <= wwr_this && @goto out
+            total_validity = partition_validity
+            total_min = min_world(total_validity)
+            lookup_world = total_min - 1
+            rte = this_rte
+            total_min <= wwr_this && @goto out
+        end
+        total_min > wwr_min || break
     end
 @label out
     return Pair{WorldRange, typeof(rte)}(total_validity, rte)
