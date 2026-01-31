@@ -361,20 +361,25 @@ function already_inserted(compact::IncrementalCompact, old::OldSSAValue)
     already_inserted_ssa(compact, compact.idx-1)(0, old)
 end
 
-function already_inserted_ssa(compact::IncrementalCompact, processed_idx::Int)
-    return function did_already_insert(phi_arg::Int, old::OldSSAValue)
-        id = old.id
-        if id <= length(compact.ir.stmts)
-            return id <= processed_idx
-        end
-        id -= length(compact.ir.stmts)
-        if id <= length(compact.ir.new_nodes)
-            return did_already_insert(phi_arg, OldSSAValue(compact.ir.new_nodes.info[id].pos))
-        end
-        id -= length(compact.ir.new_nodes)
-        @assert id <= length(compact.pending_nodes)
-        return !(id in compact.pending_perm)
+function _already_inserted_ssa(compact::IncrementalCompact, processed_idx::Int,
+                               phi_arg::Int, old::OldSSAValue)
+    id = old.id
+    if id <= length(compact.ir.stmts)
+        return id <= processed_idx
     end
+    id -= length(compact.ir.stmts)
+    if id <= length(compact.ir.new_nodes)
+        return _already_inserted_ssa(compact, processed_idx, phi_arg,
+                                     OldSSAValue(compact.ir.new_nodes.info[id].pos))
+    end
+    id -= length(compact.ir.new_nodes)
+    @assert id <= length(compact.pending_nodes)
+    return !(id in compact.pending_perm)
+end
+
+function already_inserted_ssa(compact::IncrementalCompact, processed_idx::Int)
+    return (phi_arg::Int, old::OldSSAValue) ->
+        _already_inserted_ssa(compact, processed_idx, phi_arg, old)
 end
 
 function is_pending(compact::IncrementalCompact, old::OldSSAValue)
@@ -1647,6 +1652,25 @@ function reachable_blocks(cfg::CFG, from_bb::Int, to_bb::Int)
     return visited
 end
 
+function _update_finalizer_insert!(ir::IRCode, lazypostdomtree::LazyPostDomtree,
+                                   finalizer_idx::Int, insert_bb::Int,
+                                   insert_idx::Union{Int,Nothing}, x::Union{Int,SSAUse})
+    defuse_idx = x isa SSAUse ? x.idx : x
+    defuse_idx == finalizer_idx && return insert_bb, insert_idx
+    defuse_bb = block_for_inst(ir, defuse_idx)
+    new_insert_bb = nearest_common_dominator(get!(lazypostdomtree),
+        insert_bb, defuse_bb)
+    if new_insert_bb == insert_bb && insert_idx !== nothing
+        insert_idx = max(insert_idx::Int, defuse_idx)
+    elseif new_insert_bb == defuse_bb
+        insert_idx = defuse_idx
+    else
+        insert_idx = nothing
+    end
+    insert_bb = new_insert_bb
+    return insert_bb, insert_idx
+end
+
 function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, defuse::SSADefUse,
         inlining::InliningState, lazydomtree::LazyDomtree,
         lazypostdomtree::LazyPostDomtree, @nospecialize(info::CallInfo))
@@ -1668,24 +1692,12 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
     # Check #2: The insertion block for the finalizer is the post-dominator of all uses
     insert_bb::Int = finalizer_bb
     insert_idx::Union{Int,Nothing} = finalizer_idx
-    function note_defuse!(x::Union{Int,SSAUse})
-        defuse_idx = x isa SSAUse ? x.idx : x
-        defuse_idx == finalizer_idx && return nothing
-        defuse_bb = block_for_inst(ir, defuse_idx)
-        new_insert_bb = nearest_common_dominator(get!(lazypostdomtree),
-            insert_bb, defuse_bb)
-        if new_insert_bb == insert_bb && insert_idx !== nothing
-            insert_idx = max(insert_idx::Int, defuse_idx)
-        elseif new_insert_bb == defuse_bb
-            insert_idx = defuse_idx
-        else
-            insert_idx = nothing
-        end
-        insert_bb = new_insert_bb
-        nothing
+    for x in defuse.uses
+        insert_bb, insert_idx = _update_finalizer_insert!(ir, lazypostdomtree, finalizer_idx, insert_bb, insert_idx, x)
     end
-    foreach(note_defuse!, defuse.uses)
-    foreach(note_defuse!, defuse.defs)
+    for x in defuse.defs
+        insert_bb, insert_idx = _update_finalizer_insert!(ir, lazypostdomtree, finalizer_idx, insert_bb, insert_idx, x)
+    end
     insert_bb != 0 || return nothing # verify post-dominator of all uses exists
 
     if !OptimizationParams(inlining.interp).assume_fatal_throw

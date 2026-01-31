@@ -399,10 +399,10 @@ end
 
 ## Constructors ##
 
-similar(a::Array{T,1}) where {T}                    = Vector{T}(undef, size(a,1))
-similar(a::Array{T,2}) where {T}                    = Matrix{T}(undef, size(a,1), size(a,2))
-similar(a::Array{T,1}, S::Type) where {T}           = Vector{S}(undef, size(a,1))
-similar(a::Array{T,2}, S::Type) where {T}           = Matrix{S}(undef, size(a,1), size(a,2))
+similar(a::Vector{T}) where {T}                    = Vector{T}(undef, size(a,1))
+similar(a::Matrix{T}) where {T}                    = Matrix{T}(undef, size(a,1), size(a,2))
+similar(a::Vector{T}, S::Type) where {T}           = Vector{S}(undef, size(a,1))
+similar(a::Matrix{T}, S::Type) where {T}           = Matrix{S}(undef, size(a,1), size(a,2))
 similar(a::Array{T}, m::Int) where {T}              = Vector{T}(undef, m)
 similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(undef, dims)
 similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(undef, dims)
@@ -540,7 +540,7 @@ julia> v2
  []
 ```
 
-See also: [`fill!`](@ref), [`zeros`](@ref), [`ones`](@ref), [`similar`](@ref).
+See also [`fill!`](@ref), [`zeros`](@ref), [`ones`](@ref), [`similar`](@ref).
 
 # Examples
 ```jldoctest
@@ -672,7 +672,7 @@ julia> collect(Float64, 1:2:5)
 collect(::Type{T}, itr) where {T} = _collect(T, itr, IteratorSize(itr))
 
 _collect(::Type{T}, itr, isz::Union{HasLength,HasShape}) where {T} =
-    copyto!(_array_for(T, isz, _similar_shape(itr, isz)), itr)
+    copyto!(_array_for_inner(T, isz, _similar_shape(itr, isz)), itr)
 function _collect(::Type{T}, itr, isz::SizeUnknown) where T
     a = Vector{T}()
     for x in itr
@@ -696,12 +696,12 @@ _similar_for(c::AbstractArray, ::Type{T}, itr, ::HasShape, axs) where {T} =
     similar(c, T, axs)
 
 # make a collection appropriate for collecting `itr::Generator`
-_array_for(::Type{T}, ::SizeUnknown, ::Nothing) where {T} = Vector{T}(undef, 0)
-_array_for(::Type{T}, ::HasLength, len::Integer) where {T} = Vector{T}(undef, Int(len))
-_array_for(::Type{T}, ::HasShape{N}, axs) where {T,N} = similar(Array{T,N}, axs)
+_array_for_inner(::Type{T}, ::SizeUnknown, ::Nothing) where {T} = Vector{T}(undef, 0)
+_array_for_inner(::Type{T}, ::HasLength, len::Integer) where {T} = Vector{T}(undef, Int(len))
+_array_for_inner(::Type{T}, ::HasShape{N}, axs) where {T,N} = similar(Array{T,N}, axs)
 
 # used by syntax lowering for simple typed comprehensions
-_array_for(::Type{T}, itr, isz) where {T} = _array_for(T, isz, _similar_shape(itr, isz))
+_array_for(::Type{T}, itr, isz) where {T} = _array_for_inner(T, isz, _similar_shape(itr, isz))
 
 
 """
@@ -827,10 +827,10 @@ function collect(itr::Generator)
         shp = _similar_shape(itr, isz)
         y = iterate(itr)
         if y === nothing
-            return _array_for(et, isz, shp)
+            return _array_for_inner(et, isz, shp)
         end
         v1, st = y
-        dest = _array_for(typeof(v1), isz, shp)
+        dest = _array_for_inner(typeof(v1), isz, shp)
         # The typeassert gives inference a helping hand on the element type and dimensionality
         # (work-around for #28382)
         et′ = et <: Type ? Type : et
@@ -1632,7 +1632,7 @@ Remove an item in `collection` and return it. If `collection` is an
 ordered container, the last item is returned; for unordered containers,
 an arbitrary element is returned.
 
-See also: [`popfirst!`](@ref), [`popat!`](@ref), [`delete!`](@ref), [`deleteat!`](@ref), [`splice!`](@ref), and [`push!`](@ref).
+See also [`popfirst!`](@ref), [`popat!`](@ref), [`delete!`](@ref), [`deleteat!`](@ref), [`splice!`](@ref), [`push!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1683,7 +1683,7 @@ are shifted to fill the resulting gap.
 When `i` is not a valid index for `a`, return `default`, or throw an error if
 `default` is not specified.
 
-See also: [`pop!`](@ref), [`popfirst!`](@ref), [`deleteat!`](@ref), [`splice!`](@ref).
+See also [`pop!`](@ref), [`popfirst!`](@ref), [`deleteat!`](@ref), [`splice!`](@ref).
 
 !!! compat "Julia 1.5"
     This function is available as of Julia 1.5.
@@ -1777,7 +1777,7 @@ Remove the first `item` from `collection`.
 
 This function is called `shift` in many other programming languages.
 
-See also: [`pop!`](@ref), [`popat!`](@ref), [`delete!`](@ref).
+See also [`pop!`](@ref), [`popat!`](@ref), [`delete!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1817,7 +1817,7 @@ end
 Insert an `item` into `a` at the given `index`. `index` is the index of `item` in
 the resulting `a`.
 
-See also: [`push!`](@ref), [`replace`](@ref), [`popat!`](@ref), [`splice!`](@ref).
+See also [`push!`](@ref), [`replace`](@ref), [`popat!`](@ref), [`splice!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1832,12 +1832,12 @@ julia> insert!(Any[1:6;], 3, "here")
  6
 ```
 """
-function insert!(a::Array{T,1}, i::Integer, item) where T
+function insert!(a::Vector{T}, i::Integer, item) where T
     @_propagate_inbounds_meta
     item = item isa T ? item : convert(T, item)::T
     return _insert!(a, i, item)
 end
-function _insert!(a::Array{T,1}, i::Integer, item::T) where T
+function _insert!(a::Vector{T}, i::Integer, item::T) where T
     @_noub_meta
     # Throw convert error before changing the shape of the array
     _growat!(a, i, 1)
@@ -1852,7 +1852,7 @@ end
 Remove the item at the given `i` and return the modified `a`. Subsequent items
 are shifted to fill the resulting gap.
 
-See also: [`keepat!`](@ref), [`delete!`](@ref), [`popat!`](@ref), [`splice!`](@ref).
+See also [`keepat!`](@ref), [`delete!`](@ref), [`popat!`](@ref), [`splice!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1993,7 +1993,7 @@ Subsequent items are shifted left to fill the resulting gap.
 If specified, replacement values from an ordered
 collection will be spliced in place of the removed item.
 
-See also: [`replace`](@ref), [`delete!`](@ref), [`deleteat!`](@ref), [`pop!`](@ref), [`popat!`](@ref).
+See also [`replace`](@ref), [`delete!`](@ref), [`deleteat!`](@ref), [`pop!`](@ref), [`popat!`](@ref).
 
 # Examples
 ```jldoctest
@@ -2382,7 +2382,7 @@ To search for other kinds of values, pass a predicate as the first argument.
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
-See also: [`findall`](@ref), [`findnext`](@ref), [`findlast`](@ref), [`searchsortedfirst`](@ref).
+See also [`findall`](@ref), [`findnext`](@ref), [`findlast`](@ref), [`searchsortedfirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -2532,7 +2532,7 @@ or `nothing` if not found.
 Indices are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
-See also: [`findnext`](@ref), [`findfirst`](@ref), [`findall`](@ref).
+See also [`findnext`](@ref), [`findfirst`](@ref), [`findall`](@ref).
 
 # Examples
 ```jldoctest
@@ -2568,7 +2568,7 @@ Return `nothing` if there is no `true` value in `A`.
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
-See also: [`findfirst`](@ref), [`findprev`](@ref), [`findall`](@ref).
+See also [`findfirst`](@ref), [`findprev`](@ref), [`findall`](@ref).
 
 # Examples
 ```jldoctest
@@ -2774,7 +2774,7 @@ To search for other kinds of values, pass a predicate as the first argument.
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
-See also: [`findfirst`](@ref), [`searchsorted`](@ref).
+See also [`findfirst`](@ref), [`searchsorted`](@ref).
 
 # Examples
 ```jldoctest
@@ -2834,7 +2834,7 @@ Return an array containing the first index in `b` for
 each value in `a` that is a member of `b`. The output
 array contains `nothing` wherever `a` is not a member of `b`.
 
-See also: [`sortperm`](@ref), [`findfirst`](@ref).
+See also [`sortperm`](@ref), [`findfirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -2949,10 +2949,11 @@ end
 
 function indcopy(sz::Dims, I::Tuple{Vararg{RangeIndex}})
     n = length(I)
-    s = sz[n]
+    _s = sz[n]
     for i = n+1:length(sz)
-        s *= sz[i]
+        _s *= sz[i]
     end
+    s = _s
     dst::typeof(I) = ntuple(i-> _findin(I[i], i < n ? (1:sz[i]) : (1:s)), n)::typeof(I)
     src::typeof(I) = ntuple(i-> I[i][_findin(I[i], i < n ? (1:sz[i]) : (1:s))], n)::typeof(I)
     dst, src
@@ -2969,7 +2970,7 @@ The function `f` is passed one argument.
 !!! compat "Julia 1.4"
     Support for `a` as a tuple requires at least Julia 1.4.
 
-See also: [`filter!`](@ref), [`Iterators.filter`](@ref).
+See also [`filter!`](@ref), [`Iterators.filter`](@ref).
 
 # Examples
 ```jldoctest

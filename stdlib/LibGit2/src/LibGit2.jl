@@ -451,13 +451,15 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
             branch_ref = new_branch_ref
         end
     end
+
+    branch_ref′ = branch_ref # Avoids boxing `branch_ref`
     try
         #TODO: what if branch tracks other then "origin" remote
         if !isempty(track) # setup tracking
             try
                 with(GitConfig, repo) do cfg
                     set!(cfg, "branch.$branch_name.remote", Consts.REMOTE_ORIGIN)
-                    set!(cfg, "branch.$branch_name.merge", name(branch_ref))
+                    set!(cfg, "branch.$branch_name.merge", name(branch_ref′))
                 end
             catch
                 @warn "Please provide remote tracking for branch '$branch_name' in '$(path(repo))'"
@@ -466,15 +468,15 @@ function branch!(repo::GitRepo, branch_name::AbstractString,
 
         if set_head
             # checkout selected branch
-            with(peel(GitTree, branch_ref)) do btree
+            with(peel(GitTree, branch_ref′)) do btree
                 checkout_tree(repo, btree)
             end
 
             # switch head to the branch
-            head!(repo, branch_ref)
+            head!(repo, branch_ref′)
         end
     finally
-        close(branch_ref)
+        close(branch_ref′)
     end
     return
 end
@@ -509,13 +511,13 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
     isempty(commit) && return
 
     # grab head name
-    head_name = Consts.HEAD_FILE
+    head_name = Ref(Consts.HEAD_FILE)
     try
         with(head(repo)) do head_ref
-            head_name = shortname(head_ref)
+            head_name[] = shortname(head_ref)
             # if it is HEAD use short OID instead
-            if head_name == Consts.HEAD_FILE
-                head_name = string(GitHash(head_ref))
+            if head_name[] == Consts.HEAD_FILE
+                head_name[] = string(GitHash(head_ref))
             end
         end
     catch
@@ -530,7 +532,7 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
     checkout_tree(repo, peeled, options = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) : CheckoutOptions())
 
     GitReference(repo, obj_oid, force=force,
-                 msg="libgit2.checkout: moving from $head_name to $(obj_oid))")
+                 msg="libgit2.checkout: moving from $(head_name[]) to $(obj_oid))")
 
     return nothing
 end

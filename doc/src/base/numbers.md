@@ -76,6 +76,7 @@ Base.Irrational
 ```@docs
 Base.digits
 Base.digits!
+Base.ndigits
 Base.bitstring
 Base.parse
 Base.tryparse
@@ -85,6 +86,8 @@ Base.unsigned
 Base.float(::Any)
 Base.Math.significand
 Base.Math.exponent
+Base.Math.frexp
+Base.Math.ldexp
 Base.complex(::Complex)
 Base.bswap
 Base.hex2bytes

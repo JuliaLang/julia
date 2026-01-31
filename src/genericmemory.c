@@ -199,7 +199,6 @@ JL_DLLEXPORT jl_value_t *jl_genericmemory_to_string(jl_genericmemory_t *m, size_
     size_t mlength = m->length;
     if (how != 0) {
         jl_value_t *o = jl_genericmemory_data_owner_field(m);
-        jl_genericmemory_data_owner_field(m) = NULL;
         if (how == 3 && // implies jl_is_string(o)
              ((mlength + sizeof(void*) + 1 <= GC_MAX_SZCLASS) == (len + sizeof(void*) + 1 <= GC_MAX_SZCLASS))) {
             if (jl_string_data(o)[len] != '\0')

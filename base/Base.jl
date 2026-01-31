@@ -319,6 +319,9 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
 include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
 
+# May be replaced in incremental sysimage build after-the-fact
+const JuliaLowering = nothing
+
 end_base_include = time_ns()
 
 const _sysimage_modules = PkgId[]
@@ -396,6 +399,11 @@ function __init__()
     delete!(ENV, "JULIA_WAIT_FOR_TRACY")
     if get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
         JuliaSyntax.enable_in_core!()
+    end
+    if JuliaLowering !== nothing && get_bool_env("JULIA_USE_FLISP_LOWERING", true) === false
+        # This is not available by default, but JuliaLowering can be added to
+        # Base after-the-fact via an incremental sysimage build.
+        JuliaLowering.activate!()
     end
 
     CoreLogging.global_logger(CoreLogging.ConsoleLogger())

@@ -5,6 +5,9 @@ include("testhelpers/withlocales.jl")
 
 # Tests that do not really go anywhere else
 
+# Modify when (intentionally) changing the number of boxes in Base methods
+@test length(Test.detect_closure_boxes(Base)) == 6
+
 # test @assert macro
 @test_throws AssertionError (@assert 1 == 2)
 @test_throws AssertionError (@assert false)
@@ -1559,6 +1562,9 @@ end
     # test that you can grab the value from @allocated
     @allocated _x = 1+2
     @test _x === 3
+
+    # test `@allocated` works for dotted operations
+    @test (@allocated 1 .+ 1) == 0
 
     n, m = 10, 20
     X = rand(n, m)
