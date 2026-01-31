@@ -27,43 +27,47 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
 
     global reinterpret
 
-    @doc """
-        reinterpret(T::DataType, A::AbstractArray)
+@doc """
+    reinterpret(T::DataType, A::AbstractArray)
 
-    Construct a view of the array with the same binary data as the given
-    array, but with `T` as element type.
+Construct a view of the array with the same binary data as the given
+array, but with `T` as the element type.
 
-    This function also works on "lazy" array whose elements are not computed until they are explicitly retrieved.
-    For instance, `reinterpret` on the range `1:6` works similarly as on the dense vector `collect(1:6)`:
+This function also works on lazy arrays whose elements are not computed
+until they are explicitly retrieved. For instance, `reinterpret` on the
+range `1:6` works similarly to the dense vector `collect(1:6)`.
 
-    ```jldoctest
-    julia> reinterpret(Float32, UInt32[1 2 3 4 5])
-    1×5 reinterpret(Float32, ::Matrix{UInt32}):
-     1.0f-45  3.0f-45  4.0f-45  6.0f-45  7.0f-45
+```jldoctest
+julia> reinterpret(Float32, UInt32[1 2 3 4 5])
+1×5 reinterpret(Float32, ::Matrix{UInt32}):
+ 1.0f-45  3.0f-45  4.0f-45  6.0f-45  7.0f-45
 
-    julia> reinterpret(Complex{Int}, 1:6)
-    3-element reinterpret(Complex{$Int}, ::UnitRange{$Int}):
-     1 + 2im
-     3 + 4im
-     5 + 6im
-    ```
+julia> reinterpret(Complex{Int}, 1:6)
+3-element reinterpret(Complex{Int}, ::UnitRange{Int}):
+ 1 + 2im
+ 3 + 4im
+ 5 + 6im
 
-    If the location of padding bits does not line up between `T` and `eltype(A)`, the resulting array will be
-    read-only or write-only, to prevent invalid bits from being written to or read from, respectively.
+```
 
-    ```jldoctest
-    julia> a = reinterpret(Tuple{UInt8, UInt32}, UInt32[1, 2])
-    1-element reinterpret(Tuple{UInt8, UInt32}, ::Vector{UInt32}):
-     (0x01, 0x00000002)
+!!! warning
+    If padding bits are not aligned between `T` and `eltype(A)`, the resulting
+    array may be read-only or write-only to prevent invalid memory access.
 
-    julia> a[1] = 3
-    ERROR: Padding of type Tuple{UInt8, UInt32} is not compatible with type UInt32.
+```jldoctest
+julia> a = reinterpret(Tuple{UInt8, UInt32}, UInt32[1, 2])
+1-element reinterpret(Tuple{UInt8, UInt32}, ::Vector{UInt32}):
+ (0x01, 0x00000002)
 
-    julia> b = reinterpret(UInt32, Tuple{UInt8, UInt32}[(0x01, 0x00000002)]); # showing will error
+julia> a[1] = 3
+ERROR: Padding of type Tuple{UInt8, UInt32} is not compatible with type UInt32.
 
-    julia> b[1]
-    ERROR: Padding of type UInt32 is not compatible with type Tuple{UInt8, UInt32}.
-    ```
+julia> b = reinterpret(UInt32, Tuple{UInt8, UInt32}[(0x01, 0x00000002)]);
+
+julia> b[1]
+ERROR: Padding of type UInt32 is not compatible with type Tuple{UInt8, UInt32}.
+
+```
     """
     function reinterpret(::Type{T}, a::A) where {T,N,S,A<:AbstractArray{S, N}}
         function thrownonint(S::Type, T::Type, dim)
@@ -144,8 +148,8 @@ NonReshapedReinterpretArray{T,N,S,A<:AbstractArray{S, N}} = ReinterpretArray{T,N
 
 Change the type-interpretation of `A` while consuming or adding a "channel dimension."
 
-If `sizeof(T) = n*sizeof(S)` for `n>1`, `A`'s first dimension must be
-of size `n` and `B` lacks `A`'s first dimension. Conversely, if `sizeof(S) = n*sizeof(T)` for `n>1`,
+If `sizeof(T) == n*sizeof(S)` for `n > 1`, `A`'s first dimension must be
+of size `n` and `B` lacks `A`'s first dimension. Conversely, if `sizeof(S) == n*sizeof(T)` for `n > 1`,
 `B` gets a new first dimension of size `n`. The dimensionality is unchanged if `sizeof(T) == sizeof(S)`.
 
 !!! compat "Julia 1.6"
@@ -155,22 +159,22 @@ of size `n` and `B` lacks `A`'s first dimension. Conversely, if `sizeof(S) = n*s
 
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Matrix{$Int}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> reinterpret(reshape, Complex{Int}, A)    # the result is a vector
-2-element reinterpret(reshape, Complex{$Int}, ::Matrix{$Int}) with eltype Complex{$Int}:
+2-element reinterpret(reshape, Complex{Int64}, ::Matrix{Int64}) with eltype Complex{Int64}:
  1 + 3im
  2 + 4im
 
 julia> a = [(1,2,3), (4,5,6)]
-2-element Vector{Tuple{$Int, $Int, $Int}}:
+2-element Vector{Tuple{Int64, Int64, Int64}}:
  (1, 2, 3)
  (4, 5, 6)
 
 julia> reinterpret(reshape, Int, a)             # the result is a matrix
-3×2 reinterpret(reshape, $Int, ::Vector{Tuple{$Int, $Int, $Int}}) with eltype $Int:
+3×2 reinterpret(reshape, Int64, ::Vector{Tuple{Int64, Int64, Int64}}) with eltype Int64:
  1  4
  2  5
  3  6
