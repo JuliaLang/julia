@@ -975,10 +975,6 @@ function history_prev(s::LineEdit.MIState, hist::REPLHistoryProvider,
     if m === :ok
         LineEdit.move_input_start(s)
         LineEdit.move_line_end(s)
-        # Reset key_repeats and previous_key to avoid triggering repeated key behavior
-        # when the first key is pressed after history recall
-        s.key_repeats = 0
-        empty!(s.previous_key)
         return LineEdit.refresh_line(s)
     elseif m === :skip
         return history_prev(s, hist, num+1, save_idx)
@@ -1005,10 +1001,6 @@ function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider,
     m = history_move(s, hist, cur_idx+num, save_idx)
     if m === :ok
         LineEdit.move_input_end(s)
-        # Reset key_repeats and previous_key to avoid triggering repeated key behavior
-        # when the first key is pressed after history recall
-        s.key_repeats = 0
-        empty!(s.previous_key)
         return LineEdit.refresh_line(s)
     elseif m === :skip
         return history_next(s, hist, num+1, save_idx)
