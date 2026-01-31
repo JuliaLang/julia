@@ -327,6 +327,15 @@ function showerror(io::IO, ex::MethodError)
             print(io, "\nFor element-wise $nounf, use broadcasting with dot syntax: $first .$fstring $second")
         end
     end
+    # catch transpose and adjoint on arrays with unsupported element types
+    if f isa Function && (f === transpose || f === adjoint) && length(san_arg_types_param) == 1
+        # if the argument is not an array, it's likely an element type that doesn't support the operation
+        if !(san_arg_types_param[1] <: AbstractArray)
+            fname = f === transpose ? "transpose" : "adjoint"
+            print(io, "\n$fname is a linear-algebra operation that applies recursively to elements.")
+            print(io, "\nTo permute dimensions of an array, use permutedims.")
+        end
+    end
     if ft <: AbstractArray
         print(io, "\nIn case you're trying to index into the array, use square brackets [] instead of parentheses ().")
     end
