@@ -3385,7 +3385,7 @@ AssertionError
 """
     LoadError(file::AbstractString, line::Int, error)
 
-An error occurred while [`include`](@ref Base.include)ing, [`require`](@ref Base.require)ing, or [`using`](@ref) a file. The error specifics
+An error occurred while [`include`](@ref Base.include)ing, [`import`](@ref)ing, or [`using`](@ref) a file. The error specifics
 should be available in the `.error` field.
 
 !!! compat "Julia 1.7"
