@@ -1280,7 +1280,7 @@ function parse_unary(ps::ParseState)
             return (needs_parameters=is_paren_call,
                     is_paren_call=is_paren_call,
                     is_block=!is_paren_call && num_semis > 0)
-        end
+        end::NamedTuple{(:needs_parameters, :is_paren_call, :is_block, :delim_flags), Tuple{Bool, Bool, Bool, RawFlags}}
 
         # The precedence between unary + and any following infix ^ depends on
         # whether the parens are a function call or not
@@ -1488,11 +1488,21 @@ function parse_unary_prefix(ps::ParseState, has_unary_prefix=false)
     end
 end
 
-function maybe_parsed_macro_name(ps, processing_macro_name, mark)
+function maybe_parsed_macro_name(ps, processing_macro_name, last_identifier_orig_kind, mark)
     if processing_macro_name
         emit(ps, mark, K"macro_name")
+        maybe_parsed_special_macro(ps, last_identifier_orig_kind)
     end
     return false
+end
+
+function maybe_parsed_special_macro(ps, last_identifier_orig_kind)
+    is_syntax_version_macro = last_identifier_orig_kind == K"VERSION"
+    if is_syntax_version_macro && ps.stream.version >= (1, 14)
+        # Encode the current parser version into an invisible token
+        bump_invisible(ps, K"VERSION",
+            set_numeric_flags(ps.stream.version[2] * 10))
+    end
 end
 
 # Parses a chain of suffixes at function call precedence, leftmost binding
@@ -1543,7 +1553,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # @+x y       ==> (macrocall (macro_name +) x y)
             # A.@.x       ==> (macrocall (. A (macro_name .)) x)
             processing_macro_name = maybe_parsed_macro_name(
-                ps, processing_macro_name, mark)
+                ps, processing_macro_name, last_identifier_orig_kind, mark)
             let ps = with_space_sensitive(ps)
                 # Space separated macro arguments
                 # A.@foo a b    ==> (macrocall (. A (macro_name foo)) a b)
@@ -1577,7 +1587,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # (a=1)()  ==>  (call (parens (= a 1)))
             # f (a)    ==>  (call f (error-t) a)
             processing_macro_name = maybe_parsed_macro_name(
-                ps, processing_macro_name, mark)
+                ps, processing_macro_name, last_identifier_orig_kind, mark)
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
             opts = parse_call_arglist(ps, K")")
@@ -1598,7 +1608,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             end
         elseif k == K"["
             processing_macro_name = maybe_parsed_macro_name(
-                ps, processing_macro_name, mark)
+                ps, processing_macro_name, last_identifier_orig_kind, mark)
             m = position(ps)
             # a [i]  ==>  (ref a (error-t) i)
             bump_disallowed_space(ps)
@@ -1666,7 +1676,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 if is_macrocall
                     # Recover by pretending we do have the syntax
                     processing_macro_name = maybe_parsed_macro_name(
-                        ps, processing_macro_name, mark)
+                        ps, processing_macro_name, last_identifier_orig_kind, mark)
                     # @M.(x)  ==> (macrocall (dotcall (macro_name M) (error-t) x))
                     bump_invisible(ps, K"error", TRIVIA_FLAG)
                     emit_diagnostic(ps, mark,
@@ -1720,6 +1730,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 macro_atname_range = (m, position(ps))
                 is_macrocall = true
                 emit(ps, mark, K".")
+                maybe_parsed_special_macro(ps, last_identifier_orig_kind)
             elseif k == K"'"
                 # f.'  =>  (dotcall-post f (error '))
                 bump(ps, remap_kind=K"Identifier")  # bump '
@@ -1760,7 +1771,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             emit(ps, mark, K"call", POSTFIX_OP_FLAG)
         elseif k == K"{"
             processing_macro_name = maybe_parsed_macro_name(
-                ps, processing_macro_name, mark)
+                ps, processing_macro_name, last_identifier_orig_kind, mark)
             # Type parameter curlies and macro calls
             m = position(ps)
             # S {a} ==> (curly S (error-t) a)
@@ -2047,15 +2058,60 @@ function parse_resword(ps::ParseState)
             parse_eq(ps)
         end
         emit(ps, mark, K"return")
-    elseif word in KSet"break continue"
-        # break     ==>  (break)
-        # continue  ==>  (continue)
+    elseif word == K"continue"
+        # continue         ==>  (continue)
+        # continue _       ==>  (continue _)        [1.14+]
+        # continue label   ==>  (continue label)    [1.14+]
         bump(ps, TRIVIA_FLAG)
-        emit(ps, mark, word)
         k = peek(ps)
-        if !(k in KSet"NewlineWs ; ) : EndMarker" || (k == K"end" && !ps.end_symbol))
-            recover(is_closer_or_newline, ps, TRIVIA_FLAG,
-                    error="unexpected token after $(untokenize(word))")
+        if k in KSet"NewlineWs ; ) EndMarker" || (k == K"end" && !ps.end_symbol)
+            # continue with no arguments
+            emit(ps, mark, K"continue")
+        elseif ps.range_colon_enabled && k == K":"
+            # Ternary case: `cond ? continue : x`
+            emit(ps, mark, K"continue")
+        elseif k == K"Identifier" || is_contextual_keyword(k)
+            # continue label - plain identifier or contextual keyword as label
+            bump(ps)
+            emit(ps, mark, K"continue")
+            min_supported_version(v"1.14", ps, mark, "labeled `continue`")
+        else
+            # Error: unexpected token after continue
+            emit(ps, mark, K"continue")
+        end
+    elseif word == K"break"
+        # break            ==>  (break)
+        # break _          ==>  (break _)               [1.14+]
+        # break _ val      ==>  (break _ val)           [1.14+]
+        # break label      ==>  (break label)           [1.14+]
+        # break label val  ==>  (break label val)       [1.14+]
+        bump(ps, TRIVIA_FLAG)
+        function parse_break_value(ps, mark)
+            k2 = peek(ps)
+            if k2 in KSet"NewlineWs ; ) : EndMarker" || (k2 == K"end" && !ps.end_symbol)
+                # break label
+                emit(ps, mark, K"break")
+            else
+                # break label value
+                parse_eq(ps)
+                emit(ps, mark, K"break")
+            end
+            min_supported_version(v"1.14", ps, mark, "labeled `break`")
+        end
+        k = peek(ps)
+        if k in KSet"NewlineWs ; ) EndMarker" || (k == K"end" && !ps.end_symbol)
+            # break with no arguments
+            emit(ps, mark, K"break")
+        elseif ps.range_colon_enabled && k == K":"
+            # Ternary case: `cond ? break : x`
+            emit(ps, mark, K"break")
+        elseif k == K"Identifier" || is_contextual_keyword(k)
+            # break label [value] - plain identifier or contextual keyword as label
+            bump(ps)
+            parse_break_value(ps, mark)
+        else
+            # Error: unexpected token after break
+            emit(ps, mark, K"break")
         end
     elseif word in KSet"module baremodule"
         # module A end  ==> (module A (block))
@@ -2065,6 +2121,13 @@ function parse_resword(ps::ParseState)
             # module do \n end  ==>  (module (error do) (block))
             bump(ps, error="Invalid module name")
         else
+            if ps.stream.version >= (1, 14)
+                # Encode the parser version that parsed this module - the runtime
+                # will use this to set the same parser version for runtime `include`
+                # etc into this module.
+                bump_invisible(ps, K"VERSION",
+                    set_numeric_flags(ps.stream.version[2] * 10))
+            end
             # module $A end  ==>  (module ($ A) (block))
             parse_unary_prefix(ps)
         end
@@ -2200,10 +2263,23 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
             opts = parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
                 _parsed_call = was_eventually_call(ps)
                 _maybe_grouping_parens = !had_commas && !had_splat && num_semis == 0 && num_subexprs == 1
-                # Skip intervening newlines only when the parentheses hold a single
-                # expression, which is the ambiguous case between a name like (::T)
-                # and an anonymous function parameter list.
-                next_kind = peek(ps, 2, skip_newlines=_maybe_grouping_parens)
+                # Check if there's a newline between `)` and the next `(` or `.`.
+                # We need to find where `)` is and check what immediately follows it.
+                # If peek(1, skip_newlines=false) is `)`, we're directly before it.
+                # Otherwise there's whitespace/newline before `)`.
+                next_token_pos = if peek(ps, 1, skip_newlines=false) == K")"
+                    # Directly before ), token after ) is at 2
+                    2
+                else
+                    # There's whitespace before ), so ) is at 2
+                    # and what follows ) is at 3
+                    3
+                end
+                token_after_paren = peek(ps, next_token_pos, skip_newlines=false)
+                # If token_after_paren is a newline, this is an anonymous function
+                has_newline_after_paren = _maybe_grouping_parens && token_after_paren == K"NewlineWs"
+                # Get the next significant token to determine if we need to parse a call
+                next_kind = peek(ps, 2, skip_newlines=_maybe_grouping_parens && !has_newline_after_paren)
                 _needs_parse_call = next_kind ∈ KSet"( ."
                 _is_anon_func = (!_needs_parse_call && !_parsed_call) || had_commas
                 return (needs_parameters      = _is_anon_func,
@@ -2211,7 +2287,8 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
                         parsed_call           = _parsed_call,
                         needs_parse_call      = _needs_parse_call,
                         maybe_grouping_parens = _maybe_grouping_parens)
-            end
+            end::NamedTuple{(:needs_parameters, :is_anon_func, :parsed_call, :needs_parse_call, :maybe_grouping_parens, :delim_flags),
+                            Tuple{Bool, Bool, Bool, Bool, Bool, RawFlags}}
             is_anon_func = opts.is_anon_func
             parsed_call = opts.parsed_call
             needs_parse_call = opts.needs_parse_call
@@ -2745,7 +2822,7 @@ function parse_call_arglist(ps::ParseState, closer)
 
     parse_brackets(ps, closer, false) do _, _, _, _
         return (needs_parameters=true,)
-    end
+    end::NamedTuple{(:needs_parameters, :delim_flags), Tuple{Bool, RawFlags}}
 end
 
 # Parse the suffix of comma-separated array expressions such as
@@ -2762,7 +2839,7 @@ function parse_vect(ps::ParseState, closer, prefix_trailing_comma)
     opts = parse_brackets(ps, closer) do _, _, _, num_subexprs
         return (needs_parameters=true,
                 num_subexprs=num_subexprs)
-    end
+    end::NamedTuple{(:needs_parameters, :num_subexprs, :delim_flags), Tuple{Bool, Int, RawFlags}}
     delim_flags = opts.delim_flags
     if opts.num_subexprs == 0 && prefix_trailing_comma
         delim_flags |= TRAILING_COMMA_FLAG
@@ -3119,7 +3196,7 @@ function parse_paren(ps::ParseState, check_identifiers=true, has_unary_prefix=fa
             return (needs_parameters=is_tuple,
                     is_tuple=is_tuple,
                     is_block=num_semis > 0)
-        end
+        end::NamedTuple{(:needs_parameters, :is_tuple, :is_block, :delim_flags), Tuple{Bool, Bool, Bool, RawFlags}}
         if opts.is_tuple
             # Tuple syntax with commas
             # (x,)        ==>  (tuple-p x)
@@ -3171,8 +3248,8 @@ end
 # (a,b=1; c,d=2; e,f=3)  ==>  (tuple-p a (= b 1) (parameters c (= d 2)) (parameters e (= f 3)))
 #
 # flisp: parts of parse-paren- and parse-arglist
-function parse_brackets(after_parse::Function,
-                        ps::ParseState, closing_kind, generator_is_last=true)
+function parse_brackets(after_parse::F,
+                        ps::ParseState, closing_kind, generator_is_last=true) where {F}
     ps = ParseState(ps, range_colon_enabled=true,
                     space_sensitive=false,
                     where_enabled=true,
@@ -3297,7 +3374,7 @@ function parse_string(ps::ParseState, raw::Bool)
                 opts = parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
                     return (needs_parameters=false,
                             simple_interp=!had_commas && num_semis == 0 && num_subexprs == 1)
-                end
+                end::NamedTuple{(:needs_parameters, :simple_interp, :delim_flags), Tuple{Bool, Bool, RawFlags}}
                 if !opts.simple_interp || peek_behind(ps, skip_parens=false).kind == K"generator"
                     # "$(x,y)" ==> (string (parens (error x y)))
                     emit(ps, m, K"error", error="invalid interpolation syntax")

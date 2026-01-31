@@ -1075,3 +1075,13 @@ let io = IOBuffer()
     str = String(take!(io))
     @test occursin("julia.write_barrier", str)
 end
+
+# Test phi node codegen for union types with inline roots
+function union_phi_inline_roots(x::Bool)
+    if x
+        return ("Q8", 1)
+    else
+        return ("Q10", Ref(5))
+    end
+end
+@test union_phi_inline_roots(true) === ("Q8", 1)

@@ -100,7 +100,7 @@ inv(x::Integer) = float(one(x)) / float(x)
 """
     mul_hi(a::T, b::T) where {T<:Base.Integer}
 
-Returns the higher half of the product of `a` and `b` where `T` is a fixed size integer.
+Return the higher half of the product of `a` and `b` where `T` is a fixed size integer.
 
 # Examples
 ```jldoctest

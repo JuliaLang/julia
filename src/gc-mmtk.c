@@ -1191,11 +1191,6 @@ void jl_gc_debug_fprint_status(ios_t *s) JL_NOTSAFEPOINT
                     pool_count + big_count, pool_count, big_count, gc_num.pause);
 }
 
-JL_DLLEXPORT size_t jl_gc_external_obj_hdr_size(void)
-{
-    return sizeof(bigval_t);
-}
-
 void jl_print_gc_stats(JL_STREAM *s)
 {
 }

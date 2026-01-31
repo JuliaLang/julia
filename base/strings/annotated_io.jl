@@ -52,7 +52,7 @@ function write(dest::AnnotatedIOBuffer, src::AnnotatedIOBuffer)
     srcpos = position(src)
     nb = write(dest.io, src.io)
     isappending || _clear_annotations_in_region!(dest.annotations, destpos:destpos+nb)
-    srcannots = [setindex(annot, max(1 + srcpos, first(annot.region)):last(annot.region), :region)
+    srcannots = [@inline(setindex(annot, max(1 + srcpos, first(annot.region)):last(annot.region), :region))
                  for annot in src.annotations if first(annot.region) >= srcpos]
     _insert_annotations!(dest, srcannots, destpos - srcpos)
     nb
@@ -78,10 +78,11 @@ function write(io::AbstractPipe, c::AnnotatedChar)
 end
 
 function read(io::AnnotatedIOBuffer, ::Type{AnnotatedString{T}}) where {T <: AbstractString}
-    if (start = position(io)) == 0
+    start = position(io)
+    if start == 0
         AnnotatedString(read(io.io, T), copy(io.annotations))
     else
-        annots = [setindex(annot, UnitRange{Int}(max(1, first(annot.region) - start), last(annot.region)-start), :region)
+        annots = [@inline(setindex(annot, UnitRange{Int}(max(1, first(annot.region) - start), last(annot.region)-start), :region))
                   for annot in io.annotations if last(annot.region) > start]
         AnnotatedString(read(io.io, T), annots)
     end
@@ -101,7 +102,7 @@ read(io::AnnotatedIOBuffer, ::Type{AnnotatedChar}) = read(io, AnnotatedChar{Char
 function truncate(io::AnnotatedIOBuffer, size::Integer)
     truncate(io.io, size)
     filter!(ann -> first(ann.region) <= size, io.annotations)
-    map!(ann -> setindex(ann, first(ann.region):min(size, last(ann.region)), :region),
+    map!(ann -> @inline(setindex(ann, first(ann.region):min(size, last(ann.region)), :region)),
          io.annotations, io.annotations)
     io
 end
@@ -125,17 +126,17 @@ function _clear_annotations_in_region!(annotations::Vector{RegionAnnotation}, sp
         # Test for partial overlap
         if first(region) <= first(span) <= last(region) || first(region) <= last(span) <= last(region)
             annotations[i] =
-                setindex(annot,
+                @inline(setindex(annot,
                          if first(region) < first(span)
                              first(region):first(span)-1
                          else
                              last(span)+1:last(region)
                          end,
-                         :region)
+                         :region))
             # If `span` fits exactly within `region`, then we've only copied over
             # the beginning overhang, but also need to conserve the end overhang.
             if first(region) < first(span) && last(span) < last(region)
-                push!(extras, (i, setindex(annot, last(span)+1:last(region), :region)))
+                push!(extras, (i, @inline(setindex(annot, last(span)+1:last(region), :region))))
             end
         end
     end
@@ -164,28 +165,26 @@ This is implemented so that one can say write an `AnnotatedString` to an
 new annotation for each character.
 """
 function _insert_annotations!(annots::Vector{RegionAnnotation}, newannots::Vector{RegionAnnotation}, offset::Int = 0)
-    run = 0
-    if !isempty(annots) && last(last(annots).region) == offset
-        for i in reverse(axes(newannots, 1))
-            annot = newannots[i]
-            first(annot.region) == 1 || continue
-            i <= length(annots) || continue
-            if annot.label == last(annots).label && annot.value == last(annots).value
-                valid_run = true
-                for runlen in 1:i
+    run = @label _ begin
+        if !isempty(annots) && last(last(annots).region) == offset
+            for i in reverse(axes(newannots, 1))
+                annot = newannots[i]
+                first(annot.region) == 1 || continue
+                i <= length(annots) || continue
+                annot.label == last(annots).label || continue
+                annot.value == last(annots).value || continue
+                all(1:i) do runlen
                     new = newannots[begin+runlen-1]
                     old = annots[end-i+runlen]
-                    if last(old.region) != offset || first(new.region) != 1 || old.label != new.label || old.value != new.value
-                        valid_run = false
-                        break
-                    end
-                end
-                if valid_run
-                    run = i
-                    break
-                end
+                    !(last(old.region) != offset ||
+                    first(new.region) != 1 ||
+                    old.label != new.label ||
+                    old.value != new.value)
+                end || continue
+                break _ i
             end
         end
+        break _ 0
     end
     for runindex in 0:run-1
         old_index = lastindex(annots) - run + 1 + runindex

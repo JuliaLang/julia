@@ -246,7 +246,7 @@ function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractIn
     bb_vartables = Union{VarTable,Nothing}[]
     for _ = 1:length(cfg.blocks)
         push!(bb_vartables, VarState[
-            VarState(slottypes[slot], src.slotflags[slot] & SLOT_USEDUNDEF != 0)
+            VarState(slottypes[slot], typemin(Int), src.slotflags[slot] & SLOT_USEDUNDEF != 0)
             for slot = 1:nslots
         ])
     end
