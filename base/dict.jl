@@ -782,16 +782,25 @@ end
 
 `ImmutableDict` is a dictionary implemented as an immutable linked list,
 which is optimal for small dictionaries that are constructed over many individual insertions.
-Note that it is not possible to remove a value, although it can be partially overridden and hidden
-by inserting a new value with the same key.
+Note that it is not possible to remove a value, but a new value with the same
+key may be added. Calling `getindex` will return the most recent value for a
+particular key, but iterating will show all `key => value` pairs.
 
-    ImmutableDict(KV::Pair)
+- Use `(key => value) in dict` to see if this particular combination is in the
+  properties set.
+- Use `get(dict, key, default)` to retrieve the most recent value for a particular key.
+- Iterate over `dict` to see all `key => value` pairs, including duplicate keys.
+  Iteration is in reverse order, from most recently added to least recently
+  added.
 
-Create a new entry in the `ImmutableDict` for a `key => value` pair
+    ImmutableDict(KV::Pair...)
 
- - use `(key => value) in dict` to see if this particular combination is in the properties set
- - use `get(dict, key, default)` to retrieve the most recent value for a particular key
+Create a new `ImmutableDict` containing the provided `key => value` pairs.
 
+    ImmutableDict(d::ImmutableDict, KV::Pair...)
+
+Return a new `ImmutableDict` containing all of the `key => value` pairs of `d`
+as well as new entries for the provided `key => value` pairs.
 """
 ImmutableDict
 ImmutableDict(KV::Pair{K,V}) where {K,V} = ImmutableDict{K,V}(KV[1], KV[2])
@@ -850,6 +859,28 @@ end
 length(t::ImmutableDict) = count(Returns(true), t)
 isempty(t::ImmutableDict) = !isdefined(t, :parent)
 empty(::ImmutableDict, ::Type{K}, ::Type{V}) where {K, V} = ImmutableDict{K,V}()
+
+"""
+    setindex(d::ImmutableDict, value, key)
+
+Creates a new `ImmutableDict` similar to `d` with the most recent value of the
+key `key` set to `value`.
+
+Any existing values with the same key remain in `d`, but they are shadowed by
+this new value when using [`getindex`](@ref). The existing values are still
+present when iterating over `d`.
+
+# Examples
+```jldoctest
+julia> Base.setindex(Base.ImmutableDict(:a => 1), 2, :a) == Base.ImmutableDict(:a => 1, :a => 2)
+true
+julia> Base.setindex(Base.ImmutableDict(:a => 1), 2, :b) == Base.ImmutableDict(:a => 1, :b => 2)
+true
+```
+"""
+function setindex(d::ImmutableDict, value, key)
+    ImmutableDict(d, key => value)
+end
 
 _similar_for(c::AbstractDict, ::Type{Pair{K,V}}, itr, isz, len) where {K, V} = empty(c, K, V)
 _similar_for(c::AbstractDict, ::Type{T}, itr, isz, len) where {T} =
