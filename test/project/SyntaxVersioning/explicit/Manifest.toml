@@ -12,3 +12,8 @@ syntax.julia_version = "1.13.0"
 path = "VersionedDep2"
 uuid = "e127e659-a899-4a00-b565-5b74face18ba"
 syntax.julia_version = "1.14.0"
+
+[[deps.VersionedDep3]]
+path = "VersionedDep3"
+uuid = "6ae26a88-8a9e-4c29-a00a-ea2b9a48e6e1"
+syntax.julia_version = "1.0.0"

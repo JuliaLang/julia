@@ -70,6 +70,95 @@ int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT;
 static void jl_longjmp_in_ctx(int sig, void *_ctx, jl_jmp_buf jmpbuf);
 
 #if !defined(_OS_DARWIN_)
+extern void jl_fake_signal_return(void);
+// Create a trampoline function that does the stack manipulations for jl_call_in_ctx/jl_call_in_state
+// The callee-saved registers still may get smashed (by the cdecl fptr), since we didn't explicitly copy all of the
+// state to the stack (to build a real sigreturn frame).
+#if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || defined(_OS_OPENBSD_)) && defined(_CPU_X86_64_)
+__asm__(
+    "  .type jl_fake_signal_return, @function\n"
+    "jl_fake_signal_return:\n"
+    "  .cfi_startproc\n"
+    "  .cfi_signal_frame\n"
+    // Mark as end of stack until frame is set up
+    "  .cfi_undefined %rip\n"
+    "  .cfi_undefined %rsp\n"
+    // rdi points to signal_ctx_pc in ptls (followed by signal_ctx_sp, signal_ctx_fptr, signal_ctx_arg)
+    "  pushq (%rdi)\n"        // push pc (signal_ctx_pc)
+    "  pushq 8(%rdi)\n"       // push sp (signal_ctx_sp)
+    // stack layout: [sp, pc] (pc at higher address, like return address after call)
+    "  .cfi_def_cfa %rsp, 8\n"
+    "  .cfi_offset %rip, 0\n"  // previous %rip at CFA+0 (pc slot at rsp+8)
+    "  .cfi_offset %rsp, -8\n" // previous %rsp at CFA-8 (sp slot at rsp+0)
+    "  pushq 16(%rdi)\n"      // push fptr (signal_ctx_fptr)
+    "  .cfi_def_cfa %rsp, 16\n"
+    "  movq 24(%rdi), %rdi\n" // restore original rdi from signal_ctx_arg
+    "  subq $8, %rsp\n"       // align stack to 16 bytes
+    "  .cfi_def_cfa %rsp, 24\n"
+    "  callq *8(%rsp)\n"      // call fptr
+    "  ud2\n"                 // unreachable
+    "  .cfi_endproc\n"
+    "  .size jl_fake_signal_return, .-jl_fake_signal_return\n"
+);
+
+#elif (defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && defined(_CPU_X86_)
+__asm__(
+    "  .type jl_fake_signal_return, @function\n"
+    "jl_fake_signal_return:\n"
+    "  .cfi_startproc\n"
+    "  .cfi_signal_frame\n"
+    // Mark as end of stack until frame is set up
+    "  .cfi_undefined 1\n"
+    // eax points to signal_ctx_pc in ptls (followed by signal_ctx_sp, signal_ctx_fptr, signal_ctx_arg)
+    "  pushl (%eax)\n"        // push pc (signal_ctx_pc)
+    "  pushl 4(%eax)\n"       // push sp (signal_ctx_sp)
+    // stack layout: [sp, pc] (pc at higher address, like return address after call)
+    "  .cfi_def_cfa %esp, 4\n"
+    "  .cfi_offset %eip, 0\n"  // previous %eip at CFA+0 (pc slot at esp+4)
+    "  .cfi_offset %esp, -4\n" // previous %esp at CFA-4 (sp slot at esp+0)
+    "  pushl 8(%eax)\n"       // push fptr (signal_ctx_fptr)
+    "  .cfi_def_cfa %esp, 8\n"
+    "  movl 12(%eax), %eax\n" // restore original eax from signal_ctx_arg
+    "  subl $4, %esp\n"       // align stack to 16 bytes
+    "  .cfi_def_cfa %esp, 12\n"
+    "  calll *4(%esp)\n"      // call fptr
+    "  ud2\n"                 // unreachable
+    "  .cfi_endproc\n"
+    "  .size jl_fake_signal_return, .-jl_fake_signal_return\n"
+);
+#elif (defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && defined(_CPU_AARCH64_)
+__asm__(
+    "  .type jl_fake_signal_return, @function\n"
+    "jl_fake_signal_return:\n"
+    "  .cfi_startproc\n"
+    "  .cfi_signal_frame\n"
+    // Mark as end of stack until frame is set up
+    "  .cfi_undefined 1\n"
+    // x0 points to signal_ctx_pc in ptls (followed by signal_ctx_sp, signal_ctx_fptr, signal_ctx_arg)
+    "  ldp x1, x2, [x0]\n"      // load pc (x1) and sp (x2)
+    "  stp x2, x1, [sp, #-16]!\n" // push sp and pc (sp at lower addr, pc at higher addr)
+    // stack layout: [sp, pc] (pc at higher address, like return address after call)
+    "  .cfi_def_cfa sp, 16\n"
+    "  .cfi_offset lr, -8\n"   // previous lr (pc) at CFA-8 (pc slot at sp+8)
+    "  .cfi_offset sp, -16\n"  // previous sp at CFA-16 (sp slot at sp+0)
+    // This is not quite valid, since the AArch64 DWARF spec lacks the ability to define how to restore the LR register correctly,
+    // so normally libunwind implementations on linux detect this function specially and hack around the invalid info:
+    // https://github.com/llvm/llvm-project/commit/c82deed6764cbc63966374baf9721331901ca958
+    "  ldp x1, x2, [x0, #16]\n" // load fptr (x1) and saved x0 (x2)
+    "  mov x0, x2\n"           // restore original x0
+    "  blr x1\n"               // call fptr
+    "  brk #1\n"               // unreachable
+    "  .cfi_endproc\n"
+    "  .size jl_fake_signal_return, .-jl_fake_signal_return\n"
+);
+#else
+extern void JL_NORETURN jl_fake_signal_return(void)
+{
+    CFI_NORETURN
+    abort();
+}
+#endif
+
 static inline uintptr_t jl_get_rsp_from_ctx(const void *_ctx)
 {
 #if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
@@ -123,46 +212,79 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int si
     // will not be part of the validation...
     uintptr_t rsp = jl_get_rsp_from_ctx(_ctx);
     rsp = (rsp - 256) & ~(uintptr_t)15; // redzone and re-alignment
+    assert(rsp % 16 == 0);
 #if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
-    rsp -= sizeof(void*);
-    *(uintptr_t*)rsp = 0;
-    ctx->uc_mcontext.gregs[REG_RSP] = rsp;
-    ctx->uc_mcontext.gregs[REG_RIP] = (uintptr_t)fptr;
+    // Save context in ptls for stack unwinding
+    ptls->signal_ctx_pc = ctx->uc_mcontext.gregs[REG_RIP];
+    ptls->signal_ctx_sp = ctx->uc_mcontext.gregs[REG_RSP];
+    ptls->signal_ctx_fptr = fptr;
+    ptls->signal_ctx_arg = ctx->uc_mcontext.gregs[REG_RDI];
+    ctx->uc_mcontext.gregs[REG_RSP] = rsp; // set stack pointer
+    ctx->uc_mcontext.gregs[REG_RDI] = (uintptr_t)&ptls->signal_ctx_pc; // first arg points to signal_ctx
+    ctx->uc_mcontext.gregs[REG_RIP] = (uintptr_t)&jl_fake_signal_return; // "call" jl_fake_signal_return
 #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_64_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
-    rsp -= sizeof(void*);
-    *(uintptr_t*)rsp = 0;
-    ctx->uc_mcontext.mc_rsp = rsp;
-    ctx->uc_mcontext.mc_rip = (uintptr_t)fptr;
+    // Save context in ptls for stack unwinding
+    ptls->signal_ctx_pc = ctx->uc_mcontext.mc_rip;
+    ptls->signal_ctx_sp = ctx->uc_mcontext.mc_rsp;
+    ptls->signal_ctx_fptr = fptr;
+    ptls->signal_ctx_arg = ctx->uc_mcontext.mc_rdi;
+    ctx->uc_mcontext.mc_rsp = rsp; // set stack pointer
+    ctx->uc_mcontext.mc_rdi = (uintptr_t)&ptls->signal_ctx_pc; // first arg points to signal_ctx
+    ctx->uc_mcontext.mc_rip = (uintptr_t)&jl_fake_signal_return; // "call" jl_fake_signal_return
 #elif defined(_OS_LINUX_) && defined(_CPU_X86_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
-    rsp -= sizeof(void*);
-    *(uintptr_t*)rsp = 0;
-    ctx->uc_mcontext.gregs[REG_ESP] = rsp;
-    ctx->uc_mcontext.gregs[REG_EIP] = (uintptr_t)fptr;
+    // Save context in ptls for stack unwinding
+    ptls->signal_ctx_pc = ctx->uc_mcontext.gregs[REG_EIP];
+    ptls->signal_ctx_sp = ctx->uc_mcontext.gregs[REG_ESP];
+    ptls->signal_ctx_fptr = fptr;
+    ptls->signal_ctx_arg = ctx->uc_mcontext.gregs[REG_EAX];
+    ctx->uc_mcontext.gregs[REG_ESP] = rsp; // set stack pointer
+    ctx->uc_mcontext.gregs[REG_EAX] = (uintptr_t)&ptls->signal_ctx_pc; // set eax to point to signal_ctx
+    ctx->uc_mcontext.gregs[REG_EIP] = (uintptr_t)&jl_fake_signal_return; // "call" jl_fake_signal_return
 #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
-    rsp -= sizeof(void*);
-    *(uintptr_t*)rsp = 0;
-    ctx->uc_mcontext.mc_esp = rsp;
-    ctx->uc_mcontext.mc_eip = (uintptr_t)fptr;
+    // Save context in ptls for stack unwinding
+    ptls->signal_ctx_pc = ctx->uc_mcontext.mc_eip;
+    ptls->signal_ctx_sp = ctx->uc_mcontext.mc_esp;
+    ptls->signal_ctx_fptr = fptr;
+    ptls->signal_ctx_arg = ctx->uc_mcontext.mc_eax;
+    ctx->uc_mcontext.mc_esp = rsp; // set stack pointer
+    ctx->uc_mcontext.mc_eax = (uintptr_t)&ptls->signal_ctx_pc; // set eax to point to signal_ctx
+    ctx->uc_mcontext.mc_eip = (uintptr_t)&jl_fake_signal_return; // "call" jl_fake_signal_return
 #elif defined(_OS_OPENBSD_) && defined(_CPU_X86_64_)
     struct sigcontext *ctx = (struct sigcontext *)_ctx;
-    rsp -= sizeof(void*);
-    *(uintptr_t*)rsp = 0;
-    ctx->sc_rsp = rsp;
-    ctx->sc_rip = fptr;
+    // Save context in ptls for stack unwinding
+    ptls->signal_ctx_pc = ctx->sc_rip;
+    ptls->signal_ctx_sp = ctx->sc_rsp;
+    ptls->signal_ctx_fptr = fptr;
+    ptls->signal_ctx_arg = ctx->sc_rdi;
+    ctx->sc_rsp = rsp; // set stack pointer
+    ctx->sc_rdi = (uintptr_t)&ptls->signal_ctx_pc; // first arg points to signal_ctx
+    ctx->sc_rip = (uintptr_t)&jl_fake_signal_return; // "call" jl_fake_signal_return
 #elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
-    ctx->uc_mcontext.sp = rsp;
-    ctx->uc_mcontext.regs[29] = 0; // Clear link register (x29)
-    ctx->uc_mcontext.pc = (uintptr_t)fptr;
+    // Save context in ptls for stack unwinding
+    ptls->signal_ctx_pc = (uintptr_t)ctx->uc_mcontext.pc;
+    ptls->signal_ctx_sp = ctx->uc_mcontext.sp;
+    ptls->signal_ctx_fptr = fptr;
+    ptls->signal_ctx_arg = ctx->uc_mcontext.regs[0];
+    ctx->uc_mcontext.sp = rsp; // sp
+    ctx->uc_mcontext.regs[0] = (uintptr_t)&ptls->signal_ctx_pc; // first arg points to signal_ctx
+    ctx->uc_mcontext.pc = (uint64_t)&jl_fake_signal_return; // pc
+    ctx->uc_mcontext.regs[30] = 0; // clear lr (x30)
 #elif defined(_OS_FREEBSD_) && defined(_CPU_AARCH64_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
-    ctx->uc_mcontext.mc_gpregs.gp_sp = rsp;
-    ctx->uc_mcontext.mc_gpregs.gp_x[29] = 0; // Clear link register (x29)
-    ctx->uc_mcontext.mc_gpregs.gp_elr = (uintptr_t)fptr;
+    // Save context in ptls for stack unwinding
+    ptls->signal_ctx_pc = ctx->uc_mcontext.mc_gpregs.gp_elr;
+    ptls->signal_ctx_sp = ctx->uc_mcontext.mc_gpregs.gp_sp;
+    ptls->signal_ctx_fptr = fptr;
+    ptls->signal_ctx_arg = ctx->uc_mcontext.mc_gpregs.gp_x[0];
+    ctx->uc_mcontext.mc_gpregs.gp_sp = rsp; // set stack pointer
+    ctx->uc_mcontext.mc_gpregs.gp_x[0] = (uintptr_t)&ptls->signal_ctx_pc; // first arg points to signal_ctx
+    ctx->uc_mcontext.mc_gpregs.gp_elr = (uintptr_t)&jl_fake_signal_return; // pc
+    ctx->uc_mcontext.mc_gpregs.gp_lr = 0; // clear lr (x30)
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     uintptr_t target = (uintptr_t)fptr;
@@ -549,9 +671,8 @@ static void jl_try_deliver_sigint(void)
 // Write only by signal handling thread, read only by main thread
 // no sync necessary.
 static int thread0_exit_signo = 0;
-static void JL_NORETURN jl_exit_thread0_cb(void)
+static void jl_exit_thread0_cb(void)
 {
-CFI_NORETURN
     jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
     jl_fprint_critical_error(ios_safe_stderr, thread0_exit_signo, 0, NULL, jl_current_task);
     jl_atexit_hook(128);
@@ -1274,3 +1395,177 @@ JL_DLLEXPORT int jl_repl_raise_sigtstp(void)
 {
     return raise(SIGTSTP);
 }
+
+#if !defined(_OS_DARWIN_)
+// Thread suspension based membarrier fallback.
+// This is a sound but slow implementation that suspends and resumes each thread
+// to force them to execute memory barriers via the signal handling mechanism.
+// This is used as a fallback when neither the membarrier syscall nor the mprotect
+// hack are available or working.
+static void jl_thread_suspend_membarrier(void)
+{
+    bt_context_t ctx;
+    // Suspend each thread and immediately resume it.
+    // The act of suspending/resuming forces a memory barrier via
+    // the signal handler mechanism.
+    // jl_thread_suspend tries to interrupt the thread for up to 1 second,
+    // so we retry in a loop until it succeeds or we determine the thread
+    // is no longer alive.
+    for (int tid = 0; tid < jl_atomic_load_acquire(&jl_n_threads); tid++) {
+        while (!jl_thread_suspend(tid, &ctx)) {
+            jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+            jl_task_t *ct2 = ptls2 ? jl_atomic_load_relaxed(&ptls2->current_task) : NULL;
+            if (ct2 == NULL) {
+                // this thread is not alive or already dead, move to next
+                goto next_thread;
+            }
+            // thread is alive but suspend failed, retry
+        }
+        jl_thread_resume(tid);
+next_thread:;
+    }
+}
+
+// Implementation of the `mprotect` based membarrier fallback.
+// This is a common fallback based on the observation that `mprotect` happens to
+// issue the necessary memory barriers. However, there is no spec that
+// guarantees this behavior. On AArch64, it is known not to work on either
+// Linux or FreeBSD, so we don't use it there. However, we use it as a fallback
+// here for older versions of Linux and FreeBSD on x86 where we know that it
+// happens to work.
+#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_)
+static pthread_mutex_t mprotect_barrier_lock = PTHREAD_MUTEX_INITIALIZER;
+static _Atomic(uint64_t) *mprotect_barrier_page = NULL;
+// Returns 1 on success, 0 on failure (e.g. mlock fails)
+static int jl_init_mprotect_membarrier(void)
+{
+    int result = pthread_mutex_lock(&mprotect_barrier_lock);
+    assert(result == 0);
+    if (mprotect_barrier_page == NULL) {
+        size_t pagesize = jl_getpagesize();
+
+        mprotect_barrier_page = (_Atomic(uint64_t) *)
+                                     mmap(NULL, pagesize, PROT_READ | PROT_WRITE,
+                                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (mprotect_barrier_page == MAP_FAILED) {
+            mprotect_barrier_page = NULL;
+            result = pthread_mutex_unlock(&mprotect_barrier_lock);
+            assert(result == 0);
+            return 0;
+        }
+        result = mlock(mprotect_barrier_page, pagesize);
+        if (result != 0) {
+            // mlock failed (e.g. RLIMIT_MEMLOCK too low), fall back to thread suspension
+            munmap(mprotect_barrier_page, pagesize);
+            mprotect_barrier_page = NULL;
+            result = pthread_mutex_unlock(&mprotect_barrier_lock);
+            assert(result == 0);
+            return 0;
+        }
+    }
+    result = pthread_mutex_unlock(&mprotect_barrier_lock);
+    assert(result == 0);
+    (void)result;
+    return 1;
+}
+
+static void jl_mprotect_membarrier(void)
+{
+    int result = pthread_mutex_lock(&mprotect_barrier_lock);
+    assert(result == 0);
+    size_t pagesize = jl_getpagesize();
+    result = mprotect(mprotect_barrier_page, pagesize, PROT_READ | PROT_WRITE);
+    jl_atomic_fetch_add_relaxed(mprotect_barrier_page, 1);
+    assert(result == 0);
+    result = mprotect(mprotect_barrier_page, pagesize, PROT_NONE);
+    assert(result == 0);
+    result = pthread_mutex_unlock(&mprotect_barrier_lock);
+    assert(result == 0);
+    (void)result;
+}
+#endif // !_CPU_AARCH64_ && !_CPU_ARM_
+
+// Membarrier implementation selection
+enum membarrier_implementation {
+    MEMBARRIER_IMPLEMENTATION_UNKNOWN        = 0,
+    MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER = 1,
+    MEMBARRIER_IMPLEMENTATION_MPROTECT       = 2,
+    MEMBARRIER_IMPLEMENTATION_THREAD_SUSPEND = 3
+};
+
+static _Atomic(enum membarrier_implementation) membarrier_impl = MEMBARRIER_IMPLEMENTATION_UNKNOWN;
+
+// Linux and FreeBSD have compatible membarrier syscall support
+#if defined(_OS_LINUX_)
+#   include <sys/syscall.h>
+#   if defined(__NR_membarrier)
+enum membarrier_cmd {
+    MEMBARRIER_CMD_QUERY                        = 0,
+    MEMBARRIER_CMD_PRIVATE_EXPEDITED            = (1 << 3),
+    MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED   = (1 << 4),
+};
+#    define membarrier(...) syscall(__NR_membarrier, __VA_ARGS__)
+#    define HAVE_MEMBARRIER_SYSCALL
+#  else
+#    warning "Missing linux kernel headers for membarrier syscall, support disabled"
+#  endif
+#elif defined(_OS_FREEBSD_)
+#  include <sys/param.h>
+#  if __FreeBSD_version >= 1401500
+#    include <sys/membarrier.h>
+#    define HAVE_MEMBARRIER_SYSCALL
+#  endif
+#endif
+
+static enum membarrier_implementation jl_init_membarrier(void) {
+#ifdef HAVE_MEMBARRIER_SYSCALL
+    int ret = membarrier(MEMBARRIER_CMD_QUERY, 0, 0);
+    int needed = MEMBARRIER_CMD_PRIVATE_EXPEDITED | MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED;
+    if (ret > 0 && ((ret & needed) == needed)) {
+        // supported
+        if (membarrier(MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED, 0, 0) == 0) {
+            // working
+            jl_atomic_store_relaxed(&membarrier_impl, MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER);
+            return MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER;
+        }
+    }
+#endif
+    // The mprotect fallback is known not to work on AArch64, so skip it there
+#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_)
+    if (jl_init_mprotect_membarrier()) {
+        jl_atomic_store_relaxed(&membarrier_impl, MEMBARRIER_IMPLEMENTATION_MPROTECT);
+        return MEMBARRIER_IMPLEMENTATION_MPROTECT;
+    }
+#endif
+    // Fall back to thread suspension (sound but slow)
+    jl_atomic_store_relaxed(&membarrier_impl, MEMBARRIER_IMPLEMENTATION_THREAD_SUSPEND);
+    return MEMBARRIER_IMPLEMENTATION_THREAD_SUSPEND;
+}
+
+JL_DLLEXPORT void jl_membarrier(void) {
+    enum membarrier_implementation impl = jl_atomic_load_relaxed(&membarrier_impl);
+    if (impl == MEMBARRIER_IMPLEMENTATION_UNKNOWN) {
+        impl = jl_init_membarrier();
+    }
+    switch (impl) {
+#ifdef HAVE_MEMBARRIER_SYSCALL
+    case MEMBARRIER_IMPLEMENTATION_SYS_MEMBARRIER: {
+        int ret = membarrier(MEMBARRIER_CMD_PRIVATE_EXPEDITED, 0, 0);
+        assert(ret == 0);
+        (void)ret;
+        break;
+    }
+#endif
+#if !defined(_CPU_AARCH64_) && !defined(_CPU_ARM_)
+    case MEMBARRIER_IMPLEMENTATION_MPROTECT:
+        jl_mprotect_membarrier();
+        break;
+#endif
+    case MEMBARRIER_IMPLEMENTATION_THREAD_SUSPEND:
+        jl_thread_suspend_membarrier();
+        break;
+    default:
+        abort();
+    }
+}
+#endif // !_OS_DARWIN_

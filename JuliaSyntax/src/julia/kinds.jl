@@ -1027,6 +1027,7 @@ register_kinds!(JuliaSyntax, 0, [
         "char"           # A char string node (containing delims + char data)
         "macrocall"
         "parameters"     # the list after ; in f(; a=1)
+        "kw"
         "toplevel"
         "tuple"
         "ref"
@@ -1055,6 +1056,21 @@ register_kinds!(JuliaSyntax, 0, [
         # Container for a single statement/atom plus any trivia and errors
         "wrapper"
     "END_SYNTAX_KINDS"
+
+    # Kinds not corresponding to surface syntax in RawGreenNode, but required
+    # for parsing to a provenance-containing structure that is compatible with
+    # Expr.  May shrink with syntax evolution.
+    "BEGIN_SYNTAXTREE_KINDS"
+        # A literal Julia value of any kind, as might be inserted into the
+        # AST during macro expansion.  Only used in parsing to SyntaxTree.
+        "Value"
+        "core"
+        "unknown_head"
+        "flatten"
+        # QuoteNode; not quasiquote
+        "inert"
+        "inert_syntaxtree"
+    "END_SYNTAXTREE_KINDS"
 
     # Special tokens
     "TOMBSTONE"    # Empty placeholder for kind to be filled later

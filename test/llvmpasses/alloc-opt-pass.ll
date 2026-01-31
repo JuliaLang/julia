@@ -79,8 +79,9 @@ declare ptr addrspace(10) @external_function2()
 
 
 ; CHECK-LABEL: @legal_int_types
-; CHECK: alloca [12 x i8]
-; CHECK-NOT: alloca i96
+; Test that allocations use i64 chunks (capped at 64 bits for backend compatibility)
+; A 12-byte allocation rounds up to 16 bytes, giving [2 x i64]
+; CHECK: alloca [2 x i64], align 16
 ; CHECK: call void @llvm.memset.p0.i64(ptr align 16 %var1,
 ; CHECK: ret void
 define void @legal_int_types() {
@@ -151,11 +152,10 @@ define void @lifetime_no_preserve_end(ptr noalias nocapture noundef nonnull sret
 
 
 ; CHECK-LABEL: @initializers
-; CHECK: alloca [1 x i8]
-; CHECK-DAG: alloca [2 x i8]
-; CHECK-DAG: alloca [3 x i8]
-; CHECK-DAG: call void @llvm.memset.p0.i64(ptr align 1 %var1,
-; CHECK-DAG: call void @llvm.memset.p0.i64(ptr align 4 %var7,
+; Small allocations (1, 2, 3 bytes) all round up to 8 bytes, giving i64
+; CHECK-DAG: alloca i64, align 16
+; CHECK-DAG: call void @llvm.memset.p0.i64(ptr align 16 %var1,
+; CHECK-DAG: call void @llvm.memset.p0.i64(ptr align 16 %var7,
 ; CHECK: ret void
 define void @initializers() {
   %pgcstack = call ptr @julia.get_pgcstack()
@@ -267,6 +267,37 @@ define swiftcc i64 @"atomicrmw"(ptr nonnull swiftself "gcstack" %0) #0 {
   %19 = atomicrmw xchg ptr addrspace(11) %16, i64 %18 seq_cst, align 8, !tbaa !25, !alias.scope !23, !noalias !24                                    ; preds = %19
   ret i64 %19
 }
+
+; Test that higher alignment from the original allocation is inherited
+; 8 bytes with 32-byte alignment uses i64 (element size capped at 64 bits)
+; CHECK-LABEL: @align_inherit
+; CHECK: alloca i64, align 32
+; CHECK: ret void
+define void @align_inherit() {
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %ptls = call ptr @julia.ptls_states()
+  %ptls_i8 = bitcast ptr %ptls to ptr
+  %var1 = call align 32 ptr addrspace(10) @julia.gc_alloc_obj(ptr %ptls_i8, i64 8, ptr addrspace(10) @tag)
+  %var2 = addrspacecast ptr addrspace(10) %var1 to ptr addrspace(11)
+  %var3 = call ptr @julia.pointer_from_objref(ptr addrspace(11) %var2)
+  ret void
+}
+; CHECK-LABEL: }{{$}}
+
+; Test that 8-byte allocation uses i64 with GC alignment
+; CHECK-LABEL: @legal_int_i64
+; CHECK: alloca i64, align 16
+; CHECK: ret void
+define void @legal_int_i64() {
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %ptls = call ptr @julia.ptls_states()
+  %ptls_i8 = bitcast ptr %ptls to ptr
+  %var1 = call ptr addrspace(10) @julia.gc_alloc_obj(ptr %ptls_i8, i64 8, ptr addrspace(10) @tag)
+  %var2 = addrspacecast ptr addrspace(10) %var1 to ptr addrspace(11)
+  %var3 = call ptr @julia.pointer_from_objref(ptr addrspace(11) %var2)
+  ret void
+}
+; CHECK-LABEL: }{{$}}
 
 declare ptr @julia.ptls_states()
 

@@ -505,8 +505,13 @@ static int lookup_pointer(
         else {
             int havelock = jl_lock_profile_wr();
             assert(havelock); (void)havelock;
-            info = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
+            auto lineinfo = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
             jl_unlock_profile_wr();
+#if JL_LLVM_VERSION < 210000
+            info = std::move(lineinfo);
+#else
+            info = std::move(lineinfo.value());
+#endif
         }
 
         jl_frame_t *frame = &(*frames)[i];
@@ -1076,6 +1081,9 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, uint64_t 
     IMAGEHLP_MODULE64 ModuleInfo;
     ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
     uv_mutex_lock(&jl_in_stackwalk);
+    uv_mutex_lock(&jl_dll_notify_lock);
+    jl_profile_process_dll_events();
+    uv_mutex_unlock(&jl_dll_notify_lock);
     bool isvalid = SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
     uv_mutex_unlock(&jl_in_stackwalk);
     if (!isvalid)
@@ -1177,6 +1185,9 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
     static IMAGEHLP_LINE64 frame_info_line;
     DWORD dwDisplacement = 0;
     uv_mutex_lock(&jl_in_stackwalk);
+    uv_mutex_lock(&jl_dll_notify_lock);
+    jl_profile_process_dll_events();
+    uv_mutex_unlock(&jl_dll_notify_lock);
     DWORD64 dwAddress = pointer;
     frame_info_line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
     if (SymGetLineFromAddr64(GetCurrentProcess(), dwAddress, &dwDisplacement, &frame_info_line)) {
@@ -1444,7 +1455,7 @@ static DW_EH_PE parseCIE(const uint8_t *Addr, const uint8_t *End) JL_NOTSAFEPOIN
     else {
         p = consume_leb128(p, cie_end);
     }
-    // Now it's the augmentation data. which may have the information we
+    // Now it's the augmentation data, which may have the information we
     // are interested in...
     for (const char *augp = augmentation;;augp++) {
         switch (*augp) {

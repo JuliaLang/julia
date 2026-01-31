@@ -45,7 +45,7 @@ _numchildren(@nospecialize(ex)) = ex isa Expr ? length(ex.args) : 0
 _syntax_list(ctx::InterpolationContext) = SyntaxList(ctx)
 _syntax_list(ctx::ExprInterpolationContext) = Any[]
 
-_interp_makenode(ctx::InterpolationContext, ex, args) = makenode(ctx, ex, ex, args)
+_interp_makenode(ctx::InterpolationContext, ex, args) = mknode(ex, args)
 _interp_makenode(ctx::ExprInterpolationContext, ex, args) = Expr((ex::Expr).head, args...)
 
 _is_leaf(ex::SyntaxTree) = is_leaf(ex)
@@ -63,9 +63,9 @@ function _interpolated_value(ctx::InterpolationContext, srcref, ex)
         # Plain symbols become identifiers. This is an accommodation for
         # compatibility to allow `:x` (a Symbol) and `:(x)` (a SyntaxTree) to
         # be used interchangeably in macros.
-        makeleaf(ctx, srcref, K"Identifier", string(ex))
+        newleaf(ctx, srcref, K"Identifier", string(ex))
     else
-        makeleaf(ctx, srcref, K"Value", ex)
+        newleaf(ctx, srcref, K"Value", ex)
     end
 end
 
@@ -143,7 +143,7 @@ function interpolate_ast(::Type{Expr}, @nospecialize(ex), values...)
         @assert length(values) === 1
         if length(ex.args) !== 1
             throw(LoweringError(
-                expr_to_syntaxtree(ex), "More than one value in bare `\$` expression"))
+                expr_to_est(ex), "More than one value in bare `\$` expression"))
         end
         only(values[1])
     else
@@ -292,7 +292,7 @@ end
 struct GeneratedFunctionStub
     expr_compat_mode::Bool
     gen::Function
-    srcref::Union{SyntaxTree,LineNumberNode,SourceRef}
+    srcref::Union{LineNumberNode,SourceRef}
     argnames::Core.SimpleVector
     spnames::Core.SimpleVector
 end
@@ -333,7 +333,8 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     mctx = MacroContext(syntax_graph(ctx1), g.srcref, layer, g.expr_compat_mode)
     ex0 = g.gen(mctx, args...)
     if ex0 isa Expr
-        ex0 = expr_to_syntaxtree(ctx1, ex0, source_location(LineNumberNode, g.srcref))
+        ex0 = expr_to_est(
+            syntax_graph(ctx1), ex0, source_location(LineNumberNode, g.srcref))
     end
     if ex0 isa SyntaxTree
         if !is_compatible_graph(ctx1, ex0)
@@ -343,7 +344,7 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
             ex0 = copy_ast(ctx1, ex0)
         end
     else
-        ex0 = @ast ctx1 g.srcref ex0::K"Value"
+        ex0 = newleaf(syntax_graph(ctx1), g.srcref, K"Value", ex0)
     end
     # Expand any macros emitted by the generator
     ex1 = expand_forms_1(ctx1, reparent(ctx1, ex0))

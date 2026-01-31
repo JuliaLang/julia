@@ -1146,7 +1146,7 @@ end
         _ext = Base.get_extension(parent, ext)
         _ext isa Module || error("expected extension \$ext to be loaded")
         _pkgdir = pkgdir(_ext)
-        _pkgdir == pkgdir(parent) != nothing || error("unexpected extension \$ext pkgdir path: \$_pkgdir")
+        _pkgdir == pkgdir(parent) !== nothing || error("unexpected extension \$ext pkgdir path: \$_pkgdir")
         _pkgversion = pkgversion(_ext)
         _pkgversion == pkgversion(parent) || error("unexpected extension \$ext version: \$_pkgversion")
     end
@@ -1901,8 +1901,8 @@ module M58272_to end
     # Test explicit environments (packages loaded from Manifest.toml)
     old_load_path = copy(LOAD_PATH)
     old_active_project = Base.ACTIVE_PROJECT[]
+    explicit_env = joinpath(@__DIR__, "project", "SyntaxVersioning", "explicit")
     try
-        explicit_env = joinpath(@__DIR__, "project", "SyntaxVersioning", "explicit")
         Base.ACTIVE_PROJECT[] = joinpath(explicit_env, "Project.toml")
         empty!(LOAD_PATH)
         push!(LOAD_PATH, "@")
@@ -1910,8 +1910,46 @@ module M58272_to end
         @test invokelatest(getglobal, (@eval (using VersionedDep1; VersionedDep1)), :ver) == v"1.13"
         # syntax.julia_version from Manifest = "1.14"
         @test invokelatest(getglobal, (@eval (using VersionedDep2; VersionedDep2)), :ver) == v"1.14"
+        # syntax.julia_version from Manifest = "1.0" should be clamped to "1.13"
+        @test invokelatest(getglobal, (@eval (using VersionedDep3; VersionedDep3)), :ver) == v"1.13"
     finally
         Base.ACTIVE_PROJECT[] = old_active_project
         copy!(LOAD_PATH, old_load_path)
+    end
+
+    # Test that the selected project affects code evaluation in `Main` for both `-e` and scripts
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep1")) -e 'print((Base.Experimental.@VERSION).syntax)'`, String)) == v"1.13"
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep2")) -e 'print((Base.Experimental.@VERSION).syntax)'`, String)) == v"1.14"
+
+    syntax_version_script = joinpath(@__DIR__, "testhelpers", "print_syntax_version.jl")
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep1")) $syntax_version_script`, String)) == v"1.13"
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep2")) $syntax_version_script`, String)) == v"1.14"
+
+    function include_world_age()
+       m = @eval(module IncludeWorldAgeTest end)
+       @test_nowarn @test include_string(m, "Base.Experimental.@VERSION").syntax == (Base.Experimental.@VERSION).syntax
+       @test_nowarn @test Core.include(m, joinpath(@__DIR__, "testhelpers", "return_syntax_version.jl")) == (Base.Experimental.@VERSION).syntax
+       Base.set_syntax_version(m, v"1.13")
+       @test_nowarn @test include_string(m, "Base.Experimental.@VERSION").syntax == v"1.13"
+       @test_nowarn @test Core.include(m, joinpath(@__DIR__, "testhelpers", "return_syntax_version.jl")) == v"1.13"
+    end
+    include_world_age()
+end
+
+@testset "require_stdlib with isolated depot" begin
+    # Test that require_stdlib works with JULIA_DEPOT_PATH not including bundled depot
+    tmpdir = mktempdir()
+    try
+        script = "Base.require_stdlib(Base.PkgId(Base.UUID(\"2a0f44e3-6c83-55bd-87e4-b1978d98bd5f\"), \"Base64\")); println(\"SUCCESS\")"
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`, "JULIA_DEPOT_PATH" => tmpdir, "JULIA_DEBUG" => "loading")
+        out = PipeBuffer()
+        run(pipeline(cmd, stdout=out, stderr=out))
+        output = read(out, String)
+        # Should not precompile since it loads from bundled depot
+        @test contains(output, "Loading object cache file")
+        @test !contains(output, "Precompiling")
+        @test contains(output, "SUCCESS")
+    finally
+        rm(tmpdir; recursive=true, force=true)
     end
 end

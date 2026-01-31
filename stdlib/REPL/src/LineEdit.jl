@@ -85,9 +85,11 @@ mutable struct MIState
     line_modify_lock::Base.ReentrantLock
     hint_generation_lock::Base.ReentrantLock
     n_keys_pressed::Int
+    # Optional event that gets notified each time the prompt is ready for input
+    prompt_ready_event::Union{Nothing, Base.Event}
 end
 
-MIState(i, mod, c, a, m) = MIState(i, mod, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}(), Base.ReentrantLock(), Base.ReentrantLock(), 0)
+MIState(i, mod, c, a, m) = MIState(i, mod, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}(), Base.ReentrantLock(), Base.ReentrantLock(), 0, nothing)
 
 const BufferLike = Union{MIState,ModeState,IOBuffer}
 const State = Union{MIState,ModeState}
@@ -1802,6 +1804,8 @@ function normalize_key(key::Union{String,SubString{String}})
                 c, i = iterate(key, i)
                 write(buf, '\e')
                 write(buf, c)
+            elseif c == '^'
+                write(buf, c)
             end
         else
             write(buf, c)
@@ -2179,7 +2183,7 @@ let
     for (left, right) in bracket_pairs
         # Left bracket: insert both and move cursor between them
         bracket_insert_keymap[left] = (s::MIState, o...) -> begin
-            buf = buffer(s)
+            local buf = buffer(s)
             edit_insert(buf, left)
             if eof(buf) || peek(buf, Char) in right_brackets_ws
                 edit_insert(buf, right)
@@ -2190,7 +2194,7 @@ let
 
         # Right bracket: skip over if next char matches, otherwise insert
         bracket_insert_keymap[right] = (s::MIState, o...) -> begin
-            buf = buffer(s)
+            local buf = buffer(s)
             if !eof(buf) && peek(buf, Char) == right
                 edit_move_right(buf)
             else
@@ -2203,7 +2207,7 @@ let
     # Quote characters (need special handling for transpose detection)
     for quote_char in ('"', '\'', '`')
         bracket_insert_keymap[quote_char] = (s::MIState, o...) -> begin
-            buf = buffer(s)
+            local buf = buffer(s)
             if !eof(buf) && peek(buf, Char) == quote_char
                 # Skip over closing quote
                 edit_move_right(buf)
@@ -2231,15 +2235,14 @@ let
             repl = Base.active_repl
             mirepl = isdefined(repl, :mi) ? repl.mi : repl
             main_mode = mirepl.interface.modes[1]
-            buf = copy(buffer(s))
+            local buf = copy(buffer(s))
             transition(s, main_mode) do
                 state(s, main_mode).input_buffer = buf
             end
             return
         end
 
-        buf = buffer(s)
-        if try_remove_paired_delimiter(buf)
+        if try_remove_paired_delimiter(buffer(s))
             return refresh_line(s)
         end
         return edit_backspace(s)
@@ -2977,6 +2980,10 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
     enable_bracketed_paste(term)
     try
         activate(prompt, s, term, term)
+        # Notify that prompt is ready for input
+        if s.prompt_ready_event !== nothing
+            notify(s.prompt_ready_event)
+        end
         old_state = mode(s)
         # spawn this because the main repl task is sticky (due to use of @async and _wait2)
         # and we want to not block typing when the repl task thread is busy

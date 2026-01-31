@@ -20,6 +20,7 @@
         <td>Continuous integration</td>
         <td>
             <a href="https://buildkite.com/julialang/julia-master"><img src='https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master'/></a>
+            <a href="https://juliaci.github.io/julia-ci-timing/"><img src='https://img.shields.io/badge/CI-timing_tracking-blue'/></a>
         </td>
     </tr>
     <!-- Coverage -->
@@ -53,9 +54,14 @@ and installing Julia, below.
 - **YouTube:** <https://www.youtube.com/user/JuliaLanguage>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
-New developers may find the notes in
-[CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md)
-helpful to start contributing to the Julia codebase.
+
+## Contributing to Julia
+
+We welcome contributions from developers of all experience levels, including bug fixes,
+documentation improvements, tests, and performance enhancements.
+
+New contributors are encouraged to start by reading [CONTRIBUTING.md](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md).
+
 
 ### Learning Julia
 

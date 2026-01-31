@@ -319,6 +319,8 @@ void jl_init_common_symbols(void)
     jl_atomic_sym = jl_symbol("atomic");
     jl_not_atomic_sym = jl_symbol("not_atomic");
     jl_unordered_sym = jl_symbol("unordered");
+    jl_singlethread_sym = jl_symbol("singlethread");
+    jl_system_sym = jl_symbol("system");
     jl_monotonic_sym = jl_symbol("monotonic");
     jl_acquire_sym = jl_symbol("acquire");
     jl_release_sym = jl_symbol("release");
@@ -1316,7 +1318,7 @@ jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
 {
     jl_value_t *parser = NULL;
     if (inmodule) {
-        parser = jl_get_global(inmodule, jl_symbol("_internal_julia_parse"));
+        parser = jl_get_global(inmodule, jl_symbol("#_internal_julia_parse"));
     }
     if ((!parser || parser == jl_nothing) && jl_core_module) {
         parser = jl_get_global(jl_core_module, jl_symbol("_parse"));

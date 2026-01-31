@@ -69,6 +69,15 @@ function cvarargs_2(arg1::Float64, arg2::Float64)
 end
 """) isa Function
 @test test_mod.cvarargs_2(1.1, 2.2) == "1.1 2.2"
+# (function, library) syntax
+@test JuliaLowering.include_string(test_mod, """
+    ccall((:ctest, :libccalltest), Complex{Int}, (Complex{Int},), 10 + 20im)
+""") === 11 + 18im
+# (function, library): library is a global
+@eval test_mod libccalltest_var = "libccalltest"
+@test JuliaLowering.include_string(test_mod, """
+    ccall((:ctest, libccalltest_var), Complex{Int}, (Complex{Int},), 10 + 20im)
+""") === 11 + 18im
 
 # cfunction
 JuliaLowering.include_string(test_mod, """
@@ -85,13 +94,29 @@ cf_float = JuliaLowering.include_string(test_mod, """
 """)
 @test @ccall($cf_float(2::Float64, 3::Float64)::Float64) == 32.0
 
-# Test that hygiene works with @ccallable function names (this is broken in
-# Base)
+# Test that hygiene works with @ccallable function names
 JuliaLowering.include_string(test_mod, raw"""
 f_ccallable_hygiene() = 1
 
 module Nested
     f_ccallable_hygiene() = 2
+    macro cfunction_hygiene()
+        :(@cfunction($f_ccallable_hygiene, Int, ()))
+    end
+end
+""")
+cf_hygiene = JuliaLowering.include_string(test_mod, """
+Nested.@cfunction_hygiene
+""")
+@test @ccall($cf_hygiene()::Int) == 2
+# Same as above, but non-interpolated symbol.  Arguably this could return 20,
+# but if it should, this is a bug in the macro implementation, not lowering.
+# Match Base for now.
+JuliaLowering.include_string(test_mod, raw"""
+f_ccallable_hygiene() = 10
+
+module Nested
+    f_ccallable_hygiene() = 20
     macro cfunction_hygiene()
         :(@cfunction(f_ccallable_hygiene, Int, ()))
     end
@@ -100,7 +125,49 @@ end
 cf_hygiene = JuliaLowering.include_string(test_mod, """
 Nested.@cfunction_hygiene
 """)
-@test @ccall($cf_hygiene()::Int) == 2
+@test @ccall($cf_hygiene()::Int) == 10
+
+# quoted function in cfunction
+quoted_cfn_anon = JuliaLowering.include_string(test_mod, raw"""
+    @cfunction((function(x); x; end), Int, (Int,))
+""")
+@test ccall(quoted_cfn_anon, Int, (Int,), 1) == 1
+
+quoted_cfn_named = JuliaLowering.include_string(test_mod, raw"""
+    @cfunction((function fname_unused(x); x; end), Int, (Int,))
+""")
+@test ccall(quoted_cfn_named, Int, (Int,), 1) == 1
+
+# flisp-expanded ccall, cfunction should be lowerable by us
+let fl_ex = macroexpand(
+    test_mod,
+    :(cfun_flisp_thunk() = @cfunction(+, Cint, (Cint, Cint))))
+
+    fl_st = JuliaLowering.expr_to_est(fl_ex)
+    fl_fn = JuliaLowering.eval(test_mod, fl_st)
+    fl_cfn = @invokelatest fl_fn()
+    @test fl_fn isa Function
+    @test fl_cfn isa Ptr
+    @test ccall(fl_cfn, Int, (Int,Int), 1, 2) == 3
+end
+let fl_ex = macroexpand(
+    test_mod,
+    :(cfun_flisp_thunk() = @cfunction(function some_cfunc_add(x,y); x+y; end,
+                                      Cint, (Cint, Cint))))
+
+    fl_st = JuliaLowering.expr_to_est(fl_ex)
+    fl_fn = JuliaLowering.eval(test_mod, fl_st)
+    fl_cfn = @invokelatest fl_fn()
+    @test fl_fn isa Function
+    @test fl_cfn isa Ptr
+    @test ccall(fl_cfn, Int, (Int,Int), 1, 2) == 3
+end
+let fl_ex = macroexpand(
+    test_mod,
+    :(@ccall(libccalltest_var.ctest((10+20im)::Complex{Int})::Complex{Int})))
+    fl_st = JuliaLowering.expr_to_est(fl_ex)
+    @test JuliaLowering.eval(test_mod, fl_st) == 11 + 18im
+end
 
 # Test that ccall can be passed static parameters in type signatures.
 #
@@ -186,20 +253,21 @@ end
     jeval(test_mod, "\"docstr10\" f10(x::Int, y, z::T_exists)")
     d = jeval(test_mod, "@doc f10")
     @test d |> string === "docstr10\n"
-    # TODO: Is there a better way of accessing this? Feel free to change tests
-    # if docsystem storage changes.
-    @test d.meta[:results][1].data[:typesig] === Tuple{Int, Any, test_mod.T_exists}
 
     jeval(test_mod, "\"docstr11\" f11(x::T_exists, y::U, z::T) where {T, U<:Number}")
     d = jeval(test_mod, "@doc f11")
     @test d |> string === "docstr11\n"
-    @test d.meta[:results][1].data[:typesig] === Tuple{test_mod.T_exists, U, T} where {T, U<:Number}
 
     jeval(test_mod, "\"docstr12\" f12(x::Int, y::U, z::T=1) where {T, U<:Number}")
     d = jeval(test_mod, "@doc f12")
     @test d |> string === "docstr12\n"
-    @test d.meta[:results][1].data[:typesig] === Union{Tuple{Int, U, T}, Tuple{Int, U}} where {T, U<:Number}
 
+    # doc-strings on macrocalls (punned on quoted macrocall)
+    # TODO: implement and test `doc!` support for this
+    @test_broken jeval(test_mod, """
+        "doc string"
+        :@test
+    """) isa Expr
 end
 
 # SyntaxTree @eval should pass along expr_compat_mode

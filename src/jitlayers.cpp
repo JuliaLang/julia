@@ -14,6 +14,9 @@
 #include <llvm/ExecutionEngine/Orc/CompileUtils.h>
 #include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
 #include <llvm/ExecutionEngine/Orc/DebugObjectManagerPlugin.h>
+#if JL_LLVM_VERSION >= 210000
+#  include <llvm/ExecutionEngine/Orc/SelfExecutorProcessControl.h>
+#endif
 #include <llvm/ExecutionEngine/Orc/TargetProcess/JITLoaderGDB.h>
 #if JL_LLVM_VERSION >= 200000
 #include <llvm/ExecutionEngine/Orc/AbsoluteSymbols.h>
@@ -32,6 +35,7 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/FormattedStream.h>
+#include <llvm/Support/TimeProfiler.h>
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/Utils/Cloning.h>
@@ -599,6 +603,7 @@ static void prepare_compile(jl_code_instance_t *codeinst) JL_NOTSAFEPOINT_LEAVE 
             assert(waiting == std::get<1>(it->second));
             std::get<1>(it->second) = 0;
             auto &params = std::get<0>(it->second);
+            JL_GC_PROMISE_ROOTED(&params);
             params.tsctx_lock = params.tsctx.getLock();
             waiting = jl_analyze_workqueue(codeinst, params, true); // may safepoint
             assert(!waiting); (void)waiting;
@@ -630,6 +635,7 @@ static void complete_emit(jl_code_instance_t *edge) JL_NOTSAFEPOINT_LEAVE JL_NOT
         assert(it != incompletemodules.end());
         if (--std::get<1>(it->second) == 0) {
             auto &params = std::get<0>(it->second);
+            JL_GC_PROMISE_ROOTED(&params);
             params.tsctx_lock = params.tsctx.getLock();
             assert(callee == it->first);
             orc::ThreadSafeModule &M = emittedmodules[callee];
@@ -1396,7 +1402,12 @@ namespace {
         }
         auto optlevel = CodeGenOptLevelFor(jl_options.opt_level);
         auto TM = TheTarget->createTargetMachine(
-                TheTriple.getTriple(), TheCPU, FeaturesStr,
+#if JL_LLVM_VERSION < 210000
+                TheTriple.getTriple(),
+#else
+                TheTriple,
+#endif
+                TheCPU, FeaturesStr,
                 options,
                 relocmodel,
                 codemodel,
@@ -1504,6 +1515,7 @@ namespace {
 
                 {
                     JL_TIMING(LLVM_JIT, JIT_Opt);
+                    TimeTraceScope OptimizeScope("JIT Optimize", M.getModuleIdentifier());
                     //Run the optimization
                     (****PMs[PoolIdx]).run(M);
                     assert(!verifyLLVMIR(M));
@@ -1926,7 +1938,8 @@ JuliaOJIT::JuliaOJIT()
     MemMgr(createRTDyldMemoryManager()),
     UnlockedObjectLayer(
             ES,
-            [this]() {
+            [this](auto&&...) {
+                // LLVM 21+ passes in a memory buffer
                 std::unique_ptr<RuntimeDyld::MemoryManager> result(new ForwardingMemoryManager(MemMgr));
                 return result;
             }
@@ -2072,6 +2085,21 @@ JuliaOJIT::JuliaOJIT()
     asan_crt[mangle("___asan_globals_registered")] = {ExecutorAddr::fromPtr(&jl___asan_globals_registered), JITSymbolFlags::Common | JITSymbolFlags::Exported};
     cantFail(JD.define(orc::absoluteSymbols(asan_crt)));
 #endif
+
+    if (jl_is_timing_trace) {
+        PrintLLVMTimers.push_back([]() JL_NOTSAFEPOINT {
+            if (timeTraceProfilerEnabled()) {
+                StringRef FileName = jl_timing_trace_file.empty() ?
+                    StringRef("julia_time_trace.json") : StringRef(jl_timing_trace_file);
+                if (auto E = timeTraceProfilerWrite(FileName, "")) {
+                    handleAllErrors(std::move(E), [](const StringError &SE) JL_NOTSAFEPOINT {
+                        errs() << SE.getMessage() << "\n";
+                    });
+                }
+                timeTraceProfilerCleanup();
+            }
+        });
+    }
 }
 
 JuliaOJIT::~JuliaOJIT() = default;
@@ -2111,6 +2139,7 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 
     // Treat this as if one of the passes might contain a safepoint
     // even though that shouldn't be the case and might be unwise
+    TimeTraceScope CompileScope("JIT Compile", M.getModuleIdentifier());
     Expected<std::unique_ptr<MemoryBuffer>> Obj = CompileLayer.getCompiler()(M);
     if (!Obj) {
 #ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the static analyzer thinks might be a safepoint
@@ -2134,13 +2163,14 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 Error JuliaOJIT::addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM, bool ShouldOptimize)
 {
     if (auto Err = TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT -> Error {
+            auto PostOptDL = TM->createDataLayout(); // excludes ni tags stripped by optzns
             if (M.getDataLayout().isDefault())
-                M.setDataLayout(DL);
-            if (M.getDataLayout() != DL)
+                M.setDataLayout(PostOptDL);
+            if (M.getDataLayout() != PostOptDL)
                 return make_error<StringError>(
                     "Added modules have incompatible data layouts: " +
                     M.getDataLayout().getStringRepresentation() + " (module) vs " +
-                    DL.getStringRepresentation() + " (jit)",
+                    PostOptDL.getStringRepresentation() + " (jit)",
                 inconvertibleErrorCode());
             // OrcJIT requires that all modules / files have unique names:
             M.setModuleIdentifier((M.getModuleIdentifier() + Twine("-") + Twine(jl_atomic_fetch_add_relaxed(&jitcounter, 1))).str());
@@ -2382,7 +2412,11 @@ std::unique_ptr<TargetMachine> JuliaOJIT::cloneTargetMachine() const
 {
     auto NewTM = std::unique_ptr<TargetMachine>(getTarget()
         .createTargetMachine(
+#if JL_LLVM_VERSION < 210000
             getTargetTriple().str(),
+#else
+            getTargetTriple(),
+#endif
             getTargetCPU(),
             getTargetFeatureString(),
             getTargetOptions(),

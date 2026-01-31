@@ -354,10 +354,10 @@ mutable struct InferenceState
         for i = 1:nslots
             argtyp = (i > nargtypes) ? Bottom : argtypes[i]
             if argtyp === Bool && has_conditional(typeinf_lattice(interp))
-                argtyp = Conditional(i, Const(true), Const(false))
+                argtyp = Conditional(i, #= ssadef =# 0, Const(true), Const(false))
             end
             slottypes[i] = argtyp
-            bb_vartable1[i] = VarState(argtyp, i > nargtypes)
+            bb_vartable1[i] = VarState(argtyp, #= ssadef =# 0, i > nargtypes)
         end
         src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for _ = 1:nssavalues ]
         ssaflags = copy(src.ssaflags)
@@ -759,7 +759,7 @@ function sptypes_from_meth_instance(mi::MethodInstance)
             ty = Const(v)
             undef = false
         end
-        sptypes[i] = VarState(ty, undef)
+        sptypes[i] = VarState(ty, typemin(Int), undef)
     end
     return sptypes
 end

@@ -44,23 +44,17 @@
 // aarch64-darwin (macOS on ARM64), and not likely to ever be supported there
 // (see https://bugs.llvm.org/show_bug.cgi?id=52029).
 //
-// However, JITLink is a relatively young library and lags behind in platform
-// and feature support (e.g. Windows, JITEventListeners for various profilers,
-// etc.). Thus, we currently only use JITLink where absolutely required, that is,
-// for Mac/aarch64 and Linux/aarch64.
-//#define JL_FORCE_JITLINK
+// JITLink is now used on all platforms by default.  The support for RuntimeDyld
+// will be removed when we need the ability to manipulate JITLink LinkGraphs.
+//
+// Of the supported profilers, only OProfile has not been ported to JITLink.
 
 #if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
 # define HAS_SANITIZER
 #endif
-// The sanitizers don't play well with our memory manager
 
-#if defined(JL_FORCE_JITLINK) || defined(_CPU_AARCH64_) || defined(HAS_SANITIZER)
-# define JL_USE_JITLINK
-#endif
-
-#if defined(_CPU_RISCV64_)
-# define JL_USE_JITLINK
+#ifndef JL_USE_OPROFILE_JITEVENTS
+#define JL_USE_JITLINK
 #endif
 
 # include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
@@ -68,6 +62,11 @@
 # include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
 
 using namespace llvm;
+
+inline int jl_is_timing_passes = 0;
+inline int jl_is_timing_trace = 0;
+inline unsigned jl_timing_trace_granularity = 500;
+inline std::string jl_timing_trace_file;
 
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeContext, LLVMOrcThreadSafeContextRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeModule, LLVMOrcThreadSafeModuleRef)
@@ -222,6 +221,7 @@ struct jl_returninfo_t {
     size_t union_align;
     size_t union_minalign;
     unsigned return_roots;
+    bool all_roots;
 };
 
 struct jl_codegen_call_target_t {
@@ -293,7 +293,7 @@ struct jl_codegen_params_t {
     bool imaging_mode;
     bool safepoint_on_entry = true;
     bool use_swiftcc = true;
-    jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple) JL_NOTSAFEPOINT  JL_NOTSAFEPOINT_ENTER
+    jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple) JL_NOTSAFEPOINT
       : tsctx(std::move(ctx)),
         tsctx_lock(tsctx.getLock()),
         DL(std::move(DL)),
@@ -687,10 +687,16 @@ private:
     OptSelLayerT OptSelLayer;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
-std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx, const DataLayout &DL, const Triple &triple) JL_NOTSAFEPOINT;
-inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafeContext ctx, const DataLayout &DL, const Triple &triple) JL_NOTSAFEPOINT {
+std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx,
+                                              const DataLayout &DL, const Triple &triple,
+                                              Module *source = nullptr) JL_NOTSAFEPOINT;
+inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafeContext ctx,
+                                                 const DataLayout &DL, const Triple &triple,
+                                                 Module *source = nullptr) JL_NOTSAFEPOINT
+{
     auto lock = ctx.getLock();
-    return orc::ThreadSafeModule(jl_create_llvm_module(name, *ctx.getContext(), DL, triple), ctx);
+    return orc::ThreadSafeModule(
+        jl_create_llvm_module(name, *ctx.getContext(), DL, triple, source), ctx);
 }
 
 Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
