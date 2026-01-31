@@ -463,12 +463,10 @@ packages, or user code.  For example, `⋅` and `×` are defined in the standard
 [^2]:
     Unary operators and juxtaposition of numeric literals take precedence over `^` only *within the exponent*.  For example, `2^-3`, `x^√2`, and `2^3x` are parsed as `2^(-3)`, `x^(√2)`, and `2^(3*x)`; whereas `-2^3`, `√x^2`, `2^3*x`, and `2x^3` are parsed as `-(2^3)`, `√(x^2)`, `(2^3)*x`, and `2*(x^3)`.
 [^3]:
-    The unary operators `+` and `-` require explicit parentheses around their argument to disambiguate them from the operator `++`, etc. Other compositions of unary operators are parsed with right-associativity, e.g., `√√-a` as `√(√(-a))`.
+    Note that most unary operators can be composed, except `++` which is a distinct *binary* operator, and `--` which produces a `ParseError`.  Other compositions of unary operators are parsed with right-associativity — e.g., `√√-a` as `√(√(-a))`.
 [^4]:
-    Note that most unary operators can be juxtaposed, except `++` which is a distinct *binary* operator, and `--` which produces a `ParseError`.  Other compositions of unary operators are parsed with right-associativity — e.g., `√√-a` as `√(√(-a))`.
-[^5]:
     The operators `+`, `++` and `*` are parsed differently.  For example, `a + b + c` is parsed as `+(a, b, c)` not `+(+(a, b),c)`.  However, the fallback methods for `+(a, b, c, d...)` and `*(a, b, c, d...)` both default to left-associative evaluation.  Note that `++` is not defined in `Base`, but is parsed in the same way.
-[^6]:
+[^5]:
     Comparisons can be [chained](@ref "Chaining comparisons").  For example, `a < b < c` is essentially the same as `a < b && b < c`.  However, the order of evaluation is undefined.
 
 It is also possible to define additional operators by appending suffixes to most of the binary operators.  The valid
