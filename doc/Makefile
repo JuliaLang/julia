@@ -23,7 +23,7 @@ help:
 
 VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
 DOCUMENTER_OPTIONS := linkcheck=$(linkcheck) doctest=$(doctest) buildroot=$(call cygpath_w,$(BUILDROOT)) \
-    texplatform=$(texplatform) revise=$(revise) stdlibdir=$(call cygpath_w,$(build_datarootdir)/julia/stdlib/$(VERSDIR)/)
+    texplatform=$(texplatform) revise=$(revise) stdlibdir=$(call cygpath_w,$(build_private_libdir)/stdlib/$(VERSDIR)/)
 
 UNICODE_DATA_VERSION=17.0.0
 $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt:

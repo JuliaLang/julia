@@ -19,7 +19,7 @@ end
 # the system image and simply returns that copy of the compiler. If not,
 # we proceed to load/precompile this as an ordinary package.
 elseif (isdefined(Base, :generating_output) && Base.generating_output(true) &&
-        Base.samefile(joinpath(Sys.BINDIR, Base.DATAROOTDIR, Base._compiler_require_dependencies[1][2]), @eval @__FILE__) &&
+        Base.samefile(joinpath(Sys.BINDIR, Base.PRIVATE_LIBDIR, Base._compiler_require_dependencies[1][2]), @eval @__FILE__) &&
         !Base.any_includes_stale(
             map(Base.compiler_chi, Base._compiler_require_dependencies),
             "sysimg", nothing))
@@ -96,14 +96,14 @@ eval(m, x) = Core.eval(m, x)
 function include(x::String)
     if !isdefined(Base, :end_base_include)
         # During bootstrap, all includes are relative to `base/`
-        x = Base.strcat(Base.strcat(Base.DATAROOT, "julia/Compiler/src/"), x)
+        x = Base.strcat(Base.strcat(Base.PRIVATE_LIBDIR_ARG, "Compiler/src/"), x)
     end
     Base.include(Compiler, x)
 end
 
 function include(mod::Module, x::String)
     if !isdefined(Base, :end_base_include)
-        x = Base.strcat(Base.strcat(Base.DATAROOT, "julia/Compiler/src/"), x)
+        x = Base.strcat(Base.strcat(Base.PRIVATE_LIBDIR_ARG, "Compiler/src/"), x)
     end
     Base.include(mod, x)
 end
