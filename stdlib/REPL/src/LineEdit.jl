@@ -1882,7 +1882,7 @@ function match_input(k::Dict{Char}, s::Union{Nothing,MIState}, term::Union{Abstr
     push!(cs, c)
     key = haskey(k, c) ? c : wildcard
     # if we don't match on the key, look for a default action then fallback on 'nothing' to ignore
-    return match_input(get(k, key, nothing), s, term, cs, keymap; update_repeats=update_repeats)
+    return match_input(get(k, key, nothing), s, term, cs, keymap; update_repeats)
 end
 
 update_key_repeats(s, keystroke) = nothing
