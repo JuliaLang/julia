@@ -179,7 +179,7 @@ end
     @test ∘(x -> (x, 3), x -> (x, 2), x->(x,1))(0) === (((0, 1), 2), 3)
     @test ∘(x -> (x, 4), x -> (x, 3), x->(x,2), x-> (x, 1))(0) === ((((0, 1), 2), 3), 4)
 
-    # test that user defined functors only need to overload the two arg version
+    # test that user defined callable structs only need to overload the two arg version
     struct FreeMagma
         word
     end

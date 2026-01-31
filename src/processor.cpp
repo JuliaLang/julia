@@ -16,7 +16,6 @@
 #include "julia.h"
 #include "julia_internal.h"
 
-#include <map>
 #include <algorithm>
 
 #include "julia_assert.h"
@@ -24,8 +23,6 @@
 #ifndef _OS_WINDOWS_
 #include <dlfcn.h>
 #endif
-
-#include <iostream>
 
 // CPU target string is a list of strings separated by `;` each string starts with a CPU
 // or architecture name and followed by an optional list of features separated by `,`.
@@ -988,19 +985,6 @@ static std::string jl_get_cpu_features_llvm(void)
             }
             else {
                 attr.append("+");
-            }
-            attr.append(ele.getKey().str());
-        }
-    }
-    // Explicitly disabled features need to be added at the end so that
-    // they are not re-enabled by other features that implies them by default.
-    for (auto &ele: HostFeatures) {
-        if (!ele.getValue()) {
-            if (!attr.empty()) {
-                attr.append(",-");
-            }
-            else {
-                attr.append("-");
             }
             attr.append(ele.getKey().str());
         }

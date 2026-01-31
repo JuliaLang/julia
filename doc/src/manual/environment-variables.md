@@ -495,6 +495,10 @@ A `generic` or empty CPU name means the basic required feature set of the target
 which is at least the architecture the C/C++ runtime is compiled with. Each string
 is interpreted by LLVM.
 
+!!! note
+    Package images can only target the same or more specific CPU features than
+    their base system image.
+
 A few special features are supported:
 
 1. `sysimage`
@@ -532,6 +536,15 @@ A few special features are supported:
 ### [`JULIA_DEBUG`](@id JULIA_DEBUG)
 
 Enable debug logging for a file or module, see [`Logging`](@ref man-logging) for more information.
+
+### CI Debug Environment Variables
+
+Julia automatically enables verbose debugging options when certain continuous integration (CI) debug environment variables are set. This improves the debugging experience when CI jobs are re-run with debug logging enabled, by automatically:
+
+- Enabling `--trace-eval` (location mode) to show expressions being evaluated
+- Setting `JULIA_TEST_VERBOSE=true` to enable verbose test output
+
+This allows developers to get detailed debugging information from CI runs without modifying their scripts or workflow files.
 
 ### [`JULIA_PROFILE_PEEK_HEAP_SNAPSHOT`](@id JULIA_PROFILE_PEEK_HEAP_SNAPSHOT)
 

@@ -15,7 +15,7 @@ using Base.Filesystem: _readdirx
 using Base.JuliaSyntax: @K_str, @KSet_str, parseall, byte_range, children, is_prefix_call, is_trivia, kind
 
 using ..REPL.LineEdit: NamedCompletion
-using ..REPL.SyntaxUtil: CursorNode, find_parent, seek_pos, char_range, char_last, children_nt, find_delim
+using ..REPL.SyntaxUtil: CursorNode, find_parent, seek_pos, char_range, char_first, char_last, children_nt, find_delim
 
 abstract type Completion end
 
@@ -186,7 +186,7 @@ function complete_symbol!(suggestions::Vector{Completion},
                           complete_modules_only::Bool=false,
                           shift::Bool=false)
     local mod, t, val
-    complete_internal_only = false
+    complete_internal_only = isempty(name)
     if prefix !== nothing
         res = repl_eval_ex(prefix, context_module)
         res === nothing && return Completion[]
@@ -210,14 +210,15 @@ function complete_symbol!(suggestions::Vector{Completion},
     end
 
     if @isdefined(mod) # lookup names available within the module
-        let modname = nameof(mod),
-            is_main = mod===Main
+        let mod_for_check = mod,
+            modname = nameof(mod_for_check),
+            is_main = mod_for_check === Main
             append_filtered_mod_names!(suggestions, mod, name, complete_internal_only) do s::Symbol
-                if Base.isdeprecated(mod, s)
+                if Base.isdeprecated(mod_for_check, s)
                     return false
                 elseif s === modname
                     return false # exclude `Main.Main.Main`, etc.
-                elseif complete_modules_only && !completes_module(mod, s)
+                elseif complete_modules_only && !completes_module(mod_for_check, s)
                     return false
                 elseif is_main && s === :MainInclude
                     return false
@@ -288,13 +289,17 @@ function complete_from_list!(suggestions::Vector{Completion}, T::Type, list::Vec
     return suggestions
 end
 
-const sorted_keywords = [
-    "abstract type", "baremodule", "begin", "break", "catch", "ccall",
-    "const", "continue", "do", "else", "elseif", "end", "export",
-    "finally", "for", "function", "global", "if", "import",
-    "let", "local", "macro", "module", "mutable struct",
-    "primitive type", "quote", "return", "struct",
-    "try", "using", "while"]
+const sorted_keywords = let
+    keywords = map(string, Base.JuliaSyntax.Tokenize.kws)
+    excluded = ("type", "doc", "var", "VERSION")
+    filter!(∉(excluded), keywords)
+    compound = ("abstract", "mutable", "primitive")
+    filter!(∉(compound), keywords)
+    push!(keywords, "abstract type", "mutable struct", "primitive type")
+    # Register additional keywords, not in JuliaSyntax keywords
+    push!(keywords, "ccall")
+    sort!(keywords)
+end
 
 complete_keyword!(suggestions::Vector{Completion}, s::String) =
     complete_from_list!(suggestions, KeywordCompletion, sorted_keywords, s)
@@ -334,19 +339,25 @@ PATH_cache_task::Union{Task,Nothing} = nothing
 PATH_cache_condition::Union{Threads.Condition, Nothing} = nothing # used for sync in tests
 next_cache_update::Float64 = 0.0
 function maybe_spawn_cache_PATH()
-    global PATH_cache_task, next_cache_update
+    global PATH_cache_task, PATH_cache_condition, next_cache_update
     @lock PATH_cache_lock begin
-        PATH_cache_task isa Task && !istaskdone(PATH_cache_task) && return
+        # Extract to local variables to enable flow-sensitive type inference for these global variables
+        PATH_cache_task_local = PATH_cache_task
+        PATH_cache_task_local isa Task && !istaskdone(PATH_cache_task_local) && return
         time() < next_cache_update && return
-        PATH_cache_task = Threads.@spawn begin
-            REPLCompletions.cache_PATH()
-            @lock PATH_cache_lock begin
-                next_cache_update = time() + 10 # earliest next update can run is 10s after
-                PATH_cache_task = nothing # release memory when done
-                PATH_cache_condition !== nothing && notify(PATH_cache_condition)
+        PATH_cache_task = PATH_cache_task_local = Threads.@spawn begin
+            try
+                REPLCompletions.cache_PATH()
+            finally
+                @lock PATH_cache_lock begin
+                    next_cache_update = time() + 10 # earliest next update can run is 10s after
+                    PATH_cache_task = nothing # release memory when done
+                    PATH_cache_condition_local = PATH_cache_condition
+                    PATH_cache_condition_local !== nothing && notify(PATH_cache_condition_local)
+                end
             end
         end
-        Base.errormonitor(PATH_cache_task)
+        Base.errormonitor(PATH_cache_task_local)
     end
 end
 
@@ -592,14 +603,6 @@ function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef, baile
                                               sv::CC.InferenceState)
 end
 
-function is_repl_frame_getproperty(sv::CC.InferenceState)
-    def = sv.linfo.def
-    def isa Method || return false
-    def.name === :getproperty || return false
-    CC.is_cached(sv) && return false
-    return is_repl_frame(CC.frame_parent(sv))
-end
-
 # aggressive concrete evaluation for `:inconsistent` frames within `repl_frame`
 function CC.concrete_eval_eligible(interp::REPLInterpreter, @nospecialize(f),
                                    result::CC.MethodCallResult, arginfo::CC.ArgInfo,
@@ -607,7 +610,7 @@ function CC.concrete_eval_eligible(interp::REPLInterpreter, @nospecialize(f),
     if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_stack_uncached(sv))
         neweffects = CC.Effects(result.effects; consistent=CC.ALWAYS_TRUE)
         result = CC.MethodCallResult(result.rt, result.exct, neweffects, result.edge,
-                                     result.edgecycle, result.edgelimited, result.volatile_inf_result)
+                                     result.edgecycle, result.edgelimited, result.call_result)
     end
     ret = @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter, f::Any,
                                             result::CC.MethodCallResult, arginfo::CC.ArgInfo,
@@ -629,6 +632,8 @@ function CC.const_prop_argument_heuristic(interp::REPLInterpreter, arginfo::CC.A
     return @invoke CC.const_prop_argument_heuristic(interp::CC.AbstractInterpreter, arginfo::CC.ArgInfo, sv::CC.InferenceState)
 end
 
+# Perform some post-hoc mutation on lowered code, as expected by some abstract interpretation
+# routines, especially for `:foreigncall` and `:cglobal`.
 function resolve_toplevel_symbols!(src::Core.CodeInfo, mod::Module)
     @ccall jl_resolve_definition_effects_in_ir(
         #=jl_array_t *stmts=# src.code::Any,
@@ -637,6 +642,11 @@ function resolve_toplevel_symbols!(src::Core.CodeInfo, mod::Module)
         #=jl_value_t *binding_edge=# C_NULL::Ptr{Cvoid},
         #=int binding_effects=# 0::Int)::Cvoid
     return src
+end
+
+function construct_toplevel_mi(src::Core.CodeInfo, context_module::Module)
+    resolve_toplevel_symbols!(src, context_module)
+    return @ccall jl_method_instance_for_thunk(src::Any, context_module::Any)::Ref{Core.MethodInstance}
 end
 
 # lower `ex` and run type inference on the resulting top-level expression
@@ -658,10 +668,7 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module; limit_aggressiv
     isexpr(lwr, :thunk) || return nothing # lowered to `Expr(:error, ...)` or similar
     src = lwr.args[1]::Core.CodeInfo
 
-    resolve_toplevel_symbols!(src, context_module)
-    # construct top-level `MethodInstance`
-    mi = ccall(:jl_method_instance_for_thunk, Ref{Core.MethodInstance}, (Any, Any), src, context_module)
-
+    mi = construct_toplevel_mi(src, context_module)
     interp = REPLInterpreter(limit_aggressive_inference)
     result = CC.InferenceResult(mi)
     frame = CC.InferenceState(result, src, #=cache=#:no, interp)
@@ -692,6 +699,15 @@ code_typed(CC.typeinf, (REPLInterpreter, CC.InferenceState))
 MAX_METHOD_COMPLETIONS::Int = 40
 function _complete_methods(ex_org::Expr, context_module::Module, shift::Bool)
     isempty(ex_org.args) && return 2, nothing, [], Set{Symbol}()
+    # Desugar do block call into call with lambda
+    if ex_org.head === :do && length(ex_org.args) >= 2
+        ex_call = ex_org.args[1]
+        ex_args = [x for x in ex_call.args if !(x isa Expr && x.head === :parameters)]
+        ex_params = findfirst(x -> x isa Expr && x.head === :parameters, ex_call.args)
+        new_args = [ex_args[1], ex_org.args[end], ex_args[2:end]...]
+        ex_params !== nothing && push!(new_args, ex_call.args[ex_params])
+        ex_org = Expr(:call, new_args...)
+    end
     funct = repl_eval_ex(ex_org.args[1], context_module)
     funct === nothing && return 2, nothing, [], Set{Symbol}()
     funct = CC.widenconst(funct)
@@ -890,12 +906,6 @@ function complete_keyword_argument!(suggestions::Vector{Completion},
     kwargs_flag == 2 && return false # one of the previous kwargs is invalid
 
     methods = Completion[]
-    # Limit kwarg completions to cases when function is concretely known; looking up
-    # matching methods for abstract functions — particularly `Any` or `Function` — can
-    # take many seconds to run over the thousands of possible methods. Note that
-    # isabstracttype would return naively return true for common constructor calls
-    # like Array, but the REPL's introspection here may know their Type{T}.
-    isconcretetype(funct) || return false
     complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, -1, arg_pos == :kwargs)
     # TODO: use args_ex instead of Any[Vararg{Any}] and only provide kwarg completion for
     # method calls compatible with the current arguments.
@@ -988,6 +998,7 @@ end
 
 function completions(string::String, pos::Int, context_module::Module=Main, shift::Bool=true, hint::Bool=false)
     # filename needs to be string so macro can be evaluated
+    # TODO: JuliaSyntax version API here
     node = parseall(CursorNode, string, ignore_errors=true, keep_parens=true, filename="none")
     cur = @something seek_pos(node, pos) node
 
@@ -1016,8 +1027,8 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         if obj !== nothing
             # Skip leading whitespace inside brackets.
             i = @something findnext(!isspace, string, first(key)) nextind(string, last(key))
-            key = i:last(key)
-            s = string[intersect(key, 1:pos)]
+            key = intersect(i:last(key), 1:pos)
+            s = string[key]
             matches = find_dict_matches(obj, s)
             length(matches) == 1 && !closed && (matches[1] *= ']')
             if length(matches) > 0
@@ -1032,7 +1043,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     #   `file ~/exa TAB          => `file ~/example.txt
     #   `file ~/example.txt TAB  => `file /home/user/example.txt
     if (n = find_parent(cur, K"CmdString")) !== nothing
-        off = n.position - 1
+        off = char_first(n) - 1
         ret, r, success = shell_completions(string[char_range(n)], pos - off, hint, cmd_escape=true)
         success && return ret, r .+ off, success
     end
@@ -1042,6 +1053,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     #  "~/example.txt TAB => "/home/user/example.txt"
     r, closed = find_str(cur)
     if r !== nothing
+        r = intersect(r, 1:pos)
         s = do_string_unescape(string[r])
         ret, success = complete_path_string(s, hint; string_escape=true,
                                             dirsep=Sys.iswindows() ? '\\' : '/')
@@ -1085,8 +1097,8 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         # Keyword argument completion:
         #   foo(ar TAB   => keyword arguments like `arg1=`
         elseif kind(cur) == K"Identifier"
-            r = char_range(cur)
-            s = string[intersect(r, 1:pos)]
+            r = intersect(char_range(cur), 1:pos)
+            s = string[r]
             # Return without adding more suggestions if kwargs only
             complete_keyword_argument!(suggestions, e, s, context_module, arg_pos; shift) &&
                 return sort_suggestions(), r, true
@@ -1095,17 +1107,18 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
 
     # Symbol completion
     # TODO: Should completions replace the identifier at the cursor?
-    if cur.parent !== nothing && kind(cur.parent) == K"var"
+    looks_like_ident = Base.isidentifier(@view string[intersect(char_range(cur), 1:pos)])
+    if cur.parent !== nothing && kind(cur.parent) === K"var"
         # Replace the entire var"foo", but search using only "foo".
         r = intersect(char_range(cur.parent), 1:pos)
         r2 = char_range(children_nt(cur.parent)[1])
         s = string[intersect(r2, 1:pos)]
-    elseif kind(cur) in KSet"Identifier @"
-        r = intersect(char_range(cur), 1:pos)
-        s = string[r]
-    elseif kind(cur) == K"MacroName"
+    elseif cur.parent !== nothing && kind(cur.parent) === K"macro_name"
         # Include the `@`
-        r = intersect(prevind(string, cur.position):char_last(cur), 1:pos)
+        r = intersect(prevind(string, char_first(cur)):char_last(cur), 1:pos)
+        s = string[r]
+    elseif looks_like_ident || kind(cur) in KSet"Bool Identifier @"
+        r = intersect(char_range(cur), 1:pos)
         s = string[r]
     else
         r = nextind(string, pos):pos
@@ -1114,7 +1127,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
 
     complete_modules_only = false
     prefix = node_prefix(cur, context_module)
-    comp_keywords = prefix === nothing
+    comp_keywords = prefix === nothing && !isempty(s)
 
     # Complete loadable module names:
     #   import Mod TAB
@@ -1123,13 +1136,13 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     if (n = find_parent(cur, K"importpath")) !== nothing
         # Given input lines like `using Foo|`, `import Foo, Bar|` and `using Foo.Bar, Baz, |`:
         # Let's look only for packages and modules we can reach from here
-        if prefix == nothing
+        if prefix === nothing
             complete_loading_candidates!(suggestions, s)
             return sort_suggestions(), r, true
         end
 
         # Allow completion for `import Mod.name` (where `name` is not a module)
-        complete_modules_only = prefix == nothing || kind(n.parent) == K"using"
+        complete_modules_only = prefix === nothing || kind(n.parent) === K"using"
         comp_keywords = false
     end
 
@@ -1163,8 +1176,10 @@ function find_ref_key(cur::CursorNode, pos::Int)
     n = find_parent(cur, K"ref")
     n !== nothing || return nothing, nothing, nothing
     key, closed = find_delim(n, K"[", K"]")
-    first(key) - 1 <= pos <= last(key) || return nothing, nothing, nothing
-    n, key, closed
+    if key === nothing || !(first(key) - 1 <= pos <= last(key))
+        return nothing, nothing, nothing
+    end
+    return n, key, closed
 end
 
 # If the cursor is in a literal string, return the contents and char range
@@ -1200,6 +1215,7 @@ function node_prefix(node::CursorNode, context_module::Module)
     p = node.parent
     # In x.var"y", the parent is the "var" when the cursor is on "y".
     kind(p) == K"var" && (p = p.parent)
+    kind(p) == K"macro_name" && (p = p.parent)
 
     # expr.node => expr
     if kind(p) == K"."
@@ -1370,9 +1386,10 @@ function complete_path_string(path, hint::Bool=false;
 
     # Expand '~' if the user hits TAB on a path ending in '/'.
     expanded && (hint || path != dir * "/") && (dir = contractuser(dir))
+    local dir_for_paths = dir
 
     map!(paths) do c::PathCompletion
-        p = joinpath_withsep(dir, c.path; dirsep)
+        p = joinpath_withsep(dir_for_paths, c.path; dirsep)
         PathCompletion(escape(p))
     end
     return sort!(paths, by=p->p.path), success

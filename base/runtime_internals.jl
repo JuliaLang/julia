@@ -7,7 +7,7 @@
 
 Get a module's enclosing `Module`. `Main` is its own parent.
 
-See also: [`names`](@ref), [`nameof`](@ref), [`fullname`](@ref), [`@__MODULE__`](@ref).
+See also [`names`](@ref), [`nameof`](@ref), [`fullname`](@ref), [`@__MODULE__`](@ref).
 
 # Examples
 ```jldoctest
@@ -95,7 +95,7 @@ If `all` is true, then the list also includes non-public names defined in the mo
 deprecated names, and compiler-generated names.
 If `imported` is true, then names explicitly imported from other modules
 are also included.
-If `usings` is true, then names explicitly imported via `using` are also included.
+If `usings` is true, then names explicitly or implicitly imported via `using` are also included.
 Names are returned in sorted order.
 
 As a special case, all names defined in `Main` are considered \"public\",
@@ -110,7 +110,10 @@ since it is not idiomatic to explicitly mark names from `Main` as public.
     `names` may return duplicate names. The duplication happens, e.g. if an `import`ed name
     conflicts with an already existing identifier.
 
-See also: [`Base.isexported`](@ref), [`Base.ispublic`](@ref), [`Base.@locals`](@ref), [`@__MODULE__`](@ref).
+!!! compat "Julia 1.12"
+    The `usings` argument requires Julia 1.12 or later.
+
+See also [`Base.isexported`](@ref), [`Base.ispublic`](@ref), [`Base.@locals`](@ref), [`@__MODULE__`](@ref).
 """
 names(m::Module; kwargs...) = sort!(unsorted_names(m; kwargs...))
 unsorted_names(m::Module; all::Bool=false, imported::Bool=false, usings::Bool=false) =
@@ -119,9 +122,9 @@ unsorted_names(m::Module; all::Bool=false, imported::Bool=false, usings::Bool=fa
 """
     isexported(m::Module, s::Symbol)::Bool
 
-Returns whether a symbol is exported from a module.
+Return whether a symbol is exported from a module.
 
-See also: [`ispublic`](@ref), [`names`](@ref)
+See also [`ispublic`](@ref), [`names`](@ref).
 
 ```jldoctest
 julia> module Mod
@@ -145,14 +148,14 @@ isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any),
 """
     ispublic(m::Module, s::Symbol)::Bool
 
-Returns whether a symbol is marked as public in a module.
+Return whether a symbol is marked as public in a module.
 
 Exported symbols are considered public.
 
 !!! compat "Julia 1.11"
     This function and the notion of publicity were added in Julia 1.11.
 
-See also: [`isexported`](@ref), [`names`](@ref)
+See also [`isexported`](@ref), [`names`](@ref).
 
 ```jldoctest
 julia> module Mod
@@ -250,11 +253,14 @@ const PARTITION_KIND_BACKDATED_CONST    = 0xb
 const PARTITION_FLAG_EXPORTED     = 0x10
 const PARTITION_FLAG_DEPRECATED   = 0x20
 const PARTITION_FLAG_DEPWARN      = 0x40
+const PARTITION_FLAG_IMPLICITLY_EXPORTED = 0x80
 
 const PARTITION_MASK_KIND         = 0x0f
 const PARTITION_MASK_FLAG         = 0xf0
 
 const BINDING_FLAG_ANY_IMPLICIT_EDGES = 0x8
+
+const JL_MODULE_USING_REEXPORT = 0x1
 
 is_defined_const_binding(kind::UInt8) = (kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_BACKDATED_CONST)
 is_some_const_binding(kind::UInt8) = (is_defined_const_binding(kind) || kind == PARTITION_KIND_UNDEF_CONST)
@@ -287,7 +293,7 @@ end
 
 partition_restriction(bpart::Core.BindingPartition) = ccall(:jl_bpart_get_restriction_value, Any, (Any,), bpart)
 
-binding_kind(bpart::Core.BindingPartition) = ccall(:jl_bpart_get_kind, UInt8, (Any,), bpart)
+binding_kind(bpart::Core.BindingPartition) = UInt8(bpart.kind & PARTITION_MASK_KIND)
 binding_kind(m::Module, s::Symbol) = binding_kind(lookup_binding_partition(tls_world_age(), GlobalRef(m, s)))
 
 """
@@ -565,6 +571,10 @@ struct DataTypeLayout
     # fielddesc_type : 2;
     # arrayelem_isboxed : 1;
     # arrayelem_isunion : 1;
+    # arrayelem_isatomic : 1;
+    # arrayelem_islocked : 1;
+    # isbitsegal : 1;
+    # padding : 8;
 end
 
 """
@@ -576,8 +586,9 @@ alignment of the elements, not the whole object.
 """
 function datatype_alignment(dt::DataType)
     @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
+    layout = dt.layout::Ptr{Cvoid}
+    layout == C_NULL && throw(UndefRefError())
+    alignment = unsafe_load(convert(Ptr{DataTypeLayout}, layout)).alignment
     return Int(alignment)
 end
 
@@ -637,7 +648,7 @@ function datatype_isbitsegal(dt::DataType)
     @_foldable_meta
     dt.layout == C_NULL && throw(UndefRefError())
     flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
-    return (flags & (1<<5)) != 0
+    return (flags & (1<<7)) != 0
 end
 
 """
@@ -660,8 +671,9 @@ Return the number of pointers in the layout of a datatype.
 """
 function datatype_npointers(dt::DataType)
     @_foldable_meta
-    dt.layout == C_NULL && throw(UndefRefError())
-    return unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).npointers
+    layout = dt.layout::Ptr{Cvoid}
+    layout == C_NULL && throw(UndefRefError())
+    return unsafe_load(convert(Ptr{DataTypeLayout}, layout)).npointers
 end
 
 """
@@ -986,10 +998,10 @@ iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union |
 """
     Base.isconcretedispatch(T)
 
-Returns true if `T` is a [concrete type](@ref isconcretetype) that could appear
+Return true if `T` is a [concrete type](@ref isconcretetype) that could appear
 as an element of a [dispatch tuple](@ref isdispatchtuple).
 
-See also: [`isdispatchtuple`](@ref).
+See also [`isdispatchtuple`](@ref).
 
 # Examples
 ```jldoctest
@@ -1038,7 +1050,7 @@ If `T` is not a type, then return `false`.
     possible for a type `U` to exist such that `T == U`, `isconcretetype(T)`,
     but `!isconcretetype(U)`.
 
-See also: [`isbits`](@ref), [`isabstracttype`](@ref), [`issingletontype`](@ref).
+See also [`isbits`](@ref), [`isabstracttype`](@ref), [`issingletontype`](@ref).
 
 # Examples
 ```jldoctest
@@ -1081,7 +1093,7 @@ If `T` is not a type, then return `false`.
     vice versa, types can be neither concrete nor abstract (for example,
     `Vector` (a [`UnionAll`](@ref))).
 
-See also: [`isconcretetype`](@ref).
+See also [`isconcretetype`](@ref).
 
 # Examples
 ```jldoctest
@@ -1433,7 +1445,7 @@ max_world(m::Core.CodeInfo) = m.max_world
 """
     get_world_counter()
 
-Returns the current maximum world-age counter. This counter is monotonically
+Return the current maximum world-age counter. This counter is monotonically
 increasing.
 
 !!! warning
@@ -1447,7 +1459,7 @@ get_world_counter() = ccall(:jl_get_world_counter, UInt, ())
 """
     tls_world_age()
 
-Returns the world the [current_task()](@ref) is executing within.
+Return the world the [current_task()](@ref) is executing within.
 """
 tls_world_age() = ccall(:jl_get_tls_world_age, UInt, ())
 
@@ -1466,7 +1478,7 @@ of the documented interface of `x`.   If you want it to also return "private"
 property names intended for internal use, pass `true` for the optional second argument.
 REPL tab completion on `x.` shows only the `private=false` properties.
 
-See also: [`hasproperty`](@ref), [`hasfield`](@ref).
+See also [`hasproperty`](@ref), [`hasfield`](@ref).
 """
 propertynames(x) = fieldnames(typeof(x))
 propertynames(m::Module) = names(m)
@@ -1481,7 +1493,7 @@ Return a boolean indicating whether the object `x` has `s` as one of its own pro
 !!! compat "Julia 1.2"
      This function requires at least Julia 1.2.
 
-See also: [`propertynames`](@ref), [`hasfield`](@ref).
+See also [`propertynames`](@ref), [`hasfield`](@ref).
 """
 hasproperty(x, s::Symbol) = s in propertynames(x)
 
@@ -1515,15 +1527,7 @@ end
 function matches_to_methods(ms::Array{Any,1}, tn::Core.TypeName, mod)
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
     ms = Method[(ms[i]::Core.MethodMatch).method for i in 1:length(ms)]
-    # Remove shadowed methods with identical type signatures
-    prev = nothing
-    filter!(ms) do m
-        l = prev
-        repeated = (l isa Method && m.sig == l.sig)
-        prev = m
-        return !repeated
-    end
-    # Remove methods not part of module (after removing shadowed methods)
+    # Remove methods not part of module
     mod === nothing || filter!(ms) do m
         return parentmodule(m) ∈ mod
     end
@@ -1542,7 +1546,7 @@ A list of modules can also be specified as an array or set.
 !!! compat "Julia 1.4"
     At least Julia 1.4 is required for specifying a module.
 
-See also: [`which`](@ref), [`@which`](@ref Main.InteractiveUtils.@which) and [`methodswith`](@ref Main.InteractiveUtils.methodswith).
+See also [`which`](@ref), [`@which`](@ref Main.InteractiveUtils.@which), [`methodswith`](@ref Main.InteractiveUtils.methodswith).
 """
 function methods(@nospecialize(f), @nospecialize(t),
                  mod::Union{Tuple{Module},AbstractArray{Module},AbstractSet{Module},Nothing}=nothing)
@@ -1648,7 +1652,7 @@ ast_slotflag(@nospecialize(code), i) = ccall(:jl_ir_slotflag, UInt8, (Any, Csize
 """
     may_invoke_generator(method, atype, sparams)::Bool
 
-Computes whether or not we may invoke the generator for the given `method` on
+Compute whether or not we may invoke the generator for the given `method` on
 the given `atype` and `sparams`. For correctness, all generated function are
 required to return monotonic answers. However, since we don't expect users to
 be able to successfully implement this criterion, we only call generated
@@ -1796,9 +1800,6 @@ hasintersect(@nospecialize(a), @nospecialize(b)) = typeintersect(a, b) !== Botto
 # scoping #
 ###########
 
-_topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
-
-
 # high-level, more convenient method lookup functions
 
 function visit(f, mt::Core.MethodTable)
@@ -1873,11 +1874,11 @@ end
 length(specs::MethodSpecializations) = count(Returns(true), specs)
 
 function length(mt::Core.MethodTable)
-    n = 0
+    n = Ref(0)
     visit(mt) do m
-        n += 1
+        n[] += 1
     end
-    return n::Int
+    return n[]
 end
 isempty(mt::Core.MethodTable) = (mt.defs === nothing)
 

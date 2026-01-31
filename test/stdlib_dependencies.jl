@@ -1,12 +1,37 @@
-using Libdl
-using Pkg
-using Test
-prev_env = Base.active_project()
-Pkg.activate(temp=true)
-Pkg.add(Pkg.PackageSpec(name="ObjectFile", uuid="d8793406-e978-5875-9003-1fc021f44a92", version="0.4"))
-using ObjectFile
-try
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Libdl
+using Test
+
+# Load ObjectFile.jl from the vendored jlutilities depot
+buildroot = get(ENV, "JULIA_TEST_BUILDROOT", joinpath(@__DIR__, ".."))
+depspath = joinpath(buildroot, "deps", "jlutilities")
+if ispath(depspath)
+    depspath = realpath(depspath)
+    # With a source-tree use the vendored depot
+    pushfirst!(DEPOT_PATH, joinpath(depspath, "depot"))
+    using Pkg
+    old_active_project = Base.active_project()
+    Base.redirect_stdout(devnull) do
+        Base.redirect_stderr(devnull) do
+            Pkg.activate(realpath(joinpath(@__DIR__, "..", "deps", "jlutilities", "objectfile")))
+            Pkg.instantiate()
+        end
+    end
+    using ObjectFile
+    popfirst!(DEPOT_PATH)
+    Base.set_active_project(old_active_project)
+else
+    # Without a source-tree - expect that the user has installed it for us - warn otherwise
+    ObjectFile_pkgid = Base.PkgId(Base.UUID("d8793406-e978-5875-9003-1fc021f44a92"), "ObjectFile")
+    if Base.locate_package(ObjectFile_pkgid) !== nothing
+        @eval using ObjectFile
+    end
+end
+
+if !@isdefined(ObjectFile)
+    @warn("ObjectFile.jl not available; skipping stdlib JLL dependency tests")
+else
     strip_soversion(lib::AbstractString) = Base.BinaryPlatforms.parse_dl_name_version(lib)[1]
 
     function get_deps_objectfile_macos(lib_path::String)
@@ -178,6 +203,7 @@ try
             "bcrypt",
             "winhttp",
             "secur32",
+            "iphlpapi",
         ]
         return any(syslib -> lowercase(lib) == syslib, system_libs)
     end
@@ -213,7 +239,7 @@ try
                 prop = getproperty(m, prop_name)
                 if isa(prop, Libdl.LazyLibrary)
                     lib_path = dlpath(prop)
-                    lazy_lib_deps = strip_soversion.(basename.(dlpath.(prop.dependencies)))
+                    lazy_lib_deps = strip_soversion.(basename.(dlpath.(prop.dependencies())))
                     real_lib_deps = filter(!is_system_lib, get_deps_objectfile(lib_path))
 
                     # See if there are missing dependencies in the lazy library deps
@@ -233,13 +259,21 @@ try
                         end
                     end
 
+                    if prop_name == :libspqr
+                        # Allow libstdc++ to not be linked - spqr only uses std::complex,
+                        # which may be header-only, so doesn't get linked on as-needed distributions.
+                        # However, in general, we can't assume that, so we need to take the dependency
+                        # and just allow this here.
+                        extraneous_deps = setdiff(extraneous_deps, ["libstdc++"])
+                    end
+
                     # We expect there to be no missing or extraneous deps
                     deps_mismatch = !isempty(missing_deps) || !isempty(extraneous_deps)
 
                     # This is a manually-managed special case
                     if stdlib_name == "libblastrampoline_jll" &&
-                       prop_name == :libblastrampoline &&
-                       extraneous_deps in (["libopenblas64_"], ["libopenblas"])
+                        prop_name == :libblastrampoline &&
+                        extraneous_deps in (["libopenblas64_"], ["libopenblas"])
                         deps_mismatch = false
                     end
 
@@ -264,11 +298,44 @@ try
         end
     end
 
-finally
-    if prev_env !== nothing
-        Pkg.activate(prev_env)
-    else
-        # If no previous environment, activate the default one
-        Pkg.activate()
+    # Check that any JLL stdlib that defines executables also provides corresponding *_path variables
+    @testset "Stdlib JLL executable path variables" begin
+        for (_, (stdlib_name, _)) in Pkg.Types.stdlibs()
+            if !endswith(stdlib_name, "_jll")
+                continue
+            end
+
+            # Import the stdlib, skip it if it's not available on this platform
+            m = eval(Meta.parse("import $(stdlib_name); $(stdlib_name)"))
+            if !Base.invokelatest(getproperty(m, :is_available))
+                continue
+            end
+
+            # Look for *_exe constants that indicate executable definitions
+            exe_constants = Symbol[]
+            for name in names(m, all=true)
+                name_str = string(name)
+                if endswith(name_str, "_exe") && isdefined(m, name)
+                    push!(exe_constants, name)
+                end
+            end
+
+            # For each *_exe constant, check if there's a corresponding *_path variable
+            for exe_const in exe_constants
+                exe_name_str = string(exe_const)
+                # Convert from *_exe to *_path (e.g., zstd_exe -> zstd_path)
+                expected_path_var = Symbol(replace(exe_name_str, "_exe" => "_path"))
+
+                @test isdefined(m, expected_path_var)
+
+                if !isdefined(m, expected_path_var)
+                    @warn("Missing path variable",
+                        jll = stdlib_name,
+                        exe_constant = exe_const,
+                        expected_path_var = expected_path_var
+                    )
+                end
+            end
+        end
     end
 end

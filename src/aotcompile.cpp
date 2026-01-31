@@ -41,9 +41,11 @@
 #include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/Support/FormatAdapters.h>
 #include <llvm/Linker/Linker.h>
-
+#include <llvm/Support/TimeProfiler.h>
 
 using namespace llvm;
+
+#include <zstd.h>
 
 #include "jitlayers.h"
 #include "serialize.h"
@@ -91,7 +93,7 @@ void jl_get_function_id_impl(void *native_code, jl_code_instance_t *codeinst,
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN void
-jl_get_llvm_mis_impl(void *native_code, size_t *num_elements, jl_method_instance_t **data)
+jl_get_llvm_cis_impl(void *native_code, size_t *num_elements, jl_code_instance_t **data)
 {
     jl_native_code_desc_t *desc = (jl_native_code_desc_t *)native_code;
     auto &map = desc->jl_fvar_map;
@@ -104,7 +106,7 @@ jl_get_llvm_mis_impl(void *native_code, size_t *num_elements, jl_method_instance
     assert(*num_elements == map.size());
     size_t i = 0;
     for (auto &ci : map) {
-        data[i++] = jl_get_ci_mi(ci.first);
+        data[i++] = ci.first;
     }
 }
 
@@ -421,6 +423,28 @@ static void aot_optimize_roots(jl_codegen_params_t &params, egal_set &method_roo
     }
 }
 
+static jl_compiled_functions_t::iterator get_ci_equiv_compiled(jl_code_instance_t *ci JL_PROPAGATES_ROOT, jl_compiled_functions_t &compiled_functions) JL_NOTSAFEPOINT
+{
+    jl_value_t *def = ci->def;
+    jl_value_t *owner = ci->owner;
+    jl_value_t *rettype = ci->rettype;
+    size_t min_world = jl_atomic_load_relaxed(&ci->min_world);
+    size_t max_world = jl_atomic_load_relaxed(&ci->max_world);
+    for (auto it = compiled_functions.begin(), E = compiled_functions.end(); it != E; ++it) {
+        auto codeinst = it->first;
+        if (codeinst != ci &&
+            jl_atomic_load_relaxed(&codeinst->inferred) != NULL &&
+            jl_atomic_load_relaxed(&codeinst->min_world) <= min_world &&
+            jl_atomic_load_relaxed(&codeinst->max_world) >= max_world &&
+            jl_egal(codeinst->def, def) &&
+            jl_egal(codeinst->owner, owner) &&
+            jl_egal(codeinst->rettype, rettype)) {
+            return it;
+        }
+    }
+    return compiled_functions.end();
+}
+
 static void resolve_workqueue(jl_codegen_params_t &params, egal_set &method_roots, jl_compiled_functions_t &compiled_functions)
 {
     jl_workqueue_t workqueue;
@@ -438,6 +462,8 @@ static void resolve_workqueue(jl_codegen_params_t &params, egal_set &method_root
         bool preal_specsig = false;
         {
             auto it = compiled_functions.find(codeinst);
+            if (it == compiled_functions.end())
+                it = get_ci_equiv_compiled(codeinst, compiled_functions);
             if (it != compiled_functions.end()) {
                 auto &decls = it->second.decls;
                 invokeName = decls.functionObject;
@@ -476,7 +502,7 @@ static void resolve_workqueue(jl_codegen_params_t &params, egal_set &method_root
             // emit specsig-to-(jl)invoke conversion
             proto.decl->setLinkage(GlobalVariable::InternalLinkage);
             //protodecl->setAlwaysInline();
-            jl_init_function(proto.decl, params.TargetTriple);
+            jl_init_function(proto.decl, params);
             jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
             size_t nrealargs = jl_nparams(mi->specTypes); // number of actual arguments being passed
             bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
@@ -540,7 +566,9 @@ Function *IRLinker_copyFunctionProto(Module *DstM, Function *SF) {
   auto *F = Function::Create(SF->getFunctionType(), SF->getLinkage(),
                              SF->getAddressSpace(), SF->getName(), DstM);
   F->copyAttributesFrom(SF);
+#if JL_LLVM_VERSION < 210000
   F->IsNewDbgInfoFormat = SF->IsNewDbgInfoFormat;
+#endif
 
   // Remove these copied constants since they point to the source module.
   F->setPersonalityFn(nullptr);
@@ -602,8 +630,8 @@ static void generate_cfunc_thunks(jl_codegen_params_t &params, jl_compiled_funct
         };
         Module *defM = nullptr;
         StringRef func;
-        jl_method_instance_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
-        if (mi) {
+        jl_method_instance_t *mi = (jl_method_instance_t*)jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
+        if ((jl_value_t*)mi != jl_nothing) {
             auto it = compiled_mi.find(mi);
             if (it != compiled_mi.end()) {
                 codeinst = it->second;
@@ -676,14 +704,17 @@ static bool canPartition(const Function &F)
            !F.hasFnAttribute(Attribute::InlineHint);
 }
 
-// takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
 // `external_linkage` create linkages between pkgimages.
 extern "C" JL_DLLEXPORT_CODEGEN
-void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, int trim, int external_linkage, size_t world)
+void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int external_linkage, size_t world,
+                           jl_array_t *mod_array, jl_array_t *worklist, int all, jl_array_t *module_init_order)
 {
     JL_TIMING(INFERENCE, INFERENCE);
     auto ct = jl_current_task;
+    if (!jl_compile_and_emit_func) {
+        jl_error("inference not available for generating compiled output");
+    }
     bool timed = (ct->reentrant_timing & 1) == 0;
     if (timed)
         ct->reentrant_timing |= 1;
@@ -692,39 +723,37 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
 
-    jl_cgparams_t cgparams = jl_default_cgparams;
-    size_t compile_for[] = { jl_typeinf_world, world };
-    int compiler_world = 1;
-    if (trim || compile_for[0] == 0)
-        compiler_world = 0;
     jl_value_t **fargs;
-    JL_GC_PUSHARGS(fargs, 4);
-    jl_array_t *codeinfos = NULL;
-    if (jl_typeinf_func) {
-        fargs[0] = (jl_value_t*)jl_typeinf_func;
-        fargs[1] = (jl_value_t*)methods;
+    JL_GC_PUSHARGS(fargs, 8);
 #ifdef _P64
-        jl_value_t *jl_array_ulong_type = jl_array_uint64_type;
+    jl_value_t *jl_array_ulong_type = jl_array_uint64_type;
 #else
-        jl_value_t *jl_array_ulong_type = jl_array_uint32_type;
+    jl_value_t *jl_array_ulong_type = jl_array_uint32_type;
 #endif
-        jl_array_t *worlds = jl_alloc_array_1d(jl_array_ulong_type, 1 + compiler_world);
-        fargs[2] = (jl_value_t*)worlds;
-        jl_array_data(worlds, size_t)[0] = jl_typeinf_world;
-        jl_array_data(worlds, size_t)[compiler_world] = world; // might overwrite previous
-        fargs[3] = jl_box_uint8(trim);
-        size_t last_age = ct->world_age;
-        ct->world_age = jl_typeinf_world;
-        codeinfos = (jl_array_t*)jl_apply(fargs, 4);
-        ct->world_age = last_age;
-        JL_TYPECHK(create_native, array_any, (jl_value_t*)codeinfos);
-    }
-    else {
-        // we could put a very simple generator here, but there is no reason to do that right now
-        jl_error("inference not available for generating compiled output");
-    }
-    fargs[0] = (jl_value_t*)codeinfos;
-    void *data = jl_emit_native(codeinfos, llvmmod, &cgparams, external_linkage);
+    jl_array_t *worlds = jl_alloc_array_1d(jl_array_ulong_type, 2);
+    fargs[0] = jl_compile_and_emit_func;
+    fargs[1] = (jl_value_t*)worlds;
+    jl_array_data(worlds, size_t)[0] = jl_typeinf_world;
+    int compiler_world = 1;
+    if (trim || jl_array_data(worlds, size_t)[0] == 0 || external_linkage)
+        compiler_world = 0;
+    jl_array_data(worlds, size_t)[compiler_world] = world; // might overwrite previous
+    worlds->dimsize[0] = 1 + compiler_world;
+    fargs[2] = jl_box_uint8(trim);
+    fargs[3] = jl_box_bool(external_linkage);
+    fargs[4] = worklist ? (jl_value_t*)worklist : jl_nothing; // worklist (or nothing)
+    fargs[5] = mod_array ? (jl_value_t*)mod_array : jl_nothing; // mod_array (or nothing)
+    fargs[6] = jl_box_bool(all);
+    fargs[7] = module_init_order ? (jl_value_t*)module_init_order : jl_nothing; // module_init_order (or nothing)
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_typeinf_world;
+    fargs[0] = jl_apply(fargs, 8);
+    fargs[1] = fargs[2] = fargs[3] = fargs[4] = fargs[5] = fargs[6] = fargs[7] = NULL;
+    ct->world_age = last_age;
+    jl_value_t *codeinfos = fargs[0];
+    JL_TYPECHK(jl_create_native, array_any, codeinfos);
+    void *data = jl_emit_native((jl_array_t*)codeinfos, llvmmod, NULL, external_linkage ? 1 : 0);
+    JL_GC_POP();
 
     // move everything inside, now that we've merged everything
     // (before adding the exported headers)
@@ -754,7 +783,6 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         }
     });
 
-    JL_GC_POP();
     if (timed) {
         if (measure_compile_time_enabled) {
             auto end = jl_hrtime();
@@ -764,6 +792,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     }
     return data;
 }
+
 
 // also be used be extern consumers like GPUCompiler.jl to obtain a module containing
 // all reachable & inferrrable functions.
@@ -775,6 +804,10 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
     CreateNativeMax.updateMax(jl_array_nrows(codeinfos));
     if (cgparams == NULL)
         cgparams = &jl_default_cgparams;
+    jl_cgparams_t target_cgparams = *cgparams;
+    target_cgparams.sanitize_memory = jl_options.target_sanitize_memory;
+    target_cgparams.sanitize_thread = jl_options.target_sanitize_thread;
+    target_cgparams.sanitize_address = jl_options.target_sanitize_address;
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
     orc::ThreadSafeContext ctx;
     orc::ThreadSafeModule backing;
@@ -793,7 +826,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
     jl_codegen_params_t params(ctxt, std::move(target_info.first), std::move(target_info.second));
     if (!llvmmod)
         params.getContext().setDiscardValueNames(true);
-    params.params = cgparams;
+    params.params = &target_cgparams;
     assert(params.imaging_mode); // `_imaging_mode` controls if broken features like code-coverage are disabled
     params.external_linkage = external_linkage;
     params.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
@@ -814,9 +847,12 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
                 continue; // skip any duplicates that accidentally made there way in here (or make this an error?)
             if (jl_ir_inlining_cost((jl_value_t*)src) < UINT16_MAX)
                 params.safepoint_on_entry = false; // ensure we don't block ExpandAtomicModifyPass from inlining this code if applicable
-            orc::ThreadSafeModule result_m = jl_create_ts_module(name_from_method_instance(jl_get_ci_mi(codeinst)),
-                    params.tsctx, clone.getModuleUnlocked()->getDataLayout(),
-                    Triple(clone.getModuleUnlocked()->getTargetTriple()));
+            orc::ThreadSafeModule result_m =
+                jl_create_ts_module(name_from_method_instance(jl_get_ci_mi(codeinst)),
+                                    params.tsctx,
+                                    clone.getModuleUnlocked()->getDataLayout(),
+                                    Triple(clone.getModuleUnlocked()->getTargetTriple()),
+                                    clone.getModuleUnlocked());
             jl_llvm_functions_t decls;
             if (!(params.params->force_emit_all) && jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr)
                 decls.functionObject = "jl_fptr_const_return";
@@ -895,7 +931,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
                 jl_callptr_t invoke;
                 void *fptr;
                 jl_read_codeinst_invoke(this_code, &specsigflags, &invoke, &fptr, 0);
-                if (invoke != NULL && (specsigflags & 0b100)) {
+                if (invoke != NULL && (specsigflags & JL_CI_FLAGS_FROM_IMAGE)) {
                     // this codeinst is already available externally: keep it only if canPartition demands it for local use
                     // TODO: for performance, avoid generating the src code when we know it would reach here anyways?
                     if (M.withModuleDo([&](Module &M) { return !canPartition(*cast<Function>(M.getNamedValue(cfunc))); })) {
@@ -1194,7 +1230,6 @@ static FunctionInfo getFunctionWeight(const Function &F)
 }
 
 struct ModuleInfo {
-    Triple triple;
     size_t globals;
     size_t funcs;
     size_t bbs;
@@ -1205,7 +1240,6 @@ struct ModuleInfo {
 
 ModuleInfo compute_module_info(Module &M) {
     ModuleInfo info;
-    info.triple = Triple(M.getTargetTriple());
     info.globals = 0;
     info.funcs = 0;
     info.bbs = 0;
@@ -1529,7 +1563,11 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
     AOTOutputs out;
     auto TM = std::unique_ptr<TargetMachine>(
         SourceTM.getTarget().createTargetMachine(
+#if JL_LLVM_VERSION < 210000
             SourceTM.getTargetTriple().str(),
+#else
+            SourceTM.getTargetTriple(),
+#endif
             SourceTM.getTargetCPU(),
             SourceTM.getTargetFeatureString(),
             SourceTM.Options,
@@ -1557,7 +1595,11 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
 
         auto PMTM = std::unique_ptr<TargetMachine>(
             SourceTM.getTarget().createTargetMachine(
+#if JL_LLVM_VERSION < 210000
                 SourceTM.getTargetTriple().str(),
+#else
+                SourceTM.getTargetTriple(),
+#endif
                 SourceTM.getTargetCPU(),
                 SourceTM.getTargetFeatureString(),
                 SourceTM.Options,
@@ -1565,8 +1607,15 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
                 SourceTM.getCodeModel(),
                 SourceTM.getOptLevel()));
         fixupTM(*PMTM);
-        NewPM optimizer{std::move(PMTM), getOptLevel(jl_options.opt_level), OptimizationOptions::defaults(true, true)};
-        optimizer.run(M);
+        auto options = OptimizationOptions::defaults(true, true);
+        options.sanitize_memory = jl_options.target_sanitize_memory;
+        options.sanitize_thread = jl_options.target_sanitize_thread;
+        options.sanitize_address = jl_options.target_sanitize_address;
+        NewPM optimizer{std::move(PMTM), getOptLevel(jl_options.opt_level), options};
+        {
+            TimeTraceScope OptimizeScope("AOT Optimize", M.getModuleIdentifier());
+            optimizer.run(M);
+        }
         assert(!verifyLLVMIR(M));
         bool inject_aliases = false;
         for (auto &F : M.functions()) {
@@ -1631,6 +1680,7 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
 
     if (obj) {
         timers.obj.startTimer();
+        TimeTraceScope EmitScope("AOT Emit Object", M.getModuleIdentifier());
         raw_svector_ostream OS(out.obj);
         legacy::PassManager emitter;
         addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
@@ -1827,10 +1877,16 @@ static void construct_vars(Module &M, Partition &partition, StringRef suffix) {
     gidxs_var->setDSOLocal(true);
 }
 
-extern "C" void lambda_trampoline(void* arg) {
-    std::function<void()>* func = static_cast<std::function<void()>*>(arg);
-    (*func)();
-    delete func;
+template<typename CB>
+static inline void schedule_uv_thread(uv_thread_t *worker, CB &&cb)
+{
+    auto func = new CB(std::move(cb));
+    // Use libuv thread to avoid issues with stack sizes
+    uv_thread_create(worker, [] (void *arg) {
+        auto func = static_cast<CB*>(arg);
+        (*func)();
+        delete func;
+    }, func);
 }
 
 // Entrypoint to optionally-multithreaded image compilation. This handles global coordination of the threading,
@@ -1930,7 +1986,10 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
         JL_TIMING(NATIVE_AOT, NATIVE_Opt);
         std::vector<uv_thread_t> workers(threads);
         for (unsigned i = 0; i < threads; i++) {
-            std::function<void()> func = [&, i]() {
+            schedule_uv_thread(&workers[i], [&, i]() {
+                // Initialize time trace profiler for this thread if enabled
+                if (jl_is_timing_trace)
+                    timeTraceProfilerInitialize(jl_timing_trace_granularity, ("shard_" + std::to_string(i)).c_str());
                 LLVMContext ctx;
                 ctx.setDiscardValueNames(true);
                 // Lazily deserialize the entire module
@@ -1955,14 +2014,16 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
                 // The DICompileUnit file is not used for anything, but ld64 requires it be a unique string per object file
                 // or it may skip emitting debug info for that file. Here set it to ./julia#N
                 DIFile *topfile = DIFile::get(M->getContext(), "julia#" + std::to_string(i), ".");
-                for (DICompileUnit *CU : M->debug_compile_units())
-                    CU->replaceOperandWith(0, topfile);
+                if (M->getNamedMetadata("llvm.dbg.cu"))
+                    for (auto CU: M->getNamedMetadata("llvm.dbg.cu")->operands())
+                        CU->replaceOperandWith(0, topfile);
                 timers[i].construct.stopTimer();
 
                 outputs[i] = add_output_impl(*M, TM, timers[i], unopt_out, opt_out, obj_out, asm_out);
-            };
-            auto arg = new std::function<void()>(func);
-            uv_thread_create(&workers[i], lambda_trampoline, arg); // Use libuv thread to avoid issues with stack sizes
+                // Merge this thread's time trace into the main thread
+                if (jl_is_timing_trace)
+                    timeTraceProfilerFinishThread();
+            });
         }
 
         // Wait for all of the worker threads to finish
@@ -1993,7 +2054,6 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     return outputs;
 }
 
-extern int jl_is_timing_passes;
 static unsigned compute_image_thread_count(const ModuleInfo &info) {
     // 32-bit systems are very memory-constrained
 #ifdef _P32
@@ -2002,12 +2062,6 @@ static unsigned compute_image_thread_count(const ModuleInfo &info) {
 #endif
     if (jl_is_timing_passes) // LLVM isn't thread safe when timing the passes https://github.com/llvm/llvm-project/issues/44417
         return 1;
-    // COFF has limits on external symbols (even hidden) up to 65536. We reserve the last few
-    // for any of our other symbols that we insert during compilation.
-    if (info.triple.isOSBinFormatCOFF() && info.globals > 64000) {
-        LLVM_DEBUG(dbgs() << "COFF is restricted to a single thread for large images\n");
-        return 1;
-    }
     // This is not overridable because empty modules do occasionally appear, but they'll be very small and thus exit early to
     // known easy behavior. Plus they really don't warrant multiple threads
     if (info.weight < 1000) {
@@ -2015,7 +2069,7 @@ static unsigned compute_image_thread_count(const ModuleInfo &info) {
         return 1;
     }
 
-    unsigned threads = std::max(jl_cpu_threads() / 2, 1);
+    unsigned threads = std::max(jl_effective_threads() / 2, 1);
 
     auto max_threads = info.globals / 100;
     if (max_threads < threads) {
@@ -2110,7 +2164,11 @@ void jl_dump_native_impl(void *native_code,
     }
     std::unique_ptr<TargetMachine> SourceTM(
         jl_ExecutionEngine->getTarget().createTargetMachine(
+#if JL_LLVM_VERSION < 210000
             TheTriple.getTriple(),
+#else
+            TheTriple,
+#endif
             jl_ExecutionEngine->getTargetCPU(),
             jl_ExecutionEngine->getTargetFeatureString(),
             jl_ExecutionEngine->getTargetOptions(),
@@ -2143,16 +2201,33 @@ void jl_dump_native_impl(void *native_code,
         LLVMContext Context;
         Context.setDiscardValueNames(true);
         Module sysimgM("sysimg", Context);
+#if JL_LLVM_VERSION < 210000
         sysimgM.setTargetTriple(TheTriple.str());
+#else
+        sysimgM.setTargetTriple(TheTriple);
+#endif
         sysimgM.setDataLayout(DL);
         sysimgM.setStackProtectorGuard(StackProtectorGuard);
         sysimgM.setOverrideStackAlignment(OverrideStackAlignment);
-        Constant *data = ConstantDataArray::get(Context,
-            ArrayRef<uint8_t>((const unsigned char*)z->buf, z->size));
+
+        int compression = jl_options.compress_sysimage ? 15 : 0;
+        ArrayRef<char> sysimg_data{z->buf, (size_t)z->size};
+        SmallVector<char, 0> compressed_data;
+        if (compression) {
+            compressed_data.resize(ZSTD_compressBound(z->size));
+            size_t comp_size = ZSTD_compress(compressed_data.data(), compressed_data.size(),
+                                             z->buf, z->size, compression);
+            compressed_data.resize(comp_size);
+            sysimg_data = compressed_data;
+            ios_close(z);
+            free(z);
+        }
+
+        Constant *data = ConstantDataArray::get(Context, sysimg_data);
         auto sysdata = new GlobalVariable(sysimgM, data->getType(), false,
                                      GlobalVariable::ExternalLinkage,
                                      data, "jl_system_image_data");
-        sysdata->setAlignment(Align(64));
+        sysdata->setAlignment(Align(jl_page_size));
 #if JL_LLVM_VERSION >= 180000
         sysdata->setCodeModel(CodeModel::Large);
 #else
@@ -2160,14 +2235,27 @@ void jl_dump_native_impl(void *native_code,
             sysdata->setSection(".ldata");
 #endif
         addComdat(sysdata, TheTriple);
-        Constant *len = ConstantInt::get(sysimgM.getDataLayout().getIntPtrType(Context), z->size);
+        Constant *len = ConstantInt::get(sysimgM.getDataLayout().getIntPtrType(Context), sysimg_data.size());
         addComdat(new GlobalVariable(sysimgM, len->getType(), true,
                                      GlobalVariable::ExternalLinkage,
                                      len, "jl_system_image_size"), TheTriple);
-        // Free z here, since we've copied out everything into data
-        // Results in serious memory savings
-        ios_close(z);
-        free(z);
+
+        const char *unpack_func = compression ? "jl_image_unpack_zstd" : "jl_image_unpack_uncomp";
+        auto unpack = new GlobalVariable(sysimgM, DL.getIntPtrType(Context), true,
+                                         GlobalVariable::ExternalLinkage, nullptr,
+                                         unpack_func);
+        addComdat(new GlobalVariable(sysimgM, PointerType::getUnqual(Context), true,
+                                     GlobalVariable::ExternalLinkage, unpack,
+                                     "jl_image_unpack"),
+                  TheTriple);
+
+        if (!compression) {
+            // Free z here, since we've copied out everything into data
+            // Results in serious memory savings
+            ios_close(z);
+            free(z);
+        }
+        compressed_data.clear();
         // Note that we don't set z to null, this allows the check in WRITE_ARCHIVE
         // to function as expected
         // no need to free the module/context, destructor handles that
@@ -2185,7 +2273,11 @@ void jl_dump_native_impl(void *native_code,
 
     data->M.withModuleDo([&](Module &dataM) {
         JL_TIMING(NATIVE_AOT, NATIVE_Setup);
+#if JL_LLVM_VERSION < 210000
         dataM.setTargetTriple(TheTriple.str());
+#else
+        dataM.setTargetTriple(TheTriple);
+#endif
         dataM.setDataLayout(DL);
         dataM.setPICLevel(PICLevel::BigPIC);
         auto &Context = dataM.getContext();
@@ -2271,9 +2363,14 @@ void jl_dump_native_impl(void *native_code,
         auto lock = TSCtx.getLock();
         auto dataM = data->M.getModuleUnlocked();
 
-        // Delete data when add_output thinks it's done with it
-        // Saves memory for use when multithreading
-        data_outputs = compile(*dataM, "text", threads, [data](Module &) { delete data; });
+        data_outputs = compile(*dataM, "text", threads, [data, &lock, &TSCtx](Module &) {
+            // Delete data when add_output thinks it's done with it
+            // Saves memory for use when multithreading
+            auto lock2 = std::move(lock);
+            delete data;
+            // Drop last reference to shared LLVM::Context
+            auto TSCtx2 = std::move(TSCtx);
+        });
     }
 
     if (params->emit_metadata) {
@@ -2281,7 +2378,11 @@ void jl_dump_native_impl(void *native_code,
         LLVMContext Context;
         Context.setDiscardValueNames(true);
         Module metadataM("metadata", Context);
+#if JL_LLVM_VERSION < 210000
         metadataM.setTargetTriple(TheTriple.str());
+#else
+        metadataM.setTargetTriple(TheTriple);
+#endif
         metadataM.setDataLayout(DL);
         metadataM.setStackProtectorGuard(StackProtectorGuard);
         metadataM.setOverrideStackAlignment(OverrideStackAlignment);
@@ -2494,10 +2595,10 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
             for (cfunc_decl_t &cfunc : output.cfuncs) {
                 jl_value_t *sigt = cfunc.abi.sigt;
                 JL_GC_PROMISE_ROOTED(sigt);
-                jl_method_instance_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
-                if (mi == nullptr)
+                jl_value_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
+                if (mi == jl_nothing)
                     continue;
-                jl_code_instance_t *codeinst = jl_type_infer(mi, latestworld, SOURCE_MODE_NOT_REQUIRED, jl_options.trim);
+                jl_code_instance_t *codeinst = jl_type_infer((jl_method_instance_t*)mi, latestworld, SOURCE_MODE_NOT_REQUIRED, jl_options.trim);
                 if (codeinst == nullptr || compiled_functions.count(codeinst))
                     continue;
                 orc::ThreadSafeModule decl_m = jl_create_ts_module("extern", ctx, DL, TT);
@@ -2540,7 +2641,11 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                 }
                 assert(!verifyLLVMIR(*m.getModuleUnlocked()));
                 if (optimize) {
-                    NewPM PM{jl_ExecutionEngine->cloneTargetMachine(), getOptLevel(jl_options.opt_level)};
+                    auto opts = OptimizationOptions::defaults();
+                    opts.sanitize_memory = params.sanitize_memory;
+                    opts.sanitize_thread = params.sanitize_thread;
+                    opts.sanitize_address = params.sanitize_address;
+                    NewPM PM{jl_ExecutionEngine->cloneTargetMachine(), getOptLevel(jl_options.opt_level), opts};
                     //Safe b/c context lock is held by output
                     PM.run(*m.getModuleUnlocked());
                     assert(!verifyLLVMIR(*m.getModuleUnlocked()));

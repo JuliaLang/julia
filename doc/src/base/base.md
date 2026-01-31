@@ -44,6 +44,7 @@ ans
 err
 Base.active_project
 Base.set_active_project
+Base.active_manifest
 ```
 
 ## [Keywords](@id Keywords)
@@ -108,18 +109,19 @@ where
 .=
 .
 ->
+Base.:(:)
 ::
 []
 ```
 
-## Standard Modules
+## [Standard Modules](@id standard-modules)
 ```@docs
 Main
 Core
 Base
 ```
 
-## Base Submodules
+## [Base Submodules](@id base-submodules)
 ```@docs
 Base.Broadcast
 Base.Docs
@@ -139,8 +141,6 @@ Core.:(===)
 Core.isa
 Base.isequal
 Base.isless
-Base.ispositive
-Base.isnegative
 Base.isunordered
 Base.ifelse
 Core.typeassert
@@ -294,6 +294,7 @@ Base.splat
 Base.Fix
 Base.Fix1
 Base.Fix2
+Returns
 ```
 
 ## Syntax
@@ -379,6 +380,7 @@ Base.@elapsed
 Base.@allocated
 Base.@allocations
 Base.@lock_conflicts
+Base.TRACE_EVAL
 Base.EnvDict
 Base.ENV
 Base.Sys.STDLIB
@@ -499,6 +501,7 @@ Core.modifyglobal!
 Core.swapglobal!
 Core.setglobalonce!
 Core.replaceglobal!
+Core.declare_const
 ```
 
 ## Documentation
@@ -538,6 +541,7 @@ Meta.parse(::AbstractString)
 Meta.ParseError
 Core.QuoteNode
 Base.macroexpand
+Base.macroexpand!
 Base.@macroexpand
 Base.@macroexpand1
 Base.code_lowered

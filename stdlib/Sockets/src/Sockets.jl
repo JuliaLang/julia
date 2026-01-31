@@ -456,7 +456,7 @@ function send(sock::UDPSocket, ipaddr::IPAddr, port::Integer, msg)
     finally
         Base.sigatomic_end()
         iolock_begin()
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::Base.IntrusiveLinkedList{Task}, ct)
         if uv_req_data(uvw) != C_NULL
             # uvw is still alive,
             # so make sure we won't get spurious notifications later
@@ -474,9 +474,19 @@ end
 
 
 #from `connect`
-function uv_connectcb(conn::Ptr{Cvoid}, status::Cint)
+function uv_connectcb_tcp(conn::Ptr{Cvoid}, status::Cint)
     hand = ccall(:jl_uv_connect_handle, Ptr{Cvoid}, (Ptr{Cvoid},), conn)
-    sock = @handle_as hand LibuvStream
+    sock = @handle_as hand TCPSocket
+    connectcb(conn, status, hand, sock)
+end
+
+function uv_connectcb_pipe(conn::Ptr{Cvoid}, status::Cint)
+    hand = ccall(:jl_uv_connect_handle, Ptr{Cvoid}, (Ptr{Cvoid},), conn)
+    sock = @handle_as hand PipeEndpoint
+    connectcb(conn, status, hand, sock)
+end
+
+function connectcb(conn::Ptr{Cvoid}, status::Cint, hand::Ptr{Cvoid}, sock::LibuvStream)
     lock(sock.cond)
     try
         if status >= 0 # success
@@ -508,7 +518,7 @@ function connect!(sock::TCPSocket, host::Union{IPv4, IPv6}, port::Integer)
     end
     host_in = Ref(hton(host.host))
     uv_error("connect", ccall(:jl_tcp_connect, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, UInt16, Ptr{Cvoid}, Cint),
-                              sock, host_in, hton(UInt16(port)), @cfunction(uv_connectcb, Cvoid, (Ptr{Cvoid}, Cint)),
+                              sock, host_in, hton(UInt16(port)), @cfunction(uv_connectcb_tcp, Cvoid, (Ptr{Cvoid}, Cint)),
                               host isa IPv6))
     sock.status = StatusConnecting
     iolock_end()

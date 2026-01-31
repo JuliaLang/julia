@@ -83,18 +83,18 @@ loaders = ["gzip", { driver = "csv", args = {delim = "\t"}}]
 @testset "vec with dicts and non-dicts" begin
     # https://github.com/JuliaLang/julia/issues/45340
     d =  Dict("b" => Any[111, Dict("a" =>  222, "d" => 333)])
-    @test toml_str(d) == (sizeof(Int) == 8 ?
+    @test toml_str(d) == (sizeof(Int) == 4 ?
         "b = [111, {a = 222, d = 333}]\n" :
         "b = [111, {d = 333, a = 222}]\n")
 
 
     d =  Dict("b" => Any[Dict("a" =>  222, "d" => 333), 111])
-    @test toml_str(d) == (sizeof(Int) == 8 ?
+    @test toml_str(d) == (sizeof(Int) == 4 ?
         "b = [{a = 222, d = 333}, 111]\n" :
         "b = [{d = 333, a = 222}, 111]\n")
 
     d =  Dict("b" => Any[Dict("a" =>  222, "d" => 333)])
-    @test toml_str(d) == (sizeof(Int) == 8 ?
+    @test toml_str(d) == (sizeof(Int) == 4 ?
         """
         [[b]]
         a = 222

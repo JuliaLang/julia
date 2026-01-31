@@ -1332,6 +1332,9 @@ static void jl_typemap_list_insert_(
         jl_typemap_entry_t *newrec)
 {
     jl_typemap_entry_t *l = jl_atomic_load_relaxed(pml);
+
+    // Pick the first intersection point that guarantees that the list ordering
+    // will be (leaf sigs..., simple sigs..., other sigs...)
     while ((jl_value_t*)l != jl_nothing) {
         if (newrec->isleafsig || !l->isleafsig)
             if (newrec->issimplesig || !l->issimplesig)
@@ -1340,6 +1343,7 @@ static void jl_typemap_list_insert_(
         parent = (jl_value_t*)l;
         l = jl_atomic_load_relaxed(&l->next);
     }
+
     jl_atomic_store_relaxed(&newrec->next, l);
     jl_gc_wb(newrec, l);
     jl_atomic_store_release(pml, newrec);
@@ -1357,6 +1361,7 @@ static void jl_typemap_insert_generic(
         jl_typemap_memory_insert_(map, (_Atomic(jl_genericmemory_t*)*)pml, doublesplit, newrec, parent, 0, offs, NULL);
         return;
     }
+
     if (jl_typeof(ml) == (jl_value_t*)jl_typemap_level_type) {
         assert(!doublesplit);
         jl_typemap_level_insert_(map, (jl_typemap_level_t*)ml, newrec, offs);

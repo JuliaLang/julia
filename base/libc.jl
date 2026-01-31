@@ -280,7 +280,7 @@ end
 """
     time(t::TmStruct)::Float64
 
-Converts a `TmStruct` struct to a number of seconds since the epoch.
+Convert a `TmStruct` struct to a number of seconds since the epoch.
 """
 time(tm::TmStruct) = Float64(ccall(:mktime, Int, (Ref{TmStruct},), tm))
 
@@ -574,6 +574,7 @@ end
 
 getuid() = ccall(:jl_getuid, Culong, ())
 geteuid() = ccall(:jl_geteuid, Culong, ())
+getegid() = Sys.iswindows() ? Culong(-1) : ccall(:getegid, Culong, ())
 
 # Include dlopen()/dlpath() code
 include("libdl.jl")

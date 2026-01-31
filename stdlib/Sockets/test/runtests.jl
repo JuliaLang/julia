@@ -3,12 +3,21 @@
 using Sockets, Random, Test
 using Base: Experimental
 
+# This is for debugging only - if the system doesn't have `netstat`, we just ignore it
+netstat() = try; read(ignorestatus(`netstat -ndi`), String); catch; return ""; end
+const netstat_before = netstat()
+
 # set up a watchdog alarm for 10 minutes
 # so that we can attempt to get a "friendly" backtrace if something gets stuck
 # (although this'll also terminate any attempted debugging session)
 # expected test duration is about 5-10 seconds
 function killjob(d)
     Core.print(Core.stderr, d)
+    Core.print(Core.stderr, "Netstat before:\n")
+    Core.print(Core.stderr, netstat_before)
+    Core.print(Core.stderr, "\nNetstat after:\n")
+    # This might fail if we're in a bad libuv state
+    Core.print(Core.stderr, netstat())
     if Sys.islinux()
         SIGINFO = 10
     elseif Sys.isbsd()

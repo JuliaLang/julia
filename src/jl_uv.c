@@ -68,7 +68,7 @@ static void wait_empty_func(uv_timer_t *t)
     uv_unref((uv_handle_t*)&signal_async);
     if (!uv_loop_alive(t->loop))
         return;
-    jl_safe_printf("\n[pid %zd] waiting for IO to finish:\n"
+    jl_safe_printf("\n[pid %zd] Waiting for background task / IO / timer to finish:\n"
                    " Handle type        uv_handle_t->data\n",
                    (size_t)uv_os_getpid());
     uv_walk(jl_io_loop, walk_print_cb, NULL);
@@ -506,6 +506,8 @@ JL_DLLEXPORT void jl_uv_disassociate_julia_struct(uv_handle_t *handle)
  * @param cpumask A C string representing the CPU affinity mask for the process.
           See also the `cpumask` field of the `uv_process_options_t` structure in the libuv documentation.
  * @param cpumask_size The size of the cpumask.
+ * @param uid The user ID for the process (only used if UV_PROCESS_SETUID flag is set).
+ * @param gid The group ID for the process (only used if UV_PROCESS_SETGID flag is set).
  * @param cb A function pointer to `uv_exit_cb` which is the callback function to be called upon process exit.
  *
  * @return An integer indicating the success or failure of the spawn operation. A return value of 0 indicates success,
@@ -515,16 +517,15 @@ JL_DLLEXPORT int jl_spawn(char *name, char **argv,
                           uv_loop_t *loop, uv_process_t *proc,
                           uv_stdio_container_t *stdio, int nstdio,
                           uint32_t flags, char **env, char *cwd, char* cpumask,
-                          size_t cpumask_size, uv_exit_cb cb)
+                          size_t cpumask_size, uint32_t uid, uint32_t gid, uv_exit_cb cb)
 {
     uv_process_options_t opts = {0};
     opts.stdio = stdio;
     opts.file = name;
     opts.env = env;
     opts.flags = flags;
-    // unused fields:
-    //opts.uid = 0;
-    //opts.gid = 0;
+    opts.uid = (uv_uid_t)uid;
+    opts.gid = (uv_gid_t)gid;
     opts.cpumask = cpumask;
     opts.cpumask_size = cpumask_size;
     opts.cwd = cwd;
@@ -816,29 +817,41 @@ JL_DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...)
     return c;
 }
 
-JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...)
+static void jl_safe_vfprintf(ios_t *s, const char *fmt, va_list args) JL_NOTSAFEPOINT
 {
-    static char buf[1000];
+    char buf[1000];
     buf[0] = '\0';
     int last_errno = errno;
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
-
-    va_list args;
-    va_start(args, fmt);
     // Not async signal safe on some platforms?
     vsnprintf(buf, sizeof(buf), fmt, args);
-    va_end(args);
 
     buf[999] = '\0';
-    if (write(STDERR_FILENO, buf, strlen(buf)) < 0) {
+    if (!ios_write(s, buf, strlen(buf))) {
         // nothing we can do; ignore the failure
     }
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
 #endif
     errno = last_errno;
+}
+
+JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    jl_safe_vfprintf(ios_safe_stderr, fmt, args);
+    va_end(args);
+}
+
+JL_DLLEXPORT void jl_safe_fprintf(ios_t *s, const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    jl_safe_vfprintf(s, fmt, args);
+    va_end(args);
 }
 
 typedef union {
@@ -1169,7 +1182,7 @@ JL_DLLEXPORT int jl_tty_set_mode(uv_tty_t *handle, int mode)
     if (handle->type != UV_TTY) return 0;
     uv_tty_mode_t mode_enum = UV_TTY_MODE_NORMAL;
     if (mode)
-        mode_enum = UV_TTY_MODE_RAW;
+        mode_enum = UV_TTY_MODE_RAW_VT;
     // TODO: do we need lock?
     return uv_tty_set_mode(handle, mode_enum);
 }

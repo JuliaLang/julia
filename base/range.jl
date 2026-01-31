@@ -49,6 +49,8 @@ The operator `:` is also used in indexing to select whole dimensions, e.g. in `A
 `:` is also used to [`quote`](@ref) code, e.g. `:(x + y) isa Expr` and `:x isa Symbol`.
 Since `:2 isa Int`, it does *not* create a range in indexing: `v[:2] == v[2] != v[begin:2]`.
 """
+(:)(::Any, ::Any, ::Any)
+
 (:)(start::T, step, stop::T) where {T} = _colon(start, step, stop)
 (:)(start::T, step, stop::T) where {T<:Real} = _colon(start, step, stop)
 # without the second method above, the first method above is ambiguous with
@@ -1164,6 +1166,17 @@ function ==(r::AbstractRange, s::AbstractRange)
         yr, ys = iterate(r, yr[2]), iterate(s, ys[2])
     end
     return true
+end
+
+function cmp(r1::T, r2::T) where {T <: AbstractRange}
+    firstindex(r1) == firstindex(r2) || return cmp(firstindex(r1), firstindex(r2))
+    (isempty(r1) || isempty(r2)) && return cmp(isempty(r2), isempty(r1))
+    first(r1) != first(r2) && return cmp(first(r1), first(r2))
+    # Assume that ranges are monotonic and use the last shared element as a high precision proxy for step.
+    n = min(lastindex(r1), lastindex(r2))
+    x1, x2 = r1[n], r2[n]
+    x1 != x2 && return cmp(x1, x2)
+    cmp(length(r1), length(r2))
 end
 
 intersect(r::OneTo, s::OneTo) = OneTo(min(r.stop,s.stop))

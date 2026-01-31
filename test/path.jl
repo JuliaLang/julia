@@ -65,7 +65,7 @@
         end
 
         if Sys.iswindows()
-            @test joinpath(S("foo"),S("bar:baz")) == "bar:baz"
+            @test joinpath(S("foo"),S("D:bar")) == "D:bar"
             @test joinpath(S("C:"),S("foo"),S("D:"),S("bar")) == "D:bar"
             @test joinpath(S("C:"),S("foo"),S("D:bar"),S("baz")) == "D:bar$(sep)baz"
 
@@ -181,6 +181,9 @@
                 ("\\\\servername.com\\hello.world","\\filename.ext")
             @test splitdrive(S("C:\\foo\\bar")) ==
                 ("C:","\\foo\\bar")
+            # only single characters followed by a colon are drives
+            @test splitdrive(S("foo:bar")) ==
+                ("", "foo:bar")
         end
 
         @test splitext(S("")) == ("", "")

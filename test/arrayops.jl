@@ -319,6 +319,12 @@ end
     @test_throws ArgumentError dropdims(a, dims=3)
     @test_throws ArgumentError dropdims(a, dims=4)
     @test_throws ArgumentError dropdims(a, dims=6)
+
+    h1 = HeterogeneousAxisArray(rand(4, 1))
+    h2 = HeterogeneousAxisArray(rand(1, 4))
+    @test size(dropdims(h1, dims=2)) == (4,)
+    @test size(dropdims(h2, dims=1)) == (4,)
+
     @testset "insertdims" begin
         a = rand(8, 7)
         @test @inferred(insertdims(a, dims=1)) == @inferred(insertdims(a, dims=(1,))) == reshape(a, (1, 8, 7))
@@ -519,6 +525,12 @@ end
     v = empty!(collect(1:100))
     pushfirst!(v, 1)
     @test length(v.ref.mem) == 100
+
+    # test that insert! at position 1 doesn't allocate for empty arrays with capacity (issue #58640)
+    v = empty!(Vector{Int}(undef, 5))
+    insert!(v, 1, 10)
+    @test v == [10]
+    @test length(v.ref.mem) == 5
 end
 
 @testset "popat!(::Vector, i, [default])" begin
@@ -1246,6 +1258,18 @@ end
         @test setdiff((1, 2), (3, 2)) == [1]
         @test symdiff((1, 2), (3, 2)) == [1, 3]
     end
+
+    @testset "setdiff preserves element type of first argument" begin
+        @test setdiff([1, 2, 3], [1.0, 2.0]) isa Vector{Int}
+        @test setdiff([1.0, 2.0, 3.0], [1, 2]) isa Vector{Float64}
+        @test setdiff(['a', 'b', 'c'], [98]) isa Vector{Char}
+        @test setdiff([1, 2], [1.0, 2.0]) isa Vector{Int}
+    end
+    @testset "intersect promotes element types of arguments" begin
+        @test intersect([1, 2, 3], [1.0, 2.0]) isa Vector{Float64}
+        @test intersect([1.0, 2.0, 3.0], [1, 2]) isa Vector{Float64}
+        @test intersect(['a', 'b', 'c'], Int[]) isa Vector{Any}
+    end
 end
 
 @testset "mapslices" begin
@@ -1447,6 +1471,18 @@ end
     @test cmp([UInt8(1), UInt8(0)], [UInt8(0), UInt8(0)]) == 1
     @test cmp([UInt8(1), UInt8(0)], [UInt8(1), UInt8(0)]) == 0
     @test cmp([UInt8(0), UInt8(0)], [UInt8(1), UInt8(1)]) == -1
+
+    x = [1, 2, 3]
+    y = OffsetVector(x, -1)
+    @test cmp(x, y) == 1
+    @test cmp(y, x) == -1
+    @test !isless(x, y)
+    @test isless(y, x)
+
+    y2 = OffsetVector([1, 2, 3], 0)
+    @test cmp(x, y2) == 0
+    @test !isless(x, y2)
+    @test !isless(y2, x)
 end
 
 @testset "sort on arrays" begin
@@ -2658,9 +2694,9 @@ end
 @inferred map(Int8, Int[0])
 
 # make sure @inbounds isn't used too much
-mutable struct OOB_Functor{T}; a::T; end
-(f::OOB_Functor)(i::Int) = f.a[i]
-let f = OOB_Functor([1,2])
+mutable struct OOB_Callable{T}; a::T; end
+(f::OOB_Callable)(i::Int) = f.a[i]
+let f = OOB_Callable([1,2])
     @test_throws BoundsError map(f, [1,2,3,4,5])
 end
 
@@ -2714,6 +2750,7 @@ function f15894(d)
     s
 end
 @test f15894(fill(1, 100)) == 100
+@test (@nexprs 2 i -> "_i_: $i") == "_i_: 2"
 end
 
 @testset "sign, conj[!], ~" begin
@@ -3272,6 +3309,28 @@ end
         "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, \"bad index\"]"
 end
 
+@testset "return type inference of function that calls `length(::Array)`" begin
+    f(x) = length(x)
+    @test Int === Base.infer_return_type(f, Tuple{Array})
+end
+
+@testset "return type inference of `sizeof(::Array)`" begin
+    @test isconcretetype(Base.infer_return_type(sizeof, Tuple{Array}))
+end
+
+@testset "return type inference of `getindex(::Array, ::Colon)`" begin
+    f = a -> a[:]
+    @test Vector == Base.infer_return_type(f, Tuple{Array})
+    @test Vector{Float32} === Base.infer_return_type(f, Tuple{Array{Float32}})
+end
+
+@testset "return type inference of linear `eachindex` for `Array` and `Memory`" begin
+    f = a -> eachindex(IndexLinear(), a)
+    for typ in (Array, Memory, Union{Array, Memory})
+        @test isconcretetype(Base.infer_return_type(f, Tuple{typ}))
+    end
+end
+
 @testset "inference of Union{T,Nothing} arrays 26771" begin
     f(a) = (v = [1, nothing]; [v[x] for x in a])
     @test only(Base.return_types(f, (Int,))) === Union{Array{Int,0}, Array{Nothing,0}}
@@ -3344,4 +3403,11 @@ end
     mem = Memory{Float32}(undef, 3)
     ref = memoryref(mem, 2)
     @test parent(ref) === mem
+    @test Base.memoryindex(ref) === 2
+
+    # Test for zero-sized structs
+    mem = Memory{Nothing}(undef, 10)
+    ref = memoryref(mem, 8)
+    @test parent(ref) === mem
+    @test Base.memoryindex(ref) === 8
 end

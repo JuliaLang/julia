@@ -50,7 +50,7 @@ MinGW-w64 compilers available through Cygwin's package manager.
     *Advanced*: you may skip steps 2-4 by running:
 
     ```sh
-    setup-x86_64.exe -s <url> -q -P cmake,gcc-g++,git,make,patch,curl,m4,python3,p7zip,mingw64-i686-gcc-g++,mingw64-i686-gcc-fortran,mingw64-x86_64-gcc-g++,mingw64-x86_64-gcc-fortran
+    setup-x86_64.exe -s <url> -q -P cmake,gcc-g++=12.5.0-1,git,make,patch,curl,m4,python3,p7zip,mingw64-i686-gcc-g++=12.5.0-1,mingw64-i686-gcc-fortran=12.5.0-1,mingw64-i686-gcc-core=12.5.0-1,mingw64-i686-headers=12.0.0-1,mingw64-i686-runtime=12.0.0-1,mingw64-i686-winpthreads=12.0.0-1,mingw64-x86_64-gcc-g++=12.5.0-1,mingw64-x86_64-gcc-fortran=12.5.0-1,mingw64-x86_64-gcc-core=12.5.0-1,mingw64-x86_64-headers=12.0.0-1,mingw64-x86_64-runtime=12.0.0-1,mingw64-x86_64-winpthreads=12.0.0-1
     ```
 
     replacing `<url>` with a site from [https://cygwin.com/mirrors.html](https://cygwin.com/mirrors.html)
@@ -65,9 +65,11 @@ MinGW-w64 compilers available through Cygwin's package manager.
     3. From *Interpreters* (or *Python*) category: `m4`, `python3`
     4. From the *Archive* category: `p7zip`
     5. For 32 bit Julia, and also from the *Devel* category:
-       `mingw64-i686-gcc-g++` and `mingw64-i686-gcc-fortran`
+       `mingw64-i686-gcc-g++` and `mingw64-i686-gcc-fortran` and `mingw64-i686-gcc-core` (version "12.5.0-1")
+       `mingw64-i686-headers` and `mingw64-i686-runtime` and `mingw64-i686-winpthreads` (version "12.0.0-1")
     6. For 64 bit Julia, and also from the *Devel* category:
-       `mingw64-x86_64-gcc-g++` and `mingw64-x86_64-gcc-fortran`
+       `mingw64-x86_64-gcc-g++` and `mingw64-x86_64-gcc-fortran` and `mingw64-x86_64-gcc-core` (version "12.5.0-1")
+       `mingw64-x86_64-headers` and `mingw64-x86_64-runtime` and `mingw64-x86_64-winpthreads` (version "12.0.0-1")
 
  4. Allow Cygwin installation to finish, then start from the installed shortcut
     *'Cygwin Terminal'*, or *'Cygwin64 Terminal'*, respectively.
@@ -177,7 +179,7 @@ Note: MSYS2 requires **64 bit** Windows 7 or newer.
       CXX=/mingw64/bin/clang++
       ```
 !!! warning "UCRT Unsupported"
-   Do not try to use any other clang that MSYS2 may install (which may not have the correct default target) or the "Clang" environment(which defaults to the currently unsupported ucrt).
+    Do not try to use any other clang that MSYS2 may install (which may not have the correct default target) or the "Clang" environment(which defaults to the currently unsupported ucrt).
 
     4. Start the build
 
@@ -233,6 +235,12 @@ If you are building for 64-bit Windows, the steps are essentially the same.
 Just replace `i686` in `XC_HOST` with `x86_64`. (Note: on Mac, wine only runs
 in 32-bit mode).
 
+## Distribution to other machines
+
+If you intend to run this copy of Julia on a different x86-64 machine than it was compiled
+on, add `JULIA_CPU_TARGET=` to `Make.user`. Currently, x86-64 Julia distributions are built
+with `JULIA_CPU_TARGET=generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1);x86_64_v4,-rdrnd,base(1)`.
+[See here for more on this environment variable.](https://docs.julialang.org/en/v1/manual/environment-variables/#JULIA_CPU_TARGET)
 
 ## Debugging a cross-compiled build under wine
 

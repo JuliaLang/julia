@@ -202,12 +202,7 @@ end
 
 function PipeEndpoint(fd::OS_HANDLE)
     pipe = PipeEndpoint()
-    iolock_begin()
-    err = ccall(:uv_pipe_open, Int32, (Ptr{Cvoid}, OS_HANDLE), pipe.handle, fd)
-    uv_error("pipe_open", err)
-    pipe.status = StatusOpen
-    iolock_end()
-    return pipe
+    return open_pipe!(pipe, fd)
 end
 if OS_HANDLE != RawFD
     PipeEndpoint(fd::RawFD) = PipeEndpoint(Libc._get_osfhandle(fd))
@@ -283,8 +278,8 @@ end
 lock(s::LibuvStream) = lock(s.lock)
 unlock(s::LibuvStream) = unlock(s.lock)
 
-setup_stdio(stream::LibuvStream, ::Bool) = (stream, false)
-rawhandle(stream::LibuvStream) = stream.handle
+setup_stdio(stream::Union{LibuvStream, LibuvServer}, ::Bool) = (stream, false)
+rawhandle(stream::Union{LibuvStream, LibuvServer}) = stream.handle
 unsafe_convert(::Type{Ptr{Cvoid}}, s::Union{LibuvStream, LibuvServer}) = s.handle
 
 function init_stdio(handle::Ptr{Cvoid})
@@ -378,7 +373,7 @@ end
 
 function isopen(x::Union{LibuvStream, LibuvServer})
     if x.status == StatusUninit || x.status == StatusInit || x.handle === C_NULL
-        throw(ArgumentError("$x is not initialized"))
+        throw(ArgumentError("stream not initialized"))
     end
     return x.status != StatusClosed
 end
@@ -617,7 +612,8 @@ end
 function alloc_request(buffer::IOBuffer, recommended_size::UInt)
     ensureroom(buffer, recommended_size)
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
-    nb = min(length(buffer.data), buffer.maxsize + get_offset(buffer)) - ptr + 1
+    start_offset = ptr - 1
+    nb = max(0, min(length(buffer.data) - start_offset, buffer.maxsize - (start_offset - get_offset(buffer))))
     return (Ptr{Cvoid}(pointer(buffer.data, ptr)), nb)
 end
 
@@ -1249,7 +1245,15 @@ function _redirect_io_libc(stream, unix_fd::Int)
                 -10 - unix_fd, Libc._get_osfhandle(posix_fd))
         end
     end
-    dup(posix_fd, RawFD(unix_fd))
+    GC.@preserve stream dup(posix_fd, RawFD(unix_fd))
+    nothing
+end
+function _redirect_io_cglobal(handle::Union{LibuvStream, IOStream, Nothing}, unix_fd::Int)
+    c_sym = unix_fd == 0 ? cglobal(:jl_uv_stdin, Ptr{Cvoid}) :
+            unix_fd == 1 ? cglobal(:jl_uv_stdout, Ptr{Cvoid}) :
+            unix_fd == 2 ? cglobal(:jl_uv_stderr, Ptr{Cvoid}) :
+            C_NULL
+    c_sym == C_NULL || unsafe_store!(c_sym, handle === nothing ? Ptr{Cvoid}(unix_fd) : handle.handle)
     nothing
 end
 function _redirect_io_global(io, unix_fd::Int)
@@ -1260,11 +1264,7 @@ function _redirect_io_global(io, unix_fd::Int)
 end
 function (f::RedirectStdStream)(handle::Union{LibuvStream, IOStream})
     _redirect_io_libc(handle, f.unix_fd)
-    c_sym = f.unix_fd == 0 ? cglobal(:jl_uv_stdin, Ptr{Cvoid}) :
-            f.unix_fd == 1 ? cglobal(:jl_uv_stdout, Ptr{Cvoid}) :
-            f.unix_fd == 2 ? cglobal(:jl_uv_stderr, Ptr{Cvoid}) :
-            C_NULL
-    c_sym == C_NULL || unsafe_store!(c_sym, handle.handle)
+    _redirect_io_cglobal(handle, f.unix_fd)
     _redirect_io_global(handle, f.unix_fd)
     return handle
 end
@@ -1273,6 +1273,7 @@ function (f::RedirectStdStream)(::DevNull)
     handle = open(nulldev, write=f.writable)
     _redirect_io_libc(handle, f.unix_fd)
     close(handle) # handle has been dup'ed in _redirect_io_libc
+    _redirect_io_cglobal(nothing, f.unix_fd)
     _redirect_io_global(devnull, f.unix_fd)
     return devnull
 end

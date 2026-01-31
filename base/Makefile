@@ -71,6 +71,7 @@ endif
 	@printf "%s\n" "const PRIVATE_LIBDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(private_libdir_rel)))) >> $@
 	@printf "%s\n" "const PRIVATE_LIBEXECDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(private_libexecdir_rel)))) >> $@
 	@printf "%s\n" "const INCLUDEDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(includedir_rel)))) >> $@
+	@printf "%s\n" "const SOURCEDIR = "$(call shell_escape,$(call julia_escape,$(call normalize_path,$(shell echo $(call cygpath_w,$(JULIAHOME)))))) >> $@
 ifeq ($(DARWIN_FRAMEWORK), 1)
 	@printf "%s\n" "const DARWIN_FRAMEWORK = true" >> $@
 	@printf "%s\n" "const DARWIN_FRAMEWORK_NAME = \"$(FRAMEWORK_NAME)\"" >> $@
@@ -182,14 +183,14 @@ endif
 endef
 
 # libexec executables
-symlink_p7zip: $(build_bindir)/7z$(EXE)
+symlink_p7zip: $(build_private_libexecdir)/7z$(EXE)
 
 ifneq ($(USE_SYSTEM_P7ZIP),0)
 SYMLINK_SYSTEM_LIBRARIES += symlink_p7zip
 7Z_PATH := $(shell which 7z$(EXE))
 endif
 
-$(build_bindir)/7z$(EXE):
+$(build_private_libexecdir)/7z$(EXE):
 	[ -e "$(7Z_PATH)" ] && \
 	rm -f "$@" && \
 	ln -sf "$(7Z_PATH)" "$@"
@@ -306,4 +307,5 @@ clean:
 	-rm -f $(BUILDDIR)/file_constants.jl
 	-rm -f $(BUILDDIR)/version_git.jl
 	-rm -f $(BUILDDIR)/version_git.jl.phony
+	-rm -f $(BUILDDIR)/version_git_dirty
 	-rm -f $(build_private_libdir)/lib*.$(SHLIB_EXT)*

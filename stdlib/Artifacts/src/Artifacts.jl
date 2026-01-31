@@ -16,6 +16,13 @@ using Base.TOML: TOML
 export artifact_exists, artifact_path, artifact_meta, artifact_hash,
        select_downloadable_artifacts, find_artifacts_toml, @artifact_str
 
+const _artifacts_world_age = Ref{UInt}(typemax(UInt))
+
+function __init__()
+    _artifacts_world_age[] = Base.get_world_counter()
+    nothing
+end
+
 """
     parse_toml(path::String)
 
@@ -403,7 +410,7 @@ function artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String
         dl_dict = Dict{Platform,Dict{String,Any}}()
         for x in meta
             x = x::Dict{String, Any}
-            dl_dict[unpack_platform(x, name, artifacts_toml)] = x
+            dl_dict[unpack_platform(x, name, artifacts_toml)::Platform] = x
         end
         meta = select_platform(dl_dict, platform)
     # If it's NOT a dict, complain
@@ -543,7 +550,7 @@ function jointail(dir, tail)
 end
 
 function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, ::Val{LazyArtifacts}) where LazyArtifacts
-    world = Base._require_world_age[]
+    world = _artifacts_world_age[]
     if world == typemax(UInt)
         world = Base.get_world_counter()
     end
@@ -766,6 +773,5 @@ precompile(NamedTuple{(:pkg_uuid,)}, (Tuple{Base.UUID},))
 precompile(Core.kwfunc(load_artifacts_toml), (NamedTuple{(:pkg_uuid,), Tuple{Base.UUID}}, typeof(load_artifacts_toml), String))
 precompile(parse_mapping, (String, String, String))
 precompile(parse_mapping, (Dict{String, Any}, String, String))
-precompile(Tuple{typeof(Artifacts._artifact_str), Module, String, Base.SubString{String}, String, Base.Dict{String, Any}, Base.SHA1, Base.BinaryPlatforms.Platform, Any})
-
+precompile(Tuple{typeof(Artifacts.__artifact_str), Module, String, Base.SubString{String}, String, Base.Dict{String, Any}, Base.SHA1, Base.BinaryPlatforms.Platform, Base.Val{Artifacts}})
 end # module Artifacts

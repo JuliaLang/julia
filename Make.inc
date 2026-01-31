@@ -63,6 +63,10 @@ USE_SYSTEM_ZSTD:=0
 USE_SYSTEM_P7ZIP:=0
 USE_SYSTEM_LLD:=0
 
+# Link libjulia-internal with static libgcc and libstdc++
+USE_RT_STATIC_LIBGCC:=1
+USE_RT_STATIC_LIBSTDCXX:=1
+
 # Link to the LLVM shared library
 USE_LLVM_SHLIB := 1
 
@@ -94,8 +98,14 @@ WITH_NVTX := 0
 WITH_TRACY := 0
 WITH_TRACY_CALLSTACKS := 0
 
+# Enable Apple Instruments support
+WITH_APPLE_OSLOG := 0
+
 # Enable Timing Counts support
 WITH_TIMING_COUNTS := 0
+
+# Should --gc-sections/-dead_strip be used to remove unreferenced code?
+USE_LINKER_GC:=1
 
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
@@ -553,26 +563,29 @@ MACOSX_VERSION_MIN := 11.0
 endif
 endif
 
-JCFLAGS_COMMON    := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -Wformat -Wformat-security
-JCFLAGS_CLANG     := $(JCFLAGS_COMMON)
-JCFLAGS_GCC       := $(JCFLAGS_COMMON) -fno-gnu-unique
+# These are lazy expansion variables, so that arguments can be added to them later and they'll affect all of these uses too
+JCFLAGS_COMMON     = -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -Wformat -Wformat-security
+JCFLAGS_CLANG      = $(JCFLAGS_COMMON)
+JCFLAGS_GCC        = $(JCFLAGS_COMMON) -fno-gnu-unique
+
 
 # These flags are needed to generate decent debug info
-JCPPFLAGS_COMMON  := -fasynchronous-unwind-tables
-JCPPFLAGS_CLANG   := $(JCPPFLAGS_COMMON) -mllvm -enable-tail-merge=0
-JCPPFLAGS_GCC     := $(JCPPFLAGS_COMMON) -fno-tree-tail-merge
+JCPPFLAGS_COMMON   = -fasynchronous-unwind-tables
+JCPPFLAGS_CLANG    = $(JCPPFLAGS_COMMON) -mllvm -enable-tail-merge=0
+JCPPFLAGS_GCC      = $(JCPPFLAGS_COMMON) -fno-tree-tail-merge
 
-JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++17 -Wformat -Wformat-security
-JCXXFLAGS_CLANG   := $(JCXXFLAGS_COMMON) -pedantic
-JCXXFLAGS_GCC     := $(JCXXFLAGS_COMMON) -fno-gnu-unique
+JCXXFLAGS_COMMON   = -pipe $(fPIC) -fno-rtti -std=c++17 -Wformat -Wformat-security -fno-strict-aliasing
+JCXXFLAGS_CLANG    = $(JCXXFLAGS_COMMON) -pedantic
+JCXXFLAGS_GCC      = $(JCXXFLAGS_COMMON) -fno-gnu-unique
 
-DEBUGFLAGS_COMMON := -O0 -DJL_DEBUG_BUILD -fstack-protector
-DEBUGFLAGS_CLANG  := $(DEBUGFLAGS_COMMON) -g
-DEBUGFLAGS_GCC    := $(DEBUGFLAGS_COMMON) -ggdb2
+DEBUGFLAGS_COMMON  = -O0 -DJL_DEBUG_BUILD -fstack-protector
+DEBUGFLAGS_CLANG   = $(DEBUGFLAGS_COMMON) -g
+DEBUGFLAGS_GCC     = $(DEBUGFLAGS_COMMON) -ggdb2
 
-SHIPFLAGS_COMMON  := -O3
-SHIPFLAGS_CLANG   := $(SHIPFLAGS_COMMON) -g
-SHIPFLAGS_GCC     := $(SHIPFLAGS_COMMON) -ggdb2 -falign-functions
+SHIPFLAGS_COMMON   = -O3
+SHIPFLAGS_CLANG    = $(SHIPFLAGS_COMMON) -g
+SHIPFLAGS_GCC      = $(SHIPFLAGS_COMMON) -ggdb2 -falign-functions
+
 
 BOLT_LDFLAGS :=
 
@@ -591,22 +604,22 @@ endif
 ifeq ($(USEGCC),1)
 CC         := $(CROSS_COMPILE)gcc
 CXX        := $(CROSS_COMPILE)g++
-JCFLAGS    := $(JCFLAGS_GCC)
-JCPPFLAGS  := $(JCPPFLAGS_GCC)
-JCXXFLAGS  := $(JCXXFLAGS_GCC)
-DEBUGFLAGS := $(DEBUGFLAGS_GCC)
-SHIPFLAGS  := $(SHIPFLAGS_GCC) $(BOLT_CFLAGS_GCC)
+JCFLAGS     = $(JCFLAGS_GCC)
+JCPPFLAGS   = $(JCPPFLAGS_GCC)
+JCXXFLAGS   = $(JCXXFLAGS_GCC)
+DEBUGFLAGS  = $(DEBUGFLAGS_GCC)
+SHIPFLAGS   = $(SHIPFLAGS_GCC) $(BOLT_CFLAGS_GCC)
 BOLT_CFLAGS  := $(BOLT_CFLAGS_GCC)
 endif
 
 ifeq ($(USECLANG),1)
 CC         := $(CROSS_COMPILE)clang
 CXX        := $(CROSS_COMPILE)clang++
-JCFLAGS    := $(JCFLAGS_CLANG)
-JCPPFLAGS  := $(JCPPFLAGS_CLANG)
-JCXXFLAGS  := $(JCXXFLAGS_CLANG)
-DEBUGFLAGS := $(DEBUGFLAGS_CLANG)
-SHIPFLAGS  := $(SHIPFLAGS_CLANG) $(BOLT_CFLAGS_CLANG)
+JCFLAGS     = $(JCFLAGS_CLANG)
+JCPPFLAGS   = $(JCPPFLAGS_CLANG)
+JCXXFLAGS   = $(JCXXFLAGS_CLANG)
+DEBUGFLAGS  = $(DEBUGFLAGS_CLANG)
+SHIPFLAGS   = $(SHIPFLAGS_CLANG) $(BOLT_CFLAGS_CLANG)
 BOLT_CFLAGS  := $(BOLT_CFLAGS_CLANG)
 
 ifeq ($(OS), Darwin)
@@ -798,6 +811,8 @@ ifneq ($(OS), Darwin)
 endif
 endif
 
+bootstrap_julia_flags :=
+
 ifeq ($(SANITIZE),1)
 SANITIZE_OPTS :=
 SANITIZE_LDFLAGS :=
@@ -813,8 +828,11 @@ SANITIZE_OPTS += -fsanitize=address
 SANITIZE_LDFLAGS += -fsanitize=address -shared-libasan
 endif
 ifeq ($(SANITIZE_THREAD),1)
-SANITIZE_OPTS += -fsanitize=thread
+SANITIZE_OPTS += -fsanitize=thread -fsanitize-ignorelist=$(JULIAHOME)/contrib/tsan/ignorelist.txt
 SANITIZE_LDFLAGS += -fsanitize=thread
+ifneq ($(CROSS_BOOTSTRAP_JULIA),)
+bootstrap_julia_flags += --target-sanitize=thread
+endif
 endif
 ifeq ($(SANITIZE_OPTS),)
 $(error SANITIZE=1, but no sanitizer selected, set either SANITIZE_MEMORY, SANITIZE_THREAD, or SANITIZE_ADDRESS)
@@ -914,6 +932,15 @@ JCFLAGS += -DTRACY_CALLSTACK=32
 LIBTRACYCLIENT:=-lTracyClient
 endif
 
+ifeq ($(WITH_APPLE_OSLOG), 1)
+ifeq ($(OS), Darwin)
+JCXXFLAGS += -DUSE_APPLE_OSLOG
+JCFLAGS += -DUSE_APPLE_OSLOG
+else
+$(warning "WITH_APPLE_OSLOG=1 is only supported on Darwin, ignoring")
+endif
+endif
+
 ifeq ($(WITH_TIMING_COUNTS), 1)
 JCXXFLAGS += -DUSE_TIMING_COUNTS
 JCFLAGS += -DUSE_TIMING_COUNTS
@@ -922,6 +949,23 @@ endif
 ifeq ($(WITH_NVTX), 1)
 JCXXFLAGS += -DUSE_NVTX
 JCFLAGS += -DUSE_NVTX
+endif
+
+ifneq ($(findstring $(OS),WINNT FreeBSD OpenBSD),)
+  USE_LINKER_GC := 0
+  USE_RT_STATIC_LIBGCC := 0
+  USE_RT_STATIC_LIBSTDCXX := 0
+endif
+
+# Linker garbage collection
+ifeq ($(USE_LINKER_GC), 1)
+ifeq ($(OS), Darwin)
+  JLDFLAGS += -Wl,-dead_strip
+else
+  JLDFLAGS += -Wl,--gc-sections
+  JCFLAGS += -ffunction-sections -fdata-sections
+  JCXXFLAGS += -ffunction-sections -fdata-sections
+endif
 endif
 
 # ===========================================================================
@@ -1079,18 +1123,23 @@ BINARY:=64
 MARCH=
 endif
 
-# Allow Clang to use CRC instructions (only applicable on AArch64)
-ifneq (,$(findstring aarch64,$(ARCH)))
-ifeq ($(USECLANG),1)
-ifeq (,$(MARCH))
-JCFLAGS += -mcrc
-endif
-endif
-endif
 
 # If we are running on powerpc64 or ppc64, fail out dramatically
 ifneq (,$(filter $(ARCH), powerpc64 ppc64))
 $(error Big-endian PPC64 is not supported, to ignore this error, set ARCH=ppc64le)
+endif
+
+# Architecture and platform-specific compiler flags
+# Allow Clang to use CRC instructions (only applicable on AArch64) when no specific march is set
+ifneq (,$(findstring aarch64,$(ARCH)))
+ifeq (,$(MARCH))
+JCFLAGS_CLANG += -mcrc
+endif
+endif
+
+# Add platform-specific GCC flags
+ifeq ($(ISX86),1)
+SHIPFLAGS_GCC += -momit-leaf-frame-pointer
 endif
 
 # File name of make binary-dist result
@@ -1219,11 +1268,6 @@ endif
 endif
 endif
 
-ifeq ($(USEGCC),1)
-ifeq ($(ISX86),1)
-  SHIPFLAGS += -momit-leaf-frame-pointer
-endif
-endif
 
 ifeq ($(OS),WINNT)
 LIBUNWIND:=
@@ -1500,11 +1544,9 @@ RPATH_LIB := $(RPATH_ORIGIN)
 
 # --whole-archive
 ifeq ($(OS), Darwin)
-  WHOLE_ARCHIVE := -Xlinker -all_load
-  NO_WHOLE_ARCHIVE :=
+  whole_archive = -Xlinker -force_load $(1)
 else
-  WHOLE_ARCHIVE := -Wl,--whole-archive
-  NO_WHOLE_ARCHIVE := -Wl,--no-whole-archive
+  whole_archive = -Wl,--whole-archive $(1) -Wl,--no-whole-archive
 endif
 
 # Initialize these once, then add to them in OS-specific blocks
@@ -1536,6 +1578,7 @@ endif
 ifeq ($(OS), FreeBSD)
 JLDFLAGS += -Wl,-Bdynamic
 OSLIBS += -lelf -lkvm -lrt -lpthread -latomic
+HAVE_SSP := 1
 
 # Tweak order of libgcc_s in DT_NEEDED,
 # make it loaded first to
@@ -1550,8 +1593,7 @@ ifeq (,$(findstring aarch64,$(ARCH)))
 OSLIBS += -lgcc_s
 endif
 
-OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
-	$(NO_WHOLE_ARCHIVE)
+OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(BUILDROOT)/src/julia.expmap -Wl,--no-whole-archive
 endif
 
 ifeq ($(OS), OpenBSD)
@@ -1570,8 +1612,6 @@ endif
 ifeq ($(OS), Darwin)
 SHLIB_EXT := dylib
 OSLIBS += -framework CoreFoundation
-WHOLE_ARCHIVE := -Xlinker -all_load
-NO_WHOLE_ARCHIVE :=
 HAVE_SSP := 1
 JLIBLDFLAGS += -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
 endif
@@ -1579,14 +1619,14 @@ endif
 ifeq ($(OS), WINNT)
 HAVE_SSP := 1
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
-	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic -lole32
+	-Wl,--no-whole-archive -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic -lole32
 # N.B.: Unlike in the sysimage, we cannot -Wl,--disable-auto-import -Wl,--disable-runtime-pseudo-reloc here, because libstdc++/LLVM are not fully correct under
 # enforced visibility at this point.
 JLDFLAGS += -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif
-JCPPFLAGS += -D_WIN32_WINNT=0x0502
+JCPPFLAGS += -D_WIN32_WINNT=0x0602 # (0x0602 = _WIN32_WINNT_WIN8)
 UNTRUSTED_SYSTEM_LIBM := 1
 # Use hard links for files on windows, rather than soft links
 #   https://stackoverflow.com/questions/3648819/how-to-make-a-symbolic-link-with-cygwin-in-windows-7
@@ -1682,6 +1722,12 @@ ifeq ($(USEGCC),1)
 # try to help clang find the c++ files for CC by guessing the value for --prefix
 # by dropping lib/gcc/<platform>/<version> from the install directory it reports
 CLANGSA_CXXFLAGS += --gcc-toolchain="$(abspath $(shell LANG=C $(CC) -print-search-dirs | grep '^install: ' | sed -e "s/^install: //")/../../../..)"
+ifneq ($(OS), Darwin)
+GCC_SYSROOT := $(shell $(CC) --print-sysroot 2>/dev/null)
+ifneq ($(GCC_SYSROOT),)
+CLANGSA_FLAGS += --sysroot=$(GCC_SYSROOT)
+endif
+endif
 endif
 
 
@@ -1761,9 +1807,15 @@ JULIA_BUILD_MODE := debug
 endif
 endif
 
+ifneq ($(CROSS_BOOTSTRAP_JULIA),)
+JULIA_EXECUTABLE_debug := $(CROSS_BOOTSTRAP_JULIA)
+JULIA_EXECUTABLE_release := $(CROSS_BOOTSTRAP_JULIA)
+JULIA_EXECUTABLE := $(CROSS_BOOTSTRAP_JULIA)
+else
 JULIA_EXECUTABLE_debug := $(build_bindir)/julia-debug$(EXE)
 JULIA_EXECUTABLE_release := $(build_bindir)/julia$(EXE)
 JULIA_EXECUTABLE := $(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))
+endif
 
 JULIA_SYSIMG_debug := $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
 JULIA_SYSIMG_release := $(build_private_libdir)/sys.$(SHLIB_EXT)
