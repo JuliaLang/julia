@@ -31,7 +31,9 @@ struct SystemError <: Exception
 end
 
 lock(::IO) = nothing
+typeof(lock).name.max_methods = UInt8(1)
 unlock(::IO) = nothing
+typeof(unlock).name.max_methods = UInt8(1)
 
 """
     reseteof(io)

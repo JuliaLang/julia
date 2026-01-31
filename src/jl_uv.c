@@ -68,7 +68,7 @@ static void wait_empty_func(uv_timer_t *t)
     uv_unref((uv_handle_t*)&signal_async);
     if (!uv_loop_alive(t->loop))
         return;
-    jl_safe_printf("\n[pid %zd] waiting for IO to finish:\n"
+    jl_safe_printf("\n[pid %zd] Waiting for background task / IO / timer to finish:\n"
                    " Handle type        uv_handle_t->data\n",
                    (size_t)uv_os_getpid());
     uv_walk(jl_io_loop, walk_print_cb, NULL);
@@ -1182,7 +1182,7 @@ JL_DLLEXPORT int jl_tty_set_mode(uv_tty_t *handle, int mode)
     if (handle->type != UV_TTY) return 0;
     uv_tty_mode_t mode_enum = UV_TTY_MODE_NORMAL;
     if (mode)
-        mode_enum = UV_TTY_MODE_RAW;
+        mode_enum = UV_TTY_MODE_RAW_VT;
     // TODO: do we need lock?
     return uv_tty_set_mode(handle, mode_enum);
 }

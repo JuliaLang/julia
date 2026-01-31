@@ -541,7 +541,7 @@ of type `Array{Any}`). But, if you're using one of these structures and happen t
 of an element, it helps to share this knowledge with the compiler:
 
 ```julia
-function foo(a::Array{Any,1})
+function foo(a::Vector{Any})
     x = a[1]::Int32
     b = x+1
     ...
@@ -651,6 +651,29 @@ would not normally specialize that method call. You need to check the
 [method internals](@ref ast-lowered-method) if you want to see whether specializations are generated
 when argument types are changed, i.e., if `Base.specializations(@which f(...))` contains specializations
 for the argument in question.
+
+Note that in the presence of keywords and optional positional arguments, you may need to force specialization of a method argument
+even though the method is called in the body. This is due to how Julia rewrites method with default arguments. If we consider:
+
+```julia
+g(f, x=1) = f(...)
+```
+
+the method argument `f` is here clearly used within the method `g`. However, julia will rewrite this as:
+
+```julia
+g(f, x) = f(...)
+g(f) = g(f, 1)
+```
+
+With this rewrite, the second method that passes along the default argument value does no longer use `f`, calling `g(f)` may therefore not specialize on `f`.
+Writing the original definition as
+
+```julia
+g(f::F, x=1) where {F} = f(...)
+```
+
+would solve this.
 
 ### Write "type-stable" functions
 

@@ -189,7 +189,7 @@ let
     @test Base.binding_module(TestMod7648.TestModSub9475, :b9475) == TestMod7648.TestModSub9475
     defaultset = Set(Symbol[:Foo7648, :TestMod7648, :a9475, :c7648, :f9475, :foo7648, :foo7648_nomethods])
     allset = defaultset ∪ Set(Symbol[
-        Symbol("#foo7648"), Symbol("#foo7648_nomethods"),
+        Symbol("#foo7648"), Symbol("#foo7648_nomethods"), Symbol("#_internal_julia_parse"),
         :TestModSub9475, :d7648, :eval, :f7648, :include])
     imported = Set(Symbol[:convert, :curmod_name, :curmod])
     usings_from_Test = Set(Symbol[
@@ -197,7 +197,7 @@ let
         Symbol("@test_logs"), Symbol("@test_nowarn"), Symbol("@test_skip"), Symbol("@test_throws"),
         Symbol("@test_warn"), Symbol("@testset"), :GenericArray, :GenericDict, :GenericOrder,
         :GenericSet, :GenericString, :LogRecord, :Test, :TestLogger, :TestSetException,
-        :detect_ambiguities, :detect_unbound_args])
+        :detect_ambiguities, :detect_closure_boxes, :detect_closure_boxes_all_modules, :detect_unbound_args])
     usings_from_Base = delete!(Set(names(Module(); usings=true)), :anonymous) # the name of the anonymous module itself
     usings = Set(Symbol[:x36529, :TestModSub9475, :f54609]) ∪ usings_from_Test ∪ usings_from_Base
     @test Set(names(TestMod7648)) == defaultset
@@ -275,7 +275,7 @@ let defaultset = Set((:A,))
     imported = Set((:M2,))
     usings_from_Base = delete!(Set(names(Module(); usings=true)), :anonymous) # the name of the anonymous module itself
     usings = Set((:A, :f, :C, :y, :M1, :m1_x)) ∪ usings_from_Base
-    allset = Set((:A, :B, :C, :eval, :include))
+    allset = Set((:A, :B, :C, :eval, :include, Symbol("#_internal_julia_parse")))
     @test Set(names(TestMod54609.A)) == defaultset
     @test Set(names(TestMod54609.A, imported=true)) == defaultset ∪ imported
     @test Set(names(TestMod54609.A, usings=true)) == defaultset ∪ usings

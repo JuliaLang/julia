@@ -7,7 +7,7 @@ using LibGit2_jll
 using Test
 using Random, Serialization, Sockets
 
-const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
 isdefined(Main, :ChallengePrompts) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ChallengePrompts.jl"))
 using .Main.ChallengePrompts: challenge_prompt as basic_challenge_prompt
 
@@ -744,6 +744,23 @@ mktempdir() do dir
             cred_payload = LibGit2.CredentialPayload()
             @test_throws ArgumentError LibGit2.clone(cache_repo, test_repo, callbacks=callbacks, credentials=cred_payload)
         end
+        @testset "shallow clone" begin
+            @static if LibGit2.VERSION >= v"1.7.0"
+                # Note: Shallow clones are not supported with local file:// transport
+                # This is a limitation in libgit2 - shallow clones only work with
+                # network protocols (http, https, git, ssh)
+                # See online-tests.jl for tests with remote repositories
+
+                # Test normal clone is not shallow
+                normal_path = joinpath(dir, "Example.NotShallow")
+                LibGit2.with(LibGit2.clone(cache_repo, normal_path)) do repo
+                    @test !LibGit2.isshallow(repo)
+                end
+            else
+                # Test that depth parameter throws error on older libgit2
+                @test_throws ArgumentError LibGit2.clone(cache_repo, joinpath(dir, "Example.Shallow"), depth=1)
+            end
+        end
     end
 
     @testset "Update cache repository" begin
@@ -1082,6 +1099,14 @@ mktempdir() do dir
                         rethrow()
                     end
                 end
+
+                # Test GitTree constructor with GitHash
+                tree1 = LibGit2.GitTree(repo, "HEAD^{tree}")
+                tree_hash = LibGit2.GitHash(tree1)
+                tree2 = LibGit2.GitTree(repo, tree_hash)
+                @test isa(tree2, LibGit2.GitTree)
+                @test LibGit2.GitHash(tree1) == LibGit2.GitHash(tree2)
+                @test LibGit2.count(tree1) == LibGit2.count(tree2)
             end
         end
 
@@ -1146,6 +1171,20 @@ mktempdir() do dir
                 @test !LibGit2.isdiff(repo, "HEAD")
                 @test !LibGit2.isdirty(repo, cached=true)
                 @test !LibGit2.isdiff(repo, "HEAD", cached=true)
+            end
+
+            LibGit2.with(LibGit2.GitRepo(cache_repo)) do repo
+                diff_str = "diff --git a/test.txt b/test.txt\nindex 0000000..1111111 100644\n"
+                @test_throws LibGit2.GitError LibGit2.GitDiff(diff_str)
+
+                tree1 = LibGit2.GitTree(repo, "HEAD~1^{tree}")
+                tree2 = LibGit2.GitTree(repo, "HEAD^{tree}")
+                diff = LibGit2.diff_tree(repo, tree1, tree2)
+                idx = LibGit2.apply_to_tree(repo, tree1, diff)
+                @test idx isa LibGit2.GitIndex
+                oid = LibGit2.write_tree_to!(repo, idx)
+                @test oid isa LibGit2.GitHash
+                close(idx)
             end
         end
     end
@@ -3054,9 +3093,28 @@ mktempdir() do dir
                 key = joinpath(root, common_name * ".key")
                 cert = joinpath(root, common_name * ".crt")
                 pem = joinpath(root, common_name * ".pem")
+                conf = joinpath(root, common_name * ".conf")
+
+                # Make sure test doesn't depend on system OpenSSL config (which may be broken)
+                open(conf, "w") do io
+                    write(io, """
+                        [req]
+                        distinguished_name = req_distinguished_name
+
+                        [req_distinguished_name]
+                        CN = $common_name
+                        """)
+                end
 
                 # Generated a certificate which has the CN set correctly but no subjectAltName
-                run(pipeline(`openssl req -new -x509 -newkey rsa:2048 -sha256 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`, stderr=devnull))
+                err = IOBuffer()
+                p = run(pipeline(addenv(
+                    `openssl req -new -x509 -newkey rsa:2048 -sha256 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`,
+                    "OPENSSL_CONF" => conf), stderr=err); wait=false)
+                wait(p)
+                @testset let err = String(take!(err))
+                    @test success(p)
+                end
                 run(`openssl x509 -in $cert -out $pem -outform PEM`)
 
                 local pobj, port

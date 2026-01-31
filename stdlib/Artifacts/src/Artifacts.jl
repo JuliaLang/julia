@@ -16,6 +16,13 @@ using Base.TOML: TOML
 export artifact_exists, artifact_path, artifact_meta, artifact_hash,
        select_downloadable_artifacts, find_artifacts_toml, @artifact_str
 
+const _artifacts_world_age = Ref{UInt}(typemax(UInt))
+
+function __init__()
+    _artifacts_world_age[] = Base.get_world_counter()
+    nothing
+end
+
 """
     parse_toml(path::String)
 
@@ -403,7 +410,7 @@ function artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String
         dl_dict = Dict{Platform,Dict{String,Any}}()
         for x in meta
             x = x::Dict{String, Any}
-            dl_dict[unpack_platform(x, name, artifacts_toml)] = x
+            dl_dict[unpack_platform(x, name, artifacts_toml)::Platform] = x
         end
         meta = select_platform(dl_dict, platform)
     # If it's NOT a dict, complain
@@ -543,7 +550,7 @@ function jointail(dir, tail)
 end
 
 function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, ::Val{LazyArtifacts}) where LazyArtifacts
-    world = Base._require_world_age[]
+    world = _artifacts_world_age[]
     if world == typemax(UInt)
         world = Base.get_world_counter()
     end

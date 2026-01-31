@@ -162,6 +162,86 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
     if (e->head == jl_foreigncall_sym) {
         JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, nreq, (cc, effects, gc_safe))
         jl_task_t *ct = jl_current_task;
+        jl_value_t *fptr = jl_exprarg(e, 0);
+        // Handle dot expressions in tuple arguments for ccall by converting to GlobalRef eagerly
+        jl_sym_t *tuple_sym = jl_symbol("tuple");
+        if (jl_is_quotenode(fptr)) {
+            if (jl_is_string(jl_quotenode_value(fptr)) || jl_is_tuple(jl_quotenode_value(fptr)))
+                fptr = jl_quotenode_value(fptr);
+        }
+        if (jl_is_tuple(fptr)) {
+            // convert literal Tuple to Expr tuple
+            jl_expr_t *tupex = jl_exprn(tuple_sym, jl_nfields(fptr));
+            jl_value_t *v = NULL;
+            JL_GC_PUSH2(&tupex, &v);
+            for (long i = 0; i < jl_nfields(fptr); i++) {
+                v = jl_fieldref(fptr, i);
+                if (!jl_is_string(v))
+                    v = jl_new_struct(jl_quotenode_type, v);
+                jl_exprargset(tupex, i, v);
+            }
+            jl_exprargset(e, 0, tupex);
+            fptr = (jl_value_t*)tupex;
+            JL_GC_POP();
+        }
+        if (jl_is_expr(fptr) && ((jl_expr_t*)fptr)->head == tuple_sym) {
+            // verify Expr tuple can be interpreted and handle
+            jl_expr_t *tuple_expr = (jl_expr_t*)fptr;
+            size_t nargs_tuple = jl_expr_nargs(tuple_expr);
+            if (nargs_tuple == 0)
+                jl_error("ccall function name cannot be empty tuple");
+            if (nargs_tuple > 2)
+                jl_error("ccall function name tuple can have at most 2 elements");
+            // Validate tuple elements are not more complicated than inference/codegen can safely handle
+            for (size_t i = 0; i < nargs_tuple; i++) {
+                jl_value_t *arg = jl_exprarg(tuple_expr, i);
+                // Handle dot expressions by converting to a GlobalRef
+                if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_dot_sym) {
+                    jl_expr_t *dot_expr = (jl_expr_t*)arg;
+                    if (jl_expr_nargs(dot_expr) != 2)
+                        jl_error("ccall function name: invalid dot expression");
+                    jl_value_t *mod_expr = jl_exprarg(dot_expr, 0);
+                    jl_value_t *sym_expr = jl_exprarg(dot_expr, 1);
+                    if (!(jl_is_quotenode(sym_expr) && jl_is_symbol(jl_quotenode_value(sym_expr))))
+                        jl_type_error("ccall name dot expression", (jl_value_t*)jl_symbol_type, sym_expr);
+                    JL_TRY {
+                        // Evaluate the module expression
+                        jl_value_t *mod_val = jl_toplevel_eval(module, mod_expr);
+                        JL_TYPECHK(ccall name dot expression, module, mod_val);
+                        JL_GC_PROMISE_ROOTED(mod_val);
+                        // Create GlobalRef from evaluated module and quoted symbol
+                        jl_sym_t *sym = (jl_sym_t*)jl_quotenode_value(sym_expr);
+                        jl_value_t *globalref = jl_module_globalref((jl_module_t*)mod_val, sym);
+                        jl_exprargset(tuple_expr, i, globalref);
+                    }
+                    JL_CATCH {
+                        if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
+                            jl_error("could not evaluate ccall function/library name (it might depend on a local variable)");
+                        else
+                            jl_rethrow();
+                    }
+                }
+                else if (jl_is_quotenode(arg)) {
+                    if (i == 0) {
+                        // function name must be a symbol or string, library can be anything
+                        jl_value_t *quoted_val = jl_quotenode_value(arg);
+                        if (!jl_is_symbol(quoted_val) && !jl_is_string(quoted_val))
+                            jl_type_error("ccall function name", (jl_value_t*)jl_symbol_type, jl_quotenode_value(arg));
+                    }
+                }
+                else if (!jl_is_globalref(arg) && jl_isa_ast_node(arg)) {
+                    jl_type_error(i == 0 ? "ccall function name" : "ccall library name", (jl_value_t*)jl_symbol_type, arg);
+                }
+            }
+        }
+        else if (jl_is_string(fptr) || (jl_is_quotenode(fptr) && jl_is_symbol(jl_quotenode_value(fptr)))) {
+            // convert String to Expr (String,)
+            // convert QuoteNode(Symbol) to Expr (QuoteNode(Symbol),)
+            jl_expr_t *tupex = jl_exprn(tuple_sym, 1);
+            jl_exprargset(tupex, 0, fptr);
+            jl_exprargset(e, 0, tupex);
+            fptr = (jl_value_t*)tupex;
+        }
         jl_value_t *rt = jl_exprarg(e, 1);
         jl_value_t *at = jl_exprarg(e, 2);
         if (!jl_is_type(rt)) {

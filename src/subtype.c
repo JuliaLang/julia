@@ -4840,7 +4840,7 @@ static jl_value_t *insert_nondiagonal(jl_value_t *type, jl_varbinding_t *troot, 
         JL_GC_POP();
     }
     else if (jl_is_vararg(type)) {
-        // As for Vararg we'd better widen it's var to ub as otherwise they are still diagonal
+        // As for Vararg we'd better widen its var to ub as otherwise they are still diagonal
         jl_value_t *t = jl_unwrap_vararg(type);
         jl_value_t *n = jl_unwrap_vararg_num(type);
         if (widen2ub == 0)

@@ -11,7 +11,7 @@ const HASH_SECRET = (
 """
     hash(x[, h::UInt])::UInt
 
-Compute an integer hash code such that `isequal(x,y)` implies `hash(x)==hash(y)`. The
+Compute an integer hash code such that `isequal(x,y)` implies `isequal(hash(x), hash(y))`. The
 optional second argument `h` is another hash code to be mixed with the result.
 
 New types should implement the 2-argument form, typically by calling the 2-argument `hash`
@@ -21,6 +21,12 @@ Typically, any type that implements `hash` should also implement its own [`==`](
 
 The hash value may change when a new Julia process is started.
 
+!!! warning
+    When implementing the 2-argument form, the second argument `h` should _not_ be given a
+    default value such `h = UInt(0)` as this will implicitly create a 1-argument method that
+    is more specific than the fallback (see [Note on Optional and keyword Arguments](@ref)),
+    but potentially with the wrong seed, causing hash inconsistencies.
+
 ```jldoctest; filter = r"0x[0-9a-f]{16}"
 julia> a = hash(10)
 0x759d18cc5346a65f
@@ -29,7 +35,7 @@ julia> hash(10, a) # only use the output of another hash function as the second 
 0x03158cd61b1b0bd1
 ```
 
-See also: [`objectid`](@ref), [`Dict`](@ref), [`Set`](@ref).
+See also [`objectid`](@ref), [`Dict`](@ref), [`Set`](@ref).
 """
 hash(data::Any) = hash(data, HASH_SEED)
 hash(w::WeakRef, h::UInt) = hash(w.value, h)
@@ -629,7 +635,3 @@ hash(data::AbstractString, h::UInt) =
     hash_bytes(utf8units(data), UInt64(h), HASH_SECRET) % UInt
 @assume_effects :total hash(data::String, h::UInt) =
     GC.@preserve data hash_bytes(pointer(data), sizeof(data), UInt64(h), HASH_SECRET) % UInt
-
-# no longer used in Base, but a lot of packages access these internals
-const memhash = UInt === UInt64 ? :memhash_seed : :memhash32_seed
-const memhash_seed = UInt === UInt64 ? 0x71e729fd56419c81 : 0x56419c81

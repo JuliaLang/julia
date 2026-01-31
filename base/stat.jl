@@ -54,7 +54,7 @@ The following fields of this struct are considered public API:
 | mtime   | `Float64`                       | Unix timestamp of when the file was last modified                  |
 | ctime   | `Float64`                       | Unix timestamp of when the file's metadata was changed             |
 
-See also: [`stat`](@ref)
+See also [`stat`](@ref).
 """
 struct StatStruct
     desc    :: Union{String, OS_HANDLE} # for show method, not included in equality or hash
@@ -406,6 +406,8 @@ ischardev(st::StatStruct) = filemode(st) & 0xf000 == 0x2000
 
 Return `true` if `path` points to a directory, `false` otherwise.
 
+See also [`isfile`](@ref), [`ispath`](@ref).
+
 # Examples
 ```jldoctest
 julia> isdir(homedir())
@@ -414,8 +416,6 @@ true
 julia> isdir("not/a/directory")
 false
 ```
-
-See also [`isfile`](@ref) and [`ispath`](@ref).
 """
 isdir(st::StatStruct) = filemode(st) & 0xf000 == 0x4000
 
@@ -434,6 +434,8 @@ isblockdev(st::StatStruct) = filemode(st) & 0xf000 == 0x6000
 
 Return `true` if `path` points to a regular file, `false` otherwise.
 
+See also [`isdir`](@ref), [`ispath`](@ref).
+
 # Examples
 ```jldoctest
 julia> isfile(homedir())
@@ -451,8 +453,6 @@ julia> rm(filename);
 julia> isfile(filename)
 false
 ```
-
-See also [`isdir`](@ref) and [`ispath`](@ref).
 """
 isfile(st::StatStruct) = filemode(st) & 0xf000 == 0x8000
 
@@ -519,7 +519,7 @@ is read+write, the bitfield is "110", which maps to the decimal
 value of 0+2+4=6. This is reflected in the printing of the
 returned `UInt8` value.
 
-See also [`gperm`](@ref) and [`operm`](@ref).
+See also [`gperm`](@ref), [`operm`](@ref).
 
 ```jldoctest
 julia> touch("dummy_file");  # Create test-file without contents

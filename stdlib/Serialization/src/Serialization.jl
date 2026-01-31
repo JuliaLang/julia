@@ -1067,11 +1067,10 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     nospecializeinfer = false
     constprop = 0x00
     purity = 0x0000
-    local template_or_is_opaque, template
-    with(current_module => mod) do
-        template_or_is_opaque = deserialize(s)
+    template_or_is_opaque = with(current_module => mod) do
+        deserialize(s)
     end
-    if isa(template_or_is_opaque, Bool)
+    template = if isa(template_or_is_opaque, Bool)
         is_for_opaque_closure = template_or_is_opaque
         if format_version(s) >= 24
             nospecializeinfer = deserialize(s)::Bool
@@ -1085,10 +1084,10 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
             purity = UInt16(deserialize(s)::UInt8)
         end
         with(current_module => mod) do
-            template = deserialize(s)
+            deserialize(s)
         end
     else
-        template = template_or_is_opaque
+        template_or_is_opaque
     end
     generator = deserialize(s)
     recursion_relation = nothing

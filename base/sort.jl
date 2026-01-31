@@ -325,7 +325,7 @@ searched value `x` as well as the values in `v`.
 The range is generally found using binary search, but there are optimized
 implementations for some inputs.
 
-See also: [`searchsortedfirst`](@ref), [`sort!`](@ref), [`insorted`](@ref), [`findall`](@ref).
+See also [`searchsortedfirst`](@ref), [`sort!`](@ref), [`insorted`](@ref), [`findall`](@ref).
 
 # Examples
 ```jldoctest
@@ -364,7 +364,7 @@ values in `v`.
 The index is generally found using binary search, but there are optimized
 implementations for some inputs.
 
-See also: [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
+See also [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -496,7 +496,7 @@ end
 """
     make_scratch(scratch::Union{Nothing, Vector}, T::Type, len::Integer)
 
-Returns `(s, t)` where `t` is an `AbstractVector` of type `T` with length at least `len`
+Return `(s, t)` where `t` is an `AbstractVector` of type `T` with length at least `len`
 that is backed by the `Vector` `s`. If `scratch !== nothing`, then `s === scratch`.
 
 This function will allocate a new vector if `scratch === nothing`, `resize!` `scratch` if it
@@ -763,7 +763,7 @@ end
 """
     IsUIntMappable(yes, no) isa Base.Sort.Algorithm
 
-Determines if the elements of a vector can be mapped to unsigned integers while preserving
+Determine if the elements of a vector can be mapped to unsigned integers while preserving
 their order under the specified ordering.
 
 If they can be, dispatch to the `yes` algorithm and record the unsigned integer type that
@@ -1894,7 +1894,7 @@ julia> partialsortperm!(ix, v, 2:3)
  4
  3
 ```
- """
+"""
 function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
                           k::Union{Integer, OrdinalRange};
                           lt::Function=isless,
@@ -1935,7 +1935,7 @@ To sort slices of an array, refer to [`sortslices`](@ref).
 
 # Examples
 ```jldoctest
-julia> v = [3, 1, 2];
+julia> v = [13, 11, 12];
 
 julia> p = sortperm(v)
 3-element Vector{Int64}:
@@ -1945,9 +1945,9 @@ julia> p = sortperm(v)
 
 julia> v[p]
 3-element Vector{Int64}:
- 1
- 2
- 3
+ 11
+ 12
+ 13
 
 julia> A = [8 7; 5 6]
 2×2 Matrix{Int64}:
@@ -2248,7 +2248,7 @@ a linear ordering for `a, b <: typeof(x)`. Satisfies
 `isless(order, a, b) === (uint_map(a, order) < uint_map(b, order))`
 and `x === uint_unmap(typeof(x), uint_map(x, order), order)`
 
-See also: [`UIntMappable`](@ref) [`uint_unmap`](@ref)
+See also [`UIntMappable`](@ref), [`uint_unmap`](@ref).
 """
 function uint_map end
 
@@ -2258,7 +2258,7 @@ function uint_map end
 Reconstruct the unique value `x::T` that uint_maps to `u`. Satisfies
 `x === uint_unmap(T, uint_map(x::T, order), order)` for all `x <: T`.
 
-See also: [`uint_map`](@ref) [`UIntMappable`](@ref)
+See also [`uint_map`](@ref), [`UIntMappable`](@ref).
 """
 function uint_unmap end
 

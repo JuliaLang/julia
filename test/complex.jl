@@ -1013,9 +1013,9 @@ end
 # issue #10926
 @test typeof(π - 1im) == ComplexF64
 
-@testset "issue #15969" begin
+@testset "issues #15969 #59684" begin
     # specialized muladd for complex types
-    for x in (3, 3+13im), y in (2, 2+7im), z in (5, 5+11im)
+    for x in (3, 3+13im, 1im), y in (2, 2+7im, 1im), z in (5, 5+11im, 0x01, 0x01 + 0x00*im)
         @test muladd(x,y,z) === x*y + z
     end
 end

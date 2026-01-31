@@ -121,6 +121,17 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname, const char *co
     jl_throw(ex);
 }
 
+JL_DLLEXPORT void JL_NORETURN jl_type_error_global(const char *fname, jl_module_t *mod, jl_sym_t *sym,
+                                               jl_value_t *expected JL_MAYBE_UNROOTED,
+                                               jl_value_t *got JL_MAYBE_UNROOTED)
+{
+    jl_value_t *gr = jl_module_globalref(mod, sym);
+    JL_GC_PUSH2(&expected, &got);
+    jl_value_t *ex = jl_new_struct(jl_typeerror_type, jl_symbol(fname), gr, expected, got);
+    jl_throw(ex);
+}
+
+
 // with function name or description only
 JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname,
                                             jl_value_t *expected JL_MAYBE_UNROOTED,
@@ -286,6 +297,7 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh)
     ct->eh = eh->prev;
     ct->gcstack = eh->gcstack;
     ct->scope = eh->scope;
+    jl_gc_wb_current_task(ct, ct->scope);
     small_arraylist_t *locks = &ptls->locks;
     int unlocks = locks->len > eh->locks_len;
     if (unlocks) {
@@ -325,6 +337,7 @@ JL_DLLEXPORT void jl_eh_restore_state_noexcept(jl_task_t *ct, jl_handler_t *eh)
 {
     assert(ct->gcstack == eh->gcstack && "Incorrect GC usage under try catch");
     ct->scope = eh->scope;
+    jl_gc_wb_current_task(ct, ct->scope);
     ct->eh = eh->prev;
     ct->ptls->defer_signal = eh->defer_signal; // optional, but certain try-finally (in stream.jl) may be slightly harder to write without this
 }
@@ -817,7 +830,7 @@ static size_t jl_static_show_float(JL_STREAM *out, double v,
 {
     size_t n = 0;
     // TODO: non-canonical NaNs do not round-trip
-    // TOOD: BFloat16
+    // TODO: BFloat16
     const char *size_suffix = vt == jl_float16_type ? "16" :
                               vt == jl_float32_type ? "32" :
                                                       "";

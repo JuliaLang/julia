@@ -182,7 +182,7 @@ The quotient and remainder from Euclidean division.
 Equivalent to `(div(x, y, r), rem(x, y, r))`. Equivalently, with the default
 value of `r`, this call is equivalent to `(x ÷ y, x % y)`.
 
-See also: [`fldmod`](@ref), [`cld`](@ref).
+See also [`fldmod`](@ref), [`cld`](@ref).
 
 # Examples
 ```jldoctest
@@ -286,7 +286,7 @@ end
 The floored quotient and modulus after division. A convenience wrapper for
 `divrem(x, y, RoundDown)`. Equivalent to `(fld(x, y), mod(x, y))`.
 
-See also: [`fld`](@ref), [`cld`](@ref), [`fldmod1`](@ref).
+See also [`fld`](@ref), [`cld`](@ref), [`fldmod1`](@ref).
 """
 fldmod(x, y) = divrem(x, y, RoundDown)
 
@@ -381,3 +381,9 @@ end
 # NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
 # so it is used here as the basis of float div().
 div(x::T, y::T, r::RoundingMode) where {T<:AbstractFloat} = convert(T, round((x - rem(x, y, r)) / y))
+
+# Vincent Lefèvre: "The Euclidean Division Implemented with a Floating-Point Division and a Floor"
+# https://inria.hal.science/inria-00070403
+# Theorem 1 implies that the following are exact if eps(x/y) <= 1
+div(x::Float32, y::Float32, r::RoundingMode) = Float32(round(Float64(x) / Float64(y), r))
+div(x::Float16, y::Float16, r::RoundingMode) = Float16(round(Float32(x) / Float32(y), r))

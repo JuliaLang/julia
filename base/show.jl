@@ -385,6 +385,11 @@ The following properties are in common use:
  - `:color`: Boolean specifying whether ANSI color/escape codes are supported/expected.
    By default, this is determined by whether `io` is a compatible terminal and by any
    `--color` command-line flag when `julia` was launched.
+ - `:hexunsigned`: Boolean specifying whether to print unsigned integers in
+   hexadecimal. Defaults to `true`, otherwise they will be printed in decimal.
+
+!!! compat "Julia 1.14"
+    The `:hexunsigned` option requires Julia 1.14 or later.
 
 # Examples
 
@@ -1210,7 +1215,7 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
         return
     elseif isnamedtuple
         syms, types = parameters
-        if syms isa Tuple && types isa DataType
+        if syms isa Tuple && types isa DataType && length(types.parameters) == length(syms) && !isvatuple(types)
             print(io, "@NamedTuple{")
             show_at_namedtuple(io, syms, types)
             print(io, "}")
@@ -1260,7 +1265,7 @@ show_supertypes(typ::DataType) = show_supertypes(stdout, typ)
 
 Prints one or more expressions, and their results, to `stdout`, and returns the last result.
 
-See also: [`show`](@ref), [`@info`](@ref man-logging), [`println`](@ref).
+See also [`show`](@ref), [`@info`](@ref man-logging), [`println`](@ref).
 
 # Examples
 ```jldoctest
@@ -1293,7 +1298,17 @@ nonnothing_nonmissing_typeinfo(io::IO) = nonmissingtype(nonnothingtype(get(io, :
 show(io::IO, b::Bool) = print(io, nonnothing_nonmissing_typeinfo(io) === Bool ? (b ? "1" : "0") : (b ? "true" : "false"))
 show(io::IO, ::Nothing) = print(io, "nothing")
 show(io::IO, n::Signed) = (write(io, string(n)); nothing)
-show(io::IO, n::Unsigned) = print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
+function show(io::IO, n::Unsigned)
+    if get(io, :hexunsigned, true)::Bool
+        print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
+    else
+        if get(io, :typeinfo, Nothing)::Type == typeof(n)
+            print(io, n)
+        else
+            print(io, typeof(n), "($(n))")
+        end
+    end
+end
 print(io::IO, n::Unsigned) = print(io, string(n))
 
 has_tight_type(p::Pair) =
@@ -1551,9 +1566,12 @@ const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'),
 """
     operator_precedence(s::Symbol)
 
-Return an integer representing the precedence of operator `s`, relative to
+Return an integer representing the precedence of a binary operator `s`, relative to
 other operators. Higher-numbered operators take precedence over lower-numbered
-operators. Return `0` if `s` is not a valid operator.
+operators. Return `0` if `s` is not a valid binary operator.
+
+(The precedence of *unary* operators is handled differently, including cases like `+`
+where an operator can be either unary or binary.)
 
 # Examples
 ```jldoctest
@@ -2163,7 +2181,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             print(io, "end")
         end
 
+    elseif head === :module && nargs==4 && isa(args[1],VersionNumber) && isa(args[2],Bool)
+        # New 4-argument form: (version, baremodule_flag, name, body)
+        show_block(IOContext(io, beginsym=>false), args[2] ? :module : :baremodule, args[3], args[4], indent, quote_level)
+        print(io, "end")
     elseif head === :module && nargs==3 && isa(args[1],Bool)
+        # Old 3-argument form: (baremodule_flag, name, body)
         show_block(IOContext(io, beginsym=>false), args[1] ? :module : :baremodule, args[2], args[3], indent, quote_level)
         print(io, "end")
 
@@ -2568,11 +2591,11 @@ function type_depth_limit(str::String, n::Int; maxdepth = nothing)
     levelcount = Int[]                     # number of nodes at each level
     strwid = 0
     st_0, st_backslash, st_squote, st_dquote = 0,1,2,4
-    state::Int = st_0
-    stateis(s) = (state & s) != 0
+    state = Ref(st_0)
+    stateis(s) = (state[] & s) != 0
     quoted() = stateis(st_squote) || stateis(st_dquote)
-    enter(s) = (state |= s)
-    leave(s) = (state &= ~s)
+    enter(s) = (state[] |= s)
+    leave(s) = (state[] &= ~s)
     for (i, c) in ANSIIterator(str)
         if c isa ANSIDelimiter
             depths[i] = depth
@@ -3110,6 +3133,14 @@ function array_summary(io::IO, a, inds)
     print(io, " with indices ", inds2string(inds))
 end
 
+## `summary` for GenericMemoryRef
+function summary(io::IO, mref::GenericMemoryRef)
+    offset = Core.memoryrefoffset(mref)
+    len_after_offset = length(mref.mem) - offset + 1
+    print(io, len_after_offset, "-element ")
+    showarg(io, mref, true)
+end
+
 ## `summary` for Function
 summary(io::IO, f::Function) = show(io, MIME"text/plain"(), f)
 
@@ -3293,6 +3324,10 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         print(io, " [")
         if (partition.kind & PARTITION_FLAG_EXPORTED) != 0
             print(io, "exported")
+        end
+        if (partition.kind & PARTITION_FLAG_IMPLICITLY_EXPORTED) != 0
+            first ? (first = false) : print(io, ",")
+            print(io, "re-exported")
         end
         if (partition.kind & PARTITION_FLAG_DEPRECATED) != 0
             first ? (first = false) : print(io, ",")

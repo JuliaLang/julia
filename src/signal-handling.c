@@ -178,7 +178,6 @@ void jl_unlock_profile_wr(void)
 }
 
 
-#ifndef _OS_WINDOWS_
 static uint64_t profile_cong_rng_seed = 0;
 static int *profile_round_robin_thread_order = NULL;
 static int profile_round_robin_thread_order_size = 0;
@@ -209,7 +208,6 @@ static int *profile_get_randperm(int size)
     jl_shuffle_int_array_inplace(profile_round_robin_thread_order, size, &profile_cong_rng_seed);
     return profile_round_robin_thread_order;
 }
-#endif
 
 
 JL_DLLEXPORT int jl_profile_is_buffer_full(void)

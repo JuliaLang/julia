@@ -26,6 +26,13 @@ function term(io::IO, md::Paragraph, columns)
     end
 end
 
+function term(io::IO, md::HTMLBlock, columns)
+    for line in md.content[1:end-1]
+        println(io, line)
+    end
+    print(io, md.content[end])
+end
+
 function term(io::IO, md::BlockQuote, columns)
     content = annotprint(term, md.content, columns - 10)
     lines = wraplines(rstrip(content), columns - 10)
@@ -70,15 +77,50 @@ function term(io::IO, f::Footnote, columns)
     end
 end
 
-function term(io::IO, md::List, columns)
+const _bullets = ("• ", "– ", "▪ ")
+
+function term(io::IO, md::List, columns, depth::Int = 1)
+    dterm(io, md, columns, _depth)      = term(io, md, columns)
+    dterm(io, md::List, columns, depth) = term(io, md, columns, depth)
+
+    function make_list_marker(i::Int)
+        list_marker = if isordered(md)
+            string(lpad(i + md.ordered - 1, ndigits(length(md.items) + md.ordered - 1)), ". ")
+        elseif depth == 1
+            first(_bullets)
+        else
+            _bullets[2 + mod(depth, length(_bullets) - 1)]
+        end
+    end
+
+    # adjust column count to ensure word wrap works correctly; the last
+    # label will be the widest (for ordered lists; for unordered lists they
+    # are all the same anyway)
+    columns -= length(make_list_marker(length(md.items)))
+
     for (i, point) in enumerate(md.items)
-        bullet = isordered(md) ? "$(i + md.ordered - 1)." : "• "
-        print(io, ' '^2margin, styled"{markdown_list:$bullet} ")
-        content = annotprint(term, point, columns - 10)
+        list_marker = make_list_marker(i)
+        print(io, ' '^margin, styled"{markdown_list:$list_marker}")
+        buf = AnnotatedIOBuffer()
+        if point isa Vector && !isempty(point)
+            for (i, elt) in enumerate(point[1:end-1])
+                dterm(buf, elt, columns, depth + 1)
+                println(buf)
+                (!(point[i+1] isa List) || point[i+1].loose) && println(buf)
+            end
+            dterm(buf, point[end], columns, depth + 1)
+        else
+            dterm(buf, point, columns, depth + 1)
+        end
+        content = read(seekstart(buf), AnnotatedString)
         lines = split(rstrip(content), '\n')
+        common_indent = minimum(
+            (sum((1 for _ in Iterators.takewhile(isspace, line)), init=0)
+             for line in Iterators.filter(!isempty, lines)),
+            init=if isempty(lines) 0 else length(first(lines)) end)
         for (l, line) in enumerate(lines)
-            l > 1 && print(io, ' '^(2margin+3))
-            print(io, lstrip(line))
+            l > 1 && print(io, ' '^(margin + length(list_marker)))
+            !isempty(line) && print(io, line[common_indent+1:end])
             l < length(lines) && println(io)
         end
         i < length(md.items) && print(io, '\n'^(1 + md.loose))
@@ -92,20 +134,19 @@ function term(io::AnnotIO, md::Header{l}, columns) where l
     face = Symbol("markdown_h$l")
     underline = _header_underlines[l]
     pre = ' '^margin
-    local line_width
-    with_output_annotations(io, :face => face) do io
+    line_width = with_output_annotations(io, :face => face) do io
         headline = annotprint(terminline, md.text)
         lines = wraplines(headline, columns - 4margin)
         for (i, line) in enumerate(lines)
             print(io, pre, line)
             i < length(lines) && println(io)
         end
-        line_width = if length(lines) == 1
-            min(textwidth(lines[end]), columns)
+        if length(lines) == 1
+            return min(textwidth(lines[end]), columns)
         elseif length(lines) > 1
-            max(textwidth(lines[end]), div(columns, 3)+length(pre))
+            return max(textwidth(lines[end]), div(columns, 3)+length(pre))
         else
-            0
+            return 0
         end
     end
     header_width = max(0, line_width)
@@ -174,7 +215,7 @@ function terminline(io::IO, content::Vector)
 end
 
 function terminline(io::IO, md::AbstractString)
-    print(io, replace(md, r"[\s\t\n]+" => ' '))
+    print(io, replace(md, r"[ \t\n]+" => ' '))
 end
 
 function terminline(io::AnnotIO, md::Bold)
@@ -183,6 +224,10 @@ end
 
 function terminline(io::AnnotIO, md::Italic)
     with_output_annotations(io -> terminline(io, md.text), io, :face => :italic)
+end
+
+function terminline(io::AnnotIO, md::Strikethrough)
+    with_output_annotations(io -> terminline(io, md.text), io, :face => :strikethrough)
 end
 
 function terminline(io::IO, md::LineBreak)

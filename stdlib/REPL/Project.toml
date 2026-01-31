@@ -3,6 +3,7 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 version = "1.11.0"
 
 [deps]
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 FileWatching = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 InteractiveUtils = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 JuliaSyntaxHighlighting = "ac6e5ff7-fb65-4e79-a425-ec3bc9c03011"

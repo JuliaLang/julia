@@ -92,6 +92,19 @@ function single_stride_dim(A::Array)
 end
 single_stride_dim(@nospecialize(A)) = single_stride_dim(copy_to_array(A))
 
+function unsafe_strided_getindex(A::AbstractArray{T,N}, I::Vararg{Int, N})::T where {T, N}
+    A_cconv = Base.cconvert(Ptr{T}, A)
+    GC.@preserve A_cconv begin
+        A_ptr = Base.unsafe_convert(Ptr{T}, A_cconv)
+        for d in 1:N
+            stride_in_bytes = stride(A, d) * Base.elsize(typeof(A))
+            first_idx = first(axes(A, d))
+            A_ptr += (I[d] - first_idx) * stride_in_bytes
+        end
+        unsafe_load(A_ptr)
+    end
+end
+
 # Testing equality of AbstractArrays, using several different methods to access values
 function test_cartesian(@nospecialize(A), @nospecialize(B))
     isgood = true
@@ -99,7 +112,8 @@ function test_cartesian(@nospecialize(A), @nospecialize(B))
         @test A[IA] == B[IB]
         if A isa StridedArray
             v1 = GC.@preserve A unsafe_load(pointer(A.parent, sum((0,(strides(A) .* (IA.I .- 1))...))+Base.first_index(A)))
-            @test v1 == B[IB]
+            v2 = unsafe_strided_getindex(A, Tuple(IA)...)
+            @test v1 == v2 == B[IB]
         end
     end
 end
@@ -1103,3 +1117,98 @@ end
 
 
 @test @views quote var"begin" + var"end" end isa Expr
+
+@testset "@views handling of assignment" begin
+    @test @macroexpand(@views x[a:b] = c) == :(x[a:b] = c)
+    # Assignments should still work
+    let array = [1, 2, 3, 4, 5, 6, 7, 8]
+        @views array[begin:2] = [-1, -2]
+        @test array == [-1, -2, 3, 4, 5, 6, 7, 8]
+        @views array[7:end] = [-7, -8]
+        @test array == [-1, -2, 3, 4, 5, 6, -7, -8]
+        @views array[begin + 2:end - 4] = [-3, -4]
+        @test array == [-1, -2, -3, -4, 5, 6, -7, -8]
+        @views identity(array)[begin + 4:end - 2] = [-5, -6]
+        @test array == [-1, -2, -3, -4, -5, -6, -7, -8]
+
+        @views array[begin:2] .= 100
+        @test array == [100, 100, -3, -4, -5, -6, -7, -8]
+        @views array[7:end] .= 200
+        @test array == [100, 100, -3, -4, -5, -6, 200, 200]
+        @views array[begin + 2:end - 4] .= 300
+        @test array == [100, 100, 300, 300, -5, -6, 200, 200]
+        @views identity(array)[begin + 4:end - 2] .= 400
+        @test array == [100, 100, 300, 300, 400, 400, 200, 200]
+
+        @views identity(array)[begin:end] .-= 1
+        @test array == [99, 99, 299, 299, 399, 399, 199, 199]
+
+        @views identity(array)[begin:end] += [1, 2, 3, 4, 5, 6, 7, 8]
+        @test array == [100, 101, 302, 303, 404, 405, 206, 207]
+    end
+    # Nested getindex in assignment should be transformed
+    let array = [1, 2, 3, 4, 5, 6, 7, 8], array2 = [1, 2, 3, 4, 5, 6, 7, 8]
+        array[begin + 1:end - 2][2] = -1
+        array[begin + 1:end - 2][end] = -2
+        @test array == [1, 2, 3, 4, 5, 6, 7, 8]
+
+        @views array[begin + 1:end - 2][2] = -1
+        @views array[begin + 1:end - 2][end] = -2
+        @test array == [1, 2, -1, 4, 5, -2, 7, 8]
+
+        function swap_ele(ary, i, v)
+            res = ary[i]
+            ary[i] = v
+            return res
+        end
+        array2[swap_ele(array[begin:end], 1, -3):swap_ele(array[begin:end], 7, -4)] = [-1, -2, -3, -4, -5, -6, -7]
+        @test array == [1, 2, -1, 4, 5, -2, 7, 8]
+        @test array2 == [-1, -2, -3, -4, -5, -6, -7, 8]
+        @views array2[swap_ele(array[begin:end], 1, -3):swap_ele(array[begin:end], 7, -4)] = [-10, 2, -30, 4, -50, 6, -70]
+        @test array == [-3, 2, -1, 4, 5, -2, -4, 8]
+        @test array2 == [-10, 2, -30, 4, -50, 6, -70, 8]
+    end
+end
+
+@testset "strided array interface for subarrays" begin
+    # Create a type to test strided array interface edge cases.
+    # This array is memory backed, but the MyStridedTestArrayCConvert wrapper hides this.
+    struct MyStridedTestArray{T, N} <: AbstractArray{T, N}
+        a::Array{T, N}
+    end
+    Base.size(A::MyStridedTestArray) = size(A.a)
+    function Base.getindex(A::MyStridedTestArray{T, N}, I::Vararg{Int, N}) where {T, N}
+        getindex(A.a, I...)
+    end
+    struct MyStridedTestArrayCConvert{C}
+        c::C
+    end
+    function Base.cconvert(::Type{Ptr{T}}, A::MyStridedTestArray{T}) where T
+        MyStridedTestArrayCConvert(Base.cconvert(Ptr{T}, A.a))
+    end
+    function Base.unsafe_convert(::Type{Ptr{T}}, c::MyStridedTestArrayCConvert) where T
+        Base.unsafe_convert(Ptr{T}, c.c)
+    end
+    function Base.elsize(::Type{MyStridedTestArray{T, N}}) where {T, N}
+        Base.elsize(Array{T, N})
+    end
+    Base.strides(A::MyStridedTestArray) = Base.strides(A.a)
+    function test_strided_vs_getindex(A::AbstractArray)
+        @assert isbitstype(eltype(A))
+        for I in CartesianIndices(A)
+            @test unsafe_strided_getindex(A, Tuple(I)...) === A[I]
+        end
+    end
+
+    test_strided_vs_getindex(rand(10))
+    test_strided_vs_getindex(rand(3, 10))
+    test_strided_vs_getindex(rand(2, 3, 10))
+    test_strided_vs_getindex(view(rand(10, 10), 2:2:6, 1:3:9))
+    test_strided_vs_getindex(view(transpose(view(rand(10, 10), 2:2:6, 1:3:9)), 2:3, 3:-1:1))
+
+    test_strided_vs_getindex(MyStridedTestArray(rand(10)))
+    test_strided_vs_getindex(MyStridedTestArray(rand(3, 10)))
+    test_strided_vs_getindex(MyStridedTestArray(rand(2, 3, 10)))
+    test_strided_vs_getindex(view(MyStridedTestArray(rand(10, 10)), 2:2:6, 1:3:9))
+    test_strided_vs_getindex(view(transpose(view(MyStridedTestArray(rand(10, 10)), 2:2:6, 1:3:9)), 2:3, 3:-1:1))
+end

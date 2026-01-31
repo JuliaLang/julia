@@ -112,6 +112,27 @@ function isattached(repo::GitRepo)
     ccall((:git_repository_head_detached, libgit2), Cint, (Ptr{Cvoid},), repo) != 1
 end
 
+"""
+    isshallow(repo::GitRepo)::Bool
+
+Determine if `repo` is a shallow clone. A shallow clone has a truncated history,
+created by cloning with a specific depth (e.g., `LibGit2.clone(url, path, depth=1)`).
+
+# Examples
+```julia
+shallow_repo = LibGit2.clone(url, "shallow_path", depth=1)
+LibGit2.isshallow(shallow_repo)  # returns true
+
+normal_repo = LibGit2.clone(url, "normal_path")
+LibGit2.isshallow(normal_repo)  # returns false
+```
+"""
+function isshallow(repo::GitRepo)
+    ensure_initialized()
+    @assert repo.ptr != C_NULL
+    ccall((:git_repository_is_shallow, libgit2), Cint, (Ptr{Cvoid},), repo) == 1
+end
+
 @doc """
     GitObject(repo::GitRepo, hash::AbstractGitHash)
     GitObject(repo::GitRepo, spec::AbstractString)

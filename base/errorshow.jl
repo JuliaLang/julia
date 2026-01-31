@@ -91,6 +91,9 @@ function showerror(io::IO, ex::TypeError)
         end
         if ex.context == ""
             ctx = "in $(ex.func)"
+        elseif isa(ex.context, Core.GlobalRef)
+            gr = ex.context
+            ctx = "in $(ex.func) of global binding `$(gr.mod).$(gr.name)`"
         elseif ex.func === :var"keyword argument"
             ctx = "in keyword argument $(ex.context)"
         else
@@ -1291,9 +1294,11 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
         warned = _UndefVarError_warnfor(io, [Base], var)
 
         if !warned
-            modules_to_check = (m for m in Base.loaded_modules_order
-                                if m !== Core && m !== Base && m !== Main && m !== scope)
-            warned |= _UndefVarError_warnfor(io, modules_to_check, var)
+            let scope = scope
+                modules_to_check = (m for m in Base.loaded_modules_order
+                                    if m !== Core && m !== Base && m !== Main && m !== scope)
+                warned |= _UndefVarError_warnfor(io, modules_to_check, var)
+            end
         end
 
         warned || _UndefVarError_warnfor(io, [Core, Main], var)

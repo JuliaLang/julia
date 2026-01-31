@@ -13,7 +13,7 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `false` (or equivalently, if the input contains no `true` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
-See also: [`all`](@ref), [`count`](@ref), [`sum`](@ref), [`|`](@ref), [`||`](@ref).
+See also [`all`](@ref), [`count`](@ref), [`sum`](@ref), [`|`](@ref), [`||`](@ref).
 
 # Examples
 ```jldoctest
@@ -51,7 +51,7 @@ If the input contains [`missing`](@ref) values, return `missing` if all non-miss
 values are `true` (or equivalently, if the input contains no `false` value), following
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
 
-See also: [`all!`](@ref), [`any`](@ref), [`count`](@ref), [`&`](@ref), [`&&`](@ref), [`allunique`](@ref).
+See also [`all!`](@ref), [`any`](@ref), [`count`](@ref), [`&`](@ref), [`&&`](@ref), [`allunique`](@ref).
 
 # Examples
 ```jldoctest
