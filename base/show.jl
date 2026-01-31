@@ -1573,6 +1573,11 @@ operators. Return `0` if `s` is not a valid binary operator.
 (The precedence of *unary* operators is handled differently, including cases like `+`
 where an operator can be either unary or binary.)
 
+Parsing is primarily determined by operator precedence. For operators with identical
+operator precedence parsing depends on their associativity.
+
+See also [`Base.operator_associativity`](@ref).
+
 # Examples
 ```jldoctest
 julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
@@ -1599,6 +1604,11 @@ Return a symbol representing the associativity of operator `s`. Left- and right-
 operators return `:left` and `:right`, respectively. Return `:none` if `s` is non-associative
 or an invalid operator.
 
+Parsing is primarily determined by operator precedence. For operators with identical
+operator precedence parsing depends on their associativity.
+
+See also [`Base.operator_precedence`](@ref).
+
 # Examples
 ```jldoctest
 julia> Base.operator_associativity(:-), Base.operator_associativity(:+), Base.operator_associativity(:^)
@@ -1607,13 +1617,25 @@ julia> Base.operator_associativity(:-), Base.operator_associativity(:+), Base.op
 julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Base.operator_associativity(:→)
 (:left, :none, :right)
 ```
+
+# Extended help
+For binary operators `⊙` and `⊡` of identical operator precedence parsing depends on their
+associativity as follows:
+
+| Associativity | `x ⊙ y ⊡ z` is parsed as |
+|:-------------:|:------------------------:|
+| `:left`       | `(x ⊙ y) ⊡ z`            |
+| `:none`       | `x ⊙ y ⊡ z`              |
+| `:right`      | `x ⊙ (y ⊡ z)`            |
+
+`⊙` and `⊡` can be the same operator. A difference in parsing behavior does not imply a
+different result of the expression.
 """
 function operator_associativity(s::Symbol)
     if operator_precedence(s) in (prec_arrow, prec_assignment, prec_control_flow, prec_pair, prec_power) ||
-        (isunaryoperator(s) && !is_unary_and_binary_operator(s)) ||
-        (s === :<| || s === :|| || s == :?)
+        (isunaryoperator(s) && !is_unary_and_binary_operator(s)) || s in (:<|, :||, :?, :->)
         return :right
-    elseif operator_precedence(s) in (0, prec_comparison) || s in (:+, :++, :*)
+    elseif operator_precedence(s) in (0, prec_comparison) && s != :where || s in (:+, :++, :*, :(:))
         return :none
     end
     return :left
