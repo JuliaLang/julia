@@ -245,9 +245,7 @@ function isdirpath(path::String)::Bool
     # Reimplements occursin(r"(?:^|/)\.{0,2}$"sa, splitdrive(path)[2])
 
     _, after_last_separator = _splitdir_nodrive("", splitdrive(path)[2])
-    # `$` in regex (multiline mode disabled) can match either end of
-    # subject or everything before a newline at end of subject
-    return after_last_separator in ("", ".", "..", "\n", ".\n", "..\n")
+    return after_last_separator in ("", ".", "..")
 end
 
 """

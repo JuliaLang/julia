@@ -47,15 +47,15 @@
         @test isdirpath(S("."))
         @test isdirpath(S(".."))
 
-        # Current behavior is that isdirpath ignores a single trailing \n. FIXME?
-        @test isdirpath("a/\n")
-        @test isdirpath("\n") # != isdirpath("a")
-        @test isdirpath(".\n")
-        @test isdirpath("..\n")
-        @test isdirpath("a/\n")
-        @test isdirpath("a/.\n")
-        @test isdirpath("a/..\n")
-        @test !isdirpath("a/..\n\n")
+        # After https://github.com/JuliaLang/julia/pull/60677, paths
+        # with "\n", ".\n" or "..\n" after the last separator are
+        # not accepted as directories.
+        @test !isdirpath("\n")
+        @test !isdirpath(".\n")
+        @test !isdirpath("..\n")
+        @test !isdirpath("a/\n")
+        @test !isdirpath("a/.\n")
+        @test !isdirpath("a/..\n")
     end
     @testset "joinpath" begin
         @test joinpath(S("")) == ""
