@@ -975,8 +975,8 @@ function history_prev(s::LineEdit.MIState, hist::REPLHistoryProvider,
     if m === :ok
         LineEdit.move_input_start(s)
         LineEdit.reset_key_repeats(s) do
-        LineEdit.move_line_end(s)
-    end
+            LineEdit.move_line_end(s)
+        end
         return LineEdit.refresh_line(s)
     elseif m === :skip
         return history_prev(s, hist, num+1, save_idx)
