@@ -244,26 +244,28 @@ julia> typeof(numerator(a))
 BigInt
 ```
 """
-function rationalize(::Type{T}, x::AbstractFloat, tol::Real)::Rational{T} where T<:Integer
+function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
     tol < 0 && throw(ArgumentError("Tolerance can not be negative. tol=$tol"))
     T<:Unsigned && x < 0 && __throw_negate_unsigned()
     isnan(x) && return T(x)//one(T)
     isinf(x) && return unsafe_rational(x < 0 ? -one(T) : one(T), zero(T))
-
-    r, a = modf(abs(x))
+    r = modf(abs(x))[1]
     if r > tol && r ≤ inv(maxintfloat(x))
         p = 1 - exponent(r)
-        if p > precision(Float64)
-            return setprecision(() -> rationalize(T, BigFloat(x), tol), BigFloat, p)
-        end
-        x, a, r = Float64.((x, a, r))
+        p > precision(Float64) && return setprecision(() -> _rationalize(T, BigFloat(x), tol), p)
+        p > precision(Float32) && return _rationalize(T, convert(Float64, x), tol)
+        return _rationalize(T, convert(Float32, x), tol)
     end
+    return _rationalize(T, x, tol)
+end
 
+function _rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
     p,  q  = (x < 0 ? -one(T) : one(T)), zero(T)
     pp, qq = zero(T), one(T)
 
     x = abs(x)
     y = one(x)
+    r, a = modf(x)
     tolx = oftype(x, tol)
     nt, t, tt = tolx, zero(tolx), tolx
     ia = np = nq = zero(T)
