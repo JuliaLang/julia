@@ -855,21 +855,19 @@ mktempdir() do tmpdir
     rm(b_tmpdir)
 end
 
-# ----------------------------------------------------
-# checkfor_mv_cp_cptree
+
 @testset "checkfor_mv_cp_cptree - overwrite checks" begin
     mktempdir() do dir
         dst = joinpath(dir, "dst")
         touch(dst)
 
         # Case 1: dst exists, force=false
-        @test_throws ArgumentError Base.Filesystem.checkfor_mv_cp_cptree(dst, dst, "test"; force=false)
+        @test_throws ArgumentError cp(dst, dst; force=false, follow_symlinks=false)
 
         # Case 2: dst exists, force=true, src == dst
-        @test_throws ArgumentError Base.Filesystem.checkfor_mv_cp_cptree(dst, dst, "test"; force=true)
+        @test_throws ArgumentError cp(dst, dst; force=true, follow_symlinks=false)
     end
 end
-#------------------------------------------------------
 
 
 @testset "rename" begin
