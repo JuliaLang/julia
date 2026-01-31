@@ -359,6 +359,19 @@ end
     @test !isdir(temp_dir_path)
 end
 
+@testset "checkfor_mv_cp_cptree - overwrite checks" begin
+    mktempdir() do dir
+        dst = joinpath(dir, "dst")
+        touch(dst)
+
+        # Case 1: dst exists, src=dst, force=false
+        @test_throws ArgumentError cp(dst, dst, force=false; false)
+
+        # Case 2: dst exists, src=dst, force=true, src == dst
+        @test_throws ArgumentError cp(dst, dst, force=true; false)
+    end
+end
+
 #######################################################################
 # This section tests some of the features of the stat-based file info #
 #######################################################################
