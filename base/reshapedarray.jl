@@ -356,7 +356,7 @@ viewindexing(I::Tuple{Slice, ReshapedUnitRange, Vararg{ScalarIndex}}) = IndexLin
 viewindexing(I::Tuple{ReshapedRange, Vararg{ScalarIndex}}) = IndexLinear()
 compute_stride1(s, inds, I::Tuple{ReshapedRange, Vararg{Any}}) = s*step(I[1].parent)
 compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{ReshapedRange}) =
-    (@inline; first(I[1]) - first(axes1(I[1]))*stride1)
+    (@inline; _signed_sub(first(I[1]), first(axes1(I[1]))*stride1))
 substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedUnitRange, Vararg{Any}}) where N =
     (size_to_strides(strds[1], size(I[1])...)..., substrides(tail(strds), tail(I))...)
 
