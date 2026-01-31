@@ -1147,6 +1147,28 @@ end
             @test (r==s) == (ar==as)
         end
     end
+
+    struct WrapRange{T} <: AbstractRange{T} r::AbstractRange{T} end
+    Base.firstindex(w::WrapRange) = firstindex(w.r)
+    Base.isempty(w::WrapRange) = isempty(w.r)
+    Base.first(w::WrapRange) = first(w.r)
+    Base.last(w::WrapRange) = last(w.r)
+    Base.step(w::WrapRange) = step(w.r)
+    Base.length(w::WrapRange) = length(w.r)
+    @testset "empty offset ranges" begin
+        r1 = Base.IdentityUnitRange(2:1)
+        r2 = Base.IdentityUnitRange(3:2)
+        r3 = OffsetArrays.IdOffsetRange(1:0, -1)
+        r4 = OffsetArrays.IdOffsetRange(1:0, -2)
+        range_list = AbstractRange[r1, r2, r3, r4]
+        append!(range_list, map(WrapRange, range_list))
+        for (a, b) in Iterators.product(range_list, range_list)
+            @test r1 != r2
+            @test !(@invoke ==(r1::AbstractUnitRange, r2::AbstractUnitRange))
+            @test !(@invoke ==(r1::OrdinalRange, r2::OrdinalRange))
+            @test !(@invoke ==(r1::AbstractRange, r2::AbstractRange))
+        end
+    end
 end
 
 @testset "comparing UnitRanges and OneTo" begin
