@@ -963,6 +963,11 @@ end
         @test +(A) == A
         @test *(A) == A
     end
+    # Test for PR #60767: fix unary + for AbstractArrays
+    let A = [true, false, true]
+        @test +A == [1, 0, 1]
+        @test eltype(+A) === Int
+    end
 end
 
 @testset "reverse dim on empty" begin
