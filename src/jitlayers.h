@@ -63,6 +63,11 @@
 
 using namespace llvm;
 
+inline int jl_is_timing_passes = 0;
+inline int jl_is_timing_trace = 0;
+inline unsigned jl_timing_trace_granularity = 500;
+inline std::string jl_timing_trace_file;
+
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeContext, LLVMOrcThreadSafeContextRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeModule, LLVMOrcThreadSafeModuleRef)
 
@@ -288,7 +293,7 @@ struct jl_codegen_params_t {
     bool imaging_mode;
     bool safepoint_on_entry = true;
     bool use_swiftcc = true;
-    jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple) JL_NOTSAFEPOINT  JL_NOTSAFEPOINT_ENTER
+    jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple) JL_NOTSAFEPOINT
       : tsctx(std::move(ctx)),
         tsctx_lock(tsctx.getLock()),
         DL(std::move(DL)),

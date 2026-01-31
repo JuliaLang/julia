@@ -17,14 +17,13 @@
 
 function _apply_nospecialize(ctx, ex)
     k = kind(ex)
-    if k == K"Identifier" || k == K"Placeholder" || k == K"tuple"
+    if k == K"Identifier" || k == K"Placeholder" || k == K"tuple" ||
+        k == K"::" && numchildren(ex) == 1
         setmeta(ex, :nospecialize, true)
     elseif k == K"..." || k == K"::" || k == K"=" || k == K"kw"
         # The @nospecialize macro is responsible for converting K"=" to K"kw".
         # Desugaring uses this helper internally, so we may see K"kw" too.
-        if k == K"::" && numchildren(ex) == 1
-            ex = @ast ctx ex [K"::" "_"::K"Placeholder" ex[1]]
-        elseif k == K"=" && numchildren(ex) === 2
+        if k == K"=" && numchildren(ex) === 2
             ex = @ast ctx ex [K"kw" ex[1] ex[2]]
         end
         mapchildren(c->_apply_nospecialize(ctx, c), ctx, ex, 1:1)
@@ -46,7 +45,7 @@ end
 
 function Base.var"@label"(__context__::MacroContext, ex)
     @chk kind(ex) == K"Identifier"
-    @ast __context__ ex ex=>K"symbolic_label"
+    @ast __context__ ex [K"symboliclabel" ex]
 end
 
 function Base.var"@label"(__context__::MacroContext, name, body)
@@ -63,24 +62,22 @@ function Base.var"@label"(__context__::MacroContext, name, body)
     # This allows `continue name` to work by breaking to `name#cont`
     body_kind = kind(body)
     if body_kind == K"for" || body_kind == K"while"
-        cont_name = string(name.name_val, "#cont")
+        cont_name = mkleaf(name) # use name's scope and attrs
+        setattr!(name, :kind, K"Identifier")
+        setattr!(name, :name_val, string(name.name_val, "#cont"))
         loop_body = body[2]
-        wrapped_body = @ast __context__ loop_body [K"symbolic_block"
-            cont_name::K"Identifier"
+        wrapped_body = @ast __context__ loop_body [K"symbolicblock"
+            cont_name
             loop_body
         ]
-        if body_kind == K"for"
-            body = @ast __context__ body [K"for" body[1] wrapped_body]
-        else  # while
-            body = @ast __context__ body [K"while" body[1] wrapped_body]
-        end
+        body = @ast __context__ body [body_kind body[1] wrapped_body]
     end
-    @ast __context__ __context__.macrocall [K"symbolic_block" name body]
+    @ast __context__ __context__.macrocall [K"symbolicblock" name body]
 end
 
 function Base.var"@goto"(__context__::MacroContext, ex)
     @chk kind(ex) == K"Identifier"
-    @ast __context__ ex ex=>K"symbolic_goto"
+    @ast __context__ ex [K"symbolicgoto" ex]
 end
 
 function Base.var"@locals"(__context__::MacroContext)
@@ -95,7 +92,8 @@ function Base.var"@generated"(__context__::MacroContext)
     @ast __context__ __context__.macrocall [K"generated"]
 end
 function Base.var"@generated"(__context__::MacroContext, ex)
-    if kind(ex) != K"function"
+    if !(kind(ex) === K"function" ||
+        kind(ex) === K"=" && is_eventually_call(ex[1]))
         throw(LoweringError(ex, "Expected a function argument to `@generated`"))
     end
     @ast __context__ __context__.macrocall [K"function"
@@ -103,7 +101,7 @@ function Base.var"@generated"(__context__::MacroContext, ex)
         [K"if" [K"generated"]
             ex[2]
             [K"block"
-                [K"meta" "generated_only"::K"Symbol"]
+                [K"meta" "generated_only"::K"Identifier"]
                 [K"return"]
             ]
         ]
@@ -115,7 +113,7 @@ function Base.var"@cfunction"(__context__::MacroContext, callable, return_type, 
         throw(MacroExpansionError(arg_types, "@cfunction argument types must be a literal tuple"))
     end
     arg_types_svec = @ast __context__ arg_types [K"call"
-        "svec"::K"core"
+        [K"core" "svec"::K"Identifier"]
         children(arg_types)...
     ]
     if kind(callable) == K"$"
@@ -133,70 +131,86 @@ function Base.var"@cfunction"(__context__::MacroContext, callable, return_type, 
     @ast __context__ __context__.macrocall [K"cfunction"
         typ::K"Value"
         fptr
-        [K"static_eval"(meta=name_hint("cfunction return type"))
-            return_type
-        ]
-        [K"static_eval"(meta=name_hint("cfunction argument type"))
-            arg_types_svec
-        ]
-        "ccall"::K"Symbol"
+        return_type
+        arg_types_svec
+        [K"inert" "ccall"::K"Identifier"]
     ]
 end
 
-function ccall_macro_parse(ctx, ex, opts)
+function ccall_macro_parse(ctx, exs)
     gc_safe=false
+    opts = exs[1:end-1]
+    ex = exs[end]
     for opt in opts
-        if kind(opt) != K"=" || numchildren(opt) != 2 ||
-                kind(opt[1]) != K"Identifier"
-            throw(MacroExpansionError(opt, "Bad option to ccall"))
-        else
-            optname = opt[1].name_val
-            if optname == "gc_safe"
-                if kind(opt[2]) == K"Bool"
-                    gc_safe = opt[2].value::Bool
-                else
-                    throw(MacroExpansionError(opt[2], "gc_safe must be true or false"))
-                end
+        @stm opt begin
+            [K"=" [K"Identifier"] val] -> if opt[1].name_val != "gc_safe"
+                throw(MacroExpansionError(opt[1], "unknown option name for ccall"))
+            elseif !(kind(val) in KSet"Bool Value")
+                throw(MacroExpansionError(val, "gc_safe must be true or false"))
             else
-                throw(MacroExpansionError(opt[1], "Unknown option name for ccall"))
+                gc_safe = val.value
             end
+            _ -> throw(MacroExpansionError(opt, "bad option to ccall"))
         end
     end
-
-    if kind(ex) != K"::"
-        throw(MacroExpansionError(ex, "Expected a return type annotation `::SomeType`", position=:end))
+    if length(opts) >= 2
+        throw(MacroExpansionError(opts[2], "too many options provided to @ccall"))
     end
 
-    rettype = ex[2]
-    call = ex[1]
-    if kind(call) != K"call"
-        throw(MacroExpansionError(call, "Expected function call syntax `f()`"))
+    (func, argts, rettype) = @stm ex begin
+        [K"::" [K"call" f as...] r] -> let f_expanded = @stm f begin
+            [K"." lib sym] -> @ast ctx f [K"tuple" sym lib]
+            [K"inert" [K"Identifier"]] -> @ast ctx f [K"tuple" f]
+            [K"Identifier"] -> @ast ctx f [K"tuple" [K"inert" f]]
+            [K"$" x] -> let kx = kind(x)
+                if kx in KSet"tuple String string" ||
+                        (kx === K"Value" && x.value isa Tuple) ||
+                        kx == K"inert" && !(kx[1].value isa Ptr)
+                    throw(MacroExpansionError(
+                        f, "interpolated value should be a variable or expression, not a literal name or tuple"))
+                end
+                x
+            end
+            _ -> throw(MacroExpansionError(
+                f, "@ccall function name must be a symbol, a `.` node (e.g. `libc.printf`) or an interpolated function pointer (with `\$`)"))
+        end
+            (f_expanded, as, r)
+        end
+        [K"call" _...] -> throw(MacroExpansionError(
+            ex, "expected a return type annotation `::SomeType`", position=:end))
+        _ -> throw(MacroExpansionError(
+            ex, "expected call expression with return type"))
     end
 
-    func = call[1]
-    varargs = numchildren(call) > 1 && kind(call[end]) == K"parameters" ?
-        children(call[end]) : nothing
+    # detect varargs
+    varargs = nothing
+    argstart = 1
+    if length(argts) > 0 && kind(argts[1]) == K"parameters"
+        varargs = children(argts[1])
+        argstart = 2
+    end
 
     # collect args and types
     args = SyntaxList(ctx)
     types = SyntaxList(ctx)
-    function pusharg!(arg)
-        if kind(arg) != K"::"
-            throw(MacroExpansionError(arg, "argument needs a type annotation"))
+    function pusharg!(at)
+        @stm at begin
+            [K"::" a t] -> (push!(args, a); push!(types, t))
+            _ -> throw(MacroExpansionError(
+                at, "argument needs a type annotation"))
         end
-        push!(args, arg[1])
-        push!(types, arg[2])
     end
 
-    for e in call[2:(isnothing(varargs) ? end : end-1)]
-        kind(e) != K"parameters" || throw(MacroExpansionError(call[end], "Multiple parameter blocks not allowed"))
+    for e in argts[argstart:end]
         pusharg!(e)
     end
 
     if !isnothing(varargs)
         num_required_args = length(args)
         if num_required_args == 0
-            throw(MacroExpansionError(call[end], "C ABI prohibits varargs without one required argument"))
+            throw(MacroExpansionError(
+                argts[1],
+                "C ABI prohibits varargs without one required argument"))
         end
         for e in varargs
             pusharg!(e)
@@ -209,75 +223,27 @@ function ccall_macro_parse(ctx, ex, opts)
 end
 
 function ccall_macro_lower(ctx, ex, convention, func, rettype, types, args, gc_safe, num_required_args)
-    statements = SyntaxTree[]
-    kf = kind(func)
-    if kf == K"Identifier"
-        lowered_func = @ast ctx func func=>K"Symbol"
-    elseif kf == K"."
-        lowered_func = @ast ctx func [K"tuple"
-            func[2]=>K"Symbol"
-            [K"static_eval"(meta=name_hint("@ccall library name"))
-                func[1]
-            ]
-        ]
-    elseif kf == K"$"
-        fid = @ast ctx func[1] "func"::K"Identifier"
-        check = @ast ctx func [K"block"
-            [K"=" fid func[1]]
-            [K"if"
-                [K"call" (!isa)::K"Value" fid [K"curly" Ptr::K"Value" Cvoid::K"Value"]]
-                [K"block"
-                    [K"=" "name"::K"Identifier" [K"quote" func[1]]]
-                    [K"call" throw::K"Value"
-                        [K"call" ArgumentError::K"Value"
-                            [K"string"
-                                "interpolated function `"::K"String"
-                                "name"::K"Identifier"
-                                "` was not a `Ptr{Cvoid}`, but "::K"String"
-                                [K"call" typeof::K"Value" fid]]]]]]]
-        push!(statements, check)
-        lowered_func = check[1][1]
+    if convention isa Tuple
+        cconv_tuple = (convention..., gc_safe)
     else
-        throw(MacroExpansionError(func,
-            "Function name must be a symbol like `foo`, a library and function name like `libc.printf` or an interpolated function pointer like `\$ptr`"))
+        cconv_tuple = (convention, UInt16(0), gc_safe)
     end
-
-    roots = SyntaxTree[]
-    cargs = SyntaxTree[]
-    for (i, (type, arg)) in enumerate(zip(types, args))
-        argi = @ast ctx arg "arg$i"::K"Identifier"
-        # TODO: Does it help to emit ssavar() here for the `argi`?
-        push!(statements,
-              @ast ctx arg [K"local"
-                  [K"=" argi [K"call" Base.cconvert::K"Value" type arg]]])
-        push!(roots, argi)
-        push!(cargs, @ast ctx ex [K"call" Base.unsafe_convert::K"Value" type argi])
-    end
-    effect_flags = UInt16(0)
-    push!(statements, @ast ctx ex [K"foreigncall"
-        lowered_func
-        [K"static_eval"(meta=name_hint("@ccall return type"))
-            rettype
-        ]
-        [K"static_eval"(meta=name_hint("@ccall argument type"))
-            [K"call"
-                "svec"::K"core"
-                types...
-            ]
-        ]
-        num_required_args::K"Integer"
-        QuoteNode((convention, effect_flags, gc_safe))::K"Value"
-        cargs...
-        roots...
-    ])
-
-    @ast ctx ex [K"block"
-        statements...
+    return @ast ctx ex [K"call"
+        "ccall"::K"Identifier"
+        func
+        [K"cconv" cconv_tuple::K"Value" num_required_args::K"Value"]
+        rettype
+        [K"tuple" types...]
+        args...
     ]
 end
 
-function Base.var"@ccall"(ctx::MacroContext, ex, opts...)
-    ccall_macro_lower(ctx, ex, :ccall, ccall_macro_parse(ctx, ex, opts)...)
+function Base.var"@ccall"(ctx::MacroContext)
+    throw(ArgumentError("@ccall needs a function signature with a return type"))
+end
+
+function Base.var"@ccall"(ctx::MacroContext, exs...)
+    ccall_macro_lower(ctx, exs[end], :ccall, ccall_macro_parse(ctx, exs)...)
 end
 
 function Base.GC.var"@preserve"(__context__::MacroContext, exs...)
@@ -322,18 +288,18 @@ function _at_eval_code(ctx, srcref, mod, ex)
                 [K"call"
                     # TODO: Call "eval"::K"core" here
                     JuliaLowering.eval::K"Value"
-                    mod
-                    [K"quote" ex]
                     [K"parameters"
                         [K"kw"
                             "expr_compat_mode"::K"Identifier"
                             ctx.expr_compat_mode::K"Bool"
                         ]
                     ]
+                    mod
+                    [K"quote" ex]
                 ]
             ]
         ]
-        (::K"latestworld_if_toplevel")
+        [K"unknown_head"(name_val="latestworld-if-toplevel")]
         "eval_result"::K"Identifier"
     ]
 end
