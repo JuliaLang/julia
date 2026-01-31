@@ -475,7 +475,7 @@ test_read_nbyte()
 
 
 # devnull
-@test !isreadable(devnull)
+@test isreadable(devnull)
 @test iswritable(devnull)
 @test isopen(devnull)
 @test write(devnull, 0xff) === 1
