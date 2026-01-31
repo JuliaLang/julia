@@ -365,10 +365,10 @@ end
         touch(dst)
 
         # Case 1: dst exists, src=dst, force=false
-        @test_throws ArgumentError cp(dst, dst, force=false; false)
+        @test_throws ArgumentError cp(dst, dst, force=false; follow_symlinks=false)
 
         # Case 2: dst exists, src=dst, force=true, src == dst
-        @test_throws ArgumentError cp(dst, dst, force=true; false)
+        @test_throws ArgumentError cp(dst, dst, force=true; follow_symlinks=false)
     end
 end
 
