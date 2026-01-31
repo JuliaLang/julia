@@ -472,7 +472,7 @@ packages, or user code.  For example, `⋅` and `×` are defined in the standard
     Comparisons can be [chained](@ref "Chaining comparisons").  For example, `a < b < c` is essentially the same as `a < b && b < c`.  However, the order of evaluation is undefined.
 
 It is also possible to define additional operators by appending suffixes to most of the binary operators.  The valid
-suffixes include the Unicode combining  characters, along with the subscripts, superscripts, and various primes
+suffixes include the Unicode combining characters, along with the subscripts, superscripts, and various primes
 (`′ ″ ‴ ⁗ ‵ ‶ ‷`) listed in
 [`src/flisp/julia_opsuffs.h`](https://github.com/JuliaLang/julia/blob/master/src/flisp/julia_opsuffs.h).  The
 resulting operators can be used with either functional or infix notation, and have the same precedence and
