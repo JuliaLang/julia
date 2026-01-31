@@ -349,8 +349,8 @@ void JuliaTaskDispatcher::shutdown() {
 }
 
 void JuliaTaskDispatcher::work_until(future_base &F) {
+  jl_unique_gcsafe_lock Lock{DispatchMutex};
   while (!F.ready()) {
-    jl_unique_gcsafe_lock Lock{DispatchMutex};
     process_tasks(Lock);
 
     // Check if our future is now ready
