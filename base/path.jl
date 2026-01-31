@@ -22,12 +22,14 @@ export
 
 if Sys.isunix()
     const path_separator    = "/"
+    const path_separator_re = r"/+"sa # May be used by some external packages
     @inline isseparator(c::Char) = c === '/'
     @inline isseparator(c::UInt8) = c === UInt8('/')
 
     splitdrive(path::String) = ("",path)
 elseif Sys.iswindows()
     const path_separator    = "\\"
+    const path_separator_re = r"[/\\]+"sa # May be used by some external packages
     @inline isseparator(c::Char) = c === '/' || c === '\\'
     @inline isseparator(c::UInt8) = c === UInt8('/') || c === UInt8('\\')
 

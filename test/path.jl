@@ -429,6 +429,20 @@
         @test isa(joinpath(S("a"), S("b")), String)
         @test isa(joinpath(S(abspath("a")), S("b")), String)
     end
+
+    @testset "Separator" begin
+        @test Base.Filesystem.isseparator('/')
+        @test any(Base.Filesystem.isseparator, "abc/def")
+        @test occursin(Base.Filesystem.path_separator_re, "abc/def")
+        @test !Base.Filesystem.isseparator('a')
+        @test !any(Base.Filesystem.isseparator, "abcdef")
+        @test !occursin(Base.Filesystem.path_separator_re, "abcdef")
+        if Sys.iswindows()
+            @test Base.Filesystem.isseparator('\\')
+            @test any(Base.Filesystem.isseparator, "abc\\def")
+            @test occursin(Base.Filesystem.path_separator_re, "abc\\def")
+        end
+    end
 end
 
 @testset "homedir" begin
