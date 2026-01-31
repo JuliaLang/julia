@@ -36,7 +36,6 @@ private:
   SmallVector<std::unique_ptr<Task>> TaskQueue;
   std::mutex DispatchMutex;
   std::condition_variable WorkFinishedCV;
-  int NWorking = 0;
 
 public:
 
@@ -360,16 +359,11 @@ void JuliaTaskDispatcher::work_until(future_base &F) {
     // If we get here, our queue is empty but the future isn't ready
     // We need to wait for other threads to finish work that should complete our
     // future
-    if (NWorking <= 0) {
-      errs() << "TaskQueue is empty, but no threads are working.\n";
-      abort();
-    }
     Lock.wait(WorkFinishedCV);
   }
 }
 
 void JuliaTaskDispatcher::process_tasks(jl_unique_gcsafe_lock &Lock) {
-    ++NWorking;
     while (!TaskQueue.empty()) {
         auto T = TaskQueue.pop_back_val();
 
@@ -379,7 +373,6 @@ void JuliaTaskDispatcher::process_tasks(jl_unique_gcsafe_lock &Lock) {
 
         WorkFinishedCV.notify_all();
     }
-    --NWorking;
 }
 
 } // End namespace
