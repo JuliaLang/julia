@@ -1869,7 +1869,7 @@ end
 
 match_input(k::Nothing, s, term, cs, keymap; update_repeats::Bool=true) = (s,p) -> return :ok
 match_input(k::KeyAlias, s::Union{Nothing,MIState}, term, cs, keymap::Dict{Char}; update_repeats::Bool=true) =
-    match_input(keymap, s, IOBuffer(k.seq), Char[], keymap; update_repeats=update_repeats)
+    match_input(keymap, s, IOBuffer(k.seq), Char[], keymap; update_repeats)
 
 function match_input(k::Dict{Char}, s::Union{Nothing,MIState}, term::Union{AbstractTerminal,IOBuffer}=terminal(s), cs::Vector{Char}=Char[], keymap::Dict{Char} = k; update_repeats::Bool=true)
     # if we run out of characters to match before resolving an action,
