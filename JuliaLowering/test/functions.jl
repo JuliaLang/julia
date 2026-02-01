@@ -577,8 +577,7 @@ end
     end
 end
 
-@testset "Generated functions" begin
-    for expr_compat_mode in (false, true)
+@testset "Generated functions" begin; for expr_compat_mode in (false, true)
     @test JuliaLowering.include_string(test_mod, raw"""
     begin
         @generated function f_gen(x::NTuple{N,T}) where {N,T}
@@ -633,13 +632,111 @@ end
         f_gen_calls_macros(1)
     end
     """; expr_compat_mode) === "foo"
+end
+
+    genfunc_quote_s = """
+    begin
+        function f_gen_quote_1(::Tuple{T}) where {T}
+            out = :(:x1,first)
+            if @generated
+            else
+            end
+            return out
+        end
+
+        f_gen_quote_1((1,))
     end
+    """
+    @test JuliaLowering.include_string(
+        test_mod, genfunc_quote_s; expr_compat_mode=true) == :(:x1,first)
+    @test JuliaLowering.include_string(
+        test_mod, genfunc_quote_s; expr_compat_mode=false) ≈
+            @ast_ [K"tuple" [K"inert" "x1"::K"Identifier"] "first"::K"Identifier"]
+
+    genfunc_quote_s = """
+    begin
+        function f_gen_quote_2(::Tuple{T}) where {T}
+            out = nothing
+            if @generated
+                :(out = :(:x2,generated))
+            else
+                out = (:x2,nongen)
+            end
+            return out
+        end
+
+        f_gen_quote_2((1,))
+    end
+    """
+    @test JuliaLowering.include_string(
+        test_mod, genfunc_quote_s; expr_compat_mode=true) == :(:x2,generated)
+    @test JuliaLowering.include_string(
+        test_mod, genfunc_quote_s; expr_compat_mode=false) ≈
+            @ast_ [K"tuple" [K"inert" "x2"::K"Identifier"] "generated"::K"Identifier"]
+
+    genfunc_quote_s = """
+    begin
+        function f_gen_quote_3(::Tuple{T}) where {T}
+            if @generated
+            else
+            end
+            return :(:x4,after)
+        end
+
+        f_gen_quote_3((1,))
+    end
+    """
+    @test JuliaLowering.include_string(
+        test_mod, genfunc_quote_s; expr_compat_mode=true) == :(:x4,after)
+    @test JuliaLowering.include_string(
+        test_mod, genfunc_quote_s; expr_compat_mode=false) ≈
+            @ast_ [K"tuple" [K"inert" "x4"::K"Identifier"] "after"::K"Identifier"]
+
+    genfunc_quote_s = raw"""
+    begin
+        function f_gen_interpolate(::Tuple{T}) where {T}
+            out = :(:x1,first)
+            if @generated
+                out = :($out, generated)
+            else
+                out = :($out, nongen)
+            end
+            return out
+        end
+
+        f_gen_interpolate((1,))
+    end
+    """
+    @test JuliaLowering.include_string(
+        test_mod, genfunc_quote_s; expr_compat_mode=true) == :((:x1,first),nongen)
+    @test JuliaLowering.include_string(
+        test_mod, genfunc_quote_s; expr_compat_mode=false) ≈
+            @ast_ [K"tuple" [K"tuple"
+                             [K"inert" "x1"::K"Identifier"]
+                             "first"::K"Identifier"]
+                   "nongen"::K"Identifier"]
+
+    genfunc_quote_s = raw"""
+    begin
+        @eval function f_gen_quote_1(::Tuple{T}) where {T}
+            out = $(Expr(:quote, Expr(:call, :+, 1, Expr(:if, Expr(:generated), 1, 2))))
+            if @generated
+            else
+            end
+            return out
+        end
+        f_gen_quote_1((1,))
+    end
+    """
+    @test JuliaLowering.include_string(
+        test_mod, genfunc_quote_s; expr_compat_mode=true) ==
+            :(1 + $(Expr(:if, Expr(:generated), 1, 2)))
 
     # Test generated function edges to bindings
     # (see also https://github.com/JuliaLang/julia/pull/57230)
     JuliaLowering.include_string(test_mod, raw"""
     const delete_me = 4
-    @generated f_generated_return_delete_me() = return :(delete_me)
+    @generated f_generated_return_delete_me() = return quote; delete_me; end
     """)
     @test test_mod.f_generated_return_delete_me() == 4
     Base.delete_binding(test_mod, :delete_me)

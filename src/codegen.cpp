@@ -74,6 +74,7 @@
 #include <llvm/Target/TargetMachine.h>
 
 #include "llvm/Support/Path.h" // for llvm::sys::path
+#include <llvm/Support/TimeProfiler.h>
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Linker/Linker.h>
 #include <llvm/CodeGen/MachineModuleInfo.h>
@@ -2292,9 +2293,11 @@ static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, unsigned nb, Align alig
     // if it cannot find something better to do, which is terrible for performance.
     // However, if we emit this with an element size equal to the alignment, it will instead split it into aligned chunks
     // which is great for performance and vectorization.
-    if (alignTo(nb, align) == align.value()) // don't bother with making an array of length 1
-        return emit_static_alloca(ctx, ctx.builder.getIntNTy(align.value() * 8), align);
-    return emit_static_alloca(ctx, ArrayType::get(ctx.builder.getIntNTy(align.value() * 8), alignTo(nb, align) / align.value()), align);
+    // Cap element size at 64 bits since not all backends support larger integers.
+    unsigned elsize = std::min(align.value(), (uint64_t)8);
+    if (alignTo(nb, elsize) == elsize) // don't bother with making an array of length 1
+        return emit_static_alloca(ctx, ctx.builder.getIntNTy(elsize * 8), align);
+    return emit_static_alloca(ctx, ArrayType::get(ctx.builder.getIntNTy(elsize * 8), alignTo(nb, elsize) / elsize), align);
 }
 
 static AllocaInst *emit_static_roots(jl_codectx_t &ctx, unsigned nroots)
@@ -10433,8 +10436,6 @@ char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
 char jl_using_perf_jitevents = 0;
 #endif
 
-int jl_is_timing_passes = 0;
-
 extern "C" void jl_init_llvm(void)
 {
     jl_page_size = jl_getpagesize();
@@ -10462,6 +10463,20 @@ extern "C" void jl_init_llvm(void)
 
     // Parse command line flags after initialization
     StringMap<cl::Option*> &llvmopts = cl::getRegisteredOptions();
+
+    // Register time-trace options if not already present (e.g., when loaded as plugin by opt)
+    if (!llvmopts.lookup("time-trace")) {
+        new cl::opt<bool>("time-trace", cl::desc("Record time trace"));
+        new cl::opt<unsigned>(
+            "time-trace-granularity",
+            cl::desc("Minimum time granularity (in microseconds) traced by time profiler"),
+            cl::init(500), cl::Hidden);
+        new cl::opt<std::string>(
+            "time-trace-file",
+            cl::desc("Specify time trace file destination"),
+            cl::value_desc("filename"));
+    }
+
     const char *const argv[1] = {"julia"};
     cl::ParseCommandLineOptions(1, argv, "", nullptr, "JULIA_LLVM_ARGS");
 
@@ -10483,6 +10498,18 @@ extern "C" void jl_init_llvm(void)
     clopt = llvmopts.lookup("time-passes");
     if (clopt && clopt->getNumOccurrences() > 0)
         jl_is_timing_passes = 1;
+
+    clopt = llvmopts.lookup("time-trace");
+    if (clopt && clopt->getNumOccurrences() > 0) {
+        jl_is_timing_trace = 1;
+        clopt = llvmopts.lookup("time-trace-granularity");
+        if (clopt)
+            jl_timing_trace_granularity = static_cast<cl::opt<unsigned>*>(clopt)->getValue();
+        clopt = llvmopts.lookup("time-trace-file");
+        if (clopt && clopt->getNumOccurrences() > 0)
+            jl_timing_trace_file = static_cast<cl::opt<std::string>*>(clopt)->getValue();
+        timeTraceProfilerInitialize(jl_timing_trace_granularity, "julia");
+    }
 
     jl_ExecutionEngine = new JuliaOJIT();
 
@@ -10654,9 +10681,10 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_value_t *jl_get_libllvm_impl(void) JL_NOTSAFE
     DWORD n16 = GetModuleFileNameW(mod, path16, MAX_PATH);
     if (n16 <= 0)
         return jl_nothing;
-    path16[n16++] = 0;
     char path8[MAX_PATH * 3];
-    if (!WideCharToMultiByte(CP_UTF8, 0, path16, n16, path8, MAX_PATH * 3, NULL, NULL))
+    char *path8_ptr = path8;
+    size_t path8_len = sizeof(path8) - 1;
+    if (uv_utf16_to_wtf8((uint16_t*)path16, n16, &path8_ptr, &path8_len))
         return jl_nothing;
     return (jl_value_t*) jl_symbol(path8);
 #else

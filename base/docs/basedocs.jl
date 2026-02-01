@@ -161,7 +161,7 @@ runtime initialization functions of external C libraries and initializing global
 that involve pointers returned by external libraries.
 See the [manual section about modules](@ref modules) for more details.
 
-See also: [`OncePerProcess`](@ref).
+See also [`OncePerProcess`](@ref).
 
 # Examples
 ```julia
@@ -338,7 +338,6 @@ Reuse an existing local variable for iteration in a `for` loop.
 See the [manual section on variable scoping](@ref scope-of-variables) for more information.
 
 See also [`for`](@ref).
-
 
 # Examples
 ```jldoctest
@@ -744,7 +743,7 @@ Quote an expression `expr`, returning the abstract syntax tree (AST) of `expr`.
 The AST may be of type `Expr`, `Symbol`, or a literal value.
 The syntax `:identifier` evaluates to a `Symbol`.
 
-See also: [`Expr`](@ref), [`Symbol`](@ref), [`Meta.parse`](@ref)
+See also [`Expr`](@ref), [`Symbol`](@ref), [`Meta.parse`](@ref).
 
 # Examples
 ```jldoctest
@@ -1389,7 +1388,7 @@ Note that if `y` is an expression, it is only evaluated when `x` is `false`, whi
 Also, `y` does not need to have a boolean value.  This means that `(condition) || (statement)` can be used as shorthand for
 `if !(condition); statement; end` for an arbitrary `statement`.
 
-See also: [`|`](@ref), [`xor`](@ref), [`&&`](@ref).
+See also [`|`](@ref), [`xor`](@ref), [`&&`](@ref).
 
 # Examples
 ```jldoctest
@@ -1637,7 +1636,7 @@ devnull
 
 A type with no fields that is the type of [`nothing`](@ref).
 
-See also: [`isnothing`](@ref), [`Some`](@ref), [`Missing`](@ref).
+See also [`isnothing`](@ref), [`Some`](@ref), [`Missing`](@ref).
 """
 Nothing
 
@@ -1649,7 +1648,7 @@ The singleton instance of type [`Nothing`](@ref), used by convention when there 
 
 A return value of `nothing` is not displayed by the REPL and similar interactive environments.
 
-See also: [`isnothing`](@ref), [`something`](@ref), [`missing`](@ref).
+See also [`isnothing`](@ref), [`something`](@ref), [`missing`](@ref).
 """
 nothing
 
@@ -2495,7 +2494,7 @@ Otherwise, if not declared as `@atomic`, this parameter must be `:not_atomic` if
 The bounds check may be disabled, in which case the behavior of this function is
 undefined if `i` is out of bounds.
 
-See also [`getproperty`](@ref Base.getproperty) and [`fieldnames`](@ref).
+See also [`getproperty`](@ref Base.getproperty), [`fieldnames`](@ref).
 
 # Examples
 ```jldoctest
@@ -2523,6 +2522,7 @@ mutable and `x` must be a subtype of `fieldtype(typeof(value), name)`.
 Additionally, an ordering can be specified for this operation. If the field was
 declared `@atomic`, this specification is mandatory. Otherwise, if not declared
 as `@atomic`, it must be `:not_atomic` if specified.
+
 See also [`setproperty!`](@ref Base.setproperty!).
 
 # Examples
@@ -2579,6 +2579,9 @@ optimized to the appropriate hardware instruction, otherwise it'll use a loop.
 
 !!! compat "Julia 1.7"
     This function requires Julia 1.7 or later.
+
+See also [`modifyproperty!`](@ref Base.modifyproperty!),
+[`setfield!`](@ref Base.setfield!).
 """
 modifyfield!
 
@@ -2603,6 +2606,10 @@ instruction, otherwise it'll use a loop.
 
 !!! compat "Julia 1.7"
     This function requires Julia 1.7 or later.
+
+See also [`replaceproperty!`](@ref Base.replaceproperty!),
+[`setfield!`](@ref Base.setfield!),
+[`setfieldonce!`](@ref Base.setfieldonce!).
 """
 replacefield!
 
@@ -2621,6 +2628,10 @@ a given value, only if it was previously not set.
 
 !!! compat "Julia 1.11"
     This function requires Julia 1.11 or later.
+
+See also [`setpropertyonce!`](@ref Base.setpropertyonce!),
+[`setfield!`](@ref Base.setfield!),
+[`replacefield!`](@ref Base.replacefield!).
 """
 setfieldonce!
 
@@ -2644,7 +2655,7 @@ Most users should not have to call this function directly -- The
 !!! compat "Julia 1.9"
     This function requires Julia 1.9 or later.
 
-See also [`getproperty`](@ref Base.getproperty) and [`setglobal!`](@ref).
+See also [`getproperty`](@ref Base.getproperty), [`setglobal!`](@ref).
 
 # Examples
 ```jldoctest
@@ -2683,7 +2694,7 @@ cases.
 !!! compat "Julia 1.9"
     This function requires Julia 1.9 or later.
 
-See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
+See also [`setproperty!`](@ref Base.setproperty!), [`getglobal`](@ref)
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*\\n.*)*"
@@ -2725,7 +2736,7 @@ Atomically perform the operations to simultaneously get and set a global.
 !!! compat "Julia 1.11"
     This function requires Julia 1.11 or later.
 
-See also [`swapproperty!`](@ref Base.swapproperty!) and [`setglobal!`](@ref).
+See also [`swapproperty!`](@ref Base.swapproperty!), [`setglobal!`](@ref).
 """
 swapglobal!
 
@@ -2738,7 +2749,7 @@ the function `op`.
 !!! compat "Julia 1.11"
     This function requires Julia 1.11 or later.
 
-See also [`modifyproperty!`](@ref Base.modifyproperty!) and [`setglobal!`](@ref).
+See also [`modifyproperty!`](@ref Base.modifyproperty!), [`setglobal!`](@ref).
 """
 modifyglobal!
 
@@ -2752,7 +2763,7 @@ a given value.
 !!! compat "Julia 1.11"
     This function requires Julia 1.11 or later.
 
-See also [`replaceproperty!`](@ref Base.replaceproperty!) and [`setglobal!`](@ref).
+See also [`replaceproperty!`](@ref Base.replaceproperty!), [`setglobal!`](@ref).
 """
 replaceglobal!
 
@@ -2766,7 +2777,7 @@ a given value, only if it was previously not set.
 !!! compat "Julia 1.11"
     This function requires Julia 1.11 or later.
 
-See also [`setpropertyonce!`](@ref Base.setpropertyonce!) and [`setglobal!`](@ref).
+See also [`setpropertyonce!`](@ref Base.setpropertyonce!), [`setglobal!`](@ref).
 """
 setglobalonce!
 
@@ -3162,8 +3173,9 @@ Array{T,N}(::Missing, dims)
     UndefInitializer
 
 Singleton type used in array initialization, indicating the array-constructor-caller
-would like an uninitialized array. See also [`undef`](@ref),
-an alias for `UndefInitializer()`.
+would like an uninitialized array.
+
+See also [`undef`](@ref), an alias for `UndefInitializer()`.
 
 # Examples
 ```julia-repl
@@ -3183,7 +3195,7 @@ Alias for `UndefInitializer()`, which constructs an instance of the singleton ty
 [`UndefInitializer`](@ref), used in array initialization to indicate the
 array-constructor-caller would like an uninitialized array.
 
-See also: [`missing`](@ref), [`similar`](@ref).
+See also [`missing`](@ref), [`similar`](@ref).
 
 # Examples
 ```julia-repl
@@ -3238,7 +3250,7 @@ true
 
 Unary minus operator.
 
-See also: [`abs`](@ref), [`flipsign`](@ref).
+See also [`abs`](@ref), [`flipsign`](@ref).
 
 # Examples
 ```jldoctest
@@ -3678,7 +3690,7 @@ Also note that using methods is often preferable. See also this style guide docu
 for more information: [Prefer exported methods over direct field access](@ref).
 
 See also [`getfield`](@ref Core.getfield),
-[`propertynames`](@ref Base.propertynames) and
+[`propertynames`](@ref Base.propertynames),
 [`setproperty!`](@ref Base.setproperty!).
 """
 Base.getproperty
@@ -3691,12 +3703,12 @@ The syntax `a.b = c` calls `setproperty!(a, :b, c)`.
 The syntax `@atomic order a.b = c` calls `setproperty!(a, :b, c, :order)`
 and the syntax `@atomic a.b = c` calls `setproperty!(a, :b, c, :sequentially_consistent)`.
 
+See also [`setfield!`](@ref Core.setfield!),
+[`propertynames`](@ref Base.propertynames),
+[`getproperty`](@ref Base.getproperty).
+
 !!! compat "Julia 1.8"
     `setproperty!` on modules requires at least Julia 1.8.
-
-See also [`setfield!`](@ref Core.setfield!),
-[`propertynames`](@ref Base.propertynames) and
-[`getproperty`](@ref Base.getproperty).
 """
 Base.setproperty!
 
@@ -3706,8 +3718,8 @@ Base.setproperty!
 The syntax `@atomic a.b, _ = c, a.b` returns `(c, swapproperty!(a, :b, c, :sequentially_consistent))`,
 where there must be one `getproperty` expression common to both sides.
 
-See also [`swapfield!`](@ref Core.swapfield!)
-and [`setproperty!`](@ref Base.setproperty!).
+See also [`swapfield!`](@ref Core.swapfield!),
+[`setproperty!`](@ref Base.setproperty!).
 """
 Base.swapproperty!
 
@@ -3723,8 +3735,8 @@ Invocation of `op(getproperty(x, f), v)` must return a value that can be stored 
 [`setproperty!`](@ref Base.setproperty!), the `convert` function is not called
 automatically.
 
-See also [`modifyfield!`](@ref Core.modifyfield!)
-and [`setproperty!`](@ref Base.setproperty!).
+See also [`modifyfield!`](@ref Core.modifyfield!),
+[`setproperty!`](@ref Base.setproperty!).
 """
 Base.modifyproperty!
 
@@ -3735,7 +3747,7 @@ Perform a compare-and-swap operation on `x.f` from `expected` to `desired`, per
 egal. The syntax `@atomicreplace x.f expected => desired` can be used instead
 of the function call form.
 
-See also [`replacefield!`](@ref Core.replacefield!)
+See also [`replacefield!`](@ref Core.replacefield!),
 [`setproperty!`](@ref Base.setproperty!),
 [`setpropertyonce!`](@ref Base.setpropertyonce!).
 """
@@ -3747,12 +3759,12 @@ Base.replaceproperty!
 Perform a compare-and-swap operation on `x.f` to set it to `value` if previously unset.
 The syntax `@atomiconce x.f = value` can be used instead of the function call form.
 
-See also [`setfieldonce!`](@ref Core.replacefield!),
-[`setproperty!`](@ref Base.setproperty!),
-[`replaceproperty!`](@ref Base.replaceproperty!).
-
 !!! compat "Julia 1.11"
     This function requires Julia 1.11 or later.
+
+See also [`setfieldonce!`](@ref Core.setfieldonce!),
+[`setproperty!`](@ref Base.setproperty!),
+[`replaceproperty!`](@ref Base.replaceproperty!).
 """
 Base.setpropertyonce!
 
@@ -3890,7 +3902,7 @@ Unsafe pointer operations are compatible with loading and storing pointers decla
 `_Atomic` and `std::atomic` type in C11 and C++23 respectively. An error may be thrown if
 there is not support for atomically loading the Julia type `T`.
 
-See also: [`unsafe_load`](@ref), [`unsafe_modify!`](@ref), [`unsafe_replace!`](@ref), [`unsafe_store!`](@ref), [`unsafe_swap!`](@ref)
+See also [`unsafe_load`](@ref), [`unsafe_modify!`](@ref), [`unsafe_replace!`](@ref), [`unsafe_store!`](@ref), [`unsafe_swap!`](@ref)
 """
 kw"atomic"
 

@@ -86,6 +86,7 @@ precompile(Tuple{typeof(Base.promoteK), Type, Base.Dict{String, Any}})
 precompile(Tuple{typeof(Base.promoteV), Type, Base.Dict{String, Any}, Base.Dict{String, Any}})
 precompile(Tuple{typeof(Base.eval_user_input), Base.PipeEndpoint, Any, Bool})
 precompile(Tuple{typeof(Base.get), Base.PipeEndpoint, Symbol, Bool})
+precompile(Tuple{typeof(Base.HashArrayMappedTries.next), Base.HashArrayMappedTries.HashState{Base.ScopedValues.ScopedValue{Any}}})
 
 # used by Revise.jl
 precompile(Tuple{typeof(Base.parse_cache_header), String})

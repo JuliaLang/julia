@@ -177,7 +177,7 @@ function du_declare!(state::DefUseState, var_id)
     end
 end
 
-# Returns whether e contained a symbolic_label
+# Returns whether e contained a symboliclabel
 function du_visit!(ctx, state::DefUseState, e)
     k = kind(e)
 
@@ -185,8 +185,8 @@ function du_visit!(ctx, state::DefUseState, e)
         du_mark_used!(state, e.var_id)
         return false
 
-    elseif k == K"symbolic_label"
-        # Must check BEFORE is_leaf since symbolic_label is a leaf node
+    elseif k == K"symboliclabel"
+        # Must check BEFORE is_leaf since symboliclabel is a leaf node
         du_kill!(state)
         return true
 
@@ -194,7 +194,7 @@ function du_visit!(ctx, state::DefUseState, e)
         du_kill!(state)
         return false
 
-    elseif k in KSet"break symbolic_goto"
+    elseif k in KSet"break symbolicgoto"
         # this kill!() is not required for soundness since these are branch points
         # not merge points, but it's here for parity with flisp
         du_kill!(state)
@@ -297,7 +297,7 @@ function du_visit!(ctx, state::DefUseState, e)
     elseif is_leaf(e) || is_quoted(e) ||
         k in KSet"local meta inbounds boundscheck noinline loopinfo decl
             with_static_parameters toplevel_butfirst global globalref
-            extension constdecl atomic isdefined toplevel module error
+            constdecl atomic isdefined toplevel module error
             gc_preserve_begin gc_preserve_end export public inline"
 
         # Forms that don't interact with locals or affect control flow (likely more than is necessary).

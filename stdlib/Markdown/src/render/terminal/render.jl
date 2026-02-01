@@ -26,7 +26,7 @@ function term(io::IO, md::Paragraph, columns)
     end
 end
 
-function term(io::IO, md::HTML, columns)
+function term(io::IO, md::HTMLBlock, columns)
     for line in md.content[1:end-1]
         println(io, line)
     end
@@ -215,7 +215,7 @@ function terminline(io::IO, content::Vector)
 end
 
 function terminline(io::IO, md::AbstractString)
-    print(io, replace(md, r"[\s\t\n]+" => ' '))
+    print(io, replace(md, r"[ \t\n]+" => ' '))
 end
 
 function terminline(io::AnnotIO, md::Bold)

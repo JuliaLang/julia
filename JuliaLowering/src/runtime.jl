@@ -143,7 +143,7 @@ function interpolate_ast(::Type{Expr}, @nospecialize(ex), values...)
         @assert length(values) === 1
         if length(ex.args) !== 1
             throw(LoweringError(
-                expr_to_syntaxtree(ex), "More than one value in bare `\$` expression"))
+                expr_to_est(ex), "More than one value in bare `\$` expression"))
         end
         only(values[1])
     else
@@ -333,7 +333,8 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     mctx = MacroContext(syntax_graph(ctx1), g.srcref, layer, g.expr_compat_mode)
     ex0 = g.gen(mctx, args...)
     if ex0 isa Expr
-        ex0 = expr_to_syntaxtree(ctx1, ex0, source_location(LineNumberNode, g.srcref))
+        ex0 = expr_to_est(
+            syntax_graph(ctx1), ex0, source_location(LineNumberNode, g.srcref))
     end
     if ex0 isa SyntaxTree
         if !is_compatible_graph(ctx1, ex0)
