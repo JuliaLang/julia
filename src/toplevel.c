@@ -595,8 +595,8 @@ static jl_value_t *jl_eval_toplevel_stmts(jl_module_t *JL_NONNULL m, jl_array_t 
     for (i = 0; i < jl_array_nrows(stmts); i++) {
         root = jl_array_ptr_ref(stmts, i);
         if (jl_needs_lowering(root)) {
-            root = jl_svecref(jl_lower(root, m, *toplevel_filename, *toplevel_lineno, ~(size_t)0,
-                                       need_value), 0);
+            root = jl_svecref(jl_fl_lower(root, m, *toplevel_filename, *toplevel_lineno, ~(size_t)0,
+                                          need_value), 0);
         }
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         res = jl_toplevel_eval_flex(m, root, fast, 1, toplevel_filename, toplevel_lineno);
@@ -657,7 +657,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
     JL_GC_PUSH3(&thk, &ex, &root);
 
     if (!expanded && (jl_needs_lowering(e))) {
-        ex = (jl_expr_t*)jl_svecref(jl_lower(e, m, *toplevel_filename, *toplevel_lineno, ~(size_t)0, 1), 0);
+        ex = (jl_expr_t*)jl_svecref(jl_fl_lower(e, m, *toplevel_filename, *toplevel_lineno, ~(size_t)0, 1), 0);
     }
     jl_sym_t *head = jl_is_expr(ex) ? ex->head : NULL;
 
@@ -855,7 +855,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
     JL_GC_PUSH3(&ast, &result, &expression);
 
     ast = jl_svecref(jl_parse(jl_string_data(text), jl_string_len(text),
-                              filename, 1, 0, (jl_value_t*)jl_all_sym, module), 0);
+                              filename, 1, 0, (jl_value_t*)jl_all_sym, (jl_value_t*)module), 0);
     if (!jl_is_expr(ast) || ((jl_expr_t*)ast)->head != jl_toplevel_sym) {
         jl_errorf("jl_parse_all() must generate a top level expression");
     }
@@ -879,7 +879,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
                 jl_atomic_store_relaxed(&jl_lineno, lineno);
                 continue;
             }
-            expression = jl_svecref(jl_lower(expression, module, jl_string_data(filename), lineno, ~(size_t)0, 1), 0);
+            expression = jl_svecref(jl_fl_lower(expression, module, jl_string_data(filename), lineno, ~(size_t)0, 1), 0);
             ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
             result = jl_toplevel_eval_flex(module, expression, 1, 1, &filename_str, &lineno);
         }
