@@ -242,14 +242,23 @@ end
                 anon = Module(:__anon__)
                 Core.eval(anon, Meta.parse("using $(imports), Test"))
                 # Ensure that we get the expected exception, since this test runs with --depwarn=error
-                Core.eval(anon, quote
-                    try
-                        artifact"socrates"
-                        @assert false "this @artifact_str macro invocation should have failed!"
-                    catch e
-                        @test startswith("using Pkg instead of using LazyArtifacts is deprecated", e.msg)
-                    end
-                end)
+                depwarn_flag = Base.JLOptions().depwarn
+                # 0: --depwarn=no
+                # 1: --depwarn=yes
+                # 2: --depwarn=error
+                if depwarn_flag == 2
+                    Core.eval(anon, quote
+                        try
+                            artifact"socrates"
+                            @assert false "this @artifact_str macro invocation should have failed!"
+                        catch e
+                            @test startswith("using Pkg instead of using LazyArtifacts is deprecated", e.msg)
+                        end
+                    end)
+                else
+                    @warn "Skipping one test, because we aren't running with --depwarn=error"
+                    @test_skip false
+                end
             end
         end
     end
