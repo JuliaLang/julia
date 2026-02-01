@@ -1347,6 +1347,10 @@ end
             check_strided_get(equivalent_array)
         end
     end
+    check_strided_get(view(Base.PermutedDimsArray(view(rand(10, 10), 2:2:6, 1:3:9), (2,1)), 2:3, 3:-1:1))
+    check_strided_get(NonMemStridedArray(rand(3, 10)))
+    check_strided_get(view(NonMemStridedArray(rand(10, 10)), 2:2:6, 1:3:9))
+    check_strided_get(view(Base.PermutedDimsArray(view(NonMemStridedArray(rand(10, 10)), 2:2:6, 1:3:9), (2,1)), 2:3, 3:-1:1))
 end
 
 @testset "first/last n elements of $(typeof(itr))" for itr in (collect(1:9),

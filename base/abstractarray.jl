@@ -612,6 +612,9 @@ end
 Return `true` if `A` can be read from as a strided array.
 
 See also: [`has_strided_set`](@ref).
+
+!!! compat "Julia 1.14"
+     This function requires at least Julia 1.14.
 """
 function has_strided_get(A::AbstractArray)
     false
@@ -623,6 +626,9 @@ end
 Return `true` if `A` can be written to as a strided array.
 
 See also: [`has_strided_get`](@ref).
+
+!!! compat "Julia 1.14"
+     This function requires at least Julia 1.14.
 """
 function has_strided_set(A::AbstractArray)
     false

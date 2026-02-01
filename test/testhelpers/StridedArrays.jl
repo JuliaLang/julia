@@ -11,7 +11,7 @@ export strided_ptr
 export check_strided_get
 export check_strided_set
 export Strider
-export StridedArrayWrapper
+export NonMemStridedArray
 
 
 function strided_ptr(f, a::AbstractArray{T}) where {T}
@@ -31,8 +31,8 @@ function check_strided_get(a::AbstractArray{T,N})::Nothing where {T, N}
     if !isbitstype(eltype(a))
         error("a doesn't have isbits elements")
     end
-    if !Base.has_strided_get(a)
-        error("Base.has_strided_get(a) is false")
+    if !has_strided_get(a)
+        error("has_strided_get(a) is false")
     end
     # Putting strided_ptr before the loop means that strided_ptr shouldn't error for empty arrays
     strided_ptr(a) do a_ptr
@@ -71,8 +71,8 @@ function check_strided_set(a::AbstractArray{T,N}, b::AbstractArray{T,N}, c::Abst
     if !isbitstype(eltype(a))
         error("a doesn't have isbits elements")
     end
-    if !Base.has_strided_set(a)
-        error("Base.has_strided_set(a) is false")
+    if !has_strided_set(a)
+        error("has_strided_set(a) is false")
     end
     # Putting strided_ptr before the loop means that strided_ptr shouldn't error for empty arrays
     strided_ptr(a) do a_ptr
@@ -143,5 +143,29 @@ end
 function Base.has_strided_set(::Strider)
     true
 end
+
+# Create a type to test strided array interface edge cases.
+# This array is memory backed, but the MyStridedTestArrayCConvert wrapper hides this.
+struct NonMemStridedArray{T, N} <: AbstractArray{T, N}
+    a::Array{T, N}
+end
+Base.size(A::NonMemStridedArray) = size(A.a)
+function Base.getindex(A::NonMemStridedArray{T, N}, I::Vararg{Int, N}) where {T, N}
+    getindex(A.a, I...)
+end
+struct NonMemStridedArrayCConvert{C}
+    c::C
+end
+function Base.cconvert(::Type{Ptr{T}}, A::NonMemStridedArray{T}) where T
+    NonMemStridedArrayCConvert(Base.cconvert(Ptr{T}, A.a))
+end
+function Base.unsafe_convert(::Type{Ptr{T}}, c::NonMemStridedArrayCConvert) where T
+    Base.unsafe_convert(Ptr{T}, c.c)
+end
+function Base.elsize(::Type{NonMemStridedArray{T, N}}) where {T, N}
+    Base.elsize(Array{T, N})
+end
+Base.strides(A::NonMemStridedArray) = Base.strides(A.a)
+Base.has_strided_get(::NonMemStridedArray) = true
 
 end # module StridedArrays

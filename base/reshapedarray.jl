@@ -445,7 +445,7 @@ end
 # Return true if a is strided, assuming the parent is strided.
 function _check_strides(a::ReshapedArray)::Bool
     _checkcontiguous(Bool, a) && return true
-    apsz = size(a.parent)
+    apsz::Dims = size(a.parent)
     apst::Dims = strides(a.parent)
     msz::Int, mst::Int, n::Int = merge_adjacent_dim(apsz, apst)
     n == ndims(a.parent) && return true # Parent is stridevector like
