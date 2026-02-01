@@ -6,6 +6,20 @@ import Base: div, divrem, mul_hi, rem, unsigned, mod
 using  Base: IndexLinear, IndexCartesian, tail
 export multiplicativeinverse
 
+"""
+    unsigned(T::Type{<:Integer})
+
+Convert an integer bitstype to the unsigned type of the same size.
+# Examples
+```jldoctest
+julia> unsigned(Int16)
+UInt16
+julia> unsigned(UInt64)
+UInt64
+```
+"""
+function unsigned(::Type{<:Integer}) end
+
 unsigned(::Type{Bool}) = UInt
 unsigned(::Type{Int8}) = UInt8
 unsigned(::Type{Int16}) = UInt16
