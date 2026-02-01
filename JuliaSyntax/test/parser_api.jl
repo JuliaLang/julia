@@ -112,6 +112,13 @@
         @test parseshow("'abc'", ignore_errors=true) == "(char (ErrorOverLongCharacter))"
         @test parseshow("1e1000", ignore_errors=true) == "(ErrorNumericOverflow)"
         @test parseshow("1f1000", ignore_errors=true) == "(ErrorNumericOverflow)"
+        @testset "raise = false with invalid dotted operators" begin
+            result = Meta.parse("a .:= b"; raise = false)
+            @test Meta.isexpr(result, :error)
+
+            result2 = Meta.parse("a .= b"; raise = false)
+            @test result2 == :(a .= b)
+        end
     end
 end
 
