@@ -296,7 +296,8 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"cconv" tup nreq] -> (get(tup, :value, nothing) isa Tuple &&
         get(nreq, :value, nothing) isa Int) ? pass() :
         @fail(st, "expected (cconv convention_tuple n_req_args)")
-    [K"tryfinally" t f _...] -> vst1(vcx, t) & vst1(vcx, f)
+    [K"tryfinally" t f] -> vst1(vcx, t) & vst1(vcx, f)
+    [K"tryfinally" t f scope] -> vst1(vcx, t) & vst1(vcx, f) & vst1(vcx, scope)
     [K"inline" _] -> pass()
     [K"noinline" _] -> pass()
     [K"inbounds" _] -> pass()

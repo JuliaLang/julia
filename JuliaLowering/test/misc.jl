@@ -281,4 +281,19 @@ end
     end
 """; expr_compat_mode=true) === 1
 
+@testset "tryfinally with scopedvalues" begin
+    @eval test_mod scopedval = Base.ScopedValues.ScopedValue(1)
+    @eval test_mod val_history = []
+    ex = Expr(:tryfinally,
+              :(push!(val_history, scopedval[])),
+              :(push!(val_history, scopedval[])),
+              :(Base.ScopedValues.Scope(Core.current_scope(),
+                                        $test_mod.scopedval => 2)))
+    JuliaLowering.eval(test_mod, JuliaLowering.expr_to_est(ex); expr_compat_mode=true)
+    # try block uses "inner" dynamic scope, finally does not
+    @test test_mod.val_history == [2, 1]
+    JuliaLowering.eval(test_mod, JuliaLowering.expr_to_est(ex))
+    @test test_mod.val_history == [2, 1, 2, 1]
+end
+
 end
