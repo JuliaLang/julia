@@ -144,34 +144,6 @@ end
 
 end
 
-@testset "basic softscope (uses internal lowering nodes, not surface syntax)" begin
-    # wrap expression in scope block of `scope_type` (:neutral or :hard)
-    function wrapscope(ex, scope_type)
-        g = JuliaLowering.ensure_attributes(ex._graph, scope_type=Symbol)
-        ex = JuliaLowering.reparent(g, ex)
-        out = JuliaLowering.newnode(g, ex, K"scope_block", [ex._id])
-        setattr!(out, :scope_type, scope_type)
-    end
-    function use_soft(ex::SyntaxTree)
-        @ast ex._graph ex [K"block" (::K"softscope") ex]
-    end
-
-    assign_z_2 = parsestmt(SyntaxTree, "begin z = 2 end", filename="foo.jl")
-    Base.eval(test_mod, :(z=1))
-    @test test_mod.z == 1
-    # hard scopes will always create a new binding; softscope mode is ignored
-    JuliaLowering.eval(test_mod, wrapscope(assign_z_2, :hard))
-    @test test_mod.z == 1
-    JuliaLowering.eval(test_mod, use_soft(wrapscope(assign_z_2, :hard)))
-    @test test_mod.z == 1
-    # neutral (eg, for loops) and hard (eg, let) scopes create a new binding for z
-    JuliaLowering.eval(test_mod, wrapscope(assign_z_2, :neutral))
-    @test test_mod.z == 1
-    # but soft scope mode makes assignment in neutral scope assign to global `z`
-    JuliaLowering.eval(test_mod, use_soft(wrapscope(assign_z_2, :neutral)))
-    @test test_mod.z == 2
-end
-
 # Switch to Core.eval for sanity-checking
 expr_eval(mod, ex) = JuliaLowering.eval(mod, ex)
 

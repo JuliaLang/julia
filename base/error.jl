@@ -21,7 +21,7 @@
 
 Throw an object as an exception.
 
-See also: [`rethrow`](@ref), [`error`](@ref).
+See also [`rethrow`](@ref), [`error`](@ref).
 """
 throw
 

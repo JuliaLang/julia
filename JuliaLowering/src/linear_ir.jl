@@ -29,7 +29,7 @@ struct JumpTarget{Attrs}
     label::SyntaxTree{Attrs}
     handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
     catch_token_stack::SyntaxList{Attrs, Vector{NodeId}}
-    result_var::Union{SyntaxTree{Attrs}, Nothing}  # for symbolic_block valued breaks
+    result_var::Union{SyntaxTree{Attrs}, Nothing}  # for symbolicblock valued breaks
 end
 
 function JumpTarget(label::SyntaxTree{Attrs}, ctx, result_var=nothing) where {Attrs}
@@ -308,8 +308,16 @@ function emit_break(ctx, ex)
     name = ex[1].name_val
     target = get(ctx.break_targets, name, nothing)
     if isnothing(target)
-        ty = name == "loop_exit" ? "break" : "continue"
-        throw(LoweringError(ex, "$ty must be used inside a `while` or `for` loop"))
+        if name == "loop_exit"
+            throw(LoweringError(ex, "`break` must be used inside a `while` or `for` loop"))
+        elseif name == "loop_cont"
+            throw(LoweringError(ex, "`continue` must be used inside a `while` or `for` loop"))
+        elseif endswith(name, "#cont")
+            label = name[1:end-5]
+            throw(LoweringError(ex, "`continue $label` is not inside a `@label $label` loop"))
+        else
+            throw(LoweringError(ex, "`break $name` is not inside a `@label $name` block"))
+        end
     end
     # Handle valued break (break name val)
     if numchildren(ex) >= 2
@@ -706,7 +714,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         if needs_value
             compile(ctx, nothing_(ctx, ex), needs_value, in_tail_pos)
         end
-    elseif k == K"symbolic_block"
+    elseif k == K"symbolicblock"
         name = ex[1].name_val
         if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
             throw(LoweringError(ex, "Label `$name` defined multiple times"))
@@ -740,7 +748,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
     elseif k == K"break"
         emit_break(ctx, ex)
-    elseif k == K"symbolic_label"
+    elseif k == K"symboliclabel"
         label = emit_label(ctx, ex)
         name = ex.name_val
         if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
@@ -752,7 +760,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         elseif needs_value
             throw(LoweringError(ex, "misplaced label in value position"))
         end
-    elseif k == K"symbolic_goto"
+    elseif k == K"symbolicgoto"
         push!(ctx.symbolic_jump_origins, JumpOrigin(ex, length(ctx.code)+1, ctx))
         emit(ctx, newleaf(ctx, ex, K"TOMBSTONE")) # ? pop_exception
         emit(ctx, newleaf(ctx, ex, K"TOMBSTONE")) # ? leave

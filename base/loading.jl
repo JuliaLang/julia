@@ -2828,8 +2828,6 @@ function set_pkgorigin_version_path(pkg::PkgId, path::String)
     nothing
 end
 
-# Unused
-const PKG_PRECOMPILE_HOOK = Ref{Function}()
 disable_parallel_precompile::Bool = false
 
 # Returns `nothing` or the new(ish) module
@@ -2892,7 +2890,10 @@ function __require_prelocked(pkg::PkgId, env)
                     try
                         if !generating_output() && !parallel_precompile_attempted[] && !disable_parallel_precompile && @isdefined(Precompilation)
                             parallel_precompile_attempted[] = true
-                            precompiled = Precompilation.precompilepkgs([pkg]; _from_loading=true, ignore_loaded=false)
+                            # Note that we use @invokelatest here to avoid world
+                            # age issues when printing, see:
+                            # https://github.com/JuliaLang/julia/issues/60223
+                            precompiled = @invokelatest Precompilation.precompilepkgs([pkg]; _from_loading=true, ignore_loaded=false)
                             # prcompiled returns either nothing, indicating it needs serial precompile,
                             # or the entry(ies) that it found would be best to load (possibly because it just created it)
                             # or an empty set of entries (indicating the precompile should be skipped)

@@ -358,7 +358,8 @@ inconvenient since the modulus is by definition too big to be represented by the
 type.
 
 The modular inverse is computed much more efficiently than the general case
-using the algorithm described in https://arxiv.org/pdf/2204.04342.pdf.
+using the algorithm described in [*An Improved Integer Modular Multiplicative
+Inverse (modulo ``2^w``)* by Jeffrey Hurchalla](https://arxiv.org/abs/2204.04342).
 
 !!! compat "Julia 1.11"
     The `invmod(n)` and `invmod(n, T)` methods require Julia 1.11 or later.
