@@ -2,6 +2,8 @@
 
 using Test, InteractiveUtils
 
+@test isempty(Test.detect_closure_boxes(InteractiveUtils))
+
 @testset "highlighting" begin
     include("highlighting.jl")
 end

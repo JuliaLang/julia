@@ -7,6 +7,8 @@ using Distributed: RemoteException
 
 import Logging: Debug, Info, Warn, with_logger
 
+@test isempty(Test.detect_closure_boxes(Test))
+
 @testset "@test" begin
     atol = 1
     a = (; atol=2)

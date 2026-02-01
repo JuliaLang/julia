@@ -4,6 +4,8 @@ using Test, FileWatching
 using Base: uv_error, Experimental
 using Base.Filesystem: StatStruct
 
+@test isempty(Test.detect_closure_boxes(FileWatching))
+
 @testset "FileWatching" begin
 
 # This script does the following
