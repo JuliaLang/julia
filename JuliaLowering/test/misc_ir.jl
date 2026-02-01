@@ -148,7 +148,7 @@ LoweringError:
 #---------------------
 LoweringError:
 (a=1; b=2, c=3)
-#└─┘ ── cannot mix tuple `(a,b,c)` and named tuple `(;a,b,c)` syntax
+#   └────────┘ ── cannot mix tuple `(a,b,c)` and named tuple `(;a,b,c)` syntax
 
 ########################################
 # Error: Named tuple field dots in rhs
