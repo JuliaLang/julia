@@ -411,11 +411,11 @@ function cconvert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIn
     )
 end
 
-function has_strided_get(V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}})
+function has_strided_get(V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {T,N,P}
     has_strided_get(V.parent)
 end
 
-function has_strided_set(V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}})
+function has_strided_set(V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {T,N,P}
     has_strided_set(V.parent)
 end
 
@@ -455,7 +455,7 @@ function _check_strides(a::ReshapedArray)::Bool
     for i in 2:length(asz)
         local sz = asz[i]
         if reshaped == msz && sz != 1
-            msz::Int, mst::Int, n::Int = merge_adjacent_dim(apsz, apst, n+1)
+            msz, mst, n = merge_adjacent_dim(apsz, apst, n+1)
             reshaped = 1
         end
         reshaped = reshaped*sz

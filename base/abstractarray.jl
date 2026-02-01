@@ -606,10 +606,24 @@ function stride(A::AbstractArray, k::Integer)
     return s
 end
 
+"""
+    has_strided_get(A::AbstractArray)::Bool
+
+Return `true` if `A` can be read from as a strided array.
+
+See also: [`has_strided_set`](@ref).
+"""
 function has_strided_get(A::AbstractArray)
     false
 end
 
+"""
+    has_strided_set(A::AbstractArray)::Bool
+
+Return `true` if `A` can be written to as a strided array.
+
+See also: [`has_strided_get`](@ref).
+"""
 function has_strided_set(A::AbstractArray)
     false
 end

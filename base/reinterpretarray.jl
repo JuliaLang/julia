@@ -201,7 +201,6 @@ has_strided_set(::Array) = true
 has_strided_get(::Memory) = true
 has_strided_set(::Memory) = true
 has_strided_get(::CodeUnits{UInt8, <:Union{String, SubString{String}}}) = true
-has_strided_set(::CodeUnits{UInt8, <:Union{String, SubString{String}}}) = false
 
 function strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) where {T,S,IsReshaped}
     _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
@@ -219,7 +218,7 @@ function has_strided_get(a::ReinterpretArray)::Bool
 end
 
 function has_strided_set(a::ReinterpretArray)::Bool
-    has_strided_set(parent(a)) && (a.writeable) && _check_strides(a)
+    has_strided_set(parent(a)) && (a.writable) && _check_strides(a)
 end
 
 # Return true if a is strided, assuming the parent is strided.
@@ -228,24 +227,13 @@ function _check_strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsResha
     elsize(parent(a)) != elp && return false
     _checkcontiguous(Bool, a) && return true
     els == elp && return true
+    IsReshaped && els < elp && return true
     stp = strides(parent(a))
-    if IsReshaped 
-        if els < elp
-            # The constructor ensures rem(elp, els) == 0
-            return true
-        end
-        if stp[1] != 1
-            return false
-        end
+    stp[1] == 1 || return false
+    if elp > els && rem(elp, els) == 0
+        return true
     else
-        if stp[1] != 1
-            return false
-        end
-        if elp > els && rem(elp, els) == 0
-            return true
-        else
-            return all(i->iszero(rem(elp * i, els)), stp)
-        end
+        return all(i->iszero(rem(elp * i, els)), tail(stp))
     end
 end
 

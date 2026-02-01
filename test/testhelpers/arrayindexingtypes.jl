@@ -70,6 +70,8 @@ Base.setindex!(A::WrapperArray, v, i::Int...) = A.parent[i...] = v
 Base.similar(A::WrapperArray, ::Type{T}, dims::Dims) where T = similar(A.parent, T, dims)
 Base.cconvert(::Type{Ptr{T}}, A::WrapperArray{T}) where {T} = Base.cconvert(Ptr{T}, A.parent)
 Base.strides(A::WrapperArray) = strides(A.parent)
+Base.has_strided_get(A::WrapperArray) = Base.has_strided_get(A.parent)
+Base.has_strided_set(A::WrapperArray) = Base.has_strided_set(A.parent)
 Base.elsize(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = Base.elsize(A)
 
 # An array type with heterogenous axis types
