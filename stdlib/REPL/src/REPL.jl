@@ -836,11 +836,12 @@ setmodifiers!(c::REPLCompletionProvider, m::LineEdit.Modifiers) = c.modifiers = 
 Set `mod` as the default contextual module in the REPL,
 both for evaluating expressions and printing them.
 """
-function activate(mod::Module=Main; interactive_utils::Bool=true)
+function activate(mod::Module=Main; interactive_utils::Bool=true, linearalgebra::Bool=true)
     mistate = (Base.active_repl::LineEditREPL).mistate
     mistate === nothing && return nothing
     mistate.active_module = mod
     interactive_utils && Base.load_InteractiveUtils(mod)
+    linearalgebra && Base.load_LinearAlgebra(mod)
     return nothing
 end
 
