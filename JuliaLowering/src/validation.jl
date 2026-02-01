@@ -690,12 +690,12 @@ end
 # TODO: add list matching to @stm
 function _calldecl_positionals(vcx, params_meta, kw_kind)
     isempty(params_meta) && return pass()
-    ok = pass()
+    ok = Ref(pass())
     params = map(params_meta) do meta_p
         @stm meta_p begin
             [K"meta" s p] -> let meta_s = get(s, :name_val, "")
                 if !(meta_s in ("specialize", "nospecialize"))
-                    ok &= @fail(p, "unrecognized meta function arg form")
+                    ok[] &= @fail(p, "unrecognized meta function arg form")
                 end
                 p
             end
@@ -712,22 +712,22 @@ function _calldecl_positionals(vcx, params_meta, kw_kind)
     end
     if !isnothing(va_ok)
         params = params[1:end-1]
-        ok &= va_ok
+        ok[] &= va_ok
     end
     require_assign = false
     for p in params
         if kind(p) === kw_kind
             require_assign = true
-            ok &= vst1_param_and_default(vcx, p; kw_kind)
+            ok[] &= vst1_param_and_default(vcx, p; kw_kind)
         elseif kind(p) === K"..."
-            ok &= @fail(p, "`...` may only be used on the final parameter")
+            ok[] &= @fail(p, "`...` may only be used on the final parameter")
         elseif require_assign # TODO: multi-syntaxtree error
-            ok &= @fail(p, "all function parameters after an optional parameter must also be optional")
+            ok[] &= @fail(p, "all function parameters after an optional parameter must also be optional")
         else
-            ok &= vst1_param_typed_tuple(vcx, p)
+            ok[] &= vst1_param_typed_tuple(vcx, p)
         end
     end
-    return ok
+    return ok[]
 end
 
 # destructuring args: function f(a, (x, y)) ...
