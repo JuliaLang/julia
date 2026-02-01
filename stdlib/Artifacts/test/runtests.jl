@@ -246,7 +246,12 @@ end
                 # 0: --depwarn=no
                 # 1: --depwarn=yes
                 # 2: --depwarn=error
-                if depwarn_flag == 2
+                if depwarn_flag == 0
+                    @warn "Skipping one test, because we are running with --depwarn=no"
+                    @test_skip false
+                elseif depwarn_flag == 1
+                    error("TODO: Implement this codepath")
+                elseif depwarn_flag == 2
                     Core.eval(anon, quote
                         try
                             artifact"socrates"
@@ -256,8 +261,7 @@ end
                         end
                     end)
                 else
-                    @warn "Skipping one test, because we aren't running with --depwarn=error"
-                    @test_skip false
+                    error("Unexpected value for Base.JLOptions().depwarn: $(depwarn_flag)")
                 end
             end
         end
