@@ -357,7 +357,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         else
             access
         end
-    elseif is_leaf(ex) || k == K"inert" || k == K"static_eval"
+    elseif is_leaf(ex) || k == K"inert" || k == K"inert_syntaxtree" || k == K"static_eval"
         ex
     elseif k == K"="
         convert_assignment(ctx, ex)
@@ -390,7 +390,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         binfo = get_binding(ctx, ex[1])
         if binfo.kind == :global
             # flisp has this, but our K"assert" handling is in a previous pass
-            # [K"assert" "toplevel_only"::K"Symbol" [K"inert" ex]]
+            # [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex]]
             make_globaldecl(ctx, ex, binfo.mod, binfo.name, true, _convert_closures(ctx, ex[2]))
         else
             newleaf(ctx, ex, K"TOMBSTONE")

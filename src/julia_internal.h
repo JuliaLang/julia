@@ -1049,10 +1049,6 @@ struct restriction_kind_pair {
 JL_DLLEXPORT int jl_get_binding_leaf_partitions_restriction_kind(jl_binding_t *b JL_PROPAGATES_ROOT, struct restriction_kind_pair *rkp, size_t min_world, size_t max_world) JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_value_t *jl_get_binding_leaf_partitions_value_if_const(jl_binding_t *b JL_PROPAGATES_ROOT, int *maybe_depwarn, size_t min_world, size_t max_world);
 
-EXTERN_INLINE_DECLARE uint8_t jl_bpart_get_kind(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT {
-    return (uint8_t)(bpart->kind & 0xf);
-}
-
 STATIC_INLINE void jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **bpart JL_PROPAGATES_ROOT, size_t world) JL_NOTSAFEPOINT;
 STATIC_INLINE void jl_walk_binding_inplace_depwarn(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world, int *depwarn) JL_NOTSAFEPOINT;
 STATIC_INLINE void jl_walk_binding_inplace_all(jl_binding_t **bnd, jl_binding_partition_t **bpart JL_PROPAGATES_ROOT, int *depwarn, size_t min_world, size_t max_world) JL_NOTSAFEPOINT;
@@ -1503,7 +1499,9 @@ typedef struct {
     CONTEXT context;
 } bt_cursor_t;
 #endif
+extern uv_mutex_t jl_dll_notify_lock;
 extern JL_DLLEXPORT uv_mutex_t jl_in_stackwalk;
+void jl_profile_process_dll_events(void) JL_NOTSAFEPOINT;
 #elif !defined(JL_DISABLE_LIBUNWIND)
 // This gives unwind only local unwinding options ==> faster code
 #  define UNW_LOCAL_ONLY
@@ -1675,9 +1673,6 @@ JL_DLLIMPORT void *jl_jit_abi_converter(jl_task_t *ct, jl_abi_t from_abi, jl_cod
 #define JL_LIBJULIA_DL_LIBNAME          ((const char*)2)
 #define JL_LIBJULIA_INTERNAL_DL_LIBNAME ((const char*)3)
 JL_DLLEXPORT const char *jl_dlfind(const char *name);
-
-// libuv wrappers:
-JL_DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
 
 // -- Runtime intrinsics -- //
 JL_DLLEXPORT const char *jl_intrinsic_name(int f) JL_NOTSAFEPOINT;

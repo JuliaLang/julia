@@ -41,6 +41,7 @@
 #include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/Support/FormatAdapters.h>
 #include <llvm/Linker/Linker.h>
+#include <llvm/Support/TimeProfiler.h>
 
 using namespace llvm;
 
@@ -1611,7 +1612,10 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
         options.sanitize_thread = jl_options.target_sanitize_thread;
         options.sanitize_address = jl_options.target_sanitize_address;
         NewPM optimizer{std::move(PMTM), getOptLevel(jl_options.opt_level), options};
-        optimizer.run(M);
+        {
+            TimeTraceScope OptimizeScope("AOT Optimize", M.getModuleIdentifier());
+            optimizer.run(M);
+        }
         assert(!verifyLLVMIR(M));
         bool inject_aliases = false;
         for (auto &F : M.functions()) {
@@ -1676,6 +1680,7 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
 
     if (obj) {
         timers.obj.startTimer();
+        TimeTraceScope EmitScope("AOT Emit Object", M.getModuleIdentifier());
         raw_svector_ostream OS(out.obj);
         legacy::PassManager emitter;
         addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
@@ -1982,6 +1987,9 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
         std::vector<uv_thread_t> workers(threads);
         for (unsigned i = 0; i < threads; i++) {
             schedule_uv_thread(&workers[i], [&, i]() {
+                // Initialize time trace profiler for this thread if enabled
+                if (jl_is_timing_trace)
+                    timeTraceProfilerInitialize(jl_timing_trace_granularity, ("shard_" + std::to_string(i)).c_str());
                 LLVMContext ctx;
                 ctx.setDiscardValueNames(true);
                 // Lazily deserialize the entire module
@@ -2012,6 +2020,9 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
                 timers[i].construct.stopTimer();
 
                 outputs[i] = add_output_impl(*M, TM, timers[i], unopt_out, opt_out, obj_out, asm_out);
+                // Merge this thread's time trace into the main thread
+                if (jl_is_timing_trace)
+                    timeTraceProfilerFinishThread();
             });
         }
 
@@ -2043,7 +2054,6 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     return outputs;
 }
 
-extern int jl_is_timing_passes;
 static unsigned compute_image_thread_count(const ModuleInfo &info) {
     // 32-bit systems are very memory-constrained
 #ifdef _P32

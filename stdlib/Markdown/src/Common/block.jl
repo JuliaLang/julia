@@ -405,11 +405,11 @@ end
 # HTML
 # ––––––––––
 
-mutable struct HTML <: MarkdownElement
-    content
+mutable struct HTMLBlock <: MarkdownElement
+    content::Vector{String}
 end
 
-HTML() = HTML([])
+HTMLBlock() = HTMLBlock(String[])
 
 # spaces, tabs, and up to one line ending
 const SPACES = "(?:[ \t]*(?:[ \t\n])[ \t]*)"
@@ -440,18 +440,21 @@ const ATTRIBUTE_VALUE_SPEC = "$SPACES?=$SPACES?$ATTRIBUTE_VALUE"
 # specification restricted to ASCII. HTML5 is laxer.)
 const ATTRIBUTE_NAME = "[a-zA-Z_:][a-zA-Z0-9_.:-]*"
 
-# An attribute consists of spaces, tabs, and up to one line ending, an attribute name, and an optional attribute value specification.
+# An attribute consists of spaces, tabs, and up to one line ending, an
+# attribute name, and an optional attribute value specification.
 const ATTRIBUTE = "$SPACES$ATTRIBUTE_NAME(?:$ATTRIBUTE_VALUE_SPEC)?"
 
-# A tag name consists of an ASCII letter followed by zero or more ASCII letters, digits, or hyphens (-).
+# A tag name consists of an ASCII letter followed by zero or more ASCII
+# letters, digits, or hyphens (-).
 const TAG_NAME = "[a-zA-Z][a-zA-Z0-9-]*"
 
-# An open tag consists of a < character, a tag name, zero or more attributes, optional spaces, tabs,
-# and up to one line ending, an optional / character, and a > character.
+# An open tag consists of a < character, a tag name, zero or more attributes,
+# optional spaces, tabs, and up to one line ending, an optional / character,
+# and a > character.
 const OPEN_TAG = "<($TAG_NAME)((?:$ATTRIBUTE)*)$SPACES?/?>"
 
-# A closing tag consists of the string </, a tag name, optional spaces, tabs, and up to one line
-# ending, and the character >.
+# A closing tag consists of the string </, a tag name, optional spaces, tabs,
+# and up to one line ending, and the character >.
 const CLOSING_TAG = "</$TAG_NAME$SPACES?>"
 
 # Regex for a the HTML block start condition of type 7
@@ -494,7 +497,7 @@ function html_block(stream::IO, block::MD)
             return false
         end
 
-        html = HTML()
+        html = HTMLBlock()
 
         # return to start, and read line by line
         seek(stream, pos)
@@ -524,7 +527,7 @@ function html_block_type7(stream::IO, block::MD)
         eatindent(stream) || return false
         startswith(stream, TYPE_7_REGEX) || return false
 
-        html = HTML()
+        html = HTMLBlock()
 
         # return to start, and read line by line
         seek(stream, pos)

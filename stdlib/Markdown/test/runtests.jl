@@ -1492,7 +1492,7 @@ end
     @test Markdown.insert_hlines(nothing) === nothing
 end
 
-@testset "#59967: indented code blocks with more than one blank line" begin
+@testset "issue #59967: indented code blocks with more than one blank line" begin
     # Test the broken case in issue: indented code block with multiple blank lines
     md = Markdown.parse("""
     - code block inside a list with more than one blank line with indentation works
@@ -1715,6 +1715,27 @@ end
     @test lastindex(md) == 6
     @test md[6] === hr
     @test typeof.(md) == [Markdown.Header{1}, Markdown.Paragraph, Markdown.List, Markdown.HorizontalRule, Markdown.Paragraph, Markdown.HorizontalRule]
+end
+
+@testset "issue #46991: Preserve non-breaking space" begin
+    # reference: normal spaces
+    input = "abc\\\n    | def"
+    # and now with non-breaking space
+    # Julia's CI won't let us use non-breaking spaces in here directly,
+    # so we insert them manually
+    nbsp = "\u00a0"^4
+    input_nbsp = "abc\\\n$nbsp| def"
+
+    md = Markdown.parse(input)
+    md_nbsp = Markdown.parse(input_nbsp)
+
+    str = sprint(Markdown.term, md)
+    str_nbsp = sprint(Markdown.term, md_nbsp)
+
+    # regular version: four leading spaces got into a single one
+    @test str == "  abc\n   | def"
+    # non-breaking version: four leading spaces got preserved
+    @test str_nbsp == "  abc\n  $nbsp| def"
 end
 
 include("test_spec_roundtrip_common.jl")

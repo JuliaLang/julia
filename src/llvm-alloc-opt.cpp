@@ -678,11 +678,8 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
     // The allocation does not escape or get used in a phi node so none of the derived
     // SSA from it are live when we run the allocation again.
     // It is now safe to promote the allocation to an entry block alloca.
-    size_t align = 1;
-    // TODO: This is overly conservative. May want to instead pass this as a
-    //       parameter to the allocation function directly.
-    if (sz > 1)
-        align = MinAlign(JL_SMALL_BYTE_ALIGNMENT, NextPowerOf2(sz));
+    // Inherit alignment from the original allocation, with GC alignment as minimum.
+    Align align(std::max((unsigned)orig_inst->getRetAlign().valueOrOne().value(), (unsigned)JL_SMALL_BYTE_ALIGNMENT));
     // No debug info for prolog instructions
     IRBuilder<> prolog_builder(&F.getEntryBlock().front());
     AllocaInst *buff;
@@ -698,17 +695,21 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
         const DataLayout &DL = F.getParent()->getDataLayout();
         auto asize = ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), sz / DL.getTypeAllocSize(pass.T_prjlvalue));
         buff = prolog_builder.CreateAlloca(pass.T_prjlvalue, asize);
-        buff->setAlignment(Align(align));
+        buff->setAlignment(align);
         ptr = cast<Instruction>(buff);
     }
     else {
+        // Use alignment-sized chunks so SROA splits the alloca into aligned pieces
+        // which is better for performance and vectorization (see emit_static_alloca).
+        // Cap element size at 64 bits since not all backends support larger integers.
         Type *buffty;
-        if (pass.DL->isLegalInteger(sz * 8))
-            buffty = Type::getIntNTy(pass.getLLVMContext(), sz * 8);
+        unsigned elsize = std::min(align.value(), (uint64_t)8);
+        if (alignTo(sz, elsize) == elsize)
+            buffty = Type::getIntNTy(pass.getLLVMContext(), elsize * 8);
         else
-            buffty = ArrayType::get(Type::getInt8Ty(pass.getLLVMContext()), sz);
+            buffty = ArrayType::get(Type::getIntNTy(pass.getLLVMContext(), elsize * 8), alignTo(sz, elsize) / elsize);
         buff = prolog_builder.CreateAlloca(buffty);
-        buff->setAlignment(Align(align));
+        buff->setAlignment(align);
         ptr = cast<Instruction>(buff);
     }
     insertLifetime(ptr, ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), sz), orig_inst);
@@ -979,6 +980,8 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         uint32_t size;
     };
     SmallVector<SplitSlot,8> slots;
+    // Inherit alignment from the original allocation, with GC alignment as minimum.
+    Align align(std::max((unsigned)orig_inst->getRetAlign().valueOrOne().value(), (unsigned)JL_SMALL_BYTE_ALIGNMENT));
     for (auto memop: use_info.memops) {
         auto offset = memop.first;
         auto &field = memop.second;
@@ -994,12 +997,18 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         else if (field.elty && !field.multiloc) {
             allocty = field.elty;
         }
-        else if (pass.DL->isLegalInteger(field.size * 8)) {
-            allocty = Type::getIntNTy(pass.getLLVMContext(), field.size * 8);
-        } else {
-            allocty = ArrayType::get(Type::getInt8Ty(pass.getLLVMContext()), field.size);
+        else {
+            // Use alignment-sized chunks so SROA splits the alloca into aligned pieces
+            // which is better for performance and vectorization (see emit_static_alloca).
+            // Cap element size at 64 bits since not all backends support larger integers.
+            unsigned elsize = std::min(align.value(), (uint64_t)8);
+            if (alignTo(field.size, elsize) == elsize)
+                allocty = Type::getIntNTy(pass.getLLVMContext(), elsize * 8);
+            else
+                allocty = ArrayType::get(Type::getIntNTy(pass.getLLVMContext(), elsize * 8), alignTo(field.size, elsize) / elsize);
         }
         slot.slot = prolog_builder.CreateAlloca(allocty);
+        slot.slot->setAlignment(align);
         IRBuilder<> builder(orig_inst);
         insertLifetime(slot.slot, ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), field.size), orig_inst);
         initializeAlloca(builder, slot.slot, use_info.allockind);

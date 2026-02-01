@@ -33,7 +33,7 @@ function plain(io::IO, p::Paragraph)
     println(io)
 end
 
-function plain(io::IO, md::HTML)
+function plain(io::IO, md::HTMLBlock)
     for line in md.content
         println(io, line)
     end

@@ -967,7 +967,7 @@ Return the method of `f` (a `Method` object) that would be called for arguments 
 
 If `types` is an abstract type, then the method that would be called by `invoke` is returned.
 
-See also: [`parentmodule`](@ref), [`@which`](@ref Main.InteractiveUtils.@which), and [`@edit`](@ref Main.InteractiveUtils.@edit).
+See also [`parentmodule`](@ref), [`@which`](@ref Main.InteractiveUtils.@which), [`@edit`](@ref Main.InteractiveUtils.@edit).
 """
 function which(@nospecialize(f), @nospecialize(t))
     tt = signature_type(f, t)
@@ -1051,8 +1051,8 @@ end
 
 Return the module in which the given method `m` is defined.
 
-!!! compat "Julia 1.9"
-    Passing a `Method` as an argument requires Julia 1.9 or later.
+!!! compat "Julia 1.10"
+    Passing a `Method` as an argument requires Julia 1.10 or later.
 """
 parentmodule(m::Method) = m.module
 
