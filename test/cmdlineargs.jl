@@ -2,6 +2,8 @@
 
 import Libdl
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 # helper function for passing input to stdin
 # and returning the stdout result
 function writereadpipeline(input, exename; stderr=nothing)
@@ -554,7 +556,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         opts = Base.JLOptions()
         coverage_file = (opts.output_code_coverage != C_NULL) ?  unsafe_string(opts.output_code_coverage) : ""
         @test !isfile(covfile)
-        @test defaultcov == string(opts.code_coverage != 0 && (isempty(coverage_file) || occursin("%p", coverage_file)))
+        @test defaultcov == string(opts.code_coverage != 0 && (isempty(coverage_file) || occursin("%p", coverage_file))) broken=coverage_enabled
         @test readchomp(`$cov_exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=none`) == "0"
         @test !isfile(covfile)
@@ -725,16 +727,16 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             @test popfirst!(got) == "       32     Base.invokelatest(g, x)"
         elseif 12 == (() -> @allocated ccall(:jl_gc_allocobj, Ptr{Cvoid}, (Csize_t,), 8))()
             # See if we have a 12-byte pool with 32 bit tags (MAX_ALIGN = 4)
-            @test popfirst!(got) == "       12     Base.invokelatest(g, 0)"
-            @test popfirst!(got) == "       24     Base.invokelatest(g, x)"
+            @test popfirst!(got) == "       12     Base.invokelatest(g, 0)" broken=coverage_enabled
+            @test popfirst!(got) == "       24     Base.invokelatest(g, x)" broken=coverage_enabled
         else # MAX_ALIGN >= 8
-            @test popfirst!(got) == "        8     Base.invokelatest(g, 0)"
-            @test popfirst!(got) == "       32     Base.invokelatest(g, x)"
+            @test popfirst!(got) == "        8     Base.invokelatest(g, 0)" broken=coverage_enabled
+            @test popfirst!(got) == "       32     Base.invokelatest(g, x)" broken=coverage_enabled
         end
         if Sys.WORD_SIZE == 64
             @test popfirst!(got) == "       32     []"
         else
-            @test popfirst!(got) == "       16     []"
+            @test popfirst!(got) == "       16     []" broken=coverage_enabled
         end
         @test popfirst!(got) == "        - end"
         @test popfirst!(got) == "        - f(1.23)"
@@ -772,7 +774,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 # TODO: consider moving test to llvmpasses as this fails on some platforms
                 # without clear reason
                 @test_skip occursin("int.jl", code)
-                @test !occursin("name: \"Int64\"", code)
+                @test !occursin("name: \"Int64\"", code) broken=coverage_enabled
             end
             let code = readchomperrors(`$exename -g2 -E "@eval Int64(1)+Int64(1)"`)
                 @test code[1]
@@ -921,8 +923,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             `$exename -i`,
             stderr=io)
         _stderr = String(take!(io))
-        @test length(findall(r"precompile\(", _stderr)) == 5
-        @test length(findall(r" # recompile", _stderr)) == 1
+        @test length(findall(r"precompile\(", _stderr)) == 5 broken=coverage_enabled
+        @test length(findall(r" # recompile", _stderr)) == 1 broken=coverage_enabled
     end
 
     # --trace-dispatch

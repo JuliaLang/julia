@@ -6,6 +6,8 @@ using Random, InteractiveUtils
 
 const Bottom = Union{}
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 # For curmod_*
 include("testenv.jl")
 
@@ -8307,15 +8309,15 @@ struct ModTParamUnionAll{A, B}; end
 # effects for objectid
 for T in (Int, String, Symbol, Module)
     @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (T,)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (T,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (T,))) broken=coverage_enabled
     @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Some{T},)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Some{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Some{T},))) broken=coverage_enabled
     @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Some{Some{T}},)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Some{Some{T}},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Some{Some{T}},))) broken=coverage_enabled
     @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{T},)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T},))) broken=coverage_enabled
     @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{T,T},)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T,T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T,T},))) broken=coverage_enabled
     @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Ref{T},)))
     @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{Ref{T}},)))
     @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{Vector{T}},)))

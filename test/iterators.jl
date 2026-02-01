@@ -8,6 +8,8 @@ using Dates: Date, Day
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 @test (@inferred Base.IteratorSize(Any)) isa Base.SizeUnknown
 
 # zip and filter iterators
@@ -1053,8 +1055,8 @@ end
     simple_types = (Vector, NTuple, NamedTuple{X, Y} where {X, Y <: NTuple})
     example_type = Tuple{Bool, Int8, Vararg{Int16, 20}}
     function test_foldability_inference(f, S::Type)
-        @test Core.Compiler.is_foldable(Base.infer_effects(f, Tuple{S}))
-        @test Core.Compiler.is_foldable(Base.infer_effects(f, Tuple{Type{<:S}}))
+        @test Core.Compiler.is_foldable(Base.infer_effects(f, Tuple{S})) broken=coverage_enabled
+        @test Core.Compiler.is_foldable(Base.infer_effects(f, Tuple{Type{<:S}})) broken=coverage_enabled
     end
     @testset "concrete" begin  # weaker test, only checks foldability for certain concrete types
         @testset "f: $f" for f ∈ functions

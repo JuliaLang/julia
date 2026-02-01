@@ -4,6 +4,8 @@ using Random
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 ==ₜ(::Any, ::Any) = false
 ==ₜ(a::T, b::T) where {T} = isequal(a, b)
 
@@ -746,30 +748,30 @@ end
 @testset "concrete eval `[any|all](f, itr::Tuple)`" begin
     intf = in((1,2,3)); Intf = typeof(intf)
     symf = in((:one,:two,:three)); Symf = typeof(symf)
-    @test Core.Compiler.is_foldable(Base.infer_effects(intf, (Int,)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(symf, (Symbol,)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(all, (Intf,Tuple{Int,Int,Int})))
-    @test Core.Compiler.is_foldable(Base.infer_effects(all, (Symf,Tuple{Symbol,Symbol,Symbol})))
-    @test Core.Compiler.is_foldable(Base.infer_effects(any, (Intf,Tuple{Int,Int,Int})))
-    @test Core.Compiler.is_foldable(Base.infer_effects(any, (Symf,Tuple{Symbol,Symbol,Symbol})))
-    @test Base.return_types() do
+    @test Core.Compiler.is_foldable(Base.infer_effects(intf, (Int,))) broken=coverage_enabled
+    @test Core.Compiler.is_foldable(Base.infer_effects(symf, (Symbol,))) broken=coverage_enabled
+    @test Core.Compiler.is_foldable(Base.infer_effects(all, (Intf,Tuple{Int,Int,Int}))) broken=coverage_enabled
+    @test Core.Compiler.is_foldable(Base.infer_effects(all, (Symf,Tuple{Symbol,Symbol,Symbol}))) broken=coverage_enabled
+    @test Core.Compiler.is_foldable(Base.infer_effects(any, (Intf,Tuple{Int,Int,Int}))) broken=coverage_enabled
+    @test Core.Compiler.is_foldable(Base.infer_effects(any, (Symf,Tuple{Symbol,Symbol,Symbol}))) broken=coverage_enabled
+    @test (Base.return_types() do
         Val(all(in((1,2,3)), (1,2,3)))
-    end |> only == Val{true}
-    @test Base.return_types() do
+    end |> only == Val{true}) broken=coverage_enabled
+    @test (Base.return_types() do
         Val(all(in((1,2,3)), (1,2,3,4)))
-    end |> only == Val{false}
-    @test Base.return_types() do
+    end |> only == Val{false}) broken=coverage_enabled
+    @test (Base.return_types() do
         Val(any(in((1,2,3)), (4,5,3)))
-    end |> only == Val{true}
-    @test Base.return_types() do
+    end |> only == Val{true}) broken=coverage_enabled
+    @test (Base.return_types() do
         Val(any(in((1,2,3)), (4,5,6)))
-    end |> only == Val{false}
-    @test Base.return_types() do
+    end |> only == Val{false}) broken=coverage_enabled
+    @test (Base.return_types() do
         Val(all(in((:one,:two,:three)),(:three,:four)))
-    end |> only == Val{false}
-    @test Base.return_types() do
+    end |> only == Val{false}) broken=coverage_enabled
+    @test (Base.return_types() do
         Val(any(in((:one,:two,:three)),(:four,:three)))
-    end |> only == Val{true}
+    end |> only == Val{true}) broken=coverage_enabled
 end
 
 # `reduce(vcat, A)` should not alias the input for length-1 collections
