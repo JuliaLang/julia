@@ -129,7 +129,7 @@ export JULIA_NUM_THREADS=3,1
 This starts Julia with 3 threads in the `:default` threadpool and 1 thread in
 the `:interactive` threadpool:
 
-```julia-repl
+```jldoctest
 julia> using Base.Threads
 
 julia> nthreadpools()
@@ -186,7 +186,7 @@ thread ID into each location.
 Julia supports parallel loops using the [`Threads.@threads`](@ref) macro. This macro is affixed
 in front of a `for` loop to indicate to Julia that the loop is a multi-threaded region:
 
-```julia-repl
+```jldoctest
 julia> Threads.@threads for i = 1:10
            a[i] = Threads.threadid()
        end
@@ -195,7 +195,7 @@ julia> Threads.@threads for i = 1:10
 The iteration space is split among the threads, after which each thread writes its thread ID
 to its assigned locations:
 
-```julia-repl
+```jldoctest
 julia> a
 10-element Vector{Float64}:
  1.0
@@ -217,7 +217,7 @@ Note that [`Threads.@threads`](@ref) does not have an optional reduction paramet
 The concept of a data-race is elaborated on in ["Communication and data races between threads"](@ref man-communication-and-data-races). For now, just know that a data race can result in incorrect results and dangerous errors.
 
 Lets say we want to make the function `sum_single` below multithreaded.
-```julia-repl
+```jldoctest
 julia> function sum_single(a)
            s = 0
            for i in a
@@ -232,7 +232,7 @@ julia> sum_single(1:1_000_000)
 ```
 
 Simply adding `@threads` exposes a data race with multiple threads reading and writing `s` at the same time.
-```julia-repl
+```jldoctest
 julia> function sum_multi_bad(a)
            s = 0
            Threads.@threads for i in a
@@ -251,7 +251,7 @@ Note that the result is not `500000500000` as it should be, and will most likely
 To fix this, buffers that are specific to the task may be used to segment the sum into chunks that are race-free.
 Here `sum_single` is reused, with its own internal buffer `s`. The input vector `a` is split into at most `nthreads()`
 chunks for parallel work. We then use `Threads.@spawn` to create tasks that individually sum each chunk. Finally, we sum the results from each task using `sum_single` again:
-```julia-repl
+```jldoctest
 julia> function sum_multi_good(a)
            chunks = Iterators.partition(a, cld(length(a), Threads.nthreads()))
            tasks = map(chunks) do chunk
@@ -312,7 +312,7 @@ Note that the link between a lock and a variable is made by the programmer, and 
 
 For example, we can create a lock `my_lock`, and lock it while we mutate a variable `my_variable`. This is done most simply with the `@lock` macro:
 
-```julia-repl
+```jldoctest
 julia> my_lock = ReentrantLock();
 
 julia> my_variable = [1, 2, 3];
@@ -324,7 +324,7 @@ julia> @lock my_lock my_variable[1] = 100
 By using a similar pattern with the same lock and variable, but on another thread, the operations are free from data-races.
 
 We could have performed the operation above with the functional version of `lock`, in the following two ways:
-```julia-repl
+```jldoctest
 julia> lock(my_lock) do
            my_variable[1] = 100
        end
@@ -348,14 +348,14 @@ to a global or closure variable) accessed by other threads. Failing to do this c
 As mentioned in the previous section, the helper-type [`Base.Lockable`](@ref) can be used to programmatically ensure the association between a lock and a value. This is generally recommended, as it is both less prone to error and more readable for others compared to having the association only by convention.
 
 Any object can be wrapped in `Base.Lockable`:
-```julia-repl
+```jldoctest
 julia> my_array = [];
 
 julia> my_locked_array = Base.Lockable(my_array);
 ```
 
 If the lock is held, the underlying object can be accessed with the empty indexing notation:
-```julia-repl
+```jldoctest
 julia> begin
            lock(my_locked_array)
            try
@@ -369,7 +369,7 @@ julia> begin
 ```
 
 It is usually easier and safer to pass a function as the first argument to `lock`. The function is applied to the unlocked object, and the locking/unlocking is handled automatically:
-```julia-repl
+```jldoctest
 julia> lock(x -> push!(x, 2), my_locked_array);
 
 julia> lock(display, my_locked_array)
@@ -393,7 +393,7 @@ Julia supports accessing and modifying values *atomically*, that is, in a thread
 type) can be wrapped as [`Threads.Atomic`](@ref) to indicate it must be accessed in this way.
 Here we can see an example:
 
-```julia-repl
+```jldoctest
 julia> i = Threads.Atomic{Int}(0);
 
 julia> ids = zeros(4);
@@ -427,7 +427,7 @@ Had we tried to do the addition without the atomic tag, we might have gotten the
 wrong answer due to a race condition. An example of what would happen if we didn't
 avoid the race:
 
-```julia-repl
+```jldoctest
 julia> using Base.Threads
 
 julia> Threads.nthreads()

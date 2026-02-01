@@ -28,7 +28,7 @@ not evaluated at construction time but only when first accessed.
 
 # Examples
 
-```julia-repl
+```jldoctest
 julia> using Base.ScopedValues;
 
 julia> const editor = LazyScopedValue(OncePerProcess(() -> ENV["JULIA_EDITOR"]));

@@ -363,7 +363,7 @@ See also [`@showtime`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@
 !!! compat "Julia 1.11"
     The reporting of any lock conflicts was added in Julia 1.11.
 
-```julia-repl
+```jldoctest
 julia> x = rand(10,10);
 
 julia> @time x * x;
@@ -415,7 +415,7 @@ Like `@time` but also prints the expression being evaluated for reference.
 
 See also [`@time`](@ref).
 
-```julia-repl
+```jldoctest
 julia> @showtime sleep(1)
 sleep(1): 1.002164 seconds (4 allocations: 128 bytes)
 ```
@@ -442,7 +442,7 @@ Optionally provide a description string to print before the time report.
 See also [`@time`](@ref), [`@timed`](@ref), [`@elapsed`](@ref),
 [`@allocated`](@ref), and [`@allocations`](@ref).
 
-```julia-repl
+```jldoctest
 julia> x = rand(10,10);
 
 julia> @timev x * x;
@@ -491,7 +491,7 @@ compilation time will not be counted. To include this time you can run `@elapsed
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 [`@allocated`](@ref), and [`@allocations`](@ref).
 
-```julia-repl
+```jldoctest
 julia> @elapsed sleep(0.3)
 0.301391426
 ```
@@ -612,7 +612,7 @@ allocations due to the surrounding context. For example it is possible for
 See also [`@allocations`](@ref), [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@elapsed`](@ref).
 
-```julia-repl
+```jldoctest
 julia> @allocated rand(10^6)
 8000080
 ```
@@ -630,7 +630,7 @@ total number of allocations during evaluation of the expression.
 See also [`@allocated`](@ref), [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@elapsed`](@ref).
 
-```julia-repl
+```jldoctest
 julia> @allocations rand(10^6)
 2
 ```
@@ -652,7 +652,7 @@ resulted in a wait because the lock was already held.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref).
 
-```julia-repl
+```jldoctest
 julia> @lock_conflicts begin
     l = ReentrantLock()
     Threads.@threads for i in 1:Threads.nthreads()
@@ -695,7 +695,7 @@ compilation time will not be counted. To include this time you can run `@timed @
 See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref),
 [`@allocated`](@ref), [`@allocations`](@ref), and [`@lock_conflicts`](@ref).
 
-```julia-repl
+```jldoctest
 julia> stats = @timed rand(10^6);
 
 julia> stats.time

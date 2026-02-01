@@ -1306,7 +1306,7 @@ available in the current world.
     This functionality requires at least Julia 1.12.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> struct Foo; a::Int; end
 Foo
 

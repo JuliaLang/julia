@@ -437,7 +437,7 @@ const DURATIONS = (
 
 Convert `seconds` into a compact age string with largest unit.
 
-```julia-repl
+```jldoctest
 julia> humanage(70)
 "1m"
 

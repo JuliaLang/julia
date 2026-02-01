@@ -539,7 +539,7 @@ end
 The path to the entry-point file for the package corresponding to the identifier
 `pkg`, or `nothing` if not found. See also [`identify_package`](@ref).
 
-```julia-repl
+```jldoctest
 julia> pkg = Base.identify_package("Pkg")
 Pkg [44cfe95a-1eb2-52ea-b672-e2afdf69b78f]
 
@@ -598,7 +598,7 @@ the form `pkgdir(@__MODULE__)` can be used.
 
 If an extension module is given, the root of the parent package is returned.
 
-```julia-repl
+```jldoctest
 julia> pkgdir(Foo)
 "/path/to/Foo.jl"
 
@@ -4452,7 +4452,7 @@ REPL or if evaluated by `julia -e <expr>`, returns the current working directory
 The example illustrates the difference in the behaviors of `@__DIR__` and `pwd()`, by creating
 a simple script in a different directory than the current working one and executing both commands:
 
-```julia-repl
+```jldoctest
 julia> cd("/home/JuliaUser") # working directory
 
 julia> # create script at /home/JuliaUser/Projects

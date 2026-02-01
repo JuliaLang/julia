@@ -78,7 +78,7 @@ once. When the timer is closed (by [`close`](@ref)) waiting tasks are woken with
 [`isopen`](@ref) to check whether a timer is still active. An inactive timer will not fire.
 Use `t.timeout` and `t.interval` to read the setup conditions of a `Timer` `t`.
 
-```julia-repl
+```jldoctest
 julia> t = Timer(1.0; interval=0.5)
 Timer (open, timeout: 1.0 s, interval: 0.5 s) @0x000000010f4e6e90
 
@@ -346,7 +346,7 @@ it is on. If `spawn` is `nothing` (default), the task will be spawned if the par
 Here the first number is printed after a delay of two seconds, then the following numbers are
 printed quickly.
 
-```julia-repl
+```jldoctest
 julia> begin
            i = 0
            cb(timer) = (global i += 1; println(i))

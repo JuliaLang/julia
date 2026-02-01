@@ -120,7 +120,7 @@ end
 Get the fetch URL of a remote git repository.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> repo_url = "https://github.com/JuliaLang/Example.jl";
 
 julia> repo = LibGit2.init(mktempdir());
@@ -146,7 +146,7 @@ end
 Get the push URL of a remote git repository.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> repo_url = "https://github.com/JuliaLang/Example.jl";
 
 julia> repo = LibGit2.init(mktempdir());
@@ -174,7 +174,7 @@ If the remote is anonymous (see [`GitRemoteAnon`](@ref))
 the name will be an empty string `""`.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> repo_url = "https://github.com/JuliaLang/Example.jl";
 
 julia> repo = LibGit2.clone(cache_repo, "test_directory");
@@ -201,7 +201,7 @@ Get the *fetch* refspecs for the specified `rmt`. These refspecs contain
 information about which branch(es) to fetch from.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> remote = LibGit2.get(LibGit2.GitRemote, repo, "upstream");
 
 julia> LibGit2.add_fetch!(repo, remote, "upstream");
@@ -227,7 +227,7 @@ Get the *push* refspecs for the specified `rmt`. These refspecs contain
 information about which branch(es) to push to.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> remote = LibGit2.get(LibGit2.GitRemote, repo, "upstream");
 
 julia> LibGit2.add_push!(repo, remote, "refs/heads/master");
@@ -257,7 +257,7 @@ Add a *fetch* refspec for the specified `rmt`. This refspec will contain
 information about which branch(es) to fetch from.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> LibGit2.add_fetch!(repo, remote, "upstream");
 
 julia> LibGit2.fetch_refspecs(remote)
@@ -278,7 +278,7 @@ Add a *push* refspec for the specified `rmt`. This refspec will contain
 information about which branch(es) to push to.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> LibGit2.add_push!(repo, remote, "refs/heads/master");
 
 julia> remote = LibGit2.get(LibGit2.GitRemote, repo, branch);

@@ -541,7 +541,7 @@ Hello, human
 We can view the quoted return expression using the function [`macroexpand`](@ref) (**important note:**
 this is an extremely useful tool for debugging macros):
 
-```julia-repl sayhello2
+```jldoctest sayhello2
 julia> ex = macroexpand(Main, :(@sayhello("human")) )
 :(Main.println("Hello, ", "human"))
 
@@ -568,7 +568,7 @@ Macros are necessary because they execute when code is parsed, therefore, macros
 to generate and include fragments of customized code *before* the full program is run. To illustrate
 the difference, consider the following example:
 
-```julia-repl whymacros
+```jldoctest whymacros
 julia> macro twostep(arg)
            println("I execute at parse time. The argument is: ", arg)
            return :(println("I execute at runtime. The argument is: ", $arg))
@@ -582,7 +582,7 @@ I execute at parse time. The argument is: :((1, 2, 3))
 The first call to [`println`](@ref) is executed when [`macroexpand`](@ref) is called. The
 resulting expression contains *only* the second `println`:
 
-```julia-repl whymacros
+```jldoctest whymacros
 julia> typeof(ex)
 Expr
 
@@ -719,7 +719,7 @@ user to optionally specify their own error message, instead of just printing the
 Just like in functions with a variable number of arguments ([Varargs Functions](@ref)), this is specified with an ellipses
 following the last argument:
 
-```julia-repl assert2
+```jldoctest assert2
 julia> macro assert(ex, msgs...)
            msg_body = isempty(msgs) ? ex : msgs[1]
            msg = string(msg_body)
@@ -734,7 +734,7 @@ will behave the same as the simpler definition above. But now if the user specif
 it is printed in the message body instead of the failing expression. You can inspect the result
 of a macro expansion with the aptly named [`@macroexpand`](@ref) macro:
 
-```julia-repl assert2
+```jldoctest assert2
 julia> @macroexpand @assert a == b
 :(if Main.a == Main.b
         Main.nothing

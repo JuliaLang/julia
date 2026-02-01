@@ -256,7 +256,7 @@ stored in the head flags for `SyntaxNode` trees, and in the first `arg` for
 
 Vertical concatenation along dimension 1 can be done with semicolons or newlines
 
-```julia-repl
+```jldoctest
 julia> print_tree(:([a
                      b]))
 Expr(:vcat)
@@ -273,7 +273,7 @@ Expr(:vcat)
 
 For horizontal concatenation along dimension 2, use spaces or double semicolons
 
-```julia-repl
+```jldoctest
 julia> print_tree(:([a b]))
 Expr(:hcat)
 ├─ :a
@@ -291,7 +291,7 @@ Expr(:ncat)
 Concatenation along dimensions 1 and 2 can be done with spaces and single
 semicolons or newlines, producing a mixture of `vcat` and `row` expressions:
 
-```julia-repl
+```jldoctest
 julia> print_tree(:([a b
                      c d]))
 # OR
@@ -308,7 +308,7 @@ Expr(:vcat)
 General n-dimensional concatenation results in nested `ncat` and `nrow`, for
 example
 
-```julia-repl
+```jldoctest
 julia> print_tree(:([a ; b ;; c ; d ;;; x]))
 Expr(:ncat)
 ├─ 3

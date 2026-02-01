@@ -25,11 +25,11 @@ will be installed by default.[^1]
 [^1]: Currently, only version v0.1 is registered in the [General](https://github.com/JuliaRegistries/General) registry.
 
 If needed, you can switch to a custom implementation of the `Compiler` module by running
-```julia-repl
+```jldoctest
 pkg> dev /path/to/Compiler.jl # to use a local implementation
 ```
 or
-```julia-repl
+```jldoctest
 pkg> add https://url/of/Compiler/branch # to use a remote implementation
 ```
 This feature is particularly useful for developing or experimenting with alternative compiler implementations.

@@ -239,7 +239,7 @@ For example, `Base` exports the function name `read`, but the CSV.jl package als
 If we are going to invoke CSV reading many times, it would be convenient to drop the `CSV.` qualifier.
 But then it is ambiguous whether we are referring to `Base.read` or `CSV.read`:
 
-```julia-repl
+```jldoctest
 julia> read;
 
 julia> import CSV: read
@@ -248,7 +248,7 @@ WARNING: ignoring conflicting import of CSV.read into Main
 
 Renaming provides a solution:
 
-```julia-repl
+```jldoctest
 julia> import CSV: read as rd
 ```
 
@@ -337,7 +337,7 @@ Syntactically, we divide these into three precedence levels (from weakest to str
 
 In general, we permit replacement of weaker bindings by stronger ones:
 
-```julia-repl
+```jldoctest
 julia> module M1; const x = 1; export x; end
 Main.M1
 
@@ -357,7 +357,7 @@ julia> const x = 2 # Explicit declaration
 ```
 
 However, within the explicit precedence level, replacement is syntactically disallowed:
-```julia-repl
+```jldoctest
 julia> module M1; const x = 1; export x; end
 Main.M1
 
@@ -372,7 +372,7 @@ Stacktrace:
 
 or ignored:
 
-```julia-repl
+```jldoctest
 julia> const y = 2
 2
 

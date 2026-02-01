@@ -401,7 +401,7 @@ parsing `key=val` pairs inside parentheses.
   It's this last case which seems problematic (why not *require* the second
   form as a more explicit way to indicate flattening?). It's not even pretty
   printed correctly:
-  ```julia-repl
+  ```jldoctest
   julia> :([(x,y) for x in 1:10, y in 1:10 if y < x])
   :([(x, y) for $(Expr(:filter, :(y < x), :(x = 1:10), :(y = 1:10)))])
   ```

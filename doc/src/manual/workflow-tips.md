@@ -88,7 +88,7 @@ the following modifications:
 
      Navigate to your temporary directory and launch Julia, then do the following:
 
-     ```julia-repl
+     ```jldoctest
      pkg> generate MyPkg            # type ] to enter pkg mode
      julia> push!(LOAD_PATH, pwd())   # hit backspace to exit pkg mode
      ```
@@ -107,7 +107,7 @@ the following modifications:
    Then navigate to the directory containing your test file (here
    assumed to be `"runtests.jl"`) and do the following:
 
-   ```julia-repl
+   ```jldoctest
    julia> using MyPkg
 
    julia> include("runtests.jl")

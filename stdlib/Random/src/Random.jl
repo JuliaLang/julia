@@ -364,7 +364,7 @@ See also [`randn`](@ref) for normally distributed numbers, and [`rand!`](@ref) a
     Support for `S` as a `Tuple` type requires at least Julia 1.11.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> rand(Int, 2)
 2-element Vector{Int64}:
  1339893410598768192

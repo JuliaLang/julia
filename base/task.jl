@@ -643,7 +643,7 @@ are complete. All exceptions thrown by enclosed async operations are collected a
 a [`CompositeException`](@ref).
 
 # Examples
-```julia-repl
+```jldoctest
 julia> Threads.nthreads()
 4
 
@@ -746,7 +746,7 @@ end
 Print an error log to `stderr` if task `t` fails.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> wait(errormonitor(Threads.@spawn error("task failed")); throw = false)
 Unhandled Task ERROR: task failed
 Stacktrace:

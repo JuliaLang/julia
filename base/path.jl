@@ -629,7 +629,7 @@ the [Freedesktop File URI spec](https://www.freedesktop.org/wiki/Specifications/
 
 ## Examples
 
-```julia-repl
+```jldoctest
 julia> uripath("/home/user/example file.jl") # On a unix machine
 "file://<hostname>/home/user/example%20file.jl"
 

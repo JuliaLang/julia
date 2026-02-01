@@ -95,7 +95,7 @@ variable may result in an uppercase `ENV` key.)
     Mutating the environment is not thread-safe.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> ENV
 Base.EnvDict with "50" entries:
   "SECURITYSESSIONID"            => "123"

@@ -23,7 +23,7 @@ type definition, `import`/`using` declaration, creation of (typed) globals or de
 
 The current value of the global world age counter can be retrieved using the (internal) function [`Base.get_world_counter`](@ref).
 
-```julia-repl
+```jldoctest
 julia> Base.get_world_counter()
 0x0000000000009632
 
@@ -39,7 +39,7 @@ the running task will never exceed the global world age counter, but may run arb
 In general the term "current world age" refers to the local world age of the currently running task.
 The current world age may be retrieved using the (internal) function [`Base.tls_world_age`](@ref)
 
-```julia-repl
+```jldoctest
 julia> function f end
 f (generic function with 0 methods)
 
@@ -95,7 +95,7 @@ raise the current world age:
 Note, however, that the current task's world age may only ever be permanently incremented at
 top level. As a general rule, using any of the above statements in non-top-level scope is a syntax error:
 
-```julia-repl
+```jldoctest
 julia> f() = Core.@latestworld
 ERROR: syntax: World age increment not at top level
 Stacktrace:
@@ -223,7 +223,7 @@ In certain cases, it can be helpful to introspect the system's understanding of 
 a binding means in any particular world age. The default display printing of `Core.Binding`
 provides a helpful summary (e.g. on the `MyStruct` example from above):
 
-```julia-repl
+```jldoctest
 julia> convert(Core.Binding, GlobalRef(@__MODULE__, :MyStruct))
 Binding Main.MyStruct
    38456:∞ - constant binding to MyStruct
@@ -238,7 +238,7 @@ Bindings provided via `using` and `import` also operate via the world age mechan
 Binding resolution is a stateless function of the `import` and `using` definitions
 visible in the current world age. For example:
 
-```julia-repl
+```jldoctest
 julia> module M1; const x = 1; export x; end
 
 julia> module M2; const x = 2; export x; end
@@ -267,7 +267,7 @@ these is creation of new tasks. Newly created tasks will inherit the creating ta
 world age at creation time and will retain said world age (unless explicitly raised) even
 if the originating tasks raises its world age:
 
-```julia-repl
+```jldoctest
 julia> const x = 1
 
 julia> t = @task (wait(); println("Running now"); x);
