@@ -41,7 +41,7 @@ end
 
 function plain(io::IO, list::List)
     for (i, item) in enumerate(list.items)
-        list_marker = isordered(list) ? "$(i + list.ordered - 1). " : "  * "
+        list_marker = isordered(list) ? "$(i + list.ordered - 1). " : "* "
         print(io, list_marker)
         content = sprint(list.loose ? plain : plaintight, item)
         lines = split(rstrip(content), "\n")
