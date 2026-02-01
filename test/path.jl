@@ -46,6 +46,16 @@
         @test isdirpath(S(""))
         @test isdirpath(S("."))
         @test isdirpath(S(".."))
+
+        # After https://github.com/JuliaLang/julia/pull/60677, paths
+        # with "\n", ".\n" or "..\n" after the last separator are
+        # not accepted as directories.
+        @test !isdirpath("\n")
+        @test !isdirpath(".\n")
+        @test !isdirpath("..\n")
+        @test !isdirpath("a/\n")
+        @test !isdirpath("a/.\n")
+        @test !isdirpath("a/..\n")
     end
     @testset "joinpath" begin
         @test joinpath(S("")) == ""
@@ -166,7 +176,7 @@
         end
     end
 
-    @testset "splitdir, splitdrive" begin
+    @testset "splitdir, splitdrive, splitext" begin
         @test joinpath(splitdir(S(homedir()))...) == homedir()
         @test string(splitdrive(S(homedir()))...) == homedir()
         @test splitdrive("a\nb") == ("", "a\nb")
@@ -184,6 +194,51 @@
             # only single characters followed by a colon are drives
             @test splitdrive(S("foo:bar")) ==
                 ("", "foo:bar")
+
+            # unicode
+            @test splitdrive(S("\\\\α\\β\\γ")) == ("\\\\α\\β", "\\γ")
+            @test splitdrive(S("\\\\?\\UNC\\α\\β\\γ")) == ("\\\\?\\UNC\\α\\β", "\\γ")
+
+            # splitdrive currently allows any single codeunit char except separators as drive letters
+            # while isabspath does not allow this. FIXME?
+            @test splitdrive(S("::")) == ("::", "")
+            @test splitdrive(S("🍎:")) != ("🍎:", "")
+            # The behavior is different for long baths, where he drive letter can
+            # contain multiple codeunits (such as unicode chars or multiple chars)
+            # if it is followed by a delimiter, because it is then captured as a
+            # UNC path with the server name ?. FIXME?
+            @test splitdrive(S("\\\\?\\🍎:\\foobar")) == ("\\\\?\\🍎:", "\\foobar")
+            @test splitdrive(S("\\\\?\\CC:\\foobar")) == ("\\\\?\\CC:", "\\foobar")
+            # If the path contains no delimiters after the path however,
+            # everything goes into the drive
+            @test splitdrive("\\\\?\\🍎:foobar") == ("\\\\?\\🍎:foobar", "")
+        end
+
+        @test splitdir(S("foo")) == ("", "foo")
+        @test splitdir(S("foo/")) == ("foo", "")
+        @test splitdir(S("/foo")) == ("/", "foo")
+        @test splitdir(S("/foo/")) == ("/foo", "")
+        @test splitdir(S("foo/bar")) == ("foo", "bar")
+        @test splitdir(S("/foo/bar")) == ("/foo", "bar")
+        @test splitdir(S("/foo/bar/")) == ("/foo/bar", "")
+        @test splitdir(S("/foo/bar/baz")) == ("/foo/bar", "baz")
+        @test splitdir(S("/foo/bar/baz/")) == ("/foo/bar/baz", "")
+        @test splitdir(S("foo/bar/baz/")) == ("foo/bar/baz", "")
+        # Multiple leading separators are reduced to one only when
+        # all separators are at the beginning. FIXME?
+        @test splitdir(S("///foo")) == ("/", "foo") # why not ("///", "foo") ?
+        @test splitdir(S("///foo/bar")) == ("///foo", "bar")
+        if Sys.iswindows()
+            @test splitdir(S("/\\foo")) == ("/", "foo") # why not ("/\\", "foo") ?
+            @test splitdir(S("\\/foo")) == ("\\", "foo") # why not ("\\/", "foo") ?
+            @test splitdir(S("/\\/foo/bar")) == ("/\\/foo", "bar")
+            @test splitdir(S("///foo/bar/")) == ("///foo/bar", "")
+            @test splitdir(S("C:")) == ("C:", "")
+            @test splitdir(S("C:\\")) == ("C:\\", "")
+            @test splitdir(S("C:\\foo")) == ("C:\\", "foo")
+            @test splitdir(S("C:\\foo\\bar")) == ("C:\\foo", "bar")
+            @test splitdir(S("\\\\?\\C:\\foo\\bar")) == ("\\\\?\\C:\\foo", "bar")
+            @test splitdir(S("\\\\?\\C:\\foo\\bar\\")) == ("\\\\?\\C:\\foo\\bar", "")
         end
 
         @test splitext(S("")) == ("", "")
@@ -200,6 +255,20 @@
         @test_broken splitext(S(".foo..")) == (".foo", "..")
         @test_broken splitext(S(".foo...")) == (".foo", "...")
         @test splitext(S(".foo.bar")) == (".foo", ".bar")
+        @test splitext(S("bar/.foo/baz")) == ("bar/.foo/baz", "")
+        @test splitext(S("bar/foo/.baz")) == ("bar/foo/.baz", "")
+        @test splitext(S("bar/foo.baz")) == ("bar/foo", ".baz")
+        # If the second output is empty, remove a single \n from the first output
+        # unless that makes it empty or end with a /. FIXME?
+        @test splitext(S("a\r\n")) == ("a\r", "")
+        @test splitext(S("a/\n")) == ("a/\n", "") # keep \n in this case
+        @test splitext(S("a\n.foo")) == ("a\n", ".foo")
+        @test splitext(S("a/\n.foo")) == ("a/\n", ".foo")
+        @test splitext(S("\n")) == ("\n", "") # keep \n in this case
+        if Sys.iswindows()
+            @test splitext(S("C:a\n")) == ("C:a", "")
+            @test splitext(S("C:\n")) == ("C:\n", "") # keep \n in this case
+        end
     end
 
     @testset "isabspath" begin
@@ -220,6 +289,14 @@
             @test startswith(expanduser(S("~")), homedir())
         else
             @test expanduser(S("~")) == "~"
+        end
+        if Sys.iswindows()
+            @test isabspath(S("\\\\?\\C:\\"))
+            # Current behavior is to allow anything starting with a separator,
+            # even if this is not a long path, nor a UNC path.
+            @test isabspath(S("///a/b/"))
+            # Drive letters are currently treated differently in long path format. FIXME?
+            @test isabspath(S("\\\\?\\α:\\")) != isabspath("α:\\")
         end
     end
 
@@ -351,6 +428,20 @@
     @testset "type stability" begin
         @test isa(joinpath(S("a"), S("b")), String)
         @test isa(joinpath(S(abspath("a")), S("b")), String)
+    end
+
+    @testset "Separator" begin
+        @test Base.Filesystem.isseparator('/')
+        @test any(Base.Filesystem.isseparator, "abc/def")
+        @test occursin(Base.Filesystem.path_separator_re, "abc/def")
+        @test !Base.Filesystem.isseparator('a')
+        @test !any(Base.Filesystem.isseparator, "abcdef")
+        @test !occursin(Base.Filesystem.path_separator_re, "abcdef")
+        if Sys.iswindows()
+            @test Base.Filesystem.isseparator('\\')
+            @test any(Base.Filesystem.isseparator, "abc\\def")
+            @test occursin(Base.Filesystem.path_separator_re, "abc\\def")
+        end
     end
 end
 
