@@ -2,7 +2,7 @@
 
 # StridedArrays
 
-# This test file defines array types and functions 
+# This test file defines array types and functions
 # useful for testing the strided array interface.
 
 module StridedArrays
