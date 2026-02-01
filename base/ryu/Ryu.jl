@@ -1,5 +1,6 @@
 module Ryu
 
+using .Base.Libc
 import .Base: significand_bits, significand_mask, exponent_bits, exponent_mask, exponent_bias, exponent_max, uinttype
 
 include("utils.jl")
@@ -17,8 +18,17 @@ neededdigits(::Type{Float32}) = 39 + 9 + 2
 neededdigits(::Type{Float16}) = 9 + 5 + 9
 
 """
+    Ryu.neededfloatdigits(T)
+
+Number of digits necessary to represent type `T` in shortest precision.
+"""
+neededfloatdigits(::Type{Float64}) = 24
+neededfloatdigits(::Type{Float32}) = 17
+neededfloatdigits(::Type{Float16}) = 20
+
+"""
     Ryu.writeshortest(x, plus=false, space=false, hash=true, precision=-1, expchar=UInt8('e'), padexp=false, decchar=UInt8('.'), typed=false, compact=false)
-    Ryu.writeshortest(buf::Vector{UInt8}, pos::Int, x, args...)
+    Ryu.writeshortest(buf::AbstractVector{UInt8}, pos::Int, x, args...)
 
 Convert a float value `x` into its "shortest" decimal string, which can be parsed back to the same value.
 This function allows achieving the `%g` printf format.
@@ -52,7 +62,7 @@ end
 
 """
     Ryu.writefixed(x, precision, plus=false, space=false, hash=false, decchar=UInt8('.'), trimtrailingzeros=false)
-    Ryu.writefixed(buf::Vector{UInt8}, pos::Int, x, args...)
+    Ryu.writefixed(buf::AbstractVector{UInt8}, pos::Int, x, args...)
 
 Convert a float value `x` into a "fixed" size decimal string of the provided precision.
 This function allows achieving the `%f` printf format.
@@ -64,7 +74,7 @@ Various options for the output format include:
   * `hash`: whether the decimal point should be written, even if no additional digits are needed for precision
   * `precision`: minimum number of significant digits to be included in the decimal string; extra `'0'` characters will be added for padding if necessary
   * `decchar`: decimal point character to be used
-  * `trimtrailingzeros`: whether trailing zeros should be removed
+  * `trimtrailingzeros`: whether trailing zeros of fractional part should be removed
 """
 function writefixed(x::T,
     precision::Integer,
@@ -80,7 +90,7 @@ end
 
 """
     Ryu.writeexp(x, precision, plus=false, space=false, hash=false, expchar=UInt8('e'), decchar=UInt8('.'), trimtrailingzeros=false)
-    Ryu.writeexp(buf::Vector{UInt8}, pos::Int, x, args...)
+    Ryu.writeexp(buf::AbstractVector{UInt8}, pos::Int, x, args...)
 
 Convert a float value `x` into a scientific notation decimal string.
 This function allows achieving the `%e` printf format.
@@ -110,16 +120,16 @@ end
 
 function Base.show(io::IO, x::T, forceuntyped::Bool=false, fromprint::Bool=false) where {T <: Base.IEEEFloat}
     compact = get(io, :compact, false)::Bool
-    buf = Base.StringVector(neededdigits(T))
-    typed = !forceuntyped && !compact && get(io, :typeinfo, Any) != typeof(x)
+    buf = Memory{UInt8}(undef, neededfloatdigits(T))
+    typed = !forceuntyped && !compact && Base.nonnothing_nonmissing_typeinfo(io) !== typeof(x)
     pos = writeshortest(buf, 1, x, false, false, true, -1,
         (x isa Float32 && !fromprint) ? UInt8('f') : UInt8('e'), false, UInt8('.'), typed, compact)
-    write(io, resize!(buf, pos - 1))
+    write(io, view(buf, 1:pos - 1))
     return
 end
 
 function Base.string(x::T) where {T <: Base.IEEEFloat}
-    buf = Base.StringVector(neededdigits(T))
+    buf = Base.StringVector(neededfloatdigits(T))
     pos = writeshortest(buf, 1, x, false, false, true, -1,
         UInt8('e'), false, UInt8('.'), false, false)
     return String(resize!(buf, pos - 1))

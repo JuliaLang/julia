@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Random, Serialization, Base64
+using Base.ScopedValues: with
 
 # Check that serializer hasn't gone out-of-frame
 @test Serialization.sertag(Symbol) == 1
@@ -130,7 +131,7 @@ create_serialization_stream() do s # user-defined module
     modtype = eval(Meta.parse("$(modstring)"))
     serialize(s, modtype)
     seek(s, 0)
-    @test deserialize(s) === modtype
+    @test invokelatest(deserialize, s) === modtype
 end
 
 # DataType
@@ -151,7 +152,7 @@ create_serialization_stream() do s # user-defined type
     utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
-    @test deserialize(s) === utype
+    @test invokelatest(deserialize, s) === utype
 end
 
 create_serialization_stream() do s # user-defined type
@@ -160,7 +161,7 @@ create_serialization_stream() do s # user-defined type
     utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
-    @test deserialize(s) === utype
+    @test invokelatest(deserialize, s) === utype
 end
 
 create_serialization_stream() do s # user-defined type
@@ -169,7 +170,7 @@ create_serialization_stream() do s # user-defined type
     utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
-    @test deserialize(s) == utype
+    @test invokelatest(deserialize, s) == utype
 end
 
 create_serialization_stream() do s # immutable struct with 1 field
@@ -178,7 +179,7 @@ create_serialization_stream() do s # immutable struct with 1 field
     utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
-    @test deserialize(s) == utype
+    @test invokelatest(deserialize, s) == utype
 end
 
 create_serialization_stream() do s # immutable struct with 2 field
@@ -187,7 +188,7 @@ create_serialization_stream() do s # immutable struct with 2 field
     utval = eval(Meta.parse("$(usertype)(1,2)"))
     serialize(s, utval)
     seek(s, 0)
-    @test deserialize(s) === utval
+    @test invokelatest(deserialize, s) === utval
 end
 
 create_serialization_stream() do s # immutable struct with 3 field
@@ -196,7 +197,7 @@ create_serialization_stream() do s # immutable struct with 3 field
     utval = eval(Meta.parse("$(usertype)(1,2,3)"))
     serialize(s, utval)
     seek(s, 0)
-    @test deserialize(s) === utval
+    @test invokelatest(deserialize, s) === utval
 end
 
 create_serialization_stream() do s # immutable struct with 4 field
@@ -205,7 +206,7 @@ create_serialization_stream() do s # immutable struct with 4 field
     utval = eval(Meta.parse("$(usertype)(1,2,3,4)"))
     serialize(s, utval)
     seek(s, 0)
-    @test deserialize(s) === utval
+    @test invokelatest(deserialize, s) === utval
 end
 
 # Expression
@@ -317,18 +318,23 @@ main_ex = quote
     using Serialization
     $create_serialization_stream() do s
         local g() = :magic_token_anon_fun_test
+        local gkw(; kw=:thekw) = kw
         serialize(s, g)
         serialize(s, g)
+        serialize(s, gkw)
 
         seekstart(s)
         ds = Serializer(s)
         local g2 = deserialize(ds)
-        Base.invokelatest() do
-            $Test.@test g2 !== g
-            $Test.@test g2() == :magic_token_anon_fun_test
-            $Test.@test g2() == :magic_token_anon_fun_test
-            $Test.@test deserialize(ds) === g2
-        end
+        @test g2 !== g
+        $Test.@test Base.invokelatest(g2) === :magic_token_anon_fun_test
+        $Test.@test Base.invokelatest(g2) === :magic_token_anon_fun_test
+        deserialize(ds) === g2
+
+        local gkw2 = deserialize(s)
+        $Test.@test gkw2 !== gkw
+        $Test.@test Base.invokelatest(gkw2) === :thekw
+        $Test.@test Base.invokelatest(gkw2, kw="kwtest") === "kwtest"
 
         # issue #21793
         y = x -> (() -> x)
@@ -336,10 +342,10 @@ main_ex = quote
         serialize(s, y)
         seekstart(s)
         y2 = deserialize(s)
-        Base.invokelatest() do
+        $Test.@test Base.invokelatest() do
             x2 = y2(2)
-            $Test.@test x2() == 2
-        end
+            x2()
+        end === 2
     end
 end
 # This needs to be run on `Main` since the serializer treats it differently.
@@ -354,7 +360,7 @@ create_serialization_stream() do s # user-defined type array
     seek(s, 0)
     r = deserialize(s)
     @test r.storage[:v] == 2
-    @test r.state == :done
+    @test r.state === :done
     @test r.exception === nothing
 end
 
@@ -366,7 +372,7 @@ create_serialization_stream() do s # user-defined type array
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
-    @test r.state == :failed
+    @test r.state === :failed
 end
 
 # corner case: undefined inside immutable struct
@@ -572,7 +578,7 @@ let io = IOBuffer()
     serialize(io, f)
     seekstart(io)
     f2 = deserialize(io)
-    @test f2(1) === 1f0
+    @test invokelatest(f2, 1) === 1f0
 end
 
 # using a filename; #30151
@@ -590,7 +596,7 @@ let f_data
         f_data = "N0pMBwAAAAA0MxMAAAAAAAAAAAEFIyM1IzYiAAAAABBYH04BBE1haW6bRCIAAAAAIgAAAABNTEy+AQIjNRUAI78jAQAAAAAAAAAfTgEETWFpbkQBAiM1AQdSRVBMWzJdvxBTH04BBE1haW6bRAMAAAAzLAAARkYiAAAAAE7BTBsVRsEWA1YkH04BBE1haW5EAQEqwCXAFgNWJB9OAQRNYWluRJ0ovyXBFgFVKMAVAAbBAQAAAAEAAAABAAAATsEVRr80EAEMTGluZUluZm9Ob2RlH04BBE1haW6bRB9OAQRNYWluRAECIzUBB1JFUExbMl2/vhW+FcEAAAAVRsGifX5MTExMTsEp"
     end
     f = deserialize(IOBuffer(base64decode(f_data)))
-    @test f(10,3) == 23
+    @test invokelatest(f, 10,3) == 23
 end
 
 # issue #33466, IdDict
@@ -622,5 +628,48 @@ end
         f = deserialize(b)
         # this should not crash
         @test_broken f(1) == 2
+    end
+end
+
+let c1 = Threads.Condition()
+    c2 = Threads.Condition(c1.lock)
+    lock(c2)
+    t = @task nothing
+    Base._wait2(c1, t)
+    c3, c4 = deserialize(IOBuffer(sprint(serialize, [c1, c2])))::Vector{Threads.Condition}
+    @test c3.lock === c4.lock
+    @test islocked(c1)
+    @test !islocked(c3)
+    @test !isempty(c1.waitq)
+    @test isempty(c2.waitq)
+    @test isempty(c3.waitq)
+    @test isempty(c4.waitq)
+    notify(c1)
+    unlock(c2)
+    wait(t)
+end
+
+@testset "LazyString" begin
+    l1 = lazy"a $1 b $2"
+    l2 = deserialize(IOBuffer(sprint(serialize, l1)))
+    @test l2.str === l1.str
+    @test l2 == l1
+    @test l2.parts === ()
+end
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(Serialization)
+    @test_broken isempty(undoc)
+    @test undoc == [:AbstractSerializer, :Serializer]
+end
+
+# test method definitions from v1.11
+if Int === Int64
+    let f_data = "N0pMGgQAAAAWAQEFdGh1bmsbFUbnFgEBBXRodW5rGxVG4DoWAQEGbWV0aG9kAQtmMTExX3RvXzExMhUABuABAAAA4BUAB+AAAAAAThVG4DQQAQxMaW5lSW5mb05vZGUfTptEH04BBE1haW5EAQ90b3AtbGV2ZWwgc2NvcGUBBG5vbmW+vhUAAd8V305GTk4JAQAAAAAAAAAJ//////////9MTExMAwADAAUAAAX//xYBAQZtZXRob2QsBwAWAlYkH06bRAEGVHlwZW9mLAcAFgNWJB9Om0QBBHN2ZWMo4iQfTptETxYBViQfTptEAQRzdmVjFgRWJB9Om0QBBHN2ZWMo4yjkGhfgAQRub25lFgMBBm1ldGhvZCwHACjlGxVG5AEBXhYDViQfTptElyQfTp5EAQNWYWzhFgFWKOEWBFYkH06eRAELbGl0ZXJhbF9wb3co4CXhKOI6KOMVAAbkAQAAAAEAAAABAAAAAQAAAAAAAADkFQAH5AAAAAAAAAAAAAAAAAAAAAAAAAAAThVG4DQsCwAfTgEETWFpbkQBBG5vbmUBBG5vbmW/vhUAAeGifRXhAAhORk5OCQEAAAAAAAAACf//////////TExMTAMAAwAFAAAF//86ThUABucBAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAAAAAOcVAAfnAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABOFUbgNCwLAB9OAQRNYWluRCwNAAEEbm9uZb6+FQAB3xXfTkZOTgkBAAAAAAAAAAn//////////0xMTEwDAAMABQAABf//"
+        @eval Main function f111_to_112 end
+        Core.eval(Main, with(Serialization.current_module => Main) do
+                 deserialize(IOBuffer(base64decode(f_data)))
+             end)
+        @test @invokelatest(Main.f111_to_112(16)) == 256
     end
 end

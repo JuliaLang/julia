@@ -35,11 +35,11 @@ JL_FEATURE_DEF(fp16fml, 23, 0) // HWCAP_ASIMDFHM, ARMv8.2-FHM
 JL_FEATURE_DEF(dit, 24, 0) // HWCAP_DIT, ARMv8.4-DIT. Required in ARMv8.4
 // JL_FEATURE_DEF(uscat, 25, UINT32_MAX) // HWCAP_USCAT, ARMv8.4-LSE
 JL_FEATURE_DEF_NAME(rcpc_immo, 26, 0, "rcpc-immo") // HWCAP_ILRCPC, ARMv8.4-RCPC. Required in ARMv8.4
-JL_FEATURE_DEF(fmi, 27, 0) // HWCAP_FLAGM, ARMv8.4-CondM. Requird in ARMv8.4
+JL_FEATURE_DEF(flagm, 27, 120000) // HWCAP_FLAGM, ARMv8.4-CondM. Required in ARMv8.4
 JL_FEATURE_DEF(ssbs, 28, 0) // HWCAP_SSBS
 JL_FEATURE_DEF(sb, 29, 0) // HWCAP_SB. Required in ARMv8.5
-JL_FEATURE_DEF(pa, 30, 0) // HWCAP_PACA
-// JL_FEATURE_DEF(pa, 31, 0) // HWCAP_PACG. Merged with `pa`.
+JL_FEATURE_DEF(pauth, 30, 120000) // HWCAP_PACA
+// JL_FEATURE_DEF(pa, 31, 0) // HWCAP_PACG. Merged with `pauth`.
 
 // hwcap2
 JL_FEATURE_DEF(ccdp, 32 + 0, 0) // HWCAP2_DCPODP, ARMv8.2-DCCVADP. Required in ARMv8.5

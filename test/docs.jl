@@ -1,6 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Base.Docs: meta, @var, DocStr, parsedoc
+import Base.Docs: meta, DocStr, parsedoc, bindingexpr, namify
+
+macro var(x) # just for testing bindingexpr/nameify more conveniently
+    esc(bindingexpr(namify(x)))
+end
+
+# check that @doc can work before REPL is loaded
+@test !startswith(read(`$(Base.julia_cmd()) -E '@doc sin'`, String), "nothing")
+@test !startswith(read(`$(Base.julia_cmd()) -E '@doc @time'`, String), "nothing")
 
 using Markdown
 using REPL
@@ -12,26 +20,19 @@ using InteractiveUtils: apropos
 include("testenv.jl")
 
 # Test helpers.
-function docstrings_equal(d1, d2)
+function docstrings_equal(d1, d2; debug=true)
     io1 = IOBuffer()
     io2 = IOBuffer()
     show(io1, MIME"text/markdown"(), d1)
     show(io2, MIME"text/markdown"(), d2)
     s1 = String(take!(io1))
     s2 = String(take!(io2))
-    #if s1 != s2 # for debugging
-    #    e1 = eachline(IOBuffer(s1))
-    #    e2 = eachline(IOBuffer(s2))
-    #    for (l1, l2) in zip(e1, e2)
-    #        l1 == l2 || println(l1, "\n", l2, "\n")
-    #    end
-    #    for l1 in e1
-    #        println(l1, "\n[missing]\n")
-    #    end
-    #    for l2 in e2
-    #        println("[missing]\n", l2, "\n")
-    #    end
-    #end
+    if debug && s1 != s2
+        print(s1)
+        println("--------------------------------------------------------------------------------")
+        print(s2)
+        println("================================================================================")
+    end
     return s1 == s2
 end
 docstrings_equal(d1::DocStr, d2) = docstrings_equal(parsedoc(d1), d2)
@@ -61,6 +62,8 @@ macro macro_doctest() end
 @test (@eval @doc $(Meta.parse("``"))) == (@doc @cmd)
 @test (@eval @doc $(Meta.parse("123456789012345678901234567890"))) == (@doc @int128_str)
 @test (@eval @doc $(Meta.parse("1234567890123456789012345678901234567890"))) == (@doc @big_str)
+# Test that @doc doesn't crash on empty tuple expression (issue #XXXXX)
+@test (@doc :()) == (@doc Expr)
 
 # test that random stuff interpolated into docstrings doesn't break search or other methods here
 @doc doc"""
@@ -75,6 +78,37 @@ $$latex literal$$
 ### header!
 """
 function break_me_docs end
+
+
+# `hasdoc` returns `true` on a name with a docstring.
+@test Docs.hasdoc(Base, :map)
+# `hasdoc` returns `false` on a name without a docstring.
+@test !isdefined(Base, :_this_name_doesnt_exist_) && !Docs.hasdoc(Base, :_this_name_doesnt_exist_)
+@test isdefined(Base, :_typed_vcat) && !Docs.hasdoc(Base, :_typed_vcat)
+
+"This module has names without documentation."
+module _ModuleWithUndocumentedNames
+export f
+public ⨳, @foo
+f() = 1
+g() = 2
+⨳(a,b) = a * b
+macro foo(); nothing; end
+⊕(a,b) = a + b
+end
+
+"This module has some documentation."
+module _ModuleWithSomeDocumentedNames
+export f
+"f() is 1."
+f() = 1
+g() = 2
+end
+
+@test Docs.undocumented_names(_ModuleWithUndocumentedNames) == [Symbol("@foo"), :f, :⨳]
+@test isempty(Docs.undocumented_names(_ModuleWithSomeDocumentedNames))
+@test Docs.undocumented_names(_ModuleWithSomeDocumentedNames; private=true) == [:g]
+
 
 # issue #11548
 
@@ -91,12 +125,12 @@ end
 # issue #38819
 
 module NoDocStrings end
-@test meta(NoDocStrings) === getfield(NoDocStrings, Base.Docs.META)
+@test meta(NoDocStrings) === invokelatest(getglobal, NoDocStrings, Base.Docs.META)
 
 # General tests for docstrings.
 
 const LINE_NUMBER = @__LINE__() + 1
-"DocsTest"
+"DocsTest, evaluating $(K)"     # test that module docstring is evaluated within module
 module DocsTest
 
 using Markdown
@@ -177,7 +211,7 @@ t(::AbstractString)
 "t-2"
 t(::Int, ::Any)
 "t-3"
-t{S <: Integer}(::S)
+t(::S) where {S <: Integer}
 
 # Docstrings to parametric methods after definition using where syntax (#32960):
 tw(x::T) where T = nothing
@@ -241,7 +275,7 @@ fnospecialize(@nospecialize(x::AbstractArray)) = 2
 end
 
 let md = meta(DocsTest)[@var(DocsTest)]
-    @test docstrings_equal(md.docs[Union{}], doc"DocsTest")
+    @test docstrings_equal(md.docs[Union{}], doc"DocsTest, evaluating K")
     # Check that plain docstrings store a module reference.
     # https://github.com/JuliaLang/julia/pull/13017#issuecomment-138618663
     @test md.docs[Union{}].data[:module] == DocsTest
@@ -357,7 +391,7 @@ let d1 = @doc(DocsTest.t(::Int, ::Any)),
     @test docstrings_equal(d1,d2)
 end
 
-let d1 = @doc(DocsTest.t{S <: Integer}(::S)),
+let d1 = @doc(DocsTest.t(::S) where {S <: Integer}),
     d2 = doc"t-3"
     @test docstrings_equal(d1,d2)
 end
@@ -547,8 +581,8 @@ end
 
 let T = meta(DocVars)[@var(DocVars.T)],
     S = meta(DocVars)[@var(DocVars.S)],
-    Tname = Markdown.parse("```\n$(curmod_prefix)DocVars.T\n```"),
-    Sname = Markdown.parse("```\n$(curmod_prefix)DocVars.S\n```")
+    Tname = Markdown.parse("```julia\n$(curmod_str).DocVars.T\n```"),
+    Sname = Markdown.parse("```julia\n$(curmod_str).DocVars.S\n```")
     # Splicing the expression directly doesn't work
     @test docstrings_equal(T.docs[Union{}],
         doc"""
@@ -630,6 +664,7 @@ end
 
 let d = @doc(I15424.LazyHelp)
     @test repr("text/plain", d) == "LazyHelp\nLazyHelp(text)\n"
+    # (no internal warning is inserted for non-markdown content)
 end
 
 # Issue #13385.
@@ -649,15 +684,17 @@ macro m1_11993()
 end
 
 macro m2_11993()
-    Symbol("@m1_11993")
+    esc(Symbol("@m1_11993"))
 end
 
 @doc "This should document @m1... since its the result of expansion" @m2_11993
 @test (@doc @m1_11993) !== nothing
 let d = (@doc :@m2_11993),
-    macro_doc = Markdown.parse("`$(curmod_prefix)@m2_11993` is a macro.")
+    varstr = "$(curmod_prefix)@m2_11993"
+    docstr = Markdown.Code("", "$(curmod_str).@m2_11993")
+    macro_doc = Markdown.parse("`$varstr` is a macro.")
     @test docstring_startswith(d, doc"""
-    No documentation found.
+    No documentation found for private binding $docstr.
 
     $macro_doc""")
 end
@@ -723,7 +760,7 @@ f12593_2() = 1
 
 # crude test to make sure we sort docstring output by method specificity
 @test !docstrings_equal(Docs.doc(getindex, Tuple{Dict{Int,Int},Int}),
-                        Docs.doc(getindex, Tuple{Type{Int64},Int}))
+                        Docs.doc(getindex, Tuple{Type{Int64},Int}); debug=false)
 
 # test that macro documentation works
 @test (@repl :@assert) !== nothing
@@ -794,7 +831,7 @@ end
 # Issue #13905.
 let err = try; @macroexpand(@doc "" f() = @x); false; catch ex; ex; end
     err::UndefVarError
-    @test err.var == Symbol("@x")
+    @test err.var === Symbol("@x")
  end
 
 
@@ -856,9 +893,9 @@ undocumented(x,y) = 3
 end # module
 
 doc_str = Markdown.parse("""
-No docstring or readme file found for module `$(curmod_prefix)Undocumented`.
+No docstring or readme file found for internal module `$(curmod_str).Undocumented`.
 
-# Exported names
+# Public names
 
 `A`, `B`, `C`, `at0`, `pt2`
 """)
@@ -867,67 +904,67 @@ No docstring or readme file found for module `$(curmod_prefix)Undocumented`.
 doc_str = Markdown.parse("""
 No documentation found.
 
-Binding `$(curmod_prefix)Undocumented.bindingdoesnotexist` does not exist.
+Binding `$(curmod_str).Undocumented.bindingdoesnotexist` does not exist.
 """)
 @test docstrings_equal(@doc(Undocumented.bindingdoesnotexist), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for public binding `$(curmod_str).Undocumented.A`.
 
 # Summary
 ```
-abstract type $(curmod_prefix)Undocumented.A
+abstract type $(curmod_str).Undocumented.A
 ```
 
 # Subtypes
 ```
-$(curmod_prefix)Undocumented.B
-$(curmod_prefix)Undocumented.C
+$(curmod_str).Undocumented.B
+$(curmod_str).Undocumented.C
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.A), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for public binding `$(curmod_str).Undocumented.B`.
 
 # Summary
 ```
-abstract type $(curmod_prefix)Undocumented.B
+abstract type $(curmod_str).Undocumented.B
 ```
 
 # Subtypes
 ```
-$(curmod_prefix)Undocumented.D
+$(curmod_str).Undocumented.D
 ```
 
 # Supertype Hierarchy
 ```
-$(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A <: Any
+$(curmod_str).Undocumented.B <: $(curmod_str).Undocumented.A <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.B), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for public binding `$(curmod_str).Undocumented.C`.
 
 # Summary
 ```
-mutable struct $(curmod_prefix)Undocumented.C
+mutable struct $(curmod_str).Undocumented.C
 ```
 
 # Supertype Hierarchy
 ```
-$(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A <: Any
+$(curmod_str).Undocumented.C <: $(curmod_str).Undocumented.A <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.C), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private binding `$(curmod_str).Undocumented.D`.
 
 # Summary
 ```
-struct $(curmod_prefix)Undocumented.D
+struct $(curmod_str).Undocumented.D
 ```
 
 # Fields
@@ -939,219 +976,220 @@ three :: Float64
 
 # Supertype Hierarchy
 ```
-$(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A <: Any
+$(curmod_str).Undocumented.D <: $(curmod_str).Undocumented.B <: $(curmod_str).Undocumented.A <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.D), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for public binding `$(curmod_str).Undocumented.at0`.
 
 # Summary
 
 ```
-abstract type $(curmod_prefix)Undocumented.at0{T<:Number, N}
+abstract type $(curmod_str).Undocumented.at0{T<:Number, N}
 ```
 
 # Subtypes
 
 ```
-$(curmod_prefix)Undocumented.at1{Integer<:T<:Number, N}
-$(curmod_prefix)Undocumented.pt2{T<:Number, N, A>:Integer}
-$(curmod_prefix)Undocumented.st3{T<:Integer, N}
-$(curmod_prefix)Undocumented.st4{T<:Number, N}
+$(curmod_str).Undocumented.at1{Integer<:T<:Number, N}
+$(curmod_str).Undocumented.pt2{T<:Number, N, A>:Integer}
+$(curmod_str).Undocumented.st3{T<:Integer, N}
+$(curmod_str).Undocumented.st4{T<:Number, N}
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.at0), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private binding `$(curmod_str).Undocumented.at1`.
 
 # Summary
 
 ```
-abstract type $(curmod_prefix)Undocumented.at1{T>:Integer, N}
+abstract type $(curmod_str).Undocumented.at1{T>:Integer, N}
 ```
 
 # Subtypes
 
 ```
-$(curmod_prefix)Undocumented.mt6{Integer, N}
+$(curmod_str).Undocumented.mt6{Integer, N}
+$(curmod_str).Undocumented.st5{T>:Integer, N}
 ```
 
 # Supertype Hierarchy
 ```
-$(curmod_prefix)Undocumented.at1{T>:Integer, N} <: $(curmod_prefix)Undocumented.at0{T>:Integer, N} <: Any
+$(curmod_str).Undocumented.at1{T>:Integer, N} <: $(curmod_str).Undocumented.at0{T>:Integer, N} <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.at1), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private binding `$(curmod_str).Undocumented.at_`.
 
 # Summary
 
 ```
-abstract type $(curmod_prefix)Undocumented.at0{Int64, N}
+abstract type $(curmod_str).Undocumented.at0{Int64, N}
 ```
 
 # Subtypes
 
 ```
-$(curmod_prefix)Undocumented.pt2{Int64, N, A>:Integer}
-$(curmod_prefix)Undocumented.st3{Int64, N}
-$(curmod_prefix)Undocumented.st4{Int64, N}
+$(curmod_str).Undocumented.pt2{Int64, N, A>:Integer}
+$(curmod_str).Undocumented.st3{Int64, N}
+$(curmod_str).Undocumented.st4{Int64, N}
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.at_), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for public binding `$(curmod_str).Undocumented.pt2`.
 
 # Summary
 
 ```
-primitive type $(curmod_prefix)Undocumented.pt2{T<:Number, N, A>:Integer}
+primitive type $(curmod_str).Undocumented.pt2{T<:Number, N, A>:Integer}
 ```
 
 # Supertype Hierarchy
 
 ```
-$(curmod_prefix)Undocumented.pt2{T<:Number, N, A>:Integer} <: $(curmod_prefix)Undocumented.at0{T<:Number, N} <: Any
+$(curmod_str).Undocumented.pt2{T<:Number, N, A>:Integer} <: $(curmod_str).Undocumented.at0{T<:Number, N} <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.pt2), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private binding `$(curmod_str).Undocumented.st3`.
 
 # Summary
 
 ```
-struct $(curmod_prefix)Undocumented.st3{T<:Integer, N}
+struct $(curmod_str).Undocumented.st3{T<:Integer, N}
 ```
 
 # Fields
 ```
-a :: Tuple{Vararg{T<:Integer, N}}
+a :: NTuple{N, T<:Integer}
 b :: Array{Int64, N}
 c :: Int64
 ```
 
 # Supertype Hierarchy
 ```
-$(curmod_prefix)Undocumented.st3{T<:Integer, N} <: $(curmod_prefix)Undocumented.at0{T<:Integer, N} <: Any
+$(curmod_str).Undocumented.st3{T<:Integer, N} <: $(curmod_str).Undocumented.at0{T<:Integer, N} <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.st3), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private binding `$(curmod_str).Undocumented.st4`.
 
 # Summary
 
 ```
-struct $(curmod_prefix)Undocumented.st4{T, N}
+struct $(curmod_str).Undocumented.st4{T, N}
 ```
 
 # Fields
 ```
 a :: T
-b :: Tuple{Vararg{T, N}}
+b :: NTuple{N, T}
 ```
 
 # Supertype Hierarchy
 ```
-$(curmod_prefix)Undocumented.st4{T, N} <: $(curmod_prefix)Undocumented.at0{T, N} <: Any
+$(curmod_str).Undocumented.st4{T, N} <: $(curmod_str).Undocumented.at0{T, N} <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.st4), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private binding `$(curmod_str).Undocumented.st5`.
 
 # Summary
 
 ```
-struct $(curmod_prefix)Undocumented.st5{T>:Int64, N}
+struct $(curmod_str).Undocumented.st5{T>:Int64, N}
 ```
 
 # Fields
 ```
-c :: $(curmod_prefix)Undocumented.st3{T>:Int64, N}
+c :: $(curmod_str).Undocumented.st3{T>:Int64, N}
 ```
 
 # Supertype Hierarchy
 ```
-$(curmod_prefix)Undocumented.st5{T>:Int64, N} <: $(curmod_prefix)Undocumented.at1{T>:Int64, N} <: $(curmod_prefix)Undocumented.at0{T>:Int64, N} <: Any
+$(curmod_str).Undocumented.st5{T>:Int64, N} <: $(curmod_str).Undocumented.at1{T>:Int64, N} <: $(curmod_str).Undocumented.at0{T>:Int64, N} <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.st5), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private binding `$(curmod_str).Undocumented.mt6`.
 
 # Summary
 
 ```
-mutable struct $(curmod_prefix)Undocumented.mt6{T<:Integer, N}
+mutable struct $(curmod_str).Undocumented.mt6{T<:Integer, N}
 ```
 
 # Fields
 ```
-d :: $(curmod_prefix)Undocumented.st5{T<:Integer, N}
+d :: $(curmod_str).Undocumented.st5{T<:Integer, N}
 ```
 
 # Supertype Hierarchy
 ```
-$(curmod_prefix)Undocumented.mt6{T<:Integer, N} <: $(curmod_prefix)Undocumented.at1{T<:Integer, N} <: $(curmod_prefix)Undocumented.at0{T<:Integer, N} <: Any
+$(curmod_str).Undocumented.mt6{T<:Integer, N} <: $(curmod_str).Undocumented.at1{T<:Integer, N} <: $(curmod_str).Undocumented.at0{T<:Integer, N} <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.mt6), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private binding `$(curmod_str).Undocumented.ut7`.
 
 # Summary
 
-`$(curmod_prefix)Undocumented.ut7` is of type `Union`.
+`$(curmod_str).Undocumented.ut7` is of type `Union`.
 
 # Union Composed of Types
 
- - `$(curmod_prefix)Undocumented.mt6`
- - `$(curmod_prefix)Undocumented.st5`
+ - `$(curmod_str).Undocumented.mt6`
+ - `$(curmod_str).Undocumented.st5`
 """)
 @test docstrings_equal(@doc(Undocumented.ut7), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private binding `$(curmod_str).Undocumented.ut8`.
 
 # Summary
 
-`$(curmod_prefix)Undocumented.ut8` is of type `Union`.
+`$(curmod_str).Undocumented.ut8` is of type `Union`.
 
 # Union Composed of Types
 
- - `$(curmod_prefix)Undocumented.at1`
- - `$(curmod_prefix)Undocumented.pt2`
- - `$(curmod_prefix)Undocumented.st3`
- - `$(curmod_prefix)Undocumented.st4`
+ - `$(curmod_str).Undocumented.at1`
+ - `$(curmod_str).Undocumented.pt2`
+ - `$(curmod_str).Undocumented.st3`
+ - `$(curmod_str).Undocumented.st4`
 """)
 @test docstrings_equal(@doc(Undocumented.ut8), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private binding `$(curmod_str).Undocumented.ut9`.
 
 # Summary
 
-`$(curmod_prefix)Undocumented.ut9` is of type `UnionAll`.
+`$(curmod_str).Undocumented.ut9` is of type `UnionAll`.
 
 # Union Composed of Types
 
- - `$(curmod_prefix)Undocumented.at1{T} where T`
- - `$(curmod_prefix)Undocumented.pt2{T} where T`
- - `$(curmod_prefix)Undocumented.st3{T} where T`
- - `$(curmod_prefix)Undocumented.st4`
+ - `$(curmod_str).Undocumented.at1{T} where T`
+ - `$(curmod_str).Undocumented.pt2{T} where T`
+ - `$(curmod_str).Undocumented.st3{T} where T`
+ - `$(curmod_str).Undocumented.st4`
 """)
 @test docstrings_equal(@doc(Undocumented.ut9), doc"$doc_str")
 
@@ -1159,9 +1197,9 @@ let d = @doc(Undocumented.f)
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
     @test startswith(String(take!(io)),"""
-    No documentation found.
+    No documentation found for private binding `$(curmod_str).Undocumented.f`.
 
-    `$(curmod_prefix)Undocumented.f` is a `Function`.
+    `$(curmod_str).Undocumented.f` is a `Function`.
     """)
 end
 
@@ -1169,9 +1207,9 @@ let d = @doc(Undocumented.undocumented)
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
     @test startswith(String(take!(io)), """
-    No documentation found.
+    No documentation found for private binding `$(curmod_str).Undocumented.undocumented`.
 
-    `$(curmod_prefix)Undocumented.undocumented` is a `Function`.
+    `$(curmod_str).Undocumented.undocumented` is a `Function`.
     """)
 end
 
@@ -1207,13 +1245,13 @@ end
 
 # Bindings.
 
-import Base.Docs: @var, Binding, defined
+import Base.Docs: Binding, defined
 
-let x = Binding(Base, Symbol("@time"))
+let x = Binding(Base, Symbol("@inline"))
     @test defined(x) == true
-    @test @var(@time) == x
-    @test @var(Base.@time) == x
-    @test @var(Base.Iterators.@time) == x
+    @test @var(@inline) == x
+    @test @var(Base.@inline) == x
+    @test @var(Base.Iterators.@inline) == x
 end
 
 let x = Binding(Iterators, :enumerate)
@@ -1271,6 +1309,8 @@ end
 
 # issue #36378 (\u1e8b and x\u307 are the fully composed and decomposed forms of ẋ, respectively)
 @test sprint(repl_latex, "\u1e8b") == "\"x\u307\" can be typed by x\\dot<tab>\n\n"
+# issue 39814
+@test sprint(repl_latex, "\u2209") == "\"\u2209\" can be typed by \\notin<tab>\n\n"
 
 # issue #15684
 begin
@@ -1300,9 +1340,9 @@ dynamic_test.x = "test 2"
 function striptrimdocs(expr)
     if Meta.isexpr(expr, :call)
         fex = expr.args[1]
-        if Meta.isexpr(fex, :.) && fex.args[1] == :REPL
+        if Meta.isexpr(fex, :.) && fex.args[1] === :REPL
             fmex = fex.args[2]
-            if isa(fmex, QuoteNode) && fmex.value == :trimdocs
+            if isa(fmex, QuoteNode) && fmex.value === :trimdocs
                 expr = expr.args[2]
             end
         end
@@ -1313,30 +1353,30 @@ end
 let dt1 = striptrimdocs(_repl(:(dynamic_test(1.0))))
     @test dt1 isa Expr
     @test dt1.args[1] isa Expr
-    @test dt1.args[1].head === :macrocall
-    @test dt1.args[1].args[1] == Symbol("@doc")
-    @test dt1.args[1].args[3] == :(dynamic_test(::typeof(1.0)))
+    @test dt1.args[1].head === :call
+    @test dt1.args[1].args[1] === Base.Docs.doc
+    @test dt1.args[1].args[3] == :(Union{Tuple{typeof(1.0)}})
 end
 let dt2 = striptrimdocs(_repl(:(dynamic_test(::String))))
     @test dt2 isa Expr
     @test dt2.args[1] isa Expr
-    @test dt2.args[1].head === :macrocall
-    @test dt2.args[1].args[1] == Symbol("@doc")
-    @test dt2.args[1].args[3] == :(dynamic_test(::String))
+    @test dt2.args[1].head === :call
+    @test dt2.args[1].args[1] === Base.Docs.doc
+    @test dt2.args[1].args[3] == :(Union{Tuple{String}})
 end
 let dt3 = striptrimdocs(_repl(:(dynamic_test(a))))
     @test dt3 isa Expr
     @test dt3.args[1] isa Expr
-    @test dt3.args[1].head === :macrocall
-    @test dt3.args[1].args[1] == Symbol("@doc")
-    @test dt3.args[1].args[3].args[2].head == :(::) # can't test equality due to line numbers
+    @test dt3.args[1].head === :call
+    @test dt3.args[1].args[1] === Base.Docs.doc
+    @test dt3.args[1].args[3].args[2].head === :curly # can't test equality due to line numbers
 end
 let dt4 = striptrimdocs(_repl(:(dynamic_test(1.0,u=2.0))))
     @test dt4 isa Expr
     @test dt4.args[1] isa Expr
-    @test dt4.args[1].head === :macrocall
-    @test dt4.args[1].args[1] == Symbol("@doc")
-    @test dt4.args[1].args[3] == :(dynamic_test(::typeof(1.0); u::typeof(2.0)=2.0))
+    @test dt4.args[1].head === :call
+    @test dt4.args[1].args[1] === Base.Docs.doc
+    @test dt4.args[1].args[3] == :(Union{Tuple{typeof(1.0)}})
 end
 
 # Equality testing
@@ -1437,27 +1477,36 @@ end
 end
 
 struct t_docs_abc end
-@test "t_docs_abc" in accessible(@__MODULE__)
+@test "t_docs_abc" in string.(accessible(@__MODULE__))
 
-# Call overloading issue #20087
+# Call overloading issues #20087 and #44889
 """
 Docs for `MyFunc` struct.
 """
-mutable struct MyFunc
-    x
-end
+mutable struct MyFunc x end
+"""
+Docs for `MyParametricFunc{T}` struct.
+"""
+struct MyParametricFunc{T} end
 
 """
 Docs for calling `f::MyFunc`.
 """
-function (f::MyFunc)(x)
-    f.x = x
-    return f
-end
+(f::MyFunc)(x) = f
 
-@test docstrings_equal(@doc(MyFunc(2)),
+"""
+Docs for calling `f::MyParametricFunc{T}`.
+"""
+(f::MyParametricFunc{T})(x) where T = f
+
+@test docstrings_equal(@doc((::MyFunc)(2)),
 doc"""
 Docs for calling `f::MyFunc`.
+""")
+
+@test docstrings_equal(@doc((::MyParametricFunc{Int})(44889)),
+doc"""
+Docs for calling `f::MyParametricFunc{T}`.
 """)
 
 struct A_20087 end
@@ -1477,7 +1526,7 @@ struct B_20087 end
 # issue #27832
 
 _last_atdoc = Core.atdoc
-Core.atdoc!(Core.Compiler.CoreDocs.docm)  # test bootstrap doc system
+Core.atdoc!(Base.CoreDocs.docm)  # test bootstrap doc system
 
 """
 """
@@ -1502,3 +1551,120 @@ end
 # Issue #13109
 eval(Expr(:block, Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), nothing, "...", Expr(:module, false, :MBareModuleEmpty, Expr(:block)))))
 @test docstrings_equal(@doc(MBareModuleEmpty), doc"...")
+
+# issue #41727
+"struct docstring"
+struct S41727
+    "x is $(2*2)"
+    x
+end
+@test S41727(1) isa S41727
+@test string(@repl S41727.x) == "x is 4\n"
+
+"ensure we can document ccallable functions"
+Base.@ccallable c51586_short()::Int = 2
+"ensure we can document ccallable functions"
+Base.@ccallable c51586_long()::Int = 3
+
+@test docstrings_equal(@doc(c51586_short()), doc"ensure we can document ccallable functions")
+@test docstrings_equal(@doc(c51586_long()), doc"ensure we can document ccallable functions")
+
+@testset "Docs docstrings" begin
+    undoc = Docs.undocumented_names(Docs)
+    @test isempty(undoc)
+end
+
+# Docing the macroception macro
+macro docmacroception()
+    Expr(:toplevel, macroexpand(__module__, :(@Base.__doc__ macro docmacrofoo() 1 end); recursive=false), :(@docmacrofoo))
+end
+
+"""
+This docmacroception has a docstring
+"""
+@docmacroception()
+
+@test Docs.hasdoc(@__MODULE__, :var"@docmacrofoo")
+
+# Test that @doc returns the value of the documented expression
+module DocReturnValue
+    using Test
+    # Test function definition returns the function
+    result = begin
+        "docstring for f"
+        function f end
+    end
+    @test result === f
+    # Test with regular function syntax
+    result2 = begin
+        "docstring for g"
+        g(x) = x + 1
+    end
+    @test result2 === g
+    # Test with struct definition
+    result3 = begin
+        "docstring for S"
+        struct S; x; end
+    end
+    @test result3 === nothing
+    # Test with const binding
+    result4 = begin
+        "docstring for K"
+        const K = 42
+    end
+    @test result4 === 42
+    # Test that documenting a global declaration returns nothing to avoid syntax errors
+    result5 = begin
+        "docstring for global x"
+        global x
+    end
+    @test result5 === nothing
+    @test Base.binding_module(DocReturnValue, :x) === DocReturnValue
+    # Test that assignment returns the RHS
+    result6 = begin
+        "docstring for global y"
+        global y = 4
+    end
+    @test result6 === 4
+    @test y === 4
+    # Test that assignment returns the RHS
+    result7 = begin
+        "docstring for const z"
+        const z = 5
+    end
+    @test result7 === z === 5
+    # Test module returns module
+    result8 = begin
+        "docstring for module A"
+        module A end
+    end
+    @test result8 === A
+    # Tests without definition effect
+    function t end
+    result9 = begin
+        "docstring for existing value t"
+        :t
+    end
+    @test result9 isa Base.Docs.Binding
+    macro s end
+    result10 = begin
+        "docstring for existing macro s"
+        :@s
+    end
+    @test result10 isa Base.Docs.Binding
+    function h end
+    result11 = begin
+        "docstring for existing function"
+        h()
+    end
+    @test result11 isa Base.Docs.Binding
+end
+
+# https://github.com/JuliaLang/julia/issues/59949
+struct Foo59949{T} end
+
+"""
+Bar59949{T}
+"""
+Bar59949{T} = Foo59949{T}
+@test docstrings_equal(@doc(Bar59949), doc"Bar59949{T}")

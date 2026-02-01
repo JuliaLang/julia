@@ -1,5 +1,3 @@
-set RootPath to POSIX path of (path to me)
-tell application id "com.apple.terminal"
-  do script ("exec '" & RootPath & "Contents/Resources/julia/bin/julia'")
-  activate
-end tell
+set RootPath to (path to me)
+set JuliaPath to POSIX path of ((RootPath as text) & "Contents:Resources:julia:bin:julia")
+do shell script "open -a Terminal '" & JuliaPath & "'"

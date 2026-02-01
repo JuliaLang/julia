@@ -27,15 +27,15 @@ function diff_tree(repo::GitRepo, tree::GitTree, pathspecs::AbstractString=""; c
     ensure_initialized()
     diff_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     if cached
-        @check ccall((:git_diff_tree_to_index, :libgit2), Cint,
+        @check ccall((:git_diff_tree_to_index, libgit2), Cint,
                      (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{DiffOptionsStruct}),
-                     diff_ptr_ptr, repo.ptr, tree.ptr, C_NULL, isempty(pathspecs) ? C_NULL : pathspecs)
+                     diff_ptr_ptr, repo, tree, C_NULL, isempty(pathspecs) ? C_NULL : pathspecs)
     else
-        @check ccall((:git_diff_tree_to_workdir_with_index, :libgit2), Cint,
+        @check ccall((:git_diff_tree_to_workdir_with_index, libgit2), Cint,
                      (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{DiffOptionsStruct}),
-                     diff_ptr_ptr, repo.ptr, tree.ptr, isempty(pathspecs) ? C_NULL : pathspecs)
+                     diff_ptr_ptr, repo, tree, isempty(pathspecs) ? C_NULL : pathspecs)
     end
-    return GitDiff(repo, diff_ptr_ptr[])
+    return GitDiff(diff_ptr_ptr[])
 end
 
 """
@@ -51,10 +51,10 @@ to compare a commit on another branch with the current latest commit on `master`
 function diff_tree(repo::GitRepo, oldtree::GitTree, newtree::GitTree)
     ensure_initialized()
     diff_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
-    @check ccall((:git_diff_tree_to_tree, :libgit2), Cint,
+    @check ccall((:git_diff_tree_to_tree, libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{DiffOptionsStruct}),
-                   diff_ptr_ptr, repo.ptr, oldtree.ptr, newtree.ptr, C_NULL)
-    return GitDiff(repo, diff_ptr_ptr[])
+                   diff_ptr_ptr, repo, oldtree, newtree, C_NULL)
+    return GitDiff(diff_ptr_ptr[])
 end
 
 """
@@ -67,14 +67,14 @@ files were changed, how many insertions were made, and how many deletions were m
 function GitDiffStats(diff::GitDiff)
     ensure_initialized()
     diff_stat_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
-    @check ccall((:git_diff_get_stats, :libgit2), Cint,
+    @check ccall((:git_diff_get_stats, libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}),
-                  diff_stat_ptr_ptr, diff.ptr)
-    return GitDiffStats(diff.owner, diff_stat_ptr_ptr[])
+                  diff_stat_ptr_ptr, diff)
+    return GitDiffStats(diff_stat_ptr_ptr[])
 end
 
 """
-    files_changed(diff_stat::GitDiffStats) -> Csize_t
+    files_changed(diff_stat::GitDiffStats)::Csize_t
 
 Return how many files were changed (added/modified/deleted) in the [`GitDiff`](@ref)
 summarized by `diff_stat`. The result may vary depending on the [`DiffOptionsStruct`](@ref)
@@ -83,11 +83,11 @@ are to be included or not).
 """
 function files_changed(diff_stat::GitDiffStats)
     ensure_initialized()
-    return ccall((:git_diff_stats_files_changed, :libgit2), Csize_t, (Ptr{Cvoid},), diff_stat.ptr)
+    return ccall((:git_diff_stats_files_changed, libgit2), Csize_t, (Ptr{Cvoid},), diff_stat)
 end
 
 """
-    insertions(diff_stat::GitDiffStats) -> Csize_t
+    insertions(diff_stat::GitDiffStats)::Csize_t
 
 Return the total number of insertions (lines added) in the [`GitDiff`](@ref)
 summarized by `diff_stat`. The result may vary depending on the [`DiffOptionsStruct`](@ref)
@@ -96,11 +96,11 @@ are to be included or not).
 """
 function insertions(diff_stat::GitDiffStats)
     ensure_initialized()
-    return ccall((:git_diff_stats_insertions, :libgit2), Csize_t, (Ptr{Cvoid},), diff_stat.ptr)
+    return ccall((:git_diff_stats_insertions, libgit2), Csize_t, (Ptr{Cvoid},), diff_stat)
 end
 
 """
-    deletions(diff_stat::GitDiffStats) -> Csize_t
+    deletions(diff_stat::GitDiffStats)::Csize_t
 
 Return the total number of deletions (lines removed) in the [`GitDiff`](@ref)
 summarized by `diff_stat`. The result may vary depending on the [`DiffOptionsStruct`](@ref)
@@ -109,12 +109,12 @@ are to be included or not).
 """
 function deletions(diff_stat::GitDiffStats)
     ensure_initialized()
-    return ccall((:git_diff_stats_deletions, :libgit2), Csize_t, (Ptr{Cvoid},), diff_stat.ptr)
+    return ccall((:git_diff_stats_deletions, libgit2), Csize_t, (Ptr{Cvoid},), diff_stat)
 end
 
 function count(diff::GitDiff)
     ensure_initialized()
-    return ccall((:git_diff_num_deltas, :libgit2), Cint, (Ptr{Cvoid},), diff.ptr)
+    return ccall((:git_diff_num_deltas, libgit2), Cint, (Ptr{Cvoid},), diff)
 end
 
 function Base.getindex(diff::GitDiff, i::Integer)
@@ -122,10 +122,12 @@ function Base.getindex(diff::GitDiff, i::Integer)
         throw(BoundsError(diff, (i,)))
     end
     ensure_initialized()
-    delta_ptr = ccall((:git_diff_get_delta, :libgit2),
-                      Ptr{DiffDelta},
-                      (Ptr{Cvoid}, Csize_t), diff.ptr, i-1)
-    return unsafe_load(delta_ptr)
+    GC.@preserve diff begin # preserve `diff` object until return of `unsafe_load`
+        delta_ptr = ccall((:git_diff_get_delta, libgit2),
+                          Ptr{DiffDelta},
+                          (Ptr{Cvoid}, Csize_t), diff, i-1)
+        return unsafe_load(delta_ptr)
+    end
 end
 
 function Base.show(io::IO, diff_stat::GitDiffStats)
@@ -139,4 +141,35 @@ function Base.show(io::IO, diff::GitDiff)
     println(io, "GitDiff:")
     println(io, "Number of deltas: $(count(diff))")
     show(io, GitDiffStats(diff))
+end
+
+"""
+    GitDiff(content::AbstractString)
+
+Parse a diff from a buffer. The `content` should be in unified diff format.
+Returns a [`GitDiff`](@ref) object.
+
+This is equivalent to [`git_diff_from_buffer`](https://libgit2.org/libgit2/#HEAD/group/diff/git_diff_from_buffer).
+
+# Examples
+```julia
+diff_str = \"\"\"
+diff --git a/file.txt b/file.txt
+index 1234567..abcdefg 100644
+--- a/file.txt
++++ b/file.txt
+@@ -1 +1 @@
+-old content
++new content
+\"\"\"
+diff = LibGit2.GitDiff(diff_str)
+```
+"""
+function GitDiff(content::AbstractString)
+    ensure_initialized()
+    diff_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
+    @check ccall((:git_diff_from_buffer, libgit2), Cint,
+                 (Ptr{Ptr{Cvoid}}, Cstring, Csize_t),
+                 diff_ptr_ptr, content, sizeof(content))
+    return GitDiff(diff_ptr_ptr[])
 end

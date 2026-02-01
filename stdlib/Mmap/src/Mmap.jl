@@ -6,10 +6,9 @@ Low level module for mmap (memory mapping of files).
 module Mmap
 
 import Base: OS_HANDLE, INVALID_OS_HANDLE
+using Base.Sys: PAGESIZE
 
 export mmap
-
-const PAGESIZE = Int(Sys.isunix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
 
 # for mmaps not backed by files
 mutable struct Anonymous <: IO
@@ -86,6 +85,8 @@ grow!(::Anonymous,o::Integer,l::Integer) = return
 function grow!(io::IO, offset::Integer, len::Integer)
     pos = position(io)
     filelen = filesize(io)
+    # If non-regular file skip trying to grow since we know that will fail the ftruncate syscall
+    filelen == 0 && !isfile(io) && return
     if filelen < offset + len
         failure = ccall(:jl_ftruncate, Cint, (Cint, Int64), fd(io), offset+len)
         Base.systemerror(:ftruncate, failure != 0)
@@ -185,15 +186,19 @@ like HDF5 (which can be used with memory-mapping).
 """
 function mmap(io::IO,
               ::Type{Array{T,N}}=Vector{UInt8},
-              dims::NTuple{N,Integer}=(div(filesize(io)-position(io),sizeof(T)),),
+              dims::NTuple{N,Integer}=(div(filesize(io)-position(io),Base.aligned_sizeof(T)),),
               offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T,N}
     # check inputs
     isopen(io) || throw(ArgumentError("$io must be open to mmap"))
     isbitstype(T)  || throw(ArgumentError("unable to mmap $T; must satisfy isbitstype(T) == true"))
 
-    len = prod(dims) * sizeof(T)
+    len = Base.aligned_sizeof(T)
+    for l in dims
+        len, overflow = Base.Checked.mul_with_overflow(promote(len, l)...)
+        overflow && throw(ArgumentError("requested size prod($((len, dims...))) too large, would overflow typeof(size(T)) == $(typeof(len))"))
+    end
     len >= 0 || throw(ArgumentError("requested size must be ≥ 0, got $len"))
-    len == 0 && return Array{T}(undef, ntuple(x->0,Val(N)))
+    len == 0 && return Array{T}(undef, dims)
     len < typemax(Int) - PAGESIZE || throw(ArgumentError("requested size must be < $(typemax(Int)-PAGESIZE), got $len"))
 
     offset >= 0 || throw(ArgumentError("requested offset must be ≥ 0, got $offset"))
@@ -204,18 +209,38 @@ function mmap(io::IO,
     mmaplen = (offset - offset_page) + len
 
     file_desc = gethandle(io)
+    szfile = convert(Csize_t, len + offset)
+    requestedSizeLarger = false
+    if !(io isa Mmap.Anonymous)
+        requestedSizeLarger = szfile > filesize(io)
+    end
     # platform-specific mmapping
     @static if Sys.isunix()
         prot, flags, iswrite = settings(file_desc, shared)
-        iswrite && grow && grow!(io, offset, len)
+        if requestedSizeLarger && isfile(io) # add a condition to this line to ensure it only checks files
+            if iswrite
+                if grow
+                    grow!(io, offset, len)
+                else
+                    throw(ArgumentError("requested size $szfile larger than file size $(filesize(io)), but requested not to grow"))
+                end
+            else
+                throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
+            end
+        end
         # mmap the file
         ptr = ccall(:jl_mmap, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t, Cint, Cint, RawFD, Int64),
             C_NULL, mmaplen, prot, flags, file_desc, offset_page)
         systemerror("memory mapping failed", reinterpret(Int, ptr) == -1)
     else
         name, readonly, create = settings(io)
-        szfile = convert(Csize_t, len + offset)
-        readonly && szfile > filesize(io) && throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
+        if requestedSizeLarger
+            if readonly
+                throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
+            elseif !grow
+                throw(ArgumentError("requested size $szfile larger than file size $(filesize(io)), but requested not to grow"))
+            end
+        end
         handle = create ? ccall(:CreateFileMappingW, stdcall, Ptr{Cvoid}, (OS_HANDLE, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
                                 file_desc, C_NULL, readonly ? PAGE_READONLY : PAGE_READWRITE, szfile >> 32, szfile & typemax(UInt32), name) :
                           ccall(:OpenFileMappingW, stdcall, Ptr{Cvoid}, (DWORD, Cint, Cwstring),
@@ -227,7 +252,7 @@ function mmap(io::IO,
     end # os-test
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
     A = unsafe_wrap(Array, convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
-    finalizer(A) do x
+    finalizer(A.ref.mem) do x
         @static if Sys.isunix()
             systemerror("munmap",  ccall(:munmap, Cint, (Ptr{Cvoid}, Int), ptr, mmaplen) != 0)
         else
@@ -241,7 +266,7 @@ end
 
 mmap(file::AbstractString,
      ::Type{T}=Vector{UInt8},
-     dims::NTuple{N,Integer}=(div(filesize(file),sizeof(eltype(T))),),
+     dims::NTuple{N,Integer}=(div(filesize(file),Base.aligned_sizeof(eltype(T))),),
      offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) where {T<:Array,N} =
     open(io->mmap(io, T, dims, offset; grow=grow, shared=shared), file, isfile(file) ? "r" : "w+")::Array{eltype(T),N}
 
@@ -338,8 +363,9 @@ Forces synchronization between the in-memory version of a memory-mapped `Array` 
 [`BitArray`](@ref) and the on-disk version.
 """
 function sync!(m::Array, flags::Integer=MS_SYNC)
-    offset = rem(UInt(pointer(m)), PAGESIZE)
-    ptr = pointer(m) - offset
+    ptr = pointer(m)
+    offset = rem(UInt(ptr), PAGESIZE)
+    ptr = ptr - offset
     mmaplen = sizeof(m) + offset
     GC.@preserve m @static if Sys.isunix()
         systemerror("msync",
@@ -400,8 +426,9 @@ Advises the kernel on the intended usage of the memory-mapped `array`, with the 
 `flag` being one of the available `MADV_*` constants.
 """
 function madvise!(m::Array, flag::Integer=MADV_NORMAL)
-    offset = rem(UInt(pointer(m)), PAGESIZE)
-    ptr = pointer(m) - offset
+    ptr = pointer(m)
+    offset = rem(UInt(ptr), PAGESIZE)
+    ptr = ptr - offset
     mmaplen = sizeof(m) + offset
     GC.@preserve m begin
         systemerror("madvise",

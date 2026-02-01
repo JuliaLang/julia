@@ -10,6 +10,7 @@
 // Files that need `assert` should include this file after all other includes.
 // All files should also check `JL_NDEBUG` instead of `NDEBUG`.
 
+#pragma GCC visibility push(default)
 #ifdef NDEBUG
 #  ifndef JL_NDEBUG
 #    undef NDEBUG
@@ -21,7 +22,11 @@
 #  endif
 #else
 #  ifdef JL_NDEBUG
-#    undef JL_NDEBUG
+#    define NDEBUG
+#    include <assert.h>
+#    undef NDEBUG
+#  else
+#    include <assert.h>
 #  endif
-#  include <assert.h>
 #endif
+#pragma GCC visibility pop

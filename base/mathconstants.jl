@@ -10,11 +10,31 @@ module MathConstants
 
 export π, pi, ℯ, e, γ, eulergamma, catalan, φ, golden
 
-Base.@irrational π        3.14159265358979323846  pi
-Base.@irrational ℯ        2.71828182845904523536  exp(big(1))
-Base.@irrational γ        0.57721566490153286061  euler
-Base.@irrational φ        1.61803398874989484820  (1+sqrt(big(5)))/2
-Base.@irrational catalan  0.91596559417721901505  catalan
+Base.@irrational π        pi
+Base.@irrational ℯ        exp(big(1))
+Base.@irrational γ        euler
+Base.@irrational φ        (1+sqrt(big(5)))/2
+Base.@irrational catalan  catalan
+
+const _KnownIrrational = Union{
+    typeof(π), typeof(ℯ), typeof(γ), typeof(φ), typeof(catalan)
+}
+
+function Rational{BigInt}(::_KnownIrrational)
+    Base._throw_argument_error_irrational_to_rational_bigint()
+end
+Base.@assume_effects :foldable function Rational{T}(x::_KnownIrrational) where {T<:Integer}
+    Base._irrational_to_rational(T, x)
+end
+Base.@assume_effects :foldable function (::Type{T})(x::_KnownIrrational, r::RoundingMode) where {T<:Union{Float32,Float64}}
+    Base._irrational_to_float(T, x, r)
+end
+Base.@assume_effects :foldable function Base.rationalize(::Type{T}, x::_KnownIrrational; tol::Real=0) where {T<:Integer}
+    Base._rationalize_irrational(T, x, tol)
+end
+Base.@assume_effects :foldable function Base.lessrational(rx::Rational, x::_KnownIrrational)
+    Base._lessrational(rx, x)
+end
 
 # aliases
 """
@@ -76,7 +96,7 @@ julia> Base.MathConstants.eulergamma
 julia> dx = 10^-6;
 
 julia> sum(-exp(-x) * log(x) for x in dx:dx:100) * dx
-0.5772078382499134
+0.5772078382499133
 ```
 """
 γ, const eulergamma = γ
@@ -122,5 +142,11 @@ Base.literal_pow(::typeof(^), ::Irrational{:ℯ}, ::Val{p}) where {p} = exp(p)
 
 Base.log(::Irrational{:ℯ}) = 1 # use 1 to correctly promote expressions like log(x)/log(ℯ)
 Base.log(::Irrational{:ℯ}, x::Number) = log(x)
+
+Base.sin(::Irrational{:π}) = 0.0
+Base.cos(::Irrational{:π}) = -1.0
+Base.sincos(::Irrational{:π}) = (0.0, -1.0)
+Base.tan(::Irrational{:π}) = 0.0
+Base.cot(::Irrational{:π}) = -1/0
 
 end # module

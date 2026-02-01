@@ -17,13 +17,13 @@ end
 ==(a::PkgId, b::PkgId) = a.uuid == b.uuid && a.name == b.name
 
 function hash(pkg::PkgId, h::UInt)
-    h += 0xc9f248583a0ca36c % UInt
+    h ⊻= 0xc9f248583a0ca36c % UInt
     h = hash(pkg.uuid, h)
     h = hash(pkg.name, h)
     return h
 end
 
-show(io::IO, pkg::PkgId) =
+show(io::IO,  ::MIME"text/plain", pkg::PkgId) =
     print(io, pkg.name, " [", pkg.uuid === nothing ? "top-level" : pkg.uuid, "]")
 
 function binpack(pkg::PkgId)
@@ -32,14 +32,14 @@ function binpack(pkg::PkgId)
     uuid = pkg.uuid
     write(io, uuid === nothing ? UInt128(0) : UInt128(uuid))
     write(io, pkg.name)
-    return String(take!(io))
+    return unsafe_takestring!(io)
 end
 
 function binunpack(s::String)
     io = IOBuffer(s)
-    @assert read(io, UInt8) === 0x00
+    z = read(io, UInt8)
+    @assert z === 0x00
     uuid = read(io, UInt128)
     name = read(io, String)
     return PkgId(UUID(uuid), name)
 end
-
