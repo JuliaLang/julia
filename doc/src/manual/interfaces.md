@@ -405,6 +405,8 @@ perhaps range-types `Ind` of your own design. For more information, see
 | **Optional methods**                            | **Default definition**                 | **Brief description**                                                                                |
 | `stride(A, i::Int)`                             |     `strides(A)[i]`                    | Return the distance in memory (in number of elements) between adjacent elements in dimension i.      |
 | `Base.cconvert(::Type{Ptr{T}}, A)`              |     `A`                                | Return an object that can be converted to the native address of the array with [`Base.unsafe_convert`](@ref) |
+| `Base.has_strided_get(A)`                       |     `false`                            | Return `true` if `A` can be read from as a strided array. |
+| `Base.has_strided_set(A)`                       |     `false`                            | Return `true` if `A` can be written to as a strided array. |
 
 A strided array is a subtype of `AbstractArray` whose entries are stored in memory with fixed strides.
 Provided the element type of the array is compatible with BLAS, a strided array can utilize BLAS and LAPACK routines

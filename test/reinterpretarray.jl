@@ -5,6 +5,8 @@ isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.j
 using .Main.OffsetArrays
 isdefined(Main, :TSlow) || @eval Main include("testhelpers/arrayindexingtypes.jl")
 using .Main: TSlow, WrapperArray
+isdefined(Main, :StridedArrays) || @eval Main include("testhelpers/StridedArrays.jl")
+using .Main.StridedArrays
 
 tslow(a::AbstractArray) = TSlow(a)
 wrapper(a::AbstractArray) = WrapperArray(a)
@@ -239,85 +241,65 @@ let A = collect(reshape(1:20, 5, 4))
     @test reshape(R, :) isa StridedArray
 end
 
-function check_strides(A::AbstractArray)
-    # Make sure stride(A, i) is equivalent with strides(A)[i] (if 1 <= i <= ndims(A))
-    dims = ntuple(identity, ndims(A))
-    map(i -> stride(A, i), dims) == strides(A) || return false
-    # Test strides via value check.
-    for i in eachindex(IndexLinear(), A)
-        A[i] === Base.unsafe_load(pointer(A, i)) || return false
-    end
-    return true
-end
-
 @testset "strides for NonReshapedReinterpretArray" begin
     A = WrapperArray(Array{Int32}(reshape(1:88, 11, 8)))
     for viewax2 in (1:8, 1:2:6, 7:-1:1, 5:-2:1, 2:3:8, 7:-6:1, 3:5:11)
         # dim1 is contiguous
         for T in (Int16, Float32)
-            @test check_strides(reinterpret(T, view(A, 1:8, viewax2)))
+            check_strided_get(reinterpret(T, view(A, 1:8, viewax2)))
         end
         if mod(step(viewax2), 2) == 0
-            @test check_strides(reinterpret(Int64, view(A, 1:8, viewax2)))
+            check_strided_get(reinterpret(Int64, view(A, 1:8, viewax2)))
         else
-            @test_throws "Parent's strides" strides(reinterpret(Int64, view(A, 1:8, viewax2)))
+            local x0 = reinterpret(Int64, view(A, 1:8, viewax2))
+            @test_throws "Parent's strides" strides(x0)
+            @test !Base.has_strided_get(x0)
         end
         # non-integer-multiplied classified
         if mod(step(viewax2), 3) == 0
-            @test check_strides(reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
+            check_strided_get(reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
         else
-            @test_throws "Parent's strides" strides(reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
+            local x1 = reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2))
+            @test_throws "Parent's strides" strides(x1)
+            @test !Base.has_strided_get(x1)
         end
         if mod(step(viewax2), 5) == 0
-            @test check_strides(reinterpret(NTuple{5,Int16}, view(A, 2:11, viewax2)))
+            check_strided_get(reinterpret(NTuple{5,Int16}, view(A, 2:11, viewax2)))
         else
-            @test_throws "Parent's strides" strides(reinterpret(NTuple{5,Int16}, view(A, 2:11, viewax2)))
+            local x2 = reinterpret(NTuple{5,Int16}, view(A, 2:11, viewax2))
+            @test_throws "Parent's strides" strides(x2)
+            @test !Base.has_strided_get(x2)
         end
         # dim1 is not contiguous
         for T in (Int16, Int64)
-            @test_throws "Parent must" strides(reinterpret(T, view(A, 8:-1:1, viewax2)))
+            local v = reinterpret(T, view(A, 8:-1:1, viewax2))
+            @test_throws "Parent must" strides(v)
+            @test !Base.has_strided_get(v)
         end
-        @test check_strides(reinterpret(Float32, view(A, 8:-1:1, viewax2)))
+        check_strided_get(reinterpret(Float32, view(A, 8:-1:1, viewax2)))
     end
     # issue 46113
     A = reinterpret(Int8, reinterpret(reshape, Int16, rand(Int8, 2, 3, 3)))
-    @test check_strides(A)
+    check_strided_get(A)
 end
 
 @testset "strides for ReshapedReinterpretArray" begin
     A = WrapperArray(Array{Int32}(reshape(1:192, 3, 8, 8)))
     for viewax1 in (1:8, 1:2:8, 8:-1:1, 8:-2:1), viewax2 in (1:2, 4:-1:1)
         for T in (Int16, Float32)
-            @test check_strides(reinterpret(reshape, T, view(A, 1:2, viewax1, viewax2)))
-            @test check_strides(reinterpret(reshape, T, view(A, 1:2:3, viewax1, viewax2)))
+            check_strided_get(reinterpret(reshape, T, view(A, 1:2, viewax1, viewax2)))
+            check_strided_get(reinterpret(reshape, T, view(A, 1:2:3, viewax1, viewax2)))
         end
         if mod(step(viewax1), 2) == 0
-            @test check_strides(reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2)))
+            check_strided_get(reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2)))
         else
-            @test_throws "Parent's strides" strides(reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2)))
+            local x1 = reinterpret(reshape, Int64, view(A, 1:2, viewax1, viewax2))
+            @test_throws "Parent's strides" strides(x1)
+            @test !Base.has_strided_get(x1)
         end
-        @test_throws "Parent must" strides(reinterpret(reshape, Int64, view(A, 1:2:3, viewax1, viewax2)))
-    end
-end
-
-@testset "strides" begin
-    a = rand(10)
-    b = view(a,2:2:10)
-    A = rand(10,10)
-    B = view(A, 2:2:10, 2:2:10)
-
-    @test strides(a) == (1,)
-    @test strides(b) == (2,)
-    @test strides(A) == (1,10)
-    @test strides(B) == (2,20)
-
-    for M in (a, b, A, B)
-        @inferred strides(M)
-        strides_M = strides(M)
-
-        for (i, _stride) in enumerate(collect(strides_M))
-            @test _stride == stride(M, i)
-        end
+        local x2 = reinterpret(reshape, Int64, view(A, 1:2:3, viewax1, viewax2))
+        @test_throws "Parent must" strides(x2)
+        @test !Base.has_strided_get(x2)
     end
 end
 
@@ -418,8 +400,17 @@ A2 = S2[S2(0, 0)]
 test_many_wrappers((A1, A2), (identity, wrapper)) do (A1_, A2_)
     A1, A2 = deepcopy(A1_), deepcopy(A2_)
     @test reinterpret(S1, A2)[1] == S1(0, 0)
-    @test_throws Base.PaddingError (reinterpret(S1, A2)[1] = S2(1, 2))
+    @test_throws Base.PaddingError (reinterpret(S1, A2)[1] = S1(1, 2))
+    @test !Base.has_strided_set(reinterpret(S1, A2))
+    check_strided_get(reinterpret(S1, A2))
     @test_throws Base.PaddingError reinterpret(S2, A1)[1]
+    @test !Base.has_strided_get(reinterpret(S2, A1))
+    check_strided_set(
+        reinterpret(S2, deepcopy(A1_)),
+        reinterpret(S2, deepcopy(A1_)),
+        [S2(1, 2)],
+        (a, b) -> parent(a) == parent(b),
+    )
     reinterpret(S2, A1)[1] = S2(1, 2)
     @test A1[1] == S1(1, 2)
 end
