@@ -389,6 +389,18 @@ end
     """; expr_compat_mode=true)
     @test test_mod.SOME_ENUM <: Enum
     @test test_mod.X1 isa Enum
+
+    # @testset produces :tryfinally with secret third arg
+    @eval test_mod :(using Test)
+    @test JuliaLowering.include_string(test_mod, "@test true") isa Test.Pass
+    @testset let jltestset = JuliaLowering.include_string(test_mod, """
+    @testset begin
+        @test true
+    end
+    """; expr_compat_mode=true)
+        @test jltestset isa Test.AbstractTestSet
+        @test jltestset.n_passed == 1
+    end
 end
 
 @testset "macros producing meta forms" begin

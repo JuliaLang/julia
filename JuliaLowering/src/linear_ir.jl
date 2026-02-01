@@ -472,27 +472,27 @@ end
 # See the devdocs for further discussion.
 function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     @chk numchildren(ex) <= 3
-    try_block = ex[1]
-    if kind(ex) == K"trycatchelse"
-        catch_block = ex[2]
-        else_block = numchildren(ex) == 2 ? nothing : ex[3]
-        finally_block = nothing
-        catch_label = make_label(ctx, catch_block)
-    else
-        catch_block = nothing
-        else_block = nothing
-        finally_block = ex[2]
-        catch_label = make_label(ctx, finally_block)
-    end
+    (try_block, catch_block, else_block, finally_block, catch_label, scope) = @stm ex begin
+         [K"trycatchelse" t c] -> (t, c, nothing, nothing, make_label(ctx, c), nothing)
+         [K"trycatchelse" t c e] -> (t, c, e, nothing, make_label(ctx, c), nothing)
+         [K"tryfinally" t f] -> (t, nothing, nothing, f, make_label(ctx, f), nothing)
+         [K"tryfinally" t f scope] -> (t, nothing, nothing, f, make_label(ctx, f), scope)
+     end
 
     end_label = !in_tail_pos || !isnothing(finally_block) ? make_label(ctx, ex) : nothing
     try_result = needs_value && !in_tail_pos ? new_local_binding(ctx, ex, "try_result") : nothing
 
+    enter_scope_arg = SyntaxList(ctx)
+    if scope !== nothing
+        args = SyntaxList(ctx)
+        push!(args, scope)
+        enter_scope_arg = compile_args(ctx, args)
+    end
     # Exception handler block prefix
     handler_token = ssavar(ctx, ex, "handler_token")
     emit(ctx, @ast ctx ex [K"="
         handler_token
-        [K"enter" catch_label]  # TODO: dynscope
+        [K"enter" catch_label enter_scope_arg...]
     ])
     if !isnothing(finally_block)
         # TODO: Trivial finally block optimization from JuliaLang/julia#52593 (or
