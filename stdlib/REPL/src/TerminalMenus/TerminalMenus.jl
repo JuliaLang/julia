@@ -1,8 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    REPL.TerminalMenus
+
+A module that contains code for displaying text mode interactive menus.
+Key exported symbols include [`REPL.TerminalMenus.RadioMenu`](@ref) and
+[`REPL.TerminalMenus.MultiSelectMenu`](@ref).
+"""
 module TerminalMenus
 
-using REPL: REPL
+using ..REPL: REPL
 
 function default_terminal(; in::IO=stdin, out::IO=stdout, err::IO=stderr)
     return REPL.Terminals.TTYTerminal(
@@ -22,6 +29,9 @@ export
     MultiSelectMenu,
     Pager,
     request
+
+public Config, config, MultiSelectConfig
+public pick, cancel, writeline, options, numoptions, selected, header, keypress
 
 # TODO: remove in Julia 2.0
 # While not exported, AbstractMenu documented these as an extension interface

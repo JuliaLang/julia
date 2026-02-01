@@ -8,7 +8,7 @@ Complex number type with real and imaginary part of type `T`.
 `ComplexF16`, `ComplexF32` and `ComplexF64` are aliases for
 `Complex{Float16}`, `Complex{Float32}` and `Complex{Float64}` respectively.
 
-See also: [`Real`](@ref), [`complex`](@ref), [`real`](@ref).
+See also [`Real`](@ref), [`complex`](@ref), [`real`](@ref).
 """
 struct Complex{T<:Real} <: Number
     re::T
@@ -22,7 +22,7 @@ Complex(x::Real) = Complex(x, zero(x))
 
 The imaginary unit.
 
-See also: [`imag`](@ref), [`angle`](@ref), [`complex`](@ref).
+See also [`imag`](@ref), [`angle`](@ref), [`complex`](@ref).
 
 # Examples
 ```jldoctest
@@ -61,7 +61,7 @@ float(::Type{Complex{T}}) where {T} = Complex{float(T)}
 
 Return the real part of the complex number `z`.
 
-See also: [`imag`](@ref), [`reim`](@ref), [`complex`](@ref), [`isreal`](@ref), [`Real`](@ref).
+See also [`imag`](@ref), [`reim`](@ref), [`complex`](@ref), [`isreal`](@ref), [`Real`](@ref).
 
 # Examples
 ```jldoctest
@@ -76,7 +76,7 @@ real(z::Complex) = z.re
 
 Return the imaginary part of the complex number `z`.
 
-See also: [`conj`](@ref), [`reim`](@ref), [`adjoint`](@ref), [`angle`](@ref).
+See also [`conj`](@ref), [`reim`](@ref), [`adjoint`](@ref), [`angle`](@ref).
 
 # Examples
 ```jldoctest
@@ -120,10 +120,10 @@ Float64
 real(T::Type) = typeof(real(zero(T)))
 real(::Type{T}) where {T<:Real} = T
 real(C::Type{<:Complex}) = fieldtype(C, 1)
-real(::Type{Union{}}, slurp...) = Union{}(im)
+real(::Type{Union{}}, slurp...) = Union{}
 
 """
-    isreal(x) -> Bool
+    isreal(x)::Bool
 
 Test whether `x` or all its elements are numerically equal to some real number
 including infinities and NaNs. `isreal(x)` is true if `isequal(x, real(x))`
@@ -162,12 +162,6 @@ Convert real numbers or arrays to complex. `i` defaults to zero.
 ```jldoctest
 julia> complex(7)
 7 + 0im
-
-julia> complex([1, 2, 3])
-3-element Vector{Complex{Int64}}:
- 1 + 0im
- 2 + 0im
- 3 + 0im
 ```
 """
 complex(z::Complex) = z
@@ -194,6 +188,7 @@ Union{Missing, Complex{Int64}}
 """
 complex(::Type{T}) where {T<:Real} = Complex{T}
 complex(::Type{Complex{T}}) where {T<:Real} = Complex{T}
+complex(::Type{Union{}}, slurp...) = Union{}
 
 flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
 
@@ -201,18 +196,18 @@ function show(io::IO, z::Complex)
     r, i = reim(z)
     compact = get(io, :compact, false)::Bool
     show(io, r)
-    if signbit(i) && !isnan(i)
+    bufio = IOBuffer()
+    show(IOContext(bufio, io), i)
+    seekstart(bufio)
+    if peek(bufio) === UInt8('-')
+        seek(bufio, 1)
         print(io, compact ? "-" : " - ")
-        if isa(i,Signed) && !isa(i,BigInt) && i == typemin(typeof(i))
-            show(io, -widen(i))
-        else
-            show(io, -i)
-        end
+        write(io, bufio)
     else
         print(io, compact ? "+" : " + ")
-        show(io, i)
+        write(io, bufio)
     end
-    if !(isa(i,Integer) && !isa(i,Bool) || isa(i,AbstractFloat) && isfinite(i))
+    if !(isa(i,Signed) || isa(i,AbstractFloat) && isfinite(i))
         print(io, "*")
     end
     print(io, "im")
@@ -254,11 +249,7 @@ isequal(z::Real, w::Complex) = isequal(z,real(w))::Bool & isequal(zero(z),imag(w
 
 in(x::Complex, r::AbstractRange{<:Real}) = isreal(x) && real(x) in r
 
-if UInt === UInt64
-    const h_imag = 0x32a7a07f3e7cd1f9
-else
-    const h_imag = 0x3e7cd1f9
-end
+const h_imag = 0x32a7a07f3e7cd1f9 % UInt
 const hash_0_imag = hash(0, h_imag)
 
 function hash(z::Complex, h::UInt)
@@ -274,7 +265,7 @@ end
 
 Compute the complex conjugate of a complex number `z`.
 
-See also: [`angle`](@ref), [`adjoint`](@ref).
+See also [`angle`](@ref), [`adjoint`](@ref).
 
 # Examples
 ```jldoctest
@@ -299,9 +290,11 @@ inv(z::Complex{<:Integer}) = inv(float(z))
 *(z::Complex, w::Complex) = Complex(real(z) * real(w) - imag(z) * imag(w),
                                     real(z) * imag(w) + imag(z) * real(w))
 
+_mulsub(a, b, c) = _mulsub(promote(a, b, c)...)
+_mulsub(a::T, b::T, c::T) where {T<:Real} = muladd(a, b, -c)
 muladd(z::Complex, w::Complex, x::Complex) =
-    Complex(muladd(real(z), real(w), -muladd(imag(z), imag(w), -real(x))),
-            muladd(real(z), imag(w),  muladd(imag(z), real(w),  imag(x))))
+    Complex(muladd(real(z), real(w), -_mulsub(imag(z), imag(w), real(x))),
+            muladd(real(z), imag(w), muladd(imag(z), real(w), imag(x))))
 
 # handle Bool and Complex{Bool}
 # avoid type signature ambiguity warnings
@@ -342,13 +335,13 @@ end
 *(x::Real, z::Complex) = Complex(x * real(z), x * imag(z))
 *(z::Complex, x::Real) = Complex(x * real(z), x * imag(z))
 
-muladd(x::Real, z::Complex, y::Number) = muladd(z, x, y)
+muladd(x::Real, z::Complex, y::Union{Real,Complex}) = muladd(z, x, y)
 muladd(z::Complex, x::Real, y::Real) = Complex(muladd(real(z),x,y), imag(z)*x)
 muladd(z::Complex, x::Real, w::Complex) =
     Complex(muladd(real(z),x,real(w)), muladd(imag(z),x,imag(w)))
 muladd(x::Real, y::Real, z::Complex) = Complex(muladd(x,y,real(z)), imag(z))
 muladd(z::Complex, w::Complex, x::Real) =
-    Complex(muladd(real(z), real(w), -muladd(imag(z), imag(w), -x)),
+    Complex(muladd(real(z), real(w), -_mulsub(imag(z), imag(w), x)),
             muladd(real(z), imag(w), imag(z) * real(w)))
 
 /(a::R, z::S) where {R<:Real,S<:Complex} = (T = promote_type(R,S); a*inv(T(z)))
@@ -600,7 +593,7 @@ More accurate method for `cis(pi*x)` (especially for large `x`).
 See also [`cis`](@ref), [`sincospi`](@ref), [`exp`](@ref), [`angle`](@ref).
 
 # Examples
-```jldoctest
+```julia-repl
 julia> cispi(10000)
 1.0 + 0.0im
 
@@ -628,7 +621,7 @@ Compute the phase angle in radians of a complex number `z`.
 Returns a number `-pi ≤ angle(z) ≤ pi`, and is thus discontinuous
 along the negative real axis.
 
-See also: [`atan`](@ref), [`cis`](@ref), [`rad2deg`](@ref).
+See also [`atan`](@ref), [`cis`](@ref), [`rad2deg`](@ref).
 
 # Examples
 ```jldoctest
@@ -1037,24 +1030,22 @@ end
 function atanh(z::Complex{T}) where T
     z = float(z)
     Tf = float(T)
-    Ω = prevfloat(typemax(Tf))
-    θ = sqrt(Ω)/4
-    ρ = 1/θ
     x, y = reim(z)
     ax = abs(x)
     ay = abs(y)
+    θ = sqrt(floatmax(Tf))/4
     if ax > θ || ay > θ #Prevent overflow
         if isnan(y)
             if isinf(x)
                 return Complex(copysign(zero(x),x), y)
             else
-                return Complex(real(1/z), y)
+                return Complex(real(inv(z)), y)
             end
         end
         if isinf(y)
             return Complex(copysign(zero(x),x), copysign(oftype(y,pi)/2, y))
         end
-        return Complex(real(1/z), copysign(oftype(y,pi)/2, y))
+        return Complex(real(inv(z)), copysign(oftype(y,pi)/2, y))
     end
     β = copysign(one(Tf), x)
     z *= β
@@ -1064,16 +1055,15 @@ function atanh(z::Complex{T}) where T
             ξ = oftype(x, Inf)
             η = y
         else
-            ym = ay+ρ
-            ξ = log(sqrt(sqrt(4+y*y))/sqrt(ym))
-            η = copysign(oftype(y,pi)/2 + atan(ym/2), y)/2
+            ξ = log(sqrt(sqrt(muladd(y, y, 4)))/sqrt(ay))
+            η = copysign(oftype(y,pi)/2 + atan(ay/2), y)/2
         end
     else #Normal case
-        ysq = (ay+ρ)^2
+        ysq = ay^2
         if x == 0
             ξ = x
         else
-            ξ = log1p(4x/((1-x)^2 + ysq))/4
+            ξ = log1p(4x/(muladd(1-x, 1-x, ysq)))/4
         end
         η = angle(Complex((1-x)*(1+x)-ysq, 2y))/2
     end
@@ -1125,7 +1115,23 @@ big(::Type{Complex{T}}) where {T<:Real} = Complex{big(T)}
 big(z::Complex{T}) where {T<:Real} = Complex{big(T)}(z)
 
 ## Array operations on complex numbers ##
+"""
+    complex(A::AbstractArray)
 
+Return an array containing the complex analog of each entry in array `A`.
+
+Equivalent to `complex.(A)`, except that the return value may share memory with all or
+part of `A` in accordance with the behavior of `convert(T, A)` given output type `T`.
+
+# Examples
+```jldoctest
+julia> complex([1, 2, 3])
+3-element Vector{Complex{Int64}}:
+ 1 + 0im
+ 2 + 0im
+ 3 + 0im
+```
+"""
 complex(A::AbstractArray{<:Complex}) = A
 
 function complex(A::AbstractArray{T}) where T
@@ -1134,3 +1140,9 @@ function complex(A::AbstractArray{T}) where T
     end
     convert(AbstractArray{typeof(complex(zero(T)))}, A)
 end
+
+## Machine epsilon for complex ##
+
+eps(z::Complex{<:AbstractFloat}) = hypot(eps(real(z)), eps(imag(z)))
+
+eps(::Type{Complex{T}}) where {T<:AbstractFloat} = sqrt(2*one(T))*eps(T)

@@ -216,6 +216,7 @@ end
     small_part =  muladd(jU, expm1b_kernel(base, r), jL) + jU
 
     if !(abs(x) <= SUBNORM_EXP(base, T))
+        isnan(x) && return x
         x >= MAX_EXP(base, T) && return Inf
         x <= MIN_EXP(base, T) && return 0.0
         if k <= -53
@@ -223,7 +224,7 @@ end
             twopk = (k + UInt64(53)) << 52
             return reinterpret(T, twopk + reinterpret(UInt64, small_part))*0x1p-53
         end
-        #k == 1024 && return (small_part * 2.0) * 2.0^1023
+        #k == 1024 && return (small_part * 2.0) * 0x1p1023
     end
     twopk = Int64(k) << 52
     return reinterpret(T, twopk + reinterpret(Int64, small_part))
@@ -243,6 +244,7 @@ end
     hi, lo = Base.canonicalize2(1.0, kern)
     small_part = fma(jU, hi, muladd(jU, (lo+xlo), very_small))
     if !(abs(x) <= SUBNORM_EXP(base, T))
+        isnan(x) && return x
         x >= MAX_EXP(base, T) && return Inf
         x <= MIN_EXP(base, T) && return 0.0
         if k <= -53
@@ -250,7 +252,7 @@ end
             twopk = (k + UInt64(53)) << 52
             return reinterpret(T, twopk + reinterpret(UInt64, small_part))*0x1p-53
         end
-        k == 1024 && return (small_part * 2.0) * 2.0^1023
+        k == 1024 && return (small_part * 2.0) * 0x1p1023
     end
     twopk = Int64(k) << 52
     return reinterpret(T, twopk + reinterpret(Int64, small_part))
@@ -334,7 +336,7 @@ end
 
 Compute the natural base exponential of `x`, in other words ``ℯ^x``.
 
-See also [`exp2`](@ref), [`exp10`](@ref) and [`cis`](@ref).
+See also [`exp2`](@ref), [`exp10`](@ref), [`expm1`](@ref), [`cis`](@ref), [`log`](@ref).
 
 # Examples
 ```jldoctest
@@ -351,7 +353,7 @@ true
 
 Compute the base 2 exponential of `x`, in other words ``2^x``.
 
-See also [`ldexp`](@ref), [`<<`](@ref).
+See also [`exp`](@ref), [`log2`](@ref), [`ldexp`](@ref), [`<<`](@ref).
 
 # Examples
 ```jldoctest
@@ -371,6 +373,8 @@ exp2(x)
     exp10(x)
 
 Compute the base 10 exponential of `x`, in other words ``10^x``.
+
+See also, [`exp`](@ref), [`log10`](@ref).
 
 # Examples
 ```jldoctest
@@ -393,7 +397,7 @@ exp10(x)
         reinterpret(Float64, 0x0000_0000_0000_0001 << ((x + 1074) % UInt))
     else
         # We will cast everything to Int64 to avoid errors in case of Int128
-        # If x is a Int128, and is outside the range of Int64, then it is not -1023<x<=1023
+        # If x is an Int128, and is outside the range of Int64, then it is not -1023<x<=1023
         reinterpret(Float64, (exponent_bias(Float64) + (x % Int64)) << (significand_bits(Float64) % UInt))
     end
 end
@@ -489,7 +493,10 @@ end
     expm1(x)
 
 Accurately compute ``e^x-1``. It avoids the loss of precision involved in the direct
-evaluation of exp(x)-1 for small values of x.
+evaluation of exp(x) - 1 for small values of x.
+
+See also [`exp`](@ref), [`log1p`](@ref).
+
 # Examples
 ```jldoctest
 julia> expm1(1e-16)

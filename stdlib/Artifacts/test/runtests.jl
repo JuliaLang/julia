@@ -195,8 +195,8 @@ end
     with_artifacts_directory(artifacts_dir) do
         win64 = Platform("x86_64", "windows")
         mac64 = Platform("x86_64", "macos")
-        @test basename(@artifact_str("HelloWorldC", win64)) == "2f1a6d4f82cd1eea785a5141b992423c09491f1b"
-        @test basename(@artifact_str("HelloWorldC", mac64)) == "f8ab5a03697f9afc82210d8a2be1d94509aea8bc"
+        @test basename(@artifact_str("HelloWorldC", win64)) == "6e1eb164b0651aa44621eac4dfa340d6e60295ef"
+        @test basename(@artifact_str("HelloWorldC", mac64)) == "2e1742c9c0addd693b0b025f7a1e7aa4c50a0e6c"
     end
 end
 
@@ -206,7 +206,7 @@ end
 
     # Check the first key in Artifacts.toml is hashed correctly
     @test artifact_hash("HelloWorldC", joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux) ==
-            SHA1("5a8288c8a30578c0d0f24a9cded29579517ce7a8")
+            SHA1("0a8e7b523ef6be31311aefe9983a488616e58201")
 
     # Check the second key in Artifacts.toml is hashed correctly
     @test artifact_hash("socrates", joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux) ==
@@ -214,18 +214,18 @@ end
 
     # Check artifact_hash() works for any AbstractString
     @test artifact_hash(SubString("HelloWorldC0", 1, 11), joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux) ==
-            SHA1("5a8288c8a30578c0d0f24a9cded29579517ce7a8")
+            SHA1("0a8e7b523ef6be31311aefe9983a488616e58201")
 end
 
 @testset "select_downloadable_artifacts()" begin
     armv7l_linux = Platform("armv7l", "linux")
     artifacts = select_downloadable_artifacts(joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux)
     @test length(keys(artifacts)) == 1
-    @test artifacts["HelloWorldC"]["git-tree-sha1"] == "5a8288c8a30578c0d0f24a9cded29579517ce7a8"
+    @test artifacts["HelloWorldC"]["git-tree-sha1"] == "0a8e7b523ef6be31311aefe9983a488616e58201"
 
     artifacts = select_downloadable_artifacts(joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux, include_lazy=true)
     @test length(keys(artifacts)) == 2
-    @test artifacts["HelloWorldC"]["git-tree-sha1"] == "5a8288c8a30578c0d0f24a9cded29579517ce7a8"
+    @test artifacts["HelloWorldC"]["git-tree-sha1"] == "0a8e7b523ef6be31311aefe9983a488616e58201"
     @test artifacts["socrates"]["git-tree-sha1"] == "43563e7631a7eafae1f9f8d9d332e3de44ad7239"
 end
 

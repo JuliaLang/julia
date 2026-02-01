@@ -7,11 +7,11 @@ An error occurred when trying to access `str` at index `i` that is not valid.
 """
 struct StringIndexError <: Exception
     string::AbstractString
-    index::Integer
+    index::Int
 end
-@noinline string_index_err(s::AbstractString, i::Integer) =
+@noinline string_index_err((@nospecialize s::AbstractString), i::Integer) =
     throw(StringIndexError(s, Int(i)))
-function Base.showerror(io::IO, exc::StringIndexError)
+function showerror(io::IO, exc::StringIndexError)
     s = exc.string
     print(io, "StringIndexError: ", "invalid index [$(exc.index)]")
     if firstindex(s) <= exc.index <= ncodeunits(s)
@@ -61,14 +61,9 @@ by [`take!`](@ref) on a writable [`IOBuffer`](@ref) and by calls to
 In other cases, `Vector{UInt8}` data may be copied, but `v` is truncated anyway
 to guarantee consistent behavior.
 """
-String(v::AbstractVector{UInt8}) = String(copyto!(StringMemory(length(v)), v))
-function String(v::Memory{UInt8})
-    len = length(v)
-    len == 0 && return ""
-    return ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), v, len)
-end
+String(v::AbstractVector{UInt8}) = unsafe_takestring(copyto!(StringMemory(length(v)), v))
+
 function String(v::Vector{UInt8})
-    #return ccall(:jl_array_to_string, Ref{String}, (Any,), v)
     len = length(v)
     len == 0 && return ""
     ref = v.ref
@@ -84,7 +79,37 @@ function String(v::Vector{UInt8})
 end
 
 """
+    unsafe_takestring(m::Memory{UInt8})::String
+
+Create a `String` from `m`, changing the interpretation of the contents of `m`.
+This is done without copying, if possible. Thus, any access to `m` after
+calling this function, either to read or to write, is undefined behavior.
+"""
+function unsafe_takestring(m::Memory{UInt8})
+    isempty(m) ? "" : ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), m, length(m))
+end
+
+"""
+    takestring!(x) -> String
+
+Create a string from the content of `x`, emptying `x`.
+
+# Examples
+```jldoctest
+julia> v = [0x61, 0x62, 0x63];
+
+julia> s = takestring!(v)
+"abc"
+
+julia> isempty(v)
+true
+```
+"""
+takestring!(v::Vector{UInt8}) = String(v)
+
+"""
     unsafe_string(p::Ptr{UInt8}, [length::Integer])
+    unsafe_string(p::Cstring)
 
 Copy a string from the address of a C-style (NUL-terminated) string encoded as UTF-8.
 (The pointer can be safely freed afterwards.) If `length` is specified
@@ -102,9 +127,11 @@ function unsafe_string(p::Union{Ptr{UInt8},Ptr{Int8}})
     ccall(:jl_cstr_to_string, Ref{String}, (Ptr{UInt8},), p)
 end
 
-# This is @assume_effects :effect_free :nothrow :terminates_globally @ccall jl_alloc_string(n::Csize_t)::Ref{String},
+# This is `@assume_effects :total !:consistent @ccall jl_alloc_string(n::Csize_t)::Ref{String}`,
 # but the macro is not available at this time in bootstrap, so we write it manually.
-@eval _string_n(n::Integer) = $(Expr(:foreigncall, QuoteNode(:jl_alloc_string), Ref{String}, Expr(:call, Expr(:core, :svec), :Csize_t), 1, QuoteNode((:ccall,0x000e)), :(convert(Csize_t, n))))
+const _string_n_override = 0x04ee
+@eval _string_n(n::Integer) = $(Expr(:foreigncall, QuoteNode(:jl_alloc_string), Ref{String},
+    :(Core.svec(Csize_t)), 1, QuoteNode((:ccall, _string_n_override, false)), :(convert(Csize_t, n))))
 
 """
     String(s::AbstractString)
@@ -115,10 +142,7 @@ String(s::AbstractString) = print_to_string(s)
 @assume_effects :total String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
 
 unsafe_wrap(::Type{Memory{UInt8}}, s::String) = ccall(:jl_string_to_genericmemory, Ref{Memory{UInt8}}, (Any,), s)
-function unsafe_wrap(::Type{Vector{UInt8}}, s::String)
-    mem = unsafe_wrap(Memory{UInt8}, s)
-    view(mem, eachindex(mem))
-end
+unsafe_wrap(::Type{Vector{UInt8}}, s::String) = wrap(Array, unsafe_wrap(Memory{UInt8}, s))
 
 Vector{UInt8}(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(undef, length(s)), s)
 Vector{UInt8}(s::String) = Vector{UInt8}(codeunits(s))
@@ -134,7 +158,7 @@ pointer(s::String, i::Integer) = pointer(s) + Int(i)::Int - 1
 ncodeunits(s::String) = Core.sizeof(s)
 codeunit(s::String) = UInt8
 
-codeunit(s::String, i::Integer) = codeunit(s, Int(i))
+codeunit(s::String, i::Integer) = codeunit(s, Int(i)::Int)
 @assume_effects :foldable @inline function codeunit(s::String, i::Int)
     @boundscheck checkbounds(s, i)
     b = GC.@preserve s unsafe_load(pointer(s, i))
@@ -209,7 +233,7 @@ end
             i = i′
             @inbounds l = codeunit(s, i)
             (l < 0x80) | (0xf8 ≤ l) && return i+1
-            @assert l >= 0xc0
+            @assert l >= 0xc0 "invalid codeunit"
         end
         # first continuation byte
         (i += 1) > n && return i
@@ -226,7 +250,7 @@ end
     end)(s, i, n, l)
 end
 
-## checking UTF-8 & ACSII validity ##
+## checking UTF-8 & ASCII validity ##
 #=
     The UTF-8 Validation is performed by a shift based DFA.
     ┌───────────────────────────────────────────────────────────────────┐
@@ -374,7 +398,7 @@ end
 
 ##
 
-# Classifcations of string
+# Classifications of string
     # 0: neither valid ASCII nor UTF-8
     # 1: valid ASCII
     # 2: valid UTF-8
@@ -437,24 +461,25 @@ end
 
 # duck-type s so that external UTF-8 string packages like StringViews can hook in
 function iterate_continued(s, i::Int, u::UInt32)
-    u < 0xc0000000 && (i += 1; @goto ret)
-    n = ncodeunits(s)
-    # first continuation byte
-    (i += 1) > n && @goto ret
-    @inbounds b = codeunit(s, i)
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b) << 16
-    # second continuation byte
-    ((i += 1) > n) | (u < 0xe0000000) && @goto ret
-    @inbounds b = codeunit(s, i)
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b) << 8
-    # third continuation byte
-    ((i += 1) > n) | (u < 0xf0000000) && @goto ret
-    @inbounds b = codeunit(s, i)
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b); i += 1
-@label ret
+    @label _ begin
+        u < 0xc0000000 && (i += 1; break _)
+        n = ncodeunits(s)
+        # first continuation byte
+        (i += 1) > n && break _
+        @inbounds b = codeunit(s, i)
+        b & 0xc0 == 0x80 || break _
+        u |= UInt32(b) << 16
+        # second continuation byte
+        ((i += 1) > n) | (u < 0xe0000000) && break _
+        @inbounds b = codeunit(s, i)
+        b & 0xc0 == 0x80 || break _
+        u |= UInt32(b) << 8
+        # third continuation byte
+        ((i += 1) > n) | (u < 0xf0000000) && break _
+        @inbounds b = codeunit(s, i)
+        b & 0xc0 == 0x80 || break _
+        u |= UInt32(b); i += 1
+    end
     return reinterpret(Char, u), i
 end
 
@@ -467,28 +492,29 @@ end
 
 # duck-type s so that external UTF-8 string packages like StringViews can hook in
 function getindex_continued(s, i::Int, u::UInt32)
-    if u < 0xc0000000
-        # called from `getindex` which checks bounds
-        @inbounds isvalid(s, i) && @goto ret
-        string_index_err(s, i)
+    @label _ begin
+        if u < 0xc0000000
+            # called from `getindex` which checks bounds
+            @inbounds isvalid(s, i) && break _
+            string_index_err(s, i)
+        end
+        n = ncodeunits(s)
+
+        (i += 1) > n && break _
+        @inbounds b = codeunit(s, i) # cont byte 1
+        b & 0xc0 == 0x80 || break _
+        u |= UInt32(b) << 16
+
+        ((i += 1) > n) | (u < 0xe0000000) && break _
+        @inbounds b = codeunit(s, i) # cont byte 2
+        b & 0xc0 == 0x80 || break _
+        u |= UInt32(b) << 8
+
+        ((i += 1) > n) | (u < 0xf0000000) && break _
+        @inbounds b = codeunit(s, i) # cont byte 3
+        b & 0xc0 == 0x80 || break _
+        u |= UInt32(b)
     end
-    n = ncodeunits(s)
-
-    (i += 1) > n && @goto ret
-    @inbounds b = codeunit(s, i) # cont byte 1
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b) << 16
-
-    ((i += 1) > n) | (u < 0xe0000000) && @goto ret
-    @inbounds b = codeunit(s, i) # cont byte 2
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b) << 8
-
-    ((i += 1) > n) | (u < 0xf0000000) && @goto ret
-    @inbounds b = codeunit(s, i) # cont byte 3
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b)
-@label ret
     return reinterpret(Char, u)
 end
 
@@ -559,7 +585,7 @@ isascii(s::String) = isascii(codeunits(s))
 @assume_effects :foldable repeat(c::Char, r::BitInteger) = @invoke repeat(c::Char, r::Integer)
 
 """
-    repeat(c::AbstractChar, r::Integer) -> String
+    repeat(c::AbstractChar, r::Integer)::String
 
 Repeat a character `r` times. This can equivalently be accomplished by calling
 [`c^r`](@ref :^(::Union{AbstractString, AbstractChar}, ::Integer)).
@@ -571,9 +597,10 @@ julia> repeat('A', 3)
 ```
 """
 function repeat(c::AbstractChar, r::Integer)
+    r < 0 && throw(ArgumentError("can't repeat a character $r times"))
+    r = UInt(r)::UInt
     c = Char(c)::Char
     r == 0 && return ""
-    r < 0 && throw(ArgumentError("can't repeat a character $r times"))
     u = bswap(reinterpret(UInt32, c))
     n = 4 - (leading_zeros(u | 0xff) >> 3)
     s = _string_n(n*r)

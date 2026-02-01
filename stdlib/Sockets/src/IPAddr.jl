@@ -286,7 +286,7 @@ julia> @ip_str "2001:db8:0:0:0:0:2:1"
 ip"2001:db8::2:1"
 ```
 """
-macro ip_str(str)
+macro ip_str(str::String)
     return parse(IPAddr, str)
 end
 

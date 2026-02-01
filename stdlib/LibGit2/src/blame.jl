@@ -13,7 +13,7 @@ function GitBlame(repo::GitRepo, path::AbstractString; options::BlameOptions=Bla
     blame_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
     @check ccall((:git_blame_file, libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Ptr{BlameOptions}),
-                   blame_ptr_ptr, repo.ptr, path, Ref(options))
+                   blame_ptr_ptr, repo, path, Ref(options))
     return GitBlame(repo, blame_ptr_ptr[])
 end
 
@@ -27,7 +27,7 @@ that function later.
 """
 function counthunks(blame::GitBlame)
     ensure_initialized()
-    return ccall((:git_blame_get_hunk_count, libgit2), Int32, (Ptr{Cvoid},), blame.ptr)
+    return ccall((:git_blame_get_hunk_count, libgit2), Int32, (Ptr{Cvoid},), blame)
 end
 
 function Base.getindex(blame::GitBlame, i::Integer)

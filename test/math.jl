@@ -1,5 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+include("testhelpers/EvenIntegers.jl")
+using .EvenIntegers
+
+include("testhelpers/ULPError.jl")
+using .ULPError
+
 using Random
 using LinearAlgebra
 using Base.Experimental: @force_compile
@@ -22,45 +28,97 @@ has_fma = Dict(
     BigFloat => true,
 )
 
-@testset "clamp" begin
-    @test clamp(0, 1, 3) == 1
-    @test clamp(1, 1, 3) == 1
-    @test clamp(2, 1, 3) == 2
-    @test clamp(3, 1, 3) == 3
-    @test clamp(4, 1, 3) == 3
-
-    @test clamp(0.0, 1, 3) == 1.0
-    @test clamp(1.0, 1, 3) == 1.0
-    @test clamp(2.0, 1, 3) == 2.0
-    @test clamp(3.0, 1, 3) == 3.0
-    @test clamp(4.0, 1, 3) == 3.0
-
-    @test clamp.([0, 1, 2, 3, 4], 1.0, 3.0) == [1.0, 1.0, 2.0, 3.0, 3.0]
-    @test clamp.([0 1; 2 3], 1.0, 3.0) == [1.0 1.0; 2.0 3.0]
-
-    @test clamp(-200, Int8) === typemin(Int8)
-    @test clamp(100, Int8) === Int8(100)
-    @test clamp(200, Int8) === typemax(Int8)
-
-    begin
-        x = [0.0, 1.0, 2.0, 3.0, 4.0]
-        clamp!(x, 1, 3)
-        @test x == [1.0, 1.0, 2.0, 3.0, 3.0]
+@testset "meta test: ULPError" begin
+    examples_f64 = (-3e0, -2e0, -1e0, -1e-1, -1e-10, -0e0, 0e0, 1e-10, 1e-1, 1e0, 2e0, 3e0)::Tuple{Vararg{Float64}}
+    examples_f16 = Float16.(examples_f64)
+    examples_f32 = Float32.(examples_f64)
+    examples = (examples_f16..., examples_f32..., examples_f64...)
+    @testset "edge cases" begin
+        @testset "zero error - two equivalent values" begin
+            @test 0 == @inferred ulp_error(NaN, NaN)
+            @test 0 == @inferred ulp_error(-NaN, -NaN)
+            @test 0 == @inferred ulp_error(-NaN, NaN)
+            @test 0 == @inferred ulp_error(NaN, -NaN)
+            @test 0 == @inferred ulp_error(Inf, Inf)
+            @test 0 == @inferred ulp_error(-Inf, -Inf)
+            @test 0 == @inferred ulp_error(0.0, 0.0)
+            @test 0 == @inferred ulp_error(-0.0, -0.0)
+            @test 0 == @inferred ulp_error(-0.0, 0.0)
+            @test 0 == @inferred ulp_error(0.0, -0.0)
+            @test 0 == @inferred ulp_error(3.0, 3.0)
+            @test 0 == @inferred ulp_error(-3.0, -3.0)
+        end
+        @testset "infinite error" begin
+            @test Inf == @inferred ulp_error(NaN, 0.0)
+            @test Inf == @inferred ulp_error(0.0, NaN)
+            @test Inf == @inferred ulp_error(NaN, 3.0)
+            @test Inf == @inferred ulp_error(3.0, NaN)
+            @test Inf == @inferred ulp_error(NaN, Inf)
+            @test Inf == @inferred ulp_error(Inf, NaN)
+            @test Inf == @inferred ulp_error(Inf, -Inf)
+            @test Inf == @inferred ulp_error(-Inf, Inf)
+            @test Inf == @inferred ulp_error(0.0, Inf)
+            @test Inf == @inferred ulp_error(Inf, 0.0)
+            @test Inf == @inferred ulp_error(3.0, Inf)
+            @test Inf == @inferred ulp_error(Inf, 3.0)
+        end
     end
+    @testset "faithful" begin
+        for x in examples
+            @test 1 == @inferred ulp_error(x, nextfloat(x, 1))
+            @test 1 == @inferred ulp_error(x, nextfloat(x, -1))
+        end
+    end
+    @testset "midpoint" begin
+        for x in examples
+            a = abs(x)
+            @test 1 == 2 * @inferred ulp_error(copysign((widen(a) + nextfloat(a, 1))/2, x), x)
+        end
+    end
+end
 
-    @test clamp(typemax(UInt64), Int64) === typemax(Int64)
-    @test clamp(typemin(Int), UInt64) === typemin(UInt64)
-    @test clamp(Int16(-1), UInt16) === UInt16(0)
-    @test clamp(-1, 2, UInt(0)) === UInt(2)
-    @test clamp(typemax(UInt16), Int16) === Int16(32767)
+@testset "clamp" begin
+    let
+        @test clamp(0, 1, 3) == 1
+        @test clamp(1, 1, 3) == 1
+        @test clamp(2, 1, 3) == 2
+        @test clamp(3, 1, 3) == 3
+        @test clamp(4, 1, 3) == 3
 
-    # clamp should not allocate a BigInt for typemax(Int16)
-    x = big(2) ^ 100
-    @test (@allocated clamp(x, Int16)) == 0
+        @test clamp(0.0, 1, 3) == 1.0
+        @test clamp(1.0, 1, 3) == 1.0
+        @test clamp(2.0, 1, 3) == 2.0
+        @test clamp(3.0, 1, 3) == 3.0
+        @test clamp(4.0, 1, 3) == 3.0
 
-    x = clamp(2.0, BigInt)
-    @test x isa BigInt
-    @test x == big(2)
+        @test clamp.([0, 1, 2, 3, 4], 1.0, 3.0) == [1.0, 1.0, 2.0, 3.0, 3.0]
+        @test clamp.([0 1; 2 3], 1.0, 3.0) == [1.0 1.0; 2.0 3.0]
+
+        @test clamp(-200, Int8) === typemin(Int8)
+        @test clamp(100, Int8) === Int8(100)
+        @test clamp(200, Int8) === typemax(Int8)
+
+        let x = [0.0, 1.0, 2.0, 3.0, 4.0]
+            clamp!(x, 1, 3)
+            @test x == [1.0, 1.0, 2.0, 3.0, 3.0]
+        end
+
+        @test clamp(typemax(UInt64), Int64) === typemax(Int64)
+        @test clamp(typemin(Int), UInt64) === typemin(UInt64)
+        @test clamp(Int16(-1), UInt16) === UInt16(0)
+        @test clamp(-1, 2, UInt(0)) === UInt(2)
+        @test clamp(typemax(UInt16), Int16) === Int16(32767)
+
+        # clamp should not allocate a BigInt for typemax(Int16)
+        let x = big(2) ^ 100
+            @test (@allocated clamp(x, Int16)) == 0
+        end
+
+        let x = clamp(2.0, BigInt)
+            @test x isa BigInt
+            @test x == big(2)
+        end
+    end
 end
 
 @testset "constants" begin
@@ -380,6 +438,19 @@ end
     end
 end
 
+@testset "https://github.com/JuliaLang/julia/issues/56782" begin
+    @test isnan(exp(reinterpret(Float64, 0x7ffbb14880000000)))
+end
+
+@testset "issue #57463" begin
+    for T in (Int16, Int32, Int64, Int128)
+        @test iszero(1.1^typemin(T))
+        @test iszero(0.9^typemax(T))
+        @test isinf(1.1^typemax(T))
+        @test isinf(0.9^typemin(T))
+    end
+end
+
 @testset "test abstractarray trig functions" begin
     TAA = rand(2,2)
     TAA = (TAA + TAA')/2.
@@ -438,13 +509,23 @@ end
 end
 
 @testset "deg2rad/rad2deg" begin
-    @testset "$T" for T in (Int, Float64, BigFloat)
+    @testset "$T" for T in (Int, Float16, Float32, Float64, BigFloat)
         @test deg2rad(T(180)) ≈ 1pi
         @test deg2rad.(T[45, 60]) ≈ [pi/T(4), pi/T(3)]
         @test rad2deg.([pi/T(4), pi/T(3)]) ≈ [45, 60]
         @test rad2deg(T(1)*pi) ≈ 180
         @test rad2deg(T(1)) ≈ rad2deg(true)
         @test deg2rad(T(1)) ≈ deg2rad(true)
+    end
+    @testset "accuracy" begin
+        @testset "$T" for T in (Float16, Float32, Float64)
+            @test rad2deg(T(1)) === setprecision(BigFloat, 500) do
+                T(180 / BigFloat(pi))
+            end
+            @test deg2rad(T(1)) === setprecision(BigFloat, 500) do
+                T(BigFloat(pi) / 180)
+            end
+        end
     end
     @test deg2rad(180 + 60im) ≈ pi + (pi/3)*im
     @test rad2deg(pi + (pi/3)*im) ≈ 180 + 60im
@@ -570,6 +651,39 @@ end
     @test ismissing(scdm[2])
 end
 
+@testset "behavior at signed zero of monotonic floating-point functions mapping zero to zero" begin
+    function rounder(rm::RoundingMode)
+        function closure(::Type{T}, x::AbstractFloat) where {T <: AbstractFloat}
+            round(T, x, rm)
+        end
+    end
+    rounding_modes = (
+        RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp, RoundToZero, RoundFromZero, RoundUp, RoundDown,
+    )
+    rounders = map(rounder, rounding_modes)
+    @testset "typ: $typ" for typ in (Float16, Float32, Float64, BigFloat)
+        (n0, n1) = typ.(0:1)
+        rounders_typ = Base.Fix1.(rounders, typ)
+        @testset "f: $f" for f in (
+            # all strictly increasing
+            identity, deg2rad, rad2deg, cbrt, log1p, expm1, sinh, tanh, asinh, atanh,
+            sin, sind, sinpi, tan, tand, tanpi, asin, asind, atan, atand, Base.Fix2(atan, n1), Base.Fix2(atand, n1),
+            Base.Fix1(round, typ), Base.Fix1(trunc, typ), +, ∘(-, -), ∘(-, cosc),
+            rounders_typ...,
+            Base.Fix1(*, n1), Base.Fix2(*, n1), Base.Fix2(/, n1),
+        )
+            @testset "s: $s" for s in (-1, 1)
+                z = s * n0
+                z::typ
+                @test z == f(z)::typ
+                @test signbit(z) === signbit(f(z))
+                isbitstype(typ) &&
+                @test z === @inferred f(z)
+            end
+        end
+    end
+end
+
 @testset "Integer and Inf args for sinpi/cospi/tanpi/sinc/cosc" begin
     for (sinpi, cospi) in ((sinpi, cospi), (x->sincospi(x)[1], x->sincospi(x)[2]))
         @test sinpi(1) === 0.0
@@ -631,6 +745,20 @@ end
     setprecision(256) do
         @test cosc(big"0.5") ≈ big"-1.273239544735162686151070106980114896275677165923651589981338752471174381073817" rtol=1e-76
         @test cosc(big"0.499") ≈ big"-1.272045747741181369948389133250213864178198918667041860771078493955590574971317" rtol=1e-76
+    end
+
+    @testset "accuracy of `cosc` around the origin" begin
+        for t in (Float32, Float64)
+            @test ulp_error_maximum(cosc, range(start = t(-1), stop = t(1), length = 5000)) < 4
+        end
+    end
+end
+
+@testset "accuracy of `sinpi`, `cospi` around the origin" begin
+    for f in (sinpi, cospi)
+        for t in (Float32, Float64)
+            @test ulp_error_maximum(f, range(start = t(-0.25), stop = t(0.25), length = 5000)) < (has_fma[t] ? 1.0 : 1.5)
+        end
     end
 end
 
@@ -1417,7 +1545,7 @@ end
             @test func(-zero(T), zero(T), -zero(T)) === -zero(T)
             for _ in 1:2^18
                 a, b, c = reinterpret.(T, rand(Base.uinttype(T), 3))
-                @test isequal(func(a, b, c), fma(a, b, c)) || (a,b,c)
+                @test isequal(func(a, b, c), fma(a, b, c)) context=(a,b,c)
             end
         end
         @test func(floatmax(Float64), nextfloat(1.0), -floatmax(Float64)) === 3.991680619069439e292
@@ -1434,13 +1562,14 @@ end
                     Float32=>[.51, .51, .51, 2.0, 1.5],
                     Float64=>[.55, 0.8, 1.5, 2.0, 1.5])
     for T in (Float16, Float32, Float64)
+        @inferred T T(1.1)^T(1.1) #test that we always return the right type
         for x in (0.0, -0.0, 1.0, 10.0, 2.0, Inf, NaN, -Inf, -NaN)
             for y in (0.0, -0.0, 1.0, -3.0,-10.0 , Inf, NaN, -Inf, -NaN)
                 got, expected = T(x)^T(y), T(big(x)^T(y))
                 if isnan(expected)
-                    @test isnan_type(T, got) || T.((x,y))
+                    @test isnan_type(T, got) context=T.((x,y))
                 else
-                    @test got == expected || T.((x,y))
+                    @test got == expected context=T.((x,y))
                 end
             end
         end
@@ -1450,13 +1579,13 @@ end
             got, expected = x^y, widen(x)^y
             if isfinite(eps(T(expected)))
                 if y == T(-2) # unfortunately x^-2 is less accurate for performance reasons.
-                    @test abs(expected-got) <= POW_TOLS[T][4]*eps(T(expected)) || (x,y)
+                    @test abs(expected-got) <= POW_TOLS[T][4]*eps(T(expected)) context=(x,y)
                 elseif y == T(3) # unfortunately x^3 is less accurate for performance reasons.
-                    @test abs(expected-got) <= POW_TOLS[T][5]*eps(T(expected)) || (x,y)
+                    @test abs(expected-got) <= POW_TOLS[T][5]*eps(T(expected)) context=(x,y)
                 elseif issubnormal(got)
-                    @test abs(expected-got) <= POW_TOLS[T][2]*eps(T(expected)) || (x,y)
+                    @test abs(expected-got) <= POW_TOLS[T][2]*eps(T(expected)) context=(x,y)
                 else
-                    @test abs(expected-got) <= POW_TOLS[T][1]*eps(T(expected)) || (x,y)
+                    @test abs(expected-got) <= POW_TOLS[T][1]*eps(T(expected)) context=(x,y)
                 end
             end
         end
@@ -1465,7 +1594,7 @@ end
             x=rand(T)*floatmin(T); y=rand(T)*3-T(1.2)
             got, expected = x^y, widen(x)^y
             if isfinite(eps(T(expected)))
-                @test abs(expected-got) <= POW_TOLS[T][3]*eps(T(expected)) || (x,y)
+                @test abs(expected-got) <= POW_TOLS[T][3]*eps(T(expected)) context=(x,y)
             end
         end
         # test (-x)^y for y larger than typemax(Int)
@@ -1498,6 +1627,81 @@ end
     n = Int64(1024 / log2(E))
     @test E^n == Inf
     @test E^float(n) == Inf
+
+    # issue #55831
+    @testset "literal pow zero sign" begin
+        @testset "T: $T" for T ∈ (Float16, Float32, Float64, BigFloat)
+            @testset "literal `-1`" begin
+                @test -0.0 === Float64(T(-Inf)^-1)
+            end
+            @testset "`Int(-1)`" begin
+                @test -0.0 === Float64(T(-Inf)^Int(-1))
+            end
+        end
+    end
+
+    # issue #55633
+    struct Issue55633_1 <: Number end
+    struct Issue55633_3 <: Number end
+    struct Issue55633_9 <: Number end
+    Base.one(::Issue55633_3) = Issue55633_1()
+    Base.:(*)(::Issue55633_3, ::Issue55633_3) = Issue55633_9()
+    Base.promote_rule(::Type{Issue55633_1}, ::Type{Issue55633_3}) = Int
+    Base.promote_rule(::Type{Issue55633_3}, ::Type{Issue55633_9}) = Int
+    Base.promote_rule(::Type{Issue55633_1}, ::Type{Issue55633_9}) = Int
+    Base.promote_rule(::Type{Issue55633_1}, ::Type{Int}) = Int
+    Base.promote_rule(::Type{Issue55633_3}, ::Type{Int}) = Int
+    Base.promote_rule(::Type{Issue55633_9}, ::Type{Int}) = Int
+    Base.convert(::Type{Int}, ::Issue55633_1) = 1
+    Base.convert(::Type{Int}, ::Issue55633_3) = 3
+    Base.convert(::Type{Int}, ::Issue55633_9) = 9
+    for x ∈ (im, pi, Issue55633_3())
+        p = promote(one(x), x, x*x)
+        for y ∈ 0:2
+            @test all((t -> ===(t...)), zip(x^y, p[y + 1]))
+        end
+    end
+
+    @testset "rng exponentiation, issue #57590" begin
+        @test EvenInteger(16) === @inferred EvenInteger(2)^4
+        @test EvenInteger(16) === @inferred EvenInteger(2)^Int(4)  # avoid `literal_pow`
+        @test EvenInteger(16) === @inferred EvenInteger(2)^EvenInteger(4)
+    end
+
+    # issue #57464
+    @test Float32(1.1)^typemin(Int) == Float32(0.0)
+    @test Float16(1.1)^typemin(Int) == Float16(0.0)
+    @test Float32(1.1)^unsigned(0) === Float32(1.0)
+    @test Float32(1.1)^big(0) === Float32(1.0)
+
+    # By using a limited-precision integer (3 bits) we can trigger issue 57464
+    # for a case where the answer isn't zero.
+    struct Int3 <: Integer
+        x::Int8
+        function Int3(x::Integer)
+            if x < -4 || x > 3
+                Core.throw_inexacterror(:Int3, Int3, x)
+            end
+            return new(x)
+        end
+    end
+    Base.typemin(::Type{Int3}) = Int3(-4)
+    Base.promote_rule(::Type{Int3}, ::Type{T}) where {T<:Integer} = T
+    Base.convert(::Type{T}, x::Int3) where {T<:Integer} = convert(T, x.x)
+    Base.:-(x::Int3) = x.x == -4 ? x : Int3(-x.x)
+    Base.trailing_zeros(x::Int3) = trailing_zeros(x.x)
+    Base.:>>(x::Int3, n::UInt64) = Int3(x.x>>n)
+
+    @test 1.001f0^-3 == 1.001f0^Int3(-3)
+    @test 1.001f0^-4 == 1.001f0^typemin(Int3)
+end
+
+@testset "special function `::Real` fallback shouldn't recur without bound, issue #57789" begin
+    mutable struct Issue57789 <: Real end
+    Base.float(::Issue57789) = Issue57789()
+    for f ∈ (sin, sinpi, log, exp)
+        @test_throws MethodError f(Issue57789())
+    end
 end
 
 # Test that sqrt behaves correctly and doesn't exhibit fp80 double rounding.
@@ -1586,8 +1790,10 @@ function f44336()
     @inline hypot(as...)
 end
 @testset "Issue #44336" begin
-    f44336()
-    @test (@allocated f44336()) == 0
+    let
+        f44336()
+        @test (@allocated f44336()) == 0
+    end
 end
 
 @testset "constant-foldability of core math functions" begin
@@ -1602,11 +1808,9 @@ end
                     @test Core.Compiler.is_foldable(effects)
                 end
             end
-            @static if !(Sys.iswindows()&&Int==Int32) # COMBAK debug this
             @testset let effects = Base.infer_effects(^, (T,Int))
                 @test Core.Compiler.is_foldable(effects)
             end
-            end # @static
             @testset let effects = Base.infer_effects(^, (T,T))
                 @test Core.Compiler.is_foldable(effects)
             end

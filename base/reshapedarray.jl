@@ -35,35 +35,37 @@ end
 length(R::ReshapedArrayIterator) = length(R.iter)
 eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedIndex{eltype(I)} : Any
 
-## reshape(::Array, ::Dims) returns an Array, except for isbitsunion eltypes (issue #28611)
+@noinline throw_dmrsa(dims, len) =
+    throw(DimensionMismatch(LazyString("new dimensions ", dims, " must be consistent with array length ", len)))
+
+## reshape(::Array, ::Dims) returns a new Array (to avoid conditionally aliasing the structure, only the data)
 # reshaping to same # of dimensions
 @eval function reshape(a::Array{T,M}, dims::NTuple{N,Int}) where {T,N,M}
-    throw_dmrsa(dims, len) =
-        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array length $len"))
     len = Core.checked_dims(dims...) # make sure prod(dims) doesn't overflow (and because of the comparison to length(a))
     if len != length(a)
         throw_dmrsa(dims, length(a))
     end
-    isbitsunion(T) && return ReshapedArray(a, dims, ())
-    if N == M && dims == size(a)
-        return a
-    end
     ref = a.ref
-    if M == 1 && N !== 1
-        mem = ref.mem::Memory{T}
-        if !(ref === memoryref(mem) && len === mem.length)
-            mem = ccall(:jl_genericmemory_slice, Memory{T}, (Any, Ptr{Cvoid}, Int), mem, ref.ptr_or_offset, len)
-            ref = memoryref(mem)::typeof(ref)
-        end
-    end
-    # or we could use `a = Array{T,N}(undef, ntuple(0, Val(N))); a.ref = ref; a.size = dims; return a` here
+    # or we could use `a = Array{T,N}(undef, ntuple(i->0, Val(N))); a.ref = ref; a.size = dims; return a` here to avoid the eval
     return $(Expr(:new, :(Array{T,N}), :ref, :dims))
 end
 
+## reshape!(::Array, ::Dims) returns the original array, but must have the same dimensions and length as the original
+# see also resize! for a similar operation that can change the length
+function reshape!(a::Array{T,N}, dims::NTuple{N,Int}) where {T,N}
+    len = Core.checked_dims(dims...) # make sure prod(dims) doesn't overflow (and because of the comparison to length(a))
+    if len != length(a)
+        throw_dmrsa(dims, length(a))
+    end
+    setfield!(a, :dims, dims)
+    return a
+end
+
+
 
 """
-    reshape(A, dims...) -> AbstractArray
-    reshape(A, dims) -> AbstractArray
+    reshape(A, dims...)::AbstractArray
+    reshape(A, dims)::AbstractArray
 
 Return an array with the same data as `A`, but with different
 dimension sizes or number of dimensions. The two arrays share the same
@@ -118,38 +120,60 @@ julia> reshape(1:6, 2, 3)
 reshape
 
 reshape(parent::AbstractArray, dims::IntOrInd...) = reshape(parent, dims)
+reshape(parent::AbstractArray, shp::Tuple{Union{Integer,AbstractOneTo}, Vararg{Union{Integer,AbstractOneTo}}}) = reshape(parent, to_shape(shp))
+# legacy method for packages that specialize reshape(parent::AbstractArray, shp::Tuple{Union{Integer,OneTo,CustomAxis}, Vararg{Union{Integer,OneTo,CustomAxis}}})
+# leaving this method in ensures that Base owns the more specific method
 reshape(parent::AbstractArray, shp::Tuple{Union{Integer,OneTo}, Vararg{Union{Integer,OneTo}}}) = reshape(parent, to_shape(shp))
+reshape(parent::AbstractArray, dims::Tuple{Integer, Vararg{Integer}}) = reshape(parent, map(Int, dims))
 reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 
 # Allow missing dimensions with Colon():
 reshape(parent::AbstractVector, ::Colon) = parent
 reshape(parent::AbstractVector, ::Tuple{Colon}) = parent
 reshape(parent::AbstractArray, dims::Int...) = reshape(parent, dims)
-reshape(parent::AbstractArray, dims::Union{Int,Colon}...) = reshape(parent, dims)
-reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = reshape(parent, _reshape_uncolon(parent, dims))
-@inline function _reshape_uncolon(A, dims)
-    @noinline throw1(dims) = throw(DimensionMismatch(string("new dimensions $(dims) ",
-        "may have at most one omitted dimension specified by `Colon()`")))
-    @noinline throw2(A, dims) = throw(DimensionMismatch(string("array size $(length(A)) ",
-        "must be divisible by the product of the new dimensions $dims")))
-    pre = _before_colon(dims...)::Tuple{Vararg{Int}}
+reshape(parent::AbstractArray, dims::Integer...) = reshape(parent, dims)
+reshape(parent::AbstractArray, dims::Union{Integer,Colon}...) = reshape(parent, dims)
+reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Integer,Colon}}}) = reshape(parent, _reshape_uncolon(parent, dims))
+
+@noinline throw1(dims) = throw(DimensionMismatch(LazyString("new dimensions ", dims,
+        " may have at most one omitted dimension specified by `Colon()`")))
+@noinline throw2(lenA, dims) = throw(DimensionMismatch(string("array size ", lenA,
+    " must be divisible by the product of the new dimensions ", dims)))
+
+@inline function _reshape_uncolon(A, _dims::Tuple{Vararg{Union{Integer, Colon}}})
+    # promote the dims to `Int` at least
+    dims = map(x -> x isa Colon ? x : promote_type(typeof(x), Int)(x), _dims)
+    pre = _before_colon(dims...)
     post = _after_colon(dims...)
     _any_colon(post...) && throw1(dims)
-    post::Tuple{Vararg{Int}}
     len = length(A)
-    sz, is_exact = if iszero(len)
-        (0, true)
+    _reshape_uncolon_computesize(len, dims, pre, post)
+end
+@inline function _reshape_uncolon_computesize(len::Int, dims, pre::Tuple{Vararg{Int}}, post::Tuple{Vararg{Int}})
+    sz = if iszero(len)
+        0
     else
         let pr = Core.checked_dims(pre..., post...)  # safe product
-            if iszero(pr)
-                throw2(A, dims)
-            end
-            (quo, rem) = divrem(len, pr)
-            (Int(quo), iszero(rem))
+            quo = _reshape_uncolon_computesize_nonempty(len, dims, pr)
+            convert(Int, quo)
         end
-    end::Tuple{Int,Bool}
-    is_exact || throw2(A, dims)
-    (pre..., sz, post...)::Tuple{Int,Vararg{Int}}
+    end
+    (pre..., sz, post...)
+end
+@inline function _reshape_uncolon_computesize(len, dims, pre, post)
+    pr = prod((pre..., post...))
+    sz = if iszero(len)
+        promote(len, pr)[1] # zero of the correct type
+    else
+        _reshape_uncolon_computesize_nonempty(len, dims, pr)
+    end
+    (pre..., sz, post...)
+end
+@inline function _reshape_uncolon_computesize_nonempty(len, dims, pr)
+    iszero(pr) && throw2(len, dims)
+    (quo, rem) = divrem(len, pr)
+    iszero(rem) || throw2(len, dims)
+    quo
 end
 @inline _any_colon() = false
 @inline _any_colon(dim::Colon, tail...) = true
@@ -201,7 +225,7 @@ function _reshape(parent::AbstractArray, dims::Dims)
 end
 
 @noinline function _throw_dmrs(n, str, dims)
-    throw(DimensionMismatch("parent has $n elements, which is incompatible with $str $dims"))
+    throw(DimensionMismatch("parent has $n elements, which is incompatible with $str $dims ($(prod(dims)) elements)"))
 end
 
 # Reshaping a ReshapedArray
@@ -210,10 +234,10 @@ _reshape(R::ReshapedArray, dims::Dims) = _reshape(R.parent, dims)
 
 function __reshape(p::Tuple{AbstractArray,IndexStyle}, dims::Dims)
     parent = p[1]
-    strds = front(size_to_strides(map(length, axes(parent))..., 1))
-    strds1 = map(s->max(1,Int(s)), strds)  # for resizing empty arrays
-    mi = map(SignedMultiplicativeInverse, strds1)
-    ReshapedArray(parent, dims, reverse(mi))
+    szs = front(size(parent))
+    szs1 = map(s -> max(1, Int(s)), szs) # for resizing empty arrays
+    mi = map(SignedMultiplicativeInverse, szs1)
+    ReshapedArray(parent, dims, mi)
 end
 
 function __reshape(p::Tuple{AbstractArray{<:Any,0},IndexCartesian}, dims::Dims)
@@ -229,10 +253,10 @@ end
 size(A::ReshapedArray) = A.dims
 length(A::ReshapedArray) = length(parent(A))
 similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype, dims)
+similar(::Type{TA}, dims::Dims) where {T,N,P,TA<:ReshapedArray{T,N,P}} = similar(P, dims)
 IndexStyle(::Type{<:ReshapedArrayLF}) = IndexLinear()
 parent(A::ReshapedArray) = A.parent
 parentindices(A::ReshapedArray) = map(oneto, size(parent(A)))
-reinterpret(::Type{T}, A::ReshapedArray, dims::Dims) where {T} = reinterpret(T, parent(A), dims)
 elsize(::Type{<:ReshapedArray{<:Any,<:Any,P}}) where {P} = elsize(P)
 
 unaliascopy(A::ReshapedArray) = typeof(A)(unaliascopy(A.parent), A.dims, A.mi)
@@ -244,11 +268,11 @@ mightalias(A::ReshapedArray, B::SubArray) = mightalias(parent(A), B)
 mightalias(A::SubArray, B::ReshapedArray) = mightalias(A, parent(B))
 
 @inline ind2sub_rs(ax, ::Tuple{}, i::Int) = (i,)
-@inline ind2sub_rs(ax, strds, i) = _ind2sub_rs(ax, strds, i - 1)
+@inline ind2sub_rs(ax, szs, i) = _ind2sub_rs(ax, szs, i - 1)
 @inline _ind2sub_rs(ax, ::Tuple{}, ind) = (ind + first(ax[end]),)
-@inline function _ind2sub_rs(ax, strds, ind)
-    d, r = divrem(ind, strds[1])
-    (_ind2sub_rs(front(ax), tail(strds), r)..., d + first(ax[end]))
+@inline function _ind2sub_rs(ax, szs, ind)
+    d, r = divrem(ind, szs[1])
+    (r + first(ax[1]), _ind2sub_rs(tail(ax), tail(szs), d)...)
 end
 offset_if_vec(i::Integer, axs::Tuple{<:AbstractUnitRange}) = i + first(axs[1]) - 1
 offset_if_vec(i::Integer, axs::Tuple) = i
@@ -324,6 +348,7 @@ setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()
 @noinline _rs_setindex!_err() = error("indexed assignment fails for a reshaped range; consider calling collect")
 
 cconvert(::Type{Ptr{T}}, a::ReshapedArray{T}) where {T} = cconvert(Ptr{T}, parent(a))
+unsafe_convert(::Type{Ptr{T}}, a::ReshapedArray{T}) where {T} = unsafe_convert(Ptr{T}, a.parent)
 
 # Add a few handy specializations to further speed up views of reshaped ranges
 const ReshapedUnitRange{T,N,A<:AbstractUnitRange} = ReshapedArray{T,N,A,Tuple{}}
@@ -335,16 +360,54 @@ compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{ReshapedRange
 substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedUnitRange, Vararg{Any}}) where N =
     (size_to_strides(strds[1], size(I[1])...)..., substrides(tail(strds), tail(I))...)
 
-# cconvert(::Type{<:Ptr}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {T,N,P} = V
+# This exists for backwards compatibility, normally the cconvert method below will be used
 function unsafe_convert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {S,T,N,P}
     parent = V.parent
-    p = cconvert(Ptr{T}, parent) # XXX: this should occur in cconvert, the result is not GC-rooted
     Δmem = if _checkcontiguous(Bool, parent)
         (first_index(V) - firstindex(parent)) * elsize(parent)
     else
         _memory_offset(parent, map(first, V.indices)...)
     end
-    return Ptr{S}(unsafe_convert(Ptr{T}, p) + Δmem)
+    return Ptr{S}(unsafe_convert(Ptr{T}, parent) + Δmem)
+end
+
+struct OffsetCConvert{T, C}
+    byte_offset::Int
+    cconv_parent::C
+end
+
+# Avoid unneeded nesting
+function _offset_cconvert(::Type{Ptr{T}}, byte_offset::Int, cconv_parent::OffsetCConvert{T}) where {T}
+    _offset_cconvert(
+        Ptr{T},
+        cconv_parent.byte_offset + byte_offset,
+        cconv_parent.cconv_parent,
+    )
+end
+function _offset_cconvert(::Type{Ptr{T}}, byte_offset::Int, cconv_parent::C) where {T,C}
+    OffsetCConvert{T,C}(
+        byte_offset,
+        cconv_parent,
+    )
+end
+
+function unsafe_convert(::Type{Ptr{S}}, c::OffsetCConvert{T}) where {S, T}
+    Ptr{S}(unsafe_convert(Ptr{T}, c.cconv_parent) + c.byte_offset)
+end
+
+function cconvert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {S,T,N,P}
+    parent = V.parent
+    p = cconvert(Ptr{T}, parent)
+    Δmem = if _checkcontiguous(Bool, parent)
+        (first_index(V) - firstindex(parent)) * elsize(parent)
+    else
+        _memory_offset(parent, map(first, V.indices)...)
+    end
+    _offset_cconvert(
+        Ptr{T},
+        Int(Δmem),
+        p,
+    )
 end
 
 _checkcontiguous(::Type{Bool}, A::AbstractArray) = false

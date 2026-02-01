@@ -18,6 +18,8 @@ const patterns = split("""
     *Makefile
 """)
 
+const is_gha = something(tryparse(Bool, get(ENV, "GITHUB_ACTIONS", "false")), false)
+
 # Note: `git ls-files` gives `/` as a path separator on Windows,
 #   so we just use `/` for all platforms.
 allow_tabs(path) =
@@ -30,10 +32,39 @@ allow_tabs(path) =
     endswith(path, "test/syntax.jl") ||
     endswith(path, "test/triplequote.jl")
 
-const errors = Set{Tuple{String,Int,String}}()
-
 function check_whitespace()
-    for path in eachline(`git ls-files -- $patterns`)
+    # Get file list from ARGS if provided, otherwise use git ls-files
+    errors = Set{Tuple{String,Int,String}}()
+    files_to_check = filter(arg -> arg != "--fix", ARGS)
+    if isempty(files_to_check)
+        files_to_check = eachline(`git ls-files -- $patterns`)
+    end
+
+    files_fixed = 0
+    if "--fix" in ARGS
+        for path in files_to_check
+            content = newcontent = read(path, String)
+            isempty(content) && continue
+            if !allow_tabs(path)
+                tabpattern = r"^([ \t]+)"m => (x -> replace(x, r"((?: {4})*)( *\t)" => s"\1    ")) # Replace tab sequences at start of line after any number of 4-space groups
+                newcontent = replace(newcontent, tabpattern)
+            end
+            newcontent = replace(newcontent,
+                r"\s*$" => '\n',                # Remove trailing whitespace and normalize line ending at eof
+                r"\s*?[\r\n]" => '\n',          # Remove trailing whitespace and normalize line endings on each line
+                r"\xa0" => ' '                  # Replace non-breaking spaces
+            )
+            if content != newcontent
+                write(path, newcontent)
+                files_fixed += 1
+            end
+        end
+        if files_fixed > 0
+            println(stderr, "Fixed whitespace issues in $files_fixed files.")
+        end
+    end
+
+    for path in files_to_check
         lineno = 0
         non_blank = 0
 
@@ -63,8 +94,14 @@ function check_whitespace()
         for (path, lineno, msg) in sort!(collect(errors))
             if lineno == 0
                 println(stderr, "$path -- $msg")
+                if is_gha
+                    println(stdout, "::warning title=Whitespace check,file=", path, "::", msg)
+                end
             else
                 println(stderr, "$path:$lineno -- $msg")
+                if is_gha
+                    println(stdout, "::warning title=Whitespace check,file=", path, ",line=", lineno, "::", msg)
+                end
             end
         end
         exit(1)

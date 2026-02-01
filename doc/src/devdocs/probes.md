@@ -177,8 +177,8 @@ It's sometimes useful to know when a task is spawning other tasks. This is very
 easy to see with `rt__new__task`. The first argument to the probe, `parent`, is
 the existing task which is creating a new task. This means that if you know the
 address of the task you want to monitor, you can easily just look at the tasks
-that that specific task spawned. Let's see how to do this; first let's start a
-Julia session and get the PID and REPL's task address:
+that were spawned by that specific task. Let's see how to do this; first let's
+start a Julia session and get the PID and REPL's task address:
 
 ```
 > julia
@@ -206,7 +206,7 @@ Now we can start `bpftrace` and have it monitor `rt__new__task` for *only* this 
 
 And if we spawn a single task:
 
-`@async 1+1`
+`Threads.@spawn 1+1`
 
 we see this task being created:
 
@@ -215,8 +215,8 @@ we see this task being created:
 However, if we spawn a bunch of tasks from that newly-spawned task:
 
 ```julia
-@async for i in 1:10
-   @async 1+1
+Threads.@spawn for i in 1:10
+   Threads.@spawn 1+1
 end
 ```
 

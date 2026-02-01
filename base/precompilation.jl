@@ -1,8 +1,8 @@
 module Precompilation
 
-using Base: PkgId, UUID, SHA1, parsed_toml, project_file_name_uuid, project_names,
+using Base: CoreLogging, PkgId, UUID, SHA1, parsed_toml, project_file_name_uuid, project_names,
             project_file_manifest_path, get_deps, preferences_names, isaccessibledir, isfile_casesensitive,
-            base_project
+            base_project, isdefined
 
 # This is currently only used for pkgprecompile but the plan is to use this in code loading in the future
 # see the `kc/codeloading2.0` branch
@@ -26,9 +26,24 @@ struct ExplicitEnv
     #local_prefs::Union{Nothing, Dict{String, Any}}
 end
 
-function ExplicitEnv(envpath::String=Base.active_project())
-    if !isfile(envpath)
-        error("expected a project file at $(repr(envpath))")
+ExplicitEnv() = ExplicitEnv(Base.active_project())
+function ExplicitEnv(::Nothing, envpath::String="")
+    ExplicitEnv(envpath,
+        Dict{String, UUID}(),     # project_deps
+        Dict{String, UUID}(),     # project_weakdeps
+        Dict{String, UUID}(),     # project_extras
+        Dict{String, Vector{UUID}}(), # project_extensions
+        Dict{UUID, Vector{UUID}}(),   # deps
+        Dict{UUID, Vector{UUID}}(),   # weakdeps
+        Dict{UUID, Dict{String, Vector{UUID}}}(), # extensions
+        Dict{UUID, String}(),     # names
+        Dict{UUID, Union{SHA1, String, Nothing, Missing}}())
+end
+function ExplicitEnv(envpath::String)
+    # Handle missing project file by creating an empty environment
+    if !isfile(envpath) || project_file_manifest_path(envpath) === nothing
+        envpath = abspath(envpath)
+        return ExplicitEnv(nothing, envpath)
     end
     envpath = abspath(envpath)
     project_d = parsed_toml(envpath)
@@ -48,7 +63,7 @@ function ExplicitEnv(envpath::String=Base.active_project())
                 key == "weakdeps" ? project_weakdeps :
                 key == "extras" ? project_extras :
                 error()
-            uuid = UUID(_uuid)
+            uuid = UUID(_uuid::String)
             v[name] = uuid
             names[UUID(uuid)] = name
             project_uuid_to_name[name] = UUID(uuid)
@@ -75,9 +90,11 @@ function ExplicitEnv(envpath::String=Base.active_project())
 
     project_extensions = Dict{String, Vector{UUID}}()
     # Collect all extensions of the project
-    for (name, triggers::Union{String, Vector{String}}) in get(Dict{String, Any}, project_d, "extensions")::Dict{String, Any}
+    for (name, triggers) in get(Dict{String, Any}, project_d, "extensions")::Dict{String, Any}
         if triggers isa String
             triggers = [triggers]
+        else
+            triggers = triggers::Vector{String}
         end
         uuids = UUID[]
         for trigger in triggers
@@ -108,8 +125,8 @@ function ExplicitEnv(envpath::String=Base.active_project())
     sizehint!(lookup_strategy, length(manifest_d))
 
     for (name, pkg_infos) in get_deps(manifest_d)
-        pkg_infos = pkg_infos::Vector{Any}
-        for pkg_info in pkg_infos
+        for pkg_info in pkg_infos::Vector{Any}
+            pkg_info = pkg_info::Dict{String, Any}
             m_uuid = UUID(pkg_info["uuid"]::String)
 
             # If we have multiple packages with the same name we will overwrite things here
@@ -130,8 +147,8 @@ function ExplicitEnv(envpath::String=Base.active_project())
                 # Expanded format:
                 else
                     uuids = UUID[]
-                    for (name_dep, _dep_uuid::String) in deps_pkg
-                        dep_uuid = UUID(_dep_uuid)
+                    for (name_dep, _dep_uuid) in deps_pkg
+                        dep_uuid = UUID(_dep_uuid::String)
                         push!(uuids, dep_uuid)
                         names[dep_uuid] = name_dep
                     end
@@ -141,14 +158,16 @@ function ExplicitEnv(envpath::String=Base.active_project())
 
             # Extensions
             deps_pkg = get(Dict{String, Any}, pkg_info, "extensions")::Dict{String, Any}
+            deps_pkg_concrete = Dict{String, Vector{String}}()
             for (ext, triggers) in deps_pkg
-                triggers = triggers::Union{String, Vector{String}}
                 if triggers isa String
                     triggers = [triggers]
+                else
+                    triggers = triggers::Vector{String}
                 end
-                deps_pkg[ext] = triggers
+                deps_pkg_concrete[ext] = triggers
             end
-            extensions[m_uuid] = deps_pkg
+            extensions[m_uuid] = deps_pkg_concrete
 
             # Determine strategy to find package
             lookup_strat = begin
@@ -176,7 +195,7 @@ function ExplicitEnv(envpath::String=Base.active_project())
     if proj_name !== nothing && proj_uuid !== nothing
         deps_expanded[proj_uuid] = filter!(!=(proj_uuid), collect(values(project_deps)))
         extensions_expanded[proj_uuid] = project_extensions
-        path = get(project_d, "path", nothing)
+        path = get(project_d, "path", nothing)::Union{String, Nothing}
         entry_point = path !== nothing ? path : dirname(envpath)
         lookup_strategy[proj_uuid] = entry_point
     end
@@ -285,7 +304,7 @@ function show_progress(io::IO, p::MiniProgressBar; termwidth=nothing, carriagere
         return
     end
     t = time()
-    if p.has_shown && (t - p.time_shown) < PROGRESS_BAR_TIME_GRANULARITY[]
+    if !p.always_reprint && p.has_shown && (t - p.time_shown) < PROGRESS_BAR_TIME_GRANULARITY[]
         return
     end
     p.time_shown = t
@@ -297,16 +316,27 @@ function show_progress(io::IO, p::MiniProgressBar; termwidth=nothing, carriagere
     else
         string(p.current, "/",  p.max)
     end
-    termwidth = @something termwidth displaysize(io)[2]
+    termwidth = @something termwidth (displaysize(io)::Tuple{Int,Int})[2]
     max_progress_width = max(0, min(termwidth - textwidth(p.header) - textwidth(progress_text) - 10 , p.width))
-    n_filled = ceil(Int, max_progress_width * perc / 100)
+    n_filled = floor(Int, max_progress_width * perc / 100)
+    partial_filled = (max_progress_width * perc / 100) - n_filled
     n_left = max_progress_width - n_filled
+    headers = split(p.header, ' ')
     to_print = sprint(; context=io) do io
         print(io, " "^p.indent)
-        printstyled(io, p.header, color=p.color, bold=true)
-        print(io, " [")
-        print(io, "="^n_filled, ">")
-        print(io, " "^n_left, "]  ", )
+        printstyled(io, headers[1], " "; color=:green, bold=true)
+        printstyled(io, join(headers[2:end], ' '))
+        print(io, " ")
+        printstyled(io, "━"^n_filled; color=p.color)
+        if n_left > 0
+            if partial_filled > 0.5
+                printstyled(io, "╸"; color=p.color) # More filled, use ╸
+            else
+                printstyled(io, "╺"; color=:light_black) # Less filled, use ╺
+            end
+            printstyled(io, "━"^(n_left-1); color=:light_black)
+        end
+        printstyled(io, " "; color=:light_black)
         print(io, progress_text)
         carriagereturn && print(io, "\r")
     end
@@ -340,17 +370,178 @@ Base.show(io::IO, err::PkgPrecompileError) = print(io, "PkgPrecompileError: ", e
 
 import Base: StaleCacheKey
 
-can_fancyprint(io::IO) = io isa Base.TTY && (get(ENV, "CI", nothing) != "true")
+can_fancyprint(io::IO) = @something(get(io, :force_fancyprint, nothing), (io isa Base.TTY && (get(ENV, "CI", nothing) != "true")))
 
-function printpkgstyle(io, header, msg; color=:light_green)
+function printpkgstyle(io, header, msg; color=:green)
     printstyled(io, header; color, bold=true)
     println(io, " ", msg)
 end
 
 const Config = Pair{Cmd, Base.CacheFlags}
-const PkgConfig = Tuple{Base.PkgId,Config}
+const PkgConfig = Tuple{PkgId,Config}
 
-function precompilepkgs(pkgs::Vector{String}=String[];
+# name or parent → ext
+function full_name(ext_to_parent::Dict{PkgId, PkgId}, pkg::PkgId)
+    if haskey(ext_to_parent, pkg)
+        return string(ext_to_parent[pkg].name, " → ", pkg.name)
+    else
+        return pkg.name
+    end
+end
+
+function excluded_circular_deps_explanation(io::IOContext{IO}, ext_to_parent::Dict{PkgId, PkgId}, circular_deps, cycles)
+    outer_deps = copy(circular_deps)
+    cycles_names = ""
+    for cycle in cycles
+        filter!(!in(cycle), outer_deps)
+        cycle_str = ""
+        for (i, pkg) in enumerate(cycle)
+            j = max(0, i - 1)
+            if length(cycle) == 1
+                line = " ─ "
+            elseif i == 1
+                line = " ┌ "
+            elseif i < length(cycle)
+                line = " │ " * " " ^j
+            else
+                line = " └" * "─" ^j * " "
+            end
+            hascolor = get(io, :color, false)::Bool # XXX: this output does not go to `io` so this is bad to call here
+            line = _color_string(line, :light_black, hascolor) * full_name(ext_to_parent, pkg) * "\n"
+            cycle_str *= line
+        end
+        cycles_names *= cycle_str
+    end
+    plural1 = length(cycles) > 1 ? "these cycles" : "this cycle"
+    plural2 = length(cycles) > 1 ? "cycles" : "cycle"
+    msg = """Circular dependency detected.
+    Precompilation will be skipped for dependencies in $plural1:
+    $cycles_names"""
+    if !isempty(outer_deps)
+        msg *= "Precompilation will also be skipped for the following, which depend on the above $plural2:\n"
+        msg *= join(("  " * full_name(ext_to_parent, pkg) for pkg in outer_deps), "\n")
+    end
+    return msg
+end
+
+
+function scan_pkg!(stack, could_be_cycle, cycles, pkg, dmap)
+    if haskey(could_be_cycle, pkg)
+        return could_be_cycle[pkg]
+    else
+        return scan_deps!(stack, could_be_cycle, cycles, pkg, dmap)
+    end
+end
+function scan_deps!(stack, could_be_cycle, cycles, pkg, dmap)
+    push!(stack, pkg)
+    cycle = nothing
+    for dep in dmap[pkg]
+        if dep in stack
+            # Created fresh cycle
+            cycle′ = stack[findlast(==(dep), stack):end]
+            if cycle === nothing || length(cycle′) < length(cycle)
+                cycle = cycle′ # try to report smallest cycle possible
+            end
+        elseif scan_pkg!(stack, could_be_cycle, cycles, dep, dmap)
+            # Reaches an existing cycle
+            could_be_cycle[pkg] = true
+            pop!(stack)
+            return true
+        end
+    end
+    pop!(stack)
+    if cycle !== nothing
+        push!(cycles, cycle)
+        could_be_cycle[pkg] = true
+        return true
+    end
+    could_be_cycle[pkg] = false
+    return false
+end
+
+# restrict to dependencies of given packages
+function collect_all_deps(direct_deps, dep, alldeps=Set{Base.PkgId}())
+    for _dep in direct_deps[dep]
+        if !(_dep in alldeps)
+            push!(alldeps, _dep)
+            collect_all_deps(direct_deps, _dep, alldeps)
+        end
+    end
+    return alldeps
+end
+
+
+"""
+    precompilepkgs(pkgs; kwargs...)
+
+Precompile packages and their dependencies, with support for parallel compilation,
+progress tracking, and various compilation configurations.
+
+`pkgs::Union{Vector{String}, Vector{PkgId}}`: Packages to precompile. When
+empty (default), precompiles all project dependencies. When specified,
+precompiles only the given packages and their dependencies (unless
+`manifest=true`).
+
+!!! note
+    Errors will only throw when precompiling the top-level dependencies, given that
+    not all manifest dependencies may be loaded by the top-level dependencies on the given system.
+    This can be overridden to make errors in all dependencies throw by setting the kwarg `strict` to `true`
+
+# Keyword Arguments
+- `internal_call::Bool`: Indicates this is an automatic precompilation call
+  from somewhere external (e.g. Pkg). Do not use this parameter.
+
+- `strict::Bool`: Controls error reporting scope. When `false` (default), only reports
+  errors for direct project dependencies. Only relevant when `manifest=true`.
+
+- `warn_loaded::Bool`: When `true` (default), checks for and warns about packages that are
+  precompiled but already loaded with a different version. Displays a warning that Julia
+  needs to be restarted to use the newly precompiled versions.
+
+- `timing::Bool`: When `true` (not default), displays timing information for
+  each package compilation, but only if compilation might have succeeded.
+  Disables fancy progress bar output (timing is shown in simple text mode).
+
+- `_from_loading::Bool`: Internal flag indicating the call originated from the
+  package loading system. When `true` (not default): returns early instead of
+  throwing when packages are not found; suppresses progress messages when not
+  in an interactive session; allows packages outside the current environment to
+  be added as serial precompilation jobs; skips LOADING_CACHE initialization;
+  and changes cachefile locking behavior.
+
+- `configs::Union{Config,Vector{Config}}`: Compilation configurations to use. Each Config
+  is a `Pair{Cmd, Base.CacheFlags}` specifying command flags and cache flags. When
+  multiple configs are provided, each package is precompiled for each configuration.
+
+- `io::IO`: Output stream for progress messages, warnings, and errors. Can be
+  redirected (e.g., to `devnull` when called from loading in non-interactive mode).
+
+- `fancyprint::Bool`: Controls output format. When `true`, displays an animated progress
+  bar with spinners. When `false`, instead enables `timing` mode. Automatically
+  disabled when `timing=true` or when called from loading in non-interactive mode.
+
+- `manifest::Bool`: Controls the scope of packages to precompile. When `false` (default),
+  precompiles only packages specified in `pkgs` and their dependencies. When `true`,
+  precompiles all packages in the manifest (workspace mode), typically used by Pkg for
+  workspace precompile requests.
+
+- `ignore_loaded::Bool`: Controls whether already-loaded packages affect cache
+  freshness checks. When `false` (not default), loaded package versions are considered when
+  determining if cache files are fresh.
+
+# Return
+- `Vector{String}`: Paths to cache files for the requested packages.
+- `Nothing`: precompilation should be skipped
+
+# Notes
+- Packages in circular dependency cycles are skipped with a warning.
+- Packages with `__precompile__(false)` are skipped if they are from loading to
+  avoid repeated work on every session.
+- Parallel compilation is controlled by `JULIA_NUM_PRECOMPILE_TASKS` environment variable
+  (defaults to CPU_THREADS + 1, capped at 16, halved on Windows).
+- Extensions are precompiled when all their triggers are available in the environment.
+"""
+function precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}}=String[];
                         internal_call::Bool=false,
                         strict::Bool = false,
                         warn_loaded::Bool = true,
@@ -360,10 +551,60 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                         io::IO=stderr,
                         # asking for timing disables fancy mode, as timing is shown in non-fancy mode
                         fancyprint::Bool = can_fancyprint(io) && !timing,
-                        manifest::Bool=false,)
+                        manifest::Bool=false,
+                        ignore_loaded::Bool=true)
+    @debug "precompilepkgs called with" pkgs internal_call strict warn_loaded timing _from_loading configs fancyprint manifest ignore_loaded
+    # monomorphize this to avoid latency problems
+    _precompilepkgs(pkgs, internal_call, strict, warn_loaded, timing, _from_loading,
+                   configs isa Vector{Config} ? configs : [configs],
+                   IOContext{IO}(io), fancyprint, manifest, ignore_loaded)
+end
 
-    configs = configs isa Config ? [configs] : configs
+function _visit_indirect_deps!(direct_deps::Dict{PkgId, Vector{PkgId}}, visited::Set{PkgId},
+                               node::PkgId, all_deps::Set{PkgId})
+    if node in visited
+        return
+    end
+    push!(visited, node)
+    for dep in get(Set{PkgId}, direct_deps, node)
+        if !(dep in all_deps)
+            push!(all_deps, dep)
+            _visit_indirect_deps!(direct_deps, visited, dep, all_deps)
+        end
+    end
+    return
+end
+
+function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
+                         internal_call::Bool,
+                         strict::Bool,
+                         warn_loaded::Bool,
+                         timing::Bool,
+                         _from_loading::Bool,
+                         configs::Vector{Config},
+                         io::IOContext{IO},
+                         fancyprint′::Bool,
+                         manifest::Bool,
+                         ignore_loaded::Bool)
     requested_pkgs = copy(pkgs) # for understanding user intent
+    pkg_names = pkgs isa Vector{String} ? copy(pkgs) : String[pkg.name for pkg in pkgs]
+    if pkgs isa Vector{PkgId}
+        requested_pkgids′ = copy(pkgs)
+    else
+        requested_pkgids′ = PkgId[]
+        for name in pkgs
+            pkgid = Base.identify_package(name)
+            if pkgid === nothing
+                if _from_loading
+                    return # leave it up to loading to handle this
+                else
+                    throw(PkgPrecompileError("Unknown package: $name"))
+                end
+            end
+            push!(requested_pkgids′, pkgid)
+        end
+    end
+    requested_pkgids = requested_pkgids′
 
     time_start = time_ns()
 
@@ -371,134 +612,165 @@ function precompilepkgs(pkgs::Vector{String}=String[];
 
     # Windows sometimes hits a ReadOnlyMemoryError, so we halve the default number of tasks. Issue #2323
     # TODO: Investigate why this happens in windows and restore the full task limit
-    default_num_tasks = Sys.iswindows() ? div(Sys.CPU_THREADS::Int, 2) + 1 : Sys.CPU_THREADS::Int + 1
+    default_num_tasks = Sys.iswindows() ? div(Sys.EFFECTIVE_CPU_THREADS::Int, 2) + 1 : Sys.EFFECTIVE_CPU_THREADS::Int + 1
     default_num_tasks = min(default_num_tasks, 16) # limit for better stability on shared resource systems
 
-    num_tasks = parse(Int, get(ENV, "JULIA_NUM_PRECOMPILE_TASKS", string(default_num_tasks)))
+    num_tasks = max(1, something(tryparse(Int, get(ENV, "JULIA_NUM_PRECOMPILE_TASKS", string(default_num_tasks))), 1))
     parallel_limiter = Base.Semaphore(num_tasks)
 
-    if _from_loading && !Sys.isinteractive() && Base.get_bool_env("JULIA_TESTS", false)
-        # suppress passive loading printing in julia test suite. `JULIA_TESTS` is set in Base.runtests
-        io = devnull
+    # suppress precompilation progress messages when precompiling for loading packages, except during interactive sessions
+    # or when specified by logging heuristics that explicitly require it
+    # since the complicated IO implemented here can have somewhat disastrous consequences when happening in the background (e.g. #59599)
+    logio′ = io
+    logcalls′ = nothing
+    if _from_loading
+        if isinteractive()
+            logcalls′ = CoreLogging.Info # sync with Base.compilecache
+        else
+            logio′ = IOContext{IO}(devnull)
+            fancyprint′ = false
+            logcalls′ = CoreLogging.Debug # sync with Base.compilecache
+        end
     end
+    fancyprint = fancyprint′
+    logio = logio′
+    logcalls = logcalls′
 
-    hascolor = get(io, :color, false)::Bool
+    nconfigs = length(configs)
+    hascolor = get(logio, :color, false)::Bool
     color_string(cstr::String, col::Union{Int64, Symbol}) = _color_string(cstr, col, hascolor)
 
     stale_cache = Dict{StaleCacheKey, Bool}()
-    exts = Dict{Base.PkgId, String}() # ext -> parent
-    # make a flat map of each dep and its direct deps
-    depsmap = Dict{Base.PkgId, Vector{Base.PkgId}}()
-    pkg_exts_map = Dict{Base.PkgId, Vector{Base.PkgId}}()
+    cachepath_cache = Dict{PkgId, Vector{String}}()
 
+    # a map from packages/extensions to their direct deps
+    direct_deps = Dict{Base.PkgId, Vector{Base.PkgId}}()
+    # a map from parent → extension, including all extensions that are loadable
+    # in the current environment (i.e. their triggers are present)
+    parent_to_exts = Dict{Base.PkgId, Vector{Base.PkgId}}()
+    # inverse map of `parent_to_ext` above (ext → parent)
+    ext_to_parent = Dict{Base.PkgId, Base.PkgId}()
+
+    function describe_pkg(pkg::PkgId, is_project_dep::Bool, is_serial_dep::Bool, flags::Cmd, cacheflags::Base.CacheFlags)
+        name = full_name(ext_to_parent, pkg)
+        name = is_project_dep ? name : color_string(name, :light_black)
+        if is_serial_dep
+            name *= color_string(" (serial)", :light_black)
+        end
+        if nconfigs > 1 && !isempty(flags)
+            config_str = join(flags, " ")
+            name *= color_string(" `$config_str`", :light_black)
+        end
+        if nconfigs > 1
+            config_str = join(Base.translate_cache_flags(cacheflags, Base.DefaultCacheFlags), " ")
+            name *= color_string(" $config_str", :light_black)
+        end
+        return name
+    end
+
+    triggers = Dict{Base.PkgId,Vector{Base.PkgId}}()
     for (dep, deps) in env.deps
         pkg = Base.PkgId(dep, env.names[dep])
         Base.in_sysimage(pkg) && continue
         deps = [Base.PkgId(x, env.names[x]) for x in deps]
-        depsmap[pkg] = filter!(!Base.in_sysimage, deps)
-        # add any extensions
-        pkg_exts = Dict{Base.PkgId, Vector{Base.PkgId}}()
-        for (ext_name, extdep_uuids) in env.extensions[dep]
-            ext_deps = Base.PkgId[]
-            push!(ext_deps, pkg) # depends on parent package
-            all_extdeps_available = true
-            for extdep_uuid in extdep_uuids
-                extdep_name = env.names[extdep_uuid]
-                if extdep_uuid in keys(env.deps)
-                    push!(ext_deps, Base.PkgId(extdep_uuid, extdep_name))
+        direct_deps[pkg] = filter!(!Base.in_sysimage, deps)
+        for (ext_name, trigger_uuids) in env.extensions[dep]
+            ext_uuid = Base.uuid5(pkg.uuid, ext_name)
+            ext = Base.PkgId(ext_uuid, ext_name)
+            triggers[ext] = Base.PkgId[pkg] # depends on parent package
+            all_triggers_available = true
+            for trigger_uuid in trigger_uuids
+                trigger_name = Base.PkgId(trigger_uuid, env.names[trigger_uuid])
+                if trigger_uuid in keys(env.deps) || Base.in_sysimage(trigger_name)
+                    push!(triggers[ext], trigger_name)
                 else
-                    all_extdeps_available = false
+                    all_triggers_available = false
                     break
                 end
             end
-            all_extdeps_available || continue
-            ext_uuid = Base.uuid5(pkg.uuid, ext_name)
-            ext = Base.PkgId(ext_uuid, ext_name)
-            filter!(!Base.in_sysimage, ext_deps)
-            depsmap[ext] = ext_deps
-            exts[ext] = pkg.name
-            pkg_exts[ext] = ext_deps
-        end
-        if !isempty(pkg_exts)
-            pkg_exts_map[pkg] = collect(keys(pkg_exts))
+            all_triggers_available || continue
+            ext_to_parent[ext] = pkg
+            direct_deps[ext] = filter(!Base.in_sysimage, triggers[ext])
+
+            if !haskey(parent_to_exts, pkg)
+                parent_to_exts[pkg] = Base.PkgId[ext]
+            else
+                push!(parent_to_exts[pkg], ext)
+            end
         end
     end
 
-    direct_deps = [
+    project_deps = [
         Base.PkgId(uuid, name)
         for (name, uuid) in env.project_deps if !Base.in_sysimage(Base.PkgId(uuid, name))
     ]
 
-    # consider exts of direct deps to be direct deps so that errors are reported
-    append!(direct_deps, keys(filter(d->last(d) in keys(env.project_deps), exts)))
+    # consider exts of project deps to be project deps so that errors are reported
+    append!(project_deps, keys(filter(d->last(d).name in keys(env.project_deps), ext_to_parent)))
 
-    # An extension effectively depends on another extension if it has all the the
-    # dependencies of that other extension
-    function expand_dependencies(depsmap)
-        function visit!(visited, node, all_deps)
-            if node in visited
-                return
-            end
-            push!(visited, node)
-            for dep in get(Set{Base.PkgId}, depsmap, node)
-                if !(dep in all_deps)
-                    push!(all_deps, dep)
-                    visit!(visited, dep, all_deps)
-                end
+    # An extension effectively depends on another extension if it has a strict superset of its triggers
+    for ext_a in keys(ext_to_parent)
+        for ext_b in keys(ext_to_parent)
+            if triggers[ext_a] ⊋ triggers[ext_b]
+                push!(triggers[ext_a], ext_b)
+                push!(direct_deps[ext_a], ext_b)
             end
         end
+    end
 
-        depsmap_transitive = Dict{Base.PkgId, Set{Base.PkgId}}()
-        for package in keys(depsmap)
+    # A package depends on an extension if it (indirectly) depends on all extension triggers
+    function expand_indirect_dependencies(direct_deps)
+        local indirect_deps = Dict{Base.PkgId, Set{Base.PkgId}}()
+        for package in keys(direct_deps)
             # Initialize a set to keep track of all dependencies for 'package'
             all_deps = Set{Base.PkgId}()
             visited = Set{Base.PkgId}()
-            visit!(visited, package, all_deps)
-            # Update depsmap with the complete set of dependencies for 'package'
-            depsmap_transitive[package] = all_deps
+            _visit_indirect_deps!(direct_deps, visited, package, all_deps)
+            # Update direct_deps with the complete set of dependencies for 'package'
+            indirect_deps[package] = all_deps
         end
-        return depsmap_transitive
+        return indirect_deps
     end
 
-    depsmap_transitive = expand_dependencies(depsmap)
-
-    for (_, extensions_1) in pkg_exts_map
-        for extension_1 in extensions_1
-            deps_ext_1 = depsmap_transitive[extension_1]
-            for (_, extensions_2) in pkg_exts_map
-                for extension_2 in extensions_2
-                    extension_1 == extension_2 && continue
-                    deps_ext_2 = depsmap_transitive[extension_2]
-                    if issubset(deps_ext_2, deps_ext_1)
-                        push!(depsmap[extension_1], extension_2)
-                    end
-                end
+    # this loop must be run after the full direct_deps map has been populated
+    indirect_deps = expand_indirect_dependencies(direct_deps)
+    for ext in keys(ext_to_parent)
+        ext_loadable_in_pkg = Dict{Base.PkgId,Bool}()
+        for pkg in keys(direct_deps)
+            is_trigger = in(pkg, direct_deps[ext])
+            is_extension = in(pkg, keys(ext_to_parent))
+            has_triggers = issubset(direct_deps[ext], indirect_deps[pkg])
+            ext_loadable_in_pkg[pkg] = !is_extension && has_triggers && !is_trigger
+        end
+        for (pkg, ext_loadable) in ext_loadable_in_pkg
+            if ext_loadable && !any((dep)->ext_loadable_in_pkg[dep], direct_deps[pkg])
+                # add an edge if the extension is loadable by pkg, and was not loadable in any
+                # of the pkg's dependencies
+                push!(direct_deps[pkg], ext)
             end
         end
     end
 
-    @debug "precompile: deps collected"
-    # this loop must be run after the full depsmap has been populated
-    for (pkg, pkg_exts) in pkg_exts_map
-        # find any packages that depend on the extension(s)'s deps and replace those deps in their deps list with the extension(s),
-        # basically injecting the extension into the precompile order in the graph, to avoid race to precompile extensions
-        for (_pkg, deps) in depsmap # for each manifest dep
-            if !in(_pkg, keys(exts)) && pkg in deps # if not an extension and depends on pkg
-                append!(deps, pkg_exts) # add the package extensions to deps
-                filter!(!isequal(pkg), deps) # remove the pkg from deps
+    serial_deps = Base.PkgId[] # packages that are being precompiled in serial
+
+    if _from_loading
+        # if called from loading precompilation it may be a package from another environment stack
+        # where we don't have access to the dep graph, so just add as a single package and do serial
+        # precompilation of its deps within the job.
+        for pkgid in requested_pkgids # In case loading asks for multiple packages
+            pkgid === nothing && continue
+            if !haskey(direct_deps, pkgid)
+                @debug "precompile: package `$(pkgid)` is outside of the environment, so adding as single package serial job"
+                direct_deps[pkgid] = Base.PkgId[] # no deps, do them in serial in the job
+                push!(project_deps, pkgid) # add to project_deps so it doesn't show up in gray
+                push!(serial_deps, pkgid)
             end
         end
     end
-    @debug "precompile: extensions collected"
 
     # return early if no deps
-    if isempty(depsmap)
+    if isempty(direct_deps)
         if isempty(pkgs)
-            return
-        elseif _from_loading
-            # if called from loading precompilation it may be a package from another environment stack so
-            # don't error and allow serial precompilation to try
-            # TODO: actually handle packages from other envs in the stack
             return
         else
             error("No direct dependencies outside of the sysimage found matching $(pkgs)")
@@ -510,88 +782,72 @@ function precompilepkgs(pkgs::Vector{String}=String[];
     was_processed = Dict{PkgConfig,Base.Event}()
     was_recompiled = Dict{PkgConfig,Bool}()
     for config in configs
-        for pkgid in keys(depsmap)
+        for pkgid in keys(direct_deps)
             pkg_config = (pkgid, config)
             started[pkg_config] = false
             was_processed[pkg_config] = Base.Event()
             was_recompiled[pkg_config] = false
         end
     end
-    @debug "precompile: signalling initialized"
-
 
     # find and guard against circular deps
-    circular_deps = Base.PkgId[]
-    # Three states
-    # !haskey -> never visited
-    # true -> cannot be compiled due to a cycle (or not yet determined)
-    # false -> not depending on a cycle
+    cycles = Vector{Base.PkgId}[]
+    # For every scanned package, true if pkg found to be in a cycle
+    # or depends on packages in a cycle and false otherwise.
     could_be_cycle = Dict{Base.PkgId, Bool}()
-    function scan_pkg!(pkg, dmap)
-        did_visit_dep = true
-        inpath = get!(could_be_cycle, pkg) do
-            did_visit_dep = false
-            return true
-        end
-        if did_visit_dep ? inpath : scan_deps!(pkg, dmap)
-            # Found a cycle. Delete this and all parents
-            return true
-        end
-        return false
-    end
-    function scan_deps!(pkg, dmap)
-        for dep in dmap[pkg]
-            scan_pkg!(dep, dmap) && return true
-        end
-        could_be_cycle[pkg] = false
-        return false
-    end
-    for pkg in keys(depsmap)
-        if scan_pkg!(pkg, depsmap)
+    # temporary stack for the SCC-like algorithm below
+    stack = Base.PkgId[]
+
+    # set of packages that depend on a cycle (either because they are
+    # a part of a cycle themselves or because they transitively depend
+    # on a package in some cycle)
+    circular_deps = Base.PkgId[]
+    for pkg in keys(direct_deps)
+        @assert isempty(stack)
+        pkg in serial_deps && continue # skip serial deps as we don't have their dependency graph
+        if scan_pkg!(stack, could_be_cycle, cycles, pkg, direct_deps)
             push!(circular_deps, pkg)
-            for pkg_config in keys(was_processed)
+            for (pkg_config, evt) in was_processed
                 # notify all to allow skipping
-                pkg_config[1] == pkg && notify(was_processed[pkg_config])
+                pkg_config[1] == pkg && notify(evt)
             end
         end
     end
     if !isempty(circular_deps)
-        @warn """Circular dependency detected. Precompilation will be skipped for:\n  $(join(string.(circular_deps), "\n  "))"""
+        @warn excluded_circular_deps_explanation(io, ext_to_parent, circular_deps, cycles)
     end
-    @debug "precompile: circular dep check done"
 
+    # If you have a workspace and want to precompile all projects in it, look through all packages in the manifest
+    # instead of collecting from a project i.e. not filter out packages that are in the current project.
+    # i.e. Pkg sets manifest to true for workspace precompile requests
+    # TODO: rename `manifest`?
     if !manifest
-        if isempty(pkgs)
-            pkgs = [pkg.name for pkg in direct_deps]
-            target = "all packages"
-        else
-            target = join(pkgs, ", ")
-        end
-        # restrict to dependencies of given packages
-        function collect_all_deps(depsmap, dep, alldeps=Set{Base.PkgId}())
-            for _dep in depsmap[dep]
-                if !(_dep in alldeps)
-                    push!(alldeps, _dep)
-                    collect_all_deps(depsmap, _dep, alldeps)
-                end
-            end
-            return alldeps
+        if isempty(pkg_names)
+            pkg_names = [pkg.name for pkg in project_deps]
         end
         keep = Set{Base.PkgId}()
-        for dep in depsmap
-            dep_pkgid = first(dep)
-            if dep_pkgid.name in pkgs
+        for dep_pkgid in keys(direct_deps)
+            if dep_pkgid.name in pkg_names
                 push!(keep, dep_pkgid)
-                collect_all_deps(depsmap, dep_pkgid, keep)
+                collect_all_deps(direct_deps, dep_pkgid, keep)
             end
         end
-        for ext in keys(exts)
-            if issubset(collect_all_deps(depsmap, ext), keep) # if all extension deps are kept
+        # Also keep packages that were explicitly requested as PkgIds (for extensions)
+        if pkgs isa Vector{PkgId}
+            for requested_pkgid in requested_pkgids
+                if haskey(direct_deps, requested_pkgid)
+                    push!(keep, requested_pkgid)
+                    collect_all_deps(direct_deps, requested_pkgid, keep)
+                end
+            end
+        end
+        for ext in keys(ext_to_parent)
+            if issubset(collect_all_deps(direct_deps, ext), keep) # if all extension deps are kept
                 push!(keep, ext)
             end
         end
-        filter!(d->in(first(d), keep), depsmap)
-        if isempty(depsmap)
+        filter!(d->in(first(d), keep), direct_deps)
+        if isempty(direct_deps)
             if _from_loading
                 # if called from loading precompilation it may be a package from another environment stack so
                 # don't error and allow serial precompilation to try
@@ -601,29 +857,25 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                 return
             end
         end
-    else
-        target = "manifest"
     end
 
-    nconfigs = length(configs)
+    target = Ref{Union{Nothing, String}}(nothing)
     if nconfigs == 1
         if !isempty(only(configs)[1])
-            target *= " for configuration $(join(only(configs)[1], " "))"
+            target[] = "for configuration $(join(only(configs)[1], " "))"
         end
-        target *= "..."
     else
-        target *= " for $nconfigs compilation configurations..."
+        target[] = "for $nconfigs compilation configurations..."
     end
-    @debug "precompile: packages filtered"
 
     pkg_queue = PkgConfig[]
     failed_deps = Dict{PkgConfig, String}()
     precomperr_deps = PkgConfig[] # packages that may succeed after a restart (i.e. loaded packages with no cache file)
 
-    print_lock = io isa Base.LibuvStream ? io.lock::ReentrantLock : ReentrantLock()
+    print_lock = io.io isa Base.LibuvStream ? io.io.lock::ReentrantLock : ReentrantLock()
     first_started = Base.Event()
-    printloop_should_exit::Bool = !fancyprint # exit print loop immediately if not fancy printing
-    interrupted_or_done = Base.Event()
+    printloop_should_exit = Ref{Bool}(!fancyprint) # exit print loop immediately if not fancy printing
+    interrupted_or_done = Ref{Bool}(false)
 
     ansi_moveup(n::Int) = string("\e[", n, "A")
     ansi_movecol1 = "\e[1G"
@@ -631,119 +883,95 @@ function precompilepkgs(pkgs::Vector{String}=String[];
     ansi_cleartoendofline = "\e[0K"
     ansi_enablecursor = "\e[?25h"
     ansi_disablecursor = "\e[?25l"
-    n_done::Int = 0
-    n_already_precomp::Int = 0
-    n_loaded::Int = 0
-    interrupted = false
+    n_done = Ref(0)
+    n_already_precomp = Ref(0)
+    n_loaded = Ref(0)
+    interrupted = Ref(false)
+    t_print = Ref{Task}()
 
-    function handle_interrupt(err, in_printloop = false)
-        notify(interrupted_or_done)
-        in_printloop || wait(t_print) # wait to let the print loop cease first
+    function handle_interrupt(err, in_printloop::Bool)
         if err isa InterruptException
-            lock(print_lock) do
+            # record that this interrupted_or_done was from InterruptException
+            interrupted[] = true
+        end
+        interrupted_or_done[] = true
+        # notify all Event sources
+        for (pkg_config, evt) in was_processed
+            notify(evt)
+        end
+        notify(first_started)
+        in_printloop || (isassigned(t_print) && wait(t_print[])) # Wait to let the print loop cease first. This makes the printing incorrect, so we shouldn't wait here, but we do anyways.
+        if err isa InterruptException
+            @lock print_lock begin
                 println(io, " Interrupted: Exiting precompilation...", ansi_cleartoendofline)
             end
-            interrupted = true
             return true
         else
             return false
         end
     end
-    std_outputs = Dict{PkgConfig,String}()
+    std_outputs = Dict{PkgConfig,IOBuffer}()
     taskwaiting = Set{PkgConfig}()
     pkgspidlocked = Dict{PkgConfig,String}()
-    pkg_liveprinted = nothing
-
-    function monitor_std(pkg_config, pipe; single_requested_pkg=false)
-        pkg, config = pkg_config
-        try
-            liveprinting = false
-            while !eof(pipe)
-                str = readline(pipe, keep=true)
-                if single_requested_pkg && (liveprinting || !isempty(str))
-                    lock(print_lock) do
-                        if !liveprinting
-                            printpkgstyle(io, :Info, "Given $(pkg.name) was explicitly requested, output will be shown live $ansi_cleartoendofline",
-                                color = Base.info_color())
-                            liveprinting = true
-                            pkg_liveprinted = pkg
-                        end
-                        print(io, ansi_cleartoendofline, str)
-                    end
-                end
-                std_outputs[pkg_config] = string(get(std_outputs, pkg_config, ""), str)
-                if !in(pkg_config, taskwaiting) && occursin("waiting for IO to finish", str)
-                    !fancyprint && lock(print_lock) do
-                        println(io, pkg.name, color_string(" Waiting for background task / IO / timer.", Base.warn_color()))
-                    end
-                    push!(taskwaiting, pkg_config)
-                end
-                if !fancyprint && in(pkg_config, taskwaiting)
-                    lock(print_lock) do
-                        print(io, str)
-                    end
-                end
-            end
-        catch err
-            err isa InterruptException || rethrow()
-        end
-    end
+    pkg_liveprinted = Ref{Union{Nothing, PkgId}}(nothing)
 
     ## fancy print loop
-    t_print = @async begin
+    t_print[] = @async begin
         try
             wait(first_started)
-            (isempty(pkg_queue) || interrupted_or_done.set) && return
-            fancyprint && lock(print_lock) do
-                printpkgstyle(io, :Precompiling, target)
-                print(io, ansi_disablecursor)
+            (isempty(pkg_queue) || interrupted_or_done[]) && return
+            @lock print_lock begin
+                if target[] !== nothing
+                    printpkgstyle(logio, :Precompiling, target[])
+                end
+                if fancyprint
+                    print(logio, ansi_disablecursor)
+                end
             end
             t = Timer(0; interval=1/10)
             anim_chars = ["◐","◓","◑","◒"]
             i = 1
             last_length = 0
-            bar = MiniProgressBar(; indent=2, header = "Progress", color = Base.info_color(), percentage=false, always_reprint=true)
-            n_total = length(depsmap) * length(configs)
-            bar.max = n_total - n_already_precomp
+            bar = MiniProgressBar(; indent=0, header = "Precompiling packages ", color = :green, percentage=false, always_reprint=true)
+            n_total = length(direct_deps) * length(configs)
+            bar.max = n_total - n_already_precomp[]
             final_loop = false
             n_print_rows = 0
-            while !printloop_should_exit
-                lock(print_lock) do
-                    term_size = Base.displaysize(io)::Tuple{Int,Int}
-                    num_deps_show = term_size[1] - 3
-                    pkg_queue_show = if !interrupted_or_done.set && length(pkg_queue) > num_deps_show
+            while !printloop_should_exit[]
+                @lock print_lock begin
+                    term_size = displaysize(logio)::Tuple{Int, Int}
+                    num_deps_show = max(term_size[1] - 3, 2) # show at least 2 deps
+                    pkg_queue_show = if !interrupted_or_done[] && length(pkg_queue) > num_deps_show
                         last(pkg_queue, num_deps_show)
                     else
                         pkg_queue
                     end
+                    local i_local = i
+                    local final_loop_local = final_loop
                     str_ = sprint() do iostr
-                        if i > 1
+                        if i_local > 1
                             print(iostr, ansi_cleartoend)
                         end
-                        bar.current = n_done - n_already_precomp
-                        bar.max = n_total - n_already_precomp
+                        bar.current = n_done[] - n_already_precomp[]
+                        bar.max = n_total - n_already_precomp[]
                         # when sizing to the terminal width subtract a little to give some tolerance to resizing the
                         # window between print cycles
-                        termwidth = displaysize(io)[2] - 4
-                        if !final_loop
-                            str = sprint(io -> show_progress(io, bar; termwidth, carriagereturn=false); context=io)
-                            print(iostr, Base._truncate_at_width_or_chars(true, str, termwidth), "\n")
+                        termwidth = (displaysize(io)::Tuple{Int,Int})[2] - 4
+                        if !final_loop_local
+                            s = sprint(io -> show_progress(io, bar; termwidth, carriagereturn=false); context=logio)
+                            print(iostr, Base._truncate_at_width_or_chars(true, s, termwidth), "\n")
                         end
                         for pkg_config in pkg_queue_show
                             dep, config = pkg_config
                             loaded = warn_loaded && haskey(Base.loaded_modules, dep)
-                            _name = haskey(exts, dep) ? string(exts[dep], " → ", dep.name) : dep.name
-                            name = dep in direct_deps ? _name : string(color_string(_name, :light_black))
-                            if nconfigs > 1 && !isempty(config[1])
-                                config_str = "$(join(config[1], " "))"
-                                name *= color_string(" $(config_str)", :light_black)
-                            end
+                            local flags, cacheflags = config
+                            name = describe_pkg(dep, dep in project_deps, dep in serial_deps, flags, cacheflags)
                             line = if pkg_config in precomperr_deps
                                 string(color_string("  ? ", Base.warn_color()), name)
                             elseif haskey(failed_deps, pkg_config)
                                 string(color_string("  ✗ ", Base.error_color()), name)
                             elseif was_recompiled[pkg_config]
-                                !loaded && interrupted_or_done.set && continue
+                                !loaded && interrupted_or_done[] && continue
                                 loaded || @async begin # keep successful deps visible for short period
                                     sleep(1);
                                     filter!(!isequal(pkg_config), pkg_queue)
@@ -752,8 +980,8 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                             elseif started[pkg_config]
                                 # Offset each spinner animation using the first character in the package name as the seed.
                                 # If not offset, on larger terminal fonts it looks odd that they all sync-up
-                                anim_char = anim_chars[(i + Int(dep.name[1])) % length(anim_chars) + 1]
-                                anim_char_colored = dep in direct_deps ? anim_char : color_string(anim_char, :light_black)
+                                anim_char = anim_chars[(i_local + Int(dep.name[1])) % length(anim_chars) + 1]
+                                anim_char_colored = dep in project_deps ? anim_char : color_string(anim_char, :light_black)
                                 waiting = if haskey(pkgspidlocked, pkg_config)
                                     who_has_lock = pkgspidlocked[pkg_config]
                                     color_string(" Being precompiled by $(who_has_lock)", Base.info_color())
@@ -771,107 +999,164 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                     end
                     last_length = length(pkg_queue_show)
                     n_print_rows = count("\n", str_)
-                    print(io, str_)
-                    printloop_should_exit = interrupted_or_done.set && final_loop
-                    final_loop = interrupted_or_done.set # ensures one more loop to tidy last task after finish
+                    print(logio, str_)
+                    printloop_should_exit[] = interrupted_or_done[] && final_loop
+                    final_loop = interrupted_or_done[] # ensures one more loop to tidy last task after finish
                     i += 1
-                    printloop_should_exit || print(io, ansi_moveup(n_print_rows), ansi_movecol1)
+                    printloop_should_exit[] || print(logio, ansi_moveup(n_print_rows), ansi_movecol1)
                 end
                 wait(t)
             end
         catch err
+            # For debugging:
+            # println("Task failed $err")
+            # Base.display_error(ErrorException(""), Base.catch_backtrace())
             handle_interrupt(err, true) || rethrow()
         finally
-            fancyprint && print(io, ansi_enablecursor)
+            fancyprint && print(logio, ansi_enablecursor)
         end
     end
+
     tasks = Task[]
     if !_from_loading
-        Base.LOADING_CACHE[] = Base.LoadingCache()
+        @lock Base.require_lock begin
+            Base.LOADING_CACHE[] = Base.LoadingCache()
+        end
     end
-    @debug "precompile: starting precompilation loop" depsmap direct_deps
+    @debug "precompile: starting precompilation loop" direct_deps project_deps
     ## precompilation loop
 
-    for (pkg, deps) in depsmap
+    for (pkg, deps) in direct_deps
         cachepaths = Base.find_all_in_cache_path(pkg)
-        sourcepath = Base.locate_package(pkg)
-        single_requested_pkg = length(requested_pkgs) == 1 && only(requested_pkgs) == pkg.name
+        freshpaths = String[]
+        cachepath_cache[pkg] = freshpaths
+        sourcespec = Base.locate_package_load_spec(pkg)
+        single_requested_pkg = length(requested_pkgs) == 1 &&
+            (pkg in requested_pkgids || pkg.name in pkg_names)
         for config in configs
             pkg_config = (pkg, config)
-            if sourcepath === nothing
+            if sourcespec === nothing
                 failed_deps[pkg_config] = "Error: Missing source file for $(pkg)"
                 notify(was_processed[pkg_config])
                 continue
             end
-            # Heuristic for when precompilation is disabled
-            if occursin(r"\b__precompile__\(\s*false\s*\)", read(sourcepath, String))
+            # Heuristic for when precompilation is disabled, which must not over-estimate however for any dependent
+            # since it will also block precompilation of all dependents
+            if _from_loading && single_requested_pkg && occursin(r"\b__precompile__\(\s*false\s*\)", read(sourcespec.path, String))
+                @lock print_lock begin
+                    Base.@logmsg logcalls "Disabled precompiling $(repr("text/plain", pkg)) since the text `__precompile__(false)` was found in file."
+                end
                 notify(was_processed[pkg_config])
                 continue
             end
-            flags, cacheflags = config
+            local flags, cacheflags = config
             task = @async begin
                 try
-                    loaded = haskey(Base.loaded_modules, pkg)
+                    loaded = warn_loaded && haskey(Base.loaded_modules, pkg)
                     for dep in deps # wait for deps to finish
                         wait(was_processed[(dep,config)])
+                        if interrupted_or_done[]
+                            return
+                        end
                     end
                     circular = pkg in circular_deps
-                    is_stale = !Base.isprecompiled(pkg; ignore_loaded=true, stale_cache, cachepaths, sourcepath, flags=cacheflags)
+                    freshpath = Base.compilecache_freshest_path(pkg; ignore_loaded, stale_cache, cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
+                    is_stale = freshpath === nothing
+                    if !is_stale
+                        push!(freshpaths, freshpath)
+                    end
                     if !circular && is_stale
                         Base.acquire(parallel_limiter)
-                        is_direct_dep = pkg in direct_deps
+                        is_serial_dep = pkg in serial_deps
+                        is_project_dep = pkg in project_deps
 
                         # std monitoring
                         std_pipe = Base.link_pipe!(Pipe(); reader_supports_async=true, writer_supports_async=true)
-                        t_monitor = @async monitor_std(pkg_config, std_pipe; single_requested_pkg)
+                        t_monitor = @async _precompilepkgs_monitor_std(pkg_config, std_pipe,
+                            single_requested_pkg, ext_to_parent, hascolor, std_outputs, taskwaiting,
+                            pkg_liveprinted, print_lock, io, fancyprint, ansi_cleartoendofline)
 
-                        _name = haskey(exts, pkg) ? string(exts[pkg], " → ", pkg.name) : pkg.name
-                        name = is_direct_dep ? _name : string(color_string(_name, :light_black))
-                        if nconfigs > 1 && !isempty(flags)
-                            config_str = "$(join(flags, " "))"
-                            name *= color_string(" $(config_str)", :light_black)
-                        end
-                        !fancyprint && lock(print_lock) do
-                            isempty(pkg_queue) && printpkgstyle(io, :Precompiling, target)
-                        end
-                        push!(pkg_queue, pkg_config)
-                        started[pkg_config] = true
-                        fancyprint && notify(first_started)
-                        if interrupted_or_done.set
-                            notify(was_processed[pkg_config])
-                            Base.release(parallel_limiter)
-                            return
-                        end
+                        local name
                         try
-                            # allows processes to wait if another process is precompiling a given package to
-                            # a functionally identical package cache (except for preferences, which may differ)
-                            t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(io, print_lock, fancyprint, pkg_config, pkgspidlocked, hascolor) do
-                                Base.with_logger(Base.NullLogger()) do
-                                    # The false here means we ignore loaded modules, so precompile for a fresh session
-                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, false; flags, cacheflags)
+                            name = describe_pkg(pkg, is_project_dep, is_serial_dep, flags, cacheflags)
+                            @lock print_lock begin
+                                if !fancyprint && isempty(pkg_queue)
+                                    printpkgstyle(logio, :Precompiling, something(target[], "packages..."))
                                 end
                             end
-                            if ret isa Base.PrecompilableError
-                                push!(precomperr_deps, pkg_config)
-                                !fancyprint && lock(print_lock) do
-                                    println(io, _timing_string(t), color_string("  ? ", Base.warn_color()), name)
+                            push!(pkg_queue, pkg_config)
+                            started[pkg_config] = true
+                            fancyprint && notify(first_started)
+                            if interrupted_or_done[]
+                                return
+                            end
+                            # for extensions, any extension that can trigger it needs to be accounted for here (even stdlibs, which are excluded from direct_deps)
+                            loadable_exts = haskey(ext_to_parent, pkg) ? filter((dep)->haskey(ext_to_parent, dep), triggers[pkg]) : nothing
+
+                            flags_ =if !isempty(deps)
+                                # if deps is empty, either it doesn't have any (so compiled-modules is
+                                # irrelevant) or we couldn't compute them (so we actually should attempt
+                                # serial compile, as the dependencies are not in the parallel list)
+                                `$flags --compiled-modules=strict`
+                            else
+                                flags
+                            end
+
+                            if _from_loading && pkg in requested_pkgids
+                                # loading already took the cachefile_lock and printed logmsg for its explicit requests
+                                t = @elapsed ret = begin
+                                    Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !ignore_loaded;
+                                                      flags=flags_, cacheflags, loadable_exts)
                                 end
                             else
-                                !fancyprint && lock(print_lock) do
-                                    println(io, _timing_string(t), color_string("  ✓ ", loaded ? Base.warn_color() : :green), name)
+                                # allows processes to wait if another process is precompiling a given package to
+                                # a functionally identical package cache (except for preferences, which may differ)
+                                fullname = full_name(ext_to_parent, pkg)
+                                t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(io, print_lock, fancyprint, pkg_config, pkgspidlocked, hascolor, parallel_limiter, fullname) do
+                                    # refresh and double-check the search now that we have global lock
+                                    if interrupted_or_done[]
+                                        return ErrorException("canceled")
+                                    end
+                                    local cachepaths = Base.find_all_in_cache_path(pkg)
+                                    local freshpath = Base.compilecache_freshest_path(pkg; ignore_loaded, stale_cache, cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
+                                    local is_stale = freshpath === nothing
+                                    if !is_stale
+                                        push!(freshpaths, freshpath)
+                                        return nothing # returning nothing indicates another process did the recompile
+                                    end
+                                    logcalls === CoreLogging.Debug && @lock print_lock begin
+                                        @debug "Precompiling $(repr("text/plain", pkg))"
+                                    end
+                                    Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !ignore_loaded;
+                                                      flags=flags_, cacheflags, loadable_exts)
                                 end
-                                was_recompiled[pkg_config] = true
                             end
-                            loaded && (n_loaded += 1)
+                            if ret isa Exception
+                                push!(precomperr_deps, pkg_config)
+                                !fancyprint && @lock print_lock begin
+                                    println(logio, _timing_string(t), color_string("  ? ", Base.warn_color()), name)
+                                end
+                            else
+                                !fancyprint && @lock print_lock begin
+                                    println(logio, _timing_string(t), color_string("  ✓ ", loaded ? Base.warn_color() : :green), name)
+                                end
+                                if ret !== nothing
+                                    was_recompiled[pkg_config] = true
+                                    cachefile, _ = ret::Tuple{String, Union{Nothing, String}}
+                                    push!(freshpaths, cachefile)
+                                    build_id, _ = Base.parse_cache_buildid(cachefile)
+                                    stale_cache_key = (pkg, build_id, sourcespec, cachefile, ignore_loaded, cacheflags)::StaleCacheKey
+                                    stale_cache[stale_cache_key] = false
+                                end
+                            end
+                            loaded && (n_loaded[] += 1)
                         catch err
-                            # @show err
                             close(std_pipe.in) # close pipe to end the std output monitor
                             wait(t_monitor)
                             if err isa ErrorException || (err isa ArgumentError && startswith(err.msg, "Invalid header in cache file"))
-                                failed_deps[pkg_config] = (strict || is_direct_dep) ? string(sprint(showerror, err), "\n", strip(get(std_outputs, pkg_config, ""))) : ""
-                                delete!(std_outputs, pkg_config) # so it's not shown as warnings, given error report
-                                !fancyprint && lock(print_lock) do
-                                    println(io, " "^9, color_string("  ✗ ", Base.error_color()), name)
+                                failed_deps[pkg_config] = sprint(showerror, err)
+                                !fancyprint && @lock print_lock begin
+                                    println(logio, " "^12, color_string("  ✗ ", Base.error_color()), name)
                                 end
                             else
                                 rethrow()
@@ -882,54 +1167,84 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                             Base.release(parallel_limiter)
                         end
                     else
-                        is_stale || (n_already_precomp += 1)
+                        is_stale || (n_already_precomp[] += 1)
                     end
-                    n_done += 1
+                    n_done[] += 1
                     notify(was_processed[pkg_config])
                 catch err_outer
                     # For debugging:
-                    # println("Task failed $err_outer")
-                    # Base.display_error(ErrorException(""), Base.catch_backtrace())# logging doesn't show here
-                    handle_interrupt(err_outer) || rethrow()
-                    notify(was_processed[pkg_config])
-                finally
-                    filter!(!istaskdone, tasks)
-                    length(tasks) == 1 && notify(interrupted_or_done)
+                    println("Task failed $err_outer")
+                    Base.display_error(ErrorException(""), Base.catch_backtrace())# logging doesn't show here
+                    handle_interrupt(err_outer, false)
+                    rethrow()
                 end
             end
             push!(tasks, task)
         end
     end
-    isempty(tasks) && notify(interrupted_or_done)
     try
-        wait(interrupted_or_done)
+        waitall(tasks; failfast=false, throw=false)
+        interrupted_or_done[] = true
     catch err
-        handle_interrupt(err) || rethrow()
+        # For debugging:
+        println("Task failed $err")
+        Base.display_error(ErrorException(""), Base.catch_backtrace())# logging doesn't show here
+        handle_interrupt(err, false) || rethrow()
     finally
-        Base.LOADING_CACHE[] = nothing
+        try
+            waitall(tasks; failfast=false, throw=false)
+        finally
+            @lock Base.require_lock begin
+                Base.LOADING_CACHE[] = nothing
+            end
+        end
     end
     notify(first_started) # in cases of no-op or !fancyprint
-    fancyprint && wait(t_print)
-    quick_exit = !all(istaskdone, tasks) || interrupted # if some not finished internal error is likely
+    fancyprint && isassigned(t_print) && wait(t_print[])
+    quick_exit = any(t -> !istaskdone(t) || istaskfailed(t), tasks) || interrupted[] # all should have finished (to avoid memory corruption)
     seconds_elapsed = round(Int, (time_ns() - time_start) / 1e9)
     ndeps = count(values(was_recompiled))
-    if ndeps > 0 || !isempty(failed_deps) || (quick_exit && !isempty(std_outputs))
-        str = sprint() do iostr
-            if !quick_exit
+    # Determine if any of failures were a requested package
+    requested_errs = false
+    for ((dep, config), err) in failed_deps
+        if dep in requested_pkgids
+            requested_errs = true
+            break
+        end
+    end
+    # if every requested package succeeded, filter away output from failed packages
+    # since it didn't contribute to the overall success and can be regenerated if that package is later required
+    if !strict && !requested_errs
+        for (pkg_config, err) in failed_deps
+            delete!(std_outputs, pkg_config)
+        end
+        empty!(failed_deps)
+    end
+    if ndeps > 0 || !isempty(failed_deps)
+        if !quick_exit
+            logstr = sprint(context=logio) do iostr
+                if fancyprint # replace the progress bar
+                    what = isempty(requested_pkgids) ? "packages finished." : "$(join((full_name(ext_to_parent, p) for p in requested_pkgids), ", ", " and ")) finished."
+                    printpkgstyle(iostr, :Precompiling, what)
+                end
                 plural = length(configs) > 1 ? "dependency configurations" : ndeps == 1 ? "dependency" : "dependencies"
                 print(iostr, "  $(ndeps) $(plural) successfully precompiled in $(seconds_elapsed) seconds")
-                if n_already_precomp > 0 || !isempty(circular_deps)
-                    n_already_precomp > 0 && (print(iostr, ". $n_already_precomp already precompiled"))
+                if n_already_precomp[] > 0 || !isempty(circular_deps)
+                    n_already_precomp[] > 0 && (print(iostr, ". $(n_already_precomp[]) already precompiled"))
                     !isempty(circular_deps) && (print(iostr, ". $(length(circular_deps)) skipped due to circular dependency"))
                     print(iostr, ".")
                 end
-                if n_loaded > 0
-                    plural1 = length(configs) > 1 ? "dependency configurations" : n_loaded == 1 ? "dependency" : "dependencies"
-                    plural2 = n_loaded == 1 ? "a different version is" : "different versions are"
-                    plural3 = n_loaded == 1 ? "" : "s"
+                if n_loaded[] > 0
+                    local plural1 = length(configs) > 1 ? "dependency configurations" : n_loaded[] == 1 ? "dependency" : "dependencies"
+                    local plural2 = n_loaded[] == 1 ? "a different version is" : "different versions are"
+                    local plural3 = n_loaded[] == 1 ? "" : "s"
+                    local plural4 = n_loaded[] == 1 ? "this package" : "these packages"
                     print(iostr, "\n  ",
-                        color_string(string(n_loaded), Base.warn_color()),
-                        " $(plural1) precompiled but $(plural2) currently loaded. Restart julia to access the new version$(plural3)"
+                        color_string(string(n_loaded[]), Base.warn_color()),
+                        " $(plural1) precompiled but ",
+                        color_string("$(plural2) currently loaded", Base.warn_color()),
+                        ". Restart julia to access the new version$(plural3). \
+                        Otherwise, loading dependents of $(plural4) may trigger further precompilation to work with the unexpected version$(plural3)."
                     )
                 end
                 if !isempty(precomperr_deps)
@@ -940,63 +1255,102 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                     )
                 end
             end
-            # show any stderr output, even if Pkg.precompile has been interrupted (quick_exit=true), given user may be
-            # interrupting a hanging precompile job with stderr output. julia#48371
-            filter!(kv -> !isempty(strip(last(kv))), std_outputs) # remove empty output
-            if !isempty(std_outputs)
-                plural1 = length(std_outputs) == 1 ? "y" : "ies"
-                plural2 = length(std_outputs) == 1 ? "" : "s"
-                print(iostr, "\n  ", color_string("$(length(std_outputs))", Base.warn_color()), " dependenc$(plural1) had output during precompilation:")
-                for (pkg_config, err) in std_outputs
-                    pkg, config = pkg_config
-                    err = if pkg == pkg_liveprinted
-                        "[Output was shown above]"
-                    else
-                        join(split(strip(err), "\n"), color_string("\n│  ", Base.warn_color()))
-                    end
-                    name = haskey(exts, pkg) ? string(exts[pkg], " → ", pkg.name) : pkg.name
-                    print(iostr, color_string("\n┌ ", Base.warn_color()), name, color_string("\n│  ", Base.warn_color()), err, color_string("\n└  ", Base.warn_color()))
-                end
-            end
-        end
-        let str=str
-            lock(print_lock) do
-                println(io, str)
-            end
-        end
-        quick_exit && return
-        err_str = ""
-        n_direct_errs = 0
-        for (pkg_config, err) in failed_deps
-            dep, config = pkg_config
-            if strict || (dep in direct_deps)
-                config_str = isempty(config[1]) ? "" : "$(join(config[1], " ")) "
-                err_str = string(err_str, "\n$(dep.name) $config_str\n\n$err", (n_direct_errs > 0 ? "\n" : ""))
-                n_direct_errs += 1
-            end
-        end
-        if err_str != ""
-            pluralde = n_direct_errs == 1 ? "y" : "ies"
-            direct = strict ? "" : "direct "
-            err_msg = "The following $n_direct_errs $(direct)dependenc$(pluralde) failed to precompile:\n$(err_str[1:end-1])"
-            if internal_call # aka. auto-precompilation
-                if isinteractive() && !get(ENV, "CI", false)
-                    plural1 = length(failed_deps) == 1 ? "y" : "ies"
-                    println(io, "  ", color_string("$(length(failed_deps))", Base.error_color()), " dependenc$(plural1) errored.")
-                    println(io, "  For a report of the errors see `julia> err`. To retry use `pkg> precompile`")
-                    setglobal!(Base.MainInclude, :err, PkgPrecompileError(err_msg))
-                else
-                    # auto-precompilation shouldn't throw but if the user can't easily access the
-                    # error messages, just show them
-                    print(io, "\n", err_msg)
-                end
-            else
-                println(io)
-                throw(PkgPrecompileError(err_msg))
+            @lock print_lock begin
+                println(logio, logstr)
             end
         end
     end
-    nothing
+    if !isempty(std_outputs)
+        str = sprint(context=io) do iostr
+            # show any stderr output, even if Pkg.precompile has been interrupted (quick_exit=true), given user may be
+            # interrupting a hanging precompile job with stderr output.
+            let std_outputs = Tuple{PkgConfig,SubString{String}}[(pkg_config, strip(String(take!(io)))) for (pkg_config,io) in std_outputs]
+                filter!(!isempty∘last, std_outputs)
+                if !isempty(std_outputs)
+                    local plural1 = length(std_outputs) == 1 ? "y" : "ies"
+                    local plural2 = length(std_outputs) == 1 ? "" : "s"
+                    print(iostr, "\n  ", color_string("$(length(std_outputs))", Base.warn_color()), " dependenc$(plural1) had output during precompilation:")
+                    for (pkg_config, err) in std_outputs
+                        pkg, config = pkg_config
+                        err = if pkg == pkg_liveprinted[]
+                            "[Output was shown above]"
+                        else
+                            join(split(err, "\n"), color_string("\n│  ", Base.warn_color()))
+                        end
+                        name = full_name(ext_to_parent, pkg)
+                        print(iostr, color_string("\n┌ ", Base.warn_color()), name, color_string("\n│  ", Base.warn_color()), err, color_string("\n└  ", Base.warn_color()))
+                    end
+                end
+            end
+        end
+        isempty(str) || @lock print_lock begin
+            println(io, str)
+        end
+    end
+    # Done cleanup and sub-process output, now ensure caller aborts too with the right error
+    if interrupted[]
+        throw(InterruptException())
+    end
+    # Fail noisily now with failed_deps if any.
+    # Include all messages from compilecache since any might be relevant in the failure.
+    if !isempty(failed_deps)
+        err_str = IOBuffer()
+        for ((dep, config), err) in failed_deps
+            write(err_str, "\n")
+            print(err_str, "\n", full_name(ext_to_parent, dep), " ")
+            join(err_str, config[1], " ")
+            print(err_str, "\n", err)
+        end
+        n_errs = length(failed_deps)
+        pluraled = n_errs == 1 ? "" : "s"
+        err_msg = "The following $n_errs package$(pluraled) failed to precompile:$(String(take!(err_str)))\n"
+        if internal_call
+            # Pkg does not implement correct error handling, so this sometimes handles them instead
+            print(io, err_msg)
+        else
+            throw(PkgPrecompileError(err_msg))
+        end
+    end
+    return collect(String, Iterators.flatten((v for (pkgid, v) in cachepath_cache if pkgid in requested_pkgids)))
+end
+
+function _precompilepkgs_monitor_std(pkg_config, pipe, single_requested_pkg::Bool,
+    ext_to_parent, hascolor::Bool, std_outputs, taskwaiting, pkg_liveprinted, print_lock,
+    io::IOContext, fancyprint::Bool, ansi_cleartoendofline::String)
+    local pkg, config = pkg_config
+    try
+        local liveprinting = false
+        local thistaskwaiting = false
+        while !eof(pipe)
+            local str = readline(pipe, keep=true)
+            if single_requested_pkg && (liveprinting || !isempty(str))
+                @lock print_lock begin
+                    if !liveprinting
+                        liveprinting = true
+                        pkg_liveprinted[] = pkg
+                    end
+                    print(io, ansi_cleartoendofline, str)
+                end
+            end
+            write(get!(IOBuffer, std_outputs, pkg_config), str)
+            if thistaskwaiting
+                if occursin("Waiting for background task / IO / timer", str)
+                    thistaskwaiting = true
+                    !liveprinting && !fancyprint && @lock print_lock begin
+                        println(io, full_name(ext_to_parent, pkg), _color_string(str, Base.warn_color(), hascolor))
+                    end
+                    push!(taskwaiting, pkg_config)
+                end
+            else
+                # XXX: don't just re-enable IO for random packages without printing the context for them first
+                !liveprinting && !fancyprint && @lock print_lock begin
+                    print(io, ansi_cleartoendofline, str)
+                end
+            end
+        end
+    catch err
+        err isa InterruptException || rethrow()
+    end
 end
 
 _timing_string(t) = string(lpad(round(t * 1e3, digits = 1), 9), " ms")
@@ -1012,15 +1366,17 @@ function _color_string(cstr::String, col::Union{Int64, Symbol}, hascolor)
 end
 
 # Can be merged with `maybe_cachefile_lock` in loading?
-function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLock, fancyprint::Bool, pkg_config, pkgspidlocked, hascolor)
+function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLock, fancyprint::Bool, pkg_config, pkgspidlocked, hascolor, parallel_limiter::Base.Semaphore, fullname)
+    if !(isdefined(Base, :mkpidlock_hook) && isdefined(Base, :trymkpidlock_hook) && Base.isdefined(Base, :parse_pidfile_hook))
+        return f()
+    end
     pkg, config = pkg_config
     flags, cacheflags = config
-    FileWatching = Base.loaded_modules[Base.PkgId(Base.UUID("7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"), "FileWatching")]
     stale_age = Base.compilecache_pidlock_stale_age
     pidfile = Base.compilecache_pidfile_path(pkg, flags=cacheflags)
-    cachefile = FileWatching.trymkpidlock(f, pidfile; stale_age)
+    cachefile = @invokelatest Base.trymkpidlock_hook(f, pidfile; stale_age)
     if cachefile === false
-        pid, hostname, age = FileWatching.Pidfile.parse_pidfile(pidfile)
+        pid, hostname, age = @invokelatest Base.parse_pidfile_hook(pidfile)
         pkgspidlocked[pkg_config] = if isempty(hostname) || hostname == gethostname()
             if pid == getpid()
                 "an async task in this process (pidfile: $pidfile)"
@@ -1030,18 +1386,19 @@ function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLo
         else
             "another machine (hostname: $hostname, pid: $pid, pidfile: $pidfile)"
         end
-        !fancyprint && lock(print_lock) do
-            println(io, "    ", pkg.name, _color_string(" Being precompiled by $(pkgspidlocked[pkg_config])", Base.info_color(), hascolor))
+        !fancyprint && @lock print_lock begin
+            println(io, "    ", fullname, _color_string(" Being precompiled by $(pkgspidlocked[pkg_config])", Base.info_color(), hascolor))
         end
-        # wait until the lock is available
-        FileWatching.mkpidlock(pidfile; stale_age) do
-            # double-check in case the other process crashed or the lock expired
-            if Base.isprecompiled(pkg; ignore_loaded=true, flags=cacheflags) # don't use caches for this as the env state will have changed
-                return nothing # returning nothing indicates a process waited for another
-            else
-                delete!(pkgspidlocked, pkg_config)
-                return f() # precompile
-            end
+        Base.release(parallel_limiter) # release so other work can be done while waiting
+        try
+            # wait until the lock is available
+            @invokelatest Base.mkpidlock_hook(() -> begin
+                    delete!(pkgspidlocked, pkg_config)
+                    Base.acquire(f, parallel_limiter)
+                end,
+                pidfile; stale_age)
+        finally
+            Base.acquire(parallel_limiter) # re-acquire so the outer release is balanced
         end
     end
     return cachefile

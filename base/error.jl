@@ -21,7 +21,7 @@
 
 Throw an object as an exception.
 
-See also: [`rethrow`](@ref), [`error`](@ref).
+See also [`rethrow`](@ref), [`error`](@ref).
 """
 throw
 
@@ -42,6 +42,7 @@ typeof(error).name.max_methods = UInt8(2)
 Raise an `ErrorException` with the given message.
 """
 error(s::AbstractString) = throw(ErrorException(s))
+error() = throw(ErrorException(""))
 
 """
     error(msg...)
@@ -134,8 +135,8 @@ function catch_backtrace()
     return _reformat_bt(bt::Vector{Ptr{Cvoid}}, bt2::Vector{Any})
 end
 
-struct ExceptionStack <: AbstractArray{Any,1}
-    stack::Array{Any,1}
+struct ExceptionStack <: AbstractArray{NamedTuple{(:exception, :backtrace)},1}
+    stack::Array{NamedTuple{(:exception, :backtrace)},1}
 end
 
 """
@@ -158,7 +159,7 @@ uncaught exceptions.
 """
 function current_exceptions(task::Task=current_task(); backtrace::Bool=true)
     raw = ccall(:jl_get_excstack, Any, (Any,Cint,Cint), task, backtrace, typemax(Cint))::Vector{Any}
-    formatted = Any[]
+    formatted = NamedTuple{(:exception, :backtrace)}[]
     stride = backtrace ? 3 : 1
     for i = reverse(1:stride:length(raw))
         exc = raw[i]
@@ -232,18 +233,19 @@ macro assert(ex, msgs...)
         msg = msg # pass-through
     elseif !isempty(msgs) && (isa(msg, Expr) || isa(msg, Symbol))
         # message is an expression needing evaluating
-        msg = :(Main.Base.string($(esc(msg))))
+        msg = :($_assert_tostring($(esc(msg))))
     elseif isdefined(Main, :Base) && isdefined(Main.Base, :string) && applicable(Main.Base.string, msg)
         msg = Main.Base.string(msg)
     else
         # string() might not be defined during bootstrap
-        msg = :(_assert_tostring($(Expr(:quote,msg))))
+        msg = :($_assert_tostring($(Expr(:quote,msg))))
     end
     return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end
 
 # this may be overridden in contexts where `string(::Expr)` doesn't work
-_assert_tostring(msg) = isdefined(Main, :Base) ? Main.Base.string(msg) :
+_assert_tostring(@nospecialize(msg)) = Core.compilerbarrier(:type, __assert_tostring)(msg)
+__assert_tostring(msg) = isdefined(Main, :Base) ? Main.Base.string(msg) :
     (Core.println(msg); "Error during bootstrap. See stdout.")
 
 struct ExponentialBackOff

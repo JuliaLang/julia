@@ -157,7 +157,7 @@ end
 
 # Hash definition to ensure that it's stable
 function Base.hash(p::Platform, h::UInt)
-    h += 0x506c6174666f726d % UInt
+    h ⊻= 0x506c6174666f726d % UInt
     h = hash(p.tags, h)
     h = hash(p.compare_strategies, h)
     return h
@@ -520,14 +520,17 @@ function triplet(p::AbstractPlatform)
     )
 
     # Tack on optional compiler ABI flags
-    if libgfortran_version(p) !== nothing
-        str = string(str, "-libgfortran", libgfortran_version(p).major)
+    libgfortran_version_ = libgfortran_version(p)
+    if libgfortran_version_ !== nothing
+        str = string(str, "-libgfortran", libgfortran_version_.major)
     end
-    if cxxstring_abi(p) !== nothing
-        str = string(str, "-", cxxstring_abi(p))
+    cxxstring_abi_ = cxxstring_abi(p)
+    if cxxstring_abi_ !== nothing
+        str = string(str, "-", cxxstring_abi_)
     end
-    if libstdcxx_version(p) !== nothing
-        str = string(str, "-libstdcxx", libstdcxx_version(p).patch)
+    libstdcxx_version_ = libstdcxx_version(p)
+    if libstdcxx_version_ !== nothing
+        str = string(str, "-libstdcxx", libstdcxx_version_.patch)
     end
 
     # Tack on all extra tags
@@ -597,7 +600,7 @@ const arch_mapping = Dict(
     "armv7l" => "arm(v7l)?", # if we just see `arm-linux-gnueabihf`, we assume it's `armv7l`
     "armv6l" => "armv6l",
     "powerpc64le" => "p(ower)?pc64le",
-    "riscv64" => "riscv64",
+    "riscv64" => "(rv64|riscv64)",
 )
 # Keep this in sync with `CPUID.ISAs_by_family`
 # These are the CPUID side of the microarchitectures targeted by GCC flags in BinaryBuilder.jl
@@ -751,7 +754,7 @@ function Base.parse(::Type{Platform}, triplet::String; validate_strict::Bool = f
         end
         os_version = nothing
         if os == "macos"
-            os_version = extract_os_version("macos", r".*darwin([\d\.]+)"sa)
+            os_version = extract_os_version("macos", r".*darwin([\d.]+)"sa)
         end
         if os == "freebsd"
             os_version = extract_os_version("freebsd", r".*freebsd([\d.]+)"sa)
@@ -796,6 +799,17 @@ function platform_dlext(p::AbstractPlatform = HostPlatform())
     end
 end
 
+# Not general purpose, just for parse_dl_name_version
+function _this_os_name()
+    if Sys.iswindows()
+        return "windows"
+    elseif Sys.isapple()
+        return "macos"
+    else
+        return "other"
+    end
+end
+
 """
     parse_dl_name_version(path::String, platform::AbstractPlatform)
 
@@ -806,12 +820,14 @@ valid dynamic library, this method throws an error.  If no soversion
 can be extracted from the filename, as in "libbar.so" this method
 returns `"libbar", nothing`.
 """
-function parse_dl_name_version(path::String, os::String)
+function parse_dl_name_version(path::String, os::String=_this_os_name())
     # Use an extraction regex that matches the given OS
     local dlregex
+    # Keep this up to date with _this_os_name
     if os == "windows"
-        # On Windows, libraries look like `libnettle-6.dll`
-        dlregex = r"^(.*?)(?:-((?:[\.\d]+)*))?\.dll$"sa
+        # On Windows, libraries look like `libnettle-6.dll`.
+        # Stay case-insensitive, the suffix might be `.DLL`.
+        dlregex = r"^(.*?)(?:-((?:[\.\d]+)*))?\.dll$"isa
     elseif os == "macos"
         # On OSX, libraries look like `libnettle.6.3.dylib`
         dlregex = r"^(.*?)((?:\.[\d]+)*)\.dylib$"sa
@@ -837,24 +853,70 @@ function parse_dl_name_version(path::String, os::String)
 end
 
 # Adapter for `AbstractString`
-function parse_dl_name_version(path::AbstractString, os::AbstractString)
+function parse_dl_name_version(path::AbstractString, os::AbstractString=_this_os_name())
     return parse_dl_name_version(string(path)::String, string(os)::String)
+end
+
+function get_csl_member(member::Symbol)
+    # If CompilerSupportLibraries_jll is a stdlib, we can just grab things from it
+    csl_pkgids = filter(pkgid -> pkgid.name == "CompilerSupportLibraries_jll", keys(Base.loaded_modules))
+    if !isempty(csl_pkgids)
+        CSL_mod = Base.loaded_modules[first(csl_pkgids)]
+
+        # This can fail during bootstrap, so we skip in that case.
+        if isdefined(CSL_mod, member)
+            return getproperty(CSL_mod, member)
+        end
+    end
+
+    return nothing
+end
+
+
+function _get_libgfortran_path()
+    # If CompilerSupportLibraries_jll is a stdlib, we can just directly ask for
+    # the path here, without checking `dllist()`:
+    libgfortran_path = get_csl_member(:libgfortran_path)
+    if libgfortran_path !== nothing
+        return libgfortran_path::String
+    end
+
+    # Otherwise, look for it having already been loaded by something
+    libgfortran_paths = filter!(x -> occursin("libgfortran", x), Libdl.dllist())
+    if !isempty(libgfortran_paths)
+        return first(libgfortran_paths)::String
+    end
+
+    # One day, I hope to not be linking against libgfortran in base Julia
+    return nothing
+end
+
+function _get_libstdcxx_handle()
+    # If CompilerSupportLibraries_jll is a stdlib, we can just directly open it
+    libstdcxx = get_csl_member(:libstdcxx)
+    if libstdcxx !== nothing
+        return nothing
+    end
+
+    # Otherwise, look for it having already been loaded by something
+    libstdcxx_paths = filter!(x -> occursin("libstdc++", x), Libdl.dllist())
+    if !isempty(libstdcxx_paths)
+        return Libdl.dlopen(first(libstdcxx_paths), Libdl.RTLD_NOLOAD)::Ptr{Cvoid}
+    end
+
+    # One day, I hope to not be linking against libgfortran in base Julia
+    return nothing
 end
 
 """
     detect_libgfortran_version()
 
 Inspects the current Julia process to determine the libgfortran version this Julia is
-linked against (if any).
+linked against (if any).  Returns `nothing` if no libgfortran version dependence is
+detected.
 """
 function detect_libgfortran_version()
-    libgfortran_paths = filter!(x -> occursin("libgfortran", x), Libdl.dllist())
-    if isempty(libgfortran_paths)
-        # One day, I hope to not be linking against libgfortran in base Julia
-        return nothing
-    end
-    libgfortran_path = first(libgfortran_paths)
-
+    libgfortran_path = _get_libgfortran_path()
     name, version = parse_dl_name_version(libgfortran_path, os())
     if version === nothing
         # Even though we complain about this, we allow it to continue in the hopes that
@@ -878,24 +940,18 @@ it is linked against (if any).  `max_minor_version` is the latest version in the
 3.4 series of GLIBCXX where the search is performed.
 """
 function detect_libstdcxx_version(max_minor_version::Int=30)
-    libstdcxx_paths = filter!(x -> occursin("libstdc++", x), Libdl.dllist())
-    if isempty(libstdcxx_paths)
-        # This can happen if we were built by clang, so we don't link against
-        # libstdc++ at all.
-        return nothing
-    end
-
     # Brute-force our way through GLIBCXX_* symbols to discover which version we're linked against
-    hdl = Libdl.dlopen(first(libstdcxx_paths))::Ptr{Cvoid}
-    # Try all GLIBCXX versions down to GCC v4.8:
-    # https://gcc.gnu.org/onlinedocs/libstdc++/manual/abi.html
-    for minor_version in max_minor_version:-1:18
-        if Libdl.dlsym(hdl, "GLIBCXX_3.4.$(minor_version)"; throw_error=false) !== nothing
-            Libdl.dlclose(hdl)
-            return VersionNumber("3.4.$(minor_version)")
+    libstdcxx = _get_libstdcxx_handle()
+
+    if libstdcxx !== nothing
+        # Try all GLIBCXX versions down to GCC v4.8:
+        # https://gcc.gnu.org/onlinedocs/libstdc++/manual/abi.html
+        for minor_version in max_minor_version:-1:18
+            if Libdl.dlsym(libstdcxx, "GLIBCXX_3.4.$(minor_version)"; throw_error=false) !== nothing
+                return VersionNumber("3.4.$(minor_version)")
+            end
         end
     end
-    Libdl.dlclose(hdl)
     return nothing
 end
 
@@ -1041,7 +1097,7 @@ function platforms_match(a::AbstractPlatform, b::AbstractPlatform)
 
         # Call the comparator, passing in which objects requested this comparison (one, the other, or both)
         # For some comparators this doesn't matter, but for non-symmetrical comparisons, it does.
-        if !(comparator(ak, bk, a_comp === comparator, b_comp === comparator)::Bool)
+        if !(@invokelatest(comparator(ak, bk, a_comp === comparator, b_comp === comparator))::Bool)
             return false
         end
     end

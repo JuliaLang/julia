@@ -257,6 +257,35 @@ end
     end
 end
 
+@testset "isapprox and unsigned integers" begin
+    for T in Base.BitUnsigned_types
+        # Test also combinations of different integer types
+        W = widen(T)
+        # The order of the operands for difference between unsigned integers is
+        # very important, test both combinations.
+        @test isapprox(T(42), T(42); rtol=T(0), atol=0.5)
+        @test isapprox(T(42), W(42); rtol=T(0), atol=0.5)
+        @test !isapprox(T(0), T(1); rtol=T(0), atol=0.5)
+        @test !isapprox(T(1), T(0); rtol=T(0), atol=0.5)
+        @test isapprox(T(1), T(3); atol=T(2))
+        @test isapprox(T(4), T(2); atol=T(2))
+        @test isapprox(T(1), W(3); atol=T(2))
+        @test isapprox(T(4), W(2); atol=T(2))
+        @test isapprox(T(5), T(7); atol=typemax(T))
+        @test isapprox(T(8), T(6); atol=typemax(T))
+        @test isapprox(T(1), T(2); rtol=1)
+        @test isapprox(T(6), T(3); rtol=1)
+        @test isapprox(T(1), W(2); rtol=1)
+        @test isapprox(T(6), W(3); rtol=1)
+        @test !isapprox(typemin(T), typemax(T))
+        @test !isapprox(typemax(T), typemin(T))
+        @test !isapprox(typemin(T), typemax(T); atol=typemax(T)-T(1))
+        @test !isapprox(typemax(T), typemin(T); atol=typemax(T)-T(1))
+        @test isapprox(typemin(T), typemax(T); atol=typemax(T))
+        @test isapprox(typemax(T), typemin(T); atol=typemax(T))
+    end
+end
+
 @testset "Conversion from floating point to unsigned integer near extremes (#51063)" begin
     @test_throws InexactError UInt32(4.2949673f9)
     @test_throws InexactError UInt64(1.8446744f19)

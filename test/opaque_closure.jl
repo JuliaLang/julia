@@ -151,26 +151,33 @@ end # module test_world_age
 
 function maybe_vararg(isva::Bool)
     T = isva ? Vararg{Int} : Int
-    @opaque Tuple{T} (x...)->x
+    @opaque Tuple{T}->_ (x...)->x
 end
 @test maybe_vararg(false)(1) == (1,)
 @test_throws MethodError maybe_vararg(false)(1,2,3)
 @test maybe_vararg(true)(1) == (1,)
 @test maybe_vararg(true)(1,2,3) == (1,2,3)
-@test (@opaque Tuple{Int, Int} (a, b, x...)->x)(1,2) === ()
-@test (@opaque Tuple{Int, Int} (a, x...)->x)(1,2) === (2,)
-@test (@opaque Tuple{Int, Vararg{Int}} (a, x...)->x)(1,2,3,4) === (2,3,4)
+@test (@opaque Tuple{Int, Int}->_ (a, b, x...)->x)(1,2) === ()
+@test (@opaque Tuple{Int, Int}->Tuple{} (a, b, x...)->x)(1,2) === ()
+@test (@opaque _->Tuple{Vararg{Int}} (a, b, x...)->x)(1,2) === ()
+@test (@opaque Tuple{Int, Int}->_ (a, x...)->x)(1,2) === (2,)
+@test (@opaque Tuple{Int, Int}->Tuple{Int} (a, x...)->x)(1,2) === (2,)
+@test (@opaque _->Tuple{Vararg{Int}} (a, x...)->x)(1,2) === (2,)
+@test (@opaque Tuple{Int, Vararg{Int}}->_ (a, x...)->x)(1,2,3,4) === (2,3,4)
+@test (@opaque Tuple{Int, Vararg{Int}}->Tuple{Vararg{Int}} (a, x...)->x)(1,2,3,4) === (2,3,4)
 @test (@opaque (a::Int, x::Int...)->x)(1,2,3) === (2,3)
+@test (@opaque _->Tuple{Vararg{Int}} (a::Int, x::Int...)->x)(1,2,3) === (2,3)
+@test (@opaque _->_ (a::Int, x::Int...)->x)(1,2,3) === (2,3)
 
-@test_throws ErrorException (@opaque Tuple{Vararg{Int}} x->x)
-@test_throws ErrorException (@opaque Tuple{Int, Vararg{Int}} x->x)
-@test_throws ErrorException (@opaque Tuple{Int, Int} x->x)
-@test_throws ErrorException (@opaque Tuple{Any} (x,y)->x)
-@test_throws ErrorException (@opaque Tuple{Vararg{Int}} (x,y...)->x)
-@test_throws ErrorException (@opaque Tuple{Int} (x,y,z...)->x)
+@test_throws ErrorException (@opaque Tuple{Vararg{Int}}->_ x->x)
+@test_throws ErrorException (@opaque Tuple{Int, Vararg{Int}}->_ x->x)
+@test_throws ErrorException (@opaque Tuple{Int, Int}->_ x->x)
+@test_throws ErrorException (@opaque Tuple{Any}->_ (x,y)->x)
+@test_throws ErrorException (@opaque Tuple{Vararg{Int}}->_ (x,y...)->x)
+@test_throws ErrorException (@opaque Tuple{Int}->_ (x,y,z...)->x)
 
 # cannot specify types both on arguments and separately
-@test_throws ErrorException @eval @opaque Tuple{Any} (x::Int)->x
+@test_throws ErrorException @eval @opaque Tuple{Any}->_ (x::Int)->x
 
 # Vargarg in complied mode
 mk_va_opaque() = @opaque (x...)->x
@@ -178,7 +185,7 @@ mk_va_opaque() = @opaque (x...)->x
 @test mk_va_opaque()(1,2) == (1,2)
 
 # OpaqueClosure show method
-@test repr(@opaque x->Base.inferencebarrier(1)) == "(::Any)::Any->◌"
+@test repr(@opaque x->Base.inferencebarrier(1)) == "(::Any)->◌::Any"
 
 # Opaque closure in CodeInfo returned from generated functions
 let ci = @code_lowered const_int()
@@ -290,6 +297,20 @@ let src = code_typed((Int,Int)) do x, y...
         @test oc(1,2) === (1,(2,))
         @test_throws MethodError oc(1,2,3)
     end
+
+    # with manually constructed IRCode, without round-trip to CodeInfo
+    f59222(xs...) = length(xs)
+    ir = Base.code_ircode_by_type(Tuple{typeof(f59222), Symbol, Symbol})[1][1]
+    ir.argtypes[1] = Tuple{}
+    let oc = OpaqueClosure(ir; isva=true)
+        @test oc(:a, :b) == 2
+    end
+    ir = Base.code_ircode_by_type(Tuple{typeof(f59222), Symbol, Vararg{Symbol}})[1][1]
+    ir.argtypes[1] = Tuple{}
+    let oc = OpaqueClosure(ir; isva=true)
+        @test oc(:a) == 1
+        @test oc(:a, :b, :c) == 3
+    end
 end
 
 # Check for correct handling in case of broken return type.
@@ -340,9 +361,12 @@ let (bt, did_gc) = make_oc_and_collect_bt()
     GC.gc(true); GC.gc(true); GC.gc(true);
     @test did_gc[]
     @test any(stacktrace(bt)) do frame
-        isa(frame.linfo, Core.MethodInstance) || return false
-        isa(frame.linfo.def, Method) || return false
-        return frame.linfo.def.is_for_opaque_closure
+        li = frame.linfo
+        isa(li, Core.CodeInstance) && (li = li.def)
+        isa(li, Core.ABIOverride) && (li = li.def)
+        isa(li, Core.MethodInstance) || return false
+        isa(li.def, Method) || return false
+        return li.def.is_for_opaque_closure
     end
 end
 
@@ -380,3 +404,23 @@ let ir = first(only(Base.code_ircode(sin, (Int,))))
     oc = Core.OpaqueClosure(ir; do_compile=false)
     @test oc(1) == sin(1)
 end
+
+function typed_add54236(::Type{T}) where T
+    return @opaque (x::Int)->T(x) + T(1)
+end
+let f = typed_add54236(Float64)
+    @test f isa Core.OpaqueClosure
+    @test f(32) === 33.0
+end
+
+f54357(g, ::Type{AT}) where {AT} = Base.Experimental.@opaque AT->_ (args...) -> g((args::AT)...)
+let f = f54357(+, Tuple{Int,Int})
+    @test f isa Core.OpaqueClosure
+    @test f(32, 34) === 66
+    g = f54357(+, Tuple{Float64,Float64})
+    @test g isa Core.OpaqueClosure
+    @test g(32.0, 34.0) === 66.0
+end
+
+# 49659: signature-scoped typevar shouldn't fail in lowering
+@test_throws "must be a tuple type" @opaque ((x::T,y::T) where {T}) -> 123

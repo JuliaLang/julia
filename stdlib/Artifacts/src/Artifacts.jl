@@ -16,6 +16,13 @@ using Base.TOML: TOML
 export artifact_exists, artifact_path, artifact_meta, artifact_hash,
        select_downloadable_artifacts, find_artifacts_toml, @artifact_str
 
+const _artifacts_world_age = Ref{UInt}(typemax(UInt))
+
+function __init__()
+    _artifacts_world_age[] = Base.get_world_counter()
+    nothing
+end
+
 """
     parse_toml(path::String)
 
@@ -175,13 +182,11 @@ function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
         end
     end
 
-    overrides = Dict{Symbol,Any}(
-        # Overrides by UUID
-        :UUID => overrides_uuid,
-
-        # Overrides by hash
-        :hash => overrides_hash
-    )
+    overrides = Dict{Symbol,Any}()
+    # Overrides by UUID
+    overrides[:UUID] = overrides_uuid
+    # Overrides by hash
+    overrides[:hash] = overrides_hash
 
     ARTIFACT_OVERRIDES[] = overrides
     return overrides
@@ -351,7 +356,7 @@ function process_overrides(artifact_dict::Dict, pkg_uuid::Base.UUID)
 
             # If we've got a platform-specific friend, override all hashes:
             artifact_dict_name = artifact_dict[name]
-            if isa(artifact_dict_name, Array)
+            if isa(artifact_dict_name, Vector{Any})
                 for entry in artifact_dict_name
                     entry = entry::Dict{String,Any}
                     hash = SHA1(entry["git-tree-sha1"]::String)
@@ -405,7 +410,7 @@ function artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String
         dl_dict = Dict{Platform,Dict{String,Any}}()
         for x in meta
             x = x::Dict{String, Any}
-            dl_dict[unpack_platform(x, name, artifacts_toml)] = x
+            dl_dict[unpack_platform(x, name, artifacts_toml)::Platform] = x
         end
         meta = select_platform(dl_dict, platform)
     # If it's NOT a dict, complain
@@ -445,7 +450,7 @@ function artifact_hash(name::String, artifacts_toml::String;
         return nothing
     end
 
-    return SHA1(meta["git-tree-sha1"])
+    return SHA1(meta["git-tree-sha1"]::String)
 end
 
 function select_downloadable_artifacts(artifact_dict::Dict, artifacts_toml::String;
@@ -544,11 +549,19 @@ function jointail(dir, tail)
     end
 end
 
-function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, @nospecialize(lazyartifacts))
-    moduleroot = Base.moduleroot(__module__)
-    if haskey(Base.module_keys, moduleroot)
+function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, ::Val{LazyArtifacts}) where LazyArtifacts
+    world = _artifacts_world_age[]
+    if world == typemax(UInt)
+        world = Base.get_world_counter()
+    end
+    return Base.invoke_in_world(world, __artifact_str, __module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, Val(LazyArtifacts))::String
+end
+
+function __artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, ::Val{LazyArtifacts}) where LazyArtifacts
+    pkg = Base.PkgId(__module__)
+    if pkg.uuid !== nothing
         # Process overrides for this UUID, if we know what it is
-        process_overrides(artifact_dict, Base.module_keys[moduleroot].uuid)
+        process_overrides(artifact_dict, pkg.uuid)
     end
 
     # If the artifact exists, we're in the happy path and we can immediately
@@ -563,11 +576,12 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
     # If not, try determining what went wrong:
     meta = artifact_meta(name, artifact_dict, artifacts_toml; platform)
     if meta !== nothing && get(meta, "lazy", false)
-        if lazyartifacts isa Module && isdefined(lazyartifacts, :ensure_artifact_installed)
-            if nameof(lazyartifacts) in (:Pkg, :Artifacts)
+        if LazyArtifacts isa Module && isdefined(LazyArtifacts, :ensure_artifact_installed)
+            if nameof(LazyArtifacts) in (:Pkg, :Artifacts, :PkgArtifacts)
                 Base.depwarn("using Pkg instead of using LazyArtifacts is deprecated", :var"@artifact_str", force=true)
             end
-            return jointail(lazyartifacts.ensure_artifact_installed(string(name), meta, artifacts_toml; platform), path_tail)
+            path_base = (@invokelatest LazyArtifacts.ensure_artifact_installed(string(name), meta, artifacts_toml; platform))::String
+            return jointail(path_base, path_tail)
         end
         error("Artifact $(repr(name)) is a lazy artifact; package developers must call `using LazyArtifacts` in $(__module__) before using lazy artifacts.")
     end
@@ -644,10 +658,9 @@ function artifact_slash_lookup(name::String, artifact_dict::Dict,
     if meta === nothing
         error("Cannot locate artifact '$(name)' for $(triplet(platform)) in '$(artifacts_toml)'")
     end
-    hash = SHA1(meta["git-tree-sha1"])
+    hash = SHA1(meta["git-tree-sha1"]::String)
     return artifact_name, artifact_path_tail, hash
 end
-
 """
     macro artifact_str(name)
 
@@ -699,31 +712,30 @@ macro artifact_str(name, platform=nothing)
 
     # Check if the user has provided `LazyArtifacts`, and thus supports lazy artifacts
     # If not, check to see if `Pkg` or `Pkg.Artifacts` has been imported.
-    lazyartifacts = nothing
-    for module_name in (:LazyArtifacts, :Pkg, :Artifacts)
+    LazyArtifacts = nothing
+    for module_name in (:LazyArtifacts, :Pkg, :Artifacts, :PkgArtifacts)
         if isdefined(__module__, module_name)
-            lazyartifacts = GlobalRef(__module__, module_name)
+            LazyArtifacts = GlobalRef(__module__, module_name)
             break
         end
     end
 
     # If `name` is a constant, (and we're using the default `Platform`) we can actually load
     # and parse the `Artifacts.toml` file now, saving the work from runtime.
-    if isa(name, AbstractString) && platform === nothing
-        # To support slash-indexing, we need to split the artifact name from the path tail:
+    if platform === nothing
         platform = HostPlatform()
+    end
+    if isa(name, AbstractString) && isa(platform, AbstractPlatform)
+        # To support slash-indexing, we need to split the artifact name from the path tail:
         artifact_name, artifact_path_tail, hash = artifact_slash_lookup(name, artifact_dict, artifacts_toml, platform)
         return quote
-            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), $(artifact_name), $(artifact_path_tail), $(artifact_dict), $(hash), $(platform), $(lazyartifacts))::String
+            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), $(artifact_name), $(artifact_path_tail), $(artifact_dict), $(hash), $(platform), Val($(LazyArtifacts)))::String
         end
     else
-        if platform === nothing
-            platform = :($(HostPlatform)())
-        end
         return quote
             local platform = $(esc(platform))
             local artifact_name, artifact_path_tail, hash = artifact_slash_lookup($(esc(name)), $(artifact_dict), $(artifacts_toml), platform)
-            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), artifact_name, artifact_path_tail, $(artifact_dict), hash, platform, $(lazyartifacts))::String
+            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), artifact_name, artifact_path_tail, $(artifact_dict), hash, platform, Val($(LazyArtifacts)))::String
         end
     end
 end
@@ -761,6 +773,5 @@ precompile(NamedTuple{(:pkg_uuid,)}, (Tuple{Base.UUID},))
 precompile(Core.kwfunc(load_artifacts_toml), (NamedTuple{(:pkg_uuid,), Tuple{Base.UUID}}, typeof(load_artifacts_toml), String))
 precompile(parse_mapping, (String, String, String))
 precompile(parse_mapping, (Dict{String, Any}, String, String))
-precompile(Tuple{typeof(Artifacts._artifact_str), Module, String, Base.SubString{String}, String, Base.Dict{String, Any}, Base.SHA1, Base.BinaryPlatforms.Platform, Any})
-
+precompile(Tuple{typeof(Artifacts.__artifact_str), Module, String, Base.SubString{String}, String, Base.Dict{String, Any}, Base.SHA1, Base.BinaryPlatforms.Platform, Base.Val{Artifacts}})
 end # module Artifacts

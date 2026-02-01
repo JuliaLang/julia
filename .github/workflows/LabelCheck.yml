@@ -11,9 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-    - uses: yogevbd/enforce-label-action@2.2.2
+    - uses: yogevbd/enforce-label-action@a3c219da6b8fa73f6ba62b68ff09c469b3a1c024 # 2.2.2
       with:
         # REQUIRED_LABELS_ANY: "bug,enhancement,skip-changelog"
         # REQUIRED_LABELS_ANY_DESCRIPTION: "Select at least one label ['bug','enhancement','skip-changelog']"
-        BANNED_LABELS: "needs docs,needs compat annotation,needs more info,needs nanosoldier run,needs news,needs pkgeval,needs tests,DO NOT MERGE"
-        BANNED_LABELS_DESCRIPTION: "A PR should not be merged with `needs *` or `DO NOT MERGE` labels"
+        BANNED_LABELS: "needs docs,needs compat annotation,needs more info,needs nanosoldier run,needs news,needs pkgeval,needs tests,needs decision,DO NOT MERGE,status:DO NOT MERGE"
+        BANNED_LABELS_DESCRIPTION: "A PR should not be merged with `needs *` or `status:DO NOT MERGE` labels"
