@@ -459,7 +459,7 @@ julia> y === x
 true
 ```
 
-See also: [`round`](@ref), [`trunc`](@ref), [`oftype`](@ref), [`reinterpret`](@ref).
+See also [`round`](@ref), [`trunc`](@ref), [`oftype`](@ref), [`reinterpret`](@ref).
 """
 function convert end
 
@@ -520,7 +520,7 @@ argtail(_, rest...) = rest
 
 Return a `Tuple` consisting of all but the first component of `x`.
 
-See also: [`front`](@ref Base.front), [`rest`](@ref Base.rest), [`first`](@ref), [`Iterators.peel`](@ref).
+See also [`front`](@ref Base.front), [`rest`](@ref Base.rest), [`first`](@ref), [`Iterators.peel`](@ref).
 
 # Examples
 ```jldoctest
@@ -950,7 +950,7 @@ The block evaluates to `value` if a `break` statement is executed, otherwise it 
 the result of `expr`. Use `@label _ expr` for anonymous blocks (break with `break _`) or
 `@label name expr` for named blocks (break with `break name`).
 
-# Example
+# Examples
 ```julia
 result = @label myblock begin
     for i in 1:10
@@ -1188,7 +1188,7 @@ values(itr) = itr
 A type with no fields whose singleton instance [`missing`](@ref) is used
 to represent missing values.
 
-See also: [`skipmissing`](@ref), [`nonmissingtype`](@ref), [`Nothing`](@ref).
+See also [`skipmissing`](@ref), [`nonmissingtype`](@ref), [`Nothing`](@ref).
 """
 struct Missing end
 
@@ -1197,7 +1197,7 @@ struct Missing end
 
 The singleton instance of type [`Missing`](@ref) representing a missing value.
 
-See also: [`NaN`](@ref), [`skipmissing`](@ref), [`nonmissingtype`](@ref).
+See also [`NaN`](@ref), [`skipmissing`](@ref), [`nonmissingtype`](@ref).
 """
 const missing = Missing()
 
@@ -1206,7 +1206,7 @@ const missing = Missing()
 
 Indicate whether `x` is [`missing`](@ref).
 
-See also: [`skipmissing`](@ref), [`isnothing`](@ref), [`isnan`](@ref).
+See also [`skipmissing`](@ref), [`isnothing`](@ref), [`isnan`](@ref).
 """
 ismissing(x) = x === missing
 
@@ -1302,7 +1302,10 @@ is newer than the world currently running.
 The `@world` macro is primarily used in the printing of bindings that are no longer
 available in the current world.
 
-## Example
+!!! compat "Julia 1.12"
+    This functionality requires at least Julia 1.12.
+
+# Examples
 ```julia-repl
 julia> struct Foo; a::Int; end
 Foo
@@ -1318,9 +1321,6 @@ Foo
 julia> fold
 @world(Foo, 26866)(1)
 ```
-
-!!! compat "Julia 1.12"
-    This functionality requires at least Julia 1.12.
 """
 macro world(sym, world)
     if world == :∞
