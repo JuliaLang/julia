@@ -33,7 +33,7 @@ export TestLogger, LogRecord
 
 using Random
 using Random: AbstractRNG, default_rng
-using InteractiveUtils: gen_call_with_extracted_types
+using InteractiveUtils: gen_call_with_extracted_types, normalize_do_expr
 using Base: typesplit, remove_linenums!
 using Serialization: Serialization
 using Base.ScopedValues: LazyScopedValue, ScopedValue, @with
@@ -2543,6 +2543,7 @@ function _inferred(ex, mod, allow = :(Union{}))
     if Meta.isexpr(ex, :ref)
         ex = Expr(:call, :getindex, ex.args...)
     end
+    ex = normalize_do_expr(ex)
     Meta.isexpr(ex, :call)|| error("@inferred requires a call expression")
     farg = ex.args[1]
     if isa(farg, Symbol) && farg !== :.. && first(string(farg)) == '.'
