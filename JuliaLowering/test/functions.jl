@@ -651,7 +651,7 @@ end
         test_mod, genfunc_quote_s; expr_compat_mode=true) == :(:x1,first)
     @test JuliaLowering.include_string(
         test_mod, genfunc_quote_s; expr_compat_mode=false) ≈
-            @ast_ [K"tuple" [K"quote" "x1"::K"Identifier"] "first"::K"Identifier"]
+            @ast_ [K"tuple" [K"inert" "x1"::K"Identifier"] "first"::K"Identifier"]
 
     genfunc_quote_s = """
     begin
@@ -672,7 +672,7 @@ end
         test_mod, genfunc_quote_s; expr_compat_mode=true) == :(:x2,generated)
     @test JuliaLowering.include_string(
         test_mod, genfunc_quote_s; expr_compat_mode=false) ≈
-            @ast_ [K"tuple" [K"quote" "x2"::K"Identifier"] "generated"::K"Identifier"]
+            @ast_ [K"tuple" [K"inert" "x2"::K"Identifier"] "generated"::K"Identifier"]
 
     genfunc_quote_s = """
     begin
@@ -690,7 +690,7 @@ end
         test_mod, genfunc_quote_s; expr_compat_mode=true) == :(:x4,after)
     @test JuliaLowering.include_string(
         test_mod, genfunc_quote_s; expr_compat_mode=false) ≈
-            @ast_ [K"tuple" [K"quote" "x4"::K"Identifier"] "after"::K"Identifier"]
+            @ast_ [K"tuple" [K"inert" "x4"::K"Identifier"] "after"::K"Identifier"]
 
     genfunc_quote_s = raw"""
     begin
@@ -712,7 +712,7 @@ end
     @test JuliaLowering.include_string(
         test_mod, genfunc_quote_s; expr_compat_mode=false) ≈
             @ast_ [K"tuple" [K"tuple"
-                             [K"quote" "x1"::K"Identifier"]
+                             [K"inert" "x1"::K"Identifier"]
                              "first"::K"Identifier"]
                    "nongen"::K"Identifier"]
 
@@ -736,7 +736,7 @@ end
     # (see also https://github.com/JuliaLang/julia/pull/57230)
     JuliaLowering.include_string(test_mod, raw"""
     const delete_me = 4
-    @generated f_generated_return_delete_me() = return :(delete_me)
+    @generated f_generated_return_delete_me() = return quote; delete_me; end
     """)
     @test test_mod.f_generated_return_delete_me() == 4
     Base.delete_binding(test_mod, :delete_me)
