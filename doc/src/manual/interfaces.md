@@ -147,19 +147,34 @@ julia> collect(Iterators.reverse(Squares(4)))
   4
   1
 ```
+## [Destructuring](@id man-interface-destructuring)
+
+Destructuring patterns in Julia, such as `(a, b...) = x` or `(first, middle..., last) = x`, are lowered using standard iteration alongside specific methods for collecting the remaining elements.
+
+| Methods to implement                        | Brief description                                                     |
+|:------------------------------------------- |:--------------------------------------------------------------------- |
+| [`Base.rest(iter, [state])`](@ref)          | Return the remaining elements of `iter` starting at `state`.          |
+| [`Base.split_rest(iter, n, [state])`](@ref) | Return a tuple of the slurped elements and the `n` trailing elements. |
+
+The first few elements are retrieved using [`iterate`](@ref). The `...` syntax then relies on:
+
+* [`Base.rest(iter, state)`](@ref) for trailing usage (e.g., `(a, b...) = x`). The default implementation iterates to exhaustion. Custom types can implement this method to return a more efficient collection, such as a slice `x[state:end]` for arrays.
+* [`Base.split_rest(iter, n, state)`](@ref) for mid-position usage (e.g., `(a, b..., c) = x`). It is responsible for returning a tuple `(rest, tail)`, where `rest` is the collection of slurped elements and `tail` is a tuple of the `n` trailing elements.
+
+Implementing these methods is optional but recommended for custom collection types where materializing the "rest" can be done more efficiently than by sequential iteration.
 
 ## Indexing
 
-| Methods to implement | Brief description                |
-|:-------------------- |:-------------------------------- |
-| `getindex(X, i)`     | `X[i]`, indexed access, non-scalar `i` should allocate a copy  |
-| `setindex!(X, v, i)` | `X[i] = v`, indexed assignment         |
-| `firstindex(X)`         | The first index, used in `X[begin]` |
-| `lastindex(X)`           | The last index, used in `X[end]`   |
+| Methods to implement  | Brief description                                              |
+|:--------------------- |:-------------------------------------------------------------- |
+| `getindex(X, i)`      | `X[i]`, indexed access, non-scalar `i` should allocate a copy  |
+| `setindex!(X, v, i)`  | `X[i] = v`, indexed assignment                                 |
+| `firstindex(X)`       | The first index, used in `X[begin]`                            |
+| `lastindex(X)`        | The last index, used in `X[end]`                               |
 
-For the `Squares` iterable above, we can easily compute the `i`th element of the sequence by squaring
-it. We can expose this as an indexing expression `S[i]`. To opt into this behavior, `Squares`
-simply needs to define [`getindex`](@ref):
+For the `Squares` iterable above, we can easily compute the `i`th element of the sequence by
+squaring it. We can expose this as an indexing expression `S[i]`. To opt into this behavior,
+`Squares` simply needs to define [`getindex`](@ref):
 
 ```jldoctest squaretype
 julia> function Base.getindex(S::Squares, i::Int)
