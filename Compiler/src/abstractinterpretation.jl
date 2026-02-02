@@ -22,7 +22,7 @@ function can_propagate_conditional(@nospecialize(rt), argtypes::Vector{Any})
         return false
     end
     return isa(argtypes[rt.slot], Conditional) &&
-        is_const_bool_or_bottom(rt.thentype) && is_const_bool_or_bottom(rt.thentype)
+        is_const_bool_or_bottom(rt.thentype) && is_const_bool_or_bottom(rt.elsetype)
 end
 
 function propagate_conditional(rt::InterConditional, cond::Conditional)
