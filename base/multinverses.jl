@@ -2,7 +2,7 @@
 
 module MultiplicativeInverses
 
-import Base: div, divrem, mul_hi, rem, unsigned
+import Base: div, divrem, mul_hi, rem, unsigned, mod
 using  Base: IndexLinear, IndexCartesian, tail
 export multiplicativeinverse
 
@@ -151,6 +151,13 @@ rem(a::T, b::MultiplicativeInverse{T}) where {T} =
 function divrem(a::T, b::MultiplicativeInverse{T}) where T
     d = div(a, b)
     (d, a - d*b.divisor)
+end
+
+mod(a::T, b::UnsignedMultiplicativeInverse{T}) where {T} = rem(a, b)
+
+function mod(a::T, b::SignedMultiplicativeInverse{T}) where {T}
+    r = rem(a, b)
+    return (iszero(r) || signbit(r) == signbit(b.divisor)) ? r : r + b.divisor
 end
 
 multiplicativeinverse(x::Signed) = SignedMultiplicativeInverse(x)

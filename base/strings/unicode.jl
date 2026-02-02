@@ -639,6 +639,7 @@ julia> uppercase("Julia")
 """
 uppercase(s::AbstractString) = map(uppercase, s)
 uppercase(s::AnnotatedString) = annotated_chartransform(uppercase, s)
+uppercase(s::SubString{<:AnnotatedString}) = uppercase(AnnotatedString(s))
 
 """
     lowercase(s::AbstractString)
@@ -655,6 +656,7 @@ julia> lowercase("STRINGS AND THINGS")
 """
 lowercase(s::AbstractString) = map(lowercase, s)
 lowercase(s::AnnotatedString) = annotated_chartransform(lowercase, s)
+lowercase(s::SubString{<:AnnotatedString}) = lowercase(AnnotatedString(s))
 
 """
     titlecase(s::AbstractString; [wordsep::Function], strict::Bool=true)::String
@@ -720,6 +722,9 @@ function titlecase(s::AnnotatedString; wordsep::Function = !isletter, strict::Bo
     end
 end
 
+titlecase(s::SubString{<:AnnotatedString}; wordsep::Function = !isletter, strict::Bool=true) =
+    titlecase(AnnotatedString(s); wordsep=wordsep, strict=strict)
+
 """
     uppercasefirst(s::AbstractString)::String
 
@@ -754,6 +759,7 @@ function uppercasefirst(s::AnnotatedString)
         end
     end
 end
+uppercasefirst(s::SubString{<:AnnotatedString}) = uppercasefirst(AnnotatedString(s))
 
 """
     lowercasefirst(s::AbstractString)
@@ -787,6 +793,7 @@ function lowercasefirst(s::AnnotatedString)
         end
     end
 end
+lowercasefirst(s::SubString{<:AnnotatedString}) = lowercasefirst(AnnotatedString(s))
 
 ############################################################################
 # iterators for grapheme segmentation

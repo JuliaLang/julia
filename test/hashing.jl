@@ -37,6 +37,7 @@ for T = types[2:end], x = vals
     a = coerce(T, x)
     @test hash(a, zero(UInt)) == invoke(hash, Tuple{Real, UInt}, a, zero(UInt))
     @test hash(a, one(UInt)) == invoke(hash, Tuple{Real, UInt}, a, one(UInt))
+    @test hash(a) == hash(complex(a))
 end
 
 let collides = 0
@@ -312,6 +313,15 @@ struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
     @test hash((Int64(5)//2)^25) != hash(2.5^25)
     # test hashing of rational with odd denominator
     @test hash(5//3) == hash(big(5)//3)
+end
+
+@testset "`Pair`" begin
+    @test (@inferred hash(0 => 1)) === (@inferred hash(false => true))
+    @test hash(0 => 1, UInt(0)) != hash(0 => 1, UInt(1))
+    let (x, y, z) = (1, 3, 7)
+        h = UInt(9)
+        @test hash(x => (y => z), h) != hash((x => y) => z, h)
+    end
 end
 
 @testset "concrete eval type hash" begin

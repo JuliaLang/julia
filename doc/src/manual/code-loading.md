@@ -64,7 +64,7 @@ Each kind of environment defines these three maps differently, as detailed in th
 !!! note
     For ease of understanding, the examples throughout this chapter show full data structures for roots, graph and paths. However, Julia's package loading code does not explicitly create these. Instead, it lazily computes only as much of each structure as it needs to load a given package.
 
-### Project environments
+### [Project environments](@id project-environments)
 
 A project environment is determined by a directory containing a project file called `Project.toml`, and optionally a manifest file called `Manifest.toml`. These files may also be called `JuliaProject.toml` and `JuliaManifest.toml`, in which case `Project.toml` and `Manifest.toml` are ignored. This allows for coexistence with other tools that might consider files called `Project.toml` and `Manifest.toml` significant. For pure Julia projects, however, the names `Project.toml` and `Manifest.toml` are preferred. However, from Julia v1.10.8 onwards, `(Julia)Manifest-v{major}.{minor}.toml` is recognized as a format to make a given julia version use a specific manifest file i.e. in the same folder, a `Manifest-v1.11.toml` would be used by v1.11 and `Manifest.toml` by any other julia version.
 
@@ -437,6 +437,43 @@ Preferences can be set with depot-wide defaults; if package Foo is installed wit
 Preferences in environments higher up in the environment stack get overridden by the more proximal entries in the load path, ending with the currently active project.
 This allows depot-wide preference defaults to exist, with active projects able to merge or even completely overwrite these inherited preferences.
 See the docstring for `Preferences.set_preferences!()` for the full details of how to set preferences to allow or disallow merging.
+
+### [Syntax Versioning](@id syntax-versioning)
+
+Syntax versioning allows packages to specify which version of Julia's syntax they use. In particular, different
+packages can use different versions of the Julia syntax. This allows evolution of Julia's syntax in a non-breaking
+way, while allowing packages to upgrade at their own pace. The syntax version is determined from the package's
+corresponding Project.toml and propagates to all modules defined in the package.
+
+#### Syntax Version Determination
+
+The syntax version for a package is determined by the loading mechanism in the following order of precedence:
+
+1. If a `syntax.julia_version` field is present in the project file, it is used directly:
+   ```toml
+   name = "MyPackage"
+   uuid = "..."
+   syntax.julia_version = "1.14"
+   ```
+
+2. Otherwise, if a `[compat]` section specifies a Julia version constraint, the minimum compatible version is used:
+   ```toml
+   [compat]
+   julia = "1.13-2"  # implies syntax version 1.13.0
+   ```
+
+3. If neither is specified, the current Julia version is used.
+
+#### In scripts and the REPL
+
+Scripts and the REPL use the active project's syntax version. This determination happens:
+
+1. At startup after processing `--project`
+2. Before parsing any REPL input, once for each prompt
+
+In particular, a manual `set_active_project` in a script will not change the syntax versioned used
+for the rest of the script. However, doing so at the REPL (explicitly or implicitly via the Pkg
+REPL mode) will affect the syntax version used to parse the *next* REPL input.
 
 ## Conclusion
 

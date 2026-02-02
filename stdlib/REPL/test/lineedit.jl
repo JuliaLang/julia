@@ -1103,24 +1103,66 @@ end
     @test content(s) == "() "
     @test position(buffer(s)) == 1
 
-    # Test context-aware quote closing: typing " inside include("myfile.jl should close the string
+    # Test quote behavior: |foo" + " -> "foo" (not ""foo")
     s = LineEdit.init_state(term, interface)
-    write_input(s, "include(\"myfile.jl")
+    write_input(s, "foo\"")
+    charseek(buffer(s), 0)
     write_input(s, "\"")
-    @test content(s) == "include(\"myfile.jl\")"
-    @test position(buffer(s)) == 19
+    @test content(s) == "\"foo\""
+    @test position(buffer(s)) == 1
 
-    # Test context-aware quote closing for single quotes
+    # Test quote behavior: foo| + " -> foo" (not foo"")
     s = LineEdit.init_state(term, interface)
-    write_input(s, "include('fsfds ")
-    write_input(s, "'")
-    @test content(s) == "include('fsfds ')"
-    @test position(buffer(s)) == 16
-
-    # Test that auto-close for quotes still works when there's no unmatched quote
-    s = LineEdit.init_state(term, interface)
-    write_input(s, "foo()")
+    write_input(s, "foo")
     write_input(s, "\"")
-    @test content(s) == "foo()\"\""
-    @test position(buffer(s)) == 6
+    @test content(s) == "foo\""
+    @test position(buffer(s)) == 4
+
+    # Test quote behavior: foo | + " -> foo ""
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "foo ")
+    write_input(s, "\"")
+    @test content(s) == "foo \"\""
+    @test position(buffer(s)) == 5
+
+    # Test quote behavior: | foo + " -> "" foo (space before foo means double quotes)
+    s = LineEdit.init_state(term, interface)
+    write_input(s, " foo")
+    charseek(buffer(s), 0)
+    write_input(s, "\"")
+    @test content(s) == "\"\" foo"
+    @test position(buffer(s)) == 1
+
+    # Test quote behavior:  | + " -> ""
+    s = LineEdit.init_state(term, interface)
+    write_input(s, " ")
+    write_input(s, "\"")
+    @test content(s) == " \"\""
+    @test position(buffer(s)) == 2
+
+    # Test quote behavior: (|) + " -> ("")
+    s = LineEdit.init_state(term, interface)
+    write_input(s, ")")
+    charseek(buffer(s), 0)
+    write_input(s, "(")
+    # Buffer is now () with cursor at 1
+    write_input(s, "\"")
+    @test content(s) == "(\"\"))"
+    @test position(buffer(s)) == 2
+
+    # Test quote behavior: (|bar) + " -> ("bar)
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "(bar)")
+    charseek(buffer(s), 1)
+    write_input(s, "\"")
+    @test content(s) == "(\"bar)"
+    @test position(buffer(s)) == 2
+
+    # Test bracket behavior: "|" + ( -> "()"
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "\"\"")
+    charseek(buffer(s), 1)
+    write_input(s, "(")
+    @test content(s) == "\"()\""
+    @test position(buffer(s)) == 2
 end

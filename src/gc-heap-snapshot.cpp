@@ -6,25 +6,19 @@
 #include "julia_internal.h"
 #include "julia_assert.h"
 
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
-#include "llvm/ADT/DenseMap.h"
+#include "llvm/Support/FormatVariadic.h"
 
-#include <vector>
-#include <string>
-#include <sstream>
-#include <iostream>
-#include <set>
-
-using std::string;
-using std::set;
-using std::ostringstream;
-using std::pair;
 using std::make_pair;
 using llvm::SmallVector;
 using llvm::StringMap;
 using llvm::DenseMap;
 using llvm::StringRef;
+using llvm::SmallString;
+using llvm::formatv;
 
 // https://stackoverflow.com/a/33799784/751061
 void print_str_escape_json(ios_t *stream, StringRef s)
@@ -422,18 +416,16 @@ static size_t record_pointer_to_gc_snapshot(void *a, size_t bytes, StringRef nam
     return val.first->second;
 }
 
-static string _fieldpath_for_slot(void *obj, void *slot) JL_NOTSAFEPOINT
+static SmallString<128> _fieldpath_for_slot(void *obj, void *slot) JL_NOTSAFEPOINT
 {
-    string res;
+    SmallString<128> res;
     jl_datatype_t *objtype = (jl_datatype_t*)jl_typeof(obj);
 
     while (1) {
         int i = gc_slot_to_fieldidx(obj, slot, objtype);
 
         if (jl_is_tuple_type(objtype) || jl_is_namedtuple_type(objtype)) {
-            ostringstream ss;
-            ss << "[" << i << "]";
-            res += ss.str();
+            res += formatv("[{0}]", i).sstr<8>();
         }
         else {
             jl_svec_t *field_names = jl_field_names(objtype);
@@ -472,9 +464,8 @@ void _gc_heap_snapshot_record_gc_roots(jl_value_t *root, char *name) JL_NOTSAFEP
 void _gc_heap_snapshot_record_finlist(jl_value_t *obj, size_t index) JL_NOTSAFEPOINT
 {
     auto to_node_idx = record_node_to_gc_snapshot(obj);
-    ostringstream ss;
-    ss << "finlist-" << index;
-    auto edge_label = g_snapshot->names.serialize_if_necessary(g_snapshot->strings, ss.str());
+    SmallString<16> ss = formatv("finlist-{0}", index);
+    auto edge_label = g_snapshot->names.serialize_if_necessary(g_snapshot->strings, ss);
     _record_gc_just_edge("internal", g_snapshot->_gc_finlist_root_idx, to_node_idx, edge_label);
 }
 
@@ -536,7 +527,7 @@ void _gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_
 
 void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void *slot) JL_NOTSAFEPOINT
 {
-    string path = _fieldpath_for_slot(from, slot);
+    SmallString<128> path = _fieldpath_for_slot(from, slot);
     _record_gc_edge("property", from, to,
                     g_snapshot->names.serialize_if_necessary(g_snapshot->strings, path));
 }

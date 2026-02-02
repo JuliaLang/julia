@@ -573,7 +573,7 @@ minmax(x,y) = isless(y, x) ? (y, x) : (x, y)
 
 The identity function. Returns its argument.
 
-See also: [`one`](@ref), [`oneunit`](@ref), and [`LinearAlgebra`](@ref man-linalg)'s `I`.
+See also [`one`](@ref), [`oneunit`](@ref), [`LinearAlgebra.I`](@ref).
 
 # Examples
 ```jldoctest
@@ -816,7 +816,7 @@ end
 Remainder from Euclidean division, returning a value of the same sign as `x`, and smaller in
 magnitude than `y`. This value is always exact.
 
-See also: [`div`](@ref), [`mod`](@ref), [`mod1`](@ref), [`divrem`](@ref).
+See also [`div`](@ref), [`mod`](@ref), [`mod1`](@ref), [`divrem`](@ref).
 
 # Examples
 ```jldoctest
@@ -843,7 +843,7 @@ const % = rem
 The quotient from Euclidean (integer) division. Generally equivalent
 to a mathematical operation x/y without a fractional part.
 
-See also: [`cld`](@ref), [`fld`](@ref), [`rem`](@ref), [`divrem`](@ref).
+See also [`cld`](@ref), [`fld`](@ref), [`rem`](@ref), [`divrem`](@ref).
 
 # Examples
 ```jldoctest
@@ -1194,7 +1194,8 @@ end
 
 function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
     M < N-1 && throw(ArgumentError(LazyString("expected at least ", N-1, " arguments to `Fix{", N, "}`, but got ", M)))
-    return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; kws...)
+    (left, right) = _split_tuple(args, N-1)
+    return f.f(left..., f.x, right...; kws...)
 end
 
 # Special cases for improved constant propagation
@@ -1364,18 +1365,7 @@ used to implement specialized methods.
 """
 in(x) = Fix2(in, x)
 
-function in(x, itr::Any)
-    anymissing = false
-    for y in itr
-        v = (y == x)
-        if ismissing(v)
-            anymissing = true
-        elseif v
-            return true
-        end
-    end
-    return anymissing ? missing : false
-end
+in(x, itr::Any) = any(==(x), itr)
 
 # Specialized variant of in for Tuple, which can generate typed comparisons for each element
 # of the tuple, skipping values that are statically known to be != at compile time.
@@ -1459,7 +1449,7 @@ corresponding position in `collection`. To get a vector indicating whether each 
 in `items` is in `collection`, wrap `collection` in a tuple or a `Ref` like this:
 `in.(items, Ref(collection))` or `items .∈ Ref(collection)`.
 
-See also: [`∉`](@ref), [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
+See also [`∉`](@ref), [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
 
 # Examples
 ```jldoctest

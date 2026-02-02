@@ -13,7 +13,7 @@ popfirst!(c::AbstractChannel) = take!(c)
 """
     Channel{T=Any}(size::Int=0)
 
-Constructs a `Channel` with an internal buffer that can hold a maximum of `size` objects
+Construct a `Channel` with an internal buffer that can hold a maximum of `size` objects
 of type `T`.
 [`put!`](@ref) calls on a full channel block until an object is removed with [`take!`](@ref).
 
@@ -214,7 +214,7 @@ end
 """
     isopen(c::Channel)
 
-Determines whether a [`Channel`](@ref) is open for new [`put!`](@ref) operations.
+Determine whether a [`Channel`](@ref) is open for new [`put!`](@ref) operations.
 Notice that a `Channel` can be closed and still have buffered elements which can be
 consumed with [`take!`](@ref).
 
@@ -555,7 +555,7 @@ end
 """
     isready(c::Channel)
 
-Determines whether a [`Channel`](@ref) has a value stored in it.
+Determine whether a [`Channel`](@ref) has a value stored in it.
 Returns immediately, does not block.
 
 For unbuffered channels, return `true` if there are tasks waiting on a [`put!`](@ref).
@@ -600,7 +600,7 @@ end
 """
     isfull(c::Channel)
 
-Determines if a [`Channel`](@ref) is full, in the sense
+Determine if a [`Channel`](@ref) is full, in the sense
 that calling `put!(c, some_value)` would have blocked.
 Returns immediately, does not block.
 
@@ -646,7 +646,7 @@ trylock(c::Channel) = trylock(c.cond_take)
 """
     wait(c::Channel)
 
-Blocks until the `Channel` [`isready`](@ref).
+Block until the `Channel` [`isready`](@ref).
 
 ```jldoctest
 julia> c = Channel(1);

@@ -618,7 +618,7 @@ static inline ssize_t jl_check_tls_bound(void *tp, jl_gcframe_t ***k0, size_t tl
     return offset;
 }
 #  elif JL_ELF_TLS_VARIANT == 2
-// In Variant 2, the static TLS buffer comes before a unknown size TCB.
+// In Variant 2, the static TLS buffer comes before an unknown size TCB.
 // The alignment needs to be applied to the new size.
 static inline size_t jl_add_tls_size(size_t orig_size, size_t size, size_t align)
 {
@@ -738,7 +738,7 @@ void jl_init_threading(void)
             if (errno != 0 || endptr == cp || nthreads <= 0)
                 nthreads = 1;
             cp = endptr;
-            if (nthreads == 1) // User asked for 1 thread so lets assume they dont want an interactive thread
+            if (nthreads == 1) // User asked for 1 thread so let's assume they don't want an interactive thread
                 nthreadsi = 0;
         }
         if (*cp == ',') {
@@ -757,7 +757,7 @@ void jl_init_threading(void)
         }
     }
 
-    int cpu = jl_cpu_threads();
+    int cpu = jl_effective_threads();
     jl_n_markthreads = jl_options.nmarkthreads - 1;
     jl_n_sweepthreads = jl_options.nsweepthreads;
     if (jl_n_markthreads == -1) { // --gcthreads not specified
@@ -839,7 +839,7 @@ void jl_start_threads(void)
     // default pool according to a 'compact' policy
     // non-exclusive: no affinity settings; let the kernel move threads about
     if (exclusive) {
-        if (ndefault_threads > jl_cpu_threads()) {
+        if (ndefault_threads > jl_effective_threads()) {
             jl_printf(JL_STDERR, "ERROR: Too many threads requested for %s option.\n", MACHINE_EXCLUSIVE_NAME);
             exit(1);
         }

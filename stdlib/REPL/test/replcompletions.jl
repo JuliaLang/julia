@@ -1249,7 +1249,10 @@ let s, c, r
                 @test s[r] == "tmp-execu"
 
                 c,r = test_scomplete("replcompletions-link")
-                @test isempty(c)
+                if !Sys.isunix() || Libc.getuid() != 0
+                    # Root bypasses permissions
+                    @test isempty(c)
+                end
             end
         finally
             # If we don't fix the permissions here, our cleanup fails.
@@ -1455,6 +1458,62 @@ let (c, r) = test_complete("cd(\"folder_do_not_exist_77/file")
     @test length(c) == 0
 end
 
+# Test path completion in the middle of a line (issue #60050)
+mktempdir() do path
+    # Create test directory structure
+    foo_dir = joinpath(path, "foo_dir")
+    mkpath(foo_dir)
+    touch(joinpath(path, "foo_file.txt"))
+
+    # On Windows, use backslashes; on Unix, use forward slashes
+    sep = Sys.iswindows() ? "\\\\" : "/"
+    # On Windows, completion results have escaped backslashes
+    path_expected = Sys.iswindows() ? replace(path, "\\" => "\\\\") : path
+
+    # Completion at end of line should work
+    let (c, r, res) = test_complete("\"$(path)$(sep)foo")
+        @test res
+        @test length(c) == 2
+        @test "$(path_expected)$(sep)foo_dir$(sep)" in c
+        @test "$(path_expected)$(sep)foo_file.txt" in c
+    end
+
+    # Completion in middle of line should also work (regression in 1.12)
+    let (c, r, res) = test_complete_pos("\"$(path)$(sep)foo|$(sep)bar.toml\"")
+        @test res
+        @test length(c) == 2
+        @test "$(path_expected)$(sep)foo_dir$(sep)" in c
+        @test "$(path_expected)$(sep)foo_file.txt" in c
+        # Check that the range covers only the part before the cursor
+        @test findfirst("$(sep)bar", "\"$(path)$(sep)foo$(sep)bar.toml\"")[1] - 1 in r
+    end
+
+    # Completion in middle of function call with trailing arguments
+    let (c, r, res) = test_complete_pos("run_something(\"$(path)$(sep)foo|$(sep)bar.toml\"; kwarg=true)")
+        @test res
+        @test length(c) == 2
+        @test "$(path_expected)$(sep)foo_dir$(sep)" in c
+        @test "$(path_expected)$(sep)foo_file.txt" in c
+    end
+
+    # Issue #60444: path completion should not delete text after the string (e.g. indexing)
+    let (c, r, res) = test_complete_pos("f(\"$(path)$(sep)foo|\")")
+        @test res
+        @test length(c) == 2
+        @test "$(path_expected)$(sep)foo_dir$(sep)" in c
+        @test "$(path_expected)$(sep)foo_file.txt" in c
+    end
+    let (c, r, res) = test_complete_pos("f(\"$(path)$(sep)foo|\")[1]")
+        @test res
+        @test length(c) == 2
+        @test "$(path_expected)$(sep)foo_dir$(sep)" in c
+        @test "$(path_expected)$(sep)foo_file.txt" in c
+        # Range should end at cursor position, not overwrite ")[1]"
+        pos = findfirst('|', "f(\"$(path)$(sep)foo|\")[1]") - 1
+        @test last(r) == pos
+    end
+end
+
 if Sys.iswindows()
     tmp = tempname()
     touch(tmp)
@@ -1523,7 +1582,8 @@ end
     @test "ⁿ" in test_complete("\\^n")[1]
     @test "ᵞ" in test_complete("\\^gamma")[1]
     @test "⁽¹²³⁾ⁿ𐞥" in test_complete("\\^(123)nq")[1]
-    @test isempty(test_complete("\\^(123)nQ")[1])
+    @test "⁽¹²³⁾ⁿꟴ" in test_complete("\\^(123)nQ")[1]
+    @test isempty(test_complete("\\^(123)nX")[1])
     @test "₍₁₂₃₎ₙ" in test_complete("\\_(123)n")[1]
     @test "ₙ" in test_complete("\\_n")[1]
     @test "ᵧ" in test_complete("\\_gamma")[1]
@@ -1604,6 +1664,14 @@ test_dict_completion("test_repl_comp_customdict")
     # Issue #55931: neither should this:
     let s = "test_dict_no_length["
         @test REPLCompletions.completions(s, sizeof(s), Main.CompletionFoo) isa Tuple
+    end
+
+    # Issue #60444: completing dict keys should not overwrite input after cursor
+    let s = "test_dict[\"ab|c\"]"
+        c, r = test_complete_context_pos(s, Main.CompletionFoo)
+        @test "\"abc\"" in c
+        @test "\"abcd\"" in c
+        @test r == 11:13  # range ends at cursor, not at end of key
     end
 end
 
@@ -1751,6 +1819,13 @@ end
     @test hasnokwsuggestions("CompletionFoo.kwtest5('a', 3, 5, unknownsplat...; xy")
     @test hasnokwsuggestions("CompletionFoo.kwtest5(3; somek")
     =#
+
+    # Issue #60444: completing keyword arguments should not overwrite input after cursor
+    let s = "CompletionFoo.kwtest3(a; foob|true)"
+        c, r = test_complete_pos(s)
+        @test c == ["foobar="]
+        @test r == 26:29
+    end
 end
 
 # Test completion in context
