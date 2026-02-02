@@ -15,8 +15,8 @@ function _value_string(ex)
           k == K"slot"        ? "slot" :
           k == K"latestworld" ? "latestworld" :
           k == K"static_parameter" ? "static_parameter" :
-          k == K"symbolic_label" ? "label:$(ex.name_val)" :
-          k == K"symbolic_goto" ? "goto:$(ex.name_val)" :
+          k == K"symboliclabel" ? "label:$(ex.name_val)" :
+          k == K"symbolicgoto" ? "goto:$(ex.name_val)" :
           k == K"SourceLocation" ?
               "SourceLocation:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
           k == K"Value" && ex.value isa SourceRef ?

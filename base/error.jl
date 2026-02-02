@@ -27,22 +27,17 @@ throw
 
 ## native julia error handling ##
 
-# This is `Experimental.@max_methods 2 function error end`, which is not available at this point in bootstrap.
 # NOTE It is important to always be able to infer the return type of `error` as `Union{}`,
-# but there's a hitch when a package globally sets `@max_methods 1` and it causes inference
-# for `error(::Any)` to fail (JuliaLang/julia#54029).
-# This definition site `@max_methods 2` setting overrides any global `@max_methods 1` settings
-# on package side, guaranteeing that return type inference on `error` is successful always.
+# see issue (JuliaLang/julia#54029). Ensure that method counts are small enough with
+# respect to the `max_methods` value of the function.
 function error end
-typeof(error).name.max_methods = UInt8(2)
 
 """
     error(message::AbstractString)
 
 Raise an `ErrorException` with the given message.
 """
-error(s::AbstractString) = throw(ErrorException(s))
-error() = throw(ErrorException(""))
+error(::AbstractString)
 
 """
     error(msg...)
@@ -51,7 +46,14 @@ Raise an `ErrorException` with a message constructed by `string(msg...)`.
 """
 function error(s::Vararg{Any,N}) where {N}
     @noinline
-    throw(ErrorException(Main.Base.string(s...)))
+    exc = if s === ()
+        ErrorException("")
+    elseif s isa Tuple{AbstractString}
+        ErrorException(s...)
+    else
+        ErrorException(Main.Base.string(s...))
+    end
+    throw(exc)
 end
 
 """
