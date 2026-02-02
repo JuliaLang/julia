@@ -12,6 +12,7 @@ updates:
       - "ci"
   # Dependabot doesn't yet support wildcards in `target-branch`, so we have to list each release branch manually.
   # https://github.com/dependabot/dependabot-core/issues/6890
+  # https://github.com/dependabot/dependabot-core/issues/2511
   - package-ecosystem: "github-actions"
     target-branch: "release-1.10"
     directory: "/"
