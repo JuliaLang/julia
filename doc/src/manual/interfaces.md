@@ -148,6 +148,22 @@ julia> collect(Iterators.reverse(Squares(4)))
   1
 ```
 
+## Destructuring
+
+Destructuring patterns in Julia, such as `(a, b...) = x` or `(first, middle..., last) = x`, are lowered using standard iteration alongside specific methods for collecting the remaining elements.
+
+| Methods to implement | Brief description |
+|:--- |:--- |
+| [`Base.rest(iter, [state])`](@ref) | Return the remaining elements of `iter` starting at `state`. |
+| [`Base.split_rest(iter, n, [state])`](@ref) | Return a tuple of the slurped elements and the `n` trailing elements. |
+
+The first few elements are retrieved using `iterate`. The `...` syntax then relies on:
+
+*   [`Base.rest(iter, state)`](@ref) for trailing usage (e.g., `(a, b...) = x`). The default implementation iterates to exhaustion. Custom types can implement this method to return a more efficient collection, such as a slice `x[state:end]` for arrays.
+*   [`Base.split_rest(iter, n, state)`](@ref) for mid-position usage (e.g., `(a, b..., c) = x`). It is responsible for returning a tuple `(rest, tail)`, where `rest` is the collection of slurped elements and `tail` is a tuple of the `n` trailing elements.
+
+Implementing these methods is optional but recommended for custom collection types where materializing the "rest" can be done more efficiently than by sequential iteration.
+
 ## Indexing
 
 | Methods to implement | Brief description                |
