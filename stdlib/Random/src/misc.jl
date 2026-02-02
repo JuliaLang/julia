@@ -70,23 +70,25 @@ function randstring end
 let b = UInt8['0':'9';'A':'Z';'a':'z']
     global randstring
 
-    function randstring(r::AbstractRNG, chars=b, n::Integer=8)
-        _n = convert(Int, n)
+    function randstring(r::AbstractRNG, chars, n::Int)
         T = eltype(chars)
         if T === UInt8
-            str = Base._string_n(_n)
-            GC.@preserve str rand!(r, UnsafeView(pointer(str), _n), chars)
+            str = Base._string_n(n)
+            GC.@preserve str rand!(r, UnsafeView(pointer(str), n), chars)
             return str
         else
-            v = Vector{T}(undef, _n)
+            v = Vector{T}(undef, n)
             rand!(r, v, chars)
             return String(v)
         end
     end
 
-    randstring(r::AbstractRNG, n::Integer) = randstring(r, b, n)
-    randstring(chars=b, n::Integer=8) = randstring(default_rng(), chars, n)
-    randstring(n::Integer) = randstring(default_rng(), b, n)
+    randstring(r::AbstractRNG) = randstring(r::AbstractRNG, b, 8)
+    randstring(r::AbstractRNG, chars) = randstring(r::AbstractRNG, chars, 8)
+    randstring(r::AbstractRNG, chars, n::Integer) = randstring(r::AbstractRNG, chars, convert(Int, n))
+    randstring(r::AbstractRNG, n::Integer) = randstring(r, b, convert(Int, n))
+    randstring(chars=b, n::Integer=8) = randstring(default_rng(), chars, convert(Int, n))
+    randstring(n::Integer) = randstring(default_rng(), b, convert(Int, n))
 end
 
 
