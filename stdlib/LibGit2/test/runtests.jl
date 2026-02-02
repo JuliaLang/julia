@@ -2,6 +2,8 @@
 
 using Test, LibGit2
 
+@test isempty(Test.detect_closure_boxes(LibGit2))
+
 @testset verbose=true "LibGit2 $test" for test in eachline(joinpath(@__DIR__, "testgroups"))
     include("$test.jl")
 end

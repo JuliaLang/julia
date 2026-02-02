@@ -3,6 +3,8 @@
 using Test, SparseArrays
 using Test: guardseed
 
+@test isempty(Test.detect_closure_boxes(Random))
+
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
