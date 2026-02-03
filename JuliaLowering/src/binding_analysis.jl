@@ -177,7 +177,7 @@ function du_declare!(state::DefUseState, var_id)
     end
 end
 
-# Returns whether e contained a symbolic_label
+# Returns whether e contained a symboliclabel
 function du_visit!(ctx, state::DefUseState, e)
     k = kind(e)
 
@@ -185,8 +185,8 @@ function du_visit!(ctx, state::DefUseState, e)
         du_mark_used!(state, e.var_id)
         return false
 
-    elseif k == K"symbolic_label"
-        # Must check BEFORE is_leaf since symbolic_label is a leaf node
+    elseif k == K"symboliclabel"
+        # Must check BEFORE is_leaf since symboliclabel is a leaf node
         du_kill!(state)
         return true
 
@@ -194,7 +194,7 @@ function du_visit!(ctx, state::DefUseState, e)
         du_kill!(state)
         return false
 
-    elseif k in KSet"break symbolic_goto"
+    elseif k in KSet"break symbolicgoto"
         # this kill!() is not required for soundness since these are branch points
         # not merge points, but it's here for parity with flisp
         du_kill!(state)

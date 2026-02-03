@@ -852,7 +852,7 @@ function expand_generator(ctx, ex)
             iterspecs = iterspecs[1]
         end
         if kind(iterspecs) != K"iteration"
-            throw(LoweringError("""Expected `K"iteration"` iteration specification in generator"""))
+            throw(LoweringError(ex, """Expected `K"iteration"` iteration specification in generator"""))
         end
         iter_ranges = SyntaxList(ctx)
         iter_lhss = SyntaxList(ctx)
@@ -1646,7 +1646,7 @@ function expand_named_tuple(ctx, ex, kws, eq_is_kw;
             end
             name = to_symbol(ctx, kw[2])
             value = kw
-        elseif k == K"call" && is_infix_op_call(kw) && numchildren(kw) == 3 &&
+        elseif k == K"call" && numchildren(kw) == 3 &&
                 is_same_identifier_like(kw[1], "=>")
             # a=>b   ==>  $a=b
             appended_nt = _named_tuple_expr(ctx, kw, (kw[2],), (kw[3],))
@@ -1741,9 +1741,14 @@ function expand_ccall(ctx, ex)
     cfunc_name = ex[2]
     # Detect calling convention if present.
     known_conventions = ("cdecl", "stdcall", "fastcall", "thiscall", "llvmcall")
-    cconv = if any(is_same_identifier_like(ex[3], id) for id in known_conventions)
+    cconv = if kind(ex[3]) === K"cconv"
         ex[3]
+    elseif any(is_same_identifier_like(ex[3], id) for id in known_conventions)
+        ex[3]
+    else
+        nothing
     end
+
     if isnothing(cconv)
         rt_idx = 3
     else
@@ -1851,9 +1856,13 @@ function expand_ccall(ctx, ex)
                     expanded_types...
                 ]
             ]
-            (isnothing(vararg_type) ? 0 : length(arg_types))::K"Integer"
+            (cconv !== nothing && kind(cconv) === K"cconv" ? cconv[2].value :
+                isnothing(vararg_type) ? 0 :
+                length(arg_types))::K"Integer"
             if isnothing(cconv)
                 "ccall"::K"Symbol"
+            elseif kind(cconv) === K"cconv"
+                @ast ctx cconv [K"inert" cconv[1]]
             else
                 cconv=>K"Symbol"
             end
@@ -2028,7 +2037,7 @@ function expand_for(ctx, ex)
         body = if i == numchildren(iterspecs)
             # Innermost loop gets the continue label and copied vars
             @ast ctx ex [K"break_block"
-                "loop_cont"::K"symbolic_label"
+                "loop_cont"::K"symboliclabel"
                 [K"let"(scope_type=:neutral)
                      [K"block"
                          copied_vars...
@@ -2074,7 +2083,7 @@ function expand_for(ctx, ex)
         ]
     end
 
-    @ast ctx ex [K"break_block" "loop_exit"::K"symbolic_label"
+    @ast ctx ex [K"break_block" "loop_exit"::K"symboliclabel"
         loop
     ]
 end
@@ -2159,45 +2168,45 @@ end
 # assignments containing tuple destructuring.  Eg, given
 #   (x::T, (y::U, z))
 #   strip out stmts = (local x) (decl x T) (local x) (decl y U) (local z)
-#   and return (x, (y, z))
 function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
     k = kind(ex)
-    if k == K"Identifier" || k == K"Value" && ex.value isa GlobalRef
+    declname = @stm ex begin
+        [K"Identifier"] -> ex
         # TODO: consider removing support for Expr(:global, GlobalRef(...)) and
         # other Exprs that cannot be produced by the parser (tested by
         # test/precompile.jl #50538).
-        if !isnothing(declmeta)
-            push!(stmts, setattr!(newnode(ctx, ex, declkind, tree_ids(ex)),
-                                  :meta, declmeta))
-        else
-            push!(stmts, newnode(ctx, ex, declkind, tree_ids(ex)))
+        ([K"Value"], when=ex.value isa GlobalRef) -> ex
+        [K"Placeholder"] -> nothing
+        ([K"::" [K"Identifier"] t], when=type_decls) -> let x = ex[1]
+            push!(stmts, newnode(ctx, ex, K"decl", tree_ids(x, t)))
+            make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
         end
-    elseif k == K"Placeholder"
-        nothing
-    elseif (k === K"::" && numchildren(ex) === 2) || k in KSet"call curly where"
-        if type_decls
-            @chk numchildren(ex) == 2
-            name = ex[1]
-            if kind(name) == K"Identifier"
-                push!(stmts, newnode(ctx, ex, K"decl", tree_ids(name, ex[2])))
-            else
-                # TODO: Currently, this ignores the LHS in `_::T = val`.
-                # We should probably do one of the following:
-                # - Throw a LoweringError if that's not too breaking
-                # - `convert(T, rhs)::T` and discard the result which is what
-                #   `x::T = rhs` would do if x is never used again.
-                @chk kind(name) == K"Placeholder"
-                return
-            end
+        ([K"::" [K"Placeholder"] t], when=type_decls) -> let
+            # TODO: Currently, this ignores the LHS in `_::T = val`.
+            # We should probably do one of the following:
+            # - Throw a LoweringError if that's not too breaking
+            # - `convert(T, rhs)::T` and discard the result which is what
+            #   `x::T = rhs` would do if x is never used again.
         end
-        make_lhs_decls(ctx, stmts, declkind, declmeta, ex[1], type_decls)
-    elseif k == K"tuple" || k == K"parameters"
-        for e in children(ex)
-            make_lhs_decls(ctx, stmts, declkind, declmeta, e, type_decls)
+        ([K"::" x t], when=!type_decls) ->
+            make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
+        (_, when=kind(ex) in KSet"call curly where") ->
+            make_lhs_decls(ctx, stmts, declkind, declmeta, ex[1], type_decls)
+        [K"tuple" xs...] -> for x in xs
+            make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
         end
-    else
-        throw(LoweringError(ex, "invalid kind $k in $declkind declaration"))
+        [K"parameters" xs...] -> for x in xs
+            make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
+        end
+        [K"..." x] -> nothing # from recursion above
     end
+
+    if !isnothing(declname)
+        stmt = @ast ctx ex [declkind declname]
+        !isnothing(declmeta) && setattr!(stmt, :meta, declmeta)
+        push!(stmts, stmt)
+    end
+    return nothing
 end
 
 # Separate decls and assignments (which require re-expansion)
@@ -2276,72 +2285,51 @@ end
 #-------------------------------------------------------------------------------
 # Expansion of function definitions
 
-function expand_function_arg(ctx, body_stmts, arg, is_last_arg, is_kw, arg_id)
-    ex = arg
-
-    if kind(ex) == K"kw"
-        default = ex[2]
-        ex = ex[1]
-    else
-        default = nothing
+function expand_function_arg(ctx, body_stmts, arg, is_kw, arg_id)
+    (arg_symdecl, default, slurp_ex) = @stm arg begin
+        [K"kw" [K"..." x] d] -> (x, d, arg[1])
+        [K"kw" x d] -> (x, d, nothing)
+        [K"..." x] -> (x, nothing, arg)
+        x -> (x, nothing, nothing)
     end
-
-    if kind(ex) == K"..."
-        if !is_last_arg
-            typmsg = is_kw ? "keyword" : "positional"
-            throw(LoweringError(arg, "`...` may only be used for the last $typmsg argument"))
+    (arg_sym, type) = @stm arg_symdecl begin
+        [K"::" x t] -> (x, t)
+        [K"::" t] -> let
+            noname_meta = get(arg_symdecl, :meta, nothing)
+            x = @ast ctx arg_symdecl "_"::K"Placeholder"
+            !isnothing(noname_meta) && setattr!(x, :meta, noname_meta)
+            (x, t)
         end
-        @chk numchildren(ex) == 1
-        slurp_ex = ex
-        ex = ex[1]
-    else
-        slurp_ex = nothing
-    end
-
-    if kind(ex) == K"::"
-        @chk numchildren(ex) in (1,2)
-        if numchildren(ex) == 1
-            type = ex[1]
-            ex = @ast ctx ex "_"::K"Placeholder"
-        else
-            type = ex[2]
-            ex = ex[1]
-        end
-        if is_kw && !isnothing(slurp_ex)
-            throw(LoweringError(slurp_ex, "keyword argument with `...` may not be given a type"))
-        end
-    else
-        type = @ast ctx ex "Any"::K"core"
+        x -> (x, @ast ctx x "Any"::K"core")
     end
     if !isnothing(slurp_ex)
         type = @ast ctx slurp_ex [K"curly" "Vararg"::K"core" type]
     end
+    if kind(arg_sym) === K"tuple"
+        darg_sym = new_local_binding(
+            ctx, arg_sym, "destructured_arg";
+            kind=:argument,
+            is_nospecialize=getmeta(arg_sym, :nospecialize, false))
 
-    k = kind(ex)
-    if k == K"tuple" && !is_kw
-        # Argument destructuring
-        is_nospecialize = getmeta(arg, :nospecialize, false)
-        name = new_local_binding(ctx, ex, "destructured_arg";
-                                 kind=:argument, is_nospecialize=is_nospecialize)
-        push!(body_stmts, @ast ctx ex [
+        push!(body_stmts, expand_forms_2(ctx, @ast ctx arg_sym [
             K"local"(meta=CompileHints(:is_destructured_arg, true))
-            [K"=" ex name]
-        ])
-    elseif k == K"Placeholder"
+            [K"=" arg_sym darg_sym]
+        ]))
+        name = darg_sym
+    elseif kind(arg_sym) === K"Placeholder"
         # Lowering should be able to use placeholder args as rvalues internally,
         # e.g. for kw method dispatch.  Duplicate positional placeholder names
         # should be allowed.
-        is_nospecialize = getmeta(ex, :nospecialize, false)
         name = if is_kw
-            @ast ctx ex ex=>K"Identifier"
+            @ast ctx arg_sym arg_sym=>K"Identifier"
         else
-            new_local_binding(ctx, ex, "#arg$(string(arg_id))#"; kind=:argument,
-                              is_nospecialize=is_nospecialize)
+            new_local_binding(
+                ctx, arg_sym, "#arg$(string(arg_id))#"; kind=:argument,
+                is_nospecialize=getmeta(arg_sym, :nospecialize, false))
         end
-    elseif k == K"Identifier"
-        name = ex
     else
-        throw(LoweringError(ex, is_kw ? "Invalid keyword name" : "Invalid function argument"))
+        @chk kind(arg_sym) in KSet"Identifier BindingId"
+        name = arg_sym
     end
 
     return (name, type, default, !isnothing(slurp_ex))
@@ -2461,44 +2449,15 @@ function trim_used_typevars(ctx, arg_types, typevar_names, typevar_stmts)
     return trimmed_typevar_names
 end
 
-function is_if_generated(ex)
-    kind(ex) == K"if" && kind(ex[1]) == K"generated"
-end
-
-# Return true if a function body contains a code generator from `@generated` in
-# the form `[K"if" [K"generated"] ...]`
-function is_generated(ex)
-    if is_if_generated(ex)
-        return true
-    elseif is_quoted(ex) || kind(ex) == K"function"
-        return false
-    else
-        return any(is_generated, children(ex))
-    end
-end
-
-function split_generated(ctx, ex, gen_part)
-    if is_leaf(ex)
-        ex
-    elseif is_if_generated(ex)
-        gen_part ? @ast(ctx, ex, [K"$" ex[2]]) : ex[3]
-    else
-        mapchildren(e->split_generated(ctx, e, gen_part), ctx, ex)
-    end
-end
-
 # Split @generated function body into two parts:
 # * The code generator
 # * The non-generated function body
-function expand_function_generator(ctx, srcref, callex_srcref, func_name, func_name_str, body, arg_names, typevar_names)
-    gen_body = if is_if_generated(body)
-        body[2] # Simple case - don't need interpolation when the whole body is generated
-    else
-        expand_quote(ctx, @ast ctx body [K"block" split_generated(ctx, body, true)])
-    end
+function expand_function_generator(ctx, srcref, callex_srcref, func_name,
+                                   func_name_str, gen_body, nongen_body_orig,
+                                   arg_names, typevar_names)
     gen_name_str = reserve_module_binding_i(ctx.mod,
                         "#$(isnothing(func_name_str) ? "_" : func_name_str)@generator#")
-    gen_name = new_global_binding(ctx, body, gen_name_str, ctx.mod)
+    gen_name = new_global_binding(ctx, srcref, gen_name_str, ctx.mod)
 
     # Set up the arguments for the code generator
     gen_arg_names = SyntaxList(ctx)
@@ -2548,7 +2507,7 @@ function expand_function_generator(ctx, srcref, callex_srcref, func_name, func_n
     end
 
     # Extract non-generated body
-    nongen_body = @ast ctx body [K"block"
+    nongen_body = @ast ctx nongen_body_orig [K"block"
         # The Julia runtime associates the code generator with the
         # non-generated method by adding this meta to the body. This feels like
         # a hack though since the generator ultimately gets attached to the
@@ -2584,7 +2543,7 @@ function expand_function_generator(ctx, srcref, callex_srcref, func_name, func_n
                 ]
             ]
         ]
-        split_generated(ctx, body, false)
+        nongen_body_orig
     ]
 
     return gen_func_method_defs, nongen_body
@@ -2687,7 +2646,7 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
     kwtmp = new_local_binding(ctx, keywords, "kwtmp")
     for (i,arg) in enumerate(children(keywords))
         (aname, atype, default, is_slurp) =
-            expand_function_arg(ctx, nothing, arg, i == numchildren(keywords), true, i)
+            expand_function_arg(ctx, nothing, arg, true, i)
         push!(kw_names, aname)
         name_sym = @ast ctx aname aname=>K"Symbol"
         push!(body_arg_names, aname)
@@ -2945,7 +2904,11 @@ function is_invalid_func_name(ex)
 end
 
 function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=identity; doc_only=false)
-    @chk numchildren(ex) in (1,2)
+    if kind(ex) === K"generated_function"
+        @assert numchildren(ex) === 3 && rewrite_body == identity
+    else
+        @chk numchildren(ex) in (1,2)
+    end
     name = ex[1]
     if numchildren(ex) == 1 && is_identifier_like(name)
         # Function declaration with no methods
@@ -3087,7 +3050,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     arg_defaults = SyntaxList(ctx)
     for (i,arg) in enumerate(args)
         (aname, atype, default, is_slurp) =
-            expand_function_arg(ctx, body_stmts, arg, i == length(args), false, i)
+            expand_function_arg(ctx, body_stmts, arg, false, i)
         has_slurp |= is_slurp
         push!(arg_names, aname)
 
@@ -3098,22 +3061,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         # *symbolic* representation of arg_types.
         push!(arg_types, atype)
 
-        if isnothing(default)
-            if !isempty(arg_defaults) && !is_slurp
-                # TODO: Referring to multiple pieces of syntax in one error message is necessary.
-                # TODO: Poison ASTs with error nodes and continue rather than immediately throwing.
-                #
-                # We should make something like the following kind of thing work!
-                # arg_defaults[1] = @ast_error ctx arg_defaults[1] """
-                #     Positional arguments with defaults must occur at the end.
-                #
-                #     We found a [non-optional position argument]($arg) *after*
-                #     one with a [default value]($(first(arg_defaults)))
-                # """
-                #
-                throw(LoweringError(args[first_default-1], "optional positional arguments must occur at end"))
-            end
-        else
+        if !isnothing(default)
             if isempty(arg_defaults)
                 first_default = i + 1 # Offset for self argument
             end
@@ -3167,10 +3115,9 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     end
 
     gen_func_method_defs = nothing
-    if is_generated(body)
-        gen_func_method_defs, body =
-            expand_function_generator(ctx, ex, callex, name, name_str, body, arg_names, typevar_names)
-
+    if kind(ex) === K"generated_function"
+        gen_func_method_defs, body = expand_function_generator(
+            ctx, ex, callex, name, name_str, ex[2], ex[3], arg_names, typevar_names)
     end
 
     if isnothing(keywords)
@@ -3318,7 +3265,7 @@ function expand_opaque_closure(ctx, ex)
     is_va = false
     for (i, arg) in enumerate(children(args))
         (aname, atype, default, is_slurp) =
-            expand_function_arg(ctx, body_stmts, arg, i == numchildren(args), false, i)
+            expand_function_arg(ctx, body_stmts, arg, false, i)
         is_va |= is_slurp
         push!(arg_names, aname)
         push!(arg_types, atype)
@@ -3962,20 +3909,28 @@ function rewrite_new_calls(ctx, ex, struct_name, global_struct_name,
     else
         docs = nothing
     end
-    if kind(ex) != K"function"
+
+    if kind(ex) in KSet"global local"
+        stmts = SyntaxList(ctx)
+        make_lhs_decls(ctx, stmts, kind(ex), get(ex, :meta, nothing),
+                       ex[1][1], false)
+        @ast ctx ex [K"block"
+            stmts...
+            rewrite_new_calls(
+                ctx, ex[1], struct_name, global_struct_name, typevar_names,
+                field_names, field_types)
+        ]
+    elseif kind(ex) === K"function" && numchildren(ex) === 2
+        ctor_self = Ref{Union{Nothing,SyntaxTree}}(nothing)
+        expand_function_def(
+            ctx, ex, docs,
+            callex->_rewrite_ctor_sig(ctx, callex, struct_name, global_struct_name,
+                                      typevar_names, ctor_self),
+            body->_rewrite_ctor_new_calls(ctx, body, struct_name, global_struct_name,
+                                          ctor_self[], typevar_names, field_types))
+    else
         return ex
     end
-    if !(numchildren(ex) == 2 && is_eventually_call(ex[1]))
-        throw(LoweringError(ex, "Expected constructor or named inner function"))
-    end
-
-    ctor_self = Ref{Union{Nothing,SyntaxTree}}(nothing)
-    expand_function_def(ctx, ex, docs,
-        callex->_rewrite_ctor_sig(ctx, callex, struct_name,
-                                  global_struct_name, typevar_names, ctor_self),
-        body->_rewrite_ctor_new_calls(ctx, body, struct_name, global_struct_name,
-                                      ctor_self[], typevar_names, field_types)
-    )
 end
 
 function _constructor_min_initialized(ex::SyntaxTree)
@@ -4093,6 +4048,16 @@ function expand_struct_def(ctx, ex, docs)
         end
     end
 
+    # User-defined inner constructors need to be rewritten to use proper type references.
+    # global_struct_name is used because it will be resolved via the top scope where
+    # the global declaration stores the binding.
+    if !isempty(inner_defs)
+        map!(inner_defs, inner_defs) do def
+            rewrite_new_calls(ctx, def, struct_name, global_struct_name,
+                              typevar_names, field_names, field_types)
+        end
+    end
+
     # The following lowering covers several subtle issues in the ordering of
     # typevars when "redefining" structs.
     # See https://github.com/JuliaLang/julia/pull/36121
@@ -4152,23 +4117,24 @@ function expand_struct_def(ctx, ex, docs)
                     global_struct_name
                     newdef
                  ]
-                # Default constructors
-                if isempty(inner_defs)
-                    default_inner_constructors(ctx, ex, global_struct_name,
-                                               typevar_names, typevar_stmts, field_names_2, field_types)
-                else
-                    map!(inner_defs, inner_defs) do def
-                        rewrite_new_calls(ctx, def, struct_name, global_struct_name,
-                                          typevar_names, field_names, field_types)
-                    end
-                    [K"block" inner_defs...]
-                end
-                if need_outer_constructor
-                    default_outer_constructor(ctx, ex, global_struct_name,
-                                              typevar_names, typevar_stmts, field_names_2, field_types)
-                end
             ]
         ]
+
+        if isempty(inner_defs)
+            # Default constructors are generated at runtime by Core._defaultctors.
+            [K"call"
+                "_defaultctors"::K"core"
+                global_struct_name
+                ::K"SourceLocation"(ex)
+            ]
+        else
+            # User-defined inner constructors are placed in a separate scope_block
+            # so that helper functions defined in the struct body don't leak to
+            # the module's global scope.
+            [K"scope_block"(scope_type=:hard)
+                [K"block" inner_defs...]
+            ]
+        end
 
         # Documentation
         if !isnothing(docs) || !isempty(field_docs)
@@ -4475,10 +4441,40 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"="
         expand_assignment(ctx, ex)
     elseif k == K"break"
-        numchildren(ex) > 0 ? ex :
-            @ast ctx ex [K"break" "loop_exit"::K"symbolic_label"]
+        nc = numchildren(ex)
+        if nc == 0
+            @ast ctx ex [K"break" "loop_exit"::K"symboliclabel"]
+        else
+            @chk nc <= 2 (ex, "Too many arguments to break")
+            label = ex[1]
+            label_kind = kind(label)
+            # Convert Symbol (from Expr conversion) to symboliclabel
+            if label_kind == K"Symbol"
+                label = @ast ctx label label.name_val::K"symboliclabel"
+            elseif !(label_kind == K"Identifier" || label_kind == K"Placeholder" ||
+                     label_kind == K"symboliclabel" || is_contextual_keyword(label_kind))
+                throw(LoweringError(label, "Invalid break label: expected identifier"))
+            end
+            if nc == 2
+                @ast ctx ex [K"break" label expand_forms_2(ctx, ex[2])]
+            else
+                @ast ctx ex [K"break" label]
+            end
+        end
     elseif k == K"continue"
-        @ast ctx ex [K"break" "loop_cont"::K"symbolic_label"]
+        nc = numchildren(ex)
+        if nc == 0
+            @ast ctx ex [K"break" "loop_cont"::K"symboliclabel"]
+        else
+            @chk nc == 1 (ex, "Too many arguments to continue")
+            label = ex[1]
+            label_kind = kind(label)
+            if !(label_kind == K"Identifier" || label_kind == K"Placeholder" ||
+                 label_kind == K"Symbol" || is_contextual_keyword(label_kind))
+                throw(LoweringError(label, "Invalid continue label: expected identifier"))
+            end
+            @ast ctx ex [K"break" string(label.name_val, "#cont")::K"symboliclabel"]
+        end
     elseif k == K"comparison"
         expand_forms_2(ctx, expand_compare_chain(ctx, ex))
     elseif k == K"doc"
@@ -4511,7 +4507,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         expand_forms_2(ctx, expand_generator(ctx, ex))
     elseif k == K"->" || k == K"do"
         expand_forms_2(ctx, expand_arrow(ctx, ex))
-    elseif k == K"function"
+    elseif k == K"function" || k == K"generated_function"
         expand_forms_2(ctx, expand_function_def(ctx, ex, docs))
     elseif k == K"macro"
         @ast ctx ex [K"block"
@@ -4627,10 +4623,10 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         expand_forms_2(ctx, expand_ncat(ctx, ex))
     elseif k == K"while"
         @chk numchildren(ex) == 2
-        @ast ctx ex [K"break_block" "loop_exit"::K"symbolic_label"
+        @ast ctx ex [K"break_block" "loop_exit"::K"symboliclabel"
             [K"_while"
                 expand_condition(ctx, ex[1])
-                [K"break_block" "loop_cont"::K"symbolic_label"
+                [K"break_block" "loop_cont"::K"symboliclabel"
                     [K"scope_block"(scope_type=:neutral)
                          expand_forms_2(ctx, ex[2])
                     ]
@@ -4639,6 +4635,11 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         ]
     elseif k == K"inert" || k == K"inert_syntaxtree"
         ex
+    elseif k == K"symbolicblock"
+        # @label name body -> (symbolicblock name expanded_body)
+        # The @label macro inserts the continue block for loops, so we just expand the body
+        @chk numchildren(ex) == 2
+        @ast ctx ex [K"symbolicblock" ex[1] expand_forms_2(ctx, ex[2])]
     elseif k == K"gc_preserve"
         s = ssavar(ctx, ex)
         r = ssavar(ctx, ex)
@@ -4683,6 +4684,13 @@ end
 
 @fzone "JL: desugar" function expand_forms_2(ctx::MacroExpansionContext, ex::SyntaxTree)
     ctx1 = DesugaringContext(ctx, ctx.expr_compat_mode)
+    vr = valid_st1(ex)
+    # surface only one error until we have pretty-printing for multiple
+    if !vr.ok
+        # showerrors(vr)
+        throw(LoweringError(vr.errors[1].sts[1], vr.errors[1].msg))
+    end
+    ex = est_to_dst(ex)
     ex1 = expand_forms_2(ctx1, reparent(ctx1, ex))
     ctx1, ex1
 end

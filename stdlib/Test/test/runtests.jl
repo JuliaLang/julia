@@ -7,6 +7,8 @@ using Distributed: RemoteException
 
 import Logging: Debug, Info, Warn, with_logger
 
+@test isempty(Test.detect_closure_boxes(Test))
+
 @testset "@test" begin
     atol = 1
     a = (; atol=2)
@@ -29,6 +31,40 @@ import Logging: Debug, Info, Warn, with_logger
     @test 'a' .. 'a'
     @test !('a' .. 'b')
 end
+
+
+module ClosureBoxTest
+    function boxed()
+        x = 1
+        inner() = (x += 1)
+        inner()
+    end
+
+    module Sub
+        function boxed_sub()
+            x = 0
+            inner() = (x += 1)
+            inner()
+        end
+    end
+end
+
+@testset "detect_closure_boxes" begin
+    boxes = Test.detect_closure_boxes(ClosureBoxTest)
+    @test any(p -> p.first.name === :boxed, boxes)
+    @test any(p -> p.first.name === :boxed_sub, boxes)
+
+    sub_boxes = Test.detect_closure_boxes(ClosureBoxTest.Sub)
+    @test any(p -> p.first.name === :boxed_sub, sub_boxes)
+    @test all(p -> parentmodule(p.first) === ClosureBoxTest.Sub, sub_boxes)
+
+    @test isempty(Test.detect_closure_boxes())
+
+    # _all version checks all loaded modules
+    all_boxes = Test.detect_closure_boxes_all_modules()
+    @test any(p -> p.first.name === :boxed, all_boxes)
+end
+
 @testset "@test with skip/broken kwargs" begin
     # Make sure the local variables can be used in conditions
     a = 1

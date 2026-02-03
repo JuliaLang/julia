@@ -220,6 +220,12 @@ function _find_scope_decls!(ctx, scope, ex)
             k === K"constdecl" && numchildren(ex) == 2)
             _find_scope_decls!(ctx, scope, ex[2])
         end
+    elseif k === K"symbolicblock"
+        # Only recurse into the body (second child), not the label name (first child)
+        _find_scope_decls!(ctx, scope, ex[2])
+    elseif k === K"break" && numchildren(ex) >= 2
+        # For break with value, only recurse into the value expression (second child), not the label
+        _find_scope_decls!(ctx, scope, ex[2])
     elseif needs_resolution(ex) && !(k === K"scope_block" || k === K"lambda")
         for e in children(ex)
             _find_scope_decls!(ctx, scope, e)
@@ -343,6 +349,10 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         ex
     elseif k == K"softscope"
         newleaf(ctx, ex, K"TOMBSTONE")
+    elseif k == K"break" && numchildren(ex) >= 2
+        # For break with value (break label value), process the value expression but not the label
+        # This must come BEFORE !needs_resolution check since K"break" is in is_quoted
+        @ast ctx ex [K"break" ex[1] _resolve_scopes(ctx, ex[2], scope)]
     elseif !needs_resolution(ex)
         ex
     elseif k == K"local"
@@ -410,12 +420,14 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         pop!(ctx.scope_stack)
         @ast ctx ex [K"block" stmts...]
     elseif k == K"islocal"
-        b = resolve_name(ctx, ex[1])
-        islocal = !isnothing(b) && b.kind !== :global
+        e1 = ex[1]
+        islocal = kind(e1) == K"Identifier" &&
+            let b = resolve_name(ctx, e1)
+                !isnothing(b) && b.kind !== :global
+            end
         @ast ctx ex islocal::K"Bool"
     elseif k == K"isglobal"
         e1 = ex[1]
-        @chk kind(e1) in KSet"Identifier Placeholder"
         isglobal = kind(e1) == K"Identifier" &&
             let b = resolve_name(ctx, e1)
                 isnothing(b) || b.kind === :global
@@ -507,6 +519,9 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         @assert numchildren(ex) === 2
         assignment_kind = bk == :global ? K"constdecl" : K"="
         @ast ctx ex _resolve_scopes(ctx, [assignment_kind ex[1] ex[2]], scope)
+    elseif k == K"symbolicblock"
+        # Only recurse into the body (second child), not the label name (first child)
+        @ast ctx ex [K"symbolicblock" ex[1] _resolve_scopes(ctx, ex[2], scope)]
     else
         mapchildren(e->_resolve_scopes(ctx, e, scope), ctx, ex)
     end
@@ -600,6 +615,11 @@ function analyze_variables!(ctx, ex)
         @assert b.kind === :global || b.is_ssa || haskey(ctx.lambda_bindings.locals_capt, b.id)
     elseif k == K"Identifier"
         @assert false
+    elseif k == K"break" && numchildren(ex) >= 2
+        # For break with value, only analyze the value expression (second child), not the label
+        # This must come BEFORE !needs_resolution check since K"break" is in is_quoted
+        analyze_variables!(ctx, ex[2])
+        return
     elseif !needs_resolution(ex)
         return
     elseif k == K"static_eval"
@@ -676,6 +696,9 @@ function analyze_variables!(ctx, ex)
             ctx.graph, ctx.bindings, ctx.mod, ctx.scopes, lambda_bindings,
             ctx.method_def_stack, ctx.closure_bindings)
         foreach(e->analyze_variables!(ctx2, e), ex[3:end]) # body & return type
+    elseif k == K"symbolicblock"
+        # Only analyze the body (second child), not the label name (first child)
+        analyze_variables!(ctx, ex[2])
     else
         foreach(e->analyze_variables!(ctx, e), children(ex))
     end

@@ -81,12 +81,12 @@ elseif Sys.iswindows()
             throw(ArgumentError("Windows clipboard strings cannot contain NUL character"))
         end
         x_u16 = Base.cwstring(x)
-        pdata = Ptr{UInt16}(C_NULL)
+        pdata = Ref(Ptr{UInt16}(C_NULL))
         function cleanup(cause)
             errno = cause === :success ? UInt32(0) : Libc.GetLastError()
             if cause !== :OpenClipboard
-                if cause !== :success && pdata != C_NULL
-                    ccall((:GlobalFree, "kernel32"), stdcall, Cint, (Ptr{UInt16},), pdata)
+                if cause !== :success && pdata[] != C_NULL
+                    ccall((:GlobalFree, "kernel32"), stdcall, Cint, (Ptr{UInt16},), pdata[])
                 end
                 ccall((:CloseClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror(:CloseClipboard) # this should never fail
             end
@@ -96,15 +96,15 @@ elseif Sys.iswindows()
         ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Cvoid},), C_NULL) == 0 && return Base.windowserror(:OpenClipboard)
         ccall((:EmptyClipboard, "user32"), stdcall, Cint, ()) == 0 && return cleanup(:EmptyClipboard)
         # copy data to locked, allocated space
-        pdata = ccall((:GlobalAlloc, "kernel32"), stdcall, Ptr{UInt16}, (Cuint, Csize_t), 2 #=GMEM_MOVEABLE=#, sizeof(x_u16))
-        pdata == C_NULL && return cleanup(:GlobalAlloc)
-        plock = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{UInt16}, (Ptr{UInt16},), pdata)
+        pdata[] = ccall((:GlobalAlloc, "kernel32"), stdcall, Ptr{UInt16}, (Cuint, Csize_t), 2 #=GMEM_MOVEABLE=#, sizeof(x_u16))
+        pdata[] == C_NULL && return cleanup(:GlobalAlloc)
+        plock = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{UInt16}, (Ptr{UInt16},), pdata[])
         plock == C_NULL && return cleanup(:GlobalLock)
         GC.@preserve x_u16 memcpy(plock, Base.unsafe_convert(Ptr{UInt16}, Base.cconvert(Ptr{UInt16}, x_u16)), sizeof(x_u16))
-        unlock = ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{UInt16},), pdata)
+        unlock = ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{UInt16},), pdata[])
         (unlock == 0 && Libc.GetLastError() == 0) || return cleanup(:GlobalUnlock) # this should never fail
-        pset = ccall((:SetClipboardData, "user32"), stdcall, Ptr{UInt16}, (Cuint, Ptr{UInt16}), 13, pdata) # CF_UNICODETEXT
-        pdata != pset && return cleanup(:SetClipboardData)
+        pset = ccall((:SetClipboardData, "user32"), stdcall, Ptr{UInt16}, (Cuint, Ptr{UInt16}), 13, pdata[]) # CF_UNICODETEXT
+        pdata[] != pset && return cleanup(:SetClipboardData)
         cleanup(:success)
     end
     clipboard(x) = clipboard(sprint(print, x)::String)

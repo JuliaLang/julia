@@ -3,6 +3,8 @@
 using Test, Random, Serialization, Base64
 using Base.ScopedValues: with
 
+@test isempty(Test.detect_closure_boxes(Serialization))
+
 # Check that serializer hasn't gone out-of-frame
 @test Serialization.sertag(Symbol) == 1
 @test Serialization.sertag(()) == 68

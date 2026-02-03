@@ -1136,7 +1136,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     if (n = find_parent(cur, K"importpath")) !== nothing
         # Given input lines like `using Foo|`, `import Foo, Bar|` and `using Foo.Bar, Baz, |`:
         # Let's look only for packages and modules we can reach from here
-        if prefix == nothing
+        if prefix === nothing
             complete_loading_candidates!(suggestions, s)
             return sort_suggestions(), r, true
         end
