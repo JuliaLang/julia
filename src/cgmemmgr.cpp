@@ -80,9 +80,10 @@ const int CALL_RANGE = 26;
 std::optional<uintptr_t> map_reserve(uintptr_t hint, size_t size)
 {
     assert(size % jl_page_size == 0);
-    int flags = MAP_PRIVATE | MAP_ANONYMOUS;
 # ifdef MAP_GUARD
-    flags |= MAP_GUARD;
+    int flags = MAP_GUARD;
+# else
+    int flags = MAP_PRIVATE | MAP_ANONYMOUS;
 # endif
 # ifdef MAP_NORESERVE
     flags |= MAP_NORESERVE;
