@@ -878,10 +878,12 @@ struct Segment {
     {
         uintptr_t Pos = 0;
         for (auto B : Blocks) {
-            Pos += (B->getAlignmentOffset() - Pos) % B->getAlignment();
+            uint64_t A = B->getAlignment();
+            size_t S = B->getSize();
+            Pos += (B->getAlignmentOffset() - Pos) % A;
             F(Pos, B);
-            Pos += B->getSize();
-            Alignment = std::max(Alignment, Align(B->getAlignment()));
+            Pos += S;
+            Alignment = std::max(Alignment, Align(A));
         }
         Size = Pos;
     }
