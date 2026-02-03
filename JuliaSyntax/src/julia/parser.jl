@@ -760,7 +760,7 @@ function dotted(ps::ParseState, k)
     elseif k == K"op="
         return K".op="
     else
-        emit_diagnostic(ps, error = "Unexpected dotted operator: $k")
+        emit_diagnostic(ps, error = "Operator is invalid for broadcasting")
         return K"error"
     end
 end
