@@ -41,6 +41,29 @@ namespace {
 
 using namespace llvm;
 
+/*
+ * This file implements JLJITLinkMemoryManager, which is intended to have lower
+ * memory use than orc::MapperJITLinkMemoryManager and support non-large code
+ * models, unlike the old Julia CG memory manager.  We accomplish this by
+ * reserving a block in the address space that is smaller than the maximum
+ * distance for relocations on the current architecture, putting the code and
+ * data sections inside this block:
+ *
+ *     v-- 2^JULIA_CGMEM_BLOCK_SIZE --v
+ *
+ *  ---+---------------------+--------+----
+ *     | RX                  | RW     |
+ *  ---+---------------------+--------+----
+ *
+ * We make allocations inside the RX and RW regions (read-only data goes into
+ * the RX region for compactness) until one or the other is full, then we unmap
+ * unused pages and make a new block elsewhere.  The size of a block can be set
+ * with JULIA_CGMEM_BLOCK_SIZE, while the ratio of RX to RW within the block is
+ * fixed, based on empirical measurements.  If an allocation requires more space
+ * than is available in a single block, contiguous pages are allocated at an
+ * arbitrary address for it.
+ */
+
 #ifdef _P64
 constexpr int DEFAULT_BLOCK_SIZE = 20;
 constexpr int DEFAULT_TEXT_DATA_RATIO = 7;
