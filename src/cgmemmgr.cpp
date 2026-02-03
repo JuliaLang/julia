@@ -123,7 +123,7 @@ void map_remove(uintptr_t addr, size_t size)
 uintptr_t map_rw(uintptr_t addr, size_t size)
 {
 #ifdef _OS_WINDOWS_
-    // Until Win10+, we'll put the allocation whereever.
+    // Until Win10+, we'll put the allocation wherever.
     (void)addr;
     void *ret = VirtualAlloc(nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
     if (!ret)
@@ -145,8 +145,8 @@ uintptr_t map_rw(uintptr_t addr, size_t size)
  * that every byte in the region is within 2^(range-1) of every byte in the
  * target region.
  */
-uintptr_t map_reserve_around(size_t size, int range_bits, uintptr_t target,
-                             size_t target_size)
+[[maybe_unused]] uintptr_t map_reserve_around(size_t size, int range_bits, uintptr_t target,
+                                              size_t target_size)
 {
     assert(target % jl_page_size == 0);
     assert(target_size % jl_page_size == 0);
@@ -641,6 +641,7 @@ public:
 
         int pages = (1u << block_size_bits) / jl_page_size;
         int rx_pages = pages * DEFAULT_TEXT_DATA_RATIO / (1 + DEFAULT_TEXT_DATA_RATIO);
+        rx_pages = std::min(rx_pages, pages - 1);
         int rw_pages = pages - rx_pages;
         assert(rw_pages > 0 && rx_pages > 0);
         rx_block_size = rx_pages * jl_page_size;
@@ -740,7 +741,6 @@ protected:
         // Without Win10+, we'll just map the RW and RX sections right after
         // each other and use the large code model.
         block = 0;
-        (void)map_reserve_around;
 #else
         size_t size = 1u << block_size_bits;
         if (code_lo == 0 && code_hi == 0) {
