@@ -4,6 +4,8 @@ using Base.MathConstants
 using Random
 using LinearAlgebra
 
+using Test
+
 const ≣ = isequal # convenient for comparing NaNs
 
 @testset "basic booleans" begin
@@ -2733,22 +2735,30 @@ end
     @test rem(T(1), T(2), RoundDown)    == 1
     @test rem(T(1), T(2), RoundUp)      == -1
     @test rem(T(1), T(2), RoundFromZero) == -1
+    @test rem(T(1), T(2), RoundNearestTiesUp) == -1
+    @test rem(T(1), T(2), RoundNearestTiesAway) == -1
     @test rem(T(1.5), T(2), RoundToZero)  == 1.5
     @test rem(T(1.5), T(2), RoundNearest) == -0.5
     @test rem(T(1.5), T(2), RoundDown)    == 1.5
     @test rem(T(1.5), T(2), RoundUp)      == -0.5
     @test rem(T(1.5), T(2), RoundFromZero) == -0.5
+    @test rem(T(1.5), T(2), RoundNearestTiesUp) == -0.5
+    @test rem(T(1.5), T(2), RoundNearestTiesAway) == -0.5
     @test rem(T(-1), T(2), RoundToZero)  == -1
     @test rem(T(-1), T(2), RoundNearest) == -1
     @test rem(T(-1), T(2), RoundDown)    == 1
     @test rem(T(-1), T(2), RoundUp)      == -1
     @test rem(T(-1), T(2), RoundFromZero) == 1
+    @test rem(T(-1), T(2), RoundNearestTiesUp) == -1
+    @test rem(T(-1), T(2), RoundNearestTiesAway) == 1
     @test rem(T(-1.5), T(2), RoundToZero)  == -1.5
     @test rem(T(-1.5), T(2), RoundNearest) == 0.5
     @test rem(T(-1.5), T(2), RoundDown)    == 0.5
     @test rem(T(-1.5), T(2), RoundUp)      == -1.5
     @test rem(T(-1.5), T(2), RoundFromZero) == 0.5
-    for mode in [RoundToZero, RoundNearest, RoundDown, RoundUp, RoundFromZero]
+    @test rem(T(-1.5), T(2), RoundNearestTiesUp) == 0.5
+    @test rem(T(-1.5), T(2), RoundNearestTiesAway) == 0.5
+    for mode in [RoundToZero, RoundNearest, RoundDown, RoundUp, RoundFromZero, RoundNearestTiesUp, RoundNearestTiesAway]
         @test isnan(rem(T(1), T(0), mode))
         @test isnan(rem(T(Inf), T(2), mode))
         @test isnan(rem(T(1), T(NaN), mode))
@@ -2759,6 +2769,8 @@ end
     @test isequal(rem(nextfloat(typemin(T)), T(2), RoundDown),     0.0)
     @test isequal(rem(nextfloat(typemin(T)), T(2), RoundUp),      -0.0)
     @test isequal(rem(nextfloat(typemin(T)), T(2), RoundFromZero), 0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundNearestTiesUp), -0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundNearestTiesAway), 0.0)
 end
 
 @testset "rem for $T RoundNearest" for T in (Int8, Int16, Int32, Int64, Int128)
