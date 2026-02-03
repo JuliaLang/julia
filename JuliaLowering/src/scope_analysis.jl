@@ -377,7 +377,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
             if !isnothing(binfo.type)
                 throw(LoweringError(ex, "multiple type declarations found for `$(binfo.name)`"))
             end
-            binfo.type = ex_out[2]
+            binfo.type = ex_out[2]._id
         end
         ex_out
     elseif k == K"always_defined"
@@ -644,7 +644,7 @@ function analyze_variables!(ctx, ex)
             if !isnothing(b.type)
                 # Assignments introduce a variable's type later during closure
                 # conversion, but we must model that explicitly here.
-                analyze_variables!(ctx, b.type)
+                analyze_variables!(ctx, binding_type_ex(ctx, b))
             end
         end
         analyze_variables!(ctx, ex[2])
