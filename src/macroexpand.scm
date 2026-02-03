@@ -461,7 +461,7 @@
                    (body (cadr e))
                    (m (caddr e))
                    (lno  (cdddr e)))
-              (resolve-expansion-vars-with-new-env body '() m parent-scope inarg #t)))
+              (resolve-expansion-vars-with-new-env body env m parent-scope inarg #t)))
            ((tuple)
             (cons (car e)
                   (map (lambda (x)
