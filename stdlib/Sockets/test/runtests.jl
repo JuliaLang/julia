@@ -3,6 +3,8 @@
 using Sockets, Random, Test
 using Base: Experimental
 
+@test isempty(Test.detect_closure_boxes(Sockets))
+
 # This is for debugging only - if the system doesn't have `netstat`, we just ignore it
 netstat() = try; read(ignorestatus(`netstat -ndi`), String); catch; return ""; end
 const netstat_before = netstat()

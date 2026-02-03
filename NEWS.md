@@ -77,6 +77,10 @@ Standard library changes
   allocate `Core.Box` in their lowered code, which can indicate performance issues from
   captured variables in closures.
 
+#### Dates
+
+* `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
+
 #### InteractiveUtils
 
 #### Dates

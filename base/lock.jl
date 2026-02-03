@@ -324,10 +324,10 @@ available.
 When this function returns, the `lock` has been released, so the caller should
 not attempt to `unlock` it.
 
-See also: [`@lock`](@ref).
-
 !!! compat "Julia 1.7"
     Using a [`Channel`](@ref) as the second argument requires Julia 1.7 or later.
+
+See also [`@lock`](@ref).
 """
 function lock(f, l::AbstractLock)
     lock(l)
@@ -409,7 +409,7 @@ holding the lock.
 !!! compat "Julia 1.11"
     Requires at least Julia 1.11.
 
-## Example
+# Examples
 
 ```jldoctest
 julia> locked_list = Base.Lockable(Int[]);
@@ -707,7 +707,7 @@ which won't get serialized.
 !!! compat "Julia 1.12"
     This type requires Julia 1.12 or later.
 
-## Example
+# Examples
 
 ```jldoctest
 julia> const global_state = Base.OncePerProcess{Vector{UInt32}}() do
@@ -815,12 +815,12 @@ if that behavior is correct within your library's threading-safety design.
     may get deprecated in the future. If initializer yields, the thread running the current
     task after the call might not be the same as the one at the start of the call.
 
-See also: [`OncePerTask`](@ref).
-
 !!! compat "Julia 1.12"
     This type requires Julia 1.12 or later.
 
-## Example
+See also [`OncePerTask`](@ref).
+
+# Examples
 
 ```jldoctest
 julia> const thread_state = Base.OncePerThread{Vector{UInt32}}() do
@@ -952,12 +952,12 @@ end
 Calling a `OncePerTask` object returns a value of type `T` by running the function `initializer`
 exactly once per Task. All future calls in the same Task will return exactly the same value.
 
-See also: [`task_local_storage`](@ref).
-
 !!! compat "Julia 1.12"
     This type requires Julia 1.12 or later.
 
-## Example
+See also [`task_local_storage`](@ref).
+
+# Examples
 
 ```jldoctest
 julia> const task_state = Base.OncePerTask{Vector{UInt32}}() do
