@@ -2175,6 +2175,22 @@ mktempdir() do dir
             LibGit2.Error.Callback, LibGit2.Error.EAUTH,
             "All authentication methods have failed.")
 
+        noninteractive_exhausted_error = LibGit2.GitError(
+            LibGit2.Error.Callback, LibGit2.Error.EAUTH,
+            """Authentication failed. The remote server requires authentication, but no valid """ *
+            """credentials were provided and the environment is non-interactive """ *
+            """(prompting is disabled).
+
+To provide SSH credentials, you can:
+  • Set the SSH_KEY_PATH environment variable to the path of your private key
+  • Set the SSH_PUB_KEY_PATH environment variable to the path of your public key
+  • Set the SSH_KEY_PASS environment variable if your key requires a passphrase
+  • Ensure ssh-agent is running and has the appropriate key loaded
+  • Place your SSH keys at the default locations: ~/.ssh/id_rsa or ~/.ssh/id_ecdsa
+
+For HTTPS URLs, you can use git credential helpers or provide credentials
+via the GIT_ASKPASS environment variable.""")
+
         @testset "SSH credential prompt" begin
             url = "git@github.com:test/package.jl"
             username = "git"
@@ -2573,14 +2589,14 @@ mktempdir() do dir
             # An empty string username_ptr
             ex = gen_ex(username="")
             err, auth_attempts, p = challenge_prompt(ex, [])
-            @test err == exhausted_error
+            @test err == noninteractive_exhausted_error
             @test auth_attempts == 3
 
             # A null username_ptr passed into `git_cred_ssh_key_from_agent` can cause a
             # segfault.
             ex = gen_ex(username=nothing)
             err, auth_attempts, p = challenge_prompt(ex, [])
-            @test err == exhausted_error
+            @test err == noninteractive_exhausted_error
             @test auth_attempts == 2
 
             Base.shred!(valid_cred)
@@ -2732,7 +2748,7 @@ mktempdir() do dir
             # Explicitly provided credential is incorrect
             ex = gen_ex(invalid_cred, allow_prompt=false, allow_ssh_agent=false)
             err, auth_attempts, p = challenge_prompt(ex, [])
-            @test err == exhausted_error
+            @test err == noninteractive_exhausted_error
             @test auth_attempts == 3
             @test p.explicit == invalid_cred
             @test p.credential != invalid_cred
@@ -2767,7 +2783,7 @@ mktempdir() do dir
             # Explicitly provided credential is incorrect
             ex = gen_ex(invalid_cred, allow_prompt=false)
             err, auth_attempts, p = challenge_prompt(ex, [])
-            @test err == exhausted_error
+            @test err == noninteractive_exhausted_error
             @test auth_attempts == 2
             @test p.explicit == invalid_cred
             @test p.credential != invalid_cred
@@ -2853,7 +2869,7 @@ mktempdir() do dir
             ex = gen_ex(cached_cred=invalid_cred, allow_prompt=false)
             err, auth_attempts, p = challenge_prompt(ex, [])
             cache = p.cache
-            @test err == exhausted_error
+            @test err == noninteractive_exhausted_error
             @test auth_attempts == 2
             @test typeof(cache) == LibGit2.CachedCredentials
             @test cache.cred == Dict()
