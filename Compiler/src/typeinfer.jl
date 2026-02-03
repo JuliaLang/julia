@@ -1052,6 +1052,8 @@ function codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, @no
     tree.ssaflags = [IR_FLAG_NULL]
     tree.rettype = Core.Typeof(val)
     tree.edges = Core.svec()
+    tree.nargs = UInt(nargs)
+    tree.isva = method.isva
     set_inlineable!(tree, true)
     tree.parent = mi
     return tree

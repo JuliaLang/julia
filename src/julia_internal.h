@@ -2057,6 +2057,7 @@ JL_DLLIMPORT void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         ios_t *z, ios_t *s, jl_emission_params_t *params);
 JL_DLLIMPORT void jl_get_llvm_gvs(void *native_code, size_t *num_els, void **gvs);
+JL_DLLIMPORT void jl_get_llvm_gvs_globals(void *native_code, size_t *num_els, void **gvs);
 JL_DLLIMPORT void jl_get_llvm_external_fns(void *native_code, size_t *num_els,
                                            jl_code_instance_t *gvs);
 JL_DLLIMPORT void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,
@@ -2064,7 +2065,8 @@ JL_DLLIMPORT void jl_get_function_id(void *native_code, jl_code_instance_t *ncod
 JL_DLLIMPORT void jl_register_fptrs(uint64_t image_base, const struct _jl_image_fptrs_t *fptrs,
                                     jl_method_instance_t **linfos, size_t n);
 JL_DLLIMPORT void jl_get_llvm_mis(void *native_code, size_t *num_els,
-                                  jl_method_instance_t *MIs);
+                                  jl_method_instance_t **MIs);
+JL_DLLIMPORT void jl_get_llvm_cis(void *native_code, size_t *num_els, jl_code_instance_t **data);
 JL_DLLIMPORT void jl_init_codegen(void);
 JL_DLLIMPORT void jl_teardown_codegen(void) JL_NOTSAFEPOINT;
 JL_DLLIMPORT int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT;

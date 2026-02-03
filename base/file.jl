@@ -1059,7 +1059,7 @@ struct DirEntry
 end
 function Base.getproperty(obj::DirEntry, p::Symbol)
     if p === :path
-        return joinpath(obj.dir, obj.name)
+        return joinpath(getfield(obj, :dir), getfield(obj, :name))
     else
         return getfield(obj, p)
     end

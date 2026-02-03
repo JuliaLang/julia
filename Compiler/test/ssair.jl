@@ -108,6 +108,21 @@ let cfg = CFG(BasicBlock[
     @test length(compact.cfg_transform.result_bbs) == 4 && 0 in compact.cfg_transform.result_bbs[3].preds
 end
 
+# Test that removing a self-edge during compaction only scans compacted phi statements.
+let code = Any[
+        # Block 1
+        Compiler.GotoNode(2),
+        # Block 2
+        Core.PhiNode(Int32[1, 3], Any[1, 2]),
+        Compiler.GotoIfNot(true, 2),
+        # Block 3
+        Compiler.ReturnNode(0),
+    ]
+    ir = make_ircode(code)
+    ir = Compiler.compact!(ir, true)
+    @test Compiler.verify_ir(ir) === nothing
+end
+
 # Issue #32579 - Optimizer bug involving type constraints
 function f32579(x::Int, b::Bool)
     if b
@@ -838,3 +853,31 @@ end
 let ir = Base.code_ircode(_worker_task57153, (), optimize_until="CC: COMPACT_2")[1].first
     @test findfirst(x->x==0, ir.cfg.blocks[1].preds) !== nothing
 end
+
+# codeinfo_for_const should set nargs and isva
+let
+    _const_return_func(@nospecialize(x)) = 42
+    mi = Compiler.specialize_method(only(methods(_const_return_func)), Tuple{typeof(_const_return_func), Int}, Core.svec())
+    ci = Compiler.codeinfo_for_const(Compiler.NativeInterpreter(), mi, 42)
+    @test ci.nargs == 2
+    @test ci.isva == false
+    # inflate_ir! should succeed now that nargs/isva are set
+    ir = Compiler.inflate_ir!(ci, mi)
+    @test ir isa Compiler.IRCode
+end
+
+# Tests that CFG edge cleanup during compaction doesn't corrupt iteration codegen.
+Trips_60660 = let
+    Ts = (Float64, Float32)
+    [(Ta, Tb, Tc) for Ta in Ts for Tb in Ts for Tc in Ts]
+end
+@test Trips_60660 == [
+    (Float64, Float64, Float64),
+    (Float64, Float64, Float32),
+    (Float64, Float32, Float64),
+    (Float64, Float32, Float32),
+    (Float32, Float64, Float64),
+    (Float32, Float64, Float32),
+    (Float32, Float32, Float64),
+    (Float32, Float32, Float32),
+]

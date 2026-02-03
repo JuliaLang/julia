@@ -197,6 +197,7 @@ static int mark_reset_age = 0;
 
 static int64_t scanned_bytes; // young bytes scanned while marking
 static int64_t perm_scanned_bytes; // old bytes scanned while marking
+static int64_t heap_size_after_last_full_gc = 0;
 int prev_sweep_full = 1;
 int current_sweep_full = 0;
 int next_sweep_full = 0;
@@ -629,7 +630,7 @@ void jl_gc_reset_alloc_count(void) JL_NOTSAFEPOINT
 static void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT
 {
     assert(jl_is_genericmemory(m));
-    assert(jl_genericmemory_how(m) == 1 || jl_genericmemory_how(m) == 2);
+    assert(jl_genericmemory_how(m) == 1);
     char *d = (char*)m->ptr;
     size_t freed_bytes = memory_block_usable_size(d, isaligned);
     assert(freed_bytes != 0);
@@ -2232,13 +2233,13 @@ JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
 // `_new_obj` has its lowest bit tagged if it's in the remset (in which case we shouldn't update page metadata)
 FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_new_obj)
 {
-    int meta_updated = (uintptr_t)_new_obj & GC_REMSET_PTR_TAG;
+    int remset_object = (uintptr_t)_new_obj & GC_REMSET_PTR_TAG;
     jl_value_t *new_obj = (jl_value_t *)((uintptr_t)_new_obj & ~(uintptr_t)GC_REMSET_PTR_TAG);
     mark_obj: {
         jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
         uintptr_t vtag = o->header & ~(uintptr_t)0xf;
         uint8_t bits = (gc_old(o->header) && !mark_reset_age) ? GC_OLD_MARKED : GC_MARKED;
-        int update_meta = __likely(!meta_updated && !gc_verifying);
+        int update_meta = __likely(!remset_object && !gc_verifying);
         int foreign_alloc = 0;
         if (update_meta && o->bits.in_image) {
             foreign_alloc = 1;
@@ -2338,7 +2339,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 uintptr_t nptr = (npointers << 2) | 1 | bits;
                 new_obj = gc_mark_obj8(ptls, obj8_parent, obj8_begin, obj8_end, nptr);
                 if (new_obj != NULL) {
-                    if (!meta_updated)
+                    if (!remset_object)
                         goto mark_obj;
                     else
                         gc_ptr_queue_push(mq, new_obj);
@@ -2460,7 +2461,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             assert(obj8_begin < obj8_end);
             new_obj = gc_mark_obj8(ptls, obj8_parent, obj8_begin, obj8_end, nptr);
             if (new_obj != NULL) {
-                if (!meta_updated)
+                if (!remset_object)
                     goto mark_obj;
                 else
                     gc_ptr_queue_push(mq, new_obj);
@@ -2473,7 +2474,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             assert(obj16_begin < obj16_end);
             new_obj = gc_mark_obj16(ptls, obj16_parent, obj16_begin, obj16_end, nptr);
             if (new_obj != NULL) {
-                if (!meta_updated)
+                if (!remset_object)
                     goto mark_obj;
                 else
                     gc_ptr_queue_push(mq, new_obj);
@@ -2488,7 +2489,7 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             assert(obj32_begin < obj32_end);
             new_obj = gc_mark_obj32(ptls, obj32_parent, obj32_begin, obj32_end, nptr);
             if (new_obj != NULL) {
-                if (!meta_updated)
+                if (!remset_object)
                     goto mark_obj;
                 else
                     gc_ptr_queue_push(mq, new_obj);
@@ -3036,7 +3037,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     uint64_t gc_start_time = jl_hrtime();
     uint64_t mutator_time = gc_end_time == 0 ? old_mut_time : gc_start_time - gc_end_time;
     uint64_t before_free_heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
-    int64_t last_perm_scanned_bytes = perm_scanned_bytes;
     uint64_t start_mark_time = jl_hrtime();
     JL_PROBE_GC_MARK_BEGIN();
     {
@@ -3130,8 +3130,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     gc_stats_all_pool();
     gc_stats_big_obj();
     gc_num.total_allocd += gc_num.allocd;
-    if (!prev_sweep_full)
-        promoted_bytes += perm_scanned_bytes - last_perm_scanned_bytes;
+    // promoted_bytes are all the new bytes scanned that got promoted to old but that have never seen a full GC as old
+    promoted_bytes += scanned_bytes;
+    scanned_bytes = 0;
     // 4. next collection decision
     int remset_nptr = 0;
     int sweep_full = next_sweep_full;
@@ -3157,13 +3158,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         recollect = 1;
         gc_count_full_sweep_reason(FULL_SWEEP_REASON_FORCED_FULL_SWEEP);
     }
-    if (sweep_full) {
-        // these are the difference between the number of gc-perm bytes scanned
-        // on the first collection after sweep_full, and the current scan
-        perm_scanned_bytes = 0;
-        promoted_bytes = 0;
-    }
-    scanned_bytes = 0;
     // 5. start sweeping
     uint64_t start_sweep_time = jl_hrtime();
     JL_PROBE_GC_SWEEP_BEGIN(sweep_full);
@@ -3295,7 +3289,19 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         target_heap = jl_atomic_load_relaxed(&gc_heap_stats.heap_target);
     }
 
+    if (sweep_full) {
+        // these are the difference between the number of gc-perm bytes scanned
+        // on the first collection after sweep_full, and the current scan
+        perm_scanned_bytes = 0;
+        promoted_bytes = 0;
+        heap_size_after_last_full_gc = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
+    }
+    // We want to trigger full GCs either if the heap size has grown a lot since the last full GC.
+    // For this we use the overallocation function to see what a reasonable rate of growth is,
+    // or if there is too much memory that has not seen a full GC after being promoted to old.
     double old_ratio = (double)promoted_bytes/(double)heap_size;
+    double expected_heap_size = overallocation(heap_size_after_last_full_gc, 0, UINT64_MAX) + heap_size_after_last_full_gc;
+    double last_full_gc_heap_ratio = (double)heap_size/expected_heap_size;
     if (heap_size > user_max) {
         next_sweep_full = 1;
         gc_count_full_sweep_reason(FULL_SWEEP_REASON_USER_MAX_EXCEEDED);
@@ -3303,6 +3309,10 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     else if (old_ratio > 0.15) {
         next_sweep_full = 1;
         gc_count_full_sweep_reason(FULL_SWEEP_REASON_LARGE_PROMOTION_RATE);
+    }
+    else if (last_full_gc_heap_ratio > 1) {
+        next_sweep_full = 1;
+        gc_count_full_sweep_reason(FULL_SWEEP_REASON_LARGE_HEAP_GROWTH);
     }
     else {
         next_sweep_full = 0;

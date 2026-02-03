@@ -273,9 +273,10 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         if linfo isa Union{MethodInstance, CodeInstance}
             def = frame_method_or_module(frame)
             if def isa Module
-                Base.show_mi(io, linfo, #=from_stackframe=#true)
+                Base.show_mi(io, linfo::MethodInstance, #=from_stackframe=#true)
             else
-                show_spec_sig(io, def, frame_mi(frame).specTypes)
+                mi = frame_mi(frame)::MethodInstance
+                show_spec_sig(io, def::Method, mi.specTypes)
             end
         else
             m = linfo::Method
