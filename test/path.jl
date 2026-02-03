@@ -258,16 +258,19 @@
         @test splitext(S("bar/.foo/baz")) == ("bar/.foo/baz", "")
         @test splitext(S("bar/foo/.baz")) == ("bar/foo/.baz", "")
         @test splitext(S("bar/foo.baz")) == ("bar/foo", ".baz")
-        # If the second output is empty, remove a single \n from the first output
-        # unless that makes it empty or end with a /. FIXME?
-        @test splitext(S("a\r\n")) == ("a\r", "")
-        @test splitext(S("a/\n")) == ("a/\n", "") # keep \n in this case
+        
+        # Before merging https://github.com/JuliaLang/julia/pull/60677,
+        # a single \n would be removed from the first output unless that made 
+        # it empty or end with a separator. The tests below reflect the 
+        # updated behavior.  
+        @test splitext(S("a\r\n")) == ("a\r\n", "")
+        @test splitext(S("a/\n")) == ("a/\n", "") # not changed by 60677
         @test splitext(S("a\n.foo")) == ("a\n", ".foo")
         @test splitext(S("a/\n.foo")) == ("a/\n", ".foo")
-        @test splitext(S("\n")) == ("\n", "") # keep \n in this case
+        @test splitext(S("\n")) == ("\n", "") # not changed by 60677
         if Sys.iswindows()
-            @test splitext(S("C:a\n")) == ("C:a", "")
-            @test splitext(S("C:\n")) == ("C:\n", "") # keep \n in this case
+            @test splitext(S("C:a\n")) == ("C:a\n", "")
+            @test splitext(S("C:\n")) == ("C:\n", "") # not changed by 60677
         end
     end
 
