@@ -438,7 +438,7 @@ end
 vst1_tuple(vcx, st) = @stm st begin
     [K"tuple" [K"parameters" kws...]] -> all(vst1_call_kwarg, vcx, kws)
     [K"tuple" [K"parameters" _ _...] _ _...] -> @fail(
-        st[end], "cannot mix tuple `(a,b,c)` and named tuple `(;a,b,c)` syntax")
+        st[1], "cannot mix tuple `(a,b,c)` and named tuple `(;a,b,c)` syntax")
     ([K"tuple" args...], when=any(x->kind(x)===K"=", args)) ->
         all(vst1_call_arg, vcx, args)
     [K"tuple" xs...] -> all(vst1_splat_or_val, vcx, xs)
@@ -519,7 +519,7 @@ end
 vst1_symdecl(vcx, st) = @stm st begin
     [K"Identifier"] -> pass()
     [K"::" [K"Identifier"] t] -> vst1(vcx, t)
-    _ -> @fail(st, "expected identifier or `::`")
+    _ -> @fail(st, "expected identifier or `identifier::type`")
 end
 
 # TODO: globalref might not be valid everywhere; check usage of this function
@@ -640,9 +640,9 @@ vst1_simple_calldecl(vcx, st; in_macro=false) = @stm st begin
         vst1_calldecl_kws(vcx, st[2])
     [K"call" f ps...] -> vst1_calldecl_name(vcx, f) &
         _calldecl_positionals(vcx, ps, K"kw")
-    # anonymous function syntax `function (x)`
-    [K"tuple" _...] ->
-        vst1_lam_lhs(vcx, st)
+    # anonymous function syntax `function (x); end`  or `function (x...); end`
+    [K"tuple" _...] -> vst1_lam_lhs(vcx, st)
+    [K"..." va] -> vst1_pparam_typed_tuple(vcx, va)
     _ -> @fail(st, "malformed `call` in function decl")
 end
 
@@ -679,7 +679,7 @@ vst1_calldecl_name(vcx, st) = @stm st begin
     [K"::" t] ->
         vst1(vcx, t)
     [K"::" x t] ->
-        vst1_param_simple_tuple(vcx, x) & vst1(vcx, t)
+        vst1_pparam_simple_tuple(vcx, x) & vst1(vcx, t)
 
     [K"where" t tds...] ->
         vst1(vcx, t) & all(vst1_typevar_decl, vcx, tds)
@@ -687,7 +687,7 @@ vst1_calldecl_name(vcx, st) = @stm st begin
 end
 
 # Check mandatory and optional positional params:
-# `[param* param_and_default* (kw (... param) val)|(... param)?]`
+# `[pparam* pparam_and_default* pparam_and_splatdefault? pparam_va?]`
 # TODO: add list matching to @stm
 function _calldecl_positionals(vcx, params_meta, kw_kind)
     isempty(params_meta) && return pass()
@@ -703,15 +703,8 @@ function _calldecl_positionals(vcx, params_meta, kw_kind)
             p -> p
         end
     end
-    va_ok = @stm params[end] begin
-        ([K"kw" [K"..." va] val], when=kw_kind===K"kw") ->
-            vst1_param_typed_tuple(vcx, va) & vst1_splat_or_val(vcx, val)
-        ([K"=" [K"..." va] val], when=kw_kind===K"=") ->
-            vst1_param_typed_tuple(vcx, va) & vst1_splat_or_val(vcx, val)
-        [K"..." va] -> vst1_param_typed_tuple(vcx, va)
-        _ -> nothing
-    end
-    if !isnothing(va_ok)
+    va_ok = vst1_pparam_va(vcx, params[end]; kw_kind)
+    if is_known(va_ok)
         params = params[1:end-1]
         ok[] &= va_ok
     end
@@ -719,57 +712,90 @@ function _calldecl_positionals(vcx, params_meta, kw_kind)
     for p in params
         if kind(p) === kw_kind
             require_assign = true
-            ok[] &= vst1_param_and_default(vcx, p; kw_kind)
+            if p == params[end]
+                ok[] &= vst1_pparam_and_default(vcx, p; kw_kind, allow_val_splat=true)
+            else
+                ok[] &= vst1_pparam_and_default(vcx, p; kw_kind, allow_val_splat=false)
+            end
         elseif kind(p) === K"..."
             ok[] &= @fail(p, "`...` may only be used on the final parameter")
         elseif require_assign # TODO: multi-syntaxtree error
             ok[] &= @fail(p, "all function parameters after an optional parameter must also be optional")
         else
-            ok[] &= vst1_param_typed_tuple(vcx, p)
+            ok[] &= vst1_pparam_typed_tuple(vcx, p)
         end
     end
     return ok[]
 end
 
+vst1_pparam_va(vcx, st; kw_kind) = @stm st begin
+    ([K"kw" [K"..." va] val], when=kw_kind===K"kw") ->
+        vst1_pparam_typed_tuple(vcx, va) & vst1_splat_or_val(vcx, val)
+    ([K"=" [K"..." va] val], when=kw_kind===K"=") ->
+        vst1_pparam_typed_tuple(vcx, va) & vst1_splat_or_val(vcx, val)
+    [K"..." va] -> vst1_pparam_typed_tuple(vcx, va)
+    _ -> unknown()
+end
+
 # destructuring args: function f(a, (x, y)) ...
-vst1_param_typed_tuple(vcx, st) = @stm st begin
+vst1_pparam_typed_tuple(vcx, st) = @stm st begin
     [K"::" [K"tuple" _...] t] ->
-        vst1_param_simple_tuple(vcx, st[1]) &
+        vst1_pparam_simple_tuple(vcx, st[1]) &
         vst1(with(vcx; in_param_t=true), t)
-    [K"tuple" _...] -> vst1_param_simple_tuple(vcx, st)
+    [K"tuple" _...] -> vst1_pparam_simple_tuple(vcx, st)
     _ -> vst1_param(vcx, st)
 end
-
-vst1_param_simple_tuple_or_splat(vcx, st) = @stm st begin
-    [K"..." t] -> vst1_param_simple_tuple(vcx, t)
-    t -> vst1_param_simple_tuple(vcx, t)
+vst1_pparam_simple_tuple_or_splat(vcx, st) = @stm st begin
+    [K"..." t] -> vst1_pparam_simple_tuple(vcx, t)
+    t -> vst1_pparam_simple_tuple(vcx, t)
 end
-
-vst1_param_simple_tuple(vcx, st) = @stm st begin
+# Similar to an assignment to a tuple LHS, but does not allow `::`.  Also should
+# not allow ref, curly, or call, but flisp does, so we may need to change this.
+vst1_pparam_simple_tuple(vcx, st) = @stm st begin
     [K"Identifier"] -> pass()
+    [K"tuple" [K"parameters" _ _...] _ _...] -> @fail(
+        st[1], "cannot mix tuple `(a,b,c)` and named tuple `(;a,b,c)` syntax")
     [K"tuple" [K"parameters" kws...]] -> all(vst1_ident, vcx, kws; lhs=true)
-    [K"tuple" xs...] -> all(vst1_param_simple_tuple_or_splat, vcx, xs)
-    _ -> unknown()
+    [K"tuple" xs...] ->
+        all(vst1_pparam_simple_tuple_or_splat, vcx, xs) &
+        (count(kind(x)===K"..." for x in xs) <= 1 ? pass() :
+        @fail(st, "multiple `...` in destructured parameter is ambiguous"))
+    [K"::" _...] -> @fail(st, "cannot have type in destructured argument")
+    _ -> @fail(st, "expected identifier or tuple")
 end
 
 vst1_param(vcx, st) = @stm st begin
     [K"Identifier"] -> pass()
     [K"::" [K"Identifier"] t] -> vst1(with(vcx; in_param_t=true), t)
     [K"::" t] -> vst1(with(vcx; in_param_t=true), t)
-    _ -> @fail(st, "expected identifier or `::`")
+    _ -> @fail(st, "expected identifier or `identifier::type`")
 end
 
-vst1_param_and_default(vcx, st; kw_kind) = @stm st begin
+# allow_val_splat=true when this is the final optional param (even if there are
+# varargs after it).  See #50563
+vst1_pparam_and_default(vcx, st; kw_kind, allow_val_splat) = @stm st begin
     ([K"kw" id val], when=(kw_kind===K"kw")) ->
-        vst1_param_typed_tuple(vcx, id) & vst1(vcx, val)
+        vst1_pparam_typed_tuple(vcx, id) & @stm val begin
+            [K"..." v] -> allow_val_splat ? vst1(vcx, v) :
+                @fail(val, "splat only allowed on final positional default arg")
+            _ -> vst1(vcx, val)
+        end
     ([K"=" id val], when=(kw_kind===K"=")) ->
-        vst1_param_typed_tuple(vcx, id) & vst1(vcx, val)
+        vst1_pparam_typed_tuple(vcx, id) & @stm val begin
+            [K"..." v] -> allow_val_splat ? vst1(vcx, v) :
+                @fail(val, "splat only allowed on final positional default arg")
+            _ -> vst1(vcx, val)
+        end
     _ -> @fail(st, "malformed optional positional parameter; expected `=`")
 end
 
 vst1_calldecl_kws(vcx, st) = @stm st begin
     [K"parameters" kws... [K"..." varkw]] ->
-        all(vst1_param_kw, vcx, kws) & vst1_param(vcx, varkw)
+        all(vst1_param_kw, vcx, kws) & @stm varkw begin
+            [K"Identifier"] -> pass()
+            [K"::" _...] ->
+                @fail(varkw, "keyword parameter with `...` may not be given a type")
+        end
     [K"parameters" kws...] -> all(vst1_param_kw, vcx, kws)
     _ -> unknown()
 end
@@ -778,7 +804,7 @@ vst1_param_kw(vcx, st) = @stm st begin
     [K"kw" id val] ->
         vst1_param(vcx, id) & vst1(vcx, val)
     [K"..." _...] ->
-        @fail(st, "`...` may only be used for the last keyword parameter")
+        @fail(st, "`...` may only be used for the final keyword parameter")
     _ -> vst1_param(vcx, st) |
         @fail(st, "malformed keyword parameter; expected identifier, `=`, or `::`")
 end
