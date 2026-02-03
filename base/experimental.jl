@@ -655,26 +655,7 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
         timer = Timer(timeout)
         waiter_left = Threads.Atomic{Bool}(false)
         # start a task to wait on the timer
-        t = Task() do
-            try
-                wait(timer)
-            catch e
-                # if the timer was closed, the waiting task has been scheduled; do nothing
-                e isa EOFError && return
-            end
-            dosched = false
-            lock(c.lock)
-            # Confirm that the waiting task is still in the wait queue and remove it. If
-            # the task is not in the wait queue, it must have been notified already so we
-            # don't do anything here.
-            if !waiter_left[] && ct.queue === c.waitq
-                dosched = true
-                Base.list_deletefirst!(c.waitq, ct)
-            end
-            unlock(c.lock)
-            # send the waiting task a timeout
-            dosched && schedule(ct, :timed_out)
-        end
+        t = _wait_with_timeout_task(c, ct, timer, waiter_left)
         t.sticky = false
         Threads._spawn_set_thrpool(t, :interactive)
         schedule(t)
@@ -692,6 +673,30 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
         rethrow()
     finally
         Base.relockall(c.lock, token)
+    end
+end
+
+function _wait_with_timeout_task(c::GenericCondition, ct::Task, timer::Timer,
+    waiter_left::Threads.Atomic{Bool})
+    return Task() do
+        try
+            wait(timer)
+        catch e
+            # if the timer was closed, the waiting task has been scheduled; do nothing
+            e isa EOFError && return
+        end
+        dosched = false
+        lock(c.lock)
+        # Confirm that the waiting task is still in the wait queue and remove it. If
+        # the task is not in the wait queue, it must have been notified already so we
+        # don't do anything here.
+        if !waiter_left[] && ct.queue === c.waitq
+            dosched = true
+            Base.list_deletefirst!(c.waitq, ct)
+        end
+        unlock(c.lock)
+        # send the waiting task a timeout
+        dosched && schedule(ct, :timed_out)
     end
 end
 

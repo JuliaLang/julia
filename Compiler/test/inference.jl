@@ -2597,6 +2597,15 @@ end == Integer
     Val(isdefined(xxx.value, :x))
 end == Val{true}
 
+# Test union splitting for MustAlias
+struct GetSomethingA; x::Union{Nothing,Int}; end
+struct GetSomethingB; x::Int; end
+getsomethingx(a::GetSomethingA) = something(a.x, 0)
+getsomethingx(b::GetSomethingB) = b.x
+@test Base.infer_return_type((Union{GetSomethingA,GetSomethingB},); interp=MustAliasInterpreter()) do x
+    getsomethingx(x)
+end == Int
+
 @testset "issue #56913: `BoundsError` in type inference" begin
     R = UnitRange{Int}
     @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, Vararg{R}})

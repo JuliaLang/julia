@@ -534,37 +534,33 @@ function DILineInfoPrinter(debuginfo, def, showtypes::Bool=false)
                 started::Bool = false
                 if !update_line_only && showtypes && !isa(frame.method, Symbol) && nctx != 1
                     print(io, linestart)
-                    with_output_color(linecolor, io) do io
-                        print(io, indent("│"))
-                        print(io, "┌ invoke ", frame.method)
-                        println(io)
-                    end
+                    printstyled(io, indent("│"), color=linecolor)
+                    printstyled(io, "┌ invoke ", frame.method, color=linecolor)
+                    println(io)
                     started = true
                 end
                 print(io, linestart)
-                with_output_color(linecolor, io) do io
-                    print(io, indent("│"))
-                    push!(context, frame)
-                    if update_line_only
-                        update_line_only = false
-                    else
-                        context_depth[] += 1
-                        nctx != 1 && print(io, started ? "│" : "┌")
-                    end
-                    print(io, " @ ", frame.file)
-                    if frame.line != typemax(frame.line) && frame.line != 0
-                        print(io, ":", frame.line)
-                    end
-                    print(io, " within `", method_name(frame), "`")
-                    if collapse
-                        method = method_name(frame)
-                        while nctx < nframes
-                            frame = DI[nframes - nctx]
-                            method_name(frame) === method || break
-                            nctx += 1
-                            push!(context, frame)
-                            print(io, " @ ", frame.file, ":", frame.line)
-                        end
+                printstyled(io, indent("│"), color=linecolor)
+                push!(context, frame)
+                if update_line_only
+                    update_line_only = false
+                else
+                    context_depth[] += 1
+                    nctx != 1 && printstyled(io, started ? "│" : "┌", color=linecolor)
+                end
+                printstyled(io, " @ ", frame.file, color=linecolor)
+                if frame.line != typemax(frame.line) && frame.line != 0
+                    printstyled(io, ":", frame.line, color=linecolor)
+                end
+                printstyled(io, " within `", method_name(frame), "`", color=linecolor)
+                if collapse
+                    method = method_name(frame)
+                    while nctx < nframes
+                        frame = DI[nframes - nctx]
+                        method_name(frame) === method || break
+                        nctx += 1
+                        push!(context, frame)
+                        printstyled(io, " @ ", frame.file, ":", frame.line, color=linecolor)
                     end
                 end
                 println(io)
@@ -681,6 +677,60 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
                         sptypes, used, cfg, bb_idx; pop_new_node!, only_after, config.bb_color, config.label_dynamic_calls)
 end
 
+function _print_ir_indentation(io::IO, cfg::CFG, bb_idx::Int, max_bb_idx_size::Int, bb_color,
+                               line_info_preprinter, idx::Int, i::Int; final::Bool=true)
+    # Compute BB guard rail
+    if bb_idx > length(cfg.blocks)
+        # If invariants are violated, print a special leader
+        linestart = " "^(max_bb_idx_size + 2) # not inside a basic block bracket
+        inlining_indent = line_info_preprinter(io, linestart, i == 1 ? idx : 0)
+        printstyled(io, "!!! ", "─"^max_bb_idx_size, color=bb_color)
+    else
+        bbrange = cfg.blocks[bb_idx].stmts
+        # Print line info update
+        linestart = idx == first(bbrange) ? "  " : sprint(io -> printstyled(io, "│ ", color=bb_color), context=io)
+        linestart *= " "^max_bb_idx_size
+        # idx == 0 means only indentation is printed, so we don't print linfos
+        # multiple times if the are new nodes
+        inlining_indent = line_info_preprinter(io, linestart, i == 1 ? idx : 0)
+
+        if i == 1 && idx == first(bbrange)
+            bb_idx_str = string(bb_idx)
+            bb_pad = max_bb_idx_size - length(bb_idx_str)
+            bb_type = length(cfg.blocks[bb_idx].preds) <= 1 ? "─" : "┄"
+            printstyled(io, bb_idx_str, " ", bb_type, "─"^bb_pad, color=bb_color)
+        elseif final && idx == last(bbrange) # print separator
+            printstyled(io, "└", "─"^(1 + max_bb_idx_size), color=bb_color)
+        else
+            printstyled(io, "│ ", " "^max_bb_idx_size, color=bb_color)
+        end
+    end
+    print(io, inlining_indent, " ")
+    return nothing
+end
+
+function _print_ir_new_node(io::IO, node, code, sptypes::Vector{VarState}, used::BitSet, maxlength_idx::Int,
+                            label_dynamic_calls::Bool, line_info_postprinter, cfg::CFG, bb_idx::Int,
+                            max_bb_idx_size::Int, bb_color, line_info_preprinter, idx::Int, i::Int; final::Bool=true)
+    _print_ir_indentation(io, cfg, bb_idx, max_bb_idx_size, bb_color, line_info_preprinter, idx, i; final)
+
+    node_idx, new_node_inst, new_node_type = node
+    @assert new_node_inst !== UNDEF # we filtered these out earlier
+    show_type = should_print_ssa_type(new_node_inst)
+    with_output_color(:green, io) do io′
+        print_stmt(io′, node_idx, new_node_inst, code, sptypes, used, maxlength_idx, false, show_type, label_dynamic_calls)
+    end
+
+    if new_node_type === UNDEF
+        # Try to be robust against errors
+        printstyled(io, "::#UNDEF", color=:red)
+    else
+        line_info_postprinter(io; type = new_node_type, used = node_idx in used, show_type, idx = node_idx)
+    end
+    println(io)
+    return nothing
+end
+
 function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, line_info_preprinter, line_info_postprinter,
                       sptypes::Vector{VarState}, used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), only_after::Bool=false,
                       bb_color=:light_black, label_dynamic_calls::Bool=true)
@@ -703,58 +753,11 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
     end
 
     i = 1
-    function print_indentation(final::Bool=true)
-        # Compute BB guard rail
-        if bb_idx > length(cfg.blocks)
-            # If invariants are violated, print a special leader
-            linestart = " "^(max_bb_idx_size + 2) # not inside a basic block bracket
-            inlining_indent = line_info_preprinter(io, linestart, i == 1 ? idx : 0)
-            printstyled(io, "!!! ", "─"^max_bb_idx_size, color=bb_color)
-        else
-            bbrange = cfg.blocks[bb_idx].stmts
-            # Print line info update
-            linestart = idx == first(bbrange) ? "  " : sprint(io -> printstyled(io, "│ ", color=bb_color), context=io)
-            linestart *= " "^max_bb_idx_size
-            # idx == 0 means only indentation is printed, so we don't print linfos
-            # multiple times if the are new nodes
-            inlining_indent = line_info_preprinter(io, linestart, i == 1 ? idx : 0)
-
-            if i == 1 && idx == first(bbrange)
-                bb_idx_str = string(bb_idx)
-                bb_pad = max_bb_idx_size - length(bb_idx_str)
-                bb_type = length(cfg.blocks[bb_idx].preds) <= 1 ? "─" : "┄"
-                printstyled(io, bb_idx_str, " ", bb_type, "─"^bb_pad, color=bb_color)
-            elseif final && idx == last(bbrange) # print separator
-                printstyled(io, "└", "─"^(1 + max_bb_idx_size), color=bb_color)
-            else
-                printstyled(io, "│ ", " "^max_bb_idx_size, color=bb_color)
-            end
-        end
-        print(io, inlining_indent, " ")
-    end
-
     # first, print new nodes that are to be inserted before the current statement
-    function print_new_node(node; final::Bool=true)
-        print_indentation(final)
-
-        node_idx, new_node_inst, new_node_type = node
-        @assert new_node_inst !== UNDEF # we filtered these out earlier
-        show_type = should_print_ssa_type(new_node_inst)
-        let maxlength_idx=maxlength_idx, show_type=show_type
-            with_output_color(:green, io) do io′
-                print_stmt(io′, node_idx, new_node_inst, code, sptypes, used, maxlength_idx, false, show_type, label_dynamic_calls)
-            end
-        end
-
-        if new_node_type === UNDEF # try to be robust against errors
-            printstyled(io, "::#UNDEF", color=:red)
-        else
-            line_info_postprinter(io; type = new_node_type, used = node_idx in used, show_type, idx = node_idx)
-        end
-        println(io)
-    end
     while (next = pop_new_node!(idx)) !== nothing
-        only_after || print_new_node(next; final=false)
+        only_after || _print_ir_new_node(io, next, code, sptypes, used, maxlength_idx, label_dynamic_calls,
+                                         line_info_postprinter, cfg, bb_idx, max_bb_idx_size, bb_color,
+                                         line_info_preprinter, idx, i; final=false)
         i += 1
     end
 
@@ -766,7 +769,7 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
     # FIXME: `only_after` is hack so that we can call this function to print uncompacted
     #        attach-after nodes when the current node has already been compated already
     if !only_after
-        print_indentation(next===nothing)
+        _print_ir_indentation(io, cfg, bb_idx, max_bb_idx_size, bb_color, line_info_preprinter, idx, i; final=next===nothing)
         if code isa CodeInfo
             stmt = statement_indices_to_labels(stmt, cfg)
         end
@@ -786,7 +789,9 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
 
     # finally, print new nodes that are to be inserted after the current statement
     while next !== nothing
-        print_new_node(next)
+        _print_ir_new_node(io, next, code, sptypes, used, maxlength_idx, label_dynamic_calls,
+                           line_info_postprinter, cfg, bb_idx, max_bb_idx_size, bb_color,
+                           line_info_preprinter, idx, i)
         i += 1
         next = pop_new_node!(idx; attach_after=true)
     end
