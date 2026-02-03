@@ -1,8 +1,12 @@
 {
-    "extensions": [
-      "julialang.language-julia",
-      "ms-vscode.cpptools"
-    ],
-  
-    "dockerFile": "Dockerfile"
+  "image": "docker.io/library/julia:latest",
+  "customizations": {
+      "vscode": {
+        "extensions": [
+          "julialang.language-julia",
+          "ms-vscode.cpptools"
+        ]
+     }
+  },
+  "onCreateCommand": "apt-get update && apt-get install -y build-essential libatomic1 python3 gfortran perl wget m4 cmake pkg-config git"
 }

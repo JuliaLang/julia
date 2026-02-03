@@ -9,7 +9,7 @@ struct JLOptions
     commands::Ptr{Ptr{UInt8}} # (e)eval, (E)print, (L)load
     image_file::Ptr{UInt8}
     cpu_target::Ptr{UInt8}
-    nthreadpools::Int16
+    nthreadpools::Int8
     nthreads::Int16
     nmarkthreads::Int16
     nsweepthreads::Int8

@@ -1,0 +1,11 @@
+--- a/CMakeLists.txt	2026-01-19 17:44:58
++++ b/CMakeLists.txt	2026-01-19 17:45:04
+@@ -20,7 +20,7 @@
+ #   mbedtls, mbedx509, mbedcrypto and apidoc targets.
+ #
+
+-cmake_minimum_required(VERSION 2.8.12)
++cmake_minimum_required(VERSION 3.5)
+
+ # https://cmake.org/cmake/help/latest/policy/CMP0011.html
+ # Setting this policy is required in CMake >= 3.18.0, otherwise a warning is generated. The OLD
