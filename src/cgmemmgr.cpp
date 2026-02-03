@@ -104,8 +104,9 @@ uintptr_t map_reserve(size_t size)
 #else
     if (auto p = map_reserve(0, size))
         return *p;
-#endif
+    perror(__func__);
     abort();
+#endif
 }
 
 void map_remove(uintptr_t addr, size_t size)
