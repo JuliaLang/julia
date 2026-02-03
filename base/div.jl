@@ -116,7 +116,10 @@ rem(x, y, ::RoundingMode{:Down}) = mod(x, y)
 rem(x, y, ::RoundingMode{:Up}) = mod(x, -y)
 rem(x, y, r::RoundingMode{:Nearest}) = x - y * div(x, y, r)
 rem(x::Integer, y::Integer, r::RoundingMode{:Nearest}) = divrem(x, y, r)[2]
-
+function rem(x::Integer, y::Integer, rnd::Union{typeof(RoundNearestTiesAway),
+                                                typeof(RoundNearestTiesUp)})
+    divrem(x, y, rnd)[2]
+end
 function rem(x, y, ::typeof(RoundFromZero))
     signbit(x) == signbit(y) ? rem(x, y, RoundUp) : rem(x, y, RoundDown)
 end
