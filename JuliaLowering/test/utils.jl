@@ -378,3 +378,7 @@ end
 function reference_lower(mod::Module, x)
     Base.fl_lower(x, mod, @__FILE__, @__LINE__, Base.get_world_counter())[1]
 end
+
+function reference_eval(mod::Module, x)
+    Core.eval(mod, reference_lower(mod, x))
+end
