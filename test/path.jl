@@ -258,11 +258,11 @@
         @test splitext(S("bar/.foo/baz")) == ("bar/.foo/baz", "")
         @test splitext(S("bar/foo/.baz")) == ("bar/foo/.baz", "")
         @test splitext(S("bar/foo.baz")) == ("bar/foo", ".baz")
-        
+
         # Before merging https://github.com/JuliaLang/julia/pull/60677,
-        # a single \n would be removed from the first output unless that made 
-        # it empty or end with a separator. The tests below reflect the 
-        # updated behavior.  
+        # a single \n would be removed from the first output unless that made
+        # it empty or end with a separator. The tests below reflect the
+        # updated behavior.
         @test splitext(S("a\r\n")) == ("a\r\n", "")
         @test splitext(S("a/\n")) == ("a/\n", "") # not changed by 60677
         @test splitext(S("a\n.foo")) == ("a\n", ".foo")
