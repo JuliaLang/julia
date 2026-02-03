@@ -684,15 +684,8 @@ public:
         if (!rx_mapper && mapper_type)
             jl_errorf("Unsupported JULIA_CGMEMMGR_MAP_TYPE: %s", mapper_type);
 
-        if ((rx_mapper = DualBlockMapper::Create()))
-            return;
-#ifdef _OS_LINUX_
-        if ((rx_mapper = SelfMemMapper::Create()))
-            return;
-#endif
-
         if (!rx_mapper)
-            abort();
+            jl_errorf("Failed to initialize cgmmemgr\n");
     }
 
     std::pair<Allocation, Allocation> alloc(size_t size_rx, size_t align_rx, size_t size_rw,
