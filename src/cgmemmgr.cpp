@@ -138,10 +138,7 @@ void map_remove(uintptr_t addr, size_t size)
 #ifdef _OS_WINDOWS_
     VirtualFree((void *)addr, size, MEM_DECOMMIT);
 #else
-    if (munmap((void *)addr, size) != -1)
-        return;
-    perror(__func__);
-    abort();
+    munmap((void *)addr, size);
 #endif
 }
 
