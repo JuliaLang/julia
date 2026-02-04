@@ -480,9 +480,8 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     # These functions are special cased to only show if first argument is matched.
     special = f === convert || f === getindex || f === setindex!
     f isa Core.Builtin && return # `methods` isn't very useful for a builtin
-    funcs = Tuple{Any,Vector{Any}}[(f, arg_types_param)]
 
-    for (func, arg_types_param) in funcs
+    let func = f
         for method in methods(func)
             buf = IOBuffer()
             iob0 = iob = IOContext(buf, io)
