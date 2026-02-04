@@ -8193,6 +8193,25 @@ foo46503(a::Int, b::Nothing) = @invoke foo46503(a::Any, b)
 foo46503(@nospecialize(a), b::Union{Nothing, Float64}) = rand() + 10
 @test 10 <= foo46503(1, nothing) <= 11
 
+@testset "inference for `rest` with unknown state argument types" begin
+    @testset "`Array`, `Memory`" begin
+        for typ in (Vector{Float32}, Matrix{Float32}, Memory{Float32})
+            @test (isconcretetype ∘ Base.infer_return_type)(Base.rest, Tuple{typ, Any})
+            for e in (Base.Compiler.is_terminates, Base.Compiler.is_notaskstate, Base.Compiler.is_nonoverlayed)
+                @test (e ∘ Base.infer_effects)(Base.rest, Tuple{typ, Any})
+            end
+        end
+    end
+    @testset "`Tuple`" begin
+        typ = NTuple{5, Float32}
+        @test Base.infer_return_type(Base.rest, Tuple{typ, Any}) <: Tuple
+    end
+    @testset "`NamedTuple`" begin
+        typ = NamedTuple{(:a, :b, :c, :d, :e), NTuple{5, Float32}}
+        @test Base.infer_return_type(Base.rest, Tuple{typ, Any}) <: NamedTuple
+    end
+end
+
 @testset "effect override on Symbol(::String)" begin
     @test Core.Compiler.is_foldable(Base.infer_effects(Symbol, (String,)))
 end

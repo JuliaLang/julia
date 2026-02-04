@@ -1376,9 +1376,15 @@ end
 # test --bug-report=rr
 if Sys.islinux() && Sys.ARCH in (:i686, :x86_64) # rr is only available on these platforms
     mktempdir() do temp_trace_dir
-        test_read_success(setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`,
-                                 "JULIA_RR_RECORD_ARGS" => "-n --nested=ignore",
-                                 "_RR_TRACE_DIR" => temp_trace_dir))
+        cmd = setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`,
+                     "JULIA_RR_RECORD_ARGS" => "-n --nested=ignore",
+                     "_RR_TRACE_DIR" => temp_trace_dir)
+        success, out, err = readchomperrors(cmd)
+        # rr cannot read perf counters if running in containers, allow it to fail in this case
+        allowed_failure = occursin("Unable to open performance counter", err)
+        @testset let cmd=cmd, stdout=out, stderr=err
+            @test success || allowed_failure
+        end
     end
 end
 

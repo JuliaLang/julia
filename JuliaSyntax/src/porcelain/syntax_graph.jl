@@ -1622,6 +1622,8 @@ function preprocessed_green_children(st::SyntaxTree)
             inner_cs = preprocessed_green_children(cs[i])
             if length(inner_cs) === 1
                 cs[i] = inner_cs[1]
+            else
+                break
             end
         end
     end
