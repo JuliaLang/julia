@@ -655,22 +655,8 @@ static long getenv_int(const char *name, long def)
 
 class CodeAllocator {
 public:
-    CodeAllocator()
+    static std::optional<CodeAllocator> Create()
     {
-        block_size_bits = getenv_int("JULIA_CGMEMMGR_BLOCK_SIZE", DEFAULT_BLOCK_SIZE);
-        if (block_size_bits > (CALL_RANGE - 1))
-            jl_error("JULIA_CGMEMMGR_BLOCK_SIZE is too big for call relocations");
-        else if ((1u << block_size_bits) <= jl_page_size)
-            jl_error("JULIA_CGMEMMGR_BLOCK_SIZE is smaller than page size");
-
-        int pages = (1u << block_size_bits) / jl_page_size;
-        int rx_pages = pages * DEFAULT_TEXT_DATA_RATIO / (1 + DEFAULT_TEXT_DATA_RATIO);
-        rx_pages = std::min(rx_pages, pages - 1);
-        int rw_pages = pages - rx_pages;
-        assert(rw_pages > 0 && rx_pages > 0);
-        rx_block_size = rx_pages * jl_page_size;
-        rw_block_size = rw_pages * jl_page_size;
-
         using MapFn = std::unique_ptr<ROBlockMapper> (*)();
         std::pair<const char *, MapFn> mappers[] = {
             {"dual", &DualBlockMapper::Create},
@@ -679,15 +665,18 @@ public:
 #endif
         };
 
+        std::unique_ptr<ROBlockMapper> rx_mapper;
         char *mapper_type = getenv("JULIA_CGMEMMGR_MAP_TYPE");
         for (auto [name, mapfn] : mappers)
             if ((mapper_type && !strcmp(mapper_type, name)) || !mapper_type)
                 rx_mapper = mapfn();
-        if (!rx_mapper && mapper_type)
+        if (!rx_mapper && mapper_type && strcmp(mapper_type, "fallback"))
             jl_errorf("Unsupported JULIA_CGMEMMGR_MAP_TYPE: %s", mapper_type);
 
         if (!rx_mapper)
-            jl_errorf("Failed to initialize cgmemmgr\n");
+            return {};          // fallback
+
+        return CodeAllocator{std::move(rx_mapper)};
     }
 
     std::pair<Allocation, Allocation> alloc(size_t size_rx, size_t align_rx, size_t size_rw,
@@ -751,6 +740,24 @@ public:
     }
 
 protected:
+    CodeAllocator(std::unique_ptr<ROBlockMapper> rx_mapper)
+      : rx_mapper(std::move(rx_mapper))
+    {
+        block_size_bits = getenv_int("JULIA_CGMEMMGR_BLOCK_SIZE", DEFAULT_BLOCK_SIZE);
+        if (block_size_bits > (CALL_RANGE - 1))
+            jl_error("JULIA_CGMEMMGR_BLOCK_SIZE is too big for call relocations");
+        else if ((1u << block_size_bits) <= jl_page_size)
+            jl_error("JULIA_CGMEMMGR_BLOCK_SIZE is smaller than page size");
+
+        int pages = (1u << block_size_bits) / jl_page_size;
+        int rx_pages = pages * DEFAULT_TEXT_DATA_RATIO / (1 + DEFAULT_TEXT_DATA_RATIO);
+        rx_pages = std::min(rx_pages, pages - 1);
+        int rw_pages = pages - rx_pages;
+        assert(rw_pages > 0 && rx_pages > 0);
+        rx_block_size = rx_pages * jl_page_size;
+        rw_block_size = rw_pages * jl_page_size;
+    }
+
     void alloc_blocks()
     {
         uintptr_t block;
@@ -805,6 +812,8 @@ private:
 class JLJITLinkMemoryManager : public jitlink::JITLinkMemoryManager {
 public:
     class InFlightAlloc;
+
+    JLJITLinkMemoryManager(CodeAllocator Alloc) : Alloc(std::move(Alloc)) {}
 
     void allocate(const jitlink::JITLinkDylib *JD, jitlink::LinkGraph &G,
                   OnAllocatedFunction OnAllocated) override;
@@ -951,5 +960,10 @@ void JLJITLinkMemoryManager::allocate(const jitlink::JITLinkDylib *JD,
 
 std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager()
 {
-    return std::make_unique<JLJITLinkMemoryManager>();
+    auto Alloc = CodeAllocator::Create();
+    if (Alloc)
+        return std::make_unique<JLJITLinkMemoryManager>(std::move(*Alloc));
+    return cantFail(
+        orc::MapperJITLinkMemoryManager::CreateWithMapper<orc::InProcessMemoryMapper>(
+            16 * 1024 * 1024));
 }

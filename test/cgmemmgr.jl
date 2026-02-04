@@ -11,7 +11,7 @@ for i in 1:100
 end
 """
 
-map_types = Sys.islinux() ? ["dual", "selfmem"] : ["dual"]
+map_types = Sys.islinux() ? ["dual", "selfmem", "fallback"] : ["dual", "fallback"]
 block_sizes = [16, 22]
 
 for block_size in block_sizes
