@@ -2025,6 +2025,46 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 store->setOrdering(AtomicOrdering::Unordered);
                 store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
 
+                // Zero GC pointer fields if the operand bundle specifies offsets
+                // This ensures GC sees valid pointers even if initialization is delayed
+                if (auto bundle = CI->getOperandBundle("julia.gc_alloc_ptr_offsets")) {
+                    Value *derived = builder.CreateAddrSpaceCast(newI,
+                        PointerType::get(newI->getContext(), AddressSpace::Derived));
+                    Constant *null_ptr = ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
+                    for (Value *offset_val : bundle->Inputs) {
+                        if (auto *CI_offset = dyn_cast<ConstantInt>(offset_val)) {
+                            uint64_t offset = CI_offset->getZExtValue();
+                            Value *ptr = builder.CreateInBoundsGEP(
+                                Type::getInt8Ty(newI->getContext()), derived,
+                                ConstantInt::get(T_size, offset));
+                            builder.CreateAlignedStore(null_ptr, ptr, Align(sizeof(void*)));
+                        }
+                    }
+                }
+
+                // Zero a region if the operand bundle specifies it (for GenericMemory with boxed elements)
+                // Bundle contains: (offset, size) where offset is start byte and size is bytes to zero
+                if (auto bundle = CI->getOperandBundle("julia.gc_alloc_zeroinit")) {
+                    if (bundle->Inputs.size() == 2) {
+                        auto *offset_val = dyn_cast<ConstantInt>(bundle->Inputs[0]);
+                        auto *size_val = dyn_cast<ConstantInt>(bundle->Inputs[1]);
+                        if (offset_val && size_val) {
+                            uint64_t offset = offset_val->getZExtValue();
+                            uint64_t size = size_val->getZExtValue();
+                            if (size > 0) {
+                                Value *derived = builder.CreateAddrSpaceCast(newI,
+                                    PointerType::get(newI->getContext(), AddressSpace::Derived));
+                                Value *ptr = builder.CreateInBoundsGEP(
+                                    Type::getInt8Ty(newI->getContext()), derived,
+                                    ConstantInt::get(T_size, offset));
+                                builder.CreateMemSet(ptr,
+                                    ConstantInt::get(Type::getInt8Ty(newI->getContext()), 0),
+                                    size, Align(sizeof(void*)));
+                            }
+                        }
+                    }
+                }
+
                 // Replace uses of the call to `julia.gc_alloc_obj` with the call to
                 // `julia.gc_alloc_bytes`.
                 CI->replaceAllUsesWith(newI);
