@@ -162,7 +162,7 @@ end
 # Debug log file for dumping parsed code
 const _debug_log = Ref{Union{Nothing,IO}}(nothing)
 
-function core_parser_hook(code, filename::String, lineno::Int, offset::Int, options::Symbol)
+function core_parser_hook(code, filename::String, lineno::Int, offset::Int, options::Symbol; syntax_version = v"1.13")
     try
         # TODO: Check that we do all this input wrangling without copying the
         # code buffer
@@ -184,7 +184,7 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
             write(_debug_log[], code)
         end
 
-        stream = ParseStream(code, offset+1)
+        stream = ParseStream(code, offset+1; version = syntax_version)
         if options === :statement || options === :atom
             # To copy the flisp parser driver:
             # * Parsing atoms      consumes leading trivia

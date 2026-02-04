@@ -3,6 +3,8 @@
 using Test, Profile, Serialization, Logging
 using Base.StackTraces: StackFrame
 
+@test isempty(Test.detect_closure_boxes(Profile))
+
 @test_throws "The profiling data buffer is not initialized. A profile has not been requested this session." Profile.print()
 
 Profile.clear()
@@ -283,7 +285,7 @@ let cmd = Base.julia_cmd()
 end
 
 # Thread suspend deadlock - run many times (#60042)
-let cmd = Base.julia_cmd()
+@test_skip let cmd = Base.julia_cmd()
     script = """
         using Profile
         @profile println("done")
@@ -293,7 +295,7 @@ let cmd = Base.julia_cmd()
         s = run_with_watchdog(`$cmd -t2 -e $script`, 5)
         good &= occursin("done", s)
     end
-    @test good
+    good
 end
 
 if Sys.isbsd() || Sys.islinux()

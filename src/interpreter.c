@@ -539,12 +539,12 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             }
             s->locals[jl_source_nslots(s->src) + ip] = jl_box_ulong(jl_excstack_state(ct));
             if (jl_enternode_scope(stmt)) {
-                jl_value_t *scope = eval_value(jl_enternode_scope(stmt), s);
-                // GC preserve the scope, since it is not rooted in the `jl_handler_t *`
-                // and may be removed from jl_current_task by any nested block and then
-                // replaced later
-                JL_GC_PUSH1(&scope);
-                ct->scope = scope;
+                jl_value_t *old_scope = ct->scope; // Identical to __eh.scope
+                // GC preserve the old_scope, since it is not rooted in the `jl_handler_t *`,
+                // the newly entered scope is preserved through the current_task.
+                JL_GC_PUSH1(&old_scope);
+                ct->scope = eval_value(jl_enternode_scope(stmt), s);
+                jl_gc_wb_current_task(ct, ct->scope);
                 if (!jl_setjmp(__eh.eh_ctx, 0)) {
                     ct->eh = &__eh;
                     eval_body(stmts, s, next_ip, toplevel);

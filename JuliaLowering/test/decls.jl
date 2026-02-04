@@ -92,8 +92,16 @@ end
 
 # Tuple/destructuring assignments
 @test JuliaLowering.include_string(test_mod, "(a0, a1, a2) = [1,2,3]") == [1,2,3]
-
 @test JuliaLowering.include_string(test_mod, "const a,b,c = 1,2,3") === (1, 2, 3)
+
+@testset "Placeholder decls" begin
+    @test JuliaLowering.include_string(test_mod, "global _ = 1") === 1
+    @test JuliaLowering.include_string(test_mod, "global _::Int = 1") === 1
+    @test JuliaLowering.include_string(test_mod, "let; local _; _ = 1; end") === 1
+    @test JuliaLowering.include_string(test_mod, "let; local _::Int = 1; end") === 1
+    @test JuliaLowering.include_string(test_mod, "let; local (a0, _, a2) = [1,2,3]; end") == [1,2,3]
+    @test JuliaLowering.include_string(test_mod, "let; local (a0, _::Int, a2) = [1,2,3]; end") == [1,2,3]
+end
 
 test_mod_2 = Module()
 @testset "toplevel-preserving syntax" begin

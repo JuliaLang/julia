@@ -63,6 +63,10 @@ USE_SYSTEM_ZSTD:=0
 USE_SYSTEM_P7ZIP:=0
 USE_SYSTEM_LLD:=0
 
+# Link libjulia-internal with static libgcc and libstdc++
+USE_RT_STATIC_LIBGCC:=1
+USE_RT_STATIC_LIBSTDCXX:=1
+
 # Link to the LLVM shared library
 USE_LLVM_SHLIB := 1
 
@@ -94,8 +98,14 @@ WITH_NVTX := 0
 WITH_TRACY := 0
 WITH_TRACY_CALLSTACKS := 0
 
+# Enable Apple Instruments support
+WITH_APPLE_OSLOG := 0
+
 # Enable Timing Counts support
 WITH_TIMING_COUNTS := 0
+
+# Should --gc-sections/-dead_strip be used to remove unreferenced code?
+USE_LINKER_GC:=1
 
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
@@ -922,6 +932,15 @@ JCFLAGS += -DTRACY_CALLSTACK=32
 LIBTRACYCLIENT:=-lTracyClient
 endif
 
+ifeq ($(WITH_APPLE_OSLOG), 1)
+ifeq ($(OS), Darwin)
+JCXXFLAGS += -DUSE_APPLE_OSLOG
+JCFLAGS += -DUSE_APPLE_OSLOG
+else
+$(warning "WITH_APPLE_OSLOG=1 is only supported on Darwin, ignoring")
+endif
+endif
+
 ifeq ($(WITH_TIMING_COUNTS), 1)
 JCXXFLAGS += -DUSE_TIMING_COUNTS
 JCFLAGS += -DUSE_TIMING_COUNTS
@@ -930,6 +949,23 @@ endif
 ifeq ($(WITH_NVTX), 1)
 JCXXFLAGS += -DUSE_NVTX
 JCFLAGS += -DUSE_NVTX
+endif
+
+ifneq ($(findstring $(OS),WINNT FreeBSD OpenBSD),)
+  USE_LINKER_GC := 0
+  USE_RT_STATIC_LIBGCC := 0
+  USE_RT_STATIC_LIBSTDCXX := 0
+endif
+
+# Linker garbage collection
+ifeq ($(USE_LINKER_GC), 1)
+ifeq ($(OS), Darwin)
+  JLDFLAGS += -Wl,-dead_strip
+else
+  JLDFLAGS += -Wl,--gc-sections
+  JCFLAGS += -ffunction-sections -fdata-sections
+  JCXXFLAGS += -ffunction-sections -fdata-sections
+endif
 endif
 
 # ===========================================================================
@@ -1508,11 +1544,9 @@ RPATH_LIB := $(RPATH_ORIGIN)
 
 # --whole-archive
 ifeq ($(OS), Darwin)
-  WHOLE_ARCHIVE := -Xlinker -all_load
-  NO_WHOLE_ARCHIVE :=
+  whole_archive = -Xlinker -force_load $(1)
 else
-  WHOLE_ARCHIVE := -Wl,--whole-archive
-  NO_WHOLE_ARCHIVE := -Wl,--no-whole-archive
+  whole_archive = -Wl,--whole-archive $(1) -Wl,--no-whole-archive
 endif
 
 # Initialize these once, then add to them in OS-specific blocks
@@ -1544,6 +1578,7 @@ endif
 ifeq ($(OS), FreeBSD)
 JLDFLAGS += -Wl,-Bdynamic
 OSLIBS += -lelf -lkvm -lrt -lpthread -latomic
+HAVE_SSP := 1
 
 # Tweak order of libgcc_s in DT_NEEDED,
 # make it loaded first to
@@ -1558,8 +1593,7 @@ ifeq (,$(findstring aarch64,$(ARCH)))
 OSLIBS += -lgcc_s
 endif
 
-OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
-	$(NO_WHOLE_ARCHIVE)
+OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(BUILDROOT)/src/julia.expmap -Wl,--no-whole-archive
 endif
 
 ifeq ($(OS), OpenBSD)
@@ -1578,8 +1612,6 @@ endif
 ifeq ($(OS), Darwin)
 SHLIB_EXT := dylib
 OSLIBS += -framework CoreFoundation
-WHOLE_ARCHIVE := -Xlinker -all_load
-NO_WHOLE_ARCHIVE :=
 HAVE_SSP := 1
 JLIBLDFLAGS += -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
 endif
@@ -1587,7 +1619,7 @@ endif
 ifeq ($(OS), WINNT)
 HAVE_SSP := 1
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
-	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic -lole32
+	-Wl,--no-whole-archive -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic -lole32
 # N.B.: Unlike in the sysimage, we cannot -Wl,--disable-auto-import -Wl,--disable-runtime-pseudo-reloc here, because libstdc++/LLVM are not fully correct under
 # enforced visibility at this point.
 JLDFLAGS += -Wl,--stack,8388608
@@ -1690,6 +1722,12 @@ ifeq ($(USEGCC),1)
 # try to help clang find the c++ files for CC by guessing the value for --prefix
 # by dropping lib/gcc/<platform>/<version> from the install directory it reports
 CLANGSA_CXXFLAGS += --gcc-toolchain="$(abspath $(shell LANG=C $(CC) -print-search-dirs | grep '^install: ' | sed -e "s/^install: //")/../../../..)"
+ifneq ($(OS), Darwin)
+GCC_SYSROOT := $(shell $(CC) --print-sysroot 2>/dev/null)
+ifneq ($(GCC_SYSROOT),)
+CLANGSA_FLAGS += --sysroot=$(GCC_SYSROOT)
+endif
+endif
 endif
 
 

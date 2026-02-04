@@ -817,7 +817,7 @@ function compute_edges!(sv::InferenceState)
     for i in 1:length(sv.stmt_info)
         add_edges!(edges, sv.stmt_info[i])
     end
-    user_edges = sv.src.edges
+    user_edges = sv.src.edges::Union{Nothing, SimpleVector, Vector{Any}}
     if user_edges !== nothing && user_edges !== empty_edges
         append!(edges, user_edges)
     end
@@ -930,7 +930,7 @@ function type_annotate!(::AbstractInterpreter, sv::InferenceState)
             for slot in 1:nslots
                 vt = varstate[slot]
                 widened_type = widenslotwrapper(ignorelimited(vt.typ))
-                varstate[slot] = VarState(widened_type, vt.undef)
+                varstate[slot] = VarState(widened_type, vt.ssadef, vt.undef)
             end
         end
     end
@@ -1104,6 +1104,39 @@ function codeinst_as_edge(interp::AbstractInterpreter, sv::InferenceState, @nosp
     return ci
 end
 
+function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, result::InferenceResult,
+                                    method::Method, edge_ci::Union{Nothing,CodeInstance},
+                                    edgecycle::Bool, edgelimited::Bool)
+    mresult = Future{MethodCallResult}()
+    push!(caller.tasks, function get_infer_result(interp, caller)
+        update_valid_age!(caller, get_inference_world(interp), frame.valid_worlds)
+        isinferred = is_inferred(frame)
+        effects = nothing
+        edge = nothing
+        call_result = nothing
+        if isinferred
+            edge = result.ci
+            if edge_ci isa CodeInstance && codeinst_edges_sub(edge_ci, edge.min_world, edge.max_world, edge.edges)
+                edge = edge_ci # override the edge for tracking invalidation
+            end
+            result.ci_as_edge = edge # override the edge for tracking purposes
+            effects = result.ipo_effects # effects are adjusted already within `finish` for ipo_effects
+            call_result = result
+        else
+            effects = adjust_effects(effects_for_cycle(frame.ipo_effects), method)
+            add_cycle_backedge!(caller, frame)
+        end
+        bestguess = frame.bestguess
+        exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
+        # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
+        # note that this result is cached globally exclusively, so we can use this local result destructively
+        mresult[] = MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects,
+            edge, edgecycle, edgelimited, call_result)
+        return true
+    end)
+    return mresult
+end
+
 # compute (and cache) an inferred AST and return the current best estimate of the result type
 function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, caller::AbsIntState, edgecycle::Bool, edgelimited::Bool)
     mi = specialize_method(method, atype, sparams)
@@ -1204,35 +1237,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         assign_parentchild!(frame, caller)
         # the actual inference task for this edge is going to be scheduled within `typeinf_local` via the callstack queue
         # while splitting off the rest of the work for this caller into a separate workq thunk
-        let mresult = Future{MethodCallResult}()
-            push!(caller.tasks, function get_infer_result(interp, caller)
-                update_valid_age!(caller, get_inference_world(interp), frame.valid_worlds)
-                local isinferred = is_inferred(frame)
-                local effects
-                local edge = nothing
-                local call_result = nothing
-                if isinferred
-                    edge = result.ci
-                    if edge_ci isa CodeInstance && codeinst_edges_sub(edge_ci, edge.min_world, edge.max_world, edge.edges)
-                        edge = edge_ci # override the edge for tracking invalidation
-                    end
-                    result.ci_as_edge = edge # override the edge for tracking purposes
-                    effects = result.ipo_effects # effects are adjusted already within `finish` for ipo_effects
-                    call_result = result
-                else
-                    effects = adjust_effects(effects_for_cycle(frame.ipo_effects), method)
-                    add_cycle_backedge!(caller, frame)
-                end
-                local bestguess = frame.bestguess
-                local exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
-                # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
-                # note that this result is cached globally exclusively, so we can use this local result destructively
-                mresult[] = MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects,
-                    edge, edgecycle, edgelimited, call_result)
-                return true
-            end)
-            return mresult
-        end
+        return _schedule_edge_infer_task!(caller, frame, result, method, edge_ci, edgecycle, edgelimited)
     elseif frame === true
         # unresolvable cycle
         add_remark!(interp, caller, "[typeinf_edge] Unresolvable cycle")
@@ -1642,6 +1647,12 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
                 push!(argtypes, sp_type_rewrap(at[i], linfo, #= isreturn =# false))
             end
             atype = argtypes_to_type(argtypes)
+        elseif isexpr(stmt, :new)
+            # When creating a struct of Function type, check to see if we should
+            # proactively compile the lambda
+            t, _, _, _ = instanceof_tfunc(argextype(stmt.args[1], ci, sptypes))
+            t <: Function || continue
+            atype = Tuple{t, Vararg}
         else
             # TODO: handle other StmtInfo like OpaqueClosure?
             continue
@@ -1829,7 +1840,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
 end
 
 const _verify_trim_world_age = RefValue{UInt}(typemax(UInt))
-verify_typeinf_trim(codeinfos::Vector{Any}, onlywarn::Bool) = Core._call_in_world(_verify_trim_world_age[], verify_typeinf_trim, stdout, codeinfos, onlywarn)
+verify_typeinf_trim(codeinfos::Vector{Any}, onlywarn::Bool) = Core._call_in_world(_verify_trim_world_age[], verify_typeinf_trim, Base.stderr, codeinfos, onlywarn)
 
 function return_type(@nospecialize(f), t::DataType) # this method has a special tfunc
     world = tls_world_age()

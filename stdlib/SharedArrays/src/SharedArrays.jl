@@ -113,20 +113,21 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
     local shmmem_create_pid
     try
         # On OSX, the shm_seg_name length must be <= 31 characters (including the terminating NULL character)
-        shm_seg_name = "/jl$(lpad(string(getpid() % 10^6), 6, "0"))$(randstring(20))"
+        seg_name = "/jl$(lpad(string(getpid() % 10^6), 6, "0"))$(randstring(20))"
+        shm_seg_name = seg_name
         if onlocalhost
             shmmem_create_pid = myid()
-            s = shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR)
+            s = shm_mmap_array(T, dims, seg_name, JL_O_CREAT | JL_O_RDWR)
         else
             # The shared array is created on a remote machine
             shmmem_create_pid = pids[1]
             remotecall_fetch(pids[1]) do
-                shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR)
+                shm_mmap_array(T, dims, seg_name, JL_O_CREAT | JL_O_RDWR)
                 nothing
             end
         end
 
-        func_mapshmem = () -> shm_mmap_array(T, dims, shm_seg_name, JL_O_RDWR)
+        func_mapshmem = () -> shm_mmap_array(T, dims, seg_name, JL_O_RDWR)
 
         refs = Vector{Future}(undef, length(pids))
         for (i, p) in enumerate(pids)
@@ -141,13 +142,13 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
         # All good, immediately unlink the segment.
         if (prod(dims) > 0) && (sizeof(T) > 0)
             if onlocalhost
-                rc = shm_unlink(shm_seg_name)
+                rc = shm_unlink(seg_name)
             else
-                rc = remotecall_fetch(shm_unlink, shmmem_create_pid, shm_seg_name)
+                rc = remotecall_fetch(shm_unlink, shmmem_create_pid, seg_name)
             end
-            systemerror("Error unlinking shmem segment " * shm_seg_name, rc != 0)
+            systemerror("Error unlinking shmem segment " * seg_name, rc != 0)
         end
-        S = SharedArray{T,N}(dims, pids, refs, shm_seg_name, s)
+        S = SharedArray{T,N}(dims, pids, refs, seg_name, s)
         initialize_shared_array(S, onlocalhost, init, pids)
         shm_seg_name = ""
 
@@ -185,23 +186,21 @@ function SharedArray{T,N}(filename::AbstractString, dims::NTuple{N,Int}, offset:
 
     # If not supplied, determine the appropriate mode
     have_file = onlocalhost ? isfile(filename) : remotecall_fetch(isfile, pids[1], filename)
-    if mode === nothing
-        mode = have_file ? "r+" : "w+"
-    end
-    workermode = mode == "w+" ? "r+" : mode  # workers don't truncate!
+    mode_val = mode === nothing ? (have_file ? "r+" : "w+") : mode
+    workermode = mode_val == "w+" ? "r+" : mode_val  # workers don't truncate!
 
     # Ensure the file will be readable
-    if !(mode in ("r", "r+", "w+", "a+"))
-        throw(ArgumentError("mode must be readable, but $mode is not"))
+    if !(mode_val in ("r", "r+", "w+", "a+"))
+        throw(ArgumentError("mode must be readable, but $mode_val is not"))
     end
     if init !== false
         typeassert(init, Function)
-        if !(mode in ("r+", "w+", "a+"))
-            throw(ArgumentError("cannot initialize unwritable array (mode = $mode)"))
+        if !(mode_val in ("r+", "w+", "a+"))
+            throw(ArgumentError("cannot initialize unwritable array (mode = $mode_val)"))
         end
     end
-    if mode == "r" && !isfile(filename)
-        throw(ArgumentError("file $filename does not exist, but mode $mode cannot create it"))
+    if mode_val == "r" && !isfile(filename)
+        throw(ArgumentError("file $filename does not exist, but mode $mode_val cannot create it"))
     end
 
     # Create the file if it doesn't exist, map it if it does
@@ -211,13 +210,13 @@ function SharedArray{T,N}(filename::AbstractString, dims::NTuple{N,Int}, offset:
     end
     s = Array{T}(undef, ntuple(d->0,N))
     if onlocalhost
-        s = func_mmap(mode)
+        s = func_mmap(mode_val)
         refs[1] = remotecall(pids[1]) do
             func_mmap(workermode)
         end
     else
         refs[1] = remotecall_wait(pids[1]) do
-            func_mmap(mode)
+            func_mmap(mode_val)
         end
     end
 

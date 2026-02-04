@@ -99,6 +99,7 @@ public
     @constprop,
     @locals,
     @propagate_inbounds,
+    @__doc__,
 
 # External processes
     shell_escape,
@@ -110,6 +111,11 @@ public
 
 # Strings
     escape_raw_string,
+
+# Chars
+    ismalformed,
+    isoverlong,
+    show_invalid,
 
 # IO
     # types
@@ -126,6 +132,9 @@ public
 
 # filesystem operations
     rename,
+
+# promotion
+    promote_typejoin,
 
 # misc
     notnothing,

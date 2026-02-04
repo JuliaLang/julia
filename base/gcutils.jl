@@ -169,7 +169,7 @@ end
 """
     GC.in_finalizer()::Bool
 
-Returns `true` if the current task is running a finalizer, returns `false`
+Return `true` if the current task is running a finalizer, return `false`
 otherwise. Will also return `false` within a finalizer which was inlined by the
 compiler's eager finalization optimization, or if `finalize` is called on the
 finalizer directly.

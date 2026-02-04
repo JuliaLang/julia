@@ -672,7 +672,7 @@ restart_switch:
             else if (!strcmp(optarg,"existing"))
                 jl_options.use_pkgimages = JL_OPTIONS_USE_PKGIMAGES_EXISTING;
             else
-                jl_errorf("julia: invalid argument to --pkgimages={yes|no} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --pkgimages={yes|no|existing} (%s)", optarg);
             break;
         case 'C': // cpu-target
             jl_options.cpu_target = strdup(optarg);
@@ -725,9 +725,11 @@ restart_switch:
                 }
                 jl_options.nthreads = nthreads + nthreadsi;
             }
+            assert(jl_options.nthreadpools == 1 || jl_options.nthreadpools == 2);
             int16_t *ntpp = (int16_t *)malloc_s(jl_options.nthreadpools * sizeof(int16_t));
             ntpp[0] = (int16_t)nthreads;
-            ntpp[1] = (int16_t)nthreadsi;
+            if (jl_options.nthreadpools == 2)
+                ntpp[1] = (int16_t)nthreadsi;
             jl_options.nthreads_per_pool = ntpp;
             break;
         }

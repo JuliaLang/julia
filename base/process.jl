@@ -140,15 +140,14 @@ end
         if err == 0
             pp = Process(cmd, handle, syncd)
             associate_julia_struct(handle, pp)
+            iolock_end()
+            return pp
         else
             ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), handle) # will call free on handle eventually
+            iolock_end()
+            throw(_UVError("could not spawn " * repr(cmd), err))
         end
-        iolock_end()
     end
-    if err != 0
-        throw(_UVError("could not spawn " * repr(cmd), err))
-    end
-    return pp
 end
 
 _spawn(cmds::AbstractCmd) = _spawn(cmds, SpawnIOs())

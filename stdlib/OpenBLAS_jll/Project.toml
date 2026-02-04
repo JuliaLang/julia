@@ -1,6 +1,6 @@
 name = "OpenBLAS_jll"
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.29+0"
+version = "0.3.30+0"
 
 [deps]
 Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"

@@ -5,6 +5,8 @@ CODEOWNERS @JuliaLang/github-actions
 /.github/workflows/rerun_failed.yml @DilumAluthge
 /.github/workflows/statuses.yml @DilumAluthge
 /.github/workflows/PrAssignee.yml @LilithHafner @DilumAluthge
+/.github/workflows/backport-label-audit.yml @IanButterworth @DilumAluthge
+/.github/workflows/backport-label-cleanup.yml @IanButterworth @DilumAluthge
 /base/special/ @oscardssmith
 /base/sort.jl @LilithHafner
 /test/sorting.jl @LilithHafner
@@ -12,11 +14,4 @@ CODEOWNERS @JuliaLang/github-actions
 /base/binaryplatforms.jl @giordano
 /src/julia_gcext.h @fingolfin
 /test/gcext/gcext.c @fingolfin
-/src/gc-common.* @d-netto
-/src/gc-debug.c @d-netto
-/src/gc-interface.h @d-netto
-/src/gc-page-profiler.* @d-netto
-/src/gc-pages.c @d-netto
-/src/gc-stock.* @d-netto
-/src/gc-tls-common.h @d-netto
-/src/gc-tls-stock.h @d-netto
+/src/gc-* @udesou @qinsoon @d-netto
