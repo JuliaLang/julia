@@ -403,10 +403,10 @@ static void write_self_mem(void *dest, void *ptr, size_t size) JL_NOTSAFEPOINT
 
 struct Allocation {
     // Address to write to (the one returned by the allocation function)
-    char *wr_addr;
+    char *wr_addr{nullptr};
     // Runtime address
-    char *rt_addr;
-    size_t sz;
+    char *rt_addr{nullptr};
+    size_t sz{0};
 };
 
 struct Block {
@@ -422,7 +422,7 @@ struct Block {
     {
         assert(can_alloc(size, align));
         if (size == 0)
-            return {nullptr, nullptr, 0};
+            return {};
         size_t aligned_avail = avail & (-align);
         char *p = ptr + total - aligned_avail;
         avail = aligned_avail - size;
@@ -452,7 +452,7 @@ struct Block {
 };
 
 struct SplitPtrBlock : public Block {
-    char *wr_ptr;
+    char *wr_ptr{nullptr};
     int in_flight{0};
 };
 
@@ -532,6 +532,8 @@ fail:
 
     Allocation alloc(SplitPtrBlock &block, size_t size, size_t align) override
     {
+        if (size == 0)
+            return {};
         Allocation a = block.alloc(size, align);
         a.wr_addr = (a.rt_addr - block.ptr) + block.wr_ptr;
         ++block.in_flight;
