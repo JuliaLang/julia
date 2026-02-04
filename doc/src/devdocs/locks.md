@@ -188,7 +188,16 @@ g()                   # recompile g
 ```
 
 After compiling the two versions of `g()`, the global cache looks like this:
-![Global cache state after invalidation](./img/invalidation-example.png)
+```@raw html
+<img src="img/invalidation-example.svg" alt="Global cache state after invalidation"/>
+```
+```@raw latex
+\begin{figure}
+\centering
+\includegraphics[max width=\linewidth]{devdocs/img/invalidation-example.pdf}
+\caption{Global cache state after invalidation}
+\end{figure}
+```
 
 The maximum world age, `jl_world_counter`, is protected by the
 `world_counter_lock`.  Julia uses a form of optimistic concurrency control to
@@ -219,7 +228,16 @@ Type inference proceeds like so:
     on the backedges for invalidation.
 - Release `world_counter_lock`.
 
-![Two threads doing type inference while another adds a method](./img/typeinf-promotion.png)
+```@raw html
+<img src="img/typeinf-promotion.svg" alt="Two threads doing type inference while another adds a method"/>
+```
+```@raw latex
+\begin{figure}
+\centering
+\includegraphics[max width=\linewidth]{devdocs/img/typeinf-promotion.pdf}
+\caption{Two threads doing type inference while another adds a method}
+\end{figure}
+```
 
 In the above diagram, threads 1 and 2 are doing type inference (the dotted
 line), while thread 3 is activating a new method.  The solid boxes represent
