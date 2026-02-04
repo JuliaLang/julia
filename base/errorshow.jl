@@ -404,7 +404,7 @@ function showerror(io::IO, ex::MethodError)
 end
 
 Experimental.register_error_hint(MethodError) do io, exc, argtypes, kwargs
-    if exc.f == convert && Core._hasmethod(Tuple{argtypes...}) && length(argtypes) ≥ 1 && (argtypes[1] isa Type)
+    if exc.f == convert && Core._hasmethod(Tuple{argtypes...}) && length(argtypes) ≥ 1 && isType(argtypes[1])
         args = join(("::$(T)" for T ∈ argtypes[2:end]), ", ")
         fstr = argtypes[1].parameters[1]
         println(io, "\nHint: Did you mean to call $(fstr)($args) ?")
