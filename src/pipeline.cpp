@@ -756,7 +756,7 @@ void parseLLVMOptions(const char *options, PrintOptions &out) JL_NOTSAFEPOINT {
     // option should include trailing "=" (e.g., "-print-after=")
     // Returns the value if matched, empty StringRef if no match
     // Supports both "-option=value" and "-option value" syntax
-    auto getNextValue = [&](size_t &idx, StringRef Arg, StringRef option) -> StringRef {
+    auto getNextValue = [&](size_t &idx, StringRef Arg, StringRef option) JL_NOTSAFEPOINT -> StringRef {
         StringRef optionName = option.drop_back(); // remove trailing "="
         // Check for "-option=value" syntax
         if (Arg.starts_with(option)) {
