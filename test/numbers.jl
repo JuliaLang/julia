@@ -3327,3 +3327,34 @@ end
         @test v === typemin(v) === typemax(v)
     end
 end
+
+@testset "rem rounded to nearest w/wo ties (#60916)" begin
+    Random.seed!(123)
+    for T in (Float16, Float32, Float64, BigFloat)
+        p = precision(T) + 1
+        for e1 in 0:p, e2 in e1-p:p+e1, s1 in (+1, -1), s2 in (+1, -1)
+            x = ldexp(s1*rand(T), e1)
+            y = ldexp(s2*rand(T), e2)
+            rd = rem(x, y, RoundDown)
+            ru = rem(x, y, RoundUp)
+            if abs(rd) != abs(ru)
+                # no tie
+                nearest = abs(rd) < abs(ru) ? rd : ru
+                @test isequal(rem(x, y, RoundNearestTiesUp), nearest)
+                @test isequal(rem(x, y, RoundNearestTiesAway), nearest)
+                @test isequal(rem(x, y, RoundNearest), nearest)
+                # try to find close x,y pair such that there is a tie
+                y = Base.truncbits(y, trunc(Int, p/4))
+                q = round(x/y, RoundFromZero)
+                x = q*y + y/2
+                rd = rem(x, y, RoundDown)
+                ru = rem(x, y, RoundUp)
+            end
+            if abs(rd) == abs(ru)
+                # tie
+                @test rem(x, y, RoundNearestTiesUp) == rem(x, y, RoundUp)
+                @test rem(x, y, RoundNearestTiesAway) == rem(x, y, RoundFromZero)
+            end
+        end
+    end
+end
