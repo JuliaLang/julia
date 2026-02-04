@@ -919,12 +919,15 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     jl_svec_t *tt = ((jl_datatype_t *)at)->parameters;
     size_t nargt = jl_svec_len(tt);
     SmallVector<llvm::Type*, 0> argtypes;
-    SmallVector<Value *, 8> argvals(nargt);
+    SmallVector<jl_value_t*, 0> argttis;
+    SmallVector<Value *, 8> argvals;
+    argtypes.reserve(nargt);
+    argttis.reserve(nargt);
+    argvals.reserve(nargt);
     for (size_t i = 0; i < nargt; ++i) {
         jl_value_t *tti = jl_svecref(tt,i);
         bool toboxed;
         Type *t = julia_type_to_llvm(ctx, tti, &toboxed);
-        argtypes.push_back(t);
         if (4 + i > nargs) {
             emit_error(ctx, "Missing arguments to llvmcall!");
             JL_GC_POP();
@@ -934,12 +937,12 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         jl_cgval_t arg = emit_expr(ctx, argi);
 
         Value *v = julia_to_native(ctx, t, toboxed, tti, NULL, arg, false, i);
-        if (v == nullptr) {
-            CreateTrap(ctx.builder);
-            v = UndefValue::get(t);
-        }
+        if (v == nullptr)
+            continue;
+        argtypes.push_back(t);
+        argttis.push_back(tti);
         bool issigned = jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type);
-        argvals[i] = llvm_type_rewrite(ctx, v, t, issigned);
+        argvals.push_back(llvm_type_rewrite(ctx, v, t, issigned));
     }
 
     // Determine return type
@@ -995,10 +998,10 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         if (!Mod) {
             std::string compat_arguments;
             raw_string_ostream compat_argstream(compat_arguments);
-            for (size_t i = 0; i < nargt; ++i) {
+            for (size_t i = 0; i < argttis.size(); ++i) {
                 if (i > 0)
                     compat_argstream << ",";
-                jl_value_t *tti = jl_svecref(tt, i);
+                jl_value_t *tti = argttis[i];
                 Type *t;
                 if (jl_is_cpointer_type(tti))
                     t = ctx.types().T_size;
@@ -1088,8 +1091,8 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
 
     // backwards compatibility: support for IR with integer pointers
     bool mismatched_pointers = false;
-    for (size_t i = 0; i < nargt; ++i) {
-        jl_value_t *tti = jl_svecref(tt, i);
+    for (size_t i = 0; i < argttis.size(); ++i) {
+        jl_value_t *tti = argttis[i];
         if (jl_is_cpointer_type(tti) &&
             !f->getFunctionType()->getParamType(i)->isPointerTy()) {
             mismatched_pointers = true;
@@ -1132,8 +1135,8 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         BasicBlock *entry = BasicBlock::Create(ctx.builder.getContext(), "", wrapper);
         IRBuilder<> irbuilder(entry);
         SmallVector<Value *, 0> wrapper_args;
-        for (size_t i = 0; i < nargt; ++i) {
-            jl_value_t *tti = jl_svecref(tt, i);
+        for (size_t i = 0; i < argttis.size(); ++i) {
+            jl_value_t *tti = argttis[i];
             Value *v = wrapper->getArg(i);
             if (jl_is_cpointer_type(tti))
                 v = irbuilder.CreatePtrToInt(v, ctx.types().T_size);
