@@ -40,14 +40,18 @@ struct ScopeInfo
     locals_capt::Union{Nothing, Dict{IdTag,Bool}}
 end
 
-function ScopeInfo(ctx, parent_id, node_id, is_lambda, is_permeable)
+function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
     id = length(ctx.scopes) + 1
-    lambda_id = is_lambda ? id : ctx.scopes[parent_id].lambda_id
+    lambda_id = kind(ex) === K"lambda" ? id : ctx.scopes[parent_id].lambda_id
+    is_toplevel_thunk = kind(ex) === K"lambda" && ex.is_toplevel_thunk
+    is_permeable = is_toplevel_thunk ||
+        (kind(ex) === K"scope_block" && ex.scope_type === :neutral &&
+        parent_id !== 0 && ctx.scopes[parent_id].is_permeable)
 
     s = ScopeInfo(
-        id, parent_id, lambda_id, node_id, is_permeable,
+        id, parent_id, lambda_id, ex._id, is_permeable,
         Dict{IdTag, NodeId}(), Dict{NameKey, NodeId}(), Dict{NameKey,IdTag}(),
-        is_lambda ? Dict{IdTag,Bool}() : nothing)
+        kind(ex) === K"lambda" ? Dict{IdTag,Bool}() : nothing)
     push!(ctx.scopes, s)
     return s
 end
@@ -242,9 +246,7 @@ function enter_scope!(ctx, ex)
     is_toplevel_thunk = kind(ex) === K"lambda" && ex.is_toplevel_thunk
     parent_id = (is_toplevel_thunk || isempty(ctx.scope_stack)) ?
         0 : ctx.scopes[ctx.scope_stack[end]].id
-    is_permeable = is_toplevel_thunk ||
-        kind(ex) === K"scope_block" && ex.scope_type === :neutral
-    scope = ScopeInfo(ctx, parent_id, ex._id, kind(ex) === K"lambda", is_permeable)
+    scope = ScopeInfo(ctx, parent_id, ex)
     lambda_scope = ctx.scopes[scope.lambda_id]
     push!(ctx.scope_stack, scope.id)
 
