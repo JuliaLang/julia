@@ -482,7 +482,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x)
     if (!x.inline_roots.empty()) {
         AllocaInst *combined = emit_static_alloca(ctx, to, Align(alignment));
         setName(ctx.emission_context, combined, [&]() {
-            std::string type_str = jl_is_datatype(jt) ? jl_symbol_name(((jl_datatype_t*)jt)->name->name) : "<unknown type>";
+            std::string type_str = jl_is_datatype(x.typ) ? jl_symbol_name(((jl_datatype_t*)x.typ)->name->name) : "<unknown type>";
             return "unbox::" + type_str;
         });
         auto combined_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
