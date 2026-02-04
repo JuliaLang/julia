@@ -97,4 +97,34 @@ end
         @test occursin("julia.gc_alloc_ptr_offsets", raw_ir)
         @test occursin("i64 0", raw_ir)  # pointer at offset 0
     end
+
+    # Test 6: Variable-length Memory{Any} uses zeroinit_indirect bundle
+    @testset "Variable-length Memory with boxed elements" begin
+        function make_memory_any_dynamic(n::Int)
+            Memory{Any}(undef, n)
+        end
+
+        raw_ir = get_raw_llvm(make_memory_any_dynamic, Tuple{Int})
+        # Variable-length uses jl_alloc_genericmemory_unchecked with zeroinit_indirect bundle
+        @test occursin("jl_alloc_genericmemory_unchecked", raw_ir)
+        @test occursin("julia.gc_alloc_zeroinit_indirect", raw_ir)
+        # Data pointer offset is 8 (sizeof(size_t) for length field)
+        @test occursin("i64 8", raw_ir)
+
+        # Optimized IR should have memset (emitted by late-gc-lowering)
+        opt_ir = get_opt_llvm(make_memory_any_dynamic, Tuple{Int})
+        @test occursin("llvm.memset", opt_ir)
+    end
+
+    # Test 7: Variable-length Memory{Int64} should NOT have zeroinit bundle
+    @testset "Variable-length Memory with non-boxed elements" begin
+        function make_memory_int_dynamic(n::Int)
+            Memory{Int64}(undef, n)
+        end
+
+        raw_ir = get_raw_llvm(make_memory_int_dynamic, Tuple{Int})
+        @test occursin("jl_alloc_genericmemory_unchecked", raw_ir)
+        # Int64 doesn't need zeroing, so no zeroinit bundle
+        @test !occursin("julia.gc_alloc_zeroinit_indirect", raw_ir)
+    end
 end

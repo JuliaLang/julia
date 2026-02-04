@@ -2044,23 +2044,25 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
 
                 // Zero a region if the operand bundle specifies it (for GenericMemory with boxed elements)
                 // Bundle contains: (offset, size) where offset is start byte and size is bytes to zero
+                // Both offset and size can be constants or dynamic SSA values
                 if (auto bundle = CI->getOperandBundle("julia.gc_alloc_zeroinit")) {
                     if (bundle->Inputs.size() == 2) {
-                        auto *offset_val = dyn_cast<ConstantInt>(bundle->Inputs[0]);
-                        auto *size_val = dyn_cast<ConstantInt>(bundle->Inputs[1]);
-                        if (offset_val && size_val) {
-                            uint64_t offset = offset_val->getZExtValue();
-                            uint64_t size = size_val->getZExtValue();
-                            if (size > 0) {
-                                Value *derived = builder.CreateAddrSpaceCast(newI,
-                                    PointerType::get(newI->getContext(), AddressSpace::Derived));
-                                Value *ptr = builder.CreateInBoundsGEP(
-                                    Type::getInt8Ty(newI->getContext()), derived,
-                                    ConstantInt::get(T_size, offset));
-                                builder.CreateMemSet(ptr,
-                                    ConstantInt::get(Type::getInt8Ty(newI->getContext()), 0),
-                                    size, Align(sizeof(void*)));
-                            }
+                        Value *offset_val = bundle->Inputs[0];
+                        Value *size_val = bundle->Inputs[1];
+                        // Skip if size is known to be zero at compile time
+                        bool skip = false;
+                        if (auto *const_size = dyn_cast<ConstantInt>(size_val)) {
+                            if (const_size->isZero())
+                                skip = true;
+                        }
+                        if (!skip) {
+                            Value *derived = builder.CreateAddrSpaceCast(newI,
+                                PointerType::get(newI->getContext(), AddressSpace::Derived));
+                            Value *ptr = builder.CreateInBoundsGEP(
+                                Type::getInt8Ty(newI->getContext()), derived, offset_val);
+                            builder.CreateMemSet(ptr,
+                                ConstantInt::get(Type::getInt8Ty(newI->getContext()), 0),
+                                size_val, Align(sizeof(void*)));
                         }
                     }
                 }
@@ -2143,6 +2145,47 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 CI->replaceAllUsesWith(NewCall);
                 UpdatePtrNumbering(CI, NewCall, S);
             } else {
+                // Assert that ptr_offsets and zeroinit bundles are only used with gc_alloc_obj
+                assert(!CI->getOperandBundle("julia.gc_alloc_ptr_offsets") &&
+                       "julia.gc_alloc_ptr_offsets bundle should only be on julia.gc_alloc_obj calls");
+                assert(!CI->getOperandBundle("julia.gc_alloc_zeroinit") &&
+                       "julia.gc_alloc_zeroinit bundle should only be on julia.gc_alloc_obj calls");
+
+                // Handle zeroinit_indirect bundle for jl_alloc_genericmemory_unchecked
+                // This bundle specifies: (ptr_field_offset, size) where:
+                // - ptr_field_offset: offset in the allocation where the data pointer is stored
+                // - size: number of bytes to zero at the location pointed to by that pointer
+                if (auto bundle = CI->getOperandBundle("julia.gc_alloc_zeroinit_indirect")) {
+                    assert(callee && callee->getName() == "jl_alloc_genericmemory_unchecked" &&
+                           "julia.gc_alloc_zeroinit_indirect bundle should only be on jl_alloc_genericmemory_unchecked calls");
+                    if (bundle->Inputs.size() == 2) {
+                        Value *ptr_field_offset = bundle->Inputs[0];
+                        Value *size_val = bundle->Inputs[1];
+                        // Skip if size is known to be zero at compile time
+                        bool skip = false;
+                        if (auto *const_size = dyn_cast<ConstantInt>(size_val)) {
+                            if (const_size->isZero())
+                                skip = true;
+                        }
+                        if (!skip) {
+                            IRBuilder<> builder(CI->getNextNode());
+                            builder.SetCurrentDebugLocation(CI->getDebugLoc());
+                            // Load the data pointer from the specified offset in the allocation
+                            Value *derived = builder.CreateAddrSpaceCast(CI,
+                                PointerType::get(CI->getContext(), AddressSpace::Derived));
+                            Value *ptr_field = builder.CreateInBoundsGEP(
+                                Type::getInt8Ty(CI->getContext()), derived, ptr_field_offset);
+                            Value *data_ptr = builder.CreateAlignedLoad(
+                                PointerType::get(CI->getContext(), 0), ptr_field, Align(sizeof(void*)));
+                            // Zero the data region
+                            builder.CreateMemSet(data_ptr,
+                                ConstantInt::get(Type::getInt8Ty(CI->getContext()), 0),
+                                size_val, Align(sizeof(void*)));
+                            ChangesMade = true;
+                        }
+                    }
+                }
+
                 SmallVector<OperandBundleDef,2> bundles;
                 CI->getOperandBundlesAsDefs(bundles);
                 bool gc_transition = false;

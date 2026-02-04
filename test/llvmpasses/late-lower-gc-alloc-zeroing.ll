@@ -6,6 +6,7 @@
 
 declare {}*** @julia.get_pgcstack()
 declare noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}**, i64, {} addrspace(10)*)
+declare noalias nonnull {} addrspace(10)* @jl_alloc_genericmemory_unchecked({}*, i64, {} addrspace(10)*)
 declare i64 @external_call({} addrspace(10)*)
 
 ; Test that julia.gc_alloc_ptr_offsets bundle causes null stores to be emitted
@@ -104,5 +105,42 @@ define {} addrspace(10)* @gc_alloc_no_bundles({}** %current_task) {
 ; CHECK-NOT: call void @llvm.memset
 ; CHECK: ret ptr addrspace(10) %v
     %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj({}** %current_task, i64 24, {} addrspace(10)* @tag)
+    ret {} addrspace(10)* %v
+}
+
+; Test julia.gc_alloc_zeroinit_indirect bundle on jl_alloc_genericmemory_unchecked
+; This loads the data pointer from offset 8 and zeros via that pointer
+define {} addrspace(10)* @gc_alloc_zeroinit_indirect({}* %ptls, i64 %nbytes) {
+; CHECK-LABEL: @gc_alloc_zeroinit_indirect
+; CHECK: %v = call noalias nonnull ptr addrspace(10) @jl_alloc_genericmemory_unchecked
+; CHECK: [[DERIVED:%.*]] = addrspacecast ptr addrspace(10) %v to ptr addrspace(11)
+; CHECK: [[PTR_FIELD:%.*]] = getelementptr inbounds i8, ptr addrspace(11) [[DERIVED]], i64 8
+; CHECK: [[DATA_PTR:%.*]] = load ptr, ptr addrspace(11) [[PTR_FIELD]], align 8
+; CHECK: call void @llvm.memset.p0.i64(ptr align 8 [[DATA_PTR]], i8 0, i64 %nbytes, i1 false)
+; CHECK: ret ptr addrspace(10) %v
+    %v = call noalias {} addrspace(10)* @jl_alloc_genericmemory_unchecked({}* %ptls, i64 %nbytes, {} addrspace(10)* @tag) [ "julia.gc_alloc_zeroinit_indirect"(i64 8, i64 %nbytes) ]
+    ret {} addrspace(10)* %v
+}
+
+; Test zeroinit_indirect with constant size
+define {} addrspace(10)* @gc_alloc_zeroinit_indirect_const({}* %ptls) {
+; CHECK-LABEL: @gc_alloc_zeroinit_indirect_const
+; CHECK: %v = call noalias nonnull ptr addrspace(10) @jl_alloc_genericmemory_unchecked
+; CHECK: [[DERIVED:%.*]] = addrspacecast ptr addrspace(10) %v to ptr addrspace(11)
+; CHECK: [[PTR_FIELD:%.*]] = getelementptr inbounds i8, ptr addrspace(11) [[DERIVED]], i64 8
+; CHECK: [[DATA_PTR:%.*]] = load ptr, ptr addrspace(11) [[PTR_FIELD]], align 8
+; CHECK: call void @llvm.memset.p0.i64(ptr align 8 [[DATA_PTR]], i8 0, i64 32, i1 false)
+; CHECK: ret ptr addrspace(10) %v
+    %v = call noalias {} addrspace(10)* @jl_alloc_genericmemory_unchecked({}* %ptls, i64 32, {} addrspace(10)* @tag) [ "julia.gc_alloc_zeroinit_indirect"(i64 8, i64 32) ]
+    ret {} addrspace(10)* %v
+}
+
+; Test zeroinit_indirect with zero size (should not emit memset)
+define {} addrspace(10)* @gc_alloc_zeroinit_indirect_zero_size({}* %ptls) {
+; CHECK-LABEL: @gc_alloc_zeroinit_indirect_zero_size
+; CHECK: %v = call noalias nonnull ptr addrspace(10) @jl_alloc_genericmemory_unchecked
+; CHECK-NOT: call void @llvm.memset
+; CHECK: ret ptr addrspace(10) %v
+    %v = call noalias {} addrspace(10)* @jl_alloc_genericmemory_unchecked({}* %ptls, i64 0, {} addrspace(10)* @tag) [ "julia.gc_alloc_zeroinit_indirect"(i64 8, i64 0) ]
     ret {} addrspace(10)* %v
 }
