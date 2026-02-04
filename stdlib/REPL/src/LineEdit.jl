@@ -2711,6 +2711,7 @@ function history_search(mistate::MIState)
     mimode = mode(mistate)
     mimode.hist.last_mode = mimode
     mimode.hist.last_buffer = copy(buffer(mistate))
+    initial_query = input_string(state(mistate))
     mistate.mode_state[mimode] =
         deactivate(mimode, state(mistate), termbuf, term)
     prefix = if mimode.prompt_prefix isa Function
@@ -2718,7 +2719,7 @@ function history_search(mistate::MIState)
     else
         mimode.prompt_prefix
     end
-    result = histsearch(mimode.hist.history, term, prefix)
+    result = histsearch(mimode.hist.history, term, prefix, initial_query)
     mimode = if isnothing(result.mode)
         mistate.current_mode
     else
@@ -2731,7 +2732,10 @@ function history_search(mistate::MIState)
     mistate.current_mode = mimode
     activate(mimode, state(mistate, mimode), termbuf, term)
     commit_changes(term, termbuf)
-    edit_insert(pstate, result.text)
+    if !isempty(result.text)
+        edit_clear(buffer(pstate))
+        edit_insert(pstate, result.text)
+    end
     refresh_multi_line(mistate)
     nothing
 end
