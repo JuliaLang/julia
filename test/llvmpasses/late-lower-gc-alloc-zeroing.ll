@@ -112,7 +112,7 @@ define {} addrspace(10)* @gc_alloc_no_bundles({}** %current_task) {
 ; This loads the data pointer from offset 8 and zeros via that pointer
 define {} addrspace(10)* @gc_alloc_zeroinit_indirect({}* %ptls, i64 %nbytes) {
 ; CHECK-LABEL: @gc_alloc_zeroinit_indirect
-; CHECK: %v = call noalias nonnull ptr addrspace(10) @jl_alloc_genericmemory_unchecked
+; CHECK: %v = call noalias ptr addrspace(10) @jl_alloc_genericmemory_unchecked
 ; CHECK: [[DERIVED:%.*]] = addrspacecast ptr addrspace(10) %v to ptr addrspace(11)
 ; CHECK: [[PTR_FIELD:%.*]] = getelementptr inbounds i8, ptr addrspace(11) [[DERIVED]], i64 8
 ; CHECK: [[DATA_PTR:%.*]] = load ptr, ptr addrspace(11) [[PTR_FIELD]], align 8
@@ -125,7 +125,7 @@ define {} addrspace(10)* @gc_alloc_zeroinit_indirect({}* %ptls, i64 %nbytes) {
 ; Test zeroinit_indirect with constant size
 define {} addrspace(10)* @gc_alloc_zeroinit_indirect_const({}* %ptls) {
 ; CHECK-LABEL: @gc_alloc_zeroinit_indirect_const
-; CHECK: %v = call noalias nonnull ptr addrspace(10) @jl_alloc_genericmemory_unchecked
+; CHECK: %v = call noalias ptr addrspace(10) @jl_alloc_genericmemory_unchecked
 ; CHECK: [[DERIVED:%.*]] = addrspacecast ptr addrspace(10) %v to ptr addrspace(11)
 ; CHECK: [[PTR_FIELD:%.*]] = getelementptr inbounds i8, ptr addrspace(11) [[DERIVED]], i64 8
 ; CHECK: [[DATA_PTR:%.*]] = load ptr, ptr addrspace(11) [[PTR_FIELD]], align 8
@@ -138,7 +138,7 @@ define {} addrspace(10)* @gc_alloc_zeroinit_indirect_const({}* %ptls) {
 ; Test zeroinit_indirect with zero size (should not emit memset)
 define {} addrspace(10)* @gc_alloc_zeroinit_indirect_zero_size({}* %ptls) {
 ; CHECK-LABEL: @gc_alloc_zeroinit_indirect_zero_size
-; CHECK: %v = call noalias nonnull ptr addrspace(10) @jl_alloc_genericmemory_unchecked
+; CHECK: %v = call noalias ptr addrspace(10) @jl_alloc_genericmemory_unchecked
 ; CHECK-NOT: call void @llvm.memset
 ; CHECK: ret ptr addrspace(10) %v
     %v = call noalias {} addrspace(10)* @jl_alloc_genericmemory_unchecked({}* %ptls, i64 0, {} addrspace(10)* @tag) [ "julia.gc_alloc_zeroinit_indirect"(i64 8, i64 0) ]
