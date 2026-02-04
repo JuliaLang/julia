@@ -685,7 +685,7 @@ public:
             jl_errorf("Unsupported JULIA_CGMEMMGR_MAP_TYPE: %s", mapper_type);
 
         if (!rx_mapper)
-            jl_errorf("Failed to initialize cgmmemgr\n");
+            jl_errorf("Failed to initialize cgmemmgr\n");
     }
 
     std::pair<Allocation, Allocation> alloc(size_t size_rx, size_t align_rx, size_t size_rw,
