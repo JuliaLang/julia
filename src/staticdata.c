@@ -3357,11 +3357,11 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
         ff = f;
     }
 
-    jl_array_t *mod_array = NULL, *extext_methods = NULL, *new_ext_cis = NULL;
+    jl_array_t *mod_array = NULL, *extext_methods = NULL, *new_ext_cis = NULL, *ext_precomp_cis = NULL;
     int64_t checksumpos = 0;
     int64_t checksumpos_ff = 0;
     int64_t datastartpos = 0;
-    JL_GC_PUSH3(&mod_array, &extext_methods, &new_ext_cis);
+    JL_GC_PUSH4(&mod_array, &extext_methods, &new_ext_cis, &ext_precomp_cis);
 
     mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
     if (worklist) {
@@ -3418,6 +3418,16 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
         }
         else {
             new_ext_cis = jl_compute_new_ext_cis();
+        }
+
+        // Merge explicitly-marked external CIs (from non-native compilers)
+        if (newly_inferred_external != NULL) {
+            ext_precomp_cis = newly_inferred_external; // root it
+            size_t n_ext = jl_array_nrows(ext_precomp_cis);
+            for (size_t i = 0; i < n_ext; i++) {
+                jl_array_ptr_1d_push(new_ext_cis, jl_array_ptr_ref(ext_precomp_cis, i));
+            }
+            ext_precomp_cis = NULL;
         }
 
         // Collect method extensions

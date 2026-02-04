@@ -3254,6 +3254,7 @@ end
 
 # Const global for GC root
 const newly_inferred = CodeInstance[]
+const newly_inferred_external = CodeInstance[]
 
 # this is called in the external process that generates precompiled package files
 function include_package_for_output(pkg::PkgId, input::String, syntax_version::VersionNumber, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
@@ -3280,6 +3281,7 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     end
 
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), newly_inferred)
+    ccall(:jl_set_newly_inferred_external, Cvoid, (Any,), newly_inferred_external)
     # This one changes the parser behavior
     __toplevel__.var"#_internal_julia_parse" = VersionedParse(syntax_version)
     # This one is the compatibility marker for cache loading
@@ -3292,6 +3294,7 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
         exit(125) # we define status = 125 means PrecompileableError
     finally
         ccall(:jl_set_newly_inferred, Cvoid, (Any,), nothing)
+        ccall(:jl_set_newly_inferred_external, Cvoid, (Any,), nothing)
     end
     # check that the package defined the expected module so we can give a nice error message if not
     m = maybe_root_module(pkg)
@@ -3301,6 +3304,7 @@ function include_package_for_output(pkg::PkgId, input::String, syntax_version::V
     # in the output. We removed it above to avoid including any code we may
     # have compiled for error handling and validation.
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), newly_inferred)
+    ccall(:jl_set_newly_inferred_external, Cvoid, (Any,), newly_inferred_external)
     @lock require_lock end_loading(pkg, m)
     # insert_extension_triggers(pkg)
     # run_package_callbacks(pkg)
@@ -4521,6 +4525,16 @@ end
 # Variants that work for `invoke`d calls for which the signature may not be sufficient
 precompile(mi::MethodInstance, world::UInt=get_world_counter()) =
     (ccall(:jl_compile_method_instance, Cvoid, (Any, Ptr{Cvoid}, UInt), mi, C_NULL, world); return true)
+
+"""
+    precompile(ci::CodeInstance)
+
+Mark a `CodeInstance` for inclusion in the precompilation cache. This is intended
+for use by non-native code caches (e.g. GPU compilers) to persist `CodeInstance`s
+whose `owner` is not `jl_nothing` into the package image.
+"""
+precompile(ci::CodeInstance) =
+    ccall(:jl_push_newly_inferred_external, Cvoid, (Any,), ci)
 
 """
     precompile(f, argtypes::Tuple{Vararg{Any}}, m::Method)

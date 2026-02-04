@@ -83,6 +83,7 @@ static uint64_t jl_worklist_key(jl_array_t *worklist) JL_NOTSAFEPOINT
 }
 
 static jl_array_t *newly_inferred JL_GLOBALLY_ROOTED /*FIXME*/;
+static jl_array_t *newly_inferred_external JL_GLOBALLY_ROOTED /*FIXME*/ = NULL;
 // Mutex for newly_inferred
 jl_mutex_t newly_inferred_mutex;
 extern jl_mutex_t world_counter_lock;
@@ -141,6 +142,27 @@ JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
     size_t end = jl_array_nrows(newly_inferred);
     jl_array_grow_end(newly_inferred, 1);
     jl_array_ptr_set(newly_inferred, end, ci);
+    JL_UNLOCK(&newly_inferred_mutex);
+}
+
+// Register array of CodeInstances from non-native compilers to be cached during precompilation
+JL_DLLEXPORT void jl_set_newly_inferred_external(jl_value_t *_newly_inferred_external)
+{
+    assert(_newly_inferred_external == NULL || _newly_inferred_external == jl_nothing ||
+           jl_is_array(_newly_inferred_external));
+    if (_newly_inferred_external == jl_nothing)
+        _newly_inferred_external = NULL;
+    newly_inferred_external = (jl_array_t*)_newly_inferred_external;
+}
+
+JL_DLLEXPORT void jl_push_newly_inferred_external(jl_value_t *ci)
+{
+    if (!newly_inferred_external)
+        return;
+    JL_LOCK(&newly_inferred_mutex);
+    size_t end = jl_array_nrows(newly_inferred_external);
+    jl_array_grow_end(newly_inferred_external, 1);
+    jl_array_ptr_set(newly_inferred_external, end, ci);
     JL_UNLOCK(&newly_inferred_mutex);
 }
 
