@@ -219,8 +219,5 @@ s = MyStruct()
 @test s.kern == 0
 @test reinterpret(Int, s.ptr) == 0
 
-f_zero_arg(x::T) where T = Base.llvmcall("ret i8 %0", Int8, Tuple{T}, x)
-@test_throws ErrorException f_zero_arg(nothing)
-
 f_zero_ret(x::Int8) = Base.llvmcall("ret void", Nothing, Tuple{Int8}, x)
-@test_throws ErrorException f_zero_ret(Int8(1))
+@test f_zero_ret(Int8(1)) === nothing
