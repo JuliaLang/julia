@@ -58,6 +58,7 @@ function uv_return_spawn(p::Ptr{Cvoid}, exit_status::Int64, termsignal::Int32)
     proc.termsignal = termsignal
     disassociate_julia_struct(proc.handle) # ensure that data field is set to C_NULL
     ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
+    ccall(:puts, Cint, (Cstring,), string("completed $(proc.handle): $(proc.exitcode)"))
     proc.handle = C_NULL
     lock(proc.exitnotify)
     try
@@ -119,6 +120,7 @@ end
         if err == 0
             pp = Process(cmd, handle)
             associate_julia_struct(handle, pp)
+            ccall(:puts, Cint, (Cstring,), string("spawned $(file): $(handle)"))
         else
             ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), handle) # will call free on handle eventually
         end
@@ -651,6 +653,7 @@ function process_status(s::Process)
 end
 
 function wait(x::Process)
+    ccall(:puts, Cint, (Cstring,), string("wait for $(x.handle)"))
     process_exited(x) && return
     iolock_begin()
     if !process_exited(x)
