@@ -2490,13 +2490,11 @@ function expand_function_generator(ctx, srcref, callex_srcref, func_name,
     # Code generator definition
     gen_func_method_defs = @ast ctx srcref [K"block"
         [K"function_decl" gen_name]
-        [K"scope_block"(scope_type=:hard)
-            [K"method_defs"
-                gen_name
-                [K"block"
-                    method_def_expr(ctx, srcref, callex_srcref, nothing, SyntaxList(ctx),
-                                    gen_arg_names, gen_arg_types, gen_body, nothing)
-                ]
+        [K"method_defs"
+            gen_name
+            [K"block"
+                method_def_expr(ctx, srcref, callex_srcref, nothing, SyntaxList(ctx),
+                                gen_arg_names, gen_arg_types, gen_body, nothing)
             ]
         ]
     ]
@@ -2848,28 +2846,24 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
 
     kw_func_method_defs = @ast ctx srcref [K"block"
         [K"function_decl" body_func_name]
-        [K"scope_block"(scope_type=:hard)
-            [K"method_defs"
-                body_func_name
-                [K"block"
-                    new_typevar_stmts...
-                    method_def_expr(ctx, srcref, callex_srcref, "nothing"::K"core",
-                                    typevar_names, body_arg_names, body_arg_types,
-                                    [K"block"
-                                        [K"meta" "nkw"::K"Symbol" numchildren(keywords)::K"Integer"]
-                                        body
-                                    ],
-                                    ret_var)
-                ]
+        [K"method_defs"
+            body_func_name
+            [K"block"
+                new_typevar_stmts...
+                method_def_expr(ctx, srcref, callex_srcref, "nothing"::K"core",
+                                typevar_names, body_arg_names, body_arg_types,
+                                [K"block"
+                                    [K"meta" "nkw"::K"Symbol" numchildren(keywords)::K"Integer"]
+                                    body
+                                ],
+                                ret_var)
             ]
         ]
-        [K"scope_block"(scope_type=:hard)
-            [K"method_defs"
-                "nothing"::K"core"
-                [K"block"
-                    new_typevar_stmts...
-                    kwcall_method_defs...
-                ]
+        [K"method_defs"
+            "nothing"::K"core"
+            [K"block"
+                new_typevar_stmts...
+                kwcall_method_defs...
             ]
         ]
     ]
@@ -3175,16 +3169,14 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         end
         gen_func_method_defs
         kw_func_method_defs
-        [K"scope_block"(scope_type=:hard)
-            [K"method_defs"
-                isnothing(bare_func_name) ? "nothing"::K"core" : bare_func_name
-                [K"block"
-                    new_typevar_stmts...
-                    if !isnothing(method_table_val)
-                        [K"=" method_table method_table_val]
-                    end
-                    method_stmts...
-                ]
+        [K"method_defs"
+            isnothing(bare_func_name) ? "nothing"::K"core" : bare_func_name
+            [K"block"
+                new_typevar_stmts...
+                if !isnothing(method_table_val)
+                    [K"=" method_table method_table_val]
+                end
+                method_stmts...
             ]
         ]
         [K"removable"
