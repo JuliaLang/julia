@@ -266,8 +266,11 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
         throw(ArgumentError("invalid arguments"))
     end
     @static if Sys.isapple()
-        function shouldcallmktime(s::String)
-            c = codeunits(s)
+        function shouldcallmktime(s::AbstractString)
+            # Equivalent to !occursin(r"([^%]|^)%(a|A|j|w|Ow)"a, s), but
+            # without regex since this is not available yet
+            
+            c = utf8units(s)
             N = length(c)
             i = findfirst(==(UInt8('%')), c)
 
