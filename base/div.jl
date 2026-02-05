@@ -49,7 +49,7 @@ julia> div(-4, 3, RoundFromZero)
     for the given floating-point type, that is, when `eps(x/y) ≤ 1`, or in other
     words, given `a = div(x, y)`, when `abs(a) < maxintfloat(a)`.
 
-    Because `div(x, y)` implements strictly correct truncated rounding based on the true
+    Because `div(x, y)` implements strict truncated rounding based on the true
     value of floating-point numbers, unintuitive situations can arise. For example:
     ```jldoctest
     julia> div(6.0, 0.1)
@@ -149,7 +149,7 @@ julia> fld.(-5:5, 3)'
     for the given floating-point type, that is, when `eps(x/y) ≤ 1`, or in other
     words, given `a = fld(x, y)`, when `abs(a) < maxintfloat(a)`.
 
-    Because `fld(x, y)` implements strictly correct floored rounding based on the true
+    Because `fld(x, y)` implements strict floored rounding based on the true
     value of floating-point numbers, unintuitive situations can arise. For example:
     ```jldoctest
     julia> fld(6.0, 0.1)
@@ -189,7 +189,7 @@ julia> cld.(-5:5, 3)'
     for the given floating-point type, that is, when `eps(x/y) ≤ 1`, or in other
     words, given `a = cld(x, y)`, when `abs(a) < maxintfloat(a)`.
 
-    Because `cld(x, y)` implements strictly correct ceiled rounding based on the true
+    Because `cld(x, y)` implements strict ceiled rounding based on the true
     value of floating-point numbers, unintuitive situations can arise. For example:
     ```jldoctest
     julia> cld(3.0, 0.3)
