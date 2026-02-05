@@ -7,6 +7,8 @@ using Test, Random, InteractiveUtils
 @enum BCOption bc_default bc_on bc_off
 bc_opt = BCOption(Base.JLOptions().check_bounds)
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 # test for boundscheck block eliminated at same level
 @inline function A1()
     r = 0
@@ -255,7 +257,7 @@ function g27079(X)
     r
 end
 
-@test occursin("vector.reduce.add", sprint(code_llvm, g27079, Tuple{Vector{Int}}))
+@test occursin("vector.reduce.add", sprint(code_llvm, g27079, Tuple{Vector{Int}})) broken=coverage_enabled
 
 # Boundschecking removal of indices with different type, see #40281
 getindex_40281(v, a, b, c) = @inbounds getindex(v, a, b, c)

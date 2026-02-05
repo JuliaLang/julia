@@ -10,6 +10,8 @@ using Random
 using LinearAlgebra
 using Base.Experimental: @force_compile
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 function isnan_type(::Type{T}, x) where T
     isa(x, T) && isnan(x)
 end
@@ -1805,14 +1807,14 @@ end
                              rt = Base.infer_return_type(f, (T,)),
                              effects = Base.infer_effects(f, (T,))
                     @test rt != Union{}
-                    @test Core.Compiler.is_foldable(effects)
+                    @test Core.Compiler.is_foldable(effects) broken=coverage_enabled
                 end
             end
             @testset let effects = Base.infer_effects(^, (T,Int))
-                @test Core.Compiler.is_foldable(effects)
+                @test Core.Compiler.is_foldable(effects) broken=coverage_enabled
             end
             @testset let effects = Base.infer_effects(^, (T,T))
-                @test Core.Compiler.is_foldable(effects)
+                @test Core.Compiler.is_foldable(effects) broken=coverage_enabled
             end
         end
     end
@@ -1822,7 +1824,7 @@ end;
         @testset let T = T
             for f = Any[exp, exp2, exp10, expm1]
                 @testset let f = f
-                    @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (T,)))
+                    @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (T,))) broken=coverage_enabled
                 end
             end
         end

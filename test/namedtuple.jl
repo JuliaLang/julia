@@ -2,6 +2,8 @@
 
 using Base: delete
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 @test_throws TypeError NamedTuple{1,Tuple{}}
 @test_throws TypeError NamedTuple{(),1}
 @test_throws TypeError NamedTuple{(:a,1),Tuple{Int}}
@@ -408,20 +410,20 @@ for f in (Base.merge, Base.structdiff)
         # test the effects of the fallback path
         fallback_func(a::NamedTuple, b::NamedTuple) = @invoke f(a::NamedTuple, b::NamedTuple)
         @testset let eff = Base.infer_effects(fallback_func)
-            @test Core.Compiler.is_foldable(eff)
+            @test Core.Compiler.is_foldable(eff) broken=coverage_enabled
             @test Core.Compiler.is_nonoverlayed(eff)
         end
         @test only(Base.return_types(fallback_func)) == NamedTuple
         # test if `max_methods = 4` setting works as expected
         general_func(a::NamedTuple, b::NamedTuple) = f(a, b)
         @testset let eff = Base.infer_effects(general_func)
-            @test Core.Compiler.is_foldable(eff)
+            @test Core.Compiler.is_foldable(eff) broken=coverage_enabled
             @test Core.Compiler.is_nonoverlayed(eff)
         end
         @test only(Base.return_types(general_func)) == NamedTuple
     end
 end
-@test Core.Compiler.is_foldable(Base.infer_effects(pairs, Tuple{NamedTuple}))
+@test Core.Compiler.is_foldable(Base.infer_effects(pairs, Tuple{NamedTuple})) broken=coverage_enabled
 
 # Test that merge/diff preserves nt field types
 let a = Base.NamedTuple{(:a, :b), Tuple{Any, Any}}((1, 2)), b = Base.NamedTuple{(:b,), Tuple{Float64}}(3)

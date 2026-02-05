@@ -2,7 +2,7 @@
 
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
-
+const coverage_enabled = Base.JLOptions().code_coverage != 0
 @testset "MissingException" begin
     @test sprint(showerror, MissingException("test")) == "MissingException: test"
 end
@@ -647,7 +647,7 @@ end
 # use LazyString for MissingException to get the better effects
 for func in (round, ceil, floor, trunc)
     @testset let func = func
-        @test Core.Compiler.is_foldable(Base.infer_effects(func, (Type{Int},Union{Int,Missing})))
+        @test Core.Compiler.is_foldable(Base.infer_effects(func, (Type{Int},Union{Int,Missing}))) broken=coverage_enabled
     end
 end
 

@@ -10,6 +10,8 @@ include("setup_Compiler.jl")
 include("irutils.jl")
 include("newinterp.jl")
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 """
 Helper to walk the AST and call a function on every node.
 """
@@ -158,7 +160,7 @@ end
 
 # check that ismutabletype(type) can be fully eliminated
 f_mutable_nothrow(s::String) = Val{typeof(s).name.flags}
-@test fully_eliminated(f_mutable_nothrow, (String,))
+@test fully_eliminated(f_mutable_nothrow, (String,)) broken=coverage_enabled
 
 # check that ifelse can be fully eliminated
 function f_ifelse(x)
@@ -166,7 +168,7 @@ function f_ifelse(x)
     b = ifelse(a, true, false)
     return b ? x + 1 : x
 end
-@test length(code_typed(f_ifelse, (String,))[1][1].code) <= 2
+@test length(code_typed(f_ifelse, (String,))[1][1].code) <= 2 broken=coverage_enabled
 
 # Test that inlining of _apply_iterate properly hits the inference cache
 @noinline cprop_inline_foo1() = (1, 1)
@@ -198,26 +200,26 @@ end
 function cprop_inline_baz1()
     return cprop_inline_bar(cprop_inline_foo1()..., cprop_inline_foo1()...)
 end
-@test fully_eliminated(cprop_inline_baz1, ())
+@test fully_eliminated(cprop_inline_baz1, ()) broken=coverage_enabled
 
 function cprop_inline_baz2()
     return cprop_inline_bar(cprop_inline_foo2()..., cprop_inline_foo2()...)
 end
-@test length(code_typed(cprop_inline_baz2, ())[1][1].code) == 2
+@test length(code_typed(cprop_inline_baz2, ())[1][1].code) == 2 broken=coverage_enabled
 
 # Check that apply_type/TypeVar can be fully eliminated
 function f_apply_typevar(T)
     NTuple{N, T} where N
     return T
 end
-@test fully_eliminated(f_apply_typevar, (Type{Any},))
+@test fully_eliminated(f_apply_typevar, (Type{Any},)) broken=coverage_enabled
 
 # check that div can be fully eliminated
 function f_div(x)
     div(x, 1)
     return x
 end
-@test fully_eliminated(f_div, (Int,); retval=Core.Argument(2))
+@test fully_eliminated(f_div, (Int,); retval=Core.Argument(2)) broken=coverage_enabled
 # ...unless we div by an unknown amount
 function f_div(x, y)
     div(x, y)
@@ -226,12 +228,12 @@ end
 @test length(code_typed(f_div, (Int, Int))[1][1].code) > 1
 
 f_identity_splat(t) = (t...,)
-@test fully_eliminated(f_identity_splat, (Tuple{Int,Int},))
+@test fully_eliminated(f_identity_splat, (Tuple{Int,Int},)) broken=coverage_enabled
 
 # splatting one tuple into (,) plus zero or more empties should reduce
 # this pattern appears for example in `fill_to_length`
 f_splat_with_empties(t) = (()..., t..., ()..., ()...)
-@test fully_eliminated(f_splat_with_empties, (NTuple{200,UInt8},))
+@test fully_eliminated(f_splat_with_empties, (NTuple{200,UInt8},)) broken=coverage_enabled
 
 # check that <: can be fully eliminated
 struct SomeArbitraryStruct; end
@@ -239,7 +241,7 @@ function f_subtype()
     T = SomeArbitraryStruct
     T <: Bool
 end
-@test fully_eliminated(f_subtype, Tuple{}; retval=false)
+@test fully_eliminated(f_subtype, Tuple{}; retval=false) broken=coverage_enabled
 
 # check that pointerref gets deleted if unused
 f_pointerref(T::Type{S}) where S = Val(length(T.parameters))
@@ -263,7 +265,7 @@ function foo_apply_apply_type_svec()
     B = Tuple{Float32, Float32}
     Core.apply_type(A..., B.types...)
 end
-@test fully_eliminated(foo_apply_apply_type_svec, Tuple{}; retval=NTuple{3, Float32})
+@test fully_eliminated(foo_apply_apply_type_svec, Tuple{}; retval=NTuple{3, Float32}) broken=coverage_enabled
 
 # The that inlining doesn't drop ambiguity errors (#30118)
 c30118(::Tuple{Ref{<:Type}, Vararg}) = nothing
@@ -277,7 +279,7 @@ b30118(x...) = c30118(x)
 f34900(x::Int, y) = x
 f34900(x, y::Int) = y
 f34900(x::Int, y::Int) = invoke(f34900, Tuple{Int, Any}, x, y)
-@test fully_eliminated(f34900, Tuple{Int, Int}; retval=Core.Argument(2))
+@test fully_eliminated(f34900, Tuple{Int, Int}; retval=Core.Argument(2)) broken=coverage_enabled
 
 using .Compiler: is_declared_inline, is_declared_noinline
 
@@ -342,7 +344,7 @@ struct NonIsBitsDims
     dims::NTuple{N, Int} where N
 end
 NonIsBitsDims() = NonIsBitsDims(())
-@test fully_eliminated(NonIsBitsDims, (); retval=NonIsBitsDims())
+@test fully_eliminated(NonIsBitsDims, (); retval=NonIsBitsDims()) broken=coverage_enabled
 
 struct NonIsBitsDimsUndef
     dims::NTuple{N, Int} where N
@@ -353,11 +355,11 @@ end
 
 # More nothrow modeling for apply_type
 f_apply_type_typeof(x) = (Ref{typeof(x)}; nothing)
-@test fully_eliminated(f_apply_type_typeof, Tuple{Any})
-@test fully_eliminated(f_apply_type_typeof, Tuple{Vector})
-@test fully_eliminated(x->(Val{x}; nothing), Tuple{Int})
-@test fully_eliminated(x->(Val{x}; nothing), Tuple{Symbol})
-@test fully_eliminated(x->(Val{x}; nothing), Tuple{Tuple{Int, Int}})
+@test fully_eliminated(f_apply_type_typeof, Tuple{Any}) broken=coverage_enabled
+@test fully_eliminated(f_apply_type_typeof, Tuple{Vector}) broken=coverage_enabled
+@test fully_eliminated(x->(Val{x}; nothing), Tuple{Int}) broken=coverage_enabled
+@test fully_eliminated(x->(Val{x}; nothing), Tuple{Symbol}) broken=coverage_enabled
+@test fully_eliminated(x->(Val{x}; nothing), Tuple{Tuple{Int, Int}}) broken=coverage_enabled
 @test !fully_eliminated(x->(Val{x}; nothing), Tuple{String})
 @test !fully_eliminated(x->(Val{x}; nothing), Tuple{Any})
 @test !fully_eliminated(x->(Val{x}; nothing), Tuple{Tuple{Int, String}})
@@ -382,7 +384,7 @@ end
 # OC getfield elim
 using Base.Experimental: @opaque
 f_oc_getfield(x) = (@opaque ()->x)()
-@test fully_eliminated(f_oc_getfield, Tuple{Int})
+@test fully_eliminated(f_oc_getfield, Tuple{Int}) broken=coverage_enabled
 
 @testset "@inline/@noinline annotation before definition" begin
     M = Module()
@@ -1022,18 +1024,18 @@ end
 
 # have_fma elimination inside ^
 f_pow() = ^(2.0, -1.0)
-@test fully_eliminated(f_pow, Tuple{})
+@test fully_eliminated(f_pow, Tuple{}) broken=coverage_enabled
 
 # bug where Conditional wasn't being properly marked as ConstAPI
 let
     @noinline fcond(a, b) = a === b
     ftest(a) = (fcond(a, nothing); a)
-    @test fully_eliminated(ftest, Tuple{Bool})
+    @test fully_eliminated(ftest, Tuple{Bool}) broken=coverage_enabled
 end
 
 # sqrt not considered volatile
 f_sqrt() = sqrt(2)
-@test fully_eliminated(f_sqrt, Tuple{})
+@test fully_eliminated(f_sqrt, Tuple{}) broken=coverage_enabled
 
 # use constant prop' result even when the return type doesn't get refined
 const Gx = Ref{Any}()
@@ -1045,7 +1047,7 @@ Base.@constprop :aggressive function conditional_escape!(cnd, x)
 end
 @test fully_eliminated((String,)) do x
     @invoke conditional_escape!(false::Any, x::Any)
-end
+end broken=coverage_enabled
 
 @testset "elimination of `get_binding_type`" begin
     m = Module()
@@ -1055,7 +1057,7 @@ end
         g() = Core.get_binding_type($m, :y)
     end
 
-    @test fully_eliminated(m.f, Tuple{}; retval=Int)
+    @test fully_eliminated(m.f, Tuple{}; retval=Int) broken=coverage_enabled
     src = code_typed(m.g, ())[][1]
     @test count(iscall((src, Core.get_binding_type)), src.code) == 1
     @test m.g() === Any
@@ -1063,7 +1065,7 @@ end
 
 # have_fma elimination inside ^
 f_pow() = ^(2.0, -1.0)
-@test fully_eliminated(f_pow, Tuple{})
+@test fully_eliminated(f_pow, Tuple{}) broken=coverage_enabled
 
 # unused total, noinline function
 @noinline function f_total_noinline(x)
@@ -1081,7 +1083,7 @@ function f_call_volatile_escape(ptr)
     return ptr
 end
 
-@test fully_eliminated(f_call_total_noinline_unused, Tuple{Float64})
+@test fully_eliminated(f_call_total_noinline_unused, Tuple{Float64}) broken=coverage_enabled
 @test !fully_eliminated(f_call_volatile_escape, Tuple{Ptr{Int}})
 
 let b = Expr(:block, (:(y += sin($x)) for x in randn(1000))...)
@@ -1091,7 +1093,7 @@ let b = Expr(:block, (:(y += sin($x)) for x in randn(1000))...)
         y
     end
 end
-@test fully_eliminated(f_sin_perf, Tuple{})
+@test fully_eliminated(f_sin_perf, Tuple{}) broken=coverage_enabled
 
 # Test that we inline the constructor of something that is not const-inlineable
 const THE_REF_NULL = Ref{Int}()
@@ -1103,31 +1105,31 @@ end
 @test fully_eliminated() do
     FooTheRef(nothing)
     nothing
-end
+end broken=coverage_enabled
 @test fully_eliminated() do
     FooTheRef(0)
     nothing
-end
+end broken=coverage_enabled
 @test fully_eliminated() do
     @invoke FooTheRef(nothing::Any)
     nothing
-end
+end broken=coverage_enabled
 @test fully_eliminated() do
     @invoke FooTheRef(0::Any)
     nothing
-end
+end broken=coverage_enabled
 
 # DCE of non-inlined callees
 @noinline noninlined_dce_simple(a) = identity(a)
 @test fully_eliminated((String,)) do s
     noninlined_dce_simple(s)
     nothing
-end
+end broken=coverage_enabled
 @noinline noninlined_dce_new(a::String) = Some(a)
 @test fully_eliminated((String,)) do s
     noninlined_dce_new(s)
     nothing
-end
+end broken=coverage_enabled
 mutable struct SafeRef{T}
     x::T
 end
@@ -1137,11 +1139,11 @@ Base.setindex!(s::SafeRef, x) = setfield!(s, 1, x)
 @test fully_eliminated((Symbol,)) do s
     noninlined_dce_new(s)
     nothing
-end
+end broken=coverage_enabled
 @test fully_eliminated((Union{Symbol,String},)) do s
     noninlined_dce_new(s)
     nothing
-end
+end broken=coverage_enabled
 
 # https://github.com/JuliaLang/julia/issues/44732
 struct Component44732
@@ -1189,7 +1191,7 @@ end
 const my_defined_var = 42
 @test fully_eliminated(; retval=42) do
     getglobal(@__MODULE__, :my_defined_var, :monotonic)
-end
+end broken=coverage_enabled
 @test !fully_eliminated() do
     getglobal(@__MODULE__, :my_defined_var, :foo)
 end
@@ -1205,7 +1207,7 @@ function maybe_error_int(x::Int)
 end
 @test fully_eliminated() do
     return maybe_error_int(1)
-end
+end broken=coverage_enabled
 
 # Test that inlining doesn't accidentally delete a bad return_type call
 f_bad_return_type() = Compiler.return_type(+, 1, 2)
@@ -1237,7 +1239,7 @@ let src = code_typed1() do
             DoAllocNoEscape()
         end
     end
-    @test count(isnew, src.code) == 0
+    @test count(isnew, src.code) == 0 broken=coverage_enabled
 end
 
 # Test that a case when `Core.finalizer` is registered interprocedurally,
@@ -1252,7 +1254,7 @@ let src = code_typed1() do
             end
         end
     end
-    @test count(isnew, src.code) == 0
+    @test count(isnew, src.code) == 0 broken=coverage_enabled
 end
 
 function register_finalizer!(obj)
@@ -1266,7 +1268,7 @@ let src = code_typed1() do
             register_finalizer!(obj)
         end
     end
-    @test count(isnew, src.code) == 0
+    @test count(isnew, src.code) == 0 broken=coverage_enabled
 end
 
 function genfinalizer(val)
@@ -1280,7 +1282,7 @@ let src = code_typed1() do
             finalizer(genfinalizer(nothing), obj)
         end
     end
-    @test count(isnew, src.code) == 0
+    @test count(isnew, src.code) == 0 broken=coverage_enabled
 end
 
 # Test that we can inline a finalizer that just returns a constant value
@@ -1296,7 +1298,7 @@ let src = code_typed1() do
             DoAllocConst()
         end
     end
-    @test count(isnew, src.code) == 0
+    @test count(isnew, src.code) == 0 broken=coverage_enabled
 end
 
 # Test that finalizer elision doesn't cause a throw to be inlined into a function
@@ -1341,8 +1343,8 @@ let src = code_typed1(Tuple{Any}) do x
     end
     @test count(x->isexpr(x, :static_parameter), src.code) == 0 # A bad inline might leave left-over :static_parameter
     nnothrow_invokes = count(isinvoke(:nothrow_side_effect), src.code)
-    @test count(iscall(f->!isa(singleton_type(argextype(f, src)), Core.Builtin)), src.code) ==
-          count(iscall((src, nothrow_side_effect)), src.code) == 2 - nnothrow_invokes
+    @test (count(iscall(f->!isa(singleton_type(argextype(f, src)), Core.Builtin)), src.code) ==
+          count(iscall((src, nothrow_side_effect)), src.code) == 2 - nnothrow_invokes) broken=coverage_enabled
     # TODO: Our effect modeling is not yet strong enough to fully eliminate this
     @test_broken count(isnew, src.code) == 0
 end
@@ -1378,7 +1380,7 @@ let src = code_typed1() do
         end
     end
     @test count(isnew, src.code) == 1
-    @test count(isinvoke(:noinline_finalizer), src.code) == 1
+    @test count(isinvoke(:noinline_finalizer), src.code) == 1 broken=coverage_enabled
 end
 
 # Test that we resolve a `finalizer` call that we don't handle currently
@@ -1399,7 +1401,7 @@ let src = code_typed1() do
             DoAllocNoEscapeBranch(i)
         end
     end
-    @test !any(iscall((src, Core.finalizer)), src.code)
+    @test !any(iscall((src, Core.finalizer)), src.code) broken=coverage_enabled
     @test !any(isinvoke(:finalizer), src.code)
 end
 
@@ -1434,12 +1436,12 @@ function const_finalization(io)
     end
 end
 let src = code_typed1(const_finalization, (IO,))
-    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1 broken=coverage_enabled
 end
 let
     init_finalization_count!()
     const_finalization(IOBuffer())
-    @test get_finalization_count() == 1000
+    @test get_finalization_count() == 1000 broken=coverage_enabled
 end
 
 # Test that finalizers that don't do anything are just erased from the IR
@@ -1451,8 +1453,8 @@ function useless_finalizer()
     return x
 end
 let src = code_typed1(useless_finalizer, ())
-    @test count(iscall((src, Core.finalizer)), src.code) == 0
-    @test length(src.code) == 2
+    @test count(iscall((src, Core.finalizer)), src.code) == 0 broken=coverage_enabled
+    @test length(src.code) == 2 broken=coverage_enabled
 end
 
 # tests finalizer inlining when def/uses involve control flow
@@ -1467,12 +1469,12 @@ function cfg_finalization1(io)
     end
 end
 let src = code_typed1(cfg_finalization1, (IO,))
-    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1 broken=coverage_enabled
 end
 let
     init_finalization_count!()
     cfg_finalization1(IOBuffer())
-    @test get_finalization_count() == 1000
+    @test get_finalization_count() == 1000 broken=coverage_enabled
 end
 
 function cfg_finalization2(io)
@@ -1487,12 +1489,12 @@ function cfg_finalization2(io)
     end
 end
 let src = code_typed1(cfg_finalization2, (IO,))
-    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1 broken=coverage_enabled
 end
 let
     init_finalization_count!()
     cfg_finalization2(IOBuffer())
-    @test get_finalization_count() == 1000
+    @test get_finalization_count() == 1000 broken=coverage_enabled
 end
 
 function cfg_finalization3(io)
@@ -1507,12 +1509,12 @@ function cfg_finalization3(io)
     end
 end
 let src = code_typed1(cfg_finalization3, (IO,))
-    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1 broken=coverage_enabled
 end
 let
     init_finalization_count!()
     cfg_finalization3(IOBuffer())
-    @test get_finalization_count() == 1000
+    @test get_finalization_count() == 1000 broken=coverage_enabled
 end
 
 function cfg_finalization4(io)
@@ -1528,12 +1530,12 @@ function cfg_finalization4(io)
     end
 end
 let src = code_typed1(cfg_finalization4, (IO,))
-    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1 broken=coverage_enabled
 end
 let
     init_finalization_count!()
     cfg_finalization4(IOBuffer())
-    @test get_finalization_count() == 1000
+    @test get_finalization_count() == 1000 broken=coverage_enabled
 end
 
 function cfg_finalization5(io)
@@ -1548,12 +1550,12 @@ function cfg_finalization5(io)
     end
 end
 let src = code_typed1(cfg_finalization5, (IO,))
-    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1 broken=coverage_enabled
 end
 let
     init_finalization_count!()
     cfg_finalization5(IOBuffer())
-    @test get_finalization_count() == 1000
+    @test get_finalization_count() == 1000 broken=coverage_enabled
 end
 
 function cfg_finalization6(io)
@@ -1567,12 +1569,12 @@ function cfg_finalization6(io)
     end
 end
 let src = code_typed1(cfg_finalization6, (IO,))
-    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1 broken=coverage_enabled
 end
 let
     init_finalization_count!()
     cfg_finalization6(IOBuffer())
-    @test get_finalization_count() == 1000
+    @test get_finalization_count() == 1000 broken=coverage_enabled
 end
 
 function cfg_finalization7(io)
@@ -1593,12 +1595,12 @@ function cfg_finalization7(io)
     end
 end
 let src = code_typed1(cfg_finalization7, (IO,))
-    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1 broken=coverage_enabled
 end
 let
     init_finalization_count!()
     cfg_finalization7(IOBuffer())
-    @test get_finalization_count() == 1000
+    @test get_finalization_count() == 1000 broken=coverage_enabled
 end
 
 # Load forwarding with `finalizer` elision
@@ -1611,7 +1613,7 @@ let src = code_typed1((Int,)) do x
         Base.@assume_effects :nothrow @noinline println("xs[] = ", @inline xs[])
         return xs[]
     end
-    @test count(iscall((src, getfield)), src.code) == 0
+    @test count(iscall((src, getfield)), src.code) == 0 broken=coverage_enabled
 end
 let src = code_typed1((Int,)) do x
         xs = finalizer(Ref(x)) do obj
@@ -1623,7 +1625,7 @@ let src = code_typed1((Int,)) do x
         xs[] += 1
         return xs[]
     end
-    @test count(iscall((src, getfield)), src.code) == 0
+    @test count(iscall((src, getfield)), src.code) == 0 broken=coverage_enabled
     @test count(iscall((src, setfield!)), src.code) == 1
 end
 
@@ -1710,7 +1712,7 @@ function oc_capture_oc(z)
     oc2 = @opaque y->oc1(y)
     return oc2(z)
 end
-@test fully_eliminated(oc_capture_oc, (Int,))
+@test fully_eliminated(oc_capture_oc, (Int,)) broken=coverage_enabled
 
 # inlining with unmatched type parameters
 @eval struct OldVal{T}
@@ -1795,7 +1797,7 @@ let src = code_typed1((Any,)) do x
         end
         nothing
     end
-    @test count(iscall((src, f_union_unmatched)), src.code) == 0
+    @test count(iscall((src, f_union_unmatched)), src.code) == 0 broken=coverage_enabled
 end
 
 # modifyfield! handling
@@ -1894,8 +1896,8 @@ f_ifelse_1(a, b) = Core.ifelse(true, a, b)
 f_ifelse_2(a, b) = Core.ifelse(false, a, b)
 f_ifelse_3(a, b) = Core.ifelse(a, true, b)
 
-@test fully_eliminated(f_ifelse_1, Tuple{Any, Any}; retval=Core.Argument(2))
-@test fully_eliminated(f_ifelse_2, Tuple{Any, Any}; retval=Core.Argument(3))
+@test fully_eliminated(f_ifelse_1, Tuple{Any, Any}; retval=Core.Argument(2)) broken=coverage_enabled
+@test fully_eliminated(f_ifelse_2, Tuple{Any, Any}; retval=Core.Argument(3)) broken=coverage_enabled
 @test !fully_eliminated(f_ifelse_3, Tuple{Any, Any})
 
 # inline_splatnew for abstract `NamedTuple`
@@ -1951,10 +1953,10 @@ function return_the_big_tuple(err::Bool)
 end
 @test fully_eliminated() do
     return_the_big_tuple(false)[1]
-end
+end broken=coverage_enabled
 @test fully_eliminated() do
     @inline return_the_big_tuple(false)[1]
-end
+end broken=coverage_enabled
 
 # inlineable but removable call should be eligible for DCE
 Base.@assume_effects :removable @inline function inlineable_effect_free(a::Float64)
@@ -1965,7 +1967,7 @@ end
     b = inlineable_effect_free(a)
     c = inlineable_effect_free(b)
     nothing
-end
+end broken=coverage_enabled
 
 # https://github.com/JuliaLang/julia/issues/47374
 function f47374(x)
@@ -2015,7 +2017,7 @@ function elim_full_ir(y)
     return Val{bs.x[1]}()
 end
 
-@test fully_eliminated(elim_full_ir, Tuple{Int})
+@test fully_eliminated(elim_full_ir, Tuple{Int}) broken=coverage_enabled
 
 # union splitting should account for uncovered call signature
 # https://github.com/JuliaLang/julia/issues/48397
@@ -2064,7 +2066,7 @@ end
 # inlining of `TypeName`
 @test fully_eliminated() do
     Ref.body.name
-end
+end broken=coverage_enabled
 
 # Regression for finalizer inlining with more complex control flow
 global finalizer_escape::Int = 0
@@ -2107,12 +2109,12 @@ for run_finalizer_escape_test in (run_finalizer_escape_test1, run_finalizer_esca
     global finalizer_escape::Int = 0
 
     let src = code_typed1(run_finalizer_escape_test, Tuple{Bool, Bool})
-        @test any(iscall((src, Core.setglobal!)), src.code)
+        @test any(iscall((src, Core.setglobal!)), src.code) broken=coverage_enabled
     end
 
     let
         run_finalizer_escape_test(true, true)
-        @test finalizer_escape == 3
+        @test finalizer_escape == 3 broken=coverage_enabled
     end
 end
 
@@ -2175,11 +2177,11 @@ Base.@assume_effects :nothrow function erase_before_inlining(x, y)
 end
 @test fully_eliminated((Float64,); retval=5) do y
     length(erase_before_inlining(true, y))
-end
+end broken=coverage_enabled
 @test fully_eliminated((Float64,); retval=(5,5)) do y
     z = erase_before_inlining(true, y)
     return length(z), length(z)
-end
+end broken=coverage_enabled
 
 # continue const-prop' when concrete-eval result is too big
 const THE_BIG_TUPLE_2 = ntuple(identity, 1024)
@@ -2275,11 +2277,11 @@ let src = code_typed1(foreign_alloc, (Type{Float64},Int,))
     @test count(iscall((src, Core.finalizer)), src.code) == 1
 end
 let src = code_typed1(f_EA_finalizer, (Int,))
-    @test count(iscall((src, Core.finalizer)), src.code) == 0
+    @test count(iscall((src, Core.finalizer)), src.code) == 0 broken=coverage_enabled
 end
 let;Base.Experimental.@force_compile
     f_EA_finalizer(42000)
-    @test foreign_buffer_checker.finalized
+    @test foreign_buffer_checker.finalized broken=coverage_enabled
 end
 
 # JuliaLang/julia#56422:

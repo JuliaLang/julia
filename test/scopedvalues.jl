@@ -4,6 +4,8 @@ using Base.ScopedValues
 
 include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 @testset "errors" begin
     @test ScopedValue{Float64}(1)[] == 1.0
     @test_throws InexactError ScopedValue{Int}(1.5)
@@ -176,7 +178,7 @@ end
 const inlineable_const_sv = ScopedValue(1)
 @test fully_eliminated(; retval=(inlineable_const_sv => 1)) do
     inlineable_const_sv => 1
-end
+end broken=coverage_enabled
 
 # Handle nothrow scope bodies correctly (#56609)
 @eval @noinline function nothrow_scope(@nospecialize(scope_at_entry))

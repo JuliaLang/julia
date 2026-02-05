@@ -2,6 +2,8 @@
 
 using Random
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 @testset "Pair" begin
     p = Pair(10,20)
     @test p == (10=>20)
@@ -1527,7 +1529,7 @@ end
 for T in (Int, Float64, String, Symbol)
     @testset let T=T
         @test !Core.Compiler.is_consistent(Base.infer_effects(getindex, (Dict{T,Any}, T)))
-        @test Core.Compiler.is_effect_free(Base.infer_effects(getindex, (Dict{T,Any}, T)))
+        @test Core.Compiler.is_effect_free(Base.infer_effects(getindex, (Dict{T,Any}, T))) broken=coverage_enabled
         @test !Core.Compiler.is_nothrow(Base.infer_effects(getindex, (Dict{T,Any}, T)))
         @test Core.Compiler.is_terminates(Base.infer_effects(getindex, (Dict{T,Any}, T)))
     end

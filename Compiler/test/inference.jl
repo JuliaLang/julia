@@ -7,6 +7,8 @@ using Test
 include("setup_Compiler.jl")
 include("irutils.jl")
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 # tests for Compiler correctness and precision
 using .Compiler: Conditional, ⊑
 isdispatchelem(@nospecialize x) = !isa(x, Type) || Compiler.isdispatchelem(x)
@@ -2562,13 +2564,13 @@ end |> only === Int
     end
     return 0
 end |> only === Int
-@test_broken Base.return_types((AliasableField{Union{Nothing,Int}},); interp=MustAliasInterpreter()) do x
+@test Base.return_types((AliasableField{Union{Nothing,Int}},); interp=MustAliasInterpreter()) do x
     if !isnothing(x.f)
         return x.f
     end
     return 0
 end |> only === Int
-@test_broken Base.return_types((AliasableField{Union{Some{Int},Nothing}},); interp=MustAliasInterpreter()) do x
+@test Base.return_types((AliasableField{Union{Some{Int},Nothing}},); interp=MustAliasInterpreter()) do x
     if !isnothing(x.f)
         return x.f
     end
@@ -5196,9 +5198,9 @@ end
 invoke_concretized1(a::Int) = a > 0 ? :int : nothing
 invoke_concretized1(a::Integer) = a > 0 ? "integer" : nothing
 # check if `invoke(invoke_concretized1, Tuple{Integer}, ::Int)` is foldable
-@test Base.infer_effects((Int,)) do a
+@test (Base.infer_effects((Int,)) do a
     @invoke invoke_concretized1(a::Integer)
-end |> Compiler.is_foldable
+end |> Compiler.is_foldable) broken=coverage_enabled
 @test Base.return_types() do
     @invoke invoke_concretized1(42::Integer)
 end |> only === String
@@ -5206,9 +5208,9 @@ end |> only === String
 invoke_concretized2(a::Int) = a > 0 ? :int : nothing
 invoke_concretized2(a::Integer) = a > 0 ? :integer : nothing
 # check if `invoke(invoke_concretized2, Tuple{Integer}, ::Int)` is foldable
-@test Base.infer_effects((Int,)) do a
+@test (Base.infer_effects((Int,)) do a
     @invoke invoke_concretized2(a::Integer)
-end |> Compiler.is_foldable
+end |> Compiler.is_foldable) broken=coverage_enabled
 @test let
     Base.Experimental.@force_compile
     @invoke invoke_concretized2(42::Integer)
@@ -5307,7 +5309,7 @@ type_level_recurse_entry() = Val{type_level_recurse1(1)}()
 f_no_bail_effects_any(x::Any) = x
 f_no_bail_effects_any(x::NamedTuple{(:x,), Tuple{Any}}) = getfield(x, 1)
 g_no_bail_effects_any(x::Any) = f_no_bail_effects_any(x)
-@test Compiler.is_foldable_nothrow(Base.infer_effects(g_no_bail_effects_any, Tuple{Any}))
+@test Compiler.is_foldable_nothrow(Base.infer_effects(g_no_bail_effects_any, Tuple{Any})) broken=coverage_enabled
 
 # issue #48374
 @test (() -> Union{<:Nothing})() == Nothing
@@ -6141,42 +6143,42 @@ end == Val{true}
 end == Val
 
 # 2. getfield modeling for partial struct
-@test Base.infer_effects((Any,Any); optimize=false) do a, b
+@test (Base.infer_effects((Any,Any); optimize=false) do a, b
     getfield(PartiallyInitialized1(a, b), :b)
-end |> Compiler.is_nothrow
+end |> Compiler.is_nothrow)
 @test Base.infer_effects((Any,Any,Symbol,); optimize=false) do a, b, f
     getfield(PartiallyInitialized1(a, b), f, #=boundscheck=#false)
 end |> !Compiler.is_nothrow
-@test Base.infer_effects((Any,Any,Any); optimize=false) do a, b, c
+@test (Base.infer_effects((Any,Any,Any); optimize=false) do a, b, c
     getfield(PartiallyInitialized1(a, b, c), :c)
-end |> Compiler.is_nothrow
-@test Base.infer_effects((Any,Any,Any,Symbol); optimize=false) do a, b, c, f
+end |> Compiler.is_nothrow)
+@test (Base.infer_effects((Any,Any,Any,Symbol); optimize=false) do a, b, c, f
     getfield(PartiallyInitialized1(a, b, c), f, #=boundscheck=#false)
-end |> Compiler.is_nothrow
-@test Base.infer_effects((Any,Any); optimize=false) do a, b
+end |> Compiler.is_nothrow)
+@test (Base.infer_effects((Any,Any); optimize=false) do a, b
     getfield(PartiallyInitialized2(a, b), :b)
-end |> Compiler.is_nothrow
+end |> Compiler.is_nothrow)
 @test Base.infer_effects((Any,Any,Symbol,); optimize=false) do a, b, f
     getfield(PartiallyInitialized2(a, b), f, #=boundscheck=#false)
 end |> !Compiler.is_nothrow
-@test Base.infer_effects((Any,Any,Any); optimize=false) do a, b, c
+@test (Base.infer_effects((Any,Any,Any); optimize=false) do a, b, c
     getfield(PartiallyInitialized2(a, b, c), :c)
-end |> Compiler.is_nothrow
-@test Base.infer_effects((Any,Any,Any,Symbol); optimize=false) do a, b, c, f
+end |> Compiler.is_nothrow)
+@test (Base.infer_effects((Any,Any,Any,Symbol); optimize=false) do a, b, c, f
     getfield(PartiallyInitialized2(a, b, c), f, #=boundscheck=#false)
-end |> Compiler.is_nothrow
+end |> Compiler.is_nothrow)
 
 # isdefined-Conditionals
-@test Base.infer_effects((Base.RefValue{Any},)) do x
+@test (Base.infer_effects((Base.RefValue{Any},)) do x
     if isdefined(x, :x)
         return getfield(x, :x)
     end
-end |> Compiler.is_nothrow
-@test Base.infer_effects((Base.RefValue{Any},)) do x
+end |> Compiler.is_nothrow)
+@test (Base.infer_effects((Base.RefValue{Any},)) do x
     if isassigned(x)
         return x[]
     end
-end |> Compiler.is_nothrow
+end |> Compiler.is_nothrow)
 @test Base.infer_effects((Any,Any); optimize=false) do a, c
     x = PartiallyInitialized2(a)
     x.c = c
@@ -6184,7 +6186,7 @@ end |> Compiler.is_nothrow
         return x.b
     end
 end |> !Compiler.is_nothrow
-@test Base.infer_effects((PartiallyInitialized2,); optimize=false) do x
+@test (Base.infer_effects((PartiallyInitialized2,); optimize=false) do x
     if isdefined(x, :b)
         if isdefined(x, :c)
             return x.c
@@ -6192,14 +6194,14 @@ end |> !Compiler.is_nothrow
         return x.b
     end
     return nothing
-end |> Compiler.is_nothrow
-@test Base.infer_effects((Bool,Int,); optimize=false) do c, b
+end |> Compiler.is_nothrow)
+@test (Base.infer_effects((Bool,Int,); optimize=false) do c, b
     x = c ? PartiallyInitialized1(true) : PartiallyInitialized1(true, b)
     if isdefined(x, :b)
         return Val(x.a), x.b
     end
     return nothing
-end |> Compiler.is_nothrow
+end |> Compiler.is_nothrow)
 
 # refine `undef` information from `@isdefined` check
 function isdefined_nothrow(c, x)
@@ -6260,9 +6262,9 @@ end == TypeError
 # nothrow modeling for `invoke` calls
 f_invoke_nothrow(::Number) = :number
 f_invoke_nothrow(::Int) = :int
-@test Base.infer_effects((Int,)) do x
+@test (Base.infer_effects((Int,)) do x
     @invoke f_invoke_nothrow(x::Number)
-end |> Compiler.is_nothrow
+end |> Compiler.is_nothrow)
 @test Base.infer_effects((Char,)) do x
     @invoke f_invoke_nothrow(x::Number)
 end |> !Compiler.is_nothrow
@@ -6401,16 +6403,16 @@ end
 
 global global_decl_defined
 global_decl_defined = 42
-@test Base.infer_effects(; interp=AssumeBindingsStaticInterp()) do
+@test (Base.infer_effects(; interp=AssumeBindingsStaticInterp()) do
     global global_decl_defined
     return global_decl_defined
-end |> Compiler.is_nothrow
+end |> Compiler.is_nothrow)
 global global_decl_defined2::Int
 global_decl_defined2 = 42
-@test Base.infer_effects(; interp=AssumeBindingsStaticInterp()) do
+@test (Base.infer_effects(; interp=AssumeBindingsStaticInterp()) do
     global global_decl_defined2
     return global_decl_defined2
-end |> Compiler.is_nothrow
+end |> Compiler.is_nothrow)
 
 @eval get_exception() = $(Expr(:the_exception))
 @test Base.infer_return_type() do
