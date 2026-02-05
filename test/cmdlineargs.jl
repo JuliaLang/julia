@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Libdl
+import Profile
 
 # helper function for passing input to stdin
 # and returning the stdout result
@@ -1477,6 +1478,15 @@ end
             Base.Linking.link_image(joinpath(dir, "sys.o.a"), joinpath(dir, "sys.so"))
             @test readchomp(`$(Base.julia_cmd()) -t1,0 -J $(dir)/sys.so -E 'hasmethod(sort, (Vector{Int},), (:dims,))'`) == "true"
         end
+    end
+end
+
+@testset "--output-heap-snapshot" begin
+    mktempdir() do dir
+        Base.compilecache(Base.PkgId(Base.UUID("3161d3a3-bdf6-5164-811a-617609db77b4"), "Zstd_jll");
+                          flags=`--output-heap-snapshot=Zstd_jll.heapsnapshot`)
+        Profile.HeapSnapshot.assemble_snapshot("Zstd_jll.heapsnapshot")
+        @test isfile("Zstd_jll.heapsnapshot")
     end
 end
 
