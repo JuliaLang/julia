@@ -40,6 +40,12 @@ A useful bug report filed as a GitHub issue provides information about how to re
 
 ## Submitting contributions
 
+### Working on issues
+
+We rarely assign issues to contributors, especially not to new contributors. If you want to work on an issue, just go ahead and open a pull request. There's no need to ask for permission or comment that you're planning to work on it—just start working and submit your PR when ready.
+
+This policy exists to avoid ["cookie licking"](https://www.redhat.com/en/blog/dont-lick-cookie) (claiming an issue without following through), which can discourage others from contributing. If someone else is already working on the same issue, that's okay—multiple approaches can be valuable, and reviewers will help sort out which solution is best.
+
 ### Contributor Checklist
 
 * Create a [GitHub account](https://github.com/signup/free).
