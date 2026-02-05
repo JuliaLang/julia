@@ -147,85 +147,136 @@ end
 # Switch to Core.eval for sanity-checking
 expr_eval(mod, ex) = JuliaLowering.eval(mod, ex)
 
-enable_softscope(e) = Expr(:block, Expr(:softscope, true), e)
-inner_neutral(e) = :(for _ in 1:1; $e; end)
-inner_func(e) = :((function (); $e end)(#=called=#))
-inner_hard(e) = :(let; $e end)
+enable_softscope(e...) = Expr(:block, Expr(:softscope, true), e...)
+wrap_none(e...) = Expr(:block, e...)
+wrap_neutral(e...) = Expr(:try, # use try so that a value is returned
+                          Expr(:block, e...),
+                          :catchvar, Expr(:block,
+                                          Expr(:call, rethrow, :catchvar)))
+wrap_func(e...) = Expr(:call,
+                       Expr(:function, Expr(:tuple),
+                            Expr(:block, e...)))
+wrap_hard(e...) = Expr(:let, Expr(:block), Expr(:block, e...))
 
-outer_none(e) = :(begin
-                      local lname = false
+decls(e...) = Expr(:block,
+                   :(local lname = false),
+                   :(global gname = false),
+                   e...)
+
+decls_none(e...) = decls(e...)
+decls_neutral(e...) = wrap_neutral(decls(), e...)
+decls_hard(e...) = :(let lname = false # takes a different code path in flisp
                       global gname = false
-                      $e
+                      $(e...)
                   end)
-outer_neutral(e) = :(try # use try so that a value is returned
-                         local lname = false
-                         global gname = false
-                         $e
-                     catch what
-                         rethrow(what)
-                     end)
-outer_hard(e) = :(let lname = false # takes a different code path in flisp
-                      global gname = false
-                      $e
-                  end)
-outer_func(e) = :((function (argname::spname = false) where spname
-                       local lname = false
-                       global gname = false
-                       $e
-                   end)(#=called=#))
+decls_func(e...) = :((function (argname::spname = false) where spname
+                          local lname = false
+                          global gname = false
+                          $(e...)
+                      end)(#=called=#))
 
 lhs_names = (:lname, :gname, :argname, :spname)
 
-# For each distinct outer and inner scope, and each kind of variable in the
-# outer scope, set the same name to true from the inner scope
+# For each distinct outer scope, declaration scope, and assignment scope, and
+# each kind of variable (lhs_names) in the declaration scope, set the same name
+# to true from the inner scope
 @testset "Behaviour of `=` in local scope (shadow or assign-existing)" begin
-    expected_outer_vals = Dict{Tuple{Bool, Function, Function}, Tuple}(
-        (true,  outer_none,    inner_func   ) => (true,false),
-        (true,  outer_none,    inner_hard   ) => (true,false),
-        (true,  outer_none,    inner_neutral) => (true,true),
-        (true,  outer_neutral, inner_func   ) => (true,true),
-        (true,  outer_neutral, inner_hard   ) => (true,true),
-        (true,  outer_neutral, inner_neutral) => (true,true),
-        (true,  outer_hard,    inner_func   ) => (true,true),
-        (true,  outer_hard,    inner_hard   ) => (true,true),
-        (true,  outer_hard,    inner_neutral) => (true,true),
-        (true,  outer_func,    inner_func   ) => (true,true,true),
-        (true,  outer_func,    inner_hard   ) => (true,true,true),
-        (true,  outer_func,    inner_neutral) => (true,true,true),
-        (false, outer_none,    inner_func   ) => (true,false),
-        (false, outer_none,    inner_hard   ) => (true,false),
-        (false, outer_none,    inner_neutral) => (true,false),
-        (false, outer_neutral, inner_func   ) => (true,true),
-        (false, outer_neutral, inner_hard   ) => (true,true),
-        (false, outer_neutral, inner_neutral) => (true,true),
-        (false, outer_hard,    inner_func   ) => (true,true),
-        (false, outer_hard,    inner_hard   ) => (true,true),
-        (false, outer_hard,    inner_neutral) => (true,true),
-        (false, outer_func,    inner_func   ) => (true,true,true),
-        (false, outer_func,    inner_hard   ) => (true,true,true),
-        (false, outer_func,    inner_neutral) => (true,true,true),
+    expected_outer_vals = Dict{Tuple{Bool, Function, Function, Function}, Tuple}(
+        (false, decls_func,    wrap_hard,    wrap_func   ) => (true,true,true),
+        (false, decls_func,    wrap_hard,    wrap_hard   ) => (true,true,true),
+        (false, decls_func,    wrap_hard,    wrap_neutral) => (true,true,true),
+        (false, decls_func,    wrap_neutral, wrap_func   ) => (true,true,true),
+        (false, decls_func,    wrap_neutral, wrap_hard   ) => (true,true,true),
+        (false, decls_func,    wrap_neutral, wrap_neutral) => (true,true,true),
+        (false, decls_func,    wrap_none,    wrap_func   ) => (true,true,true),
+        (false, decls_func,    wrap_none,    wrap_hard   ) => (true,true,true),
+        (false, decls_func,    wrap_none,    wrap_neutral) => (true,true,true),
+        (false, decls_hard,    wrap_hard,    wrap_func   ) => (true,true),
+        (false, decls_hard,    wrap_hard,    wrap_hard   ) => (true,true),
+        (false, decls_hard,    wrap_hard,    wrap_neutral) => (true,true),
+        (false, decls_hard,    wrap_neutral, wrap_func   ) => (true,true),
+        (false, decls_hard,    wrap_neutral, wrap_hard   ) => (true,true),
+        (false, decls_hard,    wrap_neutral, wrap_neutral) => (true,true),
+        (false, decls_hard,    wrap_none,    wrap_func   ) => (true,true),
+        (false, decls_hard,    wrap_none,    wrap_hard   ) => (true,true),
+        (false, decls_hard,    wrap_none,    wrap_neutral) => (true,true),
+        (false, decls_neutral, wrap_hard,    wrap_func   ) => (true,true),
+        (false, decls_neutral, wrap_hard,    wrap_hard   ) => (true,true),
+        (false, decls_neutral, wrap_hard,    wrap_neutral) => (true,true),
+        (false, decls_neutral, wrap_neutral, wrap_func   ) => (true,true),
+        (false, decls_neutral, wrap_neutral, wrap_hard   ) => (true,true),
+        (false, decls_neutral, wrap_neutral, wrap_neutral) => (true,true),
+        (false, decls_neutral, wrap_none,    wrap_func   ) => (true,true),
+        (false, decls_neutral, wrap_none,    wrap_hard   ) => (true,true),
+        (false, decls_neutral, wrap_none,    wrap_neutral) => (true,true),
+        (false, decls_none,    wrap_hard,    wrap_func   ) => (true,false),
+        (false, decls_none,    wrap_hard,    wrap_hard   ) => (true,false),
+        (false, decls_none,    wrap_hard,    wrap_neutral) => (true,false),
+        (false, decls_none,    wrap_neutral, wrap_func   ) => (true,false),
+        (false, decls_none,    wrap_neutral, wrap_hard   ) => (true,false),
+        (false, decls_none,    wrap_neutral, wrap_neutral) => (true,false),
+        (false, decls_none,    wrap_none,    wrap_func   ) => (true,false),
+        (false, decls_none,    wrap_none,    wrap_hard   ) => (true,false),
+        (false, decls_none,    wrap_none,    wrap_neutral) => (true,false),
+        (true,  decls_func,    wrap_hard,    wrap_func   ) => (true,true,true),
+        (true,  decls_func,    wrap_hard,    wrap_hard   ) => (true,true,true),
+        (true,  decls_func,    wrap_hard,    wrap_neutral) => (true,true,true),
+        (true,  decls_func,    wrap_neutral, wrap_func   ) => (true,true,true),
+        (true,  decls_func,    wrap_neutral, wrap_hard   ) => (true,true,true),
+        (true,  decls_func,    wrap_neutral, wrap_neutral) => (true,true,true),
+        (true,  decls_func,    wrap_none,    wrap_func   ) => (true,true,true),
+        (true,  decls_func,    wrap_none,    wrap_hard   ) => (true,true,true),
+        (true,  decls_func,    wrap_none,    wrap_neutral) => (true,true,true),
+        (true,  decls_hard,    wrap_hard,    wrap_func   ) => (true,true),
+        (true,  decls_hard,    wrap_hard,    wrap_hard   ) => (true,true),
+        (true,  decls_hard,    wrap_hard,    wrap_neutral) => (true,true),
+        (true,  decls_hard,    wrap_neutral, wrap_func   ) => (true,true),
+        (true,  decls_hard,    wrap_neutral, wrap_hard   ) => (true,true),
+        (true,  decls_hard,    wrap_neutral, wrap_neutral) => (true,true),
+        (true,  decls_hard,    wrap_none,    wrap_func   ) => (true,true),
+        (true,  decls_hard,    wrap_none,    wrap_hard   ) => (true,true),
+        (true,  decls_hard,    wrap_none,    wrap_neutral) => (true,true),
+        (true,  decls_neutral, wrap_hard,    wrap_func   ) => (true,true),
+        (true,  decls_neutral, wrap_hard,    wrap_hard   ) => (true,true),
+        (true,  decls_neutral, wrap_hard,    wrap_neutral) => (true,true),
+        (true,  decls_neutral, wrap_neutral, wrap_func   ) => (true,true),
+        (true,  decls_neutral, wrap_neutral, wrap_hard   ) => (true,true),
+        (true,  decls_neutral, wrap_neutral, wrap_neutral) => (true,true),
+        (true,  decls_neutral, wrap_none,    wrap_func   ) => (true,true),
+        (true,  decls_neutral, wrap_none,    wrap_hard   ) => (true,true),
+        (true,  decls_neutral, wrap_none,    wrap_neutral) => (true,true),
+        (true,  decls_none,    wrap_hard,    wrap_func   ) => (true,false),
+        (true,  decls_none,    wrap_hard,    wrap_hard   ) => (true,false),
+        (true,  decls_none,    wrap_hard,    wrap_neutral) => (true,false),
+        (true,  decls_none,    wrap_neutral, wrap_func   ) => (true,false),
+        (true,  decls_none,    wrap_neutral, wrap_hard   ) => (true,false),
+        (true,  decls_none,    wrap_neutral, wrap_neutral) => (true,true),
+        (true,  decls_none,    wrap_none,    wrap_func   ) => (true,false),
+        (true,  decls_none,    wrap_none,    wrap_hard   ) => (true,false),
+        (true,  decls_none,    wrap_none,    wrap_neutral) => (true,true),
     )
     expected_s(b::Bool) = b ? "assignment to outer var" : "brand-new var"
 
     tmp_test_mod = Module()
     tmp_test_mod_2 = Module()
 
-    for soft_mode in (true, false),
-        outer_s in (outer_none, outer_neutral, outer_hard, outer_func),
-        inner_s in (inner_func, inner_hard, inner_neutral),
-        (lhs_i, lhs) in enumerate(lhs_names)
+    for ((soft_mode, decls_s, middle_s, assign_s), results) in expected_outer_vals,
+            (lhs_i, lhs) in enumerate(lhs_names)
 
-        ex = outer_s(Expr(:block, inner_s(:($lhs = true)), lhs))
+        ex = decls_s(middle_s(assign_s(:($lhs = true))), lhs)
         soft_mode && (ex = enable_softscope(ex))
 
-        if lhs in (:argname, :spname) && parent !== outer_func
+        if lhs in (:argname, :spname) && decls_s !== decls_func
             continue
         elseif lhs === :spname
             @test_throws LoweringError expr_eval(tmp_test_mod, ex)
         else
-            expected = expected_outer_vals[(soft_mode, outer_s, inner_s)][lhs_i]
+            expected = results[lhs_i]
+            reference_ok = reference_eval(tmp_test_mod_2, ex) === expected
+            !reference_ok && @error("flisp produced unexpected result; fix that or JL scope tests:\n",
+                                   "expected $(expected_s(expected)), got $(expected_s(!expected))\n", ex)
             ok = expr_eval(tmp_test_mod, ex) === expected
-            !ok && error("expected $(expected_s(expected)), got $(expected_s(!expected))\n", ex)
+            !ok && @error("expected $(expected_s(expected)), got $(expected_s(!expected))\n", ex)
             @test ok
         end
 
@@ -238,7 +289,7 @@ end
 
 @testset "global declarations at top level are ignored in assignment resolution" begin
     suggest_global(e) = :(begin; global declared_unassigned_global; $e; end)
-    for soft_mode in (true, false), scope in (inner_func, inner_hard, inner_neutral)
+    for soft_mode in (true, false), scope in (wrap_func, wrap_hard, wrap_neutral)
         ex = scope(:(declared_unassigned_global = true))
         soft_mode && (ex = enable_softscope(ex))
         expr_eval(test_mod, ex)
@@ -264,7 +315,7 @@ end
 # lowered)
 @testset "assignments at top level can influence assignment resolution in soft scopes" begin
     for soft_mode in (true, false),
-        s1 in (inner_neutral, (e)->inner_neutral(inner_neutral(e))),
+        s1 in (wrap_neutral, (e)->wrap_neutral(wrap_neutral(e))),
         g_assign in (:(assigned_global = false), :(global assigned_global = false))
 
         inner_assign_islocal = s1(Expr(
