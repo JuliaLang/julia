@@ -3,12 +3,6 @@ try
     # test local (dev) copy of JuliaLowering, not yet vendored into Base
     Base.set_active_project(joinpath(@__DIR__, "..", "Project.toml"))
     manifest_path = joinpath(@__DIR__, "..", "Manifest.toml")
-    isfile(manifest_path) && rm(manifest_path)
-
-    # activate and instantiate JuliaSyntax as a local package (rather than using
-    # Base.JuliaSyntax)
-    import Pkg
-    Pkg.instantiate()
 
     # restore error hints (emptied by `testdefs.jl`) so that errors print as
     # JuliaLowering expects them to

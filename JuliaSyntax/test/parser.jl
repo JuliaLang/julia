@@ -377,6 +377,14 @@ tests = [
         "@doc x\n\ny"  =>  "(macrocall (macro_name doc) x)"
         "@doc x\nend"  =>  "(macrocall (macro_name doc) x)"
 
+        # Special 1.14 @VERSION parsing rules
+        ((v=v"1.13",), "@VERSION")        =>  "(macrocall (macro_name VERSION))"
+        ((v=v"1.13",), "@A.B.VERSION")    =>  "(macrocall (macro_name (. (. A B) VERSION)))"
+        ((v=v"1.13",), "A.B.@VERSION")     =>  "(macrocall (. (. A B) (macro_name VERSION)))"
+        ((v=v"1.14",), "@VERSION")        =>  "(macrocall (macro_name VERSION) v\"1.14.0\")"
+        ((v=v"1.14",), "@A.B.VERSION")    =>  "(macrocall (macro_name (. (. A B) VERSION)) v\"1.14.0\")"
+        ((v=v"1.14",), "A.B.@VERSION")     =>  "(macrocall (. (. A B) (macro_name VERSION)) v\"1.14.0\")"
+
         # calls with brackets
         "f(a,b)"  => "(call f a b)"
         "f(a,)"   => "(call-, f a)"
@@ -543,6 +551,13 @@ tests = [
         # break/continue
         "break"    => "(break)"
         "continue" => "(continue)"
+        # break/continue with labels (plain identifiers only, requires 1.14+)
+        ((v=v"1.14",), "break _")  => "(break _)"
+        ((v=v"1.14",), "break _ x") => "(break _ x)"
+        ((v=v"1.14",), "break label") => "(break label)"
+        ((v=v"1.14",), "break label x") => "(break label x)"
+        ((v=v"1.14",), "continue _") => "(continue _)"
+        ((v=v"1.14",), "continue label") => "(continue label)"
         # module/baremodule
         "module A end"      =>  "(module A (block))"
         "baremodule A end"  =>  "(module-bare A (block))"
@@ -603,6 +618,8 @@ tests = [
         "macro \$f()    end"   =>  "(macro (call (\$ f)) (block))"
         "macro (\$f)()  end"   =>  "(macro (call (parens (\$ f))) (block))"
         "function (x) body end"=>  "(function (tuple-p x) (block body))"
+        "function (x)\n    body\nend"=>  "(function (tuple-p x) (block body))"
+        "function (x)\n() end" =>  "(function (tuple-p x) (block (tuple-p)))"
         "function (x,y) end"   =>  "(function (tuple-p x y) (block))"
         "function (x,y,) end"  =>  "(function (tuple-p-, x y) (block))"
         "function (x=1) end"   =>  "(function (tuple-p (= x 1)) (block))"

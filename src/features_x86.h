@@ -136,7 +136,7 @@ JL_FEATURE_DEF_NAME(amx_complex, 32 * 10 + 8, 170000, "amx-complex")
 JL_FEATURE_DEF(avxvnniint16, 32 * 10 + 10, 170000)
 JL_FEATURE_DEF(prefetchi, 32 * 10 + 14, 160000)
 JL_FEATURE_DEF(usermsr, 32 * 10 + 15, 170000)
-// JL_FEATURE_DEF(avx10, 32 * 10 + 19, 170000) // TODO: What to do about avx10 and it's mess?
+// JL_FEATURE_DEF(avx10, 32 * 10 + 19, 170000) // TODO: What to do about avx10 and its mess?
 // JL_FEATURE_DEF(apxf, 32 * 10 + 21, 190000)
 
 // EAX=0x14,ECX=0: EBX

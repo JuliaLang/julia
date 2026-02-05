@@ -241,4 +241,251 @@ method_ex = lower_str(test_mod, "Base.Experimental.@opaque x -> 2x").args[1].cod
 @test method_ex.args[1] === nothing
 @test method_ex.args[4] isa LineNumberNode
 
+# Argument reassigned in outer scope - no Box needed
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_arg_reassign(x)
+        x = 1
+        return ()->x
+    end
+    f_arg_reassign(100)()
+end
+""") == 1
+
+# Argument reassigned in if-branch before capture - no Box needed (PR #60567 review)
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_arg_if_branch(x, cond)
+        if cond
+            x = 5
+            return ()->x
+        end
+        return x
+    end
+    # When closure is returned, it captures the reassigned value
+    f_arg_if_branch(100, true)()
+end
+""") == 5
+
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_arg_if_branch2(x, cond)
+        if cond
+            x = 5
+            return ()->x
+        end
+        return x
+    end
+    # When original value is returned
+    f_arg_if_branch2(100, false)
+end
+""") == 100
+
+# Variable declared outside loop, assigned inside - needs Box (issue #37690)
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_loop_capture()
+        local f
+        local x
+        for k = 1 : 2
+            x = k
+            if k == 1
+                f = () -> x
+            end
+        end
+        f()
+    end
+    f_loop_capture()
+end
+""") == 2
+
+# Typed local declared outside loop, assigned inside - needs Box (issue #37690)
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_typed_local_loop()
+        local f
+        local x::Int
+        for k = 1:2
+            x = k
+            if k == 1
+                f = () -> x
+            end
+        end
+        f()
+    end
+    f_typed_local_loop()
+end
+""") == 2
+
+# Label can be jumped to, bypassing assignment - needs Box
+@test JuliaLowering.include_string(test_mod, """
+let
+    @goto L
+    y = 1
+    @label L
+    f = ()->y
+    f.y
+end
+""") isa Core.Box
+
+# Argument reassigned inside loop - needs Box (argument is implicitly declared outside loop) (issue #37690)
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_arg_loop(x)
+        local f
+        for i in 1:2
+            x = i
+            i == 1 && (f = ()->x;)
+        end
+        f()
+    end
+    f_arg_loop(0)
+end
+""") == 2
+
+# Variable in while-true loop with break - needs Box (issue #37690)
+let x = JuliaLowering.include_string(test_mod, """
+    begin
+        function f_break_loop()
+            local f
+            local x
+            i = 1
+            while true
+                x = i
+                if i == 1
+                    f = ()->x
+                end
+                i >= 3 && break
+                i += 1
+            end
+            f.x
+        end
+        f_break_loop()
+    end
+    """)
+    @test x isa Core.Box
+    @test x.contents == 3
+end
+
+# Variable in while-true loop with post-dominated capture (not captured in a branch) - no Box
+let x = JuliaLowering.include_string(test_mod, """
+    begin
+        function f_break_loop2()
+            local f
+            local x
+            i = 1
+            while true
+                x = i
+                f = ()->x
+                i >= 3 && break
+                i += 1
+            end
+            f.x
+        end
+        f_break_loop2()
+    end
+    """)
+    @test x isa Int
+    @test x === 3
+end
+
+let keep = JuliaLowering.include_string(test_mod, """
+    begin
+        function f_for_after_capture(cond)
+            if cond
+                keep = Set{Base.PkgId}()
+                return ()->keep
+            end
+            for x in 1:3; end
+        end
+        f_for_after_capture(true).keep
+    end
+    """)
+    @test keep isa Set{Base.PkgId}
+    @test keep == Set{Base.PkgId}()
+end
+
+# Function where arguments are captured into closure and assigned (boxed)
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_arg_captured_assigned(x)
+        function g()
+            x = 10
+        end
+        g()
+        x
+    end
+    f_arg_captured_assigned(1)
+end
+""") == 10
+
+# Closure declaration with no methods
+@test JuliaLowering.include_string(test_mod, """
+begin
+    local no_method_f
+    function no_method_f
+    end
+    no_method_f
+end
+""") isa Function
+
+# Closure with keyword arguments
+@test JuliaLowering.include_string(test_mod, """
+let y = 10
+    function f_kw_closure(; x=1)
+        x + y
+    end
+    (f_kw_closure(), f_kw_closure(x=5))
+end
+""") == (11, 15)
+
+# Anonymous function syntax with `function`
+@test JuliaLowering.include_string(test_mod, """
+begin
+    local y = 2
+    call_it(function (x) x + y end, 3)
+end
+""") == 5
+
+# Closure where static parameter is captured
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_static_param_capture(::T) where T
+        function g()
+            T
+        end
+        g()
+    end
+    f_static_param_capture(1)
+end
+""") == Int
+
+# Closure with static parameter that may be undefined
+JuliaLowering.include_string(test_mod, """
+function f_undef_static_param(x::Union{T,Nothing}) where T
+    function inner()
+        return T
+    end
+    inner
+end
+""")
+@test_throws UndefVarError test_mod.f_undef_static_param(nothing)()
+@test test_mod.f_undef_static_param(42)() == Int
+
+# https://github.com/JuliaLang/JuliaLowering.jl/issues/134#issuecomment-3739626003
+JuliaLowering.include_string(test_mod, """
+function f_update_outer_capture()
+    local response # declare outside closure
+    f = ()->begin
+        response = 1
+    end
+    f()
+    return (f, response)
+end
+""")
+let (f, response) = test_mod.f_update_outer_capture()
+    @test f.response isa Core.Box
+    @test response == 1
+end
+
 end

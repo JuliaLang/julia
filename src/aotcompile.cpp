@@ -41,6 +41,7 @@
 #include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/Support/FormatAdapters.h>
 #include <llvm/Linker/Linker.h>
+#include <llvm/Support/TimeProfiler.h>
 
 using namespace llvm;
 
@@ -565,7 +566,9 @@ Function *IRLinker_copyFunctionProto(Module *DstM, Function *SF) {
   auto *F = Function::Create(SF->getFunctionType(), SF->getLinkage(),
                              SF->getAddressSpace(), SF->getName(), DstM);
   F->copyAttributesFrom(SF);
+#if JL_LLVM_VERSION < 210000
   F->IsNewDbgInfoFormat = SF->IsNewDbgInfoFormat;
+#endif
 
   // Remove these copied constants since they point to the source module.
   F->setPersonalityFn(nullptr);
@@ -844,9 +847,12 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
                 continue; // skip any duplicates that accidentally made there way in here (or make this an error?)
             if (jl_ir_inlining_cost((jl_value_t*)src) < UINT16_MAX)
                 params.safepoint_on_entry = false; // ensure we don't block ExpandAtomicModifyPass from inlining this code if applicable
-            orc::ThreadSafeModule result_m = jl_create_ts_module(name_from_method_instance(jl_get_ci_mi(codeinst)),
-                    params.tsctx, clone.getModuleUnlocked()->getDataLayout(),
-                    Triple(clone.getModuleUnlocked()->getTargetTriple()));
+            orc::ThreadSafeModule result_m =
+                jl_create_ts_module(name_from_method_instance(jl_get_ci_mi(codeinst)),
+                                    params.tsctx,
+                                    clone.getModuleUnlocked()->getDataLayout(),
+                                    Triple(clone.getModuleUnlocked()->getTargetTriple()),
+                                    clone.getModuleUnlocked());
             jl_llvm_functions_t decls;
             if (!(params.params->force_emit_all) && jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr)
                 decls.functionObject = "jl_fptr_const_return";
@@ -1557,7 +1563,11 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
     AOTOutputs out;
     auto TM = std::unique_ptr<TargetMachine>(
         SourceTM.getTarget().createTargetMachine(
+#if JL_LLVM_VERSION < 210000
             SourceTM.getTargetTriple().str(),
+#else
+            SourceTM.getTargetTriple(),
+#endif
             SourceTM.getTargetCPU(),
             SourceTM.getTargetFeatureString(),
             SourceTM.Options,
@@ -1585,7 +1595,11 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
 
         auto PMTM = std::unique_ptr<TargetMachine>(
             SourceTM.getTarget().createTargetMachine(
+#if JL_LLVM_VERSION < 210000
                 SourceTM.getTargetTriple().str(),
+#else
+                SourceTM.getTargetTriple(),
+#endif
                 SourceTM.getTargetCPU(),
                 SourceTM.getTargetFeatureString(),
                 SourceTM.Options,
@@ -1598,7 +1612,10 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
         options.sanitize_thread = jl_options.target_sanitize_thread;
         options.sanitize_address = jl_options.target_sanitize_address;
         NewPM optimizer{std::move(PMTM), getOptLevel(jl_options.opt_level), options};
-        optimizer.run(M);
+        {
+            TimeTraceScope OptimizeScope("AOT Optimize", M.getModuleIdentifier());
+            optimizer.run(M);
+        }
         assert(!verifyLLVMIR(M));
         bool inject_aliases = false;
         for (auto &F : M.functions()) {
@@ -1663,6 +1680,7 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
 
     if (obj) {
         timers.obj.startTimer();
+        TimeTraceScope EmitScope("AOT Emit Object", M.getModuleIdentifier());
         raw_svector_ostream OS(out.obj);
         legacy::PassManager emitter;
         addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
@@ -1969,6 +1987,9 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
         std::vector<uv_thread_t> workers(threads);
         for (unsigned i = 0; i < threads; i++) {
             schedule_uv_thread(&workers[i], [&, i]() {
+                // Initialize time trace profiler for this thread if enabled
+                if (jl_is_timing_trace)
+                    timeTraceProfilerInitialize(jl_timing_trace_granularity, ("shard_" + std::to_string(i)).c_str());
                 LLVMContext ctx;
                 ctx.setDiscardValueNames(true);
                 // Lazily deserialize the entire module
@@ -1999,6 +2020,9 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
                 timers[i].construct.stopTimer();
 
                 outputs[i] = add_output_impl(*M, TM, timers[i], unopt_out, opt_out, obj_out, asm_out);
+                // Merge this thread's time trace into the main thread
+                if (jl_is_timing_trace)
+                    timeTraceProfilerFinishThread();
             });
         }
 
@@ -2030,7 +2054,6 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     return outputs;
 }
 
-extern int jl_is_timing_passes;
 static unsigned compute_image_thread_count(const ModuleInfo &info) {
     // 32-bit systems are very memory-constrained
 #ifdef _P32
@@ -2141,7 +2164,11 @@ void jl_dump_native_impl(void *native_code,
     }
     std::unique_ptr<TargetMachine> SourceTM(
         jl_ExecutionEngine->getTarget().createTargetMachine(
+#if JL_LLVM_VERSION < 210000
             TheTriple.getTriple(),
+#else
+            TheTriple,
+#endif
             jl_ExecutionEngine->getTargetCPU(),
             jl_ExecutionEngine->getTargetFeatureString(),
             jl_ExecutionEngine->getTargetOptions(),
@@ -2174,7 +2201,11 @@ void jl_dump_native_impl(void *native_code,
         LLVMContext Context;
         Context.setDiscardValueNames(true);
         Module sysimgM("sysimg", Context);
+#if JL_LLVM_VERSION < 210000
         sysimgM.setTargetTriple(TheTriple.str());
+#else
+        sysimgM.setTargetTriple(TheTriple);
+#endif
         sysimgM.setDataLayout(DL);
         sysimgM.setStackProtectorGuard(StackProtectorGuard);
         sysimgM.setOverrideStackAlignment(OverrideStackAlignment);
@@ -2242,7 +2273,11 @@ void jl_dump_native_impl(void *native_code,
 
     data->M.withModuleDo([&](Module &dataM) {
         JL_TIMING(NATIVE_AOT, NATIVE_Setup);
+#if JL_LLVM_VERSION < 210000
         dataM.setTargetTriple(TheTriple.str());
+#else
+        dataM.setTargetTriple(TheTriple);
+#endif
         dataM.setDataLayout(DL);
         dataM.setPICLevel(PICLevel::BigPIC);
         auto &Context = dataM.getContext();
@@ -2343,7 +2378,11 @@ void jl_dump_native_impl(void *native_code,
         LLVMContext Context;
         Context.setDiscardValueNames(true);
         Module metadataM("metadata", Context);
+#if JL_LLVM_VERSION < 210000
         metadataM.setTargetTriple(TheTriple.str());
+#else
+        metadataM.setTargetTriple(TheTriple);
+#endif
         metadataM.setDataLayout(DL);
         metadataM.setStackProtectorGuard(StackProtectorGuard);
         metadataM.setOverrideStackAlignment(OverrideStackAlignment);

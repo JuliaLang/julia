@@ -12,13 +12,12 @@ import FileWatching
 using Markdown
 import REPL
 
-using .JuliaSyntax: sourcetext, set_numeric_flags
+using .JuliaSyntax: SourceAttrType, sourcetext, set_numeric_flags
 
 using .JuliaLowering:
-    SyntaxGraph, newnode!, ensure_attributes!,
+    SyntaxGraph, new_id!, ensure_attributes!,
     Kind, SourceRef, SyntaxTree, NodeId,
-    makenode, makeleaf, setattr!, sethead!,
-    is_leaf, numchildren, children,
+    setattr!, is_leaf, numchildren, children,
     @ast, flattened_provenance, showprov, LoweringError, MacroExpansionError,
     syntax_graph, Bindings, ScopeLayer, mapchildren
 
@@ -26,15 +25,15 @@ function _ast_test_graph()
     graph = SyntaxGraph()
     ensure_attributes!(graph,
                        kind=Kind, syntax_flags=UInt16,
-                       source=Union{SourceRef,NodeId,Tuple,LineNumberNode},
+                       source=SourceAttrType,
                        var_id=Int, value=Any, name_val=String, is_toplevel_thunk=Bool,
                        toplevel_pure=Bool)
 end
 
 function _source_node(graph, src)
-    id = newnode!(graph)
-    sethead!(graph, id, K"None")
-    setattr!(graph, id, source=src)
+    id = new_id!(graph)
+    setattr!(graph, id, :kind, K"None")
+    setattr!(graph, id, :source, src)
     SyntaxTree(graph, id)
 end
 
@@ -46,22 +45,6 @@ macro ast_(tree)
         @ast graph srcref $tree
     end
 end
-
-function ≈(ex1, ex2)
-    if kind(ex1) != kind(ex2) || is_leaf(ex1) != is_leaf(ex2)
-        return false
-    end
-    if is_leaf(ex1)
-        return get(ex1, :value,    nothing) == get(ex2, :value,    nothing) &&
-               get(ex1, :name_val, nothing) == get(ex2, :name_val, nothing)
-    else
-        if numchildren(ex1) != numchildren(ex2)
-            return false
-        end
-        return all(c1 ≈ c2 for (c1,c2) in zip(children(ex1), children(ex2)))
-    end
-end
-
 
 #-------------------------------------------------------------------------------
 function _format_as_ast_macro(io, ex, indent)
@@ -167,10 +150,11 @@ end
 function format_ir_for_test(mod, case)
     ex = parsestmt(SyntaxTree, case.input)
     try
-        if kind(ex) == K"macrocall" && kind(ex[1]) == K"macro_name" && ex[1][1].name_val == "ast_"
+        if (kind(ex) == K"macrocall" && kind(ex[1]) == K"Identifier" &&
+            ex[1].name_val == "@ast_")
             # Total hack, until @ast_ can be implemented in terms of new-style
             # macros.
-            ex = Base.eval(mod, Expr(ex))
+            ex = Base.eval(mod, JuliaLowering.est_to_expr(ex))
         end
         x = JuliaLowering.lower(mod, ex)
         if case.expect_error
@@ -389,4 +373,12 @@ function reduce_any_failing_toplevel(mod::Module, filename::AbstractString; do_e
         end
     end
     nothing
+end
+
+function reference_lower(mod::Module, x)
+    Base.fl_lower(x, mod, @__FILE__, @__LINE__, Base.get_world_counter())[1]
+end
+
+function reference_eval(mod::Module, x)
+    Core.eval(mod, reference_lower(mod, x))
 end

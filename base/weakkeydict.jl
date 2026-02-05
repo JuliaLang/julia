@@ -195,7 +195,7 @@ function length(t::WeakKeyDict)
 end
 
 function iterate(t::WeakKeyDict{K,V}, state...) where {K, V}
-    return lock(t) do
+    @lock t begin
         while true
             y = iterate(t.ht, state...)
             y === nothing && return nothing

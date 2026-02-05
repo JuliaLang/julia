@@ -93,13 +93,13 @@ dimensions having size 1.
 
 See [`stack`](@ref)`(slices; dims)` for the inverse of `eachslice(A; dims::Integer)`.
 
-See also [`eachrow`](@ref), [`eachcol`](@ref), [`mapslices`](@ref) and [`selectdim`](@ref).
-
 !!! compat "Julia 1.1"
      This function requires at least Julia 1.1.
 
 !!! compat "Julia 1.9"
      Prior to Julia 1.9, this returned an iterator, and only a single dimension `dims` was supported.
+
+See also [`eachrow`](@ref), [`eachcol`](@ref), [`mapslices`](@ref), [`selectdim`](@ref).
 
 # Examples
 
@@ -141,13 +141,13 @@ Row slices are returned as `AbstractVector` views of `A`.
 
 For the inverse, see [`stack`](@ref)`(rows; dims=1)`.
 
-See also [`eachcol`](@ref), [`eachslice`](@ref) and [`mapslices`](@ref).
-
 !!! compat "Julia 1.1"
      This function requires at least Julia 1.1.
 
 !!! compat "Julia 1.9"
      Prior to Julia 1.9, this returned an iterator.
+
+See also [`eachcol`](@ref), [`eachslice`](@ref), [`mapslices`](@ref).
 
 # Examples
 
@@ -179,13 +179,13 @@ Column slices are returned as `AbstractVector` views of `A`.
 
 For the inverse, see [`stack`](@ref)`(cols)` or `reduce(`[`hcat`](@ref)`, cols)`.
 
-See also [`eachrow`](@ref), [`eachslice`](@ref) and [`mapslices`](@ref).
-
 !!! compat "Julia 1.1"
      This function requires at least Julia 1.1.
 
 !!! compat "Julia 1.9"
      Prior to Julia 1.9, this returned an iterator.
+
+See also [`eachrow`](@ref), [`eachslice`](@ref), [`mapslices`](@ref).
 
 # Examples
 

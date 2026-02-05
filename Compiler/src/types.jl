@@ -70,14 +70,23 @@ SpecInfo(src::CodeInfo) = SpecInfo(
 A special wrapper that represents a local variable of a method being analyzed.
 This does not participate in the native type system nor the inference lattice, and it thus
 should be always unwrapped to `v.typ` when performing any type or lattice operations on it.
+
 `v.undef` represents undefined-ness of this static parameter. If `true`, it means that the
 variable _may_ be undefined at runtime, otherwise it is guaranteed to be defined.
 If `v.typ === Bottom` it means that the variable is strictly undefined.
+
+`v.ssadef` represents the "reaching definition" for the variable.
+If zero, then the value comes from an argument.
+If negative, this refers to a "virtual ϕ-block" preceding the given index,
+that would have been inserted as the value of this slot in a truly SSA-form IR.
+If a slot has the same `ssadef` at two different points of execution,
+the slot contents are guaranteed to share identity (`x₀ === x₁`).
 """
 struct VarState
     typ
+    ssadef::Int
     undef::Bool
-    VarState(@nospecialize(typ), undef::Bool) = new(typ, undef)
+    VarState(@nospecialize(typ), ssadef::Int, undef::Bool) = new(typ, ssadef, undef)
 end
 
 struct AnalysisResults

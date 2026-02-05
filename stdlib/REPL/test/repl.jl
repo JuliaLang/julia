@@ -244,8 +244,9 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true,style_input=fa
         @test occursin("shell> ", s) # check for the echo of the prompt
         @test occursin("'", s) # check for the echo of the input
         s = readuntil(stdout_read, "\n\n")
-        @test(startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n  [1] ") ||
-            startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n  [1] "),
+        @info repr(s)
+        @test(startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n [1] ") ||
+            startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n [1] "),
             skip = Sys.iswindows() && Sys.WORD_SIZE == 32)
         write(stdin_write, "\b")
         wait(t)
@@ -2037,5 +2038,58 @@ end
             write(stdin_write, '\x04')  # Exit
             Base.wait(repltask)
         end
+    end
+end
+
+# Test that REPL picks up syntax version from active project and re-latches on project switch
+@testset "REPL syntax version switching" begin
+    mktempdir() do tmpdir
+        # Create two projects with different syntax versions
+        proj1 = joinpath(tmpdir, "proj1")
+        proj2 = joinpath(tmpdir, "proj2")
+        mkpath(proj1)
+        mkpath(proj2)
+        write(joinpath(proj1, "Project.toml"), "syntax.julia_version = \"1.13\"\n")
+        write(joinpath(proj2, "Project.toml"), "syntax.julia_version = \"1.14\"\n")
+        found_113 = found_114 = false
+
+        old_active_project = Base.ACTIVE_PROJECT[]
+        try
+            Base.set_active_project(joinpath(proj1, "Project.toml"))
+
+            fake_repl() do stdin_write, stdout_read, repl
+                repl.specialdisplay = REPL.REPLDisplay(repl)
+                repl.history_file = false
+
+                repltask = @async REPL.run_repl(repl)
+
+                # Wait for the first prompt
+                readuntil(stdout_read, "julia> ")
+
+                # Check syntax version is 1.13 from proj1
+                write(stdin_write, "(Base.Experimental.@VERSION).syntax\r")
+                readuntil(stdout_read, "v\"1.13")
+                found_113 = true
+
+                # Wait for next prompt
+                readuntil(stdout_read, "julia> ")
+
+                # Switch to proj2 with syntax version 1.14
+                write(stdin_write, "Base.set_active_project($(repr(joinpath(proj2, "Project.toml"))))\r")
+                readuntil(stdout_read, "julia> ")
+
+                # Next prompt should use syntax version 1.14 from proj2
+                write(stdin_write, "(Base.Experimental.@VERSION).syntax\r")
+                readuntil(stdout_read, "v\"1.14")
+                found_114 = true
+
+                write(stdin_write, '\x04')
+                Base.wait(repltask)
+            end
+        finally
+            Base.set_active_project(old_active_project)
+        end
+        @test found_113
+        @test found_114
     end
 end

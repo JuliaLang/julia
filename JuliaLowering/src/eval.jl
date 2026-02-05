@@ -32,68 +32,60 @@ end
 # We might consider changing at least the second of these choices, depending on
 # how we end up putting this into Base.
 
-struct LoweringIterator{GraphType}
-    ctx::MacroExpansionContext{GraphType}
-    todo::Vector{Tuple{SyntaxTree{GraphType}, Bool, Int}}
+struct LoweringIterator{Attrs}
+    expr_compat_mode::Bool # later stored in module?
+    todo::Vector{Tuple{SyntaxTree{Attrs}, Bool, Int}}
 end
 
-function lower_init(ex::SyntaxTree, mod::Module, macro_world::UInt; expr_compat_mode::Bool=false)
-    graph = ensure_macro_attributes(syntax_graph(ex))
-    ctx = MacroExpansionContext(graph, mod, expr_compat_mode, macro_world)
-    ex = reparent(ctx, ex)
-    LoweringIterator{typeof(graph)}(ctx, [(ex, false, 0)])
+function lower_init(ex::SyntaxTree{T};
+                    expr_compat_mode::Bool=false) where {T}
+    LoweringIterator{T}(expr_compat_mode, [(ex, false, 0)])
 end
 
-function lower_step(iter, push_mod=nothing)
-    if !isnothing(push_mod)
-        push_layer!(iter.ctx, push_mod, false)
-    end
-
+function lower_step(iter, mod, world=Base.get_world_counter())
     if isempty(iter.todo)
         return Core.svec(:done)
     end
 
-    ex, is_module_body, child_idx = pop!(iter.todo)
+    top_ex, is_module_body, child_idx = pop!(iter.todo)
     if child_idx > 0
-        next_child = child_idx + 1
-        if child_idx <= numchildren(ex)
-            push!(iter.todo, (ex, is_module_body, next_child))
-            ex = ex[child_idx]
+        if child_idx <= numchildren(top_ex)
+            push!(iter.todo, (top_ex, is_module_body, child_idx + 1))
+            ex = top_ex[child_idx]
+        elseif is_module_body
+            return Core.svec(:end_module)
         else
-            if is_module_body
-                pop_layer!(iter.ctx)
-                return Core.svec(:end_module)
-            else
-                return lower_step(iter)
-            end
+            return lower_step(iter, mod)
         end
+    else
+        ex = top_ex
     end
 
     k = kind(ex)
     if !(k in KSet"toplevel module")
-        ex = expand_forms_1(iter.ctx, ex)
+        ctx1, ex = expand_forms_1(mod, ex, iter.expr_compat_mode, world)
         k = kind(ex)
     end
     if k == K"toplevel"
         push!(iter.todo, (ex, false, 1))
-        return lower_step(iter)
+        return lower_step(iter, mod)
     elseif k == K"module"
-        name = ex[1]
+        (version, notbare, name, body) = @stm ex begin
+            [K"module" version nb_st name body] ->
+                (version.value, nb_st.value, name, body)
+            [K"module" nb_st name body] ->
+                (nothing, nb_st.value, name, body)
+        end
         if kind(name) != K"Identifier"
             throw(LoweringError(name, "Expected module name"))
         end
         newmod_name = Symbol(name.name_val)
-        body = ex[2]
-        if kind(body) != K"block"
-            throw(LoweringError(body, "Expected block in module body"))
-        end
-        std_defs = !has_flags(ex, JuliaSyntax.BARE_MODULE_FLAG)
         loc = source_location(LineNumberNode, ex)
         push!(iter.todo, (body, true, 1))
-        return Core.svec(:begin_module, newmod_name, std_defs, loc)
+        return Core.svec(:begin_module, version, newmod_name, notbare, loc)
     else
         # Non macro expansion parts of lowering
-        ctx2, ex2 = expand_forms_2(iter.ctx, ex)
+        ctx2, ex2 = expand_forms_2(ctx1, ex)
         ctx3, ex3 = resolve_scopes(ctx2, ex2)
         ctx4, ex4 = convert_closures(ctx3, ex3)
         ctx5, ex5 = linearize_ir(ctx4, ex4)
@@ -368,8 +360,9 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     elseif k == K"return"
         Core.ReturnNode(_to_lowered_expr(ex[1], stmt_offset))
     elseif k == K"inert"
-        e1 = ex[1]
-        getmeta(ex, :as_Expr, false) ? QuoteNode(Expr(e1)) : e1
+        est_to_expr(ex)
+    elseif k == K"inert_syntaxtree"
+        ex[1]
     elseif k == K"code_info"
         ir = to_code_info(ex[1], ex.slots, ex.meta)
         if ex.is_toplevel_thunk
@@ -378,13 +371,13 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
             ir
         end
     elseif k == K"Value"
-        ex.value
+        ex.value isa LineNumberNode ? QuoteNode(ex.value) : ex.value
     elseif k == K"goto"
         Core.GotoNode(ex[1].id + stmt_offset)
     elseif k == K"gotoifnot"
         Core.GotoIfNot(_to_lowered_expr(ex[1], stmt_offset), ex[2].id + stmt_offset)
     elseif k == K"enter"
-        catch_idx = ex[1].id
+        catch_idx = ex[1].id + stmt_offset
         numchildren(ex) == 1 ?
             Core.EnterNode(catch_idx) :
             Core.EnterNode(catch_idx, _to_lowered_expr(ex[2], stmt_offset))
@@ -413,13 +406,16 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
         Expr(:meta, args...)
     elseif k == K"static_eval"
         @assert numchildren(ex) == 1
-        _to_lowered_expr(ex[1], stmt_offset)
-    elseif k == K"cfunction"
-        args = Any[_to_lowered_expr(e, stmt_offset) for e in children(ex)]
-        if kind(ex[2]) == K"static_eval"
-            args[2] = QuoteNode(args[2])
+        @stm ex[1] begin
+            # tuple should just be ccall library spec
+            [K"tuple" s lib] -> Expr(:tuple,
+                                     _to_lowered_expr(s, stmt_offset),
+                                     _to_lowered_expr(lib, stmt_offset))
+            [K"tuple" s] -> Expr(:tuple,
+                                 _to_lowered_expr(s, stmt_offset))
+            [K"function" _...] -> QuoteNode(est_to_expr(ex[1]))
+            _ -> _to_lowered_expr(ex[1], stmt_offset)
         end
-        Expr(:cfunction, args...)
     else
         # Allowed forms according to https://docs.julialang.org/en/v1/devdocs/ast/
         #
@@ -433,12 +429,15 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
                k == K"="         ? :(=)        :
                k == K"leave"     ? :leave      :
                k == K"isdefined" ? :isdefined  :
+               k == K"loopinfo"  ? :loopinfo   :
+               k == K"boundscheck"       ? :boundscheck       :
                k == K"latestworld"       ? :latestworld       :
                k == K"pop_exception"     ? :pop_exception     :
                k == K"captured_local"    ? :captured_local    :
                k == K"gc_preserve_begin" ? :gc_preserve_begin :
                k == K"gc_preserve_end"   ? :gc_preserve_end   :
                k == K"foreigncall"       ? :foreigncall       :
+               k == K"cfunction"         ? :cfunction         :
                k == K"new_opaque_closure" ? :new_opaque_closure :
                nothing
         if isnothing(head)
@@ -457,76 +456,39 @@ end
 @fzone "JL: eval" function eval(mod::Module, ex::SyntaxTree;
                                 macro_world::UInt=Base.get_world_counter(),
                                 opts...)
-    iter = lower_init(ex, mod, macro_world; opts...)
+    iter = lower_init(ex; opts...)
     _eval(mod, iter)
 end
 
 # Version of eval() taking `Expr` (or Expr tree leaves of any type)
 function eval(mod::Module, ex; opts...)
-    eval(mod, expr_to_syntaxtree(ex); opts...)
+    eval(mod, expr_to_est(ex); opts...)
 end
-
-if VERSION >= v"1.13.0-DEV.1199" # https://github.com/JuliaLang/julia/pull/59604
 
 function _eval(mod, iter)
-    modules = Module[]
-    new_mod = nothing
+    modules = Module[mod]
     result = nothing
     while true
-        thunk = lower_step(iter, new_mod)::Core.SimpleVector
-        new_mod = nothing
+        thunk = lower_step(iter, modules[end])::Core.SimpleVector
         type = thunk[1]::Symbol
         if type == :done
             break
         elseif type == :begin_module
+            filename = something(thunk[5].file, :none)
+            mod = @ccall jl_begin_new_module(
+                modules[end]::Any, thunk[3]::Symbol, thunk[2]::Any, thunk[4]::Cint,
+                filename::Cstring, thunk[5].line::Cint)::Module
             push!(modules, mod)
-            filename = something(thunk[4].file, :none)
-            mod = @ccall jl_begin_new_module(mod::Any, thunk[2]::Symbol, thunk[3]::Cint,
-                                             filename::Cstring, thunk[4].line::Cint)::Module
-            new_mod = mod
         elseif type == :end_module
-            @ccall jl_end_new_module(mod::Module)::Cvoid
-            result = mod
-            mod = pop!(modules)
+            @ccall jl_end_new_module(modules[end]::Module)::Cvoid
+            result = pop!(modules)
         else
             @assert type == :thunk
-            result = Core.eval(mod, thunk[2])
+            result = Core.eval(modules[end], thunk[2])
         end
     end
-    @assert isempty(modules)
+    @assert length(modules) === 1
     return result
-end
-
-else
-
-function _eval(mod, iter, new_mod=nothing)
-    in_new_mod = !isnothing(new_mod)
-    result = nothing
-    while true
-        thunk = lower_step(iter, new_mod)::Core.SimpleVector
-        new_mod = nothing
-        type = thunk[1]::Symbol
-        if type == :done
-            @assert !in_new_mod
-            break
-        elseif type == :begin_module
-            name = thunk[2]::Symbol
-            std_defs = thunk[3]
-            result = Core.eval(mod,
-                Expr(:module, std_defs, name,
-                     Expr(:block, thunk[4], Expr(:call, m->_eval(m, iter, m), name)))
-            )
-        elseif type == :end_module
-            @assert in_new_mod
-            return mod
-        else
-            @assert type == :thunk
-            result = Core.eval(mod, thunk[2])
-        end
-    end
-    return result
-end
-
 end
 
 """
@@ -566,3 +528,5 @@ function include_string(mod::Module, code::AbstractString, filename::AbstractStr
                         expr_compat_mode=false)
     eval(mod, parseall(SyntaxTree, code; filename=filename); expr_compat_mode)
 end
+
+include(path::AbstractString) = include(JuliaLowering, path)
