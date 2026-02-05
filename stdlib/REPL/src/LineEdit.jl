@@ -2100,6 +2100,33 @@ const escape_defaults = merge!(
         "\eOH"  => KeyAlias("\e[H"),
         "\eOF"  => KeyAlias("\e[F"),
     ),
+    # rxvt -> xterm translation
+    AnyDict(Iterators.flatten([
+        # cursor keys
+        ("\e[$(lowercase(c))" => KeyAlias("\e[1;2$c") for c in 'A':'D'),   # Shift
+        ("\eO$(lowercase(c))" => KeyAlias("\e[1;5$c") for c in 'A':'D'),   # Ctrl
+        ("\eO$c" => KeyAlias("\e[1;6$c") for c in 'A':'D'),                # Ctrl-Shift
+        ("\e\e[$c" => KeyAlias("\e[1;3$c") for c in 'A':'D'),              # Meta
+        ("\e\e[$(lowercase(c))" => KeyAlias("\e[1;4$c") for c in 'A':'D'), # Meta-Shift
+        ("\e\eO$(lowercase(c))" => KeyAlias("\e[1;7$c") for c in 'A':'D'), # Meta-Ctrl
+        ("\e\eO$c" => KeyAlias("\e[1;8$c") for c in 'A':'D'),              # Meta-Ctrl-Shift
+        # Home and End (without modifier as for VT220)
+        ("\e[$n\$" => KeyAlias("\e[1;2$c") for (n, c) in [(7, 'H'), (8, 'F')]),    # Shift
+        ("\e[$n\\^" => KeyAlias("\e[1;5$c") for (n, c) in [(7, 'H'), (8, 'F')]),   # Ctrl
+        ("\e[$n@" => KeyAlias("\e[1;6$c") for (n, c) in [(7, 'H'), (8, 'F')]),     # Ctrl-Shift
+        ("\e\e[$n~" => KeyAlias("\e[1;3$c") for (n, c) in [(7, 'H'), (8, 'F')]),   # Meta
+        ("\e\e[$n\$" => KeyAlias("\e[1;4$c") for (n, c) in [(7, 'H'), (8, 'F')]),  # Meta-Shift
+        ("\e\e[$n\\^" => KeyAlias("\e[1;7$c") for (n, c) in [(7, 'H'), (8, 'F')]), # Meta-Ctrl
+        ("\e\e[$n@" => KeyAlias("\e[1;8$c") for (n, c) in [(7, 'H'), (8, 'F')]),   # Meta-Ctrl-Shift
+        # Insert / Delete / Page Up / Page Down (without modifier as for VT220)
+        ("\e[$n\$" => KeyAlias("\e[$n;2~") for n in [2, 3, 5, 6]),    # Shift
+        ("\e[$n\\^" => KeyAlias("\e[$n;5~") for n in [2, 3, 5, 6]),   # Ctrl
+        ("\e[$n@" => KeyAlias("\e[$n;6~") for n in [2, 3, 5, 6]),     # Ctrl-Shift
+        ("\e\e[$n~" => KeyAlias("\e[$n;3~") for n in [2, 3, 5, 6]),   # Meta
+        ("\e\e[$n\$" => KeyAlias("\e[$n;4~") for n in [2, 3, 5, 6]),  # Meta-Shift
+        ("\e\e[$n\\^" => KeyAlias("\e[$n;7~") for n in [2, 3, 5, 6]), # Meta-Ctrl
+        ("\e\e[$n@" => KeyAlias("\e[$n;8~") for n in [2, 3, 5, 6]),   # Meta-Ctrl-Shift
+    ])),
     # set mode commands
     AnyDict("\e[$(c)h" => nothing for c in 1:20),
     # reset mode commands
@@ -2614,12 +2641,8 @@ AnyDict(
     "\ef" => (s::MIState,o...)->edit_move_word_right(s),
     # Ctrl-Left Arrow
     "\e[1;5D" => "\eb",
-    # Ctrl-Left Arrow on rxvt
-    "\eOd" => "\eb",
     # Ctrl-Right Arrow
     "\e[1;5C" => "\ef",
-    # Ctrl-Right Arrow on rxvt
-    "\eOc" => "\ef",
     # Meta Enter
     "\e\r" => (s::MIState,o...)->edit_insert_newline(s),
     "\e." =>  (s::MIState,o...)->edit_insert_last_word(s),
@@ -2764,6 +2787,17 @@ const prefix_history_keymap = merge!(
     ),
     # VT220 editing commands
     AnyDict("\e[$(n)~" => "*" for n in 1:8),
+    # rxvt cursor and editing commands
+    AnyDict(
+        # Meta-Arrow, possibly with Shift
+        "\e\e[*" => "*",
+        # Meta-Ctrl-Arrow, possibly with Shift
+        "\e\eO*" => "*",
+        # editing commands with Shift and/or Ctrl (without modifier as for VT220)
+        ("\e[$n$m" => "*" for n in 1:8, m in ["\$", "\\^", "@"])...,
+        # editing commands with Meta and possibly Shift and/or Ctrl
+        ("\e\e[$n$m" => "*" for n in 1:8, m in ["~", "\$", "\\^", "@"])...,
+    ),
     # set mode commands
     AnyDict("\e[$(c)h" => "*" for c in 1:20),
     # reset mode commands
