@@ -353,11 +353,16 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
         else
             @ast g st [K"function" rec(l) rec(r)]
         end
-        [K"function" l r] -> if has_if_generated(r)
-            gen, nongen = split_generated(r, true), split_generated(r, false)
-            @ast g st [K"generated_function" rec(l) gen nongen]
-        else
-            @ast g st [K"function" rec(l) rec(r)]
+        [K"function" l r] -> let
+            if kind(l) === K"..."
+                l = @ast g l [K"tuple" l]
+            end
+            if has_if_generated(r)
+                gen, nongen = split_generated(r, true), split_generated(r, false)
+                @ast g st [K"generated_function" rec(l) gen nongen]
+            else
+                @ast g st [K"function" rec(l) rec(r)]
+            end
         end
         [K"do" [K"call" f args...] [K"->" do_args do_body]] -> let
             # Note desugaring expects first-arg do-expression, unlike RawGreenNode
