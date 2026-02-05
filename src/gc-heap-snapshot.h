@@ -20,6 +20,7 @@ void _gc_heap_snapshot_record_task_to_frame_edge(jl_task_t *from, void *to) JL_N
 void _gc_heap_snapshot_record_frame_to_frame_edge(jl_gcframe_t *from, jl_gcframe_t *to) JL_NOTSAFEPOINT;
 void _gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index) JL_NOTSAFEPOINT;
 void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void* slot) JL_NOTSAFEPOINT;
+void _gc_heap_snapshot_record_property_edge(jl_value_t *from, jl_value_t *to, const char *property) JL_NOTSAFEPOINT;
 void _gc_heap_snapshot_record_module_to_binding(jl_module_t* module, jl_value_t *bindings, jl_value_t *bindingkeyset) JL_NOTSAFEPOINT;
 // Used for objects managed by GC, but which aren't exposed in the julia object, so have no
 // field or index.  i.e. they're not reachable from julia code, but we _will_ hit them in
@@ -34,6 +35,9 @@ void _gc_heap_snapshot_record_gc_roots(jl_value_t *root, char *name) JL_NOTSAFEP
 void _gc_heap_snapshot_record_finlist(jl_value_t *finlist, size_t index) JL_NOTSAFEPOINT;
 // Used for objects reachable from the binding partition pointer union
 void _gc_heap_snapshot_record_binding_partition_edge(jl_value_t *from, jl_value_t *to) JL_NOTSAFEPOINT;
+void _gc_start_custom_heap_snapshot(ios_t *nodes, ios_t *edges,
+    ios_t *strings, ios_t *json, char redact_data);
+void _gc_finish_custom_heap_snapshot(char all_one);
 
 extern int gc_heap_snapshot_enabled;
 extern int prev_sweep_full;
@@ -82,6 +86,12 @@ static inline void gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_valu
 {
     if (__unlikely(gc_heap_snapshot_enabled && prev_sweep_full)) {
         _gc_heap_snapshot_record_object_edge(from, *to, to);
+    }
+}
+static inline void gc_heap_snapshot_record_property_edge(jl_value_t *from, jl_value_t *to, const char *property) JL_NOTSAFEPOINT
+{
+    if (__unlikely(gc_heap_snapshot_enabled && prev_sweep_full)) {
+        _gc_heap_snapshot_record_property_edge(from, to, property);
     }
 }
 

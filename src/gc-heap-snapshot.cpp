@@ -222,6 +222,37 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *nodes, ios_t *edges,
     final_serialize_heap_snapshot((ios_t*)json, (ios_t*)strings, snapshot, all_one);
 }
 
+void _gc_start_custom_heap_snapshot(ios_t *nodes, ios_t *edges,
+    ios_t *strings, ios_t *json, char redact_data)
+{
+    jl_mutex_lock(&heapsnapshot_lock);
+
+    g_snapshot = new HeapSnapshot;
+    g_snapshot->nodes = nodes;
+    g_snapshot->edges = edges;
+    g_snapshot->strings = strings;
+    g_snapshot->json = json;
+
+    // Enable snapshotting
+    gc_heap_snapshot_redact_data = redact_data;
+    gc_heap_snapshot_enabled = true;
+
+    _add_synthetic_root_entries(g_snapshot);
+}
+
+void _gc_finish_custom_heap_snapshot(char all_one)
+{
+    HeapSnapshot *snapshot = g_snapshot;
+
+    gc_heap_snapshot_enabled = false;
+    gc_heap_snapshot_redact_data = 0;
+    g_snapshot = nullptr;
+    jl_mutex_unlock(&heapsnapshot_lock);
+
+    final_serialize_heap_snapshot((ios_t*)snapshot->json, (ios_t*)snapshot->strings, *snapshot, all_one);
+    delete snapshot;
+}
+
 void serialize_node(HeapSnapshot *snapshot, const Node &node) JL_NOTSAFEPOINT
 {
     // ["type","name","id","self_size","edge_count","trace_node_id","detachedness"]
@@ -538,6 +569,12 @@ void _gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_
 void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void *slot) JL_NOTSAFEPOINT
 {
     SmallString<128> path = _fieldpath_for_slot(from, slot);
+    _record_gc_edge("property", from, to,
+                    g_snapshot->names.serialize_if_necessary(g_snapshot->strings, path));
+}
+
+void _gc_heap_snapshot_record_property_edge(jl_value_t *from, jl_value_t *to, const char *path) JL_NOTSAFEPOINT
+{
     _record_gc_edge("property", from, to,
                     g_snapshot->names.serialize_if_necessary(g_snapshot->strings, path));
 }

@@ -74,6 +74,7 @@ External links:
 
 #include <zstd.h>
 
+#include "gc-heap-snapshot.h"
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_gcext.h"
@@ -353,6 +354,7 @@ typedef struct {
     jl_query_cache *query_cache;
     jl_ptls_t ptls;
     jl_image_t *image;
+    int8_t heap_snapshot;
     int8_t incremental;
 } jl_serializer_state;
 
@@ -595,8 +597,23 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
         jl_queue_for_serialization(s, jl_atomic_load_relaxed(&m->bindings));
     }
 
+    if (s->heap_snapshot) {
+        gc_heap_snapshot_record_property_edge((jl_value_t*)m, (jl_value_t*)m->name, "name");
+        gc_heap_snapshot_record_property_edge((jl_value_t*)m, (jl_value_t*)m->parent, "parent");
+        gc_heap_snapshot_record_property_edge((jl_value_t*)m,
+            (jl_value_t*)jl_atomic_load_relaxed(&m->bindings), "bindings");
+        gc_heap_snapshot_record_property_edge((jl_value_t*)m,
+            (jl_value_t*)jl_atomic_load_relaxed(&m->bindingkeyset), "bindingkeyset");
+        if (!jl_options.strip_metadata)
+            gc_heap_snapshot_record_property_edge((jl_value_t*)m, (jl_value_t*)m->file, "file");
+    }
+
     for (size_t i = 0; i < module_usings_length(m); i++) {
-        jl_queue_for_serialization(s, module_usings_getmod(m, i));
+        struct _jl_module_using *data = module_usings_getidx(m, i);
+        jl_queue_for_serialization(s, data->mod);
+        if (s->heap_snapshot) {
+            gc_heap_snapshot_record_array_edge((jl_value_t *)m, (jl_value_t **)&data->mod);
+        }
     }
 
     if (jl_options.trim || jl_options.strip_ir) {
@@ -606,6 +623,10 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
     else {
         jl_queue_for_serialization(s, m->usings_backedges);
         jl_queue_for_serialization(s, m->scanned_methods);
+        if (s->heap_snapshot) {
+            gc_heap_snapshot_record_binding_partition_edge((jl_value_t*)m, m->usings_backedges);
+            gc_heap_snapshot_record_binding_partition_edge((jl_value_t*)m, m->scanned_methods);
+        }
     }
 }
 
@@ -632,6 +653,10 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     jl_queue_for_serialization_(s, (jl_value_t*)t, 1, immediate);
     const jl_datatype_layout_t *layout = t->layout;
 
+    if (s->heap_snapshot && jl_needs_serialization(s, (jl_value_t*)t)) {
+        gc_heap_snapshot_record_property_edge(v, (jl_value_t*)t, "typeof(...)");
+    }
+
     if (!recursive)
         goto done_fields;
 
@@ -656,6 +681,11 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 jl_queue_for_serialization(s, mi->def.value);
                 jl_queue_for_serialization(s, mi->specTypes);
                 jl_queue_for_serialization(s, (jl_value_t*)mi->sparam_vals);
+                if (s->heap_snapshot) {
+                    gc_heap_snapshot_record_object_edge((jl_value_t*)mi, &mi->def.value);
+                    gc_heap_snapshot_record_object_edge((jl_value_t*)mi, &mi->specTypes);
+                    gc_heap_snapshot_record_object_edge((jl_value_t*)mi, (jl_value_t**)&mi->sparam_vals);
+                }
                 goto done_fields;
             }
             else if (jl_is_method(def) && jl_object_in_image(def)) {
@@ -697,6 +727,10 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         if (s->incremental && needs_uniquing(v, s->query_cache)) {
             jl_queue_for_serialization(s, b->globalref->mod);
             jl_queue_for_serialization(s, b->globalref->name);
+            if (s->heap_snapshot) {
+                gc_heap_snapshot_record_property_edge((jl_value_t*)b, (jl_value_t*)b->globalref->mod, "module");
+                gc_heap_snapshot_record_property_edge((jl_value_t*)b, (jl_value_t*)b->globalref->name, "name");
+            }
             goto done_fields;
         }
         if (jl_options.trim || jl_options.strip_ir) {
@@ -851,25 +885,41 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         size_t i, l = jl_svec_len(v);
         jl_value_t **data = jl_svec_data(v);
         for (i = 0; i < l; i++) {
-            jl_queue_for_serialization_(s, data[i], 1, immediate);
+            jl_value_t **item = &data[i];
+            jl_queue_for_serialization_(s, *item, 1, immediate);
+            if (s->heap_snapshot && jl_needs_serialization(s, *item)) {
+                gc_heap_snapshot_record_array_edge(v, item);
+            }
         }
     }
     else if (jl_is_array(v)) {
         jl_array_t *ar = (jl_array_t*)v;
-        jl_value_t *mem = get_replaceable_field((jl_value_t**)&ar->ref.mem, 1);
+        jl_value_t **mem_ptr = (jl_value_t**)&ar->ref.mem;
+        jl_value_t *mem = get_replaceable_field(mem_ptr, 1);
         jl_queue_for_serialization_(s, mem, 1, immediate);
+        if (s->heap_snapshot && jl_needs_serialization(s, mem)) {
+            _gc_heap_snapshot_record_object_edge(v, mem, (void*)mem_ptr);
+        }
     }
     else if (jl_is_genericmemory(v)) {
         jl_genericmemory_t *m = (jl_genericmemory_t*)v;
         const char *data = (const char*)m->ptr;
         if (jl_genericmemory_how(m) == JL_GENERICMEMORY_STRINGOWNED) {
-            assert(jl_is_string(jl_genericmemory_data_owner_field(m)));
+            jl_value_t *owner = jl_genericmemory_data_owner_field(m);
+            assert(jl_is_string(owner));
+            if (s->heap_snapshot && jl_needs_serialization(s, owner)) {
+                gc_heap_snapshot_record_internal_array_edge(v, owner);
+            }
         }
         else if (layout->flags.arrayelem_isboxed) {
             size_t i, l = m->length;
             for (i = 0; i < l; i++) {
-                jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[i], 1);
+                jl_value_t **fld_ptr = &((jl_value_t**)data)[i];
+                jl_value_t *fld = get_replaceable_field(fld_ptr, 1);
                 jl_queue_for_serialization_(s, fld, 1, immediate);
+                if (s->heap_snapshot && fld && jl_needs_serialization(s, fld)) {
+                    _gc_heap_snapshot_record_array_edge(v, fld, i);
+                }
             }
         }
         else if (layout->first_ptr >= 0) {
@@ -878,9 +928,12 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             size_t j, np = layout->npointers;
             for (i = 0; i < l; i++) {
                 for (j = 0; j < np; j++) {
-                    uint32_t ptr = jl_ptr_offset(t, j);
-                    jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[ptr], 1);
+                    jl_value_t **fld_ptr = &((jl_value_t**)data)[jl_ptr_offset(t, j)];
+                    jl_value_t *fld = get_replaceable_field(fld_ptr, 1);
                     jl_queue_for_serialization_(s, fld, 1, immediate);
+                    if (s->heap_snapshot && fld && jl_needs_serialization(s, fld)) {
+                        _gc_heap_snapshot_record_array_edge(v, fld, i);
+                    }
                 }
                 data += elsz;
             }
@@ -929,8 +982,12 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             while (offset >= (fldidx == layout->nfields ? jl_datatype_size(t) : jl_field_offset(t, fldidx)))
                 fldidx++;
             int mutabl = !jl_field_isconst(t, fldidx - 1);
-            jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[ptr], mutabl);
+            jl_value_t **fld_ptr = &((jl_value_t**)data)[ptr];
+            jl_value_t *fld = get_replaceable_field(fld_ptr, mutabl);
             jl_queue_for_serialization_(s, fld, 1, immediate);
+            if (s->heap_snapshot && fld && jl_needs_serialization(s, fld)) {
+                _gc_heap_snapshot_record_object_edge(v, fld, (void *)fld_ptr);
+            }
         }
     }
 
@@ -954,6 +1011,9 @@ done_fields: ;
             // if super is already on the stack of things to handle when this returns, do
             // not try to handle it now
             jl_queue_for_serialization_(s, (jl_value_t*)dt->super, 1, immediate);
+            if (s->heap_snapshot) {
+                _gc_heap_snapshot_record_object_edge(v, (jl_value_t*)dt->super, (void *)&dt->super);
+            }
         }
         immediate = 0;
         char *data = (char*)jl_data_ptr(v);
@@ -963,8 +1023,12 @@ done_fields: ;
             if (ptr * sizeof(jl_value_t*) == offsetof(jl_datatype_t, super))
                 continue; // skip the super field, since it might not be quite validly ordered
             int mutabl = 1;
-            jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[ptr], mutabl);
+            jl_value_t **fld_ptr = &((jl_value_t**)data)[ptr];
+            jl_value_t *fld = get_replaceable_field(fld_ptr, mutabl);
             jl_queue_for_serialization_(s, fld, 1, immediate);
+            if (s->heap_snapshot && fld && jl_needs_serialization(s, fld)) {
+                _gc_heap_snapshot_record_object_edge(v, fld, (void *)fld_ptr);
+            }
         }
     }
 }
@@ -1319,8 +1383,12 @@ static void record_memoryrefs_inside(jl_serializer_state *s, jl_datatype_t *t, s
 
 static void record_gvars(jl_serializer_state *s, arraylist_t *globals) JL_GC_DISABLED
 {
-    for (size_t i = 0; i < globals->len; i++)
+    for (size_t i = 0; i < globals->len; i++) {
         jl_queue_for_serialization(s, globals->items[i]);
+        if (s->heap_snapshot) {
+            gc_heap_snapshot_record_root((jl_value_t*)globals->items[i], "gvar");
+        }
+    }
 }
 
 static void record_external_fns(jl_serializer_state *s, arraylist_t *external_fns) JL_NOTSAFEPOINT
@@ -2979,6 +3047,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     arraylist_new(&object_worklist, 0);
     arraylist_new(&serialization_queue, 0);
     ios_t sysimg, const_data, symbols, relocs, gvar_record, fptr_record;
+    ios_t snapshot_nodes, snapshot_edges, snapshot_strings, snapshot_json;
     ios_mem(&sysimg, 0);
     ios_mem(&const_data, 0);
     ios_mem(&symbols, 0);
@@ -2995,6 +3064,40 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     s.gvar_record = &gvar_record;
     s.fptr_record = &fptr_record;
     s.ptls = jl_current_task->ptls;
+    if (jl_options.output_heap_snapshot != NULL) {
+        char buf[JL_PATH_MAX];
+        snprintf(buf, sizeof(buf), "%s.nodes", jl_options.output_heap_snapshot);
+        if (ios_file(&snapshot_nodes, buf, /*rd*/0, /*wr*/1, /*create*/1, /*trunc*/1) == NULL) {
+            jl_printf(JL_STDERR, "ERROR: could not open file \"%s\" for writing\n", buf);
+            jl_exit(1);
+        }
+        snprintf(buf, sizeof(buf), "%s.edges", jl_options.output_heap_snapshot);
+        if (ios_file(&snapshot_edges, buf, /*rd*/0, /*wr*/1, /*create*/1, /*trunc*/1) == NULL) {
+            jl_printf(JL_STDERR, "ERROR: could not open file \"%s\" for writing\n", buf);
+            jl_exit(1);
+        }
+        snprintf(buf, sizeof(buf), "%s.strings", jl_options.output_heap_snapshot);
+        if (ios_file(&snapshot_strings, buf, /*rd*/0, /*wr*/1, /*create*/1, /*trunc*/1) == NULL) {
+            jl_printf(JL_STDERR, "ERROR: could not open file \"%s\" for writing\n", buf);
+            jl_exit(1);
+        }
+        snprintf(buf, sizeof(buf), "%s.metadata.json", jl_options.output_heap_snapshot);
+        if (ios_file(&snapshot_json, buf, /*rd*/0, /*wr*/1, /*create*/1, /*trunc*/1) == NULL) {
+            jl_printf(JL_STDERR, "ERROR: could not open file \"%s\" for writing\n", buf);
+            jl_exit(1);
+        }
+        // FIXME: adapt GC heap snapshot interface to make this unnecessary
+        extern int prev_sweep_full;
+        prev_sweep_full = 1;
+        _gc_start_custom_heap_snapshot(
+            &snapshot_nodes,
+            &snapshot_edges,
+            &snapshot_strings,
+            &snapshot_json,
+            /* redact_data */ 0
+        );
+        s.heap_snapshot = 1;
+    }
     arraylist_new(&s.memowner_list, 0);
     arraylist_new(&s.memref_list, 0);
     arraylist_new(&s.relocs_list, 0);
@@ -3044,21 +3147,41 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             for (i = 0; tags[i] != NULL; i++) {
                 jl_value_t *tag = *tags[i];
                 jl_queue_for_serialization(&s, tag);
+                if (s.heap_snapshot) {
+                    gc_heap_snapshot_record_root(tag, "tag");
+                }
             }
-            for (i = 0; i < jl_n_builtins; i++)
+            for (i = 0; i < jl_n_builtins; i++) {
                 jl_queue_for_serialization(&s, jl_builtin_instances[i]);
-#define XX(name, type) jl_queue_for_serialization(&s, (jl_value_t*)jl_##name);
+                if (s.heap_snapshot) {
+                    gc_heap_snapshot_record_root(jl_builtin_instances[i], "builtin");
+                }
+            }
+#define XX(name, type) jl_queue_for_serialization(&s, (jl_value_t*)jl_##name); \
+                       if (s.heap_snapshot) { \
+                           gc_heap_snapshot_record_root((jl_value_t*)jl_##name, "exported"); \
+                       }
             JL_EXPORTED_DATA_POINTERS(XX)
 #undef XX
-#define XX(name, type) jl_queue_for_serialization(&s, (jl_value_t*)jl_##name);
+#define XX(name, type) jl_queue_for_serialization(&s, (jl_value_t*)jl_##name); \
+                       if (s.heap_snapshot) { \
+                           gc_heap_snapshot_record_root((jl_value_t*)jl_##name, "const_global"); \
+                       }
             JL_CONST_GLOBAL_VARS(XX)
 #undef XX
             jl_queue_for_serialization(&s, s.ptls->root_task->tls);
+            if (s.heap_snapshot) {
+                gc_heap_snapshot_record_root(s.ptls->root_task->tls, "root_task_tls");
+            }
         }
         else {
             // Queue the worklist itself as the first item we serialize
             jl_queue_for_serialization(&s, worklist);
             jl_queue_for_serialization(&s, module_init_order);
+            if (s.heap_snapshot) {
+                gc_heap_snapshot_record_root((jl_value_t*)worklist, "worklist");
+                gc_heap_snapshot_record_root((jl_value_t*)module_init_order, "module_init_order");
+            }
         }
         // step 1.1: as needed, serialize the data needed for insertion into the running system
         if (extext_methods) {
@@ -3066,6 +3189,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_queue_for_serialization(&s, extext_methods);
             // Queue the new specializations
             jl_queue_for_serialization(&s, new_ext_cis);
+            if (s.heap_snapshot) {
+                gc_heap_snapshot_record_root((jl_value_t*)extext_methods, "extext_methods");
+                gc_heap_snapshot_record_root((jl_value_t*)new_ext_cis, "new_ext_cis");
+            }
         }
         jl_serialize_reachable(&s);
         // step 1.2: ensure all gvars are part of the sysimage too
@@ -3080,6 +3207,9 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         if (s.incremental) {
             // Queue the new roots array
             jl_queue_for_serialization(&s, s.method_roots_list);
+            if (s.heap_snapshot) {
+                gc_heap_snapshot_record_gc_roots((jl_value_t*)s.method_roots_list, "method_roots_list");
+            }
             jl_serialize_reachable(&s);
         }
         // step 1.4: prune (garbage collect) special weak references from the jl_global_roots_list
@@ -3096,6 +3226,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             }
             jl_queue_for_serialization(&s, global_roots_list);
             jl_queue_for_serialization(&s, global_roots_keyset);
+            if (s.heap_snapshot) {
+                gc_heap_snapshot_record_gc_roots((jl_value_t*)global_roots_list, "global_roots_list");
+                gc_heap_snapshot_record_gc_roots((jl_value_t*)global_roots_keyset, "global_roots_keyset");
+            }
             jl_serialize_reachable(&s);
         }
         // step 1.5: prune (garbage collect) some special weak references known caches
@@ -3268,6 +3402,16 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         write_uint32(f, jl_array_len(s.link_ids_external_fnvars));
         ios_write(f, (char*)jl_array_data(s.link_ids_external_fnvars, uint32_t), jl_array_len(s.link_ids_external_fnvars) * sizeof(uint32_t));
         write_uint32(f, external_fns_begin);
+    }
+
+    if (jl_options.output_heap_snapshot != NULL) {
+        _gc_finish_custom_heap_snapshot(
+            /* all_one */ 0
+        );
+        ios_close(&snapshot_nodes);
+        ios_close(&snapshot_edges);
+        ios_close(&snapshot_strings);
+        ios_close(&snapshot_json);
     }
 
     assert(object_worklist.len == 0);
