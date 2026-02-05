@@ -4737,10 +4737,8 @@ static auto *emit_genericmemory_unchecked(jl_codectx_t &ctx, Value *cg_nbytes, V
     // Build operand bundle for zeroinit if needed
     SmallVector<OperandBundleDef, 1> bundles;
     if (zeroinit_nbytes) {
-        // The data pointer is at offset 8 in the GenericMemory header (field 1)
-        // sizeof(size_t) for the length field
         SmallVector<Value*, 2> bundle_args;
-        bundle_args.push_back(ConstantInt::get(ctx.types().T_size, sizeof(void*))); // ptr field offset
+        bundle_args.push_back(ConstantInt::get(ctx.types().T_size, offsetof(jl_genericmemory_t, ptr)));
         bundle_args.push_back(zeroinit_nbytes);
         bundles.push_back(OperandBundleDef("julia.gc_alloc_zeroinit_indirect", bundle_args));
     }
@@ -4818,7 +4816,7 @@ static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ
         // so late-gc-lowering can emit the memset unconditionally after allocation
         std::optional<AllocZeroinitRegion> zeroinit_region;
         if (zi) {
-            // Data starts at JL_SMALL_BYTE_ALIGNMENT, need to zero nbytes
+            // Data starts at JL_SMALL_BYTE_ALIGNMENT offset (must match jl_alloc_genericmemory_unchecked)
             zeroinit_region = AllocZeroinitRegion(JL_SMALL_BYTE_ALIGNMENT, nbytes);
         }
         alloc = emit_allocobj(ctx, tot, cg_typ, false, JL_SMALL_BYTE_ALIGNMENT, {}, zeroinit_region);

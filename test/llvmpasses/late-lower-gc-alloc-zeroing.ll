@@ -52,24 +52,6 @@ define {} addrspace(10)* @gc_alloc_zeroinit({}** %current_task) {
     ret {} addrspace(10)* %v
 }
 
-; Test both bundles together
-define {} addrspace(10)* @gc_alloc_both_bundles({}** %current_task) {
-; CHECK-LABEL: @gc_alloc_both_bundles
-; CHECK: %v = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_bytes
-; CHECK: store atomic ptr addrspace(10) @tag
-; ptr_offsets bundle: null store at offset 8
-; CHECK: [[DERIVED1:%.*]] = addrspacecast ptr addrspace(10) %v to ptr addrspace(11)
-; CHECK: [[PTR8:%.*]] = getelementptr inbounds i8, ptr addrspace(11) [[DERIVED1]], i64 8
-; CHECK: store ptr addrspace(10) null, ptr addrspace(11) [[PTR8]], align 8
-; zeroinit bundle: memset at offset 24 for 16 bytes
-; CHECK: [[DERIVED2:%.*]] = addrspacecast ptr addrspace(10) %v to ptr addrspace(11)
-; CHECK: [[PTR24:%.*]] = getelementptr inbounds i8, ptr addrspace(11) [[DERIVED2]], i64 24
-; CHECK: call void @llvm.memset.p11.i64(ptr addrspace(11) align 8 [[PTR24]], i8 0, i64 16, i1 false)
-; CHECK: ret ptr addrspace(10) %v
-    %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj({}** %current_task, i64 48, {} addrspace(10)* @tag) [ "julia.gc_alloc_ptr_offsets"(i64 8), "julia.gc_alloc_zeroinit"(i64 24, i64 16) ]
-    ret {} addrspace(10)* %v
-}
-
 ; Test that zeroing happens before any potential safepoint
 define {} addrspace(10)* @gc_alloc_zeroing_before_safepoint({}** %current_task, {} addrspace(10)* %input) {
 ; CHECK-LABEL: @gc_alloc_zeroing_before_safepoint

@@ -4406,10 +4406,10 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             *ret = mark_julia_const(ctx, (jl_value_t*)jl_emptysvec);
             return true;
         }
-        // Svec layout: [length (sizeof_ptr)] [ptr0] [ptr1] ... [ptr_n-1]
+        // Svec layout: [length] [ptr0] [ptr1] ... [ptr_n-1]
         // Use zeroinit_region to zero the pointer array - this must happen before
         // any safepoint (e.g., boxed() below) to prevent GC from seeing uninitialized pointers
-        AllocZeroinitRegion zeroinit(ctx.types().sizeof_ptr, ctx.types().sizeof_ptr * nargs);
+        AllocZeroinitRegion zeroinit(sizeof(jl_svec_t), ctx.types().sizeof_ptr * nargs);
         Value *svec = emit_allocobj(ctx, ctx.types().sizeof_ptr * (nargs + 1),
                                     ctx.builder.CreateIntToPtr(emit_tagfrom(ctx, jl_simplevector_type), ctx.types().T_pjlvalue),
                                     true, julia_alignment((jl_value_t*)jl_simplevector_type),
