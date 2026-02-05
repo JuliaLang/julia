@@ -2686,7 +2686,12 @@ function detect_closure_boxes(mods::Module...)
         return is_in_mods(mod, true, mods)
     end
 
+    function is_active_method(m::Method)
+        return !iszero(m.dispatch_status & Core.Compiler.ReinferUtils.METHOD_SIG_LATEST_WHICH)
+    end
+
     function scan_method!(m::Method)
+        is_active_method(m) || return
         matches_module(parentmodule(m)) || return
         ci = try
             Base.uncompressed_ast(m)
