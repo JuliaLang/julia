@@ -14,7 +14,7 @@ export mmap
 mutable struct Anonymous <: IO
     name::String
     readonly::Bool
-    create::Bool
+    create::Bool # ignored but maintained for compatibility
 end
 
 """
@@ -22,6 +22,7 @@ end
 
 Create an `IO`-like object for creating zeroed-out mmapped-memory that is not tied to a file
 for use in [`mmap`](@ref mmap). Used by `SharedArray` for creating shared memory arrays.
+`create` is ignored but maintained for compatibility.
 
 # Examples
 ```jldoctest
@@ -116,8 +117,8 @@ function gethandle(io::IO)
     return handle
 end
 
-settings(sh::Anonymous) = Ptr{Cwchar_t}(0), sh.readonly, sh.create
-settings(io::IO) = Ptr{Cwchar_t}(0), isreadonly(io), true
+settings(sh::Anonymous) = sh.readonly
+settings(io::IO) = isreadonly(io)
 
 else
     error("mmap not defined for this OS")
@@ -233,7 +234,7 @@ function mmap(io::IO,
             C_NULL, mmaplen, prot, flags, file_desc, offset_page)
         systemerror("memory mapping failed", reinterpret(Int, ptr) == -1)
     else
-        name, readonly, create = settings(io)
+        isreadonly = settings(io)
         if requestedSizeLarger
             if readonly
                 throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
@@ -241,13 +242,12 @@ function mmap(io::IO,
                 throw(ArgumentError("requested size $szfile larger than file size $(filesize(io)), but requested not to grow"))
             end
         end
-        handle = create ? ccall(:CreateFileMappingW, stdcall, Ptr{Cvoid}, (OS_HANDLE, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
-                                file_desc, C_NULL, readonly ? PAGE_READONLY : PAGE_READWRITE, szfile >> 32, szfile & typemax(UInt32), name) :
-                          ccall(:OpenFileMappingW, stdcall, Ptr{Cvoid}, (DWORD, Cint, Cwstring),
-                                readonly ? FILE_MAP_READ : FILE_MAP_WRITE, true, name)
+        name = Ptr{Cwchar_t}(0)
+        handle = ccall(:CreateFileMappingW, stdcall, Ptr{Cvoid}, (OS_HANDLE, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
+                        file_desc, C_NULL, isreadonly ? PAGE_READONLY : PAGE_READWRITE, szfile >> 32, szfile & typemax(UInt32), name)
         Base.windowserror(:mmap, handle == C_NULL)
         ptr = ccall(:MapViewOfFile, stdcall, Ptr{Cvoid}, (Ptr{Cvoid}, DWORD, DWORD, DWORD, Csize_t),
-                    handle, readonly ? FILE_MAP_READ : FILE_MAP_WRITE, offset_page >> 32, offset_page & typemax(UInt32), mmaplen)
+                    handle, isreadonly ? FILE_MAP_READ : FILE_MAP_WRITE, offset_page >> 32, offset_page & typemax(UInt32), mmaplen)
         Base.windowserror(:mmap, ptr == C_NULL)
     end # os-test
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
