@@ -63,6 +63,7 @@ struct JLOptions
     task_metrics::Int8
     timeout_for_safepoint_straggler_s::Int16
     serialize_machine_code_only::Int8
+    drop_edges::Int8
 end
 
 # This runs early in the sysimage != is not defined yet

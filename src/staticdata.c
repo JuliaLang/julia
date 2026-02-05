@@ -2244,9 +2244,11 @@ static void strip_specializations_(jl_method_instance_t *mi)
         }
         codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
+    if (jl_options.strip_ir || jl_options.drop_edges) {
+        record_field_change((jl_value_t**)&mi->backedges, NULL);
+    }
     if (jl_options.strip_ir) {
         record_field_change((jl_value_t**)&mi->uninferred, NULL);
-        record_field_change((jl_value_t**)&mi->backedges, NULL);
         record_field_change((jl_value_t**)&mi->callbacks, NULL);
     }
 }
@@ -2300,7 +2302,7 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
 
 static int strip_all_codeinfos_(jl_methtable_t *mt, void *_env)
 {
-    if (jl_options.strip_ir && mt->backedges)
+    if ((jl_options.strip_ir || jl_options.drop_edges) && mt->backedges)
         record_field_change((jl_value_t**)&mt->backedges, NULL);
     return jl_typemap_visitor(mt->defs, strip_all_codeinfos__, NULL);
 }
@@ -2411,7 +2413,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
 {
     htable_new(&field_replace, 0);
     // strip metadata and IR when requested
-    if (jl_options.strip_metadata || jl_options.strip_ir)
+    if (jl_options.strip_metadata || jl_options.strip_ir || jl_options.drop_edges)
         jl_strip_all_codeinfos();
 
     int en = jl_gc_enable(0);
@@ -2525,6 +2527,17 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             // Queue the new roots
             jl_queue_for_serialization(&s, method_roots_list);
             // Queue the edges
+            if (jl_options.drop_edges) {
+                // Empty ext_targets
+                ext_targets = jl_alloc_vec_any(0);
+                // The caller field in `edges` is used in loading so we only empty the
+                // callees array when we drop edges.
+                size_t i, l = jl_array_len(edges) / 2;
+                for (i = 0; i < l; i++) {
+                    jl_array_t *cids = jl_alloc_array_1d(jl_array_int32_type, 0);
+                    jl_array_ptr_set(edges, 2 * i + 1, cids);
+                }
+            }
             jl_queue_for_serialization(&s, ext_targets);
             jl_queue_for_serialization(&s, edges);
         }

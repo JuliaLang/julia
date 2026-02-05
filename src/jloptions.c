@@ -96,6 +96,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // task_metrics
                         25, // timeout_for_safepoint_straggler_s
                         0, // serialize_machine_code_only
+                        0, // drop_edges
     };
     jl_options_initialized = 1;
 }
@@ -247,6 +248,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_inline,
            opt_polly,
            opt_serialize_machine_code_only,
+           opt_drop_edges,
            opt_timeout_for_safepoint_straggler,
            opt_trace_compile,
            opt_trace_compile_timing,
@@ -328,6 +330,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "inline",          required_argument, 0, opt_inline },
         { "polly",           required_argument, 0, opt_polly },
         { "serialize-machine-code-only", no_argument, 0, opt_serialize_machine_code_only },
+        { "drop-edges", no_argument, 0, opt_drop_edges },
         { "timeout-for-safepoint-straggler", required_argument, 0, opt_timeout_for_safepoint_straggler },
         { "trace-compile",   required_argument, 0, opt_trace_compile },
         { "trace-compile-timing",  no_argument, 0, opt_trace_compile_timing },
@@ -898,6 +901,9 @@ restart_switch:
             break;
         case opt_serialize_machine_code_only:
             jl_options.serialize_machine_code_only = 1;
+            break;
+        case opt_drop_edges:
+            jl_options.drop_edges = 1;
             break;
         case opt_task_metrics:
             if (!strcmp(optarg, "no"))

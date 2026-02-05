@@ -67,6 +67,7 @@ typedef struct {
     int8_t task_metrics;
     int16_t timeout_for_safepoint_straggler_s;
     int8_t serialize_machine_code_only;
+    int8_t drop_edges;
 } jl_options_t;
 
 #endif

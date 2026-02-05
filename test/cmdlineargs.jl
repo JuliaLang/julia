@@ -1137,3 +1137,8 @@ end
     exename = `$(Base.julia_cmd())`
     @test parse(Int,read(`$exename --serialize-machine-code-only -E "Base.JLOptions().serialize_machine_code_only"`, String)) == 1
 end
+
+@testset "--drop-edges" begin
+    exename = `$(Base.julia_cmd())`
+    @test parse(Int,read(`$exename --drop-edges -E "Base.JLOptions().drop_edges`, String)) == 1
+end

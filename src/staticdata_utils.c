@@ -985,20 +985,22 @@ static jl_array_t *jl_verify_methods(jl_array_t *edges, jl_array_t *maxvalids)
             int32_t *idxs = (int32_t*)jl_array_data(callee_ids);
             size_t j;
             maxvalids2_data[i] = ~(size_t)0;
-            for (j = 0; j < idxs[0]; j++) {
-                int32_t idx = idxs[j + 1];
-                size_t max_valid = ((size_t*)(jl_array_data(maxvalids)))[idx];
-                if (max_valid != ~(size_t)0 && _jl_debug_method_invalidation) {
-                    jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)caller);
-                    loctag = jl_cstr_to_string("verify_methods");
-                    jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
-                    loctag = jl_box_int32((int32_t)idx);
-                    jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
+            if (jl_array_len(callee_ids) > 0) {
+                for (j = 0; j < idxs[0]; j++) {
+                    int32_t idx = idxs[j + 1];
+                    size_t max_valid = ((size_t*)(jl_array_data(maxvalids)))[idx];
+                    if (max_valid != ~(size_t)0 && _jl_debug_method_invalidation) {
+                        jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)caller);
+                        loctag = jl_cstr_to_string("verify_methods");
+                        jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
+                        loctag = jl_box_int32((int32_t)idx);
+                        jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
+                    }
+                    if (max_valid < maxvalids2_data[i])
+                        maxvalids2_data[i] = max_valid;
+                    if (max_valid == 0)
+                        break;
                 }
-                if (max_valid < maxvalids2_data[i])
-                    maxvalids2_data[i] = max_valid;
-                if (max_valid == 0)
-                    break;
             }
         }
         //jl_static_show((JL_STREAM*)ios_stderr, (jl_value_t*)caller);
@@ -1138,23 +1140,25 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
         if (maxvalid == ~(size_t)0) {
             // if this callee is still valid, add all the backedges
             jl_array_t *callee_ids = (jl_array_t*)jl_array_ptr_ref(edges, 2 * i + 1);
-            int32_t *idxs = (int32_t*)jl_array_data(callee_ids);
-            for (size_t j = 0; j < idxs[0]; j++) {
-                int32_t idx = idxs[j + 1];
-                jl_value_t *invokesig = jl_array_ptr_ref(ext_targets, idx * 3);
-                jl_value_t *callee = jl_array_ptr_ref(ext_targets, idx * 3 + 1);
-                if (callee && jl_is_method_instance(callee)) {
-                    jl_method_instance_add_backedge((jl_method_instance_t*)callee, invokesig, caller);
-                }
-                else {
-                    jl_value_t *sig = callee == NULL ? invokesig : callee;
-                    jl_methtable_t *mt = jl_method_table_for(sig);
-                    // FIXME: rarely, `callee` has an unexpected `Union` signature,
-                    // see https://github.com/JuliaLang/julia/pull/43990#issuecomment-1030329344
-                    // Fix the issue and turn this back into an `assert((jl_value_t*)mt != jl_nothing)`
-                    // This workaround exposes us to (rare) 265-violations.
-                    if ((jl_value_t*)mt != jl_nothing)
-                        jl_method_table_add_backedge(mt, sig, (jl_value_t*)caller);
+            if (jl_array_len(callee_ids) > 0) {
+                int32_t *idxs = (int32_t*)jl_array_data(callee_ids);
+                for (size_t j = 0; j < idxs[0]; j++) {
+                    int32_t idx = idxs[j + 1];
+                    jl_value_t *invokesig = jl_array_ptr_ref(ext_targets, idx * 3);
+                    jl_value_t *callee = jl_array_ptr_ref(ext_targets, idx * 3 + 1);
+                    if (callee && jl_is_method_instance(callee)) {
+                        jl_method_instance_add_backedge((jl_method_instance_t*)callee, invokesig, caller);
+                    }
+                    else {
+                        jl_value_t *sig = callee == NULL ? invokesig : callee;
+                        jl_methtable_t *mt = jl_method_table_for(sig);
+                        // FIXME: rarely, `callee` has an unexpected `Union` signature,
+                        // see https://github.com/JuliaLang/julia/pull/43990#issuecomment-1030329344
+                        // Fix the issue and turn this back into an `assert((jl_value_t*)mt != jl_nothing)`
+                        // This workaround exposes us to (rare) 265-violations.
+                        if ((jl_value_t*)mt != jl_nothing)
+                            jl_method_table_add_backedge(mt, sig, (jl_value_t*)caller);
+                    }
                 }
             }
         }
