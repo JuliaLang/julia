@@ -2233,6 +2233,23 @@ for s in ("WeirdNames().var\"oh ", "WeirdNames().var\"")
     @test c == Any["var\"oh no!\"", "var\"oh yes!\""]
 end
 
+@testset "Property completion limit" begin
+    struct LargeProps end
+    const LARGE_PROPS = [Symbol("col", i) for i in 1:7_000]
+    Base.propertynames(::LargeProps) = LARGE_PROPS
+
+    s = "LargeProps()."
+    c, r, res = test_complete_context(s; shift=false)
+    @test res
+    @test "( too many properties, use SHIFT-TAB to show )" in c
+    @test length(c) <= REPLCompletions.MAX_PROPERTY_COMPLETIONS + 1
+
+    c2, r2, res2 = test_complete_context(s; shift=true)
+    @test res2
+    @test "( too many properties, use SHIFT-TAB to show )" ∉ c2
+    @test length(c2) == length(LARGE_PROPS)
+end
+
 # Test completion of non-Expr literals
 let s = "\"abc\"."
     c, r = test_complete(s)

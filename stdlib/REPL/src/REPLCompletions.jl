@@ -227,12 +227,20 @@ function complete_symbol!(suggestions::Vector{Completion},
         end
     elseif @isdefined(val) # looking for a property of an instance
         try
+            count = 0
+            truncated = false
             for property in propertynames(val, false)
                 # TODO: support integer arguments (#36872)
                 if property isa Symbol && startswith(string(property), name)
+                    count += 1
+                    if !shift && count > MAX_PROPERTY_COMPLETIONS
+                        truncated = true
+                        break
+                    end
                     push!(suggestions, PropertyCompletion(val, property))
                 end
             end
+            truncated && push!(suggestions, TextCompletion("( too many properties, use SHIFT-TAB to show )"))
         catch
         end
     elseif @isdefined(t) && field_completion_eligible(t)
@@ -727,6 +735,7 @@ function complete_methods(ex_org::Expr, context_module::Module=Main, shift::Bool
 end
 
 MAX_ANY_METHOD_COMPLETIONS::Int = 10
+MAX_PROPERTY_COMPLETIONS::Int = 200
 
 function accessible(mod::Module, private::Bool)
     bindings = IdSet{Any}(Core.Typeof(getglobal(mod, s)) for s in names(mod; all=private, imported=private, usings=private)
