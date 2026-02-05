@@ -13,6 +13,8 @@ updates:
   # Dependabot doesn't yet support wildcards in `target-branch`, so we have to list each release branch manually.
   # https://github.com/dependabot/dependabot-core/issues/6890
   # https://github.com/dependabot/dependabot-core/issues/2511
+  #
+  # Docs for prefix: https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference#prefix
   - package-ecosystem: "github-actions"
     target-branch: "release-1.10"
     commit-message:
