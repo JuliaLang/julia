@@ -16,7 +16,7 @@ updates:
   - package-ecosystem: "github-actions"
     target-branch: "release-1.10"
     commit-message:
-      prefix: "release-1.10"
+      prefix: "[release-1.10] "
     directory: "/"
     schedule:
       interval: "monthly"
@@ -28,7 +28,7 @@ updates:
   - package-ecosystem: "github-actions"
     target-branch: "release-1.11"
     commit-message:
-      prefix: "release-1.11"
+      prefix: "[release-1.11] "
     directory: "/"
     schedule:
       interval: "monthly"
@@ -40,7 +40,7 @@ updates:
   - package-ecosystem: "github-actions"
     target-branch: "release-1.12"
     commit-message:
-      prefix: "release-1.12"
+      prefix: "[release-1.12] "
     directory: "/"
     schedule:
       interval: "monthly"
@@ -52,7 +52,7 @@ updates:
   - package-ecosystem: "github-actions"
     target-branch: "release-1.13"
     commit-message:
-      prefix: "release-1.13"
+      prefix: "[release-1.13] "
     directory: "/"
     schedule:
       interval: "monthly"
