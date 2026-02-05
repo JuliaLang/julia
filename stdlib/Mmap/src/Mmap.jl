@@ -116,7 +116,7 @@ function gethandle(io::IO)
     return handle
 end
 
-settings(sh::Anonymous) = sh.name, sh.readonly, sh.create
+settings(sh::Anonymous) = Ptr{Cwchar_t}(0), sh.readonly, sh.create
 settings(io::IO) = Ptr{Cwchar_t}(0), isreadonly(io), true
 
 else
