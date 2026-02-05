@@ -138,7 +138,7 @@ function new_local_binding(ctx::AbstractLoweringContext, srcref, name;
     b = _new_binding(ctx, nameref, name, kind; is_internal=true, kws...)
     lbindings = current_lambda_bindings(ctx)
     if !isnothing(lbindings)
-        init_lambda_binding(lbindings, b.id, false)
+        init_lambda_binding(lbindings, b, false)
     end
     binding_ex(ctx, b)
 end
@@ -179,7 +179,8 @@ end
 LambdaBindings(self::IdTag = 0, scope_id::ScopeId = 0) =
     LambdaBindings(self, scope_id, Dict{IdTag,LambdaBindings}())
 
-function init_lambda_binding(bindings::LambdaBindings, id::IdTag, capt::Bool)
-    @assert !haskey(bindings.locals_capt, id)
-    bindings.locals_capt[id] = capt
+function init_lambda_binding(bindings::LambdaBindings, b::BindingInfo, capt::Bool)
+    @assert !haskey(bindings.locals_capt, b.id)
+    bindings.locals_capt[b.id] = capt
+    b.lambda_id = bindings.scope_id
 end

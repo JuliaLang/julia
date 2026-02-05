@@ -192,7 +192,7 @@ function ensure_captured!(ctx, scope::ScopeInfo, b)
     if b.kind === :global || b.is_ssa
         return
     end
-    lam = scope.is_lifted ? top_scope(ctx) : enclosing_lambda(ctx, scope)
+    lam = enclosing_lambda(ctx, scope)
     if !haskey(lam.locals_capt, b.id)
         b.is_captured = true
         lam.locals_capt[b.id] = true
@@ -253,7 +253,7 @@ function _find_scope_decls!(ctx, scope, ex)
     elseif k === K"break" && numchildren(ex) >= 2
         # For break with value, only recurse into the value expression (second child), not the label
         _find_scope_decls!(ctx, scope, ex[2])
-    elseif needs_resolution(ex) && !(k === K"scope_block" || k === K"lambda")
+    elseif needs_resolution(ex) && !(k in KSet"scope_block lambda method_defs")
         for e in children(ex)
             _find_scope_decls!(ctx, scope, e)
         end
@@ -431,7 +431,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
             ]
             ret_var
         ]
-    elseif k == K"scope_block" #  || k == K"method_defs"
+    elseif k == K"scope_block"
         newscope = enter_scope!(ctx, ex)
         stmts = SyntaxList(ctx)
         add_local_decls!(ctx, stmts, ex, newscope)
@@ -440,6 +440,17 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         end
         pop!(ctx.scope_stack)
         @ast ctx ex [K"block" stmts...]
+    elseif k == K"method_defs"
+        newscope = enter_scope!(ctx, ex)
+        mname = _resolve_scopes(ctx, ex[1], newscope)
+        stmts = SyntaxList(ctx)
+        add_local_decls!(ctx, stmts, ex, newscope)
+        for e in children(ex[2])
+            push!(stmts, _resolve_scopes(ctx, e, newscope))
+        end
+        pop!(ctx.scope_stack)
+        lb = LambdaBindings(0, top_scope(ctx).id, top_scope(ctx).locals_capt::Dict)
+        @ast ctx ex [K"method_defs"(lambda_bindings=lb) mname [K"block" stmts...]]
     elseif k == K"islocal"
         e1 = ex[1]
         islocal = kind(e1) == K"Identifier" &&
