@@ -1,713 +1,441 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module Sys
-@doc """
-Provide methods for retrieving information about hardware and the operating system.
-""" Sys
+"""
+Low level module for mmap (memory mapping of files).
+"""
+module Mmap
 
-export BINDIR,
-       STDLIB,
-       CPU_THREADS,
-       CPU_NAME,
-       WORD_SIZE,
-       ARCH,
-       MACHINE,
-       KERNEL,
-       JIT,
-       PAGESIZE,
-       cpu_info,
-       cpu_summary,
-       sysimage_target,
-       uptime,
-       loadavg,
-       free_memory,
-       total_memory,
-       free_physical_memory,
-       total_physical_memory,
-       isapple,
-       isbsd,
-       isdragonfly,
-       isfreebsd,
-       islinux,
-       isnetbsd,
-       isopenbsd,
-       isunix,
-       iswindows,
-       isjsvm,
-       isexecutable,
-       isreadable,
-       iswritable,
-       username,
-       which,
-       detectwsl
+import Base: OS_HANDLE, INVALID_OS_HANDLE
+using Base.Sys: PAGESIZE
 
-import ..Base: show
+export mmap
+
+# for mmaps not backed by files
+mutable struct Anonymous <: IO
+    name::String
+    readonly::Bool
+    create::Bool
+end
 
 """
-    Sys.BINDIR::String
+    Mmap.Anonymous(name::AbstractString="", readonly::Bool=false, create::Bool=true)
 
-A string containing the full path to the directory containing the `julia` executable.
-"""
-global BINDIR::String = ccall(:jl_get_julia_bindir, Any, ())::String
-
-"""
-    Sys.STDLIB::String
-
-A string containing the full path to the directory containing the `stdlib` packages.
-"""
-global STDLIB::String = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
-# In case STDLIB change after julia is built, the variable below can be used
-# to update cached method locations to updated ones.
-const BUILD_STDLIB_PATH = STDLIB
-# Similarly, this is the root of the julia repo directory that julia was built from
-const BUILD_ROOT_PATH = "$BINDIR/../.."
-
-# helper to avoid triggering precompile warnings
-
-"""
-    Sys.CPU_THREADS::Int
-
-The number of logical CPU cores available in the system, i.e. the number of threads
-that the CPU can run concurrently. Note that this is not necessarily the number of
-CPU cores, for example, in the presence of
-[hyper-threading](https://en.wikipedia.org/wiki/Hyper-threading).
-
-See Hwloc.jl or CpuId.jl for extended information, including number of physical cores.
-"""
-global CPU_THREADS::Int = 1 # for bootstrap, changed on startup
-
-"""
-    Sys.ARCH::Symbol
-
-A symbol representing the architecture of the build configuration.
-"""
-const ARCH = ccall(:jl_get_ARCH, Any, ())::Symbol
-
-
-"""
-    Sys.KERNEL::Symbol
-
-A symbol representing the name of the operating system, as returned by `uname` of the build configuration.
-"""
-const KERNEL = ccall(:jl_get_UNAME, Any, ())::Symbol
-
-"""
-    Sys.MACHINE::String
-
-A string containing the build triple.
-"""
-const MACHINE = Base.MACHINE::String
-
-"""
-    Sys.WORD_SIZE::Int
-
-Standard word size on the current machine, in bits.
-"""
-const WORD_SIZE = Core.sizeof(Int) * 8
-
-"""
-    Sys.SC_CLK_TCK::Clong
-
-The number of system "clock ticks" per second, corresponding to `sysconf(_SC_CLK_TCK)` on
-POSIX systems, or `0` if it is unknown.
-
-CPU times, e.g. as returned by `Sys.cpu_info()`, are in units of ticks, i.e. units of `1 / Sys.SC_CLK_TCK` seconds if `Sys.SC_CLK_TCK > 0`.
-"""
-global SC_CLK_TCK::Clong
-
-"""
-    Sys.CPU_NAME::String
-
-A string representing the name of CPU.
+Create an `IO`-like object for creating zeroed-out mmapped-memory that is not tied to a file
+for use in [`mmap`](@ref mmap). Used by `SharedArray` for creating shared memory arrays.
 
 # Examples
-For example, `Sys.CPU_NAME` might equal `"tigerlake"` on an
-[Intel Core "Tiger Lake" CPU](https://en.wikipedia.org/wiki/Tiger_Lake),
-or `"apple-m1"` on an [Apple M1 CPU](https://en.wikipedia.org/wiki/Apple_M1).
-
-Note: Included in the detailed system information via `versioninfo(verbose=true)`.
-"""
-global CPU_NAME::String
-
-"""
-    Sys.JIT::String
-
-A string representing the specific Just-In-Time (JIT) compiler being utilized in the current runtime.
-
-# Examples
-Currently, this equals `"ORCJIT"` for the LLVM "ORC" ("On-Request Compilation") JIT library:
 ```jldoctest
-julia> Sys.JIT
-"ORCJIT"
+julia> using Mmap
+
+julia> anon = Mmap.Anonymous();
+
+julia> isreadable(anon)
+true
+
+julia> iswritable(anon)
+true
+
+julia> isopen(anon)
+true
+```
+"""
+Anonymous() = Anonymous("",false,true)
+
+Base.isopen(::Anonymous) = true
+Base.isreadable(::Anonymous) = true
+Base.iswritable(a::Anonymous) = !a.readonly
+
+# const used for zeroed, anonymous memory
+gethandle(io::Anonymous) = INVALID_OS_HANDLE
+
+# platform-specific mmap utilities
+if Sys.isunix()
+
+const PROT_READ     = Cint(1)
+const PROT_WRITE    = Cint(2)
+const MAP_SHARED    = Cint(1)
+const MAP_PRIVATE   = Cint(2)
+const MAP_ANONYMOUS = Cint(Sys.isbsd() ? 0x1000 : 0x20)
+const F_GETFL       = Cint(3)
+
+gethandle(io::IO) = RawFD(fd(io))
+
+# Determine a stream's read/write mode, and return prot & flags appropriate for mmap
+function settings(s::RawFD, shared::Bool)
+    flags = shared ? MAP_SHARED : MAP_PRIVATE
+    if s == INVALID_OS_HANDLE
+        flags |= MAP_ANONYMOUS
+        prot = PROT_READ | PROT_WRITE
+    else
+        mode = ccall(:fcntl, Cint, (RawFD, Cint, Cint...), s, F_GETFL)
+        systemerror("fcntl F_GETFL", mode == -1)
+        mode = mode & 3
+        prot = (mode == 0) ? PROT_READ : ((mode == 1) ? PROT_WRITE : (PROT_READ | PROT_WRITE))
+        if prot & PROT_READ == 0
+            throw(ArgumentError("mmap requires read permissions on the file (open with \"r+\" mode to override)"))
+        end
+    end
+    return prot, flags, (prot & PROT_WRITE) > 0
+end
+
+# Before mapping, grow the file to sufficient size
+# Note: a few mappable streams do not support lseek. When Julia
+# supports structures in ccall, switch to fstat.
+grow!(::Anonymous,o::Integer,l::Integer) = return
+function grow!(io::IO, offset::Integer, len::Integer)
+    pos = position(io)
+    filelen = filesize(io)
+    # If non-regular file skip trying to grow since we know that will fail the ftruncate syscall
+    filelen == 0 && !isfile(io) && return
+    if filelen < offset + len
+        failure = ccall(:jl_ftruncate, Cint, (Cint, Int64), fd(io), offset+len)
+        Base.systemerror(:ftruncate, failure != 0)
+    end
+    seek(io, pos)
+    return
+end
+
+elseif Sys.iswindows()
+
+const DWORD = Culong
+
+const PAGE_READONLY          = DWORD(0x02)
+const PAGE_READWRITE         = DWORD(0x04)
+const PAGE_WRITECOPY         = DWORD(0x08)
+const PAGE_EXECUTE_READ      = DWORD(0x20)
+const PAGE_EXECUTE_READWRITE = DWORD(0x40)
+const PAGE_EXECUTE_WRITECOPY = DWORD(0x80)
+const FILE_MAP_COPY          = DWORD(0x01)
+const FILE_MAP_WRITE         = DWORD(0x02)
+const FILE_MAP_READ          = DWORD(0x04)
+const FILE_MAP_EXECUTE       = DWORD(0x20)
+
+function gethandle(io::IO)
+    handle = Libc._get_osfhandle(RawFD(fd(io)))
+    Base.windowserror(:mmap, handle == INVALID_OS_HANDLE)
+    return handle
+end
+
+settings(sh::Anonymous) = sh.name, sh.readonly, sh.create
+settings(io::IO) = Ptr{Cwchar_t}(0), isreadonly(io), true
+
+else
+    error("mmap not defined for this OS")
+end # os-test
+
+# core implementation of mmap
+
+"""
+    mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
+    mmap(type::Type{Array{T,N}}, dims)
+
+Create an `Array` whose values are linked to a file, using memory-mapping. This provides a
+convenient way of working with data too large to fit in the computer's memory.
+
+The type is an `Array{T,N}` with a bits-type element of `T` and dimension `N` that
+determines how the bytes of the array are interpreted. Note that the file must be stored in
+binary format, and no format conversions are possible (this is a limitation of operating
+systems, not Julia).
+
+`dims` is a tuple or single [`Integer`](@ref) specifying the size or length of the array.
+
+The file is passed via the stream argument, either as an open [`IOStream`](@ref) or filename string.
+When you initialize the stream, use `"r"` for a "read-only" array, and `"w+"` to create a
+new array used to write values to disk.
+
+If no `type` argument is specified, the default is `Vector{UInt8}`.
+
+Optionally, you can specify an offset (in bytes) if, for example, you want to skip over a
+header in the file. The default value for the offset is the current stream position for an
+`IOStream`.
+
+The `grow` keyword argument specifies whether the disk file should be grown to accommodate
+the requested size of array (if the total file size is < requested array size). Write
+privileges are required to grow the file.
+
+The `shared` keyword argument specifies whether the resulting `Array` and changes made to it
+will be visible to other processes mapping the same file.
+
+For example, the following code
+
+```julia
+# Create a file for mmapping
+# (you could alternatively use mmap to do this step, too)
+using Mmap
+A = rand(1:20, 5, 30)
+s = open("/tmp/mmap.bin", "w+")
+# We'll write the dimensions of the array as the first two Ints in the file
+write(s, size(A,1))
+write(s, size(A,2))
+# Now write the data
+write(s, A)
+close(s)
+
+# Test by reading it back in
+s = open("/tmp/mmap.bin")   # default is read-only
+m = read(s, Int)
+n = read(s, Int)
+A2 = mmap(s, Matrix{Int}, (m,n))
 ```
 
-Note: Included in the detailed system information via `versioninfo(verbose=true)`.
-"""
-global JIT::String
+creates a `m`-by-`n` `Matrix{Int}`, linked to the file associated with stream `s`.
 
+A more portable file would need to encode the word size -- 32 bit or 64 bit -- and endianness
+information in the header. In practice, consider encoding binary data using standard formats
+like HDF5 (which can be used with memory-mapping).
 """
-    Sys.PAGESIZE::Clong
+function mmap(io::IO,
+              ::Type{Array{T,N}}=Vector{UInt8},
+              dims::NTuple{N,Integer}=(div(filesize(io)-position(io),Base.aligned_sizeof(T)),),
+              offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T,N}
+    # check inputs
+    isopen(io) || throw(ArgumentError("$io must be open to mmap"))
+    isbitstype(T)  || throw(ArgumentError("unable to mmap $T; must satisfy isbitstype(T) == true"))
 
-A number providing the pagesize of the given OS.  Common values being 4kb or 64kb on Linux.
-"""
-global PAGESIZE::Clong
-
-function __init__()
-    env_threads = nothing
-    if haskey(ENV, "JULIA_CPU_THREADS")
-        env_threads = ENV["JULIA_CPU_THREADS"]
+    len = Base.aligned_sizeof(T)
+    for l in dims
+        len, overflow = Base.Checked.mul_with_overflow(promote(len, l)...)
+        overflow && throw(ArgumentError("requested size prod($((len, dims...))) too large, would overflow typeof(size(T)) == $(typeof(len))"))
     end
-    global CPU_THREADS = if env_threads !== nothing
-        env_threads = tryparse(Int, env_threads)
-        if env_threads === nothing || env_threads <= 0
-            env_threads = Int(ccall(:jl_cpu_threads, Int32, ()))
-            Core.print(Core.stderr, "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $env_threads.\n")
-        end
-        env_threads
-    else
-        Int(ccall(:jl_cpu_threads, Int32, ()))
+    len >= 0 || throw(ArgumentError("requested size must be ≥ 0, got $len"))
+    len == 0 && return Array{T}(undef, dims)
+    len < typemax(Int) - PAGESIZE || throw(ArgumentError("requested size must be < $(typemax(Int)-PAGESIZE), got $len"))
+
+    offset >= 0 || throw(ArgumentError("requested offset must be ≥ 0, got $offset"))
+
+    # shift `offset` to start of page boundary
+    offset_page::Int64 = div(offset, PAGESIZE) * PAGESIZE
+    # add (offset - offset_page) to `len` to get total length of memory-mapped region
+    mmaplen = (offset - offset_page) + len
+
+    file_desc = gethandle(io)
+    szfile = convert(Csize_t, len + offset)
+    requestedSizeLarger = false
+    if !(io isa Mmap.Anonymous)
+        requestedSizeLarger = szfile > filesize(io)
     end
-    global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
-    global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
-    global JIT = ccall(:jl_get_JIT, Ref{String}, ())
-    global PAGESIZE = Int(Sys.isunix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
-    __init_build()
-    nothing
-end
-# Populate the paths needed by sysimg compilation, e.g. `generate_precompile.jl`,
-# without pulling in anything unnecessary like `CPU_NAME`
-function __init_build()
-    global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
-    vers = "v$(string(VERSION.major)).$(string(VERSION.minor))"
-    global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
-    nothing
-end
-
-mutable struct UV_cpu_info_t
-    model::Ptr{UInt8}
-    speed::Int32
-    cpu_times!user::UInt64
-    cpu_times!nice::UInt64
-    cpu_times!sys::UInt64
-    cpu_times!idle::UInt64
-    cpu_times!irq::UInt64
-end
-
-"""
-    Sys.CPUinfo
-
-The `CPUinfo` type is a mutable struct with the following fields:
-- `model::String`: CPU model information.
-- `speed::Int32`: CPU speed (in MHz).
-- `cpu_times!user::UInt64`: Time spent in user mode. CPU state shows CPU time used by user space processes.
-- `cpu_times!nice::UInt64`: Time spent in nice mode. CPU state is a subset of the "user" state and shows the CPU time used by processes that have a positive niceness, meaning a lower priority than other tasks.
-- `cpu_times!sys::UInt64`: Time spent in system mode. CPU state shows the amount of CPU time used by the kernel.
-- `cpu_times!idle::UInt64`: Time spent in idle mode. CPU state shows the CPU time that's not actively being used.
-- `cpu_times!irq::UInt64`: Time spent handling interrupts. CPU state shows the amount of time the CPU has been servicing hardware interrupts.
-
-The times are in units of `1/Sys.SC_CLK_TCK` seconds if `Sys.SC_CLK_TCK > 0`; otherwise they are in
-unknown units.
-
-Note: Included in the detailed system information via `versioninfo(verbose=true)`.
-"""
-mutable struct CPUinfo
-    model::String
-    speed::Int32
-    cpu_times!user::UInt64
-    cpu_times!nice::UInt64
-    cpu_times!sys::UInt64
-    cpu_times!idle::UInt64
-    cpu_times!irq::UInt64
-    CPUinfo(model,speed,u,n,s,id,ir)=new(model,speed,u,n,s,id,ir)
-end
-CPUinfo(info::UV_cpu_info_t) = CPUinfo(unsafe_string(info.model), info.speed,
-    info.cpu_times!user, info.cpu_times!nice, info.cpu_times!sys,
-    info.cpu_times!idle, info.cpu_times!irq)
-
-public CPUinfo
-
-function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::AbstractString="    ")
-    tck = SC_CLK_TCK
-    if header
-        println(io, info.model, ": ")
-        print(io, " "^length(prefix))
-        println(io, "    ", lpad("speed", 5), "    ", lpad("user", 9), "    ", lpad("nice", 9), "    ",
-                lpad("sys", 9), "    ", lpad("idle", 9), "    ", lpad("irq", 9))
-    end
-    print(io, prefix)
-    unit = tck > 0 ? " s  " : "    "
-    tc = max(tck, 1)
-    d(i, unit=unit) = lpad(string(round(Int64,i)), 9) * unit
-    print(io,
-          lpad(string(info.speed), 5), " MHz  ",
-          d(info.cpu_times!user / tc), d(info.cpu_times!nice / tc), d(info.cpu_times!sys / tc),
-          d(info.cpu_times!idle / tc), d(info.cpu_times!irq / tc, tck > 0 ? " s" : "  "))
-    if tck <= 0
-        print(io, "ticks")
-    end
-end
-
-show(io::IO, ::MIME"text/plain", info::CPUinfo) = _show_cpuinfo(io, info, true, "    ")
-
-function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
-    if j-i < 9
-        header = true
-        for x = i:j
-            header || println(io)
-            _show_cpuinfo(io, cpu[x], header, "#$(x-i+1) ")
-            header = false
-        end
-    else
-        summary = CPUinfo(cpu[i].model,0,0,0,0,0,0)
-        count = j - i + 1
-        for x = i:j
-            summary.speed += cpu[i].speed
-            summary.cpu_times!user += cpu[x].cpu_times!user
-            summary.cpu_times!nice += cpu[x].cpu_times!nice
-            summary.cpu_times!sys += cpu[x].cpu_times!sys
-            summary.cpu_times!idle += cpu[x].cpu_times!idle
-            summary.cpu_times!irq += cpu[x].cpu_times!irq
-        end
-        summary.speed = div(summary.speed,count)
-        _show_cpuinfo(io, summary, true, "#1-$(count) ")
-    end
-    println(io)
-end
-
-"""
-    Sys.cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo}=cpu_info())
-
-Print a summary of CPU information to the `io` stream (defaulting to [`stdout`](@ref)), organizing and displaying aggregated data for CPUs with the same model, for a given array of `CPUinfo` data structures
-describing a set of CPUs (which defaults to the return value of the [`Sys.cpu_info`](@ref) function).
-
-The summary includes aggregated information for each distinct CPU model,
-providing details such as average CPU speed and total time spent in different modes (user, nice, sys, idle, irq) across all cores with the same model.
-
-Note: Included in the detailed system information via `versioninfo(verbose=true)`.
-"""
-function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
-    model = cpu[1].model
-    first = 1
-    for i = 2:length(cpu)
-        if model != cpu[i].model
-            _cpu_summary(io, cpu, first, i-1)
-            first = i
-        end
-    end
-    _cpu_summary(io, cpu, first, length(cpu))
-end
-
-"""
-    Sys.cpu_info()
-
-Return a vector of `CPUinfo` objects, where each object represents information about a CPU core.
-
-This is pretty-printed in a tabular format by `Sys.cpu_summary`, which is included in the output
-of `versioninfo(verbose=true)`, so most users will not need to access the `CPUinfo`
-data structures directly.
-
-The function provides information about each CPU, including model, speed, and usage statistics such as user time, nice time, system time, idle time, and interrupt time.
-
-"""
-function cpu_info()
-    UVcpus = Ref{Ptr{UV_cpu_info_t}}()
-    count = Ref{Int32}()
-    err = ccall(:uv_cpu_info, Int32, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count)
-    Base.uv_error("uv_cpu_info", err)
-    cpus = Vector{CPUinfo}(undef, count[])
-    for i = 1:length(cpus)
-        cpus[i] = CPUinfo(unsafe_load(UVcpus[], i))
-    end
-    ccall(:uv_free_cpu_info, Cvoid, (Ptr{UV_cpu_info_t}, Int32), UVcpus[], count[])
-    return cpus
-end
-
-"""
-    Sys.sysimage_target()
-
-Return the CPU target string that was used to build the current system image.
-
-This function returns the original CPU target specification that was passed to Julia
-when the system image was compiled. This can be useful for reproducing the same
-system image or for understanding what CPU features were enabled during compilation.
-
-If the system image was built with the default settings this will return `"native"`.
-
-See also [`JULIA_CPU_TARGET`](@ref).
-"""
-function sysimage_target()
-    return ccall(:jl_get_sysimage_cpu_target, Ref{String}, ())
-end
-
-"""
-    Sys.uptime()
-
-Gets the current system uptime in seconds.
-"""
-function uptime()
-    uptime_ = Ref{Float64}()
-    err = ccall(:uv_uptime, Int32, (Ptr{Float64},), uptime_)
-    Base.uv_error("uv_uptime", err)
-    return uptime_[]
-end
-
-"""
-    Sys.loadavg()
-
-Get the load average. See: https://en.wikipedia.org/wiki/Load_(computing).
-"""
-function loadavg()
-    loadavg_ = Vector{Float64}(undef, 3)
-    ccall(:uv_loadavg, Cvoid, (Ptr{Float64},), loadavg_)
-    return loadavg_
-end
-
-"""
-    Sys.free_physical_memory()
-
-Get the free memory of the system in bytes. The entire amount may not be available to the
-current process; use `Sys.free_memory()` for the actually available amount.
-"""
-free_physical_memory() = ccall(:uv_get_free_memory, UInt64, ())
-
-"""
-    Sys.total_physical_memory()
-
-Get the total memory in RAM (including that which is currently used) in bytes. The entire
-amount may not be available to the current process; see `Sys.total_memory()`.
-"""
-total_physical_memory() = ccall(:uv_get_total_memory, UInt64, ())
-
-"""
-    Sys.free_memory()
-
-Get the total free memory in RAM in bytes.
-"""
-free_memory() = ccall(:uv_get_available_memory, UInt64, ())
-
-"""
-    Sys.total_memory()
-
-Get the total memory in RAM (including that which is currently used) in bytes.
-This amount may be constrained, e.g., by Linux control groups. For the unconstrained
-amount, see `Sys.total_physical_memory()`.
-"""
-function total_memory()
-    constrained = ccall(:uv_get_constrained_memory, UInt64, ())
-    physical = total_physical_memory()
-    if 0 < constrained <= physical
-        return constrained
-    else
-        return physical
-    end
-end
-
-"""
-    Sys.get_process_title()
-
-Get the process title. On some systems, will always return an empty string.
-"""
-function get_process_title()
-    buf = Vector{UInt8}(undef, 512)
-    err = ccall(:uv_get_process_title, Cint, (Ptr{UInt8}, Cint), buf, 512)
-    Base.uv_error("get_process_title", err)
-    return unsafe_string(pointer(buf))
-end
-
-"""
-    Sys.set_process_title(title::AbstractString)
-
-Set the process title. No-op on some operating systems.
-"""
-function set_process_title(title::AbstractString)
-    err = ccall(:uv_set_process_title, Cint, (Cstring,), title)
-    Base.uv_error("set_process_title", err)
-end
-
-"""
-    Sys.maxrss()
-
-Get the maximum resident set size utilized in bytes.
-See also:
-    - man page of `getrusage`(2) on Linux and BSD.
-    - Windows API `GetProcessMemoryInfo`.
-"""
-maxrss() = ccall(:jl_maxrss, Csize_t, ())
-
-"""
-    Sys.isunix([os])
-
-Predicate for testing if the OS provides a Unix-like interface.
-See documentation in [Handling Operating System Variation](@ref).
-"""
-function isunix(os::Symbol)
-    if iswindows(os)
-        return false
-    elseif islinux(os) || isbsd(os)
-        return true
-    elseif os === :Emscripten
-        # Emscripten implements the POSIX ABI and provides traditional
-        # Unix-style operating system functions such as file system support.
-        # Therefore, we consider it a unix, even though this need not be
-        # generally true for a jsvm embedding.
-        return true
-    else
-        throw(ArgumentError("unknown operating system \"$os\""))
-    end
-end
-
-"""
-    Sys.islinux([os])
-
-Predicate for testing if the OS is a derivative of Linux.
-See documentation in [Handling Operating System Variation](@ref).
-"""
-islinux(os::Symbol) = (os === :Linux)
-
-"""
-    Sys.isbsd([os])
-
-Predicate for testing if the OS is a derivative of BSD.
-See documentation in [Handling Operating System Variation](@ref).
-
-!!! note
-    The Darwin kernel descends from BSD, which means that `Sys.isbsd()` is
-    `true` on macOS systems. To exclude macOS from a predicate, use
-    `Sys.isbsd() && !Sys.isapple()`.
-"""
-isbsd(os::Symbol) = (isfreebsd(os) || isopenbsd(os) || isnetbsd(os) || isdragonfly(os) || isapple(os))
-
-"""
-    Sys.isfreebsd([os])
-
-Predicate for testing if the OS is a derivative of FreeBSD.
-See documentation in [Handling Operating System Variation](@ref).
-
-!!! note
-    Not to be confused with `Sys.isbsd()`, which is `true` on FreeBSD but also on
-    other BSD-based systems. `Sys.isfreebsd()` refers only to FreeBSD.
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
-"""
-isfreebsd(os::Symbol) = (os === :FreeBSD)
-
-"""
-    Sys.isopenbsd([os])
-
-Predicate for testing if the OS is a derivative of OpenBSD.
-See documentation in [Handling Operating System Variation](@ref).
-
-!!! note
-    Not to be confused with `Sys.isbsd()`, which is `true` on OpenBSD but also on
-    other BSD-based systems. `Sys.isopenbsd()` refers only to OpenBSD.
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
-"""
-isopenbsd(os::Symbol) = (os === :OpenBSD)
-
-"""
-    Sys.isnetbsd([os])
-
-Predicate for testing if the OS is a derivative of NetBSD.
-See documentation in [Handling Operating System Variation](@ref).
-
-!!! note
-    Not to be confused with `Sys.isbsd()`, which is `true` on NetBSD but also on
-    other BSD-based systems. `Sys.isnetbsd()` refers only to NetBSD.
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
-"""
-isnetbsd(os::Symbol) = (os === :NetBSD)
-
-"""
-    Sys.isdragonfly([os])
-
-Predicate for testing if the OS is a derivative of DragonFly BSD.
-See documentation in [Handling Operating System Variation](@ref).
-
-!!! note
-    Not to be confused with `Sys.isbsd()`, which is `true` on DragonFly but also on
-    other BSD-based systems. `Sys.isdragonfly()` refers only to DragonFly.
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
-"""
-isdragonfly(os::Symbol) = (os === :DragonFly)
-
-"""
-    Sys.iswindows([os])
-
-Predicate for testing if the OS is a derivative of Microsoft Windows NT.
-See documentation in [Handling Operating System Variation](@ref).
-"""
-iswindows(os::Symbol) = (os === :Windows || os === :NT)
-
-"""
-    Sys.isapple([os])
-
-Predicate for testing if the OS is a derivative of Apple Macintosh OS X or Darwin.
-See documentation in [Handling Operating System Variation](@ref).
-"""
-isapple(os::Symbol) = (os === :Apple || os === :Darwin)
-
-"""
-    Sys.isjsvm([os])
-
-Predicate for testing if Julia is running in a JavaScript VM (JSVM),
-including e.g. a WebAssembly JavaScript embedding in a web browser.
-
-!!! compat "Julia 1.2"
-    This function requires at least Julia 1.2.
-"""
-isjsvm(os::Symbol) = (os === :Emscripten)
-
-"""
-    Sys.detectwsl()
-
-Runtime predicate for testing if Julia is running inside
-Windows Subsystem for Linux (WSL).
-
-!!! note
-    Unlike `Sys.iswindows`, `Sys.islinux` etc., this is a runtime test, and thus
-    cannot meaningfully be used in `@static if` constructs.
-
-!!! compat "Julia 1.12"
-    This function requires at least Julia 1.12.
-"""
-function detectwsl()
-    # We use the same approach as canonical/snapd do to detect WSL
-    islinux() && (
-        isfile("/proc/sys/fs/binfmt_misc/WSLInterop")
-        || isdir("/run/WSL")
-    )
-end
-
-for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
-    @eval $f() = $(getfield(@__MODULE__, f)(KERNEL))
-end
-
-if iswindows()
-    function windows_version()
-        verinfo = ccall(:GetVersion, UInt32, ())
-        VersionNumber(verinfo & 0xFF, (verinfo >> 8) & 0xFF, verinfo >> 16)
-    end
-else
-    windows_version() = v"0.0"
-end
-
-"""
-    Sys.windows_version()
-
-Return the version number for the Windows NT Kernel as a `VersionNumber`,
-i.e. `v"major.minor.build"`, or `v"0.0.0"` if this is not running on Windows.
-"""
-windows_version
-
-const WINDOWS_VISTA_VER = v"6.0"
-
-const isexecutable = Base.isexecutable
-const isreadable   = Base.isreadable
-const iswritable   = Base.iswritable
-
-"""
-    Sys.which(program_name::String)
-
-Given a program name, search the current `PATH` to find the first binary with
-the proper executable permissions that can be run and return an absolute path
-to it, or return `nothing` if no such program is available. If a path with
-a directory in it is passed in for `program_name`, tests that exact path
-for executable permissions only (with `.exe` and `.com` extensions added on
-Windows platforms); no searching of `PATH` is performed.
-"""
-function which(program_name::String)
-    if isempty(program_name)
-       return nothing
-    end
-    # Build a list of program names that we're going to try
-    program_names = String[]
-    base_pname = basename(program_name)
-    if iswindows()
-        # If the file already has an extension, try that name first
-        if !isempty(splitext(base_pname)[2])
-            push!(program_names, base_pname)
-        end
-
-        # But also try appending .exe and .com`
-        for pe in (".exe", ".com")
-            push!(program_names, string(base_pname, pe))
-        end
-    else
-        # On non-windows, we just always search for what we've been given
-        push!(program_names, base_pname)
-    end
-
-    path_dirs = String[]
-    program_dirname = dirname(program_name)
-    # If we've been given a path that has a directory name in it, then we
-    # check to see if that path exists.  Otherwise, we search the PATH.
-    if isempty(program_dirname)
-        # If we have been given just a program name (not a relative or absolute
-        # path) then we should search `PATH` for it here:
-        pathsep = iswindows() ? ';' : ':'
-        path_dirs = map(abspath, eachsplit(get(ENV, "PATH", ""), pathsep))
-
-        # On windows we always check the current directory as well
-        if iswindows()
-            pushfirst!(path_dirs, pwd())
-        end
-    else
-        push!(path_dirs, abspath(program_dirname))
-    end
-
-    # Here we combine our directories with our program names, searching for the
-    # first match among all combinations.
-    for path_dir in path_dirs
-        for pname in program_names
-            program_path = joinpath(path_dir, pname)
-            try
-                # If we find something that matches our name and we can execute
-                if isfile(program_path) && isexecutable(program_path)
-                    return program_path
-                end
-            catch e
-                # If we encounter a permission error, we skip this directory
-                # and continue to the next directory in the PATH variable.
-                if isa(e, Base.IOError) && e.code == Base.UV_EACCES
-                    # Permission denied, continue searching
-                    continue
+    # platform-specific mmapping
+    @static if Sys.isunix()
+        prot, flags, iswrite = settings(file_desc, shared)
+        if requestedSizeLarger && isfile(io) # add a condition to this line to ensure it only checks files
+            if iswrite
+                if grow
+                    grow!(io, offset, len)
                 else
-                    # Rethrow the exception if it's not a permission error
-                    rethrow(e)
+                    throw(ArgumentError("requested size $szfile larger than file size $(filesize(io)), but requested not to grow"))
                 end
+            else
+                throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
             end
         end
+        # mmap the file
+        ptr = ccall(:jl_mmap, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t, Cint, Cint, RawFD, Int64),
+            C_NULL, mmaplen, prot, flags, file_desc, offset_page)
+        systemerror("memory mapping failed", reinterpret(Int, ptr) == -1)
+    else
+        name, readonly, create = settings(io)
+        if requestedSizeLarger
+            if readonly
+                throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
+            elseif !grow
+                throw(ArgumentError("requested size $szfile larger than file size $(filesize(io)), but requested not to grow"))
+            end
+        end
+        handle = create ? ccall(:CreateFileMappingW, stdcall, Ptr{Cvoid}, (OS_HANDLE, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
+                                file_desc, C_NULL, readonly ? PAGE_READONLY : PAGE_READWRITE, szfile >> 32, szfile & typemax(UInt32), name) :
+                          ccall(:OpenFileMappingW, stdcall, Ptr{Cvoid}, (DWORD, Cint, Cwstring),
+                                readonly ? FILE_MAP_READ : FILE_MAP_WRITE, true, name)
+        Base.windowserror(:mmap, handle == C_NULL)
+        ptr = ccall(:MapViewOfFile, stdcall, Ptr{Cvoid}, (Ptr{Cvoid}, DWORD, DWORD, DWORD, Csize_t),
+                    handle, readonly ? FILE_MAP_READ : FILE_MAP_WRITE, offset_page >> 32, offset_page & typemax(UInt32), mmaplen)
+        Base.windowserror(:mmap, ptr == C_NULL)
+    end # os-test
+    # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
+    A = unsafe_wrap(Array, convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
+    finalizer(A.ref.mem) do x
+        @static if Sys.isunix()
+            systemerror("munmap",  ccall(:munmap, Cint, (Ptr{Cvoid}, Int), ptr, mmaplen) != 0)
+        else
+            status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Cvoid},), ptr)!=0
+            status |= ccall(:CloseHandle, stdcall, Cint, (Ptr{Cvoid},), handle)!=0
+            Base.windowserror(:UnmapViewOfFile, status == 0)
+        end
     end
-
-    # If we couldn't find anything, don't return anything
-    nothing
+    return A
 end
-which(program_name::AbstractString) = which(String(program_name)::String)
+
+mmap(file::AbstractString,
+     ::Type{T}=Vector{UInt8},
+     dims::NTuple{N,Integer}=(div(filesize(file),Base.aligned_sizeof(eltype(T))),),
+     offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) where {T<:Array,N} =
+    open(io->mmap(io, T, dims, offset; grow=grow, shared=shared), file, isfile(file) ? "r" : "w+")::Array{eltype(T),N}
+
+# using a length argument instead of dims
+mmap(io::IO, ::Type{T}, len::Integer, offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T<:Array} =
+    mmap(io, T, (len,), offset; grow=grow, shared=shared)
+mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) where {T<:Array} =
+    open(io->mmap(io, T, (len,), offset; grow=grow, shared=shared), file, isfile(file) ? "r" : "w+")::Vector{eltype(T)}
+
+# constructors for non-file-backed (anonymous) mmaps
+mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) where {T<:Array,N} = mmap(Anonymous(), T, dims, Int64(0); shared=shared)
+mmap(::Type{T}, i::Integer...; shared::Bool=true) where {T<:Array} = mmap(Anonymous(), T, convert(Tuple{Vararg{Int}},i), Int64(0); shared=shared)
 
 """
-    Sys.username()::String
+    mmap(io, BitArray, [dims, offset])
 
-Return the username for the current user. If the username cannot be determined
-or is empty, this function throws an error.
+Create a [`BitArray`](@ref) whose values are linked to a file, using memory-mapping; it has the same
+purpose, works in the same way, and has the same arguments, as [`mmap`](@ref mmap), but
+the byte representation is different.
 
-To retrieve a username that is overridable via an environment variable,
-e.g., `USER`, consider using
-```julia
-user = get(Sys.username, ENV, "USER")
+# Examples
+```jldoctest
+julia> using Mmap
+
+julia> io = open("mmap.bin", "w+");
+
+julia> B = mmap(io, BitArray, (25,30000));
+
+julia> B[3, 4000] = true;
+
+julia> Mmap.sync!(B);
+
+julia> close(io);
+
+julia> io = open("mmap.bin", "r+");
+
+julia> C = mmap(io, BitArray, (25,30000));
+
+julia> C[3, 4000]
+true
+
+julia> C[2, 4000]
+false
+
+julia> close(io)
+
+julia> rm("mmap.bin")
 ```
-
-!!! compat "Julia 1.11"
-    This function requires at least Julia 1.11.
-
-See also [`homedir`](@ref).
+This creates a 25-by-30000 `BitArray`, linked to the file associated with stream `io`.
 """
-function username()
-    pw = Libc.getpw()
-    isempty(pw.username) && Base.uv_error("username", Base.UV_ENOENT)
-    return pw.username
+function mmap(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
+              offset::Int64=position(io); grow::Bool=true, shared::Bool=true) where N
+    n = prod(dims)
+    nc = Base.num_bit_chunks(n)
+    chunks = mmap(io, Vector{UInt64}, (nc,), offset; grow=grow, shared=shared)
+    if !isreadonly(io)
+        chunks[end] &= Base._msk_end(n)
+    else
+        if chunks[end] != chunks[end] & Base._msk_end(n)
+            throw(ArgumentError("the given file does not contain a valid BitArray of size $(join(dims, 'x')) (open with \"r+\" mode to override)"))
+        end
+    end
+    B = BitArray{N}(undef, ntuple(i->0,Val(N))...)
+    B.chunks = chunks
+    B.len = n
+    if N != 1
+        B.dims = dims
+    end
+    return B
 end
 
-end # module Sys
+mmap(file::AbstractString, ::Type{T}, dims::NTuple{N,Integer}, offset::Integer=Int64(0);grow::Bool=true, shared::Bool=true) where {T<:BitArray,N} =
+    open(io->mmap(io, T, dims, offset; grow=grow, shared=shared), file, isfile(file) ? "r" : "w+")::BitArray{N}
+
+# using a length argument instead of dims
+mmap(io::IO, ::Type{T}, len::Integer, offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T<:BitArray} =
+    mmap(io, T, (len,), offset; grow=grow, shared=shared)
+mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) where {T<:BitArray} =
+    open(io->mmap(io, T, (len,), offset; grow=grow, shared=shared), file, isfile(file) ? "r" : "w+")::BitVector
+
+# constructors for non-file-backed (anonymous) mmaps
+mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) where {T<:BitArray,N} = mmap(Anonymous(), T, dims, Int64(0); shared=shared)
+mmap(::Type{T}, i::Integer...; shared::Bool=true) where {T<:BitArray} = mmap(Anonymous(), T, convert(Tuple{Vararg{Int}},i), Int64(0); shared=shared)
+
+# msync flags for unix
+const MS_ASYNC = 1
+const MS_INVALIDATE = 2
+const MS_SYNC = 4
+
+"""
+    Mmap.sync!(array)
+
+Forces synchronization between the in-memory version of a memory-mapped `Array` or
+[`BitArray`](@ref) and the on-disk version.
+"""
+function sync!(m::Array, flags::Integer=MS_SYNC)
+    ptr = pointer(m)
+    offset = rem(UInt(ptr), PAGESIZE)
+    ptr = ptr - offset
+    mmaplen = sizeof(m) + offset
+    GC.@preserve m @static if Sys.isunix()
+        systemerror("msync",
+                    ccall(:msync, Cint, (Ptr{Cvoid}, Csize_t, Cint), ptr, mmaplen, flags) != 0)
+    else
+        Base.windowserror(:FlushViewOfFile,
+            ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Cvoid}, Csize_t), ptr, mmaplen) == 0)
+    end
+end
+sync!(B::BitArray, flags::Integer=MS_SYNC) = sync!(B.chunks, flags)
+
+@static if Sys.isunix()
+const MADV_NORMAL = 0
+const MADV_RANDOM = 1
+const MADV_SEQUENTIAL = 2
+const MADV_WILLNEED = 3
+const MADV_DONTNEED = 4
+if Sys.islinux()
+    const MADV_FREE = 8
+    const MADV_REMOVE = 9
+    const MADV_DONTFORK = 10
+    const MADV_DOFORK = 11
+    const MADV_MERGEABLE = 12
+    const MADV_UNMERGEABLE = 13
+    const MADV_HUGEPAGE = 14
+    const MADV_NOHUGEPAGE = 15
+    const MADV_DONTDUMP = 16
+    const MADV_DODUMP = 17
+    const MADV_WIPEONFORK = 18
+    const MADV_KEEPONFORK = 19
+    const MADV_COLD = 20
+    const MADV_PAGEOUT = 21
+    const MADV_HWPOISON = 100
+    const MADV_SOFT_OFFLINE = 101
+elseif Sys.isapple()
+    const MADV_FREE = 5
+elseif Sys.isfreebsd() || Sys.isdragonfly()
+    const MADV_FREE = 5
+    const MADV_NOSYNC = 6
+    const MADV_AUTOSYNC = 7
+    const MADV_NOCORE = 8
+    const MADV_CORE = 9
+    if Sys.isfreebsd()
+        const MADV_PROTECT = 10
+    else
+        const MADV_INVAL = 10
+        const MADV_SETMAP = 11
+    end
+elseif Sys.isopenbsd() || Sys.isnetbsd()
+    const MADV_SPACEAVAIL = 5
+    const MADV_FREE = 6
+end
+
+"""
+    Mmap.madvise!(array, flag::Integer = Mmap.MADV_NORMAL)
+
+Advises the kernel on the intended usage of the memory-mapped `array`, with the intent
+`flag` being one of the available `MADV_*` constants.
+"""
+function madvise!(m::Array, flag::Integer=MADV_NORMAL)
+    ptr = pointer(m)
+    offset = rem(UInt(ptr), PAGESIZE)
+    ptr = ptr - offset
+    mmaplen = sizeof(m) + offset
+    GC.@preserve m begin
+        systemerror("madvise",
+                    ccall(:madvise, Cint, (Ptr{Cvoid}, Csize_t, Cint), ptr, mmaplen, flag) != 0)
+    end
+end
+madvise!(B::BitArray, flag::Integer=MADV_NORMAL) = madvise!(B.chunks, flag)
+end # Sys.isunix()
+
+end # module
