@@ -498,7 +498,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         is_closure = kind(name) == K"BindingId" && get_binding(ctx, name).kind === :local
         cap_rewrite = is_closure ? ctx.closure_infos[name.var_id] : nothing
         ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
-                                    ctx.closure_bindings, cap_rewrite, ctx.lambda_bindings,
+                                    ctx.closure_bindings, cap_rewrite, ex.lambda_bindings,
                                     ctx.is_toplevel_seq_point, ctx.toplevel_pure, ctx.toplevel_stmts,
                                     ctx.closure_infos)
         body = map_cl_convert(ctx2, ex[2], false)
