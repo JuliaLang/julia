@@ -635,7 +635,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
         full_input = String(buf.data[1:buf.size])
         if !isempty(full_input)
             passes = StylingPass[]
-            context = StylingContext(buf_pos, regstart, regstop)
+            context = StylingContext(buf_pos + 1, regstart + 1, regstop) # StylingContext positions are 1-based
 
             # Add prompt-specific styling passes if the prompt has them and styling is enabled
             enable_style_input = prompt_obj === nothing ? false :
