@@ -150,6 +150,12 @@ end
 # helper function to clean up libuv request
 uv_fs_req_cleanup(req) = ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
 
+if Sys.iswindows()
+    const path_separator_re = r"[/\\]+"sa # May be used by some external packages
+elseif Sys.isunix()
+    const path_separator_re = r"/+"sa # May be used by some external packages
+end
+
 include("stat.jl")
 include("file.jl")
 include(string(Base.BUILDROOT, "file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)
