@@ -816,8 +816,8 @@ function write(io::IO, x1, xs...)
     return written
 end
 
-@noinline unsafe_write(s::IO, p::Ref{T}, n::Integer) where {T} =
-    unsafe_write(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
+unsafe_write(s::IO, p::Ref{T}, n::Integer) where {T} =
+    GC.@preserve p unsafe_write(s, unsafe_convert(Ref{T}, p)::Ptr, n)
 unsafe_write(s::IO, p::Ptr, n::Integer) = unsafe_write(s, convert(Ptr{UInt8}, p), convert(UInt, n))
 function write(s::IO, x::Ref{T}) where {T}
     x isa Ptr && error("write cannot copy from a Ptr")
