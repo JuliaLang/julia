@@ -541,28 +541,23 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                     x.head === :row && (d == 1 || (d == 2 && is_row_first)) && return x.args
                     return [x]
                 end
-
                 # Count leaf elements recursively
                 count_leaves(x) = !is_row(x) ? 1 :
                                   x.head === :nrow ? sum(count_leaves, @view(x.args[2:end]); init=0) :
                                   x.head === :row ? sum(count_leaves, x.args; init=0) : 1
-
                 # Base cases
                 (d == 0 || (d == 1 && !is_row_first)) && return [[length(a)]]
                 (d == 3 && is_row_first) && return get_shape(a, is_row_first, 2)
-
                 # Recursive case: build shape from children
                 shapes = map(c -> get_shape(c, is_row_first, d - 1), map(get_next, a))
                 counts = map(count_leaves, a)
                 result = [[sum(counts)], counts]
-
                 # Merge deeper levels from all children
                 max_depth = maximum(length, shapes; init=1)
                 for level in 2:max_depth
                     level_data = reduce(vcat, (s[level] for s in shapes if level <= length(s)); init=[])
                     isempty(level_data) || push!(result, level_data)
                 end
-
                 return result
             end
             function get_dims(a, is_row_first, d)
