@@ -113,7 +113,8 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
     local shmmem_create_pid
     try
         # On OSX, the shm_seg_name length must be <= 31 characters (including the terminating NULL character)
-        seg_name = "/jl$(lpad(string(getpid() % 10^6), 6, "0"))$(repr(time_ns())[3:end])$(randstring(4))"
+        #seg_name = "/jl$(lpad(string(getpid() % 10^6), 6, "0"))$(repr(time_ns())[3:end])$(randstring(4))"
+        seg_name = "/jl$(lpad(string(getpid() % 10^6), 6, "0"))$(randstring(20))"
         if onlocalhost
             shmmem_create_pid = myid()
             s, io = shm_mmap_array(T, dims, seg_name, JL_O_CREAT | JL_O_RDWR)
@@ -642,7 +643,7 @@ function shm_mmap_array(T, dims, shm_seg_name, mode)
     local io = nothing
 
     if (prod(dims) == 0) || (sizeof(T) == 0)
-        return Array{T}(undef, dims)
+        return Array{T}(undef, dims), nothing
     end
 
     try
@@ -659,6 +660,10 @@ function _shm_mmap_array(T, dims, shm_seg_name, mode)
     create = (mode & JL_O_CREAT) == JL_O_CREAT
     io = open(Mmap.Virtual, shm_seg_name, prod(dims) * sizeof(T); readonly, create)
     A = mmap(io, Array{T,length(dims)}, dims, zero(Int64))
+    if !create
+        # Can immediately close the file after mapping on workers; the creating process will unlink the segment after all workers have mapped it.
+        close(io)
+    end
     return A, io
 end
 

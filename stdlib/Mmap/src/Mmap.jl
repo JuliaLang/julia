@@ -28,10 +28,10 @@ mutable struct Virtual <: IO
     maxsize::Int
 end
 
-gethandle(io::Virtual) = fd(io.ios)
+gethandle(io::Virtual) = io.ios === nothing ? INVALID_OS_HANDLE : fd(io.ios)
 gethandle(io::IO) = fd(io)
 
-Base.isopen(io::Virtual) = io.ios != INVALID_OS_HANDLE
+Base.isopen(io::Virtual) = io.ios !== nothing || io.name == ""
 
 # Determine a stream's read/write mode, and return prot & flags appropriate for mmap
 function settings(s::RawFD, shared::Bool)
@@ -132,23 +132,28 @@ function Base.open(::Type{Virtual}, name::AbstractString, size::Integer;
     size > 0 ||
         throw(ArgumentError("Size of virtual files must be greater than 0."))
 
-    oflag = (readonly ? JL_O_RDONLY : JL_O_RDWR)
-    if create
-        oflag |= JL_O_CREAT
-    end
-    mode = S_IRUSR | S_IWUSR # Owner read/write
-    fd_mem = shm_open(name, oflag, mode)
-    systemerror(:shm_open, fd_mem < 0)
+    io = Virtual(name, nothing, readonly, create, size)
 
-    io = Virtual(name, C_NULL, readonly, create, size)
-    io.ios = fdio(fd_mem, true)
+    if !isempty(name)
+        oflag = (readonly ? JL_O_RDONLY : JL_O_RDWR)
+        if create
+            oflag |= JL_O_CREAT
+        end
+        mode = S_IRUSR | S_IWUSR # Owner read/write
+        fd_mem = shm_open(name, oflag, mode)
+        systemerror(:shm_open, fd_mem < 0)
 
-    if create
-        # Set the size of the shared memory object
-        # On OSX, ftruncate must be used to set size of segment, just lseek does not work.
-        # And only at creation time.
-        status = ccall(:jl_ftruncate, Cint, (Cint, Int64), fd_mem, size)
-        systemerror(:ftruncate, status != 0)
+        io.ios = fdio(fd_mem, true)
+
+        if create
+            # Set the size of the shared memory object
+            # On OSX, ftruncate must be used to set size of segment, just lseek does not work.
+            # And only at creation time.
+            status = ccall(:jl_ftruncate, Cint, (Cint, Int64), fd_mem, size)
+            systemerror(:ftruncate, status != 0)
+        end
+    else
+        # Anonymous mapping doesn't require an open file descriptor, occurs in `mmap`
     end
 
     return io
@@ -156,8 +161,10 @@ end
 
 function Base.close(io::Virtual)
     if io.ios !== nothing
-        rc = shm_unlink(io.name) # are both needed?
-        systemerror("Error unlinking shmem segment " * io.name, rc != 0)
+        if io.create
+            rc = shm_unlink(io.name) # are both needed?
+            systemerror("Error unlinking shmem segment " * io.name, rc != 0)
+        end
         close(io.ios)
         io.ios = nothing
     end
@@ -205,11 +212,11 @@ function Base.open(::Type{Virtual}, name::AbstractString, size::Integer;
     io = Virtual(name, C_NULL, readonly, create, ((size - 1) ÷ ACTUAL_PAGESIZE + 1) * ACTUAL_PAGESIZE)
     if create
         io.handle = ccall(:CreateFileMappingW, stdcall, Ptr{Cvoid}, (OS_HANDLE, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
-            INVALID_OS_HANDLE,                         # Backed by system paging file
-            Ref(SECURITY_ATTRIBUTES(true)),            # Default security, can be inherited
-            readonly ? PAGE_READONLY : PAGE_READWRITE, # Requested access mode
-            split_size(size, 1), split_size(size, 2),  # High-order and low-order bits of size
-            name                                       # Object name
+            INVALID_OS_HANDLE,                                    # Backed by system paging file
+            Ref(SECURITY_ATTRIBUTES(true)),                       # Default security, can be inherited
+            readonly ? PAGE_READONLY : PAGE_READWRITE,            # Requested access mode
+            split_size(io.maxsize, 1), split_size(io.maxsize, 2), # High-order and low-order bits of size
+            name                                                  # Object name
         )
         Base.windowserror(:CreateFileMappingW, io.handle == C_NULL)
     else
@@ -323,7 +330,7 @@ function mmap(io::IO,
 
     file_desc = gethandle(io)
     szfile = convert(Csize_t, len + offset)
-    requestedSizeLarger = false
+    requestedSizeLarger = szfile > filesize(io)
     # platform-specific mmapping
     @static if Sys.isunix()
         prot, flags, readonly = settings(file_desc, shared)
