@@ -918,6 +918,16 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     // type. Otherwise we pass a pointer to a jl_value_t.
     jl_svec_t *tt = ((jl_datatype_t *)at)->parameters;
     size_t nargt = jl_svec_len(tt);
+
+    for (size_t i = 0; i < nargt; ++i) {
+        jl_value_t *argt = jl_svecref(tt, i);
+        // We must check if the type is a ghost type (size 0).
+        // This includes Nothing, Missing, and empty structs.
+        if (jl_is_datatype(argt) && jl_datatype_size(argt) == 0) {
+            jl_errorf("llvmcall: argument %d is a singleton or zero-size type (e.g. Nothing) and cannot be passed as an LLVM value", (int)i + 1);
+        }
+    }
+
     SmallVector<llvm::Type*, 0> argtypes;
     SmallVector<Value *, 8> argvals(nargt);
     for (size_t i = 0; i < nargt; ++i) {
