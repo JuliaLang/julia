@@ -96,7 +96,7 @@ end
 
 function tuple_sort_test(x)
     @test issorted(sort(x))
-    length(x) > 9 && return # length > 9 uses a vector fallback
+    length(x) > 15 && return # longer lengths use a vector fallback
     @test 0 == @allocated sort(x)
 end
 @testset "sort(::NTuple)" begin

@@ -1485,7 +1485,7 @@ InitialOptimizations(next) = SubArrayOptimization(
 `DefaultStable` is an algorithm which indicates that a fast, general purpose sorting
 algorithm should be used, but does not specify exactly which algorithm.
 
-Currently, when sorting short NTuples, this is an unrolled mergesort, and otherwise it is
+Currently, when sorting short NTuples, this is an insertion sort, and otherwise it is
 composed of two parts: the [`InitialOptimizations`](@ref) and a hybrid of Radix, Insertion,
 Counting, Quick sorts.
 
@@ -1784,6 +1784,45 @@ sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 const COLLECT_ON_SORT_TYPES = Union{Base.KeySet, Base.ValueIterator}
 sort(v::COLLECT_ON_SORT_TYPES; kws...) = sort!(collect(v); kws...)
 
+function _tuple_insertion_sort(tup::Tuple, ordering::Ordering)
+    # Use `@assume_effects` to allow constant folding.
+    #
+    # Keep everything inlined into one function to allow escape analysis to prove
+    # `mem` does not escape. Then the heap allocation should be eliminated. At time
+    # of writing, Julia does not have interprocedural escape analysis. Once
+    # interprocedural escape analysis is implemented, it may be possible to simplify
+    # the code in this method body.
+    @inline let
+        n = length(tup)
+        elt = eltype(tup)
+        T = Memory{elt}
+        mem = T(undef, n)
+        Base.@assume_effects :terminates_locally for i ∈ eachindex(mem)  # copy `tup` to `mem`
+            x = tup[i]
+            Base.@assume_effects :consistent mem[i] = x
+        end
+        Base.@assume_effects :terminates_locally for i ∈ eachindex(mem)[begin:(end - 1)]  # insertion sort `mem`
+            x = Base.@assume_effects :consistent mem[i + 1]
+            j = i
+            while firstindex(mem) ≤ j
+                y = Base.@assume_effects :consistent mem[j]
+                if !(Order.lt(ordering, x, y)::Bool)
+                    break
+                end
+                k = j + 1
+                Base.@assume_effects :consistent mem[k] = y
+                j = j - 1
+            end
+            l = j + 1
+            Base.@assume_effects :consistent mem[l] = x
+        end
+        function getindex_mem(i::Int)
+             @inline Base.@assume_effects :consistent mem[i]
+        end
+        ntuple(getindex_mem, Val{n}())  # extract a `Tuple` from `mem`
+    end
+end
+
 function sort(x::NTuple;
               alg::Algorithm=defalg(x),
               lt=isless,
@@ -1798,26 +1837,14 @@ end
 # Folks who want to hack internals can define a new _sort(x::NTuple, ::TheirAlg, o::Ordering)
 # or _sort(x::NTuple{N, TheirType}, ::DefaultStable, o::Ordering) where N
 function _sort(x::NTuple, a::Union{DefaultStable, DefaultUnstable}, o::Ordering, kw)
-    # The unrolled tuple sort is prohibitively slow to compile for length > 9.
-    # See https://github.com/JuliaLang/julia/pull/46104#issuecomment-1435688502 for benchmarks
-    if length(x) > 9
+    if length(x) > 15
         v = copymutable(x)
         _sort!(v, a, o, kw)
         typeof(x)(v)
     else
-        _mergesort(x, o)
+        _tuple_insertion_sort(x, o)
     end
 end
-_mergesort(x::Union{NTuple{0}, NTuple{1}}, o::Ordering) = x
-function _mergesort(x::NTuple, o::Ordering)
-    a, b = Base.IteratorsMD.split(x, Val(length(x)>>1))
-    merge(_mergesort(a, o), _mergesort(b, o), o)
-end
-merge(x::NTuple, y::NTuple{0}, o::Ordering) = x
-merge(x::NTuple{0}, y::NTuple, o::Ordering) = y
-merge(x::NTuple{0}, y::NTuple{0}, o::Ordering) = x # Method ambiguity
-merge(x::NTuple, y::NTuple, o::Ordering) =
-    (lt(o, y[1], x[1]) ? (y[1], merge(x, tail(y), o)...) : (x[1], merge(tail(x), y, o)...))
 
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 
