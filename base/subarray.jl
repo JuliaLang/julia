@@ -173,7 +173,8 @@ Calling [`getindex`](@ref) or [`setindex!`](@ref) on the returned value
 (often a [`SubArray`](@ref)) computes the indices to access or modify the
 parent array on the fly.  The behavior is undefined if the shape of the parent array is
 changed after `view` is called because there is no bound check for the parent array; e.g.,
-it may cause a segmentation fault.
+it may cause a segmentation fault. It is likewise undefined behavior to modify the `inds`
+array(s) after construction of the view.
 
 Some immutable parent arrays (like ranges) may choose to simply
 recompute a new array in some circumstances instead of returning
@@ -299,15 +300,8 @@ reindex(idxs::Tuple{AbstractMatrix, Vararg{Any}}, subidxs::Tuple{Any, Any, Varar
     (@_propagate_inbounds_meta; (idxs[1][subidxs[1], subidxs[2]], reindex(tail(idxs), tail(tail(subidxs)))...))
 
 # In general, we index N-dimensional parent arrays with N indices
-@generated function reindex(idxs::Tuple{AbstractArray{T,N}, Vararg{Any}}, subidxs::Tuple{Vararg{Any}}) where {T,N}
-    if length(subidxs.parameters) >= N
-        subs = [:(subidxs[$d]) for d in 1:N]
-        tail = [:(subidxs[$d]) for d in N+1:length(subidxs.parameters)]
-        :(@_propagate_inbounds_meta; (idxs[1][$(subs...)], reindex(tail(idxs), ($(tail...),))...))
-    else
-        :(throw(ArgumentError("cannot re-index SubArray with fewer indices than dimensions\nThis should not occur; please submit a bug report.")))
-    end
-end
+reindex(idxs::Tuple{AbstractArray{<:Any,N}, Vararg{Any}}, subidxs::Tuple{Vararg{Any}}) where {N} =
+    (@_propagate_inbounds_meta; (idxs[1][subidxs[1:N]...], reindex(tail(idxs), subidxs[N+1:end])...))
 
 # In general, we simply re-index the parent indices by the provided ones
 SlowSubArray{T,N,P,I} = SubArray{T,N,P,I,false}

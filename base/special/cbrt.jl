@@ -22,6 +22,8 @@ Return the cube root of `x`, i.e. ``x^{1/3}``. Negative values are accepted
 
 The prefix operator `∛` is equivalent to `cbrt`.
 
+See also [`sqrt`](@ref), [`fourthroot`](@ref).
+
 # Examples
 ```jldoctest
 julia> cbrt(big(27))

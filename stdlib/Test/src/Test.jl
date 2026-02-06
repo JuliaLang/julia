@@ -26,7 +26,7 @@ export @test, @test_throws, @test_broken, @test_skip,
 
 export @testset
 export @inferred
-export detect_ambiguities, detect_unbound_args
+export detect_ambiguities, detect_unbound_args, detect_closure_boxes, detect_closure_boxes_all_modules
 export GenericString, GenericSet, GenericDict, GenericArray, GenericOrder
 export TestSetException
 export TestLogger, LogRecord
@@ -195,15 +195,23 @@ function Base.show(io::IO, t::Fail)
         # An exception was expected, but no exception was thrown
         print(io, "\n    Expected: ", data)
         print(io, "\n  No exception thrown")
+    elseif t.test_type === :test_warn
+        # @test_warn failed: expected pattern not found in output
+        print(io, "\n  Expected stderr: ", data)
+        print(io, "\n  Captured stderr: ", value)
+    elseif t.test_type === :test_nowarn
+        # @test_nowarn failed: unexpected output was produced
+        print(io, "\n  Expected stderr: ", data)
+        print(io, "\n  Captured stderr: ", value)
     elseif t.test_type === :test
         if data !== nothing && t.orig_expr != data
             # The test was an expression, so display the term-by-term
             # evaluated version as well
             print(io, "\n   Evaluated: ", data)
         end
-        if t.context !== nothing
-            print(io, "\n     Context: ", t.context)
-        end
+    end
+    if t.context !== nothing
+        print(io, "\n     Context: ", t.context)
     end
 end
 
@@ -285,21 +293,21 @@ function Base.show(io::IO, t::Error)
     elseif t.test_type === :test_error
         println(io, "  Test threw exception")
         println(io, "  Expression: ", t.orig_expr)
-        if t.context !== nothing
-            println(io, "     Context: ", t.context)
-        end
         # Capture error message and indent to match
         join(io, ("  " * line for line in filter!(!isempty, split(t.backtrace, "\n"))), "\n")
     elseif t.test_type === :test_unbroken
         # A test that was expected to fail did not
         println(io, " Unexpected Pass")
         println(io, " Expression: ", t.orig_expr)
-        println(io, " Got correct result, please change to @test if no longer broken.")
+        print(io, " Got correct result, please change to @test if no longer broken.")
     elseif t.test_type === :nontest_error
         # we had an error outside of a @test
         println(io, "  Got exception outside of a @test")
         # Capture error message and indent to match
         join(io, ("  " * line for line in filter!(!isempty, split(t.backtrace, "\n"))), "\n")
+    end
+    if t.context !== nothing
+        print(io, "\n     Context: ", t.context)
     end
 end
 
@@ -435,14 +443,15 @@ so that e.g. `@test a ≈ b atol=ε` means `@test ≈(a, b, atol=ε)`.
 test_expr!(m, ex) = ex
 
 function test_expr!(m, ex, kws...)
-    ex isa Expr && ex.head === :call || @goto fail
-    for kw in kws
-        kw isa Expr && kw.head === :(=) || @goto fail
-        kw.head = :kw
-        push!(ex.args, kw)
+    @label fail begin
+        ex isa Expr && ex.head === :call || break fail
+        for kw in kws
+            kw isa Expr && kw.head === :(=) || break fail
+            kw.head = :kw
+            push!(ex.args, kw)
+        end
+        return ex
     end
-    return ex
-@label fail
     error("invalid test macro call: $m $ex $(join(kws," "))")
 end
 
@@ -452,6 +461,7 @@ end
     @test f(args...) key=val ...
     @test ex broken=true
     @test ex skip=true
+    @test ex context=ctx
 
 Test that the expression `ex` evaluates to `true`.
 If executed inside a `@testset`, return a `Pass` `Result` if it does, a `Fail` `Result` if it is
@@ -480,8 +490,8 @@ This is equivalent to the uglier test `@test ≈(π, 3.14, atol=0.01)`.
 It is an error to supply more than one expression unless the first
 is a call expression and the rest are assignments (`k=v`).
 
-You can use any key for the `key=val` arguments, except for `broken` and `skip`,
-which have special meanings in the context of `@test`:
+You can use any key for the `key=val` arguments, except for `broken`, `skip`,
+and `context`, which have special meanings in the context of `@test`:
 
 * `broken=cond` indicates a test that should pass but currently consistently
   fails when `cond==true`.  Tests that the expression `ex` evaluates to `false`
@@ -492,6 +502,9 @@ which have special meanings in the context of `@test`:
   test summary reporting as `Broken`, when `cond==true`.  This can be useful for
   tests that intermittently fail, or tests of not-yet-implemented functionality.
   Regular `@test ex` is evaluated when `cond==false`.
+* `context=ctx` provides additional context that will be displayed if the test
+  fails. The context expression is evaluated and its result is shown in the
+  test failure output. This is useful for providing debugging information.
 
 # Examples
 
@@ -513,14 +526,18 @@ Test Passed
 
 !!! compat "Julia 1.7"
      The `broken` and `skip` keyword arguments require at least Julia 1.7.
+
+!!! compat "Julia 1.14"
+     The `context` keyword argument requires at least Julia 1.14.
 """
 macro test(ex, kws...)
-    # Collect the broken/skip keywords and remove them from the rest of keywords
+    # Collect the broken/skip/context keywords and remove them from the rest of keywords
     broken = [kw.args[2] for kw in kws if kw.args[1] === :broken]
     skip = [kw.args[2] for kw in kws if kw.args[1] === :skip]
-    kws = filter(kw -> kw.args[1] ∉ (:skip, :broken), kws)
-    # Validation of broken/skip keywords
-    for (kw, name) in ((broken, :broken), (skip, :skip))
+    context = [kw.args[2] for kw in kws if kw.args[1] === :context]
+    kws = filter(kw -> kw.args[1] ∉ (:skip, :broken, :context), kws)
+    # Validation of broken/skip/context keywords
+    for (kw, name) in ((broken, :broken), (skip, :skip), (context, :context))
         if length(kw) > 1
             error("invalid test macro call: cannot set $(name) keyword multiple times")
         end
@@ -535,12 +552,13 @@ macro test(ex, kws...)
     result = get_test_result(ex, __source__)
 
     ex = Expr(:inert, ex)
+    ctx = length(context) > 0 ? esc(context[1]) : nothing
     result = quote
         if $(length(skip) > 0 && esc(skip[1]))
             record(get_testset(), Broken(:skipped, $ex))
         else
             let _do = $(length(broken) > 0 && esc(broken[1])) ? do_broken_test : do_test
-                _do($result, $ex)
+                _do($result, $ex, $ctx)
             end
         end
     end
@@ -550,6 +568,7 @@ end
 """
     @test_broken ex
     @test_broken f(args...) key=val ...
+    @test_broken ex context=ctx
 
 Indicates a test that should pass but currently consistently fails.
 Tests that the expression `ex` evaluates to `false` or causes an
@@ -558,6 +577,9 @@ if the expression evaluates to `true`.  This is equivalent to
 [`@test ex broken=true`](@ref @test).
 
 The `@test_broken f(args...) key=val...` form works as for the `@test` macro.
+
+The `context=ctx` keyword provides additional context that will be displayed
+if the test unexpectedly passes (becomes an `Error`).
 
 # Examples
 ```jldoctest
@@ -569,13 +591,20 @@ julia> @test_broken 1 == 2 atol=0.1
 Test Broken
   Expression: ==(1, 2, atol = 0.1)
 ```
+
+!!! compat "Julia 1.14"
+     The `context` keyword argument requires at least Julia 1.14.
 """
 macro test_broken(ex, kws...)
+    # Extract context keyword if present
+    context = [kw.args[2] for kw in kws if isa(kw, Expr) && kw.head === :(=) && kw.args[1] === :context]
+    kws = filter(kw -> !(isa(kw, Expr) && kw.head === :(=) && kw.args[1] === :context), kws)
     test_expr!("@test_broken", ex, kws...)
     result = get_test_result(ex, __source__)
+    ctx = length(context) > 0 ? esc(context[1]) : nothing
     # code to call do_test with execution result and original expr
     ex = Expr(:inert, ex)
-    return :(do_broken_test($result, $ex))
+    return :(do_broken_test($result, $ex, $ctx))
 end
 
 """
@@ -631,7 +660,9 @@ function _escape_call(@nospecialize ex)
         # Update broadcast comparison calls to the function call syntax
         # (e.g. `1 .== 1` becomes `(==).(1, 1)`)
         func_str = string(ex.args[1])
-        escaped_func = if first(func_str) == '.'
+        # Check if this is a broadcast operator (starts with '.' and has more characters that aren't '.')
+        is_broadcast = length(func_str) >= 2 && first(func_str) == '.' && any(c -> c != '.', func_str[2:end])
+        escaped_func = if is_broadcast
             esc(Expr(:., Symbol(func_str[2:end])))
         else
             esc(ex.args[1])
@@ -754,11 +785,45 @@ function get_test_result(ex, source)
     result
 end
 
+# Helper to extract broken= and skip= keyword arguments from macro calls.
+# Returns (broken, skip) where each is either `nothing` or the value expression.
+# If `other_valid` is provided, those keywords are also accepted and returned in
+# the third element as a Dict.
+function extract_broken_skip_kws(kws, macroname; other_valid=())
+    broken = nothing
+    skip = nothing
+    others = Dict{Symbol,Any}()
+    for kw in kws
+        if !(kw isa Expr && kw.head === :(=))
+            error("invalid $macroname call: expected keyword argument, got $kw")
+        end
+        kw_name = kw.args[1]
+        kw_val = kw.args[2]
+        if kw_name === :broken
+            broken !== nothing && error("invalid $macroname call: cannot set broken keyword multiple times")
+            broken = kw_val
+        elseif kw_name === :skip
+            skip !== nothing && error("invalid $macroname call: cannot set skip keyword multiple times")
+            skip = kw_val
+        elseif kw_name in other_valid
+            haskey(others, kw_name) && error("invalid $macroname call: cannot set $kw_name keyword multiple times")
+            others[kw_name] = kw_val
+        else
+            error("invalid $macroname call: unknown keyword argument $kw_name")
+        end
+    end
+    if broken !== nothing && skip !== nothing
+        error("invalid $macroname call: cannot set both skip and broken keywords")
+    end
+    return broken, skip, others
+end
+
 # An internal function, called by the code generated by the @test
 # macro to actually perform the evaluation and manage the result.
-function do_test(result::ExecutionResult, @nospecialize orig_expr)
+function do_test(result::ExecutionResult, @nospecialize(orig_expr), context=nothing)
     # get_testset() returns the most recently added test set
     # We then call record() with this test set and the test result
+    context_str = context === nothing ? nothing : sprint(show, context; context=:limit => true)
     if isa(result, Returned)
         # expr, in the case of a comparison, will contain the
         # comparison with evaluated values of each term spliced in.
@@ -769,33 +834,34 @@ function do_test(result::ExecutionResult, @nospecialize orig_expr)
         testres = if isa(value, Bool)
             # a true value Passes
             value ? Pass(:test, orig_expr, result.data, value, result.source) :
-                    Fail(:test, orig_expr, result.data, value, nothing, result.source, false)
+                    Fail(:test, orig_expr, result.data, value, context_str, result.source, false)
         else
             # If the result is non-Boolean, this counts as an Error
-            Error(:test_nonbool, orig_expr, value, nothing, result.source, nothing)
+            Error(:test_nonbool, orig_expr, value, nothing, result.source, context_str)
         end
     else
         # The predicate couldn't be evaluated without throwing an
         # exception, so that is an Error and not a Fail
         @assert isa(result, Threw)
-        testres = Error(:test_error, orig_expr, result.exception, result.current_exceptions, result.source, nothing)
+        testres = Error(:test_error, orig_expr, result.exception, result.current_exceptions, result.source, context_str)
     end
     isa(testres, Pass) || trigger_test_failure_break(result)
     record(get_testset(), testres)
 end
 
-function do_broken_test(result::ExecutionResult, @nospecialize orig_expr)
+function do_broken_test(result::ExecutionResult, @nospecialize(orig_expr), context=nothing)
     testres = Broken(:test, orig_expr)
+    context_str = context === nothing ? nothing : sprint(show, context; context=:limit => true)
     # Assume the test is broken and only change if the result is true
     if isa(result, Returned)
         value = result.value
         if isa(value, Bool)
             if value
-                testres = Error(:test_unbroken, orig_expr, value, nothing, result.source, nothing)
+                testres = Error(:test_unbroken, orig_expr, value, nothing, result.source, context_str)
             end
         else
             # If the result is non-Boolean, this counts as an Error
-            testres = Error(:test_nonbool, orig_expr, value, nothing, result.source, nothing)
+            testres = Error(:test_nonbool, orig_expr, value, nothing, result.source, context_str)
         end
     end
     record(get_testset(), testres)
@@ -806,6 +872,9 @@ end
 """
     @test_throws exception expr
     @test_throws extype pattern expr
+    @test_throws exception expr broken=cond
+    @test_throws exception expr skip=cond
+    @test_throws exception expr context=ctx
 
 Tests that the expression `expr` throws `exception`.
 The exception may specify either a type,
@@ -820,13 +889,28 @@ a message pattern are tested. The `extype` must be a type, and `pattern` may be
 a string, regular expression, or list of strings occurring in the displayed error message,
 a matching function, or a value.
 
-Note that `@test_throws` does not support a trailing keyword form.
+# Keyword Arguments
+
+* `broken=cond`: if `cond==true`, indicates a test that should pass but currently
+  consistently fails. The test will be recorded as `Broken` if it fails (no exception
+  or wrong exception), or as `Error` if it unexpectedly passes.
+* `skip=cond`: if `cond==true`, marks a test that should not be executed but should
+  be included in test summary reporting as `Broken`. This can be useful for tests
+  that intermittently fail, or tests of not-yet-implemented functionality.
+* `context=ctx`: provides additional context that will be displayed if the test fails
+  (wrong exception type, wrong message, or no exception thrown).
 
 !!! compat "Julia 1.8"
     The ability to specify anything other than a type or a value as `exception` requires Julia v1.8 or later.
 
 !!! compat "Julia 1.13"
     The three-argument form `@test_throws extype pattern expr` requires Julia v1.12 or later.
+
+!!! compat "Julia 1.14"
+    The `context` keyword argument requires at least Julia 1.14.
+
+!!! compat "Julia 1.14"
+    The `broken` and `skip` keyword arguments require at least Julia 1.14.
 
 # Examples
 ```jldoctest
@@ -855,36 +939,73 @@ In the third example, instead of matching a single string it could alternatively
 
 In the final example, both the exception type (`ErrorException`) and message pattern (`"error foo"`) are tested.
 """
-macro test_throws(extype, ex)
-    orig_ex = Expr(:inert, ex)
-    ex = Expr(:block, __source__, esc(ex))
-    result = quote
-        try
-            Returned($ex, nothing, $(QuoteNode(__source__)))
-        catch _e
-            if $(esc(extype)) != InterruptException && _e isa InterruptException
-                rethrow()
-            end
-            Threw(_e, Base.current_exceptions(), $(QuoteNode(__source__)))
-        end
-    end
-    return :(do_test_throws($result, $orig_ex, $(esc(extype))))
-end
+macro test_throws(args...)
+    # Parse arguments: expect (extype, ex) or (extype, pattern, ex), with optional keyword args at end
+    nargs = length(args)
+    nargs >= 2 || error("@test_throws requires at least 2 arguments")
 
-macro test_throws(extype, pattern, ex)
+    # Collect keyword arguments from the end (they look like positional `kw=val` expressions)
+    kws = Any[]
+    while nargs >= 3 && args[end] isa Expr && args[end].head === :(=) && args[end].args[1] in (:broken, :skip, :context)
+        pushfirst!(kws, args[end])
+        args = args[1:end-1]
+        nargs -= 1
+    end
+
+    broken, skip, others = extract_broken_skip_kws(kws, "@test_throws"; other_valid=(:context,))
+    ctx = get(others, :context, nothing)
+    ctx = ctx !== nothing ? esc(ctx) : nothing
+    broken = broken !== nothing ? esc(broken) : nothing
+    skip = skip !== nothing ? esc(skip) : nothing
+
+    if nargs == 2
+        extype, ex = args
+        pattern = nothing
+    elseif nargs == 3
+        extype, pattern, ex = args
+        pattern = esc(pattern)
+    else
+        error("@test_throws expects 2 or 3 positional arguments (plus optional keyword arguments)")
+    end
+
     orig_ex = Expr(:inert, ex)
-    ex = Expr(:block, __source__, esc(ex))
-    result = quote
+    testex = Expr(:block, __source__, esc(ex))
+    source = QuoteNode(__source__)
+
+    # Build the try-catch expression
+    trycatch = quote
         try
-            Returned($ex, nothing, $(QuoteNode(__source__)))
+            Returned($testex, nothing, $source)
         catch _e
             if $(esc(extype)) != InterruptException && _e isa InterruptException
                 rethrow()
             end
-            Threw(_e, Base.current_exceptions(), $(QuoteNode(__source__)))
+            Threw(_e, Base.current_exceptions(), $source)
         end
     end
-    return :(do_test_throws($result, $orig_ex, $(esc(extype)), $(esc(pattern))))
+
+    if skip !== nothing
+        result = quote
+            if $skip
+                record(get_testset(), Broken(:skipped, $orig_ex))
+            elseif $(broken !== nothing && broken)
+                do_broken_test_throws($trycatch, $orig_ex, $(esc(extype)), $pattern, $ctx)
+            else
+                do_test_throws($trycatch, $orig_ex, $(esc(extype)), $pattern, $ctx)
+            end
+        end
+    elseif broken !== nothing
+        result = quote
+            if $broken
+                do_broken_test_throws($trycatch, $orig_ex, $(esc(extype)), $pattern, $ctx)
+            else
+                do_test_throws($trycatch, $orig_ex, $(esc(extype)), $pattern, $ctx)
+            end
+        end
+    else
+        result = :(do_test_throws($trycatch, $orig_ex, $(esc(extype)), $pattern, $ctx))
+    end
+    return result
 end
 
 const MACROEXPAND_LIKE = Symbol.(("@macroexpand", "@macroexpand1", "macroexpand"))
@@ -902,108 +1023,155 @@ function isequalexception(a::UndefVarError, b::UndefVarError)
     return isequal(a.var, b.var) && isequal(a.scope, b.scope)
 end
 
-# An internal function, called by the code generated by @test_throws
-# to evaluate and catch the thrown exception - if it exists
-function do_test_throws(result::ExecutionResult, @nospecialize(orig_expr), extype, pattern=nothing)
-    if isa(result, Threw)
-        # Check that the right type of exception was thrown
-        success = false
-        message_only = false
-        exc = result.exception
+# Helper to format extype for display (handles 3-arg form)
+function format_extype_display(extype, pattern)
+    if pattern !== nothing
+        pattern_str = isa(pattern, AbstractString) ? repr(pattern) :
+                     isa(pattern, Function) ? "< match function >" :
+                     string(pattern)
+        return string(extype) * " with pattern " * pattern_str
+    end
+    return extype
+end
 
-        # Handle three-argument form (type + pattern)
-        if pattern !== nothing
-            # In 3-arg form, first argument must be a type
-            if !isa(extype, Type)
-                testres = Fail(:test_throws_wrong, orig_expr, extype, exc, nothing, result.source, false, "First argument must be an exception type in three-argument form")
-                record(get_testset(), testres)
-                return
-            end
+# Check if an exception matches the expected type/pattern.
+# Returns (success::Bool, message_only::Bool, exc_display, extype_display, error_msg::Union{String,Nothing})
+# where error_msg is set if there's an error in the test specification itself.
+function check_exception_match(result::ExecutionResult, @nospecialize(orig_expr), extype, pattern)
+    if !isa(result, Threw)
+        # No exception was thrown
+        extype_display = format_extype_display(extype, pattern)
+        return false, false, nothing, extype_display, nothing
+    end
 
-            # Format combined expected value for display
-            pattern_str = isa(pattern, AbstractString) ? repr(pattern) :
-                         isa(pattern, Function) ? "< match function >" :
-                         string(pattern)
-            combined_expected = string(extype) * " with pattern " * pattern_str
+    exc = result.exception
+    message_only = false
 
-            # Check both type and pattern
-            type_success = isa(exc, extype)
-            if type_success
-                exc_msg = sprint(showerror, exc)
-                pattern_success = contains_warn(exc_msg, pattern)
-                success = pattern_success
-            else
-                success = false
-            end
-            extype = combined_expected  # Use combined format for all results
-        else
-            # Original two-argument form logic
-            # NB: Throwing LoadError from macroexpands is deprecated, but in order to limit
-            # the breakage in package tests we add extra logic here.
-            from_macroexpand =
-                orig_expr isa Expr &&
-                orig_expr.head in (:call, :macrocall) &&
-                orig_expr.args[1] in MACROEXPAND_LIKE
-            if isa(extype, Type)
-                success =
-                    if from_macroexpand && extype == LoadError && exc isa Exception
-                        Base.depwarn("macroexpand no longer throws a LoadError so `@test_throws LoadError ...` is deprecated and passed without checking the error type!", :do_test_throws)
-                        true
-                    elseif extype == ErrorException && isa(exc, FieldError)
-                        Base.depwarn(lazy"Using ErrorException to test field access is deprecated; use FieldError instead.", :do_test_throws)
-                        true
-                    else
-                        isa(exc, extype)
-                    end
-            elseif isa(extype, Exception) || !isa(exc, Exception)
-                if extype isa LoadError && !(exc isa LoadError) && typeof(extype.error) == typeof(exc)
-                    extype = extype.error # deprecated
-                end
-                # Support `UndefVarError(:x)` meaning `UndefVarError(:x, scope)` for any `scope`.
-                # Retains the behaviour from pre-v1.11 when `UndefVarError` didn't have `scope`.
-                if isa(extype, UndefVarError) && !isdefined(extype, :scope)
-                    success = exc isa UndefVarError && exc.var == extype.var
-                else isa(exc, typeof(extype))
-                    success = isequalexception(exc, extype)
-                end
-            else
-                message_only = true
-                exc = sprint(showerror, exc)
-                success = contains_warn(exc, extype)
-                exc = repr(exc)
-                if isa(extype, AbstractString)
-                    extype = repr(extype)
-                elseif isa(extype, Function)
-                    extype = "< match function >"
-                end
-            end
+    # Handle three-argument form (type + pattern)
+    if pattern !== nothing
+        # In 3-arg form, first argument must be a type
+        if !isa(extype, Type)
+            return false, false, exc, extype, "First argument must be an exception type in three-argument form"
         end
-        if success
-            testres = Pass(:test_throws, orig_expr, extype, exc, result.source, message_only)
+
+        # Format combined expected value for display
+        extype_display = format_extype_display(extype, pattern)
+
+        # Check both type and pattern
+        type_success = isa(exc, extype)
+        if type_success
+            exc_msg = sprint(showerror, exc)
+            success = contains_warn(exc_msg, pattern)
         else
-            excs = result.current_exceptions
-            bt = scrub_exc_stack(excs, nothing, extract_file(result.source))
-            bt_str = try # try the latest world for this, since we might have eval'd new code for show
-                Base.invokelatest(sprint, Base.show_exception_stack, bt; context=stdout)
-            catch ex
-                "#=ERROR showing exception stack=# " *
-                    try
-                        sprint(Base.showerror, ex, catch_backtrace(); context=stdout)
-                    catch
-                        "of type " * string(typeof(ex))
-                    end
+            success = false
+        end
+        return success, false, exc, extype_display, nothing
+    end
+
+    # Two-argument form logic
+    # NB: Throwing LoadError from macroexpands is deprecated, but in order to limit
+    # the breakage in package tests we add extra logic here.
+    # Note: orig_expr may be wrapped in Expr(:inert, ...), so we need to unwrap it
+    unwrapped_expr = orig_expr isa Expr && orig_expr.head === :inert && length(orig_expr.args) == 1 ? orig_expr.args[1] : orig_expr
+    from_macroexpand =
+        unwrapped_expr isa Expr &&
+        unwrapped_expr.head in (:call, :macrocall) &&
+        (unwrapped_expr.args[1] in MACROEXPAND_LIKE ||
+         (unwrapped_expr.args[1] isa GlobalRef && unwrapped_expr.args[1].name in MACROEXPAND_LIKE))
+
+    extype_display = extype
+
+    if isa(extype, Type)
+        success =
+            if from_macroexpand && extype == LoadError && exc isa Exception
+                Base.depwarn("macroexpand no longer throws a LoadError so `@test_throws LoadError ...` is deprecated and passed without checking the error type!", :do_test_throws)
+                true
+            elseif extype == ErrorException && isa(exc, FieldError)
+                Base.depwarn(lazy"Using ErrorException to test field access is deprecated; use FieldError instead.", :do_test_throws)
+                true
+            else
+                isa(exc, extype)
             end
-            testres = Fail(:test_throws_wrong, orig_expr, extype, exc, nothing, result.source, message_only, bt_str)
+    elseif isa(extype, Exception) || !isa(exc, Exception)
+        # Decorated LoadErrors are unwrapped if the actual exception matches the inner exception
+        extype_for_match = extype
+        if extype isa LoadError && !(exc isa LoadError) && typeof(extype.error) == typeof(exc)
+            extype_for_match = extype.error # deprecated: use inner exception for matching
+            extype_display = extype.error
+        end
+        # Support `UndefVarError(:x)` meaning `UndefVarError(:x, scope)` for any `scope`.
+        # Retains the behaviour from pre-v1.11 when `UndefVarError` didn't have `scope`.
+        if isa(extype_for_match, UndefVarError) && !isdefined(extype_for_match, :scope)
+            success = exc isa UndefVarError && exc.var == extype_for_match.var
+        elseif isa(exc, typeof(extype_for_match))
+            success = isequalexception(exc, extype_for_match)
+        else
+            success = false
         end
     else
-        # Handle no exception case - need to format extype properly for 3-arg form
-        if pattern !== nothing
-            pattern_str = isa(pattern, AbstractString) ? repr(pattern) :
-                         isa(pattern, Function) ? "< match function >" :
-                         string(pattern)
-            extype = string(extype) * " with pattern " * pattern_str
+        message_only = true
+        exc_msg = sprint(showerror, exc)
+        success = contains_warn(exc_msg, extype)
+        exc = repr(exc_msg)
+        if isa(extype, AbstractString)
+            extype_display = repr(extype)
+        elseif isa(extype, Function)
+            extype_display = "< match function >"
         end
-        testres = Fail(:test_throws_nothing, orig_expr, extype, nothing, nothing, result.source, false)
+    end
+
+    return success, message_only, exc, extype_display, nothing
+end
+
+# An internal function, called by the code generated by @test_throws
+# to evaluate and catch the thrown exception - if it exists
+function do_test_throws(result::ExecutionResult, @nospecialize(orig_expr), extype, pattern=nothing, context=nothing)
+    context_str = context === nothing ? nothing : sprint(show, context; context=:limit => true)
+
+    success, message_only, exc, extype_display, error_msg = check_exception_match(result, orig_expr, extype, pattern)
+
+    # Handle specification errors
+    if error_msg !== nothing
+        testres = Fail(:test_throws_wrong, orig_expr, extype, exc, context_str, result.source, false, error_msg)
+        record(get_testset(), testres)
+        return
+    end
+
+    if success
+        testres = Pass(:test_throws, orig_expr, extype_display, exc, result.source, message_only)
+    elseif isa(result, Threw)
+        excs = result.current_exceptions
+        bt = scrub_exc_stack(excs, nothing, extract_file(result.source))
+        bt_str = try # try the latest world for this, since we might have eval'd new code for show
+            Base.invokelatest(sprint, Base.show_exception_stack, bt; context=stdout)
+        catch ex
+            "#=ERROR showing exception stack=# " *
+                try
+                    sprint(Base.showerror, ex, catch_backtrace(); context=stdout)
+                catch
+                    "of type " * string(typeof(ex))
+                end
+        end
+        testres = Fail(:test_throws_wrong, orig_expr, extype_display, exc, context_str, result.source, message_only, bt_str)
+    else
+        testres = Fail(:test_throws_nothing, orig_expr, extype_display, nothing, context_str, result.source, false)
+    end
+    record(get_testset(), testres)
+end
+
+# An internal function, called by the code generated by @test_throws with broken=true
+# to evaluate and catch the thrown exception - if it exists
+function do_broken_test_throws(result::ExecutionResult, @nospecialize(orig_expr), extype, pattern=nothing, context=nothing)
+    context_str = context === nothing ? nothing : sprint(show, context; context=:limit => true)
+
+    success, _, _, extype_display, _ = check_exception_match(result, orig_expr, extype, pattern)
+
+    if success
+        # Test passed when it was expected to be broken - this is an error (unexpected pass)
+        testres = Error(:test_unbroken, orig_expr, extype_display, nothing, result.source, context_str)
+    else
+        # Test failed as expected for a broken test
+        testres = Broken(:test_throws, orig_expr)
     end
     record(get_testset(), testres)
 end
@@ -1020,6 +1188,8 @@ contains_warn(output, S::Union{AbstractArray,Tuple}) = all(s -> contains_warn(ou
 
 """
     @test_warn msg expr
+    @test_warn msg expr broken=cond
+    @test_warn msg expr skip=cond
 
 Test whether evaluating `expr` results in [`stderr`](@ref) output that contains
 the `msg` string or matches the `msg` regular expression.  If `msg` is
@@ -1031,50 +1201,165 @@ See also [`@test_nowarn`](@ref) to check for the absence of error output.
 
 Note: Warnings generated by `@warn` cannot be tested with this macro. Use
 [`@test_logs`](@ref) instead.
+
+# Keyword Arguments
+
+* `broken=cond`: if `cond==true`, indicates a test that should pass but currently
+  consistently fails.
+* `skip=cond`: if `cond==true`, marks a test that should not be executed but should
+  be included in test summary reporting as `Broken`.
+
+!!! compat "Julia 1.14"
+    The `broken` and `skip` keyword arguments require at least Julia 1.14.
 """
-macro test_warn(msg, expr)
-    test_warn_expr(expr, msg)
+macro test_warn(msg, expr, kws...)
+    broken, skip, _ = extract_broken_skip_kws(kws, "@test_warn")
+    test_warn_expr(expr, msg, __source__, broken, skip)
 end
 
 """
     @test_nowarn expr
+    @test_nowarn expr broken=cond
+    @test_nowarn expr skip=cond
 
 Test whether evaluating `expr` results in empty [`stderr`](@ref) output
 (no warnings or other messages).  Returns the result of evaluating `expr`.
 
 Note: The absence of warnings generated by `@warn` cannot be tested
 with this macro. Use [`@test_logs`](@ref) instead.
+
+# Keyword Arguments
+
+* `broken=cond`: if `cond==true`, indicates a test that should pass but currently
+  consistently fails.
+* `skip=cond`: if `cond==true`, marks a test that should not be executed but should
+  be included in test summary reporting as `Broken`.
+
+!!! compat "Julia 1.14"
+    The `broken` and `skip` keyword arguments require at least Julia 1.14.
 """
-macro test_nowarn(expr)
-    # allow printing the content of `stderr` again to `stderr` here while suppressing it
-    # for `@test_warn`. If that shouldn't be used, this could just be `test_warn_expr(expr, #=msg=#isempty)`
-    test_warn_expr(expr, function (s)
-        print(stderr, s) # this is helpful for debugging
-        isempty(s)
-    end)
+macro test_nowarn(expr, kws...)
+    broken, skip, _ = extract_broken_skip_kws(kws, "@test_nowarn")
+    test_nowarn_expr(expr, __source__, broken, skip)
 end
 
-function test_warn_expr(@nospecialize(expr), @nospecialize(msg))
-    return :(let fname = tempname()
-        try
-            f = open(fname, "w")
-            stdold = stderr
-            redirect_stderr(f)
-            ret = try
-                # We deliberately don't use the thunk versions of open/redirect
-                # to ensure that adding the macro does not change the toplevel-ness
-                # of the resulting expression.
-                $(esc(expr))
-            finally
-                redirect_stderr(stdold)
-                close(f)
+function test_warn_expr(@nospecialize(expr), @nospecialize(msg), source, broken, skip)
+    orig_expr = QuoteNode(expr)
+    quoted_msg = QuoteNode(msg)
+    src = QuoteNode(source)
+    return quote
+        if $(skip !== nothing && esc(skip))
+            record(get_testset(), Broken(:skipped, $orig_expr))
+            nothing
+        else
+            let fname = tempname()
+                try
+                    f = open(fname, "w")
+                    stdold = stderr
+                    redirect_stderr(f)
+                    ret = try
+                        # We deliberately don't use the thunk versions of open/redirect
+                        # to ensure that adding the macro does not change the toplevel-ness
+                        # of the resulting expression.
+                        $(esc(expr))
+                    finally
+                        redirect_stderr(stdold)
+                        close(f)
+                    end
+                    output = read(fname, String)
+                    _msg = $(esc(msg))
+                    if contains_warn(output, _msg)
+                        testres = if $(broken !== nothing && esc(broken))
+                            # Test passed when it was expected to be broken
+                            Error(:test_unbroken, $orig_expr, nothing, nothing, $src)
+                        else
+                            Pass(:test, $orig_expr, nothing, true, $src)
+                        end
+                    else
+                        testres = if $(broken !== nothing && esc(broken))
+                            Broken(:test, $orig_expr)
+                        else
+                            Fail(:test_warn, $orig_expr, _format_warn_msg($quoted_msg, _msg),
+                                repr(output), nothing, $src, false)
+                        end
+                    end
+                    record(get_testset(), testres)
+                    ret
+                finally
+                    rm(fname, force=true)
+                end
             end
-            @test contains_warn(read(fname, String), $(esc(msg)))
-            ret
-        finally
-            rm(fname, force=true)
         end
-    end)
+    end
+end
+
+function test_nowarn_expr(@nospecialize(expr), source, broken, skip)
+    orig_expr = QuoteNode(expr)
+    src = QuoteNode(source)
+    return quote
+        if $(skip !== nothing && esc(skip))
+            record(get_testset(), Broken(:skipped, $orig_expr))
+            nothing
+        else
+            let fname = tempname()
+                try
+                    f = open(fname, "w")
+                    stdold = stderr
+                    redirect_stderr(f)
+                    ret = try
+                        # We deliberately don't use the thunk versions of open/redirect
+                        # to ensure that adding the macro does not change the toplevel-ness
+                        # of the resulting expression.
+                        $(esc(expr))
+                    finally
+                        redirect_stderr(stdold)
+                        close(f)
+                    end
+                    output = read(fname, String)
+                    print(stderr, output)  # useful for debugging
+                    if isempty(output)
+                        testres = if $(broken !== nothing && esc(broken))
+                            # Test passed when it was expected to be broken
+                            Error(:test_unbroken, $orig_expr, nothing, nothing, $src)
+                        else
+                            Pass(:test, $orig_expr, nothing, true, $src)
+                        end
+                    else
+                        testres = if $(broken !== nothing && esc(broken))
+                            Broken(:test, $orig_expr)
+                        else
+                            Fail(:test_nowarn, $orig_expr, "\"\" (nowarn)",
+                                repr(output), nothing, $src, false)
+                        end
+                    end
+                    record(get_testset(), testres)
+                    ret
+                finally
+                    rm(fname, force=true)
+                end
+            end
+        end
+    end
+end
+
+# Format the expected warning pattern for display
+# For literals (String, Regex), show the value with matching method
+# For expressions (Function, etc.), show the original expression
+_format_warn_msg(expr, s::AbstractString) = repr(s) * " (occursin)"
+_format_warn_msg(expr, s::Regex) = repr(s) * " (occursin)"
+_format_warn_msg(expr, s::Function) = string(_remove_linenums(expr))
+_format_warn_msg(expr, S::Union{AbstractArray,Tuple}) = string(_remove_linenums(expr)) * " (all, occursin)"
+
+_remove_linenums(x) = x
+function _remove_linenums(ex::Expr)
+    if ex.head === :block
+        args = filter(a -> !(a isa LineNumberNode), ex.args)
+        if length(args) == 1
+            return _remove_linenums(args[1])
+        end
+        return Expr(ex.head, map(_remove_linenums, args)...)
+    end
+    return Expr(ex.head, map(_remove_linenums, ex.args)...)
 end
 
 #-----------------------------------------------------------------------
@@ -1233,7 +1518,14 @@ mutable struct DefaultTestSet <: AbstractTestSet
     results_lock::ReentrantLock
     results::Vector{Any}
 end
-function DefaultTestSet(desc::AbstractString; verbose::Bool = something(Base.ScopedValues.get(VERBOSE_TESTSETS)), showtiming::Bool = true, failfast::Union{Nothing,Bool} = nothing, source = nothing, rng = nothing)
+function DefaultTestSet(desc::AbstractString;
+                        verbose::Bool = something(Base.ScopedValues.get(VERBOSE_TESTSETS)),
+                        showtiming::Bool = true,
+                        failfast::Union{Nothing,Bool} = nothing,
+                        source = nothing,
+                        time_start::Float64 = time(),
+                        rng = nothing,
+                        )
     if isnothing(failfast)
         # pass failfast state into child testsets
         parent_ts = get_testset()
@@ -1245,7 +1537,7 @@ function DefaultTestSet(desc::AbstractString; verbose::Bool = something(Base.Sco
     end
     return DefaultTestSet(String(desc)::String,
         verbose, showtiming, failfast, extract_file(source),
-        time(), rng, 0, 0., 0x00, ReentrantLock(), Any[])
+        time_start, rng, 0, 0., 0x00, ReentrantLock(), Any[])
 end
 extract_file(source::LineNumberNode) = extract_file(source.file)
 extract_file(file::Symbol) = string(file)
@@ -1451,7 +1743,7 @@ end
 # Recursive function that fetches backtraces for any and all errors
 # or failures the testset and its children encountered
 function filter_errors(ts::DefaultTestSet)
-    efs = Any[]
+    efs = Union{Fail, Error}[]
     for t in ts.results
         if isa(t, DefaultTestSet)
             append!(efs, filter_errors(t))
@@ -2323,7 +2615,7 @@ function detect_ambiguities(mods::Module...;
                             allowed_undefineds = nothing)
     @nospecialize
     ambs = Set{Tuple{Method,Method}}()
-    mods = collect(mods)::Vector{Module}
+    mods = Module[mods...]
     function sortdefs(m1::Method, m2::Method)
         ord12 = cmp(m1.file, m2.file)
         if ord12 == 0
@@ -2354,6 +2646,86 @@ function detect_ambiguities(mods::Module...;
 end
 
 """
+    detect_closure_boxes(mod1, mod2...)
+
+Return a sorted `Vector{Pair{Method, Vector{Symbol}}}` of methods defined in the
+specified modules (or their submodules) that allocate `Core.Box` in their lowered
+code, paired with the boxed variable names. Variable names are `:unknown` when a
+slot name cannot be resolved.
+
+See also [`detect_closure_boxes_all_modules`](@ref) to check all loaded modules.
+"""
+function detect_closure_boxes(mods::Module...)
+    @nospecialize
+    boxes = Dict{Method, Vector{Symbol}}()
+    mods = Module[mods...]
+    isempty(mods) && return Pair{Method, Vector{Symbol}}[]
+
+    function is_box_call(@nospecialize expr)
+        if !(expr isa Expr)
+            return false
+        end
+        if expr.head === :call || expr.head === :new
+            callee = expr.args[1]
+            return callee === Core.Box || (callee isa GlobalRef && callee.mod === Core && callee.name === :Box)
+        end
+        return false
+    end
+
+    function slot_name(ci, slot)::Symbol
+        if slot isa Core.SlotNumber
+            idx = Int(slot.id)
+            if 1 <= idx <= length(ci.slotnames)
+                return ci.slotnames[idx]
+            end
+        end
+        return Symbol(string(slot))
+    end
+
+    function matches_module(mod::Module)
+        return is_in_mods(mod, true, mods)
+    end
+
+    function scan_method!(m::Method)
+        matches_module(parentmodule(m)) || return
+        ci = try
+            Base.uncompressed_ast(m)
+        catch
+            return
+        end
+        for stmt in ci.code
+            if stmt isa Expr && stmt.head === :(=)
+                lhs = stmt.args[1]
+                rhs = stmt.args[2]
+                if is_box_call(rhs)
+                    push!(get!(Vector{Symbol}, boxes, m), slot_name(ci, lhs))
+                end
+            elseif is_box_call(stmt)
+                push!(get!(Vector{Symbol}, boxes, m), :unknown)
+            end
+        end
+    end
+
+    Base.visit(Core.methodtable) do m
+        scan_method!(m)
+    end
+
+    result = collect(boxes)
+    sort!(result, by = entry -> (entry.first.file, entry.first.line, entry.first.name))
+    return result
+end
+
+"""
+    ()
+
+Return a sorted `Vector{Pair{Method, Vector{Symbol}}}` of all methods in currently
+loaded modules that allocate `Core.Box` in their lowered code.
+
+See also [`detect_closure_boxes`](@ref) to check specific modules.
+"""
+detect_closure_boxes_all_modules() = detect_closure_boxes(Base.loaded_modules_array()...)
+
+"""
     detect_unbound_args(mod1, mod2...; recursive=false, allowed_undefineds=nothing)
 
 Return a vector of `Method`s which may have unbound type parameters.
@@ -2379,7 +2751,7 @@ function detect_unbound_args(mods...;
                              allowed_undefineds=nothing)
     @nospecialize mods
     ambs = Set{Method}()
-    mods = collect(mods)::Vector{Module}
+    mods = Module[mods...]
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)
             is_in_mods(parentmodule(m), recursive, mods) || continue

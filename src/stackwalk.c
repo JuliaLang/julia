@@ -14,7 +14,9 @@
 // define `jl_unw_get` as a macro, since (like setjmp)
 // returning from the callee function will invalidate the context
 #ifdef _OS_WINDOWS_
+#include <winternl.h>
 uv_mutex_t jl_in_stackwalk;
+uv_mutex_t jl_dll_notify_lock;
 #define jl_unw_get(context) (RtlCaptureContext(context), 0)
 #elif !defined(JL_DISABLE_LIBUNWIND)
 #define jl_unw_get(context) unw_getcontext(context)
@@ -75,13 +77,15 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
     volatile int need_more_space = 0;
     uintptr_t return_ip = 0;
     uintptr_t thesp = 0;
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-    uv_mutex_lock(&jl_in_stackwalk);
+#if defined(_OS_WINDOWS_)
+#if !defined(_CPU_X86_64_)
     if (!from_signal_handler) {
         // Workaround 32-bit windows bug missing top frame
         // See for example https://bugs.chromium.org/p/crashpad/issues/detail?id=53
         skip--;
     }
+#endif
+    jl_lock_profile();
 #endif
 #if !defined(_OS_WINDOWS_) // no point on windows, since RtlVirtualUnwind won't give us a second chance if the segfault happens in ntdll
     jl_jmp_buf *old_buf = jl_get_safe_restore();
@@ -188,9 +192,8 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
         if (n > 0) n -= 1;
     }
     jl_set_safe_restore(old_buf);
-#endif
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-    uv_mutex_unlock(&jl_in_stackwalk);
+#else
+    jl_unlock_profile();
 #endif
     *bt_size = n;
     return need_more_space;
@@ -402,21 +405,16 @@ JL_DLLEXPORT jl_value_t *jl_get_excstack(jl_task_t* task, int include_bt, int ma
 }
 
 #if defined(_OS_WINDOWS_)
+
 // XXX: these caches should be per-thread
 #ifdef _CPU_X86_64_
-static UNWIND_HISTORY_TABLE HistoryTable;
-#else
-static struct {
-    DWORD64 dwAddr;
-    DWORD64 ImageBase;
-} HistoryTable;
-#endif
+static __thread UNWIND_HISTORY_TABLE HistoryTable;
+static __thread _Atomic(int) *abort_profile_ptr = NULL;
+
 static PVOID CALLBACK JuliaFunctionTableAccess64(
         _In_  HANDLE hProcess,
         _In_  DWORD64 AddrBase)
 {
-    //jl_printf(JL_STDOUT, "lookup %d\n", AddrBase);
-#ifdef _CPU_X86_64_
     DWORD64 ImageBase;
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(AddrBase, &ImageBase, &HistoryTable);
     if (fn)
@@ -425,16 +423,11 @@ static PVOID CALLBACK JuliaFunctionTableAccess64(
     PVOID ftable = SymFunctionTableAccess64(hProcess, AddrBase);
     uv_mutex_unlock(&jl_in_stackwalk);
     return ftable;
-#else
-    return SymFunctionTableAccess64(hProcess, AddrBase);
-#endif
 }
 static DWORD64 WINAPI JuliaGetModuleBase64(
         _In_  HANDLE hProcess,
         _In_  DWORD64 dwAddr)
 {
-    //jl_printf(JL_STDOUT, "lookup base %d\n", dwAddr);
-#ifdef _CPU_X86_64_
     DWORD64 ImageBase;
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(dwAddr, &ImageBase, &HistoryTable);
     if (fn)
@@ -443,7 +436,22 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
     DWORD64 fbase = SymGetModuleBase64(hProcess, dwAddr);
     uv_mutex_unlock(&jl_in_stackwalk);
     return fbase;
+}
 #else
+static __thread struct {
+    DWORD64 dwAddr;
+    DWORD64 ImageBase;
+} HistoryTable;
+static PVOID CALLBACK JuliaFunctionTableAccess64(
+        _In_  HANDLE hProcess,
+        _In_  DWORD64 AddrBase)
+{
+    return SymFunctionTableAccess64(hProcess, AddrBase);
+}
+static DWORD64 WINAPI JuliaGetModuleBase64(
+        _In_  HANDLE hProcess,
+        _In_  DWORD64 dwAddr)
+{
     if (dwAddr == HistoryTable.dwAddr)
         return HistoryTable.ImageBase;
     DWORD64 ImageBase = jl_getUnwindInfo(dwAddr);
@@ -453,25 +461,178 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
         return ImageBase;
     }
     return SymGetModuleBase64(hProcess, dwAddr);
-#endif
 }
+#endif
 
 // Might be called from unmanaged thread.
-volatile int needsSymRefreshModuleList;
-BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
+static PVOID dll_notification_cookie;
 
-JL_DLLEXPORT void jl_refresh_dbg_module_list(void)
+// Structure definitions for LdrDllNotification
+typedef struct _LDR_DLL_LOADED_NOTIFICATION_DATA {
+    ULONG Flags;
+    PCUNICODE_STRING FullDllName;
+    PCUNICODE_STRING BaseDllName;
+    PVOID DllBase;
+    ULONG SizeOfImage;
+} LDR_DLL_LOADED_NOTIFICATION_DATA;
+typedef const LDR_DLL_LOADED_NOTIFICATION_DATA *PCLDR_DLL_LOADED_NOTIFICATION_DATA;
+
+typedef struct _LDR_DLL_UNLOADED_NOTIFICATION_DATA {
+    ULONG Flags;
+    PCUNICODE_STRING FullDllName;
+    PCUNICODE_STRING BaseDllName;
+    PVOID DllBase;
+    ULONG SizeOfImage;
+} LDR_DLL_UNLOADED_NOTIFICATION_DATA;
+typedef const LDR_DLL_UNLOADED_NOTIFICATION_DATA *PCLDR_DLL_UNLOADED_NOTIFICATION_DATA;
+
+typedef union _LDR_DLL_NOTIFICATION_DATA {
+    LDR_DLL_LOADED_NOTIFICATION_DATA Loaded;
+    LDR_DLL_UNLOADED_NOTIFICATION_DATA Unloaded;
+} LDR_DLL_NOTIFICATION_DATA;
+typedef const LDR_DLL_NOTIFICATION_DATA *PCLDR_DLL_NOTIFICATION_DATA;
+
+#define LDR_DLL_NOTIFICATION_REASON_LOADED   1
+#define LDR_DLL_NOTIFICATION_REASON_UNLOADED 2
+
+typedef struct dll_notification_event {
+    ULONG      NotificationReason;
+    wchar_t   *FullDllName;
+    wchar_t   *BaseDllName;
+    uintptr_t  DllBase;
+    ULONG      SizeOfImage;
+    struct dll_notification_event *next;
+} dll_notification_event_t;
+static dll_notification_event_t *dll_notify_queue = NULL;
+
+// Forward declarations for ntdll functions
+typedef VOID CALLBACK (*PLDR_DLL_NOTIFICATION_FUNCTION)(
+  ULONG                       NotificationReason,
+  PCLDR_DLL_NOTIFICATION_DATA NotificationData,
+  PVOID                       Context
+);
+NTSTATUS NTAPI LdrRegisterDllNotification(ULONG Flags, PLDR_DLL_NOTIFICATION_FUNCTION NotificationFunction, PVOID Context, PVOID *Cookie);
+NTSTATUS NTAPI LdrUnregisterDllNotification(PVOID Cookie);
+
+// caller should hold jl_in_stackwalk and jl_dll_notify_lock locks
+void jl_profile_process_dll_events(void) JL_NOTSAFEPOINT
 {
-    if (needsSymRefreshModuleList && hSymRefreshModuleList != NULL) {
-        hSymRefreshModuleList(GetCurrentProcess());
-        needsSymRefreshModuleList = 0;
+    dll_notification_event_t *event = dll_notify_queue;
+    while (event) {
+        if (event->NotificationReason == LDR_DLL_NOTIFICATION_REASON_LOADED) {
+            SymLoadModuleExW(GetCurrentProcess(), NULL,
+                             event->FullDllName,
+                             event->BaseDllName,
+                             event->DllBase,
+                             event->SizeOfImage,
+                             NULL,
+                             0);
+            free(event->FullDllName);
+            free(event->BaseDllName);
+        }
+        else if (event->NotificationReason == LDR_DLL_NOTIFICATION_REASON_UNLOADED) {
+            // if this unload event has an earlier load event in the queue, process neither
+            //
+            // this ensures that we do not try to process DLL symbols for a module that was
+            // already unloaded, or which is concurrently unloading
+            int prior_enqueued_load_of_same_module = 0;
+            dll_notification_event_t *prior_event = event;
+            while (prior_event->next) {
+                if (prior_event->next->DllBase == event->DllBase) {
+                    assert(prior_event->next->NotificationReason == LDR_DLL_NOTIFICATION_REASON_LOADED);
+                    prior_enqueued_load_of_same_module = 1;
+                    break;
+                }
+                prior_event = prior_event->next;
+            }
+            if (prior_enqueued_load_of_same_module) {
+                // skip processing for the prior load event and this unload event
+                dll_notification_event_t *load_event = prior_event->next;
+                prior_event->next = load_event->next;
+                free(load_event->FullDllName);
+                free(load_event->BaseDllName);
+                free(load_event);
+            } else {
+                SymUnloadModule64(GetCurrentProcess(), event->DllBase);
+            }
+        }
+
+        dll_notification_event_t *next = event->next;
+        free(event);
+        event = next;
+    }
+    dll_notify_queue = NULL;
+}
+
+// Callback for LdrRegisterDllNotification
+static VOID CALLBACK dll_notification_callback(
+    ULONG NotificationReason,
+    PCLDR_DLL_NOTIFICATION_DATA NotificationData,
+    PVOID Context)
+{
+    (void)Context;
+
+    dll_notification_event_t *event = (dll_notification_event_t*)malloc(sizeof(dll_notification_event_t));
+    if (NotificationReason == LDR_DLL_NOTIFICATION_REASON_LOADED) {
+        const LDR_DLL_LOADED_NOTIFICATION_DATA *data = &NotificationData->Loaded;
+        event->FullDllName = _wcsdup(data->FullDllName->Buffer);
+        event->BaseDllName = _wcsdup(data->BaseDllName->Buffer);
+        event->DllBase = (uintptr_t)data->DllBase;
+        event->SizeOfImage = data->SizeOfImage;
+    }
+    else if (NotificationReason == LDR_DLL_NOTIFICATION_REASON_UNLOADED) {
+        event->DllBase = (uintptr_t)NotificationData->Unloaded.DllBase;
+    }
+
+    // This lock guards both the data structure, as well as the possibility
+    // that a DLL is about to unloaded that is concurrently being processed
+    // by `SymLoadModuleExW`
+    uv_mutex_lock(&jl_dll_notify_lock);
+
+    event->NotificationReason = NotificationReason;
+    event->next = dll_notify_queue;
+    dll_notify_queue = event;
+
+    uv_mutex_unlock(&jl_dll_notify_lock);
+    return; // process later
+}
+
+// Initialize stackwalk infrastructure (DLL tracking and profiling)
+void jl_init_stackwalk(void)
+{
+    uv_mutex_init(&jl_in_stackwalk);
+    uv_mutex_init(&jl_dll_notify_lock);
+    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_IGNORE_CVREC);
+    if (!SymInitialize(GetCurrentProcess(), "", 1))
+        jl_safe_printf("WARNING: failed to initialize stack walk info\n");
+    LdrRegisterDllNotification(0, dll_notification_callback, NULL, &dll_notification_cookie);
+}
+
+// Finalize stackwalk infrastructure
+void jl_fin_stackwalk(void)
+{
+    // To avoid deadlocks (due to suspending the main thread during `ExitProcess()`)
+    // and other misbehavior (due to missed DLL notifications during exit), take the
+    // profile lock here to effectively disable any active profiling threads.
+    jl_lock_profile_wr();
+    if (dll_notification_cookie) {
+        LdrUnregisterDllNotification(dll_notification_cookie);
+        dll_notification_cookie = NULL;
     }
 }
+
+// Set the abort_profile_ptr in TLS
+#ifdef _CPU_X86_64_
+JL_DLLEXPORT void jl_set_profile_abort_ptr(_Atomic(int) *abort_ptr) JL_NOTSAFEPOINT
+{
+    abort_profile_ptr = abort_ptr;
+}
+#endif
+
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
 {
     int result;
-    uv_mutex_lock(&jl_in_stackwalk);
-    jl_refresh_dbg_module_list();
+
 #if !defined(_CPU_X86_64_)
     memset(&cursor->stackframe, 0, sizeof(cursor->stackframe));
     cursor->stackframe.AddrPC.Offset = Context->Eip;
@@ -481,14 +642,15 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
     cursor->stackframe.AddrStack.Mode = AddrModeFlat;
     cursor->stackframe.AddrFrame.Mode = AddrModeFlat;
     cursor->context = *Context;
+    uv_mutex_lock(&jl_in_stackwalk);
     result = StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), hMainThread,
             &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64,
             JuliaGetModuleBase64, NULL);
+    uv_mutex_unlock(&jl_in_stackwalk);
 #else
     *cursor = *Context;
     result = 1;
 #endif
-    uv_mutex_unlock(&jl_in_stackwalk);
     return result;
 }
 
@@ -520,8 +682,10 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
         return cursor->stackframe.AddrPC.Offset != 0;
     }
 
+    uv_mutex_lock(&jl_in_stackwalk);
     BOOL result = StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), hMainThread,
         &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64, JuliaGetModuleBase64, NULL);
+    uv_mutex_unlock(&jl_in_stackwalk);
     return result;
 #else
     *ip = (uintptr_t)cursor->Rip;
@@ -534,12 +698,23 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
         return cursor->Rip != 0;
     }
 
-    DWORD64 ImageBase = JuliaGetModuleBase64(GetCurrentProcess(), cursor->Rip - !from_signal_handler);
-    if (!ImageBase)
-        return 0;
+    // Set can-abort flag
+    _Atomic(int) *abort_ptr = abort_profile_ptr;
+    if (abort_ptr && jl_atomic_exchange_relaxed(abort_ptr, 1) != 0) {
+        jl_atomic_store_relaxed(abort_ptr, 3);
+        return 0; // aborted
+    }
 
-    PRUNTIME_FUNCTION FunctionEntry = (PRUNTIME_FUNCTION)JuliaFunctionTableAccess64(
-        GetCurrentProcess(), cursor->Rip - !from_signal_handler);
+    DWORD64 ImageBase = JuliaGetModuleBase64(GetCurrentProcess(), cursor->Rip - !from_signal_handler);
+    PRUNTIME_FUNCTION FunctionEntry = ImageBase ? (PRUNTIME_FUNCTION)JuliaFunctionTableAccess64(
+        GetCurrentProcess(), cursor->Rip - !from_signal_handler) : NULL;
+
+    // Check if can-abort flag was removed, or remove it
+    if (abort_ptr && jl_atomic_exchange_relaxed(abort_ptr, 0) != 1) {
+        jl_atomic_store_relaxed(abort_ptr, 3);
+        return 0; // abort
+    }
+
     if (!FunctionEntry) {
         // Not code or bad unwind?
         return 0;
@@ -641,22 +816,22 @@ JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
     return rs;
 }
 
-static void jl_safe_print_codeloc(const char* func_name, const char* file_name,
-                                  int line, int inlined) JL_NOTSAFEPOINT
+static void jl_safe_fprint_codeloc(ios_t *s, const char* func_name, const char* file_name,
+                                   int line, int inlined) JL_NOTSAFEPOINT
 {
     const char *inlined_str = inlined ? " [inlined]" : "";
     if (line != -1) {
-        jl_safe_printf("%s at %s:%d%s\n", func_name, file_name, line, inlined_str);
+        jl_safe_fprintf(s, "%s at %s:%d%s\n", func_name, file_name, line, inlined_str);
     }
     else {
-        jl_safe_printf("%s at %s (unknown line)%s\n", func_name, file_name, inlined_str);
+        jl_safe_fprintf(s, "%s at %s (unknown line)%s\n", func_name, file_name, inlined_str);
     }
 }
 
 // Print function, file and line containing native instruction pointer `ip` by
 // looking up debug info. Prints multiple such frames when `ip` points to
 // inlined code.
-void jl_print_native_codeloc(uintptr_t ip) JL_NOTSAFEPOINT
+void jl_fprint_native_codeloc(ios_t *s, uintptr_t ip) JL_NOTSAFEPOINT
 {
     // This function is not allowed to reference any TLS variables since
     // it can be called from an unmanaged thread on OSX.
@@ -668,10 +843,10 @@ void jl_print_native_codeloc(uintptr_t ip) JL_NOTSAFEPOINT
     for (i = 0; i < n; i++) {
         jl_frame_t frame = frames[i];
         if (!frame.func_name) {
-            jl_safe_printf("unknown function (ip: %p) at %s\n", (void*)ip, frame.file_name ? frame.file_name : "(unknown file)");
+            jl_safe_fprintf(s, "unknown function (ip: %p) at %s\n", (void*)ip, frame.file_name ? frame.file_name : "(unknown file)");
         }
         else {
-            jl_safe_print_codeloc(frame.func_name, frame.file_name, frame.line, frame.inlined);
+            jl_safe_fprint_codeloc(s, frame.func_name, frame.file_name, frame.line, frame.inlined);
             free(frame.func_name);
         }
         free(frame.file_name);
@@ -691,12 +866,17 @@ const char *jl_debuginfo_file1(jl_debuginfo_t *debuginfo)
     return "<unknown>";
 }
 
-const char *jl_debuginfo_file(jl_debuginfo_t *debuginfo)
+// File name and line number of first line
+const char *jl_debuginfo_firstline(jl_debuginfo_t *debuginfo, int* line)
 {
     jl_debuginfo_t *linetable = debuginfo->linetable;
     while ((jl_value_t*)linetable != jl_nothing) {
         debuginfo = linetable;
         linetable = debuginfo->linetable;
+    }
+    if (line) {
+        struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo->codelocs, 0);
+        *line = lineidx.line;
     }
     return jl_debuginfo_file1(debuginfo);
 }
@@ -729,7 +909,7 @@ const char *jl_debuginfo_name(jl_value_t *func)
 
 // func == module : top-level
 // func == NULL : macro expansion
-static void jl_print_debugloc(jl_debuginfo_t *debuginfo, jl_value_t *func, size_t ip, int inlined) JL_NOTSAFEPOINT
+static void jl_fprint_debugloc(ios_t *s, jl_debuginfo_t *debuginfo, jl_value_t *func, size_t ip, int inlined) JL_NOTSAFEPOINT
 {
     if (!jl_is_symbol(debuginfo->def)) // this is a path or
         func = debuginfo->def; // this is inlined code
@@ -738,26 +918,26 @@ static void jl_print_debugloc(jl_debuginfo_t *debuginfo, jl_value_t *func, size_
     if (edges_idx) {
         jl_debuginfo_t *edge = (jl_debuginfo_t*)jl_svecref(debuginfo->edges, edges_idx - 1);
         assert(jl_typetagis(edge, jl_debuginfo_type));
-        jl_print_debugloc(edge, NULL, stmt.pc, 1);
+        jl_fprint_debugloc(s, edge, NULL, stmt.pc, 1);
     }
     intptr_t ip2 = stmt.line;
     if (ip2 >= 0 && ip > 0 && (jl_value_t*)debuginfo->linetable != jl_nothing) {
-        jl_print_debugloc(debuginfo->linetable, func, ip2, 0);
+        jl_fprint_debugloc(s, debuginfo->linetable, func, ip2, 0);
     }
     else {
         if (ip2 < 0) // set broken debug info to ignored
             ip2 = 0;
         const char *func_name = jl_debuginfo_name(func);
-        const char *file = jl_debuginfo_file(debuginfo);
-        jl_safe_print_codeloc(func_name, file, ip2, inlined);
+        const char *file = jl_debuginfo_firstline(debuginfo, NULL);
+        jl_safe_fprint_codeloc(s, func_name, file, ip2, inlined);
     }
 }
 
 // Print code location for backtrace buffer entry at *bt_entry
-void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
+void jl_fprint_bt_entry_codeloc(ios_t *s, jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
 {
     if (jl_bt_is_native(bt_entry)) {
-        jl_print_native_codeloc(bt_entry[0].uintptr);
+        jl_fprint_native_codeloc(s, bt_entry[0].uintptr);
     }
     else if (jl_bt_entry_tag(bt_entry) == JL_BT_INTERP_FRAME_TAG) {
         size_t ip = jl_bt_entry_header(bt_entry); // zero-indexed
@@ -776,17 +956,17 @@ void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
         if (jl_is_code_info(code)) {
             jl_code_info_t *src = (jl_code_info_t*)code;
             // See also the debug info handling in codegen.cpp.
-            jl_print_debugloc(src->debuginfo, def, ip + 1, 0);
+            jl_fprint_debugloc(s, src->debuginfo, def, ip + 1, 0);
         }
         else {
             // If we're using this function something bad has already happened;
             // be a bit defensive to avoid crashing while reporting the crash.
-            jl_safe_printf("No code info - unknown interpreter state!\n");
+            jl_safe_fprintf(s, "No code info - unknown interpreter state!\n");
         }
     }
     else {
-        jl_safe_printf("Non-native bt entry with tag and header bits 0x%" PRIxPTR "\n",
-                       bt_entry[1].uintptr);
+        jl_safe_fprintf(s, "Non-native bt entry with tag and header bits 0x%" PRIxPTR "\n",
+                        bt_entry[1].uintptr);
     }
 }
 
@@ -1257,26 +1437,13 @@ return 0;
 #endif
 }
 
-typedef struct {
-    int16_t old;
-    bt_context_t *c;
-    int success;
-} suspend_t;
-static void suspend(void *ctx)
-{
-    suspend_t *suspenddata = (suspend_t*)ctx;
-    suspenddata->success = jl_thread_suspend_and_get_state(suspenddata->old, 1, suspenddata->c);
-}
-
 JL_DLLEXPORT size_t jl_try_record_thread_backtrace(jl_ptls_t ptls2, jl_bt_element_t *bt_data, size_t max_bt_size) JL_NOTSAFEPOINT
 {
     int16_t tid = ptls2->tid;
     jl_task_t *t = NULL;
     bt_context_t *context = NULL;
     bt_context_t c;
-    suspend_t suspenddata = {tid, &c};
-    jl_with_stackwalk_lock(suspend, &suspenddata);
-    if (!suspenddata.success) {
+    if (!jl_thread_suspend(tid, &c)) {
         return 0;
     }
     // thread is stopped, safe to read the task it was running before we stopped it
@@ -1309,9 +1476,7 @@ JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_b
     int16_t old;
     for (old = -1; !jl_atomic_cmpswap(&t->tid, &old, tid) && old != tid; old = -1) {
         // if this task is already running somewhere, we need to stop the thread it is running on and query its state
-        suspend_t suspenddata = {old, &c};
-        jl_with_stackwalk_lock(suspend, &suspenddata);
-        if (!suspenddata.success) {
+        if (!jl_thread_suspend(old, &c)) {
             if (jl_atomic_load_relaxed(&t->tid) != old)
                 continue;
             return result;
@@ -1331,15 +1496,13 @@ JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_b
     if (context == NULL && (!t->ctx.copy_stack && t->ctx.started && t->ctx.ctx != NULL)) {
         // need to read the context from the task stored state
         jl_jmp_buf *mctx = &t->ctx.ctx->uc_mcontext;
-#if defined(_OS_WINDOWS_)
+#if defined(JL_TASK_SWITCH_WINDOWS)
         memset(&c, 0, sizeof(c));
         if (jl_simulate_longjmp(*mctx, &c))
             context = &c;
-#elif defined(JL_HAVE_UNW_CONTEXT)
+#elif defined(JL_TASK_SWITCH_LIBUNWIND)
         context = t->ctx.ctx;
-#elif defined(JL_HAVE_UCONTEXT)
-        context = jl_to_bt_context(t->ctx.ctx);
-#elif defined(JL_HAVE_ASM)
+#elif defined(JL_TASK_SWITCH_ASM)
         memset(&c, 0, sizeof(c));
         if (jl_simulate_longjmp(*mctx, &c))
             context = &c;
@@ -1365,56 +1528,74 @@ JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_b
 
 JL_DLLEXPORT void jl_gdblookup(void* ip)
 {
-    jl_print_native_codeloc((uintptr_t)ip);
+    jl_fprint_native_codeloc(ios_safe_stderr, (uintptr_t)ip);
 }
 
 // Print backtrace for current exception in catch block
-JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_fprint_backtrace(ios_t *s) JL_NOTSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     if (ct->ptls == NULL)
         return;
-    jl_excstack_t *s = ct->excstack;
-    if (!s)
+    jl_excstack_t *stack = ct->excstack;
+    if (!stack)
         return;
-    size_t i, bt_size = jl_excstack_bt_size(s, s->top);
-    jl_bt_element_t *bt_data = jl_excstack_bt_data(s, s->top);
+    size_t i, bt_size = jl_excstack_bt_size(stack, stack->top);
+    jl_bt_element_t *bt_data = jl_excstack_bt_data(stack, stack->top);
     for (i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
-        jl_print_bt_entry_codeloc(bt_data + i);
+        jl_fprint_bt_entry_codeloc(s, bt_data + i);
     }
 }
 
-// Print backtrace for specified task to jl_safe_printf stderr
-JL_DLLEXPORT void jlbacktracet(jl_task_t *t) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT
 {
-    jl_task_t *ct = jl_current_task;
-    jl_ptls_t ptls = ct->ptls;
-    ptls->bt_size = 0;
-    jl_bt_element_t *bt_data = ptls->bt_data;
-    jl_record_backtrace_result_t r = jl_record_backtrace(t, bt_data, JL_MAX_BT_SIZE, 0);
-    size_t bt_size = r.bt_size;
-    size_t i;
-    for (i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
-        jl_print_bt_entry_codeloc(bt_data + i);
-    }
-    if (bt_size == 0)
-        jl_safe_printf("      no backtrace recorded\n");
+    jl_fprint_backtrace(ios_safe_stderr);
 }
 
 JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT
 {
-    jlbacktrace();
+    jl_fprint_backtrace(ios_safe_stderr);
+}
+
+// Print backtrace for specified task to `s`
+JL_DLLEXPORT void jl_fprint_backtracet(ios_t *s, jl_task_t *t) JL_NOTSAFEPOINT
+{
+    jl_bt_element_t *bt_data;
+    jl_task_t *ct = jl_get_current_task();
+    size_t max_bt_size;
+    if (ct && ct->ptls != NULL) {
+        jl_ptls_t ptls = ct->ptls;
+        ptls->bt_size = 0;
+        bt_data = ptls->bt_data;
+        max_bt_size = JL_MAX_BT_SIZE;
+    } else {
+        max_bt_size = 1024; //8kb of stack should be safe
+        bt_data = (jl_bt_element_t *)alloca(max_bt_size * sizeof(jl_bt_element_t));
+    }
+    jl_record_backtrace_result_t r = jl_record_backtrace(t, bt_data, max_bt_size, 0);
+    size_t bt_size = r.bt_size;
+    size_t i;
+    for (i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
+        jl_fprint_bt_entry_codeloc(s, bt_data + i);
+    }
+    if (bt_size == 0)
+        jl_safe_fprintf(s, "      no backtrace recorded\n");
+}
+
+JL_DLLEXPORT void jlbacktracet(jl_task_t *t) JL_NOTSAFEPOINT
+{
+    jl_fprint_backtracet(ios_safe_stderr, t);
 }
 
 // Print backtraces for all live tasks, for all threads, to jl_safe_printf stderr
-JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_fprint_task_backtraces(ios_t *s, int show_done) JL_NOTSAFEPOINT
 {
     size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
     jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
     for (size_t i = 0; i < nthreads; i++) {
         jl_ptls_t ptls2 = allstates[i];
         if (gc_is_collector_thread(i)) {
-            jl_safe_printf("==== Skipping backtrace for parallel/concurrent GC thread %zu\n", i + 1);
+            jl_safe_fprintf(s, "==== Skipping backtrace for parallel/concurrent GC thread %zu\n", i + 1);
             continue;
         }
         if (ptls2 == NULL) {
@@ -1426,17 +1607,17 @@ JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
         jl_task_t *t = ptls2->root_task;
         if (t != NULL)
             t_state = jl_atomic_load_relaxed(&t->_state);
-        jl_safe_printf("==== Thread %d created %zu live tasks\n",
+        jl_safe_fprintf(s, "==== Thread %d created %zu live tasks\n",
                 ptls2->tid + 1, n + (t_state != JL_TASK_STATE_DONE));
         if (show_done || t_state != JL_TASK_STATE_DONE) {
-            jl_safe_printf("     ---- Root task (%p)\n", ptls2->root_task);
+            jl_safe_fprintf(s, "     ---- Root task (%p)\n", ptls2->root_task);
             if (t != NULL) {
-                jl_safe_printf("          (sticky: %d, started: %d, state: %d, tid: %d)\n",
+                jl_safe_fprintf(s, "          (sticky: %d, started: %d, state: %d, tid: %d)\n",
                         t->sticky, t->ctx.started, t_state,
                         jl_atomic_load_relaxed(&t->tid) + 1);
-                jlbacktracet(t);
+                jl_fprint_backtracet(s, t);
             }
-            jl_safe_printf("     ---- End root task\n");
+            jl_safe_fprintf(s, "     ---- End root task\n");
         }
 
         for (size_t j = 0; j < n; j++) {
@@ -1446,17 +1627,23 @@ JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
             int t_state = jl_atomic_load_relaxed(&t->_state);
             if (!show_done && t_state == JL_TASK_STATE_DONE)
                 continue;
-            jl_safe_printf("     ---- Task %zu (%p)\n", j + 1, t);
+            jl_safe_fprintf(s, "     ---- Task %zu (%p)\n", j + 1, t);
             // n.b. this information might not be consistent with the stack printing after it, since it could start running or change tid, etc.
-            jl_safe_printf("          (sticky: %d, started: %d, state: %d, tid: %d)\n",
+            jl_safe_fprintf(s, "          (sticky: %d, started: %d, state: %d, tid: %d)\n",
                     t->sticky, t->ctx.started, t_state,
                     jl_atomic_load_relaxed(&t->tid) + 1);
-            jlbacktracet(t);
-            jl_safe_printf("     ---- End task %zu\n", j + 1);
+            jl_fprint_backtracet(ios_safe_stderr, t);
+            jl_safe_fprintf(s, "     ---- End task %zu\n", j + 1);
         }
-        jl_safe_printf("==== End thread %d\n", ptls2->tid + 1);
+        jl_safe_fprintf(s, "==== End thread %d\n", ptls2->tid + 1);
     }
-    jl_safe_printf("==== Done\n");
+    jl_safe_fprintf(s, "==== Done\n");
+}
+
+// Print backtraces for all live tasks, for all threads, to jl_safe_printf stderr
+JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
+{
+    jl_fprint_task_backtraces(ios_safe_stderr, show_done);
 }
 
 #ifdef __cplusplus

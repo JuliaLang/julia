@@ -24,6 +24,18 @@ for T in (Int64, Float64)
     @test complex(Complex{T}) == Complex{T}
 end
 
+@testset "show for complex" begin
+    @test sprint(show, complex(1, 0), context=:compact => true) == "1+0im"
+    @test sprint(show, complex(true, true)) == "Complex(true,true)"
+    @test sprint(show, Complex{Int8}(0, typemin(Int8))) == "0 - 128im"
+
+    @test sprint(show, prevfloat(BigFloat(-1, precision=32))im) == "-0.0 - 1.0000000005im"
+    @test sprint(show, prevfloat(BigFloat(-1, precision=512))im) == "-0.0 - 1.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000015im"
+
+    @test sprint(show, prevfloat(BigFloat(-1, precision=32))im, context=:compact => true) == "-0.0-1.0im"
+    @test sprint(show, prevfloat(BigFloat(-1, precision=512))im, context=:compact => true) == "-0.0-1.0im"
+end
+
 @testset "show" begin
     @test sprint(show, complex(1, 0), context=:compact => true) == "1+0im"
     @test sprint(show, complex(true, true)) == "Complex(true,true)"
@@ -38,7 +50,6 @@ end
     @test sprint(show, complex(-Inf, NaN)) == "-Inf + NaN*im"
     @test sprint(show, complex(0, -Inf)) == "0.0 - Inf*im"
 end
-
 
 @testset "unary operator on complex boolean" begin
     @test +Complex(true, true) === Complex(1, 1)
@@ -1002,9 +1013,9 @@ end
 # issue #10926
 @test typeof(π - 1im) == ComplexF64
 
-@testset "issue #15969" begin
+@testset "issues #15969 #59684" begin
     # specialized muladd for complex types
-    for x in (3, 3+13im), y in (2, 2+7im), z in (5, 5+11im)
+    for x in (3, 3+13im, 1im), y in (2, 2+7im, 1im), z in (5, 5+11im, 0x01, 0x01 + 0x00*im)
         @test muladd(x,y,z) === x*y + z
     end
 end

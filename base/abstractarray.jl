@@ -9,7 +9,7 @@ Supertype for `N`-dimensional arrays (or array-like types) with elements of type
 [`Array`](@ref) and other types are subtypes of this. See the manual section on the
 [`AbstractArray` interface](@ref man-interface-array).
 
-See also: [`AbstractVector`](@ref), [`AbstractMatrix`](@ref), [`eltype`](@ref), [`ndims`](@ref).
+See also [`AbstractVector`](@ref), [`AbstractMatrix`](@ref), [`eltype`](@ref), [`ndims`](@ref).
 """
 AbstractArray
 
@@ -26,7 +26,7 @@ dimension to just get the length of that dimension.
 Note that `size` may not be defined for arrays with non-standard indices, in which case [`axes`](@ref)
 may be useful. See the manual chapter on [arrays with custom indices](@ref man-custom-indices).
 
-See also: [`length`](@ref), [`ndims`](@ref), [`eachindex`](@ref), [`sizeof`](@ref).
+See also [`length`](@ref), [`ndims`](@ref), [`eachindex`](@ref), [`sizeof`](@ref).
 
 # Examples
 ```jldoctest
@@ -39,7 +39,11 @@ julia> size(A, 2)
 3
 ```
 """
-size(t::AbstractArray{T,N}, d) where {T,N} = d::Integer <= N ? size(t)[d] : 1
+function size(t::AbstractArray, dim)
+    d = Int(dim)::Int
+    s = size(t)
+    d <= length(s) ? s[d] : 1
+end
 
 """
     axes(A, d)
@@ -82,7 +86,7 @@ end
 
 Return the tuple of valid indices for array `A`.
 
-See also: [`size`](@ref), [`keys`](@ref), [`eachindex`](@ref).
+See also [`size`](@ref), [`keys`](@ref), [`eachindex`](@ref).
 
 # Examples
 
@@ -225,7 +229,7 @@ For dictionary types, this will be a `Pair{KeyType,ValType}`. The definition
 instead of types. However the form that accepts a type argument should be defined for new
 types.
 
-See also: [`keytype`](@ref), [`typeof`](@ref).
+See also [`keytype`](@ref), [`typeof`](@ref).
 
 # Examples
 ```jldoctest
@@ -261,7 +265,7 @@ elsize(A::AbstractArray) = elsize(typeof(A))
 
 Return the number of dimensions of `A`.
 
-See also: [`size`](@ref), [`axes`](@ref).
+See also [`size`](@ref), [`axes`](@ref).
 
 # Examples
 ```jldoctest
@@ -282,7 +286,7 @@ Return the number of elements in the collection.
 
 Use [`lastindex`](@ref) to get the last valid index of an indexable collection.
 
-See also: [`size`](@ref), [`ndims`](@ref), [`eachindex`](@ref).
+See also [`size`](@ref), [`ndims`](@ref), [`eachindex`](@ref).
 
 # Examples
 ```jldoctest
@@ -411,7 +415,7 @@ Return the last index of `collection`. If `d` is given, return the last index of
 The syntaxes `A[end]` and `A[end, end]` lower to `A[lastindex(A)]` and
 `A[lastindex(A, 1), lastindex(A, 2)]`, respectively.
 
-See also: [`axes`](@ref), [`firstindex`](@ref), [`eachindex`](@ref), [`prevind`](@ref).
+See also [`axes`](@ref), [`firstindex`](@ref), [`eachindex`](@ref), [`prevind`](@ref).
 
 # Examples
 ```jldoctest
@@ -434,7 +438,7 @@ Return the first index of `collection`. If `d` is given, return the first index 
 The syntaxes `A[begin]` and `A[1, begin]` lower to `A[firstindex(A)]` and
 `A[1, firstindex(A, 2)]`, respectively.
 
-See also: [`first`](@ref), [`axes`](@ref), [`lastindex`](@ref), [`nextind`](@ref).
+See also [`first`](@ref), [`axes`](@ref), [`lastindex`](@ref), [`nextind`](@ref).
 
 # Examples
 ```jldoctest
@@ -456,7 +460,7 @@ firstindex(a, d) = (@inline; first(axes(a, d)))
 Get the first element of an iterable collection. Return the start point of an
 [`AbstractRange`](@ref) even if it is empty.
 
-See also: [`only`](@ref), [`firstindex`](@ref), [`last`](@ref).
+See also [`only`](@ref), [`firstindex`](@ref), [`last`](@ref).
 
 # Examples
 ```jldoctest
@@ -479,10 +483,10 @@ end
 Get the first `n` elements of the iterable collection `itr`, or fewer elements if `itr` is not
 long enough.
 
-See also: [`startswith`](@ref), [`Iterators.take`](@ref).
-
 !!! compat "Julia 1.6"
     This method requires at least Julia 1.6.
+
+See also [`startswith`](@ref), [`Iterators.take`](@ref).
 
 # Examples
 ```jldoctest
@@ -560,7 +564,7 @@ end
 
 Return a tuple of the memory strides in each dimension.
 
-See also: [`stride`](@ref).
+See also [`stride`](@ref).
 
 # Examples
 ```jldoctest
@@ -577,7 +581,7 @@ function strides end
 
 Return the distance in memory (in number of elements) between adjacent elements in dimension `k`.
 
-See also: [`strides`](@ref).
+See also [`strides`](@ref).
 
 # Examples
 ```jldoctest
@@ -814,7 +818,7 @@ julia> similar(falses(10), Float64, 2, 4)
  2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314
 ```
 
-See also: [`undef`](@ref), [`isassigned`](@ref).
+See also [`undef`](@ref), [`isassigned`](@ref).
 """
 similar(a::AbstractArray{T}) where {T}                             = similar(a, T)
 similar(a::AbstractArray, ::Type{T}) where {T}                     = similar(a, T, axes(a))
@@ -877,7 +881,7 @@ similar(::Type{T}, dims::Dims) where {T<:AbstractArray} = T(undef, dims)
 
 Create an empty vector similar to `v`, optionally changing the `eltype`.
 
-See also: [`empty!`](@ref), [`isempty`](@ref), [`isassigned`](@ref).
+See also [`empty!`](@ref), [`isempty`](@ref), [`isassigned`](@ref).
 
 # Examples
 
@@ -1601,7 +1605,7 @@ parts can specialize this method to return the concatenation of the `dataids` of
 their component parts.  A typical definition for an array that wraps a parent is
 `Base.dataids(C::CustomArray) = dataids(C.parent)`.
 """
-dataids(A::AbstractArray) = (UInt(objectid(A)),)
+dataids(A::AbstractArray) = (objectid(A),)
 dataids(A::Memory) = (UInt(A.ptr),)
 dataids(A::Array) = dataids(A.ref.mem)
 dataids(::AbstractRange) = ()
@@ -1680,8 +1684,8 @@ typed_hcat(::Type{T}) where {T} = Vector{T}()
 ## cat: special cases
 vcat(X::T...) where {T}         = T[ X[i] for i=eachindex(X) ]
 vcat(X::T...) where {T<:Number} = T[ X[i] for i=eachindex(X) ]
-hcat(X::T...) where {T}         = T[ X[j] for i=1:1, j=eachindex(X) ]
-hcat(X::T...) where {T<:Number} = T[ X[j] for i=1:1, j=eachindex(X) ]
+hcat(X::T...) where {T}         = T[ X[j] for _=1:1, j=eachindex(X) ]
+hcat(X::T...) where {T<:Number} = T[ X[j] for _=1:1, j=eachindex(X) ]
 
 vcat(X::Number...) = hvcat_fill!(Vector{promote_typeof(X...)}(undef, length(X)), X)
 hcat(X::Number...) = hvcat_fill!(Matrix{promote_typeof(X...)}(undef, 1,length(X)), X)
@@ -1823,7 +1827,7 @@ function cat_shape(dims, shapes::Tuple)
     return out_shape
 end
 # The new way to compute the shape (more inferable than combining cat_size & cat_shape, due to Varargs + issue#36454)
-cat_size_shape(dims) = ntuple(zero, Val(length(dims)))
+cat_size_shape(dims) = ntuple(Returns(0), Val(length(dims)))
 @inline cat_size_shape(dims, X, tail...) = _cat_size_shape(dims, _cshp(1, dims, (), cat_size(X)), tail...)
 _cat_size_shape(dims, shape) = shape
 @inline _cat_size_shape(dims, shape, X, tail...) = _cat_size_shape(dims, _cshp(1, dims, shape, cat_size(X)), tail...)
@@ -1877,7 +1881,7 @@ end
 @inline cat_t(::Type{T}, X...; dims) where {T} = _cat_t(dims, T, X...)
 
 # Why isn't this called `__cat!`?
-__cat(A, shape, catdims, X...) = __cat_offset!(A, shape, catdims, ntuple(zero, length(shape)), X...)
+__cat(A, shape, catdims, X...) = __cat_offset!(A, shape, catdims, ntuple(Returns(0), length(shape)), X...)
 
 function __cat_offset!(A, shape, catdims, offsets, x, X...)
     # splitting the "work" on x from X... may reduce latency (fewer costly specializations)
@@ -2384,13 +2388,13 @@ _typed_hvncat_0d_only_one() =
 function _typed_hvncat(::Type{T}, ::Val{N}) where {T, N}
     N < 0 &&
         throw(ArgumentError("concatenation dimension must be non-negative"))
-    return Array{T, N}(undef, ntuple(x -> 0, Val(N)))
+    return Array{T, N}(undef, ntuple(Returns(0), Val(N)))
 end
 
 function _typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N
     N < 0 &&
         throw(ArgumentError("concatenation dimension must be non-negative"))
-    A = cat_similar(xs[1], T, (ntuple(x -> 1, Val(N - 1))..., length(xs)))
+    A = cat_similar(xs[1], T, (ntuple(Returns(1), Val(N - 1))..., length(xs)))
     hvncat_fill!(A, false, xs)
     return A
 end
@@ -2404,7 +2408,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
         throw(ArgumentError("concatenation dimension must be non-negative"))
     for a ∈ as
         ndims(a) <= N || all(x -> size(a, x) == 1, (N + 1):ndims(a)) ||
-            return _typed_hvncat(T, (ntuple(x -> 1, Val(N - 1))..., length(as), 1), false, as...)
+            return _typed_hvncat(T, (ntuple(Returns(1), Val(N - 1))..., length(as), 1), false, as...)
             # the extra 1 is to avoid an infinite cycle
     end
 
@@ -2419,7 +2423,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
         end
     end
 
-    A = cat_similar(as[1], T, (ntuple(d -> size(as[1], d), N - 1)..., Ndim, ntuple(x -> 1, nd - N)...))
+    A = cat_similar(as[1], T, (ntuple(d -> size(as[1], d), N - 1)..., Ndim, ntuple(Returns(1), nd - N)...))
     k = 1
     for a ∈ as
         for i ∈ eachindex(a)
@@ -2446,7 +2450,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
         end
     end
 
-    A = Array{T, nd}(undef, ntuple(x -> 1, Val(N - 1))..., Ndim, ntuple(x -> 1, nd - N)...)
+    A = Array{T, nd}(undef, ntuple(Returns(1), Val(N - 1))..., Ndim, ntuple(Returns(1), nd - N)...)
 
     k = 1
     for a ∈ as
@@ -2514,7 +2518,7 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
             dd = nrc * (d - 1)
             for i ∈ 1:nr
                 Ai = dd + i
-                for j ∈ 1:nc
+                for _ ∈ 1:nc
                     @inbounds A[Ai] = xs[k]
                     k += 1
                     Ai += nr
@@ -2531,7 +2535,7 @@ end
 function _typed_hvncat(T::Type, dims::NTuple{N, Int}, row_first::Bool, as...) where {N}
     # function barrier after calculating the max is necessary for high performance
     nd = max(maximum(cat_ndims(a) for a ∈ as), N)
-    return _typed_hvncat_dims(T, (dims..., ntuple(x -> 1, nd - N)...), row_first, as)
+    return _typed_hvncat_dims(T, (dims..., ntuple(Returns(1), nd - N)...), row_first, as)
 end
 
 function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as::Tuple) where {T, N}
@@ -2640,7 +2644,7 @@ end
 function _typed_hvncat(T::Type, shape::NTuple{N, Tuple}, row_first::Bool, as...) where {N}
     # function barrier after calculating the max is necessary for high performance
     nd = max(maximum(cat_ndims(a) for a ∈ as), N)
-    return _typed_hvncat_shape(T, (shape..., ntuple(x -> shape[end], nd - N)...), row_first, as)
+    return _typed_hvncat_shape(T, (shape..., ntuple(Returns(shape[end]), nd - N)...), row_first, as)
 end
 
 function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::Tuple) where {T, N}
@@ -2861,7 +2865,7 @@ julia> hvcat(5, M...) |> size  # hvcat puts matrices next to each other
 (14, 15)
 ```
 """
-stack(iter; dims=:) = _stack(dims, iter)
+stack(iter; dims::D=:) where {D} = _stack(dims, iter)
 
 """
     stack(f, args...; [dims])
@@ -2890,14 +2894,14 @@ julia> stack(eachrow([1 2 3; 4 5 6]), (10, 100); dims=1) do row, n
  4.0  5.0  6.0  400.0  500.0  600.0  0.04  0.05  0.06
 ```
 """
-stack(f, iter; dims=:) = _stack(dims, f(x) for x in iter)
-stack(f, xs, yzs...; dims=:) = _stack(dims, f(xy...) for xy in zip(xs, yzs...))
+stack(f, iter; dims::D=:) where {D} = _stack(dims, f(x) for x in iter)
+stack(f, xs, yzs...; dims::D=:) where {D} = _stack(dims, f(xy...) for xy in zip(xs, yzs...))
 
-_stack(dims::Union{Integer, Colon}, iter) = _stack(dims, IteratorSize(iter), iter)
+_stack(dims::D, iter) where {D<:Union{Integer, Colon}} = _stack(dims, IteratorSize(iter), iter)
 
-_stack(dims, ::IteratorSize, iter) = _stack(dims, collect(iter))
+_stack(dims::D, ::IteratorSize, iter) where {D} = _stack(dims, collect(iter))
 
-function _stack(dims, ::Union{HasShape, HasLength}, iter)
+function _stack(dims::D, ::Union{HasShape, HasLength}, iter) where {D}
     S = @default_eltype iter
     T = S != Union{} ? eltype(S) : Any  # Union{} occurs for e.g. stack(1,2), postpone the error
     if isconcretetype(T)
@@ -2935,8 +2939,6 @@ _iterator_axes(x, ::IteratorSize) = axes(x)
 # For some dims values, stack(A; dims) == stack(vec(A)), and the : path will be faster
 _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S} =
     _typed_stack(dims, T, S, IteratorSize(S), A)
-_typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::HasLength, A) where {T,S} =
-    _typed_stack(dims, T, S, HasShape{1}(), A)
 function _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::HasShape{N}, A) where {T,S,N}
     if dims == N+1
         _typed_stack(:, T, S, A, (_vec_axis(A),))
@@ -2972,8 +2974,8 @@ _vec_axis(A, ax=_iterator_axes(A)) = length(ax) == 1 ? only(ax) : OneTo(prod(len
 end
 
 function _dim_stack!(::Val{dims}, B::AbstractArray, x1, xrest) where {dims}
-    before = ntuple(d -> Colon(), dims - 1)
-    after = ntuple(d -> Colon(), ndims(B) - dims)
+    before = ntuple(Returns(Colon()), dims - 1)
+    after = ntuple(Returns(Colon()), ndims(B) - dims)
 
     i = firstindex(B, dims)
     copyto!(view(B, before..., i, after...), x1)
@@ -3016,6 +3018,8 @@ function isequal(A::AbstractArray, B::AbstractArray)
 end
 
 function cmp(A::AbstractVector, B::AbstractVector)
+    ai1, bi1 = firstindex(A), firstindex(B)
+    isequal(ai1, bi1) || return cmp(ai1, bi1)
     for (a, b) in zip(A, B)
         if !isequal(a, b)
             return isless(a, b) ? -1 : 1
@@ -3036,7 +3040,8 @@ end
 """
     isless(A::AbstractVector, B::AbstractVector)
 
-Return `true` when `A` is less than `B` in lexicographic order.
+Return `true` when `A` is less than `B`. Vectors are first compared by
+their starting indices, and then lexicographically by their elements.
 """
 isless(A::AbstractVector, B::AbstractVector) = cmp(A, B) < 0
 
@@ -3158,8 +3163,7 @@ _sub2ind_vec(i, I1, I...) = (@inline; (I1[i], _sub2ind_vec(i, I...)...))
 _sub2ind_vec(i) = ()
 
 function _ind2sub(inds::Union{DimsInteger{N},Indices{N}}, ind::AbstractVector{<:Integer}) where N
-    M = length(ind)
-    t = ntuple(n->similar(ind),Val(N))
+    t = ntuple(_->similar(ind),Val(N))
     for (i,idx) in pairs(IndexLinear(), ind)
         sub = _ind2sub(inds, idx)
         for j = 1:N
@@ -3462,7 +3466,7 @@ collection. `destination` must be at least as large as the smallest collection.
 
 $(_DOCS_ALIASING_WARNING)
 
-See also: [`map`](@ref), [`foreach`](@ref), [`zip`](@ref), [`copyto!`](@ref).
+See also [`map`](@ref), [`foreach`](@ref), [`zip`](@ref), [`copyto!`](@ref).
 
 # Examples
 ```jldoctest
@@ -3576,7 +3580,7 @@ push!(A, a, b, c...) = push!(push!(A, a, b), c...)
 pushfirst!(A, a, b) = pushfirst!(pushfirst!(A, b), a)
 pushfirst!(A, a, b, c...) = pushfirst!(pushfirst!(A, c...), a, b)
 
-# sizehint! does not nothing by default
+# sizehint! does nothing by default
 sizehint!(a::AbstractVector, _) = a
 
 # The semantics of `collect` are weird. Better to write our own

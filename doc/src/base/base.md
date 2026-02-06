@@ -44,6 +44,7 @@ ans
 err
 Base.active_project
 Base.set_active_project
+Base.active_manifest
 ```
 
 ## [Keywords](@id Keywords)
@@ -108,6 +109,7 @@ where
 .=
 .
 ->
+Base.:(:)
 ::
 []
 ```
@@ -139,8 +141,6 @@ Core.:(===)
 Core.isa
 Base.isequal
 Base.isless
-Base.ispositive
-Base.isnegative
 Base.isunordered
 Base.ifelse
 Core.typeassert
@@ -294,6 +294,7 @@ Base.splat
 Base.Fix
 Base.Fix1
 Base.Fix2
+Returns
 ```
 
 ## Syntax
@@ -500,6 +501,7 @@ Core.modifyglobal!
 Core.swapglobal!
 Core.setglobalonce!
 Core.replaceglobal!
+Core.declare_const
 ```
 
 ## Documentation
@@ -517,7 +519,6 @@ Docs.undocumented_names
 ```@docs
 Base.identify_package
 Base.locate_package
-Base.require
 Base.compilecache
 Base.isprecompiled
 Base.get_extension

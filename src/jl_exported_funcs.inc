@@ -144,7 +144,6 @@
     XX(jl_gc_enable) \
     XX(jl_gc_enable_conservative_gc_support) \
     XX(jl_gc_enable_finalizers) \
-    XX(jl_gc_external_obj_hdr_size) \
     XX(jl_gc_find_taggedvalue_pool) \
     XX(jl_gc_get_total_bytes) \
     XX(jl_gc_get_max_memory) \
@@ -182,6 +181,7 @@
     XX(jl_gensym) \
     XX(jl_getaffinity) \
     XX(jl_getallocationgranularity) \
+    XX(jl_gethugepagesize) \
     XX(jl_getnameinfo) \
     XX(jl_getpagesize) \
     XX(jl_get_ARCH) \
@@ -314,6 +314,7 @@
     XX(jl_module_names) \
     XX(jl_module_parent) \
     XX(jl_module_getloc) \
+    XX(jl_module_public) \
     XX(jl_module_public_p) \
     XX(jl_module_using) \
     XX(jl_module_usings) \
@@ -330,6 +331,8 @@
     XX(jl_new_method_table) \
     XX(jl_new_method_uninit) \
     XX(jl_new_module) \
+    XX(jl_begin_new_module) \
+    XX(jl_end_new_module) \
     XX(jl_new_opaque_closure_from_code_info) \
     XX(jl_new_opaque_closure_from_code_info_in_world) \
     XX(jl_new_primitivetype) \
@@ -421,6 +424,7 @@
     XX(jl_specializations_get_linfo) \
     XX(jl_specializations_lookup) \
     XX(jl_static_show) \
+    XX(jl_safe_static_show) \
     XX(jl_static_show_func_sig) \
     XX(jl_stderr_obj) \
     XX(jl_stderr_stream) \
@@ -456,6 +460,7 @@
     XX(jl_too_many_args) \
     XX(jl_toplevel_eval) \
     XX(jl_toplevel_eval_in) \
+    XX(jl_eval_thunk) \
     XX(jl_try_substrtod) \
     XX(jl_try_substrtof) \
     XX(jl_tty_set_mode) \
@@ -502,6 +507,7 @@
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
     XX(jl_write_compiler_output) \
+    XX(jl_membarrier) \
 
 #define JL_RUNTIME_EXPORTED_FUNCS_WIN(XX) \
     XX(jl_setjmp) \
@@ -537,6 +543,7 @@
     YY(jl_dump_fptr_asm) \
     YY(jl_emit_native) \
     YY(jl_get_function_id) \
+    YY(jl_struct_to_llvm) \
     YY(jl_type_to_llvm) \
     YY(jl_getUnwindInfo) \
     YY(jl_get_libllvm) \

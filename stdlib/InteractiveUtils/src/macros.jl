@@ -9,8 +9,33 @@ using Base: insert!, replace_ref_begin_end!,
 # via. `Base.@time_imports` etc.
 import Base: @time_imports, @trace_compile, @trace_dispatch
 
-typesof_expr(args::Vector{Any}, where_params::Union{Nothing, Vector{Any}} = nothing) = rewrap_where(:(Tuple{$(Any[esc(reescape(get_typeof, a)) for a in args]...)}), where_params)
-typesof_expr_unescaped(args::Vector{Any}, where_params::Union{Nothing, Vector{Any}} = nothing) = rewrap_where(:(Tuple{$(Any[reescape(get_typeof, a) for a in args]...)}), where_params)
+typesof_expr(args::Vector{Any}, where_params::Union{Nothing, Vector{Any}} = nothing) = rewrap_where(:($make_tuple_type(Any[$(Any[esc(reescape(get_typeof, a)) for a in args]...)])), where_params)
+typesof_expr_unescaped(args::Vector{Any}, where_params::Union{Nothing, Vector{Any}} = nothing) = rewrap_where(:($make_tuple_type(Any[$(Any[reescape(get_typeof, a) for a in args]...)])), where_params)
+
+function make_tuple_type(types::Vector{Any})
+    vararg = -1
+    for i in eachindex(types)
+        i == 1 && continue # ignore function type
+        type = types[i]
+        if isa(type, Core.TypeofVararg)
+            vararg !== -1 && throw(ArgumentError("More than one `Core.Vararg` type present in argument tuple ($type detected after $(types[vararg])); if provided, it must be unique"))
+            vararg = i
+            if isdefined(type, :N)
+                n = length(types) - vararg + 1
+                n > type.N && throw(ArgumentError("Expected at most $(type.N) types after `$type`, found $n instead"))
+            end
+        elseif vararg !== -1
+            ref = types[vararg]
+            if isdefined(ref, :T) && !skip_type_check(ref.T) && !skip_type_check(type)
+                !(type <: ref.T) && throw(ArgumentError("Inconsistent type `$type` detected after `$ref`; `$type <: $(ref.T)` must hold"))
+            end
+        end
+    end
+    vararg === -1 && return Tuple{types...}
+    return Tuple{@view(types[1:vararg])...}
+end
+
+skip_type_check(@nospecialize(T)) = Core.has_free_typevars(T)
 
 function extract_where_parameters(ex::Expr)
     isexpr(ex, :where) || return ex, nothing
@@ -35,7 +60,7 @@ function get_typeof(@nospecialize ex)
     isexpr(ex, :(::), 2) && return ex.args[2]
     if isexpr(ex, :..., 1)
         splatted = ex.args[1]
-        isexpr(splatted, :(::), 1) && return Expr(:curly, :(Core.Vararg), splatted.args[1])
+        isexpr(splatted, :(::)) && return Expr(:curly, :(Core.Vararg), splatted.args[end])
         return :(Any[Core.Typeof(x) for x in $splatted]...)
     end
     return :(Core.Typeof($ex))
@@ -363,10 +388,11 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
     if isa(ex0, Expr) && ex0.head === :(=) && isa(ex0.args[1], Symbol)
         return gen_call_with_extracted_types(__module__, fcn, ex0.args[2], kws; is_source_reflection, supports_binding_reflection, use_signature_tuple)
     end
-    where_params = nothing
+    _where_params = nothing
     if isa(ex0, Expr)
-        ex0, where_params = extract_where_parameters(ex0)
+        ex0, _where_params = extract_where_parameters(ex0)
     end
+    where_params = _where_params
     if isa(ex0, Expr)
         if ex0.head === :do && isexpr(get(ex0.args, 1, nothing), :call)
             # Normalize `f(args...) do ... end` calls to `f(do_anonymous_function, args...)`

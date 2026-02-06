@@ -89,9 +89,10 @@ void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT
                            NULL, code,
                            0, (LPWSTR)&errmsg, 0, NULL);
     }
-    res = WideCharToMultiByte(CP_UTF8, 0, errmsg, -1, reason, len, NULL, NULL);
-    assert(res > 0 || GetLastError() == ERROR_INSUFFICIENT_BUFFER);
-    reason[len - 1] = '\0';
+    char *buf = reason;
+    size_t buflen = len - 1;
+    int err = uv_utf16_to_wtf8((uint16_t*)errmsg, -1, &buf, &buflen);
+    assert(err == 0 || err == UV_ENOBUFS); (void)err;
     LocalFree(errmsg);
 }
 #endif
@@ -152,18 +153,16 @@ void ForEachMappedRegion(struct link_map *map, void (*cb)(const volatile void *,
 #if defined(_OS_WINDOWS_)
 JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOINT
 {
-    size_t len = MultiByteToWideChar(CP_UTF8, 0, filename, -1, NULL, 0);
-    if (!len) return NULL;
+    ssize_t len = uv_wtf8_length_as_utf16(filename);
+    if (len < 0) return NULL;
     WCHAR *wfilename = (WCHAR*)alloca(len * sizeof(WCHAR));
-    if (!MultiByteToWideChar(CP_UTF8, 0, filename, -1, wfilename, len)) return NULL;
+    uv_wtf8_to_utf16(filename, (uint16_t*)wfilename, len);
     HANDLE lib;
     if (flags & JL_RTLD_NOLOAD) {
         lib = GetModuleHandleW(wfilename);
     }
     else {
         lib = LoadLibraryExW(wfilename, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
-        if (lib)
-            needsSymRefreshModuleList = 1;
     }
     return lib;
 }
@@ -367,8 +366,11 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
                     }
 #endif
                     // bail out and show the error if file actually exists
-                    if (jl_stat(path.buf, (char*)&stbuf) == 0)
-                        goto notfound;
+                    if (jl_stat(path.buf, (char *)&stbuf) == 0) {
+                        if (!S_ISDIR(stbuf.st_mode)) {
+                            goto notfound;
+                        }
+                    }
                 }
             }
         }
@@ -390,8 +392,11 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
         break; // LoadLibrary already tested the rest
 #else
         // bail out and show the error if file actually exists
-        if (jl_stat(path.buf, (char*)&stbuf) == 0)
-            break;
+        if (jl_stat(path.buf, (char *)&stbuf) == 0) {
+            if (!S_ISDIR(stbuf.st_mode)) {
+                break;
+            }
+        }
 #endif
     }
 

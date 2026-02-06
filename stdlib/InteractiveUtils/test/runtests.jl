@@ -2,6 +2,8 @@
 
 using Test, InteractiveUtils
 
+@test isempty(Test.detect_closure_boxes(InteractiveUtils))
+
 @testset "highlighting" begin
     include("highlighting.jl")
 end
@@ -58,7 +60,7 @@ for u in Any[
     Union{Tuple{Int, Int}, Tuple{Char, Int}, Nothing},
     Union{Missing, Nothing}
 ]
-    @test InteractiveUtils.is_expected_union(u)
+    @test Base.Compiler.IRShow.is_expected_union(u)
 end
 
 for u in Any[
@@ -66,7 +68,7 @@ for u in Any[
     Union{Missing, Array},
     Union{Int, Tuple{Any, Int}}
 ]
-    @test !InteractiveUtils.is_expected_union(u)
+    @test !Base.Compiler.IRShow.is_expected_union(u)
 end
 mutable struct Stable{T,N}
     A::Array{T,N}
@@ -445,6 +447,31 @@ end
         _, rt = ret
         @test rt === Bool
     end
+
+    @testset "Vararg handling" begin
+        @test_throws "More than one `Core.Vararg`" @eval @code_typed +(1, 2::Vararg{Int}, 3, 4::Vararg{Float64})
+        @test_throws "Inconsistent type `Float64`" @eval @code_typed +(1, 2, 3, 4::Vararg{Int}, 5.0)
+        @test_throws "Inconsistent type `Float64`" @eval @code_typed +(1, 2, 3, 4::Int..., 5.0)
+        @test_throws "Inconsistent type `Float64`" @eval @code_typed +(1, 2, 3, 4::Vararg{Int}, ::Float64)
+        @test_throws "Inconsistent type `Any`" @eval @code_typed +(1, 2, 3, 4::Vararg{Int}, ::Any)
+        @test_throws r"at most 2 types .* found 3 instead" @eval @code_typed +(1, 2, 3, 4::Vararg{Int,2}, 5, 6)
+        @test (@code_typed +(1, 2, 3, 4::Vararg{Int}))[2] === Int
+        @test (@code_typed +(1, 2, 3, 4::Vararg{Int}, 5))[2] === Int
+        @test (@code_typed +(1, 2, 3, 4::Vararg{Int, 3}))[2] === Int
+        @test (@code_typed +(1, 2, 3, 4::Vararg{Int, 3}, 5))[2] === Int
+        @test (@code_typed +(1, 2, 3, 4::Vararg{Int, 3}, 5, 6))[2] === Int
+        @test (@code_typed +(1, 2, 3, 4::Vararg))[2] === Any
+        @test (@code_typed +(1, 2, 3, 4::Vararg, 5.0))[2] === Any
+        @test (@code_typed +(1, 2, 3, ::Int...))[2] === Int
+        @test (@code_typed +(1, 2, 3, ::Int..., 5))[2] === Int
+        # We just ignore the checks with `where` parameters for simplicity of implementation.
+        @test isa((@code_typed +(::T, ::Vararg{T}, ::T) where {T}), Vector{Any})
+        @test isa((@code_typed +(::T, ::Vararg{T}, ::Float64) where {T<:Real}), Vector{Any})
+        @test isa((@code_typed +(::T, ::Vararg{T}, ::Float64) where {T<:Real}), Vector{Any})
+        @test isa((@code_typed +(::T, ::Vararg{T}, ::Int) where {T<:Real}), Vector{Any})
+        @test isa((@code_typed +(::T, ::Vararg{Vector{T}}, ::Int) where {T<:Real}), Vector{Any})
+        @test isa((@code_typed +(::T, ::Vararg{Int}, ::T) where {T<:Real}), Vector{Any})
+    end
 end
 
 module HygieneTest
@@ -549,16 +576,16 @@ let errf = tempname(),
             @test startswith(errstr, """start
                 Internal error: encountered unexpected error during compilation of f_broken_code:
                 ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
-                """) || errstr
+                """) context=errstr
             @test occursin("""\nmiddle
                 Internal error: encountered unexpected error during compilation of f_broken_code:
                 ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
-                """, errstr) || errstr
+                """, errstr) context=errstr
             @test occursin("""\nlater
                 Internal error: encountered unexpected error during compilation of f_broken_code:
                 ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
-                """, errstr) || errstr
-            @test endswith(errstr, "\nend\n") || errstr
+                """, errstr) context=errstr
+            @test endswith(errstr, "\nend\n") context=errstr
         end
         rm(errf)
     end

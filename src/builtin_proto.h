@@ -35,6 +35,7 @@ extern "C" {
     XX(get_binding_type,"get_binding_type") \
     XX(getfield,"getfield") \
     XX(getglobal,"getglobal") \
+    XX(declare_global,"declare_global") \
     XX(ifelse,"ifelse") \
     XX(intrinsic_call,"intrinsic_call") \
     XX(invoke,"invoke") \
@@ -61,6 +62,7 @@ extern "C" {
     XX(opaque_closure_call,"opaque_closure_call") \
     XX(replacefield,"replacefield!") \
     XX(replaceglobal,"replaceglobal!") \
+    XX(declare_const,"declare_const") \
     XX(setfield,"setfield!") \
     XX(setfieldonce,"setfieldonce!") \
     XX(setglobal,"setglobal!") \

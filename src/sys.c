@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <stdio.h>
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -496,8 +497,8 @@ JL_DLLEXPORT uint64_t jl_hrtime(void) JL_NOTSAFEPOINT
 #ifdef __APPLE__
 #include <crt_externs.h>
 #else
-#if !defined(_OS_WINDOWS_) || defined(_COMPILER_GCC_)
-extern char **environ;
+#if !defined(_OS_WINDOWS_) || (defined(_COMPILER_GCC_) && defined(_POSIX_C_SOURCE))
+extern JL_DLLIMPORT char **environ;
 #endif
 #endif
 
@@ -610,6 +611,41 @@ JL_DLLEXPORT long jl_getallocationgranularity(void) JL_NOTSAFEPOINT
 }
 #endif
 
+JL_DLLEXPORT long jl_gethugepagesize(void) JL_NOTSAFEPOINT
+{
+#if defined(_OS_LINUX_)
+    long detected = 0;
+    FILE *f = fopen("/sys/kernel/mm/transparent_hugepage/hpage_pmd_size", "r");
+    if (f) {
+        unsigned long long size = 0;
+        if (fscanf(f, "%llu", &size) == 1 && size > 0) {
+            detected = (long)size;
+        }
+        fclose(f);
+    }
+    if (detected == 0) {
+        f = fopen("/proc/meminfo", "r");
+        if (f) {
+            char line[256];
+            while (fgets(line, sizeof(line), f)) {
+                unsigned long long kb = 0;
+                if (sscanf(line, "Hugepagesize:%llu kB", &kb) == 1 && kb > 0) {
+                    detected = (long)(kb * 1024ULL);
+                    break;
+                }
+            }
+            fclose(f);
+        }
+    }
+    if (detected == 0) {
+        detected = 2 * 1024 * 1024; // 2 MiB fallback
+    }
+    return detected;
+#else
+    return 0;
+#endif
+}
+
 JL_DLLEXPORT long jl_SC_CLK_TCK(void)
 {
 #ifndef _OS_WINDOWS_
@@ -678,16 +714,10 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
         free(pth16);
         return NULL;
     }
-    pth16[n16] = L'\0';
-    DWORD n8 = WideCharToMultiByte(CP_UTF8, 0, pth16, -1, NULL, 0, NULL, NULL);
-    if (n8 == 0) {
+    char *filepath = NULL;
+    size_t n8 = 0;
+    if (uv_utf16_to_wtf8((uint16_t*)pth16, n16, &filepath, &n8)) {
         free(pth16);
-        return NULL;
-    }
-    char *filepath = (char*)malloc_s(++n8);
-    if (!WideCharToMultiByte(CP_UTF8, 0, pth16, -1, filepath, n8, NULL, NULL)) {
-        free(pth16);
-        free(filepath);
         return NULL;
     }
     free(pth16);

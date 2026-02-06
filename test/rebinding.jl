@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Test
+
 module Rebinding
     using Test
     make_foo() = Foo(1)
@@ -407,4 +409,63 @@ module Invalidate59272
     @test isa(Bar(), Foo.Bar)
     Core.eval(Foo, :(struct Bar; x; end))
     @test Bar(1) == Foo.Bar(1)
+end
+
+# Test @reexport
+module ReexportTests
+    using Test
+    using Base.Experimental: @reexport
+
+    # Test dynamic export additions through reexport
+    module Source1
+        export s1
+        s1() = "s1"
+    end
+    module Reexporter1
+        import ..@reexport
+        @reexport using ..Source1
+    end
+    module User1
+        using ..Reexporter1
+    end
+    @test (:s1,) ⊆ names(Reexporter1)
+    @test User1.s1() == "s1"
+    Core.eval(Source1, :(s2() = "s2"; export s2))
+    @test (:s1, :s2) ⊆ names(Reexporter1)
+    @test User1.s2() == "s2"
+
+    # Test reexport syntax, multiple modules
+    module Source2
+        export s3
+        s3() = "s3"
+    end
+    module Reexporter2
+        import ..@reexport
+        @reexport using ..Source2, ..Source1
+    end
+    module User2
+        using ..Reexporter2
+    end
+    @test (:s1, :s3) ⊆ names(Reexporter2)
+    @test User2.s1() == "s1"
+    @test User2.s3() == "s3"
+
+    # Test same name from different modules - one with reexport, one without
+    module Source3
+        export same_name
+        const same_name = 42
+    end
+    module Source4
+        export same_name
+        const same_name = 42
+    end
+    module Reexporter3
+        import ..@reexport
+        using ..Source4  # without reexport
+        @reexport using ..Source3
+    end
+    module User3
+        using ..Reexporter3
+    end
+    @test User3.same_name == 42
 end

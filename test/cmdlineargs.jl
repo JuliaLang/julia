@@ -29,9 +29,10 @@ end
 function test_read_success(cmd::Cmd, expected_type::Type=String)
     success, out, err = readchomperrors(cmd)
     if !success
-        println("---- Command failed: $cmd")
-        println("stdout:$out")
-        println("stderr: $err")
+        println("---- Command failed: ")
+        show(cmd)
+        println("stdout:\n", out)
+        println("stderr:\n", err)
         println("----")
     end
     @test success
@@ -72,6 +73,38 @@ let
     @test occursin(" $(getpid()) ", fn)
     @test occursin(" $(Libc.gethostname()) ", fn)
     @test format_filename("%a%%b") == "a%b"
+end
+
+if Sys.isunix()
+    @testset "SIGQUIT prints task backtraces" begin
+        script = """
+            mutable struct RLimit
+                cur::Int64
+                max::Int64
+            end
+            const RLIMIT_CORE = 4 # from /usr/include/sys/resource.h
+            ccall(:setrlimit, Cint, (Cint, Ref{RLimit}), RLIMIT_CORE, Ref(RLimit(0, 0)))
+            write(stdout, "r")
+            wait()
+        """
+        exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
+        errp = PipeBuffer()
+        # disable coredumps for this process
+        p = open(pipeline(`$exename -e $script`, stderr=errp), "r")
+        @test read(p, UInt8) == UInt8('r')
+        # The process might ignore the first SIGQUIT, since it will try to then run cleanup,
+        # which may fail for many reasons.
+        # The process will not ignore the second SIGQUIT, but the kernel might ignore it.
+        # So keep sending SIGQUIT every few seconds until the kernel delivers the second one
+        # and `p` exits.
+        t = Timer(0, interval=10) do t; Base.kill(p, Base.SIGQUIT); end
+        wait(p)
+        close(t)
+        err_s = readchomp(errp)
+        @test Base.process_signaled(p) && p.termsignal == Base.SIGQUIT
+        @test occursin("==== Thread ", err_s)
+        @test occursin("==== Done", err_s)
+    end
 end
 
 @testset "julia_cmd" begin
@@ -240,6 +273,18 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             @test v[3] == "julia: for the --enable-tail-merge option: may only occur zero or one times!"
         end
     end
+    @testset "time-trace" begin
+        mktempdir() do dir
+            tracefile = joinpath(dir, "test_trace.json")
+            # Use forward slashes on Windows to avoid LLVM command line parser issues with backslashes
+            tracefile_arg = Sys.iswindows() ? replace(tracefile, "\\" => "/") : tracefile
+            v = readchomperrors(setenv(`$exename -e "1+1"`, "JULIA_LLVM_ARGS" => "-time-trace -time-trace-file=$tracefile_arg", "HOME" => homedir()))
+            @test v[1]
+            @test isfile(tracefile)
+            content = read(tracefile, String)
+            @test startswith(content, "{\"traceEvents\":")
+        end
+    end
 end
 
 let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
@@ -304,21 +349,21 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     end
 
     # --home
-    @test success(`$exename -H $(Sys.BINDIR)`)
-    @test success(`$exename --home=$(Sys.BINDIR)`)
+    @test "" == test_read_success(`$exename -H $(Sys.BINDIR)`)
+    @test "" == test_read_success(`$exename --home=$(Sys.BINDIR)`)
 
     # --eval
-    @test  success(`$exename -e "exit(0)"`)
+    @test "" == test_read_success(`$exename -e "exit(0)"`)
     @test errors_not_signals(`$exename -e "exit(1)"`)
-    @test  success(`$exename --eval="exit(0)"`)
+    @test "" == test_read_success(`$exename --eval="exit(0)"`)
     @test errors_not_signals(`$exename --eval="exit(1)"`)
     @test errors_not_signals(`$exename -e`)
     @test errors_not_signals(`$exename --eval`)
     # --eval --interactive (replaced --post-boot)
-    @test  success(`$exename -i -e "exit(0)"`)
+    @test "" == test_read_success(`$exename -i -e "exit(0)"`)
     @test errors_not_signals(`$exename -i -e "exit(1)"`)
     # issue #34924
-    @test  success(`$exename -e 'const LOAD_PATH=1'`)
+    @test "" == test_read_success(`$exename -e 'const LOAD_PATH=1'`)
 
     # --print
     @test read(`$exename -E "1+1"`, String) == "2\n"
@@ -518,19 +563,19 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
         @test readchomp(`$cov_exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=user`) == "1"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
         @test readchomp(`$cov_exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=all`) == "2"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in specific file
         tfile = realpath(inputfile)
@@ -539,7 +584,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in directory
         tdir = dirname(realpath(inputfile))
@@ -548,19 +593,19 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in current directory
         tdir = dirname(realpath(inputfile))
         cd(tdir) do
             # there may be atrailing separator here so use rstrip
-            @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, rstrip(unsafe_string(Base.JLOptions().tracked_path), '/'))" -L $inputfile
+            @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, rstrip(unsafe_string(Base.JLOptions().tracked_path), Base.Filesystem.path_separator[1]))" -L $inputfile
                 --code-coverage=$covfile --code-coverage=@`) == "(3, $(repr(tdir)))"
         end
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in relative directory
         tdir = dirname(realpath(inputfile))
@@ -571,7 +616,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in relative directory with dot-dot notation
         tdir = dirname(realpath(inputfile))
@@ -582,7 +627,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in a different directory
         tdir = mktempdir() # a dir that contains no code
@@ -693,7 +738,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         end
         @test popfirst!(got) == "        - end"
         @test popfirst!(got) == "        - f(1.23)"
-        @test isempty(got) || got
+        @test isempty(got) context=got
     end
 
 
@@ -1064,10 +1109,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         cd(testdir) do
             rm(testdir)
             @test Base.current_project() === nothing
-            @test success(`$exename -e "exit(0)"`)
+            @test "" == test_read_success(`$exename -e "exit(0)"`)
             for load_path in ["", "@", "@."]
                 withenv("JULIA_LOAD_PATH" => load_path) do
-                    @test success(`$exename -e "exit(!(Base.load_path() == []))"`)
+                    @test "" == test_read_success(`$exename -e "exit(!(Base.load_path() == []))"`)
                 end
             end
         end
@@ -1264,7 +1309,7 @@ for yn in ("no", "yes")
 end
 
 # issue #39259, shadowing `ARGS`
-@test success(`$(Base.julia_cmd()) --startup-file=no -e 'ARGS=1'`)
+@test "" == test_read_success(`$(Base.julia_cmd()) --startup-file=no -e 'ARGS=1'`)
 
 @testset "- as program file reads from stdin" begin
     for args in (`- foo bar`, `-- - foo bar`)
@@ -1331,9 +1376,15 @@ end
 # test --bug-report=rr
 if Sys.islinux() && Sys.ARCH in (:i686, :x86_64) # rr is only available on these platforms
     mktempdir() do temp_trace_dir
-        @test success(pipeline(setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`,
-                                      "JULIA_RR_RECORD_ARGS" => "-n --nested=ignore",
-                                      "_RR_TRACE_DIR" => temp_trace_dir); #=stderr, stdout=#))
+        cmd = setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`,
+                     "JULIA_RR_RECORD_ARGS" => "-n --nested=ignore",
+                     "_RR_TRACE_DIR" => temp_trace_dir)
+        success, out, err = readchomperrors(cmd)
+        # rr cannot read perf counters if running in containers, allow it to fail in this case
+        allowed_failure = occursin("Unable to open performance counter", err)
+        @testset let cmd=cmd, stdout=out, stderr=err
+            @test success || allowed_failure
+        end
     end
 end
 
@@ -1421,7 +1472,7 @@ end
 
 @testset "--strip-metadata" begin
     mktempdir() do dir
-        @test success(pipeline(`$(Base.julia_cmd()) --strip-metadata -t1,0 --output-o $(dir)/sys.o.a -e 0`, stderr=stderr, stdout=stdout))
+        @test "" == test_read_success(`$(Base.julia_cmd()) --strip-metadata -t1,0 --output-o $(dir)/sys.o.a -e 0`)
         if isfile(joinpath(dir, "sys.o.a"))
             Base.Linking.link_image(joinpath(dir, "sys.o.a"), joinpath(dir, "sys.so"))
             @test readchomp(`$(Base.julia_cmd()) -t1,0 -J $(dir)/sys.so -E 'hasmethod(sort, (Vector{Int},), (:dims,))'`) == "true"
@@ -1430,4 +1481,4 @@ end
 end
 
 # https://github.com/JuliaLang/julia/issues/58229 Recursion in jitlinking with inline=no
-@test success(`$(Base.julia_cmd()) --inline=no -e 'Base.compilecache(Base.identify_package("Pkg"))'`)
+@test "" == test_read_success(`$(Base.julia_cmd()) --inline=no -e 'Base.compilecache(Base.identify_package("Pkg"))'`)

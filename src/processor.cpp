@@ -16,7 +16,6 @@
 #include "julia.h"
 #include "julia_internal.h"
 
-#include <map>
 #include <algorithm>
 
 #include "julia_assert.h"
@@ -24,8 +23,6 @@
 #ifndef _OS_WINDOWS_
 #include <dlfcn.h>
 #endif
-
-#include <iostream>
 
 // CPU target string is a list of strings separated by `;` each string starts with a CPU
 // or architecture name and followed by an optional list of features separated by `,`.
