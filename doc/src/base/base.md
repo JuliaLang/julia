@@ -519,7 +519,6 @@ Docs.undocumented_names
 ```@docs
 Base.identify_package
 Base.locate_package
-Base.require
 Base.compilecache
 Base.isprecompiled
 Base.get_extension

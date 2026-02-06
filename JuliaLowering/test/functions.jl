@@ -512,13 +512,215 @@ end
     @test cl(x = 20) == 21
 end
 
+@testset "pre-desugared arg::Vararg" begin
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        f_vararg_nosplat = function (x::Vararg{Int})
+            x
+        end
+        f_vararg_nosplat(1,2,3)
+    end
+    """) == (1, 2, 3)
+
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        f_vararg_nosplat = function ((a,b,c)::Vararg{Int})
+            (a,b,c)
+        end
+        f_vararg_nosplat(1,2,3)
+    end
+    """) == (1, 2, 3)
+
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        f_vararg_nosplat = function (((a,b)...,c)::Vararg{Int})
+            (a,b,c)
+        end
+        f_vararg_nosplat(1,2,3)
+    end
+    """) == (1, 2, 3)
+
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        f_vararg_nosplat = function (((a,b)...,c)::Vararg{Tuple{Vararg{Int}}})
+            (a,b,c)
+        end
+        f_vararg_nosplat((1,2),(3,),(4,))
+    end
+    """) == ((1, 2), (3,), (4,))
+end
+
+@testset "all known valid positional argument forms" begin
+    make_defaults(x) = let (ps, vals) = x
+        # (p1,p2,p3) => (v1,v2,v3) to
+        # ((kw p1 v1),(kw p2 v2),(kw p3 v3)) => (v1,v2,v3)
+        map(zip(ps, vals)) do pv
+            Expr(:kw, pv[1], pv[2])
+        end => vals
+    end
+    make_typed(pv) = let (ps, vals) = pv
+        new_ps = map(ps) do p
+            # types go under `...`
+            if Meta.isexpr(p, :...)
+                Expr(:..., Expr(:(::), p.args[1], Any))
+            else
+                Expr(:(::), p, Any)
+            end
+        end
+        new_ps => vals
+    end
+
+    pparams_req = let
+        # tuple of params => tuple of acceptable values
+        pparams_untyped = [
+            # x,y,z must be defined for testing
+            (:x,
+             :y,
+             :z) =>
+                 (1,2,3),
+            (:x,
+             Expr(:tuple, :y, :z)) =>
+                 (1,(2,3)),
+            (:x,
+             Expr(:tuple, Expr(:parameters, :y, :z))) =>
+                 (1,(;y=2,z=3)),
+            (:x,
+             Expr(:tuple, Expr(:..., :y), :z)) =>
+                (1,(2,3,4)),
+            (Expr(:tuple, Expr(:tuple, :x, :y), :z),) =>
+                (((1,2),3),),
+            (Expr(:tuple, Expr(:..., Expr(:tuple, :x, :y)), :z),) =>
+                ((1,2,3),),
+            (Expr(:tuple, Expr(:..., Expr(:tuple, :x, :y)), :z),) =>
+                ((1,2,3,4,5),),
+            (:x,
+             :y,
+             Expr(:..., :z)) =>
+                 (1,2,3),
+        ]
+        pparams_typed = map(make_typed, pparams_untyped)
+        vcat(pparams_untyped, pparams_typed)
+    end
+
+    @testset "required args" for (params_i, args_i) in pparams_req
+        @testset let f_expr = Expr(:function,
+                                   Expr(:call, gensym(), params_i...),
+                                   Expr(:tuple, :x, :y, :z)),
+                f_st = JuliaLowering.expr_to_est(f_expr)
+
+            local func_ref, func_test
+            @test ((func_ref = Core.eval(test_mod, reference_lower(test_mod, f_expr))) isa Function)
+            @test ((func_test = JuliaLowering.eval(test_mod, f_st)) isa Function)
+            Core.@latestworld
+            @test func_ref(args_i...) == func_test(args_i...)
+        end
+    end
+
+    pparams_default = map(make_defaults, pparams_req)
+
+    @testset "default args" for (params_i, args_i) in pparams_default
+        @testset let f_expr = Expr(:function,
+                                   Expr(:call, gensym(), params_i...),
+                                   Expr(:tuple, :x, :y, :z)),
+                    f_st = JuliaLowering.expr_to_est(f_expr)
+
+            local func_ref, func_test
+            @test ((func_ref = Core.eval(test_mod, reference_lower(test_mod, f_expr))) isa Function)
+            @test ((func_test = JuliaLowering.eval(test_mod, f_st)) isa Function)
+            Core.@latestworld
+            @test func_ref(args_i...) == func_test(args_i...)
+            @test func_ref() == func_test()
+        end
+    end
+
+    # test vararg-tuples and splatted defaults separately, as providing defaults
+    # must be done with a syntactic splat, and some variants are valid syntax
+    # but not callable (may later be disallowed)
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        f_vararg_tuple = function ((x,y,z)...)
+            (x,y,z)
+        end
+        f_vararg_tuple(1,2,3), f_vararg_tuple(1,2,3,4,5)
+    end
+    """) === ((1,2,3), (1,2,3))
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        f_vararg_tuple = function ((x,y,z)...=(1,2,3)...)
+            (x,y,z)
+        end
+        f_vararg_tuple(4,5,6,7), f_vararg_tuple()
+    end
+    """) === ((4,5,6), (1,2,3))
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        f_vararg_tuple = function ((x,(y,z))...=(1,(2,3))...)
+            (x,y,z)
+        end
+        f_vararg_tuple(4,(5,6),7), f_vararg_tuple()
+    end
+    """) === ((4,5,6), (1,2,3))
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        f_vararg_tuple = function ((x,(y,z)...)...=(1,(2,3)...)...)
+            (x,y,z)
+        end
+        f_vararg_tuple(4,5,6,7), f_vararg_tuple()
+    end
+    """) === ((4,5,6), (1,2,3))
+
+    # uncallable(?)
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        f_vararg_tuple = function ((x,y,z)::Tuple...)
+            (x,y,z)
+        end
+    end
+    """) isa Function
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        f_vararg_tuple = function ((;x,y,z)...)
+            (x,y,z)
+        end
+    end
+    """) isa Function
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        f_vararg_tuple = function ((;x,y,z)::NamedTuple...)
+            (x,y,z)
+        end
+    end
+    """) isa Function
+
+    # final default arg may always be splatted, even if no-op or followed by va
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        f = function (x=1...)
+            x
+        end
+        f(), f(2), try; f(9,9); catch e; "fail"; end
+    end
+    """) === (1, 2, "fail")
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        f = function (x=1..., args...)
+            x, args
+        end
+        f(), f(2), f(3,4,5)
+    end
+    """) === ((1, ()),
+              (2, ()),
+              (3, (4,5)))
+end
+
 @testset "Write-only placeholder function arguments" begin
     # positional arguments may be duplicate placeholders.  keyword arguments can
     # contain placeholders, but they must be unique
     params_req = [""
                   "_"
                   "::Int"
-                  "_, _"]
+                  "_, _"
+                  "(_, _)"]
     params_opt = [""
                   "::Int=2"
                   "_=2"]
@@ -530,13 +732,15 @@ end
                   "; _=1, __=2"
                   "; _..."
                   "; _=1, __..."]
-    local i = 0
     for req in params_req, opt in params_opt, va in params_va, kw in params_kw
         arg_str = join(filter(!isempty, (req, opt, va, kw)), ", ")
-        f_str = "function f_placeholders$i($arg_str); end"
-        i += 1
+        f_str = "function ($arg_str); end"
         @testset "$f_str" begin
             @test JuliaLowering.include_string(test_mod, f_str) isa Function
+        end
+        f_lam_str = "($arg_str)->nothing"
+        @testset "$f_lam_str" begin
+            @test JuliaLowering.include_string(test_mod, f_lam_str) isa Function
         end
     end
 end

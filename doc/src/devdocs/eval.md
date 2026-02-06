@@ -18,8 +18,16 @@ function, and primitive function, before turning into the desired result (hopefu
         Abstract Syntax Tree. The AST is the digital representation of the code structure. In this form
         the code has been tokenized for meaning so that it is more suitable for manipulation and execution.
 
-
-![Diagram of the compiler flow](./img/compiler_diagram.png)
+```@raw html
+<img src="img/compiler_diagram.svg" alt="Diagram of the compiler flow"/>
+```
+```@raw latex
+\begin{figure}
+\centering
+\includegraphics[max width=\linewidth]{devdocs/img/compiler_diagram.pdf}
+\caption{Diagram of the compiler flow}
+\end{figure}
+```
 
 ## Julia Execution
 

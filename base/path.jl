@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Base: StringVector, utf8units
+
 export
     abspath,
     basename,
@@ -20,40 +22,128 @@ export
 
 if Sys.isunix()
     const path_separator    = "/"
-    const path_separator_re = r"/+"sa
-    const path_directory_re = r"(?:^|/)\.{0,2}$"sa
-    const path_dir_splitter = r"^(.*?)(/+)([^/]*)$"sa
-    const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"sa
+    const path_separator_re = r"/+"sa # May be used by some external packages
+    @inline isseparator(c::Char) = c === '/'
+    @inline isseparator(c::UInt8) = c === UInt8('/')
 
     splitdrive(path::String) = ("",path)
 elseif Sys.iswindows()
     const path_separator    = "\\"
-    const path_separator_re = r"[/\\]+"sa
-    const path_absolute_re  = r"^(?:[A-Za-z]+:)?[/\\]"sa
-    const path_directory_re = r"(?:^|[/\\])\.{0,2}$"sa
-    const path_dir_splitter = r"^(.*?)([/\\]+)([^/\\]*)$"sa
-    const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"sa
+    const path_separator_re = r"[/\\]+"sa # May be used by some external packages
+    @inline isseparator(c::Char) = c === '/' || c === '\\'
+    @inline isseparator(c::UInt8) = c === UInt8('/') || c === UInt8('\\')
 
-    const splitdrive_re = let
-        # Slash in either direction.
-        S = raw"[\\/]"
-        # Not a slash in either direction.
-        N = raw"[^\\/]"
-        # Drive letter, e.g. `C:`
-        drive = "$(N):"
-        # UNC path, e.g. `\\server\share`
-        unc = "$(S)$(S)$(N)+$(S)$(N)+"
-        # Long drive letter, e.g. `\\?\C:`
-        long_drive = "$(S)$(S)\\?$(S)$(drive)"
-        # Long UNC path, e.g. `\\?\UNC\server\share`
-        long_unc = "$(S)$(S)\\?$(S)UNC$(S)$(N)+$(S)$(N)+"
-        # Need to match the long patterns first so they get priority.
-        Regex("^($long_unc|$long_drive|$unc|$drive|)(.*)\$", "sa")
+    @inline isdriveletter(c::Char) = isascii(c) && isdriveletter(UInt8(c))
+    @inline function isdriveletter(c::UInt8)
+        UInt8('A') <= c <= UInt8('Z') ||
+        UInt8('a') <= c <= UInt8('z')
     end
 
-    function splitdrive(path::String)
-        m = match(splitdrive_re, path)::AbstractMatch
-        String(something(m.captures[1])), String(something(m.captures[2]))
+    function _split_longunc(s::String)::Tuple{String, String}
+        # Long UNC path, e.g. `\\?\UNC\server\share`
+        # Based on previous implementation matching with regex
+        # S = raw"[\\/]"; N = raw"[^\\/]";
+        # r"^$(S)$(S)\?$(S)UNC$(S)$(N)+$(S)$(N)+"sa
+
+        if (ncodeunits(s) >= 11 &&
+            isseparator(codeunit(s, 1)) &&
+            isseparator(codeunit(s, 2)) &&
+            codeunit(s, 3) === UInt8('?') &&
+            isseparator(codeunit(s, 4)) &&
+            codeunit(s, 5) === UInt8('U') &&
+            codeunit(s, 6) === UInt8('N') &&
+            codeunit(s, 7) === UInt8('C') &&
+            isseparator(codeunit(s, 8))
+        )
+            # Ensure we have [sequence of non-separator] - single separator - [sequence of non-separator].
+            # Since the prefix raw"\\?\UNC\" is always 8 codeunits, we start at index 9.
+            i = findnext(isseparator, s, 9)
+            if (!isnothing(i) &&
+                i >= 10 && # implies !isseparator(s[9])
+                ncodeunits(s) > i && # Need something after the separator
+                !isseparator(codeunit(s, i+1)) # Consecutive separators does not count
+            )
+                # Stop just before next separator if it exists,
+                # otherwise the whole string is a drive
+                j = something(findnext(isseparator, s, i+1), lastindex(s)+1)
+                return s[1:prevind(s, j)], s[j:end]
+            end
+        end
+        return "", s
+    end
+
+    function _split_longdriveletter(s::String)::Tuple{String, String}
+        # Long drive letter, e.g. `\\?\C:`
+        # Based on implementation matching with regex
+        # S = raw"[\\/]"; N = raw"[^\\/]"; drive = "$(N):";
+        # r"$(S)$(S)\?$(S)$(drive)"sa
+        if (ncodeunits(s) >= 6 &&
+            isseparator(codeunit(s, 1)) &&
+            isseparator(codeunit(s, 2)) &&
+            codeunit(s, 3) === UInt8('?') &&
+            isseparator(codeunit(s, 4)) &&
+            !isseparator(codeunit(s, 5)) && # Any ascii char except separators passes as the drive letter
+            codeunit(s, 6) == UInt8(':') # This effectively limits codeunit(s, 5) to ascii
+        )
+            return s[1:6], s[nextind(s, 6):end]
+        end
+        return "", s
+    end
+
+    function _split_uncpath(s::String)::Tuple{String, String}
+        # UNC path, e.g. `\\server\share`
+        # Based on previous implementation matching with regex
+        # S = raw"[\\/]"; N = raw"[^\\/]";
+        # r"$(S)$(S)$(N)+$(S)$(N)+"sa
+        if (ncodeunits(s) >= 5 && # Not shorter than `\\a\b`
+            isseparator(codeunit(s, 1)) &&
+            isseparator(codeunit(s, 2))
+        )
+            # Ensure we have [sequence of non-separator] - single separator - [sequence of non-separator].
+            # Since the prefix raw"\\" is always 2 codeunits, we start at index 3.
+            i = findnext(isseparator, s, 3)
+            if (!isnothing(i) &&
+                i >= 4 && # implies !isseparator(s[3])
+                ncodeunits(s) > i && # Need something after the separator
+                !isseparator(codeunit(s, i+1)) # Consecutive separators does not count
+            )
+                # Stop just before next separator if it exists,
+                # otherwise the whole string is a drive
+                j = something(findnext(isseparator, s, i+1), lastindex(s)+1)
+                return s[1:prevind(s, j)], s[j:end]
+            end
+        end
+        return "", s
+    end
+
+    function splitdrive(path::String)::Tuple{String, String}
+        if !isempty(path)
+            # Fast return if path does not contain a drive
+            if !isseparator(codeunit(path, 1)) && (codeunit(path, 1) < 0x80)
+                # Drive letter, e.g. `C:`
+                # Any ascii char except separators passes as the drive letter
+                colonind = nextind(path, 1)
+                if checkbounds(Bool, path, colonind) && path[colonind] === ':'
+                    return path[1:colonind], path[colonind+1:end]
+                end
+            elseif ncodeunits(path) >= 2 && isseparator(codeunit(path, 2))
+                # All other drive types must start with two separators
+
+                # Long UNC path, e.g. `\\?\UNC\server\share`
+                drive, rest = _split_longunc(path)
+                !isempty(drive) && return drive, rest
+
+                # Long drive letter, e.g. `\\?\C:`
+                drive, rest = _split_longdriveletter(path)
+                !isempty(drive) && return drive, rest
+
+                # UNC path, e.g. `\\server\share`
+                drive, rest = _split_uncpath(path)
+                !isempty(drive) && return drive, rest
+            end
+        end
+
+        return "", path
     end
 else
     error("path primitives for this OS need to be defined")
@@ -96,11 +186,29 @@ function homedir()
     end
 end
 
+function isabspath(path::String)
+    isempty(path) && return false
+    # Paths starting with "/" are considered absolute also on windows
+    # This captures e.g. UNC paths, but does not guarantee a valid path.
+    # Also note that isabspath(x) does not imply !isempty(splitdrive(x)[1])
+    isseparator(codeunit(path, 1) ) && return true
 
-if Sys.iswindows()
-    isabspath(path::AbstractString) = occursin(path_absolute_re, path)
-else
-    isabspath(path::AbstractString) = startswith(path, '/')
+    @static if Sys.iswindows()
+        # the letter before : in e.g. "C:\" must be a valid drive letter.
+        # This differs from `splitdrive`, where any non-separator single codeunit char is
+        # is accepted.
+        firstsep = findfirst(isseparator, codeunits(path))
+        if (!isnothing(firstsep) &&
+            firstsep >= 3 &&
+            codeunit(path, firstsep-1) == UInt(':')
+        )
+            for b in codeunits(path)[1:firstsep-2]
+                !isdriveletter(b) && return false
+            end
+            return true
+        end
+    end
+    return false
 end
 
 """
@@ -133,7 +241,12 @@ julia> isdirpath("/home/")
 true
 ```
 """
-isdirpath(path::String) = occursin(path_directory_re, splitdrive(path)[2])
+function isdirpath(path::String)::Bool
+    # Reimplements occursin(r"(?:^|/)\.{0,2}$"sa, splitdrive(path)[2])
+
+    _, after_last_separator = _splitdir_nodrive("", splitdrive(path)[2])
+    return after_last_separator in ("", ".", "..")
+end
 
 """
     splitdir(path::AbstractString) -> (dir::AbstractString, file::AbstractString)
@@ -153,14 +266,15 @@ end
 
 # Common splitdir functionality without splitdrive, needed for splitpath.
 _splitdir_nodrive(path::String) = _splitdir_nodrive("", path)
-function _splitdir_nodrive(a::String, b::String)
-    m = match(path_dir_splitter,b)
-    m === nothing && return (a,b)
-    cs = m.captures
-    getcapture(cs, i) = cs[i]::AbstractString
-    c1, c2, c3 = getcapture(cs, 1), getcapture(cs, 2), getcapture(cs, 3)
-    a = string(a, isempty(c1) ? c2[1] : c1)
-    a, String(c3)
+function _splitdir_nodrive(drive::String, path::String)::Tuple{String, String}
+    lastsepind = findlast(isseparator, path)
+
+    isnothing(lastsepind) && return drive, path
+
+    dir = path[1:something(findprev(!isseparator, path, lastsepind), 1)]
+    tail = path[nextind(path, lastsepind):end]
+
+    return drive * dir, tail
 end
 
 """
@@ -223,11 +337,23 @@ julia> splitext("/home/my.user/example")
 ("/home/my.user/example", "")
 ```
 """
-function splitext(path::String)
-    a, b = splitdrive(path)
-    m = match(path_ext_splitter, b)
-    m === nothing && return (path,"")
-    (a*something(m.captures[1])), String(something(m.captures[2]))
+function splitext(path::String)::Tuple{String, String}
+    drive, p = splitdrive(path)
+    lastdot = findlast('.', p)
+    if !isnothing(lastdot)
+        # No separator after the last dot
+        if isnothing(findnext(isseparator, p, lastdot))
+            # No separator just before the last dot
+            prev = prevind(p, lastdot)
+            if checkbounds(Bool, p, prev)
+                if !isseparator(p[prev])
+                    return drive * p[1:prev], p[lastdot:end]
+                end
+            end
+        end
+    end
+
+    return (path, "")
 end
 
 # NOTE: deprecated in 1.4
@@ -287,7 +413,7 @@ function joinpath(paths::Union{Tuple, AbstractVector})::String
         assertstring(paths[i])
         p_drive, p_path = splitdrive(paths[i])
 
-        if startswith(p_path, ('\\', '/'))
+        if !isempty(p_path) && isseparator(first(p_path))
             # second path is absolute
             if !isempty(p_drive) || !isempty(result_drive)
                 result_drive = p_drive
@@ -304,7 +430,7 @@ function joinpath(paths::Union{Tuple, AbstractVector})::String
         end
 
         # second path is relative to the first
-        if !isempty(result_path) && result_path[end] ∉ ('\\', '/')
+        if !isempty(result_path) && !isseparator(result_path[end])
             result_path *= "\\"
         end
 
@@ -312,7 +438,11 @@ function joinpath(paths::Union{Tuple, AbstractVector})::String
     end
 
     # add separator between UNC and non-absolute path
-    if !isempty(p_path) && result_path[1] ∉ ('\\', '/') && !isempty(result_drive) && result_drive[end] != ':'
+    if (!isempty(p_path) &&
+        !isseparator(result_path[1]) &&
+        !isempty(result_drive) &&
+        result_drive[end] != ':'
+    )
         return result_drive * "\\" * result_path
     end
 
@@ -372,6 +502,30 @@ julia> joinpath(["/home/myuser", "example.jl"])
 """
 joinpath
 
+function _split_at_separators(path::AbstractString; keepempty = true)
+    # Equivalent to Base.split(path, r"/+"sa; keepempty) (r"[\\/]+"sa on windows)
+    # Since there is no split between consecutive separators, keepempty
+    # only has an effect on strings starting or ending with separators.
+    out = String[]
+    start = 1
+
+    while true
+        nextsep = findnext(isseparator, path, start)
+
+        stop = isnothing(nextsep) ? lastindex(path) : prevind(path, nextsep)
+
+        substr = String(view(path, start:stop))
+        if keepempty || !isempty(substr)
+            push!(out, substr)
+        end
+
+        isnothing(nextsep) && break
+
+        start = something(findnext(!isseparator, path, nextsep+1), nextind(path, lastindex(path)))
+    end
+    return out
+end
+
 """
     normpath(path::AbstractString)::String
 
@@ -391,7 +545,7 @@ function normpath(path::String)
     isabs = isabspath(path)
     isdir = isdirpath(path)
     drive, path = splitdrive(path)
-    parts = split(path, path_separator_re; keepempty=false)
+    parts = _split_at_separators(path, keepempty = false)
     filter!(!=("."), parts)
     while true
         clean = true
@@ -445,7 +599,7 @@ Which gives a path like `"/home/JuliaUser/data/"`.
 
 See also [`joinpath`](@ref), [`pwd`](@ref), [`expanduser`](@ref).
 """
-function abspath(a::String)::String
+@noinline function abspath(a::String)::String
     if !isabspath(a)
         cwd = pwd()
         a_drive, a_nodrive = splitdrive(a)
@@ -581,11 +735,11 @@ function relpath(path::String, startpath::String = ".")
         startpath_drive, startpath_without_drive = splitdrive(startpath)
         isempty(startpath_drive) && (startpath_drive = path_drive) # by default assume same as path drive
         uppercase(path_drive) == uppercase(startpath_drive) || return abspath(path) # if drives differ return first path
-        path_arr  = split(abspath(path_drive * path_without_drive),      path_separator_re)
-        start_arr = split(abspath(path_drive * startpath_without_drive), path_separator_re)
+        path_arr  = _split_at_separators(abspath(path_drive * path_without_drive))
+        start_arr = _split_at_separators(abspath(path_drive * startpath_without_drive))
     else
-        path_arr  = split(abspath(path),      path_separator_re)
-        start_arr = split(abspath(startpath), path_separator_re)
+        path_arr  = _split_at_separators(abspath(path))
+        start_arr = _split_at_separators(abspath(startpath))
     end
     i = 0
     while i < min(length(path_arr), length(start_arr))
@@ -610,14 +764,28 @@ end
 relpath(path::AbstractString, startpath::AbstractString) =
     relpath(String(path)::String, String(startpath)::String)
 
-for f in (:isdirpath, :splitdir, :splitdrive, :splitext, :normpath, :abspath)
+for f in (:isdirpath, :splitdir, :splitdrive, :splitext, :normpath, :abspath, :isabspath)
     @eval $f(path::AbstractString) = $f(String(path)::String)
 end
 
-# RFC3986 Section 2.1
-percent_escape(s) = '%' * join(map(b -> uppercase(string(b, base=16)), codeunits(s)), '%')
-# RFC3986 Section 2.3
-encode_uri_component(s) = replace(s, r"[^A-Za-z0-9\-_.~/]+" => percent_escape)
+function encode_uri_component(s::AbstractString)
+    out = empty!(StringVector(sizeof(s)))
+    for cu in utf8units(s)
+        # RFC3986 Section 2.3
+        if (UInt8('A') <= cu <= UInt8('Z') ||
+            UInt8('a') <= cu <= UInt8('z') ||
+            UInt8('0') <= cu <= UInt8('9') ||
+            cu in map(UInt8, ('-', '_', '.', '~', '/'))
+        )
+            push!(out, cu)
+        else
+            # RFC3986 Section 2.1
+            push!(out, UInt8('%'))
+            append!(out, codeunits(uppercase(string(cu, base = 16))))
+        end
+    end
+    String(out)
+end
 
 """
     uripath(path::AbstractString)
@@ -643,18 +811,18 @@ function uripath end
     function uripath(path::String)
         path = abspath(path)
         if startswith(path, "\\\\") # UNC path, RFC8089 Appendix E.3
-            unixpath = join(eachsplit(path, path_separator_re, keepempty=false), '/')
+            unixpath = join(_split_at_separators(path, keepempty=false), '/')
             string("file://", encode_uri_component(unixpath)) # RFC8089 Section 2
         else
             drive, localpath = splitdrive(path) # Assuming that non-UNC absolute paths on Windows always have a drive component
-            unixpath = join(eachsplit(localpath, path_separator_re, keepempty=false), '/')
+            unixpath = join(_split_at_separators(localpath, keepempty=false), '/')
             encdrive = replace(encode_uri_component(drive), "%3A" => ':', "%7C" => '|') # RFC8089 Appendices D.2, E.2.1, and E.2.2
             string("file:///", encdrive, '/', encode_uri_component(unixpath)) # RFC8089 Section 2
         end
     end
 else
     function uripath(path::String)
-        localpath = join(eachsplit(abspath(path), path_separator_re, keepempty=false), '/')
+        localpath = join(_split_at_separators(abspath(path), keepempty=false), '/')
         host = if ispath("/proc/sys/fs/binfmt_misc/WSLInterop") # WSL sigil
             distro = get(ENV, "WSL_DISTRO_NAME", "") # See <https://patrickwu.space/wslconf/>
             "wsl\$/$distro" # See <https://github.com/microsoft/terminal/pull/14993> and <https://learn.microsoft.com/en-us/windows/wsl/filesystems>
