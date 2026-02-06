@@ -143,15 +143,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "built"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4ad8f11f288f48ca24471bbd51ac257aaeaaa07adae295591266b792902ae64"
-dependencies = [
- "git2",
-]
-
-[[package]]
 name = "bumpalo"
 version = "3.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -732,7 +723,7 @@ dependencies = [
  "atomic 0.6.1",
  "atomic-traits",
  "atomic_refcell",
- "built 0.7.7",
+ "built",
  "bytemuck",
  "bytemuck_derive",
  "cfg-if",
@@ -768,7 +759,7 @@ version = "0.31.1"
 dependencies = [
  "atomic 0.4.6",
  "bindgen",
- "built 0.8.0",
+ "built",
  "cc",
  "chrono",
  "enum-map",
