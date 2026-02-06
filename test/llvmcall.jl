@@ -218,3 +218,14 @@ s = MyStruct()
 @test eltype(supertype(Core.LLVMPtr{UInt8,1})) <: UInt8
 @test s.kern == 0
 @test reinterpret(Int, s.ptr) == 0
+
+f_zero_ret(x::Int8) = Base.llvmcall("ret void", Nothing, Tuple{Int8}, x)
+@test f_zero_ret(Int8(1)) === nothing
+
+f_zst_arg(x::Nothing) = Base.llvmcall("ret i8 0", Int8, Tuple{Nothing}, x)
+@test f_zst_arg(nothing) == Int8(0)
+zst_side_effect_ran = Ref(false)
+zst_side_effect() = (zst_side_effect_ran[] = true; nothing)
+@test f_zst_arg(zst_side_effect()) == Int8(0)
+@test zst_side_effect_ran[]
+code_llvm(devnull, f_zst_arg, Tuple{Nothing})
