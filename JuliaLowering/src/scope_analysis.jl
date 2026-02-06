@@ -480,7 +480,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
             ]
         ])
         for sid in ctx.scope_stack
-            for id in values(ctx.scopes[sid].vars)
+            for id in sort!(collect(values(ctx.scopes[sid].vars)))
                 binfo = get_binding(ctx, id)
                 if binfo.kind == :global || binfo.is_internal
                     continue
