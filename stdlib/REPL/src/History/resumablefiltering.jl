@@ -24,7 +24,7 @@ const FILTER_SEPARATOR = ';'
 
 List of single-character prefixes that set search modes.
 """
-const FILTER_PREFIXES = ('!', '`', '=', '/', '~', '>')
+const FILTER_PREFIXES = ('!', '`', '=', '/', '~')
 
 """
     FILTER_SHORTHELP_QUERY
@@ -53,20 +53,22 @@ const FILTER_SHORTHELP = S"""
 
  See more information on behaviour and keybindings with '{REPL_History_search_prefix:??}'.
 
+ By default, each word in the search string is looked for in any order.
+ Should the search string start with {REPL_History_search_prefix:xyz>}, then only xyz-mode entries are considered.
+
  Different search modes are available via prefixes, as follows:
  {emphasis:•} {REPL_History_search_prefix:=} looks for exact matches
  {emphasis:•} {REPL_History_search_prefix:!} {italic:excludes} exact matches
  {emphasis:•} {REPL_History_search_prefix:/} performs a regexp search
  {emphasis:•} {REPL_History_search_prefix:~} looks for fuzzy matches
- {emphasis:•} {REPL_History_search_prefix:>} looks for a particular REPL mode
  {emphasis:•} {REPL_History_search_prefix:`} looks for an initialism (text with matching initials)
 
  You can also apply multiple restrictions with the separator '{REPL_History_search_separator:$FILTER_SEPARATOR}'.
 
  For example, {region:{REPL_History_search_prefix:/}^foo{REPL_History_search_separator:$FILTER_SEPARATOR}\
 {REPL_History_search_prefix:`}bar{REPL_History_search_separator:$FILTER_SEPARATOR}\
-{REPL_History_search_prefix:>}shell} will look for history entries that start with "{code:foo}",
- contains "{code:b... a... r...}", {italic:and} is a shell history entry.
+{REPL_History_search_prefix:shell>}} will look for history entries that start with "{code:foo}",
+ contains "{code:b... a... r...}", {italic:and} are a shell history entry.
 """
 
 const FILTER_LONGHELP = S"""
@@ -108,9 +110,9 @@ function ConditionSet(spec::S) where {S <: AbstractString}
     function addcond!(condset::ConditionSet, cond::SubString)
         isempty(cond) && return
         kind = first(cond)
-        if kind ∈ ('!', '=', '`', '/', '>', '~')
+        if kind ∈ ('!', '=', '`', '/', '~')
             value = @view cond[2:end]
-            if kind ∈ ('`', '>', '~')
+            if kind ∈ ('`', '~')
                 value = strip(value)
             elseif !all(isspace, value)
                 value = if kind == '/'
@@ -128,16 +130,23 @@ function ConditionSet(spec::S) where {S <: AbstractString}
                 push!(condset.initialisms, value)
             elseif startswith(cond, '/')
                 push!(condset.regexps, value)
-            elseif startswith(cond, '>')
-                push!(condset.modes, SubString(lowercase(value)))
             elseif startswith(cond, '~')
                 push!(condset.fuzzy, value)
             end
         else
             if startswith(cond, '\\') && !(length(cond) > 1 && cond[2] == '\\')
                 cond = @view cond[2:end]
+            else
+                rang = something(findfirst('>', cond), typemax(Int))
+                if rang == something(findfirst(isspace, cond), ncodeunits(cond) + 1) - 1
+                    mode = @view cond[1:prevind(cond, rang)]
+                    push!(condset.modes, SubString(lowercase(mode)))
+                    cond = @view cond[rang + 1:end]
+                end
             end
-            push!(condset.words, strip(cond))
+            cond = strip(cond)
+            isempty(cond) && return
+            push!(condset.words, cond)
         end
         nothing
     end
@@ -155,10 +164,12 @@ function ConditionSet(spec::S) where {S <: AbstractString}
         elseif chr == '\\'
             escaped = true
         elseif chr == FILTER_SEPARATOR
-            str = SubString(spec, mark:pos - 1)
-            if !isempty(dropbytes)
-                str = SubString(convert(S, String(deleteat!(collect(codeunits(str)), dropbytes))))
+            str = if isempty(dropbytes)
+                SubString(spec, mark:prevind(spec, pos))
+            else
+                subbytes = deleteat!(codeunits(spec)[mark:pos-1], dropbytes)
                 empty!(dropbytes)
+                SubString(convert(S, String(subbytes)))
             end
             addcond!(cset, lstrip(str))
             mark = pos + 1
@@ -166,11 +177,14 @@ function ConditionSet(spec::S) where {S <: AbstractString}
         pos = nextind(spec, pos)
     end
     if mark <= lastind
-        str = SubString(spec, mark:pos - 1)
-        if !isempty(dropbytes)
-            str = SubString(convert(S, String(deleteat!(collect(codeunits(str)), dropbytes))))
+        str = if isempty(dropbytes)
+            SubString(spec, mark)
+        else
+            subbytes = deleteat!(codeunits(spec)[mark:end], dropbytes)
+            empty!(dropbytes)
+            SubString(convert(S, String(subbytes)))
         end
-        addcond!(cset, lstrip(SubString(spec, mark:lastind)))
+        addcond!(cset, lstrip(str))
     end
     cset
 end
