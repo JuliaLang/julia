@@ -70,7 +70,7 @@ end
     all_boxes = Test.detect_closure_boxes_all_modules()
     @test any(p -> p.first.name === :boxed, all_boxes)
 
-    # Redefinition should drop closure boxes from deleted methods.
+    # Redefinition should drop closure boxes from shadowed methods.
     @test !isempty(Test.detect_closure_boxes(ClosureBoxRedefTest))
     @eval ClosureBoxRedefTest begin
         function boxed()
