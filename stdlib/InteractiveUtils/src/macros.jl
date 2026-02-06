@@ -583,7 +583,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                 shape = get_shape(args, true, d)
                 is_balanced = sum(map((x, y) -> sum(map(z -> z - y, x)), shape[2:end], first.(shape[2:end]))) == 0
                 dimsshape = if is_balanced
-                    get_dims(args, is_row_first, d)
+                    reverse!(get_dims(args, is_row_first, d))
                 else
                     map(x -> tuple(x...), shape)
                 end
