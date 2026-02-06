@@ -55,9 +55,8 @@ function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
     else
         parent = ctx.scopes[parent_id]
         lambda_id = kind(ex) === K"lambda" ? id : parent.lambda_id
-        is_permeable = (
-            kind(ex) === K"scope_block" && ex.scope_type === :neutral &&
-                parent_id !== 0 && ctx.scopes[parent_id].is_permeable)
+        is_permeable = (kind(ex) === K"scope_block" &&
+            ex.scope_type === :neutral && parent_id !== 0 && parent.is_permeable)
         is_lifted = kind(ex) === K"method_defs" ||
             (kind(ex) !== K"lambda" && parent.is_lifted)
     end
@@ -129,7 +128,7 @@ function maybe_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
         b = get_binding(ctx, bid)
         @assert b.kind === new_k
         if b.lambda_id !== 0
-            throw(LoweringError(ex, "cannot declare a BindingId in multiple scopes"))
+            internal_error(ex, "cannot declare a BindingId in multiple scopes")
         end
         add_lambda_local!(ctx, scope, b)
         return bid
@@ -519,7 +518,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
                 throw(LoweringError(e, "this syntax is only allowed in top level code"))
             end
         else
-            throw(LoweringError(ex, "Unknown syntax assertion"))
+            internal_error(ex, "unknown syntax assertion")
         end
         newleaf(ctx, ex, K"TOMBSTONE")
     elseif k == K"function_decl"

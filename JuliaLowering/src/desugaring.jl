@@ -96,7 +96,7 @@ end
 # Generating a new_local_binding or ssaval should only be done if we can
 # guarantee there's some scope it's declared in, and that it's not declared or
 # used outside of that scope (binding capture is OK).  This is the alternative.
-function fresh_sym(ctx, srcref::SyntaxTree, name::String)
+function newsym(ctx, srcref::SyntaxTree, name::String)
     @ast ctx srcref name::K"Identifier"(scope_layer=new_scope_layer(ctx))
 end
 
@@ -2315,7 +2315,7 @@ function expand_function_arg(ctx, body_stmts, arg, is_kw, arg_id)
         type = @ast ctx slurp_ex [K"curly" "Vararg"::K"core" type]
     end
     if kind(arg_sym) === K"tuple"
-        darg_sym = setmeta!(fresh_sym(ctx, arg_sym, "destructured_arg"),
+        darg_sym = setmeta!(newsym(ctx, arg_sym, "destructured_arg"),
                             :nospecialize, getmeta(arg_sym, :nospecialize, false))
         push!(body_stmts, expand_forms_2(ctx, @ast ctx arg_sym [
             K"local"(meta=CompileHints(:is_destructured_arg, true))
@@ -2329,7 +2329,7 @@ function expand_function_arg(ctx, body_stmts, arg, is_kw, arg_id)
         name = if is_kw
             @ast ctx arg_sym arg_sym=>K"Identifier"
         else
-            setmeta!(fresh_sym(ctx, arg_sym, "#arg$(string(arg_id))#"),
+            setmeta!(newsym(ctx, arg_sym, "#arg$(string(arg_id))#"),
                      :nospecialize, getmeta(arg_sym, :nospecialize, false))
         end
     else
@@ -2468,7 +2468,7 @@ function expand_function_generator(ctx, srcref, callex_srcref, func_name,
     gen_arg_names = SyntaxList(ctx)
     gen_arg_types = SyntaxList(ctx)
     # Self arg
-    push!(gen_arg_names, fresh_sym(ctx, callex_srcref, "#self#"))
+    push!(gen_arg_names, newsym(ctx, callex_srcref, "#self#"))
     push!(gen_arg_types, @ast ctx callex_srcref [K"function_type" gen_name])
     # Macro expansion context arg
     if kind(func_name) != K"Identifier"
@@ -2563,7 +2563,7 @@ function optional_positional_defs!(ctx, method_stmts, srcref, callex,
     # Replace placeholder arguments with variables - we need to pass them to
     # the inner method for dispatch even when unused in the inner method body
     def_arg_names = map(arg_names) do arg
-        kind(arg) == K"Placeholder" ? fresh_sym(ctx, arg, arg.name_val) : arg
+        kind(arg) == K"Placeholder" ? newsym(ctx, arg, arg.name_val) : arg
     end
     for def_idx = 1:length(arg_defaults)
         first_omitted = first_default + def_idx - 1
@@ -2620,20 +2620,20 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
     kwcall_arg_names = SyntaxList(ctx)
     kwcall_arg_types = SyntaxList(ctx)
 
-    push!(kwcall_arg_names, fresh_sym(ctx, callex_srcref, "#self#"))
+    push!(kwcall_arg_names, newsym(ctx, callex_srcref, "#self#"))
     push!(kwcall_arg_types,
         @ast ctx callex_srcref [K"call"
             "typeof"::K"core"
             "kwcall"::K"core"
         ]
     )
-    kws_arg = fresh_sym(ctx, keywords, "kws")
+    kws_arg = newsym(ctx, keywords, "kws")
     push!(kwcall_arg_names, kws_arg)
     push!(kwcall_arg_types, @ast ctx keywords "NamedTuple"::K"core")
 
     body_arg_names = SyntaxList(ctx)
     body_arg_types = SyntaxList(ctx)
-    push!(body_arg_names, fresh_sym(ctx, keywords, "#self#"))
+    push!(body_arg_names, newsym(ctx, keywords, "#self#"))
     push!(body_arg_types, @ast ctx body_func_name [K"function_type" body_func_name])
 
     non_positional_typevars = typevar_names[map(!,
@@ -2759,8 +2759,8 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
         for n in kw_names
             # If not using slots for the keyword argument values, still declare
             # them for reflection purposes.
-            local_n = @ast ctx n [K"local" n]
-            push!(kw_val_stmts, setmeta!(local_n, :is_internal, true))
+            local_n = @ast ctx n [K"local" setmeta(n, :is_internal, true)]
+            push!(kw_val_stmts, local_n)
         end
         kw_val_vars = SyntaxList(ctx)
         for val in kw_values
@@ -3018,7 +3018,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     end
     # Add self argument
     if isnothing(self_name)
-        self_name = fresh_sym(ctx, name, "#self#")
+        self_name = newsym(ctx, name, "#self#")
     end
 
     # Expand remaining argument names and types
@@ -3249,7 +3249,7 @@ function expand_opaque_closure(ctx, ex)
 
     arg_names = SyntaxList(ctx)
     arg_types = SyntaxList(ctx)
-    push!(arg_names, fresh_sym(ctx, args, "#self#"))
+    push!(arg_names, newsym(ctx, args, "#self#"))
     body_stmts = SyntaxList(ctx)
     is_va = false
     for (i, arg) in enumerate(children(args))
@@ -3620,7 +3620,7 @@ function default_inner_constructors(ctx, srcref, global_struct_name,
         # Definition which takes `Any` for all arguments and uses
         # `Base.convert()` to convert those to the exact field type. Only
         # defined if at least one field type is not Any.
-        ctor_self = fresh_sym(ctx, srcref, "#ctor-self#")
+        ctor_self = newsym(ctx, srcref, "#ctor-self#")
         @ast ctx srcref [K"function"
             [K"call"
                  [K"::"
@@ -3715,7 +3715,7 @@ function _rewrite_ctor_sig(ctx, callex, struct_name, global_struct_name, struct_
     name = callex[1]
     if is_same_identifier_like(struct_name, name)
         # X(x,y)  ==>  (#ctor-self#::Type{X})(x,y)
-        ctor_self[] = fresh_sym(ctx, callex, "#ctor-self#")
+        ctor_self[] = newsym(ctx, callex, "#ctor-self#")
         @ast ctx callex [K"call"
             [K"::"
                 ctor_self[]
@@ -3725,7 +3725,7 @@ function _rewrite_ctor_sig(ctx, callex, struct_name, global_struct_name, struct_
         ]
     elseif kind(name) == K"curly" && is_same_identifier_like(struct_name, name[1])
         # X{T}(x,y)  ==>  (#ctor-self#::Type{X{T}})(x,y)
-        self = fresh_sym(ctx, callex, "#ctor-self#")
+        self = newsym(ctx, callex, "#ctor-self#")
         if numchildren(name) - 1 == length(struct_typevars)
             # Self fully parameterized - can be used as the full type to
             # rewrite new() calls in constructor body.
