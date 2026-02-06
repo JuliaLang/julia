@@ -522,13 +522,15 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
             function extract_elements(x)
                 if isa(x, Expr)
                     if x.head === :nrow
-                        return extract_elements.(x.args[2:end])
+                        return collect(Iterators.flatten(extract_elements.(x.args[2:end])))
                     elseif x.head === :row
                         is_row_first = true
-                        return extract_elements.(x.args)
+                        return collect(Iterators.flatten(extract_elements.(x.args)))
                     else
                         return []
                     end
+                else
+                    x
                 end
             end
             function get_shape(a, is_row_first, d)
@@ -573,7 +575,8 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                 end
             end
             is_1d = !any(is_row, args)
-            xs = extract_elements.(args)
+            args |> dump
+            xs = collect(Iterators.flatten(extract_elements.(args)))
             if is_1d
                 args = [ex0.head === :ncat ? [] : Any[ex0.args[1]]; d; xs]
                 return gen_call(fcn, Any[f, args...], where_params, kws; use_signature_tuple)
