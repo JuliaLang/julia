@@ -547,6 +547,20 @@ JL_DLLEXPORT int jl_is_debugbuild(void) JL_NOTSAFEPOINT
 }
 
 /**
+ * @brief Check if Julia is built with AddressSanitizer (ASAN) enabled.
+ *
+ * @return Returns 1 if Julia is built with ASAN, 0 otherwise.
+ */
+JL_DLLEXPORT int jl_is_asanbuild(void) JL_NOTSAFEPOINT
+{
+#ifdef _COMPILER_ASAN_ENABLED_
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+/**
  * @brief Check if Julia has been build with assertions enabled.
  *
  * @return Returns 1 if assertions are enabled, 0 otherwise.
