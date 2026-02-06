@@ -584,6 +584,91 @@ top_set_bit(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
 >>>(x::BitInteger, y::Int) =
     ifelse(0 <= y, x >>> unsigned(y), x << unsigned(-y))
 
+## unsafe (unchecked) integer shifts ##
+
+"""
+    unsafe_shl(x::BitInteger, y::BitUnsigned)
+
+Left shift `x` by `y` bits using a single native CPU instruction.
+
+Unlike [`<<`](@ref), this function does not check whether the shift amount
+exceeds the bit width of `x`. If `y >= 8*sizeof(x)`, the result is undefined
+behavior (typically the shift amount is masked to the lower bits, e.g.,
+`y & (8*sizeof(x) - 1)` on most architectures).
+
+Use this function when you can guarantee that the shift amount is valid,
+or when you explicitly want the native CPU behavior for performance.
+
+See also [`<<`](@ref), [`unsafe_shr`](@ref), [`unsafe_lshr`](@ref).
+
+# Examples
+```jldoctest
+julia> unsafe_shl(Int8(1), UInt8(2))
+4
+
+julia> unsafe_shl(Int8(1), UInt8(7))
+-128
+```
+"""
+unsafe_shl(x::BitInteger, y::BitUnsigned) = shl_int_native(x, y)
+
+"""
+    unsafe_shr(x::BitInteger, y::BitUnsigned)
+
+Right shift `x` by `y` bits using a single native CPU instruction.
+
+For signed integers, this performs an arithmetic shift (sign-extending).
+For unsigned integers, this performs a logical shift (zero-extending).
+
+Unlike [`>>`](@ref), this function does not check whether the shift amount
+exceeds the bit width of `x`. If `y >= 8*sizeof(x)`, the result is undefined
+behavior (typically the shift amount is masked to the lower bits).
+
+Use this function when you can guarantee that the shift amount is valid,
+or when you explicitly want the native CPU behavior for performance.
+
+See also [`>>`](@ref), [`unsafe_shl`](@ref), [`unsafe_lshr`](@ref).
+
+# Examples
+```jldoctest
+julia> unsafe_shr(Int8(-128), UInt8(2))
+-32
+
+julia> unsafe_shr(UInt8(128), UInt8(2))
+32
+```
+"""
+unsafe_shr(x::BitSigned, y::BitUnsigned) = ashr_int_native(x, y)
+unsafe_shr(x::BitUnsigned, y::BitUnsigned) = lshr_int_native(x, y)
+
+"""
+    unsafe_lshr(x::BitInteger, y::BitUnsigned)
+
+Logical right shift `x` by `y` bits using a single native CPU instruction.
+
+This always performs a logical shift (zero-extending), regardless of whether
+`x` is signed or unsigned.
+
+Unlike [`>>>`](@ref), this function does not check whether the shift amount
+exceeds the bit width of `x`. If `y >= 8*sizeof(x)`, the result is undefined
+behavior (typically the shift amount is masked to the lower bits).
+
+Use this function when you can guarantee that the shift amount is valid,
+or when you explicitly want the native CPU behavior for performance.
+
+See also [`>>>`](@ref), [`unsafe_shl`](@ref), [`unsafe_shr`](@ref).
+
+# Examples
+```jldoctest
+julia> unsafe_lshr(Int8(-128), UInt8(2))
+32
+
+julia> unsafe_lshr(UInt8(128), UInt8(2))
+32
+```
+"""
+unsafe_lshr(x::BitInteger, y::BitUnsigned) = lshr_int_native(x, y)
+
 for to in BitInteger_types, from in (BitInteger_types..., Bool)
     if !(to === from)
         if Core.sizeof(to) < Core.sizeof(from)
