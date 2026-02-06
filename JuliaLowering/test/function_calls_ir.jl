@@ -503,7 +503,7 @@ ccall(:foo, Csize_t, (Cstring..., Cstring...), "asdfg", "blah")
 cglobal((:sym, lib), Int)
 #---------------------
 1   TestMod.Int
-2   (call core.cglobal (static_eval (tuple :sym TestMod.lib)) %₁)
+2   (call core.cglobal (static_eval (call core.tuple :sym TestMod.lib)) %₁)
 3   (return %₂)
 
 ########################################
