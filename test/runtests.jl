@@ -14,6 +14,39 @@ include("buildkitetestjson.jl")
 const longrunning_delay = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_DELAY", "45")) * 60 # minutes
 const longrunning_interval = parse(Int, get(ENV, "JULIA_TEST_LONGRUNNING_INTERVAL", "15")) * 60 # minutes
 
+# Helper to run code with prefixed output (uses Pipe + background reader)
+function with_output_prefix(f, prefix::String, io::IO, lock::ReentrantLock)
+    pipe = Pipe()
+    Base.link_pipe!(pipe; reader_supports_async=true, writer_supports_async=true)
+
+    reader_task = @async begin
+        try
+            while isopen(pipe) || bytesavailable(pipe) > 0
+                line = readline(pipe; keep=true)
+                isempty(line) && break
+                @lock lock begin
+                    printstyled(io, "  ", prefix, ": ", color=:light_black)
+                    print(io, line)
+                    endswith(line, '\n') || println(io)
+                end
+            end
+        catch e
+            e isa EOFError || rethrow()
+        end
+    end
+
+    try
+        redirect_stdout(pipe) do
+            redirect_stderr(pipe) do
+                f()
+            end
+        end
+    finally
+        close(pipe.in)
+        wait(reader_task)
+    end
+end
+
 (; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(ARGS)
 tests = unique(tests)
 
@@ -123,6 +156,9 @@ cd(@__DIR__) do
     end
     skipped = 0
 
+    # Track which test is running on each worker (worker_id => test_name)
+    worker_current_test = Dict{Int, String}()
+
     @everywhere include("testdefs.jl")
 
     if use_revise
@@ -158,6 +194,21 @@ cd(@__DIR__) do
     print_lock = stdout isa Base.LibuvStream ? stdout.lock : ReentrantLock()
     if stderr isa Base.LibuvStream
         stderr.lock = print_lock
+    end
+
+    # Set up hook to display test name with worker output
+    Distributed.worker_output_hook[] = (ident, line) -> begin
+        wrkr_id = tryparse(Int, ident)
+        test_name = wrkr_id === nothing ? nothing : get(worker_current_test, wrkr_id, nothing)
+        @lock print_lock begin
+            if test_name !== nothing
+                printstyled("  ", test_name, " (", ident, "): ", color=:light_black)
+            else
+                printstyled("  From worker ", ident, ": ", color=:light_black)
+            end
+            println(line)
+        end
+        return true
     end
 
     function print_testworker_stats(test, wrkr, resp)
@@ -268,6 +319,7 @@ cd(@__DIR__) do
                         test = popfirst!(tests)
                         running_tests[test] = now()
                         wrkr = p
+                        worker_current_test[wrkr] = test
 
                         # Create a timer for this test to report long-running status
                         test_timers[test] = Timer(longrunning_delay, interval=longrunning_interval) do timer
@@ -304,6 +356,7 @@ cd(@__DIR__) do
                                 Any[CapturedException(e, catch_backtrace())], time() - before
                             end
                         delete!(running_tests, test)
+                        delete!(worker_current_test, wrkr)
                         if haskey(test_timers, test)
                             close(test_timers[test])
                             delete!(test_timers, test)
@@ -361,8 +414,10 @@ cd(@__DIR__) do
             t == "SharedArrays" && (isolate = false)
             before = time()
             resp, duration = try
-                    r = @invokelatest runtests(t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
-                    r, time() - before
+                    with_output_prefix("$t (1)", stdout, print_lock) do
+                        r = @invokelatest runtests(t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
+                        r, time() - before
+                    end
                 catch e
                     isa(e, InterruptException) && rethrow()
                     Any[CapturedException(e, catch_backtrace())], time() - before
@@ -395,6 +450,7 @@ cd(@__DIR__) do
         if @isdefined test_timers
             foreach(close, values(test_timers))
         end
+        Distributed.worker_output_hook[] = nothing
     end
 
     #=
