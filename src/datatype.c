@@ -679,6 +679,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         }
     }
     else {
+        jl_compute_has_concrete_subtype_from_fields(st);
         // compute layout for the wrapper object if the field types have no free variables
         if (!st->isconcretetype && !jl_has_fixed_layout(st)) {
             assert(st == w); // otherwise caller should not have requested this layout

@@ -212,6 +212,20 @@ end
 @test !Compiler.valid_as_lattice(Tuple{1}, true)
 @test !Compiler.valid_as_lattice(Tuple{<:Union{}}, true)
 @test !Compiler.valid_as_lattice(Type{1}, true)
+@test Compiler.valid_as_lattice(Tuple{Vararg}, true)
+@test Compiler.valid_as_lattice(Tuple{Int, Vararg}, true)
+@test Compiler.valid_as_lattice(Tuple{Vararg{Int}}, true)
+struct C57764
+    x::A57764{Union{}}
+end
+@test !Compiler.valid_as_lattice(C57764, true)
+mutable struct D57764{X,Y}
+    x::X
+    y::Y
+    D57764{X,Y}(x::X) where {X,Y} = new{X,Y}(x)
+end
+@test Compiler.valid_as_lattice(D57764{Int,Union{}}, true)
+@test !Compiler.valid_as_lattice(D57764{Union{},Int}, true)
 
 # PR 22120
 function tuplemerge_test(a, b, r, commutative=true)
