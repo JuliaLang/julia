@@ -893,6 +893,10 @@ function test_checksquare()
     @test_throws DimensionMismatch LinearAlgebra.checksquare(zeros(2,3))
 end
 
+@testset "issue ##45337 filter on iterators" begin
+    @test filter(((x,i),)->isodd(x), enumerate([1,2,3])) == [(1, 1), (3, 3)]
+end
+
 #----- run tests -------------------------------------------------------------#
 
 @testset for T in (T24Linear, TSlow), shape in ((24,), (2, 12), (2,3,4), (1,2,3,4), (4,3,2,1))
