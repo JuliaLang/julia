@@ -98,7 +98,7 @@ IteratorSize(::Type{Any}) = SizeUnknown()
 
 IteratorSize(::Type{<:Tuple}) = HasLength()
 IteratorSize(::Type{<:AbstractArray{<:Any,N}})  where {N} = HasShape{N}()
-IteratorSize(::Type{Generator{I,F}}) where {I,F} = IteratorSize(I)
+IteratorSize(::Type{<:Generator{I}}) where {I} = (@isdefined I) ? IteratorSize(I) : SizeUnknown()
 
 haslength(iter) = IteratorSize(iter) isa Union{HasShape, HasLength}
 

@@ -361,20 +361,25 @@ function already_inserted(compact::IncrementalCompact, old::OldSSAValue)
     already_inserted_ssa(compact, compact.idx-1)(0, old)
 end
 
-function already_inserted_ssa(compact::IncrementalCompact, processed_idx::Int)
-    return function did_already_insert(phi_arg::Int, old::OldSSAValue)
-        id = old.id
-        if id <= length(compact.ir.stmts)
-            return id <= processed_idx
-        end
-        id -= length(compact.ir.stmts)
-        if id <= length(compact.ir.new_nodes)
-            return did_already_insert(phi_arg, OldSSAValue(compact.ir.new_nodes.info[id].pos))
-        end
-        id -= length(compact.ir.new_nodes)
-        @assert id <= length(compact.pending_nodes)
-        return !(id in compact.pending_perm)
+function _already_inserted_ssa(compact::IncrementalCompact, processed_idx::Int,
+                               phi_arg::Int, old::OldSSAValue)
+    id = old.id
+    if id <= length(compact.ir.stmts)
+        return id <= processed_idx
     end
+    id -= length(compact.ir.stmts)
+    if id <= length(compact.ir.new_nodes)
+        return _already_inserted_ssa(compact, processed_idx, phi_arg,
+                                     OldSSAValue(compact.ir.new_nodes.info[id].pos))
+    end
+    id -= length(compact.ir.new_nodes)
+    @assert id <= length(compact.pending_nodes)
+    return !(id in compact.pending_perm)
+end
+
+function already_inserted_ssa(compact::IncrementalCompact, processed_idx::Int)
+    return (phi_arg::Int, old::OldSSAValue) ->
+        _already_inserted_ssa(compact, processed_idx, phi_arg, old)
 end
 
 function is_pending(compact::IncrementalCompact, old::OldSSAValue)
@@ -872,6 +877,49 @@ function perform_lifting!(compact::IncrementalCompact,
     end
 
     return Pair{Any, PhiNest}(stmt_val, PhiNest(visited_philikes, lifted_philikes, lifted_leaves, reverse_mapping, walker_callback))
+end
+
+# Handle _apply_iterate calls: convert arguments to use `Core.svec`.
+# The behavior of `Core.svec` (with boxing) better matches the ABI of codegen.
+function lift_apply_args!(compact::IncrementalCompact, idx::Int, stmt::Expr)
+    compact[idx] = nothing
+    for i in 4:length(stmt.args) # Skip `_apply_iterate`, `iterate`, and the function
+        arg = stmt.args[i]
+        arg_type = widenconst(argextype(arg, compact))
+        if isa(arg_type, DataType) && arg_type.name === Tuple.name
+            svec_args = nothing
+            if isa(arg, SSAValue)
+                arg_stmt = compact[arg][:stmt]
+                if is_known_call(arg_stmt, Core.tuple, compact)
+                    svec_args = copy(arg_stmt.args)
+                end
+            end
+            if svec_args === nothing
+                # Fallback path: generate getfield calls for tuple elements
+                tuple_length = length(arg_type.parameters)
+                if tuple_length > 0 && !isvarargtype(arg_type.parameters[tuple_length])
+                    svec_args = Vector{Any}(undef, tuple_length + 1)
+                    for j in 1:tuple_length
+                        getfield_call = Expr(:call, GlobalRef(Core, :getfield), arg, j)
+                        getfield_type = arg_type.parameters[j]
+                        inst = compact[SSAValue(idx)]
+                        getfield_ssa = insert_node!(compact, SSAValue(idx), NewInstruction(getfield_call, getfield_type, NoCallInfo(), inst[:line], inst[:flag]))
+                        svec_args[j + 1] = getfield_ssa
+                    end
+                end
+            end
+            if svec_args !== nothing
+                svec_args[1] = GlobalRef(Core, :svec)
+                new_svec_call = Expr(:call)
+                new_svec_call.args = svec_args
+                inst = compact[SSAValue(idx)]
+                new_svec_ssa = insert_node!(compact, SSAValue(idx), NewInstruction(new_svec_call, SimpleVector, NoCallInfo(), inst[:line], inst[:flag]))
+                stmt.args[i] = new_svec_ssa
+            end
+        end
+    end
+    compact[idx] = stmt
+    nothing
 end
 
 function lift_svec_ref!(compact::IncrementalCompact, idx::Int, stmt::Expr)
@@ -1377,6 +1425,9 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 compact[SSAValue(idx)] = (compact[enter_ssa][:stmt]::EnterNode).scope
             elseif isexpr(stmt, :new)
                 refine_new_effects!(𝕃ₒ, compact, idx, stmt)
+            elseif is_known_call(stmt, Core._apply_iterate, compact)
+                length(stmt.args) >= 4 || continue
+                lift_apply_args!(compact, idx, stmt)
             end
             continue
         end
@@ -1532,7 +1583,7 @@ end
 function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     code::CodeInstance, @nospecialize(info::CallInfo), inlining::InliningState,
     attach_after::Bool)
-    mi = code.def
+    mi = get_ci_mi(code)
     et = InliningEdgeTracker(inlining)
     if code isa CodeInstance
         if use_const_api(code)
@@ -1540,12 +1591,15 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
             add_inlining_edge!(et, code)
             return true
         end
-        src = @atomic :monotonic code.inferred
+        # COMBAK: this has awkward and unreliable global cache effects, but
+        # this doesn't respect the bottom-up inliner order so we do not have
+        # CallInfo anymore. See `handle_finalizer_call!` too.
+        src = ci_get_source(inlining.interp, code)
     else
         return false
     end
 
-    src_inlining_policy(inlining.interp, src, info, IR_FLAG_NULL) || return false
+    src_inlining_policy(inlining.interp, mi, src, info, IR_FLAG_NULL) || return false
     src, spec_info, di = retrieve_ir_for_inlining(code, src)
 
     # For now: Require finalizer to only have one basic block
@@ -1598,6 +1652,25 @@ function reachable_blocks(cfg::CFG, from_bb::Int, to_bb::Int)
     return visited
 end
 
+function _update_finalizer_insert!(ir::IRCode, lazypostdomtree::LazyPostDomtree,
+                                   finalizer_idx::Int, insert_bb::Int,
+                                   insert_idx::Union{Int,Nothing}, x::Union{Int,SSAUse})
+    defuse_idx = x isa SSAUse ? x.idx : x
+    defuse_idx == finalizer_idx && return insert_bb, insert_idx
+    defuse_bb = block_for_inst(ir, defuse_idx)
+    new_insert_bb = nearest_common_dominator(get!(lazypostdomtree),
+        insert_bb, defuse_bb)
+    if new_insert_bb == insert_bb && insert_idx !== nothing
+        insert_idx = max(insert_idx::Int, defuse_idx)
+    elseif new_insert_bb == defuse_bb
+        insert_idx = defuse_idx
+    else
+        insert_idx = nothing
+    end
+    insert_bb = new_insert_bb
+    return insert_bb, insert_idx
+end
+
 function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, defuse::SSADefUse,
         inlining::InliningState, lazydomtree::LazyDomtree,
         lazypostdomtree::LazyPostDomtree, @nospecialize(info::CallInfo))
@@ -1619,24 +1692,12 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
     # Check #2: The insertion block for the finalizer is the post-dominator of all uses
     insert_bb::Int = finalizer_bb
     insert_idx::Union{Int,Nothing} = finalizer_idx
-    function note_defuse!(x::Union{Int,SSAUse})
-        defuse_idx = x isa SSAUse ? x.idx : x
-        defuse_idx == finalizer_idx && return nothing
-        defuse_bb = block_for_inst(ir, defuse_idx)
-        new_insert_bb = nearest_common_dominator(get!(lazypostdomtree),
-            insert_bb, defuse_bb)
-        if new_insert_bb == insert_bb && insert_idx !== nothing
-            insert_idx = max(insert_idx::Int, defuse_idx)
-        elseif new_insert_bb == defuse_bb
-            insert_idx = defuse_idx
-        else
-            insert_idx = nothing
-        end
-        insert_bb = new_insert_bb
-        nothing
+    for x in defuse.uses
+        insert_bb, insert_idx = _update_finalizer_insert!(ir, lazypostdomtree, finalizer_idx, insert_bb, insert_idx, x)
     end
-    foreach(note_defuse!, defuse.uses)
-    foreach(note_defuse!, defuse.defs)
+    for x in defuse.defs
+        insert_bb, insert_idx = _update_finalizer_insert!(ir, lazypostdomtree, finalizer_idx, insert_bb, insert_idx, x)
+    end
     insert_bb != 0 || return nothing # verify post-dominator of all uses exists
 
     if !OptimizationParams(inlining.interp).assume_fatal_throw
@@ -1683,7 +1744,7 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
             if inline::Bool && try_inline_finalizer!(ir, argexprs, loc, ci, info, inlining, attach_after)
                 # the finalizer body has been inlined
             else
-                newinst = add_flag(NewInstruction(Expr(:invoke, ci, argexprs...), Nothing), flag)
+                newinst = add_flag(NewInstruction(Expr(:invoke, ci, argexprs...), Any), flag)
                 insert_node!(ir, loc, newinst, attach_after)
             end
         end

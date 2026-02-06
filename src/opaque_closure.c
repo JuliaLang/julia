@@ -28,7 +28,7 @@ JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *sourc
 }
 
 static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
-    jl_value_t *source_, jl_value_t *captures, int do_compile)
+    jl_value_t *source_, jl_value_t *captures, int do_compile, size_t world)
 {
     if (!jl_is_tuple_type((jl_value_t*)argt)) {
         jl_error("OpaqueClosure argument tuple must be a tuple type");
@@ -61,7 +61,6 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
         }
     }
     jl_task_t *ct = jl_current_task;
-    size_t world = ct->world_age;
     jl_code_instance_t *ci = NULL;
     if (do_compile) {
         ci = jl_compile_method_internal(mi, world);
@@ -140,13 +139,13 @@ jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_
 {
     jl_value_t *captures = jl_f_tuple(NULL, env, nenv);
     JL_GC_PUSH1(&captures);
-    jl_opaque_closure_t *oc = new_opaque_closure(argt, rt_lb, rt_ub, source_, captures, do_compile);
+    jl_opaque_closure_t *oc = new_opaque_closure(argt, rt_lb, rt_ub, source_, captures, do_compile, jl_current_task->world_age);
     JL_GC_POP();
     return oc;
 }
 
-JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
-    jl_module_t *mod, jl_code_info_t *ci, int lineno, jl_value_t *file, int nargs, int isva, jl_value_t *env, int do_compile, int isinferred)
+JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info_in_world(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
+    jl_module_t *mod, jl_code_info_t *ci, int lineno, jl_value_t *file, int nargs, int isva, jl_value_t *env, int do_compile, int isinferred, size_t world)
 {
     jl_value_t *root = NULL, *sigtype = NULL;
     jl_code_instance_t *inst = NULL;
@@ -156,7 +155,6 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tuplet
     root = jl_new_struct(jl_linenumbernode_type, root, file);
     jl_method_t *meth = jl_make_opaque_closure_method(mod, jl_nothing, nargs, root, ci, isva, isinferred);
     root = (jl_value_t*)meth;
-    size_t world = jl_current_task->world_age;
     // these are only legal in the current world since they are not in any tables
     jl_atomic_store_release(&meth->primary_world, world);
 
@@ -172,9 +170,15 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tuplet
         jl_mi_cache_insert(mi, inst);
     }
 
-    jl_opaque_closure_t *oc = new_opaque_closure(argt, rt_lb, rt_ub, root, env, do_compile);
+    jl_opaque_closure_t *oc = new_opaque_closure(argt, rt_lb, rt_ub, root, env, do_compile, world);
     JL_GC_POP();
     return oc;
+}
+
+JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
+    jl_module_t *mod, jl_code_info_t *ci, int lineno, jl_value_t *file, int nargs, int isva, jl_value_t *env, int do_compile, int isinferred)
+{
+    return jl_new_opaque_closure_from_code_info_in_world(argt, rt_lb, rt_ub, mod, ci, lineno, file, nargs, isva, env, do_compile, isinferred, jl_current_task->world_age);
 }
 
 JL_CALLABLE(jl_new_opaque_closure_jlcall)

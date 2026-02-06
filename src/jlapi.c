@@ -120,6 +120,13 @@ JL_DLLEXPORT void jl_init_with_image_file(const char *julia_bindir,
     jl_exception_clear();
 }
 
+// Deprecated function, kept for backward compatibility
+JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
+                                    const char *image_path)
+{
+    jl_init_with_image_file(julia_bindir, image_path);
+}
+
 /**
  * @brief Initialize the Julia runtime.
  *
@@ -275,12 +282,12 @@ JL_DLLEXPORT const char *jl_string_ptr(jl_value_t *s)
 /**
  * @brief Call a Julia function with a specified number of arguments.
  *
- * @param f A pointer to `jl_function_t` representing the Julia function to call.
+ * @param f A pointer to `jl_value_t` representing the Julia function to call.
  * @param args An array of pointers to `jl_value_t` representing the arguments.
  * @param nargs The number of arguments in the array.
  * @return A pointer to `jl_value_t` representing the result of the function call.
  */
-JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, uint32_t nargs)
+JL_DLLEXPORT jl_value_t *jl_call(jl_value_t *f, jl_value_t **args, uint32_t nargs)
 {
     jl_value_t *v;
     jl_task_t *ct = jl_current_task;
@@ -310,10 +317,10 @@ JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, uint32_t n
  *
  * A specialized case of `jl_call` for simpler scenarios.
  *
- * @param f A pointer to `jl_function_t` representing the Julia function to call.
+ * @param f A pointer to `jl_value_t` representing the Julia function to call.
  * @return A pointer to `jl_value_t` representing the result of the function call.
  */
-JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f)
+JL_DLLEXPORT jl_value_t *jl_call0(jl_value_t *f)
 {
     jl_value_t *v;
     jl_task_t *ct = jl_current_task;
@@ -338,11 +345,11 @@ JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f)
  *
  * A specialized case of `jl_call` for simpler scenarios.
  *
- * @param f A pointer to `jl_function_t` representing the Julia function to call.
+ * @param f A pointer to `jl_value_t` representing the Julia function to call.
  * @param a A pointer to `jl_value_t` representing the argument to the function.
  * @return A pointer to `jl_value_t` representing the result of the function call.
  */
-JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
+JL_DLLEXPORT jl_value_t *jl_call1(jl_value_t *f, jl_value_t *a)
 {
     jl_value_t *v;
     jl_task_t *ct = jl_current_task;
@@ -370,12 +377,12 @@ JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
  *
  * A specialized case of `jl_call` for simpler scenarios.
  *
- * @param f A pointer to `jl_function_t` representing the Julia function to call.
+ * @param f A pointer to `jl_value_t` representing the Julia function to call.
  * @param a A pointer to `jl_value_t` representing the first argument.
  * @param b A pointer to `jl_value_t` representing the second argument.
  * @return A pointer to `jl_value_t` representing the result of the function call.
  */
-JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b)
+JL_DLLEXPORT jl_value_t *jl_call2(jl_value_t *f, jl_value_t *a, jl_value_t *b)
 {
     jl_value_t *v;
     jl_task_t *ct = jl_current_task;
@@ -404,13 +411,13 @@ JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b
  *
  * A specialized case of `jl_call` for simpler scenarios.
  *
- * @param f A pointer to `jl_function_t` representing the Julia function to call.
+ * @param f A pointer to `jl_value_t` representing the Julia function to call.
  * @param a A pointer to `jl_value_t` representing the first argument.
  * @param b A pointer to `jl_value_t` representing the second argument.
  * @param c A pointer to `jl_value_t` representing the third argument.
  * @return A pointer to `jl_value_t` representing the result of the function call.
  */
-JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
+JL_DLLEXPORT jl_value_t *jl_call3(jl_value_t *f, jl_value_t *a,
                                   jl_value_t *b, jl_value_t *c)
 {
     jl_value_t *v;
@@ -441,14 +448,14 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
  *
  * A specialized case of `jl_call` for simpler scenarios.
  *
- * @param f A pointer to `jl_function_t` representing the Julia function to call.
+ * @param f A pointer to `jl_value_t` representing the Julia function to call.
  * @param a A pointer to `jl_value_t` representing the first argument.
  * @param b A pointer to `jl_value_t` representing the second argument.
  * @param c A pointer to `jl_value_t` representing the third argument.
  * @param d A pointer to `jl_value_t` representing the fourth argument.
  * @return A pointer to `jl_value_t` representing the result of the function call.
  */
-JL_DLLEXPORT jl_value_t *jl_call4(jl_function_t *f, jl_value_t *a,
+JL_DLLEXPORT jl_value_t *jl_call4(jl_value_t *f, jl_value_t *a,
                                   jl_value_t *b, jl_value_t *c,
                                   jl_value_t *d)
 {
@@ -919,7 +926,7 @@ static int exec_program(char *program)
         jl_load(jl_main_module, program);
     }
     JL_CATCH {
-        // TODO: It is possible for this output to be mangled due to `jl_print_backtrace`
+        // TODO: It is possible for this output to be mangled due to `jl_fprint_backtrace`
         //       printing directly to STDERR_FILENO.
         int shown_err = 0;
         jl_printf(JL_STDERR, "error during bootstrap:\n");
@@ -938,7 +945,7 @@ static int exec_program(char *program)
             jl_static_show((JL_STREAM*)STDERR_FILENO, exc);
             jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
         }
-        jl_print_backtrace(); // written to STDERR_FILENO
+        jl_fprint_backtrace(ios_safe_stderr);
         jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
         return 1;
     }
@@ -954,8 +961,8 @@ static NOINLINE int true_main(int argc, char *argv[])
     size_t last_age = ct->world_age;
     ct->world_age = jl_get_world_counter();
 
-    jl_function_t *start_client = jl_base_module ?
-        (jl_function_t*)jl_get_global_value(jl_base_module, jl_symbol("_start")) : NULL;
+    jl_value_t *start_client = jl_base_module ?
+        (jl_value_t*)jl_get_global_value(jl_base_module, jl_symbol("_start"), ct->world_age) : NULL;
 
     if (start_client) {
         int ret = 1;
@@ -989,8 +996,8 @@ static NOINLINE int true_main(int argc, char *argv[])
     while (!ios_eof(ios_stdin)) {
         char *volatile line = NULL;
         JL_TRY {
-            ios_puts("\njulia> ", ios_stdout);
-            ios_flush(ios_stdout);
+            jl_printf(JL_STDOUT, "\njulia> ");
+            jl_uv_flush(JL_STDOUT);
             line = ios_readline(ios_stdin);
             jl_value_t *val = (jl_value_t*)jl_eval_string(line);
             JL_GC_PUSH1(&val);
@@ -1006,7 +1013,6 @@ static NOINLINE int true_main(int argc, char *argv[])
             jl_printf(JL_STDOUT, "\n");
             free(line);
             line = NULL;
-            jl_process_events();
         }
         JL_CATCH {
             if (line) {
@@ -1016,7 +1022,7 @@ static NOINLINE int true_main(int argc, char *argv[])
             jl_printf((JL_STREAM*)STDERR_FILENO, "\nparser error:\n");
             jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
             jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
-            jl_print_backtrace(); // written to STDERR_FILENO
+            jl_fprint_backtrace(ios_safe_stderr);
         }
     }
     return 0;
@@ -1167,21 +1173,20 @@ static const char *absformat(const char *in)
 static char *absrealpath(const char *in, int nprefix)
 { // compute an absolute realpath location, so that chdir doesn't change the file reference
   // ignores (copies directly over) nprefix characters at the start of abspath
-#ifndef _OS_WINDOWS_
-    char *out = realpath(in + nprefix, NULL);
-    if (out) {
-        if (nprefix > 0) {
-            size_t sz = strlen(out) + 1;
-            char *cpy = (char*)malloc_s(sz + nprefix);
-            memcpy(cpy, in, nprefix);
-            memcpy(cpy + nprefix, out, sz);
-            free(out);
-            out = cpy;
-        }
+    char *out;
+    uv_fs_t req;
+    int realpath_ret = uv_fs_realpath(NULL, &req, in + nprefix, NULL);
+    if (realpath_ret >= 0) {
+        size_t sz = strlen((char*)(req.ptr)) + 1;
+        out = (char*)malloc_s(sz + nprefix);
+        memcpy(out, in, nprefix);
+        memcpy(out + nprefix, req.ptr, sz);
+        uv_fs_req_cleanup(&req);
     }
     else {
+        uv_fs_req_cleanup(&req);
         size_t sz = strlen(in + nprefix) + 1;
-        if (in[nprefix] == PATHSEPSTRING[0]) {
+        if (jl_isabspath(in + nprefix)) {
             out = (char*)malloc_s(sz + nprefix);
             memcpy(out, in, sz + nprefix);
         }
@@ -1199,27 +1204,6 @@ static char *absrealpath(const char *in, int nprefix)
             free(path);
         }
     }
-#else
-    // GetFullPathName intentionally errors if given an empty string so manually insert `.` to invoke cwd
-    char *in2 = (char*)malloc_s(JL_PATH_MAX);
-    if (strlen(in) - nprefix == 0) {
-        memcpy(in2, in, nprefix);
-        in2[nprefix] = '.';
-        in2[nprefix+1] = '\0';
-        in = in2;
-    }
-    DWORD n = GetFullPathName(in + nprefix, 0, NULL, NULL);
-    if (n <= 0) {
-        jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
-    }
-    char *out = (char*)malloc_s(n + nprefix);
-    DWORD m = GetFullPathName(in + nprefix, n, out + nprefix, NULL);
-    if (n != m + 1) {
-        jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
-    }
-    memcpy(out, in, nprefix);
-    free(in2);
-#endif
     return out;
 }
 

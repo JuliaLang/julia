@@ -118,15 +118,15 @@ wc265_41332a = Task(tls_world_age)
     global wc265_41332d = Task(tls_world_age)
     nothing
 end)()
-@test wc265 + 12 == get_world_counter() == tls_world_age()
+@test wc265 + 11 == get_world_counter() == tls_world_age()
 schedule(wc265_41332a)
 schedule(wc265_41332b)
 schedule(wc265_41332c)
 schedule(wc265_41332d)
 @test wc265 + 1 == fetch(wc265_41332a)
-@test wc265 + 10 == fetch(wc265_41332b)
-@test wc265 + 12 == fetch(wc265_41332c)
-@test wc265 + 10 == fetch(wc265_41332d)
+@test wc265 + 9 == fetch(wc265_41332b)
+@test wc265 + 11 == fetch(wc265_41332c)
+@test wc265 + 9 == fetch(wc265_41332d)
 chnls, tasks = Base.channeled_tasks(2, wfunc)
 t265 = tasks[1]
 
@@ -198,7 +198,7 @@ z26506 = Any["ABC"]
 f26506(x::Int) = 2
 g26506(z26506) # Places an entry for f26506(::String) in MethodTable cache
 w26506 = Base.get_world_counter()
-cache26506 = ccall(:jl_mt_find_cache_entry, Any, (Any, Any, UInt), Core.GlobalMethods.cache, Tuple{typeof(f26506),String}, w26506)::Core.TypeMapEntry
+cache26506 = ccall(:jl_mt_find_cache_entry, Any, (Any, Any, UInt), Core.methodtable.cache, Tuple{typeof(f26506),String}, w26506)::Core.TypeMapEntry
 @test cache26506.max_world === typemax(UInt)
 w26506 = Base.get_world_counter()
 f26506(x::String) = 3
@@ -557,7 +557,13 @@ struct FooBackdated
 
     FooBackdated() = new(FooBackdated[])
 end
-@test Base.invoke_in_world(before_backdate_age, isdefined, @__MODULE__, :FooBackdated)
+# For depwarn == 1, this throws a warning on access, for depwarn == 2, it throws an error.
+# `isdefinedglobal` changes with that, but doesn't error.
+if Base.JLOptions().depwarn <= 1
+    @test Base.invoke_in_world(before_backdate_age, isdefinedglobal, @__MODULE__, :FooBackdated)
+else
+    @test !Base.invoke_in_world(before_backdate_age, isdefinedglobal, @__MODULE__, :FooBackdated)
+end
 
 # Test that ambiguous binding intersect the using'd binding's world ranges
 module AmbigWorldTest
@@ -591,4 +597,22 @@ function f()
     Core._eval_import(true, @__MODULE__, nothing, Expr(:., :Random))
 end
 end
-@test_throws ErrorException("importing Random into M57965 conflicts with an existing global") M57965.f()s
+@test_throws ErrorException("importing Random into M57965 conflicts with an existing global") M57965.f()
+
+# issue #59429 - world age semantics with toplevel in macros
+module M59429
+using Test
+macro new_enum(T::Symbol, args...)
+   esc(quote
+      @enum $T $(args...)
+      function Base.hash(x::$T, h::UInt)
+        rand(UInt)
+      end
+    end)
+end
+
+@new_enum Foo59429 bar59429 baz59429
+
+# Test that the hash function works without world age issues
+@test hash(bar59429, UInt(0)) isa UInt
+end

@@ -3,7 +3,7 @@
 ## Introduction
 
 Julia Base contains a range of functions and macros appropriate for performing
-scientific and numerical computing, but is also as broad as those of many general purpose programming
+scientific and numerical computing, but is also as broad as those of many general-purpose programming
 languages. Additional functionality is available from a growing collection of
 [available packages](https://julialang.org/packages/).
 Functions are grouped by topic below.
@@ -44,6 +44,7 @@ ans
 err
 Base.active_project
 Base.set_active_project
+Base.active_manifest
 ```
 
 ## [Keywords](@id Keywords)
@@ -108,18 +109,19 @@ where
 .=
 .
 ->
+Base.:(:)
 ::
 []
 ```
 
-## Standard Modules
+## [Standard Modules](@id standard-modules)
 ```@docs
 Main
 Core
 Base
 ```
 
-## Base Submodules
+## [Base Submodules](@id base-submodules)
 ```@docs
 Base.Broadcast
 Base.Docs
@@ -139,8 +141,6 @@ Core.:(===)
 Core.isa
 Base.isequal
 Base.isless
-Base.ispositive
-Base.isnegative
 Base.isunordered
 Base.ifelse
 Core.typeassert
@@ -193,6 +193,7 @@ Base.typeintersect
 Base.promote_type
 Base.promote_rule
 Base.promote_typejoin
+Base.iskindtype
 Base.isdispatchtuple
 ```
 
@@ -251,6 +252,7 @@ Base.instances
 Core.Any
 Core.Union
 Union{}
+Core.TypeofBottom
 Core.UnionAll
 Core.Tuple
 Core.NTuple
@@ -292,6 +294,7 @@ Base.splat
 Base.Fix
 Base.Fix1
 Base.Fix2
+Returns
 ```
 
 ## Syntax
@@ -377,6 +380,7 @@ Base.@elapsed
 Base.@allocated
 Base.@allocations
 Base.@lock_conflicts
+Base.TRACE_EVAL
 Base.EnvDict
 Base.ENV
 Base.Sys.STDLIB
@@ -395,6 +399,7 @@ Base.Sys.total_memory
 Base.Sys.free_physical_memory
 Base.Sys.total_physical_memory
 Base.Sys.uptime
+Base.Sys.sysimage_target
 Base.Sys.isjsvm
 Base.Sys.loadavg
 Base.Sys.isexecutable
@@ -478,6 +483,7 @@ Base.moduleroot
 __module__
 __source__
 Base.@__MODULE__
+Base.@__FUNCTION__
 Base.@__FILE__
 Base.@__DIR__
 Base.@__LINE__
@@ -495,6 +501,7 @@ Core.modifyglobal!
 Core.swapglobal!
 Core.setglobalonce!
 Core.replaceglobal!
+Core.declare_const
 ```
 
 ## Documentation
@@ -512,7 +519,6 @@ Docs.undocumented_names
 ```@docs
 Base.identify_package
 Base.locate_package
-Base.require
 Base.compilecache
 Base.isprecompiled
 Base.get_extension
@@ -534,6 +540,7 @@ Meta.parse(::AbstractString)
 Meta.ParseError
 Core.QuoteNode
 Base.macroexpand
+Base.macroexpand!
 Base.@macroexpand
 Base.@macroexpand1
 Base.code_lowered

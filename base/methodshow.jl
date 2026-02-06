@@ -78,7 +78,7 @@ end
 
 # NOTE: second argument is deprecated and is no longer used
 function kwarg_decl(m::Method, kwtype = nothing)
-    if m.sig !== Tuple # OpaqueClosure or Builtin
+    if !(m.sig === Tuple || m.sig <: Tuple{Core.Builtin, Vararg}) # OpaqueClosure or Builtin
         kwtype = typeof(Core.kwcall)
         sig = rewrap_unionall(Tuple{kwtype, NamedTuple, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
         kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, get_world_counter())
@@ -140,7 +140,7 @@ function fixup_stdlib_path(path::String)
         if isdefined(@__MODULE__, :Core) && isdefined(Core, :Compiler)
             compiler_folder = dirname(String(Base.moduleloc(Core.Compiler).file))
             if dirname(path) == compiler_folder
-                return abspath(Sys.STDLIB, "..", "..", "Compiler", "src", basename(path))
+                return abspath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "Compiler", "src", basename(path))
             end
         end
     end
@@ -181,6 +181,7 @@ end
 Return a tuple `(filename,line)` giving the location of a generic `Function` definition.
 """
 functionloc(@nospecialize(f), @nospecialize(types)) = functionloc(which(f,types))
+functionloc(@nospecialize(argtypes::Union{Tuple, Type{<:Tuple}})) = functionloc(which(argtypes))
 
 function functionloc(@nospecialize(f))
     mt = methods(f)
@@ -214,10 +215,11 @@ show(io::IO, m::Method; kwargs...) = show_method(IOContext(io, :compact=>true), 
 
 show(io::IO, ::MIME"text/plain", m::Method; kwargs...) = show_method(io, m; kwargs...)
 
-function show_method(io::IO, m::Method; modulecolor = :light_black, digit_align_width = 1)
+function show_method(io::IO, m::Method;
+                     modulecolor = :light_black, digit_align_width = 1,
+                     print_signature_only::Bool = get(io, :print_method_signature_only, false)::Bool)
     tv, decls, file, line = arg_decl_parts(m)
-    sig = unwrap_unionall(m.sig)
-    if sig === Tuple
+    if m.sig <: Tuple{Core.Builtin, Vararg}
         # Builtin
         print(io, m.name, "(...)")
         file = "none"
@@ -250,12 +252,14 @@ function show_method(io::IO, m::Method; modulecolor = :light_black, digit_align_
         show_method_params(io, tv)
     end
 
-    if !(get(io, :compact, false)::Bool) # single-line mode
-        println(io)
-        digit_align_width += 4
+    if !print_signature_only
+        if !(get(io, :compact, false)::Bool) # single-line mode
+            println(io)
+            digit_align_width += 4
+        end
+        # module & file, re-using function from errorshow.jl
+        print_module_path_file(io, parentmodule(m), string(file), line; modulecolor, digit_align_width)
     end
-    # module & file, re-using function from errorshow.jl
-    print_module_path_file(io, parentmodule(m), string(file), line; modulecolor, digit_align_width)
 end
 
 function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
@@ -397,19 +401,21 @@ function url(m::Method)
     if LibGit2 isa Module
         try
             d = dirname(file)
-            return LibGit2.with(LibGit2.GitRepoExt(d)) do repo
-                LibGit2.with(LibGit2.GitConfig(repo)) do cfg
-                    u = LibGit2.get(cfg, "remote.origin.url", "")
-                    u = (match(LibGit2.GITHUB_REGEX,u)::AbstractMatch).captures[1]
-                    commit = string(LibGit2.head_oid(repo))
-                    root = LibGit2.path(repo)
-                    if startswith(file, root) || startswith(realpath(file), root)
-                        "https://github.com/$u/tree/$commit/"*file[length(root)+1:end]*"#L$line"
-                    else
-                        fileurl(file)
+            return let file = file
+                LibGit2.with(LibGit2.GitRepoExt(d)) do repo
+                    LibGit2.with(LibGit2.GitConfig(repo)) do cfg
+                        u = LibGit2.get(cfg, "remote.origin.url", "")
+                        u = (match(LibGit2.GITHUB_REGEX,u)::AbstractMatch).captures[1]
+                        commit = string(LibGit2.head_oid(repo))
+                        root = LibGit2.path(repo)
+                        if startswith(file, root) || startswith(realpath(file), root)
+                            "https://github.com/$u/tree/$commit/"*file[length(root)+1:end]*"#L$line"
+                        else
+                            fileurl(file)
+                        end
                     end
                 end
-            end
+            end::String
         catch
             # oops, this was a bad idea
         end
@@ -420,8 +426,7 @@ end
 function show(io::IO, ::MIME"text/html", m::Method)
     tv, decls, file, line = arg_decl_parts(m, true)
     sig = unwrap_unionall(m.sig)
-    if sig === Tuple
-        # Builtin
+    if sig <: Tuple{Core.Builtin, Vararg}
         print(io, m.name, "(...) in ", parentmodule(m))
         return
     end

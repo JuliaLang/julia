@@ -7,7 +7,7 @@ This document will explain how functions, method definitions, and method tables 
 
 Every function in Julia is a generic function. A generic function is conceptually a single function,
 but consists of many definitions, or methods. The methods of a generic function are stored in a
-method table. There is one global method table (type `MethodTable`) named `Core.GlobalMethods`. Any
+method table. There is one global method table (type `MethodTable`) named `Core.methodtable`. Any
 default operation on methods (such as calls) uses that table.
 
 ## [Function calls](@id Function-calls)
@@ -38,7 +38,7 @@ This entry point for the same functionality accepts the function separately, so 
 does not contain the function:
 
 ```c
-jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs);
+jl_value_t *jl_call(jl_value_t *f, jl_value_t **args, int32_t nargs);
 ```
 
 ## Adding methods

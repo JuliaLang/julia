@@ -7,9 +7,7 @@
  * These symbols support statically linking the sysimage with libjulia-internal.
  *
  * Here we provide dummy definitions that are used when these are not linked
- * together (the default build configuration). The 0 value of jl_system_image_size
+ * together (the default build configuration). The 0 value of jl_image_unpack
  * is used as a sentinel to indicate that the sysimage should be loaded externally.
  **/
-char jl_system_image_data = 0;
-size_t jl_system_image_size = 0;
-jl_image_pointers_t jl_image_pointers = { 0 };
+jl_image_unpack_func_t *jl_image_unpack = NULL;

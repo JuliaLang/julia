@@ -123,7 +123,7 @@ JLJITGetTripleString_impl(JuliaOJITRef JIT)
     return unwrap(JIT)->getTargetTriple().str().c_str();
 }
 
-JL_DLLEXPORT_CODEGEN const char
+JL_DLLEXPORT_CODEGEN char
 JLJITGetGlobalPrefix_impl(JuliaOJITRef JIT)
 {
     return unwrap(JIT)->getDataLayout().getGlobalPrefix();

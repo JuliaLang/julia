@@ -20,104 +20,9 @@
 extern "C" {
 #endif
 
-// head symbols for each expression type
-JL_DLLEXPORT jl_sym_t *jl_call_sym;
-JL_DLLEXPORT jl_sym_t *jl_invoke_sym;
-JL_DLLEXPORT jl_sym_t *jl_invoke_modify_sym;
-JL_DLLEXPORT jl_sym_t *jl_empty_sym;
-JL_DLLEXPORT jl_sym_t *jl_top_sym;
-JL_DLLEXPORT jl_sym_t *jl_module_sym;
-JL_DLLEXPORT jl_sym_t *jl_slot_sym;
-JL_DLLEXPORT jl_sym_t *jl_export_sym;
-JL_DLLEXPORT jl_sym_t *jl_public_sym;
-JL_DLLEXPORT jl_sym_t *jl_toplevel_sym;
-JL_DLLEXPORT jl_sym_t *jl_quote_sym;
-JL_DLLEXPORT jl_sym_t *jl_line_sym;
-JL_DLLEXPORT jl_sym_t *jl_incomplete_sym;
-JL_DLLEXPORT jl_sym_t *jl_goto_sym;
-JL_DLLEXPORT jl_sym_t *jl_goto_ifnot_sym;
-JL_DLLEXPORT jl_sym_t *jl_return_sym;
-JL_DLLEXPORT jl_sym_t *jl_lineinfo_sym;
-JL_DLLEXPORT jl_sym_t *jl_lambda_sym;
-JL_DLLEXPORT jl_sym_t *jl_assign_sym;
-JL_DLLEXPORT jl_sym_t *jl_globalref_sym;
-JL_DLLEXPORT jl_sym_t *jl_do_sym;
-JL_DLLEXPORT jl_sym_t *jl_method_sym;
-JL_DLLEXPORT jl_sym_t *jl_core_sym;
-JL_DLLEXPORT jl_sym_t *jl_enter_sym;
-JL_DLLEXPORT jl_sym_t *jl_leave_sym;
-JL_DLLEXPORT jl_sym_t *jl_pop_exception_sym;
-JL_DLLEXPORT jl_sym_t *jl_exc_sym;
-JL_DLLEXPORT jl_sym_t *jl_error_sym;
-JL_DLLEXPORT jl_sym_t *jl_new_sym;
-JL_DLLEXPORT jl_sym_t *jl_splatnew_sym;
-JL_DLLEXPORT jl_sym_t *jl_block_sym;
-JL_DLLEXPORT jl_sym_t *jl_new_opaque_closure_sym;
-JL_DLLEXPORT jl_sym_t *jl_opaque_closure_method_sym;
-JL_DLLEXPORT jl_sym_t *jl_const_sym;
-JL_DLLEXPORT jl_sym_t *jl_thunk_sym;
-JL_DLLEXPORT jl_sym_t *jl_foreigncall_sym;
-JL_DLLEXPORT jl_sym_t *jl_as_sym;
-JL_DLLEXPORT jl_sym_t *jl_global_sym;
-JL_DLLEXPORT jl_sym_t *jl_globaldecl_sym;
-JL_DLLEXPORT jl_sym_t *jl_local_sym;
-JL_DLLEXPORT jl_sym_t *jl_list_sym;
-JL_DLLEXPORT jl_sym_t *jl_dot_sym;
-JL_DLLEXPORT jl_sym_t *jl_newvar_sym;
-JL_DLLEXPORT jl_sym_t *jl_boundscheck_sym;
-JL_DLLEXPORT jl_sym_t *jl_inbounds_sym;
-JL_DLLEXPORT jl_sym_t *jl_copyast_sym;
-JL_DLLEXPORT jl_sym_t *jl_cfunction_sym;
-JL_DLLEXPORT jl_sym_t *jl_loopinfo_sym;
-JL_DLLEXPORT jl_sym_t *jl_meta_sym;
-JL_DLLEXPORT jl_sym_t *jl_inert_sym;
-JL_DLLEXPORT jl_sym_t *jl_polly_sym;
-JL_DLLEXPORT jl_sym_t *jl_unused_sym;
-JL_DLLEXPORT jl_sym_t *jl_static_parameter_sym;
-JL_DLLEXPORT jl_sym_t *jl_inline_sym;
-JL_DLLEXPORT jl_sym_t *jl_noinline_sym;
-JL_DLLEXPORT jl_sym_t *jl_generated_sym;
-JL_DLLEXPORT jl_sym_t *jl_generated_only_sym;
-JL_DLLEXPORT jl_sym_t *jl_isdefined_sym;
-JL_DLLEXPORT jl_sym_t *jl_propagate_inbounds_sym;
-JL_DLLEXPORT jl_sym_t *jl_specialize_sym;
-JL_DLLEXPORT jl_sym_t *jl_aggressive_constprop_sym;
-JL_DLLEXPORT jl_sym_t *jl_no_constprop_sym;
-JL_DLLEXPORT jl_sym_t *jl_purity_sym;
-JL_DLLEXPORT jl_sym_t *jl_nospecialize_sym;
-JL_DLLEXPORT jl_sym_t *jl_nospecializeinfer_sym;
-JL_DLLEXPORT jl_sym_t *jl_macrocall_sym;
-JL_DLLEXPORT jl_sym_t *jl_colon_sym;
-JL_DLLEXPORT jl_sym_t *jl_hygienicscope_sym;
-JL_DLLEXPORT jl_sym_t *jl_throw_undef_if_not_sym;
-JL_DLLEXPORT jl_sym_t *jl_getfield_undefref_sym;
-JL_DLLEXPORT jl_sym_t *jl_gc_preserve_begin_sym;
-JL_DLLEXPORT jl_sym_t *jl_gc_preserve_end_sym;
-JL_DLLEXPORT jl_sym_t *jl_coverageeffect_sym;
-JL_DLLEXPORT jl_sym_t *jl_escape_sym;
-JL_DLLEXPORT jl_sym_t *jl_aliasscope_sym;
-JL_DLLEXPORT jl_sym_t *jl_popaliasscope_sym;
-JL_DLLEXPORT jl_sym_t *jl_optlevel_sym;
-JL_DLLEXPORT jl_sym_t *jl_thismodule_sym;
-JL_DLLEXPORT jl_sym_t *jl_eval_sym;
-JL_DLLEXPORT jl_sym_t *jl_include_sym;
-JL_DLLEXPORT jl_sym_t *jl_atom_sym;
-JL_DLLEXPORT jl_sym_t *jl_statement_sym;
-JL_DLLEXPORT jl_sym_t *jl_all_sym;
-JL_DLLEXPORT jl_sym_t *jl_compile_sym;
-JL_DLLEXPORT jl_sym_t *jl_force_compile_sym;
-JL_DLLEXPORT jl_sym_t *jl_infer_sym;
-JL_DLLEXPORT jl_sym_t *jl_max_methods_sym;
-JL_DLLEXPORT jl_sym_t *jl_atomic_sym;
-JL_DLLEXPORT jl_sym_t *jl_not_atomic_sym;
-JL_DLLEXPORT jl_sym_t *jl_unordered_sym;
-JL_DLLEXPORT jl_sym_t *jl_monotonic_sym;
-JL_DLLEXPORT jl_sym_t *jl_acquire_sym;
-JL_DLLEXPORT jl_sym_t *jl_release_sym;
-JL_DLLEXPORT jl_sym_t *jl_acquire_release_sym;
-JL_DLLEXPORT jl_sym_t *jl_sequentially_consistent_sym;
-JL_DLLEXPORT jl_sym_t *jl_uninferred_sym;
-JL_DLLEXPORT jl_sym_t *jl_latestworld_sym;
+#define XX(name) JL_DLLEXPORT jl_sym_t *jl_##name;
+JL_COMMON_SYMBOLS(XX)
+#undef XX
 
 static const uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -359,7 +264,6 @@ void jl_init_common_symbols(void)
     jl_opaque_closure_method_sym = jl_symbol("opaque_closure_method");
     jl_const_sym = jl_symbol("const");
     jl_global_sym = jl_symbol("global");
-    jl_globaldecl_sym = jl_symbol("globaldecl");
     jl_local_sym = jl_symbol("local");
     jl_thunk_sym = jl_symbol("thunk");
     jl_toplevel_sym = jl_symbol("toplevel");
@@ -415,6 +319,8 @@ void jl_init_common_symbols(void)
     jl_atomic_sym = jl_symbol("atomic");
     jl_not_atomic_sym = jl_symbol("not_atomic");
     jl_unordered_sym = jl_symbol("unordered");
+    jl_singlethread_sym = jl_symbol("singlethread");
+    jl_system_sym = jl_symbol("system");
     jl_monotonic_sym = jl_symbol("monotonic");
     jl_acquire_sym = jl_symbol("acquire");
     jl_release_sym = jl_symbol("release");
@@ -1047,14 +953,15 @@ int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT
 
 // Utility function to return whether `e` is any of the special AST types or
 // will always evaluate to itself exactly unchanged. This corresponds to
-// `is_self_quoting` in Core.Compiler utilities.
-int jl_is_ast_node(jl_value_t *e) JL_NOTSAFEPOINT
+// `isa_ast_node` in Core.Compiler utilities.
+int jl_isa_ast_node(jl_value_t *e) JL_NOTSAFEPOINT
 {
     return jl_is_newvarnode(e)
         || jl_is_code_info(e)
         || jl_is_linenode(e)
         || jl_is_gotonode(e)
         || jl_is_gotoifnot(e)
+        || jl_is_enternode(e)
         || jl_is_returnnode(e)
         || jl_is_ssavalue(e)
         || jl_is_slotnumber(e)
@@ -1069,9 +976,10 @@ int jl_is_ast_node(jl_value_t *e) JL_NOTSAFEPOINT
         || jl_is_expr(e);
 }
 
-static int is_self_quoting_expr(jl_expr_t *e) JL_NOTSAFEPOINT
+static int is_self_escaping_expr(jl_expr_t *e) JL_NOTSAFEPOINT
 {
     return (e->head == jl_inert_sym ||
+            e->head == jl_leave_sym ||
             e->head == jl_core_sym ||
             e->head == jl_line_sym ||
             e->head == jl_lineinfo_sym ||
@@ -1089,12 +997,13 @@ int need_esc_node(jl_value_t *e) JL_NOTSAFEPOINT
         || jl_is_ssavalue(e)
         || jl_is_slotnumber(e)
         || jl_is_argument(e)
+        || jl_is_enternode(e)
         || jl_is_quotenode(e))
         return 0;
     if (jl_is_expr(e))
-        return !is_self_quoting_expr((jl_expr_t*)e);
+        return !is_self_escaping_expr((jl_expr_t*)e);
     // note: jl_is_globalref(e) is not included here, since we care a little about about having a line number for it
-    return jl_is_ast_node(e);
+    return jl_isa_ast_node(e);
 }
 
 static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule, jl_module_t **ctx, jl_value_t **lineinfo, size_t world, int throw_load_error)
@@ -1109,8 +1018,21 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
     margs[0] = jl_array_ptr_ref(args, 0);
     // __source__ argument
     jl_value_t *lno = jl_array_ptr_ref(args, 1);
-    if (!jl_is_linenode(lno))
+    jl_value_t *retry_lno = NULL;
+    if (!jl_is_linenumbernode(lno)) {
+        if (lno != jl_nothing) {
+            // Special case: The magic @VERSION macro currently gets a special
+            // Core.MacroSource for its __source__ argument. However, to avoid
+            // giving this to macros that do not expect it, we check for that
+            // special case and retry with just the LineNumberNode if needed.
+            if (jl_typeof(lno) == jl_get_global(jl_core_module, jl_symbol("MacroSource"))) {
+                retry_lno = jl_fieldref_noalloc(lno, 0);
+                goto lno_ok;
+            }
+        }
         lno = jl_new_struct(jl_linenumbernode_type, jl_box_long(0), jl_nothing);
+    }
+lno_ok:
     margs[1] = lno;
     margs[2] = (jl_value_t*)inmodule;
     for (i = 3; i < nargs; i++)
@@ -1122,9 +1044,17 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
         ct->world_age = world;
     jl_value_t *result;
     JL_TRY {
-        margs[0] = jl_toplevel_eval(*ctx, margs[0]);
-        jl_method_instance_t *mfunc = jl_method_lookup(margs, nargs, ct->world_age);
+        jl_module_t *ctx_module = *ctx;
+        JL_GC_PROMISE_ROOTED(ctx_module);
+        margs[0] = jl_toplevel_eval(ctx_module, margs[0]);
+        jl_method_instance_t *mfunc = NULL;
+        mfunc = jl_method_lookup(margs, nargs, ct->world_age);
         JL_GC_PROMISE_ROOTED(mfunc);
+        if (mfunc == NULL && retry_lno != NULL) {
+            margs[1] = retry_lno;
+            mfunc = jl_method_lookup(margs, nargs, ct->world_age);
+            JL_GC_PROMISE_ROOTED(mfunc);
+        }
         if (mfunc == NULL) {
             jl_method_error(margs[0], &margs[1], nargs, ct->world_age);
             // unreachable
@@ -1249,24 +1179,15 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
     return expr;
 }
 
-JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule)
+JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule, int recursive, int inplace, int expand_scope)
 {
     JL_TIMING(LOWERING, LOWERING);
     JL_GC_PUSH1(&expr);
-    expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, 0, jl_atomic_load_acquire(&jl_world_counter), 0);
-    expr = jl_call_scm_on_ast("jl-expand-macroscope", expr, inmodule);
-    JL_GC_POP();
-    return expr;
-}
-
-JL_DLLEXPORT jl_value_t *jl_macroexpand1(jl_value_t *expr, jl_module_t *inmodule)
-{
-    JL_TIMING(LOWERING, LOWERING);
-    JL_GC_PUSH1(&expr);
-    expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, 1, jl_atomic_load_acquire(&jl_world_counter), 0);
-    expr = jl_call_scm_on_ast("jl-expand-macroscope", expr, inmodule);
+    if (!inplace)
+        expr = jl_copy_ast(expr);
+    expr = jl_expand_macros(expr, inmodule, NULL, !recursive, jl_atomic_load_acquire(&jl_world_counter), 0);
+    if (expand_scope)
+        expr = jl_call_scm_on_ast("jl-expand-macroscope", expr, inmodule);
     JL_GC_POP();
     return expr;
 }
@@ -1326,15 +1247,18 @@ JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_value_t *expr, jl_module_t *inmodule,
 JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
                                   const char *filename, int line, size_t world, bool_t warn)
 {
-    jl_value_t *core_lower = NULL;
-    if (jl_core_module)
-        core_lower = jl_get_global_value(jl_core_module, jl_symbol("_lower"));
-    if (!core_lower || core_lower == jl_nothing) {
+    jl_value_t *julia_lower = NULL;
+    if (inmodule) {
+        julia_lower = jl_get_global(inmodule, jl_symbol("_internal_julia_lower"));
+    }
+    if ((!julia_lower || julia_lower == jl_nothing) && jl_core_module)
+        julia_lower = jl_get_global_value(jl_core_module, jl_symbol("_lower"), jl_current_task->world_age);
+    if (!julia_lower || julia_lower == jl_nothing) {
         return jl_fl_lower(expr, inmodule, filename, line, world, warn);
     }
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 7);
-    args[0] = core_lower;
+    args[0] = julia_lower;
     args[1] = expr;
     args[2] = (jl_value_t*)inmodule;
     args[3] = jl_cstr_to_string(filename);
@@ -1390,20 +1314,23 @@ jl_code_info_t *jl_inner_ctor_body(jl_array_t *fieldkinds, jl_module_t *inmodule
 // `text` is passed as a pointer to allow raw non-String buffers to be used
 // without copying.
 jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
-                     size_t lineno, size_t offset, jl_value_t *options)
+                     size_t lineno, size_t offset, jl_value_t *options, jl_module_t *inmodule)
 {
-    jl_value_t *core_parse = NULL;
-    if (jl_core_module) {
-        core_parse = jl_get_global(jl_core_module, jl_symbol("_parse"));
+    jl_value_t *parser = NULL;
+    if (inmodule) {
+        parser = jl_get_global(inmodule, jl_symbol("#_internal_julia_parse"));
     }
-    if (!core_parse || core_parse == jl_nothing) {
+    if ((!parser || parser == jl_nothing) && jl_core_module) {
+        parser = jl_get_global(jl_core_module, jl_symbol("_parse"));
+    }
+    if (!parser || parser == jl_nothing) {
         // In bootstrap, directly call the builtin parser.
         jl_value_t *result = jl_fl_parse(text, text_len, filename, lineno, offset, options);
         return result;
     }
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 6);
-    args[0] = core_parse;
+    args[0] = parser;
     args[1] = (jl_value_t*)jl_alloc_svec(2);
     jl_svecset(args[1], 0, jl_box_uint8pointer((uint8_t*)text));
     jl_svecset(args[1], 1, jl_box_long(text_len));
@@ -1432,7 +1359,7 @@ JL_DLLEXPORT jl_value_t *jl_parse_all(const char *text, size_t text_len,
 {
     jl_value_t *fname = jl_pchar_to_string(filename, filename_len);
     JL_GC_PUSH1(&fname);
-    jl_value_t *p = jl_parse(text, text_len, fname, lineno, 0, (jl_value_t*)jl_all_sym);
+    jl_value_t *p = jl_parse(text, text_len, fname, lineno, 0, (jl_value_t*)jl_all_sym, NULL);
     JL_GC_POP();
     return jl_svecref(p, 0);
 }
@@ -1445,7 +1372,7 @@ JL_DLLEXPORT jl_value_t *jl_parse_string(const char *text, size_t text_len,
     jl_value_t *fname = jl_cstr_to_string("none");
     JL_GC_PUSH1(&fname);
     jl_value_t *result = jl_parse(text, text_len, fname, 1, offset,
-                                  (jl_value_t*)(greedy ? jl_statement_sym : jl_atom_sym));
+                                  (jl_value_t*)(greedy ? jl_statement_sym : jl_atom_sym), NULL);
     JL_GC_POP();
     return result;
 }

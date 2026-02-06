@@ -36,7 +36,7 @@ JL_DLLEXPORT const char *jl_get_default_sysimg_path(void)
 
 /* This function is also used by gc-stock.c to parse the
  * JULIA_HEAP_SIZE_HINT environment variable. */
-uint64_t parse_heap_size_hint(const char *optarg, const char *option_name)
+uint64_t parse_heap_size_option(const char *optarg, const char *option_name, int allow_pct)
 {
     long double value = 0.0;
     char unit[4] = {0};
@@ -62,14 +62,16 @@ uint64_t parse_heap_size_hint(const char *optarg, const char *option_name)
             multiplier <<= 40;
             break;
         case '%':
-            if (value > 100)
-                jl_errorf("julia: invalid percentage specified in %s", option_name);
-            uint64_t mem = uv_get_total_memory();
-            uint64_t cmem = uv_get_constrained_memory();
-            if (cmem > 0 && cmem < mem)
-                mem = cmem;
-            multiplier = mem/100;
-            break;
+            if (allow_pct) {
+                if (value > 100)
+                    jl_errorf("julia: invalid percentage specified in %s", option_name);
+                uint64_t mem = uv_get_total_memory();
+                uint64_t cmem = uv_get_constrained_memory();
+                if (cmem > 0 && cmem < mem)
+                    mem = cmem;
+                multiplier = mem/100;
+                break;
+            }
         default:
             jl_errorf("julia: invalid argument to %s (%s)", option_name, optarg);
             break;
@@ -151,10 +153,19 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // strip-ir
                         0, // permalloc_pkgimg
                         0, // heap-size-hint
+                        0, // hard-heap-limit
+                        0, // heap-target-increment
                         0, // trace_compile_timing
                         JL_TRIM_NO, // trim
+                        0, // trace-eval
                         0, // task_metrics
                         -1, // timeout_for_safepoint_straggler_s
+                        0, // gc_sweep_always_full
+                        0, // compress_sysimage
+                        0, // alert_on_critical_error
+                        0, // target_sanitize_memory
+                        0, // target_sanitize_thread
+                        0, // target_sanitize_address
     };
     jl_options_initialized = 1;
 }
@@ -174,8 +185,9 @@ static const char opts[]  =
     "                                               Or, create a temporary environment with `@temp`\n"
     "                                               The default @. option will search through parent\n"
     "                                               directories until a Project.toml or JuliaProject.toml\n"
-    "                                               file is found. @script is similar, but searches up from\n"
-    "                                               the programfile or a path relative to programfile.\n"
+    "                                               file is found. @script is similar, but searches up\n"
+    "                                               from the programfile or a path relative to\n"
+    "                                               programfile.\n"
     " -J, --sysimage <file>                         Start up with the given system image file\n"
     " -H, --home <dir>                              Set location of `julia` executable\n"
     " --startup-file={yes*|no}                      Load `JULIA_DEPOT_PATH/config/startup.jl`; \n"
@@ -286,12 +298,12 @@ static const char opts[]  =
     "                                               information, see --bug-report=help.\n\n"
     " --heap-size-hint=<size>[<unit>]               Forces garbage collection if memory usage is higher\n"
     "                                               than the given value. The value may be specified as a\n"
-    "                                               number of bytes, optionally in units of: B, K (kibibytes),\n"
-    "                                               M (mebibytes), G (gibibytes), T (tebibytes), or % (percentage\n"
-    "                                               of physical memory).\n\n"
+    "                                               number of bytes, optionally in units of: B,\n"
+    "                                               K (kibibytes), M (mebibytes), G (gibibytes),\n"
+    "                                               T (tebibytes), or % (percentage of physical memory).\n\n"
 ;
 
-static const char opts_hidden[]  =
+static const char opts_hidden[] =
     "Switches (a '*' marks the default value, if applicable):\n\n"
     " Option                                        Description\n"
     " ---------------------------------------------------------------------------------------------------\n"
@@ -305,7 +317,10 @@ static const char opts_hidden[]  =
     " --strip-metadata                              Remove docstrings and source location info from\n"
     "                                               system image\n"
     " --strip-ir                                    Remove IR (intermediate representation) of compiled\n"
-    "                                               functions\n\n"
+    "                                               functions\n"
+    " --compress-sysimage={yes|no*}                 Compress the sys/pkgimage heap at the expense of\n"
+    "                                               slightly increased load time.\n"
+    "\n"
 
     // compiler debugging and experimental (see the devdocs for tips on using these options)
     " --experimental                                Enable the use of experimental (alpha) features\n"
@@ -314,24 +329,46 @@ static const char opts_hidden[]  =
     " --output-asm <name>                           Generate an assembly file (.s)\n"
     " --output-incremental={yes|no*}                Generate an incremental output file (rather than\n"
     "                                               complete)\n"
-    " --timeout-for-safepoint-straggler <seconds>   If this value is set, then we will dump the backtrace for a thread\n"
-    "                                               that fails to reach a safepoint within the specified time\n"
+    " --timeout-for-safepoint-straggler <seconds>   If this value is set, then we will dump the backtrace\n"
+    "                                               for a thread that fails to reach a safepoint within\n"
+    "                                               the specified time\n"
     " --trace-compile={stderr|name}                 Print precompile statements for methods compiled\n"
-    "                                               during execution or save to stderr or a path. Methods that\n"
-    "                                               were recompiled are printed in yellow or with a trailing\n"
-    "                                               comment if color is not supported\n"
-    " --trace-compile-timing                        If --trace-compile is enabled show how long each took to\n"
-    "                                               compile in ms\n"
+    "                                               during execution or save to stderr or a path. Methods\n"
+    "                                               that were recompiled are printed in yellow or with\n"
+    "                                               a trailing comment if color is not supported\n"
+    " --trace-compile-timing                        If --trace-compile is enabled show how long each took\n"
+    "                                               to compile in ms\n"
     " --task-metrics={yes|no*}                      Enable collection of per-task timing data.\n"
     " --image-codegen                               Force generate code in imaging mode\n"
-    " --permalloc-pkgimg={yes|no*}                  Copy the data section of package images into memory\n"
-    " --trim={no*|safe|unsafe|unsafe-warn}\n"
-    "                                               Build a sysimage including only code provably reachable\n"
-    "                                               from methods marked by calling `entrypoint`. In unsafe\n"
-    "                                               mode, the resulting binary might be missing needed code\n"
-    "                                               and can throw errors. With unsafe-warn warnings will be\n"
-    "                                               printed for dynamic call sites that might lead to such\n"
-    "                                               errors. In safe mode compile-time errors are given instead.\n"
+    " --permalloc-pkgimg={yes|no*}                  Copy the data section of package images into memory\n\n"
+
+    " --trim={no*|safe|unsafe|unsafe-warn}          Build a sysimage including only code provably\n"
+    "                                               reachable from methods marked by calling\n"
+    "                                               `entrypoint`. In unsafe mode, the resulting binary\n"
+    "                                               might be missing needed code and can throw errors.\n"
+    "                                               With unsafe-warn warnings will be printed for\n"
+    "                                               dynamic call sites that might lead to such errors.\n"
+    "                                               In safe mode compile-time errors are given instead.\n"
+    " --trace-eval={loc|full|no*}                   Show the expression being evaluated before eval.\n"
+    " --hard-heap-limit=<size>[<unit>]              Set a hard limit on the heap size: if we ever\n"
+    "                                               go above this limit, we will abort. The value\n"
+    "                                               may be specified as a number of bytes,\n"
+    "                                               optionally in units of: B, K (kibibytes),\n"
+    "                                               M (mebibytes), G (gibibytes) or T (tebibytes).\n"
+    " --heap-target-increment=<size>[<unit>]        Set an upper bound on how much the heap\n"
+    "                                               target can increase between consecutive\n"
+    "                                               collections. The value may be specified as\n"
+    "                                               a number of bytes, optionally in units of:\n"
+    "                                               B, K (kibibytes), M (mebibytes), G (gibibytes)\n"
+    "                                               or T (tebibytes).\n"
+    " --gc-sweep-always-full                        Makes the GC always do a full sweep of the heap\n"
+    " --target-sanitize=memory                      Instrument generated code for MemorySanitizer.\n"
+    " --target-sanitize=thread                      Instrument generated code for ThreadSanitizer.\n"
+    " --target-sanitize=address                     Instrument generated code for AddressSanitizer.\n"
+    "                                               The above options control the instrumentation of\n"
+    "                                               code generated by --output-* only. JITed code is\n"
+    "                                               instrumented if Julia itself is built with\n"
+    "                                               sanitizers.\n"
 ;
 
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
@@ -380,10 +417,16 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_strip_metadata,
            opt_strip_ir,
            opt_heap_size_hint,
+           opt_hard_heap_limit,
+           opt_heap_target_increment,
+           opt_gc_sweep_always_full,
            opt_gc_threads,
            opt_permalloc_pkgimg,
            opt_trim,
+           opt_trace_eval,
            opt_experimental_features,
+           opt_compress_sysimage,
+           opt_target_sanitize,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:";
     static const struct option longopts[] = {
@@ -451,7 +494,13 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "strip-ir",        no_argument,       0, opt_strip_ir },
         { "permalloc-pkgimg",required_argument, 0, opt_permalloc_pkgimg },
         { "heap-size-hint",  required_argument, 0, opt_heap_size_hint },
+        { "hard-heap-limit", required_argument, 0, opt_hard_heap_limit },
+        { "heap-target-increment", required_argument, 0, opt_heap_target_increment },
+        { "gc-sweep-always-full", no_argument, 0, opt_gc_sweep_always_full },
         { "trim",  optional_argument, 0, opt_trim },
+        { "compress-sysimage", required_argument, 0, opt_compress_sysimage },
+        { "trace-eval",       optional_argument, 0, opt_trace_eval },
+        { "target-sanitize", required_argument, 0, opt_target_sanitize },
         { 0, 0, 0, 0 }
     };
 
@@ -623,7 +672,7 @@ restart_switch:
             else if (!strcmp(optarg,"existing"))
                 jl_options.use_pkgimages = JL_OPTIONS_USE_PKGIMAGES_EXISTING;
             else
-                jl_errorf("julia: invalid argument to --pkgimages={yes|no} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --pkgimages={yes|no|existing} (%s)", optarg);
             break;
         case 'C': // cpu-target
             jl_options.cpu_target = strdup(optarg);
@@ -631,6 +680,7 @@ restart_switch:
                 jl_error("julia: failed to allocate memory");
             break;
         case 't': // threads
+        {
             errno = 0;
             jl_options.nthreadpools = 2;
             // By default:
@@ -669,14 +719,20 @@ restart_switch:
                         if (nthreadsi == 0)
                             jl_options.nthreadpools = 1;
                     }
+                } else if (nthreads == 1) { // User asked for 1 thread so don't add an interactive one
+                    jl_options.nthreadpools = 1;
+                    nthreadsi = 0;
                 }
                 jl_options.nthreads = nthreads + nthreadsi;
             }
+            assert(jl_options.nthreadpools == 1 || jl_options.nthreadpools == 2);
             int16_t *ntpp = (int16_t *)malloc_s(jl_options.nthreadpools * sizeof(int16_t));
             ntpp[0] = (int16_t)nthreads;
-            ntpp[1] = (int16_t)nthreadsi;
+            if (jl_options.nthreadpools == 2)
+                ntpp[1] = (int16_t)nthreadsi;
             jl_options.nthreads_per_pool = ntpp;
             break;
+        }
         case 'p': // procs
             errno = 0;
             if (!strcmp(optarg,"auto")) {
@@ -960,12 +1016,25 @@ restart_switch:
             break;
         case opt_heap_size_hint:
             if (optarg != NULL)
-                jl_options.heap_size_hint = parse_heap_size_hint(optarg, "--heap-size-hint=<size>[<unit>]");
+                jl_options.heap_size_hint = parse_heap_size_option(optarg, "--heap-size-hint=<size>[<unit>]", 1);
             if (jl_options.heap_size_hint == 0)
                 jl_errorf("julia: invalid memory size specified in --heap-size-hint=<size>[<unit>]");
 
             break;
+        case opt_hard_heap_limit:
+            if (optarg != NULL)
+                jl_options.hard_heap_limit = parse_heap_size_option(optarg, "--hard-heap-limit=<size>[<unit>]", 0);
+            if (jl_options.hard_heap_limit == 0)
+                jl_errorf("julia: invalid memory size specified in --hard-heap-limit=<size>[<unit>]");
+            break;
+        case opt_heap_target_increment:
+            if (optarg != NULL)
+                jl_options.heap_target_increment = parse_heap_size_option(optarg, "--heap-target-increment=<size>[<unit>]", 0);
+            if (jl_options.heap_target_increment == 0)
+                jl_errorf("julia: invalid memory size specified in --heap-target-increment=<size>[<unit>]");
+            break;
         case opt_gc_threads:
+        {
             errno = 0;
             long nmarkthreads = strtol(optarg, &endptr, 10);
             if (errno != 0 || optarg == endptr || nmarkthreads < 1 || nmarkthreads >= INT16_MAX) {
@@ -980,6 +1049,7 @@ restart_switch:
                     jl_errorf("julia: --gcthreads=<n>,<m>; m must be 0 or 1");
                 jl_options.nsweepthreads = (int8_t)nsweepthreads;
             }
+        }
             break;
         case opt_permalloc_pkgimg:
             if (!strcmp(optarg,"yes"))
@@ -990,11 +1060,16 @@ restart_switch:
                 jl_errorf("julia: invalid argument to --permalloc-pkgimg={yes|no} (%s)", optarg);
             break;
         case opt_timeout_for_safepoint_straggler:
+        {
             errno = 0;
             long timeout = strtol(optarg, &endptr, 10);
             if (errno != 0 || optarg == endptr || timeout < 1 || timeout > INT16_MAX)
                 jl_errorf("julia: --timeout-for-safepoint-straggler=<seconds>; seconds must be an integer between 1 and %d", INT16_MAX);
             jl_options.timeout_for_safepoint_straggler_s = (int16_t)timeout;
+            break;
+        }
+        case opt_gc_sweep_always_full:
+            jl_options.gc_sweep_always_full = 1;
             break;
         case opt_trim:
             if (optarg == NULL || !strcmp(optarg,"safe"))
@@ -1008,6 +1083,16 @@ restart_switch:
             else
                 jl_errorf("julia: invalid argument to --trim={safe|no|unsafe|unsafe-warn} (%s)", optarg);
             break;
+        case opt_trace_eval:
+            if (optarg == NULL || !strcmp(optarg,"loc"))
+                jl_options.trace_eval = 1;
+            else if (!strcmp(optarg,"full"))
+                jl_options.trace_eval = 2;
+            else if (!strcmp(optarg,"no"))
+                jl_options.trace_eval = 0;
+            else
+                jl_errorf("julia: invalid argument to --trace-eval={yes|no} (%s)", optarg);
+            break;
         case opt_task_metrics:
             if (!strcmp(optarg, "no"))
                 jl_options.task_metrics = JL_OPTIONS_TASK_METRICS_OFF;
@@ -1015,6 +1100,22 @@ restart_switch:
                 jl_options.task_metrics = JL_OPTIONS_TASK_METRICS_ON;
             else
                 jl_errorf("julia: invalid argument to --task-metrics={yes|no} (%s)", optarg);
+            break;
+        case opt_compress_sysimage:
+            if (!strcmp(optarg,"yes"))
+                jl_options.compress_sysimage = 1;
+            else if (!strcmp(optarg,"no"))
+                jl_options.compress_sysimage = 0;
+            break;
+        case opt_target_sanitize:
+            if (!strcmp(optarg, "memory"))
+                jl_options.target_sanitize_memory = 1;
+            else if (!strcmp(optarg, "thread"))
+                jl_options.target_sanitize_thread = 1;
+            else if (!strcmp(optarg, "address"))
+                jl_options.target_sanitize_address = 1;
+            else
+                jl_errorf("julia: invalid argument to --target-sanitize={memory|thread|address} (%s)", optarg);
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"

@@ -63,33 +63,29 @@ precompile_test_harness() do load_path
         let m = only(methods(TestAbsIntPrecompile2.basic_callee))
             mi = only(Base.specializations(m))
             ci = mi.cache
-            @test_broken isdefined(ci, :next)
-            @test ci.owner === nothing
-            @test ci.max_world == typemax(UInt)
-            @test Base.module_build_id(TestAbsIntPrecompile2) ==
-                Base.object_build_id(ci)
-            @test_skip begin
-            ci = ci.next
-            @test !isdefined(ci, :next)
+            @test isdefined(ci, :next)
             @test ci.owner === cache_owner
             @test ci.max_world == typemax(UInt)
             @test Base.module_build_id(TestAbsIntPrecompile2) ==
                 Base.object_build_id(ci)
-            end
+            ci = ci.next
+            @test !isdefined(ci, :next)
+            @test ci.owner === nothing
+            @test ci.max_world == typemax(UInt)
+            @test Base.module_build_id(TestAbsIntPrecompile2) ==
+                Base.object_build_id(ci)
         end
         let m = only(methods(sum, (Vector{Float64},)))
             found = false
             for mi = Base.specializations(m)
                 if mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(sum),Vector{Float64}}
                     ci = mi.cache
-                    @test_broken isdefined(ci, :next)
-                    @test_broken ci.owner === cache_owner
-                    @test_skip begin
+                    @test isdefined(ci, :next)
+                    @test ci.owner === cache_owner
                     @test ci.max_world == typemax(UInt)
                     @test Base.module_build_id(TestAbsIntPrecompile2) ==
                         Base.object_build_id(ci)
                     ci = ci.next
-                    end
                     @test !isdefined(ci, :next)
                     @test ci.owner === nothing
                     @test ci.max_world == typemax(UInt)

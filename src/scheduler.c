@@ -331,7 +331,7 @@ void jl_task_wait_empty(void)
         jl_wait_empty_begin();
         size_t lastage = ct->world_age;
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("wait"));
+        jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("wait"), ct->world_age);
         wait_empty = ct;
         if (f) {
             JL_GC_PUSH1(&f);

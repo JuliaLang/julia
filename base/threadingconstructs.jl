@@ -91,7 +91,7 @@ end
 """
     Threads.threadpool(tid = threadid())::Symbol
 
-Returns the specified thread's threadpool; either `:default`, `:interactive`, or `:foreign`.
+Return the specified thread's threadpool; either `:default`, `:interactive`, or `:foreign`.
 """
 function threadpool(tid = threadid())
     tpid = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1)
@@ -101,7 +101,7 @@ end
 """
     Threads.threadpooldescription(tid = threadid())::String
 
-Returns the specified thread's threadpool name with extended description where appropriate.
+Return the specified thread's threadpool name with extended description where appropriate.
 """
 function threadpooldescription(tid = threadid())
     threadpool_name = threadpool(tid)
@@ -119,7 +119,7 @@ end
 """
     Threads.nthreadpools()::Int
 
-Returns the number of threadpools currently configured.
+Return the number of threadpools currently configured.
 """
 nthreadpools() = Int(unsafe_load(cglobal(:jl_n_threadpools, Cint)))
 
@@ -147,7 +147,7 @@ end
 """
     threadpooltids(pool::Symbol)
 
-Returns a vector of IDs of threads in the given pool.
+Return a vector of IDs of threads in the given pool.
 """
 function threadpooltids(pool::Symbol)
     ni = _nthreads_in_pool(Int8(0))
@@ -163,7 +163,7 @@ end
 """
     Threads.ngcthreads()::Int
 
-Returns the number of GC threads currently configured.
+Return the number of GC threads currently configured.
 This includes both mark threads and concurrent sweep threads.
 """
 ngcthreads() = Int(unsafe_load(cglobal(:jl_n_gcthreads, Cint))) + 1
@@ -173,24 +173,27 @@ function threading_run(fun, static)
     n = threadpoolsize()
     tid_offset = threadpoolsize(:interactive)
     tasks = Vector{Task}(undef, n)
-    for i = 1:n
-        t = Task(() -> fun(i)) # pass in tid
-        t.sticky = static
-        if static
-            ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
-        else
-            # TODO: this should be the current pool (except interactive) if there
-            # are ever more than two pools.
-            _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default))
-            @assert _result == 1
+    try
+        for i = 1:n
+            t = Task(() -> fun(i)) # pass in tid
+            t.sticky = static
+            if static
+                ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
+            else
+                # TODO: this should be the current pool (except interactive) if there
+                # are ever more than two pools.
+                _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default))
+                @assert _result == 1
+            end
+            tasks[i] = t
+            schedule(t)
         end
-        tasks[i] = t
-        schedule(t)
+        for i = 1:n
+            Base._wait(tasks[i])
+        end
+    finally
+        ccall(:jl_exit_threaded_region, Cvoid, ())
     end
-    for i = 1:n
-        Base._wait(tasks[i])
-    end
-    ccall(:jl_exit_threaded_region, Cvoid, ())
     failed_tasks = filter!(istaskfailed, tasks)
     if !isempty(failed_tasks)
         throw(CompositeException(map(TaskFailedException, failed_tasks)))
@@ -222,7 +225,7 @@ end
 
 function greedy_func(itr, lidx, lbody)
     quote
-        let c = Channel{eltype($itr)}(0,spawn=true) do ch
+        let c = Channel{eltype($itr)}(threadpoolsize(), spawn=true) do ch
             for item in $itr
                 put!(ch, item)
             end
@@ -287,8 +290,14 @@ A macro to execute a `for` loop in parallel. The iteration space is distributed 
 coarse-grained tasks. This policy can be specified by the `schedule` argument. The
 execution of the loop waits for the evaluation of all iterations.
 
+Tasks spawned by `@threads` are scheduled on the `:default` threadpool. This means that
+`@threads` will not use threads from the `:interactive` threadpool, even if called from
+the main thread or from a task in the interactive pool. The `:default` threadpool is
+intended for compute-intensive parallel workloads.
+
 See also: [`@spawn`](@ref Threads.@spawn) and
 `pmap` in [`Distributed`](@ref man-distributed).
+For more information on threadpools, see the chapter on [threadpools](@ref man-threadpools).
 
 # Extended help
 

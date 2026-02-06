@@ -13,17 +13,17 @@ const PATH_list = String[]
 const LIBPATH = Ref("")
 const LIBPATH_list = String[]
 artifact_dir::String = ""
+
 libdSFMT_path::String = ""
-
-if Sys.iswindows()
-    const _libdSFMT_path = BundledLazyLibraryPath("libdSFMT.dll")
-elseif Sys.isapple()
-    const _libdSFMT_path = BundledLazyLibraryPath("libdSFMT.dylib")
-else
-    const _libdSFMT_path = BundledLazyLibraryPath("libdSFMT.so")
-end
-
-const libdSFMT = LazyLibrary(_libdSFMT_path)
+const libdSFMT = LazyLibrary(
+    if Sys.iswindows()
+        BundledLazyLibraryPath("libdSFMT.dll")
+    elseif Sys.isapple()
+        BundledLazyLibraryPath("libdSFMT.dylib")
+    else
+        BundledLazyLibraryPath("libdSFMT.so")
+    end
+)
 
 function eager_mode()
     dlopen(libdSFMT)
@@ -31,7 +31,7 @@ end
 is_available() = true
 
 function __init__()
-    global libdSFMT_path = string(_libdSFMT_path)
+    global libdSFMT_path = string(libdSFMT.path)
     global artifact_dir = dirname(Sys.BINDIR)
     LIBPATH[] = dirname(libdSFMT_path)
     push!(LIBPATH_list, LIBPATH[])

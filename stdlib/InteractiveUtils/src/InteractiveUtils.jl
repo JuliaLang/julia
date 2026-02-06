@@ -53,7 +53,7 @@ function varinfo(m::Module=Base.active_module(), pattern::Regex=r""; all::Bool =
             if !isdefined(m2, v) || !occursin(pattern, string(v))
                 continue
             end
-            value = getfield(m2, v)
+            value = getglobal(m2, v)
             isbuiltin = value === Base || value === Base.active_module() || value === Core
             if recursive && !isbuiltin && isa(value, Module) && value !== m2 && nameof(value) === v && parentmodule(value) === m2
                 push!(workqueue, (value, "$prep$v."))
@@ -102,7 +102,7 @@ See also: [`VERSION`](@ref).
 """
 function versioninfo(io::IO=stdout; verbose::Bool=false)
     println(io, "Julia Version $VERSION")
-    if !isempty(Base.GIT_VERSION_INFO.commit_short)
+    if !isempty(Base.GIT_VERSION_INFO.commit_short_raw)
         println(io, "Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")
     end
     official_release = Base.TAGGED_RELEASE_BANNER == "Official https://julialang.org release"
@@ -120,7 +120,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
 
                     Note: This is an unofficial build, please report bugs to the project
                     responsible for this build and not to the Julia project unless you can
-                    reproduce the issue using official builds available at https://julialang.org/downloads
+                    reproduce the issue using official builds available at https://julialang.org
                 """
             )
         end
@@ -200,7 +200,7 @@ end
 
 # `methodswith` -- shows a list of methods using the type given
 """
-    methodswith(typ[, module or function]; supertypes::Bool=false])
+    methodswith(typ[, module or function]; supertypes::Bool=false)
 
 Return an array of methods with an argument of type `typ`.
 
@@ -232,8 +232,8 @@ end
 function _methodswith(@nospecialize(t::Type), m::Module, supertypes::Bool)
     meths = Method[]
     for nm in names(m)
-        if isdefined(m, nm)
-            f = getfield(m, nm)
+        if isdefinedglobal(m, nm)
+            f = getglobal(m, nm)
             if isa(f, Base.Callable)
                 methodswith(t, f, meths; supertypes = supertypes)
             end
@@ -264,8 +264,8 @@ function _subtypes_in!(mods::Array, x::Type)
         m = pop!(mods)
         xt = xt::DataType
         for s in names(m, all = true)
-            if !isdeprecated(m, s) && isdefined(m, s)
-                t = getfield(m, s)
+            if !isdeprecated(m, s) && isdefinedglobal(m, s)
+                t = getglobal(m, s)
                 dt = isa(t, UnionAll) ? unwrap_unionall(t) : t
                 if isa(dt, DataType)
                     if dt.name.name === s && dt.name.module == m && supertype(dt).name == xt.name
@@ -351,8 +351,7 @@ function report_bug(kind)
     BugReportingId = Base.PkgId(
         Base.UUID((0xbcf9a6e7_4020_453c,0xb88e_690564246bb8)), "BugReporting")
     # Check if the BugReporting package exists in the current environment
-    local BugReporting
-    if Base.locate_package(BugReportingId) === nothing
+    BugReporting = if Base.locate_package(BugReportingId) === nothing
         @info "Package `BugReporting` not found - attempting temporary installation"
         # Create a temporary environment and add BugReporting
         let Pkg = Base.require_stdlib(Base.PkgId(
@@ -364,13 +363,14 @@ function report_bug(kind)
                 Base.ACTIVE_PROJECT[] = nothing
                 pkgspec = @invokelatest Pkg.PackageSpec(BugReportingId.name, BugReportingId.uuid)
                 @invokelatest Pkg.add(pkgspec)
-                BugReporting = Base.require(BugReportingId)
+                _BugReporting = Base.require(BugReportingId)
                 append!(empty!(LOAD_PATH), old_load_path)
                 Base.ACTIVE_PROJECT[] = old_active_project
+                _BugReporting
             end
         end
     else
-        BugReporting = Base.require(BugReportingId)
+        Base.require(BugReportingId)
     end
     return @invokelatest BugReporting.make_interactive_report(kind, ARGS)
 end

@@ -1,2 +1,5 @@
 [default]
 extend-ignore-words-re = ["^[a-zA-Z]?[a-zA-Z]?[a-zA-Z]?[a-zA-Z]?$"]
+
+[default.extend-words]
+indexin = "indexin"

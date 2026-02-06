@@ -118,6 +118,17 @@ else
     "--no-whole-archive"
 end
 
+# Prefer whole_archive to WHOLE_ARCHIVE
+whole_archive(paths::String; is_cc=false) = whole_archive([paths]; is_cc)
+function whole_archive(paths::Vector{String}; is_cc=false)
+    cc_arg(a) = is_cc ? "-Wl,$a" : a
+    if Sys.isapple()
+        Cmd(collect(Iterators.flatmap(p -> (cc_arg("-force_load"), p), paths)))
+    else
+        `$(cc_arg("--whole-archive")) $paths $(cc_arg("--no-whole-archive"))`
+    end
+end
+
 const SHARED = if Sys.isapple()
     "-dylib"
 else
@@ -140,11 +151,19 @@ function link_image_cmd(path, out)
     LIBS = isdebugbuild() ? ("-ljulia-debug", "-ljulia-internal-debug") :
                         ("-ljulia", "-ljulia-internal")
     @static if Sys.iswindows()
-        LIBS = (LIBS..., "-lopenlibm", "-lssp", "-lgcc_s", "-lgcc", "-lmsvcrt")
+        LIBS = (LIBS..., "-lopenlibm", "-lgcc_s", "-lgcc", "-lmsvcrt")
+        if isdebugbuild()
+            LIBS = (LIBS..., "-lssp")
+            if isfile(joinpath(private_libdir(), "libmingwex.a"))
+                # In MinGW 11, the ssp implementation was moved from libssp to
+                # libmingwex with ssp only being a stub. See #59020.
+                LIBS = (LIBS..., "-lmingwex", "-lkernel32")
+            end
+        end
     end
 
     V = verbose_linking() ? "--verbose" : ""
-    `$(ld()) $V $SHARED -o $out $WHOLE_ARCHIVE $path $NO_WHOLE_ARCHIVE $PRIVATE_LIBDIR $SHLIBDIR $LIBS`
+    `$(ld()) $V $SHARED -o $out $(whole_archive(path)) $PRIVATE_LIBDIR $SHLIBDIR $LIBS`
 end
 
 function link_image(path, out, internal_stderr::IO=stderr, internal_stdout::IO=stdout)

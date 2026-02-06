@@ -5,15 +5,6 @@
   lightweight processes (symmetric coroutines)
 */
 
-// need this to get the real definition of ucontext_t,
-// if we're going to use the ucontext_t implementation there
-//#if defined(__APPLE__) && defined(JL_HAVE_UCONTEXT)
-//#pragma push_macro("_XOPEN_SOURCE")
-//#define _XOPEN_SOURCE
-//#include <ucontext.h>
-//#pragma pop_macro("_XOPEN_SOURCE")
-//#endif
-
 // this is needed for !COPY_STACKS to work on linux
 #ifdef _FORTIFY_SOURCE
 // disable __longjmp_chk validation so that we can jump between stacks
@@ -36,6 +27,10 @@
 #include "julia_internal.h"
 #include "threading.h"
 #include "julia_assert.h"
+
+#ifdef _COMPILER_TSAN_ENABLED_
+#include <sanitizer/tsan_interface.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -203,10 +198,6 @@ static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt
     lastt->ctx.copy_stack = nb;
     lastt->sticky = 1;
     memcpy_stack_a16((uint64_t*)buf, (uint64_t*)frame_addr, nb);
-    // this task's stack could have been modified after
-    // it was marked by an incremental collection
-    // move the barrier back instead of walking it again here
-    jl_gc_wb_back(lastt);
 }
 
 JL_NO_ASAN static void NOINLINE JL_NORETURN restore_stack(jl_ucontext_t *t, jl_ptls_t ptls, char *p)
@@ -255,18 +246,18 @@ JL_NO_ASAN static void restore_stack2(jl_ucontext_t *t, jl_ptls_t ptls, jl_ucont
         memcpy_stack_a16((uint64_t*)_x, (uint64_t*)_y, nb);
     }
 #if defined(_OS_WINDOWS_)
-    // jl_swapcontext and setjmp are the same on Windows, so we can just use swapcontext directly
+    // jl_swapcontext and setjmp are the same on Windows, so we can just use jl_swapcontext directly
     tsan_switch_to_ctx(t);
     jl_swapcontext(lastt->ctx, t->copy_ctx);
 #else
-#if defined(JL_HAVE_UNW_CONTEXT)
+#if defined(JL_TASK_SWITCH_LIBUNWIND)
     volatile int returns = 0;
     int r = unw_getcontext(lastt->ctx);
     if (++returns == 2) // r is garbage after the first return
         return;
     if (r != 0 || returns != 1)
         abort();
-#elif defined(JL_HAVE_ASM)
+#elif defined(JL_TASK_SWITCH_ASM)
     if (jl_setjmp(lastt->ctx->uc_mcontext, 0))
         return;
 #else
@@ -279,7 +270,7 @@ JL_NO_ASAN static void restore_stack2(jl_ucontext_t *t, jl_ptls_t ptls, jl_ucont
 
 JL_NO_ASAN static void NOINLINE restore_stack3(jl_ucontext_t *t, jl_ptls_t ptls, char *p)
 {
-#if !defined(JL_HAVE_ASM)
+#if !defined(JL_TASK_SWITCH_ASM)
     char *_x = (char*)ptls->stackbase;
     if (!p) {
         // switch to a stackframe that's well beyond the bounds of the next switch
@@ -307,7 +298,7 @@ CFI_NORETURN
 #endif
 
 /* Rooted by the base module */
-static _Atomic(jl_function_t*) task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
+static _Atomic(jl_value_t*) task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
 
 void JL_NORETURN jl_finish_task(jl_task_t *ct)
 {
@@ -333,9 +324,9 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
     ct->ptls->in_pure_callback = 0;
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
     // let the runtime know this task is dead and find a new task to run
-    jl_function_t *done = jl_atomic_load_relaxed(&task_done_hook_func);
+    jl_value_t *done = jl_atomic_load_relaxed(&task_done_hook_func);
     if (done == NULL) {
-        done = (jl_function_t*)jl_get_global_value(jl_base_module, jl_symbol("task_done_hook"));
+        done = (jl_value_t*)jl_get_global_value(jl_base_module, jl_symbol("task_done_hook"), ct->world_age);
         if (done != NULL)
             jl_atomic_store_release(&task_done_hook_func, done);
     }
@@ -348,7 +339,7 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
             jl_no_exc_handler(jl_current_exception(ct), ct);
         }
     }
-    jl_gc_debug_critical_error();
+    jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();
 }
 
@@ -504,6 +495,12 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
             lastt->ctx.ctx = &lasttstate.ctx;
         }
     }
+    // this task's stack or scope field could have been modified after
+    // it was marked by an incremental collection
+    // move the barrier back instead of walking the shadow stack again here to check if that is required
+    // even if killed (dropping the stack) and just the scope field matters,
+    // let the gc figure that out next time it does a quick mark
+    jl_gc_wb_back(lastt);
 
     // set up global state for new task and clear global state for old task
     t->ptls = ptls;
@@ -728,10 +725,38 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
     if (!e)
         e = jl_current_exception(ct);
 
-    jl_printf((JL_STREAM*)STDERR_FILENO, "fatal: error thrown and no exception handler available.\n");
-    jl_static_show((JL_STREAM*)STDERR_FILENO, e);
-    jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
-    jlbacktrace(); // written to STDERR_FILENO
+    // Write error to memory first
+    ios_t s;
+    ios_mem(&s, 1024);
+    jl_safe_fprintf(&s, "fatal: error thrown and no exception handler available.\n");
+    jl_static_show((JL_STREAM*)&s, e);
+    jl_safe_fprintf(&s, "\n");
+    jl_fprint_backtrace(&s);
+
+    // Then to STDERR
+    ios_write_direct(ios_stderr, &s);
+
+    // Finally write to system log (if supported)
+#ifdef _OS_WINDOWS_
+    HANDLE event_source = RegisterEventSourceW(NULL, L"julia");
+    if (event_source != INVALID_HANDLE_VALUE) {
+        ios_putc('\0', &s);
+        const wchar_t *strings[] = { ios_utf8_to_wchar(s.buf) };
+        ReportEventW(
+            event_source, EVENTLOG_ERROR_TYPE, /* category */ 0, /* event_id */ (DWORD)0xE0000000L,
+           /* user_sid */ NULL, /* n_strings */ 1, /* data_size */ 0, strings, /* data */ NULL
+        );
+        free((void *)strings[0]);
+
+        if (jl_options.alert_on_critical_error) {
+            MessageBoxW(NULL, /* message */ L"fatal: error thrown and no exception handler available\n\n"
+                                            L"See Application log in Event Viewer for more information.",
+                        /* title */ L"fatal error in libjulia", MB_OK | MB_ICONEXCLAMATION | MB_SYSTEMMODAL);
+        }
+    }
+#endif
+
+    ios_close(&s);
     if (ct == NULL)
         jl_raise(6);
     jl_exit(1);
@@ -1069,7 +1094,7 @@ void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSA
     }
 }
 
-JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion_future, size_t ssize)
+JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_future, size_t ssize)
 {
     jl_task_t *ct = jl_current_task;
     jl_task_t *t = (jl_task_t*)jl_gc_alloc(ct->ptls, sizeof(jl_task_t), jl_task_type);
@@ -1108,6 +1133,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     jl_atomic_store_relaxed(&t->_isexception, 0);
     // Inherit scope from parent task
     t->scope = ct->scope;
+    jl_gc_wb_fresh(t, t->scope);
     // Fork task-local random state from parent
     jl_rng_split(t->rngState, ct->rngState);
     // there is no active exception handler available on this stack yet
@@ -1258,37 +1284,24 @@ skip_pop_exception:;
     ct->result = res;
     jl_gc_wb(ct, ct->result);
     jl_finish_task(ct);
-    jl_gc_debug_critical_error();
+    jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();
 }
 
 
-#if defined(JL_HAVE_UCONTEXT)
-#ifdef _OS_WINDOWS_
-#define setcontext jl_setcontext
-#define swapcontext jl_swapcontext
-#endif
+#ifdef JL_TASK_SWITCH_WINDOWS
 static int make_fiber(jl_ucontext_t *t, _jl_ucontext_t *ctx)
 {
-#ifndef _OS_WINDOWS_
-    int r = getcontext(ctx);
-    if (r != 0) abort();
-#endif
     ctx->uc_stack.ss_sp = (char*)t->stkbuf;
     ctx->uc_stack.ss_size = t->bufsz;
-#ifdef _OS_WINDOWS_
     jl_makecontext(ctx, &start_task);
-#else
-    ctx->uc_link = NULL;
-    makecontext(ctx, &start_task, 0);
-#endif
     return 1;
 }
 static void jl_start_fiber_set(jl_ucontext_t *t)
 {
     _jl_ucontext_t ctx;
     make_fiber(t, &ctx);
-    setcontext(&ctx);
+    jl_setcontext(&ctx);
 }
 static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
@@ -1296,20 +1309,20 @@ static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *t)
     make_fiber(t, &ctx);
     assert(lastt);
     tsan_switch_to_ctx(t);
-    swapcontext(lastt->ctx, &ctx);
+    jl_swapcontext(lastt->ctx, &ctx);
 }
 static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     tsan_switch_to_ctx(t);
-    swapcontext(lastt->ctx, t->ctx);
+    jl_swapcontext(lastt->ctx, t->ctx);
 }
 static void jl_set_fiber(jl_ucontext_t *t)
 {
-    setcontext(t->ctx);
+    jl_setcontext(t->ctx);
 }
 #endif
 
-#if defined(JL_HAVE_UNW_CONTEXT)
+#if defined(JL_TASK_SWITCH_LIBUNWIND)
 #ifdef _OS_WINDOWS_
 #error unw_context_t not defined in Windows
 #endif
@@ -1339,7 +1352,7 @@ static void jl_set_fiber(jl_ucontext_t *t)
         abort();
     unw_resume(&c);
 }
-#elif defined(JL_HAVE_ASM)
+#elif defined(JL_TASK_SWITCH_ASM)
 static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     if (jl_setjmp(lastt->ctx->uc_mcontext, 0))
@@ -1353,7 +1366,7 @@ static void jl_set_fiber(jl_ucontext_t *t)
 }
 #endif
 
-#if defined(JL_HAVE_UNW_CONTEXT) && !defined(JL_HAVE_ASM)
+#if defined(JL_TASK_SWITCH_LIBUNWIND) && !defined(JL_TASK_SWITCH_ASM)
 #if defined(_CPU_X86_) || defined(_CPU_X86_64_)
 #define PUSH_RET(ctx, stk) \
     do { \
@@ -1417,14 +1430,14 @@ static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *t)
 }
 #endif
 
-#if defined(JL_HAVE_ASM)
+#if defined(JL_TASK_SWITCH_ASM)
 #ifdef _OS_WINDOWS_
-#error JL_HAVE_ASM not defined in Windows
+#error JL_TASK_SWITCH_ASM not defined in Windows
 #endif
 JL_NO_ASAN static void jl_start_fiber_swap(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     assert(lastt);
-#ifdef JL_HAVE_UNW_CONTEXT
+#ifdef JL_TASK_SWITCH_LIBUNWIND
     volatile int returns = 0;
     int r = unw_getcontext(lastt->ctx);
     if (++returns == 2) // r is garbage after the first return
@@ -1513,7 +1526,7 @@ CFI_NORETURN
         " trap; \n"
         : : "r"(stk), "r"(fn) : "memory");
 #else
-#error JL_HAVE_ASM defined but not implemented for this CPU type
+#error JL_TASK_SWITCH_ASM defined but not implemented for this CPU type
 #endif
     __builtin_unreachable();
 }
@@ -1534,8 +1547,6 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     } bootstrap_task = {0};
     jl_set_pgcstack(&bootstrap_task.value.gcstack);
     bootstrap_task.value.ptls = ptls;
-    if (jl_nothing == NULL) // make a placeholder
-        jl_nothing = jl_gc_permobj(0, jl_nothing_type, 0);
     jl_task_t *ct = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t), jl_task_type);
     jl_set_typetagof(ct, jl_task_tag, 0);
     memset(ct, 0, sizeof(jl_task_t));
@@ -1573,6 +1584,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->donenotify = jl_nothing;
     jl_atomic_store_relaxed(&ct->_isexception, 0);
     ct->scope = jl_nothing;
+    jl_gc_wb_knownold(ct, ct->scope);
     ct->eh = NULL;
     ct->gcstack = NULL;
     ct->excstack = NULL;

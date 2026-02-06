@@ -34,6 +34,7 @@ public
 # arrays
     has_offset_axes,
     require_one_based_indexing,
+    memoryindex,
 
 # collections
     IteratorEltype,
@@ -52,6 +53,7 @@ public
     DL_LOAD_PATH,
     load_path,
     active_project,
+    active_manifest,
 
 # Reflection and introspection
     get_extension,
@@ -68,12 +70,21 @@ public
     ispublic,
     remove_linenums!,
 
+# AST handling
+    IR,
+    isa_ast_node,
+    quoted,
+
 # Operators
     operator_associativity,
     operator_precedence,
     isbinaryoperator,
     isoperator,
     isunaryoperator,
+
+# Integer math
+    uabs,
+    mul_hi,
 
 # C interface
     cconvert,
@@ -88,6 +99,7 @@ public
     @constprop,
     @locals,
     @propagate_inbounds,
+    @__doc__,
 
 # External processes
     shell_escape,
@@ -99,6 +111,11 @@ public
 
 # Strings
     escape_raw_string,
+
+# Chars
+    ismalformed,
+    isoverlong,
+    show_invalid,
 
 # IO
     # types
@@ -116,8 +133,12 @@ public
 # filesystem operations
     rename,
 
+# promotion
+    promote_typejoin,
+
 # misc
     notnothing,
     runtests,
     text_colors,
-    depwarn
+    depwarn,
+    donotdelete

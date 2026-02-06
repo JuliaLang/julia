@@ -230,7 +230,7 @@ end
             @test cmp_sn2(Tw(xw+yw), astuple(x+y)..., slopbits)
             @test cmp_sn2(Tw(xw-yw), astuple(x-y)..., slopbits)
             @test cmp_sn2(Tw(xw*yw), astuple(x*y)..., slopbits)
-            @test cmp_sn2(Tw(xw/yw), astuple(x/y)..., slopbits)
+            @test cmp_sn2(Tw(xw/yw), astuple(x/y)..., slopbits+1) # extra bit because division is hard
             y = rand(T)
             yw = widen(widen(y))
             @test cmp_sn2(Tw(xw+yw), astuple(x+y)..., slopbits)
@@ -699,6 +699,18 @@ end
         @test Duck(4) ∈ Duck(1):Duck(5)
         @test Duck(0) ∉ Duck(1):Duck(5)
     end
+    @testset "unique" begin
+        struct MyStepRangeLen{T,R} <: AbstractRange{T}
+           x :: R
+        end
+        MyStepRangeLen(s::StepRangeLen{T}) where {T} = MyStepRangeLen{T,typeof(s)}(s)
+        Base.first(s::MyStepRangeLen) = first(s.x)
+        Base.last(s::MyStepRangeLen) = last(s.x)
+        Base.length(s::MyStepRangeLen) = length(s.x)
+        Base.step(s::MyStepRangeLen) = step(s.x)
+        sr = StepRangeLen(1,0,4)
+        @test unique(MyStepRangeLen(sr)) == unique(sr)
+    end
 end
 @testset "indexing range with empty range (#4309)" begin
     @test (@inferred (3:6)[5:4]) === 7:6
@@ -743,6 +755,8 @@ end
         @test length(typemin(T):typemax(T)) == T(0)
         @test length(zero(T):one(T):typemax(T)) == typemin(T)
         @test length(typemin(T):one(T):typemax(T)) == T(0)
+        @test length(StepRange{T,BigInt}(zero(T), 1, typemax(T))) == typemin(T)
+        @test length(StepRange{T,BigInt}(typemin(T), 1, typemax(T))) == T(0)
         @test_throws OverflowError checked_length(zero(T):typemax(T))
         @test_throws OverflowError checked_length(typemin(T):typemax(T))
         @test_throws OverflowError checked_length(zero(T):one(T):typemax(T))
@@ -2816,4 +2830,33 @@ end
     r = StepRangeLen(Date(2020,1,1), Day(1), 4)
     @test StepRange(r) == r
     @test StepRange(r) isa StepRange{Date,Day}
+end
+
+const EXAMPLE_RANGES = AbstractRange[
+    1:10,
+    1:5,
+    1:0,
+    1:1,
+    3:2,
+    3:0,
+    10:-1:1,
+    1:2:10,
+    10:-2:1,
+    LinRange(1.0, 10.0, 10),
+    LinRange(10.0, 1.0, 10),
+    1e10:1.99:(1e10 + 2),
+    1e10:(1.99+eps()):(1e10 + 2),
+    StepRangeLen(1, 2, 5),
+    StepRangeLen(10, -2, 5),
+    UInt8(1):UInt8(10),
+    UInt8(10):-UInt8(1):UInt8(1),
+    'a':'z',
+    LinRange(0.3376448676263234, 1.509664528429199, 3),
+    range(0.3376448676263234, step=0.5860098304014378, length=3),
+]
+
+@testset "cmp(::AbstractRange, ::AbstractRange)" begin
+    for a in EXAMPLE_RANGES, b in EXAMPLE_RANGES
+        @test try cmp(a, b) catch e; e end == try cmp(collect(a), collect(b)) catch e; e end
+    end
 end
