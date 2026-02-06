@@ -83,12 +83,18 @@ let b = UInt8['0':'9';'A':'Z';'a':'z']
         end
     end
 
-    randstring(r::AbstractRNG) = randstring(r::AbstractRNG, b, 8)
-    randstring(r::AbstractRNG, chars) = randstring(r::AbstractRNG, chars, 8)
-    randstring(r::AbstractRNG, chars, n::Integer) = randstring(r::AbstractRNG, chars, convert(Int, n))
-    randstring(r::AbstractRNG, n::Integer) = randstring(r, b, convert(Int, n))
-    randstring(chars=b, n::Integer=8) = randstring(default_rng(), chars, convert(Int, n))
-    randstring(n::Integer) = randstring(default_rng(), b, convert(Int, n))
+    # Zero-arg methods:
+    randstring() = randstring(default_rng(), b, 8)
+    # One-arg methods:
+    randstring(r::AbstractRNG) = randstring(r, b, 8)
+    randstring(chars) = randstring(default_rng(), chars, 8)
+    randstring(n::Integer) = randstring(default_rng(), chars, convert(Int, n))
+    # Two-arg methods:
+    randstring(r::AbstractRNG, chars) = randstring(r, chars, 8)
+    randstring(r::AbstractRNG, n::Integer) = randstring(r, b, 8)
+    randstring(chars, n::Integer) = randstring(default_rng(), chars, n)
+    # Three-arg methods:
+    randstring(r::AbstractRNG, chars, n::Integer) = randstring(r, chars, convert(Int, n))
 end
 
 
