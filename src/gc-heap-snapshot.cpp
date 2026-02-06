@@ -119,12 +119,9 @@ class SerializedStringTable: public StringTable {
         auto val = map.insert(make_pair(key, next_id));
         if (val.second) {
             strings.push_back(val.first->first());
-            // persist the string size first, then the string itself
-            // so that we could read it back in the same order
-            size_t s_size = key.size();
-            ios_write(stream, reinterpret_cast<const char*>(&s_size), sizeof(size_t));
-            ios_write(stream, key.data(), s_size);
-            next_id++;
+            size_t id = serialize(stream, key);
+            assert(id == val.first->second);
+            return id;
         }
         return val.first->second;
     }
@@ -133,6 +130,8 @@ class SerializedStringTable: public StringTable {
     // and return its index. This means that we might have duplicates in the
     // output string file.
     size_t serialize(ios_t *stream, StringRef key) JL_NOTSAFEPOINT {
+        // persist the string size first, then the string itself
+        // so that we could read it back in the same order
         size_t s_size = key.size();
         ios_write(stream, reinterpret_cast<const char*>(&s_size), sizeof(size_t));
         ios_write(stream, key.data(), s_size);
@@ -380,7 +379,7 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
 
     auto node = Node{
         (uint8_t)g_snapshot->node_types.find_or_create_string_id(node_type), // size_t type;
-        g_snapshot->names.serialize(g_snapshot->strings, name), // size_t name;
+        g_snapshot->names.serialize_if_necessary(g_snapshot->strings, name), // size_t name;
         (size_t)a,     // size_t id;
         // We add 1 to self-size for the type tag that all heap-allocated objects have.
         // Also because the Chrome Snapshot viewer ignores size-0 leaves!
@@ -405,7 +404,7 @@ static size_t record_pointer_to_gc_snapshot(void *a, size_t bytes, StringRef nam
 
     auto node = Node{
         (uint8_t)g_snapshot->node_types.find_or_create_string_id( "object"), // size_t type;
-        g_snapshot->names.serialize(g_snapshot->strings, name), // size_t name;
+        g_snapshot->names.serialize_if_necessary(g_snapshot->strings, name), // size_t name;
         (size_t)a,     // size_t id;
         bytes,         // size_t self_size;
         0,             // size_t trace_node_id (unused)
@@ -448,7 +447,7 @@ static SmallString<128> _fieldpath_for_slot(void *obj, void *slot) JL_NOTSAFEPOI
 void _gc_heap_snapshot_record_root(jl_value_t *root, char *name) JL_NOTSAFEPOINT
 {
     size_t to_node_idx = record_node_to_gc_snapshot(root);
-    auto edge_label = g_snapshot->names.serialize(g_snapshot->strings, name);
+    auto edge_label = g_snapshot->names.serialize_if_necessary(g_snapshot->strings, name);
 
     _record_gc_just_edge("internal", g_snapshot->internal_root_idx, to_node_idx, edge_label);
 }
@@ -456,7 +455,7 @@ void _gc_heap_snapshot_record_root(jl_value_t *root, char *name) JL_NOTSAFEPOINT
 void _gc_heap_snapshot_record_gc_roots(jl_value_t *root, char *name) JL_NOTSAFEPOINT
 {
     auto to_node_idx = record_node_to_gc_snapshot(root);
-    auto edge_label = g_snapshot->names.serialize(g_snapshot->strings, name);
+    auto edge_label = g_snapshot->names.serialize_if_necessary(g_snapshot->strings, name);
 
     _record_gc_just_edge("internal", g_snapshot->_gc_root_idx, to_node_idx, edge_label);
 }
