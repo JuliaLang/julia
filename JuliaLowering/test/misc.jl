@@ -66,6 +66,14 @@ end
     @test cg isa Ptr{Cint}
     @test cg !== C_NULL
     @test unsafe_load(cg) == 1
+    cg = JuliaLowering.include_string(test_mod, """
+        let local_tuple = (:global_var, libccalltest_var)
+            cglobal(local_tuple, Cint)
+        end
+    """)
+    @test cg isa Ptr{Cint}
+    @test cg !== C_NULL
+    @test unsafe_load(cg) == 1
 end
 
 # ccall

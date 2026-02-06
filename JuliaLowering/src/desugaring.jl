@@ -1723,13 +1723,12 @@ function expand_ccall_argtype(ctx, ex)
     end
 end
 
-# Expand the (sym,lib) argument to ccall/cglobal
-function expand_C_library_symbol(ctx, ex, desugar_tuple)
+# Expand the (sym,lib) argument to ccall
+function expand_C_library_symbol(ctx, ex)
     @stm ex begin
         [K"tuple" _...] -> @ast ctx ex [K"static_eval"(
             meta=name_hint("function name and library expression"))
-            desugar_tuple ? expand_forms_2(ctx, ex) :
-                mapchildren(e->expand_forms_2(ctx,e), ctx, ex)
+            mapchildren(e->expand_forms_2(ctx,e), ctx, ex)
         ]
         [K"static_eval" _] -> ex # already done
         _ -> expand_forms_2(ctx, ex)
@@ -1849,7 +1848,7 @@ function expand_ccall(ctx, ex)
     @ast ctx ex [K"block"
         sctx.stmts...
         [K"foreigncall"
-            expand_C_library_symbol(ctx, cfunc_name, false)
+            expand_C_library_symbol(ctx, cfunc_name)
             [K"static_eval"(meta=name_hint("ccall return type"))
                 expand_forms_2(ctx, return_type)
             ]
@@ -1918,7 +1917,7 @@ function expand_call(ctx, ex)
         @chk numchildren(ex) in 2:3  (ex, "cglobal must have one or two arguments")
         return @ast ctx ex [K"call"
             ex[1]
-            expand_C_library_symbol(ctx, ex[2], true)
+            expand_forms_2(ctx, ex[2])
             if numchildren(ex) == 3
                 expand_forms_2(ctx, ex[3])
             end
@@ -4640,7 +4639,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         ex
     elseif k == K"foreigncall"
         @ast ctx ex [K"foreigncall"
-            expand_C_library_symbol(ctx, ex[1], false)
+            expand_C_library_symbol(ctx, ex[1])
             map(c->expand_forms_2(ctx, c), ex[2:end])...
         ]
     elseif k == K"symbolicblock"
