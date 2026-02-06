@@ -179,7 +179,7 @@ uintptr_t map_rw(uintptr_t addr, size_t size)
     // MemExtendedParameterAddressRequirements.
     return 0;
 #else
-    size_t half_range = 1u << (range_bits - 1);
+    size_t half_range = (size_t)1 << (range_bits - 1);
     uintptr_t lo = target + target_size - half_range;
     uintptr_t hi = target + half_range - size;
     // The target region is too big.
@@ -196,7 +196,7 @@ uintptr_t map_rw(uintptr_t addr, size_t size)
             map_remove(*addr, size);
         }
         do {
-            intptr_t r = cong(1u << range_bits, &seed) - half_range;
+            intptr_t r = cong((size_t)1 << range_bits, &seed) - half_range;
             hint = LLT_ALIGN(target + target_size + r, jl_page_size);
         } while (!inrange(hint));
     }
@@ -746,10 +746,10 @@ protected:
         block_size_bits = getenv_int("JULIA_CGMEMMGR_BLOCK_SIZE", DEFAULT_BLOCK_SIZE);
         if (block_size_bits > (CALL_RANGE - 1))
             jl_error("JULIA_CGMEMMGR_BLOCK_SIZE is too big for call relocations");
-        else if ((1u << block_size_bits) <= jl_page_size)
+        else if (((size_t)1 << block_size_bits) <= jl_page_size)
             jl_error("JULIA_CGMEMMGR_BLOCK_SIZE is smaller than page size");
 
-        int pages = (1u << block_size_bits) / jl_page_size;
+        int pages = ((size_t)1 << block_size_bits) / jl_page_size;
         int rx_pages = pages * DEFAULT_TEXT_DATA_RATIO / (1 + DEFAULT_TEXT_DATA_RATIO);
         rx_pages = std::min(rx_pages, pages - 1);
         int rw_pages = pages - rx_pages;
