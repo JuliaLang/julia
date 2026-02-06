@@ -534,31 +534,36 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                 end
             end
             function get_shape(a, is_row_first, d)
+                # Unwrap one level of row/nrow expressions
                 function get_next(x)
-                    if !is_row(x) ||
-                        x.head === :nrow && d > x.args[1] + 1 ||
-                        x.head === :row && d > 1
-                        return [x]
-                    elseif x.head === :nrow
-                        return x.args[2:end]
-                    else
-                        return x.args
-                    end
+                    is_row(x) || return [x]
+                    x.head === :nrow && d == x.args[1] + 1 && return x.args[2:end]
+                    x.head === :row && (d == 1 || (d == 2 && is_row_first)) && return x.args
+                    return [x]
                 end
-                if d == 0 || d == 1 && !is_row_first
-                    return length(a)
-                elseif d == 3 && is_row_first
-                    return get_shape(a, is_row_first, d - 1)
-                else
-                    ashape = map(x -> get_shape(get_next(x), is_row_first, d - 1), a)
-                    if length(ashape) > 1
-                        counts = ashape .|> first
-                        prev_counts = ashape .|> last
-                        return [sum(counts), counts, vcat(map(x -> vcat(x...), prev_counts)...)]
-                    else
-                        return [sum(ashape), ashape]
-                    end
+
+                # Count leaf elements recursively
+                count_leaves(x) = !is_row(x) ? 1 :
+                                  x.head === :nrow ? sum(count_leaves, @view(x.args[2:end]); init=0) :
+                                  x.head === :row ? sum(count_leaves, x.args; init=0) : 1
+
+                # Base cases
+                (d == 0 || (d == 1 && !is_row_first)) && return [[length(a)]]
+                (d == 3 && is_row_first) && return get_shape(a, is_row_first, 2)
+
+                # Recursive case: build shape from children
+                shapes = map(c -> get_shape(c, is_row_first, d - 1), map(get_next, a))
+                counts = map(count_leaves, a)
+                result = [[sum(counts)], counts]
+
+                # Merge deeper levels from all children
+                max_depth = maximum(length, shapes; init=1)
+                for level in 2:max_depth
+                    level_data = reduce(vcat, (s[level] for s in shapes if level <= length(s)); init=[])
+                    isempty(level_data) || push!(result, level_data)
                 end
+
+                return result
             end
             function get_dims(a, is_row_first, d)
                 if d < 2 && !is_row(a[1])
@@ -575,7 +580,6 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                 end
             end
             is_1d = !any(is_row, args)
-            args |> dump
             xs = collect(Iterators.flatten(extract_elements.(args)))
             if is_1d
                 args = [ex0.head === :ncat ? [] : Any[ex0.args[1]]; d; xs]
