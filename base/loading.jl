@@ -2437,6 +2437,10 @@ const _concrete_dependencies = Pair{PkgId,UInt128}[] # these dependency versions
 const _require_dependencies = Any[] # a list of (mod::Module, abspath::String, fsize::UInt64, hash::UInt32, mtime::Float64) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
 
+function _include_dependency_hash(path::AbstractString, stat::Union{StatStruct,Nothing}=nothing)
+    return (isnothing(stat) ? isdir(path) : isdir(stat)) ? _crc32c(join(readdir(path))) : open(_crc32c, path, "r")::UInt32
+end
+
 function _include_dependency(mod::Module, _path::AbstractString; track_content::Bool=true,
                              path_may_be_dir::Bool=false)
     _include_dependency!(_require_dependencies, _track_dependencies[], mod, _path, track_content, path_may_be_dir)
@@ -2460,7 +2464,7 @@ function _include_dependency!(dep_list::Vector{Any}, track_dependencies::Bool,
     else
         @lock require_lock begin
             if track_content
-                hash = (isdir(path) ? _crc32c(join(readdir(path))) : open(_crc32c, path, "r"))::UInt32
+                hash = _include_dependency_hash(path)
                 # use mtime=-1.0 here so that fsize==0 && mtime==0.0 corresponds to a missing include_dependency
                 push!(dep_list, (mod, path, UInt64(filesize(path)), hash, -1.0))
             else
@@ -3637,14 +3641,22 @@ function CacheHeaderIncludes(dep_tuple::Tuple{Module, String, UInt64, UInt32, Fl
     return CacheHeaderIncludes(PkgId(dep_tuple[1]), dep_tuple[2:end]..., String[])
 end
 
-function replace_depot_path(path::AbstractString, depots::Vector{String}=normalize_depots_for_relocation())
+function replace_depot_path_impl(path::AbstractString, depots::Vector{String}=normalize_depots_for_relocation())
+    the_depot = nothing
+    reloc_path = path
     for depot in depots
         if startswith(path, string(depot, Filesystem.pathsep())) || path == depot
-            path = replace(path, depot => "@depot"; count=1)
+            reloc_path = replace(path, depot => "@depot"; count=1)
+            the_depot = depot
             break
         end
     end
-    return path
+    return the_depot, reloc_path
+end
+
+function replace_depot_path(path::AbstractString, depots::Vector{String}=normalize_depots_for_relocation())
+    _, reloc_path = replace_depot_path_impl(path, depots)
+    return reloc_path
 end
 
 function normalize_depots_for_relocation()
@@ -3670,6 +3682,76 @@ function resolve_depot(inc::AbstractString)
         ispath(restore_depot_path(inc, depot)) && return depot
     end
     return :no_depot_found
+end
+
+"""
+    Base.RelocPath(path::AbstractString; track_content::Bool=true)
+
+A type to represent a relocatable path.
+
+Requires `path` to be located within one of `DEPOT_PATH` upon construction.
+
+An error is thrown if relocation fails.
+
+If `track_content=true` the content hash of `path` is stored and later used to distinguish
+different versions of `path` appearing in multiple depots. If `path` refers to a directory,
+then the content hash is based on the string list of the directory's entries.
+
+# Example
+```jldoctest
+julia> path1 = joinpath(mktempdir(), "foo"); touch(path1); # set up a file called foo
+
+julia> pushfirst!(DEPOT_PATH, dirname(path1));
+
+julia> relocpath = Base.RelocPath(path1);
+
+julia> String(relocpath) == path1
+true
+
+julia> path2 = joinpath(mktempdir(), "foo"); touch(path2); # set up another foo
+
+julia> pushfirst!(DEPOT_PATH, dirname(path2));
+
+julia> String(relocpath) == path2
+true
+
+julia> path1 != path2
+true
+```
+"""
+struct RelocPath
+    subpath::String
+    checksum::Union{UInt32,Nothing}
+    function RelocPath(path::AbstractString; track_content::Bool=true)
+        if track_content && !ispath(path)
+            error("Can't track content of nonexistent path $(path).")
+        end
+        depot, _ = replace_depot_path_impl(path)
+        if isnothing(depot)
+            error("Failed to locate $(path) in any of DEPOT_PATH.")
+        end
+        subpath = replace(path, depot => ""; count=1)
+        return new(subpath, track_content ? _include_dependency_hash(path) : nothing)
+    end
+end
+
+function String(r::RelocPath)
+    for d in DEPOT_PATH
+        if isdirpath(d)
+            d = dirname(d)
+        end
+        path = string(d, r.subpath)
+        if ispath(path)
+            if isnothing(r.checksum) || _include_dependency_hash(path) == r.checksum
+                return path
+            end
+        end
+    end
+    error("Failed to relocate @depot$(r.subpath) in any of DEPOT_PATH.")
+end
+
+function show(io::IO, r::RelocPath)
+    print(io, string("RelocPath(\"@depot", r.subpath, "\", track_content=$(!isnothing(r.checksum)))"))
 end
 
 function read_module_list(f::IO, has_buildid_hi::Bool)
@@ -4212,7 +4294,7 @@ function any_includes_stale(includes::Vector{CacheHeaderIncludes}, cachefile::St
                 record_reason(reasons, "file size changed")
                 return true
             end
-            hash = isdir(fstat) ? _crc32c(join(readdir(f))) : open(_crc32c, f, "r")
+            hash = _include_dependency_hash(f, fstat)
             if hash != hash_req
                 @debug "Rejecting stale cache file $cachefile because hash of $f has changed (hash $hash, before $hash_req)"
                 record_reason(reasons, "file content changed")
