@@ -638,6 +638,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         // this check allows us to force re-computation of the layout for some types during init
         st->layout = NULL;
         st->zeroinit = 0;
+        st->has_concrete_subtype = 1;
     }
     if (st->name == jl_genericmemory_typename) {
         jl_get_genericmemory_layout(st);
