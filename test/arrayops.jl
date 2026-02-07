@@ -3256,6 +3256,12 @@ end
     @test setindex!(zeros(2,2), fill(1.0), CI0, 1, 1) == [1.0 0.0; 0.0 0.0]
 end
 
+@testset "conditionally-throwing version of `checkbounds` should return `nothing` if it returns" begin
+    for typ in (AbstractString, DenseArray, Base.AbstractBroadcasted)
+        @test Base.infer_return_type(checkbounds, Tuple{typ, Any})
+    end
+end
+
 # Throws ArgumentError for negative dimensions in Array
 @test_throws ArgumentError fill('a', -10)
 
