@@ -608,7 +608,7 @@ end
 function print_shmem_limits(slen)
     try
         if Sys.islinux()
-            pfx = "kernel"
+            return # Not relevant to Linux, which uses a tmpfs-backed system
         elseif Sys.isapple()
             pfx = "kern.sysv"
         elseif Sys.KERNEL === :FreeBSD || Sys.KERNEL === :DragonFly
@@ -631,7 +631,7 @@ function print_shmem_limits(slen)
             "\nIf not, increase system limits and try again."
         )
     catch e
-        nothing # Ignore any errors in this
+        @warn "Unable to print shared memory limits."
     end
 end
 
