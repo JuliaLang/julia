@@ -6,6 +6,7 @@ Low level module for mmap (memory mapping of files).
 module Mmap
 
 import Base: OS_HANDLE, INVALID_OS_HANDLE
+import Base.Filesystem: JL_O_CREAT, JL_O_RDWR, JL_O_EXCL, S_IRUSR, S_IWUSR
 using Base.Sys: PAGESIZE
 
 export mmap
@@ -25,6 +26,14 @@ Shared memory size cannot be grown after creation, though smaller regions can be
 """
 SharedMemory
 
+mutable struct SharedMemory <: IO
+    name::String
+    handle::OS_HANDLE
+    readonly::Bool
+    create::Bool
+    size::UInt
+end
+
 # platform-specific mmap utilities
 if Sys.isunix()
 
@@ -35,18 +44,7 @@ const MAP_PRIVATE   = Cint(2)
 const MAP_ANONYMOUS = Cint(Sys.isbsd() ? 0x1000 : 0x20)
 const F_GETFL       = Cint(3)
 
-mutable struct SharedMemory <: IO
-    name::String
-    ios::Union{Nothing, IOStream}
-    readonly::Bool
-    create::Bool
-    size::UInt
-end
-
-gethandle(io::SharedMemory) = io.ios === nothing ? INVALID_OS_HANDLE : fd(io.ios)
 gethandle(io::IO) = fd(io)
-
-Base.isopen(io::SharedMemory) = io.ios !== nothing || io.name == ""
 
 function shm_open(name, oflags, permissions)
     # On macOS, `shm_open()` is a variadic function, so to properly match
@@ -65,7 +63,7 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
     create   :: Bool = false
 )
     validate_sharedmemory_args(name, size, create)
-    io = SharedMemory(name, nothing, readonly, create, size)
+    io = SharedMemory(name, INVALID_OS_HANDLE, readonly, create, size)
     if !isempty(name)
         oflag = (readonly ? JL_O_RDONLY : JL_O_RDWR)
         if create
@@ -75,8 +73,6 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
         fd_mem = shm_open(name, oflag, mode)
         systemerror(:shm_open, fd_mem < 0)
 
-        io.ios = fdio(fd_mem, true)
-
         if create
             # Set the size of the shared memory object
             # On OSX, ftruncate must be used to set size of segment, just lseek does not work.
@@ -84,6 +80,7 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
             status = ccall(:jl_ftruncate, Cint, (Cint, Int64), fd_mem, size)
             systemerror(:ftruncate, status != 0)
         end
+        io.handle = RawFD(fd_mem)
     else
         # Anonymous mapping doesn't require a shared-memory file descriptor.
     end
@@ -92,13 +89,12 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
 end
 
 function Base.close(io::SharedMemory)
-    if io.ios !== nothing
+    if io.handle !== INVALID_OS_HANDLE
         if io.create
             rc = shm_unlink(io.name)
             systemerror(:shm_unlink, rc != 0)
         end
-        close(io.ios)
-        io.ios = nothing
+        io.handle = INVALID_OS_HANDLE
     end
 end
 
@@ -119,9 +115,6 @@ function settings(s::RawFD, shared::Bool)
     end
     return prot, flags, (prot & PROT_WRITE) == 0
 end
-
-grow!(::SharedMemory, ::Integer, ::Integer) =
-    throw(ArgumentError("resizing of SharedMemory is not supported"))
 
 # Before mapping, grow the file to sufficient size
 # Note: a few mappable streams do not support lseek. When Julia supports structures in ccall, switch to fstat.
@@ -157,22 +150,11 @@ const FILE_MAP_EXECUTE       = DWORD(0x20)
 
 const ERROR_ALREADY_EXISTS   = DWORD(0xB7)
 
-mutable struct SharedMemory <: IO
-    name::String
-    handle::OS_HANDLE
-    readonly::Bool
-    create::Bool
-    size::UInt
-end
-
-gethandle(io::SharedMemory) = io.handle
 function gethandle(io::IO)
     handle = Libc._get_osfhandle(RawFD(fd(io)))
     Base.windowserror(:mmap, handle == INVALID_OS_HANDLE)
     return handle
 end
-
-Base.isopen(io::SharedMemory) = io.handle != C_NULL
 
 mutable struct SECURITY_ATTRIBUTES
     nLength::DWORD
@@ -253,6 +235,9 @@ Base.isfile(io::SharedMemory) = !isempty(io.name)
 Base.isreadonly(io::SharedMemory) = io.readonly
 Base.isreadable(io::SharedMemory) = true
 Base.iswritable(io::SharedMemory) = !io.readonly
+Base.isopen(io::SharedMemory) = io.handle != INVALID_OS_HANDLE || io.name == ""
+
+gethandle(io::SharedMemory) = io.handle
 
 isanonymous(io::SharedMemory) = isempty(io.name)
 isanonymous(::IO) = false
