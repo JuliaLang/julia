@@ -113,7 +113,7 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
     local shmmem_create_pid
     try
         # On OSX, the shm_seg_name length must be <= 31 characters (including the terminating NULL character)
-        seg_name = "/jl$(lpad(string(getpid() % 10^6), 6, "0"))$(randstring(20))"
+        seg_name = "/jl$(lpad(string(getpid() % 10^6), 6, "0"))$(repr(time_ns())[3:end])$(randstring(4))"
         shm_seg_name = seg_name
         if onlocalhost
             shmmem_create_pid = myid()
