@@ -6,7 +6,7 @@ Low level module for mmap (memory mapping of files).
 module Mmap
 
 import Base: OS_HANDLE, INVALID_OS_HANDLE
-import Base.Filesystem: JL_O_CREAT, JL_O_RDWR, JL_O_EXCL, S_IRUSR, S_IWUSR
+import Base.Filesystem: JL_O_CREAT, JL_O_RDONLY, JL_O_RDWR, JL_O_EXCL, S_IRUSR, S_IWUSR
 using Base.Sys: PAGESIZE
 
 export mmap
@@ -44,6 +44,22 @@ const MAP_PRIVATE   = Cint(2)
 const MAP_ANONYMOUS = Cint(Sys.isbsd() ? 0x1000 : 0x20)
 const F_GETFL       = Cint(3)
 
+if Sys.isapple()
+
+const F_PEOFPOSMODE = Cint(3)
+const F_ALLOCATEALL = Cint(4)
+const F_PREALLOCATE = Cint(42)
+
+mutable struct FStore
+    fst_flags::UInt32
+    fst_posmode::Cint
+    fst_offset::Int64
+    fst_length::Int64
+    fst_bytesalloc::Int64
+end
+
+end
+
 gethandle(io::IO) = fd(io)
 
 function shm_open(name, oflags, permissions)
@@ -58,6 +74,17 @@ end
 
 shm_unlink(name) = ccall(:shm_unlink, Cint, (Cstring,), name)
 
+function preallocate(fd::OS_HANDLE, size::Integer)
+    @static if Sys.isapple()
+        fstore = Ref(FStore(F_ALLOCATEALL, F_PEOFPOSMODE, 0, size, 0))
+        status = ccall(:fcntl, Cint, (OS_HANDLE, Cint, Ref{FStore}...), fd, F_PREALLOCATE, fstore)
+        systemerror("fcntl F_PREALLOCATE", status == -1)
+    else
+        status = ccall(:posix_fallocate, Cint, (OS_HANDLE, Int64, Int64), fd, 0, size) # does not set `errno`
+        status != 0 && systemerror(:posix_fallocate, status)
+    end
+end
+
 function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
     readonly :: Bool = true,
     create   :: Bool = false
@@ -70,17 +97,21 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
             oflag |= JL_O_CREAT | JL_O_EXCL
         end
         mode = S_IRUSR | S_IWUSR # Owner read/write
-        fd_mem = shm_open(name, oflag, mode)
-        systemerror(:shm_open, fd_mem < 0)
+        fd_mem = RawFD(shm_open(name, oflag, mode))
+        systemerror(:shm_open, fd_mem == INVALID_OS_HANDLE)
 
         if create
+            # Reserve space for the shared memory object
+            # Failing to do this here may later result in SIGBUS fault if reading/writing beyond available memory
+            preallocate(fd_mem, size)
+
             # Set the size of the shared memory object
             # On OSX, ftruncate must be used to set size of segment, just lseek does not work.
             # And only at creation time.
-            status = ccall(:jl_ftruncate, Cint, (Cint, Int64), fd_mem, size)
+            status = ccall(:jl_ftruncate, Cint, (OS_HANDLE, Int64), fd_mem, size)
             systemerror(:ftruncate, status != 0)
         end
-        io.handle = RawFD(fd_mem)
+        io.handle = fd_mem
     else
         # Anonymous mapping doesn't require a shared-memory file descriptor.
     end
@@ -94,6 +125,7 @@ function Base.close(io::SharedMemory)
             rc = shm_unlink(io.name)
             systemerror(:shm_unlink, rc != 0)
         end
+        close(io.handle)
         io.handle = INVALID_OS_HANDLE
     end
 end
@@ -177,7 +209,7 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
     io = SharedMemory(name, INVALID_OS_HANDLE, readonly, create, size)
     if create
         page_prot = readonly ? PAGE_READONLY : PAGE_READWRITE
-        io.handle = ccall(:CreateFileMappingW, stdcall, OS_HANDLE, (OS_HANDLE, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
+        io.handle = ccall(:CreateFileMappingW, stdcall, OS_HANDLE, (OS_HANDLE, Ref{SECURITY_ATTRIBUTES}, DWORD, DWORD, DWORD, Cwstring),
             INVALID_OS_HANDLE,                                 # Backed by system paging file
             default_security_attrs(),                          # Default security, can be inherited
             page_prot,                                         # Requested access mode
@@ -231,7 +263,7 @@ end
 
 Base.filesize(io::SharedMemory) = io.size
 Base.position(io::SharedMemory) = 0
-Base.isfile(io::SharedMemory) = !isempty(io.name)
+Base.isfile(io::SharedMemory) = false
 Base.isreadonly(io::SharedMemory) = io.readonly
 Base.isreadable(io::SharedMemory) = true
 Base.iswritable(io::SharedMemory) = !io.readonly
@@ -364,7 +396,7 @@ function mmap(io::IO,
 
         if !(io isa SharedMemory)
             page_prot = readonly ? PAGE_READONLY : PAGE_READWRITE
-            handle = ccall(:CreateFileMappingW, stdcall, OS_HANDLE, (OS_HANDLE, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
+            handle = ccall(:CreateFileMappingW, stdcall, OS_HANDLE, (OS_HANDLE, Ref{SECURITY_ATTRIBUTES}, DWORD, DWORD, DWORD, Cwstring),
                 file_desc,                                       # File to map
                 default_security_attrs(),                        # Default security, can be inherited
                 page_prot,                                       # Requested access mode
