@@ -219,31 +219,26 @@ function view(A::AbstractArray, I::Vararg{Any,M}) where {M}
 end
 
 # Ranges implement getindex to return recomputed ranges; use that for views, too (when possible)
-function view(r1::AbstractUnitRange, r2::AbstractUnitRange{<:Integer})
+# we specialize on unsafe_view to ensure that conversions from Colons or CartesainIndices have already taken place
+function unsafe_view(r1::AbstractUnitRange, r2::AbstractUnitRange{<:Integer})
     @_propagate_inbounds_meta
     getindex(r1, r2)
 end
-function view(r1::AbstractUnitRange, r2::StepRange{<:Integer})
+function unsafe_view(r1::AbstractUnitRange, r2::StepRange{<:Integer})
     @_propagate_inbounds_meta
     getindex(r1, r2)
 end
-function view(r1::StepRange, r2::AbstractRange{<:Integer})
+function unsafe_view(r1::StepRange, r2::AbstractRange{<:Integer})
     @_propagate_inbounds_meta
     getindex(r1, r2)
 end
-function view(r1::StepRangeLen, r2::OrdinalRange{<:Integer})
+function unsafe_view(r1::StepRangeLen, r2::OrdinalRange{<:Integer})
     @_propagate_inbounds_meta
     getindex(r1, r2)
 end
-function view(r1::LinRange, r2::OrdinalRange{<:Integer})
+function unsafe_view(r1::LinRange, r2::OrdinalRange{<:Integer})
     @_propagate_inbounds_meta
     getindex(r1, r2)
-end
-
-# getindex(r::AbstractRange, ::Colon) returns a copy of the range, and we may do the same for a view
-function view(r1::AbstractRange, c::Colon)
-    @_propagate_inbounds_meta
-    getindex(r1, c)
 end
 
 function unsafe_view(A::AbstractArray, I::Vararg{ViewIndex,N}) where {N}
