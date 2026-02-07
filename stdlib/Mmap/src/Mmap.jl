@@ -415,7 +415,7 @@ mmap(file::AbstractString,
 mmap(io::IO, ::Type{T}, len::Integer, offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T<:Array} =
     mmap(io, T, (len,), offset; grow, shared)
 mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) where {T<:Array} =
-    open(io->mmap(io, T, (len,), offset; grow, shared), file, isfile(file) ? "r" : "w+")::Vector{eltype(T)} 
+    open(io->mmap(io, T, (len,), offset; grow, shared), file, isfile(file) ? "r" : "w+")::Vector{eltype(T)}
 
 # constructors for non-file-backed, unnamed (anonymous) mmaps
 mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) where {T <: Array, N} =
