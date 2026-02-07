@@ -43,6 +43,39 @@ let x=11
 end
 """) == 220
 
+@eval test_mod libccalltest_var = "libccalltest"
+
+@testset "cglobal" begin
+    cg = JuliaLowering.include_string(test_mod, """
+        cglobal(:jl_, Any)
+    """)
+    @test cg isa Ptr{Any}
+    @test cg !== C_NULL
+
+    cg = JuliaLowering.include_string(test_mod, """
+        cglobal((:global_var, libccalltest_var), Cint)
+    """)
+    @test cg isa Ptr{Cint}
+    @test cg !== C_NULL
+    @test unsafe_load(cg) == 1
+
+    @eval test_mod global cglobal_tuple = (:global_var, libccalltest_var)
+    cg = JuliaLowering.include_string(test_mod, """
+        cglobal(cglobal_tuple, Cint)
+    """)
+    @test cg isa Ptr{Cint}
+    @test cg !== C_NULL
+    @test unsafe_load(cg) == 1
+    cg = JuliaLowering.include_string(test_mod, """
+        let local_tuple = (:global_var, libccalltest_var)
+            cglobal(local_tuple, Cint)
+        end
+    """)
+    @test cg isa Ptr{Cint}
+    @test cg !== C_NULL
+    @test unsafe_load(cg) == 1
+end
+
 # ccall
 @test JuliaLowering.include_string(test_mod, """
 ccall(:strlen, Csize_t, (Cstring,), "asdfg")
@@ -74,7 +107,6 @@ end
     ccall((:ctest, :libccalltest), Complex{Int}, (Complex{Int},), 10 + 20im)
 """) === 11 + 18im
 # (function, library): library is a global
-@eval test_mod libccalltest_var = "libccalltest"
 @test JuliaLowering.include_string(test_mod, """
     ccall((:ctest, libccalltest_var), Complex{Int}, (Complex{Int},), 10 + 20im)
 """) === 11 + 18im

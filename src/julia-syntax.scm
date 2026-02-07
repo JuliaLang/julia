@@ -4891,7 +4891,8 @@ f(x) = yt(x)
                                (compile-args (list-head (cdr e) 4) break-labels)
                                (list (append (butlast oc_method) (list lambda)))
                                (compile-args (list-tail (cdr e) 5) break-labels))))
-                           ;; NOTE: 1st argument to cglobal treated same as for ccall
+                           ;; NOTE: 1st argument to cglobal is similar to ccall,
+                           ;; but tuple should be a value, not literal expr
                            ((and (length> e 2)
                                  (or (eq? (cadr e) 'cglobal)
                                      (equal? (cadr e) '(globalref (thismodule) cglobal))))

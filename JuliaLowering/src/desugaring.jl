@@ -1723,14 +1723,16 @@ function expand_ccall_argtype(ctx, ex)
     end
 end
 
-# Expand the (sym,lib) argument to ccall/cglobal
+# Expand the (sym,lib) argument to ccall
 function expand_C_library_symbol(ctx, ex)
-    if kind(ex) == K"tuple"
-        return @ast ctx ex [K"static_eval"(meta=name_hint("function name and library expression"))
+    @stm ex begin
+        [K"tuple" _...] -> @ast ctx ex [K"static_eval"(
+            meta=name_hint("function name and library expression"))
             mapchildren(e->expand_forms_2(ctx,e), ctx, ex)
         ]
+        [K"static_eval" _] -> ex # already done
+        _ -> expand_forms_2(ctx, ex)
     end
-    return expand_forms_2(ctx, ex)
 end
 
 function expand_ccall(ctx, ex)
@@ -1915,7 +1917,7 @@ function expand_call(ctx, ex)
         @chk numchildren(ex) in 2:3  (ex, "cglobal must have one or two arguments")
         return @ast ctx ex [K"call"
             ex[1]
-            expand_C_library_symbol(ctx, ex[2])
+            expand_forms_2(ctx, ex[2])
             if numchildren(ex) == 3
                 expand_forms_2(ctx, ex[3])
             end
@@ -4506,7 +4508,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"generator"
         expand_forms_2(ctx, expand_generator(ctx, ex))
     elseif k == K"->" || k == K"do"
-        expand_forms_2(ctx, expand_arrow(ctx, ex))
+        expand_arrow(ctx, ex)
     elseif k == K"function" || k == K"generated_function"
         expand_forms_2(ctx, expand_function_def(ctx, ex, docs))
     elseif k == K"macro"
@@ -4635,6 +4637,11 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         ]
     elseif k == K"inert" || k == K"inert_syntaxtree"
         ex
+    elseif k == K"foreigncall"
+        @ast ctx ex [K"foreigncall"
+            expand_C_library_symbol(ctx, ex[1])
+            map(c->expand_forms_2(ctx, c), ex[2:end])...
+        ]
     elseif k == K"symbolicblock"
         # @label name body -> (symbolicblock name expanded_body)
         # The @label macro inserts the continue block for loops, so we just expand the body
