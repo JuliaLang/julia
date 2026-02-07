@@ -1590,13 +1590,10 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
                     catch err
                         close(std_pipe.in) # close pipe to end the std output monitor
                         wait(t_monitor)
-                        if err isa ErrorException || (err isa ArgumentError && startswith(err.msg, "Invalid header in cache file"))
-                            failed_deps[pkg_config] = sprint(showerror, err)
-                            !fancyprint && @lock print_lock begin
-                                println(logio, " "^12, color_string("  ✗ ", Base.error_color()), name)
-                            end
-                        else
-                            rethrow()
+                        err isa InterruptException && rethrow()
+                        failed_deps[pkg_config] = sprint(showerror, err)
+                        !fancyprint && @lock print_lock begin
+                            println(logio, " "^12, color_string("  ✗ ", Base.error_color()), name)
                         end
                     finally
                         isopen(std_pipe.in) && close(std_pipe.in) # close pipe to end the std output monitor
