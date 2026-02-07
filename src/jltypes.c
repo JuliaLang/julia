@@ -1843,7 +1843,7 @@ static unsigned typekeyvalue_hash(jl_typename_t *tn, jl_value_t *key1, jl_value_
 static int jl_is_type_valid_for_concrete_subtype(jl_value_t *v) {
     if (!v)
         return 1; // Vararg may be NULL
-    if (jl_is_typevar(v))
+    while (jl_is_typevar(v))
         v = ((jl_tvar_t*)v)->ub;
     if (!v || v == jl_bottom_type)
         return 0;
@@ -2891,7 +2891,10 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow
 // Compute a conservative estimate of whether there could exist an instance of a subtype of this,
 // based on the computed field types
 void jl_compute_has_concrete_subtype_from_fields(jl_datatype_t *dt) {
-    if (dt->types == NULL)
+    // Skip Tuple types: their types svec contains type parameters (including Vararg),
+    // not regular field types. Use types==parameters to handle early bootstrap when
+    // jl_tuple_typename is not yet initialized.
+    if (dt->types == NULL || dt->types == dt->parameters)
         return;
     size_t nfields = jl_svec_len(dt->types);
     for (size_t i = 0; dt->has_concrete_subtype && i < nfields - dt->name->n_uninitialized; i++) {
