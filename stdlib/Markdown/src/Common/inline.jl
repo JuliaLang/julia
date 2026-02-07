@@ -275,3 +275,44 @@ function replace_escapes_and_entities(s::AbstractString)
     end
     return takestring!(out)
 end
+
+# ––––––––
+# Raw HTML
+# ––––––––
+
+mutable struct HTMLInline <: MarkdownElement
+    content::String
+end
+
+#HTMLInline() = HTMLInline(String[])
+
+# An HTML comment consists of <!-->, <!--->, or <!--, a string of characters
+# not including the string -->, and --> (see the HTML spec).
+const HTML_COMMENT = r"<!---?>?(?:(?!-->).)*-->"s
+
+# A processing instruction consists of the string <?, a string of characters
+# not including the string ?>, and the string ?>.
+const PROCESSING_INSTRUCTION = r"<\?(?:(?!\?>).)*\?>"s
+
+# A declaration consists of the string <!, an ASCII letter, zero or more
+# characters not including the character >, and the character >.
+const DECLARATION = r"<![A-Za-z][^>]*>"
+
+# A CDATA section consists of the string <![CDATA[, a string of characters not
+# including the string ]]>, and the string ]]>.
+const CDATA_SECTION = r"<!\[CDATA\[(?:(?!\]\]>).)*\]\]>"
+
+# An HTML tag consists of an open tag, a closing tag, an HTML comment, a
+# processing instruction, a declaration, or a CDATA section.
+const HTML_TAG_REGEX = Regex("^(?:$OPEN_TAG)|(?:$CLOSING_TAG)|(?:$HTML_COMMENT)|(?:$PROCESSING_INSTRUCTION)|(?:$DECLARATION)|(?:$CDATA_SECTION)", "s")
+
+@trigger '<' ->
+function html_inline(stream::IO, md::MD)
+    # TODO: this only works with single HTML for now, since `matchstart` only
+    # matches on the current line. This can certainly be fixed, but for now it
+    # is good enough for many cases.
+    m = matchstart(stream, HTML_TAG_REGEX)
+    if m !== nothing
+        return HTMLInline(m.match)
+    end
+end
