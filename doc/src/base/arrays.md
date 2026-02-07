@@ -68,6 +68,8 @@ Base.IndexCartesian
 Base.conj!
 Base.stride
 Base.strides
+Base.has_strided_get
+Base.has_strided_set
 ```
 
 ## Broadcast and vectorization
