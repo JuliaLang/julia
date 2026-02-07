@@ -242,7 +242,7 @@ end
 function is_initial_reserved_word(ps::ParseState, k)
     k = kind(k)
     is_iresword = k in KSet"begin while if for try return break continue function
-                            macro quote let local global const do struct module
+                            macro quote let local global const do struct typegroup module
                             baremodule using import export"
     # `begin` means firstindex(a) inside a[...]
     return is_iresword && !(k == K"begin" && ps.end_symbol)
@@ -271,7 +271,7 @@ end
 
 function is_block_form(k)
     kind(k) in KSet"block quote if for while let function macro
-                    abstract primitive struct try module"
+                    abstract primitive struct typegroup try module"
 end
 
 function is_syntactic_unary_op(k)
@@ -2044,6 +2044,14 @@ function parse_resword(ps::ParseState)
         bump_semicolon_trivia(ps)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"primitive")
+    elseif word == K"typegroup"
+        # Grouped type definitions (mutually recursive)
+        # typegroup struct A ... end end  ==> (typegroup (block ...))
+        bump(ps, TRIVIA_FLAG)
+        parse_block(ps)
+        bump_closing_token(ps, K"end")
+        emit(ps, mark, K"typegroup")
+        min_supported_version(v"1.14", ps, mark, "typegroup")
     elseif word == K"try"
         parse_try(ps)
     elseif word == K"return"

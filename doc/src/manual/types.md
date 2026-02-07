@@ -508,6 +508,78 @@ ERROR: setfield!: const field .b of type Baz cannot be changed
 [...]
 ```
 
+## Mutually Recursive Types
+
+By default, type definitions cannot reference types that have not yet been defined. This makes
+it impossible to define mutually recursive types where two or more types reference each other:
+
+```julia
+struct Foo
+    b::Bar  # ERROR: Bar is not defined
+end
+
+struct Bar
+    a::Foo
+end
+```
+
+The `typegroup` block solves this by allowing type definitions to reference each other:
+
+```jldoctest recursivetypes
+julia> typegroup
+           struct Node
+               edges::Vector{Edge}
+           end
+           struct Edge
+               from::Node
+               to::Node
+           end
+       end
+
+julia> fieldtype(Node, :edges)
+Vector{Edge} (alias for Array{Edge, 1})
+```
+
+Inside a `typegroup` block, type names are collected from all `struct` definitions,
+and field types referencing these names are resolved after all types are defined.
+
+Both mutable and immutable structs are supported:
+
+```jldoctest recursivetypes2
+julia> typegroup
+           struct ImmutableNode
+               children::Vector{MutableNode}
+           end
+           mutable struct MutableNode
+               parent::Union{Nothing, ImmutableNode}
+           end
+       end
+
+julia> fieldtype(ImmutableNode, :children)
+Vector{MutableNode} (alias for Array{MutableNode, 1})
+```
+
+Parametric types work as expected:
+
+```jldoctest
+julia> typegroup
+           struct NS{T}
+               value::T
+               next::Union{Nothing, NS{T}}
+           end
+       end
+
+julia> NS{Int}(1, NS{Int}(2, nothing))
+NS{Int64}(1, NS{Int64}(2, nothing))
+```
+
+The `typegroup` block returns `nothing`; the types are defined as a side effect and
+bound as constants in the enclosing module.
+
+!!! note
+    Method definitions are not allowed inside `typegroup` blocks. Define methods
+    after the block completes.
+
 ## [Declared Types](@id man-declared-types)
 
 The three kinds of types (abstract, primitive, composite) discussed in the previous

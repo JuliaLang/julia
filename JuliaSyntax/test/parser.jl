@@ -543,6 +543,11 @@ tests = [
         ((v=v"1.7",), "struct A const a end") => "(struct A (block (error (const a))))"
         "struct A end"    =>  "(struct A (block))"
         "struct try end"  =>  "(struct (error try) (block))"
+        # typegroup (1.14+)
+        ((v=v"1.14",), "typegroup struct A end end")  =>  "(typegroup (block (struct A (block))))"
+        ((v=v"1.14",), "typegroup\nstruct A\na::Int\nend\nend")  =>  "(typegroup (block (struct A (block (::-i a Int)))))"
+        ((v=v"1.14",), "typegroup\nstruct A end\nstruct B end\nend")  =>  "(typegroup (block (struct A (block)) (struct B (block))))"
+        ((v=v"1.13",), "typegroup struct A end end")  =>  "(error (typegroup (block (struct A (block)))))"
         # return
         "return\nx"   =>  "(return)"
         "return)"     =>  "(return)"
