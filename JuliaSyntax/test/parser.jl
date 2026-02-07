@@ -9,13 +9,13 @@ function parse_to_sexpr_str(production, code::AbstractString; v=v"1.6", show_kws
     return sprint(io->show(io, MIME("text/x.sexpression"), s; show_kws...))
 end
 
-function test_parse(production, input, expected)
+function test_parse(production, input, expected; show_kws...)
     if !(input isa AbstractString)
         opts, input = input
     else
         opts = NamedTuple()
     end
-    parsed = parse_to_sexpr_str(production, input; opts...)
+    parsed = parse_to_sexpr_str(production, input; show_kws..., opts...)
     if expected isa Regex # Could be AbstractPattern, but that type was added in Julia 1.6.
         @test match(expected, parsed) !== nothing
     else
@@ -556,8 +556,14 @@ tests = [
         ((v=v"1.14",), "break _ x") => "(break _ x)"
         ((v=v"1.14",), "break label") => "(break label)"
         ((v=v"1.14",), "break label x") => "(break label x)"
+        ((v=v"1.14",), "break f ()") => "(break f (tuple-p))"
+        ((v=v"1.14",), "break f()") => "(break f (error-t) (tuple-p))"
         ((v=v"1.14",), "continue _") => "(continue _)"
         ((v=v"1.14",), "continue label") => "(continue label)"
+        ((v=v"1.14",), "break +")  => "(break (error-t + (error-t)))"
+        ((v=v"1.13",), "break label") => "(error (break label))"
+        ((v=v"1.13",), "continue label") => "(error (continue label))"
+        ((v=v"1.13",), "break +")  => "(break (error-t + (error-t)))"
         # module/baremodule
         "module A end"      =>  "(module A (block))"
         "baremodule A end"  =>  "(module-bare A (block))"
@@ -1127,6 +1133,13 @@ parsestmt_test_specs = [
     # unit tests there.
     "''" => "(char (error))"
 
+    # break / continue with trailing tokens are legal in some cases
+    "a ? break : c"    => "(? a (break) c)"
+    "begin break end"  => "(block (break))"
+    "a ? continue : c"   => "(? a (continue) c)"
+    "begin continue end" => "(block (continue))"
+    "break:x"  => "(call-i (break) : x)" # range colon allowed
+
     # The following may not be ideal error recovery! But at least the parser
     # shouldn't crash
     "@(x y)" => "(macrocall (macro_name (parens x (error-t y))))"
@@ -1152,7 +1165,7 @@ parsestmt_test_specs = [
     "f(x for x = xs a)"     =>  "(call f (generator x (iteration (in x xs))) (error-t a))"
 ]
 
-@testset "Parser does not crash on broken code" begin
+@testset "Parsestmt tests" begin
     @testset "$(repr(input))" for (input, output) in parsestmt_test_specs
         test_parse(JuliaSyntax.parse_stmts, input, output)
     end
@@ -1179,6 +1192,11 @@ parsestmt_with_kind_tests = [
     "a^b"    => "(call-i a::Identifier ^::Identifier b::Identifier)"
     "f.'"    => "(dotcall-post f::Identifier (error '::Identifier))"
     "f'"     => "(call-post f::Identifier '::Identifier)"
+    # break/continue labels (contextual keywords allowed)
+    ((v=v"1.14",), "break label") => "(break label::Identifier)"
+    ((v=v"1.14",), "continue label") => "(continue label::Identifier)"
+    ((v=v"1.14",), "break outer") => "(break outer::Identifier)"
+    ((v=v"1.14",), "continue outer") => "(continue outer::Identifier)"
     # Standalone syntactic ops which keep their kind - they can't really be
     # used in a sane way as identifiers or interpolated into expressions
     # because they have their own syntactic forms.
@@ -1200,8 +1218,7 @@ parsestmt_with_kind_tests = [
 
 @testset "parser `Kind` remapping" begin
     @testset "$(repr(input))" for (input, output) in parsestmt_with_kind_tests
-        input = ((show_kind=true,), input)
-        test_parse(JuliaSyntax.parse_stmts, input, output)
+        test_parse(JuliaSyntax.parse_stmts, input, output; show_kind=true)
     end
 end
 

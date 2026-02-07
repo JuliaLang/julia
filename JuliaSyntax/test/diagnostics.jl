@@ -143,6 +143,22 @@ end
         diagnostic("public[7] = 5", version=v"1.11") ==
         diagnostic("public() = 6", version=v"1.11") ==
         Diagnostic(1, 6, :warning, "using public as an identifier is deprecated")
+
+    @testset "break/continue version=$ver" for ver in [v"1.13", v"1.14"]
+        @test diagnostic("break +", only_first=true, version=ver) ==
+            Diagnostic(6, 7, :error, "unexpected token after break")
+        @test diagnostic("break ()", only_first=true, version=ver) ==
+            Diagnostic(6, 7, :error, "unexpected token after break")
+
+        @test diagnostic("continue +", only_first=true, version=ver) ==
+            Diagnostic(9, 10, :error, "unexpected token after continue")
+    end
+
+    @test diagnostic("break f()", version=v"1.14") ==
+        Diagnostic(8, 7, :error, "expected space after break label")
+
+    @test diagnostic("continue f val", version=v"1.14") ==
+        Diagnostic(11, 14, :error, "extra tokens after end of expression")
 end
 
 @testset "diagnostics for literal parsing" begin
