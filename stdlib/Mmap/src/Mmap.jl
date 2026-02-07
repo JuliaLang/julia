@@ -125,7 +125,7 @@ function Base.close(io::SharedMemory)
             rc = shm_unlink(io.name)
             systemerror(:shm_unlink, rc != 0)
         end
-        close(io.handle)
+        ccall(:close, Cint, (OS_HANDLE,), io.handle)
         io.handle = INVALID_OS_HANDLE
     end
 end
@@ -383,11 +383,8 @@ function mmap(io::IO,
     # platform-specific mmapping
     @static if Sys.isunix()
         prot, flags, readonly = settings(file_desc, shared)
-        if check_can_grow(io, szfile, readonly, grow)
-            grow!(io, offset, len)
-        end
-
-        ptr = ccall(:jl_mmap, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t, Cint, Cint, RawFD, Int64),
+        check_can_grow(io, szfile, readonly, grow) && grow!(io, offset, len)
+        ptr = ccall(:jl_mmap, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t, Cint, Cint, OS_HANDLE, Int64),
             C_NULL, mmaplen, prot, flags, file_desc, offset_page)
         systemerror("memory mapping failed", reinterpret(Int, ptr) == -1)
     else
