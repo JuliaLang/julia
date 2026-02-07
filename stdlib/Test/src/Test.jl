@@ -2686,7 +2686,15 @@ function detect_closure_boxes(mods::Module...)
         return is_in_mods(mod, true, mods)
     end
 
+    world = Base.get_world_counter()
+    matches = Any[]
+    function is_active_method(m::Method)
+        minworld, maxworld = Core.Compiler.ReinferUtils.verify_invokesig(m.sig, m, world, matches)
+        return minworld <= world <= maxworld
+    end
+
     function scan_method!(m::Method)
+        is_active_method(m) || return
         matches_module(parentmodule(m)) || return
         ci = try
             Base.uncompressed_ast(m)
