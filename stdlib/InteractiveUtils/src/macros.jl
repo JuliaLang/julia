@@ -527,7 +527,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                         is_row_first = true
                         return collect(Iterators.flatten(extract_elements.(x.args)))
                     else
-                        return []
+                        return [x]
                     end
                 else
                     x
