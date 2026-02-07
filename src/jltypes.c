@@ -2888,7 +2888,8 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow
     return vm;
 }
 
-// Clear `has_concrete_subtype` if any required field type rules out concrete instances.
+// Compute a conservative estimate of whether there could exist an instance of a subtype of this,
+// based on the computed field types
 void jl_compute_has_concrete_subtype_from_fields(jl_datatype_t *dt) {
     if (dt->types == NULL)
         return;

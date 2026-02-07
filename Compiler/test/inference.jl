@@ -227,6 +227,23 @@ end
 @test Compiler.valid_as_lattice(D57764{Int,Union{}}, true)
 @test !Compiler.valid_as_lattice(D57764{Union{},Int}, true)
 
+@noinline _side_effect_57764() = "string"
+function _f_57764(x::Union{Int, A57764{Union{}}})
+    x isa A57764 && return _side_effect_57764()
+    return x + 1
+end
+function _g_57764(x::Union{Int, Tuple{<:Union{}}})
+    x isa Tuple && return _side_effect_57764()
+    return x + 1
+end
+function _h_57764(x::Union{Int, B57764{Union{}, <:Int}})
+    x isa B57764 && return _side_effect_57764()
+    return x + 1
+end
+@test Base.return_types(_f_57764, (Union{Int, A57764{Union{}}},)) == [Int]
+@test Base.return_types(_g_57764, (Union{Int, Tuple{<:Union{}}},)) == [Int]
+@test Base.return_types(_h_57764, (Union{Int, B57764{Union{}, <:Int}},)) == [Int]
+
 # PR 22120
 function tuplemerge_test(a, b, r, commutative=true)
     @test r == Compiler.tuplemerge(a, b)
