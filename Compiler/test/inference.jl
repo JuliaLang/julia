@@ -185,6 +185,69 @@ Base.ndims(g::e43296) = ndims(typeof(g))
 @test Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}) == 5
 @test Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}}}}) == 7
 
+@test !Compiler.valid_as_lattice(Array{1}, true)
+@test !Compiler.valid_as_lattice(Memory{1}, true)
+@test !Compiler.valid_as_lattice(Tuple{1}, true)
+@test !Compiler.valid_as_lattice(Tuple{<:Union{}}, true)
+@test !Compiler.valid_as_lattice(Type{1}, true)
+@test Compiler.valid_as_lattice(Tuple{Vararg}, true)
+@test Compiler.valid_as_lattice(Tuple{Int, Vararg}, true)
+@test Compiler.valid_as_lattice(Tuple{Vararg{Int}}, true)
+@test Compiler.valid_as_lattice(Tuple{T} where T <: S where S <: Int, true)
+
+struct A57764{X}
+    x::X
+end
+struct B57764{X,Y}
+    x::X
+    y::Y
+    B57764{X,Y}(x::X) where {X,Y} = new{X,Y}(x)
+end
+struct C57764
+    x::A57764{Union{}}
+end
+mutable struct D57764{X,Y}
+    x::X
+    y::Y
+    D57764{X,Y}(x::X) where {X,Y} = new{X,Y}(x)
+end
+struct E57764
+    x::Tuple
+end
+
+@test !Compiler.valid_as_lattice(A57764{Union{}}, true)
+@test !Compiler.valid_as_lattice(A57764{<:Union{}}, true)
+@test Compiler.valid_as_lattice(A57764{Int}, true)
+@test Compiler.valid_as_lattice(A57764{<:Int}, true)
+@test !Compiler.valid_as_lattice(A57764{Type{1}}, true)
+@test Compiler.valid_as_lattice(B57764{Int,Int}, true)
+@test Compiler.valid_as_lattice(B57764{<:Int,Int}, true)
+@test Compiler.valid_as_lattice(B57764{Int,Union{}}, true)
+@test Compiler.valid_as_lattice(B57764{<:Int,Union{}}, true)
+@test !Compiler.valid_as_lattice(B57764{Union{}, Int}, true)
+@test !Compiler.valid_as_lattice(B57764{Union{}, <:Int}, true)
+@test !Compiler.valid_as_lattice(B57764{<:Union{}, <:Int}, true)
+@test !Compiler.valid_as_lattice(C57764, true)
+@test Compiler.valid_as_lattice(D57764{Int,Union{}}, true)
+@test !Compiler.valid_as_lattice(D57764{Union{},Int}, true)
+@test Compiler.valid_as_lattice(E57764, true)
+
+@noinline _side_effect_57764() = "string"
+function _f_57764(x::Union{Int, A57764{Union{}}})
+    x isa A57764 && return _side_effect_57764()
+    return x + 1
+end
+function _g_57764(x::Union{Int, Tuple{<:Union{}}})
+    x isa Tuple && return _side_effect_57764()
+    return x + 1
+end
+function _h_57764(x::Union{Int, B57764{Union{}, <:Int}})
+    x isa B57764 && return _side_effect_57764()
+    return x + 1
+end
+@test Base.return_types(_f_57764, (Union{Int, A57764{Union{}}},)) == [Int]
+@test Base.return_types(_g_57764, (Union{Int, Tuple{<:Union{}}},)) == [Int]
+@test Base.return_types(_h_57764, (Union{Int, B57764{Union{}, <:Int}},)) == [Int]
 
 # PR 22120
 function tuplemerge_test(a, b, r, commutative=true)
