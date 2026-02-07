@@ -32,6 +32,7 @@ const TESTNAMES = [
         "scopedvalues", "compileall", "rebinding",
         "faulty_constructor_method_should_not_cause_stack_overflows",
         "JuliaSyntax", "JuliaLowering", "JuliaLowering_stdlibs",
+        "cgmemmgr",
 ]
 
 const INTERNET_REQUIRED_LIST = [
