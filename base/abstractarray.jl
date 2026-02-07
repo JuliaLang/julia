@@ -457,8 +457,12 @@ firstindex(a, d) = (@inline; first(axes(a, d)))
 """
     first(coll)
 
-Get the first element of an iterable collection. Return the start point of an
-[`AbstractRange`](@ref) even if it is empty.
+Get the first element of an iterable collection.
+
+!!! note
+    For an [`AbstractRange`](@ref) the start point is always returned,
+    even if the range is empty. For other empty collections, an error
+    is thrown.
 
 See also [`only`](@ref), [`firstindex`](@ref), [`last`](@ref).
 
@@ -476,6 +480,30 @@ function first(itr)
     x === nothing && throw(ArgumentError("collection must be non-empty"))
     x[1]
 end
+
+
+"""
+    first(f, itr)
+
+Get the first element of an iterable collection `itr` for which the
+predicate `f` returns `true.`
+
+!!! compat "Julia 1.14"
+    This method requires at least Julia 1.14.
+
+# Examples
+```jldoctest
+julia> first(>=(5), 2:2:10)
+6
+
+julia> first(iseven, [1; 2; 3; 4])
+2
+
+julia> first(isodd, 2:2:10)
+ERROR: ArgumentError: collection must be non-empty
+```
+"""
+first(f, itr) = first(Iterators.filter(f, itr))
 
 """
     first(itr, n::Integer)
