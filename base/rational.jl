@@ -244,22 +244,28 @@ julia> typeof(numerator(a))
 BigInt
 ```
 """
-function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) where T<:Integer
-    if tol < 0
-        throw(ArgumentError("negative tolerance $tol"))
-    end
-
+function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
+    tol < 0 && throw(ArgumentError("Tolerance can not be negative. tol=$tol"))
     T<:Unsigned && x < 0 && __throw_negate_unsigned()
     isnan(x) && return T(x)//one(T)
     isinf(x) && return unsafe_rational(x < 0 ? -one(T) : one(T), zero(T))
+    r = modf(abs(x))[1]
+    if r > tol && r ≤ inv(maxintfloat(x))
+        p = 1 - exponent(r)
+        p > precision(Float64) && return setprecision(() -> _rationalize(T, BigFloat(x), tol), p)
+        p > precision(Float32) && return _rationalize(T, convert(Float64, x), tol)
+        return _rationalize(T, convert(Float32, x), tol)
+    end
+    return _rationalize(T, x, tol)
+end
 
+function _rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
     p,  q  = (x < 0 ? -one(T) : one(T)), zero(T)
     pp, qq = zero(T), one(T)
 
     x = abs(x)
-    a = trunc(x)
-    r = x-a
     y = one(x)
+    r, a = modf(x)
     tolx = oftype(x, tol)
     nt, t, tt = tolx, zero(tolx), tolx
     ia = np = nq = zero(T)
@@ -309,9 +315,21 @@ rationalize(x::Real; kvs...) = rationalize(Int, x; kvs...)
 rationalize(::Type{T}, x::Complex; kvs...) where {T<:Integer} = Complex(rationalize(T, x.re; kvs...), rationalize(T, x.im; kvs...))
 rationalize(x::Complex; kvs...) = Complex(rationalize(Int, x.re; kvs...), rationalize(Int, x.im; kvs...))
 rationalize(::Type{T}, x::Rational; tol::Real = 0) where {T<:Integer} = rationalize(T, x, tol)
-rationalize(x::Rational; kvs...) = x
+rationalize(x::Rational{T}; kvs...) where {T<:Integer} = rationalize(T, x; kvs...)
+function rationalize(::Type{T}, x::Rational, tol::Real) where {T<:Integer}
+    T<:Unsigned && x < 0 && __throw_negate_unsigned()
+    if 0 ≤ tol ≤ eps(float(x))
+        try
+            return Rational{T}(x)
+        catch e
+            isa(e,InexactError) || rethrow()
+        end
+    end
+    return rationalize(T, float(x), tol)
+end
 rationalize(x::Integer; kvs...) = Rational(x)
 function rationalize(::Type{T}, x::Integer; kvs...) where {T<:Integer}
+    T<:Unsigned && x < 0 && __throw_negate_unsigned()
     if Base.hastypemax(T) # BigInt doesn't
         x < typemin(T) && return unsafe_rational(-one(T), zero(T))
         x > typemax(T) && return unsafe_rational(one(T), zero(T))

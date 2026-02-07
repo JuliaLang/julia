@@ -39,6 +39,7 @@ using Test
     @test @inferred(rationalize(Int8, 1000//3)) === Rational{Int8}(1//0)
     @test @inferred(rationalize(Int8, 1000)) === Rational{Int8}(1//0)
     @test_throws OverflowError rationalize(UInt, -2.0)
+    @test_throws OverflowError rationalize(UInt, -2)
     @test_throws ArgumentError rationalize(Int, big(3.0), -1.)
     # issue 26823
     @test_throws InexactError rationalize(Int, NaN)
@@ -878,4 +879,35 @@ end
     @test Float16(6.0e-8) == 1//16777216
     @test 1.0 != big(1//0)
     @test Inf == big(1//0)
+end
+
+@testset "rationalize(Rational) (issue #60768)" begin
+    x = float(pi)
+    r = rationalize(x)
+    @test rationalize(Int32, r, tol=0.0) === Rational{Int32}(r) == r
+    @test rationalize(r) === rationalize(r, tol=0) === r
+    @test rationalize(r, tol=eps(float(r))) === r
+    @test rationalize(r, tol=0.1) == 16//5
+    for n=1:10
+        @test rationalize(r, tol=1/10^n) == rationalize(float(r), tol=1/10^n)
+    end
+    @test_throws OverflowError rationalize(UInt, -r)
+end
+
+@testset "rationalize(x) with tiny x (issue #49803, #49848)" begin
+    for (T, U) in ((Int32, Float16), (Int64, Float32), (Int128, Float64), (BigInt, BigFloat))
+        x = prevfloat(1/maxintfloat(U))
+        r = rationalize(T, x, tol=0)
+        @test abs(r - x) == 0
+        if U != BigFloat
+            # x subnormal
+            x = prevfloat(floatmin(U))
+            r = rationalize(widen(T), x, tol=0)
+            @test abs(r - x) == 0
+            # x subnormal, inv(x) infinite
+            x = inv(floatmax(U))
+            r = rationalize(BigInt, x, tol=0)
+            @test abs(r - x) == 0
+        end
+    end
 end
