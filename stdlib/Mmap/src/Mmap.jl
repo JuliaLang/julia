@@ -48,17 +48,24 @@ gethandle(io::IO) = fd(io)
 
 Base.isopen(io::SharedMemory) = io.ios !== nothing || io.name == ""
 
+function shm_open(name, oflags, permissions)
+    # On macOS, `shm_open()` is a variadic function, so to properly match
+    # calling ABI, we must declare our arguments as variadic as well.
+    @static if Sys.isapple()
+        return ccall(:shm_open, Cint, (Cstring, Cint, Base.Cmode_t...), name, oflags, permissions)
+    else
+        return ccall(:shm_open, Cint, (Cstring, Cint, Base.Cmode_t), name, oflags, permissions)
+    end
+end
+
+shm_unlink(name) = ccall(:shm_unlink, Cint, (Cstring,), name)
+
 function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
     readonly :: Bool = true,
     create   :: Bool = false
 )
-    isempty(name) && !create &&
-        throw(ArgumentError("Anonymous SharedMemory files must have `create = true`."))
-    create && size > 0 ||
-        throw(ArgumentError("Size of SharedMemory files must be greater than 0."))
-
+    validate_sharedmemory_args(name, size, create)
     io = SharedMemory(name, nothing, readonly, create, size)
-
     if !isempty(name)
         oflag = (readonly ? JL_O_RDONLY : JL_O_RDWR)
         if create
@@ -93,20 +100,7 @@ function Base.close(io::SharedMemory)
         close(io.ios)
         io.ios = nothing
     end
-    return nothing
 end
-
-function shm_open(name, oflags, permissions)
-    # On macOS, `shm_open()` is a variadic function, so to properly match
-    # calling ABI, we must declare our arguments as variadic as well.
-    @static if Sys.isapple()
-        return ccall(:shm_open, Cint, (Cstring, Cint, Base.Cmode_t...), name, oflags, permissions)
-    else
-        return ccall(:shm_open, Cint, (Cstring, Cint, Base.Cmode_t), name, oflags, permissions)
-    end
-end
-
-shm_unlink(name) = ccall(:shm_unlink, Cint, (Cstring,), name)
 
 # Determine a stream's read/write mode, and return prot & flags appropriate for mmap
 function settings(s::RawFD, shared::Bool)
@@ -126,26 +120,27 @@ function settings(s::RawFD, shared::Bool)
     return prot, flags, (prot & PROT_WRITE) == 0
 end
 
-grow!(::SharedMemory, ::Integer, ::Integer) = throw(ArgumentError("resizing of SharedMemory is not supported"))
+grow!(::SharedMemory, ::Integer, ::Integer) =
+    throw(ArgumentError("resizing of SharedMemory is not supported"))
 
 # Before mapping, grow the file to sufficient size
-# Note: a few mappable streams do not support lseek. When Julia
-# supports structures in ccall, switch to fstat.
+# Note: a few mappable streams do not support lseek. When Julia supports structures in ccall, switch to fstat.
 function grow!(io::IO, offset::Integer, len::Integer)
     pos = position(io)
     filelen = filesize(io)
-    # If non-regular file skip trying to grow since we know that will fail the ftruncate syscall
+    # Don't attempt to grow non-regular file, will fail
     filelen == 0 && !isfile(io) && return
     if filelen < offset + len
-        failure = ccall(:jl_ftruncate, Cint, (Cint, Int64), fd(io), offset+len)
-        Base.systemerror(:ftruncate, failure != 0)
+        status = ccall(:jl_ftruncate, Cint, (Cint, Int64), fd(io), offset + len)
+        Base.systemerror(:ftruncate, status != 0)
     end
     seek(io, pos)
-    return
+    return nothing
 end
 
 elseif Sys.iswindows()
 
+# Windows API constants
 const DWORD = Culong
 
 const PAGE_READONLY          = DWORD(0x02)
@@ -154,15 +149,17 @@ const PAGE_WRITECOPY         = DWORD(0x08)
 const PAGE_EXECUTE_READ      = DWORD(0x20)
 const PAGE_EXECUTE_READWRITE = DWORD(0x40)
 const PAGE_EXECUTE_WRITECOPY = DWORD(0x80)
+
 const FILE_MAP_COPY          = DWORD(0x01)
 const FILE_MAP_WRITE         = DWORD(0x02)
 const FILE_MAP_READ          = DWORD(0x04)
 const FILE_MAP_EXECUTE       = DWORD(0x20)
+
 const ERROR_ALREADY_EXISTS   = DWORD(0xB7)
 
 mutable struct SharedMemory <: IO
     name::String
-    handle::WindowsRawSocket
+    handle::OS_HANDLE
     readonly::Bool
     create::Bool
     size::UInt
@@ -184,7 +181,9 @@ mutable struct SECURITY_ATTRIBUTES
 
     SECURITY_ATTRIBUTES(inherit_handle::Bool) = new(sizeof(SECURITY_ATTRIBUTES), C_NULL, inherit_handle)
 end
+default_security_attrs() = Ref(SECURITY_ATTRIBUTES(true))
 
+# Split 64-bit size into high and low 32-bit parts for Windows API
 split_high_bits(size::Integer) = UInt32(size >> 32)
 split_low_bits(size::Integer) = UInt32(size & typemax(UInt32))
 
@@ -192,23 +191,20 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
     readonly :: Bool = true,
     create   :: Bool = false
 )
-    isempty(name) && !create &&
-        throw(ArgumentError("Anonymous SharedMemory files must have `create = true`."))
-    create && size > 0 ||
-        throw(ArgumentError("Size of SharedMemory files must be greater than 0."))
-
+    validate_sharedmemory_args(name, size, create)
     io = SharedMemory(name, INVALID_OS_HANDLE, readonly, create, size)
     if create
+        page_prot = readonly ? PAGE_READONLY : PAGE_READWRITE
         io.handle = ccall(:CreateFileMappingW, stdcall, OS_HANDLE, (OS_HANDLE, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
             INVALID_OS_HANDLE,                                 # Backed by system paging file
-            Ref(SECURITY_ATTRIBUTES(true)),                    # Default security, can be inherited
-            readonly ? PAGE_READONLY : PAGE_READWRITE,         # Requested access mode
+            default_security_attrs(),                          # Default security, can be inherited
+            page_prot,                                         # Requested access mode
             split_high_bits(io.size), split_low_bits(io.size), # High-order and low-order bits of size
             name                                               # Object name
         )
         lasterr = ccall(:GetLastError, stdcall, DWORD, ())
         if lasterr == ERROR_ALREADY_EXISTS
-            status = ccall(:CloseHandle, stdcall, Cint, (Ptr{Cvoid},), io.handle) != 0
+            status = ccall(:CloseHandle, stdcall, Cint, (OS_HANDLE,), io.handle)
             Base.windowserror(:CloseHandle, status == 0)
             io.handle = INVALID_OS_HANDLE
             Base.windowserror(:CreateFileMappingW, lasterr)
@@ -216,14 +212,14 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
             Base.windowserror(:CreateFileMappingW, io.handle == INVALID_OS_HANDLE)
         end
     else
+        map_access = readonly ? FILE_MAP_READ : FILE_MAP_WRITE
         io.handle = ccall(:OpenFileMappingW, stdcall, OS_HANDLE, (DWORD, Cint, Cwstring),
-            readonly ? FILE_MAP_READ : FILE_MAP_WRITE, # Requested access mode
-            true,                                      # Can be inherited
-            name                                       # Object name
+            map_access, # Requested access mode
+            true,       # Can be inherited
+            name        # Object name
         )
         Base.windowserror(:OpenFileMappingW, io.handle == INVALID_OS_HANDLE)
     end
-
     return io
 end
 
@@ -239,6 +235,10 @@ end
 else
     error("mmap not defined for this OS")
 end # os-test
+
+# SharedMemory cannot be grown after creation
+grow!(::SharedMemory, ::Integer, ::Integer) =
+    throw(ArgumentError("resizing of SharedMemory is not supported"))
 
 function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer, mode::AbstractString)
     mode == "r"  ? open(SharedMemory, name, size; readonly = true,  create = false) :
@@ -256,6 +256,24 @@ Base.iswritable(io::SharedMemory) = !io.readonly
 
 isanonymous(io::SharedMemory) = isempty(io.name)
 isanonymous(::IO) = false
+
+function validate_sharedmemory_args(name::AbstractString, size::Integer, create::Bool)
+    isempty(name) && !create &&
+        throw(ArgumentError("Anonymous SharedMemory files must have `create = true`."))
+    create && size == 0 &&
+        throw(ArgumentError("Size of SharedMemory files must be greater than 0."))
+end
+
+function check_can_grow(io::IO, szfile::Csize_t, readonly::Bool, grow::Bool)
+    requestedSizeLarger = szfile > filesize(io)
+    if requestedSizeLarger
+        readonly && throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
+        !grow && throw(ArgumentError("requested size $szfile larger than file size $(filesize(io)), but requested not to grow"))
+        io isa SharedMemory && throw(ArgumentError("unable to increase size of SharedMemory beyond $(filesize(io))"))
+        return true
+    end
+    return false
+end
 
 # core implementation of mmap
 
@@ -344,41 +362,27 @@ function mmap(io::IO,
 
     file_desc = gethandle(io)
     szfile = convert(Csize_t, len + offset)
-    requestedSizeLarger = szfile > filesize(io)
+
     # platform-specific mmapping
     @static if Sys.isunix()
         prot, flags, readonly = settings(file_desc, shared)
-        if requestedSizeLarger
-            if readonly
-                throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
-            elseif !grow
-                throw(ArgumentError("requested size $szfile larger than file size $(filesize(io)), but requested not to grow"))
-            elseif io isa SharedMemory
-                throw(ArgumentError("unable to increase size of SharedMemory beyond $(filesize(io))"))
-            else
-                grow!(io, offset, len)
-            end
+        if check_can_grow(io, szfile, readonly, grow)
+            grow!(io, offset, len)
         end
-        # mmap the file
+
         ptr = ccall(:jl_mmap, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t, Cint, Cint, RawFD, Int64),
             C_NULL, mmaplen, prot, flags, file_desc, offset_page)
         systemerror("memory mapping failed", reinterpret(Int, ptr) == -1)
     else
         readonly = isreadonly(io)
-        if requestedSizeLarger
-            if readonly
-                throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
-            elseif !grow
-                throw(ArgumentError("requested size $szfile larger than file size $(filesize(io)), but requested not to grow"))
-            elseif io isa SharedMemory
-                throw(ArgumentError("unable to increase size of SharedMemory file beyond $(filesize(io))"))
-            end
-        end
+        check_can_grow(io, szfile, readonly, grow) # Cannot grow on Windows, error if requested size is larger than file size
+
         if !(io isa SharedMemory)
+            page_prot = readonly ? PAGE_READONLY : PAGE_READWRITE
             handle = ccall(:CreateFileMappingW, stdcall, OS_HANDLE, (OS_HANDLE, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
                 file_desc,                                       # File to map
-                Ref(SECURITY_ATTRIBUTES(true)),                  # Default security, can be inherited
-                readonly ? PAGE_READONLY : PAGE_READWRITE,       # Requested access mode
+                default_security_attrs(),                        # Default security, can be inherited
+                page_prot,                                       # Requested access mode
                 split_high_bits(szfile), split_low_bits(szfile), # High-order and low-order bits of size
                 ""                                               # Object name
             )
@@ -386,13 +390,16 @@ function mmap(io::IO,
         else
             handle = io.handle
         end
+
+        map_access = readonly ? FILE_MAP_READ : FILE_MAP_WRITE
         ptr = ccall(:MapViewOfFile, stdcall, Ptr{Cvoid}, (OS_HANDLE, DWORD, DWORD, DWORD, Csize_t),
             handle,                                                    # Handle to mapping object
-            readonly ? FILE_MAP_READ : FILE_MAP_WRITE,                 # Requested access mode
+            map_access,                                                # Requested access mode
             split_high_bits(offset_page), split_low_bits(offset_page), # High-order and low-order bits of offset
             mmaplen                                                    # Number of bytes to map
         )
         Base.windowserror(:MapViewOfFile, ptr == C_NULL)
+
         if !(io isa SharedMemory)
             status = ccall(:CloseHandle, stdcall, Cint, (OS_HANDLE,), handle) != 0
             Base.windowserror(:CloseHandle, status == 0)
@@ -401,10 +408,10 @@ function mmap(io::IO,
 
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
     A = unsafe_wrap(Array, convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
-    finalizer(A.ref.mem) do x
+    finalizer(A.ref.mem) do _
         @static if Sys.isunix()
             status = ccall(:munmap, Cint, (Ptr{Cvoid}, Int), ptr, mmaplen)
-            systemerror(:munmap, status != 0)     
+            systemerror(:munmap, status != 0)
         else
             status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Cvoid},), ptr)
             Base.windowserror(:UnmapViewOfFile, status == 0)
@@ -421,10 +428,9 @@ mmap(file::AbstractString,
 
 # using a length argument instead of dims
 mmap(io::IO, ::Type{T}, len::Integer, offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T<:Array} =
-    mmap(io, T, (len,), offset; grow=grow, shared=shared)
+    mmap(io, T, (len,), offset; grow, shared)
 mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) where {T<:Array} =
-    open(io->mmap(io, T, (len,), offset; grow, shared), file, isfile(file) ? "r" : "w+")::Vector{eltype(T)}
-    # On Windows, 
+    open(io->mmap(io, T, (len,), offset; grow, shared), file, isfile(file) ? "r" : "w+")::Vector{eltype(T)} 
 
 # constructors for non-file-backed, unnamed (anonymous) mmaps
 mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) where {T <: Array, N} =
@@ -499,16 +505,22 @@ mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=Int64(0); gr
     open(io->mmap(io, T, (len,), offset; grow, shared), file, isfile(file) ? "r" : "w+")::BitVector
 
 # constructors for non-file-backed (anonymous) mmaps
-mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) where {T<:BitArray,N} = 
-    open(SharedMemory, "", prod(dims) * sizeof(T)) do io
-        mmap(io, T, dims, Int64(0); shared)
-    end
-mmap(::Type{T}, i::Integer...; shared::Bool=true) where {T<:BitArray} = mmap(T, convert(Tuple{Vararg{Int}},i); shared)
+mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) where {T<:BitArray,N} =
+    open(io -> mmap(io, T, dims, Int64(0); shared), SharedMemory, "", prod(dims) * sizeof(T), "w+")
+mmap(::Type{T}, i::Integer...; shared::Bool=true) where {T<:BitArray} = mmap(T, convert(Tuple{Vararg{Int}}, i); shared)
 
 # msync flags for unix
 const MS_ASYNC = 1
 const MS_INVALIDATE = 2
 const MS_SYNC = 4
+
+# Helper for page-aligned pointer calculations
+function page_aligned_region(ptr::Ptr, len::Integer)
+    offset = rem(UInt(ptr), PAGESIZE)
+    aligned_ptr = ptr - offset
+    aligned_len = len + offset
+    return aligned_ptr, aligned_len
+end
 
 """
     Mmap.sync!(array)
@@ -517,16 +529,13 @@ Forces synchronization between the in-memory version of a memory-mapped `Array` 
 [`BitArray`](@ref) and the on-disk version.
 """
 function sync!(m::Array, flags::Integer=MS_SYNC)
-    ptr = pointer(m)
-    offset = rem(UInt(ptr), PAGESIZE)
-    ptr = ptr - offset
-    mmaplen = sizeof(m) + offset
+    ptr, len = page_aligned_region(pointer(m), sizeof(m))
     GC.@preserve m @static if Sys.isunix()
         systemerror("msync",
-                    ccall(:msync, Cint, (Ptr{Cvoid}, Csize_t, Cint), ptr, mmaplen, flags) != 0)
+            ccall(:msync, Cint, (Ptr{Cvoid}, Csize_t, Cint), ptr, len, flags) != 0)
     else
-        Base.windowserror(:FlushViewOfFile,
-            ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Cvoid}, Csize_t), ptr, mmaplen) == 0)
+        Base.windowseror(:FlushViewOfFile,
+            ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Cvoid}, Csize_t), ptr, len) == 0)
     end
 end
 sync!(B::BitArray, flags::Integer=MS_SYNC) = sync!(B.chunks, flags)
@@ -580,13 +589,10 @@ Advises the kernel on the intended usage of the memory-mapped `array`, with the 
 `flag` being one of the available `MADV_*` constants.
 """
 function madvise!(m::Array, flag::Integer=MADV_NORMAL)
-    ptr = pointer(m)
-    offset = rem(UInt(ptr), PAGESIZE)
-    ptr = ptr - offset
-    mmaplen = sizeof(m) + offset
+    ptr, len = page_aligned_region(pointer(m), sizeof(m))
     GC.@preserve m begin
         systemerror("madvise",
-                    ccall(:madvise, Cint, (Ptr{Cvoid}, Csize_t, Cint), ptr, mmaplen, flag) != 0)
+            ccall(:madvise, Cint, (Ptr{Cvoid}, Csize_t, Cint), ptr, len, flag) != 0)
     end
 end
 madvise!(B::BitArray, flag::Integer=MADV_NORMAL) = madvise!(B.chunks, flag)
