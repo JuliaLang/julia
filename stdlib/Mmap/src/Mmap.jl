@@ -80,7 +80,7 @@ function preallocate(fd::OS_HANDLE, size::Integer)
         status = ccall(:fcntl, Cint, (OS_HANDLE, Cint, Ref{FStore}...), fd, F_PREALLOCATE, fstore)
         systemerror("fcntl F_PREALLOCATE", status == -1)
     else
-        status = ccall(:posix_fallocate, Cint, (OS_HANDLE, Int64, Int64), fd, 0, size) # does not set `errno`
+        status = ccall(:posix_fallocate, Cint, (OS_HANDLE, Int, Int), fd, 0, size) # does not set `errno`
         status != 0 && systemerror(:posix_fallocate, status)
     end
 end
@@ -548,7 +548,7 @@ function sync!(m::Array, flags::Integer=MS_SYNC)
         systemerror("msync",
             ccall(:msync, Cint, (Ptr{Cvoid}, Csize_t, Cint), ptr, len, flags) != 0)
     else
-        Base.windowseror(:FlushViewOfFile,
+        Base.windowserror(:FlushViewOfFile,
             ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Cvoid}, Csize_t), ptr, len) == 0)
     end
 end
