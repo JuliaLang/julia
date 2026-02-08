@@ -51,6 +51,20 @@ represents a valid Unicode character.
 """
 Char
 
+"""
+    Int(c::AbstractChar)
+
+Convert a character `c` to its corresponding Unicode code point as an integer.
+
+# Examples
+
+    julia> Int('a')
+    97
+
+    julia> Int('é')
+    233
+"""
+
 @constprop :aggressive (::Type{T})(x::Number) where {T<:AbstractChar} = T(UInt32(x)::UInt32)
 @constprop :aggressive AbstractChar(x::Number) = Char(x)
 @constprop :aggressive (::Type{T})(x::AbstractChar) where {T<:Union{Number,AbstractChar}} = T(codepoint(x))
