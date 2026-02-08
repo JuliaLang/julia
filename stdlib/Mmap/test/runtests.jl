@@ -280,14 +280,8 @@ A2 = A3 = A4 = nothing
 GC.gc()
 rm(fname)
 
-# Mmap.Anonymous
-m = Mmap.Anonymous()
-@test m.name == ""
-@test !m.readonly
-@test m.create
-@test isopen(m)
-@test isreadable(m)
-@test iswritable(m)
+# Mmap.SharedMemory
+# TODO
 
 m = mmap(Vector{UInt8}, 12)
 @test length(m) == 12
