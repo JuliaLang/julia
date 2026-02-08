@@ -420,7 +420,6 @@ function mmap(io::IO,
     # platform-specific mmapping
     handle = INVALID_OS_HANDLE
     try
-        ptr = C_NULL
         @static if Sys.isunix()
             prot, flags, readonly = settings(file_desc, shared)
             check_can_grow(io, szfile, readonly, grow) && grow!(io, offset, len)
@@ -457,7 +456,7 @@ function mmap(io::IO,
 
         # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
         A = unsafe_wrap(Array, convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
-        finalizer(A.ref.mem) do x
+        finalizer(A.ref.mem) do _
             @static if Sys.isunix()
                 ustatus = ccall(:munmap, Cint, (Ptr{Cvoid}, Int), ptr, mmaplen)
                 systemerror(:munmap, ustatus != 0)
