@@ -290,6 +290,15 @@ end
 ansi_enablecursor = "\e[?25h"
 ansi_disablecursor = "\e[?25l"
 blackhole = Sys.isunix() ? "/dev/null" : "nul"
+# Ugly hack for our cache file to not have a dependency edge on the FakePTYs file.
+Base._track_dependencies[] = false
+try
+    Base.include(@__MODULE__, joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test", "testhelpers", "FakePTYs.jl"))
+    @Core.latestworld
+    import .FakePTYs: open_fake_pty
+finally
+    Base._track_dependencies[] = true
+end
 procenv = Dict{String,Any}(
         "JULIA_HISTORY" => blackhole,
         "JULIA_LOAD_PATH" => "@$(Sys.iswindows() ? ";" : ":")@stdlib",
@@ -355,9 +364,22 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             Base.Precompilation.precompilepkgs(;fancyprint=true);
             $precompile_script
             """
+        # Use a PTY for stderr so the subprocess initializes stderr as a Base.TTY,
+        # giving precompilepkgs the same IOContext{Base.TTY} type used at runtime.
+        pts, ptm = open_fake_pty()
+        # Drain the master side so the subprocess doesn't block on a full PTY buffer
+        drain = @async try
+            while !eof(ptm)
+                readavailable(ptm)
+            end
+        catch ex
+            ex isa Base.IOError || rethrow()
+        end
         p = run(pipeline(addenv(`$(julia_exepath()) -O0 --trace-compile=$tmp_proc --sysimage $sysimg
                 --cpu-target=native --startup-file=no --color=yes --project=$(pkgpath)`, procenv),
-                 stdin=IOBuffer(s), stderr=debug_output, stdout=debug_output))
+                 stdin=IOBuffer(s), stderr=pts, stdout=debug_output))
+        close(ptm)
+        wait(drain)
         n_step1 = 0
         for f in (tmp_prec, tmp_proc)
             isfile(f) || continue
