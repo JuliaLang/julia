@@ -477,12 +477,12 @@ function mmap(io::IO,
 
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
     A = unsafe_wrap(Array, convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
-    finalizer(A.ref.mem) do _
+    finalizer(A.ref.mem) do x
         @static if Sys.isunix()
-            ustatus = ccall(:munmap, Cint, (Ptr{Cvoid}, Int), ptr, mmaplen)
+            ustatus = ccall(:munmap, Cint, (Ptr{Cvoid}, Int), pointer(x), mmaplen)
             systemerror(:munmap, ustatus != 0)
         else
-            ustatus = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Cvoid},), ptr)
+            ustatus = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Cvoid},), pointer(x))
             Base.windowserror(:UnmapViewOfFile, ustatus == 0)
         end
     end
