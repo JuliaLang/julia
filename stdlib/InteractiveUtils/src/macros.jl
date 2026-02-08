@@ -580,7 +580,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                 args = [ex0.head === :ncat ? [] : Any[ex0.args[1]]; d; xs]
                 return gen_call(fcn, Any[f, args...], where_params, kws; use_signature_tuple)
             else
-                shape = get_shape(args, true, d)
+                shape = get_shape(args, is_row_first, d)
                 is_balanced = sum(map((x, y) -> sum(map(z -> z - y, x)), shape[2:end], first.(shape[2:end]))) == 0
                 dimsshape = if is_balanced
                     reverse!(get_dims(args, is_row_first, d))
