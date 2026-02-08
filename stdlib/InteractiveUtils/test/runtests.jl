@@ -1081,20 +1081,21 @@ end
 
 
     me = (@macroexpand @which Int64[1;;;])
-    test_which_expand(me, typed_hvncat, :Int64, 3, 1)
+    test_which_expand(me, Base.typed_hvncat, :Int64, 3, 1)
 
     me = (@macroexpand @which Int64[1 ;;;; 3;;;; 9])
-    test_which_expand(me, typed_hvncat, :Int64, 4, 1, 3, 9)
+    test_which_expand(me, Base.typed_hvncat, :Int64, 4, 1, 3, 9)
 
     me = (@macroexpand @which Int64[1 4 ;;; 3 4 ;;; 1 9])
-    test_which_expand(me, typed_hvncat, :Int64, Expr(:tuple, 1, 2, 3), true, 1, 4, 3, 4, 1, 9)
+    test_which_expand(me, Base.typed_hvncat, :Int64, Expr(:tuple, 1, 2, 3), true, 1, 4, 3, 4, 1, 9)
 
     me = (@macroexpand @which Int64[1 ;; 4 ;;;; 3;; 9])
-    test_which_expand(me, typed_hvncat, :Int64, Expr(:tuple, 1, 2, 1, 2), false, 1, 4, 3, 9)
+    test_which_expand(me, Base.typed_hvncat, :Int64, Expr(:tuple, 1, 2, 1, 2), false, 1, 4, 3, 9)
 
     me = (@macroexpand @which Int64[1 4 ;;; 3 4 ;;;; 4])
-    test_which_expand(me, typed_hvncat, :Int64, Expr(:tuple, (5,), (4, 1), (2, 2, 1), (1, 1, 1, 1, 1)), true, 1, 4, 3, 4, 4)
+    test_which_expand(me, Base.typed_hvncat, :Int64, Expr(:tuple, (5,), (4, 1), (2, 2, 1), (1, 1, 1, 1, 1)), true, 1, 4, 3, 4, 4)
 
+    
     me = (@macroexpand @which [string() ;;; string()])
     test_which_expand(me, hvncat, 3, :(string()), :(string()))
 end
