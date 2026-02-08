@@ -416,26 +416,17 @@ function mmap(io::IO,
 
     file_desc = gethandle(io)
     szfile = convert(Csize_t, len + offset)
-    ptr = C_NULL
 
     # platform-specific mmapping
-    @static if Sys.isunix()
-        try
+    handle = INVALID_OS_HANDLE
+    try
+        @static if Sys.isunix()
             prot, flags, readonly = settings(file_desc, shared)
             check_can_grow(io, szfile, readonly, grow) && grow!(io, offset, len)
             ptr = ccall(:jl_mmap, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t, Cint, Cint, OS_HANDLE, Int64),
                 C_NULL, mmaplen, prot, flags, file_desc, offset_page)
             systemerror(:mmap, reinterpret(Int, ptr) == -1)
-        catch e
-            if e isa SystemError
-                throw(IOError("Failed to create memory map", e.errnum))
-            else
-                rethrow()
-            end
-        end
-    else
-        handle = INVALID_OS_HANDLE
-        try
+        else
             readonly = isreadonly(io)
             check_can_grow(io, szfile, readonly, grow) # Cannot grow on Windows, error if requested size is larger than file size
 
@@ -461,32 +452,34 @@ function mmap(io::IO,
                 mmaplen                                                    # Number of bytes to map
             )
             Base.windowserror(:MapViewOfFile, ptr == C_NULL)
-        catch e
-            if e isa SystemError
-                throw(IOError("Failed to create memory map", e.errnum))
+        end # os-test
+
+        # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
+        A = unsafe_wrap(Array, convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
+        finalizer(A.ref.mem) do x
+            @static if Sys.isunix()
+                ustatus = ccall(:munmap, Cint, (Ptr{Cvoid}, Int), pointer(x), mmaplen)
+                systemerror(:munmap, ustatus != 0)
             else
-                rethrow()
+                ustatus = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Cvoid},), pointer(x))
+                Base.windowserror(:UnmapViewOfFile, ustatus == 0)
             end
-        finally
+        end
+        return A
+    catch e
+        if e isa SystemError
+            throw(IOError("Failed to create memory map", e.errnum))
+        else
+            rethrow()
+        end
+    finally
+        @static if Sys.iswindows()
             if !(io isa SharedMemory) && handle != INVALID_OS_HANDLE
                 status = ccall(:CloseHandle, stdcall, Cint, (OS_HANDLE,), handle) != 0
                 Base.windowserror(:CloseHandle, status == 0)
             end
         end
-    end # os-test
-
-    # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
-    A = unsafe_wrap(Array, convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
-    finalizer(A.ref.mem) do x
-        @static if Sys.isunix()
-            ustatus = ccall(:munmap, Cint, (Ptr{Cvoid}, Int), pointer(x), mmaplen)
-            systemerror(:munmap, ustatus != 0)
-        else
-            ustatus = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Cvoid},), pointer(x))
-            Base.windowserror(:UnmapViewOfFile, ustatus == 0)
-        end
     end
-    return A
 end
 
 mmap(file::AbstractString,
