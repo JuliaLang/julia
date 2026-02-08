@@ -32,6 +32,12 @@ mutable struct SharedMemory <: IO
     readonly::Bool
     create::Bool
     size::UInt
+
+    function SharedMemory(name, handle, readonly, create, size)
+        io = new(name, handle, readonly, create, size)
+        finalizer(close, io)
+        return io
+    end
 end
 
 # platform-specific mmap utilities
@@ -71,7 +77,7 @@ function preallocate(fd::OS_HANDLE, size::Integer)
             systemerror(:write, written == -1)
             remaining -= written
         end
-        status = ccall(:lseek, Int64, (Mmap.OS_HANDLE, Cint, Cint), fd, 0, 0)
+        status = ccall(:lseek, Int64, (OS_HANDLE, Int64, Cint), fd, 0, 0)
         systemerror(:lseek, status == -1)
     else
         status = ccall(:posix_fallocate, Cint, (OS_HANDLE, Int, Int), fd, 0, size) # does not set `errno`
@@ -129,13 +135,17 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
 end
 
 function Base.close(io::SharedMemory)
-    if io.handle !== INVALID_OS_HANDLE
-        if io.create
-            rc = shm_unlink(io.name)
-            systemerror(:shm_unlink, rc != 0)
+    if io.handle != INVALID_OS_HANDLE
+        try
+            if io.create
+                status = shm_unlink(io.name)
+                systemerror(:shm_unlink, status != 0)
+            end
+        finally
+            status = ccall(:close, Cint, (OS_HANDLE,), io.handle)
+            io.handle = INVALID_OS_HANDLE
+            systemerror(:close, status != 0)
         end
-        ccall(:close, Cint, (OS_HANDLE,), io.handle)
-        io.handle = INVALID_OS_HANDLE
     end
     return nothing
 end
@@ -222,7 +232,7 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
     if create
         try
             page_prot = readonly ? PAGE_READONLY : PAGE_READWRITE
-            io.handle = ccall(:CreateFileMappingW, stdcall, OS_HANDLE, (OS_HANDLE, Ref{SECURITY_ATTRIBUTES}, DWORD, DWORD, DWORD, Cwstring),
+            handle = ccall(:CreateFileMappingW, stdcall, OS_HANDLE, (OS_HANDLE, Ref{SECURITY_ATTRIBUTES}, DWORD, DWORD, DWORD, Cwstring),
                 INVALID_OS_HANDLE,                                 # Backed by system paging file
                 default_security_attrs(),                          # Default security, can be inherited
                 page_prot,                                         # Requested access mode
@@ -232,12 +242,13 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
             lasterr = ccall(:GetLastError, stdcall, DWORD, ())
             if lasterr == ERROR_ALREADY_EXISTS
                 # Windows indicates if it already exists this way, but returns a valid handle anyway
-                status = ccall(:CloseHandle, stdcall, Cint, (OS_HANDLE,), io.handle)
+                status = ccall(:CloseHandle, stdcall, Cint, (OS_HANDLE,), handle)
                 Base.windowserror(:CloseHandle, status == 0)
                 Base.windowserror(:CreateFileMappingW, lasterr)
             else
-                Base.windowserror(:CreateFileMappingW,  io.handle == NULL_OS_HANDLE)
+                Base.windowserror(:CreateFileMappingW,  handle == NULL_OS_HANDLE)
             end
+            io.handle = handle
         catch e
             if e isa SystemError
                 throw(IOError("Failed to create and allocate shared memory", e.errnum))
@@ -248,12 +259,13 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
     else
         try
             map_access = readonly ? FILE_MAP_READ : FILE_MAP_WRITE
-            io.handle = ccall(:OpenFileMappingW, stdcall, OS_HANDLE, (DWORD, Cint, Cwstring),
+            handle = ccall(:OpenFileMappingW, stdcall, OS_HANDLE, (DWORD, Cint, Cwstring),
                 map_access, # Requested access mode
                 true,       # Can be inherited
                 name        # Object name
             )
-            Base.windowserror(:OpenFileMappingW, io.handle == NULL_OS_HANDLE)
+            Base.windowserror(:OpenFileMappingW, handle == NULL_OS_HANDLE)
+            io.handle = handle
         catch e
             if e isa SystemError
                 throw(IOError("Failed to open shared memory", e.errnum))
@@ -267,9 +279,9 @@ end
 
 function Base.close(io::SharedMemory)
     if io.handle != INVALID_OS_HANDLE
-        status = ccall(:CloseHandle, stdcall, Cint, (OS_HANDLE,), io.handle) != 0
-        Base.windowserror(:CloseHandle, status == 0)
+        status = ccall(:CloseHandle, stdcall, Cint, (OS_HANDLE,), io.handle)
         io.handle = INVALID_OS_HANDLE
+        Base.windowserror(:CloseHandle, status == 0)
     end
     return nothing
 end
@@ -422,6 +434,7 @@ function mmap(io::IO,
             end
         end
     else
+        handle = INVALID_OS_HANDLE
         try
             readonly = isreadonly(io)
             check_can_grow(io, szfile, readonly, grow) # Cannot grow on Windows, error if requested size is larger than file size
@@ -455,7 +468,7 @@ function mmap(io::IO,
                 rethrow()
             end
         finally
-            if !(io isa SharedMemory)
+            if !(io isa SharedMemory) && handle != INVALID_OS_HANDLE
                 status = ccall(:CloseHandle, stdcall, Cint, (OS_HANDLE,), handle) != 0
                 Base.windowserror(:CloseHandle, status == 0)
             end
