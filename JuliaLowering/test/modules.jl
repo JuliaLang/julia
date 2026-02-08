@@ -12,7 +12,7 @@ end
 @test A isa Module
 @test A.g() == "hi"
 @test A.include isa Base.IncludeInto
-@test A.eval isa Core.EvalInto
+@test A.eval isa Base.EvalInto
 @test A.Base === Base
 @test A.eval(:(x = -2)) == -2
 @test A.x == -2

@@ -19,7 +19,7 @@ macro test_parseerror(str, msg)
 end
 
 macro test_loweringerror(ex, msg, opt=nothing)
-    code = :(@test Meta.lower(@__MODULE__, $(esc(ex))) == Expr(:error, $(esc(msg))))
+    code = :(@test Meta.lower(@__MODULE__, $(esc(ex))) == Expr(:error, ErrorException(string("syntax: ", $(esc(msg))))))
     code.args[2] = __source__
     if opt === :broken
         code.args[1] = :var"@test_broken"
@@ -337,7 +337,7 @@ end
 
 # issue #15798
 # lowering preserves Expr(:error)
-@test Meta.lower(Main, Expr(:error, "no")) == Expr(:error, "no")
+@test Meta.lower(Main, Expr(:error, ErrorException("no"))) == Expr(:error, ErrorException("no"))
 
 # issue #19861 make sure macro-expansion happens in the newest world for top-level expression
 @test eval(Base.parse_input_line("""
@@ -485,21 +485,17 @@ end
 @test_throws MethodError eval(Meta.parse("(Any=>Any)[:a=>1,:b=>2]"))
 
 # issue #16720
-let err = try
-    include_string(@__MODULE__, "module A
+@test_throws Base.JuliaSyntax.ParseError include_string(@__MODULE__,
+    """
+    module A
 
-        function broken()
+    function broken()
 
-            x[1] = some_func(
+        x[1] = some_func(
 
-        end
-
-        end")
-    catch e
-        e
     end
-    @test err.line in (5, 7)
-end
+
+    end""")
 
 # PR #17393
 for op in (:.==, :.&, :.|, :.≤)
@@ -1897,8 +1893,8 @@ end
 @test Meta.isexpr(Meta.parse("1, "), :incomplete)
 @test Meta.isexpr(Meta.parse("1,\n"), :incomplete)
 @test Meta.isexpr(Meta.parse("1, \n"), :incomplete)
-@test_throws LoadError include_string(@__MODULE__, "1,")
-@test_throws LoadError include_string(@__MODULE__, "1,\n")
+@test_throws Base.JuliaSyntax.ParseError include_string(@__MODULE__, "1,")
+@test_throws Base.JuliaSyntax.ParseError include_string(@__MODULE__, "1,\n")
 
 # issue #30062
 @test_loweringerror(Base.remove_linenums!(quote if false end, b+=2 end),

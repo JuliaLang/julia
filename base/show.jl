@@ -3409,7 +3409,7 @@ function show(io::IO, ii::IncludeInto)
     end
 end
 
-function show(io::IO, ei::Core.EvalInto)
+function show(io::IO, ei::EvalInto)
     if getglobal(ei.m, :eval) === ei
         print(io, ei.m)
         print(io, ".eval")
