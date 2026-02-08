@@ -534,6 +534,17 @@ function stop_background_precompile(; graceful::Bool = true)
     end
 end
 
+const _register_atexit_hook = Base.OncePerProcess{Nothing}() do
+    Base.atexit() do
+        task = @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.task
+        task === nothing && return
+        istaskdone(task) && return
+        stop_background_precompile(; graceful=false)
+        wait(task)
+    end
+    nothing
+end
+
 function monitor_background_precompile(io::IO = stderr, detachable::Bool = true, wait_for_pkg::Union{Nothing, PkgId} = nothing)
     local completed_at::Union{Nothing, Float64}
     local task
@@ -885,6 +896,10 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
 
     # Capture necessary context for background task
     pkg_names = pkgs isa Vector{String} ? copy(pkgs) : String[pkg.name for pkg in pkgs]
+
+    # Register an atexit hook (once) to cleanly shut down background precompilation
+    # before the event loop is torn down.
+    _register_atexit_hook()
 
     # Launch new background precompilation
     lock(BACKGROUND_PRECOMPILE.lock) do
