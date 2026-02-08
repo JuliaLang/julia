@@ -1202,6 +1202,35 @@ end
 
 Experimental.register_error_hint(methods_on_iterable, MethodError)
 
+function kwcall_stub_hint_handler(io, ex, arg_types, kwargs)
+    @nospecialize
+    isempty(kwargs) && return
+
+    kwt = try
+        names = Tuple(first.(kwargs))
+        vals = Core.apply_type(Tuple, last.(kwargs)...)
+        NamedTuple{names, vals}
+    catch
+        nothing
+    end
+    kwt isa Type || return
+
+    m = try
+        tt = Core.apply_type(Tuple, kwt, typeof(ex.f), arg_types...)
+        which(Core.kwcall, tt)
+    catch
+        nothing
+    end
+    (m isa Method && m.is_kwcall_stub) || return
+
+    print(io, "\nKeyword arguments do not participate in method dispatch: the matching method is chosen using positional arguments.")
+    print(io, "\nHowever, the matching method for this call does not accept these keyword arguments.")
+    print(io, "\nConsider defining a keyword method for this positional signature, or calling a method that accepts these keywords.")
+    return
+end
+
+Experimental.register_error_hint(kwcall_stub_hint_handler, MethodError)
+
 # Display a hint in case the user tries to access non-member fields of container type datastructures
 function fielderror_dict_hint_handler(io, exc)
     @nospecialize
