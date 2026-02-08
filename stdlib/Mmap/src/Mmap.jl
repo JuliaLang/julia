@@ -192,6 +192,8 @@ const FILE_MAP_EXECUTE       = DWORD(0x20)
 
 const ERROR_ALREADY_EXISTS   = DWORD(0xB7)
 
+const NULL_OS_HANDLE         = reinterpret(OS_HANDLE, 0)
+
 function gethandle(io::IO)
     handle = Libc._get_osfhandle(RawFD(fd(io)))
     Base.windowserror(:mmap, handle == INVALID_OS_HANDLE)
@@ -234,7 +236,7 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
                 Base.windowserror(:CloseHandle, status == 0)
                 Base.windowserror(:CreateFileMappingW, lasterr)
             else
-                Base.windowserror(:CreateFileMappingW,  io.handle == INVALID_OS_HANDLE)
+                Base.windowserror(:CreateFileMappingW,  io.handle == NULL_OS_HANDLE)
             end
         catch e
             if e isa SystemError
@@ -251,7 +253,7 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
                 true,       # Can be inherited
                 name        # Object name
             )
-            Base.windowserror(:OpenFileMappingW, io.handle == INVALID_OS_HANDLE)
+            Base.windowserror(:OpenFileMappingW, io.handle == NULL_OS_HANDLE)
         catch e
             if e isa SystemError
                 throw(IOError("Failed to open shared memory", e.errnum))
@@ -433,7 +435,7 @@ function mmap(io::IO,
                     split_high_bits(szfile), split_low_bits(szfile), # High-order and low-order bits of size
                     ""                                               # Object name
                 )
-                Base.windowserror(:CreateFileMappingW, handle == INVALID_OS_HANDLE)
+                Base.windowserror(:CreateFileMappingW, handle == NULL_OS_HANDLE)
             else
                 handle = io.handle
             end
