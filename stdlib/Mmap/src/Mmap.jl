@@ -5,7 +5,7 @@ Low level module for mmap (memory mapping of files).
 """
 module Mmap
 
-import Base: OS_HANDLE, INVALID_OS_HANDLE
+import Base: OS_HANDLE, INVALID_OS_HANDLE, IOError
 import Base.Filesystem: JL_O_CREAT, JL_O_RDONLY, JL_O_RDWR, JL_O_EXCL, S_IRUSR, S_IWUSR
 using Base.Sys: PAGESIZE
 
@@ -91,21 +91,36 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
             oflag |= JL_O_CREAT | JL_O_EXCL
         end
         mode = S_IRUSR | S_IWUSR # Owner read/write
-        fd_mem = RawFD(shm_open(name, oflag, mode))
-        systemerror(:shm_open, fd_mem == INVALID_OS_HANDLE)
-
-        if create
-            # Reserve space for the shared memory object
-            # Failing to do this here may later result in SIGBUS fault if reading/writing beyond available memory
-            preallocate(fd_mem, size)
-
-            # Set the size of the shared memory object
-            # On OSX, ftruncate must be used to set size of segment, just lseek does not work.
-            # And only at creation time.
-            status = ccall(:jl_ftruncate, Cint, (OS_HANDLE, Int64), fd_mem, size)
-            systemerror(:ftruncate, status != 0)
+        try
+            io.handle = RawFD(shm_open(name, oflag, mode))
+            systemerror(:shm_open, io.handle == INVALID_OS_HANDLE)
+        catch e
+            if e isa SystemError
+                throw(IOError("Failed to $(create ? "create" : "open") shared memory", e.errnum))
+            else
+                rethrow()
+            end
         end
-        io.handle = fd_mem
+        try
+            if create
+                # Set the size of the shared memory object
+                # On OSX, ftruncate must be used to set size of segment, just lseek does not work.
+                # And only at creation time.
+                status = ccall(:jl_ftruncate, Cint, (OS_HANDLE, Int64), io.handle, size)
+                systemerror(:ftruncate, status != 0)
+
+                # Reserve space for the shared memory object
+                # Failing to do this here may later result in SIGBUS fault if reading/writing beyond available memory
+                preallocate(io.handle, size)
+            end
+        catch e
+            close(io)
+            if e isa SystemError
+                throw(IOError("Failed to allocate shared memory", e.errnum))
+            else
+                rethrow()
+            end
+        end
     else
         # Anonymous mapping doesn't require a shared-memory file descriptor.
     end
@@ -122,6 +137,7 @@ function Base.close(io::SharedMemory)
         ccall(:close, Cint, (OS_HANDLE,), io.handle)
         io.handle = INVALID_OS_HANDLE
     end
+    return nothing
 end
 
 # Determine a stream's read/write mode, and return prot & flags appropriate for mmap
@@ -202,31 +218,47 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
     validate_sharedmemory_args(name, size, create)
     io = SharedMemory(name, INVALID_OS_HANDLE, readonly, create, size)
     if create
-        page_prot = readonly ? PAGE_READONLY : PAGE_READWRITE
-        io.handle = ccall(:CreateFileMappingW, stdcall, OS_HANDLE, (OS_HANDLE, Ref{SECURITY_ATTRIBUTES}, DWORD, DWORD, DWORD, Cwstring),
-            INVALID_OS_HANDLE,                                 # Backed by system paging file
-            default_security_attrs(),                          # Default security, can be inherited
-            page_prot,                                         # Requested access mode
-            split_high_bits(io.size), split_low_bits(io.size), # High-order and low-order bits of size
-            name                                               # Object name
-        )
-        lasterr = ccall(:GetLastError, stdcall, DWORD, ())
-        if lasterr == ERROR_ALREADY_EXISTS
-            status = ccall(:CloseHandle, stdcall, Cint, (OS_HANDLE,), io.handle)
-            Base.windowserror(:CloseHandle, status == 0)
-            io.handle = INVALID_OS_HANDLE
-            Base.windowserror(:CreateFileMappingW, lasterr)
-        else
-            Base.windowserror(:CreateFileMappingW, io.handle == INVALID_OS_HANDLE)
+        try
+            page_prot = readonly ? PAGE_READONLY : PAGE_READWRITE
+            io.handle = ccall(:CreateFileMappingW, stdcall, OS_HANDLE, (OS_HANDLE, Ref{SECURITY_ATTRIBUTES}, DWORD, DWORD, DWORD, Cwstring),
+                INVALID_OS_HANDLE,                                 # Backed by system paging file
+                default_security_attrs(),                          # Default security, can be inherited
+                page_prot,                                         # Requested access mode
+                split_high_bits(io.size), split_low_bits(io.size), # High-order and low-order bits of size
+                name                                               # Object name
+            )
+            lasterr = ccall(:GetLastError, stdcall, DWORD, ())
+            if lasterr == ERROR_ALREADY_EXISTS
+                # Windows indicates if it already exists this way, but returns a valid handle anyway
+                status = ccall(:CloseHandle, stdcall, Cint, (OS_HANDLE,), io.handle)
+                Base.windowserror(:CloseHandle, status == 0)
+                Base.windowserror(:CreateFileMappingW, lasterr)
+            else
+                Base.windowserror(:CreateFileMappingW,  io.handle == INVALID_OS_HANDLE)
+            end
+        catch e
+            if e isa SystemError
+                throw(IOError("Failed to create and allocate shared memory", e.errnum))
+            else
+                rethrow()
+            end
         end
     else
-        map_access = readonly ? FILE_MAP_READ : FILE_MAP_WRITE
-        io.handle = ccall(:OpenFileMappingW, stdcall, OS_HANDLE, (DWORD, Cint, Cwstring),
-            map_access, # Requested access mode
-            true,       # Can be inherited
-            name        # Object name
-        )
-        Base.windowserror(:OpenFileMappingW, io.handle == INVALID_OS_HANDLE)
+        try
+            map_access = readonly ? FILE_MAP_READ : FILE_MAP_WRITE
+            io.handle = ccall(:OpenFileMappingW, stdcall, OS_HANDLE, (DWORD, Cint, Cwstring),
+                map_access, # Requested access mode
+                true,       # Can be inherited
+                name        # Object name
+            )
+            Base.windowserror(:OpenFileMappingW, io.handle == INVALID_OS_HANDLE)
+        catch e
+            if e isa SystemError
+                throw(IOError("Failed to open shared memory", e.errnum))
+            else
+                rethrow()
+            end
+        end
     end
     return io
 end
@@ -373,44 +405,60 @@ function mmap(io::IO,
 
     # platform-specific mmapping
     @static if Sys.isunix()
-        prot, flags, readonly = settings(file_desc, shared)
-        check_can_grow(io, szfile, readonly, grow) && grow!(io, offset, len)
-        ptr = ccall(:jl_mmap, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t, Cint, Cint, OS_HANDLE, Int64),
-            C_NULL, mmaplen, prot, flags, file_desc, offset_page)
-        systemerror("memory mapping failed", reinterpret(Int, ptr) == -1)
-    else
-        readonly = isreadonly(io)
-        check_can_grow(io, szfile, readonly, grow) # Cannot grow on Windows, error if requested size is larger than file size
-
-        if !(io isa SharedMemory)
-            page_prot = readonly ? PAGE_READONLY : PAGE_READWRITE
-            handle = ccall(:CreateFileMappingW, stdcall, OS_HANDLE, (OS_HANDLE, Ref{SECURITY_ATTRIBUTES}, DWORD, DWORD, DWORD, Cwstring),
-                file_desc,                                       # File to map
-                default_security_attrs(),                        # Default security, can be inherited
-                page_prot,                                       # Requested access mode
-                split_high_bits(szfile), split_low_bits(szfile), # High-order and low-order bits of size
-                ""                                               # Object name
-            )
-            Base.windowserror(:CreateFileMappingW, handle == INVALID_OS_HANDLE)
-        else
-            handle = io.handle
+        try
+            prot, flags, readonly = settings(file_desc, shared)
+            check_can_grow(io, szfile, readonly, grow) && grow!(io, offset, len)
+            ptr = ccall(:jl_mmap, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t, Cint, Cint, OS_HANDLE, Int64),
+                C_NULL, mmaplen, prot, flags, file_desc, offset_page)
+            systemerror(:mmap, reinterpret(Int, ptr) == -1)
+        catch e
+            if e isa SystemError
+                throw(IOError("Failed to create memory map", e.errnum))
+            else
+                rethrow()
+            end
         end
+    else
+        try
+            readonly = isreadonly(io)
+            check_can_grow(io, szfile, readonly, grow) # Cannot grow on Windows, error if requested size is larger than file size
 
-        map_access = readonly ? FILE_MAP_READ : FILE_MAP_WRITE
-        ptr = ccall(:MapViewOfFile, stdcall, Ptr{Cvoid}, (OS_HANDLE, DWORD, DWORD, DWORD, Csize_t),
-            handle,                                                    # Handle to mapping object
-            map_access,                                                # Requested access mode
-            split_high_bits(offset_page), split_low_bits(offset_page), # High-order and low-order bits of offset
-            mmaplen                                                    # Number of bytes to map
-        )
-        Base.windowserror(:MapViewOfFile, ptr == C_NULL)
+            if !(io isa SharedMemory)
+                page_prot = readonly ? PAGE_READONLY : PAGE_READWRITE
+                handle = ccall(:CreateFileMappingW, stdcall, OS_HANDLE, (OS_HANDLE, Ref{SECURITY_ATTRIBUTES}, DWORD, DWORD, DWORD, Cwstring),
+                    file_desc,                                       # File to map
+                    default_security_attrs(),                        # Default security, can be inherited
+                    page_prot,                                       # Requested access mode
+                    split_high_bits(szfile), split_low_bits(szfile), # High-order and low-order bits of size
+                    ""                                               # Object name
+                )
+                Base.windowserror(:CreateFileMappingW, handle == INVALID_OS_HANDLE)
+            else
+                handle = io.handle
+            end
 
-        if !(io isa SharedMemory)
-            status = ccall(:CloseHandle, stdcall, Cint, (OS_HANDLE,), handle) != 0
-            Base.windowserror(:CloseHandle, status == 0)
+            map_access = readonly ? FILE_MAP_READ : FILE_MAP_WRITE
+            ptr = ccall(:MapViewOfFile, stdcall, Ptr{Cvoid}, (OS_HANDLE, DWORD, DWORD, DWORD, Csize_t),
+                handle,                                                    # Handle to mapping object
+                map_access,                                                # Requested access mode
+                split_high_bits(offset_page), split_low_bits(offset_page), # High-order and low-order bits of offset
+                mmaplen                                                    # Number of bytes to map
+            )
+            Base.windowserror(:MapViewOfFile, ptr == C_NULL)
+        catch e
+            if e isa SystemError
+                throw(IOError("Failed to create memory map", e.errnum))
+            else
+                rethrow()
+            end
+        finally
+            if !(io isa SharedMemory)
+                status = ccall(:CloseHandle, stdcall, Cint, (OS_HANDLE,), handle) != 0
+                Base.windowserror(:CloseHandle, status == 0)
+            end
         end
     end # os-test
-
+    
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
     A = unsafe_wrap(Array, convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
     finalizer(A.ref.mem) do _
