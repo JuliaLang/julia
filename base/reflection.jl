@@ -596,7 +596,7 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
     interp = passed_interp === nothing ? invoke_default_compiler(:_default_interp, world) : interp
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
-        _, rt = only(code_typed_opaque_closure(f, types; Compiler))
+        _, rt = only(code_typed_opaque_closure(f, types; interp=passed_interp))
         return Any[rt]
     elseif isa(f, Core.Builtin)
         return Any[_builtin_return_type(passed_interp, interp, f, types)]
