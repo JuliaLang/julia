@@ -76,9 +76,7 @@ shm_unlink(name) = ccall(:shm_unlink, Cint, (Cstring,), name)
 
 function preallocate(fd::OS_HANDLE, size::Integer)
     @static if Sys.isapple()
-        fstore = Ref(FStore(F_ALLOCATEALL, F_PEOFPOSMODE, 0, size, 0))
-        status = ccall(:fcntl, Cint, (OS_HANDLE, Cint, Ref{FStore}...), fd, F_PREALLOCATE, fstore)
-        systemerror("fcntl F_PREALLOCATE", status == -1)
+        # TODO: Is it possible to pre-allocate on MacOS? Does it remain vulnerable to SIGBUS?
     else
         status = ccall(:posix_fallocate, Cint, (OS_HANDLE, Int, Int), fd, 0, size) # does not set `errno`
         status != 0 && systemerror(:posix_fallocate, status)
