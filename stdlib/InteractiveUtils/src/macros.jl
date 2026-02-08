@@ -517,21 +517,30 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
             end
             d = args[1]
             args = args[2:end]
-            is_row_first = false
             is_row(x) = isa(x, Expr) && (x.head === :row || x.head === :nrow)
             function extract_elements(x)
                 if isa(x, Expr)
-                    if x.head === :nrow
-                        return collect(Iterators.flatten(extract_elements.(x.args[2:end])))
-                    elseif x.head === :row
-                        is_row_first = true
-                        return collect(Iterators.flatten(extract_elements.(x.args)))
-                    else
+                    xargs = x.head === :nrow ? x.args[2:end] :
+                        x.head === :row  ? x.args :
+                        nothing
+                    if xargs === nothing
                         return [x]
+                    else
+                        return collect(Iterators.flatten(extract_elements.(xargs)))
                     end
-                else
-                    x
                 end
+                return x
+            end
+            function get_is_row_first(x)
+                if isa(x, Expr)
+                    if x.head === :nrow
+                        x = x.args[2:end]
+                    elseif x.head == :row
+                        return true
+                    end
+                end
+                isa(x, Vector) && return any(get_is_row_first.(x))
+                return false
             end
             function get_shape(a, is_row_first, d)
                 # Unwrap one level of row/nrow expressions
@@ -574,6 +583,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                     [length(a); get_dims(anext, is_row_first, d - 1)]
                 end
             end
+            is_row_first = get_is_row_first(args)
             is_1d = !any(is_row, args)
             xs = collect(Iterators.flatten(extract_elements.(args)))
             if is_1d
