@@ -2,17 +2,14 @@ name: cffconvert
 
 on:
   push:
-    branches:
+    branches: &branches
       - 'master'
       - 'release-*'
-    paths:
+    paths: &paths
       - CITATION.cff
   pull_request:
-    branches:
-      - 'master'
-      - 'release-*'
-    paths:
-      - CITATION.cff
+    branches: *branches
+    paths: *paths
 
 permissions:
   contents: read
@@ -20,7 +17,7 @@ permissions:
 jobs:
   validate:
     name: "validate"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - name: Check out a copy of the repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
