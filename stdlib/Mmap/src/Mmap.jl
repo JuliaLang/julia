@@ -60,7 +60,19 @@ shm_unlink(name) = ccall(:shm_unlink, Cint, (Cstring,), name)
 
 function preallocate(fd::OS_HANDLE, size::Integer)
     @static if Sys.isapple()
-        # TODO: Is it possible to pre-allocate on MacOS? Does it remain vulnerable to SIGBUS?
+        # MacOS doesn't support preallocation, so have to fall back to writing zeros
+        # Need to use system calls directly because the Julia API currently swallows IO errors!
+        chunksize = 65 * 1024
+        buf = zeros(UInt8, min(size, chunksize))
+        remaining = size
+        while remaining > 0
+            writesize = min(remaining, chunksize)
+            written = ccall(:write, Cssize_t, (Cint, Ptr{UInt8}, Csize_t), fd, buf, writesize)
+            systemerror(:write, written == -1)
+            remaining -= written
+        end
+        status = ccall(:lseek, Int64, (Mmap.OS_HANDLE, Cint, Cint), fd, 0, 0)
+        systemerror(:lseek, status == -1)
     else
         status = ccall(:posix_fallocate, Cint, (OS_HANDLE, Int, Int), fd, 0, size) # does not set `errno`
         status != 0 && systemerror(:posix_fallocate, status)
