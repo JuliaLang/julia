@@ -402,6 +402,7 @@ function mmap(io::IO,
 
     file_desc = gethandle(io)
     szfile = convert(Csize_t, len + offset)
+    ptr = C_NULL
 
     # platform-specific mmapping
     @static if Sys.isunix()
