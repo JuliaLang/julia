@@ -37,6 +37,8 @@ Build system changes
 New library functions
 ---------------------
 
+* `Iterators.cat(iterators...)` concatenates several iterators ([XXX]).
+
 New library features
 --------------------
 

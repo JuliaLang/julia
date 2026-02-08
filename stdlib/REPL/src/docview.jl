@@ -497,8 +497,8 @@ repl_corrections(s) = repl_corrections(stdout, s)
 const symbols_latex = Dict{String,String}()
 function symbol_latex(s::String)
     if isempty(symbols_latex)
-        for (k,v) in Iterators.flatten((REPLCompletions.latex_symbols,
-                                        REPLCompletions.emoji_symbols))
+        for (k,v) in Iterators.cat(REPLCompletions.latex_symbols,
+                                   REPLCompletions.emoji_symbols)
             symbols_latex[v] = k
         end
 

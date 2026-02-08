@@ -556,6 +556,13 @@ end
     @test (@inferred Base.IteratorSize(Base.Flatten(1:2:4))) == Base.HasLength()
 end
 
+@testset "`Iterators.cat`" begin
+    f = collect ∘ Iterators.cat
+    @test [] == f() == f([]) == f([], []) == f(()) == f([], ())
+    @test [3] == f([], [3]) == f([3], []) == f([], (), [3])
+    @test [10, 1, 2] == f((10,), [1, 2]) == f([10, 1], (2,))
+end
+
 @test (@inferred Base.IteratorEltype(Base.Flatten((i for i=1:2) for j=1:1))) == Base.EltypeUnknown()
 # see #29112, #29464, #29548
 @test Base.return_types(Base.IteratorEltype, Tuple{Array}) == [Base.HasEltype]

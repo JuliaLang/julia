@@ -33,7 +33,46 @@ import Base:
     popfirst!, isdone, peek, intersect
 
 export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap, partition, nth, findeach
-public accumulate, filter, map, peel, reverse, Stateful
+public accumulate, filter, map, peel, reverse, Stateful, cat
+
+"""
+    Iterators.cat(iterators...)
+
+Concatenate several iterators.
+
+Currently just defined as `Iterators.flatten ∘ tuple`.
+
+!!! compat "Julia 1.14"
+
+    This function requires at least Julia 1.14.
+
+# Examples
+
+```jldoctest
+julia> collect(Int, Iterators.cat())
+Int64[]
+
+julia> collect(Int, Iterators.cat([]))
+Int64[]
+
+julia> collect(Int, Iterators.cat([], []))
+Int64[]
+
+julia> collect(Iterators.cat([1, 2, 3]))
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
+
+julia> collect(Iterators.cat([1, 2, 3], [10]))
+4-element Vector{Int64}:
+  1
+  2
+  3
+ 10
+```
+"""
+const cat = Iterators.flatten ∘ tuple
 
 """
     Iterators.map(f, iterators...)
