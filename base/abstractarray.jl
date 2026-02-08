@@ -564,7 +564,7 @@ end
 
 Return a tuple of the memory strides in each dimension.
 
-See also [`stride`](@ref).
+See also [`stride`](@ref) and [`try_strides`].
 
 # Examples
 ```jldoctest
@@ -604,6 +604,68 @@ function stride(A::AbstractArray, k::Integer)
         s += st[i] * sz[i]
     end
     return s
+end
+
+"""
+    try_strides(A::AbstractArray)::Union{Nothing, Dims}
+
+Return a tuple of the memory strides in each dimension if `A` is strided.
+Otherwise return `nothing`.
+
+If `try_strides` doesn't return `nothing`, a pointer to any element of the array can be obtained using `Base.cconvert`, `Base.unsafe_convert`, `Base.elsize`, and `Base.strides` as desribed in the strided array interface.
+
+See also [`strides`](@ref) and [`stride`](@ref).
+
+# Examples
+```jldoctest
+julia> A = fill(1, (3,4,5));
+
+julia> try_strides(A)
+(1, 3, 12)
+
+julia> B = 1:10;
+
+julia> isnothing(try_strides(B))
+true
+```
+
+!!! compat "Julia 1.14"
+     This function requires at least Julia 1.14.
+"""
+function try_strides(A::AbstractArray)
+    nothing
+end
+
+"""
+    can_ptr_load(A::AbstractArray)::Bool
+
+Return `true` if a pointer to an `isbits` element in `A` can be used to load that element. Otherwise return `false`.
+
+Do not assume `can_ptr_load` arrays are strided.
+
+See also: [`can_ptr_store`](@ref) and [`try_strides`](@ref).
+
+!!! compat "Julia 1.14"
+     This function requires at least Julia 1.14.
+"""
+function can_ptr_load(A::AbstractArray)
+    false
+end
+
+"""
+    can_ptr_store(A::AbstractArray)::Bool
+
+Return `true` if a pointer to an `isbits` element in `A` can be used to load that element. Otherwise return `false`.
+
+Do not assume `can_ptr_load` arrays are strided.
+
+See also: [`can_ptr_load`](@ref) and [`try_strides`](@ref).
+
+!!! compat "Julia 1.14"
+     This function requires at least Julia 1.14.
+"""
+function can_ptr_store(A::AbstractArray)
+    false
 end
 
 @inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * d, sz...)...)
