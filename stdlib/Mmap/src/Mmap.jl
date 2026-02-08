@@ -44,22 +44,6 @@ const MAP_PRIVATE   = Cint(2)
 const MAP_ANONYMOUS = Cint(Sys.isbsd() ? 0x1000 : 0x20)
 const F_GETFL       = Cint(3)
 
-if Sys.isapple()
-
-const F_PEOFPOSMODE = Cint(3)
-const F_ALLOCATEALL = Cint(4)
-const F_PREALLOCATE = Cint(42)
-
-mutable struct FStore
-    fst_flags::UInt32
-    fst_posmode::Cint
-    fst_offset::Int64
-    fst_length::Int64
-    fst_bytesalloc::Int64
-end
-
-end
-
 gethandle(io::IO) = fd(io)
 
 function shm_open(name, oflags, permissions)
@@ -269,9 +253,6 @@ Base.isopen(io::SharedMemory) = io.handle != INVALID_OS_HANDLE || io.name == ""
 
 gethandle(io::SharedMemory) = io.handle
 
-isanonymous(io::SharedMemory) = isempty(io.name)
-isanonymous(::IO) = false
-
 function validate_sharedmemory_args(name::AbstractString, size::Integer, create::Bool)
     isempty(name) && !create &&
         throw(ArgumentError("Anonymous SharedMemory files must have `create = true`."))
@@ -422,11 +403,11 @@ function mmap(io::IO,
     A = unsafe_wrap(Array, convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
     finalizer(A.ref.mem) do _
         @static if Sys.isunix()
-            status = ccall(:munmap, Cint, (Ptr{Cvoid}, Int), ptr, mmaplen)
-            systemerror(:munmap, status != 0)
+            ustatus = ccall(:munmap, Cint, (Ptr{Cvoid}, Int), ptr, mmaplen)
+            systemerror(:munmap, ustatus != 0)
         else
-            status = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Cvoid},), ptr)
-            Base.windowserror(:UnmapViewOfFile, status == 0)
+            ustatus = ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Cvoid},), ptr)
+            Base.windowserror(:UnmapViewOfFile, ustatus == 0)
         end
     end
     return A
