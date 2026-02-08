@@ -144,6 +144,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         NULL, // output-asm
                         NULL, // output-ji
                         NULL, // output-code_coverage
+                        NULL, // output-heap-snapshot
                         0, // incremental
                         0, // image_file_specified
                         JL_OPTIONS_WARN_SCOPE_ON,  // ambiguous scope warning
@@ -401,6 +402,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_output_o,
            opt_output_asm,
            opt_output_ji,
+           opt_output_heap_snapshot,
            opt_use_precompiled,
            opt_use_compilecache,
            opt_incremental,
@@ -470,6 +472,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "output-o",        required_argument, 0, opt_output_o },
         { "output-asm",      required_argument, 0, opt_output_asm },
         { "output-ji",       required_argument, 0, opt_output_ji },
+        { "output-heap-snapshot",required_argument, 0, opt_output_heap_snapshot },
         { "output-incremental",required_argument, 0, opt_incremental },
         { "depwarn",         required_argument, 0, opt_depwarn },
         { "warn-overwrite",  required_argument, 0, opt_warn_overwrite },
@@ -905,6 +908,9 @@ restart_switch:
         case opt_output_ji:
             jl_options.outputji = optarg;
             if (!jl_options.image_file_specified) jl_options.image_file = NULL;
+            break;
+        case opt_output_heap_snapshot:
+            jl_options.output_heap_snapshot = optarg;
             break;
         case opt_incremental:
             if (!strcmp(optarg,"yes"))
