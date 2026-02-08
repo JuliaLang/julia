@@ -671,11 +671,16 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
             if nread == UV_ENOBUFS && nrequested == 0
                 # remind the client that stream.buffer is full
                 notify(stream.cond)
-            elseif nread == UV_EOF # libuv called uv_stop_reading already
-                if stream.status != StatusClosing
-                    # Read-side EOF does NOT imply write-side shutdown
-                    stream.status = StatusEOF
-                    notify(stream.cond)
+                elseif nread == UV_EOF # libuv called uv_stop_reading already
+                    if stream.status != StatusClosing
+                        stream.status = StatusEOF
+                        notify(stream.cond)
+                
+                        if stream isa PipeEndpoint
+                            ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
+                            stream.status = StatusClosing
+                        end
+                    end
                 end
             else
                 stream.readerror = _UVError("read", nread)
