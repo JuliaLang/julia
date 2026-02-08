@@ -17,9 +17,11 @@ mutable struct BackgroundPrecompileState
     lock::ReentrantLock
     task_done::Threads.Condition
     signal_channels::Vector{Channel{Int32}}  # channels for broadcasting signals to all subprocesses
+    pending_pkgids::Set{PkgId}  # packages queued and currently being precompiled
+    pkg_done::Threads.Condition  # notified when a package finishes precompiling
 end
 
-const BACKGROUND_PRECOMPILE = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[])
+const BACKGROUND_PRECOMPILE = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Set{PkgId}(), Threads.Condition())
 
 # This is currently only used for pkgprecompile but the plan is to use this in code loading in the future
 # see the `kc/codeloading2.0` branch
@@ -493,6 +495,20 @@ function is_precompiling_in_background()
     end
 end
 
+# If `pkg` is currently being precompiled by a background task, temporarily
+# monitor the precompile progress until that package finishes, then auto-detach.
+# Returns true if we monitored (caller should retry from cache).
+function wait_for_pending_package(pkg::PkgId)
+    @lock BACKGROUND_PRECOMPILE.lock begin
+        BACKGROUND_PRECOMPILE.task === nothing && return false
+        istaskdone(BACKGROUND_PRECOMPILE.task) && return false
+        pkg ∉ BACKGROUND_PRECOMPILE.pending_pkgids && return false
+    end
+    printpkgstyle(stderr, :Info, "$(pkg.name) is currently being precompiled in the background. Waiting for it to finish...", color = Base.info_color())
+    monitor_background_precompile(stderr, false, pkg)
+    return true
+end
+
 # Broadcast a signal to all active precompilation subprocesses.
 function broadcast_signal(sig::Int32)
     lock(BACKGROUND_PRECOMPILE.lock) do
@@ -518,7 +534,7 @@ function stop_background_precompile(; graceful::Bool = true)
     end
 end
 
-function monitor_background_precompile(io::IO = stderr, detachable::Bool = true)
+function monitor_background_precompile(io::IO = stderr, detachable::Bool = true, wait_for_pkg::Union{Nothing, PkgId} = nothing)
     local completed_at::Union{Nothing, Float64}
     local task
 
@@ -558,7 +574,7 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true)
     interrupt_requested = Ref(false)
 
     # Start a task to listen for keypresses
-    key_task = if isinteractive() && stdin isa Base.TTY
+    key_task = if stdin isa Base.TTY
         Threads.@spawn :samepool try
             term = Base.Terminals.TTYTerminal(get(ENV, "TERM", "dumb"), stdin, stdout, stderr)
             Base.Terminals.raw!(term, true)
@@ -575,13 +591,13 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true)
                     end
                     bytesavailable(stdin) > 0 || continue
                     c = read(stdin, Char)
-                    if c == 'c' || c == 'C'
+                    if c in ('c', 'C')
                         cancel_requested[] = true
                         println(io)  # newline after keypress
                         @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.cancel_requested = true
                         broadcast_signal(Base.SIGKILL)
                         break
-                    elseif detachable && (c == 'd' || c == 'D')
+                    elseif detachable && c in ('d', 'D', 'q', 'Q', ']')
                         exit_requested[] = true
                         println(io)  # newline after keypress
                         break
@@ -592,8 +608,18 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true)
                         @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.interrupt_requested = true
                         broadcast_signal(Base.SIGINT)
                         break
-                    elseif c == 'i' || c == 'I'
+                    elseif c in ('i', 'I')
                         broadcast_signal(Sys.isapple() ? Base.SIGINFO : Base.SIGUSR1)
+                    elseif c in ('?', 'h', 'H')
+                        println(io)
+                        println(io, "  Keyboard shortcuts:")
+                        println(io, "    c       Cancel precompilation (kills subprocesses)")
+                        if detachable
+                            println(io, "    d/q/]   Detach (precompilation continues in background)")
+                        end
+                        println(io, "    i       Send profiling signal to subprocesses")
+                        println(io, "    Ctrl-C  Interrupt (sends SIGINT, shows output)")
+                        println(io, "    ?/h     Show this help")
                     end
                 end
             finally
@@ -624,6 +650,21 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true)
         end
     end
 
+    # If waiting for a specific package, spawn a watcher that exits when it's done
+    pkg_watcher = if wait_for_pkg !== nothing
+        Threads.@spawn :samepool begin
+            @lock BACKGROUND_PRECOMPILE.pkg_done begin
+                while wait_for_pkg ∈ BACKGROUND_PRECOMPILE.pending_pkgids
+                    wait(BACKGROUND_PRECOMPILE.pkg_done)
+                end
+            end
+            exit_requested[] = true
+            @lock BACKGROUND_PRECOMPILE.task_done notify(BACKGROUND_PRECOMPILE.task_done)
+        end
+    else
+        nothing
+    end
+
     return try
         # Wait for task completion or user action
         while !exit_requested[] && !cancel_requested[] && !interrupt_requested[]
@@ -651,6 +692,17 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true)
             end
             wait(task; throw=false)
             close(escalation)
+            return
+        end
+
+        # If we were waiting for a specific package and it finished, clean up silently
+        if exit_requested[] && wait_for_pkg !== nothing
+            @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.monitoring = false
+            if key_task !== nothing
+                wake_key_task()
+                wait(key_task)
+            end
+            print(io, "\e[?25h\e[J")  # enable cursor + clear to end
             return
         end
 
@@ -753,11 +805,12 @@ When running interactively in a TTY, the following keys are available during
 precompilation:
 
   - **`c`** — Cancel precompilation. Kills all subprocesses and suppresses output.
-  - **`d`** — Detach (only when `detachable=true`). Returns to the REPL while
+  - **`d`/`q`/`]`** — Detach (only when `detachable=true`). Returns to the REPL while
     precompilation continues in the background.
   - **`i`** — Info. Sends a profiling signal (SIGINFO on macOS/BSD, SIGUSR1 on
     Linux) to subprocesses, triggering a profile peek without interrupting
     compilation.
+  - **`?`/`h`** — Show keyboard shortcut help.
   - **Ctrl-C** — Interrupt. Sends SIGINT to subprocesses and displays their output.
 
 # Return
@@ -827,6 +880,7 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
         BACKGROUND_PRECOMPILE.result = nothing
         BACKGROUND_PRECOMPILE.return_value = nothing
         BACKGROUND_PRECOMPILE.exception = nothing
+        empty!(BACKGROUND_PRECOMPILE.pending_pkgids)
     end
 
     # Capture necessary context for background task
@@ -858,6 +912,8 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
                     BACKGROUND_PRECOMPILE.cancel_requested = false
                     foreach(close, BACKGROUND_PRECOMPILE.signal_channels)
                     empty!(BACKGROUND_PRECOMPILE.signal_channels)
+                    empty!(BACKGROUND_PRECOMPILE.pending_pkgids)
+                    @lock BACKGROUND_PRECOMPILE.pkg_done notify(BACKGROUND_PRECOMPILE.pkg_done)
                     BACKGROUND_PRECOMPILE.monitoring = false
                     BACKGROUND_PRECOMPILE.completed_at = time()
                     @lock BACKGROUND_PRECOMPILE.task_done notify(BACKGROUND_PRECOMPILE.task_done)
@@ -1271,8 +1327,8 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
         try
             wait(first_started)
             (isempty(pkg_queue) || interrupted_or_done[]) && return
-            keyboard_tip = if fancyprint && isinteractive() && (stdin isa Base.TTY)
-                detachable ? "Press `c` to cancel, `d` to detach." : "Press `c` to cancel."
+            keyboard_tip = if fancyprint && (stdin isa Base.TTY)
+                detachable ? "Press `?` for help, `c` to cancel, `d` to detach." : "Press `?` for help, `c` to cancel."
             else
                 ""
             end
@@ -1413,6 +1469,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
                 notify(was_processed[pkg_config])
                 continue
             end
+            @lock BACKGROUND_PRECOMPILE.lock push!(BACKGROUND_PRECOMPILE.pending_pkgids, pkg)
             local flags, cacheflags = config
             task = Threads.@spawn :samepool try
                 loaded = warn_loaded && haskey(Base.loaded_modules, pkg)
@@ -1525,6 +1582,10 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
                         isopen(std_pipe.in) && close(std_pipe.in) # close pipe to end the std output monitor
                         wait(t_monitor)
                         Base.release(parallel_limiter)
+                        @lock BACKGROUND_PRECOMPILE.lock begin
+                            delete!(BACKGROUND_PRECOMPILE.pending_pkgids, pkg)
+                            @lock BACKGROUND_PRECOMPILE.pkg_done notify(BACKGROUND_PRECOMPILE.pkg_done)
+                        end
                     end
                 else
                     is_stale || (n_already_precomp[] += 1)
