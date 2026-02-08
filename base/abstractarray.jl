@@ -696,6 +696,8 @@ end
     checkbounds(A, I...)
 
 Throw an error if the specified indices `I` are not in bounds for the given array `A`.
+
+In case there is no throw, it is recommended to return [`nothing`](@ref).
 """
 function checkbounds(A::AbstractArray, I...)
     @inline

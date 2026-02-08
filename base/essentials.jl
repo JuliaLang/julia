@@ -383,6 +383,7 @@ end
 function checkbounds(A::Union{Array, GenericMemory}, i::Int)
     @inline
     checkbounds(Bool, A, i) || throw_boundserror(A, (i,))
+    nothing
 end
 
 default_access_order(::GenericMemory{:not_atomic}) = :not_atomic
