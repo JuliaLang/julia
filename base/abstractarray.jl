@@ -612,7 +612,7 @@ end
 Return a tuple of the memory strides in each dimension if `A` is strided.
 Otherwise return `nothing`.
 
-If `try_strides` doesn't return `nothing`, a pointer to any element of the array can be obtained using `Base.cconvert`, `Base.unsafe_convert`, `Base.elsize`, and `Base.strides` as desribed in the strided array interface.
+If `try_strides` doesn't return `nothing` and elements are `isbits`, a pointer to any element of the array can be obtained using `Base.cconvert`, `Base.unsafe_convert`, `Base.elsize`, and `Base.strides` as described in the strided array interface.
 
 See also [`strides`](@ref) and [`stride`](@ref).
 
