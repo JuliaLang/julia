@@ -310,10 +310,7 @@ function enqueue_specialization!(all::Bool, worklist, mi::Core.MethodInstance)
     codeinst = isdefined(mi, :cache) ? mi.cache : nothing
     while codeinst !== nothing
         do_compile = false
-        if codeinst.owner !== nothing
-            # TODO(vchuravy) native code caching for foreign interpreters
-            # Skip foreign code instances
-        elseif use_const_api(codeinst) # Check if invoke is jl_fptr_const_return
+        if use_const_api(codeinst) # Check if invoke is jl_fptr_const_return
             do_compile = true
         elseif codeinst.invoke != C_NULL || codeinst.precompile
             do_compile = true
