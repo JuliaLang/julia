@@ -166,6 +166,19 @@ function uv_status_string(x)
     return "invalid status"
 end
 
+"""
+    PipeEndpoint()
+    PipeEndpoint(fd::RawFD)
+
+A named pipe endpoint, implemented using libuv. `PipeEndpoint` provides a bidirectional
+byte-stream I/O object that can be used for inter-process communication.
+
+A `PipeEndpoint` can be created standalone (e.g. for connecting to a named pipe) or
+obtained from the `stdin`, `stdout`, or `stderr` fields of a [`Process`](@ref) launched
+with I/O redirection.
+
+See also [`PipeServer`], [`open_pipe!`].
+"""
 mutable struct PipeEndpoint <: LibuvStream
     handle::Ptr{Cvoid}
     status::Int
