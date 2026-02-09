@@ -7,7 +7,7 @@ on: [pull_request]
 jobs:
   typos-check:
     name: Check for new typos
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
       - name: Checkout the JuliaLang/julia repository

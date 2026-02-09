@@ -1,4 +1,5 @@
 name: PR Assignee
+
 on:
   # Important security note: Do NOT use `actions/checkout`
   # or any other method for checking out the pull request's source code.
@@ -25,7 +26,7 @@ permissions:
 
 jobs:
   pr-assignee:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     if: ${{ github.event.pull_request.draft != true }}
     steps:
       # Important security note: As discussed above, do NOT use `actions/checkout`
