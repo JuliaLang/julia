@@ -33,7 +33,7 @@ end
 function check_presence(mi, token)
     ci = isdefined(mi, :cache) ? mi.cache : nothing
     while ci !== nothing
-        @assert ci.max_world != Core.Compiler.WORLD_AGE_REVALIDATION_SENTINEL
+        @assert ci.max_world != Base.ReinferUtils.WORLD_AGE_REVALIDATION_SENTINEL
         if ci.owner === token && ci.max_world == typemax(UInt)
             return ci
         end
