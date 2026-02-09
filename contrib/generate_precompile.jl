@@ -367,13 +367,13 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
         # Use a PTY for stderr so the subprocess initializes stderr as a Base.TTY,
         # giving precompilepkgs the same IOContext{Base.TTY} type used at runtime.
         pts, ptm = open_fake_pty()
-        # Drain the master side so the subprocess doesn't block on a full PTY buffer
+        # Drain the master side so the subprocess doesn't block on a full PTY buffer.
+        # Use read() instead of while !eof() to avoid compiling eof(::TTY) outside
+        # the REPL precompile workload's jl_tag_newly_inferred block.
         drain = @async try
-            while !eof(ptm)
-                readavailable(ptm)
-            end
+            read(ptm)
         catch ex
-            ex isa Base.IOError || rethrow()
+            (ex isa Base.IOError || ex isa EOFError) || rethrow()
         end
         p = run(pipeline(addenv(`$(julia_exepath()) -O0 --trace-compile=$tmp_proc --sysimage $sysimg
                 --cpu-target=native --startup-file=no --color=yes --project=$(pkgpath)`, procenv),

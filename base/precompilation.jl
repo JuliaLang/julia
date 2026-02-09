@@ -679,9 +679,9 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
     return try
         # Wait for task completion or user action
         while !exit_requested[] && !cancel_requested[] && !interrupt_requested[]
-            @lock BACKGROUND_PRECOMPILE.task_done wait(BACKGROUND_PRECOMPILE.task_done)
             completed = @lock BACKGROUND_PRECOMPILE.lock (BACKGROUND_PRECOMPILE.completed_at !== nothing)
             completed && break
+            @lock BACKGROUND_PRECOMPILE.task_done wait(BACKGROUND_PRECOMPILE.task_done)
         end
 
         # If user requested cancel, stop the background task
