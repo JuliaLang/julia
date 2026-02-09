@@ -1278,7 +1278,7 @@ define a separate function for each vectorized operation.
 ### [Fewer dots: Unfuse certain intermediate broadcasts](@id man-performance-unfuse)
 
 The dot loop fusion mentioned above enables concise and idiomatic code to express highly performant operations. However, it is important to remember that the fused operation will be computed at every iteration of the broadcast. This means that in some situations, particularly in the presence of composed or multidimensional broadcasts, an expression with dot calls may be computing a function more times than intended. As an example, say we want to build a random matrix whose rows have Euclidean norm one. We might write something like the following:
-```julia
+```julia-repl
 julia> x = rand(1000, 1000);
 
 julia> d = sum(abs2, x; dims=2);
