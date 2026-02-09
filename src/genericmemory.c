@@ -40,6 +40,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory_unchecked(jl_ptls_t ptls
     }
     m = (jl_genericmemory_t*)jl_gc_alloc(ptls, tot, mtype);
     if (pooled) {
+        // N.B. if this offset changes, also update emit_const_len_memorynew in cgutils.cpp
         data = (char*)m + JL_SMALL_BYTE_ALIGNMENT;
     }
     else {
