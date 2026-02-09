@@ -1120,151 +1120,79 @@ struct Pair{A, B}
     end
 end
 
-# Incomplete types for mutually recursive type definitions (typegroup blocks).
-# These are ordinary mutable structs - being mutable gives them identity semantics
-# which is important for the substitution map during resolution.
+# TypeApp: lazy type application for typegroup blocks.
+# Represents a single type application step, like UnionAll represents a single where binding.
+# T{P1, P2} is TypeApp(TypeApp(T, P1), P2) -- nested left-to-right.
+# Allowed inside UnionAll; rejected by subtyping/intersection (like free typevars).
+struct TypeApp
+    head::Any            # Type constructor (TypeVar, Type, or outer TypeApp)
+    param::Any           # Single type parameter
+end
 
-"""
-Represents an incomplete struct type during mutual recursion resolution.
-"""
-mutable struct IncompleteStruct
-    const name::Symbol
-    super::Any                    # Supertype (may be incomplete or nothing)
-    parameters::SimpleVector      # Type parameters (TypeVars)
-    fieldnames::SimpleVector      # Field names (Symbols)
-    fieldtypes::SimpleVector      # Field types (may contain Incomplete* refs)
-    fieldattrs::SimpleVector      # Field attributes
-    mutabl::Bool                  # Is mutable struct
-    abstract::Bool                # Is abstract type
-    min_initialized::Int          # Minimum fields initialized by constructors
-
-    # Constructor for placeholder (name only)
-    IncompleteStruct(name::Symbol) = new(name, nothing, svec(), svec(), svec(), svec(), false, false, 0)
-
-    # Full constructor
-    function IncompleteStruct(name::Symbol, @nospecialize(super), parameters::SimpleVector,
-                              fieldnames::SimpleVector, fieldtypes::SimpleVector,
-                              fieldattrs::SimpleVector, mutabl::Bool, abstract::Bool,
-                              min_initialized::Int)
-        new(name, super, parameters, fieldnames, fieldtypes, fieldattrs, mutabl, abstract, min_initialized)
+# Check if a value contains a TypeApp anywhere in its structure
+function _contains_typeapp(@nospecialize(x))
+    if x isa TypeApp
+        return true
     end
-end
-
-"""
-    incomplete_setsuper!(incomplete::IncompleteStruct, super)
-
-Set the supertype of an incomplete struct. Mirrors `_setsuper!` for regular types.
-"""
-function incomplete_setsuper!(incomplete::IncompleteStruct, @nospecialize(super))
-    setfield!(incomplete, :super, super)
-    nothing
-end
-
-"""
-    incomplete_typebody!(incomplete::IncompleteStruct, fieldtypes::SimpleVector)
-
-Set the field types of an incomplete struct. Mirrors `_typebody!` for regular types.
-"""
-function incomplete_typebody!(incomplete::IncompleteStruct, fieldtypes::SimpleVector)
-    setfield!(incomplete, :fieldtypes, fieldtypes)
-    nothing
-end
-
-"""
-    complete_struct!(incomplete::IncompleteStruct, info::SimpleVector)
-
-Complete an incomplete struct with all its type information.
-`info` is a SimpleVector containing:
-  (parameters, fieldnames, fieldattrs, mutabl, min_initialized, super, fieldtypes)
-"""
-function complete_struct!(incomplete::IncompleteStruct, info::SimpleVector)
-    setfield!(incomplete, :parameters, _svec_ref(info, 1)::SimpleVector)
-    setfield!(incomplete, :fieldnames, _svec_ref(info, 2)::SimpleVector)
-    setfield!(incomplete, :fieldattrs, _svec_ref(info, 3)::SimpleVector)
-    setfield!(incomplete, :mutabl, _svec_ref(info, 4)::Bool)
-    setfield!(incomplete, :min_initialized, _svec_ref(info, 5)::Int)
-    setfield!(incomplete, :super, _svec_ref(info, 6))
-    setfield!(incomplete, :fieldtypes, _svec_ref(info, 7)::SimpleVector)
-    nothing
-end
-
-"""
-Represents a UnionAll with incomplete components.
-"""
-mutable struct IncompleteUnionAll
-    var::TypeVar                  # Type variable
-    body::Any                     # Body (may be incomplete)
-    IncompleteUnionAll(var::TypeVar, @nospecialize(body)) = new(var, body)
-end
-
-"""
-Represents a type application where some parameters are incomplete.
-Used for both apply_type (e.g., Vector{T}) and Union (Union{A,B}).
-"""
-mutable struct IncompleteTypeApp
-    head::Any                     # The type constructor (e.g., Vector, Union)
-    params::SimpleVector          # Parameters (may contain Incomplete* refs)
-    IncompleteTypeApp(@nospecialize(head), params::SimpleVector) = new(head, params)
-end
-
-# Predicate to check if a value is any incomplete type
-is_incomplete(@nospecialize(x)) = x isa IncompleteStruct ||
-                                   x isa IncompleteUnionAll || x isa IncompleteTypeApp
-
-"""
-    apply_type_or_incomplete(tc, params...)
-
-Apply type parameters, returning an `IncompleteTypeApp` if any parameter is incomplete.
-Otherwise, calls `Core.apply_type` for normal type application.
-"""
-function apply_type_or_incomplete(@nospecialize(tc), @nospecialize params...)
-    # Check if the type constructor itself is incomplete
-    if is_incomplete(tc)
-        return IncompleteTypeApp(tc, svec(params...))
+    if x isa UnionAll
+        return _contains_typeapp(x.body)
     end
-    # Use index-based iteration to avoid needing iterate() on mixed tuples
-    # Use sle_int directly since <= is not available in Core at this point
+    if x isa Union
+        return _contains_typeapp(x.a) || _contains_typeapp(x.b)
+    end
+    if x isa DataType
+        p = x.parameters::SimpleVector
+        n = _svec_len(p)
+        i = 1
+        while sle_int(i, n)
+            if _contains_typeapp(_svec_ref(p, i))
+                return true
+            end
+            i = add_int(i, 1)
+        end
+    end
+    return false
+end
+
+function apply_type_or_typeapp(@nospecialize(tc), @nospecialize params...)
+    # Head is TypeVar/TypeApp => must defer (apply_type requires UnionAll/DataType head)
+    if tc isa TypeVar || tc isa TypeApp
+        # Build nested TypeApp chain: TypeApp(TypeApp(tc, p1), p2), ...
+        n = nfields(params)
+        result = tc
+        i = 1
+        while sle_int(i, n)
+            result = TypeApp(result, getfield(params, i))
+            i = add_int(i, 1)
+        end
+        return result
+    end
+    # Any param contains TypeApp => must defer
     n = nfields(params)
     i = 1
     while sle_int(i, n)
-        p = getfield(params, i)
-        if is_incomplete(p)
-            return IncompleteTypeApp(tc, svec(params...))
+        if _contains_typeapp(getfield(params, i))
+            # Build nested TypeApp chain for all params
+            result = tc
+            j = 1
+            while sle_int(j, n)
+                result = TypeApp(result, getfield(params, j))
+                j = add_int(j, 1)
+            end
+            return result
         end
         i = add_int(i, 1)
     end
+    # All concrete -- real apply_type
     return apply_type(tc, params...)
 end
 
-"""
-    unionall_or_incomplete(var, body)
-
-Create a UnionAll, returning an `IncompleteUnionAll` if the body is incomplete.
-Otherwise, creates a normal UnionAll type.
-"""
-function unionall_or_incomplete(var::TypeVar, @nospecialize(body))
-    if is_incomplete(body)
-        return IncompleteUnionAll(var, body)
-    end
-    return UnionAll(var, body)
-end
-
-"""
-    resolve_incompletes(mod::Module, incompletes...)
-
-Resolve multiple incomplete types atomically into real DataTypes.
-Takes a module and IncompleteStruct values and returns a tuple of resolved types in the same order.
-This is called at the end of a `typegroup` block to convert all incomplete
-type definitions into real Julia types.
-"""
-function resolve_incompletes(mod::Module, @nospecialize incompletes...)
-    n = nfields(incompletes)
+function resolve_typegroup(mod::Module, typevars::SimpleVector, struct_infos::SimpleVector)
+    n = _svec_len(typevars)
     if n === 0
         return ()
     end
-    # Call the C function that does the actual resolution
-    # Pass the tuple directly - the C function will iterate over it
-    return ccall(:jl_resolve_incompletes, Any, (Any, Any), mod, incompletes)
+    return ccall(:jl_resolve_typegroup, Any, (Any, Any, Any), mod, typevars, struct_infos)
 end
 
 function _hasmethod(@nospecialize(tt)) # this function has a special tfunc

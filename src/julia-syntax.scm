@@ -1004,7 +1004,7 @@
             ,@(map (lambda (v) `(local ,v)) params)
             ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
             (toplevel-only struct (globalref (thismodule) ,name))
-            (call (core complete_struct!) ,name (call (core svec)
+            (= ,incomp (call (core svec)
               (call (core svec) ,@params)
               (call (core svec) ,@(map quotify field-names))
               (call (core svec) ,@attrs)
@@ -1412,21 +1412,15 @@
      (receive (name sdef fdef) (struct-def-expr sig fields mut #f)
        `(block (global ,name) ,sdef ,fdef (latestworld) (null))))))
 
-;; Replace (call (core apply_type) ...) with (call (core apply_type_or_incomplete) ...)
-;; in an expression tree. Used for typegroup to handle incomplete type references.
-;; Replace Core type constructors with incomplete-aware versions
-;; Used for typegroup to handle incomplete type references.
+;; Replace (call (core apply_type) ...) with (call (core apply_type_or_typeapp) ...)
+;; in an expression tree. Used for typegroup to handle TypeVar/TypeApp references.
 (define (replace-type-constructors expr)
   (cond ((not (pair? expr)) expr)
         ((quoted? expr) expr)
         ((and (eq? (car expr) 'call)
               (pair? (cdr expr))
               (equal? (cadr expr) '(core apply_type)))
-         `(call (core apply_type_or_incomplete) ,@(map replace-type-constructors (cddr expr))))
-        ((and (eq? (car expr) 'call)
-              (pair? (cdr expr))
-              (equal? (cadr expr) '(core UnionAll)))
-         `(call (core unionall_or_incomplete) ,@(map replace-type-constructors (cddr expr))))
+         `(call (core apply_type_or_typeapp) ,@(map replace-type-constructors (cddr expr))))
         (else (map replace-type-constructors expr))))
 
 (define (expand-typegroup-def e)
@@ -1436,28 +1430,29 @@
                     (list body))))
     ;; First pass: collect names and process structs
     (let loop ((remaining stmts)
-               (names '())
-               (sdefs '())
-               (fdefs '()))
+               (names '()) (sdefs '()) (fdefs '()) (info-vars '()))
       (if (null? remaining)
           ;; Generate the full lowered code
           (let* ((names (reverse names))
                  (sdefs (reverse sdefs))
                  (fdefs (reverse fdefs))
+                 (info-vars (reverse info-vars))
                  ;; Build the block structure:
                  ;; 1. Declare all names as locals
-                 ;; 2. Create IncompleteStructs for each name
-                 ;; 3. Run sdefs (complete_struct! calls)
-                 ;; 4. Resolve incompletes
+                 ;; 2. Create TypeVar placeholders for each name
+                 ;; 3. Run sdefs (assigns struct info svecs to SSA values)
+                 ;; 4. Resolve typegroup via C
                  ;; 5. Bind to global constants
                  ;; 6. Run fdefs (constructors)
                  (code `(scope-block
                          (block
                           ,@(map (lambda (n) `(local ,n)) names)
-                          ,@(map (lambda (n) `(= ,n (call (core IncompleteStruct) (inert ,n)))) names)
+                          ,@(map (lambda (n) `(= ,n (call (core TypeVar) (inert ,n)))) names)
                           ,@sdefs
                           (= (tuple ,@names)
-                             (call (core resolve_incompletes) (thismodule) ,@names))
+                             (call (core resolve_typegroup) (thismodule)
+                                   (call (core svec) ,@names)
+                                   (call (core svec) ,@info-vars)))
                           ,@(map (lambda (n) `(const (globalref (thismodule) ,n) ,n)) names)
                           (latestworld)
                           ,@fdefs
@@ -1468,18 +1463,18 @@
             replaced)
           (let ((x (car remaining)))
             (cond ((linenum? x)
-                   (loop (cdr remaining) names sdefs fdefs))
+                   (loop (cdr remaining) names sdefs fdefs info-vars))
                   ((not (and (pair? x) (eq? (car x) 'struct)))
                    (error (string "typegroup only supports struct definitions, got: " (deparse x))))
                   (else
                    (let* ((mut (cadr x))
                           (sig (caddr x))
-                          (fields (cdr (cadddr x))))
-                     (receive (name sdef fdef) (struct-def-expr sig fields mut #t)
+                          (fields (cdr (cadddr x)))
+                          (info-var (make-ssavalue)))
+                     (receive (name sdef fdef) (struct-def-expr sig fields mut info-var)
                        (loop (cdr remaining)
-                             (cons name names)
-                             (cons sdef sdefs)
-                             (cons fdef fdefs)))))))))))
+                             (cons name names) (cons sdef sdefs)
+                             (cons fdef fdefs) (cons info-var info-vars)))))))))))
 
 ;; the following are for expanding `try` blocks
 

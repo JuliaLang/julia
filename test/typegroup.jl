@@ -439,6 +439,31 @@ using Test
         @test TG_SuperRefA <: AbstractVector{TG_SuperRefB}
     end
 
+    @testset "self-referential supertype parameter" begin
+        # Node{T} <: AbstractVector{Node{T}} -- type references itself in supertype params
+        typegroup
+            struct TG_SelfSuperNode{T} <: AbstractVector{TG_SelfSuperNode{T}}
+                data::T
+            end
+        end
+        @test TG_SelfSuperNode{Int} <: AbstractVector{TG_SelfSuperNode{Int}}
+        @test supertype(TG_SelfSuperNode{Int}) == AbstractVector{TG_SelfSuperNode{Int}}
+        n = TG_SelfSuperNode{Int}(42)
+        @test n.data == 42
+
+        # Two types where one references itself in supertype
+        typegroup
+            struct TG_SelfSuperA{T} <: AbstractVector{TG_SelfSuperA{T}}
+                b::Union{Nothing, TG_SelfSuperB{T}}
+            end
+            struct TG_SelfSuperB{T}
+                a::TG_SelfSuperA{T}
+            end
+        end
+        @test TG_SelfSuperA{Int} <: AbstractVector{TG_SelfSuperA{Int}}
+        @test fieldtype(TG_SelfSuperB{Int}, :a) == TG_SelfSuperA{Int}
+    end
+
     @testset "Tuple fields with incomplete types" begin
         # Self-referential Tuple field
         typegroup

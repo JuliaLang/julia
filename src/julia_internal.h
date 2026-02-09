@@ -1231,8 +1231,17 @@ void jl_init_llvm(void);
 void jl_init_runtime_ccall(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_intrinsic_properties(void);
-JL_DLLEXPORT void jl_init_incomplete_types(void);
-JL_DLLEXPORT jl_value_t *jl_resolve_incompletes(jl_module_t *module, jl_value_t *incompletes_tuple);
+// TypeApp: immutable struct with head::Any, param::Any
+// Represents a single lazy type application step (like UnionAll for where bindings).
+typedef struct {
+    JL_DATA_TYPE
+    jl_value_t *head;
+    jl_value_t *param;
+} jl_typeapp_t;
+
+JL_DLLEXPORT void jl_init_typeapp_type(void);
+JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *typevars, jl_svec_t *struct_infos);
+int jl_is_typeapp(jl_value_t *v) JL_NOTSAFEPOINT;
 void jl_init_tasks(void) JL_GC_DISABLED;
 void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo) JL_NOTSAFEPOINT;
 jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi);

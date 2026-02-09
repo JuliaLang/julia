@@ -238,7 +238,7 @@
     XX(jl_idtable_rehash) \
     XX(jl_init) \
     XX(jl_init_) \
-    XX(jl_init_incomplete_types) \
+    XX(jl_init_typeapp_type) \
     XX(jl_init_options) \
     XX(jl_init_restored_module) \
     XX(jl_init_with_image) \
@@ -389,7 +389,7 @@
     XX(jl_realloc) \
     XX(jl_register_newmeth_tracer) \
     XX(jl_resolve_definition_effects_in_ir) \
-    XX(jl_resolve_incompletes) \
+    XX(jl_resolve_typegroup) \
     XX(jl_restore_excstack) \
     XX(jl_restore_incremental) \
     XX(jl_restore_package_image_from_file) \
