@@ -19,9 +19,10 @@ mutable struct BackgroundPrecompileState
     signal_channels::Vector{Channel{Int32}}  # channels for broadcasting signals to all subprocesses
     pending_pkgids::Set{PkgId}  # packages queued and currently being precompiled
     pkg_done::Threads.Condition  # notified when a package finishes precompiling
+    keyboard_tip::String  # set by key handler when active, read by print loop
 end
 
-const BACKGROUND_PRECOMPILE = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Set{PkgId}(), Threads.Condition())
+const BACKGROUND_PRECOMPILE = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Set{PkgId}(), Threads.Condition(), "")
 
 # This is currently only used for pkgprecompile but the plan is to use this in code loading in the future
 # see the `kc/codeloading2.0` branch
@@ -595,6 +596,13 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
     key_task = if stdin isa Base.TTY
         Threads.@spawn :samepool try
             trylock(stdin.raw_lock) || return
+            @lock BACKGROUND_PRECOMPILE.lock begin
+                BACKGROUND_PRECOMPILE.keyboard_tip = if detachable
+                    "Press `?` for help, `c` to cancel, `d` to detach."
+                else
+                    "Press `?` for help, `c` to cancel."
+                end
+            end
             try
                 term = Base.Terminals.TTYTerminal(get(ENV, "TERM", "dumb"), stdin, stdout, stderr)
                 Base.Terminals.raw!(term, true)
@@ -650,6 +658,7 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                 rethrow()
             finally
                 Base.reseteof(stdin)
+                @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.keyboard_tip = ""
                 unlock(stdin.raw_lock)
             end
         finally
@@ -1354,11 +1363,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
         try
             wait(first_started)
             (isempty(pkg_queue) || interrupted_or_done[]) && return
-            keyboard_tip = if fancyprint && (stdin isa Base.TTY)
-                detachable ? "Press `?` for help, `c` to cancel, `d` to detach." : "Press `?` for help, `c` to cancel."
-            else
-                ""
-            end
+            keyboard_tip = @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.keyboard_tip
             @lock print_lock begin
                 if BACKGROUND_PRECOMPILE.monitoring && target[] !== nothing
                     printpkgstyle(logio, :Precompiling, something(target[], ""))
