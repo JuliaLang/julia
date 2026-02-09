@@ -991,6 +991,24 @@ end
 
 `@label` and `@goto` cannot create jumps to different top-level statements. Attempts cause an
 error. To still use `@goto`, enclose the `@label` and `@goto` in a block.
+
+Note that `@goto` implements unstructured control flow and bypasses normal control flow structures. In
+particular, jumping out of a `try`-`catch`-`finally` block with `@goto` will **not** execute the
+`finally` clause. Consider using structured control flow (like `return`, `break`, or
+`continue`) when possible.
+
+# Example
+```julia
+function example()
+    try
+        @goto skip_finally
+    finally
+        println("This will not be printed")
+    end
+    @label skip_finally
+    println("Jumped here directly")
+end
+```
 """
 macro goto(name::Symbol)
     return esc(Expr(:symbolicgoto, name))
