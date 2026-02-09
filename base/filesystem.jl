@@ -215,6 +215,16 @@ end
 closewrite(f::File) = nothing
 
 # sendfile is the most efficient way to copy from a file descriptor
+"""
+    sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
+    sendfile(src::AbstractString, dst::AbstractString)
+
+Efficiently copy data between file descriptors or file paths using the OS-level
+`sendfile` mechanism when available. In the two-argument path form, copies the entire
+file from `src` to `dst`, preserving the file mode.
+
+This is used internally by [`cp`](@ref) for efficient file copying.
+"""
 function sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
     check_open(dst)
     check_open(src)
