@@ -4044,6 +4044,42 @@ A non-exhaustive list of examples of when this is used include:
 """
 ConcurrencyViolationError
 
+"""
+    GenericMemoryRef{kind, T, addrspace}
+
+A reference (pointer with bounds-checking) into a [`GenericMemory`](@ref) object.
+`GenericMemoryRef` is parameterized by:
+- `kind::Symbol`: The atomicity kind (e.g. `:not_atomic` or `:atomic`).
+- `T`: The element type.
+- `addrspace`: The address space.
+
+The type aliases [`MemoryRef{T}`](@ref) and [`AtomicMemoryRef{T}`](@ref) are provided
+for the common cases.
+
+See also [`GenericMemory`](@ref), [`MemoryRef`](@ref), [`AtomicMemoryRef`](@ref).
+"""
+Core.GenericMemoryRef
+
+"""
+    MemoryRef{T}
+
+Type alias for `GenericMemoryRef{:not_atomic, T, Core.CPU}`, i.e. a reference into
+a non-atomic [`Memory{T}`](@ref).
+
+See also [`GenericMemoryRef`](@ref), [`Memory`](@ref).
+"""
+Core.MemoryRef
+
+"""
+    AtomicMemoryRef{T}
+
+Type alias for `GenericMemoryRef{:atomic, T, Core.CPU}`, i.e. a reference into
+an [`AtomicMemory{T}`](@ref).
+
+See also [`GenericMemoryRef`](@ref), [`AtomicMemory`](@ref).
+"""
+Core.AtomicMemoryRef
+
 Base.include(BaseDocs, "intrinsicsdocs.jl")
 
 end
