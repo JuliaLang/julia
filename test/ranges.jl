@@ -1887,6 +1887,17 @@ end
         vm = findfirst(sig->tt <: Base.tuple_type_tail(sig.sig), vmt)
         @test vmt[vm].sig != Tuple{typeof(view),AbstractArray,Vararg{Any,N}} where N
     end
+
+    struct MyRange{T,A<:AbstractRange{T}} <: AbstractRange{T}
+        r::A
+    end
+    Base.first(r::MyRange) = first(r.r)
+    Base.last(r::MyRange) = last(r.r)
+    Base.step(r::MyRange) = step(r.r)
+    Base.length(r::MyRange) = length(r.r)
+    Base.getindex(r::MyRange, i::Int) = getindex(r.r, i)
+
+    @test view(MyRange(1:10), :) === MyRange(1:10)
 end
 
 @testset "Issue #26608" begin
