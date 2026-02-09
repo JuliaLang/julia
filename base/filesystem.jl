@@ -165,6 +165,18 @@ include(string(Base.BUILDROOT, "file_constants.jl"))  # include($BUILDROOT/base/
 
 abstract type AbstractFile <: IO end
 
+"""
+    Filesystem.File(fd::RawFD)
+    Filesystem.File(fd::OS_HANDLE)
+
+A low-level file handle wrapping an OS-level file descriptor, providing direct access to
+libuv file system operations. Unlike [`IOStream`](@ref), `File` does not perform buffering.
+
+Use [`Filesystem.open`](@ref) to open a file and obtain a `File` handle, then call
+[`read`](@ref), [`write`](@ref), [`seek`](@ref), and [`close`](@ref) as needed.
+
+Most users should prefer [`Base.open`](@ref) and [`IOStream`](@ref) for file I/O.
+"""
 mutable struct File <: AbstractFile
     open::Bool
     handle::OS_HANDLE
