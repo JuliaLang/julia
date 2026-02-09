@@ -495,15 +495,21 @@ function is_precompiling_in_background()
     end
 end
 
-# If `pkg` is currently being precompiled by a background task, temporarily
-# monitor the precompile progress until that package finishes, then auto-detach.
-# Returns true if we monitored (caller should retry from cache).
-function wait_for_pending_package(pkg::PkgId)
+# Check if `pkg` is currently being precompiled by a background task.
+# This should be called while holding require_lock to avoid races.
+# Returns true if the package is pending.
+function is_package_pending(pkg::PkgId)
     @lock BACKGROUND_PRECOMPILE.lock begin
         BACKGROUND_PRECOMPILE.task === nothing && return false
         istaskdone(BACKGROUND_PRECOMPILE.task) && return false
-        pkg ∉ BACKGROUND_PRECOMPILE.pending_pkgids && return false
+        return pkg ∈ BACKGROUND_PRECOMPILE.pending_pkgids
     end
+end
+
+# Monitor the precompile progress for `pkg` until that package finishes.
+# This should be called after unlocking require_lock.
+function wait_for_pending_package(pkg::PkgId)
+    is_package_pending(pkg) || return false
     printpkgstyle(stderr, :Info, "$(pkg.name) is currently being precompiled in the background. Waiting for it to finish...", color = Base.info_color())
     monitor_background_precompile(stderr, false, pkg)
     return true

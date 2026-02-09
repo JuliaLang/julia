@@ -2857,17 +2857,19 @@ function __require_prelocked(pkg::PkgId, env)
         if !generating_output(#=incremental=#false)
             # If a background precompile task is working on this package,
             # temporarily monitor it until done, then retry from cache.
-            unlock(require_lock)
-            try
-                if @invokelatest Precompilation.wait_for_pending_package(pkg)
+            if Precompilation.is_package_pending(pkg)
+                unlock(require_lock)
+                try
+                    if Precompilation.wait_for_pending_package(pkg)
+                        lock(require_lock)
+                        @goto load_from_cache
+                    end
+                catch
                     lock(require_lock)
-                    @goto load_from_cache
+                    rethrow()
                 end
-            catch
                 lock(require_lock)
-                rethrow()
             end
-            lock(require_lock)
             # spawn off a new incremental pre-compile task for recursive `require` calls
             loaded = let spec = spec, reasons = reasons, parallel_precompile_attempted = parallel_precompile_attempted
                 maybe_cachefile_lock(pkg, spec.path) do
