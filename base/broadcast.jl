@@ -1246,6 +1246,18 @@ end
 # explicit calls to view.   (All of this can go away if slices
 # are changed to generate views by default.)
 
+"""
+    Broadcast.dotview(x, args...)
+
+Return the view of `x` that is used on the left-hand side of a fused broadcast assignment
+(`x[...] .= ...`). By default, `dotview` calls `Base.maybeview`, so that `x[i] .= rhs`
+uses a view for assignment.
+
+Custom array types can specialize `dotview` to control how broadcast assignment targets
+are created.
+
+See also [`Base.maybeview`](@ref), [`@views`](@ref).
+"""
 Base.@propagate_inbounds dotview(args...) = Base.maybeview(args...)
 
 ############################################################
