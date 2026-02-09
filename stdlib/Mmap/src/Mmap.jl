@@ -66,23 +66,16 @@ shm_unlink(name) = ccall(:shm_unlink, Cint, (Cstring,), name)
 
 function preallocate(fd::OS_HANDLE, size::Integer)
     @static if Sys.isapple()
-        # macOS doesn't support posix_fallocate, and F_PREALLOCATE/write are not
-        # supported for shm_open fds. Instead, temporarily mmap the region and
-        # mlock/munlock one page at a time to force the kernel to commit VM backing
-        # pages. This detects insufficient memory as ENOMEM rather than causing
-        # SIGBUS on later access, without requiring the entire region to fit in
-        # physical RAM simultaneously (munlock frees each physical frame for reuse).
-
-        # Guard: verify RLIMIT_MEMLOCK allows locking at least one page
-        rlim = Ref((Int64(0), Int64(0))) # (soft, hard)
-        rc = ccall(:getrlimit, Cint, (Cint, Ref{Tuple{Int64,Int64}}),
-                   Cint(6), rlim) # 6 = RLIMIT_MEMLOCK on macOS
-        if rc == 0
-            soft = rlim[][1]
-            if soft >= 0 && UInt64(soft) < PAGESIZE
-                @warn "RLIMIT_MEMLOCK too low to verify shared memory backing; skipping preallocation"
-                return
-            end
+        # MacOS does not support preallocation of shared memory as a syscall, and will
+        # allow the memory to grow on demand until it exceeds limits and the process is
+        # killed. And when that happens, the resources may be left open. To avoid this,
+        # we first use `os_proc_available_memory()` to determine if there is sufficient
+        # memory available. Then we temporarily `mmap` the region and use iterative 
+        # `mlock` to force MacOS to commit the memory, to match the semantics on other
+        # platforms.
+        avail = ccall(:os_proc_available_memory, Csize_t, ())
+        if size > avail
+            systemerror("preallocate", Libc.ENOMEM)
         end
 
         # Temporarily mmap the shared memory region
@@ -91,12 +84,11 @@ function preallocate(fd::OS_HANDLE, size::Integer)
         systemerror(:mmap, reinterpret(Int, ptr) == -1)
         try
             # Lock and immediately unlock each page to force backing page allocation.
-            # mlock returns ENOMEM on failure; munlock frees the physical frame so
-            # the next iteration can reuse it.
+            # munlock frees the physical frame so the next iteration can reuse it.
             for page_offset in 0:Int(PAGESIZE):(size - 1)
                 chunk = min(Int(PAGESIZE), size - page_offset)
                 status = ccall(:mlock, Cint, (Ptr{Cvoid}, Csize_t), ptr + page_offset, chunk)
-                systemerror("preallocating shared memory", status == -1)
+                systemerror(:mlock, status == -1)
                 ccall(:munlock, Cint, (Ptr{Cvoid}, Csize_t), ptr + page_offset, chunk)
             end
         finally
