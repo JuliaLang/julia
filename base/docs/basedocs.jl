@@ -4044,6 +4044,16 @@ A non-exhaustive list of examples of when this is used include:
 """
 ConcurrencyViolationError
 
+"""
+    SegmentationFault() <: Exception
+
+An exception thrown when a segmentation fault (invalid memory access) occurs. These
+typically indicate a bug in native code called via [`ccall`](@ref) or a Julia runtime error.
+Unlike most exceptions, a `SegmentationFault` is automatically converted into a Julia
+exception by the runtime signal handler rather than being explicitly thrown by Julia code.
+"""
+Core.SegmentationFault
+
 Base.include(BaseDocs, "intrinsicsdocs.jl")
 
 end
