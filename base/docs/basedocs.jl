@@ -4044,6 +4044,25 @@ A non-exhaustive list of examples of when this is used include:
 """
 ConcurrencyViolationError
 
+"""
+    Exception
+
+Abstract type of all exceptions in Julia. New exception types should subtype `Exception`.
+
+# Examples
+```jldoctest
+julia> struct MyException <: Exception
+           msg::String
+       end
+
+julia> MyException("something went wrong") isa Exception
+true
+```
+
+See also [`throw`](@ref), [`error`](@ref), [`catch`](@ref).
+"""
+Core.Exception
+
 Base.include(BaseDocs, "intrinsicsdocs.jl")
 
 end
