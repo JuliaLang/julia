@@ -4087,6 +4087,25 @@ This function exists for backward compatibility. Use [`size`](@ref) instead.
 """
 Core.arraysize
 
+"""
+    Exception
+
+Abstract type of all exceptions in Julia. New exception types should subtype `Exception`.
+
+# Examples
+```jldoctest
+julia> struct MyException <: Exception
+           msg::String
+       end
+
+julia> MyException("something went wrong") isa Exception
+true
+```
+
+See also [`throw`](@ref), [`error`](@ref), [`catch`](@ref).
+"""
+Core.Exception
+
 Base.include(BaseDocs, "intrinsicsdocs.jl")
 
 end
