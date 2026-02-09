@@ -4044,6 +4044,20 @@ A non-exhaustive list of examples of when this is used include:
 """
 ConcurrencyViolationError
 
+"""
+    IO
+
+The abstract type for all I/O streams. Every stream used for reading or writing data
+in Julia is a subtype of `IO`, including [`IOBuffer`](@ref), [`IOStream`](@ref),
+and network or file-based streams.
+
+Custom I/O types should subtype `IO` and implement methods such as
+[`read`](@ref), [`write`](@ref), and [`close`](@ref).
+
+See also [`IOBuffer`](@ref), [`IOStream`](@ref), [`open`](@ref).
+"""
+Core.IO
+
 Base.include(BaseDocs, "intrinsicsdocs.jl")
 
 end
