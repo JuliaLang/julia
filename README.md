@@ -62,6 +62,8 @@ documentation improvements, tests, and performance enhancements.
 
 New contributors are encouraged to start by reading [CONTRIBUTING.md](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md).
 
+> [!IMPORTANT]
+> If your pull request contains substantial contributions from a generative AI tool, please disclose so with details, and review all changes before opening.
 
 ### Learning Julia
 

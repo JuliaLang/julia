@@ -12,7 +12,7 @@ import FileWatching
 using Markdown
 import REPL
 
-using .JuliaSyntax: sourcetext, set_numeric_flags
+using .JuliaSyntax: SourceAttrType, sourcetext, set_numeric_flags
 
 using .JuliaLowering:
     SyntaxGraph, new_id!, ensure_attributes!,
@@ -25,7 +25,7 @@ function _ast_test_graph()
     graph = SyntaxGraph()
     ensure_attributes!(graph,
                        kind=Kind, syntax_flags=UInt16,
-                       source=Union{SourceRef,NodeId,Tuple,LineNumberNode},
+                       source=SourceAttrType,
                        var_id=Int, value=Any, name_val=String, is_toplevel_thunk=Bool,
                        toplevel_pure=Bool)
 end
@@ -154,7 +154,7 @@ function format_ir_for_test(mod, case)
             ex[1].name_val == "@ast_")
             # Total hack, until @ast_ can be implemented in terms of new-style
             # macros.
-            ex = Base.eval(mod, Expr(ex))
+            ex = Base.eval(mod, JuliaLowering.est_to_expr(ex))
         end
         x = JuliaLowering.lower(mod, ex)
         if case.expect_error
@@ -373,4 +373,12 @@ function reduce_any_failing_toplevel(mod::Module, filename::AbstractString; do_e
         end
     end
     nothing
+end
+
+function reference_lower(mod::Module, x)
+    Base.fl_lower(x, mod, @__FILE__, @__LINE__, Base.get_world_counter())[1]
+end
+
+function reference_eval(mod::Module, x)
+    Core.eval(mod, reference_lower(mod, x))
 end

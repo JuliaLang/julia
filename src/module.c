@@ -12,9 +12,6 @@
 extern "C" {
 #endif
 
-// In this translation unit and this translation unit only emit this symbol `extern` for use by julia
-EXTERN_INLINE_DEFINE uint8_t jl_bpart_get_kind(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT;
-
 static jl_binding_partition_t *new_binding_partition(void)
 {
     jl_binding_partition_t *bpart = (jl_binding_partition_t*)jl_gc_alloc(jl_current_task->ptls, sizeof(jl_binding_partition_t), jl_binding_partition_type);

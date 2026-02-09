@@ -4,6 +4,8 @@ using Test, Logging
 
 import Logging: min_enabled_level, shouldlog, handle_message
 
+@test isempty(Test.detect_closure_boxes(Logging))
+
 @noinline func1() = backtrace()
 
 # see "custom log macro" testset
