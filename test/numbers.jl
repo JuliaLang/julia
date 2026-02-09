@@ -3,6 +3,7 @@
 using Base.MathConstants
 using Random
 using LinearAlgebra
+using Test
 
 const ≣ = isequal # convenient for comparing NaNs
 
@@ -1808,6 +1809,24 @@ end
 
         @test fld(1.6856322854563416e16, 3.8274770451988434) === 4.40402977091864e15
         @test cld(1.6856322854563416e16, 3.8274770451988434) === 4.404029770918641e15
+
+        Random.seed!(123)
+        for T in (Float16, Float32, Float64, BigFloat)
+            p = precision(T)
+            for e in T(2).^(-6:2), s1 in (+1, -1), s2 in (+1, -1), r in 1:5
+                z = rand(T)
+                x = s1 * ldexp(1 + rand(T), rand(0:p))
+                y = s2 * z * eps(x/z) / e
+                _fld, _cld = e ≤ 1 ? (fld, cld) : (/, /)
+                if T == BigFloat
+                    @test fld(x, y) == T(setprecision(() -> _fld(x, y), p + 16))
+                    @test cld(x, y) == T(setprecision(() -> _cld(x, y), p + 16))
+                else
+                    @test fld(x, y) == T(_fld(widen(x), widen(y)))
+                    @test cld(x, y) == T(_cld(widen(x), widen(y)))
+                end
+            end
+        end
     end
 end
 @testset "return types" begin
