@@ -526,7 +526,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                     if xargs === nothing
                         return [x]
                     else
-                        return collect(Iterators.flatten(extract_elements.(xargs)))
+                        return collect(Iterators.flatten((@__FUNCTION__).(xargs)))
                     end
                 end
                 return x
@@ -539,7 +539,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                         return true
                     end
                 end
-                isa(x, Vector) && return any(get_is_row_first.(x))
+                isa(x, Vector) && return any((@__FUNCTION__).(x))
                 return false
             end
             function get_shape(a, is_row_first, d)
@@ -552,13 +552,13 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                 end
                 # Count leaf elements recursively
                 count_leaves(x) = !is_row(x) ? 1 :
-                                  x.head === :nrow ? sum(count_leaves, @view(x.args[2:end]); init=0) :
-                                  x.head === :row ? sum(count_leaves, x.args; init=0) : 1
+                                  x.head === :nrow ? sum((@__FUNCTION__), @view(x.args[2:end]); init=0) :
+                                  x.head === :row ? sum((@__FUNCTION__), x.args; init=0) : 1
                 # Base cases
                 (d == 0 || (d == 1 && !is_row_first)) && return [[length(a)]]
-                (d == 3 && is_row_first) && return get_shape(a, is_row_first, 2)
+                (d == 3 && is_row_first) && return (@__FUNCTION__)(a, is_row_first, 2)
                 # Recursive case: build shape from children
-                shapes = map(c -> get_shape(c, is_row_first, d - 1), map(get_next, a))
+                shapes = map(c -> (@__FUNCTION__)(c, is_row_first, d - 1), map(get_next, a))
                 counts = map(count_leaves, a)
                 result = [[sum(counts)], counts]
                 # Merge deeper levels from all children
@@ -573,14 +573,14 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                 if d < 2 && !is_row(a[1])
                     [length(a)]
                 elseif d == 1
-                    [get_dims(a[1].args, is_row_first, 0)[1]; length(a)]
+                    [(@__FUNCTION__)(a[1].args, is_row_first, 0)[1]; length(a)]
                 elseif d == 3 && is_row_first
-                    get_dims(a, is_row_first, 2)
+                    (@__FUNCTION__)(a, is_row_first, 2)
                 else
                     anext = isa(a[1], Expr) && a[1].head === :nrow && d == a[1].args[1] + 1 ?
                         a[1].args[2:end] :
                         [a[1]]
-                    [length(a); get_dims(anext, is_row_first, d - 1)]
+                    [length(a); (@__FUNCTION__)(anext, is_row_first, d - 1)]
                 end
             end
             is_row_first = get_is_row_first(args)
