@@ -590,64 +590,69 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
     cancel_requested = Ref(false)
     interrupt_requested = Ref(false)
 
-    # Start a task to listen for keypresses
+    # Start a task to listen for keypresses (only if stdin isn't already being
+    # consumed in raw mode by another reader, e.g. runtests.jl's stdin_monitor)
     key_task = if stdin isa Base.TTY
         Threads.@spawn :samepool try
-            term = Base.Terminals.TTYTerminal(get(ENV, "TERM", "dumb"), stdin, stdout, stderr)
-            Base.Terminals.raw!(term, true)
+            trylock(stdin.raw_lock) || return
             try
-                while true
-                    completed = @lock BACKGROUND_PRECOMPILE.lock (BACKGROUND_PRECOMPILE.completed_at !== nothing)
-                    if completed || exit_requested[] || cancel_requested[] || interrupt_requested[]
-                        break
-                    end
-                    Base.wait_readnb(stdin, 1)
-                    completed = @lock BACKGROUND_PRECOMPILE.lock (BACKGROUND_PRECOMPILE.completed_at !== nothing)
-                    if completed || exit_requested[] || cancel_requested[] || interrupt_requested[]
-                        break
-                    end
-                    bytesavailable(stdin) > 0 || continue
-                    c = read(stdin, Char)
-                    if c in ('c', 'C')
-                        cancel_requested[] = true
-                        println(io)  # newline after keypress
-                        @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.cancel_requested = true
-                        broadcast_signal(Base.SIGKILL)
-                        break
-                    elseif detachable && c in ('d', 'D', 'q', 'Q', ']')
-                        exit_requested[] = true
-                        println(io)  # newline after keypress
-                        break
-                    elseif c == '\x03'  # Ctrl-C
-                        interrupt_requested[] = true
-                        println(io)  # newline after keypress
-                        # Send SIGINT to all workers and tell do_precompile to stop starting new ones
-                        @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.interrupt_requested = true
-                        broadcast_signal(Base.SIGINT)
-                        break
-                    elseif c in ('i', 'I')
-                        broadcast_signal(Sys.isapple() ? Base.SIGINFO : Base.SIGUSR1)
-                    elseif c in ('?', 'h', 'H')
-                        println(io)
-                        println(io, "  Keyboard shortcuts:")
-                        println(io, "    c       Cancel precompilation (kills subprocesses)")
-                        if detachable
-                            println(io, "    d/q/]   Detach (precompilation continues in background)")
+                term = Base.Terminals.TTYTerminal(get(ENV, "TERM", "dumb"), stdin, stdout, stderr)
+                Base.Terminals.raw!(term, true)
+                try
+                    while true
+                        completed = @lock BACKGROUND_PRECOMPILE.lock (BACKGROUND_PRECOMPILE.completed_at !== nothing)
+                        if completed || exit_requested[] || cancel_requested[] || interrupt_requested[]
+                            break
                         end
-                        println(io, "    i       Send profiling signal to subprocesses")
-                        println(io, "    Ctrl-C  Interrupt (sends SIGINT, shows output)")
-                        println(io, "    ?/h     Show this help")
+                        Base.wait_readnb(stdin, 1)
+                        completed = @lock BACKGROUND_PRECOMPILE.lock (BACKGROUND_PRECOMPILE.completed_at !== nothing)
+                        if completed || exit_requested[] || cancel_requested[] || interrupt_requested[]
+                            break
+                        end
+                        bytesavailable(stdin) > 0 || continue
+                        c = read(stdin, Char)
+                        if c in ('c', 'C')
+                            cancel_requested[] = true
+                            println(io)  # newline after keypress
+                            @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.cancel_requested = true
+                            broadcast_signal(Base.SIGKILL)
+                            break
+                        elseif detachable && c in ('d', 'D', 'q', 'Q', ']')
+                            exit_requested[] = true
+                            println(io)  # newline after keypress
+                            break
+                        elseif c == '\x03'  # Ctrl-C
+                            interrupt_requested[] = true
+                            println(io)  # newline after keypress
+                            @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.interrupt_requested = true
+                            broadcast_signal(Base.SIGINT)
+                            break
+                        elseif c in ('i', 'I')
+                            broadcast_signal(Sys.isapple() ? Base.SIGINFO : Base.SIGUSR1)
+                        elseif c in ('?', 'h', 'H')
+                            println(io)
+                            println(io, "  Keyboard shortcuts:")
+                            println(io, "    c       Cancel precompilation (kills subprocesses)")
+                            if detachable
+                                println(io, "    d/q/]   Detach (precompilation continues in background)")
+                            end
+                            println(io, "    i       Send profiling signal to subprocesses")
+                            println(io, "    Ctrl-C  Interrupt (sends SIGINT, shows output)")
+                            println(io, "    ?/h     Show this help")
+                        end
                     end
+                finally
+                    Base.Terminals.raw!(term, false)
                 end
+            catch err
+                err isa EOFError && return
+                exit_requested[] = true
+                rethrow()
             finally
-                Base.Terminals.raw!(term, false)
+                Base.reseteof(stdin)
+                unlock(stdin.raw_lock)
             end
-        catch err
-            err isa EOFError && return
-            exit_requested[] = true
-            rethrow()
         finally
-            Base.reseteof(stdin)
             @lock BACKGROUND_PRECOMPILE.task_done notify(BACKGROUND_PRECOMPILE.task_done)
         end
     else

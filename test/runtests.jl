@@ -237,6 +237,7 @@ cd(@__DIR__) do
         if !Sys.iswindows() && isa(stdin, Base.TTY)
             t = current_task()
             stdin_monitor = @async begin
+                trylock(stdin.raw_lock) || return
                 term = Base.Terminals.TTYTerminal("xterm", stdin, stdout, stderr)
                 try
                     Base.Terminals.raw!(term, true)
@@ -257,6 +258,7 @@ cd(@__DIR__) do
                     isa(e, InterruptException) || rethrow()
                 finally
                     Base.Terminals.raw!(term, false)
+                    unlock(stdin.raw_lock)
                 end
             end
             Base.errormonitor(stdin_monitor)

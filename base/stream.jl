@@ -218,6 +218,7 @@ mutable struct TTY <: LibuvStream
     sendbuf::Union{IOBuffer, Nothing}
     lock::ReentrantLock # advisory lock
     throttle::Int
+    raw_lock::ReentrantLock # exclusive access to raw mode
     @static if Sys.iswindows(); ispty::Bool; end
     function TTY(handle::Ptr{Cvoid}, status)
         tty = new(
@@ -228,7 +229,8 @@ mutable struct TTY <: LibuvStream
             nothing,
             nothing,
             ReentrantLock(),
-            DEFAULT_READ_BUFFER_SZ)
+            DEFAULT_READ_BUFFER_SZ,
+            ReentrantLock())
         associate_julia_struct(handle, tty)
         finalizer(uvfinalize, tty)
         @static if Sys.iswindows()
