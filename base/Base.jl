@@ -170,6 +170,11 @@ include("env.jl")
 function rand end
 function randn end
 
+# misc useful functions & macros
+include("timing.jl")
+include("client.jl")
+include("asyncmap.jl")
+
 # I/O
 include("libuv.jl")
 include("asyncevent.jl")
@@ -272,11 +277,6 @@ include("loading.jl")
 
 # BinaryPlatforms, used by Artifacts.  Needs `Sort`.
 include("binaryplatforms.jl")
-
-# misc useful functions & macros
-include("timing.jl")
-include("client.jl")
-include("asyncmap.jl")
 
 # deprecated functions
 include("deprecated.jl")
