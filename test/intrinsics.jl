@@ -364,9 +364,9 @@ end)()
 
 @testset "issue #54548" begin
     @inline passthrough(ptr::Core.LLVMPtr{T,A}) where {T,A} = Base.llvmcall(("""
-            define i32 addrspace(1)* @entry(i32 addrspace(1)* %0) #0 {
+            define i8 addrspace(1)* @entry(i8 addrspace(1)* %0) #0 {
             entry:
-                ret i32 addrspace(1)* %0
+                ret i8 addrspace(1)* %0
             }
 
             attributes #0 = { alwaysinline }""", "entry"),
