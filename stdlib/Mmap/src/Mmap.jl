@@ -99,7 +99,7 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
                 # OSX does not support this, and has no equivalent. Therefore, cannot guarantee that reading from or
                 # writing to a memory-mapped region will not kill the process on that platform.
                 @static if !Sys.isapple()
-                    status = ccall(:posix_fallocate, Cint, (OS_HANDLE, Int, Int), fd, 0, size) # does not set `errno`
+                    status = ccall(:posix_fallocate, Cint, (OS_HANDLE, Int, Int), io.handle, 0, size) # does not set `errno`
                     status != 0 && systemerror(:posix_fallocate, status)
                 end
             end
@@ -643,5 +643,29 @@ function madvise!(m::Array, flag::Integer=MADV_NORMAL)
 end
 madvise!(B::BitArray, flag::Integer=MADV_NORMAL) = madvise!(B.chunks, flag)
 end # Sys.isunix()
+
+
+# Compatibility for deprecated Anonymous
+mutable struct Anonymous <: IO
+    name::String
+    readonly::Bool
+    create::Bool
+    function Anonymous(name, readonly, create)
+        Base.depwarn("`Mmap.Anonymous` is deprecated; please migrate to `SharedMemory`", :Anonymous)
+    end
+end
+
+Anonymous() = Anonymous("", false, true)
+
+Base.isopen(::Anonymous) = true
+Base.isreadable(::Anonymous) = true
+Base.iswritable(a::Anonymous) = !a.readonly
+gethandle(::Anonymous) = INVALID_OS_HANDLE
+
+mmap(anon::Anonymous, ::Type{T}, len::Integer, args...; kwargs...) where T =
+    open(io -> mmap(io, T, len, args...; kwargs...), SharedMemory, anon.name, len; readonly = anon.readonly, create = anon.create)
+
+mmap(anon::Anonymous, ::Type{Array{T, N}}, dims::NTuple{N, Integer}, args...; kwargs...) where {T, N} =
+    open(io -> mmap(io, Array{T, N}, dims, args...; kwargs...), SharedMemory, anon.name, prod(dims) * sizeof(T); readonly = anon.readonly, create = anon.create)
 
 end # module
