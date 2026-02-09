@@ -5,6 +5,20 @@
 Core.Task(@nospecialize(f), reserved_stack::Int=0) = Core._Task(f, reserved_stack, ThreadSynchronizer())
 
 # Container for a captured exception and its backtrace. Can be serialized.
+"""
+    CapturedException(ex, bt) <: Exception
+
+An exception type that wraps another exception `ex` together with a processed backtrace,
+making it safe to serialize and transport across processes. This is commonly used when
+an exception is caught in one context (such as a remote worker or async task) and needs
+to be rethrown or displayed elsewhere.
+
+# Fields
+- `ex`: The original exception.
+- `processed_bt::Vector{Any}`: The processed (serializable) backtrace.
+
+See also [`CompositeException`](@ref), [`TaskFailedException`](@ref).
+"""
 struct CapturedException <: Exception
     ex::Any
     processed_bt::Vector{Any}
