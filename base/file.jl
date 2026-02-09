@@ -1234,6 +1234,17 @@ function _walkdir(chnl, path, topdown, follow_symlinks, onerror)
     nothing
 end
 
+"""
+    unlink(p::AbstractString)
+
+Remove (delete) the file at path `p`. This is a low-level function that directly calls
+the POSIX `unlink` system call via libuv. It only works on files and symbolic links,
+not directories.
+
+Most users should prefer [`rm`](@ref) for removing files and directories.
+
+See also [`rm`](@ref).
+"""
 function unlink(p::AbstractString)
     err = ccall(:jl_fs_unlink, Int32, (Cstring,), p)
     err < 0 && uv_error("unlink($(repr(p)))", err)
