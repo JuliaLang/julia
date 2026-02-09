@@ -4044,6 +4044,30 @@ A non-exhaustive list of examples of when this is used include:
 """
 ConcurrencyViolationError
 
+"""
+    LineNumberNode
+
+A type representing a line number annotation in Julia's AST (abstract syntax tree).
+These nodes are used to track source locations for debugging and error reporting.
+
+# Fields
+- `line::Int`: The line number.
+- `file::Union{Symbol,Nothing}`: The source file name, or `nothing` if unknown.
+
+# Examples
+```jldoctest
+julia> ln = LineNumberNode(42, :myfile)
+:(#= myfile:42 =#)
+
+julia> ln.line
+42
+
+julia> ln.file
+:myfile
+```
+"""
+Core.LineNumberNode
+
 Base.include(BaseDocs, "intrinsicsdocs.jl")
 
 end
