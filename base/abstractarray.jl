@@ -1364,6 +1364,18 @@ end
 
 @inline unsafe_getindex(A::AbstractArray, I...) = @inbounds getindex(A, I...)
 
+"""
+    CanonicalIndexError(func::String, type) <: Exception
+
+An exception thrown when a canonical indexing method for a custom `AbstractArray` subtype
+is not implemented. This is an internal mechanism to detect infinite recursion: when
+`getindex` or `setindex!` falls through to the canonical form without an actual
+implementation, this error is thrown instead of entering an infinite loop.
+
+Custom array types should implement the appropriate indexing method for their
+[`IndexStyle`](@ref) (either `getindex(A::MyArray, i::Int)` for [`IndexLinear`](@ref)
+or `getindex(A::MyArray, I::Vararg{Int,N})` for [`IndexCartesian`](@ref)) to avoid this error.
+"""
 struct CanonicalIndexError <: Exception
     func::String
     type::Any
