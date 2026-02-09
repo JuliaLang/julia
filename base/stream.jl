@@ -12,6 +12,15 @@ end
 
 
 ## types ##
+"""
+    IOServer
+
+Abstract type for server-side I/O objects that listen for and accept incoming connections.
+Subtypes include [`LibuvServer`], and concrete implementations such as
+[`Sockets.TCPServer`] and [`PipeServer`].
+
+See also [`listen`](@ref), [`accept`](@ref).
+"""
 abstract type IOServer end
 """
     LibuvServer
