@@ -70,7 +70,7 @@ function preallocate(fd::OS_HANDLE, size::Integer)
         # allow the memory to grow on demand until it exceeds limits and the process is
         # killed. And when that happens, the resources may be left open. To avoid this,
         # we first use `os_proc_available_memory()` to determine if there is sufficient
-        # memory available. Then we temporarily `mmap` the region and use iterative 
+        # memory available. Then we temporarily `mmap` the region and use iterative
         # `mlock` to force MacOS to commit the memory, to match the semantics on other
         # platforms.
         avail = ccall(:os_proc_available_memory, Csize_t, ())
