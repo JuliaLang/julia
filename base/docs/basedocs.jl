@@ -4144,6 +4144,28 @@ Custom I/O types should subtype `IO` and implement methods such as
 See also [`IOBuffer`](@ref), [`IOStream`](@ref), [`open`](@ref).
 """
 Core.IO
+    LineNumberNode
+
+A type representing a line number annotation in Julia's AST (abstract syntax tree).
+These nodes are used to track source locations for debugging and error reporting.
+
+# Fields
+- `line::Int`: The line number.
+- `file::Union{Symbol,Nothing}`: The source file name, or `nothing` if unknown.
+
+# Examples
+```jldoctest
+julia> ln = LineNumberNode(42, :myfile)
+:(#= myfile:42 =#)
+
+julia> ln.line
+42
+
+julia> ln.file
+:myfile
+```
+"""
+Core.LineNumberNode
 
 Base.include(BaseDocs, "intrinsicsdocs.jl")
 
