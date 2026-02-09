@@ -211,7 +211,7 @@ julia> view(2:5, 2:3) # returns a range as type is immutable
 ```
 """
 function view(A::AbstractArray, I::Vararg{Any,M}) where {M}
-    @inline
+    @_propagate_inbounds_meta
     J = map(i->unalias(A,i), to_indices(A, I))
     @boundscheck checkbounds(A, J...)
     J′ = rm_singleton_indices(ntuple(Returns(true), Val(ndims(A))), J...)
