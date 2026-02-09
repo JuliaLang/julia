@@ -10,18 +10,6 @@ and characters can be converted to integer codepoint values via the [`codepoint`
 function, or can be constructed from the same integer.  At least for valid,
 properly encoded Unicode characters, these numerical codepoint values
 determine how characters are compared with `<` and `==`, for example.
-
-!!! note
-    Characters can also be converted to integers using `Int(c::AbstractChar)`,
-    which returns the Unicode code point of `c`.
-
-    # Examples
-        julia> Int('a')
-        97
-
-        julia> Int('é')
-        233
-
 New `T <: AbstractChar` types should define a `codepoint(::T)`
 method and a `T(::UInt32)` constructor, at minimum.
 
@@ -60,6 +48,15 @@ a `Char` value may store information that cannot be converted to a Unicode
 codepoint — converting such a `Char` to `UInt32` will throw an error.
 The [`isvalid(c::Char)`](@ref) function can be used to query whether `c`
 represents a valid Unicode character.
+
+*Note:* Characters can also be converted to integers using `Int(c::Char)`; 
+this returns the Unicode code point of `c`. Example:
+
+    julia> Int('a')
+    97
+
+    julia> Int('é')
+    233
 """
 Char
 
