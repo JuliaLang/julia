@@ -5,6 +5,8 @@ using Unicode
 using Unicode: normalize, isassigned, julia_chartransform
 import Random
 
+@test isempty(Test.detect_closure_boxes(Unicode))
+
 Random.seed!(12345)
 
 @testset "string normalization" begin
