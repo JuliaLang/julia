@@ -4200,6 +4200,30 @@ an [`AtomicMemory{T}`](@ref).
 See also [`GenericMemoryRef`](@ref), [`AtomicMemory`](@ref).
 """
 Core.AtomicMemoryRef
+    Method
+
+A type representing a single method definition in Julia's method table. A `Method` stores
+metadata about a specific method, including its source location, signature, and the
+module in which it was defined.
+
+Methods are created when a function is defined with a particular signature. Use
+[`methods`](@ref) to list the methods of a function, and [`which`](@ref) to find the specific
+method that would be called for given argument types.
+
+# Examples
+```jldoctest
+julia> m = which(+, (Int, Int));
+
+julia> m isa Method
+true
+
+julia> m.module
+Base
+```
+
+See also [`methods`](@ref), [`which`](@ref), [`Function`](@ref).
+"""
+Core.Method
 
 Base.include(BaseDocs, "intrinsicsdocs.jl")
 
