@@ -251,6 +251,15 @@ function truncate(f::File, n::Integer)
     return f
 end
 
+"""
+    futime(f::File, atime::Float64, mtime::Float64)
+
+Change the access time (`atime`) and modification time (`mtime`) of an open
+[`File`](@ref Base.Filesystem.File) `f`. Times are in seconds since the Unix epoch
+(1970-01-01 00:00:00 UTC). Returns `f`.
+
+See also [`stat`](@ref) for reading file timestamps.
+"""
 function futime(f::File, atime::Float64, mtime::Float64)
     check_open(f)
     req = Libc.malloc(_sizeof_uv_fs)
