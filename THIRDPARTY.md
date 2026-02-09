@@ -67,6 +67,7 @@ Julia bundles the following external programs and libraries:
 
 - [7-Zip](https://www.7-zip.org/license.txt)
 - [ZLIB](https://zlib.net/zlib_license.html)
+- [ZSTD](https://github.com/facebook/zstd/blob/v1.5.7/LICENSE)
 
 On some platforms, distributions of Julia contain SSL certificate authority certificates,
 released under the [Mozilla Public License](https://en.wikipedia.org/wiki/Mozilla_Public_License).
