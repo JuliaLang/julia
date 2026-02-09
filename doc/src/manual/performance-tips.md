@@ -59,14 +59,14 @@ Passing arguments to functions is better style. It leads to more reusable code a
 In the following REPL session:
 
 ```jldoctest
-julia> x = 1.0
+ x = 1.0
 1.0
 ```
 
 is equivalent to:
 
 ```jldoctest
-julia> global x = 1.0
+ global x = 1.0
 1.0
 ```
 
@@ -78,9 +78,9 @@ A useful tool for measuring performance is the [`@time`](@ref) macro. We here re
 with the global variable above, but this time with the type annotation removed:
 
 ```jldoctest; setup = :(using Random; Random.seed!(1234)), filter = r"[0-9\.]+ seconds \(.*?\)"
-julia> x = rand(1000);
+ x = rand(1000);
 
-julia> function sum_global()
+ function sum_global()
            s = 0.0
            for i in x
                s += i
@@ -88,11 +88,11 @@ julia> function sum_global()
            return s
        end;
 
-julia> @time sum_global()
+ @time sum_global()
   0.011539 seconds (9.08 k allocations: 373.386 KiB, 98.69% compilation time)
 523.0007221951678
 
-julia> @time sum_global()
+ @time sum_global()
   0.000091 seconds (3.49 k allocations: 70.156 KiB)
 523.0007221951678
 ```
@@ -123,9 +123,9 @@ In this particular case, the memory allocation is due to the usage of a type-uns
 and is significantly faster after the first call:
 
 ```jldoctest sumarg; setup = :(using Random; Random.seed!(1234)), filter = r"[0-9\.]+ seconds \(.*?\)"
-julia> x = rand(1000);
+ x = rand(1000);
 
-julia> function sum_arg(x)
+ function sum_arg(x)
            s = 0.0
            for i in x
                s += i
@@ -133,11 +133,11 @@ julia> function sum_arg(x)
            return s
        end;
 
-julia> @time sum_arg(x)
+ @time sum_arg(x)
   0.007551 seconds (3.98 k allocations: 200.548 KiB, 99.77% compilation time)
 523.0007221951678
 
-julia> @time sum_arg(x)
+ @time sum_arg(x)
   0.000006 seconds (1 allocation: 16 bytes)
 523.0007221951678
 ```
@@ -1289,7 +1289,7 @@ julia> @time x ./= sqrt.(d);
 This will work. However, this expression will actually recompute `sqrt(d[i])` for *every* element in the row `x[i, :]`, meaning that many more square roots are computed than necessary. To see precisely over which indices the broadcast will iterate, we can call `Broadcast.combine_axes` on the arguments of the fused expression. This will return a tuple of ranges whose entries correspond to the axes of iteration; the product of lengths of these ranges will be the total number of calls to the fused operation.
 
 It follows that when some components of the broadcast expression are constant along an axis—like the `sqrt` along the second dimension in the preceding example—there is potential for a performance improvement by forcibly "unfusing" those components, i.e. allocating the result of the broadcasted operation in advance and reusing the cached value along its constant axis. Some such potential approaches are to use temporary variables, wrap components of a dot expression in `identity`, or use an equivalent intrinsically vectorized (but non-fused) function.
-```julia
+```julia-repl
 julia> @time let s = sqrt.(d); x ./= s end;
   0.000809 seconds (5 allocations: 8.031 KiB)
 
