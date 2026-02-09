@@ -4044,6 +4044,36 @@ A non-exhaustive list of examples of when this is used include:
 """
 ConcurrencyViolationError
 
+"""
+    TypeVar
+
+A type variable, representing a parameter in [`UnionAll`](@ref) types. `TypeVar`s are
+typically created by the `where` syntax in type declarations and method signatures.
+
+# Fields
+- `name::Symbol`: The name of the type variable.
+- `lb`: The lower bound of the type variable (default `Union{}`).
+- `ub`: The upper bound of the type variable (default `Any`).
+
+# Examples
+```jldoctest
+julia> T = TypeVar(:T)
+T
+
+julia> Vector{T} where T
+Vector{T} where T
+
+julia> TypeVar(:T, Integer)
+T<:Integer
+
+julia> TypeVar(:T, Int, Real)
+Int<:T<:Real
+```
+
+See also [`UnionAll`](@ref), [`where`](@ref).
+"""
+Core.TypeVar
+
 Base.include(BaseDocs, "intrinsicsdocs.jl")
 
 end
