@@ -1,5 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    Sort
+
+Module providing sorting algorithms and related functions. Contains the
+implementation of [`sort`](@ref), [`sort!`](@ref), [`sortperm`](@ref),
+[`issorted`](@ref), and related functions, as well as the sorting algorithm
+types ([`InsertionSort`](@ref), [`QuickSort`](@ref), [`MergeSort`](@ref), etc.).
+
+See also [`Base.Order`](@ref).
+"""
 module Sort
 
 using Base.Order
@@ -43,6 +53,15 @@ export # not exported by Base
     SMALL_ALGORITHM,
     SMALL_THRESHOLD
 
+"""
+    Algorithm
+
+Abstract supertype for all sorting algorithms. Concrete subtypes are used to select
+a sorting strategy when calling [`sort!`](@ref) with the `alg` keyword argument.
+
+Built-in algorithm types include [`InsertionSort`](@ref), [`QuickSort`](@ref),
+[`MergeSort`](@ref), and [`PartialQuickSort`](@ref).
+"""
 abstract type Algorithm end
 
 ## functions requiring only ordering ##
@@ -1594,6 +1613,15 @@ const _DEFAULT_ALGORITHMS_FOR_VECTORS = InitialOptimizations(
 _sort!(v::AbstractVector, ::Union{DefaultStable, DefaultUnstable}, o::Ordering, kw) =
     _sort!(v, _DEFAULT_ALGORITHMS_FOR_VECTORS, o, kw)
 
+"""
+    SMALL_THRESHOLD
+
+The maximum number of elements for which a sorting algorithm is considered
+"small" and may switch to a specialized small-array sorting strategy. Currently
+set to `$SMALL_THRESHOLD`.
+
+See also [`SMALL_ALGORITHM`](@ref).
+"""
 const SMALL_THRESHOLD  = 20
 
 function Base.show(io::IO, alg::Algorithm)
