@@ -259,6 +259,7 @@ cd(@__DIR__) do
                     Base.Terminals.raw!(term, false)
                 end
             end
+            Base.errormonitor(stdin_monitor)
         end
         o_ts_duration = @elapsed Experimental.@sync begin
             for p in workers()
@@ -390,7 +391,7 @@ cd(@__DIR__) do
         foreach(wait, all_tasks)
     finally
         if @isdefined stdin_monitor
-            schedule(stdin_monitor, InterruptException(); error=true)
+            istaskdone(stdin_monitor) || schedule(stdin_monitor, InterruptException(); error=true)
         end
         if @isdefined test_timers
             foreach(close, values(test_timers))
