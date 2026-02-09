@@ -1,0 +1,4 @@
+[deps]
+GitHub = "bc5e4493-9b4d-5f90-b8aa-2b2bcaad7a26"
+HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
+JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
