@@ -874,7 +874,7 @@ similar(::Type{T}, dims::DimOrInd...) where {T<:AbstractArray} = similar(T, dims
 similar(::Type{T}, shape::Tuple{Union{Integer, AbstractOneTo}, Vararg{Union{Integer, AbstractOneTo}}}) where {T<:AbstractArray} = similar(T, to_shape(shape))
 # legacy method for packages that specialize similar(::Type{T}, dims::Tuple{Union{Integer, OneTo, CustomAxis}, Vararg{Union{Integer, OneTo, CustomAxis}})
 similar(::Type{T}, shape::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T<:AbstractArray} = similar(T, to_shape(shape))
-similar(::Type{T}, dims::Dims) where {T<:AbstractArray} = T(undef, dims)
+similar(::Type{T}, dims::DimsInteger) where {T<:AbstractArray} = T(undef, dims)
 
 """
     empty(v::AbstractVector, [eltype])
