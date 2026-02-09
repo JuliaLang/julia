@@ -4,6 +4,9 @@ Hi! If you are new to the Julia community: welcome, and thanks for trying Julia.
 
 If you are already familiar with Julia itself, this blog post by Katharine Hyatt on [Making your first Julia pull request](https://kshyatt.github.io/post/firstjuliapr/) is a great way to get started.
 
+> [!IMPORTANT]
+> If your pull request contains substantial contributions from a generative AI tool, please disclose so with details, and review all changes before opening.
+
 ## Learning Julia
 
 [The learning page](https://julialang.org/learning) has a great list of resources for new and experienced users alike.

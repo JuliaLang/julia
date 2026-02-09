@@ -3493,6 +3493,7 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
         ios_seek_end(&f);
         size_t len = ios_pos(&f);
         char *sysimg = (char*)jl_gc_perm_alloc(len, 0, 64, 0);
+        jl_gc_notify_image_alloc(sysimg, len);
         ios_seek(&f, 0);
 
         if (ios_readall(&f, sysimg, len) != len)
@@ -4366,9 +4367,10 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
         char *sysimg;
         int success = !needs_permalloc;
         ios_seek(f, datastartpos);
-        if (needs_permalloc)
+        if (needs_permalloc) {
             sysimg = (char*)jl_gc_perm_alloc(len, 0, 64, 0);
-        else
+            jl_gc_notify_image_alloc(sysimg, len);
+        } else
             sysimg = &f->buf[f->bpos];
         if (needs_permalloc)
             success = ios_readall(f, sysimg, len) == len;

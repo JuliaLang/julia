@@ -166,7 +166,7 @@ function code_warntype(io::IO, arginfo::ArgInfo;
     if arginfo.oc !== nothing
         (; oc, tt) = arginfo
         isa(oc.source, Method) && (nargs = oc.source.nargs)
-        print_warntype_codeinfo(io, Base.code_typed_opaque_closure(oc, tt)[1]..., nargs;
+        print_warntype_codeinfo(io, Base.code_typed_opaque_closure(oc, tt; optimize, interp)[1]..., nargs;
                                 lineprinter, label_dynamic_calls = optimize)
         return nothing
     end
