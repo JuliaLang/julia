@@ -1507,6 +1507,31 @@ function peek(s::LibuvStream, ::Type{T}) where T
 end
 
 # BufferStream's are non-OS streams, backed by a regular IOBuffer
+"""
+    BufferStream()
+
+An in-memory I/O stream backed by an [`IOBuffer`](@ref), implementing the
+[`LibuvStream`] interface. Unlike `IOBuffer`, a `BufferStream` supports blocking
+[`read`](@ref) operations that wait until data becomes available.
+
+`BufferStream` is useful as a pipe-like stream to connect producers and consumers
+of data within a single process. Writing to a `BufferStream` notifies any blocked
+readers that data is available, and closing the stream signals end-of-file.
+
+# Examples
+```jldoctest
+julia> bs = BufferStream();
+
+julia> write(bs, "hello");
+
+julia> close(bs);
+
+julia> String(read(bs))
+"hello"
+```
+
+See also [`IOBuffer`](@ref), [`PipeBuffer`](@ref).
+"""
 mutable struct BufferStream <: LibuvStream
     buffer::IOBuffer
     cond::Threads.Condition
