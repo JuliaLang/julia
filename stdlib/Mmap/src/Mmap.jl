@@ -64,42 +64,6 @@ end
 
 shm_unlink(name) = ccall(:shm_unlink, Cint, (Cstring,), name)
 
-function preallocate(fd::OS_HANDLE, size::Integer)
-    @static if Sys.isapple()
-        # MacOS does not support preallocation of shared memory as a syscall, and will
-        # allow the memory to grow on demand until it exceeds limits and the process is
-        # killed. And when that happens, the resources may be left open. To avoid this,
-        # we first use `os_proc_available_memory()` to determine if there is sufficient
-        # memory available. Then we temporarily `mmap` the region and use iterative
-        # `mlock` to force MacOS to commit the memory, to match the semantics on other
-        # platforms.
-        avail = ccall(:os_proc_available_memory, Csize_t, ())
-        if size > avail
-            systemerror("preallocate", Libc.ENOMEM)
-        end
-
-        # Temporarily mmap the shared memory region
-        ptr = ccall(:jl_mmap, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t, Cint, Cint, OS_HANDLE, Int64),
-                    C_NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, Int64(0))
-        systemerror(:mmap, reinterpret(Int, ptr) == -1)
-        try
-            # Lock and immediately unlock each page to force backing page allocation.
-            # munlock frees the physical frame so the next iteration can reuse it.
-            for page_offset in 0:Int(PAGESIZE):(size - 1)
-                chunk = min(Int(PAGESIZE), size - page_offset)
-                status = ccall(:mlock, Cint, (Ptr{Cvoid}, Csize_t), ptr + page_offset, chunk)
-                systemerror(:mlock, status == -1)
-                ccall(:munlock, Cint, (Ptr{Cvoid}, Csize_t), ptr + page_offset, chunk)
-            end
-        finally
-            ccall(:munmap, Cint, (Ptr{Cvoid}, Csize_t), ptr, size)
-        end
-    else
-        status = ccall(:posix_fallocate, Cint, (OS_HANDLE, Int, Int), fd, 0, size) # does not set `errno`
-        status != 0 && systemerror(:posix_fallocate, status)
-    end
-end
-
 function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
     readonly :: Bool = true,
     create   :: Bool = false
@@ -131,8 +95,13 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
                 systemerror(:ftruncate, status != 0)
 
                 # Reserve space for the shared memory object
-                # Failing to do this here may later result in SIGBUS fault if reading/writing beyond available memory
-                preallocate(io.handle, size)
+                # Failing to do this here may later result in SIGBUS fault if reading/writing beyond available memory.
+                # OSX does not support this, and has no equivalent. Therefore, cannot guarantee that reading from or
+                # writing to a memory-mapped region will not kill the process on that platform.
+                @static if !Sys.isapple()
+                    status = ccall(:posix_fallocate, Cint, (OS_HANDLE, Int, Int), fd, 0, size) # does not set `errno`
+                    status != 0 && systemerror(:posix_fallocate, status)
+                end
             end
         catch e
             close(io)
