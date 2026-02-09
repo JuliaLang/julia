@@ -4044,6 +4044,49 @@ A non-exhaustive list of examples of when this is used include:
 """
 ConcurrencyViolationError
 
+"""
+    Core.arrayref(inbounds::Bool, A::Array, i::Int...)
+
+Legacy function to retrieve an element from an `Array` at the given indices. Equivalent
+to `Base.getindex(A, i...)`. The `inbounds` argument is ignored in current Julia versions.
+
+This function exists for backward compatibility. Use `getindex` or indexing syntax
+`A[i...]` instead.
+"""
+Core.arrayref
+
+"""
+    Core.const_arrayref(inbounds::Bool, A::Array, i::Int...)
+
+Legacy function identical to [`Core.arrayref`](@ref), retained for backward compatibility.
+Use `getindex` or indexing syntax `A[i...]` instead.
+"""
+Core.const_arrayref
+
+"""
+    Core.arrayset(inbounds::Bool, A::Array{T}, x, i::Int...) where T
+
+Legacy function to set an element of an `Array` at the given indices. Equivalent
+to `Base.setindex!(A, x, i...)`. The `inbounds` argument is ignored in current
+Julia versions.
+
+This function exists for backward compatibility. Use `setindex!` or indexing syntax
+`A[i...] = x` instead.
+"""
+Core.arrayset
+
+"""
+    Core.arraysize(a::Array)
+    Core.arraysize(a::Array, i::Int)
+
+Legacy function to get the dimensions of an `Array`. Called with one argument, returns
+a tuple of all dimensions. Called with two arguments, returns the size along dimension `i`
+(or 1 if `i` exceeds the number of dimensions).
+
+This function exists for backward compatibility. Use [`size`](@ref) instead.
+"""
+Core.arraysize
+
 Base.include(BaseDocs, "intrinsicsdocs.jl")
 
 end
