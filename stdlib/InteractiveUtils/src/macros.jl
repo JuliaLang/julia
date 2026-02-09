@@ -520,13 +520,13 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
             is_row(x) = isa(x, Expr) && (x.head === :row || x.head === :nrow)
             function extract_elements(x)
                 if isa(x, Expr)
-                    xargs = x.head === :nrow ? x.args[2:end] :
+                    eexargs = x.head === :nrow ? x.args[2:end] :
                         x.head === :row  ? x.args :
                         nothing
-                    if xargs === nothing
+                    if eexargs === nothing
                         return [x]
                     else
-                        return collect(Iterators.flatten((@__FUNCTION__).(xargs)))
+                        return collect(Iterators.flatten((@__FUNCTION__).(eexargs)))
                     end
                 end
                 return x
