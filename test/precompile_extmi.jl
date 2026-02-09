@@ -65,10 +65,10 @@ precompile_test_harness() do load_path
         cache_owner = :ExampleInterpreter
 
         mi_square = Base.method_instance(ExampleUser.square, (Float64,))
-        @assert check_presence(mi_square, :ExampleInterpreter) !== nothing
+        @test check_presence(mi_square, :ExampleInterpreter) !== nothing
 
         mi_identity = Base.method_instance(identity, (Float64,))
-        @assert check_presence(mi_identity, :ExampleInterpreter) !== nothing
+        @test check_presence(mi_identity, :ExampleInterpreter) !== nothing
     end
 end
 
