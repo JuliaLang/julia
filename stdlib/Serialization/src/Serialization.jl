@@ -15,8 +15,24 @@ using Core.IR
 
 export serialize, deserialize, AbstractSerializer, Serializer
 
+"""
+    AbstractSerializer
+
+Abstract supertype for serializers. Subtypes should implement the serialization protocol
+to support [`serialize`](@ref) and [`deserialize`](@ref) operations. The built-in
+concrete implementation is [`Serializer`](@ref).
+"""
 abstract type AbstractSerializer end
 
+"""
+    Serializer{I<:IO}(io::IO)
+
+The default serializer implementation that reads from and writes to an `IO` stream.
+`Serializer` maintains internal state for tracking object references, enabling
+correct serialization of shared and circular data structures.
+
+See also [`serialize`](@ref), [`deserialize`](@ref), [`AbstractSerializer`](@ref).
+"""
 mutable struct Serializer{I<:IO} <: AbstractSerializer
     io::I
     counter::Int
