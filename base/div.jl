@@ -45,12 +45,14 @@ julia> div(-4, 3, RoundFromZero)
 ```
 !!! note "Floating-point numbers"
     Accurate results for floating-point arguments are only guaranteed when the
-    true value of `x / y` is within the range of exactly representable integers
-    for the given floating-point type, that is, when `eps(x/y) ≤ 1`, or in other
-    words, given `a = div(x, y)`, when `abs(a) < maxintfloat(a)`.
+    mathematical value ``\\frac{x}{y}`` is within the range of exactly representable
+    integers for the given floating-point type, that is, when `eps(x/y) ≤ 1`, or
+    in other words, given `a = div(x, y)`, when `abs(a) < maxintfloat(a)`.
 
-    Because `div(x, y)` implements strict truncated rounding based on the true
-    value of floating-point numbers, unintuitive situations can arise. For example:
+    Because `div(x, y)` implements strict truncated rounding based on the quotient
+    and remainder of the Euclidean division, and because the binary representation
+    of floating-point numbers (in most cases) only approximates the decimal
+    representation we use, unintuitive situations can arise. For example:
     ```jldoctest
     julia> div(6.0, 0.1)
     59.0
@@ -59,11 +61,16 @@ julia> div(-4, 3, RoundFromZero)
     julia> 6.0 / big(0.1)
     59.99999999999999666933092612453056361837965690217069245739573412231113406246995
     ```
-    What is happening here is that the true value of the floating-point number written
-    as `0.1` is slightly larger than the numerical value 1/10 while `6.0` represents
-    the number 6 precisely. Therefore the true value of `6.0 / 0.1` is slightly less
-    than 60. When doing division, this is rounded to precisely `60.0`, but
-    `div(6.0, 0.1, RoundToZero)` always truncates the true value, so the result is `59.0`.
+    What is happening here is that the binary representation of the `Float64`
+    number written as `0.1` is slightly larger than the numerical value ``0.1``
+    (just like `0.3333333333333333` is less than ``1/3`` in decimal), while `6.0`
+    represents the number ``6`` precisely. Therefore the mathematical result of
+    `6.0` divided by (the `Float64` representation of) `0.1` is slightly less
+    than ``60``. The result of the floating-point division is rounded to precisely
+    `60.0`, but `div(6.0, 0.1, RoundToZero)` takes account of the quotient and
+    (here non-zero) remainder of the Euclidean division, so the result is `59.0`.
+
+    See also [`rem`](@ref), [`divrem`](@ref).
 """
 div(x, y, r::RoundingMode)
 
@@ -145,12 +152,14 @@ julia> fld.(-5:5, 3)'
 ```
 !!! note "Floating-point numbers"
     Accurate results for floating-point arguments are only guaranteed when the
-    true value of `x / y` is within the range of exactly representable integers
-    for the given floating-point type, that is, when `eps(x/y) ≤ 1`, or in other
-    words, given `a = fld(x, y)`, when `abs(a) < maxintfloat(a)`.
+    mathematical value ``\\frac{x}{y}`` is within the range of exactly representable
+    integers for the given floating-point type, that is, when `eps(x/y) ≤ 1`, or
+    in other words, given `a = fld(x, y)`, when `abs(a) < maxintfloat(a)`.
 
-    Because `fld(x, y)` implements strict floored rounding based on the true
-    value of floating-point numbers, unintuitive situations can arise. For example:
+    Because `fld(x, y)` implements strict floored rounding based on the quotient
+    and remainder of the Euclidean division, and because the binary representation
+    of floating-point numbers (in most cases) only approximates the decimal
+    representation we use, unintuitive situations can arise. For example:
     ```jldoctest
     julia> fld(6.0, 0.1)
     59.0
@@ -159,11 +168,16 @@ julia> fld.(-5:5, 3)'
     julia> 6.0 / big(0.1)
     59.99999999999999666933092612453056361837965690217069245739573412231113406246995
     ```
-    What is happening here is that the true value of the floating-point number written
-    as `0.1` is slightly larger than the numerical value 1/10 while `6.0` represents
-    the number 6 precisely. Therefore the true value of `6.0 / 0.1` is slightly less
-    than 60. When doing division, this is rounded to precisely `60.0`, but
-    `fld(6.0, 0.1)` always takes the floor of the true value, so the result is `59.0`.
+    What is happening here is that the binary representation of the `Float64`
+    number written as `0.1` is slightly larger than the numerical value ``0.1``
+    (just like `0.3333333333333333` is less than ``1/3`` in decimal), while `6.0`
+    represents the number ``6`` precisely. Therefore the mathematical result of
+    `6.0` divided by (the `Float64` representation of) `0.1` is slightly less
+    than ``60``. The result of the floating-point division is rounded to precisely
+    `60.0`, but `fld(6.0, 0.1)` takes account of the quotient and (here non-zero)
+    remainder of the Euclidean division, so the result is `59.0`.
+
+    See also [`rem`](@ref), [`divrem`](@ref).
 """
 fld(a, b) = div(a, b, RoundDown)
 
@@ -185,12 +199,14 @@ julia> cld.(-5:5, 3)'
 ```
 !!! note "Floating-point numbers"
     Accurate results for floating-point arguments are only guaranteed when the
-    true value of `x / y` is within the range of exactly representable integers
-    for the given floating-point type, that is, when `eps(x/y) ≤ 1`, or in other
-    words, given `a = cld(x, y)`, when `abs(a) < maxintfloat(a)`.
+    mathematical value ``\\frac{x}{y}`` is within the range of exactly representable
+    integers for the given floating-point type, that is, when `eps(x/y) ≤ 1`, or
+    in other words, given `a = cld(x, y)`, when `abs(a) < maxintfloat(a)`.
 
-    Because `cld(x, y)` implements strict ceiled rounding based on the true
-    value of floating-point numbers, unintuitive situations can arise. For example:
+    Because `cld(x, y)` implements strict ceiled rounding based on the quotient
+    and remainder of the Euclidean division, and because the binary representation
+    of floating-point numbers (in most cases) only approximates the decimal
+    representation we use, unintuitive situations can arise. For example:
     ```jldoctest
     julia> cld(3.0, 0.3)
     11.0
@@ -199,11 +215,16 @@ julia> cld.(-5:5, 3)'
     julia> 3.0 / big(0.3)
     10.00000000000000037007434154171886050337904945061778828900298697586147515340753
     ```
-    What is happening here is that the true value of the floating-point number written
-    as `0.3` is slightly less than the numerical value 3/10 while `3.0` represents
-    the number 3 precisely. Therefore the true value of `3.0 / 0.3` is slightly larger
-    than 10. When doing division, this is rounded to precisely `10.0`, but
-    `cld(3.0, 0.3)` always takes the ceil of the true value, so the result is `11.0`.
+    What is happening here is that the binary representation of the `Float64`
+    number written as `0.3` is slightly less than the numerical value ``0.3``
+    (just like `0.3333333333333333` is less than ``1/3`` in decimal), while `3.0`
+    represents the number ``3`` precisely. Therefore the mathematical result of
+    `3.0` divided by (the `Float64` representation of) `0.3` is slightly larger
+    than ``10``. The result of the floating-point division is rounded to precisely
+    `10.0`, but `cld(3.0, 0.3)` takes account of the quotient and (here non-zero)
+    remainder of the Euclidean division, so the result is `11.0`.
+
+    See also [`rem`](@ref), [`divrem`](@ref).
 """
 cld(a, b) = div(a, b, RoundUp)
 
