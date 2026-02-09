@@ -776,8 +776,7 @@ static jl_globalref_t *jl_new_globalref(jl_module_t *mod, jl_sym_t *name, jl_bin
 {
     jl_task_t *ct = jl_current_task;
     jl_globalref_t *g = (jl_globalref_t*)jl_gc_alloc(ct->ptls, sizeof(jl_globalref_t), jl_globalref_type);
-    if (jl_globalref_type->smalltag)
-        jl_set_typetagof(g, jl_globalref_type->smalltag, 0);
+    jl_set_typetagof(g, jl_globalref_tag, 0);
     g->mod = mod;
     jl_gc_wb_fresh(g, g->mod);
     g->name = name;
