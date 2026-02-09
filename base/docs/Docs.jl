@@ -65,6 +65,26 @@ function.
 
 include("bindings.jl")
 
+"""
+    Docs.@var(x)
+
+Create a [`Docs.Binding`](@ref) object referencing the binding `x`. This is used to
+refer to a specific binding in a given module for documentation lookups, without
+evaluating the value of `x`.
+
+# Examples
+```jldoctest
+julia> using Base.Docs: @var
+
+julia> @var(sin)
+Base.sin
+
+julia> @var(Base.cos)
+Base.cos
+```
+"""
+:(@var)
+
 import .Base.Meta: quot, isexpr, unblock, unescape, uncurly
 import .Base: Callable, with_output_color
 using .Base: RefValue, mapany
