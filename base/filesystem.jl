@@ -2,6 +2,17 @@
 
 ## File Operations (Libuv-based) ##
 
+"""
+    Filesystem
+
+Module providing low-level file system operations backed by libuv. This module contains
+the [`File`](@ref Base.Filesystem.File) type for direct file handle manipulation as well as
+file-system constants (e.g. `JL_O_RDONLY`, `S_IRUSR`) used with [`open`](@ref) and other system calls.
+
+Most users should prefer higher-level I/O functions such as [`open`](@ref), [`read`](@ref),
+[`write`](@ref), and file operations in `Base` (e.g. [`cp`](@ref), [`mv`](@ref), [`rm`](@ref))
+rather than using this module directly.
+"""
 module Filesystem
 
 """
