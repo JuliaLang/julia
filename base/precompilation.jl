@@ -1342,6 +1342,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     taskwaiting = Set{PkgConfig}()
     pkgspidlocked = Dict{PkgConfig,String}()
     pkg_liveprinted = Ref{Union{Nothing, PkgId}}(nothing)
+    start_loaded_modules = keys(Base.loaded_modules) # only informative to highlight if the package was loaded before starting
 
     ## fancy print loop
     t_print[] = Threads.@spawn :samepool begin
@@ -1397,7 +1398,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
                         end
                         for pkg_config in pkg_queue_show
                             dep, config = pkg_config
-                            loaded = warn_loaded && haskey(Base.loaded_modules, dep)
+                            loaded = warn_loaded && (dep in start_loaded_modules)
                             local flags, cacheflags = config
                             name = describe_pkg(dep, dep in project_deps, dep in serial_deps, flags, cacheflags)
                             line = if pkg_config in precomperr_deps
@@ -1493,7 +1494,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
             @lock BACKGROUND_PRECOMPILE.lock push!(BACKGROUND_PRECOMPILE.pending_pkgids, pkg)
             local flags, cacheflags = config
             task = Threads.@spawn :samepool try
-                loaded = warn_loaded && haskey(Base.loaded_modules, pkg)
+                loaded = warn_loaded && (pkg in start_loaded_modules)
                 for dep in deps # wait for deps to finish
                     wait(was_processed[(dep,config)])
                     if should_stop(interrupted)
