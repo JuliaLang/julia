@@ -652,6 +652,7 @@ mutable struct Anonymous <: IO
     create::Bool
     function Anonymous(name, readonly, create)
         Base.depwarn("`Mmap.Anonymous` is deprecated; please migrate to `SharedMemory`", :Anonymous)
+        new(name, readonly, create)
     end
 end
 
@@ -660,7 +661,6 @@ Anonymous() = Anonymous("", false, true)
 Base.isopen(::Anonymous) = true
 Base.isreadable(::Anonymous) = true
 Base.iswritable(a::Anonymous) = !a.readonly
-gethandle(::Anonymous) = INVALID_OS_HANDLE
 
 mmap(anon::Anonymous, ::Type{T}, len::Integer, args...; kwargs...) where T =
     open(io -> mmap(io, T, len, args...; kwargs...), SharedMemory, anon.name, len; readonly = anon.readonly, create = anon.create)
