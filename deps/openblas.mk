@@ -106,8 +106,8 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-m1-4003.patch-applied: $(BUILDDIR)/$(OP
 	echo 1 > $@
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-asum-avx512.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-m1-4003.patch-applied
-	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \                             
-		patch -p1 -f < $(SRCDIR)/patches/openblas-asum-avx512.patch 
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/openblas-asum-avx512.patch
 	echo 1 > $@
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-casum-fallback-fix.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-asum-avx512.patch-applied
