@@ -444,4 +444,3 @@ function iswritable(path::String)
     return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, W_OK) == 0
 end
 iswritable(path::AbstractString) = iswritable(String(path)::String)
-

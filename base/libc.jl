@@ -269,7 +269,7 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
         function shouldcallmktime(s::AbstractString)
             # Equivalent to !occursin(r"([^%]|^)%(a|A|j|w|Ow)"a, s), but
             # without regex since this is not available yet
-            
+
             c = Base.utf8units(s)
             N = length(c)
             i = findfirst(==(UInt8('%')), c)

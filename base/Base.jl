@@ -122,7 +122,7 @@ end
 # Enable dynamic library loading
 include("osinfo.jl") # Defines the module Sys, more added later
 include("path.jl") # Defines the module Filesystem, more content added later
-using .Filesystem 
+using .Filesystem
 include("libc.jl") # Libdl (include in libc.jl) is required for regex.jl
 using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
 

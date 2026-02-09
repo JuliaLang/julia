@@ -12,8 +12,7 @@ export KERNEL,
        iswindows,
        isjsvm,
        detectwsl
-   
-       
+
 """
     Sys.KERNEL::Symbol
 
