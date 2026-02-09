@@ -4044,6 +4044,31 @@ A non-exhaustive list of examples of when this is used include:
 """
 ConcurrencyViolationError
 
+"""
+    GlobalRef
+
+A reference to a global variable in a specific module. This is a low-level representation
+used internally in Julia's intermediate representation (IR) and code generation to
+unambiguously identify module-level bindings.
+
+# Fields
+- `mod::Module`: The module containing the binding.
+- `name::Symbol`: The name of the binding.
+
+# Examples
+```jldoctest
+julia> gr = GlobalRef(Base, :sin)
+Base.sin
+
+julia> gr.mod
+Base
+
+julia> gr.name
+:sin
+```
+"""
+Core.GlobalRef
+
 Base.include(BaseDocs, "intrinsicsdocs.jl")
 
 end
