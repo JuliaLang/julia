@@ -1,5 +1,6 @@
 #include "gc-common.h"
 #include "gc-tls-mmtk.h"
+#include "gc-wb-mmtk.h"
 #include "mmtkMutator.h"
 #include "threading.h"
 
@@ -868,10 +869,23 @@ STATIC_INLINE void* mmtk_immortal_alloc_fast(MMTkMutatorContext* mutator, size_t
     return bump_alloc_fast(mutator, (uintptr_t*)&allocator->cursor, (uintptr_t)allocator->limit, size, align, offset, 1);
 }
 
+inline void mmtk_set_side_metadata(const void* side_metadata_base, void* obj) {
+        intptr_t addr = (intptr_t) obj;
+        uint8_t* meta_addr = (uint8_t*) side_metadata_base + (addr >> 6);
+        intptr_t shift = (addr >> 3) & 0b111;
+        while(1) {
+            uint8_t old_val = *meta_addr;
+            uint8_t new_val = old_val | (1 << shift);
+            if (jl_atomic_cmpswap((_Atomic(uint8_t)*)meta_addr, &old_val, new_val)) {
+                break;
+            }
+        }
+}
+
 STATIC_INLINE void mmtk_immortal_post_alloc_fast(MMTkMutatorContext* mutator, void* obj, size_t size) {
-    // FIXME: Similarly, for now, we do nothing
-    // but when supporting moving, this is where we set the valid object (VO) bit
-    // and log (old gen) bit
+    if (MMTK_NEEDS_WRITE_BARRIER == MMTK_OBJECT_BARRIER) {
+        mmtk_set_side_metadata(MMTK_SIDE_LOG_BIT_BASE_ADDRESS, obj);
+    }
 }
 
 JL_DLLEXPORT jl_value_t *jl_mmtk_gc_alloc_default(jl_ptls_t ptls, int osize, size_t align, void *ty)
@@ -1087,6 +1101,11 @@ void jl_gc_notify_image_load(const char* img_data, size_t len)
     mmtk_set_vm_space((void*)img_data, len);
 }
 
+void jl_gc_notify_image_alloc(const char* img_data, size_t len)
+{
+    mmtk_immortal_region_post_alloc((void*)img_data, len);
+}
+
 // ========================================================================= //
 // Code specific to stock that is not supported by MMTk
 // ========================================================================= //
@@ -1134,7 +1153,9 @@ _Atomic(int) gc_stack_free_idx = 0;
 
 JL_DLLEXPORT void jl_gc_queue_root(const struct _jl_value_t *ptr) JL_NOTSAFEPOINT
 {
-    mmtk_unreachable();
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    mmtk_object_reference_write_slow(&ptls->gc_tls.mmtk_mutator, ptr, (const void*) 0);
 }
 
 JL_DLLEXPORT void jl_gc_queue_multiroot(const struct _jl_value_t *root, const void *stored,
