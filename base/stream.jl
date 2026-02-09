@@ -231,6 +231,17 @@ if OS_HANDLE != RawFD
 end
 
 
+"""
+    TTY(fd::RawFD)
+    TTY(fd::OS_HANDLE)
+
+A stream type representing a terminal (tty) device, implemented using libuv. `TTY`
+objects are typically obtained from the global `stdin`, `stdout`, and `stderr` streams
+when Julia is run in an interactive terminal, but can also be constructed from a raw
+file descriptor.
+
+See also [`PipeEndpoint`](@ref), [`IOStream`](@ref).
+"""
 mutable struct TTY <: LibuvStream
     handle::Ptr{Cvoid}
     status::Int
