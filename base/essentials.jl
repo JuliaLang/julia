@@ -992,16 +992,29 @@ end
 `@label` and `@goto` cannot create jumps to different top-level statements. Attempts cause an
 error. To still use `@goto`, enclose the `@label` and `@goto` in a block.
 
-Note that `@goto` implements unstructured control flow and bypasses normal control flow structures. In
-particular, jumping out of a `try`-`catch`-`finally` block with `@goto` will **not** execute the
-`finally` clause. Consider using structured control flow (like `return`, `break`, or
-`continue`) when possible.
+Note that `@goto` implements unstructured control flow. Jumping directly out of a `try` block that has
+a `finally` clause is forbidden and will cause a syntax error. However, jumping from within a
+`catch` block will skip the `finally` clause without error. Consider using structured
+control flow (like `return`, `break`, or `continue`) when possible.
 
-# Example
+# Examples
 ```julia
-function example()
+# This is forbidden and will produce a syntax error:
+function example1()
     try
-        @goto skip_finally
+        @goto skip_finally  # ERROR: goto from a try/finally block is not permitted
+    finally
+        println("finally clause")
+    end
+    @label skip_finally
+end
+
+# This is allowed and skips the finally clause:
+function example2()
+    try
+        error()
+    catch
+        @goto skip_finally  # Skips the finally clause
     finally
         println("This will not be printed")
     end
