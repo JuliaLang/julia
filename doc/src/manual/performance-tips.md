@@ -59,14 +59,14 @@ Passing arguments to functions is better style. It leads to more reusable code a
 In the following REPL session:
 
 ```jldoctest
- x = 1.0
+julia> x = 1.0
 1.0
 ```
 
 is equivalent to:
 
 ```jldoctest
- global x = 1.0
+julia> global x = 1.0
 1.0
 ```
 
@@ -78,9 +78,9 @@ A useful tool for measuring performance is the [`@time`](@ref) macro. We here re
 with the global variable above, but this time with the type annotation removed:
 
 ```jldoctest; setup = :(using Random; Random.seed!(1234)), filter = r"[0-9\.]+ seconds \(.*?\)"
- x = rand(1000);
+julia> x = rand(1000);
 
- function sum_global()
+julia> function sum_global()
            s = 0.0
            for i in x
                s += i
@@ -88,11 +88,11 @@ with the global variable above, but this time with the type annotation removed:
            return s
        end;
 
- @time sum_global()
+julia> @time sum_global()
   0.011539 seconds (9.08 k allocations: 373.386 KiB, 98.69% compilation time)
 523.0007221951678
 
- @time sum_global()
+julia> @time sum_global()
   0.000091 seconds (3.49 k allocations: 70.156 KiB)
 523.0007221951678
 ```
@@ -123,9 +123,9 @@ In this particular case, the memory allocation is due to the usage of a type-uns
 and is significantly faster after the first call:
 
 ```jldoctest sumarg; setup = :(using Random; Random.seed!(1234)), filter = r"[0-9\.]+ seconds \(.*?\)"
- x = rand(1000);
+julia> x = rand(1000);
 
- function sum_arg(x)
+julia> function sum_arg(x)
            s = 0.0
            for i in x
                s += i
@@ -133,11 +133,11 @@ and is significantly faster after the first call:
            return s
        end;
 
- @time sum_arg(x)
+julia> @time sum_arg(x)
   0.007551 seconds (3.98 k allocations: 200.548 KiB, 99.77% compilation time)
 523.0007221951678
 
- @time sum_arg(x)
+julia> @time sum_arg(x)
   0.000006 seconds (1 allocation: 16 bytes)
 523.0007221951678
 ```
@@ -1543,7 +1543,7 @@ tree. i.e. see `0.4 ms  Statistics → SparseArraysExt`.
 This report gives a good opportunity to review whether the cost of dependency load time is worth the functionality it brings.
 Also the `Pkg` utility `why` can be used to report why an indirect dependency exists.
 
-```julia
+```julia-repl
 (CustomPackage) pkg> why FFMPEG_jll
   Plots → FFMPEG → FFMPEG_jll
   Plots → GR → GR_jll → FFMPEG_jll
@@ -1696,7 +1696,7 @@ timeit(1000, 1000)
 
 On a computer with a 2.4GHz Intel Core i5 processor, this produces:
 
-```julia
+```bash
 GFlop/sec        = 1.9467069505224963
 GFlop/sec (SIMD) = 17.578554163920018
 ```
@@ -1839,7 +1839,7 @@ end
 
 This gives an output similar to
 
-```julia
+```bash
   0.002202 seconds (1 allocation: 4.063 KiB)
   0.001502 seconds (1 allocation: 4.063 KiB)
   0.002139 seconds (1 allocation: 4.063 KiB)
