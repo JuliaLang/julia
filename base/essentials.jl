@@ -991,6 +991,9 @@ end
 
 `@label` and `@goto` cannot create jumps to different top-level statements. Attempts cause an
 error. To still use `@goto`, enclose the `@label` and `@goto` in a block.
+
+Also, `@goto` is not allowed for jumping out of a `try`, `catch`, or `else` block when a `finally`
+block is present.
 """
 macro goto(name::Symbol)
     return esc(Expr(:symbolicgoto, name))
