@@ -9,8 +9,8 @@
 Elements in a `Set` are unique, as determined by the elements' definition of `isequal`.
 The order of elements in a `Set` is an implementation detail and cannot be relied on.
 
-See also: [`AbstractSet`](@ref), [`BitSet`](@ref), [`Dict`](@ref),
-[`push!`](@ref), [`empty!`](@ref), [`union!`](@ref), [`in`](@ref), [`isequal`](@ref)
+See also [`AbstractSet`](@ref), [`BitSet`](@ref), [`Dict`](@ref),
+[`push!`](@ref), [`empty!`](@ref), [`union!`](@ref), [`in`](@ref), [`isequal`](@ref).
 
 # Examples
 ```jldoctest; filter = r"^  '.'"ma
@@ -98,10 +98,10 @@ If `x` is in `s`, return `true`. If not, push `x` into `s` and return `false`.
 This is equivalent to `in(x, s) ? true : (push!(s, x); false)`, but may have a
 more efficient implementation.
 
-See also: [`in`](@ref), [`push!`](@ref), [`Set`](@ref)
-
 !!! compat "Julia 1.11"
     This function requires at least 1.11.
+
+See also [`in`](@ref), [`push!`](@ref), [`Set`](@ref).
 
 # Examples
 ```jldoctest; filter = r"^\\s+\\d\$"m
@@ -205,7 +205,7 @@ as determined by [`isequal`](@ref) and [`hash`](@ref), in the order that the fir
 set of equivalent elements originally appears. The element type of the
 input is preserved.
 
-See also: [`unique!`](@ref), [`allunique`](@ref), [`allequal`](@ref).
+See also [`unique!`](@ref), [`allunique`](@ref), [`allequal`](@ref).
 
 # Examples
 ```jldoctest
@@ -489,10 +489,10 @@ The precise number of calls is regarded as an implementation detail.
 
 `allunique` may use a specialized implementation when the input is sorted.
 
-See also: [`unique`](@ref), [`issorted`](@ref), [`allequal`](@ref).
-
 !!! compat "Julia 1.11"
     The method `allunique(f, itr)` requires at least Julia 1.11.
+
+See also [`unique`](@ref), [`issorted`](@ref), [`allequal`](@ref).
 
 # Examples
 ```jldoctest
@@ -611,13 +611,13 @@ Or if all of `[f(x) for x in itr]` are equal, for the second method.
 Note that `allequal(f, itr)` may call `f` fewer than `length(itr)` times.
 The precise number of calls is regarded as an implementation detail.
 
-See also: [`unique`](@ref), [`allunique`](@ref).
-
 !!! compat "Julia 1.8"
     The `allequal` function requires at least Julia 1.8.
 
 !!! compat "Julia 1.11"
     The method `allequal(f, itr)` requires at least Julia 1.11.
+
+See also [`unique`](@ref), [`allunique`](@ref).
 
 # Examples
 ```jldoctest

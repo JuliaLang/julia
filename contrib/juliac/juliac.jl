@@ -204,9 +204,9 @@ function link_products()
         if output_type == "--output-lib"
             cmd2 = `$(cc) $(allflags) $(rpath) -o $outname -shared $(Base.Linking.whole_archive(img_path; is_cc=true)) $(julia_libs)`
         elseif output_type == "--output-sysimage"
-            cmd2 = `$(cc) $(allflags) $(rpath) -o $outname -shared -Wl,$(Base.Linking.whole_archive(img_path; is_cc=true)) $(julia_libs)`
+            cmd2 = `$(cc) $(allflags) $(rpath) -o $outname -shared $(Base.Linking.whole_archive(img_path; is_cc=true)) $(julia_libs)`
         else
-            cmd2 = `$(cc) $(allflags) $(rpath) -o $outname -Wl,$(Base.Linking.whole_archive(img_path; is_cc=true)) $(julia_libs)`
+            cmd2 = `$(cc) $(allflags) $(rpath) -o $outname $(Base.Linking.whole_archive(img_path; is_cc=true)) $(julia_libs)`
         end
         verbose && println("Running: $cmd2")
         run(cmd2)

@@ -40,14 +40,18 @@ struct ScopeInfo
     locals_capt::Union{Nothing, Dict{IdTag,Bool}}
 end
 
-function ScopeInfo(ctx, parent_id, node_id, is_lambda, is_permeable)
+function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
     id = length(ctx.scopes) + 1
-    lambda_id = is_lambda ? id : ctx.scopes[parent_id].lambda_id
+    lambda_id = kind(ex) === K"lambda" ? id : ctx.scopes[parent_id].lambda_id
+    is_toplevel_thunk = kind(ex) === K"lambda" && ex.is_toplevel_thunk
+    is_permeable = is_toplevel_thunk ||
+        (kind(ex) === K"scope_block" && ex.scope_type === :neutral &&
+        parent_id !== 0 && ctx.scopes[parent_id].is_permeable)
 
     s = ScopeInfo(
-        id, parent_id, lambda_id, node_id, is_permeable,
+        id, parent_id, lambda_id, ex._id, is_permeable,
         Dict{IdTag, NodeId}(), Dict{NameKey, NodeId}(), Dict{NameKey,IdTag}(),
-        is_lambda ? Dict{IdTag,Bool}() : nothing)
+        kind(ex) === K"lambda" ? Dict{IdTag,Bool}() : nothing)
     push!(ctx.scopes, s)
     return s
 end
@@ -220,7 +224,7 @@ function _find_scope_decls!(ctx, scope, ex)
             k === K"constdecl" && numchildren(ex) == 2)
             _find_scope_decls!(ctx, scope, ex[2])
         end
-    elseif k === K"symbolic_block"
+    elseif k === K"symbolicblock"
         # Only recurse into the body (second child), not the label name (first child)
         _find_scope_decls!(ctx, scope, ex[2])
     elseif k === K"break" && numchildren(ex) >= 2
@@ -242,9 +246,7 @@ function enter_scope!(ctx, ex)
     is_toplevel_thunk = kind(ex) === K"lambda" && ex.is_toplevel_thunk
     parent_id = (is_toplevel_thunk || isempty(ctx.scope_stack)) ?
         0 : ctx.scopes[ctx.scope_stack[end]].id
-    is_permeable = is_toplevel_thunk ||
-        kind(ex) === K"scope_block" && ex.scope_type === :neutral
-    scope = ScopeInfo(ctx, parent_id, ex._id, kind(ex) === K"lambda", is_permeable)
+    scope = ScopeInfo(ctx, parent_id, ex)
     lambda_scope = ctx.scopes[scope.lambda_id]
     push!(ctx.scope_stack, scope.id)
 
@@ -420,12 +422,14 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         pop!(ctx.scope_stack)
         @ast ctx ex [K"block" stmts...]
     elseif k == K"islocal"
-        b = resolve_name(ctx, ex[1])
-        islocal = !isnothing(b) && b.kind !== :global
+        e1 = ex[1]
+        islocal = kind(e1) == K"Identifier" &&
+            let b = resolve_name(ctx, e1)
+                !isnothing(b) && b.kind !== :global
+            end
         @ast ctx ex islocal::K"Bool"
     elseif k == K"isglobal"
         e1 = ex[1]
-        @chk kind(e1) in KSet"Identifier Placeholder"
         isglobal = kind(e1) == K"Identifier" &&
             let b = resolve_name(ctx, e1)
                 isnothing(b) || b.kind === :global
@@ -517,9 +521,9 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         @assert numchildren(ex) === 2
         assignment_kind = bk == :global ? K"constdecl" : K"="
         @ast ctx ex _resolve_scopes(ctx, [assignment_kind ex[1] ex[2]], scope)
-    elseif k == K"symbolic_block"
+    elseif k == K"symbolicblock"
         # Only recurse into the body (second child), not the label name (first child)
-        @ast ctx ex [K"symbolic_block" ex[1] _resolve_scopes(ctx, ex[2], scope)]
+        @ast ctx ex [K"symbolicblock" ex[1] _resolve_scopes(ctx, ex[2], scope)]
     else
         mapchildren(e->_resolve_scopes(ctx, e, scope), ctx, ex)
     end
@@ -694,7 +698,7 @@ function analyze_variables!(ctx, ex)
             ctx.graph, ctx.bindings, ctx.mod, ctx.scopes, lambda_bindings,
             ctx.method_def_stack, ctx.closure_bindings)
         foreach(e->analyze_variables!(ctx2, e), ex[3:end]) # body & return type
-    elseif k == K"symbolic_block"
+    elseif k == K"symbolicblock"
         # Only analyze the body (second child), not the label name (first child)
         analyze_variables!(ctx, ex[2])
     else

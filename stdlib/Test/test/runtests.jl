@@ -7,6 +7,8 @@ using Distributed: RemoteException
 
 import Logging: Debug, Info, Warn, with_logger
 
+@test isempty(Test.detect_closure_boxes(Test))
+
 @testset "@test" begin
     atol = 1
     a = (; atol=2)
@@ -47,6 +49,14 @@ module ClosureBoxTest
     end
 end
 
+module ClosureBoxRedefTest
+    function boxed()
+        x = 1
+        inner() = (x += 1)
+        inner()
+    end
+end
+
 @testset "detect_closure_boxes" begin
     boxes = Test.detect_closure_boxes(ClosureBoxTest)
     @test any(p -> p.first.name === :boxed, boxes)
@@ -61,6 +71,17 @@ end
     # _all version checks all loaded modules
     all_boxes = Test.detect_closure_boxes_all_modules()
     @test any(p -> p.first.name === :boxed, all_boxes)
+
+    # Redefinition should drop closure boxes from shadowed methods.
+    @test !isempty(Test.detect_closure_boxes(ClosureBoxRedefTest))
+    @eval ClosureBoxRedefTest begin
+        function boxed()
+            x = 1
+            inner() = x + 1
+            inner()
+        end
+    end
+    @test isempty(Test.detect_closure_boxes(ClosureBoxRedefTest))
 end
 
 @testset "@test with skip/broken kwargs" begin
