@@ -2581,7 +2581,6 @@ let r = Ptr{Cvoid}(20):-UInt(2):Ptr{Cvoid}(10)
     @test last(r) === Ptr{Cvoid}(10)
 end
 
-<<<<<<< HEAD
 # test behavior of wrap-around and promotion of empty ranges (#35711)
 @test length(range(0, length=UInt(0))) === UInt(0)
 @test isempty(range(0, length=UInt(0)))
