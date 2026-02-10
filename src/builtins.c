@@ -2345,36 +2345,155 @@ JL_CALLABLE(jl_f__typebody)
         }
         dt->types = (jl_svec_t*)ft;
         jl_gc_wb(dt, ft);
-        // If a supertype can reference the same type, then we may not be
-        // able to compute the layout of the object before needing to
-        // publish it, so we must assume it cannot be inlined, if that
-        // check passes, then we also still need to check the fields too.
+    }
+have_type:
+    return tret;
+}
+
+// Check if `target_name` is transitively reachable from type expression `p`
+// by following both type parameters and field types of referenced DataTypes.
+// This detects mutual recursion cycles (e.g., A → B → A through field types
+// or type parameters) that `references_name` misses because it only follows
+// type parameters, not field types of other types.
+// Uses `visited` to prevent infinite loops in cyclic type graphs.
+static int name_reachable_via_fields(jl_value_t *p, jl_typename_t *target_name,
+                                     small_arraylist_t *visited) JL_NOTSAFEPOINT
+{
+    while (jl_is_unionall(p))
+        p = ((jl_unionall_t*)p)->body;
+    if (jl_is_uniontype(p))
+        return name_reachable_via_fields(((jl_uniontype_t*)p)->a, target_name, visited) ||
+               name_reachable_via_fields(((jl_uniontype_t*)p)->b, target_name, visited);
+    if (jl_is_vararg(p)) {
+        jl_value_t *T = ((jl_vararg_t*)p)->T;
+        return T && name_reachable_via_fields(T, target_name, visited);
+    }
+    if (jl_is_typevar(p))
+        return 0;
+    if (jl_is_datatype(p)) {
+        jl_datatype_t *dp = (jl_datatype_t*)p;
+        if (dp->name == target_name)
+            return 1;
+        jl_datatype_t *uw = (jl_datatype_t*)jl_unwrap_unionall(dp->name->wrapper);
+        // Determine whether this type's parameters affect layout.
+        // Same logic as references_name: a type's parameters affect layout if
+        // it's a GenericMemory, has no layout yet, or has field types with
+        // free type vars (meaning type parameter substitution creates new types
+        // whose layouts may need computation).
+        int dominated = jl_is_genericmemory_type(dp) || uw->layout == NULL;
+        if (!dominated && uw->types != NULL && jl_field_names(dp) != jl_emptysvec) {
+            size_t i, l = jl_svec_len(uw->types);
+            for (i = 0; i < l; i++) {
+                jl_value_t *ft = jl_svecref(uw->types, i);
+                if (!jl_is_typevar(ft) && jl_has_free_typevars(ft)) {
+                    dominated = 1;
+                    break;
+                }
+            }
+        }
+        // If type params don't affect layout and layout is known, skip entirely
+        if (!dominated)
+            return 0;
+        // Check if already visited this TypeName
+        uint32_t k;
+        for (k = 0; k < visited->len; k++) {
+            if (visited->items[k] == (void*)dp->name)
+                return 0;
+        }
+        small_arraylist_push(visited, (void*)dp->name);
+        // Follow type parameters of the concrete instance (e.g., Array{Foo,1}
+        // has Foo as a type parameter, which may transitively reference our type)
+        size_t i, np = jl_nparams(dp);
+        for (i = 0; i < np; i++) {
+            if (name_reachable_via_fields(jl_tparam(dp, i), target_name, visited))
+                return 1;
+        }
+        // Follow the wrapper body's field types transitively (only for types
+        // without layouts, since laid-out types can't cause layout recursion)
+        if (uw->layout == NULL && uw->types != NULL) {
+            size_t nf = jl_svec_len(uw->types);
+            for (i = 0; i < nf; i++) {
+                if (name_reachable_via_fields(jl_svecref(uw->types, i), target_name, visited))
+                    return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+// Check if type expression `ty` contains a reference to a DataType whose
+// primary type has types == NULL (i.e., field types not yet set). This detects
+// references to types that are still being constructed — e.g., defining a
+// struct inside another struct's field expression that references the outer type.
+static int has_incomplete_field_type(jl_value_t *ty) JL_NOTSAFEPOINT
+{
+    while (jl_is_unionall(ty))
+        ty = ((jl_unionall_t*)ty)->body;
+    if (jl_is_uniontype(ty))
+        return has_incomplete_field_type(((jl_uniontype_t*)ty)->a) ||
+               has_incomplete_field_type(((jl_uniontype_t*)ty)->b);
+    if (jl_is_datatype(ty)) {
+        jl_datatype_t *dt = (jl_datatype_t*)ty;
+        jl_datatype_t *primary = (jl_datatype_t*)jl_unwrap_unionall(dt->name->wrapper);
+        if (!primary->name->abstract && !primary->isprimitivetype && primary->types == NULL)
+            return 1;
+    }
+    return 0;
+}
+
+JL_CALLABLE(jl_f__finish_type)
+{
+    JL_NARGS(_finish_type!, 1, 1);
+    jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(args[0]);
+    JL_TYPECHK(_finish_type!, datatype, (jl_value_t*)dt);
+    // Check that no field type references an incomplete DataType. This prevents
+    // computing a layout (and thus allocating) types whose fields reference types
+    // that haven't had their field types set yet. Such types arise from defining
+    // structs inside another struct's field expression that reference the outer type.
+    if (dt->types != NULL) {
+        size_t nf = jl_svec_len(dt->types);
+        for (size_t i = 0; i < nf; i++) {
+            jl_value_t *fld = jl_svecref(dt->types, i);
+            if (has_incomplete_field_type(fld))
+                jl_errorf("invalid type definition: type %s references incomplete type in field %zu",
+                          jl_symbol_name(dt->name->name), i + 1);
+        }
+    }
+    // Compute mayinlinealloc BEFORE reinstantiation and layout, since
+    // jl_compute_field_offsets uses it (datatype.c line 650).
+    // name_reachable_via_fields detects mutual recursion through both
+    // field types and type parameters, so it's safe to set this early:
+    // mutually recursive types will get mayinlinealloc=0, preventing
+    // infinite recursion during lazy layout computation.
+    if (dt->types != NULL) {
+        size_t nf = jl_svec_len(dt->types);
         if (!dt->name->mutabl && (nf == 0 || !references_name((jl_value_t*)dt->super, dt->name, 0, 1))) {
             int mayinlinealloc = 1;
+            small_arraylist_t visited;
+            small_arraylist_new(&visited, 0);
             size_t i;
             for (i = 0; i < nf; i++) {
-                jl_value_t *fld = jl_svecref(ft, i);
-                if (references_name(fld, dt->name, 1, 1)) {
+                jl_value_t *fld = jl_svecref(dt->types, i);
+                visited.len = 0;
+                if (name_reachable_via_fields(fld, dt->name, &visited)) {
                     mayinlinealloc = 0;
                     break;
                 }
             }
+            small_arraylist_free(&visited);
             dt->name->mayinlinealloc = mayinlinealloc;
         }
     }
-    {
-        JL_TRY {
-            jl_reinstantiate_inner_types(dt);
-        }
-        JL_CATCH {
-            dt->name->partial = NULL;
-            jl_rethrow();
-        }
+    JL_TRY {
+        jl_reinstantiate_inner_types(dt);
+    }
+    JL_CATCH {
+        dt->name->partial = NULL;
+        jl_rethrow();
     }
     if (jl_is_structtype(dt))
         jl_compute_field_offsets(dt);
-have_type:
-    return tret;
+    return jl_nothing;
 }
 
 // this is a heuristic for allowing "redefining" a type to something identical

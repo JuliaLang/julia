@@ -16,6 +16,7 @@ extern "C" {
     XX(_defaultctors,"_defaultctors") \
     XX(_equiv_typedef,"_equiv_typedef") \
     XX(_expr,"_expr") \
+    XX(_finish_type,"_finish_type!") \
     XX(_import, "_import") \
     XX(_primitivetype,"_primitivetype") \
     XX(_setsuper,"_setsuper!") \

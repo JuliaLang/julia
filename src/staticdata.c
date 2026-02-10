@@ -988,6 +988,17 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
     if (jl_is_foreign_type(t) == 1) {
         jl_error("Cannot serialize instances of foreign datatypes");
     }
+    // Reject incomplete types — types still being constructed (super or field types not set)
+    if (jl_is_datatype(v)) {
+        jl_datatype_t *dt = (jl_datatype_t*)v;
+        jl_datatype_t *primary = (jl_datatype_t*)jl_unwrap_unionall(dt->name->wrapper);
+        if (primary->super == NULL)
+            jl_errorf("cannot serialize incomplete type %s (supertype not set)",
+                      jl_symbol_name(dt->name->name));
+        if (!primary->name->abstract && !primary->isprimitivetype && primary->types == NULL)
+            jl_errorf("cannot serialize incomplete type %s (field types not set)",
+                      jl_symbol_name(dt->name->name));
+    }
 
     // Items that require postorder traversal must visit their children prior to insertion into
     // the worklist/serialization_order (and also before their first use)

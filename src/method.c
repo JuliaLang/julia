@@ -1348,6 +1348,23 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                               jl_symbol_name(file),
                               line);
         }
+        // Reject types whose supertype has not yet been set (still between
+        // _structtype and _setsuper!). This prevents defining methods on
+        // types that are still being constructed.
+        jl_value_t *chk = elt;
+        while (jl_is_unionall(chk))
+            chk = ((jl_unionall_t*)chk)->body;
+        if (jl_is_datatype(chk)) {
+            jl_datatype_t *primary = (jl_datatype_t*)jl_unwrap_unionall(((jl_datatype_t*)chk)->name->wrapper);
+            if (primary->super == NULL) {
+                jl_exceptionf(jl_argumenterror_type,
+                              "invalid type for argument in method definition for %s at %s:%d: type %s is incomplete (still being defined)",
+                              jl_symbol_name(name),
+                              jl_symbol_name(file),
+                              line,
+                              jl_symbol_name(primary->name->name));
+            }
+        }
     }
     for (i = jl_svec_len(tvars); i > 0; i--) {
         jl_value_t *tv = jl_svecref(tvars, i - 1);

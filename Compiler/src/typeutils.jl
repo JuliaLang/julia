@@ -77,6 +77,11 @@ function valid_as_lattice(@nospecialize(x), astag::Bool=false)
         return true
     end
     if x isa DataType
+        # Reject incomplete types (still being constructed)
+        xw = unwrap_unionall(x.name.wrapper)::DataType
+        if !isdefined(xw, :super) || (isstructtype(xw) && !isdefined(xw, :types))
+            return false
+        end
         if isType(x)
             p = x.parameters[1]
             p isa Type || p isa TypeVar || return false

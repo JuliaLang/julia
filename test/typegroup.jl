@@ -464,6 +464,31 @@ using Test
         @test fieldtype(TG_SelfSuperB{Int}, :a) == TG_SelfSuperA{Int}
     end
 
+    @testset "red/black list with AbstractArray{T,0} supertype" begin
+        # Mutually recursive supertypes: each list node subtypes a 0-dimensional
+        # AbstractArray whose element type is the opposite-color node
+        typegroup
+            struct TG_RedNode <: AbstractArray{TG_BlackNode, 0}
+                child::Union{Nothing, TG_BlackNode}
+            end
+            struct TG_BlackNode <: AbstractArray{TG_RedNode, 0}
+                child::Union{Nothing, TG_RedNode}
+            end
+        end
+        @test TG_RedNode <: AbstractArray{TG_BlackNode, 0}
+        @test TG_BlackNode <: AbstractArray{TG_RedNode, 0}
+        @test eltype(TG_RedNode) == TG_BlackNode
+        @test eltype(TG_BlackNode) == TG_RedNode
+
+        # Construct alternating red/black chain
+        r1 = TG_RedNode(nothing)
+        b1 = TG_BlackNode(r1)
+        r2 = TG_RedNode(b1)
+        b2 = TG_BlackNode(r2)
+        @test b2.child.child.child === r1
+        @test b2.child.child.child.child === nothing
+    end
+
     @testset "Tuple fields with incomplete types" begin
         # Self-referential Tuple field
         typegroup
@@ -508,6 +533,94 @@ using Test
         @test t.data[2] === nothing
         t2 = TG_TupleUnion((99, t))
         @test t2.data[2].data[1] == 42
+    end
+
+    # Issue #60919: accessing incomplete types during struct definition should error, not segfault
+    @testset "incomplete type errors (#60919)" begin
+        # fieldtype on incomplete type with no matching field
+        @test_throws FieldError eval(:(struct TG_60919_A <: AbstractVector{fieldtype(TG_60919_A, :x)}
+        end))
+
+        # fieldtype on incomplete type where field exists but types aren't set yet
+        @test_throws ErrorException eval(:(struct TG_60919_B <: AbstractVector{fieldtype(TG_60919_B, :x)}
+            x::Int
+        end))
+
+        # sizeof on outer incomplete type from nested struct field-type expression
+        @test_throws ErrorException eval(:(struct TG_60919_C
+            x::(struct TG_60919_C_Inner; y::TG_60919_C; end; Core.sizeof(TG_60919_C); TG_60919_C_Inner)
+        end))
+
+        # nested struct referencing incomplete outer type (no sizeof) — should error
+        # because the inner type's _finish_type! detects the incomplete field type
+        @test_throws ErrorException eval(:(struct TG_60919_D
+            x::(struct TG_60919_D_Inner; y::TG_60919_D; end; TG_60919_D_Inner)
+        end))
+
+        # allocation of type with incomplete field type — new() should not succeed
+        @test_throws ErrorException eval(:(struct TG_60919_E
+            x::(struct TG_60919_E_Inner
+                y::TG_60919_E
+                TG_60919_E_Inner() = new()
+                TG_60919_E_Inner(x) = new(x)
+            end; TG_60919_E_Inner(); TG_60919_E_Inner)
+        end))
+    end
+
+    # Constructing a typegroup type while types are still being defined should error, not crash
+    @testset "method call on incomplete typegroup type" begin
+        @test_throws MethodError eval(:(typegroup
+            struct TG_EarlyCall_A
+                x::Int
+                b::Union{Nothing, TG_EarlyCall_B}
+            end
+            struct TG_EarlyCall_B
+                a::(TG_EarlyCall_A(1, nothing); TG_EarlyCall_A)
+            end
+        end))
+    end
+
+    # Defining methods on incomplete types during type construction should error
+    @testset "method definition on incomplete type during super expression" begin
+        # Normal struct case
+        @test_throws ArgumentError eval(:(struct TG_SideEffect_S <: (global _tg_se_f; _tg_se_f(::TG_SideEffect_S) = 1; Any)
+            x::Int
+        end))
+        # Typegroup case
+        @test_throws ArgumentError eval(:(typegroup
+            struct TG_SideEffect_A <: (global _tg_se_g; _tg_se_g(::TG_SideEffect_A) = 1; Any)
+                b::Union{Nothing, TG_SideEffect_B}
+            end
+            struct TG_SideEffect_B
+                a::Union{Nothing, TG_SideEffect_A}
+            end
+        end))
+        # Subtype check on type whose super is not yet set
+        @test_throws ErrorException eval(:(struct TG_SideEffect_Sub <: (TG_SideEffect_Sub <: Real ? Any : Real)
+        end))
+    end
+
+    # Precompilation should fail for modules containing incomplete type errors
+    @testset "precompilation rejects incomplete types" begin
+        mktempdir() do dir
+            pushfirst!(LOAD_PATH, dir)
+            depot = mktempdir()
+            pushfirst!(DEPOT_PATH, depot)
+            try
+                write(joinpath(dir, "TG_PrecompIncomplete.jl"), """
+                module TG_PrecompIncomplete
+                # Nested struct referencing incomplete outer type
+                struct Outer
+                    x::(struct Inner; y::Outer; end; Inner)
+                end
+                end
+                """)
+                @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :TG_PrecompIncomplete)
+            finally
+                filter!((≠)(dir), LOAD_PATH)
+                filter!((≠)(depot), DEPOT_PATH)
+            end
+        end
     end
 
 end

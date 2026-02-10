@@ -432,7 +432,7 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
                 *has_ccall = 1;
             }
             // TODO: rely on latestworld instead of function callee detection here (or add it to jl_is_toplevel_only_expr)
-            if (called == BUILTIN(_typebody) || called == BUILTIN(declare_const)) {
+            if (called == BUILTIN(_typebody) || called == BUILTIN(_finish_type) || called == BUILTIN(declare_const)) {
                 *has_defs = 1;
             }
         }

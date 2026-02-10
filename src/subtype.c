@@ -2248,8 +2248,6 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
 // types at the outer level of `y`.
 JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, int envsz)
 {
-    if (jl_is_typeapp(x) || jl_is_typeapp(y))
-        jl_error("internal error: TypeApp in subtyping");
     jl_stenv_t e;
     if (y == (jl_value_t*)jl_any_type || x == jl_bottom_type)
         return 1;
@@ -2481,8 +2479,6 @@ int jl_has_intersect_kind_not_type(jl_value_t *t)
 
 JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
 {
-    if (jl_is_typeapp(t))
-        jl_error("internal error: TypeApp in jl_isa");
     if (t == (jl_value_t*)jl_any_type || jl_typetagis(x,t))
         return 1;
     if (jl_typetagof(x) < (jl_max_tags << 4) && jl_is_datatype(t) && jl_typetagis(x,((jl_datatype_t*)t)->smalltag << 4))
@@ -4571,8 +4567,6 @@ static int might_intersect_concrete(jl_value_t *a)
 // sets *issubty to 1 iff `a` is a subtype of `b`
 jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t **penv, int *issubty)
 {
-    if (jl_is_typeapp(a) || jl_is_typeapp(b))
-        jl_error("internal error: TypeApp in type intersection");
     if (issubty) *issubty = 0;
     if (obviously_disjoint(a, b, 0)) {
         if (issubty && a == jl_bottom_type) *issubty = 1;
