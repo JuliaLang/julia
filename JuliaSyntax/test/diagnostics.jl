@@ -143,6 +143,26 @@ end
         diagnostic("public[7] = 5", version=v"1.11") ==
         diagnostic("public() = 6", version=v"1.11") ==
         Diagnostic(1, 6, :warning, "using public as an identifier is deprecated")
+
+    @test diagnostic("break +", only_first=true, version=v"1.13") ==
+        Diagnostic(6, 7, :error, "unexpected token after break")
+    @test diagnostic("break ()", only_first=true, version=v"1.13") ==
+        Diagnostic(6, 7, :error, "unexpected token after break")
+    @test diagnostic("continue +", only_first=true, version=v"1.13") ==
+        Diagnostic(9, 10, :error, "unexpected token after continue")
+    @test diagnostic("break label", only_first=true, version=v"1.13") ==
+        Diagnostic(1, 11, :error, "labeled `break` and `continue` not supported in Julia version 1.13 < 1.14")
+
+    @test diagnostic("break +", only_first=true, version=v"1.14") ==
+        Diagnostic(7, 7, :error, "expected identifier for break label")
+    @test diagnostic("continue +", only_first=true, version=v"1.14") ==
+        Diagnostic(10, 10, :error, "expected identifier for break label")
+
+    @test diagnostic("break f()", only_first=true, version=v"1.14") ==
+        Diagnostic(8, 7, :error, "expected space after break label")
+
+    @test diagnostic("continue f val", only_first=true, version=v"1.14") ==
+        Diagnostic(11, 14, :error, "unexpected token after continue")
 end
 
 @testset "diagnostics for literal parsing" begin
