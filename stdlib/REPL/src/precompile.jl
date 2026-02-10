@@ -91,7 +91,7 @@ function repl_workload()
     SHELL_PROMPT = "shell> "
     HELP_PROMPT = "help?> "
 
-    tmphistfile = tempname()
+    tmphistfile = tempname(; cleanup = false)
     write(tmphistfile, """
     # time: 2020-10-31 13:16:39 AWST
     # mode: julia
