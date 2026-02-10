@@ -348,7 +348,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
 end
 
 function record_immutable_preserve!(new_preserves::Vector{Any}, def::Expr, compact::IncrementalCompact)
-    args = isexpr(def, :new) ? def.args : Iterators.drop(def.args, 1)
+    args = Iterators.drop(def.args, !isexpr(def, :new))
     for arg in args
         if !isbitstype(widenconst(argextype(arg, compact)))
             push!(new_preserves, arg)
