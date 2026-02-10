@@ -194,7 +194,7 @@ static inline llvm::Value *get_current_signal_page_from_ptls(llvm::IRBuilder<> &
     auto T_ptr = builder.getPtrTy();
     auto i8 = builder.getInt8Ty();
     int nthfield = offsetof(jl_tls_states_t, safepoint);
-    llvm::Value *psafepoint = builder.CreateConstInBoundsGEP1_32(i8, ptls, nthfield);
+    llvm::Value *psafepoint = builder.CreateConstInBoundsGEP1_32(i8, ptls, nthfield, "safepoint_addr");
     LoadInst *ptls_load = builder.CreateAlignedLoad(
             T_ptr, psafepoint, Align(sizeof(void *)), "safepoint");
     ptls_load->setOrdering(AtomicOrdering::Monotonic);
