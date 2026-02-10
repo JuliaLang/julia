@@ -1929,7 +1929,6 @@ JuliaOJIT::JuliaOJIT()
     ES(cantFail(orc::SelfExecutorProcessControl::Create(nullptr, std::make_unique<::JuliaTaskDispatcher>()))),
     GlobalJD(ES.createBareJITDylib("JuliaGlobals")),
     JD(ES.createBareJITDylib("JuliaOJIT")),
-    ExternalJD(ES.createBareJITDylib("JuliaExternal")),
     DLSymOpt(std::make_unique<DLSymOptimizer>(false)),
 #ifdef JL_USE_JITLINK
     MemMgr(createJITLinkMemoryManager()),
@@ -2018,9 +2017,6 @@ JuliaOJIT::JuliaOJIT()
     }
 
     JD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
-    JD.addToLinkOrder(ExternalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
-    ExternalJD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
-    ExternalJD.addToLinkOrder(JD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
 
     orc::SymbolAliasMap jl_crt = {
         // Float16 conversion routines
@@ -2160,6 +2156,15 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
     }
 }
 
+orc::JITDylib& JuliaOJIT::createJITDylib(StringRef NamePrefix)
+{
+    // Create a new JITDylib with unique name
+    std::string dylib_name = (NamePrefix + "_" + Twine(jl_atomic_fetch_add_relaxed(&jitcounter, 1))).str();
+    JITDylib &NewJD = ES.createBareJITDylib(dylib_name);
+    NewJD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
+    return NewJD;
+}
+
 Error JuliaOJIT::addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM, bool ShouldOptimize)
 {
     if (auto Err = TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT -> Error {
@@ -2177,6 +2182,7 @@ Error JuliaOJIT::addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM,
             return Error::success();
         }))
         return Err;
+
     //if (ShouldOptimize)
     //    return OptimizeLayer.add(JD, std::move(TSM));
     return CompileLayer.add(JD.getDefaultResourceTracker(), std::move(TSM));
@@ -2205,30 +2211,17 @@ SmallVector<uint64_t> JuliaOJIT::findSymbols(ArrayRef<StringRef> Names)
     return Addrs;
 }
 
-Expected<ExecutorSymbolDef> JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
+Expected<ExecutorSymbolDef> JuliaOJIT::findJDSymbol(JITDylib &JD, StringRef Name, bool ExternalJDOnly)
 {
-    orc::JITDylib* SearchOrders[3] = {&JD, &GlobalJD, &ExternalJD};
-    ArrayRef<orc::JITDylib*> SearchOrder = ArrayRef<orc::JITDylib*>(&SearchOrders[0], ExportedSymbolsOnly ? 3 : 1);
-    auto Sym = ::safelookup(ES, SearchOrder, Name);
-    return Sym;
-}
-
-Expected<ExecutorSymbolDef> JuliaOJIT::findUnmangledSymbol(StringRef Name)
-{
-    return findSymbol(getMangledName(Name), true);
-}
-
-Expected<ExecutorSymbolDef> JuliaOJIT::findExternalJDSymbol(StringRef Name, bool ExternalJDOnly)
-{
-    orc::JITDylib* SearchOrders[3] = {&ExternalJD, &GlobalJD, &JD};
-    ArrayRef<orc::JITDylib*> SearchOrder = ArrayRef<orc::JITDylib*>(&SearchOrders[0], ExternalJDOnly ? 1 : 3);
+    orc::JITDylib *SearchOrders[2] = {&JD, &GlobalJD};
+    ArrayRef<orc::JITDylib*> SearchOrder = ArrayRef<orc::JITDylib*>(&SearchOrders[0], ExternalJDOnly ? 1 : 2);
     auto Sym = ::safelookup(ES, SearchOrder, getMangledName(Name));
     return Sym;
 }
 
 uint64_t JuliaOJIT::getGlobalValueAddress(StringRef Name)
 {
-    auto addr = findSymbol(getMangledName(Name), false);
+    auto addr = findJDSymbol(JD, Name, true);
     if (!addr) {
         consumeError(addr.takeError());
         return 0;
@@ -2238,7 +2231,7 @@ uint64_t JuliaOJIT::getGlobalValueAddress(StringRef Name)
 
 uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
 {
-    auto addr = findSymbol(getMangledName(Name), false);
+    auto addr = findJDSymbol(JD, Name, true);
     if (!addr) {
         consumeError(addr.takeError());
         return 0;

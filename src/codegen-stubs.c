@@ -136,13 +136,13 @@ JL_DLLEXPORT void* JLJITGetLLVMOrcExecutionSession_fallback(void* JIT) UNAVAILAB
 
 JL_DLLEXPORT void* JLJITGetJuliaOJIT_fallback(void) UNAVAILABLE
 
-JL_DLLEXPORT void* JLJITGetExternalJITDylib_fallback(void* JIT) UNAVAILABLE
+JL_DLLEXPORT void* JLJITCreateJITDylib_fallback(void* JIT, const char *Name) UNAVAILABLE
 
 JL_DLLEXPORT void* JLJITAddObjectFile_fallback(void* JIT, void* JD, void* ObjBuffer) UNAVAILABLE
 
 JL_DLLEXPORT void* JLJITAddLLVMIRModule_fallback(void* JIT, void* JD, void* TSM) UNAVAILABLE
 
-JL_DLLEXPORT void* JLJITLookup_fallback(void* JIT, void* Result, const char *Name) UNAVAILABLE
+JL_DLLEXPORT void* JLJITJDLookup_fallback(void* JIT, void* JD, void* Result, const char *Name, int ExternalJDOnly) UNAVAILABLE
 
 JL_DLLEXPORT void* JLJITMangleAndIntern_fallback(void* JIT, const char *Name) UNAVAILABLE
 
