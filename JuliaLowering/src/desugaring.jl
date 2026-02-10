@@ -4625,10 +4625,14 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"inert" || k == K"inert_syntaxtree"
         ex
     elseif k == K"foreigncall"
-        @ast ctx ex [K"foreigncall"
-            expand_C_library_symbol(ctx, ex[1])
-            map(c->expand_forms_2(ctx, c), ex[2:end])...
-        ]
+        # Assume user macros may produce this, but static_eval means desugaring
+        # has already occurred.
+        args = SyntaxList(ctx)
+        for c in ex[2:end]
+            push!(args, kind(c) === K"static_eval" ? c :
+                @ast ctx ex [K"static_eval" expand_forms_2(ctx, c)])
+        end
+        @ast ctx ex [K"foreigncall" expand_C_library_symbol(ctx, ex[1]) args...]
     elseif k == K"symbolicblock"
         # @label name body -> (symbolicblock name expanded_body)
         # The @label macro inserts the continue block for loops, so we just expand the body

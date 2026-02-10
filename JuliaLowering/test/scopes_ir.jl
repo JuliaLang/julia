@@ -199,14 +199,12 @@ end
 7   SourceLocation::1:10
 8   (call core.svec %₅ %₆ %₇)
 9   --- method core.nothing %₈
-    slots: [slot₁/#self# slot₂/z]
+    slots: [slot₁/#self#(!read) slot₂/z]
     1   (call core.apply_type top.Dict core.Symbol core.Any)
     2   (call %₁)
     3   (gotoifnot true label₅)
-    4   (call top.setindex! %₂ slot₁/#self# :#self#)
-    5   (gotoifnot true label₇)
-    6   (call top.setindex! %₂ slot₂/z :z)
-    7   (return %₂)
+    4   (call top.setindex! %₂ slot₂/z :z)
+    5   (return %₂)
 10  latestworld
 11  TestMod.f
 12  (return %₁₁)

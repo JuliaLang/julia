@@ -168,8 +168,8 @@ function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol; kws...)
         declaration_scope = scope
         mod = nothing
     end
-    b = _new_binding(ctx, ex, nk.name, bk;
-                     mod, is_internal=getmeta(ex, :is_internal, false), kws...)
+    is_internal = ctx.scope_layers[nk.layer].is_internal || getmeta(ex, :is_internal, false)
+    b = _new_binding(ctx, ex, nk.name, bk; mod, is_internal, kws...)
     declaration_scope.vars[nk] = b.id
     scope.vars[nk] = b.id
     add_lambda_local!(ctx, scope, b)

@@ -517,9 +517,9 @@ begin
 end
 """) == (1, Int)
 
-@test_broken JuliaLowering.include_string(test_mod, """
+@test JuliaLowering.include_string(test_mod, """
 begin
-    function f_many_closure_sp_capt(x::T where T)
+    function f_many_closure_sp_capt(x::T) where T
         function (); function (); function (); (x, T) end; end; end
     end
     f_many_closure_sp_capt(1)()()()
@@ -535,7 +535,9 @@ begin
 end
 """) == (1, 2, Int)
 
-# Note this doesn't work in flisp either
+# Inner method typevar `U` depending on a static parameter `T` so hoisting the
+# method def for `inner` out to top level would require detecting this and
+# making `inner` parametric on `T`.  Note this doesn't work in flisp either.
 @test_broken JuliaLowering.include_string(test_mod, """
 begin
     function f_typevarcapt_sp(x::T) where T
