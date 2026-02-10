@@ -671,16 +671,16 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
             if nread == UV_ENOBUFS && nrequested == 0
                 # remind the client that stream.buffer is full
                 notify(stream.cond)
-            elseif nread == UV_EOF # libuv called uv_stop_reading already
+            elseif nread == UV_EOF
+                # n.b. libuv called uv_stop_reading already
                 if stream.status != StatusClosing
                     stream.status = StatusEOF
                     notify(stream.cond)
                     if stream isa TTY
                         # stream can still be used by reseteof (or possibly write)
-                    elseif !(stream isa PipeEndpoint) && ccall(:uv_is_writable, Cint, (Ptr{Cvoid},), stream.handle) != 0
-                        # stream can still be used by write
-                    else
-                        # underlying stream is no longer useful: begin finalization
+                    elseif iszero(ccall(:uv_is_writable, Cint, (Ptr{Cvoid},), stream.handle))
+                        # stream cannot be used by write, so underlying stream
+                        # is no longer useful: do early finalization now
                         ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
                         stream.status = StatusClosing
                     end
