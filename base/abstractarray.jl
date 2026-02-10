@@ -1649,7 +1649,7 @@ function _isdisjoint_dataids(as::Tuple{Vararg{DataID}}, bs::Tuple{Vararg{DataID}
     _isdisjoint_dataids(t, bs)
 end
 
-function _canonicalize_dataid(x)
+function _canonicalize_dataid(x; read_write_status::Union{IsReadOnly, IsReadWrite} = IsReadWrite())
     let y
         if x isa UInt
             y = DataID{Core.CPU}(; owner = x)
@@ -1658,6 +1658,11 @@ function _canonicalize_dataid(x)
         end
         y
     end
+end
+
+function _canonicalize_dataid_as_readonly(x)
+    read_write_status = IsReadOnly()
+    _canonicalize_dataid(x; read_write_status)
 end
 
 function _isdisjoint(a::Tuple, b::Tuple)
