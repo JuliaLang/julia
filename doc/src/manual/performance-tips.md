@@ -1696,7 +1696,7 @@ timeit(1000, 1000)
 
 On a computer with a 2.4GHz Intel Core i5 processor, this produces:
 
-```bash
+```
 GFlop/sec        = 1.9467069505224963
 GFlop/sec (SIMD) = 17.578554163920018
 ```
@@ -1839,7 +1839,7 @@ end
 
 This gives an output similar to
 
-```bash
+```
   0.002202 seconds (1 allocation: 4.063 KiB)
   0.001502 seconds (1 allocation: 4.063 KiB)
   0.002139 seconds (1 allocation: 4.063 KiB)
