@@ -1485,7 +1485,7 @@ InitialOptimizations(next) = SubArrayOptimization(
 `DefaultStable` is an algorithm which indicates that a fast, general purpose sorting
 algorithm should be used, but does not specify exactly which algorithm.
 
-Currently, when sorting short NTuples, this is an insertion sort, and otherwise it is
+Currently, when sorting short NTuples, this is an unrolled mergesort or an insertion sort, depending on the length of the tuple, and otherwise it is
 composed of two parts: the [`InitialOptimizations`](@ref) and a hybrid of Radix, Insertion,
 Counting, Quick sorts.
 
@@ -1837,14 +1837,29 @@ end
 # Folks who want to hack internals can define a new _sort(x::NTuple, ::TheirAlg, o::Ordering)
 # or _sort(x::NTuple{N, TheirType}, ::DefaultStable, o::Ordering) where N
 function _sort(x::NTuple, a::Union{DefaultStable, DefaultUnstable}, o::Ordering, kw)
-    if length(x) > 15
+    len = length(x)
+    # The unrolled tuple sort is prohibitively slow to compile for length > 9.
+    # See https://github.com/JuliaLang/julia/pull/46104#issuecomment-1435688502 for benchmarks
+    if len > 20
         v = copymutable(x)
         _sort!(v, a, o, kw)
         typeof(x)(v)
-    else
+    elseif len > 9
         _tuple_insertion_sort(x, o)
+    else
+        _mergesort(x, o)
     end
 end
+_mergesort(x::Union{NTuple{0}, NTuple{1}}, o::Ordering) = x
+function _mergesort(x::NTuple, o::Ordering)
+    a, b = Base.IteratorsMD.split(x, Val(length(x)>>1))
+    merge(_mergesort(a, o), _mergesort(b, o), o)
+end
+merge(x::NTuple, y::NTuple{0}, o::Ordering) = x
+merge(x::NTuple{0}, y::NTuple, o::Ordering) = y
+merge(x::NTuple{0}, y::NTuple{0}, o::Ordering) = x # Method ambiguity
+merge(x::NTuple, y::NTuple, o::Ordering) =
+    (lt(o, y[1], x[1]) ? (y[1], merge(x, tail(y), o)...) : (x[1], merge(tail(x), y, o)...))
 
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 
