@@ -343,8 +343,7 @@ void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) {
 }
 
 void JuliaTaskDispatcher::shutdown() {
-  jl_unique_gcsafe_lock Lock{DispatchMutex};
-  process_tasks(Lock);
+  abort();
 }
 
 void JuliaTaskDispatcher::work_until(future_base &F) {
