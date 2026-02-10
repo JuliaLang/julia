@@ -92,7 +92,7 @@ let b = UInt8['0':'9';'A':'Z';'a':'z']
     # Two-arg methods:
     randstring(r::AbstractRNG, chars) = randstring(r, chars, 8)
     randstring(r::AbstractRNG, n::Integer) = randstring(r, b, convert(Int, n))
-    randstring(chars, n::Integer) = randstring(default_rng(), chars, n)
+    randstring(chars, n::Integer) = randstring(default_rng(), chars, convert(Int, n))
     # Three-arg methods:
     randstring(r::AbstractRNG, chars, n::Integer) = randstring(r, chars, convert(Int, n))
 end
