@@ -360,4 +360,22 @@ end
             @test f isa Fix{1,Type{MyStruct},Int}
         end
     end
+
+    @testset "two-argument `show`" begin
+        @testset "type aliases" begin
+            @test repr(Base.Fix1(convert, Float32)) == "Base.Fix1(convert, Float32)"
+            @test repr(Base.Fix2(typeassert, Float32)) == "Base.Fix2(typeassert, Float32)"
+        end
+        @testset "roundtripping" begin
+            for N ∈ (1, 2, 3, 999)
+                for x ∈ (Base.Fix{N}(convert, Float32), Base.Fix{N}(Int, 7))
+                    @test x === (eval ∘ Meta.parse ∘ repr)(x)
+                    @test repr(x) == (repr ∘ eval ∘ Meta.parse ∘ repr)(x)
+                end
+                let x = Base.Fix{N}(Int, big(7))
+                    @test repr(x) == (repr ∘ eval ∘ Meta.parse ∘ repr)(x)
+                end
+            end
+        end
+    end
 end

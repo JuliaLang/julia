@@ -1104,7 +1104,16 @@ static const auto jl_excstack_state_func = new JuliaFunction<TypeFnContextAndSiz
     [](LLVMContext &C, Type *T_size) {
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
         return FunctionType::get(T_size, {T_pjlvalue}, false); },
-    nullptr,
+        [](LLVMContext &C) {
+            auto FnAttrs = AttrBuilder(C);
+            FnAttrs.addAttribute(Attribute::WillReturn);
+            FnAttrs.addAttribute(Attribute::NoUnwind);
+            FnAttrs.addMemoryAttr(MemoryEffects::readOnly());
+            return AttributeList::get(C,
+                AttributeSet::get(C, FnAttrs),
+                AttributeSet(),
+                None);
+        },
 };
 static const auto jlegalx_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_egal__unboxed),
@@ -2417,6 +2426,10 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_
     }
     else {
         loc = emit_static_alloca(ctx, v->getType(), align);
+        setName(ctx.emission_context, loc, [&]() {
+            std::string type_str = jl_is_datatype(typ) ? jl_symbol_name(((jl_datatype_t*)typ)->name->name) : "<unknown type>";
+            return "slot::" + type_str;
+        });
         ctx.builder.CreateAlignedStore(v, loc, align);
     }
     return mark_julia_slot(loc, typ, tindex, ctx.tbaa().tbaa_stack);
@@ -2429,6 +2442,10 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v
         Align align(julia_alignment(v.typ));
         Type *ty = julia_type_to_llvm(ctx, v.typ);
         AllocaInst *loc = emit_static_alloca(ctx, ty, align);
+        setName(ctx.emission_context, loc, [&]() {
+            std::string type_str = jl_is_datatype(v.typ) ? jl_symbol_name(((jl_datatype_t*)v.typ)->name->name) : "<unknown type>";
+            return "slot::" + type_str;
+        });
         jl_datatype_t *dt = (jl_datatype_t *)v.typ;
         size_t npointers = dt->layout->first_ptr >= 0 ? dt->layout->npointers : 0;
         if (npointers > 0) {
@@ -3500,6 +3517,10 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
         if (!constval) {
             undef_var_error_ifnot(ctx, ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0), name, (jl_value_t*)mod);
             return jl_cgval_t();
+        }
+        if (jl_generating_output()) {
+            // root is required to allow bindings to be pruned, especially by `--trim`
+            jl_temporary_root(ctx, constval);
         }
         return mark_julia_const(ctx, constval);
     }
@@ -5309,7 +5330,10 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
         } else {
             result = emit_static_alloca(ctx, returninfo.union_bytes, Align(returninfo.union_align));
         }
-        setName(ctx.emission_context, result, "sret_box");
+        setName(ctx.emission_context, result, [&]() {
+            std::string type_str = jl_is_datatype(jlretty) ? jl_symbol_name(((jl_datatype_t*)jlretty)->name->name) : "<unknown type>";
+            return "sret::" + type_str;
+        });
         argvals[idx] = result;
         idx++;
     }
@@ -5317,7 +5341,10 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
     AllocaInst *return_roots = nullptr;
     if (returninfo.return_roots) {
         return_roots = emit_static_roots(ctx, returninfo.return_roots);
-        setName(ctx.emission_context, return_roots, "return_roots");
+        setName(ctx.emission_context, return_roots, [&]() {
+            std::string type_str = jl_is_datatype(jlretty) ? jl_symbol_name(((jl_datatype_t*)jlretty)->name->name) : "<unknown type>";
+            return "return_roots::" + type_str;
+        });
         argvals[idx] = return_roots;
         idx++;
     }
@@ -6105,6 +6132,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
                             ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
                     AllocaInst *phi = cast<AllocaInst>(dest->clone());
                     phi->insertAfter(dest);
+                    setName(ctx.emission_context, phi, "union_phi");
                     ctx.builder.CreateMemCpy(phi, Align(min_align), dest, dest->getAlign(), nbytes, false);
                     ctx.builder.CreateLifetimeEnd(dest);
                     ptr = ctx.builder.CreateSelect(isboxed,
@@ -6152,12 +6180,20 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             Align align(julia_alignment(phiType));
             unsigned nb = jl_datatype_size(phiType);
             dest = emit_static_alloca(ctx, nb, align);
+            setName(ctx.emission_context, dest, [&]() {
+                std::string type_str = jl_is_datatype(phiType) ? jl_symbol_name(((jl_datatype_t*)phiType)->name->name) : "<unknown type>";
+                return "phi::" + type_str;
+            });
             phi = cast<AllocaInst>(dest->clone());
 #if JL_LLVM_VERSION >= 200000
             phi->insertBefore(dest->getIterator());
 #else
             phi->insertBefore(dest);
 #endif
+            setName(ctx.emission_context, phi, [&]() {
+                std::string type_str = jl_is_datatype(phiType) ? jl_symbol_name(((jl_datatype_t*)phiType)->name->name) : "<unknown type>";
+                return "phi_result::" + type_str;
+            });
             ctx.builder.CreateMemCpy(phi, align, dest, align, nb, false);
             ctx.builder.CreateLifetimeEnd(dest);
         }
@@ -9711,6 +9747,7 @@ static jl_llvm_functions_t
                 // Save exception stack depth at enter for use in pop_exception
                 Value *excstack_state =
                     ctx.builder.CreateCall(prepare_call(jl_excstack_state_func), {get_current_task(ctx)});
+                setName(ctx.emission_context, excstack_state, "excstack_state");
                 assert(!ctx.ssavalue_assigned[cursor]);
                 ctx.SAvalues[cursor] = jl_cgval_t(excstack_state, (jl_value_t*)jl_ulong_type, NULL);
                 ctx.ssavalue_assigned[cursor] = true;
@@ -9719,6 +9756,7 @@ static jl_llvm_functions_t
                 auto *handler_sz64 = ConstantInt::get(Type::getInt64Ty(ctx.builder.getContext()),
                   sizeof(jl_handler_t));
                 AllocaInst* ehbuff = emit_static_alloca(ctx, sizeof(jl_handler_t), Align(16));
+                setName(ctx.emission_context, ehbuff, "exception_handler");
                 ctx.eh_buffers[stmt] = ehbuff;
                 ctx.builder.CreateLifetimeStart(ehbuff, handler_sz64);
                 ctx.builder.CreateCall(prepare_call(jlenter_func), {ct, ehbuff});
