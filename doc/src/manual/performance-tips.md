@@ -1543,7 +1543,7 @@ tree. i.e. see `0.4 ms  Statistics → SparseArraysExt`.
 This report gives a good opportunity to review whether the cost of dependency load time is worth the functionality it brings.
 Also the `Pkg` utility `why` can be used to report why an indirect dependency exists.
 
-```julia-repl
+```
 (CustomPackage) pkg> why FFMPEG_jll
   Plots → FFMPEG → FFMPEG_jll
   Plots → GR → GR_jll → FFMPEG_jll
