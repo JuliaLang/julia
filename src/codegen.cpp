@@ -2317,15 +2317,11 @@ static void undef_derived_strct(jl_codectx_t &ctx, Value *ptr, jl_datatype_t *st
     size_t first_offset = sty->layout->nfields ? jl_field_offset(sty, 0) : 0;
     if (first_offset != 0)
         ctx.builder.CreateMemSet(ptr, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), first_offset, MaybeAlign(0));
-    if (sty->layout->first_ptr < 0)
-        return;
-    size_t i, np = sty->layout->npointers;
-    auto T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx.builder.getContext());
-    for (i = 0; i < np; i++) {
-        Value *fld = emit_ptrgep(ctx, ptr, jl_ptr_offset(sty, i) * sizeof(jl_value_t*));
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
-        ai.decorateInst(ctx.builder.CreateStore(Constant::getNullValue(T_prjlvalue), fld));
-    }
+    // GC pointer fields are now zeroed by LateLowerGCFrame based on the
+    // julia.gc_alloc_ptr_offsets operand bundle on the allocation call.
+    // This ensures zeroing happens after allocation lowering, preventing
+    // optimization passes from sinking it past safepoints.
+    (void)tbaa;
 }
 
 static Value *emit_inttoptr(jl_codectx_t &ctx, Value *v, Type *ty)
@@ -4410,11 +4406,16 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             *ret = mark_julia_const(ctx, (jl_value_t*)jl_emptysvec);
             return true;
         }
-        Value *svec = emit_allocobj(ctx, ctx.types().sizeof_ptr * (nargs + 1), ctx.builder.CreateIntToPtr(emit_tagfrom(ctx, jl_simplevector_type), ctx.types().T_pjlvalue), true, julia_alignment((jl_value_t*)jl_simplevector_type));
+        // Svec layout: [length] [ptr0] [ptr1] ... [ptr_n-1]
+        // Use zeroinit_region to zero the pointer array - this must happen before
+        // any safepoint (e.g., boxed() below) to prevent GC from seeing uninitialized pointers
+        AllocZeroinitRegion zeroinit(sizeof(jl_svec_t), ctx.types().sizeof_ptr * nargs);
+        Value *svec = emit_allocobj(ctx, ctx.types().sizeof_ptr * (nargs + 1),
+                                    ctx.builder.CreateIntToPtr(emit_tagfrom(ctx, jl_simplevector_type), ctx.types().T_pjlvalue),
+                                    true, julia_alignment((jl_value_t*)jl_simplevector_type),
+                                    {}, zeroinit);
         Value *svec_derived = decay_derived(ctx, svec);
         ctx.builder.CreateAlignedStore(ConstantInt::get(ctx.types().T_size, nargs), svec_derived, Align(ctx.types().sizeof_ptr));
-        Value *svec_data = emit_ptrgep(ctx, svec_derived, ctx.types().sizeof_ptr);
-        ctx.builder.CreateMemSet(svec_data, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0), ctx.types().sizeof_ptr * nargs, Align(ctx.types().sizeof_ptr));
         for (size_t i = 0; i < nargs; i++) {
             Value *elem = boxed(ctx, argv[i + 1]);
             Value *elem_ptr = emit_ptrgep(ctx, svec_derived, ctx.types().sizeof_ptr * (i + 1));
