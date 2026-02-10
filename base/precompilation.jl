@@ -997,7 +997,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
 
     if already_running
         # Print message that a job is currently running
-        printpkgstyle(io.io, :Precompiling, "in the background already. Monitoring...", color = Base.info_color())
+        printpkgstyle(io.io, :Precompiling, "in the background already. Finishing before starting new work...", color = Base.info_color())
     else
         # Launch new background task
         launch_background_precompile(pkgs, internal_call, strict, warn_loaded, timing, _from_loading,
@@ -1005,7 +1005,17 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     end
 
     # Monitor (blocks until complete or user detaches)
-    monitor_background_precompile(io.io, detachable)
+    # When chaining jobs, disable detaching to ensure both jobs complete
+    monitor_background_precompile(io.io, already_running ? false : detachable)
+
+    # If we were monitoring a previous job, start a new one with the newly requested parameters
+    # TODO: populate the jobs and feed them into the existing background task above? Needs careful dep tree design
+    if already_running # was already running, but now done
+        printpkgstyle(io.io, :Precompiling, "latest request...", color = Base.info_color())
+        launch_background_precompile(pkgs, internal_call, strict, warn_loaded, timing, _from_loading,
+                                     configs, io, fancyprint′, manifest, ignore_loaded, detachable)
+        monitor_background_precompile(io.io, detachable)
+    end
 
     # Propagate return value or exception from do_precompile
     local ret_val, ret_ex
