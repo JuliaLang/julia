@@ -3257,7 +3257,7 @@ end
 end
 
 @testset "conditionally-throwing version of `checkbounds` should return `nothing` if it returns" begin
-    for typ in (AbstractString, DenseArray, Base.AbstractBroadcasted)
+    for typ in (AbstractString, AbstractArray, Base.AbstractBroadcasted)
         @test Base.infer_return_type(checkbounds, Tuple{typ, Vararg}) <: Nothing
     end
 end
