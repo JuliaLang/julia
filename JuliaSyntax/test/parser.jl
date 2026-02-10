@@ -27,7 +27,7 @@ function test_parse(inout::Pair)
     test_parse(JuliaSyntax.parse_toplevel, inout...)
 end
 
-PARSE_ERROR = r"\(error-t "
+PARSE_ERROR = r"\(error"
 
 with_version(v::VersionNumber, (i,o)::Pair) = ((;v=v), i) => o
 
@@ -543,27 +543,6 @@ tests = [
         ((v=v"1.7",), "struct A const a end") => "(struct A (block (error (const a))))"
         "struct A end"    =>  "(struct A (block))"
         "struct try end"  =>  "(struct (error try) (block))"
-        # return
-        "return\nx"   =>  "(return)"
-        "return)"     =>  "(return)"
-        "return x"    =>  "(return x)"
-        "return x,y"  =>  "(return (tuple x y))"
-        # break/continue
-        "break"    => "(break)"
-        "continue" => "(continue)"
-        # break/continue with labels (plain identifiers only, requires 1.14+)
-        ((v=v"1.14",), "break _")  => "(break _)"
-        ((v=v"1.14",), "break _ x") => "(break _ x)"
-        ((v=v"1.14",), "break label") => "(break label)"
-        ((v=v"1.14",), "break label x") => "(break label x)"
-        ((v=v"1.14",), "break f ()") => "(break f (tuple-p))"
-        ((v=v"1.14",), "break f()") => "(break f (error-t) (tuple-p))"
-        ((v=v"1.14",), "continue _") => "(continue _)"
-        ((v=v"1.14",), "continue label") => "(continue label)"
-        ((v=v"1.14",), "break +")  => "(break (error-t + (error-t)))"
-        ((v=v"1.13",), "break label") => "(error (break label))"
-        ((v=v"1.13",), "continue label") => "(error (continue label))"
-        ((v=v"1.13",), "break +")  => "(break (error-t + (error-t)))"
         # module/baremodule
         "module A end"      =>  "(module A (block))"
         "baremodule A end"  =>  "(module-bare A (block))"
@@ -1132,6 +1111,57 @@ parsestmt_test_specs = [
     # tested above but we don't require the input stream to be consumed in the
     # unit tests there.
     "''" => "(char (error))"
+
+    # return
+    "return\nx"   =>  "(return)"
+    "return x"    =>  "(return x)"
+    "return x,y"  =>  "(return (tuple x y))"
+    # closing tokens after return
+    "if x return else end" => "(if x (block (return)) (block))"
+    "(return)"    =>  "(parens (return))"
+    "[return]" => "(vect (return))"
+    "{return}" => "(braces (return))"
+    # return doesn't require a closing token afterward
+    "[return x y]" => "(hcat (return x) y)"
+    # 1.14: return respects end/colon parse state
+    ((v=v"1.14",), "a[return end]") => "(ref a (return end))"
+    ((v=v"1.14",), "x ? return : y") => "(? x (return) y)"
+    ((v=v"1.13",), "a[return end]") => PARSE_ERROR
+    ((v=v"1.13",), "x ? return : y") => PARSE_ERROR
+    # break/continue
+    "break"    => "(break)"
+    "(break)"    => "(parens (break))"
+    "continue" => "(continue)"
+    # break/continue respect other closing delimiters (>=1.14)
+    ((v=v"1.14",), "[break]") =>  "(vect (break))"
+    ((v=v"1.14",), "{break}")  => "(braces (break))"
+    # break/continue with labels (plain identifiers only, requires >=1.14)
+    ((v=v"1.14",), "break _")        => "(break _)"
+    ((v=v"1.14",), "break _ x")      => "(break _ x)"
+    ((v=v"1.14",), "break label")    => "(break label)"
+    ((v=v"1.14",), "break var\"label\"") => "(break (var label))"
+    ((v=v"1.14",), "break \$label")  => "(break (\$ label))"
+    ((v=v"1.14",), "break label x")  => "(break label x)"
+    ((v=v"1.14",), "break f ()")     => "(break f (tuple-p))"
+    ((v=v"1.14",), "break f()")      => "(break f (error-t) (tuple-p))"
+    ((v=v"1.14",), "continue _")     => "(continue _)"
+    ((v=v"1.14",), "continue label") => "(continue label)"
+    ((v=v"1.14",), "break +")        => "(break (error-t +))"
+    ((v=v"1.14",), "a[break label end]") => "(ref a (break label end))"
+    ((v=v"1.14",), "x ? break : y")  => "(? x (break) y)"
+    ((v=v"1.14",), "x ? break label z : y") => "(? x (break label z) y)"
+    # `break label x` must be followed by closing token
+    ((v=v"1.14",), "[break label x y]") => "(vect (break label x) (error-t y))"
+    # misfeature disabled in 1.14 (`:` always considered a break closing token)
+    ((v=v"1.14",), "break : x")      => PARSE_ERROR
+
+    ((v=v"1.13",), "break label")    => "(error (break (error-t label (error-t))))"
+    ((v=v"1.13",), "continue label") => "(error (continue (error-t label (error-t))))"
+    ((v=v"1.13",), "break +")        => "(break (error-t + (error-t)))"
+    ((v=v"1.13",), "x ? break : y")  => "(? x (break) y)"
+    ((v=v"1.13",), "a[break label end]") => PARSE_ERROR
+    ((v=v"1.13",), "x ? break label z : y") => PARSE_ERROR
+    ((v=v"1.13",), "break : x")      => "(call-i (break) : x)"
 
     # break / continue with trailing tokens are legal in some cases
     "a ? break : c"    => "(? a (break) c)"
