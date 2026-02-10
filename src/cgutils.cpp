@@ -4665,22 +4665,6 @@ static Value *emit_defer_signal(jl_codectx_t &ctx)
     return emit_ptrgep(ctx, ptls, offsetof(jl_tls_states_t, defer_signal));
 }
 
-#if 0
-static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
-{
-    return
-           (a->track_allocations == b->track_allocations) &&
-           (a->code_coverage == b->code_coverage) &&
-           (a->prefer_specsig == b->prefer_specsig) &&
-           (a->gnu_pubnames == b->gnu_pubnames) &&
-           (a->debug_info_kind == b->debug_info_kind) &&
-           (a->safepoint_on_entry == b->safepoint_on_entry) &&
-           (a->gcstack_arg == b->gcstack_arg) &&
-           (a->use_jlplt == b->use_jlplt) &&
-           (a->force_emit_all == b->force_emit_all);
-}
-#endif
-
 static auto *emit_genericmemory_unchecked(jl_codectx_t &ctx, Value *cg_nbytes, Value *cg_typ)
 {
     auto ptls = get_current_ptls(ctx);
