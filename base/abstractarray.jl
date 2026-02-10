@@ -1585,15 +1585,86 @@ regions, as identified by their [`Base.dataids`](@ref).
 mightalias(A::AbstractArray, B::AbstractArray) = !isbits(A) && !isbits(B) && !isempty(A) && !isempty(B) && !_isdisjoint(dataids(A), dataids(B))
 mightalias(x, y) = false
 
-_isdisjoint(as::Tuple{}, bs::Tuple{}) = true
-_isdisjoint(as::Tuple{}, bs::Tuple{UInt}) = true
-_isdisjoint(as::Tuple{}, bs::Tuple) = true
-_isdisjoint(as::Tuple{UInt}, bs::Tuple{}) = true
-_isdisjoint(as::Tuple{UInt}, bs::Tuple{UInt}) = as[1] != bs[1]
-_isdisjoint(as::Tuple{UInt}, bs::Tuple) = !(as[1] in bs)
-_isdisjoint(as::Tuple, bs::Tuple{}) = true
-_isdisjoint(as::Tuple, bs::Tuple{UInt}) = !(bs[1] in as)
-_isdisjoint(as::Tuple, bs::Tuple) = !(as[1] in bs) && _isdisjoint(tail(as), bs)
+struct IsReadOnly end
+struct IsReadWrite end
+
+struct DataID{
+    # `addrspace::Core.AddrSpace`
+    addrspace,
+    # is the data read-only?
+    ReadWriteStatus <: Union{IsReadOnly, IsReadWrite},
+    # currently restricted to just `UInt`, might relax to other subtypes of `Unsigned` in the future?
+    Owner <: UInt,
+    OptionalExtent <: Union{Nothing, UnitRange{UInt}},
+}
+    read_write_status::ReadWriteStatus
+    owner::Owner
+    optional_extent::OptionalExtent
+    function DataID{addrspace}(;
+        read_write_status::Union{IsReadOnly, IsReadWrite} = IsReadWrite(),
+        owner::UInt,
+        optional_extent::Union{Nothing, UnitRange{UInt}} = nothing,
+    ) where {addrspace}
+        ReadWriteStatus = typeof(read_write_status)
+        Owner = typeof(owner)
+        OptionalExtent = typeof(optional_extent)
+        new{addrspace, ReadWriteStatus, Owner, OptionalExtent}(read_write_status, owner, optional_extent)
+    end
+end
+
+function _addrspace(::DataID{addrspace}) where {addrspace}
+    addrspace::Core.AddrSpace
+end
+
+function _isdisjoint_dataid(a::DataID, b::DataID)
+    if (
+        # assuming data in distinct address spaces is not aliased
+        (_addrspace(a) !== _addrspace(b)) ||
+        # if both pieces of data are read-only, aliasing is not something to worry about
+        (a.read_write_status === IsReadOnly() === b.read_write_status)
+    )
+        return true
+    end
+    a_extent = a.optional_extent
+    b_extent = b.optional_extent
+    a_has_extent = a_extent !== nothing
+    b_has_extent = b_extent !== nothing
+    if a_has_extent && b_has_extent
+        isdisjoint(a_extent, b_extent)::Bool
+    else
+        (a.owner != b.owner)::Bool
+    end
+end
+
+function _isdisjoint_dataids(as::Tuple{Vararg{DataID}}, bs::Tuple{Vararg{DataID}})
+    if (as === ()) || (bs === ())
+        return true
+    end
+    a = as[1]
+    f = Fix1(_isdisjoint_dataid, a)
+    if any(!f, bs)
+        return false
+    end
+    t = tail(as)
+    _isdisjoint_dataids(t, bs)
+end
+
+function _canonicalize_dataid(x)
+    let y
+        if x isa UInt
+            y = DataID{Core.CPU}(; owner = x)
+        elseif x isa DataID
+            y = x
+        end
+        y
+    end
+end
+
+function _isdisjoint(a::Tuple, b::Tuple)
+    f = Fix1(map, _canonicalize_dataid)
+    ab = map(f, (a, b))
+    _isdisjoint_dataids(ab...)
+end
 
 """
     Base.dataids(A::AbstractArray)
