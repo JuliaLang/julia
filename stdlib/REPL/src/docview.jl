@@ -13,8 +13,6 @@ using Base: with_output_color, mapany, isdeprecated, isexported
 
 using Base.Filesystem: _readdirx
 
-import REPL
-
 using InteractiveUtils: subtypes
 
 using Unicode: normalize
@@ -25,7 +23,7 @@ using Unicode: normalize
 function helpmode(io::IO, line::AbstractString, mod::Module=Main)
     internal_accesses = Set{Pair{Module,Symbol}}()
     quote
-        docs = $REPL.insert_hlines($(REPL._helpmode(io, line, mod, internal_accesses)))
+        docs = $Markdown.insert_hlines($(REPL._helpmode(io, line, mod, internal_accesses)))
         $REPL.insert_internal_warning(docs, $internal_accesses)
     end
 end
@@ -78,26 +76,13 @@ function _helpmode(io::IO, line::AbstractString, mod::Module=Main, internal_acce
 end
 _helpmode(line::AbstractString, mod::Module=Main) = _helpmode(stdout, line, mod)
 
-# Print horizontal lines between each docstring if there are multiple docs
-function insert_hlines(docs)
-    if !isa(docs, Markdown.MD) || !haskey(docs.meta, :results) || isempty(docs.meta[:results])
-        return docs
-    end
-    docs = docs::Markdown.MD
-    v = Any[]
-    for (n, doc) in enumerate(docs.content)
-        push!(v, doc)
-        n == length(docs.content) || push!(v, Markdown.HorizontalRule())
-    end
-    return Markdown.MD(v)
-end
-
 function formatdoc(d::DocStr)
     buffer = IOBuffer()
     for part in d.text
         formatdoc(buffer, d, part)
     end
-    Markdown.MD(Any[Markdown.parse(seekstart(buffer))])
+    md = Markdown.MD(Any[Markdown.parse(seekstart(buffer))])
+    assume_julia_code!(md)
 end
 @noinline formatdoc(buffer, d, part) = print(buffer, part)
 
@@ -109,6 +94,27 @@ function parsedoc(d::DocStr)
         d.object = md
     end
     d.object
+end
+
+"""
+    assume_julia_code!(doc::Markdown.MD) -> doc
+
+Assume that code blocks with no language specified are Julia code.
+"""
+function assume_julia_code!(doc::Markdown.MD)
+    assume_julia_code!(doc.content)
+    doc
+end
+
+function assume_julia_code!(blocks::Vector)
+    for (i, block) in enumerate(blocks)
+        if block isa Markdown.Code && block.language == ""
+            blocks[i] = Markdown.Code("julia", block.code)
+        elseif block isa Vector || block isa Markdown.MD
+            assume_julia_code!(block)
+        end
+    end
+    blocks
 end
 
 ## Trimming long help ("# Extended help")
@@ -250,7 +256,7 @@ doc(obj::UnionAll) = doc(Base.unwrap_unionall(obj))
 doc(object, sig::Type = Union{}) = doc(aliasof(object, typeof(object)), sig)
 doc(object, sig...)              = doc(object, Tuple{sig...})
 
-function lookup_doc(ex)
+function lookup_doc(@nospecialize(ex))
     if isa(ex, Expr) && ex.head !== :(.) && Base.isoperator(ex.head)
         # handle syntactic operators, e.g. +=, ::, .=
         ex = ex.head
@@ -278,7 +284,13 @@ function lookup_doc(ex)
             end
         end
     end
-    binding = esc(bindingexpr(namify(ex)))
+    name = namify(ex)
+    # If namify couldn't extract a meaningful name and returned an Expr
+    # that can't be converted to a binding, treat it like a value
+    if isa(name, Expr) && !isexpr(name, :(.))
+        return :($(doc)($(typeof)($(esc(ex)))))
+    end
+    binding = esc(bindingexpr(name))
     if isexpr(ex, :call) || isexpr(ex, :macrocall) || isexpr(ex, :where)
         sig = esc(signature(ex))
         :($(doc)($binding, $sig))
@@ -295,20 +307,22 @@ function summarize(binding::Binding, sig)
     if defined(binding)
         binding_res = resolve(binding)
         if !isa(binding_res, Module)
+            varstr = "$(binding.mod).$(binding.var)"
             if Base.ispublic(binding.mod, binding.var)
-                println(io, "No documentation found for public symbol.\n")
+                println(io, "No documentation found for public binding `$varstr`.\n")
             else
-                println(io, "No documentation found for private symbol.\n")
+                println(io, "No documentation found for private binding `$varstr`.\n")
             end
         end
         summarize(io, binding_res, binding)
     else
         println(io, "No documentation found.\n")
         quot = any(isspace, sprint(print, binding)) ? "'" : ""
-        if Base.isbindingresolved(binding.mod, binding.var)
-            println(io, "Binding ", quot, "`", binding, "`", quot, " exists, but has not been assigned a value.")
-        else
+        bpart = Base.lookup_binding_partition(Base.tls_world_age(), convert(Core.Binding, GlobalRef(binding.mod, binding.var)))
+        if Base.binding_kind(bpart) === Base.PARTITION_KIND_GUARD
             println(io, "Binding ", quot, "`", binding, "`", quot, " does not exist.")
+        else
+            println(io, "Binding ", quot, "`", binding, "`", quot, " exists, but has not been assigned a value.")
         end
     end
     md = Markdown.parse(seekstart(io))
@@ -383,7 +397,7 @@ function find_readme(m::Module)::Union{String, Nothing}
     while true
         for entry in _readdirx(path; sort=true)
             isfile(entry) && (lowercase(entry.name) in ["readme.md", "readme"]) || continue
-            return entry.path
+            return joinpath(entry)
         end
         path == top_path && break # go no further than pkgdir
         path = dirname(path) # work up through nested modules
@@ -410,7 +424,9 @@ function summarize(io::IO, m::Module, binding::Binding; nlines::Int = 200)
     if !isnothing(readme_path)
         readme_lines = readlines(readme_path)
         isempty(readme_lines) && return  # don't say we are going to print empty file
-        println(io, "# Displaying contents of readme found at `$(readme_path)`")
+        println(io)
+        println(io, "---")
+        println(io, "_Package description from `$(basename(readme_path))`:_")
         for line in first(readme_lines, nlines)
             println(io, line)
         end
@@ -467,7 +483,12 @@ function repl_corrections(io::IO, s, mod::Module)
     quot = any(isspace, s) ? "'" : ""
     print(io, quot)
     printstyled(io, s, color=:cyan)
-    print(io, quot, '\n')
+    print(io, quot)
+    if Base.identify_package(s) === nothing
+        print(io, '\n')
+    else
+        print(io, ", but a loadable package with that name exists. If you are looking for the package docs load the package first.\n")
+    end
     print_correction(io, s, mod)
 end
 repl_corrections(s) = repl_corrections(stdout, s)
@@ -475,7 +496,7 @@ repl_corrections(s) = repl_corrections(stdout, s)
 # inverse of latex_symbols Dict, lazily created as needed
 const symbols_latex = Dict{String,String}()
 function symbol_latex(s::String)
-    if isempty(symbols_latex) && isassigned(Base.REPL_MODULE_REF)
+    if isempty(symbols_latex)
         for (k,v) in Iterators.flatten((REPLCompletions.latex_symbols,
                                         REPLCompletions.emoji_symbols))
             symbols_latex[v] = k
@@ -509,26 +530,27 @@ function repl_latex(io::IO, s0::String)
         print(io, "\"")
         printstyled(io, s, color=:cyan)
         print(io, "\" can be typed by ")
-        state::Char = '\0'
+        s_to_print = s
         with_output_color(:cyan, io) do io
-            for c in s
+            state::Char = '\0'
+            for c in s_to_print
                 cstr = string(c)
                 if haskey(symbols_latex, cstr)
-                    latex = symbols_latex[cstr]
-                    if length(latex) == 3 && latex[2] in ('^','_')
+                    latex_symbol = symbols_latex[cstr]
+                    if length(latex_symbol) == 3 && latex_symbol[2] in ('^','_')
                         # coalesce runs of sub/superscripts
-                        if state != latex[2]
+                        if state != latex_symbol[2]
                             '\0' != state && print(io, "<tab>")
-                            print(io, latex[1:2])
-                            state = latex[2]
+                            print(io, latex_symbol[1:2])
+                            state = latex_symbol[2]
                         end
-                        print(io, latex[3])
+                        print(io, latex_symbol[3])
                     else
                         if '\0' != state
                             print(io, "<tab>")
                             state = '\0'
                         end
-                        print(io, latex, "<tab>")
+                        print(io, latex_symbol, "<tab>")
                     end
                 else
                     if '\0' != state
@@ -553,8 +575,7 @@ function repl(io::IO, s::Symbol; brief::Bool=true, mod::Module=Main, internal_ac
     quote
         repl_latex($io, $str)
         repl_search($io, $str, $mod)
-        $(if !isdefined(mod, s) && !Base.isbindingresolved(mod, s) && !haskey(keywords, s) && !Base.isoperator(s)
-               # n.b. we call isdefined for the side-effect of resolving the binding, if possible
+        $(if !isdefined(mod, s) && !haskey(keywords, s) && !Base.isoperator(s)
                :(repl_corrections($io, $str, $mod))
           end)
         $(_repl(s, brief, mod, internal_accesses))
@@ -565,7 +586,6 @@ isregex(x) = isexpr(x, :macrocall, 3) && x.args[1] === Symbol("@r_str") && !isem
 repl(io::IO, ex::Expr; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex, brief, mod, internal_accesses)
 repl(io::IO, str::AbstractString; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = :(apropos($io, $str))
 repl(io::IO, other; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = esc(:(@doc $other)) # TODO: track internal_accesses
-#repl(io::IO, other) = lookup_doc(other) # TODO
 
 repl(x; brief::Bool=true, mod::Module=Main) = repl(stdout, x; brief, mod)
 
@@ -581,13 +601,14 @@ function _repl(x, brief::Bool=true, mod::Module=Main, internal_accesses::Union{N
                     if kwarg isa Symbol
                         kwarg = :($kwarg::Any)
                     elseif isexpr(kwarg, :kw)
-                        lhs = kwarg.args[1]
-                        rhs = kwarg.args[2]
-                        if lhs isa Symbol
-                            if rhs isa Symbol
-                                kwarg.args[1] = :($lhs::(@isdefined($rhs) ? typeof($rhs) : Any))
-                            else
-                                kwarg.args[1] = :($lhs::typeof($rhs))
+                        let kw_lhs = kwarg.args[1],
+                            kw_rhs = kwarg.args[2]
+                            if kw_lhs isa Symbol
+                                if kw_rhs isa Symbol
+                                    kwarg.args[1] = :($kw_lhs::(@isdefined($kw_rhs) ? typeof($kw_rhs) : Any))
+                                else
+                                    kwarg.args[1] = :($kw_lhs::typeof($kw_rhs))
+                                end
                             end
                         end
                     end
@@ -597,13 +618,13 @@ function _repl(x, brief::Bool=true, mod::Module=Main, internal_accesses::Union{N
                 if kwargs === nothing
                     kwargs = Any[]
                 end
-                lhs = arg.args[1]
-                rhs = arg.args[2]
-                if lhs isa Symbol
-                    if rhs isa Symbol
-                        arg.args[1] = :($lhs::(@isdefined($rhs) ? typeof($rhs) : Any))
+                arg_lhs = arg.args[1]
+                arg_rhs = arg.args[2]
+                if arg_lhs isa Symbol
+                    if arg_rhs isa Symbol
+                        arg.args[1] = :($arg_lhs::(@isdefined($arg_rhs) ? typeof($arg_rhs) : Any))
                     else
-                        arg.args[1] = :($lhs::typeof($rhs))
+                        arg.args[1] = :($arg_lhs::typeof($arg_rhs))
                     end
                 end
                 push!(kwargs, arg)
@@ -626,7 +647,7 @@ function _repl(x, brief::Bool=true, mod::Module=Main, internal_accesses::Union{N
     docs = esc(:(@doc $x))
     docs = if isfield(x)
         quote
-            if isa($(esc(x.args[1])), DataType)
+            if $(esc(x.args[1])) isa Type
                 fielddoc($(esc(x.args[1])), $(esc(x.args[2])))
             else
                 $docs
@@ -648,13 +669,17 @@ function fielddoc(binding::Binding, field::Symbol)
     for mod in modules
         dict = meta(mod; autoinit=false)
         isnothing(dict) && continue
-        if haskey(dict, binding)
-            multidoc = dict[binding]
-            if haskey(multidoc.docs, Union{})
-                fields = multidoc.docs[Union{}].data[:fields]
-                if haskey(fields, field)
-                    doc = fields[field]
-                    return isa(doc, Markdown.MD) ? doc : Markdown.parse(doc)
+        multidoc = get(dict, binding, nothing)
+        if multidoc !== nothing
+            structdoc = get(multidoc.docs, Union{}, nothing)
+            if structdoc !== nothing
+                fieldsdoc = get(structdoc.data, :fields, nothing)
+                if fieldsdoc !== nothing
+                    fielddoc = get(fieldsdoc, field, nothing)
+                    if fielddoc !== nothing
+                        return isa(fielddoc, Markdown.MD) ?
+                            fielddoc : Markdown.parse(fielddoc)
+                    end
                 end
             end
         end
@@ -666,6 +691,7 @@ function fielddoc(binding::Binding, field::Symbol)
 end
 
 # As with the additional `doc` methods, this converts an object to a `Binding` first.
+fielddoc(obj::UnionAll, field::Symbol) = fielddoc(Base.unwrap_unionall(obj), field)
 fielddoc(object, field::Symbol) = fielddoc(aliasof(object, typeof(object)), field)
 
 

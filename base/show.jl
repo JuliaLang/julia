@@ -1,6 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core.Compiler: has_typevar
+using .Compiler: has_typevar
+using .Meta: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator,
+            is_id_start_char, is_id_char, _isoperator, is_syntactic_operator, is_valid_identifier,
+            is_unary_and_binary_operator
 
 function show(io::IO, ::MIME"text/plain", u::UndefInitializer)
     show(io, u)
@@ -11,6 +14,13 @@ end
 # first a few multiline show functions for types defined before the MIME type:
 
 show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
+
+function show(io::IO, ::MIME"text/plain", r::UnitRange)
+    show(io, r)
+    if !(get(io, :compact, false)::Bool) && isempty(r)
+        print(io, " (empty range)")
+    end
+end
 
 function show(io::IO, ::MIME"text/plain", r::LinRange)
     isempty(r) && return show(io, r)
@@ -32,16 +42,16 @@ end
 
 function _isself(ft::DataType)
     ftname = ft.name
-    isdefined(ftname, :mt) || return false
-    name = ftname.mt.name
-    mod = parentmodule(ft)  # NOTE: not necessarily the same as ft.name.mt.module
-    return isdefined(mod, name) && ft == typeof(getfield(mod, name))
+    name = ftname.singletonname
+    ftname.name === name && return false
+    mod = parentmodule(ft)
+    return isdefinedglobal(mod, name) && ft === typeof(getglobal(mod, name))
 end
 
 function show(io::IO, ::MIME"text/plain", f::Function)
     get(io, :compact, false)::Bool && return show(io, f)
     ft = typeof(f)
-    name = ft.name.mt.name
+    name = ft.name.singletonname
     if isa(f, Core.IntrinsicFunction)
         print(io, f)
         id = Core.Intrinsics.bitcast(Int32, f)
@@ -72,13 +82,13 @@ ncodeunits(c::ANSIDelimiter) = ncodeunits(c.del)
 textwidth(::ANSIDelimiter) = 0
 
 # An iterator similar to `pairs(::String)` but whose values are Char or ANSIDelimiter
-struct ANSIIterator
-    captures::RegexMatchIterator
+struct ANSIIterator{S}
+    captures::RegexMatchIterator{S}
 end
 ANSIIterator(s::AbstractString) = ANSIIterator(eachmatch(ansi_regex, s))
 
-IteratorSize(::Type{ANSIIterator}) = SizeUnknown()
-eltype(::Type{ANSIIterator}) = Pair{Int, Union{Char,ANSIDelimiter}}
+IteratorSize(::Type{<:ANSIIterator}) = SizeUnknown()
+eltype(::Type{<:ANSIIterator}) = Pair{Int, Union{Char,ANSIDelimiter}}
 function iterate(I::ANSIIterator, (i, m_st)=(1, iterate(I.captures)))
     m_st === nothing && return nothing
     m, (j, new_m_st) = m_st
@@ -152,7 +162,7 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
 end
 
 function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
-    isempty(t) && return show(io, t)
+    (isempty(t) || !haslength(t)) && return show(io, t)
     # show more descriptively, with one line per key/value pair
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit = get(io, :limit, false)::Bool
@@ -324,8 +334,11 @@ end
 
 convert(::Type{IOContext}, io::IOContext) = io
 convert(::Type{IOContext}, io::IO) = IOContext(io, ioproperties(io))::IOContext
+convert(::Type{IOContext{IO_t}}, io::IOContext{IO_t}) where {IO_t} = io
+convert(::Type{IOContext{IO_t}}, io::IO) where {IO_t} = IOContext{IO_t}(io, ioproperties(io))::IOContext{IO_t}
 
 IOContext(io::IO) = convert(IOContext, io)
+IOContext{IO_t}(io::IO) where {IO_t} = convert(IOContext{IO_t}, io)
 
 function IOContext(io::IO, KV::Pair)
     d = ioproperties(io)
@@ -336,6 +349,11 @@ end
     IOContext(io::IO, context::IOContext)
 
 Create an `IOContext` that wraps an alternate `IO` but inherits the properties of `context`.
+
+!!! note
+    Unless explicitly set in the wrapped `io` the `displaysize` of `io` will not be inherited.
+    This is because by default `displaysize` is not a property of IO objects themselves, but lazily inferred,
+    as the size of the terminal window can change during the lifetime of the IO object.
 """
 IOContext(io::IO, context::IO) = IOContext(io, ioproperties(context))
 
@@ -367,6 +385,11 @@ The following properties are in common use:
  - `:color`: Boolean specifying whether ANSI color/escape codes are supported/expected.
    By default, this is determined by whether `io` is a compatible terminal and by any
    `--color` command-line flag when `julia` was launched.
+ - `:hexunsigned`: Boolean specifying whether to print unsigned integers in
+   hexadecimal. Defaults to `true`, otherwise they will be printed in decimal.
+
+!!! compat "Julia 1.14"
+    The `:hexunsigned` option requires Julia 1.14 or later.
 
 # Examples
 
@@ -375,12 +398,12 @@ julia> io = IOBuffer();
 
 julia> printstyled(IOContext(io, :color => true), "string", color=:red)
 
-julia> String(take!(io))
+julia> takestring!(io)
 "\\e[31mstring\\e[39m"
 
 julia> printstyled(io, "string", color=:red)
 
-julia> String(take!(io))
+julia> takestring!(io)
 "string"
 ```
 
@@ -427,7 +450,7 @@ get(io::IO, key, default) = default
 keys(io::IOContext) = keys(io.dict)
 keys(io::IO) = keys(ImmutableDict{Symbol,Any}())
 
-displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize]::Tuple{Int,Int} : displaysize(io.io)
+displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize]::Tuple{Int,Int} : displaysize(io.io)::Tuple{Int,Int}
 
 show_circular(io::IO, @nospecialize(x)) = false
 function show_circular(io::IOContext, @nospecialize(x))
@@ -435,7 +458,7 @@ function show_circular(io::IOContext, @nospecialize(x))
     for (k, v) in io.dict
         if k === :SHOWN_SET
             if v === x
-                print(io, "#= circular reference @-$d =#")
+                printstyled(io, "#= circular reference @-$d =#"; color = :yellow)
                 return true
             end
             d += 1
@@ -514,43 +537,33 @@ function _show_default(io::IO, @nospecialize(x))
 end
 
 function active_module()
-    isassigned(REPL_MODULE_REF) || return Main
-    REPL = REPL_MODULE_REF[]
-    return invokelatest(REPL.active_module)::Module
+    if ccall(:jl_is_in_pure_context, Bool, ())
+        error("active_module() should not be called from a pure context")
+    end
+    if !@isdefined(active_repl) || active_repl === nothing
+        return Main
+    end
+    return invokelatest(active_module, active_repl)::Module
 end
 
-# Check if a particular symbol is exported from a standard library module
-function is_exported_from_stdlib(name::Symbol, mod::Module)
-    !isdefined(mod, name) && return false
-    orig = getfield(mod, name)
-    while !(mod === Base || mod === Core)
-        activemod = active_module()
-        parent = parentmodule(mod)
-        if mod === activemod || mod === parent || parent === activemod
-            return false
-        end
-        mod = parent
-    end
-    return isexported(mod, name) && isdefined(mod, name) && !isdeprecated(mod, name) && getfield(mod, name) === orig
+module UsesBaseOnly
 end
 
 function show_function(io::IO, f::Function, compact::Bool, fallback::Function)
-    ft = typeof(f)
-    mt = ft.name.mt
-    if mt === Symbol.name.mt
-        # uses shared method table
+    fname = typeof(f).name
+    if fname.name === fname.singletonname
         fallback(io, f)
     elseif compact
-        print(io, mt.name)
-    elseif isdefined(mt, :module) && isdefined(mt.module, mt.name) &&
-        getfield(mt.module, mt.name) === f
-        mod = active_module()
-        if is_exported_from_stdlib(mt.name, mt.module) || mt.module === mod
-            show_sym(io, mt.name)
-        else
-            print(io, mt.module, ".")
-            show_sym(io, mt.name)
+        print(io, fname.singletonname)
+    elseif isdefined(fname, :module) && isdefinedglobal(fname.module, fname.singletonname) && isconst(fname.module, fname.singletonname) &&
+            getglobal(fname.module, fname.singletonname) === f
+        # this used to call the removed internal function `is_exported_from_stdlib`, which effectively
+        # just checked for exports from Base.
+        mod = get(io, :module, UsesBaseOnly)
+        if !(isvisible(fname.singletonname, fname.module, mod) || fname.module === mod)
+            print(io, fname.module, ".")
         end
+        show_sym(io, fname.singletonname)
     else
         fallback(io, f)
     end
@@ -618,7 +631,7 @@ function make_typealias(@nospecialize(x::Type))
     Any === x && return nothing
     x <: Tuple && return nothing
     mods = modulesof!(Set{Module}(), x)
-    Core in mods && push!(mods, Base)
+    replace!(mods, Core=>Base)
     aliases = Tuple{GlobalRef,SimpleVector}[]
     xenv = UnionAll[]
     for p in uniontypes(unwrap_unionall(x))
@@ -627,8 +640,8 @@ function make_typealias(@nospecialize(x::Type))
     x isa UnionAll && push!(xenv, x)
     for mod in mods
         for name in unsorted_names(mod)
-            if isdefined(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
-                alias = getfield(mod, name)
+            if isdefinedglobal(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
+                alias = getglobal(mod, name)
                 if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && x <: alias
                     if alias isa UnionAll
                         (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
@@ -681,7 +694,7 @@ function show_can_elide(p::TypeVar, wheres::Vector, elide::Int, env::SimpleVecto
         has_typevar(v.lb, p) && return false
         has_typevar(v.ub, p) && return false
     end
-    for i = 1:length(env)
+    for i = eachindex(env)
         i == skip && continue
         has_typevar(env[i], p) && return false
     end
@@ -737,9 +750,9 @@ end
 function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, wheres::Vector)
     if !(get(io, :compact, false)::Bool)
         # Print module prefix unless alias is visible from module passed to
-        # IOContext. If :module is not set, default to Main (or current active module).
+        # IOContext. If :module is not set, default to Main.
         # nothing can be used to force printing prefix.
-        from = get(io, :module, active_module())
+        from = get(io, :module, Main)
         if (from === nothing || !isvisible(name.name, name.mod, from))
             show(io, name.mod)
             print(io, ".")
@@ -820,7 +833,7 @@ function make_typealiases(@nospecialize(x::Type))
     Any === x && return aliases, Union{}
     x <: Tuple && return aliases, Union{}
     mods = modulesof!(Set{Module}(), x)
-    Core in mods && push!(mods, Base)
+    replace!(mods, Core=>Base)
     vars = Dict{Symbol,TypeVar}()
     xenv = UnionAll[]
     each = Any[]
@@ -831,14 +844,14 @@ function make_typealiases(@nospecialize(x::Type))
     x isa UnionAll && push!(xenv, x)
     for mod in mods
         for name in unsorted_names(mod)
-            if isdefined(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
-                alias = getfield(mod, name)
+            if isdefinedglobal(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
+                alias = getglobal(mod, name)
                 if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && !(alias <: Tuple)
                     (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
                     ti === Union{} && continue
                     # make sure this alias wasn't from an unrelated part of the Union
                     mod2 = modulesof!(Set{Module}(), alias)
-                    mod in mod2 || (mod === Base && Core in mods) || continue
+                    mod in mod2 || (mod === Base && Core in mod2) || continue
                     env = env::SimpleVector
                     applied = alias
                     if !isempty(env)
@@ -958,7 +971,7 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     # give a helpful hint for function types
     if x isa DataType && x !== UnionAll && !(get(io, :compact, false)::Bool)
         tn = x.name::Core.TypeName
-        globname = isdefined(tn, :mt) ? tn.mt.name : nothing
+        globname = tn.singletonname
         if is_global_function(tn, globname)
             print(io, " (singleton type of function ")
             show_sym(io, globname)
@@ -1021,23 +1034,53 @@ end
 # If an object with this name exists in 'from', we need to check that it's the same binding
 # and that it's not deprecated.
 function isvisible(sym::Symbol, parent::Module, from::Module)
-    owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), parent, sym)
-    from_owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), from, sym)
-    return owner !== C_NULL && from_owner === owner &&
-        !isdeprecated(parent, sym) &&
-        isdefined(from, sym) # if we're going to return true, force binding resolution
+    isdeprecated(parent, sym) && return false
+    isdefinedglobal(from, sym) || return false
+    isdefinedglobal(parent, sym) || return false
+    parent_binding = convert(Core.Binding, GlobalRef(parent, sym))
+    from_binding = convert(Core.Binding, GlobalRef(from, sym))
+    while true
+        from_binding === parent_binding && return true
+        partition = lookup_binding_partition(tls_world_age(), from_binding)
+        is_some_explicit_imported(binding_kind(partition)) || break
+        from_binding = partition_restriction(partition)::Core.Binding
+    end
+    parent_partition = lookup_binding_partition(tls_world_age(), parent_binding)
+    from_partition = lookup_binding_partition(tls_world_age(), from_binding)
+    if is_defined_const_binding(binding_kind(parent_partition)) && is_defined_const_binding(binding_kind(from_partition))
+        return parent_partition.restriction === from_partition.restriction
+    end
+    return false
 end
 
 function is_global_function(tn::Core.TypeName, globname::Union{Symbol,Nothing})
-    if globname !== nothing
+    if globname !== nothing && isconcretetype(tn.wrapper) && tn !== DataType.name # ignore that typeof(DataType)===DataType, since it is valid but not useful
         globname_str = string(globname::Symbol)
-        if ('#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
-                isbindingresolved(tn.module, globname) && isdefined(tn.module, globname) &&
-                isconcretetype(tn.wrapper) && isa(getfield(tn.module, globname), tn.wrapper))
+        if '#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
+                isdefinedglobal(tn.module, globname) && isconst(tn.module, globname) &&
+                isa(getglobal(tn.module, globname), tn.wrapper)
             return true
         end
     end
     return false
+end
+
+function check_world_bounded(tn::Core.TypeName)
+    bnd = ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), tn.module, tn.name, true)
+    isdefined(bnd, :partitions) || return nothing
+    partition = @atomic bnd.partitions
+    while true
+        if is_defined_const_binding(binding_kind(partition))
+            cval = partition_restriction(partition)
+            if isa(cval, Type) && cval <: tn.wrapper
+                max_world = @atomic partition.max_world
+                max_world == typemax(UInt) && return nothing
+                return Int(partition.min_world):Int(max_world)
+            end
+        end
+        isdefined(partition, :next) || return nothing
+        partition = @atomic partition.next
+    end
 end
 
 function show_type_name(io::IO, tn::Core.TypeName)
@@ -1046,16 +1089,18 @@ function show_type_name(io::IO, tn::Core.TypeName)
         # intercept this case and print `UnionAll` instead.
         return print(io, "UnionAll")
     end
-    globname = isdefined(tn, :mt) ? tn.mt.name : nothing
+    globname = tn.singletonname
     globfunc = is_global_function(tn, globname)
     sym = (globfunc ? globname : tn.name)::Symbol
     globfunc && print(io, "typeof(")
     quo = false
+    world = check_world_bounded(tn)
+    world !== nothing && print(io, "@world(")
     if !(get(io, :compact, false)::Bool)
         # Print module prefix unless type is visible from module passed to
-        # IOContext If :module is not set, default to Main (or current active module).
+        # IOContext If :module is not set, default to Main.
         # nothing can be used to force printing prefix
-        from = get(io, :module, active_module())
+        from = get(io, :module, Main)
         if isdefined(tn, :module) && (from === nothing || !isvisible(sym, tn.module, from::Module))
             show(io, tn.module)
             print(io, ".")
@@ -1069,12 +1114,15 @@ function show_type_name(io::IO, tn::Core.TypeName)
         end
     end
     show_sym(io, sym)
+    world !== nothing && print(io, ", ", world, ")")
     quo      && print(io, ")")
     globfunc && print(io, ")")
     nothing
 end
 
 function maybe_kws_nt(x::DataType)
+    # manually-written version of
+    # x <: (Pairs{Symbol, eltype(NT), Nothing, NT} where NT <: NamedTuple)
     x.name === typename(Pairs) || return nothing
     length(x.parameters) == 4 || return nothing
     x.parameters[1] === Symbol || return nothing
@@ -1084,7 +1132,7 @@ function maybe_kws_nt(x::DataType)
         types isa DataType || return nothing
         x.parameters[2] === eltype(p4) || return nothing
         isa(syms, Tuple) || return nothing
-        x.parameters[3] === typeof(syms) || return nothing
+        x.parameters[3] === Nothing || return nothing
         return p4
     end
     return nothing
@@ -1167,7 +1215,7 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
         return
     elseif isnamedtuple
         syms, types = parameters
-        if syms isa Tuple && types isa DataType
+        if syms isa Tuple && types isa DataType && length(types.parameters) == length(syms) && !isvatuple(types)
             print(io, "@NamedTuple{")
             show_at_namedtuple(io, syms, types)
             print(io, "}")
@@ -1188,7 +1236,7 @@ end
 
 function show_at_namedtuple(io::IO, syms::Tuple, types::DataType)
     first = true
-    for i in 1:length(syms)
+    for i in eachindex(syms)
         if !first
             print(io, ", ")
         end
@@ -1217,7 +1265,7 @@ show_supertypes(typ::DataType) = show_supertypes(stdout, typ)
 
 Prints one or more expressions, and their results, to `stdout`, and returns the last result.
 
-See also: [`show`](@ref), [`@info`](@ref man-logging), [`println`](@ref).
+See also [`show`](@ref), [`@info`](@ref man-logging), [`println`](@ref).
 
 # Examples
 ```jldoctest
@@ -1250,10 +1298,18 @@ nonnothing_nonmissing_typeinfo(io::IO) = nonmissingtype(nonnothingtype(get(io, :
 show(io::IO, b::Bool) = print(io, nonnothing_nonmissing_typeinfo(io) === Bool ? (b ? "1" : "0") : (b ? "true" : "false"))
 show(io::IO, ::Nothing) = print(io, "nothing")
 show(io::IO, n::Signed) = (write(io, string(n)); nothing)
-show(io::IO, n::Unsigned) = print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
+function show(io::IO, n::Unsigned)
+    if get(io, :hexunsigned, true)::Bool
+        print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
+    else
+        if get(io, :typeinfo, Nothing)::Type == typeof(n)
+            print(io, n)
+        else
+            print(io, typeof(n), "($(n))")
+        end
+    end
+end
 print(io::IO, n::Unsigned) = print(io, string(n))
-
-show(io::IO, p::Ptr) = print(io, typeof(p), " @0x$(string(UInt(p), base = 16, pad = Sys.WORD_SIZE>>2))")
 
 has_tight_type(p::Pair) =
     typeof(p.first)  == typeof(p).parameters[1] &&
@@ -1334,17 +1390,27 @@ function sourceinfo_slotnames(slotnames::Vector{Symbol})
     return printnames
 end
 
-show(io::IO, l::Core.MethodInstance) = show_mi(io, l)
+show(io::IO, mi::Core.MethodInstance) = show_mi(io, mi)
+function show(io::IO, codeinst::Core.CodeInstance)
+    print(io, "CodeInstance for ")
+    def = codeinst.def
+    if isa(def, Core.ABIOverride)
+        show_mi(io, def.def)
+        print(io, " (ABI Overridden)")
+    else
+        show_mi(io, def::MethodInstance)
+    end
+end
 
-function show_mi(io::IO, l::Core.MethodInstance, from_stackframe::Bool=false)
-    def = l.def
+function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)
+    def = mi.def
     if isa(def, Method)
-        if isdefined(def, :generator) && l === def.generator
+        if isdefined(def, :generator) && mi === def.generator
             print(io, "MethodInstance generator for ")
             show(io, def)
         else
             print(io, "MethodInstance for ")
-            show_tuple_as_call(io, def.name, l.specTypes; qualified=true)
+            show_tuple_as_call(io, def.name, mi.specTypes; qualified=true)
         end
     else
         print(io, "Toplevel MethodInstance thunk")
@@ -1352,43 +1418,17 @@ function show_mi(io::IO, l::Core.MethodInstance, from_stackframe::Bool=false)
         # MethodInstance is part of a stacktrace, it gets location info
         # added by other means.  But if it isn't, then we should try
         # to print a little more identifying information.
-        if !from_stackframe
-            di = mi.uninferred.debuginfo
-            file, line = IRShow.debuginfo_firstline(di)
-            file = string(file)
-            line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"
-            print(io, " from ", def, " starting at ", line)
+        if !from_stackframe && isdefined(mi, :cache)
+            ci = mi.cache
+            if ci.owner === :uninferred
+                di = ci.inferred.debuginfo
+                file, line = IRShow.debuginfo_firstline(di)
+                file = string(file)
+                line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"
+                print(io, " from ", def, " starting at ", line)
+            end
         end
     end
-end
-
-# These sometimes show up as Const-values in InferenceFrameInfo signatures
-show(io::IO, r::Core.Compiler.UnitRange) = show(io, r.start : r.stop)
-show(io::IO, mime::MIME{Symbol("text/plain")}, r::Core.Compiler.UnitRange) = show(io, mime, r.start : r.stop)
-
-function show(io::IO, mi_info::Core.Compiler.Timings.InferenceFrameInfo)
-    mi = mi_info.mi
-    def = mi.def
-    if isa(def, Method)
-        if isdefined(def, :generator) && mi === def.generator
-            print(io, "InferenceFrameInfo generator for ")
-            show(io, def)
-        else
-            print(io, "InferenceFrameInfo for ")
-            argnames = [isa(a, Core.Const) ? (isa(a.val, Type) ? "" : a.val) : "" for a in mi_info.slottypes[1:mi_info.nargs]]
-            show_tuple_as_call(io, def.name, mi.specTypes; argnames, qualified=true)
-        end
-    else
-        di = mi.uninferred.debuginfo
-        file, line = IRShow.debuginfo_firstline(di)
-        file = string(file)
-        line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"
-        print(io, "Toplevel InferenceFrameInfo thunk from ", def, " starting at ", line)
-    end
-end
-
-function show(io::IO, tinf::Core.Compiler.Timings.Timing)
-    print(io, "Core.Compiler.Timings.Timing(", tinf.mi_info, ") with ", length(tinf.children), " children")
 end
 
 function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, delim, cl,
@@ -1406,11 +1446,11 @@ function show_delim_array(io::IO, itr::Union{AbstractArray,SimpleVector}, op, de
                     x = itr[i]
                     show(recur_io, x)
                 end
-                i += 1
-                if i > l
+                if i == l
                     delim_one && first && print(io, delim)
                     break
                 end
+                i += 1
                 first = false
                 print(io, delim)
                 print(io, ' ')
@@ -1522,111 +1562,16 @@ const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'),
                          :ncat =>('[',']'), :nrow =>('[',']'),
                          :braces=>('{','}'), :bracescat=>('{','}'))
 
-## AST decoding helpers ##
-
-is_id_start_char(c::AbstractChar) = ccall(:jl_id_start_char, Cint, (UInt32,), c) != 0
-is_id_char(c::AbstractChar) = ccall(:jl_id_char, Cint, (UInt32,), c) != 0
-
-"""
-     isidentifier(s) -> Bool
-
-Return whether the symbol or string `s` contains characters that are parsed as
-a valid ordinary identifier (not a binary/unary operator) in Julia code;
-see also [`Base.isoperator`](@ref).
-
-Internally Julia allows any sequence of characters in a `Symbol` (except `\\0`s),
-and macros automatically use variable names containing `#` in order to avoid
-naming collision with the surrounding code. In order for the parser to
-recognize a variable, it uses a limited set of characters (greatly extended by
-Unicode). `isidentifier()` makes it possible to query the parser directly
-whether a symbol contains valid characters.
-
-# Examples
-```jldoctest
-julia> Meta.isidentifier(:x), Meta.isidentifier("1x")
-(true, false)
-```
-"""
-function isidentifier(s::AbstractString)
-    x = Iterators.peel(s)
-    isnothing(x) && return false
-    (s == "true" || s == "false") && return false
-    c, rest = x
-    is_id_start_char(c) || return false
-    return all(is_id_char, rest)
-end
-isidentifier(s::Symbol) = isidentifier(string(s))
-
-is_op_suffix_char(c::AbstractChar) = ccall(:jl_op_suffix_char, Cint, (UInt32,), c) != 0
-
-_isoperator(s) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
-
-"""
-    isoperator(s::Symbol)
-
-Return `true` if the symbol can be used as an operator, `false` otherwise.
-
-# Examples
-```jldoctest
-julia> Meta.isoperator(:+), Meta.isoperator(:f)
-(true, false)
-```
-"""
-isoperator(s::Union{Symbol,AbstractString}) = _isoperator(s) || ispostfixoperator(s)
-
-"""
-    isunaryoperator(s::Symbol)
-
-Return `true` if the symbol can be used as a unary (prefix) operator, `false` otherwise.
-
-# Examples
-```jldoctest
-julia> Meta.isunaryoperator(:-), Meta.isunaryoperator(:√), Meta.isunaryoperator(:f)
-(true, true, false)
-```
-"""
-isunaryoperator(s::Symbol) = ccall(:jl_is_unary_operator, Cint, (Cstring,), s) != 0
-is_unary_and_binary_operator(s::Symbol) = ccall(:jl_is_unary_and_binary_operator, Cint, (Cstring,), s) != 0
-is_syntactic_operator(s::Symbol) = ccall(:jl_is_syntactic_operator, Cint, (Cstring,), s) != 0
-
-"""
-    isbinaryoperator(s::Symbol)
-
-Return `true` if the symbol can be used as a binary (infix) operator, `false` otherwise.
-
-# Examples
-```jldoctest
-julia> Meta.isbinaryoperator(:-), Meta.isbinaryoperator(:√), Meta.isbinaryoperator(:f)
-(true, false, false)
-```
-"""
-function isbinaryoperator(s::Symbol)
-    return _isoperator(s) && (!isunaryoperator(s) || is_unary_and_binary_operator(s)) &&
-        s !== Symbol("'")
-end
-
-"""
-    ispostfixoperator(s::Union{Symbol,AbstractString})
-
-Return `true` if the symbol can be used as a postfix operator, `false` otherwise.
-
-# Examples
-```jldoctest
-julia> Meta.ispostfixoperator(Symbol("'")), Meta.ispostfixoperator(Symbol("'ᵀ")), Meta.ispostfixoperator(:-)
-(true, true, false)
-```
-"""
-function ispostfixoperator(s::Union{Symbol,AbstractString})
-    s = String(s)::String
-    return startswith(s, '\'') && all(is_op_suffix_char, SubString(s, 2))
-end
 
 """
     operator_precedence(s::Symbol)
 
-Return an integer representing the precedence of operator `s`, relative to
+Return an integer representing the precedence of a binary operator `s`, relative to
 other operators. Higher-numbered operators take precedence over lower-numbered
-operators. Return `0` if `s` is not a valid operator.
+operators. Return `0` if `s` is not a valid binary operator.
+
+(The precedence of *unary* operators is handled differently, including cases like `+`
+where an operator can be either unary or binary.)
 
 # Examples
 ```jldoctest
@@ -1665,7 +1610,8 @@ julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Bas
 """
 function operator_associativity(s::Symbol)
     if operator_precedence(s) in (prec_arrow, prec_assignment, prec_control_flow, prec_pair, prec_power) ||
-        (isunaryoperator(s) && !is_unary_and_binary_operator(s)) || s === :<| || s === :||
+        (isunaryoperator(s) && !is_unary_and_binary_operator(s)) ||
+        (s === :<| || s === :|| || s == :?)
         return :right
     elseif operator_precedence(s) in (0, prec_comparison) || s in (:+, :++, :*)
         return :none
@@ -1757,13 +1703,6 @@ function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, quote_le
     print(io, cl)
 end
 
-function is_valid_identifier(sym)
-    return isidentifier(sym) || (
-        _isoperator(sym) &&
-        !(sym in (Symbol("'"), :(::), :?)) &&
-        !is_syntactic_operator(sym)
-    )
-end
 
 # show a normal (non-operator) function call, e.g. f(x, y) or A[z]
 # kw: `=` expressions are parsed with head `kw` in this context
@@ -1803,7 +1742,7 @@ function show_sym(io::IO, sym::Symbol; allow_macroname=false)
         print(io, '@')
         show_sym(io, Symbol(sym_str[2:end]))
     else
-        print(io, "var", repr(string(sym))) # TODO: this is not quite right, since repr uses String escaping rules, and Symbol uses raw string rules
+        print(io, "var\"", escape_raw_string(string(sym)), '"')
     end
 end
 
@@ -2206,8 +2145,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif head === :do && nargs == 2
         iob = IOContext(io, beginsym=>false)
         show_unquoted(iob, args[1], indent, -1, quote_level)
-        print(io, " do ")
-        show_list(iob, (((args[2]::Expr).args[1])::Expr).args, ", ", 0, 0, quote_level)
+        print(io, " do")
+        do_args = (((args[2]::Expr).args[1])::Expr).args
+        if !isempty(do_args)
+            print(io, ' ')
+            show_list(iob, do_args, ", ", 0, 0, quote_level)
+        end
         for stmt in (((args[2]::Expr).args[2])::Expr).args
             print(io, '\n', " "^(indent + indent_width))
             show_unquoted(iob, stmt, indent + indent_width, -1, quote_level)
@@ -2241,7 +2184,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             print(io, "end")
         end
 
+    elseif head === :module && nargs==4 && isa(args[1],VersionNumber) && isa(args[2],Bool)
+        # New 4-argument form: (version, baremodule_flag, name, body)
+        show_block(IOContext(io, beginsym=>false), args[2] ? :module : :baremodule, args[3], args[4], indent, quote_level)
+        print(io, "end")
     elseif head === :module && nargs==3 && isa(args[1],Bool)
+        # Old 3-argument form: (baremodule_flag, name, body)
         show_block(IOContext(io, beginsym=>false), args[1] ? :module : :baremodule, args[2], args[3], indent, quote_level)
         print(io, "end")
 
@@ -2384,7 +2332,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         if get(io, beginsym, false)
             print(io, '(')
             ind = indent + indent_width
-            for i = 1:length(ex.args)
+            for i = eachindex(ex.args)
                 if i > 1
                     # if there was only a comment before the first semicolon, the expression would get parsed as a NamedTuple
                     if !(i == 2 && ex.args[1] isa LineNumberNode)
@@ -2537,10 +2485,10 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
     uw = unwrap_unionall(ft)
     if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) && _isself(uw)
         uwmod = parentmodule(uw)
-        if qualified && !is_exported_from_stdlib(uw.name.mt.name, uwmod) && uwmod !== Main
+        if qualified && !isexported(uwmod, uw.name.singletonname) && uwmod !== Main
             print_within_stacktrace(io, uwmod, '.', bold=true)
         end
-        s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.mt.name), context=io)
+        s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.singletonname), context=io)
         print_within_stacktrace(io, s, bold=true)
     elseif isType(ft) && (f = ft.parameters[1]; !isa(f, TypeVar))
         uwf = unwrap_unionall(f)
@@ -2619,7 +2567,7 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
     end
     print_within_stacktrace(io, ")", bold=true)
     show_method_params(io, tv)
-    str = String(take!(buf))
+    str = takestring!(buf)
     str = type_limited_string_from_context(out, str)
     print(out, str)
     nothing
@@ -2628,7 +2576,7 @@ end
 function type_limited_string_from_context(out::IO, str::String)
     typelimitflag = get(out, :stacktrace_types_limited, nothing)
     if typelimitflag isa RefValue{Bool}
-        sz = get(out, :displaysize, displaysize(out))::Tuple{Int, Int}
+        sz = get(out, :displaysize, Base.displaysize_(out))::Tuple{Int, Int}
         str_lim = type_depth_limit(str, max(sz[2], 120))
         if sizeof(str_lim) < sizeof(str)
             typelimitflag[] = true
@@ -2646,11 +2594,11 @@ function type_depth_limit(str::String, n::Int; maxdepth = nothing)
     levelcount = Int[]                     # number of nodes at each level
     strwid = 0
     st_0, st_backslash, st_squote, st_dquote = 0,1,2,4
-    state::Int = st_0
-    stateis(s) = (state & s) != 0
+    state = Ref(st_0)
+    stateis(s) = (state[] & s) != 0
     quoted() = stateis(st_squote) || stateis(st_dquote)
-    enter(s) = (state |= s)
-    leave(s) = (state &= ~s)
+    enter(s) = (state[] |= s)
+    leave(s) = (state[] &= ~s)
     for (i, c) in ANSIIterator(str)
         if c isa ANSIDelimiter
             depths[i] = depth
@@ -2728,7 +2676,7 @@ function type_depth_limit(str::String, n::Int; maxdepth = nothing)
         end
         prev = di
     end
-    return String(take!(output))
+    return unsafe_takestring!(output)
 end
 
 function print_type_bicolor(io, type; kwargs...)
@@ -2826,33 +2774,7 @@ function show(io::IO, vm::Core.TypeofVararg)
     end
 end
 
-module IRShow
-    const Compiler = Core.Compiler
-    using Core.IR
-    import ..Base
-    import .Compiler: IRCode, CFG, scan_ssa_use!,
-        isexpr, compute_basic_blocks, block_for_inst, IncrementalCompact,
-        Effects, ALWAYS_TRUE, ALWAYS_FALSE, DebugInfoStream, getdebugidx
-    Base.getindex(r::Compiler.StmtRange, ind::Integer) = Compiler.getindex(r, ind)
-    Base.size(r::Compiler.StmtRange) = Compiler.size(r)
-    Base.first(r::Compiler.StmtRange) = Compiler.first(r)
-    Base.last(r::Compiler.StmtRange) = Compiler.last(r)
-    Base.length(is::Compiler.InstructionStream) = Compiler.length(is)
-    Base.iterate(is::Compiler.InstructionStream, st::Int=1) = (st <= Compiler.length(is)) ? (is[st], st + 1) : nothing
-    Base.getindex(is::Compiler.InstructionStream, idx::Int) = Compiler.getindex(is, idx)
-    Base.getindex(node::Compiler.Instruction, fld::Symbol) = Compiler.getindex(node, fld)
-    Base.getindex(ir::IRCode, ssa::SSAValue) = Compiler.getindex(ir, ssa)
-    include("compiler/ssair/show.jl")
-
-    const __debuginfo = Dict{Symbol, Any}(
-        # :full => src -> statementidx_lineinfo_printer(src), # and add variable slot information
-        :source => src -> statementidx_lineinfo_printer(src),
-        # :oneliner => src -> statementidx_lineinfo_printer(PartialLineInfoPrinter, src),
-        :none => src -> Base.IRShow.lineinfo_disabled,
-        )
-    const default_debuginfo = Ref{Symbol}(:none)
-    debuginfo(sym) = sym === :default ? default_debuginfo[] : sym
-end
+Compiler.load_irshow!()
 
 function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     # Fix slot names and types in function body
@@ -2869,34 +2791,63 @@ function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     print(io, ")")
 end
 
-function show(io::IO, inferred::Core.Compiler.InferenceResult)
-    mi = inferred.linfo
-    tt = mi.specTypes.parameters[2:end]
-    tts = join(["::$(t)" for t in tt], ", ")
-    rettype = inferred.result
-    if isa(rettype, Core.Compiler.InferenceState)
-        rettype = rettype.bestguess
+show_unquoted(io::IO, val::Argument, indent::Int, prec::Int) = show_unquoted(io, Core.SlotNumber(val.n), indent, prec)
+
+show_unquoted(io::IO, stmt::PhiNode, indent::Int, ::Int) = show_unquoted_phinode(io, stmt, indent, "%")
+function show_unquoted_phinode(io::IO, stmt::PhiNode, indent::Int, prefix::String)
+    args = String[let
+        e = stmt.edges[i]
+        v = !isassigned(stmt.values, i) ? "#undef" :
+            sprint(; context=io) do io′
+                show_unquoted(io′, stmt.values[i], indent)
+            end
+        "$prefix$e => $v"
+        end for i in 1:length(stmt.edges)
+    ]
+    print(io, "φ ", '(')
+    join(io, args, ", ")
+    print(io, ')')
+end
+
+function show_unquoted(io::IO, stmt::PhiCNode, indent::Int, ::Int)
+    print(io, "φᶜ (")
+    first = true
+    for v in stmt.values
+        first ? (first = false) : print(io, ", ")
+        show_unquoted(io, v, indent)
     end
-    if isa(mi.def, Method)
-        print(io, mi.def.name, "(", tts, " => ", rettype, ")")
+    print(io, ")")
+end
+
+function show_unquoted(io::IO, stmt::PiNode, indent::Int, ::Int)
+    print(io, "π (")
+    show_unquoted(io, stmt.val, indent)
+    print(io, ", ")
+    printstyled(io, stmt.typ, color=:cyan)
+    print(io, ")")
+end
+
+function show_unquoted(io::IO, stmt::UpsilonNode, indent::Int, ::Int)
+    print(io, "ϒ (")
+    isdefined(stmt, :val) ?
+        show_unquoted(io, stmt.val, indent) :
+        print(io, "#undef")
+    print(io, ")")
+end
+
+function show_unquoted(io::IO, stmt::ReturnNode, indent::Int, ::Int)
+    if !isdefined(stmt, :val)
+        print(io, "unreachable")
     else
-        print(io, "Toplevel MethodInstance thunk from ", mi.def, " => ", rettype)
+        print(io, "return ")
+        show_unquoted(io, stmt.val, indent)
     end
 end
 
-show(io::IO, sv::Core.Compiler.InferenceState) =
-    (print(io, "InferenceState for "); show(io, sv.linfo))
-
-show(io::IO, ::Core.Compiler.NativeInterpreter) =
-    print(io, "Core.Compiler.NativeInterpreter(...)")
-
-show(io::IO, cache::Core.Compiler.CachedMethodTable) =
-    print(io, typeof(cache), "(", Core.Compiler.length(cache.cache), " entries)")
-
-function show(io::IO, limited::Core.Compiler.LimitedAccuracy)
-    print(io, "Core.Compiler.LimitedAccuracy(")
-    show(io, limited.typ)
-    print(io, ", #= ", Core.Compiler.length(limited.causes), " cause(s) =#)")
+show_unquoted(io::IO, stmt::GotoIfNot, indent::Int, ::Int) = show_unquoted_gotoifnot(io, stmt, indent, "%")
+function show_unquoted_gotoifnot(io::IO, stmt::GotoIfNot, indent::Int, prefix::String)
+    print(io, "goto ", prefix, stmt.dest, " if not ")
+    show_unquoted(io, stmt.cond, indent)
 end
 
 function dump(io::IOContext, x::SimpleVector, n::Int, indent)
@@ -2906,7 +2857,7 @@ function dump(io::IOContext, x::SimpleVector, n::Int, indent)
     end
     print(io, "SimpleVector")
     if n > 0
-        for i = 1:length(x)
+        for i in eachindex(x)
             println(io)
             print(io, indent, "  ", i, ": ")
             if isassigned(x,i)
@@ -3023,7 +2974,7 @@ function dump(io::IOContext, x::DataType, n::Int, indent)
         end
         fields = fieldnames(x)
         fieldtypes = datatype_fieldtypes(x)
-        for idx in 1:length(fields)
+        for idx in eachindex(fields)
             println(io)
             print(io, indent, "  ")
             is_mut && isconst(x, idx) && print(io, "const ")
@@ -3145,7 +3096,7 @@ Print to a stream `io`, or return a string `str`, giving a brief description of
 a value. By default returns `string(typeof(x))`, e.g. [`Int64`](@ref).
 
 For arrays, returns a string of size and type info,
-e.g. `10-element Array{Int64,1}`.
+e.g. `10-element Vector{Int64}` or `9×4×5 Array{Float64, 3}`.
 
 # Examples
 ```jldoctest
@@ -3160,7 +3111,7 @@ summary(io::IO, x) = print(io, typeof(x))
 function summary(x)
     io = IOBuffer()
     summary(io, x)
-    String(take!(io))
+    takestring!(io)
 end
 
 ## `summary` for AbstractArrays
@@ -3185,21 +3136,35 @@ function array_summary(io::IO, a, inds)
     print(io, " with indices ", inds2string(inds))
 end
 
+## `summary` for GenericMemoryRef
+function summary(io::IO, mref::GenericMemoryRef)
+    offset = Core.memoryrefoffset(mref)
+    len_after_offset = length(mref.mem) - offset + 1
+    print(io, len_after_offset, "-element ")
+    showarg(io, mref, true)
+end
+
 ## `summary` for Function
 summary(io::IO, f::Function) = show(io, MIME"text/plain"(), f)
 
 """
-    showarg(io::IO, x, toplevel)
+    Base.showarg(io::IO, x, toplevel)
 
-Show `x` as if it were an argument to a function. This function is
-used by [`summary`](@ref) to display type information in terms of sequences of
-function calls on objects. `toplevel` is `true` if this is
-the direct call from `summary` and `false` for nested (recursive) calls.
+Show the quasi-type of `x` where quasi-type is the type of `x` or an expression (possibly
+containing quasi-types) that would generate an object of the same type as `x`. The shorter
+of these two options is typically used.
 
-The fallback definition is to print `x` as "::\\\$(typeof(x))",
-representing argument `x` in terms of its type. (The double-colon is
-omitted if `toplevel=true`.) However, you can
-specialize this function for specific types to customize printing.
+This function is used by `summary` to display type information in terms of sequences of
+function calls on objects.
+
+Show a leading `::` if `toplevel` is `false` and showing a type. `toplevel` is `true` if
+this is the direct call from `summary` and `false` for nested (recursive) calls.
+
+The fallback definition is to print `x` as "::\\\$(typeof(x))" or "\\\$(typeof(x))",
+representing argument `x` in terms of its type. However, you can specialize
+this function for specific types to customize printing. This customization is useful for
+types that have simple, public constructors and verbose and/or internal types and type
+parameters such as `reinterpret`ed arrays or `SubArray`s.
 
 # Examples
 
@@ -3228,13 +3193,13 @@ type, indicating that any recursed calls are not at the top level.
 Printing the parent as `::Array{Float64,3}` is the fallback (non-toplevel)
 behavior, because no specialized method for `Array` has been defined.
 """
-function showarg(io::IO, T::Type, toplevel)
-    toplevel || print(io, "::")
-    print(io, "Type{", T, "}")
-end
 function showarg(io::IO, @nospecialize(x), toplevel)
     toplevel || print(io, "::")
     print(io, typeof(x))
+end
+function showarg(io::IO, T::Type, toplevel)
+    toplevel || print(io, "::")
+    print(io, "Type{", T, "}")
 end
 # This method resolves an ambiguity for packages that specialize on eltype
 function showarg(io::IO, a::Array{Union{}}, toplevel)
@@ -3260,7 +3225,9 @@ showindices(io) = nothing
 function showarg(io::IO, r::ReshapedArray, toplevel)
     print(io, "reshape(")
     showarg(io, parent(r), false)
-    print(io, ", ", join(r.dims, ", "))
+    if !isempty(r.dims)
+        print(io, ", ", join(r.dims, ", "))
+    end
     print(io, ')')
     toplevel && print(io, " with eltype ", eltype(r))
     return nothing
@@ -3294,7 +3261,7 @@ function Base.showarg(io::IO, r::Iterators.Pairs{<:Integer, <:Any, <:Any, T}, to
     print(io, "pairs(IndexLinear(), ::", T, ")")
 end
 
-function Base.showarg(io::IO, r::Iterators.Pairs{Symbol, <:Any, <:Any, T}, toplevel) where {T <: NamedTuple}
+function Base.showarg(io::IO, r::Iterators.Pairs{Symbol, <:Any, Nothing, T}, toplevel) where {T <: NamedTuple}
     print(io, "pairs(::NamedTuple)")
 end
 
@@ -3337,10 +3304,119 @@ bitstring(B::BitArray) = sprint(bitshow, B)
 function show(io::IO, oc::Core.OpaqueClosure)
     A, R = typeof(oc).parameters
     show_tuple_as_call(io, Symbol(""), A; hasfirst=false)
-    print(io, "::", R)
     print(io, "->◌")
+    print(io, "::", R)
 end
 
 function show(io::IO, ::MIME"text/plain", oc::Core.OpaqueClosure{A, R}) where {A, R}
     show(io, oc)
+end
+
+# printing bindings and partitions
+function print_partition(io::IO, partition::Core.BindingPartition)
+    print(io, partition.min_world)
+    print(io, ":")
+    max_world = @atomic partition.max_world
+    if max_world == typemax(UInt)
+        print(io, '∞')
+    else
+        print(io, max_world)
+    end
+    if (partition.kind & PARTITION_MASK_FLAG) != 0
+        first = false
+        print(io, " [")
+        if (partition.kind & PARTITION_FLAG_EXPORTED) != 0
+            print(io, "exported")
+        end
+        if (partition.kind & PARTITION_FLAG_IMPLICITLY_EXPORTED) != 0
+            first ? (first = false) : print(io, ",")
+            print(io, "re-exported")
+        end
+        if (partition.kind & PARTITION_FLAG_DEPRECATED) != 0
+            first ? (first = false) : print(io, ",")
+            print(io, "deprecated")
+        end
+        if (partition.kind & PARTITION_FLAG_DEPWARN) != 0
+            first ? (first = false) : print(io, ",")
+            print(io, "depwarn")
+        end
+        print(io, "]")
+    end
+    print(io, " - ")
+    kind = binding_kind(partition)
+    if kind == PARTITION_KIND_BACKDATED_CONST
+        print(io, "backdated constant binding to ")
+        print(io, partition_restriction(partition))
+    elseif kind == PARTITION_KIND_CONST
+        print(io, "constant binding to ")
+        print(io, partition_restriction(partition))
+    elseif kind == PARTITION_KIND_CONST_IMPORT
+        print(io, "constant binding (declared with `import`) to ")
+        print(io, partition_restriction(partition))
+    elseif kind == PARTITION_KIND_UNDEF_CONST
+        print(io, "undefined const binding")
+    elseif kind == PARTITION_KIND_GUARD
+        print(io, "undefined binding - guard entry")
+    elseif kind == PARTITION_KIND_FAILED
+        print(io, "ambiguous binding - guard entry")
+    elseif kind == PARTITION_KIND_DECLARED
+        print(io, "weak global binding declared using `global` (implicit type Any)")
+    elseif kind == PARTITION_KIND_IMPLICIT_GLOBAL
+        print(io, "implicit `using` resolved to global ")
+        print(io, partition_restriction(partition).globalref)
+    elseif kind == PARTITION_KIND_IMPLICIT_CONST
+        print(io, "implicit `using` resolved to constant ")
+        print(io, partition_restriction(partition))
+    elseif kind == PARTITION_KIND_EXPLICIT
+        print(io, "explicit `using` from ")
+        print(io, partition_restriction(partition).globalref)
+    elseif kind == PARTITION_KIND_IMPORTED
+        print(io, "explicit `import` from ")
+        print(io, partition_restriction(partition).globalref)
+    else
+        @assert kind == PARTITION_KIND_GLOBAL
+        print(io, "global variable with type ")
+        print(io, partition_restriction(partition))
+    end
+end
+
+function show(io::IO, ::MIME"text/plain", partition::Core.BindingPartition)
+    print(io, "BindingPartition ")
+    print_partition(io, partition)
+end
+
+function show(io::IO, ::MIME"text/plain", bnd::Core.Binding)
+    print(io, "Binding ")
+    print(io, bnd.globalref)
+    if !isdefined(bnd, :partitions)
+        print(io, " - No partitions")
+    else
+        partition = @atomic bnd.partitions
+        while true
+            println(io)
+            print(io, "   ")
+            print_partition(io, partition)
+            isdefined(partition, :next) || break
+            partition = @atomic partition.next
+        end
+    end
+end
+
+# Special pretty printing for EvalInto/IncludeInto
+function show(io::IO, ii::IncludeInto)
+    if getglobal(ii.m, :include) === ii
+        print(io, ii.m)
+        print(io, ".include")
+    else
+        show_default(io, ii)
+    end
+end
+
+function show(io::IO, ei::Core.EvalInto)
+    if getglobal(ei.m, :eval) === ei
+        print(io, ei.m)
+        print(io, ".eval")
+    else
+        show_default(io, ei)
+    end
 end

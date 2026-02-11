@@ -7,7 +7,7 @@ $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2: | $(SRCCACHE)
 $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted: $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	mkdir $(dir $@)
-	cd $(dir $@) && $(TAR) jxf $< --strip-components=1
+	cd $(dir $@) && $(TAR) -jxf $< --strip-components=1
 	touch -c $(SRCCACHE)/patchelf-$(PATCHELF_VER)/configure # old target
 	echo 1 > $@
 

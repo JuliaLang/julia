@@ -91,7 +91,7 @@ julia> sum(Squares(100))
 ```
 
 There are a few more methods we can extend to give Julia more information about this iterable
-collection.  We know that the elements in a `Squares` sequence will always be `Int`. By extending
+collection. We know that the elements in a `Squares` sequence will always be `Int`. By extending
 the [`eltype`](@ref) method, we can give that information to Julia and help it make more specialized
 code in the more complicated methods. We also know the number of elements in our sequence, so
 we can extend [`length`](@ref), too:
@@ -131,7 +131,7 @@ to additionally specialize those extra behaviors when they know a more efficient
 be used in their specific case.
 
 It is also often useful to allow iteration over a collection in *reverse order*
-by iterating over [`Iterators.reverse(iterator)`](@ref).  To actually support
+by iterating over [`Iterators.reverse(iterator)`](@ref). To actually support
 reverse-order iteration, however, an iterator
 type `T` needs to implement `iterate` for `Iterators.Reverse{T}`.
 (Given `r::Iterators.Reverse{T}`, the underling iterator of type `T` is `r.itr`.)
@@ -158,7 +158,7 @@ julia> collect(Iterators.reverse(Squares(4)))
 | `lastindex(X)`           | The last index, used in `X[end]`   |
 
 For the `Squares` iterable above, we can easily compute the `i`th element of the sequence by squaring
-it.  We can expose this as an indexing expression `S[i]`. To opt into this behavior, `Squares`
+it. We can expose this as an indexing expression `S[i]`. To opt into this behavior, `Squares`
 simply needs to define [`getindex`](@ref):
 
 ```jldoctest squaretype
@@ -233,12 +233,12 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | `similar(T::Union{Type,Function}, inds)`   | `T(Base.to_shape(inds))`               | Return an array similar to `T` with the specified indices `inds` (see below)          |
 
 If a type is defined as a subtype of `AbstractArray`, it inherits a very large set of rich behaviors
-including iteration and multidimensional indexing built on top of single-element access.  See
+including iteration and multidimensional indexing built on top of single-element access. See
 the [arrays manual page](@ref man-multi-dim-arrays) and the [Julia Base section](@ref lib-arrays) for more supported methods.
 
 A key part in defining an `AbstractArray` subtype is [`IndexStyle`](@ref). Since indexing is
 such an important part of an array and often occurs in hot loops, it's important to make both
-indexing and indexed assignment as efficient as possible.  Array data structures are typically
+indexing and indexed assignment as efficient as possible. Array data structures are typically
 defined in one of two ways: either it most efficiently accesses its elements using just one index
 (linear indexing) or it intrinsically accesses the elements with indices specified for every dimension.
  These two modalities are identified by Julia as `IndexLinear()` and `IndexCartesian()`.
@@ -246,7 +246,7 @@ defined in one of two ways: either it most efficiently accesses its elements usi
 provides a traits-based mechanism to enable efficient generic code for all array types.
 
 This distinction determines which scalar indexing methods the type must define. `IndexLinear()`
-arrays are simple: just define `getindex(A::ArrayType, i::Int)`.  When the array is subsequently
+arrays are simple: just define `getindex(A::ArrayType, i::Int)`. When the array is subsequently
 indexed with a multidimensional set of indices, the fallback `getindex(A::AbstractArray, I...)`
 efficiently converts the indices into one linear index and then calls the above method. `IndexCartesian()`
 arrays, on the other hand, require methods to be defined for each supported dimensionality with
@@ -255,10 +255,10 @@ library module, only supports two dimensions, so it just defines
 `getindex(A::SparseMatrixCSC, i::Int, j::Int)`. The same holds for [`setindex!`](@ref).
 
 Returning to the sequence of squares from above, we could instead define it as a subtype of an
-`AbstractArray{Int, 1}`:
+`AbstractVector{Int}`:
 
 ```jldoctest squarevectype
-julia> struct SquaresVector <: AbstractArray{Int, 1}
+julia> struct SquaresVector <: AbstractVector{Int}
            count::Int
        end
 
@@ -400,18 +400,47 @@ perhaps range-types `Ind` of your own design. For more information, see
 | Methods to implement                            |                                        | Brief description                                                                     |
 |:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
 | `strides(A)`                                    |                                        | Return the distance in memory (in number of elements) between adjacent elements in each dimension as a tuple. If `A` is an `AbstractArray{T,0}`, this should return an empty tuple.    |
-| `Base.unsafe_convert(::Type{Ptr{T}}, A)`        |                                        | Return the native address of an array.                                                             |
-| `Base.elsize(::Type{<:A})`                      |                                        | Return the stride between consecutive elements in the array.                                       |
-| **Optional methods**                            | **Default definition**                 | **Brief description**                                                                              |
-| `stride(A, i::Int)`                             |     `strides(A)[i]`                    | Return the distance in memory (in number of elements) between adjacent elements in dimension k.    |
+| `Base.unsafe_convert(::Type{Ptr{T}}, Base.cconvert(Ptr{T}, A))` |                        | Return the native address of an array. |
+| `Base.elsize(::Type{<:A})`                      |                                        | Return the stride (in number of bytes) between consecutive elements in the array.                    |
+| **Optional methods**                            | **Default definition**                 | **Brief description**                                                                                |
+| `stride(A, i::Int)`                             |     `strides(A)[i]`                    | Return the distance in memory (in number of elements) between adjacent elements in dimension i.      |
+| `Base.cconvert(::Type{Ptr{T}}, A)`              |     `A`                                | Return an object that can be converted to the native address of the array with [`Base.unsafe_convert`](@ref) |
 
 A strided array is a subtype of `AbstractArray` whose entries are stored in memory with fixed strides.
 Provided the element type of the array is compatible with BLAS, a strided array can utilize BLAS and LAPACK routines
-for more efficient linear algebra routines.  A typical example of a user-defined strided array is one
+for more efficient linear algebra routines. A typical example of a user-defined strided array is one
 that wraps a standard `Array` with additional structure.
 
 Warning: do not implement these methods if the underlying storage is not actually strided, as it
 may lead to incorrect results or segmentation faults.
+
+The following function demonstrates how an element at indices `I` in a strided array `A` can be accessed.
+This function assumes the element type `isbitstype` and the indices are inbounds.
+
+```jldoctest
+julia> function unsafe_strided_getindex(A::AbstractArray{T,N}, I::Vararg{Int, N})::T where {T, N}
+           A_cconv = Base.cconvert(Ptr{T}, A)
+           GC.@preserve A_cconv begin
+               A_ptr = Base.unsafe_convert(Ptr{T}, A_cconv)
+               for d in 1:N
+                   stride_in_bytes = stride(A, d) * Base.elsize(typeof(A))
+                   first_idx = first(axes(A, d))
+                   A_ptr += (I[d] - first_idx) * stride_in_bytes
+               end
+               unsafe_load(A_ptr)
+           end
+       end;
+
+julia> A = [1 5; 2 6; 3 7; 4 8];
+
+julia> unsafe_strided_getindex(A, 3, 2)
+7
+
+julia> V = view(A, 1:2:3, 1:2);
+
+julia> unsafe_strided_getindex(V, 2, 2)
+7
+```
 
 Here are some examples to demonstrate which type of arrays are strided and which are not:
 ```julia
@@ -464,7 +493,7 @@ container for broadcasting, then the following method should be defined:
 ```julia
 Base.broadcastable(o::MyType) = Ref(o)
 ```
-that returns the argument wrapped in a 0-dimensional [`Ref`](@ref) container.   For example, such a wrapper
+that returns the argument wrapped in a 0-dimensional [`Ref`](@ref) container. For example, such a wrapper
 method is defined for types themselves, functions, special singletons like [`missing`](@ref) and [`nothing`](@ref), and dates.
 
 Custom array-like types can specialize
@@ -526,8 +555,8 @@ similar(bc::Broadcasted{DefaultArrayStyle{N}}, ::Type{ElType}) where {N,ElType} 
 
 However, if needed you can specialize on any or all of these arguments. The final argument
 `bc` is a lazy representation of a (potentially fused) broadcast operation, a `Broadcasted`
-object.  For these purposes, the most important fields of the wrapper are
-`f` and `args`, describing the function and argument list, respectively.  Note that the argument
+object. For these purposes, the most important fields of the wrapper are
+`f` and `args`, describing the function and argument list, respectively. Note that the argument
 list can — and often does — include other nested `Broadcasted` wrappers.
 
 For a complete example, let's say you have created a type, `ArrayAndChar`, that stores an

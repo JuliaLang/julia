@@ -24,49 +24,52 @@ JL_DLLEXPORT char *jl_genericmemory_typetagdata(jl_genericmemory_t *m) JL_NOTSAF
     return (char*)m->ptr + m->length * layout->size;
 }
 
-#if defined(_P64) && defined(UINT128MAX)
-typedef __uint128_t wideint_t;
-#else
-typedef uint64_t wideint_t;
-#endif
-
 #define MAXINTVAL (((size_t)-1)>>1)
 
-jl_genericmemory_t *_new_genericmemory_(jl_value_t *mtype, size_t nel, int8_t isunion, int8_t zeroinit, size_t elsz)
+// ONLY USE FROM CODEGEN. It only partially initializes the mem
+JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory_unchecked(jl_ptls_t ptls, size_t nbytes, jl_datatype_t *mtype)
 {
-    jl_task_t *ct = jl_current_task;
-    char *data;
-    jl_genericmemory_t *m;
-    if (nel == 0) // zero-sized allocation optimization
-        return (jl_genericmemory_t*)((jl_datatype_t*)mtype)->instance;
-    wideint_t prod = (wideint_t)nel * elsz;
-    if (isunion) {
-        // an extra byte for each isbits union memory element, stored at m->ptr + m->length
-        prod += nel;
-    }
-    if (nel >= MAXINTVAL || prod >= (wideint_t) MAXINTVAL)
-        jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory size: too large for system address width");
-    size_t tot = (size_t)prod + LLT_ALIGN(sizeof(jl_genericmemory_t),JL_SMALL_BYTE_ALIGNMENT);
+    size_t tot = nbytes + LLT_ALIGN(sizeof(jl_genericmemory_t),JL_SMALL_BYTE_ALIGNMENT);
 
     int pooled = tot <= GC_MAX_SZCLASS;
+    char *data;
+    jl_genericmemory_t *m;
     if (!pooled) {
-        data = (char*)jl_gc_managed_malloc(prod);
+        data = (char*)jl_gc_managed_malloc(nbytes);
         tot = sizeof(jl_genericmemory_t) + sizeof(void*);
     }
-    m = (jl_genericmemory_t*)jl_gc_alloc(ct->ptls, tot, mtype);
+    m = (jl_genericmemory_t*)jl_gc_alloc(ptls, tot, mtype);
     if (pooled) {
+        // N.B. if this offset changes, also update emit_const_len_memorynew in cgutils.cpp
         data = (char*)m + JL_SMALL_BYTE_ALIGNMENT;
     }
     else {
         int isaligned = 1; // jl_gc_managed_malloc is always aligned
-        jl_gc_track_malloced_genericmemory(ct->ptls, m, isaligned);
+        jl_gc_track_malloced_genericmemory(ptls, m, isaligned);
         jl_genericmemory_data_owner_field(m) = (jl_value_t*)m;
     }
-    m->length = nel;
+    // length set by codegen
     m->ptr = data;
+    return m;
+}
 
+jl_genericmemory_t *_new_genericmemory_(jl_value_t *mtype, size_t nel, int8_t isunion, int8_t zeroinit, size_t elsz)
+{
+    if (nel == 0) // zero-sized allocation optimization
+        return (jl_genericmemory_t*)((jl_datatype_t*)mtype)->instance;
+    size_t nbytes = 0; // initialized to workaround clang sa bug on v20: https://github.com/llvm/llvm-project/issues/136292
+    int overflow = __builtin_mul_overflow(nel, elsz, &nbytes);
+    if (isunion) {
+        // an extra byte for each isbits union memory element, stored at m->ptr + m->length
+        overflow |= __builtin_add_overflow(nel, nbytes, &nbytes);
+    }
+    if ((nel >= MAXINTVAL-1) || (nbytes >= MAXINTVAL-1) || overflow)
+        jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory size: the number of elements is either negative or too large for system address width");
+    jl_task_t *ct = jl_current_task;
+    jl_genericmemory_t *m = jl_alloc_genericmemory_unchecked((jl_ptls_t) ct->ptls, nbytes, (jl_datatype_t*)mtype);
+    m->length = nel;
     if (zeroinit)
-        memset(data, 0, (size_t)prod);
+        memset((char*)m->ptr, 0, nbytes);
     return m;
 }
 
@@ -150,22 +153,24 @@ JL_DLLEXPORT jl_genericmemory_t *jl_ptr_to_genericmemory(jl_value_t *mtype, void
     if (((uintptr_t)data) & ((align > JL_HEAP_ALIGNMENT ? JL_HEAP_ALIGNMENT : align) - 1))
         jl_exceptionf(jl_argumenterror_type,
                       "unsafe_wrap: pointer %p is not properly aligned to %u bytes", data, align);
-    wideint_t prod = (wideint_t)nel * elsz;
+    size_t nbytes = 0; // initialized to workaround clang sa bug on v20: https://github.com/llvm/llvm-project/issues/136292
+    int overflow = __builtin_mul_overflow(nel, elsz, &nbytes);
     if (isunion) {
         // an extra byte for each isbits union memory element, stored at m->ptr + m->length
-        prod += nel;
+        overflow |= __builtin_add_overflow(nel, nbytes, &nbytes);
     }
-    if (nel >= MAXINTVAL || prod >= (wideint_t) MAXINTVAL)
-        jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory size: too large for system address width");
+    if ((nel >= MAXINTVAL) || (nbytes >= MAXINTVAL) || overflow)
+        jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory size: the number of elements is either negative or too large for system address width");
     int tsz = sizeof(jl_genericmemory_t) + sizeof(void*);
     m = (jl_genericmemory_t*)jl_gc_alloc(ct->ptls, tsz, mtype);
     m->ptr = data;
     m->length = nel;
-    jl_genericmemory_data_owner_field(m) = NULL;
-    int isaligned = 0;  // TODO: allow passing memalign'd buffers
+    jl_genericmemory_data_owner_field(m) = own_buffer ? (jl_value_t*)m : NULL;
     if (own_buffer) {
+        int isaligned = 0;  // TODO: allow passing memalign'd buffers
         jl_gc_track_malloced_genericmemory(ct->ptls, m, isaligned);
-        jl_gc_count_allocd(nel*elsz);
+        size_t allocated_bytes = memory_block_usable_size(data, isaligned);
+        jl_gc_count_allocd(allocated_bytes);
     }
     return m;
 }
@@ -193,11 +198,9 @@ JL_DLLEXPORT jl_value_t *jl_genericmemory_to_string(jl_genericmemory_t *m, size_
     }
     int how = jl_genericmemory_how(m);
     size_t mlength = m->length;
-    m->length = 0;
     if (how != 0) {
         jl_value_t *o = jl_genericmemory_data_owner_field(m);
-        jl_genericmemory_data_owner_field(m) = NULL;
-        if (how == 3 &&
+        if (how == 3 && // implies jl_is_string(o)
              ((mlength + sizeof(void*) + 1 <= GC_MAX_SZCLASS) == (len + sizeof(void*) + 1 <= GC_MAX_SZCLASS))) {
             if (jl_string_data(o)[len] != '\0')
                 jl_string_data(o)[len] = '\0';
@@ -210,45 +213,13 @@ JL_DLLEXPORT jl_value_t *jl_genericmemory_to_string(jl_genericmemory_t *m, size_
         JL_GC_POP();
         return str;
     }
+    // n.b. how == 0 is always pool-allocated, so the freed bytes are computed from the pool not the object
     return jl_pchar_to_string((const char*)m->ptr, len);
 }
 
 JL_DLLEXPORT jl_genericmemory_t *jl_alloc_memory_any(size_t n)
 {
     return jl_alloc_genericmemory(jl_memory_any_type, n);
-}
-
-JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_slice(jl_genericmemory_t *mem, void *data, size_t len)
-{
-    // Given a GenericMemoryRef represented as `jl_genericmemory_ref ref = {data, mem}`,
-    // return a new GenericMemory that only accesses the slice from the given GenericMemoryRef to
-    // the given length if this is possible to return. This allows us to make
-    // `length(Array)==length(Array.ref.mem)`, for simplification of this.
-    jl_datatype_t *dt = (jl_datatype_t*)jl_typetagof(mem);
-    const jl_datatype_layout_t *layout = dt->layout;
-    // repeated checks here ensure the values cannot overflow, since we know mem->length is a reasonable value
-    if (len > mem->length)
-        jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory slice"); // TODO: make a BoundsError
-    if (layout->flags.arrayelem_isunion) {
-        if (!((size_t)data == 0 && mem->length == len))
-            jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory slice"); // only exact slices are supported
-        data = mem->ptr;
-    }
-    else if (layout->size == 0) {
-        if ((size_t)data > mem->length || (size_t)data + len > mem->length)
-            jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory slice"); // TODO: make a BoundsError
-        data = mem->ptr;
-    }
-    else {
-        if (data < mem->ptr || (char*)data > (char*)mem->ptr + mem->length * layout->size || (char*)data + len * layout->size > (char*)mem->ptr + mem->length * layout->size)
-            jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory slice"); // TODO: make a BoundsError
-    }
-    jl_task_t *ct = jl_current_task;
-    jl_genericmemory_t *newmem = (jl_genericmemory_t*)jl_gc_alloc(ct->ptls, sizeof(jl_genericmemory_t) + sizeof(void*), dt);
-    newmem->length = len;
-    newmem->ptr = data;
-    jl_genericmemory_data_owner_field(newmem) = jl_genericmemory_owner(mem);
-    return newmem;
 }
 
 JL_DLLEXPORT void jl_genericmemory_copyto(jl_genericmemory_t *dest, char* destdata,
@@ -263,36 +234,7 @@ JL_DLLEXPORT void jl_genericmemory_copyto(jl_genericmemory_t *dest, char* destda
         _Atomic(void*) * dest_p = (_Atomic(void*)*)destdata;
         _Atomic(void*) * src_p = (_Atomic(void*)*)srcdata;
         jl_value_t *owner = jl_genericmemory_owner(dest);
-        if (__unlikely(jl_astaggedvalue(owner)->bits.gc == GC_OLD_MARKED)) {
-            jl_value_t *src_owner = jl_genericmemory_owner(src);
-            ssize_t done = 0;
-            if (jl_astaggedvalue(src_owner)->bits.gc != GC_OLD_MARKED) {
-                if (dest_p < src_p || dest_p > src_p + n) {
-                    for (; done < n; done++) { // copy forwards
-                        void *val = jl_atomic_load_relaxed(src_p + done);
-                        jl_atomic_store_release(dest_p + done, val);
-                        // `val` is young or old-unmarked
-                        if (val && !(jl_astaggedvalue(val)->bits.gc & GC_MARKED)) {
-                            jl_gc_queue_root(owner);
-                            break;
-                        }
-                    }
-                    src_p += done;
-                    dest_p += done;
-                } else {
-                    for (; done < n; done++) { // copy backwards
-                        void *val = jl_atomic_load_relaxed(src_p + n - done - 1);
-                        jl_atomic_store_release(dest_p + n - done - 1, val);
-                        // `val` is young or old-unmarked
-                        if (val && !(jl_astaggedvalue(val)->bits.gc & GC_MARKED)) {
-                            jl_gc_queue_root(owner);
-                            break;
-                        }
-                    }
-                }
-                n -= done;
-            }
-        }
+        jl_gc_wb_genericmemory_copy_boxed(owner, dest_p, src, src_p, &n);
         return memmove_refs(dest_p, src_p, n);
     }
     size_t elsz = layout->size;
@@ -308,17 +250,7 @@ JL_DLLEXPORT void jl_genericmemory_copyto(jl_genericmemory_t *dest, char* destda
     if (layout->first_ptr != -1) {
         memmove_refs((_Atomic(void*)*)destdata, (_Atomic(void*)*)srcdata, n * elsz / sizeof(void*));
         jl_value_t *owner = jl_genericmemory_owner(dest);
-        if (__unlikely(jl_astaggedvalue(owner)->bits.gc == GC_OLD_MARKED)) {
-            jl_value_t *src_owner = jl_genericmemory_owner(src);
-            if (jl_astaggedvalue(src_owner)->bits.gc != GC_OLD_MARKED) {
-                dt = (jl_datatype_t*)jl_tparam1(dt);
-                for (size_t done = 0; done < n; done++) { // copy forwards
-                    char* s = (char*)src_p+done*elsz;
-                    if (*((jl_value_t**)s+layout->first_ptr) != NULL)
-                        jl_gc_queue_multiroot(owner, s, dt);
-                }
-            }
-        }
+        jl_gc_wb_genericmemory_copy_ptr(owner, src, src_p, n, dt);
     }
     else {
         memmove(destdata, srcdata, n * elsz);
@@ -330,8 +262,8 @@ JL_DLLEXPORT void jl_genericmemory_copyto(jl_genericmemory_t *dest, char* destda
 
 JL_DLLEXPORT jl_value_t *jl_genericmemoryref(jl_genericmemory_t *mem, size_t i)
 {
-    int isatomic = (jl_tparam0(jl_typetagof(mem)) == (jl_value_t*)jl_atomic_sym);
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(mem))->layout;
+    int isatomic = layout->flags.arrayelem_isatomic || layout->flags.arrayelem_islocked;
     jl_genericmemoryref_t m;
     m.mem = mem;
     m.ptr_or_offset = (layout->flags.arrayelem_isunion || layout->size == 0) ? (void*)i : (void*)((char*)mem->ptr + layout->size * i);
@@ -350,6 +282,9 @@ JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_copy_slice(jl_genericmemory_t 
         memcpy(jl_genericmemory_typetagdata(new_mem), jl_genericmemory_typetagdata(mem) + (size_t)data, len);
     }
     else if (layout->first_ptr != -1) {
+        if (data == NULL) {
+            assert(len * elsz / sizeof(void*) == 0); // make static analyzer happy
+        }
         memmove_refs((_Atomic(void*)*)new_mem->ptr, (_Atomic(void*)*)data, len * elsz / sizeof(void*));
     }
     else if (data != NULL) {
@@ -407,8 +342,8 @@ static jl_value_t *jl_ptrmemrefget(jl_genericmemoryref_t m JL_PROPAGATES_ROOT, i
 
 JL_DLLEXPORT jl_value_t *jl_memoryrefget(jl_genericmemoryref_t m, int isatomic)
 {
-    assert(isatomic == (jl_tparam0(jl_typetagof(m.mem)) == (jl_value_t*)jl_atomic_sym));
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(m.mem))->layout;
+    assert(isatomic == (layout->flags.arrayelem_isatomic || layout->flags.arrayelem_islocked));
     if (layout->flags.arrayelem_isboxed)
         return jl_ptrmemrefget(m, isatomic);
     jl_value_t *eltype = jl_tparam1(jl_typetagof(m.mem));
@@ -430,7 +365,7 @@ JL_DLLEXPORT jl_value_t *jl_memoryrefget(jl_genericmemoryref_t m, int isatomic)
     assert(data - (char*)m.mem->ptr < layout->size * m.mem->length);
     jl_value_t *r;
     size_t fsz = jl_datatype_size(eltype);
-    int needlock = isatomic && fsz > MAX_ATOMIC_SIZE;
+    int needlock = layout->flags.arrayelem_islocked;
     if (isatomic && !needlock) {
         r = jl_atomic_new_bits(eltype, data);
     }
@@ -458,9 +393,6 @@ static int _jl_memoryref_isassigned(jl_genericmemoryref_t m, int isatomic)
     if (layout->flags.arrayelem_isboxed) {
     }
     else if (layout->first_ptr >= 0) {
-        int needlock = isatomic && layout->size > MAX_ATOMIC_SIZE;
-        if (needlock)
-            elem = elem + LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT) / sizeof(jl_value_t*);
         elem = &elem[layout->first_ptr];
     }
     else {
@@ -476,7 +408,8 @@ JL_DLLEXPORT jl_value_t *jl_memoryref_isassigned(jl_genericmemoryref_t m, int is
 
 JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m JL_ROOTING_ARGUMENT, jl_value_t *rhs JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, int isatomic)
 {
-    assert(isatomic == (jl_tparam0(jl_typetagof(m.mem)) == (jl_value_t*)jl_atomic_sym));
+    const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(m.mem))->layout;
+    assert(isatomic == (layout->flags.arrayelem_isatomic || layout->flags.arrayelem_islocked));
     jl_value_t *eltype = jl_tparam1(jl_typetagof(m.mem));
     if (eltype != (jl_value_t*)jl_any_type && !jl_typeis(rhs, eltype)) {
         JL_GC_PUSH1(&rhs);
@@ -484,7 +417,6 @@ JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m JL_ROOTING_ARGUMENT, j
             jl_type_error("memoryrefset!", eltype, rhs);
         JL_GC_POP();
     }
-    const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(m.mem))->layout;
     if (layout->flags.arrayelem_isboxed) {
         assert((char*)m.ptr_or_offset - (char*)m.mem->ptr < sizeof(jl_value_t*) * m.mem->length);
         if (isatomic)
@@ -514,7 +446,7 @@ JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m JL_ROOTING_ARGUMENT, j
     }
     if (layout->size != 0) {
         assert(data - (char*)m.mem->ptr < layout->size * m.mem->length);
-        int needlock = isatomic && layout->size > MAX_ATOMIC_SIZE;
+        int needlock = layout->flags.arrayelem_islocked;
         size_t fsz = jl_datatype_size((jl_datatype_t*)jl_typeof(rhs)); // need to shrink-wrap the final copy
         if (isatomic && !needlock) {
             jl_atomic_store_bits(data, rhs, fsz);
@@ -574,7 +506,7 @@ JL_DLLEXPORT jl_value_t *jl_memoryrefmodify(jl_genericmemoryref_t m, jl_value_t 
     char *data = (char*)m.ptr_or_offset;
     if (layout->flags.arrayelem_isboxed) {
         assert(data - (char*)m.mem->ptr < sizeof(jl_value_t*) * m.mem->length);
-        return modify_value(eltype, (_Atomic(jl_value_t*)*)data, owner, op, rhs, isatomic, NULL, NULL);
+        return modify_value(eltype, (_Atomic(jl_value_t*)*)data, owner, op, rhs, isatomic, NULL, NULL, NULL);
     }
     size_t fsz = layout->size;
     uint8_t *psel = NULL;

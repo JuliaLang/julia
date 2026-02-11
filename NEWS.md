@@ -1,44 +1,35 @@
-Julia v1.12 Release Notes
+Julia v1.14 Release Notes
 ========================
 
 New language features
 ---------------------
 
+  - It is now possible to control which version of the Julia syntax will be used to parse a package by setting the
+    `compat.julia` or `syntax.julia_version` key in Project.toml. This feature is similar to the notion of "editions"
+    in other language ecosystems and will allow non-breaking evolution of Julia syntax in future versions.
+    See the "Syntax Versioning" section in the code loading documentation ([#60018]).
+  - `ᵅ` (U+U+1D45), `ᵋ` (U+1D4B), `ᶲ` (U+1DB2), `˱` (U+02F1), `˲` (U+02F2), and `ₔ` (U+2094) can now also be used as
+    operator suffixes, accessible as `\^alpha`, `\^epsilon`, `\^ltphi`, `\_<`, `\_>`, and `\_schwa` at the REPL
+    ([#60285]).
+  - The `@label` macro can now create labeled blocks that can be exited early with `break name [value]`. Use
+    `@label name expr` for named blocks or `@label _ expr` for anonymous blocks. The `continue` statement also
+    supports labels with `continue name` to continue a labeled loop ([#60481]).
+
 Language changes
 ----------------
-
- - When methods are replaced with exactly equivalent ones, the old method is no
-   longer deleted implicitly simultaneously, although the new method does take
-   priority and become more specific than the old method. Thus if the new
-   method is deleted later, the old method will resume operating. This can be
-   useful to mocking frameworks (such as in SparseArrays, Pluto, and Mocking,
-   among others), as they do not need to explicitly restore the old method.
-   While inference and compilation still must be repeated with this, it also
-   may pave the way for inference to be able to intelligently re-use the old
-   results, once the new method is deleted. ([#53415])
-
- - Macro expansion will no longer eargerly recurse into into `Expr(:toplevel)`
-   expressions returned from macros. Instead, macro expansion of `:toplevel`
-   expressions will be delayed until evaluation time. This allows a later
-   expression within a given `:toplevel` expression to make use of macros
-   defined earlier in the same `:toplevel` expression. ([#53515])
 
 Compiler/Runtime improvements
 -----------------------------
 
-- Generated LLVM IR now uses actual pointer types instead of passing pointers as integers.
-  This affects `llvmcall`: Inline LLVM IR should be updated to use `i8*` or `ptr` instead of
-  `i32` or `i64`, and remove unneeded `ptrtoint`/`inttoptr` conversions. For compatibility,
-  IR with integer pointers is still supported, but generates a deprecation warning. ([#53687])
-
 Command-line option changes
 ---------------------------
 
-* The `-m/--module` flag can be passed to run the `main` function inside a package with a set of arguments.
-  This `main` function should be declared using `@main` to indicate that it is an entry point.
-
 Multi-threading changes
 -----------------------
+
+  - New functions `Threads.atomic_fence_heavy` and `Threads.atomic_fence_light` provide support for
+    asymmetric atomic fences, speeding up atomic synchronization where one side of the synchronization
+    runs significantly less often than the other ([#60311]).
 
 Build system changes
 --------------------
@@ -46,48 +37,26 @@ Build system changes
 New library functions
 ---------------------
 
-* `logrange(start, stop; length)` makes a range of constant ratio, instead of constant step ([#39071])
-* The new `isfull(c::Channel)` function can be used to check if `put!(c, some_value)` will block. ([#53159])
-* `waitany(tasks; throw=false)` and `waitall(tasks; failfast=false, throw=false)` which wait multiple tasks at once ([#53341]).
-
 New library features
 --------------------
 
-* `invmod(n, T)` where `T` is a native integer type now computes the modular inverse of `n` in the modular integer ring that `T` defines ([#52180]).
-* `invmod(n)` is an abbreviation for `invmod(n, typeof(n))` for native integer types ([#52180]).
-* `replace(string, pattern...)` now supports an optional `IO` argument to
-  write the output to a stream rather than returning a string ([#48625]).
-* `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
-* New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
-* New function `Docs.undocumented_names(module)` returns a module's undocumented public names ([#52413]).
-* Passing an `IOBuffer` as a stdout argument for `Process` spawn now works as
-  expected, synchronized with `wait` or `success`, so a `Base.BufferStream` is
-  no longer required there for correctness to avoid data races ([#52461]).
-* After a process exits, `closewrite` will no longer be automatically called on
-  the stream passed to it. Call `wait` on the process instead to ensure the
-  content is fully written, then call `closewrite` manually to avoid
-  data-races. Or use the callback form of `open` to have all that handled
-  automatically.
-* `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
-* `filter` can now act on a `NamedTuple` ([#50795]).
-* `tempname` can now take a suffix string to allow the file name to include a suffix and include that suffix in
-  the uniquing checking ([#53474])
-* `RegexMatch` objects can now be used to construct `NamedTuple`s and `Dict`s ([#50988])
+* `IOContext` supports a new boolean `hexunsigned` option that allows for
+  printing unsigned integers in decimal instead of hexadecimal ([#60267]).
 
 Standard library changes
 ------------------------
 
-#### StyledStrings
+* `codepoint(c)` now succeeds for overlong encodings.  `Base.ismalformed`, `Base.isoverlong`, and
+  `Base.show_invalid` are now `public` and documented (but not exported) ([#55152]).
 
 #### JuliaSyntaxHighlighting
 
-#### Package Manager
-
 #### LinearAlgebra
 
-#### Logging
+#### Markdown
 
-#### Printf
+  * Strikethrough text via `~strike~` or `~~through~~` is now supported by the
+    Markdown parser. ([#60537])
 
 #### Profile
 
@@ -95,31 +64,34 @@ Standard library changes
 
 #### REPL
 
-#### SuiteSparse
-
-#### SparseArrays
-
 #### Test
+
+* `@test`, `@test_throws`, and `@test_broken` now support a `context` keyword argument
+  that provides additional information displayed on test failure. This is useful for
+  debugging which specific case failed in parameterized tests ([#60501]).
+
+* `@test_throws`, `@test_warn`, `@test_nowarn`, `@test_logs`, and `@test_deprecated` now support
+  `broken` and `skip` keyword arguments for consistency with `@test` ([#60543]).
+
+* New functions `detect_closure_boxes` and `detect_closure_boxes_all` find methods that
+  allocate `Core.Box` in their lowered code, which can indicate performance issues from
+  captured variables in closures.
 
 #### Dates
 
-#### Statistics
-
-#### Distributed
-
-#### Unicode
-
-#### DelimitedFiles
+* `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
 
 #### InteractiveUtils
 
-Deprecated or removed
----------------------
+#### Dates
 
 External dependencies
 ---------------------
 
 Tooling Improvements
 --------------------
+
+Deprecated or removed
+---------------------
 
 <!--- generated by NEWS-update.jl: -->

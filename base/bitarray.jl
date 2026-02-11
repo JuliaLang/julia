@@ -53,7 +53,7 @@ Construct an undef [`BitArray`](@ref) with the given dimensions.
 Behaves identically to the [`Array`](@ref) constructor. See [`undef`](@ref).
 
 # Examples
-```julia-repl
+```jldoctest; filter = r"[01]"
 julia> BitArray(undef, 2, 2)
 2×2 BitMatrix:
  0  0
@@ -81,7 +81,7 @@ BitVector() = BitVector(undef, 0)
 
 Construct a `BitVector` from a tuple of `Bool`.
 # Examples
-```julia-repl
+```jldoctest
 julia> nt = (true, false, true, false)
 (true, false, true, false)
 
@@ -103,11 +103,6 @@ end
 length(B::BitArray) = B.len
 size(B::BitVector) = (B.len,)
 size(B::BitArray) = B.dims
-
-@inline function size(B::BitVector, d::Integer)
-    d < 1 && throw_boundserror(size(B), d)
-    ifelse(d == 1, B.len, 1)
-end
 
 isassigned(B::BitArray, i::Int) = 1 <= i <= length(B)
 
@@ -151,16 +146,14 @@ function copy_chunks!(dest::Vector{UInt64}, pos_d::Int, src::Vector{UInt64}, pos
     delta_ks = ks1 - ks0
 
     u = _msk64
+    msk_d0 = ~(u << ld0)
+    msk_d1 = (u << (ld1+1))
     if delta_kd == 0
-        msk_d0 = ~(u << ld0) | (u << (ld1+1))
-    else
-        msk_d0 = ~(u << ld0)
-        msk_d1 = (u << (ld1+1))
+        msk_d0 |= msk_d1
     end
+    msk_s0 = (u << ls0)
     if delta_ks == 0
-        msk_s0 = (u << ls0) & ~(u << (ls1+1))
-    else
-        msk_s0 = (u << ls0)
+        msk_s0 &= ~(u << (ls1+1))
     end
 
     chunk_s0 = glue_src_bitchunks(src, ks0, ks1, msk_s0, ls0)
@@ -211,16 +204,14 @@ function copy_chunks_rtol!(chunks::Vector{UInt64}, pos_d::Int, pos_s::Int, numbi
         delta_kd = kd1 - kd0
         delta_ks = ks1 - ks0
 
+        msk_d0 = ~(u << ld0)
+        msk_d1 = (u << (ld1+1))
         if delta_kd == 0
-            msk_d0 = ~(u << ld0) | (u << (ld1+1))
-        else
-            msk_d0 = ~(u << ld0)
-            msk_d1 = (u << (ld1+1))
+            msk_d0 |= msk_d1
         end
+        msk_s0 = (u << ls0)
         if delta_ks == 0
-            msk_s0 = (u << ls0) & ~(u << (ls1+1))
-        else
-            msk_s0 = (u << ls0)
+            msk_s0 &= ~(u << (ls1+1))
         end
 
         chunk_s0 = glue_src_bitchunks(chunks, ks0, ks1, msk_s0, ls0) & ~(u << s)
@@ -246,11 +237,10 @@ function fill_chunks!(Bc::Array{UInt64}, x::Bool, pos::Int, numbits::Int)
     k1, l1 = get_chunks_id(pos+numbits-1)
 
     u = _msk64
+    msk0 = (u << l0)
+    msk1 = ~(u << (l1+1))
     if k1 == k0
-        msk0 = (u << l0) & ~(u << (l1+1))
-    else
-        msk0 = (u << l0)
-        msk1 = ~(u << (l1+1))
+        msk0 &= msk1
     end
     @inbounds if x
         Bc[k0] |= msk0
@@ -270,7 +260,7 @@ end
 copy_to_bitarray_chunks!(dest::Vector{UInt64}, pos_d::Int, src::BitArray, pos_s::Int, numbits::Int) =
     copy_chunks!(dest, pos_d, src.chunks, pos_s, numbits)
 
-# pack 8 Bools encoded as one contiguous UIn64 into a single byte, e.g.:
+# pack 8 Bools encoded as one contiguous UInt64 into a single byte, e.g.:
 # 0000001:0000001:00000000:00000000:00000001:00000000:00000000:00000001 → 11001001 → 0xc9
 function pack8bools(z::UInt64)
     z |= z >>> 7
@@ -404,6 +394,7 @@ falses(dims::DimOrInd...) = falses(dims)
 falses(dims::NTuple{N, Union{Integer, OneTo}}) where {N} = falses(map(to_dim, dims))
 falses(dims::NTuple{N, Integer}) where {N} = fill!(BitArray(undef, dims), false)
 falses(dims::Tuple{}) = fill!(BitArray(undef, dims), false)
+falses(dims::NTuple{N, DimOrInd}) where {N} = fill!(similar(BitArray, dims), false)
 
 """
     trues(dims)
@@ -422,6 +413,7 @@ trues(dims::DimOrInd...) = trues(dims)
 trues(dims::NTuple{N, Union{Integer, OneTo}}) where {N} = trues(map(to_dim, dims))
 trues(dims::NTuple{N, Integer}) where {N} = fill!(BitArray(undef, dims), true)
 trues(dims::Tuple{}) = fill!(BitArray(undef, dims), true)
+trues(dims::NTuple{N, DimOrInd}) where {N} = fill!(similar(BitArray, dims), true)
 
 function one(x::BitMatrix)
     m, n = size(x)
@@ -538,13 +530,8 @@ function _copyto_bitarray!(B::BitArray, A::AbstractArray)
     return B
 end
 
-reinterpret(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) where {N} = reinterpret(B, dims)
-reinterpret(B::BitArray, dims::NTuple{N,Int}) where {N} = reshape(B, dims)
-
-if nameof(@__MODULE__) === :Base  # avoid method overwrite
 (::Type{T})(x::T) where {T<:BitArray} = copy(x)::T
 BitArray(x::BitArray) = copy(x)
-end
 
 """
     BitArray(itr)
@@ -1338,7 +1325,7 @@ function (>>>)(B::BitVector, i::UInt)
 end
 
 """
-    >>(B::BitVector, n) -> BitVector
+    >>(B::BitVector, n)::BitVector
 
 Right bit shift operator, `B >> n`. For `n >= 0`, the result is `B`
 with elements shifted `n` positions forward, filling with `false`
@@ -1376,7 +1363,7 @@ julia> B >> -1
 
 # signed integer version of shift operators with handling of negative values
 """
-    <<(B::BitVector, n) -> BitVector
+    <<(B::BitVector, n)::BitVector
 
 Left bit shift operator, `B << n`. For `n >= 0`, the result is `B`
 with elements shifted `n` positions backwards, filling with `false`
@@ -1413,7 +1400,7 @@ julia> B << -1
 (<<)(B::BitVector, i::Int) = (i >=0 ? B << unsigned(i) : B >> unsigned(-i))
 
 """
-    >>>(B::BitVector, n) -> BitVector
+    >>>(B::BitVector, n)::BitVector
 
 Unsigned right bitshift operator, `B >>> n`. Equivalent to `B >> n`. See [`>>`](@ref) for
 details and examples.

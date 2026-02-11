@@ -12,7 +12,7 @@ A structured representation of a terminfo file, without any knowledge of
 particular capabilities, solely based on `term(5)`.
 
 !!! warning
-  This is not part of the public API, and thus subject to change without notice.
+    This is not part of the public API, and thus subject to change without notice.
 
 # Fields
 
@@ -44,7 +44,7 @@ end
 A parsed terminfo paired with capability information.
 
 !!! warning
-  This is not part of the public API, and thus subject to change without notice.
+    This is not part of the public API, and thus subject to change without notice.
 
 # Fields
 
@@ -69,7 +69,7 @@ struct TermInfo
     aliases::Dict{Symbol, Symbol}
 end
 
-TermInfo() = TermInfo([], Dict(), Dict(), Dict(), nothing, Dict())
+TermInfo() = TermInfo(String[], Dict{Symbol, Bool}(), Dict{Symbol, Int}(), Dict{Symbol, String}(), nothing, Dict{Symbol, Symbol}())
 
 function read(data::IO, ::Type{TermInfoRaw})
     # Parse according to `term(5)`
@@ -245,7 +245,8 @@ end
 Locate the terminfo file for `term`, return `nothing` if none could be found.
 
 The lookup policy is described in `terminfo(5)` "Fetching Compiled
-Descriptions".
+Descriptions". A terminfo database is included by default with Julia and is
+taken to be the first entry of `@TERMINFO_DIRS@`.
 """
 function find_terminfo_file(term::String)
     isempty(term) && return
@@ -261,6 +262,7 @@ function find_terminfo_file(term::String)
         append!(terminfo_dirs,
                 replace(split(ENV["TERMINFO_DIRS"], ':'),
                         "" => "/usr/share/terminfo"))
+    push!(terminfo_dirs, normpath(Sys.BINDIR, DATAROOTDIR, "julia", "terminfo"))
     Sys.isunix() &&
         push!(terminfo_dirs, "/etc/terminfo", "/lib/terminfo", "/usr/share/terminfo")
     for dir in terminfo_dirs
@@ -268,8 +270,15 @@ function find_terminfo_file(term::String)
             return joinpath(dir, chr, term)
         elseif isfile(joinpath(dir, chrcode, term))
             return joinpath(dir, chrcode, term)
+        elseif isfile(joinpath(dir, lowercase(chr), lowercase(term)))
+            # The vendored terminfo database is fully lowercase to avoid issues on
+            # case-sensitive filesystems. On Unix-like systems, terminfo files with
+            # different cases are hard links to one another, so this is still
+            # correct for non-vendored terminfo, just redundant.
+            return joinpath(dir, lowercase(chr), lowercase(term))
         end
     end
+    return nothing
 end
 
 """
@@ -294,16 +303,24 @@ end
 """
 The terminfo of the current terminal.
 """
-current_terminfo::TermInfo = TermInfo()
+const current_terminfo = OncePerProcess{TermInfo}() do
+    term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
+    terminfo = load_terminfo(term_env)
+    # Ensure setaf is set for xterm terminals
+    if !haskey(terminfo, :setaf) && startswith(term_env, "xterm")
+        # For xterm-like terminals without setaf, add a reasonable default
+        terminfo.strings[:setaf] = "\e[3%p1%dm"
+    end
+    return terminfo
+end
 
 # Legacy/TTY methods and the `:color` parameter
 
 if Sys.iswindows()
-    ttyhascolor(term_type = nothing) = true
+    ttyhascolor() = true
 else
-    function ttyhascolor(term_type = get(ENV, "TERM", ""))
-        startswith(term_type, "xterm") ||
-            haskey(current_terminfo, :setaf)
+    function ttyhascolor()
+        haskey(current_terminfo(), :setaf)
     end
 end
 
@@ -314,8 +331,8 @@ Return a boolean signifying whether the current terminal supports 24-bit colors.
 
 Multiple conditions are taken as signifying truecolor support, specifically any of the following:
 - The `COLORTERM` environment variable is set to `"truecolor"` or `"24bit"`
-- The current terminfo sets the [`RGB`[^1]
-  capability](https://invisible-island.net/ncurses/man/user_caps.5.html#h3-Recognized-Capabilities)
+- The current terminfo sets the [`RGB`
+  capability](https://invisible-island.net/ncurses/man/user_caps.5.html#h3-Recognized-Capabilities)[^1]
   (or the legacy `Tc` capability[^2]) flag
 - The current terminfo provides `setrgbf` and `setrgbb` strings[^3]
 - The current terminfo has a `colors` number greater that `256`, on a unix system
@@ -343,9 +360,9 @@ Multiple conditions are taken as signifying truecolor support, specifically any 
 function ttyhastruecolor()
     # Lasciate ogne speranza, voi ch'intrate
     get(ENV, "COLORTERM", "") ∈ ("truecolor", "24bit") ||
-        get(current_terminfo, :RGB, false) || get(current_terminfo, :Tc, false) ||
-        (haskey(current_terminfo, :setrgbf) && haskey(current_terminfo, :setrgbb)) ||
-        @static if Sys.isunix() get(current_terminfo, :colors, 0) > 256 else false end ||
+        get(current_terminfo(), :RGB, false) || get(current_terminfo(), :Tc, false) ||
+        (haskey(current_terminfo(), :setrgbf) && haskey(current_terminfo(), :setrgbb)) ||
+        @static if Sys.isunix() get(current_terminfo(), :colors, 0) > 256 else false end ||
         (Sys.iswindows() && Sys.windows_version() ≥ v"10.0.14931") || # See <https://devblogs.microsoft.com/commandline/24-bit-color-in-the-windows-console/>
         something(tryparse(Int, get(ENV, "VTE_VERSION", "")), 0) >= 3600 || # Per GNOME bug #685759 <https://bugzilla.gnome.org/show_bug.cgi?id=685759>
         haskey(ENV, "XTERM_VERSION") ||

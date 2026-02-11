@@ -2,6 +2,8 @@
 
 using Test, InteractiveUtils
 
+@test isempty(Test.detect_closure_boxes(InteractiveUtils))
+
 @testset "highlighting" begin
     include("highlighting.jl")
 end
@@ -58,7 +60,7 @@ for u in Any[
     Union{Tuple{Int, Int}, Tuple{Char, Int}, Nothing},
     Union{Missing, Nothing}
 ]
-    @test InteractiveUtils.is_expected_union(u)
+    @test Base.Compiler.IRShow.is_expected_union(u)
 end
 
 for u in Any[
@@ -66,7 +68,7 @@ for u in Any[
     Union{Missing, Array},
     Union{Int, Tuple{Any, Int}}
 ]
-    @test !InteractiveUtils.is_expected_union(u)
+    @test !Base.Compiler.IRShow.is_expected_union(u)
 end
 mutable struct Stable{T,N}
     A::Array{T,N}
@@ -137,6 +139,11 @@ tag = "ANY"
 @test !warntype_hastag(^, Tuple{Float32,Int32}, tag)
 @test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float64}, tag)
 @test !warntype_hastag(ImportIntrinsics15819.sqrt15819, Tuple{Float32}, tag)
+
+@testset "code_warntype OpaqueClosure" begin
+    g = Base.Experimental.@opaque Tuple{Float64}->_ x -> 0.0
+    @test warntype_hastag(g, Tuple{Float64}, "::Float64")
+end
 
 end # module WarnType
 
@@ -323,23 +330,180 @@ try
 catch err13464
     @test startswith(err13464.msg, "expression is not a function call")
 end
-module MacroTest
-export @macrotest
-macro macrotest(x::Int, y::Symbol) end
-macro macrotest(x::Int, y::Int)
-    nothing #This is here because of #15280
+
+@testset "Single-argument forms" begin
+    a = which(+, (Int, Int))
+    b = which((typeof(+), Int, Int))
+    c = which(Tuple{typeof(+), Int, Int})
+    @test a == b == c
+
+    a = functionloc(+, (Int, Int))
+    b = functionloc((typeof(+), Int, Int))
+    c = functionloc(Tuple{typeof(+), Int, Int})
+    @test a == b == c
 end
+
+# PR 57909
+@testset "Support for type annotations as arguments" begin
+    @testset "`getindex`/`setindex!`" begin
+        @test (@which (::Vector{Int})[::Int]).name === :getindex
+        @test (@which [1, 2][::Int]).name === :getindex
+        @test (@which [1 2][begin, ::Int]).name === :getindex
+        @test (@which [1 2][::Int, end]).name === :getindex
+        @test (@which [1 2][begin, end]).name === :getindex
+        @test (@which [1 2][1:end]).name === :getindex
+        @test (@which [1 2][begin:end]).name === :getindex
+        @test_throws "`begin` or `end` cannot be used" (@which (::Vector{Int})[begin])
+        @test_throws "`begin` or `end` cannot be used" (@which (::Vector{Int})[end])
+        @test (@which (::Vector{Int})[::Int] = ::Int).name === :setindex!
+    end
+
+    @testset "`getproperty`/`setproperty!`" begin
+        @test (@which (::Base.RefValue{Int}).x).name === :getproperty
+        @test (@which (::Base.RefValue{Int}).x = ::Int).name === :setproperty!
+    end
+
+    @testset "Array syntax" begin
+        @test (@which [::Int]).name === :vect
+        @test (@which [undef_var::Int]).name === :vect
+        @test (@which [::Int 2]).name === :hcat
+        @test (@which [::Int; 2]).name === :vcat
+        @test (@which Int[::Int 2]).name === :typed_hcat
+        @test (@which Int[::Int; 2]).name === :typed_vcat
+        @test (@which [::Int 2;3 (::Int)]).name === :hvcat
+        @test (@which Int[::Int 2;3 (::Int)]).name === :typed_hvcat
+        @test (@which (::Type{Int})[::Int 2;3 (::Int)]).name === :typed_hvcat
+        @test (@which (::Type{T})[::T 2;3 (::T)] where {T<:Real}).name === :typed_hvcat
+    end
+
+    @test (@which (::Float64)^2).name === :literal_pow
+    @test (@which (::Vector{Float64})').name === :adjoint
+    @test (@which "$(::Symbol) is a symbol").sig === Tuple{typeof(string), Vararg{Union{Char, String, Symbol}}}
+    @test (@which (::Int)^4).name === :literal_pow
+    @test (@which +(some_x::Int, some_y::Float64)).name === :+
+    @test (@which +(::Any, ::Any, ::Any, ::Any...)).sig === Tuple{typeof(+), Any, Any, Any, Vararg{Any}}
+    @test (@which +(::Any, ::Any, ::Any, ::Vararg{Any})).sig === Tuple{typeof(+), Any, Any, Any, Vararg{Any}}
+    n = length(@code_typed +(::Float64, ::Vararg{Float64}))
+    @test n ≥ 2
+    @test length(@code_typed +(::Float64, ::Float64...)) == n
+    @test (@which +(1, ::Float64)).sig === Tuple{typeof(+), Number, Number}
+    @test (@which +((1, 2)...)).name === :+
+    @test (@which (::typeof(+))(::Int, ::Float64)).sig === Tuple{typeof(+), Number, Number}
+    @test (@code_typed .+(::Float64, ::Vector{Float64})) isa Pair
+    @test (@code_typed .+(::Float64, .*(::Vector{Float64}, ::Int))) isa Pair
+    @test (@which +(::T, ::T) where {T<:Number}).sig === Tuple{typeof(+), T, T} where {T<:Number}
+
+    @testset "Keyword arguments" begin
+        @test (@which round(::Float64; digits=3)).name === :round
+        @test (@which round(1.2; digits = ::Int)).name === :round
+        @test (@which round(1.2; digits::Int)).name === :round
+        @test (@code_typed round(::T; digits = ::T) where {T<:Float64})[2] === Union{}
+        @test (@code_typed round(::T; digits = ::T) where {T<:Int})[2] === Float64
+        base = 10
+        kwargs_1 = (; digits = 3)
+        kwargs_2 = (; sigdigits = 3)
+        @test (@which round(1.2; kwargs_1...)).name === :round
+        @test (@which round(1.2; digits = 1, kwargs_1...)).name === :round
+        @test (@code_typed round(1.2; digits = ::Float64, kwargs_1...))[2] === Float64 # picks `3::Int` from `kwargs_1`
+        @test (@code_typed round(1.2; kwargs_1..., digits = ::Float64))[2] === Union{} # picks `::Float64` from parameters
+        @test (@which round(1.2; digits = ::Float64, kwargs_1...)).name === :round
+        @test (@which round(1.2; sigdigits = ::Int, kwargs_1...)).name === :round
+        @test (@which round(1.2; kwargs_1..., kwargs_2..., base)).name === :round
+    end
+
+    @testset "Broadcasting" begin
+        @test (@code_typed optimize=false round.([1.0, 2.0]; digits = ::Int64))[2] == Vector{Float64}
+        @test (@code_typed optimize=false round.(::Vector{Float64}, base = 2; digits = ::Int64))[2] == Vector{Float64}
+        @test (@code_typed optimize=false round.(base = ::Int64, ::Vector{Float64}; digits = ::Int64))[2] == Vector{Float64}
+        @test (@code_typed optimize=false [1, 2] .= ::Int)[2] == Vector{Int}
+        @test (@code_typed optimize=false ::Vector{Int} .= ::Int)[2] == Vector{Int}
+        @test (@code_typed optimize=false ::Vector{Float64} .= 1 .+ ::Vector{Int})[2] == Vector{Float64}
+        @test (@code_typed optimize=false ::Vector{Float64} .= 1 .+ round.(base = ::Int, ::Vector{Int}; digits = 3))[2] == Vector{Float64}
+    end
+
+    @testset "Callable objects" begin
+        @test (@code_typed (::Base.Fix2{typeof(+), Float64})(3))[2] === Float64
+        @test (@code_typed optimize=false (::Returns{Float64})(::Int64; name::String))[2] === Float64
+        @test (@code_typed (::Returns{T})(3.0) where {T<:Real})[2] === Real
+    end
+
+    @testset "Opaque closures" begin
+        opaque_f(@nospecialize(x::Type), @nospecialize(y::Type)) = sizeof(x) == sizeof(y)
+        src, _ = only(code_typed(opaque_f, (Type, Type)))
+        src.slottypes[1] = Tuple{}
+
+        # from CodeInfo
+        oc = Core.OpaqueClosure(src; sig = Tuple{Type, Type}, rettype = Bool, nargs = 2)
+        ret = @code_typed oc(Int64, Float64)
+        @test [ret] == code_typed(oc)
+        _, rt = ret
+        @test rt === Bool
+
+        # from optimized IR
+        ir = Core.Compiler.inflate_ir(src)
+        oc = Core.OpaqueClosure(ir)
+        ret = @code_typed oc(Int64, Float64)
+        @test [ret] == code_typed(oc)
+        _, rt = ret
+        @test rt === Bool
+    end
+
+    @testset "Vararg handling" begin
+        @test_throws "More than one `Core.Vararg`" @eval @code_typed +(1, 2::Vararg{Int}, 3, 4::Vararg{Float64})
+        @test_throws "Inconsistent type `Float64`" @eval @code_typed +(1, 2, 3, 4::Vararg{Int}, 5.0)
+        @test_throws "Inconsistent type `Float64`" @eval @code_typed +(1, 2, 3, 4::Int..., 5.0)
+        @test_throws "Inconsistent type `Float64`" @eval @code_typed +(1, 2, 3, 4::Vararg{Int}, ::Float64)
+        @test_throws "Inconsistent type `Any`" @eval @code_typed +(1, 2, 3, 4::Vararg{Int}, ::Any)
+        @test_throws r"at most 2 types .* found 3 instead" @eval @code_typed +(1, 2, 3, 4::Vararg{Int,2}, 5, 6)
+        @test (@code_typed +(1, 2, 3, 4::Vararg{Int}))[2] === Int
+        @test (@code_typed +(1, 2, 3, 4::Vararg{Int}, 5))[2] === Int
+        @test (@code_typed +(1, 2, 3, 4::Vararg{Int, 3}))[2] === Int
+        @test (@code_typed +(1, 2, 3, 4::Vararg{Int, 3}, 5))[2] === Int
+        @test (@code_typed +(1, 2, 3, 4::Vararg{Int, 3}, 5, 6))[2] === Int
+        @test (@code_typed +(1, 2, 3, 4::Vararg))[2] === Any
+        @test (@code_typed +(1, 2, 3, 4::Vararg, 5.0))[2] === Any
+        @test (@code_typed +(1, 2, 3, ::Int...))[2] === Int
+        @test (@code_typed +(1, 2, 3, ::Int..., 5))[2] === Int
+        # We just ignore the checks with `where` parameters for simplicity of implementation.
+        @test isa((@code_typed +(::T, ::Vararg{T}, ::T) where {T}), Vector{Any})
+        @test isa((@code_typed +(::T, ::Vararg{T}, ::Float64) where {T<:Real}), Vector{Any})
+        @test isa((@code_typed +(::T, ::Vararg{T}, ::Float64) where {T<:Real}), Vector{Any})
+        @test isa((@code_typed +(::T, ::Vararg{T}, ::Int) where {T<:Real}), Vector{Any})
+        @test isa((@code_typed +(::T, ::Vararg{Vector{T}}, ::Int) where {T<:Real}), Vector{Any})
+        @test isa((@code_typed +(::T, ::Vararg{Int}, ::T) where {T<:Real}), Vector{Any})
+    end
+end
+
+module HygieneTest
+const Int = Float64
+using InteractiveUtils: @code_typed
+macro escape_argument(ex) :(@code_typed $(esc(ex)) * 2.0) end
+macro escape_type_annotation(ex) :(@code_typed identity(::(typeof($(esc(ex)))))) end
+macro escape_all(ex) esc(:(@__MODULE__().@code_typed $ex)) end
+end # module
+
+(; var"@escape_argument", var"@escape_type_annotation", var"@escape_all") = HygieneTest
+@testset "Macro hygiene interactions" begin
+    _f = sum
+    @test (@escape_argument _f(Int[]))[2] == Float64
+    @test (@escape_type_annotation _f(Int[]))[2] == Int
+    @test (@escape_all _f(Int[]))[2] == Int
+end
+
+module MacroTest
+var"@which" = parentmodule(@__MODULE__).var"@which"
+macro macrotest(x::Int, y::Symbol) end
+macro macrotest(x::Int, y::Int) end
 end
 
 let
-    using .MacroTest
     a = 1
-    m = getfield(@__MODULE__, Symbol("@macrotest"))
-    @test which(m, Tuple{LineNumberNode, Module, Int, Symbol}) == @which @macrotest 1 a
-    @test which(m, Tuple{LineNumberNode, Module, Int, Int}) == @which @macrotest 1 1
+    m = MacroTest.var"@macrotest"
+    @test which(m, Tuple{LineNumberNode, Module, Int, Symbol}) == @eval MacroTest @which @macrotest 1 a
+    @test which(m, Tuple{LineNumberNode, Module, Int, Int}) == @eval MacroTest @which @macrotest 1 1
 
     @test first(methods(m, Tuple{LineNumberNode, Module, Int, Int})) == @which MacroTest.@macrotest 1 1
-    @test functionloc(@which @macrotest 1 1) == @functionloc @macrotest 1 1
+    @test functionloc(@eval MacroTest @which @macrotest 1 1) == @functionloc MacroTest.@macrotest 1 1
 end
 
 mutable struct A18434
@@ -388,23 +552,40 @@ let errf = tempname(),
     new_stderr = open(errf, "w")
     try
         redirect_stderr(new_stderr)
+        @test occursin("f_broken_code", sprint(code_native, h_broken_code, ()))
+        Libc.flush_cstdio()
         println(new_stderr, "start")
         flush(new_stderr)
-        @test occursin("h_broken_code", sprint(code_native, h_broken_code, ()))
+        @test_throws "could not compile the specified method" sprint(io -> code_native(io, f_broken_code, (), dump_module=true))
+        Libc.flush_cstdio()
+        println(new_stderr, "middle")
+        flush(new_stderr)
+        @test !isempty(sprint(io -> code_native(io, f_broken_code, (), dump_module=false)))
+        Libc.flush_cstdio()
+        println(new_stderr, "later")
+        flush(new_stderr)
+        @test invokelatest(g_broken_code) == 0
         Libc.flush_cstdio()
         println(new_stderr, "end")
         flush(new_stderr)
-        @eval @test g_broken_code() == 0
     finally
+        Libc.flush_cstdio()
         redirect_stderr(old_stderr)
         close(new_stderr)
         let errstr = read(errf, String)
             @test startswith(errstr, """start
-                end
                 Internal error: encountered unexpected error during compilation of f_broken_code:
                 ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
-                """) || errstr
-            @test !endswith(errstr, "\nend\n") || errstr
+                """) context=errstr
+            @test occursin("""\nmiddle
+                Internal error: encountered unexpected error during compilation of f_broken_code:
+                ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
+                """, errstr) context=errstr
+            @test occursin("""\nlater
+                Internal error: encountered unexpected error during compilation of f_broken_code:
+                ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
+                """, errstr) context=errstr
+            @test endswith(errstr, "\nend\n") context=errstr
         end
         rm(errf)
     end
@@ -439,7 +620,22 @@ a14637 = A14637(0)
 @test (@code_typed optimize=true max.([1,7], UInt.([4])))[2] == Vector{UInt}
 @test (@code_typed Ref.([1,2])[1].x)[2] == Int
 @test (@code_typed max.(Ref(true).x))[2] == Bool
+@test (@code_typed optimize=false round.([1.0, 2.0]; digits = 3))[2] == Vector{Float64}
+@test (@code_typed optimize=false round.([1.0, 2.0], base = 2; digits = 3))[2] == Vector{Float64}
+@test (@code_typed optimize=false round.(base = 2, [1.0, 2.0], digits = 3))[2] == Vector{Float64}
+@test (@code_typed optimize=false [1, 2] .= 2)[2] == Vector{Int}
+@test (@code_typed optimize=false [1, 2] .<<= 2)[2] == Vector{Int}
+@test (@code_typed optimize=false [1, 2.0] .= 1 .+ [2, 3])[2] == Vector{Float64}
+@test (@code_typed optimize=false [1, 2.0] .= 1 .+ round.(base = 1, [1, 3]; digits = 3))[2] == Vector{Float64}
+@test (@code_typed optimize=false [1] .+ [2])[2] == Vector{Int}
 @test !isempty(@code_typed optimize=false max.(Ref.([5, 6])...))
+expansion = string(@macroexpand @code_typed optimize=false max.(Ref.([5, 6])...))
+@test contains(expansion, "(x1) =") # presence of wrapper function
+# Make sure broadcasts in nested arguments are not processed.
+v = Any[1]
+expansion = string(@macroexpand @code_typed v[1] = rand.(Ref(1)))
+@test contains(expansion, "Typeof(rand.(Ref(1)))")
+@test !contains(expansion, "(x1) =")
 
 # Issue # 45889
 @test !isempty(@code_typed 3 .+ 6)
@@ -504,7 +700,9 @@ end # module ReflectionTest
 # Issue #18883, code_llvm/code_native for generated functions
 @generated f18883() = nothing
 @test !isempty(sprint(code_llvm, f18883, Tuple{}))
+@test !isempty(sprint(code_llvm, (typeof(f18883),)))
 @test !isempty(sprint(code_native, f18883, Tuple{}))
+@test !isempty(sprint(code_native, (typeof(f18883),)))
 
 ix86 = r"i[356]86"
 
@@ -525,9 +723,9 @@ if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
     output = replace(String(take!(buf)), r"#[^\r\n]+" => "")
     @test !occursin(rgx, output)
 
-    code_native(buf, linear_foo, ())
-    output = String(take!(buf))
-    @test occursin(rgx, output)
+    code_native(buf, linear_foo, (), debuginfo = :none)
+    output = replace(String(take!(buf)), r"#[^\r\n]+" => "")
+    @test !occursin(rgx, output)
 
     @testset "binary" begin
         # check the RET instruction (opcode: C3)
@@ -552,6 +750,9 @@ end
     @test_throws err @code_lowered ""
     @test_throws err @code_lowered 1
     @test_throws err @code_lowered 1.0
+
+    @test_throws "dot expressions are not lowered to a single function call" @which a .= 1 + 2
+    @test_throws "invalid keyword argument syntax" @eval @which round(1; digits(3))
 end
 
 using InteractiveUtils: editor
@@ -636,6 +837,10 @@ file, ln = functionloc(versioninfo, Tuple{})
 @test isfile(pathof(InteractiveUtils))
 @test isdir(pkgdir(InteractiveUtils))
 
+# compiler stdlib path updating
+file, ln = functionloc(Core.Compiler.tmeet, Tuple{Int, Float64})
+@test isfile(file)
+
 @testset "buildbot path updating" begin
     file, ln = functionloc(versioninfo, Tuple{})
     @test isfile(file)
@@ -686,7 +891,7 @@ let
         length((@code_lowered sum(1:10)).code)
 end
 
-@testset "@time_imports" begin
+@testset "@time_imports, @trace_compile, @trace_dispatch" begin
     mktempdir() do dir
         cd(dir) do
             try
@@ -695,7 +900,16 @@ end
                 write(foo_file,
                     """
                     module Foo3242
-                    foo() = 1
+                    function foo()
+                        Base.Experimental.@force_compile
+                        foo(1)
+                    end
+                    foo(x) = x
+                    function bar()
+                        Base.Experimental.@force_compile
+                        bar(1)
+                    end
+                    bar(x) = x
                     end
                     """)
 
@@ -712,6 +926,27 @@ end
 
                 @test occursin("ms  Foo3242", String(buf))
 
+                fname = tempname()
+                f = open(fname, "w")
+                redirect_stderr(f) do
+                    @trace_compile @eval Foo3242.foo()
+                end
+                close(f)
+                buf = read(fname)
+                rm(fname)
+
+                @test occursin("ms =# precompile(", String(buf))
+
+                fname = tempname()
+                f = open(fname, "w")
+                redirect_stderr(f) do
+                    @trace_dispatch @eval Foo3242.bar()
+                end
+                close(f)
+                buf = read(fname)
+                rm(fname)
+
+                @test occursin("precompile(", String(buf))
             finally
                 filter!((≠)(dir), LOAD_PATH)
             end
@@ -740,9 +975,31 @@ let # `default_tt` should work with any function with one method
     end); true)
 end
 
+let # specifying calls as argtypes (incl. arg0) should be supported
+    @test (code_warntype(devnull, (typeof(function ()
+        sin(42)
+    end),)); true)
+    @test (code_warntype(devnull, (typeof(function (a::Int)
+        sin(42)
+    end), Int)); true)
+    @test (code_llvm(devnull, (typeof(function ()
+        sin(42)
+    end),)); true)
+    @test (code_llvm(devnull, (typeof(function (a::Int)
+        sin(42)
+    end), Int)); true)
+    @test (code_native(devnull, (typeof(function ()
+        sin(42)
+    end),)); true)
+    @test (code_native(devnull, (typeof(function (a::Int)
+        sin(42)
+    end), Int)); true)
+end
+
 @testset "code_llvm on opaque_closure" begin
     let ci = code_typed(+, (Int, Int))[1][1]
         ir = Core.Compiler.inflate_ir(ci)
+        ir.argtypes[1] = Tuple{}
         @test ir.debuginfo.def === nothing
         ir.debuginfo.def = Symbol(@__FILE__)
         oc = Core.OpaqueClosure(ir)
@@ -766,7 +1023,36 @@ end
 end
 
 @test Base.infer_effects(sin, (Int,)) == InteractiveUtils.@infer_effects sin(42)
+@test Base.infer_return_type(sin, (Int,)) == InteractiveUtils.@infer_return_type sin(42)
+@test Base.infer_exception_type(sin, (Int,)) == InteractiveUtils.@infer_exception_type sin(42)
+@test first(InteractiveUtils.@code_ircode sin(42)) isa Core.Compiler.IRCode
+@test first(InteractiveUtils.@code_ircode optimize_until="CC: INLINING" sin(42)) isa Core.Compiler.IRCode
+# Test.@inferred also uses `gen_call_with_extracted_types`
+@test Test.@inferred round(1.2) isa Float64
+@test Test.@inferred round(1.3; digits = 3) isa Float64
+# ensure proper inference of the macro output of `@inferred`
+@test Base.infer_return_type(x -> Test.@inferred(round(x)), (Float64,)) === Float64
+@test Base.infer_return_type(x -> Test.@inferred(round(x; digits = 3)), (Float64,)) === Float64
 
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(InteractiveUtils))
+end
+
+# issue https://github.com/JuliaIO/ImageMagick.jl/issues/235
+module OuterModule
+    module InternalModule
+        struct MyType
+            x::Int
+        end
+
+        Base.@deprecate_binding MyOldType MyType
+
+        export MyType
+    end
+    using .InternalModule
+    export MyType, MyOldType
+end # module
+@testset "Subtypes and deprecations" begin
+    using .OuterModule
+    @test_nowarn subtypes(Integer);
 end

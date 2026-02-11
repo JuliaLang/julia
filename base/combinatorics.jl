@@ -2,23 +2,30 @@
 
 # Factorials
 
-const _fact_table64 = Vector{Int64}(undef, 20)
-_fact_table64[1] = 1
-for n in 2:20
-    _fact_table64[n] = _fact_table64[n-1] * n
+const _fact_table64 = let _fact_table64 = Vector{Int64}(undef, 20)
+    _fact_table64[1] = 1
+    for n in 2:20
+        _fact_table64[n] = _fact_table64[n-1] * n
+    end
+    Tuple(_fact_table64)
 end
 
-const _fact_table128 = Vector{UInt128}(undef, 34)
-_fact_table128[1] = 1
-for n in 2:34
-    _fact_table128[n] = _fact_table128[n-1] * n
+const _fact_table128 = let _fact_table128 = Vector{UInt128}(undef, 34)
+    _fact_table128[1] = 1
+    for n in 2:34
+        _fact_table128[n] = _fact_table128[n-1] * n
+    end
+    Tuple(_fact_table128)
 end
 
-function factorial_lookup(n::Integer, table, lim)
-    n < 0 && throw(DomainError(n, "`n` must not be negative."))
-    n > lim && throw(OverflowError(string(n, " is too large to look up in the table; consider using `factorial(big(", n, "))` instead")))
-    n == 0 && return one(n)
-    @inbounds f = table[n]
+function factorial_lookup(
+    n::Union{Checked.SignedInt,Checked.UnsignedInt},
+    table::Union{NTuple{20,Int64},NTuple{34,UInt128}}, lim::Int)
+    idx = Int(n)
+    idx < 0 && throw(DomainError(n, "`n` must not be negative."))
+    idx > lim && throw(OverflowError(lazy"$n is too large to look up in the table; consider using `factorial(big($n))` instead"))
+    idx == 0 && return one(n)
+    f = getfield(table, idx)
     return oftype(n, f)
 end
 
@@ -53,7 +60,7 @@ end
 end
 
 """
-    isperm(v) -> Bool
+    isperm(v)::Bool
 
 Return `true` if `v` is a valid permutation.
 
@@ -177,13 +184,12 @@ end
 """
     permute!(v, p)
 
-Permute vector `v` in-place, according to permutation `p`. No checking is done
-to verify that `p` is a permutation.
+Permute vector `v` according to permutation `p`, storing the result back into `v`.
+No checking is done to verify that `p` is a permutation.
 
 To return a new permutation, use `v[p]`. This is generally faster than `permute!(v, p)`;
 it is even faster to write into a pre-allocated output array with `u .= @view v[p]`.
-(Even though `permute!` overwrites `v` in-place, it internally requires some allocation
-to keep track of which elements have been moved.)
+(Even though `permute!` overwrites `v` in-place, it internally requires some allocation.)
 
 $(_DOCS_ALIASING_WARNING)
 

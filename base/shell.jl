@@ -28,8 +28,12 @@ function rstrip_shell(s::AbstractString)
     SubString(s, 1, 0)
 end)
 
-function shell_parse(str::AbstractString, interpolate::Bool=true;
-                     special::AbstractString="", filename="none")
+shell_parse(str::AbstractString, interpolate::Bool=true;
+            special::AbstractString="", filename="none") =
+    __repl_entry_shell_parse(str, interpolate, special, filename)
+
+# N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
+function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, special::AbstractString, filename)
     last_arg = firstindex(str) # N.B.: This is used by REPLCompletions
     s = SubString(str, last_arg)
     s = rstrip_shell(lstrip(s))
@@ -171,7 +175,7 @@ function shell_split(s::AbstractString)
     parsed = shell_parse(s, false)[1]
     args = String[]
     for arg in parsed
-        push!(args, string(arg...))
+        push!(args, string(arg...)::String)
     end
     args
 end
@@ -219,9 +223,9 @@ print_shell_escaped(io::IO; special::String="") = nothing
 """
     shell_escape(args::Union{Cmd,AbstractString...}; special::AbstractString="")
 
-The unexported `shell_escape` function is the inverse of the unexported `shell_split` function:
+The unexported `shell_escape` function is the inverse of the unexported [`Base.shell_split()`](@ref) function:
 it takes a string or command object and escapes any special characters in such a way that calling
-`shell_split` on it would give back the array of words in the original command. The `special`
+[`Base.shell_split()`](@ref) on it would give back the array of words in the original command. The `special`
 keyword argument controls what characters in addition to whitespace, backslashes, quotes and
 dollar signs are considered to be special (default: none).
 
@@ -244,34 +248,40 @@ function print_shell_escaped_posixly(io::IO, args::AbstractString...)
         first || print(io, ' ')
         # avoid printing quotes around simple enough strings
         # that any (reasonable) shell will definitely never consider them to be special
-        have_single::Bool = false
-        have_double::Bool = false
-        function isword(c::AbstractChar)
-            if '0' <= c <= '9' || 'a' <= c <= 'z' || 'A' <= c <= 'Z'
-                # word characters
-            elseif c == '_' || c == '/' || c == '+' || c == '-' || c == '.'
-                # other common characters
-            elseif c == '\''
-                have_single = true
-            elseif c == '"'
-                have_double && return false # switch to single quoting
-                have_double = true
-            elseif !first && c == '='
-                # equals is special if it is first (e.g. `env=val ./cmd`)
-            else
-                # anything else
-                return false
-            end
-            return true
-        end
         if isempty(arg)
             print(io, "''")
-        elseif all(isword, arg)
-            have_single && (arg = replace(arg, '\'' => "\\'"))
-            have_double && (arg = replace(arg, '"' => "\\\""))
-            print(io, arg)
         else
-            print(io, '\'', replace(arg, '\'' => "'\\''"), '\'')
+            have_single = false
+            have_double = false
+            isword = true
+            for c in arg
+                if '0' <= c <= '9' || 'a' <= c <= 'z' || 'A' <= c <= 'Z'
+                    # word characters
+                elseif c == '_' || c == '/' || c == '+' || c == '-' || c == '.'
+                    # other common characters
+                elseif c == '\''
+                    have_single = true
+                elseif c == '"'
+                    if have_double
+                        isword = false
+                        break # switch to single quoting
+                    end
+                    have_double = true
+                elseif !first && c == '='
+                    # equals is special if it is first (e.g. `env=val ./cmd`)
+                else
+                    # anything else
+                    isword = false
+                    break
+                end
+            end
+            if isword
+                have_single && (arg = replace(arg, '\'' => "\\'"))
+                have_double && (arg = replace(arg, '"' => "\\\""))
+                print(io, arg)
+            else
+                print(io, '\'', replace(arg, '\'' => "'\\''"), '\'')
+            end
         end
         first = false
     end
@@ -283,6 +293,8 @@ end
 The unexported `shell_escape_posixly` function
 takes a string or command object and escapes any special characters in such a way that
 it is safe to pass it as an argument to a posix shell.
+
+See also: [`Base.shell_escape()`](@ref)
 
 # Examples
 ```jldoctest
@@ -316,7 +328,7 @@ a backslash.
 This function should also work for a POSIX shell, except if the input
 string contains a linefeed (`"\\n"`) character.
 
-See also: [`shell_escape_posixly`](@ref)
+See also: [`Base.shell_escape_posixly()`](@ref)
 """
 function shell_escape_csh(io::IO, args::AbstractString...)
     first = true
@@ -342,7 +354,7 @@ function shell_escape_csh(io::IO, args::AbstractString...)
 end
 shell_escape_csh(args::AbstractString...) =
     sprint(shell_escape_csh, args...;
-           sizehint = sum(sizeof.(args)) + length(args) * 3)
+           sizehint = sum(sizeof, args) + length(args) * 3)
 
 """
     shell_escape_wincmd(s::AbstractString)
@@ -414,7 +426,7 @@ run(setenv(`cmd /C echo %cmdargs%`, "cmdargs" => cmdargs))
 With an I/O stream parameter `io`, the result will be written there,
 rather than returned as a string.
 
-See also [`escape_microsoft_c_args`](@ref), [`shell_escape_posixly`](@ref).
+See also [`Base.escape_microsoft_c_args()`](@ref), [`Base.shell_escape_posixly()`](@ref).
 
 # Examples
 ```jldoctest
@@ -468,7 +480,7 @@ It joins command-line arguments to be passed to a Windows
 C/C++/Julia application into a command line, escaping or quoting the
 meta characters space, TAB, double quote and backslash where needed.
 
-See also [`shell_escape_wincmd`](@ref), [`escape_raw_string`](@ref).
+See also [`Base.shell_escape_wincmd()`](@ref), [`Base.escape_raw_string()`](@ref).
 """
 function escape_microsoft_c_args(io::IO, args::AbstractString...)
     # http://daviddeley.com/autohotkey/parameters/parameters.htm#WINCRULES
@@ -492,4 +504,4 @@ function escape_microsoft_c_args(io::IO, args::AbstractString...)
 end
 escape_microsoft_c_args(args::AbstractString...) =
     sprint(escape_microsoft_c_args, args...;
-           sizehint = (sum(sizeof.(args)) + 3*length(args)))
+           sizehint = (sum(sizeof, args) + 3*length(args)))

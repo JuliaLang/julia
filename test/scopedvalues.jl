@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Base.ScopedValues
+
+include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 
 @testset "errors" begin
     @test ScopedValue{Float64}(1)[] == 1.0
@@ -77,13 +80,15 @@ import Base.Threads: @spawn
 end
 
 @testset "show" begin
-    @test sprint(show, ScopedValue{Int}()) == "Base.ScopedValues.ScopedValue{$Int}(undefined)"
-    @test sprint(show, sval) == "Base.ScopedValues.ScopedValue{$Int}(1)"
-    @test sprint(show, Core.current_scope()) == "nothing"
+    @test sprint(show, ScopedValue{Int}(), context=(:module=>Core,)) == "Base.ScopedValues.ScopedValue{$Int}()"
+    @test sprint(show, sval, context=(:module=>Core,)) == "Base.ScopedValues.ScopedValue{$Int}(1)"
     with(sval => 2.0) do
-        @test sprint(show, sval) == "Base.ScopedValues.ScopedValue{$Int}(2)"
+        @test sprint(show, sval, context=(:module=>Core,)) == "Base.ScopedValues.ScopedValue{$Int}(2)"
         objid = sprint(show, Base.objectid(sval))
-        @test sprint(show, Core.current_scope()) == "Base.ScopedValues.Scope(Base.ScopedValues.ScopedValue{$Int}@$objid => 2)"
+        let str = sprint(show, Core.current_scope(), context=(:module=>Core,))
+            @test startswith(str, "Base.ScopedValues.Scope")
+            @test contains(str, "Base.ScopedValues.ScopedValue{$Int}@$objid => 2")
+        end
     end
 end
 
@@ -135,6 +140,12 @@ end
         @test sval[] == 1
         @test sval_float[] == 1.0
     end
+    @with sval=>2 sval_float=>2.0 begin
+        @with begin
+            @test sval[] == 2
+            @test sval_float[] == 2.0
+        end
+    end
 end
 
 @testset "isassigned" begin
@@ -159,4 +170,101 @@ end
 
 let code = code_typed(with_macro_slot_cross)[1][1].code
     @test !any(x->isa(x, Core.PhiCNode), code)
+end
+
+# inline constant scoped values
+const inlineable_const_sv = ScopedValue(1)
+@test fully_eliminated(; retval=(inlineable_const_sv => 1)) do
+    inlineable_const_sv => 1
+end
+
+# Handle nothrow scope bodies correctly (#56609)
+@eval @noinline function nothrow_scope(@nospecialize(scope_at_entry))
+    $(Expr(:tryfinally, :(), nothing, 1))
+    @test Core.current_scope() === scope_at_entry
+end
+nothrow_scope(Core.current_scope())
+
+# https://github.com/JuliaLang/julia/issues/56062
+@testset "issue #56062" begin
+    ts = Int[]
+    try
+        @with begin
+            return
+        end
+    catch err
+    finally
+        push!(ts, 2)
+    end
+end
+
+# LazyScopedValue
+global lsv_ncalled = 0
+const lsv = LazyScopedValue{Int}(OncePerProcess(() -> (global lsv_ncalled; lsv_ncalled += 1; 1)))
+@testset "LazyScopedValue" begin
+    @test (@with lsv=>2 lsv[]) == 2
+    @test lsv_ncalled == 0
+    @test lsv[] == 1
+    @test lsv_ncalled == 1
+    @test lsv[] == 1
+    @test lsv_ncalled == 1
+end
+
+@testset "ScopedThunk" begin
+    function check_svals()
+        @test sval[] == 8
+        @test sval_float[] == 8.0
+    end
+    sf = nothing
+    @with sval=>8 sval_float=>8.0 begin
+        sf = ScopedThunk(check_svals)
+    end
+    sf()
+    @with sval=>8 sval_float=>8.0 begin
+        sf2 = ScopedThunk{Function}(check_svals)
+    end
+    sf2()
+end
+
+using Base.ScopedValues: ScopedValue, with
+@noinline function test_59483()
+    sv = ScopedValue([])
+    ch = Channel{Bool}()
+
+    # Spawn a child task, which inherits the parent's Scope
+    @noinline function inner_function()
+        # Block until the parent task has left the scope.
+        take!(ch)
+        # Now, per issue 59483, this task's scope is not rooted, except by the task itself.
+
+        # Now switch to an inner scope, leaving the current scope possibly unrooted.
+        val = with(sv=>Any[2]) do
+            # Inside this new scope, when we perform GC, the parent scope can be freed.
+            # The fix for this issue made sure that the first scope in this task remains
+            # rooted.
+            GC.gc()
+            GC.gc()
+            sv[]
+        end
+        @test val == Any[2]
+        # Finally, we've returned to the original scope, but that could be a dangling
+        # pointer if the scope itself was freed by the above GCs. So these GCs could crash:
+        GC.gc()
+        GC.gc()
+    end
+    @noinline function spawn_inner()
+        # Set a new Scope in the parent task - this is the scope that could be freed.
+        with(sv=>Any[1]) do
+            return @async inner_function()
+        end
+    end
+
+    # RUN THE TEST:
+    t = spawn_inner()
+    # Exit the scope, and let the child task proceed
+    put!(ch, true)
+    wait(t)
+end
+@testset "issue 59483" begin
+    test_59483()
 end

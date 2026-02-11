@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function Signature(ptr::Ptr{SignatureStruct})
+    @assert ptr != C_NULL
     sig   = unsafe_load(ptr)::SignatureStruct
     name  = unsafe_string(sig.name)
     email = unsafe_string(sig.email)
@@ -67,6 +68,6 @@ function default_signature(repo::GitRepo)
     ensure_initialized()
     sig_ptr_ptr = Ref{Ptr{SignatureStruct}}(C_NULL)
     @check ccall((:git_signature_default, libgit2), Cint,
-                 (Ptr{Ptr{SignatureStruct}}, Ptr{Cvoid}), sig_ptr_ptr, repo.ptr)
+                 (Ptr{Ptr{SignatureStruct}}, Ptr{Cvoid}), sig_ptr_ptr, repo)
     return GitSignature(sig_ptr_ptr[])
 end

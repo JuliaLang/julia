@@ -49,15 +49,29 @@ Fully implemented by:
   * [`Pair`](@ref)
   * [`NamedTuple`](@ref)
 
-## Constructors and Types
+## Ranges
+
+### Constructing Ranges
+
+```@docs
+Base.:(:)(::Any, ::Any, ::Any)
+Base.:(:)(::CartesianIndex, ::CartesianIndex, ::CartesianIndex)
+Base.range
+Base.logrange
+```
+
+### Range Types
 
 ```@docs
 Base.AbstractRange
 Base.OrdinalRange
 Base.AbstractUnitRange
 Base.StepRange
+Base.StepRangeLen
 Base.UnitRange
+Base.OneTo
 Base.LinRange
+Base.LogRange
 ```
 
 ## General Collections
@@ -195,7 +209,7 @@ Dictionaries may also be created with generators. For example, `Dict(i => f(i) f
 
 Given a dictionary `D`, the syntax `D[x]` returns the value of key `x` (if it exists) or throws
 an error, and `D[x] = y` stores the key-value pair `x => y` in `D` (replacing any existing value
-for the key `x`).  Multiple arguments to `D[...]` are converted to tuples; for example, the syntax
+for the key `x`). Multiple arguments to `D[...]` are converted to tuples; for example, the syntax
 `D[x,y]`  is equivalent to `D[(x,y)]`, i.e. it refers to the value keyed by the tuple `(x,y)`.
 
 ```@docs
@@ -275,7 +289,7 @@ Partially implemented by:
 
   * [`Array`](@ref)
 
-## Dequeues
+## Deques
 
 ```@docs
 Base.push!

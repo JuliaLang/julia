@@ -7,9 +7,11 @@ convert(::Type{T}, x::T)      where {T<:Number} = x
 convert(::Type{T}, x::Number) where {T<:Number} = T(x)::T
 
 """
-    isinteger(x) -> Bool
+    isinteger(x)::Bool
 
 Test whether `x` is numerically equal to some integer.
+
+See also [`iszero`](@ref), [`isone`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
 
 # Examples
 ```jldoctest
@@ -25,7 +27,7 @@ isinteger(x::Integer) = true
 Return `true` if `x == zero(x)`; if `x` is an array, this checks whether
 all of the elements of `x` are zero.
 
-See also: [`isone`](@ref), [`isinteger`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
+See also [`isone`](@ref), [`isinteger`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
 
 # Examples
 ```jldoctest
@@ -47,6 +49,8 @@ iszero(x) = x == zero(x) # fallback method
 Return `true` if `x == one(x)`; if `x` is an array, this checks whether
 `x` is an identity matrix.
 
+See also [`iszero`](@ref), [`isinteger`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
+
 # Examples
 ```jldoctest
 julia> isone(1.0)
@@ -62,9 +66,11 @@ true
 isone(x) = x == one(x) # fallback method
 
 """
-    isfinite(f) -> Bool
+    isfinite(f)::Bool
 
 Test whether a number is finite.
+
+See also [`iszero`](@ref), [`isone`](@ref), [`isinteger`](@ref), [`isnan`](@ref).
 
 # Examples
 ```jldoctest
@@ -117,7 +123,7 @@ copy(x::Number) = x # some code treats numbers as collection-like
 
 Return `true` if the value of the sign of `x` is negative, otherwise `false`.
 
-See also [`sign`](@ref) and [`copysign`](@ref).
+See also [`sign`](@ref), [`copysign`](@ref).
 
 # Examples
 ```jldoctest
@@ -135,6 +141,50 @@ true
 ```
 """
 signbit(x::Real) = x < 0
+
+"""
+    ispositive(x)
+
+Test whether `x > 0`. See also [`isnegative`](@ref).
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
+
+# Examples
+```jldoctest
+julia> ispositive(-4.0)
+false
+
+julia> ispositive(99)
+true
+
+julia> ispositive(0.0)
+false
+```
+"""
+ispositive(x::Real) = x > 0
+
+"""
+    isnegative(x)
+
+Test whether `x < 0`. See also [`ispositive`](@ref).
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
+
+# Examples
+```jldoctest
+julia> isnegative(-4.0)
+true
+
+julia> isnegative(99)
+false
+
+julia> isnegative(-0.0)
+false
+```
+"""
+isnegative(x::Real) = x < 0
 
 """
     sign(x)
@@ -316,7 +366,7 @@ zero(::Type{Union{}}, slurp...) = Union{}(0)
 
 """
     one(x)
-    one(T::type)
+    one(T::Type)
 
 Return a multiplicative identity for `x`: a value such that
 `one(x)*x == x*one(x) == x`. If the multiplicative identity can

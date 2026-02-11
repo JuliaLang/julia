@@ -21,18 +21,23 @@
 
 Throw an object as an exception.
 
-See also: [`rethrow`](@ref), [`error`](@ref).
+See also [`rethrow`](@ref), [`error`](@ref).
 """
 throw
 
 ## native julia error handling ##
+
+# NOTE It is important to always be able to infer the return type of `error` as `Union{}`,
+# see issue (JuliaLang/julia#54029). Ensure that method counts are small enough with
+# respect to the `max_methods` value of the function.
+function error end
 
 """
     error(message::AbstractString)
 
 Raise an `ErrorException` with the given message.
 """
-error(s::AbstractString) = throw(ErrorException(s))
+error(::AbstractString)
 
 """
     error(msg...)
@@ -41,7 +46,14 @@ Raise an `ErrorException` with a message constructed by `string(msg...)`.
 """
 function error(s::Vararg{Any,N}) where {N}
     @noinline
-    throw(ErrorException(Main.Base.string(s...)))
+    exc = if s === ()
+        ErrorException("")
+    elseif s isa Tuple{AbstractString}
+        ErrorException(s...)
+    else
+        ErrorException(Main.Base.string(s...))
+    end
+    throw(exc)
 end
 
 """
@@ -62,7 +74,7 @@ rethrow() = ccall(:jl_rethrow, Bottom, ())
 rethrow(@nospecialize(e)) = ccall(:jl_rethrow_other, Bottom, (Any,), e)
 
 struct InterpreterIP
-    code::Union{CodeInfo,Core.MethodInstance,Nothing}
+    code::Union{CodeInfo,Core.MethodInstance,Core.CodeInstance,Nothing}
     stmt::Csize_t
     mod::Union{Module,Nothing}
 end
@@ -87,7 +99,7 @@ function _reformat_bt(bt::Array{Ptr{Cvoid},1}, bt2::Array{Any,1})
         tag       = (entry_metadata >> 6) & 0xf
         header    =  entry_metadata >> 10
         if tag == 1 # JL_BT_INTERP_FRAME_TAG
-            code = bt2[j]::Union{CodeInfo,Core.MethodInstance,Nothing}
+            code = bt2[j]::Union{CodeInfo,Core.MethodInstance,Core.CodeInstance,Nothing}
             mod = njlvalues == 2 ? bt2[j+1]::Union{Module,Nothing} : nothing
             push!(ret, InterpreterIP(code, header, mod))
         else
@@ -125,8 +137,8 @@ function catch_backtrace()
     return _reformat_bt(bt::Vector{Ptr{Cvoid}}, bt2::Vector{Any})
 end
 
-struct ExceptionStack <: AbstractArray{Any,1}
-    stack::Array{Any,1}
+struct ExceptionStack <: AbstractArray{NamedTuple{(:exception, :backtrace)},1}
+    stack::Array{NamedTuple{(:exception, :backtrace)},1}
 end
 
 """
@@ -149,7 +161,7 @@ uncaught exceptions.
 """
 function current_exceptions(task::Task=current_task(); backtrace::Bool=true)
     raw = ccall(:jl_get_excstack, Any, (Any,Cint,Cint), task, backtrace, typemax(Cint))::Vector{Any}
-    formatted = Any[]
+    formatted = NamedTuple{(:exception, :backtrace)}[]
     stride = backtrace ? 3 : 1
     for i = reverse(1:stride:length(raw))
         exc = raw[i]
@@ -223,18 +235,19 @@ macro assert(ex, msgs...)
         msg = msg # pass-through
     elseif !isempty(msgs) && (isa(msg, Expr) || isa(msg, Symbol))
         # message is an expression needing evaluating
-        msg = :(Main.Base.string($(esc(msg))))
+        msg = :($_assert_tostring($(esc(msg))))
     elseif isdefined(Main, :Base) && isdefined(Main.Base, :string) && applicable(Main.Base.string, msg)
         msg = Main.Base.string(msg)
     else
         # string() might not be defined during bootstrap
-        msg = :(_assert_tostring($(Expr(:quote,msg))))
+        msg = :($_assert_tostring($(Expr(:quote,msg))))
     end
     return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end
 
 # this may be overridden in contexts where `string(::Expr)` doesn't work
-_assert_tostring(msg) = isdefined(Main, :Base) ? Main.Base.string(msg) :
+_assert_tostring(@nospecialize(msg)) = Core.compilerbarrier(:type, __assert_tostring)(msg)
+__assert_tostring(msg) = isdefined(Main, :Base) ? Main.Base.string(msg) :
     (Core.println(msg); "Error during bootstrap. See stdout.")
 
 struct ExponentialBackOff

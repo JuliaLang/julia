@@ -14,6 +14,7 @@ arch_mapping = {
     'i686': "i\\d86",
     'aarch64': "(arm|aarch)64",
     'armv7l': "arm(v7l)?",
+    'riscv64': "(rv64|riscv64)",
     'powerpc64le': "p(ower)?pc64le",
 }
 platform_mapping = {
