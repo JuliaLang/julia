@@ -813,7 +813,6 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
             // now add it to our compilation results
             jl_code_instance_t *codeinst = (jl_code_instance_t*)item;
 
-            // TODO: check
             if (external_linkage &&
                 (jl_atomic_load_relaxed(&codeinst->flags) & JL_CI_FLAGS_FROM_IMAGE)) {
                 ++i;
