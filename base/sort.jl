@@ -1785,8 +1785,6 @@ const COLLECT_ON_SORT_TYPES = Union{Base.KeySet, Base.ValueIterator}
 sort(v::COLLECT_ON_SORT_TYPES; kws...) = sort!(collect(v); kws...)
 
 function _tuple_insertion_sort(tup::Tuple, ordering::Ordering)
-    # Use `@assume_effects` to allow constant folding.
-    #
     # Keep everything inlined into one function to allow escape analysis to prove
     # `mem` does not escape. Then the heap allocation should be eliminated. At time
     # of writing, Julia does not have interprocedural escape analysis. Once
@@ -1797,27 +1795,27 @@ function _tuple_insertion_sort(tup::Tuple, ordering::Ordering)
         elt = eltype(tup)
         T = Memory{elt}
         mem = T(undef, n)
-        Base.@assume_effects :terminates_locally for i ∈ eachindex(mem)  # copy `tup` to `mem`
+        for i ∈ eachindex(mem)  # copy `tup` to `mem`
             x = tup[i]
-            Base.@assume_effects :consistent mem[i] = x
+            mem[i] = x
         end
-        Base.@assume_effects :terminates_locally for i ∈ eachindex(mem)[begin:(end - 1)]  # insertion sort `mem`
-            x = Base.@assume_effects :consistent mem[i + 1]
+        for i ∈ eachindex(mem)[begin:(end - 1)]  # insertion sort `mem`
+            x = mem[i + 1]
             j = i
             while firstindex(mem) ≤ j
-                y = Base.@assume_effects :consistent mem[j]
+                y = mem[j]
                 if !(Order.lt(ordering, x, y)::Bool)
                     break
                 end
                 k = j + 1
-                Base.@assume_effects :consistent mem[k] = y
+                mem[k] = y
                 j = j - 1
             end
             l = j + 1
-            Base.@assume_effects :consistent mem[l] = x
+            mem[l] = x
         end
         function getindex_mem(i::Int)
-             @inline Base.@assume_effects :consistent mem[i]
+             @inline mem[i]
         end
         ntuple(getindex_mem, Val{n}())  # extract a `Tuple` from `mem`
     end
