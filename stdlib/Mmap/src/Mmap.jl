@@ -171,6 +171,7 @@ elseif Sys.iswindows()
 
 # Windows API constants
 const DWORD = Culong
+const BOOL = Cint
 
 const PAGE_READONLY          = DWORD(0x02)
 const PAGE_READWRITE         = DWORD(0x04)
@@ -197,7 +198,7 @@ end
 mutable struct SECURITY_ATTRIBUTES
     nLength::DWORD
     lpSecurityDescriptor::Ptr{Cvoid}
-    bInheritHandle::Bool
+    bInheritHandle::BOOL
 
     SECURITY_ATTRIBUTES(inherit_handle::Bool) = new(sizeof(SECURITY_ATTRIBUTES), C_NULL, inherit_handle)
 end
