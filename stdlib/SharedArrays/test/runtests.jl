@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed, SharedArrays, Random
+using Test, Distributed, Mmap, SharedArrays, Random
 include(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test", "testenv.jl"))
 
 @test isempty(Test.detect_closure_boxes(SharedArrays))
@@ -148,11 +148,12 @@ read!(fn3, filedata)
 finalize(S)
 @test Base.elsize(S) == Base.elsize(typeof(S)) == Base.elsize(Vector{UInt8})
 
+# TODO: Commenting out to test if necessary anymore
 # call gc 3 times to avoid unlink: operation not permitted (EPERM) on Windows
-S = nothing
-@everywhere GC.gc(true)
-@everywhere GC.gc(true)
-@everywhere GC.gc(true)
+#S = nothing
+#@everywhere GC.gc(true)
+#@everywhere GC.gc(true)
+#@everywhere GC.gc(true)
 rm(fn); rm(fn2); rm(fn3)
 
 ### Utility functions
@@ -326,6 +327,97 @@ end
 @test SharedMatrix([0.1 0.2; 0.3 0.4]) == [0.1 0.2; 0.3 0.4]
 @test_throws MethodError SharedVector(rand(4,4))
 @test_throws MethodError SharedMatrix(rand(4))
+
+# Resource cleanup
+@static if Sys.isunix()
+
+# If open, an fd will exist with contents matching the name, e.g. "/dev/shm/jltestsegname"
+@everywhere function has_open_fd(name)
+    for fd in readdir("/proc/self/fd")
+        try
+            return basename(name) == Base.Filesystem.readlink("/proc/self/fd/$fd")
+        catch
+            # fd may close between listing and reading the link
+        end
+    end
+    return false
+end
+
+# If a named memory segment file descriptor was created, mapped, and closed, the line will look like
+# ["7d3d9c0ed000-7d3d9c0ee000", "rw-s", "00000000", "00:3f", "44", "/dev/shm/jltestsegname", "(deleted)"]
+@everywhere function shmem_mapped(segname)
+    maps = split.(readlines("/proc/self/maps"))
+    i = findfirst(x -> length(x) ≥ 6 && basename(x[6]) == basename(segname), maps)
+    ismapped = i !== nothing
+    isdeleted = ismapped && length(maps[i]) > 6 && maps[i][7] == "(deleted)"
+    return ismapped, isdeleted
+end
+
+else # Sys.iswindows()
+
+# Attempting to open a named memory object will throw an exception if it has been closed
+@everywhere function named_mapping_open(segname)
+    try
+        io = open(Mmap.SharedMemory, segname, 1; readonly=true, create=false)
+        close(io)
+        return true
+    catch
+        return false
+    end
+end
+
+end
+
+@testset "Resource cleanup" begin
+    @testset "Backing file descriptors/handles closed after construction" begin
+        S = SharedArray{Int64}(100, 100)
+        segname = S.segname
+        pids = procs(S)
+
+        @static if Sys.isunix()
+
+            @test !has_open_fd(segname)
+            ismapped, isdeleted = shmem_mapped(segname)
+            @test ismapped
+            @test isdeleted
+
+            @test all(pids) do p
+                hasfd = remotecall_fetch(has_open_fd, p, segname)
+                ismapped, isdeleted = remotecall_fetch(shmem_mapped, p, segname)
+                return !hasfd && ismapped && isdeleted
+            end
+
+        else # Sys.iswindows()
+
+            @test !named_mapping_open(segname)
+            @test !any(pids) do p
+                remotecall_fetch(named_mapping_open, p, segname)
+            end
+
+        end
+    end
+
+    @testset "Zero-element SharedArray creates no shared memory segment" begin
+        S = SharedArray{Int64}(0)
+        segname = S.segname
+        pids = procs(S)
+
+        @static if Sys.islinux()
+
+            @test !ispath("/dev/shm" * segname)
+            ismapped, _ = shmem_mapped(segname)
+            @test !ismapped
+
+            @test all(pids) do p
+                ismapped, _ = shmem_mapped(segname)
+                return !ismapped
+            end
+
+        else
+            # Cannot be tested?
+        end
+    end
+end
 
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(SharedArrays))
