@@ -2793,3 +2793,12 @@ end
 #issue 58115
 @test Tuple{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{             Union{Tuple{}, Tuple{Tuple{}}}}}}}}}}}}}  , Tuple{}} <:
       Tuple{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Union{Tuple{}, Tuple{Tuple{}}}}}}}}}}}}}}}, Tuple{}}
+
+# issue 59490
+@test typeintersect(Tuple{DataType, Type{UnitRange{Int64}}, Type{Int64}},
+                    Tuple{Type{T}, S, S} where {T<:AbstractArray, S<:Type{<:Any}}) !== Union{}
+@test typeintersect(Tuple{DataType, Type{UnitRange{Int64}}, Type{Int64}},
+                    Tuple{Type{T}, Vararg{S, N}} where {N, eT, T<:AbstractArray{eT, N}, S<:Type{<:Any}}) !== Union{}
+@test typeintersect(Tuple{Union{DataType, UnionAll, Union}, Type{UnitRange{Int64}}, Type{Int64}},
+                    Tuple{Type{T}, Vararg{S, N}} where {N, eT, T<:AbstractArray{eT, N}, S<:Type{<:Any}}) !== Union{}
+@test typeintersect(Tuple{Int, String}, Tuple{T, T} where T) === Union{}

@@ -886,6 +886,24 @@ static jl_value_t *widen_Type(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
     return t;
 }
 
+// Find a concrete kind type C such that t <: C <: ub.
+// Kind types are the only concrete types that can serve as common
+// supertypes for different Type{X} values in the diagonal rule.
+static jl_value_t *find_concrete_supertype(jl_value_t *t, jl_value_t *ub)
+{
+    jl_value_t *kinds[4] = {
+        (jl_value_t*)jl_datatype_type,
+        (jl_value_t*)jl_unionall_type,
+        (jl_value_t*)jl_uniontype_type,
+        (jl_value_t*)jl_typeofbottom_type,
+    };
+    for (int i = 0; i < 4; i++) {
+        if (jl_subtype(t, kinds[i]) && jl_subtype(kinds[i], ub))
+            return kinds[i];
+    }
+    return NULL;
+}
+
 // convert a type with free variables to a typevar bounded by a UnionAll-wrapped
 // version of that type.
 // TODO: This loses some inference precision. For example in a case where a
@@ -3494,6 +3512,24 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
             }
             restore_env(e, &se, vb.constraintkind == 1 ? 1 : 0);
             vb.occurs_cov = vb.occurs_inv = 0;
+            res = intersect_unionall_(t, u, e, R, param, &vb);
+        }
+    }
+    else if (res == jl_bottom_type && vb.constraintkind == 1 &&
+             vb.occurs_cov > 1) {
+        // constraintkind=1 returned Bottom for a diagonal var. Different
+        // covariant occurrences had incompatible types under intersection,
+        // but they might share a concrete kind supertype (e.g., Type{Int}
+        // and Type{Float64} are both <: DataType, which is concrete).
+        // Check for such a supertype and retry with it as the var's ub.
+        jl_value_t *concrete_sup = find_concrete_supertype(vb.ub, u->var->ub);
+        if (concrete_sup != NULL) {
+            vb.lb = u->var->lb;
+            vb.ub = concrete_sup;
+            vb.constraintkind = 0;
+            vb.concrete = 0;
+            vb.occurs_cov = vb.occurs_inv = 0;
+            restore_env(e, &se, 1);
             res = intersect_unionall_(t, u, e, R, param, &vb);
         }
     }
