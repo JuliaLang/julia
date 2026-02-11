@@ -1375,7 +1375,6 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
         try
             wait(first_started)
             (isempty(pkg_queue) || interrupted_or_done[]) && return
-            keyboard_tip = @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.keyboard_tip
             @lock print_lock begin
                 if BACKGROUND_PRECOMPILE.monitoring && target[] !== nothing
                     printpkgstyle(logio, :Precompiling, something(target[], ""))
@@ -1402,6 +1401,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
                     end
                     local i_local = i
                     local final_loop_local = final_loop
+                    keyboard_tip = BACKGROUND_PRECOMPILE.keyboard_tip
                     str_ = sprint(; context=logio) do iostr
                         if i_local > 1
                             print(iostr, ansi_cleartoend)
