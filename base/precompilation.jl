@@ -393,8 +393,10 @@ import Base: StaleCacheKey
 can_fancyprint(io::IO) = @something(get(io, :force_fancyprint, nothing), (io isa Base.TTY && (get(ENV, "CI", nothing) != "true")))
 
 function printpkgstyle(io, header, msg; color=:green)
-    printstyled(io, header; color, bold=true)
-    println(io, " ", msg)
+    return @lock io begin
+        printstyled(io, header; color, bold=true)
+        println(io, " ", msg)
+    end
 end
 
 const Config = Pair{Cmd, Base.CacheFlags}
