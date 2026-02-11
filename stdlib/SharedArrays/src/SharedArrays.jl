@@ -116,16 +116,16 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
         seg_name = "/jl$(lpad(string(getpid() % 10^6), 6, "0"))$(randstring(20))"
         if onlocalhost
             shmmem_create_pid = myid()
-            s, io = shm_mmap_array(T, dims, seg_name, JL_O_CREAT | JL_O_RDWR)
+            s, io = shm_mmap_array(T, dims, seg_name, JL_O_CREAT | JL_O_RDWR, false)
         else
             # The shared array is created on a remote machine
             shmmem_create_pid = pids[1]
-            remotecall_fetch(pids[1]) do
-                shm_mmap_array(T, dims, seg_name, JL_O_CREAT | JL_O_RDWR)
+            io = remotecall_fetch(pids[1]) do
+                last(shm_mmap_array(T, dims, seg_name, JL_O_CREAT | JL_O_RDWR, false))
             end
         end
 
-        func_mapshmem = () -> first(shm_mmap_array(T, dims, seg_name, JL_O_RDWR))
+        func_mapshmem = () -> first(shm_mmap_array(T, dims, seg_name, JL_O_RDWR, true))
 
         refs = Vector{Future}(undef, length(pids))
         for (i, p) in enumerate(pids)
@@ -636,31 +636,27 @@ function print_shmem_limits(slen)
 end
 
 # utilities
-function shm_mmap_array(T, dims, shm_seg_name, mode)
-    local A = nothing
-    local io = nothing
-
+function shm_mmap_array(T, dims, shm_seg_name, mode, closeio)
     if (prod(dims) == 0) || (sizeof(T) == 0)
         return Array{T}(undef, dims), nothing
     end
-
     try
-        A, io = _shm_mmap_array(T, dims, shm_seg_name, mode)
+        return _shm_mmap_array(T, dims, shm_seg_name, mode, closeio)
     catch
         print_shmem_limits(prod(dims)*sizeof(T))
         rethrow()
     end
-    A, io
 end
 
-function _shm_mmap_array(T, dims, shm_seg_name, mode)
+function _shm_mmap_array(T, dims, shm_seg_name, mode, closeio)
     readonly = !((mode & JL_O_RDWR) == JL_O_RDWR)
     create = (mode & JL_O_CREAT) == JL_O_CREAT
     io = open(Mmap.SharedMemory, shm_seg_name, prod(dims) * sizeof(T); readonly, create)
     A = mmap(io, Array{T,length(dims)}, dims, zero(Int64))
-    if !create
-        # Workers can immediately close the virtual file after mapping; the creating process will unlink the segment after all workers have mapped it.
+    # Workers can immediately close the virtual file after mapping
+    if closeio
         close(io)
+        io = nothing
     end
     return A, io
 end
