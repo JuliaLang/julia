@@ -1,110 +1,97 @@
-Julia v1.2 Release Notes
+Julia v1.14 Release Notes
 ========================
 
 New language features
 ---------------------
 
-  * Argument splatting (`x...`) can now be used in calls to the `new` pseudo-function in
-    constructors ([#30577]).
-
-  * Objects created by calling `skipmissing` on an array can now be indexed using indices
-    from the parent at non-missing positions. This allows functions such as
-    `findall`, `findfirst`, `argmin`/`argmax` and `findmin`/`findmax` to work with these
-    objects, returning the index of matching non-missing elements in the parent ([#31008]).
-
-Multi-threading changes
------------------------
-
-  * The `Condition` type now has a thread-safe replacement, accessed as `Threads.Condition`.
-    With that addition, task scheduling primitives such as `ReentrantLock` are now thread-safe ([#30061]).
+  - It is now possible to control which version of the Julia syntax will be used to parse a package by setting the
+    `compat.julia` or `syntax.julia_version` key in Project.toml. This feature is similar to the notion of "editions"
+    in other language ecosystems and will allow non-breaking evolution of Julia syntax in future versions.
+    See the "Syntax Versioning" section in the code loading documentation ([#60018]).
+  - `ᵅ` (U+U+1D45), `ᵋ` (U+1D4B), `ᶲ` (U+1DB2), `˱` (U+02F1), `˲` (U+02F2), and `ₔ` (U+2094) can now also be used as
+    operator suffixes, accessible as `\^alpha`, `\^epsilon`, `\^ltphi`, `\_<`, `\_>`, and `\_schwa` at the REPL
+    ([#60285]).
+  - The `@label` macro can now create labeled blocks that can be exited early with `break name [value]`. Use
+    `@label name expr` for named blocks or `@label _ expr` for anonymous blocks. The `continue` statement also
+    supports labels with `continue name` to continue a labeled loop ([#60481]).
 
 Language changes
 ----------------
-* Empty entries in `JULIA_DEPOT_PATH` are now expanded to default depot entries ([#31009]).
-* `Enum` now behaves like a scalar when used in broadcasting ([#30670]).
+
+Compiler/Runtime improvements
+-----------------------------
 
 Command-line option changes
 ---------------------------
 
+Multi-threading changes
+-----------------------
+
+  - New functions `Threads.atomic_fence_heavy` and `Threads.atomic_fence_light` provide support for
+    asymmetric atomic fences, speeding up atomic synchronization where one side of the synchronization
+    runs significantly less often than the other ([#60311]).
+
+Build system changes
+--------------------
 
 New library functions
 ---------------------
 
-* `getipaddrs()` function returns all the IP addresses of the local machine ([#30349])
-* Added `Base.hasproperty` and `Base.hasfield` ([#28850]).
-* One argument `!=(x)`, `>(x)`, `>=(x)`, `<(x)`, `<=(x)` has been added for currying,
-  similar to the existing `==(x)` and `isequal(x)` methods ([#30915]).
+New library features
+--------------------
+
+* `IOContext` supports a new boolean `hexunsigned` option that allows for
+  printing unsigned integers in decimal instead of hexadecimal ([#60267]).
 
 Standard library changes
 ------------------------
 
-* The `extrema` function now accepts a function argument in the same manner as `minimum` and
-  `maximum` ([#30323]).
-* `hasmethod` can now check for matching keyword argument names ([#30712]).
-* `startswith` and `endswith` now accept a `Regex` for the second argument ([#29790]).
-* `retry` supports arbitrary callable objects ([#30382]).
-* `filter` now supports `SkipMissing`-wrapped arrays ([#31235]).
-* A no-argument construct to `Ptr{T}` has been added which constructs a null pointer ([#30919])
-* `strip` now accepts a function argument in the same manner as `lstrip` and `rstrip` ([#31211])
+* `codepoint(c)` now succeeds for overlong encodings.  `Base.ismalformed`, `Base.isoverlong`, and
+  `Base.show_invalid` are now `public` and documented (but not exported) ([#55152]).
+
+#### JuliaSyntaxHighlighting
 
 #### LinearAlgebra
 
-* Added keyword arguments `rtol`, `atol` to `pinv` and `nullspace` ([#29998]).
-* `UniformScaling` instances are now callable such that e.g. `I(3)` will produce a `Diagonal` matrix ([#30298]).
-* Eigenvalues λ of general matrices are now sorted lexicographically by (Re λ, Im λ) ([#21598]).
-* `one` for structured matrices (`Diagonal`, `Bidiagonal`, `Tridiagonal`, `Symtridiagonal`) now preserves
-  structure and type. ([#29777])
-* `diagm(v)` is now a shorthand for `diagm(0 => v)`. ([#31125]).
+#### Markdown
 
-#### SparseArrays
+  * Strikethrough text via `~strike~` or `~~through~~` is now supported by the
+    Markdown parser. ([#60537])
 
-* performance improvements for sparse matrix-matrix multiplication ([#30372]).
-* Sparse vector outer products are more performant and maintain sparsity in products of the
-  form `kron(u, v')`, `u * v'`, and `u .* v'` where `u` and `v` are sparse vectors or column
-  views. ([#24980])
+#### Profile
+
+#### Random
+
+#### REPL
+
+#### Test
+
+* `@test`, `@test_throws`, and `@test_broken` now support a `context` keyword argument
+  that provides additional information displayed on test failure. This is useful for
+  debugging which specific case failed in parameterized tests ([#60501]).
+
+* `@test_throws`, `@test_warn`, `@test_nowarn`, `@test_logs`, and `@test_deprecated` now support
+  `broken` and `skip` keyword arguments for consistency with `@test` ([#60543]).
+
+* New functions `detect_closure_boxes` and `detect_closure_boxes_all` find methods that
+  allocate `Core.Box` in their lowered code, which can indicate performance issues from
+  captured variables in closures.
 
 #### Dates
 
-* Fixed `repr` such that it displays `DateTime` as it would be entered in Julia ([#30200]).
+* `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
 
-#### Miscellaneous
+#### InteractiveUtils
 
-* Since environment variables on Windows are case-insensitive, `ENV` now converts its keys
-  to uppercase for display, iteration, and copying ([#30593]).
+#### Dates
 
 External dependencies
 ---------------------
 
-* libgit2 has been updated to v0.27.7 ([#30584]).
-* OpenBLAS has been updated to v0.3.5 ([#30583]).
-* MbedTLS has been updated to v2.16.0 ([#30618]).
-* libunwind has been updated to v1.3.1 ([#30724]).
+Tooling Improvements
+--------------------
 
 Deprecated or removed
 ---------------------
 
-
 <!--- generated by NEWS-update.jl: -->
-[#21598]: https://github.com/JuliaLang/julia/issues/21598
-[#24980]: https://github.com/JuliaLang/julia/issues/24980
-[#28850]: https://github.com/JuliaLang/julia/issues/28850
-[#29777]: https://github.com/JuliaLang/julia/issues/29777
-[#29790]: https://github.com/JuliaLang/julia/issues/29790
-[#29998]: https://github.com/JuliaLang/julia/issues/29998
-[#30061]: https://github.com/JuliaLang/julia/issues/30061
-[#30200]: https://github.com/JuliaLang/julia/issues/30200
-[#30298]: https://github.com/JuliaLang/julia/issues/30298
-[#30323]: https://github.com/JuliaLang/julia/issues/30323
-[#30349]: https://github.com/JuliaLang/julia/issues/30349
-[#30372]: https://github.com/JuliaLang/julia/issues/30372
-[#30382]: https://github.com/JuliaLang/julia/issues/30382
-[#30577]: https://github.com/JuliaLang/julia/issues/30577
-[#30583]: https://github.com/JuliaLang/julia/issues/30583
-[#30584]: https://github.com/JuliaLang/julia/issues/30584
-[#30593]: https://github.com/JuliaLang/julia/issues/30593
-[#30618]: https://github.com/JuliaLang/julia/issues/30618
-[#30670]: https://github.com/JuliaLang/julia/issues/30670
-[#30712]: https://github.com/JuliaLang/julia/issues/30712
-[#30724]: https://github.com/JuliaLang/julia/issues/30724
-[#30915]: https://github.com/JuliaLang/julia/issues/30915
-[#30919]: https://github.com/JuliaLang/julia/issues/30919

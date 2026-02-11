@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Generate encode table.
-const BASE64_ENCODE = [UInt8(x) for x in ['A':'Z'; 'a':'z'; '0':'9'; '+'; '/']]
+const BASE64_ENCODE = [UInt8(x) for x in append!(['A':'Z'; 'a':'z'; '0':'9'], ['+', '/'])]
 encode(x::UInt8) = @inbounds return BASE64_ENCODE[(x & 0x3f) + 1]
 encodepadding()  = UInt8('=')
 
@@ -24,25 +24,30 @@ julia> write(iob64_encode, "Hello!")
 
 julia> close(iob64_encode);
 
-julia> str = String(take!(io))
+julia> str = takestring!(io)
 "SGVsbG8h"
 
 julia> String(base64decode(str))
 "Hello!"
 ```
 """
-struct Base64EncodePipe <: IO
-    io::IO
+struct Base64EncodePipe{T <: IO} <: IO
+    io::T
     buffer::Buffer
 
-    function Base64EncodePipe(io::IO)
+    function Base64EncodePipe{T}(io::T) where {T <: IO}
         # The buffer size must be at least 3.
         buffer = Buffer(512)
-        pipe = new(io, buffer)
+        pipe = new{T}(io, buffer)
         finalizer(_ -> close(pipe), buffer)
         return pipe
     end
 end
+
+Base64EncodePipe(io::IO) = Base64EncodePipe{IO}(io)
+
+Base.isreadable(::Base64EncodePipe) = false
+Base.iswritable(pipe::Base64EncodePipe) = iswritable(pipe.io)
 
 function Base.unsafe_write(pipe::Base64EncodePipe, ptr::Ptr{UInt8}, n::UInt)::Int
     buffer = pipe.buffer
@@ -208,6 +213,6 @@ function base64encode(f::Function, args...; context=nothing)
         f(IOContext(b, context), args...)
     end
     close(b)
-    return String(take!(s))
+    return takestring!(s)
 end
 base64encode(args...; context=nothing) = base64encode(write, args...; context=context)

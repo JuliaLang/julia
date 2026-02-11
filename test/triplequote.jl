@@ -52,7 +52,7 @@ s = "   p"
       """ == " $s$(nl)"
 @test """\t""" == "\t"
 @test """
-      \t""" == ""
+      \t""" == "\t"
 @test """
       foo
       \tbar""" == "foo$(nl)\tbar"
@@ -66,3 +66,10 @@ s = "   p"
 @test """
       $("\n      ")
       """ == "\n      $(nl)"
+
+# issue #34105
+let str = "   yoyo"
+    interp = """interpolate:\n$str
+    next line"""
+    @test interp == "interpolate:\n   yoyo\nnext line"
+end

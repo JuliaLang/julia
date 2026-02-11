@@ -1,22 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Base: peek
-
-macro dotimes(n, body)
-    quote
-        for i = 1:$(esc(n))
-            $(esc(body))
-        end
-    end
-end
-
 const whitespace = " \t\r"
 
 """
 Skip any leading whitespace. Returns io.
+If `newlines=true` then also skip line ends.
 """
 function skipwhitespace(io::IO; newlines = true)
-    while !eof(io) && (Char(peek(io)) in whitespace || (newlines && peek(io) == UInt8('\n')))
+    while !eof(io)
+        c = peek(io, Char)
+        c in whitespace || (newlines && c == '\n') || break
         read(io, Char)
     end
     return io
@@ -28,8 +21,7 @@ Skip any leading blank lines. Returns the number skipped.
 function skipblank(io::IO)
     start = position(io)
     i = 0
-    while !eof(io)
-        c = read(io, Char)
+    for c in readeach(io, Char)
         c == '\n' && (start = position(io); i+=1; continue)
         c == '\r' && (start = position(io); i+=1; continue)
         c in whitespace || break
@@ -39,7 +31,7 @@ function skipblank(io::IO)
 end
 
 """
-Returns true if the line contains only (and, unless allowempty,
+Return true if the line contains only (and, unless allowempty,
 at least one of) the characters given.
 """
 function linecontains(io::IO, chars; allow_whitespace = true,
@@ -95,20 +87,27 @@ function startswith(stream::IO, ss::Vector{<:AbstractString}; kws...)
     any(s->startswith(stream, s; kws...), ss)
 end
 
-function startswith(stream::IO, r::Regex; eat = true, padding = false)
+function matchstart(stream::IO, r::Regex; eat = true, padding = false)
     @assert Base.startswith(r.pattern, "^")
     start = position(stream)
     padding && skipwhitespace(stream)
     line = readline(stream)
     seek(stream, start)
     m = match(r, line)
-    m === nothing && return ""
-    eat && @dotimes length(m.match) read(stream, Char)
-    return m.match
+    if eat && m !== nothing
+        for i in 1:length(m.match)
+            read(stream, Char)
+        end
+    end
+    return m
+end
+
+function startswith(stream::IO, r::Regex; kws...)
+    return matchstart(stream, r; kws...) !== nothing
 end
 
 """
-Executes the block of code, and if the return value is `nothing`,
+Executes the block of code, and if the return value is `nothing` or `false`,
 returns the stream to its initial position.
 """
 function withstream(f, stream)
@@ -144,7 +143,7 @@ function readuntil(stream::IO, delimiter; newlines = false, match = nothing)
         while !eof(stream)
             if startswith(stream, delimiter)
                 if count == 0
-                    return String(take!(buffer))
+                    return takestring!(buffer)
                 else
                     count -= 1
                     write(buffer, delimiter)
@@ -182,16 +181,15 @@ function parse_inline_wrapper(stream::IO, delimiter::AbstractString; rep = false
         startswith(stream, delimiter^n) || return nothing
         while startswith(stream, delimiter); n += 1; end
         !rep && n > nmin && return nothing
-        !eof(stream) && Char(peek(stream)) in whitespace && return nothing
+        !eof(stream) && isspace(peek(stream, Char)) && return nothing
 
         buffer = IOBuffer()
-        while !eof(stream)
-            char = read(stream, Char)
+        for char in readeach(stream, Char)
             write(buffer, char)
-            if !(char in whitespace || char == '\n' || char in delimiter) && startswith(stream, delimiter^n)
+            if !(isspace(char) || char in delimiter) && startswith(stream, delimiter^n)
                 trailing = 0
                 while startswith(stream, delimiter); trailing += 1; end
-                trailing == 0 && return String(take!(buffer))
+                trailing == 0 && return takestring!(buffer)
                 write(buffer, delimiter ^ (n + trailing))
             end
         end

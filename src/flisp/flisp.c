@@ -41,6 +41,7 @@
 #include <locale.h>
 #include <limits.h>
 #include <errno.h>
+#include <libgen.h> // defines dirname
 
 #include "platform.h"
 #include "libsupport.h"
@@ -49,13 +50,6 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-#include <malloc.h>
-JL_DLLEXPORT char * dirname(char *);
-#else
-#include <libgen.h>
 #endif
 
 static const char *const builtin_names[] =
@@ -226,6 +220,7 @@ static symbol_t *mk_symbol(const char *str)
     size_t len = strlen(str);
 
     sym = (symbol_t*)malloc((offsetof(symbol_t,name)+len+1+7)&-8);
+    // TODO: if sym == NULL
     CHECK_ALIGN8(sym);
     sym->left = sym->right = NULL;
     sym->flags = 0;
@@ -330,6 +325,7 @@ static value_t mk_cons(fl_context_t *fl_ctx)
     if (fl_ctx->n_allocd > GC_INTERVAL)
         gc(fl_ctx, 0);
     c = (cons_t*)((void**)malloc(3*sizeof(void*)) + 1);
+    // TODO: if c == NULL
     CHECK_ALIGN8(c);
     ((void**)c)[-1] = fl_ctx->tochain;
     fl_ctx->tochain = c;
@@ -353,6 +349,7 @@ static value_t *alloc_words(fl_context_t *fl_ctx, int n)
     if (fl_ctx->n_allocd > GC_INTERVAL)
         gc(fl_ctx, 0);
     first = (value_t*)malloc((n+1)*sizeof(value_t)) + 1;
+    // TODO: if first == NULL
     CHECK_ALIGN8(first);
     first[-1] = (value_t)fl_ctx->tochain;
     fl_ctx->tochain = first;
@@ -990,11 +987,12 @@ static uint32_t process_keys(fl_context_t *fl_ctx, value_t kwtable,
     ((int16_t)                                  \
     ((((int16_t)a[0])<<0)  |                    \
      (((int16_t)a[1])<<8)))
-#define PUT_INT32(a,i) (*(int32_t*)(a) = bswap_32((int32_t)(i)))
+#define PUT_INT32(a,i) jl_store_unaligned_i32((void*)a,
+    (uint32_t)bswap_32((int32_t)(i)))
 #else
-#define GET_INT32(a) (*(int32_t*)a)
-#define GET_INT16(a) (*(int16_t*)a)
-#define PUT_INT32(a,i) (*(int32_t*)(a) = (int32_t)(i))
+#define GET_INT32(a) (int32_t)jl_load_unaligned_i32((void*)a)
+#define GET_INT16(a) (int16_t)jl_load_unaligned_i16((void*)a)
+#define PUT_INT32(a,i) jl_store_unaligned_i32((void*)a, (uint32_t)(i))
 #endif
 #define SWAP_INT32(a) (*(int32_t*)(a) = bswap_32(*(int32_t*)(a)))
 #define SWAP_INT16(a) (*(int16_t*)(a) = bswap_16(*(int16_t*)(a)))
@@ -2338,6 +2336,7 @@ static void lisp_init(fl_context_t *fl_ctx, size_t initial_heapsize)
     comparehash_init(fl_ctx);
     fl_ctx->N_STACK = 262144;
     fl_ctx->Stack = (value_t*)malloc(fl_ctx->N_STACK*sizeof(value_t));
+    // TODO: if fl_ctx->Stack == NULL
     CHECK_ALIGN8(fl_ctx->Stack);
 
     fl_ctx->NIL = builtin(OP_THE_EMPTY_LIST);
@@ -2397,6 +2396,7 @@ static void lisp_init(fl_context_t *fl_ctx, size_t initial_heapsize)
 #endif
 
     fl_ctx->jl_sym = symbol(fl_ctx, "julia_value");
+    fl_ctx->jl_char_sym = symbol(fl_ctx, "julia_char");
 
     fl_ctx->the_empty_vector = tagptr(alloc_words(fl_ctx, 1), TAG_VECTOR);
     vector_setsize(fl_ctx->the_empty_vector, 0);

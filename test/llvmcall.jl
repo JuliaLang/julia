@@ -70,20 +70,24 @@ end
        ret i32 %3""", Int32, Tuple{Int32, Int32},
         Int32(1), Int32(2))) # llvmcall must be compiled to be called
 
-# Test whether declarations work properly
+#Since LLVM 18, LLVM does a best effort to automatically include the intrinsics
 function undeclared_ceil(x::Float64)
     llvmcall("""%2 = call double @llvm.ceil.f64(double %0)
         ret double %2""", Float64, Tuple{Float64}, x)
 end
-@test_throws ErrorException undeclared_ceil(4.2)
-@test_throws ErrorException undeclared_ceil(4.2)
+@test undeclared_ceil(4.2) == 5.0
+@test undeclared_ceil(4.2) == 5.0
 
 function declared_floor(x::Float64)
     llvmcall(
-        ("""declare double @llvm.floor.f64(double)""",
-         """%2 = call double @llvm.floor.f64(double %0)
-            ret double %2"""),
-    Float64, Tuple{Float64}, x)
+        ("""declare double @llvm.floor.f64(double)
+            define double @entry(double) #0 {
+            1:
+                %2 = call double @llvm.floor.f64(double %0)
+                ret double %2
+            }
+            attributes #0 = { alwaysinline }
+         """, "entry"), Float64, Tuple{Float64}, x)
 end
 @test declared_floor(4.2) ≈ 4.
 ir = sprint(code_llvm, declared_floor, Tuple{Float64})
@@ -91,92 +95,53 @@ ir = sprint(code_llvm, declared_floor, Tuple{Float64})
 
 function doubly_declared_floor(x::Float64)
     llvmcall(
-        ("""declare double @llvm.floor.f64(double)""",
-         """%2 = call double @llvm.floor.f64(double %0)
-            ret double %2"""),
-    Float64, Tuple{Float64}, x+1)-1
+        ("""declare double @llvm.floor.f64(double)
+            define double @entry(double) #0 {
+            1:
+                %2 = call double @llvm.floor.f64(double %0)
+                ret double %2
+            }
+            attributes #0 = { alwaysinline }
+         """, "entry"), Float64, Tuple{Float64}, x+1)-1
 end
 @test doubly_declared_floor(4.2) ≈ 4.
 
 function doubly_declared2_trunc(x::Float64)
     a = llvmcall(
-        ("""declare double @llvm.trunc.f64(double)""",
-         """%2 = call double @llvm.trunc.f64(double %0)
-            ret double %2"""),
-    Float64, Tuple{Float64}, x)
+        ("""declare double @llvm.trunc.f64(double)
+            define double @entry(double) #0 {
+            1:
+                %2 = call double @llvm.trunc.f64(double %0)
+                ret double %2
+            }
+            attributes #0 = { alwaysinline }
+         """, "entry"), Float64, Tuple{Float64}, x)
     b = llvmcall(
-        ("""declare double @llvm.trunc.f64(double)""",
-         """%2 = call double @llvm.trunc.f64(double %0)
-            ret double %2"""),
-    Float64, Tuple{Float64}, x+1)-1
+        ("""declare double @llvm.trunc.f64(double)
+            define double @entry(double) #0 {
+            1:
+                %2 = call double @llvm.trunc.f64(double %0)
+                ret double %2
+            }
+            attributes #0 = { alwaysinline }
+         """, "entry"), Float64, Tuple{Float64}, x+1)-1
     a + b
 end
 @test doubly_declared2_trunc(4.2) ≈ 8.
 
-# Test for single line
-function declared_ceil(x::Float64)
-    llvmcall(
-        ("declare double @llvm.ceil.f64(double)",
-         """%2 = call double @llvm.ceil.f64(double %0)
-            ret double %2"""),
-    Float64, Tuple{Float64}, x)
-end
-@test declared_ceil(4.2) ≈ 5.0
-
-# Test for multiple lines
-function ceilfloor(x::Float64)
-    llvmcall(
-        ("""declare double @llvm.ceil.f64(double)
-            declare double @llvm.floor.f64(double)""",
-         """%2 = call double @llvm.ceil.f64(double %0)
-            %3 = call double @llvm.floor.f64(double %2)
-            ret double %3"""),
-    Float64, Tuple{Float64}, x)
-end
-@test ceilfloor(7.4) ≈ 8.0
-
-# Test for proper declaration extraction
-function confuse_declname_parsing()
-    llvmcall(
-        ("""declare i64 addrspace(0)* @foobar()""",
-         """ret void"""),
-    Cvoid, Tuple{})
-end
-confuse_declname_parsing()
-
 # Test for proper mangling of external (C) functions
 function call_jl_errno()
     llvmcall(
-    (""" declare i32 @jl_errno()""",
-    """
-    %r = call i32 @jl_errno()
-    ret i32 %r
-    """),Int32,Tuple{})
+        ("""declare i32 @jl_errno()
+            define i32 @entry() #0 {
+            0:
+                %r = call i32 @jl_errno()
+                ret i32 %r
+            }
+            attributes #0 = { alwaysinline }
+         """, "entry"),Int32,Tuple{})
 end
 call_jl_errno()
-
-module ObjLoadTest
-    using Base: llvmcall, @ccallable
-    using Test
-    didcall = false
-    @ccallable Cvoid function jl_the_callback()
-        global didcall
-        didcall = true
-        nothing
-    end
-    # Make sure everything up until here gets compiled
-    jl_the_callback(); didcall = false
-    function do_the_call()
-        llvmcall(
-        (""" declare void @jl_the_callback()""",
-        """
-        call void @jl_the_callback()
-        ret void
-        """),Cvoid,Tuple{})
-    end
-    do_the_call()
-    @test didcall
-end
 
 # Test for proper parenting
 local foo
@@ -190,42 +155,66 @@ function foo()
 end
 code_llvm(devnull, foo, ())
 
-module CcallableRetTypeTest
-    using Base: llvmcall, @ccallable
-    using Test
-    @ccallable function jl_test_returns_float()::Float64
-        return 42
-    end
-    function do_the_call()
-        llvmcall(
-        (""" declare double @jl_test_returns_float()""",
-        """
-        %1 = call double @jl_test_returns_float()
-        ret double %1
-        """),Float64,Tuple{})
-    end
-    @test do_the_call() === 42.0
+# Issue #48093 - test that non-external globals are not deduplicated
+function kernel()
+    Base.llvmcall(("""
+        @shmem = internal global i8 0, align 8
+        define void @entry() {
+            store i8 1, i8* @shmem
+            ret void
+        }""", "entry"), Cvoid, Tuple{})
+    Base.llvmcall(("""
+        @shmem = internal global i8 0, align 8
+        define i8 @entry() {
+            %1 = load i8, i8* @shmem
+            ret i8 %1
+        }""", "entry"), UInt8, Tuple{})
 end
+@test kernel() == 0x00
 
 # If this test breaks, you've probably broken Cxx.jl - please check
 module LLVMCallFunctionTest
     using Base: llvmcall
     using Test
 
-    function julia_to_llvm(@nospecialize x)
-        isboxed = Ref{UInt8}()
-        ccall(:julia_type_to_llvm,Ptr{Cvoid},(Any,Ref{UInt8}),x,isboxed)
-    end
-    const AnyTy = julia_to_llvm(Any)
-
     const libllvmcalltest = "libllvmcalltest"
-    const the_f = ccall((:MakeIdentityFunction, libllvmcalltest), Ptr{Cvoid}, (Ptr{Cvoid},), AnyTy)
+    const the_ir = unsafe_string(ccall((:MakeIdentityFunction, libllvmcalltest), Cstring, (Any,), Any))
 
-    @eval really_complicated_identity(x) = llvmcall($(the_f), Any, Tuple{Any}, x)
+    @eval really_complicated_identity(x) = llvmcall(($(the_ir), "identity"), Any, Tuple{Any}, x)
 
     mutable struct boxed_struct
     end
     let x = boxed_struct()
         @test really_complicated_identity(x) === x
     end
+
+    # Define two functions that each compute the address of a dedicated internal global variable.
+    # The names of these globals are the same, so if their linkages are overwritten, then the
+    # linker will merge the globals. Consequently, we can test that linkage is preserved by testing
+    # that the addresses of the globals differ. The next few lines of code do just that.
+    const the_other_ir1 = unsafe_string(ccall((:MakeLoadGlobalFunction, libllvmcalltest), Cstring, ()))
+    const the_other_ir2 = unsafe_string(ccall((:MakeLoadGlobalFunction, libllvmcalltest), Cstring, ()))
+
+    @eval global_value_address1() = llvmcall(($(the_other_ir1), "load_global_var"), Int64, Tuple{})
+    @eval global_value_address2() = llvmcall(($(the_other_ir2), "load_global_var"), Int64, Tuple{})
+
+    @test global_value_address1() != global_value_address2()
 end
+
+# issue 34166
+f34166(x) = Base.llvmcall("ret i$(Sys.WORD_SIZE) %0", Int, (Int,), x)
+@test_throws ErrorException f34166(1)
+
+# Test that codegen can construct constant LLVMPtr #38864
+struct MyStruct
+    kern::UInt64
+    ptr::Core.LLVMPtr{UInt8,1}
+end
+MyStruct(kern) = MyStruct(kern, reinterpret(Core.LLVMPtr{UInt8,1}, 0))
+MyStruct() = MyStruct(0)
+s = MyStruct()
+
+# ensure LLVMPtr properly subtypes
+@test eltype(supertype(Core.LLVMPtr{UInt8,1})) <: UInt8
+@test s.kern == 0
+@test reinterpret(Int, s.ptr) == 0

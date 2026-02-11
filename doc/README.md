@@ -1,6 +1,6 @@
 # Julia Documentation README
 
-Julia's documentation is written in Markdown. A reference of all supported syntax can be found in the [manual](https://docs.julialang.org/en/latest/manual/documentation/#Markdown-syntax-1). All documentation can be found in the Markdown files in `doc/src/` and the docstrings in Julia source files in `base/`.
+Julia's documentation is written in Markdown. A reference of all supported syntax can be found in the [manual](https://docs.julialang.org/en/v1/stdlib/Markdown/). All documentation can be found in the Markdown files in `doc/src/` and the docstrings in Julia source files in `base/` and `stdlib/`.
 
 ## Requirements
 
@@ -28,3 +28,10 @@ $ make -C doc doctest=true
 
 from the root directory.
 
+## Customizing Doctest Execution
+
+By default, doctests are run using the in-tree Julia executable.
+This behavior can be changed by setting the `JULIA_EXECUTABLE` Makefile variable.
+
+> [!WARNING]
+> Using a custom `JULIA_EXECUTABLE` will not pick up changes to docstrings for Base or any standard library built into the system image. To see the list of standard libraries that are part of the system image, you can run the `contrib/print_sorted_stdlibs.jl` script (e.g., `julia contrib/print_sorted_stdlibs.jl --only-sysimg`).

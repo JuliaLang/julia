@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<installer-gui-script minSpecVersion="2">
+    <title>FRAMEWORK_NAME</title>
+    <background file="logo_hires.png" mime-type="image/png" alignment="bottomleft" scaling="proportional"/>
+    <readme file="readme.rtf" mime-type="text/rtf"/>
+    <conclusion file="conclusion.rtf" mime-type="text/rtf"/>
+    <volume-check>
+        <allowed-os-versions>
+            <os-version min="MINVERSION" />
+        </allowed-os-versions>
+    </volume-check>
+    <options customize="always" require-scripts="false" hostArchitectures="x86_64"/>
+    <domains enable_localSystem="true" enable_anywhere="true" enable_currentUserHome="true"/>
+    <pkg-ref id="org.julialang.julia.lib" onConclusion="none">FRAMEWORK_NAME-framework.pkg</pkg-ref>
+    <pkg-ref id="org.julialang.JuliaLauncher" onConclusion="none">launcher.pkg</pkg-ref>
+    <choice id="org.julialang.julia.lib" selected="true" visible="true" enabled="true" description="The Julia language distribution bundled as a framework." title="Julia">
+        <pkg-ref id="org.julialang.julia.lib"/>
+    </choice>
+    <choice id="org.julialang.JuliaLauncher" selected="true" visible="true" enabled="true" description="An application that launches a REPL for Julia." title="Julia Launcher">
+        <pkg-ref id="org.julialang.JuliaLauncher"/>
+    </choice>
+    <choices-outline>
+        <line choice="org.julialang.JuliaLauncher"/>
+        <line choice="org.julialang.julia.lib"/>
+    </choices-outline>
+</installer-gui-script>

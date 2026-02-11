@@ -49,6 +49,15 @@ chnlprod(x) = Channel(c->for i in x; put!(c,i); end)
 
         @test_throws Union{BoundsError, ArgumentError} copyto!(dest, 1, src(), 2, 2)
     end
+
+    v = rand(Float32, 4)
+    a = Memory{Float32}(v)
+    b = similar(a)
+    copyto!(b, a)
+    @test a == b
+
+    c = Memory{Float32}(undef, 3)
+    @test_throws BoundsError copyto!(c, a)
 end
 
 @testset "with CartesianIndices" begin
@@ -58,11 +67,18 @@ end
         @test B == A
     end
     let A = reshape(1:6, 3, 2), B = zeros(8,8)
-        RA = CartesianIndices(axes(A))
-        copyto!(B, CartesianIndices((5:7,2:3)), A, RA)
-        @test B[5:7,2:3] == A
-        B[5:7,2:3] .= 0
-        @test all(x->x==0, B)
+        RBs = Any[(5:7,2:3), (3:2:7,1:2:3), (6:-1:4,2:-1:1)]
+        RAs = Any[axes(A), reverse.(axes(A))]
+        for RB in RBs, RA in RAs
+            copyto!(B, CartesianIndices(RB), A, CartesianIndices(RA))
+            @test B[RB...] == A[RA...]
+            B[RB...] .= 0
+            @test all(iszero, B)
+        end
+    end
+    let A = [reshape(1:6, 3, 2);;]
+        copyto!(A, CartesianIndices((2:3,2)), A, CartesianIndices((2,2)))
+        @test A[2:3,:] == [1 4;2 5]
     end
 end
 
@@ -75,6 +91,13 @@ end
     @test dca !== a
     @test dca[1] !== a[1]
     @test deepcopy(q).value !== q.value
+
+    @test_throws ErrorException("deepcopy of Modules not supported") deepcopy(Base)
+
+    # deepcopy recursive dicts
+    x = Dict{Dict, Int}()
+    x[x] = 0
+    @test length(deepcopy(x)) == 1
 end
 
 @testset "issue #13124" begin
@@ -82,6 +105,27 @@ end
     b = (a,a)
     c = deepcopy(b)
     @test c[1] === c[2]
+end
+
+@testset "issue #31309" begin
+    rgx1 = match(deepcopy(r""), "")
+    @test rgx1.regex == r""
+    @test rgx1.offset == 1
+    @test rgx1.match == ""
+    @test isempty(rgx1.offsets)
+    @test isempty(rgx1.captures)
+end
+
+@testset "deepcopy for bits types" begin
+    struct Immutable; x::Int; end
+    mutable struct Mutable; x::Int; end
+
+    @test deepcopy(Immutable(2)) === Immutable(2)
+    @test deepcopy(Mutable(2))   !== Mutable(2)
+    @inferred deepcopy(Immutable(2))
+    @inferred deepcopy(Mutable(2))
+
+    @test deepcopy(Dict(0 => 0))[0] == 0
 end
 
 # issue #30911
@@ -154,7 +198,7 @@ end
         bar = Bar19921(foo, Dict(foo => 3))
         bar2 = deepcopy(bar)
         @test bar2.foo ∈ keys(bar2.fooDict)
-        @test bar2.fooDict[bar2.foo] != nothing
+        @test bar2.fooDict[bar2.foo] !== nothing
     end
 
     let d = IdDict(rand(2) => rand(2) for i = 1:100)
@@ -166,4 +210,101 @@ end
             @test haskey(d, k)
         end
     end
+end
+
+# issue #17149
+mutable struct Bar17149
+end
+let x = Bar17149()
+    @test deepcopy(x) !== x
+end
+
+@testset "copying CodeInfo" begin
+    _testfunc() = nothing
+    ci,_ = code_typed(_testfunc, ())[1]
+    if isdefined(ci, :edges)
+        ci.edges = [_testfunc]
+
+        ci2 = copy(ci)
+        # Test that edges are not shared
+        @test ci2.edges !== ci.edges
+    end
+end
+
+@testset "issue #34025" begin
+    s = [2 0; 0 3]
+    r = ones(Int, 3, 3)
+    @test copyto!(copy(r), s') == [2 3 1; 0 1 1; 0 1 1]
+    @test copyto!(copy(r), s) == copyto!(copy(r), s') ==
+          copyto!(copy(r)', s) == copyto!(copy(r)', s')
+    r = ones(Int, 3, 3)
+    s = [1 2 3 4]'
+    @test copyto!(r, s) == [1 4 1; 2 1 1; 3 1 1]
+    a = fill(1, 5)
+    r = Base.IdentityUnitRange(-1:1)
+    copyto!(a, r)
+    @test a[1:3] == [-1, 0, 1]
+end
+
+@testset "issue #34889" begin
+    s = [1, 2]
+    @test copyto!(s, view(Int[],Int[])) == [1, 2]
+    @test copyto!(s, Float64[]) == [1, 2]
+    @test copyto!(s, String[]) == [1, 2] # No error
+end
+
+@testset "circular reference arrays" begin
+    # issue 56775
+    p = Any[nothing]
+    p[1] = p
+    p2 = deepcopy(p)
+    @test p2 === p2[1]
+    @test p2 !== p
+end
+
+@testset "deepcopy_internal arrays" begin
+    @test (@inferred Base.deepcopy_internal(zeros(), IdDict())) == zeros()
+end
+
+@testset "deepcopy_internal inference" begin
+    @inferred Base.deepcopy_internal(1, IdDict())
+    @inferred Base.deepcopy_internal(1.0, IdDict())
+    @inferred Base.deepcopy_internal(big(1), IdDict())
+    @inferred Base.deepcopy_internal(big(1.0), IdDict())
+    @inferred Base.deepcopy_internal('a', IdDict())
+    @inferred Base.deepcopy_internal("abc", IdDict())
+    @inferred Base.deepcopy_internal([1,2,3], IdDict())
+
+    # structs without custom deepcopy_internal method
+    struct Immutable2; x::Int; end
+    mutable struct Mutable2; x::Int; end
+    @inferred Base.deepcopy_internal(Immutable2(1), IdDict())
+    @inferred Base.deepcopy_internal(Mutable2(1), IdDict())
+end
+
+@testset "`copyto!`'s unaliasing" begin
+    a = view([1:3;], :)
+    @test copyto!(a, 2, a, 1, 2) == [1;1:2;]
+    a = [1:3;]
+    @test copyto!(a, 2:3, 1:1, a, 1:2, 1:1) == [1;1:2;]
+end
+
+@testset "`deepcopy` a `GenericCondition`" begin
+    a = Base.GenericCondition(ReentrantLock())
+    # Test printing
+    @test repr(a) == "Base.GenericCondition(ReentrantLock())"
+    @test !islocked(a.lock)
+    lock(a.lock)
+    @test islocked(a.lock)
+    b = deepcopy(a)
+    @test typeof(a) === typeof(b)
+    @test a != b
+    @test a !== b
+    @test typeof(a.lock) === typeof(b.lock)
+    @test a.lock != b.lock
+    @test a.lock !== b.lock
+    @test islocked(a.lock)
+    @test !islocked(b.lock)
+    @inferred deepcopy(a)
+    @inferred deepcopy(a.lock)
 end

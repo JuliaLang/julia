@@ -1,4 +1,8 @@
-# Markdown
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Markdown/docs/src/index.md"
+```
+
+# [Markdown](@id markdown_stdlib)
 
 This section describes Julia's markdown syntax, which is enabled by the
 Markdown standard library. The following Markdown elements are supported:
@@ -21,7 +25,15 @@ A paragraph containing a **bold** word.
 Surround words with one asterisk, `*`, to display the enclosed text in italics.
 
 ```
-A paragraph containing an *emphasized* word.
+A paragraph containing an *italicized* word.
+```
+
+### Strikethrough
+
+Surround words with one or two tildes, `~` or`~~`, to display the enclosed text with a strikethrough, or a line through it.
+
+```
+A paragraph containing a ~~struck~~ word.
 ```
 
 ### Literals
@@ -40,19 +52,21 @@ parts of a Julia program.
     the text.
 
     ```
-    A paragraph containing a ``` `backtick` character ```.
+    A paragraph containing ``` `backtick` characters ```.
     ```
 
     By extension any odd number of backticks may be used to enclose a lesser number of backticks.
 
 ### ``\LaTeX``
 
-Surround text that should be displayed as mathematics using ``\LaTeX`` syntax with double backticks,
-``` `` ``` .
+Surround text that should be displayed as mathematics using ``\LaTeX`` syntax with double backticks:
+``` `` ```.
 
 ```
 A paragraph containing some ``\LaTeX`` markup.
 ```
+
+See the [Display equations](@ref) section for non-inline LaTeX.
 
 !!! tip
     As with literals in the previous section, if literal backticks need to be written within double
@@ -67,15 +81,22 @@ A paragraph containing some ``\LaTeX`` markup.
     ```
     @doc raw"``\LaTeX`` syntax in a docstring." functionname
     ```
+!!! note
+    Inline ``\LaTeX`` can also be created using a pair of single `$` characters. However
+    this is not recommended as `$` is also used for string interpolation. Thus using it can
+    easily lead to unintended results. For example, inside an `md` string the parser will
+    interpret an unmatched `$` as string interpolation, leading to unexpected errors or
+    worse, undesired behavior, when a variable is unexpectedly interpolated into a string.
+    In contrast, an unmatched ``` `` ``` results in a helpful error message.
 
 ### Links
 
-Links to either external or internal addresses can be written using the following syntax, where
+Links to either external or internal targets can be written using the following syntax, where
 the text enclosed in square brackets, `[ ]`, is the name of the link and the text enclosed in
 parentheses, `( )`, is the URL.
 
 ```
-A paragraph containing a link to [Julia](http://www.julialang.org).
+A paragraph containing a link to [Julia](https://www.julialang.org).
 ```
 
 It's also possible to add cross-references to other documented functions/methods/variables within
@@ -127,7 +148,7 @@ in the [Inline elements](@ref) section above, with one or more blank lines above
 ```
 This is a paragraph.
 
-And this is *another* one containing some emphasized text.
+And this is *another* paragraph containing some emphasized text.
 A new line, but still part of the same paragraph.
 ```
 
@@ -153,8 +174,8 @@ A header line can contain any inline syntax in the same way as a paragraph can.
 
 ### Code blocks
 
-Source code can be displayed as a literal block using an indent of four spaces as shown in the
-following example.
+Source code can be displayed as a literal block using an indent of four spaces or one tab as shown
+in the following example.
 
 ```
 This is a paragraph.
@@ -285,6 +306,14 @@ f(a) = \frac{1}{2\pi}\int_{0}^{2\pi} (\alpha+R\cos(\theta))d\theta
 ```
 ````
 
+Note that the `\$\$` version is available but deprecated:
+
+```julia
+raw"$$H = - \sum p(x) \log p(x)$$"
+```
+
+See the [Inline elements](@ref) for inline ``\LaTeX`` and a note about the status of the dollar-sign (`\$`) deprecated form.
+
 ### Footnotes
 
 This syntax is paired with the inline syntax for [Footnote references](@ref). Make sure to read
@@ -298,7 +327,8 @@ aside from the `:` character that is appended to the footnote label.
 
 [^note]:
 
-    Named footnote text containing several toplevel elements.
+    Named footnote text containing several toplevel elements
+    indented by 4 spaces or one tab.
 
       * item one
       * item two
@@ -316,7 +346,8 @@ aside from the `:` character that is appended to the footnote label.
 
 ### Horizontal rules
 
-The equivalent of an `<hr>` HTML tag can be written using the following syntax:
+The equivalent of an `<hr>` HTML tag can be achieved using three hyphens (`---`).
+For example:
 
 ```
 Text above the line.
@@ -356,6 +387,7 @@ They can be defined using the following `!!!` syntax:
 !!! note
 
     This is the content of the note.
+    It is indented by 4 spaces. A tab would work as well.
 
 !!! warning "Beware!"
 
@@ -364,15 +396,37 @@ They can be defined using the following `!!!` syntax:
     This warning admonition has a custom title: `"Beware!"`.
 ```
 
-The type of the admonition can be any word, but some types produce special styling,
-namely (in order of decreasing severity): `danger`, `warning`, `info`/`note`, and `tip`.
+The first word after `!!!` declares the type of the admonition.
+There are standard admonition types that should produce special styling.
+Namely (in order of decreasing severity): `danger`, `warning`, `info`/`note`, and `tip`.
+
+You can also use your own admonition types, as long as the type name only contains lowercase Latin characters (a-z).
+For example, you could have a `terminology` block like this:
+
+```
+!!! terminology "julia vs Julia"
+
+    Strictly speaking, "Julia" refers to the language,
+    and "julia" to the standard implementation.
+```
+
+However, unless the code rendering the Markdown special-cases that particular admonition type, it will get the default styling.
 
 A custom title for the box can be provided as a string (in double quotes) after the admonition type.
-If no title text is specified after the admonition type, then the title used will be the type of the block,
-i.e. `"Note"` in the case of the `note` admonition.
+If no title text is specified after the admonition type, then the type name will be used as the title (e.g. `"Note"` for the `note` admonition).
 
-Admonitions, like most other toplevel elements, can contain other toplevel elements.
+Admonitions, like most other toplevel elements, can contain other toplevel elements (e.g. lists, images).
 
+## [Markdown String Literals](@id stdlib-markdown-literals)
+
+The `md""` macro allows you to embed Markdown strings directly into your Julia code.
+This macro is designed to simplify the inclusion of Markdown-formatted text within your Julia source files.
+
+### Usage
+
+```julia
+result = md"This is a **custom** Markdown string with [a link](http://example.com)."
+```
 ## Markdown Syntax Extensions
 
 Julia's markdown supports interpolation in a very similar way to basic string literals, with the
@@ -383,3 +437,15 @@ complex features (such as references) without cluttering the basic syntax.
 
 In principle, the Markdown parser itself can also be arbitrarily extended by packages, or an entirely
 custom flavour of Markdown can be used, but this should generally be unnecessary.
+
+
+## [API reference](@id stdlib-markdown-api)
+
+```@docs
+Markdown.MD
+Markdown.@md_str
+Markdown.@doc_str
+Markdown.parse
+Markdown.html
+Markdown.latex
+```

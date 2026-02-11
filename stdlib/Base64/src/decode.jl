@@ -32,16 +32,21 @@ julia> String(read(iob64_decode))
 "Hello!"
 ```
 """
-struct Base64DecodePipe <: IO
-    io::IO
+struct Base64DecodePipe{T <: IO} <: IO
+    io::T
     buffer::Buffer
     rest::Vector{UInt8}
 
-    function Base64DecodePipe(io::IO)
+    function Base64DecodePipe{T}(io::T) where {T <: IO}
         buffer = Buffer(512)
-        return new(io, buffer, UInt8[])
+        return new{T}(io, buffer, UInt8[])
     end
 end
+
+Base64DecodePipe(io::IO) = Base64DecodePipe{IO}(io)
+
+Base.isreadable(pipe::Base64DecodePipe) = !isempty(pipe.rest) || isreadable(pipe.io)
+Base.iswritable(::Base64DecodePipe) = false
 
 function Base.unsafe_read(pipe::Base64DecodePipe, ptr::Ptr{UInt8}, n::UInt)
     p = read_until_end(pipe, ptr, n)
@@ -123,7 +128,7 @@ function Base.readbytes!(pipe::Base64DecodePipe, data::AbstractVector{UInt8}, nb
     return filled
 end
 
-Base.eof(pipe::Base64DecodePipe) = isempty(pipe.rest) && eof(pipe.io)
+Base.eof(pipe::Base64DecodePipe) = isempty(pipe.rest) && eof(pipe.io)::Bool
 Base.close(pipe::Base64DecodePipe) = nothing
 
 # Decode data from (b1, b2, b3, b5, buffer, input) into (ptr, rest).
@@ -147,7 +152,6 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
             b4 = decode(read(input, UInt8))
         else
             b4 = BASE64_CODE_END
-            break
         end
     end
 
@@ -155,13 +159,13 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
     k = 0
     if b1 < 0x40 && b2 < 0x40 && b3 < 0x40 && b4 < 0x40
         k = 3
-    elseif b1 < 0x40 && b2 < 0x40 && b3 < 0x40 && b4 == BASE64_CODE_PAD
+    elseif b1 < 0x40 && b2 < 0x40 && b3 < 0x40 && (b4 == BASE64_CODE_PAD || b4 == BASE64_CODE_END)
         b4 = 0x00
         k = 2
-    elseif b1 < 0x40 && b2 < 0x40 && b3 == b4 == BASE64_CODE_PAD
+    elseif b1 < 0x40 && b2 < 0x40 && (b3 == BASE64_CODE_PAD || b3 == BASE64_CODE_END) && (b4 == BASE64_CODE_PAD || b4 == BASE64_CODE_END)
         b3 = b4 = 0x00
         k = 1
-    elseif b1 == b2 == b3 == BASE64_CODE_IGN && b4 == BASE64_CODE_END
+    elseif b1 == b2 == b3 == b4 == BASE64_CODE_END
         b1 = b2 = b3 = b4 = 0x00
     else
         throw(ArgumentError("malformed base64 sequence"))
@@ -170,19 +174,21 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
     # Write output.
     p::Ptr{UInt8} = ptr
     p_end = ptr + n
-    function output(b)
-        if p < p_end
-            unsafe_store!(p, b)
-            p += 1
-        else
-            push!(rest, b)
-        end
-    end
-    k ≥ 1 && output(b1 << 2 | b2 >> 4)
-    k ≥ 2 && output(b2 << 4 | b3 >> 2)
-    k ≥ 3 && output(b3 << 6 | b4     )
+    k ≥ 1 && (p = _output(b1 << 2 | b2 >> 4, p, p_end, rest))
+    k ≥ 2 && (p = _output(b2 << 4 | b3 >> 2, p, p_end, rest))
+    k ≥ 3 && (p = _output(b3 << 6 | b4     , p, p_end, rest))
 
     return i, p, k == 0
+end
+
+function _output(b, p, p_end, rest)
+    if p < p_end
+        unsafe_store!(p, b)
+        return p + 1
+    else
+        push!(rest, b)
+        return p
+    end
 end
 
 """
@@ -196,7 +202,7 @@ See also [`base64encode`](@ref).
 # Examples
 ```jldoctest
 julia> b = base64decode("SGVsbG8h")
-6-element Array{UInt8,1}:
+6-element Vector{UInt8}:
  0x48
  0x65
  0x6c

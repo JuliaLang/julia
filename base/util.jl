@@ -1,302 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-
-# This type must be kept in sync with the C struct in src/gc.h
-struct GC_Num
-    allocd      ::Int64 # GC internal
-    deferred_alloc::Int64 # GC internal
-    freed       ::Int64 # GC internal
-    malloc      ::UInt64
-    realloc     ::UInt64
-    poolalloc   ::UInt64
-    bigalloc    ::UInt64
-    freecall    ::UInt64
-    total_time  ::UInt64
-    total_allocd::UInt64 # GC internal
-    since_sweep ::UInt64 # GC internal
-    collect     ::Csize_t # GC internal
-    pause       ::Cint
-    full_sweep  ::Cint
-end
-
-gc_num() = ccall(:jl_gc_num, GC_Num, ())
-
-# This type is to represent differences in the counters, so fields may be negative
-struct GC_Diff
-    allocd      ::Int64 # Bytes allocated
-    malloc      ::Int64 # Number of GC aware malloc()
-    realloc     ::Int64 # Number of GC aware realloc()
-    poolalloc   ::Int64 # Number of pool allocation
-    bigalloc    ::Int64 # Number of big (non-pool) allocation
-    freecall    ::Int64 # Number of GC aware free()
-    total_time  ::Int64 # Time spent in garbage collection
-    pause       ::Int64 # Number of GC pauses
-    full_sweep  ::Int64 # Number of GC full collection
-end
-
-gc_total_bytes(gc_num::GC_Num) =
-    (gc_num.allocd + gc_num.deferred_alloc +
-     Int64(gc_num.collect) + Int64(gc_num.total_allocd))
-
-function GC_Diff(new::GC_Num, old::GC_Num)
-    # logic from `src/gc.c:jl_gc_total_bytes`
-    old_allocd = gc_total_bytes(old)
-    new_allocd = gc_total_bytes(new)
-    return GC_Diff(new_allocd - old_allocd,
-                   Int64(new.malloc       - old.malloc),
-                   Int64(new.realloc      - old.realloc),
-                   Int64(new.poolalloc    - old.poolalloc),
-                   Int64(new.bigalloc     - old.bigalloc),
-                   Int64(new.freecall     - old.freecall),
-                   Int64(new.total_time   - old.total_time),
-                   new.pause              - old.pause,
-                   new.full_sweep         - old.full_sweep)
-end
-
-function gc_alloc_count(diff::GC_Diff)
-    diff.malloc + diff.realloc + diff.poolalloc + diff.bigalloc
-end
-
-
-# total time spend in garbage collection, in nanoseconds
-gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
-
-# total number of bytes allocated so far
-gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
-
-# print elapsed time, return expression value
-const _mem_units = ["byte", "KiB", "MiB", "GiB", "TiB", "PiB"]
-const _cnt_units = ["", " k", " M", " G", " T", " P"]
-function prettyprint_getunits(value, numunits, factor)
-    if value == 0 || value == 1
-        return (value, 1)
-    end
-    unit = ceil(Int, log(value) / log(factor))
-    unit = min(numunits, unit)
-    number = value/factor^(unit-1)
-    return number, unit
-end
-
-function padded_nonzero_print(value,str)
-    if value != 0
-        blanks = "                "[1:18-length(str)]
-        println("$str:$blanks$value")
-    end
-end
-
-function format_bytes(bytes)
-    bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))
-    if mb == 1
-        Printf.@sprintf("%d %s%s", bytes, _mem_units[mb], bytes==1 ? "" : "s")
-    else
-        Printf.@sprintf("%.3f %s", bytes, _mem_units[mb])
-    end
-end
-
-function time_print(elapsedtime, bytes=0, gctime=0, allocs=0)
-    Printf.@printf("%10.6f seconds", elapsedtime/1e9)
-    if bytes != 0 || allocs != 0
-        allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
-        if ma == 1
-            Printf.@printf(" (%d%s allocation%s: ", allocs, _cnt_units[ma], allocs==1 ? "" : "s")
-        else
-            Printf.@printf(" (%.2f%s allocations: ", allocs, _cnt_units[ma])
-        end
-        print(format_bytes(bytes))
-        if gctime > 0
-            Printf.@printf(", %.2f%% gc time", 100*gctime/elapsedtime)
-        end
-        print(")")
-    elseif gctime > 0
-        Printf.@printf(", %.2f%% gc time", 100*gctime/elapsedtime)
-    end
-end
-
-function timev_print(elapsedtime, diff::GC_Diff)
-    allocs = gc_alloc_count(diff)
-    time_print(elapsedtime, diff.allocd, diff.total_time, allocs)
-    print("\nelapsed time (ns): $elapsedtime\n")
-    padded_nonzero_print(diff.total_time,   "gc time (ns)")
-    padded_nonzero_print(diff.allocd,       "bytes allocated")
-    padded_nonzero_print(diff.poolalloc,    "pool allocs")
-    padded_nonzero_print(diff.bigalloc,     "non-pool GC allocs")
-    padded_nonzero_print(diff.malloc,       "malloc() calls")
-    padded_nonzero_print(diff.realloc,      "realloc() calls")
-    padded_nonzero_print(diff.freecall,     "free() calls")
-    padded_nonzero_print(diff.pause,        "GC pauses")
-    padded_nonzero_print(diff.full_sweep,   "full collections")
-end
-
-"""
-    @time
-
-A macro to execute an expression, printing the time it took to execute, the number of
-allocations, and the total number of bytes its execution caused to be allocated, before
-returning the value of the expression.
-
-See also [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
-[`@allocated`](@ref).
-
-```julia-repl
-julia> @time rand(10^6);
-  0.001525 seconds (7 allocations: 7.630 MiB)
-
-julia> @time begin
-           sleep(0.3)
-           1+1
-       end
-  0.301395 seconds (8 allocations: 336 bytes)
-2
-```
-"""
-macro time(ex)
-    quote
-        local stats = gc_num()
-        local elapsedtime = time_ns()
-        local val = $(esc(ex))
-        elapsedtime = time_ns() - elapsedtime
-        local diff = GC_Diff(gc_num(), stats)
-        time_print(elapsedtime, diff.allocd, diff.total_time,
-                   gc_alloc_count(diff))
-        println()
-        val
-    end
-end
-
-"""
-    @timev
-
-This is a verbose version of the `@time` macro. It first prints the same information as
-`@time`, then any non-zero memory allocation counters, and then returns the value of the
-expression.
-
-See also [`@time`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
-[`@allocated`](@ref).
-
-```julia-repl
-julia> @timev rand(10^6);
-  0.001006 seconds (7 allocations: 7.630 MiB)
-elapsed time (ns): 1005567
-bytes allocated:   8000256
-pool allocs:       6
-malloc() calls:    1
-```
-"""
-macro timev(ex)
-    quote
-        local stats = gc_num()
-        local elapsedtime = time_ns()
-        local val = $(esc(ex))
-        elapsedtime = time_ns() - elapsedtime
-        timev_print(elapsedtime, GC_Diff(gc_num(), stats))
-        val
-    end
-end
-
-"""
-    @elapsed
-
-A macro to evaluate an expression, discarding the resulting value, instead returning the
-number of seconds it took to execute as a floating-point number.
-
-See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
-and [`@allocated`](@ref).
-
-```julia-repl
-julia> @elapsed sleep(0.3)
-0.301391426
-```
-"""
-macro elapsed(ex)
-    quote
-        local t0 = time_ns()
-        local val = $(esc(ex))
-        (time_ns()-t0)/1e9
-    end
-end
-
-# measure bytes allocated without *most* contamination from compilation
-# Note: This reports a different value from the @time macros, because
-# it wraps the call in a function, however, this means that things
-# like:  @allocated y = foo()
-# will not work correctly, because it will set y in the context of
-# the local function made by the macro, not the current function
-"""
-    @allocated
-
-A macro to evaluate an expression, discarding the resulting value, instead returning the
-total number of bytes allocated during evaluation of the expression. Note: the expression is
-evaluated inside a local function, instead of the current context, in order to eliminate the
-effects of compilation, however, there still may be some allocations due to JIT compilation.
-This also makes the results inconsistent with the `@time` macros, which do not try to adjust
-for the effects of compilation.
-
-See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
-and [`@elapsed`](@ref).
-
-```julia-repl
-julia> @allocated rand(10^6)
-8000080
-```
-"""
-macro allocated(ex)
-    quote
-        let
-            local f
-            function f()
-                b0 = gc_bytes()
-                $(esc(ex))
-                gc_bytes() - b0
-            end
-            f()
-        end
-    end
-end
-
-"""
-    @timed
-
-A macro to execute an expression, and return the value of the expression, elapsed time,
-total bytes allocated, garbage collection time, and an object with various memory allocation
-counters.
-
-See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref), and
-[`@allocated`](@ref).
-
-```julia-repl
-julia> val, t, bytes, gctime, memallocs = @timed rand(10^6);
-
-julia> t
-0.006634834
-
-julia> bytes
-8000256
-
-julia> gctime
-0.0055765
-
-julia> fieldnames(typeof(memallocs))
-(:allocd, :malloc, :realloc, :poolalloc, :bigalloc, :freecall, :total_time, :pause, :full_sweep)
-
-julia> memallocs.total_time
-5576500
-```
-"""
-macro timed(ex)
-    quote
-        local stats = gc_num()
-        local elapsedtime = time_ns()
-        local val = $(esc(ex))
-        elapsedtime = time_ns() - elapsedtime
-        local diff = GC_Diff(gc_num(), stats)
-        val, elapsedtime/1e9, diff.allocd, diff.total_time/1e9, diff
-    end
-end
-
-
 ## printing with color ##
 
-const text_colors = AnyDict(
+const text_colors = Dict{Union{Symbol,Int},String}(
     :black         => "\033[30m",
     :red           => "\033[31m",
     :green         => "\033[32m",
@@ -312,9 +18,11 @@ const text_colors = AnyDict(
     :light_blue    => "\033[94m",
     :light_magenta => "\033[95m",
     :light_cyan    => "\033[96m",
+    :light_white   => "\033[97m",
     :normal        => "\033[0m",
     :default       => "\033[39m",
     :bold          => "\033[1m",
+    :italic        => "\033[3m",
     :underline     => "\033[4m",
     :blink         => "\033[5m",
     :reverse       => "\033[7m",
@@ -326,8 +34,9 @@ for i in 0:255
     text_colors[i] = "\033[38;5;$(i)m"
 end
 
-const disable_text_style = AnyDict(
+const disable_text_style = Dict{Symbol,String}(
     :bold      => "\033[22m",
+    :italic    => "\033[23m",
     :underline => "\033[24m",
     :blink     => "\033[25m",
     :reverse   => "\033[27m",
@@ -339,12 +48,13 @@ const disable_text_style = AnyDict(
 
 # Create a docstring with an automatically generated list
 # of colors.
-available_text_colors = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors)))
-const possible_formatting_symbols = [:normal, :bold, :default]
-available_text_colors = cat(
-    sort!(intersect(available_text_colors, possible_formatting_symbols), rev=true),
-    sort!(setdiff(  available_text_colors, possible_formatting_symbols));
-    dims=1)
+let color_syms = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors))),
+    formatting_syms = [:normal, :bold, :italic, :default]
+    global const available_text_colors = cat(
+        sort!(intersect(color_syms, formatting_syms), rev=true),
+        sort!(setdiff(  color_syms, formatting_syms));
+        dims=1)
+end
 
 const available_text_colors_docstring =
     string(join([string("`:", key,"`")
@@ -360,63 +70,109 @@ Printing with the color `:nothing` will print the string without modifications.
 """
 text_colors
 
-function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args...; bold::Bool = false)
+function with_output_color(@nospecialize(f::Function), color::Union{Int, Symbol}, io::IO, args...;
+        bold::Bool = false, italic::Bool = false, underline::Bool = false, blink::Bool = false,
+        reverse::Bool = false, hidden::Bool = false)
     buf = IOBuffer()
-    iscolor = get(io, :color, false)
+    iscolor = get(io, :color, false)::Bool
     try f(IOContext(buf, io), args...)
     finally
-        str = String(take!(buf))
+        str = takestring!(buf)
         if !iscolor
             print(io, str)
         else
-            bold && color == :bold && (color = :nothing)
+            bold && color === :bold && (color = :nothing)
+            italic && color === :italic && (color = :nothing)
+            underline && color === :underline && (color = :nothing)
+            blink && color === :blink && (color = :nothing)
+            reverse && color === :reverse && (color = :nothing)
+            hidden && color === :hidden && (color = :nothing)
             enable_ansi  = get(text_colors, color, text_colors[:default]) *
-                               (bold ? text_colors[:bold] : "")
-            disable_ansi = (bold ? disable_text_style[:bold] : "") *
+                               (bold ? text_colors[:bold] : "") *
+                               (italic ? text_colors[:italic] : "") *
+                               (underline ? text_colors[:underline] : "") *
+                               (blink ? text_colors[:blink] : "") *
+                               (reverse ? text_colors[:reverse] : "") *
+                               (hidden ? text_colors[:hidden] : "")
+
+            disable_ansi = (hidden ? disable_text_style[:hidden] : "") *
+                           (reverse ? disable_text_style[:reverse] : "") *
+                           (blink ? disable_text_style[:blink] : "") *
+                           (underline ? disable_text_style[:underline] : "") *
+                           (bold ? disable_text_style[:bold] : "") *
+                           (italic ? disable_text_style[:italic] : "") *
                                get(disable_text_style, color, text_colors[:default])
             first = true
-            for line in split(str, '\n')
+            for line in eachsplit(str, '\n')
                 first || print(buf, '\n')
                 first = false
                 isempty(line) && continue
                 print(buf, enable_ansi, line, disable_ansi)
             end
-            print(io, String(take!(buf)))
+            print(io, takestring!(buf))
         end
     end
 end
 
 """
-    printstyled([io], xs...; bold::Bool=false, color::Union{Symbol,Int}=:normal)
+    printstyled([io], xs...; bold::Bool=false, italic::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Symbol,Int}=:normal)
 
 Print `xs` in a color specified as a symbol or integer, optionally in bold.
 
-`color` may take any of the values $(Base.available_text_colors_docstring)
+Keyword `color` may take any of the values $(Base.available_text_colors_docstring)
 or an integer between 0 and 255 inclusive. Note that not all terminals support 256 colors.
-If the keyword `bold` is given as `true`, the result will be printed in bold.
+
+Keywords `bold=true`, `italic=true`, `underline=true`, `blink=true` are self-explanatory.
+Keyword `reverse=true` prints with foreground and background colors exchanged,
+and `hidden=true` should be invisible in the terminal but can still be copied.
+These properties can be used in any combination.
+
+See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
+
+!!! note
+    Not all terminals support italic output. Some terminals interpret italic as reverse or
+    blink.
+
+!!! compat "Julia 1.7"
+    Keywords except `color` and `bold` were added in Julia 1.7.
+!!! compat "Julia 1.10"
+    Support for italic output was added in Julia 1.10.
 """
-printstyled(io::IO, msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
-    with_output_color(print, color, io, msg...; bold=bold)
-printstyled(msg...; bold::Bool=false, color::Union{Int,Symbol}=:normal) =
-    printstyled(stdout, msg...; bold=bold, color=color)
+@constprop :none printstyled(io::IO, msg...; bold::Bool=false, italic::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
+    with_output_color(print, color, io, msg...; bold=bold, italic=italic, underline=underline, blink=blink, reverse=reverse, hidden=hidden)
+@constprop :none printstyled(msg...; bold::Bool=false, italic::Bool=false, underline::Bool=false, blink::Bool=false, reverse::Bool=false, hidden::Bool=false, color::Union{Int,Symbol}=:normal) =
+    printstyled(stdout, msg...; bold=bold, italic=italic, underline=underline, blink=blink, reverse=reverse, hidden=hidden, color=color)
 
 """
-    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR::String, julia_exename()))
+    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Union{Nothing,String}=nothing)
 
 Return a julia command similar to the one of the running process.
 Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-native-code`,
-`--compiled-modules`, `--inline`, `--check-bounds`, `--optimize`, `-g`,
-`--code-coverage`, and `--depwarn`
+`--compiled-modules`, `--pkgimages`, `--inline`, `--check-bounds`, `--optimize`, `--min-optlevel`, `-g`,
+`--code-coverage`, `--track-allocation`, `--color`, `--startup-file`, and `--depwarn`
 command line arguments that are not at their default values.
 
 Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notably not propagated currently.
 
+Unless set to `nothing`, the `cpu_target` keyword argument can be used to override the CPU target set for the running process.
+
+To get the julia command without propagated command line arguments, `julia_cmd()[1]` can be used.
+
 !!! compat "Julia 1.1"
     Only the `--cpu-target`, `--sysimage`, `--depwarn`, `--compile` and `--check-bounds` flags were propagated before Julia 1.1.
+
+!!! compat "Julia 1.5"
+    The flags `--color` and `--startup-file` were added in Julia 1.5.
+
+!!! compat "Julia 1.9"
+    The keyword argument `cpu_target` was added in 1.9.
+    The flag `--pkgimages` was added in Julia 1.9.
 """
-function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
+function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Union{Nothing,String} = nothing)
     opts = JLOptions()
-    cpu_target = unsafe_string(opts.cpu_target)
+    if cpu_target === nothing
+        cpu_target = unsafe_string(opts.cpu_target)
+    end
     image_file = unsafe_string(opts.image_file)
     addflags = String[]
     let compile = if opts.compile_enabled == 0
@@ -430,12 +186,12 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
                   end
         isempty(compile) || push!(addflags, "--compile=$compile")
     end
-    let depwarn = if opts.depwarn == 0
-                      "no"
+    let depwarn = if opts.depwarn == 1
+                      "yes"
                   elseif opts.depwarn == 2
                       "error"
                   else
-                      "" # default = "yes"
+                      "" # default = "no"
                   end
         isempty(depwarn) || push!(addflags, "--depwarn=$depwarn")
     end
@@ -444,13 +200,18 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
                   elseif opts.check_bounds == 2
                       "no" # off
                   else
-                      "" # "default"
+                      "" # default = "auto"
                   end
         isempty(check_bounds) || push!(addflags, "--check-bounds=$check_bounds")
     end
     opts.can_inline == 0 && push!(addflags, "--inline=no")
     opts.use_compiled_modules == 0 && push!(addflags, "--compiled-modules=no")
+    opts.use_compiled_modules == 2 && push!(addflags, "--compiled-modules=existing")
+    opts.use_compiled_modules == 3 && push!(addflags, "--compiled-modules=strict")
+    opts.use_pkgimages == 0 && push!(addflags, "--pkgimages=no")
+    opts.use_pkgimages == 2 && push!(addflags, "--pkgimages=existing")
     opts.opt_level == 2 || push!(addflags, "-O$(opts.opt_level)")
+    opts.opt_level_min == 0 || push!(addflags, "--min-optlevel=$(opts.opt_level_min)")
     push!(addflags, "-g$(opts.debug_level)")
     if opts.code_coverage != 0
         # Forward the code-coverage flag only if applicable (if the filename is pid-dependent)
@@ -460,22 +221,38 @@ function julia_cmd(julia=joinpath(Sys.BINDIR::String, julia_exename()))
                 push!(addflags, "--code-coverage=user")
             elseif opts.code_coverage == 2
                 push!(addflags, "--code-coverage=all")
+            elseif opts.code_coverage == 3
+                push!(addflags, "--code-coverage=@$(unsafe_string(opts.tracked_path))")
             end
             isempty(coverage_file) || push!(addflags, "--code-coverage=$coverage_file")
         end
     end
-    if opts.malloc_log != 0
-        if opts.malloc_log == 1
-            push!(addflags, "--track-allocation=user")
-        elseif opts.malloc_log == 2
-            push!(addflags, "--track-allocation=all")
-        end
+    if opts.malloc_log == 1
+        push!(addflags, "--track-allocation=user")
+    elseif opts.malloc_log == 2
+        push!(addflags, "--track-allocation=all")
+    elseif opts.malloc_log == 3
+        push!(addflags, "--track-allocation=@$(unsafe_string(opts.tracked_path))")
     end
-    return `$julia -C$cpu_target -J$image_file $addflags`
+    if opts.color == 1
+        push!(addflags, "--color=yes")
+    elseif opts.color == 2
+        push!(addflags, "--color=no")
+    end
+    if opts.startupfile == 2
+        push!(addflags, "--startup-file=no")
+    end
+    if opts.use_sysimage_native_code == 0
+        push!(addflags, "--sysimage-native-code=no")
+    end
+    if opts.compress_sysimage == 1
+        push!(addflags, "--compress-sysimage=yes")
+    end
+    return `$julia -C $cpu_target -J$image_file $addflags`
 end
 
 function julia_exename()
-    if ccall(:jl_is_debugbuild, Cint, ()) == 0
+    if !isdebugbuild()
         return @static Sys.iswindows() ? "julia.exe" : "julia"
     else
         return @static Sys.iswindows() ? "julia-debug.exe" : "julia-debug"
@@ -493,62 +270,139 @@ will always be called.
 function securezero! end
 @noinline securezero!(a::AbstractArray{<:Number}) = fill!(a, 0)
 @noinline unsafe_securezero!(p::Ptr{T}, len::Integer=1) where {T} =
-    ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
+    memset(p, 0, len*sizeof(T))
 unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
 """
-    Base.getpass(message::AbstractString) -> Base.SecretBuffer
+    Base.getpass(message::AbstractString; with_suffix::Bool=true)::Base.SecretBuffer
 
 Display a message and wait for the user to input a secret, returning an `IO`
-object containing the secret.
+object containing the secret. If `with_suffix` is `true` (the default), the
+suffix `": "` will be appended to `message`.
 
-Note that on Windows, the secret might be displayed as it is typed; see
-`Base.winprompt` for securely retrieving username/password pairs from a
-graphical interface.
+!!! info "Windows"
+    Note that on Windows, the secret might be displayed as it is typed; see
+    `Base.winprompt` for securely retrieving username/password pairs from a
+    graphical interface.
+
+!!! compat "Julia 1.12"
+    The `with_suffix` keyword argument requires at least Julia 1.12.
+
+# Examples
+
+```julia-repl
+julia> Base.getpass("Secret")
+Secret: SecretBuffer("*******")
+
+julia> Base.getpass("Secret> "; with_suffix=false)
+Secret> SecretBuffer("*******")
+```
 """
 function getpass end
 
-if Sys.iswindows()
-function getpass(input::TTY, output::IO, prompt::AbstractString)
-    input === stdin || throw(ArgumentError("getpass only works for stdin"))
-    print(output, prompt, ": ")
-    flush(output)
-    s = SecretBuffer()
-    plen = 0
-    while true
-        c = UInt8(ccall(:_getch, Cint, ()))
-        if c == 0xff || c == UInt8('\n') || c == UInt8('\r')
-            break # EOF or return
-        elseif c == 0x00 || c == 0xe0
-            ccall(:_getch, Cint, ()) # ignore function/arrow keys
-        elseif c == UInt8('\b') && plen > 0
-            plen -= 1 # delete last character on backspace
-        elseif !iscntrl(Char(c)) && plen < 128
-            write(s, c)
-        end
+# Note, this helper only works within `with_raw_tty()` on POSIX platforms!
+function _getch()
+    @static if Sys.iswindows()
+        return UInt8(ccall(:_getch, Cint, ()))
+    else
+        return read(stdin, UInt8)
     end
-    return seekstart(s)
 end
-else
-function getpass(input::TTY, output::IO, prompt::AbstractString)
-    (input === stdin && output === stdout) || throw(ArgumentError("getpass only works for stdin"))
-    msg = string(prompt, ": ")
-    unsafe_SecretBuffer!(ccall(:getpass, Cstring, (Cstring,), msg))
+
+const termios_size = Int(ccall(:jl_termios_size, Cint, ()))
+make_termios() = zeros(UInt8, termios_size)
+
+# These values seem to hold on all OSes we care about:
+# glibc Linux, musl Linux, macOS, FreeBSD
+@enum TCSETATTR_FLAGS TCSANOW=0 TCSADRAIN=1 TCSAFLUSH=2
+
+function tcgetattr(fd::RawFD, termios)
+    ret = ccall(:tcgetattr, Cint, (Cint, Ptr{Cvoid}), fd, termios)
+    if ret != 0
+        throw(IOError("tcgetattr failed", ret))
+    end
 end
+function tcsetattr(fd::RawFD, termios, mode::TCSETATTR_FLAGS = TCSADRAIN)
+    ret = ccall(:tcsetattr, Cint, (Cint, Cint, Ptr{Cvoid}), fd, Cint(mode), termios)
+    if ret != 0
+        throw(IOError("tcsetattr failed", ret))
+    end
+end
+cfmakeraw(termios) = ccall(:cfmakeraw, Cvoid, (Ptr{Cvoid},), termios)
+
+function with_raw_tty(f::Function, input::TTY)
+    input === stdin || throw(ArgumentError("with_raw_tty only works for stdin"))
+    fd = RawFD(0)
+
+    # If we're on windows, we do nothing, as we have access to `_getch()` quite easily
+    @static if Sys.iswindows()
+        return f()
+    end
+
+    # Get the current terminal mode
+    old_termios = make_termios()
+    tcgetattr(fd, old_termios)
+    try
+        # Set a new, raw, terminal mode
+        new_termios = copy(old_termios)
+        cfmakeraw(new_termios)
+        tcsetattr(fd, new_termios)
+
+        # Call the user-supplied callback
+        f()
+    finally
+        # Always restore the terminal mode
+        tcsetattr(fd, old_termios)
+    end
+end
+
+function getpass(input::TTY, output::IO, prompt::AbstractString; with_suffix::Bool=true)
+    input === stdin || throw(ArgumentError("getpass only works for stdin"))
+    with_raw_tty(stdin) do
+        print(output, prompt)
+        with_suffix && print(output, ": ")
+        flush(output)
+
+        s = SecretBuffer()
+        plen = 0
+        while true
+            c = _getch()
+            if c == 0xff || c == UInt8('\n') || c == UInt8('\r') || c == 0x04
+                break # EOF or return
+            elseif c == 0x00 || c == 0xe0
+                _getch() # ignore function/arrow keys
+            elseif c == UInt8('\b') && plen > 0
+                plen -= 1 # delete last character on backspace
+            elseif !iscntrl(Char(c)) && plen < 128
+                write(s, c)
+            end
+        end
+        return seekstart(s)
+    end
 end
 
 # allow new getpass methods to be defined if stdin has been
 # redirected to some custom stream, e.g. in IJulia.
-getpass(prompt::AbstractString) = getpass(stdin, stdout, prompt)
+getpass(prompt::AbstractString; with_suffix::Bool=true) = getpass(stdin, stdout, prompt; with_suffix)
 
 """
-    prompt(message; default="") -> Union{String, Nothing}
+    prompt(message; default="")::Union{String, Nothing}
 
 Displays the `message` then waits for user input. Input is terminated when a newline (\\n)
 is encountered or EOF (^D) character is entered on a blank line. If a `default` is provided
 then the user can enter just a newline character to select the `default`.
 
-See also `Base.getpass` and `Base.winprompt` for secure entry of passwords.
+See also `Base.winprompt` (for Windows) and `Base.getpass` for secure entry of passwords.
+
+# Examples
+
+```julia-repl
+julia> your_name = Base.prompt("Enter your name");
+Enter your name: Logan
+
+julia> your_name
+"Logan"
+```
 """
 function prompt(input::IO, output::IO, message::AbstractString; default::AbstractString="")
     msg = !isempty(default) ? "$message [$default]: " : "$message: "
@@ -590,7 +444,13 @@ if Sys.iswindows()
         succeeded = ccall((:CredPackAuthenticationBufferW, "credui.dll"), stdcall, Bool,
             (UInt32, Cwstring, Cwstring, Ptr{UInt8}, Ptr{UInt32}),
              CRED_PACK_GENERIC_CREDENTIALS, default_username, "", credbuf, credbufsize)
-        @assert succeeded
+        if !succeeded
+            credbuf = resize!(credbuf, credbufsize[])
+            succeeded = ccall((:CredPackAuthenticationBufferW, "credui.dll"), stdcall, Bool,
+                (UInt32, Cwstring, Cwstring, Ptr{UInt8}, Ptr{UInt32}),
+                 CRED_PACK_GENERIC_CREDENTIALS, default_username, "", credbuf, credbufsize)
+            @assert succeeded
+        end
 
         # Step 2: Create the actual dialog
         #      2.1: Set up the window
@@ -648,10 +508,16 @@ end
 
 unsafe_crc32c(a, n, crc) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, n)
 
-_crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) =
-    unsafe_crc32c(a, length(a) % Csize_t, crc)
+_crc32c(a::NTuple{<:Any, UInt8}, crc::UInt32=0x00000000) =
+    unsafe_crc32c(Ref(a), length(a) % Csize_t, crc)
 
-_crc32c(s::String, crc::UInt32=0x00000000) = unsafe_crc32c(s, sizeof(s) % Csize_t, crc)
+function _crc32c(a::DenseUInt8OrInt8, crc::UInt32=0x00000000)
+    unsafe_crc32c(a, length(a) % Csize_t, crc)
+end
+
+function _crc32c(s::Union{String, SubString{String}}, crc::UInt32=0x00000000)
+    unsafe_crc32c(s, sizeof(s) % Csize_t, crc)
+end
 
 function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
     nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0, got $nb"))
@@ -667,8 +533,16 @@ function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
 end
 _crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
 _crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
-_crc32c(uuid::UUID, crc::UInt32=0x00000000) =
-    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, uuid.value, 16)
+_crc32c(x::UInt128, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, x, 16)
+_crc32c(x::UInt64, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt64}, Csize_t), crc, x, 8)
+_crc32c(x::UInt32, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt32}, Csize_t), crc, x, 4)
+_crc32c(x::UInt16, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt16}, Csize_t), crc, x, 2)
+_crc32c(x::UInt8, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt8}, Csize_t), crc, x, 1)
 
 """
     @kwdef typedef
@@ -687,9 +561,12 @@ order to function correctly with the keyword outer constructor.
     `Base.@kwdef` for parametric structs, and structs with supertypes
     requires at least Julia 1.1.
 
+!!! compat "Julia 1.9"
+    This macro is exported as of Julia 1.9.
+
 # Examples
 ```jldoctest
-julia> Base.@kwdef struct Foo
+julia> @kwdef struct Foo
            a::Int = 1         # specified default
            b::String          # required keyword
        end
@@ -699,124 +576,167 @@ julia> Foo(b="hi")
 Foo(1, "hi")
 
 julia> Foo()
-ERROR: UndefKeywordError: keyword argument b not assigned
+ERROR: UndefKeywordError: keyword argument `b` not assigned
 Stacktrace:
 [...]
 ```
 """
 macro kwdef(expr)
     expr = macroexpand(__module__, expr) # to expand @static
-    expr isa Expr && expr.head == :struct || error("Invalid usage of @kwdef")
-    T = expr.args[2]
-    if T isa Expr && T.head == :<:
+    isexpr(expr, :struct) || error("Invalid usage of @kwdef")
+    _, T, fieldsblock = expr.args
+    if T isa Expr && T.head === :<:
         T = T.args[1]
     end
 
-    params_ex = Expr(:parameters)
-    call_args = Any[]
+    fieldnames = Any[]
+    defvals = Any[]
+    extract_names_and_defvals_from_kwdef_fieldblock!(fieldsblock, fieldnames, defvals)
+    parameters = map(fieldnames, defvals) do fieldname, defval
+        if isnothing(defval)
+            return fieldname
+        else
+            return Expr(:kw, fieldname, esc(defval))
+        end
+    end
 
-    _kwdef!(expr.args[3], params_ex.args, call_args)
     # Only define a constructor if the type has fields, otherwise we'll get a stack
     # overflow on construction
-    if !isempty(params_ex.args)
-        if T isa Symbol
-            kwdefs = :(($(esc(T)))($params_ex) = ($(esc(T)))($(call_args...)))
-        elseif T isa Expr && T.head == :curly
+    if !isempty(parameters)
+        T_no_esc = Meta.unescape(T)
+        if T_no_esc isa Symbol
+            sig = Expr(:call, esc(T), Expr(:parameters, parameters...))
+            body = Expr(:block, __source__, Expr(:call, esc(T), fieldnames...))
+            kwdefs = Expr(:function, sig, body)
+        elseif isexpr(T_no_esc, :curly)
             # if T == S{A<:AA,B<:BB}, define two methods
             #   S(...) = ...
             #   S{A,B}(...) where {A<:AA,B<:BB} = ...
             S = T.args[1]
             P = T.args[2:end]
-            Q = [U isa Expr && U.head == :<: ? U.args[1] : U for U in P]
+            Q = Any[isexpr(U, :<:) ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
-            kwdefs = quote
-                ($(esc(S)))($params_ex) =($(esc(S)))($(call_args...))
-                ($(esc(SQ)))($params_ex) where {$(esc.(P)...)} =
-                    ($(esc(SQ)))($(call_args...))
-            end
+            body1 = Expr(:block, __source__, Expr(:call, esc(S), fieldnames...))
+            sig1 = Expr(:call, esc(S), Expr(:parameters, parameters...))
+            def1 = Expr(:function, sig1, body1)
+            body2 = Expr(:block, __source__, Expr(:call, esc(SQ), fieldnames...))
+            sig2 = :($(Expr(:call, esc(SQ), Expr(:parameters, parameters...))) where {$(esc.(P)...)})
+            def2 = Expr(:function, sig2, body2)
+            kwdefs = Expr(:block, def1, def2)
         else
             error("Invalid usage of @kwdef")
         end
     else
         kwdefs = nothing
     end
-    quote
-        Base.@__doc__($(esc(expr)))
+    return quote
+        $(esc(:($Base.@__doc__ $expr)))
         $kwdefs
     end
 end
 
 # @kwdef helper function
 # mutates arguments inplace
-function _kwdef!(blk, params_args, call_args)
-    for i in eachindex(blk.args)
-        ei = blk.args[i]
-        if ei isa Symbol
-            #  var
-            push!(params_args, ei)
-            push!(call_args, ei)
-        elseif ei isa Expr
-            if ei.head == :(=)
-                lhs = ei.args[1]
-                if lhs isa Symbol
-                    #  var = defexpr
-                    var = lhs
-                elseif lhs isa Expr && lhs.head == :(::) && lhs.args[1] isa Symbol
-                    #  var::T = defexpr
-                    var = lhs.args[1]
-                else
-                    # something else, e.g. inline inner constructor
-                    #   F(...) = ...
-                    continue
+function extract_names_and_defvals_from_kwdef_fieldblock!(block, names, defvals)
+    for (i, item) in pairs(block.args)
+        if isexpr(item, :block)
+            extract_names_and_defvals_from_kwdef_fieldblock!(item, names, defvals)
+        elseif item isa Expr && item.head in (:escape, :var"hygienic-scope")
+            n = length(names)
+            extract_names_and_defvals_from_kwdef_fieldblock!(item, names, defvals)
+            for j in n+1:length(defvals)
+                if !isnothing(defvals[j])
+                    defvals[j] = Expr(item.head, defvals[j])
                 end
-                defexpr = ei.args[2]  # defexpr
-                push!(params_args, Expr(:kw, var, esc(defexpr)))
-                push!(call_args, var)
-                blk.args[i] = lhs
-            elseif ei.head == :(::) && ei.args[1] isa Symbol
-                # var::Typ
-                var = ei.args[1]
-                push!(params_args, var)
-                push!(call_args, var)
-            elseif ei.head == :block
-                # can arise with use of @static inside type decl
-                _kwdef!(ei, params_args, call_args)
             end
+        else
+            def, name, defval = @something(def_name_defval_from_kwdef_fielddef(item), continue)
+            block.args[i] = def
+            push!(names, name)
+            push!(defvals, defval)
         end
     end
-    blk
+end
+
+function def_name_defval_from_kwdef_fielddef(kwdef)
+    if kwdef isa Symbol
+        return kwdef, kwdef, nothing
+    elseif isexpr(kwdef, :(::))
+        name, _ = kwdef.args
+        return kwdef, Meta.unescape(name), nothing
+    elseif isexpr(kwdef, :(=))
+        lhs, rhs = kwdef.args
+        def, name, _ = @something(def_name_defval_from_kwdef_fielddef(lhs), return nothing)
+        return def, name, rhs
+    elseif kwdef isa Expr && kwdef.head in (:const, :atomic)
+        def, name, defval = @something(def_name_defval_from_kwdef_fielddef(kwdef.args[1]), return nothing)
+        return Expr(kwdef.head, def), name, defval
+    elseif kwdef isa Expr && kwdef.head in (:escape, :var"hygienic-scope")
+        def, name, defval = @something(def_name_defval_from_kwdef_fielddef(kwdef.args[1]), return nothing)
+        return Expr(kwdef.head, def), name, isnothing(defval) ? defval : Expr(kwdef.head, defval)
+    end
 end
 
 # testing
 
 """
-    Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_THREADS / 2),
-                  exit_on_error=false, [seed])
+    Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.EFFECTIVE_CPU_THREADS / 2),
+                  exit_on_error=false, revise=false, propagate_project=true, [seed], [julia_args::Cmd])
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
 strings, using `ncores` processors. If `exit_on_error` is `false`, when one test
 fails, all remaining tests in other files will still be run; they are otherwise discarded,
 when `exit_on_error == true`.
+If `revise` is `true`, the `Revise` package is used to load any modifications to `Base` or
+to the standard libraries before running the tests.
+If `propagate_project` is true the current project is propagated to the test environment.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
+The argument `julia_args` can be used to pass custom `julia` command line flags to the test process.
 """
-function runtests(tests = ["all"]; ncores = ceil(Int, Sys.CPU_THREADS / 2),
-                  exit_on_error=false,
-                  seed::Union{BitInteger,Nothing}=nothing)
+function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.EFFECTIVE_CPU_THREADS / 2),
+                  exit_on_error::Bool=false,
+                  revise::Bool=false,
+                  propagate_project::Bool=false,
+                  seed::Union{BitInteger,Nothing}=nothing,
+                  julia_args::Cmd=``)
     if isa(tests,AbstractString)
         tests = split(tests)
     end
     exit_on_error && push!(tests, "--exit-on-error")
-    seed != nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
+    revise && push!(tests, "--revise")
+    seed !== nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
+    pathsep = Sys.iswindows() ? ";" : ":"
+    ENV2["JULIA_DEPOT_PATH"] = string(mktempdir(; cleanup = true), pathsep) # make sure the default depots can be loaded
+    ENV2["JULIA_LOAD_PATH"] = string("@", pathsep, "@stdlib")
+    ENV2["JULIA_TESTS"] = "true"
+    delete!(ENV2, "JULIA_PROJECT")
+    project_flag = propagate_project ? `--project` : ``
     try
-        run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR::String,
+        run(setenv(`$(julia_cmd()) $julia_args $project_flag $(joinpath(Sys.BINDIR,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
+        nothing
     catch
-        buf = PipeBuffer()
-        Base.require(Base, :InteractiveUtils).versioninfo(buf)
-        error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
-              "including error messages above and the output of versioninfo():\n$(read(buf, String))")
+        # evaluate versioninfo in the test environment so the listed env vars are the same
+        vinfo = read(setenv(`$(julia_cmd()) -e 'let InteractiveUtils = Base.require_stdlib(Base.PkgId(Base.UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils")); @invokelatest(InteractiveUtils.versioninfo()); end'`, ENV2), String)
+        msg = "A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
+              "including error messages above and the output of versioninfo():\n$(vinfo)"
+        if isinteractive()
+            error(msg)
+        else
+            print(stderr, "ERROR: ", msg)
+            exit(1)
+        end
     end
+end
+
+"""
+    isdebugbuild()
+
+Return `true` if julia is a debug version.
+"""
+function isdebugbuild()
+    return ccall(:jl_is_debugbuild, Cint, ()) != 0
 end

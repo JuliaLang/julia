@@ -1,520 +1,587 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
+
 using Base.Threads
-using Base.Threads: SpinLock, Mutex
 
-# threading constructs
+include("print_process_affinity.jl") # import `uv_thread_getaffinity`
 
-# parallel loop with parallel atomic addition
-function threaded_loop(a, r, x)
-    @threads for i in r
-        a[i] = 1 + atomic_add!(x, 1)
+# simple sanity tests for locks under cooperative concurrent access
+let lk = ReentrantLock()
+    c1 = Event()
+    c2 = Event()
+    @test trylock(lk)
+    @test trylock(lk)
+    t1 = @async (notify(c1); lock(lk); unlock(lk); trylock(lk))
+    t2 = @async (notify(c2); trylock(lk))
+    wait(c1)
+    wait(c2)
+    # wait for the task to park in the queue (it may be spinning)
+    @test timedwait(() -> t1.queue === lk.cond_wait.waitq, 1.0) == :ok
+    @test t2.queue !== lk.cond_wait.waitq
+    @test istaskdone(t2)
+    @test !fetch(t2)
+    unlock(lk)
+    @test t1.queue === lk.cond_wait.waitq
+    unlock(lk)
+    @test t1.queue !== lk.cond_wait.waitq
+    @test fetch(t1)
+end
+
+let e = Event(), started1 = Event(false), started2 = Event(false)
+    for i = 1:3
+        done1 = false
+        done2 = false
+        t1 = @async (notify(started1); wait(e); done1 = true)
+        t2 = @async (notify(started2); wait(e); done2 = true)
+        wait(started1)
+        wait(started2)
+        sleep(0.1)
+        @test !done1 && !done2
+        notify(e)
+        wait(t1)
+        @test done1
+        wait(t2)
+        @test done2
+        wait(e)
+        notify(e)
+        reset(e)
     end
 end
 
-function test_threaded_loop_and_atomic_add()
-    x = Atomic()
-    a = zeros(Int,10000)
-    threaded_loop(a,1:10000,x)
-    found = zeros(Bool,10000)
-    was_inorder = true
-    for i=1:length(a)
-        was_inorder &= a[i]==i
-        found[a[i]] = true
-    end
-    @test x[] == 10000
-    # Next test checks that all loop iterations ran,
-    # and were unique (via pigeon-hole principle).
-    @test !(false in found)
-    if was_inorder
-        println(stderr, "Warning: threaded loop executed in order")
-    end
-end
-
-test_threaded_loop_and_atomic_add()
-
-# Helper for test_threaded_atomic_minmax that verifies sequential consistency.
-function check_minmax_consistency(old::Array{T,1}, m::T, start::T, o::Base.Ordering) where T
-    for v in old
-        if v != start
-            # Check that atomic op that installed v reported consistent old value.
-            @test Base.lt(o, old[v-m+1], v)
-        end
+let e = Event(true), started1 = Event(true), started2 = Event(true), done = Event(true)
+    for i = 1:3
+        done1 = false
+        done2 = false
+        t1 = @async (notify(started1); wait(e); done1 = true; notify(done))
+        t2 = @async (notify(started2); wait(e); done2 = true; notify(done))
+        wait(started1)
+        wait(started2)
+        sleep(0.1)
+        @test !done1 && !done2
+        notify(e)
+        wait(done)
+        @test done1 ⊻ done2
+        done1 ? wait(t1) : wait(t2)
+        notify(e)
+        wait(t1)
+        @test done1
+        wait(t2)
+        @test done2
+        wait(done)
     end
 end
 
-function test_threaded_atomic_minmax(m::T,n::T) where T
-    mid = m + (n-m)>>1
-    x = Atomic{T}(mid)
-    y = Atomic{T}(mid)
-    oldx = Vector{T}(undef, n-m+1)
-    oldy = Vector{T}(undef, n-m+1)
-    @threads for i = m:n
-        oldx[i-m+1] = atomic_min!(x, T(i))
-        oldy[i-m+1] = atomic_max!(y, T(i))
-    end
-    @test x[] == m
-    @test y[] == n
-    check_minmax_consistency(oldy,m,mid,Base.Forward)
-    check_minmax_consistency(oldx,m,mid,Base.Reverse)
-end
 
-# The ranges below verify that the correct signed/unsigned comparison is used.
-test_threaded_atomic_minmax(Int16(-5000),Int16(5000))
-test_threaded_atomic_minmax(UInt16(27000),UInt16(37000))
-
-function threaded_add_locked(::Type{LockT}, x, n) where LockT
-    critical = LockT()
-    @threads for i = 1:n
-        @test lock(critical) === nothing
-        @test islocked(critical)
-        x = x + 1
-        @test unlock(critical) === nothing
-    end
-    @test !islocked(critical)
-    nentered = 0
-    nfailed = Atomic()
-    @threads for i = 1:n
-        if trylock(critical)
-            @test islocked(critical)
-            nentered += 1
-            @test unlock(critical) === nothing
-        else
-            atomic_add!(nfailed, 1)
-        end
-    end
-    @test 0 < nentered <= n
-    @test nentered + nfailed[] == n
-    @test !islocked(critical)
-    return x
-end
-
-@test threaded_add_locked(SpinLock, 0, 10000) == 10000
-@test threaded_add_locked(ReentrantLock, 0, 10000) == 10000
-@test threaded_add_locked(Mutex, 0, 10000) == 10000
-
-# Check if the recursive lock can be locked and unlocked correctly.
-let critical = ReentrantLock()
-    @test !islocked(critical)
-    @test_throws ErrorException("unlock count must match lock count") unlock(critical)
-    @test lock(critical) === nothing
-    @test islocked(critical)
-    @test lock(critical) === nothing
-    @test trylock(critical) == true
-    @test islocked(critical)
-    @test unlock(critical) === nothing
-    @test islocked(critical)
-    @test unlock(critical) === nothing
-    @test islocked(critical)
-    @test unlock(critical) === nothing
-    @test !islocked(critical)
-    @test_throws ErrorException("unlock count must match lock count") unlock(critical)
-    @test trylock(critical) == true
-    @test islocked(critical)
-    @test unlock(critical) === nothing
-    @test !islocked(critical)
-    @test_throws ErrorException("unlock count must match lock count") unlock(critical)
-    @test !islocked(critical)
-end
-
-# Make sure doing a GC while holding a lock doesn't cause dead lock
-# PR 14190. (This is only meaningful for threading)
-function threaded_gc_locked(::Type{LockT}) where LockT
-    critical = LockT()
-    @threads for i = 1:20
-        @test lock(critical) === nothing
-        @test islocked(critical)
-        GC.gc(false)
-        @test unlock(critical) === nothing
-    end
-    @test !islocked(critical)
-end
-
-threaded_gc_locked(SpinLock)
-threaded_gc_locked(Threads.ReentrantLock)
-threaded_gc_locked(Mutex)
-
-# Issue 14726
-# Make sure that eval'ing in a different module doesn't mess up other threads
-orig_curmodule14726 = @__MODULE__
-main_var14726 = 1
-module M14726
-module_var14726 = 1
-end
-
-@threads for i in 1:100
-    for j in 1:100
-        @eval M14726 module_var14726 = $j
-    end
-end
-@test @isdefined(orig_curmodule14726)
-@test @isdefined(main_var14726)
-@test @__MODULE__() == orig_curmodule14726
-
-@threads for i in 1:100
-    # Make sure current module is not null.
-    # The @test might not be particularly meaningful currently since the
-    # thread infrastructures swallows the error. (Same below)
-    @test @__MODULE__() == orig_curmodule14726
-end
-
-module M14726_2
-using Test
-using Base.Threads
-@threads for i in 1:100
-    # Make sure current module is the same as the one on the thread that
-    # pushes the work onto the threads.
-    # The @test might not be particularly meaningful currently since the
-    # thread infrastructures swallows the error. (See also above)
-    @test @__MODULE__() == M14726_2
-end
-end
-
-# Ensure only LLVM-supported types can be atomic
-@test_throws TypeError Atomic{BigInt}
-@test_throws TypeError Atomic{ComplexF64}
-
-function test_atomic_bools()
-    x = Atomic{Bool}(false)
-    # Arithmetic functions are not defined.
-    @test_throws MethodError atomic_add!(x, true)
-    @test_throws MethodError atomic_sub!(x, true)
-    # All the rest are:
-    for v in [true, false]
-        @test x[] == atomic_xchg!(x, v)
-        @test v == atomic_cas!(x, v, !v)
-    end
-    x = Atomic{Bool}(false)
-    @test false == atomic_max!(x, true); @test x[] == true
-    x = Atomic{Bool}(true)
-    @test true == atomic_and!(x, false); @test x[] == false
-end
-
-test_atomic_bools()
-
-# Test atomic memory ordering with load/store
-mutable struct CommBuf
-    var1::Atomic{Int}
-    var2::Atomic{Int}
-    correct_write::Bool
-    correct_read::Bool
-    CommBuf() = new(Atomic{Int}(0), Atomic{Int}(0), false, false)
-end
-function test_atomic_write(commbuf::CommBuf, n::Int)
-    for i in 1:n
-        # The atomic stores guarantee that var1 >= var2
-        commbuf.var1[] = i
-        commbuf.var2[] = i
-    end
-    commbuf.correct_write = true
-end
-function test_atomic_read(commbuf::CommBuf, n::Int)
-    correct = true
-    while true
-        # load var2 before var1
-        var2 = commbuf.var2[]
-        var1 = commbuf.var1[]
-        correct &= var1 >= var2
-        var1 == n && break
-        # Temporary solution before we have gc transition support in codegen.
-        ccall(:jl_gc_safepoint, Cvoid, ())
-    end
-    commbuf.correct_read = correct
-end
-function test_atomic()
-    commbuf = CommBuf()
-    count = 1_000_000
-    @threads for i in 1:2
-        if i==1
-            test_atomic_write(commbuf, count)
-        else
-            test_atomic_read(commbuf, count)
-        end
-    end
-    @test commbuf.correct_write == true
-    @test commbuf.correct_read == true
-end
-test_atomic()
-
-# Test ordering with fences using Peterson's algorithm
-# Example adapted from <https://en.wikipedia.org/wiki/Peterson%27s_algorithm>
-mutable struct Peterson
-    # State for Peterson's algorithm
-    flag::Vector{Atomic{Int}}
-    turn::Atomic{Int}
-    # Collision detection
-    critical::Vector{Atomic{Int}}
-    correct::Vector{Bool}
-    Peterson() =
-        new([Atomic{Int}(0), Atomic{Int}(0)],
-            Atomic{Int}(0),
-            [Atomic{Int}(0), Atomic{Int}(0)],
-            [false, false])
-end
-function test_fence(p::Peterson, id::Int, n::Int)
-    @assert id == mod1(id,2)
-    correct = true
-    otherid = mod1(id+1,2)
-    for i in 1:n
-        p.flag[id][] = 1
-        p.turn[] = otherid
-        atomic_fence()
-        while p.flag[otherid][] != 0 && p.turn[] == otherid
-            # busy wait
-            # Temporary solution before we have gc transition support in codegen.
-            ccall(:jl_gc_safepoint, Cvoid, ())
-        end
-        # critical section
-        p.critical[id][] = 1
-        correct &= p.critical[otherid][] == 0
-        p.critical[id][] = 0
-        # end of critical section
-        p.flag[id][] = 0
-    end
-    p.correct[id] = correct
-end
-function test_fence()
-    commbuf = Peterson()
-    count = 1_000_000
-    @threads for i in 1:2
-        test_fence(commbuf, i, count)
-    end
-    @test commbuf.correct[1] == true
-    @test commbuf.correct[2] == true
-end
-test_fence()
-
-# Test load / store with various types
-let atomic_types = [Int8, Int16, Int32, Int64, Int128,
-                    UInt8, UInt16, UInt32, UInt64, UInt128,
-                    Float16, Float32, Float64]
-    # Temporarily omit 128-bit types on 32bit x86
-    # 128-bit atomics do not exist on AArch32.
-    # And we don't support them yet on power, because they are lowered
-    # to `__sync_lock_test_and_set_16`.
-    if Sys.ARCH === :i686 || startswith(string(Sys.ARCH), "arm") ||
-       Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
-        filter!(T -> sizeof(T)<=8, atomic_types)
-    end
-    for T in atomic_types
-        var = Atomic{T}()
-        var[] = 42
-        @test var[] === T(42)
-        old = atomic_xchg!(var, T(13))
-        @test old === T(42)
-        @test var[] === T(13)
-        old = atomic_cas!(var, T(13), T(14))   # this will succeed
-        @test old === T(13)
-        @test var[] === T(14)
-        old = atomic_cas!(var, T(13), T(15))   # this will fail
-        @test old === T(14)
-        @test var[] === T(14)
+let cmd1 = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no threads_exec.jl`,
+    cmd2 = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no -e 'print(Threads.threadpoolsize(:default), ",", Threads.threadpoolsize(:interactive))'`
+    for (test_nthreads, test_nthreadsi) in (
+            (1, 0),
+            (1, 1),
+            (2, 0),
+            (2, 1),
+            (4, 0),
+            (4, 0)) # try a couple times to trigger bad races
+        new_env = copy(ENV)
+        new_env["JULIA_NUM_THREADS"] = string(test_nthreads, ",", test_nthreadsi)
+        run(pipeline(setenv(cmd1, new_env), stdout = stdout, stderr = stderr))
+        threads_config = "$test_nthreads,$test_nthreadsi"
+        # threads set via env var
+        @test chomp(read(setenv(cmd2, new_env), String)) == threads_config
+        # threads set via -t
+        @test chomp(read(`$cmd2 -t$test_nthreads,$test_nthreadsi`, String)) == threads_config
     end
 end
 
-# Test atomic_cas! and atomic_xchg!
-function test_atomic_cas!(var::Atomic{T}, range::StepRange{Int,Int}) where T
-    for i in range
-        while true
-            old = atomic_cas!(var, T(i-1), T(i))
-            old == T(i-1) && break
-            # Temporary solution before we have gc transition support in codegen.
-            ccall(:jl_gc_safepoint, Cvoid, ())
-        end
+# Timing-sensitive tests can fail on CI due to occasional unexpected delays,
+# so this test is disabled.
+#=
+let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no threadpool_latency.jl`
+    for test_nthreads in (1, 2)
+        new_env = copy(ENV)
+        new_env["JULIA_NUM_THREADS"] = string(test_nthreads, ",1")
+        run(pipeline(setenv(cmd, new_env), stdout = stdout, stderr = stderr))
     end
 end
-for T in (Int32, Int64, Float32, Float64)
-    var = Atomic{T}()
-    nloops = 1000
-    di = nthreads()
-    @threads for i in 1:di
-        test_atomic_cas!(var, i:di:nloops)
-    end
-    @test var[] === T(nloops)
+=#
+let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no threadpool_use.jl`
+    new_env = copy(ENV)
+    new_env["JULIA_NUM_THREADS"] = "1,1"
+    run(pipeline(setenv(cmd, new_env), stdout = stdout, stderr = stderr))
 end
 
-function test_atomic_xchg!(var::Atomic{T}, i::Int, accum::Atomic{Int}) where T
-    old = atomic_xchg!(var, T(i))
-    atomic_add!(accum, Int(old))
-end
-for T in (Int32, Int64, Float32, Float64)
-    accum = Atomic{Int}()
-    var = Atomic{T}()
-    nloops = 1000
-    @threads for i in 1:nloops
-        test_atomic_xchg!(var, i, accum)
-    end
-    @test accum[] + Int(var[]) === sum(0:nloops)
+function run_with_affinity(cpus)
+    script = joinpath(@__DIR__, "print_process_affinity.jl")
+    return readchomp(setcpuaffinity(`$(Base.julia_cmd()) $script`, cpus))
 end
 
-function test_atomic_float(varadd::Atomic{T}, varmax::Atomic{T}, varmin::Atomic{T}, i::Int) where T
-    atomic_add!(varadd, T(i))
-    atomic_max!(varmax, T(i))
-    atomic_min!(varmin, T(i))
-end
-for T in (Int32, Int64, Float32, Float64)
-    varadd = Atomic{T}()
-    varmax = Atomic{T}()
-    varmin = Atomic{T}()
-    nloops = 1000
-    @threads for i in 1:nloops
-        test_atomic_float(varadd, varmax, varmin, i)
-    end
-    @test varadd[] === T(sum(1:nloops))
-    @test varmax[] === T(maximum(1:nloops))
-    @test varmin[] === T(0)
-end
-
-using Dates
-for period in (0.06, Dates.Millisecond(60))
-    let async = Base.AsyncCondition(), t
-        c = Condition()
-        task = schedule(Task(function()
-            notify(c)
-            wait(c)
-            t = Timer(period)
-            wait(t)
-            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-            wait(c)
-            sleep(period)
-            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-            ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-        end))
-        wait(c)
-        notify(c)
-        delay1 = @elapsed wait(async)
-        notify(c)
-        delay2 = @elapsed wait(async)
-        @test istaskdone(task)
-        @test delay1 > 0.05
-        @test delay2 > 0.05
-        @test isopen(async)
-        @test !isopen(t)
-        close(t)
-        close(async)
-        @test_throws EOFError wait(async)
-        @test !isopen(async)
-        @test_throws EOFError wait(t)
-        @test_throws EOFError wait(async)
-    end
-end
-
-function test_thread_cfunction()
-    # ensure a runtime call to `get_trampoline` will be created
-    # TODO: get_trampoline is not thread-safe (as this test shows)
-    function complex_cfunction(a)
-        s = zero(eltype(a))
-        @inbounds @simd for i in a
-            s += muladd(a[i], a[i], -2)
-        end
-        return s
-    end
-    fs = [ let a = zeros(10)
-            () -> complex_cfunction(a)
-        end for i in 1:1000 ]
-    @noinline cf(f) = @cfunction $f Float64 ()
-    cfs = Vector{Base.CFunction}(undef, length(fs))
-    cf1 = cf(fs[1])
-    @threads for i in 1:1000
-        cfs[i] = cf(fs[i])
-    end
-    @test cfs[1] == cf1
-    @test cfs[2] == cf(fs[2])
-    @test length(unique(cfs)) == 1000
-    ok = zeros(Int, nthreads())
-    @threads for i in 1:10000
-        i = mod1(i, 1000)
-        fi = fs[i]
-        cfi = cf(fi)
-        GC.@preserve cfi begin
-            ok[threadid()] += (cfi === cfs[i])
-        end
-    end
-    @test sum(ok) == 10000
-end
-test_thread_cfunction()
-
-# Compare the two ways of checking if threading is enabled.
-# `jl_tls_states` should only be defined on non-threading build.
-if ccall(:jl_threading_enabled, Cint, ()) == 0
-    @test nthreads() == 1
-    cglobal(:jl_tls_states) != C_NULL
+# issue #34415 - make sure external affinity settings work
+if Sys.islinux()
+    const SYS_rrcall_check_presence = 1008
+    global running_under_rr() = 0 == ccall(:syscall, Int,
+        (Int, Int, Int, Int, Int, Int, Int),
+        SYS_rrcall_check_presence, 0, 0, 0, 0, 0, 0)
 else
-    @test_throws ErrorException cglobal(:jl_tls_states)
+    global running_under_rr() = false
+end
+# Note also that libuv does not support affinity in macOS and it is known to
+# hang in FreeBSD. So, it's tested only in Linux and Windows:
+const AFFINITY_SUPPORTED = (Sys.islinux() || Sys.iswindows()) && !running_under_rr()
+
+if AFFINITY_SUPPORTED
+    allowed_cpus = findall(uv_thread_getaffinity())
+    if length(allowed_cpus) ≥ 2
+        @test run_with_affinity(allowed_cpus[1:1]) == "$(allowed_cpus[1])"
+        @test run_with_affinity(allowed_cpus[1:2]) == "$(allowed_cpus[1]),$(allowed_cpus[2])"
+    end
 end
 
-function test_thread_range()
-    a = zeros(Int, nthreads())
-    @threads for i in 1:threadid()
-        a[i] = 1
+function get_nthreads(options = ``; cpus = nothing, exclusive = false)
+    cmd = `$(Base.julia_cmd()) --startup-file=no $(options)`
+    cmd = `$cmd -e "print(Threads.threadpoolsize())"`
+    cmd = addenv(cmd, "JULIA_EXCLUSIVE" => exclusive ? "1" : "0",
+        "JULIA_NUM_THREADS" => "auto")
+    if cpus !== nothing
+        cmd = setcpuaffinity(cmd, cpus)
     end
-    for i in 1:threadid()
-        @test a[i] == 1
-    end
-    for i in (threadid() + 1):nthreads()
-        @test a[i] == 0
+    return parse(Int, read(cmd, String))
+end
+
+@testset "nthreads determined based on CPU affinity" begin
+    if AFFINITY_SUPPORTED
+        allowed_cpus = findall(uv_thread_getaffinity())
+        if length(allowed_cpus) ≥ 2
+            @test get_nthreads() ≥ 2
+            @test get_nthreads(exclusive = true) ≥ 2
+            @test get_nthreads(cpus = allowed_cpus[1:1]) == 1
+            @test get_nthreads(cpus = allowed_cpus[2:2]) == 1
+            @test get_nthreads(cpus = allowed_cpus[1:2]) == 2
+            @test get_nthreads(`-t1`, cpus = allowed_cpus[1:1]) == 1
+            @test get_nthreads(`-t1`, cpus = allowed_cpus[2:2]) == 1
+            @test get_nthreads(`-t1`, cpus = allowed_cpus[1:2]) == 1
+
+            if length(allowed_cpus) ≥ 3
+                @test get_nthreads(cpus = allowed_cpus[1:2:3]) == 2
+                @test get_nthreads(cpus = allowed_cpus[2:3])   == 2
+            end
+        end
     end
 end
-test_thread_range()
 
-# Thread safety of `jl_load_and_lookup`.
-function test_load_and_lookup_18020(n)
-    @threads for i in 1:n
+# issue #34769
+function idle_callback(handle)
+    idle = Base.@handle_as handle UvTestIdle
+    if idle.active
+        idle.count += 1
+        if idle.count == 1
+            # We want to hit the case where we're allowing
+            # the thread to go to sleep, which only happens
+            # after some default amount of time (DEFAULT_THREAD_SLEEP_THRESHOLD)
+            # so spend that amount of time here.
+            Libc.systemsleep(0.004)
+        elseif idle.count >= 10
+            lock(idle.cond)
+            try
+                notify(idle.cond, true)
+            finally
+                unlock(idle.cond)
+            end
+            idle.active = false
+        end
+    end
+    nothing
+end
+
+mutable struct UvTestIdle
+    handle::Ptr{Cvoid}
+    cond::Base.ThreadSynchronizer
+    isopen::Bool
+    active::Bool
+    count::Int
+
+    function UvTestIdle()
+        this = new(Libc.malloc(Base._sizeof_uv_idle), Base.ThreadSynchronizer(), true, false, 0)
+        Base.iolock_begin()
+        Base.associate_julia_struct(this.handle, this)
+        err = ccall(:uv_idle_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}),
+            Base.eventloop(), this.handle)
+        if err != 0
+            Libc.free(this.handle)
+            this.handle = C_NULL
+            throw(_UVError("uv_idle_init", err))
+        end
+        err = ccall(:uv_idle_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}),
+            this.handle, @cfunction(idle_callback, Cvoid, (Ptr{Cvoid},)))
+        if err != 0
+            Libc.free(this.handle)
+            this.handle = C_NULL
+            throw(_UVError("uv_idle_start", err))
+        end
+        finalizer(Base.uvfinalize, this)
+        Base.iolock_end()
+        return this
+    end
+end
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, idle::UvTestIdle) = idle.handle
+
+function Base.uvfinalize(t::UvTestIdle)
+    Base.iolock_begin()
+    Base.lock(t.cond)
+    try
+        if t.handle != C_NULL
+            Base.disassociate_julia_struct(t.handle) # not going to call the usual close hooks
+            if t.isopen
+                t.isopen = false
+                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
+            end
+            t.handle = C_NULL
+            notify(t.cond, false)
+        end
+    finally
+        unlock(t.cond)
+    end
+    Base.iolock_end()
+    nothing
+end
+
+function Base.close(idle::UvTestIdle)
+    Base.uvfinalize(idle)
+end
+
+function Base.wait(idle::UvTestIdle)
+    Base.iolock_begin()
+    Base.preserve_handle(idle)
+    Base.lock(idle.cond)
+    try
+        idle.active = true
+        Base.iolock_end()
+        wait(idle.cond)
+    finally
+        Base.unlock(idle.cond)
+        Base.iolock_begin()
+        Base.unpreserve_handle(idle)
+        Base.iolock_end()
+    end
+end
+
+# Spawn another process as a watchdog. If this test fails, it'll unrecoverably
+# hang in the event loop. Another process needs to kill it
+cmd = """
+    @async (Base.wait_readnb(stdin, 1); exit())
+    sleep(100)
+    isopen(stdin) || exit()
+    println(stderr, "ERROR: Killing threads test due to watchdog expiry")
+    ccall(:uv_kill, Cint, (Cint, Cint), $(getpid()), Base.SIGTERM)
+"""
+proc = open(pipeline(`$(Base.julia_cmd()) -e $cmd`; stderr=stderr); write=true)
+
+let idle=UvTestIdle()
+    wait(idle)
+    close(idle)
+end
+
+@threads for i = 1:1
+    let idle=UvTestIdle()
+        wait(idle)
+        close(idle)
+    end
+end
+
+@test process_running(proc)
+
+# We don't need the watchdog anymore
+close(proc.in)
+
+# https://github.com/JuliaLang/julia/pull/42973
+@testset "spawn and wait *a lot* of tasks in @profile" begin
+    # Not using threads_exec.jl for better isolation, reproducibility, and a
+    # tighter timeout.
+    script = "profile_spawnmany_exec.jl"
+    cmd_base = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no $script`
+    @testset for n in [20000, 200000, 2000000]
+        cmd = ignorestatus(setenv(cmd_base, "NTASKS" => n; dir = @__DIR__))
+        cmd = pipeline(cmd; stdout = stderr, stderr)
+        proc = run(cmd; wait = false)
+        done = Threads.Atomic{Bool}(false)
+        timeout = false
+        timer = Timer(200) do _
+            timeout = true
+            for sig in (Base.SIGQUIT, Base.SIGKILL)
+                for _ in 1:3
+                    kill(proc, sig)
+                    sleep(1)
+                    if done[]
+                        @warn "Terminating `$script` required signal $sig"
+                        return
+                    end
+                end
+            end
+        end
         try
-            ccall(:jl_load_and_lookup,
-                  Ptr{Cvoid}, (Cstring, Cstring, Ref{Ptr{Cvoid}}),
-                  "$i", :f, C_NULL)
-        catch
+            wait(proc)
+        finally
+            done[] = true
+            close(timer)
+        end
+        if !success(proc) || timeout
+            @error "A \"spawn and wait lots of tasks\" test failed" n proc.exitcode proc.termsignal success(proc) timeout
+        end
+        @test success(proc)
+        @test !timeout
+    end
+end
+
+@testset "bad arguments to @threads" begin
+    @test_throws ArgumentError @macroexpand(@threads 1 2) # wrong number of args
+    @test_throws ArgumentError @macroexpand(@threads 1) # arg isn't an Expr
+    @test_throws ArgumentError @macroexpand(@threads if true 1 end) # arg doesn't start with for
+end
+
+@testset "rand_ptls underflow" begin
+    @test Base.Partr.cong(UInt32(0)) == 0
+end
+
+@testset "num_stack_mappings metric" begin
+    @test @ccall(jl_get_num_stack_mappings()::Cint) >= 1
+    # There must be at least two: one for the root test task and one for the async task:
+    @test fetch(@async(@ccall(jl_get_num_stack_mappings()::Cint))) >= 2
+end
+
+@testset "Base.Threads docstrings" begin
+    @test isempty(Docs.undocumented_names(Threads))
+end
+
+@testset "wait failed task" begin
+    @testset "wait without throw keyword" begin
+        t = Threads.@spawn error("Error")
+        @test_throws TaskFailedException wait(t)
+    end
+
+    @testset "wait with throw=false" begin
+        t = Threads.@spawn error("Error")
+        wait(t; throw=false)
+        @test istaskfailed(t)
+    end
+end
+
+@testset "jl_*affinity" begin
+    cpumasksize = @ccall uv_cpumask_size()::Cint
+    if cpumasksize > 0 # otherwise affinities are not supported on the platform (UV_ENOTSUP)
+        jl_getaffinity = (tid, mask, cpumasksize) -> ccall(:jl_getaffinity, Int32, (Int16, Ptr{Cchar}, Int32), tid, mask, cpumasksize)
+        jl_setaffinity = (tid, mask, cpumasksize) -> ccall(:jl_setaffinity, Int32, (Int16, Ptr{Cchar}, Int32), tid, mask, cpumasksize)
+        mask = zeros(Cchar, cpumasksize)
+        @test jl_getaffinity(0, mask, cpumasksize) == 0
+        @test !all(iszero, mask)
+        @test jl_setaffinity(0, mask, cpumasksize) == 0
+    end
+end
+
+@testset "io_thread" begin
+    function io_thread_test()
+        # This test creates a thread that does IO and then blocks the main julia thread
+        # This test hangs if you don't spawn an IO thread.
+        # It hanging or not is technically a race but I haven't seen julia win that race yet.
+        cmd = """
+        Base.Experimental.make_io_thread()
+        function callback()::Cvoid
+            println("Running a command")
+            run(`echo 42`)
+            return
+        end
+        function call_on_thread(callback::Ptr{Nothing})
+            tid = UInt[0]
+            threadwork = @cfunction function(arg::Ptr{Cvoid})
+                current_task().donenotify = Base.ThreadSynchronizer()
+                Base.errormonitor(current_task())
+                println("Calling Julia from thread")
+                ccall(arg, Cvoid, ())
+                nothing
+            end Cvoid (Ptr{Cvoid},)
+            err = @ccall uv_thread_create(tid::Ptr{UInt}, threadwork::Ptr{Cvoid}, callback::Ptr{Cvoid})::Cint
+            err == 0 || Base.uv_error("uv_thread_create", err)
+            gc_state = @ccall jl_gc_safe_enter()::Int8
+            err = @ccall uv_thread_join(tid::Ptr{UInt})::Cint
+            @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+            err == 0 || Base.uv_error("uv_thread_join", err)
+            return
+        end
+        function main()
+            callback_ptr = @cfunction(callback, Cvoid, ())
+            call_on_thread(callback_ptr)
+            println("Done")
+        end
+        main()
+
+        """
+        proc = run(pipeline(`$(Base.julia_cmd()) -e $cmd`), wait=false)
+        t = Timer(60) do t; kill(proc); end;
+        @test success(proc)
+        close(t)
+        return true
+    end
+    @test io_thread_test()
+end
+
+# Make sure default number of BLAS threads respects CPU affinity: issue #55572.
+@testset "LinearAlgebra number of default threads" begin
+    if AFFINITY_SUPPORTED
+        allowed_cpus = findall(uv_thread_getaffinity())
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -E 'using LinearAlgebra; BLAS.get_num_threads()'`,
+                     # Remove all variables which could affect the default number of threads
+                     "OPENBLAS_NUM_THREADS"=>nothing,
+                     "GOTO_NUM_THREADS"=>nothing,
+                     "OMP_NUM_THREADS"=>nothing)
+        for n in 1:min(length(allowed_cpus), 8) # Cap to 8 to avoid too many tests on large systems
+            @test readchomp(setcpuaffinity(cmd, allowed_cpus[1:n])) == string(max(1, n ÷ 2))
         end
     end
 end
-test_load_and_lookup_18020(10000)
 
-# Nested threaded loops
-# This may not be efficient/fully supported but should work without crashing.....
-function test_nested_loops()
-    a = zeros(Int, 100, 100)
-    @threads for i in 1:100
-        @threads for j in 1:100
-            a[j, i] = i + j
+let once = OncePerProcess(() -> return [nothing])
+    @test typeof(once) <: OncePerProcess{Vector{Nothing}}
+    x = @inferred once()
+    @test x === once()
+    @atomic once.state = 0xff
+    @test_throws ErrorException("invalid state for OncePerProcess") once()
+    @test_throws ErrorException("OncePerProcess initializer failed previously") once()
+    @atomic once.state = 0x01
+    @test x === once()
+end
+let once1 = OncePerProcess(BigFloat), once2 = OncePerProcess{BigFloat}(BigFloat)
+    # Using a type as a constructor should create a OncePerProcess with
+    # Type{...} as its initializer (rather than DataType)
+    @test typeof(once1) <: OncePerProcess{BigFloat,Type{BigFloat}}
+    @test typeof(once2) <: OncePerProcess{BigFloat,Type{BigFloat}}
+end
+let once = OncePerProcess{Int}(() -> error("expected"))
+    @test_throws ErrorException("expected") once()
+    @test_throws ErrorException("OncePerProcess initializer failed previously") once()
+end
+
+let e = Base.Event(true),
+    started = Channel{Int16}(Inf),
+    finish = Channel{Nothing}(Inf),
+    exiting = Channel{Nothing}(Inf),
+    starttest2 = Base.Event(),
+    once = OncePerThread() do
+        push!(started, threadid())
+        take!(finish)
+        return [nothing]
+    end
+    alls = OncePerThread() do
+        return [nothing]
+    end
+    @test typeof(once) <: OncePerThread{Vector{Nothing}}
+    push!(finish, nothing)
+    @test_throws ArgumentError once[0]
+    x = @inferred once()
+    @test_throws ArgumentError once[0]
+    @test x === once() === fetch(@async once()) === once[threadid()]
+    @test take!(started) == threadid()
+    @test isempty(started)
+    tids = zeros(UInt, 50)
+    newthreads = zeros(Int16, length(tids))
+    onces = Vector{Vector{Nothing}}(undef, length(tids))
+    allonces = Vector{Vector{Vector{Nothing}}}(undef, length(tids))
+    # allocate closure memory to last until all threads are started
+    cls = [function cl()
+            GC.gc(false) # stress test the GC-safepoint mechanics of jl_adopt_thread
+            try
+                newthreads[i] = threadid()
+                local y = once()
+                onces[i] = y
+                @test x !== y === once() === once[threadid()]
+                wait(starttest2)
+                allonces[i] = Vector{Nothing}[alls[tid] for tid in newthreads]
+            catch ex
+                close(started, ErrorException("failed"))
+                close(finish, ErrorException("failed"))
+                @lock stderr Base.display_error(current_exceptions())
+            end
+            push!(exiting, nothing)
+            GC.gc(false) # stress test the GC-safepoint mechanics of jl_delete_thread
+            nothing
+        end
+    for i = 1:length(tids)]
+    GC.@preserve cls begin # this memory must survive until each corresponding thread exits (waitallthreads / uv_thread_join)
+        Base.preserve_handle(cls)
+        for i = 1:length(tids)
+            function threadcallclosure(tid::Ref{UInt}, cl::Ref{F}) where {F} # create sparam so we can reference the type of cl in the ccall type
+                threadwork = @cfunction cl -> cl() Cvoid (Ref{F},) # create a cfunction that specializes on cl as an argument and calls it
+                err = @ccall uv_thread_create(tid::Ptr{UInt}, threadwork::Ptr{Cvoid}, cl::Ref{F})::Cint # call that on a thread
+                err == 0 || Base.uv_error("uv_thread_create", err)
+                nothing
+            end
+            threadcallclosure(Ref(tids, i), Ref(cls, i))
+        end
+        @noinline function waitallthreads(tids, cls)
+            for i = 1:length(tids)
+                tid = Ref(tids, i)
+                tidp = Base.unsafe_convert(Ptr{UInt}, tid)::Ptr{UInt}
+                gc_state = @ccall jl_gc_safe_enter()::Int8
+                GC.@preserve tid err = @ccall uv_thread_join(tidp::Ptr{UInt})::Cint
+                @ccall jl_gc_safe_leave(gc_state::Int8)::Cvoid
+                err == 0 || Base.uv_error("uv_thread_join", err)
+            end
+            Base.unpreserve_handle(cls)
+        end
+        try
+            # let them finish in batches of 10
+            for i = 1:length(tids) ÷ 10
+                for i = 1:10
+                    newid = take!(started)
+                    @test newid != threadid()
+                end
+                for i = 1:10
+                    push!(finish, nothing)
+                end
+            end
+            @test isempty(started)
+            # now run the second part of the test where they all try to access the other threads elements
+            notify(starttest2)
+        finally
+            for _ = 1:length(tids)
+                # run IO loop until all threads are close to exiting
+                take!(exiting)
+            end
+            waitallthreads(tids, cls)
         end
     end
-    for i in 1:100
-        for j in 1:100
-            @test a[j, i] == i + j
-        end
-    end
-end
-test_nested_loops()
+    @test isempty(started)
+    @test isempty(finish)
+    @test length(IdSet{eltype(onces)}(onces)) == length(onces) # make sure every object is unique
+    allexpected = Vector{Nothing}[alls[tid] for tid in newthreads]
+    @test length(IdSet{eltype(allexpected)}(allexpected)) == length(allexpected) # make sure every object is unique
+    @test all(i -> allonces[i] !== allexpected && all(j -> allonces[i][j] === allexpected[j], eachindex(allexpected)), eachindex(allonces)) # make sure every thread saw the same elements
+    @test_throws ArgumentError once[Threads.maxthreadid() + 1]
+    @test_throws ArgumentError once[-1]
 
-function test_thread_too_few_iters()
-    x = Atomic()
-    a = zeros(Int, nthreads()+2)
-    threaded_loop(a, 1:nthreads()-1, x)
-    found = zeros(Bool, nthreads()+2)
-    for i=1:nthreads()-1
-        found[a[i]] = true
-    end
-    @test x[] == nthreads()-1
-    # Next test checks that all loop iterations ran,
-    # and were unique (via pigeon-hole principle).
-    @test !(false in found[1:nthreads()-1])
-    @test !(true in found[nthreads():end])
 end
-test_thread_too_few_iters()
+let once1 = OncePerThread(BigFloat), once2 = OncePerThread{BigFloat}(BigFloat)
+    # Using a type as a constructor should create a OncePerThread with
+    # Type{...} as its initializer (rather than DataType)
+    @test typeof(once1) <: OncePerThread{BigFloat,Type{BigFloat}}
+    @test typeof(once2) <: OncePerThread{BigFloat,Type{BigFloat}}
+end
+let once = OncePerThread{Int}(() -> error("expected"))
+    @test_throws ErrorException("expected") once()
+    @test_throws ErrorException("OncePerThread initializer failed previously") once()
+end
 
-let e = Event(), started = Event()
-    done = false
-    t = @async (notify(started); wait(e); done = true)
-    wait(started)
-    sleep(0.1)
-    @test done == false
-    notify(e)
-    wait(t)
-    @test done == true
-    blocked = true
-    wait(@async (wait(e); blocked = false))
-    @test !blocked
+let once = OncePerTask(() -> return [nothing])
+    @test typeof(once) <: OncePerTask{Vector{Nothing}}
+    x = @inferred once()
+    @test x === once() !== fetch(@async once())
+    delete!(task_local_storage(), once)
+    @test x !== once() === once()
+end
+let once1 = OncePerTask(BigFloat), once2 = OncePerTask{BigFloat}(BigFloat)
+    # Using a type as a constructor should create a OncePerTask with
+    # Type{...} as its initializer (rather than DataType)
+    @test typeof(once1) <: OncePerTask{BigFloat,Type{BigFloat}}
+    @test typeof(once2) <: OncePerTask{BigFloat,Type{BigFloat}}
+end
+let once = OncePerTask{Int}(() -> error("expected"))
+    @test_throws ErrorException("expected") once()
+    @test_throws ErrorException("expected") once()
 end

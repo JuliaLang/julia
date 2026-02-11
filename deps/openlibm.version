@@ -1,3 +1,9 @@
-OPENLIBM_BRANCH=v0.6.0
-OPENLIBM_SHA1=ce69bf1f32d3e2e9791da36c9e33ba38670d5576
-OPENLIBM_BB_REL=0
+# -*- makefile -*-
+
+## jll artifact
+OPENLIBM_JLL_NAME := OpenLibm
+
+## source build
+OPENLIBM_VER := 0.8.7
+OPENLIBM_BRANCH=v0.8.7
+OPENLIBM_SHA1=9fbeafcd4f1b6ef6aa3946c1c8faead50f38a94d

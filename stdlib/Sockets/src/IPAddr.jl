@@ -10,6 +10,9 @@ abstract type IPAddr end
 Base.isless(a::T, b::T) where {T<:IPAddr} = isless(a.host, b.host)
 (dt::Type{<:Integer})(ip::IPAddr) = dt(ip.host)::dt
 
+# Allow IP addresses to broadcast as unwrapped scalars
+Base.Broadcast.broadcastable(ip::IPAddr) = Ref(ip)
+
 struct IPv4 <: IPAddr
     host::UInt32
     IPv4(host::UInt32) = new(host)
@@ -28,7 +31,7 @@ end
 """
     IPv4(host::Integer) -> IPv4
 
-Returns an IPv4 object from ip address `host` formatted as an [`Integer`](@ref).
+Return an IPv4 object from IP address `host` formatted as an [`Integer`](@ref).
 
 # Examples
 ```jldoctest
@@ -46,7 +49,17 @@ function IPv4(host::Integer)
     end
 end
 
-# constructor: ("1.2.3.4")
+"""
+    IPv4(str::AbstractString) -> IPv4
+
+Parse an IPv4 address string into an `IPv4` object.
+
+# Examples
+```jldoctest
+julia> IPv4("127.0.0.1")
+ip"127.0.0.1"
+```
+"""
 IPv4(str::AbstractString) = parse(IPv4, str)
 
 show(io::IO,ip::IPv4) = print(io,"ip\"",ip,"\"")
@@ -81,7 +94,7 @@ end
 """
     IPv6(host::Integer) -> IPv6
 
-Returns an IPv6 object from ip address `host` formatted as an [`Integer`](@ref).
+Return an IPv6 object from IP address `host` formatted as an [`Integer`](@ref).
 
 # Examples
 ```jldoctest
@@ -101,6 +114,17 @@ function IPv6(host::Integer)
     end
 end
 
+"""
+    IPv6(str::AbstractString) -> IPv6
+
+Parse an IPv6 address string into an `IPv6` object.
+
+# Examples
+```jldoctest
+julia> IPv6("::1")
+ip"::1"
+```
+"""
 IPv6(str::AbstractString) = parse(IPv6, str)
 
 # Suppress leading '0's and "0x"
@@ -116,7 +140,7 @@ end
 
 show(io::IO, ip::IPv6) = print(io,"ip\"",ip,"\"")
 # RFC 5952 compliant show function
-# http://tools.ietf.org/html/rfc5952
+# https://tools.ietf.org/html/rfc5952
 function print(io::IO,ip::IPv6)
     i = 8
     m = 0
@@ -173,6 +197,9 @@ function parse(::Type{IPv4}, str::AbstractString)
     fields = split(str,'.')
     i = 1
     ret = 0
+    if length(fields) != 4
+        throw(ArgumentError("IPv4 addresses must be specified as a dotted quad"))
+    end
     for f in fields
         if isempty(f)
             throw(ArgumentError("empty field in IPv4 address"))
@@ -182,17 +209,10 @@ function parse(::Type{IPv4}, str::AbstractString)
         else
             r = parse(Int, f, base = 10)
         end
-        if i != length(fields)
-            if r < 0 || r > 255
-                throw(ArgumentError("IPv4 field out of range (must be 0-255)"))
-            end
-            ret |= UInt32(r) << ((4-i)*8)
-        else
-            if r > ((UInt64(1)<<((5-length(fields))*8))-1)
-                throw(ArgumentError("IPv4 field too large"))
-            end
-            ret |= r
+        if r < 0 || r > 255
+            throw(ArgumentError("IPv4 field out of range (must be 0-255)"))
         end
+        ret |= UInt32(r) << ((4-i)*8)
         i+=1
     end
     IPv4(ret)
@@ -235,7 +255,7 @@ function parse(::Type{IPv6}, str::AbstractString)
 end
 
 #
-# This support IPv4 addresses in the common dot (IPv4) or colon (IPv6)
+# This supports IP addresses in the common dot (IPv4) or colon (IPv6)
 # separated formats. Most other common formats use a standard integer encoding
 # of the appropriate size and should use the appropriate constructor
 #
@@ -262,7 +282,7 @@ julia> @ip_str "2001:db8:0:0:0:0:2:1"
 ip"2001:db8::2:1"
 ```
 """
-macro ip_str(str)
+macro ip_str(str::String)
     return parse(IPAddr, str)
 end
 
@@ -271,7 +291,36 @@ struct InetAddr{T<:IPAddr}
     port::UInt16
 end
 
+"""
+    InetAddr(ip::IPAddr, port) -> InetAddr
+
+Return an `InetAddr` object from ip address `ip` and port number `port`.
+
+# Examples
+```jldoctest
+julia> Sockets.InetAddr(ip"127.0.0.1", 8000)
+Sockets.InetAddr{IPv4}(ip"127.0.0.1", 8000)
+```
+"""
 InetAddr(ip::IPAddr, port) = InetAddr{typeof(ip)}(ip, port)
+
+"""
+    InetAddr(str::AbstractString, port) -> InetAddr
+
+Return an `InetAddr` object from ip address `str` formatted as [`AbstractString`](@ref)
+and port number `port`.
+
+!!! compat "Julia 1.3"
+    This constructor requires at least Julia 1.3.
+
+# Examples
+```jldoctest
+julia> Sockets.InetAddr("127.0.0.1", 8000)
+Sockets.InetAddr{IPv4}(ip"127.0.0.1", 8000)
+```
+"""
+InetAddr(str::AbstractString, port) = InetAddr(parse(IPAddr, str), port)
+
 function show(io::IO, addr::InetAddr)
     show(io, typeof(addr))
     print(io, "(")
