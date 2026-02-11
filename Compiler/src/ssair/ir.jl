@@ -706,7 +706,7 @@ function CFGTransformState!(blocks::Vector{BasicBlock}, allow_cfg_transforms::Bo
         cur_bb = 1
         dfs = DFS(blocks)
         for i = 1:length(bb_rename)
-            if i != 1 && dfs.to_pre[i] == 0
+            if i != 1 && dfs.to_pre[i] == 0 # if i is unreachable
                 bb_rename[i] = -1
             else
                 bb_rename[i] = cur_bb
