@@ -1503,7 +1503,7 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt JL_PROPAGATE
     if (!mi) {
         size_t min_valid = 0;
         size_t max_valid = ~(size_t)0;
-        matc = _gf_invoke_lookup((jl_value_t*)tt, jl_nothing, world, &min_valid, &max_valid);
+        matc = _gf_invoke_lookup((jl_value_t*)tt, (jl_value_t*)mt, world, &min_valid, &max_valid);
         if (matc) {
             jl_method_t *m = matc->method;
             jl_svec_t *env = matc->sparams;

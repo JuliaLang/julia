@@ -150,6 +150,32 @@ methods = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, OverlayModule.mt, 
 methods = Base._methods_by_ftype(Tuple{typeof(sin), Int}, OverlayModule.mt, 1, Base.get_world_counter())
 @test isempty(methods)
 
+# fresh module to ensure uncached methods
+module OverlayMTTest
+    using Base.Experimental: @MethodTable, @overlay
+    @MethodTable(mt)
+
+    function overlay_only end
+    @overlay mt overlay_only(x::Int) = x * 2
+end
+
+# #60702 & #60716: Overlay methods must be found without prior cache population
+let world = Base.get_world_counter()
+    mi = Base.method_instance(OverlayMTTest.overlay_only, Tuple{Int};
+                              world, method_table=OverlayMTTest.mt)
+    @test mi isa Core.MethodInstance
+    @test mi.def.module === OverlayMTTest
+end
+
+# #60712: Global-only methods must NOT be found via custom MT
+let
+    @eval global_only_func(x::Int) = x + 1
+    world = Base.get_world_counter()
+    mi = Base.method_instance(global_only_func, Tuple{Int};
+                              world, method_table=OverlayMTTest.mt)
+    @test mi === nothing
+end
+
 # precompilation
 
 load_path = mktempdir()

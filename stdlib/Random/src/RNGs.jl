@@ -287,7 +287,7 @@ function random_seed()
         # almost surely always getting distinct seeds, while having them printed reasonably tersely
         return rand(RandomDevice(), UInt128)
     catch ex
-        ex isa IOError || rethrow()
+        ex isa Base.IOError || rethrow()
         @warn "Entropy pool not available to seed RNG; using ad-hoc entropy sources."
         return Libc.rand()
     end
