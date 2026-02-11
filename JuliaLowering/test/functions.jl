@@ -510,6 +510,40 @@ end
     """)
     @test cl() == 11
     @test cl(x = 20) == 21
+    f = JuliaLowering.include_string(test_mod, """
+    function f_kw_closure_outer(; x=1)
+        function f_kw_closure(; y=2)
+            (x, y)
+        end
+    end
+    """)
+    @test f() isa Function
+    @test f()() == (1, 2)
+    @test f()(y = 3) == (1, 3)
+    @test f(x = 10) isa Function
+    @test f(x = 10)(y = 10) == (10, 10)
+    f = JuliaLowering.include_string(test_mod, """
+    function f_kw_closure_capt_default(; x=1)
+        function f_kw_closure(; y=x)
+            (x, y)
+        end
+    end
+    """)
+    @test f() isa Function
+    @test f()() == (1, 1)
+    @test f(x=2)(y=3) == (2, 3)
+    f = JuliaLowering.include_string(test_mod, """
+    let outer_capt = 0
+    function f_kw_closure_capt_default(; x=1)
+        function f_kw_closure(; y=x)
+            (outer_capt, x, y)
+        end
+    end
+    end
+    """)
+    @test f() isa Function
+    @test f()() == (0, 1, 1)
+    @test f(x=2)(y=3) == (0, 2, 3)
 end
 
 @testset "pre-desugared arg::Vararg" begin

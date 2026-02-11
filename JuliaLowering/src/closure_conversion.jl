@@ -502,14 +502,12 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                                     ctx.is_toplevel_seq_point, ctx.toplevel_pure, ctx.toplevel_stmts,
                                     ctx.closure_infos)
         body = map_cl_convert(ctx2, ex[2], false)
-        if is_closure
-            if ctx.is_toplevel_seq_point
-                body
-            else
-                # Move methods out to a top-level sequence point.
-                push!(ctx.toplevel_stmts, body)
-                @ast ctx ex (::K"TOMBSTONE")
-            end
+        if !ctx.is_toplevel_seq_point
+            # Move methods out to a top-level sequence point.
+            push!(ctx.toplevel_stmts, body)
+            @ast ctx ex (::K"TOMBSTONE")
+        elseif is_closure
+            body
         else
             @ast ctx ex [K"block"
                 body
