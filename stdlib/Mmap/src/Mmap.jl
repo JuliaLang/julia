@@ -33,8 +33,8 @@ mutable struct SharedMemory <: IO
     create::Bool
     size::UInt
 
-    function SharedMemory(name, handle, readonly, create, size)
-        io = new(name, handle, readonly, create, size)
+    function SharedMemory(name, readonly, create, size)
+        io = new(name, INVALID_OS_HANDLE, readonly, create, size)
         finalizer(close, io)
         return io
     end
@@ -68,8 +68,8 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
     readonly :: Bool = true,
     create   :: Bool = false
 )
-    validate_sharedmemory_args(name, size, create)
-    io = SharedMemory(name, INVALID_OS_HANDLE, readonly, create, size)
+    validate_sharedmemory_args(name, size, readonly, create)
+    io = SharedMemory(name, readonly, create, size)
     if !isempty(name)
         oflag = (readonly ? JL_O_RDONLY : JL_O_RDWR)
         if create
@@ -212,8 +212,8 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
     readonly :: Bool = true,
     create   :: Bool = false
 )
-    validate_sharedmemory_args(name, size, create)
-    io = SharedMemory(name, INVALID_OS_HANDLE, readonly, create, size)
+    validate_sharedmemory_args(name, size, readonly, create)
+    io = SharedMemory(name, readonly, create, size)
     if create
         try
             page_prot = readonly ? PAGE_READONLY : PAGE_READWRITE
