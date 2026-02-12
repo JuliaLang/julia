@@ -14,6 +14,7 @@
 
 #include "platform.h"
 #include "analyzer_annotations.h"
+#include "../julia_assert.h"
 
 #if !defined(_OS_WINDOWS_)
 #include <inttypes.h>
@@ -140,54 +141,6 @@ typedef intptr_t ssize_t;
 #  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) x __attribute__ ((aligned (sizeof(void*))))
 #else
 #  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x)
-#endif
-
-#ifdef __has_builtin
-#  define jl_has_builtin(x) __has_builtin(x)
-#else
-#  define jl_has_builtin(x) 0
-#endif
-
-#if jl_has_builtin(__builtin_assume)
-#define jl_assume(cond) (__extension__ ({               \
-                __typeof__(cond) cond_ = (cond);        \
-                __builtin_assume(!!(cond_));            \
-                cond_;                                  \
-            }))
-#elif defined(__GNUC__)
-static inline void jl_assume_(int cond)
-{
-    if (!cond) {
-        __builtin_unreachable();
-    }
-}
-#define jl_assume(cond) (__extension__ ({               \
-                __typeof__(cond) cond_ = (cond);        \
-                jl_assume_(!!(cond_));                  \
-                cond_;                                  \
-            }))
-#else
-#define jl_assume(cond) (cond)
-#endif
-
-#if jl_has_builtin(__builtin_assume_aligned) || defined(_COMPILER_GCC_)
-#define jl_assume_aligned(ptr, align) __builtin_assume_aligned(ptr, align)
-#elif defined(__GNUC__)
-#define jl_assume_aligned(ptr, align) (__extension__ ({         \
-                __typeof__(ptr) ptr_ = (ptr);                   \
-                jl_assume(((uintptr_t)ptr) % (align) == 0);     \
-                ptr_;                                           \
-            }))
-#elif defined(__cplusplus)
-template<typename T>
-static inline T
-jl_assume_aligned(T ptr, unsigned align)
-{
-    (void)jl_assume(((uintptr_t)ptr) % align == 0);
-    return ptr;
-}
-#else
-#define jl_assume_aligned(ptr, align) (ptr)
 #endif
 
 typedef int bool_t;

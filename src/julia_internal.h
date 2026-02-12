@@ -2021,12 +2021,6 @@ struct _jl_image_fptrs_t;
 JL_DLLEXPORT void jl_write_coverage_data(const char*);
 void jl_write_malloc_log(void);
 
-#if jl_has_builtin(__builtin_unreachable) || defined(_COMPILER_GCC_) || defined(_COMPILER_INTEL_)
-#  define jl_unreachable() __builtin_unreachable()
-#else
-#  define jl_unreachable() ((void)jl_assume(0))
-#endif
-
 extern uv_mutex_t symtab_lock;
 jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 
