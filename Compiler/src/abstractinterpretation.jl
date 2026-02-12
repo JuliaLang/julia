@@ -3702,6 +3702,8 @@ function scan_specified_partitions(query::F1, walk_binding_partition::F2,
     wwr_min = min_world(wwr.valid_worlds)
     wwr_this = wwr.this
 
+    # This is almost a outlined iteration, but with the lookups being slightly different
+    # The @inlines are because copying RTEffects is surprisingly expensive
     binding_partition = lookup_binding_partition(lookup_world, binding)
     partition_validity, (leaf_binding, leaf_partition) = @inline walk_binding_partition(binding, binding_partition, lookup_world)
     @assert lookup_world in partition_validity
