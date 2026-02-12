@@ -93,6 +93,13 @@ function check_no_assignment(exs, msg="misplaced assignment statement in `[ ... 
     end
 end
 
+# Generating a new_local_binding or ssaval should only be done if we can
+# guarantee there's some scope it's declared in, and that it's not declared or
+# used outside of that scope (binding capture is OK).  This is the alternative.
+function newsym(ctx, srcref::SyntaxTree, name::String)
+    @ast ctx srcref name::K"Identifier"(scope_layer=new_scope_layer(ctx))
+end
+
 #-------------------------------------------------------------------------------
 # Destructuring
 
@@ -1723,14 +1730,16 @@ function expand_ccall_argtype(ctx, ex)
     end
 end
 
-# Expand the (sym,lib) argument to ccall/cglobal
+# Expand the (sym,lib) argument to ccall
 function expand_C_library_symbol(ctx, ex)
-    if kind(ex) == K"tuple"
-        return @ast ctx ex [K"static_eval"(meta=name_hint("function name and library expression"))
+    @stm ex begin
+        [K"tuple" _...] -> @ast ctx ex [K"static_eval"(
+            meta=name_hint("function name and library expression"))
             mapchildren(e->expand_forms_2(ctx,e), ctx, ex)
         ]
+        [K"static_eval" _] -> ex # already done
+        _ -> expand_forms_2(ctx, ex)
     end
-    return expand_forms_2(ctx, ex)
 end
 
 function expand_ccall(ctx, ex)
@@ -1915,7 +1924,7 @@ function expand_call(ctx, ex)
         @chk numchildren(ex) in 2:3  (ex, "cglobal must have one or two arguments")
         return @ast ctx ex [K"call"
             ex[1]
-            expand_C_library_symbol(ctx, ex[2])
+            expand_forms_2(ctx, ex[2])
             if numchildren(ex) == 3
                 expand_forms_2(ctx, ex[3])
             end
@@ -2168,45 +2177,45 @@ end
 # assignments containing tuple destructuring.  Eg, given
 #   (x::T, (y::U, z))
 #   strip out stmts = (local x) (decl x T) (local x) (decl y U) (local z)
-#   and return (x, (y, z))
 function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
     k = kind(ex)
-    if k == K"Identifier" || k == K"Value" && ex.value isa GlobalRef
+    declname = @stm ex begin
+        [K"Identifier"] -> ex
         # TODO: consider removing support for Expr(:global, GlobalRef(...)) and
         # other Exprs that cannot be produced by the parser (tested by
         # test/precompile.jl #50538).
-        if !isnothing(declmeta)
-            push!(stmts, setattr!(newnode(ctx, ex, declkind, tree_ids(ex)),
-                                  :meta, declmeta))
-        else
-            push!(stmts, newnode(ctx, ex, declkind, tree_ids(ex)))
+        ([K"Value"], when=ex.value isa GlobalRef) -> ex
+        [K"Placeholder"] -> nothing
+        ([K"::" [K"Identifier"] t], when=type_decls) -> let x = ex[1]
+            push!(stmts, newnode(ctx, ex, K"decl", tree_ids(x, t)))
+            make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
         end
-    elseif k == K"Placeholder"
-        nothing
-    elseif (k === K"::" && numchildren(ex) === 2) || k in KSet"call curly where"
-        if type_decls
-            @chk numchildren(ex) == 2
-            name = ex[1]
-            if kind(name) == K"Identifier"
-                push!(stmts, newnode(ctx, ex, K"decl", tree_ids(name, ex[2])))
-            else
-                # TODO: Currently, this ignores the LHS in `_::T = val`.
-                # We should probably do one of the following:
-                # - Throw a LoweringError if that's not too breaking
-                # - `convert(T, rhs)::T` and discard the result which is what
-                #   `x::T = rhs` would do if x is never used again.
-                @chk kind(name) == K"Placeholder"
-                return
-            end
+        ([K"::" [K"Placeholder"] t], when=type_decls) -> let
+            # TODO: Currently, this ignores the LHS in `_::T = val`.
+            # We should probably do one of the following:
+            # - Throw a LoweringError if that's not too breaking
+            # - `convert(T, rhs)::T` and discard the result which is what
+            #   `x::T = rhs` would do if x is never used again.
         end
-        make_lhs_decls(ctx, stmts, declkind, declmeta, ex[1], type_decls)
-    elseif k == K"tuple" || k == K"parameters"
-        for e in children(ex)
-            make_lhs_decls(ctx, stmts, declkind, declmeta, e, type_decls)
+        ([K"::" x t], when=!type_decls) ->
+            make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
+        (_, when=kind(ex) in KSet"call curly where") ->
+            make_lhs_decls(ctx, stmts, declkind, declmeta, ex[1], type_decls)
+        [K"tuple" xs...] -> for x in xs
+            make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
         end
-    else
-        throw(LoweringError(ex, "invalid kind $k in $declkind declaration"))
+        [K"parameters" xs...] -> for x in xs
+            make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
+        end
+        [K"..." x] -> nothing # from recursion above
     end
+
+    if !isnothing(declname)
+        stmt = @ast ctx ex [declkind declname]
+        !isnothing(declmeta) && setattr!(stmt, :meta, declmeta)
+        push!(stmts, stmt)
+    end
+    return nothing
 end
 
 # Separate decls and assignments (which require re-expansion)
@@ -2285,74 +2294,47 @@ end
 #-------------------------------------------------------------------------------
 # Expansion of function definitions
 
-function expand_function_arg(ctx, body_stmts, arg, is_last_arg, is_kw, arg_id)
-    ex = arg
-
-    if kind(ex) == K"kw"
-        default = ex[2]
-        ex = ex[1]
-    else
-        default = nothing
+function expand_function_arg(ctx, body_stmts, arg, is_kw, arg_id)
+    (arg_symdecl, default, slurp_ex) = @stm arg begin
+        [K"kw" [K"..." x] d] -> (x, d, arg[1])
+        [K"kw" x d] -> (x, d, nothing)
+        [K"..." x] -> (x, nothing, arg)
+        x -> (x, nothing, nothing)
     end
-
-    if kind(ex) == K"..."
-        if !is_last_arg
-            typmsg = is_kw ? "keyword" : "positional"
-            throw(LoweringError(arg, "`...` may only be used for the last $typmsg argument"))
+    (arg_sym, type) = @stm arg_symdecl begin
+        [K"::" x t] -> (x, t)
+        [K"::" t] -> let
+            noname_meta = get(arg_symdecl, :meta, nothing)
+            x = @ast ctx arg_symdecl "_"::K"Placeholder"
+            !isnothing(noname_meta) && setattr!(x, :meta, noname_meta)
+            (x, t)
         end
-        @chk numchildren(ex) == 1
-        slurp_ex = ex
-        ex = ex[1]
-    else
-        slurp_ex = nothing
-    end
-
-    if kind(ex) == K"::"
-        @chk numchildren(ex) in (1,2)
-        if numchildren(ex) == 1
-            type = ex[1]
-            noname_meta = get(ex, :meta, nothing)
-            ex = @ast ctx ex "_"::K"Placeholder"
-            !isnothing(noname_meta) && setattr!(ex, :meta, noname_meta)
-        else
-            type = ex[2]
-            ex = ex[1]
-        end
-        if is_kw && !isnothing(slurp_ex)
-            throw(LoweringError(slurp_ex, "keyword argument with `...` may not be given a type"))
-        end
-    else
-        type = @ast ctx ex "Any"::K"core"
+        x -> (x, @ast ctx x "Any"::K"core")
     end
     if !isnothing(slurp_ex)
         type = @ast ctx slurp_ex [K"curly" "Vararg"::K"core" type]
     end
-
-    k = kind(ex)
-    if k == K"tuple" && !is_kw
-        # Argument destructuring
-        is_nospecialize = getmeta(arg, :nospecialize, false)
-        name = new_local_binding(ctx, ex, "destructured_arg";
-                                 kind=:argument, is_nospecialize=is_nospecialize)
-        push!(body_stmts, @ast ctx ex [
+    if kind(arg_sym) === K"tuple"
+        darg_sym = setmeta!(newsym(ctx, arg_sym, "destructured_arg"),
+                            :nospecialize, getmeta(arg_sym, :nospecialize, false))
+        push!(body_stmts, expand_forms_2(ctx, @ast ctx arg_sym [
             K"local"(meta=CompileHints(:is_destructured_arg, true))
-            [K"=" ex name]
-        ])
-    elseif k == K"Placeholder"
+            [K"=" arg_sym darg_sym]
+        ]))
+        name = darg_sym
+    elseif kind(arg_sym) === K"Placeholder"
         # Lowering should be able to use placeholder args as rvalues internally,
         # e.g. for kw method dispatch.  Duplicate positional placeholder names
         # should be allowed.
-        is_nospecialize = getmeta(ex, :nospecialize, false)
         name = if is_kw
-            @ast ctx ex ex=>K"Identifier"
+            @ast ctx arg_sym arg_sym=>K"Identifier"
         else
-            new_local_binding(ctx, ex, "#arg$(string(arg_id))#"; kind=:argument,
-                              is_nospecialize=is_nospecialize)
+            setmeta!(newsym(ctx, arg_sym, "#arg$(string(arg_id))#"),
+                     :nospecialize, getmeta(arg_sym, :nospecialize, false))
         end
-    elseif k == K"Identifier"
-        name = ex
     else
-        throw(LoweringError(ex, is_kw ? "Invalid keyword name" : "Invalid function argument"))
+        @chk kind(arg_sym) in KSet"Identifier BindingId"
+        name = arg_sym
     end
 
     return (name, type, default, !isnothing(slurp_ex))
@@ -2486,7 +2468,7 @@ function expand_function_generator(ctx, srcref, callex_srcref, func_name,
     gen_arg_names = SyntaxList(ctx)
     gen_arg_types = SyntaxList(ctx)
     # Self arg
-    push!(gen_arg_names, new_local_binding(ctx, callex_srcref, "#self#"; kind=:argument))
+    push!(gen_arg_names, newsym(ctx, callex_srcref, "#self#"))
     push!(gen_arg_types, @ast ctx callex_srcref [K"function_type" gen_name])
     # Macro expansion context arg
     if kind(func_name) != K"Identifier"
@@ -2508,13 +2490,11 @@ function expand_function_generator(ctx, srcref, callex_srcref, func_name,
     # Code generator definition
     gen_func_method_defs = @ast ctx srcref [K"block"
         [K"function_decl" gen_name]
-        [K"scope_block"(scope_type=:hard)
-            [K"method_defs"
-                gen_name
-                [K"block"
-                    method_def_expr(ctx, srcref, callex_srcref, nothing, SyntaxList(ctx),
-                                    gen_arg_names, gen_arg_types, gen_body, nothing)
-                ]
+        [K"method_defs"
+            gen_name
+            [K"block"
+                method_def_expr(ctx, srcref, callex_srcref, nothing, SyntaxList(ctx),
+                                gen_arg_names, gen_arg_types, gen_body, nothing)
             ]
         ]
     ]
@@ -2583,9 +2563,7 @@ function optional_positional_defs!(ctx, method_stmts, srcref, callex,
     # Replace placeholder arguments with variables - we need to pass them to
     # the inner method for dispatch even when unused in the inner method body
     def_arg_names = map(arg_names) do arg
-        kind(arg) == K"Placeholder" ?
-            new_local_binding(ctx, arg, arg.name_val; kind=:argument) :
-            arg
+        kind(arg) == K"Placeholder" ? newsym(ctx, arg, arg.name_val) : arg
     end
     for def_idx = 1:length(arg_defaults)
         first_omitted = first_default + def_idx - 1
@@ -2642,20 +2620,20 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
     kwcall_arg_names = SyntaxList(ctx)
     kwcall_arg_types = SyntaxList(ctx)
 
-    push!(kwcall_arg_names, new_local_binding(ctx, callex_srcref, "#self#"; kind=:argument))
+    push!(kwcall_arg_names, newsym(ctx, callex_srcref, "#self#"))
     push!(kwcall_arg_types,
         @ast ctx callex_srcref [K"call"
             "typeof"::K"core"
             "kwcall"::K"core"
         ]
     )
-    kws_arg = new_local_binding(ctx, keywords, "kws"; kind=:argument)
+    kws_arg = newsym(ctx, keywords, "kws")
     push!(kwcall_arg_names, kws_arg)
     push!(kwcall_arg_types, @ast ctx keywords "NamedTuple"::K"core")
 
     body_arg_names = SyntaxList(ctx)
     body_arg_types = SyntaxList(ctx)
-    push!(body_arg_names, new_local_binding(ctx, body_func_name, "#self#"; kind=:argument))
+    push!(body_arg_names, newsym(ctx, keywords, "#self#"))
     push!(body_arg_types, @ast ctx body_func_name [K"function_type" body_func_name])
 
     non_positional_typevars = typevar_names[map(!,
@@ -2669,7 +2647,7 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
     kwtmp = new_local_binding(ctx, keywords, "kwtmp")
     for (i,arg) in enumerate(children(keywords))
         (aname, atype, default, is_slurp) =
-            expand_function_arg(ctx, nothing, arg, i == numchildren(keywords), true, i)
+            expand_function_arg(ctx, nothing, arg, true, i)
         push!(kw_names, aname)
         name_sym = @ast ctx aname aname=>K"Symbol"
         push!(body_arg_names, aname)
@@ -2781,7 +2759,8 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
         for n in kw_names
             # If not using slots for the keyword argument values, still declare
             # them for reflection purposes.
-            push!(kw_val_stmts, @ast ctx n [K"local"(meta=CompileHints(:is_internal, true)) n])
+            local_n = @ast ctx n [K"local" setmeta(n, :is_internal, true)]
+            push!(kw_val_stmts, local_n)
         end
         kw_val_vars = SyntaxList(ctx)
         for val in kw_values
@@ -2867,28 +2846,24 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
 
     kw_func_method_defs = @ast ctx srcref [K"block"
         [K"function_decl" body_func_name]
-        [K"scope_block"(scope_type=:hard)
-            [K"method_defs"
-                body_func_name
-                [K"block"
-                    new_typevar_stmts...
-                    method_def_expr(ctx, srcref, callex_srcref, "nothing"::K"core",
-                                    typevar_names, body_arg_names, body_arg_types,
-                                    [K"block"
-                                        [K"meta" "nkw"::K"Symbol" numchildren(keywords)::K"Integer"]
-                                        body
-                                    ],
-                                    ret_var)
-                ]
+        [K"method_defs"
+            body_func_name
+            [K"block"
+                new_typevar_stmts...
+                method_def_expr(ctx, srcref, callex_srcref, "nothing"::K"core",
+                                typevar_names, body_arg_names, body_arg_types,
+                                [K"block"
+                                    [K"meta" "nkw"::K"Symbol" numchildren(keywords)::K"Integer"]
+                                    body
+                                ],
+                                ret_var)
             ]
         ]
-        [K"scope_block"(scope_type=:hard)
-            [K"method_defs"
-                "nothing"::K"core"
-                [K"block"
-                    new_typevar_stmts...
-                    kwcall_method_defs...
-                ]
+        [K"method_defs"
+            "nothing"::K"core"
+            [K"block"
+                new_typevar_stmts...
+                kwcall_method_defs...
             ]
         ]
     ]
@@ -3043,14 +3018,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     end
     # Add self argument
     if isnothing(self_name)
-        # TODO: #self# should be symbolic rather than a binding for the cases
-        # where it's reused in `optional_positional_defs!` because it's
-        # probably unsafe to reuse bindings for multiple different methods in
-        # the presence of closure captures or other global binding properties.
-        #
-        # This is reminiscent of the need to renumber SSA vars in certain cases
-        # in the flisp implementation.
-        self_name = new_local_binding(ctx, name, "#self#"; kind=:argument)
+        self_name = newsym(ctx, name, "#self#")
     end
 
     # Expand remaining argument names and types
@@ -3073,7 +3041,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     arg_defaults = SyntaxList(ctx)
     for (i,arg) in enumerate(args)
         (aname, atype, default, is_slurp) =
-            expand_function_arg(ctx, body_stmts, arg, i == length(args), false, i)
+            expand_function_arg(ctx, body_stmts, arg, false, i)
         has_slurp |= is_slurp
         push!(arg_names, aname)
 
@@ -3084,22 +3052,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         # *symbolic* representation of arg_types.
         push!(arg_types, atype)
 
-        if isnothing(default)
-            if !isempty(arg_defaults) && !is_slurp
-                # TODO: Referring to multiple pieces of syntax in one error message is necessary.
-                # TODO: Poison ASTs with error nodes and continue rather than immediately throwing.
-                #
-                # We should make something like the following kind of thing work!
-                # arg_defaults[1] = @ast_error ctx arg_defaults[1] """
-                #     Positional arguments with defaults must occur at the end.
-                #
-                #     We found a [non-optional position argument]($arg) *after*
-                #     one with a [default value]($(first(arg_defaults)))
-                # """
-                #
-                throw(LoweringError(args[first_default-1], "optional positional arguments must occur at end"))
-            end
-        else
+        if !isnothing(default)
             if isempty(arg_defaults)
                 first_default = i + 1 # Offset for self argument
             end
@@ -3216,16 +3169,14 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         end
         gen_func_method_defs
         kw_func_method_defs
-        [K"scope_block"(scope_type=:hard)
-            [K"method_defs"
-                isnothing(bare_func_name) ? "nothing"::K"core" : bare_func_name
-                [K"block"
-                    new_typevar_stmts...
-                    if !isnothing(method_table_val)
-                        [K"=" method_table method_table_val]
-                    end
-                    method_stmts...
-                ]
+        [K"method_defs"
+            isnothing(bare_func_name) ? "nothing"::K"core" : bare_func_name
+            [K"block"
+                new_typevar_stmts...
+                if !isnothing(method_table_val)
+                    [K"=" method_table method_table_val]
+                end
+                method_stmts...
             ]
         ]
         [K"removable"
@@ -3298,12 +3249,12 @@ function expand_opaque_closure(ctx, ex)
 
     arg_names = SyntaxList(ctx)
     arg_types = SyntaxList(ctx)
-    push!(arg_names, new_local_binding(ctx, args, "#self#"; kind=:argument))
+    push!(arg_names, newsym(ctx, args, "#self#"))
     body_stmts = SyntaxList(ctx)
     is_va = false
     for (i, arg) in enumerate(children(args))
         (aname, atype, default, is_slurp) =
-            expand_function_arg(ctx, body_stmts, arg, i == numchildren(args), false, i)
+            expand_function_arg(ctx, body_stmts, arg, false, i)
         is_va |= is_slurp
         push!(arg_names, aname)
         push!(arg_types, atype)
@@ -3669,7 +3620,7 @@ function default_inner_constructors(ctx, srcref, global_struct_name,
         # Definition which takes `Any` for all arguments and uses
         # `Base.convert()` to convert those to the exact field type. Only
         # defined if at least one field type is not Any.
-        ctor_self = new_local_binding(ctx, srcref, "#ctor-self#"; kind=:argument)
+        ctor_self = newsym(ctx, srcref, "#ctor-self#")
         @ast ctx srcref [K"function"
             [K"call"
                  [K"::"
@@ -3764,7 +3715,7 @@ function _rewrite_ctor_sig(ctx, callex, struct_name, global_struct_name, struct_
     name = callex[1]
     if is_same_identifier_like(struct_name, name)
         # X(x,y)  ==>  (#ctor-self#::Type{X})(x,y)
-        ctor_self[] = new_local_binding(ctx, callex, "#ctor-self#"; kind=:argument)
+        ctor_self[] = newsym(ctx, callex, "#ctor-self#")
         @ast ctx callex [K"call"
             [K"::"
                 ctor_self[]
@@ -3774,7 +3725,7 @@ function _rewrite_ctor_sig(ctx, callex, struct_name, global_struct_name, struct_
         ]
     elseif kind(name) == K"curly" && is_same_identifier_like(struct_name, name[1])
         # X{T}(x,y)  ==>  (#ctor-self#::Type{X{T}})(x,y)
-        self = new_local_binding(ctx, callex, "#ctor-self#"; kind=:argument)
+        self = newsym(ctx, callex, "#ctor-self#")
         if numchildren(name) - 1 == length(struct_typevars)
             # Self fully parameterized - can be used as the full type to
             # rewrite new() calls in constructor body.
@@ -4544,7 +4495,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"generator"
         expand_forms_2(ctx, expand_generator(ctx, ex))
     elseif k == K"->" || k == K"do"
-        expand_forms_2(ctx, expand_arrow(ctx, ex))
+        expand_arrow(ctx, ex)
     elseif k == K"function" || k == K"generated_function"
         expand_forms_2(ctx, expand_function_def(ctx, ex, docs))
     elseif k == K"macro"
@@ -4673,6 +4624,15 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         ]
     elseif k == K"inert" || k == K"inert_syntaxtree"
         ex
+    elseif k == K"foreigncall"
+        # Assume user macros may produce this, but static_eval means desugaring
+        # has already occurred.
+        args = SyntaxList(ctx)
+        for c in ex[2:end]
+            push!(args, kind(c) === K"static_eval" ? c :
+                @ast ctx ex [K"static_eval" expand_forms_2(ctx, c)])
+        end
+        @ast ctx ex [K"foreigncall" expand_C_library_symbol(ctx, ex[1]) args...]
     elseif k == K"symbolicblock"
         # @label name body -> (symbolicblock name expanded_body)
         # The @label macro inserts the continue block for loops, so we just expand the body
