@@ -1,5 +1,6 @@
 attrsummary(name, value) = string(name)
 attrsummary(name, value::Number) = "$name=$value"
+attrsummary(name, value::LineNumberNode) = "$name=L$(value.line)"
 
 function _value_string(ex)
     k = kind(ex)

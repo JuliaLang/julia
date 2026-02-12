@@ -233,7 +233,7 @@ function _match_kind(srcref, ex)
     return (kind, srcref, kws)
 end
 
-function _expand_ast_tree(ctx, srcref, tree)
+function _expand_ast_tree(ctx, srcref, tree, line::QuoteNode)
     if Meta.isexpr(tree, :(::))
         # Leaf node
         if length(tree.args) == 2
@@ -244,7 +244,7 @@ function _expand_ast_tree(ctx, srcref, tree)
             kindspec = tree.args[1]
         end
         let (kind, srcref, kws) = _match_kind(srcref, kindspec)
-            n = :(newleaf($ctx, $srcref, $kind, $val))
+            n = :(setattr!(newleaf($ctx, $srcref, $kind, $val), :jl_source, $line))
             for (attr, val) in kws
                 n = :(setattr!($n, $attr, $val))
             end
@@ -254,7 +254,7 @@ function _expand_ast_tree(ctx, srcref, tree)
         # Leaf node with copied attributes
         kind = esc(tree.args[3])
         srcref2 = esc(tree.args[2])
-        :(setattr!(mkleaf($srcref2), :kind, $kind))
+        :(setattr!(setattr!(mkleaf($srcref2), :kind, $kind), :jl_source, $line))
     elseif Meta.isexpr(tree, (:vcat, :hcat, :vect))
         # Interior node
         flatargs = []
@@ -269,7 +269,7 @@ function _expand_ast_tree(ctx, srcref, tree)
         end)
         child_stmts = children_ex.args[2].args
         for a in flatargs[2:end]
-            child = _expand_ast_tree(ctx, srcref, a)
+            child = _expand_ast_tree(ctx, srcref, a, line)
             if Meta.isexpr(child, :(...))
                 push!(child_stmts, :(_append_nodeids!(graph, child_ids, $(child.args[1]))))
             else
@@ -278,7 +278,7 @@ function _expand_ast_tree(ctx, srcref, tree)
         end
         push!(child_stmts, :(child_ids))
         let (kind, srcref, kws) = _match_kind(srcref, flatargs[1])
-            n = :(newnode($ctx, $srcref, $kind, $children_ex))
+            n = :(setattr!(newnode($ctx, $srcref, $kind, $children_ex), :jl_source, $line))
             for (attr, val) in kws
                 n = :(setattr!($n, $attr, $val))
             end
@@ -286,7 +286,7 @@ function _expand_ast_tree(ctx, srcref, tree)
         end
     elseif Meta.isexpr(tree, :(:=))
         lhs = tree.args[1]
-        rhs = _expand_ast_tree(ctx, srcref, tree.args[2])
+        rhs = _expand_ast_tree(ctx, srcref, tree.args[2], line)
         ssadef = gensym("ssadef")
         quote
             ($(esc(lhs)), $ssadef) = assign_tmp($ctx, $rhs, $(string(lhs)))
@@ -295,7 +295,7 @@ function _expand_ast_tree(ctx, srcref, tree)
     elseif Meta.isexpr(tree, :macrocall)
         esc(tree)
     elseif tree isa Expr
-        Expr(tree.head, map(a->_expand_ast_tree(ctx, srcref, a), tree.args)...)
+        Expr(tree.head, map(a->_expand_ast_tree(ctx, srcref, a, line), tree.args)...)
     else
         esc(tree)
     end
@@ -357,7 +357,7 @@ macro ast(ctx, srcref, tree)
     quote
         ctx = $(esc(ctx))
         srcref::$SyntaxTree = $(_match_srcref(srcref))
-        $(_expand_ast_tree(:ctx, :srcref, tree))
+        $(_expand_ast_tree(:ctx, :srcref, tree, QuoteNode(__source__)))
     end
 end
 
