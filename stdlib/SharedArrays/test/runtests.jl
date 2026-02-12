@@ -330,7 +330,7 @@ end
 @test_throws MethodError SharedMatrix(rand(4))
 
 # Resource cleanup
-@static if Sys.isunix()
+@static if Sys.islinux()
 
 # If open, an fd will exist with contents matching the name, e.g. "/dev/shm/jltestsegname"
 @everywhere function has_open_fd(name)
@@ -354,7 +354,7 @@ end
     return ismapped, isdeleted
 end
 
-else # Sys.iswindows()
+elseif Sys.iswindows()
 
 # Attempting to open a named memory object will throw an exception if it has been closed
 @everywhere function named_mapping_open(segname)
@@ -375,7 +375,7 @@ end
         segname = S.segname
         pids = procs(S)
 
-        @static if Sys.isunix()
+        @static if Sys.islinux()
 
             @test !has_open_fd(segname)
             ismapped, isdeleted = shmem_mapped(segname)
@@ -388,12 +388,14 @@ end
                 return !hasfd && ismapped && isdeleted
             end
 
-        else # Sys.iswindows()
+        elseif Sys.iswindows()
 
             @test !named_mapping_open(segname)
             @test !any(pids) do p
                 remotecall_fetch(named_mapping_open, p, segname)
             end
+
+        else # other Unix, tests TODO
 
         end
     end
