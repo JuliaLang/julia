@@ -549,6 +549,7 @@
     YY(jl_get_libllvm) \
     YY(jl_register_passbuilder_callbacks) \
     YY(jl_jit_abi_converter) \
+    YY(jl_jit_register_new_ci) \
     YY(JLJITGetLLVMOrcExecutionSession) \
     YY(JLJITGetJuliaOJIT) \
     YY(JLJITGetExternalJITDylib) \

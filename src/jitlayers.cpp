@@ -2037,6 +2037,12 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
             ES.getExecutorProcessControl().getDispatcher()));
 }
 
+void JuliaOJIT::registerNewCI(jl_code_instance_t *CI)
+{
+    std::unique_lock Lock{LinkerMutex};
+    CISymbols.erase(CI);
+}
+
 #define addAbsoluteToMap(map,name) \
     (map[mangle(#name)] = {ExecutorAddr::fromPtr(&name), JITSymbolFlags::Exported | JITSymbolFlags::Callable}, orc::ExecutorAddr::fromPtr(&name))
 
@@ -2123,6 +2129,10 @@ CISymbolPtr JuliaOJIT::makeUniqueCIName(jl_code_instance_t *CI, const CISymbolPt
     if (Funcs.specptr)
         specialized = ES.intern(Names(*Funcs.specptr, "#"));
     CISymbolPtr Ret{Funcs.invoke_api, wrapper, specialized};
+    if (CISymbols.contains(CI)) {
+        errs() << "Attempting to register CodeInstance that was already added to JIT!\n";
+        abort();
+    }
     CISymbols[CI] = Ret;
     return Ret;
 }
@@ -2436,4 +2446,11 @@ size_t jl_jit_total_bytes_impl(void)
 void jl_jit_add_bytes(size_t bytes)
 {
     jl_ExecutionEngine->addBytes(bytes);
+}
+
+
+extern "C" JL_DLLEXPORT_CODEGEN
+void jl_jit_register_new_ci_impl(jl_code_instance_t *ci)
+{
+    jl_ExecutionEngine->registerNewCI(ci);
 }

@@ -738,6 +738,11 @@ public:
 
     void publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait=false);
 
+    // When a fresh CodeInstance is allocated, we must remove any existing
+    // entries in CISymbols, to prevent invokes to the CodeInstance from being
+    // linked to a symbol for a now-GCed CodeInstance with the same address.
+    void registerNewCI(jl_code_instance_t *CI);
+
     orc::ThreadSafeContext makeContext() JL_NOTSAFEPOINT;
     const DataLayout& getDataLayout() const JL_NOTSAFEPOINT;
 
