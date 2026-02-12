@@ -328,8 +328,8 @@ end
     @testset "No tearing in log printing" begin
         # Check for print tearing by verifying that each log entry starts and ends correctly
         f = open(fname, "r")
-        entry_start = r"┌ (Info|Warning|Error): iteration"
-        entry_end = r"└ "
+        entry_start = r"⎡ (Info|Warning|Error): iteration"
+        entry_end = r"⎣ "
 
         open_entries = 0
         total_entries = 0
