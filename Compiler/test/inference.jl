@@ -2597,6 +2597,15 @@ end == Integer
     Val(isdefined(xxx.value, :x))
 end == Val{true}
 
+# Test union splitting for MustAlias
+struct GetSomethingA; x::Union{Nothing,Int}; end
+struct GetSomethingB; x::Int; end
+getsomethingx(a::GetSomethingA) = something(a.x, 0)
+getsomethingx(b::GetSomethingB) = b.x
+@test Base.infer_return_type((Union{GetSomethingA,GetSomethingB},); interp=MustAliasInterpreter()) do x
+    getsomethingx(x)
+end == Int
+
 @testset "issue #56913: `BoundsError` in type inference" begin
     R = UnitRange{Int}
     @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, Vararg{R}})
@@ -6534,5 +6543,19 @@ function issue55548(a)
 end
 @test Float64 <: Base.infer_return_type(issue55548, (Int,))
 @test issue55548(Int64(0)) === 1.0
+
+# issue #60883: conditional propagation through wrapper functions
+mutable struct A60883
+    a::Int
+end
+inner60883(a, b) = iszero(a.a) && !b
+outer60883(a, b) = inner60883(a, b)
+function issue60883()
+    a = A60883(0)
+    b = iszero(a.a)
+    if outer60883(a, b) else end
+    return b  # should not be narrowed to Const(false)
+end
+@test issue60883() === true
 
 end # module inference

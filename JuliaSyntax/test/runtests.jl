@@ -4,6 +4,11 @@ end
 
 using Test
 
+# JuliaSyntax is not only tested on master
+if isdefined(Test, :detect_closure_boxes)
+    @test isempty(Test.detect_closure_boxes(JuliaSyntax))
+end
+
 include("test_utils.jl")
 include("test_utils_tests.jl")
 include("fuzz_test.jl")
@@ -39,3 +44,9 @@ if VERSION >= v"1.6"
 end
 
 include("serialization.jl")
+
+# Basic inference tests
+@static if isdefined(Base, :infer_return_type)
+    @test Base.infer_return_type(JuliaSyntax.sourcetext, (JuliaSyntax.SyntaxTree,)) <: AbstractString
+    @test Base.infer_return_type(JuliaSyntax.byte_range, (JuliaSyntax.SyntaxTree,)) == UnitRange{Int}
+end

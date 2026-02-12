@@ -24,8 +24,10 @@ function _register_kinds()
             "inline"
             "noinline"
             "loopinfo"
-            # Call into foreign code. Emitted by `@ccall`
+            # Call into foreign code
             "foreigncall"
+            # ccall convention
+            "cconv"
             # Special form for constructing a function callable from C
             "cfunction"
             # Special form emitted by `Base.Experimental.@opaque`
@@ -38,11 +40,11 @@ function _register_kinds()
             # be passed through lowering in a similar way to `isdefined`
             "throw_undef_if_not"
             # named labels for `@label` and `@goto`
-            "symbolic_label"
+            "symboliclabel"
             # Goto named label
-            "symbolic_goto"
+            "symbolicgoto"
             # Labeled block for `@label name expr` (block break)
-            "symbolic_block"
+            "symbolicblock"
             # Internal initializer for struct types, for inner constructors/functions
             "new"
             "splatnew"
@@ -52,6 +54,9 @@ function _register_kinds()
             # Used for converting the old-style macro hygienic-scope form (gone
             # after macro expansion).
             "hygienic-scope"
+            # Only produced by flisp macro expansion (which Core.@doc (cursed)
+            # invokes manually)
+            "copyast"
             # An expression which will eventually be evaluated "statically" in
             # the context of a CodeInfo and thus allows access only to globals
             # and static parameters. Used for ccall, cfunction, cglobal

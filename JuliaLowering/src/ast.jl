@@ -83,6 +83,7 @@ struct ScopeLayer
     mod::Module
     parent_layer::LayerId # Index of parent layer in a macro expansion. Equal to 0 for no parent
     is_macro_expansion::Bool # FIXME
+    is_internal::Bool
 end
 
 """
@@ -105,7 +106,7 @@ function JuliaSyntax.newleaf(ctx, prov, k, @nospecialize(value))
         setattr!(leaf._graph, leaf._id, :var_id, value)
     elseif k == K"label"
         setattr!(leaf._graph, leaf._id, :id, value)
-    elseif k == K"symbolic_label"
+    elseif k == K"symboliclabel"
         setattr!(leaf._graph, leaf._id, :name_val, value)
     elseif k in KSet"TOMBSTONE SourceLocation latestworld latestworld_if_toplevel
                      softscope"
@@ -563,7 +564,7 @@ function to_symbol(ctx, ex)
 end
 
 function new_scope_layer(ctx, mod_ref::Module=ctx.mod)
-    new_layer = ScopeLayer(length(ctx.scope_layers)+1, ctx.mod, 0, false)
+    new_layer = ScopeLayer(length(ctx.scope_layers)+1, ctx.mod, 0, false, true)
     push!(ctx.scope_layers, new_layer)
     new_layer.id
 end

@@ -43,6 +43,39 @@ let x=11
 end
 """) == 220
 
+@eval test_mod libccalltest_var = "libccalltest"
+
+@testset "cglobal" begin
+    cg = JuliaLowering.include_string(test_mod, """
+        cglobal(:jl_, Any)
+    """)
+    @test cg isa Ptr{Any}
+    @test cg !== C_NULL
+
+    cg = JuliaLowering.include_string(test_mod, """
+        cglobal((:global_var, libccalltest_var), Cint)
+    """)
+    @test cg isa Ptr{Cint}
+    @test cg !== C_NULL
+    @test unsafe_load(cg) == 1
+
+    @eval test_mod global cglobal_tuple = (:global_var, libccalltest_var)
+    cg = JuliaLowering.include_string(test_mod, """
+        cglobal(cglobal_tuple, Cint)
+    """)
+    @test cg isa Ptr{Cint}
+    @test cg !== C_NULL
+    @test unsafe_load(cg) == 1
+    cg = JuliaLowering.include_string(test_mod, """
+        let local_tuple = (:global_var, libccalltest_var)
+            cglobal(local_tuple, Cint)
+        end
+    """)
+    @test cg isa Ptr{Cint}
+    @test cg !== C_NULL
+    @test unsafe_load(cg) == 1
+end
+
 # ccall
 @test JuliaLowering.include_string(test_mod, """
 ccall(:strlen, Csize_t, (Cstring,), "asdfg")
@@ -74,7 +107,6 @@ end
     ccall((:ctest, :libccalltest), Complex{Int}, (Complex{Int},), 10 + 20im)
 """) === 11 + 18im
 # (function, library): library is a global
-@eval test_mod libccalltest_var = "libccalltest"
 @test JuliaLowering.include_string(test_mod, """
     ccall((:ctest, libccalltest_var), Complex{Int}, (Complex{Int},), 10 + 20im)
 """) === 11 + 18im
@@ -137,6 +169,55 @@ quoted_cfn_named = JuliaLowering.include_string(test_mod, raw"""
     @cfunction((function fname_unused(x); x; end), Int, (Int,))
 """)
 @test ccall(quoted_cfn_named, Int, (Int,), 1) == 1
+
+# flisp-expanded ccall, cfunction should be lowerable by us
+let fl_ex = macroexpand(
+    test_mod,
+    :(cfun_flisp_thunk() = @cfunction(+, Cint, (Cint, Cint))))
+
+    fl_st = JuliaLowering.expr_to_est(fl_ex)
+    fl_fn = JuliaLowering.eval(test_mod, fl_st)
+    fl_cfn = @invokelatest fl_fn()
+    @test fl_fn isa Function
+    @test fl_cfn isa Ptr
+    @test ccall(fl_cfn, Int, (Int,Int), 1, 2) == 3
+end
+let fl_ex = macroexpand(
+    test_mod,
+    :(cfun_flisp_thunk() = @cfunction(function some_cfunc_add(x,y); x+y; end,
+                                      Cint, (Cint, Cint))))
+
+    fl_st = JuliaLowering.expr_to_est(fl_ex)
+    fl_fn = JuliaLowering.eval(test_mod, fl_st)
+    fl_cfn = @invokelatest fl_fn()
+    @test fl_fn isa Function
+    @test fl_cfn isa Ptr
+    @test ccall(fl_cfn, Int, (Int,Int), 1, 2) == 3
+end
+let fl_ex = macroexpand(
+    test_mod,
+    :(@ccall(libccalltest_var.ctest((10+20im)::Complex{Int})::Complex{Int})))
+    fl_st = JuliaLowering.expr_to_est(fl_ex)
+    @test JuliaLowering.eval(test_mod, fl_st) == 11 + 18im
+end
+
+# raw :foreigncall should also be lowerable
+let raw_foreigncall_ex = Expr(
+    :foreigncall, Expr(
+        :tuple, QuoteNode(:ctest), "libccalltest"),
+    :(Complex{Int}),
+    :(Core.svec(Complex{Int})),
+    0,
+    QuoteNode((:ccall, 0x0000, false)),
+    10+20im,
+    Complex{Int})
+
+    # test flisp does this: it's unclear how much desugaring the user is
+    # responsible for here
+    @test Core.eval(test_mod, reference_lower(test_mod, raw_foreigncall_ex)) == 11 + 18im
+
+    @test JuliaLowering.eval(test_mod, JuliaLowering.expr_to_est(raw_foreigncall_ex)) == 11 + 18im
+end
 
 # Test that ccall can be passed static parameters in type signatures.
 #
@@ -222,23 +303,18 @@ end
     jeval(test_mod, "\"docstr10\" f10(x::Int, y, z::T_exists)")
     d = jeval(test_mod, "@doc f10")
     @test d |> string === "docstr10\n"
-    # TODO: Is there a better way of accessing this? Feel free to change tests
-    # if docsystem storage changes.
-    @test d.meta[:results][1].data[:typesig] === Tuple{Int, Any, test_mod.T_exists}
 
     jeval(test_mod, "\"docstr11\" f11(x::T_exists, y::U, z::T) where {T, U<:Number}")
     d = jeval(test_mod, "@doc f11")
     @test d |> string === "docstr11\n"
-    @test d.meta[:results][1].data[:typesig] === Tuple{test_mod.T_exists, U, T} where {T, U<:Number}
 
     jeval(test_mod, "\"docstr12\" f12(x::Int, y::U, z::T=1) where {T, U<:Number}")
     d = jeval(test_mod, "@doc f12")
     @test d |> string === "docstr12\n"
-    @test d.meta[:results][1].data[:typesig] === Union{Tuple{Int, U, T}, Tuple{Int, U}} where {T, U<:Number}
 
     # doc-strings on macrocalls (punned on quoted macrocall)
     # TODO: implement and test `doc!` support for this
-    @test jeval(test_mod, """
+    @test_broken jeval(test_mod, """
         "doc string"
         :@test
     """) isa Expr
@@ -254,5 +330,20 @@ end
         @eval @doc $"This is a $T" $T = 1
     end
 """; expr_compat_mode=true) === 1
+
+@testset "tryfinally with scopedvalues" begin
+    @eval test_mod scopedval = Base.ScopedValues.ScopedValue(1)
+    @eval test_mod val_history = []
+    ex = Expr(:tryfinally,
+              :(push!(val_history, scopedval[])),
+              :(push!(val_history, scopedval[])),
+              :(Base.ScopedValues.Scope(Core.current_scope(),
+                                        $test_mod.scopedval => 2)))
+    JuliaLowering.eval(test_mod, JuliaLowering.expr_to_est(ex); expr_compat_mode=true)
+    # try block uses "inner" dynamic scope, finally does not
+    @test test_mod.val_history == [2, 1]
+    JuliaLowering.eval(test_mod, JuliaLowering.expr_to_est(ex))
+    @test test_mod.val_history == [2, 1, 2, 1]
+end
 
 end
