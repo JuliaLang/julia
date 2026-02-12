@@ -113,7 +113,13 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
     local shmmem_create_pid
     try
         # On OSX, the shm_seg_name length must be <= 31 characters (including the terminating NULL character)
-        seg_name = "/jl$(lpad(string(getpid() % 10^6), 6, "0"))$(randstring(20))"
+        # Name only needs to be unique for the time it takes to instantiate the arrays; most likely case for
+        # collision is during unit testing when RNG state is re-used.
+        seg_name = "/jl" *
+            "$(lpad(string(getpid() % 10^6), 6, "0"))" *                               # Ensure uniqueness from other processes
+            "$(randstring(12))" *                                                      # Ensure uniqueness within process
+            "$(bytes2hex(reverse(reinterpret(NTuple{4, UInt8}, time_ns() % UInt32))))" # Guard against RNG reset over ~4 s
+
         if onlocalhost
             shmmem_create_pid = myid()
             s, io = shm_mmap_array(T, dims, seg_name, JL_O_CREAT | JL_O_RDWR, false)
