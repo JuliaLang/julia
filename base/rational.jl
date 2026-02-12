@@ -249,12 +249,14 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
     T<:Unsigned && x < 0 && __throw_negate_unsigned()
     isnan(x) && return T(x)//one(T)
     isinf(x) && return unsafe_rational(x < 0 ? -one(T) : one(T), zero(T))
-    r = modf(abs(x))[1]
-    if r > tol && r ≤ inv(maxintfloat(x))
-        p = 1 - exponent(r)
-        p > precision(Float64) && return setprecision(() -> _rationalize(T, BigFloat(x), tol), p)
-        p > precision(Float32) && return _rationalize(T, convert(Float64, x), tol)
-        return _rationalize(T, convert(Float32, x), tol)
+    if typeof(x) != BigFloat
+        r = modf(abs(x))[1]
+        if r > tol && r ≤ inv(maxintfloat(x)) && (T === BigInt || r > inv(typemax(T)))
+            p = 1 - exponent(r)
+            p > precision(Float64) < precision(BigFloat) && return _rationalize(T, BigFloat(x), tol)
+            p > precision(Float32) && return _rationalize(T, convert(Float64, x), tol)
+            return _rationalize(T, convert(Float32, x), tol)
+        end
     end
     return _rationalize(T, x, tol)
 end
