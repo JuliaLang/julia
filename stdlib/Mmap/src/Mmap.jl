@@ -289,16 +289,17 @@ end
 Base.filesize(io::SharedMemory) = io.size
 Base.position(io::SharedMemory) = 0
 Base.isfile(io::SharedMemory) = false
-Base.isreadonly(io::SharedMemory) = io.readonly
 Base.isreadable(io::SharedMemory) = true
 Base.iswritable(io::SharedMemory) = !io.readonly
 Base.isopen(io::SharedMemory) = io.handle != INVALID_OS_HANDLE || io.name == ""
 
 gethandle(io::SharedMemory) = io.handle
 
-function validate_sharedmemory_args(name::AbstractString, size::Integer, create::Bool)
+function validate_sharedmemory_args(name::AbstractString, size::Integer, readonly::Bool, create::Bool)
     isempty(name) && !create &&
         throw(ArgumentError("Anonymous SharedMemory files must have `create = true`."))
+    create && readonly &&
+        throw(ArgumentError("Must be writable to be created."))
     create && size == 0 &&
         throw(ArgumentError("Size of SharedMemory files must be greater than 0."))
 end
