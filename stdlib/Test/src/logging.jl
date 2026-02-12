@@ -426,28 +426,32 @@ macro test_deprecated(exs...)
     broken_esc = broken !== nothing ? esc(broken) : false
     skip_esc = skip !== nothing ? esc(skip) : false
 
+    # Capture at macro-expansion time to avoid hygiene issues: both symbols live
+    # in Base, not in Test, so bare references inside the quote would resolve wrong.
+    _jlopt  = Base.jloptions_scoped
+    _sv_with = Base.ScopedValues.with
+
     res = quote
         if $skip_esc
             Test.record(Test.get_testset(), Broken(:skipped, $(QuoteNode(expression))))
             nothing
         else
-            dw = Base.JLOptions().depwarn
-            if dw == 2
-                # TODO: Remove --depwarn=error if possible and replace with a more
-                # flexible mechanism so we don't have to do this.
-                @test_throws ErrorException $expression_esc broken=$broken_esc
-            elseif dw == 1
+            # Test that the expression throws when depwarn=error...
+            $_sv_with($_jlopt => (; $_jlopt[]..., depwarn = 2)) do
+                @test_throws ErrorException $expression_esc broken=$broken_esc context="Did not error with `depwarn=error`."
+            end
+            # ... and logs a deprecation warning when depwarn=yes.
+            result = $_sv_with($_jlopt => (; $_jlopt[]..., depwarn = 1)) do
                 @test_logs (:warn, $pattern_esc, Ignored(), :depwarn) match_mode=:any broken=$broken_esc $expression_esc
-            else
-                $expression_esc
             end
         end
     end
-    # Propagate source code location of @test_logs to @test macro
+    # Propagate call-site source location into the inner @test_throws / @test_logs macros.
     # FIXME: Use rewrite_sourceloc!() for this - see #22623
-    # Structure: res.args[2] = outer if, .args[3] = else block, .args[4] = inner if
-    # Inner if: .args[2] = @test_throws block, .args[3] = elseif with @test_logs
-    res.args[2].args[3].args[4].args[2].args[2].args[2] = __source__
-    res.args[2].args[3].args[4].args[3].args[2].args[2].args[2] = __source__
+    # Structure: res.args[2] = outer :if, .args[3] = else block
+    #   else block args[2] = `status = with(...) do @test_throws ... end`
+    #   else block args[6] = `with(...) do @test_logs ... end`
+    #res.args[2].args[3].args[2].args[2].args[2].args[2].args[2].args[2] = __source__
+    #res.args[2].args[3].args[6].args[2].args[2].args[2].args[2] = __source__
     res
 end

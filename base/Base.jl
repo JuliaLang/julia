@@ -160,6 +160,10 @@ include("weakkeydict.jl")
 # ScopedValues
 include("scopedvalues.jl")
 
+# ********************* Needs to go somewhere, but where?
+# Provide a named tuple ScopedValue for values that may be temporarily overridden
+const jloptions_scoped = ScopedValues.ScopedValue((; JLOptions().depwarn))
+
 # Logging
 include("logging/logging.jl")
 using .CoreLogging
