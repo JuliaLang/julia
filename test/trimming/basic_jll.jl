@@ -9,6 +9,8 @@ function print_string(fptr::Ptr{Cvoid})
     println(Core.stdout, unsafe_string(ccall(fptr, Cstring, ())))
 end
 
+version_str::String = "1.2.3"
+
 function @main(args::Vector{String})::Cint
     # Test the basic "Hello, world!"
     println(Core.stdout, "Julia! Hello, world!")
@@ -17,6 +19,9 @@ function @main(args::Vector{String})::Cint
     ver = unsafe_string(ccall((:ZSTD_versionString, libzstd), Cstring, ()))
     println(Core.stdout, ver)
     @assert ver == build_ver
+
+    parsed_ver = VersionNumber(version_str)
+    @assert parsed_ver == v"1.2.3"
 
     sleep(0.01)
 
