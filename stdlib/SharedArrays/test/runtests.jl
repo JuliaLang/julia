@@ -13,7 +13,8 @@ addprocs_with_testenv(4; rr_allowed=false)
 @everywhere using Test, SharedArrays
 
 id_me = myid()
-id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
+id_others = filter(x -> x != id_me, procs())
+id_other = id_others[rand(1:(nprocs()-1))]
 
 dims = (20,20,20)
 
@@ -422,3 +423,5 @@ end
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(SharedArrays))
 end
+
+rmprocs(id_others)
