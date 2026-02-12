@@ -42,14 +42,25 @@ end
 
 
 """
+    cumsum!(A; dims::Integer)
     cumsum!(B, A; dims::Integer)
 
-Cumulative sum of `A` along the dimension `dims`, storing the result in `B`. See also [`cumsum`](@ref).
+Cumulative sum of `A` along the dimension `dims`, storing the result in `B`.
+When called with a single argument `A` the result is stored in `A`,
+equivalent to `cumsum!(A, A; dims)`.
+See also [`cumsum`](@ref).
 
 $(_DOCS_ALIASING_WARNING)
 """
+cumsum!(A::AbstractArray{T}; dims::Integer) where {T} =
+    accumulate!(add_sum, A, A, dims=dims)
+
 cumsum!(B::AbstractArray{T}, A; dims::Integer) where {T} =
     accumulate!(add_sum, B, A, dims=dims)
+
+function cumsum!(v::AbstractVector; dims::Integer=1)
+    _cumsum!(v, v, dims, Base.ArithmeticStyle(eltype(v)))
+end
 
 function cumsum!(out::AbstractArray, v::AbstractVector; dims::Integer=1)
     # we dispatch on the possibility of numerical stability issues
@@ -151,26 +162,35 @@ cumsum(itr) = accumulate(add_sum, itr)
 
 
 """
+    cumprod!(A; dims::Integer)
     cumprod!(B, A; dims::Integer)
 
 Cumulative product of `A` along the dimension `dims`, storing the result in `B`.
+When called with a single argument `A` the result is stored in `A`,
+equivalent to `cumprod!(A, A; dims)`.
 See also [`cumprod`](@ref).
 
 $(_DOCS_ALIASING_WARNING)
 """
+cumprod!(A::AbstractArray{T}; dims::Integer) where {T} =
+    accumulate!(mul_prod, A, A, dims=dims)
+
 cumprod!(B::AbstractArray{T}, A; dims::Integer) where {T} =
     accumulate!(mul_prod, B, A, dims=dims)
 
 """
+    cumprod!(x::AbstractVector)
     cumprod!(y::AbstractVector, x::AbstractVector)
 
 Cumulative product of a vector `x`, storing the result in `y`.
+When called with a single argument `x` the result is stored in `x`,
+equivalent to `cumprod!(x, x)`.
 See also [`cumprod`](@ref).
 
 $(_DOCS_ALIASING_WARNING)
 """
+cumprod!(x::AbstractVector) = cumprod!(x, dims=1)
 cumprod!(y::AbstractVector, x::AbstractVector) = cumprod!(y, x, dims=1)
-
 """
     cumprod(A; dims::Integer)
 
