@@ -444,7 +444,7 @@ end
 29  SourceLocation::1:10
 30  (call core.svec %₂₇ %₂₈ %₂₉)
 31  --- method core.nothing %₃₀
-    slots: [slot₁/#self#(called) slot₂/x slot₃/y slot₄/z(!read)]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/z(!read)]
     1   (call core.tuple slot₂/x slot₃/y)
     2   (return %₁)
 32  latestworld
@@ -488,7 +488,7 @@ end
 23  SourceLocation::1:10
 24  (call core.svec %₂₁ %₂₂ %₂₃)
 25  --- method core.nothing %₂₄
-    slots: [slot₁/#self#(called) slot₂/x slot₃/y]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/y]
     1   (call core.tuple slot₂/x slot₃/y)
     2   (return %₁)
 26  latestworld
@@ -535,7 +535,7 @@ end
 26  SourceLocation::1:10
 27  (call core.svec %₂₄ %₂₅ %₂₆)
 28  --- method core.nothing %₂₇
-    slots: [slot₁/#self#(called) slot₂/#arg1# slot₃/y slot₄/z]
+    slots: [slot₁/#self#(!read) slot₂/#arg1#(!read) slot₃/y slot₄/z]
     1   (call core.tuple slot₃/y slot₄/z)
     2   (return %₁)
 29  latestworld
@@ -570,7 +570,7 @@ end
 17  SourceLocation::1:10
 18  (call core.svec %₁₅ %₁₆ %₁₇)
 19  --- method core.nothing %₁₈
-    slots: [slot₁/#self#(called) slot₂/#arg1# slot₃/x]
+    slots: [slot₁/#self#(!read) slot₂/#arg1#(!read) slot₃/x]
     1   slot₃/x
     2   (return %₁)
 20  latestworld
@@ -631,7 +631,7 @@ end
 40  SourceLocation::1:10
 41  (call core.svec %₃₅ %₃₉ %₄₀)
 42  --- method core.nothing %₄₁
-    slots: [slot₁/#self#(called) slot₂/x slot₃/y slot₄/z]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/z]
     1   (call core.tuple slot₂/x slot₃/y slot₄/z)
     2   (return %₁)
 43  latestworld
@@ -692,7 +692,7 @@ end
 37  SourceLocation::1:10
 38  (call core.svec %₃₂ %₃₆ %₃₇)
 39  --- method core.nothing %₃₈
-    slots: [slot₁/#self#(called) slot₂/x slot₃/y slot₄/z]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/z]
     1   static_parameter₁
     2   static_parameter₂
     3   static_parameter₃
@@ -729,7 +729,7 @@ end
 16  SourceLocation::1:10
 17  (call core.svec %₁₄ %₁₅ %₁₆)
 18  --- method core.nothing %₁₇
-    slots: [slot₁/#self#(called) slot₂/x(!read) slot₃/ys]
+    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/ys]
     1   slot₃/ys
     2   (return %₁)
 19  latestworld
@@ -775,7 +775,7 @@ end
 16  SourceLocation::1:10
 17  (call core.svec %₁₄ %₁₅ %₁₆)
 18  --- method core.nothing %₁₇
-    slots: [slot₁/#self#(called) slot₂/xs]
+    slots: [slot₁/#self#(!read) slot₂/xs]
     1   slot₂/xs
     2   (return %₁)
 19  latestworld
@@ -810,7 +810,7 @@ end
 16  SourceLocation::1:10
 17  (call core.svec %₁₄ %₁₅ %₁₆)
 18  --- method core.nothing %₁₇
-    slots: [slot₁/#self# slot₂/xs]
+    slots: [slot₁/#self#(!read) slot₂/xs]
     1   slot₂/xs
     2   (return %₁)
 19  latestworld
@@ -871,7 +871,7 @@ end
 17  SourceLocation::1:10
 18  (call core.svec %₁₅ %₁₆ %₁₇)
 19  --- method core.nothing %₁₈
-    slots: [slot₁/#self#(called) slot₂/destructured_arg slot₃/x(!read,single_assign)]
+    slots: [slot₁/#self#(!read) slot₂/destructured_arg slot₃/x(!read,single_assign)]
     1   (call top.indexed_iterate slot₂/destructured_arg 1)
     2   (= slot₃/x (call core.getfield %₁ 1))
     3   (return core.nothing)
@@ -1041,7 +1041,7 @@ end
 15  SourceLocation::1:10
 16  (call core.svec %₁₃ %₁₄ %₁₅)
 17  --- method core.nothing %₁₆
-    slots: [slot₁/#self#(called) slot₂/x(!read) slot₃/tmp(!read)]
+    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/tmp(!read)]
     1   TestMod.T
     2   (= slot₃/tmp core.nothing)
     3   (call core.isa slot₃/tmp %₁)
@@ -1265,7 +1265,7 @@ end
 15  SourceLocation::1:10
 16  (call core.svec %₁₃ %₁₄ %₁₅)
 17  --- method core.nothing %₁₆
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/#self#(called) slot₅/a slot₆/b]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/#self#(!read) slot₅/a slot₆/b]
     1   (meta :nkw 2)
     2   (call core.tuple slot₅/a slot₆/b slot₂/x slot₃/y)
     3   (return %₂)
@@ -1278,7 +1278,7 @@ end
 24  SourceLocation::1:10
 25  (call core.svec %₂₂ %₂₃ %₂₄)
 26  --- method core.nothing %₂₅
-    slots: [slot₁/#self#(called) slot₂/kws slot₃/#self#(called)]
+    slots: [slot₁/#self#(called) slot₂/kws slot₃/#self#]
     1   (call slot₁/#self# slot₂/kws slot₃/#self# 1 1.0)
     2   (return %₁)
 27  latestworld
@@ -1291,7 +1291,7 @@ end
 34  SourceLocation::1:10
 35  (call core.svec %₃₂ %₃₃ %₃₄)
 36  --- method core.nothing %₃₅
-    slots: [slot₁/#self#(called) slot₂/kws slot₃/#self#(called) slot₄/a]
+    slots: [slot₁/#self#(called) slot₂/kws slot₃/#self# slot₄/a]
     1   (call slot₁/#self# slot₂/kws slot₃/#self# slot₄/a 1.0)
     2   (return %₁)
 37  latestworld
@@ -1305,7 +1305,7 @@ end
 45  SourceLocation::1:10
 46  (call core.svec %₄₃ %₄₄ %₄₅)
 47  --- method core.nothing %₄₆
-    slots: [slot₁/#self#(called) slot₂/kws slot₃/#self#(called) slot₄/a slot₅/b slot₆/kwtmp slot₇/x(!read) slot₈/y(!read)]
+    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/a slot₅/b slot₆/kwtmp slot₇/x(!read) slot₈/y(!read)]
     1   (newvar slot₇/x)
     2   (newvar slot₈/y)
     3   (call core.isdefined slot₂/kws :x)
@@ -1379,7 +1379,7 @@ end
 72  SourceLocation::1:10
 73  (call core.svec %₇₀ %₇₁ %₇₂)
 74  --- method core.nothing %₇₃
-    slots: [slot₁/#self#(called) slot₂/a slot₃/b]
+    slots: [slot₁/#self# slot₂/a slot₃/b]
     1   TestMod.#f_kw_simple#0
     2   (call %₁ 'a' true slot₁/#self# slot₂/a slot₃/b)
     3   (return %₂)
@@ -1415,7 +1415,7 @@ end
 12  SourceLocation::1:10
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  --- method core.nothing %₁₃
-    slots: [slot₁/#self#(!read) slot₂/all_kws slot₃/#self#]
+    slots: [slot₁/#self#(!read) slot₂/all_kws slot₃/#self#(!read)]
     1   (meta :nkw 1)
     2   slot₂/all_kws
     3   (return %₂)
@@ -1472,7 +1472,7 @@ end
 12  SourceLocation::1:10
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  --- method core.nothing %₁₃
-    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/non_x_kws(!read) slot₄/#self#]
+    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/non_x_kws(!read) slot₄/#self#(!read)]
     1   (meta :nkw 2)
     2   TestMod.all_kws
     3   (return %₂)
@@ -1545,7 +1545,7 @@ end
 12  SourceLocation::1:10
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  --- method core.nothing %₁₃
-    slots: [slot₁/#self#(!read) slot₂/a slot₃/b slot₄/kws slot₅/#self#]
+    slots: [slot₁/#self#(!read) slot₂/a slot₃/b slot₄/kws slot₅/#self#(!read)]
     1   (meta :nkw 3)
     2   (call core.tuple slot₂/a slot₃/b slot₄/kws)
     3   (return %₂)
@@ -1636,7 +1636,7 @@ end
 18  SourceLocation::1:10
 19  (call core.svec %₁₄ %₁₇ %₁₈)
 20  --- method core.nothing %₁₉
-    slots: [slot₁/#self#(!read) slot₂/a(!read) slot₃/b(!read) slot₄/#self# slot₅/x(!read)]
+    slots: [slot₁/#self#(!read) slot₂/a(!read) slot₃/b(!read) slot₄/#self#(!read) slot₅/x(!read)]
     1   (meta :nkw 2)
     2   static_parameter₁
     3   static_parameter₂
@@ -1782,7 +1782,7 @@ end
 9   SourceLocation::1:21
 10  (call core.svec %₇ %₈ %₉)
 11  --- method core.nothing %₁₀
-    slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(!read) slot₄/x(nospecialize) slot₅/y(nospecialize)]
+    slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(nospecialize,!read) slot₄/x(nospecialize) slot₅/y(nospecialize)]
     1   TestMod.generator_code
     2   (call %₁ slot₄/x slot₅/y)
     3   (call core.tuple %₂)
@@ -1829,7 +1829,7 @@ end
 9   SourceLocation::1:10
 10  (call core.svec %₇ %₈ %₉)
 11  --- method core.nothing %₁₀
-    slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(!read) slot₄/x(nospecialize,!read) slot₅/y(nospecialize,!read)]
+    slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(nospecialize,!read) slot₄/x(nospecialize,!read) slot₅/y(nospecialize,!read)]
     1   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= maybe_gen_stuff (call some_gen_stuff x y)))))
     2   (call core.tuple %₁)
     3   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (block (= nongen_stuff (call bothgen x y)) ($ (block (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= maybe_gen_stuff (call some_gen_stuff x y))))))) (tuple-p nongen_stuff maybe_gen_stuff)))) %₂)
