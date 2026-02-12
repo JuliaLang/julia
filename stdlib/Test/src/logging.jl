@@ -446,7 +446,7 @@ macro test_deprecated(exs...)
             end
         end
     end
-    # Propagate call-site source location into the inner @test_throws / @test_logs macros.
+    # Propagate source code location of @test_logs to @test macro
     # FIXME: Use rewrite_sourceloc!() for this - see #22623
     # Structure: res.args[2] = outer :if, .args[3] = else block
     #   else block args[2] = `status = with(...) do @test_throws ... end`
