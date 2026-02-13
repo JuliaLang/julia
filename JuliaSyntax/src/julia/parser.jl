@@ -1579,7 +1579,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                     k2 = peek(ps, 2)
                     if peek(ps) == K"NewlineWs" && !is_closing_token(ps, k2) &&
                             k2 != K"NewlineWs"
-                        bump(ps) # newline
+                        bump(ps, TRIVIA_FLAG) # newline
                         parse_eq(ps)
                     end
                 end

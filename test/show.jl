@@ -2210,7 +2210,7 @@ h_line() = f_line()
 @test sprint(Base.show_unquoted, Core.Compiler.Argument(-2)) == "_-2"
 
 
-eval(Meta._parse_string("""function my_fun28173(x)
+eval(Meta.parse("""function my_fun28173(x)
     y = if x == 1
             "HI"
         elseif x == 2
@@ -2228,7 +2228,7 @@ eval(Meta._parse_string("""function my_fun28173(x)
             "three"
         end
     return y
-end""", "a"^80, 1, 1, :statement)[1]) # use parse to control the line numbers
+end"""; filename="a"^80)) # use parse to control the line numbers
 let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     @test_throws "must be one of the following" sprint(IRShow.show_ir, src; context = :debuginfo => :_)
     @test !contains(sprint(IRShow.show_ir, src; context = :debuginfo => :source_inline), "a"^80)

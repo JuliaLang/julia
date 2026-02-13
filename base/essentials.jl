@@ -375,6 +375,44 @@ macro _nospecializeinfer_meta()
     return Expr(:meta, :nospecializeinfer)
 end
 
+# Macros for hiding internal julia compiler stack frames
+
+# Hide a function from the default stack traces printed in the REPL, etc.
+#
+# Example usage:
+#
+#    @_hidestack f() = 1
+#
+#    @_hidestack function g()
+#        # ...
+#    end
+macro _hidestack(func)
+    if !(func isa Expr && func.head in (:function, :(=)) && length(func.args) == 2)
+        error("Expected function definition as argument to @_hidestack, got ", func)
+    end
+    body = func.args[2]
+    funcloc = body isa Expr && !isempty(body.args) && body.args[1] isa LineNumberNode ?
+        body.args[1] : error("Expected function location in function body")
+    # Place LineNumberNode so that backtrace generation shows three frames:
+    # * One real for the function
+    # * One for macro expansion attributed to file name "<hide-stack caller>"
+    # * One for the function body.
+    func.args[2] = Expr(:block, funcloc, Expr(:block, LineNumberNode(1, :var"<hide-stack caller>"), body))
+    esc(func)
+end
+
+# Hide `max_num_frames` stack frames starting with any calls inside `x` and
+# finishing at a matching @_hidestack_end.
+macro _hidestack_begin(max_hidden_frames, x)
+    Expr(:block, LineNumberNode(max_hidden_frames, :var"<hide-stack begin>"), esc(x))
+end
+
+# Mark the current function frame as the innermost frame of a corresponding
+# @_hidestack.
+macro _hidestack_end(x)
+    Expr(:block, LineNumberNode(1, :var"<hide-stack end>"), esc(x))
+end
+
 # These special checkbounds methods are defined early for bootstrapping
 function checkbounds(::Type{Bool}, A::Union{Array, Memory}, i::Int)
     @inline

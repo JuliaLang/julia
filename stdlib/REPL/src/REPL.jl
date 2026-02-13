@@ -309,10 +309,12 @@ const install_packages_hooks = Any[]
 # We need to do this for both the actual eval and macroexpand, since the latter can cause custom macro
 # code to run (and error).
 __repl_entry_lower_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Csize_t}) =
-    Core._lower(ast, mod, toplevel_file[], toplevel_line[])[1]
+    Base.fl_lower(ast, mod, toplevel_file[], toplevel_line[])[1]
 __repl_entry_eval_expanded_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Csize_t}) =
     ccall(:jl_toplevel_eval_flex, Any, (Any, Any, Cint, Cint, Ptr{Ptr{UInt8}}, Ptr{Csize_t}), mod, ast, 1, 1, toplevel_file, toplevel_line)
 
+# TODO: Use CompilerFrontend iterator rather than the ad hoc top level
+# interpreter here. (Would also make the hooks work with top level module code)
 function toplevel_eval_with_hooks(mod::Module, @nospecialize(ast), toplevel_file=Ref{Ptr{UInt8}}(Base.unsafe_convert(Ptr{UInt8}, :REPL)), toplevel_line=Ref{Csize_t}(1))
     if !isexpr(ast, :toplevel)
         ast = invokelatest(__repl_entry_lower_with_loc, mod, ast, toplevel_file, toplevel_line)
@@ -1129,7 +1131,7 @@ function parse_repl_input_line(line::String, repl; kwargs...)
     # then this does not affect the parser used for that module. We could probably skip this step
     # in that case, but let's just be consistent on the off chance that the active module tries
     # to `include(Main, ...)` or similar.
-    @Base.ScopedValues.with Base.MainInclude.main_parser=>Base.parser_for_active_project() Base.parse_input_line(line;
+    @Base.ScopedValues.with Base.MainInclude.compiler_frontend=>Base.frontend_for_active_project() Base.parse_input_line(line;
         mod=Base.active_module(repl), kwargs...)
 end
 
@@ -1558,7 +1560,7 @@ function setup_interface(
                 dump_tail = false
                 nl_pos = findfirst('\n', input[oldpos:end])
                 if s.current_mode == julia_prompt
-                    ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false, mod=Base.active_module(s))
+                    ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false, versionctx=Base.active_module(s))
                     if (isa(ast, Expr) && (ast.head === :error || ast.head === :incomplete)) ||
                             (pos > ncodeunits(input) && !endswith(input, '\n'))
                         # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
