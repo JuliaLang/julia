@@ -848,7 +848,7 @@ static Type *bitstype_to_llvm(jl_value_t *bt, LLVMContext &ctxt, bool llvmcall =
 {
     assert(jl_is_primitivetype(bt));
     if (bt == (jl_value_t*)jl_bool_type)
-        return llvmcall ? getInt1Ty(ctxt) : getInt8Ty(ctxt);
+        return getInt1Ty(ctxt);
     if (bt == (jl_value_t*)jl_int32_type)
         return getInt32Ty(ctxt);
     if (bt == (jl_value_t*)jl_int64_type)
@@ -1027,6 +1027,11 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, 
         else if (jl_is_vecelement_type(jt) && !jl_is_uniontype(jl_svecref(ftypes, 0))) {
             // VecElement type is unwrapped in LLVM (when possible)
             struct_decl = latypes[0];
+            // In non-llvmcall mode, widen i1 to i8 so that SIMD vector types
+            // (<N x i8>) match Julia's memory layout where each Bool occupies
+            // 1 byte, since <N x i1> would pack bits instead.
+            if (!llvmcall && struct_decl->isIntegerTy(1))
+                struct_decl = getInt8Ty(ctxt);
         }
         else if (isarray && !type_is_ghost(lasttype)) {
             if (isTuple && isvector && jl_special_vector_alignment(ntypes, jlasttype) != 0)
@@ -2434,7 +2439,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         }
         if (isa<IntegerType>(elty)) {
             unsigned nb2 = PowerOf2Ceil(nb);
-            if (nb != nb2)
+            if (nb != nb2 || cast<IntegerType>(elty)->getBitWidth() < 8 * nb)
                 elty = Type::getIntNTy(ctx.builder.getContext(), 8 * nb2);
         }
     }
@@ -2477,15 +2482,6 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
             null_pointer_check(ctx, first_ptr, nullcheck);
         if (intcast && !first_ptr)
             instr = nullptr;
-    }
-    if (jltype == (jl_value_t*)jl_bool_type) { // "freeze" undef memory to a valid value
-        // NOTE: if we zero-initialize arrays, this optimization should become valid
-        //load->setMetadata(LLVMContext::MD_range, MDNode::get(ctx.builder.getContext(), {
-        //    ConstantAsMetadata::get(ConstantInt::get(T_int8, 0)),
-        //    ConstantAsMetadata::get(ConstantInt::get(T_int8, 2)) }));
-        if (intcast)
-            instr = ctx.builder.CreateAlignedLoad(intcast->getAllocatedType(), intcast, Align(alignment));
-        instr = ctx.builder.CreateTrunc(instr, getInt1Ty(ctx.builder.getContext()));
     }
     if (instr)
         return mark_julia_type(ctx, instr, isboxed, jltype);
@@ -2575,7 +2571,6 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 return rhs;
             case StoreKind::Replace: {
                 Value *Success = emit_f_is(ctx, cmpop, ghostValue(ctx, jltype));
-                Success = ctx.builder.CreateZExt(Success, getInt8Ty(ctx.builder.getContext()));
                 const jl_cgval_t argv[2] = {ghostValue(ctx, jltype), mark_julia_type(ctx, Success, false, jl_bool_type)};
                 jl_datatype_t *rettyp = jl_apply_cmpswap_type(jltype);
                 return emit_new_struct(ctx, (jl_value_t*)rettyp, 2, argv);
@@ -2610,7 +2605,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         realelty = elty;
         if (Order != AtomicOrdering::NotAtomic && isa<IntegerType>(elty)) {
             unsigned nb2 = PowerOf2Ceil(nb);
-            if (nb != nb2)
+            if (nb != nb2 || cast<IntegerType>(elty)->getBitWidth() < 8 * nb)
                 elty = Type::getIntNTy(ctx.builder.getContext(), 8 * nb2);
         }
         if (op != StoreKind::Modify) {
@@ -3036,7 +3031,6 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         }
         // For union, oldval is already set from load_union()
         if (op == StoreKind::Replace) {
-            Success = ctx.builder.CreateZExt(Success, getInt8Ty(ctx.builder.getContext()));
             const jl_cgval_t argv[2] = {oldval, mark_julia_type(ctx, Success, false, jl_bool_type)};
             jl_datatype_t *rettyp = jl_apply_cmpswap_type(jltype);
             oldval = emit_new_struct(ctx, (jl_value_t*)rettyp, 2, argv);

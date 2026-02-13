@@ -192,7 +192,7 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
     // make sure to return exactly the type specified by
     // julia_type_to_llvm as this will be assumed by the callee.
     if (bt == jl_bool_type)
-        return ConstantInt::get(getInt8Ty(ctx.builder.getContext()), (*(const uint8_t*)ptr) ? 1 : 0);
+        return ConstantInt::get(getInt1Ty(ctx.builder.getContext()), (*(const uint8_t*)ptr) ? 1 : 0);
 
     Type *lt = julia_struct_to_llvm(ctx, (jl_value_t*)bt, NULL);
 
@@ -312,9 +312,9 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
 static Constant *julia_const_to_llvm(jl_codectx_t &ctx, jl_value_t *e)
 {
     if (e == jl_true)
-        return ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 1);
+        return ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1);
     if (e == jl_false)
-        return ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0);
+        return ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0);
     jl_value_t *bt = jl_typeof(e);
     if (!jl_is_pointerfree(bt))
         return NULL;
@@ -332,7 +332,7 @@ static Constant *undef_value_for_type(Type *T) {
     return undef;
 }
 
-// rebuild a struct type with any i1 Bool (e.g. the llvmcall type) widened to i8 (the native size for memcpy)
+// rebuild a struct type with any i1 Bool widened to i8 (the native size for memcpy)
 static Type *zext_struct_type(Type *T)
 {
     if (auto *AT = dyn_cast<ArrayType>(T)) {
@@ -356,7 +356,7 @@ static Type *zext_struct_type(Type *T)
     return T;
 }
 
-// rebuild a struct with any i1 Bool (e.g. the llvmcall type) widened to i8 (the native size for memcpy)
+// rebuild a struct with any i1 Bool widened to i8 (the native size for memcpy)
 static Value *zext_struct_helper(jl_codectx_t &ctx, Value *V, Type *T2)
 {
     Type *T = V->getType();
@@ -457,7 +457,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x)
         return emit_unboxed_coercion(ctx, to, unboxed);
     }
 
-    // bools stored as int8, so an extra Trunc is needed to get an int1
+    // bools are i1 in registers but stored as int8 in memory, so a Trunc is needed after loading
     Value *p = x.constant ? literal_pointer_val(ctx, x.constant) : x.V;
 
     if (x.typ == (jl_value_t*)jl_bool_type || to->isIntegerTy(1)) {
@@ -1487,15 +1487,6 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         }
         if (!xtyp)
             return emit_runtime_call(ctx, f, argv, nargs);
-        ////Bool are required to be in the range [0,1]
-        ////so while they are represented as i8,
-        ////the operations need to be done in mod 1
-        ////we can either do that now, or truncate them
-        ////later into mod 1.
-        ////LLVM seems to emit better code if we do the latter,
-        ////(more likely to fold away the cast) so that's what we'll do.
-        //if (xtyp == (jl_value_t*)jl_bool_type)
-        //    r = getInt1Ty(ctx.builder.getContext());
 
         SmallVector<Type *, 0> argt(nargs);
         argt[0] = xtyp;

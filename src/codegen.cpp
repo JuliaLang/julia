@@ -4372,7 +4372,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (jl_is_type_type(ta.typ) && !jl_has_free_typevars(ta.typ) &&
             jl_is_type_type(tb.typ) && !jl_has_free_typevars(tb.typ)) {
             int issub = jl_subtype(jl_tparam0(ta.typ), jl_tparam0(tb.typ));
-            *ret = mark_julia_type(ctx, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), issub), false, jl_bool_type);
+            *ret = mark_julia_type(ctx, ConstantInt::get(getInt1Ty(ctx.builder.getContext()), issub), false, jl_bool_type);
             return true;
         }
     }
