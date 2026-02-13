@@ -343,38 +343,59 @@ end
     @testset "Properties" begin
         io = open(Mmap.SharedMemory, "", 12; readonly = false, create = true)
         @test io.name == ""
-        @test io.handle == Base.INVALID_OS_HANDLE
+        @static if Sys.isunix()
+            # On Unix systems, anonymous mappings are handled by `mmap` alone
+            @test io.handle == Base.INVALID_OS_HANDLE
+        else # Sys.iswindows()
+            @test io.handle != Base.INVALID_OS_HANDLE
+        end
         @test !io.readonly
         @test io.create
         @test io.size == 12
+        @test io.ismapped == false
         @test isopen(io)
         @test !isfile(io)
         @test filesize(io) == io.size
         @test position(io) == 0
         @test isreadable(io)
         @test iswritable(io)
+        @test Mmap.isanonymous(io)
         close(io)
-        @test isopen(io) # anonymous version has no resources to free
+        @test !isopen(io)
 
         name = "/jlsharedsegment"
         io = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
         @test io.name == name
         @test io.handle != Base.INVALID_OS_HANDLE
         @test isopen(io)
+        @test !Mmap.isanonymous(io)
         close(io)
         @test !isopen(io)
     end
 
-    @testset "Anonymous SharedMemory mmaps are independent" begin
+    @testset "SharedMemory is single-use" begin
         io = open(Mmap.SharedMemory, "", 12; readonly = false, create = true)
-        m1 = mmap(io, Vector{UInt8}, 12)
-        m2 = mmap(io, Vector{UInt8}, 12)
+        m = mmap(io, Vector{UInt8}, 12)
+        @test_throws ArgumentError mmap(io, Vector{UInt8}, 12)
+        close(io); finalize(m); m = nothing; GC.gc()
+
+        io = open(Mmap.SharedMemory, "/jlsharedsegment", 12; readonly = false, create = true)
+        m = mmap(io, Vector{UInt8}, 12)
+        @test_throws ArgumentError mmap(io, Vector{UInt8}, 12)
+        close(io); finalize(m); m = nothing; GC.gc()
+    end
+
+    @testset "Anonymous SharedMemory mmaps are independent" begin
+        io1 = open(Mmap.SharedMemory, "", 12; readonly = false, create = true)
+        io2 = open(Mmap.SharedMemory, "", 12; readonly = false, create = true)
+        m1 = mmap(io1, Vector{UInt8}, 12)
+        m2 = mmap(io2, Vector{UInt8}, 12)
         @test all(m1 .== 0)
         @test all(m2 .== 0)
         m1 .= 1
         @test all(m1 .== 1)
         @test all(m2 .== 0)
-        close(io); finalize(m1); finalize(m2); m1 = m2 = nothing; GC.gc()
+        close(io1); close(io2); finalize(m1); finalize(m2); m1 = m2 = nothing; GC.gc()
     end
 
     @testset "SharedMemory modes" begin
@@ -394,16 +415,13 @@ end
         io1 = open(Mmap.SharedMemory, "/jlsharedsegment", 12; readonly = false, create = true)
         io2 = open(Mmap.SharedMemory, "/jlsharedsegment", 12; readonly = false, create = false)
         m1 = mmap(io1, Vector{UInt8}, 12)
-        m2 = mmap(io1, Vector{UInt8}, 12)
-        m3 = mmap(io2, Vector{UInt8}, 12)
+        m2 = mmap(io2, Vector{UInt8}, 12)
         @test all(m1 .== 0)
         @test all(m2 .== 0)
-        @test all(m3 .== 0)
         m1 .= 1
         @test all(m1 .== 1)
         @test all(m2 .== 1)
-        @test all(m3 .== 1)
-        close(io1); close(io2); finalize(m1); finalize(m2); finalize(m3); m1 = m2 = m3 = nothing; GC.gc()
+        close(io1); close(io2); finalize(m1); finalize(m2); m1 = m2 = nothing; GC.gc()
     end
 
     @testset "Resource cleanup" begin

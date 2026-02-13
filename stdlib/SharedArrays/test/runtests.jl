@@ -148,13 +148,11 @@ read!(fn3, filedata)
 @test all(filedata[5:end] .== 0x02)
 finalize(S)
 @test Base.elsize(S) == Base.elsize(typeof(S)) == Base.elsize(Vector{UInt8})
+S = nothing
 
-# TODO: Commenting out to test if necessary anymore
-# call gc 3 times to avoid unlink: operation not permitted (EPERM) on Windows
-#S = nothing
-#@everywhere GC.gc(true)
-#@everywhere GC.gc(true)
-#@everywhere GC.gc(true)
+# call gc 2 times to free files on Windows so they may be removed
+@everywhere GC.gc(true)
+@everywhere GC.gc(true)
 rm(fn); rm(fn2); rm(fn3)
 
 ### Utility functions

@@ -22,7 +22,8 @@ a shared memory region and returns the corresponding `SharedMemory` object.
 If `name` is empty, the region will be anonymous. If a name is provided and `create` is `true`, the attempt to open will
 fail if a shared memory region with the same name already exists.
 
-Shared memory size cannot be grown after creation, though smaller regions can be mmapped within it.
+SharedMemory size cannot be grown after creation, though smaller regions can be mmapped within it. Each SharedMemory may
+only be mmapped a single time.
 """
 SharedMemory
 
@@ -32,9 +33,11 @@ mutable struct SharedMemory <: IO
     readonly::Bool
     create::Bool
     size::UInt
+    ismapped::Bool
+    isopen::Bool
 
     function SharedMemory(name, readonly, create, size)
-        io = new(name, INVALID_OS_HANDLE, readonly, create, size)
+        io = new(name, INVALID_OS_HANDLE, readonly, create, size, false, false)
         finalizer(close, io)
         return io
     end
@@ -114,11 +117,12 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
     else
         # Anonymous mapping doesn't require a shared-memory file descriptor.
     end
-
+    io.isopen = true
     return io
 end
 
 function Base.close(io::SharedMemory)
+    io.isopen = false
     if io.handle != INVALID_OS_HANDLE
         try
             if io.create
@@ -259,10 +263,12 @@ function Base.open(::Type{SharedMemory}, name::AbstractString, size::Integer;
             end
         end
     end
+    io.isopen = true
     return io
 end
 
 function Base.close(io::SharedMemory)
+    io.isopen = false
     if io.handle != INVALID_OS_HANDLE
         status = ccall(:CloseHandle, stdcall, Cint, (OS_HANDLE,), io.handle)
         io.handle = INVALID_OS_HANDLE
@@ -291,7 +297,8 @@ Base.position(io::SharedMemory) = 0
 Base.isfile(io::SharedMemory) = false
 Base.isreadable(io::SharedMemory) = true
 Base.iswritable(io::SharedMemory) = !io.readonly
-Base.isopen(io::SharedMemory) = io.handle != INVALID_OS_HANDLE || io.name == ""
+Base.isopen(io::SharedMemory) = io.isopen
+isanonymous(io::SharedMemory) = isempty(io.name)
 
 gethandle(io::SharedMemory) = io.handle
 
@@ -403,6 +410,9 @@ function mmap(io::IO,
     file_desc = gethandle(io)
     szfile = convert(Csize_t, len + offset)
 
+    io isa SharedMemory && io.ismapped &&
+        throw(ArgumentError("SharedMemory is single-use; this object has already been mapped"))
+
     # platform-specific mmapping
     handle = INVALID_OS_HANDLE
     try
@@ -439,6 +449,8 @@ function mmap(io::IO,
             )
             Base.windowserror(:MapViewOfFile, ptr == C_NULL)
         end # os-test
+
+        io isa SharedMemory && (io.ismapped = true)
 
         # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
         A = unsafe_wrap(Array, convert(Ptr{T}, UInt(ptr) + UInt(offset - offset_page)), dims)
@@ -663,9 +675,6 @@ Anonymous() = Anonymous("", false, true)
 Base.isopen(::Anonymous) = true
 Base.isreadable(::Anonymous) = true
 Base.iswritable(a::Anonymous) = !a.readonly
-
-mmap(anon::Anonymous, ::Type{T}, len::Integer, args...; kwargs...) where T =
-    open(io -> mmap(io, T, len, args...; kwargs...), SharedMemory, anon.name, len; readonly = anon.readonly, create = anon.create)
 
 mmap(anon::Anonymous, ::Type{Array{T, N}}, dims::NTuple{N, Integer}, args...; kwargs...) where {T, N} =
     open(io -> mmap(io, Array{T, N}, dims, args...; kwargs...), SharedMemory, anon.name, prod(dims) * sizeof(T); readonly = anon.readonly, create = anon.create)
