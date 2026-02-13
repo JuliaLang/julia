@@ -232,7 +232,7 @@ end
 # flisp: sink-assignment
 function sink_assignment(ctx, srcref, lhs, rhs)
     @assert is_identifier_like(lhs)
-    if kind(rhs) == K"block"
+    if kind(rhs) == K"block" && numchildren(rhs) > 0
         @ast ctx srcref [K"block"
             rhs[1:end-1]...
             [K"=" lhs rhs[end]]
