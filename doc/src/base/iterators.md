@@ -5,6 +5,7 @@ User-provided packages in the Julia ecosystem provide some functionality not off
 ## The `Iterators` API
 
 ```@docs
+Base.Iterators
 Base.Iterators.Stateful
 Base.Iterators.zip
 Base.Iterators.enumerate
