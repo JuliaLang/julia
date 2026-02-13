@@ -6,7 +6,6 @@ User-provided packages in the Julia ecosystem provide some functionality not off
 
 ```@docs
 Base.Iterators
-Base.Iterators.Stateful
 Base.Iterators.zip
 Base.Iterators.enumerate
 Base.Iterators.rest
@@ -28,4 +27,5 @@ Base.Iterators.accumulate
 Base.Iterators.reverse
 Base.Iterators.only
 Base.Iterators.peel
+Base.Iterators.Stateful
 ```
