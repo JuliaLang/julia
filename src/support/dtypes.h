@@ -150,39 +150,39 @@ typedef intptr_t ssize_t;
 #endif
 
 #ifdef JL_NDEBUG
-# if jl_has_builtin(__builtin_assume)
-#define jl_assume(cond)                  \
-    (__extension__({                     \
-        __typeof__(cond) cond_ = (cond); \
-        __builtin_assume(!!(cond_));     \
-        cond_;                           \
-    }))
-#elif defined(__GNUC__)
+#  if jl_has_builtin(__builtin_assume)
+#    define jl_assume(cond)                     \
+       (__extension__({                         \
+           __typeof__(cond) cond_ = (cond);     \
+           __builtin_assume(!!(cond_));         \
+           cond_;                               \
+       }))
+#  elif defined(__GNUC__)
 static inline void jl_assume_(int cond)
 {
     if (!cond) {
         __builtin_unreachable();
     }
 }
-#define jl_assume(cond)                  \
-    (__extension__({                     \
-        __typeof__(cond) cond_ = (cond); \
-        jl_assume_(!!(cond_));           \
-        cond_;                           \
-    }))
-#else
-#  define jl_assume(cond) (cond)
-# endif
-# if jl_has_builtin(__builtin_assume_aligned) || defined(_COMPILER_GCC_)
-#  define jl_assume_aligned(ptr, align) __builtin_assume_aligned(ptr, align)
-# elif defined(__GNUC__)
-#define jl_assume_aligned(ptr, align)               \
-    (__extension__({                                \
-        __typeof__(ptr) ptr_ = (ptr);               \
-        jl_assume(((uintptr_t)ptr_) % (align) == 0); \
-        ptr_;                                       \
-    }))
-#elif defined(__cplusplus)
+#    define jl_assume(cond)                     \
+       (__extension__({                         \
+           __typeof__(cond) cond_ = (cond);     \
+           jl_assume_(!!(cond_));               \
+           cond_;                               \
+       }))
+#  else
+#    define jl_assume(cond) (cond)
+#  endif
+#  if jl_has_builtin(__builtin_assume_aligned) || defined(_COMPILER_GCC_)
+#    define jl_assume_aligned(ptr, align) __builtin_assume_aligned(ptr, align)
+#  elif defined(__GNUC__)
+#    define jl_assume_aligned(ptr, align)               \
+       (__extension__({                                 \
+           __typeof__(ptr) ptr_ = (ptr);                \
+           jl_assume(((uintptr_t)ptr_) % (align) == 0); \
+           ptr_;                                        \
+       }))
+#  elif defined(__cplusplus)
 template<typename T>
 static inline T
 jl_assume_aligned(T ptr, unsigned align)
@@ -190,40 +190,40 @@ jl_assume_aligned(T ptr, unsigned align)
     (void)jl_assume(((uintptr_t)ptr) % align == 0);
     return ptr;
 }
-# else
-#  define jl_assume_aligned(ptr, align) (ptr)
-# endif
+#  else
+#    define jl_assume_aligned(ptr, align) (ptr)
+#  endif
 #else
-# if defined(__GNUC__)
-#define jl_assume(cond)                  \
-    (__extension__({                     \
-        __typeof__(cond) cond_ = (cond); \
-        assert(!!(cond_));               \
-        cond_;                           \
-    }))
-#define jl_assume_aligned(ptr, align)             \
-    (__extension__({                              \
-        __typeof__(ptr) ptr_ = (ptr);             \
-        assert(((uintptr_t)ptr_) % (align) == 0); \
-        ptr_;                                     \
-    }))
-# elif defined(__cplusplus)
-#define jl_assume(cond)      \
-    (([&]() {                \
-        auto cond_ = (cond); \
-        assert(!!(cond_));   \
-        return cond_;        \
-    })())
-#define jl_assume_aligned(ptr, align)             \
-    (([&]() {                                     \
-        auto ptr_ = (ptr);                        \
-        assert(((uintptr_t)ptr_) % (align) == 0); \
-        return ptr_;                              \
-    })())
-#else
-#  define jl_assume(cond) (cond)
-#  define jl_assume_aligned(ptr, align) (ptr)
-# endif
+#  if defined(__GNUC__)
+#    define jl_assume(cond)                     \
+       (__extension__({                         \
+           __typeof__(cond) cond_ = (cond);     \
+           assert(!!(cond_));                   \
+           cond_;                               \
+       }))
+#    define jl_assume_aligned(ptr, align)               \
+       (__extension__({                                 \
+           __typeof__(ptr) ptr_ = (ptr);                \
+           assert(((uintptr_t)ptr_) % (align) == 0);    \
+           ptr_;                                        \
+       }))
+#  elif defined(__cplusplus)
+#    define jl_assume(cond)                     \
+       (([&]() {                                \
+           auto cond_ = (cond);                 \
+           assert(!!(cond_));                   \
+           return cond_;                        \
+       })())
+#    define jl_assume_aligned(ptr, align)               \
+       (([&]() {                                        \
+           auto ptr_ = (ptr);                           \
+           assert(((uintptr_t)ptr_) % (align) == 0);    \
+           return ptr_;                                 \
+       })())
+#  else
+#    define jl_assume(cond) (cond)
+#    define jl_assume_aligned(ptr, align) (ptr)
+#  endif
 #endif
 
 typedef int bool_t;
