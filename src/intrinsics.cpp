@@ -457,25 +457,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x)
         return emit_unboxed_coercion(ctx, to, unboxed);
     }
 
-    // bools are i1 in registers but stored as int8 in memory, so a Trunc is needed after loading
     Value *p = x.constant ? literal_pointer_val(ctx, x.constant) : x.V;
-
-    if (x.typ == (jl_value_t*)jl_bool_type || to->isIntegerTy(1)) {
-        assert(p && x.inline_roots.empty()); // clang-sa doesn't know that x.ispointer() implied these are true
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
-        Instruction *unbox_load = ai.decorateInst(ctx.builder.CreateLoad(getInt8Ty(ctx.builder.getContext()), p));
-        setName(ctx.emission_context, unbox_load, p->getName() + ".unbox");
-        if (x.typ == (jl_value_t*)jl_bool_type)
-            unbox_load->setMetadata(LLVMContext::MD_range, MDNode::get(ctx.builder.getContext(), {
-                ConstantAsMetadata::get(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0)),
-                ConstantAsMetadata::get(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 2)) }));
-        Value *unboxed;
-        if (to->isIntegerTy(1))
-            unboxed = ctx.builder.CreateTrunc(unbox_load, to);
-        else
-            unboxed = unbox_load; // `to` must be Int8Ty
-        return unboxed;
-    }
 
     unsigned alignment = julia_alignment(x.typ);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
