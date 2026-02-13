@@ -1,5 +1,9 @@
 # Iteration utilities
 
+User-provided packages in the Julia ecosystem provide some functionality not offered in `Iterators`. In particular, have a look at [IterTools.jl](https://github.com/JuliaCollections/IterTools.jl).
+
+## The `Iterators` API
+
 ```@docs
 Base.Iterators.Stateful
 Base.Iterators.zip
