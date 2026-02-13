@@ -602,21 +602,23 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
 
     assert(!v.isghost);
     Value *vx = NULL;
-    if (!v.ispointer())
+    if (v.inline_roots.empty() && !v.ispointer())
         vx = v.V;
     else if (v.constant)
         vx = julia_const_to_llvm(ctx, v.constant);
 
-    if (v.ispointer() && vx == NULL) {
+    if (vx == NULL) {
         // try to load as original Type, to preserve llvm optimizations
         // but if the v.typ is not well known, use llvmt
+        // also handles values in split representation (inline_roots):
+        // the dynamic checks above ensure only primitive types reach here
         if (isboxed)
             vxt = llvmt;
         auto storage_type = vxt->isIntegerTy(1) ? getInt8Ty(ctx.builder.getContext()) : vxt;
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, v.tbaa);
         vx = ai.decorateInst(ctx.builder.CreateLoad(
             storage_type,
-            data_pointer(ctx, v)));
+            maybe_decay_tracked(ctx, v.V)));
         setName(ctx.emission_context, vx, "bitcast");
     }
 
