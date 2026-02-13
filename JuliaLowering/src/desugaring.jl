@@ -2612,8 +2612,6 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
     mangled_name = let n = isnothing(name_str) ? "_" : name_str
         reserve_module_binding_i(ctx.mod, string(startswith(n, '#') ? "" : "#", n, "#"))
     end
-    # TODO: Is the layer correct here? Which module should be the parent module
-    # of this body function?
     body_func_name = newsym(ctx, callex_srcref, mangled_name)
 
     kwcall_arg_names = SyntaxList(ctx)
@@ -2862,8 +2860,9 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
             ]
         ]
         [K"method_defs"
-            # We want this method to be local or global at the same time as the
-            # body func, but it's really a method on Core.kwcall
+            # This should inherit the local / global status of the body func, so
+            # provide that here for closure conversion, even though this is
+            # really a method on Core.kwcall
             body_func_name
             [K"block"
                 new_typevar_stmts...
