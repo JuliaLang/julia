@@ -2805,7 +2805,7 @@ end
 @test typeintersect(Tuple{Any, Union{Type{Vector},Type{Int64}}, Type{Int8}},
                     Tuple{Int, S, S} where {S}) === Tuple{Int64, Type{Int64}, Type{Int8}}
 
-let 
+let
     A = Tuple{Union{Type{Vector}, Type{Int64}}, Union{Type{Matrix}, Type{Float64}}}
     B = (Tuple{S, S} where S)
     r = typeintersect(A, B)
