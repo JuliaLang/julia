@@ -160,10 +160,6 @@ include("weakkeydict.jl")
 # ScopedValues
 include("scopedvalues.jl")
 
-# ********************* Needs to go somewhere, but where?
-# Provide a named tuple ScopedValue for values that may be temporarily overridden
-const jloptions_scoped = ScopedValues.ScopedValue(Ref{@NamedTuple{depwarn::Int64}}())
-
 # Logging
 include("logging/logging.jl")
 using .CoreLogging
@@ -410,7 +406,7 @@ function __init__()
         JuliaLowering.activate!()
     end
 
-    jloptions_scoped[][] = (; JLOptions().depwarn)
+    global jloptions_scoped = ScopedValues.ScopedValue((; JLOptions().depwarn))
 
     CoreLogging.global_logger(CoreLogging.ConsoleLogger())
     nothing

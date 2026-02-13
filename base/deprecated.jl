@@ -258,7 +258,7 @@ end
 end
 @nospecializeinfer function _depwarn(msg, funcsym, force::Bool)
     @nospecialize
-    opts = jloptions_scoped[][]
+    opts = jloptions_scoped[]
     if opts.depwarn == 2
         throw(ErrorException(msg))
     end

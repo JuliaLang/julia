@@ -437,11 +437,11 @@ macro test_deprecated(exs...)
             nothing
         else
             # Test that the expression throws when depwarn=error...
-            $_sv_with($_jlopt => Ref((; $_jlopt[][]..., depwarn = 2))) do
+            $_sv_with($_jlopt => (; $_jlopt[]..., depwarn = 2)) do
                 @test_throws ErrorException $expression_esc broken=$broken_esc context="Did not error with `depwarn=error`."
             end
             # ... and logs a deprecation warning when depwarn=yes.
-            result = $_sv_with($_jlopt => Ref((; $_jlopt[][]..., depwarn = 1))) do
+            result = $_sv_with($_jlopt => (; $_jlopt[]..., depwarn = 1)) do
                 @test_logs (:warn, $pattern_esc, Ignored(), :depwarn) match_mode=:any broken=$broken_esc $expression_esc
             end
         end
