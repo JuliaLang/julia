@@ -2804,3 +2804,12 @@ end
 @test typeintersect(Tuple{Int, String}, Tuple{T, T} where T) === Union{}
 @test typeintersect(Tuple{Any, Union{Type{Vector},Type{Int64}}, Type{Int8}},
                     Tuple{Int, S, S} where {S}) === Tuple{Int64, Type{Int64}, Type{Int8}}
+
+let 
+    A = Tuple{Union{Type{Vector}, Type{Int64}}, Union{Type{Matrix}, Type{Float64}}}
+    B = (Tuple{S, S} where S)
+    r = typeintersect(A, B)
+    @test (r <: A) && (r <: B)
+    # e.g. Union{Tuple{Type{Int64}, Type{Float64}}, Tuple{Type{Vector}, Type{Matrix}}}
+    @test_broken r !== Union{}
+end

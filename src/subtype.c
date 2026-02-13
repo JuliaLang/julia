@@ -3537,7 +3537,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
                 vb.occurs_cov = vb.occurs_inv = 0;
                 restore_env(e, &se, 1);
                 res = intersect_unionall_(t, u, e, R, param, &vb);
-                if (res != jl_bottom_type) {
+                if (res != jl_bottom_type && jl_is_concrete_type(vb.ub)) {
                     vb.lb = u->var->lb;
                     vb.constraintkind = 0;
                     vb.concrete = 0;
@@ -3545,6 +3545,9 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
                     vb.occurs_cov = vb.occurs_inv = 0;
                     restore_env(e, &se, 0);
                     res = intersect_unionall_(t, u, e, R, param, &vb);
+                }
+                else {
+                    res = jl_bottom_type;
                 }
             }
         }
