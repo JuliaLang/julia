@@ -51,15 +51,27 @@ end
 # end
 
 function Base.var"@label"(__context__::MacroContext, ex)
-    @chk kind(ex) == K"Identifier"
-    @ast __context__ ex [K"symboliclabel" ex]
+    k = kind(ex)
+    if k == K"Identifier"
+        # `@label name` — goto label form
+        @ast __context__ ex [K"symboliclabel" ex]
+    elseif k == K"Placeholder"
+        # `@label _` — disallowed
+        throw(MacroExpansionError(ex, "use `@label expr` for anonymous blocks; `@label _` is not allowed"))
+    else
+        # `@label body` — 1-arg anonymous block form using `loop_exit` as the default scope
+        name = @ast __context__ __context__.macrocall "loop_exit"::K"symboliclabel"
+        @ast __context__ __context__.macrocall [K"symbolicblock" name ex]
+    end
 end
 
 function Base.var"@label"(__context__::MacroContext, name, body)
-    # Handle `@label _ body` (anonymous) or `@label name body` (named)
     k = kind(name)
-    if k == K"Identifier"
-        # `@label _ body` or `@label name body` - plain identifier
+    if k == K"Placeholder"
+        # `@label _ body` — disallowed
+        throw(MacroExpansionError(name, "use `@label expr` for anonymous blocks; `@label _ expr` is not allowed"))
+    elseif k == K"Identifier"
+        # `@label name body` - plain identifier
     elseif is_contextual_keyword(k)
         # Contextual keyword used as label name (e.g., `@label outer body`)
     else

@@ -2037,7 +2037,7 @@ function expand_for(ctx, ex)
 
         body = if i == numchildren(iterspecs)
             # Innermost loop gets the continue label and copied vars
-            @ast ctx ex [K"break_block"
+            @ast ctx ex [K"symbolicblock"
                 "loop_cont"::K"symboliclabel"
                 [K"let"(scope_type=:neutral)
                      [K"block"
@@ -2084,7 +2084,7 @@ function expand_for(ctx, ex)
         ]
     end
 
-    @ast ctx ex [K"break_block" "loop_exit"::K"symboliclabel"
+    @ast ctx ex [K"symbolicblock" "loop_exit"::K"symboliclabel"
         loop
     ]
 end
@@ -4433,7 +4433,10 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             # Convert Symbol (from Expr conversion) to symboliclabel
             if label_kind == K"Symbol"
                 label = @ast ctx label label.name_val::K"symboliclabel"
-            elseif !(label_kind == K"Identifier" || label_kind == K"Placeholder" ||
+            elseif label_kind == K"Placeholder"
+                # `break _` maps to the default break scope (loop_exit)
+                label = @ast ctx label "loop_exit"::K"symboliclabel"
+            elseif !(label_kind == K"Identifier" ||
                      label_kind == K"symboliclabel" || is_contextual_keyword(label_kind))
                 throw(LoweringError(label, "Invalid break label: expected identifier"))
             end
@@ -4451,11 +4454,16 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             @chk nc == 1 (ex, "Too many arguments to continue")
             label = ex[1]
             label_kind = kind(label)
-            if !(label_kind == K"Identifier" || label_kind == K"Placeholder" ||
-                 label_kind == K"Symbol" || is_contextual_keyword(label_kind))
+            if label_kind == K"Placeholder"
+                # `continue _` maps to the default continue scope (loop_cont)
+                cont_label = @ast ctx label "loop_cont"::K"symboliclabel"
+            elseif !(label_kind == K"Identifier" ||
+                     label_kind == K"Symbol" || is_contextual_keyword(label_kind))
                 throw(LoweringError(label, "Invalid continue label: expected identifier"))
+            else
+                cont_label = @ast ctx label string(label.name_val, "#cont")::K"symboliclabel"
             end
-            @ast ctx ex [K"break" string(label.name_val, "#cont")::K"symboliclabel"]
+            @ast ctx ex [K"break" cont_label]
         end
     elseif k == K"comparison"
         expand_forms_2(ctx, expand_compare_chain(ctx, ex))
@@ -4605,10 +4613,10 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         expand_forms_2(ctx, expand_ncat(ctx, ex))
     elseif k == K"while"
         @chk numchildren(ex) == 2
-        @ast ctx ex [K"break_block" "loop_exit"::K"symboliclabel"
+        @ast ctx ex [K"symbolicblock" "loop_exit"::K"symboliclabel"
             [K"_while"
                 expand_condition(ctx, ex[1])
-                [K"break_block" "loop_cont"::K"symboliclabel"
+                [K"symbolicblock" "loop_cont"::K"symboliclabel"
                     [K"scope_block"(scope_type=:neutral)
                          expand_forms_2(ctx, ex[2])
                     ]
