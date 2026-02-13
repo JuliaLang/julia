@@ -3610,14 +3610,15 @@ world_range(ci::CodeInfo) = WorldRange(ci.min_world, ci.max_world)
 world_range(ci::CodeInstance) = WorldRange(ci.min_world, ci.max_world)
 world_range(compact::IncrementalCompact) = world_range(compact.ir)
 
-# n.b. this function is not part of abstract eval (where it would be unsound) but rather for the optimizer to observe the result of abstract eval
+# n.b. this function is not part of abstract eval (where it would be unsound) but rather
+# for the optimizer to observe the result of abstract eval. Inference already guaranteed
+# consistency across the world range, so we just look up the partition at max_world.
 function abstract_eval_globalref_type(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact})
     worlds = world_range(src)
-    (valid_worlds, rte) = abstract_load_all_consistent_leaf_partitions(nothing, g, WorldWithRange(min_world(worlds), worlds))
-    if min_world(valid_worlds) > min_world(worlds) || max_world(valid_worlds) < max_world(worlds)
-        return Any
-    end
-    return rte.rt
+    binding = convert(Core.Binding, g)
+    partition = lookup_binding_partition(max_world(worlds), binding)
+    (_, (leaf_binding, leaf_partition)) = walk_binding_partition(binding, partition, max_world(worlds))
+    return abstract_eval_partition_load(nothing, leaf_binding, leaf_partition).rt
 end
 
 function lookup_binding_partition!(interp::AbstractInterpreter, g::Union{GlobalRef, Core.Binding}, sv::AbsIntState)
@@ -3700,10 +3701,7 @@ function scan_specified_partitions(query::F1, walk_binding_partition::F2,
     binding = convert(Core.Binding, g)
     lookup_world = max_world(wwr.valid_worlds)
     wwr_min = min_world(wwr.valid_worlds)
-    wwr_this = wwr.this
-
-    # This is almost a outlined iteration, but with the lookups being slightly different
-    # The @inlines are because copying RTEffects is surprisingly expensive
+    # The @inlines are because copying RTEffects is surprisingly expensive.
     binding_partition = lookup_binding_partition(lookup_world, binding)
     partition_validity, (leaf_binding, leaf_partition) = @inline walk_binding_partition(binding, binding_partition, lookup_world)
     @assert lookup_world in partition_validity
@@ -3711,11 +3709,11 @@ function scan_specified_partitions(query::F1, walk_binding_partition::F2,
     total_validity = partition_validity
     total_min = min_world(total_validity)
     lookup_world = total_min - 1
-    total_min <= wwr_this && @goto out
 
-    while true
+    # Scan backwards to find the largest sub-range of valid_worlds that
+    # gives a consistent answer and contains wwr.this.
+    while total_min > wwr_min
         if lookup_world < binding_partition.min_world
-            total_min > wwr_min || break
             binding_partition = lookup_binding_partition(lookup_world, binding, binding_partition)
         end
         while lookup_world >= binding_partition.min_world && total_min > wwr_min
@@ -3724,19 +3722,16 @@ function scan_specified_partitions(query::F1, walk_binding_partition::F2,
             this_rte = @inline query(interp, leaf_binding, leaf_partition)
             if this_rte === rte
                 total_validity = union(total_validity, partition_validity)
-                total_min = min_world(total_validity)
-                lookup_world = total_min - 1
-                total_min <= wwr_this && @goto out
-                continue
+            else
+                # Answer changed: if we already cover wwr.this, return current answer
+                total_min <= wwr.this && @goto out
+                # Otherwise the old answer wasn't for our world, start fresh
+                total_validity = partition_validity
+                rte = this_rte
             end
-            total_min <= wwr_this && @goto out
-            total_validity = partition_validity
             total_min = min_world(total_validity)
             lookup_world = total_min - 1
-            rte = this_rte
-            total_min <= wwr_this && @goto out
         end
-        total_min > wwr_min || break
     end
 @label out
     return Pair{WorldRange, typeof(rte)}(total_validity, rte)
