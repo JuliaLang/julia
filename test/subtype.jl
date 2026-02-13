@@ -2801,9 +2801,9 @@ end
                     Tuple{Type{T}, Vararg{S, N}} where {N, eT, T<:AbstractArray{eT, N}, S<:Type{<:Any}}) !== Union{}
 @test typeintersect(Tuple{Union{DataType, UnionAll, Union}, Type{UnitRange{Int64}}, Type{Int64}},
                     Tuple{Type{T}, Vararg{S, N}} where {N, eT, T<:AbstractArray{eT, N}, S<:Type{<:Any}}) !== Union{}
-@test typeintersect(Tuple{Int, String}, Tuple{T, T} where T) === Union{}
+@test typeintersect(Tuple{Int64, String}, Tuple{T, T} where T) === Union{}
 @test typeintersect(Tuple{Any, Union{Type{Vector},Type{Int64}}, Type{Int8}},
-                    Tuple{Int, S, S} where {S}) === Tuple{Int64, Type{Int64}, Type{Int8}}
+                    Tuple{Int64, S, S} where {S}) === Tuple{Int64, Type{Int64}, Type{Int8}}
 
 let
     A = Tuple{Union{Type{Vector}, Type{Int64}}, Union{Type{Matrix}, Type{Float64}}}
