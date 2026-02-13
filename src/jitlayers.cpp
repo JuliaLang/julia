@@ -1862,27 +1862,6 @@ static void timing_print_module_names(jl_timing_block_t *block,
 }
 #endif
 
-void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
-{
-    JL_TIMING(LLVM_JIT, JIT_Total);
-    ++ModulesAdded;
-    TimeTraceScope CompileScope("JIT Compile",
-                                TSM.getModuleUnlocked()->getModuleIdentifier());
-    TSM = optimizeModule(std::move(TSM));
-#ifdef ENABLE_TIMINGS
-    timing_print_module_names(JL_TIMING_DEFAULT_BLOCK, TSM);
-#endif
-    auto Obj = compileModule(std::move(TSM));
-    auto Err = JuliaOJIT::addObjectFile(JD, std::move(Obj));
-    if (Err) {
-#ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the static analyzer thinks might be a safepoint
-        ES.reportError(std::move(Err));
-#endif
-        errs() << "Failed to add objectfile to JIT!\n";
-        abort();
-    }
-}
-
 void JuliaOJIT::addOutput(jl_emitted_output_t O)
 {
     JL_TIMING(LLVM_JIT, JIT_Total);
