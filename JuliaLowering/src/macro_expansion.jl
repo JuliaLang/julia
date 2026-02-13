@@ -490,12 +490,12 @@ split_generated(st::SyntaxTree, gen_part) = JuliaSyntax.@stm st begin
 end
 
 ensure_macro_attributes!(graph) = ensure_attributes!(
-    graph,
+    graph;
     var_id=IdTag,
     scope_layer=LayerId,
     __macro_ctx__=Nothing,
     meta=CompileHints,
-    jl_source=LineNumberNode)
+    (DEBUG ? (:jl_source=>LineNumberNode,) : ())...)
 
 @fzone "JL: macroexpand" function expand_forms_1(mod::Module, ex::SyntaxTree, expr_compat_mode::Bool, macro_world::UInt)
     if kind(ex) == K"local"

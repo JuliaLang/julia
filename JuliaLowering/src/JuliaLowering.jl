@@ -24,6 +24,8 @@ using .JuliaSyntax: highlight, Kind, @KSet_str, is_leaf, children, numchildren,
     reparent, mapchildren, flattened_provenance, mkleaf, mknode, newleaf,
     newnode, tree_ids, @stm, mapsyntax
 
+const DEBUG = true
+
 _include("kinds.jl")
 _register_kinds()
 

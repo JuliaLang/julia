@@ -244,17 +244,18 @@ function _expand_ast_tree(ctx, srcref, tree, line::QuoteNode)
             kindspec = tree.args[1]
         end
         let (kind, srcref, kws) = _match_kind(srcref, kindspec)
-            n = :(setattr!(newleaf($ctx, $srcref, $kind, $val), :jl_source, $line))
+            n = :(newleaf($ctx, $srcref, $kind, $val))
             for (attr, val) in kws
                 n = :(setattr!($n, $attr, $val))
             end
-            n
+            DEBUG ? :(setattr!($n, :jl_source, $line)) : n
         end
     elseif Meta.isexpr(tree, :call) && tree.args[1] === :(=>)
         # Leaf node with copied attributes
         kind = esc(tree.args[3])
         srcref2 = esc(tree.args[2])
-        :(setattr!(setattr!(mkleaf($srcref2), :kind, $kind), :jl_source, $line))
+        n = :(setattr!(mkleaf($srcref2), :kind, $kind))
+        DEBUG ? :(setattr!($n, :jl_source, $line)) : n
     elseif Meta.isexpr(tree, (:vcat, :hcat, :vect))
         # Interior node
         flatargs = []
@@ -278,11 +279,11 @@ function _expand_ast_tree(ctx, srcref, tree, line::QuoteNode)
         end
         push!(child_stmts, :(child_ids))
         let (kind, srcref, kws) = _match_kind(srcref, flatargs[1])
-            n = :(setattr!(newnode($ctx, $srcref, $kind, $children_ex), :jl_source, $line))
+            n = :(newnode($ctx, $srcref, $kind, $children_ex))
             for (attr, val) in kws
                 n = :(setattr!($n, $attr, $val))
             end
-            n
+            DEBUG ? :(setattr!($n, :jl_source, $line)) : n
         end
     elseif Meta.isexpr(tree, :(:=))
         lhs = tree.args[1]
