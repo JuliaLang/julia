@@ -162,7 +162,7 @@ include("scopedvalues.jl")
 
 # ********************* Needs to go somewhere, but where?
 # Provide a named tuple ScopedValue for values that may be temporarily overridden
-const jloptions_scoped = ScopedValues.ScopedValue((; JLOptions().depwarn))
+const jloptions_scoped = ScopedValues.ScopedValue(Ref{@NamedTuple{depwarn::Int64}}())
 
 # Logging
 include("logging/logging.jl")
@@ -409,6 +409,8 @@ function __init__()
         # Base after-the-fact via an incremental sysimage build.
         JuliaLowering.activate!()
     end
+
+    jloptions_scoped[][] = (; JLOptions().depwarn)
 
     CoreLogging.global_logger(CoreLogging.ConsoleLogger())
     nothing
