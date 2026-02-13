@@ -83,6 +83,7 @@ typedef struct jl_varbinding_t {
     int8_t intvalued; // intvalued: must be integer-valued; i.e. occurs as N in Vararg{_,N}
     int8_t limited;
     int8_t intersected; // whether this variable has been intersected
+    int8_t widen_to_kind;   // widen Type{X} to kind after each set_bound (used in diagonal retry)
     int16_t depth0;         // # of invariant constructors nested around the UnionAll type for this var
     // array of typevars that our bounds depend on, whose UnionAlls need to be
     // moved outside ours.
@@ -886,22 +887,25 @@ static jl_value_t *widen_Type(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
     return t;
 }
 
-// Find a concrete kind type C such that t <: C <: ub.
-// Kind types are the only concrete types that can serve as common
-// supertypes for different Type{X} values in the diagonal rule.
-static jl_value_t *find_concrete_supertype(jl_value_t *t, jl_value_t *ub)
+// Map Type{X} to kind type (DataType, UnionAll, Union, TypeofBottom) over union
+static jl_value_t *widen_Type_union_pointwise(jl_value_t *t)
 {
-    jl_value_t *kinds[4] = {
-        (jl_value_t*)jl_datatype_type,
-        (jl_value_t*)jl_unionall_type,
-        (jl_value_t*)jl_uniontype_type,
-        (jl_value_t*)jl_typeofbottom_type,
-    };
-    for (int i = 0; i < 4; i++) {
-        if (jl_subtype(t, kinds[i]) && jl_subtype(kinds[i], ub))
-            return kinds[i];
+    if (jl_is_type_type(t) && !jl_is_typevar(jl_tparam0(t)))
+        return jl_typeof(jl_tparam0(t));
+    if (jl_is_uniontype(t)) {
+        jl_value_t *a = NULL, *b = NULL;
+        JL_GC_PUSH2(&a, &b);
+        a = widen_Type_union_pointwise(((jl_uniontype_t*)t)->a);
+        b = widen_Type_union_pointwise(((jl_uniontype_t*)t)->b);
+        jl_value_t *w;
+        if (a != ((jl_uniontype_t*)t)->a || b != ((jl_uniontype_t*)t)->b)
+            w = simple_join(a, b);
+        else
+            w = t;
+        JL_GC_POP();
+        return w;
     }
-    return NULL;
+    return t;
 }
 
 // convert a type with free variables to a typevar bounded by a UnionAll-wrapped
@@ -973,7 +977,7 @@ static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e)
 static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, int param)
 {
     u = unalias_unionall(u, e);
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0,
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                            e->invdepth, NULL, e->vars };
     JL_GC_PUSH4(&u, &vb.lb, &vb.ub, &vb.innervars);
     e->vars = &vb;
@@ -2859,6 +2863,8 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         if (e->triangular && check_unsat_bound(ub, b, e))
             return jl_bottom_type;
         set_bound(&bb->ub, ub, b, e);
+        if (bb->constraintkind == 1 && bb->widen_to_kind)
+            set_bound(&bb->ub, widen_Type_union_pointwise(bb->ub), b, e);
         return (jl_value_t*)b;
     }
     else if (bb->constraintkind == 0) {
@@ -3482,7 +3488,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
 {
     jl_value_t *res = NULL;
     jl_savedenv_t se;
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0,
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                            e->invdepth, NULL, e->vars };
     JL_GC_PUSH4(&res, &vb.lb, &vb.ub, &vb.innervars);
     save_env(e, &se, 1);
@@ -3517,20 +3523,30 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
     }
     else if (res == jl_bottom_type && vb.constraintkind == 1 &&
              vb.occurs_cov > 1) {
-        // constraintkind=1 returned Bottom for a diagonal var. Different
-        // covariant occurrences had incompatible types under intersection,
-        // but they might share a concrete kind supertype (e.g., Type{Int}
-        // and Type{Float64} are both <: DataType, which is concrete).
-        // Check for such a supertype and retry with it as the var's ub.
-        jl_value_t *concrete_sup = find_concrete_supertype(vb.ub, u->var->ub);
-        if (concrete_sup != NULL) {
-            vb.lb = u->var->lb;
-            vb.ub = concrete_sup;
-            vb.constraintkind = 0;
-            vb.concrete = 0;
-            vb.occurs_cov = vb.occurs_inv = 0;
-            restore_env(e, &se, 1);
-            res = intersect_unionall_(t, u, e, R, param, &vb);
+        // vb.constraintkind == 1 implies occurs_inv == 0, together with occurs_cov > 1
+        // means vb is diagonal
+        // res == jl_bottom_type may be a false negative if vb.ub contains different
+        // Type{X} variables, which may have a concrete common super type (queried via w)
+        jl_value_t *w = widen_Type_union_pointwise(vb.ub);
+        if (w != vb.ub) {
+            vb.ub = w;
+            if (jl_subtype(vb.ub, u->var->ub)) {
+                vb.lb = u->var->lb;
+                vb.concrete = 0;
+                vb.widen_to_kind = 1;
+                vb.occurs_cov = vb.occurs_inv = 0;
+                restore_env(e, &se, 1);
+                res = intersect_unionall_(t, u, e, R, param, &vb);
+                if (res != jl_bottom_type) {
+                    vb.lb = u->var->lb;
+                    vb.constraintkind = 0;
+                    vb.concrete = 0;
+                    vb.widen_to_kind = 0;
+                    vb.occurs_cov = vb.occurs_inv = 0;
+                    restore_env(e, &se, 0);
+                    res = intersect_unionall_(t, u, e, R, param, &vb);
+                }
+            }
         }
     }
     free_env(&se);
@@ -4922,7 +4938,7 @@ static jl_value_t *_widen_diagonal(jl_value_t *t, jl_varbinding_t *troot) {
 
 static jl_value_t *widen_diagonal(jl_value_t *t, jl_unionall_t *u, jl_varbinding_t *troot)
 {
-    jl_varbinding_t vb = { u->var, NULL, NULL, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, troot };
+    jl_varbinding_t vb = { u->var, NULL, NULL, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, troot };
     jl_value_t *nt = NULL;
     JL_GC_PUSH2(&vb.innervars, &nt);
     if (jl_is_unionall(u->body))
