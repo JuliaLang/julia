@@ -126,27 +126,22 @@ function convert_for_type_decl(ctx, srcref, ex, type, do_typeassert)
 end
 
 # TODO: Avoid producing redundant calls to declare_global
-function make_globaldecl(ctx, src_ex, mod, name, strong=false, type=nothing; ret_nothing=false)
-    if !ctx.toplevel_pure
-        decl = @ast ctx src_ex [K"block"
-            [K"call"
-                "declare_global"::K"core"
-                mod::K"Value" name::K"Symbol" strong::K"Bool"
-                type
-            ]
-            [K"latestworld"]
-            "nothing"::K"core"
+function make_globaldecl(ctx, src_ex, mod, name, strong=false, type=nothing)
+    ctx.toplevel_pure && return newleaf(ctx, decl, K"TOMBSTONE")
+    decl = @ast ctx src_ex [K"block"
+        [K"call"
+            "declare_global"::K"core"
+            mod::K"Value" name::K"Symbol" strong::K"Bool"
+            type
         ]
-        if ctx.is_toplevel_seq_point
-            return decl
-        else
-            push!(ctx.toplevel_stmts, decl)
-        end
-    end
-    if ret_nothing
-        nothing
+        (::K"latestworld")
+        "nothing"::K"core"
+    ]
+    if !ctx.is_toplevel_seq_point
+        push!(ctx.toplevel_stmts, decl)
+        newleaf(ctx, decl, K"TOMBSTONE")
     else
-        @ast ctx src_ex "nothing"::K"core"
+        return decl
     end
 end
 
@@ -154,8 +149,10 @@ function convert_global_assignment(ctx, ex, var, rhs0)
     binfo = get_binding(ctx, var)
     @assert binfo.kind == :global
     stmts = SyntaxList(ctx)
-    decl = make_globaldecl(ctx, ex, binfo.mod, binfo.name, true; ret_nothing=true)
-    decl !== nothing && push!(stmts, decl)
+    decl = make_globaldecl(ctx, ex, binfo.mod, binfo.name, true)
+    if kind(decl) !== K"TOMBSTONE"
+        push!(stmts, decl)
+    end
     rhs1 = if is_simple_atom(ctx, rhs0)
         rhs0
     else
@@ -211,7 +208,10 @@ function convert_assignment(ctx, ex)
             # Typed local
             tmp_rhs0 = ssavar(ctx, rhs0)
             rhs = isnothing(binfo.type) ? tmp_rhs0 :
-                  convert_for_type_decl(ctx, ex, tmp_rhs0, _convert_closures(ctx, binfo.type), true)
+                convert_for_type_decl(
+                    ctx, ex, tmp_rhs0,
+                    _convert_closures(ctx, binding_type_ex(ctx, binfo)),
+                    true)
             assignment = if boxed
                 @ast ctx ex [K"call"
                     "setfield!"::K"core"
@@ -430,8 +430,9 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                 closure_binds = ctx.closure_bindings[func_name_id]
                 field_syms, field_orig_bindings, field_inds, field_is_box =
                     closure_type_fields(ctx, ex, closure_binds, false)
-                name_str = reserve_module_binding_i(ctx.mod,
-                    "#$(join(closure_binds.name_stack, "#"))##")
+                name_str = reserve_module_binding_i(
+                    ctx.mod,
+                    string("#", join(closure_binds.name_stack, "#"), "##"))
                 closure_type_def, closure_type_ =
                     type_for_closure(ctx, ex, name_str, field_syms, field_is_box)
                 if !ctx.is_toplevel_seq_point
@@ -497,7 +498,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         is_closure = kind(name) == K"BindingId" && get_binding(ctx, name).kind === :local
         cap_rewrite = is_closure ? ctx.closure_infos[name.var_id] : nothing
         ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
-                                    ctx.closure_bindings, cap_rewrite, ctx.lambda_bindings,
+                                    ctx.closure_bindings, cap_rewrite, ex.lambda_bindings,
                                     ctx.is_toplevel_seq_point, ctx.toplevel_pure, ctx.toplevel_stmts,
                                     ctx.closure_infos)
         body = map_cl_convert(ctx2, ex[2], false)
