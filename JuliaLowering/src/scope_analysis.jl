@@ -405,8 +405,13 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         newscope = enter_scope!(ctx, ex)
         arg_bindings = _resolve_scopes(ctx, ex[1], newscope)
         sparam_bindings = _resolve_scopes(ctx, ex[2], newscope)
-
-        self_id = numchildren(arg_bindings) === 0 ? 0 : arg_bindings[1].var_id
+        self_id = if numchildren(arg_bindings) === 0
+            0
+        elseif getmeta(ex[1][1], :is_kwcall_self, false)
+            arg_bindings[3].var_id
+        else
+            arg_bindings[1].var_id
+        end
         lambda_bindings = LambdaBindings(self_id, newscope.id, newscope.locals_capt)
         body_stmts = SyntaxList(ctx)
         add_local_decls!(ctx, body_stmts, ex, newscope)
