@@ -113,6 +113,9 @@ struct LoweringError <: Exception
     msg::String
 end
 
+internal_error(ex, msg) = throw(
+    LoweringError(ex, string("Internal lowering error: ", msg)))
+
 function Base.showerror(io::IO, exc::LoweringError; show_detail=true)
     print(io, "LoweringError:\n")
     src = sourceref(exc.ex)

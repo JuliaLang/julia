@@ -674,7 +674,7 @@ end
 27  SourceLocation::2:14
 28  (call core.svec %₂₅ %₂₆ %₂₇)
 29  --- method core.nothing %₂₈
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/#self#]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/#self#(!read)]
     1   (meta :nkw 1)
     2   TestMod.+
     3   (call core.getfield slot₁/#self# :y)
