@@ -674,7 +674,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     jl_atomic_store_relaxed(&codeinst->ipo_purity_bits, effects);
     codeinst->analysis_results = analysis_results;
 
-    jl_jit_register_new_ci(codeinst);
+    jl_jit_register_ci(codeinst);
 
     return codeinst;
 }

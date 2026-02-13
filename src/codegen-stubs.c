@@ -88,7 +88,11 @@ JL_DLLEXPORT size_t jl_jit_total_bytes_fallback(void)
     return 0;
 }
 
-JL_DLLEXPORT void jl_jit_register_new_ci_fallback(jl_code_instance_t *ci)
+JL_DLLEXPORT void jl_jit_register_ci_fallback(jl_code_instance_t *ci)
+{
+}
+
+JL_DLLEXPORT void jl_jit_unregister_ci_fallback(jl_code_instance_t *ci)
 {
 }
 

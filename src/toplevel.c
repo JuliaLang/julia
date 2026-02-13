@@ -755,6 +755,14 @@ JL_DLLEXPORT jl_value_t *jl_eval_thunk(jl_module_t *JL_NONNULL m, jl_code_info_t
             (void)jl_type_infer(mfunc, world, SOURCE_MODE_ABI, jl_options.trim);
         }
         result = jl_invoke(/*func*/NULL, /*args*/NULL, /*nargs*/0, mfunc);
+
+        // Before letting the thunk MethodInstance/CodeInstance be GC'd, we must
+        // unregister it with the JIT, so its ORC symbols are removed.
+        jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mfunc->cache);
+        while (codeinst) {
+            jl_jit_unregister_ci(codeinst);
+            codeinst = jl_atomic_load_relaxed(&codeinst->next);
+        }
     }
     else {
         // use interpreter

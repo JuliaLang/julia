@@ -2037,7 +2037,15 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
             ES.getExecutorProcessControl().getDispatcher()));
 }
 
-void JuliaOJIT::registerNewCI(jl_code_instance_t *CI)
+void JuliaOJIT::registerCI(jl_code_instance_t *CI)
+{
+#ifndef JL_NDEBUG
+    std::unique_lock Lock{LinkerMutex};
+    assert(!CISymbols.contains(CI));
+#endif
+}
+
+void JuliaOJIT::unregisterCI(jl_code_instance_t *CI)
 {
     std::unique_lock Lock{LinkerMutex};
     CISymbols.erase(CI);
@@ -2450,7 +2458,13 @@ void jl_jit_add_bytes(size_t bytes)
 
 
 extern "C" JL_DLLEXPORT_CODEGEN
-void jl_jit_register_new_ci_impl(jl_code_instance_t *ci)
+void jl_jit_register_ci_impl(jl_code_instance_t *ci)
 {
-    jl_ExecutionEngine->registerNewCI(ci);
+    jl_ExecutionEngine->registerCI(ci);
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN
+void jl_jit_unregister_ci_impl(jl_code_instance_t *ci)
+{
+    jl_ExecutionEngine->unregisterCI(ci);
 }
