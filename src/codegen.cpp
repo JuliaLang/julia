@@ -10080,8 +10080,6 @@ std::optional<jl_llvm_functions_t> jl_emit_code(
     return ret;
 }
 
-// TODO: handle jl_invoke_type properly
-// TODO: this shouldn't return jl_llvm_functions_t
 static jl_llvm_functions_t jl_emit_oc_wrapper(jl_codegen_output_t &out, jl_method_instance_t *mi, jl_value_t *rettype)
 {
     jl_llvm_functions_t declarations{JL_INVOKE_ARGS};
