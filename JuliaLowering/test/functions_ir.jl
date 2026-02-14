@@ -1278,8 +1278,8 @@ end
 24  SourceLocation::1:10
 25  (call core.svec %₂₂ %₂₃ %₂₄)
 26  --- method core.nothing %₂₅
-    slots: [slot₁/#self#(called) slot₂/kws slot₃/#self#]
-    1   (call slot₁/#self# slot₂/kws slot₃/#self# 1 1.0)
+    slots: [slot₁/#kwcall_self#(called) slot₂/kws slot₃/#self#]
+    1   (call slot₁/#kwcall_self# slot₂/kws slot₃/#self# 1 1.0)
     2   (return %₁)
 27  latestworld
 28  (call core.typeof core.kwcall)
@@ -1291,8 +1291,8 @@ end
 34  SourceLocation::1:10
 35  (call core.svec %₃₂ %₃₃ %₃₄)
 36  --- method core.nothing %₃₅
-    slots: [slot₁/#self#(called) slot₂/kws slot₃/#self# slot₄/a]
-    1   (call slot₁/#self# slot₂/kws slot₃/#self# slot₄/a 1.0)
+    slots: [slot₁/#kwcall_self#(called) slot₂/kws slot₃/#self# slot₄/a]
+    1   (call slot₁/#kwcall_self# slot₂/kws slot₃/#self# slot₄/a 1.0)
     2   (return %₁)
 37  latestworld
 38  (call core.typeof core.kwcall)
@@ -1305,7 +1305,7 @@ end
 45  SourceLocation::1:10
 46  (call core.svec %₄₃ %₄₄ %₄₅)
 47  --- method core.nothing %₄₆
-    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/a slot₅/b slot₆/kwtmp slot₇/x(!read) slot₈/y(!read)]
+    slots: [slot₁/#kwcall_self#(!read) slot₂/kws slot₃/#self# slot₄/a slot₅/b slot₆/kwtmp slot₇/x(!read) slot₈/y(!read)]
     1   (newvar slot₇/x)
     2   (newvar slot₈/y)
     3   (call core.isdefined slot₂/kws :x)
@@ -1428,7 +1428,7 @@ end
 21  SourceLocation::1:10
 22  (call core.svec %₁₉ %₂₀ %₂₁)
 23  --- method core.nothing %₂₂
-    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/all_kws(!read)]
+    slots: [slot₁/#kwcall_self#(!read) slot₂/kws slot₃/#self# slot₄/all_kws(!read)]
     1   (newvar slot₄/all_kws)
     2   (call top.pairs slot₂/kws)
     3   TestMod.#f_kw_slurp_simple#0
@@ -1485,7 +1485,7 @@ end
 21  SourceLocation::1:10
 22  (call core.svec %₁₉ %₂₀ %₂₁)
 23  --- method core.nothing %₂₂
-    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/kwtmp slot₅/x(!read) slot₆/non_x_kws(!read)]
+    slots: [slot₁/#kwcall_self#(!read) slot₂/kws slot₃/#self# slot₄/kwtmp slot₅/x(!read) slot₆/non_x_kws(!read)]
     1   (newvar slot₅/x)
     2   (newvar slot₆/non_x_kws)
     3   (call core.isdefined slot₂/kws :x)
@@ -1558,7 +1558,7 @@ end
 21  SourceLocation::1:10
 22  (call core.svec %₁₉ %₂₀ %₂₁)
 23  --- method core.nothing %₂₂
-    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/kwtmp slot₅/a(single_assign) slot₆/b(single_assign)]
+    slots: [slot₁/#kwcall_self#(!read) slot₂/kws slot₃/#self# slot₄/kwtmp slot₅/a(single_assign) slot₆/b(single_assign)]
     1   (call core.isdefined slot₂/kws :a)
     2   (gotoifnot %₁ label₆)
     3   (call core.getfield slot₂/kws :a)
@@ -1655,7 +1655,7 @@ end
 31  SourceLocation::1:10
 32  (call core.svec %₂₈ %₃₀ %₃₁)
 33  --- method core.nothing %₃₂
-    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/x slot₅/kwtmp slot₆/a(!read) slot₇/b(!read)]
+    slots: [slot₁/#kwcall_self#(!read) slot₂/kws slot₃/#self# slot₄/x slot₅/kwtmp slot₆/a(!read) slot₇/b(!read)]
     1   (newvar slot₆/a)
     2   (newvar slot₇/b)
     3   (call core.isdefined slot₂/kws :a)

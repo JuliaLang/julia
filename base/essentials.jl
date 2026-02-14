@@ -375,14 +375,14 @@ macro _nospecializeinfer_meta()
     return Expr(:meta, :nospecializeinfer)
 end
 
-# These special checkbounds methods are defined early for bootstrapping
+# These checkbounds methods are defined early for bootstrapping
 function checkbounds(::Type{Bool}, A::Union{Array, Memory}, i::Int)
     @inline
     ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A)))
 end
-function checkbounds(A::Union{Array, GenericMemory}, i::Int)
+function checkbounds(A::AbstractArray, I...)
     @inline
-    checkbounds(Bool, A, i) || throw_boundserror(A, (i,))
+    checkbounds(Bool, A, I...) || throw_boundserror(A, I)
     nothing
 end
 

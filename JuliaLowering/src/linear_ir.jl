@@ -818,9 +818,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     elseif k == K"trycatchelse" || k == K"tryfinally"
         compile_try(ctx, ex, needs_value, in_tail_pos)
     elseif k == K"method"
-        # TODO
-        # throw(LoweringError(ex,
-        #     "Global method definition needs to be placed at the top level, or use `eval`"))
+        ctx.is_toplevel_thunk || internal_error(ex, "method not at top level")
         res = if numchildren(ex) == 1
             if in_tail_pos
                 emit_return(ctx, ex)

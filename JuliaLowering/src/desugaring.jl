@@ -232,7 +232,7 @@ end
 # flisp: sink-assignment
 function sink_assignment(ctx, srcref, lhs, rhs)
     @assert is_identifier_like(lhs)
-    if kind(rhs) == K"block"
+    if kind(rhs) == K"block" && numchildren(rhs) > 0
         @ast ctx srcref [K"block"
             rhs[1:end-1]...
             [K"=" lhs rhs[end]]
@@ -2612,15 +2612,15 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
     mangled_name = let n = isnothing(name_str) ? "_" : name_str
         reserve_module_binding_i(ctx.mod, string(startswith(n, '#') ? "" : "#", n, "#"))
     end
-    # TODO: Is the layer correct here? Which module should be the parent module
-    # of this body function?
-    layer = new_scope_layer(ctx)
-    body_func_name = adopt_scope(@ast(ctx, callex_srcref, mangled_name::K"Identifier"), layer)
+    body_func_name = newsym(ctx, callex_srcref, mangled_name)
 
     kwcall_arg_names = SyntaxList(ctx)
     kwcall_arg_types = SyntaxList(ctx)
 
-    push!(kwcall_arg_names, newsym(ctx, callex_srcref, "#self#"))
+    # Core.kwcall method has its own first argument.  Ensure closure conversion
+    # knows not to put the closure there.
+    push!(kwcall_arg_names, setmeta!(
+        newsym(ctx, callex_srcref, "#kwcall_self#"), :is_kwcall_self, true))
     push!(kwcall_arg_types,
         @ast ctx callex_srcref [K"call"
             "typeof"::K"core"
@@ -2860,7 +2860,10 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
             ]
         ]
         [K"method_defs"
-            "nothing"::K"core"
+            # This should inherit the local / global status of the body func, so
+            # provide that here for closure conversion, even though this is
+            # really a method on Core.kwcall
+            body_func_name
             [K"block"
                 new_typevar_stmts...
                 kwcall_method_defs...

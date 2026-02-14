@@ -346,4 +346,8 @@ end
     @test test_mod.val_history == [2, 1, 2, 1]
 end
 
+# JuliaLowering/issues/144
+emptyblock_result = JuliaLowering.eval(test_mod, Expr(:(=), :emptyblock_144, Expr(:block)))
+@test emptyblock_result == nothing
+
 end
