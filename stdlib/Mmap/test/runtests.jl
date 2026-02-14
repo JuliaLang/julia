@@ -312,6 +312,11 @@ n = similar(m, 12)
 @test size(n) == (12,)
 finalize(m); m = nothing; GC.gc()
 
+m = mmap(BitVector, 12)
+@test length(m) == 12
+@test !any(m)
+finalize(m); m = nothing; GC.gc()
+
 @static if Sys.islinux()
 
     function has_open_fd(name)

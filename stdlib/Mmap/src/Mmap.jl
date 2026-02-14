@@ -316,7 +316,7 @@ function check_can_grow(io::IO, szfile::Csize_t, readonly::Bool, grow::Bool)
     if requestedSizeLarger
         readonly && throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
         !grow && throw(ArgumentError("requested size $szfile larger than file size $(filesize(io)), but requested not to grow"))
-        io isa SharedMemory && throw(ArgumentError("unable to increase size of SharedMemory beyond $(filesize(io))"))
+        io isa SharedMemory && throw(ArgumentError("requested size $szfile larger than shared memory size $(filesize(io))"))
         return true
     end
     return false
@@ -517,7 +517,7 @@ julia> rm("mmap.bin")
 ```
 This creates a 25-by-30000 `BitArray`, linked to the file associated with stream `io`.
 """
-function mmap(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
+function mmap(io::IO, ::Type{<:BitArray}, dims::NTuple{N,Integer},
               offset::Int64=position(io); grow::Bool=true, shared::Bool=true) where N
     n = prod(dims)
     nc = Base.num_bit_chunks(n)
@@ -551,6 +551,8 @@ mmap(T::Type, i::Integer...; kwargs...) = mmap(T, convert(Tuple{Vararg{Int}}, i)
 # anonymous -> open SharedMemory
 mmap(::Type{Array{T, N}}, dims::NTuple{N, Integer}; kwargs...) where {T, N} =
     open(io -> mmap(io, Array{T, N}, dims; kwargs...), SharedMemory, "", prod(dims) * sizeof(T); readonly = false, create = true)
+mmap(::Type{BitArray{N}}, dims::NTuple{N, Integer}; kwargs...) where {N} =
+    open(io -> mmap(io, BitArray{N}, dims; kwargs...), SharedMemory, "", Base.num_bit_chunks(prod(dims)) * sizeof(UInt64); readonly = false, create = true)
 
 # msync flags for unix
 const MS_ASYNC = 1
