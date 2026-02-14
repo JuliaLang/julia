@@ -480,23 +480,6 @@ function mmap(io::IO,
     end
 end
 
-mmap(file::AbstractString,
-     ::Type{T}=Vector{UInt8},
-     dims::NTuple{N,Integer}=(div(filesize(file),Base.aligned_sizeof(eltype(T))),),
-     offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) where {T<:Array,N} =
-    open(io->mmap(io, T, dims, offset; grow, shared), file, isfile(file) ? "r" : "w+")::Array{eltype(T),N}
-
-# using a length argument instead of dims
-mmap(io::IO, ::Type{T}, len::Integer, offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T<:Array} =
-    mmap(io, T, (len,), offset; grow, shared)
-mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) where {T<:Array} =
-    open(io->mmap(io, T, (len,), offset; grow, shared), file, isfile(file) ? "r" : "w+")::Vector{eltype(T)}
-
-# constructors for non-file-backed, unnamed (anonymous) mmaps
-mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) where {T <: Array, N} =
-    open(io -> mmap(io, T, dims, Int64(0); shared), SharedMemory, "", prod(dims) * Base.aligned_sizeof(eltype(T)), "w+")
-mmap(::Type{T}, i::Integer...; shared::Bool=true) where {T <: Array} = mmap(T, convert(Tuple{Vararg{Int}}, i); shared)
-
 """
     mmap(io, BitArray, [dims, offset])
 
@@ -555,19 +538,19 @@ function mmap(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
     return B
 end
 
-mmap(file::AbstractString, ::Type{T}, dims::NTuple{N,Integer}, offset::Integer=Int64(0);grow::Bool=true, shared::Bool=true) where {T<:BitArray,N} =
-    open(io->mmap(io, T, dims, offset; grow, shared), file, isfile(file) ? "r" : "w+")::BitArray{N}
+# file -> open IOStream
+mmap(file::AbstractString, ::Type{T} = Vector{UInt8}, args...; kwargs...) where {T <: AbstractArray} =
+    open(io->mmap(io, T, args...; kwargs...)::T, file, isfile(file) ? "r" : "w+")
 
-# using a length argument instead of dims
-mmap(io::IO, ::Type{T}, len::Integer, offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where {T<:BitArray} =
-    mmap(io, T, (len,), offset; grow, shared)
-mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer=Int64(0); grow::Bool=true, shared::Bool=true) where {T<:BitArray} =
-    open(io->mmap(io, T, (len,), offset; grow, shared), file, isfile(file) ? "r" : "w+")::BitVector
+# length -> dims tuple
+mmap(io::IO, T::Type, len::Integer, args...; kwargs...) = mmap(io, T, (len,), args...; kwargs...)
 
-# constructors for non-file-backed (anonymous) mmaps
-mmap(::Type{T}, dims::NTuple{N,Integer}; shared::Bool=true) where {T<:BitArray,N} =
-    open(io -> mmap(io, T, dims, Int64(0); shared), SharedMemory, "", prod(dims) * sizeof(T), "w+")
-mmap(::Type{T}, i::Integer...; shared::Bool=true) where {T<:BitArray} = mmap(T, convert(Tuple{Vararg{Int}}, i); shared)
+# anonymous ints -> dims tuple
+mmap(T::Type, i::Integer...; kwargs...) = mmap(T, convert(Tuple{Vararg{Int}}, i); kwargs...)
+
+# anonymous -> open SharedMemory
+mmap(::Type{Array{T, N}}, dims::NTuple{N, Integer}; kwargs...) where {T, N} =
+    open(io -> mmap(io, Array{T, N}, dims; kwargs...), SharedMemory, "", prod(dims) * sizeof(T); readonly = false, create = true)
 
 # msync flags for unix
 const MS_ASYNC = 1
@@ -676,7 +659,12 @@ Base.isopen(::Anonymous) = true
 Base.isreadable(::Anonymous) = true
 Base.iswritable(a::Anonymous) = !a.readonly
 
-mmap(anon::Anonymous, ::Type{Array{T, N}}, dims::NTuple{N, Integer}, args...; kwargs...) where {T, N} =
-    open(io -> mmap(io, Array{T, N}, dims, args...; kwargs...), SharedMemory, anon.name, prod(dims) * sizeof(T); readonly = anon.readonly, create = anon.create)
+# Anonymous -> open SharedMemory IO
+mmap(anon::Anonymous, ::Type{Array{T, N}}, len::Integer, args...; kwargs...) where {T, N} =
+    open(io -> mmap(io, Array{T, N}, len, args...; kwargs...), SharedMemory, anon.name, len * sizeof(T); anon.readonly, anon.create)
+mmap(anon::Anonymous, ::Type{Array{T, N}}, dims::NTuple{N, <:Integer}; kwargs...) where {T, N} =
+    mmap(anon, Array{T, N}, dims, 0; kwargs...)
+mmap(anon::Anonymous, ::Type{Array{T, N}}, dims::NTuple{N, <:Integer}, offset::Integer; kwargs...) where {T, N} =
+    open(io -> mmap(io, Array{T, N}, dims, offset; kwargs...), SharedMemory, anon.name, prod(dims) * sizeof(T); anon.readonly, anon.create)
 
 end # module
