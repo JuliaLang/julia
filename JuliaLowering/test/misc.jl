@@ -201,6 +201,24 @@ let fl_ex = macroexpand(
     @test JuliaLowering.eval(test_mod, fl_st) == 11 + 18im
 end
 
+# raw :foreigncall should also be lowerable
+let raw_foreigncall_ex = Expr(
+    :foreigncall, Expr(
+        :tuple, QuoteNode(:ctest), "libccalltest"),
+    :(Complex{Int}),
+    :(Core.svec(Complex{Int})),
+    0,
+    QuoteNode((:ccall, 0x0000, false)),
+    10+20im,
+    Complex{Int})
+
+    # test flisp does this: it's unclear how much desugaring the user is
+    # responsible for here
+    @test Core.eval(test_mod, reference_lower(test_mod, raw_foreigncall_ex)) == 11 + 18im
+
+    @test JuliaLowering.eval(test_mod, JuliaLowering.expr_to_est(raw_foreigncall_ex)) == 11 + 18im
+end
+
 # Test that ccall can be passed static parameters in type signatures.
 #
 # Note that the cases where this works are extremely limited and tend to look
@@ -327,5 +345,9 @@ end
     JuliaLowering.eval(test_mod, JuliaLowering.expr_to_est(ex))
     @test test_mod.val_history == [2, 1, 2, 1]
 end
+
+# JuliaLowering/issues/144
+emptyblock_result = JuliaLowering.eval(test_mod, Expr(:(=), :emptyblock_144, Expr(:block)))
+@test emptyblock_result == nothing
 
 end

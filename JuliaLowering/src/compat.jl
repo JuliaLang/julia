@@ -122,7 +122,8 @@ function est_to_expr(st::SyntaxTree)
     elseif k === K"inert"
         QuoteNode(est_to_expr(st[1]))
     else
-        @assert !is_leaf(st)
+        # TODO: should handle post-desugaring forms as well
+        @assert !is_leaf(st) "est_to_expr should only be used pre-desugaring"
         # In a partially-expanded or quoted AST, there may be heads with no
         # corresponding kind
         head = Symbol(k === K"unknown_head" ? st.name_val : untokenize(k))
