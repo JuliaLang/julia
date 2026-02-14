@@ -3530,7 +3530,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
         jl_value_t *w = widen_Type_union_pointwise(vb.ub);
         if (w != vb.ub) {
             vb.ub = w;
-            if (jl_subtype(vb.ub, u->var->ub)) {
+            if (try_subtype_in_env(vb.ub, u->var->ub, e)) {
                 vb.lb = u->var->lb;
                 vb.concrete = 0;
                 vb.widen_to_kind = 1;
