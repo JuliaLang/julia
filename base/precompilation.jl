@@ -574,6 +574,7 @@ end
 
 function monitor_background_precompile(io::IO = stderr, detachable::Bool = true, wait_for_pkg::Union{Nothing, PkgId} = nothing)
     local completed_at::Union{Nothing, Float64}
+    local task
 
     @lock BACKGROUND_PRECOMPILE.lock begin
         completed_at = BACKGROUND_PRECOMPILE.completed_at
@@ -1160,17 +1161,15 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                          manifest::Bool,
                          ignore_loaded::Bool,
                          detachable::Bool)
-    # Check if a background task is already running
+    # Try to inject into a running background task
     already_running = false
+    local req = nothing
     @lock BACKGROUND_PRECOMPILE.lock begin
         if BACKGROUND_PRECOMPILE.task !== nothing && !istaskdone(BACKGROUND_PRECOMPILE.task)
             already_running = true
         end
     end
-
-    launch = true
     if already_running
-        # Inject into the running task instead of chaining
         pkg_names = pkgs isa Vector{String} ? copy(pkgs) : String[pkg.name for pkg in pkgs]
         req = PrecompileRequest(pkg_names, internal_call, strict, warn_loaded, timing, _from_loading,
                                 configs, io, fancyprint′, manifest, ignore_loaded, detachable,
@@ -1178,19 +1177,42 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         try
             put!(BACKGROUND_PRECOMPILE.work_channel, req)
             printpkgstyle(io, :Precompiling, "Merging precompilation request into existing run...", color = Base.info_color())
-            launch = false
         catch
             # work_channel was closed (task finished between check and put!); fall through to launch new
-            launch = true
+            already_running = false
+            req = nothing
         end
     end
-
-    launch && launch_background_precompile(pkgs, internal_call, strict, warn_loaded, timing, _from_loading,
+    already_running || launch_background_precompile(pkgs, internal_call, strict, warn_loaded, timing, _from_loading,
                                  configs, io, fancyprint′, manifest, ignore_loaded, detachable)
 
+    if req !== nothing
+        # Injected into existing task — monitor until our package finishes, then read result
+        wait_for_pkg = if _from_loading && length(pkgs) == 1
+            pkgs[1] isa PkgId ? pkgs[1] : Base.identify_package(pkgs[1])
+        else
+            nothing
+        end
+        monitor_background_precompile(io.io, detachable, wait_for_pkg)
+        if _from_loading
+            # _from_loading: package just left pending_pkgids, waiter will put result shortly
+            result = take!(req.result)
+            result isa Exception && throw(result)
+            return result
+        end
+        # Interactive: if result is ready (task completed), use it; if detached, return nothing
+        if isready(req.result)
+            result = take!(req.result)
+            result isa Exception && throw(result)
+            return result
+        end
+        return nothing
+    end
+
+    # Launched new task — wait for full completion
     monitor_background_precompile(io.io, detachable)
 
-    # Propagate return value or exception from do_precompile
+    local ret_val, ret_ex
     @lock BACKGROUND_PRECOMPILE.lock begin
         ret_val = BACKGROUND_PRECOMPILE.return_value
         ret_ex = BACKGROUND_PRECOMPILE.exception
@@ -1216,7 +1238,7 @@ Base.@kwdef mutable struct PrecompileSession
     time_start::UInt64
     print_lock::ReentrantLock
     parallel_limiter::Base.Semaphore
-    start_loaded_modules::KeySet{PkgId, Dict{PkgId, Module}}
+    start_loaded_modules::Base.KeySet{PkgId, Dict{PkgId, Module}}
     requested_pkgids::Vector{PkgId}
 
     # Dependency graph (built by setup, extended by drainer)
@@ -1499,10 +1521,10 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
                                 if should_stop(s)
                                     return ErrorException("canceled")
                                 end
-                                cachepaths = Base.find_all_in_cache_path(pkg)
-                                freshpath = Base.compilecache_freshest_path(pkg; ignore_loaded=s.ignore_loaded,
+                                local cachepaths = Base.find_all_in_cache_path(pkg)
+                                local freshpath = Base.compilecache_freshest_path(pkg; ignore_loaded=s.ignore_loaded,
                                     stale_cache=s.stale_cache, cachepath_cache=s.cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
-                                is_stale = freshpath === nothing
+                                local is_stale = freshpath === nothing
                                 if !is_stale
                                     push!(freshpaths, freshpath)
                                     return nothing
