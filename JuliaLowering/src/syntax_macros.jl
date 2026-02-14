@@ -32,21 +32,16 @@ function _apply_nospecialize(ctx, ex)
     end
 end
 
-function Base.var"@nospecialize"(__context__::MacroContext)
-    @ast __context__ __context__.macrocall [K"meta" "nospecialize"::K"Symbol"]
-end
-
-function Base.var"@nospecialize"(__context__::MacroContext, ex::SyntaxTree)
-    _apply_nospecialize(__context__, ex)
-end
-
-function Base.var"@nospecialize"(
-        __context__::MacroContext,
-        ex1::SyntaxTree, ex2::SyntaxTree, exs::SyntaxTree...
-    )
-    to_nospecialize = SyntaxTree[ex1, ex2, exs...]
-    @ast __context__ __context__.macrocall [K"block"
-        map(st->_apply_nospecialize(__context__, st), to_nospecialize)...]
+function Base.var"@nospecialize"(__context__::MacroContext, exs::SyntaxTree...)
+    if length(exs) == 0
+        @ast __context__ __context__.macrocall [K"meta" "nospecialize"::K"Symbol"]
+    elseif length(exs) == 1
+        _apply_nospecialize(__context__, only(exs))
+    else
+        @ast __context__ __context__.macrocall [K"block"
+            map(ex->_apply_nospecialize(__context__, ex), exs)...
+        ]
+     end
 end
 
 # TODO: support all forms that the original supports
