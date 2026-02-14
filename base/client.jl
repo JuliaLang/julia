@@ -436,6 +436,15 @@ function load_REPL()
     return nothing
 end
 
+"""
+    active_repl
+
+A reference to the currently active REPL instance in interactive sessions, or undefined
+if no REPL is running. To customize the REPL at startup, see [`atreplinit`](@ref).
+
+!!! compat "Julia 1.13"
+    `active_repl` was made `public` in Julia 1.13.
+"""
 global active_repl::Any
 global active_repl_backend = nothing
 

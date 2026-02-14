@@ -54,6 +54,7 @@ public
     load_path,
     active_project,
     active_manifest,
+    active_repl,
 
 # Reflection and introspection
     get_extension,
