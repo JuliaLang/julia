@@ -715,7 +715,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
     return result;
 }
 
-static void jl_jit_unregister_mi(jl_method_instance_t *mi)
+static void jl_jit_unregister_mi(jl_method_instance_t *mi) JL_NOTSAFEPOINT
 {
     // Before letting the thunk MethodInstance/CodeInstance be GC'd, we must
     // unregister it with the JIT, so its ORC symbols are removed.
