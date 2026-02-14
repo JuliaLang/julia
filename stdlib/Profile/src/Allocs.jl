@@ -15,13 +15,40 @@ using Base: InterpreterIP
 # The C jl_bt_element_t object contains either an IP pointer (size_t) or a void*.
 const BTElement = Csize_t;
 
-# matches jl_raw_backtrace_t on the C side
+"""
+    RawBacktrace
+
+Represent the raw backtrace information as it is captured at the C level within Julia. 
+It holds a pointer to the raw backtrace data (`data`) and the size of this data (`size`). 
+This struct mirrors the internal C representation used by Julia to manage backtraces, 
+facilitating the transfer of data between Julia and its underlying C implementation 
+for memory allocation profiling.
+
+# Fields
+- `data::Ptr{BTElement}`: A pointer to the beginning of the backtrace data array.
+- `size::Csize_t`: The number of elements in the backtrace data array.
+"""
 struct RawBacktrace
     data::Ptr{BTElement} # in C: *jl_bt_element_t
     size::Csize_t
 end
 
-# matches jl_raw_alloc_t on the C side
+"""
+    RawAlloc
+
+Represent a single memory allocation event's raw data, as captured at the C level within Julia. 
+It includes information about the type of the allocated object, the backtrace associated with the allocation event, 
+the size of the allocation, the task in which the allocation occurred, and a timestamp marking the allocation time. 
+This struct is designed to closely mirror the corresponding C structure used internally by Julia, 
+making it easier to process allocation data in Julia's environment.
+
+# Fields
+- `type::Ptr{Type}`: A pointer to the type of the allocated object.
+- `backtrace::RawBacktrace`: The backtrace at the point of allocation.
+- `size::Csize_t`: The size of the allocation, in bytes.
+- `task::Ptr{Cvoid}`: A pointer to the task in which the allocation occurred.
+- `timestamp::UInt64`: A timestamp (in an unspecified unit) marking when the allocation occurred.
+"""
 struct RawAlloc
     type::Ptr{Type}
     backtrace::RawBacktrace
@@ -30,7 +57,18 @@ struct RawAlloc
     timestamp::UInt64
 end
 
-# matches jl_profile_allocs_raw_results_t on the C side
+"""
+    RawResults
+
+Serve as the direct result of a profiling session. 
+This struct aggregates the raw data that has been collected, facilitating subsequent processing 
+and analysis to decode and understand the memory allocation behavior of the program.
+
+# Fields
+- `allocs::Ptr{RawAlloc}`: Pointer to the array of `RawAlloc` records, each representing a single memory allocation event.
+- `num_allocs::Csize_t`: The total number of allocation events recorded, indicating the size of the `allocs` array.
+"""
+
 struct RawResults
     allocs::Ptr{RawAlloc}
     num_allocs::Csize_t
@@ -75,6 +113,21 @@ end
 macro profile(ex)
     _prof_expr(ex, :(sample_rate=0.1))
 end
+
+"""
+    _prof_expr(expr, opts)
+
+Internal helper function for the `@profile` macro. It constructs an expression that starts the allocation profiling, 
+executes the given expression `expr`, and then stops the profiling, 
+ensuring that profiling is properly terminated even if the executed expression throws an error.
+
+# Arguments
+- `expr`: The Julia expression to be profiled.
+- `opts`: Options for the profiling session, such as the sampling rate.
+
+# Returns
+- A Julia expression that, when evaluated, performs the profiling of `expr` according to `opts`.
+"""
 
 function _prof_expr(expr, opts)
     quote
@@ -127,7 +180,22 @@ function fetch()
     return decode(raw_results)
 end
 
-# decoded results
+"""
+    Alloc
+
+A high-level representation of a memory allocation event in Julia, decoded from the raw data captured during profiling. 
+It provides a user-friendly view of each allocation, including the type of the allocated object (if known), 
+a stack trace leading to the allocation, the size of the allocation, the task identifier, and a timestamp of the allocation event. 
+This struct is used for analyzing and reporting memory allocation patterns in a more accessible format.
+
+# Fields
+- `type::Any`: The type of the allocated object. Can be a specific Julia type or a placeholder for unknown types.
+- `stacktrace::StackTrace`: A stack trace object representing the call stack leading to the allocation.
+- `size::Int`: The size of the allocated memory, in bytes.
+- `task::Ptr{Cvoid}`: A pointer to the task in which the allocation occurred. Note that this is unrooted and may not always be valid.
+- `timestamp::UInt64`: A timestamp marking when the allocation occurred.
+"""
+
 
 struct Alloc
     type::Any
@@ -136,6 +204,17 @@ struct Alloc
     task::Ptr{Cvoid} # N.B. unrooted, may not be valid
     timestamp::UInt64
 end
+
+"""
+    AllocResults
+
+Represent the results of a memory allocation profiling session. 
+This struct makes it easier to manage and analyze the set of all allocations recorded during a profiling run, 
+providing a convenient way to access and iterate over individual allocation events.
+
+# Fields
+- `allocs::Vector{Alloc}`: A vector of `Alloc` instances, each representing a single memory allocation event.
+"""
 
 struct AllocResults
     allocs::Vector{Alloc}
@@ -152,6 +231,16 @@ const BacktraceCache = Dict{BTElement,Vector{StackFrame}}
 # copied from julia_internal.h
 JL_BUFF_TAG::UInt = ccall(:jl_get_buff_tag, UInt, ())
 const JL_GC_UNKNOWN_TYPE_TAG = UInt(0xdeadaa03)
+
+
+"""
+    __init__()
+
+Initialization function for the `Allocs` module. 
+It is automatically called when the module is loaded, setting up necessary global constants and state for the module's operation. 
+Specifically, it initializes the `JL_BUFF_TAG` global variable used in memory allocation profiling.
+
+"""
 
 function __init__()
     global JL_BUFF_TAG = ccall(:jl_get_buff_tag, UInt, ())
@@ -172,6 +261,21 @@ function load_type(ptr::Ptr{Type})
     return unsafe_pointer_to_objref(ptr)
 end
 
+
+"""
+    decode_alloc(cache::BacktraceCache, raw_alloc::RawAlloc)::Alloc
+
+Decodes a single `RawAlloc` struct into a high-level `Alloc` struct, 
+making the raw allocation data more accessible and interpretable. It uses a cache to efficiently lookup and memoize stack frames.
+
+# Arguments
+- `cache`: A cache for memoizing stack frame lookups to improve performance.
+- `raw_alloc`: A `RawAlloc` instance representing the raw allocation data to be decoded.
+
+# Returns
+- An `Alloc` instance representing the decoded allocation event.
+"""
+
 function decode_alloc(cache::BacktraceCache, raw_alloc::RawAlloc)::Alloc
     Alloc(
         load_type(raw_alloc.type),
@@ -182,6 +286,20 @@ function decode_alloc(cache::BacktraceCache, raw_alloc::RawAlloc)::Alloc
     )
 end
 
+"""
+    decode(raw_results::RawResults)::AllocResults
+
+Decodes the raw results of a memory allocation profiling session (`RawResults`) 
+into a more interpretable format (`AllocResults`). This function processes an array of 
+`RawAlloc` instances, converting them into a vector of `Alloc` instances.
+
+# Arguments
+- `raw_results`: The raw profiling data to be decoded.
+
+# Returns
+- An `AllocResults` instance containing a vector of decoded `Alloc` instances.
+"""
+
 function decode(raw_results::RawResults)::AllocResults
     cache = BacktraceCache()
     allocs = [
@@ -191,6 +309,19 @@ function decode(raw_results::RawResults)::AllocResults
     return AllocResults(allocs)
 end
 
+"""
+    load_backtrace(trace::RawBacktrace)::Vector{BTElement}
+
+Loads the backtrace data from a `RawBacktrace` struct into a vector of `BTElement`, representing the call stack at the point of allocation.
+
+# Arguments
+- `trace`: A `RawBacktrace` instance containing the raw backtrace data.
+
+# Returns
+- A vector of `BTElement` representing the loaded backtrace.
+"""
+
+
 function load_backtrace(trace::RawBacktrace)::Vector{BTElement}
     out = Vector{BTElement}()
     for i in 1:trace.size
@@ -199,6 +330,23 @@ function load_backtrace(trace::RawBacktrace)::Vector{BTElement}
 
     return out
 end
+
+
+"""
+    stacktrace_memoized(cache::BacktraceCache, trace::Vector{BTElement}, c_funcs::Bool=true)::StackTrace
+
+Generates a stack trace from a vector of backtrace elements (`BTElement`), 
+using a cache to memoize and efficiently retrieve stack frames. It can optionally filter out C function calls from the stack trace.
+
+# Arguments
+- `cache`: A cache for memoizing stack frame lookups.
+- `trace`: A vector of `BTElement` representing the backtrace to be processed.
+- `c_funcs`: A boolean flag indicating whether C function calls should be included in the stack trace.
+
+# Returns
+- A `StackTrace` object representing the processed stack trace, suitable for analysis and display.
+"""
+
 
 function stacktrace_memoized(
     cache::BacktraceCache,
@@ -221,6 +369,16 @@ function stacktrace_memoized(
     end
     return stack
 end
+
+
+"""
+    warning_empty()
+
+Generates a warning message indicating that no samples were collected during the profiling session. 
+This function should be called when analysis functions detect an empty dataset, suggesting to the user to 
+run the profiling session longer or adjust the sampling rate.
+"""
+
 
 function warning_empty()
     @warn """
