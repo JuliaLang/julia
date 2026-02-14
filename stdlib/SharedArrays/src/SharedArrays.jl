@@ -17,7 +17,7 @@ import Serialization: serialize, deserialize
 import Distributed: RRID, procs, remotecall_fetch
 import Base.Filesystem: JL_O_CREAT, JL_O_RDWR, S_IRUSR, S_IWUSR
 
-export SharedArray, SharedVector, SharedMatrix, sdata, indexpids, localindices
+export SharedArray, SharedVector, SharedMatrix, sdata, indexpids, localindices, unshare!
 
 mutable struct SharedArray{T,N} <: DenseArray{T,N}
     id::RRID
@@ -610,6 +610,28 @@ function copyto!(S::SharedArray, R::SharedArray)
     end
 
     return S
+end
+
+"""
+    unshare!(S::SharedArray)
+
+Release resources from workers and make the memory no longer available to them. The array is still usable
+on the main process.
+
+!!! note
+     Relying on the finalizers to perform cleanup requires multiple GC rounds to release the underlying
+     mmap. Call this function proactively to ensure a single GC round is sufficient.
+"""
+function unshare!(S::SharedArray)
+    if !isempty(S.pids)
+        @sync begin
+            for i in eachindex(S.pids)
+                @async remotecall_wait(finalize, S.pids[i], fetch(S.refs[i]))
+            end
+        end
+        empty!(S.pids)
+        empty!(S.refs)
+    end
 end
 
 function print_shmem_limits(slen)

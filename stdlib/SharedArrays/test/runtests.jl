@@ -146,12 +146,12 @@ filedata = Vector{UInt8}(undef, len)
 read!(fn3, filedata)
 @test all(filedata[1:4] .== 0x01)
 @test all(filedata[5:end] .== 0x02)
+unshare!(S)
 finalize(S)
 @test Base.elsize(S) == Base.elsize(typeof(S)) == Base.elsize(Vector{UInt8})
 S = nothing
 
-# call gc 2 times to free files on Windows so they may be removed
-@everywhere GC.gc(true)
+# release files so they can be deleted on Windows
 @everywhere GC.gc(true)
 rm(fn); rm(fn2); rm(fn3)
 
@@ -394,6 +394,30 @@ end
             end
 
         else # other Unix, tests TODO
+
+        end
+    end
+
+    @testset "`unshare!` allows remaining resources to be cleared in a single GC round." begin
+        S = SharedArray{Int64}(100, 100)
+        segname = S.segname
+        pids = procs(S)
+        unshare!(S)
+        @everywhere GC.gc(true)
+
+        @static if Sys.islinux()
+
+            # parent array still mapped
+            ismapped, _ = shmem_mapped(segname)
+            @test ismapped
+
+            # worker arrays unmapped
+            @test all(pids) do p
+                ismapped, _ = remotecall_fetch(shmem_mapped, p, segname)
+                return !ismapped
+            end
+
+        else # Other platforms TODO, if possible
 
         end
     end
