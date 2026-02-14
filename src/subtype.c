@@ -884,6 +884,12 @@ static jl_value_t *widen_Type(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
         if (a == b)
             return a;
     }
+    if (jl_is_unionall(t)) {
+        jl_unionall_t *u = (jl_unionall_t*)t;
+        jl_value_t *body = widen_Type(u->body);
+        if (body != u->body && !jl_has_typevar(body, u->var))
+            return body;
+    }
     return t;
 }
 
@@ -904,6 +910,12 @@ static jl_value_t *widen_Type_union_pointwise(jl_value_t *t)
             w = t;
         JL_GC_POP();
         return w;
+    }
+    if (jl_is_unionall(t)) {
+        jl_unionall_t *u = (jl_unionall_t*)t;
+        jl_value_t *body = widen_Type_union_pointwise(u->body);
+        if (body != u->body && !jl_has_typevar(body, u->var))
+            return body;
     }
     return t;
 }
