@@ -151,7 +151,8 @@ finalize(S)
 @test Base.elsize(S) == Base.elsize(typeof(S)) == Base.elsize(Vector{UInt8})
 S = nothing
 
-# release files so they can be deleted on Windows
+# release files so they can be deleted on Windows; requires multiple GC passes to be sure
+@everywhere GC.gc(true)
 @everywhere GC.gc(true)
 rm(fn); rm(fn2); rm(fn3)
 
