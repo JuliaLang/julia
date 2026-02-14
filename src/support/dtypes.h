@@ -143,7 +143,7 @@ typedef intptr_t ssize_t;
 #  define JL_ATTRIBUTE_ALIGN_PTRSIZE(x)
 #endif
 
-#if defined __has_builtin
+#if defined(__has_builtin)
 #  define jl_has_builtin(x) __has_builtin(x)
 #else
 #  define jl_has_builtin(x) 0
