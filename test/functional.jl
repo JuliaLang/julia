@@ -236,6 +236,24 @@ let (:)(a,b) = (i for i in Base.:(:)(1,10) if i%2==0)
     @test Int8[ i for i = 1:2 ] == [2,4,6,8,10]
 end
 
+@testset "`Base.FixNullaryCallable`" begin
+    @test let g, n, r
+        n = 0
+        function g()
+            n = 1
+            3
+        end
+        r = Base.FixNullaryCallable{1}(+, g)(7)
+        (r === 10) && (n === 1)
+    end
+end
+
+@testset "consistency between `Base.Fix` and `Base.FixNullaryCallable`" begin
+    for n in 1:5
+        @test Base.Fix{n}(+, 3) === Base.FixNullaryCallable{n}(+, Returns(3))
+    end
+end
+
 @testset "Basic tests of Fix1, Fix2, and Fix" begin
     function test_fix1(Fix1=Base.Fix1)
         increment = Fix1(+, 1)
