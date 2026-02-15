@@ -40,9 +40,10 @@ mutable struct BackgroundPrecompileState
     pkg_done::Threads.Condition  # notified when a package finishes precompiling
     keyboard_tip::String  # set by key handler when active, read by print loop
     work_channel::Channel{PrecompileRequest}  # channel for injecting requests into running task
+    verbose::Bool  # show PIDs and CPU% for each worker
 end
 
-const BACKGROUND_PRECOMPILE = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Set{PkgId}(), Threads.Condition(), "", Channel{PrecompileRequest}(Inf))
+const BACKGROUND_PRECOMPILE = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Set{PkgId}(), Threads.Condition(), "", Channel{PrecompileRequest}(Inf), false)
 
 # This is currently only used for pkgprecompile but the plan is to use this in code loading in the future
 # see the `kc/codeloading2.0` branch
@@ -657,6 +658,8 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                             break
                         elseif c in ('i', 'I')
                             broadcast_signal(Sys.isapple() ? Base.SIGINFO : Base.SIGUSR1)
+                        elseif c in ('v', 'V')
+                            @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.verbose = !BACKGROUND_PRECOMPILE.verbose
                         elseif c in ('?', 'h', 'H')
                             println(io)
                             println(io, "  Keyboard shortcuts:")
@@ -665,6 +668,7 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                                 println(io, "    d/q/]   Detach (precompilation continues in background)")
                             end
                             println(io, "    i       Send profiling signal to subprocesses")
+                            println(io, "    v       Toggle verbose mode (show elapsed time, PID, and CPU% for each worker)")
                             println(io, "    Ctrl-C  Interrupt (sends SIGINT, shows output)")
                             println(io, "    ?/h     Show this help")
                         end
@@ -861,6 +865,8 @@ precompilation:
   - **`i`** — Info. Sends a profiling signal (SIGINFO on macOS/BSD, SIGUSR1 on
     Linux) to subprocesses, triggering a profile peek without interrupting
     compilation.
+  - **`v`** — Toggle verbose mode. Shows elapsed time, worker PID, CPU%, and
+    memory (RSS) for each actively compiling package. Supported on Linux and macOS.
   - **`?`/`h`** — Show keyboard shortcut help.
   - **Ctrl-C** — Interrupt. Sends SIGINT to subprocesses and displays their output.
 
@@ -1262,7 +1268,7 @@ Base.@kwdef mutable struct PrecompileSession
     pkg_liveprinted::Ref{Union{Nothing, PkgId}} = Ref{Union{Nothing,PkgId}}(nothing)
 
     # Per-package tracking
-    started::Dict{PkgConfig, Bool}
+    started::Dict{PkgConfig, Float64}
     was_processed::Dict{PkgConfig, Base.Event}
     was_recompiled::Dict{PkgConfig, Bool}
     failed_deps::Dict{PkgConfig, String}           = Dict{PkgConfig,String}()
@@ -1273,6 +1279,8 @@ Base.@kwdef mutable struct PrecompileSession
     pkg_queue::Vector{PkgConfig}                   = PkgConfig[]
     pkgspidlocked::Dict{PkgConfig, String}         = Dict{PkgConfig,String}()
     taskwaiting::Set{PkgConfig}                    = Set{PkgConfig}()
+    active_pids::Dict{PkgConfig, Int32}            = Dict{PkgConfig,Int32}()
+    prev_cpu_times::Dict{Int32, UInt64}            = Dict{Int32,UInt64}()
 
     # Synchronization
     first_started::Base.Event                      = Base.Event()
@@ -1289,6 +1297,90 @@ const ansi_cleartoendofline = "\e[0K"
 const ansi_enablecursor = "\e[?25h"
 const ansi_disablecursor = "\e[?25l"
 ansi_moveup(n::Int) = string("\e[", n, "A")
+
+# Mach timebase info for converting Mach absolute time → nanoseconds on macOS.
+# Queried once per process at runtime (not at sysimage build time).
+@static if Sys.isapple()
+    const _mach_timebase = Base.OncePerProcess{Tuple{UInt64,UInt64}}() do
+        buf = zeros(UInt32, 2)
+        ccall(:mach_timebase_info, Cvoid, (Ptr{UInt32},), buf)
+        (UInt64(buf[1]), UInt64(buf[2]))
+    end
+end
+
+# Read cumulative CPU time (user+system) in nanoseconds and RSS in bytes for a process.
+# Returns (cpu_ns=0, rss_bytes=0) if the process no longer exists or on unsupported platforms.
+function process_stats(pid::Int32)
+    @static if Sys.islinux()
+        try
+            stat = read("/proc/$(pid)/stat", String)
+            # Field 2 (comm) is in parens and may contain spaces; skip past it
+            i = findlast(')', stat)
+            i === nothing && return (cpu_ns=UInt64(0), rss_bytes=UInt64(0))
+            fields = split(@view(stat[nextind(stat, i):end]))
+            # fields[1] = state (field 3), so utime=field 14 is at index 12,
+            # stime=field 15 at index 13, rss=field 24 at index 22
+            length(fields) >= 22 || return (cpu_ns=UInt64(0), rss_bytes=UInt64(0))
+            utime = parse(UInt64, fields[12])
+            stime = parse(UInt64, fields[13])
+            rss_pages = parse(UInt64, fields[22])
+            # CLK_TCK is almost always 100 on Linux; 1 tick = 10ms = 10_000_000 ns
+            cpu_ns = (utime + stime) * UInt64(10_000_000)
+            rss_bytes = rss_pages * UInt64(ccall(:getpagesize, Cint, ()))
+            return (; cpu_ns, rss_bytes)
+        catch
+            return (cpu_ns=UInt64(0), rss_bytes=UInt64(0))
+        end
+    elseif Sys.isapple()
+        try
+            buf = Vector{UInt8}(undef, 96)  # sizeof(struct proc_taskinfo)
+            ret = ccall((:proc_pidinfo, "libproc"), Cint,
+                        (Cint, Cint, UInt64, Ptr{UInt8}, Cint),
+                        pid, Cint(4), UInt64(0), buf, Cint(96))
+            ret <= 0 && return (cpu_ns=UInt64(0), rss_bytes=UInt64(0))
+            # pti_resident_size at offset 8 (bytes)
+            rss_bytes = GC.@preserve buf unsafe_load(Ptr{UInt64}(pointer(buf) + 8))
+            # pti_total_user at offset 16, pti_total_system at offset 24 (Mach absolute time)
+            user = GC.@preserve buf unsafe_load(Ptr{UInt64}(pointer(buf) + 16))
+            sys  = GC.@preserve buf unsafe_load(Ptr{UInt64}(pointer(buf) + 24))
+            # Convert Mach absolute time to nanoseconds via mach_timebase_info
+            numer, denom = _mach_timebase()
+            cpu_ns = div((user + sys) * numer, denom)
+            return (; cpu_ns, rss_bytes)
+        catch
+            return (cpu_ns=UInt64(0), rss_bytes=UInt64(0))
+        end
+    else
+        return (cpu_ns=UInt64(0), rss_bytes=UInt64(0))
+    end
+end
+
+# Compute CPU% and RSS for all active PIDs since last poll.
+# Mutates cpu_pcts and rss in place.
+function poll_process_stats!(cpu_pcts::Dict{Int32, Float64}, rss::Dict{Int32, UInt64},
+                             prev_cpu_times::Dict{Int32, UInt64}, active_pids::Dict{PkgConfig, Int32}, dt::Float64)
+    empty!(cpu_pcts)
+    empty!(rss)
+    @static if !(Sys.islinux() || Sys.isapple())
+        return
+    end
+    for (_, pid) in active_pids
+        haskey(cpu_pcts, pid) && continue
+        stats = process_stats(pid)
+        stats.cpu_ns == 0 && continue
+        prev = get(prev_cpu_times, pid, stats.cpu_ns)
+        delta = stats.cpu_ns >= prev ? stats.cpu_ns - prev : UInt64(0)
+        prev_cpu_times[pid] = stats.cpu_ns
+        pct = dt > 0 ? (delta / 1.0e9) / dt * 100.0 : 0.0
+        cpu_pcts[pid] = min(pct, 999.9)
+        stats.rss_bytes > 0 && (rss[pid] = stats.rss_bytes)
+    end
+    pids_set = Set(values(active_pids))
+    for pid in keys(prev_cpu_times)
+        pid in pids_set || delete!(prev_cpu_times, pid)
+    end
+    return
+end
 
 function should_stop(s::PrecompileSession)
     ir, cr = @lock BACKGROUND_PRECOMPILE.lock begin
@@ -1348,8 +1440,18 @@ function spawn_print_loop!(s::PrecompileSession)
             bar.max = s.n_total[] - s.n_already_precomp[]
             final_loop = false
             n_print_rows = 0
+            last_poll_time = time()
+            cpu_pcts = Dict{Int32, Float64}()
+            rss_bytes = Dict{Int32, UInt64}()
             while !s.printloop_should_exit[]
                 @lock s.print_lock begin
+                    verbose = BACKGROUND_PRECOMPILE.verbose
+                    now_time = time()
+                    dt = now_time - last_poll_time
+                    if verbose && dt >= 0.5
+                        poll_process_stats!(cpu_pcts, rss_bytes, s.prev_cpu_times, s.active_pids, dt)
+                        last_poll_time = now_time
+                    end
                     term_size = displaysize(s.logio)::Tuple{Int, Int}
                     num_deps_show = max(term_size[1] - 3, 2) # show at least 2 deps
                     pkg_queue_show = if !s.interrupted_or_done[] && length(s.pkg_queue) > num_deps_show
@@ -1392,7 +1494,7 @@ function spawn_print_loop!(s::PrecompileSession)
                                     filter!(!isequal(pkg_config), s.pkg_queue)
                                 end)
                                 string(color_string("  ✓ ", loaded ? Base.warn_color() : :green, s.hascolor), name)
-                            elseif s.started[pkg_config]
+                            elseif s.started[pkg_config] > 0
                                 anim_char = anim_chars[(i_local + Int(dep.name[1])) % length(anim_chars) + 1]
                                 anim_char_colored = dep in s.project_deps ? anim_char : color_string(anim_char, :light_black, s.hascolor)
                                 waiting = if haskey(s.pkgspidlocked, pkg_config)
@@ -1403,7 +1505,19 @@ function spawn_print_loop!(s::PrecompileSession)
                                 else
                                     ""
                                 end
-                                string("  ", anim_char_colored, " ", name, waiting)
+
+                                pid_info = if verbose && haskey(s.active_pids, pkg_config)
+                                    elapsed_str = string(round(Int, now_time - s.started[pkg_config]), "s")
+                                    pid = s.active_pids[pkg_config]
+                                    pct = get(cpu_pcts, pid, -1.0)
+                                    pct_str = pct >= 0 ? string(" | cpu ", round(Int, pct), "%") : ""
+                                    mem = get(rss_bytes, pid, UInt64(0))
+                                    mem_str = mem > 0 ? string(" | ", Base.format_bytes(mem)) : ""
+                                    color_string(" $(elapsed_str) | pid $(pid)$(pct_str)$(mem_str)", Base.info_color(), s.hascolor)
+                                else
+                                    ""
+                                end
+                                string("  ", anim_char_colored, " ", name, pid_info, waiting)
                             else
                                 string("    ", name)
                             end
@@ -1497,7 +1611,7 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
                             end
                         end
                         push!(s.pkg_queue, pkg_config)
-                        s.started[pkg_config] = true
+                        s.started[pkg_config] = time()
                         s.fancyprint && notify(s.first_started)
                         if should_stop(s)
                             return
@@ -1510,13 +1624,23 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
                             flags
                         end
 
+                        pid_ch = Channel{Int32}(1)
                         if batch_from_loading && pkg in batch_reqids
+                            Base.errormonitor(Threads.@spawn :samepool begin
+                                pid = try; take!(pid_ch); catch; Int32(0); end
+                                pid > 0 && @lock s.print_lock (s.active_pids[pkg_config] = pid)
+                            end)
                             t = @elapsed ret = begin
                                 Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
-                                                  flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel())
+                                                  flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
+                                                  pid_channel=pid_ch)
                             end
                         else
                             fullname = full_name(s.ext_to_parent, pkg)
+                            Base.errormonitor(Threads.@spawn :samepool begin
+                                pid = try; take!(pid_ch); catch; Int32(0); end
+                                pid > 0 && @lock s.print_lock (s.active_pids[pkg_config] = pid)
+                            end)
                             t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(s.io, s.print_lock, s.fancyprint, pkg_config, s.pkgspidlocked, s.hascolor, s.parallel_limiter, fullname) do
                                 if should_stop(s)
                                     return ErrorException("canceled")
@@ -1533,7 +1657,8 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
                                     @debug "Precompiling $(repr("text/plain", pkg))"
                                 end
                                 Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
-                                                  flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel())
+                                                  flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
+                                                  pid_channel=pid_ch)
                             end
                         end
                         if ret isa Exception
@@ -1566,6 +1691,8 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
                     finally
                         isopen(std_pipe.in) && close(std_pipe.in)
                         wait(t_monitor)
+                        try; close(pid_ch); catch; end
+                        @lock s.print_lock delete!(s.active_pids, pkg_config)
                         Base.release(s.parallel_limiter)
                         @lock BACKGROUND_PRECOMPILE.lock begin
                             delete!(BACKGROUND_PRECOMPILE.pending_pkgids, pkg)
@@ -1633,7 +1760,7 @@ function drain_work_channel!(s::PrecompileSession, work_channel::Channel{Precomp
                         for pkgid in keys(new_dd)
                             pkg_config = (pkgid, config)
                             @lock s.print_lock begin
-                                get!(s.started, pkg_config, false)
+                                get!(s.started, pkg_config, 0.0)
                                 get!(s.was_recompiled, pkg_config, false)
                             end
                             new_wp[pkg_config] = Base.Event()
@@ -1865,7 +1992,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     for config in configs
         for pkgid in keys(graph.direct_deps)
             pkg_config = (pkgid, config)
-            started[pkg_config] = false
+            started[pkg_config] = 0.0
             was_processed[pkg_config] = Base.Event()
             was_recompiled[pkg_config] = false
         end
