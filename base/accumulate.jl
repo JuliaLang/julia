@@ -172,7 +172,7 @@ cumprod!(B::AbstractArray{T}, A=B; dims::Integer) where {T} =
     cumprod!(y::AbstractVector, x::AbstractVector=y)
 
 Cumulative product of a vector `x`, storing the result in `y`.
-If `y` is omitted, the computation is performed in-place on `y`.
+If `x` is omitted, the computation is performed in-place on `y`.
 See also [`cumprod`](@ref).
 
 $(_DOCS_ALIASING_WARNING)
