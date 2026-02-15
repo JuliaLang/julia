@@ -59,7 +59,7 @@ cumsum!(B::AbstractArray{T}, A; dims::Integer) where {T} =
     accumulate!(add_sum, B, A, dims=dims)
 
 function cumsum!(v::AbstractVector; dims::Integer=1)
-    _cumsum!(v, v, dims, Base.ArithmeticStyle(eltype(v)))
+    _cumsum!(v, v, dims, ArithmeticStyle(eltype(v)))
 end
 
 function cumsum!(out::AbstractArray, v::AbstractVector; dims::Integer=1)
