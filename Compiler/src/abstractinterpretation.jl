@@ -116,7 +116,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
         add_remark!(interp, sv, "Cannot infer call, because we previously saw :latestworld")
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     end
-    matches = find_method_matches(interp, argtypes, atype; max_methods)
+    matches = find_method_matches(interp, argtypes, atype; max_methods, fargs=arginfo.fargs)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
@@ -331,20 +331,23 @@ end
 
 function find_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any}, @nospecialize(atype);
                              max_union_splitting::Int = InferenceParams(interp).max_union_splitting,
-                             max_methods::Int = InferenceParams(interp).max_methods)
-    if is_union_split_eligible(typeinf_lattice(interp), argtypes, max_union_splitting)
-        return find_union_split_method_matches(interp, argtypes, max_methods)
+                             max_methods::Int = InferenceParams(interp).max_methods,
+                             fargs::Union{Nothing,Vector{Any}}=nothing)
+    if is_union_split_eligible(typeinf_lattice(interp), argtypes, max_union_splitting; fargs)
+        return find_union_split_method_matches(interp, argtypes, max_methods; fargs)
     end
     return find_simple_method_matches(interp, atype, max_methods)
 end
 
 # NOTE this is valid as far as any "constant" lattice element doesn't represent `Union` type
-is_union_split_eligible(𝕃::AbstractLattice, argtypes::Vector{Any}, max_union_splitting::Int) =
-    1 < unionsplitcost(𝕃, argtypes) <= max_union_splitting
+is_union_split_eligible(𝕃::AbstractLattice, argtypes::Vector{Any}, max_union_splitting::Int;
+                        fargs::Union{Nothing,Vector{Any}}=nothing) =
+    1 < unionsplitcost(𝕃, argtypes; fargs) <= max_union_splitting
 
 function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any},
-                                         max_methods::Int)
-    split_argtypes = switchtupleunion(typeinf_lattice(interp), argtypes)
+                                         max_methods::Int;
+                                         fargs::Union{Nothing,Vector{Any}}=nothing)
+    split_argtypes = switchtupleunion(typeinf_lattice(interp), argtypes; fargs)
     infos = MethodMatchInfo[]
     applicable = MethodMatchTarget[]
     applicable_argtypes = Vector{Any}[] # arrays like `argtypes`, including constants, for each match
