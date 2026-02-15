@@ -689,16 +689,19 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                         elseif c in ('v', 'V')
                             @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.verbose = !BACKGROUND_PRECOMPILE.verbose
                         elseif c in ('?', 'h', 'H')
-                            println(io)
-                            println(io, "  Keyboard shortcuts:")
-                            println(io, "    c       Cancel precompilation via killing subprocesses (press Enter to confirm)")
-                            if detachable
-                                println(io, "    d/q/]   Detach (precompilation continues in background)")
+                            @lock io begin
+                                println(io)
+                                println(io, "  Keyboard shortcuts:")
+                                println(io, "    c       Cancel precompilation via killing subprocesses (press Enter to confirm)")
+                                if detachable
+                                    println(io, "    d/q/]   Detach (precompilation continues in background)")
+                                end
+                                println(io, "    i       Send profiling signal to subprocesses")
+                                fields = Sys.iswindows() ? "elapsed time and PID" : "elapsed time, PID, CPU% and memory"
+                                println(io, "    v       Toggle verbose mode (show $(fields) for each worker)")
+                                println(io, "    Ctrl-C  Interrupt (sends SIGINT, shows output)")
+                                println(io, "    ?/h     Show this help")
                             end
-                            println(io, "    i       Send profiling signal to subprocesses")
-                            println(io, "    v       Toggle verbose mode (show elapsed time, PID, and CPU% for each worker)")
-                            println(io, "    Ctrl-C  Interrupt (sends SIGINT, shows output)")
-                            println(io, "    ?/h     Show this help")
                         end
                     end
                 finally
@@ -896,8 +899,8 @@ precompilation:
   - **`i`** — Info. Sends a profiling signal (SIGINFO on macOS/BSD, SIGUSR1 on
     Linux) to subprocesses, triggering a profile peek without interrupting
     compilation.
-  - **`v`** — Toggle verbose mode. Shows elapsed time, worker PID, CPU%, and
-    memory (RSS) for each actively compiling package. Supported on Linux and macOS.
+  - **`v`** — Toggle verbose mode. Shows elapsed time and worker PID for each actively
+    compiling package, plus CPU% and memory (RSS) on Linux and macOS.
   - **`?`/`h`** — Show keyboard shortcut help.
   - **Ctrl-C** — Interrupt. Sends SIGINT to subprocesses and displays their output.
 

@@ -1620,8 +1620,8 @@ When package precompilation is running interactively, the following keyboard con
     (only available when precompilation was started by Pkg or with `detachable=true`).
   * **`i`** — Info. Sends a profiling signal to subprocesses for a profile peek without
     interrupting compilation.
-  * **`v`** — Toggle verbose mode. Shows elapsed time, worker PID, CPU%, and
-    memory (RSS) for each actively compiling package. Supported on Linux and macOS.
+  * **`v`** — Toggle verbose mode. Shows elapsed time and worker PID for each actively
+    compiling package, plus CPU% and memory (RSS) on Linux and macOS.
   * **Ctrl-C** — Interrupt. Sends SIGINT to subprocesses and displays their output.
 
 ## Miscellaneous
