@@ -558,8 +558,8 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                 (d == 0 || (d == 1 && !is_row_first)) && return [[length(a)]]
                 (d == 3 && is_row_first) && return (@__FUNCTION__)(a, is_row_first, 2)
                 # Recursive case: build shape from children
-                shapes = map(c -> (@__FUNCTION__)(c, is_row_first, d - 1), map(get_next, a))
-                counts = map(count_leaves, a)
+                shapes = (@__FUNCTION__).(get_next.(a), is_row_first, d - 1)
+                counts = count_leaves.(a)
                 result = [[sum(counts)], counts]
                 # Merge deeper levels from all children
                 max_depth = maximum(length, shapes; init=1)
