@@ -38,12 +38,14 @@ mutable struct BackgroundPrecompileState
     signal_channels::Vector{Channel{Int32}}  # channels for broadcasting signals to all subprocesses
     pending_pkgids::Set{PkgId}  # packages queued and currently being precompiled
     pkg_done::Threads.Condition  # notified when a package finishes precompiling
-    keyboard_tip::String  # set by key handler when active, read by print loop
     work_channel::Channel{PrecompileRequest}  # channel for injecting requests into running task
     verbose::Bool  # show PIDs and CPU% for each worker
+    detachable::Bool  # whether the monitor can be detached
+    cancel_confirming::Bool  # waiting for Enter to confirm cancel
+    cancel_confirm_deadline::Float64  # time() deadline for cancel confirmation
 end
 
-const BACKGROUND_PRECOMPILE = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Set{PkgId}(), Threads.Condition(), "", Channel{PrecompileRequest}(Inf), false)
+const BACKGROUND_PRECOMPILE = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Set{PkgId}(), Threads.Condition(), Channel{PrecompileRequest}(Inf), false, false, false, 0.0)
 
 # This is currently only used for pkgprecompile but the plan is to use this in code loading in the future
 # see the `kc/codeloading2.0` branch
@@ -573,6 +575,20 @@ const register_atexit_hook = Base.OncePerProcess{Nothing}() do
     nothing
 end
 
+function keyboard_tip(s::BackgroundPrecompileState)
+    s.monitoring || return "", :default
+    color = s.cancel_confirming ? Base.info_color() : :default
+    if s.cancel_confirming
+        remaining = max(0, ceil(Int, s.cancel_confirm_deadline - time()))
+        return "Press Enter to cancel precompilation (ignoring in $(remaining)s)", color
+    end
+    if s.detachable
+        return "Press `?` for help, `c` to cancel, `d` to detach.", color
+    else
+        return "Press `?` for help, `c` to cancel.", color
+    end
+end
+
 function monitor_background_precompile(io::IO = stderr, detachable::Bool = true, wait_for_pkg::Union{Nothing, PkgId} = nothing)
     local completed_at::Union{Nothing, Float64}
     local task
@@ -618,11 +634,8 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
         Threads.@spawn :samepool try
             trylock(stdin.raw_lock) || return
             @lock BACKGROUND_PRECOMPILE.lock begin
-                BACKGROUND_PRECOMPILE.keyboard_tip = if detachable
-                    "Press `?` for help, `c` to cancel, `d` to detach."
-                else
-                    "Press `?` for help, `c` to cancel."
-                end
+                BACKGROUND_PRECOMPILE.detachable = detachable
+                BACKGROUND_PRECOMPILE.cancel_confirming = false
             end
             try
                 term = Base.Terminals.TTYTerminal(get(ENV, "TERM", "dumb"), stdin, stdout, stderr)
@@ -640,12 +653,27 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                         end
                         bytesavailable(stdin) > 0 || continue
                         c = read(stdin, Char)
-                        if c in ('c', 'C')
+                        # If waiting for cancel confirmation, Enter confirms, anything else aborts
+                        cancel_confirmed = @lock BACKGROUND_PRECOMPILE.lock begin
+                            if BACKGROUND_PRECOMPILE.cancel_confirming
+                                BACKGROUND_PRECOMPILE.cancel_confirming = false
+                                c in ('\r', '\n')
+                            else
+                                false
+                            end
+                        end
+                        if cancel_confirmed
                             cancel_requested[] = true
-                            println(io)  # newline after keypress
+                            println(io)
                             @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.cancel_requested = true
                             broadcast_signal(Base.SIGKILL)
                             break
+                        end
+                        if c in ('c', 'C')
+                            @lock BACKGROUND_PRECOMPILE.lock begin
+                                BACKGROUND_PRECOMPILE.cancel_confirming = true
+                                BACKGROUND_PRECOMPILE.cancel_confirm_deadline = time() + 5.0
+                            end
                         elseif detachable && c in ('d', 'D', 'q', 'Q', ']')
                             exit_requested[] = true
                             println(io)  # newline after keypress
@@ -663,7 +691,7 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                         elseif c in ('?', 'h', 'H')
                             println(io)
                             println(io, "  Keyboard shortcuts:")
-                            println(io, "    c       Cancel precompilation (kills subprocesses)")
+                            println(io, "    c       Cancel precompilation via killing subprocesses (press Enter to confirm)")
                             if detachable
                                 println(io, "    d/q/]   Detach (precompilation continues in background)")
                             end
@@ -682,7 +710,9 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                 rethrow()
             finally
                 Base.reseteof(stdin)
-                @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.keyboard_tip = ""
+                @lock BACKGROUND_PRECOMPILE.lock begin
+                    BACKGROUND_PRECOMPILE.cancel_confirming = false
+                end
                 unlock(stdin.raw_lock)
             end
         finally
@@ -859,7 +889,8 @@ precompiles only the given packages and their dependencies (unless
 When running interactively in a TTY, the following keys are available during
 precompilation:
 
-  - **`c`** — Cancel precompilation. Kills all subprocesses and suppresses output.
+  - **`c`** — Cancel precompilation. Prompts for Enter to confirm; ignored after
+    5 seconds or if any other key is pressed.
   - **`d`/`q`/`]`** — Detach (only when `detachable=true`). Returns to the REPL while
     precompilation continues in the background.
   - **`i`** — Info. Sends a profiling signal (SIGINFO on macOS/BSD, SIGUSR1 on
@@ -1461,7 +1492,12 @@ function spawn_print_loop!(s::PrecompileSession)
                     end
                     i_local = i
                     final_loop_local = final_loop
-                    keyboard_tip = BACKGROUND_PRECOMPILE.keyboard_tip
+                    tip, tip_color = @lock BACKGROUND_PRECOMPILE.lock begin
+                        if BACKGROUND_PRECOMPILE.cancel_confirming && time() >= BACKGROUND_PRECOMPILE.cancel_confirm_deadline
+                            BACKGROUND_PRECOMPILE.cancel_confirming = false
+                        end
+                        keyboard_tip(BACKGROUND_PRECOMPILE)
+                    end
                     str_ = sprint(; context=s.logio) do iostr
                         if i_local > 1
                             print(iostr, ansi_cleartoend)
@@ -1470,11 +1506,11 @@ function spawn_print_loop!(s::PrecompileSession)
                         bar.max = s.n_total[] - s.n_already_precomp[]
                         termwidth = (displaysize(s.logio)::Tuple{Int,Int})[2]
                         if !final_loop_local
-                            tip_width = isempty(keyboard_tip) ? 0 : textwidth(keyboard_tip) + 1
+                            tip_width = isempty(tip) ? 0 : textwidth(tip) + 1
                             bar_termwidth = termwidth - tip_width
                             s_bar = sprint(io -> show_progress(io, bar; termwidth=bar_termwidth, carriagereturn=false); context=s.logio)
-                            if !isempty(keyboard_tip)
-                                s_bar = string(s_bar, " ", keyboard_tip)
+                            if !isempty(tip)
+                                s_bar = string(s_bar, " ", color_string(tip, tip_color, s.hascolor))
                             end
                             print(iostr, Base._truncate_at_width_or_chars(true, s_bar, termwidth), "\n")
                         end

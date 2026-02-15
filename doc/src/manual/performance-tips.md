@@ -1615,7 +1615,7 @@ There are also profiling options such as [using the external profiler Tracy to p
 
 When package precompilation is running interactively, the following keyboard controls are available:
 
-  * **`c`** — Cancel. Kills all subprocesses and suppresses their output.
+  * **`c`** — Cancel via killing the subprocesses. Prompts for Enter to confirm (ignored after 5 seconds).
   * **`d`** — Detach. Returns to the REPL while precompilation continues in the background
     (only available when precompilation was started by Pkg or with `detachable=true`).
   * **`i`** — Info. Sends a profiling signal to subprocesses for a profile peek without
