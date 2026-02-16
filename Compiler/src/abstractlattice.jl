@@ -80,8 +80,8 @@ const AnyConditionalsLattice{𝕃<:AbstractLattice} = Union{ConditionalsLattice{
 const AnyMustAliasesLattice{𝕃<:AbstractLattice} = Union{MustAliasesLattice{𝕃}, InterMustAliasesLattice{𝕃}}
 
 const SimpleInferenceLattice = typeof(PartialsLattice(ConstsLattice()))
-const BaseInferenceLattice = typeof(ConditionalsLattice(SimpleInferenceLattice.instance))
-const IPOResultLattice = typeof(InterConditionalsLattice(SimpleInferenceLattice.instance))
+const BaseInferenceLattice = typeof(MustAliasesLattice(ConditionalsLattice(SimpleInferenceLattice.instance)))
+const IPOResultLattice = typeof(InterMustAliasesLattice(InterConditionalsLattice(SimpleInferenceLattice.instance)))
 
 """
     struct InferenceLattice{𝕃<:AbstractLattice} <: AbstractLattice
