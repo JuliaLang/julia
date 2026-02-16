@@ -235,7 +235,7 @@ We can assume `st` has passed `valid_st1`.  Errors arising from invalid AST
 """
 function est_to_dst(st::SyntaxTree; all_expanded=true)
     g = st._graph
-    rec = @__FUNCTION__()
+    rec = var"#self#"
 
     return @stm st begin
         [K"Identifier"] -> let s = st.name_val
