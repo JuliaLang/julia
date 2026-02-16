@@ -808,7 +808,8 @@ function print_stackframe(io, i, frame::StackFrame, ndigits_max::Int, max_nested
         modulecolor = get!(() -> popfirst!(modulecolorcycler), modulecolordict, m)
         filecolor = get_filecolor(string(frame.file), m; modulecolordict, modulecolorcycler)
     else
-        modulecolor, filecolor = :default, :light_black
+        modulecolor = :default
+        filecolor = get_filecolor(string(frame.file), Main; modulecolordict, modulecolorcycler)
     end
     print_stackframe(io, i, frame, ndigits_max, max_nested_cycles, nactive_cycles, ncycle_starts, modulecolor, filecolor; prefix)
 end
@@ -887,7 +888,7 @@ function print_module_path_file(io, modul, file, line; modulecolor = :light_blac
 end
 
 function get_filecolor(file::String, modul::Module; modulecolordict = STACKTRACE_FIXEDCOLORS, modulecolorcycler = STACKTRACE_MODULECOLORS)
-    if contains(file, pwd()) || endswith(file, r"REPL\[\d+\]")
+    if startswith(file, r"\.|none") || (Sys.isunix() && startswith(file, '~')) || contains(file, pwd()) || endswith(file, r"REPL\[\d+\]")
         # file is probably owned by current user/process
         get!(() -> popfirst!(modulecolorcycler), modulecolordict, modul)
     else
