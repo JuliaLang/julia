@@ -21,6 +21,8 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
+* File paths in stack frames are now highlighted if they match the current working directory or the REPL.
+
 Command-line option changes
 ---------------------------
 
