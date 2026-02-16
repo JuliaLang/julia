@@ -1533,33 +1533,33 @@ end
     @test occursin("1-element", err_strA)
 end
 
-@testset "`get_filecolor`" begin
-    module A end
-    module B end
+module GetFilecolorA end
+module GetFilecolorB end
 
+@testset "`get_filecolor`" begin
     local_path = joinpath(pwd(), "get_filecolor.jl")
-    modulecolordict = Dict(A => :cyan)
-    modulecolorcylcler = [:blue]
+    modulecolordict = Dict(GetFilecolorA => :cyan)
+    modulecolorcycler = [:blue]
     cases = [
-        local_path => A => :cyan
-        local_path => B => :blue
-        ".." => A => :cyan
-        ".." => B => :blue
-        "." => A => :cyan
-        "." => B => :blue
-        "none" => A => :cyan
-        "none" => B => :blue
-        "REPL[10]" => A => :cyan
-        "REPL[1]" => B => :blue
-        "REPL[]" => A => :light_black
-        "REPL[]" => B => :light_black
-        "" => A => :light_black
-        "" => B => :light_black
+        local_path => GetFilecolorA => :cyan
+        local_path => GetFilecolorB => :blue
+        ".." => GetFilecolorA => :cyan
+        ".." => GetFilecolorB => :blue
+        "." => GetFilecolorA => :cyan
+        "." => GetFilecolorB => :blue
+        "none" => GetFilecolorA => :cyan
+        "none" => GetFilecolorB => :blue
+        "REPL[10]" => GetFilecolorA => :cyan
+        "REPL[1]" => GetFilecolorB => :blue
+        "REPL[]" => GetFilecolorA => :light_black
+        "REPL[]" => GetFilecolorB => :light_black
+        "" => GetFilecolorA => :light_black
+        "" => GetFilecolorB => :light_black
     ]
 
-    Sys.isunix() && push!(cases, "~" => A => :cyan, "~" => B => :blue)
+    Sys.isunix() && push!(cases, "~" => GetFilecolorA => :cyan, "~" => GetFilecolorB => :blue)
 
     for (file, (modul, color)) in cases
-        @test Base.get_filecolor(file, modul) == color
+        @test Base.get_filecolor(file, modul; modulecolordict, modulecolorcycler) == color
     end
 end
