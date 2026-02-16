@@ -80,8 +80,8 @@ version = "0.9.5"
 
 [[deps.Documenter]]
 deps = ["ANSIColoredPrinters", "AbstractTrees", "Base64", "CodecZlib", "Dates", "DocStringExtensions", "Downloads", "Git", "IOCapture", "InteractiveUtils", "JSON", "Logging", "Markdown", "MarkdownAST", "Pkg", "PrecompileTools", "REPL", "RegistryInstances", "SHA", "TOML", "Test", "Unicode"]
-git-tree-sha1 = "f964290a125b0f41d618731f626accbda841674e"
-repo-rev = "43d5602f451ecc69d15fa990a7c9df5644fe889b"
+git-tree-sha1 = "bb06f8b98c0ab8c91a32afc0783ce7d743ae582d"
+repo-rev = "31b1f17fdd1727106e26f9499ba1b5c14043b515"
 repo-url = "https://github.com/JuliaDocs/Documenter.jl.git"
 uuid = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 version = "1.16.1"
