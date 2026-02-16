@@ -915,7 +915,7 @@ function history_move(s::Union{LineEdit.MIState,LineEdit.PrefixSearchState}, his
     # save the current line
     if save_idx == max_idx
         hist.last_mode = LineEdit.mode(s)
-        hist.last_buffer = IOBuffer()
+        hist.last_buffer = copy(LineEdit.buffer(s))
     else
         # NOTE: Modifying the history is a bit funky, so
         # we reach into the internals of `HistoryFile`

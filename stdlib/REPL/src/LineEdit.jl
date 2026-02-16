@@ -2708,7 +2708,7 @@ function history_search(mistate::MIState)
     term = terminal(mistate)
     mimode = mode(mistate)
     mimode.hist.last_mode = mimode
-    mimode.hist.last_buffer = IOBuffer()
+    mimode.hist.last_buffer = copy(buffer(mistate))
     mistate.mode_state[mimode] =
         deactivate(mimode, state(mistate), termbuf, term)
     prefix = if mimode.prompt_prefix isa Function
@@ -2729,7 +2729,12 @@ function history_search(mistate::MIState)
     mistate.current_mode = mimode
     activate(mimode, state(mistate, mimode), termbuf, term)
     commit_changes(term, termbuf)
-    replace_line(pstate, result.text)
+if !isempty(result.text)
+    pstate.input_buffer.ptr = 1
+    pstate.input_buffer.size = 0
+    write(pstate.input_buffer, result.text)
+    seekend(pstate.input_buffer)
+end
     refresh_multi_line(mistate)
     nothing
 end
