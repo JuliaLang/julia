@@ -1138,11 +1138,11 @@ EnterNode(old::EnterNode, new_dest::Int) = isdefined(old, :scope) ?
     EnterNode(new_dest, old.scope) : EnterNode(new_dest)
 
 # typename(_).constprop_heuristic
-const FORCE_CONST_PROP           = shl_int(0x1, 0)
-const ARRAY_INDEX_HEURISTIC      = shl_int(0x1, 1)
-const ITERATE_HEURISTIC          = shl_int(0x1, 2)
-const SAMETYPE_HEURISTIC         = shl_int(0x1, 3)
-const DISABLE_SEMI_CONCRETE_EVAL = shl_int(0x1, 4)
+const FORCE_CONST_PROP           = 0x01
+const ARRAY_INDEX_HEURISTIC      = 0x02
+const ITERATE_HEURISTIC          = 0x04
+const SAMETYPE_HEURISTIC         = 0x08
+const DISABLE_SEMI_CONCRETE_EVAL = 0x10
 
 # `typename` has special tfunc support in inference to improve
 # the result for `Type{Union{...}}`. It is defined here, so that the Compiler
