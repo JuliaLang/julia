@@ -12,8 +12,10 @@ mutable struct SyntaxGraph{Attrs}
     attributes::Attrs
 end
 
-SyntaxGraph() = SyntaxGraph{Dict{Symbol,Any}}(Vector{UnitRange{Int}}(),
-                                              Vector{NodeId}(), Dict{Symbol,Any}())
+SyntaxGraph() = ensure_required_attributes!(
+    SyntaxGraph{Dict{Symbol,Any}}(
+        Vector{UnitRange{Int}}(),
+        Vector{NodeId}(), Dict{Symbol,Any}()))
 
 # "Freeze" attribute names and types, encoding them in the type of the returned
 # SyntaxGraph.
@@ -43,6 +45,8 @@ function attrdefs(graph::SyntaxGraph)
     [(k=>typeof(v).parameters[2]) for (k, v) in pairs(graph.attributes)]
 end
 
+copy_attrs(g::SyntaxGraph) = SyntaxGraph(g.edge_ranges, g.edges, copy(g.attributes))
+
 function Base.show(io::IO, ::MIME"text/plain", graph::SyntaxGraph)
     print(io, typeof(graph),
           " with $(length(graph.edge_ranges)) vertices, $(length(graph.edges)) edges, and attributes:\n")
@@ -68,7 +72,7 @@ function ensure_attributes!(graph::SyntaxGraph; kws...)
 end
 
 function ensure_attributes(graph::SyntaxGraph{<:Dict}; kws...)
-    g = unfreeze_attrs(graph)
+    g = copy_attrs(graph)
     ensure_attributes!(g; kws...)
 end
 
@@ -77,6 +81,14 @@ function ensure_attributes(graph::SyntaxGraph{<:NamedTuple}; kws...)
     ensure_attributes!(g; kws...)
     freeze_attrs(g)
 end
+
+ensure_required_attributes!(g::SyntaxGraph) = ensure_attributes!(
+    g,
+    kind=Kind,
+    source=SourceAttrType,
+    syntax_flags=UInt16,
+    value=Any,
+    name_val=String)
 
 function delete_attributes!(graph::SyntaxGraph{<:Dict}, attr_names::Symbol...)
     for name in attr_names

@@ -8,20 +8,12 @@ struct DesugaringContext{Attrs} <: AbstractLoweringContext
     expr_compat_mode::Bool
 end
 
-function DesugaringContext(ctx, expr_compat_mode::Bool)
-    graph = ensure_attributes(syntax_graph(ctx),
-                              kind=Kind, syntax_flags=UInt16,
-                              source=SourceAttrType,
-                              value=Any, name_val=String,
-                              scope_type=Symbol, # :hard or :soft
-                              var_id=IdTag,
-                              is_toplevel_thunk=Bool,
-                              toplevel_pure=Bool)
+function DesugaringContext(graph, ctx)
     DesugaringContext(graph,
                       ctx.bindings,
                       ctx.scope_layers,
                       current_layer(ctx).mod,
-                      expr_compat_mode)
+                      ctx.expr_compat_mode)
 end
 
 #-------------------------------------------------------------------------------
@@ -4683,15 +4675,23 @@ function expand_forms_2(ctx::StatementListCtx, args...)
     expand_forms_2(ctx.ctx, args...)
 end
 
+ensure_desugaring_attributes!(graph) = ensure_attributes!(
+    ensure_macro_attributes!(graph),
+    is_toplevel_thunk=Bool,
+    toplevel_pure=Bool,
+    scope_type=Symbol)
+
 @fzone "JL: desugar" function expand_forms_2(ctx::MacroExpansionContext, ex::SyntaxTree)
-    ctx1 = DesugaringContext(ctx, ctx.expr_compat_mode)
+    graph = ensure_desugaring_attributes!(copy_attrs(ctx.graph))
+    ex = reparent(graph, ex)
+    ctx_out = DesugaringContext(graph, ctx.bindings, ctx.scope_layers,
+                                current_layer(ctx).mod, ctx.expr_compat_mode)
     vr = valid_st1(ex)
     # surface only one error until we have pretty-printing for multiple
     if !vr.ok
         # showerrors(vr)
         throw(LoweringError(vr.errors[1].sts[1], vr.errors[1].msg))
     end
-    ex = est_to_dst(ex)
-    ex1 = expand_forms_2(ctx1, reparent(ctx1, ex))
-    ctx1, ex1
+    ex_out = expand_forms_2(ctx_out, est_to_dst(ex))
+    ctx_out, ex_out
 end

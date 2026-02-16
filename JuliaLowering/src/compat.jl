@@ -18,13 +18,7 @@ end
 
 function expr_to_est(@nospecialize(e),
                      lnn::LineNumberNode=LineNumberNode(0, :none))
-    graph = ensure_attributes!(
-        SyntaxGraph(),
-        kind=Kind, syntax_flags=UInt16,
-        source=SourceAttrType, var_id=Int, value=Any,
-        name_val=String, is_toplevel_thunk=Bool,
-        scope_layer=LayerId, meta=CompileHints,
-        toplevel_pure=Bool)
+    graph = ensure_macro_attributes!(SyntaxGraph())
     expr_to_est(graph, e, lnn)
 end
 

@@ -85,8 +85,7 @@ struct LinearIRContext{Attrs} <: AbstractLoweringContext
     mod::Module
 end
 
-function LinearIRContext(ctx, is_toplevel_thunk, lambda_bindings, return_type)
-    graph = syntax_graph(ctx)
+function LinearIRContext(graph, ctx, is_toplevel_thunk, lambda_bindings, return_type)
     rett = isnothing(return_type) ? nothing : reparent(graph, return_type)
     Attrs = typeof(graph.attributes)
     LinearIRContext(graph, SyntaxList(ctx), ctx.bindings, Ref(0),
@@ -1135,7 +1134,8 @@ function compile_lambda(outer_ctx, ex)
     static_parameters = ex[2]
     ret_var = numchildren(ex) == 4 ? ex[4] : nothing
     lambda_bindings = ex.lambda_bindings
-    ctx = LinearIRContext(outer_ctx, ex.is_toplevel_thunk, lambda_bindings, ret_var)
+    ctx = LinearIRContext(outer_ctx.graph, outer_ctx, ex.is_toplevel_thunk,
+                          lambda_bindings, ret_var)
     for arg in children(lambda_args)
         kind(arg) == K"Placeholder" && continue
         @assert kind(arg) == K"BindingId"
@@ -1202,6 +1202,12 @@ function compile_lambda(outer_ctx, ex)
     ]
 end
 
+ensure_linearization_attributes!(graph) = ensure_attributes!(
+    ensure_scope_attributes!(graph),
+    slots=Vector{Slot},
+    mod=Module,
+    id=Int)
+
 """
 This pass converts nested ASTs in the body of a lambda into a list of
 statements (ie, Julia's linear/untyped IR).
@@ -1210,23 +1216,10 @@ Most of the compliexty of this pass is in lowering structured control flow (if,
 loops, etc) to gotos and exception handling to enter/leave. We also convert
 `K"BindingId"` into K"slot", `K"globalref"` or `K"SSAValue` as appropriate.
 """
-@fzone "JL: linearize" function linearize_ir(ctx, ex)
-    graph = ensure_attributes(ctx.graph,
-                              slots=Vector{Slot},
-                              mod=Module,
-                              id=Int)
-    # TODO: Cleanup needed - `_ctx` is just a dummy context here. But currently
-    # required to call reparent() ...
-    Attrs = typeof(graph.attributes)
-    _ctx = LinearIRContext(graph, SyntaxList(graph), ctx.bindings,
-                           Ref(0), false, LambdaBindings(),
-                           Dict{IdTag,IdTag}(), nothing,
-                           Dict{String,JumpTarget{Attrs}}(),
-                           SyntaxList(graph), SyntaxList(graph),
-                           Vector{FinallyHandler{Attrs}}(),
-                           Dict{String, JumpTarget{Attrs}}(),
-                           Vector{JumpOrigin{Attrs}}(),
-                           Set{String}(), Dict{Symbol, Any}(), ctx.mod)
-    res = compile_lambda(_ctx, reparent(_ctx, ex))
-    _ctx, res
+@fzone "JL: linearize" function linearize_ir(ctx::ClosureConversionCtx, ex)
+    graph = ensure_linearization_attributes!(copy_attrs(ctx.graph))
+    ex = reparent(graph, ex)
+    ctx_out = LinearIRContext(graph, ctx, false, LambdaBindings(), nothing)
+    ex_out = compile_lambda(ctx_out, ex)
+    ctx_out, ex_out
 end
