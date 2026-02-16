@@ -500,6 +500,8 @@ ccall(:foo, Csize_t, (Cstring..., Cstring...), "asdfg", "blah")
 
 ########################################
 # cglobal special support for (sym, lib) tuple
+# unlike flisp we outline the tuple and allow constant propagation to put it
+# back before codegen generates code for `cglobal`
 cglobal((:sym, lib), Int)
 #---------------------
 1   TestMod.lib

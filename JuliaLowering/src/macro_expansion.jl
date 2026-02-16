@@ -10,13 +10,13 @@ struct MacroExpansionContext{Attrs} <: AbstractLoweringContext
 end
 
 function MacroExpansionContext(graph::SyntaxGraph, mod::Module, expr_compat_mode::Bool, world::UInt)
-    layers = ScopeLayer[ScopeLayer(1, mod, 0, false)]
+    layers = ScopeLayer[ScopeLayer(1, mod, 0, false, false)]
     MacroExpansionContext(graph, Bindings(), layers, LayerId[length(layers)], expr_compat_mode, world)
 end
 
-function push_layer!(ctx::MacroExpansionContext, mod::Module, is_macro_expansion::Bool)
+function push_layer!(ctx::MacroExpansionContext, mod::Module)
     new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod,
-                           current_layer_id(ctx), is_macro_expansion)
+                           current_layer_id(ctx), true, false)
     push!(ctx.scope_layers, new_layer)
     push!(ctx.scope_layer_stack, new_layer.id)
 end
@@ -360,8 +360,8 @@ function expand_macro(ctx, ex)
         mod_for_ast = lookup_method_instance(macfunc, macro_args,
                                              ctx.macro_world).def.module
         new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod_for_ast,
-                               current_layer_id(ctx), true)
-        push_layer!(ctx, mod_for_ast, true)
+                               current_layer_id(ctx), true, false)
+        push_layer!(ctx, mod_for_ast)
         expanded = expand_forms_1(ctx, expanded)
         pop_layer!(ctx)
     end
@@ -427,7 +427,7 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         @chk(2 <= numchildren(ex) <= 3 && ex[2].value isa Module,
              (ex,"`hygienic-scope` requires an AST and a module"))
         new_layer = ScopeLayer(length(ctx.scope_layers)+1, ex[2].value,
-                               current_layer_id(ctx), true)
+                               current_layer_id(ctx), true, false)
         push!(ctx.scope_layers, new_layer)
         push!(ctx.scope_layer_stack, new_layer.id)
         hyg_ex = expand_forms_1(ctx, ex[1])
