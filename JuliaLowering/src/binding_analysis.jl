@@ -229,7 +229,23 @@ function du_visit!(ctx, state::DefUseState, e)
         end
         return false
 
-    elseif k == K"method_defs" || k == K"function_decl"
+    elseif k == K"function_decl"
+        # [function_decl] defines and instantiates the closure type and assigns
+        # it to its first argument (but only once per unique first argument).
+        func_id = e[1].var_id
+        @assert kind(e[1]) == K"BindingId"
+        func_id in state.seen && return false
+        if haskey(ctx.closure_bindings, func_id)
+            for lam in ctx.closure_bindings[func_id].lambdas
+                for (id, capt) in lam.locals_capt
+                    du_mark_captured!(state, id)
+                end
+            end
+        end
+        du_assign!(state, func_id)
+        return false
+
+    elseif k == K"method_defs"
         # Process nested lambdas within
         has_label = false
         for child in children(e)

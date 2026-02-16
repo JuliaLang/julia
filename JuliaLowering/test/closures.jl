@@ -562,3 +562,17 @@ let (f, response) = test_mod.f_update_outer_capture()
     @test f.response isa Core.Box
     @test response == 1
 end
+
+# https://github.com/JuliaLang/JuliaLowering.jl/issues/147
+JuliaLowering.include_string(test_mod, """
+function f_box_regression147()
+    function foo()
+        return true
+    end
+    return (()->foo, foo)
+end
+""")
+let (f, foo) = test_mod.f_box_regression147()
+    @test !(f.foo isa Core.Box)
+    @test f.foo === foo
+end
