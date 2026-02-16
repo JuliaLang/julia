@@ -408,6 +408,9 @@ function parse_julia_literal(txtbuf::Vector{UInt8}, head::SyntaxHead, srcrange)
         return had_error ? ErrorVal() : String(take!(io))
     elseif k == K"Bool"
         return txtbuf[first(srcrange)] == u8"t"
+    elseif k == K"VERSION"
+        nv = numeric_flags(head)
+        return VersionNumber(1, nv ÷ 10, nv % 10)
     end
 
     # TODO: Avoid allocating temporary String here

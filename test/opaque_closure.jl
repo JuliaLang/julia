@@ -257,6 +257,15 @@ let oc = @opaque a->sin(a)
     end
 end
 
+let oc = @opaque (a::Int) -> identity(a)
+    buf = IOBuffer()
+    code_warntype(buf, oc, (Int,); optimize=true)
+    opt = takestring!(buf)
+    code_warntype(buf, oc, (Int,); optimize=false)
+    unopt = takestring!(buf)
+    @test opt != unopt
+end
+
 # constructing an opaque closure from IRCode
 let src = first(only(code_typed(+, (Int, Int))))
     ir = Core.Compiler.inflate_ir(src, Core.Compiler.VarState[], src.slottypes)

@@ -129,6 +129,8 @@ end
 LogLevel(level::LogLevel) = level
 
 isless(a::LogLevel, b::LogLevel) = isless(a.level, b.level)
+isless(a::LogLevel, b::Integer) = isless(a.level, b)
+isless(a::Integer, b::LogLevel) = isless(a, b.level)
 +(level::LogLevel, inc::Integer) = LogLevel(level.level+inc)
 -(level::LogLevel, inc::Integer) = LogLevel(level.level-inc)
 convert(::Type{LogLevel}, level::Integer) = LogLevel(level)

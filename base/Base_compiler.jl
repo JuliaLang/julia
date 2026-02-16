@@ -141,6 +141,20 @@ import Core: @doc, @__doc__, WrappedException, @int128_str, @uint128_str, @big_s
 # Export list
 include("exports.jl")
 
+function set_syntax_version end
+_topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
+function _setup_module!(mod::Module, Core.@nospecialize syntax_ver)
+    # using Base
+    Core._using(mod, _topmod(mod), UInt8(0))
+    Core.declare_const(mod, :include, IncludeInto(mod))
+    Core.declare_const(mod, :eval, Core.EvalInto(mod))
+    if syntax_ver === nothing
+        return nothing
+    end
+    set_syntax_version(mod, syntax_ver)
+    return nothing
+end
+
 # core docsystem
 include("docs/core.jl")
 Core.atdoc!(CoreDocs.docm)

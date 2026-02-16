@@ -279,7 +279,7 @@ if (Sys.islinux() || Sys.isbsd()) && !Sys.isapple()
 
     # This callback function called by dl_iterate_phdr() on Linux and BSD's
     # DL_ITERATE_PHDR(3) on freebsd
-    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dynamic_libraries::Array{String,1})
+    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dynamic_libraries::Vector{String})
         name = unsafe_string(di.name)
         push!(dynamic_libraries, name)
         return Cint(0)
@@ -325,16 +325,16 @@ Helper type for lazily constructed library paths for use with [`LazyLibrary`](@r
 Path pieces are stored unevaluated and joined with `joinpath()` when the library is first
 accessed. Arguments must be able to have `string()` called on them.
 
-# Example
-
-```julia
-const mylib = LazyLibrary(LazyLibraryPath(artifact_dir, "lib", "libmylib.so.1.2.3"))
-```
-
 !!! compat "Julia 1.11"
     `LazyLibraryPath` was added in Julia 1.11.
 
 See also [`LazyLibrary`](@ref), [`BundledLazyLibraryPath`](@ref).
+
+# Examples
+
+```julia
+const mylib = LazyLibrary(LazyLibraryPath(artifact_dir, "lib", "libmylib.so.1.2.3"))
+```
 """
 struct LazyLibraryPath
     pieces::Tuple{Vararg{Any}}
@@ -403,6 +403,12 @@ tasks block until loading completes. The handle is then cached and reused for al
 calls (there is no dlclose for lazy library and dlclose should not be called on the returned
 handled).
 
+!!! compat "Julia 1.11"
+    `LazyLibrary` was added in Julia 1.11.
+
+See also [`LazyLibraryPath`](@ref), [`BundledLazyLibraryPath`](@ref), [`dlopen`](@ref),
+[`dlsym`](@ref), [`add_dependency!`](@ref).
+
 # Examples
 
 ```julia
@@ -418,12 +424,6 @@ const libbar = LazyLibrary("libbar"; dependencies=[libfoo])
 For more examples including platform-specific libraries, lazy path construction, and
 migration from `__init__()` patterns, see the manual section on
 [Using LazyLibrary for Lazy Loading](@ref man-lazylibrary).
-
-!!! compat "Julia 1.11"
-    `LazyLibrary` was added in Julia 1.11.
-
-See also [`LazyLibraryPath`](@ref), [`BundledLazyLibraryPath`](@ref), [`dlopen`](@ref),
-[`dlsym`](@ref), [`add_dependency!`](@ref).
 """
 mutable struct LazyLibrary
     # Name and flags to open with
@@ -506,6 +506,9 @@ function dlopen(ll::LazyLibrary, flags::Integer = ll.flags; kwargs...)
                 if ll.on_load_callback !== nothing
                     ll.on_load_callback()
                 end
+            else
+                # Another thread loaded the library while we were waiting
+                handle = @atomic :acquire ll.handle
             end
         end
     else

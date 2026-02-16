@@ -2956,11 +2956,35 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             size_t num_mis;
             jl_get_llvm_cis(native_functions, &num_mis, NULL);
             arraylist_grow(&MIs, num_mis);
+
+            // Record MethodInstances for user-provided code (as reported by codegen)
             jl_get_llvm_cis(native_functions, &num_mis, (jl_code_instance_t**)MIs.items);
             for (size_t i = 0; i < num_mis; i++) {
                 jl_code_instance_t *ci = (jl_code_instance_t*)MIs.items[i];
                 MIs.items[i] = (void*)jl_get_ci_mi(ci);
             }
+
+            // Record MethodInstances for built-ins (used when dynamically dispatching to a
+            // built-in, e.g., in the Core._apply_iterate implementation)
+            jl_datatype_t *tt = NULL;
+            JL_GC_PUSH1(&tt);
+            for (size_t i = 0; i < jl_n_builtins; i++) {
+                jl_value_t *builtin = jl_builtin_instances[i];
+                if (builtin == NULL)
+                    continue;
+
+                jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(builtin);
+                jl_value_t *params[2];
+                params[0] = dt->name->wrapper;
+                params[1] = jl_tparam0(jl_anytuple_type);
+                tt = (jl_datatype_t*)jl_apply_tuple_type_v(params, 2);
+                jl_method_instance_t *mi = (jl_method_instance_t *)jl_method_lookup_by_tt(
+                    tt, /* world */ 1, /* mt */ jl_nothing
+                );
+                assert(!jl_is_nothing(mi));
+                arraylist_push(&MIs, mi);
+            }
+            JL_GC_POP();
         }
     }
     if (jl_options.trim) {
@@ -3304,15 +3328,30 @@ static int ci_not_internal_cache(jl_code_instance_t *ci)
     return !(jl_atomic_load_relaxed(&ci->flags) & JL_CI_FLAGS_NATIVE_CACHE_VALID) || jl_object_in_image(mi->def.value);
 }
 
+static uint8_t jl_get_toplevel_syntax_version(void)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_module_t *toplevel = (jl_module_t*)jl_get_global_value(jl_base_module, jl_symbol("__toplevel__"), ct->world_age);
+    JL_GC_PROMISE_ROOTED(toplevel);
+    jl_value_t *syntax_version = jl_get_global_value(toplevel, jl_symbol("_internal_syntax_version"), ct->world_age);
+    return jl_unbox_uint8(syntax_version);
+}
+
 static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_array_t *mod_array, jl_array_t **udeps, int64_t *srctextpos, int64_t *checksumpos)
 {
     *checksumpos = write_header(f, 0);
     write_uint8(f, jl_cache_flags());
+    // write the syntax version marker. Note that unlike a VersionNumber, this is
+    // private to the serialization format and only needs to be reloaded by the
+    // same version of Julia that wrote it. As a result, we don't store the full
+    // VersionNumber, only an index of which of the supported syntax versions to
+    // select.
+    write_uint8(f, jl_get_toplevel_syntax_version());
     // write description of contents (name, uuid, buildid)
     write_worklist_for_header(f, worklist);
     // Determine unique (module, abspath, fsize, hash, mtime) dependencies for the files defining modules in the worklist
     // (see Base._require_dependencies). These get stored in `udeps` and written to the ji-file header
-    // (abspath will be converted to a relocateable @depot path before writing, cf. Base.replace_depot_path).
+    // (abspath will be converted to a relocatable @depot path before writing, cf. Base.replace_depot_path).
     // Also write Preferences.
     // last word of the dependency list is the end of the data / start of the srctextpos
     *srctextpos = write_dependency_list(f, worklist, udeps);  // srctextpos: position of srctext entry in header index (update later)
@@ -3359,6 +3398,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
         if (emit_split) {
             checksumpos_ff = write_header(ff, 1);
             write_uint8(ff, jl_cache_flags());
+            write_uint8(ff, jl_get_toplevel_syntax_version());
             write_mod_list(ff, mod_array);
         }
         else {
@@ -3477,6 +3517,7 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
         ios_seek_end(&f);
         size_t len = ios_pos(&f);
         char *sysimg = (char*)jl_gc_perm_alloc(len, 0, 64, 0);
+        jl_gc_notify_image_alloc(sysimg, len);
         ios_seek(&f, 0);
 
         if (ios_readall(&f, sysimg, len) != len)
@@ -4305,6 +4346,8 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_
     if (pkgimage && !jl_match_cache_flags_current(flags)) {
         return jl_get_exceptionf(jl_errorexception_type, "Pkgimage flags mismatch");
     }
+    // Syntax version mismatch is not fatal to load
+    (void)read_uint8(f); // syntax_version
     if (!pkgimage) {
         // skip past the worklist
         size_t len;
@@ -4348,9 +4391,10 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
         char *sysimg;
         int success = !needs_permalloc;
         ios_seek(f, datastartpos);
-        if (needs_permalloc)
+        if (needs_permalloc) {
             sysimg = (char*)jl_gc_perm_alloc(len, 0, 64, 0);
-        else
+            jl_gc_notify_image_alloc(sysimg, len);
+        } else
             sysimg = &f->buf[f->bpos];
         if (needs_permalloc)
             success = ios_readall(f, sysimg, len) == len;

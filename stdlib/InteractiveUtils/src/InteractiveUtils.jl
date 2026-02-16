@@ -351,8 +351,7 @@ function report_bug(kind)
     BugReportingId = Base.PkgId(
         Base.UUID((0xbcf9a6e7_4020_453c,0xb88e_690564246bb8)), "BugReporting")
     # Check if the BugReporting package exists in the current environment
-    local BugReporting
-    if Base.locate_package(BugReportingId) === nothing
+    BugReporting = if Base.locate_package(BugReportingId) === nothing
         @info "Package `BugReporting` not found - attempting temporary installation"
         # Create a temporary environment and add BugReporting
         let Pkg = Base.require_stdlib(Base.PkgId(
@@ -364,13 +363,14 @@ function report_bug(kind)
                 Base.ACTIVE_PROJECT[] = nothing
                 pkgspec = @invokelatest Pkg.PackageSpec(BugReportingId.name, BugReportingId.uuid)
                 @invokelatest Pkg.add(pkgspec)
-                BugReporting = Base.require(BugReportingId)
+                _BugReporting = Base.require(BugReportingId)
                 append!(empty!(LOAD_PATH), old_load_path)
                 Base.ACTIVE_PROJECT[] = old_active_project
+                _BugReporting
             end
         end
     else
-        BugReporting = Base.require(BugReportingId)
+        Base.require(BugReportingId)
     end
     return @invokelatest BugReporting.make_interactive_report(kind, ARGS)
 end

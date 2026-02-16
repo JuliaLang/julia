@@ -464,6 +464,56 @@ function test_fence()
 end
 test_fence()
 
+# Test asymmetric thread fences
+struct AsymmetricFenceTestData
+    n::Int
+    x::AtomicMemory{Int}
+    y::AtomicMemory{Int}
+    read_x::AtomicMemory{Int}
+    read_y::AtomicMemory{Int}
+end
+function test_asymmetric_fence(data::AsymmetricFenceTestData, cond1, cond2, threadid, it)
+    if (threadid % 2) == 0
+        @atomic :monotonic data.x[it] = 1
+        Threads.atomic_fence_heavy()
+        @atomic :monotonic data.read_y[it] = @atomic :monotonic data.y[it]
+        wait(cond1)
+        notify(cond2)
+    else
+        @atomic :monotonic data.y[it] = 1
+        Threads.atomic_fence_light()
+        @atomic :monotonic data.read_x[it] = @atomic :monotonic data.x[it]
+        notify(cond1)
+        wait(cond2)
+    end
+end
+function test_asymmetric_fence(data::AsymmetricFenceTestData, cond1, cond2, threadid)
+    for i = 1:data.n
+        test_asymmetric_fence(data, cond1, cond2, threadid, i)
+    end
+end
+function test_asymmetric_fence()
+    asymmetric_test_count = 200_000
+    cond1 = Threads.Event(true)
+    cond2 = Threads.Event(true)
+    data = AsymmetricFenceTestData(asymmetric_test_count,
+                                   AtomicMemory{Int}(undef, asymmetric_test_count),
+                                   AtomicMemory{Int}(undef, asymmetric_test_count),
+                                   AtomicMemory{Int}(undef, asymmetric_test_count),
+                                   AtomicMemory{Int}(undef, asymmetric_test_count))
+    for i = 1:asymmetric_test_count
+        @atomic :monotonic data.x[i] = 0
+        @atomic :monotonic data.y[i] = 0
+        @atomic :monotonic data.read_x[i] = typemax(Int)
+        @atomic :monotonic data.read_y[i] = typemax(Int)
+    end
+    t1 = @Threads.spawn test_asymmetric_fence(data, cond1, cond2, 1)
+    t2 = @Threads.spawn test_asymmetric_fence(data, cond1, cond2, 2)
+    wait(t1); wait(t2)
+    @test !any((data.read_x .== 0) .& (data.read_y .== 0))
+end
+test_asymmetric_fence()
+
 # Test load / store with various types
 let atomictypes = (Int8, Int16, Int32, Int64, Int128,
                    UInt8, UInt16, UInt32, UInt64, UInt128,

@@ -173,7 +173,7 @@ highly efficient, then it may make sense to add a method to `string` and
 define `print(io::IO, x::MyType) = print(io, string(x))` to ensure the
 functions are consistent.
 
-See also: [`String`](@ref), [`repr`](@ref), [`sprint`](@ref), [`show`](@ref @show).
+See also [`String`](@ref), [`repr`](@ref), [`sprint`](@ref), [`show`](@ref @show).
 
 # Examples
 ```jldoctest
@@ -591,9 +591,9 @@ end
 Create a raw string without interpolation and unescaping.
 The exception is that quotation marks still must be escaped. Backslashes
 escape both quotation marks and other backslashes, but only when a sequence
-of backslashes precedes a quote character. Thus, 2n backslashes followed by
-a quote encodes n backslashes and the end of the literal while 2n+1 backslashes
-followed by a quote encodes n backslashes followed by a quote character.
+of backslashes precedes a quote character. Thus, ``2n`` backslashes followed by
+a quote encode ``n`` backslashes and the end of the literal while ``2n+1`` backslashes
+followed by a quote encode ``n`` backslashes followed by a quote character.
 
 # Examples
 ```jldoctest
