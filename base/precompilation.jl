@@ -758,10 +758,11 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
 
     return try
         # Wait for task completion or user action
-        while !exit_requested[] && !cancel_requested[] && !interrupt_requested[]
-            completed = @lock BG (BG.completed_at !== nothing)
-            completed && break
-            @lock BG.task_done wait(BG.task_done)
+        @lock BG.task_done begin
+            while !exit_requested[] && !cancel_requested[] && !interrupt_requested[]
+                BG.completed_at !== nothing && break
+                wait(BG.task_done)
+            end
         end
 
         # If user requested cancel, stop the background task
@@ -1018,8 +1019,10 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
                     BG.cancel_requested = false
                     foreach(close, BG.signal_channels)
                     empty!(BG.signal_channels)
-                    empty!(BG.pending_pkgids)
-                    @lock BG.pkg_done notify(BG.pkg_done)
+                    @lock BG.pkg_done begin
+                        empty!(BG.pending_pkgids)
+                        notify(BG.pkg_done)
+                    end
                     BG.monitoring = false
                     BG.completed_at = time()
                     @lock BG.task_done notify(BG.task_done)
@@ -1323,6 +1326,7 @@ Base.@kwdef mutable struct PrecompileSession
 
     # Synchronization
     first_started::Base.Event                      = Base.Event()
+    cache_lock::ReentrantLock                      = ReentrantLock()
 
     # Task tracking
     tasks::Vector{Task}                            = Task[]
@@ -1535,7 +1539,7 @@ function spawn_print_loop!(s::PrecompileSession)
                                 !loaded && s.interrupted_or_done[] && continue
                                 loaded || Base.errormonitor(Threads.@spawn :samepool begin
                                     sleep(1);
-                                    filter!(!isequal(pkg_config), s.pkg_queue)
+                                    @lock s.print_lock filter!(!isequal(pkg_config), s.pkg_queue)
                                 end)
                                 string(color_string("  ✓ ", loaded ? Base.warn_color() : :green, s.hascolor), name)
                             elseif s.started[pkg_config] > 0
@@ -1602,7 +1606,7 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
     for (pkg, deps) in batch_dd
         cachepaths = Base.find_all_in_cache_path(pkg)
         freshpaths = String[]
-        s.cachepath_cache[pkg] = freshpaths
+        @lock s.cache_lock s.cachepath_cache[pkg] = freshpaths
         sourcespec = Base.locate_package_load_spec(pkg)
         single_requested_pkg = length(batch_reqpkgs) == 1 &&
             (pkg in batch_reqids || pkg.name in batch_names)
@@ -1620,7 +1624,7 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
                 notify(batch_wp[pkg_config])
                 continue
             end
-            @lock BG push!(BG.pending_pkgids, pkg)
+            @lock BG @lock BG.pkg_done push!(BG.pending_pkgids, pkg)
             flags, cacheflags = config
             task = Threads.@spawn :samepool try
                 loaded = s.warn_loaded && (pkg in s.start_loaded_modules)
@@ -1631,7 +1635,7 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
                     end
                 end
                 circular = pkg in batch_circular
-                freshpath = Base.compilecache_freshest_path(pkg; ignore_loaded=s.ignore_loaded,
+                freshpath = @lock s.cache_lock Base.compilecache_freshest_path(pkg; ignore_loaded=s.ignore_loaded,
                     stale_cache=s.stale_cache, cachepath_cache=s.cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
                 is_stale = freshpath === nothing
                 if !is_stale
@@ -1653,8 +1657,8 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
                             if !s.fancyprint && isempty(s.pkg_queue) && BG.monitoring
                                 printpkgstyle(s.logio, :Precompiling, something(s.target[], "packages..."))
                             end
+                            push!(s.pkg_queue, pkg_config)
                         end
-                        push!(s.pkg_queue, pkg_config)
                         s.started[pkg_config] = time()
                         s.fancyprint && notify(s.first_started)
                         if should_stop(s)
@@ -1690,7 +1694,7 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
                                     return ErrorException("canceled")
                                 end
                                 local cachepaths = Base.find_all_in_cache_path(pkg)
-                                local freshpath = Base.compilecache_freshest_path(pkg; ignore_loaded=s.ignore_loaded,
+                                local freshpath = @lock s.cache_lock Base.compilecache_freshest_path(pkg; ignore_loaded=s.ignore_loaded,
                                     stale_cache=s.stale_cache, cachepath_cache=s.cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
                                 local is_stale = freshpath === nothing
                                 if !is_stale
@@ -1720,7 +1724,7 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
                                 push!(freshpaths, cachefile)
                                 build_id, _ = Base.parse_cache_buildid(cachefile)
                                 stale_cache_key = (pkg, build_id, sourcespec, cachefile, s.ignore_loaded, cacheflags)::StaleCacheKey
-                                s.stale_cache[stale_cache_key] = false
+                                @lock s.cache_lock s.stale_cache[stale_cache_key] = false
                             end
                         end
                         loaded && (s.n_loaded[] += 1)
@@ -1738,9 +1742,9 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
                         try; close(pid_ch); catch; end
                         @lock s.print_lock delete!(s.active_pids, pkg_config)
                         Base.release(s.parallel_limiter)
-                        @lock BG begin
+                        @lock BG @lock BG.pkg_done begin
                             delete!(BG.pending_pkgids, pkg)
-                            @lock BG.pkg_done notify(BG.pkg_done)
+                            notify(BG.pkg_done)
                         end
                     end
                 else
@@ -1818,7 +1822,7 @@ function drain_work_channel!(s::PrecompileSession, work_channel::Channel{Precomp
                     s.n_batches[] += 1
                     waiter = Threads.@spawn :samepool begin
                         waitall(new_tasks; failfast=false, throw=false)
-                        paths = collect(String, Iterators.flatten((v for (pkgid, v) in s.cachepath_cache if pkgid in req_pkgids)))
+                        paths = @lock s.cache_lock collect(String, Iterators.flatten((v for (pkgid, v) in s.cachepath_cache if pkgid in req_pkgids)))
                         try; put!(request.result, paths); catch; end
                     end
                     push!(s.result_waiters, waiter)
@@ -1962,7 +1966,7 @@ function report_precompile_results!(s::PrecompileSession)
     if s.interrupted[]
         throw(InterruptException())
     end
-    return collect(String, Iterators.flatten((v for (pkgid, v) in s.cachepath_cache if pkgid in s.requested_pkgids)))
+    return @lock s.cache_lock collect(String, Iterators.flatten((v for (pkgid, v) in s.cachepath_cache if pkgid in s.requested_pkgids)))
 end
 
 # The actual precompilation implementation (mode-agnostic)
