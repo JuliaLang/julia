@@ -83,6 +83,7 @@ struct ScopeLayer
     mod::Module
     parent_layer::LayerId # Index of parent layer in a macro expansion. Equal to 0 for no parent
     is_macro_expansion::Bool # FIXME
+    is_internal::Bool
 end
 
 """
@@ -105,7 +106,7 @@ function JuliaSyntax.newleaf(ctx, prov, k, @nospecialize(value))
         setattr!(leaf._graph, leaf._id, :var_id, value)
     elseif k == K"label"
         setattr!(leaf._graph, leaf._id, :id, value)
-    elseif k == K"symbolic_label"
+    elseif k == K"symboliclabel"
         setattr!(leaf._graph, leaf._id, :name_val, value)
     elseif k in KSet"TOMBSTONE SourceLocation latestworld latestworld_if_toplevel
                      softscope"
@@ -365,7 +366,7 @@ function set_scope_layer(ctx, ex, layer_id, force)
     k = kind(ex)
     new_layer = force ? layer_id : get(ex, :scope_layer, layer_id)
 
-    ex2 = if k == K"module" || k == K"toplevel" || k == K"inert"
+    ex2 = if k == K"module" || k == K"toplevel" || k == K"inert" || k == K"inert_syntaxtree"
         mknode(ex, children(ex))
     elseif k == K"."
         cs = tree_ids(set_scope_layer(ctx, ex[1], layer_id, force), ex[2])
@@ -441,11 +442,11 @@ end
 
 function is_quoted(ex)
     kind(ex) in KSet"Symbol quote top core globalref break inert
-                     meta inbounds inline noinline loopinfo"
+                     inert_syntaxtree meta inbounds inline noinline loopinfo"
 end
 
 function extension_type(ex)
-    @assert kind(ex) == K"extension" || kind(ex) == K"assert"
+    @assert kind(ex) == K"assert"
     @chk numchildren(ex) >= 1
     @chk kind(ex[1]) == K"Symbol"
     ex[1].name_val
@@ -563,7 +564,7 @@ function to_symbol(ctx, ex)
 end
 
 function new_scope_layer(ctx, mod_ref::Module=ctx.mod)
-    new_layer = ScopeLayer(length(ctx.scope_layers)+1, ctx.mod, 0, false)
+    new_layer = ScopeLayer(length(ctx.scope_layers)+1, ctx.mod, 0, false, true)
     push!(ctx.scope_layers, new_layer)
     new_layer.id
 end

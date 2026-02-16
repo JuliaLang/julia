@@ -162,6 +162,45 @@ function traverse_analysis_results(callback, (;analysis_results)::Union{Inferenc
 end
 
 """
+    InferenceCache
+
+A cache for `InferenceResult` objects that maintains an index for fast lookups by `MethodInstance`.
+This is used as the local inference cache for `AbstractInterpreter` implementations.
+"""
+struct InferenceCache
+    results::Vector{InferenceResult}
+    # Index from MethodInstance to indices in `results` where linfo === mi
+    index::IdDict{MethodInstance, Vector{Int}}
+end
+
+InferenceCache() = InferenceCache(Vector{InferenceResult}(), IdDict{MethodInstance, Vector{Int}}())
+
+function Base.push!(cache::InferenceCache, result::InferenceResult)
+    push!(cache.results, result)
+    mi = result.linfo
+    idx = length(cache.results)
+    if haskey(cache.index, mi)
+        push!(cache.index[mi], idx)
+    else
+        cache.index[mi] = Int[idx]
+    end
+    return cache
+end
+
+Base.length(cache::InferenceCache) = length(cache.results)
+Base.isempty(cache::InferenceCache) = isempty(cache.results)
+
+Base.iterate(cache::InferenceCache) = iterate(cache.results)
+Base.iterate(cache::InferenceCache, state) = iterate(cache.results, state)
+Base.eltype(::Type{InferenceCache}) = InferenceResult
+Base.getindex(cache::InferenceCache, i::Int) = cache.results[i]
+
+# Get indices for a specific MethodInstance (returns empty vector if not found)
+function get_indices(cache::InferenceCache, mi::MethodInstance)
+    return get(cache.index, mi, Int[])
+end
+
+"""
     inf_params::InferenceParams
 
 Parameters that control abstract interpretation-based type inference operation.
@@ -402,7 +441,7 @@ struct NativeInterpreter <: AbstractInterpreter
     method_table::CachedMethodTable{InternalMethodTable}
 
     # Cache of inference results for this particular interpreter
-    inf_cache::Vector{InferenceResult}
+    inf_cache::InferenceCache
     codegen::IdDict{CodeInstance,CodeInfo}
 
     # Parameters for inference and optimization
@@ -423,7 +462,7 @@ function NativeInterpreter(world::UInt = get_world_counter();
     # incorrect, fail out loudly.
     @assert world <= curr_max_world
     method_table = CachedMethodTable(InternalMethodTable(world))
-    inf_cache = Vector{InferenceResult}() # Initially empty cache
+    inf_cache = InferenceCache() # Initially empty cache
     codegen = IdDict{CodeInstance,CodeInfo}()
     return NativeInterpreter(world, method_table, inf_cache, codegen, inf_params, opt_params)
 end
@@ -511,7 +550,7 @@ optimizer_lattice(::AbstractInterpreter) = SimpleInferenceLattice.instance
 
 struct OverlayCodeCache{Cache}
     globalcache::Cache
-    localcache::Vector{InferenceResult}
+    localcache::InferenceCache
 end
 
 setindex!(cache::OverlayCodeCache, ci::CodeInstance, mi::MethodInstance) = (setindex!(cache.globalcache, ci, mi); cache)
@@ -519,9 +558,12 @@ setindex!(cache::OverlayCodeCache, ci::CodeInstance, mi::MethodInstance) = (seti
 haskey(cache::OverlayCodeCache, mi::MethodInstance) = get(cache, mi, nothing) !== nothing
 
 function get(cache::OverlayCodeCache, mi::MethodInstance, default)
-    for cached_result in Iterators.reverse(cache.localcache)
+    localcache = cache.localcache
+    indices = get_indices(localcache, mi)
+    # Iterate in reverse to get the most recent matching entry
+    for i in length(indices):-1:1
+        cached_result = localcache.results[indices[i]]
         cached_result.tombstone && continue # ignore deleted entries (due to LimitedAccuracy)
-        cached_result.linfo === mi || continue
         cached_result.overridden_by_const === nothing || continue
         isdefined(cached_result, :ci) || continue
         ci = cached_result.ci

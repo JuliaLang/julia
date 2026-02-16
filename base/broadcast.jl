@@ -630,11 +630,15 @@ to_index(::Tuple{}) = CartesianIndex()
 to_index(Is::Tuple{Any}) = Is[1]
 to_index(Is::Tuple) = CartesianIndex(Is)
 
-@inline Base.checkbounds(bc::Broadcasted, I::CartesianIndex) =
+@inline function Base.checkbounds(bc::Broadcasted, I::CartesianIndex)
     Base.checkbounds_indices(Bool, axes(bc), (I,)) || Base.throw_boundserror(bc, (I,))
+    nothing
+end
 
-@inline Base.checkbounds(bc::Broadcasted, I::Integer) =
+@inline function Base.checkbounds(bc::Broadcasted, I::Integer)
     Base.checkindex(Bool, eachindex(IndexLinear(), bc), I) || Base.throw_boundserror(bc, (I,))
+    nothing
+end
 
 
 """

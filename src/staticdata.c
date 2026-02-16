@@ -2956,11 +2956,35 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             size_t num_mis;
             jl_get_llvm_cis(native_functions, &num_mis, NULL);
             arraylist_grow(&MIs, num_mis);
+
+            // Record MethodInstances for user-provided code (as reported by codegen)
             jl_get_llvm_cis(native_functions, &num_mis, (jl_code_instance_t**)MIs.items);
             for (size_t i = 0; i < num_mis; i++) {
                 jl_code_instance_t *ci = (jl_code_instance_t*)MIs.items[i];
                 MIs.items[i] = (void*)jl_get_ci_mi(ci);
             }
+
+            // Record MethodInstances for built-ins (used when dynamically dispatching to a
+            // built-in, e.g., in the Core._apply_iterate implementation)
+            jl_datatype_t *tt = NULL;
+            JL_GC_PUSH1(&tt);
+            for (size_t i = 0; i < jl_n_builtins; i++) {
+                jl_value_t *builtin = jl_builtin_instances[i];
+                if (builtin == NULL)
+                    continue;
+
+                jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(builtin);
+                jl_value_t *params[2];
+                params[0] = dt->name->wrapper;
+                params[1] = jl_tparam0(jl_anytuple_type);
+                tt = (jl_datatype_t*)jl_apply_tuple_type_v(params, 2);
+                jl_method_instance_t *mi = (jl_method_instance_t *)jl_method_lookup_by_tt(
+                    tt, /* world */ 1, /* mt */ jl_nothing
+                );
+                assert(!jl_is_nothing(mi));
+                arraylist_push(&MIs, mi);
+            }
+            JL_GC_POP();
         }
     }
     if (jl_options.trim) {
@@ -3493,6 +3517,7 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
         ios_seek_end(&f);
         size_t len = ios_pos(&f);
         char *sysimg = (char*)jl_gc_perm_alloc(len, 0, 64, 0);
+        jl_gc_notify_image_alloc(sysimg, len);
         ios_seek(&f, 0);
 
         if (ios_readall(&f, sysimg, len) != len)
@@ -4366,9 +4391,10 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
         char *sysimg;
         int success = !needs_permalloc;
         ios_seek(f, datastartpos);
-        if (needs_permalloc)
+        if (needs_permalloc) {
             sysimg = (char*)jl_gc_perm_alloc(len, 0, 64, 0);
-        else
+            jl_gc_notify_image_alloc(sysimg, len);
+        } else
             sysimg = &f->buf[f->bpos];
         if (needs_permalloc)
             success = ios_readall(f, sysimg, len) == len;

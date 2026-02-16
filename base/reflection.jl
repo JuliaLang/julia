@@ -596,7 +596,7 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
     interp = passed_interp === nothing ? invoke_default_compiler(:_default_interp, world) : interp
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
-        _, rt = only(code_typed_opaque_closure(f, types; Compiler))
+        _, rt = only(code_typed_opaque_closure(f, types; interp=passed_interp))
         return Any[rt]
     elseif isa(f, Core.Builtin)
         return Any[_builtin_return_type(passed_interp, interp, f, types)]
@@ -967,7 +967,7 @@ Return the method of `f` (a `Method` object) that would be called for arguments 
 
 If `types` is an abstract type, then the method that would be called by `invoke` is returned.
 
-See also: [`parentmodule`](@ref), [`@which`](@ref Main.InteractiveUtils.@which), and [`@edit`](@ref Main.InteractiveUtils.@edit).
+See also [`parentmodule`](@ref), [`@which`](@ref Main.InteractiveUtils.@which), [`@edit`](@ref Main.InteractiveUtils.@edit).
 """
 function which(@nospecialize(f), @nospecialize(t))
     tt = signature_type(f, t)
@@ -1051,8 +1051,8 @@ end
 
 Return the module in which the given method `m` is defined.
 
-!!! compat "Julia 1.9"
-    Passing a `Method` as an argument requires Julia 1.9 or later.
+!!! compat "Julia 1.10"
+    Passing a `Method` as an argument requires Julia 1.10 or later.
 """
 parentmodule(m::Method) = m.module
 

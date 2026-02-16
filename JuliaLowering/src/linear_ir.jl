@@ -3,7 +3,7 @@
 
 function is_valid_ir_argument(ctx, ex)
     k = kind(ex)
-    if is_simple_atom(ctx, ex) || k in KSet"inert top core quote static_eval"
+    if is_simple_atom(ctx, ex) || k in KSet"inert inert_syntaxtree top core quote static_eval"
         true
     elseif k == K"BindingId"
         binfo = get_binding(ctx, ex)
@@ -29,10 +29,11 @@ struct JumpTarget{Attrs}
     label::SyntaxTree{Attrs}
     handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
     catch_token_stack::SyntaxList{Attrs, Vector{NodeId}}
+    result_var::Union{SyntaxTree{Attrs}, Nothing}  # for symbolicblock valued breaks
 end
 
-function JumpTarget(label::SyntaxTree{Attrs}, ctx) where {Attrs}
-    JumpTarget{Attrs}(label, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack))
+function JumpTarget(label::SyntaxTree{Attrs}, ctx, result_var=nothing) where {Attrs}
+    JumpTarget{Attrs}(label, copy(ctx.handler_token_stack), copy(ctx.catch_token_stack), result_var)
 end
 
 struct JumpOrigin{Attrs}
@@ -79,6 +80,7 @@ struct LinearIRContext{Attrs} <: AbstractLoweringContext
     finally_handlers::Vector{FinallyHandler{Attrs}}
     symbolic_jump_targets::Dict{String,JumpTarget{Attrs}}
     symbolic_jump_origins::Vector{JumpOrigin{Attrs}}
+    symbolic_block_labels::Set{String}  # labels that are symbolic blocks (not allowed as @goto targets)
     meta::Dict{Symbol, Any}
     mod::Module
 end
@@ -91,7 +93,7 @@ function LinearIRContext(ctx, is_toplevel_thunk, lambda_bindings, return_type)
                     is_toplevel_thunk, lambda_bindings, Dict{IdTag,IdTag}(), rett,
                     Dict{String,JumpTarget{Attrs}}(), SyntaxList(ctx), SyntaxList(ctx),
                     Vector{FinallyHandler{Attrs}}(), Dict{String,JumpTarget{Attrs}}(),
-                    Vector{JumpOrigin{Attrs}}(), Dict{Symbol, Any}(), ctx.mod)
+                    Vector{JumpOrigin{Attrs}}(), Set{String}(), Dict{Symbol, Any}(), ctx.mod)
 end
 
 function current_lambda_bindings(ctx::LinearIRContext)
@@ -114,8 +116,9 @@ end
 
 function is_simple_arg(ctx, ex)
     k = kind(ex)
-    return is_simple_atom(ctx, ex) || k == K"BindingId" || k == K"quote" || k == K"inert" ||
-           k == K"top" || k == K"core" || k == K"globalref" || k == K"static_eval"
+    return is_simple_atom(ctx, ex) || k == K"BindingId" || k == K"quote" ||
+        k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
+        k == K"core" || k == K"globalref" || k == K"static_eval"
 end
 
 # flisp note: arguments are always counted as single-assign, so effects on
@@ -131,7 +134,8 @@ function is_const_read_arg(ctx, ex)
     # Even if we have side effects, we know that singly-assigned
     # locals cannot be affected by them so we can inline them anyway.
     # TODO from flisp: "We could also allow const globals here"
-    return k == K"inert" || k == K"top" || k == K"core" || k == K"static_eval" ||
+    return k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
+        k == K"core" || k == K"static_eval" ||
         is_simple_atom(ctx, ex) || is_single_assign_var(ctx, ex)
 end
 
@@ -304,8 +308,24 @@ function emit_break(ctx, ex)
     name = ex[1].name_val
     target = get(ctx.break_targets, name, nothing)
     if isnothing(target)
-        ty = name == "loop_exit" ? "break" : "continue"
-        throw(LoweringError(ex, "$ty must be used inside a `while` or `for` loop"))
+        if name == "loop_exit"
+            throw(LoweringError(ex, "`break` must be used inside a `while` or `for` loop"))
+        elseif name == "loop_cont"
+            throw(LoweringError(ex, "`continue` must be used inside a `while` or `for` loop"))
+        elseif endswith(name, "#cont")
+            label = name[1:end-5]
+            throw(LoweringError(ex, "`continue $label` is not inside a `@label $label` loop"))
+        else
+            throw(LoweringError(ex, "`break $name` is not inside a `@label $name` block"))
+        end
+    end
+    # Handle valued break (break name val)
+    if numchildren(ex) >= 2
+        if isnothing(target.result_var)
+            throw(LoweringError(ex, "break with value not allowed for label `$name`"))
+        end
+        val = compile(ctx, ex[2], true, false)
+        emit_assignment(ctx, ex, target.result_var, val)
     end
     if !isempty(ctx.finally_handlers)
         handler = last(ctx.finally_handlers)
@@ -452,27 +472,27 @@ end
 # See the devdocs for further discussion.
 function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     @chk numchildren(ex) <= 3
-    try_block = ex[1]
-    if kind(ex) == K"trycatchelse"
-        catch_block = ex[2]
-        else_block = numchildren(ex) == 2 ? nothing : ex[3]
-        finally_block = nothing
-        catch_label = make_label(ctx, catch_block)
-    else
-        catch_block = nothing
-        else_block = nothing
-        finally_block = ex[2]
-        catch_label = make_label(ctx, finally_block)
-    end
+    (try_block, catch_block, else_block, finally_block, catch_label, scope) = @stm ex begin
+         [K"trycatchelse" t c] -> (t, c, nothing, nothing, make_label(ctx, c), nothing)
+         [K"trycatchelse" t c e] -> (t, c, e, nothing, make_label(ctx, c), nothing)
+         [K"tryfinally" t f] -> (t, nothing, nothing, f, make_label(ctx, f), nothing)
+         [K"tryfinally" t f scope] -> (t, nothing, nothing, f, make_label(ctx, f), scope)
+     end
 
     end_label = !in_tail_pos || !isnothing(finally_block) ? make_label(ctx, ex) : nothing
     try_result = needs_value && !in_tail_pos ? new_local_binding(ctx, ex, "try_result") : nothing
 
+    enter_scope_arg = SyntaxList(ctx)
+    if scope !== nothing
+        args = SyntaxList(ctx)
+        push!(args, scope)
+        enter_scope_arg = compile_args(ctx, args)
+    end
     # Exception handler block prefix
     handler_token = ssavar(ctx, ex, "handler_token")
     emit(ctx, @ast ctx ex [K"="
         handler_token
-        [K"enter" catch_label]  # TODO: dynscope
+        [K"enter" catch_label enter_scope_arg...]
     ])
     if !isnothing(finally_block)
         # TODO: Trivial finally block optimization from JuliaLang/julia#52593 (or
@@ -582,8 +602,9 @@ end
 function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     k = kind(ex)
     if k == K"BindingId" || is_literal(k) || k == K"quote" || k == K"inert" ||
-            k == K"top" || k == K"core" || k == K"Value" || k == K"Symbol" ||
-            k == K"SourceLocation" || k == K"static_eval"
+            k == K"inert_syntaxtree" || k == K"top" || k == K"core" ||
+            k == K"Value" || k == K"Symbol" || k == K"SourceLocation" ||
+            k == K"static_eval"
         ex1 = ex
         if kind(ex1) == K"BindingId"
             binfo = get_binding(ctx, ex1)
@@ -680,7 +701,9 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end_label = make_label(ctx, ex)
         name = ex[1].name_val
         outer_target = get(ctx.break_targets, name, nothing)
-        ctx.break_targets[name] = JumpTarget(end_label, ctx)
+        # Inherit result_var from outer symbolicblock if present
+        outer_result_var = isnothing(outer_target) ? nothing : outer_target.result_var
+        ctx.break_targets[name] = JumpTarget(end_label, ctx, outer_result_var)
         compile(ctx, ex[2], false, false)
         if isnothing(outer_target)
             delete!(ctx.break_targets, name)
@@ -691,12 +714,44 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         if needs_value
             compile(ctx, nothing_(ctx, ex), needs_value, in_tail_pos)
         end
+    elseif k == K"symbolicblock"
+        name = ex[1].name_val
+        if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
+            throw(LoweringError(ex, "Label `$name` defined multiple times"))
+        end
+        push!(ctx.symbolic_block_labels, name)
+        end_label = make_label(ctx, ex)
+        result_var = if needs_value || in_tail_pos
+            rv = new_local_binding(ctx, ex, "$(name)_result")
+            emit_assignment(ctx, ex, rv, nothing_(ctx, ex))
+            rv
+        else
+            nothing
+        end
+        outer_target = get(ctx.break_targets, name, nothing)
+        ctx.break_targets[name] = JumpTarget(end_label, ctx, result_var)
+        body_val = compile(ctx, ex[2], !isnothing(result_var), false)
+        if !isnothing(result_var) && !isnothing(body_val)
+            emit_assignment(ctx, ex, result_var, body_val)
+        end
+        if isnothing(outer_target)
+            delete!(ctx.break_targets, name)
+        else
+            ctx.break_targets[name] = outer_target
+        end
+        emit(ctx, end_label)
+        if in_tail_pos
+            emit_return(ctx, ex, result_var)
+            nothing
+        else
+            result_var
+        end
     elseif k == K"break"
         emit_break(ctx, ex)
-    elseif k == K"symbolic_label"
+    elseif k == K"symboliclabel"
         label = emit_label(ctx, ex)
         name = ex.name_val
-        if haskey(ctx.symbolic_jump_targets, name)
+        if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
             throw(LoweringError(ex, "Label `$name` defined multiple times"))
         end
         push!(ctx.symbolic_jump_targets, name=>JumpTarget(label, ctx))
@@ -705,7 +760,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         elseif needs_value
             throw(LoweringError(ex, "misplaced label in value position"))
         end
-    elseif k == K"symbolic_goto"
+    elseif k == K"symbolicgoto"
         push!(ctx.symbolic_jump_origins, JumpOrigin(ex, length(ctx.code)+1, ctx))
         emit(ctx, newleaf(ctx, ex, K"TOMBSTONE")) # ? pop_exception
         emit(ctx, newleaf(ctx, ex, K"TOMBSTONE")) # ? leave
@@ -763,9 +818,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     elseif k == K"trycatchelse" || k == K"tryfinally"
         compile_try(ctx, ex, needs_value, in_tail_pos)
     elseif k == K"method"
-        # TODO
-        # throw(LoweringError(ex,
-        #     "Global method definition needs to be placed at the top level, or use `eval`"))
+        ctx.is_toplevel_thunk || internal_error(ex, "method not at top level")
         res = if numchildren(ex) == 1
             if in_tail_pos
                 emit_return(ctx, ex)
@@ -947,6 +1000,10 @@ function compile_body(ctx::LinearIRContext, ex)
         name = origin.goto.name_val
         target = get(ctx.symbolic_jump_targets, name, nothing)
         if isnothing(target)
+            # Check if it's a symbolic block label
+            if name in ctx.symbolic_block_labels
+                throw(LoweringError(origin.goto, "cannot use @goto to jump to @label block `$name`"))
+            end
             throw(LoweringError(origin.goto, "label `$name` referenced but not defined"))
         end
         i = origin.index
@@ -1169,7 +1226,7 @@ loops, etc) to gotos and exception handling to enter/leave. We also convert
                            Vector{FinallyHandler{Attrs}}(),
                            Dict{String, JumpTarget{Attrs}}(),
                            Vector{JumpOrigin{Attrs}}(),
-                           Dict{Symbol, Any}(), ctx.mod)
+                           Set{String}(), Dict{Symbol, Any}(), ctx.mod)
     res = compile_lambda(_ctx, reparent(_ctx, ex))
     _ctx, res
 end

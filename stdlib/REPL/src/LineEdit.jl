@@ -1804,6 +1804,8 @@ function normalize_key(key::Union{String,SubString{String}})
                 c, i = iterate(key, i)
                 write(buf, '\e')
                 write(buf, c)
+            elseif c == '^'
+                write(buf, c)
             end
         else
             write(buf, c)

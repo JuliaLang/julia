@@ -400,6 +400,8 @@ static jl_code_instance_t *jl_method_inferred_with_abi(jl_method_instance_t *mi 
     return NULL;
 }
 
+jl_mutex_t jl_typeinf_lock;
+
 // run type inference on lambda "mi" for given argument types.
 // returns the inferred source, and may cache the result in mi
 // if successful, also updates the mi argument to describe the validity of this src
@@ -428,6 +430,7 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
         return NULL;
     JL_TIMING(INFERENCE, INFERENCE);
     jl_value_t **fargs;
+    JL_GC_PUSH1(&ci);
     JL_GC_PUSHARGS(fargs, 5);
     fargs[0] = (jl_value_t*)jl_typeinf_func;
     fargs[1] = (jl_value_t*)mi;
@@ -459,6 +462,7 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
     // increase that limit, we'll need to
     // allocate another bit for the counter.
     ct->reentrant_timing += 0b10;
+    JL_LOCK(&jl_typeinf_lock);
     JL_TRY {
         ci = (jl_code_instance_t*)jl_apply(fargs, 5);
     }
@@ -482,6 +486,7 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
         abort();
 #endif
     }
+    JL_UNLOCK(&jl_typeinf_lock);
     ct->world_age = last_age;
     ct->reentrant_timing -= 0b10;
     ct->ptls->in_pure_callback = last_pure;
@@ -496,11 +501,10 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
 
     // Record inference entrance backtrace if enabled
     if (ci) {
-        JL_GC_PUSH1(&ci);
         jl_push_inference_entrance_backtraces((jl_value_t*)ci);
-        JL_GC_POP();
     }
 
+    JL_GC_POP();
     JL_GC_POP();
 #endif
 

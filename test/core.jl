@@ -8193,6 +8193,25 @@ foo46503(a::Int, b::Nothing) = @invoke foo46503(a::Any, b)
 foo46503(@nospecialize(a), b::Union{Nothing, Float64}) = rand() + 10
 @test 10 <= foo46503(1, nothing) <= 11
 
+@testset "inference for `rest` with unknown state argument types" begin
+    @testset "`Array`, `Memory`" begin
+        for typ in (Vector{Float32}, Matrix{Float32}, Memory{Float32})
+            @test (isconcretetype ∘ Base.infer_return_type)(Base.rest, Tuple{typ, Any})
+            for e in (Base.Compiler.is_terminates, Base.Compiler.is_notaskstate, Base.Compiler.is_nonoverlayed)
+                @test (e ∘ Base.infer_effects)(Base.rest, Tuple{typ, Any})
+            end
+        end
+    end
+    @testset "`Tuple`" begin
+        typ = NTuple{5, Float32}
+        @test Base.infer_return_type(Base.rest, Tuple{typ, Any}) <: Tuple
+    end
+    @testset "`NamedTuple`" begin
+        typ = NamedTuple{(:a, :b, :c, :d, :e), NTuple{5, Float32}}
+        @test Base.infer_return_type(Base.rest, Tuple{typ, Any}) <: NamedTuple
+    end
+end
+
 @testset "effect override on Symbol(::String)" begin
     @test Core.Compiler.is_foldable(Base.infer_effects(Symbol, (String,)))
 end
@@ -8443,25 +8462,30 @@ let ms = Base._methods_by_ftype(Tuple{typeof(sin), Int}, OverlayModule.mt, 1, Ba
     @test isempty(ms)
 end
 
-# test that overlay method table caches don't perform fallback lookups in the global cache
-let world = Base.get_world_counter()
-    # method_instance should find overlay methods in custom MT
-    mi = Base.method_instance(sin, Tuple{Float64}; world, method_table=OverlayModule.mt)
-    @test mi isa Core.MethodInstance
-    @test mi.def.module === OverlayModule
+# fresh module to ensure uncached methods
+module OverlayMTTest
+    using Base.Experimental: @MethodTable, @overlay
+    @MethodTable(mt)
 
-    # method_instance with global MT should find Base method, not overlay
-    mi_global = Base.method_instance(sin, Tuple{Float64}; world, method_table=nothing)
-    @test mi_global isa Core.MethodInstance
-    @test mi_global.def.module === Base.Math
+    function overlay_only end
+    @overlay mt overlay_only(x::Int) = x * 2
 end
 
-# test that global methods do not leak in overlay method tables caches
+# #60702 & #60716: Overlay methods must be found without prior cache population
+let world = Base.get_world_counter()
+    mi = Base.method_instance(OverlayMTTest.overlay_only, Tuple{Int};
+                              world, method_table=OverlayMTTest.mt)
+    @test mi isa Core.MethodInstance
+    @test mi.def.module === OverlayMTTest
+end
+
+# #60712: Global-only methods must NOT be found via custom MT
 let
-    global_only_func(x) = x + 1  # defined in global MT only
+    @eval global_only_func(x::Int) = x + 1
     world = Base.get_world_counter()
-    mi = Base.method_instance(global_only_func, Tuple{Int}; world, method_table=OverlayModule.mt)
-    @test mi === nothing  # should NOT find global method via custom MT
+    mi = Base.method_instance(global_only_func, Tuple{Int};
+                              world, method_table=OverlayMTTest.mt)
+    @test mi === nothing
 end
 
 # precompilation
@@ -8578,6 +8602,21 @@ f_invalidate_me() = 2
 @test_throws ErrorException invoke(f_invoke_me, f_invoke_me_ci)
 @test_throws ErrorException f_call_me()
 
+mysin(x::Float64) = sin(x)
+@test mysin(1.0) == sin(1.0)
+const mysin_ci = Base.specialize_method(Base._which(Tuple{typeof(mysin), Float64})).cache
+mysin2(x::Float64) = invoke(mysin, mysin_ci, x)
+@test mysin2(1.0) == sin(1.0)
+@test any(1:3) do _
+    @allocated(mysin2(rand())) == 0
+end
+let this_world = Base.get_world_counter()
+    f(x) = invoke(mysin, mysin_ci, x)
+    @atomic mysin_ci.min_world = this_world + 10
+    @test_throws ErrorException f(1.0)
+end
+
+
 myfun57023a(::Type{T}) where {T} = (x = @ccall mycfun()::Ptr{T}; x)
 @test only(code_lowered(myfun57023a)).has_fcall
 myfun57023b(::Type{T}) where {T} = (x = @cfunction myfun57023a Ptr{T} (Ref{T},); x)
@@ -8667,3 +8706,17 @@ primitive type ByteString58434 (18 * 8) end
 
 @test Base.datatype_isbitsegal(Tuple{ByteString58434}) == false
 @test Base.datatype_haspadding(Tuple{ByteString58434}) == (length(Base.padding(Tuple{ByteString58434})) > 0)
+
+# #60659 - Behavior of using'd ambiguous bindings
+module AmbiguousUsing60659
+    using Test
+    module A
+        export X
+        module B; struct X; end; export X; end
+        module C; struct X; end; export X; end
+        using .B, .C
+    end
+    module D; struct X; end; export X; end
+    using .D, .A
+    @test_throws UndefVarError X
+end

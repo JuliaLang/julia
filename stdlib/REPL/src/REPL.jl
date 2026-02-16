@@ -1625,19 +1625,20 @@ function setup_interface(
             linfos = repl.last_shown_line_infos
             str = String(take!(LineEdit.buffer(s)))
             n = tryparse(Int, str)
-            n === nothing && @goto writeback
-            if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "REPL[")
-                @goto writeback
+            @label writeback begin
+                n === nothing && break writeback
+                if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "REPL[")
+                    break writeback
+                end
+                try
+                    InteractiveUtils.edit(Base.fixup_stdlib_path(linfos[n][1]), linfos[n][2])
+                catch ex
+                    ex isa ProcessFailedException || ex isa Base.IOError || ex isa SystemError || rethrow()
+                    @info "edit failed" _exception=ex
+                end
+                LineEdit.refresh_line(s)
+                return
             end
-            try
-                InteractiveUtils.edit(Base.fixup_stdlib_path(linfos[n][1]), linfos[n][2])
-            catch ex
-                ex isa ProcessFailedException || ex isa Base.IOError || ex isa SystemError || rethrow()
-                @info "edit failed" _exception=ex
-            end
-            LineEdit.refresh_line(s)
-            return
-            @label writeback
             write(LineEdit.buffer(s), str)
             return
         end,

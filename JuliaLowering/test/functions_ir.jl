@@ -132,7 +132,7 @@ end
 #---------------------
 LoweringError:
 function f(xs..., y)
-#          └───┘ ── `...` may only be used for the last positional argument
+#          └───┘ ── `...` may only be used on the final parameter
     body
 end
 
@@ -388,7 +388,7 @@ end
 #---------------------
 LoweringError:
 function (.+)(x,y)
-#        └───────┘ ── Cannot define function using `.` broadcast syntax
+#         └┘ ── invalid function name
 end
 
 ########################################
@@ -398,7 +398,7 @@ end
 #---------------------
 LoweringError:
 function f[](x,y)
-#        └─┘ ── Invalid function name
+#        └─┘ ── invalid function name
 end
 
 ########################################
@@ -444,7 +444,7 @@ end
 29  SourceLocation::1:10
 30  (call core.svec %₂₇ %₂₈ %₂₉)
 31  --- method core.nothing %₃₀
-    slots: [slot₁/#self#(called) slot₂/x slot₃/y slot₄/z(!read)]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/z(!read)]
     1   (call core.tuple slot₂/x slot₃/y)
     2   (return %₁)
 32  latestworld
@@ -488,7 +488,7 @@ end
 23  SourceLocation::1:10
 24  (call core.svec %₂₁ %₂₂ %₂₃)
 25  --- method core.nothing %₂₄
-    slots: [slot₁/#self#(called) slot₂/x slot₃/y]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/y]
     1   (call core.tuple slot₂/x slot₃/y)
     2   (return %₁)
 26  latestworld
@@ -535,7 +535,7 @@ end
 26  SourceLocation::1:10
 27  (call core.svec %₂₄ %₂₅ %₂₆)
 28  --- method core.nothing %₂₇
-    slots: [slot₁/#self#(called) slot₂/#arg1# slot₃/y slot₄/z]
+    slots: [slot₁/#self#(!read) slot₂/#arg1#(!read) slot₃/y slot₄/z]
     1   (call core.tuple slot₃/y slot₄/z)
     2   (return %₁)
 29  latestworld
@@ -570,7 +570,7 @@ end
 17  SourceLocation::1:10
 18  (call core.svec %₁₅ %₁₆ %₁₇)
 19  --- method core.nothing %₁₈
-    slots: [slot₁/#self#(called) slot₂/#arg1# slot₃/x]
+    slots: [slot₁/#self#(!read) slot₂/#arg1#(!read) slot₃/x]
     1   slot₃/x
     2   (return %₁)
 20  latestworld
@@ -631,7 +631,7 @@ end
 40  SourceLocation::1:10
 41  (call core.svec %₃₅ %₃₉ %₄₀)
 42  --- method core.nothing %₄₁
-    slots: [slot₁/#self#(called) slot₂/x slot₃/y slot₄/z]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/z]
     1   (call core.tuple slot₂/x slot₃/y slot₄/z)
     2   (return %₁)
 43  latestworld
@@ -692,7 +692,7 @@ end
 37  SourceLocation::1:10
 38  (call core.svec %₃₂ %₃₆ %₃₇)
 39  --- method core.nothing %₃₈
-    slots: [slot₁/#self#(called) slot₂/x slot₃/y slot₄/z]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/z]
     1   static_parameter₁
     2   static_parameter₂
     3   static_parameter₃
@@ -729,7 +729,7 @@ end
 16  SourceLocation::1:10
 17  (call core.svec %₁₄ %₁₅ %₁₆)
 18  --- method core.nothing %₁₇
-    slots: [slot₁/#self#(called) slot₂/x(!read) slot₃/ys]
+    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/ys]
     1   slot₃/ys
     2   (return %₁)
 19  latestworld
@@ -744,7 +744,7 @@ end
 #---------------------
 LoweringError:
 function f(x=1, ys, z=2)
-#          └─┘ ── optional positional arguments must occur at end
+#               └┘ ── all function parameters after an optional parameter must also be optional
     ys
 end
 
@@ -775,7 +775,7 @@ end
 16  SourceLocation::1:10
 17  (call core.svec %₁₄ %₁₅ %₁₆)
 18  --- method core.nothing %₁₇
-    slots: [slot₁/#self#(called) slot₂/xs]
+    slots: [slot₁/#self#(!read) slot₂/xs]
     1   slot₂/xs
     2   (return %₁)
 19  latestworld
@@ -810,7 +810,7 @@ end
 16  SourceLocation::1:10
 17  (call core.svec %₁₄ %₁₅ %₁₆)
 18  --- method core.nothing %₁₇
-    slots: [slot₁/#self# slot₂/xs]
+    slots: [slot₁/#self#(!read) slot₂/xs]
     1   slot₂/xs
     2   (return %₁)
 19  latestworld
@@ -871,13 +871,149 @@ end
 17  SourceLocation::1:10
 18  (call core.svec %₁₅ %₁₆ %₁₇)
 19  --- method core.nothing %₁₈
-    slots: [slot₁/#self#(called) slot₂/destructured_arg slot₃/x(!read,single_assign)]
+    slots: [slot₁/#self#(!read) slot₂/destructured_arg slot₃/x(!read,single_assign)]
     1   (call top.indexed_iterate slot₂/destructured_arg 1)
     2   (= slot₃/x (call core.getfield %₁ 1))
     3   (return core.nothing)
 20  latestworld
 21  TestMod.f
 22  (return %₂₁)
+
+########################################
+# Error: multiple destructuring in destructured arg
+function f(_,(x...,y...)); end
+#---------------------
+LoweringError:
+function f(_,(x...,y...)); end
+#            └─────────┘ ── multiple `...` in destructured parameter is ambiguous
+
+########################################
+# Error: multiple destructuring in var-destructured arg
+function f(_,(x...,y...)...); end
+#---------------------
+LoweringError:
+function f(_,(x...,y...)...); end
+#            └─────────┘ ── multiple `...` in destructured parameter is ambiguous
+
+########################################
+# Error: type in destructured arg
+function f(_,(x,y::Int)); end
+#---------------------
+LoweringError:
+function f(_,(x,y::Int)); end
+#               └────┘ ── cannot have type in destructured argument
+
+########################################
+# Error: type in destructured arg, nested
+function f(_,(x,(y,(z::Int,)))...); end
+#---------------------
+LoweringError:
+function f(_,(x,(y,(z::Int,)))...); end
+#                   └────┘ ── cannot have type in destructured argument
+
+########################################
+# Error: type on splat
+function (_,((a,b)...)::Int); end
+#---------------------
+LoweringError:
+function (_,((a,b)...)::Int); end
+#           └─────────────┘ ── expected identifier or `identifier::type`
+
+########################################
+# Error: destructured arg with kw
+function f(_,(x,y=1)); end
+#---------------------
+LoweringError:
+function f(_,(x,y=1)); end
+#               └─┘ ── expected identifier or tuple
+
+########################################
+# Error: destructured arg with ;kw
+function f(_,(;x,y=1)); end
+#---------------------
+LoweringError:
+function f(_,(;x,y=1)); end
+#                └─┘ ── expected identifier
+
+########################################
+# Error: destructured arg with other lhs-likes after ; (call)
+function f(_,(;x,y())); end
+#---------------------
+LoweringError:
+function f(_,(;x,y())); end
+#                └─┘ ── expected identifier
+
+########################################
+# Error: destructured arg with other lhs-likes after ; (ref)
+function f(_,(;x,y())); end
+#---------------------
+LoweringError:
+function f(_,(;x,y())); end
+#                └─┘ ── expected identifier
+
+########################################
+# Error: destructured arg with other lhs-likes after ; (tuple)
+function f(_,(;x,(y,z))); end
+#---------------------
+LoweringError:
+function f(_,(;x,(y,z))); end
+#                └───┘ ── expected identifier
+
+########################################
+# Error: destructured arg with other lhs-likes after ; (...)
+function f(_,(;x,y...)); end
+#---------------------
+LoweringError:
+function f(_,(;x,y...)); end
+#                └──┘ ── expected identifier
+
+########################################
+# Error: destructuring mixed tuple
+function f(_,(x,;y=1)); end
+#---------------------
+LoweringError:
+function f(_,(x,;y=1)); end
+#               └──┘ ── cannot mix tuple `(a,b,c)` and named tuple `(;a,b,c)` syntax
+
+########################################
+# Error: ref in arg tuple (flisp allows this)
+function f(_,(_,x[])); end
+#---------------------
+LoweringError:
+function f(_,(_,x[])); end
+#               └─┘ ── expected identifier or tuple
+
+########################################
+# Error: call in arg tuple (flisp allows this; args ignored)
+function f(_,(_,x(y))); end
+#---------------------
+LoweringError:
+function f(_,(_,x(y))); end
+#               └──┘ ── expected identifier or tuple
+
+########################################
+# Error: curly in arg tuple (flisp allows this)
+function f(_,(_,x{y})); end
+#---------------------
+LoweringError:
+function f(_,(_,x{y})); end
+#               └──┘ ── expected identifier or tuple
+
+########################################
+# Error: splat on non-final default positional arg
+function f(x=1...,y=2); end
+#---------------------
+LoweringError:
+function f(x=1...,y=2); end
+#            └──┘ ── splat only allowed on final positional default arg
+
+########################################
+# Error: splat on non-final default positional arg 2
+function f(x=(1,2)...,y=(3,4)...); end
+#---------------------
+LoweringError:
+function f(x=(1,2)...,y=(3,4)...); end
+#            └──────┘ ── splat only allowed on final positional default arg
 
 ########################################
 # Function argument destructuring combined with splats, types and and defaults
@@ -905,7 +1041,7 @@ end
 15  SourceLocation::1:10
 16  (call core.svec %₁₃ %₁₄ %₁₅)
 17  --- method core.nothing %₁₆
-    slots: [slot₁/#self#(called) slot₂/x(!read) slot₃/tmp(!read)]
+    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/tmp(!read)]
     1   TestMod.T
     2   (= slot₃/tmp core.nothing)
     3   (call core.isa slot₃/tmp %₁)
@@ -1046,16 +1182,26 @@ end
 4   (call core.Typeof %₃)
 5   (call core.svec %₄)
 6   (call core.svec)
-7   SourceLocation::4:10
+7   SourceLocation:nothing:4:0
 8   (call core.svec %₅ %₆ %₇)
 9   --- method core.nothing %₈
     slots: [slot₁/#self#(!read)]
     1   (return core.nothing)
 10  latestworld
 11  TestMod.f
-12  (call JuliaLowering.bind_docs! %₁₁ "some docs\n" %₈)
-13  TestMod.f
-14  (return %₁₃)
+12  (= slot₁/val %₁₁)
+13  (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree f))
+14  (call Base.Docs.Binding TestMod %₁₃)
+15  (call Core.svec "some docs\n")
+16  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod)
+17  (call Base.Docs.docstr %₁₅ %₁₆)
+18  TestMod.Union
+19  TestMod.Tuple
+20  (call core.apply_type %₁₉)
+21  (call core.apply_type %₁₈ %₂₀)
+22  (call Base.Docs.doc! TestMod %₁₄ %₁₇ %₂₁)
+23  slot₁/val
+24  (return %₂₃)
 
 ########################################
 # Binding docs to callable type
@@ -1068,15 +1214,25 @@ end
 1   TestMod.T
 2   (call core.svec %₁)
 3   (call core.svec)
-4   SourceLocation::4:10
+4   SourceLocation:nothing:4:0
 5   (call core.svec %₂ %₃ %₄)
 6   --- method core.nothing %₅
     slots: [slot₁/x(!read)]
     1   (return core.nothing)
 7   latestworld
-8   TestMod.T
-9   (call JuliaLowering.bind_docs! %₈ "some docs\n" %₅)
-10  (return core.nothing)
+8   (= slot₁/val core.nothing)
+9   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree T))
+10  (call Base.Docs.Binding TestMod %₉)
+11  (call Core.svec "some docs\n")
+12  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod)
+13  (call Base.Docs.docstr %₁₁ %₁₂)
+14  TestMod.Union
+15  TestMod.Tuple
+16  (call core.apply_type %₁₅)
+17  (call core.apply_type %₁₄ %₁₆)
+18  (call Base.Docs.doc! TestMod %₁₀ %₁₃ %₁₇)
+19  slot₁/val
+20  (return %₁₉)
 
 ########################################
 # Keyword function with defaults.
@@ -1109,7 +1265,7 @@ end
 15  SourceLocation::1:10
 16  (call core.svec %₁₃ %₁₄ %₁₅)
 17  --- method core.nothing %₁₆
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/#self#(called) slot₅/a slot₆/b]
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/#self#(!read) slot₅/a slot₆/b]
     1   (meta :nkw 2)
     2   (call core.tuple slot₅/a slot₆/b slot₂/x slot₃/y)
     3   (return %₂)
@@ -1122,8 +1278,8 @@ end
 24  SourceLocation::1:10
 25  (call core.svec %₂₂ %₂₃ %₂₄)
 26  --- method core.nothing %₂₅
-    slots: [slot₁/#self#(called) slot₂/kws slot₃/#self#(called)]
-    1   (call slot₁/#self# slot₂/kws slot₃/#self# 1 1.0)
+    slots: [slot₁/#kwcall_self#(called) slot₂/kws slot₃/#self#]
+    1   (call slot₁/#kwcall_self# slot₂/kws slot₃/#self# 1 1.0)
     2   (return %₁)
 27  latestworld
 28  (call core.typeof core.kwcall)
@@ -1135,8 +1291,8 @@ end
 34  SourceLocation::1:10
 35  (call core.svec %₃₂ %₃₃ %₃₄)
 36  --- method core.nothing %₃₅
-    slots: [slot₁/#self#(called) slot₂/kws slot₃/#self#(called) slot₄/a]
-    1   (call slot₁/#self# slot₂/kws slot₃/#self# slot₄/a 1.0)
+    slots: [slot₁/#kwcall_self#(called) slot₂/kws slot₃/#self# slot₄/a]
+    1   (call slot₁/#kwcall_self# slot₂/kws slot₃/#self# slot₄/a 1.0)
     2   (return %₁)
 37  latestworld
 38  (call core.typeof core.kwcall)
@@ -1149,7 +1305,7 @@ end
 45  SourceLocation::1:10
 46  (call core.svec %₄₃ %₄₄ %₄₅)
 47  --- method core.nothing %₄₆
-    slots: [slot₁/#self#(called) slot₂/kws slot₃/#self#(called) slot₄/a slot₅/b slot₆/kwtmp slot₇/x(!read) slot₈/y(!read)]
+    slots: [slot₁/#kwcall_self#(!read) slot₂/kws slot₃/#self# slot₄/a slot₅/b slot₆/kwtmp slot₇/x(!read) slot₈/y(!read)]
     1   (newvar slot₇/x)
     2   (newvar slot₈/y)
     3   (call core.isdefined slot₂/kws :x)
@@ -1223,7 +1379,7 @@ end
 72  SourceLocation::1:10
 73  (call core.svec %₇₀ %₇₁ %₇₂)
 74  --- method core.nothing %₇₃
-    slots: [slot₁/#self#(called) slot₂/a slot₃/b]
+    slots: [slot₁/#self# slot₂/a slot₃/b]
     1   TestMod.#f_kw_simple#0
     2   (call %₁ 'a' true slot₁/#self# slot₂/a slot₃/b)
     3   (return %₂)
@@ -1259,7 +1415,7 @@ end
 12  SourceLocation::1:10
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  --- method core.nothing %₁₃
-    slots: [slot₁/#self#(!read) slot₂/all_kws slot₃/#self#]
+    slots: [slot₁/#self#(!read) slot₂/all_kws slot₃/#self#(!read)]
     1   (meta :nkw 1)
     2   slot₂/all_kws
     3   (return %₂)
@@ -1272,7 +1428,7 @@ end
 21  SourceLocation::1:10
 22  (call core.svec %₁₉ %₂₀ %₂₁)
 23  --- method core.nothing %₂₂
-    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/all_kws(!read)]
+    slots: [slot₁/#kwcall_self#(!read) slot₂/kws slot₃/#self# slot₄/all_kws(!read)]
     1   (newvar slot₄/all_kws)
     2   (call top.pairs slot₂/kws)
     3   TestMod.#f_kw_slurp_simple#0
@@ -1316,7 +1472,7 @@ end
 12  SourceLocation::1:10
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  --- method core.nothing %₁₃
-    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/non_x_kws(!read) slot₄/#self#]
+    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/non_x_kws(!read) slot₄/#self#(!read)]
     1   (meta :nkw 2)
     2   TestMod.all_kws
     3   (return %₂)
@@ -1329,7 +1485,7 @@ end
 21  SourceLocation::1:10
 22  (call core.svec %₁₉ %₂₀ %₂₁)
 23  --- method core.nothing %₂₂
-    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/kwtmp slot₅/x(!read) slot₆/non_x_kws(!read)]
+    slots: [slot₁/#kwcall_self#(!read) slot₂/kws slot₃/#self# slot₄/kwtmp slot₅/x(!read) slot₆/non_x_kws(!read)]
     1   (newvar slot₅/x)
     2   (newvar slot₆/non_x_kws)
     3   (call core.isdefined slot₂/kws :x)
@@ -1389,7 +1545,7 @@ end
 12  SourceLocation::1:10
 13  (call core.svec %₁₀ %₁₁ %₁₂)
 14  --- method core.nothing %₁₃
-    slots: [slot₁/#self#(!read) slot₂/a slot₃/b slot₄/kws slot₅/#self#]
+    slots: [slot₁/#self#(!read) slot₂/a slot₃/b slot₄/kws slot₅/#self#(!read)]
     1   (meta :nkw 3)
     2   (call core.tuple slot₂/a slot₃/b slot₄/kws)
     3   (return %₂)
@@ -1402,7 +1558,7 @@ end
 21  SourceLocation::1:10
 22  (call core.svec %₁₉ %₂₀ %₂₁)
 23  --- method core.nothing %₂₂
-    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/kwtmp slot₅/a(single_assign) slot₆/b(single_assign)]
+    slots: [slot₁/#kwcall_self#(!read) slot₂/kws slot₃/#self# slot₄/kwtmp slot₅/a(single_assign) slot₆/b(single_assign)]
     1   (call core.isdefined slot₂/kws :a)
     2   (gotoifnot %₁ label₆)
     3   (call core.getfield slot₂/kws :a)
@@ -1480,7 +1636,7 @@ end
 18  SourceLocation::1:10
 19  (call core.svec %₁₄ %₁₇ %₁₈)
 20  --- method core.nothing %₁₉
-    slots: [slot₁/#self#(!read) slot₂/a(!read) slot₃/b(!read) slot₄/#self# slot₅/x(!read)]
+    slots: [slot₁/#self#(!read) slot₂/a(!read) slot₃/b(!read) slot₄/#self#(!read) slot₅/x(!read)]
     1   (meta :nkw 2)
     2   static_parameter₁
     3   static_parameter₂
@@ -1499,7 +1655,7 @@ end
 31  SourceLocation::1:10
 32  (call core.svec %₂₈ %₃₀ %₃₁)
 33  --- method core.nothing %₃₂
-    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/x slot₅/kwtmp slot₆/a(!read) slot₇/b(!read)]
+    slots: [slot₁/#kwcall_self#(!read) slot₂/kws slot₃/#self# slot₄/x slot₅/kwtmp slot₆/a(!read) slot₇/b(!read)]
     1   (newvar slot₆/a)
     2   (newvar slot₇/b)
     3   (call core.isdefined slot₂/kws :a)
@@ -1576,7 +1732,7 @@ end
 #---------------------
 LoweringError:
 function f_kw_destruct(; (x,y)=10)
-#                        └───┘ ── Invalid keyword name
+#                        └───┘ ── expected identifier or `identifier::type`
 end
 
 ########################################
@@ -1586,7 +1742,7 @@ end
 #---------------------
 LoweringError:
 function f_kw_slurp_default(; kws...=def)
-#                             └────────┘ ── keyword argument with `...` cannot have a default value
+#                             └────┘ ── expected identifier or `identifier::type`
 end
 
 ########################################
@@ -1596,7 +1752,7 @@ end
 #---------------------
 LoweringError:
 function f_kw_slurp_type(; kws::T...)
-#                          └───────┘ ── keyword argument with `...` may not be given a type
+#                          └────┘ ── keyword parameter with `...` may not be given a type
 end
 
 ########################################
@@ -1606,7 +1762,7 @@ end
 #---------------------
 LoweringError:
 function f_kw_slurp_not_last(; kws..., x=1)
-#                              └────┘ ── `...` may only be used for the last keyword argument
+#                              └────┘ ── `...` may only be used for the final keyword parameter
 end
 
 ########################################
@@ -1626,10 +1782,12 @@ end
 9   SourceLocation::1:21
 10  (call core.svec %₇ %₈ %₉)
 11  --- method core.nothing %₁₀
-    slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(!read) slot₄/x(nospecialize) slot₅/y(nospecialize)]
+    slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(nospecialize,!read) slot₄/x(nospecialize) slot₅/y(nospecialize)]
     1   TestMod.generator_code
     2   (call %₁ slot₄/x slot₅/y)
-    3   (return %₂)
+    3   (call core.tuple %₂)
+    4   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block ($ (block (call generator_code x y))))) %₃)
+    5   (return %₄)
 12  latestworld
 13  TestMod.f_only_generated
 14  (call core.Typeof %₁₃)
@@ -1671,10 +1829,10 @@ end
 9   SourceLocation::1:10
 10  (call core.svec %₇ %₈ %₉)
 11  --- method core.nothing %₁₀
-    slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(!read) slot₄/x(nospecialize,!read) slot₅/y(nospecialize,!read)]
-    1   (call JuliaLowering.interpolate_ast SyntaxTree (inert (block (= maybe_gen_stuff (call some_gen_stuff x y)))))
+    slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(nospecialize,!read) slot₄/x(nospecialize,!read) slot₅/y(nospecialize,!read)]
+    1   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= maybe_gen_stuff (call some_gen_stuff x y)))))
     2   (call core.tuple %₁)
-    3   (call JuliaLowering.interpolate_ast SyntaxTree (inert (block (block (= nongen_stuff (call bothgen x y)) ($ (block (call JuliaLowering.interpolate_ast SyntaxTree (inert (block (= maybe_gen_stuff (call some_gen_stuff x y))))))) (tuple-p nongen_stuff maybe_gen_stuff)))) %₂)
+    3   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (block (= nongen_stuff (call bothgen x y)) ($ (block (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (= maybe_gen_stuff (call some_gen_stuff x y))))))) (tuple-p nongen_stuff maybe_gen_stuff)))) %₂)
     4   (return %₃)
 12  latestworld
 13  TestMod.f_partially_generated

@@ -3,6 +3,8 @@
 using Test, Distributed, SharedArrays, Random
 include(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test", "testenv.jl"))
 
+@test isempty(Test.detect_closure_boxes(SharedArrays))
+
 # These processes explicitly want to share memory, we can't have
 # them in separate rr sessions
 addprocs_with_testenv(4; rr_allowed=false)

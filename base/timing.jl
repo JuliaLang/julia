@@ -650,7 +650,7 @@ A macro to evaluate an expression, discard the resulting value, and instead retu
 total number of lock conflicts during evaluation, where a lock attempt on a [`ReentrantLock`](@ref)
 resulted in a wait because the lock was already held.
 
-See also [`@time`](@ref), [`@timev`](@ref) and [`@timed`](@ref).
+See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref).
 
 ```julia-repl
 julia> @lock_conflicts begin
