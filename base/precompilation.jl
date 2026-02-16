@@ -44,8 +44,11 @@ mutable struct BackgroundPrecompileState
     cancel_confirming::Bool  # waiting for Enter to confirm cancel
     cancel_confirm_deadline::Float64  # time() deadline for cancel confirmation
 end
+Base.lock(f, bg::BackgroundPrecompileState) = lock(f, bg.lock)
+Base.lock(bg::BackgroundPrecompileState) = lock(bg.lock)
+Base.unlock(bg::BackgroundPrecompileState) = unlock(bg.lock)
 
-const BACKGROUND_PRECOMPILE = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Set{PkgId}(), Threads.Condition(), Channel{PrecompileRequest}(Inf), false, false, false, 0.0)
+const BG = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Set{PkgId}(), Threads.Condition(), Channel{PrecompileRequest}(Inf), false, false, false, 0.0)
 
 # This is currently only used for pkgprecompile but the plan is to use this in code loading in the future
 # see the `kc/codeloading2.0` branch
@@ -513,8 +516,8 @@ function collect_all_deps(direct_deps, dep, alldeps=Set{Base.PkgId}())
 end
 
 function is_precompiling_in_background()
-    lock(BACKGROUND_PRECOMPILE.lock) do
-        BACKGROUND_PRECOMPILE.task !== nothing && !istaskdone(BACKGROUND_PRECOMPILE.task)
+    lock(BG) do
+        BG.task !== nothing && !istaskdone(BG.task)
     end
 end
 
@@ -522,10 +525,10 @@ end
 # This should be called while holding require_lock to avoid races.
 # Returns true if the package is pending.
 function is_package_pending(pkg::PkgId)
-    @lock BACKGROUND_PRECOMPILE.lock begin
-        BACKGROUND_PRECOMPILE.task === nothing && return false
-        istaskdone(BACKGROUND_PRECOMPILE.task) && return false
-        return pkg ∈ BACKGROUND_PRECOMPILE.pending_pkgids
+    @lock BG begin
+        BG.task === nothing && return false
+        istaskdone(BG.task) && return false
+        return pkg ∈ BG.pending_pkgids
     end
 end
 
@@ -540,8 +543,8 @@ end
 
 # Broadcast a signal to all active precompilation subprocesses.
 function broadcast_signal(sig::Int32)
-    lock(BACKGROUND_PRECOMPILE.lock) do
-        for ch in BACKGROUND_PRECOMPILE.signal_channels
+    lock(BG) do
+        for ch in BG.signal_channels
             try; isopen(ch) && put!(ch, sig); catch e; e isa InvalidStateException || rethrow(); end
         end
     end
@@ -549,15 +552,15 @@ end
 broadcast_signal(sig::Integer) = broadcast_signal(Int32(sig))
 
 function stop_background_precompile(; graceful::Bool = true)
-    return lock(BACKGROUND_PRECOMPILE.lock) do
-        if BACKGROUND_PRECOMPILE.task !== nothing && !istaskdone(BACKGROUND_PRECOMPILE.task)
+    return lock(BG) do
+        if BG.task !== nothing && !istaskdone(BG.task)
             if graceful
-                BACKGROUND_PRECOMPILE.interrupt_requested = true
+                BG.interrupt_requested = true
             else
-                BACKGROUND_PRECOMPILE.cancel_requested = true
+                BG.cancel_requested = true
                 broadcast_signal(Base.SIGKILL)
             end
-            try; close(BACKGROUND_PRECOMPILE.work_channel); catch; end
+            try; close(BG.work_channel); catch; end
             return true
         end
         return false
@@ -566,7 +569,7 @@ end
 
 const register_atexit_hook = Base.OncePerProcess{Nothing}() do
     Base.atexit() do
-        task = @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.task
+        task = @lock BG BG.task
         task === nothing && return
         istaskdone(task) && return
         stop_background_precompile(; graceful=false)
@@ -593,9 +596,9 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
     local completed_at::Union{Nothing, Float64}
     local task
 
-    @lock BACKGROUND_PRECOMPILE.lock begin
-        completed_at = BACKGROUND_PRECOMPILE.completed_at
-        task = BACKGROUND_PRECOMPILE.task
+    @lock BG begin
+        completed_at = BG.completed_at
+        task = BG.task
     end
 
     if task === nothing || istaskdone(task)
@@ -611,7 +614,7 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                 "$(round(Int, elapsed / 86400)) days ago"
             end
             printpkgstyle(io, :Info, "Background precompilation completed $time_str", color = Base.info_color())
-            result = @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.result
+            result = @lock BG BG.result
             if result !== nothing
                 println(io, "  ", result)
             end
@@ -622,7 +625,7 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
     end
 
     # Enable output from do_precompile
-    @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.monitoring = true
+    @lock BG BG.monitoring = true
 
     exit_requested = Ref(false)
     cancel_requested = Ref(false)
@@ -633,30 +636,30 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
     key_task = if stdin isa Base.TTY
         Threads.@spawn :samepool try
             trylock(stdin.raw_lock) || return
-            @lock BACKGROUND_PRECOMPILE.lock begin
-                BACKGROUND_PRECOMPILE.detachable = detachable
-                BACKGROUND_PRECOMPILE.cancel_confirming = false
+            @lock BG begin
+                BG.detachable = detachable
+                BG.cancel_confirming = false
             end
             try
                 term = Base.Terminals.TTYTerminal(get(ENV, "TERM", "dumb"), stdin, stdout, stderr)
                 Base.Terminals.raw!(term, true)
                 try
                     while true
-                        completed = @lock BACKGROUND_PRECOMPILE.lock (BACKGROUND_PRECOMPILE.completed_at !== nothing)
+                        completed = @lock BG (BG.completed_at !== nothing)
                         if completed || exit_requested[] || cancel_requested[] || interrupt_requested[]
                             break
                         end
                         Base.wait_readnb(stdin, 1)
-                        completed = @lock BACKGROUND_PRECOMPILE.lock (BACKGROUND_PRECOMPILE.completed_at !== nothing)
+                        completed = @lock BG (BG.completed_at !== nothing)
                         if completed || exit_requested[] || cancel_requested[] || interrupt_requested[]
                             break
                         end
                         bytesavailable(stdin) > 0 || continue
                         c = read(stdin, Char)
                         # If waiting for cancel confirmation, Enter confirms, anything else aborts
-                        cancel_confirmed = @lock BACKGROUND_PRECOMPILE.lock begin
-                            if BACKGROUND_PRECOMPILE.cancel_confirming
-                                BACKGROUND_PRECOMPILE.cancel_confirming = false
+                        cancel_confirmed = @lock BG begin
+                            if BG.cancel_confirming
+                                BG.cancel_confirming = false
                                 c in ('\r', '\n')
                             else
                                 false
@@ -665,14 +668,14 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                         if cancel_confirmed
                             cancel_requested[] = true
                             println(io)
-                            @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.cancel_requested = true
+                            @lock BG BG.cancel_requested = true
                             broadcast_signal(Base.SIGKILL)
                             break
                         end
                         if c in ('c', 'C')
-                            @lock BACKGROUND_PRECOMPILE.lock begin
-                                BACKGROUND_PRECOMPILE.cancel_confirming = true
-                                BACKGROUND_PRECOMPILE.cancel_confirm_deadline = time() + 5.0
+                            @lock BG begin
+                                BG.cancel_confirming = true
+                                BG.cancel_confirm_deadline = time() + 5.0
                             end
                         elseif detachable && c in ('d', 'D', 'q', 'Q', ']')
                             exit_requested[] = true
@@ -681,13 +684,13 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                         elseif c == '\x03'  # Ctrl-C
                             interrupt_requested[] = true
                             println(io)  # newline after keypress
-                            @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.interrupt_requested = true
+                            @lock BG BG.interrupt_requested = true
                             broadcast_signal(Base.SIGINT)
                             break
                         elseif c in ('i', 'I')
                             broadcast_signal(Sys.isapple() ? Base.SIGINFO : Base.SIGUSR1)
                         elseif c in ('v', 'V')
-                            @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.verbose = !BACKGROUND_PRECOMPILE.verbose
+                            @lock BG BG.verbose = !BG.verbose
                         elseif c in ('?', 'h', 'H')
                             @lock io begin
                                 println(io)
@@ -713,13 +716,13 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                 rethrow()
             finally
                 Base.reseteof(stdin)
-                @lock BACKGROUND_PRECOMPILE.lock begin
-                    BACKGROUND_PRECOMPILE.cancel_confirming = false
+                @lock BG begin
+                    BG.cancel_confirming = false
                 end
                 unlock(stdin.raw_lock)
             end
         finally
-            @lock BACKGROUND_PRECOMPILE.task_done notify(BACKGROUND_PRECOMPILE.task_done)
+            @lock BG.task_done notify(BG.task_done)
         end
     else
         nothing
@@ -741,13 +744,13 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
     # If waiting for a specific package, spawn a watcher that exits when it's done
     pkg_watcher = if wait_for_pkg !== nothing
         Threads.@spawn :samepool begin
-            @lock BACKGROUND_PRECOMPILE.pkg_done begin
-                while wait_for_pkg ∈ BACKGROUND_PRECOMPILE.pending_pkgids
-                    wait(BACKGROUND_PRECOMPILE.pkg_done)
+            @lock BG.pkg_done begin
+                while wait_for_pkg ∈ BG.pending_pkgids
+                    wait(BG.pkg_done)
                 end
             end
             exit_requested[] = true
-            @lock BACKGROUND_PRECOMPILE.task_done notify(BACKGROUND_PRECOMPILE.task_done)
+            @lock BG.task_done notify(BG.task_done)
         end
     else
         nothing
@@ -756,14 +759,14 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
     return try
         # Wait for task completion or user action
         while !exit_requested[] && !cancel_requested[] && !interrupt_requested[]
-            completed = @lock BACKGROUND_PRECOMPILE.lock (BACKGROUND_PRECOMPILE.completed_at !== nothing)
+            completed = @lock BG (BG.completed_at !== nothing)
             completed && break
-            @lock BACKGROUND_PRECOMPILE.task_done wait(BACKGROUND_PRECOMPILE.task_done)
+            @lock BG.task_done wait(BG.task_done)
         end
 
         # If user requested cancel, stop the background task
         if cancel_requested[]
-            @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.monitoring = false
+            @lock BG BG.monitoring = false
             key_task !== nothing && wait(key_task)
             print(io, "\e[?25h\e[J")  # enable cursor + clear to end
             printpkgstyle(io, :Info, "Canceling precompilation...\e[J", color = Base.info_color())
@@ -785,7 +788,7 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
 
         # If we were waiting for a specific package and it finished, clean up silently
         if exit_requested[] && wait_for_pkg !== nothing
-            @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.monitoring = false
+            @lock BG BG.monitoring = false
             if key_task !== nothing
                 wake_key_task()
                 wait(key_task)
@@ -796,7 +799,7 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
 
         # If user requested exit, clean up and return
         if exit_requested[]
-            @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.monitoring = false
+            @lock BG BG.monitoring = false
             key_task !== nothing && wait(key_task)
             print(io, "\e[?25h\e[J")  # enable cursor + clear to end
             printpkgstyle(io, :Precompiling, "detached. Precompilation will continue in the background. Monitor with `precompile --monitor`.\e[J", color = Base.info_color())
@@ -812,7 +815,7 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
         wait(task; throw=false)
     catch e
         # Clean up on error
-        @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.monitoring = false
+        @lock BG BG.monitoring = false
         if key_task !== nothing
             exit_requested[] = true
             wake_key_task()
@@ -949,30 +952,30 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
                                        ignore_loaded::Bool,
                                        detachable::Bool)
     # Stop any existing background precompilation
-    lock(BACKGROUND_PRECOMPILE.lock) do
-        if BACKGROUND_PRECOMPILE.task !== nothing && !istaskdone(BACKGROUND_PRECOMPILE.task)
-            BACKGROUND_PRECOMPILE.interrupt_requested = true
-            @lock BACKGROUND_PRECOMPILE.task_done notify(BACKGROUND_PRECOMPILE.task_done)
+    lock(BG) do
+        if BG.task !== nothing && !istaskdone(BG.task)
+            BG.interrupt_requested = true
+            @lock BG.task_done notify(BG.task_done)
         end
     end
 
     # Wait for previous task to complete
-    old_task = lock(() -> BACKGROUND_PRECOMPILE.task, BACKGROUND_PRECOMPILE.lock)
+    old_task = lock(() -> BG.task, BG)
     if old_task !== nothing
         wait(old_task)
     end
 
-    lock(BACKGROUND_PRECOMPILE.lock) do
-        BACKGROUND_PRECOMPILE.interrupt_requested = false
-        BACKGROUND_PRECOMPILE.cancel_requested = false
-        empty!(BACKGROUND_PRECOMPILE.signal_channels)
-        BACKGROUND_PRECOMPILE.monitoring = true
-        BACKGROUND_PRECOMPILE.completed_at = nothing
-        BACKGROUND_PRECOMPILE.result = nothing
-        BACKGROUND_PRECOMPILE.return_value = nothing
-        BACKGROUND_PRECOMPILE.exception = nothing
-        empty!(BACKGROUND_PRECOMPILE.pending_pkgids)
-        BACKGROUND_PRECOMPILE.work_channel = Channel{PrecompileRequest}(Inf)
+    lock(BG) do
+        BG.interrupt_requested = false
+        BG.cancel_requested = false
+        empty!(BG.signal_channels)
+        BG.monitoring = true
+        BG.completed_at = nothing
+        BG.result = nothing
+        BG.return_value = nothing
+        BG.exception = nothing
+        empty!(BG.pending_pkgids)
+        BG.work_channel = Channel{PrecompileRequest}(Inf)
     end
 
     # Capture necessary context for background task
@@ -983,23 +986,23 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
     register_atexit_hook()
 
     # Launch new background precompilation
-    lock(BACKGROUND_PRECOMPILE.lock) do
-        wc = BACKGROUND_PRECOMPILE.work_channel
-        BACKGROUND_PRECOMPILE.task = Threads.@spawn :samepool begin
+    lock(BG) do
+        wc = BG.work_channel
+        BG.task = Threads.@spawn :samepool begin
             try
                 ret = do_precompile(pkg_names, internal_call, strict, warn_loaded, timing, _from_loading,
                                     configs, io, fancyprint, manifest, ignore_loaded, detachable, wc)
 
-                @lock BACKGROUND_PRECOMPILE.lock begin
-                    BACKGROUND_PRECOMPILE.return_value = ret
+                @lock BG begin
+                    BG.return_value = ret
                 end
             catch e
-                @lock BACKGROUND_PRECOMPILE.lock begin
-                    if BACKGROUND_PRECOMPILE.interrupt_requested || BACKGROUND_PRECOMPILE.cancel_requested
-                        BACKGROUND_PRECOMPILE.result = "Background precompilation was interrupted"
+                @lock BG begin
+                    if BG.interrupt_requested || BG.cancel_requested
+                        BG.result = "Background precompilation was interrupted"
                     else
-                        BACKGROUND_PRECOMPILE.exception = e
-                        BACKGROUND_PRECOMPILE.result = "Background precompilation failed: $(sprint(showerror, e))"
+                        BG.exception = e
+                        BG.result = "Background precompilation failed: $(sprint(showerror, e))"
                     end
                 end
             finally
@@ -1009,17 +1012,17 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
                     req = try; take!(wc); catch; break; end
                     try; put!(req.result, InterruptException()); catch; end
                 end
-                @lock BACKGROUND_PRECOMPILE.lock begin
-                    BACKGROUND_PRECOMPILE.task = nothing
-                    BACKGROUND_PRECOMPILE.interrupt_requested = false
-                    BACKGROUND_PRECOMPILE.cancel_requested = false
-                    foreach(close, BACKGROUND_PRECOMPILE.signal_channels)
-                    empty!(BACKGROUND_PRECOMPILE.signal_channels)
-                    empty!(BACKGROUND_PRECOMPILE.pending_pkgids)
-                    @lock BACKGROUND_PRECOMPILE.pkg_done notify(BACKGROUND_PRECOMPILE.pkg_done)
-                    BACKGROUND_PRECOMPILE.monitoring = false
-                    BACKGROUND_PRECOMPILE.completed_at = time()
-                    @lock BACKGROUND_PRECOMPILE.task_done notify(BACKGROUND_PRECOMPILE.task_done)
+                @lock BG begin
+                    BG.task = nothing
+                    BG.interrupt_requested = false
+                    BG.cancel_requested = false
+                    foreach(close, BG.signal_channels)
+                    empty!(BG.signal_channels)
+                    empty!(BG.pending_pkgids)
+                    @lock BG.pkg_done notify(BG.pkg_done)
+                    BG.monitoring = false
+                    BG.completed_at = time()
+                    @lock BG.task_done notify(BG.task_done)
                 end
             end
         end
@@ -1203,15 +1206,15 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                          detachable::Bool)
     # Try to inject into a running background task
     local req = nothing
-    injected = @lock BACKGROUND_PRECOMPILE.lock begin
-        if BACKGROUND_PRECOMPILE.task !== nothing && !istaskdone(BACKGROUND_PRECOMPILE.task) &&
-                isopen(BACKGROUND_PRECOMPILE.work_channel)
+    injected = @lock BG begin
+        if BG.task !== nothing && !istaskdone(BG.task) &&
+                isopen(BG.work_channel)
             pkg_names = pkgs isa Vector{String} ? copy(pkgs) : String[pkg.name for pkg in pkgs]
             req = PrecompileRequest(pkg_names, internal_call, strict, warn_loaded, timing, _from_loading,
                                     configs, io, fancyprint′, manifest, ignore_loaded, detachable,
                                     Channel{Any}(1))
             try
-                put!(BACKGROUND_PRECOMPILE.work_channel, req)
+                put!(BG.work_channel, req)
                 true
             catch
                 req = nothing
@@ -1255,9 +1258,9 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     monitor_background_precompile(io.io, detachable)
 
     local ret_val, ret_ex
-    @lock BACKGROUND_PRECOMPILE.lock begin
-        ret_val = BACKGROUND_PRECOMPILE.return_value
-        ret_ex = BACKGROUND_PRECOMPILE.exception
+    @lock BG begin
+        ret_val = BG.return_value
+        ret_ex = BG.exception
     end
     ret_ex !== nothing && throw(ret_ex)
     return ret_val
@@ -1419,8 +1422,8 @@ function poll_process_stats!(cpu_pcts::Dict{Int32, Float64}, rss::Dict{Int32, UI
 end
 
 function should_stop(s::PrecompileSession)
-    ir, cr = @lock BACKGROUND_PRECOMPILE.lock begin
-        BACKGROUND_PRECOMPILE.interrupt_requested, BACKGROUND_PRECOMPILE.cancel_requested
+    ir, cr = @lock BG begin
+        BG.interrupt_requested, BG.cancel_requested
     end
     if ir || cr
         s.interrupted[] = s.interrupted[] || ir
@@ -1436,7 +1439,7 @@ end
 
 function make_signal_channel()
     ch = Channel{Int32}(32)
-    @lock BACKGROUND_PRECOMPILE.lock push!(BACKGROUND_PRECOMPILE.signal_channels, ch)
+    @lock BG push!(BG.signal_channels, ch)
     return ch
 end
 
@@ -1463,7 +1466,7 @@ function spawn_print_loop!(s::PrecompileSession)
             wait(s.first_started)
             (isempty(s.pkg_queue) || s.interrupted_or_done[]) && return
             @lock s.print_lock begin
-                if BACKGROUND_PRECOMPILE.monitoring && s.target[] !== nothing
+                if BG.monitoring && s.target[] !== nothing
                     printpkgstyle(s.logio, :Precompiling, something(s.target[], ""))
                 end
             end
@@ -1481,7 +1484,7 @@ function spawn_print_loop!(s::PrecompileSession)
             rss_bytes = Dict{Int32, UInt64}()
             while !s.printloop_should_exit[]
                 @lock s.print_lock begin
-                    verbose = BACKGROUND_PRECOMPILE.verbose
+                    verbose = BG.verbose
                     now_time = time()
                     dt = now_time - last_poll_time
                     if verbose && dt >= 0.5
@@ -1497,11 +1500,11 @@ function spawn_print_loop!(s::PrecompileSession)
                     end
                     i_local = i
                     final_loop_local = final_loop
-                    tip, tip_color = @lock BACKGROUND_PRECOMPILE.lock begin
-                        if BACKGROUND_PRECOMPILE.cancel_confirming && time() >= BACKGROUND_PRECOMPILE.cancel_confirm_deadline
-                            BACKGROUND_PRECOMPILE.cancel_confirming = false
+                    tip, tip_color = @lock BG begin
+                        if BG.cancel_confirming && time() >= BG.cancel_confirm_deadline
+                            BG.cancel_confirming = false
                         end
-                        keyboard_tip(BACKGROUND_PRECOMPILE)
+                        keyboard_tip(BG)
                     end
                     str_ = sprint(; context=s.logio) do iostr
                         if i_local > 1
@@ -1570,7 +1573,7 @@ function spawn_print_loop!(s::PrecompileSession)
                     s.printloop_should_exit[] = s.interrupted_or_done[] && final_loop
                     final_loop = s.interrupted_or_done[]
                     i += 1
-                    if BACKGROUND_PRECOMPILE.monitoring
+                    if BG.monitoring
                         if s.fancyprint && !cursor_disabled
                             print(s.logio, ansi_disablecursor)
                             cursor_disabled = true
@@ -1617,7 +1620,7 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
                 notify(batch_wp[pkg_config])
                 continue
             end
-            @lock BACKGROUND_PRECOMPILE.lock push!(BACKGROUND_PRECOMPILE.pending_pkgids, pkg)
+            @lock BG push!(BG.pending_pkgids, pkg)
             flags, cacheflags = config
             task = Threads.@spawn :samepool try
                 loaded = s.warn_loaded && (pkg in s.start_loaded_modules)
@@ -1647,7 +1650,7 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
                     try
                         name = describe_pkg(s, pkg, is_project_dep, is_serial_dep, flags, cacheflags)
                         @lock s.print_lock begin
-                            if !s.fancyprint && isempty(s.pkg_queue) && BACKGROUND_PRECOMPILE.monitoring
+                            if !s.fancyprint && isempty(s.pkg_queue) && BG.monitoring
                                 printpkgstyle(s.logio, :Precompiling, something(s.target[], "packages..."))
                             end
                         end
@@ -1704,11 +1707,11 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
                         end
                         if ret isa Exception
                             push!(s.precomperr_deps, pkg_config)
-                            !s.fancyprint && BACKGROUND_PRECOMPILE.monitoring && @lock s.print_lock begin
+                            !s.fancyprint && BG.monitoring && @lock s.print_lock begin
                                 println(s.logio, timing_string(t), color_string("  ? ", Base.warn_color(), s.hascolor), name)
                             end
                         else
-                            !s.fancyprint && BACKGROUND_PRECOMPILE.monitoring && @lock s.print_lock begin
+                            !s.fancyprint && BG.monitoring && @lock s.print_lock begin
                                 println(s.logio, timing_string(t), color_string("  ✓ ", loaded ? Base.warn_color() : :green, s.hascolor), name)
                             end
                             if ret !== nothing
@@ -1726,7 +1729,7 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
                         wait(t_monitor)
                         err isa InterruptException && rethrow()
                         s.failed_deps[pkg_config] = sprint(showerror, err)
-                        !s.fancyprint && BACKGROUND_PRECOMPILE.monitoring && @lock s.print_lock begin
+                        !s.fancyprint && BG.monitoring && @lock s.print_lock begin
                             println(s.logio, " "^12, color_string("  ✗ ", Base.error_color(), s.hascolor), name)
                         end
                     finally
@@ -1735,9 +1738,9 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
                         try; close(pid_ch); catch; end
                         @lock s.print_lock delete!(s.active_pids, pkg_config)
                         Base.release(s.parallel_limiter)
-                        @lock BACKGROUND_PRECOMPILE.lock begin
-                            delete!(BACKGROUND_PRECOMPILE.pending_pkgids, pkg)
-                            @lock BACKGROUND_PRECOMPILE.pkg_done notify(BACKGROUND_PRECOMPILE.pkg_done)
+                        @lock BG begin
+                            delete!(BG.pending_pkgids, pkg)
+                            @lock BG.pkg_done notify(BG.pkg_done)
                         end
                     end
                 else
@@ -1783,9 +1786,9 @@ function drain_work_channel!(s::PrecompileSession, work_channel::Channel{Precomp
                     new_dd = new_graph.direct_deps
                     filter_dep_graph!(new_dd, new_pkg_names, request.manifest, new_graph.project_deps, new_graph.ext_to_parent, req_pkgids)
                     skip_pkgs = Set{PkgId}()
-                    @lock BACKGROUND_PRECOMPILE.lock begin
+                    @lock BG begin
                         for pkgid in keys(new_dd)
-                            if pkgid in BACKGROUND_PRECOMPILE.pending_pkgids
+                            if pkgid in BG.pending_pkgids
                                 push!(skip_pkgs, pkgid)
                             end
                         end
@@ -1894,8 +1897,8 @@ function report_precompile_results!(s::PrecompileSession)
                     )
                 end
             end
-            @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.result = logstr
-            BACKGROUND_PRECOMPILE.monitoring && @lock s.print_lock begin
+            @lock BG BG.result = logstr
+            BG.monitoring && @lock s.print_lock begin
                 println(s.logio, logstr)
             end
         elseif s.interrupted[]
@@ -1908,8 +1911,8 @@ function report_precompile_results!(s::PrecompileSession)
                       color_string("$(n_failed)", Base.error_color(), s.hascolor),
                       " interrupted after $(seconds_elapsed) seconds")
             end
-            @lock BACKGROUND_PRECOMPILE.lock BACKGROUND_PRECOMPILE.result = istr
-            BACKGROUND_PRECOMPILE.monitoring && @lock s.print_lock begin
+            @lock BG BG.result = istr
+            BG.monitoring && @lock s.print_lock begin
                 println(s.logio, istr)
             end
         end
@@ -1935,7 +1938,7 @@ function report_precompile_results!(s::PrecompileSession)
                 end
             end
         end
-        isempty(str) || BACKGROUND_PRECOMPILE.monitoring && @lock s.print_lock begin
+        isempty(str) || BG.monitoring && @lock s.print_lock begin
             println(s.io, str)
         end
     end
@@ -2087,7 +2090,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     drainer = drain_work_channel!(s, work_channel)
 
     waitall(initial_tasks; failfast=false, throw=false)
-    @lock BACKGROUND_PRECOMPILE.lock close(work_channel)
+    @lock BG close(work_channel)
     wait(drainer)
     append!(s.tasks, s.injected_tasks)
     waitall(s.injected_tasks; failfast=false, throw=false)
@@ -2108,7 +2111,7 @@ function precompilepkgs_monitor_std(pkg_config, pipe, single_requested_pkg::Bool
     while !eof(pipe)
         str = readline(pipe, keep=true)
         if single_requested_pkg && (liveprinting || !isempty(str))
-            BACKGROUND_PRECOMPILE.monitoring && @lock print_lock begin
+            BG.monitoring && @lock print_lock begin
                 if !liveprinting
                     liveprinting = true
                     pkg_liveprinted[] = pkg
@@ -2119,13 +2122,13 @@ function precompilepkgs_monitor_std(pkg_config, pipe, single_requested_pkg::Bool
         write(get!(IOBuffer, std_outputs, pkg_config), str)
         if !thistaskwaiting && occursin("Waiting for background task / IO / timer", str)
             thistaskwaiting = true
-            !liveprinting && !fancyprint && BACKGROUND_PRECOMPILE.monitoring && @lock print_lock begin
+            !liveprinting && !fancyprint && BG.monitoring && @lock print_lock begin
                 println(io, full_name(ext_to_parent, pkg), color_string(str, Base.warn_color(), hascolor))
             end
             push!(taskwaiting, pkg_config)
         elseif !thistaskwaiting
             # XXX: don't just re-enable IO for random packages without printing the context for them first
-            !liveprinting && !fancyprint && BACKGROUND_PRECOMPILE.monitoring && @lock print_lock begin
+            !liveprinting && !fancyprint && BG.monitoring && @lock print_lock begin
                 print(io, ansi_cleartoendofline, str)
             end
         end
@@ -2170,7 +2173,7 @@ function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLo
         else
             "another machine (hostname: $hostname, pid: $pid, pidfile: $pidfile)"
         end
-        !fancyprint && BACKGROUND_PRECOMPILE.monitoring && @lock print_lock begin
+        !fancyprint && BG.monitoring && @lock print_lock begin
             println(io, "    ", fullname, color_string(" Being precompiled by $(pkgspidlocked[pkg_config])", Base.info_color(), hascolor))
         end
         Base.release(parallel_limiter) # release so other work can be done while waiting
