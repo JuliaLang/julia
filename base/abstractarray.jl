@@ -481,9 +481,8 @@ function first(itr)
     x[1]
 end
 
-
 """
-    first(f, itr)
+    filterfirst(f, itr)
 
 Get the first element of an iterable collection `itr` for which the
 predicate `f` returns `true.`
@@ -493,17 +492,17 @@ predicate `f` returns `true.`
 
 # Examples
 ```jldoctest
-julia> first(>=(5), 2:2:10)
+julia> filterfirst(>=(5), 2:2:10)
 6
 
-julia> first(iseven, [1; 2; 3; 4])
+julia> filterfirst(iseven, [1; 2; 3; 4])
 2
 
-julia> first(isodd, 2:2:10)
+julia> filterfirst(isodd, 2:2:10)
 ERROR: ArgumentError: collection must be non-empty
 ```
 """
-first(f, itr) = first(Iterators.filter(f, itr))
+filterfirst(f, itr) = first(Iterators.filter(f, itr))
 
 """
     first(itr, n::Integer)
