@@ -54,7 +54,8 @@ cumsum!(B::AbstractArray{T}, A=B; dims::Integer) where {T} =
     accumulate!(add_sum, B, A, dims=dims)
 
 function cumsum!(v::AbstractVector; dims::Integer=1)
-    _cumsum!(v, v, dims, ArithmeticStyle(eltype(v)))
+    _cumsum!(v, v, dims, Base.ArithmeticStyle(eltype(v)))
+end
 
 function cumsum!(out::AbstractArray, v::AbstractVector; dims::Integer=1)
     # we dispatch on the possibility of numerical stability issues
@@ -172,7 +173,7 @@ cumprod!(B::AbstractArray{T}, A=B; dims::Integer) where {T} =
     cumprod!(y::AbstractVector, x::AbstractVector=y)
 
 Cumulative product of a vector `x`, storing the result in `y`.
-If `x` is omitted, the computation is performed in-place on `y`.
+If `y` is omitted, the computation is performed in-place on `y`.
 See also [`cumprod`](@ref).
 
 $(_DOCS_ALIASING_WARNING)
