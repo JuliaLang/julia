@@ -1202,29 +1202,31 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                          ignore_loaded::Bool,
                          detachable::Bool)
     # Try to inject into a running background task
-    already_running = false
     local req = nothing
-    @lock BACKGROUND_PRECOMPILE.lock begin
-        if BACKGROUND_PRECOMPILE.task !== nothing && !istaskdone(BACKGROUND_PRECOMPILE.task)
-            already_running = true
+    injected = @lock BACKGROUND_PRECOMPILE.lock begin
+        if BACKGROUND_PRECOMPILE.task !== nothing && !istaskdone(BACKGROUND_PRECOMPILE.task) &&
+                isopen(BACKGROUND_PRECOMPILE.work_channel)
+            pkg_names = pkgs isa Vector{String} ? copy(pkgs) : String[pkg.name for pkg in pkgs]
+            req = PrecompileRequest(pkg_names, internal_call, strict, warn_loaded, timing, _from_loading,
+                                    configs, io, fancyprint′, manifest, ignore_loaded, detachable,
+                                    Channel{Any}(1))
+            try
+                put!(BACKGROUND_PRECOMPILE.work_channel, req)
+                true
+            catch
+                req = nothing
+                false
+            end
+        else
+            false
         end
     end
-    if already_running
-        pkg_names = pkgs isa Vector{String} ? copy(pkgs) : String[pkg.name for pkg in pkgs]
-        req = PrecompileRequest(pkg_names, internal_call, strict, warn_loaded, timing, _from_loading,
-                                configs, io, fancyprint′, manifest, ignore_loaded, detachable,
-                                Channel{Any}(1))
-        try
-            put!(BACKGROUND_PRECOMPILE.work_channel, req)
-            printpkgstyle(io, :Precompiling, "Merging precompilation request into existing run...", color = Base.info_color())
-        catch
-            # work_channel was closed (task finished between check and put!); fall through to launch new
-            already_running = false
-            req = nothing
-        end
+    if injected
+        printpkgstyle(io, :Precompiling, "Merging precompilation request into existing run...", color = Base.info_color())
+    else
+        launch_background_precompile(pkgs, internal_call, strict, warn_loaded, timing, _from_loading,
+                                     configs, io, fancyprint′, manifest, ignore_loaded, detachable)
     end
-    already_running || launch_background_precompile(pkgs, internal_call, strict, warn_loaded, timing, _from_loading,
-                                 configs, io, fancyprint′, manifest, ignore_loaded, detachable)
 
     if req !== nothing
         # Injected into existing task — monitor until our package finishes, then read result
@@ -2085,7 +2087,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     drainer = drain_work_channel!(s, work_channel)
 
     waitall(initial_tasks; failfast=false, throw=false)
-    close(work_channel)
+    @lock BACKGROUND_PRECOMPILE.lock close(work_channel)
     wait(drainer)
     append!(s.tasks, s.injected_tasks)
     waitall(s.injected_tasks; failfast=false, throw=false)
