@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# NB: This file is `Core.eval`-uated into the (pre-existing) module Sys
+
 @doc """
 Provide methods for retrieving information about hardware and the operating system.
 """ Sys

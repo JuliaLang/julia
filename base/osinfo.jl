@@ -1,4 +1,6 @@
 
+# NB: This file is `Core.eval`-uated into the (pre-existing) module Sys
+
 export KERNEL,
        isapple,
        isbsd,
