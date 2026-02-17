@@ -4654,6 +4654,12 @@ end
     end
 end
 
+@testset "effects for `finalizer`" begin
+    @test (Base.Compiler.is_noub ∘ Base.infer_effects)(finalizer, Tuple{Function, Any})
+    @test (Base.Compiler.is_nothrow ∘ Base.infer_effects)(finalizer, Tuple{Function, TestMutable})  # throws for non-`mutable struct`
+    @test (Base.Compiler.is_terminates ∘ Base.infer_effects)(finalizer, Tuple{Function, Any})
+end
+
 # issue #15283
 j15283 = 0
 let
