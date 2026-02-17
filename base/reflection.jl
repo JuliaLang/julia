@@ -1060,7 +1060,8 @@ parentmodule(m::Method) = m.module
     hasmethod(f, t::Type{<:Tuple}[, kwnames]; world=get_world_counter())::Bool
 
 Determine whether the given generic function has a method matching the given
-`Tuple` of argument types with the upper bound of world age given by `world`.
+`Tuple` of argument types in the world age given by `world`.  Note that this is
+always false when `world` is greater than the current latest world.
 
 If a tuple of keyword argument names `kwnames` is provided, this also checks
 whether the method of `f` matching `t` has the given keyword argument names.
@@ -1103,7 +1104,6 @@ end
 
 function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_counter())
     @nospecialize
-    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     isempty(kwnames) && return hasmethod(f, t; world)
     t = to_tuple_type(t)
     ft = Core.Typeof(f)
