@@ -292,7 +292,7 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
                     end
                 end
 
-                i = findnext(==(UInt8('%')), c ,i+1)
+                i = findnext(==(UInt8('%')), c, i+1)
             end
             return true
         end
