@@ -1115,6 +1115,10 @@ uninferable_kwtest(x; y=1) = 2x+y
 @test (@inferred uninferable_kwtest(1)) == 3
 @test (@inferred uninferable_kwtest(1; y=2)) == 4
 
+# Issue #59114
+# @inferred with do expressions
+@test @inferred(map([1,2]) do x x end) == [1, 2]
+
 @test_throws ErrorException @testset "$(error())" for i in 1:10
 end
 @test_throws ErrorException @testset "$(error())" begin
