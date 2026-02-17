@@ -1,3 +1,17 @@
+"""
+    Profile.Allocs
+
+Module for allocation profiling. Records allocation events with their types,
+sizes, and stack traces, allowing you to identify where memory is being allocated.
+
+Use [`Profile.Allocs.@profile`](@ref) to record allocations, [`Profile.Allocs.fetch`](@ref)
+to retrieve the results, and [`Profile.Allocs.clear`](@ref) to reset.
+
+!!! compat "Julia 1.8"
+    Allocation profiling was introduced in Julia 1.8.
+
+See also [`Profile`](@ref).
+"""
 module Allocs
 
 global print # Allocs.print is separate from both Base.print and Profile.print

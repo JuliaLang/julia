@@ -375,6 +375,17 @@ function close_chnl_on_taskdone(t::Task, c::Channel)
     nothing
 end
 
+"""
+    InvalidStateException(msg::String, state::Symbol) <: Exception
+
+An exception thrown when an operation is attempted on an object that is in an invalid
+state for that operation. For example, this is thrown when trying to [`put!`](@ref) a
+value into a closed [`Channel`](@ref).
+
+# Fields
+- `msg::String`: A description of the error.
+- `state::Symbol`: The state of the object when the exception was thrown.
+"""
 struct InvalidStateException <: Exception
     msg::String
     state::Symbol

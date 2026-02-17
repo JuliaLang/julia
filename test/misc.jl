@@ -1623,8 +1623,7 @@ end
 
 @testset "Base docstrings" begin
     undoc = Docs.undocumented_names(Base)
-    @test_broken isempty(undoc)
-    @test isempty(setdiff(undoc, [:BufferStream, :CanonicalIndexError, :CapturedException, :Filesystem, :IOServer, :InvalidStateException, :Order, :PipeEndpoint, :ScopedValues, :Sort, :TTY, :AtomicMemoryRef, :Exception, :GenericMemoryRef, :GlobalRef, :IO, :LineNumberNode, :MemoryRef, :Method, :SegmentationFault, :TypeVar, :arrayref, :arrayset, :arraysize, :const_arrayref]))
+    @test isempty(undoc)
 end
 
 exported_names(m) = filter(s -> Base.isexported(m, s), names(m))

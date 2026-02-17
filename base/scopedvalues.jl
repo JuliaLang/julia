@@ -1,5 +1,17 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    ScopedValues
+
+Module providing dynamically-scoped values. A [`ScopedValue`](@ref) allows you to
+associate a value with a dynamic scope, so that code within that scope (and any code
+it calls) can read the value, without the need to pass it as a function argument.
+
+See [`ScopedValue`](@ref), [`with`](@ref), [`@with`](@ref).
+
+!!! compat "Julia 1.11"
+    Scoped values were introduced in Julia 1.11.
+"""
 module ScopedValues
 
 export ScopedValue, LazyScopedValue, with, @with, ScopedThunk

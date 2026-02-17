@@ -363,6 +363,19 @@ function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::Ab
     end
 end
 
+"""
+    cptree(src::AbstractString, dst::AbstractString; force::Bool=false, follow_symlinks::Bool=false)
+
+Recursively copy a directory tree from `src` to `dst`. `src` must be an existing directory.
+
+If `force=true`, an existing `dst` will be removed before copying. If
+`follow_symlinks=false` (the default), symbolic links are copied as links; if
+`follow_symlinks=true`, the targets of symbolic links are copied instead.
+
+This is a lower-level function used by [`cp`](@ref) when copying directories.
+
+See also [`cp`](@ref), [`mv`](@ref).
+"""
 function cptree(src::String, dst::String; force::Bool=false,
                                           follow_symlinks::Bool=false)
     isdir(src) || throw(ArgumentError("'$src' is not a directory. Use `cp(src, dst)`"))
@@ -1221,6 +1234,17 @@ function _walkdir(chnl, path, topdown, follow_symlinks, onerror)
     nothing
 end
 
+"""
+    unlink(p::AbstractString)
+
+Remove (delete) the file at path `p`. This is a low-level function that directly calls
+the POSIX `unlink` system call via libuv. It only works on files and symbolic links,
+not directories.
+
+Most users should prefer [`rm`](@ref) for removing files and directories.
+
+See also [`rm`](@ref).
+"""
 function unlink(p::AbstractString)
     err = ccall(:jl_fs_unlink, Int32, (Cstring,), p)
     err < 0 && uv_error("unlink($(repr(p)))", err)

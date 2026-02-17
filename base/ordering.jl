@@ -1,5 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""n    Order
+
+Module providing ordering types and functions used by sorting algorithms. This module
+defines the [`Ordering`](@ref Base.Order.Ordering) abstract type and its subtypes
+([`ForwardOrdering`](@ref), [`ReverseOrdering`](@ref), [`By`](@ref Base.Order.By),
+[`Lt`](@ref Base.Order.Lt), [`Perm`](@ref Base.Order.Perm)), as well as the
+[`lt`](@ref Base.Order.lt) comparison function and the [`ord`](@ref Base.Order.ord)
+constructor.
+
+See also [`sort`](@ref), [`sort!`](@ref).
+"""
 module Order
 
 
@@ -28,6 +39,14 @@ Use [`Base.Order.lt`](@ref) to compare two elements according to the ordering.
 """
 abstract type Ordering end
 
+"""
+    ForwardOrdering <: Ordering
+
+A singleton ordering type that compares elements using [`isless`](@ref), which is the
+default ordering in Julia. The singleton instance is [`Base.Order.Forward`](@ref).
+
+See also [`ReverseOrdering`](@ref), [`DirectOrdering`](@ref).
+"""
 struct ForwardOrdering <: Ordering end
 
 """
@@ -55,6 +74,15 @@ reverses ordering specified by `o`.
 """
 reverse(o::Ordering) = ReverseOrdering(o)
 
+"""
+    DirectOrdering
+
+Type alias for `Union{ForwardOrdering, ReverseOrdering{ForwardOrdering}}`, i.e. orderings
+that compare elements directly using [`isless`](@ref) (either in forward or reverse order)
+without applying any transformation.
+
+See also [`ForwardOrdering`](@ref), [`ReverseOrdering`](@ref).
+"""
 const DirectOrdering = Union{ForwardOrdering,ReverseOrdering{ForwardOrdering}}
 
 """
@@ -167,6 +195,17 @@ end
 # The following clause means `if VERSION < v"2.0-"` but it also works during
 # bootstrap. For the same reason, we need to write `Int32` instead of `Cint`.
 if ccall(:jl_ver_major, Int32, ()) < 2
+    """
+        ordtype(o::Ordering, vs::AbstractArray)
+
+    Return the type of elements that would be compared by the ordering `o` when
+    sorting the array `vs`. For a plain `Ordering`, this is `eltype(vs)`. For
+    [`By`](@ref Base.Order.By) orderings it attempts to determine the return type
+    of the transformation function.
+
+    !!! compat "Julia 1.x"
+        This function is deprecated and may be removed in Julia 2.0.
+    """
     ordtype(o::ReverseOrdering, vs::AbstractArray) = ordtype(o.fwd, vs)
     ordtype(o::Perm,            vs::AbstractArray) = ordtype(o.order, o.data)
     # TODO: here, we really want the return type of o.by, without calling it

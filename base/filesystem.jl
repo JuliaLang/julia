@@ -2,6 +2,17 @@
 
 ## File Operations (Libuv-based) ##
 
+"""
+    Filesystem
+
+Module providing low-level file system operations backed by libuv. This module contains
+the [`File`](@ref Base.Filesystem.File) type for direct file handle manipulation as well as
+file-system constants (e.g. `JL_O_RDONLY`, `S_IRUSR`) used with [`open`](@ref) and other system calls.
+
+Most users should prefer higher-level I/O functions such as [`open`](@ref), [`read`](@ref),
+[`write`](@ref), and file operations in `Base` (e.g. [`cp`](@ref), [`mv`](@ref), [`rm`](@ref))
+rather than using this module directly.
+"""
 module Filesystem
 
 """
@@ -165,6 +176,18 @@ include(string(Base.BUILDROOT, "file_constants.jl"))  # include($BUILDROOT/base/
 
 abstract type AbstractFile <: IO end
 
+"""
+    Filesystem.File(fd::RawFD)
+    Filesystem.File(fd::OS_HANDLE)
+
+A low-level file handle wrapping an OS-level file descriptor, providing direct access to
+libuv file system operations. Unlike [`IOStream`](@ref), `File` does not perform buffering.
+
+Use [`Filesystem.open`](@ref) to open a file and obtain a `File` handle, then call
+[`read`](@ref), [`write`](@ref), [`seek`](@ref), and [`close`](@ref) as needed.
+
+Most users should prefer [`Base.open`](@ref) and [`IOStream`](@ref) for file I/O.
+"""
 mutable struct File <: AbstractFile
     open::Bool
     handle::OS_HANDLE
@@ -215,6 +238,16 @@ end
 closewrite(f::File) = nothing
 
 # sendfile is the most efficient way to copy from a file descriptor
+"""
+    sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
+    sendfile(src::AbstractString, dst::AbstractString)
+
+Efficiently copy data between file descriptors or file paths using the OS-level
+`sendfile` mechanism when available. In the two-argument path form, copies the entire
+file from `src` to `dst`, preserving the file mode.
+
+This is used internally by [`cp`](@ref) for efficient file copying.
+"""
 function sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
     check_open(dst)
     check_open(src)
@@ -251,6 +284,15 @@ function truncate(f::File, n::Integer)
     return f
 end
 
+"""
+    futime(f::File, atime::Float64, mtime::Float64)
+
+Change the access time (`atime`) and modification time (`mtime`) of an open
+[`File`](@ref Base.Filesystem.File) `f`. Times are in seconds since the Unix epoch
+(1970-01-01 00:00:00 UTC). Returns `f`.
+
+See also [`stat`](@ref) for reading file timestamps.
+"""
 function futime(f::File, atime::Float64, mtime::Float64)
     check_open(f)
     req = Libc.malloc(_sizeof_uv_fs)

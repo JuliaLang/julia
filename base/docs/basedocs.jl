@@ -4044,6 +4044,223 @@ A non-exhaustive list of examples of when this is used include:
 """
 ConcurrencyViolationError
 
+"""
+    Core.arrayref(inbounds::Bool, A::Array, i::Int...)
+
+Legacy function to retrieve an element from an `Array` at the given indices. Equivalent
+to `Base.getindex(A, i...)`. The `inbounds` argument is ignored in current Julia versions.
+
+This function exists for backward compatibility. Use `getindex` or indexing syntax
+`A[i...]` instead.
+"""
+Core.arrayref
+
+"""
+    Core.const_arrayref(inbounds::Bool, A::Array, i::Int...)
+
+Legacy function identical to [`Core.arrayref`](@ref), retained for backward compatibility.
+Use `getindex` or indexing syntax `A[i...]` instead.
+"""
+Core.const_arrayref
+
+"""
+    Core.arrayset(inbounds::Bool, A::Array{T}, x, i::Int...) where T
+
+Legacy function to set an element of an `Array` at the given indices. Equivalent
+to `Base.setindex!(A, x, i...)`. The `inbounds` argument is ignored in current
+Julia versions.
+
+This function exists for backward compatibility. Use `setindex!` or indexing syntax
+`A[i...] = x` instead.
+"""
+Core.arrayset
+
+"""
+    Core.arraysize(a::Array)
+    Core.arraysize(a::Array, i::Int)
+
+Legacy function to get the dimensions of an `Array`. Called with one argument, returns
+a tuple of all dimensions. Called with two arguments, returns the size along dimension `i`
+(or 1 if `i` exceeds the number of dimensions).
+
+This function exists for backward compatibility. Use [`size`](@ref) instead.
+"""
+Core.arraysize
+
+"""
+    Exception
+
+Abstract type of all exceptions in Julia. New exception types should subtype `Exception`.
+
+# Examples
+```jldoctest
+julia> struct MyException <: Exception
+           msg::String
+       end
+
+julia> MyException("something went wrong") isa Exception
+true
+```
+
+See also [`throw`](@ref), [`error`](@ref), [`catch`](@ref).
+"""
+Core.Exception
+
+"""
+    GlobalRef
+
+A reference to a global variable in a specific module. This is a low-level representation
+used internally in Julia's intermediate representation (IR) and code generation to
+unambiguously identify module-level bindings.
+
+# Fields
+- `mod::Module`: The module containing the binding.
+- `name::Symbol`: The name of the binding.
+
+# Examples
+```jldoctest
+julia> gr = GlobalRef(Base, :sin)
+Base.sin
+
+julia> gr.mod
+Base
+
+julia> gr.name
+:sin
+```
+"""
+Core.GlobalRef
+
+"""
+    IO
+
+The abstract type for all I/O streams. Every stream used for reading or writing data
+in Julia is a subtype of `IO`, including [`IOBuffer`](@ref), [`IOStream`](@ref),
+and network or file-based streams.
+
+Custom I/O types should subtype `IO` and implement methods such as
+[`read`](@ref), [`write`](@ref), and [`close`](@ref).
+
+See also [`IOBuffer`](@ref), [`IOStream`](@ref), [`open`](@ref).
+"""
+Core.IO
+    LineNumberNode
+
+A type representing a line number annotation in Julia's AST (abstract syntax tree).
+These nodes are used to track source locations for debugging and error reporting.
+
+# Fields
+- `line::Int`: The line number.
+- `file::Union{Symbol,Nothing}`: The source file name, or `nothing` if unknown.
+
+# Examples
+```jldoctest
+julia> ln = LineNumberNode(42, :myfile)
+:(#= myfile:42 =#)
+
+julia> ln.line
+42
+
+julia> ln.file
+:myfile
+```
+"""
+Core.LineNumberNode
+    GenericMemoryRef{kind, T, addrspace}
+
+A reference (pointer with bounds-checking) into a [`GenericMemory`](@ref) object.
+`GenericMemoryRef` is parameterized by:
+- `kind::Symbol`: The atomicity kind (e.g. `:not_atomic` or `:atomic`).
+- `T`: The element type.
+- `addrspace`: The address space.
+
+The type aliases [`MemoryRef{T}`](@ref) and [`AtomicMemoryRef{T}`](@ref) are provided
+for the common cases.
+
+See also [`GenericMemory`](@ref), [`MemoryRef`](@ref), [`AtomicMemoryRef`](@ref).
+"""
+Core.GenericMemoryRef
+
+"""
+    MemoryRef{T}
+
+Type alias for `GenericMemoryRef{:not_atomic, T, Core.CPU}`, i.e. a reference into
+a non-atomic [`Memory{T}`](@ref).
+
+See also [`GenericMemoryRef`](@ref), [`Memory`](@ref).
+"""
+Core.MemoryRef
+
+"""
+    AtomicMemoryRef{T}
+
+Type alias for `GenericMemoryRef{:atomic, T, Core.CPU}`, i.e. a reference into
+an [`AtomicMemory{T}`](@ref).
+
+See also [`GenericMemoryRef`](@ref), [`AtomicMemory`](@ref).
+"""
+Core.AtomicMemoryRef
+    Method
+
+A type representing a single method definition in Julia's method table. A `Method` stores
+metadata about a specific method, including its source location, signature, and the
+module in which it was defined.
+
+Methods are created when a function is defined with a particular signature. Use
+[`methods`](@ref) to list the methods of a function, and [`which`](@ref) to find the specific
+method that would be called for given argument types.
+
+# Examples
+```jldoctest
+julia> m = which(+, (Int, Int));
+
+julia> m isa Method
+true
+
+julia> m.module
+Base
+```
+
+See also [`methods`](@ref), [`which`](@ref), [`Function`](@ref).
+"""
+Core.Method
+    SegmentationFault() <: Exception
+
+An exception thrown when a segmentation fault (invalid memory access) occurs. These
+typically indicate a bug in native code called via [`ccall`](@ref) or a Julia runtime error.
+Unlike most exceptions, a `SegmentationFault` is automatically converted into a Julia
+exception by the runtime signal handler rather than being explicitly thrown by Julia code.
+"""
+Core.SegmentationFault
+    TypeVar
+
+A type variable, representing a parameter in [`UnionAll`](@ref) types. `TypeVar`s are
+typically created by the `where` syntax in type declarations and method signatures.
+
+# Fields
+- `name::Symbol`: The name of the type variable.
+- `lb`: The lower bound of the type variable (default `Union{}`).
+- `ub`: The upper bound of the type variable (default `Any`).
+
+# Examples
+```jldoctest
+julia> T = TypeVar(:T)
+T
+
+julia> Vector{T} where T
+Vector{T} where T
+
+julia> TypeVar(:T, Integer)
+T<:Integer
+
+julia> TypeVar(:T, Int, Real)
+Int<:T<:Real
+```
+
+See also [`UnionAll`](@ref), [`where`](@ref).
+"""
+Core.TypeVar
+
 Base.include(BaseDocs, "intrinsicsdocs.jl")
 
 end

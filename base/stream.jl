@@ -12,6 +12,15 @@ end
 
 
 ## types ##
+"""
+    IOServer
+
+Abstract type for server-side I/O objects that listen for and accept incoming connections.
+Subtypes include [`LibuvServer`], and concrete implementations such as
+[`Sockets.TCPServer`] and [`PipeServer`].
+
+See also [`listen`](@ref), [`accept`](@ref).
+"""
 abstract type IOServer end
 """
     LibuvServer
@@ -166,6 +175,19 @@ function uv_status_string(x)
     return "invalid status"
 end
 
+"""
+    PipeEndpoint()
+    PipeEndpoint(fd::RawFD)
+
+A named pipe endpoint, implemented using libuv. `PipeEndpoint` provides a bidirectional
+byte-stream I/O object that can be used for inter-process communication.
+
+A `PipeEndpoint` can be created standalone (e.g. for connecting to a named pipe) or
+obtained from the `stdin`, `stdout`, or `stderr` fields of a [`Process`](@ref) launched
+with I/O redirection.
+
+See also [`PipeServer`], [`open_pipe!`].
+"""
 mutable struct PipeEndpoint <: LibuvStream
     handle::Ptr{Cvoid}
     status::Int
@@ -209,6 +231,17 @@ if OS_HANDLE != RawFD
 end
 
 
+"""
+    TTY(fd::RawFD)
+    TTY(fd::OS_HANDLE)
+
+A stream type representing a terminal (tty) device, implemented using libuv. `TTY`
+objects are typically obtained from the global `stdin`, `stdout`, and `stderr` streams
+when Julia is run in an interactive terminal, but can also be constructed from a raw
+file descriptor.
+
+See also [`PipeEndpoint`](@ref), [`IOStream`](@ref).
+"""
 mutable struct TTY <: LibuvStream
     handle::Ptr{Cvoid}
     status::Int
@@ -1507,6 +1540,31 @@ function peek(s::LibuvStream, ::Type{T}) where T
 end
 
 # BufferStream's are non-OS streams, backed by a regular IOBuffer
+"""
+    BufferStream()
+
+An in-memory I/O stream backed by an [`IOBuffer`](@ref), implementing the
+[`LibuvStream`] interface. Unlike `IOBuffer`, a `BufferStream` supports blocking
+[`read`](@ref) operations that wait until data becomes available.
+
+`BufferStream` is useful as a pipe-like stream to connect producers and consumers
+of data within a single process. Writing to a `BufferStream` notifies any blocked
+readers that data is available, and closing the stream signals end-of-file.
+
+# Examples
+```jldoctest
+julia> bs = BufferStream();
+
+julia> write(bs, "hello");
+
+julia> close(bs);
+
+julia> String(read(bs))
+"hello"
+```
+
+See also [`IOBuffer`](@ref), [`PipeBuffer`](@ref).
+"""
 mutable struct BufferStream <: LibuvStream
     buffer::IOBuffer
     cond::Threads.Condition
