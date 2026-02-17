@@ -6825,6 +6825,11 @@ let rt = only(Base.return_types(map, (typeof(frec_rt_cycle), Vector{TreeRTCycle}
     @test !any(T -> T === Vector{Union{}}, Compiler.uniontypes(rt))
 end
 
+throwconditional(c, x) = c ? throw(x isa Int) : throw(x isa Float64)
+@test Base.infer_exception_type((Bool, Any)) do c, x
+    throwconditional(c, x)
+end == Bool
+
 # irinterp must keep splats precise after the optimizer turns them into `Core.svec` calls
 const SPLAT_SVEC_NAMES = ntuple(i -> Symbol(:a, i), 33)
 @inline splat_svec_inner(names, vals...) = NamedTuple{names}(vals)
