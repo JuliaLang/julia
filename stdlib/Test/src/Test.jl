@@ -382,8 +382,8 @@ function eval_test_comparison(comparison::Expr, quoted::Expr, source::LineNumber
         if res
             res = op(a, b)
         end
-        quoted_args[i] = a
-        quoted_args[i+2] = b
+        quoted_args[i] = a isa Symbol ? QuoteNode(a) : a
+        quoted_args[i+2] = b isa Symbol ? QuoteNode(b) : b
         i += 2
     end
 
@@ -398,6 +398,8 @@ function eval_test_comparison(comparison::Expr, quoted::Expr, source::LineNumber
              source)
 end
 
+_quote_symbol(x) = x isa Symbol ? QuoteNode(x) : x
+
 function eval_test_function(func, args, kwargs, quoted_func::Union{Expr,Symbol}, source::LineNumberNode, negate::Bool=false)
     res = func(args...; kwargs...)
 
@@ -406,12 +408,12 @@ function eval_test_function(func, args, kwargs, quoted_func::Union{Expr,Symbol},
     kw_suffix = ""
     if quoted_func === :≈ && !res
         kw_suffix = " ($(join(["$k=$v" for (k, v) in kwargs], ", ")))"
-        quoted_args = args
+        quoted_args = map(_quote_symbol, args)
     elseif isempty(kwargs)
-        quoted_args = args
+        quoted_args = map(_quote_symbol, args)
     else
-        kwargs_expr = Expr(:parameters, [Expr(:kw, k, v) for (k, v) in kwargs]...)
-        quoted_args = [kwargs_expr, args...]
+        kwargs_expr = Expr(:parameters, [Expr(:kw, k, _quote_symbol(v)) for (k, v) in kwargs]...)
+        quoted_args = [kwargs_expr, map(_quote_symbol, args)...]
     end
 
     # Properly render broadcast function call syntax, e.g. `(==).(1, 2)` or `Base.:(==).(1, 2)`.
