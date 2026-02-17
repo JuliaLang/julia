@@ -892,4 +892,3 @@ end
     end
     @test_throws OverflowError rationalize(UInt, -r)
 end
-
