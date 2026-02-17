@@ -48,6 +48,25 @@ using Test, Random
         GC.gc()
     end
 
+    @testset "unsafe secret buffer" begin
+    data = UInt8[0x61, 0x62, 0x63, 0x00, 0xff]
+    expected = copy(data)              # snapshot BEFORE zeroing
+    p = pointer(data)
+
+    sb = Base.unsafe_SecretBuffer!(p, length(data))
+
+    # position is reset
+    @test position(sb) == 0
+
+    # data was copied correctly
+    @test read(sb) == expected
+
+    # source memory was securely zeroed
+    @test all(iszero, data)
+
+    shred!(sb)
+    end
+
     @testset "initializers" begin
         s1 = SecretBuffer("setec astronomy")
         data2 = [0x73, 0x65, 0x74, 0x65, 0x63, 0x20, 0x61, 0x73, 0x74, 0x72, 0x6f, 0x6e, 0x6f, 0x6d, 0x79]
