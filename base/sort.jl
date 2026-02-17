@@ -982,7 +982,7 @@ struct ConsiderRadixSort{T <: Algorithm, U <: Algorithm} <: Algorithm
     next::U
 end
 ConsiderRadixSort(next) = ConsiderRadixSort(RadixSort(), next)
-function _sort!(v::AbstractVector, a::ConsiderRadixSort, o::DirectOrdering, kw)
+function _sort!(v::AbstractVector, a::ConsiderRadixSort, o::Ordering, kw)
     @getkw lo hi mn mx
     urange = uint_map(mx, o)-uint_map(mn, o)
     bits = unsigned(top_set_bit(urange))
@@ -1016,7 +1016,7 @@ Each pass divides the input into `2^chunk_size == mask+1` buckets. To do this, i
 `chunk_size` is larger for larger inputs and determined by an empirical heuristic.
 """
 struct RadixSort <: Algorithm end
-function _sort!(v::AbstractVector, a::RadixSort, o::DirectOrdering, kw)
+function _sort!(v::AbstractVector, a::RadixSort, o::Ordering, kw)
     @getkw lo hi mn mx scratch
     umn = uint_map(mn, o)
     urange = uint_map(mx, o)-umn
