@@ -1006,7 +1006,7 @@ function in(key_val::Pair{K,V}, dict::PersistentDict{K,V}, valcmp=(==)) where {K
     key, val = key_val
     found = KeyValue.get(dict, key)
     found === nothing && return false
-    return valcmp(val, only(found))
+    return valcmp(val, something(found))
 end
 
 function haskey(dict::PersistentDict{K}, key::K) where K
@@ -1016,13 +1016,13 @@ end
 function getindex(dict::PersistentDict{K,V}, key::K) where {K,V}
     found = KeyValue.get(dict, key)
     found === nothing && throw(KeyError(key))
-    return only(found)
+    return something(found)
 end
 
 function get(dict::PersistentDict{K,V}, key::K, default) where {K,V}
     found = KeyValue.get(dict, key)
     found === nothing && return default
-    return only(found)
+    return something(found)
 end
 
 @noinline function KeyValue.get(dict::PersistentDict{K, V}, key) where {K, V}
@@ -1034,7 +1034,7 @@ end
     found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
     if found && present
         leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
-        return (leaf.val,)
+        return Some{V}(leaf.val)
     end
     return nothing
 end
@@ -1042,13 +1042,13 @@ end
 @noinline function KeyValue.get(default, dict::PersistentDict, key)
     found = KeyValue.get(dict, key)
     found === nothing && return default()
-    return only(found)
+    return something(found)
 end
 
 function get(default::Callable, dict::PersistentDict{K,V}, key::K) where {K,V}
     found = KeyValue.get(dict, key)
     found === nothing && return default()
-    return only(found)
+    return something(found)
 end
 
 function delete(dict::PersistentDict{K}, key::K) where K
