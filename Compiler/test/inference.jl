@@ -6405,3 +6405,8 @@ frec_rt_cycle(t::TreeRTCycle) =
 let rt = only(Base.return_types(map, (typeof(frec_rt_cycle), Vector{TreeRTCycle})))
     @test !any(T -> T === Vector{Union{}}, Compiler.uniontypes(rt))
 end
+
+throwconditional(c, x) = c ? throw(x isa Int) : throw(x isa Float64)
+@test Base.infer_exception_type((Bool, Any)) do c, x
+    throwconditional(c, x)
+end == Bool
