@@ -1,10 +1,17 @@
-using .JuliaSyntax: SyntaxGraph, SyntaxTree, SyntaxList, freeze_attrs, unfreeze_attrs, ensure_attributes, ensure_attributes!, delete_attributes, copy_ast, attrdefs, @stm, NodeId, SourceRef
+using .JuliaSyntax: SyntaxGraph, SyntaxTree, SyntaxList, freeze_attrs, unfreeze_attrs, ensure_attributes, ensure_attributes!, delete_attributes, copy_ast, attrdefs, @stm, NodeId, SourceRef, SourceAttrType, Kind
 
 @testset "SyntaxGraph attrs" begin
     st = parsestmt(SyntaxTree, "function foo end")
     g_init = unfreeze_attrs(st._graph)
     gf1 = freeze_attrs(g_init)
     gu1 = unfreeze_attrs(gf1)
+
+    # Check that a default graph has required attrs
+    g_empty = SyntaxGraph()
+    @test (:kind=>Kind) in attrdefs(g_empty)
+    @test (:source=>SourceAttrType) in attrdefs(g_empty)
+    @test (:value=>Any) in attrdefs(g_empty)
+    @test (:name_val=>String) in attrdefs(g_empty)
 
     # Check that freeze/unfreeze do their jobs
     @test gf1.attributes isa NamedTuple
@@ -54,7 +61,8 @@ end
     "For filling required attrs in graphs created by hand"
     function testgraph(edge_ranges, edges, more_attrs...)
         kinds = Dict(map(i->(i=>K"block"), eachindex(edge_ranges)))
-        sources = Dict(map(i->(i=>LineNumberNode(i)), eachindex(edge_ranges)))
+        sources = Dict{Int, SourceAttrType}(
+            map(i->(i=>LineNumberNode(i)), eachindex(edge_ranges)))
         orig = Dict(map(i->(i=>i), eachindex(edge_ranges)))
         SyntaxGraph(
             edge_ranges,
@@ -69,7 +77,7 @@ end
         # 7 --> 8 --> 9
         g = testgraph([1:1, 2:2, 0:-1, 3:3, 4:4, 0:-1, 5:5, 6:6, 0:-1],
                       [2, 3, 5, 6, 8, 9],
-                      :source => Dict(enumerate([
+                      :source => Dict{Int, SourceAttrType}(enumerate([
                           map(i->i+3, 1:6)...
                           map(LineNumberNode, 7:9)...])))
         st = SyntaxTree(g, 1)
@@ -202,7 +210,7 @@ end
         # 12 --> 4 --> 8    else src(i) = line(i)
         g = testgraph([1:1, 2:2, 3:3, 4:4, 0:-1, 0:-1, 0:-1, 0:-1, 5:5, 6:6, 7:7, 8:8],
                       [5, 6, 7, 8, 1, 2, 3, 4],
-                      :source => Dict(
+                      :source => Dict{Int, SourceAttrType}(
                           1=>2, 2=>3, 3=>4,
                           map(i->(i=>LineNumberNode(i)), 4:12)...))
         st = SyntaxTree(g, 1)
