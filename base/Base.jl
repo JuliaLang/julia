@@ -121,7 +121,7 @@ end
 
 # Enable dynamic library loading
 module Sys end # Sys is populated in stages during bootstrap
-Core.eval(Sys, :(include("osinfo.jl"))) 
+Core.eval(Sys, :(include("osinfo.jl")))
 module Filesystem end # Filesystem is populated in stages during bootstrap
 Core.eval(Filesystem, :(include("path.jl")))
 using .Filesystem
