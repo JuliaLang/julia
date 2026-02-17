@@ -2543,7 +2543,19 @@ function _inferred(ex, mod, allow = :(Union{}))
     if Meta.isexpr(ex, :ref)
         ex = Expr(:call, :getindex, ex.args...)
     end
+    
+    if Meta.isexpr(ex, :do)
+
+        call_part = ex.args[1]
+        func_part = ex.args[2]
+
+        lambda = Expr(:->, func_part.args[1], func_part.args[2])
+
+        ex = Expr(:call, call_part.args[1], lambda, call_part.args[2:end]...)
+    end
+    
     Meta.isexpr(ex, :call)|| error("@inferred requires a call expression")
+
     farg = ex.args[1]
     if isa(farg, Symbol) && farg !== :.. && first(string(farg)) == '.'
         farg = Symbol(string(farg)[2:end])
