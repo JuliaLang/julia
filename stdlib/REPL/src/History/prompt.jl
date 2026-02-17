@@ -62,7 +62,7 @@ Initialize a custom REPL prompt tied to `events` using the existing `term`.
 Returns a tuple `(term, prompt, istate, pstate)` ready for
 input handling and display.
 """
-function create_prompt(events::Channel{Symbol}, term, prefix::String = "\e[90m")
+function create_prompt(events::Channel{Symbol}, term, prefix::String = "\e[90m", initial_query::String = "")
     prompt = REPL.LineEdit.Prompt(
         PROMPT_TEXT, # prompt
         prefix, "\e[0m", # prompt_prefix, prompt_suffix
@@ -78,6 +78,9 @@ function create_prompt(events::Channel{Symbol}, term, prefix::String = "\e[90m")
     interface = REPL.LineEdit.ModalInterface([prompt])
     istate = REPL.LineEdit.init_state(term, interface)
     pstate = istate.mode_state[prompt]
+    if !isempty(initial_query)
+        write(pstate.input_buffer, initial_query)
+    end
     (; term, prompt, istate, pstate)
 end
 
