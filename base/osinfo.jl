@@ -1,4 +1,3 @@
-module Sys
 
 export KERNEL,
        isapple,
@@ -169,5 +168,3 @@ end
 for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
     @eval $f() = $(getfield(@__MODULE__, f)(KERNEL))
 end
-
-end # module
