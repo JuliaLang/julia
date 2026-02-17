@@ -242,3 +242,24 @@ end
 @test VersionNumber(true, 0x2, Int128(3), (GenericString("rc"), 0x1)) == v"1.2.3-rc.1"
 @test VersionNumber(true, 0x2, Int128(3), (GenericString("rc"), 0x1)) == v"1.2.3-rc.1"
 @test VersionNumber(true, 0x2, Int128(3), (), (GenericString("sp"), 0x2)) == v"1.2.3+sp.2"
+
+@testset "tryparse does not throw for ridiculous version numbers" begin
+    for v in ("777391743771040", "1.777391743771040", "1.2.777391743771040", "777391743771040.777391743771040.777391743771040",
+              "1.2.3-24710850437479937082376077275780011980", "1.2.3-a.24710850437479937082376077275780011980",
+              "1.2.3+24710850437479937082376077275780011980", "1.2.3+a.24710850437479937082376077275780011980",
+              )
+         @test tryparse(VersionNumber, v) === nothing
+    end
+    @test tryparse(VersionNumber, "4294967295") === v"4294967295.0.0"
+    @test tryparse(VersionNumber, "1.4294967295") === v"1.4294967295.0"
+    @test tryparse(VersionNumber, "1.2.4294967295") === v"1.2.4294967295"
+    @test tryparse(VersionNumber, "4294967295.4294967295.4294967295") === v"4294967295.4294967295.4294967295"
+    @test tryparse(VersionNumber, "1.2.3-18446744073709551615") === v"1.2.3-18446744073709551615"
+    @test tryparse(VersionNumber, "1.2.3-a.18446744073709551615") === v"1.2.3-a.18446744073709551615"
+    @test tryparse(VersionNumber, "1.2.3-a18446744073709551616") === v"1.2.3-a18446744073709551616"
+    @test tryparse(VersionNumber, "1.2.3-18446744073709551615.a18446744073709551616") === v"1.2.3-18446744073709551615.a18446744073709551616"
+    @test tryparse(VersionNumber, "1.2.3+18446744073709551615") === v"1.2.3+18446744073709551615"
+    @test tryparse(VersionNumber, "1.2.3+a.18446744073709551615") === v"1.2.3+a.18446744073709551615"
+    @test tryparse(VersionNumber, "1.2.3+a18446744073709551616") === v"1.2.3+a18446744073709551616"
+    @test tryparse(VersionNumber, "1.2.3+18446744073709551615.a18446744073709551616") === v"1.2.3+18446744073709551615.a18446744073709551616"
+end

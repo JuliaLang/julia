@@ -123,9 +123,14 @@ const VERSION_REGEX = r"^
     ))
 $"ix
 
-function split_idents(s::AbstractString)
+function try_split_idents(s::AbstractString)
     idents = eachsplit(s, '.')
-    pidents = Union{UInt64,String}[occursin(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident) for ident in idents]
+    pidents = Union{UInt64,String}[]
+    for ident in idents
+        processed = occursin(r"^\d+$", ident) ? tryparse(UInt64, ident) : String(ident)
+        isnothing(processed) && return nothing
+        push!(pidents, processed)
+    end
     return tuple(pidents...)::VerTuple
 end
 
@@ -134,14 +139,19 @@ function tryparse(::Type{VersionNumber}, v::AbstractString)
     m = match(VERSION_REGEX, String(v)::String)
     m === nothing && return nothing
     major, minor, patch, minus, prerl, plus, build = m.captures
-    major = parse(VInt, major::AbstractString)
-    minor = minor !== nothing ? parse(VInt, minor) : VInt(0)
-    patch = patch !== nothing ? parse(VInt, patch) : VInt(0)
+    major = tryparse(VInt, major::AbstractString)
+    isnothing(major) && return nothing
+    minor = minor !== nothing ? tryparse(VInt, minor) : VInt(0)
+    isnothing(minor) && return nothing
+    patch = patch !== nothing ? tryparse(VInt, patch) : VInt(0)
+    isnothing(patch) && return nothing
     if prerl !== nothing && !isempty(prerl) && prerl[1] == '-'
         prerl = prerl[2:end] # strip leading '-'
     end
-    prerl = prerl !== nothing ? split_idents(prerl) : minus !== nothing ? ("",) : ()
-    build = build !== nothing ? split_idents(build) : plus  !== nothing ? ("",) : ()
+    prerl = prerl !== nothing ? try_split_idents(prerl) : minus !== nothing ? ("",) : ()
+    isnothing(prerl) && return nothing
+    build = build !== nothing ? try_split_idents(build) : plus  !== nothing ? ("",) : ()
+    isnothing(build) && return nothing
     return VersionNumber(major, minor, patch, prerl::VerTuple, build::VerTuple)
 end
 
