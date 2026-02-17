@@ -32,6 +32,7 @@ mutable struct Options
     style_input::Bool # enable syntax highlighting for input
     # default IOContext settings at the REPL
     iocontext::Dict{Symbol,Any}
+    show_project_in_prompt::Bool # show active project/environment in prompt
 end
 
 Options(;
@@ -53,7 +54,8 @@ Options(;
         hint_tab_completes = true,
         auto_insert_closing_bracket = true,
         style_input = true,
-        iocontext = Dict{Symbol,Any}()) =
+        iocontext = Dict{Symbol,Any}(),
+        show_project_in_prompt = false) =
             Options(hascolor, extra_keymap, tabwidth,
                     kill_ring_max, region_animation_duration,
                     beep_duration, beep_blink, beep_maxduration,
@@ -62,7 +64,7 @@ Options(;
                     auto_indent, auto_indent_tmp_off, auto_indent_bracketed_paste,
                     auto_indent_time_threshold, auto_refresh_time_delay,
                     hint_tab_completes, auto_insert_closing_bracket, style_input,
-                    iocontext)
+                    iocontext, show_project_in_prompt)
 
 # for use by REPLs not having an options field
 const GlobalOptions = Options()

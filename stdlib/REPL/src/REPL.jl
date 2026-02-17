@@ -1236,9 +1236,10 @@ enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
 function contextual_prompt(repl::LineEditREPL, prompt::Union{String,Function})
     function ()
         mod = Base.active_module(repl)
-        prefix = mod == Main ? "" : string('(', mod, ") ")
+        mod_prefix = mod == Main ? "" : string('(', mod, ") ")
+        env_prefix = repl.options.show_project_in_prompt ? project_prefix() : ""
         pr = prompt isa String ? prompt : prompt()
-        prefix * pr
+        env_prefix * mod_prefix * pr
     end
 end
 

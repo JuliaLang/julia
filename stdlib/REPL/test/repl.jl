@@ -1891,6 +1891,22 @@ end
     @test get_prompt("--project=$proj_file") == "(Bar) pkg> "
 end
 
+@testset "show_project_in_prompt option" begin
+    # Test project_prefix() directly
+    get_prefix(proj::String) = readchomp(`$(Base.julia_cmd()[1]) --startup-file=no $(proj) -e "using REPL; print(REPL.project_prefix())"`)
+    @test get_prefix("--project=$(pkgdir(REPL))") == "(REPL) "
+
+    tdir = mkpath(joinpath(mktempdir(), "baz"))
+    @test get_prefix("--project=$tdir") == "(baz) "
+
+    # Pkg_promptf still works after refactor
+    get_pkg(proj::String) = readchomp(`$(Base.julia_cmd()[1]) --startup-file=no $(proj) -e "using REPL; print(REPL.Pkg_promptf())"`)
+    @test get_pkg("--project=$tdir") == "(baz) pkg> "
+
+    # Test that the option defaults to false
+    @test REPL.Options().show_project_in_prompt == false
+end
+
 # Issue #58158 add alias for Char display in REPL
 @testset "REPL show_repl Char alias" begin
     # Test character with a known emoji alias

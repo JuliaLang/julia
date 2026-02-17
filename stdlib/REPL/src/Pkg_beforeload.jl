@@ -90,7 +90,7 @@ prev_project_file = nothing
 prev_project_timestamp = nothing
 prev_prefix = ""
 
-function Pkg_promptf()
+function project_prefix()
     global prev_project_timestamp, prev_prefix, prev_project_file
     project_file = find_project_file()
     prefix = ""
@@ -117,6 +117,10 @@ function Pkg_promptf()
             end
         end
     end
+    return prefix
+end
+
+function Pkg_promptf()
     # Note no handling of Pkg.offline, as the Pkg version does here
-    return "$(prefix)$(PKG_PROMPT)"
+    return "$(project_prefix())$(PKG_PROMPT)"
 end

@@ -900,6 +900,31 @@ Out[3]: Dict{Int64, Any} with 2 entries:
     an individual entry with `Out[n] = nothing`.
 
 
+## Environment in prompt
+
+By default, the active project/environment is only shown in the `pkg>` prompt. You can also
+display it in the `julia>` prompt (and other modes like `help?>` and `shell>`) by enabling
+the `show_project_in_prompt` option. To enable this on startup, add the following to your
+`~/.julia/config/startup.jl` file:
+
+```julia
+atreplinit() do repl
+    repl.options.show_project_in_prompt = true
+end
+```
+
+This will show prompts like:
+
+```julia-repl
+(@v1.12) julia>
+```
+
+or, when using a named project:
+
+```julia-repl
+(MyProject) julia>
+```
+
 ## TerminalMenus
 
 TerminalMenus is a submodule of the Julia REPL and enables small, low-profile interactive menus in the terminal.
