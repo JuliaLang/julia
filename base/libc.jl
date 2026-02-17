@@ -277,10 +277,17 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
             while true
                 isnothing(i) && break
                 i >= N && break
+
                 # Ignore % following after another %
-                if !(i >= firstindex(c)+1 && c[i-1] == UInt8('%'))
+                if i == firstindex(c) || c[i-1] != UInt8('%')
                     # Detect %a, %A, %j, %w, %Ow
-                    if c[i+1] in b"aAjw" || (i <= N-2 && c[i+1:i+2] == b"Ow")
+                    if c[i+1] in b"aAjw"
+                        return false
+                    end
+                    if (checkbounds(Bool, c, i+2) &&
+                        c[i+1] == UInt8('O') &&
+                        c[i+2] == UInt8('w')
+                    )
                         return false
                     end
                 end
