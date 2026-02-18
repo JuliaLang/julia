@@ -2216,23 +2216,20 @@ end
 function expand_decls(ctx, ex)
     declkind = kind(ex)
     @assert declkind in KSet"local global"
-    declmeta = get(ex, :meta, nothing)
-    bindings = children(ex)
     stmts = SyntaxList(ctx)
-    for binding in bindings
-        if JuliaSyntax.is_prec_assignment(kind(binding))
-            @chk numchildren(binding) == 2
-            # expand_assignment will create the type decls
-            make_lhs_decls(ctx, stmts, declkind, declmeta, binding[1], false)
-            push!(stmts, expand_assignment(ctx, binding))
-        elseif is_sym_decl(binding) || kind(binding) in (K"Value", K"Placeholder")
-            make_lhs_decls(ctx, stmts, declkind, declmeta, binding, true)
-        elseif kind(binding) == K"function"
-            make_lhs_decls(ctx, stmts, declkind, declmeta, binding[1], false)
-            push!(stmts, expand_forms_2(ctx, binding))
-        else
-            throw(LoweringError(ex, "invalid syntax in variable declaration"))
+    for c in children(ex)
+        simple = kind(c) in KSet"Identifier :: Value Placeholder"
+        lhs = @stm c begin
+            (_, when=simple) -> c
+            [K"=" x _] -> x
+            [K".=" x _] -> x
+            [K"op=" x _ _] -> x
+            [K".op=" x _ _] -> x
+            [K"function" x _] -> x
         end
+        # type decls are handled elsewhere unless simple
+        make_lhs_decls(ctx, stmts, declkind, get(ex, :meta, nothing), lhs, simple)
+        simple || push!(stmts, expand_forms_2(ctx, c))
     end
     newnode(ctx, ex, K"block", stmts)
 end
