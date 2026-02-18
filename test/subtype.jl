@@ -2811,6 +2811,10 @@ end
 @test typeintersect(Tuple{Type{Vector{T}} where T, Type{Int64}},
                     Tuple{S, S} where S) === Tuple{Type{Vector{T}} where T, Type{Int64}}
 @test Tuple{Union{Type{Vector{T}} where T, Type{Int64}}, Type{Int8}} <: Tuple{S, S} where S
+@test typeintersect(Tuple{Union{Type{Int64}, Ref{Int64}}, Ref{Int64}},
+                    Tuple{S, S} where S) === Tuple{S, S} where S<:Ref{Int64}
+@test typeintersect(Tuple{Union{Type{Val},Type{Int64}}, Type{Vector}},
+                    Tuple{T, T} where T<:Union{UnionAll,Type{<:Number}}) === Tuple{Type{Val}, Type{Vector}}
 
 let
     A = Tuple{Union{Type{Vector}, Type{Int64}}, Union{Type{Matrix}, Type{Float64}}}
@@ -2819,4 +2823,10 @@ let
     @test (r <: A) && (r <: B)
     # e.g. Union{Tuple{Type{Int64}, Type{Float64}}, Tuple{Type{Vector}, Type{Matrix}}}
     @test_broken r !== Union{}
+
+    A = Tuple{Union{Type{Vector}, Type{Int64}}, Union{Type{Int64}, Type{Float64}}, Union{Type{Matrix}, Type{Float64}}}
+    B = (Tuple{S, S, T} where S) where T
+    r = typeintersect(A, B)
+    @test (r <: A) && (r <: B)
+    @test r !== Union{}
 end
