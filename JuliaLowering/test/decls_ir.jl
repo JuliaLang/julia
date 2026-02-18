@@ -207,6 +207,33 @@ begin
 end
 
 ########################################
+# multiple type declarations is OK for globals
+begin
+    global x::Int
+    x::Int = 1
+end
+#---------------------
+1   TestMod.Int
+2   (call core.declare_global TestMod :x true %₁)
+3   latestworld
+4   (call core.declare_global TestMod :x false)
+5   latestworld
+6   TestMod.Int
+7   (call core.declare_global TestMod :x true %₆)
+8   latestworld
+9   (call core.declare_global TestMod :x true)
+10  latestworld
+11  (call core.get_binding_type TestMod :x)
+12  (= slot₁/tmp 1)
+13  (call core.isa slot₁/tmp %₁₁)
+14  (gotoifnot %₁₃ label₁₆)
+15  (goto label₁₇)
+16  (= slot₁/tmp (call top.convert %₁₁ slot₁/tmp))
+17  slot₁/tmp
+18  (call core.setglobal! TestMod :x %₁₇)
+19  (return 1)
+
+########################################
 # Error: Const not supported on locals
 const local x = 1
 #---------------------
