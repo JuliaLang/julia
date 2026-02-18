@@ -4524,10 +4524,10 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         if numchildren(ex) == 1 && kind(ex[1]) == K"String"
             ex[1]
         else
-            @ast ctx ex [K"call"
+            expand_forms_2(ctx, @ast ctx ex [K"call"
                 "string"::K"top"
-                expand_forms_2(ctx, children(ex))...
-            ]
+                children(ex)...
+            ])
         end
     elseif k == K"try"
         expand_forms_2(ctx, expand_try(ctx, ex))
