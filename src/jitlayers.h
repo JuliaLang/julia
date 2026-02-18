@@ -310,16 +310,16 @@ struct jl_emitted_output_t {
 class jl_codegen_output_t {
 private:
     orc::ThreadSafeModule owned_TSM;
-    orc::ThreadSafeModule &TSM;
+    orc::ThreadSafeModule *TSM;
     orc::ThreadSafeContext::Lock tsctx_lock;
 
     jl_name_counter_t names;
 
 public:
-    LLVMContext &get_context() { return *TSM.getContext().getContext(); }
-    Module &get_module() { return *TSM.getModuleUnlocked(); }
-    orc::ThreadSafeModule &get_tsm() { return TSM; }
-    void lock() { tsctx_lock = TSM.getContext().getLock(); }
+    LLVMContext &get_context() { return *get_tsm().getContext().getContext(); }
+    Module &get_module() { return *get_tsm().getModuleUnlocked(); }
+    orc::ThreadSafeModule &get_tsm() { return owned_TSM ? owned_TSM : *TSM; }
+    void lock() { tsctx_lock = get_tsm().getContext().getLock(); }
     void unlock() { auto _ = std::move(tsctx_lock); }
 
     StringRef strip_linux(StringRef name);
@@ -378,10 +378,10 @@ public:
     bool use_swiftcc = true;
 
     jl_codegen_output_t(orc::ThreadSafeModule &TSM)
-      : TSM(TSM),
+      : TSM(&TSM),
         tsctx_lock(TSM.getContext().getLock()),
         DL(TSM.getModuleUnlocked()->getDataLayout()),
-        TargetTriple(this->TSM.getModuleUnlocked()->getTargetTriple())
+        TargetTriple(TSM.getModuleUnlocked()->getTargetTriple())
     {
         if (TargetTriple.isRISCV())
             use_swiftcc = false;
@@ -397,8 +397,8 @@ public:
 
     jl_codegen_output_t(StringRef name, const DataLayout &DL, const Triple &triple)
       : owned_TSM(create_ts_module(name, DL, triple)),
-        TSM(owned_TSM),
-        tsctx_lock(TSM.getContext().getLock()),
+        TSM(nullptr),
+        tsctx_lock(owned_TSM.getContext().getLock()),
         DL(DL),
         TargetTriple(triple)
     {

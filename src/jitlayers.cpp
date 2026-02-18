@@ -305,7 +305,7 @@ jl_emitted_output_t jl_codegen_output_t::finish(orc::SymbolStringPool &SSP)
     }
 
     unlock();
-    return {std::move(TSM), std::move(info)};
+    return {std::move(get_tsm()), std::move(info)};
 }
 
 // Return a specptr that is ABI-compatible with `from_abi` which invokes `codeinst`.
