@@ -350,6 +350,11 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
             gid = declare_in_scope!(ctx, top_scope(ctx), ex, :global)
             b = get_binding(ctx, gid)
         end
+        # Body-level @nospecialize sets :nospecialize metadata on identifiers.
+        # Propagate this to the binding so the slot gets the nospecialize flag.
+        if getmeta(ex, :nospecialize, false) && b.kind === :argument
+            b.is_nospecialize = true
+        end
         newleaf(ctx, ex, K"BindingId", b.id)
     elseif k === K"BindingId"
         ex

@@ -32,9 +32,16 @@ function _apply_nospecialize(ctx, ex)
     end
 end
 
-function Base.var"@nospecialize"(__context__::MacroContext, ex, exs...)
-    # TODO support multi-arg version properly
-    _apply_nospecialize(__context__, ex)
+function Base.var"@nospecialize"(__context__::MacroContext, exs::SyntaxTree...)
+    if length(exs) == 0
+        @ast __context__ __context__.macrocall [K"meta" "nospecialize"::K"Symbol"]
+    elseif length(exs) == 1
+        _apply_nospecialize(__context__, only(exs))
+    else
+        @ast __context__ __context__.macrocall [K"block"
+            map(ex->_apply_nospecialize(__context__, ex), exs)...
+        ]
+     end
 end
 
 # TODO: support all forms that the original supports
