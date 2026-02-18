@@ -710,7 +710,7 @@ public:
     JuliaOJIT() JL_NOTSAFEPOINT;
     ~JuliaOJIT() JL_NOTSAFEPOINT;
 
-    void enableJITDebuggingSupport() JL_NOTSAFEPOINT;
+    void enableJITDebuggingSupport();
     void enableIntelJITEventListener() JL_NOTSAFEPOINT;
     void enableOProfileJITEventListener() JL_NOTSAFEPOINT;
     void enablePerfJITEventListener() JL_NOTSAFEPOINT;

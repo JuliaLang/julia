@@ -44,7 +44,7 @@ end
 # Functions to change parse state
 
 function normal_context(ps::ParseState)
-    ParseState(ps,
+    ParseState(ps;
                range_colon_enabled=true,
                space_sensitive=false,
                where_enabled=true,
@@ -237,6 +237,12 @@ end
 
 function is_closer_or_newline(ps::ParseState, k)
     is_closing_token(ps,k) || k == K"NewlineWs"
+end
+
+# Closer for "Non-delimited reserved words" like `return` which aren't closed with an `end`
+function is_nd_resword_closer(ps::ParseState, k)
+    return is_closer_or_newline(ps, k) ||
+           (k == K":"   && !ps.range_colon_enabled)
 end
 
 function is_initial_reserved_word(ps::ParseState, k)
@@ -1867,12 +1873,22 @@ end
 #
 # flisp: parse-resword
 function parse_resword(ps::ParseState)
-    # In normal_context
-    # begin f() where T = x end  ==>  (block (= (where (call f) T) x))
-    ps = normal_context(ps)
-    bump_trivia(ps)
-    mark = position(ps)
+    bump_trivia(ps, skip_newlines=true)
     word = peek(ps)
+    v_1_14_break_cont_ret = ps.stream.version >= (1,14)
+    if v_1_14_break_cont_ret && (word == K"break" || word == K"continue" || word == K"return")
+        # "Non-delimited" reserved words don't have an `end` delimiter and
+        # should preserve end_symbol and range_colon_enabled.
+        ps = ParseState(ps;
+                        space_sensitive=false,
+                        where_enabled=true,
+                        for_generator=false,
+                        whitespace_newline=false)
+    else
+        ps = normal_context(ps)
+    end
+
+    mark = position(ps)
     if word in KSet"begin quote"
         # begin end         ==>  (block)
         # begin a ; b end   ==>  (block a b)
@@ -2049,69 +2065,68 @@ function parse_resword(ps::ParseState)
     elseif word == K"return"
         bump(ps, TRIVIA_FLAG)
         k = peek(ps)
-        if k == K"NewlineWs" || is_closing_token(ps, k)
-            # return\nx   ==>  (return)
-            # return)     ==>  (return)
+        if v_1_14_break_cont_ret ? is_nd_resword_closer(ps, k) :
+                                   (k == K"NewlineWs" || is_closing_token(ps, k))
+            # return\nx   ==> (return)
+            # (return)    ==> (parens (return))
         else
             # return x    ==>  (return x)
             # return x,y  ==>  (return (tuple x y))
             parse_eq(ps)
         end
         emit(ps, mark, K"return")
-    elseif word == K"continue"
-        # continue         ==>  (continue)
-        # continue _       ==>  (continue _)        [1.14+]
-        # continue label   ==>  (continue label)    [1.14+]
+    elseif word == K"break" || word == K"continue"
         bump(ps, TRIVIA_FLAG)
         k = peek(ps)
-        if k in KSet"NewlineWs ; ) EndMarker" || (k == K"end" && !ps.end_symbol)
-            # continue with no arguments
-            emit(ps, mark, K"continue")
-        elseif ps.range_colon_enabled && k == K":"
-            # Ternary case: `cond ? continue : x`
-            emit(ps, mark, K"continue")
-        elseif k == K"Identifier" || is_contextual_keyword(k)
-            # continue label - plain identifier or contextual keyword as label
-            bump(ps)
-            emit(ps, mark, K"continue")
-            min_supported_version(v"1.14", ps, mark, "labeled `continue`")
-        else
-            # Error: unexpected token after continue
-            emit(ps, mark, K"continue")
-        end
-    elseif word == K"break"
-        # break            ==>  (break)
-        # break _          ==>  (break _)               [1.14+]
-        # break _ val      ==>  (break _ val)           [1.14+]
-        # break label      ==>  (break label)           [1.14+]
-        # break label val  ==>  (break label val)       [1.14+]
-        bump(ps, TRIVIA_FLAG)
-        function parse_break_value(ps, mark)
-            k2 = peek(ps)
-            if k2 in KSet"NewlineWs ; ) : EndMarker" || (k2 == K"end" && !ps.end_symbol)
-                # break label
-                emit(ps, mark, K"break")
+        if v_1_14_break_cont_ret
+            if is_nd_resword_closer(ps, k)
+                # break            ==>  (break)
+                # continue         ==>  (continue)
+                emit(ps, mark, word)
             else
-                # break label value
-                parse_eq(ps)
-                emit(ps, mark, K"break")
+                # break label      ==>  (break label)           [1.14+]
+                # continue label   ==>  (continue label)        [1.14+]
+                bump_trivia(ps)
+                emark = position(ps)
+                parse_unary_prefix(ps)
+                b = peek_behind(ps)
+                if b.orig_kind == K"Identifier" || is_contextual_keyword(b.orig_kind) ||
+                        b.kind == K"$" || b.kind == K"var"
+                    # Label ok. Check for `break label value` syntax
+                    if word == K"break"
+                        t2 = peek_token(ps)
+                        if !is_nd_resword_closer(ps, kind(t2))
+                            # break label val  ==>  (break label val)       [1.14+]
+                            if !preceding_whitespace(t2)
+                                bump_invisible(ps, K"error", TRIVIA_FLAG,
+                                               error="expected space after break label")
+                            end
+                            parse_eq(ps)
+                        end
+                    end
+                else
+                    emit(ps, emark, K"error", TRIVIA_FLAG,
+                         error="expected identifier for break label")
+                end
+                emit(ps, mark, word)
+                if !is_nd_resword_closer(ps, peek(ps))
+                    recover(is_nd_resword_closer, ps, TRIVIA_FLAG,
+                            error="unexpected token after $(untokenize(word))")
+                end
             end
-            min_supported_version(v"1.14", ps, mark, "labeled `break`")
-        end
-        k = peek(ps)
-        if k in KSet"NewlineWs ; ) EndMarker" || (k == K"end" && !ps.end_symbol)
-            # break with no arguments
-            emit(ps, mark, K"break")
-        elseif ps.range_colon_enabled && k == K":"
-            # Ternary case: `cond ? break : x`
-            emit(ps, mark, K"break")
-        elseif k == K"Identifier" || is_contextual_keyword(k)
-            # break label [value] - plain identifier or contextual keyword as label
-            bump(ps)
-            parse_break_value(ps, mark)
         else
-            # Error: unexpected token after break
-            emit(ps, mark, K"break")
+            if k in KSet"NewlineWs ; ) : EndMarker" || (k == K"end" && !ps.end_symbol)
+                # break  ==>  (break)
+                emit(ps, mark, word)
+            else
+                # break label ==> ERROR
+                recover(is_closer_or_newline, ps, TRIVIA_FLAG,
+                        error="unexpected token after $(untokenize(word))")
+                emit(ps, mark, word)
+                if k == K"Identifier" || is_contextual_keyword(k) || k == K"$" || k == K"var"
+                    min_supported_version(v"1.14", ps, mark, "labeled `break` and `continue`")
+                end
+            end
         end
     elseif word in KSet"module baremodule"
         # module A end  ==> (module A (block))

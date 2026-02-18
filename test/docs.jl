@@ -1296,6 +1296,10 @@ let x = Binding(Main, :+)
     @test Meta.parse(string(x)) == :(Base.:+)
 end
 
+let x = Binding(Main, :(:))
+    @test Meta.parse(string(x)) == :(Base.:(:))
+end
+
 let x = Binding(Meta, :parse)
     @test Meta.parse(string(x)) == :(Base.Meta.parse)
 end

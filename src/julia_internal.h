@@ -187,10 +187,14 @@ extern uintptr_t __stack_chk_guard;
 extern JL_DLLEXPORT uintptr_t __stack_chk_guard;
 #endif
 
-#if jl_has_builtin(__builtin_unreachable) || defined(_COMPILER_GCC_) || defined(_COMPILER_INTEL_)
-#  define jl_unreachable() __builtin_unreachable()
+#ifdef JL_NDEBUG
+# if jl_has_builtin(__builtin_unreachable) || defined(_COMPILER_GCC_) || defined(_COMPILER_INTEL_)
+#   define jl_unreachable() __builtin_unreachable()
+# else
+#   define jl_unreachable() ((void)jl_assume(0))
+# endif
 #else
-#  define jl_unreachable() ((void)jl_assume(0))
+# define jl_unreachable() assert(0 && "unreachable")
 #endif
 
 // If this is detected in a backtrace of segfault, it means the functions

@@ -356,6 +356,25 @@ end
     GC.@preserve @static if true v"1.14" else end
     """) isa VersionNumber
 
+    # JuliaLowering.jl/issues/144
+    @test JuliaLowering.include_string(test_mod, """
+    f_preserve144() = let
+        val = Any[]
+        GC.@preserve val begin; end
+    end
+    f_preserve144()
+    """) == nothing
+
+    # JuliaLowering.jl/issues/145
+    @test JuliaLowering.include_string(test_mod, """
+    f_preserve145() = let
+        debug_buffer = IOBuffer()
+        # inside function to force compilation
+        GC.@preserve debug_buffer 1
+    end
+    f_preserve145()
+    """) == 1
+
     # only invokelatest produces :isglobal now, so MWE here
     Base.eval(test_mod, :(macro isglobal(x); esc(Expr(:isglobal, x)); end))
     @test JuliaLowering.include_string(test_mod, """
