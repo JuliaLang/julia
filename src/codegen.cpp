@@ -10145,7 +10145,7 @@ jl_code_info_t *jl_get_method_ir(jl_code_instance_t *ci)
 void emit_always_inline(jl_codegen_output_t &out,
                         unique_function<jl_code_info_t *(jl_code_instance_t *)> get_src)
 {
-    SmallVector<std::tuple<jl_code_instance_t *, jl_invoke_api_t, jl_codegen_call_target_t &>>
+    SmallVector<std::pair<jl_code_instance_t *, jl_invoke_api_t>>
         queue;
     // We don't want to define externally-visible functions for CodeInstances
     // that are here for inlining only, so we'll restore the original ci_funcs
@@ -10155,7 +10155,7 @@ void emit_always_inline(jl_codegen_output_t &out,
         for (auto &[call, target] : out.call_targets) {
             auto [ci, api] = call;
             if (target.private_linkage && target.decl->isDeclaration())
-                queue.push_back({ci, api, target});
+                queue.push_back({ci, api});
         }
         if (queue.empty()) {
             out.ci_funcs = std::move(orig_ci_funcs);
@@ -10168,7 +10168,14 @@ void emit_always_inline(jl_codegen_output_t &out,
         int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
         out.safepoint_on_entry = false;
         JL_GC_PUSH1(&src);
-        for (auto &[ci, api, target] : queue) {
+        for (auto &[ci, api] : queue) {
+            // Emitting code may insert into call_targets and invalidate
+            // references, so we must look it up each time.
+            assert(out.call_targets.contains({ci, api}));
+            auto &target = out.call_targets[{ci, api}];
+            bool external_linkage = target.external_linkage;
+            Function *old_decl = target.decl;
+
             if (!target.decl->isDeclaration())
                 continue;
             auto it = out.ci_funcs.find(ci);
@@ -10180,11 +10187,12 @@ void emit_always_inline(jl_codegen_output_t &out,
                 src = get_src(ci);
                 if (!src)
                     continue;
+                // Invalidates references to out.call_targets
                 auto decls_opt = jl_emit_codeinst(out, ci, src); // contains safepoints
                 if (!decls_opt)
                     break;
                 decls = *decls_opt;
-                auto linkage = target.external_linkage ?
+                auto linkage = external_linkage ?
                                    GlobalValue::AvailableExternallyLinkage :
                                    GlobalValue::PrivateLinkage;
                 if (decls.invoke)
@@ -10194,9 +10202,9 @@ void emit_always_inline(jl_codegen_output_t &out,
 
             // TODO: jl_promote_method_roots?
             assert(api == decls.invoke_api);
-            target.decl->replaceAllUsesWith(decls.specptr);
-            target.decl->addFnAttr(Attribute::InlineHint);
-            target.decl = decls.specptr;
+            old_decl->replaceAllUsesWith(decls.specptr);
+            decls.specptr->addFnAttr(Attribute::InlineHint);
+            out.call_targets[{ci, api}].decl = decls.specptr;
         }
         JL_GC_POP();
         jl_gc_unsafe_leave(ct->ptls, gc_state);
