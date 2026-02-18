@@ -1217,19 +1217,30 @@ function wait()
     process_events()
 
     # get the next task to run
+    result = nothing
+    have_result = false
     W = workqueue_for(Threads.threadid())
     task = trypoptask(W)
-    if task === nothing
+    if !(task isa Task)
         # No tasks to run; switch to the scheduler task to run the
         # thread sleep logic.
         sched_task = get_sched_task()
         if ct !== sched_task
-            return yieldto(sched_task)
+            result = yieldto(sched_task)
+            have_result = true
+        else
+            task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any),
+                         trypoptask, W, checktaskempty)
         end
-        task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)
     end
-    set_next_task(task)
-    return try_yieldto(ensure_rescheduled)
+    # We may have already switched tasks (via the scheduler task), so
+    # only switch if we haven't.
+    if !have_result
+        @assert task isa Task
+        set_next_task(task)
+        result = try_yieldto(ensure_rescheduled)
+    end
+    return result
 end
 
 if Sys.iswindows()
