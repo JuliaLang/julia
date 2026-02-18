@@ -874,19 +874,19 @@ static int is_leaf_typevar(jl_tvar_t *v) JL_NOTSAFEPOINT
     return is_leaf_bound(v->lb);
 }
 
-static jl_value_t *widen_Type(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+static jl_value_t *widen_Type_if_concrete(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
     if (jl_is_type_type(t) && !jl_is_typevar(jl_tparam0(t)))
         return jl_typeof(jl_tparam0(t));
     if (jl_is_uniontype(t)) {
-        jl_value_t *a = widen_Type(((jl_uniontype_t*)t)->a);
-        jl_value_t *b = widen_Type(((jl_uniontype_t*)t)->b);
+        jl_value_t *a = widen_Type_if_concrete(((jl_uniontype_t*)t)->a);
+        jl_value_t *b = widen_Type_if_concrete(((jl_uniontype_t*)t)->b);
         if (a == b)
             return a;
     }
     if (jl_is_unionall(t)) {
         jl_unionall_t *u = (jl_unionall_t*)t;
-        jl_value_t *body = widen_Type(u->body);
+        jl_value_t *body = widen_Type_if_concrete(u->body);
         if (body != u->body && !jl_has_typevar(body, u->var))
             return body;
     }
@@ -898,7 +898,7 @@ static int try_subtype_in_env(jl_value_t *a, jl_value_t *b, jl_stenv_t *e);
 // Map Type{X} to kind type (DataType, UnionAll, Union, TypeofBottom) over union
 // drop members of the union where the widened kind doesn't satisfy `bound`
 // sets `*filtered` to the union of original (non-widened) surviving members
-static jl_value_t *widen_Type_union(jl_value_t *t, jl_value_t *bound, jl_stenv_t *e, jl_value_t **filtered)
+static jl_value_t *widen_Type_to_union(jl_value_t *t, jl_value_t *bound, jl_stenv_t *e, jl_value_t **filtered)
 {
     if (jl_is_type_type(t) && !jl_is_typevar(jl_tparam0(t))) {
         jl_value_t *w = jl_typeof(jl_tparam0(t));
@@ -912,8 +912,8 @@ static jl_value_t *widen_Type_union(jl_value_t *t, jl_value_t *bound, jl_stenv_t
     if (jl_is_uniontype(t)) {
         jl_value_t *wa = NULL, *wb = NULL, *fa = NULL, *fb = NULL;
         JL_GC_PUSH4(&wa, &wb, &fa, &fb);
-        wa = widen_Type_union(((jl_uniontype_t*)t)->a, bound, e, &fa);
-        wb = widen_Type_union(((jl_uniontype_t*)t)->b, bound, e, &fb);
+        wa = widen_Type_to_union(((jl_uniontype_t*)t)->a, bound, e, &fa);
+        wb = widen_Type_to_union(((jl_uniontype_t*)t)->b, bound, e, &fb);
         if (wa != ((jl_uniontype_t*)t)->a || wb != ((jl_uniontype_t*)t)->b) {
             *filtered = simple_join(fa, fb);
             fa = simple_join(wa, wb); // reuse root
@@ -929,7 +929,7 @@ static jl_value_t *widen_Type_union(jl_value_t *t, jl_value_t *bound, jl_stenv_t
         jl_unionall_t *u = (jl_unionall_t*)t;
         jl_value_t *fbody = NULL, *body = NULL;
         JL_GC_PUSH2(&body, &fbody);
-        body = widen_Type_union(u->body, bound, e, &fbody);
+        body = widen_Type_to_union(u->body, bound, e, &fbody);
         if (body != u->body && !jl_has_typevar(body, u->var)) {
             *filtered = fbody;
             JL_GC_POP();
@@ -1021,7 +1021,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         e->envidx--;
         // widen Type{x} to typeof(x) in argument position
         if (!vb.occurs_inv)
-            vb.lb = widen_Type(vb.lb);
+            vb.lb = widen_Type_if_concrete(vb.lb);
         }
     else
         ans = subtype(u->body, t, e, param);
@@ -2907,10 +2907,10 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         }
         jl_value_t *ub2 = NULL, *filt = NULL;
         JL_GC_PUSH3(&ub, &ub2, &filt);
-        ub2 = widen_Type_union(ub, bb->ub, e, &filt);
+        ub2 = widen_Type_to_union(ub, bb->ub, e, &filt);
         if (ub2 != ub && filt != jl_bottom_type) {
             set_bound(&bb->ub, ub2, b, e);
-            if (widen_Type(filt) != filt) {
+            if (widen_Type_if_concrete(filt) != filt) {
                 // all surviving members widen to the same concrete kind
                 JL_GC_POP();
                 return filt;
