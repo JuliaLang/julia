@@ -527,7 +527,7 @@ end
 
 connect!(sock::TCPSocket, addr::InetAddr) = connect!(sock, addr.host, addr.port)
 
-function wait_connected(x::LibuvStream)
+function wait_connected(x::LibuvStream, keepalive_delay::Int=0)
     iolock_begin()
     check_open(x)
     isopen(x) || x.readerror === nothing || throw(x.readerror)
@@ -542,6 +542,12 @@ function wait_connected(x::LibuvStream)
             lock(x.cond)
         end
         isopen(x) || x.readerror === nothing || throw(x.readerror)
+        if keepalive_delay > 0
+            err = ccall(:uv_tcp_keepalive, Cint,
+                (Ptr{Nothing}, Cint, Cuint),
+                x.handle, 1, 1)
+            Base.uv_error("failed to set keepalive on tcp socket", err)
+        end
     finally
         unlock(x.cond)
         unpreserve_handle(x)
@@ -557,13 +563,13 @@ end
 
 Connect to the host `host` on port `port`.
 """
-connect(sock::TCPSocket, port::Integer) = connect(sock, localhost, port)
-connect(port::Integer) = connect(localhost, port)
+connect(sock::TCPSocket, port::Integer; kw...) = connect(sock, localhost, port; kw...)
+connect(port::Integer; kw...) = connect(localhost, port; kw...)
 
 # Valid connect signatures for TCP
-connect(host::AbstractString, port::Integer) = connect(TCPSocket(), host, port)
-connect(addr::IPAddr, port::Integer) = connect(TCPSocket(), addr, port)
-connect(addr::InetAddr) = connect(TCPSocket(), addr)
+connect(host::AbstractString, port::Integer; kw...) = connect(TCPSocket(), host, port; kw...)
+connect(addr::IPAddr, port::Integer; kw...) = connect(TCPSocket(), addr, port; kw...)
+connect(addr::InetAddr; kw...) = connect(TCPSocket(), addr; kw...)
 
 function connect!(sock::TCPSocket, host::AbstractString, port::Integer)
     if sock.status != StatusInit
@@ -574,9 +580,9 @@ function connect!(sock::TCPSocket, host::AbstractString, port::Integer)
     return sock
 end
 
-function connect(sock::LibuvStream, args...)
+function connect(sock::LibuvStream, args...; keepalive_delay::Int=0)
     connect!(sock, args...)
-    wait_connected(sock)
+    wait_connected(sock, keepalive_delay)
     return sock
 end
 

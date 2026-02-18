@@ -600,6 +600,16 @@ end
         end
         close(srv)
     end
+    # test passing keepalive_delay keyword argument
+    let addr = Sockets.InetAddr(ip"127.0.0.1", 4445)
+        srv = listen(addr)
+        let s = Sockets.connect(addr; keepalive_delay=1)
+            @test iswritable(s)
+            closewrite(s)
+            @test !iswritable(s)
+            close(s)
+        end
+    end
 end
 
 @testset "TCPSocket RawFD constructor" begin
