@@ -461,7 +461,7 @@ end
     # Although not tested here, the keyword body method (`var"#f_body_nospecialize_with_kwargs#0"`)'s
     # third argument (corresponding to `a`) should probably be nospecialized too.
     @test_broken only(methods(test_mod.f_body_nospecialize_with_kwargs)).nospecialize == 1
-    @test_broken only(methods(Core.kwcall, (NamedTuple,typeof(test_mod.f_body_nospecialize_with_kwargs),Any))) == 1 << 2
+    @test_broken only(methods(Core.kwcall, (NamedTuple,typeof(test_mod.f_body_nospecialize_with_kwargs),Any))).nospecialize == 1 << 2
 end
 
 @testset "Keyword functions" begin
