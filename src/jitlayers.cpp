@@ -2205,7 +2205,7 @@ orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibilit
                                                jl_code_instance_t *CI, jl_invoke_api_t API)
 {
     auto It = CISymbols.find(CI);
-    if (It != CISymbols.end())
+    if (It != CISymbols.end() && It->second.invoke_api == API)
         return It->second.specptr;
 
     CISymbolPtr *Sym = linkCISymbol(CI);
