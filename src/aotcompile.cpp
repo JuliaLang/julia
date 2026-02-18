@@ -734,6 +734,7 @@ static void aot_link_output(jl_codegen_output_t &out)
 {
     for (auto &[call, target] : out.call_targets) {
         auto [ci, api] = call;
+        assert(api == JL_INVOKE_ARGS || api == JL_INVOKE_SPECSIG);
         JL_GC_PROMISE_ROOTED(ci);
         if (!target.decl->isDeclaration())
             continue;
