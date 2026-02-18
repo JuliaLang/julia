@@ -102,6 +102,7 @@ end
 
     # TODO: `@ast_` escaping is broken
     unused = JuliaSyntax.parsestmt(JuliaSyntax.SyntaxTree, "foo")
+    JuliaLowering.ensure_macro_attributes!(unused._graph)
     local st_wrappers = Function[
         x->(@assert(!isnothing(x)); @ast unused._graph unused (x::K"Value"))
         x->(@assert(!isnothing(x)); @ast unused._graph unused [K"inert" x::K"Value"])

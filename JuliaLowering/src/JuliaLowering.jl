@@ -19,10 +19,12 @@ using .JuliaSyntax: highlight, Kind, @KSet_str, is_leaf, children, numchildren,
     is_contextual_keyword,
     SyntaxGraph, SyntaxTree, SyntaxList, NodeId, SourceRef, SourceAttrType,
     ensure_attributes, ensure_attributes!, delete_attributes, new_id!, hasattr,
-    setattr, setattr!, syntax_graph, is_compatible_graph,
+    copy_attrs, setattr, setattr!, syntax_graph, is_compatible_graph,
     check_compatible_graph, copy_node, copy_ast, provenance, sourceref,
     reparent, mapchildren, flattened_provenance, mkleaf, mknode, newleaf,
     newnode, tree_ids, @stm, mapsyntax
+
+const DEBUG = true
 
 _include("kinds.jl")
 _register_kinds()

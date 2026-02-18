@@ -322,7 +322,7 @@ function list(stream::IO, block::MD)
         indent = length(m.match)
         # Calculate the starting number and regex to use for bullet matching.
         initial, regex =
-            if m.captures[3] == nothing
+            if m.captures[3] === nothing
                 # An unordered list. Use `-1` to flag the list as unordered.
                 -1, Regex("^ {0,3}(\\$(m.captures[1]))( |\$)")
             elseif m.captures[3] == "."

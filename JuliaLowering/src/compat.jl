@@ -18,13 +18,7 @@ end
 
 function expr_to_est(@nospecialize(e),
                      lnn::LineNumberNode=LineNumberNode(0, :none))
-    graph = ensure_attributes!(
-        SyntaxGraph(),
-        kind=Kind, syntax_flags=UInt16,
-        source=SourceAttrType, var_id=Int, value=Any,
-        name_val=String, is_toplevel_thunk=Bool,
-        scope_layer=LayerId, meta=CompileHints,
-        toplevel_pure=Bool)
+    graph = ensure_macro_attributes!(SyntaxGraph())
     expr_to_est(graph, e, lnn)
 end
 
@@ -122,7 +116,8 @@ function est_to_expr(st::SyntaxTree)
     elseif k === K"inert"
         QuoteNode(est_to_expr(st[1]))
     else
-        @assert !is_leaf(st)
+        # TODO: should handle post-desugaring forms as well
+        @assert !is_leaf(st) "est_to_expr should only be used pre-desugaring"
         # In a partially-expanded or quoted AST, there may be heads with no
         # corresponding kind
         head = Symbol(k === K"unknown_head" ? st.name_val : untokenize(k))
@@ -234,7 +229,7 @@ We can assume `st` has passed `valid_st1`.  Errors arising from invalid AST
 """
 function est_to_dst(st::SyntaxTree; all_expanded=true)
     g = st._graph
-    rec = @__FUNCTION__()
+    rec = var"#self#"
 
     return @stm st begin
         [K"Identifier"] -> let s = st.name_val

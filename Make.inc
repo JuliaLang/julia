@@ -1716,7 +1716,7 @@ endif
 CLANGSA_FLAGS :=
 CLANGSA_CXXFLAGS :=
 ifeq ($(OS), Darwin) # on new XCode, the files are hidden
- CLANGSA_FLAGS += -isysroot $(shell xcrun --show-sdk-path -sdk macosx)
+ CLANGSA_FLAGS += -isysroot $(shell xcrun --show-sdk-path --sdk macosx)
 endif
 ifeq ($(USEGCC),1)
 # try to help clang find the c++ files for CC by guessing the value for --prefix
