@@ -68,7 +68,11 @@ global a_typed_global::Int = 10.0
 """) === 10.0
 @test Core.get_binding_type(test_mod, :a_typed_global) === Int
 @test test_mod.a_typed_global === 10
-
+@test JuliaLowering.include_string(test_mod, """
+global a_curly_typed_global::Union{Int, Float64} = 10.0
+""") === 10.0
+@test Core.get_binding_type(test_mod, :a_curly_typed_global) === Union{Int, Float64}
+@test test_mod.a_curly_typed_global === 10.0
 # Also allowed in nontrivial scopes in a top level thunk
 @test JuliaLowering.include_string(test_mod, """
 let
@@ -77,6 +81,13 @@ end
 """) === 10.0
 @test Core.get_binding_type(test_mod, :a_typed_global_2) === Int
 @test test_mod.a_typed_global_2 === 10
+@test JuliaLowering.include_string(test_mod, """
+let
+    global a_curly_typed_global_2::Union{Int, Float64} = 10.0
+end
+""") === 10.0
+@test Core.get_binding_type(test_mod, :a_curly_typed_global_2) === Union{Int, Float64}
+@test test_mod.a_curly_typed_global_2 === 10.0
 
 @test JuliaLowering.include_string(test_mod, "const x_c_T::Int = 9") === 9
 @test Base.isdefinedglobal(test_mod, :x_c_T)

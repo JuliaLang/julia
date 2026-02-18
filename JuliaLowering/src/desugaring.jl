@@ -2179,7 +2179,8 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
         ([K"Value"], when=ex.value isa GlobalRef) -> ex
         [K"Placeholder"] -> nothing
         ([K"::" [K"Identifier"] t], when=type_decls) -> let x = ex[1]
-            push!(stmts, newnode(ctx, ex, K"decl", tree_ids(x, t)))
+            t2 = expand_forms_2(ctx, t)
+            push!(stmts, newnode(ctx, ex, K"decl", tree_ids(x, t2)))
             make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
         end
         ([K"::" [K"Placeholder"] t], when=type_decls) -> let
