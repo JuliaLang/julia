@@ -10147,6 +10147,9 @@ void emit_always_inline(jl_codegen_output_t &out,
 {
     SmallVector<std::tuple<jl_code_instance_t *, jl_invoke_api_t, jl_codegen_call_target_t &>>
         queue;
+    // We don't want to define externally-visible functions for CodeInstances
+    // that are here for inlining only, so we'll restore the original ci_funcs
+    // map after emitting everything necessary for inlining.
     auto orig_ci_funcs = out.ci_funcs;
     while (true) {
         for (auto &[call, target] : out.call_targets) {
@@ -10155,7 +10158,6 @@ void emit_always_inline(jl_codegen_output_t &out,
                 queue.push_back({ci, api, target});
         }
         if (queue.empty()) {
-            // Don't define functions for CIs that are here for inlining only
             out.ci_funcs = std::move(orig_ci_funcs);
             return;
         }
@@ -10190,7 +10192,7 @@ void emit_always_inline(jl_codegen_output_t &out,
                 decls.specptr->setLinkage(linkage);
             }
 
-            // TODO: jl_optimize_roots?
+            // TODO: jl_promote_method_roots?
             assert(api == decls.invoke_api);
             target.decl->replaceAllUsesWith(decls.specptr);
             target.decl->addFnAttr(Attribute::InlineHint);

@@ -824,9 +824,9 @@ private:
 
     // LinkerMutex protects CISymbols, Names
     std::mutex LinkerMutex;
-    // CISymbols maps CodeInstance (weak) pointers to their ORC symbols.  It is
-    // ok for the a garbage collected CISymbol to remain as a key; it will be
-    // replaced when the address is reused for another CI.
+    // CISymbols maps CodeInstance pointers to their ORC symbols.  If a
+    // CodeInstance is eligible for garbage collection, it must be removed from
+    // this map first, with unregisterCI.
     CISymbolMap CISymbols;
     jl_name_counter_t Names;
 
