@@ -892,3 +892,24 @@ end
     end
     @test_throws OverflowError rationalize(UInt, -r)
 end
+
+@testset "rationalize(x) with tiny x (issue #49803, #49848)" begin
+    for T in (Float16, Float32, Float64), n in 0:24
+        # inv(x) ≥ maxintfloat(T)
+        x = prevfloat(inv(maxintfloat(T)), n)
+        @test abs(rationalize(Base.inttype(T), x) - x) ≤ eps(x)
+        @test abs(rationalize(widen(Base.inttype(T)), x, 0) - x) == 0
+        # x subnormal
+        x = prevfloat(floatmin(T), n)
+        setprecision(BigFloat, 1 - exponent(x)) do
+            @test abs(rationalize(BigInt, x) - x) ≤ eps(x)
+            @test abs(rationalize(BigInt, x, 0) - x) == 0
+        end
+        # inv(x) infinite
+        x = nextfloat(zero(T), n + 1)
+        setprecision(BigFloat, 8 - exponent(x)) do
+            @test abs(rationalize(BigInt, x) - x) ≤ eps(x)
+            @test abs(rationalize(BigInt, x, 0) - x) == 0
+        end
+    end
+end
