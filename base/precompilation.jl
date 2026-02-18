@@ -513,8 +513,7 @@ precompiles only the given packages and their dependencies (unless
   is a `Pair{Cmd, Base.CacheFlags}` specifying command flags and cache flags. When
   multiple configs are provided, each package is precompiled for each configuration.
 
-- `io::IO`: Output stream for progress messages, warnings, and errors. Can be
-  redirected (e.g., to `devnull` when called from loading in non-interactive mode).
+- `io::IO`: Output stream for progress messages, warnings, and errors.
 
 - `fancyprint::Bool`: Controls output format. When `true`, displays an animated progress
   bar with spinners. When `false`, instead enables `timing` mode. Automatically
@@ -618,23 +617,13 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     num_tasks = max(1, something(tryparse(Int, get(ENV, "JULIA_NUM_PRECOMPILE_TASKS", string(default_num_tasks))), 1))
     parallel_limiter = Base.Semaphore(num_tasks)
 
-    # suppress precompilation progress messages when precompiling for loading packages, except during interactive sessions
-    # or when specified by logging heuristics that explicitly require it
-    # since the complicated IO implemented here can have somewhat disastrous consequences when happening in the background (e.g. #59599)
-    logio′ = io
-    logcalls′ = nothing
-    if _from_loading
-        if isinteractive()
-            logcalls′ = CoreLogging.Info # sync with Base.compilecache
-        else
-            logio′ = IOContext{IO}(devnull)
-            fancyprint′ = false
-            logcalls′ = CoreLogging.Debug # sync with Base.compilecache
-        end
+    logio = io
+    logcalls = if _from_loading
+        isinteractive() ? CoreLogging.Info : CoreLogging.Debug # sync with Base.compilecache
+    else
+        nothing
     end
     fancyprint = fancyprint′
-    logio = logio′
-    logcalls = logcalls′
 
     nconfigs = length(configs)
     hascolor = get(logio, :color, false)::Bool
