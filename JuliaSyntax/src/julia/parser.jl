@@ -2797,7 +2797,11 @@ function parse_iteration_spec(ps::ParseState)
         parse_pipe_lt(ps)
     else
         # Recovery heuristic
-        recover(ps, error="invalid iteration spec: expected one of `=` `in` or `∈`") do ps, k
+        recover(ps, error="invalid iteration spec: expected `=` `in` or `∈`
+note: a comma after a comprehension introduces another iteration spec;
+      wrap the comprehension in parentheses if you intended it
+      as an array element
+") do ps, k
             k in KSet", NewlineWs" || is_closing_token(ps, k)
         end
         # Or try parse_pipe_lt ???
