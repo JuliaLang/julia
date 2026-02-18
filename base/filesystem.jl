@@ -219,7 +219,7 @@ function sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
     check_open(dst)
     check_open(src)
     while true
-        result = ccall(:jl_fs_sendfile, Int32, (OS_HANDLE, OS_HANDLE, Int64, Csize_t),
+        result = ccall(:jl_fs_sendfile, Cssize_t, (OS_HANDLE, OS_HANDLE, Int64, Csize_t),
                        src.handle, dst.handle, src_offset, bytes)
         uv_error("sendfile", result)
         nsent = result
@@ -232,10 +232,10 @@ end
 
 function unsafe_write(f::File, buf::Ptr{UInt8}, len::UInt, offset::Int64=Int64(-1))
     check_open(f)
-    err = ccall(:jl_fs_write, Int32, (OS_HANDLE, Ptr{UInt8}, Csize_t, Int64),
+    ret = ccall(:jl_fs_write, Cssize_t, (OS_HANDLE, Ptr{UInt8}, Csize_t, Int64),
                 f.handle, buf, len, offset)
-    uv_error("write", err)
-    return len
+    uv_error("write", ret)
+    return ret
 end
 
 write(f::File, c::UInt8) = write(f, Ref{UInt8}(c))
@@ -265,7 +265,7 @@ end
 function read(f::File, ::Type{UInt8})
     check_open(f)
     p = Ref{UInt8}()
-    ret = ccall(:jl_fs_read, Int32, (OS_HANDLE, Ptr{Cvoid}, Csize_t),
+    ret = ccall(:jl_fs_read, Cssize_t, (OS_HANDLE, Ptr{Cvoid}, Csize_t),
                 f.handle, p, 1)
     uv_error("read", ret)
     @assert ret <= sizeof(p) == 1
@@ -298,7 +298,7 @@ read(f::File, ::Type{T}) where {T<:AbstractChar} = T(read(f, Char)) # fallback
 
 function unsafe_read(f::File, p::Ptr{UInt8}, nel::UInt)
     check_open(f)
-    ret = ccall(:jl_fs_read, Int32, (OS_HANDLE, Ptr{Cvoid}, Csize_t),
+    ret = ccall(:jl_fs_read, Cssize_t, (OS_HANDLE, Ptr{Cvoid}, Csize_t),
                 f.handle, p, nel)
     uv_error("read", ret)
     ret == nel || throw(EOFError())
@@ -314,7 +314,7 @@ function readbytes!(f::File, b::MutableDenseArrayType{UInt8}, nb=length(b))
     if length(b) < nr
         resize!(b, nr)
     end
-    ret = ccall(:jl_fs_read, Int32, (OS_HANDLE, Ptr{Cvoid}, Csize_t),
+    ret = ccall(:jl_fs_read, Cssize_t, (OS_HANDLE, Ptr{Cvoid}, Csize_t),
                 f.handle, b, nr)
     uv_error("read", ret)
     return ret

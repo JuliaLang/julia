@@ -583,8 +583,8 @@ JL_DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path)
     return ret;
 }
 
-JL_DLLEXPORT int jl_fs_sendfile(uv_os_fd_t src_fd, uv_os_fd_t dst_fd,
-                                int64_t in_offset, size_t len)
+JL_DLLEXPORT ssize_t jl_fs_sendfile(uv_os_fd_t src_fd, uv_os_fd_t dst_fd,
+                                    int64_t in_offset, size_t len)
 {
     uv_fs_t req;
     JL_SIGATOMIC_BEGIN();
@@ -592,7 +592,7 @@ JL_DLLEXPORT int jl_fs_sendfile(uv_os_fd_t src_fd, uv_os_fd_t dst_fd,
                              in_offset, len, NULL);
     uv_fs_req_cleanup(&req);
     JL_SIGATOMIC_END();
-    return ret;
+    return req.result ? req.result : ret;
 }
 
 JL_DLLEXPORT int jl_fs_hardlink(char *path, char *new_path)
@@ -635,7 +635,15 @@ JL_DLLEXPORT int jl_fs_access(char *path, int mode)
     return ret;
 }
 
-JL_DLLEXPORT int jl_fs_write(uv_os_fd_t handle, const char *data, size_t len,
+/*
+ * A note about the uv_fs_* functions that return a count of bytes written:
+ * uv_fs_t.result is a ssize_t, but the function returns int.  The result field
+ * needs to be checked so we can distinguish a real error from a count that
+ * overflows an int, but we can't use it directly---some error conditions will
+ * leave it set to 0 but return an error.
+ */
+
+JL_DLLEXPORT ssize_t jl_fs_write(uv_os_fd_t handle, const char *data, size_t len,
                              int64_t offset) JL_NOTSAFEPOINT
 {
     jl_task_t *ct = jl_get_current_task();
@@ -654,10 +662,10 @@ JL_DLLEXPORT int jl_fs_write(uv_os_fd_t handle, const char *data, size_t len,
         jl_io_loop = uv_default_loop();
     int ret = uv_fs_write(unused_uv_loop_arg, &req, handle, buf, 1, offset, NULL);
     uv_fs_req_cleanup(&req);
-    return ret;
+    return req.result ? req.result : ret;
 }
 
-JL_DLLEXPORT int jl_fs_read(uv_os_fd_t handle, char *data, size_t len)
+JL_DLLEXPORT ssize_t jl_fs_read(uv_os_fd_t handle, char *data, size_t len)
 {
     uv_fs_t req;
     uv_buf_t buf[1];
@@ -665,7 +673,7 @@ JL_DLLEXPORT int jl_fs_read(uv_os_fd_t handle, char *data, size_t len)
     buf[0].len = len;
     int ret = uv_fs_read(unused_uv_loop_arg, &req, handle, buf, 1, -1, NULL);
     uv_fs_req_cleanup(&req);
-    return ret;
+    return req.result ? req.result : ret;
 }
 
 JL_DLLEXPORT int jl_fs_close(uv_os_fd_t handle)
