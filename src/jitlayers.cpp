@@ -891,6 +891,10 @@ public:
             TimeTraceScope CompileScope(
                 "JIT Compile", Out.module.getModuleUnlocked()->getModuleIdentifier());
             Obj = JIT.compileModule(JIT.optimizeModule(std::move(Out.module)));
+            if (!Obj) {
+                R->failMaterialization();
+                return;
+            }
         }
         uint64_t end_time = jl_hrtime();
 
