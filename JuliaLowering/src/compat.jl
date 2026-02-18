@@ -97,6 +97,9 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
     return st._id, src
 end
 
+# `suppress_linenodes` is true if `st`'s parent knows `st` is an exception to
+# normal linenode rules.  It only applies to `st`, and not transitively to its
+# children.
 function est_to_expr(st::SyntaxTree, suppress_linenodes=false)
     k = kind(st)
     return if k === K"core" && numchildren(st) === 0 && st.name_val === "nothing"
