@@ -1185,7 +1185,8 @@ function const_prop_function_heuristic(interp::AbstractInterpreter, @nospecializ
             elseif ⊑(𝕃ᵢ, arrty, Array) || ⊑(𝕃ᵢ, arrty, GenericMemory)
                 return false
             end
-        elseif !iszero(heuristic & Core.ITERATE_HEURISTIC)
+        end
+        if !iszero(heuristic & Core.ITERATE_HEURISTIC)
             itrty = argtypes[2]
             if ⊑(𝕃ᵢ, itrty, Array) || ⊑(𝕃ᵢ, itrty, GenericMemory)
                 return false
