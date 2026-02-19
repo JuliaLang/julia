@@ -697,11 +697,7 @@ end
 
 Throw an error if the specified indices `I` are not in bounds for the given array `A`.
 """
-function checkbounds(A::AbstractArray, I...)
-    @inline
-    checkbounds(Bool, A, I...) || throw_boundserror(A, I)
-    nothing
-end
+checkbounds(A::AbstractArray, I...)
 
 """
     checkbounds_indices(Bool, IA, I)

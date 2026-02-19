@@ -8,20 +8,12 @@ struct DesugaringContext{Attrs} <: AbstractLoweringContext
     expr_compat_mode::Bool
 end
 
-function DesugaringContext(ctx, expr_compat_mode::Bool)
-    graph = ensure_attributes(syntax_graph(ctx),
-                              kind=Kind, syntax_flags=UInt16,
-                              source=SourceAttrType,
-                              value=Any, name_val=String,
-                              scope_type=Symbol, # :hard or :soft
-                              var_id=IdTag,
-                              is_toplevel_thunk=Bool,
-                              toplevel_pure=Bool)
+function DesugaringContext(graph, ctx)
     DesugaringContext(graph,
                       ctx.bindings,
                       ctx.scope_layers,
                       current_layer(ctx).mod,
-                      expr_compat_mode)
+                      ctx.expr_compat_mode)
 end
 
 #-------------------------------------------------------------------------------
@@ -232,7 +224,7 @@ end
 # flisp: sink-assignment
 function sink_assignment(ctx, srcref, lhs, rhs)
     @assert is_identifier_like(lhs)
-    if kind(rhs) == K"block"
+    if kind(rhs) == K"block" && numchildren(rhs) > 0
         @ast ctx srcref [K"block"
             rhs[1:end-1]...
             [K"=" lhs rhs[end]]
@@ -2187,7 +2179,8 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
         ([K"Value"], when=ex.value isa GlobalRef) -> ex
         [K"Placeholder"] -> nothing
         ([K"::" [K"Identifier"] t], when=type_decls) -> let x = ex[1]
-            push!(stmts, newnode(ctx, ex, K"decl", tree_ids(x, t)))
+            t2 = expand_forms_2(ctx, t)
+            push!(stmts, newnode(ctx, ex, K"decl", tree_ids(x, t2)))
             make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
         end
         ([K"::" [K"Placeholder"] t], when=type_decls) -> let
@@ -2223,23 +2216,20 @@ end
 function expand_decls(ctx, ex)
     declkind = kind(ex)
     @assert declkind in KSet"local global"
-    declmeta = get(ex, :meta, nothing)
-    bindings = children(ex)
     stmts = SyntaxList(ctx)
-    for binding in bindings
-        if JuliaSyntax.is_prec_assignment(kind(binding))
-            @chk numchildren(binding) == 2
-            # expand_assignment will create the type decls
-            make_lhs_decls(ctx, stmts, declkind, declmeta, binding[1], false)
-            push!(stmts, expand_assignment(ctx, binding))
-        elseif is_sym_decl(binding) || kind(binding) in (K"Value", K"Placeholder")
-            make_lhs_decls(ctx, stmts, declkind, declmeta, binding, true)
-        elseif kind(binding) == K"function"
-            make_lhs_decls(ctx, stmts, declkind, declmeta, binding[1], false)
-            push!(stmts, expand_forms_2(ctx, binding))
-        else
-            throw(LoweringError(ex, "invalid syntax in variable declaration"))
+    for c in children(ex)
+        simple = kind(c) in KSet"Identifier :: Value Placeholder"
+        lhs = @stm c begin
+            (_, when=simple) -> c
+            [K"=" x _] -> x
+            [K".=" x _] -> x
+            [K"op=" x _ _] -> x
+            [K".op=" x _ _] -> x
+            [K"function" x _] -> x
         end
+        # type decls are handled elsewhere unless simple
+        make_lhs_decls(ctx, stmts, declkind, get(ex, :meta, nothing), lhs, simple)
+        simple || push!(stmts, expand_forms_2(ctx, c))
     end
     newnode(ctx, ex, K"block", stmts)
 end
@@ -2612,15 +2602,15 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
     mangled_name = let n = isnothing(name_str) ? "_" : name_str
         reserve_module_binding_i(ctx.mod, string(startswith(n, '#') ? "" : "#", n, "#"))
     end
-    # TODO: Is the layer correct here? Which module should be the parent module
-    # of this body function?
-    layer = new_scope_layer(ctx)
-    body_func_name = adopt_scope(@ast(ctx, callex_srcref, mangled_name::K"Identifier"), layer)
+    body_func_name = newsym(ctx, callex_srcref, mangled_name)
 
     kwcall_arg_names = SyntaxList(ctx)
     kwcall_arg_types = SyntaxList(ctx)
 
-    push!(kwcall_arg_names, newsym(ctx, callex_srcref, "#self#"))
+    # Core.kwcall method has its own first argument.  Ensure closure conversion
+    # knows not to put the closure there.
+    push!(kwcall_arg_names, setmeta!(
+        newsym(ctx, callex_srcref, "#kwcall_self#"), :is_kwcall_self, true))
     push!(kwcall_arg_types,
         @ast ctx callex_srcref [K"call"
             "typeof"::K"core"
@@ -2860,7 +2850,10 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
             ]
         ]
         [K"method_defs"
-            "nothing"::K"core"
+            # This should inherit the local / global status of the body func, so
+            # provide that here for closure conversion, even though this is
+            # really a method on Core.kwcall
+            body_func_name
             [K"block"
                 new_typevar_stmts...
                 kwcall_method_defs...
@@ -4531,10 +4524,10 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         if numchildren(ex) == 1 && kind(ex[1]) == K"String"
             ex[1]
         else
-            @ast ctx ex [K"call"
+            expand_forms_2(ctx, @ast ctx ex [K"call"
                 "string"::K"top"
-                expand_forms_2(ctx, children(ex))...
-            ]
+                children(ex)...
+            ])
         end
     elseif k == K"try"
         expand_forms_2(ctx, expand_try(ctx, ex))
@@ -4680,15 +4673,23 @@ function expand_forms_2(ctx::StatementListCtx, args...)
     expand_forms_2(ctx.ctx, args...)
 end
 
+ensure_desugaring_attributes!(graph) = ensure_attributes!(
+    ensure_macro_attributes!(graph),
+    is_toplevel_thunk=Bool,
+    toplevel_pure=Bool,
+    scope_type=Symbol)
+
 @fzone "JL: desugar" function expand_forms_2(ctx::MacroExpansionContext, ex::SyntaxTree)
-    ctx1 = DesugaringContext(ctx, ctx.expr_compat_mode)
+    graph = ensure_desugaring_attributes!(copy_attrs(ctx.graph))
+    ex = reparent(graph, ex)
+    ctx_out = DesugaringContext(graph, ctx.bindings, ctx.scope_layers,
+                                current_layer(ctx).mod, ctx.expr_compat_mode)
     vr = valid_st1(ex)
     # surface only one error until we have pretty-printing for multiple
     if !vr.ok
         # showerrors(vr)
         throw(LoweringError(vr.errors[1].sts[1], vr.errors[1].msg))
     end
-    ex = est_to_dst(ex)
-    ex1 = expand_forms_2(ctx1, reparent(ctx1, ex))
-    ctx1, ex1
+    ex_out = expand_forms_2(ctx_out, est_to_dst(ex))
+    ctx_out, ex_out
 end

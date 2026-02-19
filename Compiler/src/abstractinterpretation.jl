@@ -4153,6 +4153,7 @@ end
 function update_exc_bestguess!(interp::AbstractInterpreter, @nospecialize(exct), frame::InferenceState)
     𝕃ₚ = ipo_lattice(interp)
     handler = gethandler(frame)
+    exct = widenslotwrapper(exct)
     if handler === nothing
         if !⊑(𝕃ₚ, exct, frame.exc_bestguess)
             frame.exc_bestguess = tmerge(𝕃ₚ, frame.exc_bestguess, exct)
