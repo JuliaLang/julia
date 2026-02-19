@@ -23,7 +23,7 @@ Implements a key-value like interface where the compiler has liberty to perform
 the following transformations. The core optimization semantically allowed for
 the compiler is:
 
-    get(set(x, key, val), key) -> (val,)
+    get(set(x, key, val), key) -> Some(val)
 
 where the compiler will recursively look through `x`. Keys are compared by
 egality.
@@ -47,8 +47,8 @@ module KeyValue
     """
         get(collection, key)
 
-    Retrieve the value corresponding to `key` in `collection` as a single
-    element tuple or `nothing` if no value corresponding to the key was found.
+    Retrieve the value corresponding to `key` in `collection` wrapped in
+    `Some` or return `nothing` if no value corresponding to the key was found.
     `key`s are compared by egal.
     """
     function get end
