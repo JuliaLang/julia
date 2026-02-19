@@ -715,17 +715,6 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
     return result;
 }
 
-static void jl_jit_unregister_mi(jl_method_instance_t *mi) JL_NOTSAFEPOINT
-{
-    // Before letting the thunk MethodInstance/CodeInstance be GC'd, we must
-    // unregister it with the JIT, so its ORC symbols are removed.
-    jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
-    while (codeinst) {
-        jl_jit_unregister_ci(codeinst);
-        codeinst = jl_atomic_load_relaxed(&codeinst->next);
-    }
-}
-
 // Evaluate lowered IR thunk `thk` at top level in module `m` in the latest world
 JL_DLLEXPORT jl_value_t *jl_eval_thunk(jl_module_t *JL_NONNULL m, jl_code_info_t *thk, int fast)
 {
@@ -760,20 +749,13 @@ JL_DLLEXPORT jl_value_t *jl_eval_thunk(jl_module_t *JL_NONNULL m, jl_code_info_t
             jl_get_module_compile(m) != JL_OPTIONS_COMPILE_MIN)) {
         // use codegen
         mfunc = jl_method_instance_for_thunk(thk, m);
-        JL_TRY {
-            jl_resolve_definition_effects_in_ir((jl_array_t *)thk->code, m, NULL, NULL, 0);
-            // Don't infer blocks containing e.g. method definitions, since it's probably
-            // not worthwhile.
-            if (!has_defs && jl_get_module_infer(m) != 0) {
-                (void)jl_type_infer(mfunc, world, SOURCE_MODE_ABI, jl_options.trim);
-            }
-            result = jl_invoke(/*func*/ NULL, /*args*/ NULL, /*nargs*/ 0, mfunc);
+        jl_resolve_definition_effects_in_ir((jl_array_t *)thk->code, m, NULL, NULL, 0);
+        // Don't infer blocks containing e.g. method definitions, since it's probably
+        // not worthwhile.
+        if (!has_defs && jl_get_module_infer(m) != 0) {
+            (void)jl_type_infer(mfunc, world, SOURCE_MODE_ABI, jl_options.trim);
         }
-        JL_CATCH {
-            jl_jit_unregister_mi(mfunc);
-            jl_rethrow();
-        }
-        jl_jit_unregister_mi(mfunc);
+        result = jl_invoke_oneshot(/*func*/ NULL, /*args*/ NULL, /*nargs*/ 0, mfunc);
     }
     else {
         // use interpreter

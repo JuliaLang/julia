@@ -4123,6 +4123,22 @@ JL_DLLEXPORT jl_value_t *jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t na
     return _jl_invoke(F, args, nargs, mfunc, world);
 }
 
+// Used by jl_eval_thunk to invoke top-level thunks.  They will be
+// garbage-collectable as soon as they are invoked, so their ORC symbols must be
+// unregistered before we enter invoke, which may never return.
+JL_DLLEXPORT jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
+{
+    uint8_t specsigflags;
+    jl_callptr_t invoke;
+    void *specptr;
+    size_t world = jl_current_task->world_age;
+    jl_code_instance_t *codeinst = jl_compile_method_internal(mfunc, world);
+    jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &specptr, 1);
+    jl_jit_unregister_ci(codeinst);
+    jl_value_t *res = invoke(F, args,  nargs, codeinst);
+    return verify_type(res);
+}
+
 JL_DLLEXPORT jl_value_t *jl_invoke_oc(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
 {
     jl_opaque_closure_t *oc = (jl_opaque_closure_t*)F;

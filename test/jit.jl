@@ -16,6 +16,8 @@ function compile_no_deps(f, argtypes)
         #=max_world=#typemax(UInt), #=effects=#UInt32(0),
         #=analysis_results=#nothing, source.debuginfo, source.edges
     )
+    # Insert the CI into the global cache (necessary before adding to JIT)
+    ccall(:jl_mi_cache_insert, Cvoid, (Any, Any), mi, ci)
     ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), ci, source)
     ci
 end
@@ -51,3 +53,17 @@ end
 ci = compile_no_deps(M2.bar, (Int,))
 @test check_edges_not_compiled(ci, M2.foo)
 @test invoke(M2.bar, ci, 5) == 210
+
+# Each `eval` must compile (because of the ccall) a top-level thunk.  The
+# CodeInstance for this thunk becomes garbage-collectable after being invoked,
+# but before returning, because of wait().  If the invoke must return for the
+# CodeInstance address to be unregistered from the JIT, this will crash.  Credit
+# to @vtjnash for this example.
+function test_gc_codeinst()
+    for i=1:10000
+        @async eval(:(ccall(:sqrt, Float64, (Float64,), $i); wait()))
+        i % 100 == 0 && GC.gc()
+    end
+    true
+end
+@test test_gc_codeinst()
