@@ -9,12 +9,12 @@ _splitrest(t, ::Tuple{}) = t
 _splitrest(::Tuple{}, ref) = ()
 
 # combined count of all indices
-# rather than returning N, it returns an NTuple{N,Bool} so the result is inferrable
+# rather than returning N, it returns an NTuple{N,Bool} so the result is inferable
 @inline index_ndims(i1, I...) = (true, index_ndims(I...)...)
 index_ndims() = ()
 
 # combined dimensionality of all indices
-# rather than returning N, it returns an NTuple{N,Bool} so the result is inferrable
+# rather than returning N, it returns an NTuple{N,Bool} so the result is inferable
 @inline index_dimsum(i1, I...) = (index_dimsum(I...)...,)
 @inline index_dimsum(::Colon, I...) = (true, index_dimsum(I...)...)
 @inline index_dimsum(::AbstractArray{Bool}, I...) = (true, index_dimsum(I...)...)
