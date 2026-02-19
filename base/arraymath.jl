@@ -39,6 +39,7 @@ for f in (:+, :-)
     end
 end
 
++(A::Array) = broadcast_preserving_zero_d(+, A)
 function +(A::Array, B::Array, Cs::Array...)
     promote_shape(A, B)
     for C in Cs

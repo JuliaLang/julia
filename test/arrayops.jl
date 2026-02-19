@@ -100,6 +100,14 @@ using Dates
     @test Array{eltype(a)}(a) !== a
     @test Vector(a) !== a
 end
+
+@testset "issue #61046: unary +" begin
+    struct MyType61046 end
+    Base.:+(::MyType61046) = MyType61046()
+    A = fill(MyType61046(), 2, 2)
+    @test +A isa Matrix{MyType61046}
+    @test (+A)[1] isa MyType61046
+end
 @testset "effect inference for `reshape` for `Array`" begin
     for Arr ∈ (Array{<:Any, 0}, Vector, Matrix, Array{<:Any, 3})
         for Shape ∈ (Tuple{Int}, Tuple{Int, Int})
