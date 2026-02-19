@@ -691,6 +691,11 @@ function serialize(s::AbstractSerializer, x::Core.AddrSpace)
     write(s.io, Core.bitcast(UInt8, x))
 end
 
+function serialize(s::AbstractSerializer, x::Core.IntrinsicFunction)
+    serialize_type(s, typeof(x))
+    serialize(s, nameof(x))
+end
+
 function serialize_any(s::AbstractSerializer, @nospecialize(x))
     tag = sertag(x)
     if tag > 0
@@ -1446,6 +1451,11 @@ end
 
 function deserialize(s::AbstractSerializer, X::Type{Core.AddrSpace{M}} where M)
     Core.bitcast(X, read(s.io, UInt8))
+end
+
+function deserialize(s::AbstractSerializer, ::Type{Core.IntrinsicFunction})
+    name = deserialize(s)::Symbol
+    return getfield(Core.Intrinsics, name)::Core.IntrinsicFunction
 end
 
 function deserialize_expr(s::AbstractSerializer, len)
