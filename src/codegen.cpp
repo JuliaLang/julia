@@ -10203,6 +10203,7 @@ void emit_always_inline(jl_codegen_output_t &out,
             // TODO: jl_promote_method_roots?
             assert(api == decls.invoke_api);
             old_decl->replaceAllUsesWith(decls.specptr);
+            old_decl->eraseFromParent();
             decls.specptr->addFnAttr(Attribute::InlineHint);
             out.call_targets[{ci, api}].decl = decls.specptr;
         }
