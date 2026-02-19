@@ -810,26 +810,28 @@ operations will find the the last key added.
 
 # Examples
 
-    julia> ctypes = Base.ImmutableDict("char"=>:char, "int"=>:int)
-    Base.ImmutableDict{String, Symbol} with 2 entries:
-      "int"  => :int
-      "char" => :char
+```jldoctest
+julia> ctypes = Base.ImmutableDict("char"=>:char, "int"=>:int)
+Base.ImmutableDict{String, Symbol} with 2 entries:
+  "int"  => :int
+  "char" => :char
 
-    julia> ctypes = Base.ImmutableDict(ctypes, "float"=>:float, "double"=>:double)
-    Base.ImmutableDict{String, Symbol} with 4 entries:
-      "double" => :double
-      "float"  => :float
-      "int"    => :int
-      "char"   => :char
+julia> ctypes = Base.ImmutableDict(ctypes, "float"=>:float, "double"=>:double)
+Base.ImmutableDict{String, Symbol} with 4 entries:
+  "double" => :double
+  "float"  => :float
+  "int"    => :int
+  "char"   => :char
 
-    julia> viewparameters = Base.ImmutableDict{String,Any}()
-    Base.ImmutableDict{String, Any}()
+julia> viewparameters = Base.ImmutableDict{String,Any}()
+Base.ImmutableDict{String, Any}()
 
-    julia> viewparameters = Base.ImmutableDict(
-               viewparameters, "type"=>"perspective", "direction"=>(0, 0, 1))
-    Base.ImmutableDict{String, Any} with 2 entries:
-      "direction" => (0, 0, 1)
-      "type"      => "perspective"
+julia> viewparameters = Base.ImmutableDict(
+           viewparameters, "type"=>"perspective", "direction"=>(0, 0, 1))
+Base.ImmutableDict{String, Any} with 2 entries:
+  "direction" => (0, 0, 1)
+  "type"      => "perspective"
+```
 """
 ImmutableDict
 ImmutableDict(KV::Pair{K,V}) where {K,V} = ImmutableDict{K,V}(KV[1], KV[2])
