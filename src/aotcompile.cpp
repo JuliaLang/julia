@@ -784,7 +784,6 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
     target_cgparams.sanitize_thread = jl_options.target_sanitize_thread;
     target_cgparams.sanitize_address = jl_options.target_sanitize_address;
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
-    std::optional<orc::ThreadSafeContext::Lock> lock;
     if (llvmmod) {
         data->out = std::make_unique<jl_codegen_output_t>(*unwrap(llvmmod));
     }
@@ -2406,7 +2405,6 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
     dump->F = nullptr;
     dump->TSM = nullptr;
     if (src && jl_is_code_info(src)) {
-        auto ctx = jl_ExecutionEngine->makeContext();
         const auto &DL = jl_ExecutionEngine->getDataLayout();
         const auto &TT = jl_ExecutionEngine->getTargetTriple();
         jl_codegen_output_t output{name_from_method_instance(mi), DL, TT};
