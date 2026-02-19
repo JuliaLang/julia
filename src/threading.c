@@ -51,6 +51,8 @@ JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_recompile_time = 0;
 
 JL_DLLEXPORT _Atomic(uint8_t) jl_task_metrics_enabled = 0;
 
+JL_DLLEXPORT _Atomic(uint64_t) jl_fptr_compile_time = 0;
+
 JL_DLLEXPORT void *jl_get_ptls_states(void)
 {
     // mostly deprecated: use current_task instead

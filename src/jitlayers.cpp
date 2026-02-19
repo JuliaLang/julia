@@ -534,6 +534,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
                 jl_atomic_fetch_add_relaxed(&jl_cumulative_recompile_time, t_comp);
             }
             jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, t_comp);
+            jl_atomic_fetch_add_relaxed(&jl_fptr_compile_time, t_comp);
         }
         ct->reentrant_timing &= ~1ull;
     }

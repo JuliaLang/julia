@@ -307,6 +307,7 @@ static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
 extern JL_DLLEXPORT _Atomic(uint8_t) jl_measure_compile_time_enabled;
 extern JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_compile_time;
 extern JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_recompile_time;
+extern JL_DLLEXPORT _Atomic(uint64_t) jl_fptr_compile_time;
 
 // Global *atomic* integer controlling *process-wide* task timing.
 extern JL_DLLEXPORT _Atomic(uint8_t) jl_task_metrics_enabled;

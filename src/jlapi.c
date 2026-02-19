@@ -509,6 +509,11 @@ JL_DLLEXPORT uint64_t jl_cumulative_recompile_time_ns(void)
     return jl_atomic_load_relaxed(&jl_cumulative_recompile_time);
 }
 
+JL_DLLEXPORT uint64_t jl_fptr_compile_time_ns(void)
+{
+    return jl_atomic_load_relaxed(&jl_fptr_compile_time);
+}
+
 /**
  * @brief Enable per-task timing.
  */
