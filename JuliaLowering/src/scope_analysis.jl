@@ -383,7 +383,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         id = ex_out[1]
         if kind(id) != K"Placeholder"
             binfo = get_binding(ctx, id)
-            if !isnothing(binfo.type)
+            if !isnothing(binfo.type) && binfo.kind !== :global
                 throw(LoweringError(ex, "multiple type declarations found for `$(binfo.name)`"))
             end
             binfo.type = ex_out[2]._id

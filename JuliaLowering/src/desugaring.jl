@@ -2179,7 +2179,8 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
         ([K"Value"], when=ex.value isa GlobalRef) -> ex
         [K"Placeholder"] -> nothing
         ([K"::" [K"Identifier"] t], when=type_decls) -> let x = ex[1]
-            push!(stmts, newnode(ctx, ex, K"decl", tree_ids(x, t)))
+            t2 = expand_forms_2(ctx, t)
+            push!(stmts, newnode(ctx, ex, K"decl", tree_ids(x, t2)))
             make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
         end
         ([K"::" [K"Placeholder"] t], when=type_decls) -> let
@@ -2215,23 +2216,20 @@ end
 function expand_decls(ctx, ex)
     declkind = kind(ex)
     @assert declkind in KSet"local global"
-    declmeta = get(ex, :meta, nothing)
-    bindings = children(ex)
     stmts = SyntaxList(ctx)
-    for binding in bindings
-        if JuliaSyntax.is_prec_assignment(kind(binding))
-            @chk numchildren(binding) == 2
-            # expand_assignment will create the type decls
-            make_lhs_decls(ctx, stmts, declkind, declmeta, binding[1], false)
-            push!(stmts, expand_assignment(ctx, binding))
-        elseif is_sym_decl(binding) || kind(binding) in (K"Value", K"Placeholder")
-            make_lhs_decls(ctx, stmts, declkind, declmeta, binding, true)
-        elseif kind(binding) == K"function"
-            make_lhs_decls(ctx, stmts, declkind, declmeta, binding[1], false)
-            push!(stmts, expand_forms_2(ctx, binding))
-        else
-            throw(LoweringError(ex, "invalid syntax in variable declaration"))
+    for c in children(ex)
+        simple = kind(c) in KSet"Identifier :: Value Placeholder"
+        lhs = @stm c begin
+            (_, when=simple) -> c
+            [K"=" x _] -> x
+            [K".=" x _] -> x
+            [K"op=" x _ _] -> x
+            [K".op=" x _ _] -> x
+            [K"function" x _] -> x
         end
+        # type decls are handled elsewhere unless simple
+        make_lhs_decls(ctx, stmts, declkind, get(ex, :meta, nothing), lhs, simple)
+        simple || push!(stmts, expand_forms_2(ctx, c))
     end
     newnode(ctx, ex, K"block", stmts)
 end
@@ -4526,10 +4524,10 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         if numchildren(ex) == 1 && kind(ex[1]) == K"String"
             ex[1]
         else
-            @ast ctx ex [K"call"
+            expand_forms_2(ctx, @ast ctx ex [K"call"
                 "string"::K"top"
-                expand_forms_2(ctx, children(ex))...
-            ]
+                children(ex)...
+            ])
         end
     elseif k == K"try"
         expand_forms_2(ctx, expand_try(ctx, ex))
