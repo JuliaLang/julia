@@ -2000,7 +2000,7 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         // CodeInstances with native code, but not if invoke is jl_fptr_args and
         // the specptr is a builtin.
         if (s->image->fptrs.nptrs == 0 && jl_jlcall_specptr_is_native(type) &&
-            (offset & BuiltinInvokeTag))
+            !(offset & BuiltinInvokeTag))
             return 0;
         return fptr;
     }
