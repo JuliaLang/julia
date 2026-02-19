@@ -10456,7 +10456,7 @@ extern "C" void jl_init_llvm(void)
     bool jl_using_gdb_jitevents = false;
     // Register GDB event listener
 #if defined(JL_DEBUG_BUILD)
-    // jl_using_gdb_jitevents = true;
+    jl_using_gdb_jitevents = true;
 #endif
     const char *jit_gdb = getenv("ENABLE_GDBLISTENER");
     if (jit_gdb) {
