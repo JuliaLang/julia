@@ -254,8 +254,9 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
     pp, qq = zero(T), one(T)
 
     x = abs(x)
+    a = trunc(x)
+    r = x-a
     y = one(x)
-    r, a = modf(x)
     tolx = oftype(x, tol)
     nt, t, tt = tolx, zero(tolx), tolx
     ia = np = nq = zero(T)
