@@ -2817,6 +2817,8 @@ end
                     Tuple{T, T} where T<:Union{UnionAll,Type{<:Number}}) === Tuple{Type{Val}, Type{Vector}}
 @test typeintersect(Tuple{Union{Type{Val}, Type{Int8}}, Union{Type{Val}, Type{Int64}}},
                     NTuple{2,<:Union{Type{<:Val}, DataType}}) === Tuple{Type{Val}, Type{Val}}
+@test typeintersect(Tuple{Union{Type{Val}, Type{Int64}}, DataType},
+                    Tuple{S, S} where S) === Tuple{Type{Int64}, DataType}
 
 let
     A = Tuple{Union{Type{Vector}, Type{Int64}}, Union{Type{Matrix}, Type{Float64}}}

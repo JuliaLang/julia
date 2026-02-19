@@ -2896,7 +2896,6 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         }
         if (!jl_is_type_type(ub) && !jl_is_uniontype(ub) && !jl_is_unionall(ub)) {
             // this branch is a fast path if there are no `Type`s and not needed for correctness
-            bb->widened_to_kind = 0;
             set_bound(&bb->ub, ub, b, e);
             return (jl_value_t*)b;
         }
@@ -2914,7 +2913,6 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
             JL_GC_POP();
             return (jl_value_t*)b;
         }
-        bb->widened_to_kind = 0;
         set_bound(&bb->ub, ub, b, e);
         JL_GC_POP();
         return (jl_value_t*)b;
