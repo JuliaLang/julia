@@ -564,3 +564,26 @@ end)()
     f(gws) = passthrough(Core.bitcast(Core.LLVMPtr{UInt32,1}, gws))
     f(C_NULL)
 end
+
+# Test bitcast on union values with inline_roots (split representation)
+@testset "bitcast union with inline_roots" begin
+    struct BitcastMixedGC
+        a::Vector{Int}
+        b::Vector{Int}
+        c::Vector{Float64}
+        d::Int
+    end
+    @noinline function _bitcast_returns_union(x::Int)
+        x == 0 && return BitcastMixedGC(Int[], Int[], Float64[], 0)
+        x == 1 && return UInt(0)
+        x == 2 && return Int(0)
+        x == 3 && return C_NULL
+        return nothing
+    end
+    function _bitcast_trigger(x::Int)
+        val = _bitcast_returns_union(x)
+        return Core.Intrinsics.bitcast(Ptr{Nothing}, val)
+    end
+    @test _bitcast_trigger(1) === Ptr{Nothing}(0)
+    @test _bitcast_trigger(3) === Ptr{Nothing}(0)
+end
