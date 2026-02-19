@@ -796,7 +796,7 @@ static size_t jl_static_show_symbol(JL_STREAM *out, jl_sym_t *name) JL_NOTSAFEPO
     }
     else {
         n += jl_printf(out, "var");
-        n += jl_static_show_string(out, sn, strlen(sn), 1, 1);
+        n += jl_static_show_string(out, sn, strlen(sn), 1, 0);
     }
     return n;
 }
