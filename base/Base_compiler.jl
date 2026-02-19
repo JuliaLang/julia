@@ -349,6 +349,7 @@ include("abstractdict.jl")
 include("iddict.jl")
 include("idset.jl")
 include("ntuple.jl")
+include("subarray.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate, only
 using .Iterators: Flatten, Filter, product  # for generators

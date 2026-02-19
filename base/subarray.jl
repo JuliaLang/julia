@@ -1,5 +1,39 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+### some indexing helpers are first defined here and will be
+### extended in multidimensional.jl and reshapedarray.jl
+
+@inline _splitrest(t, ref) = _splitrest(tail(t), tail(ref))
+_splitrest(::Tuple{}, ::Tuple{}) = ()
+_splitrest(t, ::Tuple{}) = t
+_splitrest(::Tuple{}, ref) = ()
+
+# combined count of all indices
+# rather than returning N, it returns an NTuple{N,Bool} so the result is inferrable
+@inline index_ndims(i1, I...) = (true, index_ndims(I...)...)
+index_ndims() = ()
+
+# combined dimensionality of all indices
+# rather than returning N, it returns an NTuple{N,Bool} so the result is inferrable
+@inline index_dimsum(i1, I...) = (index_dimsum(I...)...,)
+@inline index_dimsum(::Colon, I...) = (true, index_dimsum(I...)...)
+@inline index_dimsum(::AbstractArray{Bool}, I...) = (true, index_dimsum(I...)...)
+@inline function index_dimsum(::AbstractArray{<:Any,N}, I...) where N
+    (_ntrues(Val(N))..., index_dimsum(I...)...)
+end
+index_dimsum() = ()
+
+ensure_indexable(I::Tuple{}) = ()
+@inline ensure_indexable(I::Tuple{Any, Vararg{Any}}) = (I[1], ensure_indexable(tail(I))...)
+
+reshape(parent::AbstractArray{T,N}, ndims::Val{N}) where {T,N} = parent
+function reshape(parent::AbstractArray, ndims::Val{N}) where N
+    reshape(parent, rdims(Val(N), axes(parent)))
+end
+
+_ntrues(::Val{0}) = ()
+@inline _ntrues(::Val{N}) where {N} = (true, _ntrues(Val(N-1))...)
+
 abstract type AbstractCartesianIndex{N} end # This is a hacky forward declaration for CartesianIndex
 const ViewIndex = Union{Real, AbstractArray}
 const ScalarIndex = Real
@@ -159,7 +193,7 @@ _maybe_reshape_parent(A::AbstractArray{<:Any,1}, ::NTuple{1, Bool}) = reshape(A,
 _maybe_reshape_parent(A::AbstractArray{<:Any,N}, ::NTuple{N, Bool}) where {N} = A
 _maybe_reshape_parent(A::AbstractArray, ::NTuple{N, Bool}) where {N} = reshape(A, Val(N))
 # The trailing singleton indices could be eliminated after bounds checking.
-rm_singleton_indices(ndims::Tuple, J1, Js...) = (J1, rm_singleton_indices(IteratorsMD._splitrest(ndims, index_ndims(J1)), Js...)...)
+rm_singleton_indices(ndims::Tuple, J1, Js...) = (J1, rm_singleton_indices(_splitrest(ndims, index_ndims(J1)), Js...)...)
 rm_singleton_indices(::Tuple{}, ::ScalarIndex, Js...) = rm_singleton_indices((), Js...)
 rm_singleton_indices(::Tuple) = ()
 
@@ -214,7 +248,7 @@ function view(A::AbstractArray, I::Vararg{Any,M}) where {M}
     @inline
     J = map(i->unalias(A,i), to_indices(A, I))
     @boundscheck checkbounds(A, J...)
-    J′ = rm_singleton_indices(ntuple(Returns(true), Val(ndims(A))), J...)
+    J′ = rm_singleton_indices(_ntrues(Val(ndims(A))), J...)
     unsafe_view(_maybe_reshape_parent(A, index_ndims(J′...)), J′...)
 end
 

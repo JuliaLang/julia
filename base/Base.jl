@@ -60,8 +60,7 @@ using .Cartesian
 include("hashing.jl")
 include("osutils.jl")
 
-# subarrays
-include("subarray.jl")
+# @view
 include("views.jl")
 
 # numeric operations
