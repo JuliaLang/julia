@@ -2714,7 +2714,7 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
 
     # copy into final array
     A = cat_similar(as[1], T, ntuple(i -> outdims[i], nd))
-    if !any(==(0), outdims)
+    if !any(iszero, outdims)
         hvncat_fill!(A, currentdims, blockcounts, d1, d2, as)
     end
     return A
