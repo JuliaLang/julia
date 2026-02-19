@@ -874,11 +874,11 @@ public:
     void materialize(std::unique_ptr<MaterializationResponsibility> R) override
     {
         auto &ES = R->getExecutionSession();
+        jl_task_t *ct = jl_current_task;
 
         // TODO: Tell GCChecker that materialize can have safepoints.
 #ifndef __clang_analyzer__
         {
-            jl_task_t *ct = jl_current_task;
             auto Lock = Out.module.getContext().getLock();
             uint8_t state = jl_gc_unsafe_enter(ct->ptls);
             JIT.optimizeDLSyms(*Out.module.getModuleUnlocked()); // May safepoint
@@ -898,10 +898,15 @@ public:
         }
         uint64_t end_time = jl_hrtime();
 
-        for (auto [CI, _] : Out.linker_info->ci_funcs) {
-            JL_GC_PROMISE_ROOTED(CI);
-            jl_do_dump_compile(CI, end_time - start_time);
+        {
+            uint8_t state = jl_gc_unsafe_enter(ct->ptls);
+            for (auto [CI, _] : Out.linker_info->ci_funcs) {
+                JL_GC_PROMISE_ROOTED(CI);
+                jl_do_dump_compile(CI, end_time - start_time);
+            }
+            jl_gc_unsafe_leave(ct->ptls, state);
         }
+
         auto G = jitlink::createLinkGraphFromObject(Obj->getMemBufferRef(),
                                                     ES.getSymbolStringPool());
         if (!G) {
