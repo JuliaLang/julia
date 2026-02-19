@@ -382,6 +382,19 @@ DocMeta.setdocmeta!(
     maybe_revise(:(;;));
     recursive=true,
 )
+# Use current Julia version's syntax for Base and Core doctests
+DocMeta.setdocmeta!(
+    Base,
+    :DocTestSyntax,
+    VERSION;
+    recursive=true, warn=false,
+)
+DocMeta.setdocmeta!(
+    Core,
+    :DocTestSyntax,
+    VERSION;
+    recursive=true, warn=false,
+)
 DocMeta.setdocmeta!(
     Base.BinaryPlatforms,
     :DocTestSetup,
