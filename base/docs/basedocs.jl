@@ -1190,6 +1190,23 @@ julia> while true
 4
 5
 ```
+
+Labeled break can be used to exit early from a labeled block created with [`@label`](@ref).
+
+```jldoctest
+julia> result = @label myblock begin
+           for i in 1:10
+               if i > 5
+                   break myblock i * 2
+               end
+           end
+           0
+       end
+12
+```
+
+!!! compat "Julia 1.14"
+    Labeled `break` requires Julia 1.14.
 """
 kw"break"
 
@@ -1208,6 +1225,28 @@ julia> for i = 1:6
 3
 5
 ```
+
+Labeled continue can be used to skip to the next iteration of a labeled loop created with [`@label`](@ref).
+
+```jldoctest
+julia> for i in 1:3
+           @label inner for j in 1:3
+               if j == 2
+                   continue inner
+               end
+               println((i, j))
+           end
+       end
+(1, 1)
+(1, 3)
+(2, 1)
+(2, 3)
+(3, 1)
+(3, 3)
+```
+
+!!! compat "Julia 1.14"
+    Labeled `continue` requires Julia 1.14.
 """
 kw"continue"
 
