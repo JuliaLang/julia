@@ -180,9 +180,9 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"=" l r] ->
         vst1_assign_lhs(vcx, l) & vst1(vcx, r)
     [K".=" l r] ->
-        vst1_dotassign_lhs(vcx, l) & vst1(vcx, r)
+        vst1_dotted_or_op_assign(vcx, st)
     ([K"unknown_head" l r], when=Base.isoperator(st.name_val)) ->
-        vst1_op_assign(vcx, st)
+        vst1_dotted_or_op_assign(vcx, st)
     [K"unknown_head"] -> let head = st.name_val
         head === "latestworld-if-toplevel" ?
             pass() : @fail(st, string("unknown expr head: ", head))
@@ -388,7 +388,7 @@ end
 
 vst1_local_arg(vcx, st) = @stm st begin
     [K"function" _...] -> vst1_function(vcx, st)
-    _ -> vst1_symdecl_or_assign(vcx, st) | vst1_op_assign(vcx, st) |
+    _ -> vst1_symdecl_or_assign(vcx, st) | vst1_dotted_or_op_assign(vcx, st) |
         @fail(st, "invalid local declaration: expected identifier or assignment")
 end
 
@@ -396,16 +396,13 @@ vst1_global_arg(vcx, st) = @stm st begin
     [K"Identifier"] -> pass()
     ([K"Value"], when=(st.value isa GlobalRef)) -> pass
     [K"=" l r] ->
-        vst1_assign_lhs(vcx, l; disallow_type=!vcx.toplevel) &
-        vst1(vcx, r)
+        vst1_assign_lhs(vcx, l) & vst1(vcx, r)
     [K"function" _...] -> vcx.toplevel ?
         vst1_function(vcx, st) :
         @fail(st, "global function needs to be placed at top level, or use eval")
-    [K"::" [K"Identifier"] t] -> vcx.toplevel ?
-        vst1(vcx, t) :
-        @fail(st, "type declarations for globals cannot be inside a function")
-    (_, when=vst1_op_assign(vcx, st).ok) -> pass()
-    _ -> @fail(st, "invalid global declaration: expected identifier or assignment")
+    [K"::" [K"Identifier"] t] -> vst1(vcx, t)
+    _ -> vst1_dotted_or_op_assign(vcx, st) |
+        @fail(st, "invalid global declaration: expected identifier or assignment")
 end
 
 # @stm doesn't work so well with n dots and m identifiers
@@ -866,11 +863,11 @@ end
 #
 # Note simple `op` and `.op` are calls to (dotted) identifiers, so this special
 # handling isn't necessary.
-vst1_op_assign(vcx, st) = let op_s = get(st, :name_val, "")
+vst1_dotted_or_op_assign(vcx, st) = let op_s = get(st, :name_val, "")
     @stm st begin
+        [K".=" l r] -> vst1_dotassign_lhs(vcx, l) & vst1(vcx, r)
         (_, when=(!Base.isoperator(op_s))) -> unknown()
-        (_, when=(isempty(op_s) || op_s[end] !== '=')) ->
-            @fail(st, "expected op= or .op=")
+        (_, when=(isempty(op_s) || op_s[end] !== '=')) -> unknown()
         ([K"unknown_head" l r], when=(op_s[1] === '.')) ->
              vst1_dotassign_lhs(vcx, l) & vst1(vcx, r)
         ([K"unknown_head" l r]) ->
@@ -887,9 +884,7 @@ end
 # - in curly, typevars are checked for structure, but not used.
 # - (local/global (= lhs rhs)) forms should probably reject the same
 #   lhss as const (ref and .)
-vst1_assign_lhs(
-    vcx, st; in_const=false, in_tuple=false, disallow_type=false
-) = @stm st begin
+vst1_assign_lhs(vcx, st; in_const=false, in_tuple=false) = @stm st begin
     [K"tuple" [K"parameters" xs...]] -> all(vst1_symdecl, vcx, xs)
     [K"tuple" xs...] ->
         all(vst1_assign_lhs, vcx, xs; in_const, in_tuple=true) &
@@ -899,21 +894,18 @@ vst1_assign_lhs(
     # [K"::" [K"tuple" _...] t] -> ???
     [K"..." x] -> !in_tuple ?
         @fail(st, "splat on left side of assignment must be in a tuple") :
-        vst1_assign_lhs_nontuple(vcx, x; in_const, disallow_type)
+        vst1_assign_lhs_nontuple(vcx, x; in_const)
     ([K"parameters" _...], when=in_tuple) -> @fail(st, """
         property destructuring must use a single `;` before the property \
         names, e.g. `(; a, b) = rhs`""")
     _ -> vst1_assign_lhs_nontuple(vcx, st; in_const)
 end
-vst1_assign_lhs_nontuple(
-    vcx, st; in_const=false, in_tuple=false, disallow_type=false
-) = @stm st begin
+vst1_assign_lhs_nontuple(vcx, st; in_const=false, in_tuple=false) = @stm st begin
     [K"Identifier"] -> pass()
     ([K"Value"], when=(st.value isa GlobalRef)) -> pass()
     (_, when=(is_eventually_call(st))) ->
         vst1_function_calldecl(vcx, st)
-    [K"::" x t] -> disallow_type ?
-        @fail(st, "type declarations for globals cannot be inside a function") :
+    [K"::" x t] ->
         vst1_assign_lhs(vcx, x; in_const, in_tuple) & vst1(vcx, t)
     [K"." x y] ->
         in_const ? @fail(st, "cannot declare this form constant") :

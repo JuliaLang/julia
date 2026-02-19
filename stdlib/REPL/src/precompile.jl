@@ -96,7 +96,7 @@ function repl_workload()
     println("done")
     """
 
-    tmphistfile = tempname()
+    tmphistfile = tempname(; cleanup = false)
     write(tmphistfile, """
     # time: 2020-10-31 13:16:39 AWST
     # mode: julia
