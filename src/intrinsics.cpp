@@ -615,10 +615,24 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         if (isboxed)
             vxt = llvmt;
         auto storage_type = vxt->isIntegerTy(1) ? getInt8Ty(ctx.builder.getContext()) : vxt;
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, v.tbaa);
+        Value *p;
+        jl_aliasinfo_t ai;
+        if (!v.inline_roots.empty()) {
+            unsigned alignment = julia_alignment(v.typ);
+            AllocaInst *combined = emit_static_alloca(ctx, storage_type, Align(alignment));
+            setName(ctx.emission_context, combined, "bitcast_combined");
+            auto combined_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+            recombine_value(ctx, v, combined, combined_ai, Align(alignment), false);
+            p = combined;
+            ai = combined_ai;
+        }
+        else {
+            p = maybe_decay_tracked(ctx, v.V);
+            ai = jl_aliasinfo_t::fromTBAA(ctx, v.tbaa);
+        }
         vx = ai.decorateInst(ctx.builder.CreateLoad(
             storage_type,
-            maybe_decay_tracked(ctx, v.V)));
+            p));
         setName(ctx.emission_context, vx, "bitcast");
     }
 

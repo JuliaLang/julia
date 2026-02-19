@@ -565,7 +565,7 @@ end)()
     f(C_NULL)
 end
 
-# Test bitcast on union values with inline_roots (split representation)
+# Issue #61026
 @testset "bitcast union with inline_roots" begin
     struct BitcastMixedGC
         a::Vector{Int}
@@ -586,4 +586,20 @@ end
     end
     @test _bitcast_trigger(1) === Ptr{Nothing}(0)
     @test _bitcast_trigger(3) === Ptr{Nothing}(0)
+
+    struct BitcastMixedGC2
+        s::String
+        sym::Symbol
+        x::Int
+    end
+    @noinline function _bitcast_returns_union2(x::Int)
+        x == 0 && return BitcastMixedGC2("hello", :world, 42)
+        x == 1 && return UInt(0)
+        return nothing
+    end
+    function _bitcast_trigger2(x::Int)
+        val = _bitcast_returns_union2(x)
+        return Core.Intrinsics.bitcast(Ptr{Nothing}, val)
+    end
+    @test _bitcast_trigger2(1) === Ptr{Nothing}(0)
 end
