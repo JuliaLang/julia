@@ -370,7 +370,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal)
         }
         for (i = 0; i < l; i++) {
             int32_t e = jl_array_data(edges, int32_t)[i];
-            if (e <= 0 && e <= 20) { // 1-byte encodings
+            if (e >= 0 && e <= 20) { // 1-byte encodings
                 jl_value_t *ebox = jl_box_int32(e);
                 JL_GC_PROMISE_ROOTED(ebox);
                 jl_encode_value(s, ebox);
