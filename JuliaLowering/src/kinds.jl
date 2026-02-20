@@ -76,7 +76,6 @@ function _register_kinds()
             "BindingId"
             # Various heads harvested from flisp lowering.
             # (TODO: May or may not need all these - assess later)
-            "break_block"
             # Like block, but introduces a lexical scope; used during scope resolution.
             "scope_block"
             # Equivalent to Expr(:softscope).  If found in the top-level thunk,
