@@ -516,10 +516,11 @@ end
 
 
 """
-    touch(path::AbstractString)
-    touch(fd::File)
+    touch(path::AbstractString; atime::Bool=false)
+    touch(fd::File; atime::Bool=false)
 
 Update the last-modified timestamp on a file to the current time.
+If `atime=true`, update the access time instead.
 
 If the file does not exist a new file is created.
 
@@ -540,16 +541,15 @@ julia> mtime("my_little_file")
 
 We can see the [`mtime`](@ref) has been modified by `touch`.
 """
-function touch(path::AbstractString)
+function touch(path::AbstractString; atime::Bool=false)
     f = open(path, JL_O_WRONLY | JL_O_CREAT, 0o0666)
     try
-        touch(f)
+        touch(f; atime)
     finally
         close(f)
     end
     path
 end
-
 
 """
     tempdir()

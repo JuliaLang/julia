@@ -356,13 +356,19 @@ end
 fd(f::File) = f.handle
 stat(f::File) = stat(f.handle)
 
-function touch(f::File)
-    @static if Sys.isunix()
-        ret = ccall(:futimes, Cint, (Cint, Ptr{Cvoid}), fd(f), C_NULL)
-        systemerror(:futimes, ret != 0)
+function touch(f::File; atime::Bool=false)
+    if atime
+        st = stat(f)
+        current_time = time()
+        futime(f, current_time, st.mtime)
     else
-        t = time()
-        futime(f, t, t)
+        @static if Sys.isunix()
+            ret = ccall(:futimes, Cint, (Cint, Ptr{Cvoid}), fd(f), C_NULL)
+            systemerror(:futimes, ret != 0)
+        else
+            t = time()
+            futime(f, t, t)
+        end
     end
     f
 end
