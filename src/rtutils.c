@@ -814,20 +814,8 @@ static size_t jl_static_show_symbol(JL_STREAM *out, jl_sym_t *name) JL_NOTSAFEPO
         }
         else {
             
-            n += jl_printf(out, "var\"");
-            for (size_t i = 0; i < len; i++) {
-                char c = sn[i];
-                if (c == '"') {
-                    n += jl_printf(out, "\\\"");
-                }
-                else if (c == '\\' && i == len - 1) {
-                    n += jl_printf(out, "\\\\");
-                }
-                else {
-                    n += jl_printf(out, "%c", c);
-                }
-            }
-            n += jl_printf(out, "\"");
+            n += jl_printf(out, "var");
+            n += jl_static_show_string(out, sn, strlen(sn), 1, 1);
         }
     }
     return n;
