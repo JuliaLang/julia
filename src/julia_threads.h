@@ -204,6 +204,8 @@ typedef struct _jl_tls_states_t {
         uint64_t sleep_leave;
     )
 
+    _Atomic(uint64_t) lock_waiting_time;
+
     // some hidden state (usually just because we don't have the type's size declaration)
 #ifdef JL_LIBRARY_EXPORTS
     uv_mutex_t sleep_lock;

@@ -382,6 +382,7 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     memset(bt_data, 0, sizeof(jl_bt_element_t) * (JL_MAX_BT_SIZE + 1));
     ptls->bt_data = bt_data;
     small_arraylist_new(&ptls->locks, 0);
+    jl_atomic_store_relaxed(&ptls->lock_waiting_time, 0);
     jl_init_thread_heap(ptls);
 
     uv_mutex_init(&ptls->sleep_lock);
@@ -808,6 +809,7 @@ void _jl_mutex_init(jl_mutex_t *lock, const char *name) JL_NOTSAFEPOINT
 
 void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
 {
+    jl_ptls_t ptls = self->ptls;
     jl_task_t *owner = jl_atomic_load_relaxed(&lock->owner);
     if (owner == self) {
         lock->count++;
@@ -826,12 +828,15 @@ void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
         if (owner == NULL && jl_atomic_cmpswap(&lock->owner, &owner, self)) {
             lock->count = 1;
             jl_profile_lock_acquired(lock);
-            if (lock->record_waiting_time)
-                self->lock_waiting_time += jl_hrtime() - t0;
+            if (lock->record_waiting_time) {
+                uint64_t waiting_time = jl_hrtime() - t0;
+                self->lock_waiting_time += waiting_time;
+                ptls->lock_waiting_time += waiting_time;
+            }
             return;
         }
         if (safepoint) {
-            jl_gc_safepoint_(self->ptls);
+            jl_gc_safepoint_(ptls);
         }
         if (jl_running_under_rr(0)) {
             // when running under `rr`, use system mutexes rather than spin locking
@@ -927,6 +932,34 @@ void _jl_mutex_unlock(jl_task_t *self, jl_mutex_t *lock)
     }
 }
 
+JL_DLLEXPORT uint64_t jl_get_thread_lock_waiting_time(int16_t tid)
+{
+    int nthreads = jl_atomic_load_relaxed(&jl_n_threads);
+    jl_ptls_t *all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
+    if (tid < nthreads) {
+        jl_ptls_t ptls = all_tls_states[tid];
+        if (ptls) {
+            return jl_atomic_load_relaxed(&ptls->lock_waiting_time);
+        }
+    }
+    return 0;
+}
+
+JL_DLLEXPORT uint64_t jl_get_lock_waiting_time(void)
+{
+    uint64_t waiting_time = 0;
+    int nthreads = jl_atomic_load_relaxed(&jl_n_threads);
+    int ngcthreads = jl_n_gcthreads;
+    int nmutatorthreads = nthreads - ngcthreads;
+    jl_ptls_t *all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
+    for (int i = 0; i < nmutatorthreads; i++) {
+        jl_ptls_t ptls = all_tls_states[i];
+        if (ptls) {
+            waiting_time += jl_atomic_load_relaxed(&ptls->lock_waiting_time);
+        }
+    }
+    return waiting_time;
+}
 
 // Make gc alignment available for threading
 // see threads.jl alignment
