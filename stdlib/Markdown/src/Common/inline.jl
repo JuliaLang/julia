@@ -444,6 +444,8 @@ function skip_cdata_section(io::IO)
     end
 end
 
+const HTML_BREAK_REGEX = r"^<br\s*/?>"i
+
 @trigger '<' ->
 function html_inline(stream::IO, md::MD)
     pos = position(stream)
@@ -451,7 +453,7 @@ function html_inline(stream::IO, md::MD)
     # special case for <br>: this is of course not part of CommonMark,
     # but it is the only way to get linebreaks into tables, and by handling
     # this here, it will also work in LaTeX / PDF output.
-    startswith(stream, "<br>") && return LineBreak()
+    startswith(stream, HTML_BREAK_REGEX) && return LineBreak()
 
     # An HTML tag consists of an open tag, a closing tag, an HTML comment, a
     # processing instruction, a declaration, or a CDATA section.
