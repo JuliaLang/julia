@@ -4128,13 +4128,26 @@ JL_DLLEXPORT jl_value_t *jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t na
 // unregistered before we enter invoke, which may never return.
 JL_DLLEXPORT jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
 {
+    size_t world = jl_current_task->world_age;
+
+    int64_t last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
+    jl_code_instance_t *codeinst = jl_compile_method_internal(mfunc, world);
+    if (jl_options.malloc_log)
+        jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
     uint8_t specsigflags;
     jl_callptr_t invoke;
     void *specptr;
-    size_t world = jl_current_task->world_age;
-    jl_code_instance_t *codeinst = jl_compile_method_internal(mfunc, world);
     jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &specptr, 1);
     jl_jit_unregister_ci(codeinst);
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
+
     jl_value_t *res = invoke(F, args,  nargs, codeinst);
     return verify_type(res);
 }
