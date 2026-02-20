@@ -898,6 +898,7 @@ public:
         }
         uint64_t end_time = jl_hrtime();
 
+#ifndef __clang_analyzer__
         {
             uint8_t state = jl_gc_unsafe_enter(ct->ptls);
             for (auto [CI, _] : Out.linker_info->ci_funcs) {
@@ -906,6 +907,7 @@ public:
             }
             jl_gc_unsafe_leave(ct->ptls, state);
         }
+#endif
 
         auto G = jitlink::createLinkGraphFromObject(Obj->getMemBufferRef(),
                                                     ES.getSymbolStringPool());
