@@ -83,7 +83,7 @@ typedef struct jl_varbinding_t {
     int8_t intvalued; // intvalued: must be integer-valued; i.e. occurs as N in Vararg{_,N}
     int8_t limited;
     int8_t intersected; // whether this variable has been intersected
-    int8_t widened_to_kind;   // 1: Type{X} was widened to a union of kinds, -1: skip widening on re-intersection
+    int8_t widened_to_kind;   // Type{X} was widened to a union of kinds
     int16_t depth0;         // # of invariant constructors nested around the UnionAll type for this var
     // array of typevars that our bounds depend on, whose UnionAlls need to be
     // moved outside ours.
@@ -2889,11 +2889,6 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         return (jl_value_t*)b;
     }
     if (bb->constraintkind == 1) {
-        if (bb->widened_to_kind < 0) {
-            // reintersection without widening; previous attempt produced non-leaf diagonal bound
-            set_bound(&bb->ub, ub, b, e);
-            return (jl_value_t*)b;
-        }
         if (!jl_is_type_type(ub) && !jl_is_uniontype(ub) && !jl_is_unionall(ub)) {
             // this branch is a fast path if there are no `Type`s and not needed for correctness
             set_bound(&bb->ub, ub, b, e);
@@ -3571,22 +3566,14 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
             res = intersect_unionall_(t, u, e, R, param, &vb);
         }
     }
-    if (res != jl_bottom_type && vb.constraintkind == 1 && vb.widened_to_kind > 0) {
+    if (res != jl_bottom_type && vb.constraintkind == 1 && vb.widened_to_kind == 1) {
         // a `Type` was widened to a non-concrete kind union during intersection
         if (vb.occurs_cov > 1) {
             // diagonal: reintersect if able to narrow across positions to a leaf bound
-            // otherwise give up on widening to kinds and just intersect normally
+            // otherwise use original (possibly non-precise) bound
             if (is_leaf_bound(vb.ub)) {
                 restore_env(e, &se, 1);
                 vb.lb = vb.var->lb;
-                vb.occurs_cov = vb.occurs_inv = 0;
-                res = intersect_unionall_(t, u, e, R, param, &vb);
-            }
-            else {
-                restore_env(e, &se, 1);
-                vb.lb = vb.var->lb;
-                vb.ub = vb.var->ub;
-                vb.widened_to_kind = -1;
                 vb.occurs_cov = vb.occurs_inv = 0;
                 res = intersect_unionall_(t, u, e, R, param, &vb);
             }
