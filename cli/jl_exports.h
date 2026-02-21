@@ -7,8 +7,9 @@
 #include "../src/jl_exported_funcs.inc"
 
 // Define pointer data as `const void * $(name);`
-#define XX(name)    JL_DLLEXPORT const void * name;
+#define XX(name, type)    JL_DLLEXPORT const void * jl_##name;
 JL_EXPORTED_DATA_POINTERS(XX)
+JL_CONST_GLOBAL_VARS(XX)
 #undef XX
 
 // Define symbol data as `$(type) $(name);`

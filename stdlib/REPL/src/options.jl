@@ -28,6 +28,8 @@ mutable struct Options
     # refresh after time delay
     auto_refresh_time_delay::Float64
     hint_tab_completes::Bool
+    auto_insert_closing_bracket::Bool # automatically insert closing brackets, quotes, etc.
+    style_input::Bool # enable syntax highlighting for input
     # default IOContext settings at the REPL
     iocontext::Dict{Symbol,Any}
 end
@@ -47,8 +49,10 @@ Options(;
         auto_indent_tmp_off = false,
         auto_indent_bracketed_paste = false,
         auto_indent_time_threshold = 0.005,
-        auto_refresh_time_delay = Sys.iswindows() ? 0.05 : 0.0,
+        auto_refresh_time_delay = 0.0, # this no longer seems beneficial
         hint_tab_completes = true,
+        auto_insert_closing_bracket = true,
+        style_input = true,
         iocontext = Dict{Symbol,Any}()) =
             Options(hascolor, extra_keymap, tabwidth,
                     kill_ring_max, region_animation_duration,
@@ -57,7 +61,7 @@ Options(;
                     backspace_align, backspace_adjust, confirm_exit,
                     auto_indent, auto_indent_tmp_off, auto_indent_bracketed_paste,
                     auto_indent_time_threshold, auto_refresh_time_delay,
-                    hint_tab_completes,
+                    hint_tab_completes, auto_insert_closing_bracket, style_input,
                     iocontext)
 
 # for use by REPLs not having an options field

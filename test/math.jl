@@ -3,6 +3,9 @@
 include("testhelpers/EvenIntegers.jl")
 using .EvenIntegers
 
+include("testhelpers/ULPError.jl")
+using .ULPError
+
 using Random
 using LinearAlgebra
 using Base.Experimental: @force_compile
@@ -24,6 +27,55 @@ has_fma = Dict(
     Float64 => has_fma_Float64(),
     BigFloat => true,
 )
+
+@testset "meta test: ULPError" begin
+    examples_f64 = (-3e0, -2e0, -1e0, -1e-1, -1e-10, -0e0, 0e0, 1e-10, 1e-1, 1e0, 2e0, 3e0)::Tuple{Vararg{Float64}}
+    examples_f16 = Float16.(examples_f64)
+    examples_f32 = Float32.(examples_f64)
+    examples = (examples_f16..., examples_f32..., examples_f64...)
+    @testset "edge cases" begin
+        @testset "zero error - two equivalent values" begin
+            @test 0 == @inferred ulp_error(NaN, NaN)
+            @test 0 == @inferred ulp_error(-NaN, -NaN)
+            @test 0 == @inferred ulp_error(-NaN, NaN)
+            @test 0 == @inferred ulp_error(NaN, -NaN)
+            @test 0 == @inferred ulp_error(Inf, Inf)
+            @test 0 == @inferred ulp_error(-Inf, -Inf)
+            @test 0 == @inferred ulp_error(0.0, 0.0)
+            @test 0 == @inferred ulp_error(-0.0, -0.0)
+            @test 0 == @inferred ulp_error(-0.0, 0.0)
+            @test 0 == @inferred ulp_error(0.0, -0.0)
+            @test 0 == @inferred ulp_error(3.0, 3.0)
+            @test 0 == @inferred ulp_error(-3.0, -3.0)
+        end
+        @testset "infinite error" begin
+            @test Inf == @inferred ulp_error(NaN, 0.0)
+            @test Inf == @inferred ulp_error(0.0, NaN)
+            @test Inf == @inferred ulp_error(NaN, 3.0)
+            @test Inf == @inferred ulp_error(3.0, NaN)
+            @test Inf == @inferred ulp_error(NaN, Inf)
+            @test Inf == @inferred ulp_error(Inf, NaN)
+            @test Inf == @inferred ulp_error(Inf, -Inf)
+            @test Inf == @inferred ulp_error(-Inf, Inf)
+            @test Inf == @inferred ulp_error(0.0, Inf)
+            @test Inf == @inferred ulp_error(Inf, 0.0)
+            @test Inf == @inferred ulp_error(3.0, Inf)
+            @test Inf == @inferred ulp_error(Inf, 3.0)
+        end
+    end
+    @testset "faithful" begin
+        for x in examples
+            @test 1 == @inferred ulp_error(x, nextfloat(x, 1))
+            @test 1 == @inferred ulp_error(x, nextfloat(x, -1))
+        end
+    end
+    @testset "midpoint" begin
+        for x in examples
+            a = abs(x)
+            @test 1 == 2 * @inferred ulp_error(copysign((widen(a) + nextfloat(a, 1))/2, x), x)
+        end
+    end
+end
 
 @testset "clamp" begin
     let
@@ -390,6 +442,15 @@ end
     @test isnan(exp(reinterpret(Float64, 0x7ffbb14880000000)))
 end
 
+@testset "issue #57463" begin
+    for T in (Int16, Int32, Int64, Int128)
+        @test iszero(1.1^typemin(T))
+        @test iszero(0.9^typemax(T))
+        @test isinf(1.1^typemax(T))
+        @test isinf(0.9^typemin(T))
+    end
+end
+
 @testset "test abstractarray trig functions" begin
     TAA = rand(2,2)
     TAA = (TAA + TAA')/2.
@@ -448,13 +509,23 @@ end
 end
 
 @testset "deg2rad/rad2deg" begin
-    @testset "$T" for T in (Int, Float64, BigFloat)
+    @testset "$T" for T in (Int, Float16, Float32, Float64, BigFloat)
         @test deg2rad(T(180)) ≈ 1pi
         @test deg2rad.(T[45, 60]) ≈ [pi/T(4), pi/T(3)]
         @test rad2deg.([pi/T(4), pi/T(3)]) ≈ [45, 60]
         @test rad2deg(T(1)*pi) ≈ 180
         @test rad2deg(T(1)) ≈ rad2deg(true)
         @test deg2rad(T(1)) ≈ deg2rad(true)
+    end
+    @testset "accuracy" begin
+        @testset "$T" for T in (Float16, Float32, Float64)
+            @test rad2deg(T(1)) === setprecision(BigFloat, 500) do
+                T(180 / BigFloat(pi))
+            end
+            @test deg2rad(T(1)) === setprecision(BigFloat, 500) do
+                T(BigFloat(pi) / 180)
+            end
+        end
     end
     @test deg2rad(180 + 60im) ≈ pi + (pi/3)*im
     @test rad2deg(pi + (pi/3)*im) ≈ 180 + 60im
@@ -580,6 +651,39 @@ end
     @test ismissing(scdm[2])
 end
 
+@testset "behavior at signed zero of monotonic floating-point functions mapping zero to zero" begin
+    function rounder(rm::RoundingMode)
+        function closure(::Type{T}, x::AbstractFloat) where {T <: AbstractFloat}
+            round(T, x, rm)
+        end
+    end
+    rounding_modes = (
+        RoundNearest, RoundNearestTiesAway, RoundNearestTiesUp, RoundToZero, RoundFromZero, RoundUp, RoundDown,
+    )
+    rounders = map(rounder, rounding_modes)
+    @testset "typ: $typ" for typ in (Float16, Float32, Float64, BigFloat)
+        (n0, n1) = typ.(0:1)
+        rounders_typ = Base.Fix1.(rounders, typ)
+        @testset "f: $f" for f in (
+            # all strictly increasing
+            identity, deg2rad, rad2deg, cbrt, log1p, expm1, sinh, tanh, asinh, atanh,
+            sin, sind, sinpi, tan, tand, tanpi, asin, asind, atan, atand, Base.Fix2(atan, n1), Base.Fix2(atand, n1),
+            Base.Fix1(round, typ), Base.Fix1(trunc, typ), +, ∘(-, -), ∘(-, cosc),
+            rounders_typ...,
+            Base.Fix1(*, n1), Base.Fix2(*, n1), Base.Fix2(/, n1),
+        )
+            @testset "s: $s" for s in (-1, 1)
+                z = s * n0
+                z::typ
+                @test z == f(z)::typ
+                @test signbit(z) === signbit(f(z))
+                isbitstype(typ) &&
+                @test z === @inferred f(z)
+            end
+        end
+    end
+end
+
 @testset "Integer and Inf args for sinpi/cospi/tanpi/sinc/cosc" begin
     for (sinpi, cospi) in ((sinpi, cospi), (x->sincospi(x)[1], x->sincospi(x)[2]))
         @test sinpi(1) === 0.0
@@ -641,6 +745,20 @@ end
     setprecision(256) do
         @test cosc(big"0.5") ≈ big"-1.273239544735162686151070106980114896275677165923651589981338752471174381073817" rtol=1e-76
         @test cosc(big"0.499") ≈ big"-1.272045747741181369948389133250213864178198918667041860771078493955590574971317" rtol=1e-76
+    end
+
+    @testset "accuracy of `cosc` around the origin" begin
+        for t in (Float32, Float64)
+            @test ulp_error_maximum(cosc, range(start = t(-1), stop = t(1), length = 5000)) < 4
+        end
+    end
+end
+
+@testset "accuracy of `sinpi`, `cospi` around the origin" begin
+    for f in (sinpi, cospi)
+        for t in (Float32, Float64)
+            @test ulp_error_maximum(f, range(start = t(-0.25), stop = t(0.25), length = 5000)) < (has_fma[t] ? 1.0 : 1.5)
+        end
     end
 end
 
@@ -1427,7 +1545,7 @@ end
             @test func(-zero(T), zero(T), -zero(T)) === -zero(T)
             for _ in 1:2^18
                 a, b, c = reinterpret.(T, rand(Base.uinttype(T), 3))
-                @test isequal(func(a, b, c), fma(a, b, c)) || (a,b,c)
+                @test isequal(func(a, b, c), fma(a, b, c)) context=(a,b,c)
             end
         end
         @test func(floatmax(Float64), nextfloat(1.0), -floatmax(Float64)) === 3.991680619069439e292
@@ -1449,9 +1567,9 @@ end
             for y in (0.0, -0.0, 1.0, -3.0,-10.0 , Inf, NaN, -Inf, -NaN)
                 got, expected = T(x)^T(y), T(big(x)^T(y))
                 if isnan(expected)
-                    @test isnan_type(T, got) || T.((x,y))
+                    @test isnan_type(T, got) context=T.((x,y))
                 else
-                    @test got == expected || T.((x,y))
+                    @test got == expected context=T.((x,y))
                 end
             end
         end
@@ -1461,13 +1579,13 @@ end
             got, expected = x^y, widen(x)^y
             if isfinite(eps(T(expected)))
                 if y == T(-2) # unfortunately x^-2 is less accurate for performance reasons.
-                    @test abs(expected-got) <= POW_TOLS[T][4]*eps(T(expected)) || (x,y)
+                    @test abs(expected-got) <= POW_TOLS[T][4]*eps(T(expected)) context=(x,y)
                 elseif y == T(3) # unfortunately x^3 is less accurate for performance reasons.
-                    @test abs(expected-got) <= POW_TOLS[T][5]*eps(T(expected)) || (x,y)
+                    @test abs(expected-got) <= POW_TOLS[T][5]*eps(T(expected)) context=(x,y)
                 elseif issubnormal(got)
-                    @test abs(expected-got) <= POW_TOLS[T][2]*eps(T(expected)) || (x,y)
+                    @test abs(expected-got) <= POW_TOLS[T][2]*eps(T(expected)) context=(x,y)
                 else
-                    @test abs(expected-got) <= POW_TOLS[T][1]*eps(T(expected)) || (x,y)
+                    @test abs(expected-got) <= POW_TOLS[T][1]*eps(T(expected)) context=(x,y)
                 end
             end
         end
@@ -1476,7 +1594,7 @@ end
             x=rand(T)*floatmin(T); y=rand(T)*3-T(1.2)
             got, expected = x^y, widen(x)^y
             if isfinite(eps(T(expected)))
-                @test abs(expected-got) <= POW_TOLS[T][3]*eps(T(expected)) || (x,y)
+                @test abs(expected-got) <= POW_TOLS[T][3]*eps(T(expected)) context=(x,y)
             end
         end
         # test (-x)^y for y larger than typemax(Int)

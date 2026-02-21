@@ -105,6 +105,9 @@ function compute_basic_blocks(stmts::Vector{Any})
     end
     # Compute successors/predecessors
     for (num, b) in enumerate(blocks)
+        if b.stmts.start == 1
+            push!(b.preds, 0) # the entry block has a virtual predecessor
+        end
         terminator = stmts[last(b.stmts)]
         if isa(terminator, ReturnNode)
             # return never has any successors
@@ -581,7 +584,7 @@ function is_relevant_expr(e::Expr)
                       :foreigncall, :isdefined, :copyast,
                       :throw_undef_if_not,
                       :cfunction, :method, :pop_exception,
-                      :leave, :const, :globaldecl,
+                      :leave,
                       :new_opaque_closure)
 end
 
@@ -609,7 +612,7 @@ end
     elseif isa(stmt, EnterNode)
         op == 1 || throw(BoundsError())
         stmt = EnterNode(stmt.catch_dest, v)
-    elseif isa(stmt, Union{AnySSAValue, GlobalRef})
+    elseif isa(stmt, Union{AnySSAValue, Argument, GlobalRef})
         op == 1 || throw(BoundsError())
         stmt = v
     elseif isa(stmt, UpsilonNode)
@@ -640,7 +643,7 @@ end
 function userefs(@nospecialize(x))
     relevant = (isa(x, Expr) && is_relevant_expr(x)) ||
         isa(x, GotoIfNot) || isa(x, ReturnNode) || isa(x, SSAValue) || isa(x, OldSSAValue) || isa(x, NewSSAValue) ||
-        isa(x, PiNode) || isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode) || isa(x, EnterNode)
+        isa(x, PiNode) || isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode) || isa(x, EnterNode) || isa(x, Argument)
     return UseRefIterator(x, relevant)
 end
 
@@ -810,7 +813,7 @@ end
 types(ir::Union{IRCode, IncrementalCompact}) = TypesView(ir)
 
 function getindex(compact::IncrementalCompact, ssa::SSAValue)
-    (1 ≤ ssa.id ≤ compact.result_idx) || throw(InvalidIRError())
+    (1 ≤ ssa.id < compact.result_idx) || throw(InvalidIRError())
     return compact.result[ssa.id]
 end
 
@@ -1379,8 +1382,19 @@ function kill_edge!(ir::IRCode, from::Int, to::Int, callback=nothing)
     kill_edge!(ir.cfg.blocks, from, to, callback)
 end
 
-# N.B.: from and to are non-renamed indices
-function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::Int)
+@inline function compacted_stmt_range(compact::IncrementalCompact, bb::BasicBlock, active_bb::Int, to::Int)
+    to == active_bb && return StmtRange(first(bb.stmts), compact.result_idx - 1)
+    return bb.stmts
+end
+
+"""
+    kill_edge_terminator!(compact::IncrementalCompact, active_bb::Int, from::Int, to::Int)
+
+Kill a CFG edge while compacting a terminator in `active_bb`. Assumes all PhiNode
+block statements in `to` have already been processed, so the active BB may only
+scan the compacted prefix when `to == active_bb`. `from` and `to` are non-renamed indices.
+"""
+function kill_edge_terminator!(compact::IncrementalCompact, active_bb::Int, from::Int, to::Int)
     # Note: We recursively kill as many edges as are obviously dead.
     (; bb_rename_pred, bb_rename_succ, result_bbs, domtree) = compact.cfg_transform
     preds = result_bbs[bb_rename_succ[to]].preds
@@ -1396,7 +1410,7 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
         for succ in copy(to_succs)
             new_succ = findfirst(x::Int->x==succ, bb_rename_pred)
             new_succ === nothing && continue
-            kill_edge!(compact, active_bb, to, new_succ)
+            kill_edge_terminator!(compact, active_bb, to, new_succ)
         end
         empty!(preds)
         empty!(to_succs)
@@ -1418,8 +1432,9 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
         # Remove this edge from all phi nodes in `to` block
         # NOTE: It is possible for `to` to contain only `nothing` statements,
         #       so we must be careful to stop at its last statement
-        if to < active_bb
-            stmts = result_bbs[bb_rename_succ[to]].stmts
+        if to <= active_bb
+            bb = result_bbs[bb_rename_succ[to]]
+            stmts = compacted_stmt_range(compact, bb, active_bb, to)
             idx = first(stmts)
             while idx <= last(stmts)
                 stmt = compact.result[idx][:stmt]
@@ -1499,14 +1514,14 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             if cond
                 ssa_rename[idx] = nothing
                 result[result_idx][:stmt] = nothing
-                kill_edge!(compact, active_bb, active_bb, stmt.dest)
+                kill_edge_terminator!(compact, active_bb, active_bb, stmt.dest)
                 # Don't increment result_idx => Drop this statement
             else
                 label = bb_rename_succ[stmt.dest]
                 @assert label > 0
                 ssa_rename[idx] = SSAValue(result_idx)
                 result[result_idx][:stmt] = GotoNode(label)
-                kill_edge!(compact, active_bb, active_bb, active_bb+1)
+                kill_edge_terminator!(compact, active_bb, active_bb, active_bb+1)
                 result_idx += 1
             end
         else
@@ -1681,7 +1696,10 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 stmt = ssa_rename[stmt.id]
             end
         elseif isa(stmt, NewSSAValue)
-            stmt = SSAValue(stmt.id)
+            if stmt.id > 0
+                # Negative ids reference new_new_nodes and must remain NewSSAValue.
+                stmt = SSAValue(stmt.id)
+            end
         else
             # Constant assign, replace uses of this ssa value with its result
         end

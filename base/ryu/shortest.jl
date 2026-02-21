@@ -196,6 +196,7 @@ integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
         e10 = 0
 
         if maxsignif !== nothing && b > maxsignif
+            roundup = false
             b_allzero = true
             # reduce to max significant digits
             while true
@@ -250,8 +251,10 @@ function writeshortest(buf::AbstractVector{UInt8}, pos, x::T,
             pos += 1
         end
         if precision == -1
-            @inbounds buf[pos] = UInt8('0')
-            pos += 1
+            if hash
+                @inbounds buf[pos] = UInt8('0')
+                pos += 1
+            end
             if typed && x isa Float32
                 @inbounds buf[pos] = UInt8('f')
                 @inbounds buf[pos + 1] = UInt8('0')
@@ -375,8 +378,11 @@ function writeshortest(buf::AbstractVector{UInt8}, pos, x::T,
         else
             pointoff = olength - abs(nexp)
             # shift bytes after pointoff to make room for decchar
-            ptr = pointer(buf)
-            memmove(ptr + pos + pointoff, ptr + pos + pointoff - 1, olength - pointoff + 1)
+            buf_cconv = Base.cconvert(Ptr{UInt8}, buf)
+            GC.@preserve buf_cconv begin
+                ptr = Base.unsafe_convert(Ptr{UInt8}, buf_cconv)
+                memmove(ptr + pos + pointoff, ptr + pos + pointoff - 1, (olength - pointoff + 1)%Csize_t)
+            end
             @inbounds buf[pos + pointoff] = decchar
             pos += olength + 1
             precision -= olength

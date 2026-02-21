@@ -7,10 +7,12 @@
 
 function activate_codegen!()
     ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)
+    # Register the new unified compile and emit function
+    ccall(:jl_set_compile_and_emit_func, Cvoid, (Any,), compile_and_emit_native)
     Core.eval(Compiler, quote
         let typeinf_world_age = Base.tls_world_age()
             @eval Core.OptimizedGenerics.CompilerPlugins.typeinf(::Nothing, mi::MethodInstance, source_mode::UInt8) =
-                Base.invoke_in_world($(Expr(:$, :typeinf_world_age)), typeinf_ext_toplevel, mi, Base.tls_world_age(), source_mode)
+                Base.invoke_in_world($(Expr(:$, :typeinf_world_age)), typeinf_ext_toplevel, mi, Base.tls_world_age(), source_mode, Compiler.TRIM_NO)
         end
     end)
 end
@@ -46,7 +48,6 @@ function bootstrap!()
             end
         end
         starttime = time()
-        methods = Any[]
         world = get_world_counter()
         for f in fs
             if isa(f, DataType) && f.name === typename(Tuple)
@@ -67,7 +68,7 @@ function bootstrap!()
                     end
                     mi = specialize_method(m.method, Tuple{params...}, m.sparams)
                     #isa_compileable_sig(mi) || println(stderr, "WARNING: inferring `", mi, "` which isn't expected to be called.")
-                    typeinf_ext_toplevel(mi, world, isa_compileable_sig(mi) ? SOURCE_MODE_ABI : SOURCE_MODE_NOT_REQUIRED)
+                    typeinf_ext_toplevel(mi, world, isa_compileable_sig(mi) ? SOURCE_MODE_ABI : SOURCE_MODE_NOT_REQUIRED, TRIM_NO)
                 end
             end
         end

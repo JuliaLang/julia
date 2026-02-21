@@ -76,7 +76,7 @@ function _cleanup_locked(h::WeakKeyDict)
     return h
 end
 
-sizehint!(d::WeakKeyDict, newsz; shrink::Bool = true) = @lock d sizehint!(d.ht, newsz; shrink = shrink)
+sizehint!(d::WeakKeyDict, newsz::Integer; shrink::Bool = true) = @lock d sizehint!(d.ht, newsz; shrink = shrink)
 empty(d::WeakKeyDict, ::Type{K}, ::Type{V}) where {K, V} = WeakKeyDict{K, V}()
 
 IteratorSize(::Type{<:WeakKeyDict}) = SizeUnknown()
@@ -195,7 +195,7 @@ function length(t::WeakKeyDict)
 end
 
 function iterate(t::WeakKeyDict{K,V}, state...) where {K, V}
-    return lock(t) do
+    @lock t begin
         while true
             y = iterate(t.ht, state...)
             y === nothing && return nothing

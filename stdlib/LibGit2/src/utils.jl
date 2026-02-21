@@ -162,7 +162,7 @@ function git_url(;
     end
     seekstart(io)
 
-    return String(take!(io))
+    return takestring!(io)
 end
 
 function credential_identifier(scheme::AbstractString, host::AbstractString)

@@ -16,6 +16,13 @@ using Base.TOML: TOML
 export artifact_exists, artifact_path, artifact_meta, artifact_hash,
        select_downloadable_artifacts, find_artifacts_toml, @artifact_str
 
+const _artifacts_world_age = Ref{UInt}(typemax(UInt))
+
+function __init__()
+    _artifacts_world_age[] = Base.get_world_counter()
+    nothing
+end
+
 """
     parse_toml(path::String)
 
@@ -403,7 +410,7 @@ function artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String
         dl_dict = Dict{Platform,Dict{String,Any}}()
         for x in meta
             x = x::Dict{String, Any}
-            dl_dict[unpack_platform(x, name, artifacts_toml)] = x
+            dl_dict[unpack_platform(x, name, artifacts_toml)::Platform] = x
         end
         meta = select_platform(dl_dict, platform)
     # If it's NOT a dict, complain
@@ -543,6 +550,14 @@ function jointail(dir, tail)
 end
 
 function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, ::Val{LazyArtifacts}) where LazyArtifacts
+    world = _artifacts_world_age[]
+    if world == typemax(UInt)
+        world = Base.get_world_counter()
+    end
+    return Base.invoke_in_world(world, __artifact_str, __module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, Val(LazyArtifacts))::String
+end
+
+function __artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, ::Val{LazyArtifacts}) where LazyArtifacts
     pkg = Base.PkgId(__module__)
     if pkg.uuid !== nothing
         # Process overrides for this UUID, if we know what it is
@@ -565,7 +580,8 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
             if nameof(LazyArtifacts) in (:Pkg, :Artifacts, :PkgArtifacts)
                 Base.depwarn("using Pkg instead of using LazyArtifacts is deprecated", :var"@artifact_str", force=true)
             end
-            return jointail(LazyArtifacts.ensure_artifact_installed(string(name), meta, artifacts_toml; platform), path_tail)
+            path_base = (@invokelatest LazyArtifacts.ensure_artifact_installed(string(name), meta, artifacts_toml; platform))::String
+            return jointail(path_base, path_tail)
         end
         error("Artifact $(repr(name)) is a lazy artifact; package developers must call `using LazyArtifacts` in $(__module__) before using lazy artifacts.")
     end
@@ -662,7 +678,7 @@ If `name` contains a forward or backward slash, all elements after the first sla
 be taken to be path names indexing into the artifact, allowing for an easy one-liner to
 access a single file/directory within an artifact.  Example:
 
-    ffmpeg_path = @artifact"FFMPEG/bin/ffmpeg"
+    ffmpeg_path = artifact"FFMPEG/bin/ffmpeg"
 
 !!! compat "Julia 1.3"
     This macro requires at least Julia 1.3.
@@ -673,7 +689,8 @@ access a single file/directory within an artifact.  Example:
 macro artifact_str(name, platform=nothing)
     # Find Artifacts.toml file we're going to load from
     srcfile = string(__source__.file)
-    if ((isinteractive() && startswith(srcfile, "REPL[")) || (!isinteractive() && srcfile == "none")) && !isfile(srcfile)
+    is_repl_or_ijulia = isinteractive() && (startswith(srcfile, "REPL[") || startswith(srcfile, "In["))
+    if (is_repl_or_ijulia || (!isinteractive() && srcfile == "none")) && !isfile(srcfile)
         srcfile = pwd()
     end
     local artifacts_toml = find_artifacts_toml(srcfile)
@@ -757,6 +774,5 @@ precompile(NamedTuple{(:pkg_uuid,)}, (Tuple{Base.UUID},))
 precompile(Core.kwfunc(load_artifacts_toml), (NamedTuple{(:pkg_uuid,), Tuple{Base.UUID}}, typeof(load_artifacts_toml), String))
 precompile(parse_mapping, (String, String, String))
 precompile(parse_mapping, (Dict{String, Any}, String, String))
-precompile(Tuple{typeof(Artifacts._artifact_str), Module, String, Base.SubString{String}, String, Base.Dict{String, Any}, Base.SHA1, Base.BinaryPlatforms.Platform, Any})
-
+precompile(Tuple{typeof(Artifacts.__artifact_str), Module, String, Base.SubString{String}, String, Base.Dict{String, Any}, Base.SHA1, Base.BinaryPlatforms.Platform, Base.Val{Artifacts}})
 end # module Artifacts

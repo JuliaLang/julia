@@ -7,11 +7,11 @@ An error occurred when trying to access `str` at index `i` that is not valid.
 """
 struct StringIndexError <: Exception
     string::AbstractString
-    index::Integer
+    index::Int
 end
-@noinline string_index_err(s::AbstractString, i::Integer) =
+@noinline string_index_err((@nospecialize s::AbstractString), i::Integer) =
     throw(StringIndexError(s, Int(i)))
-function Base.showerror(io::IO, exc::StringIndexError)
+function showerror(io::IO, exc::StringIndexError)
     s = exc.string
     print(io, "StringIndexError: ", "invalid index [$(exc.index)]")
     if firstindex(s) <= exc.index <= ncodeunits(s)
@@ -62,8 +62,8 @@ In other cases, `Vector{UInt8}` data may be copied, but `v` is truncated anyway
 to guarantee consistent behavior.
 """
 String(v::AbstractVector{UInt8}) = unsafe_takestring(copyto!(StringMemory(length(v)), v))
+
 function String(v::Vector{UInt8})
-    #return ccall(:jl_array_to_string, Ref{String}, (Any,), v)
     len = length(v)
     len == 0 && return ""
     ref = v.ref
@@ -78,14 +78,38 @@ function String(v::Vector{UInt8})
     return str
 end
 
-"Create a string re-using the memory, if possible.
-Mutating or reading the memory after calling this function is undefined behaviour."
+"""
+    unsafe_takestring(m::Memory{UInt8})::String
+
+Create a `String` from `m`, changing the interpretation of the contents of `m`.
+This is done without copying, if possible. Thus, any access to `m` after
+calling this function, either to read or to write, is undefined behavior.
+"""
 function unsafe_takestring(m::Memory{UInt8})
     isempty(m) ? "" : ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), m, length(m))
 end
 
 """
+    takestring!(x) -> String
+
+Create a string from the content of `x`, emptying `x`.
+
+# Examples
+```jldoctest
+julia> v = [0x61, 0x62, 0x63];
+
+julia> s = takestring!(v)
+"abc"
+
+julia> isempty(v)
+true
+```
+"""
+takestring!(v::Vector{UInt8}) = String(v)
+
+"""
     unsafe_string(p::Ptr{UInt8}, [length::Integer])
+    unsafe_string(p::Cstring)
 
 Copy a string from the address of a C-style (NUL-terminated) string encoded as UTF-8.
 (The pointer can be safely freed afterwards.) If `length` is specified
@@ -134,7 +158,7 @@ pointer(s::String, i::Integer) = pointer(s) + Int(i)::Int - 1
 ncodeunits(s::String) = Core.sizeof(s)
 codeunit(s::String) = UInt8
 
-codeunit(s::String, i::Integer) = codeunit(s, Int(i))
+codeunit(s::String, i::Integer) = codeunit(s, Int(i)::Int)
 @assume_effects :foldable @inline function codeunit(s::String, i::Int)
     @boundscheck checkbounds(s, i)
     b = GC.@preserve s unsafe_load(pointer(s, i))
@@ -437,24 +461,25 @@ end
 
 # duck-type s so that external UTF-8 string packages like StringViews can hook in
 function iterate_continued(s, i::Int, u::UInt32)
-    u < 0xc0000000 && (i += 1; @goto ret)
-    n = ncodeunits(s)
-    # first continuation byte
-    (i += 1) > n && @goto ret
-    @inbounds b = codeunit(s, i)
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b) << 16
-    # second continuation byte
-    ((i += 1) > n) | (u < 0xe0000000) && @goto ret
-    @inbounds b = codeunit(s, i)
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b) << 8
-    # third continuation byte
-    ((i += 1) > n) | (u < 0xf0000000) && @goto ret
-    @inbounds b = codeunit(s, i)
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b); i += 1
-@label ret
+    @label begin
+        u < 0xc0000000 && (i += 1; break)
+        n = ncodeunits(s)
+        # first continuation byte
+        (i += 1) > n && break
+        @inbounds b = codeunit(s, i)
+        b & 0xc0 == 0x80 || break
+        u |= UInt32(b) << 16
+        # second continuation byte
+        ((i += 1) > n) | (u < 0xe0000000) && break
+        @inbounds b = codeunit(s, i)
+        b & 0xc0 == 0x80 || break
+        u |= UInt32(b) << 8
+        # third continuation byte
+        ((i += 1) > n) | (u < 0xf0000000) && break
+        @inbounds b = codeunit(s, i)
+        b & 0xc0 == 0x80 || break
+        u |= UInt32(b); i += 1
+    end
     return reinterpret(Char, u), i
 end
 
@@ -467,28 +492,29 @@ end
 
 # duck-type s so that external UTF-8 string packages like StringViews can hook in
 function getindex_continued(s, i::Int, u::UInt32)
-    if u < 0xc0000000
-        # called from `getindex` which checks bounds
-        @inbounds isvalid(s, i) && @goto ret
-        string_index_err(s, i)
+    @label begin
+        if u < 0xc0000000
+            # called from `getindex` which checks bounds
+            @inbounds isvalid(s, i) && break
+            string_index_err(s, i)
+        end
+        n = ncodeunits(s)
+
+        (i += 1) > n && break
+        @inbounds b = codeunit(s, i) # cont byte 1
+        b & 0xc0 == 0x80 || break
+        u |= UInt32(b) << 16
+
+        ((i += 1) > n) | (u < 0xe0000000) && break
+        @inbounds b = codeunit(s, i) # cont byte 2
+        b & 0xc0 == 0x80 || break
+        u |= UInt32(b) << 8
+
+        ((i += 1) > n) | (u < 0xf0000000) && break
+        @inbounds b = codeunit(s, i) # cont byte 3
+        b & 0xc0 == 0x80 || break
+        u |= UInt32(b)
     end
-    n = ncodeunits(s)
-
-    (i += 1) > n && @goto ret
-    @inbounds b = codeunit(s, i) # cont byte 1
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b) << 16
-
-    ((i += 1) > n) | (u < 0xe0000000) && @goto ret
-    @inbounds b = codeunit(s, i) # cont byte 2
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b) << 8
-
-    ((i += 1) > n) | (u < 0xf0000000) && @goto ret
-    @inbounds b = codeunit(s, i) # cont byte 3
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b)
-@label ret
     return reinterpret(Char, u)
 end
 

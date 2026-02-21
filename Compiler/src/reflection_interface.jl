@@ -42,7 +42,7 @@ end
 
 function statement_costs!(interp::AbstractInterpreter, cost::Vector{Int}, body::Vector{Any}, src::Union{CodeInfo, IRCode}, match::Core.MethodMatch)
     params = OptimizationParams(interp)
-    sptypes = VarState[VarState(sp, false) for sp in match.sparams]
+    sptypes = VarState[VarState(sp, #= ssadef =# typemin(Int), false) for sp in match.sparams]
     return statement_costs!(cost, body, src, sptypes, params)
 end
 

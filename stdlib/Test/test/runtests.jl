@@ -7,6 +7,8 @@ using Distributed: RemoteException
 
 import Logging: Debug, Info, Warn, with_logger
 
+@test isempty(Test.detect_closure_boxes(Test))
+
 @testset "@test" begin
     atol = 1
     a = (; atol=2)
@@ -24,7 +26,64 @@ import Logging: Debug, Info, Warn, with_logger
     @test isapprox(1, 1; [(:atol, 0)]...)
     @test isapprox(1, 2; atol)
     @test isapprox(1, 3; a.atol)
+    # Test custom .. operator (not a broadcast operator)
+    ..(x, y) = x == y
+    @test 'a' .. 'a'
+    @test !('a' .. 'b')
 end
+
+
+module ClosureBoxTest
+    function boxed()
+        x = 1
+        inner() = (x += 1)
+        inner()
+    end
+
+    module Sub
+        function boxed_sub()
+            x = 0
+            inner() = (x += 1)
+            inner()
+        end
+    end
+end
+
+module ClosureBoxRedefTest
+    function boxed()
+        x = 1
+        inner() = (x += 1)
+        inner()
+    end
+end
+
+@testset "detect_closure_boxes" begin
+    boxes = Test.detect_closure_boxes(ClosureBoxTest)
+    @test any(p -> p.first.name === :boxed, boxes)
+    @test any(p -> p.first.name === :boxed_sub, boxes)
+
+    sub_boxes = Test.detect_closure_boxes(ClosureBoxTest.Sub)
+    @test any(p -> p.first.name === :boxed_sub, sub_boxes)
+    @test all(p -> parentmodule(p.first) === ClosureBoxTest.Sub, sub_boxes)
+
+    @test isempty(Test.detect_closure_boxes())
+
+    # _all version checks all loaded modules
+    all_boxes = Test.detect_closure_boxes_all_modules()
+    @test any(p -> p.first.name === :boxed, all_boxes)
+
+    # Redefinition should drop closure boxes from shadowed methods.
+    @test !isempty(Test.detect_closure_boxes(ClosureBoxRedefTest))
+    @eval ClosureBoxRedefTest begin
+        function boxed()
+            x = 1
+            inner() = x + 1
+            inner()
+        end
+    end
+    @test isempty(Test.detect_closure_boxes(ClosureBoxRedefTest))
+end
+
 @testset "@test with skip/broken kwargs" begin
     # Make sure the local variables can be used in conditions
     a = 1
@@ -107,8 +166,202 @@ end
     @test_throws "\"" throw("\"")
     @test_throws Returns(false) throw(Returns(false))
 end
+
+@testset "Pass - exception with pattern (3-arg form)" begin
+    # Test 3-argument form: @test_throws ExceptionType pattern expr
+    @test_throws ErrorException "error foo" error("error foo 1")
+    @test_throws DomainError r"sqrt.*negative" sqrt(-1)
+    @test_throws BoundsError "at index [2]" [1][2]
+    @test_throws ErrorException ["error", "foo"] error("error foo bar")
+
+    # Test with function pattern
+    @test_throws ErrorException (s -> occursin("foo", s)) error("error foo bar")
+
+    # Test output format
+    let result = @test_throws ErrorException "error foo" error("error foo 1")
+        output = sprint(show, result)
+        @test occursin("Test Passed", output)
+        @test occursin("Thrown: ErrorException", output)
+    end
+end
+
 # Test printing of Fail results
 include("nothrow_testset.jl")
+
+# Test @test_throws with broken/skip keywords
+@testset "@test_throws broken keyword" begin
+    # broken=false should behave normally
+    @test_throws ErrorException error("test") broken=false
+
+    # broken=true with no exception should record as Broken
+    let results = @testset NoThrowTestSet begin
+            @test_throws ErrorException 1+1 broken=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+        @test results[1].test_type === :test_throws
+    end
+
+    # broken=true with wrong exception type should record as Broken
+    let results = @testset NoThrowTestSet begin
+            @test_throws BoundsError error("wrong type") broken=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+    end
+
+    # broken=true with correct exception should record as Error (unexpected pass)
+    let results = @testset NoThrowTestSet begin
+            @test_throws ErrorException error("test") broken=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Error
+        @test results[1].test_type === :test_unbroken
+    end
+end
+
+@testset "@test_throws skip keyword" begin
+    # skip=true should record Broken(:skipped) and not execute
+    let results = @testset NoThrowTestSet begin
+            @test_throws ErrorException error("should not run") skip=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+        @test results[1].test_type === :skipped
+    end
+
+    # skip=false should behave normally
+    @test_throws ErrorException error("test") skip=false
+end
+
+@testset "@test_throws context keyword" begin
+    # context should be included in failure output
+    let fails = @testset NoThrowTestSet begin
+            @test_throws ErrorException 1+1 context="extra info"
+        end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].context == "\"extra info\""
+    end
+end
+
+@testset "@test_warn/@test_nowarn broken/skip keywords" begin
+    # @test_warn with broken=true when test fails (no warning) should be Broken
+    let results = @testset NoThrowTestSet begin
+            @test_warn "expected warning" 1+1 broken=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+    end
+
+    # @test_warn with broken=true when test passes should be Error (unexpected pass)
+    let results = @testset NoThrowTestSet begin
+            @test_warn "foo" (println(stderr, "foo"); 1) broken=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Error
+        @test results[1].test_type === :test_unbroken
+    end
+
+    # @test_nowarn with broken=true when test fails (has warning) should be Broken
+    let results = @testset NoThrowTestSet begin
+            @test_nowarn (println(stderr, "oops"); 1) broken=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+    end
+
+    # @test_nowarn with broken=true when test passes should be Error (unexpected pass)
+    let results = @testset NoThrowTestSet begin
+            @test_nowarn 1+1 broken=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Error
+        @test results[1].test_type === :test_unbroken
+    end
+
+    # skip=true should record Broken(:skipped) and not execute
+    let results = @testset NoThrowTestSet begin
+            @test_warn "foo" error("should not run") skip=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+        @test results[1].test_type === :skipped
+    end
+
+    let results = @testset NoThrowTestSet begin
+            @test_nowarn error("should not run") skip=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+        @test results[1].test_type === :skipped
+    end
+end
+
+@testset "@test_warn/@test_nowarn failure display" begin
+    # @test_warn with string pattern - failure shows expected and captured stderr
+    let results = @testset NoThrowTestSet begin
+            @test_warn "expected" println(stderr, "wrong")
+        end
+        @test length(results) == 1
+        fail = results[1]
+        @test fail isa Test.Fail
+        @test fail.test_type === :test_warn
+        @test fail.data == "\"expected\" (occursin)"
+        @test fail.value == "\"wrong\\n\""
+        str = sprint(show, fail)
+        @test occursin("Expected stderr:", str)
+        @test occursin("Captured stderr:", str)
+    end
+
+    # @test_warn with regex pattern
+    let results = @testset NoThrowTestSet begin
+            @test_warn r"expected" println(stderr, "wrong")
+        end
+        @test length(results) == 1
+        fail = results[1]
+        @test fail isa Test.Fail
+        @test fail.test_type === :test_warn
+        @test fail.data == "r\"expected\" (occursin)"
+    end
+
+    # @test_warn with array pattern
+    let results = @testset NoThrowTestSet begin
+            @test_warn ["foo", "bar"] println(stderr, "only foo")
+        end
+        @test length(results) == 1
+        fail = results[1]
+        @test fail isa Test.Fail
+        @test fail.test_type === :test_warn
+        @test occursin("(all, occursin)", fail.data)
+    end
+
+    # @test_warn with function pattern
+    let results = @testset NoThrowTestSet begin
+            @test_warn (s -> occursin("expected", s)) println(stderr, "wrong")
+        end
+        @test length(results) == 1
+        fail = results[1]
+        @test fail isa Test.Fail
+        @test fail.test_type === :test_warn
+        @test occursin("s->occursin(\"expected\", s)", fail.data)  # Shows the function expression
+    end
+
+    # @test_nowarn failure shows expected "" and captured stderr
+    let results = @testset NoThrowTestSet begin
+            @test_nowarn println(stderr, "oops")
+        end
+        @test length(results) == 1
+        fail = results[1]
+        @test fail isa Test.Fail
+        @test fail.test_type === :test_nowarn
+        @test fail.data == "\"\" (nowarn)"
+        @test fail.value == "\"oops\\n\""
+        str = sprint(show, fail)
+        @test occursin("Expected stderr: \"\" (nowarn)", str)
+        @test occursin("Captured stderr: \"oops\\n\"", str)
+    end
+end
 
 let fails = @testset NoThrowTestSet begin
         # 1 - Fail - wrong exception
@@ -390,7 +643,7 @@ let retval_tests = @testset NoThrowTestSet begin
         ts = Test.DefaultTestSet("Mock for testing retval of record(::DefaultTestSet, ::T <: Result) methods")
         pass_mock = Test.Pass(:test, 1, 2, 3, LineNumberNode(0, "A Pass Mock"))
         @test Test.record(ts, pass_mock) isa Test.Pass
-        error_mock = Test.Error(:test, 1, 2, 3, LineNumberNode(0, "An Error Mock"))
+        error_mock = Test.Error(:test, 1, 2, nothing, LineNumberNode(0, "An Error Mock"), nothing)
         @test Test.record(ts, error_mock; print_result=false) isa Test.Error
         fail_mock = Test.Fail(:test, 1, 2, 3, nothing, LineNumberNode(0, "A Fail Mock"), false)
         @test Test.record(ts, fail_mock; print_result=false) isa Test.Fail
@@ -399,6 +652,123 @@ let retval_tests = @testset NoThrowTestSet begin
     end
     for retval_test in retval_tests
         @test retval_test isa Test.Pass
+    end
+end
+
+@testset "Fail - exception with pattern (3-arg form)" begin
+    # Test type mismatch
+    let fails = @testset NoThrowTestSet begin
+        @test_throws ArgumentError "error foo" error("error foo 1")  # Wrong type
+    end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].test_type === :test_throws_wrong
+        @test occursin("ArgumentError with pattern \"error foo\"", fails[1].data)
+    end
+
+    # Test pattern mismatch
+    let fails = @testset NoThrowTestSet begin
+        @test_throws ErrorException "wrong pattern" error("error foo 1")  # Wrong pattern
+    end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].test_type === :test_throws_wrong
+        @test occursin("ErrorException with pattern \"wrong pattern\"", fails[1].data)
+    end
+
+    # Test no exception thrown
+    let fails = @testset NoThrowTestSet begin
+        @test_throws ErrorException "error foo" 1 + 1  # No exception
+    end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].test_type === :test_throws_nothing
+        @test occursin("ErrorException with pattern \"error foo\"", fails[1].data)
+    end
+
+    # Test first argument must be a type
+    let fails = @testset NoThrowTestSet begin
+        @test_throws "not a type" "error foo" error("error foo 1")  # First arg not a type
+    end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].test_type === :test_throws_wrong
+    end
+end
+
+# Tests for context keyword
+@testset "@test with context keyword" begin
+    # Test that context appears in Fail
+    let f = Test.Fail(:test, "false", nothing, "false", "(sin, Float64)", LineNumberNode(1), false)
+        @test occursin("Context: (sin, Float64)", sprint(show, f))
+    end
+
+    # Test that context is evaluated and shown in @test
+    let fails = @testset NoThrowTestSet begin
+            @test false context=(sin, Float64)
+        end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test occursin("(sin, Float64)", fails[1].context)
+    end
+
+    # Test context with broken=true (should record as Broken)
+    let results = @testset NoThrowTestSet begin
+            @test false context="info" broken=true
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+    end
+
+    # Test context with Error (exception thrown)
+    let errors = @testset NoThrowTestSet begin
+            @test error("boom") context="error info"
+        end
+        @test length(errors) == 1
+        @test errors[1] isa Test.Error
+        @test errors[1].context == "\"error info\""
+    end
+end
+
+@testset "@test_throws with context keyword" begin
+    # Test context appears when wrong exception thrown
+    let fails = @testset NoThrowTestSet begin
+            @test_throws ArgumentError error("wrong") context="extra info"
+        end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].context == "\"extra info\""
+    end
+
+    # Test context with three-arg form
+    let fails = @testset NoThrowTestSet begin
+            @test_throws ErrorException "pattern" error("wrong msg") context=(1, 2)
+        end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test occursin("(1, 2)", fails[1].context)
+    end
+
+    # Test context when no exception thrown
+    let fails = @testset NoThrowTestSet begin
+            @test_throws ErrorException 1 + 1 context="no throw info"
+        end
+        @test length(fails) == 1
+        @test fails[1] isa Test.Fail
+        @test fails[1].test_type === :test_throws_nothing
+        @test fails[1].context == "\"no throw info\""
+    end
+end
+
+@testset "@test_broken with context keyword" begin
+    # Test context with @test_broken when test unexpectedly passes
+    let errors = @testset NoThrowTestSet begin
+            @test_broken true context="broken info"
+        end
+        @test length(errors) == 1
+        @test errors[1] isa Test.Error
+        @test errors[1].test_type === :test_unbroken
+        @test errors[1].context == "\"broken info\""
     end
 end
 
@@ -524,7 +894,7 @@ end
         @test total_error  == 6
         @test total_broken == 0
     end
-    ts.anynonpass = false
+    @atomic ts.anynonpass = 0x00
     deleteat!(Test.get_testset().results, 1)
 end
 
@@ -917,11 +1287,11 @@ let msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --co
         end'`), stderr=devnull), String)
     @test occursin(r"""
         Test Summary: \| Pass  Fail  Total +Time
-        Foo Tests     \|    2     2      4  \s*\d*\.\ds
-          Animals     \|    1     1      2  \s*\d*\.\ds
-            Felines   \|    1            1  \s*\d*\.\ds
-            Canines   \|          1      1  \s*\d*\.\ds
-          Arrays      \|    1     1      2  \s*\d*\.\ds
+        Foo Tests     \|    2     2      4  \s*(\d+m)?\d*\.\ds
+          Animals     \|    1     1      2  \s*(\d+m)?\d*\.\ds
+            Felines   \|    1            1  \s*(\d+m)?\d*\.\ds
+            Canines   \|          1      1  \s*(\d+m)?\d*\.\ds
+          Arrays      \|    1     1      2  \s*(\d+m)?\d*\.\ds
         """, msg)
 end
 
@@ -1048,6 +1418,51 @@ erronce() = @error "an error" maxlog=1
     @test startswith(fails[4].value, "ErrorException")
 end
 
+@testset "@test_logs broken/skip keywords" begin
+    # broken=true when logs don't match should be Broken
+    let results = @testset NoThrowTestSet begin
+            @test_logs (:warn,) broken=true @info "wrong level"
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+        @test results[1].test_type === :test
+    end
+
+    # broken=true when logs match should be Error (unexpected pass)
+    let results = @testset NoThrowTestSet begin
+            @test_logs (:info,) broken=true @info "correct"
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Error
+        @test results[1].test_type === :test_unbroken
+    end
+
+    # broken=true when expression errors should be Broken
+    let results = @testset NoThrowTestSet begin
+            @test_logs (:info,) broken=true error("test error")
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+    end
+
+    # skip=true should record Broken(:skipped)
+    let results = @testset NoThrowTestSet begin
+            @test_logs (:info,) skip=true error("should not run")
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+        @test results[1].test_type === :skipped
+    end
+
+    # broken and skip work with other kwargs
+    let results = @testset NoThrowTestSet begin
+            @test_logs (:debug,) min_level=Debug broken=true @info "wrong"
+        end
+        @test length(results) == 1
+        @test results[1] isa Test.Broken
+    end
+end
+
 let code = quote
         function newfunc()
             42
@@ -1067,6 +1482,31 @@ let code = quote
             @test length(fails) == 2
             @test fails[1] isa Test.LogTestFailure
             @test fails[2] isa Test.LogTestFailure
+        end
+
+        @testset "@test_deprecated broken/skip keywords" begin
+            # broken=true when deprecation warning is missing should be Broken
+            results = @testset NoThrowTestSet begin
+                @test_deprecated newfunc() broken=true
+            end
+            @test length(results) == 1
+            @test results[1] isa Test.Broken
+
+            # broken=true when deprecation warning is present should be Error
+            results = @testset NoThrowTestSet begin
+                @test_deprecated oldfunc() broken=true
+            end
+            @test length(results) == 1
+            @test results[1] isa Test.Error
+            @test results[1].test_type === :test_unbroken
+
+            # skip=true should record Broken(:skipped)
+            results = @testset NoThrowTestSet begin
+                @test_deprecated error("should not run") skip=true
+            end
+            @test length(results) == 1
+            @test results[1] isa Test.Broken
+            @test results[1].test_type === :skipped
         end
     end
     incl = "include($(repr(joinpath(@__DIR__, "nothrow_testset.jl"))))"
@@ -1300,16 +1740,16 @@ end
 @testset "verbose option" begin
     expected = r"""
     Test Summary:             \| Pass  Total +Time
-    Parent                    \|    9      9  \s*\d*\.\ds
-      Child 1                 \|    3      3  \s*\d*\.\ds
-        Child 1\.1 \(long name\) \|    1      1  \s*\d*\.\ds
-        Child 1\.2             \|    1      1  \s*\d*\.\ds
-        Child 1\.3             \|    1      1  \s*\d*\.\ds
-      Child 2                 \|    3      3  \s*\d*\.\ds
-      Child 3                 \|    3      3  \s*\d*\.\ds
-        Child 3\.1             \|    1      1  \s*\d*\.\ds
-        Child 3\.2             \|    1      1  \s*\d*\.\ds
-        Child 3\.3             \|    1      1  \s*\d*\.\ds
+    Parent                    \|    9      9  \s*(\d+m)?\d*\.\ds
+      Child 1                 \|    3      3  \s*(\d+m)?\d*\.\ds
+        Child 1\.1 \(long name\) \|    1      1  \s*(\d+m)?\d*\.\ds
+        Child 1\.2             \|    1      1  \s*(\d+m)?\d*\.\ds
+        Child 1\.3             \|    1      1  \s*(\d+m)?\d*\.\ds
+      Child 2                 \|    3      3  \s*(\d+m)?\d*\.\ds
+      Child 3                 \|    3      3  \s*(\d+m)?\d*\.\ds
+        Child 3\.1             \|    1      1  \s*(\d+m)?\d*\.\ds
+        Child 3\.2             \|    1      1  \s*(\d+m)?\d*\.\ds
+        Child 3\.3             \|    1      1  \s*(\d+m)?\d*\.\ds
     """
 
     mktemp() do f, _
@@ -1371,8 +1811,8 @@ end
     @testset "non failfast (default)" begin
         expected = r"""
         Test Summary: \| Pass  Fail  Error  Total +Time
-        Foo           \|    1     2      1      4  \s*\d*\.\ds
-          Bar         \|    1     1             2  \s*\d*\.\ds
+        Foo           \|    1     2      1      4  \s*(\d+m)?\d*\.\ds
+          Bar         \|    1     1             2  \s*(\d+m)?\d*\.\ds
         """
 
         mktemp() do f, _
@@ -1394,10 +1834,10 @@ end
             @test occursin(expected, result)
         end
     end
-    @testset "failfast" begin
+    @testset "failfast begin-end" begin
         expected = r"""
         Test Summary: \| Fail  Total +Time
-        Foo           \|    1      1  \s*\d*\.\ds
+        Foo           \|    1      1  \s*(\d+m)?\d*\.\ds
         """
 
         mktemp() do f, _
@@ -1419,11 +1859,37 @@ end
             @test occursin(expected, result)
         end
     end
+    @testset "failfast for-loop" begin
+        expected = r"""
+        Test Summary: \| Fail  Total +Time
+        Foo           \|    1      1  \s*(\d+m)?\d*\.\ds
+          1           \|    1      1  \s*(\d+m)?\d*\.\ds
+        """
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+
+            @testset "Foo" failfast=true begin
+                @testset "\$x" for x in 1:2
+                    @test false
+                end
+                @testset "Bar" begin
+                    @test false
+                    @test true
+                end
+            end
+            """)
+            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin(expected, result)
+        end
+    end
     @testset "failfast passes to child testsets" begin
         expected = r"""
         Test Summary: \| Fail  Total +Time
-        Foo           \|    1      1  \s*\d*\.\ds
-          1           \|    1      1  \s*\d*\.\ds
+        Foo           \|    1      1  \s*(\d+m)?\d*\.\ds
+          1           \|    1      1  \s*(\d+m)?\d*\.\ds
         """
 
         mktemp() do f, _
@@ -1448,14 +1914,14 @@ end
     @testset "failfast via env var" begin
         expected = r"""
         Test Summary: \| Fail  Total +Time
-        Foo           \|    1      1  \s*\d*\.\ds
+        Foo           \|    1      1  \s*(\d+m)?\d*\.\ds
         """
 
         mktemp() do f, _
             write(f,
             """
             using Test
-            ENV["JULIA_TEST_FAILFAST"] = true
+
             @testset "Foo" begin
                 @test false
                 @test error()
@@ -1465,7 +1931,7 @@ end
                 end
             end
             """)
-            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            cmd    = addenv(`$(Base.julia_cmd()) --startup-file=no --color=no $f`, "JULIA_TEST_FAILFAST"=>"true")
             result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
             @test occursin(expected, result)
         end
@@ -1864,5 +2330,145 @@ end
         @test _escape_call(:(Main.f.(x, y))) == (; func=:(Broadcast.BroadcastFunction($(esc(:(Main.f))))), args, kwargs, quoted_func=QuoteNode(Expr(:., :(Main.f))))
         @test _escape_call(:(x .== y)) == (; func=esc(:(.==)), args, kwargs, quoted_func=:(:.==))
         @test _escape_call(:((==).(x, y))) == (; func=Expr(:., esc(:(==))), args, kwargs, quoted_func=QuoteNode(Expr(:., :(==))))
+        # Test that .. operator is not treated as a broadcast operator
+        @test _escape_call(:(x .. y)) == (; func=esc(:(..)), args, kwargs, quoted_func=:(:..))
+    end
+end
+
+@testset "Context display in @testset let blocks" begin
+    # Mock parent testset that just captures results
+    struct MockParentTestSet <: Test.AbstractTestSet
+        results::Vector{Any}
+        MockParentTestSet() = new([])
+    end
+    Test.record(ts::MockParentTestSet, t) = (push!(ts.results, t); t)
+    Test.finish(ts::MockParentTestSet) = ts
+
+    @testset "context shown when a context testset fails" begin
+        mock_parent1 = MockParentTestSet()
+        ctx_ts1 = Test.ContextTestSet(mock_parent1, :x, 42)
+
+        fail_result = Test.Fail(:test, "x == 99", "42 == 99", "42", nothing, LineNumberNode(1, :test), false)
+        Test.record(ctx_ts1, fail_result)
+
+        @test length(mock_parent1.results) == 1
+        recorded_fail = mock_parent1.results[1]
+        @test recorded_fail isa Test.Fail
+        @test recorded_fail.context !== nothing
+        @test occursin("x = 42", recorded_fail.context)
+    end
+
+    @testset "context shown when a context testset errors" begin
+        mock_parent2 = MockParentTestSet()
+        ctx_ts2 = Test.ContextTestSet(mock_parent2, :x, 42)
+
+        # Use internal constructor to create Error with pre-processed values
+        error_result = Test.Error(:test_error, "error(\"test\")", "ErrorException(\"test\")", "test\nStacktrace:\n [1] error()", nothing, LineNumberNode(1, :test))
+        Test.record(ctx_ts2, error_result)
+
+        @test length(mock_parent2.results) == 1
+        recorded_error = mock_parent2.results[1]
+        @test recorded_error isa Test.Error
+        @test recorded_error.context !== nothing
+        @test occursin("x = 42", recorded_error.context)
+
+        # Context shows up in string representation
+        error_str = sprint(show, recorded_error)
+        @test occursin("Context:", error_str)
+        @test occursin("x = 42", error_str)
+
+        # Multiple variables context
+        mock_parent3 = MockParentTestSet()
+        ctx_ts3 = Test.ContextTestSet(mock_parent3, :(x, y), (42, "hello"))
+
+        error_result2 = Test.Error(:test_error, "error(\"test\")", "ErrorException(\"test\")", "test\nStacktrace:\n [1] error()", nothing, LineNumberNode(1, :test))
+        Test.record(ctx_ts3, error_result2)
+
+        recorded_error2 = mock_parent3.results[1]
+        @test recorded_error2 isa Test.Error
+        @test recorded_error2.context !== nothing
+        @test occursin("(x, y) = (42, \"hello\")", recorded_error2.context)
+    end
+end
+
+@testset "io argument for Test output functions" begin
+    # Test print_test_results and print_test_errors with io redirection
+    io = IOBuffer()
+
+    # Create a testset with passing and failing tests
+    ts = Test.DefaultTestSet("IO Test"; time_start=1.36071654e9)
+    Test.record(ts, Test.Pass(:test, nothing, nothing, nothing, LineNumberNode(1), false))
+    fail = Test.Fail(:test, "1 == 2", nothing, nothing, LineNumberNode(2, Symbol("test.jl")))
+    push!(ts.results, fail)
+
+    # Test print_test_results with io
+    Test.print_test_results(io, ts)
+    output = String(take!(io))
+    @test occursin("Test Summary:", output)
+    @test occursin("IO Test", output)
+    @test occursin("Pass", output)
+    @test occursin("Fail", output)
+
+    # Test print_test_errors with io
+    Test.print_test_errors(io, ts)
+    output = String(take!(io))
+    @test occursin("Error in testset", output)
+    @test occursin("1 == 2", output)
+end
+
+@testset "JULIA_TEST_VERBOSE" begin
+    # Test the verbose testset entry/exit functionality
+    Base.ScopedValues.@with Test.VERBOSE_TESTSETS => true begin
+        # Capture output
+        output = mktemp() do fname, f
+            redirect_stdout(f) do
+                @testset "Verbose Test" begin
+                    @test true
+                    @testset "Nested Verbose Test" begin
+                        sleep(0.01)  # Add some duration
+                        @test 1 + 1 == 2
+                    end
+                end
+            end
+            seekstart(f)
+            read(f, String)
+        end
+
+        # Check that verbose messages are present
+        @test occursin("Starting testset: Verbose Test", output)
+        @test occursin("Finished testset: Verbose Test", output)
+        @test occursin("Starting testset: Nested Verbose Test", output)
+        @test occursin("Finished testset: Nested Verbose Test", output)
+
+        # Check that timing information is included in exit messages
+        @test occursin(r"Finished testset: Nested Verbose Test \([0-9\.]+s\)", output)
+
+        # Check indentation for nested testsets
+        lines = split(output, '\n')
+        entering_nested = findfirst(line -> occursin("Starting testset: Nested Verbose Test", line), lines)
+        exiting_nested = findfirst(line -> occursin("Finished testset: Nested Verbose Test", line), lines)
+
+        if entering_nested !== nothing && exiting_nested !== nothing
+            # Both nested messages should have more indentation than outer messages
+            @test startswith(lines[entering_nested], "  ")
+            @test startswith(lines[exiting_nested], "  ")
+        end
+    end
+
+    # Test that verbose output is disabled by default
+    Base.ScopedValues.@with Test.VERBOSE_TESTSETS => false begin
+        output = mktemp() do fname, f
+            redirect_stdout(f) do
+                @testset "Non-Verbose Test" begin
+                    @test true
+                end
+            end
+            seekstart(f)
+            read(f, String)
+        end
+
+        # Should not contain verbose messages
+        @test !occursin("Starting testset:", output)
+        @test !occursin("Finished testset:", output)
     end
 end

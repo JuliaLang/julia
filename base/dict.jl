@@ -124,9 +124,10 @@ _shorthash7(hsh::UInt) = (hsh >> (8sizeof(UInt)-7))%UInt8 | 0x80
 # hashindex (key, sz) - computes optimal position and shorthash7
 #     idx - optimal position in the hash table
 #     sh::UInt8 - short hash (7 highest hash bits)
-function hashindex(key, sz)
+function hashindex(key, sz::Integer)
+    sz = Int(sz)::Int
     hsh = hash(key)::UInt
-    idx = (((hsh % Int) & (sz-1)) + 1)::Int
+    idx = ((hsh % Int) & (sz-1)) + 1
     return idx, _shorthash7(hsh)
 end
 
@@ -165,7 +166,7 @@ end
         @inbounds if (olds[i] & 0x80) != 0
             k = oldk[i]
             v = oldv[i]
-            index, sh = hashindex(k, newsz)
+            index, _ = hashindex(k, newsz)
             index0 = index
             while slots[index] != 0
                 index = (index & (newsz-1)) + 1
@@ -190,7 +191,8 @@ end
     return h
 end
 
-function sizehint!(d::Dict{T}, newsz; shrink::Bool=true) where T
+function sizehint!(d::Dict{T}, newsz::Integer; shrink::Bool=true) where T
+    newsz = Int(newsz)::Int
     oldsz = length(d.slots)
     # limit new element count to max_values of the key type
     newsz = min(max(newsz, length(d)), max_values(T)::Int)
@@ -696,11 +698,11 @@ function skip_deleted_floor!(h::Dict)
     idx
 end
 
-@propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} = i == 0 ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i == typemax(Int) ? 0 : i+1)
+@propagate_inbounds _iterate_dict(t::Dict{K,V}, i) where {K,V} = i == 0 ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i == typemax(Int) ? 0 : i+1)
 @propagate_inbounds function iterate(t::Dict)
-    _iterate(t, skip_deleted(t, t.idxfloor))
+    _iterate_dict(t, skip_deleted(t, t.idxfloor))
 end
-@propagate_inbounds iterate(t::Dict, i) = _iterate(t, skip_deleted(t, i))
+@propagate_inbounds iterate(t::Dict, i) = _iterate_dict(t, skip_deleted(t, i))
 
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
@@ -780,16 +782,25 @@ end
 
 `ImmutableDict` is a dictionary implemented as an immutable linked list,
 which is optimal for small dictionaries that are constructed over many individual insertions.
-Note that it is not possible to remove a value, although it can be partially overridden and hidden
-by inserting a new value with the same key.
+Note that it is not possible to remove a value, but a new value with the same
+key may be added. Calling `getindex` will return the most recent value for a
+particular key, but iterating will show all `key => value` pairs.
 
-    ImmutableDict(KV::Pair)
+- Use `(key => value) in dict` to see if this particular combination is in the
+  properties set.
+- Use `get(dict, key, default)` to retrieve the most recent value for a particular key.
+- Iterate over `dict` to see all `key => value` pairs, including duplicate keys.
+  Iteration is in reverse order, from most recently added to least recently
+  added.
 
-Create a new entry in the `ImmutableDict` for a `key => value` pair
+    ImmutableDict(KV::Pair...)
 
- - use `(key => value) in dict` to see if this particular combination is in the properties set
- - use `get(dict, key, default)` to retrieve the most recent value for a particular key
+Create a new `ImmutableDict` containing the provided `key => value` pairs.
 
+    ImmutableDict(d::ImmutableDict, KV::Pair...)
+
+Return a new `ImmutableDict` containing all of the `key => value` pairs of `d`
+as well as new entries for the provided `key => value` pairs.
 """
 ImmutableDict
 ImmutableDict(KV::Pair{K,V}) where {K,V} = ImmutableDict{K,V}(KV[1], KV[2])
@@ -849,6 +860,28 @@ length(t::ImmutableDict) = count(Returns(true), t)
 isempty(t::ImmutableDict) = !isdefined(t, :parent)
 empty(::ImmutableDict, ::Type{K}, ::Type{V}) where {K, V} = ImmutableDict{K,V}()
 
+"""
+    setindex(d::ImmutableDict, value, key)
+
+Creates a new `ImmutableDict` similar to `d` with the most recent value of the
+key `key` set to `value`.
+
+Any existing values with the same key remain in `d`, but they are shadowed by
+this new value when using [`getindex`](@ref). The existing values are still
+present when iterating over `d`.
+
+# Examples
+```jldoctest
+julia> Base.setindex(Base.ImmutableDict(:a => 1), 2, :a) == Base.ImmutableDict(:a => 1, :a => 2)
+true
+julia> Base.setindex(Base.ImmutableDict(:a => 1), 2, :b) == Base.ImmutableDict(:a => 1, :b => 2)
+true
+```
+"""
+function setindex(d::ImmutableDict, value, key)
+    ImmutableDict(d, key => value)
+end
+
 _similar_for(c::AbstractDict, ::Type{Pair{K,V}}, itr, isz, len) where {K, V} = empty(c, K, V)
 _similar_for(c::AbstractDict, ::Type{T}, itr, isz, len) where {T} =
     throw(ArgumentError("for AbstractDicts, similar requires an element type of Pair;\n  if calling map, consider a comprehension instead"))
@@ -898,7 +931,7 @@ end
 """
     PersistentDict
 
-`PersistentDict` is a dictionary implemented as an hash array mapped trie,
+`PersistentDict` is a dictionary implemented as a hash array mapped trie,
 which is optimal for situations where you need persistence, each operation
 returns a new dictionary separate from the previous one, but the underlying
 implementation is space-efficient and may share storage across multiple
@@ -973,7 +1006,7 @@ function in(key_val::Pair{K,V}, dict::PersistentDict{K,V}, valcmp=(==)) where {K
     key, val = key_val
     found = KeyValue.get(dict, key)
     found === nothing && return false
-    return valcmp(val, only(found))
+    return valcmp(val, something(found))
 end
 
 function haskey(dict::PersistentDict{K}, key::K) where K
@@ -983,13 +1016,13 @@ end
 function getindex(dict::PersistentDict{K,V}, key::K) where {K,V}
     found = KeyValue.get(dict, key)
     found === nothing && throw(KeyError(key))
-    return only(found)
+    return something(found)
 end
 
 function get(dict::PersistentDict{K,V}, key::K, default) where {K,V}
     found = KeyValue.get(dict, key)
     found === nothing && return default
-    return only(found)
+    return something(found)
 end
 
 @noinline function KeyValue.get(dict::PersistentDict{K, V}, key) where {K, V}
@@ -1001,7 +1034,7 @@ end
     found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
     if found && present
         leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
-        return (leaf.val,)
+        return Some{V}(leaf.val)
     end
     return nothing
 end
@@ -1009,13 +1042,13 @@ end
 @noinline function KeyValue.get(default, dict::PersistentDict, key)
     found = KeyValue.get(dict, key)
     found === nothing && return default()
-    return only(found)
+    return something(found)
 end
 
 function get(default::Callable, dict::PersistentDict{K,V}, key::K) where {K,V}
     found = KeyValue.get(dict, key)
     found === nothing && return default()
-    return only(found)
+    return something(found)
 end
 
 function delete(dict::PersistentDict{K}, key::K) where K

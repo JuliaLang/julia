@@ -191,6 +191,7 @@ When `data` is not given, the buffer will be both readable and writable by defau
     offset leaving behind arbitrary values at other offsets. If `maxsize > length(data)`,
     the IOBuffer might re-allocate the data entirely, which
     may or may not be visible in any outstanding bindings to `array`.
+
 # Examples
 ```jldoctest
 julia> io = IOBuffer();
@@ -198,7 +199,7 @@ julia> io = IOBuffer();
 julia> write(io, "JuliaLang is a GitHub organization.", " It has many members.")
 56
 
-julia> String(take!(io))
+julia> takestring!(io)
 "JuliaLang is a GitHub organization. It has many members."
 
 julia> io = IOBuffer(b"JuliaLang is a GitHub organization.")
@@ -216,7 +217,7 @@ IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=fa
 julia> write(io, "JuliaLang is a GitHub organization.")
 34
 
-julia> String(take!(io))
+julia> takestring!(io)
 "JuliaLang is a GitHub organization"
 
 julia> length(read(IOBuffer(b"data", read=true, truncate=false)))
@@ -515,7 +516,7 @@ function seek(io::GenericIOBuffer, n::Int)
     end
 
     # TODO: REPL.jl relies on the fact that this does not throw (by seeking past the beginning or end
-    #       of an GenericIOBuffer), so that would need to be fixed in order to throw an error here
+    #       of a GenericIOBuffer), so that would need to be fixed in order to throw an error here
     max_ptr = io.size + 1
     min_ptr = get_offset(io) + 1
     io.ptr = clamp(translate_seek_position(io, n), min_ptr, max_ptr)
@@ -604,7 +605,8 @@ end
     end
     # The fast path here usually checks there is already room, then does nothing.
     # When append is true, new data is added after io.size, not io.ptr
-    existing_space = min(lastindex(io.data), io.maxsize + get_offset(io)) - (io.append ? io.size : io.ptr - 1)
+    start_offset = io.append ? io.size : io.ptr - 1
+    existing_space = min(lastindex(io.data) - start_offset, io.maxsize - (start_offset - get_offset(io)))
     if existing_space < nshort % Int
         # Outline this function to make it more likely that ensureroom inlines itself
         return ensureroom_slowpath(io, nshort, existing_space)
@@ -771,7 +773,7 @@ function take!(io::IOBuffer)
         elseif io.writable
             data = wrap(Array, memoryref(io.data, io.ptr), nbytes)
         else
-            data = read!(io, data)
+            error("Unreachable IOBuffer state")
         end
     end
     if io.writable
@@ -782,6 +784,82 @@ function take!(io::IOBuffer)
     end
     return data
 end
+
+"""
+Internal method. This method can be faster than takestring!, because it does not
+reset the buffer to a usable state, and it does not check for io.reinit.
+Using the buffer after calling unsafe_takestring! may cause undefined behaviour.
+This function is meant to be used when the buffer is only used as a temporary
+string builder, which is discarded after the string is built.
+"""
+function unsafe_takestring!(io::IOBuffer)
+    used_span = get_used_span(io)
+    nbytes = length(used_span)
+    from = first(used_span)
+    isempty(used_span) && return ""
+    # The C function can only copy from the start of the memory.
+    # Fortunately, in most cases, the offset will be zero.
+    return if isone(from)
+        ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), io.data, nbytes)
+    else
+        mem = StringMemory(nbytes % UInt)
+        unsafe_copyto!(mem, 1, io.data, from, nbytes)
+        unsafe_takestring(mem)
+    end
+end
+
+"""
+    takestring!(io::IOBuffer) -> String
+
+Return the content of `io` as a `String`, resetting the buffer to its initial
+state.
+This is preferred over calling `String(take!(io))` to create a string from
+an `IOBuffer`.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer();
+
+julia> write(io, [0x61, 0x62, 0x63]);
+
+julia> s = takestring!(io)
+"abc"
+
+julia> isempty(take!(io)) # io is now empty
+true
+```
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
+"""
+function takestring!(io::IOBuffer)
+    # If the buffer has been used up and needs to be replaced, there are no bytes, and
+    # we can return an empty string without interacting with the buffer at all.
+    io.reinit && return ""
+
+    # If the iobuffer is writable, taking will remove the buffer from `io`.
+    # So, we reset the iobuffer, and directly unsafe takestring.
+    return if io.writable
+        s = unsafe_takestring!(io)
+        io.reinit = true
+        io.mark = -1
+        io.ptr = 1
+        io.size = 0
+        io.offset_or_compacted = 0
+        s
+    else
+        # If the buffer is not writable, taking will NOT remove the buffer,
+        # so if we just converted the buffer to a string, garbage collecting
+        # the string would free the memory underneath the iobuffer
+        used_span = get_used_span(io)
+        mem = StringMemory(length(used_span))
+        unsafe_copyto!(mem, 1, io.data, first(used_span), length(used_span))
+        unsafe_takestring(mem)
+    end
+end
+
+# Fallback methods
+takestring!(io::GenericIOBuffer) = String(take!(io))
 
 """
     _unsafe_take!(io::IOBuffer)
@@ -824,12 +902,13 @@ function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     append = to.append
     ptr = append ? size+1 : to.ptr
     data = to.data
-    to_write = min(nb, (min(Int(length(data))::Int, to.maxsize + get_offset(to)) - ptr + 1) % UInt) % Int
+    start_offset = ptr - 1
+    to_write = max(0, min(nb, (min(Int(length(data))::Int - start_offset, to.maxsize - (start_offset - get_offset(to)))) % UInt) % Int)
     # Dispatch based on the type of data, to possibly allow using memcpy
     _unsafe_write(data, p, ptr, to_write % UInt)
     # Update to.size only if the ptr has advanced to higher than
     # the previous size. Otherwise, we just overwrote existing data
-    to.size = max(size, ptr + to_write - 1)
+    to.size = max(size, start_offset + to_write)
     # If to.append, we only update size, not ptr.
     if !append
         to.ptr = ptr + to_write
@@ -867,7 +946,7 @@ end
     ptr = (to.append ? to.size+1 : to.ptr)
     # We have just ensured there is room for 1 byte, EXCEPT if we were to exceed
     # maxsize. So, we just need to check that here.
-    if ptr > to.maxsize + get_offset(to)
+    if ptr - get_offset(to) > to.maxsize
         return 0
     else
         to.data[ptr] = a
@@ -879,7 +958,7 @@ end
     return sizeof(UInt8)
 end
 
-readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb))
+readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb)::Int)
 
 function readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb::Int)
     io.readable || _throw_not_readable()

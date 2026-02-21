@@ -62,7 +62,7 @@ function issorted(itr, order::Ordering)
 end
 
 """
-    issorted(v, lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
+    issorted(itr, lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
 
 Test whether a collection is in sorted order. The keywords modify what
 order is considered sorted, as described in the [`sort!`](@ref) documentation.
@@ -113,9 +113,9 @@ maybeview(v, k) = view(v, k)
 maybeview(v, k::Integer) = v[k]
 
 """
-    partialsort!(v, k; by=identity, lt=isless, rev=false)
+    partialsort!(v, k; by=identity, lt=isless, rev=false, order::Base.Order.Ordering=Base.Order.Forward)
 
-Partially sort the vector `v` in place so that the value at index `k` (or
+Mutate the vector `v` so that the value at index `k` (or
 range of adjacent values if `k` is a range) occurs
 at the position where it would appear if the array were fully sorted. If `k` is a single
 index, that value is returned; if `k` is a range, an array of values at those indices is
@@ -170,7 +170,7 @@ partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange};
     partialsort!(v, k, ord(lt,by,rev,order); kws...)
 
 """
-    partialsort(v, k, by=identity, lt=isless, rev=false)
+    partialsort(v, k, by=identity, lt=isless, rev=false, order::Base.Order.Ordering=Base.Order.Forward)
 
 Variant of [`partialsort!`](@ref) that copies `v` before partially sorting it, thereby returning the
 same thing as `partialsort!` but leaving `v` unmodified.
@@ -325,7 +325,7 @@ searched value `x` as well as the values in `v`.
 The range is generally found using binary search, but there are optimized
 implementations for some inputs.
 
-See also: [`searchsortedfirst`](@ref), [`sort!`](@ref), [`insorted`](@ref), [`findall`](@ref).
+See also [`searchsortedfirst`](@ref), [`sort!`](@ref), [`insorted`](@ref), [`findall`](@ref).
 
 # Examples
 ```jldoctest
@@ -364,7 +364,7 @@ values in `v`.
 The index is generally found using binary search, but there are optimized
 implementations for some inputs.
 
-See also: [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
+See also [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -496,7 +496,7 @@ end
 """
     make_scratch(scratch::Union{Nothing, Vector}, T::Type, len::Integer)
 
-Returns `(s, t)` where `t` is an `AbstractVector` of type `T` with length at least `len`
+Return `(s, t)` where `t` is an `AbstractVector` of type `T` with length at least `len`
 that is backed by the `Vector` `s`. If `scratch !== nothing`, then `s === scratch`.
 
 This function will allocate a new vector if `scratch === nothing`, `resize!` `scratch` if it
@@ -563,12 +563,15 @@ function _sort!(v::UnwrappableSubArray, a::SubArrayOptimization, o::Ordering, kw
     @getkw lo hi
     # @assert v.stride1 == 1
     parent = v.parent
-    if parent isa Array && !(parent isa Vector) && hi - lo < 100
+    if parent isa Array && !(parent isa Vector) && hi - lo < 100 || !iszero(v.offset1)
         # vec(::Array{T, ≠1}) allocates and is therefore somewhat expensive.
         # We don't want that for small inputs.
+
+        # Additionally, if offset1 is non-zero, then this optimization is incompatible with
+        # algorithms that track absolute first and last indices (e.g. ScratchQuickSort)
         _sort!(v, a.next, o, kw)
     else
-        _sort!(vec(parent), a.next, o, (;kw..., lo = lo + v.offset1, hi = hi + v.offset1))
+        _sort!(vec(parent), a.next, o, kw)
     end
 end
 
@@ -760,7 +763,7 @@ end
 """
     IsUIntMappable(yes, no) isa Base.Sort.Algorithm
 
-Determines if the elements of a vector can be mapped to unsigned integers while preserving
+Determine if the elements of a vector can be mapped to unsigned integers while preserving
 their order under the specified ordering.
 
 If they can be, dispatch to the `yes` algorithm and record the unsigned integer type that
@@ -1625,10 +1628,11 @@ defalg(v) = DEFAULT_STABLE
 """
     sort!(v; alg::Base.Sort.Algorithm=Base.Sort.defalg(v), lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
 
-Sort the vector `v` in place. A stable algorithm is used by default: the
-ordering of elements that compare equal is preserved. A specific algorithm can
-be selected via the `alg` keyword (see [Sorting Algorithms](@ref) for available
-algorithms).
+Mutate the vector `v` so that it is sorted.
+
+A stable algorithm is used by default: the ordering of elements that
+compare equal is preserved. A specific algorithm can be selected via the
+`alg` keyword (see [Sorting Algorithms](@ref) for available algorithms).
 
 Elements are first transformed with the function `by` and then compared
 according to either the function `lt` or the ordering `order`. Finally, the
@@ -1745,7 +1749,7 @@ end
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
 When calling `sort` on the [`keys`](@ref) or [`values](@ref) of a dictionary, `v` is
-collected and then sorted in place.
+collected and then sorted.
 
 !!! compat "Julia 1.12"
     Sorting `NTuple`s requires Julia 1.12 or later.
@@ -1890,7 +1894,7 @@ julia> partialsortperm!(ix, v, 2:3)
  4
  3
 ```
- """
+"""
 function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
                           k::Union{Integer, OrdinalRange};
                           lt::Function=isless,
@@ -1931,7 +1935,7 @@ To sort slices of an array, refer to [`sortslices`](@ref).
 
 # Examples
 ```jldoctest
-julia> v = [3, 1, 2];
+julia> v = [13, 11, 12];
 
 julia> p = sortperm(v)
 3-element Vector{Int64}:
@@ -1941,9 +1945,9 @@ julia> p = sortperm(v)
 
 julia> v[p]
 3-element Vector{Int64}:
- 1
- 2
- 3
+ 11
+ 12
+ 13
 
 julia> A = [8 7; 5 6]
 2×2 Matrix{Int64}:
@@ -2244,7 +2248,7 @@ a linear ordering for `a, b <: typeof(x)`. Satisfies
 `isless(order, a, b) === (uint_map(a, order) < uint_map(b, order))`
 and `x === uint_unmap(typeof(x), uint_map(x, order), order)`
 
-See also: [`UIntMappable`](@ref) [`uint_unmap`](@ref)
+See also [`UIntMappable`](@ref), [`uint_unmap`](@ref).
 """
 function uint_map end
 
@@ -2254,7 +2258,7 @@ function uint_map end
 Reconstruct the unique value `x::T` that uint_maps to `u`. Satisfies
 `x === uint_unmap(T, uint_map(x::T, order), order)` for all `x <: T`.
 
-See also: [`uint_map`](@ref) [`UIntMappable`](@ref)
+See also [`uint_map`](@ref), [`UIntMappable`](@ref).
 """
 function uint_unmap end
 
@@ -2289,7 +2293,7 @@ UIntMappable(T::Type, order::ReverseOrdering) = UIntMappable(T, order.fwd)
 
 ### Vectors
 
-# Convert v to unsigned integers in place, maintaining sort order.
+# Convert v to unsigned integers in-place, maintaining sort order.
 function uint_map!(v::AbstractVector, lo::Integer, hi::Integer, order::Ordering)
     u = reinterpret(UIntMappable(eltype(v), order), v)
     @inbounds for i in lo:hi

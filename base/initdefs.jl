@@ -97,7 +97,7 @@ const DEPOT_PATH = String[]
 function append_bundled_depot_path!(DEPOT_PATH)
     path = abspath(Sys.BINDIR, "..", "local", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
-    path = abspath(Sys.BINDIR, "..", "share", "julia")
+    path = abspath(Sys.BINDIR, Base.DATAROOTDIR, "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
     return DEPOT_PATH
 end
@@ -271,6 +271,19 @@ function init_active_project()
     )
 end
 
+function init_named_env!(path)
+    try
+        mkpath(dirname(path))
+        open(path, "w") do io
+            print(io, "syntax.julia_version = \"",VERSION,"\"")
+        end
+        return path
+    catch e
+        @warn "Failed to initialize named environment at $path: $e"
+        return nothing
+    end
+end
+
 ## load path expansion: turn LOAD_PATH entries into concrete paths ##
 cmd_suppresses_program(cmd) = cmd in ('e', 'E')
 
@@ -307,7 +320,8 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
             end
         end
         isempty(DEPOT_PATH) && return nothing
-        return abspath(DEPOT_PATH[1], "environments", name, project_names[end])
+        new_named_env_path = abspath(DEPOT_PATH[1], "environments", name, project_names[end])
+        return init_named_env!(new_named_env_path)
     end
     # otherwise, it's a path
     path = abspath(env)
@@ -371,6 +385,27 @@ function set_active_project(projfile::Union{AbstractString,Nothing})
     end
 end
 
+"""
+    active_manifest()
+    active_manifest(project_file::AbstractString)
+
+Return the path of the active manifest file, or the manifest file that would be used for a given `project_file`.
+
+In a stacked environment (where multiple environments exist in the load path), this returns the manifest
+file for the primary (active) environment only, not the manifests from other environments in the stack.
+See the manual section on [Environment stacks](@ref) for more details on how stacked environments work.
+
+See [`Project environments`](@ref project-environments) for details on the difference between a project and a manifest, and the naming
+options and their priority in package loading.
+
+See also [`Base.active_project`](@ref), [`Base.set_active_project`](@ref).
+"""
+function active_manifest(project_file::Union{AbstractString,Nothing}=nothing; search_load_path::Bool=true)
+    # If `project_file` was specified, use that, otherwise get the active project:
+    project_file = !isnothing(project_file) ? project_file : active_project(search_load_path)
+    project_file === nothing && return nothing
+    return project_file_manifest_path(project_file)
+end
 
 """
     load_path()
@@ -494,10 +529,13 @@ end
 ## hook for disabling threaded libraries ##
 
 library_threading_enabled::Bool = true
-const disable_library_threading_hooks = []
+
+# Base.OncePerProcess ensures that any registered hooks do not outlive the session.
+# (even if they are registered during the sysimage build process by top-level code)
+const disable_library_threading_hooks = Base.OncePerProcess(Vector{Any})
 
 function at_disable_library_threading(f)
-    push!(disable_library_threading_hooks, f)
+    push!(disable_library_threading_hooks(), f)
     if !library_threading_enabled
         disable_library_threading()
     end
@@ -506,8 +544,8 @@ end
 
 function disable_library_threading()
     global library_threading_enabled = false
-    while !isempty(disable_library_threading_hooks)
-        f = pop!(disable_library_threading_hooks)
+    while !isempty(disable_library_threading_hooks())
+        f = pop!(disable_library_threading_hooks())
         try
             f()
         catch err

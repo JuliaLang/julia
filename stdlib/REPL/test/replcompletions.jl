@@ -139,6 +139,7 @@ let ex =
             kwtest4(a::SubString; x23, _something) = pass
             kwtest5(a::Int, b, x...; somekwarg, somekotherkwarg) = pass
             kwtest5(a::Char, b; xyz) = pass
+            kwtest6(f::Function, arg1; somekwarg) = pass
 
             const named = (; len2=3)
             const fmsoebelkv = (; len2=3)
@@ -198,6 +199,8 @@ test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s, lastinde
 test_complete_pos(s) = map_completion_text(@inferred(completions(replace(s, '|' => ""), findfirst('|', s)-1)))
 test_complete_context(s, m=@__MODULE__; shift::Bool=true) =
     map_completion_text(@inferred(completions(s,lastindex(s), m, shift)))
+test_complete_context_pos(s, m=@__MODULE__; shift::Bool=true) =
+    map_completion_text(@inferred(completions(replace(s, '|' => ""), findfirst('|', s)-1, m, shift)))
 test_complete_foo(s; shift::Bool=true) = test_complete_context(s, Main.CompletionFoo; shift)
 test_complete_noshift(s) = map_completion_text(@inferred(completions(s, lastindex(s), Main, false)))
 
@@ -1073,6 +1076,39 @@ let c, r, res
     @test res === false
 end
 
+# A pair of utility function for the REPL completions test to test PATH_cache
+# dependent completions, which ordinarily happen asynchronously.
+# Only to be used from the test suite
+function test_only_arm_cache_refresh()
+    @lock REPL.REPLCompletions.PATH_cache_lock begin
+        @assert REPL.REPLCompletions.PATH_cache_condition === nothing
+
+        # Arm a condition we can wait on
+        REPL.REPLCompletions.PATH_cache_condition = Threads.Condition(REPL.REPLCompletions.PATH_cache_lock)
+
+        # Check if the previous update is still running - if so, wait for it to finish
+        while REPL.REPLCompletions.PATH_cache_task !== nothing
+            @assert !istaskdone(REPL.REPLCompletions.PATH_cache_task)
+            wait(REPL.REPLCompletions.PATH_cache_condition)
+        end
+
+        # force the next cache update to happen immediately
+        REPL.REPLCompletions.next_cache_update = 0
+    end
+    return nothing
+end
+
+function test_only_wait_cache_path_done()
+    @lock REPL.REPLCompletions.PATH_cache_lock begin
+        @assert REPL.REPLCompletions.PATH_cache_condition !== nothing
+
+        while REPL.REPLCompletions.next_cache_update == 0.
+            wait(REPL.REPLCompletions.PATH_cache_condition)
+        end
+        REPL.REPLCompletions.PATH_cache_condition = nothing
+    end
+end
+
 if Sys.isunix()
 let s, c, r
     #Assume that we can rely on the existence and accessibility of /tmp
@@ -1204,19 +1240,19 @@ let s, c, r
                 # Files reachable by PATH are cached async when PATH is seen to have been changed by `complete_path`
                 # so changes are unlikely to appear in the first complete. For testing purposes we can wait for
                 # caching to finish
-                @lock REPL.REPLCompletions.PATH_cache_lock begin
-                    # force the next cache update to happen immediately
-                    REPL.REPLCompletions.next_cache_update = 0
-                end
+                test_only_arm_cache_refresh()
                 c,r = test_scomplete(s)
-                timedwait(()->REPL.REPLCompletions.next_cache_update != 0, 5) # wait for caching to complete
+                test_only_wait_cache_path_done()
                 c,r = test_scomplete(s)
                 @test "tmp-executable" in c
                 @test r == 1:9
                 @test s[r] == "tmp-execu"
 
                 c,r = test_scomplete("replcompletions-link")
-                @test isempty(c)
+                if !Sys.isunix() || Libc.getuid() != 0
+                    # Root bypasses permissions
+                    @test isempty(c)
+                end
             end
         finally
             # If we don't fix the permissions here, our cleanup fails.
@@ -1238,12 +1274,9 @@ let s, c, r
 
             withenv("PATH" => string(tempdir(), ":", dir)) do
                 s = string("repl-completio")
-                @lock REPL.REPLCompletions.PATH_cache_lock begin
-                    # force the next cache update to happen immediately
-                    REPL.REPLCompletions.next_cache_update = 0
-                end
+                test_only_arm_cache_refresh()
                 c,r = test_scomplete(s)
-                timedwait(()->REPL.REPLCompletions.next_cache_update != 0, 5) # wait for caching to complete
+                test_only_wait_cache_path_done()
                 c,r = test_scomplete(s)
                 @test ["repl-completion"] == c
                 @test s[r] == "repl-completio"
@@ -1425,6 +1458,62 @@ let (c, r) = test_complete("cd(\"folder_do_not_exist_77/file")
     @test length(c) == 0
 end
 
+# Test path completion in the middle of a line (issue #60050)
+mktempdir() do path
+    # Create test directory structure
+    foo_dir = joinpath(path, "foo_dir")
+    mkpath(foo_dir)
+    touch(joinpath(path, "foo_file.txt"))
+
+    # On Windows, use backslashes; on Unix, use forward slashes
+    sep = Sys.iswindows() ? "\\\\" : "/"
+    # On Windows, completion results have escaped backslashes
+    path_expected = Sys.iswindows() ? replace(path, "\\" => "\\\\") : path
+
+    # Completion at end of line should work
+    let (c, r, res) = test_complete("\"$(path)$(sep)foo")
+        @test res
+        @test length(c) == 2
+        @test "$(path_expected)$(sep)foo_dir$(sep)" in c
+        @test "$(path_expected)$(sep)foo_file.txt" in c
+    end
+
+    # Completion in middle of line should also work (regression in 1.12)
+    let (c, r, res) = test_complete_pos("\"$(path)$(sep)foo|$(sep)bar.toml\"")
+        @test res
+        @test length(c) == 2
+        @test "$(path_expected)$(sep)foo_dir$(sep)" in c
+        @test "$(path_expected)$(sep)foo_file.txt" in c
+        # Check that the range covers only the part before the cursor
+        @test findfirst("$(sep)bar", "\"$(path)$(sep)foo$(sep)bar.toml\"")[1] - 1 in r
+    end
+
+    # Completion in middle of function call with trailing arguments
+    let (c, r, res) = test_complete_pos("run_something(\"$(path)$(sep)foo|$(sep)bar.toml\"; kwarg=true)")
+        @test res
+        @test length(c) == 2
+        @test "$(path_expected)$(sep)foo_dir$(sep)" in c
+        @test "$(path_expected)$(sep)foo_file.txt" in c
+    end
+
+    # Issue #60444: path completion should not delete text after the string (e.g. indexing)
+    let (c, r, res) = test_complete_pos("f(\"$(path)$(sep)foo|\")")
+        @test res
+        @test length(c) == 2
+        @test "$(path_expected)$(sep)foo_dir$(sep)" in c
+        @test "$(path_expected)$(sep)foo_file.txt" in c
+    end
+    let (c, r, res) = test_complete_pos("f(\"$(path)$(sep)foo|\")[1]")
+        @test res
+        @test length(c) == 2
+        @test "$(path_expected)$(sep)foo_dir$(sep)" in c
+        @test "$(path_expected)$(sep)foo_file.txt" in c
+        # Range should end at cursor position, not overwrite ")[1]"
+        pos = findfirst('|', "f(\"$(path)$(sep)foo|\")[1]") - 1
+        @test last(r) == pos
+    end
+end
+
 if Sys.iswindows()
     tmp = tempname()
     touch(tmp)
@@ -1492,7 +1581,9 @@ end
     @test "⁽¹²³⁾ⁿ" in test_complete("\\^(123)n")[1]
     @test "ⁿ" in test_complete("\\^n")[1]
     @test "ᵞ" in test_complete("\\^gamma")[1]
-    @test isempty(test_complete("\\^(123)nq")[1])
+    @test "⁽¹²³⁾ⁿ𐞥" in test_complete("\\^(123)nq")[1]
+    @test "⁽¹²³⁾ⁿꟴ" in test_complete("\\^(123)nQ")[1]
+    @test isempty(test_complete("\\^(123)nX")[1])
     @test "₍₁₂₃₎ₙ" in test_complete("\\_(123)n")[1]
     @test "ₙ" in test_complete("\\_n")[1]
     @test "ᵧ" in test_complete("\\_gamma")[1]
@@ -1573,6 +1664,14 @@ test_dict_completion("test_repl_comp_customdict")
     # Issue #55931: neither should this:
     let s = "test_dict_no_length["
         @test REPLCompletions.completions(s, sizeof(s), Main.CompletionFoo) isa Tuple
+    end
+
+    # Issue #60444: completing dict keys should not overwrite input after cursor
+    let s = "test_dict[\"ab|c\"]"
+        c, r = test_complete_context_pos(s, Main.CompletionFoo)
+        @test "\"abc\"" in c
+        @test "\"abcd\"" in c
+        @test r == 11:13  # range ends at cursor, not at end of key
     end
 end
 
@@ -1720,6 +1819,13 @@ end
     @test hasnokwsuggestions("CompletionFoo.kwtest5('a', 3, 5, unknownsplat...; xy")
     @test hasnokwsuggestions("CompletionFoo.kwtest5(3; somek")
     =#
+
+    # Issue #60444: completing keyword arguments should not overwrite input after cursor
+    let s = "CompletionFoo.kwtest3(a; foob|true)"
+        c, r = test_complete_pos(s)
+        @test c == ["foobar="]
+        @test r == 26:29
+    end
 end
 
 # Test completion in context
@@ -2632,6 +2738,81 @@ const issue57780_orig = copy(issue57780)
 test_complete_context("empty!(issue57780).", Main)
 @test issue57780 == issue57780_orig
 
+function g54131 end
+for i in 1:498
+    @eval g54131(::Val{$i}) = i
+end
+g54131(::Val{499}; kwarg=true) = 499*kwarg
+struct F54131; end
+Base.getproperty(::F54131, ::Symbol) = Any[cos, sin, g54131][rand(1:3)]
+f54131 = F54131()
+@testset "performance of kwarg completion with large method tables" begin
+    # The goal here is to simply ensure we aren't hitting catestrophically bad
+    # behaviors when shift isn't pressed. The difference between good and bad
+    # is on the order of tens of milliseconds vs tens of seconds; using 1 sec as
+    # a very rough canary that is hopefully robust even in the noisy CI coalmines
+    s = "g54131(kwa"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("kwarg") in a
+    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
+
+    s = "f54131.x("
+    a, b, c = completions(s, lastindex(s), @__MODULE__, false)
+    @test only(a) isa REPLCompletions.TextCompletion
+    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
+
+    s = "f54131.x(kwa"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, false)
+    @test REPLCompletions.KeywordArgumentCompletion("kwarg") in a
+    @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 100
+end
+
+@kwdef struct T59244
+    asdf = 1
+    qwer = 2
+end
+@kwdef struct S59244{T}
+    asdf::T = 1
+    qwer::T = 2
+end
+@testset "kwarg completion of types" begin
+    s = "T59244(as"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("asdf") in a
+
+    s = "T59244(; qw"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") in a
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") == only(a)
+
+    s = "S59244(as"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("asdf") in a
+
+    s = "S59244(; qw"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") in a
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") == only(a)
+
+    s = "S59244{Int}(as"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("asdf") in a
+
+    s = "S59244{Int}(; qw"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") in a
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") == only(a)
+
+    s = "S59244{Any}(as"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("asdf") in a
+
+    s = "S59244{Any}(; qw"
+    a, b, c = completions(s, lastindex(s), @__MODULE__, #= shift =# false)
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") in a
+    @test REPLCompletions.KeywordArgumentCompletion("qwer") == only(a)
+end
+
 # Completion inside string interpolation
 let s = "\"example: \$varflo"
     c, r = test_complete_foo(s)
@@ -2663,4 +2844,39 @@ let s = "foo58296(findfi"
     c, r = test_complete(s)
     @test "findfirst" in c
     @test r == 10:15
+end
+
+# #58931 - only show local names when completing the empty string
+let s = ""
+    c, r = test_complete_foo(s)
+    @test "test" in c
+    @test !("rand" in c)
+end
+
+# #58309, #58832 - don't show every name when completing after a full keyword
+let s = "true"     # bool is a little different (Base.isidentifier special case)
+    c, r = test_complete(s)
+    @test "trues" in c
+    @test "true" in c
+    @test !("rand" in c)
+end
+
+let s = "for"
+    c, r = test_complete(s)
+    @test "for" in c
+    @test "foreach" in c
+    @test !("rand" in c)
+end
+
+# #58833 - Autocompletion of keyword arguments with do-blocks is broken
+let s = "kwtest6(123; som|) do x; x + 3 end"
+    c, r = test_complete_context_pos(s, Main.CompletionFoo)
+    @test "somekwarg=" in c
+    @test r == 14:16
+end
+
+# Test that `jl_resolve_definition_effects_in_ir` is called correctly and inference doesn't pass unexpected toplevel code
+let s = "(@ccall strlen(\"foo\"::Cstring)::Csize_t).|"
+    _, _, res  = test_complete_pos(s)
+    @test res
 end

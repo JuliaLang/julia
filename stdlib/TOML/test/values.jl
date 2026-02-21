@@ -116,6 +116,9 @@ end
     @test testval("2016-09-09T09:09:09Z"    , DateTime(2016 , 9 , 9 , 9 , 9 , 9))
     @test testval("2016-09-09T09:09:09.0Z"  , DateTime(2016 , 9 , 9 , 9 , 9 , 9))
     @test testval("2016-09-09T09:09:09.012" , DateTime(2016 , 9 , 9 , 9 , 9 , 9  , 12))
+    @test testval("2016-09-09T09:09:09.2"   , DateTime(2016 , 9 , 9 , 9 , 9 , 9  , 200))
+    @test testval("2016-09-09T09:09:09.20"  , DateTime(2016 , 9 , 9 , 9 , 9 , 9  , 200))
+    @test testval("2016-09-09T09:09:09.02"  , DateTime(2016 , 9 , 9 , 9 , 9 , 9  , 20))
 
     @test failval("2016-09-09T09:09:09.0+10:00"   , Internals.ErrOffsetDateNotSupported)
     @test failval("2016-09-09T09:09:09.012-02:00" , Internals.ErrOffsetDateNotSupported)
@@ -132,8 +135,12 @@ end
 end
 
 @testset "Time" begin
-    @test testval("09:09:09.99"    , Time(9 , 9 , 9 , 99))
+    @test testval("09:09:09.99"    , Time(9 , 9 , 9 , 990))
     @test testval("09:09:09.99999" , Time(9 , 9 , 9 , 999))
+    @test testval("00:00:00.2"     , Time(0 , 0 , 0 , 200))
+    @test testval("00:00:00.20"    , Time(0 , 0 , 0 , 200))
+    @test testval("00:00:00.23"    , Time(0 , 0 , 0 , 230))
+    @test testval("00:00:00.234"   , Time(0 , 0 , 0 , 234))
 
     @test failval("09:09x09", Internals.ErrParsingDateTime)
 end

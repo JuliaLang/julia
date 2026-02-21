@@ -3,6 +3,7 @@
 using Base.MathConstants
 using Random
 using LinearAlgebra
+using Test
 
 const ≣ = isequal # convenient for comparing NaNs
 
@@ -1770,6 +1771,63 @@ end
         @test cld(-1.1, 0.1) == div(-1.1, 0.1, RoundUp)   ==  ceil(big(-1.1)/big(0.1)) == -11.0
         @test fld(-1.1, 0.1) == div(-1.1, 0.1, RoundDown) == floor(big(-1.1)/big(0.1)) == -12.0
     end
+    @testset "issue #49450" begin
+        @test div(514, Float16(0.75)) === Float16(685)
+        @test fld(514, Float16(0.75)) === Float16(685)
+        @test cld(515, Float16(0.75)) === Float16(687)
+
+        @test cld(1, Float16(0.000999)) === Float16(1001)
+        @test cld(2, Float16(0.001999)) === Float16(1001)
+        @test cld(3, Float16(0.002934)) === Float16(1023)
+        @test cld(4, Float16(0.003998)) === Float16(1001)
+        @test fld(5, Float16(0.004925)) === Float16(1015)
+
+        @test div(4_194_307, Float32(0.75)) === Float32(5_592_409)
+        @test fld(4_194_307, Float32(0.75)) === Float32(5_592_409)
+        @test cld(4_194_308, Float32(0.75)) === Float32(5_592_411)
+
+        @test fld(5, Float32(6.556511e-7)) === Float32(7_626_007)
+        @test fld(10, Float32(1.3113022e-6)) === Float32(7_626_007)
+        @test fld(11, Float32(1.4305115e-6)) === Float32(7_689_557)
+        @test cld(16, Float32(2.8014183e-6)) === Float32(5_711_393)
+        @test cld(17, Float32(2.2053719e-6)) === Float32(7_708_451)
+
+        @test fld(1.5046328f-36, -3.3409559485880944e-52) === -4.503599545179259e15
+        @test cld(1.5046328f-36, -3.3409559485880944e-52) === -4.503599545179258e15
+
+        @test fld(9007199254740994.0, 3.0) === 3002399751580331.0
+        @test cld(9007199254740994.0, 3.0) === 3002399751580332.0
+
+        @test fld(2.0^52, 1.5) === 3.00239975158033e15
+        @test cld(2.0^52, 1.5) === 3.002399751580331e15
+
+        @test fld(1.0, 1.1102230246251568e-16) === 9.00719925474099e15
+        @test cld(1.0, 1.1102230246251568e-16) === 9.007199254740991e15
+
+        @test fld(5.368709120000001e8, 5.960464521947985e-8) === 9.007199187632128e15
+        @test cld(5.368709120000001e8, 5.960464521947985e-8) === 9.007199187632129e15
+
+        @test fld(1.6856322854563416e16, 3.8274770451988434) === 4.40402977091864e15
+        @test cld(1.6856322854563416e16, 3.8274770451988434) === 4.404029770918641e15
+
+        Random.seed!(123)
+        for T in (Float16, Float32, Float64, BigFloat)
+            p = precision(T)
+            for e in T(2).^(-6:2), s1 in (+1, -1), s2 in (+1, -1), r in 1:5
+                z = rand(T)
+                x = s1 * ldexp(1 + rand(T), rand(0:p))
+                y = s2 * z * eps(x/z) / e
+                _fld, _cld = e ≤ 1 ? (fld, cld) : (/, /)
+                if T == BigFloat
+                    @test fld(x, y) == T(setprecision(() -> _fld(x, y), p + 16))
+                    @test cld(x, y) == T(setprecision(() -> _cld(x, y), p + 16))
+                else
+                    @test fld(x, y) == T(_fld(widen(x), widen(y)))
+                    @test cld(x, y) == T(_cld(widen(x), widen(y)))
+                end
+            end
+        end
+    end
 end
 @testset "return types" begin
     for T in (Int8,Int16,Int32,Int64,Int128, UInt8,UInt16,UInt32,UInt64,UInt128)
@@ -2191,6 +2249,10 @@ end
     @test nextfloat(Inf32) === Inf32
     @test prevfloat(-Inf32) === -Inf32
     @test isequal(nextfloat(NaN32), NaN32)
+    @test nextfloat(1.0, UInt(5)) == nextfloat(1.0, 5)
+    @test prevfloat(1.0, UInt(5)) == prevfloat(1.0, 5)
+    @test nextfloat(0.0, typemax(UInt64)) == Inf
+    @test prevfloat(0.0, typemax(UInt64)) == -Inf
 end
 @testset "issue #16206" begin
     @test prevfloat(Inf) == 1.7976931348623157e308
@@ -2420,8 +2482,8 @@ end
 
 function allsubtypes!(m::Module, x::DataType, sts::Set)
     for s in names(m, all = true)
-        if isdefined(m, s) && !Base.isdeprecated(m, s)
-            t = getfield(m, s)
+        if isdefinedglobal(m, s) && !Base.isdeprecated(m, s)
+            t = getglobal(m, s)
             if isa(t, Type) && t <: x && t != Union{}
                 push!(sts, t)
             elseif isa(t, Module) && t !== m && nameof(t) === s && parentmodule(t) === m
@@ -2578,6 +2640,22 @@ Base.:*(x::TestNumber, y::TestNumber) = TestNumber(x.inner*y.inner)
 Base.:(==)(x::TestNumber, y::TestNumber) = x.inner == y.inner
 Base.abs(x::TestNumber) = TestNumber(abs(x.inner))
 @test abs2(TestNumber(3+4im)) == TestNumber(25)
+
+@testset "mul_hi" begin
+    n = 1000
+    ground_truth(x, y) = ((widen(x)*y) >> (8*sizeof(typeof(x)))) % typeof(x)
+    for T in [UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Int128]
+        for trait1 in [typemin, typemax]
+            for trait2 in [typemin, typemax]
+                x, y = trait1(T), trait2(T)
+                @test Base.mul_hi(x, y) === ground_truth(x, y)
+            end
+        end
+        for (x, y) in zip(rand(T, n), rand(T, n))
+            @test Base.mul_hi(x, y) === ground_truth(x, y)
+        end
+    end
+end
 
 @testset "multiplicative inverses" begin
     function testmi(numrange, denrange)
