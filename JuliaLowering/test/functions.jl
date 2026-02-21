@@ -378,6 +378,90 @@ end
         (f_branch_meta(10, false), f_branch_meta(20, true))
     end
     """) == (12, 21)
+
+    # @nospecialize with multiple args in function body
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_nospecialize_multi_body(a, b, c, d)
+            @nospecialize a c d
+            (a, b, c, d)
+        end
+
+        f_nospecialize_multi_body(1, 2, 3, 4)
+    end
+    """) == (1, 2, 3, 4)
+    @test only(methods(test_mod.f_nospecialize_multi_body)).nospecialize == 0b1101
+
+    # @nospecialize with single arg in function body
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_nospecialize_single_body(a, b)
+            @nospecialize b
+            (a, b)
+        end
+
+        f_nospecialize_single_body(1, 2)
+    end
+    """) == (1, 2)
+    @test only(methods(test_mod.f_nospecialize_single_body)).nospecialize == 0b10
+
+    # @nospecialize with zero args in function body (blanket nospecialize)
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_nospecialize_zero_body(a, b, c)
+            @nospecialize
+            (a, b, c)
+        end
+
+        f_nospecialize_zero_body(1, 2, 3)
+    end
+    """) == (1, 2, 3)
+    # 0-arg @nospecialize sets all bits (-1 == typemax(Int32) for nospecialize)
+    @test only(methods(test_mod.f_nospecialize_zero_body)).nospecialize == -1
+
+    # @nospecialize with default value in signature
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_nospecialize_default(x, @nospecialize(y=1))
+            (x, y)
+        end
+
+        (f_nospecialize_default(10, 20), f_nospecialize_default(30))
+    end
+    """) == ((10, 20), (30, 1))
+    # The 2-arg method has nospecialize on y (bit 2), the 1-arg forwarding method has no y
+    ms = collect(methods(test_mod.f_nospecialize_default))
+    @test any(m -> m.nargs == 3 && m.nospecialize == 0b10, ms)
+    @test any(m -> m.nargs == 2 && m.nospecialize == 0b00, ms)
+
+    # Body-level @nospecialize with default value in signature
+    # See the TODO comment in `optional_positional_defs!`
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_body_nospecialize_default(x, y=1)
+            @nospecialize
+            (x, y)
+        end
+        (f_body_nospecialize_default(10, 20), f_body_nospecialize_default(30))
+    end
+    """) == ((10, 20), (30, 1))
+    # The 2-arg method has nospecialize on y (bit 2), the 1-arg forwarding method has no y
+    ms = collect(methods(test_mod.f_body_nospecialize_default))
+    @test count(m -> m.nargs == 3 && m.nospecialize == -1, ms) == 1
+    @test_broken count(m -> m.nargs == 2 && m.nospecialize == -1, ms) == 1
+
+    # Body-level @nospecialize for methods with keyword arguments
+    @test JuliaLowering.include_string(test_mod, """
+    function f_body_nospecialize_with_kwargs(a; kw=1)
+        @nospecialize a
+        (a, kw)
+    end
+    (f_body_nospecialize_with_kwargs(1; kw=2), f_body_nospecialize_with_kwargs(3))
+    """) == ((1,2), (3,1))
+    # Although not tested here, the keyword body method (`var"#f_body_nospecialize_with_kwargs#0"`)'s
+    # third argument (corresponding to `a`) should probably be nospecialized too.
+    @test_broken only(methods(test_mod.f_body_nospecialize_with_kwargs)).nospecialize == 1
+    @test_broken only(methods(Core.kwcall, (NamedTuple,typeof(test_mod.f_body_nospecialize_with_kwargs),Any))).nospecialize == 1 << 2
 end
 
 @testset "Keyword functions" begin

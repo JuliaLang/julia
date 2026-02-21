@@ -28,15 +28,6 @@ struct ClosureConversionCtx{Attrs} <: AbstractLoweringContext
     closure_infos::Dict{IdTag,ClosureInfo{Attrs}}
 end
 
-function ClosureConversionCtx(graph::SyntaxGraph{Attrs}, bindings::Bindings,
-                              mod::Module, closure_bindings::Dict{IdTag,ClosureBindings},
-                              lambda_bindings::LambdaBindings) where {Attrs}
-    ClosureConversionCtx{Attrs}(
-        graph, bindings, mod, closure_bindings, nothing,
-        lambda_bindings, false, true, SyntaxList(graph),
-        Dict{IdTag,ClosureInfo{Attrs}}())
-end
-
 function current_lambda_bindings(ctx::ClosureConversionCtx)
     ctx.lambda_bindings
 end
@@ -626,12 +617,17 @@ Invariants:
 * This pass must not introduce new K"Identifier" - only K"BindingId".
 * Any new binding IDs must be added to the enclosing lambda locals
 """
-@fzone "JL: closures" function convert_closures(ctx::VariableAnalysisContext, ex)
-    ctx = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
-                               ctx.closure_bindings, ex.lambda_bindings)
-    ex1 = closure_convert_lambda(ctx, ex)
-    if !isempty(ctx.toplevel_stmts)
-        throw(LoweringError(first(ctx.toplevel_stmts), "Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension"))
+@fzone "JL: closures" function convert_closures(
+    ctx::VariableAnalysisContext, ex::SyntaxTree{Attrs}
+) where Attrs
+    ctx_out = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
+                                   ctx.closure_bindings, nothing,
+                                   ex.lambda_bindings,
+                                   false, true, SyntaxList(ctx.graph),
+                                   Dict{IdTag,ClosureInfo{Attrs}}())
+    ex_out = closure_convert_lambda(ctx_out, ex)
+    if !isempty(ctx_out.toplevel_stmts)
+        throw(LoweringError(first(ctx_out.toplevel_stmts), "Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension"))
     end
-    ctx, ex1
+    ctx_out, ex_out
 end

@@ -8,20 +8,12 @@ struct DesugaringContext{Attrs} <: AbstractLoweringContext
     expr_compat_mode::Bool
 end
 
-function DesugaringContext(ctx, expr_compat_mode::Bool)
-    graph = ensure_attributes(syntax_graph(ctx),
-                              kind=Kind, syntax_flags=UInt16,
-                              source=SourceAttrType,
-                              value=Any, name_val=String,
-                              scope_type=Symbol, # :hard or :soft
-                              var_id=IdTag,
-                              is_toplevel_thunk=Bool,
-                              toplevel_pure=Bool)
+function DesugaringContext(graph, ctx)
     DesugaringContext(graph,
                       ctx.bindings,
                       ctx.scope_layers,
                       current_layer(ctx).mod,
-                      expr_compat_mode)
+                      ctx.expr_compat_mode)
 end
 
 #-------------------------------------------------------------------------------
@@ -2045,7 +2037,7 @@ function expand_for(ctx, ex)
 
         body = if i == numchildren(iterspecs)
             # Innermost loop gets the continue label and copied vars
-            @ast ctx ex [K"break_block"
+            @ast ctx ex [K"symbolicblock"
                 "loop_cont"::K"symboliclabel"
                 [K"let"(scope_type=:neutral)
                      [K"block"
@@ -2092,7 +2084,7 @@ function expand_for(ctx, ex)
         ]
     end
 
-    @ast ctx ex [K"break_block" "loop_exit"::K"symboliclabel"
+    @ast ctx ex [K"symbolicblock" "loop_exit"::K"symboliclabel"
         loop
     ]
 end
@@ -2187,7 +2179,8 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
         ([K"Value"], when=ex.value isa GlobalRef) -> ex
         [K"Placeholder"] -> nothing
         ([K"::" [K"Identifier"] t], when=type_decls) -> let x = ex[1]
-            push!(stmts, newnode(ctx, ex, K"decl", tree_ids(x, t)))
+            t2 = expand_forms_2(ctx, t)
+            push!(stmts, newnode(ctx, ex, K"decl", tree_ids(x, t2)))
             make_lhs_decls(ctx, stmts, declkind, declmeta, x, type_decls)
         end
         ([K"::" [K"Placeholder"] t], when=type_decls) -> let
@@ -2223,23 +2216,20 @@ end
 function expand_decls(ctx, ex)
     declkind = kind(ex)
     @assert declkind in KSet"local global"
-    declmeta = get(ex, :meta, nothing)
-    bindings = children(ex)
     stmts = SyntaxList(ctx)
-    for binding in bindings
-        if JuliaSyntax.is_prec_assignment(kind(binding))
-            @chk numchildren(binding) == 2
-            # expand_assignment will create the type decls
-            make_lhs_decls(ctx, stmts, declkind, declmeta, binding[1], false)
-            push!(stmts, expand_assignment(ctx, binding))
-        elseif is_sym_decl(binding) || kind(binding) in (K"Value", K"Placeholder")
-            make_lhs_decls(ctx, stmts, declkind, declmeta, binding, true)
-        elseif kind(binding) == K"function"
-            make_lhs_decls(ctx, stmts, declkind, declmeta, binding[1], false)
-            push!(stmts, expand_forms_2(ctx, binding))
-        else
-            throw(LoweringError(ex, "invalid syntax in variable declaration"))
+    for c in children(ex)
+        simple = kind(c) in KSet"Identifier :: Value Placeholder"
+        lhs = @stm c begin
+            (_, when=simple) -> c
+            [K"=" x _] -> x
+            [K".=" x _] -> x
+            [K"op=" x _ _] -> x
+            [K".op=" x _ _] -> x
+            [K"function" x _] -> x
         end
+        # type decls are handled elsewhere unless simple
+        make_lhs_decls(ctx, stmts, declkind, get(ex, :meta, nothing), lhs, simple)
+        simple || push!(stmts, expand_forms_2(ctx, c))
     end
     newnode(ctx, ex, K"block", stmts)
 end
@@ -4443,7 +4433,10 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             # Convert Symbol (from Expr conversion) to symboliclabel
             if label_kind == K"Symbol"
                 label = @ast ctx label label.name_val::K"symboliclabel"
-            elseif !(label_kind == K"Identifier" || label_kind == K"Placeholder" ||
+            elseif label_kind == K"Placeholder"
+                # `break _` maps to the default break scope (loop_exit)
+                label = @ast ctx label "loop_exit"::K"symboliclabel"
+            elseif !(label_kind == K"Identifier" ||
                      label_kind == K"symboliclabel" || is_contextual_keyword(label_kind))
                 throw(LoweringError(label, "Invalid break label: expected identifier"))
             end
@@ -4461,11 +4454,16 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             @chk nc == 1 (ex, "Too many arguments to continue")
             label = ex[1]
             label_kind = kind(label)
-            if !(label_kind == K"Identifier" || label_kind == K"Placeholder" ||
-                 label_kind == K"Symbol" || is_contextual_keyword(label_kind))
+            if label_kind == K"Placeholder"
+                # `continue _` maps to the default continue scope (loop_cont)
+                cont_label = @ast ctx label "loop_cont"::K"symboliclabel"
+            elseif !(label_kind == K"Identifier" ||
+                     label_kind == K"Symbol" || is_contextual_keyword(label_kind))
                 throw(LoweringError(label, "Invalid continue label: expected identifier"))
+            else
+                cont_label = @ast ctx label string(label.name_val, "#cont")::K"symboliclabel"
             end
-            @ast ctx ex [K"break" string(label.name_val, "#cont")::K"symboliclabel"]
+            @ast ctx ex [K"break" cont_label]
         end
     elseif k == K"comparison"
         expand_forms_2(ctx, expand_compare_chain(ctx, ex))
@@ -4534,10 +4532,10 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         if numchildren(ex) == 1 && kind(ex[1]) == K"String"
             ex[1]
         else
-            @ast ctx ex [K"call"
+            expand_forms_2(ctx, @ast ctx ex [K"call"
                 "string"::K"top"
-                expand_forms_2(ctx, children(ex))...
-            ]
+                children(ex)...
+            ])
         end
     elseif k == K"try"
         expand_forms_2(ctx, expand_try(ctx, ex))
@@ -4615,10 +4613,10 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         expand_forms_2(ctx, expand_ncat(ctx, ex))
     elseif k == K"while"
         @chk numchildren(ex) == 2
-        @ast ctx ex [K"break_block" "loop_exit"::K"symboliclabel"
+        @ast ctx ex [K"symbolicblock" "loop_exit"::K"symboliclabel"
             [K"_while"
                 expand_condition(ctx, ex[1])
-                [K"break_block" "loop_cont"::K"symboliclabel"
+                [K"symbolicblock" "loop_cont"::K"symboliclabel"
                     [K"scope_block"(scope_type=:neutral)
                          expand_forms_2(ctx, ex[2])
                     ]
@@ -4683,15 +4681,23 @@ function expand_forms_2(ctx::StatementListCtx, args...)
     expand_forms_2(ctx.ctx, args...)
 end
 
+ensure_desugaring_attributes!(graph) = ensure_attributes!(
+    ensure_macro_attributes!(graph),
+    is_toplevel_thunk=Bool,
+    toplevel_pure=Bool,
+    scope_type=Symbol)
+
 @fzone "JL: desugar" function expand_forms_2(ctx::MacroExpansionContext, ex::SyntaxTree)
-    ctx1 = DesugaringContext(ctx, ctx.expr_compat_mode)
+    graph = ensure_desugaring_attributes!(copy_attrs(ctx.graph))
+    ex = reparent(graph, ex)
+    ctx_out = DesugaringContext(graph, ctx.bindings, ctx.scope_layers,
+                                current_layer(ctx).mod, ctx.expr_compat_mode)
     vr = valid_st1(ex)
     # surface only one error until we have pretty-printing for multiple
     if !vr.ok
         # showerrors(vr)
         throw(LoweringError(vr.errors[1].sts[1], vr.errors[1].msg))
     end
-    ex = est_to_dst(ex)
-    ex1 = expand_forms_2(ctx1, reparent(ctx1, ex))
-    ctx1, ex1
+    ex_out = expand_forms_2(ctx_out, est_to_dst(ex))
+    ctx_out, ex_out
 end

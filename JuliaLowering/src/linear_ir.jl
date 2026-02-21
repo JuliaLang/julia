@@ -75,6 +75,7 @@ struct LinearIRContext{Attrs} <: AbstractLoweringContext
     argmap::Dict{IdTag, IdTag}
     return_type::Union{Nothing, SyntaxTree{Attrs}}
     break_targets::Dict{String, JumpTarget{Attrs}}
+    break_label_stack::Vector{String}  # tracks nesting order of symbolicblock labels
     handler_token_stack::SyntaxList{Attrs, Vector{NodeId}}
     catch_token_stack::SyntaxList{Attrs, Vector{NodeId}}
     finally_handlers::Vector{FinallyHandler{Attrs}}
@@ -85,13 +86,13 @@ struct LinearIRContext{Attrs} <: AbstractLoweringContext
     mod::Module
 end
 
-function LinearIRContext(ctx, is_toplevel_thunk, lambda_bindings, return_type)
-    graph = syntax_graph(ctx)
+function LinearIRContext(graph, ctx, is_toplevel_thunk, lambda_bindings, return_type)
     rett = isnothing(return_type) ? nothing : reparent(graph, return_type)
     Attrs = typeof(graph.attributes)
     LinearIRContext(graph, SyntaxList(ctx), ctx.bindings, Ref(0),
                     is_toplevel_thunk, lambda_bindings, Dict{IdTag,IdTag}(), rett,
-                    Dict{String,JumpTarget{Attrs}}(), SyntaxList(ctx), SyntaxList(ctx),
+                    Dict{String,JumpTarget{Attrs}}(), String[],
+                    SyntaxList(ctx), SyntaxList(ctx),
                     Vector{FinallyHandler{Attrs}}(), Dict{String,JumpTarget{Attrs}}(),
                     Vector{JumpOrigin{Attrs}}(), Set{String}(), Dict{Symbol, Any}(), ctx.mod)
 end
@@ -309,7 +310,7 @@ function emit_break(ctx, ex)
     target = get(ctx.break_targets, name, nothing)
     if isnothing(target)
         if name == "loop_exit"
-            throw(LoweringError(ex, "`break` must be used inside a `while` or `for` loop"))
+            throw(LoweringError(ex, "`break` must be used inside a `while`, `for` loop, or `@label` block"))
         elseif name == "loop_cont"
             throw(LoweringError(ex, "`continue` must be used inside a `while` or `for` loop"))
         elseif endswith(name, "#cont")
@@ -317,6 +318,27 @@ function emit_break(ctx, ex)
             throw(LoweringError(ex, "`continue $label` is not inside a `@label $label` loop"))
         else
             throw(LoweringError(ex, "`break $name` is not inside a `@label $name` block"))
+        end
+    end
+    # If targeting loop_exit, check for intervening named @label blocks
+    if name == "loop_exit"
+        for i in lastindex(ctx.break_label_stack):-1:1
+            lbl = ctx.break_label_stack[i]
+            lbl == "loop_exit" && break
+            if lbl != "loop_cont" && !contains(lbl, '#')
+                throw(LoweringError(ex,
+                    "plain `break` inside `@label $lbl` block is disallowed; use `break $lbl` to exit the block"))
+            end
+        end
+    end
+    # If targeting loop_cont, check for intervening loop_exit (@label block)
+    if name == "loop_cont"
+        for i in lastindex(ctx.break_label_stack):-1:1
+            lbl = ctx.break_label_stack[i]
+            lbl == "loop_cont" && break
+            if lbl == "loop_exit"
+                throw(LoweringError(ex, "`continue` inside an anonymous `@label` block is not allowed"))
+            end
         end
     end
     # Handle valued break (break name val)
@@ -697,40 +719,26 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
             res
         end
-    elseif k == K"break_block"
-        end_label = make_label(ctx, ex)
-        name = ex[1].name_val
-        outer_target = get(ctx.break_targets, name, nothing)
-        # Inherit result_var from outer symbolicblock if present
-        outer_result_var = isnothing(outer_target) ? nothing : outer_target.result_var
-        ctx.break_targets[name] = JumpTarget(end_label, ctx, outer_result_var)
-        compile(ctx, ex[2], false, false)
-        if isnothing(outer_target)
-            delete!(ctx.break_targets, name)
-        else
-            ctx.break_targets[name] = outer_target
-        end
-        emit(ctx, end_label)
-        if needs_value
-            compile(ctx, nothing_(ctx, ex), needs_value, in_tail_pos)
-        end
     elseif k == K"symbolicblock"
         name = ex[1].name_val
-        if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
-            throw(LoweringError(ex, "Label `$name` defined multiple times"))
+        # Skip duplicate check for default-scope labels (loop_exit, loop_cont) which allow nesting
+        if name != "loop_exit" && name != "loop_cont"
+            if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
+                throw(LoweringError(ex, "Label `$name` defined multiple times"))
+            end
+            push!(ctx.symbolic_block_labels, name)
         end
-        push!(ctx.symbolic_block_labels, name)
         end_label = make_label(ctx, ex)
-        result_var = if needs_value || in_tail_pos
-            rv = new_local_binding(ctx, ex, "$(name)_result")
-            emit_assignment(ctx, ex, rv, nothing_(ctx, ex))
-            rv
-        else
-            nothing
+        need_value = needs_value || in_tail_pos
+        result_var = need_value ? new_local_binding(ctx, ex, "$(name)_result") : nothing
+        if !isnothing(result_var)
+            emit_assignment(ctx, ex, result_var, nothing_(ctx, ex))
         end
         outer_target = get(ctx.break_targets, name, nothing)
         ctx.break_targets[name] = JumpTarget(end_label, ctx, result_var)
-        body_val = compile(ctx, ex[2], !isnothing(result_var), false)
+        push!(ctx.break_label_stack, name)
+        body_val = compile(ctx, ex[2], need_value, false)
+        pop!(ctx.break_label_stack)
         if !isnothing(result_var) && !isnothing(body_val)
             emit_assignment(ctx, ex, result_var, body_val)
         end
@@ -743,7 +751,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         if in_tail_pos
             emit_return(ctx, ex, result_var)
             nothing
-        else
+        elseif needs_value
             result_var
         end
     elseif k == K"break"
@@ -1135,7 +1143,8 @@ function compile_lambda(outer_ctx, ex)
     static_parameters = ex[2]
     ret_var = numchildren(ex) == 4 ? ex[4] : nothing
     lambda_bindings = ex.lambda_bindings
-    ctx = LinearIRContext(outer_ctx, ex.is_toplevel_thunk, lambda_bindings, ret_var)
+    ctx = LinearIRContext(outer_ctx.graph, outer_ctx, ex.is_toplevel_thunk,
+                          lambda_bindings, ret_var)
     for arg in children(lambda_args)
         kind(arg) == K"Placeholder" && continue
         @assert kind(arg) == K"BindingId"
@@ -1202,6 +1211,12 @@ function compile_lambda(outer_ctx, ex)
     ]
 end
 
+ensure_linearization_attributes!(graph) = ensure_attributes!(
+    ensure_scope_attributes!(graph),
+    slots=Vector{Slot},
+    mod=Module,
+    id=Int)
+
 """
 This pass converts nested ASTs in the body of a lambda into a list of
 statements (ie, Julia's linear/untyped IR).
@@ -1210,23 +1225,10 @@ Most of the compliexty of this pass is in lowering structured control flow (if,
 loops, etc) to gotos and exception handling to enter/leave. We also convert
 `K"BindingId"` into K"slot", `K"globalref"` or `K"SSAValue` as appropriate.
 """
-@fzone "JL: linearize" function linearize_ir(ctx, ex)
-    graph = ensure_attributes(ctx.graph,
-                              slots=Vector{Slot},
-                              mod=Module,
-                              id=Int)
-    # TODO: Cleanup needed - `_ctx` is just a dummy context here. But currently
-    # required to call reparent() ...
-    Attrs = typeof(graph.attributes)
-    _ctx = LinearIRContext(graph, SyntaxList(graph), ctx.bindings,
-                           Ref(0), false, LambdaBindings(),
-                           Dict{IdTag,IdTag}(), nothing,
-                           Dict{String,JumpTarget{Attrs}}(),
-                           SyntaxList(graph), SyntaxList(graph),
-                           Vector{FinallyHandler{Attrs}}(),
-                           Dict{String, JumpTarget{Attrs}}(),
-                           Vector{JumpOrigin{Attrs}}(),
-                           Set{String}(), Dict{Symbol, Any}(), ctx.mod)
-    res = compile_lambda(_ctx, reparent(_ctx, ex))
-    _ctx, res
+@fzone "JL: linearize" function linearize_ir(ctx::ClosureConversionCtx, ex)
+    graph = ensure_linearization_attributes!(copy_attrs(ctx.graph))
+    ex = reparent(graph, ex)
+    ctx_out = LinearIRContext(graph, ctx, false, LambdaBindings(), nothing)
+    ex_out = compile_lambda(ctx_out, ex)
+    ctx_out, ex_out
 end

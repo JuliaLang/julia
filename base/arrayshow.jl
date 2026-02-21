@@ -290,7 +290,7 @@ function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Functio
     reached_last_d = false
     for I in Is
         idxs = I.I
-        @label _ begin
+        @label entry begin
             if limit
                 for i = 1:nd
                     ii = idxs[i]
@@ -308,16 +308,16 @@ function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Functio
                                 szj = length(axs[j+2])
                                 indj = tailinds[j]
                                 if szj>10 && first(indj)+2 < idxs[j] <= last(indj)-3
-                                    break _
+                                    break entry
                                 end
                             end
                             print(io, ";"^(i+2))
                             print(io, " \u2026 ")
                             show_full && print(io, "\n\n")
-                            break _
+                            break entry
                         end
                         if ind[firstindex(ind)+2] < ii <= ind[end-3]
-                            break _
+                            break entry
                         end
                     end
                 end

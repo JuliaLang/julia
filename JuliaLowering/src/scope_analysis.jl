@@ -86,20 +86,6 @@ struct ScopeResolutionContext{Attrs} <: AbstractLoweringContext
     expr_compat_mode::Bool
 end
 
-function ScopeResolutionContext(ctx, ex)
-    graph = ensure_attributes(ctx.graph, lambda_bindings=LambdaBindings)
-    ScopeResolutionContext(
-        graph,
-        ctx.bindings,
-        ctx.mod,
-        Vector{ScopeInfo}(),
-        Vector{ScopeId}(),
-        ctx.scope_layers,
-        Set{NameKey}(),
-        contains_softscope_marker(ex),
-        ctx.expr_compat_mode)
-end
-
 function contains_softscope_marker(ex)
     kind(ex) == K"softscope" ||
         needs_resolution(ex) && any(contains_softscope_marker, children(ex))
@@ -364,6 +350,11 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
             gid = declare_in_scope!(ctx, top_scope(ctx), ex, :global)
             b = get_binding(ctx, gid)
         end
+        # Body-level @nospecialize sets :nospecialize metadata on identifiers.
+        # Propagate this to the binding so the slot gets the nospecialize flag.
+        if getmeta(ex, :nospecialize, false) && b.kind === :argument
+            b.is_nospecialize = true
+        end
         newleaf(ctx, ex, K"BindingId", b.id)
     elseif k === K"BindingId"
         ex
@@ -392,7 +383,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         id = ex_out[1]
         if kind(id) != K"Placeholder"
             binfo = get_binding(ctx, id)
-            if !isnothing(binfo.type)
+            if !isnothing(binfo.type) && binfo.kind !== :global
                 throw(LoweringError(ex, "multiple type declarations found for `$(binfo.name)`"))
             end
             binfo.type = ex_out[2]._id
@@ -594,12 +585,6 @@ struct VariableAnalysisContext{Attrs} <: AbstractLoweringContext
     closure_bindings::Dict{IdTag,ClosureBindings}
 end
 
-function VariableAnalysisContext(graph, bindings, mod, scopes, lambda_bindings)
-    graph = ensure_attributes(graph, lambda_bindings=LambdaBindings)
-    VariableAnalysisContext(graph, bindings, mod, scopes, lambda_bindings,
-                            SyntaxList(graph), Dict{IdTag,ClosureBindings}())
-end
-
 function init_closure_bindings!(ctx, fname)
     func_name_id = fname.var_id
     @assert get_binding(ctx, func_name_id).kind === :local
@@ -754,6 +739,10 @@ function resolve_scopes(ctx::ScopeResolutionContext, ex)
     _resolve_scopes(ctx, ex, nothing)
 end
 
+ensure_scope_attributes!(graph) = ensure_attributes!(
+    ensure_desugaring_attributes!(graph),
+    lambda_bindings=LambdaBindings)
+
 """
 This pass analyzes scopes and the names (locals/globals etc) used within them.
 
@@ -765,10 +754,18 @@ This pass also records the set of binding IDs used locally within the
 enclosing lambda form and information about variables captured by closures.
 """
 @fzone "JL: resolve_scopes" function resolve_scopes(ctx::DesugaringContext, ex)
-    ctx2 = ScopeResolutionContext(ctx, ex)
-    ex2 = resolve_scopes(ctx2, reparent(ctx2, ex))
-    ctx3 = VariableAnalysisContext(
-        ctx2.graph, ctx2.bindings, ctx2.mod, ctx2.scopes, ex2.lambda_bindings)
+    graph = ensure_scope_attributes!(copy_attrs(ctx.graph))
+    ex = reparent(graph, ex)
+    ctx2 = ScopeResolutionContext(graph, ctx.bindings, ctx.mod,
+                                  Vector{ScopeInfo}(), Vector{ScopeId}(),
+                                  ctx.scope_layers, Set{NameKey}(),
+                                  contains_softscope_marker(ex),
+                                  ctx.expr_compat_mode)
+    ex2 = resolve_scopes(ctx2, ex)
+    ctx3 = VariableAnalysisContext(graph, ctx2.bindings, ctx2.mod,
+                                   ctx2.scopes, ex2.lambda_bindings,
+                                   SyntaxList(graph),
+                                   Dict{IdTag,ClosureBindings}())
     analyze_variables!(ctx3, ex2)
     analyze_def_and_use!(ctx3, ex2)
     ctx3, ex2
