@@ -1,6 +1,8 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-gc-interface-passes.h"
+#include "llvm/IR/Intrinsics.h"
+#include "llvm/Support/Casting.h"
 
 #define DEBUG_TYPE "late_lower_gcroot"
 
@@ -76,7 +78,7 @@ unsigned getCompositeNumElements(Type *T) {
 }
 
 // Walk through a Type, and record the element path to every tracked value inside
-void TrackCompositeType(Type *T, SmallVector<unsigned, 0> &Idxs, SmallVector<SmallVector<unsigned, 0>, 0> &Numberings) {
+static void TrackCompositeType(Type *T, SmallVector<unsigned, 0> &Idxs, SmallVector<SmallVector<unsigned, 0>, 0> &Numberings) {
     if (isa<PointerType>(T)) {
         if (isSpecialPtr(T))
             Numberings.push_back(Idxs);
@@ -171,12 +173,12 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
             (void)LI;
             break;
         }
-        else if (auto II = dyn_cast<IntrinsicInst>(CurrentV)) {
-            // Some intrinsics behave like LoadInst followed by a SelectInst
-            // This should never happen in a derived addrspace (since those cannot be stored to memory)
-            // so we don't need to lift these operations, but we do need to check if it's loaded and continue walking the base pointer
+        else if (auto *II = dyn_cast<IntrinsicInst>(CurrentV)) {
             if (II->getIntrinsicID() == Intrinsic::masked_load ||
                 II->getIntrinsicID() == Intrinsic::masked_gather) {
+                // Some intrinsics behave like LoadInst followed by a SelectInst
+                // This should never happen in a derived addrspace (since those cannot be stored to memory)
+                // so we don't need to lift these operations, but we do need to check if it's loaded and continue walking the base pointer
                 if (auto VTy = dyn_cast<VectorType>(II->getType())) {
                     if (hasLoadedTy(VTy->getElementType())) {
                         Value *Mask = II->getOperand(2);
@@ -205,6 +207,24 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
                 // In general a load terminates a walk
                 break;
             }
+            else if (II->getIntrinsicID() == Intrinsic::vector_extract) {
+                if (auto VTy = dyn_cast<VectorType>(II->getType())) {
+                    if (hasLoadedTy(VTy->getElementType())) {
+                        Value *Idx = II->getOperand(1);
+                        if (!isa<ConstantInt>(Idx)) {
+                            assert(isa<UndefValue>(Idx) && "unimplemented");
+                            (void)Idx;
+                        }
+                        CurrentV = II->getOperand(0);
+                        fld_idx = -1;
+                        continue;
+                    }
+                }
+                break;
+            } else {
+                // Unknown Intrinsic
+                break;
+            }
         }
         else if (auto CI = dyn_cast<CallInst>(CurrentV)) {
             auto callee = CI->getCalledFunction();
@@ -212,9 +232,11 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
                 CurrentV = CI->getArgOperand(0);
                 continue;
             }
+            // Unknown Call
             break;
         }
         else {
+            // Unknown Instruction
             break;
         }
     }
@@ -348,10 +370,18 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
         if (isa<VectorType>(Cond->getType())) {
             Cond = ExtractElementInst::Create(Cond,
                     ConstantInt::get(Type::getInt32Ty(Cond->getContext()), i),
+#if JL_LLVM_VERSION >= 200000
+                    "", SI->getIterator());
+#else
                     "", SI);
+#endif
         }
         assert(FalseElem->getType() == TrueElem->getType());
+#if JL_LLVM_VERSION >= 200000
+        SelectInst *SelectBase = SelectInst::Create(Cond, TrueElem, FalseElem, "gclift", SI->getIterator());
+#else
         SelectInst *SelectBase = SelectInst::Create(Cond, TrueElem, FalseElem, "gclift", SI);
+#endif
         int Number = ++S.MaxPtrNumber;
         S.AllPtrNumbering[SelectBase] = Number;
         S.ReversePtrNumbering[Number] = SelectBase;
@@ -389,7 +419,11 @@ void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi) {
         Numbers.resize(NumRoots);
     }
     for (unsigned i = 0; i < NumRoots; ++i) {
+#if JL_LLVM_VERSION >= 200000
+        PHINode *lift = PHINode::Create(T_prjlvalue, Phi->getNumIncomingValues(), "gclift", Phi->getIterator());
+#else
         PHINode *lift = PHINode::Create(T_prjlvalue, Phi->getNumIncomingValues(), "gclift", Phi);
+#endif
         int Number = ++S.MaxPtrNumber;
         S.AllPtrNumbering[lift] = Number;
         S.ReversePtrNumbering[Number] = lift;
@@ -518,6 +552,22 @@ SmallVector<int, 0> LateLowerGCFrame::NumberAllBase(State &S, Value *CurrentV) {
         Numbers = NumberAll(S, IEI->getOperand(0));
         int ElNumber = Number(S, IEI->getOperand(1));
         Numbers[idx] = ElNumber;
+    // C++17
+    // } else if (auto *II = dyn_cast<IntrinsicInst>(CurrentV); II && II->getIntrinsicID() == Intrinsic::vector_insert) {
+    } else if (isa<IntrinsicInst>(CurrentV) && cast<IntrinsicInst>(CurrentV)->getIntrinsicID() == Intrinsic::vector_insert) {
+        auto *II = dyn_cast<IntrinsicInst>(CurrentV);
+        // Vector insert is a bit like a shuffle so use the same approach
+        SmallVector<int, 0> Numbers1 = NumberAll(S, II->getOperand(0));
+        SmallVector<int, 0> Numbers2 = NumberAll(S, II->getOperand(1));
+        unsigned first_idx = cast<ConstantInt>(II->getOperand(2))->getZExtValue();
+        for (unsigned i = 0; i < Numbers1.size(); ++i) {
+            if (i < first_idx)
+                Numbers.push_back(Numbers1[i]);
+            else if (i - first_idx < Numbers2.size())
+                Numbers.push_back(Numbers2[i - first_idx]);
+            else
+                Numbers.push_back(Numbers1[i]);
+        }
     } else if (auto *IVI = dyn_cast<InsertValueInst>(CurrentV)) {
         Numbers = NumberAll(S, IVI->getAggregateOperand());
         auto Tracked = TrackCompositeType(IVI->getType());
@@ -626,16 +676,6 @@ SmallVector<int, 0> LateLowerGCFrame::NumberAll(State &S, Value *V) {
 }
 
 
-static void MaybeResize(BBState &BBS, unsigned Idx) {
-    /*
-    if (BBS.Defs.size() <= Idx) {
-        BBS.Defs.resize(Idx + 1);
-        BBS.UpExposedUses.resize(Idx + 1);
-        BBS.PhiOuts.resize(Idx + 1);
-    }
-    */
-}
-
 static bool HasBitSet(const LargeSparseBitVector &BV, unsigned Bit) {
     return BV.test(Bit);
 }
@@ -644,47 +684,47 @@ static bool HasBitSet(const BitVector &BV, unsigned Bit) {
     return Bit < BV.size() && BV[Bit];
 }
 
-static void NoteDef(State &S, BBState &BBS, int Num, const ArrayRef<int> &SafepointsSoFar) {
+static void NoteDef(State &S, BBState &BBS, int Num) {
     assert(Num >= 0);
-    MaybeResize(BBS, Num);
     assert(!BBS.Defs.test(Num) && "SSA Violation or misnumbering?");
     BBS.Defs.set(Num);
     BBS.UpExposedUses.reset(Num);
     // This value could potentially be live at any following safe point
     // if it ends up live out, so add it to the LiveIfLiveOut lists for all
     // following safepoints.
-    for (int Safepoint : SafepointsSoFar) {
-        S.LiveIfLiveOut[Safepoint].push_back(Num);
-    }
+    if (BBS.HasSafepoint)
+        for (int Safepoint = BBS.FirstSafepoint; Safepoint >= BBS.LastSafepoint; --Safepoint)
+            S.LiveIfLiveOut[Safepoint].push_back(Num);
 }
 
-void LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def,
-                                    const ArrayRef<int> &SafepointsSoFar,
+bool LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def,
                                     SmallVector<int, 1> &&RefinedPtr) {
     Type *RT = Def->getType();
     if (isa<PointerType>(RT)) {
         if (!isSpecialPtr(RT))
-            return;
+            return false;
         assert(isTrackedValue(Def) && "Returned value of GC interest, but not tracked?");
         int Num = Number(S, Def);
-        NoteDef(S, BBS, Num, SafepointsSoFar);
+        NoteDef(S, BBS, Num);
         if (!RefinedPtr.empty())
             S.Refinements[Num] = std::move(RefinedPtr);
+        return true;
     }
     else {
         SmallVector<int, 0> Nums = NumberAll(S, Def);
         for (int Num : Nums) {
-            NoteDef(S, BBS, Num, SafepointsSoFar);
+            NoteDef(S, BBS, Num);
             if (!RefinedPtr.empty())
                 S.Refinements[Num] = RefinedPtr;
         }
+        return !Nums.empty();
     }
 }
 
 static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI, SmallVectorImpl<int> &CalleeRoots) {
+    assert(BBS.FirstSafepoint == -1 || BBS.FirstSafepoint == S.MaxSafepointNumber);
     int Number = ++S.MaxSafepointNumber;
-    S.SafepointNumbering[CI] = Number;
-    S.ReverseSafepointNumbering.push_back(CI);
+    S.SafepointNumbering.push_back(CI);
     // Note which pointers are upward exposed live here. They need to be
     // considered live at this safepoint even when they have a def earlier
     // in this BB (i.e. even when they don't participate in the dataflow
@@ -692,6 +732,10 @@ static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI, SmallVectorImpl<i
     S.LiveSets.push_back(BBS.UpExposedUses);
     S.LiveIfLiveOut.push_back(SmallVector<int, 0>{});
     S.CalleeRoots.push_back(std::move(CalleeRoots));
+    BBS.HasSafepoint = true;
+    if (BBS.LastSafepoint == -1)
+        BBS.LastSafepoint = Number;
+    BBS.FirstSafepoint = Number;
     return Number;
 }
 
@@ -711,7 +755,6 @@ void LateLowerGCFrame::NoteUse(State &S, BBState &BBS, Value *V, LargeSparseBitV
             int Num = Number(S, V);
             if (Num < 0)
                 return;
-            MaybeResize(BBS, Num);
             Uses.set(Num);
         }
     } else {
@@ -719,7 +762,6 @@ void LateLowerGCFrame::NoteUse(State &S, BBState &BBS, Value *V, LargeSparseBitV
         for (int Num : Nums) {
             if (Num < 0)
                 continue;
-            MaybeResize(BBS, Num);
             Uses.set(Num);
         }
     }
@@ -740,7 +782,7 @@ void RecursivelyVisit(callback f, Value *V) {
         if (isa<CallInst>(TheUser) || isa<LoadInst>(TheUser) ||
             isa<SelectInst>(TheUser) || isa<PHINode>(TheUser) || // TODO: should these be removed from this list?
             isa<StoreInst>(TheUser) || isa<PtrToIntInst>(TheUser) ||
-            isa<ICmpInst>(TheUser) || // ICmpEQ/ICmpNE can be used with ptr types
+            isa<ICmpInst>(TheUser) || isa<InsertElementInst>(TheUser)|| // ICmpEQ/ICmpNE can be used with ptr types
             isa<AtomicCmpXchgInst>(TheUser) || isa<AtomicRMWInst>(TheUser))
             continue;
         if (isa<GetElementPtrInst>(TheUser) || isa<BitCastInst>(TheUser) || isa<AddrSpaceCastInst>(TheUser)) {
@@ -749,7 +791,8 @@ void RecursivelyVisit(callback f, Value *V) {
         }
         llvm_dump(V);
         llvm_dump(TheUser);
-        assert(false && "Unexpected instruction");
+        errs() << "Unexpected instruction\n";
+        abort();
     }
 }
 
@@ -917,15 +960,6 @@ static uint64_t getLoadValueAlign(LoadInst *LI)
     if (!md)
         return 1;
     return mdconst::extract<ConstantInt>(md->getOperand(0))->getLimitedValue();
-}
-
-static bool LooksLikeFrameRef(Value *V) {
-    if (isSpecialPtr(V->getType()))
-        return false;
-    V = V->stripInBoundsOffsets();
-    if (isSpecialPtr(V->getType()))
-        return false;
-    return isa<Argument>(V);
 }
 
 SmallVector<int, 1> LateLowerGCFrame::GetPHIRefinements(PHINode *Phi, State &S)
@@ -1114,11 +1148,61 @@ void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
     }
 }
 
+// Look through instructions to find all possible allocas that might become the sret argument
+static SmallSetVector<AllocaInst *, 1> FindSretAllocas(Value* SRetArg) {
+    SmallSetVector<AllocaInst *, 1> allocas;
+    if (AllocaInst *OneSRet = dyn_cast<AllocaInst>(SRetArg)) {
+        allocas.insert(OneSRet); // Found it directly
+    }
+    else {
+        SmallSetVector<Value *, 8> worklist;
+        worklist.insert(SRetArg);
+        while (!worklist.empty()) {
+            Value *V = worklist.pop_back_val();
+            if (AllocaInst *Alloca = dyn_cast<AllocaInst>(V->stripInBoundsOffsets())) {
+                allocas.insert(Alloca); // Found a candidate
+            }
+            else if (PHINode *Phi = dyn_cast<PHINode>(V)) {
+                for (Value *Incoming : Phi->incoming_values()) {
+                    worklist.insert(Incoming);
+                }
+            }
+            else if (SelectInst *SI = dyn_cast<SelectInst>(V)) {
+                auto TrueBranch = SI->getTrueValue();
+                auto FalseBranch = SI->getFalseValue();
+                if (TrueBranch && FalseBranch) {
+                    worklist.insert(TrueBranch);
+                    worklist.insert(FalseBranch);
+                }
+                else {
+                    llvm_dump(SI);
+                    dbgs() << "Malformed Select\n";
+                    allocas.clear();
+                    return allocas;
+                }
+            }
+            else {
+                llvm_dump(V);
+                dbgs() << "Unexpected SRet argument\n";
+                allocas.clear();
+                return allocas;
+            }
+        }
+    }
+    assert(std::all_of(allocas.begin(), allocas.end(), [&] (AllocaInst* SRetAlloca) JL_NOTSAFEPOINT {
+            return (SRetAlloca->getArraySize() == allocas[0]->getArraySize() &&
+                SRetAlloca->getAllocatedType() == allocas[0]->getAllocatedType());
+        }
+    ));
+    return allocas;
+}
+
 State LateLowerGCFrame::LocalScan(Function &F) {
     State S(F);
     SmallVector<int, 8> PHINumbers;
     for (BasicBlock &BB : F) {
         BBState &BBS = S.BBStates[&BB];
+        // Avoid tracking safepoints until we reach the first instruction the defines a value.
         for (auto it = BB.rbegin(); it != BB.rend(); ++it) {
             Instruction &I = *it;
             if (CallInst *CI = dyn_cast<CallInst>(&I)) {
@@ -1150,118 +1234,98 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                             }
                         }
                     }
+                    if (II->getIntrinsicID() == Intrinsic::vector_extract || II->getIntrinsicID() == Intrinsic::vector_insert) {
+                        // These are not real defs
+                        continue;
+                    }
                 }
                 auto callee = CI->getCalledFunction();
                 if (callee && callee == typeof_func) {
-                    MaybeNoteDef(S, BBS, CI, BBS.Safepoints, SmallVector<int, 1>{-2});
+                    MaybeNoteDef(S, BBS, CI, SmallVector<int, 1>{-2});
                 }
                 else if (callee && callee->getName() == "julia.gc_loaded") {
                     continue;
                 }
                 else {
-                    MaybeNoteDef(S, BBS, CI, BBS.Safepoints);
+                    if (MaybeNoteDef(S, BBS, CI))
+                        BBS.FirstSafepointAfterFirstDef = BBS.FirstSafepoint;
                 }
-                if (CI->hasStructRetAttr()) {
-                    Type *ElT = getAttributeAtIndex(CI->getAttributes(), 1, Attribute::StructRet).getValueAsType();
-                    auto tracked = CountTrackedPointers(ElT, true);
-                    if (tracked.count) {
-                        AllocaInst *SRet = dyn_cast<AllocaInst>((CI->arg_begin()[0])->stripInBoundsOffsets());
-                        assert(SRet);
-                        {
-                            if (!(SRet->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
-                                assert(!tracked.derived);
-                                if (tracked.all) {
-                                    S.ArrayAllocas[SRet] = tracked.count * cast<ConstantInt>(SRet->getArraySize())->getZExtValue();
-                                }
-                                else {
-                                    Value *arg1 = (CI->arg_begin()[1])->stripInBoundsOffsets();
-                                    AllocaInst *SRet_gc = nullptr;
-                                    if (PHINode *Phi = dyn_cast<PHINode>(arg1)) {
-                                        for (Value *V : Phi->incoming_values()) {
-                                            if (AllocaInst *Alloca = dyn_cast<AllocaInst>(V->stripInBoundsOffsets())) {
-                                                if (SRet_gc == nullptr) {
-                                                    SRet_gc = Alloca;
-                                                } else if (SRet_gc == Alloca) {
-                                                    continue;
-                                                } else {
-                                                    llvm_dump(Alloca);
-                                                    llvm_dump(SRet_gc);
-                                                    assert(false && "Allocas in Phi node should match");
-                                                }
-                                            } else {
-                                                llvm_dump(V->stripInBoundsOffsets());
-                                                assert(false && "Expected alloca");
-                                            }
-                                        }
-                                    } else {
-                                        SRet_gc = dyn_cast<AllocaInst>(arg1);
-                                    }
-                                    if (!SRet_gc) {
-                                        llvm_dump(CI);
-                                        llvm_dump(arg1);
-                                        assert(false && "Expected alloca");
-                                    }
-                                    Type *ElT = SRet_gc->getAllocatedType();
-                                    if (!(SRet_gc->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
-                                        S.ArrayAllocas[SRet_gc] = tracked.count * cast<ConstantInt>(SRet_gc->getArraySize())->getZExtValue();
-                                    }
-                                }
+                bool HasDefBefore = false;
+                // Loop over all arguments to find those with "julia.return_roots" attribute
+                AttributeList Attrs = CI->getAttributes();
+                for (unsigned i = 0; i < CI->arg_size(); ++i) {
+                    Attribute RetRootsAttr = Attrs.getParamAttr(i, "julia.return_roots");
+                    if (RetRootsAttr.isValid()) {
+                        size_t return_roots = atol(RetRootsAttr.getValueAsString().data());
+                        assert(return_roots);
+                        HasDefBefore = true;
+                        auto gc_allocas = FindSretAllocas(CI->getArgOperand(i)->stripInBoundsOffsets());
+                        // We know that with the right optimizations we can forward a sret directly from an argument
+                        // This hasn't been seen without adding IPO effects to julia functions but it's possible we need to handle that too
+                        if (gc_allocas.size() == 0) {
+                            llvm_dump(&F);
+                            abort();
+                        }
+                        for (AllocaInst *SRet_gc : gc_allocas) {
+                            Type *ElT = SRet_gc->getAllocatedType();
+                            if (!(SRet_gc->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
+                                // this is a umax operation since we sometimes see the calls cloned, although we don't see these reused for different sizes
+                                auto &live_roots = S.ArrayAllocas[SRet_gc];
+                                if (live_roots < return_roots)
+                                    live_roots = return_roots;
                             }
                         }
                     }
                 }
                 NoteOperandUses(S, BBS, I);
-                if (CI->canReturnTwice()) {
-                    S.ReturnsTwice.push_back(CI);
-                }
-                if (callee) {
-                    if (callee == gc_preserve_begin_func) {
-                        SmallVector<int, 0> args;
-                        for (Use &U : CI->args()) {
-                            Value *V = U;
-                            if (isa<Constant>(V))
-                                continue;
-                            if (isa<PointerType>(V->getType())) {
-                                if (isSpecialPtr(V->getType())) {
-                                    int Num = Number(S, V);
-                                    if (Num >= 0)
+                if (!CI->canReturnTwice()) {
+                    if (callee) {
+                        if (callee == gc_preserve_begin_func) {
+                            SmallVector<int, 0> args;
+                            for (Use &U : CI->args()) {
+                                Value *V = U;
+                                if (isa<Constant>(V))
+                                    continue;
+                                if (isa<PointerType>(V->getType())) {
+                                    if (isSpecialPtr(V->getType())) {
+                                        int Num = Number(S, V);
+                                        if (Num >= 0)
+                                            args.push_back(Num);
+                                    }
+                                } else {
+                                    SmallVector<int, 0> Nums = NumberAll(S, V);
+                                    for (int Num : Nums) {
+                                        if (Num < 0)
+                                            continue;
                                         args.push_back(Num);
-                                }
-                            } else {
-                                SmallVector<int, 0> Nums = NumberAll(S, V);
-                                for (int Num : Nums) {
-                                    if (Num < 0)
-                                        continue;
-                                    args.push_back(Num);
+                                    }
                                 }
                             }
+                            S.GCPreserves[CI] = args;
+                            continue;
                         }
-                        S.GCPreserves[CI] = args;
+                        // Known functions emitted in codegen that are not safepoints
+                        if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
+                            callee == gc_preserve_end_func || callee == typeof_func ||
+                            callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
+                            callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
+                            callee->getName() == XSTR(jl_lock_field) || callee->getName() == XSTR(jl_unlock_field) ||
+                            callee == write_barrier_func || callee == gc_loaded_func || callee == pop_handler_noexcept_func ||
+                            callee->getName() == "memcmp") {
+                            continue;
+                        }
+                        if (callee->getMemoryEffects().onlyReadsMemory() ||
+                            callee->getMemoryEffects().onlyAccessesArgPointees()) {
+                            continue;
+                        }
+                    }
+                    if (isa<IntrinsicInst>(CI))
+                        // Intrinsics are never safepoints.
                         continue;
-                    }
-                    // Known functions emitted in codegen that are not safepoints
-                    if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
-                        callee == gc_preserve_end_func || callee == typeof_func ||
-                        callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
-                        callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
-                        callee->getName() == XSTR(jl_lock_field) || callee->getName() == XSTR(jl_unlock_field) ||
-                        callee == write_barrier_func || callee == gc_loaded_func || callee == pop_handler_noexcept_func ||
-                        callee->getName() == "memcmp") {
+                    auto effects = CI->getMemoryEffects();
+                    if (effects.onlyAccessesArgPointees() || effects.onlyReadsMemory())
+                        // Readonly functions and functions that cannot change GC state (which is inaccessiblemem) are not safepoints
                         continue;
-                    }
-                    if (callee->getMemoryEffects().onlyReadsMemory() ||
-                        callee->getMemoryEffects().onlyAccessesArgPointees()) {
-                        continue;
-                    }
-                    if (MemTransferInst *MI = dyn_cast<MemTransferInst>(CI)) {
-                        MaybeTrackDst(S, MI);
-                    }
-                }
-                if (isa<IntrinsicInst>(CI) ||
-                    CI->getMemoryEffects().onlyAccessesArgPointees() ||
-                    CI->getMemoryEffects().onlyReadsMemory()) {
-                    // Intrinsics are never safepoints.
-                    continue;
                 }
                 SmallVector<int, 0> CalleeRoots;
                 for (Use &U : CI->args()) {
@@ -1282,10 +1346,15 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     CalleeRoots.push_back(Num);
                 }
                 int SafepointNumber = NoteSafepoint(S, BBS, CI, CalleeRoots);
-                BBS.HasSafepoint = true;
-                BBS.TopmostSafepoint = SafepointNumber;
-                BBS.Safepoints.push_back(SafepointNumber);
-            } else if (LoadInst *LI = dyn_cast<LoadInst>(&I)) {
+                if (CI->canReturnTwice()) {
+                    S.ReturnsTwice.push_back(SafepointNumber);
+                    HasDefBefore = true;
+                }
+                if (HasDefBefore) // With sret, the Def happens before the instruction instead of after
+                    BBS.FirstSafepointAfterFirstDef = SafepointNumber;
+                continue;
+            }
+            if (LoadInst *LI = dyn_cast<LoadInst>(&I)) {
                 // If this is a load from an immutable, we know that
                 // this object will always be rooted as long as the
                 // object we're loading from is, so we can refine uses
@@ -1293,14 +1362,10 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 // from.
                 SmallVector<int, 1> RefinedPtr{};
                 Type *Ty = LI->getType()->getScalarType();
+                bool refined_globally = false;
                 bool task_local = false;
                 if (isLoadFromImmut(LI) && isSpecialPtr(LI->getPointerOperand()->getType())) {
                     RefinedPtr.push_back(Number(S, LI->getPointerOperand()));
-                } else if (LI->getType()->isPointerTy() &&
-                        isSpecialPtr(Ty) &&
-                        LooksLikeFrameRef(LI->getPointerOperand())) {
-                    // Loads from a jlcall argument array
-                    RefinedPtr.push_back(-1);
                 }
                 else if (isLoadFromConstGV(LI, task_local)) {
                     // If this is a const load from a global,
@@ -1308,21 +1373,26 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     // If this is a task local constant, we don't need to root it within the
                     // task but we do need to issue write barriers for when the current task dies.
                     RefinedPtr.push_back(task_local ? -1 : -2);
+                    refined_globally = true;
                 }
                 if (!hasLoadedTy(Ty))
-                    MaybeNoteDef(S, BBS, LI, BBS.Safepoints, std::move(RefinedPtr));
+                    if (MaybeNoteDef(S, BBS, LI, std::move(RefinedPtr)))
+                        if (!refined_globally)
+                            BBS.FirstSafepointAfterFirstDef = BBS.FirstSafepoint;
                 NoteOperandUses(S, BBS, I);
             } else if (auto *LI = dyn_cast<AtomicCmpXchgInst>(&I)) {
                 Type *Ty = LI->getNewValOperand()->getType()->getScalarType();
                 if (!Ty->isPointerTy() || Ty->getPointerAddressSpace() != AddressSpace::Loaded) {
-                    MaybeNoteDef(S, BBS, LI, BBS.Safepoints);
+                    if (MaybeNoteDef(S, BBS, LI))
+                        BBS.FirstSafepointAfterFirstDef = BBS.FirstSafepoint;
                 }
                 NoteOperandUses(S, BBS, I);
                 // TODO: do we need MaybeTrackStore(S, LI);
             } else if (auto *LI = dyn_cast<AtomicRMWInst>(&I)) {
                 Type *Ty = LI->getType()->getScalarType();
                 if (!Ty->isPointerTy() || Ty->getPointerAddressSpace() != AddressSpace::Loaded) {
-                    MaybeNoteDef(S, BBS, LI, BBS.Safepoints);
+                    if (MaybeNoteDef(S, BBS, LI))
+                        BBS.FirstSafepointAfterFirstDef = BBS.FirstSafepoint;
                 }
                 NoteOperandUses(S, BBS, I);
                 // TODO: do we need MaybeTrackStore(S, LI);
@@ -1338,7 +1408,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                             Number(S, SI->getFalseValue())
                         };
                     }
-                    MaybeNoteDef(S, BBS, SI, BBS.Safepoints, std::move(RefinedPtr));
+                    MaybeNoteDef(S, BBS, SI, std::move(RefinedPtr));
                     NoteOperandUses(S, BBS, I);
                 } else if (tracked.count) {
                     // We need to insert extra selects for the GC roots
@@ -1352,7 +1422,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     if (isa<PointerType>(Phi->getType()))
                         // TODO: Vector refinements
                         PHIRefinements = GetPHIRefinements(Phi, S);
-                    MaybeNoteDef(S, BBS, Phi, BBS.Safepoints, std::move(PHIRefinements));
+                    MaybeNoteDef(S, BBS, Phi, std::move(PHIRefinements));
                     if (isa<PointerType>(Phi->getType())) {
                         PHINumbers.push_back(Number(S, Phi));
                     } else {
@@ -1384,7 +1454,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                             RefinedPtr.push_back(task_local ? -1 : -2);
                         }
                     }
-                    MaybeNoteDef(S, BBS, ASCI, BBS.Safepoints, std::move(RefinedPtr));
+                    MaybeNoteDef(S, BBS, ASCI, std::move(RefinedPtr));
                 }
             } else if (auto *AI = dyn_cast<AllocaInst>(&I)) {
                 Type *ElT = AI->getAllocatedType();
@@ -1395,90 +1465,12 @@ State LateLowerGCFrame::LocalScan(Function &F) {
         }
         // Pre-seed the dataflow variables;
         BBS.LiveIn = BBS.UpExposedUses;
-        BBS.Done = true;
     }
     FixUpRefinements(PHINumbers, S);
     return S;
 }
 
-static Value *ExtractScalar(Value *V, Type *VTy, bool isptr, ArrayRef<unsigned> Idxs, IRBuilder<> &irbuilder) {
-    Type *T_int32 = Type::getInt32Ty(V->getContext());
-    if (isptr) {
-        SmallVector<Value*, 0> IdxList{Idxs.size() + 1};
-        IdxList[0] = ConstantInt::get(T_int32, 0);
-        for (unsigned j = 0; j < Idxs.size(); ++j) {
-            IdxList[j + 1] = ConstantInt::get(T_int32, Idxs[j]);
-        }
-        Value *GEP = irbuilder.CreateInBoundsGEP(VTy, V, IdxList);
-        Type *T = GetElementPtrInst::getIndexedType(VTy, IdxList);
-        assert(T->isPointerTy());
-        V = irbuilder.CreateAlignedLoad(T, GEP, Align(sizeof(void*)));
-        // since we're doing stack operations, it should be safe do this non-atomically
-        cast<LoadInst>(V)->setOrdering(AtomicOrdering::NotAtomic);
-    }
-    else if (isa<PointerType>(V->getType())) {
-        assert(Idxs.empty());
-    }
-    else if (!Idxs.empty()) {
-        auto IdxsNotVec = Idxs.slice(0, Idxs.size() - 1);
-        Type *FinalT = ExtractValueInst::getIndexedType(V->getType(), IdxsNotVec);
-        bool IsVector = isa<VectorType>(FinalT);
-        IRBuilder<InstSimplifyFolder> foldbuilder(irbuilder.getContext(), InstSimplifyFolder(irbuilder.GetInsertBlock()->getModule()->getDataLayout()));
-        foldbuilder.restoreIP(irbuilder.saveIP());
-        foldbuilder.SetCurrentDebugLocation(irbuilder.getCurrentDebugLocation());
-        if (Idxs.size() > IsVector)
-            V = foldbuilder.CreateExtractValue(V, IsVector ? IdxsNotVec : Idxs);
-        if (IsVector)
-            V = foldbuilder.CreateExtractElement(V, ConstantInt::get(Type::getInt32Ty(V->getContext()), Idxs.back()));
-    }
-    return V;
-}
 
-static unsigned getFieldOffset(const DataLayout &DL, Type *STy, ArrayRef<unsigned> Idxs)
-{
-    SmallVector<Value*,4> IdxList{Idxs.size() + 1};
-    Type *T_int32 = Type::getInt32Ty(STy->getContext());
-    IdxList[0] = ConstantInt::get(T_int32, 0);
-    for (unsigned j = 0; j < Idxs.size(); ++j)
-        IdxList[j + 1] = ConstantInt::get(T_int32, Idxs[j]);
-    auto offset = DL.getIndexedOffsetInType(STy, IdxList);
-    assert(offset >= 0);
-    return (unsigned)offset;
-}
-
-SmallVector<Value*, 0> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, IRBuilder<> &irbuilder, ArrayRef<unsigned> perm_offsets) {
-    auto Tracked = TrackCompositeType(STy);
-    SmallVector<Value*, 0> Ptrs;
-    unsigned perm_idx = 0;
-    auto ignore_field = [&] (ArrayRef<unsigned> Idxs) {
-        if (perm_idx >= perm_offsets.size())
-            return false;
-        // Assume the indices returned from `TrackCompositeType` is ordered and do a
-        // single pass over `perm_offsets`.
-        assert(!isptr);
-        auto offset = getFieldOffset(irbuilder.GetInsertBlock()->getModule()->getDataLayout(),
-                                     STy, Idxs);
-        do {
-            auto perm_offset = perm_offsets[perm_idx];
-            if (perm_offset > offset)
-                return false;
-            perm_idx++;
-            if (perm_offset == offset) {
-                return true;
-            }
-        } while (perm_idx < perm_offsets.size());
-        return false;
-    };
-    for (unsigned i = 0; i < Tracked.size(); ++i) {
-        auto Idxs = ArrayRef<unsigned>(Tracked[i]);
-        if (ignore_field(Idxs))
-            continue;
-        Value *Elem = ExtractScalar(Src, STy, isptr, Idxs, irbuilder);
-        if (isTrackedValue(Elem)) // ignore addrspace Loaded when it appears
-            Ptrs.push_back(Elem);
-    }
-    return Ptrs;
-}
 
 //static unsigned TrackWithShadow(Value *Src, Type *STy, bool isptr, Value *Dst, IRBuilder<> &irbuilder) {
 //    auto Ptrs = ExtractTrackedValues(Src, STy, isptr, irbuilder);
@@ -1491,35 +1483,6 @@ SmallVector<Value*, 0> ExtractTrackedValues(Value *Src, Type *STy, bool isptr, I
 //    }
 //    return Ptrs.size();
 //}
-
-// turn a memcpy into a set of loads
-void LateLowerGCFrame::MaybeTrackDst(State &S, MemTransferInst *MI) {
-    //Value *Dst = MI->getRawDest()->stripInBoundsOffsets();
-    //if (AllocaInst *AI = dyn_cast<AllocaInst>(Dst)) {
-    //    Type *STy = AI->getAllocatedType();
-    //    if (!AI->isStaticAlloca() || (isa<PointerType>(STy) && STy->getPointerAddressSpace() == AddressSpace::Tracked) || S.ArrayAllocas.count(AI))
-    //        return; // already numbered this
-    //    auto tracked = CountTrackedPointers(STy);
-    //    unsigned nroots = tracked.count * cast<ConstantInt>(AI->getArraySize())->getZExtValue();
-    //    if (nroots) {
-    //        assert(!tracked.derived);
-    //        if (!tracked.all) {
-    //            // materialize shadow LoadInst and StoreInst ops to make a copy of just the tracked values inside
-    //            //assert(MI->getLength() == DL.getTypeAllocSize(AI->getAllocatedType()) && !AI->isArrayAllocation()); // XXX: handle partial copy
-    //            Value *Src = MI->getSource();
-    //            Src = new BitCastInst(Src, STy->getPointerTo(MI->getSourceAddressSpace()), "", MI);
-    //            auto &Shadow = S.ShadowAllocas[AI];
-    //            if (!Shadow)
-    //                Shadow = new AllocaInst(ArrayType::get(T_prjlvalue, nroots), 0, "", MI);
-    //            AI = Shadow;
-    //            unsigned count = TrackWithShadow(Src, STy, true, AI, IRBuilder<>(MI));
-    //            assert(count == tracked.count); (void)count;
-    //        }
-    //        S.ArrayAllocas[AI] = nroots;
-    //    }
-    //}
-    //// TODO: else???
-}
 
 void LateLowerGCFrame::MaybeTrackStore(State &S, StoreInst *I) {
     Value *PtrBase = I->getPointerOperand()->stripInBoundsOffsets();
@@ -1594,10 +1557,11 @@ void LateLowerGCFrame::ComputeLiveness(State &S) {
 
 // For debugging
 JL_USED_FUNC static void dumpSafepointsForBBName(Function &F, State &S, const char *BBName) {
-    for (auto it : S.SafepointNumbering) {
-        if (it.first->getParent()->getName() == BBName) {
-            dbgs() << "Live at " << *it.first << "\n";
-            LargeSparseBitVector &LS = S.LiveSets[it.second];
+    for (Instruction *&it : S.SafepointNumbering) {
+        if (it->getParent()->getName() == BBName) {
+            int idx = &it - S.SafepointNumbering.begin();
+            dbgs() << "Live at " << idx << "\n";
+            LargeSparseBitVector &LS = S.LiveSets[idx];
             for (auto Idx : LS) {
                 dbgs() << "\t";
                 S.ReversePtrNumbering[Idx]->printAsOperand(dbgs());
@@ -1676,9 +1640,8 @@ void LateLowerGCFrame::RefineLiveSet(LargeSparseBitVector &LS, State &S, ArrayRe
 void LateLowerGCFrame::ComputeLiveSets(State &S) {
     // Iterate over all safe points. Add to live sets all those variables that
     // are now live across their parent block.
-    for (auto it : S.SafepointNumbering) {
-        int idx = it.second;
-        Instruction *Safepoint = it.first;
+    for (Instruction *&Safepoint : S.SafepointNumbering) {
+        int idx = &Safepoint - S.SafepointNumbering.begin();
         BasicBlock *BB = Safepoint->getParent();
         BBState &BBS = S.BBStates[BB];
         LargeSparseBitVector LiveAcross = BBS.LiveIn;
@@ -1718,8 +1681,9 @@ void LateLowerGCFrame::ComputeLiveSets(State &S) {
     }
     // Compute the interference graph
     S.Neighbors.resize(S.MaxPtrNumber+1);
-    for (auto it : S.SafepointNumbering) {
-        const LargeSparseBitVector &LS = S.LiveSets[it.second];
+    for (Instruction *&Safepoint : S.SafepointNumbering) {
+        int idx = &Safepoint - S.SafepointNumbering.begin();
+        const LargeSparseBitVector &LS = S.LiveSets[idx];
         for (int idx : LS) {
             S.Neighbors[idx] |= LS;
         }
@@ -1806,8 +1770,7 @@ std::pair<SmallVector<int, 0>, int> LateLowerGCFrame::ColorRoots(const State &S)
     int PreAssignedColors = 0;
     /* First assign permanent slots to things that need them due
        to returns_twice */
-    for (auto it : S.ReturnsTwice) {
-        int Num = S.SafepointNumbering.at(it);
+    for (int Num : S.ReturnsTwice) {
         const LargeSparseBitVector &LS = S.LiveSets[Num];
         for (int Idx : LS) {
             if (Colors[Idx] == -1)
@@ -1844,35 +1807,6 @@ std::pair<SmallVector<int, 0>, int> LateLowerGCFrame::ColorRoots(const State &S)
     return {Colors, PreAssignedColors};
 }
 
-// Size of T is assumed to be `sizeof(void*)`
-Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size, Value *V)
-{
-    assert(T == T_size || isa<PointerType>(T));
-    return builder.CreateInBoundsGEP(T, V, ConstantInt::get(T_size, -1), V->getName() + ".tag_addr");
-}
-
-Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V)
-{
-    auto addr = EmitTagPtr(builder, T_size, T_size, V);
-    auto &M = *builder.GetInsertBlock()->getModule();
-    LoadInst *load = builder.CreateAlignedLoad(T_size, addr, M.getDataLayout().getPointerABIAlignment(0), V->getName() + ".tag");
-    load->setOrdering(AtomicOrdering::Unordered);
-    load->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
-    MDBuilder MDB(load->getContext());
-    auto *NullInt = ConstantInt::get(T_size, 0);
-    // We can be sure that the tag is at least 16 (1<<4)
-    // Hopefully this is enough to convince LLVM that the value is still not NULL
-    // after masking off the tag bits
-    auto *NonNullInt = ConstantExpr::getAdd(NullInt, ConstantInt::get(T_size, 16));
-    load->setMetadata(LLVMContext::MD_range, MDB.createRange(NonNullInt, NullInt));
-    return load;
-}
-
-// Enable this optimization only on LLVM 4.0+ since this cause LLVM to optimize
-// constant store loop to produce a `memset_pattern16` with a global variable
-// that's initialized by `addrspacecast`. Such a global variable is not supported by the backend.
-// This is not a problem on 4.0+ since that transformation (in loop-idiom) is disabled
-// for NI pointers.
 static SmallVector<int, 1> *FindRefinements(Value *V, State *S)
 {
     if (!S)
@@ -1912,7 +1846,6 @@ MDNode *createMutableTBAAAccessTag(MDNode *Tag) {
 }
 
 void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVector<CallInst*, 0> &WriteBarriers, bool *CFGModified) {
-    auto T_size = F.getParent()->getDataLayout().getIntPtrType(F.getContext());
     for (auto CI : WriteBarriers) {
         auto parent = CI->getArgOperand(0);
         if (std::all_of(CI->op_begin() + 1, CI->op_end(),
@@ -1920,38 +1853,6 @@ void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVe
             CI->eraseFromParent();
             continue;
         }
-        if (CFGModified) {
-            *CFGModified = true;
-        }
-
-        IRBuilder<> builder(CI);
-        builder.SetCurrentDebugLocation(CI->getDebugLoc());
-        auto parBits = builder.CreateAnd(EmitLoadTag(builder, T_size, parent), GC_OLD_MARKED, "parent_bits");
-        auto parOldMarked = builder.CreateICmpEQ(parBits, ConstantInt::get(T_size, GC_OLD_MARKED), "parent_old_marked");
-        auto mayTrigTerm = SplitBlockAndInsertIfThen(parOldMarked, CI, false);
-        builder.SetInsertPoint(mayTrigTerm);
-        mayTrigTerm->getParent()->setName("may_trigger_wb");
-        Value *anyChldNotMarked = NULL;
-        for (unsigned i = 1; i < CI->arg_size(); i++) {
-            Value *child = CI->getArgOperand(i);
-            Value *chldBit = builder.CreateAnd(EmitLoadTag(builder, T_size, child), GC_MARKED, "child_bit");
-            Value *chldNotMarked = builder.CreateICmpEQ(chldBit, ConstantInt::get(T_size, 0), "child_not_marked");
-            anyChldNotMarked = anyChldNotMarked ? builder.CreateOr(anyChldNotMarked, chldNotMarked) : chldNotMarked;
-        }
-        assert(anyChldNotMarked); // handled by all_of test above
-        MDBuilder MDB(parent->getContext());
-        SmallVector<uint32_t, 2> Weights{1, 9};
-        auto trigTerm = SplitBlockAndInsertIfThen(anyChldNotMarked, mayTrigTerm, false,
-                                                  MDB.createBranchWeights(Weights));
-        trigTerm->getParent()->setName("trigger_wb");
-        builder.SetInsertPoint(trigTerm);
-        if (CI->getCalledOperand() == write_barrier_func) {
-            builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);
-        }
-        else {
-            assert(false);
-        }
-        CI->eraseFromParent();
     }
 }
 
@@ -1968,9 +1869,14 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
     AllocaInst *Frame = nullptr;
     unsigned allocaAddressSpace = F.getParent()->getDataLayout().getAllocaAddrSpace();
     if (T_prjlvalue) {
-        T_pprjlvalue = T_prjlvalue->getPointerTo();
-        Frame = new AllocaInst(T_prjlvalue, allocaAddressSpace,
-            ConstantInt::get(T_int32, maxframeargs), "jlcallframe", StartOff);
+        T_pprjlvalue = PointerType::getUnqual(T_prjlvalue->getContext());
+        Frame = new AllocaInst(T_prjlvalue, allocaAddressSpace,ConstantInt::get(T_int32, maxframeargs), "jlcallframe",
+#if JL_LLVM_VERSION >= 200000
+            StartOff->getIterator()
+#else
+            StartOff
+#endif
+        );
     }
     SmallVector<CallInst*, 0> write_barriers;
     for (BasicBlock &BB : F) {
@@ -1979,8 +1885,10 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
             // strip all constant alias information, as it might depend on the gc having
             // preserved a gc root, which stops being true after this pass (#32215)
             // similar to RewriteStatepointsForGC::stripNonValidData, but less aggressive
-            if (I->getMetadata(LLVMContext::MD_invariant_load))
-                I->setMetadata(LLVMContext::MD_invariant_load, NULL);
+            if (auto *LI = dyn_cast<LoadInst>(I)){
+                if (isSpecialPtr(LI->getPointerOperand()->getType()) && LI->getMetadata(LLVMContext::MD_invariant_load))
+                    LI->setMetadata(LLVMContext::MD_invariant_load, NULL);
+            }
             if (MDNode *TBAA = I->getMetadata(LLVMContext::MD_tbaa)) {
                 if (TBAA->getNumOperands() == 4 && isTBAA(TBAA, {"jtbaa_const", "jtbaa_memoryptr", "jtbaa_memorylen", "tbaa_memoryown"})) {
                     MDNode *MutableTBAA = createMutableTBAAAccessTag(TBAA);
@@ -2006,18 +1914,35 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 continue;
             }
             Value *callee = CI->getCalledOperand();
+
+            if (write_barrier_func && callee == write_barrier_func) {
+                assert(CI->arg_size() >= 1);
+                write_barriers.push_back(CI);
+                ChangesMade = true;
+                ++it;
+                continue;
+            }
+
             if (callee && (callee == gc_flush_func || callee == gc_preserve_begin_func
                         || callee == gc_preserve_end_func)) {
                 /* No replacement */
             } else if (pointer_from_objref_func != nullptr && callee == pointer_from_objref_func) {
                 auto *obj = CI->getOperand(0);
+#if JL_LLVM_VERSION >= 200000
+                auto *ASCI = new AddrSpaceCastInst(obj, CI->getType(), "", CI->getIterator());
+#else
                 auto *ASCI = new AddrSpaceCastInst(obj, CI->getType(), "", CI);
+#endif
                 ASCI->takeName(CI);
                 CI->replaceAllUsesWith(ASCI);
                 UpdatePtrNumbering(CI, ASCI, S);
             } else if (gc_loaded_func != nullptr && callee == gc_loaded_func) {
                 auto *obj = CI->getOperand(1);
+#if JL_LLVM_VERSION >= 200000
+                auto *ASCI = new AddrSpaceCastInst(obj, CI->getType(), "", CI->getIterator());
+#else
                 auto *ASCI = new AddrSpaceCastInst(obj, CI->getType(), "", CI);
+#endif
                 ASCI->takeName(CI);
                 CI->replaceAllUsesWith(ASCI);
                 UpdatePtrNumbering(CI, ASCI, S);
@@ -2100,6 +2025,54 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 store->setOrdering(AtomicOrdering::Unordered);
                 store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
 
+                // Zero GC pointer fields if the operand bundle specifies offsets
+                // This ensures GC sees valid pointers even if initialization is delayed
+                // Note: ptr_offsets and zeroinit bundles are mutually exclusive
+                auto ptr_offsets_bundle = CI->getOperandBundle("julia.gc_alloc_ptr_offsets");
+                auto zeroinit_bundle = CI->getOperandBundle("julia.gc_alloc_zeroinit");
+                assert(!(ptr_offsets_bundle && zeroinit_bundle) &&
+                       "julia.gc_alloc_ptr_offsets and julia.gc_alloc_zeroinit bundles are mutually exclusive");
+
+                if (ptr_offsets_bundle) {
+                    Value *derived = builder.CreateAddrSpaceCast(newI,
+                        PointerType::get(newI->getContext(), AddressSpace::Derived));
+                    Constant *null_ptr = ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
+                    for (Value *offset_val : ptr_offsets_bundle->Inputs) {
+                        if (auto *CI_offset = dyn_cast<ConstantInt>(offset_val)) {
+                            uint64_t offset = CI_offset->getZExtValue();
+                            Value *ptr = builder.CreateInBoundsGEP(
+                                Type::getInt8Ty(newI->getContext()), derived,
+                                ConstantInt::get(T_size, offset));
+                            builder.CreateAlignedStore(null_ptr, ptr, Align(sizeof(void*)));
+                        }
+                    }
+                }
+
+                // Zero a region if the operand bundle specifies it (for GenericMemory with boxed elements)
+                // Bundle contains: (offset, size) where offset is start byte and size is bytes to zero
+                // Both offset and size can be constants or dynamic SSA values
+                if (zeroinit_bundle) {
+                    assert(zeroinit_bundle->Inputs.size() == 2 &&
+                           "julia.gc_alloc_zeroinit bundle requires exactly 2 arguments (offset, size)");
+                    Value *offset_val = zeroinit_bundle->Inputs[0];
+                    Value *size_val = zeroinit_bundle->Inputs[1];
+                    // Skip if size is known to be zero at compile time
+                    bool skip = false;
+                    if (auto *const_size = dyn_cast<ConstantInt>(size_val)) {
+                        if (const_size->isZero())
+                            skip = true;
+                    }
+                    if (!skip) {
+                        Value *derived = builder.CreateAddrSpaceCast(newI,
+                            PointerType::get(newI->getContext(), AddressSpace::Derived));
+                        Value *ptr = builder.CreateInBoundsGEP(
+                            Type::getInt8Ty(newI->getContext()), derived, offset_val);
+                        builder.CreateMemSet(ptr,
+                            ConstantInt::get(Type::getInt8Ty(newI->getContext()), 0),
+                            size_val, Align(sizeof(void*)));
+                    }
+                }
+
                 // Replace uses of the call to `julia.gc_alloc_obj` with the call to
                 // `julia.gc_alloc_bytes`.
                 CI->replaceAllUsesWith(newI);
@@ -2110,21 +2083,13 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 assert(CI->arg_size() == 1);
                 IRBuilder<> builder(CI);
                 builder.SetCurrentDebugLocation(CI->getDebugLoc());
-                auto tag = EmitLoadTag(builder, T_size, CI->getArgOperand(0));
+                auto tag = EmitLoadTag(builder, T_size, CI->getArgOperand(0), tbaa_tag);
                 auto masked = builder.CreateAnd(tag, ConstantInt::get(T_size, ~(uintptr_t)15));
                 auto typ = builder.CreateAddrSpaceCast(builder.CreateIntToPtr(masked, JuliaType::get_pjlvalue_ty(masked->getContext())),
                                                        T_prjlvalue);
                 typ->takeName(CI);
                 CI->replaceAllUsesWith(typ);
                 UpdatePtrNumbering(CI, typ, S);
-            } else if (write_barrier_func && callee == write_barrier_func) {
-                // The replacement for this requires creating new BasicBlocks
-                // which messes up the loop. Queue all of them to be replaced later.
-                assert(CI->arg_size() >= 1);
-                write_barriers.push_back(CI);
-                ChangesMade = true;
-                ++it;
-                continue;
             } else if ((call_func && callee == call_func) ||
                        (call2_func && callee == call2_func) ||
                        (call3_func && callee == call3_func)) {
@@ -2159,7 +2124,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 }
                 ReplacementArgs.push_back(nframeargs == 0 ?
                     (llvm::Value*)ConstantPointerNull::get(T_pprjlvalue) :
-                    Builder.CreateAddrSpaceCast(Frame, T_prjlvalue->getPointerTo(0)));
+                    Builder.CreateAddrSpaceCast(Frame, PointerType::getUnqual(T_prjlvalue->getContext())));
                 ReplacementArgs.push_back(ConstantInt::get(T_int32, nframeargs));
                 if (callee == call2_func) {
                     // move trailing arg to the end now
@@ -2170,7 +2135,11 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 FunctionType *FTy = callee == call3_func ? JuliaType::get_jlfunc3_ty(CI->getContext()) :
                                     callee == call2_func ? JuliaType::get_jlfunc2_ty(CI->getContext()) :
                                                            JuliaType::get_jlfunc_ty(CI->getContext());
+#if JL_LLVM_VERSION >= 200000
+                CallInst *NewCall = CallInst::Create(FTy, new_callee, ReplacementArgs, "", CI->getIterator());
+#else
                 CallInst *NewCall = CallInst::Create(FTy, new_callee, ReplacementArgs, "", CI);
+#endif
                 NewCall->setTailCallKind(CI->getTailCallKind());
                 auto callattrs = CI->getAttributes();
                 callattrs = AttributeList::get(CI->getContext(), getFnAttrs(callattrs), getRetAttrs(callattrs), {});
@@ -2181,16 +2150,93 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 NewCall->copyMetadata(*CI);
                 CI->replaceAllUsesWith(NewCall);
                 UpdatePtrNumbering(CI, NewCall, S);
-            } else if (CI->arg_size() == CI->getNumOperands()) {
-                /* No operand bundle to lower */
-                ++it;
-                continue;
             } else {
-                CallInst *NewCall = CallInst::Create(CI, None, CI);
-                NewCall->takeName(CI);
-                NewCall->copyMetadata(*CI);
-                CI->replaceAllUsesWith(NewCall);
-                UpdatePtrNumbering(CI, NewCall, S);
+                // Assert that ptr_offsets and zeroinit bundles are only used with gc_alloc_obj
+                assert(!CI->getOperandBundle("julia.gc_alloc_ptr_offsets") &&
+                       "julia.gc_alloc_ptr_offsets bundle should only be on julia.gc_alloc_obj calls");
+                assert(!CI->getOperandBundle("julia.gc_alloc_zeroinit") &&
+                       "julia.gc_alloc_zeroinit bundle should only be on julia.gc_alloc_obj calls");
+
+                // Handle zeroinit_indirect bundle for jl_alloc_genericmemory_unchecked
+                // This bundle specifies: (ptr_field_offset, size) where:
+                // - ptr_field_offset: offset in the allocation where the data pointer is stored
+                // - size: number of bytes to zero at the location pointed to by that pointer
+                if (auto bundle = CI->getOperandBundle("julia.gc_alloc_zeroinit_indirect")) {
+                    assert(callee && callee->getName() == "jl_alloc_genericmemory_unchecked" &&
+                           "julia.gc_alloc_zeroinit_indirect bundle should only be on jl_alloc_genericmemory_unchecked calls");
+                    assert(bundle->Inputs.size() == 2 &&
+                           "julia.gc_alloc_zeroinit_indirect bundle requires exactly 2 arguments (ptr_offset, size)");
+                    Value *ptr_field_offset = bundle->Inputs[0];
+                    Value *size_val = bundle->Inputs[1];
+                    // Skip if size is known to be zero at compile time
+                    bool skip = false;
+                    if (auto *const_size = dyn_cast<ConstantInt>(size_val)) {
+                        if (const_size->isZero())
+                            skip = true;
+                    }
+                    if (!skip) {
+                        IRBuilder<> builder(CI->getNextNode());
+                        builder.SetCurrentDebugLocation(CI->getDebugLoc());
+                        // Load the data pointer from the specified offset in the allocation
+                        Value *derived = builder.CreateAddrSpaceCast(CI,
+                            PointerType::get(CI->getContext(), AddressSpace::Derived));
+                        Value *ptr_field = builder.CreateInBoundsGEP(
+                            Type::getInt8Ty(CI->getContext()), derived, ptr_field_offset);
+                        Value *data_ptr = builder.CreateAlignedLoad(
+                            PointerType::get(CI->getContext(), 0), ptr_field, Align(sizeof(void*)));
+                        // Zero the data region
+                        builder.CreateMemSet(data_ptr,
+                            ConstantInt::get(Type::getInt8Ty(CI->getContext()), 0),
+                            size_val, Align(sizeof(void*)));
+                        ChangesMade = true;
+                    }
+                }
+
+                SmallVector<OperandBundleDef,2> bundles;
+                CI->getOperandBundlesAsDefs(bundles);
+                bool gc_transition = false;
+                Value *ptls = nullptr;
+                for (auto &bundle: bundles)
+                    if (bundle.getTag() == "gc-transition") {
+                        gc_transition = true;
+                        ptls = bundle.inputs()[0];
+                    }
+
+                // In theory LLVM wants us to lower this using RewriteStatepointsForGC
+                if (gc_transition) {
+                    // Insert the operations to switch to gc_safe if necessary.
+                    IRBuilder<> builder(CI);
+                    assert(ptls);
+                    // We dont use emit_state_set here because safepoints are unconditional for any code that reaches this
+                    // We are basically guaranteed to go from gc_unsafe to gc_safe and back, and both transitions need a safepoint
+                    // We also can't add any BBs here, so just avoiding the branches is good
+                    unsigned offset = offsetof(jl_tls_states_t, gc_state);
+                    Value *gc_state = builder.CreateConstInBoundsGEP1_32(Type::getInt8Ty(builder.getContext()), ptls, offset, "gc_state");
+                    LoadInst *last_gc_state = builder.CreateAlignedLoad(Type::getInt8Ty(builder.getContext()), gc_state, Align(sizeof(void*)));
+                    last_gc_state->setOrdering(AtomicOrdering::Monotonic);
+                    builder.CreateAlignedStore(builder.getInt8(JL_GC_STATE_SAFE), gc_state, Align(sizeof(void*)))->setOrdering(AtomicOrdering::Release);
+                    MDNode *tbaa = get_tbaa_const(builder.getContext());
+                    emit_gc_safepoint(builder, T_size, ptls, tbaa, false);
+                    builder.SetInsertPoint(CI->getNextNode());
+                    builder.CreateAlignedStore(last_gc_state, gc_state, Align(sizeof(void*)))->setOrdering(AtomicOrdering::Release);
+                    emit_gc_safepoint(builder, T_size, ptls, tbaa, false);
+                }
+                if (CI->arg_size() == CI->getNumOperands()) {
+                    /* No operand bundle to lower */
+                    ++it;
+                    continue;
+                } else {
+                    // remove all operand bundles
+#if JL_LLVM_VERSION >= 200000
+                    CallInst *NewCall = CallInst::Create(CI, {}, CI->getIterator());
+#else
+                    CallInst *NewCall = CallInst::Create(CI, None, CI);
+#endif
+                    NewCall->takeName(CI);
+                    NewCall->copyMetadata(*CI);
+                    CI->replaceAllUsesWith(NewCall);
+                    UpdatePtrNumbering(CI, NewCall, S);
+                }
             }
             if (!CI->use_empty()) {
                 CI->replaceAllUsesWith(UndefValue::get(CI->getType()));
@@ -2210,7 +2256,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
     return ChangesMade;
 }
 
-static void AddInPredLiveOuts(BasicBlock *BB, LargeSparseBitVector &LiveIn, State &S)
+// Compute the set of all objects that are live in from all predecessors
+// TODO: reset any slots that contain values which are only live from some predecessors
+static void AddInPredecessorLiveOuts(BasicBlock *BB, LargeSparseBitVector &LiveIn, State &S)
 {
     bool First = true;
     std::set<BasicBlock *> Visited;
@@ -2231,7 +2279,7 @@ static void AddInPredLiveOuts(BasicBlock *BB, LargeSparseBitVector &LiveIn, Stat
                 WorkList.push_back(Pred);
                 continue;
             } else {
-                int LastSP = S.BBStates[Pred].Safepoints.front();
+                int LastSP = S.BBStates[Pred].LastSafepoint;
                 if (First) {
                     LiveIn |= S.LiveSets[LastSP];
                     First = false;
@@ -2252,14 +2300,22 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
     auto slotAddress = CallInst::Create(
         getOrDeclare(jl_intrinsics::getGCFrameSlot),
         {GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot)},
+#if JL_LLVM_VERSION >= 200000
+        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore->getIterator());
+#else
         "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore);
+#endif
 
     Value *Val = GetPtrForNumber(S, R, InsertBefore);
     // Pointee types don't have semantics, so the optimizer is
     // free to rewrite them if convenient. We need to change
     // it back here for the store.
     assert(Val->getType() == T_prjlvalue);
+#if JL_LLVM_VERSION >= 200000
+    new StoreInst(Val, slotAddress, InsertBefore->getIterator());
+#else
     new StoreInst(Val, slotAddress, InsertBefore);
+#endif
 }
 
 void LateLowerGCFrame::PlaceGCFrameReset(State &S, unsigned R, unsigned MinColorRoot,
@@ -2269,10 +2325,18 @@ void LateLowerGCFrame::PlaceGCFrameReset(State &S, unsigned R, unsigned MinColor
     auto slotAddress = CallInst::Create(
         getOrDeclare(jl_intrinsics::getGCFrameSlot),
         {GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot)},
+#if JL_LLVM_VERSION >= 200000
+        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore->getIterator());
+#else
         "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore);
+#endif
     // Reset the slot to NULL.
     Value *Val = ConstantPointerNull::get(T_prjlvalue);
+#if JL_LLVM_VERSION >= 200000
+    new StoreInst(Val, slotAddress, InsertBefore->getIterator());
+#else
     new StoreInst(Val, slotAddress, InsertBefore);
+#endif
 }
 
 void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
@@ -2280,20 +2344,18 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
 {
     for (auto &BB : *S.F) {
         const BBState &BBS = S.BBStates[&BB];
-        if (!BBS.HasSafepoint) {
+        if (!BBS.HasSafepoint)
             continue;
-        }
         LargeSparseBitVector LiveIn;
-        AddInPredLiveOuts(&BB, LiveIn, S);
+        AddInPredecessorLiveOuts(&BB, LiveIn, S);
         const LargeSparseBitVector *LastLive = &LiveIn;
-        for(auto rit = BBS.Safepoints.rbegin();
-              rit != BBS.Safepoints.rend(); ++rit ) {
-            const LargeSparseBitVector &NowLive = S.LiveSets[*rit];
+        for (int Safepoint = BBS.FirstSafepoint; Safepoint >= BBS.LastSafepoint; --Safepoint) {
+            const LargeSparseBitVector &NowLive = S.LiveSets[Safepoint];
             // reset slots which are no longer alive
             for (int Idx : *LastLive) {
-                if (Idx >= PreAssignedColors && !HasBitSet(NowLive, Idx)) {
+                if (Colors[Idx] >= PreAssignedColors && !HasBitSet(NowLive, Idx)) {
                     PlaceGCFrameReset(S, Idx, MinColorRoot, Colors, GCFrame,
-                      S.ReverseSafepointNumbering[*rit]);
+                        S.SafepointNumbering[Safepoint]);
                 }
             }
             // store values which are alive in this safepoint but
@@ -2301,7 +2363,7 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
             for (int Idx : NowLive) {
                 if (!HasBitSet(*LastLive, Idx)) {
                     PlaceGCFrameStore(S, Idx, MinColorRoot, Colors, GCFrame,
-                      S.ReverseSafepointNumbering[*rit]);
+                      S.SafepointNumbering[Safepoint]);
                 }
             }
             LastLive = &NowLive;
@@ -2325,12 +2387,15 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
             getOrDeclare(jl_intrinsics::newGCFrame),
             {ConstantInt::get(T_int32, 0)},
             "gcframe");
-        gcframe->insertBefore(&*F->getEntryBlock().begin());
+        gcframe->insertBefore(F->getEntryBlock().begin());
 
         auto pushGcframe = CallInst::Create(
             getOrDeclare(jl_intrinsics::pushGCFrame),
             {gcframe, ConstantInt::get(T_int32, 0)});
-        pushGcframe->insertAfter(pgcstack);
+        if (isa<Argument>(pgcstack))
+             pushGcframe->insertAfter(gcframe);
+         else
+             pushGcframe->insertAfter(cast<Instruction>(pgcstack));
 
         // we don't run memsetopt after this, so run a basic approximation of it
         // that removes any redundant memset calls in the prologue since getGCFrameSlot already includes the null store
@@ -2420,7 +2485,11 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
                 assert(Elem->getType() == T_prjlvalue);
                 //auto Idxs = ArrayRef<unsigned>(Tracked[i]);
                 //Value *Elem = ExtractScalar(Base, true, Idxs, SI);
+#if JL_LLVM_VERSION >= 200000
+                Value *shadowStore = new StoreInst(Elem, slotAddress, SI->getIterator());
+#else
                 Value *shadowStore = new StoreInst(Elem, slotAddress, SI);
+#endif
                 (void)shadowStore;
                 // TODO: shadowStore->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
                 AllocaSlot++;
@@ -2438,7 +2507,11 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
                 auto popGcframe = CallInst::Create(
                     getOrDeclare(jl_intrinsics::popGCFrame),
                     {gcframe});
+#if JL_LLVM_VERSION >= 200000
+                popGcframe->insertBefore(BB.getTerminator()->getIterator());
+#else
                 popGcframe->insertBefore(BB.getTerminator());
+#endif
             }
         }
     }
@@ -2448,42 +2521,26 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
     initAll(*F.getParent());
     smallAllocFunc = getOrDeclare(jl_well_known::GCSmallAlloc);
     LLVM_DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
-    if (!pgcstack_getter && !adoptthread_func)
-        return CleanupIR(F, nullptr, CFGModified);
 
     pgcstack = getPGCstack(F);
-    if (!pgcstack)
-        return CleanupIR(F, nullptr, CFGModified);
-
-    State S = LocalScan(F);
-    ComputeLiveness(S);
-    auto Colors = ColorRoots(S);
-    std::map<Value *, std::pair<int, int>> CallFrames; // = OptimizeCallFrames(S, Ordering);
-    PlaceRootsAndUpdateCalls(Colors.first, Colors.second, S, CallFrames);
-    CleanupIR(F, &S, CFGModified);
-
-
-    // We lower the julia.gc_alloc_bytes intrinsic in this pass to insert slowpath/fastpath blocks for MMTk
-    // For now, we do nothing for the Stock GC
-    auto GCAllocBytes = getOrNull(jl_intrinsics::GCAllocBytes);
-
-    if (GCAllocBytes) {
-        for (auto it = GCAllocBytes->user_begin(); it != GCAllocBytes->user_end(); ) {
-            if (auto *CI = dyn_cast<CallInst>(*it)) {
-                *CFGModified = true;
-
-                assert(CI->getCalledOperand() == GCAllocBytes);
-
-                auto newI = lowerGCAllocBytesLate(CI, F);
-                if (newI != CI) {
-                    ++it;
-                    CI->replaceAllUsesWith(newI);
-                    CI->eraseFromParent();
-                    continue;
-                }
-            }
-            ++it;
-        }
+    if (pgcstack) {
+      State S = LocalScan(F);
+      // If there is no safepoint after the first reachable def, then we don't need any roots (even those for allocas)
+      if (std::any_of(S.BBStates.begin(), S.BBStates.end(),
+                  [&F](auto BBS) {
+                      if (BBS.first == &F.getEntryBlock())
+                          return BBS.second.FirstSafepointAfterFirstDef != -1;
+                      return BBS.second.HasSafepoint;
+                  })) {
+        ComputeLiveness(S);
+        auto Colors = ColorRoots(S);
+        std::map<Value *, std::pair<int, int>> CallFrames; // = OptimizeCallFrames(S, Ordering);
+        PlaceRootsAndUpdateCalls(Colors.first, Colors.second, S, CallFrames);
+      }
+      CleanupIR(F, &S, CFGModified);
+    }
+    else {
+      CleanupIR(F, nullptr, CFGModified);
     }
 
     return true;

@@ -36,15 +36,14 @@ BUILDDIR := $(BUILDDIR)$(MAYBE_HOST)
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-DEP_LIBS := JuliaSyntax
-
 ifeq ($(USE_SYSTEM_LIBBLASTRAMPOLINE), 0)
 DEP_LIBS += blastrampoline
 endif
 
-ifeq ($(USE_SYSTEM_CSL), 0)
+# We need to run this whether or not USE_SYSTEM_CSL is set.
+# If it is, this target copies the system CSLs into the location our
+# build system expects.
 DEP_LIBS += csl
-endif
 
 ifeq ($(SANITIZE), 1)
 DEP_LIBS += sanitizers
@@ -72,10 +71,12 @@ endif
 endif
 endif
 
+PATCHELF_MANIFEST :=
 ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
 ifeq ($(USE_SYSTEM_PATCHELF), 0)
 DEP_LIBS += patchelf
 PATCHELF:=$(build_depsbindir)/patchelf
+PATCHELF_MANIFEST:=$(build_prefix)/manifest/patchelf
 else
 PATCHELF:=patchelf
 endif
@@ -157,6 +158,10 @@ ifeq ($(USE_SYSTEM_ZLIB), 0)
 DEP_LIBS += zlib
 endif
 
+ifeq ($(USE_SYSTEM_ZSTD), 0)
+DEP_LIBS += zstd
+endif
+
 ifeq ($(USE_SYSTEM_P7ZIP), 0)
 DEP_LIBS += p7zip
 endif
@@ -195,7 +200,7 @@ DEP_LIBS += libwhich
 endif
 endif
 
-ifneq (${MMTK_PLAN},None)
+ifeq (${USE_THIRD_PARTY_GC},mmtk)
 DEP_LIBS += mmtk_julia
 endif
 
@@ -204,8 +209,8 @@ DEP_LIBS_STAGED := $(DEP_LIBS)
 # list all targets
 DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
-	objconv openssl libssh2 nghttp2 curl libgit2 libwhich zlib p7zip csl \
-	sanitizers libsuitesparse lld libtracyclient ittapi nvtx JuliaSyntax \
+	objconv openssl libssh2 nghttp2 curl libgit2 libwhich zlib zstd p7zip csl \
+	sanitizers libsuitesparse lld libtracyclient ittapi nvtx \
 	terminfo mmtk_julia
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
 
@@ -240,6 +245,22 @@ distcleanall: $(addprefix distclean-, $(DEP_LIBS_ALL))
 	rm -rf $(build_prefix)
 getall: $(addprefix get-, $(DEP_LIBS_ALL))
 
+.PHONY: default
+.PHONY: get
+.PHONY: extract
+.PHONY: configure
+.PHONY: compile
+.PHONY: check
+.PHONY: fastcheck
+.PHONY: stage
+.PHONY: install
+.PHONY: version-check
+
+.PHONY: uninstall
+.PHONY: cleanall
+.PHONY: distcleanall
+.PHONY: getall
+
 include $(SRCDIR)/BOLT.mk
 include $(SRCDIR)/csl.mk
 include $(SRCDIR)/sanitizers.mk
@@ -256,6 +277,7 @@ include $(SRCDIR)/openblas.mk
 include $(SRCDIR)/utf8proc.mk
 include $(SRCDIR)/libsuitesparse.mk
 include $(SRCDIR)/zlib.mk
+include $(SRCDIR)/zstd.mk
 include $(SRCDIR)/unwind.mk
 include $(SRCDIR)/gmp.mk
 include $(SRCDIR)/mpfr.mk
@@ -272,8 +294,5 @@ include $(SRCDIR)/terminfo.mk
 
 # MMTk
 include $(SRCDIR)/mmtk_julia.mk
-
-# vendored Julia libs
-include $(SRCDIR)/JuliaSyntax.mk
 
 include $(SRCDIR)/tools/uninstallers.mk

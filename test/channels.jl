@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Random
+using Base.Threads
 using Base: Experimental
 using Base: n_avail
 
@@ -37,6 +38,21 @@ end
     end
     @test fetch(waiter3) == "success"
     @test fetch(t) == "finished"
+end
+
+@testset "wait_with_timeout on Condition" begin
+    a = Threads.Condition()
+    @test @lock a Experimental.wait_with_timeout(a; timeout=0.1)==:timed_out
+    lock(a)
+    @spawn begin
+        @lock a notify(a)
+    end
+    @test try
+        Experimental.wait_with_timeout(a; timeout=2)
+        true
+    finally
+        unlock(a)
+    end
 end
 
 @testset "various constructors" begin
@@ -447,15 +463,14 @@ end
         cb = first(async.cond.waitq)
         @test isopen(async)
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-        ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
-        @test isempty(Base.Workqueue)
         Base.process_events() # schedule event
         Sys.iswindows() && Base.process_events() # schedule event (windows?)
-        @test length(Base.Workqueue) == 1
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         @test tc[] == 0
         yield() # consume event
         @test tc[] == 1
+        ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+        Base.process_events()
         Sys.iswindows() && Base.process_events() # schedule event (windows?)
         yield() # consume event
         @test tc[] == 2
@@ -603,6 +618,16 @@ let a = Ref(0)
     make_unrooted_timer(a)
     GC.gc()
     @test a[] == 1
+end
+
+@testset "Timer properties" begin
+    t = Timer(1.0, interval = 0.5)
+    @test t.timeout == 1.0
+    @test t.interval == 0.5
+    close(t)
+    @test !isopen(t)
+    @test t.timeout == 1.0
+    @test t.interval == 0.5
 end
 
 # trying to `schedule` a finished task

@@ -235,6 +235,11 @@ let a, b
     @test prod(b) == foldl(*, b)
     @test 1 == prod(BigInt[]) isa BigInt
     @test prod(BigInt[0, 0, 0]) == 0 # issue #46665
+    # Test prod with negative numbers
+    @test prod(BigInt[-2, 3, -4]) == 24
+    @test prod(BigInt[-1, -2, -3]) == -6
+    @test prod(BigInt[-5]) == -5
+    @test prod(BigInt[-2, -2, -2, -2]) == 16
 end
 
 @testset "Iterated arithmetic" begin
@@ -481,6 +486,18 @@ end
     bytes_to_export_to = Vector{UInt8}(undef, 2)
     Base.GMP.MPZ.export!(bytes_to_export_to, int_to_export_from, order=0)
     @test all(bytes_to_export_to .== bytes_to_import_from)
+
+    # test export of 0 is T[0]
+    zero_to_export = BigInt(0)
+    bytes_to_export_to = Vector{UInt8}(undef, 0)
+    Base.GMP.MPZ.export!(bytes_to_export_to, zero_to_export, order=0)
+    @test bytes_to_export_to == UInt8[0]
+
+    # test export on nonzero vector
+    x_to_export = BigInt(6)
+    bytes_to_export_to = UInt8[1, 2, 3, 4, 5]
+    Base.GMP.MPZ.export!(bytes_to_export_to, x_to_export, order=0)
+    @test bytes_to_export_to == UInt8[6, 0, 0, 0, 0]
 end
 
 @test isqrt(big(4)) == 2
@@ -795,4 +812,28 @@ t = Rational{BigInt}(0, 1)
 
         @test Base.GMP.MPQ.div!(-oo, zo) == -oz
     end
+end
+
+@testset "hashing" begin
+    for i in 1:10:100
+        for shift in vcat(0:8, 9:8:81)
+            for sgn in (1, -1)
+                bint = sgn * (big(11)^i << shift)
+                bfloat = float(bint)
+                @test (hash(bint) == hash(bfloat)) == (bint == bfloat)
+                @test hash(bint, Base.HASH_SEED) ==
+                    @invoke(hash(bint::Real, Base.HASH_SEED))
+                @test Base.hash_integer(bint, Base.HASH_SEED) ==
+                    @invoke(Base.hash_integer(bint::Integer, Base.HASH_SEED))
+            end
+        end
+    end
+
+    bint = big(0)
+    bfloat = float(bint)
+    @test (hash(bint) == hash(bfloat)) == (bint == bfloat)
+    @test hash(bint, Base.HASH_SEED) ==
+        @invoke(hash(bint::Real, Base.HASH_SEED))
+    @test Base.hash_integer(bint, Base.HASH_SEED) ==
+        @invoke(Base.hash_integer(bint::Integer, Base.HASH_SEED))
 end

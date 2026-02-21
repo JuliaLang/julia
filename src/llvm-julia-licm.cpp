@@ -59,7 +59,11 @@ static void moveInstructionBefore(Instruction &I, Instruction &Dest,
                                   MemorySSAUpdater &MSSAU,
                                   ScalarEvolution *SE,
                                   MemorySSA::InsertionPlace Place = MemorySSA::BeforeTerminator) {
+#if JL_LLVM_VERSION >= 200000
+  I.moveBefore(Dest.getIterator());
+#else
   I.moveBefore(&Dest);
+#endif
   if (MSSAU.getMemorySSA())
     if (MemoryUseOrDef *OldMemAcc = cast_or_null<MemoryUseOrDef>(
             MSSAU.getMemorySSA()->getMemoryAccess(&I)))
@@ -238,7 +242,11 @@ struct JuliaLICM : public JuliaPassContext {
                     });
                     for (unsigned i = 1; i < exit_pts.size(); i++) {
                         // Clone exit
+#if JL_LLVM_VERSION >= 200000
+                        auto CI = CallInst::Create(call, {}, exit_pts[i]->getIterator());
+#else
                         auto CI = CallInst::Create(call, {}, exit_pts[i]);
+#endif
                         exit_pts[i] = CI;
                         createNewInstruction(CI, call, MSSAU);
                         LLVM_DEBUG(dbgs() << "Cloned and sunk gc_preserve_end: " << *CI << "\n");

@@ -9,23 +9,27 @@ const Bottom = Union{}
 # For curmod_*
 include("testenv.jl")
 
+include("tempdepot.jl")
+
 ## tests that `const` field declarations
 
 # sanity tests that our built-in types are marked correctly for const fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:def, :owner, :rettype, :exctype, :rettype_const, :analysis_results]),
+        (Core.CodeInstance, [:def, :owner, :rettype, :exctype, :rettype_const, :time_infer_total, :time_infer_cache_saved, :time_infer_self]),
         (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :is_for_opaque_closure, :constprop=#]),
         (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals=#]),
-        (Core.MethodTable, [:module]),
+        (Core.MethodTable, [:cache, :module, :name]),
+        (Core.MethodCache, []),
         (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :func, :isleafsig, :issimplesig, :va]),
         (Core.TypeMapLevel, []),
-        (Core.TypeName, [:name, :module, :names, :wrapper, :mt, :hash, :n_uninitialized, :flags]),
+        (Core.TypeName, [:name, :module, :names, :wrapper, :hash, :n_uninitialized, :flags]),
         (DataType, [:name, :super, :parameters, :instance, :hash]),
         (TypeVar, [:name, :ub, :lb]),
         (Core.Memory, [:length, :ptr]),
         (Core.GenericMemoryRef, [:mem, :ptr_or_offset]),
         (Task, [:metrics_enabled]),
+        (Core.BindingPartition, [:restriction, :kind]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if isconst(T, i))) == Set(c)
 end
@@ -33,17 +37,19 @@ end
 # sanity tests that our built-in types are marked correctly for atomic fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile]),
-        (Core.Method, [:primary_world, :deleted_world]),
-        (Core.MethodInstance, [:cache, :flags]),
-        (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
+        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :flags, :precompile, :time_compile]),
+        (Core.Method, [:primary_world, :did_scan_source, :dispatch_status, :interferences]),
+        (Core.MethodInstance, [:cache, :flags, :dispatch_status]),
+        (Core.MethodTable, [:defs]),
+        (Core.MethodCache, [:leafcache, :cache, :var""]),
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
-        (Core.TypeName, [:cache, :linearcache]),
+        (Core.TypeName, [:cache, :linearcache, :Typeofwrapper, :max_args, :cache_entry_count]),
         (DataType, [:types, :layout]),
         (Core.Memory, []),
         (Core.GenericMemoryRef, []),
         (Task, [:_state, :running_time_ns, :finished_at, :first_enqueued_at, :last_started_running_at]),
+        (Core.BindingPartition, [:min_world, :max_world, :next]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if Base.isfieldatomic(T, i))) == Set(c)
 end
@@ -63,20 +69,7 @@ mutable struct ABCDconst
     c
     const d::Union{Int,Nothing}
 end
-@test_throws(ErrorException("invalid redefinition of constant $(nameof(curmod)).ABCDconst"),
-    mutable struct ABCDconst
-        const a
-        const b::Int
-        c
-        d::Union{Int,Nothing}
-    end)
-@test_throws(ErrorException("invalid redefinition of constant $(nameof(curmod)).ABCDconst"),
-    mutable struct ABCDconst
-        a
-        b::Int
-        c
-        d::Union{Int,Nothing}
-    end)
+
 let abcd = ABCDconst(1, 2, 3, 4)
     @test (1, 2, 3, 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
     @test_throws(ErrorException("setfield!: const field .a of type ABCDconst cannot be changed"),
@@ -113,6 +106,21 @@ let abcd = ABCDconst(1, 2, 3, 4)
         abcd.d = nothing)
     @test (1, 2, "not constant", 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
 end
+const orig_ABCDconst = ABCDconst
+mutable struct ABCDconst
+    const a
+    const b::Int
+    c
+    d::Union{Int,Nothing}
+end
+@test ABCDconst !== orig_ABCDconst
+mutable struct ABCDconst
+    a
+    b::Int
+    c
+    d::Union{Int,Nothing}
+end
+@test ABCDconst !== orig_ABCDconst
 # Issue #52686
 struct A52686{T} end
 struct B52686{T, S}
@@ -237,6 +245,62 @@ k11840(::Type{Union{Tuple{Int32}, Tuple{Int64}}}) = '2'
 @test k11840(Tuple{Union{Int32, Int64}}) == '2'
 @test k11840(Union{Tuple{Int32}, Tuple{Int64}}) == '2'
 
+# issue #59327
+@noinline f59327(f, x) = Any[f, x]
+g59327(x) = f59327(+, Any[x][1])
+g59327(1)
+@test any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(f59327), Function, Int},
+    methods(f59327)[1].specializations)
+
+@noinline h59327(f::Union{Function, Nothing}, x) = Any[f, x]
+i59327(x) = h59327(+, Any[x][1])
+i59327(1)
+@test any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(h59327), Function, Int},
+    methods(h59327)[1].specializations)
+
+@noinline j59327(f::Function, x) = Any[f, x]
+k59327(x) = j59327(+, Any[x][1])
+k59327(1)
+@test any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(j59327), Function, Int},
+    methods(j59327)[1].specializations
+)
+
+@noinline l59327(f::Base.Callable, x) = Any[f, x]
+m59327(x) = l59327(+, Any[x][1])
+m59327(1)
+@test any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(l59327), Function, Int},
+    methods(l59327)[1].specializations
+)
+
+# _do_ specialize if the signature has a `where`
+@noinline n59327(f::F, x) where F = Any[f, x]
+o59327(x) = n59327(+, Any[x][1])
+o59327(1)
+@test !any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(n59327), Function, Int},
+    methods(n59327)[1].specializations
+)
+@test any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(n59327), typeof(+), Int},
+    methods(n59327)[1].specializations
+)
+
+# _do_ specialize if the signature is specific
+@noinline n59327(f::typeof(+), x) = Any[f, x]
+o59327(x) = n59327(+, Any[x][1])
+o59327(1)
+@test !any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(n59327), Function, Int},
+    methods(n59327)[1].specializations
+)
+@test any(
+    mi->mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(n59327), typeof(+), Int},
+    methods(n59327)[1].specializations
+)
 
 # issue #20511
 f20511(x::DataType) = 0
@@ -303,22 +367,9 @@ end  |> only == Type{typejoin(Int, UInt)}
     typejoin(Int, UInt, Float64)
 end  |> only == Type{typejoin(Int, UInt, Float64)}
 
-let res = @test_throws TypeError let
-        Base.Experimental.@force_compile
-        typejoin(1, 2)
-        nothing
-    end
-    err = res.value
-    @test err.func === :<:
-end
-let res = @test_throws TypeError let
-        Base.Experimental.@force_compile
-        typejoin(1, 2, 3)
-        nothing
-    end
-    err = res.value
-    @test err.func === :<:
-end
+@test typejoin(1, 2) === Any
+@test typejoin(1, 2, 3) === Any
+@test typejoin(Int, Int, 3) === Any
 
 # promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
 for T in (Nothing, Missing)
@@ -411,12 +462,12 @@ end
 mutable struct A3890{T1}
     x::Matrix{Complex{T1}}
 end
-@test A3890{Float64}.types[1] === Array{ComplexF64,2}
+@test A3890{Float64}.types[1] === Matrix{ComplexF64}
 # make sure the field type Matrix{Complex{T1}} isn't cached
 mutable struct B3890{T2}
     x::Matrix{Complex{T2}}
 end
-@test B3890{Float64}.types[1] === Array{ComplexF64,2}
+@test B3890{Float64}.types[1] === Matrix{ComplexF64}
 
 # issue #786
 mutable struct Node{T}
@@ -1210,15 +1261,11 @@ let A = [1]
     @test x == 1
 end
 
-# Make sure that `Module` is not resolved to `Core.Module` during sysimg generation
-# so that users can define their own binding named `Module` in Main.
-@test success(`$(Base.julia_cmd()) -e '@assert !Base.isbindingresolved(Main, :Module)'`)
-
 # Module() constructor
 @test names(Module(:anonymous), all = true, imported = true) == [:anonymous]
 @test names(Module(:anonymous, false), all = true, imported = true) == [:anonymous]
-@test Module(:anonymous, false, true).Core == Core
-@test_throws UndefVarError Module(:anonymous, false, false).Core
+@test invokelatest(getglobal, Module(:anonymous, false, true), :Core) == Core
+@test_throws UndefVarError invokelatest(getglobal, Module(:anonymous, false, false), :Core)
 
 # exception from __init__()
 let didthrow =
@@ -2291,6 +2338,31 @@ end
 x6074 = 6074
 @test @X6074() == 6074
 
+# issues #48910, 54417
+macro X43151_nested()
+    quote my_value = "from_nested_macro" end
+end
+macro X43151_parent()
+    quote
+        my_value = "from_parent_macro"
+        @X43151_nested()
+        my_value
+    end
+end
+@test @X43151_parent() == "from_parent_macro"
+
+macro X43151_nested_escaping()
+    quote $(esc(:my_value)) = "from_nested_macro" end
+end
+macro X43151_parent_escaping()
+    quote
+        my_value = "from_parent_macro"
+        @X43151_nested_escaping()
+        my_value
+    end
+end
+@test @X43151_parent_escaping() == "from_nested_macro"
+
 # issue #5536
 test5536(a::Union{Real, AbstractArray}...) = "Splatting"
 test5536(a::Union{Real, AbstractArray}) = "Non-splatting"
@@ -2622,7 +2694,7 @@ end
 # issue #8338
 let ex = Expr(:(=), :(f8338(x;y=4)), :(x*y))
     eval(ex)
-    @test invokelatest(f8338, 2) == 8
+    @test (@invokelatest f8338(2)) == 8
 end
 
 # call overloading (#2403)
@@ -2647,11 +2719,17 @@ struct D14919 <: Function; end
 @test B14919()() == "It's a brand new world"
 @test C14919()() == D14919()() == "Boo."
 
-for f in (:Any, :Function, :(Core.Builtin), :(Union{Nothing, Type}), :(Union{typeof(+), Type}), :(Union{typeof(+), typeof(-)}), :(Base.Callable))
-    @test_throws ErrorException("Method dispatch is unimplemented currently for this method signature") @eval (::$f)() = 1
-end
-for f in (:(Core.getfield), :((::typeof(Core.getfield))), :((::Core.IntrinsicFunction)))
-    @test_throws ErrorException("cannot add methods to a builtin function") @eval $f() = 1
+let ex_t = ErrorException, ex_r = r"cannot add methods to builtin function"
+    for f in (:(Core.Any), :(Core.Function), :(Core.Builtin), :(Base.Callable), :(Union{Nothing,F} where F), :(typeof(Core.getfield)), :(Core.IntrinsicFunction))
+        @test_throws ex_t @eval (::$f)() = 1
+        @test_throws ex_r @eval (::$f)() = 1
+    end
+    @test_throws ex_t @eval (::Union{Nothing,F})() where {F<:Function} = 1
+    @test_throws ex_r @eval (::Union{Nothing,F})() where {F<:Function} = 1
+    for f in (:(Core.getfield),)
+        @test_throws ex_t @eval $f() = 1
+        @test_throws ex_r @eval $f() = 1
+    end
 end
 
 # issue #33370
@@ -2739,6 +2817,14 @@ f24460(x::Int, y::Int) = "3"
 const T24460 = Tuple{T,T} where T
 g24460() = invoke(f24460, T24460, 1, 2)
 @test @inferred(g24460()) === 2.0
+
+@testset "invoke with builtins" begin
+    @test invoke(getfield, Tuple{Any, Symbol}, (a = 42,), :a) == 42
+    @test invoke(setfield!, Tuple{Any, Symbol, Any},  Base.RefValue(1), :x, 2) == 2
+    @test invoke(isdefined, Tuple{Any, Symbol}, (a = 1,), :a) == true
+    @test invoke(isdefined, Tuple{Any, Symbol}, (a = 1,), :b) == false
+    @test invoke(invoke, Tuple{Any, Type, Vararg}, sin, Tuple{Real}, 0) == 0.0
+end
 
 # issue #30679
 @noinline function f30679(::DataType)
@@ -2854,7 +2940,7 @@ mutable struct Obj; x; end
         push!(wr, WeakRef(x))
         nothing
     end
-    @noinline test_wr(r, wr) = @test r[1] == wr[1].value
+    @noinline test_wr(r, wr) = r[1] == wr[1].value
     function test_wr()
         # we need to be very careful here that we never
         # use the value directly in this function, so we aren't dependent
@@ -2862,7 +2948,7 @@ mutable struct Obj; x; end
         ref = []
         wref = []
         mk_wr(ref, wref)
-        test_wr(ref, wref)
+        @test test_wr(ref, wref)
         GC.gc()
         test_wr(ref, wref)
         empty!(ref)
@@ -3808,14 +3894,14 @@ f12092(x::Int, y::Int...) = 2
 
 # issue #12063
 # NOTE: should have > MAX_TUPLETYPE_LEN arguments
-f12063(tt, g, p, c, b, v, cu::T, d::AbstractArray{T, 2}, ve) where {T} = 1
+f12063(tt, g, p, c, b, v, cu::T, d::AbstractMatrix{T}, ve) where {T} = 1
 f12063(args...) = 2
 g12063() = f12063(0, 0, 0, 0, 0, 0, 0.0, zeros(0,0), Int[])
 @test g12063() == 1
 
 # issue #11587
 mutable struct Sampler11587{N}
-    clampedpos::Array{Int,2}
+    clampedpos::Matrix{Int}
     buf::Array{Float64,N}
 end
 function Sampler11587()
@@ -3885,11 +3971,13 @@ end
 struct NInitializedTestType
     a
 end
+const orig_NInitializedTestType = NInitializedTestType
 
-@test_throws ErrorException @eval struct NInitializedTestType
+struct NInitializedTestType
     a
     NInitializedTestType() = new()
 end
+@test orig_NInitializedTestType !== NInitializedTestType
 
 # issue #12394
 mutable struct Empty12394 end
@@ -4685,8 +4773,28 @@ end
 @test Macro_Yielding_Global_Assignment.x == 2
 
 # issue #15718
-@test :(f($NaN)) == :(f($NaN))
-@test isequal(:(f($NaN)), :(f($NaN)))
+function compare_test(x, y)
+    lx = Meta.lower(@__MODULE__, x)
+    ly = Meta.lower(@__MODULE__, y)
+    if isequal(x, y)
+        @test x == y
+        @test hash(x) == hash(y)
+        @test isequal(lx, ly)
+        @test lx == ly
+        @test hash(lx) == hash(ly)
+        true
+    else
+        @test x != y
+        @test !isequal(lx, ly)
+        @test lx != ly
+        false
+    end
+end
+@test compare_test(:(f($NaN)), :(f($NaN)))
+@test !compare_test(:(1 + (1 * 1)), :(1 + (1 * 1.0)))
+@test compare_test(:(1 + (1 * $NaN)), :(1 + (1 * $NaN)))
+@test compare_test(QuoteNode(NaN), QuoteNode(NaN))
+@test !compare_test(QuoteNode(1), QuoteNode(1.0))
 
 # PR #16011 Make sure dead code elimination doesn't delete push and pop
 # of metadata
@@ -4951,6 +5059,9 @@ let ft = Base.datatype_fieldtypes
     @test !isdefined(ft(B12238.body.body)[1], :instance)  # has free type vars
 end
 
+# issue #54969
+@test !isdefined(Memory.body, :instance)
+
 # `where` syntax in constructor definitions
 (A12238{T} where T<:Real)(x) = 0
 @test A12238{<:Real}(0) == 0
@@ -5087,7 +5198,7 @@ function f16340(x::T) where T
     return g
 end
 let g = f16340(1)
-    @test isa(typeof(g).name.mt.defs.sig, UnionAll)
+    @test isa(only(methods(g)).sig, UnionAll)
 end
 
 # issue #16793
@@ -5578,76 +5689,94 @@ struct A16424
     x
     y
 end
+const orig_A16424 = A16424
 
 struct A16424  # allowed
     x
     y
 end
+@test A16424 === orig_A16424
 
-@test_throws ErrorException @eval struct A16424
+struct A16424
     x
     z
 end
+@test A16424 !== orig_A16424
+const A16424 = orig_A16424
 
-@test_throws ErrorException @eval struct A16424
+struct A16424
     x
     y::Real
 end
+@test A16424 !== orig_A16424
+const A16424 = orig_A16424
 
 struct B16424{T}
     a
 end
+const orig_B16424 = B16424
 
 struct B16424{T}
     a
 end
+@test B16424 === orig_B16424
 
-@test_throws ErrorException @eval struct B16424{S}
+struct B16424{S}
     a
 end
+@test B16424 !== orig_B16424
 
 struct C16424{T,S}
     x::T
     y::S
 end
+const orig_C16424 = C16424
 
 struct C16424{T,S}
     x::T
     y::S
 end
+@test C16424 === orig_C16424
 
-@test_throws ErrorException @eval struct C16424{T,S}
+struct C16424{T,S}
     x::S
     y::T
 end
+@test C16424 !== orig_C16424
 
 struct D16424{T<:Real,S<:T}
     x::Vector{S}
     y::Vector{T}
 end
+const orig_D16424 = D16424
 
 struct D16424{T<:Real,S<:T}
     x::Vector{S}
     y::Vector{T}
 end
+@test D16424 === orig_D16424
 
-@test_throws ErrorException struct D16424{T<:Real,S<:Real}
+struct D16424{T<:Real,S<:Real}
     x::Vector{S}
     y::Vector{T}
 end
+@test D16424 !== orig_D16424
 
 # issue #20999, allow more type redefinitions
 struct T20999
     x::Array{T} where T<:Real
 end
+const orig_T20999 = T20999
 
 struct T20999
     x::Array{T} where T<:Real
 end
+@test T20999 === orig_T20999
 
-@test_throws ErrorException struct T20999
+struct T20999
     x::Array{T} where T<:Integer
 end
+@test T20999 !== orig_T20999
 
 # issue #54757, type redefinitions with recursive reference in supertype
 struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Tuple{Vararg},Union{T54757{Union{X,Integer}},T54757{A,N}},Vararg{Y,N}} where {X,Y<:T54757}, N}
@@ -5655,20 +5784,40 @@ struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Tuple{Vararg},Union{T54757{Unio
     y::Union{A,T54757{A,N}}
     z::T54757{A}
 end
+const orig_T54757 = T54757
 
 struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Tuple{Vararg},Union{T54757{Union{X,Integer}},T54757{A,N}},Vararg{Y,N}} where {X,Y<:T54757}, N}
     x::A
     y::Union{A,T54757{A,N}}
     z::T54757{A}
 end
+# The type is identical - either answer is semantically allowed here
+# However, knowing that the type is identical would require reasoning about the purity of the
+# field definitions exprs, which we do not do. Thus, simply check that this doesn't error and
+# then reset to the original for the next test.
+const T54757 = orig_T54757
 
-@test_throws ErrorException struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Tuple{Vararg},Union{T54757{Union{X,Integer}},T54757{A}},Vararg{Y,N}} where {X,Y<:T54757}, N}
+struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Tuple{Vararg},Union{T54757{Union{X,Integer}},T54757{A}},Vararg{Y,N}} where {X,Y<:T54757}, N}
     x::A
     y::Union{A,T54757{A,N}}
     z::T54757{A}
 end
+@test orig_T54757 !== T54757
 
+# Type redefinition with multiple tvars and reference in the field types
+struct DictLike{K, V} <: AbstractDict{K, V}
+    self::DictLike{K, V}
+end
+const orig_DictLike = DictLike
 
+struct DictLike{K, V} <: AbstractDict{K, V}
+    self::DictLike{K, V}
+end
+# It is semantically allowable to re-use the old type, but we need to
+# make sure in either case that the field type matches the definition
+@test fieldtype(DictLike, 1) === DictLike
+
+# initialization of Vector{Core.TypeofBottom}
 let a = Vector{Core.TypeofBottom}(undef, 2)
     @test a[1] == Union{}
     @test a == [Union{}, Union{}]
@@ -5734,6 +5883,13 @@ let ni128 = sizeof(FP128test) ÷ sizeof(Int),
     end
     @test reinterpret(UInt128, arr[2].fp) == expected
 end
+
+# make sure VecElement Tuple has the C alignment and ABI for supported types
+primitive type Int24 24 end
+@test Base.datatype_alignment(NTuple{10,VecElement{Int16}}) == 32
+@test Base.datatype_alignment(NTuple{10,VecElement{Int24}}) == 4
+@test Base.datatype_alignment(NTuple{10,VecElement{Int64}}) == 128
+@test Base.datatype_alignment(NTuple{10,VecElement{Int128}}) == 256
 
 # issue #21516
 struct T21516
@@ -6075,7 +6231,6 @@ module GlobalDef18933
         global sincos
         nothing
     end
-    @test which(@__MODULE__, :sincos) === Base.Math
     @test @isdefined sincos
     @test sincos === Base.sincos
 end
@@ -6697,9 +6852,6 @@ Base._growat!(A, 4, 1)
 Base._growat!(A, 2, 3)
 @test getindex(A, 1) === 0x01
 @test getindex(A, 2) === missing
-@test getindex(A, 3) === missing
-@test getindex(A, 4) === missing
-@test getindex(A, 5) === missing
 @test getindex(A, 6) === 0x03
 @test getindex(A, 7) === missing
 @test getindex(A, 8) === missing
@@ -7283,9 +7435,9 @@ end
 @test repackage28445()
 
 # issue #28597
-@test_throws ArgumentError Array{Int, 2}(undef, 0, -10)
-@test_throws ArgumentError Array{Int, 2}(undef, -10, 0)
-@test_throws ArgumentError Array{Int, 2}(undef, -1, -1)
+@test_throws ArgumentError Matrix{Int}(undef, 0, -10)
+@test_throws ArgumentError Matrix{Int}(undef, -10, 0)
+@test_throws ArgumentError Matrix{Int}(undef, -1, -1)
 
 # issue #54244
 # test that zero sized array doesn't throw even with large axes
@@ -7296,7 +7448,7 @@ Array{Int}(undef, bignum, bignum, 0, bignum, bignum)
 # but also test that it does throw if the axes multiply to a multiple of typemax(UInt)
 @test_throws ArgumentError Array{Int}(undef, bignum, bignum)
 @test_throws ArgumentError Array{Int}(undef, 1, bignum, bignum)
-# also test that we always throw erros for negative dims even if other dims are 0 or the product is positive
+# also test that we always throw errors for negative dims even if other dims are 0 or the product is positive
 @test_throws ArgumentError Array{Int}(undef, 0, -4, -4)
 @test_throws ArgumentError Array{Int}(undef, -4, 1, 0)
 @test_throws ArgumentError Array{Int}(undef, -4, -4, 1)
@@ -7646,7 +7798,7 @@ end
 # issue #31696
 foo31696(x::Int8, y::Int8) = 1
 foo31696(x::T, y::T) where {T <: Int8} = 2
-@test length(methods(foo31696)) == 2
+@test length(methods(foo31696)) == 1
 let T1 = Tuple{Int8}, T2 = Tuple{T} where T<:Int8, a = T1[(1,)], b = T2[(1,)]
     b .= a
     @test b[1] == (1,)
@@ -7676,29 +7828,35 @@ struct S36104{K,V}   # check that redefining it works
     S36104{K,V}() where {K,V} = new()
     S36104{K,V}(x::S36104) where {K,V} = new(x)
 end
-# with a gensymmed unionall
-struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
+
+# with a gensymmed unionall (#39778)
+struct Symmetric39778{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
     data::S
     uplo::Char
 end
-struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
+const orig_Symmetric39778 = Symmetric39778
+struct Symmetric39778{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
     data::S
     uplo::Char
 end
-@test_throws ErrorException begin
-    struct Symmetric{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
-        data::S
-        uplo::Char
-    end
+@test Symmetric39778 === orig_Symmetric39778
+struct Symmetric39778{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
+    data::S
+    uplo::Char
 end
-end
+@test Symmetric39778 !== orig_Symmetric39778
+
+end # module M36104
+
 @test fieldtypes(M36104.T36104) == (Vector{M36104.T36104},)
 @test_throws ErrorException("expected") @eval(struct X36104; x::error("expected"); end)
 @test !@isdefined(X36104)
 struct X36104; x::Int; end
 @test fieldtypes(X36104) == (Int,)
 primitive type P36104 8 end
-@test_throws ErrorException("invalid redefinition of constant $(nameof(curmod)).P36104") @eval(primitive type P36104 16 end)
+const orig_P36104 = P36104
+primitive type P36104 16 end
+@test P36104 !== orig_P36104
 
 # Malformed invoke
 f_bad_invoke(x::Int) = invoke(x, (Any,), x)
@@ -7995,7 +8153,10 @@ end
     setglobal!(m, :x, 2, :release)
     @test m.x === 2
     @test_throws ConcurrencyViolationError setglobal!(m, :x, 3, :not_atomic)
-    @test_throws ErrorException setglobal!(m, :x, 4., :release)
+    @test_throws TypeError setglobal!(m, :x, 4., :release)
+
+    f_set_bad_type(m) = setglobal!(m, :x, 4., :release)
+    @test_throws TypeError f_set_bad_type(m)
 
     m.x = 1
     @test m.x === 1
@@ -8031,6 +8192,25 @@ foo46503(a::Int, b::Nothing) = @invoke foo46503(a::Any, b)
 @test 0 <= foo46503(1, nothing) <= 1
 foo46503(@nospecialize(a), b::Union{Nothing, Float64}) = rand() + 10
 @test 10 <= foo46503(1, nothing) <= 11
+
+@testset "inference for `rest` with unknown state argument types" begin
+    @testset "`Array`, `Memory`" begin
+        for typ in (Vector{Float32}, Matrix{Float32}, Memory{Float32})
+            @test (isconcretetype ∘ Base.infer_return_type)(Base.rest, Tuple{typ, Any})
+            for e in (Base.Compiler.is_terminates, Base.Compiler.is_notaskstate, Base.Compiler.is_nonoverlayed)
+                @test (e ∘ Base.infer_effects)(Base.rest, Tuple{typ, Any})
+            end
+        end
+    end
+    @testset "`Tuple`" begin
+        typ = NTuple{5, Float32}
+        @test Base.infer_return_type(Base.rest, Tuple{typ, Any}) <: Tuple
+    end
+    @testset "`NamedTuple`" begin
+        typ = NamedTuple{(:a, :b, :c, :d, :e), NTuple{5, Float32}}
+        @test Base.infer_return_type(Base.rest, Tuple{typ, Any}) <: NamedTuple
+    end
+end
 
 @testset "effect override on Symbol(::String)" begin
     @test Core.Compiler.is_foldable(Base.infer_effects(Symbol, (String,)))
@@ -8233,6 +8413,7 @@ end
 let M = @__MODULE__
     Core.eval(M, :(global a_typed_global))
     @test Core.eval(M, :(global a_typed_global::$(Tuple{Union{Integer,Nothing}}))) === nothing
+    @Core.latestworld
     @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
     @test Core.eval(M, :(global a_typed_global::$(Tuple{Union{Integer,Nothing}}))) === nothing
     @test Core.eval(M, :(global a_typed_global::$(Union{Tuple{Integer},Tuple{Nothing}}))) === nothing
@@ -8257,11 +8438,12 @@ end
 module OverlayModule
 
 using Base.Experimental: @MethodTable, @overlay
+using Test
 
 @MethodTable mt
 # long function def
-@overlay mt function sin(x::Float64)
-    1
+let m = @overlay mt function sin(x::Float64); 1; end
+    @test isa(m, Method)
 end
 # short function def
 @overlay mt cos(x::Float64) = 2
@@ -8280,9 +8462,35 @@ let ms = Base._methods_by_ftype(Tuple{typeof(sin), Int}, OverlayModule.mt, 1, Ba
     @test isempty(ms)
 end
 
+# fresh module to ensure uncached methods
+module OverlayMTTest
+    using Base.Experimental: @MethodTable, @overlay
+    @MethodTable(mt)
+
+    function overlay_only end
+    @overlay mt overlay_only(x::Int) = x * 2
+end
+
+# #60702 & #60716: Overlay methods must be found without prior cache population
+let world = Base.get_world_counter()
+    mi = Base.method_instance(OverlayMTTest.overlay_only, Tuple{Int};
+                              world, method_table=OverlayMTTest.mt)
+    @test mi isa Core.MethodInstance
+    @test mi.def.module === OverlayMTTest
+end
+
+# #60712: Global-only methods must NOT be found via custom MT
+let
+    @eval global_only_func(x::Int) = x + 1
+    world = Base.get_world_counter()
+    mi = Base.method_instance(global_only_func, Tuple{Int};
+                              world, method_table=OverlayMTTest.mt)
+    @test mi === nothing
+end
+
 # precompilation
 let load_path = mktempdir()
-    depot_path = mktempdir()
+    depot_path = mkdepottempdir()
     try
         pushfirst!(LOAD_PATH, load_path)
         pushfirst!(DEPOT_PATH, depot_path)
@@ -8324,11 +8532,6 @@ let load_path = mktempdir()
         filter!((≠)(load_path), LOAD_PATH)
         filter!((≠)(depot_path), DEPOT_PATH)
         rm(load_path, recursive=true, force=true)
-        try
-            rm(depot_path, force=true, recursive=true)
-        catch err
-            @show err
-        end
     end
 end
 
@@ -8398,3 +8601,122 @@ f_call_me() = invoke(f_invoke_me, f_invoke_me_ci)
 f_invalidate_me() = 2
 @test_throws ErrorException invoke(f_invoke_me, f_invoke_me_ci)
 @test_throws ErrorException f_call_me()
+
+mysin(x::Float64) = sin(x)
+@test mysin(1.0) == sin(1.0)
+const mysin_ci = Base.specialize_method(Base._which(Tuple{typeof(mysin), Float64})).cache
+mysin2(x::Float64) = invoke(mysin, mysin_ci, x)
+@test mysin2(1.0) == sin(1.0)
+@test any(1:3) do _
+    @allocated(mysin2(rand())) == 0
+end
+let this_world = Base.get_world_counter()
+    f(x) = invoke(mysin, mysin_ci, x)
+    @atomic mysin_ci.min_world = this_world + 10
+    @test_throws ErrorException f(1.0)
+end
+
+
+myfun57023a(::Type{T}) where {T} = (x = @ccall mycfun()::Ptr{T}; x)
+@test only(code_lowered(myfun57023a)).has_fcall
+myfun57023b(::Type{T}) where {T} = (x = @cfunction myfun57023a Ptr{T} (Ref{T},); x)
+@test only(code_lowered(myfun57023b)).has_fcall
+
+# issue #57315
+global flag57315=false
+function f57315()
+    global flag57315
+    if flag57315
+        flag_2=true
+    else
+        if flag_2
+            return 2
+        end
+    end
+    return 1
+end
+@test_throws UndefVarError(:flag_2, :local) f57315()
+
+# issue #57446
+module GlobalAssign57446
+    using Test
+    global theglobal
+    (@__MODULE__).theglobal = 1
+    @test theglobal == 1
+end
+
+# issue #57638 - circular imports
+module M57638
+module I
+    using ..M57638
+end
+using .I
+end
+convert(Core.Binding, GlobalRef(M57638.I, :Base))
+@test M57638.Base === Base
+
+module M57638_2
+module I
+    using ..M57638_2
+    export Base
+end
+using .I
+export Base
+end
+@test M57638_2.Base === Base
+
+module M57638_3
+    module M2
+        using ..M57638_3
+        module M3
+            const x = 1
+            export x
+        end
+        using .M3
+        export x
+    end
+    using .M2
+    export x
+end
+@test M57638_3.x === 1
+
+@testset "no unnecessary methods for comparison functions with generically correct and performant fallback methods" begin
+    @test (isone ∘ length ∘ methods)(>, Tuple{Any, Any})
+    @test (isone ∘ length ∘ methods)(>=, Tuple{Any, Any})
+end
+
+module GlobalBindingMulti
+    module M
+        export S
+        module C
+            export S
+            struct A end
+            S = A() # making S const makes the error go away
+        end
+        using .C
+    end
+
+    using .M
+    using .M.C
+end
+@test GlobalBindingMulti.S === GlobalBindingMulti.M.C.S
+
+#58434 bitsegal comparison of oddly sized fields
+primitive type ByteString58434 (18 * 8) end
+
+@test Base.datatype_isbitsegal(Tuple{ByteString58434}) == false
+@test Base.datatype_haspadding(Tuple{ByteString58434}) == (length(Base.padding(Tuple{ByteString58434})) > 0)
+
+# #60659 - Behavior of using'd ambiguous bindings
+module AmbiguousUsing60659
+    using Test
+    module A
+        export X
+        module B; struct X; end; export X; end
+        module C; struct X; end; export X; end
+        using .B, .C
+    end
+    module D; struct X; end; export X; end
+    using .D, .A
+    @test_throws UndefVarError X
+end

@@ -5,6 +5,8 @@ using Unicode
 using Unicode: normalize, isassigned, julia_chartransform
 import Random
 
+@test isempty(Test.detect_closure_boxes(Unicode))
+
 Random.seed!(12345)
 
 @testset "string normalization" begin
@@ -284,6 +286,8 @@ end
     @test_throws BoundsError graphemes("äöüx", 2:5)
     @test_throws BoundsError graphemes("äöüx", 5:5)
     @test_throws ArgumentError graphemes("äöüx", 0:1)
+
+    @test @allocated(length(graphemes("äöüx"))) == 0
 end
 
 @testset "#3721, #6939 up-to-date character widths" begin

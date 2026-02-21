@@ -9,8 +9,8 @@
 Elements in a `Set` are unique, as determined by the elements' definition of `isequal`.
 The order of elements in a `Set` is an implementation detail and cannot be relied on.
 
-See also: [`AbstractSet`](@ref), [`BitSet`](@ref), [`Dict`](@ref),
-[`push!`](@ref), [`empty!`](@ref), [`union!`](@ref), [`in`](@ref), [`isequal`](@ref)
+See also [`AbstractSet`](@ref), [`BitSet`](@ref), [`Dict`](@ref),
+[`push!`](@ref), [`empty!`](@ref), [`union!`](@ref), [`in`](@ref), [`isequal`](@ref).
 
 # Examples
 ```jldoctest; filter = r"^  '.'"ma
@@ -92,19 +92,19 @@ length(s::Set)  = length(s.dict)
 in(x, s::Set) = haskey(s.dict, x)
 
 """
-    in!(x, s::AbstractSet) -> Bool
+    in!(x, s::AbstractSet)::Bool
 
 If `x` is in `s`, return `true`. If not, push `x` into `s` and return `false`.
 This is equivalent to `in(x, s) ? true : (push!(s, x); false)`, but may have a
 more efficient implementation.
 
-See also: [`in`](@ref), [`push!`](@ref), [`Set`](@ref)
-
 !!! compat "Julia 1.11"
     This function requires at least 1.11.
 
+See also [`in`](@ref), [`push!`](@ref), [`Set`](@ref).
+
 # Examples
-```jldoctest; filter = r"^  [1234]\$"
+```jldoctest; filter = r"^\\s+\\d\$"m
 julia> s = Set{Any}([1, 2, 3]); in!(4, s)
 false
 
@@ -169,7 +169,7 @@ copymutable(s::Set{T}) where {T} = Set{T}(s)
 # Set is the default mutable fall-back
 copymutable(s::AbstractSet{T}) where {T} = Set{T}(s)
 
-sizehint!(s::Set, newsz; shrink::Bool=true) = (sizehint!(s.dict, newsz; shrink); s)
+sizehint!(s::Set, newsz::Integer; shrink::Bool=true) = (sizehint!(s.dict, newsz; shrink); s)
 empty!(s::Set) = (empty!(s.dict); s)
 rehash!(s::Set) = (rehash!(s.dict); s)
 
@@ -205,7 +205,7 @@ as determined by [`isequal`](@ref) and [`hash`](@ref), in the order that the fir
 set of equivalent elements originally appears. The element type of the
 input is preserved.
 
-See also: [`unique!`](@ref), [`allunique`](@ref), [`allequal`](@ref).
+See also [`unique!`](@ref), [`allunique`](@ref), [`allequal`](@ref).
 
 # Examples
 ```jldoctest
@@ -259,7 +259,7 @@ _unique_from(itr, out, seen, i) = unique_from(itr, out, seen, i)
     return out
 end
 
-unique(r::AbstractRange) = allunique(r) ? r : oftype(r, r[begin:begin])
+unique(r::AbstractRange) = allunique(r) ? r : oftype(r, r[begin]:r[begin])
 
 """
     unique(f, itr)
@@ -478,8 +478,8 @@ function unique!(itr)
 end
 
 """
-    allunique(itr) -> Bool
-    allunique(f, itr) -> Bool
+    allunique(itr)::Bool
+    allunique(f, itr)::Bool
 
 Return `true` if all values from `itr` are distinct when compared with [`isequal`](@ref).
 Or if all of `[f(x) for x in itr]` are distinct, for the second method.
@@ -489,10 +489,10 @@ The precise number of calls is regarded as an implementation detail.
 
 `allunique` may use a specialized implementation when the input is sorted.
 
-See also: [`unique`](@ref), [`issorted`](@ref), [`allequal`](@ref).
-
 !!! compat "Julia 1.11"
     The method `allunique(f, itr)` requires at least Julia 1.11.
+
+See also [`unique`](@ref), [`issorted`](@ref), [`allequal`](@ref).
 
 # Examples
 ```jldoctest
@@ -602,8 +602,8 @@ function allunique(f::F, t::Tuple) where {F}
 end
 
 """
-    allequal(itr) -> Bool
-    allequal(f, itr) -> Bool
+    allequal(itr)::Bool
+    allequal(f, itr)::Bool
 
 Return `true` if all values from `itr` are equal when compared with [`isequal`](@ref).
 Or if all of `[f(x) for x in itr]` are equal, for the second method.
@@ -611,13 +611,13 @@ Or if all of `[f(x) for x in itr]` are equal, for the second method.
 Note that `allequal(f, itr)` may call `f` fewer than `length(itr)` times.
 The precise number of calls is regarded as an implementation detail.
 
-See also: [`unique`](@ref), [`allunique`](@ref).
-
 !!! compat "Julia 1.8"
     The `allequal` function requires at least Julia 1.8.
 
 !!! compat "Julia 1.11"
     The method `allequal(f, itr)` requires at least Julia 1.11.
+
+See also [`unique`](@ref), [`allunique`](@ref).
 
 # Examples
 ```jldoctest
@@ -717,7 +717,7 @@ If `count` is specified, then replace at most `count` occurrences in total.
 See also [`replace`](@ref replace(A, old_new::Pair...)).
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\$"m
 julia> replace!([1, 2, 1, 3], 1=>0, 2=>4, count=2)
 4-element Vector{Int64}:
  0
@@ -753,7 +753,7 @@ If `count` is specified, then replace at most `count` values in total
 (replacements being defined as `new(x) !== x`).
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d+(\\s+=>\\s+\\d)?\$"m
 julia> replace!(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
 4-element Vector{Int64}:
  2
@@ -849,7 +849,7 @@ If `count` is specified, then replace at most `count` values in total
     Version 1.7 is required to replace elements of a `Tuple`.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> replace(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
 4-element Vector{Int64}:
  2

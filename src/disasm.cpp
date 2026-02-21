@@ -99,7 +99,9 @@
 // for outputting assembly
 #include <llvm/CodeGen/AsmPrinter.h>
 #include <llvm/CodeGen/AsmPrinterHandler.h>
-#include <llvm/CodeGen/DebugHandlerBase.h>
+#if JL_LLVM_VERSION >= 200000
+#include <llvm/CodeGen/CodeGenTargetMachineImpl.h>
+#endif
 #include <llvm/CodeGen/MachineModuleInfo.h>
 #include <llvm/CodeGen/Passes.h>
 #include <llvm/CodeGen/TargetPassConfig.h>
@@ -456,6 +458,9 @@ static void jl_strip_llvm_debug(Module *m, bool all_meta, LineNumberAnnotatedWri
                 if (AAW)
                     AAW->addDebugLoc(&inst, inst.getDebugLoc());
                 inst.setDebugLoc(DebugLoc());
+#if JL_LLVM_VERSION >= 190000
+                inst.dropDbgRecords();
+#endif
             }
             if (deletelast) {
                 deletelast->eraseFromParent();
@@ -538,7 +543,7 @@ jl_value_t *jl_dump_function_ir_impl(jl_llvmf_dump_t *dump, char strip_ir_metada
 }
 
 static void jl_dump_asm_internal(
-        uintptr_t Fptr, size_t Fsize, int64_t slide,
+        uintptr_t Fptr, size_t Fsize, uint64_t slide,
         object::SectionRef Section,
         DIContext *di_ctx,
         raw_ostream &rstream,
@@ -588,7 +593,7 @@ jl_value_t *jl_dump_fptr_asm_impl(uint64_t fptr, char emit_mc, const char* asm_v
 
     // Find debug info (line numbers) to print alongside
     object::SectionRef Section;
-    int64_t slide = 0;
+    uint64_t slide = 0;
     uint64_t symsize = 0;
     llvm::DIContext *context = NULL;
     if (!jl_DI_for_fptr(fptr, &symsize, &slide, &Section, &context)) {
@@ -641,9 +646,9 @@ class SymbolTable {
     int Pass;
     const object::ObjectFile *object;
     uint64_t ip; // virtual instruction pointer of the current instruction
-    int64_t slide;
+    uint64_t slide;
 public:
-    SymbolTable(MCContext &Ctx, const object::ObjectFile *object, int64_t slide, const FuncMCView &MemObj) JL_NOTSAFEPOINT
+    SymbolTable(MCContext &Ctx, const object::ObjectFile *object, uint64_t slide, const FuncMCView &MemObj) JL_NOTSAFEPOINT
         : Ctx(Ctx), MemObj(MemObj), object(object), ip(0), slide(slide) {}
     ~SymbolTable() JL_NOTSAFEPOINT = default;
     const FuncMCView &getMemoryObject() const JL_NOTSAFEPOINT { return MemObj; }
@@ -846,7 +851,7 @@ std::string rawCodeComment(const llvm::ArrayRef<uint8_t>& Memory, const llvm::Tr
 }
 
 static void jl_dump_asm_internal(
-        uintptr_t Fptr, size_t Fsize, int64_t slide,
+        uintptr_t Fptr, size_t Fsize, uint64_t slide,
         object::SectionRef Section,
         DIContext *di_ctx,
         raw_ostream &rstream,
@@ -869,6 +874,8 @@ static void jl_dump_asm_internal(
     SourceMgr SrcMgr;
 
     MCTargetOptions Options;
+    Options.AsmVerbose = true;
+    Options.MCUseDwarfDirectory = MCTargetOptions::EnableDwarfDirectory;
     std::unique_ptr<MCAsmInfo> MAI(
         TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TheTriple.str()), TheTriple.str(), Options));
     assert(MAI && "Unable to create target asm info!");
@@ -917,7 +924,11 @@ static void jl_dump_asm_internal(
     // LLVM will destroy the formatted stream, and we keep the raw stream.
     std::unique_ptr<formatted_raw_ostream> ustream(new formatted_raw_ostream(rstream));
     std::unique_ptr<MCStreamer> Streamer(
-#if JL_LLVM_VERSION >= 190000
+#if JL_LLVM_VERSION >= 210000
+        TheTarget->createAsmStreamer(Ctx, std::move(ustream),
+
+                                     std::move(IP), std::move(CE), std::move(MAB))
+#elif JL_LLVM_VERSION >= 190000
         TheTarget->createAsmStreamer(Ctx, std::move(ustream),
 
                                      IP.release(), std::move(CE), std::move(MAB))
@@ -1135,7 +1146,11 @@ static void jl_dump_asm_internal(
 
 /// addPassesToX helper drives creation and initialization of TargetPassConfig.
 static MCContext *
+#if JL_LLVM_VERSION >= 200000
+addPassesToGenerateCode(CodeGenTargetMachineImpl *TM, PassManagerBase &PM) {
+#else
 addPassesToGenerateCode(LLVMTargetMachine *TM, PassManagerBase &PM) {
+#endif
     TargetPassConfig *PassConfig = TM->createPassConfig(PM);
     PassConfig->setDisableVerify(false);
     PM.add(PassConfig);
@@ -1149,11 +1164,7 @@ addPassesToGenerateCode(LLVMTargetMachine *TM, PassManagerBase &PM) {
     return &MMIWP->getMMI().getContext();
 }
 
-#if JL_LLVM_VERSION >= 190000
-class LineNumberPrinterHandler : public DebugHandlerBase {
-#else
 class LineNumberPrinterHandler : public AsmPrinterHandler {
-#endif
     MCStreamer &S;
     LineNumberAnnotatedWriter LinePrinter;
     std::string Buffer;
@@ -1162,11 +1173,7 @@ class LineNumberPrinterHandler : public AsmPrinterHandler {
 
 public:
     LineNumberPrinterHandler(AsmPrinter &Printer, const char *debuginfo)
-        :
-#if JL_LLVM_VERSION >= 190000
-          DebugHandlerBase(&Printer),
-#endif
-          S(*Printer.OutStreamer),
+        : S(*Printer.OutStreamer),
           LinePrinter("; ", true, debuginfo),
           RawStream(Buffer),
           Stream(RawStream) {}
@@ -1185,20 +1192,12 @@ public:
     //virtual void beginModule(Module *M) override {}
     virtual void endModule() override {}
     /// note that some AsmPrinter implementations may not call beginFunction at all
-#if JL_LLVM_VERSION >= 190000
-    virtual void beginFunctionImpl(const MachineFunction *MF) override {
-#else
     virtual void beginFunction(const MachineFunction *MF) override {
-#endif
         LinePrinter.emitFunctionAnnot(&MF->getFunction(), Stream);
         emitAndReset();
     }
     //virtual void markFunctionEnd() override {}
-#if JL_LLVM_VERSION >= 190000
-    virtual void endFunctionImpl(const MachineFunction *MF) override {
-#else
     virtual void endFunction(const MachineFunction *MF) override {
-#endif
         LinePrinter.emitEnd(Stream);
         emitAndReset();
     }
@@ -1236,7 +1235,16 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
                 f->addFnAttr(Attribute::NoUnwind);
         });
         auto TMBase = jl_ExecutionEngine->cloneTargetMachine();
+#if JL_LLVM_VERSION >= 200000
+        CodeGenTargetMachineImpl *TM = static_cast<CodeGenTargetMachineImpl*>(TMBase.get());
+#else
         LLVMTargetMachine *TM = static_cast<LLVMTargetMachine*>(TMBase.get());
+#endif
+        MCTargetOptions &Options = TM->Options.MCOptions;
+        Options.AsmVerbose = true;
+        Options.MCUseDwarfDirectory = MCTargetOptions::EnableDwarfDirectory;
+        if (binary)
+            Options.ShowMCEncoding = true;
         legacy::PassManager PM;
         addTargetPasses(&PM, TM->getTargetTriple(), TM->getTargetIRAnalysis());
         if (emit_mc) {
@@ -1254,7 +1262,7 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
             if (!Context)
                 return jl_an_empty_string;
             Context->setGenDwarfForAssembly(false);
-            // Duplicate LLVMTargetMachine::addAsmPrinter here so we can set the asm dialect and add the custom annotation printer
+            // Duplicate CodeGenTargetMachineImpl::addAsmPrinter here so we can set the asm dialect and add the custom annotation printer
             const MCSubtargetInfo &STI = *TM->getMCSubtargetInfo();
             const MCAsmInfo &MAI = *TM->getMCAsmInfo();
             const MCRegisterInfo &MRI = *TM->getMCRegisterInfo();
@@ -1264,27 +1272,28 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
                 OutputAsmDialect = 0;
             if (!strcmp(asm_variant, "intel"))
                 OutputAsmDialect = 1;
-            MCInstPrinter *InstPrinter = TM->getTarget().createMCInstPrinter(
-                jl_ExecutionEngine->getTargetTriple(), OutputAsmDialect, MAI, MII, MRI);
-             std::unique_ptr<MCAsmBackend> MAB(TM->getTarget().createMCAsmBackend(
-                STI, MRI, TM->Options.MCOptions));
+            std::unique_ptr<MCInstPrinter> InstPrinter(TM->getTarget().createMCInstPrinter(
+                                                           jl_ExecutionEngine->getTargetTriple(), OutputAsmDialect, MAI, MII, MRI));
+            std::unique_ptr<MCAsmBackend> MAB(TM->getTarget().createMCAsmBackend(
+                STI, MRI, Options));
             std::unique_ptr<MCCodeEmitter> MCE;
             if (binary) { // enable MCAsmStreamer::AddEncodingComment printing
                 MCE.reset(TM->getTarget().createMCCodeEmitter(MII, *Context));
             }
             auto FOut = std::make_unique<formatted_raw_ostream>(asmfile);
             std::unique_ptr<MCStreamer> S(TM->getTarget().createAsmStreamer(
-#if JL_LLVM_VERSION >= 190000
-                *Context, std::move(FOut), InstPrinter, std::move(MCE), std::move(MAB)
+#if JL_LLVM_VERSION >= 210000
+                *Context, std::move(FOut), std::move(InstPrinter), std::move(MCE), std::move(MAB)
+#elif JL_LLVM_VERSION >= 190000
+                *Context, std::move(FOut), InstPrinter.release(), std::move(MCE), std::move(MAB)
 #else
                 *Context, std::move(FOut), true, true, InstPrinter, std::move(MCE),
                 std::move(MAB), false
 #endif
                     ));
-            std::unique_ptr<AsmPrinter> Printer(
-                TM->getTarget().createAsmPrinter(*TM, std::move(S)));
+            AsmPrinter *Printer = TM->getTarget().createAsmPrinter(*TM, std::move(S));
 #if JL_LLVM_VERSION >= 190000
-            Printer->addDebugHandler(
+            Printer->addAsmPrinterHandler(
                         std::make_unique<LineNumberPrinterHandler>(*Printer, debuginfo));
 #else
             Printer->addAsmPrinterHandler(AsmPrinter::HandlerInfo(
@@ -1293,7 +1302,7 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
 #endif
             if (!Printer)
                 return jl_an_empty_string;
-            PM.add(Printer.release());
+            PM.add(Printer);
             PM.add(createFreeMachineFunctionPass());
             TSM->withModuleDo([&](Module &m){ PM.run(m); });
         }

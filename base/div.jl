@@ -43,21 +43,34 @@ julia> div(4, 3, RoundFromZero)
 julia> div(-4, 3, RoundFromZero)
 -2
 ```
-Because `div(x, y)` implements strictly correct truncated rounding based on the true
-value of floating-point numbers, unintuitive situations can arise. For example:
-```jldoctest
-julia> div(6.0, 0.1)
-59.0
-julia> 6.0 / 0.1
-60.0
-julia> 6.0 / big(0.1)
-59.99999999999999666933092612453056361837965690217069245739573412231113406246995
-```
-What is happening here is that the true value of the floating-point number written
-as `0.1` is slightly larger than the numerical value 1/10 while `6.0` represents
-the number 6 precisely. Therefore the true value of `6.0 / 0.1` is slightly less
-than 60. When doing division, this is rounded to precisely `60.0`, but
-`div(6.0, 0.1, RoundToZero)` always truncates the true value, so the result is `59.0`.
+!!! note "Floating-point numbers"
+    Accurate results for floating-point arguments are only guaranteed when the
+    mathematical value ``\\frac{x}{y}`` is within the range of exactly representable
+    integers for the given floating-point type, that is, when `eps(x/y) ≤ 1`, or
+    in other words, given `a = div(x, y)`, when `abs(a) < maxintfloat(a)`.
+
+    Because `div(x, y)` implements strict truncated rounding based on the quotient
+    and remainder of the Euclidean division, and because the binary representation
+    of floating-point numbers (in most cases) only approximates the decimal
+    representation we use, unintuitive situations can arise. For example:
+    ```jldoctest
+    julia> div(6.0, 0.1)
+    59.0
+    julia> 6.0 / 0.1
+    60.0
+    julia> 6.0 / big(0.1)
+    59.99999999999999666933092612453056361837965690217069245739573412231113406246995
+    ```
+    What is happening here is that the binary representation of the `Float64`
+    number written as `0.1` is slightly larger than the numerical value ``0.1``
+    (just like `0.3333333333333333` is less than ``1/3`` in decimal), while `6.0`
+    represents the number ``6`` precisely. Therefore the mathematical result of
+    `6.0` divided by (the `Float64` representation of) `0.1` is slightly less
+    than ``60``. The result of the floating-point division is rounded to precisely
+    `60.0`, but `div(6.0, 0.1, RoundToZero)` takes account of the quotient and
+    (here non-zero) remainder of the Euclidean division, so the result is `59.0`.
+
+    See also [`rem`](@ref), [`divrem`](@ref).
 """
 div(x, y, r::RoundingMode)
 
@@ -137,21 +150,34 @@ julia> fld.(-5:5, 3)'
 1×11 adjoint(::Vector{Int64}) with eltype Int64:
  -2  -2  -1  -1  -1  0  0  0  1  1  1
 ```
-Because `fld(x, y)` implements strictly correct floored rounding based on the true
-value of floating-point numbers, unintuitive situations can arise. For example:
-```jldoctest
-julia> fld(6.0, 0.1)
-59.0
-julia> 6.0 / 0.1
-60.0
-julia> 6.0 / big(0.1)
-59.99999999999999666933092612453056361837965690217069245739573412231113406246995
-```
-What is happening here is that the true value of the floating-point number written
-as `0.1` is slightly larger than the numerical value 1/10 while `6.0` represents
-the number 6 precisely. Therefore the true value of `6.0 / 0.1` is slightly less
-than 60. When doing division, this is rounded to precisely `60.0`, but
-`fld(6.0, 0.1)` always takes the floor of the true value, so the result is `59.0`.
+!!! note "Floating-point numbers"
+    Accurate results for floating-point arguments are only guaranteed when the
+    mathematical value ``\\frac{x}{y}`` is within the range of exactly representable
+    integers for the given floating-point type, that is, when `eps(x/y) ≤ 1`, or
+    in other words, given `a = fld(x, y)`, when `abs(a) < maxintfloat(a)`.
+
+    Because `fld(x, y)` implements strict floored rounding based on the quotient
+    and remainder of the Euclidean division, and because the binary representation
+    of floating-point numbers (in most cases) only approximates the decimal
+    representation we use, unintuitive situations can arise. For example:
+    ```jldoctest
+    julia> fld(6.0, 0.1)
+    59.0
+    julia> 6.0 / 0.1
+    60.0
+    julia> 6.0 / big(0.1)
+    59.99999999999999666933092612453056361837965690217069245739573412231113406246995
+    ```
+    What is happening here is that the binary representation of the `Float64`
+    number written as `0.1` is slightly larger than the numerical value ``0.1``
+    (just like `0.3333333333333333` is less than ``1/3`` in decimal), while `6.0`
+    represents the number ``6`` precisely. Therefore the mathematical result of
+    `6.0` divided by (the `Float64` representation of) `0.1` is slightly less
+    than ``60``. The result of the floating-point division is rounded to precisely
+    `60.0`, but `fld(6.0, 0.1)` takes account of the quotient and (here non-zero)
+    remainder of the Euclidean division, so the result is `59.0`.
+
+    See also [`rem`](@ref), [`divrem`](@ref).
 """
 fld(a, b) = div(a, b, RoundDown)
 
@@ -171,6 +197,34 @@ julia> cld.(-5:5, 3)'
 1×11 adjoint(::Vector{Int64}) with eltype Int64:
  -1  -1  -1  0  0  0  1  1  1  2  2
 ```
+!!! note "Floating-point numbers"
+    Accurate results for floating-point arguments are only guaranteed when the
+    mathematical value ``\\frac{x}{y}`` is within the range of exactly representable
+    integers for the given floating-point type, that is, when `eps(x/y) ≤ 1`, or
+    in other words, given `a = cld(x, y)`, when `abs(a) < maxintfloat(a)`.
+
+    Because `cld(x, y)` implements strict ceiled rounding based on the quotient
+    and remainder of the Euclidean division, and because the binary representation
+    of floating-point numbers (in most cases) only approximates the decimal
+    representation we use, unintuitive situations can arise. For example:
+    ```jldoctest
+    julia> cld(3.0, 0.3)
+    11.0
+    julia> 3.0 / 0.3
+    10.0
+    julia> 3.0 / big(0.3)
+    10.00000000000000037007434154171886050337904945061778828900298697586147515340753
+    ```
+    What is happening here is that the binary representation of the `Float64`
+    number written as `0.3` is slightly less than the numerical value ``0.3``
+    (just like `0.3333333333333333` is less than ``1/3`` in decimal), while `3.0`
+    represents the number ``3`` precisely. Therefore the mathematical result of
+    `3.0` divided by (the `Float64` representation of) `0.3` is slightly larger
+    than ``10``. The result of the floating-point division is rounded to precisely
+    `10.0`, but `cld(3.0, 0.3)` takes account of the quotient and (here non-zero)
+    remainder of the Euclidean division, so the result is `11.0`.
+
+    See also [`rem`](@ref), [`divrem`](@ref).
 """
 cld(a, b) = div(a, b, RoundUp)
 
@@ -182,7 +236,7 @@ The quotient and remainder from Euclidean division.
 Equivalent to `(div(x, y, r), rem(x, y, r))`. Equivalently, with the default
 value of `r`, this call is equivalent to `(x ÷ y, x % y)`.
 
-See also: [`fldmod`](@ref), [`cld`](@ref).
+See also [`fldmod`](@ref), [`cld`](@ref).
 
 # Examples
 ```jldoctest
@@ -286,7 +340,7 @@ end
 The floored quotient and modulus after division. A convenience wrapper for
 `divrem(x, y, RoundDown)`. Equivalent to `(fld(x, y), mod(x, y))`.
 
-See also: [`fld`](@ref), [`cld`](@ref), [`fldmod1`](@ref).
+See also [`fld`](@ref), [`cld`](@ref), [`fldmod1`](@ref).
 """
 fldmod(x, y) = divrem(x, y, RoundDown)
 
@@ -322,7 +376,7 @@ end
 
 # For bootstrapping purposes, we define div for integers directly. Provide the
 # generic signature also
-div(a::T, b::T, ::typeof(RoundToZero)) where {T<:Union{BitSigned, BitUnsigned64}} = div(a, b)
+div(a::T, b::T, ::typeof(RoundToZero)) where {T<:Union{BitSigned, BitUnsigned}} = div(a, b)
 div(a::Bool, b::Bool, r::RoundingMode) = div(a, b)
 # Prevent ambiguities
 for rm in (RoundUp, RoundDown, RoundToZero, RoundFromZero)
@@ -335,10 +389,6 @@ function div(x::Bool, y::Bool, rnd::Union{typeof(RoundNearest),
 end
 fld(a::T, b::T) where {T<:Union{Integer,AbstractFloat}} = div(a, b, RoundDown)
 cld(a::T, b::T) where {T<:Union{Integer,AbstractFloat}} = div(a, b, RoundUp)
-div(a::Int128, b::Int128, ::typeof(RoundToZero)) = div(a, b)
-div(a::UInt128, b::UInt128, ::typeof(RoundToZero)) = div(a, b)
-rem(a::Int128, b::Int128, ::typeof(RoundToZero)) = rem(a, b)
-rem(a::UInt128, b::UInt128, ::typeof(RoundToZero)) = rem(a, b)
 
 # These are kept for compatibility with external packages overriding fld / cld.
 # In 2.0, packages should extend div(a, b, r) instead, in which case, these can
@@ -381,7 +431,8 @@ function div(x::T, y::T, ::typeof(RoundUp)) where T<:Integer
     return d + (((x > 0) == (y > 0)) & (d * y != x))
 end
 
-# Real
-# NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
-# so it is used here as the basis of float div().
-div(x::T, y::T, r::RoundingMode) where {T<:AbstractFloat} = convert(T, round((x - rem(x, y, r)) / y))
+# Floats
+# NB. If eps(x/y) > 1, x/y rounds to an unsafe integer which can't be floored
+# or ceiled if it needs to since x/y ± 1 is not representable.
+# @see https://github.com/JuliaLang/julia/issues/49450#issuecomment-3694946121
+div(x::T, y::T, r::RoundingMode) where {T<:AbstractFloat} = round(x / y - rem(x, y, r) / y)

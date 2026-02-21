@@ -8,6 +8,7 @@
 #define JL_GC_INTERFACE_H
 
 #include "dtypes.h"
+#include "julia_atomics.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -17,6 +18,7 @@ struct _jl_tls_states_t;
 struct _jl_value_t;
 struct _jl_weakref_t;
 struct _jl_datatype_t;
+struct _jl_genericmemory_t;
 
 // ========================================================================= //
 // GC Metrics
@@ -24,34 +26,75 @@ struct _jl_datatype_t;
 
 // This struct must be kept in sync with the Julia type of the same name in base/timing.jl
 typedef struct {
+    // (GC Internal) Number of allocated bytes since the last collection. This field is reset
+    // after the end of every garbage collection cycle, so it will always be zero if observed
+    // during execution of Julia user code
     int64_t allocd;
+    // (GC Internal) Number of allocated bytes within a `gc_disable/gc_enable` block. This field is
+    // reset after every garbage collection cycle and will always be zero in case of no use
+    // of `gc_disable/gc_enable` blocks
     int64_t deferred_alloc;
+    // (GC Internal) Number of bytes freed bytes in the current collection cycle. This field is
+    // reset after every garbage collection cycle and will always be zero when observed
+    // during execution of Julia user code. It's incremented as memory is reclaimed during a collection,
+    // used to gather some statistics within the collection itself and reset at the end of a GC cycle.
     int64_t freed;
+    // Number of `malloc/calloc` calls (never reset by the runtime)
     uint64_t malloc;
+    // Number of `realloc` calls (never reset by the runtime)
     uint64_t realloc;
+    // Number of pool allocation calls (never reset by the runtime)
+    // NOTE: Julia's stock GC uses an internal (pool) allocator for objects up to 2032 bytes.
+    // Larger objects are allocated through `malloc/calloc`.
     uint64_t poolalloc;
+    // Number of allocations for "big objects" (non-array objects larger than 2032 bytes)
+    // (never reset by the runtime)
     uint64_t bigalloc;
+    // Number of `free` calls (never reset by the runtime)
     uint64_t freecall;
+    // Total time spent in garbage collection (never reset by the runtime)
     uint64_t total_time;
+    // (GC internal) Total number of bytes allocated since the program started
     uint64_t total_allocd;
+    // (GC internal) Per-thread allocation quota before triggering a GC
+    // NOTE: This field is no longer used by the heuristics in the stock GC
     size_t interval;
+    // Duration of the last GC pause in nanoseconds
     int pause;
+    // Number of full GC sweeps completed so far (never reset by the runtime)
     int full_sweep;
+    // Maximum pause duration observed so far in nanoseconds
     uint64_t max_pause;
+    // Maximum number of bytes allocated any point in time.
+    // NOTE: This is aggregated over objects, not pages
     uint64_t max_memory;
+    // Time taken to reach a safepoint in the last GC cycle in nanoseconds
     uint64_t time_to_safepoint;
+    // Maximum time taken to reach a safepoint across all GCs in nanoseconds
     uint64_t max_time_to_safepoint;
+    // Total time taken to reach safepoints across all GCs in nanoseconds
     uint64_t total_time_to_safepoint;
+    // Time spent in the last GC sweeping phase in nanoseconds
     uint64_t sweep_time;
+    // Time spent in the last GC marking phase in nanoseconds
     uint64_t mark_time;
+    // Time spent sweeping stack pools in the last GC in nanoseconds
     uint64_t stack_pool_sweep_time;
+    // Total time spent in sweeping phase across all GCs in nanoseconds
     uint64_t total_sweep_time;
-    uint64_t    total_sweep_page_walk_time;
-    uint64_t    total_sweep_madvise_time;
-    uint64_t    total_sweep_free_mallocd_memory_time;
+    // Total time spent walking pool allocated pages during sweeping phase across all GCs in nanoseconds
+    uint64_t total_sweep_page_walk_time;
+    // Total time spent in madvise calls during sweeping phase across all GCs in nanoseconds
+    uint64_t total_sweep_madvise_time;
+    // Total time spent in freeing malloc'd memory during sweeping phase across all GCs in nanoseconds
+    uint64_t total_sweep_free_mallocd_memory_time;
+    // Total time spent in marking phase across all GCs in nanoseconds
     uint64_t total_mark_time;
+    // Total time spent sweeping stack pools across all GCs in nanoseconds
     uint64_t total_stack_pool_sweep_time;
+    // Timestamp of the last full GC sweep in nanoseconds
     uint64_t last_full_sweep;
+    // Timestamp of the last incremental GC sweep in nanoseconds
     uint64_t last_incremental_sweep;
 } jl_gc_num_t;
 
@@ -95,9 +138,7 @@ JL_DLLEXPORT int jl_gc_is_enabled(void);
 // Sets a soft limit to Julia's heap.
 JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem);
 // Runs a GC cycle. This function's parameter determines whether we're running an
-// incremental, full, or automatic (i.e. heuristic driven) collection. Returns whether we
-// should run a collection cycle again (e.g. a full mark right after a full sweep to ensure
-// we do a full heap traversal).
+// incremental, full, or automatic (i.e. heuristic driven) collection.
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection);
 // Returns whether the thread with `tid` is a collector thread
 JL_DLLEXPORT int gc_is_collector_thread(int tid) JL_NOTSAFEPOINT;
@@ -201,16 +242,23 @@ JL_DLLEXPORT void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align,
 // object header must be included in the object size. This object is allocated in an
 // immortal region that is never swept. The second parameter specifies the type of the
 // object being allocated and will be used to set the object header.
+// If the value passed as alignment is 0, then the result will be aligned according to the object
+// size: if sz is 0 it will be aligned to pointer size, to 2x pointer size if sz < 2*sizeof(void*),
+// or to 16 otherwise.
 //
 // !!! warning: Because permanently allocated objects are not swept, the GC will not
 //              necessarily mark any objects that would have ordinarily been rooted by
 //              the allocated object. All objects stored in fields of this object
 //              must be either permanently allocated or have other roots.
-struct _jl_value_t *jl_gc_permobj(size_t sz, void *ty) JL_NOTSAFEPOINT;
+struct _jl_value_t *jl_gc_permobj(struct _jl_tls_states_t *ptls, size_t sz, void *ty, unsigned align) JL_NOTSAFEPOINT;
 // This function notifies the GC about memory addresses that are set when loading the boot image.
 // The GC may use that information to, for instance, determine that such objects should
 // be treated as marked and belonged to the old generation in nursery collections.
 void jl_gc_notify_image_load(const char* img_data, size_t len);
+// This function notifies the GC about memory addresses that are set when allocating the boot image.
+// The GC may use that information to, for instance, determine that all objects in that chunk of memory should
+// be treated as marked and belonged to the old generation in nursery collections.
+void jl_gc_notify_image_alloc(const char* img_data, size_t len);
 
 // ========================================================================= //
 // Runtime Write-Barriers
@@ -240,16 +288,34 @@ STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 // so write barriers can be omitted until the next allocation. This function is a no-op that
 // can be used to annotate that a write barrier would be required were it not for this property
 // (as opposed to somebody just having forgotten to think about write barriers).
-STATIC_INLINE void jl_gc_wb_fresh(const void *parent, const void *ptr) JL_NOTSAFEPOINT {}
+STATIC_INLINE void jl_gc_wb_fresh(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
+// As an optimization, the current_task is explicitly added to the remset while it is running.
+// Upon deschedule, we conservatively move the write barrier into the young generation.
+// This allows the omission of write barriers for all GC roots on the current task stack (JL_GC_PUSH_*),
+// as well as the Task's explicit fields (but only for the current task).
+// This function is a no-op that can be used to annotate that a write barrier would be required were
+// it not for this property (as opposed to somebody just having forgotten to think about write barriers).
+STATIC_INLINE void jl_gc_wb_current_task(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
 // Used to annotate that a write barrier would be required, but may be omitted because `ptr`
 // is known to be an old object.
-STATIC_INLINE void jl_gc_wb_knownold(const void *parent, const void *ptr) JL_NOTSAFEPOINT {}
+STATIC_INLINE void jl_gc_wb_knownold(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
 // Write-barrier function that must be used after copying multiple fields of an object into
 // another. It should be semantically equivalent to triggering multiple write barriers – one
 // per field of the object being copied, but may be special-cased for performance reasons.
 STATIC_INLINE void jl_gc_multi_wb(const void *parent,
                                   const struct _jl_value_t *ptr) JL_NOTSAFEPOINT;
-
+// Write-barrier function that must be used after copying fields of elements of genericmemory objects
+// into another. It should be semantically equivalent to triggering multiple write barriers – one
+// per field of the object being copied, but may be special-cased for performance reasons.
+STATIC_INLINE void jl_gc_wb_genericmemory_copy_ptr(const struct _jl_value_t *owner, struct _jl_genericmemory_t *src, char* src_p,
+                                          size_t n, struct _jl_datatype_t *dt) JL_NOTSAFEPOINT;
+// Similar to jl_gc_wb_genericmemory_copy but must be used when copying *boxed* elements of a genericmemory
+// object. Note that this barrier also performs the copying unlike jl_gc_wb_genericmemory_copy_ptr.
+// The parameters src_p, dest_p and n will be modified and will contain information about
+// the *uncopied* data after performing this barrier, and will be copied using memmove_refs.
+STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const struct _jl_value_t *owner, _Atomic(void*) * dest_p,
+                                          struct _jl_genericmemory_t *src, _Atomic(void*) * src_p,
+                                          size_t* n) JL_NOTSAFEPOINT;
 #ifdef __cplusplus
 }
 #endif

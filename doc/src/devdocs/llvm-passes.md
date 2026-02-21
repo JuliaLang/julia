@@ -37,15 +37,6 @@ This pass performs most of the GC rooting work required to track pointers betwee
 * Opt Name: `module(FinalLowerGC)`
 
 This pass lowers a few last intrinsics to their final form targeting functions in the `libjulia` library. Separating this from `LateGCLowering` enables other backends (GPU compilation) to supply their own custom lowerings for these intrinsics, enabling the Julia pipeline to be used on those backends as well.
-
-### LowerHandlers
-
-* Filename: `llvm-lower-handlers.cpp`
-* Class Name: `LowerExcHandlersPass`
-* Opt Name: `function(LowerExcHandlers)`
-
-This pass lowers exception handling intrinsics into calls to runtime functions that are actually called when handling exceptions.
-
 ### RemoveNI
 
 * Filename: `llvm-remove-ni.cpp`

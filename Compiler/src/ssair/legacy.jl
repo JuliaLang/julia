@@ -13,7 +13,7 @@ function inflate_ir!(ci::CodeInfo, mi::MethodInstance)
     if ci.slottypes === nothing
         argtypes = va_process_argtypes(fallback_lattice,
             matching_cache_argtypes(fallback_lattice, mi),
-            ci.nargs, ci.isva)
+            ci.nargs, ci.isva, mi)
     else
         argtypes = ci.slottypes[1:ci.nargs]
     end
@@ -44,7 +44,7 @@ function inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{A
     di = DebugInfoStream(nothing, ci.debuginfo, nstmts)
     stmts = InstructionStream(code, ssavaluetypes, info, di.codelocs, ci.ssaflags)
     meta = Expr[]
-    return IRCode(stmts, cfg, di, argtypes, meta, sptypes, WorldRange(ci.min_world, ci.max_world))
+    return IRCode(stmts, cfg, di, argtypes, meta, sptypes, world_range(ci))
 end
 
 """

@@ -427,12 +427,20 @@ void Optimizer::insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert)
         }
         break;
     }
+#if JL_LLVM_VERSION >= 200000
+    CallInst::Create(pass.lifetime_end, {sz, ptr}, "", insert->getIterator());
+#else
     CallInst::Create(pass.lifetime_end, {sz, ptr}, "", insert);
+#endif
 }
 
 void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
 {
+#if JL_LLVM_VERSION >= 200000
+    CallInst::Create(pass.lifetime_start, {sz, ptr}, "", orig->getIterator());
+#else
     CallInst::Create(pass.lifetime_start, {sz, ptr}, "", orig);
+#endif
     BasicBlock *def_bb = orig->getParent();
     std::set<BasicBlock*> bbs{def_bb};
     auto &DT = getDomTree();
@@ -627,10 +635,18 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
         assert(matchvararg);
         (void)matchvararg;
     }
+#if JL_LLVM_VERSION >= 200000
+    auto newF = Intrinsic::getOrInsertDeclaration(call->getModule(), ID, overloadTys);
+#else
     auto newF = Intrinsic::getDeclaration(call->getModule(), ID, overloadTys);
+#endif
     assert(newF->getFunctionType() == newfType);
     newF->setCallingConv(call->getCallingConv());
+#if JL_LLVM_VERSION >= 200000
+    auto newCall = CallInst::Create(newF, args, "", call->getIterator());
+#else
     auto newCall = CallInst::Create(newF, args, "", call);
+#endif
     newCall->setTailCallKind(call->getTailCallKind());
     auto old_attrs = call->getAttributes();
     newCall->setAttributes(AttributeList::get(pass.getLLVMContext(), getFnAttrs(old_attrs),
@@ -662,11 +678,8 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
     // The allocation does not escape or get used in a phi node so none of the derived
     // SSA from it are live when we run the allocation again.
     // It is now safe to promote the allocation to an entry block alloca.
-    size_t align = 1;
-    // TODO: This is overly conservative. May want to instead pass this as a
-    //       parameter to the allocation function directly.
-    if (sz > 1)
-        align = MinAlign(JL_SMALL_BYTE_ALIGNMENT, NextPowerOf2(sz));
+    // Inherit alignment from the original allocation, with GC alignment as minimum.
+    Align align(std::max((unsigned)orig_inst->getRetAlign().valueOrOne().value(), (unsigned)JL_SMALL_BYTE_ALIGNMENT));
     // No debug info for prolog instructions
     IRBuilder<> prolog_builder(&F.getEntryBlock().front());
     AllocaInst *buff;
@@ -682,17 +695,21 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
         const DataLayout &DL = F.getParent()->getDataLayout();
         auto asize = ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), sz / DL.getTypeAllocSize(pass.T_prjlvalue));
         buff = prolog_builder.CreateAlloca(pass.T_prjlvalue, asize);
-        buff->setAlignment(Align(align));
+        buff->setAlignment(align);
         ptr = cast<Instruction>(buff);
     }
     else {
+        // Use alignment-sized chunks so SROA splits the alloca into aligned pieces
+        // which is better for performance and vectorization (see emit_static_alloca).
+        // Cap element size at 64 bits since not all backends support larger integers.
         Type *buffty;
-        if (pass.DL->isLegalInteger(sz * 8))
-            buffty = Type::getIntNTy(pass.getLLVMContext(), sz * 8);
+        unsigned elsize = std::min(align.value(), (uint64_t)8);
+        if (alignTo(sz, elsize) == elsize)
+            buffty = Type::getIntNTy(pass.getLLVMContext(), elsize * 8);
         else
-            buffty = ArrayType::get(Type::getInt8Ty(pass.getLLVMContext()), sz);
+            buffty = ArrayType::get(Type::getIntNTy(pass.getLLVMContext(), elsize * 8), alignTo(sz, elsize) / elsize);
         buff = prolog_builder.CreateAlloca(buffty);
-        buff->setAlignment(Align(align));
+        buff->setAlignment(align);
         ptr = cast<Instruction>(buff);
     }
     insertLifetime(ptr, ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), sz), orig_inst);
@@ -701,6 +718,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
         initializeAlloca(builder, buff, allockind);
     }
     Instruction *new_inst = cast<Instruction>(ptr);
+    new_inst->copyMetadata(*orig_inst);
     new_inst->takeName(orig_inst);
 
     auto simple_replace = [&] (Instruction *orig_i, Instruction *new_i) {
@@ -742,7 +760,9 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
     auto replace_inst = [&] (Instruction *user) {
         Instruction *orig_i = cur.orig_i;
         Instruction *new_i = cur.new_i;
-        if (isa<LoadInst>(user) || isa<StoreInst>(user)) {
+        if (isa<LoadInst>(user) || isa<StoreInst>(user) ||
+            isa<AtomicCmpXchgInst>(user) || isa<AtomicRMWInst>(user)) {
+            // TODO: these atomics are likely removable if the user is the first argument
             user->replaceUsesOfWith(orig_i, new_i);
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
@@ -795,7 +815,11 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
             SmallVector<Value *, 4> IdxOperands(gep->idx_begin(), gep->idx_end());
             auto new_gep = GetElementPtrInst::Create(gep->getSourceElementType(),
                                                      new_i, IdxOperands,
+#if JL_LLVM_VERSION >= 200000
+                                                     gep->getName(), gep->getIterator());
+#else
                                                      gep->getName(), gep);
+#endif
             new_gep->setIsInBounds(gep->isInBounds());
             new_gep->takeName(gep);
             new_gep->copyMetadata(*gep);
@@ -956,6 +980,8 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         uint32_t size;
     };
     SmallVector<SplitSlot,8> slots;
+    // Inherit alignment from the original allocation, with GC alignment as minimum.
+    Align align(std::max((unsigned)orig_inst->getRetAlign().valueOrOne().value(), (unsigned)JL_SMALL_BYTE_ALIGNMENT));
     for (auto memop: use_info.memops) {
         auto offset = memop.first;
         auto &field = memop.second;
@@ -971,12 +997,18 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         else if (field.elty && !field.multiloc) {
             allocty = field.elty;
         }
-        else if (pass.DL->isLegalInteger(field.size * 8)) {
-            allocty = Type::getIntNTy(pass.getLLVMContext(), field.size * 8);
-        } else {
-            allocty = ArrayType::get(Type::getInt8Ty(pass.getLLVMContext()), field.size);
+        else {
+            // Use alignment-sized chunks so SROA splits the alloca into aligned pieces
+            // which is better for performance and vectorization (see emit_static_alloca).
+            // Cap element size at 64 bits since not all backends support larger integers.
+            unsigned elsize = std::min(align.value(), (uint64_t)8);
+            if (alignTo(field.size, elsize) == elsize)
+                allocty = Type::getIntNTy(pass.getLLVMContext(), elsize * 8);
+            else
+                allocty = ArrayType::get(Type::getIntNTy(pass.getLLVMContext(), elsize * 8), alignTo(field.size, elsize) / elsize);
         }
         slot.slot = prolog_builder.CreateAlloca(allocty);
+        slot.slot->setAlignment(align);
         IRBuilder<> builder(orig_inst);
         insertLifetime(slot.slot, ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), field.size), orig_inst);
         initializeAlloca(builder, slot.slot, use_info.allockind);
@@ -1111,6 +1143,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             return;
         }
         else if (isa<AtomicCmpXchgInst>(user) || isa<AtomicRMWInst>(user)) {
+            // TODO: Downgrade atomics here potentially
             auto slot_idx = find_slot(offset);
             auto &slot = slots[slot_idx];
             assert(slot.offset <= offset && slot.offset + slot.size >= offset);
@@ -1238,7 +1271,11 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 bundle = OperandBundleDef("jl_roots", std::move(operands));
                 break;
             }
+#if JL_LLVM_VERSION >= 200000
+            auto new_call = CallInst::Create(call, bundles, call->getIterator());
+#else
             auto new_call = CallInst::Create(call, bundles, call);
+#endif
             new_call->takeName(call);
             call->replaceAllUsesWith(new_call);
             call->eraseFromParent();
@@ -1283,8 +1320,16 @@ bool AllocOpt::doInitialization(Module &M)
 
     DL = &M.getDataLayout();
 
+#if JL_LLVM_VERSION >= 200000
+    lifetime_start = Intrinsic::getOrInsertDeclaration(&M, Intrinsic::lifetime_start, { PointerType::get(M.getContext(), DL->getAllocaAddrSpace()) });
+#else
     lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { PointerType::get(M.getContext(), DL->getAllocaAddrSpace()) });
+#endif
+#if JL_LLVM_VERSION >= 200000
+    lifetime_end = Intrinsic::getOrInsertDeclaration(&M, Intrinsic::lifetime_end, { PointerType::get(M.getContext(), DL->getAllocaAddrSpace()) });
+#else
     lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { PointerType::get(M.getContext(), DL->getAllocaAddrSpace()) });
+#endif
 
     return true;
 }
