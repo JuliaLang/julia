@@ -460,7 +460,7 @@ function serialize(s::AbstractSerializer, meth::Method)
         serialize(s, nothing)
     end
     if isdefined(meth, :recursion_relation)
-        serialize(s, method.recursion_relation)
+        serialize(s, meth.recursion_relation)
     else
         serialize(s, nothing)
     end
