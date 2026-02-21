@@ -337,6 +337,8 @@ using .Checked
 # array structures
 include("indices.jl")
 include("genericmemory.jl")
+include("lightboundserrors.jl")
+include("nonresizablevectors.jl")
 include("array.jl")
 include("abstractarray.jl")
 include("baseext.jl")
