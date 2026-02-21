@@ -38,9 +38,12 @@ end
     @test !in(1,s)
     @test in(2,s)
     @test !in(10002,s)
-    @test in(10000,s)
+    @test in(UInt128(10000),s)
+    @test in(Int32(10000),s)
     @test in(10000.0,s)
     @test !in(10002.0,s)
+    @test !in(typemax(UInt), s)
+    @test !in(typemin(Int)-Int128(14), s)
     @test_throws ArgumentError first(BitSet())
     @test_throws ArgumentError last(BitSet())
     t = copy(s)
@@ -65,11 +68,13 @@ end
     @test !(-1 in BitSet(1:10))
 end
 
-# # issue #8570
-# This requires 2^29 bytes of storage, which is too much for a simple test
-# s = BitSet(typemax(Int32))
-# @test length(s) === 1
-# for b in s; b; end
+@testset "issue #8570" begin
+    let s
+        @test 400 > @allocated s = BitSet(typemax(Int32))
+        @test length(s) === 1
+        @test only(s) == typemax(Int32)
+    end
+end
 
 @testset "union!, symdiff!" begin
     i = BitSet([1, 2, 3])
@@ -155,13 +160,16 @@ end
     for n in -20:0
         @test length(delete!(s, n)) == len
     end
+    @test length(delete!(s, typemax(UInt))) == len
     @test pop!(s, 1) === 1
     @test !(1 in s)
     @test_throws KeyError pop!(s, 1)
     @test_throws KeyError pop!(s, -1)
     @test pop!(s, -1, 1) === 1
     @test pop!(s, 1, 0) === 0
-    @test s === delete!(s, 1)
+    @test 5 in s
+    @test s === delete!(s, 1) === delete!(s, Int8(5))
+    @test !(5 in s)
     for i in s; pop!(s, i); end
     @test isempty(s)
     push!(s, 100)
@@ -346,8 +354,17 @@ end
     x = BitSet(rand(-1000:1000, 500))
     y = copy(x)
     @test union!(x, BitSet(a:b)) == union!(y, BitSet(a:1:b))
-    @test_throws ArgumentError BitSet(Int128(typemin(Int))-1:typemin(Int))
-    @test_throws ArgumentError BitSet(typemax(Int):Int128(typemax(Int))+1)
+    @test_throws InexactError BitSet(Int128(typemin(Int))-1:typemin(Int))
+    @test_throws InexactError BitSet(typemax(Int):Int128(typemax(Int))+1)
     # union! with an empty range doesn't modify the BitSet
     @test union!(x, b:a) == y
+end
+
+@testset "union!(::BitSet, ::AbstractUnitRange) when two ranges do not overlap" begin
+    # see #45574
+    a, b = rand(-10000:-5000), rand(5000:10000)
+    c, d = minmax(rand(20000:30000, 2)...)
+    @test length(union!(BitSet(a:b), c:d)) == length(a:b) + length(c:d)
+    c, d = minmax(rand(-30000:-20000, 2)...)
+    @test length(union!(BitSet(a:b), c:d)) == length(a:b) + length(c:d)
 end

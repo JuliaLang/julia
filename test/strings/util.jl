@@ -1,5 +1,23 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+SubStr(s) = SubString("abc$(s)de", firstindex(s) + 3, lastindex(s) + 3)
+
+@testset "textwidth" begin
+    for (c, w) in [('x', 1), ('α', 1), ('🍕', 2), ('\0', 0), ('\u0302', 0), ('\xc0', 1)]
+        @test textwidth(c) == w
+        @test textwidth(c^3) == w*3
+        @test w == @invoke textwidth(c::AbstractChar)
+    end
+    @test textwidth('\xc0\xa0') == 1 # overlong
+    @test textwidth('\xf0\x80\x80') == 1 # malformed
+    for i in 0x00:0x7f # test all ASCII chars (which have fast path)
+        w = Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), i))
+        c = Char(i)
+        @test textwidth(c) == w
+        @test w == @invoke textwidth(c::AbstractChar)
+    end
+end
+
 @testset "padding (lpad and rpad)" begin
     @test lpad("foo", 2) == "foo"
     @test rpad("foo", 2) == "foo"
@@ -49,6 +67,59 @@
     @test rpad("⟨k|H₁|k̃⟩", 12) |> textwidth == 12
     @test lpad("⟨k|H₁|k⟩", 12) |> textwidth == 12
     @test rpad("⟨k|H₁|k⟩", 12) |> textwidth == 12
+    for pad in (rpad, lpad), p in ('\0', "\0", "\0\0", "\u302")
+        if ncodeunits(p) == 1
+            @test_throws r".*has zero textwidth.*maybe you want.*bytes.*" pad("foo", 10, p)
+        else
+            @test_throws r".*has zero textwidth$" pad("foo", 10, p)
+        end
+    end
+end
+
+@testset "string truncation (ltruncate, rtruncate, ctruncate)" begin
+    @test ltruncate("foo", 4) == "foo"
+    @test ltruncate("foo", 3) == "foo"
+    @test ltruncate("foo", 2) == "…o"
+    @test ltruncate("🍕🍕 I love 🍕", 10) == "…I love 🍕" # handle wide emojis
+    @test ltruncate("🍕🍕 I love 🍕", 10, "[…]") == "[…]love 🍕"
+    # when the replacement string is longer than the trunc
+    # trust that the user wants the replacement string rather than erroring
+    @test ltruncate("abc", 2, "xxxxxx") == "xxxxxx"
+
+    @inferred ltruncate("xxx", 4)
+    @inferred ltruncate("xxx", 2)
+    @inferred ltruncate(@view("xxxxxxx"[1:4]), 4)
+    @inferred ltruncate(@view("xxxxxxx"[1:4]), 2)
+
+    @test rtruncate("foo", 4) == "foo"
+    @test rtruncate("foo", 3) == "foo"
+    @test rtruncate("foo", 2) == "f…"
+    @test rtruncate("🍕🍕 I love 🍕", 10) == "🍕🍕 I lo…"
+    @test rtruncate("🍕🍕 I love 🍕", 10, "[…]") == "🍕🍕 I […]"
+    @test rtruncate("abc", 2, "xxxxxx") == "xxxxxx"
+
+    @inferred rtruncate("xxx", 4)
+    @inferred rtruncate("xxx", 2)
+    @inferred rtruncate(@view("xxxxxxx"[1:4]), 4)
+    @inferred rtruncate(@view("xxxxxxx"[1:4]), 2)
+
+    @test ctruncate("foo", 4) == "foo"
+    @test ctruncate("foo", 3) == "foo"
+    @test ctruncate("foo", 2) == "f…"
+    @test ctruncate("foo", 2; prefer_left=true) == "f…"
+    @test ctruncate("foo", 2; prefer_left=false) == "…o"
+    @test ctruncate("foobar", 6) == "foobar"
+    @test ctruncate("foobar", 5) == "fo…ar"
+    @test ctruncate("foobar", 4) == "fo…r"
+    @test ctruncate("🍕🍕 I love 🍕", 10) == "🍕🍕 …e 🍕"
+    @test ctruncate("🍕🍕 I love 🍕", 10, "[…]") == "🍕🍕[…] 🍕"
+    @test ctruncate("abc", 2, "xxxxxx") == "xxxxxx"
+    @test ctruncate("🍕🍕🍕🍕🍕🍕xxxxxxxxxxx", 9) == "🍕🍕…xxxx"
+
+    @inferred ctruncate("xxxxx", 5)
+    @inferred ctruncate("xxxxx", 3)
+    @inferred ctruncate(@view("xxxxxxx"[1:5]), 5)
+    @inferred ctruncate(@view("xxxxxxx"[1:5]), 3)
 end
 
 # string manipulation
@@ -87,6 +158,30 @@ end
     @test rstrip(isnumeric, "abc0123") == "abc"
     @test lstrip("ello", ['e','o']) == "llo"
     @test rstrip("ello", ['e','o']) == "ell"
+
+    @test_throws ArgumentError strip("", "")
+    @test_throws ArgumentError lstrip("", "")
+    @test_throws ArgumentError rstrip("", "")
+end
+
+@testset "partition" begin
+    # AbstractString to partition into SubString
+    let v=collect(Iterators.partition("foobars",1))
+    @test v==SubString{String}["f","o","o","b","a","r","s"]
+    end
+
+    let v=collect(Iterators.partition("foobars",2))
+    @test v==SubString{String}["fo","ob","ar","s"]
+    end
+
+    for n in [7,8]
+        @test collect(Iterators.partition("foobars",n))[1]=="foobars"
+    end
+
+    # HOWEVER enumerate explicitly slices String "atoms" so `Chars` are returned
+    let v=collect(Iterators.partition(enumerate("foobars"),1))
+        @test v==Vector{Tuple{Int64, Char}}[[(1, 'f')],[(2, 'o')],[(3, 'o')],[(4, 'b')],[(5, 'a')],[(6, 'r')], [(7, 's')]]
+    end
 end
 
 @testset "rsplit/split" begin
@@ -184,6 +279,28 @@ end
           split("α β γ", isspace) == rsplit("α β γ", isspace) == ["α","β","γ"]
     @test split("ö.", ".") == rsplit("ö.", ".") == ["ö",""]
     @test split("α β γ", "β") == rsplit("α β γ", "β") == ["α "," γ"]
+end
+
+@testset "eachrsplit" begin
+    @test collect(eachrsplit("", 'a')) == [""]
+    @test collect(eachrsplit("", isspace; limit=3)) == [""]
+    @test collect(eachrsplit("b c  d"; limit=2)) == ["d", "b c "]
+    @test collect(eachrsplit("a.b.c", '.'; limit=1)) == ["a.b.c"]
+    @test collect(eachrsplit("a..b..c", '.')) == ["c", "", "b", "", "a"]
+    @test collect(eachrsplit("ax  b  c")) == ["c", "b", "ax"]
+    @test collect(eachrsplit(" a 12 4 v ", isnumeric)) == [" v ", " ", "", " a "]
+    @test collect(eachrsplit("ba", 'a')) == ["", "b"]
+    @test collect(eachrsplit("   ")) == []
+    @test collect(eachrsplit("aaaa", 'a'; keepempty=false)) == []
+    @test collect(eachrsplit("aaaa", 'a'; limit=2)) == ["", "aaa"]
+    @test collect(eachrsplit("abcdef", ['b', 'e'])) == ["f", "cd", "a"]
+    @test collect(eachrsplit("abc", isletter)) == ["", "", "", ""]
+
+    # This behaviour is quite surprising, but is consistent with split
+    # See issue 45916
+    @test collect(eachrsplit("a  b"; limit=2)) == ["b", "a "] # only one trailing space
+    @test collect(eachrsplit("a "; limit=1)) == ["a "]
+    @test collect(eachrsplit("  a  b  c  d"; limit=3)) == ["d", "c", "  a  b "]
 end
 
 @testset "replace" begin
@@ -311,6 +428,28 @@ end
     # Issue 36953
     @test replace("abc", "" => "_", count=1) == "_abc"
 
+    # tests for io::IO API (in addition to internals exercised above):
+    let buf = IOBuffer()
+        replace(buf, "aaa", 'a' => 'z', count=0)
+        replace(buf, "aaa", 'a' => 'z', count=1)
+        replace(buf, "bbb", 'a' => 'z')
+        replace(buf, "aaa", 'a' => 'z')
+        @test String(take!(buf)) == "aaazaabbbzzz"
+    end
+    let tempfile = tempname()
+        try
+            open(tempfile, "w") do f
+                replace(f, "aaa", 'a' => 'z', count=0)
+                replace(f, "aaa", 'a' => 'z', count=1)
+                replace(f, "bbb", 'a' => 'z')
+                replace(f, "aaa", 'a' => 'z')
+                print(f, "\n")
+            end
+            @test read(tempfile, String) == "aaazaabbbzzz\n"
+        finally
+            rm(tempfile, force=true)
+        end
+    end
 end
 
 @testset "replace many" begin
@@ -486,35 +625,96 @@ end
 end
 
 @testset "chomp/chop" begin
-    @test chomp("foo\n") == "foo"
-    @test chomp("fo∀\n") == "fo∀"
-    @test chomp("foo\r\n") == "foo"
-    @test chomp("fo∀\r\n") == "fo∀"
-    @test chomp("fo∀") == "fo∀"
-    @test chop("") == ""
-    @test chop("fooε") == "foo"
-    @test chop("foεo") == "foε"
-    @test chop("∃∃∃∃") == "∃∃∃"
-    @test chop("∀ϵ∃Δ", head=0, tail=0) == "∀ϵ∃Δ"
-    @test chop("∀ϵ∃Δ", head=0, tail=1) == "∀ϵ∃"
-    @test chop("∀ϵ∃Δ", head=0, tail=2) == "∀ϵ"
-    @test chop("∀ϵ∃Δ", head=0, tail=3) == "∀"
-    @test chop("∀ϵ∃Δ", head=0, tail=4) == ""
-    @test chop("∀ϵ∃Δ", head=0, tail=5) == ""
-    @test chop("∀ϵ∃Δ", head=1, tail=0) == "ϵ∃Δ"
-    @test chop("∀ϵ∃Δ", head=2, tail=0) == "∃Δ"
-    @test chop("∀ϵ∃Δ", head=3, tail=0) == "Δ"
-    @test chop("∀ϵ∃Δ", head=4, tail=0) == ""
-    @test chop("∀ϵ∃Δ", head=5, tail=0) == ""
-    @test chop("∀ϵ∃Δ", head=1, tail=1) == "ϵ∃"
-    @test chop("∀ϵ∃Δ", head=2, tail=2) == ""
-    @test chop("∀ϵ∃Δ", head=3, tail=3) == ""
-    @test_throws ArgumentError chop("∀ϵ∃Δ", head=-3, tail=3)
-    @test_throws ArgumentError chop("∀ϵ∃Δ", head=3, tail=-3)
-    @test_throws ArgumentError chop("∀ϵ∃Δ", head=-3, tail=-3)
+    for S in (String, SubStr, Test.GenericString)
+        @test chomp(S("foo\n")) == "foo"
+        @test chomp(S("fo∀\n")) == "fo∀"
+        @test chomp(S("foo\r\n")) == "foo"
+        @test chomp(S("fo∀\r\n")) == "fo∀"
+        @test chomp(S("fo∀")) == "fo∀"
+        @test chop(S("")) == ""
+        @test chop(S("fooε")) == "foo"
+        @test chop(S("foεo")) == "foε"
+        @test chop(S("∃∃∃∃")) == "∃∃∃"
+        @test chop(S("∀ϵ∃Δ"), head=0, tail=0) == "∀ϵ∃Δ"
+        @test chop(S("∀ϵ∃Δ"), head=0, tail=1) == "∀ϵ∃"
+        @test chop(S("∀ϵ∃Δ"), head=0, tail=2) == "∀ϵ"
+        @test chop(S("∀ϵ∃Δ"), head=0, tail=3) == "∀"
+        @test chop(S("∀ϵ∃Δ"), head=0, tail=4) == ""
+        @test chop(S("∀ϵ∃Δ"), head=0, tail=5) == ""
+        @test chop(S("∀ϵ∃Δ"), head=1, tail=0) == "ϵ∃Δ"
+        @test chop(S("∀ϵ∃Δ"), head=2, tail=0) == "∃Δ"
+        @test chop(S("∀ϵ∃Δ"), head=3, tail=0) == "Δ"
+        @test chop(S("∀ϵ∃Δ"), head=4, tail=0) == ""
+        @test chop(S("∀ϵ∃Δ"), head=5, tail=0) == ""
+        @test chop(S("∀ϵ∃Δ"), head=1, tail=1) == "ϵ∃"
+        @test chop(S("∀ϵ∃Δ"), head=2, tail=2) == ""
+        @test chop(S("∀ϵ∃Δ"), head=3, tail=3) == ""
+        @test_throws ArgumentError chop(S("∀ϵ∃Δ"), head=-3, tail=3)
+        @test_throws ArgumentError chop(S("∀ϵ∃Δ"), head=3, tail=-3)
+        @test_throws ArgumentError chop(S("∀ϵ∃Δ"), head=-3, tail=-3)
 
-    @test isa(chomp("foo"), SubString)
-    @test isa(chop("foo"), SubString)
+        for T in (String, SubStr, Test.GenericString, Regex)
+            S === Test.GenericString && T === Regex && continue # not supported
+            @test chopprefix(S("fo∀\n"), T("bog")) == "fo∀\n"
+            @test chopprefix(S("fo∀\n"), T("\n∀foΔ")) == "fo∀\n"
+            @test chopprefix(S("fo∀\n"), T("∀foΔ")) == "fo∀\n"
+            @test chopprefix(S("fo∀\n"), T("f")) == "o∀\n"
+            @test chopprefix(S("fo∀\n"), T("fo")) == "∀\n"
+            @test chopprefix(S("fo∀\n"), T("fo∀")) == "\n"
+            @test chopprefix(S("fo∀\n"), T("fo∀\n")) == ""
+            @test chopprefix(S("\nfo∀"), T("bog")) == "\nfo∀"
+            @test chopprefix(S("\nfo∀"), T("\n∀foΔ")) == "\nfo∀"
+            @test chopprefix(S("\nfo∀"), T("\nfo∀")) == ""
+            @test chopprefix(S("\nfo∀"), T("\n")) == "fo∀"
+            @test chopprefix(S("\nfo∀"), T("\nf")) == "o∀"
+            @test chopprefix(S("\nfo∀"), T("\nfo")) == "∀"
+            @test chopprefix(S("\nfo∀"), T("\nfo∀")) == ""
+            @test chopprefix(S(""), T("")) == ""
+            @test chopprefix(S(""), T("asdf")) == ""
+            @test chopprefix(S(""), T("∃∃∃")) == ""
+            @test chopprefix(S("εfoo"), T("ε")) == "foo"
+            @test chopprefix(S("ofoε"), T("o")) == "foε"
+            @test chopprefix(S("∃∃∃∃"), T("∃")) == "∃∃∃"
+            @test chopprefix(S("∃∃∃∃"), T("")) == "∃∃∃∃"
+
+            @test chopsuffix(S("fo∀\n"), T("bog")) == "fo∀\n"
+            @test chopsuffix(S("fo∀\n"), T("\n∀foΔ")) == "fo∀\n"
+            @test chopsuffix(S("fo∀\n"), T("∀foΔ")) == "fo∀\n"
+            @test chopsuffix(S("fo∀\n"), T("\n")) == "fo∀"
+            @test chopsuffix(S("fo∀\n"), T("∀\n")) == "fo"
+            @test chopsuffix(S("fo∀\n"), T("o∀\n")) == "f"
+            @test chopsuffix(S("fo∀\n"), T("fo∀\n")) == ""
+            @test chopsuffix(S("\nfo∀"), T("bog")) == "\nfo∀"
+            @test chopsuffix(S("\nfo∀"), T("\n∀foΔ")) == "\nfo∀"
+            @test chopsuffix(S("\nfo∀"), T("\nfo∀")) == ""
+            @test chopsuffix(S("\nfo∀"), T("∀")) == "\nfo"
+            @test chopsuffix(S("\nfo∀"), T("o∀")) == "\nf"
+            @test chopsuffix(S("\nfo∀"), T("fo∀")) == "\n"
+            @test chopsuffix(S("\nfo∀"), T("\nfo∀")) == ""
+            @test chopsuffix(S(""), T("")) == ""
+            @test chopsuffix(S(""), T("asdf")) == ""
+            @test chopsuffix(S(""), T("∃∃∃")) == ""
+            @test chopsuffix(S("fooε"), T("ε")) == "foo"
+            @test chopsuffix(S("εofo"), T("o")) == "εof"
+            @test chopsuffix(S("∃∃∃∃"), T("∃")) == "∃∃∃"
+            @test chopsuffix(S("∃∃∃∃"), T("")) == "∃∃∃∃"
+        end
+        @test isa(chomp(S("foo")), SubString)
+        @test isa(chop(S("foo")), SubString)
+
+        if S !== Test.GenericString
+            @test chopprefix(S("∃∃∃b∃"), r"∃+") == "b∃"
+            @test chopsuffix(S("∃b∃∃∃"), r"∃+") == "∃b"
+        end
+
+        @test isa(chopprefix(S("foo"), "fo"), SubString)
+        @test isa(chopsuffix(S("foo"), "oo"), SubString)
+
+        @test chopprefix(S(""), 'z') == chopsuffix(S(""), 'z') == ""
+        @test chopprefix(S("吃齋"), '🍖') == chopsuffix(S("吃齋"), '🍖') == "吃齋"
+        @test chopprefix(S("äwesome"), 'ä') == "wesome"
+        @test chopsuffix(S("äwesome"), 'e') == "äwesom"
+    end
 end
 
 @testset "bytes2hex and hex2bytes" begin
@@ -571,7 +771,7 @@ let testb() = b"0123"
     b = testb()
     @test eltype(b) === UInt8
     @test b isa AbstractVector
-    @test_throws ErrorException b[4] = '4'
+    @test_throws Base.CanonicalIndexError b[4] = '4'
     @test testb() == UInt8['0','1','2','3']
 end
 

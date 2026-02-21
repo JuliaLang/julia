@@ -1,113 +1,99 @@
-Julia v1.8 Release Notes
+Julia v1.14 Release Notes
 ========================
-
 
 New language features
 ---------------------
 
-* `Module(:name, false, false)` can be used to create a `module` that does not import `Core`. ([#40110])
-* `@inline` and `@noinline` annotations may now be used in function bodies. ([#41312])
-* The default behavior of observing `@inbounds` declarations is now an option via `auto` in `--check-bounds=yes|no|auto` ([#41551])
+  - It is now possible to control which version of the Julia syntax will be used to parse a package by setting the
+    `compat.julia` or `syntax.julia_version` key in Project.toml. This feature is similar to the notion of "editions"
+    in other language ecosystems and will allow non-breaking evolution of Julia syntax in future versions.
+    See the "Syntax Versioning" section in the code loading documentation ([#60018]).
+  - `ᵅ` (U+U+1D45), `ᵋ` (U+1D4B), `ᶲ` (U+1DB2), `˱` (U+02F1), `˲` (U+02F2), and `ₔ` (U+2094) can now also be used as
+    operator suffixes, accessible as `\^alpha`, `\^epsilon`, `\^ltphi`, `\_<`, `\_>`, and `\_schwa` at the REPL
+    ([#60285]).
+  - The `@label` macro can now create labeled blocks that can be exited early with `break name [value]`. Use
+    `@label name expr` for named blocks or `@label expr` for anonymous blocks. Anonymous `@label` blocks
+    participate in the default break scope: a plain `break` or `break _` exits the innermost breakable scope,
+    whether it is a loop or an `@label` block. The `continue` statement also supports labels with
+    `continue name` to continue a labeled loop ([#60481]).
 
 Language changes
 ----------------
 
-
 Compiler/Runtime improvements
 -----------------------------
-
 
 Command-line option changes
 ---------------------------
 
-
 Multi-threading changes
 -----------------------
 
+  - New functions `Threads.atomic_fence_heavy` and `Threads.atomic_fence_light` provide support for
+    asymmetric atomic fences, speeding up atomic synchronization where one side of the synchronization
+    runs significantly less often than the other ([#60311]).
 
 Build system changes
 --------------------
 
-
 New library functions
 ---------------------
-
-* `hardlink(src, dst)` can be used to create hard links. ([#41639])
 
 New library features
 --------------------
 
-* `@test_throws "some message" triggers_error()` can now be used to check whether the displayed error text
-  contains "some message" regardless of the specific exception type.
-  Regular expressions, lists of strings, and matching functions are also supported. ([#41888)
+* `IOContext` supports a new boolean `hexunsigned` option that allows for
+  printing unsigned integers in decimal instead of hexadecimal ([#60267]).
 
 Standard library changes
 ------------------------
 
-* `range` accepts either `stop` or `length` as a sole keyword argument ([#39241])
-* The `length` function on certain ranges of certain specific element types no longer checks for integer
-  overflow in most cases. The new function `checked_length` is now available, which will try to use checked
-  arithmetic to error if the result may be wrapping. Or use a package such as SaferIntegers.jl when
-  constructing the range. ([#40382])
-* TCP socket objects now expose `closewrite` functionality and support half-open mode usage ([#40783]).
+* `codepoint(c)` now succeeds for overlong encodings.  `Base.ismalformed`, `Base.isoverlong`, and
+  `Base.show_invalid` are now `public` and documented (but not exported) ([#55152]).
 
-#### InteractiveUtils
-* A new macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612])
-
-#### Package Manager
+#### JuliaSyntaxHighlighting
 
 #### LinearAlgebra
 
 #### Markdown
 
-#### Printf
-* Now uses `textwidth` for formatting `%s` and `%c` widths ([#41085]).
+  * Strikethrough text via `~strike~` or `~~through~~` is now supported by the
+    Markdown parser. ([#60537])
+
+#### Profile
 
 #### Random
 
 #### REPL
 
-* ` ?(x, y` followed by TAB displays all methods that can be called
-  with arguments `x, y, ...`. (The space at the beginning prevents entering help-mode.)
-  `MyModule.?(x, y` limits the search to `MyModule`. TAB requires that at least one
-  argument have a type more specific than `Any`; use SHIFT-TAB instead of TAB
-  to allow any compatible methods.
+#### Test
 
-#### SparseArrays
+* `@test`, `@test_throws`, and `@test_broken` now support a `context` keyword argument
+  that provides additional information displayed on test failure. This is useful for
+  debugging which specific case failed in parameterized tests ([#60501]).
+
+* `@test_throws`, `@test_warn`, `@test_nowarn`, `@test_logs`, and `@test_deprecated` now support
+  `broken` and `skip` keyword arguments for consistency with `@test` ([#60543]).
+
+* New functions `detect_closure_boxes` and `detect_closure_boxes_all` find methods that
+  allocate `Core.Box` in their lowered code, which can indicate performance issues from
+  captured variables in closures.
 
 #### Dates
 
-#### Downloads
+* `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
 
-#### Statistics
+#### InteractiveUtils
 
-#### Sockets
-
-#### Tar
-
-#### Distributed
-
-#### UUIDs
-
-#### Mmap
-
-#### DelimitedFiles
-
-#### Logging
-* The standard log levels `BelowMinLevel`, `Debug`, `Info`, `Warn`, `Error`,
-  and `AboveMaxLevel` are now exported from the Logging stdlib ([#40980]).
-
-
-Deprecated or removed
----------------------
-
+#### Dates
 
 External dependencies
 ---------------------
 
-
 Tooling Improvements
----------------------
+--------------------
 
+Deprecated or removed
+---------------------
 
 <!--- generated by NEWS-update.jl: -->

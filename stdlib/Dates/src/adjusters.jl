@@ -23,13 +23,13 @@ Base.trunc(t::Time, p::Type{Microsecond}) = t - Nanosecond(t)
 Base.trunc(t::Time, p::Type{Nanosecond})  = t
 
 """
-    trunc(dt::TimeType, ::Type{Period}) -> TimeType
+    trunc(dt::TimeType, ::Type{Period})::TimeType
 
 Truncates the value of `dt` according to the provided `Period` type.
 
 # Examples
 ```jldoctest
-julia> trunc(Dates.DateTime("1996-01-01T12:30:00"), Dates.Day)
+julia> trunc(DateTime("1996-01-01T12:30:00"), Day)
 1996-01-01T00:00:00
 ```
 """
@@ -37,13 +37,13 @@ Dates.trunc(::Dates.TimeType, ::Type{Dates.Period})
 
 # Adjusters
 """
-    firstdayofweek(dt::TimeType) -> TimeType
+    firstdayofweek(dt::TimeType)::TimeType
 
 Adjusts `dt` to the Monday of its week.
 
 # Examples
 ```jldoctest
-julia> Dates.firstdayofweek(DateTime("1996-01-05T12:30:00"))
+julia> firstdayofweek(DateTime("1996-01-05T12:30:00"))
 1996-01-01T00:00:00
 ```
 """
@@ -53,13 +53,13 @@ firstdayofweek(dt::Date) = Date(UTD(value(dt) - dayofweek(dt) + 1))
 firstdayofweek(dt::DateTime) = DateTime(firstdayofweek(Date(dt)))
 
 """
-    lastdayofweek(dt::TimeType) -> TimeType
+    lastdayofweek(dt::TimeType)::TimeType
 
 Adjusts `dt` to the Sunday of its week.
 
 # Examples
 ```jldoctest
-julia> Dates.lastdayofweek(DateTime("1996-01-05T12:30:00"))
+julia> lastdayofweek(DateTime("1996-01-05T12:30:00"))
 1996-01-07T00:00:00
 ```
 """
@@ -69,13 +69,13 @@ lastdayofweek(dt::Date) = Date(UTD(value(dt) + (7 - dayofweek(dt))))
 lastdayofweek(dt::DateTime) = DateTime(lastdayofweek(Date(dt)))
 
 """
-    firstdayofmonth(dt::TimeType) -> TimeType
+    firstdayofmonth(dt::TimeType)::TimeType
 
 Adjusts `dt` to the first day of its month.
 
 # Examples
 ```jldoctest
-julia> Dates.firstdayofmonth(DateTime("1996-05-20"))
+julia> firstdayofmonth(DateTime("1996-05-20"))
 1996-05-01T00:00:00
 ```
 """
@@ -85,13 +85,13 @@ firstdayofmonth(dt::Date) = Date(UTD(value(dt) - day(dt) + 1))
 firstdayofmonth(dt::DateTime) = DateTime(firstdayofmonth(Date(dt)))
 
 """
-    lastdayofmonth(dt::TimeType) -> TimeType
+    lastdayofmonth(dt::TimeType)::TimeType
 
 Adjusts `dt` to the last day of its month.
 
 # Examples
 ```jldoctest
-julia> Dates.lastdayofmonth(DateTime("1996-05-20"))
+julia> lastdayofmonth(DateTime("1996-05-20"))
 1996-05-31T00:00:00
 ```
 """
@@ -104,13 +104,13 @@ end
 lastdayofmonth(dt::DateTime) = DateTime(lastdayofmonth(Date(dt)))
 
 """
-    firstdayofyear(dt::TimeType) -> TimeType
+    firstdayofyear(dt::TimeType)::TimeType
 
 Adjusts `dt` to the first day of its year.
 
 # Examples
 ```jldoctest
-julia> Dates.firstdayofyear(DateTime("1996-05-20"))
+julia> firstdayofyear(DateTime("1996-05-20"))
 1996-01-01T00:00:00
 ```
 """
@@ -120,13 +120,13 @@ firstdayofyear(dt::Date) = Date(UTD(value(dt) - dayofyear(dt) + 1))
 firstdayofyear(dt::DateTime) = DateTime(firstdayofyear(Date(dt)))
 
 """
-    lastdayofyear(dt::TimeType) -> TimeType
+    lastdayofyear(dt::TimeType)::TimeType
 
 Adjusts `dt` to the last day of its year.
 
 # Examples
 ```jldoctest
-julia> Dates.lastdayofyear(DateTime("1996-05-20"))
+julia> lastdayofyear(DateTime("1996-05-20"))
 1996-12-31T00:00:00
 ```
 """
@@ -139,16 +139,16 @@ end
 lastdayofyear(dt::DateTime) = DateTime(lastdayofyear(Date(dt)))
 
 """
-    firstdayofquarter(dt::TimeType) -> TimeType
+    firstdayofquarter(dt::TimeType)::TimeType
 
 Adjusts `dt` to the first day of its quarter.
 
 # Examples
 ```jldoctest
-julia> Dates.firstdayofquarter(DateTime("1996-05-20"))
+julia> firstdayofquarter(DateTime("1996-05-20"))
 1996-04-01T00:00:00
 
-julia> Dates.firstdayofquarter(DateTime("1996-08-20"))
+julia> firstdayofquarter(DateTime("1996-08-20"))
 1996-07-01T00:00:00
 ```
 """
@@ -162,16 +162,16 @@ end
 firstdayofquarter(dt::DateTime) = DateTime(firstdayofquarter(Date(dt)))
 
 """
-    lastdayofquarter(dt::TimeType) -> TimeType
+    lastdayofquarter(dt::TimeType)::TimeType
 
 Adjusts `dt` to the last day of its quarter.
 
 # Examples
 ```jldoctest
-julia> Dates.lastdayofquarter(DateTime("1996-05-20"))
+julia> lastdayofquarter(DateTime("1996-05-20"))
 1996-06-30T00:00:00
 
-julia> Dates.lastdayofquarter(DateTime("1996-08-20"))
+julia> lastdayofquarter(DateTime("1996-08-20"))
 1996-09-30T00:00:00
 ```
 """
@@ -204,6 +204,41 @@ function adjust(df::DateFunction, start, step, limit)
     throw(ArgumentError("Adjustment limit reached: $limit iterations"))
 end
 
+"""
+    adjust(df, start[, step, limit])::TimeType
+    adjust(df, start)::TimeType
+
+Adjusts the date in `start` until the `f::Function` passed using `df` returns `true`.
+The optional `step` parameter dictates the change in `start` on every iteration.
+If `limit` iterations occur, then an [`ArgumentError`](@ref) is thrown.
+
+The default values for parameters `start` and `limit` are 1 Day and 10,000 respectively.
+
+# Examples
+```jldoctest
+julia> Dates.adjust(date -> month(date) == 10, Date(2022, 1, 1), step=Month(3), limit=10)
+2022-10-01
+
+julia> Dates.adjust(date -> year(date) == 2025, Date(2022, 1, 1), step=Year(1), limit=4)
+2025-01-01
+
+julia> Dates.adjust(date -> day(date) == 15, Date(2022, 1, 1), step=Year(1), limit=3)
+ERROR: ArgumentError: Adjustment limit reached: 3 iterations
+Stacktrace:
+[...]
+
+julia> Dates.adjust(date -> month(date) == 10, Date(2022, 1, 1))
+2022-10-01
+
+julia> Dates.adjust(date -> year(date) == 2025, Date(2022, 1, 1))
+2025-01-01
+
+julia> Dates.adjust(date -> year(date) == 2224, Date(2022, 1, 1))
+ERROR: ArgumentError: Adjustment limit reached: 10000 iterations
+Stacktrace:
+[...]
+```
+"""
 function adjust(func::Function, start; step::Period=Day(1), limit::Int=10000)
     return adjust(DateFunction(func, start), start, step, limit)
 end
@@ -211,7 +246,7 @@ end
 # Constructors using DateFunctions
 
 """
-    Date(f::Function, y[, m, d]; step=Day(1), limit=10000) -> Date
+    Date(f::Function, y[, m, d]; step=Day(1), limit=10000)::Date
 
 Create a `Date` through the adjuster API. The starting point will be constructed from the
 provided `y, m, d` arguments, and will be adjusted until `f::Function` returns `true`.
@@ -221,13 +256,13 @@ pursue before throwing an error (given that `f::Function` is never satisfied).
 
 # Examples
 ```jldoctest
-julia> Date(date -> Dates.week(date) == 20, 2010, 01, 01)
+julia> Date(date -> week(date) == 20, 2010, 01, 01)
 2010-05-17
 
-julia> Date(date -> Dates.year(date) == 2010, 2000, 01, 01)
+julia> Date(date -> year(date) == 2010, 2000, 01, 01)
 2010-01-01
 
-julia> Date(date -> Dates.month(date) == 10, 2000, 01, 01; limit = 5)
+julia> Date(date -> month(date) == 10, 2000, 01, 01; limit = 5)
 ERROR: ArgumentError: Adjustment limit reached: 5 iterations
 Stacktrace:
 [...]
@@ -238,7 +273,7 @@ function Date(func::Function, y, m=1, d=1; step::Period=Day(1), limit::Int=10000
 end
 
 """
-    DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), limit=10000) -> DateTime
+    DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), limit=10000)::DateTime
 
 Create a `DateTime` through the adjuster API. The starting point will be constructed from
 the provided `y, m, d...` arguments, and will be adjusted until `f::Function` returns
@@ -248,10 +283,10 @@ pursue before throwing an error (in the case that `f::Function` is never satisfi
 
 # Examples
 ```jldoctest
-julia> DateTime(dt -> Dates.second(dt) == 40, 2010, 10, 20, 10; step = Dates.Second(1))
+julia> DateTime(dt -> second(dt) == 40, 2010, 10, 20, 10; step = Second(1))
 2010-10-20T10:00:40
 
-julia> DateTime(dt -> Dates.hour(dt) == 20, 2010, 10, 20, 10; step = Dates.Hour(1), limit = 5)
+julia> DateTime(dt -> hour(dt) == 20, 2010, 10, 20, 10; step = Hour(1), limit = 5)
 ERROR: ArgumentError: Adjustment limit reached: 5 iterations
 Stacktrace:
 [...]
@@ -291,13 +326,13 @@ arguments are provided, the default step will be `Millisecond(1)` instead of `Se
 
 # Examples
 ```jldoctest
-julia> Dates.Time(t -> Dates.minute(t) == 30, 20)
+julia> Time(t -> minute(t) == 30, 20)
 20:30:00
 
-julia> Dates.Time(t -> Dates.minute(t) == 0, 20)
+julia> Time(t -> minute(t) == 0, 20)
 20:00:00
 
-julia> Dates.Time(t -> Dates.hour(t) == 10, 3; limit = 5)
+julia> Time(t -> hour(t) == 10, 3; limit = 5)
 ERROR: ArgumentError: Adjustment limit reached: 5 iterations
 Stacktrace:
 [...]
@@ -329,7 +364,7 @@ ISDAYOFWEEK = Dict(Mon => DateFunction(ismonday, Date(0)),
 
 # "same" indicates whether the current date can be considered or not
 """
-    tonext(dt::TimeType, dow::Int; same::Bool=false) -> TimeType
+    tonext(dt::TimeType, dow::Int; same::Bool=false)::TimeType
 
 Adjusts `dt` to the next day of week corresponding to `dow` with `1 = Monday, 2 = Tuesday,
 etc`. Setting `same=true` allows the current `dt` to be considered as the next `dow`,
@@ -339,7 +374,7 @@ tonext(dt::TimeType, dow::Int; same::Bool=false) = adjust(ISDAYOFWEEK[dow], same
 
 # Return the next TimeType where func evals true using step in incrementing
 """
-    tonext(func::Function, dt::TimeType; step=Day(1), limit=10000, same=false) -> TimeType
+    tonext(func::Function, dt::TimeType; step=Day(1), limit=10000, same=false)::TimeType
 
 Adjusts `dt` by iterating at most `limit` iterations by `step` increments until `func`
 returns `true`. `func` must take a single `TimeType` argument and return a [`Bool`](@ref).
@@ -350,7 +385,7 @@ function tonext(func::Function, dt::TimeType; step::Period=Day(1), limit::Int=10
 end
 
 """
-    toprev(dt::TimeType, dow::Int; same::Bool=false) -> TimeType
+    toprev(dt::TimeType, dow::Int; same::Bool=false)::TimeType
 
 Adjusts `dt` to the previous day of week corresponding to `dow` with `1 = Monday, 2 =
 Tuesday, etc`. Setting `same=true` allows the current `dt` to be considered as the previous
@@ -359,7 +394,7 @@ Tuesday, etc`. Setting `same=true` allows the current `dt` to be considered as t
 toprev(dt::TimeType, dow::Int; same::Bool=false) = adjust(ISDAYOFWEEK[dow], same ? dt : dt + Day(-1), Day(-1), 7)
 
 """
-    toprev(func::Function, dt::TimeType; step=Day(-1), limit=10000, same=false) -> TimeType
+    toprev(func::Function, dt::TimeType; step=Day(-1), limit=10000, same=false)::TimeType
 
 Adjusts `dt` by iterating at most `limit` iterations by `step` increments until `func`
 returns `true`. `func` must take a single `TimeType` argument and return a [`Bool`](@ref).
@@ -371,7 +406,7 @@ end
 
 # Return the first TimeType that falls on dow in the Month or Year
 """
-    tofirst(dt::TimeType, dow::Int; of=Month) -> TimeType
+    tofirst(dt::TimeType, dow::Int; of=Month)::TimeType
 
 Adjusts `dt` to the first `dow` of its month. Alternatively, `of=Year` will adjust to the
 first `dow` of the year.
@@ -383,7 +418,7 @@ end
 
 # Return the last TimeType that falls on dow in the Month or Year
 """
-    tolast(dt::TimeType, dow::Int; of=Month) -> TimeType
+    tolast(dt::TimeType, dow::Int; of=Month)::TimeType
 
 Adjusts `dt` to the last `dow` of its month. Alternatively, `of=Year` will adjust to the
 last `dow` of the year.
