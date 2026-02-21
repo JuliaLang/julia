@@ -4,6 +4,8 @@ using Random, LinearAlgebra
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 types = Any[
     Bool,
     Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float32, Float64,
@@ -325,7 +327,7 @@ end
 end
 
 @testset "concrete eval type hash" begin
-    @test Core.Compiler.is_foldable_nothrow(Base.infer_effects(hash, Tuple{Type{Int}, UInt}))
+    @test Core.Compiler.is_foldable_nothrow(Base.infer_effects(hash, Tuple{Type{Int}, UInt})) broken=coverage_enabled
 
     f(h...) = hash(Char, h...);
     src = only(code_typed(f, Tuple{UInt}))[1]

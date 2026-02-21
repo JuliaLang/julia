@@ -4,6 +4,8 @@ using Random, LinearAlgebra
 
 include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 isdefined(Main, :InfiniteArrays) || @eval Main include("testhelpers/InfiniteArrays.jl")
 using .Main.InfiniteArrays
 

@@ -9,6 +9,8 @@ using Downloads: Downloads, download
 
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 yescmd = `yes`
 echocmd = `echo`
 sortcmd = `sort`
@@ -1047,7 +1049,7 @@ end
 # effects for Cmd construction
 for f in (() -> `a b c`, () -> `a a$("bb")a $("c")`)
     effects = Base.infer_effects(f)
-    @test Core.Compiler.is_effect_free(effects)
+    @test Core.Compiler.is_effect_free(effects) broken=coverage_enabled
     @test Core.Compiler.is_terminates(effects)
     @test Core.Compiler.is_noub(effects)
     @test !Core.Compiler.is_consistent(effects)

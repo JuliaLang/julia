@@ -5,6 +5,8 @@ using Test
 include("setup_Compiler.jl")
 include("irutils.jl")
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 # Test that the Core._apply_iterate bail path taints effects
 function f_apply_bail(f)
     f(()...)
@@ -23,11 +25,11 @@ f_throws() = error()
     Compiler.return_type(f_throws, Tuple{})
     return x+1
 end
-@test Compiler.is_removable_if_unused(Base.infer_effects(return_type_unused, (Int,)))
+@test Compiler.is_removable_if_unused(Base.infer_effects(return_type_unused, (Int,))) broken=coverage_enabled
 @test fully_eliminated((Int,)) do x
     return_type_unused(x)
     return nothing
-end
+end broken=coverage_enabled
 
 # Test that ambiguous calls don't accidentally get nothrow effect
 ambig_effects_test(a::Int, b) = 1
@@ -62,7 +64,7 @@ Base.@assume_effects :foldable concrete_eval(
     f, args...; kwargs...) = f(args...; kwargs...)
 @test fully_eliminated() do
     concrete_eval(getindex, ___CONST_DICT___, :a)
-end
+end broken=coverage_enabled
 
 # :removable override
 Base.@assume_effects :removable removable_call(
@@ -70,7 +72,7 @@ Base.@assume_effects :removable removable_call(
 @test fully_eliminated() do
     @noinline removable_call(getindex, ___CONST_DICT___, :a)
     nothing
-end
+end broken=coverage_enabled
 
 # terminates_globally override
 # https://github.com/JuliaLang/julia/issues/41694
@@ -83,10 +85,10 @@ Base.@assume_effects :terminates_globally function issue41694(x)
     end
     return res
 end
-@test Compiler.is_foldable(Base.infer_effects(issue41694, (Int,)))
+@test Compiler.is_foldable(Base.infer_effects(issue41694, (Int,))) broken=coverage_enabled
 @test fully_eliminated() do
     issue41694(2)
-end
+end broken=coverage_enabled
 
 Base.@assume_effects :terminates_globally function recur_termination1(x)
     x == 0 && return 1
@@ -99,8 +101,8 @@ function recur_termination2()
     Base.@assume_effects :total !:terminates_globally
     recur_termination1(12)
 end
-@test fully_eliminated(recur_termination2)
-@test fully_eliminated() do; recur_termination2(); end
+@test fully_eliminated(recur_termination2) broken=coverage_enabled
+@test fully_eliminated() do; recur_termination2(); end broken=coverage_enabled
 
 Base.@assume_effects :terminates_globally function recur_termination21(x)
     x == 0 && return 1
@@ -116,8 +118,8 @@ function recur_termination2x()
     Base.@assume_effects :total !:terminates_globally
     recur_termination21(12) + recur_termination22(12)
 end
-@test fully_eliminated(recur_termination2x)
-@test fully_eliminated() do; recur_termination2x(); end
+@test fully_eliminated(recur_termination2x) broken=coverage_enabled
+@test fully_eliminated() do; recur_termination2x(); end broken=coverage_enabled
 
 # anonymous function support for `@assume_effects`
 @test fully_eliminated() do
@@ -132,7 +134,7 @@ end
         end
         return res
     end
-end
+end broken=coverage_enabled
 
 # control flow backedge should taint `terminates`
 @test Base.infer_effects((Int,)) do n
@@ -144,54 +146,54 @@ function sumrecur(a, x)
     isempty(a) && return x
     return sumrecur(Base.tail(a), x + first(a))
 end
-@test Base.infer_effects(sumrecur, (Tuple{Int,Int,Int},Int)) |> Compiler.is_terminates
+@test (Base.infer_effects(sumrecur, (Tuple{Int,Int,Int},Int)) |> Compiler.is_terminates)
 @test Base.infer_effects(sumrecur, (Tuple{Int,Int,Int,Vararg{Int}},Int)) |> !Compiler.is_terminates
 
 # https://github.com/JuliaLang/julia/issues/45781
-@test Base.infer_effects((Float32,)) do a
+@test (Base.infer_effects((Float32,)) do a
     out1 = promote_type(Irrational{:π}, Bool)
     out2 = sin(a)
     out1, out2
-end |> Compiler.is_terminates
+end |> Compiler.is_terminates)
 
 # refine :consistent-cy effect inference using the return type information
-@test Base.infer_effects((Any,)) do x
+@test (Base.infer_effects((Any,)) do x
     taint = Ref{Any}(x) # taints :consistent-cy, but will be adjusted
     throw(taint)
-end |> Compiler.is_consistent
-@test Base.infer_effects((Int,)) do x
+end |> Compiler.is_consistent)
+@test (Base.infer_effects((Int,)) do x
     if x < 0
         taint = Ref(x) # taints :consistent-cy, but will be adjusted
         throw(DomainError(x, taint))
     end
     return nothing
-end |> Compiler.is_consistent
-@test Base.infer_effects((Int,)) do x
+end |> Compiler.is_consistent)
+@test (Base.infer_effects((Int,)) do x
     if x < 0
         taint = Ref(x) # taints :consistent-cy, but will be adjusted
         throw(DomainError(x, taint))
     end
     return x == 0 ? nothing : x # should `Union` of isbitstype objects nicely
-end |> Compiler.is_consistent
-@test Base.infer_effects((Symbol,Any)) do s, x
+end |> Compiler.is_consistent)
+@test (Base.infer_effects((Symbol,Any)) do s, x
     if s === :throw
         taint = Ref{Any}(":throw option given") # taints :consistent-cy, but will be adjusted
         throw(taint)
     end
     return s # should handle `Symbol` nicely
-end |> Compiler.is_consistent
+end |> Compiler.is_consistent)
 @test Base.infer_effects((Int,)) do x
     return Ref(x)
 end |> !Compiler.is_consistent
 @test Base.infer_effects((Int,)) do x
     return x < 0 ? Ref(x) : nothing
 end |> !Compiler.is_consistent
-@test Base.infer_effects((Int,)) do x
+@test (Base.infer_effects((Int,)) do x
     if x < 0
         throw(DomainError(x, lazy"$x is negative"))
     end
     return nothing
-end |> Compiler.is_foldable
+end |> Compiler.is_foldable) broken=coverage_enabled
 
 # :the_exception expression should taint :consistent-cy
 global inconsistent_var::Int = 42
@@ -238,7 +240,7 @@ end
 @test !compare_inconsistent(3)
 
 # Effect modeling for Core.compilerbarrier
-@test Base.infer_effects(Base.inferencebarrier, Tuple{Any}) |> Compiler.is_removable_if_unused
+@test (Base.infer_effects(Base.inferencebarrier, Tuple{Any}) |> Compiler.is_removable_if_unused) broken=coverage_enabled
 
 # effects modeling for allocation/access of uninitialized fields
 struct Maybe{T}
@@ -260,15 +262,15 @@ end |> !Compiler.is_consistent
 @test !fully_eliminated() do
     Maybe{Int}()[]
 end
-@test Base.infer_effects() do
+@test (Base.infer_effects() do
     Maybe{String}()
-end |> Compiler.is_consistent
-@test Base.infer_effects() do
+end |> Compiler.is_consistent)
+@test (Base.infer_effects() do
     Maybe{String}()[]
-end |> Compiler.is_consistent
-@test Base.infer_effects() do
+end |> Compiler.is_consistent)
+@test (Base.infer_effects() do
     Maybe{Some{Base.RefValue{Int}}}()
-end |> Compiler.is_consistent
+end |> Compiler.is_consistent)
 let f() = Maybe{String}()[]
     @test Base.return_types() do
         f() # this call should be concrete evaluated
@@ -283,17 +285,17 @@ end |> !Compiler.is_consistent
 @test !fully_eliminated() do
     Ref{Int}()[]
 end
-@test Base.infer_effects() do
+@test (Base.infer_effects() do
     Ref{String}()[]
-end |> Compiler.is_consistent
+end |> Compiler.is_consistent)
 let f() = Ref{String}()[]
     @test Base.return_types() do
         f() # this call should be concrete evaluated
     end |> only === Union{}
 end
-@test Base.infer_effects((SyntacticallyDefined{Float64}, Symbol)) do w, s
+@test (Base.infer_effects((SyntacticallyDefined{Float64}, Symbol)) do w, s
     getfield(w, s)
-end |> Compiler.is_foldable
+end |> Compiler.is_foldable) broken=coverage_enabled
 
 # effects propagation for `Core.invoke` calls
 # https://github.com/JuliaLang/julia/issues/44763
@@ -348,12 +350,12 @@ Base.@assume_effects :foldable getcharid(c) = CONST_DICT[c]
 function entry_to_be_invalidated(c)
     return callf(getcharid, c)
 end
-@test Base.infer_effects((Char,)) do x
+@test (Base.infer_effects((Char,)) do x
     entry_to_be_invalidated(x)
-end |> Compiler.is_foldable
+end |> Compiler.is_foldable) broken=coverage_enabled
 @test fully_eliminated(; retval=97) do
     entry_to_be_invalidated('a')
-end
+end broken=coverage_enabled
 getcharid(c) = CONST_DICT[c] # now this is not eligible for concrete evaluation
 @test Base.infer_effects((Char,)) do x
     entry_to_be_invalidated(x)
@@ -431,17 +433,17 @@ end
 
 # SimpleVector allocation is consistent
 @test Compiler.is_consistent(Base.infer_effects(Core.svec))
-@test Base.infer_effects() do
+@test (Base.infer_effects() do
     Core.svec(nothing, 1, "foo")
-end |> Compiler.is_consistent
+end |> Compiler.is_consistent)
 
 # fastmath operations are in-`:consistent`
 @test !Compiler.is_consistent(Base.infer_effects((a,b)->@fastmath(a+b), (Float64,Float64)))
 
 # issue 46122: @assume_effects for @ccall
-@test Base.infer_effects((Vector{Int},)) do a
+@test (Base.infer_effects((Vector{Int},)) do a
     Base.@assume_effects :effect_free @ccall this_call_does_not_really_exist(a::Any)::Ptr{Int}
-end |> Compiler.is_effect_free
+end |> Compiler.is_effect_free) broken=coverage_enabled
 
 # `getfield_effects` handles access to union object nicely
 let 𝕃 = Compiler.fallback_lattice
@@ -450,34 +452,34 @@ let 𝕃 = Compiler.fallback_lattice
     @test Compiler.is_consistent(getfield_effects(𝕃, Any[Some{Symbol}, Core.Const(:value)], Symbol))
     @test Compiler.is_consistent(getfield_effects(𝕃, Any[Union{Some{Symbol},Some{String}}, Core.Const(:value)], Union{Symbol,String}))
 end
-@test Base.infer_effects((Bool,)) do c
+@test (Base.infer_effects((Bool,)) do c
     obj = c ? Some{String}("foo") : Some{Symbol}(:bar)
     return getfield(obj, :value)
-end |> Compiler.is_consistent
+end |> Compiler.is_consistent)
 
 # getfield is nothrow when bounds checking is turned off
-@test Base.infer_effects((Tuple{Int,Int},Int)) do t, i
+@test (Base.infer_effects((Tuple{Int,Int},Int)) do t, i
     getfield(t, i, false)
-end |> Compiler.is_nothrow
-@test Base.infer_effects((Tuple{Int,Int},Symbol)) do t, i
+end |> Compiler.is_nothrow)
+@test (Base.infer_effects((Tuple{Int,Int},Symbol)) do t, i
     getfield(t, i, false)
-end |> Compiler.is_nothrow
+end |> Compiler.is_nothrow)
 @test Base.infer_effects((Tuple{Int,Int},String)) do t, i
     getfield(t, i, false) # invalid name type
 end |> !Compiler.is_nothrow
 
-@test Base.infer_effects((Some{Any},)) do some
+@test (Base.infer_effects((Some{Any},)) do some
     getfield(some, 1, :not_atomic)
-end |> Compiler.is_nothrow
+end |> Compiler.is_nothrow)
 @test Base.infer_effects((Some{Any},)) do some
     getfield(some, 1, :invalid_atomic_spec)
 end |> !Compiler.is_nothrow
-@test Base.infer_effects((Some{Any},Bool)) do some, boundscheck
+@test (Base.infer_effects((Some{Any},Bool)) do some, boundscheck
     getfield(some, 1, boundscheck)
-end |> Compiler.is_nothrow
-@test Base.infer_effects((Some{Any},Bool)) do some, boundscheck
+end |> Compiler.is_nothrow)
+@test (Base.infer_effects((Some{Any},Bool)) do some, boundscheck
     getfield(some, 1, :not_atomic, boundscheck)
-end |> Compiler.is_nothrow
+end |> Compiler.is_nothrow)
 @test Base.infer_effects((Some{Any},Bool)) do some, boundscheck
     getfield(some, 1, :invalid_atomic_spec, boundscheck)
 end |> !Compiler.is_nothrow
@@ -493,21 +495,21 @@ const global ConstantType = Ref
 global nonconstant_global::Int = 42
 const global constant_mutable_global = Ref(0)
 const global constant_global_nonisbits = Some(:foo)
-@test Base.infer_effects() do
+@test (Base.infer_effects() do
     constant_global
-end |> Compiler.is_inaccessiblememonly
-@test Base.infer_effects() do
+end |> Compiler.is_inaccessiblememonly)
+@test (Base.infer_effects() do
     ConstantType
-end |> Compiler.is_inaccessiblememonly
-@test Base.infer_effects() do
+end |> Compiler.is_inaccessiblememonly)
+@test (Base.infer_effects() do
     ConstantType{Any}()
-end |> Compiler.is_inaccessiblememonly
-@test Base.infer_effects() do
+end |> Compiler.is_inaccessiblememonly)
+@test (Base.infer_effects() do
     constant_global_nonisbits
-end |> Compiler.is_inaccessiblememonly
-@test Base.infer_effects() do
+end |> Compiler.is_inaccessiblememonly)
+@test (Base.infer_effects() do
     getglobal(@__MODULE__, :constant_global)
-end |> Compiler.is_inaccessiblememonly
+end |> Compiler.is_inaccessiblememonly)
 @test Base.infer_effects() do
     nonconstant_global
 end |> !Compiler.is_inaccessiblememonly
@@ -530,24 +532,24 @@ module ConsistentModule
 const global constant_global::Int = 42
 const global ConstantType = Ref
 end # module
-@test Base.infer_effects() do
+@test (Base.infer_effects() do
     ConsistentModule.constant_global
-end |> Compiler.is_inaccessiblememonly
-@test Base.infer_effects() do
+end |> Compiler.is_inaccessiblememonly)
+@test (Base.infer_effects() do
     ConsistentModule.ConstantType
-end |> Compiler.is_inaccessiblememonly
-@test Base.infer_effects() do
+end |> Compiler.is_inaccessiblememonly)
+@test (Base.infer_effects() do
     ConsistentModule.ConstantType{Any}()
-end |> Compiler.is_inaccessiblememonly
-@test Base.infer_effects() do
+end |> Compiler.is_inaccessiblememonly)
+@test (Base.infer_effects() do
     getglobal(@__MODULE__, :ConsistentModule).constant_global
-end |> Compiler.is_inaccessiblememonly
-@test Base.infer_effects() do
+end |> Compiler.is_inaccessiblememonly)
+@test (Base.infer_effects() do
     getglobal(@__MODULE__, :ConsistentModule).ConstantType
-end |> Compiler.is_inaccessiblememonly
-@test Base.infer_effects() do
+end |> Compiler.is_inaccessiblememonly)
+@test (Base.infer_effects() do
     getglobal(@__MODULE__, :ConsistentModule).ConstantType{Any}()
-end |> Compiler.is_inaccessiblememonly
+end |> Compiler.is_inaccessiblememonly)
 @test Base.infer_effects((Module,)) do M
     M.constant_global
 end |> !Compiler.is_inaccessiblememonly
@@ -585,9 +587,9 @@ end
 end
 
 const consistent_global = Some(:foo)
-@test Base.infer_effects() do
+@test (Base.infer_effects() do
     consistent_global.value
-end |> Compiler.is_consistent
+end |> Compiler.is_consistent)
 const inconsistent_global = SafeRef(:foo)
 @test Base.infer_effects() do
     inconsistent_global[]
@@ -639,10 +641,10 @@ for f = Any[removable_if_unused1, removable_if_unused2]
     @test Compiler.is_inaccessiblememonly(effects)
     @test Compiler.is_effect_free(effects)
     @test Compiler.is_removable_if_unused(effects)
-    @test @eval fully_eliminated() do
+    @test (@eval fully_eliminated() do
         $f()
         nothing
-    end
+    end)
 end
 @noinline function removable_if_unused3(v)
     x = makeref()
@@ -689,13 +691,13 @@ let good_dims = [1, 2, 3, 4, 10]
     for dim = good_dims, N = Ns
         Int64(dim)^N > typemax(Int) && continue
         dims = ntuple(i->dim, N)
-        @test @eval Base.infer_effects() do
+        @test @eval(Base.infer_effects() do
             construct_array(Int, $(dims...))
-        end |> Compiler.is_removable_if_unused
-        @test @eval fully_eliminated() do
+        end |> Compiler.is_removable_if_unused) broken=coverage_enabled
+        @test (@eval fully_eliminated() do
             construct_array(Int, $(dims...))
             nothing
-        end
+        end) broken=coverage_enabled
     end
 end
 # should analyze throwness correctly
@@ -782,12 +784,12 @@ end |> !Compiler.is_nothrow
     a[] = v # may throw
 end |> !Compiler.is_nothrow
 # when bounds checking is turned off, it should be safe
-@test Base.infer_effects((MemoryRef{Int},Int)) do a, v
+@test (Base.infer_effects((MemoryRef{Int},Int)) do a, v
     Core.memoryrefset!(a, v, :not_atomic, false)
-end |> Compiler.is_nothrow
-@test Base.infer_effects((MemoryRef{Number},Number)) do a, v
+end |> Compiler.is_nothrow)
+@test (Base.infer_effects((MemoryRef{Number},Number)) do a, v
     Core.memoryrefset!(a, v, :not_atomic, false)
-end |> Compiler.is_nothrow
+end |> Compiler.is_nothrow)
 
 # arraysize
 # ---------
@@ -871,35 +873,35 @@ struct WrapperOneField{T}
 end
 
 # Effects for getfield of type instance
-@test Base.infer_effects(Tuple{Nothing}) do x
+@test (Base.infer_effects(Tuple{Nothing}) do x
     WrapperOneField{typeof(x)}.instance
-end |> Compiler.is_foldable_nothrow
-@test Base.infer_effects(Tuple{WrapperOneField{Float64}, Symbol}) do w, s
+end |> Compiler.is_foldable_nothrow) broken=coverage_enabled
+@test (Base.infer_effects(Tuple{WrapperOneField{Float64}, Symbol}) do w, s
     getfield(w, s)
-end |> Compiler.is_foldable
-@test Base.infer_effects(Tuple{WrapperOneField{Symbol}, Symbol}) do w, s
+end |> Compiler.is_foldable) broken=coverage_enabled
+@test (Base.infer_effects(Tuple{WrapperOneField{Symbol}, Symbol}) do w, s
     getfield(w, s)
-end |> Compiler.is_foldable
+end |> Compiler.is_foldable) broken=coverage_enabled
 
 # Flow-sensitive consistent for _typevar
-@test Base.infer_effects() do
+@test (Base.infer_effects() do
     return WrapperOneField == (WrapperOneField{T} where T)
-end |> Compiler.is_foldable_nothrow
+end |> Compiler.is_foldable_nothrow) broken=coverage_enabled
 
 # Test that dead `@inbounds` does not taint consistency
 # https://github.com/JuliaLang/julia/issues/48243
-@test Base.infer_effects(Tuple{Int64}) do i
+@test (Base.infer_effects(Tuple{Int64}) do i
     false && @inbounds (1,2,3)[i]
     return 1
-end |> Compiler.is_foldable_nothrow
+end |> Compiler.is_foldable_nothrow) broken=coverage_enabled
 
 @test Base.infer_effects(Tuple{Int64}) do i
     @inbounds (1,2,3)[i]
 end |> !Compiler.is_noub
 
-@test Base.infer_effects(Tuple{Tuple{Int64}}) do x
+@test (Base.infer_effects(Tuple{Tuple{Int64}}) do x
     @inbounds x[1]
-end |> Compiler.is_foldable_nothrow
+end |> Compiler.is_foldable_nothrow) broken=coverage_enabled
 
 # Test that :new of non-concrete, but otherwise known type
 # does not taint consistency.
@@ -907,9 +909,9 @@ end |> Compiler.is_foldable_nothrow
     x::T
     ImmutRef(x) = $(Expr(:new, :(ImmutRef{typeof(x)}), :x))
 end
-@test Compiler.is_foldable(Base.infer_effects(ImmutRef, Tuple{Any}))
+@test Compiler.is_foldable(Base.infer_effects(ImmutRef, Tuple{Any})) broken=coverage_enabled
 
-@test Compiler.is_foldable_nothrow(Base.infer_effects(typejoin, ()))
+@test Compiler.is_foldable_nothrow(Base.infer_effects(typejoin, ())) broken=coverage_enabled
 
 # nothrow-ness of subtyping operations
 # https://github.com/JuliaLang/julia/pull/48566
@@ -1023,9 +1025,9 @@ g50311(x) = Val{f50311((1.0, x), "foo")}()
 
 # getglobal effects
 const my_defined_var = 42
-@test Base.infer_effects() do
+@test (Base.infer_effects() do
     getglobal(@__MODULE__, :my_defined_var, :monotonic)
-end |> Compiler.is_foldable_nothrow
+end |> Compiler.is_foldable_nothrow)
 @test Base.infer_effects() do
     getglobal(@__MODULE__, :my_defined_var, :foo)
 end |> !Compiler.is_nothrow
@@ -1041,10 +1043,10 @@ Base.@assume_effects :nothrow function irinterp_nothrow_override(x, y)
     end
     return z
 end
-@test Base.infer_effects((Float64,)) do y
+@test (Base.infer_effects((Float64,)) do y
     isinf(y) && return zero(y)
     irinterp_nothrow_override(true, y)
-end |> Compiler.is_nothrow
+end |> Compiler.is_nothrow)
 
 # Effects for :compilerbarrier
 f1_compilerbarrier(b) = Base.compilerbarrier(:type, b)
@@ -1069,14 +1071,14 @@ function f2_optrefine()
     return true
 end
 @test !Compiler.is_nothrow(Base.infer_effects(f2_optrefine; optimize=false))
-@test Compiler.is_nothrow(Base.infer_effects(f2_optrefine))
+@test Compiler.is_nothrow(Base.infer_effects(f2_optrefine)) broken=coverage_enabled
 
 function f3_optrefine(x)
     @fastmath sqrt(x)
     return x
 end
 @test !Compiler.is_consistent(Base.infer_effects(f3_optrefine; optimize=false))
-@test Compiler.is_consistent(Base.infer_effects(f3_optrefine, (Float64,)))
+@test Compiler.is_consistent(Base.infer_effects(f3_optrefine, (Float64,))) broken=coverage_enabled
 
 # Check that :consistent is properly modeled for throwing statements
 const GLOBAL_MUTABLE_SWITCH = Ref{Bool}(false)
@@ -1102,10 +1104,10 @@ function post_opt_refine_effect_free(y, c=true)
     end
     return r
 end
-@test Compiler.is_effect_free(Base.infer_effects(post_opt_refine_effect_free, (Base.RefValue{Any},)))
-@test Base.infer_effects((Base.RefValue{Any},)) do y
+@test Compiler.is_effect_free(Base.infer_effects(post_opt_refine_effect_free, (Base.RefValue{Any},))) broken=coverage_enabled
+@test (Base.infer_effects((Base.RefValue{Any},)) do y
     post_opt_refine_effect_free(y, true)
-end |> Compiler.is_effect_free
+end |> Compiler.is_effect_free) broken=coverage_enabled
 
 # Check EA-based refinement of :effect_free
 Base.@assume_effects :nothrow @noinline _noinline_set!(x) = (x[] = 1; nothing)
@@ -1232,9 +1234,9 @@ let (memoryrefnew, memoryrefget, memoryref_isassigned, memoryrefset!) =
     @test !Compiler.is_noub(builtin_effects(memoryrefset!, Any[MemoryRef,Any,Symbol,Vararg{Bool}]))
     @test !Compiler.is_noub(builtin_effects(memoryrefset!, Any[MemoryRef,Vararg{Any}]))
     # `:boundscheck` taint should be refined by post-opt analysis
-    @test Base.infer_effects() do xs::Vector{Any}, i::Int
+    @test (Base.infer_effects() do xs::Vector{Any}, i::Int
         memoryrefget(memoryrefnew(getfield(xs, :ref), i, Base.@_boundscheck), :not_atomic, Base.@_boundscheck)
-    end |> Compiler.is_noub_if_noinbounds
+    end |> Compiler.is_noub_if_noinbounds)
 end
 
 # high level tests
@@ -1244,18 +1246,18 @@ end
 @test Compiler.is_noub_if_noinbounds(Base.infer_effects(Base._setindex!, (Vector{Any},Any,Int)))
 @test Compiler.is_noub_if_noinbounds(Base.infer_effects(isassigned, (Vector{Int},Int)))
 @test Compiler.is_noub_if_noinbounds(Base.infer_effects(isassigned, (Vector{Any},Int)))
-@test Base.infer_effects((Vector{Int},Int)) do xs, i
+@test (Base.infer_effects((Vector{Int},Int)) do xs, i
     xs[i]
-end |> Compiler.is_noub
-@test Base.infer_effects((Vector{Any},Int)) do xs, i
+end |> Compiler.is_noub)
+@test (Base.infer_effects((Vector{Any},Int)) do xs, i
     xs[i]
-end |> Compiler.is_noub
-@test Base.infer_effects((Vector{Int},Int,Int)) do xs, x, i
+end |> Compiler.is_noub)
+@test (Base.infer_effects((Vector{Int},Int,Int)) do xs, x, i
     xs[i] = x
-end |> Compiler.is_noub
-@test Base.infer_effects((Vector{Any},Any,Int)) do xs, x, i
+end |> Compiler.is_noub)
+@test (Base.infer_effects((Vector{Any},Any,Int)) do xs, x, i
     xs[i] = x
-end |> Compiler.is_noub
+end |> Compiler.is_noub)
 @test Base.infer_effects((Vector{Int},Int)) do xs, i
     @inbounds xs[i]
 end |> !Compiler.is_noub
@@ -1269,9 +1271,9 @@ getindex_dont_propagate(xs, i) = xs[i]
 @test Base.infer_effects((Vector{Any},Int)) do xs, i
     @inbounds getindex_propagate(xs, i)
 end |> !Compiler.is_noub
-@test Base.infer_effects((Vector{Any},Int)) do xs, i
+@test (Base.infer_effects((Vector{Any},Int)) do xs, i
     @inbounds getindex_dont_propagate(xs, i)
-end |> Compiler.is_noub
+end |> Compiler.is_noub)
 
 # refine `:nothrow` when `exct` is known to be `Bottom`
 @test Base.infer_exception_type(getindex, (Vector{Int},Int)) == BoundsError
@@ -1297,10 +1299,10 @@ let ast = code_lowered((Int,)) do x
           override.notaskstate && override.inaccessiblememonly &&
           override.noub && !override.noub_if_noinbounds
 end
-@test Base.infer_effects((Float64,)) do x
+@test (Base.infer_effects((Float64,)) do x
     isinf(x) && return 0.0
     return Base.@assume_effects :nothrow sin(x)
-end |> Compiler.is_nothrow
+end |> Compiler.is_nothrow)
 let effects = Base.infer_effects((Vector{Float64},)) do xs
         isempty(xs) && return 0.0
         Base.@assume_effects :nothrow begin
@@ -1313,7 +1315,7 @@ let effects = Base.infer_effects((Vector{Float64},)) do xs
     @test Compiler.is_nothrow(effects)
     @test Compiler.is_noub(effects)
 end
-@test Base.infer_effects((Int,)) do x
+@test (Base.infer_effects((Int,)) do x
     res = 1
     0 ≤ x < 20 || error("bad fact")
     Base.@assume_effects :terminates_locally while x > 1
@@ -1321,7 +1323,7 @@ end
         x -= 1
     end
     return res
-end |> Compiler.is_terminates
+end |> Compiler.is_terminates)
 
 # https://github.com/JuliaLang/julia/issues/52531
 const a52531 = Core.Ref(1)
@@ -1384,12 +1386,12 @@ global v53613 = nothing
 @test h53613() === nothing
 
 # tuple/svec effects
-@test Base.infer_effects((Vector{Any},)) do xs
+@test (Base.infer_effects((Vector{Any},)) do xs
     Core.tuple(xs...)
-end |> Compiler.is_nothrow
-@test Base.infer_effects((Vector{Any},)) do xs
+end |> Compiler.is_nothrow)
+@test (Base.infer_effects((Vector{Any},)) do xs
     Core.svec(xs...)
-end |> Compiler.is_nothrow
+end |> Compiler.is_nothrow)
 
 # effects for unknown `:foreigncall`s
 @test Base.infer_effects() do

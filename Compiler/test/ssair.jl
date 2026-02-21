@@ -5,6 +5,8 @@ include("irutils.jl")
 
 using Test
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 using .Compiler: CFG, BasicBlock, NewSSAValue
 
 make_bb(preds, succs) = BasicBlock(Compiler.StmtRange(0, 0), preds, succs)
@@ -583,7 +585,7 @@ end
 
     # get the addition instruction
     add_stmt = ir.stmts[1]
-    @test Meta.isexpr(add_stmt[:stmt], :call) && add_stmt[:stmt].args[3] == 42
+    @test Meta.isexpr(add_stmt[:stmt], :call) && add_stmt[:stmt].args[3] == 42 broken=coverage_enabled
 
     # replace the addition with a slightly different one
     inst = Compiler.NewInstruction(Expr(:call, add_stmt[:stmt].args[1], add_stmt[:stmt].args[2], 999), Int)
@@ -602,7 +604,7 @@ end
     @test Compiler.length(ir.new_nodes) == 0
 
     # test that we performed copy propagation, but that the undef node was trimmed
-    @test length(ir.stmts) == instructions
+    @test length(ir.stmts) == instructions broken=coverage_enabled
 
     @test show(devnull, ir) === nothing
 end

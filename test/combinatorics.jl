@@ -5,6 +5,8 @@ using Random: randcycle
 isdefined(Main, :ImmutableArrays) || @eval Main include("testhelpers/ImmutableArrays.jl")
 using .Main.ImmutableArrays
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 @testset "binomial" begin
     @test binomial(5,-1) == 0
     @test binomial(5,10) == 0
@@ -80,7 +82,7 @@ end
     for T = Base.uniontypes(Union{Base.Checked.SignedInt,Base.Checked.UnsignedInt})
         @testset let T = T
             @test factorial(T(7)) == 5040
-            @test Core.Compiler.is_foldable(Base.infer_effects(factorial, (T,)))
+            @test Core.Compiler.is_foldable(Base.infer_effects(factorial, (T,))) broken=coverage_enabled
         end
     end
     @test factorial(0) == 1

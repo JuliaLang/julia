@@ -4,6 +4,8 @@ using Random: randstring
 
 include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 @testset "ifelse" begin
     @test ifelse(true, 1, 2) == 1
     @test ifelse(false, 1, 2) == 2
@@ -209,10 +211,10 @@ end
     h = (-) ∘ (-) ∘ (-) ∘ (-) ∘ (-) ∘ (-) ∘ sum
     @test (@inferred h((1, 2, 3); init = 0.0)) == 6.0
     issue_45877 = reduce(∘, fill(sin, 50))
-    @test Core.Compiler.is_foldable(Base.infer_effects(Base.unwrap_composed, (typeof(issue_45877),)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(Base.unwrap_composed, (typeof(issue_45877),))) broken=coverage_enabled
     @test fully_eliminated() do
         issue_45877(1.0)
-    end
+    end broken=coverage_enabled
 end
 
 @testset "function negation" begin
@@ -393,25 +395,25 @@ end
     @test Core.Compiler.is_foldable(Base.infer_effects(in, (Char,Tuple{Char,Char,Char})))
     for i = (1,2,3)
         @testset let i = i
-            @test @eval Base.return_types() do
+            @test (@eval Base.return_types() do
                 Val($i in (1,2,3))
-            end |> only == Val{true}
+            end |> only == Val{true})
         end
     end
-    @test Base.infer_return_type() do
+    @test (Base.infer_return_type() do
         Val(4 in (1,2,3))
-    end == Val{false}
-    @test Base.infer_return_type() do
+    end == Val{false})
+    @test (Base.infer_return_type() do
         Val('1' in ('1','2','3'))
-    end == Val{true}
+    end == Val{true})
 
     # constant propagation
     @test Base.infer_return_type((Int,Int)) do x, y
         Val(1 in (x,2,y))
     end >: Val{true}
-    @test Base.infer_return_type((Int,Int)) do x, y
+    @test (Base.infer_return_type((Int,Int)) do x, y
         Val(2 in (x,2,y))
-    end == Val{true}
+    end == Val{true})
 
     # should use the loop implementation given large tuples to avoid inference blowup
     let t = ntuple(x->'A', 10000);

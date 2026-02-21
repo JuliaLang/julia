@@ -4,6 +4,8 @@
 
 using Random
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 @testset "flipsign/copysign" begin
     for y in (-4, Float32(-4), -4.0, big(-4.0))
         @test flipsign(3, y)  == -3
@@ -206,9 +208,9 @@ end
         for T2 in Base.BitInteger_types
             for op in (>>, <<, >>>)
                 if sizeof(T2)==sizeof(Int) || T <: Signed || (op==>>>) || T2 <: Unsigned
-                    @test Core.Compiler.is_foldable_nothrow(Base.infer_effects(op, (T, T2)))
+                    @test Core.Compiler.is_foldable_nothrow(Base.infer_effects(op, (T, T2))) broken=coverage_enabled
                 else
-                    @test Core.Compiler.is_foldable(Base.infer_effects(op, (T, T2)))
+                    @test Core.Compiler.is_foldable(Base.infer_effects(op, (T, T2))) broken=coverage_enabled
                     # #47835, TODO implement interval arithmetic analysis
                     @test_broken Core.Compiler.is_nothrow(Base.infer_effects(op, (T, T2)))
                 end

@@ -2,6 +2,8 @@
 
 using Test, Random
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 module TestBroadcastInternals
 
 using Base.Broadcast: check_broadcast_axes, check_broadcast_shape, newindex, _bcs
@@ -1200,8 +1202,8 @@ end
 
 # test that `Broadcast` definition is defined as total and eligible for concrete evaluation
 import Base.Broadcast: BroadcastStyle, DefaultArrayStyle
-@test Base.infer_effects(BroadcastStyle, (DefaultArrayStyle{1},DefaultArrayStyle{2},)) |>
-    Core.Compiler.is_foldable
+@test (Base.infer_effects(BroadcastStyle, (DefaultArrayStyle{1},DefaultArrayStyle{2},)) |>
+    Core.Compiler.is_foldable) broken=coverage_enabled
 
 f51129(v, x) = (1 .- (v ./ x) .^ 2)
 @test @inferred(f51129([13.0], 6.5)) == [-3.0]

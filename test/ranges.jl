@@ -6,6 +6,8 @@ using InteractiveUtils: code_llvm
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 @testset "range construction" begin
     @test_throws ArgumentError range(start=1, step=1, stop=2, length=10)
     @test_throws ArgumentError range(start=1, step=1, stop=10, length=11)
@@ -2651,7 +2653,7 @@ function check_ranges(rx, ry)
     end
     rx, ry
 end
-@test Core.Compiler.is_foldable(Base.infer_effects(check_ranges, (UnitRange{Int},UnitRange{Int})))
+@test Core.Compiler.is_foldable(Base.infer_effects(check_ranges, (UnitRange{Int},UnitRange{Int}))) broken=coverage_enabled
 # TODO JET.@test_opt check_ranges(1:2, 3:4)
 
 @testset "checkbounds overflow (#26623)" begin

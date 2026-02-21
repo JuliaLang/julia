@@ -3,6 +3,8 @@
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 
+const coverage_enabled = Base.JLOptions().code_coverage != 0
+
 struct BitPerm_19352
     p::NTuple{8,UInt8}
     function BitPerm(p::NTuple{8,UInt8})
@@ -839,8 +841,8 @@ namedtup = (;a=1, b=2, c=3)
 end
 
 # Make sure that tuple iteration is foldable
-@test Core.Compiler.is_foldable(Base.infer_effects(iterate, Tuple{NTuple{4, Float64}, Int}))
-@test Core.Compiler.is_foldable(Base.infer_effects(eltype, Tuple{Tuple}))
+@test Core.Compiler.is_foldable(Base.infer_effects(iterate, Tuple{NTuple{4, Float64}, Int})) broken=coverage_enabled
+@test Core.Compiler.is_foldable(Base.infer_effects(eltype, Tuple{Tuple})) broken=coverage_enabled
 
 # some basic equivalence handling tests for Union{} appearing in Tuple Vararg parameters
 @test Tuple{} <: Tuple{Vararg{Union{}}}
