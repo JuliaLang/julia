@@ -587,3 +587,29 @@ end
     @test _bitcast_trigger(1) === Ptr{Nothing}(0)
     @test _bitcast_trigger(3) === Ptr{Nothing}(0)
 end
+
+# Test unsafe_store! on union values with inline_roots (split representation)
+@testset "pointerset union with inline_roots" begin
+    struct PointersetMixedGC
+        a::Vector{Int}
+        b::Int
+    end
+    @noinline function _pointerset_returns_union(x::Int)
+        x == 0 && return PointersetMixedGC(Int[1,2,3], 42)
+        x == 1 && return UInt(0)
+        return nothing
+    end
+    function _pointerset_trigger(x::Int)
+        val = _pointerset_returns_union(x)::PointersetMixedGC
+        p = Ptr{PointersetMixedGC}(Libc.malloc(2 * sizeof(PointersetMixedGC)))
+        GC.@preserve val begin
+            unsafe_store!(p, val, 1)
+            unsafe_store!(p, val, 2)
+            r1 = unsafe_load(p, 1)
+            r2 = unsafe_load(p, 2)
+        end
+        Libc.free(p)
+        return r1.a, r1.b, r2.a, r2.b
+    end
+    @test _pointerset_trigger(0) == (Int[1,2,3], 42, Int[1,2,3], 42)
+end
