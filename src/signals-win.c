@@ -600,7 +600,7 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
     if (hBtThread == NULL) {
 #ifndef _CPU_X86_64_
         // For some reason the CI Julia build system does not have `CREATE_WAITABLE_TIMER_HIGH_RESOLUTION` available
-        // for 32-bit Windwos, so we fall back to `timeBeginPeriod` and `timeEndPeriod` there.
+        // for 32-bit Windows, so we fall back to `timeBeginPeriod` and `timeEndPeriod` there.
         TIMECAPS _timecaps;
         if (MMSYSERR_NOERROR != timeGetDevCaps(&_timecaps, sizeof(_timecaps))) {
             uv_mutex_unlock(&bt_data_prof_lock);
