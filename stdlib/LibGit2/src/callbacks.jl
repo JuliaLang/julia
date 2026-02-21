@@ -26,7 +26,7 @@ function mirror_callback(remote::Ptr{Ptr{Cvoid}}, repo_ptr::Ptr{Cvoid},
 end
 
 """
-    LibGit2.is_passphrase_required(private_key) -> Bool
+    LibGit2.is_passphrase_required(private_key)::Bool
 
 Return `true` if the `private_key` file requires a passphrase, `false` otherwise.
 """
@@ -43,7 +43,7 @@ end
 function user_abort()
     ensure_initialized()
     # Note: Potentially it could be better to just throw a Julia error.
-    ccall((:giterr_set_str, libgit2), Cvoid,
+    ccall((:git_error_set_str, libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "Aborting, user cancelled credential request.")
     return Cint(Error.EUSER)
@@ -51,7 +51,7 @@ end
 
 function prompt_limit()
     ensure_initialized()
-    ccall((:giterr_set_str, libgit2), Cvoid,
+    ccall((:git_error_set_str, libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "Aborting, maximum number of prompts reached.")
     return Cint(Error.EAUTH)
@@ -59,7 +59,7 @@ end
 
 function exhausted_abort()
     ensure_initialized()
-    ccall((:giterr_set_str, libgit2), Cvoid,
+    ccall((:git_error_set_str, libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
           "All authentication methods have failed.")
     return Cint(Error.EAUTH)
@@ -242,7 +242,7 @@ end
 
 
 """
-    credential_callback(...) -> Cint
+    credential_callback(...)::Cint
 
 A LibGit2 credential callback function which provides different credential acquisition
 functionality w.r.t. a connection protocol. The `payload_ptr` is required to contain a
@@ -339,7 +339,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Cvoid}}, url_ptr::Cstring,
     if err == 0
         if p.explicit !== nothing
             ensure_initialized()
-            ccall((:giterr_set_str, libgit2), Cvoid, (Cint, Cstring), Cint(Error.Callback),
+            ccall((:git_error_set_str, libgit2), Cvoid, (Cint, Cstring), Cint(Error.Callback),
                   "The explicitly provided credential is incompatible with the requested " *
                   "authentication methods.")
         end

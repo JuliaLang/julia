@@ -32,9 +32,12 @@ void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t byt
 void _gc_heap_snapshot_record_gc_roots(jl_value_t *root, char *name) JL_NOTSAFEPOINT;
 // Used for objects that are reachable from the finalizer list
 void _gc_heap_snapshot_record_finlist(jl_value_t *finlist, size_t index) JL_NOTSAFEPOINT;
+// Used for objects reachable from the binding partition pointer union
+void _gc_heap_snapshot_record_binding_partition_edge(jl_value_t *from, jl_value_t *to) JL_NOTSAFEPOINT;
 
 extern int gc_heap_snapshot_enabled;
 extern int prev_sweep_full;
+extern jl_mutex_t heapsnapshot_lock;
 
 int gc_slot_to_fieldidx(void *_obj, void *slot, jl_datatype_t *vt) JL_NOTSAFEPOINT;
 int gc_slot_to_arrayidx(void *_obj, void *begin) JL_NOTSAFEPOINT;
@@ -96,6 +99,13 @@ static inline void gc_heap_snapshot_record_internal_array_edge(jl_value_t *from,
     }
 }
 
+static inline void gc_heap_snapshot_record_binding_partition_edge(jl_value_t *from, jl_value_t *to) JL_NOTSAFEPOINT
+{
+    if (__unlikely(gc_heap_snapshot_enabled && prev_sweep_full)) {
+        _gc_heap_snapshot_record_binding_partition_edge(from, to);
+    }
+}
+
 static inline void gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t bytes, uint16_t alloc_type) JL_NOTSAFEPOINT
 {
     if (__unlikely(gc_heap_snapshot_enabled && prev_sweep_full)) {
@@ -121,7 +131,7 @@ static inline void gc_heap_snapshot_record_finlist(jl_value_t *finlist, size_t i
 // Functions to call from Julia to take heap snapshot
 // ---------------------------------------------------------------------
 JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *nodes, ios_t *edges,
-    ios_t *strings, ios_t *json, char all_one);
+    ios_t *strings, ios_t *json, char all_one, char redact_data);
 
 
 #ifdef __cplusplus

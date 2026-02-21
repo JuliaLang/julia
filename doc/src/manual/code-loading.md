@@ -36,11 +36,14 @@ An *environment* determines what `import X` and `using X` mean in various code c
 
 These can be intermixed to create **a stacked environment**: an ordered set of project environments and package directories, overlaid to make a single composite environment. The precedence and visibility rules then combine to determine which packages are available and where they get loaded from. Julia's load path forms a stacked environment, for example.
 
-These environment each serve a different purpose:
+These environments each serve a different purpose:
 
 * Project environments provide **reproducibility**. By checking a project environment into version control—e.g. a git repository—along with the rest of the project's source code, you can reproduce the exact state of the project and all of its dependencies. The manifest file, in particular, captures the exact version of every dependency, identified by a cryptographic hash of its source tree, which makes it possible for `Pkg` to retrieve the correct versions and be sure that you are running the exact code that was recorded for all dependencies.
 * Package directories provide **convenience** when a full carefully-tracked project environment is unnecessary. They are useful when you want to put a set of packages somewhere and be able to directly use them, without needing to create a project environment for them.
 * Stacked environments allow for **adding** tools to the primary environment. You can push an environment of development tools onto the end of the stack to make them available from the REPL and scripts, but not from inside packages.
+
+!!! note
+    When loading a package from another environment in the stack other than the active environment the package is loaded in the context of the active environment. This means that the package will be loaded as if it were imported in the active environment, which may affect how its dependencies versions are resolved. When such a package is precompiling it will be marked as a `(serial)` precompile job, which means that its dependencies will be precompiled in series within the same job, which will likely be slower.
 
 At a high-level, each environment conceptually defines three maps: roots, graph and paths. When resolving the meaning of `import X`, the roots and graph maps are used to determine the identity of `X`, while the paths map is used to locate the source code of `X`. The specific roles of the three maps are:
 
@@ -61,9 +64,9 @@ Each kind of environment defines these three maps differently, as detailed in th
 !!! note
     For ease of understanding, the examples throughout this chapter show full data structures for roots, graph and paths. However, Julia's package loading code does not explicitly create these. Instead, it lazily computes only as much of each structure as it needs to load a given package.
 
-### Project environments
+### [Project environments](@id project-environments)
 
-A project environment is determined by a directory containing a project file called `Project.toml`, and optionally a manifest file called `Manifest.toml`. These files may also be called `JuliaProject.toml` and `JuliaManifest.toml`, in which case `Project.toml` and `Manifest.toml` are ignored. This allows for coexistence with other tools that might consider files called `Project.toml` and `Manifest.toml` significant. For pure Julia projects, however, the names `Project.toml` and `Manifest.toml` are preferred. However, from Julia v1.11 onwards, `(Julia)Manifest-v{major}.{minor}.toml` is recognized as a format to make a given julia version use a specific manifest file i.e. in the same folder, a `Manifest-v1.11.toml` would be used by v1.11 and `Manifest.toml` by any other julia version.
+A project environment is determined by a directory containing a project file called `Project.toml`, and optionally a manifest file called `Manifest.toml`. These files may also be called `JuliaProject.toml` and `JuliaManifest.toml`, in which case `Project.toml` and `Manifest.toml` are ignored. This allows for coexistence with other tools that might consider files called `Project.toml` and `Manifest.toml` significant. For pure Julia projects, however, the names `Project.toml` and `Manifest.toml` are preferred. However, from Julia v1.10.8 onwards, `(Julia)Manifest-v{major}.{minor}.toml` is recognized as a format to make a given julia version use a specific manifest file i.e. in the same folder, a `Manifest-v1.11.toml` would be used by v1.11 and `Manifest.toml` by any other julia version.
 
 The roots, graph and paths maps of a project environment are defined as follows:
 
@@ -123,7 +126,7 @@ This manifest file describes a possible complete dependency graph for the `App` 
 - There are two different packages named `Priv` that the application uses. It uses a private package, which is a root dependency, and a public one, which is an indirect dependency through `Pub`. These are differentiated by their distinct UUIDs, and they have different deps:
   * The private `Priv` depends on the `Pub` and `Zebra` packages.
   * The public `Priv` has no dependencies.
-- The application also depends on the `Pub` package, which in turn depends on the public `Priv ` and the same `Zebra` package that the private `Priv` package depends on.
+- The application also depends on the `Pub` package, which in turn depends on the public `Priv` and the same `Zebra` package that the private `Priv` package depends on.
 
 
 This dependency graph represented as a dictionary, looks like this:
@@ -155,16 +158,17 @@ graph[UUID("c07ecb7d-0dc9-4db7-8803-fadaaeaf08e1")][:Priv]
 
 and gets `2d15fe94-a1f7-436c-a4d8-07a9a496e01c`, which indicates that in the context of the `Pub` package, `import Priv` refers to the public `Priv` package, rather than the private one which the app depends on directly. This is how the name `Priv` can refer to different packages in the main project than it does in one of its package's dependencies, which allows for duplicate names in the package ecosystem.
 
-What happens if `import Zebra` is evaluated in the main `App` code base? Since `Zebra` does not appear in the project file, the import will fail even though `Zebra` *does* appear in the manifest file. Moreover, if `import Zebra` occurs in the public `Priv` package—the one with UUID `2d15fe94-a1f7-436c-a4d8-07a9a496e01c`—then that would also fail since that `Priv` package has no declared dependencies in the manifest file and therefore cannot load any packages. The `Zebra` package can only be loaded by packages for which it appear as an explicit dependency in the manifest file: the  `Pub` package and one of the `Priv` packages.
+What happens if `import Zebra` is evaluated in the main `App` code base? Since `Zebra` does not appear in the project file, the import will fail even though `Zebra` *does* appear in the manifest file. Moreover, if `import Zebra` occurs in the public `Priv` package—the one with UUID `2d15fe94-a1f7-436c-a4d8-07a9a496e01c`—then that would also fail since that `Priv` package has no declared dependencies in the manifest file and therefore cannot load any packages. The `Zebra` package can only be loaded by packages for which it appears as an explicit dependency in the manifest file: the `Pub` package and one of the `Priv` packages.
 
 **The paths map** of a project environment is extracted from the manifest file. The path of a package `uuid` named `X` is determined by these rules (in order):
 
 1. If the project file in the directory matches `uuid` and name `X`, then either:
-   - It has a toplevel `path` entry, then `uuid` will be mapped to that path, interpreted relative to the directory containing the project file.
-   - Otherwise, `uuid` is mapped to  `src/X.jl` relative to the directory containing the project file.
-2. If the above is not the case and the project file has a corresponding manifest file and the manifest contains a stanza matching `uuid` then:
-   - If it has a `path` entry, use that path (relative to the directory containing the manifest file).
-   - If it has a `git-tree-sha1` entry, compute a deterministic hash function of `uuid` and `git-tree-sha1`—call it `slug`—and look for a directory named `packages/X/$slug` in each directory in the Julia `DEPOT_PATH` global array. Use the first such directory that exists.
+   - It has a toplevel `entryfile` entry, then `uuid` will be mapped to that path, interpreted relative to the directory containing the project file.
+   - Otherwise, `uuid` is mapped to `src/X.jl` relative to the directory containing the project file.
+2. 1. If the above is not the case and the project file has a corresponding manifest file and the manifest contains a stanza matching `uuid` then:
+      - If it has a `path` entry, use that path (relative to the directory containing the manifest file).
+      - If it has a `git-tree-sha1` entry, compute a deterministic hash function of `uuid` and `git-tree-sha1`—call it `slug`—and look for a directory named `packages/X/$slug` in each directory in the Julia `DEPOT_PATH` global array. Use the first such directory that exists.
+   2. If this is a directory then `uuid` is mapped to `src/X.jl` unless the matching manifest stanza has an `entryfile` entry in which case this is used. In both cases, these are relative to the directory in 2.1.
 
 If any of these result in success, the path to the source code entry point will be either that result, the relative path from that result plus `src/X.jl`; otherwise, there is no path mapping for `uuid`. When loading `X`, if no source code path is found, the lookup will fail, and the user may be prompted to install the appropriate package version or to take other corrective action (e.g. declaring `X` as a dependency).
 
@@ -190,7 +194,7 @@ paths = Dict(
     # Priv – the public one:
     (UUID("2d15fe94-a1f7-436c-a4d8-07a9a496e01c"), :Priv) =>
         # package installed in the system depot:
-        "/usr/local/julia/packages/Priv/HDkr/src/Priv.jl",
+        "/usr/local/julia/packages/Priv/HDkrT/src/Priv.jl",
     # Pub:
     (UUID("c07ecb7d-0dc9-4db7-8803-fadaaeaf08e1"), :Pub) =>
         # package installed in the user depot:
@@ -207,7 +211,6 @@ This example map includes three different kinds of package locations (the first 
 1. The private `Priv` package is "[vendored](https://stackoverflow.com/a/35109534)" inside the `App` repository.
 2. The public `Priv` and `Zebra` packages are in the system depot, where packages installed and managed by the system administrator live. These are available to all users on the system.
 3. The `Pub` package is in the user depot, where packages installed by the user live. These are only available to the user who installed them.
-
 
 ### Package directories
 
@@ -351,7 +354,7 @@ Since the primary environment is typically the environment of a project you're w
 
 ### [Package Extensions](@id man-extensions)
 
-A package "extension" is a module that is automatically loaded when a specified set of other packages (its "extension dependencies") are loaded in the current Julia session. Extensions are defined under the `[extensions]` section in the project file. The extension dependencies of an extension are a subset of those packages listed under the `[weakdeps]` section of the project file. Those packages can have compat entries like other packages.
+A package "extension" is a module that is automatically loaded when a specified set of other packages (its "triggers") are loaded in the current Julia session. Extensions are defined under the `[extensions]` section in the project file. The triggers of an extension are a subset of those packages listed under the `[weakdeps]` (and possibly, but uncommonly the `[deps]`) section of the project file. Those packages can have compat entries like other packages.
 
 ```toml
 name = "MyPackage"
@@ -371,8 +374,8 @@ FooExt = "ExtDep"
 ```
 
 The keys under `extensions` are the names of the extensions.
-They are loaded when all the packages on the right hand side (the extension dependencies) of that extension are loaded.
-If an extension only has one extension dependency the list of extension dependencies can be written as just a string for brevity.
+They are loaded when all the packages on the right hand side (the triggers) of that extension are loaded.
+If an extension only has one trigger the list of triggers can be written as just a string for brevity.
 The location for the entry point of the extension is either in `ext/FooExt.jl` or `ext/FooExt/FooExt.jl` for
 extension `FooExt`.
 The content of an extension is often structured as:
@@ -380,10 +383,10 @@ The content of an extension is often structured as:
 ```
 module FooExt
 
-# Load main package and extension dependencies
+# Load main package and triggers
 using MyPackage, ExtDep
 
-# Extend functionality in main package with types from the extension dependencies
+# Extend functionality in main package with types from the triggers
 MyPackage.func(x::ExtDep.SomeStruct) = ...
 
 end
@@ -391,8 +394,32 @@ end
 
 When a package with extensions is added to an environment, the `weakdeps` and `extensions` sections
 are stored in the manifest file in the section for that package. The dependency lookup rules for
-a package are the same as for its "parent" except that the listed extension dependencies are also considered as
+a package are the same as for its "parent" except that the listed triggers are also considered as
 dependencies.
+
+### [Workspaces](@id workspaces)
+
+A project file can define a workspace by giving a set of projects that is part of that workspace:
+
+```toml
+[workspace]
+projects = ["test", "benchmarks", "docs", "SomePackage"]
+```
+
+Each project listed in the `projects` array is specified by its relative path from the workspace root. This can be a direct child directory (e.g., `"test"`) or a nested subdirectory (e.g., `"nested/subdir/MyPackage"`). Each project contains its own `Project.toml` file, which may include additional dependencies and compatibility constraints. In such cases, the package manager gathers all dependency information from all the projects in the workspace generating a single manifest file that combines the versions of all dependencies.
+
+When Julia loads a project, it searches upward through parent directories until it reaches the user's home directory to find a workspace that includes that project. This allows workspace projects to be nested at arbitrary depth within the workspace directory tree.
+
+Furthermore, workspaces can be "nested", meaning a project defining a workspace can also be part of another workspace. In this scenario, a single manifest file is still utilized, stored alongside the "root project" (the project that doesn't have another workspace including it). An example file structure could look like this:
+
+```
+Project.toml # projects = ["MyPackage"]
+Manifest.toml
+MyPackage/
+    Project.toml # projects = ["test"]
+    test/
+        Project.toml
+```
 
 ### [Package/Environment Preferences](@id preferences)
 
@@ -410,6 +437,43 @@ Preferences can be set with depot-wide defaults; if package Foo is installed wit
 Preferences in environments higher up in the environment stack get overridden by the more proximal entries in the load path, ending with the currently active project.
 This allows depot-wide preference defaults to exist, with active projects able to merge or even completely overwrite these inherited preferences.
 See the docstring for `Preferences.set_preferences!()` for the full details of how to set preferences to allow or disallow merging.
+
+### [Syntax Versioning](@id syntax-versioning)
+
+Syntax versioning allows packages to specify which version of Julia's syntax they use. In particular, different
+packages can use different versions of the Julia syntax. This allows evolution of Julia's syntax in a non-breaking
+way, while allowing packages to upgrade at their own pace. The syntax version is determined from the package's
+corresponding Project.toml and propagates to all modules defined in the package.
+
+#### Syntax Version Determination
+
+The syntax version for a package is determined by the loading mechanism in the following order of precedence:
+
+1. If a `syntax.julia_version` field is present in the project file, it is used directly:
+   ```toml
+   name = "MyPackage"
+   uuid = "..."
+   syntax.julia_version = "1.14"
+   ```
+
+2. Otherwise, if a `[compat]` section specifies a Julia version constraint, the minimum compatible version is used:
+   ```toml
+   [compat]
+   julia = "1.13-2"  # implies syntax version 1.13.0
+   ```
+
+3. If neither is specified, the current Julia version is used.
+
+#### In scripts and the REPL
+
+Scripts and the REPL use the active project's syntax version. This determination happens:
+
+1. At startup after processing `--project`
+2. Before parsing any REPL input, once for each prompt
+
+In particular, a manual `set_active_project` in a script will not change the syntax versioned used
+for the rest of the script. However, doing so at the REPL (explicitly or implicitly via the Pkg
+REPL mode) will affect the syntax version used to parse the *next* REPL input.
 
 ## Conclusion
 

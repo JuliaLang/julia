@@ -1,6 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-// RUN: clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-output=text -Xclang -load -Xclang libGCCheckerPlugin%shlibext -Xclang -verify -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include ${CLANGSA_FLAGS} ${CPPFLAGS} ${CFLAGS} -Xclang -analyzer-checker=core,julia.GCChecker --analyzer-no-default-checks -x c++ %s
+// RUN: clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-output=text -Xclang -load -Xclang libGCCheckerPlugin%shlibext -Xclang -verify -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include ${CLANGSA_FLAGS} ${CLANGSA_CXXFLAGS} ${CPPFLAGS} ${CFLAGS} -Xclang -analyzer-checker=core,julia.GCChecker --analyzer-no-default-checks -x c++ %s
 
 #include "julia.h"
 #include <string>
@@ -8,15 +8,15 @@
 void missingPop() {
   jl_value_t *x = NULL;
   JL_GC_PUSH1(&x); // expected-note{{GC frame changed here}}
-} // expected-warning{{Non-popped GC frame present at end of function}}
-  // expected-note@-1{{Non-popped GC frame present at end of function}}
+} // expected-warning@-1{{Non-popped GC frame present at end of function}}
+  // expected-note@-2{{Non-popped GC frame present at end of function}}
 
 
 void missingPop2() {
   jl_value_t **x;
   JL_GC_PUSHARGS(x, 2); // expected-note{{GC frame changed here}}
-} // expected-warning{{Non-popped GC frame present at end of function}}
-  // expected-note@-1{{Non-popped GC frame present at end of function}}
+} // expected-warning@-1{{Non-popped GC frame present at end of function}}
+  // expected-note@-2{{Non-popped GC frame present at end of function}}
 
 void superfluousPop() {
   JL_GC_POP(); // expected-warning{{JL_GC_POP without corresponding push}}

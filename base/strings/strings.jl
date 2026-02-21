@@ -11,3 +11,4 @@ import .Iterators: PartitionIterator
 
 include("strings/util.jl")
 include("strings/io.jl")
+include("strings/annotated_io.jl")

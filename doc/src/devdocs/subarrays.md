@@ -1,6 +1,6 @@
 # SubArrays
 
-Julia's `SubArray` type is a container encoding a "view" of a parent [`AbstractArray`](@ref).  This page
+Julia's `SubArray` type is a container encoding a "view" of a parent [`AbstractArray`](@ref). This page
 documents some of the design principles and implementation of `SubArray`s.
 
 One of the major design goals is to ensure high performance for views of both [`IndexLinear`](@ref) and
@@ -56,8 +56,8 @@ struct SubArray{T,N,P,I,L} <: AbstractArray{T,N}
 end
 ```
 
-`SubArray` has 5 type parameters.  The first two are the standard element type and dimensionality.
- The next is the type of the parent `AbstractArray`.  The most heavily-used is the fourth parameter,
+`SubArray` has 5 type parameters. The first two are the standard element type and dimensionality.
+ The next is the type of the parent `AbstractArray`. The most heavily-used is the fourth parameter,
 a `Tuple` of the types of the indices for each dimension. The final one, `L`, is only provided
 as a convenience for dispatch; it's a boolean that represents whether the index types support
 fast linear indexing. More on that later.
@@ -78,8 +78,8 @@ one to dispatch to efficient algorithms.
 ### Index translation
 
 Performing index translation requires that you do different things for different concrete `SubArray`
-types.  For example, for `S1`, one needs to apply the `i,j` indices to the first and third dimensions
-of the parent array, whereas for `S2` one needs to apply them to the second and third.  The simplest
+types. For example, for `S1`, one needs to apply the `i,j` indices to the first and third dimensions
+of the parent array, whereas for `S2` one needs to apply them to the second and third. The simplest
 approach to indexing would be to do the type-analysis at runtime:
 
 ```julia
@@ -161,7 +161,7 @@ julia> diff(A[2:2:4,:][:])
 ```
 
 A view constructed as `view(A, 2:2:4, :)` happens to have uniform stride, and therefore linear
-indexing indeed could be performed efficiently.  However, success in this case depends on the
+indexing indeed could be performed efficiently. However, success in this case depends on the
 size of the array: if the first dimension instead were odd,
 
 ```jldoctest
@@ -192,7 +192,7 @@ then `A[2:2:4,:]` does not have uniform stride, so we cannot guarantee efficient
     levels of indirection; they can simply re-compute the indices into the original parent array!
   * Hopefully by now it's fairly clear that supporting slices means that the dimensionality, given
     by the parameter `N`, is not necessarily equal to the dimensionality of the parent array or the
-    length of the `indices` tuple.  Neither do user-supplied indices necessarily line up with entries
+    length of the `indices` tuple. Neither do user-supplied indices necessarily line up with entries
     in the `indices` tuple (e.g., the second user-supplied index might correspond to the third dimension
     of the parent array, and the third element in the `indices` tuple).
 

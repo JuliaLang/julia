@@ -2,6 +2,8 @@
 
 using Test, Mmap, Random
 
+@test isempty(Test.detect_closure_boxes(Mmap))
+
 file = tempname()
 write(file, "Hello World\n")
 t = b"Hello World"
@@ -11,12 +13,13 @@ GC.gc(); GC.gc()
 GC.gc(); GC.gc()
 @test mmap(file, Array{UInt8,3}, (1,1,11)) == reshape(t,(1,1,11))
 GC.gc(); GC.gc()
-@test mmap(file, Array{UInt8,3}, (11,0,1)) == Array{UInt8}(undef, (0,0,0))
+@test size(mmap(file, Array{UInt8,3}, (11,0,1))) == (11,0,1)
 @test mmap(file, Vector{UInt8}, (11,)) == t
 GC.gc(); GC.gc()
 @test mmap(file, Array{UInt8,2}, (1,11)) == t'
 GC.gc(); GC.gc()
-@test mmap(file, Array{UInt8,2}, (0,12)) == Array{UInt8}(undef, (0,0))
+@test size(mmap(file, Array{UInt8,2}, (0,12))) == (0,12)
+@test size(mmap(file, Matrix{Float32}, (10,0))) == (10,0)
 m = mmap(file, Array{UInt8,3}, (1,2,1))
 @test m == reshape(b"He",(1,2,1))
 finalize(m); m=nothing; GC.gc()
@@ -44,9 +47,10 @@ s = open(file)
 @test length(@inferred mmap(s, Vector{Int8}, 12, 0; grow=false)) == 12
 @test length(@inferred mmap(s, Vector{Int8}, 12, 0; shared=false)) == 12
 close(s)
-@test_throws ErrorException mmap(file, Vector{Ref}) # must be bit-type
+@test_throws ArgumentError mmap(file, Vector{Ref}) # must be bit-type
 GC.gc(); GC.gc()
 
+file = tempname() # new name to reduce chance of issues due slow windows fs
 s = open(f->f,file,"w")
 @test mmap(file) == Vector{UInt8}() # requested len=0 on empty file
 @test mmap(file,Vector{UInt8},0) == Vector{UInt8}()
@@ -100,9 +104,9 @@ if !(Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le)
     s = open(file, "r")
     m = mmap(s)
     @test_throws ReadOnlyMemoryError m[5] = UInt8('x') # tries to setindex! on read-only array
-    finalize(m); m=nothing; GC.gc()
+    finalize(m); m=nothing;
 end
-
+GC.gc()
 write(file, "Hello World\n")
 
 s = open(file, "r")
@@ -191,6 +195,7 @@ m = mmap(file,Vector{UInt8},2,6)
 @test_throws BoundsError m[3]
 finalize(m); m = nothing; GC.gc()
 
+file = tempname() # new name to reduce chance of issues due slow windows fs
 s = open(file, "w")
 write(s, [0xffffffffffffffff,
           0xffffffffffffffff,
@@ -266,6 +271,7 @@ A2 = mmap(s, Matrix{Int}, (m,n))
 seek(s, 0)
 A3 = mmap(s, Matrix{Int}, (m,n), convert(Int64, 2*sizeof(Int)))
 @test A == A3
+seek(s, 0)
 A4 = mmap(s, Matrix{Int}, (m,150), convert(Int64, (2+150*m)*sizeof(Int)))
 @test A[:, 151:end] == A4
 close(s)
@@ -336,9 +342,23 @@ open(file, "r+") do s
     finalize(A); A = nothing; GC.gc()
     A = mmap(s, Vector{UInt8}, (10,), 1)
     Mmap.sync!(A)
-    finalize(A); A = nothing; GC.gc()
+    finalize(A); A = nothing;
 end
+GC.gc()
 rm(file)
+
+# test for #58982 - mmap with primitive types
+file = tempname()
+primitive type PrimType9Bytes 9*8 end
+arr = Vector{PrimType9Bytes}(undef, 2)
+write(file, arr)
+m = mmap(file, Vector{PrimType9Bytes})
+@test length(m) == 2
+@test m[1] == arr[1]
+@test m[2] == arr[2]
+finalize(m); m = nothing; GC.gc()
+rm(file)
+
 
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(Mmap))

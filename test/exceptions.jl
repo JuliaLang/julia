@@ -241,6 +241,18 @@ end
         end
     end)()
     @test length(Base.current_exceptions()) == 0
+
+    (()-> begin
+        while true
+            try
+                error("foo")
+            finally
+                break
+            end
+        end
+        @test length(Base.current_exceptions()) == 0
+    end)()
+    @test length(Base.current_exceptions()) == 0
 end
 
 @testset "Deep exception stacks" begin

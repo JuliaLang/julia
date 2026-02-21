@@ -11,6 +11,8 @@ Base.size(F::Fill) = F.size
 
 Base.copy(F::Fill) = F
 
+Base.AbstractArray{T,N}(F::Fill{<:Any,N}) where {T,N} = Fill(T(F.value), F.size)
+
 @inline getindex_value(F::Fill) = F.value
 
 @inline function Base.getindex(F::Fill{<:Any,N}, i::Vararg{Int,N}) where {N}
@@ -28,6 +30,8 @@ end
     v == getindex_value(F) || throw(ArgumentError("Cannot fill! with $v a Fill with value $(getindex_value(F))."))
     F
 end
+
+Base.zero(F::Fill) = Fill(zero(F.value), size(F))
 
 Base.show(io::IO, F::Fill) = print(io, "Fill($(F.value), $(F.size))")
 Base.show(io::IO, ::MIME"text/plain", F::Fill) = show(io, F)

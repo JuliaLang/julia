@@ -2,6 +2,8 @@
 
 using Test, Printf
 
+@test isempty(Test.detect_closure_boxes(Printf))
+
 @testset "Printf" begin
 
 @testset "%p" begin
@@ -116,12 +118,15 @@ end
     @test (Printf.@sprintf "%+f" Inf) == "+Inf"
     @test (Printf.@sprintf "% f" Inf) == " Inf"
     @test (Printf.@sprintf "% #f" Inf) == " Inf"
+    @test (Printf.@sprintf "%07f" Inf) == "    Inf"
     @test (Printf.@sprintf "%f" -Inf) == "-Inf"
     @test (Printf.@sprintf "%+f" -Inf) == "-Inf"
+    @test (Printf.@sprintf "%07f" -Inf) == "   -Inf"
     @test (Printf.@sprintf "%f" NaN) == "NaN"
     @test (Printf.@sprintf "%+f" NaN) == "+NaN"
     @test (Printf.@sprintf "% f" NaN) == " NaN"
     @test (Printf.@sprintf "% #f" NaN) == " NaN"
+    @test (Printf.@sprintf "%07f" NaN) == "    NaN"
     @test (Printf.@sprintf "%e" big"Inf") == "Inf"
     @test (Printf.@sprintf "%e" big"NaN") == "NaN"
 
@@ -169,12 +174,15 @@ end
     @test (Printf.@sprintf "%+e" Inf) == "+Inf"
     @test (Printf.@sprintf "% e" Inf) == " Inf"
     @test (Printf.@sprintf "% #e" Inf) == " Inf"
+    @test (Printf.@sprintf "%07e" Inf) == "    Inf"
     @test (Printf.@sprintf "%e" -Inf) == "-Inf"
     @test (Printf.@sprintf "%+e" -Inf) == "-Inf"
+    @test (Printf.@sprintf "%07e" -Inf) == "   -Inf"
     @test (Printf.@sprintf "%e" NaN) == "NaN"
     @test (Printf.@sprintf "%+e" NaN) == "+NaN"
     @test (Printf.@sprintf "% e" NaN) == " NaN"
     @test (Printf.@sprintf "% #e" NaN) == " NaN"
+    @test (Printf.@sprintf "%07e" NaN) == "    NaN"
     @test (Printf.@sprintf "%e" big"Inf") == "Inf"
     @test (Printf.@sprintf "%e" big"NaN") == "NaN"
 

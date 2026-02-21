@@ -17,7 +17,7 @@ if Sys.iswindows()
     export GetLastError, FormatMessage
 end
 
-include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "errno_h.jl"))  # include($BUILDROOT/base/errno_h.jl)
+include(string(Base.BUILDROOT, "errno_h.jl"))  # include($BUILDROOT/base/errno_h.jl)
 
 ## RawFD ##
 
@@ -36,6 +36,13 @@ RawFD(fd::Integer) = bitcast(RawFD, Cint(fd))
 RawFD(fd::RawFD) = fd
 Base.cconvert(::Type{Cint}, fd::RawFD) = bitcast(Cint, fd)
 
+"""
+    dup(src::RawFD[, target::RawFD])::RawFD
+
+Duplicate the file descriptor `src` so that the duplicate refers to the same OS
+resource (e.g. a file or socket). A `target` file descriptor may optionally
+be passed to use for the new duplicate.
+"""
 dup(x::RawFD) = ccall((@static Sys.iswindows() ? :_dup : :dup), RawFD, (RawFD,), x)
 dup(src::RawFD, target::RawFD) = systemerror("dup", -1 ==
     ccall((@static Sys.iswindows() ? :_dup2 : :dup2), Int32,
@@ -259,9 +266,39 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
         throw(ArgumentError("invalid arguments"))
     end
     @static if Sys.isapple()
+        function shouldcallmktime(s::AbstractString)
+            # Equivalent to !occursin(r"([^%]|^)%(a|A|j|w|Ow)"a, s), but
+            # without regex since this is not available yet
+
+            c = Base.utf8units(s)
+            N = length(c)
+            i = findfirst(==(UInt8('%')), c)
+
+            while true
+                isnothing(i) && break
+                i >= N && break
+
+                # Ignore % following after another %
+                if i == firstindex(c) || c[i-1] != UInt8('%')
+                    # Detect %a, %A, %j, %w, %Ow
+                    if c[i+1] in b"aAjw"
+                        return false
+                    end
+                    if (checkbounds(Bool, c, i+2) &&
+                        c[i+1] == UInt8('O') &&
+                        c[i+2] == UInt8('w')
+                    )
+                        return false
+                    end
+                end
+
+                i = findnext(==(UInt8('%')), c, i+1)
+            end
+            return true
+        end
         # if we didn't explicitly parse the weekday or year day, use mktime
         # to fill them in automatically.
-        if !occursin(r"([^%]|^)%(a|A|j|w|Ow)"a, fmt)
+        if shouldcallmktime(fmt)
             ccall(:mktime, Int, (Ref{TmStruct},), tm)
         end
     end
@@ -271,23 +308,25 @@ end
 # system date in seconds
 
 """
-    time(t::TmStruct) -> Float64
+    time(t::TmStruct)::Float64
 
-Converts a `TmStruct` struct to a number of seconds since the epoch.
+Convert a `TmStruct` struct to a number of seconds since the epoch.
 """
 time(tm::TmStruct) = Float64(ccall(:mktime, Int, (Ref{TmStruct},), tm))
 
 """
-    time() -> Float64
+    time()::Float64
 
 Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
+
+See also [`time_ns`](@ref).
 """
 time() = ccall(:jl_clock_now, Float64, ())
 
 ## process-related functions ##
 
 """
-    getpid() -> Int32
+    getpid()::Int32
 
 Get Julia's process ID.
 """
@@ -296,7 +335,7 @@ getpid() = ccall(:uv_os_getpid, Int32, ())
 ## network functions ##
 
 """
-    gethostname() -> String
+    gethostname()::String
 
 Get the local machine's host name.
 """
@@ -385,14 +424,14 @@ free(p::Cstring) = free(convert(Ptr{UInt8}, p))
 free(p::Cwstring) = free(convert(Ptr{Cwchar_t}, p))
 
 """
-    malloc(size::Integer) -> Ptr{Cvoid}
+    malloc(size::Integer)::Ptr{Cvoid}
 
 Call `malloc` from the C standard library.
 """
 malloc(size::Integer) = ccall(:malloc, Ptr{Cvoid}, (Csize_t,), size)
 
 """
-    realloc(addr::Ptr, size::Integer) -> Ptr{Cvoid}
+    realloc(addr::Ptr, size::Integer)::Ptr{Cvoid}
 
 Call `realloc` from the C standard library.
 
@@ -402,7 +441,7 @@ obtained from [`malloc`](@ref).
 realloc(p::Ptr, size::Integer) = ccall(:realloc, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t), p, size)
 
 """
-    calloc(num::Integer, size::Integer) -> Ptr{Cvoid}
+    calloc(num::Integer, size::Integer)::Ptr{Cvoid}
 
 Call `calloc` from the C standard library.
 """
@@ -565,6 +604,7 @@ end
 
 getuid() = ccall(:jl_getuid, Culong, ())
 geteuid() = ccall(:jl_geteuid, Culong, ())
+getegid() = Sys.iswindows() ? Culong(-1) : ccall(:getegid, Culong, ())
 
 # Include dlopen()/dlpath() code
 include("libdl.jl")

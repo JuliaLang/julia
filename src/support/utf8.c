@@ -27,11 +27,10 @@
 
 #ifdef _OS_WINDOWS_
 #include <malloc.h>
-#define snprintf _snprintf
 #else
-#ifndef __FreeBSD__
+#if !defined(__FreeBSD__) && !defined(__OpenBSD__)
 #include <alloca.h>
-#endif /* __FreeBSD__ */
+#endif /* !__FreeBSD__ && !__OpenBSD__ */
 #endif
 #include <assert.h>
 

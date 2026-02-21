@@ -50,14 +50,16 @@ julia> ans
 
 In Julia mode, the REPL supports something called *prompt pasting*. This activates when pasting text
 that starts with `julia> ` into the REPL. In that case, only expressions starting with `julia> ` (as
-well as the other REPL mode prompts: `shell> `, `help?> `, `pkg>` ) are parsed, but others are
+well as the other REPL mode prompts: `shell> `, `help?> `, `pkg> ` ) are parsed, but others are
 removed. This makes it possible to paste a chunk of text that has been copied from a REPL session
 without having to scrub away prompts and outputs. This feature is enabled by default but can be
 disabled or enabled at will with `REPL.enable_promptpaste(::Bool)`. If it is enabled, you can try it
 out by pasting the code block above this paragraph straight into the REPL. This feature does not
 work on the standard Windows command prompt due to its limitation at detecting when a paste occurs.
 
-Objects are printed at the REPL using the [`show`](@ref) function with a specific [`IOContext`](@ref).
+A non-[`nothing`](@ref) result of executing an expression is displayed by the REPL using the [`show`](@ref) function
+with a specific [`IOContext`](@ref) (via [`display`](@ref), which defaults to calling
+`show(io, MIME("text/plain"), ans)`, which in turn defaults to `show(io, ans)`).
 In particular, the `:limit` attribute is set to `true`.
 Other attributes can receive in certain `show` methods a default value if it's not already set,
 like `:compact`.
@@ -66,7 +68,7 @@ It's possible, as an experimental feature, to specify the attributes used by the
 
 ```julia-repl
 julia> rand(2, 2)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.8833    0.329197
  0.719708  0.59114
 
@@ -76,7 +78,7 @@ julia> show(IOContext(stdout, :compact => false), "text/plain", rand(2, 2))
 julia> Base.active_repl.options.iocontext[:compact] = false;
 
 julia> rand(2, 2)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.2083967319174056  0.13330606013126012
  0.6244375177790158  0.9777957560761545
 ```
@@ -203,83 +205,92 @@ at the beginning of the line. The prompt for this mode is `pkg>`. It supports it
 entered by pressing `?` at the beginning  of the line of the `pkg>` prompt. The Package manager mode is
 documented in the Pkg manual, available at [https://julialang.github.io/Pkg.jl/v1/](https://julialang.github.io/Pkg.jl/v1/).
 
-### Search modes
+### History searching
 
 In all of the above modes, the executed lines get saved to a history file, which can be searched.
- To initiate an incremental search through the previous history, type `^R` -- the control key
-together with the `r` key. The prompt will change to ```(reverse-i-search)`':```, and as you
-type the search query will appear in the quotes. The most recent result that matches the query
-will dynamically update to the right of the colon as more is typed. To find an older result using
-the same query, simply type `^R` again.
+ To initiate an interactive search through the previous history, type `^R` -- the control key
+together with the `r` key.
 
-Just as `^R` is a reverse search, `^S` is a forward search, with the prompt ```(i-search)`':```.
- The two may be used in conjunction with each other to move through the previous or next matching
-results, respectively.
+You will be presented with an interactive history viewer. As you type your search history will be filtered;
+pressing enter will insert the selected history entry into the REPL. Detailed help for the history
+searcher is available within the REPL with the special queries `?`  and `??`.
 
 All executed commands in the Julia REPL are logged into `~/.julia/logs/repl_history.jl` along with a timestamp of when it was executed
-and the current REPL mode you were in. Search mode queries this log file in order to find the commands which you previously ran.
-This can be disabled at startup by passing the `--history-file=no` flag to Julia.
+and the current REPL mode you were in. The history searcher reads this log file in order to find the commands which you previously ran.
+Multiple REPLs can write to this file at once, and every time you begin a search the newest history is fetched.
+Use of this file can be disabled at startup by passing the `--history-file=no` flag to Julia.
 
 ## Key bindings
 
 The Julia REPL makes great use of key bindings. Several control-key bindings were already introduced
-above (`^D` to exit, `^R` and `^S` for searching), but there are many more. In addition to the
+above (`^D` to exit, `^R` for searching), but there are many more. In addition to the
 control-key, there are also meta-key bindings. These vary more by platform, but most terminals
 default to using alt- or option- held down with a key to send the meta-key (or can be configured
 to do so), or pressing Esc and then the key.
 
-| Keybinding          | Description                                                                                                |
-|:------------------- |:---------------------------------------------------------------------------------------------------------- |
-| **Program control** |                                                                                                            |
-| `^D`                | Exit (when buffer is empty)                                                                                |
-| `^C`                | Interrupt or cancel                                                                                        |
-| `^L`                | Clear console screen                                                                                       |
-| Return/Enter, `^J`  | New line, executing if it is complete                                                                      |
-| meta-Return/Enter   | Insert new line without executing it                                                                       |
-| `?` or `;`          | Enter help or shell mode (when at start of a line)                                                         |
-| `^R`, `^S`          | Incremental history search, described above                                                                |
-| **Cursor movement** |                                                                                                            |
-| Right arrow, `^F`   | Move right one character                                                                                   |
-| Left arrow, `^B`    | Move left one character                                                                                    |
-| ctrl-Right, `meta-F`| Move right one word                                                                                        |
-| ctrl-Left, `meta-B` | Move left one word                                                                                         |
-| Home, `^A`          | Move to beginning of line                                                                                  |
-| End, `^E`           | Move to end of line                                                                                        |
-| Up arrow, `^P`      | Move up one line (or change to the previous history entry that matches the text before the cursor)         |
-| Down arrow, `^N`    | Move down one line (or change to the next history entry that matches the text before the cursor)           |
-| Shift-Arrow Key     | Move cursor according to the direction of the Arrow key, while activating the region ("shift selection")   |
-| Page-up, `meta-P`   | Change to the previous history entry                                                                       |
-| Page-down, `meta-N` | Change to the next history entry                                                                           |
-| `meta-<`            | Change to the first history entry (of the current session if it is before the current position in history) |
-| `meta->`            | Change to the last history entry                                                                           |
-| `^-Space`           | Set the "mark" in the editing region (and de-activate the region if it's active)                           |
-| `^-Space ^-Space`   | Set the "mark" in the editing region and make the region "active", i.e. highlighted                        |
-| `^G`                | De-activate the region (i.e. make it not highlighted)                                                      |
-| `^X^X`              | Exchange the current position with the mark                                                                |
-| **Editing**         |                                                                                                            |
-| Backspace, `^H`     | Delete the previous character, or the whole region when it's active                                        |
-| Delete, `^D`        | Forward delete one character (when buffer has text)                                                        |
-| meta-Backspace      | Delete the previous word                                                                                   |
-| `meta-d`            | Forward delete the next word                                                                               |
-| `^W`                | Delete previous text up to the nearest whitespace                                                          |
-| `meta-w`            | Copy the current region in the kill ring                                                                   |
-| `meta-W`            | "Kill" the current region, placing the text in the kill ring                                               |
-| `^U`                | "Kill" to beginning of line, placing the text in the kill ring                                             |
-| `^K`                | "Kill" to end of line, placing the text in the kill ring                                                   |
-| `^Y`                | "Yank" insert the text from the kill ring                                                                  |
-| `meta-y`            | Replace a previously yanked text with an older entry from the kill ring                                    |
-| `^T`                | Transpose the characters about the cursor                                                                  |
-| `meta-Up arrow`     | Transpose current line with line above                                                                     |
-| `meta-Down arrow`   | Transpose current line with line below                                                                     |
-| `meta-u`            | Change the next word to uppercase                                                                          |
-| `meta-c`            | Change the next word to titlecase                                                                          |
-| `meta-l`            | Change the next word to lowercase                                                                          |
-| `^/`, `^_`          | Undo previous editing action                                                                               |
-| `^Q`                | Write a number in REPL and press `^Q` to open editor at corresponding stackframe or method                 |
-| `meta-Left Arrow`   | Indent the current line on the left                                                                        |
-| `meta-Right Arrow`  | Indent the current line on the right                                                                       |
-| `meta-.`            | Insert last word from previous history entry                                                               |
-| `meta-e`            | Edit the current input in an editor                                                                        |
+| Keybinding            | Description                                                                                                |
+|:----------------------|:-----------------------------------------------------------------------------------------------------------|
+| **Program control**   |                                                                                                            |
+| `^D`                  | Exit (when buffer is empty)                                                                                |
+| `^C`                  | Interrupt or cancel                                                                                        |
+| `^L`                  | Clear console screen                                                                                       |
+| Return/Enter, `^J`    | New line, executing if it is complete                                                                      |
+| meta-Return/Enter     | Insert new line without executing it                                                                       |
+| `?` or `;`            | Enter help or shell mode (when at start of a line)                                                         |
+| `^R`, `^S`            | Interactive history search, described above                                                                |
+| **Cursor movement**   |                                                                                                            |
+| Right arrow, `^F`     | Move right one character                                                                                   |
+| Left arrow, `^B`      | Move left one character                                                                                    |
+| ctrl-Right, `meta-F`  | Move right one word                                                                                        |
+| ctrl-Left, `meta-B`   | Move left one word                                                                                         |
+| Home, `^A`            | Move to beginning of line                                                                                  |
+| End, `^E`             | Move to end of line                                                                                        |
+| Up arrow, `^P`        | Move up one line (or change to the previous history entry that matches the text before the cursor)         |
+| Down arrow, `^N`      | Move down one line (or change to the next history entry that matches the text before the cursor)           |
+| Shift-Arrow Key       | Move cursor according to the direction of the Arrow key, while activating the region ("shift selection")   |
+| Page-up, `meta-P`     | Change to the previous history entry                                                                       |
+| Page-down, `meta-N`   | Change to the next history entry                                                                           |
+| `meta-<`              | Change to the first history entry (of the current session if it is before the current position in history) |
+| `meta->`              | Change to the last history entry                                                                           |
+| `^-Space`             | Set the "mark" in the editing region (and de-activate the region if it's active)                           |
+| `^-Space ^-Space`     | Set the "mark" in the editing region and make the region "active", i.e. highlighted                        |
+| `^G`                  | De-activate the region (i.e. make it not highlighted)                                                      |
+| `^X^X`                | Exchange the current position with the mark                                                                |
+| **Editing**           |                                                                                                            |
+| Backspace, `^H`       | Delete the previous character, or the whole region when it's active                                        |
+| Delete, `^D`          | Forward delete one character (when buffer has text)                                                        |
+| meta-Backspace        | Delete the previous word                                                                                   |
+| `meta-d`              | Forward delete the next word                                                                               |
+| `^W`                  | Delete previous text up to the nearest whitespace                                                          |
+| `meta-w`              | Copy the current region in the kill ring                                                                   |
+| `meta-W`              | "Kill" the current region, placing the text in the kill ring                                               |
+| `^U`                  | "Kill" to beginning of line, placing the text in the kill ring                                             |
+| `^K`                  | "Kill" to end of line, placing the text in the kill ring                                                   |
+| `^Y`                  | "Yank" insert the text from the kill ring                                                                  |
+| `meta-y`              | Replace a previously yanked text with an older entry from the kill ring                                    |
+| `^T`                  | Transpose the characters about the cursor                                                                  |
+| `meta-Up arrow`       | Transpose current line with line above                                                                     |
+| `meta-Down arrow`     | Transpose current line with line below                                                                     |
+| `meta-u`              | Change the next word to uppercase                                                                          |
+| `meta-c`              | Change the next word to titlecase                                                                          |
+| `meta-l`              | Change the next word to lowercase                                                                          |
+| `^/`, `^_`            | Undo previous editing action                                                                               |
+| `^Q`                  | Write a number in REPL and press `^Q` to open editor at corresponding stackframe or method                 |
+| `meta-Left Arrow`     | Indent the current line on the left                                                                        |
+| `meta-Right Arrow`    | Indent the current line on the right                                                                       |
+| `meta-.`              | Insert last word from previous history entry                                                               |
+| `meta-e`              | Edit the current input in an editor                                                                        |
+| **History search**    |                                                                                                            |
+| Up arrow, `^P`, `^K`  | Move the focus one entry up                                                                                |
+| Down arrow, `^P`, `^N`| Move the focus one entry down                                                                              |
+| Page up, `^B`         | Move the focus one page up                                                                                 |
+| Page down, `^F`       | Move the focus one page down                                                                               |
+| `meta-<`              | Focus on the first (oldest) history entry                                                                  |
+| `meta->`              | Focus on the last (most recent) history entry                                                              |
+| Tab                   | Toggle selection of the currently focused entry                                                            |
+| Enter                 | Accept the currently focused/selected entries                                                              |
+| `^S`                  | Save the focused/selected entries to the clipboard or a file                                               |
+| `^C`, `^D`, `^G`      | Abort the history search                                                                                   |
 
 ### Customizing keybindings
 
@@ -287,7 +298,7 @@ Julia's REPL keybindings may be fully customized to a user's preferences by pass
 to `REPL.setup_interface`. The keys of this dictionary may be characters or strings. The key
 `'*'` refers to the default action. Control plus character `x` bindings are indicated with `"^x"`.
 Meta plus `x` can be written `"\\M-x"` or `"\ex"`, and Control plus `x` can be written
-`"\\C-x"` or `"^x"`.
+`"\\C-x"` or `"^x"`. A literal `^` can be escaped as `"\\^"`.
 The values of the custom keymap must be `nothing` (indicating
 that the input should be ignored) or functions that accept the signature
 `(PromptState, AbstractREPL, Char)`.
@@ -315,6 +326,28 @@ atreplinit(customize_keys)
 
 Users should refer to `LineEdit.jl` to discover the available actions on key input.
 
+### Automatic bracket insertion
+
+The Julia REPL supports automatically inserting closing brackets, parentheses, braces, and quotes
+when you type the opening character.
+
+When enabled, typing an opening bracket `(`, `{`, or `[` will automatically insert the matching
+closing bracket `)`, `}`, or `]` and position the cursor between them. The same behavior applies
+to quotes (`"`, `'`, and `` ` ``). If you then type the closing character, the REPL will skip over
+the auto-inserted character instead of inserting a duplicate. Additionally, pressing backspace
+immediately after auto-insertion will remove both the opening and closing characters.
+
+To disable this feature, add the following to your `~/.julia/config/startup.jl` file:
+
+```julia
+atreplinit() do repl
+    # Robust against older julia versions
+    if hasfield(typeof(repl.options), :auto_insert_closing_bracket)
+        repl.options.auto_insert_closing_bracket = false
+    end
+end
+```
+
 ## Tab completion
 
 In the Julian, pkg and help modes of the REPL, one can enter the first few characters of a function
@@ -341,7 +374,15 @@ mapfoldl mapfoldr
 
 When a single complete tab-complete result is available at the end of an input line and 2 or more characters
 have been typed, a hint of the completion will show in a lighter color.
-This can be disabled via `Base.active_repl.options.hint_tab_completes = false`.
+This can be disabled via `Base.active_repl.options.hint_tab_completes = false` or by adding
+```
+atreplinit() do repl
+    if VERSION >= v"1.11.0-0"
+        repl.options.hint_tab_completes = false
+    end
+end
+```
+to your `~/.julia/config/startup.jl`.
 
 !!! compat "Julia 1.11"
     Tab-complete hinting was added in Julia 1.11
@@ -366,13 +407,13 @@ julia> π
 
 julia> e\_1[TAB] = [1,0]
 julia> e₁ = [1,0]
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  0
 
 julia> e\^1[TAB] = [1 0]
 julia> e¹ = [1 0]
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  1  0
 
 julia> \sqrt[TAB]2     # √ is equivalent to the sqrt function
@@ -521,6 +562,195 @@ mmap(file::AbstractString, ::Type{T}, dims::Tuple{Vararg{Integer, N}}) where {T<
 mmap(file::AbstractString, ::Type{T}, dims::Tuple{Vararg{Integer, N}}, offset::Integer; grow, shared) where {T<:BitArray, N} in Mmap at Mmap/src/Mmap.jl:316
 mmap(file::AbstractString, ::Type{T}, len::Integer) where T<:BitArray in Mmap at Mmap/src/Mmap.jl:322
 mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer; grow, shared) where T<:BitArray in Mmap at Mmap/src/Mmap.jl:322
+```
+
+## Syntax Highlighting
+
+The REPL provides syntax highlighting for input as you type.
+Syntax highlighting is enabled by default but can be disabled in your `~/.julia/config/startup.jl`:
+
+```julia
+atreplinit() do repl
+    repl.options.style_input = false
+end
+```
+
+### Customizing Syntax Highlighting Colors
+
+The default syntax highlighting theme is quite conservative but can be customized using a TOML file `faces.toml` (https://julialang.github.io/StyledStrings.jl/dev/#stdlib-styledstrings-face-toml) in `.julia/config` (or by explicitly loading the faces from a face toml file).
+
+
+!!! details "Example: Monokai color theme (click to expand)"
+    ```toml
+
+    # Monokai color theme for Julia syntax highlighting
+
+    [julia_macro]
+    foreground = "#A6E22E"
+
+    [julia_symbol]
+    foreground = "#AE81FF"
+
+    [julia_singleton_identifier]
+    inherit = "julia_symbol"
+
+    [julia_type]
+    foreground = "#66D9EF"
+
+    [julia_typedec]
+    foreground = "#66D9EF"
+    weight = "bold"
+
+    [julia_comment]
+    foreground = "#75715E"
+    italic = true
+
+    [julia_string]
+    foreground = "#E6DB74"
+
+    [julia_regex]
+    inherit = "julia_string"
+
+    [julia_backslash_literal]
+    foreground = "#FD971F"
+    inherit = "julia_string"
+
+    [julia_string_delim]
+    foreground = "#E6DB74"
+    weight = "bold"
+
+    [julia_cmdstring]
+    inherit = "julia_string"
+
+    [julia_char]
+    inherit = "julia_string"
+
+    [julia_char_delim]
+    inherit = "julia_string_delim"
+
+    [julia_number]
+    foreground = "#AE81FF"
+
+    [julia_bool]
+    foreground = "#AE81FF"
+    weight = "bold"
+
+    [julia_funcall]
+    foreground = "#A6E22E"
+
+    [julia_broadcast]
+    foreground = "#F92672"
+    weight = "bold"
+
+    [julia_builtin]
+    foreground = "#66D9EF"
+    weight = "bold"
+
+    [julia_operator]
+    foreground = "#F92672"
+
+    [julia_comparator]
+    inherit = "julia_operator"
+
+    [julia_assignment]
+    foreground = "#F92672"
+    weight = "bold"
+
+    [julia_keyword]
+    foreground = "#F92672"
+    weight = "bold"
+
+    [julia_parentheses]
+    foreground = "#F8F8F2"
+
+    [julia_unpaired_parentheses]
+    background = "#F92672"
+    foreground = "#F8F8F0"
+    weight = "bold"
+
+    [julia_error]
+    background = "#F92672"
+    foreground = "#F8F8F0"
+
+    [julia_rainbow_paren_1]
+    foreground = "#A6E22E"
+    inherit = "julia_parentheses"
+
+    [julia_rainbow_paren_2]
+    foreground = "#66D9EF"
+    inherit = "julia_parentheses"
+
+    [julia_rainbow_paren_3]
+    foreground = "#FD971F"
+    inherit = "julia_parentheses"
+
+    [julia_rainbow_paren_4]
+    inherit = "julia_rainbow_paren_1"
+
+    [julia_rainbow_paren_5]
+    inherit = "julia_rainbow_paren_2"
+
+    [julia_rainbow_paren_6]
+    inherit = "julia_rainbow_paren_3"
+
+    # Rainbow brackets
+    [julia_rainbow_bracket_1]
+    foreground = "#AE81FF"
+    inherit = "julia_parentheses"
+
+    [julia_rainbow_bracket_2]
+    foreground = "#E6DB74"
+    inherit = "julia_parentheses"
+
+    [julia_rainbow_bracket_3]
+    inherit = "julia_rainbow_bracket_1"
+
+    [julia_rainbow_bracket_4]
+    inherit = "julia_rainbow_bracket_2"
+
+    [julia_rainbow_bracket_5]
+    inherit = "julia_rainbow_bracket_1"
+
+    [julia_rainbow_bracket_6]
+    inherit = "julia_rainbow_bracket_2"
+
+    # Rainbow curlies
+    [julia_rainbow_curly_1]
+    foreground = "#F92672"
+    inherit = "julia_parentheses"
+
+    [julia_rainbow_curly_2]
+    foreground = "#A6E22E"
+    inherit = "julia_parentheses"
+
+    [julia_rainbow_curly_3]
+    inherit = "julia_rainbow_curly_1"
+
+    [julia_rainbow_curly_4]
+    inherit = "julia_rainbow_curly_2"
+
+    [julia_rainbow_curly_5]
+    inherit = "julia_rainbow_curly_1"
+
+    [julia_rainbow_curly_6]
+    inherit = "julia_rainbow_curly_2"
+    ```
+
+For a complete list of customizable faces, see the [JuliaSyntaxHighlighting package documentation](https://julialang.github.io/JuliaSyntaxHighlighting.jl/dev/).
+
+## Customising the history searcher
+
+The history searcher uses the following default faces, that can be customised:
+
+```toml
+[REPL.History.search]
+separator.fg  = "blue"
+prefix.fg = "magenta"
+selected.fg = "blue"
+unselected.fg = "grey"
+hint = { fg = "magenta", slant = "italic", weight ="light" }
+results.inherit = "shadow"
+match = { weight = "bold", underline = true }
 ```
 
 ## Customizing Colors

@@ -9,7 +9,7 @@ isreal(x::AbstractArray{<:Real}) = true
 ## Constructors ##
 
 """
-    vec(a::AbstractArray) -> AbstractVector
+    vec(a::AbstractArray)::AbstractVector
 
 Reshape the array `a` as a one-dimensional column vector. Return `a` if it is
 already an `AbstractVector`. The resulting array
@@ -49,14 +49,17 @@ _sub(t::Tuple, s::Tuple) = _sub(tail(t), tail(s))
     dropdims(A; dims)
 
 Return an array with the same data as `A`, but with the dimensions specified by
-`dims` removed. `size(A,d)` must equal 1 for every `d` in `dims`,
-and repeated dimensions or numbers outside `1:ndims(A)` are forbidden.
+`dims` removed.
+
+Repeated dimensions or numbers outside `1:ndims(A)` are forbidden.
+Moreover `size(A,d)` must equal 1 for every `d` in `dims`.
 
 The result shares the same underlying data as `A`, such that the
 result is mutable if and only if `A` is mutable, and setting elements of one
 alters the values of the other.
 
-See also: [`reshape`](@ref), [`vec`](@ref).
+Inverse of [`insertdims`](@ref).
+See also [`reshape`](@ref), [`vec`](@ref).
 
 # Examples
 ```jldoctest
@@ -88,10 +91,81 @@ function _dropdims(A::AbstractArray, dims::Dims)
             dims[j] == dims[i] && throw(ArgumentError("dropped dims must be unique"))
         end
     end
+    ox = axes(A)
     ax = _foldoneto((ds, d) -> d in dims ? ds : (ds..., axes(A,d)), (), Val(ndims(A)))
-    reshape(A, ax::typeof(_sub(axes(A), dims)))
+    if isconcretetype(eltype(ox))
+        # if all the axes are the same type, we can use the tail as the
+        # axes of the result rather than extracting one at each index
+        return reshape(A, ax::typeof(_sub(ox, dims)))
+    else
+        return reshape(A, ax)
+    end
 end
 _dropdims(A::AbstractArray, dim::Integer) = _dropdims(A, (Int(dim),))
+
+"""
+    insertdims(A; dims)
+
+Return an array with new singleton dimensions at every dimension in `dims`.
+
+Repeated dimensions are forbidden and the largest entry in `dims` must be
+less than or equal than `ndims(A) + length(dims)`.
+
+The result shares the same underlying data as `A`, such that the
+result is mutable if and only if `A` is mutable, and setting elements of one
+alters the values of the other.
+
+Inverse of [`dropdims`](@ref).
+See also [`reshape`](@ref), [`vec`](@ref).
+
+# Examples
+```jldoctest
+julia> x = [1 2 3; 4 5 6]
+2×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
+
+julia> insertdims(x, dims=3)
+2×3×1 Array{Int64, 3}:
+[:, :, 1] =
+ 1  2  3
+ 4  5  6
+
+julia> insertdims(x, dims=(1,2,5)) == reshape(x, 1, 1, 2, 3, 1)
+true
+
+julia> dropdims(insertdims(x, dims=(1,2,5)), dims=(1,2,5))
+2×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
+```
+
+!!! compat "Julia 1.12"
+    Requires Julia 1.12 or later.
+"""
+insertdims(A; dims) = _insertdims(A, dims)
+function _insertdims(A::AbstractArray{T, N}, dims::NTuple{M, Int}) where {T, N, M}
+    for i in eachindex(dims)
+        1 ≤ dims[i] || throw(ArgumentError("the smallest entry in dims must be ≥ 1."))
+        dims[i] ≤ N+M || throw(ArgumentError("the largest entry in dims must be not larger than the dimension of the array and the length of dims added"))
+        for j = 1:i-1
+            dims[j] == dims[i] && throw(ArgumentError("inserted dims must be unique"))
+        end
+    end
+
+    # acc is a tuple, where the first entry is the final shape
+    # the second entry off acc is a counter for the axes of A
+    inds= Base._foldoneto((acc, i) ->
+                            i ∈ dims
+                                ? ((acc[1]..., Base.OneTo(1)), acc[2])
+                                : ((acc[1]..., axes(A, acc[2])), acc[2] + 1),
+                            ((), 1), Val(N+M))
+    new_shape = inds[1]
+    return reshape(A, new_shape)
+end
+_insertdims(A::AbstractArray, dim::Integer) = _insertdims(A, (Int(dim),))
+
+
 
 ## Unary operators ##
 
@@ -230,7 +304,7 @@ Return a view of all the data of `A` where the index for dimension `d` equals `i
 
 Equivalent to `view(A,:,:,...,i,:,:,...)` where `i` is in position `d`.
 
-See also: [`eachslice`](@ref).
+See also [`eachslice`](@ref).
 
 # Examples
 ```jldoctest
@@ -265,11 +339,14 @@ circshift(a::AbstractArray, shiftamt::DimsInteger) = circshift!(similar(a), a, s
 """
     circshift(A, shifts)
 
-Circularly shift, i.e. rotate, the data in an array. The second argument is a tuple or
+Circularly shift, i.e. rotate, the data in `A`. The second argument is a tuple or
 vector giving the amount to shift in each dimension, or an integer to shift only in the
 first dimension.
 
-See also: [`circshift!`](@ref), [`circcopy!`](@ref), [`bitrotate`](@ref), [`<<`](@ref).
+The generated code is most efficient when the shift amounts are known at compile-time, i.e.,
+compile-time constants.
+
+See also [`circshift!`](@ref), [`circcopy!`](@ref), [`bitrotate`](@ref), [`<<`](@ref).
 
 # Examples
 ```jldoctest
@@ -317,6 +394,18 @@ julia> circshift(a, -1)
  0
  1
  1
+
+julia> x = (1, 2, 3, 4, 5)
+(1, 2, 3, 4, 5)
+
+julia> circshift(x, 4)
+(2, 3, 4, 5, 1)
+
+julia> z = (1, 'a', -7.0, 3)
+(1, 'a', -7.0, 3)
+
+julia> circshift(z, -1)
+('a', -7.0, 3, 1)
 ```
 """
 function circshift(a::AbstractArray, shiftamt)
@@ -330,7 +419,7 @@ end
 
 Construct an array by repeating array `A` a given number of times in each dimension, specified by `counts`.
 
-See also: [`fill`](@ref), [`Iterators.repeated`](@ref), [`Iterators.cycle`](@ref).
+See also [`fill`](@ref), [`Iterators.repeated`](@ref), [`Iterators.cycle`](@ref).
 
 # Examples
 ```jldoctest
@@ -439,6 +528,9 @@ function check(arr, inner, outer)
         # TODO: Currently one based indexing is demanded for inner !== nothing,
         # but not for outer !== nothing. Decide for something consistent.
         Base.require_one_based_indexing(arr)
+        if !all(n -> n isa Integer, inner)
+            throw(ArgumentError("repeat requires integer counts, got inner = $inner"))
+        end
         if any(<(0), inner)
             throw(ArgumentError("no inner repetition count may be negative; got $inner"))
         end
@@ -447,6 +539,9 @@ function check(arr, inner, outer)
         end
     end
     if outer !== nothing
+        if !all(n -> n isa Integer, outer)
+            throw(ArgumentError("repeat requires integer counts, got outer = $outer"))
+        end
         if any(<(0), outer)
             throw(ArgumentError("no outer repetition count may be negative; got $outer"))
         end
