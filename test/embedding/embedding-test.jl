@@ -31,6 +31,6 @@ end
     @test lines[4] == "sqrt(2.0) in C: 1.414214e+00"
     @test lines[9] == "called bar"
     @test lines[10] == "calling new bar"
-    @test lines[11] == "      From worker 2:\tTaking over the world..."
+    @test lines[11] == "  From worker 2:\tTaking over the world..."
     @test "exception caught from C" in readlines(err)
 end
