@@ -88,21 +88,20 @@ end
 # to be able to identify the file. Also convert Windows-style paths to Unix-style paths so tests can
 # be grouped by file.
 const generalize_file_paths_cache = Dict{AbstractString,AbstractString}()
-const norm_build_root_path = normpath(Sys.BUILD_ROOT_PATH)
+const norm_sourcedir = normpath(Base.SOURCEDIR)
 const bindir_dir = dirname(Sys.BINDIR)
 const pathsep = Sys.iswindows() ? '\\' : '/'
 function generalize_file_paths(path::AbstractString)
     return get!(generalize_file_paths_cache, path) do
         path = replace(path,
             Sys.STDLIB => "stdlib",
-            string(norm_build_root_path, pathsep) => "",
+            string(norm_sourcedir, pathsep) => "",
             string(bindir_dir, pathsep) => ""
         )
         @static if Sys.iswindows()
-            return replace(path, "\\" => "/")
-        else
-            return path
+            path = replace(path, "\\" => "/")
         end
+        return replace(path, "share/julia/" => "")
     end
 end
 
@@ -145,6 +144,9 @@ const TEST_TYPE_MAP = Dict(
     :test_throws_nothing => "@test_throws"
 )
 function get_test_call_str(result)
+    if result.test_type === :nontest_error
+        return "Got exception outside of a @test"
+    end
     prefix = get(TEST_TYPE_MAP, result.test_type, nothing)
     prefix === nothing && return error("Unknown test type $(repr(result.test_type))")
     return prefix == "@test_throws" ? "@test_throws $(result.data) $(result.orig_expr)" : "$prefix $(result.orig_expr)"

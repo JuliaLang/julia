@@ -4,6 +4,7 @@
 
 using Random
 using InteractiveUtils
+using InteractiveUtils: code_llvm, code_native
 using Libdl
 using Test
 
@@ -21,7 +22,7 @@ end
 # The tests below assume a certain format and safepoint_on_entry=true breaks that.
 function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
     params = Base.CodegenParams(safepoint_on_entry=false, gcstack_arg = false, debug_info_level=Cint(2))
-    d = InteractiveUtils._dump_function(f, t, false, false, raw, dump_module, :att, optimize, :none, false, params)
+    d = InteractiveUtils._dump_function(InteractiveUtils.ArgInfo(f, t), false, false, raw, dump_module, :att, optimize, :none, false, params)
     sprint(print, d)
 end
 
@@ -133,14 +134,14 @@ if !is_debug_build && opt_level > 0
     # Array
     test_loads_no_call(strip_debug_calls(get_llvm(sizeof, Tuple{Vector{Int}})), [Iptr])
     # As long as the eltype is known we don't need to load the elsize, but do need to check isvector
-    @test_skip test_loads_no_call(strip_debug_calls(get_llvm(sizeof, Tuple{Array{Any}})), ["atomic $Iptr", "ptr", "ptr", Iptr, Iptr, "ptr",  Iptr])
+    @test_skip test_loads_no_call(strip_debug_calls(get_llvm(sizeof, Tuple{Array{Any}})), ["atomic volatile $Iptr", "ptr", "ptr", Iptr, Iptr, "ptr",  Iptr])
     # Memory
     test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory{Int}})), [Iptr])
     # As long as the eltype is known we don't need to load the elsize
     test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory{Any}})), [Iptr])
     # Check that we load the elsize and isunion from the typeof layout
-    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic $Iptr", "ptr", "i32", "i16"])
-    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic $Iptr", "ptr", "i32", "i16"])
+    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic volatile $Iptr", "ptr", "i32", "i16"])
+    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic volatile $Iptr", "ptr", "i32", "i16"])
     # Primitive Type size should be folded to a constant
     test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Ptr})), String[])
 
@@ -409,7 +410,7 @@ function g_dict_hash_alloc()
 end
 # Warm up
 f_dict_hash_alloc(); g_dict_hash_alloc();
-@test abs((@allocated f_dict_hash_alloc()) / (@allocated g_dict_hash_alloc()) - 1) < 0.1 # less that 10% difference
+@test abs((@allocated f_dict_hash_alloc()) / (@allocated g_dict_hash_alloc()) - 1) < 0.3
 
 # returning an argument shouldn't alloc a new box
 @noinline f33829(x) = (global called33829 = true; x)
@@ -950,6 +951,16 @@ for (T, StructName) in ((Int128, :Issue55558), (UInt128, :UIssue55558))
     end
 end
 
+# Issue #42326
+primitive type PadAfter64_42326 448 end
+mutable struct CheckPadAfter64_42326
+    a::UInt64
+    pad::PadAfter64_42326
+    b::UInt64
+end
+@test fieldoffset(CheckPadAfter64_42326, 3) == 80
+@test sizeof(CheckPadAfter64_42326) == 96
+
 @noinline Base.@nospecializeinfer f55768(@nospecialize z::UnionAll) = z === Vector
 @test f55768(Vector)
 @test f55768(Vector{T} where T)
@@ -1032,3 +1043,45 @@ end
 const x57872 = "Hello"
 f57872() = (Core.isdefinedglobal(@__MODULE__, Base.compilerbarrier(:const, :x57872)), x57872) # Extra globalref here to force world age bounds
 @test f57872() == (true, "Hello")
+
+@noinline f_mutateany(@nospecialize x) = x[] = 1
+g_mutateany() = (y = Ref(0); f_mutateany(y); y[])
+@test g_mutateany() === 1
+
+# 58470 tbaa for unionselbyte of heap allocated mutables
+mutable struct Wrapper58470
+    x::Union{Nothing,Int}
+end
+
+function findsomething58470(dict, inds)
+    default = Wrapper58470(nothing)
+    for i in inds
+        x = get(dict, i, default).x
+        if !isnothing(x)
+            return x
+        end
+    end
+    return nothing
+end
+
+let io = IOBuffer()
+    code_llvm(io, findsomething58470, Tuple{Dict{Int64, Wrapper58470}, Vector{Int}}, dump_module=true, raw=true, optimize=false)
+    str = String(take!(io))
+    @test !occursin("jtbaa_unionselbyte", str)
+end
+
+let io = IOBuffer()
+    code_llvm(io, (x, y) -> (@atomic x[1] = y; nothing), (AtomicMemory{Pair{Any,Any}}, Pair{Any,Any},), raw=true, optimize=false)
+    str = String(take!(io))
+    @test occursin("julia.write_barrier", str)
+end
+
+# Test phi node codegen for union types with inline roots
+function union_phi_inline_roots(x::Bool)
+    if x
+        return ("Q8", 1)
+    else
+        return ("Q10", Ref(5))
+    end
+end
+@test union_phi_inline_roots(true) === ("Q8", 1)

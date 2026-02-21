@@ -36,7 +36,7 @@ length(R::ReshapedArrayIterator) = length(R.iter)
 eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedIndex{eltype(I)} : Any
 
 @noinline throw_dmrsa(dims, len) =
-    throw(DimensionMismatch("new dimensions $(dims) must be consistent with array length $len"))
+    throw(DimensionMismatch(LazyString("new dimensions ", dims, " must be consistent with array length ", len)))
 
 ## reshape(::Array, ::Dims) returns a new Array (to avoid conditionally aliasing the structure, only the data)
 # reshaping to same # of dimensions
@@ -225,7 +225,7 @@ function _reshape(parent::AbstractArray, dims::Dims)
 end
 
 @noinline function _throw_dmrs(n, str, dims)
-    throw(DimensionMismatch("parent has $n elements, which is incompatible with $str $dims"))
+    throw(DimensionMismatch("parent has $n elements, which is incompatible with $str $dims ($(prod(dims)) elements)"))
 end
 
 # Reshaping a ReshapedArray
@@ -234,10 +234,10 @@ _reshape(R::ReshapedArray, dims::Dims) = _reshape(R.parent, dims)
 
 function __reshape(p::Tuple{AbstractArray,IndexStyle}, dims::Dims)
     parent = p[1]
-    strds = front(size_to_strides(map(length, axes(parent))..., 1))
-    strds1 = map(s->max(1,Int(s)), strds)  # for resizing empty arrays
-    mi = map(SignedMultiplicativeInverse, strds1)
-    ReshapedArray(parent, dims, reverse(mi))
+    szs = front(size(parent))
+    szs1 = map(s -> max(1, Int(s)), szs) # for resizing empty arrays
+    mi = map(SignedMultiplicativeInverse, szs1)
+    ReshapedArray(parent, dims, mi)
 end
 
 function __reshape(p::Tuple{AbstractArray{<:Any,0},IndexCartesian}, dims::Dims)
@@ -253,10 +253,10 @@ end
 size(A::ReshapedArray) = A.dims
 length(A::ReshapedArray) = length(parent(A))
 similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype, dims)
+similar(::Type{TA}, dims::Dims) where {T,N,P,TA<:ReshapedArray{T,N,P}} = similar(P, dims)
 IndexStyle(::Type{<:ReshapedArrayLF}) = IndexLinear()
 parent(A::ReshapedArray) = A.parent
 parentindices(A::ReshapedArray) = map(oneto, size(parent(A)))
-reinterpret(::Type{T}, A::ReshapedArray, dims::Dims) where {T} = reinterpret(T, parent(A), dims)
 elsize(::Type{<:ReshapedArray{<:Any,<:Any,P}}) where {P} = elsize(P)
 
 unaliascopy(A::ReshapedArray) = typeof(A)(unaliascopy(A.parent), A.dims, A.mi)
@@ -268,11 +268,11 @@ mightalias(A::ReshapedArray, B::SubArray) = mightalias(parent(A), B)
 mightalias(A::SubArray, B::ReshapedArray) = mightalias(A, parent(B))
 
 @inline ind2sub_rs(ax, ::Tuple{}, i::Int) = (i,)
-@inline ind2sub_rs(ax, strds, i) = _ind2sub_rs(ax, strds, i - 1)
+@inline ind2sub_rs(ax, szs, i) = _ind2sub_rs(ax, szs, i - 1)
 @inline _ind2sub_rs(ax, ::Tuple{}, ind) = (ind + first(ax[end]),)
-@inline function _ind2sub_rs(ax, strds, ind)
-    d, r = divrem(ind, strds[1])
-    (_ind2sub_rs(front(ax), tail(strds), r)..., d + first(ax[end]))
+@inline function _ind2sub_rs(ax, szs, ind)
+    d, r = divrem(ind, szs[1])
+    (r + first(ax[1]), _ind2sub_rs(tail(ax), tail(szs), d)...)
 end
 offset_if_vec(i::Integer, axs::Tuple{<:AbstractUnitRange}) = i + first(axs[1]) - 1
 offset_if_vec(i::Integer, axs::Tuple) = i
@@ -360,16 +360,54 @@ compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{ReshapedRange
 substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedUnitRange, Vararg{Any}}) where N =
     (size_to_strides(strds[1], size(I[1])...)..., substrides(tail(strds), tail(I))...)
 
-# cconvert(::Type{<:Ptr}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {T,N,P} = V
+# This exists for backwards compatibility, normally the cconvert method below will be used
 function unsafe_convert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {S,T,N,P}
     parent = V.parent
-    p = cconvert(Ptr{T}, parent) # XXX: this should occur in cconvert, the result is not GC-rooted
     Δmem = if _checkcontiguous(Bool, parent)
         (first_index(V) - firstindex(parent)) * elsize(parent)
     else
         _memory_offset(parent, map(first, V.indices)...)
     end
-    return Ptr{S}(unsafe_convert(Ptr{T}, p) + Δmem)
+    return Ptr{S}(unsafe_convert(Ptr{T}, parent) + Δmem)
+end
+
+struct OffsetCConvert{T, C}
+    byte_offset::Int
+    cconv_parent::C
+end
+
+# Avoid unneeded nesting
+function _offset_cconvert(::Type{Ptr{T}}, byte_offset::Int, cconv_parent::OffsetCConvert{T}) where {T}
+    _offset_cconvert(
+        Ptr{T},
+        cconv_parent.byte_offset + byte_offset,
+        cconv_parent.cconv_parent,
+    )
+end
+function _offset_cconvert(::Type{Ptr{T}}, byte_offset::Int, cconv_parent::C) where {T,C}
+    OffsetCConvert{T,C}(
+        byte_offset,
+        cconv_parent,
+    )
+end
+
+function unsafe_convert(::Type{Ptr{S}}, c::OffsetCConvert{T}) where {S, T}
+    Ptr{S}(unsafe_convert(Ptr{T}, c.cconv_parent) + c.byte_offset)
+end
+
+function cconvert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {S,T,N,P}
+    parent = V.parent
+    p = cconvert(Ptr{T}, parent)
+    Δmem = if _checkcontiguous(Bool, parent)
+        (first_index(V) - firstindex(parent)) * elsize(parent)
+    else
+        _memory_offset(parent, map(first, V.indices)...)
+    end
+    _offset_cconvert(
+        Ptr{T},
+        Int(Δmem),
+        p,
+    )
 end
 
 _checkcontiguous(::Type{Bool}, A::AbstractArray) = false

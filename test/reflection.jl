@@ -16,6 +16,11 @@ function test_ir_reflection(freflect, f, types)
     nothing
 end
 
+function test_ir_reflection(freflect, argtypes)
+    @test !isempty(freflect(argtypes))
+    nothing
+end
+
 function test_bin_reflection(freflect, f, types)
     iob = IOBuffer()
     freflect(iob, f, types)
@@ -27,6 +32,9 @@ end
 function test_code_reflection(freflect, f, types, tester)
     tester(freflect, f, types)
     tester(freflect, f, (types.parameters...,))
+    tt = Base.signature_type(f, types)
+    tester(freflect, tt)
+    tester(freflect, (tt.parameters...,))
     nothing
 end
 
@@ -43,6 +51,7 @@ end
 
 test_code_reflections(test_ir_reflection, code_lowered)
 test_code_reflections(test_ir_reflection, code_typed)
+test_code_reflections(test_ir_reflection, Base.code_ircode)
 
 io = IOBuffer()
 Base.print_statement_costs(io, map, (typeof(sqrt), Tuple{Int}))
@@ -180,7 +189,7 @@ let
     @test Base.binding_module(TestMod7648.TestModSub9475, :b9475) == TestMod7648.TestModSub9475
     defaultset = Set(Symbol[:Foo7648, :TestMod7648, :a9475, :c7648, :f9475, :foo7648, :foo7648_nomethods])
     allset = defaultset ∪ Set(Symbol[
-        Symbol("#foo7648"), Symbol("#foo7648_nomethods"),
+        Symbol("#foo7648"), Symbol("#foo7648_nomethods"), Symbol("#_internal_julia_parse"),
         :TestModSub9475, :d7648, :eval, :f7648, :include])
     imported = Set(Symbol[:convert, :curmod_name, :curmod])
     usings_from_Test = Set(Symbol[
@@ -188,7 +197,7 @@ let
         Symbol("@test_logs"), Symbol("@test_nowarn"), Symbol("@test_skip"), Symbol("@test_throws"),
         Symbol("@test_warn"), Symbol("@testset"), :GenericArray, :GenericDict, :GenericOrder,
         :GenericSet, :GenericString, :LogRecord, :Test, :TestLogger, :TestSetException,
-        :detect_ambiguities, :detect_unbound_args])
+        :detect_ambiguities, :detect_closure_boxes, :detect_closure_boxes_all_modules, :detect_unbound_args])
     usings_from_Base = delete!(Set(names(Module(); usings=true)), :anonymous) # the name of the anonymous module itself
     usings = Set(Symbol[:x36529, :TestModSub9475, :f54609]) ∪ usings_from_Test ∪ usings_from_Base
     @test Set(names(TestMod7648)) == defaultset
@@ -266,7 +275,7 @@ let defaultset = Set((:A,))
     imported = Set((:M2,))
     usings_from_Base = delete!(Set(names(Module(); usings=true)), :anonymous) # the name of the anonymous module itself
     usings = Set((:A, :f, :C, :y, :M1, :m1_x)) ∪ usings_from_Base
-    allset = Set((:A, :B, :C, :eval, :include))
+    allset = Set((:A, :B, :C, :eval, :include, Symbol("#_internal_julia_parse")))
     @test Set(names(TestMod54609.A)) == defaultset
     @test Set(names(TestMod54609.A, imported=true)) == defaultset ∪ imported
     @test Set(names(TestMod54609.A, usings=true)) == defaultset ∪ usings
@@ -346,6 +355,7 @@ tlayout = TLayout(5,7,11)
 @test !hasproperty(tlayout, :p)
 @test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:fieldcount(TLayout)] ==
     [(0, :x, Int8), (2, :y, Int16), (4, :z, Int32)]
+@test [fieldoffset(TLayout, s) for s = (:x, :y, :z)] == [0, 2, 4]
 @test fieldnames(Complex) === (:re, :im)
 @test_throws BoundsError fieldtype(TLayout, 0)
 @test_throws ArgumentError fieldname(TLayout, 0)
@@ -360,6 +370,10 @@ tlayout = TLayout(5,7,11)
 # issue #30505
 @test fieldtype(Union{Tuple{Char},Tuple{Char,Char}},2) === Char
 @test_throws BoundsError fieldtype(Union{Tuple{Char},Tuple{Char,Char}},3)
+
+@test [fieldindex(TLayout, i) for i = (:x, :y, :z)] == [1, 2, 3]
+@test fieldname(TLayout, fieldindex(TLayout, :z)) === :z
+@test fieldindex(TLayout, fieldname(TLayout, 3)) === 3
 
 @test fieldnames(NTuple{3, Int}) == ntuple(i -> fieldname(NTuple{3, Int}, i), 3) == (1, 2, 3)
 @test_throws ArgumentError fieldnames(Union{})
@@ -523,13 +537,13 @@ test_typed_ir_printing(g15714, Tuple{Vector{Float32}},
 #@test used_dup_var_tested15715
 @test used_unique_var_tested15714
 
-let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
+let li = only(methods(fieldtype)).unspecialized,
     lrepr = string(li),
     mrepr = string(li.def),
     lmime = repr("text/plain", li),
     mmime = repr("text/plain", li.def)
 
-    @test lrepr == lmime == "MethodInstance for fieldtype(...)"
+    @test lrepr == lmime == "MethodInstance for fieldtype(::Vararg{Any})"
     @test mrepr == "fieldtype(...) @ Core none:0"       # simple print
     @test mmime == "fieldtype(...)\n     @ Core none:0" # verbose print
 end
@@ -572,6 +586,32 @@ fLargeTable(::Union, ::Union) = "b"
 @test length(methods(fLargeTable)) == 205
 @test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "b"
 
+# issue #58479
+fLargeTable(::Type) = "Type"
+fLargeTable(::Type{<:DataType}) = "DataType"
+@test fLargeTable(Type) == "Type"
+@test fLargeTable(DataType) == "DataType"
+@test fLargeTable(Type{DataType}) == "DataType"
+@test fLargeTable(Type{UnionAll}) == "DataType"
+@test fLargeTable(Type{Int}) == "DataType"
+@test fLargeTable(Type{Vector}) == "Type"
+@test fLargeTable(Type{Type{Union{}}}) == "DataType"
+@test fLargeTable(Type{Union{}}) == "Type"
+@test fLargeTable(Union{}) == "DataType"
+@test fLargeTable(Type{<:DataType}) == "Type"
+fLargeTable(::Type{<:UnionAll}) = "UnionAll"
+@test fLargeTable(UnionAll) == "UnionAll"
+@test fLargeTable(Type{Vector}) == "UnionAll"
+@test fLargeTable(Type{Int}) == "DataType"
+@test fLargeTable(Type{Type{Union{}}}) == "DataType"
+@test fLargeTable(Type{Union{}}) == "Type"
+@test_throws MethodError fLargeTable(Union{})
+@test fLargeTable(Type{<:DataType}) == "Type"
+@test fLargeTable(Type{Vector{T}} where T) == "DataType"
+@test fLargeTable(Union{DataType,Type{Vector{T}} where T}) == "DataType"
+@test fLargeTable(Union{DataType,UnionAll,Type{Vector{T}} where T}) == "Type"
+@test fLargeTable(Union{Type{Vector},Type{Vector{T}} where T}) == "Type"
+
 # issue #15280
 function f15280(x) end
 @test functionloc(f15280)[2] > 0
@@ -586,9 +626,9 @@ function module_depth(from::Module, to::Module)
 end
 function has_backslashes(mod::Module)
     for n in names(mod, all = true, imported = true)
-        isdefined(mod, n) || continue
+        isdefinedglobal(mod, n) || continue
         Base.isdeprecated(mod, n) && continue
-        f = getfield(mod, n)
+        f = getglobal(mod, n)
         if isa(f, Module) && module_depth(Main, f) <= module_depth(Main, mod)
             continue
         end
@@ -650,6 +690,10 @@ end
 # code_typed_by_type
 @test Base.code_typed_by_type(Tuple{Type{<:Val}})[2][2] == Val
 @test Base.code_typed_by_type(Tuple{typeof(sin), Float64})[1][2] === Float64
+
+# signature-based code_typed(...)
+@test Base.code_typed((Type{<:Val},))[2][2] == Val
+@test Base.code_typed((typeof(sin), Float64))[1][2] === Float64
 
 # New reflection methods in 0.6
 struct ReflectionExample{T<:AbstractFloat, N}
@@ -931,6 +975,7 @@ f(x::Int; y=3) = x + y
 @test hasmethod(f, Tuple{Int})
 @test hasmethod(f, Tuple{Int}, ())
 @test hasmethod(f, Tuple{Int}, (:y,))
+@test !hasmethod(f, Tuple{Int}, (:x,))
 @test !hasmethod(f, Tuple{Int}, (:jeff,))
 @test !hasmethod(f, Tuple{Int}, (:y,), world=typemin(UInt))
 g(; b, c, a) = a + b + c
@@ -1006,11 +1051,12 @@ _test_at_locals2(1,1,0.5f0)
 
 @testset "issue #31687" begin
     import InteractiveUtils._dump_function
+    import InteractiveUtils.ArgInfo
 
     @noinline f31687_child(i) = f31687_nonexistent(i)
     f31687_parent() = f31687_child(0)
     params = Base.CodegenParams()
-    _dump_function(f31687_parent, Tuple{},
+    _dump_function(ArgInfo(f31687_parent, Tuple{}),
                    #=native=#false, #=wrapper=#false, #=raw=#true,
                    #=dump_module=#true, #=syntax=#:att, #=optimize=#false, :none,
                    #=binary=#false)
@@ -1099,9 +1145,12 @@ end
     @test 1+1 == 2
     mi1 = Base.method_instance(+, (Int, Int))
     @test mi1.def.name == :+
-    # Note `jl_method_lookup` doesn't returns CNull if not found
-    mi2 = @ccall jl_method_lookup(Any[+, 1, 1]::Ptr{Any}, 3::Csize_t, Base.get_world_counter()::Csize_t)::Ref{Core.MethodInstance}
-    @test mi1 == mi2
+    mi2 = Base.method_instance((typeof(+), Int, Int))
+    @test mi2.def.name == :+
+    # Note `jl_method_lookup` doesn't return CNull if not found
+    mi3 = @ccall jl_method_lookup(Any[+, 1, 1]::Ptr{Any}, 3::Csize_t, Base.get_world_counter()::Csize_t)::Ref{Core.MethodInstance}
+    @test mi1 == mi3
+    @test mi2 == mi3
 end
 
 Base.@assume_effects :terminates_locally function issue41694(x::Int)

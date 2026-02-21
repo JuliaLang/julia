@@ -18,8 +18,120 @@ export quot,
 
 public parse
 
-using Base: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator
 import Base: isexpr
+
+## AST decoding helpers ##
+
+is_id_start_char(c::AbstractChar) = ccall(:jl_id_start_char, Cint, (UInt32,), c) != 0
+is_id_char(c::AbstractChar) = ccall(:jl_id_char, Cint, (UInt32,), c) != 0
+
+"""
+     isidentifier(s) -> Bool
+
+Return whether the symbol or string `s` contains characters that are parsed as
+a valid ordinary identifier (not a binary/unary operator) in Julia code;
+see also [`Base.isoperator`](@ref).
+
+Internally Julia allows any sequence of characters in a `Symbol` (except `\\0`s),
+and macros automatically use variable names containing `#` in order to avoid
+naming collision with the surrounding code. In order for the parser to
+recognize a variable, it uses a limited set of characters (greatly extended by
+Unicode). `isidentifier()` makes it possible to query the parser directly
+whether a symbol contains valid characters.
+
+# Examples
+```jldoctest
+julia> Meta.isidentifier(:x), Meta.isidentifier("1x")
+(true, false)
+```
+"""
+function isidentifier(s::AbstractString)
+    x = Iterators.peel(s)
+    isnothing(x) && return false
+    (s == "true" || s == "false") && return false
+    c, rest = x
+    is_id_start_char(c) || return false
+    return all(is_id_char, rest)
+end
+isidentifier(s::Symbol) = isidentifier(string(s))
+
+is_op_suffix_char(c::AbstractChar) = ccall(:jl_op_suffix_char, Cint, (UInt32,), c) != 0
+
+_isoperator(s) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
+
+"""
+    isoperator(s::Symbol)
+
+Return `true` if the symbol can be used as an operator, `false` otherwise.
+
+# Examples
+```jldoctest
+julia> Meta.isoperator(:+), Meta.isoperator(:f)
+(true, false)
+```
+"""
+isoperator(s::Union{Symbol,AbstractString}) = _isoperator(s) || ispostfixoperator(s)
+
+"""
+    isunaryoperator(s::Symbol)
+
+Return `true` if the symbol can be used as a unary (prefix) operator, `false` otherwise.
+
+# Examples
+```jldoctest
+julia> Meta.isunaryoperator(:-), Meta.isunaryoperator(:√), Meta.isunaryoperator(:f)
+(true, true, false)
+```
+"""
+isunaryoperator(s::Symbol) = ccall(:jl_is_unary_operator, Cint, (Cstring,), s) != 0
+is_unary_and_binary_operator(s::Symbol) = ccall(:jl_is_unary_and_binary_operator, Cint, (Cstring,), s) != 0
+is_syntactic_operator(s::Symbol) = ccall(:jl_is_syntactic_operator, Cint, (Cstring,), s) != 0
+
+"""
+    isbinaryoperator(s::Symbol)
+
+Return `true` if the symbol can be used as a binary (infix) operator, `false` otherwise.
+
+# Examples
+```jldoctest
+julia> Meta.isbinaryoperator(:-), Meta.isbinaryoperator(:√), Meta.isbinaryoperator(:f)
+(true, false, false)
+```
+"""
+function isbinaryoperator(s::Symbol)
+    return _isoperator(s) && (!isunaryoperator(s) || is_unary_and_binary_operator(s)) &&
+        s !== Symbol("'")
+end
+
+"""
+    ispostfixoperator(s::Union{Symbol,AbstractString})
+
+Return `true` if the symbol can be used as a postfix operator, `false` otherwise.
+
+# Examples
+```jldoctest
+julia> Meta.ispostfixoperator(Symbol("'")), Meta.ispostfixoperator(Symbol("'ᵀ")), Meta.ispostfixoperator(:-)
+(true, true, false)
+```
+"""
+function ispostfixoperator(s::Union{Symbol,AbstractString})
+    s = String(s)::String
+    return startswith(s, '\'') && all(is_op_suffix_char, SubString(s, 2))
+end
+
+const keyword_syms = IdSet{Symbol}([
+    :baremodule, :begin, :break, :catch, :const, :continue, :do, :else, :elseif,
+    :end, :export, :var"false", :finally, :for, :function, :global, :if, :import,
+    :let, :local, :macro, :module, :public, :quote, :return, :struct, :var"true",
+    :try, :using, :while ])
+
+function is_valid_identifier(sym)
+    return (isidentifier(sym) && !(sym in keyword_syms)) ||
+        (_isoperator(sym) &&
+        !(sym in (Symbol("'"), :(::), :?)) &&
+        !is_syntactic_operator(sym)
+    )
+end
 
 """
     Meta.quot(ex)::Expr
@@ -160,7 +272,7 @@ Takes the expression `x` and returns an equivalent expression in lowered form
 for executing in module `m`.
 See also [`code_lowered`](@ref).
 """
-lower(m::Module, @nospecialize(x)) = ccall(:jl_expand, Any, (Any, Any), x, m)
+lower(m::Module, @nospecialize(x)) = Core._lower(x, m, "none", 0, typemax(Csize_t), false)[1]
 
 """
     @lower [m] x
@@ -192,12 +304,21 @@ end
 
 ParseError(msg::AbstractString) = ParseError(msg, nothing)
 
+# N.B.: Should match definition in src/ast.c:jl_parse
+function parser_for_module(mod::Union{Module, Nothing})
+    mod === nothing && return Core._parse
+    isdefined(mod, Symbol("#_internal_julia_parse")) ?
+        getglobal(mod, Symbol("#_internal_julia_parse")) :
+        Core._parse
+end
+
 function _parse_string(text::AbstractString, filename::AbstractString,
-                       lineno::Integer, index::Integer, options)
+                       lineno::Integer, index::Integer, options,
+                       _parse=parser_for_module(nothing))
     if index < 1 || index > ncodeunits(text) + 1
         throw(BoundsError(text, index))
     end
-    ex, offset::Int = Core._parse(text, filename, lineno, index-1, options)
+    ex, offset::Int = _parse(text, filename, lineno, index-1, options)
     ex, offset+1
 end
 
@@ -234,8 +355,8 @@ julia> Meta.parse("(α, β) = 3, 5", 11, greedy=false)
 ```
 """
 function parse(str::AbstractString, pos::Integer;
-               filename="none", greedy::Bool=true, raise::Bool=true, depwarn::Bool=true)
-    ex, pos = _parse_string(str, String(filename), 1, pos, greedy ? :statement : :atom)
+               filename="none", greedy::Bool=true, raise::Bool=true, depwarn::Bool=true, mod::Union{Nothing, Module}=nothing, _parse = parser_for_module(mod))
+    ex, pos = _parse_string(str, String(filename), 1, pos, greedy ? :statement : :atom, _parse)
     if raise && isexpr(ex, :error)
         err = ex.args[1]
         if err isa String
@@ -274,8 +395,8 @@ julia> Meta.parse("x = ")
 ```
 """
 function parse(str::AbstractString;
-               filename="none", raise::Bool=true, depwarn::Bool=true)
-    ex, pos = parse(str, 1; filename, greedy=true, raise, depwarn)
+               filename="none", raise::Bool=true, depwarn::Bool=true, mod::Union{Nothing, Module}=nothing, _parse = parser_for_module(mod))
+    ex, pos = parse(str, 1; filename, greedy=true, raise, depwarn, _parse)
     if isexpr(ex, :error)
         return ex
     end
@@ -286,12 +407,12 @@ function parse(str::AbstractString;
     return ex
 end
 
-function parseatom(text::AbstractString, pos::Integer; filename="none", lineno=1)
-    return _parse_string(text, String(filename), lineno, pos, :atom)
+function parseatom(text::AbstractString, pos::Integer; filename="none", lineno=1, mod::Union{Nothing, Module}=nothing, _parse = parser_for_module(mod))
+    return _parse_string(text, String(filename), lineno, pos, :atom, _parse)
 end
 
-function parseall(text::AbstractString; filename="none", lineno=1)
-    ex,_ = _parse_string(text, String(filename), lineno, 1, :all)
+function parseall(text::AbstractString; filename="none", lineno=1, mod::Union{Nothing, Module}=nothing, _parse = parser_for_module(mod))
+    ex,_ = _parse_string(text, String(filename), lineno, 1, :all, _parse)
     return ex
 end
 
@@ -409,7 +530,7 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
             end
             return x
         elseif head === :cfunction
-            @assert !isa(type_signature, UnionAll) || !isempty(spvals)
+            @assert !isa(type_signature, UnionAll) || !isempty(static_param_values)
             if !isa(x.args[2], QuoteNode) # very common no-op
                 x.args[2] = _partially_inline!(x.args[2], slot_replacements, type_signature,
                                                static_param_values, slot_offset,
@@ -514,6 +635,24 @@ function unescape(@nospecialize ex)
        ex = unblock(ex.args[1])
     end
     return ex
+end
+
+"""
+    Meta.reescape(unescaped_expr, original_expr)
+
+Re-wrap `unescaped_expr` with the same level of escaping as `original_expr` had.
+This is the inverse operation of [`unescape`](@ref) - if the original expression
+was escaped, the unescaped expression is wrapped in `:escape` again.
+"""
+function reescape(@nospecialize(unescaped_expr), @nospecialize(original_expr))
+    if isexpr(original_expr, :escape)
+        return reescape(Expr(:escape, unescaped_expr), original_expr.args[1])
+    elseif isexpr(original_expr, :var"hygienic-scope")
+        next, ctx... = original_expr.args
+        return reescape(Expr(:var"hygienic-scope", unescaped_expr, ctx...), next)
+    else
+        return unescaped_expr
+    end
 end
 
 """

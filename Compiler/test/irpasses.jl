@@ -4,6 +4,7 @@ using Test
 using Base.Meta
 using Core.IR
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 # domsort
@@ -920,7 +921,7 @@ let # Test that CFG simplify doesn't try to merge every block in a loop into
 end
 
 # `cfg_simplify!` shouldn't error in a presence of `try/catch` block
-let ir = Base.code_ircode(; optimize_until="slot2ssa") do
+let ir = Base.code_ircode(; optimize_until="CC: SLOT2REG") do
         v = try
         catch
         end
@@ -1070,7 +1071,7 @@ let # Test for https://github.com/JuliaLang/julia/issues/43402
     end
 
     refs = map(Core.SSAValue, findall(@nospecialize(x)->Meta.isexpr(x, :new), src.code))
-    some_ccall = findfirst(@nospecialize(x) -> Meta.isexpr(x, :foreigncall) && x.args[1] == :(:some_ccall), src.code)
+    some_ccall = findfirst(@nospecialize(x) -> Meta.isexpr(x, :foreigncall) && x.args[1] == Expr(:tuple, :(:some_ccall)), src.code)
     @assert some_ccall !== nothing
     stmt = src.code[some_ccall]
     nccallargs = length(stmt.args[3]::Core.SimpleVector)
@@ -1180,7 +1181,7 @@ end
 
 @test Compiler.is_effect_free(Base.infer_effects(getfield, (Complex{Int}, Symbol)))
 
-# We consider a potential deprecatio warning an effect, so for completely unkown getglobal,
+# We consider a potential deprecatio warning an effect, so for completely unknown getglobal,
 # we taint the effect_free bit.
 @test !Compiler.is_effect_free(Base.infer_effects(getglobal, (Module, Symbol)))
 
@@ -1458,7 +1459,7 @@ function f_with_early_try_catch_exit()
     result
 end
 
-let ir = first(only(Base.code_ircode(f_with_early_try_catch_exit, (); optimize_until="compact")))
+let ir = first(only(Base.code_ircode(f_with_early_try_catch_exit, (); optimize_until="CC: SLOT2REG")))
     for i = 1:length(ir.stmts)
         expr = ir.stmts[i][:stmt]
         if isa(expr, PhiCNode)
@@ -1498,11 +1499,10 @@ let code = Any[
     # Simulate the important results from inference
     interp = Compiler.NativeInterpreter()
     sv = Compiler.OptimizationState(mi, src, interp)
-    slot_id = 4
-    for block_id = 3:5
-        # (_4 !== nothing) conditional narrows the type, triggering PiNodes
-        sv.bb_vartables[block_id][slot_id] = VarState(Bool, #= maybe_undef =# false)
-    end
+    # (_4 !== nothing) conditional narrows the type, triggering PiNodes
+    sv.bb_vartables[#= block_id =# 3][#= slot_id =# 4] = VarState(Bool, #= def =# 5, #= maybe_undef =# false)
+    sv.bb_vartables[#= block_id =# 4][#= slot_id =# 4] = VarState(Bool, #= def =# 7, #= maybe_undef =# false)
+    sv.bb_vartables[#= block_id =# 5][#= slot_id =# 4] = VarState(Bool, #= def =# 7, #= maybe_undef =# false)
 
     ir = Compiler.convert_to_ircode(src, sv)
     ir = Compiler.slot2reg(ir, src, sv)
@@ -2109,4 +2109,44 @@ let src = code_typed1(()) do
         a[]
     end
     @test count(iscall((src, isdefined)), src.code) == 0
+end
+# We should successfully fold the default values of a ScopedValue
+const svalconstprop = ScopedValue(1)
+foosvalconstprop() = svalconstprop[]
+
+let src = code_typed1(foosvalconstprop, ())
+    function is_constfield_load(expr)
+        iscall((src, getfield))(expr) && expr.args[3] in (:(:has_default), :(:default))
+    end
+    @test count(is_constfield_load, src.code) == 0
+end
+
+# JuliaLang/julia #59548
+# Rewrite `Core._apply_iterate` to use `Core.svec` instead of `tuple` to better match
+# the codegen ABI
+let src = code_typed1((Vector{Any},)) do xs
+        println(stdout, xs...)
+    end
+    @test count(iscall((src, Core.svec)), src.code) == 1
+end
+let src = code_typed1((Vector{Any},)) do xs
+        println(stdout, 1, xs...) # convert tuples represented by `PartialStruct`
+    end
+    @test count(iscall((src, Core.svec)), src.code) == 1
+end
+
+# Negative NewSSAValue ids must be preserved during compaction
+function f_57827(op, init, x)
+    v = op(init, x)
+    i = 0
+    while i < 1
+        v = op(v, x)
+        i += 1
+    end
+    return v
+end
+let rf = (acc, x) -> ifelse(x > acc[1], (x,), (acc[1],))
+    @test f_57827(rf, (0.0,), 1) === (1,)
+    ir = first(only(Base.code_ircode(f_57827, (typeof(rf), Tuple{Float64}, Int64); optimize_until="CC: SROA")))
+    @test ir isa Compiler.IRCode
 end

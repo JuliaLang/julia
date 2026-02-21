@@ -32,9 +32,6 @@ stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bol
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
 function repl_cmd(cmd, out)
-    shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
-    shell_name = Base.basename(shell[1])
-
     # Immediately expand all arguments, so that typing e.g. ~/bin/foo works.
     cmd.exec .= expanduser.(cmd.exec)
 
@@ -64,21 +61,17 @@ function repl_cmd(cmd, out)
         cd(dir)
         println(out, pwd())
     else
-        @static if !Sys.iswindows()
-            if shell_name == "fish"
-                shell_escape_cmd = "begin; $(shell_escape_posixly(cmd)); and true; end"
-            else
-                shell_escape_cmd = "($(shell_escape_posixly(cmd))) && true"
-            end
+        if !Sys.iswindows()
+            shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
+            shell_escape_cmd = shell_escape_posixly(cmd)
             cmd = `$shell -c $shell_escape_cmd`
         end
         try
             run(ignorestatus(cmd))
         catch
-            # Windows doesn't shell out right now (complex issue), so Julia tries to run the program itself
-            # Julia throws an exception if it can't find the program, but the stack trace isn't useful
+            # Julia throws an exception if it can't find the cmd (which may be the shell itself), but the stack trace isn't useful
             lasterr = current_exceptions()
-            lasterr = ExceptionStack([(exception = e[1], backtrace = [] ) for e in lasterr])
+            lasterr = ExceptionStack(NamedTuple[(exception = e[1], backtrace = [] ) for e in lasterr])
             invokelatest(display_error, lasterr)
         end
     end
@@ -106,7 +99,7 @@ function scrub_repl_backtrace(bt)
     return bt
 end
 scrub_repl_backtrace(stack::ExceptionStack) =
-    ExceptionStack(Any[(;x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack])
+    ExceptionStack(NamedTuple[(;x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack])
 
 istrivialerror(stack::ExceptionStack) =
     length(stack) == 1 && length(stack[1].backtrace) ≤ 1 && !isa(stack[1].exception, MethodError)
@@ -127,6 +120,10 @@ function display_error(io::IO, er, bt)
 end
 display_error(er, bt=nothing) = display_error(stderr, er, bt)
 
+# N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
+__repl_entry_client_lower(mod::Module, @nospecialize(ast)) = Meta.lower(mod, ast)
+__repl_entry_client_eval(mod::Module, @nospecialize(ast)) = Core.eval(mod, ast)
+
 function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     errcount = 0
     lasterr = nothing
@@ -143,8 +140,8 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                 errcount = 0
                 lasterr = nothing
             else
-                ast = Meta.lower(Main, ast)
-                value = Core.eval(Main, ast)
+                ast = __repl_entry_client_lower(Main, ast)
+                value = __repl_entry_client_eval(Main, ast)
                 setglobal!(Base.MainInclude, :ans, value)
                 if !(value === nothing) && show_value
                     if have_color
@@ -176,8 +173,8 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
     nothing
 end
 
-function _parse_input_line_core(s::String, filename::String)
-    ex = Meta.parseall(s, filename=filename)
+function _parse_input_line_core(s::String, filename::String, mod::Union{Module, Nothing})
+    ex = Meta.parseall(s; filename, _parse=invokelatest(Meta.parser_for_module, mod))
     if ex isa Expr && ex.head === :toplevel
         if isempty(ex.args)
             return nothing
@@ -192,18 +189,18 @@ function _parse_input_line_core(s::String, filename::String)
     return ex
 end
 
-function parse_input_line(s::String; filename::String="none", depwarn=true)
+function parse_input_line(s::String; filename::String="none", depwarn=true, mod::Union{Module, Nothing}=nothing)
     # For now, assume all parser warnings are depwarns
     ex = if depwarn
-        _parse_input_line_core(s, filename)
+        _parse_input_line_core(s, filename, mod)
     else
         with_logger(NullLogger()) do
-            _parse_input_line_core(s, filename)
+            _parse_input_line_core(s, filename, mod)
         end
     end
     return ex
 end
-parse_input_line(s::AbstractString) = parse_input_line(String(s))
+parse_input_line(s::AbstractString; kwargs...) = parse_input_line(String(s); kwargs...)
 
 # detect the reason which caused an :incomplete expression
 # from the error message
@@ -238,6 +235,20 @@ function exec_options(opts)
     startup               = (opts.startupfile != 2)
     global have_color     = colored_text(opts)
     global is_interactive = (opts.isinteractive != 0)
+
+    # Enable verbose debugging options when requested by other frameworks
+    debug_env_vars = (
+        "RUNNER_DEBUG",   # github actions when UI "debug logging" is enabled
+        "CI_DEBUG_TRACE", # gitlab CI when UI "debug" toggle is enabled
+        "SYSTEM_DEBUG",   # azure pipelines when UI "System diagnostics" is enabled
+    )
+    for v in debug_env_vars
+        if get_bool_env(v, false)
+            Base.TRACE_EVAL = Base.TRACE_EVAL === :full ? :full : :loc # Enable --trace-eval (location only)
+            ENV["JULIA_TEST_VERBOSE"] = "true" # Set JULIA_TEST_VERBOSE for this session
+            break
+        end
+    end
 
     # pre-process command line argument list
     arg_is_program = !isempty(ARGS)
@@ -277,10 +288,6 @@ function exec_options(opts)
     interactiveinput = (repl || is_interactive::Bool) && isa(stdin, TTY)
     is_interactive::Bool |= interactiveinput
 
-    # load terminfo in for styled printing
-    term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
-    global current_terminfo = load_terminfo(term_env)
-
     # load ~/.julia/config/startup.jl file
     if startup
         try
@@ -291,12 +298,18 @@ function exec_options(opts)
         end
     end
 
+    # drop all caches if code coverage is enabled. Do it here not earlier, so julia has a chance
+    # of starting up quickly
+    if Base.JLOptions().code_coverage == 2
+        Base.drop_all_caches()
+    end
+
     # process cmds list
     for (cmd, arg) in cmds
         if cmd == 'e'
-            Core.eval(Main, parse_input_line(arg))
+            Core.eval(Main, parse_input_line(arg; mod=Main))
         elseif cmd == 'E'
-            invokelatest(show, Core.eval(Main, parse_input_line(arg)))
+            invokelatest(show, Core.eval(Main, parse_input_line(arg; mod=Main)))
             println()
         elseif cmd == 'm'
             entrypoint = push!(split(arg, "."), "main")
@@ -430,7 +443,7 @@ function run_fallback_repl(interactive::Bool)
     let input = stdin
         if isa(input, File) || isa(input, IOStream)
             # for files, we can slurp in the whole thing at once
-            ex = parse_input_line(read(input, String))
+            ex = parse_input_line(read(input, String); mod=Main)
             if Meta.isexpr(ex, :toplevel)
                 # if we get back a list of statements, eval them sequentially
                 # as if we had parsed them sequentially
@@ -442,17 +455,18 @@ function run_fallback_repl(interactive::Bool)
                 eval_user_input(stderr, ex, true)
             end
         else
-            while !eof(input)
+            while true
                 if interactive
                     print("julia> ")
                     flush(stdout)
                 end
+                eof(input) && break
                 try
                     line = ""
                     ex = nothing
                     while !eof(input)
                         line *= readline(input, keep=true)
-                        ex = parse_input_line(line)
+                        ex = parse_input_line(line; mod=Main)
                         if !(isa(ex, Expr) && ex.head === :incomplete)
                             break
                         end
@@ -538,12 +552,17 @@ The thrown errors are collected in a stack of exceptions.
 """
 global err = nothing
 
+const main_parser = Base.ScopedValues.ScopedValue{Any}(Core._parse)
+function var"#_internal_julia_parse"(args...)
+    main_parser[](args...)
+end
+
 # Used for memoizing require_stdlib of these modules
 global InteractiveUtils::Module
 global Distributed::Module
 
 # weakly exposes ans and err variables to Main
-export ans, err
+export ans, err, var"#_internal_julia_parse"
 end
 
 function should_use_main_entrypoint()
@@ -559,7 +578,10 @@ function _start()
     # clear any postoutput hooks that were saved in the sysimage
     empty!(Base.postoutput_hooks)
     local ret = 0
-    try
+    # `--project` has been processed at this point - latch the active project's syntax
+    # version and use it for `-L`, `argfile`, etc. If launched, the REPL will re-evaluate
+    # at each prompt.
+    @Base.ScopedValues.with MainInclude.main_parser=>parser_for_active_project() try
         repl_was_requested = exec_options(JLOptions())
         if invokelatest(should_use_main_entrypoint) && !is_interactive
             main = invokelatest(getglobal, Main, :main)
@@ -574,7 +596,12 @@ function _start()
             ret = repl_main(ARGS)
         end
         ret === nothing && (ret = 0)
-        ret = Cint(ret)
+        ret = try
+            Cint(ret)
+        catch
+            @error "The return value of `main` should be `nothing` or convertible to `Cint`"
+            Cint(1)
+        end
     catch
         ret = Cint(1)
         invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
@@ -608,8 +635,8 @@ entrypoint. The precise semantics of the entrypoint depend on the CLI driver.
 In the `julia` driver, if `Main.main` is marked as an entrypoint, it will be automatically called upon
 the completion of script execution.
 
-The `@main` macro may be used standalone or as part of the function definition, though in the latter
-case, parentheses are required. In particular, the following are equivalent:
+The `@main` macro may be used standalone or as part of the function definition.
+The following are equivalent:
 
 ```
 function @main(args)

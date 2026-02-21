@@ -33,9 +33,9 @@ typedef struct {
   var = (decltype(var))alloca((n))
 #else
 #define JL_CPPALLOCA(var,n)                                                         \
-  JL_GCC_IGNORE_START("-Wc++-compat")                                               \
+  JL_CC_IGNORE_START("-Wc++-compat")                                               \
   var = alloca((n));                                                                \
-  JL_GCC_IGNORE_STOP
+  JL_CC_IGNORE_STOP
 #endif
 
 #ifdef __clang_gcanalyzer__
@@ -101,14 +101,13 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
 
     fname = eval_value(args[0], s);
     jl_methtable_t *mt = NULL;
-    if (jl_typetagis(fname, jl_methtable_type)) {
+    if (jl_is_mtable(fname))
         mt = (jl_methtable_t*)fname;
-    }
     atypes = eval_value(args[1], s);
     meth = eval_value(args[2], s);
-    jl_method_def((jl_svec_t*)atypes, mt, (jl_code_info_t*)meth, s->module);
+    jl_method_t *ret = jl_method_def((jl_svec_t*)atypes, mt, (jl_code_info_t*)meth, s->module);
     JL_GC_POP();
-    return jl_nothing;
+    return (jl_value_t *)ret;
 }
 
 // expression evaluator
@@ -162,17 +161,19 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
     return result;
 }
 
-jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
+// get the global (throwing if null) in the current world
+jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e, size_t world)
 {
-    jl_value_t *v = jl_get_global(m, e);
+    jl_value_t *v = jl_get_global_value(m, e, world);
     if (v == NULL)
         jl_undefined_var_error(e, (jl_value_t*)m);
     return v;
 }
 
-jl_value_t *jl_eval_globalref(jl_globalref_t *g)
+// get the global (throwing if null) in the current world, optimized
+jl_value_t *jl_eval_globalref(jl_globalref_t *g, size_t world)
 {
-    jl_value_t *v = jl_get_globalref_value(g);
+    jl_value_t *v = jl_get_globalref_value(g, world);
     if (v == NULL)
         jl_undefined_var_error(g->name, (jl_value_t*)g->mod);
     return v;
@@ -217,10 +218,10 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return jl_quotenode_value(e);
     }
     if (jl_is_globalref(e)) {
-        return jl_eval_globalref((jl_globalref_t*)e);
+        return jl_eval_globalref((jl_globalref_t*)e, jl_current_task->world_age);
     }
     if (jl_is_symbol(e)) {  // bare symbols appear in toplevel exprs not wrapped in `thunk`
-        return jl_eval_global_var(s->module, (jl_sym_t*)e);
+        return jl_eval_global_var(s->module, (jl_sym_t*)e, jl_current_task->world_age);
     }
     if (jl_is_pinode(e)) {
         jl_value_t *val = eval_value(jl_fieldref_noalloc(e, 0), s);
@@ -538,13 +539,13 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             }
             s->locals[jl_source_nslots(s->src) + ip] = jl_box_ulong(jl_excstack_state(ct));
             if (jl_enternode_scope(stmt)) {
-                jl_value_t *scope = eval_value(jl_enternode_scope(stmt), s);
-                // GC preserve the scope, since it is not rooted in the `jl_handler_t *`
-                // and may be removed from jl_current_task by any nested block and then
-                // replaced later
-                JL_GC_PUSH1(&scope);
-                ct->scope = scope;
-                if (!jl_setjmp(__eh.eh_ctx, 1)) {
+                jl_value_t *old_scope = ct->scope; // Identical to __eh.scope
+                // GC preserve the old_scope, since it is not rooted in the `jl_handler_t *`,
+                // the newly entered scope is preserved through the current_task.
+                JL_GC_PUSH1(&old_scope);
+                ct->scope = eval_value(jl_enternode_scope(stmt), s);
+                jl_gc_wb_current_task(ct, ct->scope);
+                if (!jl_setjmp(__eh.eh_ctx, 0)) {
                     ct->eh = &__eh;
                     eval_body(stmts, s, next_ip, toplevel);
                     jl_unreachable();
@@ -552,7 +553,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 JL_GC_POP();
             }
             else {
-                if (!jl_setjmp(__eh.eh_ctx, 1)) {
+                if (!jl_setjmp(__eh.eh_ctx, 0)) {
                     ct->eh = &__eh;
                     eval_body(stmts, s, next_ip, toplevel);
                     jl_unreachable();
@@ -626,26 +627,12 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             }
             else if (toplevel) {
                 if (head == jl_method_sym && jl_expr_nargs(stmt) > 1) {
-                    eval_methoddef((jl_expr_t*)stmt, s);
+                    jl_value_t *res = eval_methoddef((jl_expr_t*)stmt, s);
+                    s->locals[jl_source_nslots(s->src) + s->ip] = res;
                 }
                 else if (head == jl_toplevel_sym) {
                     jl_value_t *res = jl_toplevel_eval(s->module, stmt);
                     s->locals[jl_source_nslots(s->src) + s->ip] = res;
-                }
-                else if (head == jl_globaldecl_sym) {
-                    jl_value_t *val = NULL;
-                    if (jl_expr_nargs(stmt) >= 2) {
-                        val = eval_value(jl_exprarg(stmt, 1), s);
-                        s->locals[jl_source_nslots(s->src) + s->ip] = val; // temporarily root
-                    }
-                    jl_declare_global(s->module, jl_exprarg(stmt, 0), val, 1);
-                    s->locals[jl_source_nslots(s->src) + s->ip] = jl_nothing;
-                }
-                else if (head == jl_const_sym) {
-                    jl_value_t *val = jl_expr_nargs(stmt) == 1 ? NULL : eval_value(jl_exprarg(stmt, 1), s);
-                    s->locals[jl_source_nslots(s->src) + s->ip] = val; // temporarily root
-                    jl_eval_const_decl(s->module, jl_exprarg(stmt, 0), val);
-                    s->locals[jl_source_nslots(s->src) + s->ip] = jl_nothing;
                 }
                 else if (head == jl_latestworld_sym) {
                     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
@@ -700,7 +687,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             s->locals[n - 1] = NULL;
         }
         else if (toplevel && jl_is_linenode(stmt)) {
-            jl_lineno = jl_linenode_line(stmt);
+            jl_atomic_store_relaxed(&jl_lineno, jl_linenode_line(stmt));
         }
         else {
             eval_stmt_value(stmt, s);

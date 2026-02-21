@@ -261,12 +261,12 @@ tryparse(::Type{Union{}}, slurp...; kwargs...) = error("cannot parse a value as 
 
 function tryparse(::Type{Float64}, s::String)
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
-                          (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))
+                          (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s) % UInt)
     hasvalue ? val : nothing
 end
 function tryparse(::Type{Float64}, s::SubString{String})
     hasvalue, val = ccall(:jl_try_substrtod, Tuple{Bool, Float64},
-                          (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.ncodeunits)
+                          (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.ncodeunits % UInt)
     hasvalue ? val : nothing
 end
 function tryparse_internal(::Type{Float64}, s::String, startpos::Int, endpos::Int)
@@ -281,12 +281,12 @@ function tryparse_internal(::Type{Float64}, s::SubString{String}, startpos::Int,
 end
 function tryparse(::Type{Float32}, s::String)
     hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
-                          (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))
+                          (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s) % UInt)
     hasvalue ? val : nothing
 end
 function tryparse(::Type{Float32}, s::SubString{String})
     hasvalue, val = ccall(:jl_try_substrtof, Tuple{Bool, Float32},
-                          (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.ncodeunits)
+                          (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.ncodeunits % UInt)
     hasvalue ? val : nothing
 end
 function tryparse_internal(::Type{Float32}, s::String, startpos::Int, endpos::Int)
@@ -299,7 +299,7 @@ function tryparse_internal(::Type{Float32}, s::SubString{String}, startpos::Int,
                           (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset+startpos-1, endpos-startpos+1)
     hasvalue ? val : nothing
 end
-tryparse(::Type{T}, s::AbstractString) where {T<:Union{Float32,Float64}} = tryparse(T, String(s))
+tryparse(::Type{T}, s::AbstractString) where {T<:Union{Float32,Float64}} = tryparse(T, String(s)::String)
 tryparse(::Type{Float16}, s::AbstractString) =
     convert(Union{Float16, Nothing}, tryparse(Float32, s))
 tryparse_internal(::Type{Float16}, s::AbstractString, startpos::Int, endpos::Int) =

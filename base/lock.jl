@@ -21,7 +21,7 @@ const MAX_SPIN_ITERS = 40
 """
     ReentrantLock()
 
-Creates a re-entrant lock for synchronizing [`Task`](@ref)s. The same task can
+Create a re-entrant lock for synchronizing [`Task`](@ref)s. The same task can
 acquire the lock as many times as required (this is what the "Reentrant" part
 of the name means). Each [`lock`](@ref) must be matched with an [`unlock`](@ref).
 
@@ -324,10 +324,10 @@ available.
 When this function returns, the `lock` has been released, so the caller should
 not attempt to `unlock` it.
 
-See also: [`@lock`](@ref).
-
 !!! compat "Julia 1.7"
     Using a [`Channel`](@ref) as the second argument requires Julia 1.7 or later.
+
+See also [`@lock`](@ref).
 """
 function lock(f, l::AbstractLock)
     lock(l)
@@ -366,7 +366,7 @@ This is similar to using [`lock`](@ref) with a `do` block, but avoids creating a
 and thus can improve the performance.
 
 !!! compat
-    `@lock` was added in Julia 1.3, and exported in Julia 1.10.
+    `@lock` was added in Julia 1.3, and exported in Julia 1.7.
 """
 macro lock(l, expr)
     quote
@@ -398,9 +398,9 @@ macro lock_nofail(l, expr)
 end
 
 """
-  Lockable(value, lock = ReentrantLock())
+    Lockable(value, lock = ReentrantLock())
 
-Creates a `Lockable` object that wraps `value` and
+Create a `Lockable` object that wraps `value` and
 associates it with the provided `lock`. This object
 supports [`@lock`](@ref), [`lock`](@ref), [`trylock`](@ref),
 [`unlock`](@ref). To access the value, index the lockable object while
@@ -409,7 +409,7 @@ holding the lock.
 !!! compat "Julia 1.11"
     Requires at least Julia 1.11.
 
-## Example
+# Examples
 
 ```jldoctest
 julia> locked_list = Base.Lockable(Int[]);
@@ -431,7 +431,7 @@ Lockable(value) = Lockable(value, ReentrantLock())
 getindex(l::Lockable) = (assert_havelock(l.lock); l.value)
 
 """
-  lock(f::Function, l::Lockable)
+    lock(f::Function, l::Lockable)
 
 Acquire the lock associated with `l`, execute `f` with the lock held,
 and release the lock when `f` returns. `f` will receive one positional
@@ -704,7 +704,10 @@ calls in the same process will return exactly the same value. This is useful in
 code that will be precompiled, as it allows setting up caches or other state
 which won't get serialized.
 
-## Example
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
+
+# Examples
 
 ```jldoctest
 julia> const global_state = Base.OncePerProcess{Vector{UInt32}}() do
@@ -735,7 +738,9 @@ mutable struct OncePerProcess{T, F} <: Function
         return once
     end
 end
+OncePerProcess{T}(initializer::Type{U}) where {T, U} = OncePerProcess{T, Type{U}}(initializer)
 OncePerProcess{T}(initializer::F) where {T, F} = OncePerProcess{T, F}(initializer)
+OncePerProcess(initializer::Type{U}) where U = OncePerProcess{Base.promote_op(initializer), Type{U}}(initializer)
 OncePerProcess(initializer) = OncePerProcess{Base.promote_op(initializer), typeof(initializer)}(initializer)
 @inline function (once::OncePerProcess{T,F})() where {T,F}
     state = (@atomic :acquire once.state)
@@ -792,7 +797,7 @@ end
 
 
 # share a lock/condition, since we just need it briefly, so some contention is okay
-const PerThreadLock = ThreadSynchronizer()
+const PerThreadLock = Threads.SpinLock()
 """
     OncePerThread{T}(init::Function)() -> T
 
@@ -810,9 +815,12 @@ if that behavior is correct within your library's threading-safety design.
     may get deprecated in the future. If initializer yields, the thread running the current
     task after the call might not be the same as the one at the start of the call.
 
-See also: [`OncePerTask`](@ref).
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
 
-## Example
+See also [`OncePerTask`](@ref).
+
+# Examples
 
 ```jldoctest
 julia> const thread_state = Base.OncePerThread{Vector{UInt32}}() do
@@ -842,7 +850,9 @@ mutable struct OncePerThread{T, F} <: Function
         return once
     end
 end
+OncePerThread{T}(initializer::Type{U}) where {T, U} = OncePerThread{T,Type{U}}(initializer)
 OncePerThread{T}(initializer::F) where {T, F} = OncePerThread{T,F}(initializer)
+OncePerThread(initializer::Type{U}) where U = OncePerThread{Base.promote_op(initializer), Type{U}}(initializer)
 OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(initializer)}(initializer)
 @inline (once::OncePerThread{T,F})() where {T,F} = once[Threads.threadid()]
 @inline function getindex(once::OncePerThread{T,F}, tid::Integer) where {T,F}
@@ -891,7 +901,15 @@ OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(
                 state = @atomic :monotonic ss[tid]
                 while state == PerStateConcurrent
                     # lost race, wait for notification this is done running elsewhere
-                    wait(PerThreadLock) # wait for initializer to finish without releasing this thread
+                    # without releasing this thread
+                    unlock(PerThreadLock)
+                    while state == PerStateConcurrent
+                        # spin loop until ready
+                        ss = @atomic :acquire once.ss
+                        state = @atomic :monotonic ss[tid]
+                        GC.safepoint()
+                    end
+                    lock(PerThreadLock)
                     ss = @atomic :monotonic once.ss
                     state = @atomic :monotonic ss[tid]
                 end
@@ -905,7 +923,6 @@ OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(
                         lock(PerThreadLock)
                         ss = @atomic :monotonic once.ss
                         @atomic :release ss[tid] = PerStateErrored
-                        notify(PerThreadLock)
                         rethrow()
                     end
                     # store result and notify waiters
@@ -914,7 +931,6 @@ OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(
                     @atomic :release xs[tid] = result
                     ss = @atomic :monotonic once.ss
                     @atomic :release ss[tid] = PerStateHasrun
-                    notify(PerThreadLock)
                 elseif state == PerStateErrored
                     error("OncePerThread initializer failed previously")
                 elseif state != PerStateHasrun
@@ -936,9 +952,12 @@ end
 Calling a `OncePerTask` object returns a value of type `T` by running the function `initializer`
 exactly once per Task. All future calls in the same Task will return exactly the same value.
 
-See also: [`task_local_storage`](@ref).
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
 
-## Example
+See also [`task_local_storage`](@ref).
+
+# Examples
 
 ```jldoctest
 julia> const task_state = Base.OncePerTask{Vector{UInt32}}() do
@@ -961,8 +980,10 @@ false
 mutable struct OncePerTask{T, F} <: Function
     const initializer::F
 
+    OncePerTask{T}(initializer::Type{U}) where {T, U} = new{T,Type{U}}(initializer)
     OncePerTask{T}(initializer::F) where {T, F} = new{T,F}(initializer)
     OncePerTask{T,F}(initializer::F) where {T, F} = new{T,F}(initializer)
+    OncePerTask(initializer::Type{U}) where U = new{Base.promote_op(initializer), Type{U}}(initializer)
     OncePerTask(initializer) = new{Base.promote_op(initializer), typeof(initializer)}(initializer)
 end
 @inline function (once::OncePerTask{T,F})() where {T,F}

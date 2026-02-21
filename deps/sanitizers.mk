@@ -17,10 +17,11 @@ install-sanitizers: $$(addprefix $$(build_libdir)/, $$(notdir $$(call pathsearch
 		echo "Sanitizer library $(1) not found in $$(SANITIZER_LIB_PATH)"; \
 		exit 1; \
 	fi
-$$(addprefix $$(build_shlibdir)/,$(2)): $$(addprefix $$(dir $$(call pathsearch_all,$(1),$$(SANITIZER_LIB_PATH))),$(2)) | $$(build_shlibdir)
+$$(addprefix $$(build_shlibdir)/,$(2)): $$(addprefix $$(dir $$(call pathsearch_all,$(1),$$(SANITIZER_LIB_PATH))),$(2)) $$(PATCHELF_MANIFEST) | $$(build_shlibdir)
 	-cp $$< $$@
-	$(if $(filter $(OS), Linux), \
-		  -$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$$$ORIGIN' $$@ , 0)
+ifneq (,$(findstring $(OS),Linux))
+	-$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$$$ORIGIN' $$@
+endif
 endef
 
 ifeq ($(USECLANG),1)

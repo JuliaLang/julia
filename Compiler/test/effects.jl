@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
+
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 # Test that the Core._apply_iterate bail path taints effects
@@ -263,6 +265,9 @@ end
 end |> Compiler.is_consistent
 @test Base.infer_effects() do
     Maybe{String}()[]
+end |> Compiler.is_consistent
+@test Base.infer_effects() do
+    Maybe{Some{Base.RefValue{Int}}}()
 end |> Compiler.is_consistent
 let f() = Maybe{String}()[]
     @test Base.return_types() do
@@ -1438,6 +1443,11 @@ let effects = Base.infer_effects(Core.Intrinsics.pointerset, Tuple{Vararg{Any}})
     @test Compiler.is_consistent(effects)
     @test !Compiler.is_effect_free(effects)
 end
+@test Compiler.intrinsic_nothrow(Core.Intrinsics.add_ptr, Any[Ptr{Int}, UInt])
+@test Compiler.intrinsic_nothrow(Core.Intrinsics.sub_ptr, Any[Ptr{Int}, UInt])
+@test !Compiler.intrinsic_nothrow(Core.Intrinsics.add_ptr, Any[UInt, UInt])
+@test !Compiler.intrinsic_nothrow(Core.Intrinsics.sub_ptr, Any[UInt, UInt])
+@test Compiler.is_nothrow(Base.infer_effects(+, Tuple{Ptr{UInt8}, UInt}))
 # effects modeling for atomic intrinsics
 # these functions especially need to be marked !effect_free since they imply synchronization
 for atomicfunc = Any[
@@ -1472,8 +1482,17 @@ end
 let effects = Base.infer_effects((Core.SimpleVector,Int); optimize=false) do svec, i
         Core._svec_ref(svec, i)
     end
-    @test !Compiler.is_consistent(effects)
+    @test Compiler.is_consistent(effects)
     @test Compiler.is_effect_free(effects)
     @test !Compiler.is_nothrow(effects)
     @test Compiler.is_terminates(effects)
 end
+
+@test Compiler.is_nothrow(Base.infer_effects(length, (Core.SimpleVector,)))
+
+
+# https://github.com/JuliaLang/julia/issues/60009
+function null_offset(offset)
+    Ptr{UInt8}(C_NULL) + offset
+end
+@test null_offset(Int(100)) == Ptr{UInt8}(UInt(100))

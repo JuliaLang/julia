@@ -1,5 +1,6 @@
 module test_EA
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 const EscapeAnalysis = Compiler.EscapeAnalysis

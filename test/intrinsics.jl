@@ -395,13 +395,13 @@ end
 end
 
 using Base.Experimental: @force_compile
-@test_throws ConcurrencyViolationError("invalid atomic ordering") (@force_compile; Core.Intrinsics.atomic_fence(:u)) === nothing
-@test_throws ConcurrencyViolationError("invalid atomic ordering") (@force_compile; Core.Intrinsics.atomic_fence(Symbol("u", "x"))) === nothing
-@test_throws ConcurrencyViolationError("invalid atomic ordering") Core.Intrinsics.atomic_fence(Symbol("u", "x")) === nothing
+@test_throws ConcurrencyViolationError("invalid atomic ordering") (@force_compile; Core.Intrinsics.atomic_fence(:u, :system)) === nothing
+@test_throws ConcurrencyViolationError("invalid atomic ordering") (@force_compile; Core.Intrinsics.atomic_fence(Symbol("u", "x"), :system)) === nothing
+@test_throws ConcurrencyViolationError("invalid atomic ordering") Core.Intrinsics.atomic_fence(Symbol("u", "x"), :system) === nothing
 for order in (:not_atomic, :monotonic, :acquire, :release, :acquire_release, :sequentially_consistent)
-    @test Core.Intrinsics.atomic_fence(order) === nothing
-    @test (order -> Core.Intrinsics.atomic_fence(order))(order) === nothing
-    @test Base.invokelatest(@eval () -> Core.Intrinsics.atomic_fence($(QuoteNode(order)))) === nothing
+    @test Core.Intrinsics.atomic_fence(order, :system) === nothing
+    @test (order -> Core.Intrinsics.atomic_fence(order, :system))(order) === nothing
+    @test Base.invokelatest(@eval () -> Core.Intrinsics.atomic_fence($(QuoteNode(order)), :system)) === nothing
 end
 @test Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent) === nothing
 @test (@force_compile; Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent)) === nothing
@@ -563,4 +563,27 @@ end)()
         Core.LLVMPtr{T,A}, Tuple{Core.LLVMPtr{T,A}}, ptr)
     f(gws) = passthrough(Core.bitcast(Core.LLVMPtr{UInt32,1}, gws))
     f(C_NULL)
+end
+
+# Test bitcast on union values with inline_roots (split representation)
+@testset "bitcast union with inline_roots" begin
+    struct BitcastMixedGC
+        a::Vector{Int}
+        b::Vector{Int}
+        c::Vector{Float64}
+        d::Int
+    end
+    @noinline function _bitcast_returns_union(x::Int)
+        x == 0 && return BitcastMixedGC(Int[], Int[], Float64[], 0)
+        x == 1 && return UInt(0)
+        x == 2 && return Int(0)
+        x == 3 && return C_NULL
+        return nothing
+    end
+    function _bitcast_trigger(x::Int)
+        val = _bitcast_returns_union(x)
+        return Core.Intrinsics.bitcast(Ptr{Nothing}, val)
+    end
+    @test _bitcast_trigger(1) === Ptr{Nothing}(0)
+    @test _bitcast_trigger(3) === Ptr{Nothing}(0)
 end

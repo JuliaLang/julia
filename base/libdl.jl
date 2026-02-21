@@ -5,7 +5,7 @@ module Libdl
 Interface to libdl. Provides dynamic linking support.
 """ Libdl
 
-import Base.DL_LOAD_PATH
+import Base: DL_LOAD_PATH, isdebugbuild
 
 export DL_LOAD_PATH, RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOCAL,
     RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW, dlclose, dlopen, dlopen_e, dlsym, dlsym_e,
@@ -60,8 +60,8 @@ function dlsym(hnd::Ptr, s::Union{Symbol,AbstractString}; throw_error::Bool = tr
     hnd == C_NULL && throw(ArgumentError("NULL library handle"))
     val = Ref(Ptr{Cvoid}(0))
     symbol_found = ccall(:jl_dlsym, Cint,
-        (Ptr{Cvoid}, Cstring, Ref{Ptr{Cvoid}}, Cint),
-        hnd, s, val, Int64(throw_error)
+        (Ptr{Cvoid}, Cstring, Ref{Ptr{Cvoid}}, Cint, Cint),
+        hnd, s, val, Int64(throw_error), Int64(1)
     )
     if symbol_found == 0
         return nothing
@@ -279,7 +279,7 @@ if (Sys.islinux() || Sys.isbsd()) && !Sys.isapple()
 
     # This callback function called by dl_iterate_phdr() on Linux and BSD's
     # DL_ITERATE_PHDR(3) on freebsd
-    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dynamic_libraries::Array{String,1})
+    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dynamic_libraries::Vector{String})
         name = unsafe_string(di.name)
         push!(dynamic_libraries, name)
         return Cint(0)
@@ -319,14 +319,21 @@ end
 
 
 """
-    LazyLibraryPath
+    LazyLibraryPath(path_pieces...)
 
-Helper type for lazily constructed library paths for use with `LazyLibrary`.
-Arguments are passed to `joinpath()`.  Arguments must be able to have
-`string()` called on them.
+Helper type for lazily constructed library paths for use with [`LazyLibrary`](@ref).
+Path pieces are stored unevaluated and joined with `joinpath()` when the library is first
+accessed. Arguments must be able to have `string()` called on them.
 
-```
-libfoo = LazyLibrary(LazyLibraryPath(prefix, "lib/libfoo.so.1.2.3"))
+!!! compat "Julia 1.11"
+    `LazyLibraryPath` was added in Julia 1.11.
+
+See also [`LazyLibrary`](@ref), [`BundledLazyLibraryPath`](@ref).
+
+# Examples
+
+```julia
+const mylib = LazyLibrary(LazyLibraryPath(artifact_dir, "lib", "libmylib.so.1.2.3"))
 ```
 """
 struct LazyLibraryPath
@@ -341,34 +348,82 @@ Base.print(io::IO, llp::LazyLibraryPath) = print(io, string(llp))
 # Helper to get `$(private_shlibdir)` at runtime
 struct PrivateShlibdirGetter; end
 const private_shlibdir = Base.OncePerProcess{String}() do
-    dirname(dlpath("libjulia-internal"))
+    libname = ifelse(isdebugbuild(), "libjulia-internal-debug", "libjulia-internal")
+    dirname(dlpath(libname))
 end
 Base.string(::PrivateShlibdirGetter) = private_shlibdir()
 
 """
-    BundledLazyLibraryPath
+    BundledLazyLibraryPath(subpath)
 
-Helper type for lazily constructed library paths that are stored within the
-bundled Julia distribution, primarily for use by Base modules.
+Helper type for lazily constructed library paths within the Julia distribution.
+Constructs paths relative to Julia's private shared library directory.
 
+Primarily used by Julia's standard library. For example:
+```julia
+const libgmp = LazyLibrary(BundledLazyLibraryPath("libgmp.so.10"))
 ```
-libfoo = LazyLibrary(BundledLazyLibraryPath("libfoo.so.1.2.3"))
-```
+
+!!! compat "Julia 1.11"
+    `BundledLazyLibraryPath` was added in Julia 1.11.
+
+See also [`LazyLibrary`](@ref), [`LazyLibraryPath`](@ref).
 """
 BundledLazyLibraryPath(subpath) = LazyLibraryPath(PrivateShlibdirGetter(), subpath)
 
+# Small helper struct to initialize a LazyLibrary with its initial set of dependencies
+struct InitialDependencies{T}
+    dependencies::Vector{T}
+end
+(init::InitialDependencies)() = copy(init.dependencies)
 
 """
-    LazyLibrary(name, flags = <default dlopen flags>,
+    LazyLibrary(name; flags = <default dlopen flags>,
                 dependencies = LazyLibrary[], on_load_callback = nothing)
 
-Represents a lazily-loaded library that opens itself and its dependencies on first usage
-in a `dlopen()`, `dlsym()`, or `ccall()` usage.  While this structure contains the
-ability to run arbitrary code on first load via `on_load_callback`, we caution that this
-should be used sparingly, as it is not expected that `ccall()` should result in large
-amounts of Julia code being run.  You may call `ccall()` from within the
-`on_load_callback` but only for the current library and its dependencies, and user should
-not call `wait()` on any tasks within the on load callback.
+Represents a lazily-loaded shared library that delays loading itself and its dependencies
+until first use in a `ccall()`, `@ccall`, `dlopen()`, `dlsym()`, `dlpath()`, or `cglobal()`.
+This is a thread-safe mechanism for on-demand library initialization.
+
+# Arguments
+
+- `name`: Library name (or lazy path computation) as a `String`,
+  [`LazyLibraryPath`](@ref), or [`BundledLazyLibraryPath`](@ref).
+- `flags`: Optional `dlopen` flags (default: `RTLD_LAZY | RTLD_DEEPBIND`). See [`dlopen`](@ref).
+- `dependencies`: Vector of `LazyLibrary` object references to load before this one.
+- `on_load_callback`: Optional function to run arbitrary code on first load (use sparingly,
+  as it is not expected that `ccall()` should result in large amounts of Julia code being run.
+  You may call `ccall()` from within the `on_load_callback` but only for the current library
+  and its dependencies, and user should not call `wait()` on any tasks within the on load
+  callback as they may deadlock).
+
+The dlopen operation is thread-safe: only one thread loads the library, acquired after the
+release store of the reference to each dependency from loading of each dependency. Other
+tasks block until loading completes. The handle is then cached and reused for all subsequent
+calls (there is no dlclose for lazy library and dlclose should not be called on the returned
+handled).
+
+!!! compat "Julia 1.11"
+    `LazyLibrary` was added in Julia 1.11.
+
+See also [`LazyLibraryPath`](@ref), [`BundledLazyLibraryPath`](@ref), [`dlopen`](@ref),
+[`dlsym`](@ref), [`add_dependency!`](@ref).
+
+# Examples
+
+```julia
+# Basic usage
+const mylib = LazyLibrary("libmylib")
+@ccall mylib.myfunc(42::Cint)::Cint
+
+# With dependencies
+const libfoo = LazyLibrary("libfoo")
+const libbar = LazyLibrary("libbar"; dependencies=[libfoo])
+```
+
+For more examples including platform-specific libraries, lazy path construction, and
+migration from `__init__()` patterns, see the manual section on
+[Using LazyLibrary for Lazy Loading](@ref man-lazylibrary).
 """
 mutable struct LazyLibrary
     # Name and flags to open with
@@ -376,7 +431,11 @@ mutable struct LazyLibrary
     const flags::UInt32
 
     # Dependencies that must be loaded before we can load
-    dependencies::Vector{LazyLibrary}
+    #
+    # The OncePerProcess is introduced here so that any registered dependencies are
+    # always ephemeral to a given process (instead of, e.g., persisting depending
+    # on whether they were added in the process where this LazyLibrary was created)
+    dependencies::Base.OncePerProcess{Vector{LazyLibrary}, InitialDependencies{LazyLibrary}}
 
     # Function that get called once upon initial load
     on_load_callback
@@ -389,7 +448,9 @@ mutable struct LazyLibrary
         return new(
             path,
             UInt32(flags),
-            collect(dependencies),
+            Base.OncePerProcess{Vector{LazyLibrary}}(
+                InitialDependencies{LazyLibrary}(dependencies)
+            ),
             on_load_callback,
             Base.ReentrantLock(),
             C_NULL,
@@ -399,15 +460,31 @@ end
 
 # We support adding dependencies only because of very special situations
 # such as LBT needing to have OpenBLAS_jll added as a dependency dynamically.
+"""
+    add_dependency!(library::LazyLibrary, dependency::LazyLibrary)
+
+Dynamically add a dependency that must be loaded before `library`. Only needed when
+dependencies cannot be determined at construction time.
+
+!!! warning
+    Dependencies added with this function are **ephemeral** and only persist within the
+    current process. They will not persist across precompilation boundaries.
+
+Prefer specifying dependencies in the `LazyLibrary` constructor when possible.
+
+!!! compat "Julia 1.11"
+    `add_dependency!` was added in Julia 1.11.
+
+See also [`LazyLibrary`](@ref).
+"""
 function add_dependency!(ll::LazyLibrary, dep::LazyLibrary)
     @lock ll.lock begin
-        push!(ll.dependencies, dep)
+        push!(ll.dependencies(), dep)
     end
 end
 
 # Register `jl_libdl_dlopen_func` so that `ccall()` lowering knows
-# how to call `dlopen()`, during bootstrap.
-# See  `post_image_load_hooks` for non-bootstrapping.
+# how to call `dlopen()`.
 Base.unsafe_store!(cglobal(:jl_libdl_dlopen_func, Any), dlopen)
 
 function dlopen(ll::LazyLibrary, flags::Integer = ll.flags; kwargs...)
@@ -417,7 +494,7 @@ function dlopen(ll::LazyLibrary, flags::Integer = ll.flags; kwargs...)
             # Check to see if another thread has already run this
             if ll.handle == C_NULL
                 # Ensure that all dependencies are loaded
-                for dep in ll.dependencies
+                for dep in ll.dependencies()
                     dlopen(dep; kwargs...)
                 end
 
@@ -429,6 +506,9 @@ function dlopen(ll::LazyLibrary, flags::Integer = ll.flags; kwargs...)
                 if ll.on_load_callback !== nothing
                     ll.on_load_callback()
                 end
+            else
+                # Another thread loaded the library while we were waiting
+                handle = @atomic :acquire ll.handle
             end
         end
     else

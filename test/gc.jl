@@ -82,6 +82,15 @@ end
 @testset "Full GC reasons" begin
     full_sweep_reasons_test()
 end
+
+@testset "GC Always Full" begin
+    prog = "using Test;\n
+        for _ in 1:10; GC.gc(); end;\n
+        reasons = Base.full_sweep_reasons();\n
+        @test reasons[:FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL] >= 10;"
+    cmd = `$(Base.julia_cmd()) --depwarn=error --startup-file=no --gc-sweep-always-full -e $prog`
+    @test success(cmd)
+end
 end
 
 @testset "Base.GC docstrings" begin

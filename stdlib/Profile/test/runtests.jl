@@ -3,6 +3,8 @@
 using Test, Profile, Serialization, Logging
 using Base.StackTraces: StackFrame
 
+@test isempty(Test.detect_closure_boxes(Profile))
+
 @test_throws "The profiling data buffer is not initialized. A profile has not been requested this session." Profile.print()
 
 Profile.clear()
@@ -246,6 +248,27 @@ end
     @test occursin("@julialib" * slash, str)
 end
 
+function run_with_watchdog(cmd, timeout=600)
+    p = open(cmd)
+    t = Timer(timeout) do t
+        # should be under 10 seconds normally, so give it 10 minutes then report failure
+        # n.b.: it was observed in an interactive CI session that a 2 minute timeout is not
+        #       sufficient when the machine is under extremely high load which happens
+        #       regularly when executing other tests in parallel with Profile
+        println("KILLING debuginfo registration test BY PROFILE TEST WATCHDOG\n")
+        println("This should not happen. Please report this at https://github.com/JuliaLang/julia/issues/60306")
+        kill(p, Base.SIGQUIT)
+        sleep(30)
+        kill(p, Base.SIGQUIT)
+        sleep(30)
+        kill(p, Base.SIGKILL)
+    end
+    s = read(p, String)
+    close(t)
+    close(p)
+    success(p) ? s : ""
+end
+
 # Profile deadlocking in compilation (debuginfo registration)
 let cmd = Base.julia_cmd()
     script = """
@@ -259,22 +282,24 @@ let cmd = Base.julia_cmd()
         print(Profile.len_data())
         """
     # use multiple threads here to ensure that profiling works with threading
-    p = open(`$cmd -t2 -e $script`)
-    t = Timer(120) do t
-        # should be under 10 seconds, so give it 2 minutes then report failure
-        println("KILLING debuginfo registration test BY PROFILE TEST WATCHDOG\n")
-        kill(p, Base.SIGQUIT)
-        sleep(30)
-        kill(p, Base.SIGQUIT)
-        sleep(30)
-        kill(p, Base.SIGKILL)
-    end
-    s = read(p, String)
-    close(t)
-    @test success(p)
+    s = run_with_watchdog(`$cmd -t2 -e $script`)
     @test !isempty(s)
     @test occursin("done", s)
     @test parse(Int, split(s, '\n')[end]) > 100
+end
+
+# Thread suspend deadlock - run many times (#60042)
+@test_skip let cmd = Base.julia_cmd()
+    script = """
+        using Profile
+        @profile println("done")
+        """
+    good = true
+    for i=1:100
+        s = run_with_watchdog(`$cmd -t2 -e $script`, 5)
+        good &= occursin("done", s)
+    end
+    good
 end
 
 if Sys.isbsd() || Sys.islinux()

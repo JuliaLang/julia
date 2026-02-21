@@ -17,4 +17,8 @@ using CompilerDevTools: lookup_method_instance, SplitCacheInterp
   # required extra work to be cached under the same cache owner.
   mi = lookup_method_instance(do_work, 1, 2)
   @test haskey(cache, mi)
+
+  # Should not error with a builtin whose type we do not know
+  f_unknown_builtin() = Base.compilerbarrier(:type, isa)(1, Int)
+  with_new_compiler(f_unknown_builtin, interp.owner) === true
 end;

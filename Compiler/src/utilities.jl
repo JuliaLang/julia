@@ -4,7 +4,7 @@
 # generic #
 ###########
 
-if !@isdefined(var"@timeit")
+if !@isdefined(var"@zone")
     # This is designed to allow inserting timers when loading a second copy
     # of inference for performing performance experiments.
     macro timeit(args...)
@@ -21,7 +21,7 @@ function contains_is(itr, @nospecialize(x))
     return false
 end
 
-anymap(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i in 1:length(a) ]
+anymap(f::Function, a::Vector{Any}) = Any[ f(a[i]) for i in 1:length(a) ]
 
 ############
 # inlining #
@@ -158,10 +158,8 @@ end
 
 function get_compileable_sig(method::Method, @nospecialize(atype), sparams::SimpleVector)
     isa(atype, DataType) || return nothing
-    mt = ccall(:jl_method_get_table, Any, (Any,), method)
-    mt === nothing && return nothing
-    return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any, Cint),
-        mt, atype, sparams, method, #=int return_if_compileable=#1)
+    return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Cint),
+        atype, sparams, method, #=int return_if_compileable=#1)
 end
 
 
@@ -169,7 +167,7 @@ isa_compileable_sig(@nospecialize(atype), sparams::SimpleVector, method::Method)
     !iszero(ccall(:jl_isa_compileable_sig, Int32, (Any, Any, Any), atype, sparams, method))
 
 isa_compileable_sig(m::MethodInstance) = (def = m.def; !isa(def, Method) || isa_compileable_sig(m.specTypes, m.sparam_vals, def))
-isa_compileable_sig(m::ABIOverride) = false
+isa_compileable_sig(::ABIOverride) = false
 
 has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v) != 0
 
@@ -271,7 +269,7 @@ function foreach_anyssa(@specialize(f), @nospecialize(stmt))
 end
 
 function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
-    uses = BitSet[ BitSet() for i = 1:nvals ]
+    uses = BitSet[ BitSet() for _ = 1:nvals ]
     for line in 1:length(body)
         e = body[line]
         if isa(e, ReturnNode)
@@ -329,7 +327,7 @@ end
 
 inlining_enabled() = (JLOptions().can_inline == 1)
 
-function coverage_enabled(m::Module)
+function instrumentation_enabled(m::Module, only_if_affects_optimizer::Bool)
     generating_output() && return false # don't alter caches
     cov = JLOptions().code_coverage
     if cov == 1 # user
@@ -339,6 +337,17 @@ function coverage_enabled(m::Module)
         return true
     elseif cov == 2 # all
         return true
+    end
+    if !only_if_affects_optimizer
+        log = JLOptions().malloc_log
+        if log == 1 # user
+            m = moduleroot(m)
+            m === Core && return false
+            isdefined(Main, :Base) && m === Main.Base && return false
+            return true
+        elseif log == 2 # all
+            return true
+        end
     end
     return false
 end

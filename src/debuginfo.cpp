@@ -20,6 +20,8 @@
 #include <llvm/Object/MachO.h>
 #include <llvm/Object/COFF.h>
 #include <llvm/Object/ELFObjectFile.h>
+#include <llvm-Compression.h>
+#include <llvm/Support/Compression.h>
 
 #ifdef _OS_DARWIN_
 #include <CoreFoundation/CoreFoundation.h>
@@ -145,8 +147,8 @@ struct unw_table_entry
 template <typename T>
 static void jl_profile_atomic(T f) JL_NOTSAFEPOINT
 {
-    assert(0 == jl_lock_profile_rd_held());
-    jl_lock_profile_wr();
+    int havelock = jl_lock_profile_wr();
+    assert(havelock);
 #ifndef _OS_WINDOWS_
     sigset_t sset;
     sigset_t oset;
@@ -157,7 +159,8 @@ static void jl_profile_atomic(T f) JL_NOTSAFEPOINT
 #ifndef _OS_WINDOWS_
     pthread_sigmask(SIG_SETMASK, &oset, NULL);
 #endif
-    jl_unlock_profile_wr();
+    if (havelock)
+        jl_unlock_profile_wr();
 }
 
 
@@ -328,6 +331,7 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
             }
         }
     }
+    (void)catchjmp;
     assert(catchjmp);
     assert(UnwindData);
     assert(SectionLoadCheck);
@@ -335,9 +339,18 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
 #endif // defined(_OS_WINDOWS_)
 
     SmallVector<uint8_t, 0> packed;
-    compression::zlib::compress(ArrayRef<uint8_t>((uint8_t*)Object.getData().data(), Object.getData().size()), packed, compression::zlib::DefaultCompression);
-    jl_jit_add_bytes(packed.size());
-    auto ObjectCopy = new LazyObjectInfo{packed, Object.getData().size()}; // intentionally leaked so that we don't need to ref-count it, intentionally copied so that we exact-size the allocation (since no shrink_to_fit function)
+    ArrayRef<uint8_t> unpacked = arrayRefFromStringRef(Object.getData());
+    std::optional<compression::Format> F;
+    if (compression::zstd::isAvailable())
+        F = compression::Format::Zstd;
+    else if (compression::zlib::isAvailable())
+        F = compression::Format::Zlib;
+    if (F)
+        compression::compress(*F, unpacked, packed);
+    // intentionally leak this so that we don't need to ref-count it
+    // intentionally copy the input so that we exact-size the allocation (since no shrink_to_fit function)
+    auto ObjectCopy = new LazyObjectInfo{SmallVector<uint8_t, 0>(F ? ArrayRef(packed) : unpacked), F ? Object.getData().size() : 0};
+    jl_jit_add_bytes(ObjectCopy->data.size());
     auto symbols = object::computeSymbolSizes(Object);
     bool hassection = false;
     for (const auto &sym_size : symbols) {
@@ -382,7 +395,7 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
             objectmap.insert(std::pair{SectionLoadAddr, SectionInfo{
                 ObjectCopy,
                 (size_t)SectionSize,
-                (ptrdiff_t)(SectionAddr - SectionLoadAddr),
+                SectionAddr - SectionLoadAddr,
                 Section->getIndex()
                 }});
         });
@@ -435,7 +448,7 @@ done:
 // func_name and file_name are either NULL or malloc'd pointers
 static int lookup_pointer(
         object::SectionRef Section, DIContext *context,
-        jl_frame_t **frames, size_t pointer, int64_t slide,
+        jl_frame_t **frames, size_t pointer, uint64_t slide,
         bool demangle, bool noInline) JL_NOTSAFEPOINT
 {
     // This function is not allowed to reference any TLS variables
@@ -464,8 +477,8 @@ static int lookup_pointer(
 
     // DWARFContext/DWARFUnit update some internal tables during these queries, so
     // a lock is needed.
-    assert(0 == jl_lock_profile_rd_held());
-    jl_lock_profile_wr();
+    if (!jl_lock_profile_wr())
+        return lookup_pointer(object::SectionRef(), NULL, frames, pointer, slide, demangle, noInline);
     auto inlineInfo = context->getInliningInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
     jl_unlock_profile_wr();
 
@@ -478,7 +491,7 @@ static int lookup_pointer(
     if (noInline)
         n_frames = 1;
     if (n_frames > 1) {
-        jl_frame_t *new_frames = (jl_frame_t*)calloc(sizeof(jl_frame_t), n_frames);
+        jl_frame_t *new_frames = (jl_frame_t*)calloc(n_frames, sizeof(jl_frame_t));
         memcpy(&new_frames[n_frames - 1], *frames, sizeof(jl_frame_t));
         free(*frames);
         *frames = new_frames;
@@ -490,9 +503,15 @@ static int lookup_pointer(
             info = inlineInfo.getFrame(i);
         }
         else {
-            jl_lock_profile_wr();
-            info = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
+            int havelock = jl_lock_profile_wr();
+            assert(havelock); (void)havelock;
+            auto lineinfo = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
             jl_unlock_profile_wr();
+#if JL_LLVM_VERSION < 210000
+            info = std::move(lineinfo);
+#else
+            info = std::move(lineinfo.value());
+#endif
         }
 
         jl_frame_t *frame = &(*frames)[i];
@@ -568,7 +587,7 @@ void JITDebugInfoRegistry::libc_frames_t::libc_deregister_frame(const char *Entr
 }
 #endif
 
-static bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16]) JL_NOTSAFEPOINT
+static bool getObjUUID(const object::MachOObjectFile *obj, uint8_t uuid[16]) JL_NOTSAFEPOINT
 {
     for (auto Load : obj->load_commands())
     {
@@ -704,7 +723,8 @@ static inline void ignoreError(T &err) JL_NOTSAFEPOINT
 #endif
 }
 
-static void get_function_name_and_base(llvm::object::SectionRef Section, size_t pointer, int64_t slide, bool inimage,
+static void get_function_name_and_base(llvm::object::SectionRef Section, std::map<uintptr_t, StringRef, std::greater<size_t>> *symbolmap,
+                                       size_t pointer, uint64_t slide, bool inimage,
                                        void **saddr, char **name, bool untrusted_dladdr) JL_NOTSAFEPOINT
 {
     bool needs_saddr = saddr && (!*saddr || untrusted_dladdr);
@@ -730,59 +750,73 @@ static void get_function_name_and_base(llvm::object::SectionRef Section, size_t 
 #endif
     }
     if (Section.getObject() && (needs_saddr || needs_name)) {
-        size_t distance = (size_t)-1;
-        object::SymbolRef sym_found;
-        for (auto sym : Section.getObject()->symbols()) {
-            if (!Section.containsSymbol(sym))
-                continue;
-            auto addr = sym.getAddress();
-            if (!addr)
-                continue;
-            size_t symptr = addr.get();
-            if (symptr > pointer + slide)
-                continue;
-            size_t new_dist = pointer + slide - symptr;
-            if (new_dist > distance)
-                continue;
-            distance = new_dist;
-            sym_found = sym;
-        }
-        if (distance != (size_t)-1) {
-            if (needs_saddr) {
-                uintptr_t addr = cantFail(sym_found.getAddress());
-                *saddr = (void*)(addr - slide);
-                needs_saddr = false;
-            }
-            if (needs_name) {
-                if (auto name_or_err = sym_found.getName()) {
-                    auto nameref = name_or_err.get();
-                    const char globalPrefix = // == DataLayout::getGlobalPrefix
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-                        '_';
-#elif defined(_OS_DARWIN_)
-                        '_';
-#else
-                        '\0';
-#endif
-                    if (globalPrefix) {
-                        if (nameref[0] == globalPrefix)
-                          nameref = nameref.drop_front();
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-                        else if (nameref[0] == '@') // X86_VectorCall
-                          nameref = nameref.drop_front();
-#endif
-                        // else VectorCall, Assembly, Internal, etc.
+        uintptr_t addr = 0;
+        StringRef nameref{};
+        {
+            std::shared_lock<std::shared_mutex> read_lock(getJITDebugRegistry().symbol_mutex);
+            if (symbolmap->empty()) {
+                read_lock.unlock();
+                {
+                    // symbol map hasn't been generated yet, so fill it in now
+                    std::unique_lock<std::shared_mutex> write_lock(getJITDebugRegistry().symbol_mutex);
+                    if (symbolmap->empty()) {
+                        for (auto sym : Section.getObject()->symbols()) {
+                            if (!Section.containsSymbol(sym))
+                                continue;
+
+                            auto maybe_addr = sym.getAddress();
+                            if (!maybe_addr)
+                                continue;
+                            size_t addr = maybe_addr.get();
+
+                            auto maybe_nameref = sym.getName();
+                            StringRef nameref{};
+                            if (maybe_nameref)
+                                nameref = maybe_nameref.get();
+
+                            symbolmap->emplace(addr, nameref);
+                        }
                     }
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-                    nameref = nameref.split('@').first;
-#endif
-                    size_t len = nameref.size();
-                    *name = (char*)realloc_s(*name, len + 1);
-                    memcpy(*name, nameref.data(), len);
-                    (*name)[len] = 0;
-                    needs_name = false;
                 }
+                read_lock.lock();
             }
+            auto fit = symbolmap->lower_bound(pointer + slide);
+            if (fit != symbolmap->end()) {
+                addr = fit->first;
+                nameref = fit->second;
+            }
+        }
+        std::string namerefstr = nameref.str();
+        if (needs_saddr && addr != 0) {
+            *saddr = (void*)(addr - slide);
+            needs_saddr = false;
+        }
+        if (needs_name && !nameref.empty()) {
+            const char globalPrefix = // == DataLayout::getGlobalPrefix
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
+                '_';
+#elif defined(_OS_DARWIN_)
+                '_';
+#else
+                '\0';
+#endif
+            if (globalPrefix) {
+                if (nameref[0] == globalPrefix)
+                  nameref = nameref.drop_front();
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
+                else if (nameref[0] == '@') // X86_VectorCall
+                  nameref = nameref.drop_front();
+#endif
+                // else VectorCall, Assembly, Internal, etc.
+            }
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
+            nameref = nameref.split('@').first;
+#endif
+            size_t len = nameref.size();
+            *name = (char*)realloc_s(*name, len + 1);
+            memcpy(*name, nameref.data(), len);
+            (*name)[len] = 0;
+            needs_name = false;
         }
     }
 #ifdef _OS_WINDOWS_
@@ -806,7 +840,7 @@ static void get_function_name_and_base(llvm::object::SectionRef Section, size_t 
 #endif
 }
 
-static objfileentry_t find_object_file(uint64_t fbase, StringRef fname) JL_NOTSAFEPOINT
+static jl_object_file_entry_t find_object_file(uint64_t fbase, StringRef fname) JL_NOTSAFEPOINT
 {
     int isdarwin = 0, islinux = 0, iswindows = 0;
 #if defined(_OS_DARWIN_)
@@ -819,7 +853,7 @@ static objfileentry_t find_object_file(uint64_t fbase, StringRef fname) JL_NOTSA
     (void)iswindows;
 
 // GOAL: Read debuginfo from file
-    objfileentry_t entry{nullptr, nullptr, 0};
+    jl_object_file_entry_t entry{nullptr, nullptr, 0, nullptr};
     auto success = getJITDebugRegistry().get_objfile_map()->emplace(fbase, entry);
     if (!success.second)
         // Return cached value
@@ -830,9 +864,6 @@ static objfileentry_t find_object_file(uint64_t fbase, StringRef fname) JL_NOTSA
     std::string debuginfopath;
     uint8_t uuid[16], uuid2[16];
     if (isdarwin) {
-        // Hide Darwin symbols (e.g. CoreFoundation) from non-Darwin systems.
-#ifdef _OS_DARWIN_
-
         size_t msize = (size_t)(((uint64_t)-1) - fbase);
         std::unique_ptr<MemoryBuffer> membuf = MemoryBuffer::getMemBuffer(
                 StringRef((const char *)fbase, msize), "", false);
@@ -843,14 +874,18 @@ static objfileentry_t find_object_file(uint64_t fbase, StringRef fname) JL_NOTSA
             return entry;
         }
 
-        llvm::object::MachOObjectFile *morigobj = (llvm::object::MachOObjectFile*)
-            origerrorobj.get().get();
+        const object::MachOObjectFile *morigobj = dyn_cast<const object::MachOObjectFile>(
+            origerrorobj.get().get());
 
         // First find the uuid of the object file (we'll use this to make sure we find the
         // correct debug symbol file).
-        if (!getObjUUID(morigobj, uuid))
+        if (!morigobj || !getObjUUID(morigobj, uuid))
             return entry;
 
+        // Hide Darwin symbols (e.g. CoreFoundation) from non-Darwin systems.
+#ifndef _OS_DARWIN_
+        return entry;
+#else
         // On macOS, debug symbols are not contained in the dynamic library.
         // Use DBGCopyFullDSYMURLForUUID from the private DebugSymbols framework
         // to make use of spotlight to find the dSYM file. If that fails, lookup
@@ -906,6 +941,7 @@ static objfileentry_t find_object_file(uint64_t fbase, StringRef fname) JL_NOTSA
         if (dsfmwkbundle) {
             CFRelease(dsfmwkbundle);
         }
+#endif
 
         if (objpath.empty()) {
             // Fall back to simple path relative to the dynamic library.
@@ -915,7 +951,6 @@ static objfileentry_t find_object_file(uint64_t fbase, StringRef fname) JL_NOTSA
             debuginfopath += fname.substr(sep + 1);
             objpath = debuginfopath;
         }
-#endif
     }
     else {
         // On Linux systems we need to mmap another copy because of the permissions on the mmap'ed shared library.
@@ -974,26 +1009,29 @@ static objfileentry_t find_object_file(uint64_t fbase, StringRef fname) JL_NOTSA
 
         if (isdarwin) {
             // verify the UUID matches
-            if (!getObjUUID((llvm::object::MachOObjectFile*)debugobj, uuid2) ||
-                    memcmp(uuid, uuid2, sizeof(uuid)) != 0) {
+            if (!isa<const object::MachOObjectFile>(debugobj) ||
+                !getObjUUID(cast<const object::MachOObjectFile>(debugobj), uuid2) ||
+                memcmp(uuid, uuid2, sizeof(uuid)) != 0) {
                 return entry;
             }
         }
 
-        int64_t slide = 0;
+        uint64_t slide = 0;
         if (auto *OF = dyn_cast<const object::COFFObjectFile>(debugobj)) {
-            assert(iswindows);
+            if (!iswindows) // the COFF parser accepts some garbage inputs (like empty files) that the other parsers correctly reject, so we can end up here even when we should not
+                return entry;
             slide = OF->getImageBase() - fbase;
         }
         else {
-            slide = -(int64_t)fbase;
+            slide = -fbase;
         }
 
         auto context = DWARFContext::create(*debugobj).release();
         auto binary = errorobj->takeBinary();
         binary.first.release();
         binary.second.release();
-        entry = {debugobj, context, slide};
+
+        entry = {debugobj, context, slide, new std::map<uintptr_t, StringRef, std::greater<size_t>>()};
         // update cache
         (*getJITDebugRegistry().get_objfile_map())[fbase] = entry;
     }
@@ -1018,7 +1056,7 @@ static object::SectionRef getModuleSectionForAddress(const object::ObjectFile *o
 }
 
 
-bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *slide, llvm::DIContext **context,
+bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, uint64_t *slide, llvm::DIContext **context,
     bool onlyImage, bool *isImage, uint64_t *_fbase, void **saddr, char **name, char **filename) JL_NOTSAFEPOINT
 {
     *Section = object::SectionRef();
@@ -1043,7 +1081,9 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
     IMAGEHLP_MODULE64 ModuleInfo;
     ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
     uv_mutex_lock(&jl_in_stackwalk);
-    jl_refresh_dbg_module_list();
+    uv_mutex_lock(&jl_dll_notify_lock);
+    jl_profile_process_dll_events();
+    uv_mutex_unlock(&jl_dll_notify_lock);
     bool isvalid = SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
     uv_mutex_unlock(&jl_in_stackwalk);
     if (!isvalid)
@@ -1123,7 +1163,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
         jl_copy_str(filename, dlinfo.dli_fname);
     fname = dlinfo.dli_fname;
 #endif // ifdef _OS_WINDOWS_
-    auto entry = find_object_file(fbase, fname);
+    jl_object_file_entry_t entry = find_object_file(fbase, fname);
     *slide = entry.slide;
     *context = entry.ctx;
     if (entry.obj)
@@ -1131,7 +1171,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
     // Assume we only need base address for sysimg for now
     if (!inimage || 0 == image_info.fptrs.nptrs)
         saddr = nullptr;
-    get_function_name_and_base(*Section, pointer, entry.slide, inimage, saddr, name, untrusted_dladdr);
+    get_function_name_and_base(*Section, entry.symbolmap, pointer, entry.slide, inimage, saddr, name, untrusted_dladdr);
     return true;
 }
 
@@ -1145,7 +1185,9 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
     static IMAGEHLP_LINE64 frame_info_line;
     DWORD dwDisplacement = 0;
     uv_mutex_lock(&jl_in_stackwalk);
-    jl_refresh_dbg_module_list();
+    uv_mutex_lock(&jl_dll_notify_lock);
+    jl_profile_process_dll_events();
+    uv_mutex_unlock(&jl_dll_notify_lock);
     DWORD64 dwAddress = pointer;
     frame_info_line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
     if (SymGetLineFromAddr64(GetCurrentProcess(), dwAddress, &dwDisplacement, &frame_info_line)) {
@@ -1159,7 +1201,7 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
 #endif
     object::SectionRef Section;
     llvm::DIContext *context = NULL;
-    int64_t slide;
+    uint64_t slide;
     bool isImage;
     void *saddr;
     uint64_t fbase;
@@ -1191,12 +1233,12 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
     return lookup_pointer(Section, context, frames, pointer, slide, isImage, noInline);
 }
 
-int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
+int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
         object::SectionRef *Section, llvm::DIContext **context) JL_NOTSAFEPOINT
 {
     int found = 0;
-    assert(0 == jl_lock_profile_rd_held());
-    jl_lock_profile_wr();
+    if (!jl_lock_profile_wr())
+        return 0;
 
     if (symsize)
         *symsize = 0;
@@ -1209,7 +1251,8 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
         if (!lazyobject->object && !lazyobject->data.empty()) {
             if (lazyobject->uncompressedsize) {
                 SmallVector<uint8_t, 0> unpacked;
-                Error E = compression::zlib::decompress(lazyobject->data, unpacked, lazyobject->uncompressedsize);
+                compression::Format F = compression::zstd::isAvailable() ? compression::Format::Zstd : compression::Format::Zlib;
+                Error E = compression::decompress(F, lazyobject->data, unpacked, lazyobject->uncompressedsize);
                 if (E)
                     lazyobject->data.clear();
                 else
@@ -1245,13 +1288,13 @@ extern "C" JL_DLLEXPORT_CODEGEN int jl_getFunctionInfo_impl(jl_frame_t **frames_
     // This function is not allowed to reference any TLS variables if noInline
     // since it can be called from an unmanaged thread on OSX.
 
-    jl_frame_t *frames = (jl_frame_t*)calloc(sizeof(jl_frame_t), 1);
+    jl_frame_t *frames = (jl_frame_t*)calloc(1, sizeof(jl_frame_t));
     frames[0].line = -1;
     *frames_out = frames;
 
     llvm::DIContext *context = nullptr;
     object::SectionRef Section;
-    int64_t slide;
+    uint64_t slide;
     uint64_t symsize;
     if (jl_DI_for_fptr(pointer, &symsize, &slide, &Section, &context)) {
         frames[0].ci = getJITDebugRegistry().lookupCodeInstance(pointer);
@@ -1412,7 +1455,7 @@ static DW_EH_PE parseCIE(const uint8_t *Addr, const uint8_t *End) JL_NOTSAFEPOIN
     else {
         p = consume_leb128(p, cie_end);
     }
-    // Now it's the augmentation data. which may have the information we
+    // Now it's the augmentation data, which may have the information we
     // are interested in...
     for (const char *augp = augmentation;;augp++) {
         switch (*augp) {

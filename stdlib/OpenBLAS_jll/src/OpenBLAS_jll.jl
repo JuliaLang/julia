@@ -2,7 +2,7 @@
 
 ## dummy stub for https://github.com/JuliaBinaryWrappers/OpenBLAS_jll.jl
 baremodule OpenBLAS_jll
-using Base, Libdl, Base.BinaryPlatforms
+using Base, Libdl
 using CompilerSupportLibraries_jll
 
 export libopenblas
@@ -13,7 +13,7 @@ const PATH_list = String[]
 const LIBPATH = Ref("")
 const LIBPATH_list = String[]
 artifact_dir::String = ""
-libopenblas_path::String = ""
+
 
 if Base.USE_BLAS64
     const libsuffix = "64_"
@@ -21,14 +21,30 @@ else
     const libsuffix = ""
 end
 
-if Sys.iswindows()
-    const _libopenblas_path = BundledLazyLibraryPath(string("libopenblas", libsuffix, ".dll"))
-elseif Sys.isapple()
-    const _libopenblas_path = BundledLazyLibraryPath(string("libopenblas", libsuffix, ".dylib"))
-else
-    const _libopenblas_path = BundledLazyLibraryPath(string("libopenblas", libsuffix, ".so"))
-end
-const libopenblas = LazyLibrary(_libopenblas_path, dependencies=[libgfortran])
+libopenblas_path::String = ""
+const libopenblas = LazyLibrary(
+    if Sys.iswindows()
+        BundledLazyLibraryPath(string("libopenblas", libsuffix, ".dll"))
+    elseif Sys.isapple()
+        BundledLazyLibraryPath(string("libopenblas", libsuffix, ".dylib"))
+    else
+        BundledLazyLibraryPath(string("libopenblas", libsuffix, ".so"))
+    end,
+    dependencies = if Sys.iswindows()
+        LazyLibrary[libgfortran, libgcc_s]
+    elseif Sys.isapple()
+        deps = LazyLibrary[libgfortran]
+        if isdefined(CompilerSupportLibraries_jll, :libquadmath)
+            push!(deps, CompilerSupportLibraries_jll.libquadmath)
+        end
+        if Sys.ARCH != :aarch64
+            push!(deps, CompilerSupportLibraries_jll.libgcc_s)
+        end
+        deps
+    else
+        LazyLibrary[libgfortran]
+    end
+)
 
 # Conform to LazyJLLWrappers API
 function eager_mode()
@@ -38,7 +54,7 @@ end
 is_available() = true
 
 function __init__()
-    global libopenblas_path = string(_libopenblas_path)
+    global libopenblas_path = string(libopenblas.path)
     # make sure OpenBLAS does not set CPU affinity (#1070, #9639)
     if !(haskey(ENV, "OPENBLAS_MAIN_FREE"))
         ENV["OPENBLAS_MAIN_FREE"] = "1"
@@ -55,7 +71,7 @@ function __init__()
         ENV["OPENBLAS_DEFAULT_NUM_THREADS"] = "1"
     end
 
-    global libopenblas_path = string(_libopenblas_path)
+    global libopenblas_path = string(libopenblas.path)
     global artifact_dir = dirname(Sys.BINDIR)
     LIBPATH[] = dirname(libopenblas_path)
     push!(LIBPATH_list, LIBPATH[])

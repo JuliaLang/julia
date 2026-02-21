@@ -9,7 +9,6 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :(&) => 1:1,
     :(=) => 2:2,
     :method => 1:4,
-    :const => 1:2,
     :new => 1:typemax(Int),
     :splatnew => 2:2,
     :the_exception => 0:0,
@@ -21,8 +20,6 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :boundscheck => 0:1,
     :copyast => 1:1,
     :meta => 0:typemax(Int),
-    :global => 1:1,
-    :globaldecl => 1:2,
     :foreigncall => 5:typemax(Int), # name, RT, AT, nreq, (cconv, effects, gc_safe), args..., roots...
     :cfunction => 5:5,
     :isdefined => 1:2,
@@ -35,8 +32,6 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :aliasscope => 0:0,
     :popaliasscope => 0:0,
     :new_opaque_closure => 5:typemax(Int),
-    :import => 1:typemax(Int),
-    :using => 1:typemax(Int),
     :export => 1:typemax(Int),
     :public => 1:typemax(Int),
     :latestworld => 0:0,
@@ -55,7 +50,6 @@ const SSAVALUETYPES_MISMATCH = "not all SSAValues in AST have a type in ssavalue
 const SSAVALUETYPES_MISMATCH_UNINFERRED = "uninferred CodeInfo ssavaluetypes field does not equal the number of present SSAValues"
 const SSAFLAGS_MISMATCH = "not all SSAValues have a corresponding `ssaflags`"
 const NON_TOP_LEVEL_METHOD = "encountered `Expr` head `:method` in non-top-level code (i.e. `nargs` > 0)"
-const NON_TOP_LEVEL_GLOBAL = "encountered `Expr` head `:global` in non-top-level code (i.e. `nargs` > 0)"
 const SIGNATURE_NARGS_MISMATCH = "method signature does not match number of method arguments"
 const SLOTNAMES_NARGS_MISMATCH = "CodeInfo for method contains fewer slotnames than the number of method arguments"
 const INVALID_SIGNATURE_OPAQUE_CLOSURE = "invalid signature of method for opaque closure - `sig` field must always be set to `Tuple`"
@@ -72,11 +66,13 @@ function maybe_validate_code(mi::MethodInstance, src::CodeInfo, kind::String)
         if !isempty(errors)
             for e in errors
                 if mi.def isa Method
-                    println(stderr, "WARNING: Encountered invalid ", kind, " code for method ",
-                            mi.def, ": ", e)
+                    println(Core.stderr,
+                            "WARNING: Encountered invalid ", kind,
+                            " code for method ", mi.def, ": ", e)
                 else
-                    println(stderr, "WARNING: Encountered invalid ", kind, " code for top level expression in ",
-                            mi.def, ": ", e)
+                    println(Core.stderr,
+                            "WARNING: Encountered invalid ", kind,
+                            " code for top level expression in ", mi.def, ": ", e)
                 end
             end
             error("")
@@ -125,7 +121,6 @@ function validate_code!(errors::Vector{InvalidCodeError}, c::CodeInfo, is_top_le
             head = x.head
             if !is_top_level
                 head === :method && push!(errors, InvalidCodeError(NON_TOP_LEVEL_METHOD))
-                head === :global && push!(errors, InvalidCodeError(NON_TOP_LEVEL_GLOBAL))
             end
             narg_bounds = get(VALID_EXPR_HEADS, head, -1:-1)
             nargs = length(x.args)
@@ -149,8 +144,8 @@ function validate_code!(errors::Vector{InvalidCodeError}, c::CodeInfo, is_top_le
             elseif head === :call || head === :invoke || x.head === :invoke_modify ||
                 head === :gc_preserve_end || head === :meta ||
                 head === :inbounds || head === :foreigncall || head === :cfunction ||
-                head === :const || head === :leave || head === :pop_exception ||
-                head === :method || head === :global || head === :static_parameter ||
+                head === :leave || head === :pop_exception ||
+                head === :method || head === :static_parameter ||
                 head === :new || head === :splatnew || head === :thunk || head === :loopinfo ||
                 head === :throw_undef_if_not || head === :code_coverage_effect || head === :inline || head === :noinline
                 validate_val!(x)
@@ -225,7 +220,7 @@ function validate_code!(errors::Vector{InvalidCodeError}, mi::Core.MethodInstanc
         mnargs = 0
     else
         m = mi.def::Method
-        mnargs = m.nargs
+        mnargs = Int(m.nargs)
         n_sig_params = length((unwrap_unionall(m.sig)::DataType).parameters)
         if m.is_for_opaque_closure
             m.sig === Tuple || push!(errors, InvalidCodeError(INVALID_SIGNATURE_OPAQUE_CLOSURE, (m.sig, m.isva)))
@@ -234,6 +229,7 @@ function validate_code!(errors::Vector{InvalidCodeError}, mi::Core.MethodInstanc
         end
     end
     if isa(c, CodeInfo)
+        mnargs = Int(c.nargs)
         mnargs > length(c.slotnames) && push!(errors, InvalidCodeError(SLOTNAMES_NARGS_MISMATCH))
         validate_code!(errors, c, is_top_level)
     end

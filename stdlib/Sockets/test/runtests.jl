@@ -3,12 +3,23 @@
 using Sockets, Random, Test
 using Base: Experimental
 
+@test isempty(Test.detect_closure_boxes(Sockets))
+
+# This is for debugging only - if the system doesn't have `netstat`, we just ignore it
+netstat() = try; read(ignorestatus(`netstat -ndi`), String); catch; return ""; end
+const netstat_before = netstat()
+
 # set up a watchdog alarm for 10 minutes
 # so that we can attempt to get a "friendly" backtrace if something gets stuck
 # (although this'll also terminate any attempted debugging session)
 # expected test duration is about 5-10 seconds
 function killjob(d)
     Core.print(Core.stderr, d)
+    Core.print(Core.stderr, "Netstat before:\n")
+    Core.print(Core.stderr, netstat_before)
+    Core.print(Core.stderr, "\nNetstat after:\n")
+    # This might fail if we're in a bad libuv state
+    Core.print(Core.stderr, netstat())
     if Sys.islinux()
         SIGINFO = 10
     elseif Sys.isbsd()
@@ -25,7 +36,6 @@ sockets_watchdog_timer = Timer(t -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"
 
 @testset "parsing" begin
     @test ip"127.0.0.1" == IPv4(127,0,0,1)
-    @test ip"192.0" == IPv4(192,0,0,0)
 
     # These used to work, but are now disallowed. Check that they error
     @test_throws ArgumentError parse(IPv4, "192.0xFFF") # IPv4(192,0,15,255)
@@ -33,6 +43,7 @@ sockets_watchdog_timer = Timer(t -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"
     @test_throws ArgumentError parse(IPv4, "192.0xFFFFF") # IPv4(192,15,255,255)
     @test_throws ArgumentError parse(IPv4, "192.0xFFFFFF") # IPv4(192,255,255,255)
     @test_throws ArgumentError parse(IPv4, "022.0.0.1") # IPv4(18,0,0,1)
+    @test_throws ArgumentError parse(IPv4, "192.0") # IPv4(192,0,0,0)
 
     @test UInt(IPv4(0x01020304)) == 0x01020304
     @test Int(IPv4("1.2.3.4")) == Int(0x01020304) == Int32(0x01020304)

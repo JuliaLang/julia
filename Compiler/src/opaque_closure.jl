@@ -48,6 +48,8 @@ function Core.OpaqueClosure(ir::IRCode, @nospecialize env...;
     end
     src.slotflags = fill(zero(UInt8), nargtypes)
     src.slottypes = copy(ir.argtypes)
+    src.min_world = ir.valid_worlds.min_world
+    src.max_world = ir.valid_worlds.max_world
     src.isva = isva
     src.nargs = UInt(nargtypes)
     src = ir_to_codeinf!(src, ir)

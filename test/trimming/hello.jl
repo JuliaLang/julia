@@ -1,13 +1,6 @@
-module MyApp
+# Test that minimal executable size stays low
 
-world::String = "world!"
-const str = OncePerProcess{String}() do
-    return "Hello, " * world
-end
-
-Base.@ccallable function main()::Cint
-    println(Core.stdout, str())
+function @main(args::Vector{String})::Cint
+    println(Core.stdout, "Hello, world!")
     return 0
-end
-
 end

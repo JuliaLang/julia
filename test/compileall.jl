@@ -2,8 +2,10 @@
 # We make it a separate test target here, so that it can run in parallel
 # with the rest of the tests.
 
+include("tempdepot.jl")
+
 function precompile_test_harness(@nospecialize(f))
-    load_path = mktempdir()
+    load_path = mkdepottempdir()
     try
         pushfirst!(LOAD_PATH, load_path)
         pushfirst!(DEPOT_PATH, load_path)

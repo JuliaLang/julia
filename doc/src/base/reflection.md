@@ -85,9 +85,9 @@ the unquoted and interpolated expression ([`Expr`](@ref)) form for a given macro
 `quote` the expression block itself (otherwise, the macro will be evaluated and the result will
 be passed instead!). For example:
 
-```jldoctest; setup = :(using InteractiveUtils)
-julia> InteractiveUtils.macroexpand(@__MODULE__, :(@edit println("")) )
-:(InteractiveUtils.edit(println, (Base.typesof)("")))
+```jldoctest
+julia> macroexpand(@__MODULE__, :(@invoke identity(1::Int)))
+:(Core.invoke(identity, Base.Tuple{Int}, 1))
 ```
 
 The functions `Base.Meta.show_sexpr` and [`dump`](@ref) are used to display S-expr style views
@@ -142,7 +142,7 @@ For more information see [`@code_lowered`](@ref), [`@code_typed`](@ref), [`@code
 ### Printing of debug information
 
 The aforementioned functions and macros take the keyword argument `debuginfo` that controls the level
-debug information printed.
+of debug information printed.
 
 ```jldoctest; setup = :(using InteractiveUtils), filter = r"int.jl:\d+"
 julia> InteractiveUtils.@code_typed debuginfo=:source +(1,1)
