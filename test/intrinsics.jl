@@ -601,14 +601,14 @@ end
     end
     function _pointerset_trigger(x::Int)
         val = _pointerset_returns_union(x)::PointersetMixedGC
-        buf = Vector{PointersetMixedGC}(undef, 2)
-        GC.@preserve buf val begin
-            p = pointer(buf)
+        p = Ptr{PointersetMixedGC}(Libc.malloc(2 * sizeof(PointersetMixedGC)))
+        GC.@preserve val begin
             unsafe_store!(p, val, 1)
             unsafe_store!(p, val, 2)
             r1 = unsafe_load(p, 1)
             r2 = unsafe_load(p, 2)
         end
+        Libc.free(p)
         return r1.a, r1.b, r2.a, r2.b
     end
     @test _pointerset_trigger(0) == (Int[1,2,3], 42, Int[1,2,3], 42)
