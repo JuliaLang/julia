@@ -87,45 +87,96 @@ end
 @test goto_test5_3()
 
 
-@test Expr(:error, "goto from a try/finally block is not permitted around $(@__FILE__):$(3 + @__LINE__)") ==
-    Meta.lower(@__MODULE__, quote
+# Test that symbolicgoto (new syntax version) from try/catch/else with finally is an error
+let lowered = Meta.lower(@__MODULE__, quote
         function goto_test6()
             try
-                @goto a
+                $(Expr(:symbolicgoto, :a))
             finally
             end
-            @label a
+            $(Expr(:symboliclabel, :a))
             return
         end
     end)
+    @test lowered.head === :error
+    @test occursin("goto from a try/finally block is not permitted", lowered.args[1])
+end
 
-@test Expr(:error, "goto from a catch/finally block is not permitted around $(@__FILE__):$(3 + @__LINE__)") ==
-    Meta.lower(@__MODULE__, quote
+let lowered = Meta.lower(@__MODULE__, quote
         function goto_test6_catch()
             try
                 error()
             catch
-                @goto a
+                $(Expr(:symbolicgoto, :a))
             finally
             end
-            @label a
+            $(Expr(:symboliclabel, :a))
             return
         end
     end)
+    @test lowered.head === :error
+    @test occursin("goto from a catch/finally block is not permitted", lowered.args[1])
+end
 
-@test Expr(:error, "goto from an else/finally block is not permitted around $(@__FILE__):$(3 + @__LINE__)") ==
-    Meta.lower(@__MODULE__, quote
+let lowered = Meta.lower(@__MODULE__, quote
         function goto_test6_else()
             try
             catch
             else
-                @goto a
+                $(Expr(:symbolicgoto, :a))
             finally
             end
-            @label a
+            $(Expr(:symboliclabel, :a))
             return
         end
     end)
+    @test lowered.head === :error
+    @test occursin("goto from an else/finally block is not permitted", lowered.args[1])
+end
+
+# Test that oldsymbolicgoto (old syntax version / @goto) from try/catch/else with finally is allowed
+let lowered = Meta.lower(@__MODULE__, quote
+        function goto_test6_old_try()
+            try
+                $(Expr(:oldsymbolicgoto, :a))
+            finally
+            end
+            $(Expr(:symboliclabel, :a))
+            return
+        end
+    end)
+    @test lowered.head !== :error
+end
+
+let lowered = Meta.lower(@__MODULE__, quote
+        function goto_test6_old_catch()
+            try
+                error()
+            catch
+                $(Expr(:oldsymbolicgoto, :a))
+            finally
+            end
+            $(Expr(:symboliclabel, :a))
+            return
+        end
+    end)
+    @test lowered.head !== :error
+end
+
+let lowered = Meta.lower(@__MODULE__, quote
+        function goto_test6_old_else()
+            try
+            catch
+            else
+                $(Expr(:oldsymbolicgoto, :a))
+            finally
+            end
+            $(Expr(:symboliclabel, :a))
+            return
+        end
+    end)
+    @test lowered.head !== :error
+end
 
 
 function goto_test6()

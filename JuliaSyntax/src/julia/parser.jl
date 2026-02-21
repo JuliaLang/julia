@@ -1497,8 +1497,9 @@ function maybe_parsed_macro_name(ps, processing_macro_name, last_identifier_orig
 end
 
 function maybe_parsed_special_macro(ps, last_identifier_orig_kind)
-    is_syntax_version_macro = last_identifier_orig_kind == K"VERSION"
-    if is_syntax_version_macro && ps.stream.version >= (1, 14)
+    is_special = last_identifier_orig_kind == K"VERSION" ||
+                 last_identifier_orig_kind == K"goto"
+    if is_special && ps.stream.version >= (1, 14)
         # Encode the current parser version into an invisible token
         bump_invisible(ps, K"VERSION",
             set_numeric_flags(ps.stream.version[2] * 10))

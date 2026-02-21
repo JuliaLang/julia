@@ -992,10 +992,14 @@ end
 `@label` and `@goto` cannot create jumps to different top-level statements. Attempts cause an
 error. To still use `@goto`, enclose the `@label` and `@goto` in a block.
 
-Also, `@goto` is not allowed for jumping out of a `try`, `catch`, or `else` block when a `finally`
-block is present.
+!!! compat "Julia syntax version 1.14"
+    As of Julia syntax version 1.14, `@goto` is not allowed for jumping out of a `try`, `catch`,
+    or `else` block when a `finally` block is present.
 """
 macro goto(name::Symbol)
+    return esc(Expr(:oldsymbolicgoto, name))
+end
+function var"@goto"(__source__::Core.MacroSource, __module__::Module, name::Symbol)
     return esc(Expr(:symbolicgoto, name))
 end
 

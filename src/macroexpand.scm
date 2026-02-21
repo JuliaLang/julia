@@ -428,7 +428,7 @@
            ((using import export meta line inbounds boundscheck loopinfo inline noinline purity) (map unescape e))
            ((macrocall) e) ; invalid syntax anyways, so just act like it's quoted.
            ((symboliclabel) e)
-           ((symbolicgoto) e)
+           ((symbolicgoto oldsymbolicgoto) e)
            ((symbolicblock)
             ;; recursively expand the body of a symbolic block
             `(symbolicblock ,(cadr e) ,(resolve-expansion-vars- (caddr e) env m lno parent-scope inarg)))
@@ -671,7 +671,7 @@
       `(hygienic-scope ,(rename-symbolic-labels- (cadr e) (table) parent-scope) ,m ,@lno)))
    ((and (eq? (car e) 'escape) (not (null? parent-scope)))
     `(escape ,(apply rename-symbolic-labels- (cadr e) parent-scope)))
-   ((or (eq? (car e) 'symbolicgoto) (eq? (car e) 'symboliclabel))
+   ((or (eq? (car e) 'symbolicgoto) (eq? (car e) 'oldsymbolicgoto) (eq? (car e) 'symboliclabel))
     (let* ((s (cadr e))
            (havelabel (if (or (null? parent-scope) (not (symbol? s))) s (get relabels s #f)))
            (newlabel (if havelabel havelabel (named-gensy s))))

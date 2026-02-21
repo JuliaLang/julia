@@ -437,6 +437,7 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
             [K"inert" ex]
         ]
         [K"symbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
+        [K"oldsymbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
         [K"symboliclabel" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
         [K"unknown_head" cs...] -> let head = st.name_val
             if head === "latestworld-if-toplevel"
