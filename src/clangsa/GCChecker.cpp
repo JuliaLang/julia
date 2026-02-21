@@ -1,5 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "clang/AST/Type.h"
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/StaticAnalyzer/Checkers/SValExplainer.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
@@ -14,6 +15,7 @@
 #include "clang/Tooling/Tooling.h"
 #include "clang/StaticAnalyzer/Frontend/CheckerRegistry.h"
 
+#include "llvm/Support/Debug.h"
 #include <iostream>
 #include <memory>
 
@@ -29,7 +31,7 @@ namespace {
 using namespace clang;
 using namespace ento;
 
-#define PDP std::shared_ptr<PathDiagnosticPiece>
+typedef std::shared_ptr<PathDiagnosticPiece> PDP;
 #define MakePDP make_unique<PathDiagnosticEventPiece>
 
 static const Stmt *getStmtForDiagnostics(const ExplodedNode *N)
@@ -37,6 +39,16 @@ static const Stmt *getStmtForDiagnostics(const ExplodedNode *N)
     return N->getStmtForDiagnostics();
 }
 
+static unsigned getStackFrameHeight(const LocationContext *stack)
+{
+    // TODO: or use getID ?
+    unsigned depth = 0;
+    while (stack) {
+        depth++;
+        stack = stack->getParent();
+    }
+    return depth;
+}
 
 class GCChecker
     : public Checker<
@@ -124,8 +136,8 @@ public:
       return ValueState(Rooted, Root, Depth);
     }
     static ValueState getForArgument(const FunctionDecl *FD,
-                                     const ParmVarDecl *PVD) {
-      bool isFunctionSafepoint = !isFDAnnotatedNotSafepoint(FD);
+                                     const ParmVarDecl *PVD,
+                                     bool isFunctionSafepoint) {
       bool maybeUnrooted = declHasAnnotation(PVD, "julia_maybe_unrooted");
       if (!isFunctionSafepoint || maybeUnrooted) {
         ValueState VS = getAllocated();
@@ -167,6 +179,8 @@ public:
 private:
   template <typename callback>
   static bool isJuliaType(callback f, QualType QT) {
+    if (QT->isReferenceType())
+      return isJuliaType(f, QT->getPointeeType().getUnqualifiedType());
     if (QT->isPointerType() || QT->isArrayType())
       return isJuliaType(
           f, clang::QualType(QT->getPointeeOrArrayElementType(), 0));
@@ -181,15 +195,6 @@ private:
     }
     return f(TD->getName());
   }
-  static bool isValueCollection(QualType QT) {
-    if (QT->isPointerType() || QT->isArrayType())
-      return isValueCollection(
-          clang::QualType(QT->getPointeeOrArrayElementType(), 0));
-    const TagDecl *TD = QT->getUnqualifiedDesugaredType()->getAsTagDecl();
-    if (!TD)
-      return false;
-    return declHasAnnotation(TD, "julia_rooted_value_collection");
-  }
   template <typename callback>
   static SymbolRef walkToRoot(callback f, const ProgramStateRef &State,
                               const MemRegion *Region);
@@ -198,9 +203,10 @@ private:
   static bool isGCTracked(const Expr *E);
   bool isGloballyRootedType(QualType Type) const;
   static void dumpState(const ProgramStateRef &State);
-  static bool declHasAnnotation(const clang::Decl *D, const char *which);
-  static bool isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD);
-  bool isSafepoint(const CallEvent &Call) const;
+  static const AnnotateAttr *declHasAnnotation(const clang::Decl *D, const char *which);
+  static bool isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD, const SourceManager &SM);
+  static const SourceManager &getSM(CheckerContext &C) { return C.getSourceManager(); }
+  bool isSafepoint(const CallEvent &Call, CheckerContext &C) const;
   bool processPotentialSafepoint(const CallEvent &Call, CheckerContext &C,
                                  ProgramStateRef &State) const;
   bool processAllocationOfResult(const CallEvent &Call, CheckerContext &C,
@@ -214,7 +220,9 @@ private:
                                                 const MemRegion *R,
                                                 bool Debug = false);
   bool gcEnabledHere(CheckerContext &C) const;
+  bool gcEnabledHere(ProgramStateRef State) const;
   bool safepointEnabledHere(CheckerContext &C) const;
+  bool safepointEnabledHere(ProgramStateRef State) const;
   bool propagateArgumentRootedness(CheckerContext &C,
                                    ProgramStateRef &State) const;
   SymbolRef getSymbolForResult(const Expr *Result, const ValueState *OldValS,
@@ -238,6 +246,18 @@ public:
   class GCBugVisitor : public BugReporterVisitor {
   public:
     GCBugVisitor() {}
+
+    void Profile(llvm::FoldingSetNodeID &ID) const override {
+      static int X = 0;
+      ID.AddPointer(&X);
+    }
+
+    PDP VisitNode(const ExplodedNode *N, BugReporterContext &BRC, PathSensitiveBugReport &BR) override;
+  };
+
+  class SafepointBugVisitor : public BugReporterVisitor {
+  public:
+    SafepointBugVisitor() {}
 
     void Profile(llvm::FoldingSetNodeID &ID) const override {
       static int X = 0;
@@ -360,6 +380,38 @@ PDP GCChecker::GCBugVisitor::VisitNode(const ExplodedNode *N,
   return nullptr;
 }
 
+PDP GCChecker::SafepointBugVisitor::VisitNode(const ExplodedNode *N,
+                                       BugReporterContext &BRC, PathSensitiveBugReport &BR) {
+  const ExplodedNode *PrevN = N->getFirstPred();
+  unsigned NewSafepointDisabled = N->getState()->get<SafepointDisabledAt>();
+  unsigned OldSafepointDisabled = PrevN->getState()->get<SafepointDisabledAt>();
+  if (NewSafepointDisabled != OldSafepointDisabled) {
+    const Decl *D = &N->getCodeDecl();
+    const AnnotateAttr *Ann = declHasAnnotation(D, "julia_not_safepoint");
+    PathDiagnosticLocation Pos;
+    if (OldSafepointDisabled == (unsigned)-1) {
+      if (Ann) {
+        Pos = PathDiagnosticLocation{Ann->getLoc(), BRC.getSourceManager()};
+        return MakePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
+      } else {
+        PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
+            N->getLocationContext(), BRC.getSourceManager());
+        if (Pos.isValid())
+          return MakePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
+        //N->getLocation().dump();
+      }
+    } else if (NewSafepointDisabled == (unsigned)-1) {
+      PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
+          N->getLocationContext(), BRC.getSourceManager());
+      if (Pos.isValid())
+        return MakePDP(Pos, "Safepoints re-enabled here");
+      //N->getLocation().dump();
+    }
+    // n.b. there may be no position here to report if they were disabled by julia_notsafepoint_enter/leave
+  }
+  return nullptr;
+}
+
 PDP GCChecker::GCValueBugVisitor::ExplainNoPropagationFromExpr(
     const clang::Expr *FromWhere, const ExplodedNode *N,
     PathDiagnosticLocation Pos, BugReporterContext &BRC, PathSensitiveBugReport &BR) {
@@ -463,7 +515,7 @@ PDP GCChecker::GCValueBugVisitor::VisitNode(const ExplodedNode *N,
     } else {
       if (NewValueState->FD) {
         bool isFunctionSafepoint =
-            !isFDAnnotatedNotSafepoint(NewValueState->FD);
+            !isFDAnnotatedNotSafepoint(NewValueState->FD, BRC.getSourceManager());
         bool maybeUnrooted =
             declHasAnnotation(NewValueState->PVD, "julia_maybe_unrooted");
         assert(isFunctionSafepoint || maybeUnrooted);
@@ -544,12 +596,20 @@ void GCChecker::report_value_error(CheckerContext &C, SymbolRef Sym,
 }
 
 bool GCChecker::gcEnabledHere(CheckerContext &C) const {
-  unsigned disabledAt = C.getState()->get<GCDisabledAt>();
+  return gcEnabledHere(C.getState());
+}
+
+bool GCChecker::gcEnabledHere(ProgramStateRef State) const {
+  unsigned disabledAt = State->get<GCDisabledAt>();
   return disabledAt == (unsigned)-1;
 }
 
 bool GCChecker::safepointEnabledHere(CheckerContext &C) const {
-  unsigned disabledAt = C.getState()->get<SafepointDisabledAt>();
+    return safepointEnabledHere(C.getState());
+}
+
+bool GCChecker::safepointEnabledHere(ProgramStateRef State) const {
+  unsigned disabledAt = State->get<SafepointDisabledAt>();
   return disabledAt == (unsigned)-1;
 }
 
@@ -617,8 +677,8 @@ void GCChecker::checkBeginFunction(CheckerContext &C) const {
   // otherwise
   const auto *LCtx = C.getLocationContext();
   const auto *FD = dyn_cast<FunctionDecl>(LCtx->getDecl());
-  if (!FD)
-    return;
+  assert(FD);
+  unsigned CurrentHeight = getStackFrameHeight(C.getStackFrame());
   ProgramStateRef State = C.getState();
   bool Change = false;
   if (C.inTopFrame()) {
@@ -626,15 +686,14 @@ void GCChecker::checkBeginFunction(CheckerContext &C) const {
     State = State->set<SafepointDisabledAt>((unsigned)-1);
     Change = true;
   }
-  if (State->get<GCDisabledAt>() == (unsigned)-1) {
-    if (declHasAnnotation(FD, "julia_gc_disabled")) {
-      State = State->set<GCDisabledAt>(C.getStackFrame()->getIndex());
-      Change = true;
-    }
+  if (gcEnabledHere(State) && declHasAnnotation(FD, "julia_gc_disabled")) {
+    State = State->set<GCDisabledAt>(CurrentHeight);
+    Change = true;
   }
-  if (State->get<SafepointDisabledAt>() == (unsigned)-1 &&
-      isFDAnnotatedNotSafepoint(FD)) {
-    State = State->set<SafepointDisabledAt>(C.getStackFrame()->getIndex());
+  bool isFunctionSafepoint = !isFDAnnotatedNotSafepoint(FD, getSM(C));
+  if (safepointEnabledHere(State) &&
+      (!isFunctionSafepoint || declHasAnnotation(FD, "julia_notsafepoint_leave"))) {
+    State = State->set<SafepointDisabledAt>(CurrentHeight);
     Change = true;
   }
   if (!C.inTopFrame()) {
@@ -654,7 +713,7 @@ void GCChecker::checkBeginFunction(CheckerContext &C) const {
         continue;
       assert(AssignedSym);
       State = State->set<GCValueMap>(AssignedSym,
-                                     ValueState::getForArgument(FD, P));
+                                     ValueState::getForArgument(FD, P, isFunctionSafepoint));
       Change = true;
     }
   }
@@ -666,8 +725,10 @@ void GCChecker::checkBeginFunction(CheckerContext &C) const {
 void GCChecker::checkEndFunction(const clang::ReturnStmt *RS,
                                  CheckerContext &C) const {
   ProgramStateRef State = C.getState();
+  const auto *LCtx = C.getLocationContext();
+  const auto *FD = dyn_cast<FunctionDecl>(LCtx->getDecl());
 
-  if (RS && gcEnabledHere(C) && RS->getRetValue() && isGCTracked(RS->getRetValue())) {
+  if (RS && gcEnabledHere(State) && RS->getRetValue() && isGCTracked(RS->getRetValue())) {
     auto ResultVal = C.getSVal(RS->getRetValue());
     SymbolRef Sym = ResultVal.getAsSymbol(true);
     const ValueState *ValS = Sym ? State->get<GCValueMap>(Sym) : nullptr;
@@ -676,12 +737,16 @@ void GCChecker::checkEndFunction(const clang::ReturnStmt *RS,
     }
   }
 
+  unsigned CurrentHeight = getStackFrameHeight(C.getStackFrame());
   bool Changed = false;
-  if (State->get<GCDisabledAt>() == C.getStackFrame()->getIndex()) {
+  if (State->get<GCDisabledAt>() == CurrentHeight) {
     State = State->set<GCDisabledAt>((unsigned)-1);
     Changed = true;
   }
-  if (State->get<SafepointDisabledAt>() == C.getStackFrame()->getIndex()) {
+  if (State->get<SafepointDisabledAt>() == CurrentHeight) {
+    if (!isFDAnnotatedNotSafepoint(FD, getSM(C)) && !(FD && declHasAnnotation(FD, "julia_notsafepoint_enter"))) {
+      report_error(C, "Safepoints disabled at end of function");
+    }
     State = State->set<SafepointDisabledAt>((unsigned)-1);
     Changed = true;
   }
@@ -689,71 +754,114 @@ void GCChecker::checkEndFunction(const clang::ReturnStmt *RS,
     C.addTransition(State);
   if (!C.inTopFrame())
     return;
-  if (C.getState()->get<GCDepth>() > 0)
+  unsigned CurrentDepth = C.getState()->get<GCDepth>();
+  if (CurrentDepth != 0) {
     report_error(C, "Non-popped GC frame present at end of function");
+  }
 }
 
-bool GCChecker::declHasAnnotation(const clang::Decl *D, const char *which) {
+const AnnotateAttr *GCChecker::declHasAnnotation(const clang::Decl *D, const char *which) {
   for (const auto *Ann : D->specific_attrs<AnnotateAttr>()) {
     if (Ann->getAnnotation() == which)
-      return true;
+      return Ann;
   }
+  return nullptr;
+}
+
+bool GCChecker::isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD, const SourceManager &SM) {
+  if (declHasAnnotation(FD, "julia_not_safepoint"))
+      return true;
+  SourceLocation Loc = FD->getLocation();
+  StringRef Name = SM.getFilename(Loc);
+  Name = llvm::sys::path::filename(Name);
+  if (Name.starts_with("llvm-"))
+      return true;
   return false;
 }
 
-bool GCChecker::isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD) {
-  return declHasAnnotation(FD, "julia_not_safepoint");
+static bool isMutexLock(StringRef name) {
+    return name == "uv_mutex_lock" ||
+           name == "uv_mutex_trylock" ||
+           name == "pthread_mutex_lock" ||
+           name == "pthread_mutex_trylock" ||
+           name == "__gthread_mutex_lock" ||
+           name == "__gthread_mutex_trylock" ||
+           name == "__gthread_recursive_mutex_lock" ||
+           name == "__gthread_recursive_mutex_trylock" ||
+           name == "pthread_spin_lock" ||
+           name == "pthread_spin_trylock" ||
+           name == "uv_rwlock_rdlock" ||
+           name == "uv_rwlock_tryrdlock" ||
+           name == "uv_rwlock_wrlock" ||
+           name == "uv_rwlock_trywrlock" ||
+           false;
 }
 
-#if LLVM_VERSION_MAJOR >= 13
-#define endswith_lower endswith_insensitive
-#endif
+static bool isMutexUnlock(StringRef name) {
+    return name == "uv_mutex_unlock" ||
+           name == "pthread_mutex_unlock" ||
+           name == "__gthread_mutex_unlock" ||
+           name == "__gthread_recursive_mutex_unlock" ||
+           name == "pthread_spin_unlock" ||
+           name == "uv_rwlock_rdunlock" ||
+           name == "uv_rwlock_wrunlock" ||
+           false;
+}
+
 
 bool GCChecker::isGCTrackedType(QualType QT) {
-  return isValueCollection(QT) ||
-         isJuliaType(
+  return isJuliaType(
              [](StringRef Name) {
-               if (Name.endswith_lower("jl_value_t") ||
-                   Name.endswith_lower("jl_svec_t") ||
-                   Name.endswith_lower("jl_sym_t") ||
-                   Name.endswith_lower("jl_expr_t") ||
-                   Name.endswith_lower("jl_code_info_t") ||
-                   Name.endswith_lower("jl_array_t") ||
-                   Name.endswith_lower("jl_method_t") ||
-                   Name.endswith_lower("jl_method_instance_t") ||
-                   Name.endswith_lower("jl_tupletype_t") ||
-                   Name.endswith_lower("jl_datatype_t") ||
-                   Name.endswith_lower("jl_typemap_entry_t") ||
-                   Name.endswith_lower("jl_typemap_level_t") ||
-                   Name.endswith_lower("jl_typename_t") ||
-                   Name.endswith_lower("jl_module_t") ||
-                   Name.endswith_lower("jl_tupletype_t") ||
-                   Name.endswith_lower("jl_gc_tracked_buffer_t") ||
-                   Name.endswith_lower("jl_binding_t") ||
-                   Name.endswith_lower("jl_ordereddict_t") ||
-                   Name.endswith_lower("jl_tvar_t") ||
-                   Name.endswith_lower("jl_typemap_t") ||
-                   Name.endswith_lower("jl_unionall_t") ||
-                   Name.endswith_lower("jl_methtable_t") ||
-                   Name.endswith_lower("jl_cgval_t") ||
-                   Name.endswith_lower("jl_codectx_t") ||
-                   Name.endswith_lower("jl_ast_context_t") ||
-                   Name.endswith_lower("jl_code_instance_t") ||
-                   Name.endswith_lower("jl_excstack_t") ||
-                   Name.endswith_lower("jl_task_t") ||
-                   Name.endswith_lower("jl_uniontype_t") ||
-                   Name.endswith_lower("jl_method_match_t") ||
-                   Name.endswith_lower("jl_vararg_t") ||
-                   Name.endswith_lower("jl_opaque_closure_t") ||
-                   Name.endswith_lower("jl_globalref_t") ||
-                   // Probably not technically true for these, but let's allow it
-                   Name.endswith_lower("typemap_intersection_env") ||
-                   Name.endswith_lower("interpreter_state") ||
-                   Name.endswith_lower("jl_typeenv_t") ||
-                   Name.endswith_lower("jl_stenv_t") ||
-                   Name.endswith_lower("jl_varbinding_t") ||
-                   Name.endswith_lower("set_world") ||
-                   Name.endswith_lower("jl_codectx_t")) {
+               if (Name.ends_with_insensitive("jl_value_t") ||
+                   Name.ends_with_insensitive("jl_svec_t") ||
+                   Name.ends_with_insensitive("jl_sym_t") ||
+                   Name.ends_with_insensitive("jl_expr_t") ||
+                   Name.ends_with_insensitive("jl_code_info_t") ||
+                   Name.ends_with_insensitive("jl_array_t") ||
+                   Name.ends_with_insensitive("jl_genericmemory_t") ||
+                   //Name.ends_with_insensitive("jl_genericmemoryref_t") ||
+                   Name.ends_with_insensitive("jl_method_t") ||
+                   Name.ends_with_insensitive("jl_method_instance_t") ||
+                   Name.ends_with_insensitive("jl_debuginfo_t") ||
+                   Name.ends_with_insensitive("jl_tupletype_t") ||
+                   Name.ends_with_insensitive("jl_datatype_t") ||
+                   Name.ends_with_insensitive("jl_typemap_entry_t") ||
+                   Name.ends_with_insensitive("jl_typemap_level_t") ||
+                   Name.ends_with_insensitive("jl_typename_t") ||
+                   Name.ends_with_insensitive("jl_module_t") ||
+                   Name.ends_with_insensitive("jl_tupletype_t") ||
+                   Name.ends_with_insensitive("jl_gc_tracked_buffer_t") ||
+                   Name.ends_with_insensitive("jl_binding_t") ||
+                   Name.ends_with_insensitive("jl_binding_partition_t") ||
+                   Name.ends_with_insensitive("jl_ordereddict_t") ||
+                   Name.ends_with_insensitive("jl_tvar_t") ||
+                   Name.ends_with_insensitive("jl_typemap_t") ||
+                   Name.ends_with_insensitive("jl_unionall_t") ||
+                   Name.ends_with_insensitive("jl_methtable_t") ||
+                   Name.ends_with_insensitive("jl_methcache_t") ||
+                   Name.ends_with_insensitive("jl_cgval_t") ||
+                   Name.ends_with_insensitive("jl_codectx_t") ||
+                   Name.ends_with_insensitive("jl_ast_context_t") ||
+                   Name.ends_with_insensitive("jl_code_instance_t") ||
+                   Name.ends_with_insensitive("jl_excstack_t") ||
+                   Name.ends_with_insensitive("jl_task_t") ||
+                   Name.ends_with_insensitive("jl_uniontype_t") ||
+                   Name.ends_with_insensitive("jl_method_match_t") ||
+                   Name.ends_with_insensitive("jl_vararg_t") ||
+                   Name.ends_with_insensitive("jl_opaque_closure_t") ||
+                   Name.ends_with_insensitive("jl_globalref_t") ||
+                   Name.ends_with_insensitive("jl_abi_override_t") ||
+                   // Probably not technically true for these, but let's allow it as a root
+                   Name.ends_with_insensitive("jl_ircode_state") ||
+                   Name.ends_with_insensitive("typemap_intersection_env") ||
+                   Name.ends_with_insensitive("interpreter_state") ||
+                   Name.ends_with_insensitive("jl_typeenv_t") ||
+                   Name.ends_with_insensitive("jl_stenv_t") ||
+                   Name.ends_with_insensitive("jl_varbinding_t") ||
+                   Name.ends_with_insensitive("set_world") ||
+                   Name.ends_with_insensitive("jl_codectx_t") ||
+                   Name.ends_with_insensitive("jl_codegen_params_t") ||
+                   Name.ends_with_insensitive("egal_set")) {
                  return true;
                }
                return false;
@@ -776,17 +884,23 @@ bool GCChecker::isGCTracked(const Expr *E) {
 
 bool GCChecker::isGloballyRootedType(QualType QT) const {
   return isJuliaType(
-      [](StringRef Name) { return Name.endswith("jl_sym_t"); }, QT);
+      [](StringRef Name) { return Name.ends_with("jl_sym_t"); }, QT);
 }
 
-bool GCChecker::isSafepoint(const CallEvent &Call) const {
+bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
   bool isCalleeSafepoint = true;
   if (Call.isInSystemHeader()) {
     // defined by -isystem per
     // https://clang.llvm.org/docs/UsersManual.html#controlling-diagnostics-in-system-headers
     isCalleeSafepoint = false;
   } else {
-    auto *Decl = Call.getDecl();
+    const clang::Decl *Decl = Call.getDecl(); // we might not have a simple call, or we might have an SVal
+    const clang::Expr *Callee = nullptr;
+    if (auto CE = dyn_cast_or_null<CallExpr>(Call.getOriginExpr())) {
+      Callee = CE->getCallee();
+      if (Decl == nullptr)
+          Decl = CE->getCalleeDecl(); // ignores dyn_cast<FunctionDecl>, so it could also be a MemberDecl, etc.
+    }
     const DeclContext *DC = Decl ? Decl->getDeclContext() : nullptr;
     while (DC) {
       // Anything in llvm or std is not a safepoint
@@ -797,30 +911,32 @@ bool GCChecker::isSafepoint(const CallEvent &Call) const {
     }
     const FunctionDecl *FD = Decl ? Decl->getAsFunction() : nullptr;
     if (!Decl || !FD) {
-      const clang::Expr *Callee =
-          dyn_cast<CallExpr>(Call.getOriginExpr())->getCallee();
-      if (const TypedefType *TDT = dyn_cast<TypedefType>(Callee->getType())) {
-        isCalleeSafepoint =
-            !declHasAnnotation(TDT->getDecl(), "julia_not_safepoint");
+      if (Callee == nullptr) {
+        isCalleeSafepoint = true;
+      } else if (const ElaboratedType *ET = dyn_cast<ElaboratedType>(Callee->getType())){
+        if (const TypedefType *TDT = dyn_cast<TypedefType>(ET->getNamedType())) {
+          isCalleeSafepoint =
+              !declHasAnnotation(TDT->getDecl(), "julia_not_safepoint");
+        }
       } else if (const CXXPseudoDestructorExpr *PDE =
                      dyn_cast<CXXPseudoDestructorExpr>(Callee)) {
         // A pseudo-destructor is an expression that looks like a member
         // access to a destructor of a scalar type. A pseudo-destructor
         // expression has no run-time semantics beyond evaluating the base
-        // expression (which would have it's own CallEvent, if applicable).
+        // expression (which would have its own CallEvent, if applicable).
         isCalleeSafepoint = false;
       }
     } else if (FD) {
       if (FD->getBuiltinID() != 0 || FD->isTrivial())
         isCalleeSafepoint = false;
       else if (FD->getDeclName().isIdentifier() &&
-               (FD->getName().startswith("uv_") ||
-                FD->getName().startswith("unw_") ||
-                FD->getName().startswith("_U")) &&
+               (FD->getName().starts_with("uv_") ||
+                FD->getName().starts_with("unw_") ||
+                FD->getName().starts_with("_U")) &&
                FD->getName() != "uv_run")
         isCalleeSafepoint = false;
       else
-        isCalleeSafepoint = !isFDAnnotatedNotSafepoint(FD);
+        isCalleeSafepoint = !isFDAnnotatedNotSafepoint(FD, getSM(C));
     }
   }
   return isCalleeSafepoint;
@@ -829,7 +945,7 @@ bool GCChecker::isSafepoint(const CallEvent &Call) const {
 bool GCChecker::processPotentialSafepoint(const CallEvent &Call,
                                           CheckerContext &C,
                                           ProgramStateRef &State) const {
-  if (!isSafepoint(Call))
+  if (!isSafepoint(Call, C))
     return false;
   bool DidChange = false;
   if (!gcEnabledHere(C))
@@ -846,7 +962,7 @@ bool GCChecker::processPotentialSafepoint(const CallEvent &Call,
             isGCTrackedType(ParmType->getPointeeType())) {
           // This is probably an out parameter. Find the value it refers to now.
           SVal Loaded =
-              State->getSVal(Call.getArgSVal(i).getAs<Loc>().getValue());
+              State->getSVal(*(Call.getArgSVal(i).getAs<Loc>()));
           SpeciallyRootedSymbol = Loaded.getAsSymbol();
           continue;
         }
@@ -953,13 +1069,13 @@ bool GCChecker::processAllocationOfResult(const CallEvent &Call,
         // global roots.
         StringRef FDName =
             FD->getDeclName().isIdentifier() ? FD->getName() : "";
-        if (FDName.startswith("jl_box_") || FDName.startswith("ijl_box_")) {
+        if (FDName.starts_with("jl_box_") || FDName.starts_with("ijl_box_")) {
           SVal Arg = Call.getArgSVal(0);
           if (auto CI = Arg.getAs<nonloc::ConcreteInt>()) {
             const llvm::APSInt &Value = CI->getValue();
             bool GloballyRooted = false;
             const int64_t NBOX_C = 1024;
-            if (FDName.startswith("jl_box_u") || FDName.startswith("ijl_box_u")) {
+            if (FDName.starts_with("jl_box_u") || FDName.starts_with("ijl_box_u")) {
               if (Value < NBOX_C) {
                 GloballyRooted = true;
               }
@@ -1069,10 +1185,10 @@ void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
     // TODO: We may want to refine this. This is to track pointers through the
     // array list in jl_module_t.
     bool ParentIsModule = isJuliaType(
-        [](StringRef Name) { return Name.endswith("jl_module_t"); },
+        [](StringRef Name) { return Name.ends_with("jl_module_t"); },
         Parent->getType());
     bool ResultIsArrayList = isJuliaType(
-        [](StringRef Name) { return Name.endswith("arraylist_t"); },
+        [](StringRef Name) { return Name.ends_with("arraylist_t"); },
         Result->getType());
     if (!(ParentIsModule && ResultIsArrayList) && isGCTracked(Parent)) {
       ResultTracked = false;
@@ -1113,8 +1229,9 @@ void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
           dyn_cast<FunctionDecl>(C.getLocationContext()->getDecl());
       if (FD) {
         inheritedState = true;
+        bool isFunctionSafepoint = !isFDAnnotatedNotSafepoint(FD, getSM(C));
         Updated =
-            ValueState::getForArgument(FD, cast<ParmVarDecl>(VR->getDecl()));
+            ValueState::getForArgument(FD, cast<ParmVarDecl>(VR->getDecl()), isFunctionSafepoint);
       }
     } else {
       VR = Helpers::walk_back_to_global_VR(Region);
@@ -1222,10 +1339,21 @@ void GCChecker::checkPreCall(const CallEvent &Call, CheckerContext &C) const {
     return;
   unsigned NumArgs = Call.getNumArgs();
   ProgramStateRef State = C.getState();
-  bool isCalleeSafepoint = isSafepoint(Call);
+  bool isCalleeSafepoint = isSafepoint(Call, C);
   auto *Decl = Call.getDecl();
   const FunctionDecl *FD = Decl ? Decl->getAsFunction() : nullptr;
-  if (!safepointEnabledHere(C) && isCalleeSafepoint) {
+  StringRef FDName =
+      FD && FD->getDeclName().isIdentifier() ? FD->getName() : "";
+  if (isMutexUnlock(FDName) || (FD && declHasAnnotation(FD, "julia_notsafepoint_leave"))) {
+    const auto *LCtx = C.getLocationContext();
+    const auto *FD = dyn_cast<FunctionDecl>(LCtx->getDecl());
+    if (State->get<SafepointDisabledAt>() == getStackFrameHeight(C.getStackFrame()) &&
+        !isFDAnnotatedNotSafepoint(FD, getSM(C))) {
+      State = State->set<SafepointDisabledAt>((unsigned)-1);
+      C.addTransition(State);
+    }
+  }
+  if (!safepointEnabledHere(State) && isCalleeSafepoint) {
     // Suppress this warning if the function is noreturn.
     // We could separate out "not safepoint, except for noreturn functions",
     // but that seems like a lot of effort with little benefit.
@@ -1236,6 +1364,7 @@ void GCChecker::checkPreCall(const CallEvent &Call, CheckerContext &C) const {
               Report->addNote(
                   "Tried to call method defined here",
                   PathDiagnosticLocation::create(FD, C.getSourceManager()));
+            Report->addVisitor(make_unique<SafepointBugVisitor>());
           },
           C, ("Calling potential safepoint as " +
               Call.getKindAsString() + " from function annotated JL_NOTSAFEPOINT").str());
@@ -1296,10 +1425,8 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
   // These checks should have no effect on the surrounding environment
   // (globals should not be invalidated, etc), hence the use of evalCall.
   const CallExpr *CE = dyn_cast<CallExpr>(Call.getOriginExpr());
-  if (!CE)
-    return false;
   unsigned CurrentDepth = C.getState()->get<GCDepth>();
-  auto name = C.getCalleeName(CE);
+  auto name = CE ? C.getCalleeName(CE) : "";
   if (name == "JL_GC_POP") {
     if (CurrentDepth == 0) {
       report_error(C, "JL_GC_POP without corresponding push");
@@ -1332,7 +1459,8 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
   } else if (name == "JL_GC_PUSH1" || name == "JL_GC_PUSH2" ||
              name == "JL_GC_PUSH3" || name == "JL_GC_PUSH4" ||
              name == "JL_GC_PUSH5" || name == "JL_GC_PUSH6" ||
-             name == "JL_GC_PUSH7") {
+             name == "JL_GC_PUSH7" || name == "JL_GC_PUSH8" ||
+             name == "JL_GC_PUSH9") {
     ProgramStateRef State = C.getState();
     // Transform slots to roots, transform values to rooted
     unsigned NumArgs = CE->getNumArgs();
@@ -1412,7 +1540,7 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
       }
     }
     if (FD) {
-      Loc ItemsLoc = State->getLValue(FD, ArrayList).getAs<Loc>().getValue();
+      Loc ItemsLoc = *(State->getLValue(FD, ArrayList).getAs<Loc>());
       SVal Items = State->getSVal(ItemsLoc);
       if (Items.isUnknown()) {
         Items = C.getSValBuilder().conjureSymbolVal(
@@ -1448,7 +1576,7 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
     } else {
       cast<SymbolConjured>(Arg.getAsSymbol())->getStmt()->dump();
     }
-    bool EnabledNow = State->get<GCDisabledAt>() == (unsigned)-1;
+    bool EnabledNow = gcEnabledHere(State);
     if (!EnabledAfter) {
       State = State->set<GCDisabledAt>((unsigned)-2);
     } else {
@@ -1460,22 +1588,16 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
     C.addTransition(State->BindExpr(CE, C.getLocationContext(), Result));
     return true;
   }
-  else if (name == "uv_mutex_lock") {
-    ProgramStateRef State = C.getState();
-    if (State->get<SafepointDisabledAt>() == (unsigned)-1) {
-      C.addTransition(State->set<SafepointDisabledAt>(C.getStackFrame()->getIndex()));
-      return true;
-    }
-  }
-  else if (name == "uv_mutex_unlock") {
-    ProgramStateRef State = C.getState();
-    const auto *LCtx = C.getLocationContext();
-    const auto *FD = dyn_cast<FunctionDecl>(LCtx->getDecl());
-    if (State->get<SafepointDisabledAt>() == (unsigned)C.getStackFrame()->getIndex() &&
-        !isFDAnnotatedNotSafepoint(FD)) {
-      C.addTransition(State->set<SafepointDisabledAt>(-1));
-      return true;
-    }
+  {
+      auto *Decl = Call.getDecl();
+      const FunctionDecl *FD = Decl ? Decl->getAsFunction() : nullptr;
+      if (isMutexLock(name) || (FD && declHasAnnotation(FD, "julia_notsafepoint_enter"))) {
+        ProgramStateRef State = C.getState();
+        if (State->get<SafepointDisabledAt>() == (unsigned)-1) {
+          C.addTransition(State->set<SafepointDisabledAt>(getStackFrameHeight(C.getStackFrame())));
+          return true;
+        }
+      }
   }
   return false;
 }
@@ -1586,7 +1708,7 @@ void GCChecker::checkLocation(SVal SLoc, bool IsLoad, const Stmt *S,
   // better than this.
   if (IsLoad && (RS = State->get<GCRootMap>(SLoc.getAsRegion()))) {
     SymbolRef LoadedSym =
-        State->getSVal(SLoc.getAs<Loc>().getValue()).getAsSymbol();
+        State->getSVal(*SLoc.getAs<Loc>()).getAsSymbol();
     if (LoadedSym) {
       const ValueState *ValS = State->get<GCValueMap>(LoadedSym);
       if (!ValS || !ValS->isRooted() || ValS->RootDepth > RS->RootedAtDepth) {
@@ -1597,7 +1719,7 @@ void GCChecker::checkLocation(SVal SLoc, bool IsLoad, const Stmt *S,
       }
     }
   }
-  // If it's just the symbol by itself, let it be. We allow dead pointer to be
+  // If it's just the symbol by itself, let it be. We allow dead pointers to be
   // passed around, so long as they're not accessed. However, we do want to
   // start tracking any globals that may have been accessed.
   if (rootRegionIfGlobal(SLoc.getAsRegion(), State, C)) {

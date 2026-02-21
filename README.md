@@ -20,13 +20,15 @@
         <td>Continuous integration</td>
         <td>
             <a href="https://buildkite.com/julialang/julia-master"><img src='https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master'/></a>
+            <a href="https://juliaci.github.io/julia-ci-timing/"><img src='https://img.shields.io/badge/CI-timing_tracking-blue'/></a>
         </td>
     </tr>
     <!-- Coverage -->
     <tr>
         <td>Code coverage</td>
         <td>
-            <a href="https://coveralls.io/r/JuliaLang/julia?branch=master"><img src='https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls'/></a> <a href="https://codecov.io/github/JuliaLang/julia?branch=master"><img src='https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov'/></a>
+            <a href='https://coveralls.io/github/JuliaLang/julia?branch=master'><img src='https://coveralls.io/repos/github/JuliaLang/julia/badge.svg?branch=master' alt='Coverage Status'/></a>
+            <a href="https://codecov.io/gh/JuliaLang/julia"><img src="https://codecov.io/gh/JuliaLang/julia/branch/master/graph/badge.svg?token=TckCRxc7HS"/></a>
         </td>
     </tr>
 </table>
@@ -34,48 +36,59 @@
 ## The Julia Language
 
 Julia is a high-level, high-performance dynamic language for technical
-computing.  The main homepage for Julia can be found at
-[julialang.org](https://julialang.org/).  This is the GitHub
+computing. The main homepage for Julia can be found at
+[julialang.org](https://julialang.org/). This is the GitHub
 repository of Julia source code, including instructions for compiling
 and installing Julia, below.
 
 ## Resources
 
 - **Homepage:** <https://julialang.org>
-- **Binaries:** <https://julialang.org/downloads/>
+- **Install:** <https://julialang.org/downloads/>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Documentation:** <https://docs.julialang.org>
 - **Packages:** <https://julialang.org/packages/>
 - **Discussion forum:** <https://discourse.julialang.org>
+- **Zulip:** <https://julialang.zulipchat.com/>
 - **Slack:** <https://julialang.slack.com> (get an invite from <https://julialang.org/slack/>)
 - **YouTube:** <https://www.youtube.com/user/JuliaLanguage>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
-New developers may find the notes in
-[CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md)
-helpful to start contributing to the Julia codebase.
 
-### External Resources
+## Contributing to Julia
 
-- [**StackOverflow**](https://stackoverflow.com/questions/tagged/julia-lang)
-- [**Twitter**](https://twitter.com/JuliaLanguage)
+We welcome contributions from developers of all experience levels, including bug fixes,
+documentation improvements, tests, and performance enhancements.
+
+New contributors are encouraged to start by reading [CONTRIBUTING.md](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md).
+
+> [!IMPORTANT]
+> If your pull request contains substantial contributions from a generative AI tool, please disclose so with details, and review all changes before opening.
+
+### Learning Julia
+
 - [**Learning resources**](https://julialang.org/learning/)
 
 ## Binary Installation
 
-If you would rather not compile the latest Julia from source,
-platform-specific tarballs with pre-compiled binaries are also
-[available for download](https://julialang.org/downloads/). The
-downloads page also provides details on the
-[different tiers of support](https://julialang.org/downloads/#supported_platforms)
-for OS and platform combinations.
+The recommended way of installing Julia is to use `juliaup` which will install
+the latest stable `julia` for you and help keep it up to date. It can also let
+you install and run different Julia versions simultaneously. Instructions for
+this can be found [here](https://julialang.org/downloads/). If you want to manually
+download specific Julia binaries, you can find those on the [Manual Downloads
+page](https://julialang.org/downloads/manual-downloads/). The downloads page also provides
+details on the [different tiers of
+support](https://julialang.org/downloads/support) for OS and
+platform combinations.
 
-If everything works correctly, you will see a Julia banner and an
-interactive prompt into which you can enter expressions for
-evaluation.  You can read about [getting
-started](https://docs.julialang.org/en/v1/manual/getting-started/) in the manual.
+If everything works correctly, you will get a `julia` program and when you run
+it in a terminal or command prompt, you will see a Julia banner and an
+interactive prompt into which you can enter expressions for evaluation. You can
+read about [getting
+started](https://docs.julialang.org/en/v1/manual/getting-started/) in the
+manual.
 
-**Note**: Although some system package managers provide Julia, such
+**Note**: Although some OS package managers provide Julia, such
 installations are neither maintained nor endorsed by the Julia
 project. They may be outdated, broken and/or unmaintained. We
 recommend you use the official Julia binaries instead.
@@ -88,11 +101,11 @@ Then, acquire the source code by cloning the git repository:
 
     git clone https://github.com/JuliaLang/julia.git
 
-and then use the command prompt to change into the resulting julia directory. By default you will be building the latest unstable version of
+and then use the command prompt to change into the resulting julia directory. By default, you will be building the latest unstable version of
 Julia. However, most users should use the [most recent stable version](https://github.com/JuliaLang/julia/releases)
 of Julia. You can get this version by running:
 
-    git checkout v1.8.2
+    git checkout v1.12.2
 
 To build the `julia` executable, run `make` from within the julia directory.
 
@@ -115,7 +128,7 @@ started](https://docs.julialang.org/en/v1/manual/getting-started/)
 in the manual.
 
 Detailed build instructions, should they be necessary,
-are included in the [build documentation](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/).
+are included in the [build documentation](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/build.md).
 
 ### Uninstalling Julia
 
@@ -130,14 +143,14 @@ The Julia source code is organized as follows:
 | Directory         | Contents                                                           |
 | -                 | -                                                                  |
 | `base/`           | source code for the Base module (part of Julia's standard library) |
-| `stdlib/`         | source code for other standard library packages                    |
 | `cli/`            | source for the command line interface/REPL                         |
 | `contrib/`        | miscellaneous scripts                                              |
 | `deps/`           | external dependencies                                              |
 | `doc/src/`        | source for the user manual                                         |
+| `etc/`            | contains `startup.jl`                                              |
 | `src/`            | source for Julia language core                                     |
+| `stdlib/`         | source code for other standard library packages                    |
 | `test/`           | test suites                                                        |
-| `usr/`            | binaries and shared libraries loaded by Julia's standard libraries |
 
 ## Terminal, Editors and IDEs
 
@@ -145,7 +158,7 @@ The Julia REPL is quite powerful. See the section in the manual on
 [the Julia REPL](https://docs.julialang.org/en/v1/stdlib/REPL/)
 for more details.
 
-On Windows we highly recommend running Julia in a modern terminal,
+On Windows, we highly recommend running Julia in a modern terminal,
 such as [Windows Terminal from the Microsoft Store](https://aka.ms/terminal).
 
 Support for editing Julia is available for many
@@ -156,7 +169,7 @@ Support for editing Julia is available for many
 others.
 
 For users who prefer IDEs, we recommend using VS Code with the
-[julia-vscode](https://www.julia-vscode.org/) plugin.
+[julia-vscode](https://www.julia-vscode.org/) plugin.\
 For notebook users, [Jupyter](https://jupyter.org/) notebook support is available through the
 [IJulia](https://github.com/JuliaLang/IJulia.jl) package, and
 the [Pluto.jl](https://github.com/fonsp/Pluto.jl) package provides Pluto notebooks.

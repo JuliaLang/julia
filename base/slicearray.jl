@@ -25,7 +25,7 @@ struct Slices{P,SM,AX,S,N} <: AbstractSlices{S,N}
     """
     parent::P
     """
-    A tuple of length `ndims(parent)`, denoting how each dimension should be handled:
+    A tuple of length at least `ndims(parent)`, denoting how each dimension should be handled:
       - an integer `i`: this is the `i`th dimension of the outer `Slices` object.
       - `:`: an "inner" dimension
     """
@@ -39,33 +39,39 @@ end
 unitaxis(::AbstractArray) = Base.OneTo(1)
 
 function Slices(A::P, slicemap::SM, ax::AX) where {P,SM,AX}
+    length(slicemap) >= ndims(A) ||
+        throw(ArgumentError("Slices cannot be constructed with a slicemap of fewer elements than the parent has dimensions"))
     N = length(ax)
-    S = Base._return_type(view, Tuple{P, map((a,l) -> l === (:) ? Colon : eltype(a), axes(A), slicemap)...})
+    parent_axes = ntuple(d -> axes(A, d), length(slicemap))
+    argT = map((a,l) -> l === (:) ? Colon : eltype(a), parent_axes, slicemap)
+    S = Base.promote_op(view, P, argT...)
     Slices{P,SM,AX,S,N}(A, slicemap, ax)
 end
 
 _slice_check_dims(N) = nothing
 function _slice_check_dims(N, dim, dims...)
-    1 <= dim <= N || throw(DimensionMismatch("Invalid dimension $dim"))
+    1 <= dim || throw(DimensionMismatch("Invalid dimension $dim"))
     dim in dims && throw(DimensionMismatch("Dimensions $dims are not unique"))
     _slice_check_dims(N,dims...)
 end
 
 @constprop :aggressive function _eachslice(A::AbstractArray{T,N}, dims::NTuple{M,Integer}, drop::Bool) where {T,N,M}
     _slice_check_dims(N,dims...)
+    N_ = foldl(max, dims; init=N)
+
     if drop
         # if N = 4, dims = (3,1) then
         # axes = (axes(A,3), axes(A,1))
         # slicemap = (2, :, 1, :)
         ax = map(dim -> axes(A,dim), dims)
-        slicemap = ntuple(dim -> something(findfirst(isequal(dim), dims), (:)), N)
+        slicemap = ntuple(dim -> something(findfirst(isequal(dim), dims), (:)),  N_)
         return Slices(A, slicemap, ax)
     else
         # if N = 4, dims = (3,1) then
         # axes = (axes(A,1), OneTo(1), axes(A,3), OneTo(1))
         # slicemap = (1, :, 3, :)
-        ax = ntuple(dim -> dim in dims ? axes(A,dim) : unitaxis(A), N)
-        slicemap = ntuple(dim -> dim in dims ? dim : (:), N)
+        ax = ntuple(dim -> dim in dims ? axes(A,dim) : unitaxis(A), N_)
+        slicemap = ntuple(dim -> dim in dims ? dim : (:), N_)
         return Slices(A, slicemap, ax)
     end
 end
@@ -76,16 +82,16 @@ end
 """
     eachslice(A::AbstractArray; dims, drop=true)
 
-Create a [`Slices`](@ref) object that is an array of slices over dimensions `dims` of `A`, returning
-views that select all the data from the other dimensions in `A`. `dims` can either by an
-integer or a tuple of integers.
+Create a sliced object, usually [`Slices`](@ref), that is an array of slices over dimensions
+`dims` of `A`, returning views that select all the data from the other dimensions in `A`.
+`dims` can either be an integer or a tuple of integers.
 
-If `drop = true` (the default), the outer `Slices` will drop the inner dimensions, and
+If `drop = true` (the default), the outer slices will drop the inner dimensions, and
 the ordering of the dimensions will match those in `dims`. If `drop = false`, then the
-`Slices` will have the same dimensionality as the underlying array, with inner
+slices object will have the same dimensionality as the underlying array, with inner
 dimensions having size 1.
 
-See also [`eachrow`](@ref), [`eachcol`](@ref), [`mapslices`](@ref) and [`selectdim`](@ref).
+See [`stack`](@ref)`(slices; dims)` for the inverse of `eachslice(A; dims::Integer)`.
 
 !!! compat "Julia 1.1"
      This function requires at least Julia 1.1.
@@ -93,7 +99,9 @@ See also [`eachrow`](@ref), [`eachcol`](@ref), [`mapslices`](@ref) and [`selectd
 !!! compat "Julia 1.9"
      Prior to Julia 1.9, this returned an iterator, and only a single dimension `dims` was supported.
 
-# Example
+See also [`eachrow`](@ref), [`eachcol`](@ref), [`mapslices`](@ref), [`selectdim`](@ref).
+
+# Examples
 
 ```jldoctest
 julia> m = [1 2 3; 4 5 6; 7 8 9]
@@ -131,7 +139,7 @@ end
 Create a [`RowSlices`](@ref) object that is a vector of rows of matrix or vector `A`.
 Row slices are returned as `AbstractVector` views of `A`.
 
-See also [`eachcol`](@ref), [`eachslice`](@ref) and [`mapslices`](@ref).
+For the inverse, see [`stack`](@ref)`(rows; dims=1)`.
 
 !!! compat "Julia 1.1"
      This function requires at least Julia 1.1.
@@ -139,7 +147,9 @@ See also [`eachcol`](@ref), [`eachslice`](@ref) and [`mapslices`](@ref).
 !!! compat "Julia 1.9"
      Prior to Julia 1.9, this returned an iterator.
 
-# Example
+See also [`eachcol`](@ref), [`eachslice`](@ref), [`mapslices`](@ref).
+
+# Examples
 
 ```jldoctest
 julia> a = [1 2; 3 4]
@@ -167,7 +177,7 @@ eachrow(A::AbstractVector) = eachrow(reshape(A, size(A,1), 1))
 Create a [`ColumnSlices`](@ref) object that is a vector of columns of matrix or vector `A`.
 Column slices are returned as `AbstractVector` views of `A`.
 
-See also [`eachrow`](@ref), [`eachslice`](@ref) and [`mapslices`](@ref).
+For the inverse, see [`stack`](@ref)`(cols)` or `reduce(`[`hcat`](@ref)`, cols)`.
 
 !!! compat "Julia 1.1"
      This function requires at least Julia 1.1.
@@ -175,7 +185,9 @@ See also [`eachrow`](@ref), [`eachslice`](@ref) and [`mapslices`](@ref).
 !!! compat "Julia 1.9"
      Prior to Julia 1.9, this returned an iterator.
 
-# Example
+See also [`eachrow`](@ref), [`eachslice`](@ref), [`mapslices`](@ref).
+
+# Examples
 
 ```jldoctest
 julia> a = [1 2; 3 4]
@@ -218,7 +230,6 @@ constructed by [`eachcol`](@ref).
 const ColumnSlices{P<:AbstractMatrix,AX,S<:AbstractVector} = Slices{P,Tuple{Colon,Int},AX,S,1}
 
 
-IteratorSize(::Type{Slices{P,SM,AX,S,N}}) where {P,SM,AX,S,N} = HasShape{N}()
 axes(s::Slices) = s.axes
 size(s::Slices) = map(length, s.axes)
 
@@ -226,9 +237,13 @@ size(s::Slices) = map(length, s.axes)
     return map(l -> l === (:) ? (:) : c[l], s.slicemap)
 end
 
-Base.@propagate_inbounds getindex(s::Slices{P,SM,AX,S,N}, I::Vararg{Int,N}) where {P,SM,AX,S,N} =
-    view(s.parent, _slice_index(s, I...)...)
-Base.@propagate_inbounds setindex!(s::Slices{P,SM,AX,S,N}, val, I::Vararg{Int,N}) where {P,SM,AX,S,N} =
-    s.parent[_slice_index(s, I...)...] = val
+@inline function getindex(s::Slices{P,SM,AX,S,N}, I::Vararg{Int,N}) where {P,SM,AX,S,N}
+    @boundscheck checkbounds(s, I...)
+    @inbounds view(s.parent, _slice_index(s, I...)...)
+end
+@inline function setindex!(s::Slices{P,SM,AX,S,N}, val, I::Vararg{Int,N}) where {P,SM,AX,S,N}
+    @boundscheck checkbounds(s, I...)
+    @inbounds s.parent[_slice_index(s, I...)...] = val
+end
 
 parent(s::Slices) = s.parent
