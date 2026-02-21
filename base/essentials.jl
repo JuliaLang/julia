@@ -7,11 +7,9 @@ const Callable = Union{Function,Type}
 const Bottom = Union{}
 
 # Define minimal array interface here to help code used in macros:
-length(a::Array{T, 0}) where {T} = 1
-length(a::Array{T, 1}) where {T} = getfield(a, :size)[1]
-length(a::Array{T, 2}) where {T} = (sz = getfield(a, :size); sz[1] * sz[2])
-# other sizes are handled by generic prod definition for AbstractArray
-length(a::GenericMemory) = getfield(a, :length)
+size(a::Array) = getfield(a, :size)
+length(t::AbstractArray) = (@inline; prod(size(t)))
+size(a::GenericMemory) = (getfield(a, :length),)
 throw_boundserror(A, I) = (@noinline; throw(BoundsError(A, I)))
 
 # multidimensional getindex will be defined later on
@@ -377,20 +375,21 @@ macro _nospecializeinfer_meta()
     return Expr(:meta, :nospecializeinfer)
 end
 
-# These special checkbounds methods are defined early for bootstrapping
+# These checkbounds methods are defined early for bootstrapping
 function checkbounds(::Type{Bool}, A::Union{Array, Memory}, i::Int)
     @inline
     ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A)))
 end
-function checkbounds(A::Union{Array, GenericMemory}, i::Int)
+function checkbounds(A::AbstractArray, I...)
     @inline
-    checkbounds(Bool, A, i) || throw_boundserror(A, (i,))
+    checkbounds(Bool, A, I...) || throw_boundserror(A, I)
+    nothing
 end
 
-default_access_order(a::GenericMemory{:not_atomic}) = :not_atomic
-default_access_order(a::GenericMemory{:atomic}) = :monotonic
-default_access_order(a::GenericMemoryRef{:not_atomic}) = :not_atomic
-default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
+default_access_order(::GenericMemory{:not_atomic}) = :not_atomic
+default_access_order(::GenericMemory{:atomic}) = :monotonic
+default_access_order(::GenericMemoryRef{:not_atomic}) = :not_atomic
+default_access_order(::GenericMemoryRef{:atomic}) = :monotonic
 
 function getindex(A::GenericMemory, i::Int)
     @_noub_if_noinbounds_meta
@@ -461,12 +460,12 @@ julia> y === x
 true
 ```
 
-See also: [`round`](@ref), [`trunc`](@ref), [`oftype`](@ref), [`reinterpret`](@ref).
+See also [`round`](@ref), [`trunc`](@ref), [`oftype`](@ref), [`reinterpret`](@ref).
 """
 function convert end
 
 # ensure this is never ambiguous, and therefore fast for lookup
-convert(T::Type{Union{}}, x...) = throw(ArgumentError("cannot convert a value to Union{} for assignment"))
+convert(::Type{Union{}}, _...) = throw(ArgumentError("cannot convert a value to Union{} for assignment"))
 
 convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
                                    # in the absence of inlining-enabled
@@ -503,26 +502,26 @@ end
     Pairs{K, V, I, A}(data, itr) where {K, V, I, A} = $(Expr(:new, :(Pairs{K, V, I, A}), :(data isa A ? data : convert(A, data)), :(itr isa I ? itr : convert(I, itr))))
     Pairs{K, V}(data::A, itr::I) where {K, V, I, A} = $(Expr(:new, :(Pairs{K, V, I, A}), :data, :itr))
     Pairs{K}(data::A, itr::I) where {K, I, A} = $(Expr(:new, :(Pairs{K, eltype(A), I, A}), :data, :itr))
-    Pairs(data::A, itr::I) where  {I, A} = $(Expr(:new, :(Pairs{eltype(I), eltype(A), I, A}), :data, :itr))
+    Pairs(data::A, itr::I) where {I, A} = $(Expr(:new, :(Pairs{I !== Nothing ? eltype(I) : keytype(A), eltype(A), I, A}), :data, :itr))
 end
-pairs(::Type{NamedTuple}) = Pairs{Symbol, V, NTuple{N, Symbol}, NamedTuple{names, T}} where {V, N, names, T<:NTuple{N, Any}}
+pairs(::Type{NamedTuple}) = Pairs{Symbol, V, Nothing, NT} where {V, NT <: NamedTuple}
 
 """
     Base.Pairs(values, keys) <: AbstractDict{eltype(keys), eltype(values)}
 
-Transforms an indexable container into a Dictionary-view of the same data.
+Transform an indexable container into a Dictionary-view of the same data.
 Modifying the key-space of the underlying data may invalidate this object.
 """
 Pairs
 
-argtail(x, rest...) = rest
+argtail(_, rest...) = rest
 
 """
     tail(x::Tuple)::Tuple
 
 Return a `Tuple` consisting of all but the first component of `x`.
 
-See also: [`front`](@ref Base.front), [`rest`](@ref Base.rest), [`first`](@ref), [`Iterators.peel`](@ref).
+See also [`front`](@ref Base.front), [`rest`](@ref Base.rest), [`first`](@ref), [`Iterators.peel`](@ref).
 
 # Examples
 ```jldoctest
@@ -578,7 +577,7 @@ end
 
 # remove concrete constraint on diagonal TypeVar if it comes from troot
 function widen_diagonal(@nospecialize(t), troot::UnionAll)
-    body = ccall(:jl_widen_diagonal, Any, (Any, Any), t, troot)
+    return ccall(:jl_widen_diagonal, Any, (Any, Any), t, troot)
 end
 
 function isvarargtype(@nospecialize(t))
@@ -943,9 +942,70 @@ end
 
 Labels a statement with the symbolic label `name`. The label marks the end-point
 of an unconditional jump with [`@goto name`](@ref).
+
+    @label expr
+    @label name expr
+
+Creates a labeled block that can be exited early with `break` / `break _ value` or
+`break name value`. The block evaluates to `value` if a `break` statement is executed,
+otherwise it evaluates to the result of `expr`.
+
+`@label expr` creates an anonymous block that participates in the default break scope:
+a plain `break` (or `break _`) inside it will exit the block, just as `break` exits a loop.
+
+`@label name expr` creates a named block that can be exited with `break name` or
+`break name value`.
+
+Using `_` as an explicit label name is not allowed — use `@label expr` instead.
+
+# Examples
+```jldoctest
+julia> @label begin
+           println("before")
+           break
+           println("after")
+       end
+before
+
+julia> result = @label myblock begin
+           for i in 1:10
+               if i > 5
+                   break myblock i * 2  # exits the @label block with value 12
+               end
+           end
+           0  # default value if no break
+       end
+12
+```
 """
 macro label(name::Symbol)
+    name === :_ && error("use `@label expr` for anonymous blocks; `@label _` is not allowed")
     return esc(Expr(:symboliclabel, name))
+end
+
+macro label(name::Symbol, body)
+    name === :_ && error("use `@label expr` for anonymous blocks; `@label _ expr` is not allowed")
+    # If body is a syntactic loop, wrap its body in a continue block
+    # This allows `continue name` to work by breaking to `name#cont`
+    if body isa Expr && (body.head === :for || body.head === :while)
+        cont_name = Symbol(string(name, "#cont"))
+        if body.head === :for
+            loop_body = body.args[2]
+            wrapped_body = Expr(:symbolicblock, cont_name, loop_body)
+            body = Expr(:for, body.args[1], wrapped_body)
+        else  # while
+            loop_body = body.args[2]
+            wrapped_body = Expr(:symbolicblock, cont_name, loop_body)
+            body = Expr(:while, body.args[1], wrapped_body)
+        end
+    end
+    return esc(Expr(:symbolicblock, name, body))
+end
+
+macro label(body)
+    # 1-arg form: create anonymous block that participates in the default break scope.
+    # Uses `loop-exit` as the internal label so that `break` and `break _` both target it.
+    return esc(Expr(:symbolicblock, Symbol("loop-exit"), body))
 end
 
 """
@@ -981,13 +1041,9 @@ setindex!(A::MemoryRef{Any}, @nospecialize(x)) = (memoryrefset!(A, x, :not_atomi
 
 getindex(v::SimpleVector, i::Int) = (@_foldable_meta; Core._svec_ref(v, i))
 function length(v::SimpleVector)
-    @_total_meta
-    t = @_gc_preserve_begin v
-    len = unsafe_load(Ptr{Int}(pointer_from_objref(v)))
-    @_gc_preserve_end t
-    return len
+    Core._svec_len(v)
 end
-firstindex(v::SimpleVector) = 1
+firstindex(::SimpleVector) = 1
 lastindex(v::SimpleVector) = length(v)
 iterate(v::SimpleVector, i=1) = (length(v) < i ? nothing : (v[i], i + 1))
 eltype(::Type{SimpleVector}) = Any
@@ -1060,6 +1116,10 @@ struct Colon <: Function
 end
 const (:) = Colon()
 
+function show(io::IO, ::Colon)
+    show_type_name(io, Colon.name)
+    print(io, "()")
+end
 
 """
     Val(c)
@@ -1152,7 +1212,7 @@ values(itr) = itr
 A type with no fields whose singleton instance [`missing`](@ref) is used
 to represent missing values.
 
-See also: [`skipmissing`](@ref), [`nonmissingtype`](@ref), [`Nothing`](@ref).
+See also [`skipmissing`](@ref), [`nonmissingtype`](@ref), [`Nothing`](@ref).
 """
 struct Missing end
 
@@ -1161,7 +1221,7 @@ struct Missing end
 
 The singleton instance of type [`Missing`](@ref) representing a missing value.
 
-See also: [`NaN`](@ref), [`skipmissing`](@ref), [`nonmissingtype`](@ref).
+See also [`NaN`](@ref), [`skipmissing`](@ref), [`nonmissingtype`](@ref).
 """
 const missing = Missing()
 
@@ -1170,7 +1230,7 @@ const missing = Missing()
 
 Indicate whether `x` is [`missing`](@ref).
 
-See also: [`skipmissing`](@ref), [`isnothing`](@ref), [`isnan`](@ref).
+See also [`skipmissing`](@ref), [`isnothing`](@ref), [`isnan`](@ref).
 """
 ismissing(x) = x === missing
 
@@ -1231,7 +1291,7 @@ to obtain a definitive answer.
 
 See also [`iterate`](@ref), [`isempty`](@ref)
 """
-isdone(itr, state...) = missing
+isdone(_, _...) = missing
 
 """
     iterate(iter [, state])::Union{Nothing, Tuple{Any, Any}}
@@ -1266,7 +1326,10 @@ is newer than the world currently running.
 The `@world` macro is primarily used in the printing of bindings that are no longer
 available in the current world.
 
-## Example
+!!! compat "Julia 1.12"
+    This functionality requires at least Julia 1.12.
+
+# Examples
 ```julia-repl
 julia> struct Foo; a::Int; end
 Foo
@@ -1282,9 +1345,6 @@ Foo
 julia> fold
 @world(Foo, 26866)(1)
 ```
-
-!!! compat "Julia 1.12"
-    This functionality requires at least Julia 1.12.
 """
 macro world(sym, world)
     if world == :∞

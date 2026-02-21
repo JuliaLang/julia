@@ -170,17 +170,32 @@ struct CodegenParams
     """
     force_emit_all::Cint
 
+    """
+    When enabled, run the MemorySanitizer pass.
+    """
+    sanitize_memory::Cint
+    """
+    When enabled, run the ThreadSanitizer pass.
+    """
+    sanitize_thread::Cint
+    """
+    When enabled, run the AddressSanitizer pass.
+    """
+    sanitize_address::Cint
+
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
                    gnu_pubnames::Bool=true, debug_info_kind::Cint = default_debug_info_kind(),
                    debug_info_level::Cint = Cint(JLOptions().debug_level), safepoint_on_entry::Bool=true,
-                   gcstack_arg::Bool=true, use_jlplt::Bool=true, force_emit_all::Bool=false)
+                   gcstack_arg::Bool=true, use_jlplt::Bool=true, force_emit_all::Bool=false,
+                   sanitize_memory::Bool=false, sanitize_thread::Bool=false, sanitize_address::Bool=false)
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             debug_info_level, Cint(safepoint_on_entry),
-            Cint(gcstack_arg), Cint(use_jlplt), Cint(force_emit_all))
+            Cint(gcstack_arg), Cint(use_jlplt), Cint(force_emit_all),
+            Cint(sanitize_memory), Cint(sanitize_thread), Cint(sanitize_address))
     end
 end
 
@@ -196,7 +211,7 @@ end
 """
     code_typed(f, types; kw...)
 
-Returns an array of type-inferred lowered form (IR) for the methods matching the given
+Return an array of type-inferred lowered form (IR) for the methods matching the given
 generic function and type signature.
 
 # Keyword Arguments
@@ -260,7 +275,9 @@ function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f)); kwargs
     return code_typed_by_type(tt; kwargs...)
 end
 
-# support 'functor'-like queries, such as `(::Foo)(::Int, ::Int)` via `code_typed((Foo, Int, Int))`
+# support queries with signatures rather than objects to better support
+# non-singleton function objects such as `(::Foo)(::Int, ::Int)`
+# via `code_typed((Foo, Int, Int))` or `code_typed(Tuple{Foo, Int, Int})`.
 function code_typed(@nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}); kwargs...)
     tt = to_tuple_type(argtypes)
     return code_typed_by_type(tt; kwargs...)
@@ -306,8 +323,23 @@ function invoke_interp_compiler(interp, fname::Symbol, args...)
         T = typeof(interp)
         while true
             Tname = typename(T).name
-            Tname === :Any && error("Expected Interpreter")
+            Tname === :Any && error("Expected AbstractInterpreter")
             Tname === :AbstractInterpreter && break
+            T = supertype(T)
+        end
+        return getglobal(typename(T).module, fname)(args...)
+    end
+end
+
+function invoke_mt_compiler(mt, fname::Symbol, args...)
+    if mt === nothing
+        return invoke_default_compiler(fname, args...)
+    else
+        T = typeof(mt)
+        while true
+            Tname = typename(T).name
+            Tname === :Any && error("Expected MethodTableView")
+            Tname === :MethodTableView && break
             T = supertype(T)
         end
         return getglobal(typename(T).module, fname)(args...)
@@ -564,7 +596,7 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
     interp = passed_interp === nothing ? invoke_default_compiler(:_default_interp, world) : interp
     check_generated_context(world)
     if isa(f, Core.OpaqueClosure)
-        _, rt = only(code_typed_opaque_closure(f, types; Compiler))
+        _, rt = only(code_typed_opaque_closure(f, types; interp=passed_interp))
         return Any[rt]
     elseif isa(f, Core.Builtin)
         return Any[_builtin_return_type(passed_interp, interp, f, types)]
@@ -586,7 +618,7 @@ end
         world::UInt=get_world_counter(),
         interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world)) -> rt::Type
 
-Returns an inferred return type of the function call specified by `f` and `types`.
+Return an inferred return type of the function call specified by `f` and `types`.
 
 # Arguments
 - `f`: The function to analyze.
@@ -732,7 +764,7 @@ end
         world::UInt=get_world_counter(),
         interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world)) -> exct::Type
 
-Returns the type of exception potentially thrown by the function call specified by `f` and `types`.
+Return the type of exception potentially thrown by the function call specified by `f` and `types`.
 
 # Arguments
 - `f`: The function to analyze.
@@ -801,7 +833,7 @@ end
         world::UInt=get_world_counter(),
         interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world)) -> effects::Effects
 
-Returns the possible computation effects of the function call specified by `f` and `types`.
+Return the possible computation effects of the function call specified by `f` and `types`.
 
 # Arguments
 - `f`: The function to analyze.
@@ -920,7 +952,7 @@ function _which(@nospecialize(tt::Type);
     world::UInt=get_world_counter(),
     raise::Bool=true)
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
-    match, = invoke_default_compiler(:findsup_mt, tt, world, method_table)
+    match, = invoke_mt_compiler(method_table, :findsup_mt, tt, world, method_table)
     if match === nothing
         raise && error("no unique matching method found for the specified argument types")
         return nothing
@@ -931,11 +963,11 @@ end
 """
     which(f, types)
 
-Returns the method of `f` (a `Method` object) that would be called for arguments of the given `types`.
+Return the method of `f` (a `Method` object) that would be called for arguments of the given `types`.
 
 If `types` is an abstract type, then the method that would be called by `invoke` is returned.
 
-See also: [`parentmodule`](@ref), [`@which`](@ref Main.InteractiveUtils.@which), and [`@edit`](@ref Main.InteractiveUtils.@edit).
+See also [`parentmodule`](@ref), [`@which`](@ref Main.InteractiveUtils.@which), [`@edit`](@ref Main.InteractiveUtils.@edit).
 """
 function which(@nospecialize(f), @nospecialize(t))
     tt = signature_type(f, t)
@@ -955,7 +987,7 @@ end
 """
     which(types::Type{<:Tuple})
 
-Returns the method that would be called by the given type signature (as a tuple type).
+Return the method that would be called by the given type signature (as a tuple type).
 """
 function which(@nospecialize(tt#=::Type=#))
     return _which(tt).method
@@ -1019,8 +1051,8 @@ end
 
 Return the module in which the given method `m` is defined.
 
-!!! compat "Julia 1.9"
-    Passing a `Method` as an argument requires Julia 1.9 or later.
+!!! compat "Julia 1.10"
+    Passing a `Method` as an argument requires Julia 1.10 or later.
 """
 parentmodule(m::Method) = m.module
 
@@ -1273,22 +1305,22 @@ It also supports the following syntax:
 
 ```jldoctest
 julia> @macroexpand @invoke f(x::T, y)
-:(Core.invoke(f, Tuple{T, Core.Typeof(y)}, x, y))
+:(Core.invoke(f, Base.Tuple{T, Core.Typeof(y)}, x, y))
 
 julia> @invoke 420::Integer % Unsigned
 0x00000000000001a4
 
 julia> @macroexpand @invoke (x::X).f
-:(Core.invoke(Base.getproperty, Tuple{X, Core.Typeof(:f)}, x, :f))
+:(Core.invoke(Base.getproperty, Base.Tuple{X, Core.Typeof(:f)}, x, :f))
 
 julia> @macroexpand @invoke (x::X).f = v::V
-:(Core.invoke(Base.setproperty!, Tuple{X, Core.Typeof(:f), V}, x, :f, v))
+:(Core.invoke(Base.setproperty!, Base.Tuple{X, Core.Typeof(:f), V}, x, :f, v))
 
 julia> @macroexpand @invoke (xs::Xs)[i::I]
-:(Core.invoke(Base.getindex, Tuple{Xs, I}, xs, i))
+:(Core.invoke(Base.getindex, Base.Tuple{Xs, I}, xs, i))
 
 julia> @macroexpand @invoke (xs::Xs)[i::I] = v::V
-:(Core.invoke(Base.setindex!, Tuple{Xs, V, I}, xs, v, i))
+:(Core.invoke(Base.setindex!, Base.Tuple{Xs, V, I}, xs, v, i))
 ```
 
 !!! compat "Julia 1.7"
@@ -1305,19 +1337,19 @@ macro invoke(ex)
     f, args, kwargs = destructure_callex(topmod, ex)
     types = Expr(:curly, :Tuple)
     out = Expr(:call, GlobalRef(Core, :invoke))
-    isempty(kwargs) || push!(out.args, Expr(:parameters, kwargs...))
-    push!(out.args, f)
+    isempty(kwargs) || push!(out.args, Expr(:parameters, Any[esc(kw) for kw in kwargs]...))
+    push!(out.args, esc(f))
     push!(out.args, types)
     for arg in args
         if isexpr(arg, :(::))
-            push!(out.args, arg.args[1])
-            push!(types.args, arg.args[2])
+            push!(out.args, esc(arg.args[1]))
+            push!(types.args, esc(arg.args[2]))
         else
-            push!(out.args, arg)
-            push!(types.args, Expr(:call, GlobalRef(Core, :Typeof), arg))
+            push!(out.args, esc(arg))
+            push!(types.args, Expr(:call, GlobalRef(Core, :Typeof), esc(arg)))
         end
     end
-    return esc(out)
+    return out
 end
 
 getglobalref(gr::GlobalRef, world::UInt) = ccall(:jl_eval_globalref, Any, (Any, UInt), gr, world)
@@ -1367,42 +1399,42 @@ macro invokelatest(ex)
 
     if !isa(f, GlobalRef)
         out_f = Expr(:call, GlobalRef(Base, :invokelatest))
-        isempty(kwargs) || push!(out_f.args, Expr(:parameters, kwargs...))
+        isempty(kwargs) || push!(out_f.args, Expr(:parameters, Any[esc(kw) for kw in kwargs]...))
 
         if isexpr(f, :(.))
-            s = gensym()
+            s = :s
             check = quote
-                $s = $(f.args[1])
+                $s = $(esc(f.args[1]))
                 isa($s, Module)
             end
-            push!(out_f.args, Expr(:(.), s, f.args[2]))
+            push!(out_f.args, Expr(:(.), s, esc(f.args[2])))
         else
-            push!(out_f.args, f)
+            push!(out_f.args, esc(f))
         end
-        append!(out_f.args, args)
+        append!(out_f.args, Any[esc(arg) for arg in args])
 
         if @isdefined(s)
-            f = :(GlobalRef($s, $(f.args[2])))
-        elseif !isa(f, Symbol)
-            return esc(out_f)
+            f = :(GlobalRef($s, $(esc(f.args[2]))))
+        elseif isa(f, Symbol)
+            check = esc(:($(Expr(:isglobal, f))))
         else
-            check = :($(Expr(:isglobal, f)))
+            return out_f
         end
     end
 
     out_gr = Expr(:call, GlobalRef(Base, :invokelatest_gr))
-    isempty(kwargs) || push!(out_gr.args, Expr(:parameters, kwargs...))
+    isempty(kwargs) || push!(out_gr.args, Expr(:parameters, Any[esc(kw) for kw in kwargs]...))
     push!(out_gr.args, isa(f, GlobalRef) ? QuoteNode(f) :
                        isa(f, Symbol) ? QuoteNode(GlobalRef(__module__, f)) :
                        f)
-    append!(out_gr.args, args)
+    append!(out_gr.args, Any[esc(arg) for arg in args])
 
     if isa(f, GlobalRef)
-        return esc(out_gr)
+        return out_gr
     end
 
     # f::Symbol
-    return esc(:($check ? $out_gr : $out_f))
+    return :($check ? $out_gr : $out_f)
 end
 
 function destructure_callex(topmod::Module, @nospecialize(ex))
@@ -1452,4 +1484,21 @@ function destructure_callex(topmod::Module, @nospecialize(ex))
         throw(ArgumentError("expected a `:call` expression `f(args...; kwargs...)`"))
     end
     return f, args, kwargs
+end
+
+"""
+    Base.drop_all_caches()
+
+Internal function to drop all native code caches and increment world age.
+This invalidates all compiled code as if a method was added that intersects
+with all existing methods.
+"""
+function drop_all_caches()
+    ccall(:jl_drop_all_caches, Cvoid, ())
+
+    # Reset loading.jl world age so that loading code is regenerated
+    _require_world_age[] = typemax(UInt)
+
+    # Call Base.Compiler.activate!() after dropping caching to activate coverage of the Compiler code itself
+    Base.Compiler.activate!()
 end

@@ -963,6 +963,9 @@ end
         @test +(A) == A
         @test *(A) == A
     end
+
+    # Unary addition is valid for Arrays over anything, not just numbers
+    @test +[[1]] == [[1]]
 end
 
 @testset "reverse dim on empty" begin
@@ -1880,6 +1883,33 @@ end
     end
 end
 
+@testset "issue 56771, stack(; dims) on containers with HasLength eltype & HasShape elements" begin
+    for T in (Matrix, Array, Any)
+        xs = T[rand(2,3) for _ in 1:4]
+        @test size(stack(xs; dims=1)) == (4,2,3)
+        @test size(stack(xs; dims=2)) == (2,4,3)  # this was the problem case, for T=Array
+        @test size(stack(xs; dims=3)) == (2,3,4)
+        @test size(stack(identity, xs; dims=2)) == (2,4,3)
+        @test size(stack(x for x in xs if true; dims=2)) == (2,4,3)
+
+        xmat = T[rand(2,3) for _ in 1:4, _ in 1:5]
+        @test size(stack(xmat; dims=1)) == (20,2,3)
+        @test size(stack(xmat; dims=2)) == (2,20,3)
+        @test size(stack(xmat; dims=3)) == (2,3,20)
+    end
+
+    it = Iterators.product(1:2, 3:5)
+    @test size(it) == (2,3)
+    @test Base.IteratorSize(typeof(it)) == Base.HasShape{2}()
+    @test Base.IteratorSize(Iterators.ProductIterator) == Base.HasLength()
+    for T in (typeof(it), Iterators.ProductIterator, Any)
+        ys = T[it for _ in 1:4]
+        @test size(stack(ys; dims=2)) == (2,4,3)
+        @test size(stack(identity, ys; dims=2)) == (2,4,3)
+        @test size(stack(y for y in ys if true; dims=2)) == (2,4,3)
+    end
+end
+
 @testset "keepat!" begin
     a = [1:6;]
     @test a === keepat!(a, 1:5)
@@ -2293,6 +2323,21 @@ end
     end
 end
 
+@testset "AbstractOneTo" begin
+    s = SizedArrays.SizedArray{(2,2)}(ones(2,2))
+    v = view(s, :, 1)
+    @test axes(v,1) isa SizedArrays.SOneTo{2}
+    @test eachindex(v) isa SizedArrays.SOneTo{2}
+
+    ax = axes(v,1)
+    @test ax[Base.IdentityUnitRange(ax)] == ax
+    @test ax[Base.IdentityUnitRange(2:2)] == Base.IdentityUnitRange(2:2)
+
+    # check that IdentityUnitRange behaves like Slice
+    @test axes(Base.IdentityUnitRange(ax), 1) === ax
+    @test eachindex(Base.IdentityUnitRange(ax)) === ax
+end
+
 @testset "effect inference for `iterate` for `Array` and for `Memory`" begin
     for El ∈ (Float32, Real, Any)
         for Arr ∈ (Memory{El}, Array{El, 0}, Vector{El}, Matrix{El}, Array{El, 3})
@@ -2315,4 +2360,35 @@ end
     @test sum(x for x in v) == sum(A[1:2:end])
     v2 = view(A, Base.IdentityUnitRange(1:length(A)))
     @test sum(x for x in v2) == sum(A)
+end
+
+@testset "self referential" begin
+    v = Any[1,2,3]
+    v[1] = v
+    io = IOBuffer()
+    show(io, v)
+    @test String(take!(io)) == "Any[Any[#= circular reference @-1 =#], 2, 3]"
+
+    m1 = Any[1 2; 3 4]
+    m1[1] = m1
+    show(io, m1)
+    @test String(take!(io)) == "Any[#= circular reference @-1 =# 2; 3 4]"
+
+    m2 = Any[1; 2;; 3; 4;;; 5; 6;; 7; 8]
+    m2[1] = m2
+    show(io, m2)
+    @test String(take!(io)) == "Any[#= circular reference @-1 =# 3; 2 4;;; 5 7; 6 8]"
+end
+
+@testset "size promotion in addition/subtraction" begin
+    for A in Any[ones(), ones(1), ones(1,1,1)]
+        @test +(A) == A
+        for B in Any[ones(), ones(1), ones(1,1,1)]
+            sz = ndims(A) > ndims(B) ? size(A) : size(B)
+            @test A + B == fill(2.0,sz)
+            @test A - B == zeros(sz)
+            @test A + B + zeros() == A + B
+            @test A - B - zeros() == A - B
+        end
+    end
 end

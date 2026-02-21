@@ -20,6 +20,7 @@
         <td>Continuous integration</td>
         <td>
             <a href="https://buildkite.com/julialang/julia-master"><img src='https://badge.buildkite.com/f28e0d28b345f9fad5856ce6a8d64fffc7c70df8f4f2685cd8.svg?branch=master'/></a>
+            <a href="https://juliaci.github.io/julia-ci-timing/"><img src='https://img.shields.io/badge/CI-timing_tracking-blue'/></a>
         </td>
     </tr>
     <!-- Coverage -->
@@ -43,7 +44,7 @@ and installing Julia, below.
 ## Resources
 
 - **Homepage:** <https://julialang.org>
-- **Install:** <https://julialang.org/install/>
+- **Install:** <https://julialang.org/downloads/>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Documentation:** <https://docs.julialang.org>
 - **Packages:** <https://julialang.org/packages/>
@@ -53,9 +54,16 @@ and installing Julia, below.
 - **YouTube:** <https://www.youtube.com/user/JuliaLanguage>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
-New developers may find the notes in
-[CONTRIBUTING](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md)
-helpful to start contributing to the Julia codebase.
+
+## Contributing to Julia
+
+We welcome contributions from developers of all experience levels, including bug fixes,
+documentation improvements, tests, and performance enhancements.
+
+New contributors are encouraged to start by reading [CONTRIBUTING.md](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md).
+
+> [!IMPORTANT]
+> If your pull request contains substantial contributions from a generative AI tool, please disclose so with details, and review all changes before opening.
 
 ### Learning Julia
 
@@ -66,11 +74,11 @@ helpful to start contributing to the Julia codebase.
 The recommended way of installing Julia is to use `juliaup` which will install
 the latest stable `julia` for you and help keep it up to date. It can also let
 you install and run different Julia versions simultaneously. Instructions for
-this can be found [here](https://julialang.org/install/). If you want to manually
-download specific Julia binaries, you can find those on the [downloads
-page](https://julialang.org/downloads/). The downloads page also provides
+this can be found [here](https://julialang.org/downloads/). If you want to manually
+download specific Julia binaries, you can find those on the [Manual Downloads
+page](https://julialang.org/downloads/manual-downloads/). The downloads page also provides
 details on the [different tiers of
-support](https://julialang.org/downloads/#supported_platforms) for OS and
+support](https://julialang.org/downloads/support) for OS and
 platform combinations.
 
 If everything works correctly, you will get a `julia` program and when you run
@@ -97,7 +105,7 @@ and then use the command prompt to change into the resulting julia directory. By
 Julia. However, most users should use the [most recent stable version](https://github.com/JuliaLang/julia/releases)
 of Julia. You can get this version by running:
 
-    git checkout v1.11.5
+    git checkout v1.12.2
 
 To build the `julia` executable, run `make` from within the julia directory.
 

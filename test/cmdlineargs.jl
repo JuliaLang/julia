@@ -24,6 +24,21 @@ function readchomperrors(exename::Cmd)
     return (success(p), fetch(o), fetch(e))
 end
 
+# helper function for tests that expect successful command execution
+# logs detailed error information if the command fails
+function test_read_success(cmd::Cmd, expected_type::Type=String)
+    success, out, err = readchomperrors(cmd)
+    if !success
+        println("---- Command failed: ")
+        show(cmd)
+        println("stdout:\n", out)
+        println("stderr:\n", err)
+        println("----")
+    end
+    @test success
+    return expected_type == String ? out : parse(expected_type, out)
+end
+
 function format_filename(s)
     p = ccall(:jl_format_filename, Cstring, (Cstring,), s)
     r = unsafe_string(p)
@@ -60,6 +75,38 @@ let
     @test format_filename("%a%%b") == "a%b"
 end
 
+if Sys.isunix()
+    @testset "SIGQUIT prints task backtraces" begin
+        script = """
+            mutable struct RLimit
+                cur::Int64
+                max::Int64
+            end
+            const RLIMIT_CORE = 4 # from /usr/include/sys/resource.h
+            ccall(:setrlimit, Cint, (Cint, Ref{RLimit}), RLIMIT_CORE, Ref(RLimit(0, 0)))
+            write(stdout, "r")
+            wait()
+        """
+        exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
+        errp = PipeBuffer()
+        # disable coredumps for this process
+        p = open(pipeline(`$exename -e $script`, stderr=errp), "r")
+        @test read(p, UInt8) == UInt8('r')
+        # The process might ignore the first SIGQUIT, since it will try to then run cleanup,
+        # which may fail for many reasons.
+        # The process will not ignore the second SIGQUIT, but the kernel might ignore it.
+        # So keep sending SIGQUIT every few seconds until the kernel delivers the second one
+        # and `p` exits.
+        t = Timer(0, interval=10) do t; Base.kill(p, Base.SIGQUIT); end
+        wait(p)
+        close(t)
+        err_s = readchomp(errp)
+        @test Base.process_signaled(p) && p.termsignal == Base.SIGQUIT
+        @test occursin("==== Thread ", err_s)
+        @test occursin("==== Done", err_s)
+    end
+end
+
 @testset "julia_cmd" begin
     julia_basic = Base.julia_cmd()
     function get_julia_cmd(arg)
@@ -68,6 +115,7 @@ end
         try
             run(pipeline(cmd, stdout=io, stderr=io))
         catch
+            closewrite(io)
             @error "cmd failed" cmd read(io, String)
             rethrow()
         end
@@ -225,6 +273,18 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             @test v[3] == "julia: for the --enable-tail-merge option: may only occur zero or one times!"
         end
     end
+    @testset "time-trace" begin
+        mktempdir() do dir
+            tracefile = joinpath(dir, "test_trace.json")
+            # Use forward slashes on Windows to avoid LLVM command line parser issues with backslashes
+            tracefile_arg = Sys.iswindows() ? replace(tracefile, "\\" => "/") : tracefile
+            v = readchomperrors(setenv(`$exename -e "1+1"`, "JULIA_LLVM_ARGS" => "-time-trace -time-trace-file=$tracefile_arg", "HOME" => homedir()))
+            @test v[1]
+            @test isfile(tracefile)
+            content = read(tracefile, String)
+            @test startswith(content, "{\"traceEvents\":")
+        end
+    end
 end
 
 let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
@@ -289,21 +349,21 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     end
 
     # --home
-    @test success(`$exename -H $(Sys.BINDIR)`)
-    @test success(`$exename --home=$(Sys.BINDIR)`)
+    @test "" == test_read_success(`$exename -H $(Sys.BINDIR)`)
+    @test "" == test_read_success(`$exename --home=$(Sys.BINDIR)`)
 
     # --eval
-    @test  success(`$exename -e "exit(0)"`)
+    @test "" == test_read_success(`$exename -e "exit(0)"`)
     @test errors_not_signals(`$exename -e "exit(1)"`)
-    @test  success(`$exename --eval="exit(0)"`)
+    @test "" == test_read_success(`$exename --eval="exit(0)"`)
     @test errors_not_signals(`$exename --eval="exit(1)"`)
     @test errors_not_signals(`$exename -e`)
     @test errors_not_signals(`$exename --eval`)
     # --eval --interactive (replaced --post-boot)
-    @test  success(`$exename -i -e "exit(0)"`)
+    @test "" == test_read_success(`$exename -i -e "exit(0)"`)
     @test errors_not_signals(`$exename -i -e "exit(1)"`)
     # issue #34924
-    @test  success(`$exename -e 'const LOAD_PATH=1'`)
+    @test "" == test_read_success(`$exename -e 'const LOAD_PATH=1'`)
 
     # --print
     @test read(`$exename -E "1+1"`, String) == "2\n"
@@ -482,94 +542,96 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # --code-coverage
     mktempdir() do dir
+        # don't inherit global coverage settings that could confuse these tests
+        cov_exename = `$(Base.julia_cmd()[1]) --startup-file=no --color=no`
         helperdir = joinpath(@__DIR__, "testhelpers")
         inputfile = joinpath(helperdir, "coverage_file.jl")
         expected = replace(read(joinpath(helperdir, "coverage_file.info"), String),
             "<FILENAME>" => realpath(inputfile))
         covfile = replace(joinpath(dir, "coverage.info"), "%" => "%%")
         @test !isfile(covfile)
-        defaultcov = readchomp(`$exename -E "Base.JLOptions().code_coverage != 0" -L $inputfile`)
+        defaultcov = readchomp(`$cov_exename -E "Base.JLOptions().code_coverage != 0" -L $inputfile`)
         opts = Base.JLOptions()
         coverage_file = (opts.output_code_coverage != C_NULL) ?  unsafe_string(opts.output_code_coverage) : ""
         @test !isfile(covfile)
         @test defaultcov == string(opts.code_coverage != 0 && (isempty(coverage_file) || occursin("%p", coverage_file)))
-        @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
+        @test readchomp(`$cov_exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=none`) == "0"
         @test !isfile(covfile)
-        @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
+        @test readchomp(`$cov_exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage`) == "1"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
-        @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
+        @test occursin(expected, got) context=(expected, got)
+        @test readchomp(`$cov_exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=user`) == "1"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
-        @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
+        @test occursin(expected, got) context=(expected, got)
+        @test readchomp(`$cov_exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=all`) == "2"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in specific file
         tfile = realpath(inputfile)
-        @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
+        @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
             --code-coverage=$covfile --code-coverage=@$tfile`) == "(3, $(repr(tfile)))"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in directory
         tdir = dirname(realpath(inputfile))
-        @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
+        @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
             --code-coverage=$covfile --code-coverage=@$tdir`) == "(3, $(repr(tdir)))"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in current directory
         tdir = dirname(realpath(inputfile))
         cd(tdir) do
             # there may be atrailing separator here so use rstrip
-            @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, rstrip(unsafe_string(Base.JLOptions().tracked_path), '/'))" -L $inputfile
+            @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, rstrip(unsafe_string(Base.JLOptions().tracked_path), Base.Filesystem.path_separator[1]))" -L $inputfile
                 --code-coverage=$covfile --code-coverage=@`) == "(3, $(repr(tdir)))"
         end
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in relative directory
         tdir = dirname(realpath(inputfile))
         cd(dirname(tdir)) do
-            @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
+            @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
                 --code-coverage=$covfile --code-coverage=@testhelpers`) == "(3, $(repr(tdir)))"
         end
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in relative directory with dot-dot notation
         tdir = dirname(realpath(inputfile))
         cd(tdir) do
-            @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
+            @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
                 --code-coverage=$covfile --code-coverage=@../testhelpers`) == "(3, $(repr(tdir)))"
         end
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
-        @test occursin(expected, got) || (expected, got)
+        @test occursin(expected, got) context=(expected, got)
 
         # Ask for coverage in a different directory
         tdir = mktempdir() # a dir that contains no code
-        @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
+        @test readchomp(`$cov_exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
             --code-coverage=$covfile --code-coverage=@$tdir`) == "(3, $(repr(realpath(tdir))))"
         @test isfile(covfile)
         got = read(covfile, String)
@@ -580,7 +642,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             mktemp(dir) do srcfile, io
                 write(io, src); close(io)
                 outfile = tempname(dir, cleanup=false)*".info"
-                run(`$exename --code-coverage=$outfile $srcfile`)
+                run(`$cov_exename --code-coverage=$outfile $srcfile`)
                 result = read(outfile, String)
                 rm(outfile, force=true)
                 result
@@ -640,16 +702,17 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     end
 
     # --track-allocation
-    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0"`) == "false"
-    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0" --track-allocation=none`) == "false"
+    alloc_exename = `$(Base.julia_cmd()) --startup-file=no --color=no --track-allocation=none`
+    @test readchomp(`$alloc_exename -E "Base.JLOptions().malloc_log != 0"`) == "false"
+    @test readchomp(`$alloc_exename -E "Base.JLOptions().malloc_log != 0" --track-allocation=none`) == "false"
 
-    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0" --track-allocation`) == "true"
-    @test readchomp(`$exename -E "Base.JLOptions().malloc_log != 0" --track-allocation=user`) == "true"
+    @test readchomp(`$alloc_exename -E "Base.JLOptions().malloc_log != 0" --track-allocation`) == "true"
+    @test readchomp(`$alloc_exename -E "Base.JLOptions().malloc_log != 0" --track-allocation=user`) == "true"
     mktempdir() do dir
         helperdir = joinpath(@__DIR__, "testhelpers")
         inputfile = joinpath(dir, "allocation_file.jl")
         cp(joinpath(helperdir,"allocation_file.jl"), inputfile)
-        pid = readchomp(`$exename -E "getpid()" -L $inputfile --track-allocation=user`)
+        pid = readchomp(`$alloc_exename -E "getpid()" -L $inputfile --track-allocation=user`)
         memfile = "$inputfile.$pid.mem"
         got = readlines(memfile)
         rm(memfile)
@@ -675,7 +738,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         end
         @test popfirst!(got) == "        - end"
         @test popfirst!(got) == "        - f(1.23)"
-        @test isempty(got) || got
+        @test isempty(got) context=got
     end
 
 
@@ -873,6 +936,64 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test occursin("precompile(Tuple{typeof(Main.foo), Int", _stderr)
     end
 
+    # --trace-eval
+    let
+        # Test --trace-eval=loc (location only)
+        mktempdir() do dir
+            testfile = joinpath(dir, "test.jl")
+            write(testfile, "x = 1 + 1\ny = x * 2")
+            success, out, err = readchomperrors(`$exename --trace-eval=loc $testfile`)
+            @test success
+            @test occursin("eval: #=", err)
+            @test !occursin("eval: \$(Expr(:toplevel", err)  # Should not show full expressions
+        end
+    end
+
+    let
+        # Test --trace-eval=full (full expressions)
+        mktempdir() do dir
+            testfile = joinpath(dir, "test.jl")
+            write(testfile, "x = 1 + 1\ny = x * 2")
+            success, out, err = readchomperrors(`$exename --trace-eval=full $testfile`)
+            @test success
+            @test occursin("eval: \$(Expr(:toplevel", err)  # Should show full expressions
+            @test occursin("x = 1 + 1", err)
+        end
+    end
+
+    let
+        # Test --trace-eval=no (disabled)
+        mktempdir() do dir
+            testfile = joinpath(dir, "test.jl")
+            write(testfile, "x = 1 + 1\ny = x * 2")
+            success, out, err = readchomperrors(`$exename --trace-eval=no $testfile`)
+            @test success
+            @test !occursin("eval:", err)  # Should not show any eval traces
+        end
+    end
+
+    let
+        # Test Base.TRACE_EVAL global control takes priority
+        mktempdir() do dir
+            testfile = joinpath(dir, "test.jl")
+            write(testfile, """
+                Base.TRACE_EVAL = :full
+                x = 1 + 1
+                Base.TRACE_EVAL = :no
+                y = x * 2
+                """)
+            success, out, err = readchomperrors(`$exename --trace-eval=loc $testfile`)  # Command line says :loc, but code overrides
+            @test success
+            # Should show full expression for x = 1 + 1 (Base.TRACE_EVAL = :full)
+            @test occursin("eval: \$(Expr(:toplevel", err)
+            @test occursin("x = 1 + 1", err)
+            # Should not show trace for y = x * 2 (Base.TRACE_EVAL = :no)
+            lines = split(err, '\n')
+            y_lines = filter(line -> occursin("y = x * 2", line), lines)
+            @test length(y_lines) == 0  # No eval trace for y assignment
+        end
+    end
+
     # test passing arguments
     mktempdir() do dir
         testfile, io = mktemp(dir)
@@ -988,10 +1109,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         cd(testdir) do
             rm(testdir)
             @test Base.current_project() === nothing
-            @test success(`$exename -e "exit(0)"`)
+            @test "" == test_read_success(`$exename -e "exit(0)"`)
             for load_path in ["", "@", "@."]
                 withenv("JULIA_LOAD_PATH" => load_path) do
-                    @test success(`$exename -e "exit(!(Base.load_path() == []))"`)
+                    @test "" == test_read_success(`$exename -e "exit(!(Base.load_path() == []))"`)
                 end
             end
         end
@@ -1027,6 +1148,14 @@ end
         @test v[1] == false
         @test v[2] == ""
         @test contains(v[3], "More than one command line CPU targets specified")
+    end
+
+    # Testing this more precisely would be very platform and build system dependent and brittle.
+    withenv("JULIA_CPU_TARGET" => "sysimage") do
+        v = readchomp(`$julia_path -E "Sys.sysimage_target()"`)
+        # Local builds will likely be "native" but CI shouldn't be.
+        invalid_results = Base.get_bool_env("CI", false) ? ("", "native", "sysimage") : ("", "sysimage",)
+        @test !in(v, invalid_results)
     end
 end
 
@@ -1180,7 +1309,7 @@ for yn in ("no", "yes")
 end
 
 # issue #39259, shadowing `ARGS`
-@test success(`$(Base.julia_cmd()) --startup-file=no -e 'ARGS=1'`)
+@test "" == test_read_success(`$(Base.julia_cmd()) --startup-file=no -e 'ARGS=1'`)
 
 @testset "- as program file reads from stdin" begin
     for args in (`- foo bar`, `-- - foo bar`)
@@ -1247,9 +1376,15 @@ end
 # test --bug-report=rr
 if Sys.islinux() && Sys.ARCH in (:i686, :x86_64) # rr is only available on these platforms
     mktempdir() do temp_trace_dir
-        @test success(pipeline(setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`,
-                                      "JULIA_RR_RECORD_ARGS" => "-n --nested=ignore",
-                                      "_RR_TRACE_DIR" => temp_trace_dir); #=stderr, stdout=#))
+        cmd = setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`,
+                     "JULIA_RR_RECORD_ARGS" => "-n --nested=ignore",
+                     "_RR_TRACE_DIR" => temp_trace_dir)
+        success, out, err = readchomperrors(cmd)
+        # rr cannot read perf counters if running in containers, allow it to fail in this case
+        allowed_failure = occursin("Unable to open performance counter", err)
+        @testset let cmd=cmd, stdout=out, stderr=err
+            @test success || allowed_failure
+        end
     end
 end
 
@@ -1283,19 +1418,19 @@ end
         ("100000000", 100000000), ("1e8", 1e8), ("100MB", 100m), ("100m", 100m), ("1e5kB", 1e5k),
     ]
     @testset "--hard-heap-limit=$str" for (str, val) in one_hundred_mb_strs_and_vals
-        @test parse(UInt64,read(`$exename --hard-heap-limit=$str -E "Base.JLOptions().hard_heap_limit"`, String)) == val
+        @test test_read_success(`$exename --hard-heap-limit=$str -E "Base.JLOptions().hard_heap_limit"`, UInt64) == val
     end
     two_and_a_half_gigabytes_strs_and_vals = [
         ("2500000000", 2500000000), ("2.5e9", 2.5e9), ("2.5g", 2.5g), ("2.5GB", 2.5g), ("2.5e6mB", 2.5e6m),
     ]
     @testset "--hard-heap-limit=$str" for (str, val) in two_and_a_half_gigabytes_strs_and_vals
-        @test parse(UInt64,read(`$exename --hard-heap-limit=$str -E "Base.JLOptions().hard_heap_limit"`, String)) == val
+        @test test_read_success(`$exename --hard-heap-limit=$str -E "Base.JLOptions().hard_heap_limit"`, UInt64) == val
     end
     one_terabyte_strs_and_vals = [
         ("1TB", 1t), ("1024GB", 1t),
     ]
     @testset "--hard-heap-limit=$str" for (str, val) in one_terabyte_strs_and_vals
-        @test parse(UInt64,read(`$exename --hard-heap-limit=$str -E "Base.JLOptions().hard_heap_limit"`, String)) == val
+        @test test_read_success(`$exename --hard-heap-limit=$str -E "Base.JLOptions().hard_heap_limit"`, UInt64) == val
     end
 end
 
@@ -1313,31 +1448,31 @@ end
         ("100000000", 100000000), ("1e8", 1e8), ("100MB", 100m), ("100m", 100m), ("1e5kB", 1e5k),
     ]
     @testset "--heap-target-increment=$str" for (str, val) in one_hundred_mb_strs_and_vals
-        @test parse(UInt64,read(`$exename --heap-target-increment=$str -E "Base.JLOptions().heap_target_increment"`, String)) == val
+        @test test_read_success(`$exename --heap-target-increment=$str -E "Base.JLOptions().heap_target_increment"`, UInt64) == val
     end
     two_and_a_half_gigabytes_strs_and_vals = [
         ("2500000000", 2500000000), ("2.5e9", 2.5e9), ("2.5g", 2.5g), ("2.5GB", 2.5g), ("2.5e6mB", 2.5e6m),
     ]
     @testset "--heap-target-increment=$str" for (str, val) in two_and_a_half_gigabytes_strs_and_vals
-        @test parse(UInt64,read(`$exename --heap-target-increment=$str -E "Base.JLOptions().heap_target_increment"`, String)) == val
+        @test test_read_success(`$exename --heap-target-increment=$str -E "Base.JLOptions().heap_target_increment"`, UInt64) == val
     end
     one_terabyte_strs_and_vals = [
         ("1TB", 1t), ("1024GB", 1t),
     ]
     @testset "--heap-target-increment=$str" for (str, val) in one_terabyte_strs_and_vals
-        @test parse(UInt64,read(`$exename --heap-target-increment=$str -E "Base.JLOptions().heap_target_increment"`, String)) == val
+        @test test_read_success(`$exename --heap-target-increment=$str -E "Base.JLOptions().heap_target_increment"`, UInt64) == val
     end
 end
 
 @testset "--timeout-for-safepoint-straggler" begin
     exename = `$(Base.julia_cmd())`
     timeout = 120
-    @test parse(Int,read(`$exename --timeout-for-safepoint-straggler=$timeout -E "Base.JLOptions().timeout_for_safepoint_straggler_s"`, String)) == timeout
+    @test test_read_success(`$exename --timeout-for-safepoint-straggler=$timeout -E "Base.JLOptions().timeout_for_safepoint_straggler_s"`, Int) == timeout
 end
 
 @testset "--strip-metadata" begin
     mktempdir() do dir
-        @test success(pipeline(`$(Base.julia_cmd()) --strip-metadata -t1,0 --output-o $(dir)/sys.o.a -e 0`, stderr=stderr, stdout=stdout))
+        @test "" == test_read_success(`$(Base.julia_cmd()) --strip-metadata -t1,0 --output-o $(dir)/sys.o.a -e 0`)
         if isfile(joinpath(dir, "sys.o.a"))
             Base.Linking.link_image(joinpath(dir, "sys.o.a"), joinpath(dir, "sys.so"))
             @test readchomp(`$(Base.julia_cmd()) -t1,0 -J $(dir)/sys.so -E 'hasmethod(sort, (Vector{Int},), (:dims,))'`) == "true"
@@ -1346,4 +1481,4 @@ end
 end
 
 # https://github.com/JuliaLang/julia/issues/58229 Recursion in jitlinking with inline=no
-@test success(`$(Base.julia_cmd()) --inline=no -e 'Base.compilecache(Base.identify_package("Pkg"))'`)
+@test "" == test_read_success(`$(Base.julia_cmd()) --inline=no -e 'Base.compilecache(Base.identify_package("Pkg"))'`)

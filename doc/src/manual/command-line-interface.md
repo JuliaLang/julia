@@ -46,8 +46,24 @@ but at the conclusion of executing a script or expression, `julia` will attempt 
 `Main.main(Base.ARGS)` if such a function `Main.main` has been defined and this behavior was opted into
 by using the `@main` macro.
 
-This feature is intended to aid in the unification
-of compiled and interactive workflows. In compiled workflows, loading the code that defines the `main`
+To see this feature in action, consider the following definition:
+```julia
+(@main)(args) = println("Hello $(args[1])!")
+```
+Executing the above script with `julia script.jl "Buddy"` will automatically run `(@main)` and print "Hello Buddy!",
+despite there being no explicit call to `(@main)`.
+
+The return value of the `(@main)` function must either be `nothing`, resulting in exit code
+`0`, or convertible to a `Cint` which will be the exit code:
+```
+$ julia -e "(@main)(args) = nothing"; echo $?0
+0
+$ julia -e "(@main)(args) = 1"; echo $?
+1
+```
+Typically exit codes are in the range `0:255`, although the interpretation of the return value might be OS dependent.
+
+This feature is intended to aid in the unification of compiled and interactive workflows. In compiled workflows, loading the code that defines the `main`
 function may be spatially and temporally separated from the invocation. However, for interactive workflows,
 the behavior is equivalent to explicitly calling `exit(main(ARGS))` at the end of the evaluated script or
 expression.
@@ -55,14 +71,6 @@ expression.
 !!! compat "Julia 1.11"
     The special entry point `Main.main` was added in Julia 1.11. For compatibility with prior julia versions,
     add an explicit `@isdefined(var"@main") ? (@main) : exit(main(ARGS))` at the end of your scripts.
-
-To see this feature in action, consider the following definition, which will execute the print function despite there being no explicit call to `main`:
-
-```
-$ julia -e '(@main)(args) = println("Hello World!")'
-Hello World!
-$
-```
 
 Only the `main` binding in the `Main` module has this behavior and only if
 the macro `@main` was used within the defining module.
@@ -219,6 +227,7 @@ The following is a complete list of command-line switches available when launchi
 |`--trace-compile={stderr\|name}`       |Print precompile statements for methods compiled during execution or save to stderr or a path. Methods that were recompiled are printed in yellow or with a trailing comment if color is not supported|
 |`--trace-compile-timing`               |If `--trace-compile` is enabled show how long each took to compile in ms|
 |`--trace-dispatch={stderr\|name}`      |Print precompile statements for methods dispatched during execution or save to stderr or a path.|
+|`--trace-eval[={no*\|loc\|full}]`      |Show top-level expressions being evaluated. `loc` shows location info only, `full` shows full expressions (omitting setting is equivalent to `loc`). Only shows the outermost expression being evaluated, not internal function calls. See also [`Base.TRACE_EVAL`](@ref).|
 |`--image-codegen`                      |Force generate code in imaging mode|
 |`--permalloc-pkgimg={yes\|no*}`        |Copy the data section of package images into memory|
 |`--trim={no*\|safe\|unsafe\|unsafe-warn}` |Build a sysimage including only code provably reachable from methods marked by calling `entrypoint`. The three non-default options differ in how they handle dynamic call sites. In safe mode, such sites result in compile-time errors. In unsafe mode, such sites are allowed but the resulting binary might be missing needed code and can throw runtime errors. With unsafe-warn, such sites will trigger warnings at compile-time and might error at runtime.|

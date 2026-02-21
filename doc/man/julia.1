@@ -295,6 +295,13 @@ If --trace-compile is enabled show how long each took to compile in ms
 Print precompile statements for methods dispatched during execution or save to stderr or a path.
 
 .TP
+--trace-eval[={no*|loc|full}]
+Show top-level expressions being evaluated. `loc` shows location info only,
+`full` shows full expressions (omitting setting is equivalent to `loc`).
+Only shows the outermost expression being evaluated, not internal function calls.
+Can be controlled programmatically via Base.TRACE_EVAL.
+
+.TP
 --task-metrics={yes|no*}
 Enable the collection of per-task metrics.
 

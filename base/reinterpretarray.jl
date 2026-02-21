@@ -221,6 +221,7 @@ end
 _checkcontiguous(::Type{Bool}, A::ReinterpretArray) = _checkcontiguous(Bool, parent(A))
 
 similar(a::ReinterpretArray, T::Type, d::Dims) = similar(a.parent, T, d)
+similar(::Type{TA}, dims::Dims) where {T,N,O,P,TA<:ReinterpretArray{T,N,O,P}} = similar(P, dims)
 
 function check_readable(a::ReinterpretArray{T, N, S} where N) where {T,S}
     # See comment in check_writable
@@ -311,6 +312,7 @@ SimdLoop.simd_inner_length(::SCartesianIndices2{K}, ::Any) where K = K
     SCartesianIndex2{K}(I1+1, Ilast)
 end
 
+_maybe_reshape(::IndexSCartesian2, A::AbstractArray, I...) = _maybe_reshape(IndexCartesian(), A, I...)
 _maybe_reshape(::IndexSCartesian2, A::ReshapedReinterpretArray, I...) = A
 
 # fallbacks
@@ -329,11 +331,25 @@ function _getindex(::IndexSCartesian2, A::AbstractArray{T,N}, ind::SCartesianInd
     J = _ind2sub(tail(axes(A)), ind.j)
     getindex(A, ind.i, J...)
 end
+
+function _getindex(::IndexSCartesian2{2}, A::AbstractArray{T,2}, ind::SCartesianIndex2) where {T}
+    @_propagate_inbounds_meta
+    J = first(axes(A, 2)) + ind.j - 1
+    getindex(A, ind.i, J)
+end
+
 function _setindex!(::IndexSCartesian2, A::AbstractArray{T,N}, v, ind::SCartesianIndex2) where {T,N}
     @_propagate_inbounds_meta
     J = _ind2sub(tail(axes(A)), ind.j)
     setindex!(A, v, ind.i, J...)
 end
+
+function _setindex!(::IndexSCartesian2{2}, A::AbstractArray{T,2}, v, ind::SCartesianIndex2) where {T}
+    @_propagate_inbounds_meta
+    J = first(axes(A, 2)) + ind.j - 1
+    setindex!(A, v, ind.i, J)
+end
+
 eachindex(style::IndexSCartesian2, A::AbstractArray) = eachindex(style, parent(A))
 
 ## AbstractArray interface
@@ -902,6 +918,12 @@ function _reinterpret_padding(::Type{Out}, x::In) where {Out, In}
     return out[]
 end
 
+function String(v::ReinterpretArray{UInt8,1,S,<:Union{Vector{S},Memory{S}},IsReshaped}) where {S,IsReshaped}
+    len = length(v)
+    len == 0 && return ""
+    check_readable(v) # stringifying empty arrays is always allowed
+    return ccall(:jl_pchar_to_string, Ref{String}, (Ptr{UInt8}, Int), v, len)
+end
 
 # Reductions with IndexSCartesian2
 

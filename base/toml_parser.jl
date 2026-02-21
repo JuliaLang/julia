@@ -716,8 +716,8 @@ function parse_array(l::Parser{Dates})::Err{Vector} where Dates
         copyto_typed!(new, array)
     elseif T === Union{}
         new = Any[]
-    elseif (T === TOMLDict) || (T == BigInt) || (T === UInt128) || (T === Int128) || (T <: Vector) ||
-        (T === Dates.Date) || (T === Dates.Time) || (T === Dates.DateTime)
+    elseif (T === TOMLDict) || (T === BigInt) || (T === UInt128) || (T === Int128) || (T <: Vector) ||
+        (Dates !== nothing && ((T === Dates.Date) || (T === Dates.Time) || (T === Dates.DateTime)))
         # do nothing, leave as Vector{Any}
         new = array
     else @assert false end
@@ -900,7 +900,7 @@ end
 
 function take_string_or_substring(l, contains_underscore)::SubString
     subs = take_substring(l)
-    # Need to pass a AbstractString to `parse` so materialize it in case it
+    # Need to pass an AbstractString to `parse` so materialize it in case it
     # contains underscore.
     return contains_underscore ? SubString(filter(!=('_'), subs)) : subs
 end
@@ -1110,7 +1110,7 @@ function _parse_local_time(l::Parser, skip_hour=false)::Err{NTuple{4, Int64}}
     second in 0:59 || return ParserError(ErrParsingDateTime)
 
     # optional fractional second
-    fractional_second = Int64(0)
+    millisecond = Int64(0)
     if accept(l, '.')
         set_marker!(l)
         found_fractional_digit = false
@@ -1121,12 +1121,15 @@ function _parse_local_time(l::Parser, skip_hour=false)::Err{NTuple{4, Int64}}
             return ParserError(ErrParsingDateTime)
         end
         # DateTime in base only manages 3 significant digits in fractional
-        # second
+        # second. Interpret parsed digits as fractional seconds and scale to
+        # milliseconds precision (e.g., ".2" => 200ms, ".20" => 200ms).
+        ndigits = l.prevpos - l.marker
         fractional_second = parse_int(l, false)::Int64
+        millisecond = fractional_second * 10^(3 - ndigits)
         # Truncate off the rest eventual digits
         accept_batch(l, isdigit)
     end
-    return hour, minute, second, fractional_second
+    return hour, minute, second, millisecond
 end
 
 

@@ -1,7 +1,12 @@
 #include "gc-common.h"
 #include "gc-tls-mmtk.h"
+#include "gc-wb-mmtk.h"
 #include "mmtkMutator.h"
 #include "threading.h"
+
+#ifdef _COMPILER_TSAN_ENABLED_
+#include <sanitizer/tsan_interface.h>
+#endif
 
 // File exists in the binding
 #include "mmtk.h"
@@ -502,6 +507,9 @@ JL_DLLEXPORT void jl_gc_scan_vm_specific_roots(RootsWorkClosure* closure)
     // add module
     add_node_to_roots_buffer(closure, &buf, &len, jl_main_module);
 
+    // add global_method_table
+    add_node_to_roots_buffer(closure, &buf, &len, jl_method_table);
+
     // buildin values
     add_node_to_roots_buffer(closure, &buf, &len, jl_an_empty_vec_any);
     add_node_to_roots_buffer(closure, &buf, &len, jl_module_init_order);
@@ -861,10 +869,23 @@ STATIC_INLINE void* mmtk_immortal_alloc_fast(MMTkMutatorContext* mutator, size_t
     return bump_alloc_fast(mutator, (uintptr_t*)&allocator->cursor, (uintptr_t)allocator->limit, size, align, offset, 1);
 }
 
+inline void mmtk_set_side_metadata(const void* side_metadata_base, void* obj) {
+        intptr_t addr = (intptr_t) obj;
+        uint8_t* meta_addr = (uint8_t*) side_metadata_base + (addr >> 6);
+        intptr_t shift = (addr >> 3) & 0b111;
+        while(1) {
+            uint8_t old_val = *meta_addr;
+            uint8_t new_val = old_val | (1 << shift);
+            if (jl_atomic_cmpswap((_Atomic(uint8_t)*)meta_addr, &old_val, new_val)) {
+                break;
+            }
+        }
+}
+
 STATIC_INLINE void mmtk_immortal_post_alloc_fast(MMTkMutatorContext* mutator, void* obj, size_t size) {
-    // FIXME: Similarly, for now, we do nothing
-    // but when supporting moving, this is where we set the valid object (VO) bit
-    // and log (old gen) bit
+    if (MMTK_NEEDS_WRITE_BARRIER == MMTK_OBJECT_BARRIER) {
+        mmtk_set_side_metadata(MMTK_SIDE_LOG_BIT_BASE_ADDRESS, obj);
+    }
 }
 
 JL_DLLEXPORT jl_value_t *jl_mmtk_gc_alloc_default(jl_ptls_t ptls, int osize, size_t align, void *ty)
@@ -1015,9 +1036,8 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
     return realloc(p, sz);
 }
 
-void *jl_gc_perm_alloc_nolock(size_t sz, int zero, unsigned align, unsigned offset)
+void *jl_gc_perm_alloc_nolock(jl_ptls_t ptls, size_t sz, int zero, unsigned align, unsigned offset)
 {
-    jl_ptls_t ptls = jl_current_task->ptls;
     size_t allocsz = mmtk_align_alloc_sz(sz);
     void* addr = mmtk_immortal_alloc_fast(&ptls->gc_tls.mmtk_mutator, allocsz, align, offset);
     return addr;
@@ -1025,20 +1045,20 @@ void *jl_gc_perm_alloc_nolock(size_t sz, int zero, unsigned align, unsigned offs
 
 void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align, unsigned offset)
 {
-    return jl_gc_perm_alloc_nolock(sz, zero, align, offset);
+    jl_ptls_t ptls = jl_current_task->ptls;
+    return jl_gc_perm_alloc_nolock(ptls, sz, zero, align, offset);
 }
 
-jl_value_t *jl_gc_permobj(size_t sz, void *ty, unsigned align) JL_NOTSAFEPOINT
+jl_value_t *jl_gc_permobj(jl_ptls_t ptls, size_t sz, void *ty, unsigned align) JL_NOTSAFEPOINT
 {
     const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
     if (align == 0) {
         align = ((sz == 0) ? sizeof(void*) : (allocsz <= sizeof(void*) * 2 ?
                                                  sizeof(void*) * 2 : 16));
     }
-    jl_taggedvalue_t *o = (jl_taggedvalue_t*)jl_gc_perm_alloc(allocsz, 0, align,
+    jl_taggedvalue_t *o = (jl_taggedvalue_t*)jl_gc_perm_alloc_nolock(ptls, allocsz, 0, align,
                                                               sizeof(void*) % align);
 
-    jl_ptls_t ptls = jl_current_task->ptls;
     mmtk_immortal_post_alloc_fast(&ptls->gc_tls.mmtk_mutator, jl_valueof(o), allocsz);
     o->header = (uintptr_t)ty;
     return jl_valueof(o);
@@ -1079,6 +1099,11 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
 void jl_gc_notify_image_load(const char* img_data, size_t len)
 {
     mmtk_set_vm_space((void*)img_data, len);
+}
+
+void jl_gc_notify_image_alloc(const char* img_data, size_t len)
+{
+    mmtk_immortal_region_post_alloc((void*)img_data, len);
 }
 
 // ========================================================================= //
@@ -1128,7 +1153,9 @@ _Atomic(int) gc_stack_free_idx = 0;
 
 JL_DLLEXPORT void jl_gc_queue_root(const struct _jl_value_t *ptr) JL_NOTSAFEPOINT
 {
-    mmtk_unreachable();
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    mmtk_object_reference_write_slow(&ptls->gc_tls.mmtk_mutator, ptr, (const void*) 0);
 }
 
 JL_DLLEXPORT void jl_gc_queue_multiroot(const struct _jl_value_t *root, const void *stored,
@@ -1166,7 +1193,7 @@ JL_DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p, size_t *osiz
     return NULL;
 }
 
-void jl_gc_debug_critical_error(void) JL_NOTSAFEPOINT
+void jl_gc_debug_fprint_critical_error(ios_t *s) JL_NOTSAFEPOINT
 {
 }
 
@@ -1175,19 +1202,14 @@ int gc_is_collector_thread(int tid) JL_NOTSAFEPOINT
     return 0;
 }
 
-void jl_gc_debug_print_status(void) JL_NOTSAFEPOINT
+void jl_gc_debug_fprint_status(ios_t *s) JL_NOTSAFEPOINT
 {
     // May not be accurate but should be helpful enough
     uint64_t pool_count = gc_num.poolalloc;
     uint64_t big_count = gc_num.bigalloc;
-    jl_safe_printf("Allocations: %" PRIu64 " "
-                   "(Pool: %" PRIu64 "; Big: %" PRIu64 "); GC: %d\n",
-                   pool_count + big_count, pool_count, big_count, gc_num.pause);
-}
-
-JL_DLLEXPORT size_t jl_gc_external_obj_hdr_size(void)
-{
-    return sizeof(bigval_t);
+    jl_safe_fprintf(s, "Allocations: %" PRIu64 " "
+                    "(Pool: %" PRIu64 "; Big: %" PRIu64 "); GC: %d\n",
+                    pool_count + big_count, pool_count, big_count, gc_num.pause);
 }
 
 void jl_print_gc_stats(JL_STREAM *s)

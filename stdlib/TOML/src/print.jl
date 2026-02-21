@@ -117,7 +117,7 @@ function print_integer(io::IO, value::Integer)
 end
 
 function print_inline_table(f::Function, io::IO, value::AbstractDict, sorted::Bool)
-    vkeys = collect(keys(value))
+    vkeys = collect(keys(value))::AbstractArray
     if sorted
         sort!(vkeys)
     end

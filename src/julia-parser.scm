@@ -1597,13 +1597,60 @@
                             (if (or (eqv? t #\newline) (closing-token? t))
                                 (list 'return '(null))
                                 (list 'return (parse-eq s)))))
-       ((break continue)
+       ((continue)
         (let ((t (peek-token s)))
-          (if (or (eof-object? t)
-                  (and (eq? t 'end) (not end-symbol))
-                  (memv t '(#\newline #\; #\) :)))
-              (list word)
-              (error (string "unexpected \"" t "\" after " word)))))
+          (cond ((or (eof-object? t)
+                     (and (eq? t 'end) (not end-symbol))
+                     (memv t '(#\newline #\; #\))))
+                 ;; continue with no arguments
+                 (list word))
+                ((and range-colon-enabled (eq? t ':))
+                 ;; Could be :label or ternary. Take : and check if immediately followed by identifier.
+                 (take-token s)
+                 (let ((nxt (peek-token s)))
+                   (if (or (closing-token? nxt) (newline? nxt) (ts:space? s))
+                       ;; Space after : or closer - this is ternary, put back :
+                       (begin (ts:put-back! s ': #t)  ;; had space before :
+                              (list word))
+                       ;; No space after :, parse as atom (label validated in lowering)
+                       (begin
+                         (ts:put-back! s ': #f)  ;; put back : with no preceding space
+                         (list word (parse-atom s))))))
+                (else
+                 ;; Parse label as atom (validated in lowering)
+                 (list word (parse-atom s))))))
+
+       ((break)
+        (let ((t (peek-token s)))
+          (define (parse-break-value lbl)
+            (let ((t2 (peek-token s)))
+              (if (or (eof-object? t2)
+                      (and (eq? t2 'end) (not end-symbol))
+                      (memv t2 '(#\newline #\; #\) :)))
+                  ;; break label
+                  (list word lbl)
+                  ;; break label value
+                  (list word lbl (parse-eq s)))))
+          (cond ((or (eof-object? t)
+                     (and (eq? t 'end) (not end-symbol))
+                     (memv t '(#\newline #\; #\))))
+                 ;; break with no arguments
+                 (list word))
+                ((and range-colon-enabled (eq? t ':))
+                 ;; Could be :label or ternary. Take : and check if immediately followed by identifier.
+                 (take-token s)
+                 (let ((nxt (peek-token s)))
+                   (if (or (closing-token? nxt) (newline? nxt) (ts:space? s))
+                       ;; Space after : or closer - this is ternary, put back :
+                       (begin (ts:put-back! s ': #t)  ;; had space before :
+                              (list word))
+                       ;; No space after :, parse as atom (label validated in lowering)
+                       (begin
+                         (ts:put-back! s ': #f)  ;; put back : with no preceding space
+                         (parse-break-value (parse-atom s))))))
+                (else
+                 ;; Parse label as atom (validated in lowering)
+                 (parse-break-value (parse-atom s))))))
 
        ((module baremodule)
         (let* ((name (parse-unary-prefix s))

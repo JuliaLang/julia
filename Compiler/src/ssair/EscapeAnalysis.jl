@@ -415,7 +415,7 @@ end
 """
     iridx(x, estate::EscapeState) -> xidx::Union{Int,Nothing}
 
-Tries to convert analyzable IR element `x::Union{Argument,SSAValue}` to
+Try to convert analyzable IR element `x::Union{Argument,SSAValue}` to
 its unique identifier number `xidx` that is valid in the analysis context of `estate`.
 Returns `nothing` if `x` isn't maintained by `estate` and thus unanalyzable (e.g. `x::GlobalRef`).
 
@@ -1037,8 +1037,10 @@ function escape_foreigncall!(astate::AnalysisState, pc::Int, args::Vector{Any})
     # NOTE array allocations might have been proven as nothrow (https://github.com/JuliaLang/julia/pull/43565)
     nothrow = is_nothrow(astate.ir, pc)
     name_info = nothrow ? ⊥ : ThrownEscape(pc)
-    add_escape_change!(astate, name, name_info)
-    add_liveness_change!(astate, name, pc)
+    if !isexpr(name, :tuple)
+        add_escape_change!(astate, name, name_info)
+        add_liveness_change!(astate, name, pc)
+    end
     for i = 1:nargs
         # we should escape this argument if it is directly called,
         # otherwise just impose ThrownEscape if not nothrow

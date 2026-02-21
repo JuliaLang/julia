@@ -134,14 +134,14 @@ if !is_debug_build && opt_level > 0
     # Array
     test_loads_no_call(strip_debug_calls(get_llvm(sizeof, Tuple{Vector{Int}})), [Iptr])
     # As long as the eltype is known we don't need to load the elsize, but do need to check isvector
-    @test_skip test_loads_no_call(strip_debug_calls(get_llvm(sizeof, Tuple{Array{Any}})), ["atomic $Iptr", "ptr", "ptr", Iptr, Iptr, "ptr",  Iptr])
+    @test_skip test_loads_no_call(strip_debug_calls(get_llvm(sizeof, Tuple{Array{Any}})), ["atomic volatile $Iptr", "ptr", "ptr", Iptr, Iptr, "ptr",  Iptr])
     # Memory
     test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory{Int}})), [Iptr])
     # As long as the eltype is known we don't need to load the elsize
     test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory{Any}})), [Iptr])
     # Check that we load the elsize and isunion from the typeof layout
-    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic $Iptr", "ptr", "i32", "i16"])
-    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic $Iptr", "ptr", "i32", "i16"])
+    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic volatile $Iptr", "ptr", "i32", "i16"])
+    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic volatile $Iptr", "ptr", "i32", "i16"])
     # Primitive Type size should be folded to a constant
     test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Ptr})), String[])
 
@@ -1075,3 +1075,13 @@ let io = IOBuffer()
     str = String(take!(io))
     @test occursin("julia.write_barrier", str)
 end
+
+# Test phi node codegen for union types with inline roots
+function union_phi_inline_roots(x::Bool)
+    if x
+        return ("Q8", 1)
+    else
+        return ("Q10", Ref(5))
+    end
+end
+@test union_phi_inline_roots(true) === ("Q8", 1)

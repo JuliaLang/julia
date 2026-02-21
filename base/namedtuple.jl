@@ -159,7 +159,7 @@ end
 length(t::NamedTuple) = nfields(t)
 iterate(t::NamedTuple, iter=1) = iter > nfields(t) ? nothing : (getfield(t, iter), iter + 1)
 rest(t::NamedTuple) = t
-@inline rest(t::NamedTuple{names}, i::Int) where {names} = NamedTuple{rest(names,i)}(t)
+@inline rest(t::NamedTuple{names}, i) where {names} = NamedTuple{rest(names,i::Int)}(t)
 firstindex(t::NamedTuple) = 1
 lastindex(t::NamedTuple) = nfields(t)
 getindex(t::NamedTuple, i::Int) = getfield(t, i)
@@ -343,7 +343,7 @@ merge(a::NamedTuple,     b::NamedTuple{()}) = a
 merge(a::NamedTuple{()}, b::NamedTuple{()}) = a
 merge(a::NamedTuple{()}, b::NamedTuple)     = b
 
-merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,<:Any,<:NamedTuple}) = merge(a, getfield(b, :data))
+merge(a::NamedTuple, b::Iterators.Pairs{<:Any,<:Any,Nothing,<:NamedTuple}) = merge(a, getfield(b, :data))
 
 merge(a::NamedTuple, b::Iterators.Zip{<:Tuple{Any,Any}}) = merge(a, NamedTuple{Tuple(b.is[1])}(b.is[2]))
 
@@ -535,7 +535,7 @@ when it is printed in the stack trace view.
 
 ```julia
 julia> @Kwargs{init::Int} # the internal representation of keyword arguments
-Base.Pairs{Symbol, Int64, Tuple{Symbol}, @NamedTuple{init::Int64}}
+Base.Pairs{Symbol, Int64, Nothing, @NamedTuple{init::Int64}}
 
 julia> sum("julia"; init=1)
 ERROR: MethodError: no method matching +(::Char, ::Char)
@@ -578,7 +578,7 @@ Stacktrace:
 macro Kwargs(ex)
     return :(let
         NT = @NamedTuple $ex
-        Base.Pairs{keytype(NT),eltype(NT),typeof(NT.parameters[1]),NT}
+        Base.Pairs{keytype(NT),eltype(NT),Nothing,NT}
     end)
 end
 

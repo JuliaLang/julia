@@ -154,14 +154,24 @@ In contrast,
 julia> import .NiceStuff
 ```
 
-brings *only* the module name into scope. Users would need to use `NiceStuff.DOG`, `NiceStuff.Dog`, and `NiceStuff.nice` to access its contents. Usually, `import ModuleName` is used in contexts when the user wants to keep the namespace clean.
-As we will see in the next section `import .NiceStuff` is equivalent to `using .NiceStuff: NiceStuff`.
+brings *only* the module name into scope. Users would need to use `NiceStuff.DOG`, `NiceStuff.Dog`, and `NiceStuff.nice` to access its contents.
+As we will see in the next section `import .NiceStuff` is equivalent to `using .NiceStuff: NiceStuff`. Usually, `import ModuleName` or `using ModuleName: ModuleName` is used in contexts when the user wants to keep the namespace clean.
 
 You can combine multiple `using` and `import` statements of the same kind in a comma-separated expression, e.g.
 
 ```jldoctest module_manual
 julia> using LinearAlgebra, Random
 ```
+
+This is currently equivalent to the following:
+
+```jldoctest module_manual
+julia> using LinearAlgebra; using Random
+```
+
+However, this might change in future Julia versions to loading packages in parallel.
+Generally speaking, if something breaks when changing `using A, B` to `using B, A`
+that suggests a bug somewhere.
 
 ### `using` and `import` with specific identifiers, and adding methods
 
@@ -641,7 +651,7 @@ Other known potential failure scenarios include:
    Note that `objectid` (which works by hashing the memory pointer) has similar issues (see notes
    on `Dict` usage below).
 
-   One alternative is to use a macro to capture [`@__MODULE__`](@ref) and store it alone with the current `counter` value,
+   One alternative is to use a macro to capture [`@__MODULE__`](@ref) and store it along with the current `counter` value,
    however, it may be better to redesign the code to not depend on this global state.
 2. Associative collections (such as `Dict` and `Set`) need to be re-hashed in `__init__`. (In the
    future, a mechanism may be provided to register an initializer function.)

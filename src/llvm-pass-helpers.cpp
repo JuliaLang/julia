@@ -88,10 +88,11 @@ llvm::Value *JuliaPassContext::getPGCstack(llvm::Function &F) const
             }
         }
     }
-    if (F.getCallingConv() == CallingConv::Swift) {
-        for (auto &arg : F.args()) {
-            if (arg.hasSwiftSelfAttr())
-                return &arg;
+    for (auto &arg : F.args()) {
+        // Check for the "gcstack" attribute
+        AttributeSet attrs = F.getAttributes().getParamAttrs(arg.getArgNo());
+        if (attrs.hasAttribute("gcstack")) {
+            return &arg;
         }
     }
     return nullptr;

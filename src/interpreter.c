@@ -33,9 +33,9 @@ typedef struct {
   var = (decltype(var))alloca((n))
 #else
 #define JL_CPPALLOCA(var,n)                                                         \
-  JL_GCC_IGNORE_START("-Wc++-compat")                                               \
+  JL_CC_IGNORE_START("-Wc++-compat")                                               \
   var = alloca((n));                                                                \
-  JL_GCC_IGNORE_STOP
+  JL_CC_IGNORE_STOP
 #endif
 
 #ifdef __clang_gcanalyzer__
@@ -539,13 +539,13 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             }
             s->locals[jl_source_nslots(s->src) + ip] = jl_box_ulong(jl_excstack_state(ct));
             if (jl_enternode_scope(stmt)) {
-                jl_value_t *scope = eval_value(jl_enternode_scope(stmt), s);
-                // GC preserve the scope, since it is not rooted in the `jl_handler_t *`
-                // and may be removed from jl_current_task by any nested block and then
-                // replaced later
-                JL_GC_PUSH1(&scope);
-                ct->scope = scope;
-                if (!jl_setjmp(__eh.eh_ctx, 1)) {
+                jl_value_t *old_scope = ct->scope; // Identical to __eh.scope
+                // GC preserve the old_scope, since it is not rooted in the `jl_handler_t *`,
+                // the newly entered scope is preserved through the current_task.
+                JL_GC_PUSH1(&old_scope);
+                ct->scope = eval_value(jl_enternode_scope(stmt), s);
+                jl_gc_wb_current_task(ct, ct->scope);
+                if (!jl_setjmp(__eh.eh_ctx, 0)) {
                     ct->eh = &__eh;
                     eval_body(stmts, s, next_ip, toplevel);
                     jl_unreachable();
@@ -553,7 +553,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 JL_GC_POP();
             }
             else {
-                if (!jl_setjmp(__eh.eh_ctx, 1)) {
+                if (!jl_setjmp(__eh.eh_ctx, 0)) {
                     ct->eh = &__eh;
                     eval_body(stmts, s, next_ip, toplevel);
                     jl_unreachable();
@@ -634,21 +634,6 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     jl_value_t *res = jl_toplevel_eval(s->module, stmt);
                     s->locals[jl_source_nslots(s->src) + s->ip] = res;
                 }
-                else if (head == jl_globaldecl_sym) {
-                    jl_value_t *val = NULL;
-                    if (jl_expr_nargs(stmt) >= 2) {
-                        val = eval_value(jl_exprarg(stmt, 1), s);
-                        s->locals[jl_source_nslots(s->src) + s->ip] = val; // temporarily root
-                    }
-                    jl_declare_global(s->module, jl_exprarg(stmt, 0), val, 1);
-                    s->locals[jl_source_nslots(s->src) + s->ip] = jl_nothing;
-                }
-                else if (head == jl_const_sym) {
-                    jl_value_t *val = jl_expr_nargs(stmt) == 1 ? NULL : eval_value(jl_exprarg(stmt, 1), s);
-                    s->locals[jl_source_nslots(s->src) + s->ip] = val; // temporarily root
-                    jl_eval_const_decl(s->module, jl_exprarg(stmt, 0), val);
-                    s->locals[jl_source_nslots(s->src) + s->ip] = jl_nothing;
-                }
                 else if (head == jl_latestworld_sym) {
                     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
                 }
@@ -702,7 +687,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             s->locals[n - 1] = NULL;
         }
         else if (toplevel && jl_is_linenode(stmt)) {
-            jl_lineno = jl_linenode_line(stmt);
+            jl_atomic_store_relaxed(&jl_lineno, jl_linenode_line(stmt));
         }
         else {
             eval_stmt_value(stmt, s);

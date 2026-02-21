@@ -21,28 +21,23 @@
 
 Throw an object as an exception.
 
-See also: [`rethrow`](@ref), [`error`](@ref).
+See also [`rethrow`](@ref), [`error`](@ref).
 """
 throw
 
 ## native julia error handling ##
 
-# This is `Experimental.@max_methods 2 function error end`, which is not available at this point in bootstrap.
 # NOTE It is important to always be able to infer the return type of `error` as `Union{}`,
-# but there's a hitch when a package globally sets `@max_methods 1` and it causes inference
-# for `error(::Any)` to fail (JuliaLang/julia#54029).
-# This definition site `@max_methods 2` setting overrides any global `@max_methods 1` settings
-# on package side, guaranteeing that return type inference on `error` is successful always.
+# see issue (JuliaLang/julia#54029). Ensure that method counts are small enough with
+# respect to the `max_methods` value of the function.
 function error end
-typeof(error).name.max_methods = UInt8(2)
 
 """
     error(message::AbstractString)
 
 Raise an `ErrorException` with the given message.
 """
-error(s::AbstractString) = throw(ErrorException(s))
-error() = throw(ErrorException(""))
+error(::AbstractString)
 
 """
     error(msg...)
@@ -51,7 +46,14 @@ Raise an `ErrorException` with a message constructed by `string(msg...)`.
 """
 function error(s::Vararg{Any,N}) where {N}
     @noinline
-    throw(ErrorException(Main.Base.string(s...)))
+    exc = if s === ()
+        ErrorException("")
+    elseif s isa Tuple{AbstractString}
+        ErrorException(s...)
+    else
+        ErrorException(Main.Base.string(s...))
+    end
+    throw(exc)
 end
 
 """
@@ -135,8 +137,8 @@ function catch_backtrace()
     return _reformat_bt(bt::Vector{Ptr{Cvoid}}, bt2::Vector{Any})
 end
 
-struct ExceptionStack <: AbstractArray{Any,1}
-    stack::Array{Any,1}
+struct ExceptionStack <: AbstractArray{NamedTuple{(:exception, :backtrace)},1}
+    stack::Array{NamedTuple{(:exception, :backtrace)},1}
 end
 
 """
@@ -159,7 +161,7 @@ uncaught exceptions.
 """
 function current_exceptions(task::Task=current_task(); backtrace::Bool=true)
     raw = ccall(:jl_get_excstack, Any, (Any,Cint,Cint), task, backtrace, typemax(Cint))::Vector{Any}
-    formatted = Any[]
+    formatted = NamedTuple{(:exception, :backtrace)}[]
     stride = backtrace ? 3 : 1
     for i = reverse(1:stride:length(raw))
         exc = raw[i]
@@ -233,14 +235,12 @@ macro assert(ex, msgs...)
         msg = msg # pass-through
     elseif !isempty(msgs) && (isa(msg, Expr) || isa(msg, Symbol))
         # message is an expression needing evaluating
-        # N.B. To reduce the risk of invalidation caused by the complex callstack involved
-        # with `string`, use `inferencebarrier` here to hide this `string` from the compiler.
-        msg = :(Main.Base.inferencebarrier(Main.Base.string)($(esc(msg))))
+        msg = :($_assert_tostring($(esc(msg))))
     elseif isdefined(Main, :Base) && isdefined(Main.Base, :string) && applicable(Main.Base.string, msg)
         msg = Main.Base.string(msg)
     else
         # string() might not be defined during bootstrap
-        msg = :(_assert_tostring($(Expr(:quote,msg))))
+        msg = :($_assert_tostring($(Expr(:quote,msg))))
     end
     return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end

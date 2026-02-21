@@ -30,12 +30,41 @@ let os = ccall(:jl_get_UNAME, Any, ())
     end
 end
 
+# metaprogramming
+include("meta.jl")
+
+# Strings
+include("multimedia.jl")
+using .Multimedia
+
+include("char.jl")
+function array_new_memory(mem::Memory{UInt8}, newlen::Int)
+    # add an optimization to array_new_memory for StringVector
+    if (@assume_effects :total @ccall jl_genericmemory_owner(mem::Any,)::Any) === mem
+        # TODO: when implemented, this should use a memory growing call
+        return typeof(mem)(undef, newlen)
+    else
+        # If data is in a String, keep it that way.
+        # When implemented, this could use jl_gc_expand_string(oldstr, newlen) as an optimization
+        str = _string_n(newlen)
+        return (@assume_effects :total !:consistent @ccall jl_string_to_genericmemory(str::Any,)::Memory{UInt8})
+    end
+end
+include("strings/basic.jl")
+include("strings/string.jl")
+include("strings/substring.jl")
+include("strings/cstring.jl")
+
+include("cartesian.jl")
+using .Cartesian
+include("hashing.jl")
+include("osutils.jl")
+
 # subarrays
 include("subarray.jl")
 include("views.jl")
 
 # numeric operations
-include("hashing.jl")
 include("div.jl")
 include("twiceprecision.jl")
 include("complex.jl")
@@ -58,35 +87,11 @@ include("reduce.jl")
 include("reshapedarray.jl")
 include("reinterpretarray.jl")
 
-include("multimedia.jl")
-using .Multimedia
-
 # Some type
 include("some.jl")
 
 include("dict.jl")
 include("set.jl")
-
-# Strings
-include("char.jl")
-function array_new_memory(mem::Memory{UInt8}, newlen::Int)
-    # add an optimization to array_new_memory for StringVector
-    if (@assume_effects :total @ccall jl_genericmemory_owner(mem::Any,)::Any) === mem
-        # TODO: when implemented, this should use a memory growing call
-        return typeof(mem)(undef, newlen)
-    else
-        # If data is in a String, keep it that way.
-        # When implemented, this could use jl_gc_expand_string(oldstr, newlen) as an optimization
-        str = _string_n(newlen)
-        return (@assume_effects :total !:consistent @ccall jl_string_to_genericmemory(str::Any,)::Memory{UInt8})
-    end
-end
-include("strings/basic.jl")
-include("strings/string.jl")
-include("strings/substring.jl")
-include("strings/cstring.jl")
-
-include("osutils.jl")
 
 # Core I/O
 include("io.jl")
@@ -101,6 +106,29 @@ include("lock.jl")
 # strings & printing
 include("intfuncs.jl")
 include("strings/strings.jl")
+
+#=
+isdebugbuild is defined here as this is imported in libdl.jl (included in libc.jl)
+=#
+"""
+    isdebugbuild()
+
+Return `true` if julia is a debug version.
+"""
+function isdebugbuild()
+    return ccall(:jl_is_debugbuild, Cint, ()) != 0
+end
+
+# Enable dynamic library loading
+module Sys end # Sys is populated in stages during bootstrap
+Core.eval(Sys, :(include("osinfo.jl")))
+module Filesystem end # Filesystem is populated in stages during bootstrap
+Core.eval(Filesystem, :(include("path.jl")))
+using .Filesystem
+include("libc.jl") # Libdl (include in libc.jl) is required for regex.jl
+using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
+
+# More strings & printing
 include("regex.jl")
 include("parse.jl")
 include("shell.jl")
@@ -112,8 +140,6 @@ include("arrayshow.jl")
 include("methodshow.jl")
 
 # multidimensional arrays
-include("cartesian.jl")
-using .Cartesian
 include("multidimensional.jl")
 
 include("broadcast.jl")
@@ -127,16 +153,8 @@ include("missing.jl")
 # version
 include("version.jl")
 
-#=
-isdebugbuild is defined here as this is imported in libdl.jl (included in libc.jl)
-The method is added in util.jl
-=#
-function isdebugbuild end
-
 # system & environment
-include("sysinfo.jl")
-include("libc.jl")
-using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
+Core.eval(Sys, :(include("sysinfo.jl")))
 
 const USING_STOCK_GC = occursin("stock", GC.gc_active_impl())
 
@@ -157,9 +175,6 @@ include("weakkeydict.jl")
 # ScopedValues
 include("scopedvalues.jl")
 
-# metaprogramming
-include("meta.jl")
-
 # Logging
 include("logging/logging.jl")
 using .CoreLogging
@@ -175,11 +190,11 @@ include("libuv.jl")
 include("asyncevent.jl")
 include("iostream.jl")
 include("stream.jl")
-include("filesystem.jl")
-using .Filesystem
+Core.eval(Filesystem, :(include("filesystem.jl")))
 include("cmd.jl")
 include("process.jl")
 include("terminfo.jl")
+include("Terminals.jl") # Moved from REPL to reduce invalidations
 include("secretbuffer.jl")
 
 # core math functions
@@ -267,7 +282,6 @@ include("uuid.jl")
 include("pkgid.jl")
 include("toml_parser.jl")
 include("linking.jl")
-include("staticdata.jl")
 include("loading.jl")
 
 # BinaryPlatforms, used by Artifacts.  Needs `Sort`.
@@ -315,9 +329,12 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 @eval Core const Compiler = $Base.Compiler
 @eval Compiler const fl_parse = $Base.fl_parse
 
-# External libraries vendored into Base
+# Compiler frontend
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
-include(@__MODULE__, string(BUILDROOT, "JuliaSyntax/src/JuliaSyntax.jl")) # include($BUILDROOT/base/JuliaSyntax/JuliaSyntax.jl)
+include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
+
+# May be replaced in incremental sysimage build after-the-fact
+const JuliaLowering = nothing
 
 end_base_include = time_ns()
 
@@ -396,6 +413,11 @@ function __init__()
     delete!(ENV, "JULIA_WAIT_FOR_TRACY")
     if get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
         JuliaSyntax.enable_in_core!()
+    end
+    if JuliaLowering !== nothing && get_bool_env("JULIA_USE_FLISP_LOWERING", true) === false
+        # This is not available by default, but JuliaLowering can be added to
+        # Base after-the-fact via an incremental sysimage build.
+        JuliaLowering.activate!()
     end
 
     CoreLogging.global_logger(CoreLogging.ConsoleLogger())

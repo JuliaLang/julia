@@ -516,17 +516,19 @@ end
 
 function uvfinalize(uv::Union{FileMonitor, FolderMonitor})
     iolock_begin()
-    if uv.handle != C_NULL
-        disassociate_julia_struct(uv) # close (and free) without notify
-        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), uv.handle)
+    handle = @atomicswap :monotonic uv.handle = C_NULL
+    if handle != C_NULL
+        disassociate_julia_struct(handle) # close (and free) without notify
+        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), handle)
     end
     iolock_end()
 end
 
 function close(t::Union{FileMonitor, FolderMonitor})
     iolock_begin()
-    if t.handle != C_NULL
-        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t.handle)
+    handle = t.handle
+    if handle != C_NULL
+        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), handle)
     end
     iolock_end()
 end
@@ -799,19 +801,19 @@ function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, 
     fdw = _FDWatcher(s, mask)
     local timer
     # we need this flag to explicitly track whether we call `close` already, to update the internal refcount correctly
-    timedout = false # TODO: make this atomic
+    timedout = Ref(false) # TODO: make this atomic
     try
         if timeout_s >= 0
             # delay creating the timer until shortly before we start the poll wait
             timer = Timer(timeout_s) do t
-                timedout && return
-                timedout = true
+                timedout[] && return
+                timedout[] = true
                 close(fdw, mask)
             end
             try
                 while true
                     events = _wait(fdw, mask)
-                    if timedout || !events.timedout
+                    if timedout[] || !events.timedout
                         @lock fdw.notify fdw.events &= ~events.events
                         return events
                     end
@@ -825,8 +827,8 @@ function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, 
         end
     finally
         if @isdefined(timer)
-            if !timedout
-                timedout = true
+            if !timedout[]
+                timedout[] = true
                 close(timer)
                 close(fdw, mask)
             end
