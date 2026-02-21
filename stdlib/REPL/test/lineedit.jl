@@ -917,16 +917,252 @@ end
     @test get_last_word("a[]") == "a[]"
 end
 
-@testset "issue #45836" begin
+@testset "show_completions" begin
     term = FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
-    promptstate = REPL.LineEdit.init_state(term, REPL.LineEdit.mode(new_state()))
+
+    function getcompletion(completions)
+        promptstate = REPL.LineEdit.init_state(term, REPL.LineEdit.mode(new_state()))
+        REPL.LineEdit.show_completions(promptstate, completions)
+        return String(take!(term.out_stream))
+    end
+
+    # When the number of completions is less than
+    # LineEdit.MULTICOLUMN_THRESHOLD, they should be in a single column.
     strings = ["abcdef", "123456", "ijklmn"]
-    REPL.LineEdit.show_completions(promptstate, strings)
-    completion = String(take!(term.out_stream))
-    @test completion == "\033[0B\n\rabcdef\r\033[8C123456\r\033[16Cijklmn\n"
-    strings2 = ["abcdef", "123456\nijklmn"]
-    promptstate = REPL.LineEdit.init_state(term, REPL.LineEdit.mode(new_state()))
-    REPL.LineEdit.show_completions(promptstate, strings2)
-    completion2 = String(take!(term.out_stream))
-    @test completion2 == "\033[0B\nabcdef\n123456\nijklmn\n"
+    @assert length(strings) < LineEdit.MULTICOLUMN_THRESHOLD
+    @test getcompletion(strings) == "\033[0B\n\rabcdef\n\r123456\n\rijklmn\n"
+
+    # But with more than the threshold there should be multiple columns
+    strings2 = repeat(["foo"], LineEdit.MULTICOLUMN_THRESHOLD + 1)
+    @test getcompletion(strings2) == "\033[0B\n\rfoo\r\e[5Cfoo\n\rfoo\r\e[5Cfoo\n\rfoo\r\e[5Cfoo\n"
+
+    # Check that newlines in completions are handled correctly (issue #45836)
+    strings3 = ["abcdef", "123456\nijklmn"]
+    @test getcompletion(strings3) == "\033[0B\nabcdef\n123456\nijklmn\n"
+end
+
+# Test bracket insertion functionality
+@testset "Bracket insertion" begin
+    # Test bracket insertion with a fake REPL that has bracket completion enabled
+    term = FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+    prompt = LineEdit.Prompt("test> ")
+
+    # Build keymap with bracket insertion enabled (as it would be in practice)
+    base_keymaps = Dict{Any,Any}[LineEdit.bracket_insert_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
+    prompt.keymap_dict = LineEdit.keymap(base_keymaps)
+
+    interface = LineEdit.ModalInterface([prompt])
+    s = LineEdit.init_state(term, interface)
+
+    # Helper to write characters as stdin input
+    write_input(s, str) = for c in str
+        buf = IOBuffer(string(c))
+        LineEdit.match_input(prompt.keymap_dict, s, buf)(s, buf)
+    end
+
+    # Test left bracket at EOF triggers auto-complete
+    write_input(s, "(")
+    @test content(s) == "()"
+    @test position(buffer(s)) == 1
+
+    # Test right bracket skips over matching bracket
+    write_input(s, ")")
+    @test content(s) == "()"
+    @test position(buffer(s)) == 2
+
+    # Test backspace removes both brackets
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "(")
+    write_input(s, "\b")
+    @test content(s) == ""
+    @test position(buffer(s)) == 0
+
+    # Test quote insertion at EOF
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "\"")
+    @test content(s) == "\"\""
+    @test position(buffer(s)) == 1
+
+    # Test quote skip over
+    write_input(s, "\"")
+    @test content(s) == "\"\""
+    @test position(buffer(s)) == 2
+
+    # Test transpose detection - single quote after letter shouldn't auto-complete
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "A")
+    write_input(s, "'")
+    @test content(s) == "A'"
+    @test position(buffer(s)) == 2
+
+    # Test single quote after space should auto-complete
+    s = LineEdit.init_state(term, interface)
+    write_input(s, " ")
+    write_input(s, "'")
+    @test content(s) == " ''"
+    @test position(buffer(s)) == 2
+
+    # Test bracket not inserted when next char is not whitespace
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "x")
+    charseek(buffer(s), 0)
+    write_input(s, "(")
+    @test content(s) == "(x"
+    @test position(buffer(s)) == 1
+
+    # Test all bracket types
+    for (left, right) in (('[', ']'), ('{', '}'))
+        s = LineEdit.init_state(term, interface)
+        write_input(s, string(left))
+        @test content(s) == string(left, right)
+        @test position(buffer(s)) == 1
+        write_input(s, string(right))
+        @test position(buffer(s)) == 2
+        write_input(s, "\b")
+        @test content(s) == string(left)
+        @test position(buffer(s)) == 1
+        write_input(s, "\b")
+        @test content(s) == ""
+        @test position(buffer(s)) == 0
+    end
+
+    # Test all quote types
+    for quote_char in ('`', '"', '\'')
+        s = LineEdit.init_state(term, interface)
+        write_input(s, string(quote_char))
+        @test content(s) == string(quote_char, quote_char)
+        @test position(buffer(s)) == 1
+    end
+
+    # Test nested brackets
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "(")
+    write_input(s, "[")
+    @test content(s) == "([])"
+    @test position(buffer(s)) == 2
+    write_input(s, "]")
+    @test position(buffer(s)) == 3
+    write_input(s, ")")
+    @test position(buffer(s)) == 4
+
+    # Test backspace in middle of nested brackets
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "(")
+    write_input(s, "{")
+    @test content(s) == "({})"
+    @test position(buffer(s)) == 2
+    write_input(s, "\b")
+    @test content(s) == "()"
+    @test position(buffer(s)) == 1
+
+    # Test triple quotes don't auto-complete
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "\"")
+    @test content(s) == "\"\""
+    @test position(buffer(s)) == 1
+    write_input(s, "\"")
+    @test content(s) == "\"\""
+    @test position(buffer(s)) == 2
+    write_input(s, "\"")
+    @test content(s) == "\"\"\""
+    @test position(buffer(s)) == 3
+
+    # Test transpose detection for various cases
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "x123")
+    write_input(s, "'")
+    @test content(s) == "x123'"
+    @test position(buffer(s)) == 5
+
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "arr]")
+    write_input(s, "'")
+    @test content(s) == "arr]'"
+    @test position(buffer(s)) == 5
+
+    # Test right bracket insert when not matching
+    s = LineEdit.init_state(term, interface)
+    write_input(s, ")")
+    @test content(s) == ")"
+    @test position(buffer(s)) == 1
+
+    # Test backspace doesn't remove mismatched brackets
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "(")
+    write_input(s, "]")
+    charseek(buffer(s), 1)
+    write_input(s, "\b")
+    @test content(s) == "])"
+    @test position(buffer(s)) == 0
+
+    # Test bracket insertion followed by whitespace
+    s = LineEdit.init_state(term, interface)
+    write_input(s, " ")
+    charseek(buffer(s), 0)
+    write_input(s, "(")
+    @test content(s) == "() "
+    @test position(buffer(s)) == 1
+
+    # Test quote behavior: |foo" + " -> "foo" (not ""foo")
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "foo\"")
+    charseek(buffer(s), 0)
+    write_input(s, "\"")
+    @test content(s) == "\"foo\""
+    @test position(buffer(s)) == 1
+
+    # Test quote behavior: foo| + " -> foo" (not foo"")
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "foo")
+    write_input(s, "\"")
+    @test content(s) == "foo\""
+    @test position(buffer(s)) == 4
+
+    # Test quote behavior: foo | + " -> foo ""
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "foo ")
+    write_input(s, "\"")
+    @test content(s) == "foo \"\""
+    @test position(buffer(s)) == 5
+
+    # Test quote behavior: | foo + " -> "" foo (space before foo means double quotes)
+    s = LineEdit.init_state(term, interface)
+    write_input(s, " foo")
+    charseek(buffer(s), 0)
+    write_input(s, "\"")
+    @test content(s) == "\"\" foo"
+    @test position(buffer(s)) == 1
+
+    # Test quote behavior:  | + " -> ""
+    s = LineEdit.init_state(term, interface)
+    write_input(s, " ")
+    write_input(s, "\"")
+    @test content(s) == " \"\""
+    @test position(buffer(s)) == 2
+
+    # Test quote behavior: (|) + " -> ("")
+    s = LineEdit.init_state(term, interface)
+    write_input(s, ")")
+    charseek(buffer(s), 0)
+    write_input(s, "(")
+    # Buffer is now () with cursor at 1
+    write_input(s, "\"")
+    @test content(s) == "(\"\"))"
+    @test position(buffer(s)) == 2
+
+    # Test quote behavior: (|bar) + " -> ("bar)
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "(bar)")
+    charseek(buffer(s), 1)
+    write_input(s, "\"")
+    @test content(s) == "(\"bar)"
+    @test position(buffer(s)) == 2
+
+    # Test bracket behavior: "|" + ( -> "()"
+    s = LineEdit.init_state(term, interface)
+    write_input(s, "\"\"")
+    charseek(buffer(s), 1)
+    write_input(s, "(")
+    @test content(s) == "\"()\""
+    @test position(buffer(s)) == 2
 end

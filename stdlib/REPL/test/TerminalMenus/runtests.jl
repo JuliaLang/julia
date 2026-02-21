@@ -17,9 +17,9 @@ function simulate_input(menu::TerminalMenus.AbstractMenu, keys...; kwargs...)
             write(new_stdin, "$key")
         end
     end
-    TerminalMenus.terminal.in_stream = new_stdin
+    terminal = TerminalMenus.default_terminal(; in=new_stdin, out=devnull)
 
-    return request(menu; suppress_output=true, kwargs...)
+    return request(terminal, menu; suppress_output=true, kwargs...)
 end
 
 include("radio_menu.jl")

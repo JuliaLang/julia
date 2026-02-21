@@ -7,14 +7,19 @@
 #include "../src/jl_exported_funcs.inc"
 
 // Define pointer data as `const void * $(name);`
-#define XX(name)    JL_DLLEXPORT const void * name;
+#define XX(name, type)    JL_DLLEXPORT const void * jl_##name;
 JL_EXPORTED_DATA_POINTERS(XX)
+JL_CONST_GLOBAL_VARS(XX)
 #undef XX
 
 // Define symbol data as `$(type) $(name);`
 #define XX(name, type)    JL_DLLEXPORT type name;
 JL_EXPORTED_DATA_SYMBOLS(XX)
 #undef XX
+
+// define a copy of exported data
+#define jl_max_tags 64
+JL_DLLEXPORT void *jl_small_typeof[(jl_max_tags << 4) / sizeof(void*)]; // 16-bit aligned, like the GC
 
 // Declare list of exported functions (sans type)
 #define XX(name)    JL_DLLEXPORT void name(void);

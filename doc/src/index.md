@@ -32,18 +32,6 @@ Markdown.parse("""
 """)
 ```
 
-## [Important Links](@id man-important-links)
-
-Below is a non-exhasutive list of links that will be useful as you learn and use the Julia programming language.
-
-- [Julia Homepage](https://julialang.org)
-- [Download Julia](https://julialang.org/downloads/)
-- [Discussion forum](https://discourse.julialang.org)
-- [Julia YouTube](https://www.youtube.com/user/JuliaLanguage)
-- [Find Julia Packages](https://julialang.org/packages/)
-- [Learning Resources](https://julialang.org/learning/)
-- [Read and write blogs on Julia](https://forem.julialang.org)
-
 ## [Introduction](@id man-introduction)
 
 Scientific computing has traditionally required the highest performance, yet domain experts have
@@ -76,7 +64,7 @@ and [Ruby](https://en.wikipedia.org/wiki/Ruby_(programming_language)).
 
 The most significant departures of Julia from typical dynamic languages are:
 
-  * The core language imposes very little; Julia Base and the standard library are written in Julia itself, including
+  * The core language imposes very little; [Julia Base and the standard library](@ref man-core-base-and-stdlib) are written in Julia itself, including
     primitive operations like integer arithmetic
   * A rich language of types for constructing and describing objects, that can also optionally be
     used to make type declarations
@@ -126,3 +114,14 @@ language. In addition to the above, some advantages of Julia over comparable sys
   * Call C functions directly (no wrappers or special APIs needed)
   * Powerful shell-like capabilities for managing other processes
   * Lisp-like macros and other metaprogramming facilities
+
+## [Important Links](@id man-important-links)
+
+A non-exhaustive list of links that will be useful as you learn and use the Julia programming language:
+
+- [Julia Homepage](https://julialang.org)
+- [Install Julia](https://julialang.org/install/)
+- [Discussion forum](https://discourse.julialang.org)
+- [Julia YouTube](https://www.youtube.com/user/JuliaLanguage)
+- [Find Julia Packages](https://julialang.org/packages/)
+- [Learning Resources](https://julialang.org/learning/)

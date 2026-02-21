@@ -14,7 +14,6 @@
 #include <llvm/Analysis/CFG.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Constants.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -63,8 +62,8 @@ public:
 };
 
 void GCInvariantVerifier::visitAddrSpaceCastInst(AddrSpaceCastInst &I) {
-    unsigned FromAS = cast<PointerType>(I.getSrcTy())->getAddressSpace();
-    unsigned ToAS = cast<PointerType>(I.getDestTy())->getAddressSpace();
+    unsigned FromAS = I.getSrcTy()->getPointerAddressSpace();
+    unsigned ToAS = I.getDestTy()->getPointerAddressSpace();
     if (FromAS == 0)
         return;
     Check(ToAS != AddressSpace::Loaded && FromAS != AddressSpace::Loaded,
@@ -79,10 +78,10 @@ void GCInvariantVerifier::visitAddrSpaceCastInst(AddrSpaceCastInst &I) {
 }
 
 void GCInvariantVerifier::checkStoreInst(Type *VTy, unsigned AS, Value &SI) {
-    if (VTy->isPointerTy()) {
+    if (VTy->isPtrOrPtrVectorTy()) {
         /* We currently don't obey this for arguments. That's ok - they're
            externally rooted. */
-        unsigned AS = cast<PointerType>(VTy)->getAddressSpace();
+        unsigned AS = VTy->getPointerAddressSpace();
         Check(AS != AddressSpace::CalleeRooted &&
               AS != AddressSpace::Derived,
               "Illegal store of decayed value", &SI);
@@ -108,15 +107,15 @@ void GCInvariantVerifier::visitAtomicCmpXchgInst(AtomicCmpXchgInst &SI) {
 
 void GCInvariantVerifier::visitLoadInst(LoadInst &LI) {
     Type *Ty = LI.getType();
-    if (Ty->isPointerTy()) {
-        unsigned AS = cast<PointerType>(Ty)->getAddressSpace();
+    if (Ty->isPtrOrPtrVectorTy()) {
+        unsigned AS = Ty->getPointerAddressSpace();
         Check(AS != AddressSpace::CalleeRooted &&
               AS != AddressSpace::Derived,
               "Illegal load of gc relevant value", &LI);
     }
     Ty = LI.getPointerOperand()->getType();
-    if (Ty->isPointerTy()) {
-        unsigned AS = cast<PointerType>(Ty)->getAddressSpace();
+    if (Ty->isPtrOrPtrVectorTy()) {
+        unsigned AS = Ty->getPointerAddressSpace();
         Check(AS != AddressSpace::CalleeRooted,
               "Illegal load of callee rooted value", &LI);
     }
@@ -130,18 +129,18 @@ void GCInvariantVerifier::visitReturnInst(ReturnInst &RI) {
     if (!RI.getReturnValue())
         return;
     Type *RTy = RI.getReturnValue()->getType();
-    if (!RTy->isPointerTy())
+    if (!RTy->isPtrOrPtrVectorTy())
         return;
-    unsigned AS = cast<PointerType>(RTy)->getAddressSpace();
+    unsigned AS = RTy->getPointerAddressSpace();
     Check(!isSpecialAS(AS) || AS == AddressSpace::Tracked,
           "Only gc tracked values may be directly returned", &RI);
 }
 
 void GCInvariantVerifier::visitGetElementPtrInst(GetElementPtrInst &GEP) {
     Type *Ty = GEP.getType();
-    if (!Ty->isPointerTy())
+    if (!Ty->isPtrOrPtrVectorTy())
         return;
-    unsigned AS = cast<PointerType>(Ty)->getAddressSpace();
+    unsigned AS = Ty->getPointerAddressSpace();
     if (!isSpecialAS(AS))
         return;
     /* We're actually ok with GEPs here, as long as they don't feed into any
@@ -162,13 +161,18 @@ void GCInvariantVerifier::visitGetElementPtrInst(GetElementPtrInst &GEP) {
 void GCInvariantVerifier::visitCallInst(CallInst &CI) {
     Function *Callee = CI.getCalledFunction();
     if (Callee && (Callee->getName() == "julia.call" ||
-                   Callee->getName() == "julia.call2")) {
-        bool First = true;
+                   Callee->getName() == "julia.call2" ||
+                   Callee->getName() == "julia.call3")) {
+        unsigned Fixed = CI.getFunctionType()->getNumParams();
         for (Value *Arg : CI.args()) {
+            if (Fixed) {
+                Fixed--;
+                continue;
+            }
             Type *Ty = Arg->getType();
-            Check(Ty->isPointerTy() && cast<PointerType>(Ty)->getAddressSpace() == (First ? 0 : AddressSpace::Tracked),
-                "Invalid derived pointer in jlcall", &CI);
-            First = false;
+            Check(Ty->isPtrOrPtrVectorTy() &&
+                      Ty->getPointerAddressSpace() == AddressSpace::Tracked,
+                  "Invalid derived pointer in jlcall", &CI);
         }
     }
 }
@@ -192,37 +196,4 @@ PreservedAnalyses GCInvariantVerifierPass::run(Function &F, FunctionAnalysisMana
         abort();
     }
     return PreservedAnalyses::all();
-}
-
-struct GCInvariantVerifierLegacy : public FunctionPass {
-    static char ID;
-    bool Strong;
-    GCInvariantVerifierLegacy(bool Strong=false) : FunctionPass(ID), Strong(Strong) {}
-
-public:
-    void getAnalysisUsage(AnalysisUsage &AU) const override {
-        FunctionPass::getAnalysisUsage(AU);
-        AU.setPreservesAll();
-    }
-
-    bool runOnFunction(Function &F) override {
-        GCInvariantVerifier GIV(Strong);
-        GIV.visit(F);
-        if (GIV.Broken) {
-            abort();
-        }
-        return false;
-    }
-};
-
-char GCInvariantVerifierLegacy::ID = 0;
-static RegisterPass<GCInvariantVerifierLegacy> X("GCInvariantVerifier", "GC Invariant Verification Pass", false, false);
-
-Pass *createGCInvariantVerifierPass(bool Strong) {
-    return new GCInvariantVerifierLegacy(Strong);
-}
-
-extern "C" JL_DLLEXPORT void LLVMExtraAddGCInvariantVerifierPass_impl(LLVMPassManagerRef PM, LLVMBool Strong)
-{
-    unwrap(PM)->add(createGCInvariantVerifierPass(Strong));
 }

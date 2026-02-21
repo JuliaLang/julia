@@ -1,122 +1,99 @@
-Julia v1.10 Release Notes
+Julia v1.14 Release Notes
 ========================
 
 New language features
 ---------------------
 
+  - It is now possible to control which version of the Julia syntax will be used to parse a package by setting the
+    `compat.julia` or `syntax.julia_version` key in Project.toml. This feature is similar to the notion of "editions"
+    in other language ecosystems and will allow non-breaking evolution of Julia syntax in future versions.
+    See the "Syntax Versioning" section in the code loading documentation ([#60018]).
+  - `ᵅ` (U+U+1D45), `ᵋ` (U+1D4B), `ᶲ` (U+1DB2), `˱` (U+02F1), `˲` (U+02F2), and `ₔ` (U+2094) can now also be used as
+    operator suffixes, accessible as `\^alpha`, `\^epsilon`, `\^ltphi`, `\_<`, `\_>`, and `\_schwa` at the REPL
+    ([#60285]).
+  - The `@label` macro can now create labeled blocks that can be exited early with `break name [value]`. Use
+    `@label name expr` for named blocks or `@label expr` for anonymous blocks. Anonymous `@label` blocks
+    participate in the default break scope: a plain `break` or `break _` exits the innermost breakable scope,
+    whether it is a loop or an `@label` block. The `continue` statement also supports labels with
+    `continue name` to continue a labeled loop ([#60481]).
+
 Language changes
 ----------------
 
-
 Compiler/Runtime improvements
 -----------------------------
-* The `@pure` macro is now deprecated. Use `Base.@assume_effects :foldable` instead ([#48682]).
 
 Command-line option changes
 ---------------------------
 
-
 Multi-threading changes
 -----------------------
 
+  - New functions `Threads.atomic_fence_heavy` and `Threads.atomic_fence_light` provide support for
+    asymmetric atomic fences, speeding up atomic synchronization where one side of the synchronization
+    runs significantly less often than the other ([#60311]).
 
 Build system changes
 --------------------
 
-
 New library functions
 ---------------------
-* `tanpi` is now defined. It computes tan(πx) more accurately than `tan(pi*x)` ([#48575]).
 
 New library features
 --------------------
-* The `initialized=true` keyword assignment for `sortperm!` and `partialsortperm!`
-  is now a no-op ([#47979]). It previously exposed unsafe behavior ([#47977]).
-* `binomial(x, k)` now supports non-integer `x` ([#48124]).
-* A `CartesianIndex` is now treated as a "scalar" for broadcasting ([#47044]).
-* `printstyled` now supports italic output ([#45164]).
+
+* `IOContext` supports a new boolean `hexunsigned` option that allows for
+  printing unsigned integers in decimal instead of hexadecimal ([#60267]).
 
 Standard library changes
 ------------------------
 
-* `startswith` now supports seekable `IO` streams ([#43055])
+* `codepoint(c)` now succeeds for overlong encodings.  `Base.ismalformed`, `Base.isoverlong`, and
+  `Base.show_invalid` are now `public` and documented (but not exported) ([#55152]).
 
-#### Package Manager
-
-* "Package Extensions": support for loading a piece of code based on other
-  packages being loaded in the Julia session.
-  This has similar applications as the Requires.jl package but also
-  supports precompilation and setting compatibility.
-* `Pkg.precompile` now accepts `timing` as a keyword argument which displays per package timing information for precompilation (e.g. `Pkg.precompile(timing=true)`)
+#### JuliaSyntaxHighlighting
 
 #### LinearAlgebra
 
-* `AbstractQ` no longer subtypes to `AbstractMatrix`. Moreover, `adjoint(Q::AbstractQ)`
-  no longer wraps `Q` in an `Adjoint` type, but instead in an `AdjointQ`, that itself
-  subtypes `AbstractQ`. This change accounts for the fact that typically `AbstractQ`
-  instances behave like function-based, matrix-backed linear operators, and hence don't
-  allow for efficient indexing. Also, many `AbstractQ` types can act on vectors/matrices
-  of different size, acting like a matrix with context-dependent size. With this change,
-  `AbstractQ` has a well-defined API that is described in detail in the
-  [Julia documentation](https://docs.julialang.org/en/v1/stdlib/LinearAlgebra/#man-linalg-abstractq)
-  ([#46196]).
-* Adjoints and transposes of `Factorization` objects are no longer wrapped in `Adjoint`
-  and `Transpose` wrappers, respectively. Instead, they are wrapped in
-  `AdjointFactorization` and `TranposeFactorization` types, which themselves subtype
-  `Factorization` ([#46874]).
-* New functions `hermitianpart` and `hermitianpart!` for extracting the Hermitian
-  (real symmetric) part of a matrix ([#31836]).
+#### Markdown
 
-#### Printf
-* Format specifiers now support dynamic width and precision, e.g. `%*s` and `%*.*g` ([#40105]).
+  * Strikethrough text via `~strike~` or `~~through~~` is now supported by the
+    Markdown parser. ([#60537])
 
 #### Profile
 
-
 #### Random
-
 
 #### REPL
 
-
-#### SuiteSparse
-
-
-#### SparseArrays
-
-
 #### Test
 
+* `@test`, `@test_throws`, and `@test_broken` now support a `context` keyword argument
+  that provides additional information displayed on test failure. This is useful for
+  debugging which specific case failed in parameterized tests ([#60501]).
 
-* The `@test_broken` macro (or `@test` with `broken=true`) now complains if the test expression returns a
-  non-boolean value in the same way as a non-broken test. ([#47804])
+* `@test_throws`, `@test_warn`, `@test_nowarn`, `@test_logs`, and `@test_deprecated` now support
+  `broken` and `skip` keyword arguments for consistency with `@test` ([#60543]).
+
+* New functions `detect_closure_boxes` and `detect_closure_boxes_all` find methods that
+  allocate `Core.Box` in their lowered code, which can indicate performance issues from
+  captured variables in closures.
 
 #### Dates
 
-
-#### Distributed
-
-
-#### Unicode
-
-
-#### DelimitedFiles
-
+* `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
 
 #### InteractiveUtils
 
- * `code_native` and `@code_native` now default to intel syntax instead of AT&T.
-
-Deprecated or removed
----------------------
-
+#### Dates
 
 External dependencies
 ---------------------
 
-
 Tooling Improvements
 --------------------
 
+Deprecated or removed
+---------------------
 
 <!--- generated by NEWS-update.jl: -->

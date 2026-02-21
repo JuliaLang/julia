@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Test/docs/src/index.md"
+```
+
 # Unit Testing
 
 ```@meta
@@ -20,7 +24,7 @@ The `Test` module provides simple *unit testing* functionality. Unit testing is 
 see if your code is correct by checking that the results are what you expect. It can be helpful
 to ensure your code still works after you make changes, and can be used when developing as a way
 of specifying the behaviors your code should have when complete. You may also want to look at the
-documentation for [adding tests to your Julia Package](https://pkgdocs.julialang.org/dev/creating-packages/#Adding-tests-to-the-package).
+documentation for [adding tests to your Julia Package](https://pkgdocs.julialang.org/dev/creating-packages/#adding-tests-to-packages).
 
 Simple unit testing can be performed with the `@test` and `@test_throws` macros:
 
@@ -55,7 +59,6 @@ julia> @test foo("f") == 20
 Test Failed at none:1
   Expression: foo("f") == 20
    Evaluated: 1 == 20
-
 ERROR: There was an error during testing
 ```
 
@@ -69,6 +72,8 @@ Error During Test
   Test threw an exception of type MethodError
   Expression: foo(:cat) == 1
   MethodError: no method matching length(::Symbol)
+  The function `length` exists, but no method is defined for this combination of argument types.
+
   Closest candidates are:
     length(::SimpleVector) at essentials.jl:256
     length(::Base.MethodList) at reflection.jl:521
@@ -172,6 +177,39 @@ Foo Tests     |    8      8  0.0s
   Arrays 3    |    2      2  0.0s
 ```
 
+### Environment Variable Support
+
+The `Test` module supports the `JULIA_TEST_VERBOSE` environment variable for controlling
+verbose behavior globally:
+
+- When `JULIA_TEST_VERBOSE=true`, testsets will automatically use `verbose=true` by default,
+  and additionally print "Starting testset" and "Finished testset" messages with timing
+  information as testsets are entered and exited.
+- When `JULIA_TEST_VERBOSE=false` or unset, testsets use `verbose=false` by default and
+  no entry/exit messages are printed.
+
+This environment variable provides a convenient way to enable comprehensive verbose output
+for debugging test suites without modifying the test code itself.
+
+```julia
+$ JULIA_TEST_VERBOSE=true julia -e '
+using Test
+@testset "Example" begin
+    @test 1 + 1 == 2
+    @testset "Nested" begin
+        @test 2 * 2 == 4
+    end
+end'
+
+Starting testset: Example
+  Starting testset: Nested
+  Finished testset: Nested (0.0s)
+Finished testset: Example (0.0s)
+Test Summary: | Pass  Total  Time
+Example       |    2      2  0.0s
+  Nested      |    1      1  0.0s
+```
+
 If we do have a test failure, only the details for the failed test sets will be shown:
 
 ```julia-repl; filter = r"[0-9\.]+s"
@@ -224,8 +262,6 @@ Test Passed
 julia> @test 1 ≈ 0.999999
 Test Failed at none:1
   Expression: 1 ≈ 0.999999
-   Evaluated: 1 ≈ 0.999999
-
 ERROR: There was an error during testing
 ```
 You can specify relative and absolute tolerances by setting the `rtol` and `atol` keyword arguments of `isapprox`, respectively,
@@ -316,8 +352,12 @@ function finish(ts::CustomTestSet)
     # just record if we're not the top-level parent
     if get_testset_depth() > 0
         record(get_testset(), ts)
+        return ts
     end
-    ts
+
+    # so the results are printed if we are at the top level
+    Test.print_test_results(ts)
+    return ts
 end
 ```
 
@@ -332,6 +372,45 @@ And using that testset looks like:
 end
 ```
 
+In order to use a custom testset and have the recorded results printed as part of any outer default testset,
+also define `Test.get_test_counts`. This might look like so:
+
+```julia
+using Test: AbstractTestSet, Pass, Fail, Error, Broken, get_test_counts, TestCounts, format_duration
+
+function Test.get_test_counts(ts::CustomTestSet)
+    passes, fails, errors, broken = 0, 0, 0, 0
+    # cumulative results
+    c_passes, c_fails, c_errors, c_broken = 0, 0, 0, 0
+
+    for t in ts.results
+        # count up results
+        isa(t, Pass)   && (passes += 1)
+        isa(t, Fail)   && (fails  += 1)
+        isa(t, Error)  && (errors += 1)
+        isa(t, Broken) && (broken += 1)
+        # handle children
+        if isa(t, AbstractTestSet)
+            tc = get_test_counts(t)::TestCounts
+            c_passes += tc.passes + tc.cumulative_passes
+            c_fails  += tc.fails + tc.cumulative_fails
+            c_errors += tc.errors + tc.cumulative_errors
+            c_broken += tc.broken + tc.cumulative_broken
+        end
+    end
+    # get a duration, if we have one
+    duration = format_duration(ts)
+    return TestCounts(true, passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration)
+end
+```
+
+```@docs
+Test.TestCounts
+Test.get_test_counts
+Test.format_duration
+Test.print_test_results
+```
+
 ## Test utilities
 
 ```@docs
@@ -341,6 +420,8 @@ Test.GenericOrder
 Test.GenericSet
 Test.GenericString
 Test.detect_ambiguities
+Test.detect_closure_boxes
+Test.detect_closure_boxes_all_modules
 Test.detect_unbound_args
 ```
 
@@ -367,6 +448,8 @@ Add the following to `src/Example.jl`:
 
 ```julia
 module Example
+
+export greet, simple_add, type_multiply
 
 function greet()
     "Hello world!"
@@ -405,13 +488,13 @@ using Test
 
 @testset "Example tests" begin
 
-	@testset "Math tests" begin
-		include("math_tests.jl")
-	end
+    @testset "Math tests" begin
+        include("math_tests.jl")
+    end
 
-	@testset "Greeting tests" begin
-		include("greeting_tests.jl")
-	end
+    @testset "Greeting tests" begin
+        include("greeting_tests.jl")
+    end
 end
 ```
 
@@ -426,22 +509,22 @@ Using our knowledge of `Test.jl`, here are some example tests we could add to `m
 
 ```julia
 @testset "Testset 1" begin
-	@test 2 == simple_add(1, 1)
-	@test 3.5 == simple_add(1, 2.5)
-        @test_throws MethodError simple_add(1, "A")
-        @test_throws MethodError simple_add(1, 2, 3)
+    @test 2 == simple_add(1, 1)
+    @test 3.5 == simple_add(1, 2.5)
+    @test_throws MethodError simple_add(1, "A")
+    @test_throws MethodError simple_add(1, 2, 3)
 end
 
 @testset "Testset 2" begin
-	@test 1.0 == type_multiply(1.0, 1.0)
-        @test isa(type_multiply(2.0, 2.0), Float64)
-	@test_throws MethodError type_multiply(1, 2.5)
+    @test 1.0 == type_multiply(1.0, 1.0)
+    @test isa(type_multiply(2.0, 2.0), Float64)
+    @test_throws MethodError type_multiply(1, 2.5)
 end
 ```
 
 #### Writing Tests for `greeting_tests.jl`
 
-Using our knowledge of `Test.jl`, here are some example tests we could add to `math_tests.jl`:
+Using our knowledge of `Test.jl`, here are some example tests we could add to `greeting_tests.jl`:
 
 ```julia
 @testset "Testset 3" begin
@@ -489,3 +572,15 @@ Using `Test.jl`, more complicated tests can be added for packages but this shoul
 ```@meta
 DocTestSetup = nothing
 ```
+
+### Code Coverage
+
+Code coverage tracking during tests can be enabled using the `pkg> test --coverage` flag (or at a lower level using the
+[`--code-coverage`](@ref command-line-interface) julia arg). This is on by default in the
+[julia-runtest](https://github.com/julia-actions/julia-runtest) GitHub action.
+
+To evaluate coverage either manually inspect the `.cov` files that are generated beside the source files locally,
+or in CI use the [julia-processcoverage](https://github.com/julia-actions/julia-processcoverage) GitHub action.
+
+!!! compat "Julia 1.11"
+    Since Julia 1.11, coverage is not collected during the package precompilation phase.

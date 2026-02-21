@@ -3,9 +3,12 @@
 abstract type AbstractCmd end
 
 # libuv process option flags
-const UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS = UInt8(1 << 2)
-const UV_PROCESS_DETACHED = UInt8(1 << 3)
-const UV_PROCESS_WINDOWS_HIDE = UInt8(1 << 4)
+const UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS = UInt32(1 << 2)
+const UV_PROCESS_DETACHED = UInt32(1 << 3)
+const UV_PROCESS_WINDOWS_HIDE = UInt32(1 << 4)
+const UV_PROCESS_SETUID = UInt32(1 << 5)
+const UV_PROCESS_SETGID = UInt32(1 << 6)
+const UV_PROCESS_WINDOWS_DISABLE_EXACT_NAME = UInt32(1 << 7)
 
 struct Cmd <: AbstractCmd
     exec::Vector{String}
@@ -14,13 +17,17 @@ struct Cmd <: AbstractCmd
     env::Union{Vector{String},Nothing}
     dir::String
     cpus::Union{Nothing,Vector{UInt16}}
-    Cmd(exec::Vector{String}) =
-        new(exec, false, 0x00, nothing, "", nothing)
-    Cmd(cmd::Cmd, ignorestatus, flags, env, dir, cpus = nothing) =
+    uid::Union{Nothing,UInt32}
+    gid::Union{Nothing,UInt32}
+    Cmd(exec::Vector{<:AbstractString}) =
+        new(exec, false, 0x00, nothing, "", nothing, nothing, nothing)
+    Cmd(cmd::Cmd, ignorestatus, flags, env, dir, cpus = nothing, uid = nothing, gid = nothing) =
         new(cmd.exec, ignorestatus, flags, env,
-            dir === cmd.dir ? dir : cstr(dir), cpus)
+            dir === cmd.dir ? dir : cstr(dir), cpus, uid, gid)
     function Cmd(cmd::Cmd; ignorestatus::Bool=cmd.ignorestatus, env=cmd.env, dir::AbstractString=cmd.dir,
                  cpus::Union{Nothing,Vector{UInt16}} = cmd.cpus,
+                 uid::Union{Nothing,UInt32} = cmd.uid,
+                 gid::Union{Nothing,UInt32} = cmd.gid,
                  detach::Bool = 0 != cmd.flags & UV_PROCESS_DETACHED,
                  windows_verbatim::Bool = 0 != cmd.flags & UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS,
                  windows_hide::Bool = 0 != cmd.flags & UV_PROCESS_WINDOWS_HIDE)
@@ -28,7 +35,7 @@ struct Cmd <: AbstractCmd
                 windows_verbatim * UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS |
                 windows_hide * UV_PROCESS_WINDOWS_HIDE
         new(cmd.exec, ignorestatus, flags, byteenv(env),
-            dir === cmd.dir ? dir : cstr(dir), cpus)
+            dir === cmd.dir ? dir : cstr(dir), cpus, uid, gid)
     end
 end
 
@@ -37,10 +44,13 @@ has_nondefault_cmd_flags(c::Cmd) =
     c.flags != 0x00 ||
     c.env !== nothing ||
     c.dir !== "" ||
-    c.cpus !== nothing
+    c.cpus !== nothing ||
+    c.uid !== nothing ||
+    c.gid !== nothing
 
 """
-    Cmd(cmd::Cmd; ignorestatus, detach, windows_verbatim, windows_hide, env, dir)
+    Cmd(cmd::Cmd; ignorestatus, detach, windows_verbatim, windows_hide, env, dir, uid, gid)
+    Cmd(exec::Vector{String})
 
 Construct a new `Cmd` object, representing an external program and arguments, from `cmd`,
 while changing the settings of the optional keyword arguments:
@@ -69,17 +79,26 @@ while changing the settings of the optional keyword arguments:
   elements, use [`addenv()`](@ref) which will return a `Cmd` object with the updated environment.
 * `dir::AbstractString`: Specify a working directory for the command (instead
   of the current directory).
+* `uid::Union{Nothing,UInt32}`: Set the user ID for the process (Unix only).
+* `gid::Union{Nothing,UInt32}`: Set the group ID for the process (Unix only).
 
-For any keywords that are not specified, the current settings from `cmd` are used. Normally,
-to create a `Cmd` object in the first place, one uses backticks, e.g.
+For any keywords that are not specified, the current settings from `cmd` are used.
+
+Note that the `Cmd(exec)` constructor does not create a copy of `exec`. Any subsequent changes to `exec` will be reflected in the `Cmd` object.
+
+The most common way to construct a `Cmd` object is with command literals (backticks), e.g.
+
+    `ls -l`
+
+This can then be passed to the `Cmd` constructor to modify its settings, e.g.
 
     Cmd(`echo "Hello world"`, ignorestatus=true, detach=false)
 """
 Cmd
 
-hash(x::Cmd, h::UInt) = hash(x.exec, hash(x.env, hash(x.ignorestatus, hash(x.dir, hash(x.flags, h)))))
+hash(x::Cmd, h::UInt) = hash(x.exec, hash(x.env, hash(x.ignorestatus, hash(x.dir, hash(x.flags, hash(x.uid, hash(x.gid, h)))))))
 ==(x::Cmd, y::Cmd) = x.exec == y.exec && x.env == y.env && x.ignorestatus == y.ignorestatus &&
-                     x.dir == y.dir && isequal(x.flags, y.flags)
+                     x.dir == y.dir && isequal(x.flags, y.flags) && x.uid == y.uid && x.gid == y.gid
 
 struct OrCmds <: AbstractCmd
     a::AbstractCmd
@@ -116,9 +135,15 @@ escape_microsoft_c_args(io::IO, cmd::Cmd) =
 function show(io::IO, cmd::Cmd)
     print_env = cmd.env !== nothing
     print_dir = !isempty(cmd.dir)
-    (print_env || print_dir) && print(io, "setenv(")
+    print_uid = cmd.uid !== nothing
+    print_gid = cmd.gid !== nothing
     print_cpus = cmd.cpus !== nothing
+
+    (print_env || print_dir) && print(io, "setenv(")
     print_cpus && print(io, "setcpuaffinity(")
+    print_gid && print(io, "setgid(")
+    print_uid && print(io, "setuid(")
+
     print(io, '`')
     join(io, map(cmd.exec) do arg
         replace(sprint(context=io) do io
@@ -128,14 +153,19 @@ function show(io::IO, cmd::Cmd)
         end, '`' => "\\`")
     end, ' ')
     print(io, '`')
+
+    print_uid && (print(io, ", "); show(io, Int32(cmd.uid)); print(io, ")"))
+    print_gid && (print(io, ", "); show(io, Int32(cmd.gid)); print(io, ")"))
     if print_cpus
         print(io, ", ")
         show(io, collect(Int, something(cmd.cpus)))
         print(io, ")")
     end
-    print_env && (print(io, ","); show(io, cmd.env))
-    print_dir && (print(io, "; dir="); show(io, cmd.dir))
-    (print_dir || print_env) && print(io, ")")
+    if print_env || print_dir
+        print_env && (print(io, ","); show(io, cmd.env))
+        print_dir && (print(io, "; dir="); show(io, cmd.dir))
+        print(io, ")")
+    end
     nothing
 end
 
@@ -179,7 +209,7 @@ if OS_HANDLE !== RawFD
 end
 setup_stdio(stdio::Union{DevNull,OS_HANDLE,RawFD}, ::Bool) = (stdio, false)
 
-const Redirectable = Union{IO, FileRedirect, RawFD, OS_HANDLE}
+const Redirectable = Union{IO, IOServer, FileRedirect, RawFD, OS_HANDLE}
 const StdIOSet = NTuple{3, Redirectable}
 
 struct CmdRedirect <: AbstractCmd
@@ -216,6 +246,8 @@ Mark a command object so that running it will not throw an error if the result c
 ignorestatus(cmd::Cmd) = Cmd(cmd, ignorestatus=true)
 ignorestatus(cmd::Union{OrCmds,AndCmds}) =
     typeof(cmd)(ignorestatus(cmd.a), ignorestatus(cmd.b))
+ignorestatus(cmd::CmdRedirect) =
+    CmdRedirect(ignorestatus(cmd.cmd), cmd.handle, cmd.stream_no, cmd.readable)
 
 """
     detach(command)
@@ -346,6 +378,54 @@ function setcpuaffinity end
 setcpuaffinity(cmd::Cmd, ::Nothing) = Cmd(cmd; cpus = nothing)
 setcpuaffinity(cmd::Cmd, cpus) = Cmd(cmd; cpus = collect(UInt16, cpus))
 
+"""
+    setuid(original_command::Cmd, uid) -> command::Cmd
+
+Set the user ID (UID) of the `command`. On Unix systems, this allows
+the command to run as a different user. Passing `uid = nothing` removes
+any previously set UID.
+
+This function is only supported on Unix-based systems (Linux, macOS, etc.).
+Requires appropriate permissions to set UID.
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
+
+# Examples
+
+```julia
+julia> run(setuid(`id -u`, 1000));
+1000
+```
+"""
+function setuid end
+setuid(cmd::Cmd, ::Nothing) = Cmd(cmd; uid = nothing)
+setuid(cmd::Cmd, uid::Integer) = Cmd(cmd; uid = UInt32(uid))
+
+"""
+    setgid(original_command::Cmd, gid) -> command::Cmd
+
+Set the group ID (GID) of the `command`. On Unix systems, this allows
+the command to run as a different group. Passing `gid = nothing` removes
+any previously set GID.
+
+This function is only supported on Unix-based systems (Linux, macOS, etc.).
+Requires appropriate permissions to set GID.
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
+
+# Examples
+
+```julia
+julia> run(setgid(`id -g`, 1000));
+1000
+```
+"""
+function setgid end
+setgid(cmd::Cmd, ::Nothing) = Cmd(cmd; gid = nothing)
+setgid(cmd::Cmd, gid::Integer) = Cmd(cmd; gid = UInt32(gid))
+
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)
 redir_out(src::AbstractCmd, dest::AbstractCmd) = OrCmds(src, dest)
 redir_err(src::AbstractCmd, dest::AbstractCmd) = ErrOrCmds(src, dest)
@@ -394,8 +474,20 @@ function pipeline(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothin
     return cmd
 end
 
-pipeline(cmd::AbstractCmd, dest) = pipeline(cmd, stdout=dest)
+pipeline(cmd::AbstractCmd, dest::Union{AbstractCmd, AbstractString, Redirectable}) = pipeline(cmd, stdout=dest)
 pipeline(src::Union{Redirectable,AbstractString}, cmd::AbstractCmd) = pipeline(cmd, stdin=src)
+
+"""
+    pipeline(command, redir::Pair{<:Integer, <:Redirectable})
+
+Redirect fd number `redir.first` of `command` to or from the given `redir.second`, which can be
+an I/O stream, a filename, or a file descriptor. This method is primarily used to pass additional
+fds beyond the standard ios that are not supported by the keyword argument interface.
+
+!!! compat "Julia 1.13"
+    This method requires Julia 1.13 or later.
+"""
+pipeline(cmd::AbstractCmd, redir::Pair{<:Integer, <:Redirectable}) = CmdRedirect(cmd, redir.second, Int(redir.first))
 
 """
     pipeline(from, to, ...)
@@ -459,12 +551,12 @@ function cmd_gen(parsed)
     args = String[]
     if length(parsed) >= 1 && isa(parsed[1], Tuple{Cmd})
         cmd = (parsed[1]::Tuple{Cmd})[1]
-        (ignorestatus, flags, env, dir) = (cmd.ignorestatus, cmd.flags, cmd.env, cmd.dir)
+        (ignorestatus, flags, env, dir, cpus, uid, gid) = (cmd.ignorestatus, cmd.flags, cmd.env, cmd.dir, cmd.cpus, cmd.uid, cmd.gid)
         append!(args, cmd.exec)
         for arg in tail(parsed)
             append!(args, Base.invokelatest(arg_gen, arg...)::Vector{String})
         end
-        return Cmd(Cmd(args), ignorestatus, flags, env, dir)
+        return Cmd(Cmd(args), ignorestatus, flags, env, dir, cpus, uid, gid)
     else
         for arg in parsed
             append!(args, arg_gen(arg...)::Vector{String})
@@ -473,10 +565,16 @@ function cmd_gen(parsed)
     end
 end
 
+@assume_effects :foldable !:consistent function cmd_gen(
+    parsed::Tuple{Vararg{Tuple{Vararg{Union{String, SubString{String}}}}}}
+)
+    return @invoke cmd_gen(parsed::Any)
+end
+
 """
     @cmd str
 
-Similar to `cmd`, generate a `Cmd` from the `str` string which represents the shell command(s) to be executed.
+Similar to ``` `str` ```, generate a `Cmd` from the `str` string which represents the shell command(s) to be executed.
 The [`Cmd`](@ref) object can be run as a process and can outlive the spawning julia process (see `Cmd` for more).
 
 # Examples
@@ -489,7 +587,7 @@ julia> run(cm)
 Process(`echo 1`, ProcessExited(0))
 ```
 """
-macro cmd(str)
+macro cmd(str::String)
     cmd_ex = shell_parse(str, special=shell_special, filename=String(__source__.file))[1]
     return :(cmd_gen($(esc(cmd_ex))))
 end

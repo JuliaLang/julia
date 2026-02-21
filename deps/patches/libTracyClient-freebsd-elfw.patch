@@ -1,0 +1,33 @@
+diff --git a/public/TracyClient.cpp b/public/TracyClient.cpp
+index 77f81a4a..ebeb65c9 100644
+--- a/public/TracyClient.cpp
++++ b/public/TracyClient.cpp
+@@ -19,6 +19,28 @@
+ #  pragma warning(push, 0)
+ #endif
+
++#ifndef ElfW
++#  if defined(FREEBSD)
++#    if __ELF_WORD_SIZE == 32
++#      define ElfW(type) Elf32_##type
++#    else
++#      define ElfW(type) Elf64_##type
++#    endif
++#  elif defined(NETBSD) || defined(OPENBSD)
++#    if ELFSIZE == 32
++#      define ElfW(type) Elf32_##type
++#    else
++#      define ElfW(type) Elf64_##type
++#    endif
++#  else
++#    if !defined(ELF_CLASS) || ELF_CLASS == ELFCLASS32
++#      define ElfW(type) Elf32_##type
++#    else
++#      define ElfW(type) Elf64_##type
++#    endif
++#  endif
++#endif
++
+ #include "common/tracy_lz4.cpp"
+ #include "client/TracyProfiler.cpp"
+ #include "client/TracyCallstack.cpp"

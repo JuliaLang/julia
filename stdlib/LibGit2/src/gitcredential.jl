@@ -54,7 +54,7 @@ end
 
 
 """
-    ismatch(url, git_cred) -> Bool
+    ismatch(url, git_cred)::Bool
 
 Checks if the `git_cred` is valid for the given `url`.
 """
@@ -183,16 +183,16 @@ end
 
 function run!(helper::GitCredentialHelper, operation::AbstractString, cred::GitCredential)
     cmd = `$(helper.cmd) $operation`
-    p = open(cmd, "r+")
+    open(cmd, "r+") do p
+        # Provide the helper with the credential information we know
+        write(p, cred)
+        write(p, "\n")
+        t = @async close(p.in)
 
-    # Provide the helper with the credential information we know
-    write(p, cred)
-    write(p, "\n")
-    t = @async close(p.in)
-
-    # Process the response from the helper
-    Base.read!(p, cred)
-    wait(p)
+        # Process the response from the helper
+        Base.read!(p, cred)
+        wait(t)
+    end
 
     return cred
 end
@@ -211,7 +211,7 @@ approve(helper::GitCredentialHelper, cred::GitCredential) = run(helper, "store",
 reject(helper::GitCredentialHelper, cred::GitCredential) = run(helper, "erase", cred)
 
 """
-    credential_helpers(config, git_cred) -> Vector{GitCredentialHelper}
+    credential_helpers(config, git_cred)::Vector{GitCredentialHelper}
 
 Return all of the `GitCredentialHelper`s found within the provided `config` which are valid
 for the specified `git_cred`.
@@ -239,7 +239,7 @@ function credential_helpers(cfg::GitConfig, cred::GitCredential)
 end
 
 """
-    default_username(config, git_cred) -> Union{String, Nothing}
+    default_username(config, git_cred)::Union{String, Nothing}
 
 Return the default username, if any, provided by the `config` which is valid for the
 specified `git_cred`.

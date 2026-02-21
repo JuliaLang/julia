@@ -802,7 +802,7 @@ if cfunction_closure
 verbose && println("Testing cfunction closures: ")
 
 # helper Type for testing that constructors work
-# with cfucntion and that object identity is preserved
+# with cfunction and that object identity is preserved
 mutable struct IdentityTestKV{K, V}
     (T::Type{<:IdentityTestKV})(S) = (@test T === S; T)
 end
@@ -1477,7 +1477,7 @@ end
 # issue #20835
 @test_throws(ErrorException("could not evaluate ccall argument type (it might depend on a local variable)"),
              eval(:(f20835(x) = ccall(:fn, Cvoid, (Ptr{typeof(x)},), x))))
-@test_throws(UndefVarError(:Something_not_defined_20835),
+@test_throws(UndefVarError(:Something_not_defined_20835, @__MODULE__),
              eval(:(f20835(x) = ccall(:fn, Something_not_defined_20835, (Ptr{typeof(x)},), x))))
 @test isempty(methods(f20835))
 
@@ -1516,6 +1516,12 @@ end
 @test_throws(ErrorException("ccall return type struct fields cannot contain a reference"),
              @eval ccall(:fn, typeof(Ref("")), ()))
 
+fn45187() = nothing
+
+@test_throws(TypeError, @eval ccall(nothing, Cvoid, ()))
+@test_throws(TypeError, @eval ccall(49142, Cvoid, ()))
+@test_throws(TypeError, @eval ccall((:fn, fn45187), Cvoid, ()))
+
 # test for malformed syntax errors
 @test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (), x)))
 @test Expr(:error, "more arguments than types for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B,), x, y)))
@@ -1530,6 +1536,14 @@ end
 @test Expr(:error, "only the trailing ccall argument type should have \"...\"") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (A, B..., C...), a, x)))
 @test Expr(:error, "only the trailing ccall argument type should have \"...\"") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (A, B..., C...), a, x, y, z)))
 @test Expr(:error, "more types than arguments for ccall") == Meta.lower(@__MODULE__, :(ccall(:fn, A, (B, C...), )))
+
+# test for ccall first argument tuple validation errors
+@test_throws "ccall function name cannot be empty tuple" eval(:(f() = ccall((), A, (), )))
+@test_throws "ccall function name tuple can have at most 2 elements" eval(:(f() = ccall((:a, :b, :c), A, (), )))
+@test_throws "ccall function name tuple can have at most 2 elements" eval(:(f() = ccall((:a, :b, :c, :d), A, (), )))
+@test_throws TypeError eval(:(f() = ccall((1 + 2,), A, (), )))
+@test_throws TypeError eval(:(f() = ccall((:a, 1 + 2), A, (), )))
+@test_throws TypeError eval(:(ccall_lazy_lib_name(x) = ccall((:testUcharX, compute_lib_name()), Int32, (UInt8,), x % UInt8)))
 
 # cfunction on non-function singleton
 struct CallableSingleton
@@ -1739,49 +1753,22 @@ using Base: ccall_macro_parse, ccall_macro_lower
         :Cvoid,                           # returntype
         Any[:Cstring, :Cstring, :Cint],   # argument types
         Any["%s = %d\n", :name, :value],  # argument symbols
+        false,                            # is gc_safe
         1                                 # number of required arguments (for varargs)
     )
 end
 
 @testset "ensure the base-case of @ccall works, including library name and pointer interpolation" begin
-    call = ccall_macro_lower(:ccall, ccall_macro_parse( :( libstring.func(
+    ccallmacro = ccall_macro_lower(:ccall, ccall_macro_parse( :( libstring.func(
         str::Cstring,
         num1::Cint,
         num2::Cint
     )::Cstring))...)
-    @test call == Base.remove_linenums!(
-        quote
-        local arg1root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cstring)), $(Expr(:escape, :str)))
-        local arg1 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cstring)), arg1root)
-        local arg2root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cint)), $(Expr(:escape, :num1)))
-        local arg2 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cint)), arg2root)
-        local arg3root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cint)), $(Expr(:escape, :num2)))
-        local arg3 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cint)), arg3root)
-        $(Expr(:foreigncall,
-               :($(Expr(:escape, :((:func, libstring))))),
-               :($(Expr(:escape, :Cstring))),
-               :($(Expr(:escape, :(($(Expr(:core, :svec)))(Cstring, Cint, Cint))))),
-               0,
-               :(:ccall),
-               :arg1, :arg2, :arg3, :arg1root, :arg2root, :arg3root))
-        end)
+    ccallfunction = :(ccall($(Expr(:escape, :((:func, libstring)))), $(Expr(:cconv, (:ccall, UInt16(0), false), 0)), $(Expr(:escape, :Cstring)), ($(Expr(:escape, :Cstring)), $(Expr(:escape, :Cint)), $(Expr(:escape, :Cint))), $(Expr(:escape, :str)), $(Expr(:escape, :num1)), $(Expr(:escape, :num2))))
+    @test ccallmacro == ccallfunction
 
-    # pointer interpolation
-    call = ccall_macro_lower(:ccall, ccall_macro_parse(:( $(Expr(:$, :fptr))("bar"::Cstring)::Cvoid ))...)
-    @test Base.remove_linenums!(call) == Base.remove_linenums!(
-    quote
-        func = $(Expr(:escape, :fptr))
-        begin
-            if !(func isa Ptr{Cvoid})
-                name = :fptr
-                throw(ArgumentError("interpolated function `$(name)` was not a Ptr{Cvoid}, but $(typeof(func))"))
-            end
-        end
-        local arg1root = $(GlobalRef(Base, :cconvert))($(Expr(:escape, :Cstring)), $(Expr(:escape, "bar")))
-        local arg1 = $(GlobalRef(Base, :unsafe_convert))($(Expr(:escape, :Cstring)), arg1root)
-        $(Expr(:foreigncall, :func, :($(Expr(:escape, :Cvoid))), :($(Expr(:escape, :(($(Expr(:core, :svec)))(Cstring))))), 0, :(:ccall), :arg1, :arg1root))
-    end)
-
+    local fptr = :x
+    @test_throws TypeError @ccall $fptr()::Cvoid
 end
 
 @testset "check error paths" begin
@@ -1796,7 +1783,7 @@ end
     # no required args on varargs call
     @test_throws ArgumentError("C ABI prohibits vararg without one required argument") ccall_macro_parse(:( foo(; x::Cint)::Cint ))
     # not a function pointer
-    @test_throws ArgumentError("interpolated function `PROGRAM_FILE` was not a Ptr{Cvoid}, but String") @ccall $PROGRAM_FILE("foo"::Cstring)::Cvoid
+    @test_throws TypeError @ccall $PROGRAM_FILE("foo"::Cstring)::Cvoid
 end
 
 @testset "check error path for @cfunction" begin
@@ -1853,12 +1840,8 @@ end
 end
 
 # issue #36458
-compute_lib_name() = "libcc" * "alltest"
-ccall_lazy_lib_name(x) = ccall((:testUcharX, compute_lib_name()), Int32, (UInt8,), x % UInt8)
-@test ccall_lazy_lib_name(0) == 0
-@test ccall_lazy_lib_name(3) == 1
 ccall_with_undefined_lib() = ccall((:time, xx_nOt_DeFiNeD_xx), Cint, (Ptr{Cvoid},), C_NULL)
-@test_throws UndefVarError(:xx_nOt_DeFiNeD_xx) ccall_with_undefined_lib()
+@test_throws UndefVarError(:xx_nOt_DeFiNeD_xx, @__MODULE__) ccall_with_undefined_lib()
 
 @testset "transcode for UInt8 and UInt16" begin
     a   = [UInt8(1), UInt8(2), UInt8(3)]
@@ -1910,6 +1893,12 @@ end
     function cglobal33413_literal_notype()
         return cglobal(:sin)
     end
+    function cglobal49142_nothing()
+        return cglobal(nothing)
+    end
+    function cglobal45187fn()
+        return cglobal((:fn, fn45187))
+    end
     @test unsafe_load(cglobal33413_ptrvar()) == 1
     @test unsafe_load(cglobal33413_ptrinline()) == 1
     @test unsafe_load(cglobal33413_tupleliteral()) == 1
@@ -1918,10 +1907,125 @@ end
     @test unsafe_load(convert(Ptr{Cint}, cglobal33413_tupleliteral_notype())) == 1
     @test cglobal33413_literal() != C_NULL
     @test cglobal33413_literal_notype() != C_NULL
+    @test_throws(TypeError, cglobal49142_nothing())
+    @test_throws(TypeError, cglobal45187fn())
+    @test_throws(TypeError, @eval cglobal(nothing))
+    @test_throws(TypeError, @eval cglobal((:fn, fn45187)))
 end
 
 @testset "ccall_effects" begin
     ctest_total(x) = Base.@assume_effects :total @ccall libccalltest.ctest(x::Complex{Int})::Complex{Int}
     ctest_total_const() = Val{ctest_total(1 + 2im)}()
     Core.Compiler.return_type(ctest_total_const, Tuple{}) == Val{2 + 0im}
+end
+
+const libfrobozz = ""
+
+function somefunction_not_found()
+    ccall((:somefunction, libfrobozz), Cvoid, ())
+end
+
+function somefunction_not_found_libc()
+    ccall(:test,Int,())
+end
+
+@testset "library not found" begin
+    if Sys.islinux()
+        @test_throws "could not load symbol \"somefunction\"" somefunction_not_found()
+    else
+        @test_throws "could not load library \"\"" somefunction_not_found()
+    end
+    @test_throws "could not load symbol \"test\"" somefunction_not_found_libc()
+end
+
+# issue #52025
+@test Base.unsafe_convert(Ptr{Ptr{Cchar}}, Base.cconvert(Ptr{Ptr{Cchar}}, map(pointer, ["ab"]))) isa Ptr{Ptr{Cchar}}
+#issue #54725
+for A in (reinterpret(UInt, [0]), reshape([0, 0], 1, 2))
+    @test pointer(A) == Base.unsafe_convert(Ptr{Cvoid}, A) == Base.unsafe_convert(Ptr{Int}, A)
+end
+# Cglobal with non-static symbols doesn't error
+function cglobal_non_static1()
+    sym = (:global_var, libccalltest)
+    cglobal(sym)
+end
+global the_sym = (:global_var, libccalltest)
+cglobal_non_static2() = cglobal(the_sym)
+
+@test isa(cglobal_non_static1(), Ptr)
+@test isa(cglobal_non_static2(), Ptr)
+
+@generated function generated_world_counter()
+    return :($(Base.get_world_counter()))
+end
+function world_counter()
+    return Base.get_world_counter()
+end
+let llvm = sprint(code_llvm, world_counter, ())
+    # check that we got a reasonable value for the world age
+    @test (world_counter() != 0) && (world_counter() != -1)
+    # no call to the runtime should be left over
+    @test !occursin("call i64", llvm)
+    # the world age should be -1 in generated functions (or other pure contexts)
+    @test (generated_world_counter() == reinterpret(UInt, -1))
+end
+
+function gc_safe_ccall()
+    # jl_rand is marked as JL_NOTSAFEPOINT
+    Base.@assume_effects :nothrow @ccall gc_safe=true jl_rand()::UInt64
+end
+
+let llvm = sprint(code_llvm, gc_safe_ccall, ())
+    # check that the call works
+    @test gc_safe_ccall() isa UInt64
+    # check for the gc_safe store
+    @test occursin("store atomic i8 2", llvm)
+    @test Base.infer_effects(gc_safe_ccall, Tuple{}).nothrow == true
+end
+
+@testset "jl_dlfind and dlsym" begin
+    # Test that jl_dlfind finds things in the expected places.
+    @test ccall(:jl_dlfind, Int, (Cstring,), "doesnotexist") == 0       # not found (RTLD_DEFAULT)
+    @static if !Sys.iswindows()
+        @test ccall(:jl_dlfind, Int, (Cstring,), "main") == 1               # JL_EXE_LIBNAME
+    end
+    @test ccall(:jl_dlfind, Int, (Cstring,), "jl_gc_safepoint") == 2    # JL_LIBJULIA_DL_LIBNAME
+    @test ccall(:jl_dlfind, Int, (Cstring,), "ijl_gc_small_alloc") == 3 # JL_LIBJULIA_INTERNAL_DL_LIBNME
+    @test ccall(:jl_dlfind, Int, (Cstring,), "malloc") ∉ (1, 2, 3)      # Either 0 or msvcrt.dll on Windows
+    let hdl = Libdl.dlopen(libccalltest, Libdl.RTLD_GLOBAL)
+        try
+            @static if Sys.iswindows()
+                @test_throws ErrorException ccall(:get_c_int, Cint, ())
+            else
+                @test ccall(:get_c_int, Cint, ()) isa Cint
+            end
+        finally
+            Libdl.dlclose(hdl)
+        end
+    end
+end
+
+# issue #51293: Ensure we can load libraries even when a directory with the same name exists
+@testset "dlload with directory collision" begin
+    mktempdir() do dir
+        # Create a subdirectory with the same name as our test library
+        libdir = joinpath(dir, "libccalltest")
+        mkdir(libdir)
+
+        # Try to load libccalltest from within this directory
+        cd(dir) do
+            # This should successfully load the library from DL_LOAD_PATH, not fail due to the directory
+            hdl = Libdl.dlopen(libccalltest)
+            @test hdl != C_NULL
+            Libdl.dlclose(hdl)
+        end
+    end
+end
+
+module Test57749
+using Test, Zstd_jll
+const prefix = "Zstd version: "
+const sym = :ZSTD_versionString
+get_zstd_version() = prefix * unsafe_string(ccall((sym, libzstd), Cstring, ()))
+@test startswith(get_zstd_version(), "Zstd")
 end

@@ -67,7 +67,7 @@ macro lazy_str(text)
     parts = Any[]
     lastidx = idx = 1
     while (idx = findnext('$', text, idx)) !== nothing
-        lastidx < idx && push!(parts, text[lastidx:idx-1])
+        lastidx < idx && push!(parts, text[lastidx:prevind(text, idx)])
         idx += 1
         expr, idx = Meta.parseatom(text, idx; filename=string(__source__.file))
         push!(parts, esc(expr))
@@ -96,6 +96,7 @@ iterate(s::LazyString, i::Integer) = iterate(String(s), i)
 isequal(a::LazyString, b::LazyString) = isequal(String(a), String(b))
 ==(a::LazyString, b::LazyString) = (String(a) == String(b))
 ncodeunits(s::LazyString) = ncodeunits(String(s))
-codeunit(s::LazyString) = codeunit(String(s))
+codeunit(s::LazyString) = codeunit("") # returns UInt8
 codeunit(s::LazyString, i::Integer) = codeunit(String(s), i)
+codeunits(s::LazyString) = codeunits(String(s))
 isvalid(s::LazyString, i::Integer) = isvalid(String(s), i)

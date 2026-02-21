@@ -41,10 +41,13 @@ eltype(p::Type{Pair{A, B}}) where {A, B} = Union{A, B}
 iterate(p::Pair, i=1) = i > 2 ? nothing : (getfield(p, i), i + 1)
 indexed_iterate(p::Pair, i::Int, state=1) = (getfield(p, i), i + 1)
 
-hash(p::Pair, h::UInt) = hash(p.second, hash(p.first, h))
+let seed = (UInt === UInt64) ? 0x94cb2bb20a28ce96 : 0x1f60a087
+    global hash
+    hash(p::Pair, h::UInt) = hash(p.second, hash(p.first, xor(seed, h)))
+end
 
 ==(p::Pair, q::Pair) = (p.first==q.first) & (p.second==q.second)
-isequal(p::Pair, q::Pair) = isequal(p.first,q.first) & isequal(p.second,q.second)
+isequal(p::Pair, q::Pair) = isequal(p.first,q.first)::Bool & isequal(p.second,q.second)::Bool
 
 isless(p::Pair, q::Pair) = ifelse(!isequal(p.first,q.first), isless(p.first,q.first),
                                                              isless(p.second,q.second))
@@ -60,7 +63,11 @@ last(p::Pair) = p.second
 
 convert(::Type{Pair{A,B}}, x::Pair{A,B}) where {A,B} = x
 function convert(::Type{Pair{A,B}}, x::Pair) where {A,B}
-    Pair{A,B}(convert(A, x[1]), convert(B, x[2]))::Pair{A,B}
+    a = getfield(x, :first)
+    a isa A || (a = convert(A, a))
+    b = getfield(x, :second)
+    b isa B || (b = convert(B, b))
+    return Pair{A,B}(a, b)::Pair{A,B}
 end
 
 promote_rule(::Type{Pair{A1,B1}}, ::Type{Pair{A2,B2}}) where {A1,B1,A2,B2} =

@@ -14,18 +14,16 @@ extern "C" {
 // this flag controls when data actually moves out to the underlying I/O
 // channel. memory streams are a special case of this where the data
 // never moves out.
-
-//make it compatible with UV Handles
 typedef enum { bm_none=1000, bm_line, bm_block, bm_mem } bufmode_t;
 typedef enum { bst_none, bst_rd, bst_wr } bufstate_t;
 
-#define IOS_INLSIZE 54
+#define IOS_INLSIZE 83
 #define IOS_BUFSIZE 32768
 
 #ifdef _P64
-#define ON_P64(x) x
+#define IF_P64(x,y) x
 #else
-#define ON_P64(x)
+#define IF_P64(x,y) y
 #endif
 
 // We allow ios_t as a cvalue in flisp, which only guarantees pointer
@@ -36,10 +34,8 @@ JL_ATTRIBUTE_ALIGN_PTRSIZE(typedef struct {
     // in general, you can do any operation in any state.
     char *buf;        // start of buffer
 
-    int errcode;
-
-    ON_P64(int _pad_bm;)      // put bm at same offset as type field of uv_stream_s
-    bufmode_t bm;     //
+    IF_P64(int64_t userdata;, int errcode;)
+    bufmode_t bm;     // bm must be at same offset as type field of uv_stream_s
     bufstate_t state;
 
     int64_t maxsize;    // space allocated to buffer
@@ -50,6 +46,8 @@ JL_ATTRIBUTE_ALIGN_PTRSIZE(typedef struct {
     int64_t fpos;       // cached file pos
     size_t lineno;    // current line number
     size_t u_colno;     // current column number (in Unicode charwidths)
+
+    IF_P64(int errcode;, int64_t userdata;)
 
     // pointer-size integer to support platforms where it might have
     // to be a pointer
@@ -74,17 +72,21 @@ JL_ATTRIBUTE_ALIGN_PTRSIZE(typedef struct {
     // request durable writes (fsync)
     // unsigned char durable:1;
 
-    int64_t userdata;
+    // this declares that the buffer should not be (re-)alloc'd when
+    // attempting to write beyond its current maxsize.
+    unsigned char growable:1;
+
     char local[IOS_INLSIZE];
 } ios_t);
 
-#undef ON_P64
+#undef IF_P64
 
 extern void (*ios_set_io_wait_func)(int);
 /* low-level interface functions */
 JL_DLLEXPORT size_t ios_read(ios_t *s, char *dest, size_t n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t ios_readall(ios_t *s, char *dest, size_t n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t ios_write(ios_t *s, const char *data, size_t n) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t ios_write_direct(ios_t *dest, ios_t *src) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int64_t ios_seek(ios_t *s, int64_t pos) JL_NOTSAFEPOINT; // absolute seek
 JL_DLLEXPORT int64_t ios_seek_end(ios_t *s) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int64_t ios_skip(ios_t *s, int64_t offs);  // relative seek
@@ -105,7 +107,7 @@ JL_DLLEXPORT int ios_get_writable(ios_t *s);
 JL_DLLEXPORT void ios_set_readonly(ios_t *s);
 JL_DLLEXPORT size_t ios_copy(ios_t *to, ios_t *from, size_t nbytes);
 JL_DLLEXPORT size_t ios_copyall(ios_t *to, ios_t *from);
-JL_DLLEXPORT size_t ios_copyuntil(ios_t *to, ios_t *from, char delim) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t ios_copyuntil(ios_t *to, ios_t *from, char delim, int keep) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t ios_nchomp(ios_t *from, size_t ntowrite);
 // ensure at least n bytes are buffered if possible. returns # available.
 JL_DLLEXPORT size_t ios_readprep(ios_t *from, size_t n);
@@ -115,7 +117,6 @@ JL_DLLEXPORT ssize_t ios_fillbuf(ios_t *s);
 /* stream creation */
 JL_DLLEXPORT
 ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int trunc) JL_NOTSAFEPOINT;
-JL_DLLEXPORT ios_t *ios_mkstemp(ios_t *f, char *fname);
 JL_DLLEXPORT ios_t *ios_mem(ios_t *s, size_t initsize) JL_NOTSAFEPOINT;
 ios_t *ios_str(ios_t *s, char *str);
 ios_t *ios_static_buffer(ios_t *s, char *buf, size_t sz);
@@ -124,6 +125,7 @@ JL_DLLEXPORT ios_t *ios_fd(ios_t *s, long fd, int isfile, int own);
 extern JL_DLLEXPORT ios_t *ios_stdin;
 extern JL_DLLEXPORT ios_t *ios_stdout;
 extern JL_DLLEXPORT ios_t *ios_stderr;
+extern JL_DLLEXPORT ios_t *ios_safe_stderr; // safe for async-signal context
 void ios_init_stdstreams(void);
 
 /* high-level functions - output */
@@ -149,6 +151,10 @@ JL_DLLEXPORT int ios_peekc(ios_t *s);
 int ios_ungetc(int c, ios_t *s);
 //wint_t ios_ungetwc(ios_t *s, wint_t wc);
 #define ios_puts(str, s) ios_write(s, str, strlen(str))
+
+#ifdef _OS_WINDOWS_
+const wchar_t *ios_utf8_to_wchar(const char *str);
+#endif
 
 /*
   With memory streams, mixed reads and writes are equivalent to performing
