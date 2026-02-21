@@ -124,9 +124,7 @@ module NonResizableVectors
             nothing
         end
     end
-    if isdefined(Base, :dataids)  # not public: https://github.com/JuliaLang/julia/issues/51753
-        function Base.dataids(x::NonResizableVector)
-            Base.dataids(parent(x))  # forward to `dataids(::Memory)`
-        end
+    function Base.dataids(x::NonResizableVector)
+        Base.dataids(parent(x))  # forward to `dataids(::Memory)`
     end
 end
