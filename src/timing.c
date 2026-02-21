@@ -6,15 +6,22 @@
 #include "options.h"
 #include "stdio.h"
 
-#if defined(USE_TRACY) || defined(USE_ITTAPI)
+#if defined(USE_TRACY) || defined(USE_ITTAPI) || defined(USE_NVTX) || defined(USE_APPLE_OSLOG)
 #define DISABLE_FREQUENT_EVENTS
 #endif
-
-jl_module_t *jl_module_root(jl_module_t *m);
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+JL_DLLEXPORT int jl_timing_enabled(void) {
+#ifdef ENABLE_TIMINGS
+    return 1;
+#else
+    return 0;
+#endif
+}
+
 
 #ifdef ENABLE_TIMINGS
 
@@ -48,6 +55,10 @@ static jl_mutex_t jl_timing_counts_events_lock;
 static arraylist_t jl_timing_ittapi_events;
 static jl_mutex_t jl_timing_ittapi_events_lock;
 #endif //USE_ITTAPI
+
+#ifdef USE_NVTX
+static nvtxDomainHandle_t jl_timing_nvtx_domain;
+#endif
 
 #ifdef USE_TIMING_COUNTS
 static int cmp_counts_events(const void *a, const void *b) {
@@ -139,6 +150,13 @@ void jl_init_timing(void)
     qsort(jl_timing_subsystems, JL_TIMING_SUBSYSTEM_LAST,
           sizeof(const char *), indirect_strcmp);
 
+#ifdef USE_NVTX
+    jl_timing_nvtx_domain = nvtxDomainCreateA("julia");
+    for (int i = 0; i < JL_TIMING_SUBSYSTEM_LAST; i++) {
+        nvtxDomainNameCategoryA(jl_timing_nvtx_domain, i + 1, jl_timing_subsystems[i]);
+    }
+#endif
+
     int i __attribute__((unused)) = 0;
 #ifdef USE_ITTAPI
     i = 0;
@@ -174,6 +192,7 @@ void jl_init_timing(void)
     error |= jl_timing_set_enable("METHOD_LOOKUP_FAST", 0);
     error |= jl_timing_set_enable("AST_COMPRESS", 0);
     error |= jl_timing_set_enable("AST_UNCOMPRESS", 0);
+    error |= jl_timing_set_enable("TYPE_CACHE_INSERT", 0);
     if (error)
         jl_error("invalid timing subsystem encountered in jl_init_timing");
 #endif
@@ -233,6 +252,48 @@ static __itt_event _jl_timing_ittapi_event_create(const char *event) {
 }
 
 #endif // USE_ITTAPI
+
+#ifdef USE_APPLE_OSLOG
+
+void _jl_timing_os_signpost_start(jl_timing_block_t* block) {
+    // Initialize metadata buffer
+    block->oslog_metadata[0] = '\0';
+    block->oslog_metadata_len = 0;
+
+    if (!os_signpost_enabled(block->event->os_log_event.log)) {
+        return;
+    }
+    uint8_t _Alignas(16) buffer[64];
+    buffer[0] = 0;
+    block->signpost_id = os_signpost_id_make_with_pointer((block)->event->os_log_event.log, (void *)(block));
+    _os_signpost_emit_with_name_impl(&__dso_handle, block->event->os_log_event.log, OS_SIGNPOST_INTERVAL_BEGIN,
+        block->signpost_id, (block)->event->os_log_event.name, "", buffer, sizeof(buffer));
+}
+
+void _jl_timing_os_signpost_stop(jl_timing_block_t * block) {
+    if (!os_signpost_enabled(block->event->os_log_event.log)) {
+        return;
+    }
+
+    uint8_t _Alignas(16) buffer[128];
+    if (block->oslog_metadata_len > 0) {
+        // Emit with buffered metadata
+        const char *msg = block->oslog_metadata;
+        buffer[0] = 2;  // HasNonScalarItems
+        buffer[1] = 1;  // ItemCount
+        buffer[2] = 0x22; // StringKind + Public
+        buffer[3] = 8;  // pointer size
+        memcpy(&buffer[4], &msg, 8);
+        _os_signpost_emit_with_name_impl(&__dso_handle, block->event->os_log_event.log, OS_SIGNPOST_INTERVAL_END,
+            block->signpost_id, block->event->os_log_event.name, "%s", buffer, 12);
+    } else {
+        // No metadata, emit empty end
+        buffer[0] = 0;
+        _os_signpost_emit_with_name_impl(&__dso_handle, block->event->os_log_event.log, OS_SIGNPOST_INTERVAL_END,
+            block->signpost_id, block->event->os_log_event.name, "", buffer, sizeof(buffer));
+    }
+}
+#endif
 
 #ifdef USE_TIMING_COUNTS
 
@@ -317,6 +378,25 @@ JL_DLLEXPORT jl_timing_event_t *_jl_timing_event_create(const char *subsystem, c
     event->ittapi_event = _jl_timing_ittapi_event_create(name);
 #endif // USE_ITTAPI
 
+#ifdef USE_NVTX
+    nvtxEventAttributes_t nvtx_attrs = {0};
+    nvtx_attrs.version = NVTX_VERSION;
+    nvtx_attrs.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+
+    nvtxStringHandle_t nvtx_message = nvtxDomainRegisterStringA(jl_timing_nvtx_domain, name);
+    nvtx_attrs.messageType = NVTX_MESSAGE_TYPE_REGISTERED;
+    nvtx_attrs.message.registered = nvtx_message;
+
+    // 0 is the default (unnamed) category
+    nvtx_attrs.category = maybe_subsystem == JL_TIMING_SUBSYSTEM_LAST ? 0 : maybe_subsystem+1;
+
+    // simple Knuth hash to get nice colors
+    nvtx_attrs.colorType = NVTX_COLOR_ARGB;
+    nvtx_attrs.color = (nvtx_attrs.category * 2654435769) >> 8;
+
+    event->nvtx_attrs = nvtx_attrs;
+#endif // USE_NVTX
+
 #ifdef USE_TRACY
     event->tracy_srcloc.name = name;
     event->tracy_srcloc.function = function;
@@ -325,6 +405,10 @@ JL_DLLEXPORT jl_timing_event_t *_jl_timing_event_create(const char *subsystem, c
     event->tracy_srcloc.color = color;
 #endif // USE_TRACY
 
+#ifdef USE_APPLE_OSLOG
+    event->os_log_event.log = os_log_create("julia", subsystem);
+    event->os_log_event.name = name;
+#endif // USE_APPLE_OSLOG
     return event;
 }
 
@@ -347,7 +431,9 @@ JL_DLLEXPORT void _jl_timing_block_start(jl_timing_block_t *block) {
     uint64_t t = cycleclock(); (void)t;
     _COUNTS_START(&block->counts_ctx, t);
     _ITTAPI_START(block);
+    _NVTX_START(block);
     _TRACY_START(block);
+    _APPLE_OSLOG_START(block);
 
     jl_timing_block_t **prevp = &jl_current_task->ptls->timing_stack;
     block->prev = *prevp;
@@ -362,8 +448,10 @@ JL_DLLEXPORT void _jl_timing_block_end(jl_timing_block_t *block) {
     if (block->is_running) {
         uint64_t t = cycleclock(); (void)t;
         _ITTAPI_STOP(block);
+        _NVTX_STOP(block);
         _TRACY_STOP(block->tracy_ctx);
         _COUNTS_STOP(block, t);
+        _APPLE_OSLOG_STOP(block);
 
         jl_task_t *ct = jl_current_task;
         jl_timing_block_t **pcur = &ct->ptls->timing_stack;
@@ -426,28 +514,38 @@ jl_timing_block_t *jl_timing_block_task_exit(jl_task_t *ct, jl_ptls_t ptls)
     return blk;
 }
 
+static void _jl_timing_show_buf(jl_timing_block_t *cur_block, ios_t *buf)
+{
+    if (buf->size == buf->maxsize) {
+        memset(&buf->buf[IOS_INLSIZE - 4], '.', 3);
+        buf->size -= 1;
+        buf->buf[buf->size] = '\0'; // Ensure null-termination
+    }
+    else {
+        buf->buf[buf->size] = '\0'; // Ensure null-termination
+    }
+    jl_timing_puts(cur_block, buf->buf);
+}
+
 JL_DLLEXPORT void jl_timing_show(jl_value_t *v, jl_timing_block_t *cur_block)
 {
-#ifdef USE_TRACY
+#if defined(USE_TRACY) || defined(USE_APPLE_OSLOG)
     ios_t buf;
     ios_mem(&buf, IOS_INLSIZE);
     buf.growable = 0; // Restrict to inline buffer to avoid allocation
 
     jl_static_show((JL_STREAM*)&buf, v);
-    if (buf.size == buf.maxsize)
-        memset(&buf.buf[IOS_INLSIZE - 3], '.', 3);
-
-    TracyCZoneText(cur_block->tracy_ctx, buf.buf, buf.size);
+    _jl_timing_show_buf(cur_block, &buf);
 #endif
 }
 
 JL_DLLEXPORT void jl_timing_show_module(jl_module_t *m, jl_timing_block_t *cur_block)
 {
-#ifdef USE_TRACY
+#if defined(USE_TRACY) || defined(USE_APPLE_OSLOG)
     jl_module_t *root = jl_module_root(m);
     if (root == m || root == jl_main_module) {
         const char *module_name = jl_symbol_name(m->name);
-        TracyCZoneText(cur_block->tracy_ctx, module_name, strlen(module_name));
+        jl_timing_puts(cur_block, module_name);
     } else {
         jl_timing_printf(cur_block, "%s.%s", jl_symbol_name(root->name), jl_symbol_name(m->name));
     }
@@ -456,15 +554,15 @@ JL_DLLEXPORT void jl_timing_show_module(jl_module_t *m, jl_timing_block_t *cur_b
 
 JL_DLLEXPORT void jl_timing_show_filename(const char *path, jl_timing_block_t *cur_block)
 {
-#ifdef USE_TRACY
+#if defined(USE_TRACY) || defined(USE_APPLE_OSLOG)
     const char *filename = gnu_basename(path);
-    TracyCZoneText(cur_block->tracy_ctx, filename, strlen(filename));
+    jl_timing_puts(cur_block, filename);
 #endif
 }
 
 JL_DLLEXPORT void jl_timing_show_location(const char *file, int line, jl_module_t* mod, jl_timing_block_t *cur_block)
 {
-#ifdef USE_TRACY
+#if defined(USE_TRACY) || defined(USE_APPLE_OSLOG)
     jl_module_t *root = jl_module_root(mod);
     if (root == mod || root == jl_main_module) {
         jl_timing_printf(cur_block, "%s:%d in %s",
@@ -502,17 +600,14 @@ JL_DLLEXPORT void jl_timing_show_method(jl_method_t *method, jl_timing_block_t *
 
 JL_DLLEXPORT void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_block)
 {
-#ifdef USE_TRACY
+#if defined(USE_APPLE_OSLOG) || defined(USE_TRACY)
     ios_t buf;
     ios_mem(&buf, IOS_INLSIZE);
     buf.growable = 0; // Restrict to inline buffer to avoid allocation
 
     jl_static_show_config_t config = { /* quiet */ 1 };
     jl_static_show_func_sig_((JL_STREAM*)&buf, v, config);
-    if (buf.size == buf.maxsize)
-        memset(&buf.buf[IOS_INLSIZE - 3], '.', 3);
-
-    TracyCZoneText(cur_block->tracy_ctx, buf.buf, buf.size);
+    _jl_timing_show_buf(cur_block, &buf);
 #endif
 }
 
@@ -530,16 +625,12 @@ JL_DLLEXPORT void jl_timing_printf(jl_timing_block_t *cur_block, const char *for
     va_list args;
     va_start(args, format);
 
-#ifdef USE_TRACY
+#if defined(USE_APPLE_OSLOG) || defined(USE_TRACY)
     ios_t buf;
     ios_mem(&buf, IOS_INLSIZE);
     buf.growable = 0; // Restrict to inline buffer to avoid allocation
-
     jl_vprintf((JL_STREAM*)&buf, format, args);
-    if (buf.size == buf.maxsize)
-        memset(&buf.buf[IOS_INLSIZE - 3], '.', 3);
-
-    TracyCZoneText(cur_block->tracy_ctx, buf.buf, buf.size);
+    _jl_timing_show_buf(cur_block, &buf);
 #endif
     va_end(args);
 }
@@ -548,6 +639,18 @@ JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str)
 {
 #ifdef USE_TRACY
     TracyCZoneText(cur_block->tracy_ctx, str, strlen(str));
+#endif
+#ifdef USE_APPLE_OSLOG
+        // Buffer the metadata to be emitted with the interval end
+    assert(cur_block->oslog_metadata_len < sizeof(cur_block->oslog_metadata));
+    size_t len = strlen(str);
+    size_t remaining = sizeof(cur_block->oslog_metadata) - cur_block->oslog_metadata_len - 1;
+    if (remaining > 0) {
+        size_t to_copy = len < remaining ? len : remaining;
+        memcpy(cur_block->oslog_metadata + cur_block->oslog_metadata_len, str, to_copy);
+        cur_block->oslog_metadata_len += to_copy;
+        cur_block->oslog_metadata[cur_block->oslog_metadata_len] = '\0';
+    }
 #endif
 }
 

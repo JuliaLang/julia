@@ -37,6 +37,7 @@ for T = types[2:end], x = vals
     a = coerce(T, x)
     @test hash(a, zero(UInt)) == invoke(hash, Tuple{Real, UInt}, a, zero(UInt))
     @test hash(a, one(UInt)) == invoke(hash, Tuple{Real, UInt}, a, one(UInt))
+    @test hash(a) == hash(complex(a))
 end
 
 let collides = 0
@@ -88,6 +89,7 @@ vals = Any[
     Dict(42 => 101, 77 => 93), Dict{Any,Any}(42 => 101, 77 => 93),
     (1,2,3,4), (1.0,2.0,3.0,4.0), (1,3,2,4),
     ("a","b"), (SubString("a",1,1), SubString("b",1,1)),
+    join('c':'s'), SubString(join('a':'z'), 3, 19),
     # issue #6900
     Dict(x => x for x in 1:10),
     Dict(7=>7,9=>9,4=>4,10=>10,2=>2,3=>3,8=>8,5=>5,6=>6,1=>1),
@@ -108,7 +110,7 @@ vals = Any[
     ["a", "b", 1, 2], ["a", 1, 2], ["a", "b", 2, 2], ["a", "a", 1, 2], ["a", "b", 2, 3]
 ]
 
-for a in vals, b in vals
+for (i, a) in enumerate(vals), b in vals[i:end]
     @test isequal(a,b) == (hash(a)==hash(b))
 end
 
@@ -178,8 +180,14 @@ end
 @test hash([1,2]) == hash(view([1,2,3,4],1:2))
 
 let a = QuoteNode(1), b = QuoteNode(1.0)
-    @test (hash(a)==hash(b)) == (a==b)
+    @test hash(a) == hash(b)
+    @test a != b
 end
+let a = QuoteNode(:(1 + 2)), b = QuoteNode(:(1 + 2))
+    @test hash(a) == hash(b)
+    @test a == b
+end
+
 
 let a = Expr(:block, Core.SlotNumber(1)),
     b = Expr(:block, Core.SlotNumber(1)),
@@ -249,7 +257,9 @@ end
         )
 
         for a in vals, b in vals
-            @test isequal(a, b) == (Base.hash_64_32(a) == Base.hash_64_32(b))
+            ha = Base.hash_64_32(a)
+            hb = Base.hash_64_32(b)
+            @test isequal(a, b) == (ha == hb)
         end
     end
 
@@ -260,7 +270,9 @@ end
         )
 
         for a in vals, b in vals
-            @test isequal(a, b) == (Base.hash_32_32(a) == Base.hash_32_32(b))
+            ha = Base.hash_32_32(a)
+            hb = Base.hash_32_32(b)
+            @test isequal(a, b) == (ha == hb)
         end
     end
 end
@@ -301,4 +313,40 @@ struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
     @test hash((Int64(5)//2)^25) != hash(2.5^25)
     # test hashing of rational with odd denominator
     @test hash(5//3) == hash(big(5)//3)
+end
+
+@testset "`Pair`" begin
+    @test (@inferred hash(0 => 1)) === (@inferred hash(false => true))
+    @test hash(0 => 1, UInt(0)) != hash(0 => 1, UInt(1))
+    let (x, y, z) = (1, 3, 7)
+        h = UInt(9)
+        @test hash(x => (y => z), h) != hash((x => y) => z, h)
+    end
+end
+
+@testset "concrete eval type hash" begin
+    @test Core.Compiler.is_foldable_nothrow(Base.infer_effects(hash, Tuple{Type{Int}, UInt}))
+
+    f(h...) = hash(Char, h...);
+    src = only(code_typed(f, Tuple{UInt}))[1]
+    @test count(stmt -> Meta.isexpr(stmt, :foreigncall), src.code) == 0
+end
+
+@testset "hash_bytes consistency" begin
+    # Test that hash_bytes(::Array), hash_bytes(Generator(identity, Array)), and hash_bytes(pointer(Array)) return the same values
+
+    for n in 0:1000
+        b = rand(UInt8, n)
+        a = Base.Generator(identity, b)
+
+        # Test hash_bytes(::Array) vs hash_bytes(pointer(Array))
+        hash_array = Base.hash_bytes(b, UInt64(Base.HASH_SEED), Base.HASH_SECRET)
+        hash_pointer = Base.hash_bytes(pointer(b), length(b), UInt64(Base.HASH_SEED), Base.HASH_SECRET)
+        @test hash_array isa UInt64
+        @test hash_array === hash_pointer
+
+        # Test hash_bytes(Generator(identity, Array)) vs hash_bytes(pointer(Array))
+        hash_generator = Base.hash_bytes(a, UInt64(Base.HASH_SEED), Base.HASH_SECRET)
+        @test hash_generator === hash_pointer
+    end
 end

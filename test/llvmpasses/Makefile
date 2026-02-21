@@ -30,4 +30,7 @@ update-help:
 	$(JULIAHOME)/deps/srccache/llvm/llvm/utils/update_test_checks.py \
 	--help
 
-.PHONY: $(TESTS) $(addprefix update-,$(TESTS_ll)) check all .
+clean:
+	rm -rf .lit_test_times.txt Output
+
+.PHONY: $(TESTS) $(addprefix update-,$(TESTS_ll)) check all clean update-help .

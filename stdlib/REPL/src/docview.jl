@@ -9,9 +9,9 @@ using Base.Docs: catdoc, modules, DocStr, Binding, MultiDoc, keywords, isfield, 
 
 import Base.Docs: doc, formatdoc, parsedoc, apropos
 
-using Base: with_output_color, mapany
+using Base: with_output_color, mapany, isdeprecated, isexported
 
-import REPL
+using Base.Filesystem: _readdirx
 
 using InteractiveUtils: subtypes
 
@@ -23,7 +23,7 @@ using Unicode: normalize
 function helpmode(io::IO, line::AbstractString, mod::Module=Main)
     internal_accesses = Set{Pair{Module,Symbol}}()
     quote
-        docs = $REPL.insert_hlines($(REPL._helpmode(io, line, mod, internal_accesses)))
+        docs = $Markdown.insert_hlines($(REPL._helpmode(io, line, mod, internal_accesses)))
         $REPL.insert_internal_warning(docs, $internal_accesses)
     end
 end
@@ -76,26 +76,13 @@ function _helpmode(io::IO, line::AbstractString, mod::Module=Main, internal_acce
 end
 _helpmode(line::AbstractString, mod::Module=Main) = _helpmode(stdout, line, mod)
 
-# Print horizontal lines between each docstring if there are multiple docs
-function insert_hlines(docs)
-    if !isa(docs, Markdown.MD) || !haskey(docs.meta, :results) || isempty(docs.meta[:results])
-        return docs
-    end
-    docs = docs::Markdown.MD
-    v = Any[]
-    for (n, doc) in enumerate(docs.content)
-        push!(v, doc)
-        n == length(docs.content) || push!(v, Markdown.HorizontalRule())
-    end
-    return Markdown.MD(v)
-end
-
 function formatdoc(d::DocStr)
     buffer = IOBuffer()
     for part in d.text
         formatdoc(buffer, d, part)
     end
-    Markdown.MD(Any[Markdown.parse(seekstart(buffer))])
+    md = Markdown.MD(Any[Markdown.parse(seekstart(buffer))])
+    assume_julia_code!(md)
 end
 @noinline formatdoc(buffer, d, part) = print(buffer, part)
 
@@ -107,6 +94,27 @@ function parsedoc(d::DocStr)
         d.object = md
     end
     d.object
+end
+
+"""
+    assume_julia_code!(doc::Markdown.MD) -> doc
+
+Assume that code blocks with no language specified are Julia code.
+"""
+function assume_julia_code!(doc::Markdown.MD)
+    assume_julia_code!(doc.content)
+    doc
+end
+
+function assume_julia_code!(blocks::Vector)
+    for (i, block) in enumerate(blocks)
+        if block isa Markdown.Code && block.language == ""
+            blocks[i] = Markdown.Code("julia", block.code)
+        elseif block isa Vector || block isa Markdown.MD
+            assume_julia_code!(block)
+        end
+    end
+    blocks
 end
 
 ## Trimming long help ("# Extended help")
@@ -184,7 +192,7 @@ log_nonpublic_access(expr, ::Module, _) = expr
 
 function insert_internal_warning(md::Markdown.MD, internal_access::Set{Pair{Module,Symbol}})
     if !isempty(internal_access)
-        items = Any[Any[Markdown.Paragraph(Any[Markdown.Code("", s)])] for s in sort("$mod.$sym" for (mod, sym) in internal_access)]
+        items = Any[Any[Markdown.Paragraph(Any[Markdown.Code("", s)])] for s in sort!(["$mod.$sym" for (mod, sym) in internal_access])]
         admonition = Markdown.Admonition("warning", "Warning", Any[
             Markdown.Paragraph(Any["The following bindings may be internal; they may change or be removed in future versions:"]),
             Markdown.List(items, -1, false)])
@@ -198,14 +206,6 @@ function insert_internal_warning(other, internal_access::Set{Pair{Module,Symbol}
     other
 end
 
-"""
-    Docs.doc(binding, sig)
-
-Return all documentation that matches both `binding` and `sig`.
-
-If `getdoc` returns a non-`nothing` result on the value of the binding, then a
-dynamic docstring is returned instead of one based on the binding itself.
-"""
 function doc(binding::Binding, sig::Type = Union{})
     if defined(binding)
         result = getdoc(resolve(binding), sig)
@@ -256,7 +256,7 @@ doc(obj::UnionAll) = doc(Base.unwrap_unionall(obj))
 doc(object, sig::Type = Union{}) = doc(aliasof(object, typeof(object)), sig)
 doc(object, sig...)              = doc(object, Tuple{sig...})
 
-function lookup_doc(ex)
+function lookup_doc(@nospecialize(ex))
     if isa(ex, Expr) && ex.head !== :(.) && Base.isoperator(ex.head)
         # handle syntactic operators, e.g. +=, ::, .=
         ex = ex.head
@@ -284,7 +284,13 @@ function lookup_doc(ex)
             end
         end
     end
-    binding = esc(bindingexpr(namify(ex)))
+    name = namify(ex)
+    # If namify couldn't extract a meaningful name and returned an Expr
+    # that can't be converted to a binding, treat it like a value
+    if isa(name, Expr) && !isexpr(name, :(.))
+        return :($(doc)($(typeof)($(esc(ex)))))
+    end
+    binding = esc(bindingexpr(name))
     if isexpr(ex, :call) || isexpr(ex, :macrocall) || isexpr(ex, :where)
         sig = esc(signature(ex))
         :($(doc)($binding, $sig))
@@ -301,20 +307,22 @@ function summarize(binding::Binding, sig)
     if defined(binding)
         binding_res = resolve(binding)
         if !isa(binding_res, Module)
+            varstr = "$(binding.mod).$(binding.var)"
             if Base.ispublic(binding.mod, binding.var)
-                println(io, "No documentation found for public symbol.\n")
+                println(io, "No documentation found for public binding `$varstr`.\n")
             else
-                println(io, "No documentation found for private symbol.\n")
+                println(io, "No documentation found for private binding `$varstr`.\n")
             end
         end
         summarize(io, binding_res, binding)
     else
         println(io, "No documentation found.\n")
         quot = any(isspace, sprint(print, binding)) ? "'" : ""
-        if Base.isbindingresolved(binding.mod, binding.var)
-            println(io, "Binding ", quot, "`", binding, "`", quot, " exists, but has not been assigned a value.")
-        else
+        bpart = Base.lookup_binding_partition(Base.tls_world_age(), convert(Core.Binding, GlobalRef(binding.mod, binding.var)))
+        if Base.binding_kind(bpart) === Base.PARTITION_KIND_GUARD
             println(io, "Binding ", quot, "`", binding, "`", quot, " does not exist.")
+        else
+            println(io, "Binding ", quot, "`", binding, "`", quot, " exists, but has not been assigned a value.")
         end
     end
     md = Markdown.parse(seekstart(io))
@@ -387,9 +395,9 @@ function find_readme(m::Module)::Union{String, Nothing}
     path = dirname(mpath)
     top_path = pkgdir(m)
     while true
-        for file in readdir(path; join=true, sort=true)
-            isfile(file) && (basename(lowercase(file)) in ["readme.md", "readme"]) || continue
-            return file
+        for entry in _readdirx(path; sort=true)
+            isfile(entry) && (lowercase(entry.name) in ["readme.md", "readme"]) || continue
+            return joinpath(entry)
         end
         path == top_path && break # go no further than pkgdir
         path = dirname(path) # work up through nested modules
@@ -416,7 +424,9 @@ function summarize(io::IO, m::Module, binding::Binding; nlines::Int = 200)
     if !isnothing(readme_path)
         readme_lines = readlines(readme_path)
         isempty(readme_lines) && return  # don't say we are going to print empty file
-        println(io, "# Displaying contents of readme found at `$(readme_path)`")
+        println(io)
+        println(io, "---")
+        println(io, "_Package description from `$(basename(readme_path))`:_")
         for line in first(readme_lines, nlines)
             println(io, line)
         end
@@ -432,8 +442,31 @@ end
 
 # repl search and completions for help
 
+# This type is returned from `accessible` and denotes a binding that is accessible within
+# some context. It differs from `Base.Docs.Binding`, which is also used by the REPL, in
+# that it doesn't track the defining module for a symbol unless the symbol is public but
+# not exported, i.e. it's accessible but requires qualification. Using this type rather
+# than `Base.Docs.Binding` simplifies things considerably, partially because REPL searching
+# is based on `String`s, which this type stores, but `Base.Docs.Binding` stores a module
+# and symbol and does not have any notion of the context from which the binding is accessed.
+struct AccessibleBinding
+    source::Union{String,Nothing}
+    name::String
+end
+
+function AccessibleBinding(mod::Module, name::Symbol)
+    m = isexported(mod, name) ? nothing : String(nameof(mod))
+    return AccessibleBinding(m, String(name))
+end
+AccessibleBinding(name::Symbol) = AccessibleBinding(nothing, String(name))
+
+function Base.show(io::IO, b::AccessibleBinding)
+    b.source === nothing || print(io, b.source, '.')
+    print(io, b.name)
+end
 
 quote_spaces(x) = any(isspace, x) ? "'" * x * "'" : x
+quote_spaces(x::AccessibleBinding) = AccessibleBinding(x.source, quote_spaces(x.name))
 
 function repl_search(io::IO, s::Union{Symbol,String}, mod::Module)
     pre = "search:"
@@ -450,7 +483,12 @@ function repl_corrections(io::IO, s, mod::Module)
     quot = any(isspace, s) ? "'" : ""
     print(io, quot)
     printstyled(io, s, color=:cyan)
-    print(io, quot, '\n')
+    print(io, quot)
+    if Base.identify_package(s) === nothing
+        print(io, '\n')
+    else
+        print(io, ", but a loadable package with that name exists. If you are looking for the package docs load the package first.\n")
+    end
     print_correction(io, s, mod)
 end
 repl_corrections(s) = repl_corrections(stdout, s)
@@ -458,7 +496,7 @@ repl_corrections(s) = repl_corrections(stdout, s)
 # inverse of latex_symbols Dict, lazily created as needed
 const symbols_latex = Dict{String,String}()
 function symbol_latex(s::String)
-    if isempty(symbols_latex) && isassigned(Base.REPL_MODULE_REF)
+    if isempty(symbols_latex)
         for (k,v) in Iterators.flatten((REPLCompletions.latex_symbols,
                                         REPLCompletions.emoji_symbols))
             symbols_latex[v] = k
@@ -492,26 +530,27 @@ function repl_latex(io::IO, s0::String)
         print(io, "\"")
         printstyled(io, s, color=:cyan)
         print(io, "\" can be typed by ")
-        state::Char = '\0'
+        s_to_print = s
         with_output_color(:cyan, io) do io
-            for c in s
+            state::Char = '\0'
+            for c in s_to_print
                 cstr = string(c)
                 if haskey(symbols_latex, cstr)
-                    latex = symbols_latex[cstr]
-                    if length(latex) == 3 && latex[2] in ('^','_')
+                    latex_symbol = symbols_latex[cstr]
+                    if length(latex_symbol) == 3 && latex_symbol[2] in ('^','_')
                         # coalesce runs of sub/superscripts
-                        if state != latex[2]
+                        if state != latex_symbol[2]
                             '\0' != state && print(io, "<tab>")
-                            print(io, latex[1:2])
-                            state = latex[2]
+                            print(io, latex_symbol[1:2])
+                            state = latex_symbol[2]
                         end
-                        print(io, latex[3])
+                        print(io, latex_symbol[3])
                     else
                         if '\0' != state
                             print(io, "<tab>")
                             state = '\0'
                         end
-                        print(io, latex, "<tab>")
+                        print(io, latex_symbol, "<tab>")
                     end
                 else
                     if '\0' != state
@@ -536,8 +575,7 @@ function repl(io::IO, s::Symbol; brief::Bool=true, mod::Module=Main, internal_ac
     quote
         repl_latex($io, $str)
         repl_search($io, $str, $mod)
-        $(if !isdefined(mod, s) && !Base.isbindingresolved(mod, s) && !haskey(keywords, s) && !Base.isoperator(s)
-               # n.b. we call isdefined for the side-effect of resolving the binding, if possible
+        $(if !isdefined(mod, s) && !haskey(keywords, s) && !Base.isoperator(s)
                :(repl_corrections($io, $str, $mod))
           end)
         $(_repl(s, brief, mod, internal_accesses))
@@ -548,7 +586,6 @@ isregex(x) = isexpr(x, :macrocall, 3) && x.args[1] === Symbol("@r_str") && !isem
 repl(io::IO, ex::Expr; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex, brief, mod, internal_accesses)
 repl(io::IO, str::AbstractString; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = :(apropos($io, $str))
 repl(io::IO, other; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = esc(:(@doc $other)) # TODO: track internal_accesses
-#repl(io::IO, other) = lookup_doc(other) # TODO
 
 repl(x; brief::Bool=true, mod::Module=Main) = repl(stdout, x; brief, mod)
 
@@ -564,13 +601,14 @@ function _repl(x, brief::Bool=true, mod::Module=Main, internal_accesses::Union{N
                     if kwarg isa Symbol
                         kwarg = :($kwarg::Any)
                     elseif isexpr(kwarg, :kw)
-                        lhs = kwarg.args[1]
-                        rhs = kwarg.args[2]
-                        if lhs isa Symbol
-                            if rhs isa Symbol
-                                kwarg.args[1] = :($lhs::(@isdefined($rhs) ? typeof($rhs) : Any))
-                            else
-                                kwarg.args[1] = :($lhs::typeof($rhs))
+                        let kw_lhs = kwarg.args[1],
+                            kw_rhs = kwarg.args[2]
+                            if kw_lhs isa Symbol
+                                if kw_rhs isa Symbol
+                                    kwarg.args[1] = :($kw_lhs::(@isdefined($kw_rhs) ? typeof($kw_rhs) : Any))
+                                else
+                                    kwarg.args[1] = :($kw_lhs::typeof($kw_rhs))
+                                end
                             end
                         end
                     end
@@ -580,13 +618,13 @@ function _repl(x, brief::Bool=true, mod::Module=Main, internal_accesses::Union{N
                 if kwargs === nothing
                     kwargs = Any[]
                 end
-                lhs = arg.args[1]
-                rhs = arg.args[2]
-                if lhs isa Symbol
-                    if rhs isa Symbol
-                        arg.args[1] = :($lhs::(@isdefined($rhs) ? typeof($rhs) : Any))
+                arg_lhs = arg.args[1]
+                arg_rhs = arg.args[2]
+                if arg_lhs isa Symbol
+                    if arg_rhs isa Symbol
+                        arg.args[1] = :($arg_lhs::(@isdefined($arg_rhs) ? typeof($arg_rhs) : Any))
                     else
-                        arg.args[1] = :($lhs::typeof($rhs))
+                        arg.args[1] = :($arg_lhs::typeof($arg_rhs))
                     end
                 end
                 push!(kwargs, arg)
@@ -609,7 +647,7 @@ function _repl(x, brief::Bool=true, mod::Module=Main, internal_accesses::Union{N
     docs = esc(:(@doc $x))
     docs = if isfield(x)
         quote
-            if isa($(esc(x.args[1])), DataType)
+            if $(esc(x.args[1])) isa Type
                 fielddoc($(esc(x.args[1])), $(esc(x.args[2])))
             else
                 $docs
@@ -631,13 +669,17 @@ function fielddoc(binding::Binding, field::Symbol)
     for mod in modules
         dict = meta(mod; autoinit=false)
         isnothing(dict) && continue
-        if haskey(dict, binding)
-            multidoc = dict[binding]
-            if haskey(multidoc.docs, Union{})
-                fields = multidoc.docs[Union{}].data[:fields]
-                if haskey(fields, field)
-                    doc = fields[field]
-                    return isa(doc, Markdown.MD) ? doc : Markdown.parse(doc)
+        multidoc = get(dict, binding, nothing)
+        if multidoc !== nothing
+            structdoc = get(multidoc.docs, Union{}, nothing)
+            if structdoc !== nothing
+                fieldsdoc = get(structdoc.data, :fields, nothing)
+                if fieldsdoc !== nothing
+                    fielddoc = get(fieldsdoc, field, nothing)
+                    if fielddoc !== nothing
+                        return isa(fielddoc, Markdown.MD) ?
+                            fielddoc : Markdown.parse(fielddoc)
+                    end
                 end
             end
         end
@@ -649,6 +691,7 @@ function fielddoc(binding::Binding, field::Symbol)
 end
 
 # As with the additional `doc` methods, this converts an object to a `Binding` first.
+fielddoc(obj::UnionAll, field::Symbol) = fielddoc(Base.unwrap_unionall(obj), field)
 fielddoc(object, field::Symbol) = fielddoc(aliasof(object, typeof(object)), field)
 
 
@@ -676,6 +719,9 @@ function matchinds(needle, haystack; acronym::Bool = false)
     end
     return is
 end
+
+matchinds(needle, (; name)::AccessibleBinding; acronym::Bool=false) =
+    matchinds(needle, name; acronym)
 
 longer(x, y) = length(x) ≥ length(y) ? (x, true) : (y, false)
 
@@ -736,7 +782,17 @@ function fuzzyscore(needle::AbstractString, haystack::AbstractString)
     1 - (string_distance(needle, lena, haystack, lenb) / max(lena, lenb))
 end
 
-function fuzzysort(search::String, candidates::Vector{String})
+function fuzzyscore(needle::AbstractString, haystack::AccessibleBinding)
+    score = fuzzyscore(needle, haystack.name)
+    haystack.source === nothing && return score
+    # Apply a "penalty" of half an edit if the comparator binding is public but not
+    # exported so that exported/local names that exactly match the search query are
+    # listed first
+    penalty = 1 / (2 * max(length(needle), length(haystack.name)))
+    return max(score - penalty, 0)
+end
+
+function fuzzysort(search::String, candidates::Vector{AccessibleBinding})
     scores = map(cand -> fuzzyscore(search, cand), candidates)
     candidates[sortperm(scores)] |> reverse
 end
@@ -761,12 +817,14 @@ function levenshtein(s1, s2)
     return d[m+1, n+1]
 end
 
-function levsort(search::String, candidates::Vector{String})
-    scores = map(cand -> (Float64(levenshtein(search, cand)), -fuzzyscore(search, cand)), candidates)
+function levsort(search::String, candidates::Vector{AccessibleBinding})
+    scores = map(candidates) do cand
+        (Float64(levenshtein(search, cand.name)), -fuzzyscore(search, cand))
+    end
     candidates = candidates[sortperm(scores)]
     i = 0
     for outer i = 1:length(candidates)
-        levenshtein(search, candidates[i]) > 3 && break
+        levenshtein(search, candidates[i].name) > 3 && break
     end
     return candidates[1:i]
 end
@@ -784,24 +842,39 @@ function printmatch(io::IO, word, match)
     end
 end
 
+function printmatch(io::IO, word, match::AccessibleBinding)
+    match.source === nothing || print(io, match.source, '.')
+    printmatch(io, word, match.name)
+end
+
+function matchlength(x::AccessibleBinding)
+    n = length(x.name)
+    if x.source !== nothing
+        n += length(x.source) + 1  # the +1 is for the `.` separator
+    end
+    return n
+end
+matchlength(x) = length(x)
+
 function printmatches(io::IO, word, matches; cols::Int = _displaysize(io)[2])
     total = 0
     for match in matches
-        total + length(match) + 1 > cols && break
+        ml = matchlength(match)
+        total + ml + 1 > cols && break
         fuzzyscore(word, match) < 0.5 && break
         print(io, " ")
         printmatch(io, word, match)
-        total += length(match) + 1
+        total += ml + 1
     end
 end
 
 printmatches(args...; cols::Int = _displaysize(stdout)[2]) = printmatches(stdout, args..., cols = cols)
 
-function print_joined_cols(io::IO, ss::Vector{String}, delim = "", last = delim; cols::Int = _displaysize(io)[2])
+function print_joined_cols(io::IO, ss::Vector{AccessibleBinding}, delim = "", last = delim; cols::Int = _displaysize(io)[2])
     i = 0
     total = 0
     for outer i = 1:length(ss)
-        total += length(ss[i])
+        total += matchlength(ss[i])
         total + max(i-2,0)*length(delim) + (i>1 ? 1 : 0)*length(last) > cols && (i-=1; break)
     end
     join(io, ss[1:i], delim, last)
@@ -823,27 +896,31 @@ print_correction(word, mod::Module) = print_correction(stdout, word, mod)
 
 # Completion data
 
-
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
-filtervalid(names) = filter(x->!occursin(r"#", x), map(string, names))
-
-accessible(mod::Module) =
-    Symbol[filter!(s -> !Base.isdeprecated(mod, s), names(mod, all=true, imported=true));
-           map(names, moduleusings(mod))...;
-           collect(keys(Base.Docs.keywords))] |> unique |> filtervalid
+function accessible(mod::Module)
+    bindings = Set(AccessibleBinding(s) for s in names(mod; all=true, imported=true)
+                   if !isdeprecated(mod, s))
+    for used in moduleusings(mod)
+        union!(bindings, (AccessibleBinding(used, s) for s in names(used)
+                          if !isdeprecated(used, s)))
+    end
+    union!(bindings, (AccessibleBinding(k) for k in keys(Base.Docs.keywords)))
+    filter!(b -> !occursin('#', b.name), bindings)
+    return collect(bindings)
+end
 
 function doc_completions(name, mod::Module=Main)
     res = fuzzysort(name, accessible(mod))
 
     # to insert an entry like `raw""` for `"@raw_str"` in `res`
-    ms = match.(r"^@(.*?)_str$", res)
+    ms = map(c -> match(r"^@(.*?)_str$", c.name), res)
     idxs = findall(!isnothing, ms)
 
     # avoid messing up the order while inserting
     for i in reverse!(idxs)
         c = only((ms[i]::AbstractMatch).captures)
-        insert!(res, i, "$(c)\"\"")
+        insert!(res, i, AccessibleBinding(res[i].source, "$(c)\"\""))
     end
     res
 end
@@ -920,18 +997,6 @@ stripmd(x::Markdown.Footnote) = "$(stripmd(x.id)) $(stripmd(x.text))"
 stripmd(x::Markdown.Table) =
     join([join(map(stripmd, r), " ") for r in x.rows], " ")
 
-"""
-    apropos([io::IO=stdout], pattern::Union{AbstractString,Regex})
-
-Search available docstrings for entries containing `pattern`.
-
-When `pattern` is a string, case is ignored. Results are printed to `io`.
-
-`apropos` can be called from the help mode in the REPL by wrapping the query in double quotes:
-```
-help?> "pattern"
-```
-"""
 apropos(string) = apropos(stdout, string)
 apropos(io::IO, string) = apropos(io, Regex("\\Q$string", "i"))
 

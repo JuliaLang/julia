@@ -1,7 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Distributed, SharedArrays, Random
-include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
+include(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test", "testenv.jl"))
+
+@test isempty(Test.detect_closure_boxes(SharedArrays))
 
 # These processes explicitly want to share memory, we can't have
 # them in separate rr sessions
@@ -324,3 +326,7 @@ end
 @test SharedMatrix([0.1 0.2; 0.3 0.4]) == [0.1 0.2; 0.3 0.4]
 @test_throws MethodError SharedVector(rand(4,4))
 @test_throws MethodError SharedMatrix(rand(4))
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(SharedArrays))
+end

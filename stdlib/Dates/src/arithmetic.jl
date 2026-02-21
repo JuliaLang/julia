@@ -6,9 +6,8 @@
 
 # TimeType arithmetic
 (+)(x::TimeType) = x
-(-)(x::Date, y::Date) = x.instant - y.instant
-(-)(x::Time, y::Time) = x.instant - y.instant
-(-)(x::DateTime, y::DateTime) = x.instant - y.instant
+(-)(x::T, y::T) where {T<:TimeType} = x.instant - y.instant
+(-)(x::T, y::T) where {T<:AbstractDateTime} = x.instant - y.instant
 (-)(x::AbstractDateTime, y::AbstractDateTime) = -(promote(x, y)...)
 
 # Date-Time arithmetic

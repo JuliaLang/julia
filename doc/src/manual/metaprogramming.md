@@ -363,6 +363,14 @@ QuoteNode
 
 `QuoteNode` can also be used for certain advanced metaprogramming tasks.
 
+Note that while it does not support `$`, it also does not prevent it, nor does
+it preserve the identity of the wrapped object:
+
+```jldoctest
+julia> b = 2; eval(Expr(:quote, QuoteNode(Expr(:$, :b))))
+:($(QuoteNode(2)))
+```
+
 ### Evaluating expressions
 
 Given an expression object, one can cause Julia to evaluate (execute) it at global scope using
@@ -379,7 +387,7 @@ julia> ex = :(a + b)
 :(a + b)
 
 julia> eval(ex)
-ERROR: UndefVarError: `b` not defined
+ERROR: UndefVarError: `b` not defined in `Main`
 [...]
 
 julia> a = 1; b = 2;
@@ -397,7 +405,7 @@ julia> ex = :(x = 1)
 :(x = 1)
 
 julia> x
-ERROR: UndefVarError: `x` not defined
+ERROR: UndefVarError: `x` not defined in `Main`
 
 julia> eval(ex)
 1
@@ -413,7 +421,7 @@ Since expressions are just `Expr` objects which can be constructed programmatica
 it is possible to dynamically generate arbitrary code which can then be run using [`eval`](@ref).
 Here is a simple example:
 
-```julia-repl
+```jldoctest
 julia> a = 1;
 
 julia> ex = Expr(:call, :+, a, :b)
@@ -629,6 +637,15 @@ julia> @showarg(1+1)
 
 julia> @showarg(println("Yo!"))
 :(println("Yo!"))
+
+julia> @showarg(1)        # Numeric literal
+1
+
+julia> @showarg("Yo!")    # String literal
+"Yo!"
+
+julia> @showarg("Yo! $("hello")")    # String with interpolation is an Expr rather than a String
+:("Yo! $("hello")")
 ```
 
 In addition to the given argument list, every macro is passed extra arguments named `__source__` and `__module__`.
@@ -702,7 +719,7 @@ user to optionally specify their own error message, instead of just printing the
 Just like in functions with a variable number of arguments ([Varargs Functions](@ref)), this is specified with an ellipses
 following the last argument:
 
-```jldoctest assert2
+```julia-repl assert2
 julia> macro assert(ex, msgs...)
            msg_body = isempty(msgs) ? ex : msgs[1]
            msg = string(msg_body)

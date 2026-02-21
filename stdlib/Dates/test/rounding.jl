@@ -188,7 +188,27 @@ end
     @test round(x, Dates.Microsecond) == Dates.Microsecond(2001000)
     @test round(x, Dates.Nanosecond) == x
 end
-
+@testset "Rounding Time" begin
+    x = Time(9, 25, 45, 25, 650, 500)
+    @test floor(x, Dates.Hour) == Time(9)
+    @test floor(x, Dates.Minute) == Time(9, 25)
+    @test floor(x, Dates.Second) == Time(9, 25, 45)
+    @test floor(x, Dates.Millisecond) == Time(9, 25, 45, 25)
+    @test floor(x, Dates.Microsecond) == Time(9, 25, 45, 25, 650)
+    @test floor(x, Dates.Nanosecond) == x
+    @test ceil(x, Dates.Hour) == Time(10)
+    @test ceil(x, Dates.Minute) == Time(9, 26)
+    @test ceil(x, Dates.Second) == Time(9, 25, 46)
+    @test ceil(x, Dates.Millisecond) == Time(9, 25, 45, 26)
+    @test ceil(x, Dates.Microsecond) == Time(9, 25, 45, 25, 651)
+    @test ceil(x, Dates.Nanosecond) == x
+    @test round(x, Dates.Hour) == Time(9)
+    @test round(x, Dates.Minute) == Time(9, 26)
+    @test round(x, Dates.Second) == Time(9, 25, 45)
+    @test round(x, Dates.Millisecond) == Time(9, 25, 45, 26)
+    @test round(x, Dates.Microsecond) == Time(9, 25, 45, 25, 651)
+    @test round(x, Dates.Nanosecond) == x
+end
 @testset "Rounding DateTime to Date" begin
     now_ = DateTime(2020, 9, 1, 13)
     for p in (Year, Month, Day)

@@ -10,6 +10,7 @@
 #include <stdio.h> // for printf
 
 #include "dtypes.h"
+#include "uv.h"
 
 #ifdef _OS_WINDOWS_
 #include <malloc.h>
@@ -210,8 +211,10 @@ static char *_buf_realloc(ios_t *s, size_t sz)
         if (temp == NULL)
             return NULL;
         s->ownbuf = 1;
-        if (s->size > 0)
+        if (s->size > 0) {
+            assert(s->buf != NULL);
             memcpy(temp, s->buf, (size_t)s->size);
+        }
     }
 
     s->buf = temp;
@@ -600,11 +603,11 @@ int ios_eof(ios_t *s)
 {
     if (s->state == bst_rd && s->bpos < s->size)
         return 0;
-    if (s->bm == bm_mem)
-        return (s->_eof ? 1 : 0);
-    if (s->fd == -1)
-        return 1;
     if (s->_eof)
+        return 1;
+    if (s->bm == bm_mem)
+        return 0;
+    if (s->fd == -1)
         return 1;
     return 0;
     /*
@@ -613,6 +616,12 @@ int ios_eof(ios_t *s)
     s->_eof = 1;
     return 1;
     */
+}
+
+void ios_reseteof(ios_t *s)
+{
+    if (s->bm != bm_mem && s->fd != -1)
+        s->_eof = 0;
 }
 
 int ios_eof_blocking(ios_t *s)
@@ -721,8 +730,10 @@ char *ios_take_buffer(ios_t *s, size_t *psize)
         buf = (char*)LLT_ALLOC((size_t)s->size + 1);
         if (buf == NULL)
             return NULL;
-        if (s->size)
+        if (s->size) {
+            assert(s->buf != NULL);
             memcpy(buf, s->buf, (size_t)s->size);
+        }
     }
     else if (s->size == s->maxsize) {
         buf = (char*)LLT_REALLOC(s->buf, (size_t)s->size + 1);
@@ -948,10 +959,10 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
     if (create) flags |= O_CREAT;
     if (trunc)  flags |= O_TRUNC;
 #if defined(_OS_WINDOWS_)
-    size_t wlen = MultiByteToWideChar(CP_UTF8, 0, fname, -1, NULL, 0);
-    if (!wlen) goto open_file_err;
-    wchar_t *fname_w = (wchar_t*)alloca(wlen*sizeof(wchar_t));
-    if (!MultiByteToWideChar(CP_UTF8, 0, fname, -1, fname_w, wlen)) goto open_file_err;
+    ssize_t wlen = uv_wtf8_length_as_utf16(fname);
+    if (wlen < 0) goto open_file_err;
+    wchar_t *fname_w = (wchar_t*)alloca(wlen * sizeof(wchar_t));
+    uv_wtf8_to_utf16(fname, (uint16_t*)fname_w, wlen);
     set_io_wait_begin(1);
     fd = _wopen(fname_w, flags | O_BINARY | O_NOINHERIT, _S_IREAD | _S_IWRITE);
     set_io_wait_begin(0);
@@ -978,34 +989,14 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
     return NULL;
 }
 
-// Portable ios analogue of mkstemp: modifies fname to replace
-// trailing XXXX's with unique ID and returns the file handle s
-// for writing and reading.
-ios_t *ios_mkstemp(ios_t *s, char *fname)
-{
-    int fd;
-    // would be better to use a libuv function once it exists (see libuv/libuv#322)
 #ifdef _OS_WINDOWS_
-    size_t wlen = MultiByteToWideChar(CP_UTF8, 0, fname, -1, NULL, 0);
-    if (!wlen) goto open_file_err;
-    wchar_t *fname_w = (wchar_t*)alloca(wlen*sizeof(wchar_t));
-    if (!MultiByteToWideChar(CP_UTF8, 0, fname, -1, fname_w, wlen) ||
-        !_wmktemp(fname_w) ||
-        !WideCharToMultiByte(CP_UTF8, 0, fname_w, -1, fname, strlen(fname)+1,
-                             NULL, NULL))
-        goto open_file_err;
-    fd = _wopen(fname_w, O_CREAT|O_TRUNC|O_RDWR | O_BINARY | O_NOINHERIT, _S_IREAD | _S_IWRITE);
-#else
-    fd = mkstemp(fname);
-#endif
-    ios_fd(s, fd, 1, 1);
-    if (fd == -1)
-        goto open_file_err;
-    return s;
-open_file_err:
-    s->fd = -1;
-    return NULL;
+const wchar_t *ios_utf8_to_wchar(const char *str) {
+    ssize_t wlen = uv_wtf8_length_as_utf16(str);
+    wchar_t *wstr = (wchar_t *)malloc_s(sizeof(wchar_t) * wlen);
+    uv_wtf8_to_utf16(str, wstr, wlen);
+    return wstr;
 }
+#endif // _OS_WINDOWS_
 
 ios_t *ios_mem(ios_t *s, size_t initsize)
 {
@@ -1051,6 +1042,7 @@ ios_t *ios_fd(ios_t *s, long fd, int isfile, int own)
 ios_t *ios_stdin = NULL;
 ios_t *ios_stdout = NULL;
 ios_t *ios_stderr = NULL;
+ios_t *ios_safe_stderr = NULL;
 
 void ios_init_stdstreams(void)
 {
@@ -1064,6 +1056,12 @@ void ios_init_stdstreams(void)
     ios_stderr = (ios_t*)malloc_s(sizeof(ios_t));
     ios_fd(ios_stderr, STDERR_FILENO, 0, 0);
     ios_stderr->bm = bm_none;
+
+    // this 'safe' variant must use `bm_none` to avoid memory allocation
+    // in an async-signal context
+    ios_safe_stderr = (ios_t*)malloc_s(sizeof(ios_t));
+    ios_fd(ios_safe_stderr, STDERR_FILENO, 0, 0);
+    ios_safe_stderr->bm = bm_none;
 }
 
 /* higher level interface */
@@ -1219,7 +1217,9 @@ char *ios_readline(ios_t *s)
     ios_mem(&dest, 0);
     ios_copyuntil(&dest, s, '\n', 1);
     size_t n;
-    return ios_take_buffer(&dest, &n);
+    char * ret = ios_take_buffer(&dest, &n);
+    ios_close(&dest);
+    return ret;
 }
 
 extern int vasprintf(char **strp, const char *fmt, va_list ap);

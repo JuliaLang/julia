@@ -293,6 +293,8 @@ Point{Float64}(1.0, 2.5)
 
 julia> Point(1,2.5) ## implicit T ##
 ERROR: MethodError: no method matching Point(::Int64, ::Float64)
+The type `Point` exists, but no method is defined for this combination of argument types when trying to construct it.
+
 Closest candidates are:
   Point(::T, ::T) where T<:Real at none:2
 
@@ -372,9 +374,12 @@ However, other similar calls still don't work:
 ```jldoctest parametric2
 julia> Point(1.5,2)
 ERROR: MethodError: no method matching Point(::Float64, ::Int64)
+The type `Point` exists, but no method is defined for this combination of argument types when trying to construct it.
 
 Closest candidates are:
   Point(::T, !Matched::T) where T<:Real
+   @ Main none:1
+  Point(!Matched::Int64, !Matched::Float64)
    @ Main none:1
 
 Stacktrace:
@@ -556,6 +561,7 @@ julia> struct SummedArray{T<:Number,S<:Number}
 
 julia> SummedArray(Int32[1; 2; 3], Int32(6))
 ERROR: MethodError: no method matching SummedArray(::Vector{Int32}, ::Int32)
+The type `SummedArray` exists, but no method is defined for this combination of argument types when trying to construct it.
 
 Closest candidates are:
   SummedArray(::Vector{T}) where T
@@ -569,3 +575,32 @@ This constructor will be invoked by the syntax `SummedArray(a)`. The syntax `new
 specifying parameters for the type to be constructed, i.e. this call will return a `SummedArray{T,S}`.
 `new{T,S}` can be used in any constructor definition, but for convenience the parameters
 to `new{}` are automatically derived from the type being constructed when possible.
+
+## Constructors are just callable objects
+
+An object of any type may be [made callable](@ref "Function-like objects") by defining a
+method. This includes types, i.e., objects of type [`Type`](@ref); and constructors may,
+in fact, be viewed as just callable type objects. For example, there are many methods
+defined on `Bool` and various supertypes of it:
+
+```@repl
+methods(Bool)
+```
+
+The usual constructor syntax is exactly equivalent to the function-like object
+syntax, so trying to define a method with each syntax will cause the first method
+to be overwritten by the next one:
+
+```jldoctest
+julia> struct S
+           f::Int
+       end
+
+julia> S() = S(7)
+S
+
+julia> (::Type{S})() = S(8)  # overwrites the previous constructor method
+
+julia> S()
+S(8)
+```

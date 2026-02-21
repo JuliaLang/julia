@@ -3,6 +3,7 @@
 using Base.MathConstants
 using Random
 using LinearAlgebra
+using Test
 
 const ≣ = isequal # convenient for comparing NaNs
 
@@ -154,7 +155,8 @@ end
             x = unorded[i], unorded[i]
             y = unorded[j], unorded[j]
             z = Base._extrema_rf(x, y)
-            @test z === x || z === y
+            @test (z[1] === x[1] || z[1] === y[1]) &&
+                  (z[2] === x[1] || z[2] === y[1])
         end
     end
 end
@@ -262,7 +264,7 @@ end
 
 # GMP allocation overflow should not cause crash
 if Base.GMP.ALLOC_OVERFLOW_FUNCTION[] && sizeof(Int) > 4
-  @test_throws OutOfMemoryError BigInt(2)^(typemax(Culong))
+    @test_throws OutOfMemoryError BigInt(2)^(typemax(Culong))
 end
 
 # exponentiating with a negative base
@@ -679,6 +681,9 @@ end
     @test copysign(big(-1), 0x02) == 1
     @test copysign(big(-1.0), 0x02) == 1.0
     @test copysign(-1//2, 0x01) == 1//2
+
+    # Verify overflow is checked with rational
+    @test_throws OverflowError copysign(typemin(Int)//1, 1)
 end
 
 @testset "isnan/isinf/isfinite" begin
@@ -826,6 +831,28 @@ end
     @test cmp(isless, NaN, 1) == 1
     @test cmp(isless, 1, NaN) == -1
     @test cmp(isless, NaN, NaN) == 0
+end
+@testset "ispositive/isnegative" begin
+    for T in [Base.uniontypes(Base.BitInteger)..., Bool, Rational{Int}, BigInt, Base.uniontypes(Base.IEEEFloat)..., BigFloat, Missing]
+        values = T[zero(T), one(T)]
+        if T <: AbstractFloat
+            push!(values, Inf, NaN) # also check Infs and NaNs
+        elseif T <: Rational
+            push!(values, 1//0) # also check Infs
+        end
+        @testset "$T" begin
+            for value in values
+                # https://github.com/JuliaLang/julia/pull/53677#discussion_r1534044582
+                # Use eval to explicitly show expressions when they fail
+                @eval begin
+                    @test ispositive($value) === ($value > 0)
+                    @test ispositive(-$value) === (-$value > 0)
+                    @test isnegative($value) === ($value < 0)
+                    @test isnegative(-$value) === (-$value < 0)
+                end
+            end
+        end
+    end
 end
 @testset "Float vs Integer comparison" begin
     for x=-5:5, y=-5:5
@@ -1111,10 +1138,30 @@ end
 end
 
 @testset "Irrational zero and one" begin
-    @test one(pi) === true
-    @test zero(pi) === false
-    @test one(typeof(pi)) === true
-    @test zero(typeof(pi)) === false
+    for i in (π, ℯ, γ, catalan)
+        @test one(i) === true
+        @test zero(i) === false
+        @test one(typeof(i)) === true
+        @test zero(typeof(i)) === false
+    end
+end
+
+@testset "Irrational iszero, isfinite, isinteger, and isone" begin
+    for i in (π, ℯ, γ, catalan)
+        @test !iszero(i)
+        @test !isone(i)
+        @test !isinteger(i)
+        @test isfinite(i)
+    end
+end
+
+@testset "Irrational promote_type" begin
+    for T in (Float16, Float32, Float64)
+        for i in (π, ℯ, γ, catalan)
+            @test T(2.0) * i ≈ T(2.0) * T(i)
+            @test T(2.0) * i isa T
+        end
+    end
 end
 
 @testset "Irrationals compared with Irrationals" begin
@@ -1135,6 +1182,8 @@ end
 end
 
 @testset "Irrationals compared with Rationals and Floats" begin
+    @test pi != Float64(pi)
+    @test Float64(pi) != pi
     @test Float64(pi,RoundDown) < pi
     @test Float64(pi,RoundUp) > pi
     @test !(Float64(pi,RoundDown) > pi)
@@ -1153,6 +1202,7 @@ end
     @test nextfloat(big(pi)) > pi
     @test !(prevfloat(big(pi)) > pi)
     @test !(nextfloat(big(pi)) < pi)
+    @test big(typeof(pi)) == BigFloat
 
     @test 2646693125139304345//842468587426513207 < pi
     @test !(2646693125139304345//842468587426513207 > pi)
@@ -1569,36 +1619,44 @@ end
         end
     end
 
-    for x=0:5, y=1:5
-        @test div(UInt(x),UInt(y)) == div(x,y)
-        @test div(UInt(x),y) == div(x,y)
-        @test div(x,UInt(y)) == div(x,y)
-        @test div(UInt(x),-y) == reinterpret(UInt,div(x,-y))
-        @test div(-x,UInt(y)) == div(-x,y)
+    @test isnan(mod(NaN, Inf))
+    @test isnan(mod(NaN, -Inf))
+    for x=0:5
+        @test mod(x, Inf) == x
+        @test mod(x, -Inf) == x
+        @test mod(-x, Inf) == -x
+        @test mod(-x, -Inf) == -x
+        for y=1:5
+            @test div(UInt(x),UInt(y)) == div(x,y)
+            @test div(UInt(x),y) == div(x,y)
+            @test div(x,UInt(y)) == div(x,y)
+            @test div(UInt(x),-y) == reinterpret(UInt,div(x,-y))
+            @test div(-x,UInt(y)) == div(-x,y)
 
-        @test fld(UInt(x),UInt(y)) == fld(x,y)
-        @test fld(UInt(x),y) == fld(x,y)
-        @test fld(x,UInt(y)) == fld(x,y)
-        @test fld(UInt(x),-y) == reinterpret(UInt,fld(x,-y))
-        @test fld(-x,UInt(y)) == fld(-x,y)
+            @test fld(UInt(x),UInt(y)) == fld(x,y)
+            @test fld(UInt(x),y) == fld(x,y)
+            @test fld(x,UInt(y)) == fld(x,y)
+            @test fld(UInt(x),-y) == reinterpret(UInt,fld(x,-y))
+            @test fld(-x,UInt(y)) == fld(-x,y)
 
-        @test cld(UInt(x),UInt(y)) == cld(x,y)
-        @test cld(UInt(x),y) == cld(x,y)
-        @test cld(x,UInt(y)) == cld(x,y)
-        @test cld(UInt(x),-y) == reinterpret(UInt,cld(x,-y))
-        @test cld(-x,UInt(y)) == cld(-x,y)
+            @test cld(UInt(x),UInt(y)) == cld(x,y)
+            @test cld(UInt(x),y) == cld(x,y)
+            @test cld(x,UInt(y)) == cld(x,y)
+            @test cld(UInt(x),-y) == reinterpret(UInt,cld(x,-y))
+            @test cld(-x,UInt(y)) == cld(-x,y)
 
-        @test rem(UInt(x),UInt(y)) == rem(x,y)
-        @test rem(UInt(x),y) == rem(x,y)
-        @test rem(x,UInt(y)) == rem(x,y)
-        @test rem(UInt(x),-y) == rem(x,-y)
-        @test rem(-x,UInt(y)) == rem(-x,y)
+            @test rem(UInt(x),UInt(y)) == rem(x,y)
+            @test rem(UInt(x),y) == rem(x,y)
+            @test rem(x,UInt(y)) == rem(x,y)
+            @test rem(UInt(x),-y) == rem(x,-y)
+            @test rem(-x,UInt(y)) == rem(-x,y)
 
-        @test mod(UInt(x),UInt(y)) == mod(x,y)
-        @test mod(UInt(x),y) == mod(x,y)
-        @test mod(x,UInt(y)) == mod(x,y)
-        @test mod(UInt(x),-y) == mod(x,-y)
-        @test mod(-x,UInt(y)) == mod(-x,y)
+            @test mod(UInt(x),UInt(y)) == mod(x,y)
+            @test mod(UInt(x),y) == mod(x,y)
+            @test mod(x,UInt(y)) == mod(x,y)
+            @test mod(UInt(x),-y) == mod(x,-y)
+            @test mod(-x,UInt(y)) == mod(-x,y)
+        end
     end
 
     @test div(typemax(UInt64)  , 1) ==  typemax(UInt64)
@@ -1712,6 +1770,63 @@ end
         @test fld(+1.1, 0.1) == div(+1.1, 0.1, RoundDown) == floor(big(+1.1)/big(0.1)) == +11.0
         @test cld(-1.1, 0.1) == div(-1.1, 0.1, RoundUp)   ==  ceil(big(-1.1)/big(0.1)) == -11.0
         @test fld(-1.1, 0.1) == div(-1.1, 0.1, RoundDown) == floor(big(-1.1)/big(0.1)) == -12.0
+    end
+    @testset "issue #49450" begin
+        @test div(514, Float16(0.75)) === Float16(685)
+        @test fld(514, Float16(0.75)) === Float16(685)
+        @test cld(515, Float16(0.75)) === Float16(687)
+
+        @test cld(1, Float16(0.000999)) === Float16(1001)
+        @test cld(2, Float16(0.001999)) === Float16(1001)
+        @test cld(3, Float16(0.002934)) === Float16(1023)
+        @test cld(4, Float16(0.003998)) === Float16(1001)
+        @test fld(5, Float16(0.004925)) === Float16(1015)
+
+        @test div(4_194_307, Float32(0.75)) === Float32(5_592_409)
+        @test fld(4_194_307, Float32(0.75)) === Float32(5_592_409)
+        @test cld(4_194_308, Float32(0.75)) === Float32(5_592_411)
+
+        @test fld(5, Float32(6.556511e-7)) === Float32(7_626_007)
+        @test fld(10, Float32(1.3113022e-6)) === Float32(7_626_007)
+        @test fld(11, Float32(1.4305115e-6)) === Float32(7_689_557)
+        @test cld(16, Float32(2.8014183e-6)) === Float32(5_711_393)
+        @test cld(17, Float32(2.2053719e-6)) === Float32(7_708_451)
+
+        @test fld(1.5046328f-36, -3.3409559485880944e-52) === -4.503599545179259e15
+        @test cld(1.5046328f-36, -3.3409559485880944e-52) === -4.503599545179258e15
+
+        @test fld(9007199254740994.0, 3.0) === 3002399751580331.0
+        @test cld(9007199254740994.0, 3.0) === 3002399751580332.0
+
+        @test fld(2.0^52, 1.5) === 3.00239975158033e15
+        @test cld(2.0^52, 1.5) === 3.002399751580331e15
+
+        @test fld(1.0, 1.1102230246251568e-16) === 9.00719925474099e15
+        @test cld(1.0, 1.1102230246251568e-16) === 9.007199254740991e15
+
+        @test fld(5.368709120000001e8, 5.960464521947985e-8) === 9.007199187632128e15
+        @test cld(5.368709120000001e8, 5.960464521947985e-8) === 9.007199187632129e15
+
+        @test fld(1.6856322854563416e16, 3.8274770451988434) === 4.40402977091864e15
+        @test cld(1.6856322854563416e16, 3.8274770451988434) === 4.404029770918641e15
+
+        Random.seed!(123)
+        for T in (Float16, Float32, Float64, BigFloat)
+            p = precision(T)
+            for e in T(2).^(-6:2), s1 in (+1, -1), s2 in (+1, -1), r in 1:5
+                z = rand(T)
+                x = s1 * ldexp(1 + rand(T), rand(0:p))
+                y = s2 * z * eps(x/z) / e
+                _fld, _cld = e ≤ 1 ? (fld, cld) : (/, /)
+                if T == BigFloat
+                    @test fld(x, y) == T(setprecision(() -> _fld(x, y), p + 16))
+                    @test cld(x, y) == T(setprecision(() -> _cld(x, y), p + 16))
+                else
+                    @test fld(x, y) == T(_fld(widen(x), widen(y)))
+                    @test cld(x, y) == T(_cld(widen(x), widen(y)))
+                end
+            end
+        end
     end
 end
 @testset "return types" begin
@@ -2134,6 +2249,10 @@ end
     @test nextfloat(Inf32) === Inf32
     @test prevfloat(-Inf32) === -Inf32
     @test isequal(nextfloat(NaN32), NaN32)
+    @test nextfloat(1.0, UInt(5)) == nextfloat(1.0, 5)
+    @test prevfloat(1.0, UInt(5)) == prevfloat(1.0, 5)
+    @test nextfloat(0.0, typemax(UInt64)) == Inf
+    @test prevfloat(0.0, typemax(UInt64)) == -Inf
 end
 @testset "issue #16206" begin
     @test prevfloat(Inf) == 1.7976931348623157e308
@@ -2166,11 +2285,36 @@ for T = (UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64,UInt128,Int128)
     end
 end
 
-@testset "Irrational/Bool multiplication" begin
+@testset "Bool multiplication" begin
     @test false*pi === 0.0
     @test pi*false === 0.0
     @test true*pi === Float64(pi)
     @test pi*true === Float64(pi)
+
+    @test false*Inf === 0.0
+    @test Inf*false === 0.0
+    @test true*Inf === Inf
+    @test Inf*true === Inf
+
+    @test false*NaN === 0.0
+    @test NaN*false === 0.0
+    @test true*NaN === NaN
+    @test NaN*true === NaN
+
+    @test false*-Inf === -0.0
+    @test -Inf*false === -0.0
+    @test true*-Inf === -Inf
+    @test -Inf*true === -Inf
+
+    @test false*1//0 === 0//1
+    @test 1//0*false === 0//1
+    @test true*1//0 === 1//0
+    @test 1//0*true === 1//0
+
+    @test false*-1//0 === 0//1
+    @test -1//0*false === 0//1
+    @test true*-1//0 === -1//0
+    @test -1//0*true === -1//0
 end
 # issue #5492
 @test -0.0 + false === -0.0
@@ -2338,8 +2482,8 @@ end
 
 function allsubtypes!(m::Module, x::DataType, sts::Set)
     for s in names(m, all = true)
-        if isdefined(m, s) && !Base.isdeprecated(m, s)
-            t = getfield(m, s)
+        if isdefinedglobal(m, s) && !Base.isdeprecated(m, s)
+            t = getglobal(m, s)
             if isa(t, Type) && t <: x && t != Union{}
                 push!(sts, t)
             elseif isa(t, Module) && t !== m && nameof(t) === s && parentmodule(t) === m
@@ -2496,6 +2640,22 @@ Base.:*(x::TestNumber, y::TestNumber) = TestNumber(x.inner*y.inner)
 Base.:(==)(x::TestNumber, y::TestNumber) = x.inner == y.inner
 Base.abs(x::TestNumber) = TestNumber(abs(x.inner))
 @test abs2(TestNumber(3+4im)) == TestNumber(25)
+
+@testset "mul_hi" begin
+    n = 1000
+    ground_truth(x, y) = ((widen(x)*y) >> (8*sizeof(typeof(x)))) % typeof(x)
+    for T in [UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Int128]
+        for trait1 in [typemin, typemax]
+            for trait2 in [typemin, typemax]
+                x, y = trait1(T), trait2(T)
+                @test Base.mul_hi(x, y) === ground_truth(x, y)
+            end
+        end
+        for (x, y) in zip(rand(T, n), rand(T, n))
+            @test Base.mul_hi(x, y) === ground_truth(x, y)
+        end
+    end
+end
 
 @testset "multiplicative inverses" begin
     function testmi(numrange, denrange)
@@ -2686,7 +2846,7 @@ end
     @test divrem(a,-(a-20), RoundDown) == (div(a,-(a-20), RoundDown), rem(a,-(a-20), RoundDown))
 end
 
-@testset "rem2pi $T" for T in (Float16, Float32, Float64, BigFloat)
+@testset "rem2pi $T" for T in (Float16, Float32, Float64, BigFloat, Int8, Int16, Int32, Int64, Int128)
     @test rem2pi(T(1), RoundToZero)  == 1
     @test rem2pi(T(1), RoundNearest) == 1
     @test rem2pi(T(1), RoundDown)    == 1
@@ -2773,6 +2933,20 @@ Base.literal_pow(::typeof(^), ::PR20530, ::Val{p}) where {p} = 2
     @test [2,4,8].^-2 == [0.25, 0.0625, 0.015625]
     @test [2, 4, 8].^-2 .* 4 == [1.0, 0.25, 0.0625] # nested literal_pow
     @test ℯ^-2 == exp(-2) ≈ inv(ℯ^2) ≈ (ℯ^-1)^2 ≈ sqrt(ℯ^-4)
+
+    if Int === Int32
+        p = 2147483647
+        @test x^p == 1
+        @test x^2147483647 == 2
+        @test (@fastmath x^p) == 1
+        @test (@fastmath x^2147483647) == 2
+    elseif Int === Int64
+        p = 9223372036854775807
+        @test x^p == 1
+        @test x^9223372036854775807 == 2
+        @test (@fastmath x^p) == 1
+        @test (@fastmath x^9223372036854775807) == 2
+    end
 end
 module M20889 # do we get the expected behavior without importing Base.^?
     using Test
@@ -2895,6 +3069,14 @@ end
     @test π*ComplexF32(2) isa ComplexF32
     @test π/ComplexF32(2) isa ComplexF32
     @test log(π,ComplexF32(2)) isa ComplexF32
+end
+
+@testset "irrational promotion shouldn't recurse without bound, issue #51001" begin
+    for s ∈ (:π, :ℯ)
+        T = Irrational{s}
+        @test promote_type(Complex{T}, T) <: Complex
+        @test promote_type(T, Complex{T}) <: Complex
+    end
 end
 
 @testset "printing non finite floats" begin
@@ -3139,5 +3321,34 @@ end
     m = Int(maxintfloat(Float16))
     for F ∈ fp_types, G ∈ fp_types, n ∈ (-m):m
         @test n == G(F(n)) == F(G(n))
+    end
+end
+
+@testset "`precision`" begin
+    Fs = (Float16, Float32, Float64, BigFloat)
+
+    @testset "type vs instance" begin
+        @testset "F: $F" for F ∈ Fs
+            @test precision(F) == precision(one(F))
+            @test precision(F, base = 2) == precision(one(F), base = 2)
+            @test precision(F, base = 3) == precision(one(F), base = 3)
+        end
+    end
+
+    @testset "`precision` of `Union` shouldn't recur infinitely, #52909" begin
+        @testset "i: $i" for i ∈ eachindex(Fs)
+            @testset "j: $j" for j ∈ (i + 1):lastindex(Fs)
+                S = Fs[i]
+                T = Fs[j]
+                @test_throws MethodError precision(Union{S,T})
+                @test_throws MethodError precision(Union{S,T}, base = 3)
+            end
+        end
+    end
+end
+
+@testset "irrational special values" begin
+    for v ∈ (π, ℯ, γ, catalan, φ)
+        @test v === typemin(v) === typemax(v)
     end
 end

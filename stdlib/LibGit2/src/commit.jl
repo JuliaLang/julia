@@ -73,21 +73,23 @@ function commit(repo::GitRepo,
     ensure_initialized()
     commit_id_ptr = Ref(GitHash())
     nparents = length(parents)
-    parentptrs = Ptr{Cvoid}[c.ptr for c in parents]
-    @check ccall((:git_commit_create, libgit2), Cint,
-                 (Ptr{GitHash}, Ptr{Cvoid}, Ptr{UInt8},
-                  Ptr{SignatureStruct}, Ptr{SignatureStruct},
-                  Ptr{UInt8}, Ptr{UInt8}, Ptr{Cvoid},
-                  Csize_t, Ptr{Ptr{Cvoid}}),
-                 commit_id_ptr, repo.ptr, isempty(refname) ? C_NULL : refname,
-                 author.ptr, committer.ptr,
-                 C_NULL, msg, tree.ptr,
-                 nparents, nparents > 0 ? parentptrs : C_NULL)
+    GC.@preserve parents begin
+        parentptrs = Ptr{Cvoid}[c.ptr for c in parents]
+        @check ccall((:git_commit_create, libgit2), Cint,
+                     (Ptr{GitHash}, Ptr{Cvoid}, Ptr{UInt8},
+                      Ptr{SignatureStruct}, Ptr{SignatureStruct},
+                      Ptr{UInt8}, Ptr{UInt8}, Ptr{Cvoid},
+                      Csize_t, Ptr{Ptr{Cvoid}}),
+                     commit_id_ptr, repo, isempty(refname) ? C_NULL : refname,
+                     author, committer,
+                     C_NULL, msg, tree,
+                     nparents, nparents > 0 ? parentptrs : C_NULL)
+    end
     return commit_id_ptr[]
 end
 
 """
-    commit(repo::GitRepo, msg::AbstractString; kwargs...) -> GitHash
+    commit(repo::GitRepo, msg::AbstractString; kwargs...)::GitHash
 
 Wrapper around [`git_commit_create`](https://libgit2.org/libgit2/#HEAD/group/commit/git_commit_create).
 Create a commit in the repository `repo`. `msg` is the commit message. Return the OID of the new commit.

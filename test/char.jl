@@ -121,7 +121,7 @@ end
     #iterate(c::Char)
     for x in testarrays
         @test iterate(x)[1] == x
-        @test iterate(x, iterate(x)[2]) == nothing
+        @test iterate(x, iterate(x)[2]) === nothing
     end
 
     #isless(x::Char, y::Integer) = isless(UInt32(x), y)
@@ -244,8 +244,8 @@ end
 
 @testset "overlong codes" begin
     function test_overlong(c::Char, n::Integer, rep::String)
-        if isvalid(c)
-            @test Int(c) == n
+        if !Base.ismalformed(c)
+            @test Int(c) == n == codepoint(c)
         else
             @test_throws Base.InvalidCharError UInt32(c)
         end
@@ -288,6 +288,11 @@ Base.codepoint(c::ASCIIChar) = reinterpret(UInt8, c)
     @test string(ASCIIChar('x')) == "x"
     @test length(ASCIIChar('x')) == 1
     @test !isempty(ASCIIChar('x'))
+    @test ndims(ASCIIChar('x')) == 0
+    @test ndims(ASCIIChar) == 0
+    @test Base.IteratorSize(ASCIIChar) === Base.HasShape{0}()
+    @test firstindex(ASCIIChar('x')) == 1
+    @test lastindex(ASCIIChar('x')) == 1
     @test eltype(ASCIIChar) == ASCIIChar
     @test_throws MethodError write(IOBuffer(), ASCIIChar('x'))
     @test_throws MethodError read(IOBuffer('x'), ASCIIChar)
@@ -352,6 +357,15 @@ end
         "'\\xc0': Malformed UTF-8 (category Ma: Malformed, bad data)"
 end
 
+@testset "overlong, non-malformed chars" begin
+    c = ['\xc0\xa0', '\xf0\x8e\x80\x80']
+    @test all(Base.isoverlong, c)
+    @test !any(Base.ismalformed, c)
+    @test repr("text/plain", c[1]) == "'\\xc0\\xa0': [overlong] ASCII/Unicode U+0020 (category Zs: Separator, space)"
+    @test codepoint.(c) == [0x20, 0xE000]
+    @test isuppercase(c[1]) == isuppercase(c[2]) == false # issue #54343
+end
+
 @testset "More fallback tests" begin
     @test length(ASCIIChar('x')) == 1
     @test firstindex(ASCIIChar('x')) == 1
@@ -359,4 +373,32 @@ end
     @test hash(ASCIIChar('x'), UInt(10)) == hash('x', UInt(10))
     @test Base.IteratorSize(Char) == Base.HasShape{0}()
     @test convert(ASCIIChar, 1) == Char(1)
+end
+
+@testset "foldable functions" begin
+    v = @inferred (() -> Val(isuppercase('C')))()
+    @test v isa Val{true}
+    v = @inferred (() -> Val(islowercase('C')))()
+    @test v isa Val{false}
+
+    v = @inferred (() -> Val(isletter('C')))()
+    @test v isa Val{true}
+    v = @inferred (() -> Val(isnumeric('C')))()
+    @test v isa Val{false}
+
+    struct MyChar <: AbstractChar
+        x :: Char
+    end
+    Base.codepoint(m::MyChar) = codepoint(m.x)
+    MyChar(x::UInt32) = MyChar(Char(x))
+
+    v = @inferred (() -> Val(isuppercase(MyChar('C'))))()
+    @test v isa Val{true}
+    v = @inferred (() -> Val(islowercase(MyChar('C'))))()
+    @test v isa Val{false}
+
+    v = @inferred (() -> Val(isletter(MyChar('C'))))()
+    @test v isa Val{true}
+    v = @inferred (() -> Val(isnumeric(MyChar('C'))))()
+    @test v isa Val{false}
 end

@@ -254,13 +254,30 @@ julia> float(3//4)
 ```
 
 Conversion from rational to floating-point respects the following identity for any integral values
-of `a` and `b`, with the exception of the two cases `b == 0` and `a == 0 && b < 0`:
+of `a` and `b`, except when `a==0 && b <= 0`:
 
 ```jldoctest
 julia> a = 1; b = 2;
 
 julia> isequal(float(a//b), a/b)
 true
+
+julia> a, b = 0, 0
+(0, 0)
+
+julia> float(a//b)
+ERROR: ArgumentError: invalid rational: zero(Int64)//zero(Int64)
+Stacktrace:
+[...]
+
+julia> a/b
+NaN
+
+julia> a, b = 0, -1
+(0, -1)
+
+julia> float(a//b), a/b
+(0.0, -0.0)
 ```
 
 Constructing infinite rational values is acceptable:

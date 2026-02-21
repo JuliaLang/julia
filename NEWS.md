@@ -1,41 +1,37 @@
-Julia v1.11 Release Notes
+Julia v1.14 Release Notes
 ========================
 
 New language features
 ---------------------
-* `public` is a new keyword. Symbols marked with `public` are considered public
-  API. Symbols marked with `export` are now also treated as public API. The
-  difference between `public` and `export` is that `public` names do not become
-  available when `using` a package/module. ([#50105])
-* `ScopedValue` implement dynamic scope with inheritance across tasks ([#50958]).
-* Support for Unicode 15.1 ([#51799]).
-* A new `AbstractString` type, `AnnotatedString`, is introduced that allows for
-  regional annotations to be attached to an underlying string. This type is
-  particularly useful for holding styling information, and is used extensively
-  in the new `StyledStrings` standard library. There is also a new `AnnotatedChar`
-  type, that is the equivalent new `AbstractChar` type.
+
+  - It is now possible to control which version of the Julia syntax will be used to parse a package by setting the
+    `compat.julia` or `syntax.julia_version` key in Project.toml. This feature is similar to the notion of "editions"
+    in other language ecosystems and will allow non-breaking evolution of Julia syntax in future versions.
+    See the "Syntax Versioning" section in the code loading documentation ([#60018]).
+  - `ᵅ` (U+U+1D45), `ᵋ` (U+1D4B), `ᶲ` (U+1DB2), `˱` (U+02F1), `˲` (U+02F2), and `ₔ` (U+2094) can now also be used as
+    operator suffixes, accessible as `\^alpha`, `\^epsilon`, `\^ltphi`, `\_<`, `\_>`, and `\_schwa` at the REPL
+    ([#60285]).
+  - The `@label` macro can now create labeled blocks that can be exited early with `break name [value]`. Use
+    `@label name expr` for named blocks or `@label expr` for anonymous blocks. Anonymous `@label` blocks
+    participate in the default break scope: a plain `break` or `break _` exits the innermost breakable scope,
+    whether it is a loop or an `@label` block. The `continue` statement also supports labels with
+    `continue name` to continue a labeled loop ([#60481]).
 
 Language changes
 ----------------
 
 Compiler/Runtime improvements
 -----------------------------
-* Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
-* A new `LazyLibrary` type is exported from `Libdl` for use in building chained lazy library
-  loads, primarily to be used within JLLs ([#50074]).
 
 Command-line option changes
 ---------------------------
 
-* The entry point for Julia has been standardized to `Main.main(ARGS)`. This must be explicitly opted into using the `@main` macro
-(see the docstring for further details). When opted-in, and julia is invoked to run a script or expression
-(i.e. using `julia script.jl` or `julia -e expr`), julia will subsequently run the `Main.main` function automatically.
-This is intended to unify script and compilation workflows, where code loading may happen
-in the compiler and execution of `Main.main` may happen in the resulting executable. For interactive use, there is no semantic
-difference between defining a `main` function and executing the code directly at the end of the script. ([50974])
-
 Multi-threading changes
 -----------------------
+
+  - New functions `Threads.atomic_fence_heavy` and `Threads.atomic_fence_light` provide support for
+    asymmetric atomic fences, speeding up atomic synchronization where one side of the synchronization
+    runs significantly less often than the other ([#60311]).
 
 Build system changes
 --------------------
@@ -43,90 +39,61 @@ Build system changes
 New library functions
 ---------------------
 
-* The new `Libc.mkfifo` function wraps the `mkfifo` C function on Unix platforms ([#34587]).
-* `hardlink(src, dst)` can be used to create hard links. ([#41639])
-* `diskstat(path=pwd())` can be used to return statistics about the disk. ([#42248])
-* `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
-* `eachrsplit(string, pattern)` iterates split substrings right to left.
-
 New library features
 --------------------
-* `replace(string, pattern...)` now supports an optional `IO` argument to
-  write the output to a stream rather than returning a string ([#48625]).
+
+* `IOContext` supports a new boolean `hexunsigned` option that allows for
+  printing unsigned integers in decimal instead of hexadecimal ([#60267]).
 
 Standard library changes
 ------------------------
 
-#### StyledStrings
+* `codepoint(c)` now succeeds for overlong encodings.  `Base.ismalformed`, `Base.isoverlong`, and
+  `Base.show_invalid` are now `public` and documented (but not exported) ([#55152]).
 
-* A new standard library for handling styling in a more comprehensive and structured way.
-* The new `Faces` struct serves as a container for text styling information
-  (think typeface, as well as color and decoration), and comes with a framework
-  to provide a convenient, extensible (via `addface!`), and customisable (with a
-  user's `Faces.toml` and `loadfaces!`) approach to
-  styled content.
-* The new `@styled_str` string macro provides a convenient way of creating a
-  `AnnotatedString` with various faces or other attributes applied.
-
-#### Package Manager
+#### JuliaSyntaxHighlighting
 
 #### LinearAlgebra
 
-#### Printf
+#### Markdown
+
+  * Strikethrough text via `~strike~` or `~~through~~` is now supported by the
+    Markdown parser. ([#60537])
 
 #### Profile
 
 #### Random
-* `rand` now supports sampling over `Tuple` types ([#35856], [#50251]).
-* `rand` now supports sampling over `Pair` types ([#28705]).
-* When seeding RNGs provided by `Random`, negative integer seeds can now be used ([#51416]).
-* Seedable random number generators from `Random` can now be seeded by a string, e.g.
-  `seed!(rng, "a random seed")` ([#51527]).
 
 #### REPL
 
-* Tab complete hints now show in lighter text while typing in the repl. To disable
-  set `Base.active_repl.options.hint_tab_completes = false` ([#51229])
-* Meta-M with an empty prompt now returns the contextual module of the REPL to `Main`.
-
-#### SuiteSparse
-
-
-#### SparseArrays
-
 #### Test
+
+* `@test`, `@test_throws`, and `@test_broken` now support a `context` keyword argument
+  that provides additional information displayed on test failure. This is useful for
+  debugging which specific case failed in parameterized tests ([#60501]).
+
+* `@test_throws`, `@test_warn`, `@test_nowarn`, `@test_logs`, and `@test_deprecated` now support
+  `broken` and `skip` keyword arguments for consistency with `@test` ([#60543]).
+
+* New functions `detect_closure_boxes` and `detect_closure_boxes_all` find methods that
+  allocate `Core.Box` in their lowered code, which can indicate performance issues from
+  captured variables in closures.
 
 #### Dates
 
-#### Statistics
-
-* Statistics is now an upgradeable standard library.([#46501])
-
-#### Distributed
-
-* `pmap` now defaults to using a `CachingPool` ([#33892]).
-
-#### Unicode
-
-
-#### DelimitedFiles
-
+* `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
 
 #### InteractiveUtils
 
-Deprecated or removed
----------------------
-
+#### Dates
 
 External dependencies
 ---------------------
-* `tput` is no longer called to check terminal capabilities, it has been replaced with a pure-Julia terminfo parser.
 
 Tooling Improvements
 --------------------
 
-* CI now performs limited automatic typo detection on all PRs. If you merge a PR with a
-  failing typo CI check, then the reported typos will be automatically ignored in future CI
-  runs on PRs that edit those same files. ([#51704])
+Deprecated or removed
+---------------------
 
 <!--- generated by NEWS-update.jl: -->

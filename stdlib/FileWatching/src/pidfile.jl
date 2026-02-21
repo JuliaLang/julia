@@ -4,16 +4,15 @@ module Pidfile
 export mkpidlock, trymkpidlock
 
 using Base:
-    IOError, UV_EEXIST, UV_ESRCH,
-    Process
-
-using Base.Libc: rand
+    IOError, UV_EEXIST, UV_ESRCH, UV_ENOENT,
+    Process,
+    unsafe_takestring
 
 using Base.Filesystem:
     File, open, JL_O_CREAT, JL_O_RDWR, JL_O_RDONLY, JL_O_EXCL,
     rename, samefile, path_separator
 
-using ..FileWatching: watch_file
+using ..FileWatching: FileMonitor
 using Base.Sys: iswindows
 
 """
@@ -77,6 +76,7 @@ mutable struct LockMonitor
             lock = new(at, fd, update)
             finalizer(close, lock)
         catch ex
+            update === nothing || close(update)
             tryrmopenfile(at)
             close(fd)
             rethrow(ex)
@@ -100,10 +100,13 @@ end
 function mkpidlock(at::String, proc::Process; kwopts...)
     lock = mkpidlock(at, getpid(proc); kwopts...)
     closer = @async begin
-        wait(proc)
-        close(lock)
+        try
+            wait(proc)
+        finally
+            close(lock)
+        end
     end
-    isdefined(Base, :errormonitor) && Base.errormonitor(closer)
+    Base.errormonitor(closer)
     return lock
 end
 
@@ -254,19 +257,43 @@ function open_exclusive(path::String;
         end
     end
     # fall-back: wait for the lock
-
+    watch = Lockable(Core.Box(nothing))
     while true
-        # start the file-watcher prior to checking for the pidfile existence
-        t = @async try
-            watch_file(path, poll_interval)
+        # now try again to create it
+        # try to start the file-watcher prior to checking for the pidfile existence
+        watch = try
+            FileMonitor(path)
         catch ex
             isa(ex, IOError) || rethrow(ex)
-            sleep(poll_interval) # if the watch failed, convert to just doing a sleep
+            ex.code != UV_ENOENT # if the file was deleted in the meantime, don't sleep at all, even if the lock fails
         end
-        # now try again to create it
-        file = tryopen_exclusive(path, mode)
-        file === nothing || return file
-        Base.wait(t) # sleep for a bit before trying again
+        timeout = nothing
+        if watch isa FileMonitor && stale_age > 0
+            let watch = watch
+                timeout = Timer(stale_age) do t
+                    close(watch)
+                end
+            end
+        end
+        try
+            file = tryopen_exclusive(path, mode)
+            file === nothing || return file
+            if watch isa FileMonitor
+                try
+                    Base.wait(watch) # will time-out after stale_age passes
+                catch ex
+                    isa(ex, EOFError) || isa(ex, IOError) || rethrow(ex)
+                end
+            end
+            if watch === true # if the watch failed, convert to just doing a sleep
+                sleep(poll_interval)
+            end
+        finally
+            # something changed about the path, so watch is now possibly monitoring the wrong file handle
+            # it will need to be recreated just before the next tryopen_exclusive attempt
+            timeout isa Timer && close(timeout)
+            watch isa FileMonitor && close(watch)
+        end
         if stale_age > 0 && stale_pidfile(path, stale_age, refresh)
             # if the file seems stale, try to remove it before attempting again
             # set stale_age to zero so we won't attempt again, even if the attempt fails
@@ -278,12 +305,12 @@ function open_exclusive(path::String;
 end
 
 function _rand_filename(len::Int=4) # modified from Base.Libc
-    slug = Base.StringVector(len)
+    slug = Base.StringMemory(len)
     chars = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     for i = 1:len
         slug[i] = chars[(Libc.rand() % length(chars)) + 1]
     end
-    return String(slug)
+    return unsafe_takestring(slug)
 end
 
 function tryrmopenfile(path::String)

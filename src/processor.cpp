@@ -6,6 +6,8 @@
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/StringMap.h>
+#include <llvm/TargetParser/Host.h>
 #include <llvm/Support/MathExtras.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -14,7 +16,6 @@
 #include "julia.h"
 #include "julia_internal.h"
 
-#include <map>
 #include <algorithm>
 
 #include "julia_assert.h"
@@ -22,8 +23,6 @@
 #ifndef _OS_WINDOWS_
 #include <dlfcn.h>
 #endif
-
-#include <iostream>
 
 // CPU target string is a list of strings separated by `;` each string starts with a CPU
 // or architecture name and followed by an optional list of features separated by `,`.
@@ -156,7 +155,7 @@ struct FeatureList {
     {
         int cnt = 0;
         for (size_t i = 0; i < n; i++)
-            cnt += llvm::countPopulation(eles[i]);
+            cnt += llvm::popcount(eles[i]);
         return cnt;
     }
     inline bool empty() const
@@ -387,7 +386,7 @@ JL_UNUSED static uint32_t find_feature_bit(const FeatureName *features, size_t n
             return feature.bit;
         }
     }
-    return (uint32_t)-1;
+    return UINT32_MAX;
 }
 
 // This is how we save the target identification.
@@ -502,7 +501,22 @@ static inline llvm::SmallVector<TargetData<n>, 0>
 parse_cmdline(const char *option, F &&feature_cb)
 {
     if (!option)
-        option = "native";
+        abort();
+
+    // Preprocess the option string to expand "sysimage" keyword
+    std::string processed_option;
+    if (strncmp(option, "sysimage", 8) == 0 && (option[8] == '\0' || option[8] == ';')) {
+        // Replace "sysimage" with the actual sysimage CPU target
+        jl_value_t *target_str = jl_get_sysimage_cpu_target();
+        if (target_str != nullptr) {
+            processed_option = std::string(jl_string_data(target_str), jl_string_len(target_str));
+            if (option[8] == ';') {
+                processed_option += option + 8;  // append the rest after "sysimage"
+            }
+            option = processed_option.c_str();
+        }
+    }
+
     llvm::SmallVector<TargetData<n>, 0> res;
     TargetData<n> arg{};
     auto reset_arg = [&] {
@@ -610,37 +624,36 @@ parse_cmdline(const char *option, F &&feature_cb)
 
 // Cached version of command line parsing
 template<size_t n, typename F>
-static inline llvm::SmallVector<TargetData<n>, 0> &get_cmdline_targets(F &&feature_cb)
+static inline llvm::SmallVector<TargetData<n>, 0> &get_cmdline_targets(const char *cpu_target, F &&feature_cb)
 {
     static llvm::SmallVector<TargetData<n>, 0> targets =
-        parse_cmdline<n>(jl_options.cpu_target, std::forward<F>(feature_cb));
+        parse_cmdline<n>(cpu_target, std::forward<F>(feature_cb));
     return targets;
-}
-
-extern "C" {
-void *image_pointers_unavailable;
-extern void * JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(image_pointers_unavailable) jl_image_pointers;
 }
 
 // Load sysimg, use the `callback` for dispatch and perform all relocations
 // for the selected target.
 template<typename F>
-static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
+static inline jl_image_t parse_sysimg(jl_image_buf_t image, F &&callback, void *ctx)
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Processor);
     jl_image_t res{};
 
-    const jl_image_pointers_t *pointers;
-    if (hdl == jl_exe_handle && &jl_image_pointers != JL_WEAK_SYMBOL_DEFAULT(image_pointers_unavailable))
-        pointers = (const jl_image_pointers_t *)&jl_image_pointers;
-    else
-        jl_dlsym(hdl, "jl_image_pointers", (void**)&pointers, 1);
+    if (image.kind != JL_IMAGE_KIND_SO)
+        return res;
 
+    const jl_image_pointers_t *pointers = (const jl_image_pointers_t *)image.pointers;
     const void *ids = pointers->target_data;
+
+    // Set the sysimage CPU target from the stored string
+    if (pointers->cpu_target_string) {
+        jl_set_sysimage_cpu_target(pointers->cpu_target_string);
+    }
+
     jl_value_t* rejection_reason = nullptr;
     JL_GC_PUSH1(&rejection_reason);
-    uint32_t target_idx = callback(ids, &rejection_reason);
-    if (target_idx == (uint32_t)-1) {
+    uint32_t target_idx = callback(ctx, ids, &rejection_reason);
+    if (target_idx == UINT32_MAX) {
         jl_error(jl_string_ptr(rejection_reason));
     }
     JL_GC_POP();
@@ -649,48 +662,42 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
         jl_error("Image file is not compatible with this version of Julia");
     }
 
-    llvm::SmallVector<const char *, 0> fvars(pointers->header->nfvars);
-    llvm::SmallVector<const char *, 0> gvars(pointers->header->ngvars);
+    llvm::SmallVector<void*, 0> fvars(pointers->header->nfvars);
+    llvm::SmallVector<const char*, 0> gvars(pointers->header->ngvars);
 
-    llvm::SmallVector<std::pair<uint32_t, const char *>, 0> clones;
+    llvm::SmallVector<std::pair<uint32_t, void*>, 0> clones;
 
     for (unsigned i = 0; i < pointers->header->nshards; i++) {
         auto shard = pointers->shards[i];
 
-        // .data base
-        char *data_base = (char *)shard.gvar_base;
-
-        // .text base
-        const char *text_base = shard.fvar_base;
-
-        const int32_t *offsets = shard.fvar_offsets;
-        uint32_t nfunc = offsets[0];
+        void **fvar_shard = shard.fvar_ptrs;
+        uintptr_t nfunc = *shard.fvar_count;
         assert(nfunc <= pointers->header->nfvars);
-        offsets++;
         const int32_t *reloc_slots = shard.clone_slots;
         const uint32_t nreloc = reloc_slots[0];
-        reloc_slots += 1;
+        reloc_slots++;
         const uint32_t *clone_idxs = shard.clone_idxs;
-        const int32_t *clone_offsets = shard.clone_offsets;
+        void **clone_ptrs = shard.clone_ptrs;
         uint32_t tag_len = clone_idxs[0];
-        clone_idxs += 1;
+        clone_idxs++;
 
         assert(tag_len & jl_sysimg_tag_mask);
-        llvm::SmallVector<const int32_t*, 0> base_offsets = {offsets};
+        llvm::SmallVector<void**, 0> base_ptrs(0);
+        base_ptrs.push_back(fvar_shard);
         // Find target
-        for (uint32_t i = 0;i < target_idx;i++) {
+        for (uint32_t i = 0; i < target_idx; i++) {
             uint32_t len = jl_sysimg_val_mask & tag_len;
             if (jl_sysimg_tag_mask & tag_len) {
-                if (i != 0)
-                    clone_offsets += nfunc;
                 clone_idxs += len + 1;
+                if (i != 0)
+                    clone_ptrs += nfunc;
             }
             else {
-                clone_offsets += len;
+                clone_ptrs += len;
                 clone_idxs += len + 2;
             }
             tag_len = clone_idxs[-1];
-            base_offsets.push_back(tag_len & jl_sysimg_tag_mask ? clone_offsets : nullptr);
+            base_ptrs.push_back(tag_len & jl_sysimg_tag_mask ? clone_ptrs : nullptr);
         }
 
         bool clone_all = (tag_len & jl_sysimg_tag_mask) != 0;
@@ -698,22 +705,22 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
         if (clone_all) {
             // clone_all
             if (target_idx != 0) {
-                offsets = clone_offsets;
+                fvar_shard = clone_ptrs;
             }
         }
         else {
             uint32_t base_idx = clone_idxs[0];
             assert(base_idx < target_idx);
             if (target_idx != 0) {
-                offsets = base_offsets[base_idx];
-                assert(offsets);
+                fvar_shard = base_ptrs[base_idx];
+                assert(fvar_shard);
             }
             clone_idxs++;
             unsigned start = clones.size();
             clones.resize(start + tag_len);
             auto idxs = shard.fvar_idxs;
             for (unsigned i = 0; i < tag_len; i++) {
-                clones[start + i] = {(clone_idxs[i] & ~jl_sysimg_val_mask) | idxs[clone_idxs[i] & jl_sysimg_val_mask], clone_offsets[i] + text_base};
+                clones[start + i] = {(clone_idxs[i] & ~jl_sysimg_val_mask) | idxs[clone_idxs[i] & jl_sysimg_val_mask], clone_ptrs[i]};
             }
         }
         // Do relocation
@@ -721,13 +728,13 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
         uint32_t len = jl_sysimg_val_mask & tag_len;
         for (uint32_t i = 0; i < len; i++) {
             uint32_t idx = clone_idxs[i];
-            int32_t offset;
+            void *fptr;
             if (clone_all) {
-                offset = offsets[idx];
+                fptr = fvar_shard[idx];
             }
             else if (idx & jl_sysimg_tag_mask) {
                 idx = idx & jl_sysimg_val_mask;
-                offset = clone_offsets[i];
+                fptr = clone_ptrs[i];
             }
             else {
                 continue;
@@ -737,9 +744,10 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
                 auto reloc_idx = ((const uint32_t*)reloc_slots)[reloc_i * 2];
                 if (reloc_idx == idx) {
                     found = true;
+                    const char *data_base = (const char*)shard.clone_slots;
                     auto slot = (const void**)(data_base + reloc_slots[reloc_i * 2 + 1]);
                     assert(slot);
-                    *slot = offset + text_base;
+                    *slot = fptr;
                 }
                 else if (reloc_idx > idx) {
                     break;
@@ -751,34 +759,35 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
 
         auto fidxs = shard.fvar_idxs;
         for (uint32_t i = 0; i < nfunc; i++) {
-            fvars[fidxs[i]] = text_base + offsets[i];
+            fvars[fidxs[i]] = fvar_shard[i];
         }
 
+        // .data base
         auto gidxs = shard.gvar_idxs;
         unsigned ngvars = shard.gvar_offsets[0];
         assert(ngvars <= pointers->header->ngvars);
+        char *data_base = (char*)shard.gvar_offsets;
         for (uint32_t i = 0; i < ngvars; i++) {
             gvars[gidxs[i]] = data_base + shard.gvar_offsets[i+1];
         }
     }
 
     if (!fvars.empty()) {
-        auto offsets = (int32_t *) malloc(sizeof(int32_t) * fvars.size());
-        res.fptrs.base = fvars[0];
+        auto ptrs = (void**) malloc(sizeof(void*) * fvars.size());
         for (size_t i = 0; i < fvars.size(); i++) {
             assert(fvars[i] && "Missing function pointer!");
-            offsets[i] = fvars[i] - res.fptrs.base;
+            ptrs[i] = fvars[i];
         }
-        res.fptrs.offsets = offsets;
-        res.fptrs.noffsets = fvars.size();
+        res.fptrs.ptrs = ptrs;
+        res.fptrs.nptrs = fvars.size();
     }
 
     if (!gvars.empty()) {
-        auto offsets = (int32_t *) malloc(sizeof(int32_t) * gvars.size());
-        res.gvars_base = (uintptr_t *)gvars[0];
+        auto offsets = (int32_t*)malloc(sizeof(int32_t) * gvars.size());
+        res.gvars_base = (const char*)pointers->header;
         for (size_t i = 0; i < gvars.size(); i++) {
             assert(gvars[i] && "Missing global variable pointer!");
-            offsets[i] = gvars[i] - (const char *)res.gvars_base;
+            offsets[i] = gvars[i] - res.gvars_base;
         }
         res.gvars_offsets = offsets;
         res.ngvars = gvars.size();
@@ -786,29 +795,22 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
 
     if (!clones.empty()) {
         assert(!fvars.empty());
-        std::sort(clones.begin(), clones.end());
-        auto clone_offsets = (int32_t *) malloc(sizeof(int32_t) * clones.size());
+        std::sort(clones.begin(), clones.end(),
+            [](const std::pair<uint32_t, const void*> &a, const std::pair<uint32_t, const void*> &b) {
+                return (a.first & jl_sysimg_val_mask) < (b.first & jl_sysimg_val_mask);
+        });
+        auto clone_ptrs = (void**) malloc(sizeof(void*) * clones.size());
         auto clone_idxs = (uint32_t *) malloc(sizeof(uint32_t) * clones.size());
         for (size_t i = 0; i < clones.size(); i++) {
             clone_idxs[i] = clones[i].first;
-            clone_offsets[i] = clones[i].second - res.fptrs.base;
+            clone_ptrs[i] = clones[i].second;
         }
         res.fptrs.clone_idxs = clone_idxs;
-        res.fptrs.clone_offsets = clone_offsets;
+        res.fptrs.clone_ptrs = clone_ptrs;
         res.fptrs.nclones = clones.size();
     }
 
-#ifdef _OS_WINDOWS_
-    res.base = (intptr_t)hdl;
-#else
-    Dl_info dlinfo;
-    if (dladdr((void*)pointers, &dlinfo) != 0) {
-        res.base = (intptr_t)dlinfo.dli_fbase;
-    }
-    else {
-        res.base = 0;
-    }
-#endif
+    res.base = image.base;
 
     {
         void *pgcstack_func_slot = pointers->ptls->pgcstack_func_slot;
@@ -855,7 +857,7 @@ static inline void check_cmdline(T &&cmdline, bool imaging)
 }
 
 struct SysimgMatch {
-    uint32_t best_idx{(uint32_t)-1};
+    uint32_t best_idx{UINT32_MAX};
     int vreg_size{0};
 };
 
@@ -910,7 +912,7 @@ static inline SysimgMatch match_sysimg_targets(S &&sysimg, T &&target, F &&max_v
         feature_size = new_feature_size;
         rejection_reasons.push_back("Updating best match to this target\n");
     }
-    if (match.best_idx == (uint32_t)-1) {
+    if (match.best_idx == UINT32_MAX) {
         // Construct a nice error message for debugging purposes
         std::string error_msg = "Unable to find compatible target in cached code image.\n";
         for (size_t i = 0; i < rejection_reasons.size(); i++) {
@@ -962,6 +964,34 @@ static inline void dump_cpu_spec(uint32_t cpu, const FeatureList<n> &features,
 
 }
 
+static std::string jl_get_cpu_name_llvm(void)
+{
+    return llvm::sys::getHostCPUName().str();
+}
+
+static std::string jl_get_cpu_features_llvm(void)
+{
+#if JL_LLVM_VERSION >= 190000
+    auto HostFeatures = llvm::sys::getHostCPUFeatures();
+#else
+    llvm::StringMap<bool> HostFeatures;
+    llvm::sys::getHostCPUFeatures(HostFeatures);
+#endif
+    std::string attr;
+    for (auto &ele: HostFeatures) {
+        if (ele.getValue()) {
+            if (!attr.empty()) {
+                attr.append(",+");
+            }
+            else {
+                attr.append("+");
+            }
+            attr.append(ele.getKey().str());
+        }
+    }
+    return attr;
+}
+
 #if defined(_CPU_X86_) || defined(_CPU_X86_64_)
 
 #include "processor_x86.cpp"
@@ -976,8 +1006,21 @@ static inline void dump_cpu_spec(uint32_t cpu, const FeatureList<n> &features,
 
 #endif
 
+// Global variable to store the CPU target string used for the sysimage
+static std::string sysimage_cpu_target;
+
+JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
+{
+    return jl_cstr_to_string(host_cpu_name().c_str());
+}
+
+JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
+{
+    return jl_cstr_to_string(jl_get_cpu_features_llvm().c_str());
+}
+
 extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
-    auto specs = jl_get_llvm_clone_targets();
+    auto specs = jl_get_llvm_clone_targets(jl_options.cpu_target);
     const uint32_t base_flags = 0;
     llvm::SmallVector<uint8_t, 0> data;
     auto push_i32 = [&] (uint32_t v) {
@@ -1001,4 +1044,18 @@ extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
 extern "C" JL_DLLEXPORT void jl_reflect_feature_names(const FeatureName **fnames, size_t *nf) {
     *fnames = feature_names;
     *nf = nfeature_names;
+}
+
+extern "C" JL_DLLEXPORT jl_value_t *jl_get_sysimage_cpu_target(void) {
+    if (sysimage_cpu_target.empty()) {
+        return jl_cstr_to_string("native");
+    }
+    return jl_cstr_to_string(sysimage_cpu_target.c_str());
+}
+
+// Function to set the sysimage CPU target (called during initialization)
+void jl_set_sysimage_cpu_target(const char *cpu_target) {
+    if (cpu_target) {
+        sysimage_cpu_target = cpu_target;
+    }
 }

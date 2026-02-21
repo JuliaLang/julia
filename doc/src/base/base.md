@@ -3,8 +3,8 @@
 ## Introduction
 
 Julia Base contains a range of functions and macros appropriate for performing
-scientific and numerical computing, but is also as broad as those of many general purpose programming
-languages.  Additional functionality is available from a growing collection of
+scientific and numerical computing, but is also as broad as those of many general-purpose programming
+languages. Additional functionality is available from a growing collection of
 [available packages](https://julialang.org/packages/).
 Functions are grouped by topic below.
 
@@ -30,10 +30,13 @@ Base.isinteractive
 Base.summarysize
 Base.__precompile__
 Base.include
-Base.MainInclude.include
+Main.include
 Base.include_string
 Base.include_dependency
 __init__
+Base.OncePerProcess
+Base.OncePerTask
+Base.OncePerThread
 Base.which(::Any, ::Any)
 Base.methods
 Base.@show
@@ -41,6 +44,7 @@ ans
 err
 Base.active_project
 Base.set_active_project
+Base.active_manifest
 ```
 
 ## [Keywords](@id Keywords)
@@ -102,16 +106,22 @@ where
 ;
 =
 ?:
+.=
+.
+->
+Base.:(:)
+::
+[]
 ```
 
-## Standard Modules
+## [Standard Modules](@id standard-modules)
 ```@docs
 Main
 Core
 Base
 ```
 
-## Base Submodules
+## [Base Submodules](@id base-submodules)
 ```@docs
 Base.Broadcast
 Base.Docs
@@ -148,6 +158,7 @@ Base.setproperty!
 Base.replaceproperty!
 Base.swapproperty!
 Base.modifyproperty!
+Base.setpropertyonce!
 Base.propertynames
 Base.hasproperty
 Core.getfield
@@ -155,9 +166,9 @@ Core.setfield!
 Core.modifyfield!
 Core.replacefield!
 Core.swapfield!
+Core.setfieldonce!
 Core.isdefined
-Core.getglobal
-Core.setglobal!
+Core.isdefinedglobal
 Base.@isdefined
 Base.convert
 Base.promote
@@ -182,6 +193,7 @@ Base.typeintersect
 Base.promote_type
 Base.promote_rule
 Base.promote_typejoin
+Base.iskindtype
 Base.isdispatchtuple
 ```
 
@@ -198,6 +210,7 @@ Base.isstructtype
 Base.nameof(::DataType)
 Base.fieldnames
 Base.fieldname
+Base.fieldindex
 Core.fieldtype
 Base.fieldtypes
 Base.fieldcount
@@ -239,6 +252,7 @@ Base.instances
 Core.Any
 Core.Union
 Union{}
+Core.TypeofBottom
 Core.UnionAll
 Core.Tuple
 Core.NTuple
@@ -277,15 +291,17 @@ Base.:(|>)
 Base.:(∘)
 Base.ComposedFunction
 Base.splat
+Base.Fix
 Base.Fix1
 Base.Fix2
+Returns
 ```
 
 ## Syntax
 
 ```@docs
 Core.eval
-Base.MainInclude.eval
+Main.eval
 Base.@eval
 Base.evalfile
 Base.esc
@@ -307,7 +323,12 @@ Base.@simd
 Base.@polly
 Base.@generated
 Base.@assume_effects
+```
+
+## Managing deprecations
+```@docs
 Base.@deprecate
+Base.depwarn
 ```
 
 ## Missing Values
@@ -338,6 +359,12 @@ Base.Cmd
 Base.setenv
 Base.addenv
 Base.withenv
+Base.shell_escape
+Base.shell_split
+Base.shell_escape_posixly
+Base.shell_escape_csh
+Base.shell_escape_wincmd
+Base.escape_microsoft_c_args
 Base.setcpuaffinity
 Base.pipeline(::Any, ::Any, ::Any, ::Any...)
 Base.pipeline(::Base.AbstractCmd)
@@ -352,6 +379,8 @@ Base.@timed
 Base.@elapsed
 Base.@allocated
 Base.@allocations
+Base.@lock_conflicts
+Base.TRACE_EVAL
 Base.EnvDict
 Base.ENV
 Base.Sys.STDLIB
@@ -370,9 +399,14 @@ Base.Sys.total_memory
 Base.Sys.free_physical_memory
 Base.Sys.total_physical_memory
 Base.Sys.uptime
+Base.Sys.sysimage_target
 Base.Sys.isjsvm
 Base.Sys.loadavg
 Base.Sys.isexecutable
+Base.Sys.isreadable
+Base.Sys.iswritable
+Base.Sys.which
+Base.Sys.username
 Base.@static
 ```
 
@@ -404,6 +438,7 @@ Core.DivideError
 Core.DomainError
 Base.EOFError
 Core.ErrorException
+Core.FieldError
 Core.InexactError
 Core.InterruptException
 Base.KeyError
@@ -448,6 +483,7 @@ Base.moduleroot
 __module__
 __source__
 Base.@__MODULE__
+Base.@__FUNCTION__
 Base.@__FILE__
 Base.@__DIR__
 Base.@__LINE__
@@ -459,6 +495,23 @@ Base.nameof(::Function)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
 Base.@locals
+Core.getglobal
+Core.setglobal!
+Core.modifyglobal!
+Core.swapglobal!
+Core.setglobalonce!
+Core.replaceglobal!
+Core.declare_const
+```
+
+## Documentation
+(See also the [documentation](@ref man-documentation) chapter.)
+```@docs
+Base.@doc
+Docs.HTML
+Docs.Text
+Docs.hasdoc
+Docs.undocumented_names
 ```
 
 ## Code loading
@@ -466,7 +519,6 @@ Base.@locals
 ```@docs
 Base.identify_package
 Base.locate_package
-Base.require
 Base.compilecache
 Base.isprecompiled
 Base.get_extension
@@ -480,6 +532,7 @@ Base.GC.enable
 Base.GC.@preserve
 Base.GC.safepoint
 Base.GC.enable_logging
+Base.GC.logging_enabled
 Meta.lower
 Meta.@lower
 Meta.parse(::AbstractString, ::Int)
@@ -487,6 +540,7 @@ Meta.parse(::AbstractString)
 Meta.ParseError
 Core.QuoteNode
 Base.macroexpand
+Base.macroexpand!
 Base.@macroexpand
 Base.@macroexpand1
 Base.code_lowered

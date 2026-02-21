@@ -5,11 +5,13 @@ of Julia multi-threading features.
 
 ## Starting Julia with multiple threads
 
-By default, Julia starts up with a single thread of execution. This can be verified by using the
-command [`Threads.nthreads()`](@ref):
+By default, Julia starts up with 2 threads of execution; 1 worker thread and 1 interactive thread.
+This can be verified by using the command [`Threads.nthreads()`](@ref):
 
-```jldoctest
-julia> Threads.nthreads()
+```julia
+julia> Threads.nthreads(:default)
+1
+julia> Threads.nthreads(:interactive)
 1
 ```
 
@@ -22,6 +24,9 @@ The number of threads can either be specified as an integer (`--threads=4`) or a
 (`--threads=auto`), where `auto` tries to infer a useful default number of threads to use
 (see [Command-line Options](@ref command-line-interface) for more details).
 
+See [threadpools](@ref man-threadpools) for how to control how many `:default` and `:interactive` threads are in
+each threadpool.
+
 !!! compat "Julia 1.5"
     The `-t`/`--threads` command line argument requires at least Julia 1.5.
     In older versions you must use the environment variable instead.
@@ -29,6 +34,11 @@ The number of threads can either be specified as an integer (`--threads=4`) or a
 !!! compat "Julia 1.7"
     Using `auto` as value of the environment variable [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) requires at least Julia 1.7.
     In older versions, this value is ignored.
+
+!!! compat "Julia 1.12"
+    The default number of threads changed in Julia 1.12. Prior versions default to 1 (default thread pool) thread.
+    If the number of threads is set to 1 by either doing `-t1` or `JULIA_NUM_THREADS=1` an interactive thread will not be spawned.
+
 Lets start Julia with 4 threads:
 
 ```bash
@@ -37,7 +47,7 @@ $ julia --threads 4
 
 Let's verify there are 4 threads at our disposal.
 
-```julia-repl
+```jldoctest; filter = r"[0-9]+"
 julia> Threads.nthreads()
 4
 ```
@@ -74,12 +84,14 @@ julia> Threads.threadid()
 
 ### Multiple GC Threads
 
-The Garbage Collector (GC) can use multiple threads. The amount used is either half the number
-of compute worker threads or configured by either the `--gcthreads` command line argument or by using the
+The Garbage Collector (GC) can use multiple threads. The amount used by default matches the compute
+worker threads or can configured by either the `--gcthreads` command line argument or by using the
 [`JULIA_NUM_GC_THREADS`](@ref JULIA_NUM_GC_THREADS) environment variable.
 
 !!! compat "Julia 1.10"
     The `--gcthreads` command line argument requires at least Julia 1.10.
+
+For more details about garbage collection configuration and performance tuning, see [Memory Management and Garbage Collection](@ref man-memory-management).
 
 ## [Threadpools](@id man-threadpools)
 
@@ -96,10 +108,17 @@ using Base.Threads
 Interactive tasks should avoid performing high latency operations, and if they
 are long duration tasks, should yield frequently.
 
-Julia may be started with one or more threads reserved to run interactive tasks:
+By default Julia starts with one interactive thread reserved to run interactive tasks, but that number can
+be controlled with:
 
 ```bash
 $ julia --threads 3,1
+julia> Threads.nthreads(:interactive)
+1
+
+$ julia --threads 3,0
+julia> Threads.nthreads(:interactive)
+0
 ```
 
 The environment variable [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) can also be used similarly:
@@ -116,8 +135,8 @@ julia> using Base.Threads
 julia> nthreadpools()
 2
 
-julia> threadpool()
-:default
+julia> threadpool() # the main thread is in the interactive thread pool
+:interactive
 
 julia> nthreads(:default)
 3
@@ -128,67 +147,19 @@ julia> nthreads(:interactive)
 julia> nthreads()
 3
 ```
+!!! note
+    Explicitly asking for 1 thread by doing `-t1` or `JULIA_NUM_THREADS=1` does not add an interactive thread.
 
 !!! note
     The zero-argument version of `nthreads` returns the number of threads
     in the default pool.
 
+!!! note
+    Depending on whether Julia has been started with interactive threads,
+    the main thread is either in the default or interactive thread pool.
+
 Either or both numbers can be replaced with the word `auto`, which causes
 Julia to choose a reasonable default.
-
-## Communication and synchronization
-
-Although Julia's threads can communicate through shared memory, it is notoriously
-difficult to write correct and data-race free multi-threaded code. Julia's
-[`Channel`](@ref)s are thread-safe and may be used to communicate safely.
-
-### Data-race freedom
-
-You are entirely responsible for ensuring that your program is data-race free,
-and nothing promised here can be assumed if you do not observe that
-requirement. The observed results may be highly unintuitive.
-
-The best way to ensure this is to acquire a lock around any access to data that
-can be observed from multiple threads. For example, in most cases you should
-use the following code pattern:
-
-```julia-repl
-julia> lock(lk) do
-           use(a)
-       end
-
-julia> begin
-           lock(lk)
-           try
-               use(a)
-           finally
-               unlock(lk)
-           end
-       end
-
-julia> @lock lk use(a)
-```
-where `lk` is a lock (e.g. `ReentrantLock()`) and `a` data.
-
-Additionally, Julia is not memory safe in the presence of a data race. Be very
-careful about reading _any_ data if another thread might write to it!
-Instead, always use the lock pattern above when changing data (such as assigning
-to a global or closure variable) accessed by other threads.
-
-```julia
-Thread 1:
-global b = false
-global a = rand()
-global b = true
-
-Thread 2:
-while !b; end
-bad_read1(a) # it is NOT safe to access `a` here!
-
-Thread 3:
-while !@isdefined(a); end
-bad_read2(a) # it is NOT safe to access `a` here
-```
 
 ## The `@threads` Macro
 
@@ -241,10 +212,11 @@ julia> a
 
 Note that [`Threads.@threads`](@ref) does not have an optional reduction parameter like [`@distributed`](@ref).
 
-### Using `@threads` without data races
+### Using `@threads` without data-races
 
-Taking the example of a naive sum
+The concept of a data-race is elaborated on in ["Communication and data races between threads"](@ref man-communication-and-data-races). For now, just know that a data race can result in incorrect results and dangerous errors.
 
+Lets say we want to make the function `sum_single` below multithreaded.
 ```julia-repl
 julia> function sum_single(a)
            s = 0
@@ -277,12 +249,11 @@ julia> sum_multi_bad(1:1_000_000)
 Note that the result is not `500000500000` as it should be, and will most likely change each evaluation.
 
 To fix this, buffers that are specific to the task may be used to segment the sum into chunks that are race-free.
-Here `sum_single` is reused, with its own internal buffer `s`, and vector `a` is split into `nthreads()`
-chunks for parallel work via `nthreads()` `@spawn`-ed tasks.
-
+Here `sum_single` is reused, with its own internal buffer `s`. The input vector `a` is split into at most `nthreads()`
+chunks for parallel work. We then use `Threads.@spawn` to create tasks that individually sum each chunk. Finally, we sum the results from each task using `sum_single` again:
 ```julia-repl
 julia> function sum_multi_good(a)
-           chunks = Iterators.partition(a, length(a) ÷ Threads.nthreads())
+           chunks = Iterators.partition(a, cld(length(a), Threads.nthreads()))
            tasks = map(chunks) do chunk
                Threads.@spawn sum_single(chunk)
            end
@@ -303,7 +274,119 @@ julia> sum_multi_good(1:1_000_000)
 Another option is the use of atomic operations on variables shared across tasks/threads, which may be more performant
 depending on the characteristics of the operations.
 
-## Atomic Operations
+## [Communication and data-races between threads](@id man-communication-and-data-races)
+
+Although Julia's threads can communicate through shared memory, it is notoriously difficult to write correct and data-race free multi-threaded code. Julia's
+[`Channel`](@ref)s are thread-safe and may be used to communicate safely. There are also sections below that explain how to use [locks](@ref man-using-locks) and [atomics](@ref man-atomic-operations) to avoid data-races.
+
+In certain cases, Julia is able to detect safety violations, in particular in regards to deadlocks or other known-unsafe operations such as yielding
+to the currently running task. In these cases, a [`ConcurrencyViolationError`](@ref) is thrown.
+
+### Data-race freedom
+
+You are entirely responsible for ensuring that your program is data-race free,
+and nothing promised here can be assumed if you do not observe that
+requirement. The observed results may be highly unintuitive.
+
+If data-races are introduced, Julia is not memory safe. **Be very
+careful about reading _any_ data if another thread might write to it, as it could result in segmentation faults or worse**. Below are a couple of unsafe ways to access global variables from different threads:
+```julia
+Thread 1:
+global b = false
+global a = rand()
+global b = true
+
+Thread 2:
+while !b; end
+bad_read1(a) # it is NOT safe to access `a` here!
+
+Thread 3:
+while !@isdefined(a); end
+bad_read2(a) # it is NOT safe to access `a` here
+```
+
+### [Using locks to avoid data-races](@id man-using-locks)
+An important tool for avoiding data races, and writing thread-safe code in general, is the concept of a "lock". A lock can be locked and unlocked. If a thread has locked a lock, and not unlocked it, it is said to "hold" the lock. If there is only one lock, and we write code that requires holding the lock to access some data, we can ensure that multiple threads will never access the same data simultaneously.
+
+Note that the link between a lock and a variable is made by the programmer, and not the program. A helper-type [`Base.Lockable`](@ref) exists that helps you associate a lock and a value. This is often more safe than keeping track yourself, and is detailed under [Using Base.Lockable to associate a lock and a value](@ref man-lockable).
+
+For example, we can create a lock `my_lock`, and lock it while we mutate a variable `my_variable`. This is done most simply with the `@lock` macro:
+
+```julia-repl
+julia> my_lock = ReentrantLock();
+
+julia> my_variable = [1, 2, 3];
+
+julia> @lock my_lock my_variable[1] = 100
+100
+```
+
+By using a similar pattern with the same lock and variable, but on another thread, the operations are free from data-races.
+
+We could have performed the operation above with the functional version of `lock`, in the following two ways:
+```julia-repl
+julia> lock(my_lock) do
+           my_variable[1] = 100
+       end
+100
+
+julia> begin
+           lock(my_lock)
+           try
+               my_variable[1] = 100
+           finally
+               unlock(my_lock)
+           end
+       end
+100
+```
+
+All three options are equivalent. Note how the final version requires an explicit `try`-block to ensure that the lock is always unlocked, whereas the first two version do this internally. One should always use the lock pattern above when changing data (such as assigning
+to a global or closure variable) accessed by other threads. Failing to do this could have unforeseen and serious consequences.
+
+#### [Using Base.Lockable to associate a lock and a value](@id man-lockable)
+As mentioned in the previous section, the helper-type [`Base.Lockable`](@ref) can be used to programmatically ensure the association between a lock and a value. This is generally recommended, as it is both less prone to error and more readable for others compared to having the association only by convention.
+
+Any object can be wrapped in `Base.Lockable`:
+```julia-repl
+julia> my_array = [];
+
+julia> my_locked_array = Base.Lockable(my_array);
+```
+
+If the lock is held, the underlying object can be accessed with the empty indexing notation:
+```julia-repl
+julia> begin
+           lock(my_locked_array)
+           try
+               push!(my_locked_array[], 1)
+           finally
+               unlock(my_locked_array)
+           end
+       end
+1-element Vector{Any}:
+ 1
+```
+
+It is usually easier and safer to pass a function as the first argument to `lock`. The function is applied to the unlocked object, and the locking/unlocking is handled automatically:
+```julia-repl
+julia> lock(x -> push!(x, 2), my_locked_array);
+
+julia> lock(display, my_locked_array)
+2-element Vector{Any}:
+ 1
+ 2
+
+julia> lock(my_locked_array) do x
+           x[1] = π
+           display(x)
+       end
+2-element Vector{Any}:
+ π = 3.1415926535897...
+ 2
+```
+
+### [Atomic Operations](@id man-atomic-operations)
 
 Julia supports accessing and modifying values *atomically*, that is, in a thread-safe way to avoid
 [race conditions](https://en.wikipedia.org/wiki/Race_condition). A value (which must be of a primitive
@@ -372,11 +455,12 @@ julia> acc[]
 ```
 
 
-## [Per-field atomics](@id man-atomics)
+#### [Per-field atomics](@id man-atomics)
 
 We can also use atomics on a more granular level using the [`@atomic`](@ref
-Base.@atomic), [`@atomicswap`](@ref Base.@atomicswap), and
-[`@atomicreplace`](@ref Base.@atomicreplace) macros.
+Base.@atomic), [`@atomicswap`](@ref Base.@atomicswap),
+[`@atomicreplace`](@ref Base.@atomicreplace) macros, and
+[`@atomiconce`](@ref Base.@atomiconce) macros.
 
 Specific details of the memory model and other details of the design are written
 in the [Julia Atomics

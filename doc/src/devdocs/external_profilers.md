@@ -8,8 +8,20 @@ The currently supported profilers are:
 
 ### Adding New Zones
 
+#### From C/C++ code
+
 To add new zones, use the `JL_TIMING` macro. You can find numerous examples throughout the codebase by searching for `JL_TIMING`. To add a new type of zone
 you add it to `JL_TIMING_OWNERS` (and possibly `JL_TIMING_EVENTS`).
+
+#### From Julia code
+
+The `Compiler.@zone` macro can be used to add a zone from Julia code, it is used as:
+
+```julia
+Compiler.@zone "ZONE NAME" begin
+    ...
+end
+```
 
 ### Dynamically Enabling and Disabling Zones
 

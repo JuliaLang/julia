@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#include "gc.h"
+#include "gc-common.h"
+#include "gc-stock.h"
 #ifndef _OS_WINDOWS_
 #  include <sys/resource.h>
 #endif
@@ -8,6 +9,13 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+uv_mutex_t gc_pages_lock;
+
+JL_DLLEXPORT uint64_t jl_get_pg_size(void)
+{
+    return GC_PAGE_SZ;
+}
 
 // Try to allocate memory in chunks to permit faster allocation
 // and improve memory locality of the pools
@@ -62,7 +70,7 @@ char *jl_gc_try_alloc_pages_(int pg_cnt) JL_NOTSAFEPOINT
 // more chunks (or other allocations). The final page count is recorded
 // and will be used as the starting count next time. If the page count is
 // smaller `MIN_BLOCK_PG_ALLOC` a `jl_memory_exception` is thrown.
-// Assumes `gc_perm_lock` is acquired, the lock is released before the
+// Assumes `gc_pages_lock` is acquired, the lock is released before the
 // exception is thrown.
 char *jl_gc_try_alloc_pages(void) JL_NOTSAFEPOINT
 {
@@ -82,7 +90,7 @@ char *jl_gc_try_alloc_pages(void) JL_NOTSAFEPOINT
             block_pg_cnt = pg_cnt = min_block_pg_alloc;
         }
         else {
-            uv_mutex_unlock(&gc_perm_lock);
+            uv_mutex_unlock(&gc_pages_lock);
             jl_throw(jl_memory_exception);
         }
     }
@@ -122,29 +130,31 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
         goto exit;
     }
 
-    uv_mutex_lock(&gc_perm_lock);
+    uv_mutex_lock(&gc_pages_lock);
     // another thread may have allocated a large block while we were waiting...
     meta = pop_lf_back(&global_page_pool_clean);
     if (meta != NULL) {
-        uv_mutex_unlock(&gc_perm_lock);
+        uv_mutex_unlock(&gc_pages_lock);
         gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
         goto exit;
     }
-    // must map a new set of pages
-    char *data = jl_gc_try_alloc_pages();
-    meta = (jl_gc_pagemeta_t*)malloc_s(block_pg_cnt * sizeof(jl_gc_pagemeta_t));
-    for (int i = 0; i < block_pg_cnt; i++) {
-        jl_gc_pagemeta_t *pg = &meta[i];
-        pg->data = data + GC_PAGE_SZ * i;
-        gc_alloc_map_maybe_create(pg->data);
-        if (i == 0) {
-            gc_alloc_map_set(pg->data, GC_PAGE_ALLOCATED);
+    {
+        // must map a new set of pages
+        char *data = jl_gc_try_alloc_pages();
+        meta = (jl_gc_pagemeta_t*)malloc_s(block_pg_cnt * sizeof(jl_gc_pagemeta_t));
+        for (int i = 0; i < block_pg_cnt; i++) {
+            jl_gc_pagemeta_t *pg = &meta[i];
+            pg->data = data + GC_PAGE_SZ * i;
+            gc_alloc_map_maybe_create(pg->data);
+            if (i == 0) {
+                gc_alloc_map_set(pg->data, GC_PAGE_ALLOCATED);
+            }
+            else {
+                push_lf_back(&global_page_pool_clean, pg);
+            }
         }
-        else {
-            push_lf_back(&global_page_pool_clean, pg);
-        }
+        uv_mutex_unlock(&gc_pages_lock);
     }
-    uv_mutex_unlock(&gc_perm_lock);
 exit:
 #ifdef _OS_WINDOWS_
     VirtualAlloc(meta->data, GC_PAGE_SZ, MEM_COMMIT, PAGE_READWRITE);
@@ -155,7 +165,7 @@ exit:
 }
 
 // return a page to the freemap allocator
-void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
+NOINLINE void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
     void *p = pg->data;
     gc_alloc_map_set((char*)p, GC_PAGE_FREED);
