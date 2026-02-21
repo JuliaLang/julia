@@ -518,7 +518,7 @@ static void print_string(fl_context_t *fl_ctx, ios_t *f, char *str, size_t sz)
     }
     else {
         while (i < sz) {
-            size_t n = u8_escape(buf, sizeof(buf), str, &i, sz, 1, 0);
+            size_t n = u8_escape(buf, sizeof(buf), str, &i, sz, "\"", 0);
             outsn(fl_ctx, buf, f, n-1);
         }
     }

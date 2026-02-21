@@ -11,7 +11,7 @@ OrderStyle(::Type{<:Real}) = Ordered()
 OrderStyle(::Type{<:AbstractString}) = Ordered()
 OrderStyle(::Type{Symbol}) = Ordered()
 OrderStyle(::Type{<:Any}) = Unordered()
-OrderStyle(::Type{Union{}}) = Ordered()
+OrderStyle(::Type{Union{}}, slurp...) = Ordered()
 
 # trait for objects that support arithmetic
 abstract type ArithmeticStyle end
@@ -23,6 +23,7 @@ ArithmeticStyle(instance) = ArithmeticStyle(typeof(instance))
 ArithmeticStyle(::Type{<:AbstractFloat}) = ArithmeticRounds()
 ArithmeticStyle(::Type{<:Integer}) = ArithmeticWraps()
 ArithmeticStyle(::Type{<:Any}) = ArithmeticUnknown()
+ArithmeticStyle(::Type{Union{}}, slurp...) = ArithmeticUnknown()
 
 # trait for objects that support ranges with regular step
 """
@@ -58,5 +59,6 @@ ranges with an element type which is a subtype of `Integer`.
 abstract type RangeStepStyle end
 struct RangeStepRegular   <: RangeStepStyle end # range with regular step
 struct RangeStepIrregular <: RangeStepStyle end # range with rounding error
+RangeStepStyle(::Type{Union{}}, slurp...) = RangeStepIrregular()
 
 RangeStepStyle(instance) = RangeStepStyle(typeof(instance))

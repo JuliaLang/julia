@@ -109,7 +109,7 @@ Source: "{#SourceDir}\{#AppMainExeName}"; DestDir: "{app}\bin"; Flags: ignorever
 
 [Icons]
 Name: "{autodesktop}\{#AppNameLong}"; Filename: "{app}\{#AppMainExeName}"; WorkingDir: "{%USERPROFILE}"; Tasks: desktopicon
-Name: "{autostartmenu}\{#AppNameLong}"; Filename: "{app}\{#AppMainExeName}"; WorkingDir: "{%USERPROFILE}"; Tasks: startmenu
+Name: "{autostartmenu}\Programs\{#AppNameLong}"; Filename: "{app}\{#AppMainExeName}"; WorkingDir: "{%USERPROFILE}"; Tasks: startmenu
 
 
 [Run]
@@ -150,6 +150,9 @@ begin
   case CurPageID of
     wpWelcome: WizardForm.Color := WizardForm.WelcomePage.Color;
     wpFinished: WizardForm.Color := WizardForm.FinishedPage.Color;
+
+    //change button text from "next" to "install" when ReadyPage is disabled.
+    wpSelectTasks: WizardForm.NextButton.Caption := SetupMessage(msgButtonInstall);
   else
     WizardForm.Color := WizardForm.InnerPage.Color;
   end;

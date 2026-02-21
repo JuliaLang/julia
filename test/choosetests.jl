@@ -6,7 +6,7 @@ const STDLIB_DIR = Sys.STDLIB
 const STDLIBS = filter!(x -> isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")), readdir(STDLIB_DIR))
 
 const TESTNAMES = [
-        "subarray", "core", "compiler", "worlds", "atomics",
+        "subarray", "core", "compiler", "compiler_extras", "worlds", "atomics",
         "keywordargs", "numbers", "subtype",
         "char", "strings", "triplequote", "unicode", "intrinsics",
         "dict", "hashing", "iobuffer", "staged", "offsetarray",
@@ -19,17 +19,65 @@ const TESTNAMES = [
         "mpfr", "broadcast", "complex",
         "floatapprox", "stdlib", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
-        "euler", "show", "client",
+        "euler", "show", "client", "terminfo",
         "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "ryu",
-        "some", "meta", "stacktraces", "docs",
-        "misc", "threads", "stress", "binaryplatforms", "atexit",
+        "some", "meta", "stacktraces", "docs", "gc",
+        "misc", "threads", "stress", "binaryplatforms","stdlib_dependencies", "atexit",
         "enums", "cmdlineargs", "int", "interpreter",
-        "checked", "bitset", "floatfuncs", "precompile",
+        "checked", "bitset", "floatfuncs", "precompile", "relocatedepot",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
         "channels", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
         "smallarrayshrink", "opaque_closure", "filesystem", "download",
+        "scopedvalues", "compileall", "rebinding",
+        "faulty_constructor_method_should_not_cause_stack_overflows",
+        "JuliaSyntax", "JuliaLowering", "JuliaLowering_stdlibs",
 ]
+
+const INTERNET_REQUIRED_LIST = [
+    "Artifacts",
+    "Downloads",
+    "LazyArtifacts",
+    "LibCURL",
+    "LibGit2",
+    "Pkg",
+    "TOML",
+    "download",
+]
+
+const NETWORK_REQUIRED_LIST = vcat(INTERNET_REQUIRED_LIST, ["Sockets"])
+
+const TOP_LEVEL_PKGS = [
+    "Compiler",
+    "JuliaSyntax",
+    "JuliaLowering",
+]
+
+function test_path(test)
+    t = split(test, '/')
+    if t[1] in STDLIBS
+        pkgdir = abspath(Base.find_package(String(t[1])), "..", "..")
+        if length(t) == 2
+            return joinpath(pkgdir, "test", t[2])
+        else
+            return joinpath(pkgdir, "test", "runtests")
+        end
+    elseif t[1] == "Compiler" && length(t) ≥ 3 && t[2] == "extras"
+        testpath = length(t) >= 4 ? t[4:end] : ("runtests",)
+        return joinpath(@__DIR__, "..", t[1], t[2], t[3], "test", testpath...)
+    elseif t[1] == "Compiler"
+        testpath = length(t) >= 2 ? t[2:end] : ("runtests",)
+        return joinpath(@__DIR__, "..", t[1], "test", testpath...)
+    elseif t[1] == "JuliaSyntax"
+        testpath = length(t) >= 2 ? t[2:end] : ("runtests_vendored",)
+        return joinpath(@__DIR__, "..", t[1], "test", testpath...)
+    elseif t[1] == "JuliaLowering"
+        testpath = length(t) >= 2 ? t[2:end] : ("runtests_vendored",)
+        return joinpath(@__DIR__, "..", t[1], "test", testpath...)
+    else
+        return joinpath(@__DIR__, test)
+    end
+end
 
 """
 `(; tests, net_on, exit_on_error, seed) = choosetests(choices)` selects a set of tests to be
@@ -66,6 +114,7 @@ function choosetests(choices = [])
     seed = rand(RandomDevice(), UInt128)
     ci_option_passed = false
     dryrun = false
+    buildroot = joinpath(@__DIR__, "..")
 
     for (i, t) in enumerate(choices)
         if t == "--skip"
@@ -75,6 +124,8 @@ function choosetests(choices = [])
             exit_on_error = true
         elseif t == "--revise"
             use_revise = true
+        elseif startswith(t, "--buildroot=")
+            buildroot = t[(length("--buildroot=") + 1):end]
         elseif startswith(t, "--seed=")
             seed = parse(UInt128, t[(length("--seed=") + 1):end])
         elseif t == "--ci"
@@ -90,6 +141,7 @@ function choosetests(choices = [])
                   --help-list          : prints the options computed without running them
                   --revise             : load Revise
                   --seed=<SEED>        : set the initial seed for all testgroups (parsed as a UInt128)
+                  --buildroot=<PATH>   : set the build root directory (default: in-tree)
                   --skip <NAMES>...    : skip test or collection tagged with <NAMES>
                 TESTS:
                   Can be special tokens, such as "all", "unicode", "stdlib", the names of stdlib \
@@ -137,18 +189,13 @@ function choosetests(choices = [])
 
     filtertests!(tests, "unicode", ["unicode/utf8"])
     filtertests!(tests, "strings", ["strings/basic", "strings/search", "strings/util",
-                   "strings/io", "strings/types"])
+                   "strings/io", "strings/types", "strings/annotated"])
     # do subarray before sparse but after linalg
     filtertests!(tests, "subarray")
-    filtertests!(tests, "compiler", [
-        "compiler/datastructures", "compiler/inference", "compiler/effects",
-        "compiler/validation", "compiler/ssair", "compiler/irpasses",
-        "compiler/codegen", "compiler/inline", "compiler/contextual",
-        "compiler/AbstractInterpreter", "compiler/EscapeAnalysis/local",
-        "compiler/EscapeAnalysis/interprocedural"])
-    filtertests!(tests, "compiler/EscapeAnalysis", [
-        "compiler/EscapeAnalysis/local", "compiler/EscapeAnalysis/interprocedural"])
+    filtertests!(tests, "compiler", ["Compiler"])
+    filtertests!(tests, "compiler_extras", ["Compiler/extras/CompilerDevTools/testpkg"])
     filtertests!(tests, "stdlib", STDLIBS)
+    filtertests!(tests, "internet_required", INTERNET_REQUIRED_LIST)
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests
     filtertests!(tests, "ambiguous")
 
@@ -164,22 +211,9 @@ function choosetests(choices = [])
         filter!(x -> x != "rounding", tests)
     end
 
-    net_required_for = filter!(in(tests), [
-        "Artifacts",
-        "Downloads",
-        "LazyArtifacts",
-        "LibCURL",
-        "LibGit2",
-        "Sockets",
-        "download",
-        "TOML",
-    ])
+    net_required_for = filter!(in(tests), NETWORK_REQUIRED_LIST)
     net_on = true
-    JULIA_TEST_NETWORKING_AVAILABLE = get(ENV, "JULIA_TEST_NETWORKING_AVAILABLE", "") |>
-                                      strip |>
-                                      lowercase |>
-                                      s -> tryparse(Bool, s) |>
-                                      x -> x === true
+    JULIA_TEST_NETWORKING_AVAILABLE = Base.get_bool_env("JULIA_TEST_NETWORKING_AVAILABLE", false) === true
     # If the `JULIA_TEST_NETWORKING_AVAILABLE` environment variable is set to `true`, we
     # always set `net_on` to `true`.
     # Otherwise, we set `net_on` to true if and only if networking is actually available.
@@ -204,10 +238,12 @@ function choosetests(choices = [])
     filter!(!in(tests), unhandled)
     filter!(!in(skip_tests), tests)
 
+    is_package_test(testname) = testname in STDLIBS || testname in TOP_LEVEL_PKGS
+
     new_tests = String[]
     for test in tests
-        if test in STDLIBS
-            testfile = joinpath(STDLIB_DIR, test, "test", "testgroups")
+        if is_package_test(test)
+            testfile = test_path("$test/testgroups")
             if isfile(testfile)
                 testgroups = readlines(testfile)
                 length(testgroups) == 0 && error("no testgroups defined for $test")
@@ -217,7 +253,7 @@ function choosetests(choices = [])
             end
         end
     end
-    filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
+    filter!(x -> (x != "stdlib" && !is_package_test(x)) , tests)
     append!(tests, new_tests)
 
     requested_all || explicit_pkg            || filter!(x -> x != "Pkg",            tests)
@@ -245,5 +281,5 @@ function choosetests(choices = [])
         empty!(tests)
     end
 
-    return (; tests, net_on, exit_on_error, use_revise, seed)
+    return (; tests, net_on, exit_on_error, use_revise, buildroot, seed)
 end

@@ -1,5 +1,6 @@
-; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -PropagateJuliaAddrspaces -dce -S %s | FileCheck %s
-; RUN: opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='PropagateJuliaAddrspaces,dce' -S %s | FileCheck %s
+; This file is a part of Julia. License is MIT: https://julialang.org/license
+
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='PropagateJuliaAddrspaces,dce' -S %s | FileCheck %s
 
 define i64 @simple() {
 ; CHECK-LABEL: @simple

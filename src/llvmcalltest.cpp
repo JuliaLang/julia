@@ -6,10 +6,11 @@
 
 #include "llvm/Config/llvm-config.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Module.h"
 #include <llvm/Support/raw_ostream.h>
 
 #include "julia.h"
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 
 using namespace llvm;
 
@@ -17,11 +18,7 @@ using namespace llvm;
 #ifdef _OS_WINDOWS_
 #  define DLLEXPORT __declspec(dllexport)
 #else
-# if defined(_OS_LINUX_)
-#  define DLLEXPORT __attribute__ ((visibility("protected")))
-# else
 #  define DLLEXPORT __attribute__ ((visibility("default")))
-# endif
 #endif
 
 extern "C" {
@@ -29,7 +26,7 @@ extern "C" {
 DLLEXPORT const char *MakeIdentityFunction(jl_value_t* jl_AnyTy) {
     LLVMContext Ctx;
     // FIXME: get TrackedTy via jl_type_to_llvm(Ctx, jl_AnyTy)
-    Type *TrackedTy = PointerType::get(StructType::get(Ctx), AddressSpace::Tracked);
+    Type *TrackedTy = PointerType::get(Ctx, AddressSpace::Tracked);
     Module *M = new llvm::Module("shadow", Ctx);
     Function *F = Function::Create(
         FunctionType::get(

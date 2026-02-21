@@ -6,14 +6,21 @@ struct SummarySize
     frontier_i::Vector{Int}
     exclude::Any
     chargeall::Any
+    count::Bool
 end
 
-"""
-    Base.summarysize(obj; exclude=Union{...}, chargeall=Union{...}) -> Int
+nth_pointer_isdefined(obj, i::Int) = ccall(:jl_nth_pointer_isdefined, Cint, (Any, Csize_t), obj, i-1) != 0
+get_nth_pointer(obj, i::Int) = ccall(:jl_get_nth_pointer, Any, (Any, Csize_t), obj, i-1)
 
-Compute the amount of memory, in bytes, used by all unique objects reachable from the argument.
+"""
+    Base.summarysize(obj; count = false, exclude=Union{...}, chargeall=Union{...})::Int
+
+Compute all unique objects reachable from the argument and return either their size in
+memory (in bytes) or the number of allocations they span.
 
 # Keyword Arguments
+- `count`: if false, return the total size of the objects in memory. if true, return the
+  number of allocations spanned by the object.
 - `exclude`: specifies the types of objects to exclude from the traversal.
 - `chargeall`: specifies the types of objects to always charge the size of all of their
   fields, even if those fields would normally be excluded.
@@ -30,13 +37,17 @@ julia> Base.summarysize(Ref(rand(100)))
 
 julia> sizeof(Ref(rand(100)))
 8
+
+julia> Base.summarysize(Core.svec(1.0, "testing", true); count=true)
+4
 ```
 """
 function summarysize(obj;
+                     count::Bool = false,
                      exclude = Union{DataType, Core.TypeName, Core.MethodInstance},
                      chargeall = Union{Core.TypeMapEntry, Method})
     @nospecialize obj exclude chargeall
-    ss = SummarySize(IdDict(), Any[], Int[], exclude, chargeall)
+    ss = SummarySize(IdDict(), Any[], Int[], exclude, chargeall, count)
     size::Int = ss(obj)
     while !isempty(ss.frontier_x)
         # DFS heap traversal of everything without a specialization
@@ -44,21 +55,34 @@ function summarysize(obj;
         x = ss.frontier_x[end]
         i = ss.frontier_i[end]
         val = nothing
-        if isa(x, SimpleVector)
+        if isa(x, Core.SimpleVector)
             nf = length(x)
             if isassigned(x, i)
                 val = x[i]
             end
-        elseif isa(x, Array)
-            nf = length(x)
-            if ccall(:jl_array_isassigned, Cint, (Any, UInt), x, i - 1) != 0
-                val = x[i]
+        elseif isa(x, GenericMemory)
+            T = eltype(x)
+            if allocatedinline(T)
+                np = datatype_npointers(T)
+                nf = length(x) * np
+                idx = (i-1) ÷ np + 1
+                if @inbounds @inline isassigned(x, idx)
+                    elt = x[idx]
+                    p = (i-1) % np + 1
+                    if nth_pointer_isdefined(elt, p)
+                        val = get_nth_pointer(elt, p)
+                    end
+                end
+            else
+                nf = length(x)
+                if @inbounds @inline isassigned(x, i)
+                    val = x[i]
+                end
             end
         else
-            nf = nfields(x)
-            ft = typeof(x).types
-            if !isbitstype(ft[i]) && isdefined(x, i)
-                val = getfield(x, i)
+            nf = datatype_npointers(typeof(x))
+            if nth_pointer_isdefined(x, i)
+                val = get_nth_pointer(x, i)
             end
         end
         if nf > i
@@ -74,15 +98,15 @@ function summarysize(obj;
     return size
 end
 
-(ss::SummarySize)(@nospecialize obj) = _summarysize(ss, obj)
+(ss::SummarySize)(@nospecialize obj) = _summarysize(ss, obj, ss.count)
 # define the general case separately to make sure it is not specialized for every type
-@noinline function _summarysize(ss::SummarySize, @nospecialize obj)
+@noinline function _summarysize(ss::SummarySize, @nospecialize(obj), count::Bool)
     issingletontype(typeof(obj)) && return 0
     # NOTE: this attempts to discover multiple copies of the same immutable value,
     # and so is somewhat approximate.
     key = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), obj)
     haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
-    if nfields(obj) > 0
+    if datatype_npointers(typeof(obj)) > 0
         push!(ss.frontier_x, obj)
         push!(ss.frontier_i, 1)
     end
@@ -96,7 +120,7 @@ end
         # 0-field mutable structs are not unique
         return gc_alignment(0)
     end
-    return sz
+    return count ? 1 : sz
 end
 
 (::SummarySize)(obj::Symbol) = 0
@@ -105,14 +129,13 @@ end
 function (ss::SummarySize)(obj::String)
     key = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), obj)
     haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
-    return Core.sizeof(Int) + Core.sizeof(obj)
+    return (ss.count ? 1 : (Core.sizeof(Int) + Core.sizeof(obj)))
 end
 
 function (ss::SummarySize)(obj::DataType)
     key = pointer_from_objref(obj)
     haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
-    size::Int = 7 * Core.sizeof(Int) + 6 * Core.sizeof(Int32)
-    size += 4 * nfields(obj) + ifelse(Sys.WORD_SIZE == 64, 4, 0)
+    size::Int = ss.count ? 1 : sizeof(DataType)
     size += ss(obj.parameters)::Int
     if isdefined(obj, :types)
         size += ss(obj.types)::Int
@@ -123,24 +146,23 @@ end
 function (ss::SummarySize)(obj::Core.TypeName)
     key = pointer_from_objref(obj)
     haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
-    return Core.sizeof(obj) + (isdefined(obj, :mt) ? ss(obj.mt) : 0)
+    return (ss.count ? 1 : Core.sizeof(obj))
 end
 
-function (ss::SummarySize)(obj::Array)
+function (ss::SummarySize)(obj::GenericMemory)
     haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
-    headersize = 4*sizeof(Int) + 8 + max(0, ndims(obj)-2)*sizeof(Int)
-    size::Int = headersize
+    headersize = 2 * sizeof(Int)
+    size::Int = (ss.count ? 1 : headersize)
     datakey = unsafe_convert(Ptr{Cvoid}, obj)
     if !haskey(ss.seen, datakey)
         ss.seen[datakey] = true
-        dsize = Core.sizeof(obj)
-        T = eltype(obj)
-        if isbitsunion(T)
-            # add 1 union selector byte for each element
-            dsize += length(obj)
+        if !ss.count
+            size += sizeof(obj)
+        elseif pointer_from_objref(obj) + 16 != datakey
+            size += 1
         end
-        size += dsize
-        if !isempty(obj) && T !== Symbol && (!Base.allocatedinline(T) || (T isa DataType && !Base.datatype_pointerfree(T)))
+        T = eltype(obj)
+        if !isempty(obj) && T !== Symbol && (!allocatedinline(T) || (T isa DataType && !datatype_pointerfree(T)))
             push!(ss.frontier_x, obj)
             push!(ss.frontier_i, 1)
         end
@@ -148,10 +170,10 @@ function (ss::SummarySize)(obj::Array)
     return size
 end
 
-function (ss::SummarySize)(obj::SimpleVector)
+function (ss::SummarySize)(obj::Core.SimpleVector)
     key = pointer_from_objref(obj)
     haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
-    size::Int = Core.sizeof(obj)
+    size::Int = (ss.count ? 1 : Core.sizeof(obj))
     if !isempty(obj)
         push!(ss.frontier_x, obj)
         push!(ss.frontier_i, 1)
@@ -161,7 +183,7 @@ end
 
 function (ss::SummarySize)(obj::Module)
     haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
-    size::Int = Core.sizeof(obj)
+    size::Int = (ss.count ? 1 : Core.sizeof(obj))
     for binding in names(obj, all = true)
         if isdefined(obj, binding) && !isdeprecated(obj, binding)
             value = getfield(obj, binding)
@@ -182,7 +204,7 @@ end
 
 function (ss::SummarySize)(obj::Task)
     haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
-    size::Int = Core.sizeof(obj)
+    size::Int = (ss.count ? 1 : Core.sizeof(obj))
     if isdefined(obj, :code)
         size += ss(obj.code)::Int
     end
@@ -193,4 +215,4 @@ function (ss::SummarySize)(obj::Task)
     return size
 end
 
-(ss::SummarySize)(obj::BigInt) = _summarysize(ss, obj) + obj.alloc*sizeof(Base.GMP.Limb)
+(ss::SummarySize)(obj::BigInt) = _summarysize(ss, obj, ss.count) + (ss.count ? 1 : obj.alloc * sizeof(GMP.Limb))
