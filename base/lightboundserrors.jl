@@ -5,29 +5,6 @@
 # * https://github.com/JuliaArrays/LightBoundsErrors.jl
 module LightBoundsErrors
     export LightBoundsError, throw_lightboundserror, checkbounds_lightboundserror
-    function print_comma_blank(io::IO)
-        print(io, ',')
-        print(io, ' ')
-    end
-    function show_splatted(io::IO, iterator)
-        ei1 = Iterators.peel(iterator)
-        if ei1 === nothing
-            return  # `iterator` is empty, return without printing anything
-        end
-        (e1, i1) = ei1
-        show(io, e1)
-        ei2 = Iterators.peel(i1)
-        if ei2 === nothing
-            return  # `iterator` had only a single element, we already printed it, return now
-        end
-        (e2, i2) = ei2
-        print_comma_blank(io)
-        show(io, e2)
-        for e ∈ i2
-            print_comma_blank(io)
-            show(io, e)
-        end
-    end
     """
         LightBoundsError
 
@@ -44,17 +21,6 @@ module LightBoundsErrors
         function LightBoundsError(; collection_type::DataType, collection_axes::Tuple, requested_indices::Tuple)
             new(collection_type, collection_axes, requested_indices)
         end
-    end
-    function Base.showerror(io::IO, ex::LightBoundsError)
-        show(io, typeof(ex))
-        print(io, ": out-of-bounds indexing: `collection[")
-        show_splatted(io, ex.requested_indices)
-        print(io, "]`, where:\n* `typeof(collection) == ")
-        show(io, ex.collection_type)
-        print(io, "`\n* `axes(collection) == ")
-        show(io, ex.collection_axes)
-        print(io, '`')
-        nothing
     end
     @noinline function throw_lightboundserror_impl(collection_type::DataType, collection_axes::Tuple, requested_indices::Tuple)
         ex = LightBoundsError(; collection_type, collection_axes, requested_indices)
