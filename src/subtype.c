@@ -4029,24 +4029,6 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                     if (R) flip_offset(e);
                     return res;
                 }
-                if (xub == xlb && jl_is_typevar(xub)) {
-                    record_var_occurrence(xx, e, param);
-                    if (y == xub) {
-                        record_var_occurrence(yy, e, param);
-                        return y;
-                    }
-                    if (R) flip_offset(e);
-                    jl_value_t *res = intersect(xub, y, e, param);
-                    if (R) flip_offset(e);
-                    return res;
-                }
-                if (yub == ylb && jl_is_typevar(yub)) {
-                    record_var_occurrence(yy, e, param);
-                    if (R) flip_offset(e);
-                    jl_value_t *res = intersect(x, yub, e, param);
-                    if (R) flip_offset(e);
-                    return res;
-                }
                 record_var_occurrence(xx, e, param);
                 record_var_occurrence(yy, e, param);
                 int xoffset = R ? -e->Loffset : e->Loffset;

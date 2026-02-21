@@ -481,6 +481,10 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x)
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
     if (!x.inline_roots.empty()) {
         AllocaInst *combined = emit_static_alloca(ctx, to, Align(alignment));
+        setName(ctx.emission_context, combined, [&]() {
+            std::string type_str = jl_is_datatype(x.typ) ? jl_symbol_name(((jl_datatype_t*)x.typ)->name->name) : "<unknown type>";
+            return "unbox::" + type_str;
+        });
         auto combined_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
         recombine_value(ctx, x, combined, combined_ai, Align(alignment), false);
         p = combined;
@@ -598,21 +602,23 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
 
     assert(!v.isghost);
     Value *vx = NULL;
-    if (!v.ispointer())
+    if (v.inline_roots.empty() && !v.ispointer())
         vx = v.V;
     else if (v.constant)
         vx = julia_const_to_llvm(ctx, v.constant);
 
-    if (v.ispointer() && vx == NULL) {
+    if (vx == NULL) {
         // try to load as original Type, to preserve llvm optimizations
         // but if the v.typ is not well known, use llvmt
+        // also handles values in split representation (inline_roots):
+        // the dynamic checks above ensure only primitive types reach here
         if (isboxed)
             vxt = llvmt;
         auto storage_type = vxt->isIntegerTy(1) ? getInt8Ty(ctx.builder.getContext()) : vxt;
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, v.tbaa);
         vx = ai.decorateInst(ctx.builder.CreateLoad(
             storage_type,
-            data_pointer(ctx, v)));
+            maybe_decay_tracked(ctx, v.V)));
         setName(ctx.emission_context, vx, "bitcast");
     }
 

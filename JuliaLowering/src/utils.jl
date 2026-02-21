@@ -1,5 +1,6 @@
 attrsummary(name, value) = string(name)
 attrsummary(name, value::Number) = "$name=$value"
+attrsummary(name, value::LineNumberNode) = "$name=L$(value.line)"
 
 function _value_string(ex)
     k = kind(ex)
@@ -112,6 +113,9 @@ struct LoweringError <: Exception
     ex::SyntaxTree
     msg::String
 end
+
+internal_error(ex, msg) = throw(
+    LoweringError(ex, string("Internal lowering error: ", msg)))
 
 function Base.showerror(io::IO, exc::LoweringError; show_detail=true)
     print(io, "LoweringError:\n")

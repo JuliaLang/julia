@@ -1158,7 +1158,7 @@ void jl_mi_done_backedges(jl_method_instance_t *mi JL_PROPAGATES_ROOT, uint8_t o
                     continue;
                 insb = set_next_edge(backedges, insb, invokesig, caller);
             }
-            if (insb == n) {
+            if (insb == 0) {
                 // All were deleted
                 mi->backedges = NULL;
             } else {

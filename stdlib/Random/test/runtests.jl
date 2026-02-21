@@ -3,13 +3,14 @@
 using Test, SparseArrays
 using Test: guardseed
 
+using Random
+
 @test isempty(Test.detect_closure_boxes(Random))
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
-using Random
 using Random.DSFMT
 
 using Random: default_rng, Sampler, SamplerRangeFast, SamplerRangeInt, SamplerRangeNDL, MT_CACHE_F, MT_CACHE_I
@@ -692,6 +693,12 @@ let b = ['0':'9';'A':'Z';'a':'z']
         end
     end
     @test randstring(MersenneTwister(0)) == randstring(MersenneTwister(0), b)
+end
+
+@testset "`randstring` with $T" for T in (UInt8, UInt16, UInt32, Int8, Int16, Int32, UInt, Int)
+    # clamp it to a small value so that we don't allocate too much unnecessarily
+    n = clamp(rand(T), Int8) % T
+    @test randstring(n) isa String
 end
 
 # this shouldn't crash (#22403)

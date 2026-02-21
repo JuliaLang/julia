@@ -1369,6 +1369,9 @@ static std::tuple<Value*, jl_gc_roots_t, MDNode*> split_value(jl_codectx_t &ctx,
         }
         Align align_dst(julia_alignment((jl_value_t*)typ));
         AllocaInst *alloca = emit_static_alloca(ctx, sizes.first, align_dst);
+        setName(ctx.emission_context, alloca, [&]() {
+            return "split::" + std::string(jl_symbol_name(typ->name->name));
+        });
         auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
         split_value_into(ctx, x, x_alignment, alloca, align_dst, stack_ai, false);
         bits = alloca;
@@ -4250,15 +4253,43 @@ static void emit_cpointercheck(jl_codectx_t &ctx, const jl_cgval_t &x, const Twi
     ctx.builder.SetInsertPoint(passBB);
 }
 
+// Zeroinit region info for allocations with dynamic-sized GC pointer regions
+struct AllocZeroinitRegion {
+    uint64_t offset;  // byte offset where zeroinit region starts
+    uint64_t size;    // number of bytes to zero
+    AllocZeroinitRegion(uint64_t off, uint64_t sz) : offset(off), size(sz) {}
+};
+
 // allocation for known size object
 // returns a prjlvalue
+// gc_ptr_offsets: byte offsets of GC pointer fields that need zeroing (empty = none)
+// zeroinit_region: optional region to zero (for GenericMemory with boxed elements)
 static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt,
-                            bool fully_initialized, unsigned align)
+                            bool fully_initialized, unsigned align,
+                            ArrayRef<uint64_t> gc_ptr_offsets = {},
+                            std::optional<AllocZeroinitRegion> zeroinit_region = std::nullopt)
 {
     ++EmittedAllocObjs;
     Value *current_task = get_current_task(ctx);
     Function *F = prepare_call(jl_alloc_obj_func);
-    auto call = ctx.builder.CreateCall(F, {current_task, ConstantInt::get(ctx.types().T_size, static_size), maybe_decay_untracked(ctx, jt)});
+
+    // Build operand bundles for GC pointer info
+    SmallVector<OperandBundleDef, 2> bundles;
+    if (!gc_ptr_offsets.empty()) {
+        SmallVector<Value*, 4> offset_values;
+        for (uint64_t off : gc_ptr_offsets) {
+            offset_values.push_back(ConstantInt::get(ctx.types().T_size, off));
+        }
+        bundles.push_back(OperandBundleDef("julia.gc_alloc_ptr_offsets", offset_values));
+    }
+    if (zeroinit_region) {
+        SmallVector<Value*, 2> region_values;
+        region_values.push_back(ConstantInt::get(ctx.types().T_size, zeroinit_region->offset));
+        region_values.push_back(ConstantInt::get(ctx.types().T_size, zeroinit_region->size));
+        bundles.push_back(OperandBundleDef("julia.gc_alloc_zeroinit", region_values));
+    }
+
+    auto call = ctx.builder.CreateCall(F, {current_task, ConstantInt::get(ctx.types().T_size, static_size), maybe_decay_untracked(ctx, jt)}, bundles);
     call->setAttributes(F->getAttributes());
     if (static_size > 0)
         call->addRetAttr(Attribute::getWithDereferenceableBytes(call->getContext(), static_size));
@@ -4268,10 +4299,26 @@ static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt,
     return call;
 }
 
+// Collect byte offsets of GC pointer fields in a datatype
+static SmallVector<uint64_t, 4> get_gc_ptr_offsets(jl_datatype_t *jt)
+{
+    SmallVector<uint64_t, 4> offsets;
+    const jl_datatype_layout_t *layout = jt->layout;
+    if (layout) {
+        uint32_t npointers = layout->npointers;
+        for (uint32_t i = 0; i < npointers; i++) {
+            uint32_t ptr_offset = jl_ptr_offset(jt, i);
+            offsets.push_back(ptr_offset * sizeof(void*));
+        }
+    }
+    return offsets;
+}
+
 static Value *emit_allocobj(jl_codectx_t &ctx, jl_datatype_t *jt, bool fully_initialized)
 {
+    SmallVector<uint64_t, 4> gc_offsets = get_gc_ptr_offsets(jt);
     return emit_allocobj(ctx, jl_datatype_size(jt), ctx.builder.CreateIntToPtr(emit_tagfrom(ctx, jt), ctx.types().T_pjlvalue),
-                         fully_initialized, julia_alignment((jl_value_t*)jt));
+                         fully_initialized, julia_alignment((jl_value_t*)jt), gc_offsets);
 }
 
 // allocation for unknown object from an untracked pointer
@@ -4681,18 +4728,35 @@ static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
 }
 #endif
 
-static auto *emit_genericmemory_unchecked(jl_codectx_t &ctx, Value *cg_nbytes, Value *cg_typ)
+// Emit allocation for variable-length GenericMemory
+// If zeroinit_nbytes is non-null, adds a zeroinit_indirect bundle to zero that many bytes
+// via the data pointer (at offset 8 in the memory header)
+static auto *emit_genericmemory_unchecked(jl_codectx_t &ctx, Value *cg_nbytes, Value *cg_typ,
+                                          Value *zeroinit_nbytes = nullptr)
 {
     auto ptls = get_current_ptls(ctx);
     auto call = prepare_call(jl_alloc_genericmemory_unchecked_func);
-    auto *alloc = ctx.builder.CreateCall(call, { ptls, cg_nbytes, cg_typ});
+
+    // Build operand bundle for zeroinit if needed
+    SmallVector<OperandBundleDef, 1> bundles;
+    if (zeroinit_nbytes) {
+        SmallVector<Value*, 2> bundle_args;
+        bundle_args.push_back(ConstantInt::get(ctx.types().T_size, offsetof(jl_genericmemory_t, ptr)));
+        bundle_args.push_back(zeroinit_nbytes);
+        bundles.push_back(OperandBundleDef("julia.gc_alloc_zeroinit_indirect", bundle_args));
+    }
+
+    auto *alloc = ctx.builder.CreateCall(call, { ptls, cg_nbytes, cg_typ }, bundles);
     alloc->setAttributes(call->getAttributes());
     alloc->addRetAttr(Attribute::getWithAlignment(alloc->getContext(), Align(JL_HEAP_ALIGNMENT)));
     call->addRetAttr(Attribute::getWithDereferenceableBytes(call->getContext(), sizeof(jl_genericmemory_t)));
     return alloc;
 }
 
-static void emit_memory_zeroinit_and_stores(jl_codectx_t &ctx, jl_datatype_t *typ, Value* alloc, Value* nbytes, Value* nel, int zi)
+// Set up the length field for a GenericMemory allocation
+// Note: zeroing of the data region is now handled via the zeroinit_indirect bundle
+// on the allocation call, processed by late-gc-lowering
+static void emit_memory_stores(jl_codectx_t &ctx, jl_datatype_t *typ, Value* alloc, Value* nel)
 {
     auto arg_typename = [&] JL_NOTSAFEPOINT {
         std::string type_str;
@@ -4712,16 +4776,6 @@ static void emit_memory_zeroinit_and_stores(jl_codectx_t &ctx, jl_datatype_t *ty
     auto len_store = ctx.builder.CreateAlignedStore(nel, len_field, Align(sizeof(void*)));
     auto aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memorylen);
     aliasinfo.decorateInst(len_store);
-    // zeroinit pointers and unions
-    if (zi) {
-        Value *memory_ptr = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
-        auto *load = ctx.builder.CreateAlignedLoad(ctx.types().T_ptr, memory_ptr, Align(sizeof(void*)));
-        aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memoryptr);
-        aliasinfo.decorateInst(load);
-        auto int8t = getInt8Ty(ctx.builder.getContext());
-        ctx.builder.CreateMemSet(load, ConstantInt::get(int8t, 0), nbytes, Align(sizeof(void*)));
-    }
-    return;
 }
 
 
@@ -4761,7 +4815,14 @@ static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ
     Value *alloc, *decay_alloc, *memory_ptr;
     jl_aliasinfo_t aliasinfo;
     if (pooled) {
-        alloc = emit_allocobj(ctx, tot, cg_typ, false, JL_SMALL_BYTE_ALIGNMENT);
+        // For pooled allocations with boxed/union elements, pass zeroinit region info
+        // so late-gc-lowering can emit the memset unconditionally after allocation
+        std::optional<AllocZeroinitRegion> zeroinit_region;
+        if (zi) {
+            // Data starts at JL_SMALL_BYTE_ALIGNMENT offset (must match jl_alloc_genericmemory_unchecked)
+            zeroinit_region = AllocZeroinitRegion(JL_SMALL_BYTE_ALIGNMENT, nbytes);
+        }
+        alloc = emit_allocobj(ctx, tot, cg_typ, false, JL_SMALL_BYTE_ALIGNMENT, {}, zeroinit_region);
         decay_alloc = decay_derived(ctx, alloc);
         memory_ptr = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
         setName(ctx.emission_context, memory_ptr, "memory_ptr");
@@ -4772,9 +4833,11 @@ static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ
         aliasinfo.decorateInst(store);
         setName(ctx.emission_context, memory_data, "memory_data");
     } else { // just use the dynamic length version since the malloc will be slow anyway
-        alloc = emit_genericmemory_unchecked(ctx, cg_nbytes, cg_typ);
+        // For non-pooled, pass zeroinit size via the indirect bundle
+        Value *zeroinit_nbytes = zi ? cg_nbytes : nullptr;
+        alloc = emit_genericmemory_unchecked(ctx, cg_nbytes, cg_typ, zeroinit_nbytes);
     }
-    emit_memory_zeroinit_and_stores(ctx, typ, alloc, cg_nbytes, cg_nel, zi);
+    emit_memory_stores(ctx, typ, alloc, cg_nel);
     return mark_julia_type(ctx, alloc, true, typ);
 }
 
@@ -4844,8 +4907,10 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     error_unless(ctx, prepare_call(jlargumenterror_func), notoverflow, "invalid GenericMemory size: the number of elements is either negative or too large for system address width");
     // actually allocate the memory
 
-    Value *alloc = emit_genericmemory_unchecked(ctx, nbytes, cg_typ);
-    emit_memory_zeroinit_and_stores(ctx, typ, alloc, nbytes, nel_unboxed, zi);
+    // Pass zeroinit size via the indirect bundle if needed
+    Value *zeroinit_nbytes = zi ? nbytes : nullptr;
+    Value *alloc = emit_genericmemory_unchecked(ctx, nbytes, cg_typ, zeroinit_nbytes);
+    emit_memory_stores(ctx, typ, alloc, nel_unboxed);
     ctx.builder.CreateBr(retvalBB);
     nonemptymemBB = ctx.builder.GetInsertBlock();
     // phi node to choose which side of branch

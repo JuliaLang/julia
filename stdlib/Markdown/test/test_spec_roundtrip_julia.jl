@@ -4552,7 +4552,7 @@ end
     expected = Markdown.parse(input; flavor=:julia)
     new_input = Markdown.plain(expected)
     actual = Markdown.parse(new_input; flavor=:julia)
-    @test_broken expected == actual
+    @test expected == actual
 
     # Example 628
     input = "foo <!ELEMENT br EMPTY>\n"

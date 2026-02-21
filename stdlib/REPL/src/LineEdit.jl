@@ -2731,7 +2731,12 @@ function history_search(mistate::MIState)
     mistate.current_mode = mimode
     activate(mimode, state(mistate, mimode), termbuf, term)
     commit_changes(term, termbuf)
-    edit_insert(pstate, result.text)
+if !isempty(result.text)
+    pstate.input_buffer.ptr = 1
+    pstate.input_buffer.size = 0
+    write(pstate.input_buffer, result.text)
+    seekend(pstate.input_buffer)
+end
     refresh_multi_line(mistate)
     nothing
 end

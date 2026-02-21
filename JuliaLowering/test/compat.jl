@@ -102,6 +102,7 @@ end
 
     # TODO: `@ast_` escaping is broken
     unused = JuliaSyntax.parsestmt(JuliaSyntax.SyntaxTree, "foo")
+    JuliaLowering.ensure_macro_attributes!(unused._graph)
     local st_wrappers = Function[
         x->(@assert(!isnothing(x)); @ast unused._graph unused (x::K"Value"))
         x->(@assert(!isnothing(x)); @ast unused._graph unused [K"inert" x::K"Value"])
@@ -479,6 +480,28 @@ test_toplevel_programs = [
             end
         end
 
+    end
+
+    @testset "test exceptions to blocks containing linenodes" begin
+        # Macro authors are otherwise expected to handle LineNumberNode in
+        # blocks, but since they were never emitted in `let` or `for` assignment
+        # blocks, test that we have the same behaviour.
+        @testset "linenodes equal in `let`" begin
+            s = """
+            let a=1, b=2, c=3
+                a,b,c
+            end
+            """
+            @test JL.est_to_expr(JS.parsestmt(SyntaxTree, s)) == JS.parsestmt(Expr, s)
+        end
+        @testset "linenodes equal in `for`" begin
+            s = """
+            for a in 1:2, b in 3:4, c in 5:6
+                a,b,c
+            end
+            """
+            @test JL.est_to_expr(JS.parsestmt(SyntaxTree, s)) == JS.parsestmt(Expr, s)
+        end
     end
 end
 
