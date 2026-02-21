@@ -404,7 +404,11 @@ JL_DLLEXPORT void jl_install_sigint_handler(void)
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 }
 
+#ifdef _CPU_X86_64_
+static HANDLE hProfileTimer = NULL;
+#else
 static TIMECAPS timecaps;
+#endif
 static HANDLE hBtThread = 0;
 static uv_cond_t bt_data_prof_cond = CONDITION_VARIABLE_INIT;
 
@@ -487,7 +491,16 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
     }
     while (1) {
         DWORD timeout_ms = nsecprof / (GIGA / 1000);
-        Sleep(timeout_ms > 0 ? timeout_ms : 1);
+        if (timeout_ms == 0)
+            timeout_ms = 1;
+#ifdef _CPU_X86_64_
+        if (hProfileTimer != NULL)
+            WaitForSingleObject(hProfileTimer, timeout_ms);
+        else
+            Sleep(timeout_ms);
+#else
+        Sleep(timeout_ms);
+#endif
         if (jl_profile_is_buffer_full())
             jl_profile_stop_timer(); // does not change the thread state
         if (!profile_running) {
@@ -585,6 +598,9 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
 {
     uv_mutex_lock(&bt_data_prof_lock);
     if (hBtThread == NULL) {
+#ifndef _CPU_X86_64_
+        // For some reason the CI Julia build system does not have `CREATE_WAITABLE_TIMER_HIGH_RESOLUTION` available
+        // for 32-bit Windwos, so we fall back to `timeBeginPeriod` and `timeEndPeriod` there.
         TIMECAPS _timecaps;
         if (MMSYSERR_NOERROR != timeGetDevCaps(&_timecaps, sizeof(_timecaps))) {
             uv_mutex_unlock(&bt_data_prof_lock);
@@ -592,7 +608,7 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
             return -2;
         }
         timecaps = _timecaps;
-
+#endif
         hBtThread = CreateThread(
             NULL,                   // default security attributes
             0,                      // use default stack size
@@ -608,10 +624,33 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
         (void)SetThreadPriority(hBtThread, THREAD_PRIORITY_ABOVE_NORMAL);
     }
     if (profile_running == 0) {
-        // Failure to change the timer resolution is not fatal. However, it is important to
+#ifdef _CPU_X86_64_
+        hProfileTimer = CreateWaitableTimerExW(
+            NULL,                                  // default security attributes
+            NULL,                                  // no name
+            CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, // high resolution timer
+            TIMER_MODIFY_STATE | SYNCHRONIZE       // allow threads to wait on this timer
+        );
+        if (hProfileTimer != NULL) {
+            LARGE_INTEGER liNoDelay;
+            liNoDelay.QuadPart = 0;
+            LONG period_ms =  nsecprof / (GIGA / 1000);
+            if (period_ms < 1)
+                period_ms = 1;
+            SetWaitableTimer(
+                hProfileTimer, // handle to timer object
+                &liNoDelay,    // due time
+                period_ms,     // interval matching profile delay
+                NULL, NULL,    // no completion routine
+                0              // do not restore from suspended power state
+            );
+        }
+#else
         // ensure that the timeBeginPeriod/timeEndPeriod is paired.
         if (TIMERR_NOERROR != timeBeginPeriod(timecaps.wPeriodMin))
             timecaps.wPeriodMin = 0;
+#endif
+        // failure to create and set the timer is not fatal
     }
     profile_all_tasks = all_tasks;
     profile_running = 1; // set `profile_running` finally
@@ -622,8 +661,15 @@ JL_DLLEXPORT int jl_profile_start_timer(uint8_t all_tasks)
 JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
     uv_mutex_lock(&bt_data_prof_lock);
+#ifdef _CPU_X86_64_
+    if (profile_running && hProfileTimer != NULL){
+        CloseHandle(hProfileTimer);
+        hProfileTimer = NULL;
+    }
+#else
     if (profile_running && timecaps.wPeriodMin)
         timeEndPeriod(timecaps.wPeriodMin);
+#endif
     profile_running = 0;
     profile_all_tasks = 0;
     uv_mutex_unlock(&bt_data_prof_lock);
