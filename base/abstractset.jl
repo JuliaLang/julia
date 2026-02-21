@@ -25,7 +25,7 @@ This is an infix operator, allowing `s ∪ itr`.
 See also [`unique`](@ref), [`intersect`](@ref), [`isdisjoint`](@ref), [`vcat`](@ref), [`Iterators.flatten`](@ref).
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\$"m
 julia> union([1, 2], [3])
 3-element Vector{Int64}:
  1
@@ -68,7 +68,7 @@ Maintain order with arrays.
 $(_DOCS_ALIASING_WARNING)
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\$"m
 julia> a = Set([3, 4, 5]);
 
 julia> union!(a, 1:2:7);
@@ -201,9 +201,9 @@ intersect!(s::AbstractSet, itr) =
     setdiff(s, itrs...)
 
 Construct the set of elements in `s` but not in any of the iterables in `itrs`.
-Maintain order with arrays.
+Maintain order with arrays. The result will have the same element type as `s`.
 
-See also [`setdiff!`](@ref), [`union`](@ref) and [`intersect`](@ref).
+See also [`setdiff!`](@ref), [`union`](@ref), [`intersect`](@ref).
 
 # Examples
 ```jldoctest
@@ -211,6 +211,10 @@ julia> setdiff([1,2,3], [3,4,5])
 2-element Vector{Int64}:
  1
  2
+
+julia> setdiff([1,2,3], [1.0, 2.0])
+1-element Vector{Int64}:
+ 3
 ```
 """
 setdiff(s::AbstractSet, itrs...) = setdiff!(copymutable(s), itrs...)
@@ -255,7 +259,7 @@ end
 Construct the symmetric difference of elements in the passed in sets.
 When `s` is not an `AbstractSet`, the order is maintained.
 
-See also [`symdiff!`](@ref), [`setdiff`](@ref), [`union`](@ref) and [`intersect`](@ref).
+See also [`symdiff!`](@ref), [`setdiff`](@ref), [`union`](@ref), [`intersect`](@ref).
 
 # Examples
 ```jldoctest
@@ -302,9 +306,9 @@ end
 const ⊆ = issubset
 function ⊇ end
 """
-    issubset(a, b) -> Bool
-    ⊆(a, b) -> Bool
-    ⊇(b, a) -> Bool
+    issubset(a, b)::Bool
+    ⊆(a, b)::Bool
+    ⊇(b, a)::Bool
 
 Determine whether every element of `a` is also in `b`, using [`in`](@ref).
 
@@ -394,10 +398,10 @@ used to implement specialized methods.
 function ⊊ end
 function ⊋ end
 """
-    ⊊(a, b) -> Bool
-    ⊋(b, a) -> Bool
+    ⊊(a, b)::Bool
+    ⊋(b, a)::Bool
 
-Determines if `a` is a subset of, but not equal to, `b`.
+Determine if `a` is a subset of, but not equal to, `b`.
 
 See also [`issubset`](@ref) (`⊆`), [`⊈`](@ref).
 
@@ -446,8 +450,8 @@ used to implement specialized methods.
 function ⊈ end
 function ⊉ end
 """
-    ⊈(a, b) -> Bool
-    ⊉(b, a) -> Bool
+    ⊈(a, b)::Bool
+    ⊉(b, a)::Bool
 
 Negation of `⊆` and `⊇`, i.e. checks that `a` is not a subset of `b`.
 
@@ -496,12 +500,12 @@ used to implement specialized methods.
 ## set equality comparison
 
 """
-    issetequal(a, b) -> Bool
+    issetequal(a, b)::Bool
 
 Determine whether `a` and `b` have the same elements. Equivalent
 to `a ⊆ b && b ⊆ a` but more efficient when possible.
 
-See also: [`isdisjoint`](@ref), [`union`](@ref).
+See also [`isdisjoint`](@ref), [`union`](@ref).
 
 # Examples
 ```jldoctest
@@ -544,12 +548,12 @@ issetequal(a) = Fix2(issetequal, a)
 
 ## set disjoint comparison
 """
-    isdisjoint(a, b) -> Bool
+    isdisjoint(a, b)::Bool
 
 Determine whether the collections `a` and `b` are disjoint.
 Equivalent to `isempty(a ∩ b)` but more efficient when possible.
 
-See also: [`intersect`](@ref), [`isempty`](@ref), [`issetequal`](@ref).
+See also [`intersect`](@ref), [`isempty`](@ref), [`issetequal`](@ref).
 
 !!! compat "Julia 1.5"
     This function requires at least Julia 1.5.

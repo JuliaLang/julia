@@ -24,7 +24,7 @@ The `Test` module provides simple *unit testing* functionality. Unit testing is 
 see if your code is correct by checking that the results are what you expect. It can be helpful
 to ensure your code still works after you make changes, and can be used when developing as a way
 of specifying the behaviors your code should have when complete. You may also want to look at the
-documentation for [adding tests to your Julia Package](https://pkgdocs.julialang.org/dev/creating-packages/#Adding-tests-to-the-package).
+documentation for [adding tests to your Julia Package](https://pkgdocs.julialang.org/dev/creating-packages/#adding-tests-to-packages).
 
 Simple unit testing can be performed with the `@test` and `@test_throws` macros:
 
@@ -59,7 +59,6 @@ julia> @test foo("f") == 20
 Test Failed at none:1
   Expression: foo("f") == 20
    Evaluated: 1 == 20
-
 ERROR: There was an error during testing
 ```
 
@@ -178,6 +177,39 @@ Foo Tests     |    8      8  0.0s
   Arrays 3    |    2      2  0.0s
 ```
 
+### Environment Variable Support
+
+The `Test` module supports the `JULIA_TEST_VERBOSE` environment variable for controlling
+verbose behavior globally:
+
+- When `JULIA_TEST_VERBOSE=true`, testsets will automatically use `verbose=true` by default,
+  and additionally print "Starting testset" and "Finished testset" messages with timing
+  information as testsets are entered and exited.
+- When `JULIA_TEST_VERBOSE=false` or unset, testsets use `verbose=false` by default and
+  no entry/exit messages are printed.
+
+This environment variable provides a convenient way to enable comprehensive verbose output
+for debugging test suites without modifying the test code itself.
+
+```julia
+$ JULIA_TEST_VERBOSE=true julia -e '
+using Test
+@testset "Example" begin
+    @test 1 + 1 == 2
+    @testset "Nested" begin
+        @test 2 * 2 == 4
+    end
+end'
+
+Starting testset: Example
+  Starting testset: Nested
+  Finished testset: Nested (0.0s)
+Finished testset: Example (0.0s)
+Test Summary: | Pass  Total  Time
+Example       |    2      2  0.0s
+  Nested      |    1      1  0.0s
+```
+
 If we do have a test failure, only the details for the failed test sets will be shown:
 
 ```julia-repl; filter = r"[0-9\.]+s"
@@ -230,8 +262,6 @@ Test Passed
 julia> @test 1 ≈ 0.999999
 Test Failed at none:1
   Expression: 1 ≈ 0.999999
-   Evaluated: 1 ≈ 0.999999
-
 ERROR: There was an error during testing
 ```
 You can specify relative and absolute tolerances by setting the `rtol` and `atol` keyword arguments of `isapprox`, respectively,
@@ -390,6 +420,8 @@ Test.GenericOrder
 Test.GenericSet
 Test.GenericString
 Test.detect_ambiguities
+Test.detect_closure_boxes
+Test.detect_closure_boxes_all_modules
 Test.detect_unbound_args
 ```
 
@@ -479,13 +511,13 @@ Using our knowledge of `Test.jl`, here are some example tests we could add to `m
 @testset "Testset 1" begin
     @test 2 == simple_add(1, 1)
     @test 3.5 == simple_add(1, 2.5)
-        @test_throws MethodError simple_add(1, "A")
-        @test_throws MethodError simple_add(1, 2, 3)
+    @test_throws MethodError simple_add(1, "A")
+    @test_throws MethodError simple_add(1, 2, 3)
 end
 
 @testset "Testset 2" begin
     @test 1.0 == type_multiply(1.0, 1.0)
-        @test isa(type_multiply(2.0, 2.0), Float64)
+    @test isa(type_multiply(2.0, 2.0), Float64)
     @test_throws MethodError type_multiply(1, 2.5)
 end
 ```

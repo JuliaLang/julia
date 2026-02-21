@@ -61,7 +61,7 @@ int main()
     {
         // Same as above but with function handle (more flexible)
 
-        jl_function_t *func = jl_get_function(jl_base_module, "sqrt");
+        jl_value_t *func = jl_get_function(jl_base_module, "sqrt");
         jl_value_t* argument = jl_box_float64(2.0);
         jl_value_t* ret = jl_call1(func, argument);
         double retDouble = jl_unbox_float64(ret);
@@ -92,7 +92,7 @@ int main()
         for (i = 0; i < jl_array_nrows(x); i++)
             xData[i] = i;
 
-        jl_function_t *func  = jl_get_function(jl_base_module, "reverse!");
+        jl_value_t *func  = jl_get_function(jl_base_module, "reverse!");
         jl_call1(func, (jl_value_t*) x);
 
         printf("x = [");
@@ -109,7 +109,7 @@ int main()
 
         checked_eval_string("my_func(x) = 2 * x");
 
-        jl_function_t *func = jl_get_function(jl_main_module, "my_func");
+        jl_value_t *func = jl_get_function(jl_main_module, "my_func");
         jl_value_t* arg = jl_box_float64(5.0);
         double ret = jl_unbox_float64(jl_call1(func, arg));
 

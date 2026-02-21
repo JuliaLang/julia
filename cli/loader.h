@@ -36,9 +36,9 @@
 // Borrow definition from `support/dtypes.h`
 #ifdef _OS_WINDOWS_
 # ifdef JL_LIBRARY_EXPORTS
-#  define JL_DLLEXPORT __declspec(dllexport)
+#  define JL_DLLEXPORT __declspec(dllexport) __attribute__ ((visibility("default")))
 # endif
-#  define JL_DLLIMPORT __declspec(dllimport)
+#  define JL_DLLIMPORT __declspec(dllimport) __attribute__ ((visibility("default")))
 #define JL_HIDDEN
 #else
 # define JL_DLLIMPORT __attribute__ ((visibility("default")))
@@ -70,7 +70,10 @@
 JL_DLLEXPORT extern int jl_load_repl(int, char **);
 JL_DLLEXPORT void jl_loader_print_stderr(const char * msg);
 void jl_loader_print_stderr3(const char * msg1, const char * msg2, const char * msg3);
+void *jl_loader_open_via_mmap(const char *filepath, size_t *size);
 static void * lookup_symbol(const void * lib_handle, const char * symbol_name);
+const char *jl_loader_probe_system_library(const char *libname, const char *symbol);
+int jl_loader_locate_symbol(const char *library, const char *symbol);
 
 #ifdef _OS_WINDOWS_
 LPWSTR *CommandLineToArgv(LPWSTR lpCmdLine, int *pNumArgs);

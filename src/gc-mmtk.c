@@ -1,7 +1,12 @@
 #include "gc-common.h"
 #include "gc-tls-mmtk.h"
+#include "gc-wb-mmtk.h"
 #include "mmtkMutator.h"
 #include "threading.h"
+
+#ifdef _COMPILER_TSAN_ENABLED_
+#include <sanitizer/tsan_interface.h>
+#endif
 
 // File exists in the binding
 #include "mmtk.h"
@@ -64,11 +69,37 @@ void jl_gc_init(void) {
 
     arraylist_new(&to_finalize, 0);
     arraylist_new(&finalizer_list_marked, 0);
-
+    gc_num.interval = default_collect_interval;
     gc_num.allocd = 0;
     gc_num.max_pause = 0;
     gc_num.max_memory = 0;
 
+    // Necessary if we want to use Julia heap resizing heuristics
+    uint64_t mem_reserve = 250*1024*1024; // LLVM + other libraries need some amount of memory
+    uint64_t min_heap_size_hint = mem_reserve + 1*1024*1024;
+    uint64_t hint = jl_options.heap_size_hint;
+
+    // check if heap size specified on command line
+    if (jl_options.heap_size_hint == 0) {
+        char *cp = getenv(HEAP_SIZE_HINT);
+        if (cp)
+            hint = parse_heap_size_option(cp, "JULIA_HEAP_SIZE_HINT=\"<size>[<unit>]\"", 1);
+    }
+#ifdef _P64
+    if (hint == 0) {
+        uint64_t constrained_mem = uv_get_constrained_memory();
+        if (constrained_mem > 0 && constrained_mem < uv_get_total_memory())
+            hint = constrained_mem;
+    }
+#endif
+    if (hint) {
+        if (hint < min_heap_size_hint)
+            hint = min_heap_size_hint;
+        jl_gc_set_max_memory(hint - mem_reserve);
+    }
+
+    // MMTK supports setting the heap size using the
+    // MMTK_MIN_HSIZE and MMTK_MAX_HSIZE environment variables
     long long min_heap_size;
     long long max_heap_size;
     char* min_size_def = getenv("MMTK_MIN_HSIZE");
@@ -77,7 +108,8 @@ void jl_gc_init(void) {
     char* max_size_def = getenv("MMTK_MAX_HSIZE");
     char* max_size_gb = getenv("MMTK_MAX_HSIZE_G");
 
-    // default min heap currently set as Julia's default_collect_interval
+    // If min and max values are not specified, set them to 0 here
+    // and use stock heuristics as defined in the binding
     if (min_size_def != NULL) {
         char *p;
         double min_size = strtod(min_size_def, &p);
@@ -87,10 +119,9 @@ void jl_gc_init(void) {
         double min_size = strtod(min_size_gb, &p);
         min_heap_size = (long) 1024 * 1024 * 1024 * min_size;
     } else {
-        min_heap_size = default_collect_interval;
+        min_heap_size = 0;
     }
 
-    // default max heap currently set as 70% the free memory in the system
     if (max_size_def != NULL) {
         char *p;
         double max_size = strtod(max_size_def, &p);
@@ -100,7 +131,7 @@ void jl_gc_init(void) {
         double max_size = strtod(max_size_gb, &p);
         max_heap_size = (long) 1024 * 1024 * 1024 * max_size;
     } else {
-        max_heap_size = uv_get_free_memory() * 70 / 100;
+        max_heap_size = 0;
     }
 
     // Assert that the number of stock GC threads is 0; MMTK uses the number of threads in jl_options.ngcthreads
@@ -159,7 +190,17 @@ void jl_free_thread_gc_state(struct _jl_tls_states_t *ptls) {
 }
 
 JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem) {
-    // MMTk currently does not allow setting the heap size at runtime
+#ifdef _P32
+    max_mem = max_mem < MAX32HEAP ? max_mem : MAX32HEAP;
+#endif
+    max_total_memory = max_mem;
+}
+
+JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void)
+{
+    // FIXME: We should return the max heap size set in MMTk
+    // when not using Julia's heap resizing heuristics
+    return max_total_memory;
 }
 
 STATIC_INLINE void maybe_collect(jl_ptls_t ptls)
@@ -415,12 +456,6 @@ JL_DLLEXPORT void jl_gc_get_total_bytes(int64_t *bytes) JL_NOTSAFEPOINT
     *bytes = (num.total_allocd + num.deferred_alloc + num.allocd);
 }
 
-JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void)
-{
-    // FIXME: should probably return MMTk's heap size
-    return max_total_memory;
-}
-
 // These are needed to collect MMTk statistics from a Julia program using ccall
 JL_DLLEXPORT void (jl_mmtk_harness_begin)(void)
 {
@@ -472,6 +507,9 @@ JL_DLLEXPORT void jl_gc_scan_vm_specific_roots(RootsWorkClosure* closure)
     // add module
     add_node_to_roots_buffer(closure, &buf, &len, jl_main_module);
 
+    // add global_method_table
+    add_node_to_roots_buffer(closure, &buf, &len, jl_method_table);
+
     // buildin values
     add_node_to_roots_buffer(closure, &buf, &len, jl_an_empty_vec_any);
     add_node_to_roots_buffer(closure, &buf, &len, jl_module_init_order);
@@ -496,6 +534,9 @@ JL_DLLEXPORT void jl_gc_scan_vm_specific_roots(RootsWorkClosure* closure)
     size_t tpinned_len = 0;
     add_node_to_tpinned_roots_buffer(closure, &tpinned_buf, &tpinned_len, jl_global_roots_list);
     add_node_to_tpinned_roots_buffer(closure, &tpinned_buf, &tpinned_len, jl_global_roots_keyset);
+
+    // FIXME: transivitely pinning for now, should be removed after we add moving Immix
+    add_node_to_tpinned_roots_buffer(closure, &tpinned_buf, &tpinned_len, precompile_field_replace);
 
     // Push the result of the work.
     (closure->report_nodes_func)(buf.ptr, len, buf.cap, closure->data, false);
@@ -828,10 +869,23 @@ STATIC_INLINE void* mmtk_immortal_alloc_fast(MMTkMutatorContext* mutator, size_t
     return bump_alloc_fast(mutator, (uintptr_t*)&allocator->cursor, (uintptr_t)allocator->limit, size, align, offset, 1);
 }
 
+inline void mmtk_set_side_metadata(const void* side_metadata_base, void* obj) {
+        intptr_t addr = (intptr_t) obj;
+        uint8_t* meta_addr = (uint8_t*) side_metadata_base + (addr >> 6);
+        intptr_t shift = (addr >> 3) & 0b111;
+        while(1) {
+            uint8_t old_val = *meta_addr;
+            uint8_t new_val = old_val | (1 << shift);
+            if (jl_atomic_cmpswap((_Atomic(uint8_t)*)meta_addr, &old_val, new_val)) {
+                break;
+            }
+        }
+}
+
 STATIC_INLINE void mmtk_immortal_post_alloc_fast(MMTkMutatorContext* mutator, void* obj, size_t size) {
-    // FIXME: Similarly, for now, we do nothing
-    // but when supporting moving, this is where we set the valid object (VO) bit
-    // and log (old gen) bit
+    if (MMTK_NEEDS_WRITE_BARRIER == MMTK_OBJECT_BARRIER) {
+        mmtk_set_side_metadata(MMTK_SIDE_LOG_BIT_BASE_ADDRESS, obj);
+    }
 }
 
 JL_DLLEXPORT jl_value_t *jl_mmtk_gc_alloc_default(jl_ptls_t ptls, int osize, size_t align, void *ty)
@@ -982,9 +1036,8 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
     return realloc(p, sz);
 }
 
-void *jl_gc_perm_alloc_nolock(size_t sz, int zero, unsigned align, unsigned offset)
+void *jl_gc_perm_alloc_nolock(jl_ptls_t ptls, size_t sz, int zero, unsigned align, unsigned offset)
 {
-    jl_ptls_t ptls = jl_current_task->ptls;
     size_t allocsz = mmtk_align_alloc_sz(sz);
     void* addr = mmtk_immortal_alloc_fast(&ptls->gc_tls.mmtk_mutator, allocsz, align, offset);
     return addr;
@@ -992,18 +1045,20 @@ void *jl_gc_perm_alloc_nolock(size_t sz, int zero, unsigned align, unsigned offs
 
 void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align, unsigned offset)
 {
-    return jl_gc_perm_alloc_nolock(sz, zero, align, offset);
+    jl_ptls_t ptls = jl_current_task->ptls;
+    return jl_gc_perm_alloc_nolock(ptls, sz, zero, align, offset);
 }
 
-jl_value_t *jl_gc_permobj(size_t sz, void *ty) JL_NOTSAFEPOINT
+jl_value_t *jl_gc_permobj(jl_ptls_t ptls, size_t sz, void *ty, unsigned align) JL_NOTSAFEPOINT
 {
     const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
-    unsigned align = (sz == 0 ? sizeof(void*) : (allocsz <= sizeof(void*) * 2 ?
+    if (align == 0) {
+        align = ((sz == 0) ? sizeof(void*) : (allocsz <= sizeof(void*) * 2 ?
                                                  sizeof(void*) * 2 : 16));
-    jl_taggedvalue_t *o = (jl_taggedvalue_t*)jl_gc_perm_alloc(allocsz, 0, align,
+    }
+    jl_taggedvalue_t *o = (jl_taggedvalue_t*)jl_gc_perm_alloc_nolock(ptls, allocsz, 0, align,
                                                               sizeof(void*) % align);
 
-    jl_ptls_t ptls = jl_current_task->ptls;
     mmtk_immortal_post_alloc_fast(&ptls->gc_tls.mmtk_mutator, jl_valueof(o), allocsz);
     o->header = (uintptr_t)ty;
     return jl_valueof(o);
@@ -1044,6 +1099,11 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
 void jl_gc_notify_image_load(const char* img_data, size_t len)
 {
     mmtk_set_vm_space((void*)img_data, len);
+}
+
+void jl_gc_notify_image_alloc(const char* img_data, size_t len)
+{
+    mmtk_immortal_region_post_alloc((void*)img_data, len);
 }
 
 // ========================================================================= //
@@ -1093,7 +1153,9 @@ _Atomic(int) gc_stack_free_idx = 0;
 
 JL_DLLEXPORT void jl_gc_queue_root(const struct _jl_value_t *ptr) JL_NOTSAFEPOINT
 {
-    mmtk_unreachable();
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    mmtk_object_reference_write_slow(&ptls->gc_tls.mmtk_mutator, ptr, (const void*) 0);
 }
 
 JL_DLLEXPORT void jl_gc_queue_multiroot(const struct _jl_value_t *root, const void *stored,
@@ -1131,7 +1193,7 @@ JL_DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p, size_t *osiz
     return NULL;
 }
 
-void jl_gc_debug_critical_error(void) JL_NOTSAFEPOINT
+void jl_gc_debug_fprint_critical_error(ios_t *s) JL_NOTSAFEPOINT
 {
 }
 
@@ -1140,19 +1202,14 @@ int gc_is_collector_thread(int tid) JL_NOTSAFEPOINT
     return 0;
 }
 
-void jl_gc_debug_print_status(void) JL_NOTSAFEPOINT
+void jl_gc_debug_fprint_status(ios_t *s) JL_NOTSAFEPOINT
 {
     // May not be accurate but should be helpful enough
     uint64_t pool_count = gc_num.poolalloc;
     uint64_t big_count = gc_num.bigalloc;
-    jl_safe_printf("Allocations: %" PRIu64 " "
-                   "(Pool: %" PRIu64 "; Big: %" PRIu64 "); GC: %d\n",
-                   pool_count + big_count, pool_count, big_count, gc_num.pause);
-}
-
-JL_DLLEXPORT size_t jl_gc_external_obj_hdr_size(void)
-{
-    return sizeof(bigval_t);
+    jl_safe_fprintf(s, "Allocations: %" PRIu64 " "
+                    "(Pool: %" PRIu64 "; Big: %" PRIu64 "); GC: %d\n",
+                    pool_count + big_count, pool_count, big_count, gc_num.pause);
 }
 
 void jl_print_gc_stats(JL_STREAM *s)

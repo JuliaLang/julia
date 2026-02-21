@@ -32,7 +32,7 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
 ## Binary distribution
 
 For the binary distribution installation notes on Windows please see the instructions at
-[https://julialang.org/downloads/platform/#windows](https://julialang.org/downloads/platform/#windows).
+[https://julialang.org/downloads/platform/#windows](https://julialang.org/downloads/platform/#windows). Note, however, that on all platforms [using `juliaup`](https://julialang.org/install/) is recommended over manually installing binaries.
 
 ## Source distribution
 
@@ -50,7 +50,7 @@ MinGW-w64 compilers available through Cygwin's package manager.
     *Advanced*: you may skip steps 2-4 by running:
 
     ```sh
-    setup-x86_64.exe -s <url> -q -P cmake,gcc-g++,git,make,patch,curl,m4,python3,p7zip,mingw64-i686-gcc-g++,mingw64-i686-gcc-fortran,mingw64-x86_64-gcc-g++,mingw64-x86_64-gcc-fortran
+    setup-x86_64.exe -s <url> -q -P cmake,gcc-g++=12.5.0-1,git,make,patch,curl,m4,python3,p7zip,mingw64-i686-gcc-g++=12.5.0-1,mingw64-i686-gcc-fortran=12.5.0-1,mingw64-i686-gcc-core=12.5.0-1,mingw64-i686-headers=12.0.0-1,mingw64-i686-runtime=12.0.0-1,mingw64-i686-winpthreads=12.0.0-1,mingw64-x86_64-gcc-g++=12.5.0-1,mingw64-x86_64-gcc-fortran=12.5.0-1,mingw64-x86_64-gcc-core=12.5.0-1,mingw64-x86_64-headers=12.0.0-1,mingw64-x86_64-runtime=12.0.0-1,mingw64-x86_64-winpthreads=12.0.0-1
     ```
 
     replacing `<url>` with a site from [https://cygwin.com/mirrors.html](https://cygwin.com/mirrors.html)
@@ -65,9 +65,11 @@ MinGW-w64 compilers available through Cygwin's package manager.
     3. From *Interpreters* (or *Python*) category: `m4`, `python3`
     4. From the *Archive* category: `p7zip`
     5. For 32 bit Julia, and also from the *Devel* category:
-       `mingw64-i686-gcc-g++` and `mingw64-i686-gcc-fortran`
+       `mingw64-i686-gcc-g++` and `mingw64-i686-gcc-fortran` and `mingw64-i686-gcc-core` (version "12.5.0-1")
+       `mingw64-i686-headers` and `mingw64-i686-runtime` and `mingw64-i686-winpthreads` (version "12.0.0-1")
     6. For 64 bit Julia, and also from the *Devel* category:
-       `mingw64-x86_64-gcc-g++` and `mingw64-x86_64-gcc-fortran`
+       `mingw64-x86_64-gcc-g++` and `mingw64-x86_64-gcc-fortran` and `mingw64-x86_64-gcc-core` (version "12.5.0-1")
+       `mingw64-x86_64-headers` and `mingw64-x86_64-runtime` and `mingw64-x86_64-winpthreads` (version "12.0.0-1")
 
  4. Allow Cygwin installation to finish, then start from the installed shortcut
     *'Cygwin Terminal'*, or *'Cygwin64 Terminal'*, respectively.
@@ -129,32 +131,32 @@ Note: MSYS2 requires **64 bit** Windows 7 or newer.
 
     2. Open the MSYS2 shell. Update the package database and base packages:
 
-        ```
-        pacman -Syu
-        ```
+       ```
+       pacman -Syu
+       ```
     3. Exit and restart MSYS2. Update the rest of the base packages:
 
-        ```
-        pacman -Syu
-        ```
+       ```
+       pacman -Syu
+       ```
 
     4. Then install tools required to build julia:
 
-        ```
-        pacman -S cmake diffutils git m4 make patch tar p7zip curl python
-        ```
+       ```
+       pacman -S diffutils git m4 make patch tar p7zip curl python
+       ```
 
-        For 64 bit Julia, install the x86_64 version:
+       For 64 bit Julia, install the x86_64 version:
 
-        ```
-        pacman -S mingw-w64-x86_64-gcc
-        ```
+       ```
+       pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-clang
+       ```
 
-        For 32 bit Julia, install the i686 version:
+       For 32 bit Julia, install the i686 version:
 
-        ```
-        pacman -S mingw-w64-i686-gcc
-        ```
+       ```
+       pacman -S mingw-w64-i686-gcc mingw-w64-i686-cmake mingw-w64-i686-clang
+       ```
 
     5. Configuration of MSYS2 is complete. Now `exit` the MSYS2 shell.
  2. Build Julia and its dependencies with pre-build dependencies.
@@ -166,16 +168,24 @@ Note: MSYS2 requires **64 bit** Windows 7 or newer.
 
     2. Clone the Julia sources:
 
-        ```
-        git clone https://github.com/JuliaLang/julia.git
-        cd julia
-        ```
+       ```sh
+       git clone https://github.com/JuliaLang/julia.git
+       cd julia
+       ```
 
-    3. Start the build
+    3. If you want to use clang (currently required if building LLVM from source), put the following in your Make.user
+      ```
+      CC=/mingw64/bin/clang
+      CXX=/mingw64/bin/clang++
+      ```
+!!! warning "UCRT Unsupported"
+    Do not try to use any other clang that MSYS2 may install (which may not have the correct default target) or the "Clang" environment(which defaults to the currently unsupported ucrt).
 
-        ```
-        make -j$(nproc)
-        ```
+    4. Start the build
+
+       ```
+       make -j$(nproc)
+       ```
 
 !!! note "Pro tip: build in dir"
     ```sh
@@ -225,6 +235,12 @@ If you are building for 64-bit Windows, the steps are essentially the same.
 Just replace `i686` in `XC_HOST` with `x86_64`. (Note: on Mac, wine only runs
 in 32-bit mode).
 
+## Distribution to other machines
+
+If you intend to run this copy of Julia on a different x86-64 machine than it was compiled
+on, add `JULIA_CPU_TARGET=` to `Make.user`. Currently, x86-64 Julia distributions are built
+with `JULIA_CPU_TARGET=generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1);x86_64_v4,-rdrnd,base(1)`.
+[See here for more on this environment variable.](https://docs.julialang.org/en/v1/manual/environment-variables/#JULIA_CPU_TARGET)
 
 ## Debugging a cross-compiled build under wine
 

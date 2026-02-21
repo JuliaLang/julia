@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Core: Tuple
+
 # Document NTuple here where we have everything needed for the doc system
 """
     NTuple{N, T}
@@ -43,7 +45,7 @@ get(f::Callable, t::Tuple, i::Integer) = i in 1:length(t) ? getindex(t, i) : f()
 """
     setindex(t::Tuple, v, i::Integer)
 
-Creates a new tuple similar to `t` with the value at index `i` set to `v`.
+Create a new tuple similar to `t` with the value at index `i` set to `v`.
 Throws a `BoundsError` when out of bounds.
 
 # Examples
@@ -147,18 +149,19 @@ nextind(@nospecialize(t::Tuple), i::Integer) = Int(i)+1
 
 function keys(t::Tuple, t2::Tuple...)
     @inline
-    OneTo(_maxlength(t, t2...))
-end
-_maxlength(t::Tuple) = length(t)
-function _maxlength(t::Tuple, t2::Tuple, t3::Tuple...)
-    @inline
-    max(length(t), _maxlength(t2, t3...))
+    lent = length(t)
+    if !all(==(lent) ∘ length, t2)
+        let inds = map(only ∘ axes, (t, t2...))
+            throw_eachindex_mismatch_indices("indices", inds...)
+        end
+    end
+    Base.OneTo(lent)
 end
 
 # this allows partial evaluation of bounded sequences of next() calls on tuples,
 # while reducing to plain next() for arbitrary iterables.
 indexed_iterate(t::Tuple, i::Int, state=1) = (@inline; (getfield(t, i), i+1))
-indexed_iterate(a::Array, i::Int, state=1) = (@inline; (a[i], i+1))
+indexed_iterate(a::Union{Array,Memory}, i::Int, state=1) = (@inline; (a[i], i+1))
 function indexed_iterate(I, i)
     x = iterate(I)
     x === nothing && throw(BoundsError(I, i))
@@ -203,9 +206,12 @@ julia> first, Base.rest(a, state)
 """
 function rest end
 rest(t::Tuple) = t
-rest(t::Tuple, i::Int) = ntuple(x -> getfield(t, x+i-1), length(t)-i+1)
-rest(a::Array, i::Int=1) = a[i:end]
-rest(a::Core.SimpleVector, i::Int=1) = a[i:end]
+function rest(t::Tuple, i)
+    let i = i::Int
+        ntuple(x -> getfield(t, x+i-1), length(t)-i+1)
+    end
+end
+rest(a::Union{Array,Memory,Core.SimpleVector}, i=1) = a[(i::Int):end]
 rest(itr, state...) = Iterators.rest(itr, state...)
 
 """
@@ -258,7 +264,9 @@ function _split_rest(a::Union{AbstractArray, Core.SimpleVector}, n::Int)
     return a[begin:end-n], a[end-n+1:end]
 end
 
-@eval split_rest(t::Tuple, n::Int, i=1) = ($(Expr(:meta, :aggressive_constprop)); (t[i:end-n], t[end-n+1:end]))
+@eval _split_tuple(t::Tuple, n::Int, i::Int=1) = ($(Expr(:meta, :aggressive_constprop)); (t[i:n], t[n+1:end]))
+
+@eval split_rest(t::Tuple, n::Int, i=1) = ($(Expr(:meta, :aggressive_constprop)); _split_tuple(t, length(t)-n, Int(i)))
 
 # Use dispatch to avoid a branch in first
 first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))
@@ -266,10 +274,18 @@ first(t::Tuple) = t[1]
 
 # eltype
 
-eltype(::Type{Tuple{}}) = Bottom
 # the <: here makes the runtime a bit more complicated (needing to check isdefined), but really helps inference
-eltype(t::Type{<:Tuple{Vararg{E}}}) where {E} = @isdefined(E) ? (E isa Type ? E : Union{}) : _compute_eltype(t)
-eltype(t::Type{<:Tuple}) = _compute_eltype(t)
+_eltype_ntuple(t::Type{<:Tuple{Vararg{E}}}) where {E} = @isdefined(E) ? (E isa Type ? E : Union{}) : _compute_eltype(t)
+# We'd like to be able to infer eltype(::Tuple), so keep the number of eltype(::Type{<:Tuple}) methods at max_methods!
+function eltype(t::Type{<:Tuple})
+    if t <: Tuple{}
+        Bottom
+    elseif t <: NTuple
+        _eltype_ntuple(t)
+    else
+        _compute_eltype(t)
+    end
+end
 function _compute_eltype(@nospecialize t)
     @_total_meta
     has_free_typevars(t) && return Any
@@ -293,21 +309,6 @@ function _compute_eltype(@nospecialize t)
     end
     return r
 end
-
-# We'd like to be able to infer eltype(::Tuple), which needs to be able to
-# look at these four methods:
-#
-# julia> methods(Base.eltype, Tuple{Type{<:Tuple}})
-# 4 methods for generic function "eltype" from Base:
-# [1] eltype(::Type{Union{}})
-#  @ abstractarray.jl:234
-# [2] eltype(::Type{Tuple{}})
-#  @ tuple.jl:199
-# [3] eltype(t::Type{<:Tuple{Vararg{E}}}) where E
-#  @ tuple.jl:200
-# [4] eltype(t::Type{<:Tuple})
-#  @ tuple.jl:209
-typeof(function eltype end).name.max_methods = UInt8(4)
 
 # key/val types
 keytype(@nospecialize t::Tuple) = keytype(typeof(t))
@@ -574,10 +575,10 @@ function _eq(t1::Any32, t2::Any32)
 end
 
 const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
-hash(::Tuple{}, h::UInt) = h + tuplehash_seed
+hash(::Tuple{}, h::UInt) = h ⊻ tuplehash_seed
 hash(t::Tuple, h::UInt) = hash(t[1], hash(tail(t), h))
 function hash(t::Any32, h::UInt)
-    out = h + tuplehash_seed
+    out = h ⊻ tuplehash_seed
     for i = length(t):-1:1
         out = hash(t[i], out)
     end
@@ -653,19 +654,6 @@ prod(x::Tuple{}) = 1
 # It is defined here separately in order to support bootstrap, because it's needed earlier
 # than the general prod definition is available.
 prod(x::Tuple{Int, Vararg{Int}}) = *(x...)
-
-all(x::Tuple{}) = true
-all(x::Tuple{Bool}) = x[1]
-all(x::Tuple{Bool, Bool}) = x[1]&x[2]
-all(x::Tuple{Bool, Bool, Bool}) = x[1]&x[2]&x[3]
-all(x::Tuple{Any}) = x[1] || return false
-all(f, x::Tuple{}) = true
-all(f, x::Tuple{Any}) = all((f(x[1]),))
-
-any(x::Tuple{}) = false
-any(x::Tuple{Bool}) = x[1]
-any(x::Tuple{Bool, Bool}) = x[1]|x[2]
-any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
 
 # a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
 function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})

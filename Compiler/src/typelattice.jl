@@ -8,6 +8,19 @@
 # inside the global code cache.
 import Core: Const, InterConditional, PartialStruct
 
+function may_form_limited_typ(@nospecialize(aty), @nospecialize(bty), @nospecialize(xty))
+    if aty isa LimitedAccuracy
+        if bty isa LimitedAccuracy
+            return LimitedAccuracy(xty, union!(copy(aty.causes), bty.causes))
+        else
+            return LimitedAccuracy(xty, copy(aty.causes))
+        end
+    elseif bty isa LimitedAccuracy
+        return LimitedAccuracy(xty, copy(bty.causes))
+    end
+    return nothing
+end
+
 """
     cnd::Conditional
 
@@ -19,7 +32,7 @@ the type of `SlotNumber(cnd.slot)` will be limited by `cnd.thentype`
 and in the false branch, it will be limited by `cnd.elsetype`.
 Example:
 ```julia
-let cond = isa(x::Union{Int, Float}, Int)::Conditional(x, Int, Float)
+let cond = isa(x::Union{Int, Float}, Int)::Conditional(x, _, Int, Float)
     if cond
        # May assume x is `Int` now
     else
@@ -30,25 +43,30 @@ end
 """
 struct Conditional
     slot::Int
+    ssadef::Int
     thentype
     elsetype
     # `isdefined` indicates this `Conditional` is from `@isdefined slot`, implying that
     # the `undef` information of `slot` can be improved in the then branch.
     # Since this is only beneficial for local inference, it is not translated into `InterConditional`.
     isdefined::Bool
-    function Conditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype);
+    function Conditional(slot::Int, ssadef::Int, @nospecialize(thentype), @nospecialize(elsetype);
                          isdefined::Bool=false)
         assert_nested_slotwrapper(thentype)
         assert_nested_slotwrapper(elsetype)
-        return new(slot, thentype, elsetype, isdefined)
+        limited = may_form_limited_typ(thentype, elsetype, Bool)
+        limited !== nothing && return limited
+        return new(slot, ssadef, thentype, elsetype, isdefined)
     end
 end
-Conditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype); isdefined::Bool=false) =
-    Conditional(slot_id(var), thentype, elsetype; isdefined)
+Conditional(var::SlotNumber, ssadef::Int, @nospecialize(thentype), @nospecialize(elsetype); isdefined::Bool=false) =
+    Conditional(slot_id(var), ssadef, thentype, elsetype; isdefined)
 
 const AnyConditional = Union{Conditional,InterConditional}
-Conditional(cnd::InterConditional) = Conditional(cnd.slot, cnd.thentype, cnd.elsetype)
-InterConditional(cnd::Conditional) = InterConditional(cnd.slot, cnd.thentype, cnd.elsetype)
+function InterConditional(cnd::Conditional)
+    @assert cnd.ssadef == 0
+    InterConditional(cnd.slot, cnd.thentype, cnd.elsetype)
+end
 
 """
     alias::MustAlias
@@ -75,19 +93,22 @@ N.B. currently this lattice element is only used in abstractinterpret, not in op
 """
 struct MustAlias
     slot::Int
+    ssadef::Int
     vartyp::Any
     fldidx::Int
     fldtyp::Any
-    function MustAlias(slot::Int, @nospecialize(vartyp), fldidx::Int, @nospecialize(fldtyp))
+    function MustAlias(slot::Int, ssadef::Int, @nospecialize(vartyp), fldidx::Int, @nospecialize(fldtyp))
         assert_nested_slotwrapper(vartyp)
         assert_nested_slotwrapper(fldtyp)
         # @assert !isalreadyconst(vartyp) "vartyp is already const"
         # @assert !isalreadyconst(fldtyp) "fldtyp is already const"
-        return new(slot, vartyp, fldidx, fldtyp)
+        limited = may_form_limited_typ(vartyp, fldtyp, fldtyp)
+        limited !== nothing && return limited
+        return new(slot, ssadef, vartyp, fldidx, fldtyp)
     end
 end
-MustAlias(var::SlotNumber, @nospecialize(vartyp), fldidx::Int, @nospecialize(fldtyp)) =
-    MustAlias(slot_id(var), vartyp, fldidx, fldtyp)
+MustAlias(var::SlotNumber, ssadef::Int, @nospecialize(vartyp), fldidx::Int, @nospecialize(fldtyp)) =
+    MustAlias(slot_id(var), ssadef, vartyp, fldidx, fldtyp)
 
 """
     alias::InterMustAlias
@@ -104,6 +125,8 @@ struct InterMustAlias
         assert_nested_slotwrapper(fldtyp)
         # @assert !isalreadyconst(vartyp) "vartyp is already const"
         # @assert !isalreadyconst(fldtyp) "fldtyp is already const"
+        limited = may_form_limited_typ(vartyp, fldtyp, fldtyp)
+        limited !== nothing && return limited
         return new(slot, vartyp, fldidx, fldtyp)
     end
 end
@@ -111,8 +134,10 @@ InterMustAlias(var::SlotNumber, @nospecialize(vartyp), fldidx::Int, @nospecializ
     InterMustAlias(slot_id(var), vartyp, fldidx, fldtyp)
 
 const AnyMustAlias = Union{MustAlias,InterMustAlias}
-MustAlias(alias::InterMustAlias) = MustAlias(alias.slot, alias.vartyp, alias.fldidx, alias.fldtyp)
-InterMustAlias(alias::MustAlias) = InterMustAlias(alias.slot, alias.vartyp, alias.fldidx, alias.fldtyp)
+function InterMustAlias(alias::MustAlias)
+    @assert alias.ssadef == 0
+    InterMustAlias(alias.slot, alias.vartyp, alias.fldidx, alias.fldtyp)
+end
 
 struct PartialTypeVar
     tv::TypeVar
@@ -126,8 +151,20 @@ end
 struct StateUpdate
     var::SlotNumber
     vtype::VarState
-    conditional::Bool
-    StateUpdate(var::SlotNumber, vtype::VarState, conditional::Bool=false) = new(var, vtype, conditional)
+end
+
+"""
+Similar to `StateUpdate`, except with the additional guarantee that object identity
+is preserved by the update (i.e. `x (before) === x (after)`).
+"""
+struct StateRefinement
+    slot::Int
+    # XXX: This should be an intersection of the old type with the new
+    #      (i.e. newtyp ⊑ oldtyp)
+    newtyp
+    undef::Bool
+
+    StateRefinement(slot::Int, @nospecialize(newtyp), undef::Bool) = new(slot, newtyp, undef)
 end
 
 """
@@ -215,13 +252,6 @@ end
     return typ
 end
 
-@nospecializeinfer function widenwrappedslotwrapper(@nospecialize typ)
-    if isa(typ, LimitedAccuracy)
-        return LimitedAccuracy(widenslotwrapper(typ.typ), typ.causes)
-    end
-    return widenslotwrapper(typ)
-end
-
 # Conditional
 # ===========
 
@@ -265,6 +295,7 @@ end
     return false
 end
 
+is_same_conditionals(a::Conditional, b::Conditional) = a.slot == b.slot && a.ssadef == b.ssadef
 is_same_conditionals(a::C, b::C) where C<:AnyConditional = a.slot == b.slot
 
 @nospecializeinfer is_lattice_bool(lattice::AbstractLattice, @nospecialize(typ)) = typ !== Bottom && ⊑(lattice, typ, Bool)
@@ -313,20 +344,20 @@ end
 end
 
 @nospecializeinfer function form_mustalias_conditional(alias::MustAlias, @nospecialize(thentype), @nospecialize(elsetype))
-    (; slot, vartyp, fldidx) = alias
+    (; slot, ssadef, vartyp, fldidx) = alias
     if isa(vartyp, PartialStruct)
         fields = vartyp.fields
         thenfields = thentype === Bottom ? nothing : copy(fields)
         elsefields = elsetype === Bottom ? nothing : copy(fields)
-        for i in 1:length(fields)
-            if i == fldidx
-                thenfields === nothing || (thenfields[i] = thentype)
-                elsefields === nothing || (elsefields[i] = elsetype)
-            end
+        undefs = copy(_getundefs(vartyp))
+        if 1 ≤ fldidx ≤ length(fields)
+            thenfields === nothing || (thenfields[fldidx] = thentype)
+            elsefields === nothing || (elsefields[fldidx] = elsetype)
+            undefs[fldidx] = false
         end
-        return Conditional(slot,
-            thenfields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp.typ, thenfields),
-            elsefields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp.typ, elsefields))
+        return Conditional(slot, ssadef,
+            thenfields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp.typ, undefs, thenfields),
+            elsefields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp.typ, undefs, elsefields))
     else
         vartyp_widened = widenconst(vartyp)
         thenfields = thentype === Bottom ? nothing : Any[]
@@ -341,7 +372,7 @@ end
                 elsefields === nothing || push!(elsefields, t)
             end
         end
-        return Conditional(slot,
+        return Conditional(slot, ssadef,
             thenfields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp_widened, thenfields),
             elsefields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp_widened, elsefields))
     end
@@ -395,6 +426,13 @@ end
         end
         a = Bool
     elseif isa(b, ConditionalT)
+        if isa(a, Const) && isa(a.val, Bool)
+           if (a.val === true && b.thentype === Any && b.elsetype === Bottom) ||
+              (a.val === false && b.elsetype === Any && b.thentype === Bottom)
+               # this Conditional contains distinctly no lattice information, and is simply an alternative representation of the Const Bool used for internal tracking purposes
+               return true
+           end
+        end
         return false
     end
     return ⊑(widenlattice(lattice), a, b)
@@ -417,17 +455,15 @@ end
     if isa(a, PartialStruct)
         if isa(b, PartialStruct)
             a.typ <: b.typ || return false
-            if length(a.fields) ≠ length(b.fields)
-                if !(isvarargtype(a.fields[end]) || isvarargtype(b.fields[end]))
-                    length(a.fields) ≥ length(b.fields) || return false
-                else
+            nflds = length(a.fields)
+            nflds == length(b.fields) || return false
+            for i in 1:nflds
+                if !(_getundefs(b)[i] === nothing || _getundefs(a)[i] === _getundefs(b)[i])
                     return false
                 end
-            end
-            for i in 1:length(b.fields)
                 af = a.fields[i]
                 bf = b.fields[i]
-                if i == length(b.fields)
+                if i == nflds
                     if isvarargtype(af)
                         # If `af` is vararg, so must bf by the <: above
                         @assert isvarargtype(bf)
@@ -457,13 +493,19 @@ end
                 nfields(a.val) == length(b.fields) || return false
             else
                 widea <: wideb || return false
-                # for structs we need to check that `a` has more information than `b` that may be partially initialized
-                n_initialized(a) ≥ length(b.fields) || return false
+                # for structs we need to check that `a` does not have less information than `b` that may be partially initialized
+                n_initialized(a) ≥ n_initialized(b) || return false
             end
             nf = nfields(a.val)
             for i in 1:nf
-                isdefined(a.val, i) || continue # since ∀ T Union{} ⊑ T
+                if !isdefined(a.val, i)
+                    _getundefs(b)[i] === false && return false # conflicting defined-ness information
+                    continue # since ∀ T Union{} ⊑ T
+                end
                 i > length(b.fields) && break # `a` has more information than `b` that is partially initialized struct
+                if _getundefs(b)[i] === true
+                    return false # conflicting defined-ness information
+                end
                 bfᵢ = b.fields[i]
                 if i == nf
                     bfᵢ = unwrapva(bfᵢ)
@@ -534,6 +576,7 @@ end
     if isa(a, PartialStruct)
         isa(b, PartialStruct) || return false
         length(a.fields) == length(b.fields) || return false
+        _getundefs(a) == _getundefs(b) || return false
         widenconst(a) == widenconst(b) || return false
         a.fields === b.fields && return true # fast path
         for i in 1:length(a.fields)
@@ -682,34 +725,28 @@ widenconst(::LimitedAccuracy) = error("unhandled LimitedAccuracy")
 # state management #
 ####################
 
-function smerge(lattice::AbstractLattice, sa::Union{NotFound,VarState}, sb::Union{NotFound,VarState})
+function smerge(lattice::AbstractLattice, sa::Union{NotFound,VarState}, sb::Union{NotFound,VarState}, join_pc::Int)
     sa === sb && return sa
     sa === NOT_FOUND && return sb
     sb === NOT_FOUND && return sa
-    return VarState(tmerge(lattice, sa.typ, sb.typ), sa.undef | sb.undef)
+    return VarState(tmerge(lattice, sa.typ, sb.typ), sa.ssadef == sb.ssadef ? sa.ssadef : join_pc, sa.undef | sb.undef)
 end
 
-@nospecializeinfer @inline schanged(lattice::AbstractLattice, @nospecialize(n), @nospecialize(o)) =
-    (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !(n.undef <= o.undef && ⊑(lattice, n.typ, o.typ))))
+@nospecializeinfer @inline schanged(lattice::AbstractLattice, @nospecialize(n), @nospecialize(o), join_pc::Int) =
+    (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !(n.undef <= o.undef && (n.ssadef === o.ssadef || o.ssadef === join_pc) && ⊑(lattice, n.typ, o.typ))))
 
-# remove any lattice elements that wrap the reassigned slot object from the vartable
-function invalidate_slotwrapper(vt::VarState, changeid::Int, ignore_conditional::Bool)
-    newtyp = ignorelimited(vt.typ)
-    if (!ignore_conditional && isa(newtyp, Conditional) && newtyp.slot == changeid) ||
-       (isa(newtyp, MustAlias) && newtyp.slot == changeid)
-        newtyp = @noinline widenwrappedslotwrapper(vt.typ)
-        return VarState(newtyp, vt.undef)
-    end
-    return nothing
-end
-
-function stupdate!(lattice::AbstractLattice, state::VarTable, changes::VarTable)
+function stupdate!(lattice::AbstractLattice, state::VarTable, changes::VarTable, join_pc::Int)
     changed = false
     for i = 1:length(state)
         newtype = changes[i]
         oldtype = state[i]
-        if schanged(lattice, newtype, oldtype)
-            state[i] = smerge(lattice, oldtype, newtype)
+        # In addition to computing the type, the merge here computes the "reaching definition"
+        # for a slot. The provided `join_pc` is a "virtual" PC, which corresponds to the ϕ-block
+        # that would exist at the beginning of the BasicBlock.
+        #
+        # This effectively applies the "path-convergence criterion" for SSA construction.
+        if schanged(lattice, newtype, oldtype, join_pc)
+            state[i] = smerge(lattice, oldtype, newtype, join_pc)
             changed = true
         end
     end
@@ -724,25 +761,38 @@ function stoverwrite!(state::VarTable, newstate::VarTable)
 end
 
 function stoverwrite1!(state::VarTable, change::StateUpdate)
-    changeid = slot_id(change.var)
-    for i = 1:length(state)
-        invalidated = invalidate_slotwrapper(state[i], changeid, change.conditional)
-        if invalidated !== nothing
-            state[i] = invalidated
-        end
-    end
-    # and update the type of it
-    newtype = change.vtype
-    state[changeid] = newtype
+    # Note: We no longer need to invalidate Conditional/MustAlias in other slots
+    # that reference this slot. The ssadef tracking handles this: when a slot is
+    # reassigned, its ssadef changes, and any Conditional/MustAlias referencing
+    # the old ssadef will be detected as stale by conditional_valid().
+    state[slot_id(change.var)] = change.vtype
+    return state
+end
+
+function strefine1!(state::VarTable, refinement::StateRefinement)
+    (; newtyp, undef, slot) = refinement
+    state[slot] = VarState(newtyp, state[slot].ssadef, undef)
     return state
 end
 
 # The ::AbstractLattice argument is unused and simply serves to disambiguate
 # different instances of the compiler that may share the `Core.PartialStruct`
 # type.
-function Core.PartialStruct(::AbstractLattice, @nospecialize(typ), fields::Vector{Any})
+
+# Legacy constructor
+function Core.PartialStruct(𝕃::AbstractLattice, @nospecialize(typ), fields::Vector{Any})
+    undefs = partialstruct_init_undefs(typ, fields)
+    undefs === nothing && error("This object never exists at runtime")
+    return PartialStruct(𝕃, typ, undefs, fields)
+end
+
+function Core.PartialStruct(::AbstractLattice, @nospecialize(typ), undefs::Vector{Union{Nothing,Bool}}, fields::Vector{Any})
     for i = 1:length(fields)
         assert_nested_slotwrapper(fields[i])
     end
-    return Core._PartialStruct(typ, fields)
+    return PartialStruct(typ, undefs, fields)
 end
+
+# a special getter for `PartialStruct` to achieve better type stability:
+# `(x::PartialStruct).undefs` will be lowered to `getfield(x, :undefs)::Any` otherwise
+_getundefs(p::PartialStruct) = Base.getproperty(p, :undefs)

@@ -13,11 +13,11 @@
 JL_DLLEXPORT void jl_dump_native_fallback(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         ios_t *z, ios_t *s) UNAVAILABLE
-JL_DLLEXPORT void jl_get_llvm_gvs_fallback(void *native_code, arraylist_t *gvs) UNAVAILABLE
-JL_DLLEXPORT void jl_get_llvm_external_fns_fallback(void *native_code, arraylist_t *gvs) UNAVAILABLE
-JL_DLLEXPORT void jl_get_llvm_mis_fallback(void *native_code, arraylist_t* MIs) UNAVAILABLE
+JL_DLLEXPORT void jl_get_llvm_gvs_fallback(void *native_code, size_t *num, void **gvs) UNAVAILABLE
+JL_DLLEXPORT void jl_get_llvm_gv_inits_fallback(void *native_code, size_t *num, void **inits) UNAVAILABLE
+JL_DLLEXPORT void jl_get_llvm_external_fns_fallback(void *native_code, size_t *num, void **gvs) UNAVAILABLE
+JL_DLLEXPORT void jl_get_llvm_cis_fallback(void *native_code, size_t *num, void **CIs) UNAVAILABLE
 
-JL_DLLEXPORT void jl_extern_c_fallback(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name) UNAVAILABLE
 JL_DLLEXPORT jl_value_t *jl_dump_method_asm_fallback(jl_method_instance_t *linfo, size_t world,
         char emit_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
 JL_DLLEXPORT jl_value_t *jl_dump_function_ir_fallback(jl_llvmf_dump_t *dump, char strip_ir_metadata, char dump_module, const char *debuginfo) UNAVAILABLE
@@ -71,9 +71,12 @@ JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION_fallback(void)
     return 0;
 }
 
-JL_DLLEXPORT int jl_compile_extern_c_fallback(LLVMOrcThreadSafeModuleRef llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
+JL_DLLEXPORT int jl_compile_extern_c_fallback(LLVMOrcThreadSafeModuleRef llvmmod, void *params, void *sysimg, jl_value_t *name, jl_value_t *declrt, jl_value_t *sigt)
 {
-    return 0;
+    // Assume we were able to register the ccallable with the JIT. The
+    // fact that we didn't is not observable since we cannot compile
+    // anything else.
+    return 1;
 }
 
 JL_DLLEXPORT void jl_teardown_codegen_fallback(void) JL_NOTSAFEPOINT
@@ -85,7 +88,7 @@ JL_DLLEXPORT size_t jl_jit_total_bytes_fallback(void)
     return 0;
 }
 
-JL_DLLEXPORT void *jl_create_native_fallback(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, int _trim, int _external_linkage, size_t _world) UNAVAILABLE
+JL_DLLEXPORT void *jl_create_native_fallback(LLVMOrcThreadSafeModuleRef llvmmod, int _trim, int _external_linkage, size_t _world, jl_array_t *_mod_array, jl_array_t *_worklist, int _all, jl_array_t *_module_init_order) UNAVAILABLE
 JL_DLLEXPORT void *jl_emit_native_fallback(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _external_linkage) UNAVAILABLE
 
 JL_DLLEXPORT void jl_dump_compiles_fallback(void *s)
@@ -113,6 +116,8 @@ JL_DLLEXPORT void *jl_get_llvm_function_fallback(void *native_code, uint32_t idx
 JL_DLLEXPORT LLVMOrcThreadSafeModuleRef jl_get_llvm_module_fallback(void *native_code) UNAVAILABLE
 
 JL_DLLEXPORT void *jl_type_to_llvm_fallback(jl_value_t *jt, LLVMContextRef llvmctxt, bool_t *isboxed) UNAVAILABLE
+
+JL_DLLEXPORT void *jl_struct_to_llvm_fallback(jl_value_t *jt, LLVMContextRef llvmctxt, bool_t *isboxed) UNAVAILABLE
 
 JL_DLLEXPORT jl_value_t *jl_get_libllvm_fallback(void) JL_NOTSAFEPOINT
 {

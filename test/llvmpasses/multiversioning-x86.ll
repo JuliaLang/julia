@@ -11,7 +11,7 @@
 ; OPAQUE: @jl_gvar_ptrs = global [0 x ptr] zeroinitializer, align 8
 ; CHECK: @jl_fvar_idxs = hidden constant [5 x i32] [i32 0, i32 1, i32 2, i32 3, i32 4], align 8
 ; CHECK: @jl_gvar_idxs = hidden constant [0 x i32] zeroinitializer, align 8
-; OPAQUE: @simd_test.reloc_slot = hidden global ptr null
+; OPAQUE: @simd_test.reloc_slot = hidden global ptr @simd_test.autoinit_trampoline
 ; OPAQUE: @jl_fvar_ptrs = hidden global [5 x ptr] [ptr @boring, ptr @fastmath_test, ptr @loop_test, ptr @simd_test, ptr @simd_test_call]
 ; OPAQUE: @jl_clone_slots = hidden constant [3 x i32] [i32 1, i32 3, i32 trunc (i64 sub (i64 ptrtoint (ptr @simd_test.reloc_slot to i64), i64 ptrtoint (ptr @jl_clone_slots to i64)) to i32)]
 ; CHECK: @jl_clone_idxs = hidden constant [10 x i32] [i32 -2147483647, i32 3, i32 -2147483647, i32 3, i32 4, i32 1, i32 1, i32 2, i32 -2147483645, i32 4]

@@ -1,7 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module inference
+
 using Test
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 # tests for Compiler correctness and precision
@@ -102,12 +105,12 @@ end
 
 # issue #51694
 @test Compiler.type_more_complex(
-       Base.Generator{Base.Iterators.Flatten{Array{Bool, 1}}, typeof(identity)},
-       Base.Generator{Array{Bool, 1}, typeof(identity)},
+       Base.Generator{Base.Iterators.Flatten{Vector{Bool}}, typeof(identity)},
+       Base.Generator{Vector{Bool}, typeof(identity)},
        Core.svec(), 0, 0, 0)
 @test Compiler.type_more_complex(
-       Base.Generator{Base.Iterators.Flatten{Base.Generator{Array{Bool, 1}, typeof(identity)}}, typeof(identity)},
-       Base.Generator{Array{Bool, 1}, typeof(identity)},
+       Base.Generator{Base.Iterators.Flatten{Base.Generator{Vector{Bool}, typeof(identity)}}, typeof(identity)},
+       Base.Generator{Vector{Bool}, typeof(identity)},
        Core.svec(), 0, 0, 0)
 
 let # 40336
@@ -416,7 +419,7 @@ end
 
 # issue #12826
 f12826(v::Vector{I}) where {I<:Integer} = v[1]
-@test Base.return_types(f12826,Tuple{Array{I,1} where I<:Integer})[1] == Integer
+@test Base.return_types(f12826,Tuple{Vector{I} where I<:Integer})[1] == Integer
 
 
 # non-terminating inference, issue #14009
@@ -728,7 +731,7 @@ for (codetype, all_ssa) in Any[
     local i
     for i = 1:length(code.ssavaluetypes)
         typ = code.ssavaluetypes[i]
-        @test isa(typ, Type) || isa(typ, Const) || isa(typ, Conditional) || typ
+        @test isa(typ, Type) || isa(typ, Const) || isa(typ, Conditional) context=typ
     end
     test_inferred_static(codetype, all_ssa)
 end
@@ -1207,6 +1210,7 @@ let isdefined_tfunc(@nospecialize xs...) =
     @test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:x)) === Const(true)
     @test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:y)) === Const(false)
     @test isdefined_tfunc(Union{UnionIsdefinedA,Nothing}, Const(:x)) === Bool
+    @test isdefined_tfunc(Nothing, Any) === Const(false)
 end
 
 # https://github.com/aviatesk/JET.jl/issues/379
@@ -1294,7 +1298,7 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
                 continue
             end
         end
-        @test false || "Side effect expressions found $ex"
+        @test false context="Side effect expressions found $ex"
         return
     end
 end
@@ -1377,7 +1381,7 @@ let isa_tfunc(@nospecialize xs...) =
     @test isa_tfunc(typeof(Union{}), Union{}) === Union{} # any result is ok
     @test isa_tfunc(typeof(Union{}), Type{typeof(Union{})}) === Const(true)
     @test isa_tfunc(typeof(Union{}), Const(typeof(Union{}))) === Const(true)
-    let c = Conditional(0, Const(Union{}), Const(Union{}))
+    let c = Conditional(#= slot =# 0, #= ssadef =# 0, Const(Union{}), Const(Union{}))
         @test isa_tfunc(c, Const(Bool)) === Const(true)
         @test isa_tfunc(c, Type{Bool}) === Const(true)
         @test isa_tfunc(c, Const(Real)) === Const(true)
@@ -1429,7 +1433,7 @@ let subtype_tfunc(@nospecialize xs...) =
     @test subtype_tfunc(Type{Union{}}, Any) === Const(true) # Union{} <: Any
     @test subtype_tfunc(Type{Union{}}, Union{Type{Int64}, Type{Float64}}) === Const(true)
     @test subtype_tfunc(Type{Union{}}, Union{Type{T}, Type{Float64}} where T) === Const(true)
-    let c = Conditional(0, Const(Union{}), Const(Union{}))
+    let c = Conditional(#= slot =# 0, #= ssadef =# 0, Const(Union{}), Const(Union{}))
         @test subtype_tfunc(c, Const(Bool)) === Const(true) # any result is ok
     end
     @test subtype_tfunc(Type{Val{1}}, Type{Val{T}} where T) === Bool
@@ -1461,8 +1465,8 @@ let egal_tfunc
     @test egal_tfunc(Array, Array) == Bool
     @test egal_tfunc(Array, AbstractArray{Int}) == Bool
     @test egal_tfunc(Array{Real}, AbstractArray{Int}) === Const(false)
-    @test egal_tfunc(Array{Real, 2}, AbstractArray{Real, 2}) === Bool
-    @test egal_tfunc(Array{Real, 2}, AbstractArray{Int, 2}) === Const(false)
+    @test egal_tfunc(Matrix{Real}, AbstractMatrix{Real}) === Bool
+    @test egal_tfunc(Matrix{Real}, AbstractMatrix{Int}) === Const(false)
     @test egal_tfunc(DataType, Int) === Const(false)
     @test egal_tfunc(DataType, Const(Int)) === Bool
     @test egal_tfunc(DataType, Const(Array)) === Const(false)
@@ -1473,7 +1477,7 @@ let egal_tfunc
     @test egal_tfunc(Type{Union{Float32, Float64}}, Type{Union{Float32, Float64}}) === Bool
     @test egal_tfunc(typeof(Union{}), typeof(Union{})) === Bool # could be improved
     @test egal_tfunc(Const(typeof(Union{})), Const(typeof(Union{}))) === Const(true)
-    let c = Conditional(0, Const(Union{}), Const(Union{}))
+    let c = Conditional(#= slot =# 0, #= ssadef =# 0, Const(Union{}), Const(Union{}))
         @test egal_tfunc(c, Const(Bool)) === Const(false)
         @test egal_tfunc(c, Type{Bool}) === Const(false)
         @test egal_tfunc(c, Const(Real)) === Const(false)
@@ -1484,17 +1488,17 @@ let egal_tfunc
         @test egal_tfunc(c, Bool) === Bool
         @test egal_tfunc(c, Any) === Bool
     end
-    let c = Conditional(0, Union{}, Const(Union{})) # === Const(false)
-        @test egal_tfunc(c, Const(false)) === Conditional(c.slot, c.elsetype, Union{})
-        @test egal_tfunc(c, Const(true)) === Conditional(c.slot, Union{}, c.elsetype)
+    let c = Conditional(#= slot =# 0, #= ssadef =# 0, Union{}, Const(Union{})) # === Const(false)
+        @test egal_tfunc(c, Const(false)) === Conditional(c.slot, c.ssadef, c.elsetype, Union{})
+        @test egal_tfunc(c, Const(true)) === Conditional(c.slot, c.ssadef, Union{}, c.elsetype)
         @test egal_tfunc(c, Const(nothing)) === Const(false)
         @test egal_tfunc(c, Int) === Const(false)
         @test egal_tfunc(c, Bool) === Bool
         @test egal_tfunc(c, Any) === Bool
     end
-    let c = Conditional(0, Const(Union{}), Union{}) # === Const(true)
-        @test egal_tfunc(c, Const(false)) === Conditional(c.slot, Union{}, c.thentype)
-        @test egal_tfunc(c, Const(true)) === Conditional(c.slot, c.thentype, Union{})
+    let c = Conditional(#= slot =# 0, #= ssadef =# 0, Const(Union{}), Union{}) # === Const(true)
+        @test egal_tfunc(c, Const(false)) === Conditional(c.slot, c.ssadef, Union{}, c.thentype)
+        @test egal_tfunc(c, Const(true)) === Conditional(c.slot, c.ssadef, c.thentype, Union{})
         @test egal_tfunc(c, Const(nothing)) === Const(false)
         @test egal_tfunc(c, Int) === Const(false)
         @test egal_tfunc(c, Bool) === Bool
@@ -1593,9 +1597,12 @@ let memoryref_tfunc(@nospecialize xs...) = Compiler.memoryref_tfunc(Compiler.fal
     @test memoryref_tfunc(MemoryRef{Int}, Int, Symbol) == Union{}
     @test memoryref_tfunc(MemoryRef{Int}, Int, Bool) == MemoryRef{Int}
     @test memoryref_tfunc(MemoryRef{Int}, Int, Vararg{Bool}) == MemoryRef{Int}
-    @test memoryref_tfunc(Memory{Int}, Int) == Union{}
-    @test memoryref_tfunc(Any, Any, Any) == Any # also probably could be GenericMemoryRef
-    @test memoryref_tfunc(Any, Any) == Any # also probably could be GenericMemoryRef
+    @test memoryref_tfunc(Memory{Int}, Int) == MemoryRef{Int}
+    @test memoryref_tfunc(Memory{Int}, Int, Symbol) == Union{}
+    @test memoryref_tfunc(Memory{Int}, Int, Bool) == MemoryRef{Int}
+    @test memoryref_tfunc(Memory{Int}, Int, Vararg{Bool}) == MemoryRef{Int}
+    @test memoryref_tfunc(Any, Any, Any) == GenericMemoryRef
+    @test memoryref_tfunc(Any, Any) == GenericMemoryRef
     @test memoryref_tfunc(Any) == GenericMemoryRef
     @test memoryrefget_tfunc(MemoryRef{Int}, Symbol, Bool) === Int
     @test memoryrefget_tfunc(MemoryRef{Int}, Any, Any) === Int
@@ -2261,12 +2268,18 @@ struct AliasableFields{S,T}
     f1::S
     f2::T
 end
+struct NullableAliasableFields{S,T}
+    f1::S
+    f2::T
+    NullableAliasableFields(f1::S, f2::T) where {S,T} = new{S,T}(f1, f2)
+    NullableAliasableFields(f1::S) where {S} = new{S,Union{}}(f1)
+end
 mutable struct AliasableConstField{S,T}
     const f1::S
     f2::T
 end
 
-import .Compiler:
+using .Compiler:
     InferenceLattice, MustAliasesLattice, InterMustAliasesLattice,
     BaseInferenceLattice, SimpleInferenceLattice, IPOResultLattice, typeinf_lattice, ipo_lattice, optimizer_lattice
 
@@ -2279,34 +2292,28 @@ Compiler.optimizer_lattice(::MustAliasInterpreter) = SimpleInferenceLattice.inst
 # lattice
 # -------
 
-import .Compiler: MustAlias, Const, PartialStruct, ⊑, tmerge
+using .Compiler: MustAlias, Const, PartialStruct, ⊑, tmerge
 let 𝕃ᵢ = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance))
     ⊑(@nospecialize(a), @nospecialize(b)) = Compiler.:⊑(𝕃ᵢ, a, b)
     tmerge(@nospecialize(a), @nospecialize(b)) = Compiler.tmerge(𝕃ᵢ, a, b)
     isa_tfunc(@nospecialize xs...) = Compiler.isa_tfunc(𝕃ᵢ, xs...)
     ifelse_tfunc(@nospecialize xs...) = Compiler.ifelse_tfunc(𝕃ᵢ, xs...)
 
-    @test (MustAlias(2, AliasableField{Any}, 1, Int) ⊑ Int)
-    @test !(Int ⊑ MustAlias(2, AliasableField{Any}, 1, Int))
-    @test (Int ⊑ MustAlias(2, AliasableField{Any}, 1, Any))
-    @test (Const(42) ⊑ MustAlias(2, AliasableField{Any}, 1, Int))
-    @test !(MustAlias(2, AliasableField{Any}, 1, Any) ⊑ Int)
-    @test tmerge(MustAlias(2, AliasableField{Any}, 1, Any), Const(nothing)) === Any
-    @test tmerge(MustAlias(2, AliasableField{Any}, 1, Int), Const(nothing)) === Union{Int,Nothing}
-    @test tmerge(Const(nothing), MustAlias(2, AliasableField{Any}, 1, Any)) === Any
-    @test tmerge(Const(nothing), MustAlias(2, AliasableField{Any}, 1, Int)) === Union{Int,Nothing}
+    @test (MustAlias(2, 0, AliasableField{Any}, 1, Int) ⊑ Int)
+    @test !(Int ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Int))
+    @test (Int ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Any))
+    @test (Const(42) ⊑ MustAlias(2, 0, AliasableField{Any}, 1, Int))
+    @test !(MustAlias(2, 0, AliasableField{Any}, 1, Any) ⊑ Int)
+    @test tmerge(MustAlias(2, 0, AliasableField{Any}, 1, Any), Const(nothing)) === Any
+    @test tmerge(MustAlias(2, 0, AliasableField{Any}, 1, Int), Const(nothing)) === Union{Int,Nothing}
+    @test tmerge(Const(nothing), MustAlias(2, 0, AliasableField{Any}, 1, Any)) === Any
+    @test tmerge(Const(nothing), MustAlias(2, 0, AliasableField{Any}, 1, Int)) === Union{Int,Nothing}
     tmerge(Const(AbstractVector{<:Any}), Const(AbstractVector{T} where {T}))  # issue #56913
-    @test isa_tfunc(MustAlias(2, AliasableField{Any}, 1, Bool), Const(Bool)) === Const(true)
-    @test isa_tfunc(MustAlias(2, AliasableField{Any}, 1, Bool), Type{Bool}) === Const(true)
-    @test isa_tfunc(MustAlias(2, AliasableField{Any}, 1, Int), Type{Bool}) === Const(false)
-    @test ifelse_tfunc(MustAlias(2, AliasableField{Any}, 1, Bool), Int, Int) === Int
-    @test ifelse_tfunc(MustAlias(2, AliasableField{Any}, 1, Int), Int, Int) === Union{}
-end
-
-@testset "issue #56913: `BoundsError` in type inference" begin
-    R = UnitRange{Int}
-    @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, Vararg{R}})
-    @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, R, Vararg{R}})
+    @test isa_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Bool), Const(Bool)) === Const(true)
+    @test isa_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Bool), Type{Bool}) === Const(true)
+    @test isa_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Int), Type{Bool}) === Const(false)
+    @test ifelse_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Bool), Int, Int) === Int
+    @test ifelse_tfunc(MustAlias(2, 0, AliasableField{Any}, 1, Int), Int, Int) === Union{}
 end
 
 maybeget_mustalias_tmerge(x::AliasableField) = x.f
@@ -2465,7 +2472,7 @@ end |> only === Int
 # appropriate lattice order
 @test Base.return_types((AliasableField{Any},); interp=MustAliasInterpreter()) do x
     v = x.f        # ::MustAlias(2, AliasableField{Any}, 1, Any)
-    if isa(v, Int) # ::Conditional(3, Int, Any)
+    if isa(v, Int) # ::Conditional(3, _, Int, Any)
         v = v      # ::Int (∵ Int ⊑ MustAlias(2, AliasableField{Any}, 1, Any))
     else
         v = 42
@@ -2516,6 +2523,15 @@ jet509_hasitems(list) = length(list) >= 1
     end
     error("list is empty")
 end |> only == Vector{Int}
+
+# don't form nested slot wrappers
+@test Base.infer_return_type((NullableAliasableFields{NullableAliasableFields},); interp=MustAliasInterpreter()) do x
+    y = getfield(x, :f1)
+    if isdefined(y, :f2) && isa(getfield(y, :f2), Int)
+        return getfield(y, :f2)
+    end
+    return 0
+end == Int
 
 # === constraint
 # --------------
@@ -2573,6 +2589,28 @@ end |> only === Compiler.InterMustAlias
     end
     return 0
 end == Integer
+
+# `isdefined` accuracy for `MustAlias`
+@test Base.infer_return_type((Any,); interp=MustAliasInterpreter()) do x
+    xx = Ref{Any}(x)
+    xxx = Some{Any}(xx)
+    Val(isdefined(xxx.value, :x))
+end == Val{true}
+
+# Test union splitting for MustAlias
+struct GetSomethingA; x::Union{Nothing,Int}; end
+struct GetSomethingB; x::Int; end
+getsomethingx(a::GetSomethingA) = something(a.x, 0)
+getsomethingx(b::GetSomethingB) = b.x
+@test Base.infer_return_type((Union{GetSomethingA,GetSomethingB},); interp=MustAliasInterpreter()) do x
+    getsomethingx(x)
+end == Int
+
+@testset "issue #56913: `BoundsError` in type inference" begin
+    R = UnitRange{Int}
+    @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, Vararg{R}})
+    @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, R, Vararg{R}})
+end
 
 function f25579(g)
     h = g[]
@@ -2733,6 +2771,26 @@ vacond(cnd, va...) = cnd ? va : 0
     # at runtime we will see `va::Tuple{Tuple{Int,Int}, Tuple{Int,Int}}`
     vacond(isa(x, Tuple{Int,Int}), x, x)
 end |> only == Union{Int,Tuple{Any,Any}}
+
+let A = Core.Const(true)
+    B = Core.InterConditional(2, Tuple, Union{})
+    C = Core.InterConditional(2, Any, Union{})
+    L = ipo_lattice(Compiler.NativeInterpreter())
+    @test !⊑(L, A, B)
+    @test ⊑(L, B, A)
+    @test tmerge(L, A, B) == C
+    @test ⊑(L, A, C)
+end
+function tail_is_ntuple((@nospecialize t::Tuple))
+    if unknown
+        t isa Tuple
+    else
+        tail_is_ntuple(t)
+    end
+end
+tail_is_ntuple_val((@nospecialize t::Tuple)) = Val(tail_is_ntuple(t))
+@test Base.return_types(tail_is_ntuple, (Tuple,)) |> only === Bool
+@test Base.return_types(tail_is_ntuple_val, (Tuple,)) |> only === Val{true}
 
 # https://github.com/JuliaLang/julia/issues/47435
 is_closed_ex(e::InvalidStateException) = true
@@ -3460,11 +3518,11 @@ end
 struct MixedKeyDict{T<:Tuple} #<: AbstractDict{Any,Any}
     dicts::T
 end
-Base.merge(f::Function, d::MixedKeyDict, others::MixedKeyDict...) = _merge(f, (), d.dicts, (d->d.dicts).(others)...)
-Base.merge(f, d::MixedKeyDict, others::MixedKeyDict...) = _merge(f, (), d.dicts, (d->d.dicts).(others)...)
+Base.mergewith(f::Function, d::MixedKeyDict, others::MixedKeyDict...) = _merge(f, (), d.dicts, (d->d.dicts).(others)...)
+Base.mergewith(f, d::MixedKeyDict, others::MixedKeyDict...) = _merge(f, (), d.dicts, (d->d.dicts).(others)...)
 function _merge(f, res, d, others...)
     ofsametype, remaining = _alloftype(Base.heads(d), ((),), others...)
-    return _merge(f, (res..., merge(f, ofsametype...)), Base.tail(d), remaining...)
+    return _merge(f, (res..., mergewith(f, ofsametype...)), Base.tail(d), remaining...)
 end
 _merge(f, res, ::Tuple{}, others...) = _merge(f, res, others...)
 _merge(f, res, d) = MixedKeyDict((res..., d...))
@@ -3488,9 +3546,9 @@ _alloftype(ofdesiredtype, accumulated) = ofdesiredtype, Base.front(accumulated)
 let
     d = MixedKeyDict((Dict(1 => 3), Dict(4. => 2)))
     e = MixedKeyDict((Dict(1 => 7), Dict(5. => 9)))
-    @test merge(+, d, e).dicts == (Dict(1 => 10), Dict(4.0 => 2, 5.0 => 9))
+    @test mergewith(+, d, e).dicts == (Dict(1 => 10), Dict(4.0 => 2, 5.0 => 9))
     f = MixedKeyDict((Dict(2 => 7), Dict(5. => 11)))
-    @test merge(+, d, e, f).dicts == (Dict(1 => 10, 2 => 7), Dict(4.0 => 2, 5.0 => 20))
+    @test mergewith(+, d, e, f).dicts == (Dict(1 => 10, 2 => 7), Dict(4.0 => 2, 5.0 => 20))
 end
 
 # Issue #31974
@@ -3500,8 +3558,14 @@ f31974(n::Int) = f31974(1:n)
 # call cycles.
 @test code_typed(f31974, Tuple{Int}) !== nothing
 
-f_overly_abstract_complex() = Complex(Ref{Number}(1)[])
-@test Base.return_types(f_overly_abstract_complex, Tuple{}) == [Complex]
+# Issue #33472
+struct WrapperWithUnionall33472{T<:Real}
+    x::T
+end
+
+f_overly_abstract33472() = WrapperWithUnionall33472(Base.inferencebarrier(1)::Number)
+# Check that this doesn't infer as `WrapperWithUnionall33472{T<:Number}`.
+@test Base.return_types(f_overly_abstract33472, Tuple{}) == [WrapperWithUnionall33472]
 
 # Issue 26724
 const IntRange = AbstractUnitRange{<:Integer}
@@ -4660,16 +4724,18 @@ end
     ⊔ = Compiler.join(Compiler.fallback_lattice)
     𝕃 = Compiler.fallback_lattice
     Const, PartialStruct = Core.Const, Core.PartialStruct
+    alldefined = Union{Nothing,Bool}[false, false, false]
+    defined1 = Union{Nothing,Bool}[false, nothing, nothing]
     let init = Base.ImmutableDict{Any,Any}()
         a = Const(init)
-        b = PartialStruct(𝕃, typeof(init), Any[Const(init), Any, Any])
+        b = PartialStruct(𝕃, typeof(init), alldefined, Any[Const(init), Any, Any])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c === typeof(init)
     end
     let init = Base.ImmutableDict{Any,Any}(1,2)
         a = Const(init)
-        b = PartialStruct(𝕃, typeof(init), Any[Const(getfield(init,1)), Any, Any])
+        b = PartialStruct(𝕃, typeof(init), alldefined, Any[Const(getfield(init,1)), Any, Any])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c isa PartialStruct
@@ -4677,14 +4743,14 @@ end
     end
     let init = Base.ImmutableDict{Number,Number}()
         a = Const(init)
-        b = PartialStruct(𝕃, typeof(init), Any[Const(init), Number, ComplexF64])
+        b = PartialStruct(𝕃, typeof(init), alldefined, Any[Const(init), Number, ComplexF64])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c === typeof(init)
     end
     let init = Base.ImmutableDict{Number,Number}()
-        a = PartialStruct(𝕃, typeof(init), Any[Const(init), ComplexF64, ComplexF64])
-        b = PartialStruct(𝕃, typeof(init), Any[Const(init), Number, ComplexF64])
+        a = PartialStruct(𝕃, typeof(init), alldefined, Any[Const(init), ComplexF64, ComplexF64])
+        b = PartialStruct(𝕃, typeof(init), alldefined, Any[Const(init), Number, ComplexF64])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c isa PartialStruct
@@ -4692,8 +4758,8 @@ end
         @test c.fields[3] === ComplexF64
     end
     let init = Base.ImmutableDict{Number,Number}()
-        a = PartialStruct(𝕃, typeof(init), Any[Const(init), ComplexF64, ComplexF64])
-        b = PartialStruct(𝕃, typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
+        a = PartialStruct(𝕃, typeof(init), alldefined, Any[Const(init), ComplexF64, ComplexF64])
+        b = PartialStruct(𝕃, typeof(init), alldefined, Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c isa PartialStruct
@@ -4701,16 +4767,16 @@ end
         @test c.fields[3] === Complex
     end
     let T = Base.ImmutableDict{Number,Number}
-        a = PartialStruct(𝕃, T, Any[T])
-        b = PartialStruct(𝕃, T, Any[T, Number, Number])
+        a = PartialStruct(𝕃, T, defined1, Any[T, Number, Number])
+        b = PartialStruct(𝕃, T, alldefined, Any[T, Number, Number])
         @test b ⊑ a
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c isa PartialStruct
-        @test length(c.fields) == 1
+        @test length(c.fields) == 3 && c.undefs == defined1
     end
     let T = Base.ImmutableDict{Number,Number}
-        a = PartialStruct(𝕃, T, Any[T])
+        a = PartialStruct(𝕃, T, defined1, Any[T, Number, Number])
         b = Const(T())
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
@@ -4718,7 +4784,7 @@ end
     end
     let T = Base.ImmutableDict{Number,Number}
         a = Const(T())
-        b = PartialStruct(𝕃, T, Any[T])
+        b = PartialStruct(𝕃, T, defined1, Any[T, Number, Number])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c === T
@@ -4763,10 +4829,44 @@ end
     @test a == Tuple
 end
 
+module _Partials_inference
+    mutable struct Partial
+        x::String
+        y::Integer
+        z::Any
+        Partial() = new()
+    end
+
+    struct Partial2
+        x::String
+        y::Integer
+        z::Any
+        Partial2(x) = new(x)
+    end
+
+    struct Partial3
+        x::Int
+        y::String
+        z::Float64
+        Partial3(x, y) = new(x, y)
+    end
+
+    struct Partial4
+        x::Int
+        y::String
+        z::Float64
+        Partial4(x) = new(x)
+    end
+end
+
 let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
+    ⋢ = !⊑
     ⊔ = Compiler.join(Compiler.fallback_lattice)
     𝕃 = Compiler.fallback_lattice
     Const, PartialStruct = Core.Const, Core.PartialStruct
+    form_partially_defined_struct = Compiler.form_partially_defined_struct
+    M = _Partials_inference
+    Partial, Partial2, Partial3, Partial4 = M.Partial, M.Partial2, M.Partial3, M.Partial4
 
     @test  (Const((1,2)) ⊑ PartialStruct(𝕃, Tuple{Int,Int}, Any[Const(1),Int]))
     @test !(Const((1,2)) ⊑ PartialStruct(𝕃, Tuple{Int,Int,Int}, Any[Const(1),Int,Int]))
@@ -4782,11 +4882,160 @@ let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
     @test !(PartialStruct(𝕃, Tuple{Int,Vararg{Int}}, Any[Const(1),Vararg{Int}]) ⊑ Const((1,2)))
     @test !(PartialStruct(𝕃, Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2)))
     @test !(PartialStruct(𝕃, Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2,3)))
+    # test comparison between conflicting elements
+    let a = PartialStruct(M.Partial, Union{Nothing,Bool}[false,false,false], Any[Int,Int,Any])
+        b = Const(M.Partial())
+        @test a ⋢ b && b ⋢ a
+    end
+    let a = PartialStruct(M.Partial, Union{Nothing,Bool}[false,nothing,nothing], Any[Int,Int,Any])
+        b = Const(M.Partial())
+        @test a ⋢ b && b ⋢ a
+    end
+    let a = PartialStruct(M.Partial, Union{Nothing,Bool}[nothing,nothing,nothing], Any[Int,Int,Any])
+        b = Const(M.Partial())
+        @test a ⋢ b && b ⊑ a
+    end
 
-    t = Const((false, false)) ⊔ Const((false, true))
-    @test t isa PartialStruct && length(t.fields) == 2 && t.fields[1] === Const(false)
-    t = t ⊔ Const((false, false, 0))
-    @test t ⊑ Union{Tuple{Bool,Bool},Tuple{Bool,Bool,Int}}
+    let t = Const((false, false)) ⊔ Const((false, true))
+        @test t isa PartialStruct && length(t.fields) == 2 && t.fields[1] === Const(false)
+        t = t ⊔ Const((false, false, 0))
+        @test t ⊑ Union{Tuple{Bool,Bool},Tuple{Bool,Bool,Int}}
+    end
+
+    let t = PartialStruct(𝕃, Tuple{Int, Int}, Any[Const(1),Int])
+        @test Compiler.n_initialized(t) == 2
+        @test t ⊑ t && t ⊔ t === t
+        t = PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,false,nothing], Any[String, Const(2), Any])
+        @test Compiler.n_initialized(t) == 2
+        @test t ⊑ t && t ⊔ t === t
+    end
+
+    let t1 = PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,false,nothing], Any[String, Const(3), Any])
+        t2 = PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,nothing,nothing], Any[Const("x"), Integer, Any])
+        @test t1 ⋢ t2 && t2 ⋢ t1
+        t3 = t1 ⊔ t2
+        @test t3.fields == Any[String, Integer, Any]
+    end
+
+    let t1 = PartialStruct(𝕃, Partial, Union{Nothing,Bool}[nothing,false,false], Any[String, Int, Const(3)])
+        @test Compiler.n_initialized(t1) == 0
+        @test t1 ⊑ t1 && t1 ⊔ t1 === t1
+        t2 = PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,nothing,false], Any[Const("x"), Int, Any])
+        @test Compiler.n_initialized(t2) == 1
+        @test t1 ⊔ t2 isa PartialStruct
+    end
+
+    let t1 = PartialStruct(𝕃, Tuple{Int,String,Vararg}, Any[Int, String, Vararg])
+        @test t1 ⊑ t1 && t1 ⊔ t1 == t1
+        t2 = PartialStruct(𝕃, Tuple{Int,String}, Any[Int, String])
+        @test t1 ⋢ t2 && t2 ⋢ t1
+        t3 = t1 ⊔ t2
+        @test_broken t3 isa PartialStruct && Compiler.n_initialized(t3) == 2
+    end
+
+    let t = PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,nothing,nothing], Any[Const("x"),Integer,Any])
+        @test form_partially_defined_struct(𝕃, t, Const(:x)) === nothing
+        t′ = form_partially_defined_struct(𝕃, t, Const(:z))
+        @test t′ == PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,nothing,false], Any[Const("x"), Integer, Any])
+    end
+    let t = PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,nothing,nothing], Any[String,Integer,Const(2)])
+        @test form_partially_defined_struct(𝕃, t, Const(:x)) === nothing
+        t′ = form_partially_defined_struct(𝕃, t, Const(:z))
+        @test t′ == PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,nothing,false], Any[String,Integer,Const(2)])
+    end
+
+    @test form_partially_defined_struct(𝕃, Partial2, Const(:x)) === nothing
+    let t = PartialStruct(𝕃, Partial2, Any[String, Const(2), Any])
+        @test form_partially_defined_struct(𝕃, t, Const(:x)) === nothing
+        t′ = form_partially_defined_struct(𝕃, t, Const(:z))
+        @test t′ == PartialStruct(𝕃, Partial2, Union{Nothing,Bool}[false,nothing,false], Any[String, Const(2), Any])
+    end
+
+    @test form_partially_defined_struct(𝕃, Partial3, Const(:x)) === nothing
+    @test form_partially_defined_struct(𝕃, Partial3, Const(:y)) === nothing
+    let t = form_partially_defined_struct(𝕃, Partial3, Const(:z))
+        @test t == PartialStruct(𝕃, Partial3, Union{Nothing,Bool}[false,false,false], Any[Int, String, Float64])
+    end
+    let t = PartialStruct(𝕃, Partial3, Any[Int, String, Float64])
+        t′ = form_partially_defined_struct(𝕃, t, Const(:z))
+        @test t′ == PartialStruct(𝕃, Partial3, Union{Nothing,Bool}[false,false,false], Any[Int, String, Float64])
+    end
+
+    let t1 = PartialStruct(𝕃, Partial4, Union{Nothing,Bool}[false,false,nothing], Any[Int, String, Float64])
+        t2 = PartialStruct(𝕃, Partial4, Union{Nothing,Bool}[false,nothing,false], Any[Const(1), String, Float64])
+        @test t1 ⋢ t2 && t2 ⋢ t1
+        c = Const(Partial4(1))
+        @test c ⋢ t1 && t1 ⋢ c && c ⊑ t2 && t2 ⋢ c
+        t3 = PartialStruct(𝕃, Partial4, Union{Nothing,Bool}[false,false,nothing], Any[Const(1), Const("x"), Float64])
+        @test c ⋢ t3 && t3 ⋢ c
+    end
+
+    let c = Const(Ref{Any}(1))
+        t = PartialStruct(Base.RefValue{Any}, Union{Nothing,Bool}[true], Any[String])
+        @test c ⋢ t && t ⋢ c
+    end
+
+    let a = PartialStruct(𝕃, Base.RefValue{Any}, Union{Nothing,Bool}[false], Any[Int])
+        b = PartialStruct(𝕃, Base.RefValue{Any}, Union{Nothing,Bool}[true], Any[Int])
+        @test a ⊔ b == b ⊔ a
+        c = a ⊔ b
+        @test c isa PartialStruct && Compiler.n_initialized(c) == 0
+    end
+    let a = PartialStruct(𝕃, Base.RefValue{Any}, Union{Nothing,Bool}[false], Any[Int])
+        b = PartialStruct(𝕃, Base.RefValue{Any}, Union{Nothing,Bool}[nothing], Any[Int])
+        @test a ⊔ b == b ⊔ a
+        c = a ⊔ b
+        @test c isa PartialStruct && Compiler.n_initialized(c) == 0
+    end
+    let a = PartialStruct(𝕃, Base.RefValue{Int}, Union{Nothing,Bool}[false], Any[Int])
+        b = Const(Base.RefValue{Int}(42))
+        @test a == a ⊔ b == b ⊔ a
+    end
+    let a = Const(Base.RefValue{Int}(1))
+        b = Const(Base.RefValue{Int}(2))
+        @test a ⊔ b == b ⊔ a
+        c = a ⊔ b
+        @test c isa PartialStruct && Compiler.n_initialized(c) == 1
+    end
+end
+
+# strict undef information of `PartialStruct`
+struct StrictUndefXY1{X,Y}
+    x::X
+    y::Y
+    StrictUndefXY1{Y}(x::X) where {X,Y} = new{X,Y}(x)
+    StrictUndefXY1(x::X,y::Y) where {X,Y} = new{X,Y}(x,y)
+end
+@test Base.infer_return_type() do
+    Val(isdefined(StrictUndefXY1{Union{}}(42), :y))
+end == Val{false}
+@test Base.infer_return_type() do
+    Val(isdefined(StrictUndefXY1{Int}(42), :y))
+end == Val{true}
+@test Base.infer_return_type() do
+    Val(isdefined(StrictUndefXY1(42,nothing), :y))
+end == Val{true}
+
+mutable struct StrictUndefXY2{X,Y}
+    const x::X
+    y::Y
+    StrictUndefXY2{Y}(x::X) where {X,Y} = new{X,Y}(x)
+    StrictUndefXY2(x::X,y::Y) where {X,Y} = new{X,Y}(x,y)
+end
+@test Base.infer_return_type() do
+    Val(isdefined(StrictUndefXY2{Union{}}(42), :y))
+end == Val{false}
+@test Base.infer_return_type() do
+    Val(isdefined(StrictUndefXY2{Bool}(42), :y))
+end == Val{true}
+let rt = Base.infer_return_type((Bool,)) do b
+        xy = StrictUndefXY2{Any}(42)
+        if b
+            xy.y = nothing
+        end
+        Val(isdefined(xy, :y))
+    end
+    @test rt >: Val{false} && rt >: Val{true}
 end
 
 # Test that a function-wise `@max_methods` works as expected
@@ -4923,7 +5172,7 @@ let src = code_typed1() do
 end
 
 # Test that Const ⊑ PartialStruct respects vararg
-@test Const((1,2)) ⊑ PartialStruct(Compiler.fallback_lattice, Tuple{Vararg{Int}}, [Const(1), Vararg{Int}])
+@test Const((1,2)) ⊑ PartialStruct(Compiler.fallback_lattice, Tuple{Int,Vararg{Int}}, Union{Nothing,Bool}[false,nothing], [Const(1), Vararg{Int}])
 
 # Test that semi-concrete interpretation doesn't break on functions with while loops in them.
 Base.@assume_effects :consistent :effect_free :terminates_globally function pure_annotated_loop(x::Int, y::Int)
@@ -4979,11 +5228,11 @@ end
 @testset "#45956: non-linearized cglobal needs special treatment for stmt effects" begin
     function foo()
         cglobal((a, ))
-        ccall(0, Cvoid, (Nothing,), b)
+        ccall(C_NULL, Cvoid, (Nothing,), b)
     end
     @test only(code_typed() do
         cglobal((a, ))
-        ccall(0, Cvoid, (Nothing,), b)
+        ccall(C_NULL, Cvoid, (Nothing,), b)
     end)[2] === Nothing
 end
 
@@ -6140,14 +6389,28 @@ end === Int
     swapglobal!(@__MODULE__, :swapglobal!_xxx, x)
 end === Union{}
 
-global swapglobal!_must_throw
-@newinterp SwapGlobalInterp
-Compiler.InferenceParams(::SwapGlobalInterp) = Compiler.InferenceParams(; assume_bindings_static=true)
+@newinterp AssumeBindingsStaticInterp
+Compiler.InferenceParams(::AssumeBindingsStaticInterp) = Compiler.InferenceParams(; assume_bindings_static=true)
+
+eval(Expr(:const, :swapglobal!_must_throw))
 function func_swapglobal!_must_throw(x)
     swapglobal!(@__MODULE__, :swapglobal!_must_throw, x)
 end
-@test Base.infer_return_type(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) === Union{}
-@test !Compiler.is_effect_free(Base.infer_effects(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) )
+@test Base.infer_return_type(func_swapglobal!_must_throw, (Int,); interp=AssumeBindingsStaticInterp()) === Union{}
+@test !Compiler.is_effect_free(Base.infer_effects(func_swapglobal!_must_throw, (Int,); interp=AssumeBindingsStaticInterp()) )
+
+global global_decl_defined
+global_decl_defined = 42
+@test Base.infer_effects(; interp=AssumeBindingsStaticInterp()) do
+    global global_decl_defined
+    return global_decl_defined
+end |> Compiler.is_nothrow
+global global_decl_defined2::Int
+global_decl_defined2 = 42
+@test Base.infer_effects(; interp=AssumeBindingsStaticInterp()) do
+    global global_decl_defined2
+    return global_decl_defined2
+end |> Compiler.is_nothrow
 
 @eval get_exception() = $(Expr(:the_exception))
 @test Base.infer_return_type() do
@@ -6162,3 +6425,142 @@ end <: Any
     end
     return out
 end == Union{Float64,DomainError}
+
+# issue #56628
+@test Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}} ]) === Tuple{Int, UnitRange{Int}}
+@test Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}}, Float64 ]) === Tuple{Int, UnitRange{Int}, Float64}
+@test Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}}, Float64, Memory{2} ]) === Union{}
+@test Base.return_types(Tuple{Tuple{Int, Vararg{Pair{Any, Union{}}}}},) do x; Returns(true)(x...); end |> only === Bool
+
+# issue #57292
+f57292(xs::Union{Tuple{String}, Int}...) = getfield(xs...)
+g57292(xs::String...) = getfield(("abc",), 1, :not_atomic, xs...)
+@test Base.infer_return_type(f57292) == String
+@test Base.infer_return_type(g57292) == String
+
+mutable struct Issue57673{C<:Union{Int,Float64}}
+    c::C
+    d
+    Issue57673(c::C, d) where C = new{C}(c, d)
+    Issue57673(c::C) where C = new{C}(c)
+end
+@test Base.infer_return_type((Issue57673,)) do a::Issue57673{<:String}
+    setfield!(a, :d, nothing)
+    a
+end === Union{} # `setfield!` tfunc should be able to figure out this object is runtime invalid
+
+# only refine with `PartialStruct` on `setfield!` when we have full argument type information
+let src = code_typed1((Base.RefValue{String}, String)) do x, val
+        setfield!(x, :x, val)
+        isdefined(x, :x)
+    end
+    retval = src.code[end].val
+    @test retval === true
+    src = code_typed1((Base.RefValue{String}, String)) do x, args...
+        setfield!(x, :x, args...)
+        isdefined(x, :x)
+    end
+    retval = src.code[end].val
+    @test isa(retval, Core.SSAValue)
+end
+
+global invalid_setglobal!_exct_modeling::Int
+@test Base.infer_exception_type((Float64,)) do x
+    setglobal!(@__MODULE__, :invalid_setglobal!_exct_modeling, x)
+end == TypeError
+
+# Issue #58257 - Hang in inference during BindingPartition resolution
+module A58257
+    module B58257
+        const age = Base.get_world_counter()
+        using ..A58257
+        # World age here is N
+    end
+    using .B58257
+    # World age here is N+1
+    @eval f() = $(GlobalRef(B58257, :get!))
+end
+
+## The sequence of events is critical here.
+A58257.get!      # Creates binding partition in A, N+1:∞
+A58257.B58257.get!    # Creates binding partition in A.B, N+1:∞
+Base.invoke_in_world(A58257.B58257.age, getglobal, A58257, :get!) # Expands binding partition in A through <N
+@test Base.infer_return_type(A58257.f) == typeof(Base.get!) # Attempt to lookup A.B in world age N hangs
+
+function tt57873(a::Vector{String}, pref)
+    ret = String[]
+    for j in a
+        append!(ret, tt57873(a[2:end], (pref..., "")))
+    end
+    return ret
+end
+let code = Compiler.typeinf_ext_toplevel(Any[Core.svec(Any,Tuple{typeof(tt57873),Vector{String},Tuple{String}})], [Base.get_world_counter()], Base.Compiler.TRIM_NO)
+    @test !isempty(code)
+    ## If we were to run trim here, we should fail with:
+    #    Verifier error #1: unresolved invoke from statement tt57873(::Vector{String}, ::Tuple{String, String})::Vector{String}
+    #Stacktrace:
+    # [1] tt57873(a::Vector{String}, pref::Tuple{String})
+    #   @ Main REPL[1]:4
+end
+
+function ss57873(a::Vector{String}, pref)
+    ret = String[]
+    for j in a
+        append!(ret, ss57873(a[2:end], (pref..., "")))
+    end
+    return ret
+end
+@test ss57873(["a", "b", "c"], ("",)) == String[]
+
+@test Base.infer_return_type((Module,Symbol,Vector{Any})) do m, n, xs
+    getglobal(m, n, xs...)
+end <: Any
+@test Base.infer_return_type((Module,Symbol,Any,Vector{Any})) do m, n, v, xs
+    setglobal!(m, n, v, xs...)
+end <: Any
+@test Base.infer_return_type((Module,Symbol,Vector{Any})) do m, n, xs
+    isdefinedglobal(m, n, xs...)
+end <: Bool
+@test Base.infer_return_type((Module,Symbol,Vector{Any})) do m, n, xs
+    Core.get_binding_type(m, n, xs...)
+end <: Type
+
+# issue #59269
+function haskey_inference_test()
+    kwargs = Core.compilerbarrier(:const, Base.pairs((; item = false)))
+    return haskey(kwargs, :item) ? nothing : Any[]
+end
+@inferred haskey_inference_test()
+
+# JuliaLang/julia#55548: invalidate stale slot wrapper types in `ssavaluetypes`
+_issue55548_proj1(a, b) = a
+function issue55548(a)
+    a = Base.inferencebarrier(a)::Union{Int64,Float64}
+    if _issue55548_proj1(isa(a, Int64), (a = Base.inferencebarrier(1.0)::Union{Int64,Float64}; true))
+        return a
+    end
+    return 2
+end
+@test Float64 <: Base.infer_return_type(issue55548, (Int,))
+@test issue55548(Int64(0)) === 1.0
+
+# issue #60883: conditional propagation through wrapper functions
+mutable struct A60883
+    a::Int
+end
+inner60883(a, b) = iszero(a.a) && !b
+outer60883(a, b) = inner60883(a, b)
+function issue60883()
+    a = A60883(0)
+    b = iszero(a.a)
+    if outer60883(a, b) else end
+    return b  # should not be narrowed to Const(false)
+end
+@test issue60883() === true
+
+throwconditional(c, x) = c ? throw(x isa Int) : throw(x isa Float64)
+@test Base.infer_exception_type((Bool, Any)) do c, x
+    throwconditional(c, x)
+end == Bool
+
+end # module inference

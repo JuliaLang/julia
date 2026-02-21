@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module Sys
+# NB: This file is `Core.eval`-uated into the (pre-existing) module Sys
+
 @doc """
 Provide methods for retrieving information about hardware and the operating system.
 """ Sys
@@ -8,37 +9,29 @@ Provide methods for retrieving information about hardware and the operating syst
 export BINDIR,
        STDLIB,
        CPU_THREADS,
+       EFFECTIVE_CPU_THREADS,
        CPU_NAME,
        WORD_SIZE,
        ARCH,
        MACHINE,
-       KERNEL,
        JIT,
+       PAGESIZE,
        cpu_info,
        cpu_summary,
+       sysimage_target,
        uptime,
        loadavg,
        free_memory,
        total_memory,
        free_physical_memory,
        total_physical_memory,
-       isapple,
-       isbsd,
-       isdragonfly,
-       isfreebsd,
-       islinux,
-       isnetbsd,
-       isopenbsd,
-       isunix,
-       iswindows,
-       isjsvm,
        isexecutable,
        isreadable,
        iswritable,
        username,
        which
 
-import ..Base: show
+import ..Base: DATAROOTDIR, show
 
 """
     Sys.BINDIR::String
@@ -52,12 +45,10 @@ global BINDIR::String = ccall(:jl_get_julia_bindir, Any, ())::String
 
 A string containing the full path to the directory containing the `stdlib` packages.
 """
-global STDLIB::String = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
+global STDLIB::String = "$BINDIR/$DATAROOTDIR/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
 # In case STDLIB change after julia is built, the variable below can be used
 # to update cached method locations to updated ones.
 const BUILD_STDLIB_PATH = STDLIB
-# Similarly, this is the root of the julia repo directory that julia was built from
-const BUILD_ROOT_PATH = "$BINDIR/../.."
 
 # helper to avoid triggering precompile warnings
 
@@ -70,8 +61,27 @@ CPU cores, for example, in the presence of
 [hyper-threading](https://en.wikipedia.org/wiki/Hyper-threading).
 
 See Hwloc.jl or CpuId.jl for extended information, including number of physical cores.
+
+See also: [`Sys.EFFECTIVE_CPU_THREADS`](@ref) for a container-aware CPU count that respects
+cgroup limits.
 """
 global CPU_THREADS::Int = 1 # for bootstrap, changed on startup
+
+"""
+    Sys.EFFECTIVE_CPU_THREADS::Int
+
+The effective number of logical CPU cores available to the Julia process, taking into
+account container limits (e.g., Docker `--cpus`, Kubernetes CPU limits, cgroup quotas).
+This is the minimum of the hardware CPU thread count and any imposed CPU limits.
+
+In non-containerized environments, this typically equals `Sys.CPU_THREADS`. In containerized
+environments, it respects cgroup CPU limits and provides a more accurate measure of
+available parallelism.
+
+Use this constant when determining default thread pool sizes or parallelism levels to
+ensure proper behavior in containerized deployments.
+"""
+global EFFECTIVE_CPU_THREADS::Int = 1 # for bootstrap, changed on startup
 
 """
     Sys.ARCH::Symbol
@@ -80,13 +90,6 @@ A symbol representing the architecture of the build configuration.
 """
 const ARCH = ccall(:jl_get_ARCH, Any, ())::Symbol
 
-
-"""
-    Sys.KERNEL::Symbol
-
-A symbol representing the name of the operating system, as returned by `uname` of the build configuration.
-"""
-const KERNEL = ccall(:jl_get_UNAME, Any, ())::Symbol
 
 """
     Sys.MACHINE::String
@@ -103,12 +106,10 @@ Standard word size on the current machine, in bits.
 const WORD_SIZE = Core.sizeof(Int) * 8
 
 """
-    Sys.SC_CLK_TCK:
+    Sys.SC_CLK_TCK::Clong
 
 The number of system "clock ticks" per second, corresponding to `sysconf(_SC_CLK_TCK)` on
 POSIX systems, or `0` if it is unknown.
-
-CPU times, e.g. as returned by `Sys.cpu_info()`, are in units of ticks, i.e. units of `1 / Sys.SC_CLK_TCK` seconds if `Sys.SC_CLK_TCK > 0`.
 """
 global SC_CLK_TCK::Clong
 
@@ -142,6 +143,13 @@ Note: Included in the detailed system information via `versioninfo(verbose=true)
 """
 global JIT::String
 
+"""
+    Sys.PAGESIZE::Clong
+
+A number providing the pagesize of the given OS.  Common values being 4kb or 64kb on Linux.
+"""
+global PAGESIZE::Clong
+
 function __init__()
     env_threads = nothing
     if haskey(ENV, "JULIA_CPU_THREADS")
@@ -157,9 +165,11 @@ function __init__()
     else
         Int(ccall(:jl_cpu_threads, Int32, ()))
     end
+    global EFFECTIVE_CPU_THREADS = min(CPU_THREADS, Int(ccall(:jl_effective_threads, Int32, ())))
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
+    global PAGESIZE = Int(Sys.isunix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
     __init_build()
     nothing
 end
@@ -168,7 +178,7 @@ end
 function __init_build()
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
     vers = "v$(string(VERSION.major)).$(string(VERSION.minor))"
-    global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
+    global STDLIB = abspath(BINDIR, DATAROOTDIR, "julia", "stdlib", vers)
     nothing
 end
 
@@ -194,8 +204,7 @@ The `CPUinfo` type is a mutable struct with the following fields:
 - `cpu_times!idle::UInt64`: Time spent in idle mode. CPU state shows the CPU time that's not actively being used.
 - `cpu_times!irq::UInt64`: Time spent handling interrupts. CPU state shows the amount of time the CPU has been servicing hardware interrupts.
 
-The times are in units of `1/Sys.SC_CLK_TCK` seconds if `Sys.SC_CLK_TCK > 0`; otherwise they are in
-unknown units.
+The times are in units of milliseconds.
 
 Note: Included in the detailed system information via `versioninfo(verbose=true)`.
 """
@@ -216,7 +225,6 @@ CPUinfo(info::UV_cpu_info_t) = CPUinfo(unsafe_string(info.model), info.speed,
 public CPUinfo
 
 function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::AbstractString="    ")
-    tck = SC_CLK_TCK
     if header
         println(io, info.model, ": ")
         print(io, " "^length(prefix))
@@ -224,16 +232,13 @@ function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::Abs
                 lpad("sys", 9), "    ", lpad("idle", 9), "    ", lpad("irq", 9))
     end
     print(io, prefix)
-    unit = tck > 0 ? " s  " : "    "
-    tc = max(tck, 1)
+    ms_per_s = 1000
+    unit = " s  "
     d(i, unit=unit) = lpad(string(round(Int64,i)), 9) * unit
     print(io,
           lpad(string(info.speed), 5), " MHz  ",
-          d(info.cpu_times!user / tc), d(info.cpu_times!nice / tc), d(info.cpu_times!sys / tc),
-          d(info.cpu_times!idle / tc), d(info.cpu_times!irq / tc, tck > 0 ? " s" : "  "))
-    if tck <= 0
-        print(io, "ticks")
-    end
+          d(info.cpu_times!user / ms_per_s), d(info.cpu_times!nice / ms_per_s), d(info.cpu_times!sys / ms_per_s),
+          d(info.cpu_times!idle / ms_per_s), d(info.cpu_times!irq / ms_per_s))
 end
 
 show(io::IO, ::MIME"text/plain", info::CPUinfo) = _show_cpuinfo(io, info, true, "    ")
@@ -312,9 +317,26 @@ function cpu_info()
 end
 
 """
+    Sys.sysimage_target()
+
+Return the CPU target string that was used to build the current system image.
+
+This function returns the original CPU target specification that was passed to Julia
+when the system image was compiled. This can be useful for reproducing the same
+system image or for understanding what CPU features were enabled during compilation.
+
+If the system image was built with the default settings this will return `"native"`.
+
+See also [`JULIA_CPU_TARGET`](@ref).
+"""
+function sysimage_target()
+    return ccall(:jl_get_sysimage_cpu_target, Ref{String}, ())
+end
+
+"""
     Sys.uptime()
 
-Gets the current system uptime in seconds.
+Get the current system uptime in seconds.
 """
 function uptime()
     uptime_ = Ref{Float64}()
@@ -405,136 +427,6 @@ See also:
     - Windows API `GetProcessMemoryInfo`.
 """
 maxrss() = ccall(:jl_maxrss, Csize_t, ())
-
-"""
-    Sys.isunix([os])
-
-Predicate for testing if the OS provides a Unix-like interface.
-See documentation in [Handling Operating System Variation](@ref).
-"""
-function isunix(os::Symbol)
-    if iswindows(os)
-        return false
-    elseif islinux(os) || isbsd(os)
-        return true
-    elseif os === :Emscripten
-        # Emscripten implements the POSIX ABI and provides traditional
-        # Unix-style operating system functions such as file system support.
-        # Therefore, we consider it a unix, even though this need not be
-        # generally true for a jsvm embedding.
-        return true
-    else
-        throw(ArgumentError("unknown operating system \"$os\""))
-    end
-end
-
-"""
-    Sys.islinux([os])
-
-Predicate for testing if the OS is a derivative of Linux.
-See documentation in [Handling Operating System Variation](@ref).
-"""
-islinux(os::Symbol) = (os === :Linux)
-
-"""
-    Sys.isbsd([os])
-
-Predicate for testing if the OS is a derivative of BSD.
-See documentation in [Handling Operating System Variation](@ref).
-
-!!! note
-    The Darwin kernel descends from BSD, which means that `Sys.isbsd()` is
-    `true` on macOS systems. To exclude macOS from a predicate, use
-    `Sys.isbsd() && !Sys.isapple()`.
-"""
-isbsd(os::Symbol) = (isfreebsd(os) || isopenbsd(os) || isnetbsd(os) || isdragonfly(os) || isapple(os))
-
-"""
-    Sys.isfreebsd([os])
-
-Predicate for testing if the OS is a derivative of FreeBSD.
-See documentation in [Handling Operating System Variation](@ref).
-
-!!! note
-    Not to be confused with `Sys.isbsd()`, which is `true` on FreeBSD but also on
-    other BSD-based systems. `Sys.isfreebsd()` refers only to FreeBSD.
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
-"""
-isfreebsd(os::Symbol) = (os === :FreeBSD)
-
-"""
-    Sys.isopenbsd([os])
-
-Predicate for testing if the OS is a derivative of OpenBSD.
-See documentation in [Handling Operating System Variation](@ref).
-
-!!! note
-    Not to be confused with `Sys.isbsd()`, which is `true` on OpenBSD but also on
-    other BSD-based systems. `Sys.isopenbsd()` refers only to OpenBSD.
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
-"""
-isopenbsd(os::Symbol) = (os === :OpenBSD)
-
-"""
-    Sys.isnetbsd([os])
-
-Predicate for testing if the OS is a derivative of NetBSD.
-See documentation in [Handling Operating System Variation](@ref).
-
-!!! note
-    Not to be confused with `Sys.isbsd()`, which is `true` on NetBSD but also on
-    other BSD-based systems. `Sys.isnetbsd()` refers only to NetBSD.
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
-"""
-isnetbsd(os::Symbol) = (os === :NetBSD)
-
-"""
-    Sys.isdragonfly([os])
-
-Predicate for testing if the OS is a derivative of DragonFly BSD.
-See documentation in [Handling Operating System Variation](@ref).
-
-!!! note
-    Not to be confused with `Sys.isbsd()`, which is `true` on DragonFly but also on
-    other BSD-based systems. `Sys.isdragonfly()` refers only to DragonFly.
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
-"""
-isdragonfly(os::Symbol) = (os === :DragonFly)
-
-"""
-    Sys.iswindows([os])
-
-Predicate for testing if the OS is a derivative of Microsoft Windows NT.
-See documentation in [Handling Operating System Variation](@ref).
-"""
-iswindows(os::Symbol) = (os === :Windows || os === :NT)
-
-"""
-    Sys.isapple([os])
-
-Predicate for testing if the OS is a derivative of Apple Macintosh OS X or Darwin.
-See documentation in [Handling Operating System Variation](@ref).
-"""
-isapple(os::Symbol) = (os === :Apple || os === :Darwin)
-
-"""
-    Sys.isjsvm([os])
-
-Predicate for testing if Julia is running in a JavaScript VM (JSVM),
-including e.g. a WebAssembly JavaScript embedding in a web browser.
-
-!!! compat "Julia 1.2"
-    This function requires at least Julia 1.2.
-"""
-isjsvm(os::Symbol) = (os === :Emscripten)
-
-for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
-    @eval $f() = $(getfield(@__MODULE__, f)(KERNEL))
-end
 
 if iswindows()
     function windows_version()
@@ -636,10 +528,10 @@ function which(program_name::String)
     # If we couldn't find anything, don't return anything
     nothing
 end
-which(program_name::AbstractString) = which(String(program_name))
+which(program_name::AbstractString) = which(String(program_name)::String)
 
 """
-    Sys.username() -> String
+    Sys.username()::String
 
 Return the username for the current user. If the username cannot be determined
 or is empty, this function throws an error.
@@ -660,5 +552,3 @@ function username()
     isempty(pw.username) && Base.uv_error("username", Base.UV_ENOENT)
     return pw.username
 end
-
-end # module Sys

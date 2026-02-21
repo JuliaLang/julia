@@ -129,7 +129,7 @@ end
 ##################################################################
 
 """
-    header(m::AbstractMenu) -> String
+    header(m::AbstractMenu)::String
 
 Return a header string to be printed above the menu.
 Defaults to "".
@@ -137,7 +137,7 @@ Defaults to "".
 header(m::AbstractMenu) = ""
 
 """
-    keypress(m::AbstractMenu, i::UInt32) -> Bool
+    keypress(m::AbstractMenu, i::UInt32)::Bool
 
 Handle any non-standard keypress event.
 If `true` is returned, [`TerminalMenus.request`](@ref) will exit.
@@ -146,7 +146,7 @@ Defaults to `false`.
 keypress(m::AbstractMenu, i::UInt32) = false
 
 """
-    numoptions(m::AbstractMenu) -> Int
+    numoptions(m::AbstractMenu)::Int
 
 Return the number of options in menu `m`. Defaults to `length(options(m))`.
 

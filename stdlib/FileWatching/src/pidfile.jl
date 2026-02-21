@@ -5,7 +5,8 @@ export mkpidlock, trymkpidlock
 
 using Base:
     IOError, UV_EEXIST, UV_ESRCH, UV_ENOENT,
-    Process
+    Process,
+    unsafe_takestring
 
 using Base.Filesystem:
     File, open, JL_O_CREAT, JL_O_RDWR, JL_O_RDONLY, JL_O_EXCL,
@@ -304,12 +305,12 @@ function open_exclusive(path::String;
 end
 
 function _rand_filename(len::Int=4) # modified from Base.Libc
-    slug = Base.StringVector(len)
+    slug = Base.StringMemory(len)
     chars = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     for i = 1:len
         slug[i] = chars[(Libc.rand() % length(chars)) + 1]
     end
-    return String(slug)
+    return unsafe_takestring(slug)
 end
 
 function tryrmopenfile(path::String)
