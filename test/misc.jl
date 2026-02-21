@@ -5,6 +5,9 @@ include("testhelpers/withlocales.jl")
 
 # Tests that do not really go anywhere else
 
+# Modify when (intentionally) changing the number of boxes in Base methods
+@test length(Test.detect_closure_boxes(Base)) == 6
+
 # test @assert macro
 @test_throws AssertionError (@assert 1 == 2)
 @test_throws AssertionError (@assert false)
@@ -227,6 +230,24 @@ end
     @sync for _ in 1:n
         @async begin
             @test Base.acquire(s) do
+                history[Threads.atomic_add!(clock, 1)] = Threads.atomic_add!(occupied, 1) + 1
+                sleep(rand(0:0.01:0.1))
+                history[Threads.atomic_add!(clock, 1)] = Threads.atomic_sub!(occupied, 1) - 1
+                return :resultvalue
+            end === :resultvalue
+        end
+    end
+    @test all(<=(sem_size), history)
+    @test all(>=(0), history)
+    @test history[end] == 0
+
+    # macro form
+    clock = Threads.Atomic{Int}(1)
+    occupied = Threads.Atomic{Int}(0)
+    history = fill!(Vector{Int}(undef, 2n), -1)
+    @sync for _ in 1:n
+        @async begin
+            @test Base.@acquire s begin
                 history[Threads.atomic_add!(clock, 1)] = Threads.atomic_add!(occupied, 1) + 1
                 sleep(rand(0:0.01:0.1))
                 history[Threads.atomic_add!(clock, 1)] = Threads.atomic_sub!(occupied, 1) - 1
@@ -481,12 +502,12 @@ begin
     local second = @capture_stdout @time @eval calldouble2(1.0)
 
     # these functions were not recompiled
-    local matches = collect(eachmatch(r"(\d+(?:\.\d+)?)%", first))
+    local matches = collect(eachmatch(r"(\d+(?:\.\d+)?)% compilation", first))
     @test length(matches) == 1
     @test parse(Float64, matches[1][1]) > 0.0
     @test parse(Float64, matches[1][1]) <= 100.0
 
-    matches = collect(eachmatch(r"(\d+(?:\.\d+)?)%", second))
+    matches = collect(eachmatch(r"(\d+(?:\.\d+)?)% compilation", second))
     @test length(matches) == 1
     @test parse(Float64, matches[1][1]) > 0.0
     @test parse(Float64, matches[1][1]) <= 100.0
@@ -617,6 +638,11 @@ let z = Z53061[Z53061(S53061(rand(), (rand(),rand())), 0) for _ in 1:10^4]
     @test allequal(summarysize(z) for i in 1:10)
     # broken on i868 linux. issue #54895
     @test abs(summarysize(z) - 640000)/640000 <= 0.01 broken = Sys.WORD_SIZE == 32 && Sys.islinux()
+end
+
+# issue #57506
+let len = 100, m1 = Memory{UInt8}(1:len), m2 = Memory{Union{Nothing,UInt8}}(1:len)
+    @test summarysize(m2) == summarysize(m1) + len
 end
 
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
@@ -1218,8 +1244,8 @@ end
 @test readlines(`$(Base.julia_cmd()) --startup-file=no -e 'foreach(println, names(Main))'`) == ["Base","Core","Main"]
 
 # issue #26310
-@test_warn "could not import" Core.eval(@__MODULE__, :(import .notdefined_26310__))
-@test_warn "could not import" Core.eval(Main,        :(import ........notdefined_26310__))
+@test_warn "undeclared at import time" Core.eval(@__MODULE__, :(import .notdefined_26310__))
+@test_warn "undeclared at import time" Core.eval(Main,        :(import ........notdefined_26310__))
 @test_nowarn Core.eval(Main, :(import .Main))
 @test_nowarn Core.eval(Main, :(import ....Main))
 
@@ -1453,7 +1479,8 @@ end
 @test_throws ErrorException finalizer(x->nothing, 1)
 @test_throws ErrorException finalizer(C_NULL, 1)
 
-
+# FIXME: Issue #57103 Test is specific to Stock GC
+@static if Base.USING_STOCK_GC
 @testset "GC utilities" begin
     GC.gc()
     GC.gc(true); GC.gc(false)
@@ -1472,6 +1499,7 @@ end
         end
         @test occursin("GC: pause", read(tmppath, String))
     end
+end
 end
 
 @testset "fieldtypes Module" begin
@@ -1515,15 +1543,43 @@ end
 # issue #41656
 run(`$(Base.julia_cmd()) -e 'isempty(x) = true'`)
 
+function treshape59278(X::AbstractArray, n, m)
+    Y = reshape(X, n, m)
+    Y .= 1.0
+    return X
+end
+
+# a function that allocates iff no constprop
+@inline maybealloc59278(n, _) = ntuple(i->rand(), n)
+
 @testset "Base/timing.jl" begin
     @test Base.jit_total_bytes() >= 0
 
     # sanity check `@allocations` returns what we expect in some very simple cases.
-    # These are inside functions because `@allocations` uses `Experimental.@force_compile`
-    # so can be affected by other code in the same scope.
     @test (() -> @allocations "a")() == 0
-    @test (() -> @allocations "a" * "b")() == 0 # constant propagation
+    "a" * Base.inferencebarrier("b")
     @test (() -> @allocations "a" * Base.inferencebarrier("b"))() == 1
+    # test that you can grab the value from @allocated
+    @allocated _x = 1+2
+    @test _x === 3
+
+    # test `@allocated` works for dotted operations
+    @test (@allocated 1 .+ 1) == 0
+
+    n, m = 10, 20
+    X = rand(n, m)
+    treshape59278(X, n, m)
+    # test that @allocated and @allocations are consistent about whether anything was
+    # allocated in a case where the compiler can sometimes remove an allocation
+    # https://github.com/JuliaLang/julia/issues/58634#issuecomment-2940840651
+    @test ((@allocated treshape59278(X, n, m))==0) == ((@allocations treshape59278(X, n, m))==0)
+    # TODO: would be nice to have but not yet reliable
+    #@test ((@allocated begin treshape59278(X, n, m) end)==0) == ((@allocations begin treshape59278(X, n, m) end)==0)
+
+    # test that all wrapped allocations are counted and constprop is not done
+    @test (@allocated @noinline maybealloc59278(10, [])) > (@allocated maybealloc59278(10, 0)) > 0
+    # but if you wrap it in another function it can be constprop'd
+    @test (@allocated (()->maybealloc59278(10, []))()) == 0
 
     _lock_conflicts, _nthreads = eval(Meta.parse(read(`$(Base.julia_cmd()) -tauto -E '
         _lock_conflicts = @lock_conflicts begin
@@ -1537,10 +1593,7 @@ run(`$(Base.julia_cmd()) -e 'isempty(x) = true'`)
         _lock_conflicts,Threads.nthreads()
     '`, String)))
     @test _lock_conflicts > 0 skip=(_nthreads < 2) # can only test if the worker can multithread
-end
 
-#TODO: merge with `@testset "Base/timing.jl"` once https://github.com/JuliaLang/julia/issues/52948 is resolved
-@testset "Base/timing.jl2" begin
     # Test the output of `format_bytes()`
     inputs = [(factor * (Int64(1000)^e),binary) for binary in (false,true), factor in (1,2), e in 0:6][:]
     expected_output = ["1 byte", "1 byte", "2 bytes", "2 bytes", "1000 bytes", "1000 bytes", "2.000 kB", "1.953 KiB",
@@ -1548,7 +1601,6 @@ end
                         "2.000 GB", "1.863 GiB", "1000.000 GB", "931.323 GiB", "2.000 TB", "1.819 TiB",
                         "1000.000 TB", "909.495 TiB", "2.000 PB", "1.776 PiB", "1000.000 PB", "888.178 PiB",
                         "2000.000 PB", "1776.357 PiB"]
-
     for ((n, binary), expected) in zip(inputs, expected_output)
         @test Base.format_bytes(n; binary) == expected
     end
@@ -1572,7 +1624,12 @@ end
 @testset "Base docstrings" begin
     undoc = Docs.undocumented_names(Base)
     @test_broken isempty(undoc)
-    @test undoc == [:BufferStream, :CanonicalIndexError, :CapturedException, :Filesystem, :IOServer, :InvalidStateException, :Order, :PipeEndpoint, :ScopedValues, :Sort, :TTY]
+    @test isempty(setdiff(undoc, [:BufferStream, :CanonicalIndexError, :CapturedException, :Filesystem, :IOServer, :InvalidStateException, :Order, :PipeEndpoint, :ScopedValues, :Sort, :TTY, :AtomicMemoryRef, :Exception, :GenericMemoryRef, :GlobalRef, :IO, :LineNumberNode, :MemoryRef, :Method, :SegmentationFault, :TypeVar, :arrayref, :arrayset, :arraysize, :const_arrayref]))
+end
+
+exported_names(m) = filter(s -> Base.isexported(m, s), names(m))
+@testset "Base re-exports Core" begin
+    @test issubset(exported_names(Core), exported_names(Base))
 end
 
 @testset "Base.Libc docstrings" begin
@@ -1602,10 +1659,10 @@ end
 let errs = IOBuffer()
     run(`$(Base.julia_cmd()) -e '
         using Test
-        @test isdefined(DataType.name.mt, :backedges)
+        @test !isempty(Core.methodtable.backedges)
         Base.Experimental.disable_new_worlds()
         @test_throws "disable_new_worlds" @eval f() = 1
-        @test !isdefined(DataType.name.mt, :backedges)
+        @test isempty(Core.methodtable.backedges)
         @test_throws "disable_new_worlds" Base.delete_method(which(+, (Int, Int)))
         @test 1+1 == 2
         using Dates

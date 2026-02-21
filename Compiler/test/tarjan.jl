@@ -2,6 +2,7 @@
 
 using Test
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 using .Compiler: CFGReachability, DomTree, CFG, BasicBlock, StmtRange, dominates,

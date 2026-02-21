@@ -77,9 +77,8 @@ void gc_page_profile_write_preamble(gc_page_profiler_serializer_t *serializer)
     JL_NOTSAFEPOINT
 {
     if (__unlikely(page_profile_enabled)) {
-        const size_t large_enough_str_size = 4096;
-        char str[large_enough_str_size];
-        snprintf(str, large_enough_str_size,
+        char str[4096];
+        snprintf(str, sizeof(str),
                  "{\"address\": \"%p\",\"object_size\": %d,\"objects\": [",
                  serializer->data, serializer->osize);
         ios_write(page_profile_stream, str, strlen(str));

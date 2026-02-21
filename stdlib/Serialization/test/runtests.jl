@@ -1,6 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Random, Serialization, Base64
+using Base.ScopedValues: with
+
+@test isempty(Test.detect_closure_boxes(Serialization))
 
 # Check that serializer hasn't gone out-of-frame
 @test Serialization.sertag(Symbol) == 1
@@ -130,7 +133,7 @@ create_serialization_stream() do s # user-defined module
     modtype = eval(Meta.parse("$(modstring)"))
     serialize(s, modtype)
     seek(s, 0)
-    @test deserialize(s) === modtype
+    @test invokelatest(deserialize, s) === modtype
 end
 
 # DataType
@@ -151,7 +154,7 @@ create_serialization_stream() do s # user-defined type
     utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
-    @test deserialize(s) === utype
+    @test invokelatest(deserialize, s) === utype
 end
 
 create_serialization_stream() do s # user-defined type
@@ -160,7 +163,7 @@ create_serialization_stream() do s # user-defined type
     utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
-    @test deserialize(s) === utype
+    @test invokelatest(deserialize, s) === utype
 end
 
 create_serialization_stream() do s # user-defined type
@@ -169,7 +172,7 @@ create_serialization_stream() do s # user-defined type
     utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
-    @test deserialize(s) == utype
+    @test invokelatest(deserialize, s) == utype
 end
 
 create_serialization_stream() do s # immutable struct with 1 field
@@ -178,7 +181,7 @@ create_serialization_stream() do s # immutable struct with 1 field
     utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
-    @test deserialize(s) == utype
+    @test invokelatest(deserialize, s) == utype
 end
 
 create_serialization_stream() do s # immutable struct with 2 field
@@ -187,7 +190,7 @@ create_serialization_stream() do s # immutable struct with 2 field
     utval = eval(Meta.parse("$(usertype)(1,2)"))
     serialize(s, utval)
     seek(s, 0)
-    @test deserialize(s) === utval
+    @test invokelatest(deserialize, s) === utval
 end
 
 create_serialization_stream() do s # immutable struct with 3 field
@@ -196,7 +199,7 @@ create_serialization_stream() do s # immutable struct with 3 field
     utval = eval(Meta.parse("$(usertype)(1,2,3)"))
     serialize(s, utval)
     seek(s, 0)
-    @test deserialize(s) === utval
+    @test invokelatest(deserialize, s) === utval
 end
 
 create_serialization_stream() do s # immutable struct with 4 field
@@ -205,7 +208,7 @@ create_serialization_stream() do s # immutable struct with 4 field
     utval = eval(Meta.parse("$(usertype)(1,2,3,4)"))
     serialize(s, utval)
     seek(s, 0)
-    @test deserialize(s) === utval
+    @test invokelatest(deserialize, s) === utval
 end
 
 # Expression
@@ -660,4 +663,15 @@ end
     undoc = Docs.undocumented_names(Serialization)
     @test_broken isempty(undoc)
     @test undoc == [:AbstractSerializer, :Serializer]
+end
+
+# test method definitions from v1.11
+if Int === Int64
+    let f_data = "N0pMGgQAAAAWAQEFdGh1bmsbFUbnFgEBBXRodW5rGxVG4DoWAQEGbWV0aG9kAQtmMTExX3RvXzExMhUABuABAAAA4BUAB+AAAAAAThVG4DQQAQxMaW5lSW5mb05vZGUfTptEH04BBE1haW5EAQ90b3AtbGV2ZWwgc2NvcGUBBG5vbmW+vhUAAd8V305GTk4JAQAAAAAAAAAJ//////////9MTExMAwADAAUAAAX//xYBAQZtZXRob2QsBwAWAlYkH06bRAEGVHlwZW9mLAcAFgNWJB9Om0QBBHN2ZWMo4iQfTptETxYBViQfTptEAQRzdmVjFgRWJB9Om0QBBHN2ZWMo4yjkGhfgAQRub25lFgMBBm1ldGhvZCwHACjlGxVG5AEBXhYDViQfTptElyQfTp5EAQNWYWzhFgFWKOEWBFYkH06eRAELbGl0ZXJhbF9wb3co4CXhKOI6KOMVAAbkAQAAAAEAAAABAAAAAQAAAAAAAADkFQAH5AAAAAAAAAAAAAAAAAAAAAAAAAAAThVG4DQsCwAfTgEETWFpbkQBBG5vbmUBBG5vbmW/vhUAAeGifRXhAAhORk5OCQEAAAAAAAAACf//////////TExMTAMAAwAFAAAF//86ThUABucBAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAAAAAOcVAAfnAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABOFUbgNCwLAB9OAQRNYWluRCwNAAEEbm9uZb6+FQAB3xXfTkZOTgkBAAAAAAAAAAn//////////0xMTEwDAAMABQAABf//"
+        @eval Main function f111_to_112 end
+        Core.eval(Main, with(Serialization.current_module => Main) do
+                 deserialize(IOBuffer(base64decode(f_data)))
+             end)
+        @test @invokelatest(Main.f111_to_112(16)) == 256
+    end
 end

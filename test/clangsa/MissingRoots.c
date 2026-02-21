@@ -277,20 +277,6 @@ void nonconst_loads2()
 static inline void look_at_value2(jl_value_t *v) {
   look_at_value(v);
 }
-void mtable(jl_value_t *f) {
-  look_at_value2((jl_value_t*)jl_gf_mtable(f));
-  jl_value_t *val = NULL;
-  JL_GC_PUSH1(&val);
-  val = (jl_value_t*)jl_gf_mtable(f);
-  JL_GC_POP();
-}
-
-void mtable2(jl_value_t **v) {
-  jl_value_t *val = NULL;
-  JL_GC_PUSH1(&val);
-  val = (jl_value_t*)jl_gf_mtable(v[2]);
-  JL_GC_POP();
-}
 
 void tparam0(jl_value_t *atype) {
    look_at_value(jl_tparam0(atype));

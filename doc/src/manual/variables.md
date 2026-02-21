@@ -3,21 +3,17 @@
 A variable, in Julia, is a name associated (or bound) to a value. It's useful when you want to
 store a value (that you obtained after some math, for example) for later use. For example:
 
-```julia-repl
-# Assign the value 10 to the variable x
-julia> x = 10
+```jldoctest
+julia> x = 10   # Assign the value 10 to the variable x
 10
 
-# Doing math with x's value
-julia> x + 1
+julia> x + 1    # Doing math with x's value
 11
 
-# Reassign x's value
-julia> x = 1 + 1
+julia> x = 1 + 1   # Reassign x's value
 2
 
-# You can assign values of other types, like strings of text
-julia> x = "Hello World!"
+julia> x = "Hello World!"   # You can assign values of other types, like strings of text
 "Hello World!"
 ```
 
@@ -79,10 +75,12 @@ julia> Base.length
 length (generic function with 79 methods)
 ```
 
-However, if you try to redefine a built-in constant or function already in use, Julia will give
-you an error:
+However, if you try to redefine a built-in constant or function that you
+have explicitly imported, Julia will give you an error:
 
 ```jldoctest
+julia> using Base: pi, sqrt
+
 julia> pi
 π = 3.1415926535897...
 
@@ -96,6 +94,10 @@ julia> sqrt = 4
 ERROR: cannot assign a value to imported variable Base.sqrt from module Main
 ```
 
+!!! compat "Julia 1.12"
+    Note that in versions prior to Julia 1.12, these errors depended on *use*
+    rather than definition of the conflicting binding.
+
 ## [Allowed Variable Names](@id man-allowed-variable-names)
 
 Variable names must begin with a letter (A-Z or a-z), underscore, or a subset of Unicode code
@@ -106,7 +108,8 @@ digits (0-9 and other characters in categories Nd/No), as well as other Unicode 
 and other modifying marks (categories Mn/Mc/Me/Sk), some punctuation connectors (category Pc),
 primes, and a few other characters.
 
-Operators like `+` are also valid identifiers, but are parsed specially. In some contexts, operators
+[Operators](@ref Operator-Precedence-and-Associativity) like `+` are also valid identifiers, but
+are parsed specially. In some contexts, operators
 can be used just like variables; for example `(+)` refers to the addition function, and `(+) = f`
 will reassign it. Most of the Unicode infix operators (in category Sm), such as `⊕`, are parsed
 as infix operators and are available for user-defined methods (e.g. you can use `const ⊗ = kron`
@@ -116,10 +119,9 @@ A space is required between an operator that ends with a subscript/superscript l
 variable name. For example, if `+ᵃ` is an operator, then `+ᵃx` must be written as `+ᵃ x` to distinguish
 it from `+ ᵃx` where `ᵃx` is the variable name.
 
-
 A particular class of variable names is one that contains only underscores. These identifiers are write-only. I.e. they can only be assigned values, which are immediately discarded, and their values cannot be used in any way.
 
-```julia-repl
+```jldoctest
 julia> x, ___ = size([2 2; 1 1])
 (2, 2)
 
@@ -132,12 +134,18 @@ ERROR: syntax: all-underscore identifiers are write-only and their values cannot
 
 The only explicitly disallowed names for variables are the names of the built-in [Keywords](@ref Keywords):
 
-```julia-repl
+```jldoctest
 julia> else = false
-ERROR: syntax: unexpected "else"
+ERROR: ParseError:
+# Error @ none:1:1
+else = false
+└──┘ ── invalid identifier
 
 julia> try = "No"
-ERROR: syntax: unexpected "="
+ERROR: ParseError:
+# Error @ none:1:1
+try = "No"
+└────────┘ ── try without catch or finally
 ```
 
 Some Unicode characters are considered to be equivalent in identifiers.

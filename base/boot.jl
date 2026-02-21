@@ -229,16 +229,18 @@ export
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
     fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!, setfieldonce!,
-    nfields, throw, tuple, ===, isdefined, eval,
+    nfields, throw, tuple, ===, isdefined,
     # access to globals
-    getglobal, setglobal!, swapglobal!, modifyglobal!, replaceglobal!, setglobalonce!,
+    getglobal, setglobal!, swapglobal!, modifyglobal!, replaceglobal!, setglobalonce!, isdefinedglobal,
     # ifelse, sizeof    # not exported, to avoid conflicting with Base
     # type reflection
     <:, typeof, isa, typeassert,
     # method reflection
     applicable, invoke,
     # constants
-    nothing, Main
+    nothing, Main,
+    # backwards compatibility
+    arrayref, arrayset, arraysize, const_arrayref
 
 const getproperty = getfield # TODO: use `getglobal` for modules instead
 const setproperty! = setfield!
@@ -383,9 +385,10 @@ struct StackOverflowError  <: Exception end
 struct UndefRefError       <: Exception end
 struct UndefVarError <: Exception
     var::Symbol
+    world::UInt
     scope # a Module or Symbol or other object describing the context where this variable was looked for (e.g. Main or :local or :static_parameter)
-    UndefVarError(var::Symbol) = new(var)
-    UndefVarError(var::Symbol, @nospecialize scope) = new(var, scope)
+    UndefVarError(var::Symbol) = new(var, ccall(:jl_get_tls_world_age, UInt, ()))
+    UndefVarError(var::Symbol, @nospecialize scope) = new(var, ccall(:jl_get_tls_world_age, UInt, ()), scope)
 end
 struct ConcurrencyViolationError <: Exception
     msg::AbstractString
@@ -407,7 +410,7 @@ struct TypeError <: Exception
     # `context` optionally adds extra detail, e.g. the name of the type parameter
     # that got a bad value.
     func::Symbol
-    context::Union{AbstractString,Symbol}
+    context::Union{AbstractString,GlobalRef,Symbol}
     expected::Type
     got
     TypeError(func, context, @nospecialize(expected::Type), @nospecialize(got)) =
@@ -472,6 +475,7 @@ struct ABIOverride
 end
 
 struct PrecompilableError <: Exception end
+struct TrimFailure <: Exception end
 
 String(s::String) = s  # no constructor yet
 
@@ -512,6 +516,37 @@ struct VecElement{T}
 end
 VecElement(arg::T) where {T} = VecElement{T}(arg)
 
+# inference lattice element types (moved from jltypes.c)
+struct Const
+    val
+    Const(@nospecialize(v)) = new(v)
+end
+
+struct PartialStruct
+    typ
+    undefs::Array{Union{Nothing,Bool}, 1}
+    fields::Array{Any, 1}
+    # N.B. The constructor for this struct is intentionally not defined here.
+    # It is defined in coreir.jl along with some validation logic.
+    global _PartialStruct
+    _PartialStruct(@nospecialize(typ), undef::Array{Union{Nothing,Bool}, 1}, fields::Array{Any, 1}) = new(typ, undef, fields)
+end
+
+struct InterConditional
+    slot::Int
+    thentype
+    elsetype
+    InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) = new(slot, thentype, elsetype)
+end
+
+struct PartialOpaque
+    typ::Type
+    env
+    parent::MethodInstance
+    source
+    PartialOpaque(@nospecialize(typ::Type), @nospecialize(env), parent::MethodInstance, source) = new(typ, env, parent, source)
+end
+
 eval(Core, quote
     GotoNode(label::Int) = $(Expr(:new, :GotoNode, :label))
     NewvarNode(slot::SlotNumber) = $(Expr(:new, :NewvarNode, :slot))
@@ -538,10 +573,6 @@ eval(Core, quote
     PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))
     UpsilonNode(@nospecialize(val)) = $(Expr(:new, :UpsilonNode, :val))
     UpsilonNode() = $(Expr(:new, :UpsilonNode))
-    Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))
-    _PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))
-    PartialOpaque(@nospecialize(typ), @nospecialize(env), parent::MethodInstance, source) = $(Expr(:new, :PartialOpaque, :typ, :env, :parent, :source))
-    InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :thentype, :elsetype))
     MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) = $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))
 end)
 
@@ -586,8 +617,9 @@ const undef = UndefInitializer()
 # empty vector constructor
 (self::Type{GenericMemory{kind,T,addrspace}})() where {T,kind,addrspace} = self(undef, 0)
 
+# memoryref is simply convenience wrapper function around memoryrefnew
 memoryref(mem::GenericMemory) = memoryrefnew(mem)
-memoryref(mem::GenericMemory, i::Integer) = memoryrefnew(memoryrefnew(mem), Int(i), @_boundscheck)
+memoryref(mem::GenericMemory, i::Integer) = memoryrefnew(mem, Int(i), @_boundscheck)
 memoryref(ref::GenericMemoryRef, i::Integer) = memoryrefnew(ref, Int(i), @_boundscheck)
 GenericMemoryRef(mem::GenericMemory) = memoryref(mem)
 GenericMemoryRef(mem::GenericMemory, i::Integer) = memoryref(mem, i)
@@ -691,18 +723,68 @@ function Symbol(a::Array{UInt8, 1})
 end
 Symbol(s::Symbol) = s
 
+# Minimal implementations of using/import for bootstrapping (supports only
+# `import .M: a, b, c, ...`, little error checking)
+let
+    fail() = throw(ArgumentError("unsupported import/using while bootstrapping"))
+    length(a::Array{T, 1}) where {T} = getfield(getfield(a, :size), 1)
+    function getindex(A::Array, i::Int)
+        Intrinsics.ult_int(Intrinsics.bitcast(UInt, Intrinsics.sub_int(i, 1)), Intrinsics.bitcast(UInt, length(A))) || fail()
+        memoryrefget(memoryrefnew(getfield(A, :ref), i, false), :not_atomic, false)
+    end
+    x == y = Intrinsics.eq_int(x, y)
+    x + y = Intrinsics.add_int(x, y)
+    x <= y = Intrinsics.sle_int(x, y)
+
+    global function _eval_import(explicit::Bool, to::Module, from::Union{Expr, Nothing}, paths::Expr...)
+        from isa Expr || fail()
+        if length(from.args) == 2 && getindex(from.args, 1) === :.
+            from = getglobal(to, getindex(from.args, 2))
+        elseif length(from.args) == 1 && getindex(from.args, 1) === :Core
+            from = Core
+        elseif length(from.args) == 1 && getindex(from.args, 1) === :Base
+            from = Main.Base
+        else
+            fail()
+        end
+        from isa Module || fail()
+        i = 1
+        while i <= nfields(paths)
+            a = getfield(paths, i).args
+            length(a) == 1 || fail()
+            s = getindex(a, 1)
+            Core._import(to, from, s, s, explicit)
+            i += 1
+        end
+    end
+
+    global function _eval_using(to::Module, path::Expr)
+        getindex(path.args, 1) === :. || fail()
+        from = getglobal(to, getindex(path.args, 2))
+        i = 3
+        while i <= length(path.args)
+            from = getfield(from, getindex(path.args, i))
+            i += 1
+        end
+        from isa Module || fail()
+        Core._using(to, from)
+    end
+end
+
 # module providing the IR object model
+# excluding types already exported by Core (GlobalRef, QuoteNode, Expr, LineNumberNode)
+# any type beyond these is self-quoting (see also Base.isa_ast_node)
 module IR
 
 export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, DebugInfo,
-    Const, PartialStruct, InterConditional, EnterNode, memoryref
+    Const, PartialStruct, InterConditional, EnterNode
 
 using Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, DebugInfo,
-    Const, PartialStruct, InterConditional, EnterNode, memoryref
+    Const, PartialStruct, InterConditional, EnterNode
 
 end # module IR
 
@@ -717,7 +799,8 @@ macro __doc__(x)
 end
 
 isbasicdoc(@nospecialize x) = (isa(x, Expr) && x.head === :.) || isa(x, Union{QuoteNode, Symbol})
-iscallexpr(ex::Expr) = (isa(ex, Expr) && ex.head === :where) ? iscallexpr(ex.args[1]) : (isa(ex, Expr) && ex.head === :call)
+firstarg(arg1, args...) = arg1
+iscallexpr(ex::Expr) = (isa(ex, Expr) && ex.head === :where) ? iscallexpr(firstarg(ex.args...)) : (isa(ex, Expr) && ex.head === :call)
 iscallexpr(ex) = false
 function ignoredoc(source, mod, str, expr)
     (isbasicdoc(expr) || iscallexpr(expr)) && return Expr(:escape, nothing)
@@ -773,27 +856,6 @@ struct GeneratedFunctionStub
     gen
     argnames::SimpleVector
     spnames::SimpleVector
-end
-
-# invoke and wrap the results of @generated expression
-function (g::GeneratedFunctionStub)(world::UInt, source::LineNumberNode, @nospecialize args...)
-    # args is (spvals..., argtypes...)
-    body = g.gen(args...)
-    file = source.file
-    file isa Symbol || (file = :none)
-    lam = Expr(:lambda, Expr(:argnames, g.argnames...).args,
-               Expr(:var"scope-block",
-                    Expr(:block,
-                         source,
-                         Expr(:meta, :push_loc, file, :var"@generated body"),
-                         Expr(:return, body),
-                         Expr(:meta, :pop_loc))))
-    spnames = g.spnames
-    if spnames === svec()
-        return lam
-    else
-        return Expr(Symbol("with-static-parameters"), lam, spnames...)
-    end
 end
 
 # If the generator is a subtype of this trait, inference caches the generated unoptimized
@@ -864,7 +926,7 @@ toInt8(x::UInt16)     = checked_trunc_sint(Int8, check_sign_bit(Int8, x))
 toInt8(x::UInt32)     = checked_trunc_sint(Int8, check_sign_bit(Int8, x))
 toInt8(x::UInt64)     = checked_trunc_sint(Int8, check_sign_bit(Int8, x))
 toInt8(x::UInt128)    = checked_trunc_sint(Int8, check_sign_bit(Int8, x))
-toInt8(x::Bool)       = and_int(bitcast(Int8, x), Int8(1))
+toInt8(x::Bool)       = bitcast(Int8, x)
 toInt16(x::Int8)      = sext_int(Int16, x)
 toInt16(x::Int16)     = x
 toInt16(x::Int32)     = checked_trunc_sint(Int16, x)
@@ -875,7 +937,7 @@ toInt16(x::UInt16)    = bitcast(Int16, check_sign_bit(Int16, x))
 toInt16(x::UInt32)    = checked_trunc_sint(Int16, check_sign_bit(Int16, x))
 toInt16(x::UInt64)    = checked_trunc_sint(Int16, check_sign_bit(Int16, x))
 toInt16(x::UInt128)   = checked_trunc_sint(Int16, check_sign_bit(Int16, x))
-toInt16(x::Bool)      = and_int(zext_int(Int16, x), Int16(1))
+toInt16(x::Bool)      = zext_int(Int16, x)
 toInt32(x::Int8)      = sext_int(Int32, x)
 toInt32(x::Int16)     = sext_int(Int32, x)
 toInt32(x::Int32)     = x
@@ -886,7 +948,7 @@ toInt32(x::UInt16)    = zext_int(Int32, x)
 toInt32(x::UInt32)    = bitcast(Int32, check_sign_bit(Int32, x))
 toInt32(x::UInt64)    = checked_trunc_sint(Int32, check_sign_bit(Int32, x))
 toInt32(x::UInt128)   = checked_trunc_sint(Int32, check_sign_bit(Int32, x))
-toInt32(x::Bool)      = and_int(zext_int(Int32, x), Int32(1))
+toInt32(x::Bool)      = zext_int(Int32, x)
 toInt64(x::Int8)      = sext_int(Int64, x)
 toInt64(x::Int16)     = sext_int(Int64, x)
 toInt64(x::Int32)     = sext_int(Int64, x)
@@ -897,7 +959,7 @@ toInt64(x::UInt16)    = zext_int(Int64, x)
 toInt64(x::UInt32)    = zext_int(Int64, x)
 toInt64(x::UInt64)    = bitcast(Int64, check_sign_bit(Int64, x))
 toInt64(x::UInt128)   = checked_trunc_sint(Int64, check_sign_bit(Int64, x))
-toInt64(x::Bool)      = and_int(zext_int(Int64, x), Int64(1))
+toInt64(x::Bool)      = zext_int(Int64, x)
 toInt128(x::Int8)     = sext_int(Int128, x)
 toInt128(x::Int16)    = sext_int(Int128, x)
 toInt128(x::Int32)    = sext_int(Int128, x)
@@ -908,7 +970,7 @@ toInt128(x::UInt16)   = zext_int(Int128, x)
 toInt128(x::UInt32)   = zext_int(Int128, x)
 toInt128(x::UInt64)   = zext_int(Int128, x)
 toInt128(x::UInt128)  = bitcast(Int128, check_sign_bit(Int128, x))
-toInt128(x::Bool)     = and_int(zext_int(Int128, x), Int128(1))
+toInt128(x::Bool)     = zext_int(Int128, x)
 toUInt8(x::Int8)      = bitcast(UInt8, check_sign_bit(UInt8, x))
 toUInt8(x::Int16)     = checked_trunc_uint(UInt8, x)
 toUInt8(x::Int32)     = checked_trunc_uint(UInt8, x)
@@ -919,7 +981,7 @@ toUInt8(x::UInt16)    = checked_trunc_uint(UInt8, x)
 toUInt8(x::UInt32)    = checked_trunc_uint(UInt8, x)
 toUInt8(x::UInt64)    = checked_trunc_uint(UInt8, x)
 toUInt8(x::UInt128)   = checked_trunc_uint(UInt8, x)
-toUInt8(x::Bool)      = and_int(bitcast(UInt8, x), UInt8(1))
+toUInt8(x::Bool)      = bitcast(UInt8, x)
 toUInt16(x::Int8)     = sext_int(UInt16, check_sign_bit(UInt16, x))
 toUInt16(x::Int16)    = bitcast(UInt16, check_sign_bit(UInt16, x))
 toUInt16(x::Int32)    = checked_trunc_uint(UInt16, x)
@@ -930,7 +992,7 @@ toUInt16(x::UInt16)   = x
 toUInt16(x::UInt32)   = checked_trunc_uint(UInt16, x)
 toUInt16(x::UInt64)   = checked_trunc_uint(UInt16, x)
 toUInt16(x::UInt128)  = checked_trunc_uint(UInt16, x)
-toUInt16(x::Bool)     = and_int(zext_int(UInt16, x), UInt16(1))
+toUInt16(x::Bool)     = zext_int(UInt16, x)
 toUInt32(x::Int8)     = sext_int(UInt32, check_sign_bit(UInt32, x))
 toUInt32(x::Int16)    = sext_int(UInt32, check_sign_bit(UInt32, x))
 toUInt32(x::Int32)    = bitcast(UInt32, check_sign_bit(UInt32, x))
@@ -941,7 +1003,7 @@ toUInt32(x::UInt16)   = zext_int(UInt32, x)
 toUInt32(x::UInt32)   = x
 toUInt32(x::UInt64)   = checked_trunc_uint(UInt32, x)
 toUInt32(x::UInt128)  = checked_trunc_uint(UInt32, x)
-toUInt32(x::Bool)     = and_int(zext_int(UInt32, x), UInt32(1))
+toUInt32(x::Bool)     = zext_int(UInt32, x)
 toUInt64(x::Int8)     = sext_int(UInt64, check_sign_bit(UInt64, x))
 toUInt64(x::Int16)    = sext_int(UInt64, check_sign_bit(UInt64, x))
 toUInt64(x::Int32)    = sext_int(UInt64, check_sign_bit(UInt64, x))
@@ -952,7 +1014,7 @@ toUInt64(x::UInt16)   = zext_int(UInt64, x)
 toUInt64(x::UInt32)   = zext_int(UInt64, x)
 toUInt64(x::UInt64)   = x
 toUInt64(x::UInt128)  = checked_trunc_uint(UInt64, x)
-toUInt64(x::Bool)     = and_int(zext_int(UInt64, x), UInt64(1))
+toUInt64(x::Bool)     = zext_int(UInt64, x)
 toUInt128(x::Int8)    = sext_int(UInt128, check_sign_bit(UInt128, x))
 toUInt128(x::Int16)   = sext_int(UInt128, check_sign_bit(UInt128, x))
 toUInt128(x::Int32)   = sext_int(UInt128, check_sign_bit(UInt128, x))
@@ -963,7 +1025,7 @@ toUInt128(x::UInt16)  = zext_int(UInt128, x)
 toUInt128(x::UInt32)  = zext_int(UInt128, x)
 toUInt128(x::UInt64)  = zext_int(UInt128, x)
 toUInt128(x::UInt128) = x
-toUInt128(x::Bool)    = and_int(zext_int(UInt128, x), UInt128(1))
+toUInt128(x::Bool)    = zext_int(UInt128, x)
 
 # TODO: this is here to work around the 4 method limit in inference (#23210).
 const BuiltinInts = Union{Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8, Bool}
@@ -1014,8 +1076,9 @@ function struct_name_shim(@nospecialize(x), name::Symbol, mod::Module, @nospecia
     return x === mod ? t : getfield(x, name)
 end
 
-# Binding for the julia parser, called as
-#
+# Bindings for the julia frontend.  The internal jl_parse and jl_lower will call
+# Core._parse and Core._lower respectively (if they are not `nothing`.)
+
 #    Core._parse(text, filename, lineno, offset, options)
 #
 # Parse Julia code from the buffer `text`, starting at `offset` and attributing
@@ -1025,14 +1088,23 @@ end
 #
 # `_parse` must return an `svec` containing an `Expr` and the new offset as an
 # `Int`.
-#
-# The internal jl_parse will call into Core._parse if not `nothing`.
 _parse = nothing
 
-_setparser!(parser) = setglobal!(Core, :_parse, parser)
+#    Core._lower(code, module, filename="none", linenum=0, world=0xfff..., warn=false)
+#
+# Lower `code` (usually Expr), returning `svec(e::Any xs::Any...)` where `e` is
+# the lowered code, and `xs` is possible additional information from
+# JuliaLowering (TBD).
+_lower = nothing
 
-# support for deprecated uses of internal _apply function
-_apply(x...) = Core._apply_iterate(Main.Base.iterate, x...)
+_setparser!(parser) = setglobal!(Core, :_parse, parser)
+_setlowerer!(lowerer) = setglobal!(Core, :_lower, lowerer)
+
+# support for deprecated uses of builtin functions
+_apply(x...) = _apply_iterate(Main.Base.iterate, x...)
+const _apply_pure = _apply
+const _call_latest = invokelatest
+const _call_in_world = invoke_in_world
 
 struct Pair{A, B}
     first::A
@@ -1059,7 +1131,6 @@ const_arrayref(inbounds::Bool, A::Array, i::Int...) = Main.Base.getindex(A, i...
 arrayset(inbounds::Bool, A::Array{T}, x::Any, i::Int...) where {T} = Main.Base.setindex!(A, x::T, i...)
 arraysize(a::Array) = a.size
 arraysize(a::Array, i::Int) = sle_int(i, nfields(a.size)) ? getfield(a.size, i) : 1
-export arrayref, arrayset, arraysize, const_arrayref
 const check_top_bit = check_sign_bit
 
 # For convenience
@@ -1096,5 +1167,11 @@ typename(union::UnionAll) = typename(union.body)
 (!==)(@nospecialize(a), @nospecialize(b)) = Intrinsics.not_int(a === b)
 
 include(Core, "optimized_generics.jl")
+
+# Used only be the magic @VERSION macro
+struct MacroSource
+    lno::Any # ::LineNumberNode, but needs to be a pointer
+    syntax_ver::Any # ::VersionNumber =#
+end
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

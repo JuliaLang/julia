@@ -131,6 +131,18 @@ function loopedlength(arr)
     end
     len
 end
+# COM: Vector
+# ALL-LABEL: @julia_memset_like
+# ALL: vector.body
+
+# COM: Memory
+# ALL-LABEL: @julia_memset_like
+# ALL: vector.body
+function memset_like(mem)
+    for idx in eachindex(mem)
+        mem[idx] = 1.0
+    end
+end
 
 emit(iterate_read, Vector{Int64})
 emit(iterate_write, Vector{Int64}, Vector{Int64})
@@ -150,3 +162,6 @@ emit(sumloop, Int64)
 emit(simd_sumloop, Float32)
 
 emit(loopedlength, Vector{Int64})
+
+emit(memset_like, Vector{Float64})
+emit(memset_like, Memory{Float64})

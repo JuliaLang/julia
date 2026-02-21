@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## File Operations (Libuv-based) ##
+# NB: This file is `Core.eval`-uated into the (pre-existing) module Filesystem
 
-module Filesystem
+## File Operations (Libuv-based) ##
 
 """
     JL_O_APPEND
@@ -137,11 +137,11 @@ export File,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
 import .Base:
-    IOError, _UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
-    bytesavailable, position, read, read!, readavailable, seek, seekend, show,
-    skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
+    IOError, _UVError, _sizeof_uv_fs, check_open, close, closewrite, eof, eventloop, fd, isopen,
+    bytesavailable, position, read, read!, readbytes!, readavailable, seek, seekend, show,
+    skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error, _uv_error,
     setup_stdio, rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize,
-    isexecutable, isreadable, iswritable, MutableDenseArrayType
+    isexecutable, isreadable, iswritable, MutableDenseArrayType, truncate, unsafe_takestring!
 
 import .Base.RefValue
 
@@ -149,14 +149,15 @@ if Sys.iswindows()
     import .Base: cwstring
 end
 
-# Average buffer size including null terminator for several filesystem operations.
-# On Windows we use the MAX_PATH = 260 value on Win32.
-const AVG_PATH = Sys.iswindows() ? 260 : 512
-
 # helper function to clean up libuv request
 uv_fs_req_cleanup(req) = ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
 
-include("path.jl")
+if Sys.iswindows()
+    const path_separator_re = r"[/\\]+"sa # May be used by some external packages
+elseif Sys.isunix()
+    const path_separator_re = r"/+"sa # May be used by some external packages
+end
+
 include("stat.jl")
 include("file.jl")
 include(string(Base.BUILDROOT, "file_constants.jl"))  # include($BUILDROOT/base/file_constants.jl)
@@ -390,7 +391,7 @@ function isexecutable(path::String)
     X_OK = 0x01
     return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, X_OK) == 0
 end
-isexecutable(path::AbstractString) = isexecutable(String(path))
+isexecutable(path::AbstractString) = isexecutable(String(path)::String)
 
 """
     isreadable(path::String)
@@ -417,7 +418,7 @@ function isreadable(path::String)
     R_OK = 0x04
     return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, R_OK) == 0
 end
-isreadable(path::AbstractString) = isreadable(String(path))
+isreadable(path::AbstractString) = isreadable(String(path)::String)
 
 """
     iswritable(path::String)
@@ -444,7 +445,4 @@ function iswritable(path::String)
     W_OK = 0x02
     return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, W_OK) == 0
 end
-iswritable(path::AbstractString) = iswritable(String(path))
-
-
-end
+iswritable(path::AbstractString) = iswritable(String(path)::String)

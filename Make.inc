@@ -59,8 +59,13 @@ USE_SYSTEM_LIBGIT2:=0
 USE_SYSTEM_PATCHELF:=0
 USE_SYSTEM_LIBWHICH:=0
 USE_SYSTEM_ZLIB:=0
+USE_SYSTEM_ZSTD:=0
 USE_SYSTEM_P7ZIP:=0
 USE_SYSTEM_LLD:=0
+
+# Link libjulia-internal with static libgcc and libstdc++
+USE_RT_STATIC_LIBGCC:=1
+USE_RT_STATIC_LIBSTDCXX:=1
 
 # Link to the LLVM shared library
 USE_LLVM_SHLIB := 1
@@ -80,9 +85,6 @@ HAVE_SSP := 0
 WITH_GC_VERIFY := 0
 WITH_GC_DEBUG_ENV := 0
 
-# Use stock if MMTK_PLAN hasn't been defined
-MMTK_PLAN ?= None
-
 # Enable DTrace support
 WITH_DTRACE := 0
 
@@ -96,8 +98,14 @@ WITH_NVTX := 0
 WITH_TRACY := 0
 WITH_TRACY_CALLSTACKS := 0
 
+# Enable Apple Instruments support
+WITH_APPLE_OSLOG := 0
+
 # Enable Timing Counts support
 WITH_TIMING_COUNTS := 0
+
+# Should --gc-sections/-dead_strip be used to remove unreferenced code?
+USE_LINKER_GC:=1
 
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
@@ -110,6 +118,11 @@ define newline # a literal \n
 endef
 COMMA:=,
 SPACE:=$(eval) $(eval)
+
+# define various helper macros for safe interpolation into various parsers
+shell_escape='$(subst ','\'',$1)'
+c_escape="$(subst ",\",$(subst \,\\,$1))"
+julia_escape=$(call c_escape,$1)
 
 # force a sane / stable configuration
 export LC_ALL=C
@@ -371,11 +384,15 @@ $(1)_rel_eval = $(call rel_path,$(2),$($(1)))
 $(1)_rel = $$(call hit_cache,$(1)_rel_eval)
 endef
 $(foreach D,libdir private_libdir datarootdir libexecdir private_libexecdir docdir sysconfdir includedir,$(eval $(call cache_rel_path,$(D),$(bindir))))
-$(foreach D,build_libdir build_private_libdir,$(eval $(call cache_rel_path,$(D),$(build_bindir))))
+$(foreach D,build_libdir build_private_libdir                                                           ,$(eval $(call cache_rel_path,$(D),$(build_bindir))))
 
 # Save a special one: reverse_private_libdir_rel: usually just `../`, but good to be general:
 reverse_private_libdir_rel_eval = $(call rel_path,$(private_libdir),$(libdir))
 reverse_private_libdir_rel = $(call hit_cache,reverse_private_libdir_rel_eval)
+reverse_private_libexecdir_rel_eval = $(call rel_path,$(private_libexecdir),$(private_libdir))
+reverse_private_libexecdir_rel = $(call hit_cache,reverse_private_libexecdir_rel_eval)
+reverse_build_private_libexecdir_rel_eval = $(call rel_path,$(build_private_libexecdir),$(build_libdir))
+reverse_build_private_libexecdir_rel = $(call hit_cache,reverse_build_private_libexecdir_rel_eval)
 
 INSTALL_F := $(JULIAHOME)/contrib/install.sh 644
 INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
@@ -424,9 +441,10 @@ export PKG_CONFIG_PATH = $(JULIAHOME)/usr/lib/pkgconfig
 export PKG_CONFIG_LIBDIR = $(JULIAHOME)/usr/lib/pkgconfig
 
 # Figure out OS and architecture
-BUILD_OS := $(shell uname)
+RAW_BUILD_OS = $(shell uname)
+BUILD_OS := $(RAW_BUILD_OS)
 
-ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+ifneq (,$(findstring CYGWIN,$(RAW_BUILD_OS)))
 XC_HOST ?= $(shell uname -m)-w64-mingw32
 endif
 
@@ -514,6 +532,10 @@ endif
 
 # Compiler specific stuff
 
+ifneq ($(USECLANG)$(USEGCC),)
+$(error "These internal variables are not overridable. Set CC instead.")
+endif
+
 ifeq (default,$(origin CC))
 CC := $(CROSS_COMPILE)$(CC) # attempt to add cross-compiler prefix, if the user
                             # is not overriding the default, to form target-triple-cc (which
@@ -541,26 +563,29 @@ MACOSX_VERSION_MIN := 11.0
 endif
 endif
 
-JCFLAGS_COMMON    := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -Wformat -Wformat-security
-JCFLAGS_CLANG     := $(JCFLAGS_COMMON)
-JCFLAGS_GCC       := $(JCFLAGS_COMMON) -fno-gnu-unique
+# These are lazy expansion variables, so that arguments can be added to them later and they'll affect all of these uses too
+JCFLAGS_COMMON     = -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -Wformat -Wformat-security
+JCFLAGS_CLANG      = $(JCFLAGS_COMMON)
+JCFLAGS_GCC        = $(JCFLAGS_COMMON) -fno-gnu-unique
+
 
 # These flags are needed to generate decent debug info
-JCPPFLAGS_COMMON  := -fasynchronous-unwind-tables
-JCPPFLAGS_CLANG   := $(JCPPFLAGS_COMMON) -mllvm -enable-tail-merge=0
-JCPPFLAGS_GCC     := $(JCPPFLAGS_COMMON) -fno-tree-tail-merge
+JCPPFLAGS_COMMON   = -fasynchronous-unwind-tables
+JCPPFLAGS_CLANG    = $(JCPPFLAGS_COMMON) -mllvm -enable-tail-merge=0
+JCPPFLAGS_GCC      = $(JCPPFLAGS_COMMON) -fno-tree-tail-merge
 
-JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++17 -Wformat -Wformat-security
-JCXXFLAGS_CLANG   := $(JCXXFLAGS_COMMON) -pedantic
-JCXXFLAGS_GCC     := $(JCXXFLAGS_COMMON) -fno-gnu-unique
+JCXXFLAGS_COMMON   = -pipe $(fPIC) -fno-rtti -std=c++17 -Wformat -Wformat-security -fno-strict-aliasing
+JCXXFLAGS_CLANG    = $(JCXXFLAGS_COMMON) -pedantic
+JCXXFLAGS_GCC      = $(JCXXFLAGS_COMMON) -fno-gnu-unique
 
-DEBUGFLAGS_COMMON := -O0 -DJL_DEBUG_BUILD -fstack-protector
-DEBUGFLAGS_CLANG  := $(DEBUGFLAGS_COMMON) -g
-DEBUGFLAGS_GCC    := $(DEBUGFLAGS_COMMON) -ggdb2
+DEBUGFLAGS_COMMON  = -O0 -DJL_DEBUG_BUILD -fstack-protector
+DEBUGFLAGS_CLANG   = $(DEBUGFLAGS_COMMON) -g
+DEBUGFLAGS_GCC     = $(DEBUGFLAGS_COMMON) -ggdb2
 
-SHIPFLAGS_COMMON  := -O3
-SHIPFLAGS_CLANG   := $(SHIPFLAGS_COMMON) -g
-SHIPFLAGS_GCC     := $(SHIPFLAGS_COMMON) -ggdb2 -falign-functions
+SHIPFLAGS_COMMON   = -O3
+SHIPFLAGS_CLANG    = $(SHIPFLAGS_COMMON) -g
+SHIPFLAGS_GCC      = $(SHIPFLAGS_COMMON) -ggdb2 -falign-functions
+
 
 BOLT_LDFLAGS :=
 
@@ -579,22 +604,22 @@ endif
 ifeq ($(USEGCC),1)
 CC         := $(CROSS_COMPILE)gcc
 CXX        := $(CROSS_COMPILE)g++
-JCFLAGS    := $(JCFLAGS_GCC)
-JCPPFLAGS  := $(JCPPFLAGS_GCC)
-JCXXFLAGS  := $(JCXXFLAGS_GCC)
-DEBUGFLAGS := $(DEBUGFLAGS_GCC)
-SHIPFLAGS  := $(SHIPFLAGS_GCC) $(BOLT_CFLAGS_GCC)
+JCFLAGS     = $(JCFLAGS_GCC)
+JCPPFLAGS   = $(JCPPFLAGS_GCC)
+JCXXFLAGS   = $(JCXXFLAGS_GCC)
+DEBUGFLAGS  = $(DEBUGFLAGS_GCC)
+SHIPFLAGS   = $(SHIPFLAGS_GCC) $(BOLT_CFLAGS_GCC)
 BOLT_CFLAGS  := $(BOLT_CFLAGS_GCC)
 endif
 
 ifeq ($(USECLANG),1)
 CC         := $(CROSS_COMPILE)clang
 CXX        := $(CROSS_COMPILE)clang++
-JCFLAGS    := $(JCFLAGS_CLANG)
-JCPPFLAGS  := $(JCPPFLAGS_CLANG)
-JCXXFLAGS  := $(JCXXFLAGS_CLANG)
-DEBUGFLAGS := $(DEBUGFLAGS_CLANG)
-SHIPFLAGS  := $(SHIPFLAGS_CLANG) $(BOLT_CFLAGS_CLANG)
+JCFLAGS     = $(JCFLAGS_CLANG)
+JCPPFLAGS   = $(JCPPFLAGS_CLANG)
+JCXXFLAGS   = $(JCXXFLAGS_CLANG)
+DEBUGFLAGS  = $(DEBUGFLAGS_CLANG)
+SHIPFLAGS   = $(SHIPFLAGS_CLANG) $(BOLT_CFLAGS_CLANG)
 BOLT_CFLAGS  := $(BOLT_CFLAGS_CLANG)
 
 ifeq ($(OS), Darwin)
@@ -644,12 +669,12 @@ CXX += -Qunused-arguments
 export CCACHE_CPP2 := yes
 endif
 else #USECCACHE
-CC_BASE := $(shell echo $(CC) | cut -d' ' -f1)
-CC_ARG := $(shell echo $(CC) | cut -s -d' ' -f2-)
-CXX_BASE := $(shell echo $(CXX) | cut -d' ' -f1)
-CXX_ARG := $(shell echo $(CXX) | cut -s -d' ' -f2-)
-FC_BASE := $(shell echo $(FC) 2>/dev/null | cut -d' ' -f1)
-FC_ARG := $(shell echo $(FC) 2>/dev/null | cut -s -d' ' -f2-)
+CC_BASE := $(shell printf "%s\n" $(call shell_escape,$(CC)) | cut -d' ' -f1)
+CC_ARG := $(shell printf "%s\n" $(call shell_escape,$(CC)) | cut -s -d' ' -f2-)
+CXX_BASE := $(shell printf "%s\n" $(call shell_escape,$(CXX)) | cut -d' ' -f1)
+CXX_ARG := $(shell printf "%s\n" $(call shell_escape,$(CXX)) | cut -s -d' ' -f2-)
+FC_BASE := $(shell printf "%s\n" $(call shell_escape,$(FC)) 2>/dev/null | cut -d' ' -f1)
+FC_ARG := $(shell printf "%s\n" $(call shell_escape,$(FC)) 2>/dev/null | cut -s -d' ' -f2-)
 endif
 
 JFFLAGS := -O2 $(fPIC)
@@ -776,7 +801,7 @@ LDFLAGS += -L$(build_libdir) -Wl,-rpath,$(build_libdir)
 endif # gfortran
 endif # FreeBSD
 
-ifneq ($(CC_BASE)$(CXX_BASE),$(shell echo $(CC) | cut -d' ' -f1)$(shell echo $(CXX) | cut -d' ' -f1))
+ifneq ($(CC_BASE)$(CXX_BASE),$(shell printf "%s\n" $(call shell_escape,$(CC)) | cut -d' ' -f1)$(shell printf "%s\n" $(call shell_escape,$(CXX)) | cut -d' ' -f1))
     $(error Forgot override directive on CC or CXX in Make.user? Cowardly refusing to build)
 endif
 
@@ -785,6 +810,8 @@ ifneq ($(OS), Darwin)
 	$(error Darwin framework cannot be enabled for non-Darwin OS)
 endif
 endif
+
+bootstrap_julia_flags :=
 
 ifeq ($(SANITIZE),1)
 SANITIZE_OPTS :=
@@ -801,8 +828,11 @@ SANITIZE_OPTS += -fsanitize=address
 SANITIZE_LDFLAGS += -fsanitize=address -shared-libasan
 endif
 ifeq ($(SANITIZE_THREAD),1)
-SANITIZE_OPTS += -fsanitize=thread
+SANITIZE_OPTS += -fsanitize=thread -fsanitize-ignorelist=$(JULIAHOME)/contrib/tsan/ignorelist.txt
 SANITIZE_LDFLAGS += -fsanitize=thread
+ifneq ($(CROSS_BOOTSTRAP_JULIA),)
+bootstrap_julia_flags += --target-sanitize=thread
+endif
 endif
 ifeq ($(SANITIZE_OPTS),)
 $(error SANITIZE=1, but no sanitizer selected, set either SANITIZE_MEMORY, SANITIZE_THREAD, or SANITIZE_ADDRESS)
@@ -820,6 +850,9 @@ $(error "please install either GNU tar or bsdtar")
 endif
 endif
 
+# Do not try to extract owner uids, even if we're root (e.g. in sandboxes)
+TAR += --no-same-owner
+
 ifeq ($(WITH_GC_VERIFY), 1)
 JCXXFLAGS += -DGC_VERIFY
 JCFLAGS += -DGC_VERIFY
@@ -836,29 +869,44 @@ JCXXFLAGS += -DGC_DEBUG_ENV
 JCFLAGS += -DGC_DEBUG_ENV
 endif
 
-ifneq (${MMTK_PLAN},None)
-JCXXFLAGS += -DMMTK_GC
-JCFLAGS += -DMMTK_GC
-# Do a release build on the binding by default
-MMTK_BUILD ?= release
+# By default we use the stock GC
+WITH_THIRD_PARTY_GC ?= 0
+
+# Convert to lowercase
+USE_THIRD_PARTY_GC := $(shell echo $(WITH_THIRD_PARTY_GC) | tr A-Z a-z)
+
+# NB: When adding a new GC, make sure to add -DWITH_THIRD_PARTY_HEAP=<#NEW_GC>
+# to the variables JCFLAGS and JCXXFLAGS according to the mapping (MMTK=1, #NEW_GC=2)
+
+ifeq (${USE_THIRD_PARTY_GC},mmtk)
+JCXXFLAGS += -DWITH_THIRD_PARTY_HEAP=1
+JCFLAGS += -DWITH_THIRD_PARTY_HEAP=1
+
+# Must specify a supported MMTk Plan: Immix or StickyImmix
 ifeq (${MMTK_PLAN},Immix)
 JCXXFLAGS += -DMMTK_PLAN_IMMIX
 JCFLAGS += -DMMTK_PLAN_IMMIX
+else ifeq (${MMTK_PLAN},StickyImmix)
+JCXXFLAGS += -DMMTK_PLAN_STICKYIMMIX
+JCFLAGS += -DMMTK_PLAN_STICKYIMMIX
 else
-$(error "Unsupported MMTk plan: $(MMTK_PLAN)")
+$(error "Unsupported MMTk plan: $(MMTK_PLAN). Supported plan(s): Immix or StickyImmix.")
 endif
+
+# Do a release build on the binding by default
+MMTK_BUILD ?= release
 
 # Location of mmtk-julia binding
 # (needed for api/*.h and .so file)
 MMTK_JULIA_DIR ?= $(BUILDROOT)/usr/lib/mmtk_julia
-
 MMTK_DIR = ${MMTK_JULIA_DIR}/mmtk
 MMTK_API_INC = ${MMTK_DIR}/api
-
 MMTK_LIB := -lmmtk_julia
-else
-MMTK_JULIA_INC :=
-MMTK_LIB :=
+
+# Must specify a supported third-party GC or use the stock GC.
+# Supported third-party GCs: mmtk
+else ifneq (${USE_THIRD_PARTY_GC},0)
+$(error "Unsupported third-party GC: $(WITH_THIRD_PARTY_GC). Supported option(s): mmtk")
 endif
 
 ifeq ($(WITH_DTRACE), 1)
@@ -884,6 +932,15 @@ JCFLAGS += -DTRACY_CALLSTACK=32
 LIBTRACYCLIENT:=-lTracyClient
 endif
 
+ifeq ($(WITH_APPLE_OSLOG), 1)
+ifeq ($(OS), Darwin)
+JCXXFLAGS += -DUSE_APPLE_OSLOG
+JCFLAGS += -DUSE_APPLE_OSLOG
+else
+$(warning "WITH_APPLE_OSLOG=1 is only supported on Darwin, ignoring")
+endif
+endif
+
 ifeq ($(WITH_TIMING_COUNTS), 1)
 JCXXFLAGS += -DUSE_TIMING_COUNTS
 JCFLAGS += -DUSE_TIMING_COUNTS
@@ -892,6 +949,23 @@ endif
 ifeq ($(WITH_NVTX), 1)
 JCXXFLAGS += -DUSE_NVTX
 JCFLAGS += -DUSE_NVTX
+endif
+
+ifneq ($(findstring $(OS),WINNT FreeBSD OpenBSD),)
+  USE_LINKER_GC := 0
+  USE_RT_STATIC_LIBGCC := 0
+  USE_RT_STATIC_LIBSTDCXX := 0
+endif
+
+# Linker garbage collection
+ifeq ($(USE_LINKER_GC), 1)
+ifeq ($(OS), Darwin)
+  JLDFLAGS += -Wl,-dead_strip
+else
+  JLDFLAGS += -Wl,--gc-sections
+  JCFLAGS += -ffunction-sections -fdata-sections
+  JCXXFLAGS += -ffunction-sections -fdata-sections
+endif
 endif
 
 # ===========================================================================
@@ -961,19 +1035,17 @@ ARCH := $(BUILD_OS)
 endif
 endif
 
-# MMTk is only available on x86_64 Linux for now
-ifneq (${MMTK_PLAN},None)
 
+ifeq (${USE_THIRD_PARTY_GC},mmtk)
+# MMTk is only available on x86_64 Linux for now
 ifeq ($(OS),Linux)
 MMTK_LIB_NAME := libmmtk_julia.so
 else
 $(error "Unsupported OS for MMTk")
 endif
-
 ifneq ($(ARCH),x86_64)
 $(error "Unsupported build architecture for MMTk")
 endif
-
 endif
 
 # Detect common pre-SSE2 JULIA_CPU_TARGET values known not to work (#7185)
@@ -1051,18 +1123,23 @@ BINARY:=64
 MARCH=
 endif
 
-# Allow Clang to use CRC instructions (only applicable on AArch64)
-ifneq (,$(findstring aarch64,$(ARCH)))
-ifeq ($(USECLANG),1)
-ifeq (,$(MARCH))
-JCFLAGS += -mcrc
-endif
-endif
-endif
 
 # If we are running on powerpc64 or ppc64, fail out dramatically
 ifneq (,$(filter $(ARCH), powerpc64 ppc64))
 $(error Big-endian PPC64 is not supported, to ignore this error, set ARCH=ppc64le)
+endif
+
+# Architecture and platform-specific compiler flags
+# Allow Clang to use CRC instructions (only applicable on AArch64) when no specific march is set
+ifneq (,$(findstring aarch64,$(ARCH)))
+ifeq (,$(MARCH))
+JCFLAGS_CLANG += -mcrc
+endif
+endif
+
+# Add platform-specific GCC flags
+ifeq ($(ISX86),1)
+SHIPFLAGS_GCC += -momit-leaf-frame-pointer
 endif
 
 # File name of make binary-dist result
@@ -1191,11 +1268,6 @@ endif
 endif
 endif
 
-ifeq ($(USEGCC),1)
-ifeq ($(ISX86),1)
-  SHIPFLAGS += -momit-leaf-frame-pointer
-endif
-endif
 
 ifeq ($(OS),WINNT)
 LIBUNWIND:=
@@ -1395,14 +1467,19 @@ LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SP
 # shipped with CSL. Although we do not depend on any of the symbols, it is entirely
 # possible that a user might choose to install a library which depends on symbols provided
 # by a newer libstdc++. Without runtime detection, those libraries would break.
-CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.33|GLIBCXX_3\.5\.|GLIBCXX_4\.
+CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.34|GLIBCXX_3\.5\.|GLIBCXX_4\.
 
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
 # Note: we explicitly _do not_ define `CSL` here, since it requires some more
 # advanced techniques to decide whether it should be installed from a BB source
 # or not.  See `deps/csl.mk` for more detail.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP LLD LIBTRACYCLIENT BOLT
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB ZSTD P7ZIP LLD LIBTRACYCLIENT BOLT
+
+ifeq (${USE_THIRD_PARTY_GC},mmtk)
+BB_PROJECTS += MMTK_JULIA
+endif
+
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
@@ -1467,11 +1544,9 @@ RPATH_LIB := $(RPATH_ORIGIN)
 
 # --whole-archive
 ifeq ($(OS), Darwin)
-  WHOLE_ARCHIVE := -Xlinker -all_load
-  NO_WHOLE_ARCHIVE :=
+  whole_archive = -Xlinker -force_load $(1)
 else
-  WHOLE_ARCHIVE := -Wl,--whole-archive
-  NO_WHOLE_ARCHIVE := -Wl,--no-whole-archive
+  whole_archive = -Wl,--whole-archive $(1) -Wl,--no-whole-archive
 endif
 
 # Initialize these once, then add to them in OS-specific blocks
@@ -1503,6 +1578,7 @@ endif
 ifeq ($(OS), FreeBSD)
 JLDFLAGS += -Wl,-Bdynamic
 OSLIBS += -lelf -lkvm -lrt -lpthread -latomic
+HAVE_SSP := 1
 
 # Tweak order of libgcc_s in DT_NEEDED,
 # make it loaded first to
@@ -1517,8 +1593,7 @@ ifeq (,$(findstring aarch64,$(ARCH)))
 OSLIBS += -lgcc_s
 endif
 
-OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
-	$(NO_WHOLE_ARCHIVE)
+OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(BUILDROOT)/src/julia.expmap -Wl,--no-whole-archive
 endif
 
 ifeq ($(OS), OpenBSD)
@@ -1537,8 +1612,6 @@ endif
 ifeq ($(OS), Darwin)
 SHLIB_EXT := dylib
 OSLIBS += -framework CoreFoundation
-WHOLE_ARCHIVE := -Xlinker -all_load
-NO_WHOLE_ARCHIVE :=
 HAVE_SSP := 1
 JLIBLDFLAGS += -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
 endif
@@ -1546,12 +1619,14 @@ endif
 ifeq ($(OS), WINNT)
 HAVE_SSP := 1
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
-	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic -lole32
-JLDFLAGS += -Wl,--stack,8388608 --disable-auto-import --disable-runtime-pseudo-reloc
+	-Wl,--no-whole-archive -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic -lole32
+# N.B.: Unlike in the sysimage, we cannot -Wl,--disable-auto-import -Wl,--disable-runtime-pseudo-reloc here, because libstdc++/LLVM are not fully correct under
+# enforced visibility at this point.
+JLDFLAGS += -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif
-JCPPFLAGS += -D_WIN32_WINNT=0x0502
+JCPPFLAGS += -D_WIN32_WINNT=0x0602 # (0x0602 = _WIN32_WINNT_WIN8)
 UNTRUSTED_SYSTEM_LIBM := 1
 # Use hard links for files on windows, rather than soft links
 #   https://stackoverflow.com/questions/3648819/how-to-make-a-symbolic-link-with-cygwin-in-windows-7
@@ -1636,17 +1711,23 @@ endif
 # Note: we're passing *FLAGS here computed based on your system compiler to
 # clang. If that causes you problems, you might want to build and/or run
 # specific clang-sa-* files with clang explicitly selected:
-#   make CC=~+/../usr/tools/clang CXX=~+/../usr/tools/clang USECLANG=1 analyzegc
-#   make USECLANG=1 clang-sa-*
+#   make CC=~+/../usr/tools/clang CXX=~+/../usr/tools/clang analyzegc
+#   make clang-sa-*
 CLANGSA_FLAGS :=
 CLANGSA_CXXFLAGS :=
 ifeq ($(OS), Darwin) # on new XCode, the files are hidden
- CLANGSA_FLAGS += -isysroot $(shell xcrun --show-sdk-path -sdk macosx)
+ CLANGSA_FLAGS += -isysroot $(shell xcrun --show-sdk-path --sdk macosx)
 endif
 ifeq ($(USEGCC),1)
 # try to help clang find the c++ files for CC by guessing the value for --prefix
 # by dropping lib/gcc/<platform>/<version> from the install directory it reports
 CLANGSA_CXXFLAGS += --gcc-toolchain="$(abspath $(shell LANG=C $(CC) -print-search-dirs | grep '^install: ' | sed -e "s/^install: //")/../../../..)"
+ifneq ($(OS), Darwin)
+GCC_SYSROOT := $(shell $(CC) --print-sysroot 2>/dev/null)
+ifneq ($(GCC_SYSROOT),)
+CLANGSA_FLAGS += --sysroot=$(GCC_SYSROOT)
+endif
+endif
 endif
 
 
@@ -1661,6 +1742,12 @@ ifeq ($(BUILD_OS), WINNT)
 define mingw_to_dos
 $(subst /,\\,$(subst $(shell $(2) pwd),$(shell $(2) cmd //C cd),$(abspath $(1))))
 endef
+endif
+
+ifeq ($(OS), WINNT)
+normalize_path = $(subst /,\,$1)
+else
+normalize_path = $1
 endif
 
 define symlink_target # (from, to-dir, to-name)
@@ -1720,29 +1807,35 @@ JULIA_BUILD_MODE := debug
 endif
 endif
 
+ifneq ($(CROSS_BOOTSTRAP_JULIA),)
+JULIA_EXECUTABLE_debug := $(CROSS_BOOTSTRAP_JULIA)
+JULIA_EXECUTABLE_release := $(CROSS_BOOTSTRAP_JULIA)
+JULIA_EXECUTABLE := $(CROSS_BOOTSTRAP_JULIA)
+else
 JULIA_EXECUTABLE_debug := $(build_bindir)/julia-debug$(EXE)
 JULIA_EXECUTABLE_release := $(build_bindir)/julia$(EXE)
 JULIA_EXECUTABLE := $(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))
+endif
 
 JULIA_SYSIMG_debug := $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
 JULIA_SYSIMG_release := $(build_private_libdir)/sys.$(SHLIB_EXT)
 JULIA_SYSIMG := $(JULIA_SYSIMG_$(JULIA_BUILD_MODE))
 
 define dep_lib_path
-$(shell $(PYTHON) $(call python_cygpath,$(JULIAHOME)/contrib/relative_path.py) $(1) $(2))
+$(call normalize_path,$(shell $(PYTHON) $(call python_cygpath,$(JULIAHOME)/contrib/relative_path.py) $(1) $(2)))
 endef
 
-LIBJULIAINTERNAL_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-internal.$(JL_MAJOR_SHLIB_EXT))
-LIBJULIAINTERNAL_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/libjulia-internal.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIAINTERNAL_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_shlibdir)/libjulia-internal.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIAINTERNAL_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/libjulia-internal.$(JL_MAJOR_SHLIB_EXT))
 
-LIBJULIAINTERNAL_DEBUG_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT))
-LIBJULIAINTERNAL_DEBUG_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIAINTERNAL_DEBUG_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIAINTERNAL_DEBUG_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT))
 
-LIBJULIACODEGEN_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_SHLIB_EXT))
-LIBJULIACODEGEN_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/libjulia-codegen.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIACODEGEN_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIACODEGEN_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/libjulia-codegen.$(JL_MAJOR_SHLIB_EXT))
 
-LIBJULIACODEGEN_DEBUG_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT))
-LIBJULIACODEGEN_DEBUG_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIACODEGEN_DEBUG_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIACODEGEN_DEBUG_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT))
 
 ifeq ($(OS),WINNT)
 ifeq ($(BINARY),32)
@@ -1770,34 +1863,34 @@ endif
 
 # USE_SYSTEM_CSL causes it to get symlinked into build_private_shlibdir
 ifeq ($(USE_SYSTEM_CSL),1)
-LIBGCC_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_private_shlibdir)/$(LIBGCC_NAME))
+LIBGCC_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_private_shlibdir)/$(LIBGCC_NAME))
 else
-LIBGCC_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/$(LIBGCC_NAME))
+LIBGCC_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_shlibdir)/$(LIBGCC_NAME))
 endif
-LIBGCC_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBGCC_NAME))
+LIBGCC_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/$(LIBGCC_NAME))
 
 # We only bother to define this on Linux, as that's the only platform that does libstdc++ probing
 # On all other platforms, the LIBSTDCXX_*_DEPLIB variables will be empty.
 ifeq ($(OS),Linux)
 LIBSTDCXX_NAME := libstdc++.so.6
 ifeq ($(USE_SYSTEM_CSL),1)
-LIBSTDCXX_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_private_shlibdir)/$(LIBSTDCXX_NAME))
+LIBSTDCXX_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_private_shlibdir)/$(LIBSTDCXX_NAME))
 else
-LIBSTDCXX_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/$(LIBSTDCXX_NAME))
+LIBSTDCXX_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_shlibdir)/$(LIBSTDCXX_NAME))
 endif
-LIBSTDCXX_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBSTDCXX_NAME))
+LIBSTDCXX_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/$(LIBSTDCXX_NAME))
 endif
 
 
 # USE_SYSTEM_LIBM and USE_SYSTEM_OPENLIBM causes it to get symlinked into build_private_shlibdir
 ifeq ($(USE_SYSTEM_LIBM),1)
-LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
+LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
 else ifeq ($(USE_SYSTEM_OPENLIBM),1)
-LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
+LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
 else
-LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
+LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
 endif
-LIBM_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
+LIBM_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
 
 # We list:
 #  * libgcc_s, because FreeBSD needs to load ours, not the system one.
@@ -1861,7 +1954,7 @@ ifeq ($(VERBOSE), 0)
 
 QUIET_MAKE = -s
 
-GOAL=$(subst ','\'',$(subst $(abspath $(JULIAHOME))/,,$(abspath $@)))
+GOAL=$(call shell_escape,$(subst $(abspath $(JULIAHOME))/,,$(abspath $@)))
 
 PRINT_CC = printf '    %b %b\n' $(CCCOLOR)CC$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_ANALYZE = printf '    %b %b\n' $(CCCOLOR)ANALYZE$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR); $(1)
@@ -1873,13 +1966,13 @@ PRINT_DTRACE = printf '    %b %b\n' $(DTRACECOLOR)DTRACE$(ENDCOLOR) $(BINCOLOR)$
 
 else
 QUIET_MAKE =
-PRINT_CC = echo '$(subst ','\'',$(1))'; $(1)
-PRINT_ANALYZE = echo '$(subst ','\'',$(1))'; $(1)
-PRINT_LINK = echo '$(subst ','\'',$(1))'; $(1)
-PRINT_PERL = echo '$(subst ','\'',$(1))'; $(1)
-PRINT_FLISP = echo '$(subst ','\'',$(1))'; $(1)
-PRINT_JULIA = echo '$(subst ','\'',$(1))'; $(1)
-PRINT_DTRACE = echo '$(subst ','\'',$(1))'; $(1)
+PRINT_CC = printf "%s\n" $(call shell_escape,$(1)); $(1)
+PRINT_ANALYZE = printf "%s\n" $(call shell_escape,$(1)); $(1)
+PRINT_LINK = printf "%s\n" $(call shell_escape,$(1)); $(1)
+PRINT_PERL = printf "%s\n" $(call shell_escape,$(1)); $(1)
+PRINT_FLISP = printf "%s\n" $(call shell_escape,$(1)); $(1)
+PRINT_JULIA = printf "%s\n" $(call shell_escape,$(1)); $(1)
+PRINT_DTRACE = printf "%s\n" $(call shell_escape,$(1)); $(1)
 
 endif # VERBOSE
 
@@ -1887,4 +1980,4 @@ endif # VERBOSE
 # call print-VARIABLE to see the runtime value of any variable
 # (hardened against any special characters appearing in the output)
 print-%:
-	@echo '$*=$(subst ','\'',$(subst $(newline),\n,$($*)))'
+	@printf "%s\n" $(call shell_escape,$*)=$(call shell_escape,$(subst $(newline),\n,$($*)))
