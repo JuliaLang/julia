@@ -2961,4 +2961,32 @@ end
         @test !contains(str, "…")
         @test str == "Vector{Vector{Vector{Vector{Vector{Int64}}}}}"
     end
+
+    @testset "plain Int budget auto-wraps in Ref" begin
+        T = Vector{Vector{Vector{Vector{Int}}}}
+        full = "Vector{Vector{Vector{Vector{Int64}}}}"
+        str = sprint(show, T, context = :type_budget => 100)
+        @test str == full
+        str = sprint(show, T, context = :type_budget => 3)
+        @test contains(str, "…")
+        @test sizeof(str) < sizeof(full)
+    end
+
+    @testset "Union types under budget" begin
+        T = Union{Int, Float64, String, Vector{Int}, Dict{String, Float64}}
+        full = sprint(show, T)
+        @test !contains(full, "…")
+        str = sprint(show, T, context = :type_budget => 3)
+        @test contains(str, "…")
+        @test sizeof(str) < sizeof(full)
+    end
+
+    @testset "UnionAll types under budget" begin
+        T = Vector{T} where T<:AbstractVector{S} where S<:Real
+        full = sprint(show, T)
+        @test !contains(full, "…")
+        str = sprint(show, T, context = :type_budget => 2)
+        @test contains(str, "…")
+        @test sizeof(str) < sizeof(full)
+    end
 end
