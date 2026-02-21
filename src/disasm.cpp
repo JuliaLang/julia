@@ -1038,7 +1038,10 @@ static void jl_dump_asm_internal(
                     if (!buf.empty()) {
                         Streamer->emitRawText(buf);
                     }
-                    nextLineAddr = (++di_lineIter)->first;
+                    if (++di_lineIter != di_lineEnd)
+                        nextLineAddr = di_lineIter->first;
+                    else
+                        nextLineAddr = (uint64_t)-1;
                 }
             }
 
