@@ -48,24 +48,15 @@ jobs:
             echo -n $OLD_FILES | xargs "${{ runner.temp }}/typos/typos" --format json >> ${{ runner.temp }}/old_typos.jsonl || true
           fi
 
-          echo "Old typos:"
-          cat ${{ runner.temp }}/old_typos.jsonl
-          echo "\n----\n"
-          echo "New typos:"
-          cat ${{ runner.temp }}/new_typos.jsonl
-          echo "\n----\n"
 
           python -c '
-          print("X")
           import sys, json
           old = set()
-          print(sys.argv)
           with open(sys.argv[1]) as old_file:
             for line in old_file:
               j = json.loads(line)
               if j["type"] == "typo":
                 old.add(j["typo"])
-          print("Y")
           clean = True
           with open(sys.argv[2]) as new_file:
             for line in new_file:
