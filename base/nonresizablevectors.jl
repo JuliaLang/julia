@@ -12,7 +12,7 @@ module NonResizableVectors
         end
     end
     module GenericMemoryVectors
-        using ..Miscellaneous
+        using Base.NonResizableVectors.Miscellaneous
         export GenericMemoryVector, MemoryVector
         struct GenericMemoryVector{isatomic, T, addrspace} <: vector_supertype{T}
             memory::GenericMemory{isatomic, T, addrspace}
@@ -43,7 +43,7 @@ module NonResizableVectors
         end
     end
     module GenericMemoryRefVectors
-        using ..Miscellaneous
+        using Base.NonResizableVectors.Miscellaneous
         export
             GenericMemoryRefVectorImm, GenericMemoryRefVectorMut, GenericMemoryRefVector,
             MemoryRefVectorImm, MemoryRefVectorMut, MemoryRefVector
@@ -106,7 +106,7 @@ module NonResizableVectors
         end
     end
     using .GenericMemoryVectors, .GenericMemoryRefVectors
-    using ..LightBoundsErrors: checkbounds_lightboundserror
+    using Base.LightBoundsErrors: checkbounds_lightboundserror
     export
         MemoryVector, MemoryRefVectorImm, MemoryRefVectorMut
     const NonResizableVector = Union{MemoryVector{T}, MemoryRefVector{T}} where {T}
