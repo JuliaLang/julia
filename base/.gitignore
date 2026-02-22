@@ -1,3 +1,4 @@
+/features_h.jl
 /pcre_h.jl
 /errno_h.jl
 /build_h.jl
@@ -6,4 +7,6 @@
 /uv_constants.jl
 /version_git.jl
 /version_git.jl.phony
+/version_git_dirty
 /userimg.jl
+/JuliaSyntax

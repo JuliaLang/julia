@@ -36,50 +36,66 @@ Fully implemented by:
 
   * [`AbstractRange`](@ref)
   * [`UnitRange`](@ref)
-  * `Tuple`
-  * `Number`
+  * [`Tuple`](@ref)
+  * [`Number`](@ref)
   * [`AbstractArray`](@ref)
   * [`BitSet`](@ref)
   * [`IdDict`](@ref)
   * [`Dict`](@ref)
   * [`WeakKeyDict`](@ref)
   * `EachLine`
-  * `AbstractString`
+  * [`AbstractString`](@ref)
   * [`Set`](@ref)
   * [`Pair`](@ref)
   * [`NamedTuple`](@ref)
 
-## Constructors and Types
+## Ranges
+
+### Constructing Ranges
+
+```@docs
+Base.:(:)(::Any, ::Any, ::Any)
+Base.:(:)(::CartesianIndex, ::CartesianIndex, ::CartesianIndex)
+Base.range
+Base.logrange
+```
+
+### Range Types
 
 ```@docs
 Base.AbstractRange
 Base.OrdinalRange
 Base.AbstractUnitRange
 Base.StepRange
+Base.StepRangeLen
 Base.UnitRange
+Base.OneTo
 Base.LinRange
+Base.LogRange
 ```
 
 ## General Collections
 
 ```@docs
 Base.isempty
+Base.isdone
 Base.empty!
 Base.length
+Base.checked_length
 ```
 
 Fully implemented by:
 
   * [`AbstractRange`](@ref)
   * [`UnitRange`](@ref)
-  * `Tuple`
-  * `Number`
+  * [`Tuple`](@ref)
+  * [`Number`](@ref)
   * [`AbstractArray`](@ref)
   * [`BitSet`](@ref)
   * [`IdDict`](@ref)
   * [`Dict`](@ref)
   * [`WeakKeyDict`](@ref)
-  * `AbstractString`
+  * [`AbstractString`](@ref)
   * [`Set`](@ref)
   * [`NamedTuple`](@ref)
 
@@ -88,12 +104,15 @@ Fully implemented by:
 ```@docs
 Base.in
 Base.:∉
+Base.hasfastin
 Base.eltype
 Base.indexin
 Base.unique
 Base.unique!
 Base.allunique
+Base.allequal
 Base.reduce(::Any, ::Any)
+Base.reduce(::Any, ::AbstractArray)
 Base.foldl(::Any, ::Any)
 Base.foldr(::Any, ::Any)
 Base.maximum
@@ -101,6 +120,7 @@ Base.maximum!
 Base.minimum
 Base.minimum!
 Base.extrema
+Base.extrema!
 Base.argmax
 Base.argmin
 Base.findmax
@@ -118,8 +138,6 @@ Base.all(::Any)
 Base.all(::AbstractArray, ::Any)
 Base.all!
 Base.count
-Base.any(::Any, ::Any)
-Base.all(::Any, ::Any)
 Base.foreach
 Base.map
 Base.map!
@@ -138,6 +156,8 @@ Base.filter!
 Base.replace(::Any, ::Pair...)
 Base.replace(::Base.Callable, ::Any)
 Base.replace!
+Base.rest
+Base.split_rest
 ```
 
 ## Indexable Collections
@@ -160,8 +180,8 @@ Partially implemented by:
 
   * [`AbstractRange`](@ref)
   * [`UnitRange`](@ref)
-  * `Tuple`
-  * `AbstractString`
+  * [`Tuple`](@ref)
+  * [`AbstractString`](@ref)
   * [`Dict`](@ref)
   * [`IdDict`](@ref)
   * [`WeakKeyDict`](@ref)
@@ -189,7 +209,7 @@ Dictionaries may also be created with generators. For example, `Dict(i => f(i) f
 
 Given a dictionary `D`, the syntax `D[x]` returns the value of key `x` (if it exists) or throws
 an error, and `D[x] = y` stores the key-value pair `x => y` in `D` (replacing any existing value
-for the key `x`).  Multiple arguments to `D[...]` are converted to tuples; for example, the syntax
+for the key `x`). Multiple arguments to `D[...]` are converted to tuples; for example, the syntax
 `D[x,y]`  is equivalent to `D[(x,y)]`, i.e. it refers to the value keyed by the tuple `(x,y)`.
 
 ```@docs
@@ -198,11 +218,10 @@ Base.Dict
 Base.IdDict
 Base.WeakKeyDict
 Base.ImmutableDict
+Base.PersistentDict
 Base.haskey
-Base.get(::Any, ::Any, ::Any)
 Base.get
-Base.get!(::Any, ::Any, ::Any)
-Base.get!(::Function, ::Any, ::Any)
+Base.get!
 Base.getkey
 Base.delete!
 Base.pop!(::Any, ::Any, ::Any)
@@ -220,18 +239,20 @@ Base.valtype
 
 Fully implemented by:
 
-  * [`IdDict`](@ref)
   * [`Dict`](@ref)
+  * [`IdDict`](@ref)
   * [`WeakKeyDict`](@ref)
 
 Partially implemented by:
 
-  * [`BitSet`](@ref)
   * [`Set`](@ref)
+  * [`BitSet`](@ref)
+  * [`IdSet`](@ref)
   * [`EnvDict`](@ref Base.EnvDict)
   * [`Array`](@ref)
   * [`BitArray`](@ref)
   * [`ImmutableDict`](@ref Base.ImmutableDict)
+  * [`PersistentDict`](@ref Base.PersistentDict)
   * [`Iterators.Pairs`](@ref)
 
 ## Set-Like Collections
@@ -240,6 +261,7 @@ Partially implemented by:
 Base.AbstractSet
 Base.Set
 Base.BitSet
+Base.IdSet
 Base.union
 Base.union!
 Base.intersect
@@ -249,6 +271,7 @@ Base.symdiff
 Base.symdiff!
 Base.intersect!
 Base.issubset
+Base.in!
 Base.:⊈
 Base.:⊊
 Base.issetequal
@@ -257,22 +280,26 @@ Base.isdisjoint
 
 Fully implemented by:
 
-  * [`BitSet`](@ref)
   * [`Set`](@ref)
+  * [`BitSet`](@ref)
+  * [`IdSet`](@ref)
+
 
 Partially implemented by:
 
   * [`Array`](@ref)
 
-## Dequeues
+## Deques
 
 ```@docs
 Base.push!
 Base.pop!
+Base.popat!
 Base.pushfirst!
 Base.popfirst!
 Base.insert!
 Base.deleteat!
+Base.keepat!
 Base.splice!
 Base.resize!
 Base.append!

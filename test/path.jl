@@ -9,6 +9,23 @@
         @test isabspath(S(homedir()))
         @test !isabspath(S("foo"))
     end
+    if Sys.iswindows()
+        @testset "issue #38491" begin
+            pwd_drive = uppercase(splitdrive(pwd())[1])
+            drive = (pwd_drive == "X:") ? "Y:" : "X:"
+            @test abspath("$(lowercase(drive))a\\b\\c") == "$(lowercase(drive))\\a\\b\\c"
+            @test abspath("$(uppercase(drive))a\\b\\c") == "$(uppercase(drive))\\a\\b\\c"
+            @test abspath("$(lowercase(drive))a") == "$(lowercase(drive))\\a"
+            @test abspath("$(uppercase(drive))a") == "$(uppercase(drive))\\a"
+            @test abspath(lowercase(drive)) == "$(lowercase(drive))\\"
+            @test abspath(uppercase(drive)) == "$(uppercase(drive))\\"
+
+            @test lowercase(abspath("$(pwd_drive)a\\b\\c")) == lowercase(joinpath(pwd(), "a\\b\\c"))
+            @test lowercase(abspath("$(pwd_drive)a")) == lowercase(joinpath(pwd(), "a"))
+            @test lowercase(abspath(lowercase(pwd_drive))) == lowercase("$(pwd())\\")
+            @test lowercase(abspath(uppercase(pwd_drive))) == lowercase("$(pwd())\\")
+        end
+    end
     @test basename(S("foo$(sep)bar")) == "bar"
     @test dirname(S("foo$(sep)bar")) == "foo"
 
@@ -17,11 +34,11 @@
         @test expanduser(S("x")) == "x"
         @test expanduser(S("~")) == (Sys.iswindows() ? "~" : homedir())
     end
-    @testset "Base.contractuser" begin
-        @test Base.contractuser(S(homedir())) == (Sys.iswindows() ? homedir() : "~")
-        @test Base.contractuser(S(joinpath(homedir(), "x"))) ==
+    @testset "contractuser" begin
+        @test contractuser(S(homedir())) == (Sys.iswindows() ? homedir() : "~")
+        @test contractuser(S(joinpath(homedir(), "x"))) ==
               (Sys.iswindows() ? joinpath(homedir(), "x") : "~$(sep)x")
-        @test Base.contractuser(S("/foo/bar")) == "/foo/bar"
+        @test contractuser(S("/foo/bar")) == "/foo/bar"
     end
     @testset "isdirpath" begin
         @test !isdirpath(S("foo"))
@@ -29,6 +46,16 @@
         @test isdirpath(S(""))
         @test isdirpath(S("."))
         @test isdirpath(S(".."))
+
+        # After https://github.com/JuliaLang/julia/pull/60677, paths
+        # with "\n", ".\n" or "..\n" after the last separator are
+        # not accepted as directories.
+        @test !isdirpath("\n")
+        @test !isdirpath(".\n")
+        @test !isdirpath("..\n")
+        @test !isdirpath("a/\n")
+        @test !isdirpath("a/.\n")
+        @test !isdirpath("a/..\n")
     end
     @testset "joinpath" begin
         @test joinpath(S("")) == ""
@@ -42,8 +69,13 @@
         @test joinpath(S("foo"), S(homedir())) == homedir()
         @test joinpath(S(abspath("foo")), S(homedir())) == homedir()
 
+        for str in map(S, [sep, "a$(sep)b", "a$(sep)b$(sep)c", "a$(sep)b$(sep)c$(sep)d"])
+            @test str == joinpath(splitpath(str))
+            @test joinpath(splitpath(str)) == joinpath(splitpath(str)...)
+        end
+
         if Sys.iswindows()
-            @test joinpath(S("foo"),S("bar:baz")) == "bar:baz"
+            @test joinpath(S("foo"),S("D:bar")) == "D:bar"
             @test joinpath(S("C:"),S("foo"),S("D:"),S("bar")) == "D:bar"
             @test joinpath(S("C:"),S("foo"),S("D:bar"),S("baz")) == "D:bar$(sep)baz"
 
@@ -57,6 +89,11 @@
             @test joinpath(S("\\\\server"), S("share"), S("a"), S("b")) == "\\\\server\\share\\a\\b"
             @test joinpath(S("\\\\server\\share"),S("a")) == "\\\\server\\share\\a"
             @test joinpath(S("\\\\server\\share\\"), S("a")) == "\\\\server\\share\\a"
+
+            for str in map(S, ["c:\\", "c:\\a", "c:\\a\\b", "c:\\a\\b\\c", "c:\\a\\b\\c\\d"])
+                @test str == joinpath(splitpath(str))
+                @test joinpath(splitpath(str)) == joinpath(splitpath(str)...)
+            end
 
         elseif Sys.isunix()
             @test joinpath(S("foo"),S("bar:baz")) == "foo$(sep)bar:baz"
@@ -139,10 +176,13 @@
         end
     end
 
-    @testset "splitdir, splitdrive" begin
+    @testset "splitdir, splitdrive, splitext" begin
         @test joinpath(splitdir(S(homedir()))...) == homedir()
         @test string(splitdrive(S(homedir()))...) == homedir()
         @test splitdrive("a\nb") == ("", "a\nb")
+
+        @test splitdir("a/\xfe/\n/b/c.ext") == ("a/\xfe/\n/b", "c.ext")
+        @test splitext("a/\xfe/\n/b/c.ext") == ("a/\xfe/\n/b/c", ".ext")
 
         if Sys.iswindows()
             @test splitdrive(S("\\\\servername\\hello.world\\filename.ext")) ==
@@ -151,6 +191,54 @@
                 ("\\\\servername.com\\hello.world","\\filename.ext")
             @test splitdrive(S("C:\\foo\\bar")) ==
                 ("C:","\\foo\\bar")
+            # only single characters followed by a colon are drives
+            @test splitdrive(S("foo:bar")) ==
+                ("", "foo:bar")
+
+            # unicode
+            @test splitdrive(S("\\\\α\\β\\γ")) == ("\\\\α\\β", "\\γ")
+            @test splitdrive(S("\\\\?\\UNC\\α\\β\\γ")) == ("\\\\?\\UNC\\α\\β", "\\γ")
+
+            # splitdrive currently allows any single codeunit char except separators as drive letters
+            # while isabspath does not allow this. FIXME?
+            @test splitdrive(S("::")) == ("::", "")
+            @test splitdrive(S("🍎:")) != ("🍎:", "")
+            # The behavior is different for long baths, where he drive letter can
+            # contain multiple codeunits (such as unicode chars or multiple chars)
+            # if it is followed by a delimiter, because it is then captured as a
+            # UNC path with the server name ?. FIXME?
+            @test splitdrive(S("\\\\?\\🍎:\\foobar")) == ("\\\\?\\🍎:", "\\foobar")
+            @test splitdrive(S("\\\\?\\CC:\\foobar")) == ("\\\\?\\CC:", "\\foobar")
+            # If the path contains no delimiters after the path however,
+            # everything goes into the drive
+            @test splitdrive("\\\\?\\🍎:foobar") == ("\\\\?\\🍎:foobar", "")
+        end
+
+        @test splitdir(S("foo")) == ("", "foo")
+        @test splitdir(S("foo/")) == ("foo", "")
+        @test splitdir(S("/foo")) == ("/", "foo")
+        @test splitdir(S("/foo/")) == ("/foo", "")
+        @test splitdir(S("foo/bar")) == ("foo", "bar")
+        @test splitdir(S("/foo/bar")) == ("/foo", "bar")
+        @test splitdir(S("/foo/bar/")) == ("/foo/bar", "")
+        @test splitdir(S("/foo/bar/baz")) == ("/foo/bar", "baz")
+        @test splitdir(S("/foo/bar/baz/")) == ("/foo/bar/baz", "")
+        @test splitdir(S("foo/bar/baz/")) == ("foo/bar/baz", "")
+        # Multiple leading separators are reduced to one only when
+        # all separators are at the beginning. FIXME?
+        @test splitdir(S("///foo")) == ("/", "foo") # why not ("///", "foo") ?
+        @test splitdir(S("///foo/bar")) == ("///foo", "bar")
+        if Sys.iswindows()
+            @test splitdir(S("/\\foo")) == ("/", "foo") # why not ("/\\", "foo") ?
+            @test splitdir(S("\\/foo")) == ("\\", "foo") # why not ("\\/", "foo") ?
+            @test splitdir(S("/\\/foo/bar")) == ("/\\/foo", "bar")
+            @test splitdir(S("///foo/bar/")) == ("///foo/bar", "")
+            @test splitdir(S("C:")) == ("C:", "")
+            @test splitdir(S("C:\\")) == ("C:\\", "")
+            @test splitdir(S("C:\\foo")) == ("C:\\", "foo")
+            @test splitdir(S("C:\\foo\\bar")) == ("C:\\foo", "bar")
+            @test splitdir(S("\\\\?\\C:\\foo\\bar")) == ("\\\\?\\C:\\foo", "bar")
+            @test splitdir(S("\\\\?\\C:\\foo\\bar\\")) == ("\\\\?\\C:\\foo\\bar", "")
         end
 
         @test splitext(S("")) == ("", "")
@@ -167,6 +255,23 @@
         @test_broken splitext(S(".foo..")) == (".foo", "..")
         @test_broken splitext(S(".foo...")) == (".foo", "...")
         @test splitext(S(".foo.bar")) == (".foo", ".bar")
+        @test splitext(S("bar/.foo/baz")) == ("bar/.foo/baz", "")
+        @test splitext(S("bar/foo/.baz")) == ("bar/foo/.baz", "")
+        @test splitext(S("bar/foo.baz")) == ("bar/foo", ".baz")
+
+        # Before merging https://github.com/JuliaLang/julia/pull/60677,
+        # a single \n would be removed from the first output unless that made
+        # it empty or end with a separator. The tests below reflect the
+        # updated behavior.
+        @test splitext(S("a\r\n")) == ("a\r\n", "")
+        @test splitext(S("a/\n")) == ("a/\n", "") # not changed by 60677
+        @test splitext(S("a\n.foo")) == ("a\n", ".foo")
+        @test splitext(S("a/\n.foo")) == ("a/\n", ".foo")
+        @test splitext(S("\n")) == ("\n", "") # not changed by 60677
+        if Sys.iswindows()
+            @test splitext(S("C:a\n")) == ("C:a\n", "")
+            @test splitext(S("C:\n")) == ("C:\n", "") # not changed by 60677
+        end
     end
 
     @testset "isabspath" begin
@@ -187,6 +292,14 @@
             @test startswith(expanduser(S("~")), homedir())
         else
             @test expanduser(S("~")) == "~"
+        end
+        if Sys.iswindows()
+            @test isabspath(S("\\\\?\\C:\\"))
+            # Current behavior is to allow anything starting with a separator,
+            # even if this is not a long path, nor a UNC path.
+            @test isabspath(S("///a/b/"))
+            # Drive letters are currently treated differently in long path format. FIXME?
+            @test isabspath(S("\\\\?\\α:\\")) != isabspath("α:\\")
         end
     end
 
@@ -262,18 +375,76 @@
                     res = relpath(filep, startp)
                     idx += 1
                     @test res == relpath_expected_results[idx]
+                    if Sys.iswindows()
+                        @test relpath("e:$filep", "e:$startp") == relpath_expected_results[idx]
+                        @test relpath("e:$filep", "E:$startp") == relpath_expected_results[idx]
+                        @test relpath("E:$filep", "e:$startp") == relpath_expected_results[idx]
+                        @test relpath("E:$filep", "E:$startp") == relpath_expected_results[idx]
+                    end
                 end
             end
             # Additional cases
             @test_throws ArgumentError relpath(S("$(sep)home$(sep)user$(sep)dir_withendsep$(sep)"), "")
             @test_throws ArgumentError relpath(S(""), S("$(sep)home$(sep)user$(sep)dir_withendsep$(sep)"))
+
+            # issue 40237
+            path = "..$(sep)a$(sep)b$(sep)c"
+            @test relpath(abspath(path)) == path
         end
         test_relpath()
+    end
+
+    @testset "uripath" begin
+        host = if Sys.iswindows()
+            ""
+        elseif Sys.detectwsl()
+            distro = get(ENV, "WSL_DISTRO_NAME", "") # See <https://patrickwu.space/wslconf/>
+            "wsl%24/$distro" # See <https://github.com/microsoft/terminal/pull/14993> and <https://learn.microsoft.com/en-us/windows/wsl/filesystems>
+        else
+            gethostname()
+        end
+        sysdrive, uridrive = if Sys.iswindows() "C:\\", "C:/" else "/", "" end
+        @test Base.Filesystem.uripath("$(sysdrive)some$(sep)file.txt") == "file://$host/$(uridrive)some/file.txt"
+        @test Base.Filesystem.uripath("$(sysdrive)another$(sep)$(sep)folder$(sep)file.md") == "file://$host/$(uridrive)another/folder/file.md"
+        @test Base.Filesystem.uripath("$(sysdrive)some file with ^odd% chars") == "file://$host/$(uridrive)some%20file%20with%20%5Eodd%25%20chars"
+        @test Base.Filesystem.uripath("$(sysdrive)weird chars like @#&()[]{}") == "file://$host/$(uridrive)weird%20chars%20like%20%40%23%26%28%29%5B%5D%7B%7D"
+        @test Base.Filesystem.uripath("$sysdrive") == "file://$host/$uridrive"
+        @test Base.Filesystem.uripath(".") == Base.Filesystem.uripath(pwd())
+        @test Base.Filesystem.uripath("$(sysdrive)unicode$(sep)Δεδομένα") == "file://$host/$(uridrive)unicode/%CE%94%CE%B5%CE%B4%CE%BF%CE%BC%CE%AD%CE%BD%CE%B1"
+        @test Base.Filesystem.uripath("$(sysdrive)unicode$(sep)🧮🐛🔨") == "file://$host/$(uridrive)unicode/%F0%9F%A7%AE%F0%9F%90%9B%F0%9F%94%A8"
+    end
+
+    if Sys.iswindows()
+        @testset "issue #23646" begin
+            @test lowercase(relpath("E:\\a\\b", "C:\\c")) == "e:\\a\\b"
+            @test lowercase(relpath("E:\\a\\b", "c:\\c")) == "e:\\a\\b"
+            @test lowercase(relpath("e:\\a\\b", "C:\\c")) == "e:\\a\\b"
+            @test lowercase(relpath("e:\\a\\b", "c:\\c")) == "e:\\a\\b"
+
+            @test relpath("C:\\a\\b", "c:\\a\\b") == "."
+            @test relpath("c:\\a\\b", "C:\\a\\b") == "."
+            @test lowercase(relpath("C:\\a\\b", "c:\\c\\d")) == "..\\..\\a\\b"
+            @test lowercase(relpath("c:\\a\\b", "C:\\c\\d")) == "..\\..\\a\\b"
+        end
     end
 
     @testset "type stability" begin
         @test isa(joinpath(S("a"), S("b")), String)
         @test isa(joinpath(S(abspath("a")), S("b")), String)
+    end
+
+    @testset "Separator" begin
+        @test Base.Filesystem.isseparator('/')
+        @test any(Base.Filesystem.isseparator, "abc/def")
+        @test occursin(Base.Filesystem.path_separator_re, "abc/def")
+        @test !Base.Filesystem.isseparator('a')
+        @test !any(Base.Filesystem.isseparator, "abcdef")
+        @test !occursin(Base.Filesystem.path_separator_re, "abcdef")
+        if Sys.iswindows()
+            @test Base.Filesystem.isseparator('\\')
+            @test any(Base.Filesystem.isseparator, "abc\\def")
+            @test occursin(Base.Filesystem.path_separator_re, "abc\\def")
+        end
     end
 end
 

@@ -8,7 +8,7 @@ export @simd, simd_outer_range, simd_inner_length, simd_index
 
 # Error thrown from ill-formed uses of @simd
 struct SimdError <: Exception
-    msg::AbstractString
+    msg::String
 end
 
 # Parse iteration space expression
@@ -26,7 +26,7 @@ function check_body!(x::Expr)
     if x.head === :break || x.head === :continue
         throw(SimdError("$(x.head) is not allowed inside a @simd loop body"))
     elseif x.head === :macrocall && x.args[1] === Symbol("@goto")
-        throw(SimdError("$(x.args[1]) is not allowed inside a @simd loop body"))
+        throw(SimdError("@goto is not allowed inside a @simd loop body"))
     end
     for arg in x.args
         check_body!(arg)
@@ -60,22 +60,22 @@ function compile(x, ivdep)
     check_body!(x)
 
     var,range = parse_iteration_space(x.args[1])
-    r = gensym("r") # Range value
-    j = gensym("i") # Iteration variable for outer loop
-    n = gensym("n") # Trip count for inner loop
-    i = gensym("i") # Trip index for inner loop
-    quote
+    # r: Range value
+    # j: Iteration variable for outer loop
+    # n: Trip count for inner loop
+    # i: Trip index for inner loop
+    return quote
         # Evaluate range value once, to enhance type and data flow analysis by optimizers.
-        let $r = $range
-            for $j in Base.simd_outer_range($r)
-                let $n = Base.simd_inner_length($r,$j)
-                    if zero($n) < $n
+        let r = $(esc(range))
+            for j in Base.simd_outer_range(r)
+                let n = Base.simd_inner_length(r,j)
+                    if zero(n) < n
                         # Lower loop in way that seems to work best for LLVM 3.3 vectorizer.
-                        let $i = zero($n)
-                            while $i < $n
-                                local $var = Base.simd_index($r,$j,$i)
-                                $(x.args[2])        # Body of loop
-                                $i += 1
+                        let i = zero(n)
+                            while i < n
+                                local $(esc(var)) = Base.simd_index(r,j,i)
+                                $(esc(x.args[2]))        # Body of loop
+                                i += 1
                                 $(Expr(:loopinfo, Symbol("julia.simdloop"), ivdep))  # Mark loop as SIMD loop
                             end
                         end
@@ -100,7 +100,7 @@ The object iterated over in a `@simd for` loop should be a one-dimensional range
 By using `@simd`, you are asserting several properties of the loop:
 
 * It is safe to execute iterations in arbitrary or overlapping order, with special consideration for reduction variables.
-* Floating-point operations on reduction variables can be reordered, possibly causing different results than without `@simd`.
+* Floating-point operations on reduction variables can be reordered or contracted, possibly causing different results than without `@simd`.
 
 In many cases, Julia is able to automatically vectorize inner for loops without the use of `@simd`.
 Using `@simd` gives the compiler a little extra leeway to make it possible in more situations. In
@@ -125,12 +125,12 @@ either case, your inner loop should have the following properties to allow vecto
 * No iteration ever waits on a previous iteration to make forward progress.
 """
 macro simd(forloop)
-    esc(compile(forloop, nothing))
+    compile(forloop, nothing)
 end
 
 macro simd(ivdep, forloop)
     if ivdep === :ivdep
-        esc(compile(forloop, Symbol("julia.ivdep")))
+        compile(forloop, Symbol("julia.ivdep"))
     else
         throw(SimdError("Only ivdep is valid as the first argument to @simd"))
     end

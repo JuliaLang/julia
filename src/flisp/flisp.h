@@ -6,6 +6,14 @@
 
 #include "platform.h"
 #include "libsupport.h"
+#include "utils.h"
+#include "bitvector.h"
+#include "timefuncs.h"
+#include "strtod.h"
+#include "dirpath.h"
+#include "hashing.h"
+#include "ptrhash.h"
+#include "htable.h"
 #include "uv.h"
 
 //#define MEMDEBUG
@@ -150,7 +158,7 @@ value_t fl_cons(fl_context_t *fl_ctx, value_t a, value_t b) JL_NOTSAFEPOINT;
 value_t fl_list2(fl_context_t *fl_ctx, value_t a, value_t b) JL_NOTSAFEPOINT;
 value_t fl_listn(fl_context_t *fl_ctx, size_t n, ...) JL_NOTSAFEPOINT;
 value_t symbol(fl_context_t *fl_ctx, const char *str) JL_NOTSAFEPOINT;
-char *symbol_name(fl_context_t *fl_ctx, value_t v);
+char *symbol_name(fl_context_t *fl_ctx, value_t v) JL_NOTSAFEPOINT;
 int fl_is_keyword_name(const char *str, size_t len);
 value_t alloc_vector(fl_context_t *fl_ctx, size_t n, int init);
 size_t llength(value_t v);
@@ -204,13 +212,13 @@ typedef struct _ectx_t {
         for(l__ca=1; l__ca; l__ca=0, fl_restorestate(fl_ctx, &_ctx))
 
 #if defined(_OS_WINDOWS_)
-__declspec(noreturn) void lerrorf(fl_context_t *fl_ctx, value_t e, const char *format, ...);
+__declspec(noreturn) void lerrorf(fl_context_t *fl_ctx, value_t e, const char *format, ...) JL_NOTSAFEPOINT;
 __declspec(noreturn) void lerror(fl_context_t *fl_ctx, value_t e, const char *msg) JL_NOTSAFEPOINT;
 __declspec(noreturn) void fl_raise(fl_context_t *fl_ctx, value_t e);
 __declspec(noreturn) void type_error(fl_context_t *fl_ctx, const char *fname, const char *expected, value_t got);
 __declspec(noreturn) void bounds_error(fl_context_t *fl_ctx, const char *fname, value_t arr, value_t ind);
 #else
-void lerrorf(fl_context_t *fl_ctx, value_t e, const char *format, ...) __attribute__ ((__noreturn__));
+void lerrorf(fl_context_t *fl_ctx, value_t e, const char *format, ...) __attribute__ ((__noreturn__)) JL_NOTSAFEPOINT;
 void lerror(fl_context_t *fl_ctx, value_t e, const char *msg) __attribute__((__noreturn__)) JL_NOTSAFEPOINT;
 void fl_raise(fl_context_t *fl_ctx, value_t e) __attribute__ ((__noreturn__));
 void type_error(fl_context_t *fl_ctx, const char *fname, const char *expected, value_t got) __attribute__ ((__noreturn__));
@@ -320,6 +328,8 @@ typedef float    fl_float_t;
 typedef value_t (*builtin_t)(fl_context_t*, value_t*, uint32_t);
 
 value_t cvalue(fl_context_t *fl_ctx, fltype_t *type, size_t sz) JL_NOTSAFEPOINT;
+value_t cprim(fl_context_t *fl_ctx, fltype_t *type, size_t sz) JL_NOTSAFEPOINT;
+value_t cvalue_no_finalizer(fl_context_t *fl_ctx, fltype_t *type, size_t sz) JL_NOTSAFEPOINT;
 void add_finalizer(fl_context_t *fl_ctx, cvalue_t *cv);
 void cv_autorelease(fl_context_t *fl_ctx, cvalue_t *cv);
 void cv_pin(fl_context_t *fl_ctx, cvalue_t *cv);
@@ -336,10 +346,10 @@ value_t cvalue_static_cstrn(fl_context_t *fl_ctx, const char *str, size_t n);
 value_t cvalue_static_cstring(fl_context_t *fl_ctx, const char *str);
 value_t string_from_cstr(fl_context_t *fl_ctx, char *str);
 value_t string_from_cstrn(fl_context_t *fl_ctx, char *str, size_t n);
-int fl_isstring(fl_context_t *fl_ctx, value_t v);
-int fl_isnumber(fl_context_t *fl_ctx, value_t v);
-int fl_isgensym(fl_context_t *fl_ctx, value_t v);
-int fl_isiostream(fl_context_t *fl_ctx, value_t v);
+int fl_isstring(fl_context_t *fl_ctx, value_t v) JL_NOTSAFEPOINT;
+int fl_isnumber(fl_context_t *fl_ctx, value_t v) JL_NOTSAFEPOINT;
+int fl_isgensym(fl_context_t *fl_ctx, value_t v) JL_NOTSAFEPOINT;
+int fl_isiostream(fl_context_t *fl_ctx, value_t v) JL_NOTSAFEPOINT;
 ios_t *fl_toiostream(fl_context_t *fl_ctx, value_t v, const char *fname);
 value_t cvalue_compare(value_t a, value_t b);
 int numeric_compare(fl_context_t *fl_ctx, value_t a, value_t b, int eq, int eqnans, char *fname);
@@ -465,7 +475,7 @@ struct _fl_context_t {
     unsigned char *tospace;
     unsigned char *curheap;
     unsigned char *lim;
-    uint32_t heapsize;//bytes
+    size_t heapsize;//bytes
     uint32_t *consflags;
 
     // error utilities --------------------------------------------------
@@ -494,13 +504,14 @@ struct _fl_context_t {
     value_t apply_func, apply_v, apply_e;
 
     value_t jl_sym;
+    value_t jl_char_sym;
     // persistent buffer (avoid repeated malloc/free)
     // for julia_extensions.c: normalize
     size_t jlbuflen;
     void *jlbuf;
 };
 
-static inline void argcount(fl_context_t *fl_ctx, const char *fname, uint32_t nargs, uint32_t c)
+static inline void argcount(fl_context_t *fl_ctx, const char *fname, uint32_t nargs, uint32_t c) JL_NOTSAFEPOINT
 {
     if (__unlikely(nargs != c))
         lerrorf(fl_ctx, fl_ctx->ArgError,"%s: too %s arguments", fname, nargs<c ? "few":"many");

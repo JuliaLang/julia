@@ -1,102 +1,99 @@
-Julia v1.5 Release Notes
+Julia v1.14 Release Notes
 ========================
 
 New language features
 ---------------------
-* Macro calls `@foo {...}` can now also be written `@foo{...}` (without the space) ([#34498]).
+
+  - It is now possible to control which version of the Julia syntax will be used to parse a package by setting the
+    `compat.julia` or `syntax.julia_version` key in Project.toml. This feature is similar to the notion of "editions"
+    in other language ecosystems and will allow non-breaking evolution of Julia syntax in future versions.
+    See the "Syntax Versioning" section in the code loading documentation ([#60018]).
+  - `ᵅ` (U+U+1D45), `ᵋ` (U+1D4B), `ᶲ` (U+1DB2), `˱` (U+02F1), `˲` (U+02F2), and `ₔ` (U+2094) can now also be used as
+    operator suffixes, accessible as `\^alpha`, `\^epsilon`, `\^ltphi`, `\_<`, `\_>`, and `\_schwa` at the REPL
+    ([#60285]).
+  - The `@label` macro can now create labeled blocks that can be exited early with `break name [value]`. Use
+    `@label name expr` for named blocks or `@label expr` for anonymous blocks. Anonymous `@label` blocks
+    participate in the default break scope: a plain `break` or `break _` exits the innermost breakable scope,
+    whether it is a loop or an `@label` block. The `continue` statement also supports labels with
+    `continue name` to continue a labeled loop ([#60481]).
 
 Language changes
 ----------------
 
-* The interactive REPL now uses "soft scope" for top-level expressions: an assignment inside a
-  scope block such as a `for` loop automatically assigns to a global variable if one has been
-  defined already. This matches the behavior of Julia versions 0.6 and prior, as well as
-  [IJulia](https://github.com/JuliaLang/IJulia.jl).
-  Note that this only affects expressions interactively typed or pasted directly into the
-  default REPL ([#28789], [#33864]).
+Compiler/Runtime improvements
+-----------------------------
 
-* Outside of the REPL (e.g. in a file), assigning to a variable within a top-level scope
-  block is considered ambiguous if a global variable with the same name exists.
-  A warning is given if that happens, to alert you that the code will work differently
-  than in the REPL.
-  A new command line option `--warn-scope` controls this warning ([#33864]).
-
-* Converting arbitrary tuples to `NTuple`, e.g. `convert(NTuple, (1, ""))` now gives an error,
-  where it used to be incorrectly allowed. This is because `NTuple` refers only to homogeneous
-  tuples (this meaning has not changed) ([#34272]).
-
-* In docstrings, a level-1 markdown header "Extended help" is now
-  interpreted as a marker dividing "brief help" from "extended help."
-  The REPL help mode only shows the brief help (the content before the
-  "Extended help" header) by default; prepend the expression with '?'
-  (in addition to the one that enters the help mode) to see the full
-  docstring. ([#25930])
-
-* The syntax `(;)` (which was deprecated in v1.4) now creates an empty named tuple ([#30115]).
+Command-line option changes
+---------------------------
 
 Multi-threading changes
 -----------------------
 
+  - New functions `Threads.atomic_fence_heavy` and `Threads.atomic_fence_light` provide support for
+    asymmetric atomic fences, speeding up atomic synchronization where one side of the synchronization
+    runs significantly less often than the other ([#60311]).
 
 Build system changes
 --------------------
 
-
 New library functions
 ---------------------
 
-* New functions `mergewith` and `mergewith!` supersede `merge` and `merge!` with `combine`
-  argument.  They don't have the restriction for `combine` to be a `Function` and also
-  provide one-argument method that returns a closure.  The old methods of `merge` and
-  `merge!` are still available for backward compatibility ([#34296]).
-* The new `isdisjoint` function indicates whether two collections are disjoint ([#34427]).
-
 New library features
 --------------------
-* Function composition now works also on one argument `∘(f) = f` (#34251)
 
-* `isapprox` (or `≈`) now has a one-argument "curried" method `isapprox(x)` which returns a function, like `isequal` (or `==`)` ([#32305]).
-* `Ref{NTuple{N,T}}` can be passed to `Ptr{T}`/`Ref{T}` `ccall` signatures ([#34199])
-
+* `IOContext` supports a new boolean `hexunsigned` option that allows for
+  printing unsigned integers in decimal instead of hexadecimal ([#60267]).
 
 Standard library changes
 ------------------------
-* The `@timed` macro now returns a `NamedTuple` ([#34149])
-* New `supertypes(T)` function returns a tuple of all supertypes of `T` ([#34419]).
+
+* `codepoint(c)` now succeeds for overlong encodings.  `Base.ismalformed`, `Base.isoverlong`, and
+  `Base.show_invalid` are now `public` and documented (but not exported) ([#55152]).
+
+#### JuliaSyntaxHighlighting
 
 #### LinearAlgebra
-* The BLAS submodule now supports the level-2 BLAS subroutine `hpmv!` ([#34211]).
-* `normalize` now supports multidimensional arrays ([#34239])
-* `lq` factorizations can now be used to compute the minimum-norm solution to under-determined systems ([#34350]).
 
 #### Markdown
 
+  * Strikethrough text via `~strike~` or `~~through~~` is now supported by the
+    Markdown parser. ([#60537])
+
+#### Profile
 
 #### Random
 
-
 #### REPL
 
+#### Test
 
-#### SparseArrays
-* `lu!` accepts `UmfpackLU` as an argument to make use of its symbolic factorization.
+* `@test`, `@test_throws`, and `@test_broken` now support a `context` keyword argument
+  that provides additional information displayed on test failure. This is useful for
+  debugging which specific case failed in parameterized tests ([#60501]).
+
+* `@test_throws`, `@test_warn`, `@test_nowarn`, `@test_logs`, and `@test_deprecated` now support
+  `broken` and `skip` keyword arguments for consistency with `@test` ([#60543]).
+
+* New functions `detect_closure_boxes` and `detect_closure_boxes_all` find methods that
+  allocate `Core.Box` in their lowered code, which can indicate performance issues from
+  captured variables in closures.
 
 #### Dates
 
-#### Statistics
+* `unix2datetime` now accepts a keyword argument `localtime=true` to use the host system's local time zone instead of UTC ([#50296]).
 
+#### InteractiveUtils
 
-#### Sockets
-
-
-Deprecated or removed
----------------------
+#### Dates
 
 External dependencies
 ---------------------
 
 Tooling Improvements
----------------------
+--------------------
 
+Deprecated or removed
+---------------------
 
 <!--- generated by NEWS-update.jl: -->

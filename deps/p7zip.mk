@@ -1,55 +1,43 @@
 ## p7zip ##
+include $(SRCDIR)/p7zip.version
 
 ifneq ($(USE_BINARYBUILDER_P7ZIP),1)
-# Force optimization for P7ZIP flags (Issue #11668)
-$(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.bz2: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ https://downloads.sourceforge.net/project/p7zip/p7zip/16.02/p7zip_16.02_src_all.tar.bz2
 
-$(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted: $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.bz2
+$(SRCCACHE)/7z$(subst .,,$(P7ZIP_VER))-src.tar.xz: | $(SRCCACHE)
+	$(JLDOWNLOAD) $@ https://downloads.sourceforge.net/project/sevenzip/7-Zip/$(P7ZIP_VER)/7z$(subst .,,$(P7ZIP_VER))-src.tar.xz
+
+$(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted: $(SRCCACHE)/7z$(subst .,,$(P7ZIP_VER))-src.tar.xz
 	$(JLCHECKSUM) $<
 	mkdir -p $(dir $@)
-	cd $(dir $@) && $(TAR) --strip-components 1 -jxf $<
-	echo $1 > $@
-
-$(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-12-CVE-2016-9296.patch-applied: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted
-	cd $(dir $@) && patch -p1 -f < $(SRCDIR)/patches/p7zip-12-CVE-2016-9296.patch
+	cd $(dir $@) && $(TAR) -Jxf $<
 	echo 1 > $@
 
-$(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-13-CVE-2017-17969.patch-applied: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-12-CVE-2016-9296.patch-applied
-	cd $(dir $@) && patch -p1 -f < $(SRCDIR)/patches/p7zip-13-CVE-2017-17969.patch
-	echo 1 > $@
+checksum-p7zip: $(SRCCACHE)/7z$(subst .,,$(P7ZIP_VER))-src.tar.xz
+	$(JLCHECKSUM) $<
 
-$(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-15-Enhanced-encryption-strength.patch-applied: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-13-CVE-2017-17969.patch-applied
-	cd $(dir $@) && patch -p4 -f < $(SRCDIR)/patches/p7zip-15-Enhanced-encryption-strength.patch
-	echo 1 > $@
-
-$(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-Windows_ErrorMsg.patch-applied: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-15-Enhanced-encryption-strength.patch-applied
-	cd $(dir $@) && patch -p0 -f < $(SRCDIR)/patches/p7zip-Windows_ErrorMsg.patch
-	echo 1 > $@
-
-$(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-Windows_ErrorMsg.patch-applied
+$(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted
 $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-compiled: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured
-	$(MAKE) -C $(dir $<) $(MAKE_COMMON) CC="$(CC)" CXX="$(CXX)" 7za
+	$(MAKE) -C $(dir $<)CPP/7zip/Bundles/Alone -f makefile.gcc
 	echo 1 > $@
 
 define P7ZIP_INSTALL
-	mkdir -p $2/$$(build_bindir)
-	cp -a $1/bin/7za $2/$$(build_bindir)/7z
+	mkdir -p $2/$$(build_private_libexecdir)/
+	cp -a $1/CPP/7zip/Bundles/Alone/_o/7za$(EXE) $2/$$(build_private_libexecdir)/7z$(EXE)
 endef
 $(eval $(call staged-install, \
 	p7zip,p7zip-$(P7ZIP_VER), \
 	P7ZIP_INSTALL,,,))
 
 clean-p7zip:
-	-rm $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-compiled
-	-rm $(build_bindir)/7za
-	-$(MAKE) -C $(BUILDDIR)/p7zip-$(P7ZIP_VER) clean
+	-rm -f $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-compiled
+	-rm -f $(build_bindir)/7z$(EXE) $(build_bindir)/7z$(EXE) $(build_private_libexecdir)/7z$(EXE)
+	-$(MAKE) -C $(BUILDDIR)/p7zip-$(P7ZIP_VER) $(MAKE_COMMON) $(P7ZIP_BUILD_OPTS) clean
 
 distclean-p7zip:
-	-rm -rf $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.bz2 $(SRCCACHE)/p7zip-$(P7ZIP_VER) $(BUILDDIR)/p7zip-$(P7ZIP_VER)
+	rm -rf $(SRCCACHE)/7z$(subst .,,$(P7ZIP_VER))-src.tar.xz $(SRCCACHE)/p7zip-$(P7ZIP_VER) $(BUILDDIR)/p7zip-$(P7ZIP_VER)
 
 
-get-p7zip: $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.bz2
+get-p7zip: $(SRCCACHE)/7z$(subst .,,$(P7ZIP_VER))-src.tar.xz
 extract-p7zip: $(SRCCACHE)/p7zip-$(P7ZIP_VER)/source-extracted
 configure-p7zip: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured
 compile-p7zip: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-compiled
@@ -58,8 +46,22 @@ check-p7zip: compile-p7zip
 
 
 else # USE_BINARYBUILDER_P7ZIP
-P7ZIP_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/p7zip_jll.jl/releases/download/p7zip-v$(P7ZIP_VER)+$(P7ZIP_BB_REL)
-P7ZIP_BB_NAME := p7zip.v$(P7ZIP_VER)
+
 $(eval $(call bb-install,p7zip,P7ZIP,false))
+# move from bindir to shlibdir, where we expect to install it
+install-p7zip: post-install-p7zip
+uninstall-p7zip: pre-uninstall-p7zip
+post-install-p7zip: $(build_prefix)/manifest/p7zip $(PATCHELF_MANIFEST)
+	mkdir -p $(build_private_libexecdir)/
+	[ ! -e $(build_bindir)/7z$(EXE) ] || mv $(build_bindir)/7z$(EXE) $(build_private_libexecdir)/7z$(EXE)
+	[ -e $(build_private_libexecdir)/7z$(EXE) ]
+ifneq (,$(findstring $(OS),Linux FreeBSD))
+	[ -L $(build_private_libexecdir)/7z ] || \
+	$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN/$(reverse_build_private_libexecdir_rel)' $(build_private_libexecdir)/7z$(EXE)
+endif
+pre-uninstall-p7zip:
+	-rm -f $(build_private_libexecdir)/7z$(EXE)
+
+.PHONY: post-install-p7zip pre-uninstall-p7zip
 
 endif

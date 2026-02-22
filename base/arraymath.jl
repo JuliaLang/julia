@@ -1,123 +1,137 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## Unary operators ##
+## Binary arithmetic operators ##
 
-"""
-    conj!(A)
-
-Transform an array to its complex conjugate in-place.
-
-See also [`conj`](@ref).
-
-# Examples
-```jldoctest
-julia> A = [1+im 2-im; 2+2im 3+im]
-2×2 Array{Complex{Int64},2}:
- 1+1im  2-1im
- 2+2im  3+1im
-
-julia> conj!(A);
-
-julia> A
-2×2 Array{Complex{Int64},2}:
- 1-1im  2+1im
- 2-2im  3-1im
-```
-"""
-conj!(A::AbstractArray{<:Number}) = (@inbounds broadcast!(conj, A, A); A)
-
-for f in (:-, :conj, :real, :imag)
-    @eval ($f)(A::AbstractArray) = broadcast_preserving_zero_d($f, A)
+function _broadcast_preserving_zero_d(f, A, B)
+    broadcast_preserving_zero_d(f, A, B)
 end
 
+# Using map over broadcast enables vectorization for wide matrices with few rows.
+# This is because we use linear indexing in `map` as opposed to Cartesian indexing in broadcasting.
+# https://github.com/JuliaLang/julia/issues/47873#issuecomment-1352472461
+function _broadcast_preserving_zero_d(f, A::Array{<:Any,N}, B::Array{<:Any,N}, Cs::Array{<:Any,N}...) where {N}
+    map(f, A, B, Cs...)
+end
 
-## Binary arithmetic operators ##
+function _broadcast_preserving_zero_d(f, A::Array, B::Array, Cs::Array...)
+    # we already know that the shapes are compatible.
+    # We just need to select the size corresponding to the highest ndims
+    # and reshape all the arrays to that size
+    arrays = (A, B, Cs...)
+    sz = mapreduce(size, (x,y) -> length(x) > length(y) ? x : y, arrays)
+    # Skip reshaping where possible to avoid the overhead
+    arrays_sameshape = map(x -> length(sz) == ndims(x) ? x : reshape(x, sz), arrays)
+    map(f, arrays_sameshape...)
+end
+
+function _broadcast_preserving_zero_d(f, A::Array, B::Number)
+    map(Fix2(f, B), A)
+end
+
+function _broadcast_preserving_zero_d(f, A::Number, B::Array)
+    map(Fix1(f, A), B)
+end
 
 for f in (:+, :-)
     @eval function ($f)(A::AbstractArray, B::AbstractArray)
         promote_shape(A, B) # check size compatibility
-        broadcast_preserving_zero_d($f, A, B)
+        _broadcast_preserving_zero_d($f, A, B)
     end
 end
 
-function +(A::Array, Bs::Array...)
-    for B in Bs
-        promote_shape(A, B) # check size compatibility
++(A::Array) = map(+, A)
+
+function +(A::Array, B::Array, Cs::Array...)
+    promote_shape(A, B)
+    for C in Cs
+        promote_shape(A, C) # check size compatibility
     end
-    broadcast_preserving_zero_d(+, A, Bs...)
+    _broadcast_preserving_zero_d(+, A, B, Cs...)
 end
 
 for f in (:/, :\, :*)
     if f !== :/
-        @eval ($f)(A::Number, B::AbstractArray) = broadcast_preserving_zero_d($f, A, B)
+        @eval ($f)(A::Number, B::AbstractArray) = _broadcast_preserving_zero_d($f, A, B)
     end
     if f !== :\
-        @eval ($f)(A::AbstractArray, B::Number) = broadcast_preserving_zero_d($f, A, B)
+        @eval ($f)(A::AbstractArray, B::Number) = _broadcast_preserving_zero_d($f, A, B)
     end
 end
 
 ## data movement ##
 
-function reverse(A::Array{T}; dims::Integer) where T
-    nd = ndims(A); d = dims
-    1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
-    sd = size(A, d)
-    if sd == 1 || isempty(A)
-        return copy(A)
+"""
+    reverse(A; dims=:)
+
+Reverse `A` along dimension `dims`, which can be an integer (a
+single dimension), a tuple of integers (a tuple of dimensions)
+or `:` (reverse along all the dimensions, the default).  See
+also [`reverse!`](@ref) for in-place reversal.
+
+# Examples
+```jldoctest
+julia> b = Int64[1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> reverse(b, dims=2)
+2×2 Matrix{Int64}:
+ 2  1
+ 4  3
+
+julia> reverse(b)
+2×2 Matrix{Int64}:
+ 4  3
+ 2  1
+```
+
+!!! compat "Julia 1.6"
+    Prior to Julia 1.6, only single-integer `dims` are supported in `reverse`.
+"""
+reverse(A::AbstractArray; dims::D=:) where {D} = _reverse(A, dims)
+_reverse(A, dims::D) where {D} = reverse!(copymutable(A); dims)
+
+"""
+    reverse!(A; dims=:)
+
+Like [`reverse`](@ref), but operates in-place in `A`.
+
+!!! compat "Julia 1.6"
+    Multidimensional `reverse!` requires Julia 1.6.
+"""
+reverse!(A::AbstractArray; dims::D=:) where {D} = _reverse!(A, dims)
+_reverse!(A::AbstractArray{<:Any,N}, ::Colon) where {N} = _reverse!(A, ntuple(identity, Val{N}()))
+_reverse!(A, dim::Integer) = _reverse!(A, (Int(dim),))
+_reverse!(A, dims::NTuple{M,Integer}) where {M} = _reverse!(A, Int.(dims))
+function _reverse!(A::AbstractArray{<:Any,N}, dims::NTuple{M,Int}) where {N,M}
+    dims === () && return A # nothing to reverse
+    dimrev = ntuple(k -> k in dims, Val{N}()) # boolean tuple indicating reversed dims
+
+    if N < M || M != sum(dimrev)
+        throw(ArgumentError("invalid dimensions $dims in reverse!"))
     end
 
-    B = similar(A)
+    # swapping loop only needs to traverse ≈half of the array
+    halfsz = ntuple(k -> k == dims[1] ? size(A,k) ÷ 2 : size(A,k), Val{N}())
 
-    nnd = 0
-    for i = 1:nd
-        nnd += Int(size(A,i)==1 || i==d)
+    last1 = ntuple(k -> lastindex(A,k)+firstindex(A,k), Val{N}()) # offset for reversed index
+    for i in CartesianIndices(ntuple(k -> firstindex(A,k):firstindex(A,k)-1+@inbounds(halfsz[k]), Val{N}()))
+        iₜ = Tuple(i)
+        iᵣ = CartesianIndex(ifelse.(dimrev, last1 .- iₜ, iₜ))
+        @inbounds A[iᵣ], A[i] = A[i], A[iᵣ]
     end
-    if nnd==nd
-        # reverse along the only non-singleton dimension
-        for i = 1:sd
-            B[i] = A[sd+1-i]
-        end
-        return B
+    if M > 1 && isodd(size(A, dims[1]))
+        # middle slice for odd dimensions must be recursively flipped
+        mid = firstindex(A, dims[1]) + (size(A, dims[1]) ÷ 2)
+        midslice = CartesianIndices(ntuple(k -> k == dims[1] ? (mid:mid) : (firstindex(A,k):lastindex(A,k)), Val{N}()))
+        _reverse!(view(A, midslice), dims[2:end])
     end
-
-    d_in = size(A)
-    leading = d_in[1:(d-1)]
-    M = prod(leading)
-    N = length(A)
-    stride = M * sd
-
-    if M==1
-        for j = 0:stride:(N-stride)
-            for i = 1:sd
-                ri = sd+1-i
-                B[j + ri] = A[j + i]
-            end
-        end
-    else
-        if allocatedinline(T) && M>200
-            for i = 1:sd
-                ri = sd+1-i
-                for j=0:stride:(N-stride)
-                    offs = j + 1 + (i-1)*M
-                    boffs = j + 1 + (ri-1)*M
-                    copyto!(B, boffs, A, offs, M)
-                end
-            end
-        else
-            for i = 1:sd
-                ri = sd+1-i
-                for j=0:stride:(N-stride)
-                    offs = j + 1 + (i-1)*M
-                    boffs = j + 1 + (ri-1)*M
-                    for k=0:(M-1)
-                        B[boffs + k] = A[offs + k]
-                    end
-                end
-            end
-        end
-    end
-    return B
+    return A
 end
+# fix ambiguity with array.jl:
+_reverse!(A::AbstractVector, dim::Tuple{Int}) = _reverse!(A, first(dim))
+
 
 """
     rotl90(A)
@@ -127,12 +141,12 @@ Rotate matrix `A` left 90 degrees.
 # Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> rotl90(a)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  2  4
  1  3
 ```
@@ -155,12 +169,12 @@ Rotate matrix `A` right 90 degrees.
 # Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> rotr90(a)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  3  1
  4  2
 ```
@@ -182,12 +196,12 @@ Rotate matrix `A` 180 degrees.
 # Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> rot180(a)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  2  1
 ```
@@ -210,27 +224,27 @@ If `k` is a multiple of four (including zero), this is equivalent to a `copy`.
 # Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> rotl90(a,1)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  2  4
  1  3
 
 julia> rotl90(a,2)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  2  1
 
 julia> rotl90(a,3)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  3  1
  4  2
 
 julia> rotl90(a,4)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 ```
@@ -250,27 +264,27 @@ If `k` is a multiple of four (including zero), this is equivalent to a `copy`.
 # Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> rotr90(a,1)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  3  1
  4  2
 
 julia> rotr90(a,2)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  2  1
 
 julia> rotr90(a,3)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  2  4
  1  3
 
 julia> rotr90(a,4)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 ```
@@ -285,17 +299,17 @@ If `k` is even, this is equivalent to a `copy`.
 # Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> rot180(a,1)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  4  3
  2  1
 
 julia> rot180(a,2)
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 ```

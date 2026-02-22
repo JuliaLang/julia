@@ -1,0 +1,20 @@
+--- configure.orig	2025-05-26 15:25:01
++++ configure	2025-05-26 15:25:41
+@@ -20878,7 +20878,7 @@
+   printf %s "(cached) " >&6
+ else $as_nop
+   ac_check_lib_save_LIBS=$LIBS
+-LIBS="-llzma  $LIBS"
++LIBS="-L${libdir} -l:liblzma.a  $LIBS"
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+ /* end confdefs.h.  */
+ 
+@@ -20908,7 +20908,7 @@
+ printf "%s\n" "$ac_cv_lib_lzma_lzma_mf_is_supported" >&6; }
+ if test "x$ac_cv_lib_lzma_lzma_mf_is_supported" = xyes
+ then :
+-  LIBLZMA=-llzma
++  LIBLZMA="-L${libdir} -l:liblzma.a"
+ 
+ printf "%s\n" "#define HAVE_LZMA 1" >>confdefs.h
+ 

@@ -1,3 +1,7 @@
+pre, code {
+    font-variant-ligatures: no-contextual;
+}
+
 nav.toc h1 {
     display: none;
 }

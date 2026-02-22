@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# RUN: julia --startup-file=no %s %t && llvm-link -S %t/* -o %t/module.ll
+# RUN: julia --startup-file=no %s %t -O && llvm-link -S %t/* -o %t/module.ll
 # RUN: cat %t/module.ll | FileCheck %s
 
 ## Notes:
@@ -14,5 +14,5 @@ include(joinpath("..", "testhelpers", "llvmpasses.jl"))
 
 import Base.FastMath
 
-# CHECK: call fast float @llvm.sqrt.f32(float %0)
+# CHECK: call fast float @llvm.sqrt.f32(float %"x::Float32")
 emit(FastMath.sqrt_fast, Float32)

@@ -1,17 +1,44 @@
-# Documentation
+# [Documentation](@id man-documentation)
+
+## Accessing Documentation
+
+Documentation can be accessed at the REPL or in [IJulia](https://github.com/JuliaLang/IJulia.jl)
+by typing `?` followed by the name of a function or macro, and pressing `Enter`. For example,
+
+```julia
+?cos
+?@time
+?r""
+```
+
+will show documentation for the relevant function, macro or string macro respectively. Most Julia
+environments provide a way to access documentation directly:
+- [VS Code](https://www.julia-vscode.org/) shows documentation when you hover over a function name.
+  You can also use the Julia panel in the sidebar to search for documentation.
+- In [Pluto](https://github.com/fonsp/Pluto.jl), open the "Live Docs" panel on the bottom right.
+- In [Juno](https://junolab.org) using `Ctrl-J, Ctrl-D` will show the documentation for the object
+  under the cursor.
+
+
+`Docs.hasdoc(module, name)::Bool` tells whether a name has a docstring. `Docs.undocumented_names(module; all)`
+returns the undocumented names in a module.
+
+## [Writing Documentation](@id man-writing-documentation)
 
 Julia enables package developers and users to document functions, types and other objects easily
-via a built-in documentation system since Julia 0.4.
+via a built-in documentation system.
 
-The basic syntax is simple: any string appearing at the toplevel right before an object
+The basic syntax is simple: any string appearing just before an object
 (function, macro, type or instance) will be interpreted as documenting it (these are called
 *docstrings*). Note that no blank lines or comments may intervene between a docstring and
 the documented object. Here is a basic example:
 
 ```julia
-"Tell whether there are too foo items in the array."
+"Tell whether there are too many foo items in the array."
 foo(xs::Array) = ...
 ```
+!!! note "Reminder"
+    Any empty lines between the docstring and the object being documented detach the former from the latter, making the docstring ineffective.
 
 Documentation is interpreted as [Markdown](https://en.wikipedia.org/wiki/Markdown), so you can
 use indentation and code fences to delimit code examples from text. Technically, any object can
@@ -29,8 +56,9 @@ Here is a more complex example, still using Markdown:
 """
     bar(x[, y])
 
-Compute the Bar index between `x` and `y`. If `y` is missing, compute
-the Bar index between all pairs of columns of `x`.
+Compute the Bar index between `x` and `y`.
+
+If `y` is unspecified, compute the Bar index between all pairs of columns of `x`.
 
 # Examples
 ```julia-repl
@@ -55,6 +83,35 @@ As in the example above, we recommend following some simple conventions when wri
    accepts many keyword arguments, only include a `<keyword arguments>` placeholder in the signature
    (i.e. `f(x; <keyword arguments>)`), and give the complete list under an `# Arguments` section
    (see point 4 below).
+
+   Use this style to document the return type or give the return value a name:
+
+   ```julia
+   # Naming the return value or its type is not necessary (this is the most common case)
+   """
+      sum(itr; [init])
+
+   ...
+   """
+
+   # The return type is easily documented and critical to the semantics of this function
+   """
+      vec(x::AbstractArray)::AbstractVector
+
+   ...
+   """
+
+   # Naming and/or destructuring the return value clarifies the semantics of this function
+   """
+      splitdir(path::AbstractString) -> (dir::AbstractString, file::AbstractString)
+   ...
+   """
+   ```
+   When included, a return type should be written after the signature, separated by `::`,
+   while a named return value should be separated by ` -> `, with a space on both sides.
+   Return types and return values should be valid Julia expressions when possible.
+   Macro docstring signatures that annotate return types or return values should use
+   parentheses to clarify where the macro arguments end and return type or return value begins.
 2. Include a single one-line sentence describing what the function does or what the object represents
    after the simplified signature block. If needed, provide more details in a second paragraph, after
    a blank line.
@@ -90,10 +147,10 @@ As in the example above, we recommend following some simple conventions when wri
 5. Provide hints to related functions.
 
    Sometimes there are functions of related functionality. To increase discoverability please provide
-   a short list of these in a `See also:` paragraph.
+   a short list of these in a `See also` paragraph.
 
    ```
-   See also: [`bar!`](@ref), [`baz`](@ref), [`baaz`](@ref)
+   See also [`bar!`](@ref), [`baz`](@ref), [`baaz`](@ref).
    ```
 6. Include any code examples in an `# Examples` section.
 
@@ -116,7 +173,7 @@ As in the example above, we recommend following some simple conventions when wri
    # Examples
    ```jldoctest
    julia> a = [1 2; 3 4]
-   2×2 Array{Int64,2}:
+   2×2 Matrix{Int64}:
     1  2
     3  4
    ```
@@ -127,8 +184,7 @@ As in the example above, we recommend following some simple conventions when wri
        Calling `rand` and other RNG-related functions should be avoided in doctests since they will not
        produce consistent outputs during different Julia sessions. If you would like to show some random
        number generation related functionality, one option is to explicitly construct and seed your own
-       [`MersenneTwister`](@ref) (or other pseudorandom number generator) and pass it to the functions you are
-       doctesting.
+       RNG object (see [`Random`](@ref Random-Numbers)) and pass it to the functions you are doctesting.
 
        Operating system word size ([`Int32`](@ref) or [`Int64`](@ref)) as well as path separator differences
        (`/` or `\`) will also affect the reproducibility of some doctests.
@@ -192,30 +248,15 @@ As in the example above, we recommend following some simple conventions when wri
 
    Docstrings are edited using the same tools as code. Therefore, the same conventions should apply.
    It is recommended that lines are at most 92 characters wide.
-6. Provide information allowing custom types to implement the function in an
+10. Provide information allowing custom types to implement the function in an
    `# Implementation` section. These implementation details are intended for developers
    rather than users, explaining e.g. which functions should be overridden and which
    functions automatically use appropriate fallbacks. Such details are best kept separate
    from the main description of the function's behavior.
-5. For long docstrings, consider splitting the documentation with an
+11. For long docstrings, consider splitting the documentation with an
    `# Extended help` header. The typical help-mode will show only the
    material above the header; you can access the full help by adding a '?'
    at the beginning of the expression (i.e., "??foo" rather than "?foo").
-
-## Accessing Documentation
-
-Documentation can be accessed at the REPL or in [IJulia](https://github.com/JuliaLang/IJulia.jl)
-by typing `?` followed by the name of a function or macro, and pressing `Enter`. For example,
-
-```julia
-?cos
-?@time
-?r""
-```
-
-will show documentation for the relevant function, macro or string macro respectively. In
-[Juno](http://junolab.org) using `Ctrl-J, Ctrl-D` will show the documentation for the object
-under the cursor.
 
 ## Functions & Methods
 
@@ -264,7 +305,7 @@ with the `catdoc` function, which can of course be overridden for custom types.
 
 ## Advanced Usage
 
-The `@doc` macro associates its first argument with its second in a per-module dictionary called
+The [`@doc`](@ref Core.@doc) macro associates its first argument with its second in a per-module dictionary called
 `META`.
 
 To make it easier to write documentation, the parser treats the macro name `@doc` specially:
@@ -279,7 +320,8 @@ Therefore the following syntax is parsed as a 2-argument call to `@doc`:
 f(x) = x
 ```
 
-This makes it possible to use expressions other than normal string literals (such as the `raw""` string macro) as a docstring.
+This makes it possible to use expressions other than normal string literals (such as the
+[`raw"..."`](@ref @raw_str) string macro) as a docstring.
 
 When used for retrieving documentation, the `@doc` macro (or equally, the `doc` function) will
 search all `META` dictionaries for metadata relevant to the given object and return it. The returned
@@ -292,30 +334,52 @@ documentation between different versions of a function:
 @doc (@doc foo!) foo
 ```
 
+!!! compat "Julia 1.11"
+    In Julia 1.11 and newer, retrieving documentation with the `@doc` macro requires that
+    the `REPL` stdlib is loaded.
+
 Or for use with Julia's metaprogramming functionality:
 
 ```julia
 for (f, op) in ((:add, :+), (:subtract, :-), (:multiply, :*), (:divide, :/))
     @eval begin
-        $f(a,b) = $op(a,b)
+        $f(a, b) = $op(a, b)
     end
 end
-@doc "`add(a,b)` adds `a` and `b` together" add
-@doc "`subtract(a,b)` subtracts `b` from `a`" subtract
+@doc "`add(a, b)` adds `a` and `b` together" add
+@doc "`subtract(a, b)` subtracts `b` from `a`" subtract
 ```
 
-Documentation written in non-toplevel blocks, such as `begin`, `if`, `for`, and `let`, is
-added to the documentation system as blocks are evaluated. For example:
+Documentation in non-toplevel blocks, such as `begin`, `if`, `for`, `let`, and
+inner constructors, should be added to the documentation system via `@doc` as
+well. For example:
 
 ```julia
 if condition()
-    "..."
+    @doc "..."
     f(x) = x
 end
 ```
 
 will add documentation to `f(x)` when `condition()` is `true`. Note that even if `f(x)` goes
-out of scope at the end of the block, its documentation will remain.
+out of scope at the end of a block, its documentation will remain.
+
+It is possible to make use of metaprogramming to assist in the creation of documentation.
+When using string-interpolation within the docstring you will need to use an extra `$` as
+shown with `$($name)`:
+
+```julia
+for func in (:day, :dayofmonth)
+    name = string(func)
+    @eval begin
+        @doc """
+            $($name)(dt::TimeType) -> Int64
+
+        The day of month of a `Date` or `DateTime` as an `Int64`.
+        """ $func(dt::Dates.TimeType)
+    end
+end
+```
 
 ### Dynamic documentation
 
@@ -325,17 +389,17 @@ for your custom type that returns the documentation on a per-instance basis. For
 
 ```julia
 struct MyType
-    value::String
+    value::Int
 end
 
 Docs.getdoc(t::MyType) = "Documentation for MyType with value $(t.value)"
 
-x = MyType("x")
-y = MyType("y")
+x = MyType(1)
+y = MyType(2)
 ```
 
-`?x` will display "Documentation for MyType with value x" while `?y` will display
-"Documentation for MyType with value y".
+`?x` will display "Documentation for MyType with value 1" while `?y` will display
+"Documentation for MyType with value 2".
 
 ## Syntax Guide
 
@@ -346,10 +410,10 @@ In the following examples `"..."` is used to illustrate an arbitrary docstring.
 
 ### `$` and `\` characters
 
-The `$` and `\` characters are still parsed as string interpolation or start of an escape sequence
-in docstrings too. The `raw""` string macro together with the `@doc` macro can be used to avoid
-having to escape them. This is handy when the docstrings include LaTeX or Julia source code examples
-containing interpolation:
+The `$` and `\` characters are still parsed as string interpolation or start of an escape
+sequence in docstrings too. The [`raw"..."`](@ref @raw_str) string macro together with the
+[`@doc`](@ref Core.@doc) macro can be used to avoid having to escape them. This is handy
+when the docstrings include LaTeX or Julia source code examples containing interpolation:
 
 ````julia
 @doc raw"""
@@ -379,7 +443,7 @@ f(x) = x
 
 "..."
 function f(x)
-    x
+    return x
 end
 
 "..."
@@ -406,10 +470,13 @@ Adds docstring `"..."` to the `@m(::Any)` macro definition.
 
 ```julia
 "..."
-:(@m)
+:(@m1)
+
+"..."
+macro m2 end
 ```
 
-Adds docstring `"..."` to the macro named `@m`.
+Adds docstring `"..."` to the macros named `@m1` and `@m2`.
 
 ### Types
 
@@ -430,6 +497,20 @@ end
 
 Adds the docstring `"..."` to types `T1`, `T2`, and `T3`.
 
+```
+"..."
+T1
+
+"..."
+T2
+
+"..."
+T3
+```
+
+Adds the docstring `"..."` to types `T1`, `T2`, and `T3`.
+The previous version is the preferred syntax, however both are equivalent.
+
 ```julia
 "..."
 struct T
@@ -437,11 +518,17 @@ struct T
     x
     "y"
     y
+
+    @doc "Inner constructor"
+    function T()
+        new(...)
+    end
 end
 ```
 
-Adds docstring `"..."` to type `T`, `"x"` to field `T.x` and `"y"` to field `T.y`. Also applicable
-to `mutable struct` types.
+Adds docstring `"..."` to type `T`, `"x"` to field `T.x`, `"y"` to field `T.y`,
+and `"Inner constructor"` to the inner constructor `T()`. Also applicable to
+`mutable struct` types.
 
 ### Modules
 
@@ -457,8 +544,22 @@ M
 end
 ```
 
-Adds docstring `"..."` to the `Module``M`. Adding the docstring above the `Module` is the preferred
+Adds docstring `"..."` to the `Module` `M`. Adding the docstring above the `Module` is the preferred
 syntax, however both are equivalent.
+
+The module docstring is evaluated *inside* the scope of the module, allowing
+access to all the symbols defined in and imported into the module:
+
+```julia
+"The magic number is $(MAGIC)."
+module DocStringEval
+const MAGIC = 42
+end
+```
+
+Documenting a `baremodule` by placing a docstring above the expression automatically imports
+`@doc` into the module. These imports must be done manually when the module expression is not
+documented:
 
 ```julia
 "..."
@@ -475,10 +576,6 @@ f(x) = x
 
 end
 ```
-
-Documenting a `baremodule` by placing a docstring above the expression automatically imports
-`@doc` into the module. These imports must be done manually when the module expression is not
-documented. Empty `baremodule`s cannot be documented.
 
 ### Global Variables
 
