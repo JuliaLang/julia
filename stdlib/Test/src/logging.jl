@@ -436,6 +436,7 @@ macro test_deprecated(exs...)
     # in Base, not in Test, so bare references inside the quote would resolve wrong.
     _jlopt  = Base.jloptions_scoped
     _sv_with = Base.ScopedValues.with
+    opts_orig = Base.JLOptions()
 
     res = quote
         if $skip_esc
@@ -453,15 +454,20 @@ macro test_deprecated(exs...)
                         end
                     end
                     logs_ok, _logs, value = $_sv_with($_jlopt => (; $_jlopt[]..., depwarn = 1)) do
-                        match_logs((:warn, $pattern_esc, Ignored(), :depwarn); match_mode=:any) do
-                            $expression_esc
+                        if !($from_c) || $opts_orig.depwarn != 2
+                            # If from C and depwarn=error, this will fail, so don't bother
+                            match_logs((:warn, $pattern_esc, Ignored(), :depwarn); match_mode=:any) do
+                                $expression_esc
+                            end
+                        else
+                            true, nothing, nothing
                         end
                     end
                     if $from_c
-                        # C code doesn't use the depwarn path, so only fail if the depwarn option matches.
-                        opts_orig = Base.JLOptions()
-                        throws_ok |= opts_orig.depwarn != 2
-                        logs_ok |= opts_orig.depwarn != 1
+                        # C code doesn't use the depwarn path, so only fail if error detected when `depwarn=error``,
+                        # and ignore warning, which is printed directly rather than logged.
+                        throws_ok |= $opts_orig.depwarn != 2
+                        logs_ok = true
                     end
                     context = !throws_ok ? "did not error with `depwarn=error`" : ""
                     context *= !throws_ok && !logs_ok ? ", and " : ""
