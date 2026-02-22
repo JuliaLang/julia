@@ -16,7 +16,40 @@ You can also set `MARCH=native` in `Make.user` for a maximum-performance build c
 
 ## Linux Build Troubleshooting
 
- Problem              | Possible Solution
-------------------------|---------------------
- OpenBLAS build failure | Set one of the following build options in `Make.user` and build again: <ul><li> `OPENBLAS_TARGET_ARCH=BARCELONA` (AMD CPUs) or `OPENBLAS_TARGET_ARCH=NEHALEM` (Intel CPUs)<ul>Set `OPENBLAS_DYNAMIC_ARCH = 0` to disable compiling multiple architectures in a single binary.</ul></li><li> `OPENBLAS_NO_AVX2 = 1` disables AVX2 instructions, allowing OpenBLAS to compile with `OPENBLAS_DYNAMIC_ARCH = 1` using old versions of binutils </li><li> `USE_SYSTEM_BLAS=1` uses the system provided `libblas` <ul><li>Set `LIBBLAS=-lopenblas` and `LIBBLASNAME=libopenblas` to force the use of the system provided OpenBLAS when multiple BLAS versions are installed. </li></ul></li></ul><p> If you get an error that looks like ```../kernel/x86_64/dgemm_kernel_4x4_haswell.S:1709: Error: no such instruction: `vpermpd $ 0xb1,%ymm0,%ymm0'```, then you need to set `OPENBLAS_DYNAMIC_ARCH = 0` or `OPENBLAS_NO_AVX2 = 1`, or you need a newer version of `binutils` (2.18 or newer). ([Issue #7653](https://github.com/JuliaLang/julia/issues/7653))</p><p> If the linker cannot find `gfortran` and you get an error like `julia /usr/bin/x86_64-linux-gnu-ld: cannot find -lgfortran`, check the path with `gfortran -print-file-name=libgfortran.so` and use the output to export something similar to this: `export LDFLAGS=-L/usr/lib/gcc/x86_64-linux-gnu/8/`. See [Issue #6150](https://github.com/JuliaLang/julia/issues/6150#issuecomment-37546803).</p>
-Illegal Instruction error | Check if your CPU supports AVX while your OS does not (e.g. through virtualization, as described in [this issue](https://github.com/JuliaLang/julia/issues/3263)).
+### Problem: OpenBLAS build failure.
+
+**Possible Solution:**
+Set one of the following build options in `Make.user` and build again:
+
+- `OPENBLAS_TARGET_ARCH=BARCELONA` (AMD CPUs) or
+  `OPENBLAS_TARGET_ARCH=NEHALEM` (Intel CPUs)
+  - Set `OPENBLAS_DYNAMIC_ARCH = 0` to disable compiling multiple
+    architectures in a single binary.
+- `OPENBLAS_NO_AVX2 = 1` disables AVX2 instructions, allowing OpenBLAS
+  to compile with `OPENBLAS_DYNAMIC_ARCH = 1` using old versions of
+  binutils
+- `USE_SYSTEM_BLAS=1` uses the system provided `libblas`
+  - Set `LIBBLAS=-lopenblas` and `LIBBLASNAME=libopenblas` to force
+    the use of the system provided OpenBLAS when multiple BLAS versions
+    are installed.
+
+If you get an error that looks like
+```
+../kernel/x86_64/dgemm_kernel_4x4_haswell.S:1709: Error: no such instruction: `vpermpd \$ 0xb1,%ymm0,%ymm0\'
+```
+then you need to set
+`OPENBLAS_DYNAMIC_ARCH = 0` or `OPENBLAS_NO_AVX2 = 1`, or you need a
+newer version of `binutils` (2.18 or newer). ([Issue
+#7653](https://github.com/JuliaLang/julia/issues/7653))
+
+If the linker cannot find `gfortran` and you get an error like `julia
+/usr/bin/x86_64-linux-gnu-ld: cannot find -lgfortran`, check the path
+with `gfortran -print-file-name=libgfortran.so` and use the output to
+export something similar to this: `export
+LDFLAGS=-L/usr/lib/gcc/x86_64-linux-gnu/8/`. See [Issue
+#6150](https://github.com/JuliaLang/julia/issues/6150#issuecomment-37546803).
+
+### Problem: Illegal Instruction error.
+
+**Possible Solution:**
+Check if your CPU supports AVX while your OS does not (e.g. through virtualization, as described in [this issue](https://github.com/JuliaLang/julia/issues/3263)).

@@ -3243,7 +3243,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         old_freed_diff = gc_mem;
         old_pause_time = gc_time;
         // thrashing estimator: if GC time more than 50% of the runtime
-        if (pause > mutator_time && !(thrash_counter < 4))
+        if (pause > mutator_time && thrash_counter <= 4)
             thrash_counter += 1;
         else if (thrash_counter > 0)
             thrash_counter -= 1;
@@ -4142,8 +4142,12 @@ void jl_gc_notify_image_load(const char* img_data, size_t len)
     // Do nothing
 }
 
-JL_DLLEXPORT const char* jl_gc_active_impl(void)
+void jl_gc_notify_image_alloc(const char* img_data, size_t len)
 {
+    // Do nothing
+}
+
+JL_DLLEXPORT const char* jl_gc_active_impl(void) {
     return "Built with stock GC";
 }
 

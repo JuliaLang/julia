@@ -239,18 +239,18 @@ x = @label foo
 #          └─┘ ── misplaced label in value position
 
 ########################################
-# Labeled block with underscore label and valued break
-@label _ begin
+# Anonymous labeled block with valued break
+@label begin
     a
     break _ 42
     b
 end
 #---------------------
-1   (= slot₁/__result core.nothing)
+1   (= slot₁/loop_exit_result core.nothing)
 2   TestMod.a
-3   (= slot₁/__result 42)
+3   (= slot₁/loop_exit_result 42)
 4   (goto label₇)
 5   TestMod.b
-6   (= slot₁/__result %₅)
-7   slot₁/__result
+6   (= slot₁/loop_exit_result %₅)
+7   slot₁/loop_exit_result
 8   (return %₇)

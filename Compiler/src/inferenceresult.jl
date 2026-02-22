@@ -181,12 +181,12 @@ function elim_free_typevars(@nospecialize t)
     end
 end
 
-function constprop_cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given_argtypes::Vector{Any}, cache::Vector{InferenceResult})
-    method = mi.def::Method
+function constprop_cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given_argtypes::Vector{Any}, cache::InferenceCache)
     nargtypes = length(given_argtypes)
-    for cached_result in cache
+    indices = get_indices(cache, mi)
+    for idx in indices
+        cached_result = cache.results[idx]
         cached_result.tombstone && continue # ignore deleted entries (due to LimitedAccuracy)
-        cached_result.linfo === mi || continue
         cache_argtypes = cached_result.argtypes
         @assert length(cache_argtypes) == nargtypes "invalid `cache_argtypes` for `mi`"
         cache_overridden_by_const = cached_result.overridden_by_const

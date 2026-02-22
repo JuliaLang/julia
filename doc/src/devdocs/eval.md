@@ -34,11 +34,13 @@ function, and primitive function, before turning into the desired result (hopefu
 The 10,000 foot view of the whole process is as follows:
 
 1. The user starts `julia`.
-2. The C function `main()` from `cli/loader_exe.c` gets called. This function processes the command line
-   arguments, filling in the `jl_options` struct and setting the variable `ARGS`. It then initializes
-   Julia (by calling [`julia_init` in `init.c`](https://github.com/JuliaLang/julia/blob/master/src/init.c),
+2. The C function `main()` from [`cli/loader_exe.c`](https://github.com/JuliaLang/julia/blob/master/cli/loader_exe.c)
+   gets called. This loads Julia by calling `jl_load_repl()` in
+   [`cli/loader_lib.c`](https://github.com/JuliaLang/julia/blob/master/cli/loader_lib.c).
+   It ultimately ends up calling `jl_init_` in [`init.c`](https://github.com/JuliaLang/julia/blob/master/src/init.c),
    which may load a previously compiled [sysimg](@ref dev-sysimg)). Finally, it passes off control to Julia
    by calling [`Base._start()`](https://github.com/JuliaLang/julia/blob/master/base/client.jl).
+   For more details on this and the next step, see [Initialization of the Julia runtime](@ref).
 3. When `_start()` takes over control, the subsequent sequence of commands depends on the command
    line arguments given. For example, if a filename was supplied, it will proceed to execute that
    file. Otherwise, it will start an interactive REPL.

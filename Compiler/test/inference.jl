@@ -6558,4 +6558,9 @@ function issue60883()
 end
 @test issue60883() === true
 
+throwconditional(c, x) = c ? throw(x isa Int) : throw(x isa Float64)
+@test Base.infer_exception_type((Bool, Any)) do c, x
+    throwconditional(c, x)
+end == Bool
+
 end # module inference
