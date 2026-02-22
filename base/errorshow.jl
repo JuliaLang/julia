@@ -95,7 +95,7 @@ function show_splatted(io::IO, iterator)
     end
 end
 
-function showerror(io::IO, ex::LightBoundsErrors.LightBoundsError)
+function showerror(io::IO, ex::LightBoundsError)
     show(io, typeof(ex))
     print(io, ": out-of-bounds indexing: `collection[")
     show_splatted(io, ex.requested_indices)

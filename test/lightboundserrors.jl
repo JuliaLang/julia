@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.LightBoundsErrors
+using Base: LightBoundsError, checkbounds_lightboundserror, throw_lightboundserror
 using Test
 
 function error_message_pattern(indices::String, collection)

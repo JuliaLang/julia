@@ -1,9 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.NonResizableVectors
+using Base: LightBoundsError, MemoryVector, MemoryRefVectorImm, MemoryRefVectorMut
 using Test
-
-using Base.LightBoundsErrors: LightBoundsError
 
 const basic_types = (MemoryVector, MemoryRefVectorImm, MemoryRefVectorMut)
 
