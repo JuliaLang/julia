@@ -457,7 +457,7 @@ macro test_deprecated(exs...)
                     context *= !throws_ok && !logs_ok ? ", and " : ""
                     context *= !logs_ok ? "did not log a warning including the pattern $($pattern_esc) with `depwarn=yes`" : ""
                     ok = throws_ok && logs_ok
-                    testres = _broken ? 
+                    testres = _broken ?
                         (ok ?
                             Error(:test_unbroken, $orig_expr, true, nothing, $sourceloc) :
                             Broken(:test, $orig_expr)) :
