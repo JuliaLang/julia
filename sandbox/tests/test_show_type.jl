@@ -30,31 +30,3 @@ end
     @test string(Array) == "Array"
     @test string(Tuple{Array}) == "Tuple{Array}"
 end
-
-# Verify that default show (without budget) produces full untruncated output.
-# This ensures that repr, sprint, and print are not broken by the budget system.
-@testset "default show produces full type output (no truncation)" begin
-    T = Vector{Vector{Vector{Vector{Int}}}}
-    str = sprint(Base_show, T)
-    @test str == "Vector{Vector{Vector{Vector{Int64}}}}"
-    @test !contains(str, "…")
-
-    @test Base_repr(T) == "Vector{Vector{Vector{Vector{Int64}}}}"
-
-    T2 = Dict{String, Vector{Pair{Symbol, Int}}}
-    str2 = sprint(Base_show, T2)
-    @test str2 == "Dict{String, Vector{Pair{Symbol, Int64}}}"
-    @test !contains(str2, "…")
-
-    T3 = typeof(view([1,2,3], 1:2))
-    str3 = sprint(Base_show, T3)
-    @test !contains(str3, "…")
-    @test contains(str3, "SubArray")
-    @test contains(str3, "UnitRange")
-
-    T4 = Tuple{Int, Vector{Float64}, Dict{String, Any}}
-    str4 = sprint(Base_show, T4)
-    @test !contains(str4, "…")
-    @test contains(str4, "Tuple{")
-    @test contains(str4, "Dict{String, Any}")
-end

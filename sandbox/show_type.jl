@@ -81,28 +81,6 @@ function Base_makeproper(io::IO, @nospecialize(x::Type))
     return x
 end
 
-# ── alias candidate cache ──────────────────────────────────────────────
-# Iterating unsorted_names(mod) + isdefinedglobal / isconst / getglobal
-# for every call to Base_make_typealias is O(|module|) and dominates
-# the cost for large modules like Base (~130 μs for 1215 names).
-# Cache the small set of candidates (~30 for Base) on first access.
-const _typealias_candidates = Dict{Module, Vector{Tuple{Symbol, Any}}}()
-
-function _get_typealias_candidates(mod::Module)
-    return get!(_typealias_candidates, mod) do
-        candidates = Tuple{Symbol, Any}[]
-        for name in unsorted_names(mod)
-            if isdefinedglobal(mod, name) && isconst(mod, name)
-                alias = getglobal(mod, name)
-                if alias isa Type && !has_free_typevars(alias) && !Base_print_without_params(alias)
-                    push!(candidates, (name, alias))
-                end
-            end
-        end
-        candidates
-    end
-end
-
 # ── make_typealias ──────────────────────────────────────────────────────
 function Base_make_typealias(@nospecialize(x::Type))
     Any === x && return nothing
@@ -115,39 +93,32 @@ function Base_make_typealias(@nospecialize(x::Type))
         p isa UnionAll && push!(xenv, p)
     end
     x isa UnionAll && push!(xenv, x)
-    # For a DataType, `applied === x` can only hold when the alias
-    # shares the same TypeName, so we can skip the expensive `x <: alias`
-    # subtyping check for every unrelated type constant in the module.
-    ux = unwrap_unionall(x)
-    x_tn = ux isa DataType ? ux.name : nothing
     for mod in mods
-        for (name, alias) in _get_typealias_candidates(mod)
-            if !isdeprecated(mod, name)
-                if x_tn !== nothing
-                    ua = unwrap_unionall(alias)
-                    (ua isa DataType && ua.name === x_tn) || continue
-                end
-                x <: alias || continue
-                if alias isa UnionAll
-                    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
-                    env = env::SimpleVector
-                    applied = try
-                            alias{env...}
-                        catch ex
-                            ex isa TypeError || rethrow()
-                            continue
+        for name in unsorted_names(mod)
+            if isdefinedglobal(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
+                alias = getglobal(mod, name)
+                if alias isa Type && !has_free_typevars(alias) && !Base_print_without_params(alias) && x <: alias
+                    if alias isa UnionAll
+                        (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
+                        env = env::SimpleVector
+                        applied = try
+                                alias{env...}
+                            catch ex
+                                ex isa TypeError || rethrow()
+                                continue
+                            end
+                        for p in xenv
+                            applied = rewrap_unionall(applied, p)
                         end
-                    for p in xenv
-                        applied = rewrap_unionall(applied, p)
+                        has_free_typevars(applied) && continue
+                        applied === x || continue
+                    elseif alias === x
+                        env = Core.svec()
+                    else
+                        continue
                     end
-                    has_free_typevars(applied) && continue
-                    applied === x || continue
-                elseif alias === x
-                    env = Core.svec()
-                else
-                    continue
+                    push!(aliases, (GlobalRef(mod, name), env))
                 end
-                push!(aliases, (GlobalRef(mod, name), env))
             end
         end
     end
@@ -785,48 +756,33 @@ function Base_show(io::IO, vm::Core.TypeofVararg)
 end
 
 # ── type node budget (prevents exponential blowup on nested types) ──────
-#
 # The budget limits the total number of type nodes expanded during
-# printing.  This is an **opt-in** mechanism: callers set the IOContext
-# property `:type_budget => Ref{Int}` (a countdown) to activate it.
-# When this property is absent, the budget check is a no-op and types
-# are printed in full (preserving default behavior of `repr`, `print`,
-# `string`, etc.).
-#
-# To opt in, callers create an IOContext before calling `show`:
-#
-#     io = IOContext(io, :type_budget => Ref(80))
-#     show(io, some_type)
-#
-# The budget system is complementary to `type_depth_limit`:
-#   - Budget: limits work *during* printing (performance guard against
-#     exponential blowup on deeply nested types)
-#   - `type_depth_limit`: post-processing that truncates an already-
-#     generated string to fit the display width (cosmetic)
+# printing.  It is derived from the display width: printing more type
+# nodes than can fit on the screen is wasted work and the output will
+# be truncated later anyway (by Base_type_depth_limit or similar).
+function _base_type_budget_init!(io::IO)
+    counter = get(io, :type_nodes_counter, nothing)
+    if counter === nothing
+        budget = displaysize(io)[2]
+        counter = Ref(0)
+        io = IOContext(io, :type_nodes_counter => counter, :type_nodes_limit => budget)
+    end
+    return io, counter
+end
 
-"""
-    _base_type_budget_exceeded!(io::IO) -> Bool
-
-Check whether the type node budget has been exceeded.
-
-Returns `false` immediately if `:type_budget` is not present in `io`
-(i.e., the caller did not opt in to budget-limited printing).
-
-When the budget is active, decrements the countdown and returns `true`
-once it drops below zero, signalling the caller to print `…` instead of
-expanding the type further.
-"""
 function _base_type_budget_exceeded!(io::IO)
-    budget = get(io, :type_budget, nothing)
-    budget === nothing && return false
-    budget::Base.RefValue{Int}
-    budget[] -= 1
-    return budget[] < 0
+    counter = get(io, :type_nodes_counter, nothing)
+    counter === nothing && return false
+    counter::Base.RefValue{Int}
+    counter[] += 1
+    limit = get(io, :type_nodes_limit, typemax(Int))::Int
+    return counter[] > limit
 end
 
 # ── show(io, Type) / _show_type ─────────────────────────────────────────
 Base_show(io::IO, @nospecialize(x::Type)) = Base_show_type(io, inferencebarrier(x))
 function Base_show_type(io::IO, @nospecialize(x::Type))
+    io, _ = _base_type_budget_init!(io)
     if _base_type_budget_exceeded!(io)
         print(io, "…")
         return
@@ -880,30 +836,7 @@ function Base_show_type(io::IO, @nospecialize(x::Type))
 end
 
 # ── repr ────────────────────────────────────────────────────────────────
-"""
-    Base_repr(x; context=nothing)
-
-Return a string representation of `x` using `Base_show`.
-
-By default, types are printed in full without any truncation.  To enable
-budget-limited type printing, pass an `IOContext` with the `:type_budget`
-property via `context`:
-
-```julia
-context = IOContext(stdout, :type_budget => Ref(80))
-Base_repr(some_type; context=context)
-```
-
-# IOContext property for type node budgeting
-
- - `:type_budget :: Ref{Int}` — Countdown of remaining type nodes to
-   expand.  Initialize to `Ref(n)` where `n` is the maximum number of
-   nodes.  Each node visited decrements the countdown; when it reaches
-   zero, remaining nodes are replaced with `…`.
-"""
-function Base_repr(x; context=nothing)
-    sprint(Base_show, x; context=context)
-end
+Base_repr(x; context=nothing) = sprint(Base_show, x; context=context)
 
 # ── sprint (re-export from Base for convenience) ────────────────────────
 const Base_sprint = sprint
@@ -945,32 +878,7 @@ function Base.iterate(I::Base_ANSIIterator, (i, m_st)=(1, iterate(I.captures)))
     return (i => c, (j, iterate(I.captures, (j, new_m_st))))
 end
 
-"""
-    Base_type_depth_limit(str::String, n::Int; maxdepth=nothing) -> String
-
-Limit the nesting depth of `{ }` brackets in `str` until the string's
-`textwidth` is at most `n`, replacing elided content with `…`.
-
-If `maxdepth` is given, truncate at exactly that depth regardless of width.
-
-This is a **post-processing** step that operates on an already-generated
-string.  It is complementary to the type node budget system
-(`_base_type_budget_exceeded!`), which limits work *during* printing to
-prevent exponential blowup.  `type_depth_limit` handles width-fitting
-with proper ANSI escape code and quoted-string awareness.
-
-# Examples
-```
-julia> str = repr(typeof(view([1, 2, 3], 1:2)))
-"SubArray{Int64, 1, Vector{Int64}, Tuple{UnitRange{Int64}}, true}"
-
-julia> Base.type_depth_limit(str, 0, maxdepth = 1)
-"SubArray{…}"
-
-julia> Base.type_depth_limit(str, 45)
-"SubArray{Int64, 1, Vector{…}, Tuple{…}, true}"
-```
-"""
+# ── type_depth_limit ────────────────────────────────────────────────────
 function Base_type_depth_limit(str::String, n::Int; maxdepth = nothing)
     depth = 0
     width_at = Int[]
