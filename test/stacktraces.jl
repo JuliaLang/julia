@@ -259,25 +259,6 @@ struct F49231{a,b,c,d,e,f,g} end
     @test contains(str, "[2] \e[0m\e[1m(::$F49231{Vector, Val{…}, Vector{…}, NTuple{…}, $Int, $Int, $Int})\e[22m\e[0m\e[1m(\e[22m\e[90ma\e[39m::\e[0m$Int, \e[90mb\e[39m::\e[0m$Int, \e[90mc\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n")
 end
 
-# Verify that `repr` and 2-arg `show` produce untruncated type strings,
-# while `:limit => true` activates the type node budget.
-@testset "type node budget respects :limit" begin
-    T = typeof(view([1,2,3], 1:2))
-    full = repr(T)
-    @test !contains(full, "…")
-
-    buf = IOBuffer()
-    show(buf, T)
-    @test String(take!(buf)) == full
-
-    no_limit_small = sprint(show, T, context = :displaysize => (24, 5))
-    @test no_limit_small == full
-
-    limited = sprint(show, T, context = (:limit => true, :displaysize => (24, 5)))
-    @test contains(limited, "…")
-    @test sizeof(limited) < sizeof(full)
-end
-
 @testset "Base.StackTraces docstrings" begin
     @test isempty(Docs.undocumented_names(StackTraces))
 end

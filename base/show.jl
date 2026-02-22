@@ -980,36 +980,8 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     end
 end
 
-# Limit the total number of type nodes expanded during printing.
-# When `:type_budget => Ref{Int}(n)` is present in the IOContext, each
-# type node visited decrements the countdown; once it drops below zero,
-# remaining nodes are replaced with `…`.
-#
-# Auto-initialized from the display width when `:limit => true` is set
-# (e.g. by the REPL), so `repr` and `print` to files/buffers still
-# produce complete type representations.
-function _type_budget_init!(io::IO)
-    budget = get(io, :type_budget, nothing)
-    budget === nothing || return io
-    get(io, :limit, false)::Bool || return io
-    return IOContext(io, :type_budget => Ref(displaysize(io)[2]))
-end
-
-function _type_budget_exceeded!(io::IO)
-    budget = get(io, :type_budget, nothing)
-    budget === nothing && return false
-    budget::RefValue{Int}
-    budget[] -= 1
-    return budget[] < 0
-end
-
 show(io::IO, @nospecialize(x::Type)) = _show_type(io, inferencebarrier(x))
 function _show_type(io::IO, @nospecialize(x::Type))
-    io = _type_budget_init!(io)
-    if _type_budget_exceeded!(io)
-        print(io, "…")
-        return
-    end
     if print_without_params(x)
         show_type_name(io, (unwrap_unionall(x)::DataType).name)
         return
@@ -2611,28 +2583,7 @@ function type_limited_string_from_context(out::IO, str::String)
     return str
 end
 
-"""
-    type_depth_limit(str::String, n::Int; maxdepth=nothing) -> String
-
-Limit the nesting depth of `{ }` brackets in `str` until the string's
-`textwidth` is at most `n`, replacing elided content with `…`.
-
-If `maxdepth` is given, truncate at exactly that depth regardless of width.
-
-This is a post-processing step that operates on an already-generated string.
-It is complementary to the type node budget system (`_type_budget_exceeded!`),
-which limits work *during* printing to prevent exponential blowup.
-`type_depth_limit` handles width-fitting with proper ANSI escape code and
-quoted-string awareness.
-
-# Examples
-```jldoctest
-julia> str = repr(typeof(view([1, 2, 3], 1:2)));
-
-julia> Base.type_depth_limit(str, 0, maxdepth = 1)
-"SubArray{…}"
-```
-"""
+# limit nesting depth of `{ }` until string textwidth is less than `n`
 function type_depth_limit(str::String, n::Int; maxdepth = nothing)
     depth = 0
     width_at = Int[]                       # total textwidth at each nesting depth
