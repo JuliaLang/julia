@@ -1,5 +1,2 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-
-[sources]
-Documenter = {rev = "43d5602f451ecc69d15fa990a7c9df5644fe889b", url = "https://github.com/JuliaDocs/Documenter.jl.git"}

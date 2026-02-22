@@ -83,6 +83,7 @@ typedef struct jl_varbinding_t {
     int8_t intvalued; // intvalued: must be integer-valued; i.e. occurs as N in Vararg{_,N}
     int8_t limited;
     int8_t intersected; // whether this variable has been intersected
+    int8_t widened_to_kind;   // Type{X} was widened to a union of kinds
     int16_t depth0;         // # of invariant constructors nested around the UnionAll type for this var
     // array of typevars that our bounds depend on, whose UnionAlls need to be
     // moved outside ours.
@@ -873,15 +874,59 @@ static int is_leaf_typevar(jl_tvar_t *v) JL_NOTSAFEPOINT
     return is_leaf_bound(v->lb);
 }
 
-static jl_value_t *widen_Type(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+static jl_value_t *widen_Type_if_concrete(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
     if (jl_is_type_type(t) && !jl_is_typevar(jl_tparam0(t)))
         return jl_typeof(jl_tparam0(t));
     if (jl_is_uniontype(t)) {
-        jl_value_t *a = widen_Type(((jl_uniontype_t*)t)->a);
-        jl_value_t *b = widen_Type(((jl_uniontype_t*)t)->b);
+        jl_value_t *a = widen_Type_if_concrete(((jl_uniontype_t*)t)->a);
+        jl_value_t *b = widen_Type_if_concrete(((jl_uniontype_t*)t)->b);
         if (a == b)
             return a;
+    }
+    if (jl_is_unionall(t)) {
+        jl_unionall_t *u = (jl_unionall_t*)t;
+        jl_value_t *body = widen_Type_if_concrete(u->body);
+        if (body != u->body && !jl_has_typevar(body, u->var))
+            return body;
+    }
+    return t;
+}
+
+static int try_subtype_in_env(jl_value_t *a, jl_value_t *b, jl_stenv_t *e);
+
+// Map Type{X} to kind type (DataType, UnionAll, Union, TypeofBottom) over union
+// only if the widened kind satisfies `bound` , otherwise leave unchanged
+static jl_value_t *widen_Type_to_union(jl_value_t *t, jl_value_t *bound, jl_stenv_t *e)
+{
+    if (jl_is_type_type(t) && !jl_is_typevar(jl_tparam0(t))) {
+        jl_value_t *w = jl_typeof(jl_tparam0(t));
+        if (!try_subtype_in_env(w, bound, e))
+            return t;
+        return w;
+    }
+    if (jl_is_uniontype(t)) {
+        jl_value_t *wa = NULL, *wb = NULL;
+        JL_GC_PUSH2(&wa, &wb);
+        wa = widen_Type_to_union(((jl_uniontype_t*)t)->a, bound, e);
+        wb = widen_Type_to_union(((jl_uniontype_t*)t)->b, bound, e);
+        if (wa != ((jl_uniontype_t*)t)->a || wb != ((jl_uniontype_t*)t)->b)
+            wa = simple_join(wa, wb);
+        else
+            wa = t;
+        JL_GC_POP();
+        return wa;
+    }
+    if (jl_is_unionall(t)) {
+        jl_unionall_t *u = (jl_unionall_t*)t;
+        jl_value_t *body = NULL;
+        JL_GC_PUSH1(&body);
+        body = widen_Type_to_union(u->body, bound, e);
+        if (body != u->body && !jl_has_typevar(body, u->var)) {
+            JL_GC_POP();
+            return body;
+        }
+        JL_GC_POP();
     }
     return t;
 }
@@ -955,7 +1000,7 @@ static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e)
 static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, int param)
 {
     u = unalias_unionall(u, e);
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0,
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                            e->invdepth, NULL, e->vars };
     JL_GC_PUSH4(&u, &vb.lb, &vb.ub, &vb.innervars);
     e->vars = &vb;
@@ -966,7 +1011,7 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         e->envidx--;
         // widen Type{x} to typeof(x) in argument position
         if (!vb.occurs_inv)
-            vb.lb = widen_Type(vb.lb);
+            vb.lb = widen_Type_if_concrete(vb.lb);
         }
     else
         ans = subtype(u->body, t, e, param);
@@ -2837,10 +2882,34 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     jl_value_t *ub = R ? intersect_aside(a, bb->ub, e, bb->depth0) : intersect_aside(bb->ub, a, e, bb->depth0);
     if (ub == jl_bottom_type)
         return jl_bottom_type;
-    if (bb->constraintkind == 1 || (e->triangular && param == 1)) {
-        if (e->triangular && check_unsat_bound(ub, b, e))
+    if (e->triangular && param == 1) {
+        if (check_unsat_bound(ub, b, e))
             return jl_bottom_type;
         set_bound(&bb->ub, ub, b, e);
+        return (jl_value_t*)b;
+    }
+    if (bb->constraintkind == 1) {
+        if (!jl_is_type_type(ub) && !jl_is_uniontype(ub) && !jl_is_unionall(ub)) {
+            // this branch is a fast path if there are no `Type`s and not needed for correctness
+            set_bound(&bb->ub, ub, b, e);
+            return (jl_value_t*)b;
+        }
+        jl_value_t *ub2 = NULL;
+        JL_GC_PUSH2(&ub, &ub2);
+        ub2 = widen_Type_to_union(ub, bb->ub, e);
+        if (ub2 != ub) {
+            set_bound(&bb->ub, ub2, b, e);
+            if (jl_is_concrete_type(ub2)) {
+                // all members widened to the same concrete kind
+                JL_GC_POP();
+                return ub;
+            }
+            bb->widened_to_kind = 1;
+            JL_GC_POP();
+            return (jl_value_t*)b;
+        }
+        set_bound(&bb->ub, ub, b, e);
+        JL_GC_POP();
         return (jl_value_t*)b;
     }
     else if (bb->constraintkind == 0) {
@@ -3464,7 +3533,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
 {
     jl_value_t *res = NULL;
     jl_savedenv_t se;
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0,
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                            e->invdepth, NULL, e->vars };
     JL_GC_PUSH4(&res, &vb.lb, &vb.ub, &vb.innervars);
     save_env(e, &se, 1);
@@ -3493,6 +3562,29 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
                 vb.ub = vb.var->ub;
             }
             restore_env(e, &se, vb.constraintkind == 1 ? 1 : 0);
+            vb.occurs_cov = vb.occurs_inv = 0;
+            res = intersect_unionall_(t, u, e, R, param, &vb);
+        }
+    }
+    if (res != jl_bottom_type && vb.constraintkind == 1 && vb.widened_to_kind == 1) {
+        // a `Type` was widened to a non-concrete kind union during intersection
+        if (vb.occurs_cov > 1) {
+            // diagonal: reintersect if able to narrow across positions to a leaf bound
+            // otherwise use original (possibly non-precise) bound
+            if (is_leaf_bound(vb.ub)) {
+                restore_env(e, &se, 1);
+                vb.lb = vb.var->lb;
+                vb.occurs_cov = vb.occurs_inv = 0;
+                res = intersect_unionall_(t, u, e, R, param, &vb);
+            }
+        }
+        else {
+            // actually non-diagonal: reintersect without widening or constraint
+            restore_env(e, &se, 1);
+            vb.lb = vb.var->lb;
+            vb.ub = vb.var->ub;
+            vb.constraintkind = 0;
+            vb.widened_to_kind = 0;
             vb.occurs_cov = vb.occurs_inv = 0;
             res = intersect_unionall_(t, u, e, R, param, &vb);
         }
@@ -4868,7 +4960,7 @@ static jl_value_t *_widen_diagonal(jl_value_t *t, jl_varbinding_t *troot) {
 
 static jl_value_t *widen_diagonal(jl_value_t *t, jl_unionall_t *u, jl_varbinding_t *troot)
 {
-    jl_varbinding_t vb = { u->var, NULL, NULL, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, troot };
+    jl_varbinding_t vb = { u->var, NULL, NULL, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, troot };
     jl_value_t *nt = NULL;
     JL_GC_PUSH2(&vb.innervars, &nt);
     if (jl_is_unionall(u->body))
