@@ -342,6 +342,7 @@ end
     @test_deprecated [pattern] expression
     @test_deprecated [pattern] expression broken=cond
     @test_deprecated [pattern] expression skip=cond
+    @test_deprecated [pattern] expression from_c=cond
 
 When `--depwarn=yes`, test that `expression` emits a deprecation warning and
 return the value of `expression`.  The log message string will be matched
@@ -356,6 +357,8 @@ When `--depwarn=no`, simply return the result of executing `expression`.  When
   consistently fails.
 * `skip=cond`: if `cond==true`, marks a test that should not be executed but should
   be included in test summary reporting as `Broken`.
+* `from_c=cond`: if `cond==true`, marks a test that emits a deprecation warning from C code,
+  which does not use the `depwarn` path, and is locked to the original `depwarn` option.
 
 !!! compat "Julia 1.14"
     The `broken` and `skip` keyword arguments require at least Julia 1.14.
@@ -371,9 +374,9 @@ When `--depwarn=no`, simply return the result of executing `expression`.  When
 ```
 """
 macro test_deprecated(exs...)
-    # Parse arguments: [pattern] expression [broken=...] [skip=...]
+    # Parse arguments: [pattern] expression [broken=...] [skip=...] [from_c=true/false]
     length(exs) >= 1 || throw(ArgumentError("""`@test_deprecated` expects at least one argument.
-                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
+                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond] [from_c=cond]`"""))
     pattern = r"deprecated"i
     expression = nothing
     kws = Any[]
@@ -385,23 +388,23 @@ macro test_deprecated(exs...)
 
     for (i, e) in enumerate(exs)
         if e isa Expr && e.head === :(=)
-            if e.args[1] in (:broken, :skip)
+            if e.args[1] in (:broken, :skip, :from_c)
                 push!(kws, e)
             else
                 # This is the expression (like `f(x=1)`)
                 expression !== nothing && throw(ArgumentError("""`@test_deprecated` expects at most one expression.
-                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
+                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond] [from_c=cond]`"""))
                 expression = e
             end
         elseif e isa Expr && e.head === :call
             # This is the expression (function call)
             expression !== nothing && throw(ArgumentError("""`@test_deprecated` expects at most one expression.
-                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
+                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond] [from_c=cond]`"""))
             expression = e
         elseif e isa Expr && e.head === :macrocall && !is_string_macro(e)
             # This is the expression (macro call, but not a string macro like r"...")
             expression !== nothing && throw(ArgumentError("""`@test_deprecated` expects at most one expression.
-                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
+                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond] [from_c=cond]`"""))
             expression = e
         elseif i == 1 && (e isa Union{Regex, String, Symbol} || is_string_macro(e) ||
                          (e isa Expr && e.head ∉ (:call, :macrocall)))
@@ -411,15 +414,16 @@ macro test_deprecated(exs...)
         else
             # Assume it's the expression
             expression !== nothing && throw(ArgumentError("""`@test_deprecated` expects at most one expression.
-                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
+                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond] [from_c=cond]`"""))
             expression = e
         end
     end
 
     expression === nothing && throw(ArgumentError("""`@test_deprecated` needs an expression to run.
-                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
+                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond] [from_c=cond]`"""))
 
-    broken, skip, _ = extract_broken_skip_kws(kws, "@test_deprecated")
+    broken, skip, otherdict = extract_broken_skip_kws(kws, "@test_deprecated"; other_valid = (:from_c,))
+    from_c = get(otherdict, :from_c, false)
 
     pattern_esc = esc(pattern)
     expression_esc = esc(expression)
@@ -452,6 +456,12 @@ macro test_deprecated(exs...)
                         match_logs((:warn, $pattern_esc, Ignored(), :depwarn); match_mode=:any) do
                             $expression_esc
                         end
+                    end
+                    if $from_c
+                        # C code doesn't use the depwarn path, so only fail if the depwarn option matches.
+                        opts_orig = Base.JLOptions()
+                        throws_ok |= opts_orig.depwarn != 2
+                        logs_ok |= opts_orig.depwarn != 1
                     end
                     context = !throws_ok ? "did not error with `depwarn=error`" : ""
                     context *= !throws_ok && !logs_ok ? ", and " : ""
