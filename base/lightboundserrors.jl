@@ -22,7 +22,8 @@ module LightBoundsErrors
             new(collection_type, collection_axes, requested_indices)
         end
     end
-    @noinline function throw_lightboundserror_impl(collection_type::DataType, collection_axes::Tuple, requested_indices::Tuple)
+    function throw_lightboundserror_impl(collection_type::DataType, collection_axes::Tuple, requested_indices::Tuple)
+        @noinline
         ex = LightBoundsError(; collection_type, collection_axes, requested_indices)
         throw(ex)
     end
