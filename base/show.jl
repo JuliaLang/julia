@@ -387,13 +387,9 @@ The following properties are in common use:
    `--color` command-line flag when `julia` was launched.
  - `:hexunsigned`: Boolean specifying whether to print unsigned integers in
    hexadecimal. Defaults to `true`, otherwise they will be printed in decimal.
- - `:type_budget`: An `Int` limiting the number of type nodes expanded when printing
-   types. Once the budget is exhausted, remaining type nodes are replaced with `…`.
-   Automatically initialized from the display width when `:limit => true` is set
-   (e.g. in the REPL), so `repr` and `print` produce complete output by default.
 
 !!! compat "Julia 1.14"
-    The `:hexunsigned` and `:type_budget` options require Julia 1.14 or later.
+    The `:hexunsigned` option requires Julia 1.14 or later.
 
 # Examples
 
@@ -985,21 +981,15 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
 end
 
 # Limit the total number of type nodes expanded during printing.
-# When `:type_budget => n` is present in the IOContext, each type node
-# visited decrements the countdown; once it drops below zero, remaining
-# nodes are replaced with `…`.
-#
-# The value may be a plain `Int` (auto-wrapped in a `Ref` on first use)
-# or a `Ref{Int}` for shared mutable state across recursive calls.
+# When `:type_budget => Ref{Int}(n)` is present in the IOContext, each
+# type node visited decrements the countdown; once it drops below zero,
+# remaining nodes are replaced with `…`.
 #
 # Auto-initialized from the display width when `:limit => true` is set
 # (e.g. by the REPL), so `repr` and `print` to files/buffers still
 # produce complete type representations.
 function _type_budget_init!(io::IO)
     budget = get(io, :type_budget, nothing)
-    if budget isa Int
-        return IOContext(io, :type_budget => Ref(budget))
-    end
     budget === nothing || return io
     get(io, :limit, false)::Bool || return io
     return IOContext(io, :type_budget => Ref(displaysize(io)[2]))
@@ -2630,9 +2620,10 @@ Limit the nesting depth of `{ }` brackets in `str` until the string's
 If `maxdepth` is given, truncate at exactly that depth regardless of width.
 
 This is a post-processing step that operates on an already-generated string.
-It is complementary to the `:type_budget` IOContext property, which limits
-work *during* printing to prevent exponential blowup. `type_depth_limit`
-handles width-fitting with proper ANSI escape code and quoted-string awareness.
+It is complementary to the type node budget system (`_type_budget_exceeded!`),
+which limits work *during* printing to prevent exponential blowup.
+`type_depth_limit` handles width-fitting with proper ANSI escape code and
+quoted-string awareness.
 
 # Examples
 ```jldoctest
