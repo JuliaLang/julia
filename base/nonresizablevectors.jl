@@ -6,7 +6,7 @@
 module NonResizableVectors
     module Miscellaneous
         export vector_supertype, memory_type
-        const vector_supertype = AbstractVector  # TODO: consider switching to `DenseVector`
+        const vector_supertype = AbstractArray{T,1} where {T}  # TODO: consider switching to `DenseVector`
         function memory_type(::Val{isatomic}, ::Type{T}, ::Val{addrspace}) where {isatomic, T, addrspace}
             GenericMemory{isatomic::Symbol, T, addrspace::Core.AddrSpace}
         end
