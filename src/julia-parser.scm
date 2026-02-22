@@ -123,6 +123,13 @@
       (and (pair? ex)
            (eq? '$ (car ex)))))
 
+(define (symbol-as-or-interpolate? ex)
+  (or (symbol-or-interpolate? ex)
+      (and (pair? ex)
+           (eq? 'as (car ex))
+           (symbol-or-interpolate? (cadr ex))
+           (symbol-or-interpolate? (caddr ex)))))
+
 (define (is-word-operator? op)
   (every identifier-start-char? (string->list (symbol->string op))))
 
@@ -1378,6 +1385,14 @@
                (take-lineendings s))
         s)))
 
+(define (parse-export s)
+  (let ((ex (parse-atsym s)))
+    (if (eq? (peek-token s) 'as)
+      (begin
+        (take-token s)
+        `(as ,ex ,(parse-atsym s)))
+      ex)))
+
 ;; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
   (with-bindings
@@ -1662,9 +1677,8 @@
           (list 'module (if (eq? word 'module) '(true) '(false)) name
                 `(block ,loc ,@(cdr body)))))
        ((export public)
-        (let ((es (map macrocall-to-atsym
-                       (parse-comma-separated s parse-unary-prefix))))
-          (if (not (every symbol-or-interpolate? es))
+        (let ((es (parse-comma-separated s (if (eq? word 'export) parse-export parse-atsym))))
+          (if (not (every symbol-as-or-interpolate? es))
               (error (string "invalid \"" word "\" statement")))
           `(,word ,@es)))
        ((import using)
@@ -1683,11 +1697,6 @@
       `(-> (tuple ,@doargs)
            ,(begin0 (parse-block s)
                     (expect-end s 'do)))))))
-
-(define (macrocall-to-atsym e)
-  (if (and (pair? e) (eq? (car e) 'macrocall))
-      (cadr e)
-      e))
 
 (define (parse-imports s word)
   (let* ((first (parse-import s word #f))
@@ -1725,7 +1734,7 @@
        (parse-atom s #f))))
 
 (define (parse-atsym s)
-  (let ((t (peek-token s)))
+  (let ((t (require-token s)))
     (if (eqv? t #\@)
         (begin (take-token s)
                (macroify-name (parse-macro-name s)))
