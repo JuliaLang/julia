@@ -18,16 +18,19 @@ const MemoryVector = GenericMemoryVector{:not_atomic, T, Core.CPU} where {T}
 function size(x::MemoryVector)
     size(x.memory)
 end
-@propagate_inbounds function getindex(x::MemoryVector, index::Int)
+function getindex(x::MemoryVector, index::Int)
+    @_propagate_inbounds_meta
     @boundscheck checkbounds(x, index)
     @inbounds x.memory[index]
 end
-@propagate_inbounds function setindex!(x::MemoryVector, element, index::Int)
+function setindex!(x::MemoryVector, element, index::Int)
+    @_propagate_inbounds_meta
     @boundscheck checkbounds(x, index)
     @inbounds x.memory[index] = element
     x
 end
-@propagate_inbounds function isassigned(x::MemoryVector, index::Int)
+function isassigned(x::MemoryVector, index::Int)
+    @_propagate_inbounds_meta
     isassigned(x.memory, index)::Bool
 end
 function parent(x::MemoryVector)
@@ -66,20 +69,23 @@ function size(x::MemoryRefVector)
     l = ml - i + 1
     (l,)
 end
-@propagate_inbounds function getindex(x::MemoryRefVector, index::Int)
+function getindex(x::MemoryRefVector, index::Int)
+    @_propagate_inbounds_meta
     @boundscheck checkbounds(x, index)
     memory_ref = validated_memory_ref(x)
     memory_ref_with_offset = @inbounds memoryref(memory_ref, index)
     memory_ref_with_offset[]
 end
-@propagate_inbounds function setindex!(x::MemoryRefVector, element, index::Int)
+function setindex!(x::MemoryRefVector, element, index::Int)
+    @_propagate_inbounds_meta
     @boundscheck checkbounds(x, index)
     memory_ref = validated_memory_ref(x)
     memory_ref_with_offset = @inbounds memoryref(memory_ref, index)
     memory_ref_with_offset[] = element
     x
 end
-@propagate_inbounds function isassigned(x::MemoryRefVector, index::Int)
+function isassigned(x::MemoryRefVector, index::Int)
+    @_propagate_inbounds_meta
     if !checkbounds(Bool, x, index)
         return false
     end
