@@ -4124,7 +4124,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
         if (!box) {
             bool do_promote = vinfo.promotion_point;
             if (do_promote && is_promotable && vinfo.inline_roots.empty()) {
-                auto IP = ctx.builder.saveIP();
+                IRBuilderBase::InsertPointGuard IP(ctx.builder);
                 ctx.builder.SetInsertPoint(vinfo.promotion_point);
                 box = emit_allocobj(ctx, (jl_datatype_t*)jt, true);
                 Value *decayed = decay_derived(ctx, box);
@@ -4136,7 +4136,6 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
                 originalAlloca->replaceAllUsesWith(decayed);
                 // end illegal IR
                 originalAlloca->eraseFromParent();
-                ctx.builder.restoreIP(IP);
             }
             else {
                 auto arg_typename = [&] JL_NOTSAFEPOINT {
@@ -4463,7 +4462,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 jl_value_t *jtype = jl_svecref(sty->types, i); // n.b. ty argument must be concrete
                 jl_cgval_t fval_info = argv[i];
 
-                IRBuilderBase::InsertPoint savedIP;
+                std::optional<IRBuilderBase::InsertPointGuard> savedIP;
                 emit_typecheck(ctx, fval_info, jtype, "new");
                 fval_info = update_julia_type(ctx, fval_info, jtype);
                 if (fval_info.typ == jl_bottom_type)
@@ -4485,7 +4484,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     fval_info.inline_roots.empty() && inline_roots.empty() && // these need to be compatible, if they were to be implemented
                     fval_info.promotion_point && fval_info.promotion_point->getParent() == ctx.builder.GetInsertBlock();
                 if (field_promotable) {
-                    savedIP = ctx.builder.saveIP();
+                    savedIP.emplace(ctx.builder);
                     ctx.builder.SetInsertPoint(fval_info.promotion_point);
                 }
                 if (!init_as_value) {
@@ -4613,9 +4612,6 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     else
                         assert(false);
                 }
-                if (field_promotable) {
-                    ctx.builder.restoreIP(savedIP);
-                }
             }
             if (init_as_value) {
                 for (size_t i = nargs; i < nf; i++) {
@@ -4633,7 +4629,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             }
             if (nargs < nf) {
                 assert(!init_as_value);
-                IRBuilderBase::InsertPoint savedIP = ctx.builder.saveIP();
+                IRBuilderBase::InsertPointGuard savedIP(ctx.builder);
                 if (promotion_point)
                     ctx.builder.SetInsertPoint(promotion_point);
                 if (strct) {
@@ -4641,7 +4637,6 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     promotion_point = ai.decorateInst(ctx.builder.CreateMemSet(strct, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0),
                                                                 jl_datatype_size(ty), Align(julia_alignment(ty))));
                 }
-                ctx.builder.restoreIP(savedIP);
             }
             if (type_is_ghost(lt))
                 return mark_julia_const(ctx, sty->instance);

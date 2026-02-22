@@ -2286,12 +2286,17 @@ void JuliaOJIT::enableJITDebuggingSupport()
     auto registerJITLoaderGDBWrapper = addAbsoluteToMap(GDBFunctions,llvm_orc_registerJITLoaderGDBWrapper);
     cantFail(JD.define(orc::absoluteSymbols(GDBFunctions)));
     (void)registerJITLoaderGDBWrapper;
-    if (TM->getTargetTriple().isOSBinFormatMachO())
-        ObjectLayer.addPlugin(cantFail(orc::GDBJITDebugInfoRegistrationPlugin::Create(ES, JD, TM->getTargetTriple())));
+    if (TM->getTargetTriple().isOSBinFormatMachO()) {
+        auto RegisterSym = cantFail(
+            safelookup(ES, {&JD}, ES.intern("_llvm_orc_registerJITLoaderGDBAllocAction")));
+        ObjectLayer.addPlugin(
+            std::make_unique<GDBJITDebugInfoRegistrationPlugin>(RegisterSym.getAddress()));
+    }
 #ifndef _COMPILER_ASAN_ENABLED_ // TODO: Fix duplicated sections spam #51794
-    else if (TM->getTargetTriple().isOSBinFormatELF())
+    else if (TM->getTargetTriple().isOSBinFormatELF()) {
         //EPCDebugObjectRegistrar doesn't take a JITDylib, so we have to directly provide the call address
         ObjectLayer.addPlugin(std::make_unique<orc::DebugObjectManagerPlugin>(ES, std::make_unique<orc::EPCDebugObjectRegistrar>(ES, registerJITLoaderGDBWrapper)));
+    }
 #endif
 }
 

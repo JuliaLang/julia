@@ -952,13 +952,19 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
             # method since currently there is no easy way to execute overlayed methods
             add_remark!(interp, sv, "[constprop] Concrete eval disabled for overlayed methods")
         end
-        if !any_conditional(arginfo)
-            if may_optimize(interp)
-                return :semi_concrete_eval
+        if may_optimize(interp)
+            if any_conditional(arginfo)
+                # N.B. semi-concrete eval uses `IRInterpretationState` which does not support
+                # `Conditional`, so skip it when these lattice elements are present in argtypes
+                add_remark!(interp, sv, "[constprop] Semi-concrete interpretation disabled due to conditional")
+            elseif !iszero(typename(typeof(f)).constprop_heuristic & Core.DISABLE_SEMI_CONCRETE_EVAL)
+                add_remark!(interp, sv, "[constprop] Semi-concrete interpretation disabled due to constprop_heuristic")
             else
-                # disable irinterp if optimization is disabled, since it requires optimized IR
-                add_remark!(interp, sv, "[constprop] Semi-concrete interpretation disabled for non-optimizing interpreter")
+                return :semi_concrete_eval
             end
+        else
+            # disable irinterp if optimization is disabled, since it requires optimized IR
+            add_remark!(interp, sv, "[constprop] Semi-concrete interpretation disabled for non-optimizing interpreter")
         end
     end
     return :none
@@ -1157,7 +1163,7 @@ end
 function force_const_prop(interp::AbstractInterpreter, @nospecialize(f), method::Method)
     return is_aggressive_constprop(method) ||
            InferenceParams(interp).aggressive_constant_propagation ||
-           typename(typeof(f)).constprop_heuristic === Core.FORCE_CONST_PROP
+           !iszero(typename(typeof(f)).constprop_heuristic & Core.FORCE_CONST_PROP)
 end
 
 function const_prop_function_heuristic(interp::AbstractInterpreter, @nospecialize(f),
@@ -1166,7 +1172,7 @@ function const_prop_function_heuristic(interp::AbstractInterpreter, @nospecializ
     heuristic = typename(typeof(f)).constprop_heuristic
     if length(argtypes) > 1
         𝕃ᵢ = typeinf_lattice(interp)
-        if heuristic === Core.ARRAY_INDEX_HEURISTIC
+        if !iszero(heuristic & Core.ARRAY_INDEX_HEURISTIC)
             arrty = argtypes[2]
             # don't propagate constant index into indexing of non-constant array
             if arrty isa Type && arrty <: AbstractArray && !issingletontype(arrty)
@@ -1179,14 +1185,15 @@ function const_prop_function_heuristic(interp::AbstractInterpreter, @nospecializ
             elseif ⊑(𝕃ᵢ, arrty, Array) || ⊑(𝕃ᵢ, arrty, GenericMemory)
                 return false
             end
-        elseif heuristic === Core.ITERATE_HEURISTIC
+        end
+        if !iszero(heuristic & Core.ITERATE_HEURISTIC)
             itrty = argtypes[2]
             if ⊑(𝕃ᵢ, itrty, Array) || ⊑(𝕃ᵢ, itrty, GenericMemory)
                 return false
             end
         end
     end
-    if !all_overridden && heuristic === Core.SAMETYPE_HEURISTIC
+    if !all_overridden && !iszero(heuristic & Core.SAMETYPE_HEURISTIC)
         # it is almost useless to inline the op when all the same type,
         # but highly worthwhile to inline promote of a constant
         length(argtypes) > 2 || return false
@@ -4145,6 +4152,7 @@ end
 function update_exc_bestguess!(interp::AbstractInterpreter, @nospecialize(exct), frame::InferenceState)
     𝕃ₚ = ipo_lattice(interp)
     handler = gethandler(frame)
+    exct = widenslotwrapper(exct)
     if handler === nothing
         if !⊑(𝕃ₚ, exct, frame.exc_bestguess)
             frame.exc_bestguess = tmerge(𝕃ₚ, frame.exc_bestguess, exct)
