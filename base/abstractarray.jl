@@ -2129,22 +2129,11 @@ julia> a * b
 # `@constprop :aggressive` allows `catdims` to be propagated as constant improving return type inference
 @constprop :aggressive _cat(catdims, A::AbstractArray{T}...) where {T} = _cat_t(catdims, T, A...)
 
-# The specializations for 1 and 2 inputs are important
-# especially when running with --inline=no, see #11158
-vcat(A::AbstractArray) = cat(A; dims=Val(1))
-vcat(A::AbstractArray, B::AbstractArray) = cat(A, B; dims=Val(1))
-vcat(A::AbstractArray...) = cat(A...; dims=Val(1))
 vcat(A::Union{AbstractArray,Number}...) = cat(A...; dims=Val(1))
-hcat(A::AbstractArray) = cat(A; dims=Val(2))
-hcat(A::AbstractArray, B::AbstractArray) = cat(A, B; dims=Val(2))
 hcat(A::AbstractArray...) = cat(A...; dims=Val(2))
 hcat(A::Union{AbstractArray,Number}...) = cat(A...; dims=Val(2))
 
-typed_vcat(T::Type, A::AbstractArray) = _cat_t(Val(1), T, A)
-typed_vcat(T::Type, A::AbstractArray, B::AbstractArray) = _cat_t(Val(1), T, A, B)
 typed_vcat(T::Type, A::AbstractArray...) = _cat_t(Val(1), T, A...)
-typed_hcat(T::Type, A::AbstractArray) = _cat_t(Val(2), T, A)
-typed_hcat(T::Type, A::AbstractArray, B::AbstractArray) = _cat_t(Val(2), T, A, B)
 typed_hcat(T::Type, A::AbstractArray...) = _cat_t(Val(2), T, A...)
 
 # 2d horizontal and vertical concatenation
