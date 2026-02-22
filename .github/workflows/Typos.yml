@@ -48,6 +48,12 @@ jobs:
             echo -n $OLD_FILES | xargs "${{ runner.temp }}/typos/typos" --format json >> ${{ runner.temp }}/old_typos.jsonl || true
           fi
 
+          echo "Old typos:"
+          cat ${{ runner.temp }}/old_typos.jsonl
+          echo "\n----\n"
+          echo "New typos:"
+          cat ${{ runner.temp }}/new_typos.jsonl
+          echo "\n----\n"
 
           python -c '
           import sys, json
