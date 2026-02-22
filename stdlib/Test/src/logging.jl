@@ -425,6 +425,8 @@ macro test_deprecated(exs...)
     expression_esc = esc(expression)
     broken_esc = broken !== nothing ? esc(broken) : false
     skip_esc = skip !== nothing ? esc(skip) : false
+    orig_expr = QuoteNode(expression)
+    sourceloc = QuoteNode(__source__)
 
     # Capture at macro-expansion time to avoid hygiene issues: both symbols live
     # in Base, not in Test, so bare references inside the quote would resolve wrong.
@@ -433,25 +435,45 @@ macro test_deprecated(exs...)
 
     res = quote
         if $skip_esc
-            Test.record(Test.get_testset(), Broken(:skipped, $(QuoteNode(expression))))
-            nothing
+            Test.record(Test.get_testset(), Broken(:skipped, $(QuoteNode(expression)))); nothing
         else
-            # Test that the expression throws when depwarn=error...
-            $_sv_with($_jlopt => (; $_jlopt[]..., depwarn = 2)) do
-                @test_throws ErrorException $expression_esc broken=$broken_esc context="Did not error with `depwarn=error`."
-            end
-            # ... and logs a deprecation warning when depwarn=yes.
-            result = $_sv_with($_jlopt => (; $_jlopt[]..., depwarn = 1)) do
-                @test_logs (:warn, $pattern_esc, Ignored(), :depwarn) match_mode=:any broken=$broken_esc $expression_esc
+            let testres=nothing, value=nothing, _broken=$broken_esc
+                try
+                    throws_ok = $_sv_with($_jlopt => (; $_jlopt[]..., depwarn = 2)) do
+                        try
+                            $expression_esc
+                            false
+                        catch _e
+                            _e isa InterruptException && rethrow()
+                            _e isa ErrorException
+                        end
+                    end
+                    logs_ok, _logs, value = $_sv_with($_jlopt => (; $_jlopt[]..., depwarn = 1)) do
+                        match_logs((:warn, $pattern_esc, Ignored(), :depwarn); match_mode=:any) do
+                            $expression_esc
+                        end
+                    end
+                    context = !throws_ok ? "did not error with `depwarn=error`" : ""
+                    context *= !throws_ok && !logs_ok ? ", and " : ""
+                    context *= !logs_ok ? "did not log a warning including the pattern $($pattern_esc) with `depwarn=yes`" : ""
+                    ok = throws_ok && logs_ok
+                    testres = _broken ? 
+                        (ok ?
+                            Error(:test_unbroken, $orig_expr, true, nothing, $sourceloc) :
+                            Broken(:test, $orig_expr)) :
+                        ok ?
+                            Pass(:test, $orig_expr, nothing, value, $sourceloc) :
+                            Fail(:test, $orig_expr, nothing, nothing, context, $sourceloc, false)
+                catch _e
+                    _e isa InterruptException && rethrow()
+                    testres = _broken ?
+                        Broken(:test, $orig_expr) :
+                        Error(:test_error, $orig_expr, _e, Base.current_exceptions(), $sourceloc)
+                end
+                Test.record(Test.get_testset(), testres)
+                value
             end
         end
     end
-    # Propagate source code location of @test_logs to @test macro
-    # FIXME: Use rewrite_sourceloc!() for this - see #22623
-    # Structure: res.args[2] = outer :if, .args[3] = else block
-    #   else block args[2] = `status = with(...) do @test_throws ... end`
-    #   else block args[6] = `with(...) do @test_logs ... end`
-    #res.args[2].args[3].args[2].args[2].args[2].args[2].args[2].args[2] = __source__
-    #res.args[2].args[3].args[6].args[2].args[2].args[2].args[2] = __source__
-    res
+    Base.Meta.replace_sourceloc!(__source__, res)
 end
