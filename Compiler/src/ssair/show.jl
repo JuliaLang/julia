@@ -77,15 +77,21 @@ end
 
 function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,CodeInfo,IncrementalCompact},
                     sptypes::Vector{VarState}, used::BitSet, maxlength_idx::Int, color::Bool, show_type::Bool, label_dynamic_calls::Bool)
+    unstable_ssa = get(io, :unstable_ssa, nothing)
     if idx in used
         idx_s = string(idx)
         pad = " "^(maxlength_idx - length(idx_s) + 1)
-        print(io, "%", idx_s, pad, "= ")
+        if color && unstable_ssa isa BitSet && idx in unstable_ssa
+            printstyled(io, "%", idx_s; color=:light_red, bold=true)
+        else
+            print(io, "%", idx_s)
+        end
+        print(io, pad, "= ")
     else
         print(io, " "^(maxlength_idx + 4))
     end
-    # TODO: `indent` is supposed to be the full width of the leader for correct alignment
-    indent = 16
+    # TODO: `indent` is supposed to be the full indent including `"│  "` prefixes
+    indent = 2
     if !color && stmt isa PiNode
         # when the outer context is already colored (green, for pending nodes), don't use the usual coloring printer
         print(io, "π (")
@@ -965,6 +971,14 @@ function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(io, ir)
     finish_show_ir(io, cfg, config)
 end
 
+function is_unstable_ssa(code::CodeInfo, idx::Int)
+    types = code.ssavaluetypes
+    types isa Vector{Any} || return false
+    isassigned(types, idx) || return false
+    type = types[idx]
+    return type === Any
+end
+
 function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(io, ci);
                  pop_new_node! = Returns(nothing))
     used = stmts_used(io, ci)
@@ -973,7 +987,8 @@ function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(io, c
     sptypes = if parent isa MethodInstance
         sptypes_from_meth_instance(parent)
     else EMPTY_SPTYPES end
-    let io = IOContext(io, :maxssaid=>length(ci.code))
+    unstable_ssa = filter(idx -> is_unstable_ssa(ci, idx), used)
+    let io = IOContext(io, :maxssaid=>length(ci.code), :unstable_ssa=>unstable_ssa)
         show_ir_stmts(io, ci, 1:length(ci.code), config, sptypes, used, cfg, 1; pop_new_node!)
     end
     finish_show_ir(io, cfg, config)
