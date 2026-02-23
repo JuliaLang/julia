@@ -1473,7 +1473,8 @@ static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull
         jl_value_t *uw = jl_unwrap_unionall(typ);
         if (jl_is_datatype(uw)) { // quick path to catch common cases
             jl_datatype_t *dt = (jl_datatype_t*)uw;
-            assert(!dt->smalltag);
+            if (dt->smalltag)
+                return false;
             if (!dt->name->abstract)
                 return true;
             if (dt == jl_any_type)
