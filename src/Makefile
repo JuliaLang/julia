@@ -84,6 +84,7 @@ CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
 	llvm-pass-helpers llvm-ptls llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt llvm-alloc-helpers cgmemmgr llvm-remove-addrspaces \
 	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures llvm-expand-atomic-modify \
+	llvm-newsink \
 	pipeline llvm_api \
 	$(GC_CODEGEN_SRCS)
 FLAGS_COMMON += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
