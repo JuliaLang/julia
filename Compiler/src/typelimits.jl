@@ -338,6 +338,7 @@ end
     typea === typeb && return true
     if typea isa PartialStruct
         aty = widenconst(typea)
+        issimpleenoughtype(aty) || return false
         if typeb isa Const || typeb isa PartialStruct
             @assert n_initialized(typea) ≤ n_initialized(typeb) "typeb ⊑ typea is assumed"
         elseif typeb isa PartialStruct
@@ -677,9 +678,7 @@ end
 
 @nospecializeinfer function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(typeb))
     r = tmerge_fast_path(lattice, typea, typeb)
-    if r !== nothing
-        return (isa(r, PartialStruct) && !issimpleenoughtype(r.typ)) ? widenconst(r) : r
-    end
+    r !== nothing && return r
 
     # type-lattice for Const and PartialStruct wrappers
     aps = isa(typea, PartialStruct)
