@@ -68,11 +68,12 @@ $5/$$($2_SRC_DIR)/source-extracted: $$($2_SRC_FILE)
 	$(TAR) -C $$(dir $$@) --strip-components 1 -xf $$<
 	echo 1 > $$@
 
-checksum-$(1): $$($2_SRC_FILE)
+checksum-$1: $$($2_SRC_FILE)
 	$$(JLCHECKSUM) $$<
 endif # DEPS_GIT
 
 $$(build_prefix)/manifest/$1: $$(SRCDIR)/$1.version # make the manifest stale if the version file is touched (causing re-install for compliant targets)
 distclean-$1:
 	rm -rf $5/$$($2_SRC_DIR) $$($2_SRC_FILE) $$(BUILDDIR)/$$($2_SRC_DIR)
+.PHONY: $(addsuffix -$1,checksum distclean)
 endef

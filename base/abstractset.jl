@@ -25,7 +25,7 @@ This is an infix operator, allowing `s ∪ itr`.
 See also [`unique`](@ref), [`intersect`](@ref), [`isdisjoint`](@ref), [`vcat`](@ref), [`Iterators.flatten`](@ref).
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\$"m
 julia> union([1, 2], [3])
 3-element Vector{Int64}:
  1
@@ -65,8 +65,10 @@ const ∪ = union
 Construct the [`union`](@ref) of passed in sets and overwrite `s` with the result.
 Maintain order with arrays.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\$"m
 julia> a = Set([3, 4, 5]);
 
 julia> union!(a, 1:2:7);
@@ -99,7 +101,7 @@ max_values(::Type{Bool}) = 2
 max_values(::Type{Nothing}) = 1
 
 function union!(s::AbstractSet{T}, itr) where T
-    haslength(itr) && sizehint!(s, length(s) + Int(length(itr))::Int)
+    haslength(itr) && sizehint!(s, length(s) + Int(length(itr))::Int; shrink = false)
     for x in itr
         push!(s, x)
         length(s) == max_values(T) && break
@@ -182,6 +184,8 @@ const ∩ = intersect
 
 Intersect all passed in sets and overwrite `s` with the result.
 Maintain order with arrays.
+
+$(_DOCS_ALIASING_WARNING)
 """
 function intersect!(s::AbstractSet, itrs...)
     for x in itrs
@@ -197,9 +201,9 @@ intersect!(s::AbstractSet, itr) =
     setdiff(s, itrs...)
 
 Construct the set of elements in `s` but not in any of the iterables in `itrs`.
-Maintain order with arrays.
+Maintain order with arrays. The result will have the same element type as `s`.
 
-See also [`setdiff!`](@ref), [`union`](@ref) and [`intersect`](@ref).
+See also [`setdiff!`](@ref), [`union`](@ref), [`intersect`](@ref).
 
 # Examples
 ```jldoctest
@@ -207,6 +211,10 @@ julia> setdiff([1,2,3], [3,4,5])
 2-element Vector{Int64}:
  1
  2
+
+julia> setdiff([1,2,3], [1.0, 2.0])
+1-element Vector{Int64}:
+ 3
 ```
 """
 setdiff(s::AbstractSet, itrs...) = setdiff!(copymutable(s), itrs...)
@@ -217,6 +225,8 @@ setdiff(s) = union(s)
 
 Remove from set `s` (in-place) each element of each iterable from `itrs`.
 Maintain order with arrays.
+
+$(_DOCS_ALIASING_WARNING)
 
 # Examples
 ```jldoctest
@@ -249,7 +259,7 @@ end
 Construct the symmetric difference of elements in the passed in sets.
 When `s` is not an `AbstractSet`, the order is maintained.
 
-See also [`symdiff!`](@ref), [`setdiff`](@ref), [`union`](@ref) and [`intersect`](@ref).
+See also [`symdiff!`](@ref), [`setdiff`](@ref), [`union`](@ref), [`intersect`](@ref).
 
 # Examples
 ```jldoctest
@@ -272,6 +282,8 @@ symdiff(s) = symdiff!(copy(s))
 Construct the symmetric difference of the passed in sets, and overwrite `s` with the result.
 When `s` is an array, the order is maintained.
 Note that in this case the multiplicity of elements matters.
+
+$(_DOCS_ALIASING_WARNING)
 """
 function symdiff!(s::AbstractSet, itrs...)
     for x in itrs
@@ -294,9 +306,9 @@ end
 const ⊆ = issubset
 function ⊇ end
 """
-    issubset(a, b) -> Bool
-    ⊆(a, b) -> Bool
-    ⊇(b, a) -> Bool
+    issubset(a, b)::Bool
+    ⊆(a, b)::Bool
+    ⊇(b, a)::Bool
 
 Determine whether every element of `a` is also in `b`, using [`in`](@ref).
 
@@ -338,13 +350,17 @@ function issubset(a, b)
 end
 
 """
-    hasfastin(T)
+    Base.hasfastin(T)
 
 Determine whether the computation `x ∈ collection` where `collection::T` can be considered
 as a "fast" operation (typically constant or logarithmic complexity).
 The definition `hasfastin(x) = hasfastin(typeof(x))` is provided for convenience so that instances
 can be passed instead of types.
 However the form that accepts a type argument should be defined for new types.
+
+The default for `hasfastin(T)` is `true` for subtypes of
+[`AbstractSet`](@ref), [`AbstractDict`](@ref) and [`AbstractRange`](@ref)
+and `false` otherwise.
 """
 hasfastin(::Type) = false
 hasfastin(::Union{Type{<:AbstractSet},Type{<:AbstractDict},Type{<:AbstractRange}}) = true
@@ -352,15 +368,40 @@ hasfastin(x) = hasfastin(typeof(x))
 
 ⊇(a, b) = b ⊆ a
 
+"""
+    issubset(x)
+
+Create a function that compares its argument to `x` using [`issubset`](@ref), i.e.
+a function equivalent to `y -> issubset(y, x)`.
+The returned function is of type `Base.Fix2{typeof(issubset)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.11"
+    This functionality requires at least Julia 1.11.
+"""
+issubset(a) = Fix2(issubset, a)
+
+"""
+    ⊇(x)
+
+Create a function that compares its argument to `x` using [`⊇`](@ref), i.e.
+a function equivalent to `y -> y ⊇ x`.
+The returned function is of type `Base.Fix2{typeof(⊇)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.11"
+    This functionality requires at least Julia 1.11.
+"""
+⊇(a) = Fix2(⊇, a)
 ## strict subset comparison
 
 function ⊊ end
 function ⊋ end
 """
-    ⊊(a, b) -> Bool
-    ⊋(b, a) -> Bool
+    ⊊(a, b)::Bool
+    ⊋(b, a)::Bool
 
-Determines if `a` is a subset of, but not equal to, `b`.
+Determine if `a` is a subset of, but not equal to, `b`.
 
 See also [`issubset`](@ref) (`⊆`), [`⊈`](@ref).
 
@@ -381,11 +422,36 @@ false
 ⊊(a, b) = Set(a) ⊊ Set(b)
 ⊋(a, b) = b ⊊ a
 
+"""
+    ⊋(x)
+
+Create a function that compares its argument to `x` using [`⊋`](@ref), i.e.
+a function equivalent to `y -> y ⊋ x`.
+The returned function is of type `Base.Fix2{typeof(⊋)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.11"
+    This functionality requires at least Julia 1.11.
+"""
+⊋(a) = Fix2(⊋, a)
+"""
+    ⊊(x)
+
+Create a function that compares its argument to `x` using [`⊊`](@ref), i.e.
+a function equivalent to `y -> y ⊊ x`.
+The returned function is of type `Base.Fix2{typeof(⊊)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.11"
+    This functionality requires at least Julia 1.11.
+"""
+⊊(a) = Fix2(⊊, a)
+
 function ⊈ end
 function ⊉ end
 """
-    ⊈(a, b) -> Bool
-    ⊉(b, a) -> Bool
+    ⊈(a, b)::Bool
+    ⊉(b, a)::Bool
 
 Negation of `⊆` and `⊇`, i.e. checks that `a` is not a subset of `b`.
 
@@ -405,15 +471,41 @@ false
 ⊈(a, b) = !⊆(a, b)
 ⊉(a, b) = b ⊈ a
 
+"""
+    ⊉(x)
+
+Create a function that compares its argument to `x` using [`⊉`](@ref), i.e.
+a function equivalent to `y -> y ⊉ x`.
+The returned function is of type `Base.Fix2{typeof(⊉)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.11"
+    This functionality requires at least Julia 1.11.
+"""
+⊉(a) = Fix2(⊉, a)
+
+"""
+    ⊈(x)
+
+Create a function that compares its argument to `x` using [`⊈`](@ref), i.e.
+a function equivalent to `y -> y ⊈ x`.
+The returned function is of type `Base.Fix2{typeof(⊈)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.11"
+    This functionality requires at least Julia 1.11.
+"""
+⊈(a) = Fix2(⊈, a)
+
 ## set equality comparison
 
 """
-    issetequal(a, b) -> Bool
+    issetequal(a, b)::Bool
 
 Determine whether `a` and `b` have the same elements. Equivalent
 to `a ⊆ b && b ⊆ a` but more efficient when possible.
 
-See also: [`isdisjoint`](@ref), [`union`](@ref).
+See also [`isdisjoint`](@ref), [`union`](@ref).
 
 # Examples
 ```jldoctest
@@ -441,14 +533,27 @@ function issetequal(a, b)
     return issetequal(Set(a), Set(b))
 end
 
+"""
+    issetequal(x)
+
+Create a function that compares its argument to `x` using [`issetequal`](@ref), i.e.
+a function equivalent to `y -> issetequal(y, x)`.
+The returned function is of type `Base.Fix2{typeof(issetequal)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.11"
+    This functionality requires at least Julia 1.11.
+"""
+issetequal(a) = Fix2(issetequal, a)
+
 ## set disjoint comparison
 """
-    isdisjoint(a, b) -> Bool
+    isdisjoint(a, b)::Bool
 
 Determine whether the collections `a` and `b` are disjoint.
 Equivalent to `isempty(a ∩ b)` but more efficient when possible.
 
-See also: [`intersect`](@ref), [`isempty`](@ref), [`issetequal`](@ref).
+See also [`intersect`](@ref), [`isempty`](@ref), [`issetequal`](@ref).
 
 !!! compat "Julia 1.5"
     This function requires at least Julia 1.5.
@@ -474,6 +579,40 @@ function isdisjoint(a, b)
         return _isdisjoint(b, a)
     end
     _isdisjoint(a, b)
+end
+
+function isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T
+    (isempty(a) || isempty(b)) && return true
+    fa, la = extrema(a)
+    fb, lb = extrema(b)
+    if (la < fb) | (lb < fa)
+        return true
+    else
+        return _overlapping_range_isdisjoint(a, b)
+    end
+end
+
+"""
+    isdisjoint(x)
+
+Create a function that compares its argument to `x` using [`isdisjoint`](@ref), i.e.
+a function equivalent to `y -> isdisjoint(y, x)`.
+The returned function is of type `Base.Fix2{typeof(isdisjoint)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.11"
+    This functionality requires at least Julia 1.11.
+"""
+isdisjoint(a) = Fix2(isdisjoint, a)
+
+_overlapping_range_isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T = invoke(isdisjoint, Tuple{Any,Any}, a, b)
+
+function _overlapping_range_isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T<:Integer
+    if abs(step(a)) == abs(step(b))
+        return mod(minimum(a), step(a)) != mod(minimum(b), step(a))
+    else
+        return invoke(isdisjoint, Tuple{Any,Any}, a, b)
+    end
 end
 
 ## partial ordering of sets by containment

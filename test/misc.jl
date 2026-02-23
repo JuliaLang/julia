@@ -5,6 +5,9 @@ include("testhelpers/withlocales.jl")
 
 # Tests that do not really go anywhere else
 
+# Modify when (intentionally) changing the number of boxes in Base methods
+@test length(Test.detect_closure_boxes(Base)) == 6
+
 # test @assert macro
 @test_throws AssertionError (@assert 1 == 2)
 @test_throws AssertionError (@assert false)
@@ -129,6 +132,46 @@ let l = ReentrantLock()
     @test_throws ErrorException unlock(l)
 end
 
+# Lockable{T, L<:AbstractLock}
+using Base: Lockable
+let
+    @test Base.isexported(Base, :Lockable)
+    lockable = Lockable(Dict("foo" => "hello"), ReentrantLock())
+    # note field access is non-public
+    @test lockable.value["foo"] == "hello"
+    @test @lock(lockable, lockable[]["foo"]) == "hello"
+    lock(lockable) do d
+        @test d["foo"] == "hello"
+    end
+    lock(lockable) do d
+        d["foo"] = "goodbye"
+    end
+    @test lockable.value["foo"] == "goodbye"
+    @lock lockable begin
+        @test lockable[]["foo"] == "goodbye"
+    end
+    l = trylock(lockable)
+    try
+        @test l
+    finally
+        unlock(lockable)
+    end
+    # Test 1-arg constructor
+    lockable2 = Lockable(Dict("foo" => "hello"))
+    @test lockable2.lock isa ReentrantLock
+    @test @lock(lockable2, lockable2[]["foo"]) == "hello"
+end
+
+@testset "`show` for ReentrantLock" begin
+    l = ReentrantLock()
+    @test repr(l) == "ReentrantLock()"
+    @test repr("text/plain", l) == "ReentrantLock() (unlocked)"
+    @lock l begin
+        @test startswith(repr("text/plain", l), "ReentrantLock() (locked by current Task (")
+    end
+    @test repr("text/plain", l) == "ReentrantLock() (unlocked)"
+end
+
 for l in (Threads.SpinLock(), ReentrantLock())
     @test get_finalizers_inhibited() == 0
     @test lock(get_finalizers_inhibited, l) == 1
@@ -149,7 +192,7 @@ for l in (Threads.SpinLock(), ReentrantLock())
     @test get_finalizers_inhibited() == 1
     GC.enable_finalizers(true)
     @test get_finalizers_inhibited() == 0
-    if ccall(:jl_is_debugbuild, Cint, ()) != 0
+    if Base.isdebugbuild()
         # Note this warning only exists in debug builds
         @test_warn "WARNING: GC finalizers already enabled on this thread." GC.enable_finalizers(true)
     end
@@ -197,6 +240,24 @@ end
     @test all(<=(sem_size), history)
     @test all(>=(0), history)
     @test history[end] == 0
+
+    # macro form
+    clock = Threads.Atomic{Int}(1)
+    occupied = Threads.Atomic{Int}(0)
+    history = fill!(Vector{Int}(undef, 2n), -1)
+    @sync for _ in 1:n
+        @async begin
+            @test Base.@acquire s begin
+                history[Threads.atomic_add!(clock, 1)] = Threads.atomic_add!(occupied, 1) + 1
+                sleep(rand(0:0.01:0.1))
+                history[Threads.atomic_add!(clock, 1)] = Threads.atomic_sub!(occupied, 1) - 1
+                return :resultvalue
+            end === :resultvalue
+        end
+    end
+    @test all(<=(sem_size), history)
+    @test all(>=(0), history)
+    @test history[end] == 0
 end
 
 # task switching
@@ -221,12 +282,14 @@ let c = Ref(0),
     @test c[] == 100
 end
 
-@test_throws ErrorException("deadlock detected: cannot wait on current task") wait(current_task())
+@test_throws ConcurrencyViolationError("deadlock detected: cannot wait on current task") wait(current_task())
+
+@test_throws ConcurrencyViolationError("Cannot yield to currently running task!") yield(current_task())
 
 # issue #41347
 let t = @async 1
     wait(t)
-    @test_throws ErrorException yield(t)
+    @test_throws ConcurrencyViolationError yield(t)
 end
 
 let t = @async error(42)
@@ -265,6 +328,9 @@ let
     stats = @timed sin(1)
     @test stats.value == sin(1)
     @test isa(stats.time, Real) && stats.time >= 0
+    @test isa(stats.compile_time, Real) && stats.compile_time >= 0
+    @test isa(stats.recompile_time, Real) && stats.recompile_time >= 0
+    @test stats.compile_time <= stats.time
 
     # The return type of gcstats was changed in Julia 1.4 (# 34147)
     # Test that the 1.0 API still works
@@ -286,25 +352,43 @@ v11801, t11801 = @timed sin(1)
 @test names(@__MODULE__, all = true) == names_before_timing
 
 redirect_stdout(devnull) do # suppress time prints
+
 # Accepted @time argument formats
 @test @time true
 @test @time "message" true
+@test @time 1 true
 let msg = "message"
     @test @time msg true
 end
 let foo() = "message"
     @test @time foo() true
 end
+let foo() = 1
+    @test @time foo() true
+end
 
 # Accepted @timev argument formats
 @test @timev true
 @test @timev "message" true
+@test @timev 1 true
 let msg = "message"
     @test @timev msg true
 end
 let foo() = "message"
     @test @timev foo() true
 end
+let foo() = 1
+    @test @timev foo() true
+end
+
+# this is internal, but used for easy testing
+@test sprint(Base.time_print, 1e9) == "  1.000000 seconds"
+@test sprint(Base.time_print, 1e9, 111, 0, 222) == "  1.000000 seconds (222 allocations: 111 bytes)"
+@test sprint(Base.time_print, 1e9, 111, 0.5e9, 222) == "  1.000000 seconds (222 allocations: 111 bytes, 50.00% gc time)"
+@test sprint(Base.time_print, 1e9, 111, 0, 222, 333) == "  1.000000 seconds (222 allocations: 111 bytes, 333 lock conflicts)"
+@test sprint(Base.time_print, 1e9, 0, 0, 0, 333) == "  1.000000 seconds (333 lock conflicts)"
+@test sprint(Base.time_print, 1e9, 111, 0, 222, 333, 0.25e9) == "  1.000000 seconds (222 allocations: 111 bytes, 333 lock conflicts, 25.00% compilation time)"
+@test sprint(Base.time_print, 1e9, 111, 0.5e9, 222, 333, 0.25e9, 0.175e9) == "  1.000000 seconds (222 allocations: 111 bytes, 50.00% gc time, 333 lock conflicts, 25.00% compilation time: 70% of which was recompilation)"
 
 # @showtime
 @test @showtime true
@@ -353,8 +437,48 @@ end
 
 after_comp, after_recomp = Base.cumulative_compile_time_ns() # no need to turn timing off, @time will do that
 @test after_comp >= before_comp;
+@test after_recomp >= before_recomp;
+@test after_recomp - before_recomp <= after_comp - before_comp;
+
+# should be approximately 60,000,000 ns, we definitely shouldn't exceed 100x that value
+# failing this probably means an uninitialized variable somewhere
+@test after_comp - before_comp < 6_000_000_000;
 
 end # redirect_stdout
+
+# issue #48024, avoid overcounting timers
+begin
+    double(x::Real) = 2x;
+    calldouble(container) = double(container[1]);
+    calldouble2(container) = calldouble(container);
+
+    Base.Experimental.@force_compile;
+    local elapsed = Base.time_ns();
+    Base.cumulative_compile_timing(true);
+    local compiles = Base.cumulative_compile_time_ns();
+    @eval calldouble([1.0]);
+    Base.cumulative_compile_timing(false);
+    compiles = Base.cumulative_compile_time_ns() .- compiles;
+    elapsed = Base.time_ns() - elapsed;
+
+    # compile time should be at most total time
+    @test compiles[1] <= elapsed
+    # recompile time should be at most compile time
+    @test compiles[2] <= compiles[1]
+
+    elapsed = Base.time_ns();
+    Base.cumulative_compile_timing(true);
+    compiles = Base.cumulative_compile_time_ns();
+    @eval calldouble(1.0);
+    Base.cumulative_compile_timing(false);
+    compiles = Base.cumulative_compile_time_ns() .- compiles;
+    elapsed = Base.time_ns() - elapsed;
+
+    # compile time should be at most total time
+    @test compiles[1] <= elapsed
+    # recompile time should be at most compile time
+    @test compiles[2] <= compiles[1]
+end
 
 macro capture_stdout(ex)
     quote
@@ -366,6 +490,27 @@ macro capture_stdout(ex)
             read(f, String)
         end
     end
+end
+
+# issue #48024, but with the time macro itself
+begin
+    double(x::Real) = 2x;
+    calldouble(container) = double(container[1]);
+    calldouble2(container) = calldouble(container);
+
+    local first = @capture_stdout @time @eval calldouble([1.0])
+    local second = @capture_stdout @time @eval calldouble2(1.0)
+
+    # these functions were not recompiled
+    local matches = collect(eachmatch(r"(\d+(?:\.\d+)?)% compilation", first))
+    @test length(matches) == 1
+    @test parse(Float64, matches[1][1]) > 0.0
+    @test parse(Float64, matches[1][1]) <= 100.0
+
+    matches = collect(eachmatch(r"(\d+(?:\.\d+)?)% compilation", second))
+    @test length(matches) == 1
+    @test parse(Float64, matches[1][1]) > 0.0
+    @test parse(Float64, matches[1][1]) <= 100.0
 end
 
 # compilation reports in @time, @timev
@@ -436,7 +581,7 @@ struct ambigconvert; end # inject a problematic `convert` method to ensure it st
 Base.convert(::Any, v::ambigconvert) = v
 
 import Base.summarysize
-@test summarysize(Core) > (summarysize(Core.Compiler) + Base.summarysize(Core.Intrinsics)) > Core.sizeof(Core)
+@test summarysize(Core) > Base.summarysize(Core.Intrinsics) > Core.sizeof(Core)
 @test summarysize(Base) > 100_000 * sizeof(Ptr)
 
 let R = Ref{Any}(nothing), depth = 10^6
@@ -476,6 +621,29 @@ end
 
 # issue #44780
 @test summarysize(BigInt(2)^1000) > summarysize(BigInt(2))
+
+# issue #53061
+mutable struct S53061
+    x::Union{Float64, Tuple{Float64, Float64}}
+    y::Union{Float64, Tuple{Float64, Float64}}
+end
+let s = S53061[S53061(rand(), (rand(),rand())) for _ in 1:10^4]
+    @test allequal(summarysize(s) for i in 1:10)
+end
+struct Z53061
+    x::S53061
+    y::Int64
+end
+let z = Z53061[Z53061(S53061(rand(), (rand(),rand())), 0) for _ in 1:10^4]
+    @test allequal(summarysize(z) for i in 1:10)
+    # broken on i868 linux. issue #54895
+    @test abs(summarysize(z) - 640000)/640000 <= 0.01 broken = Sys.WORD_SIZE == 32 && Sys.islinux()
+end
+
+# issue #57506
+let len = 100, m1 = Memory{UInt8}(1:len), m2 = Memory{Union{Nothing,UInt8}}(1:len)
+    @test summarysize(m2) == summarysize(m1) + len
+end
 
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
 
@@ -798,6 +966,10 @@ let buf = IOBuffer()
     printstyled(buf_color, "foo"; bold=true, color=:red)
     @test String(take!(buf)) == "\e[31m\e[1mfoo\e[22m\e[39m"
 
+    # Check that italic is turned off
+    printstyled(buf_color, "foo"; italic=true, color=:red)
+    @test String(take!(buf)) == "\e[31m\e[3mfoo\e[23m\e[39m"
+
     # Check that underline is turned off
     printstyled(buf_color, "foo"; color = :red, underline = true)
     @test String(take!(buf)) == "\e[31m\e[4mfoo\e[24m\e[39m"
@@ -815,8 +987,8 @@ let buf = IOBuffer()
     @test String(take!(buf)) == "\e[31m\e[8mfoo\e[28m\e[39m"
 
     # Check that all options can be turned on simultaneously
-    printstyled(buf_color, "foo"; color = :red, bold = true, underline = true, blink = true, reverse = true, hidden = true)
-    @test String(take!(buf)) == "\e[31m\e[1m\e[4m\e[5m\e[7m\e[8mfoo\e[28m\e[27m\e[25m\e[24m\e[22m\e[39m"
+    printstyled(buf_color, "foo"; color = :red, bold = true, italic = true, underline = true, blink = true, reverse = true, hidden = true)
+    @test String(take!(buf)) == "\e[31m\e[1m\e[3m\e[4m\e[5m\e[7m\e[8mfoo\e[28m\e[27m\e[25m\e[24m\e[22m\e[23m\e[39m"
 end
 
 abstract type DA_19281{T, N} <: AbstractArray{T, N} end
@@ -845,7 +1017,7 @@ mutable struct Demo_20254
 end
 
 # these cause stack overflows and are a little flaky on CI, ref #20256
-if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+if Base.get_bool_env("JULIA_TESTFULL", false)
     function Demo_20254(arr::AbstractArray=Any[])
         Demo_20254(string.(arr))
     end
@@ -902,38 +1074,87 @@ end
 module atinvokelatest
 f(x) = 1
 g(x, y; z=0) = x * y + z
+mutable struct X; x; end
+Base.getproperty(::X, ::Any) = error("overload me")
+Base.setproperty!(::X, ::Any, ::Any) = error("overload me")
+struct Xs
+    xs::Vector{Any}
+end
+Base.getindex(::Xs, ::Any) = error("overload me")
+Base.setindex!(::Xs, ::Any, ::Any) = error("overload me")
 end
 
-let foo() = begin
+let call_test() = begin
         @eval atinvokelatest.f(x::Int) = 3
-        return Base.@invokelatest atinvokelatest.f(0)
+        return @invokelatest atinvokelatest.f(0)
     end
-    @test foo() == 3
-end
+    @test call_test() == 3
 
-let foo() = begin
-        @eval atinvokelatest.f(x::Int) = 3
-        return Base.@invokelatest atinvokelatest.f(0)
-    end
-    @test foo() == 3
-
-    bar() = begin
+    call_with_kws_test() = begin
         @eval atinvokelatest.g(x::Int, y::Int; z=3) = z
-        return Base.@invokelatest atinvokelatest.g(2, 3; z=1)
+        return @invokelatest atinvokelatest.g(2, 3; z=1)
     end
-    @test bar() == 1
+    @test call_with_kws_test() == 1
+
+    getproperty_test() = begin
+        @eval Base.getproperty(x::atinvokelatest.X, f::Symbol) = getfield(x, f)
+        x = atinvokelatest.X(nothing)
+        return @invokelatest x.x
+    end
+    @test isnothing(getproperty_test())
+
+    setproperty!_test() = begin
+        @eval Base.setproperty!(x::atinvokelatest.X, f::Symbol, @nospecialize(v)) = setfield!(x, f, v)
+        x = atinvokelatest.X(nothing)
+        @invokelatest x.x = 1
+        return x
+    end
+    x = setproperty!_test()
+    @test getfield(x, :x) == 1
+
+    getindex_test() = begin
+        @eval Base.getindex(xs::atinvokelatest.Xs, idx::Int) = xs.xs[idx]
+        xs = atinvokelatest.Xs(Any[nothing])
+        return @invokelatest xs[1]
+    end
+    @test isnothing(getindex_test())
+
+    setindex!_test() = begin
+        @eval function Base.setindex!(xs::atinvokelatest.Xs, @nospecialize(v), idx::Int)
+            xs.xs[idx] = v
+        end
+        xs = atinvokelatest.Xs(Any[nothing])
+        @invokelatest xs[1] = 1
+        return xs
+    end
+    xs = setindex!_test()
+    @test xs.xs[1] == 1
 end
+
+abstract type InvokeX end
+Base.getproperty(::InvokeX, ::Symbol) = error("overload InvokeX")
+Base.setproperty!(::InvokeX, ::Symbol, @nospecialize(v::Any)) = error("overload InvokeX")
+mutable struct InvokeX2 <: InvokeX; x; end
+Base.getproperty(x::InvokeX2, f::Symbol) = getfield(x, f)
+Base.setproperty!(x::InvokeX2, f::Symbol, @nospecialize(v::Any)) = setfield!(x, f, v)
+
+abstract type InvokeXs end
+Base.getindex(::InvokeXs, ::Int) = error("overload InvokeXs")
+Base.setindex!(::InvokeXs, @nospecialize(v::Any), ::Int) = error("overload InvokeXs")
+struct InvokeXs2 <: InvokeXs
+    xs::Vector{Any}
+end
+Base.getindex(xs::InvokeXs2, idx::Int) = xs.xs[idx]
+Base.setindex!(xs::InvokeXs2, @nospecialize(v::Any), idx::Int) = xs.xs[idx] = v
 
 @testset "@invoke macro" begin
     # test against `invoke` doc example
-    let
-        f(x::Real) = x^2
+    let f(x::Real) = x^2
         f(x::Integer) = 1 + @invoke f(x::Real)
         @test f(2) == 5
     end
 
-    let
-        f1(::Integer) = Integer
+    let f1(::Integer) = Integer
         f1(::Real) = Real;
         f2(x::Real) = _f2(x)
         _f2(::Integer) = Integer
@@ -944,9 +1165,8 @@ end
         @test @invoke(f2(1::Real)) === Integer
     end
 
-    # when argment's type annotation is omitted, it should be specified as `Core.Typeof(x)`
-    let
-        f(_) = Any
+    # when argument's type annotation is omitted, it should be specified as `Core.Typeof(x)`
+    let f(_) = Any
         f(x::Integer) = Integer
         @test f(1) === Integer
         @test @invoke(f(1::Any)) === Any
@@ -959,12 +1179,27 @@ end
     end
 
     # handle keyword arguments correctly
-    let
-        f(a; kw1 = nothing, kw2 = nothing) = a + max(kw1, kw2)
+    let f(a; kw1 = nothing, kw2 = nothing) = a + max(kw1, kw2)
         f(::Integer; kwargs...) = error("don't call me")
 
         @test_throws Exception f(1; kw1 = 1, kw2 = 2)
         @test 3 == @invoke f(1::Any; kw1 = 1, kw2 = 2)
+    end
+
+    # additional syntax test
+    let x = InvokeX2(nothing)
+        @test_throws "overload InvokeX" @invoke (x::InvokeX).x
+        @test isnothing(@invoke x.x)
+        @test_throws "overload InvokeX" @invoke (x::InvokeX).x = 42
+        @invoke x.x = 42
+        @test 42 == x.x
+
+        xs = InvokeXs2(Any[nothing])
+        @test_throws "overload InvokeXs" @invoke (xs::InvokeXs)[1]
+        @test isnothing(@invoke xs[1])
+        @test_throws "overload InvokeXs" @invoke (xs::InvokeXs)[1] = 42
+        @invoke xs[1] = 42
+        @test 42 == xs.xs[1]
     end
 end
 
@@ -1002,18 +1237,15 @@ include("testenv.jl")
 
 let flags = Cmd(filter(a->!occursin("depwarn", a), collect(test_exeflags)))
     local cmd = `$test_exename $flags --depwarn=yes deprecation_exec.jl`
-
-    if !success(pipeline(cmd; stdout=stdout, stderr=stderr))
-        error("Deprecation test failed, cmd : $cmd")
-    end
+    run(cmd, devnull)
 end
 
 # PR #23664, make sure names don't get added to the default `Main` workspace
 @test readlines(`$(Base.julia_cmd()) --startup-file=no -e 'foreach(println, names(Main))'`) == ["Base","Core","Main"]
 
 # issue #26310
-@test_warn "could not import" Core.eval(@__MODULE__, :(import .notdefined_26310__))
-@test_warn "could not import" Core.eval(Main,        :(import ........notdefined_26310__))
+@test_warn "undeclared at import time" Core.eval(@__MODULE__, :(import .notdefined_26310__))
+@test_warn "undeclared at import time" Core.eval(Main,        :(import ........notdefined_26310__))
 @test_nowarn Core.eval(Main, :(import .Main))
 @test_nowarn Core.eval(Main, :(import ....Main))
 
@@ -1137,10 +1369,75 @@ end
     end
 end
 
+@kwdef struct Test_kwdef_lineinfo
+    a::String
+end
+@testset "@kwdef constructor line info" begin
+    for method in methods(Test_kwdef_lineinfo)
+        @test method.file === Symbol(@__FILE__)
+        @test ((@__LINE__)-6) ≤ method.line ≤ ((@__LINE__)-5)
+    end
+end
+@kwdef struct Test_kwdef_lineinfo_sparam{S<:AbstractString}
+    a::S
+end
+@testset "@kwdef constructor line info with static parameter" begin
+    for method in methods(Test_kwdef_lineinfo_sparam)
+        @test method.file === Symbol(@__FILE__)
+        @test ((@__LINE__)-6) ≤ method.line ≤ ((@__LINE__)-5)
+    end
+end
+
+module KwdefWithEsc
+    const Int1 = Int
+    const val1 = 42
+    macro define_struct()
+        quote
+            @kwdef struct $(esc(:Struct))
+                a
+                b = val1
+                c::Int1
+                d::Int1 = val1
+
+                $(esc(quote
+                    e
+                    f = val2
+                    g::Int2
+                    h::Int2 = val2
+                end))
+
+                $(esc(:(i = val2)))
+                $(esc(:(j::Int2)))
+                $(esc(:(k::Int2 = val2)))
+
+                l::$(esc(:Int2))
+                m::$(esc(:Int2)) = val1
+
+                n = $(esc(:val2))
+                o::Int1 = $(esc(:val2))
+
+                $(esc(:p))
+                $(esc(:q)) = val1
+                $(esc(:s))::Int1
+                $(esc(:t))::Int1 = val1
+            end
+        end
+    end
+end
+
+module KwdefWithEsc_TestModule
+    using ..KwdefWithEsc
+    const Int2 = Int
+    const val2 = 42
+    KwdefWithEsc.@define_struct()
+end
+@test isdefined(KwdefWithEsc_TestModule, :Struct)
+
 @testset "exports of modules" begin
-    for (_, mod) in Base.loaded_modules
+    @testset "$mod" for (_, mod) in Base.loaded_modules
         mod === Main && continue # Main exports everything
-        for v in names(mod)
+        @testset "$v" for v in names(mod)
+            isdefined(mod, v) || @error "missing $v in $mod"
             @test isdefined(mod, v)
         end
     end
@@ -1151,6 +1448,11 @@ end
     b = Base.UUID("2832b20a-2ad5-46e9-abb1-2d20c8c31dd3")
     @test isless(b, a)
     @test sort([a, b]) == [b, a]
+end
+
+@testset "UUID display" begin
+    a = Base.UUID("dbd321ed-e87e-4f33-9511-65b7d01cdd55")
+    @test repr(a) == "$(Base.UUID)(\"dbd321ed-e87e-4f33-9511-65b7d01cdd55\")"
 end
 
 @testset "Libc.rand" begin
@@ -1177,7 +1479,8 @@ end
 @test_throws ErrorException finalizer(x->nothing, 1)
 @test_throws ErrorException finalizer(C_NULL, 1)
 
-
+# FIXME: Issue #57103 Test is specific to Stock GC
+@static if Base.USING_STOCK_GC
 @testset "GC utilities" begin
     GC.gc()
     GC.gc(true); GC.gc(false)
@@ -1188,12 +1491,15 @@ end
         open(tmppath, "w") do tmpio
             redirect_stderr(tmpio) do
                 GC.enable_logging(true)
+                @test GC.logging_enabled()
                 GC.gc()
                 GC.enable_logging(false)
+                @test !GC.logging_enabled()
             end
         end
         @test occursin("GC: pause", read(tmppath, String))
     end
+end
 end
 
 @testset "fieldtypes Module" begin
@@ -1206,9 +1512,9 @@ end
 end
 
 # Test that read fault on a prot-none region does not incorrectly give
-# ReadOnlyMemoryEror, but rather crashes the program
+# ReadOnlyMemoryError, but rather crashes the program
 const MAP_ANONYMOUS_PRIVATE = Sys.isbsd() ? 0x1002 : 0x22
-let script = :(
+let script = """
         let ptr = Ptr{Cint}(ccall(:jl_mmap, Ptr{Cvoid},
                                   (Ptr{Cvoid}, Csize_t, Cint, Cint, Cint, Int),
                                   C_NULL, 16*1024, 0, $MAP_ANONYMOUS_PRIVATE, -1, 0))
@@ -1218,20 +1524,160 @@ let script = :(
                 println(e)
             end
         end
-    )
+    """
     cmd = if Sys.isunix()
         # Set the maximum core dump size to 0 to keep this expected crash from
         # producing a (and potentially overwriting an existing) core dump file
-        `sh -c "ulimit -c 0; $(Base.shell_escape(Base.julia_cmd())) -e '$script'"`
+        `sh -c "ulimit -c 0; $(Base.shell_escape(Base.julia_cmd())) -e $(Base.shell_escape(script))"`
     else
-        `$(Base.julia_cmd()) -e '$script'`
+        `$(Base.julia_cmd()) -e $script`
     end
-    @test !success(cmd)
+    p = run(ignorestatus(cmd), devnull, stdout, devnull)
+    if p.termsignal == 0
+        Sys.isunix() ? @test(p.exitcode ∈ (128+7, 128+10, 128+11)) : @test(p.exitcode != 0) # expect SIGBUS (7 on BSDs or 10 on Linux) or SIGSEGV (11)
+    else
+        @test(p.termsignal ∈ (7, 10, 11))
+    end
 end
 
 # issue #41656
-@test success(`$(Base.julia_cmd()) -e 'isempty(x) = true'`)
+run(`$(Base.julia_cmd()) -e 'isempty(x) = true'`)
+
+function treshape59278(X::AbstractArray, n, m)
+    Y = reshape(X, n, m)
+    Y .= 1.0
+    return X
+end
+
+# a function that allocates iff no constprop
+@inline maybealloc59278(n, _) = ntuple(i->rand(), n)
 
 @testset "Base/timing.jl" begin
     @test Base.jit_total_bytes() >= 0
+
+    # sanity check `@allocations` returns what we expect in some very simple cases.
+    @test (() -> @allocations "a")() == 0
+    "a" * Base.inferencebarrier("b")
+    @test (() -> @allocations "a" * Base.inferencebarrier("b"))() == 1
+    # test that you can grab the value from @allocated
+    @allocated _x = 1+2
+    @test _x === 3
+
+    # test `@allocated` works for dotted operations
+    @test (@allocated 1 .+ 1) == 0
+
+    n, m = 10, 20
+    X = rand(n, m)
+    treshape59278(X, n, m)
+    # test that @allocated and @allocations are consistent about whether anything was
+    # allocated in a case where the compiler can sometimes remove an allocation
+    # https://github.com/JuliaLang/julia/issues/58634#issuecomment-2940840651
+    @test ((@allocated treshape59278(X, n, m))==0) == ((@allocations treshape59278(X, n, m))==0)
+    # TODO: would be nice to have but not yet reliable
+    #@test ((@allocated begin treshape59278(X, n, m) end)==0) == ((@allocations begin treshape59278(X, n, m) end)==0)
+
+    # test that all wrapped allocations are counted and constprop is not done
+    @test (@allocated @noinline maybealloc59278(10, [])) > (@allocated maybealloc59278(10, 0)) > 0
+    # but if you wrap it in another function it can be constprop'd
+    @test (@allocated (()->maybealloc59278(10, []))()) == 0
+
+    _lock_conflicts, _nthreads = eval(Meta.parse(read(`$(Base.julia_cmd()) -tauto -E '
+        _lock_conflicts = @lock_conflicts begin
+            l = ReentrantLock()
+            Threads.@threads for i in 1:Threads.nthreads()
+                 lock(l) do
+                    sleep(1)
+                end
+            end
+        end
+        _lock_conflicts,Threads.nthreads()
+    '`, String)))
+    @test _lock_conflicts > 0 skip=(_nthreads < 2) # can only test if the worker can multithread
+
+    # Test the output of `format_bytes()`
+    inputs = [(factor * (Int64(1000)^e),binary) for binary in (false,true), factor in (1,2), e in 0:6][:]
+    expected_output = ["1 byte", "1 byte", "2 bytes", "2 bytes", "1000 bytes", "1000 bytes", "2.000 kB", "1.953 KiB",
+                        "1000.000 kB", "976.562 KiB", "2.000 MB", "1.907 MiB", "1000.000 MB", "953.674 MiB",
+                        "2.000 GB", "1.863 GiB", "1000.000 GB", "931.323 GiB", "2.000 TB", "1.819 TiB",
+                        "1000.000 TB", "909.495 TiB", "2.000 PB", "1.776 PiB", "1000.000 PB", "888.178 PiB",
+                        "2000.000 PB", "1776.357 PiB"]
+    for ((n, binary), expected) in zip(inputs, expected_output)
+        @test Base.format_bytes(n; binary) == expected
+    end
+end
+
+@testset "in_finalizer" begin
+    @test !GC.in_finalizer()
+
+    in_fin = Ref{Any}()
+    wait(@async begin
+        r = Ref(1)
+        finalizer(r) do _
+            in_fin[] = GC.in_finalizer()
+        end
+        nothing
+    end)
+    GC.gc(true); yield()
+    @test in_fin[]
+end
+
+@testset "Base docstrings" begin
+    undoc = Docs.undocumented_names(Base)
+    @test_broken isempty(undoc)
+    @test isempty(setdiff(undoc, [:BufferStream, :CanonicalIndexError, :CapturedException, :Filesystem, :IOServer, :InvalidStateException, :Order, :PipeEndpoint, :ScopedValues, :Sort, :TTY, :AtomicMemoryRef, :Exception, :GenericMemoryRef, :GlobalRef, :IO, :LineNumberNode, :MemoryRef, :Method, :SegmentationFault, :TypeVar, :arrayref, :arrayset, :arraysize, :const_arrayref]))
+end
+
+exported_names(m) = filter(s -> Base.isexported(m, s), names(m))
+@testset "Base re-exports Core" begin
+    @test issubset(exported_names(Core), exported_names(Base))
+end
+
+@testset "Base.Libc docstrings" begin
+    @test isempty(Docs.undocumented_names(Libc))
+end
+
+@testset "Silenced missed transformations" begin
+    # Ensure the WarnMissedTransformationsPass is not on by default
+    src = """
+        @noinline iteration(i) = (@show(i); return nothing)
+        @eval function loop_unroll_full_fail(N)
+            for i in 1:N
+              iteration(i)
+              \$(Expr(:loopinfo, (Symbol("llvm.loop.unroll.full"), 1)))
+          end
+       end
+       loop_unroll_full_fail(3)
+    """
+    out_err = mktemp() do _, f
+        run(`$(Base.julia_cmd()) -e "$src"`, devnull, devnull, f)
+        seekstart(f)
+        read(f, String)
+    end
+    @test !occursin("loop not unrolled", out_err)
+end
+
+let errs = IOBuffer()
+    run(`$(Base.julia_cmd()) -e '
+        using Test
+        @test !isempty(Core.methodtable.backedges)
+        Base.Experimental.disable_new_worlds()
+        @test_throws "disable_new_worlds" @eval f() = 1
+        @test isempty(Core.methodtable.backedges)
+        @test_throws "disable_new_worlds" Base.delete_method(which(+, (Int, Int)))
+        @test 1+1 == 2
+        using Dates
+        '`, devnull, stdout, errs)
+    @test occursin("disable_new_worlds", String(take!(errs)))
+end
+
+@testset "`@constprop`, `@assume_effects` handling of an unknown setting" begin
+    for x ∈ ("constprop", "assume_effects")
+        try
+            eval(Meta.parse("Base.@$x :unknown f() = 3"))
+            error("unexpectedly reached")
+        catch e
+            e::LoadError
+            @test e.error isa ArgumentError
+        end
+    end
 end

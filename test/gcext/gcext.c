@@ -32,7 +32,7 @@ static inline int lt_ptr(void *a, void *b)
     return (uintptr_t)a < (uintptr_t)b;
 }
 
-/* align pointer to full word if mis-aligned */
+/* align pointer to full word if misaligned */
 static inline void *align_ptr(void *p)
 {
     uintptr_t u = (uintptr_t)p;
@@ -219,7 +219,6 @@ static uint64_t xorshift_rng(void)
 }
 
 static treap_t *bigvals;
-static size_t bigval_startoffset;
 
 // Hooks to allocate and free external objects (bigval_t's).
 
@@ -307,6 +306,7 @@ static size_t gc_alloc_size(jl_value_t *val)
 
 int internal_obj_scan(jl_value_t *val)
 {
+    // FIXME: `jl_gc_internal_obj_base_ptr` is not allowed to be called from outside GC
     if (jl_gc_internal_obj_base_ptr(val) == val) {
         size_t size = gc_alloc_size(val);
         char *addr = (char *)val;
@@ -599,6 +599,13 @@ int main()
     jl_gc_set_cb_notify_external_alloc(alloc_bigval, 1);
     jl_gc_set_cb_notify_external_free(free_bigval, 1);
 
+    // single threaded mode
+    // Note: with -t1,1 a signal 10 occurs in task_scanner
+    jl_options.nthreadpools = 1;
+    jl_options.nthreads = 1;
+    int16_t ntpp[] = {jl_options.nthreads};
+    jl_options.nthreads_per_pool = ntpp;
+
     jl_init();
     if (jl_gc_enable_conservative_gc_support() < 0)
         abort();
@@ -611,8 +618,7 @@ int main()
     jl_gc_set_cb_root_scanner(abort_with_error, 1);
     jl_gc_set_cb_root_scanner(abort_with_error, 0);
     // Create module to store types in.
-    module = jl_new_module(jl_symbol("TestGCExt"));
-    module->parent = jl_main_module;
+    module = jl_new_module(jl_symbol("TestGCExt"), jl_main_module);
     jl_set_const(jl_main_module, jl_symbol("TestGCExt"), (jl_value_t *)module);
     // Define Julia types for our stack implementation.
     datatype_stack = jl_new_foreign_type(
@@ -642,8 +648,6 @@ int main()
             module,
             jl_symbol("StackDataLarge"),
             (jl_value_t *)datatype_stack_external);
-    // Remember the offset of external objects
-    bigval_startoffset = jl_gc_external_obj_hdr_size();
     // Run the actual tests
     checked_eval_string(
             "let dir = dirname(unsafe_string(Base.JLOptions().julia_bin))\n"

@@ -6,23 +6,6 @@
 #include "../src/julia_fasttls.h"
 
 #ifdef _OS_WINDOWS_
-/* We need to reimplement a bunch of standard library stuff on windows,
- * but we want to make sure that it doesn't conflict with the actual implementations
- * once those get linked into this process. */
-#define fwrite loader_fwrite
-#define fputs loader_fputs
-#define exit loader_exit
-#define strlen loader_strlen
-#define wcslen loader_wcslen
-#define strncat loader_strncat
-#define memcpy loader_memcpy
-#define dirname loader_dirname
-#define strchr loader_strchr
-#define malloc loader_malloc
-#define realloc loader_realloc
-#endif
-
-#ifdef _OS_WINDOWS_
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -44,6 +27,7 @@
 #include <libgen.h>
 #include <unistd.h>
 #include <dlfcn.h>
+#include <signal.h>
 
 #endif
 
@@ -51,19 +35,17 @@
 
 // Borrow definition from `support/dtypes.h`
 #ifdef _OS_WINDOWS_
-# ifdef LIBRARY_EXPORTS
-#  define JL_DLLEXPORT __declspec(dllexport)
-# else
-#  define JL_DLLEXPORT __declspec(dllimport)
+# ifdef JL_LIBRARY_EXPORTS
+#  define JL_DLLEXPORT __declspec(dllexport) __attribute__ ((visibility("default")))
 # endif
+#  define JL_DLLIMPORT __declspec(dllimport) __attribute__ ((visibility("default")))
 #define JL_HIDDEN
 #else
-# if defined(LIBRARY_EXPORTS) && defined(_OS_LINUX_)
-#  define JL_DLLEXPORT __attribute__ ((visibility("protected")))
-# else
-#  define JL_DLLEXPORT __attribute__ ((visibility("default")))
-# endif
+# define JL_DLLIMPORT __attribute__ ((visibility("default")))
 #define JL_HIDDEN    __attribute__ ((visibility("hidden")))
+#endif
+#ifndef JL_DLLEXPORT
+#  define JL_DLLEXPORT JL_DLLIMPORT
 #endif
 /*
  * DEP_LIBS is our list of dependent libraries that must be loaded before `libjulia`.
@@ -88,12 +70,15 @@
 JL_DLLEXPORT extern int jl_load_repl(int, char **);
 JL_DLLEXPORT void jl_loader_print_stderr(const char * msg);
 void jl_loader_print_stderr3(const char * msg1, const char * msg2, const char * msg3);
+void *jl_loader_open_via_mmap(const char *filepath, size_t *size);
 static void * lookup_symbol(const void * lib_handle, const char * symbol_name);
+const char *jl_loader_probe_system_library(const char *libname, const char *symbol);
+int jl_loader_locate_symbol(const char *library, const char *symbol);
 
 #ifdef _OS_WINDOWS_
 LPWSTR *CommandLineToArgv(LPWSTR lpCmdLine, int *pNumArgs);
-int wchar_to_utf8(const wchar_t * wstr, char *str, size_t maxlen);
-int utf8_to_wchar(const char * str, wchar_t *wstr, size_t maxlen);
+char *wchar_to_utf8(const wchar_t * wstr);
+wchar_t *utf8_to_wchar(const char * str);
 void setup_stdio(void);
 #endif
 
