@@ -428,7 +428,7 @@ operators `+`, `++`, and `*` (but not other addition or multiplication operators
 parsed as varargs calls when chained, rather than nested binary calls: `a + b + c` is parsed as
 `+(a, b, c)` and `a*b*c` is parsed as `*(a, b, c)`.  The `++` operator is also parsed in this
 way, but note that it has no methods defined in `Base`.  Also note that juxtaposition of
-[Numeric literal coefficients](@ref man-numeric-literal-coefficients) to denote multiplication
+[numeric literal coefficients](@ref man-numeric-literal-coefficients) to denote multiplication
 — like `2x` to mean `2*x` — is more of a syntactic form than an operator.  Describing its
 associativity doesn't make sense, except to state the obvious point that `24x` means `24*x`
 rather than `2*(4*x)` or `(2*4)*x`. They are treated as multiplications with higher precedence
@@ -474,7 +474,7 @@ packages, or user code.  For example, `⋅` and `×` are defined in the standard
 | Fraction       | `//`                                                                                       | Left           |
 | Multiplication | `* / ÷ % & ∘ \ ∩ ⊼` (`⋅ × ⋆ ⊗ ⊘ ⊠ ⊡ ⊓ ∧`, etc.)                                            | Left[^6]       |
 | Addition       | `+ - \| ∪ ⊻ ⊽` (`++ ± ∓ ⊕ ⊖ ⊞ ⊟ ⊔ ∨`, etc.)                                                | Left[^6]       |
-| Dot            | `:  ...` (`.. … ⁝ ⋮ ⋱ ⋰ ⋯`)                                                                | Left[^7]       |
+| Dots           | `: ...` (`.. … ⁝ ⋮ ⋱ ⋰ ⋯`)                                                                 | Left[^7]       |
 | Piping         | `\|>`                                                                                      | Left           |
 | Syntax         | `<\|`                                                                                      | Right          |
 | Comparison     | `in isa > < >= ≥ <= ≤ == === ≡ != ≠ !== ≢ ∈ ∉ ∋ ∌ ⊆ ⊈ ⊊ ≈ ≉ ⊇ ⊉ ⊋ <: >:` (`⊂ ⊄ ∝ ∥`, etc.) | Chaining[^8]   |
@@ -486,10 +486,10 @@ packages, or user code.  For example, `⋅` and `×` are defined in the standard
 | Tuple          | `,`                                                                                        | Vararg         |
 
 [^2]:
-    Spaces are not allowed around the `.` getproperty or the `:` expr operators.  
-    the unary `:` operator requires parens on consecutive calls to prevent confusion with `::`
+    Spaces are not allowed around the `.` getproperty or the `:` expr operators<br/>
+    The unary `:` operator requires parens on consecutive calls to prevent confusion with `::`
 [^3]:
-    `'` is a postfix unary operator. For example, 2'ᵃ'ᵇ'ᶜ parses like ((2'ᵃ)'ᵇ)'ᶜ  
+    `'` is a postfix unary operator. For example, 2'ᵃ'ᵇ'ᶜ parses like ((2'ᵃ)'ᵇ)'ᶜ<br/>
     Due to a `.'` transpose operator present in pre-1.0 Julia, you cannot dot-distribute `'` or any operators derived from it. This may be changed in a future version of Julia
 [^4]:
     Unary operators and juxtaposition of numeric literals are lower precedence than `^` only as the *first argument*.  For example, `2^-3`, `x^√2`, and `2^3x` are parsed as `2^(-3)`, `x^(√2)`, and `2^(3*x)`; whereas `-2^3`, `√x^2`, `2^3*x`, and `2x^3` are parsed as `-(2^3)`, `√(x^2)`, `(2^3)*x`, and `2*(x^3)`.
@@ -498,9 +498,9 @@ packages, or user code.  For example, `⋅` and `×` are defined in the standard
 [^6]:
     The operators `+`, `++` and `*` are chained rather than left-associative.  For example, `a + b + c` is parsed as `+(a, b, c)` not `+(+(a, b),c)`.  However, the fallback methods for `+(a, b, c, d...)` and `*(a, b, c, d...)` both default to left-associative evaluation.  Note that `++` is not defined in `Base`, but is parsed in the same way.
 [^7]:
-    The operator `:` is parsed into groups of three. For example `a : b : c : d : e` is parsed as `(:)((:)(a, b, c), d, e)`.  
-    The operators `:` and `..` cannot be dot-distributed to prevent confusion with `.:` and `...`  
-    The postfix unary operator `...` must be followed by an operator of lower precedence  
+    The operator `:` is parsed into groups of three. For example `a : b : c : d : e` is parsed as `(:)((:)(a, b, c), d, e)`.<br/>
+    The operators `:` and `..` cannot be dot-distributed to prevent confusion with `.:` and `...`<br/>
+    The postfix unary operator `...` may only be followed by an operator of lower precedence<br/>
     Due to a parser bug, dots operators other than `:` cannot currently be composed. This may be fixed to 3-arg grouping like `:` or normal left associativity in a future version.
 [^8]:
     Comparisons can be [chained](@ref "Chaining comparisons").  For example, `a < b < c` is essentially the same as `a < b && b < c`.  However, the order of evaluation is undefined.
