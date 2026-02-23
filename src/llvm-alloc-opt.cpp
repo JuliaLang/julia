@@ -1011,7 +1011,14 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         slot.slot->setAlignment(align);
         IRBuilder<> builder(orig_inst);
         insertLifetime(slot.slot, ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), field.size), orig_inst);
-        initializeAlloca(builder, slot.slot, use_info.allockind);
+        if (field.hasobjref) {
+            // alloca must be promotable for PromoteMemToReg below
+            if ((use_info.allockind & AllocFnKind::Uninitialized) == AllocFnKind::Unknown)
+                builder.CreateStore(Constant::getNullValue(pass.T_prjlvalue), slot.slot);
+        }
+        else {
+            initializeAlloca(builder, slot.slot, use_info.allockind);
+        }
         slots.push_back(std::move(slot));
     }
     const auto nslots = slots.size();
