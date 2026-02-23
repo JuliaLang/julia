@@ -106,9 +106,6 @@ function is_valid_body_ir_argument(ctx, ex)
         true
     elseif kind(ex) == K"BindingId"
         binfo = get_binding(ctx, ex)
-        # arguments are inherently always-defined, but the closure
-        # box analysis overrides this flag to mean "valid to leave
-        # unboxed" so we check for them specifically here
         binfo.kind == :argument || binfo.is_always_defined
     else
         false
