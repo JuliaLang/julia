@@ -6563,4 +6563,10 @@ throwconditional(c, x) = c ? throw(x isa Int) : throw(x isa Float64)
     throwconditional(c, x)
 end == Bool
 
+# issue #60715
+let
+    f() = 1; f(_, x...) = (0, f(x...))
+    @test f(1, 2, 3) == (0, (0, (0, 1)))
+end
+
 end # module inference

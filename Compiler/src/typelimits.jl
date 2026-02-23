@@ -677,7 +677,9 @@ end
 
 @nospecializeinfer function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(typeb))
     r = tmerge_fast_path(lattice, typea, typeb)
-    r !== nothing && return r
+    if r !== nothing
+        return (isa(r, PartialStruct) && !issimpleenoughtype(r.typ)) ? widenconst(r) : r
+    end
 
     # type-lattice for Const and PartialStruct wrappers
     aps = isa(typea, PartialStruct)
