@@ -489,13 +489,13 @@ split_generated(st::SyntaxTree, gen_part) = JuliaSyntax.@stm st begin
     _ -> mapchildren(x->split_generated(x, gen_part), st._graph, st)
 end
 
-function ensure_macro_attributes(graph)
-    ensure_attributes(graph,
-                      var_id=IdTag,
-                      scope_layer=LayerId,
-                      __macro_ctx__=Nothing,
-                      meta=CompileHints)
-end
+ensure_macro_attributes!(graph) = ensure_attributes!(
+    graph;
+    var_id=IdTag,
+    scope_layer=LayerId,
+    __macro_ctx__=Nothing,
+    meta=CompileHints,
+    (DEBUG ? (:jl_source=>LineNumberNode,) : ())...)
 
 @fzone "JL: macroexpand" function expand_forms_1(mod::Module, ex::SyntaxTree, expr_compat_mode::Bool, macro_world::UInt)
     if kind(ex) == K"local"
@@ -503,14 +503,16 @@ end
         # we might want to make that more explicit in the pass system.
         throw(LoweringError(ex, "local declarations have no effect outside a scope"))
     end
-    graph = ensure_macro_attributes(syntax_graph(ex))
-    ctx = MacroExpansionContext(graph, mod, expr_compat_mode, macro_world)
-    ex2 = expand_forms_1(ctx, reparent(ctx, ex))
-    graph2 = delete_attributes(graph, :__macro_ctx__)
+    graph = ensure_macro_attributes!(copy_attrs(syntax_graph(ex)))
+    ex = reparent(graph, ex)
+    ctx_out = MacroExpansionContext(graph, mod, expr_compat_mode, macro_world)
+    ex_out = expand_forms_1(ctx_out, ex)
+    graph2 = delete_attributes(ex._graph, :__macro_ctx__)
     # TODO: Returning the context with pass-specific mutable data is a bad way
     # to carry state into the next pass. We might fix this by attaching such
     # data to the graph itself as global attributes?
-    ctx2 = MacroExpansionContext(graph2, ctx.bindings, ctx.scope_layers, ctx.scope_layer_stack,
+    ctx2 = MacroExpansionContext(graph2, ctx_out.bindings, ctx_out.scope_layers,
+                                 ctx_out.scope_layer_stack,
                                  expr_compat_mode, macro_world)
-    return ctx2, reparent(ctx2, ex2)
+    return ctx2, reparent(ctx2.graph, ex_out)
 end

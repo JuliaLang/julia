@@ -1531,10 +1531,10 @@ catch e
     @test e.error isa MethodError
 end
 
-@test_loweringerror(:(if true; break; end for i = 1:1), "break or continue outside loop")
-@test_loweringerror(:([if true; break; end for i = 1:1]), "break or continue outside loop")
+@test_loweringerror(:(if true; break; end for i = 1:1), "`break` must be used inside a `while`, `for` loop, or `@label` block")
+@test_loweringerror(:([if true; break; end for i = 1:1]), "`break` must be used inside a `while`, `for` loop, or `@label` block")
 @test_loweringerror(:(Int[if true; break; end for i = 1:1]), "break or continue outside loop")
-@test_loweringerror(:([if true; continue; end for i = 1:1]), "break or continue outside loop")
+@test_loweringerror(:([if true; continue; end for i = 1:1]), "`continue` must be used inside a `while` or `for` loop")
 @test_loweringerror(:(Int[if true; continue; end for i = 1:1]), "break or continue outside loop")
 
 @test_loweringerror(:(return 0 for i=1:2), "\"return\" not allowed inside comprehension or generator")

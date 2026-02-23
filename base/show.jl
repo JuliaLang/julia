@@ -1950,6 +1950,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif (head in expr_infix_any && nargs==2)
         func_prec = operator_precedence(head)
         head_ = head in expr_infix_wide ? " $head " : head
+        if head == :-> && is_expr(args[1], :...)
+            args = Any[Expr(:tuple, args[1]), args[2]]
+        end
         if func_prec <= prec
             show_enclosed_list(io, '(', args, head_, ')', indent, func_prec, quote_level, true)
         else

@@ -2275,7 +2275,16 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             vtag == (jl_unionall_tag << 4) ||
             vtag == (jl_uniontype_tag << 4) ||
             vtag == (jl_tvar_tag << 4) ||
-            vtag == (jl_vararg_tag << 4)) {
+            vtag == (jl_vararg_tag << 4) ||
+            vtag == (jl_globalref_tag << 4) ||
+            vtag == (jl_gotoifnot_tag << 4) ||
+            vtag == (jl_returnnode_tag << 4) ||
+            vtag == (jl_enternode_tag << 4) ||
+            vtag == (jl_pinode_tag << 4) ||
+            vtag == (jl_phinode_tag << 4) ||
+            vtag == (jl_phicnode_tag << 4) ||
+            vtag == (jl_upsilonnode_tag << 4) ||
+            vtag == (jl_quotenode_tag << 4)) {
             // these objects have pointers in them, but no other special handling
             // so we want these to fall through to the end
             vtag = (uintptr_t)ijl_small_typeof[vtag / sizeof(*ijl_small_typeof)];
@@ -3243,7 +3252,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         old_freed_diff = gc_mem;
         old_pause_time = gc_time;
         // thrashing estimator: if GC time more than 50% of the runtime
-        if (pause > mutator_time && !(thrash_counter < 4))
+        if (pause > mutator_time && thrash_counter <= 4)
             thrash_counter += 1;
         else if (thrash_counter > 0)
             thrash_counter -= 1;

@@ -1,10 +1,7 @@
 import Libdl
 
 # known precompilation failures under JL
-const INCOMPATIBLE_STDLIBS = String[
-    "Pkg", # closure w/ kwarg bug (JuliaLang/JuliaLowering.jl#139)
-    "LazyArtifacts", # depends on Pkg
-]
+const INCOMPATIBLE_STDLIBS = String[]
 
 const JULIA_EXECUTABLE = Base.unsafe_string(Base.JLOptions().julia_bin)
 const JULIA_CPU_TARGET = get(ENV, "JULIA_CPU_TARGET", Base.unsafe_string(Base.JLOptions().cpu_target))

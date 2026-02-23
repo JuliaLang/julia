@@ -18,6 +18,8 @@
 #include <set>
 #include <unordered_set>
 #include <functional>
+#include <memory>
+#include <optional>
 
 // target machine computation
 #include <llvm/CodeGen/TargetSubtargetInfo.h>
@@ -2449,7 +2451,7 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v
         jl_datatype_t *dt = (jl_datatype_t *)v.typ;
         size_t npointers = dt->layout->first_ptr >= 0 ? dt->layout->npointers : 0;
         if (npointers > 0) {
-            auto InsertPoint = ctx.builder.saveIP();
+            IRBuilderBase::InsertPointGuard InsertPoint(ctx.builder);
             ctx.builder.SetInsertPoint(ctx.topalloca->getParent(), ++ctx.topalloca->getIterator());
             for (size_t i = 0; i < npointers; i++) {
                 // make sure these are nullptr early from LLVM's perspective, in case it decides to SROA it
@@ -2457,7 +2459,6 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v
                 ctx.builder.CreateAlignedStore(
                     Constant::getNullValue(ctx.types().T_prjlvalue), ptr_field, Align(sizeof(void *)));
             }
-            ctx.builder.restoreIP(InsertPoint);
         }
         auto tbaa = v.V == nullptr ? ctx.tbaa().tbaa_gcframe : ctx.tbaa().tbaa_stack;
         auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);

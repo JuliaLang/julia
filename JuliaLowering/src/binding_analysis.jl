@@ -285,7 +285,7 @@ function du_visit!(ctx, state::DefUseState, e)
             return false
         end
 
-    elseif k == K"break_block"
+    elseif k == K"symbolicblock"
         # Skip the first child (break target label) - it's not a @goto target
         # No save/restore needed: the body always executes (break just exits early)
         has_label = false

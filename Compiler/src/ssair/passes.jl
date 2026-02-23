@@ -1044,17 +1044,27 @@ function lift_keyvalue_get!(compact::IncrementalCompact, idx::Int, stmt::Expr, �
         result_t = tmerge(𝕃ₒ, result_t, argextype(v.val, compact))
     end
 
+    # Extract the wrapper type (e.g. Some{V}) from the inferred return type
+    # Union{Nothing, Some{V}} by subtracting Nothing. Bail out if the result
+    # is not a valid single-field concrete wrapper type.
+    get_rtype = widenconst(compact[SSAValue(idx)][:type])
+    wrapper_typ = typesubtract(get_rtype, Nothing, 0)
+    isconcretetype(wrapper_typ) || return
+    fieldcount(wrapper_typ) == 1 || return
+    ⊑(𝕃ₒ, result_t, fieldtype(wrapper_typ, 1)) || return
+
     (lifted_val, nest) = perform_lifting!(compact,
         visited_philikes, key, result_t, lifted_leaves, collection, nothing,
         KeyValueWalker(compact))
 
-    compact[idx] = lifted_val === nothing ? nothing : Expr(:call, GlobalRef(Core, :tuple), lifted_val.val)
-    finish_phi_nest!(compact, nest)
     if lifted_val !== nothing
-        if !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], tuple_tfunc(𝕃ₒ, Any[result_t]))
-            add_flag!(compact[SSAValue(idx)], IR_FLAG_REFINED)
-        end
+        compact[idx] = Expr(:new, wrapper_typ, lifted_val.val)
+        compact[SSAValue(idx)][:type] = wrapper_typ
+        add_flag!(compact[SSAValue(idx)], IR_FLAG_REFINED)
+    else
+        compact[idx] = nothing
     end
+    finish_phi_nest!(compact, nest)
 
     return
 end

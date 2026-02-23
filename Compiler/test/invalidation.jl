@@ -361,3 +361,14 @@ end
     @test occursin("precompile(Tuple{typeof(Main.drop_cache_test_g), $Int})", err_before)
     @test occursin("precompile(Tuple{typeof(Main.drop_cache_test_g), $Int}) # recompile", err_after)
 end
+
+# Test that backedge compaction clears mi.backedges when all backedges are removed
+begin
+    pr61102_callee(x) = 2x
+    pr61102_caller(x) = pr61102_callee(x)
+    pr61102_caller(0)
+    callee_mi = Base.method_instance(pr61102_callee, (Int,))
+    @test isdefined(callee_mi, :backedges)
+    pr61102_callee(x::Int) = 3x
+    @test !isdefined(callee_mi, :backedges)
+end

@@ -208,3 +208,54 @@ end
 10  latestworld
 11  TestMod.foo
 12  (return %₁₁)
+
+########################################
+# @nospecialize (single arg in body)
+function foo(a, b)
+    @nospecialize a
+    a + b
+end
+#---------------------
+1   (method TestMod.foo)
+2   latestworld
+3   TestMod.foo
+4   (call core.Typeof %₃)
+5   (call core.svec %₄ core.Any core.Any)
+6   (call core.svec)
+7   SourceLocation::1:10
+8   (call core.svec %₅ %₆ %₇)
+9   --- method core.nothing %₈
+    slots: [slot₁/#self#(!read) slot₂/a(nospecialize) slot₃/b]
+    1   slot₂/a
+    2   TestMod.+
+    3   (call %₂ slot₂/a slot₃/b)
+    4   (return %₃)
+10  latestworld
+11  TestMod.foo
+12  (return %₁₁)
+
+########################################
+# @nospecialize (multi-arg in body)
+function foo(x, y, z)
+    @nospecialize x z
+    x + y + z
+end
+#---------------------
+1   (method TestMod.foo)
+2   latestworld
+3   TestMod.foo
+4   (call core.Typeof %₃)
+5   (call core.svec %₄ core.Any core.Any core.Any)
+6   (call core.svec)
+7   SourceLocation::1:10
+8   (call core.svec %₅ %₆ %₇)
+9   --- method core.nothing %₈
+    slots: [slot₁/#self#(!read) slot₂/x(nospecialize) slot₃/y slot₄/z(nospecialize)]
+    1   slot₂/x
+    2   slot₄/z
+    3   TestMod.+
+    4   (call %₃ slot₂/x slot₃/y slot₄/z)
+    5   (return %₄)
+10  latestworld
+11  TestMod.foo
+12  (return %₁₁)
