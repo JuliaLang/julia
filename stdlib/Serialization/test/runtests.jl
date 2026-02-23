@@ -659,6 +659,12 @@ end
     @test l2.parts === ()
 end
 
+# serialize to and deserialize from Vector{UInt8}
+@testset "Vector{UInt8}" begin
+    @test serialize([1, 2, 3]) isa Vector{UInt8}
+    @test deserialize(serialize([1, 2, 3])) == [1, 2, 3]
+end
+
 @testset "Docstrings" begin
     undoc = Docs.undocumented_names(Serialization)
     @test_broken isempty(undoc)
