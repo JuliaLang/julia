@@ -268,6 +268,39 @@ define swiftcc i64 @"atomicrmw"(ptr nonnull swiftself "gcstack" %0) #0 {
   ret i64 %19
 }
 
+; Test that an allocation used as the value operand of atomicrmw escapes
+; CHECK-LABEL: @atomicrmw_obj_val_escape
+; CHECK: call{{.*}}@julia.gc_alloc_obj
+; CHECK: ret void
+define void @atomicrmw_obj_val_escape(ptr addrspace(10) %holder) {
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %ptls = call ptr @julia.ptls_states()
+  %v = call noalias nonnull align 8 dereferenceable(8) ptr addrspace(10) @julia.gc_alloc_obj(ptr %ptls, i64 8, ptr addrspace(10) @tag) #7
+  %v_derived = addrspacecast ptr addrspace(10) %v to ptr addrspace(11)
+  store ptr addrspace(10) null, ptr addrspace(11) %v_derived, align 8, !tbaa !20
+  %holder_derived = addrspacecast ptr addrspace(10) %holder to ptr addrspace(11)
+  %old = atomicrmw xchg ptr addrspace(11) %holder_derived, ptr addrspace(10) %v seq_cst, align 8, !tbaa !20
+  ret void
+}
+; CHECK-LABEL: }{{$}}
+
+; Test that an objref field is not falsely marked as multiloc on first access
+; CHECK-LABEL: @objref_no_multiloc
+; CHECK-NOT: @julia.gc_alloc_obj
+; CHECK: ret ptr addrspace(10) %val
+define ptr addrspace(10) @objref_no_multiloc(ptr addrspace(10) %val) {
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %ptls = call ptr @julia.ptls_states()
+  %v = call noalias nonnull align 8 dereferenceable(8) ptr addrspace(10) @julia.gc_alloc_obj(ptr %ptls, i64 8, ptr addrspace(10) @tag) #7
+  %v_derived = addrspacecast ptr addrspace(10) %v to ptr addrspace(11)
+  store ptr addrspace(10) %val, ptr addrspace(11) %v_derived, align 8, !tbaa !20
+  %tok = call token (...) @llvm.julia.gc_preserve_begin(ptr addrspace(10) %v)
+  %loaded = load ptr addrspace(10), ptr addrspace(11) %v_derived, align 8, !tbaa !20
+  call void @llvm.julia.gc_preserve_end(token %tok)
+  ret ptr addrspace(10) %loaded
+}
+; CHECK-LABEL: }{{$}}
+
 ; Test that higher alignment from the original allocation is inherited
 ; 8 bytes with 32-byte alignment uses i64 (element size capped at 64 bits)
 ; CHECK-LABEL: @align_inherit
