@@ -338,7 +338,7 @@ end
     typea === typeb && return true
     if typea isa PartialStruct
         aty = widenconst(typea)
-        issimpleenoughtype(aty) || return false
+        issimplertype(aty, widenconst(bty)) || return false
         if typeb isa Const || typeb isa PartialStruct
             @assert n_initialized(typea) ≤ n_initialized(typeb) "typeb ⊑ typea is assumed"
         elseif typeb isa PartialStruct
