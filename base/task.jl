@@ -192,22 +192,22 @@ Get the currently running [`Task`](@ref).
 current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
 
 """
-    root_task()
+    main_task()
 
 Get the initial [`Task`](@ref). Compare to [`current_task`](@ref) above to see
 if the current [`Task`](@ref) is the root [`Task`](@ref). This may be important
 for interoperability with other languages or native libraries.
 """
-root_task() = roottask
+main_task() = roottask
 # Alternatively, consider exposing :jl_get_root_task
 
 """
-    isroottask(task::Task = current_task())
+    ismaintask(task::Task = current_task())
 
 Test if the current or optionally passed [`Task`](@ref) is the root `Task`.
 Returns true if the current or given `Task` is the root `Task`.
 """
-isroottask(task::Task = current_task()) = Base.roottask === task
+ismaintask(task::Task = current_task()) = Base.roottask === task
 
 """
     istaskdone(t::Task)::Bool
