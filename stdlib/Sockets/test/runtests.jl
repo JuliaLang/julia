@@ -3,12 +3,23 @@
 using Sockets, Random, Test
 using Base: Experimental
 
+@test isempty(Test.detect_closure_boxes(Sockets))
+
+# This is for debugging only - if the system doesn't have `netstat`, we just ignore it
+netstat() = try; read(ignorestatus(`netstat -ndi`), String); catch; return ""; end
+const netstat_before = netstat()
+
 # set up a watchdog alarm for 10 minutes
 # so that we can attempt to get a "friendly" backtrace if something gets stuck
 # (although this'll also terminate any attempted debugging session)
 # expected test duration is about 5-10 seconds
 function killjob(d)
     Core.print(Core.stderr, d)
+    Core.print(Core.stderr, "Netstat before:\n")
+    Core.print(Core.stderr, netstat_before)
+    Core.print(Core.stderr, "\nNetstat after:\n")
+    # This might fail if we're in a bad libuv state
+    Core.print(Core.stderr, netstat())
     if Sys.islinux()
         SIGINFO = 10
     elseif Sys.isbsd()
@@ -16,16 +27,15 @@ function killjob(d)
     end
     if @isdefined(SIGINFO)
         ccall(:uv_kill, Cint, (Cint, Cint), getpid(), SIGINFO)
-        sleep(1)
+        sleep(5) # Allow time for profile to collect and print before killing
     end
     ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
     nothing
 end
-Timer(t -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"), 600)
+sockets_watchdog_timer = Timer(t -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"), 600)
 
 @testset "parsing" begin
     @test ip"127.0.0.1" == IPv4(127,0,0,1)
-    @test ip"192.0" == IPv4(192,0,0,0)
 
     # These used to work, but are now disallowed. Check that they error
     @test_throws ArgumentError parse(IPv4, "192.0xFFF") # IPv4(192,0,15,255)
@@ -33,6 +43,7 @@ Timer(t -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"), 600)
     @test_throws ArgumentError parse(IPv4, "192.0xFFFFF") # IPv4(192,15,255,255)
     @test_throws ArgumentError parse(IPv4, "192.0xFFFFFF") # IPv4(192,255,255,255)
     @test_throws ArgumentError parse(IPv4, "022.0.0.1") # IPv4(18,0,0,1)
+    @test_throws ArgumentError parse(IPv4, "192.0") # IPv4(192,0,0,0)
 
     @test UInt(IPv4(0x01020304)) == 0x01020304
     @test Int(IPv4("1.2.3.4")) == Int(0x01020304) == Int32(0x01020304)
@@ -136,7 +147,7 @@ defaultport = rand(2000:4000)
                 write(sock, "Hello World\n")
 
                 # test "locked" println to a socket
-                @Experimental.sync begin
+                Experimental.@sync begin
                     for i in 1:100
                         @async println(sock, "a", 1)
                     end
@@ -196,9 +207,35 @@ end
 
 
 @testset "getnameinfo on some unroutable IP addresses (RFC 5737)" begin
+    try
+        getnameinfo(ip"192.0.2.1")
+        getnameinfo(ip"198.51.100.1")
+        getnameinfo(ip"203.0.113.1")
+        getnameinfo(ip"0.1.1.1")
+        getnameinfo(ip"::ffff:0.1.1.1")
+        getnameinfo(ip"::ffff:192.0.2.1")
+        getnameinfo(ip"2001:db8::1")
+    catch
+        # NOTE: Default Ubuntu installations contain a faulty DNS configuration
+        # that returns `EAI_AGAIN` instead of `EAI_NONAME`.  To fix this, try
+        # installing `libnss-resolve`, which installs the `systemd-resolve`
+        # backend for NSS, which should fix it.
+        #
+        # If you are running tests inside Docker, you'll need to install
+        # `libnss-resolve` both outside Docker (i.e. on the host machine) and
+        # inside the Docker container.
+        if Sys.islinux()
+            error_msg = string(
+                "`getnameinfo` failed on an unroutable IP address. ",
+                "If your DNS setup seems to be working, try installing libnss-resolve",
+            )
+            @error(error_msg)
+        end
+    end
     @test getnameinfo(ip"192.0.2.1") == "192.0.2.1"
     @test getnameinfo(ip"198.51.100.1") == "198.51.100.1"
-    @test getnameinfo(ip"203.0.113.1") == "203.0.113.1"
+    # Temporarily broken due to a DNS issue. See https://github.com/JuliaLang/julia/issues/55008
+    @test_skip getnameinfo(ip"203.0.113.1") == "203.0.113.1"
     @test getnameinfo(ip"0.1.1.1") == "0.1.1.1"
     @test getnameinfo(ip"::ffff:0.1.1.1") == "::ffff:0.1.1.1"
     @test getnameinfo(ip"::ffff:192.0.2.1") == "::ffff:192.0.2.1"
@@ -218,6 +255,8 @@ end
 end
 
 @testset "getaddrinfo" begin
+    @test getaddrinfo("127.0.0.1") == ip"127.0.0.1"
+    @test getaddrinfo("::1") == ip"::1"
     let localhost = getnameinfo(ip"127.0.0.1")::String
         @test !isempty(localhost) && localhost != "127.0.0.1"
         @test !isempty(getalladdrinfo(localhost)::Vector{IPAddr})
@@ -255,10 +294,10 @@ end
 end
 
 # test connecting to a named port
-let localhost = getaddrinfo("localhost")
+let localhost = ip"127.0.0.1"
     global randport
     randport, server = listenany(localhost, defaultport)
-    @async connect("localhost", randport)
+    @async connect(localhost, randport)
     s1 = accept(server)
     @test_throws ErrorException("client TCPSocket is not in initialization state") accept(server, s1)
     @test_throws Base._UVError("listen", Base.UV_EADDRINUSE) listen(randport)
@@ -280,7 +319,7 @@ end
         bind(a, ip"127.0.0.1", randport)
         bind(b, ip"127.0.0.1", randport + 1)
 
-        @Experimental.sync begin
+        Experimental.@sync begin
             let i = 0
                 for _ = 1:30
                     @async let msg = String(recv(a))
@@ -360,7 +399,7 @@ end
         # connect to it
         client_sock = connect(addr, port)
         test_done = false
-        @Experimental.sync begin
+        Experimental.@sync begin
             @async begin
                 Base.wait_readnb(client_sock, 1)
                 test_done || error("Client disconnected prematurely.")
@@ -425,6 +464,8 @@ end
         catch e
             if isa(e, Base.IOError) && Base.uverrorname(e.code) == "EPERM"
                 @warn "UDP IPv4 broadcast test skipped (permission denied upon send, restrictive firewall?)"
+            elseif Sys.isapple() && isa(e, Base.IOError) && Base.uverrorname(e.code) == "EHOSTUNREACH"
+                @warn "UDP IPv4 broadcast test skipped (local network access not granted?)"
             else
                 rethrow()
             end
@@ -517,8 +558,7 @@ end
         fetch(r)
     end
 
-    let addr = Sockets.InetAddr(ip"127.0.0.1", 4444)
-        srv = listen(addr)
+    let addr = Sockets.InetAddr(ip"192.0.2.5", 4444)
         s = Sockets.TCPSocket()
         Sockets.connect!(s, addr)
         r = @async close(s)
@@ -530,12 +570,73 @@ end
 @testset "iswritable" begin
     let addr = Sockets.InetAddr(ip"127.0.0.1", 4445)
         srv = listen(addr)
-        s = Sockets.TCPSocket()
-        Sockets.connect!(s, addr)
-        @test iswritable(s)
-        close(s)
-        @test !iswritable(s)
+        let s = Sockets.TCPSocket()
+            Sockets.connect!(s, addr)
+            @test iswritable(s) broken=Sys.iswindows()
+            close(s)
+            @test !iswritable(s)
+        end
+        let s = Sockets.connect(addr)
+            @test iswritable(s)
+            closewrite(s)
+            @test !iswritable(s)
+            close(s)
+        end
+        close(srv)
+        srv = listen(addr)
+        let s = Sockets.connect(addr)
+            let c = accept(srv)
+                Base.errormonitor(@async try; write(c, c); finally; close(c); end)
+            end
+            @test iswritable(s)
+            write(s, "hello world\n")
+            closewrite(s)
+            @test !iswritable(s)
+            @test isreadable(s)
+            @test read(s, String) == "hello world\n"
+            @test !isreadable(s)
+            @test !isopen(s)
+            close(s)
+        end
+        close(srv)
     end
+end
+
+@testset "TCPSocket RawFD constructor" begin
+    if Sys.islinux()
+        let fd = ccall(:socket, Int32, (Int32, Int32, Int32),
+                       2, # AF_INET
+                       1, # SOCK_STREAM
+                       0)
+            s = Sockets.TCPSocket(RawFD(fd))
+            close(s)
+        end
+    end
+end
+
+@testset "fd() methods" begin
+    function valid_fd(x)
+        if Sys.iswindows()
+            return x isa Base.OS_HANDLE
+        elseif !Sys.iswindows()
+            value = Base.cconvert(Cint, x)
+
+            # 2048 is a bit arbitrary, it depends on the process not having too many
+            # file descriptors open. But select() has a limit of 1024 and people
+            # don't seem to hit it too often so let's hope twice that is safe.
+            return value > 0 && value < 2048
+        end
+    end
+
+    sock = TCPSocket(; delay=false)
+    @test valid_fd(fd(sock))
+
+    sock = UDPSocket()
+    bind(sock, Sockets.localhost, 0)
+    @test valid_fd(fd(sock))
+
+    server = listen(Sockets.localhost, 0)
+    @test valid_fd(fd(server))
 end
 
 @testset "TCPServer constructor" begin
@@ -547,11 +648,26 @@ end
 
 @testset "getipaddrs" begin
     @test getipaddr() in getipaddrs()
-    try
-        getipaddr(IPv6) in getipaddrs(IPv6)
-    catch
-        if !isempty(getipaddrs(IPv6))
-            @test "getipaddr(IPv6) errored when it shouldn't have!"
+
+    has_ipv4 = !isempty(getipaddrs(IPv4))
+    if has_ipv4
+        @test getipaddr(IPv4) in getipaddrs(IPv4)
+    else
+        @test_throws "No networking interface available" getipaddr(IPv4)
+    end
+
+    has_ipv6 = !isempty(getipaddrs(IPv6))
+    if has_ipv6
+        @test getipaddr(IPv6) in getipaddrs(IPv6)
+    else
+        @test_throws "No networking interface available" getipaddr(IPv6)
+    end
+
+    @testset "getipaddr() prefers IPv4 over IPv6" begin
+        if has_ipv4
+            @test getipaddr() isa IPv4
+        else
+            @test getipaddr() isa IPv6
         end
     end
 
@@ -614,4 +730,11 @@ end
             @test getaddrinfo("localhost") isa IPAddr
         end
     end
+end
+
+
+close(sockets_watchdog_timer)
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Sockets))
 end

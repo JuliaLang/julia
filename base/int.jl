@@ -70,6 +70,7 @@ julia> signed(UInt64)
 Int64
 ```
 """
+signed(::Type{Bool}) = Int
 signed(::Type{UInt8}) = Int8
 signed(::Type{UInt16}) = Int16
 signed(::Type{UInt32}) = Int32
@@ -86,15 +87,60 @@ signed(::Type{T}) where {T<:Signed} = T
 (+)(x::T, y::T) where {T<:BitInteger} = add_int(x, y)
 (*)(x::T, y::T) where {T<:BitInteger} = mul_int(x, y)
 
+negate(x) = -x
+negate(x::Unsigned) = -convert(Signed, x)
+#widenegate(x) = -convert(widen(signed(typeof(x))), x)
+
 inv(x::Integer) = float(one(x)) / float(x)
 (/)(x::T, y::T) where {T<:Integer} = float(x) / float(y)
 # skip promotion for system integer types
 (/)(x::BitInteger, y::BitInteger) = float(x) / float(y)
 
-"""
-    isodd(x::Integer) -> Bool
 
-Return `true` if `x` is odd (that is, not divisible by 2), and `false` otherwise.
+"""
+    mul_hi(a::T, b::T) where {T<:Base.Integer}
+
+Return the higher half of the product of `a` and `b` where `T` is a fixed size integer.
+
+# Examples
+```jldoctest
+julia> Base.mul_hi(12345678987654321, 123456789)
+82624
+
+julia> (widen(12345678987654321) * 123456789) >> 64
+82624
+
+julia> Base.mul_hi(0xff, 0xff)
+0xfe
+```
+"""
+function mul_hi(a::T, b::T) where {T<:Integer}
+    ((widen(a)*b) >>> Base.top_set_bit(-1 % T)) % T
+end
+
+function mul_hi(a::UInt128, b::UInt128)
+    shift = sizeof(a)*4
+    mask = typemax(UInt128) >> shift
+    a1, a2 = a >>> shift, a & mask
+    b1, b2 = b >>> shift, b & mask
+    a1b1, a1b2, a2b1, a2b2 = a1*b1, a1*b2, a2*b1, a2*b2
+    carry = ((a1b2 & mask) + (a2b1 & mask) + (a2b2 >>> shift)) >>> shift
+    a1b1 + (a1b2 >>> shift) + (a2b1 >>> shift) + carry
+end
+
+function mul_hi(a::Int128, b::Int128)
+    shift = sizeof(a)*8 - 1
+    t1, t2 = (a >> shift) & b % UInt128, (b >> shift) & a % UInt128
+    (mul_hi(a % UInt128, b % UInt128) - t1 - t2) % Int128
+end
+
+"""
+    isodd(x::Number)::Bool
+
+Return `true` if `x` is an odd integer (that is, an integer not divisible by 2), and `false` otherwise.
+
+!!! compat "Julia 1.7"
+    Non-`Integer` arguments require Julia 1.7 or later.
 
 # Examples
 ```jldoctest
@@ -105,12 +151,16 @@ julia> isodd(10)
 false
 ```
 """
-isodd(n::Integer) = rem(n, 2) != 0
+isodd(n::Number) = isreal(n) && isodd(real(n))
+isodd(n::Real) = isinteger(n) && !iszero(rem(Integer(n), 2))
 
 """
-    iseven(x::Integer) -> Bool
+    iseven(x::Number)::Bool
 
-Return `true` if `x` is even (that is, divisible by 2), and `false` otherwise.
+Return `true` if `x` is an even integer (that is, an integer divisible by 2), and `false` otherwise.
+
+!!! compat "Julia 1.7"
+    Non-`Integer` arguments require Julia 1.7 or later.
 
 # Examples
 ```jldoctest
@@ -121,10 +171,13 @@ julia> iseven(10)
 true
 ```
 """
-iseven(n::Integer) = !isodd(n)
+iseven(n::Number) = isreal(n) && iseven(real(n))
+iseven(n::Real) = isinteger(n) && iszero(rem(Integer(n), 2))
 
 signbit(x::Integer) = x < 0
 signbit(x::Unsigned) = false
+
+isnegative(x::Unsigned) = false
 
 flipsign(x::T, y::T) where {T<:BitSigned} = flipsign_int(x, y)
 flipsign(x::BitSigned, y::BitSigned) = flipsign_int(promote(x, y)...) % typeof(x)
@@ -151,6 +204,8 @@ when `abs` is applied to the minimum representable value of a signed
 integer. That is, when `x == typemin(typeof(x))`, `abs(x) == x < 0`,
 not `-x` as might be expected.
 
+See also: [`abs2`](@ref), [`unsigned`](@ref), [`sign`](@ref).
+
 # Examples
 ```jldoctest
 julia> abs(-3)
@@ -159,8 +214,12 @@ julia> abs(-3)
 julia> abs(1 + im)
 1.4142135623730951
 
-julia> abs(typemin(Int64))
--9223372036854775808
+julia> abs.(Int8[-128 -127 -126 0 126 127])  # overflow at typemin(Int8)
+1×6 Matrix{Int8}:
+ -128  127  126  0  126  127
+
+julia> maximum(abs, [1, -2, 3, -4])
+4
 ```
 """
 function abs end
@@ -175,12 +234,20 @@ abs(x::Signed) = flipsign(x,x)
 
 Convert a number to an unsigned integer. If the argument is signed, it is reinterpreted as
 unsigned without checking for negative values.
+
+See also: [`signed`](@ref), [`sign`](@ref), [`signbit`](@ref).
+
 # Examples
 ```jldoctest
 julia> unsigned(-2)
 0xfffffffffffffffe
-julia> unsigned(2)
-0x0000000000000002
+
+julia> unsigned(Int8(2))
+0x02
+
+julia> typeof(ans)
+UInt8
+
 julia> signed(unsigned(-2))
 -2
 ```
@@ -193,6 +260,8 @@ unsigned(x::BitSigned) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 
 Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as
 signed without checking for overflow.
+
+See also: [`unsigned`](@ref), [`sign`](@ref), [`signbit`](@ref).
 """
 signed(x) = x % typeof(convert(Signed, zero(x)))
 signed(x::BitUnsigned) = reinterpret(typeof(convert(Signed, zero(x))), x)
@@ -221,7 +290,7 @@ end
 The reduction of `x` modulo `y`, or equivalently, the remainder of `x` after floored
 division by `y`, i.e. `x - y*fld(x,y)` if computed without intermediate rounding.
 
-The result will have the same sign as `y`, and magnitude less than `abs(y)` (with some
+The result will have the same sign as `y` if `isfinite(y)`, and magnitude less than `abs(y)` (with some
 exceptions, see note below).
 
 !!! note
@@ -229,6 +298,8 @@ exceptions, see note below).
     When used with floating point values, the exact result may not be representable by the
     type, and so rounding error may occur. In particular, if the exact result is very
     close to `y`, then it may be rounded to `y`.
+
+See also: [`rem`](@ref), [`div`](@ref), [`fld`](@ref), [`mod1`](@ref), [`invmod`](@ref).
 
 ```jldoctest
 julia> mod(8, 3)
@@ -245,14 +316,24 @@ julia> mod(eps(), 3)
 
 julia> mod(-eps(), 3)
 3.0
+
+julia> mod.(-5:5, 3)'
+1×11 adjoint(::Vector{Int64}) with eltype Int64:
+ 1  2  0  1  2  0  1  2  0  1  2
 ```
 """
 function mod(x::T, y::T) where T<:Integer
     y == -1 && return T(0)   # avoid potential overflow in fld
     return x - fld(x, y) * y
 end
-mod(x::BitSigned, y::Unsigned) = rem(y + unsigned(rem(x, y)), y)
-mod(x::Unsigned, y::Signed) = rem(y + signed(rem(x, y)), y)
+function mod(x::BitSigned, y::Unsigned)
+    remval = rem(x, y) # correct iff  remval>=0
+    return unsigned(remval + (remval<zero(remval))*y)
+end
+function mod(x::Unsigned, y::Signed)
+    remval =  signed(rem(x, y)) #remval>0 so correct iff y>0 or remval==0
+    return remval + (!iszero(remval) && y<zero(y))*y
+end
 mod(x::T, y::T) where {T<:Unsigned} = rem(x, y)
 
 # Don't promote integers for div/rem/mod since there is no danger of overflow,
@@ -268,6 +349,8 @@ rem(x::T, y::T) where {T<:BitUnsigned64} = checked_urem_int(x, y)
     ~(x)
 
 Bitwise not.
+
+See also: [`!`](@ref), [`&`](@ref), [`|`](@ref).
 
 # Examples
 ```jldoctest
@@ -289,6 +372,8 @@ false
 Bitwise and. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 returning [`missing`](@ref) if one operand is `missing` and the other is `true`. Add parentheses for
 function application form: `(&)(x, y)`.
+
+See also: [`|`](@ref), [`xor`](@ref), [`&&`](@ref).
 
 # Examples
 ```jldoctest
@@ -312,6 +397,8 @@ false
 
 Bitwise or. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 returning [`missing`](@ref) if one operand is `missing` and the other is `false`.
+
+See also: [`&`](@ref), [`xor`](@ref), [`||`](@ref).
 
 # Examples
 ```jldoctest
@@ -353,12 +440,12 @@ julia> string(bswap(1), base = 2)
 "100000000000000000000000000000000000000000000000000000000"
 ```
 """
-bswap(x::Union{Int8, UInt8}) = x
+bswap(x::Union{Int8, UInt8, Bool}) = x
 bswap(x::Union{Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}) =
     bswap_int(x)
 
 """
-    count_ones(x::Integer) -> Integer
+    count_ones(x::Integer)::Integer
 
 Number of ones in the binary representation of `x`.
 
@@ -366,12 +453,15 @@ Number of ones in the binary representation of `x`.
 ```jldoctest
 julia> count_ones(7)
 3
+
+julia> count_ones(Int32(-1))
+32
 ```
 """
-count_ones(x::BitInteger) = ctpop_int(x) % Int
+count_ones(x::BitInteger) = (ctpop_int(x) % Int)::Int
 
 """
-    leading_zeros(x::Integer) -> Integer
+    leading_zeros(x::Integer)::Integer
 
 Number of zeros leading the binary representation of `x`.
 
@@ -381,10 +471,10 @@ julia> leading_zeros(Int32(1))
 31
 ```
 """
-leading_zeros(x::BitInteger) = ctlz_int(x) % Int
+leading_zeros(x::BitInteger) = (ctlz_int(x) % Int)::Int
 
 """
-    trailing_zeros(x::Integer) -> Integer
+    trailing_zeros(x::Integer)::Integer
 
 Number of zeros trailing the binary representation of `x`.
 
@@ -394,10 +484,10 @@ julia> trailing_zeros(2)
 1
 ```
 """
-trailing_zeros(x::BitInteger) = cttz_int(x) % Int
+trailing_zeros(x::BitInteger) = (cttz_int(x) % Int)::Int
 
 """
-    count_zeros(x::Integer) -> Integer
+    count_zeros(x::Integer)::Integer
 
 Number of zeros in the binary representation of `x`.
 
@@ -405,12 +495,15 @@ Number of zeros in the binary representation of `x`.
 ```jldoctest
 julia> count_zeros(Int32(2 ^ 16 - 1))
 16
+
+julia> count_zeros(-1)
+0
 ```
 """
 count_zeros(x::Integer) = count_ones(~x)
 
 """
-    leading_ones(x::Integer) -> Integer
+    leading_ones(x::Integer)::Integer
 
 Number of ones leading the binary representation of `x`.
 
@@ -423,7 +516,7 @@ julia> leading_ones(UInt32(2 ^ 32 - 2))
 leading_ones(x::Integer) = leading_zeros(~x)
 
 """
-    trailing_ones(x::Integer) -> Integer
+    trailing_ones(x::Integer)::Integer
 
 Number of ones trailing the binary representation of `x`.
 
@@ -434,6 +527,32 @@ julia> trailing_ones(3)
 ```
 """
 trailing_ones(x::Integer) = trailing_zeros(~x)
+
+"""
+    top_set_bit(x::Integer)::Integer
+
+The number of bits in `x`'s binary representation, excluding leading zeros.
+
+Equivalently, the position of the most significant set bit in `x`'s binary
+representation, measured from the least significant side.
+
+Negative `x` are only supported when `x::BitSigned`.
+
+See also: [`ndigits0z`](@ref), [`ndigits`](@ref).
+
+# Examples
+```jldoctest
+julia> Base.top_set_bit(4)
+3
+
+julia> Base.top_set_bit(0)
+0
+
+julia> Base.top_set_bit(-1)
+64
+```
+"""
+top_set_bit(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
 
 ## integer comparisons ##
 
@@ -467,11 +586,11 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 
 for to in BitInteger_types, from in (BitInteger_types..., Bool)
     if !(to === from)
-        if to.size < from.size
+        if Core.sizeof(to) < Core.sizeof(from)
             @eval rem(x::($from), ::Type{$to}) = trunc_int($to, x)
         elseif from === Bool
             @eval rem(x::($from), ::Type{$to}) = convert($to, x)
-        elseif from.size < to.size
+        elseif Core.sizeof(from) < Core.sizeof(to)
             if from <: Signed
                 @eval rem(x::($from), ::Type{$to}) = sext_int($to, x)
             else
@@ -495,6 +614,8 @@ A negative value of `k` will rotate to the right instead.
 !!! compat "Julia 1.5"
     This function requires Julia 1.5 or later.
 
+See also: [`<<`](@ref), [`circshift`](@ref), [`BitArray`](@ref).
+
 ```jldoctest
 julia> bitrotate(UInt8(114), 2)
 0xc9
@@ -512,28 +633,32 @@ julia> bitstring(bitrotate(0b01110010, 8))
 bitrotate(x::T, k::Integer) where {T <: BitInteger} =
     (x << ((sizeof(T) << 3 - 1) & k)) | (x >>> ((sizeof(T) << 3 - 1) & -k))
 
-# @doc isn't available when running in Core at this point.
-# Tuple syntax for documentation two function signatures at the same time
-# doesn't work either at this point.
-if nameof(@__MODULE__) === :Base
-    for fname in (:mod, :rem)
-        @eval @doc """
-            rem(x::Integer, T::Type{<:Integer}) -> T
-            mod(x::Integer, T::Type{<:Integer}) -> T
-            %(x::Integer, T::Type{<:Integer}) -> T
+for fname in (:mod, :rem)
+    @eval @doc """
+        rem(x::Integer, T::Type{<:Integer})::T
+        mod(x::Integer, T::Type{<:Integer})::T
+        %(x::Integer, T::Type{<:Integer})::T
 
-        Find `y::T` such that `x` ≡ `y` (mod n), where n is the number of integers representable
-        in `T`, and `y` is an integer in `[typemin(T),typemax(T)]`.
-        If `T` can represent any integer (e.g. `T == BigInt`), then this operation corresponds to
-        a conversion to `T`.
+    Find `y::T` such that `x` ≡ `y` (mod n), where n is the number of integers representable
+    in `T`, and `y` is an integer in `[typemin(T),typemax(T)]`.
+    If `T` can represent any integer (e.g. `T == BigInt`), then this operation corresponds to
+    a conversion to `T`.
 
-        # Examples
-        ```jldoctest
-        julia> 129 % Int8
-        -127
-        ```
-        """ $fname(x::Integer, T::Type{<:Integer})
-    end
+    # Examples
+    ```jldoctest
+    julia> x = 129 % Int8
+    -127
+
+    julia> typeof(x)
+    Int8
+
+    julia> x = 129 % BigInt
+    129
+
+    julia> typeof(x)
+    BigInt
+    ```
+    """ $fname(x::Integer, T::Type{<:Integer})
 end
 
 rem(x::T, ::Type{T}) where {T<:Integer} = x
@@ -545,83 +670,50 @@ mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
 
 unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
 
-"""
-    trunc([T,] x)
-    trunc(x; digits::Integer= [, base = 10])
-    trunc(x; sigdigits::Integer= [, base = 10])
-
-`trunc(x)` returns the nearest integral value of the same type as `x` whose absolute value
-is less than or equal to `x`.
-
-`trunc(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
-not representable.
-
-`digits`, `sigdigits` and `base` work as for [`round`](@ref).
-"""
-function trunc end
-
-"""
-    floor([T,] x)
-    floor(x; digits::Integer= [, base = 10])
-    floor(x; sigdigits::Integer= [, base = 10])
-
-`floor(x)` returns the nearest integral value of the same type as `x` that is less than or
-equal to `x`.
-
-`floor(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
-not representable.
-
-`digits`, `sigdigits` and `base` work as for [`round`](@ref).
-"""
-function floor end
-
-"""
-    ceil([T,] x)
-    ceil(x; digits::Integer= [, base = 10])
-    ceil(x; sigdigits::Integer= [, base = 10])
-
-`ceil(x)` returns the nearest integral value of the same type as `x` that is greater than or
-equal to `x`.
-
-`ceil(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is not
-representable.
-
-`digits`, `sigdigits` and `base` work as for [`round`](@ref).
-"""
-function ceil end
-
-round(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
-trunc(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
-floor(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
- ceil(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
-
 ## integer construction ##
 
 """
     @int128_str str
-    @int128_str(str)
 
-`@int128_str` parses a string into a Int128
-Throws an `ArgumentError` if the string is not a valid integer
+Parse `str` as an [`Int128`](@ref).
+Throw an `ArgumentError` if the string is not a valid integer.
+
+# Examples
+```jldoctest
+julia> int128"123456789123"
+123456789123
+
+julia> int128"123456789123.4"
+ERROR: LoadError: ArgumentError: invalid base 10 digit '.' in "123456789123.4"
+[...]
+```
 """
-macro int128_str(s)
+macro int128_str(s::String)
     return parse(Int128, s)
 end
 
 """
     @uint128_str str
-    @uint128_str(str)
 
-`@uint128_str` parses a string into a UInt128
-Throws an `ArgumentError` if the string is not a valid integer
+Parse `str` as an [`UInt128`](@ref).
+Throw an `ArgumentError` if the string is not a valid integer.
+
+# Examples
+```
+julia> uint128"123456789123"
+0x00000000000000000000001cbe991a83
+
+julia> uint128"-123456789123"
+ERROR: LoadError: ArgumentError: invalid base 10 digit '-' in "-123456789123"
+[...]
+```
 """
-macro uint128_str(s)
+macro uint128_str(s::String)
     return parse(UInt128, s)
 end
 
 """
     @big_str str
-    @big_str(str)
 
 Parse a string into a [`BigInt`](@ref) or [`BigFloat`](@ref),
 and throw an `ArgumentError` if the string is not a valid number.
@@ -634,28 +726,47 @@ julia> big"123_456"
 
 julia> big"7891.5"
 7891.5
+
+julia> big"_"
+ERROR: ArgumentError: invalid number format _ for BigInt or BigFloat
+[...]
 ```
+
+!!! warning
+    Using `@big_str` for constructing [`BigFloat`](@ref) values may not result
+    in the behavior that might be naively expected: as a macro, `@big_str`
+    obeys the global precision ([`setprecision`](@ref)) and rounding mode
+    ([`setrounding`](@ref)) settings as they are at *load time*. Thus, a
+    function like `() -> precision(big"0.3")` returns a constant whose value
+    depends on the value of the precision at the point when the function is
+    defined, **not** at the precision at the time when the function is called.
 """
-macro big_str(s)
+macro big_str(s::String)
+    message = "invalid number format $s for BigInt or BigFloat"
+    throw_error =  :(throw(ArgumentError($message)))
     if '_' in s
-        # remove _ in s[2:end-1]
-        bf = IOBuffer(maxsize=lastindex(s))
-        print(bf, s[1])
-        for c in SubString(s, 2, lastindex(s)-1)
+        # remove _ in s[2:end-1].
+        # Do not allow '_' right before or after dot.
+        bf = IOBuffer(sizehint=ncodeunits(s))
+        c = s[1]
+        print(bf, c)
+        is_prev_underscore = (c == '_')
+        is_prev_dot = (c == '.')
+        for c in SubString(s, nextind(s, 1), prevind(s, lastindex(s)))
             c != '_' && print(bf, c)
+            c == '_' && is_prev_dot && return throw_error
+            c == '.' && is_prev_underscore && return throw_error
+            is_prev_underscore = (c == '_')
+            is_prev_dot = (c == '.')
         end
         print(bf, s[end])
-        seekstart(bf)
-        n = tryparse(BigInt, String(take!(bf)))
-        n === nothing || return n
-    else
-        n = tryparse(BigInt, s)
-        n === nothing || return n
-        n = tryparse(BigFloat, s)
-        n === nothing || return n
+        s = unsafe_takestring!(bf)
     end
-    message = "invalid number format $s for BigInt or BigFloat"
-    return :(throw(ArgumentError($message)))
+    n = tryparse(BigInt, s)
+    n === nothing || return n
+    n = tryparse(BigFloat, s)
+    n === nothing || return n
+    return throw_error
 end
 
 ## integer promotions ##
@@ -683,13 +794,27 @@ promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 
 The lowest value representable by the given (real) numeric DataType `T`.
 
+See also: [`floatmin`](@ref), [`maxintfloat`](@ref), [`typemax`](@ref), [`eps`](@ref).
+
 # Examples
 ```jldoctest
+julia> typemin(Int8)
+-128
+
+julia> typemin(UInt32)
+0x00000000
+
 julia> typemin(Float16)
 -Inf16
 
 julia> typemin(Float32)
 -Inf32
+
+julia> floatmin(Float32)  # smallest positive finite Float32 floating point number
+1.1754944f-38
+
+julia> nextfloat(-Inf32) == -floatmax(Float32)  # equivalent ways of getting the lowest finite Float32 floating point number
+true
 ```
 """
 function typemin end
@@ -699,6 +824,8 @@ function typemin end
 
 The highest value representable by the given (real) numeric `DataType`.
 
+See also: [`floatmax`](@ref), [`maxintfloat`](@ref), [`typemin`](@ref), [`eps`](@ref).
+
 # Examples
 ```jldoctest
 julia> typemax(Int8)
@@ -706,6 +833,15 @@ julia> typemax(Int8)
 
 julia> typemax(UInt32)
 0xffffffff
+
+julia> typemax(Float64)
+Inf
+
+julia> typemax(Float32)
+Inf32
+
+julia> floatmax(Float32)  # largest positive finite Float32 floating point number
+3.4028235f38
 ```
 """
 function typemax end
@@ -746,7 +882,7 @@ widen(::Type{UInt64}) = UInt128
 # |x|<=2^(k-1), |y|<=2^k-1   =>   |x*y|<=2^(2k-1)-1
 widemul(x::Signed,y::Unsigned) = widen(x) * signed(widen(y))
 widemul(x::Unsigned,y::Signed) = signed(widen(x)) * widen(y)
-# multplication by Bool doesn't require widening
+# multiplication by Bool doesn't require widening
 widemul(x::Bool,y::Bool) = x * y
 widemul(x::Bool,y::Number) = x * y
 widemul(x::Number,y::Bool) = x * y

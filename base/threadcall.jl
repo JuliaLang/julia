@@ -1,15 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 const max_ccall_threads = parse(Int, get(ENV, "UV_THREADPOOL_SIZE", "4"))
-const thread_notifiers = Union{Base.Condition, Nothing}[nothing for i in 1:max_ccall_threads]
+const thread_notifiers = Union{Event, Nothing}[nothing for i in 1:max_ccall_threads]
 const threadcall_restrictor = Semaphore(max_ccall_threads)
+const threadcall_lock = Threads.SpinLock()
 
 """
     @threadcall((cfunc, clib), rettype, (argtypes...), argvals...)
 
 The `@threadcall` macro is called in the same way as [`ccall`](@ref) but does the work
 in a different thread. This is useful when you want to call a blocking C
-function without causing the main `julia` thread to become blocked. Concurrency
+function without causing the current `julia` thread to become blocked. Concurrency
 is limited by size of the libuv thread pool, which defaults to 4 threads but
 can be increased by setting the `UV_THREADPOOL_SIZE` environment variable and
 restarting the `julia` process.
@@ -30,7 +31,7 @@ macro threadcall(f, rettype, argtypes, argvals...)
     argvals = map(esc, argvals)
 
     # construct non-allocating wrapper to call C function
-    wrapper = :(function (args_ptr::Ptr{Cvoid}, retval_ptr::Ptr{Cvoid})
+    wrapper = :(function (fptr::Ptr{Cvoid}, args_ptr::Ptr{Cvoid}, retval_ptr::Ptr{Cvoid})
         p = args_ptr
         # the rest of the body is created below
     end)
@@ -42,18 +43,19 @@ macro threadcall(f, rettype, argtypes, argvals...)
         push!(body, :(p += Core.sizeof($T)))
         push!(args, arg)
     end
-    push!(body, :(ret = ccall($f, $rettype, ($(argtypes...),), $(args...))))
+    push!(body, :(ret = ccall(fptr, $rettype, ($(argtypes...),), $(args...))))
     push!(body, :(unsafe_store!(convert(Ptr{$rettype}, retval_ptr), ret)))
     push!(body, :(return Int(Core.sizeof($rettype))))
 
     # return code to generate wrapper function and send work request thread queue
-    wrapper = Expr(Symbol("hygienic-scope"), wrapper, @__MODULE__)
-    return :(let fun_ptr = @cfunction($wrapper, Int, (Ptr{Cvoid}, Ptr{Cvoid}))
-        do_threadcall(fun_ptr, $rettype, Any[$(argtypes...)], Any[$(argvals...)])
+    wrapper = Expr(:var"hygienic-scope", wrapper, @__MODULE__, __source__)
+    return :(let fun_ptr = @cfunction($wrapper, Int, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}))
+        # use cglobal to look up the function on the calling thread
+        do_threadcall(fun_ptr, cglobal($f), $rettype, Any[$(argtypes...)], Any[$(argvals...)])
     end)
 end
 
-function do_threadcall(fun_ptr::Ptr{Cvoid}, rettype::Type, argtypes::Vector, argvals::Vector)
+function do_threadcall(fun_ptr::Ptr{Cvoid}, cfptr::Ptr{Cvoid}, rettype::Type, argtypes::Vector, argvals::Vector)
     # generate function pointer
     c_notify_fun = @cfunction(
         function notify_fun(idx)
@@ -80,18 +82,23 @@ function do_threadcall(fun_ptr::Ptr{Cvoid}, rettype::Type, argtypes::Vector, arg
 
     # wait for a worker thread to be available
     acquire(threadcall_restrictor)
-    idx = findfirst(isequal(nothing), thread_notifiers)::Int
-    thread_notifiers[idx] = Base.Condition()
+    idx = -1
+    @lock threadcall_lock begin
+        idx = findfirst(isequal(nothing), thread_notifiers)::Int
+        thread_notifiers[idx] = Event()
+    end
 
     GC.@preserve args_arr ret_arr roots begin
         # queue up the work to be done
         ccall(:jl_queue_work, Cvoid,
-            (Ptr{Cvoid}, Ptr{UInt8}, Ptr{UInt8}, Ptr{Cvoid}, Cint),
-            fun_ptr, args_arr, ret_arr, c_notify_fun, idx)
+            (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{UInt8}, Ptr{UInt8}, Ptr{Cvoid}, Cint),
+            fun_ptr, cfptr, args_arr, ret_arr, c_notify_fun, idx)
 
         # wait for a result & return it
         wait(thread_notifiers[idx])
-        thread_notifiers[idx] = nothing
+        @lock threadcall_lock begin
+            thread_notifiers[idx] = nothing
+        end
         release(threadcall_restrictor)
 
         r = unsafe_load(convert(Ptr{rettype}, pointer(ret_arr)))

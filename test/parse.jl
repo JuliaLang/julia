@@ -24,11 +24,19 @@
     @test parse(Int64,"3830974272") == 3830974272
     @test parse(Int64,"-3830974272") == -3830974272
 
+    @test parse(Int32,'1',base=2)==1
+    @test parse(Int32,'c',base=58) == 38
+    @test parse(Int32,'d',base=62)==39
+    @test parse(Int32,'8') == 8
     @test parse(Int,'3') == 3
     @test parse(Int,'3', base = 8) == 3
     @test parse(Int, 'a', base=16) == 10
     @test_throws ArgumentError parse(Int, 'a')
     @test_throws ArgumentError parse(Int,typemax(Char))
+    @test_throws ArgumentError parse(Int8,'A',base=64)
+    @test_throws ArgumentError parse(Int8,'B',base=1)
+    @test_throws ArgumentError parse(Int8,'φ',base=20)
+    @test_throws ArgumentError parse(Int32,'A',base=10)
 end
 
 # Issue 29451
@@ -40,6 +48,16 @@ Base.iterate(::Issue29451String, i::Integer=1) = i == 1 ? ('0', 2) : nothing
 
 @test Issue29451String() == "0"
 @test parse(Int, Issue29451String()) == 0
+
+# https://github.com/JuliaStrings/InlineStrings.jl/issues/57
+struct InlineStringIssue57 <: AbstractString end
+Base.ncodeunits(::InlineStringIssue57) = 4
+Base.lastindex(::InlineStringIssue57) = 4
+Base.isvalid(::InlineStringIssue57, i::Integer) = 0 < i < 5
+Base.iterate(::InlineStringIssue57, i::Integer=1) = i == 1 ? ('t', 2) : i == 2 ? ('r', 3) : i == 3 ? ('u', 4) : i == 4 ? ('e', 5) : nothing
+Base.:(==)(::SubString{InlineStringIssue57}, x::String) = x == "true"
+
+@test parse(Bool, InlineStringIssue57())
 
 @testset "Issue 20587, T=$T" for T in Any[BigInt, Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8]
     T === BigInt && continue # TODO: make BigInt pass this test
@@ -236,6 +254,13 @@ end
     @test_throws ArgumentError parse(Int, "2", base = 63)
 end
 
+@testset "issue #42616" begin
+    @test tryparse(Bool, "") === nothing
+    @test tryparse(Bool, " ") === nothing
+    @test_throws ArgumentError parse(Bool, "")
+    @test_throws ArgumentError parse(Bool, " ")
+end
+
 # issue #17333: tryparse should still throw on invalid base
 for T in (Int32, BigInt), base in (0,1,100)
     @test_throws ArgumentError tryparse(T, "0", base = base)
@@ -279,6 +304,8 @@ end
         @test_throws ArgumentError parse(Complex{T}, bad)
     end
     @test_throws ArgumentError parse(Complex{Int}, "3 + 4.2im")
+    @test_throws ArgumentError parse(ComplexF64, "3 β+ 4im")
+    @test_throws ArgumentError parse(ComplexF64, "3 + 4αm")
 end
 
 @testset "parse and tryparse type inference" begin
@@ -293,7 +320,7 @@ end
     @test eltype([tryparse(Complex{Int}, s) for s in String[]]) == Union{Nothing, Complex{Int}}
 end
 
-@testset "isssue #29980" begin
+@testset "issue #29980" begin
     @test parse(Bool, "1") === true
     @test parse(Bool, "01") === true
     @test parse(Bool, "0") === false
@@ -309,9 +336,4 @@ end
         s = case(string(sbefore, sign, vs, safter))
         @test isequal(parse(Float64, s), sign(v))
     end
-end
-
-@testset "unary ± and ∓" begin
-    @test Meta.parse("±x") == Expr(:call, :±, :x)
-    @test Meta.parse("∓x") == Expr(:call, :∓, :x)
 end
