@@ -65,6 +65,6 @@ jobs:
                 if len(new["typo"]) > 6: # Short typos might be false positives. Long are probably real.
                   clean = False
                 print("::warning file={},line={},col={}::perhaps \"{}\" should be \"{}\".".format(
-                  new["path"], new["line_num"], new["byte_offset"],
+                  new["path"], new.get("line_num", 1), new["byte_offset"],
                   new["typo"], " or ".join(new["corrections"])))
           sys.exit(1 if not clean else 0)' "${{ runner.temp }}/old_typos.jsonl" "${{ runner.temp }}/new_typos.jsonl"
