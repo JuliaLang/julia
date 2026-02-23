@@ -15,19 +15,15 @@ import REPL
 using .JuliaSyntax: SourceAttrType, sourcetext, set_numeric_flags
 
 using .JuliaLowering:
-    SyntaxGraph, new_id!, ensure_attributes!,
+    SyntaxGraph, new_id!,
     Kind, SourceRef, SyntaxTree, NodeId,
     setattr!, is_leaf, numchildren, children,
     @ast, flattened_provenance, showprov, LoweringError, MacroExpansionError,
     syntax_graph, Bindings, ScopeLayer, mapchildren
 
 function _ast_test_graph()
-    graph = SyntaxGraph()
-    ensure_attributes!(graph,
-                       kind=Kind, syntax_flags=UInt16,
-                       source=SourceAttrType,
-                       var_id=Int, value=Any, name_val=String, is_toplevel_thunk=Bool,
-                       toplevel_pure=Bool)
+    graph = JuliaLowering.ensure_desugaring_attributes!(
+        JuliaLowering.ensure_macro_attributes!(SyntaxGraph()))
 end
 
 function _source_node(graph, src)

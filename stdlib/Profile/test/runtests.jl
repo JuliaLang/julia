@@ -248,11 +248,15 @@ end
     @test occursin("@julialib" * slash, str)
 end
 
-function run_with_watchdog(cmd, timeout=120)
+function run_with_watchdog(cmd, timeout=600)
     p = open(cmd)
     t = Timer(timeout) do t
-        # should be under 10 seconds, so give it 2 minutes then report failure
+        # should be under 10 seconds normally, so give it 10 minutes then report failure
+        # n.b.: it was observed in an interactive CI session that a 2 minute timeout is not
+        #       sufficient when the machine is under extremely high load which happens
+        #       regularly when executing other tests in parallel with Profile
         println("KILLING debuginfo registration test BY PROFILE TEST WATCHDOG\n")
+        println("This should not happen. Please report this at https://github.com/JuliaLang/julia/issues/60306")
         kill(p, Base.SIGQUIT)
         sleep(30)
         kill(p, Base.SIGQUIT)

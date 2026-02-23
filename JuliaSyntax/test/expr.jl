@@ -274,6 +274,10 @@
             Expr(:(=),
                  Expr(Symbol("'"), :x),
                  1)
+        @test parsestmt("x' = A * x") ==
+            Expr(:(=),
+                 Expr(Symbol("'"), :x),
+                 Expr(:call, :*, :A, :x))
 
         # `.=` doesn't introduce short form functions
         @test parsestmt("f() .= xs") ==

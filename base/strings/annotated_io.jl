@@ -165,7 +165,7 @@ This is implemented so that one can say write an `AnnotatedString` to an
 new annotation for each character.
 """
 function _insert_annotations!(annots::Vector{RegionAnnotation}, newannots::Vector{RegionAnnotation}, offset::Int = 0)
-    run = @label _ begin
+    run = @label search begin
         if !isempty(annots) && last(last(annots).region) == offset
             for i in reverse(axes(newannots, 1))
                 annot = newannots[i]
@@ -181,10 +181,10 @@ function _insert_annotations!(annots::Vector{RegionAnnotation}, newannots::Vecto
                     old.label != new.label ||
                     old.value != new.value)
                 end || continue
-                break _ i
+                break search i
             end
         end
-        break _ 0
+        0
     end
     for runindex in 0:run-1
         old_index = lastindex(annots) - run + 1 + runindex

@@ -472,6 +472,83 @@ end
 @test_throws UndefVarError test_mod.f_undef_static_param(nothing)()
 @test test_mod.f_undef_static_param(42)() == Int
 
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_inner_sp(x::T) where T
+        function inner(y::U) where U
+            (T, U)
+        end
+        (T, inner("foo"))
+    end
+    f_inner_sp(1)
+end
+""") == (Int, (Int, String))
+
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_complex_arg_sp(a)
+        function inner(x::(let z = T; Vector{z} end)) where {T <: Integer}
+            T, typeof(x), @isdefined(z)
+        end
+        inner(a)
+    end
+    f_complex_arg_sp([1,2,3])
+end
+""") == (Int, Vector{Int}, false)
+
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_inner_rt_sp(a)
+        function inner(x::T)::Tuple{T, Vector{T}} where T
+            (x,T[x])
+        end
+        inner(a)
+    end
+    f_inner_rt_sp(1), f_inner_rt_sp("foo")
+end
+""") == ((1, [1]), ("foo", ["foo"]))
+
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_many_closure_sp()
+        function (); function (); function (x::T) where T; (x, T) end; end; end
+    end
+    f_many_closure_sp()()()(1)
+end
+""") == (1, Int)
+
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_many_closure_sp_capt(x::T) where T
+        function (); function (); function (); (x, T) end; end; end
+    end
+    f_many_closure_sp_capt(1)()()()
+end
+""") == (1, Int)
+
+@test_broken JuliaLowering.include_string(test_mod, """
+begin
+    function f_argcapt_sp(x::T) where T
+        (inner_x::T)->(x, inner_x, T)
+    end
+    f_argcapt_sp(1)(2)
+end
+""") == (1, 2, Int)
+
+# Inner method typevar `U` depending on a static parameter `T` so hoisting the
+# method def for `inner` out to top level would require detecting this and
+# making `inner` parametric on `T`.  Note this doesn't work in flisp either.
+@test_broken JuliaLowering.include_string(test_mod, """
+begin
+    function f_typevarcapt_sp(x::T) where T
+        function inner(y::U) where {U<:T}
+            (x,y,T,U)
+        end
+    end
+    f_typevarcapt_sp(1)(2)
+end
+""") == (1,2,Int,Int)
+
 # https://github.com/JuliaLang/JuliaLowering.jl/issues/134#issuecomment-3739626003
 JuliaLowering.include_string(test_mod, """
 function f_update_outer_capture()

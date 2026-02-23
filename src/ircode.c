@@ -78,6 +78,7 @@ extern "C" {
 #define TAG_ENTERNODE          61
 
 #define LAST_TAG 61
+#define MAX_SMALL_INT32 20
 
 
 typedef struct {
@@ -370,7 +371,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal)
         }
         for (i = 0; i < l; i++) {
             int32_t e = jl_array_data(edges, int32_t)[i];
-            if (e <= 0 && e <= 20) { // 1-byte encodings
+            if (e >= 0 && e <= MAX_SMALL_INT32) { // 1-byte encodings
                 jl_value_t *ebox = jl_box_int32(e);
                 JL_GC_PROMISE_ROOTED(ebox);
                 jl_encode_value(s, ebox);
@@ -1631,6 +1632,7 @@ void jl_init_serializer(void)
                      // empirical list of very common symbols
                      #include "common_symbols1.inc"
 
+                     // keep in sync with MAX_SMALL_INT32
                      jl_box_int32(0), jl_box_int32(1), jl_box_int32(2),
                      jl_box_int32(3), jl_box_int32(4), jl_box_int32(5),
                      jl_box_int32(6), jl_box_int32(7), jl_box_int32(8),
