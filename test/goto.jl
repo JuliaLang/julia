@@ -513,13 +513,14 @@ end
 # i=3, j=2: k=1->321, k=2 skipped, k=3 continue outer
 @test combined_triple_nested() == [111, 121, 211, 221, 311, 321]
 
-# Unlabeled block inside labeled loop - break should exit the inner block, not the loop
-function unlabeled_block_in_labeled_loop()
+# Anonymous @label block (1-arg form) inside labeled loop
+# break should exit the inner @label block, not the loop
+function anon_block_in_labeled_loop()
     result = Int[]
     @label outer for i in 1:3
-        x = @label _ begin
+        x = @label begin
             if i == 2
-                break _ 100  # break out of unlabeled block with value
+                break _ 100  # break out of anonymous block with value
             end
             i * 10
         end
@@ -531,11 +532,70 @@ function unlabeled_block_in_labeled_loop()
     end
     result
 end
-@test unlabeled_block_in_labeled_loop() == [10, 11, 100, 30, 31]
+@test anon_block_in_labeled_loop() == [10, 11, 100, 30, 31]
 
-# Nested `_` labels should error - `_` doesn't get special treatment
-@test_throws "label \"_\" defined multiple times" @eval @label _ begin
-    @label _ begin
-        break _ 42
-    end
+# break / break _ / break _ nothing are all equivalent in @label blocks
+function break_equivalence_test()
+    @test (@label begin; break; error("unreachable"); end) === nothing
+    @test (@label begin; break _; error("unreachable"); end) === nothing
+    @test (@label begin; break _ nothing; error("unreachable"); end) === nothing
+    @test (@label begin; break _ 42; error("unreachable"); end) == 42
 end
+break_equivalence_test()
+
+# @label block inside loop: break exits the @label block, not the loop
+function break_exits_innermost_label()
+    result = Int[]
+    for i in 1:3
+        @label begin
+            if i == 2
+                break  # exits @label block, NOT the for loop
+            end
+            push!(result, i)
+        end
+    end
+    result
+end
+@test break_exits_innermost_label() == [1, 3]
+
+# Nested @label blocks (inner shadows outer)
+function nested_anon_label_blocks()
+    x = @label begin
+        y = @label begin
+            break _ 10
+        end
+        break _ y + 5
+    end
+    x
+end
+@test nested_anon_label_blocks() == 15
+
+# @label _ and @label _ body are errors
+@test_throws "use `@label expr` for anonymous blocks; `@label _` is not allowed" @eval @label _
+@test_throws "use `@label expr` for anonymous blocks; `@label _ expr` is not allowed" @eval @label _ begin
+    42
+end
+
+# Plain break inside named @label block is disallowed
+@test Expr(:error, "plain `break` inside `@label blk` block is disallowed; use `break blk` to exit the block") ==
+    Meta.lower(@__MODULE__, quote
+        function break_in_named_block()
+            for i in 1:3
+                @label blk begin
+                    break
+                end
+            end
+        end
+    end)
+
+# continue inside anonymous @label block is disallowed
+@test Expr(:error, "`continue` inside an anonymous `@label` block is not allowed") ==
+    Meta.lower(@__MODULE__, quote
+        function continue_in_label_block()
+            for i in 1:3
+                @label begin
+                    continue
+                end
+            end
+        end
+    end)

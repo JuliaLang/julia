@@ -350,6 +350,11 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
             gid = declare_in_scope!(ctx, top_scope(ctx), ex, :global)
             b = get_binding(ctx, gid)
         end
+        # Body-level @nospecialize sets :nospecialize metadata on identifiers.
+        # Propagate this to the binding so the slot gets the nospecialize flag.
+        if getmeta(ex, :nospecialize, false) && b.kind === :argument
+            b.is_nospecialize = true
+        end
         newleaf(ctx, ex, K"BindingId", b.id)
     elseif k === K"BindingId"
         ex
@@ -378,7 +383,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         id = ex_out[1]
         if kind(id) != K"Placeholder"
             binfo = get_binding(ctx, id)
-            if !isnothing(binfo.type)
+            if !isnothing(binfo.type) && binfo.kind !== :global
                 throw(LoweringError(ex, "multiple type declarations found for `$(binfo.name)`"))
             end
             binfo.type = ex_out[2]._id

@@ -481,7 +481,7 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
         specenv = get(cache.located, (pkg, stopenv), missing)
         specenv === missing || return specenv
     end
-    (env′, spec) = @label _ begin
+    (env′, spec) = @label found begin
         if pkg.uuid === nothing
             # The project we're looking for does not have a Project.toml (n.b. - present
             # `Project.toml` without UUID gets a path-based dummy UUID). It must have
@@ -493,10 +493,10 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
                 found = implicit_manifest_pkgid(env, pkg.name)
                 if found !== nothing && found.uuid === nothing
                     @assert found.name == pkg.name
-                    break _ (env, implicit_manifest_uuid_load_spec(env, pkg))
+                    break found (env, implicit_manifest_uuid_load_spec(env, pkg))
                 end
                 if !(loading_extension || precompiling_extension)
-                    stopenv == env && break _ (nothing, nothing)
+                    stopenv == env && break found (nothing, nothing)
                 end
             end
         else
@@ -505,10 +505,10 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
                 # missing is used as a sentinel to stop looking further down in envs
                 if spec === missing
                     is_stdlib(pkg) && break
-                    break _ (nothing, nothing)
+                    break found (nothing, nothing)
                 end
                 if spec !== nothing
-                    break _ (env, spec)
+                    break found (env, spec)
                 end
                 if !(loading_extension || precompiling_extension)
                     stopenv == env && break
@@ -518,7 +518,7 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
             # e.g. if they have been explicitly added to the project/manifest
             mbyspec = manifest_uuid_load_spec(Sys.STDLIB, pkg)
             if mbyspec isa PkgLoadSpec
-                break _ (Sys.STDLIB, mbyspec)
+                break found (Sys.STDLIB, mbyspec)
             end
         end
         (nothing, nothing)
@@ -1169,7 +1169,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
             # a table of entries (deps = {"DepA" = "6ea...", "DepB" = "55d..."}
             deps = get(entry, "deps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
             local dep::Union{Nothing, PkgId}
-            @label _ begin
+            @label resolved begin
                 if UUID(uuid) === where.uuid
                     dep = dep_stanza_get(deps, name)
 
@@ -1197,7 +1197,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                                     (deps,))
                                 dep = dep_stanza_get(deps′, name)
                                 dep === nothing && continue
-                                break _
+                                break resolved
                             end
                             return PkgId(name)
                         end
@@ -2635,13 +2635,13 @@ function find_unsuitable_manifests_versions()
         manifest_file isa String || continue # no manifest file
         m = parsed_toml(manifest_file)
         man_julia_version = get(m, "julia_version", nothing)
-        @label _ begin
-            man_julia_version isa String || break _
+        @label check begin
+            man_julia_version isa String || break check
             man_julia_version = VersionNumber(man_julia_version)
-            thispatch(man_julia_version) != thispatch(VERSION) && break _
-            isempty(man_julia_version.prerelease) != isempty(VERSION.prerelease) && break _
+            thispatch(man_julia_version) != thispatch(VERSION) && break check
+            isempty(man_julia_version.prerelease) != isempty(VERSION.prerelease) && break check
             isempty(man_julia_version.prerelease) && continue
-            man_julia_version.prerelease[1] != VERSION.prerelease[1] && break _
+            man_julia_version.prerelease[1] != VERSION.prerelease[1] && break check
             if VERSION.prerelease[1] == "DEV"
                 # manifests don't store the 2nd part of prerelease, so cannot check further
                 # so treat them specially in the warning
@@ -4377,10 +4377,10 @@ end
             if !samefile(includes[1].filename, modspec.path)
                 # In certain cases the path rewritten by `fixup_stdlib_path` may
                 # point to an unreadable directory, make sure we can `stat` the
-                # file before comparing it with `modpath`.
+                # file before comparing it with `modspec.path`.
                 stdlib_path = fixup_stdlib_path(includes[1].filename)
                 if !(isreadable(stdlib_path) && samefile(stdlib_path, modspec.path))
-                    @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $modpath"
+                    @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $(modspec.path)"
                     record_reason(reasons, "different source file path")
                     return true # cache file was compiled from a different path
                 end

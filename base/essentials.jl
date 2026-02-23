@@ -943,31 +943,48 @@ end
 Labels a statement with the symbolic label `name`. The label marks the end-point
 of an unconditional jump with [`@goto name`](@ref).
 
-    @label _ expr
+    @label expr
     @label name expr
 
-Creates a labeled block that can be exited early with `break _ value` or `break name value`.
-The block evaluates to `value` if a `break` statement is executed, otherwise it evaluates to
-the result of `expr`. Use `@label _ expr` for anonymous blocks (break with `break _`) or
-`@label name expr` for named blocks (break with `break name`).
+Creates a labeled block that can be exited early with `break` / `break _ value` or
+`break name value`. The block evaluates to `value` if a `break` statement is executed,
+otherwise it evaluates to the result of `expr`.
+
+`@label expr` creates an anonymous block that participates in the default break scope:
+a plain `break` (or `break _`) inside it will exit the block, just as `break` exits a loop.
+
+`@label name expr` creates a named block that can be exited with `break name` or
+`break name value`.
+
+Using `_` as an explicit label name is not allowed — use `@label expr` instead.
 
 # Examples
-```julia
-result = @label myblock begin
-    for i in 1:10
-        if i > 5
-            break myblock i * 2  # exits with value 12
-        end
-    end
-    0  # default value if no break
-end
+```jldoctest
+julia> @label begin
+           println("before")
+           break
+           println("after")
+       end
+before
+
+julia> result = @label myblock begin
+           for i in 1:10
+               if i > 5
+                   break myblock i * 2  # exits the @label block with value 12
+               end
+           end
+           0  # default value if no break
+       end
+12
 ```
 """
 macro label(name::Symbol)
+    name === :_ && error("use `@label expr` for anonymous blocks; `@label _` is not allowed")
     return esc(Expr(:symboliclabel, name))
 end
 
 macro label(name::Symbol, body)
+    name === :_ && error("use `@label expr` for anonymous blocks; `@label _ expr` is not allowed")
     # If body is a syntactic loop, wrap its body in a continue block
     # This allows `continue name` to work by breaking to `name#cont`
     if body isa Expr && (body.head === :for || body.head === :while)
@@ -983,6 +1000,12 @@ macro label(name::Symbol, body)
         end
     end
     return esc(Expr(:symbolicblock, name, body))
+end
+
+macro label(body)
+    # 1-arg form: create anonymous block that participates in the default break scope.
+    # Uses `loop-exit` as the internal label so that `break` and `break _` both target it.
+    return esc(Expr(:symbolicblock, Symbol("loop-exit"), body))
 end
 
 """
