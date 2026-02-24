@@ -658,13 +658,15 @@ the form `pkgversion(@__MODULE__)` can be used.
     This function was introduced in Julia 1.9.
 """
 function pkgversion(m::Module)
-    path = pkgdir(m)
-    path === nothing && return nothing
     @lock require_lock begin
-        v = get_pkgversion_from_path(path)
         pkgorigin = get(pkgorigins, PkgId(moduleroot(m)), nothing)
-        # Cache the version
-        if pkgorigin !== nothing && pkgorigin.version === nothing
+        if pkgorigin !== nothing && pkgorigin.version !== nothing
+            return pkgorigin.version
+        end
+        path = pkgdir(m)
+        path === nothing && return nothing
+        v = get_pkgversion_from_path(path)
+        if pkgorigin !== nothing
             pkgorigin.version = v
         end
         return v
