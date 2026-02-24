@@ -416,7 +416,7 @@ disambiguate the order, precedence and associativity rules determine how the exp
 
 [^2]:
     Some operators are parsed specially: `&& || = += -= *= /= //= \= ^= ÷= %= <<= >>= >>>= |= &=
-    ⊻= := $= . ... -> $ & :: ,`, as well as the ternary conditional `a ? b : c` and unary quote `:`.
+    ⊻= := $= . ... , -> $ & ::`, as well as the ternary conditional `a ? b : c` and unary quote `:`.
 
 In an expression with different operators, *precedence* determines the order.  For example, `*`
 has higher precedence than `+` when used as binary operators, so `1 + 2 * 3` is parsed as
@@ -432,7 +432,7 @@ parsed as varargs calls when chained, rather than nested binary calls: `a + b + 
 `+(a, b, c)` and `a*b*c` is parsed as `*(a, b, c)`.  The `++` operator is also parsed in this
 way, but note that it has no methods defined in `Base`.  Also note that juxtaposition of
 [numeric literal coefficients](@ref man-numeric-literal-coefficients) to denote multiplication
-— like `2x` to mean `2*x` — is more of a syntactic form than an operator.  Describing its
+(for example `2x` to mean `2*x`) is more of a syntactic form than an operator.  Describing its
 associativity doesn't make sense, except to state the obvious point that `24x` means `24*x`
 rather than `2*(4*x)` or `(2*4)*x`. They are treated as multiplications with higher precedence
 than any other binary operation, with the exception of `^` where they have higher precedence
@@ -458,7 +458,7 @@ with a subscript or superscript letter.  For example, if `+ᵃ` is an operator, 
 to distinguish it from `+ ᵃx`.
 
 [^3]:
-    Exceptions to this are tuple, assignment, ternary if, control flow, dots, unary, declaration, and field access operators,
+    Exceptions to this are tuple, assignment, ternary if, control flow, dots, unary, declaration, field access, and unary quote operators,
     as well as `<: >: in isa $`
 
 The following table lists Julia's operators, from highest precedence to lowest.  Those listed
@@ -469,42 +469,42 @@ packages, or user code.  For example, `⋅` and `×` are defined in the standard
 *every* Julia operator and its precedence, see the top of this file:
 [`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm).
 
-| Category       | Operators                                                                                  | Associativity  |
-|:-------------- |:------------------------------------------------------------------------------------------ |:-------------- |
-| Field access   | `:` followed by `.`                                                                        | Left[^4]       |
-| Postfix unary  | `'`                                                                                        | Left           |
-| Declaration    | `::`                                                                                       | Left           |
-| Exponentiation | `^` (`↑ ↓ ⇵ ⟰ ⟱ ⤈ ⤉ ⤊ ⤋ ⤒ ⤓`, etc.)                                                        | Right[^5]      |
-| Unary          | `+ - ! ~ √ ∛ ∜ <: >:` (`¬ ⋆ ± ∓`)                                                          | Right[^6]      |
-| Juxtaposition  | Implicit multiplication by numeric literal coefficients                                    | Not composable |
-| Bitshift       | `<< >> >>>`                                                                                | Left           |
-| Fraction       | `//`                                                                                       | Left           |
-| Multiplication | `* / ÷ % & ∘ \ ∩ ⊼` (`⋅ × ⋆ ⊗ ⊘ ⊠ ⊡ ⊓ ∧`, etc.)                                            | Left[^7]       |
-| Addition       | `+ - \| ∪ ⊻ ⊽` (`++ ± ∓ ⊕ ⊖ ⊞ ⊟ ⊔ ∨ $`, etc.)                                              | Left[^7]       |
-| Dots           | `: ...` (`.. … ⁝ ⋮ ⋱ ⋰ ⋯`)                                                                 | Left[^8]       |
-| Pipe           | `\|>`                                                                                      | Left           |
-| Pipe           | (`<\|`)                                                                                    | Right          |
-| Comparison     | `in isa > < >= ≥ <= ≤ == === ≡ != ≠ !== ≢ ∈ ∉ ∋ ∌ ⊆ ⊈ ⊊ ≈ ≉ ⊇ ⊉ ⊋ <: >:` (`⊂ ⊄ ∝ ∥`, etc.) | Chaining[^9]   |
-| Control flow   | `&&` followed by `\|\|`                                                                    | Right          |
-| Arrow          | (`← → ↔ ↚ ↛ ↢ ↣ ↦ ↤ ↮ ⇎ ⇍ ⇏ ⇐ ⇒ ⇔`, etc.)                                                  | Right          |
-| Ternary if     | `?:`                                                                                       | Right[^10]     |
-| Pair           | `=>`                                                                                       | Right          |
-| Assignment     | `= += -= *= /= //= \= ^= ÷= %= <<= >>= >>>= \|= &= ⊻= ->` (`~ ≔ ⩴ ≕ :=`)                   | Right[^11]     |
-| Tuple          | `,`                                                                                        | Vararg         |
+| Category       | Operators                                                                                  | Associativity      |
+|:-------------- |:------------------------------------------------------------------------------------------ |:--------------     |
+| Unary quote    | `:`                                                                                        | Not composable[^4] |
+| Field access   | `.`                                                                                        | Left[^4]           |
+| Postfix unary  | `'`                                                                                        | Left               |
+| Declaration    | `::`                                                                                       | Left               |
+| Exponentiation | `^` (`↑ ↓ ⇵ ⟰ ⟱ ⤈ ⤉ ⤊ ⤋ ⤒ ⤓`, etc.)                                                        | Right[^5]          |
+| Unary          | `+ - ! ~ √ ∛ ∜ <: >:` (`¬ ⋆ ± ∓`)                                                          | Right[^6]          |
+| Juxtaposition  | Implicit multiplication by numeric literal coefficients                                    | Not composable     |
+| Bitshift       | `<< >> >>>`                                                                                | Left               |
+| Fraction       | `//`                                                                                       | Left               |
+| Multiplication | `* / ÷ % & ∘ \ ∩ ⊼` (`⋅ × ⋆ ⊗ ⊘ ⊠ ⊡ ⊓ ∧`, etc.)                                            | Left[^7]           |
+| Addition       | `+ - \| ∪ ⊻ ⊽` (`++ ± ∓ ⊕ ⊖ ⊞ ⊟ ⊔ ∨ $`, etc.)                                              | Left[^7]           |
+| Dots           | `: ...` (`.. … ⁝ ⋮ ⋱ ⋰ ⋯`)                                                                 | Left[^8]           |
+| Pipe           | `\|>`                                                                                      | Left               |
+| Pipe           | (`<\|`)                                                                                    | Right              |
+| Comparison     | `in isa > < >= ≥ <= ≤ == === ≡ != ≠ !== ≢ ∈ ∉ ∋ ∌ ⊆ ⊈ ⊊ ≈ ≉ ⊇ ⊉ ⊋ <: >:` (`⊂ ⊄ ∝ ∥`, etc.) | Chaining[^9]       |
+| Control flow   | `&&` followed by `\|\|`                                                                    | Right              |
+| Arrow          | (`← → ↔ ↚ ↛ ↢ ↣ ↦ ↤ ↮ ⇎ ⇍ ⇏ ⇐ ⇒ ⇔`, etc.)                                                  | Right              |
+| Ternary if     | `?:`                                                                                       | Right[^10]         |
+| Pair           | `=>`                                                                                       | Right              |
+| Assignment     | `= += -= *= /= //= \= ^= ÷= %= <<= >>= >>>= \|= &= ⊻= ->` (`~ ≔ ⩴ ≕ :=`)                   | Right[^11]         |
+| Tuple          | `,`                                                                                        | Vararg             |
 
 [^4]:
-    Spaces are not allowed around the `.` getproperty or the `:` expr operators<br/>
-    The unary `:` operator requires parens on consecutive calls to prevent confusion with `::`
+    Spaces are not allowed around the `.` getproperty or the `:` expr operators
 [^5]:
     Unary operators and juxtaposition of numeric literals are lower precedence than `^` only as the *first argument*.  For example, `2^-3`, `x^√2`, and `2^3x` are parsed as `2^(-3)`, `x^(√2)`, and `2^(3*x)`; whereas `-2^3`, `√x^2`, `2^3*x`, and `2x^3` are parsed as `-(2^3)`, `√(x^2)`, `(2^3)*x`, and `2*(x^3)`
 [^6]:
     Most unary operators can be composed, except `++` which is a distinct *binary* operator, and `--` which produces a `ParseError`.  Other compositions of unary operators are parsed with right-associativity — e.g., `√√-a` as `√(√(-a))`
 [^7]:
-    The operators `+`, `++` and `*` are chained rather than left-associative.  For example, `a + b + c` is parsed as `+(a, b, c)` not `+(+(a, b),c)`.  However, the fallback methods for `+(a, b, c, d...)` and `*(a, b, c, d...)` both default to left-associative evaluation.  Note that `++` is not defined in `Base`, but is parsed in the same way
+    The operators `+`, `++` and `*` are vararg calls rather than left-associative.  For example, `a + b + c` is parsed as `+(a, b, c)` not `+(+(a, b),c)`.  However, the fallback methods for `+(a, b, c, d...)` and `*(a, b, c, d...)` both default to left-associative evaluation.  Note that `++` is not defined in `Base`, but is parsed in the same way
 [^8]:
-    The operator `:` is parsed into groups of three. For example `a : b : c : d : e` is parsed as `(:)((:)(a, b, c), d, e)`<br/>
-    The postfix unary operator `...` may only be followed by an operator of lower precedence<br/>
-    Due to a parser bug, dots operators other than `:` cannot currently be composed. This may be fixed to 3-arg grouping like `:` or normal left associativity in a future version
+    The operator `:` is parsed into groups of three. For example `a : b : c : d : e` is parsed as `(:)((:)(a, b, c), d, e)`\
+    The postfix unary operator `...` may only be followed by an operator of lower precedence\
+    Due to a parser bug ([#58763](https://github.com/JuliaLang/julia/issues/58763)), dots operators other than `:` cannot currently be composed. This may be fixed to 3-arg grouping like `:` or normal left associativity in a future version
 [^9]:
     Comparisons can be [chained](@ref "Chaining comparisons").  For example, `a < b < c` is essentially the same as `a < b && b < c`.  However, the order of evaluation is undefined
 [^10]:
