@@ -423,9 +423,9 @@ let fails = @testset NoThrowTestSet begin
         # 29 - Fail - assignment
         @test (i = length([1, 2])) == 3
         # 30 - Fail - symbol comparison
-        @test 1 == :sym
+        @test 1 + 2 == :sym
         # 31 - Fail - symbol in function call
-        @test isequal(1, :sym)
+        @test isequal(1 + 2, :sym)
         # 32 - 35 - Fail - wrong message
         @test_throws "A test" error("a test")
         @test_throws r"sqrt\([Cc]omplx" sqrt(-1)
@@ -583,11 +583,11 @@ let fails = @testset NoThrowTestSet begin
 
     # Test that symbols are printed with : prefix
     let str = sprint(show, fails[30])
-        @test occursin("Evaluated: 1 == :sym", str)
+        @test occursin("Evaluated: 3 == :sym", str)
     end
 
     let str = sprint(show, fails[31])
-        @test occursin("Evaluated: isequal(1, :sym)", str)
+        @test occursin("Evaluated: isequal(3, :sym)", str)
     end
 
     let str = sprint(show, fails[32])
