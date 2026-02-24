@@ -1095,7 +1095,6 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                             @lock BG BG.verbose = !BG.verbose
                         elseif c in ('?', 'h', 'H')
                             @lock io begin
-                                println(io, ansi_cleartoendofline)
                                 println(io, "  Keyboard shortcuts:", ansi_cleartoendofline)
                                 println(io, "    c       Cancel precompilation via killing subprocesses (press Enter to confirm)", ansi_cleartoendofline)
                                 if detachable
