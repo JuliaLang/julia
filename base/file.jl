@@ -771,24 +771,35 @@ function _win_mkstemp(temppath::AbstractString)
     lentname = something(findfirst(iszero, tname))
     @assert lentname > 0
     resize!(tname, lentname - 1)
+    if isempty(temppath)
+        # strip leading slash
+        front = popfirst!(tname)
+        @assert front == UInt('\\')
+    end
     return transcode(String, tname)
 end
 
 function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
-    filename = _win_mkstemp(parent)
-    cleanup && temp_cleanup_later(filename)
-    return (filename, Base.open(filename, "r+"))
+    filepath = _win_mkstemp(parent)
+    if cleanup
+        abspath = isabspath(parent) ? filepath : joinpath(pwd(), filepath)
+        temp_cleanup_later(abspath)
+    end
+    return (filepath, Base.open(filepath, "r+"))
 end
 
 else # !windows
 
 # Create and return the name of a temporary file along with an IOStream
 function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
-    b = joinpath(parent, temp_prefix * "XXXXXX")
-    p = ccall(:mkstemp, Int32, (Cstring,), b) # modifies b
+    filepath = joinpath(parent, temp_prefix * "XXXXXX")
+    p = ccall(:mkstemp, Int32, (Cstring,), filepath) # modifies filepath
     systemerror(:mktemp, p == -1)
-    cleanup && temp_cleanup_later(b)
-    return (b, fdio(p, true))
+    if cleanup
+        abspath = isabspath(parent) ? filepath : joinpath(pwd(), filepath)
+        temp_cleanup_later(abspath)
+    end
+    return (filepath, fdio(p, true))
 end
 
 end # os-test
