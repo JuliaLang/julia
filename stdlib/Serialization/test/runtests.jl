@@ -659,6 +659,18 @@ end
     @test l2.parts === ()
 end
 
+@testset "Core.IntrinsicFunction" begin
+    create_serialization_stream() do s
+        serialize(s, Core.Intrinsics.add_int)
+        serialize(s, Core.Intrinsics.xor_int)
+        serialize(s, Core.Intrinsics.sub_float)
+        seekstart(s)
+        @test deserialize(s) === Core.Intrinsics.add_int
+        @test deserialize(s) === Core.Intrinsics.xor_int
+        @test deserialize(s) === Core.Intrinsics.sub_float
+    end
+end
+
 @testset "Docstrings" begin
     undoc = Docs.undocumented_names(Serialization)
     @test_broken isempty(undoc)
