@@ -427,6 +427,13 @@ let fails = @testset NoThrowTestSet begin
         @test_throws r"sqrt\([Cc]omplx" sqrt(-1)
         @test_throws str->occursin("a T", str) error("a test")
         @test_throws ["BoundsError", "acquire", "1-element", "at index [2]"] [1][2]
+        # 34-36 - Fail - symbol, expr, quotenode
+        sym_var = :sym
+        expr_var = :(a + b)
+        qn_var = QuoteNode(:sym)
+        @test sym_var == 1
+        @test expr_var == 1
+        @test qn_var == 1
     end
     for fail in fails
         @test fail isa Test.Fail
@@ -597,6 +604,20 @@ let fails = @testset NoThrowTestSet begin
         @test occursin(r"Message: \"BoundsError.* 1-element.*at index \[2\]", str)
     end
 
+    let str = sprint(show, fails[34])
+        @test occursin("Expression: sym_var == 1", str)
+        @test occursin("Evaluated: :sym == 1", str)
+    end
+
+    let str = sprint(show, fails[35])
+        @test occursin("Expression: expr_var == 1", str)
+        @test occursin("Evaluated: :(a + b) == 1", str)
+    end
+
+    let str = sprint(show, fails[36])
+        @test occursin("Expression: qn_var == 1", str)
+        @test occursin("Evaluated: :(:sym) == 1", str)
+    end
 end
 
 struct BadError <: Exception end

@@ -368,6 +368,10 @@ struct Threw <: ExecutionResult
     source::LineNumberNode
 end
 
+_quote_evaluated_arg(x::Union{Symbol, Expr, QuoteNode}) = Expr(:quote, x)
+_quote_evaluated_arg(x) = x
+
+
 function eval_test_comparison(comparison::Expr, quoted::Expr, source::LineNumberNode, negate::Bool=false)
     comparison.head === :comparison || throw(ArgumentError("$comparison is not a comparison expression"))
     comparison_args = comparison.args
@@ -382,8 +386,8 @@ function eval_test_comparison(comparison::Expr, quoted::Expr, source::LineNumber
         if res
             res = op(a, b)
         end
-        quoted_args[i] = a
-        quoted_args[i+2] = b
+        quoted_args[i] = _quote_evaluated_arg(a)
+        quoted_args[i+2] = _quote_evaluated_arg(b)
         i += 2
     end
 
@@ -405,13 +409,13 @@ function eval_test_function(func, args, kwargs, quoted_func::Union{Expr,Symbol},
     # the arguments evaluated
     kw_suffix = ""
     if quoted_func === :≈ && !res
-        kw_suffix = " ($(join(["$k=$v" for (k, v) in kwargs], ", ")))"
-        quoted_args = args
+        kw_suffix = " ($(join(["$k=$(repr(v))" for (k, v) in kwargs], ", ")))"
+        quoted_args = map(_quote_evaluated_arg, args)
     elseif isempty(kwargs)
-        quoted_args = args
+        quoted_args = map(_quote_evaluated_arg, args)
     else
-        kwargs_expr = Expr(:parameters, [Expr(:kw, k, v) for (k, v) in kwargs]...)
-        quoted_args = [kwargs_expr, args...]
+        kwargs_expr = Expr(:parameters, [Expr(:kw, k, _quote_evaluated_arg(v)) for (k, v) in kwargs]...)
+        quoted_args = Any[kwargs_expr, map(_quote_evaluated_arg, args)...]
     end
 
     # Properly render broadcast function call syntax, e.g. `(==).(1, 2)` or `Base.:(==).(1, 2)`.
