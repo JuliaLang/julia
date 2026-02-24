@@ -67,3 +67,4 @@ function test_gc_codeinst()
     true
 end
 @test test_gc_codeinst()
+sleep(5)  # Avoids problems where we don't respond to Distributed.jl fast enough
