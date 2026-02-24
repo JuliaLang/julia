@@ -105,8 +105,7 @@ function is_valid_body_ir_argument(ctx, ex)
     if is_valid_ir_argument(ctx, ex)
         true
     elseif kind(ex) == K"BindingId"
-        binfo = get_binding(ctx, ex)
-        binfo.kind == :argument || binfo.is_always_defined
+        get_binding(ctx, ex).is_always_defined
     else
         false
     end

@@ -327,19 +327,8 @@ function _analyze_lambda_vars!(ctx, ex)
     for id in union(state.live, state.unused)
         if id in state.seen
             b = get_binding(ctx, id)
-            if b.kind === :argument
-                # do this here so we don't mix the flag we're setting and the
-                # existing is_always_defined flag on arguments
-                b.unboxed = true
-            end
-            b.is_always_defined = true
-        end
-    end
-    for (id, capt) in lambda_bindings.locals_capt
-        capt && continue
-        b = get_binding(ctx, id)
-        if b.kind === :local && b.is_always_defined
             b.unboxed = true
+            b.is_always_defined = true
         end
     end
 end
