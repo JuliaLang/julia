@@ -1135,8 +1135,9 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
                 elapsed = round((time_ns() - t_before) / 1e6, digits = 1)
                 comp_time, recomp_time = cumulative_compile_time_ns() .- t_comp_before
                 print(lpad(elapsed, 9), " ms  ")
-                parentid = get(EXT_PRIMED, pkg, nothing)
-                if parentid !== nothing
+                triggers = get(EXT_PRIMED, pkg, nothing)
+                if triggers !== nothing
+                    parentid = triggers[1]
                     print(parentid.name, " → ")
                 end
                 print(pkg.name)
@@ -1253,7 +1254,7 @@ mutable struct ExtensionId
     ntriggers::Int # how many more packages must be defined until this is loaded
 end
 
-const EXT_PRIMED = Dict{PkgId, PkgId}() # Extension -> Parent
+const EXT_PRIMED = Dict{PkgId,Vector{PkgId}}() # Extension -> Parent + Triggers (parent is always first)
 const EXT_DORMITORY = Dict{PkgId,Vector{ExtensionId}}() # Trigger -> Extensions that can be triggered by it
 const EXT_DORMITORY_FAILED = ExtensionId[]
 
@@ -1336,11 +1337,11 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
     for (ext, triggers) in extensions
         triggers = triggers::Union{String, Vector{String}}
         triggers isa String && (triggers = [triggers])
-        id = PkgId(uuid5(parent.uuid, ext), ext)
-        if id in keys(EXT_PRIMED) || haskey(Base.loaded_modules, id)
+        id = PkgId(uuid5(parent.uuid::UUID, ext), ext)
+        if haskey(EXT_PRIMED, id) || haskey(Base.loaded_modules, id)
             continue  # extension is already primed or loaded, don't add it again
         end
-        EXT_PRIMED[id] = parent
+        EXT_PRIMED[id] = trigger_ids = PkgId[parent]
         gid = ExtensionId(id, parent, 1 + length(triggers), 1 + length(triggers))
         trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, parent)
         push!(trigger1, gid)
@@ -1348,6 +1349,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
             # TODO: Better error message if this lookup fails?
             uuid_trigger = UUID(totaldeps[trigger]::String)
             trigger_id = PkgId(uuid_trigger, trigger)
+            push!(trigger_ids, trigger_id)
             if !haskey(Base.loaded_modules, trigger_id) || haskey(package_locks, trigger_id) || (trigger_id == precompilation_target)
                 trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, trigger_id)
                 push!(trigger1, gid)
@@ -1359,6 +1361,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
 end
 
 loading_extension::Bool = false
+loadable_extensions::Union{Nothing,Vector{PkgId}} = nothing
 precompiling_extension::Bool = false
 precompilation_target::Union{Nothing,PkgId} = nothing
 function run_extension_callbacks(extid::ExtensionId)
@@ -1390,7 +1393,7 @@ function run_extension_callbacks(pkgid::PkgId)
     for extid in extids
         @assert extid.ntriggers > 0
         extid.ntriggers -= 1
-        if extid.ntriggers == 0
+        if extid.ntriggers == 0 && (loadable_extensions === nothing || extid.id in loadable_extensions)
             push!(extids_to_load, extid)
         end
     end
@@ -2042,7 +2045,17 @@ function _require(pkg::PkgId, env=nothing)
                     # double-check now that we have lock
                     m = _require_search_from_serialized(pkg, path, UInt128(0))
                     m isa Module && return m
-                    compilecache(pkg, path)
+                    triggers = get(EXT_PRIMED, pkg, nothing)
+                    loadable_exts = nothing
+                    if triggers !== nothing # extension
+                        loadable_exts = PkgId[]
+                        for (ext′, triggers′) in EXT_PRIMED
+                            if triggers′ ⊊ triggers
+                                push!(loadable_exts, ext′)
+                            end
+                        end
+                    end
+                    compilecache(pkg, path; loadable_exts)
                 end
                 cachefile_or_module isa Module && return cachefile_or_module::Module
                 cachefile = cachefile_or_module
@@ -2300,9 +2313,16 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
     end
 end
 
+# protects against PkgId and UUID being imported and losing Base prefix
+_pkg_str(_pkg::PkgId) = (_pkg.uuid === nothing) ? "Base.PkgId($(repr(_pkg.name)))" : "Base.PkgId(Base.UUID(\"$(_pkg.uuid)\"), $(repr(_pkg.name)))"
+_pkg_str(_pkg::Vector) = sprint(show, eltype(_pkg); context = :module=>nothing) * "[" * join(map(_pkg_str, _pkg), ",") * "]"
+_pkg_str(_pkg::Pair{PkgId}) = _pkg_str(_pkg.first) * " => " * repr(_pkg.second)
+_pkg_str(_pkg::Nothing) = "nothing"
+
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
 function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::Union{Nothing, String},
-                           concrete_deps::typeof(_concrete_dependencies), internal_stderr::IO = stderr, internal_stdout::IO = stdout)
+                           concrete_deps::typeof(_concrete_dependencies), internal_stderr::IO = stderr,
+                           internal_stdout::IO = stdout, loadable_exts::Union{Vector{PkgId},Nothing}=nothing)
     @nospecialize internal_stderr internal_stdout
     rm(output, force=true)   # Remove file if it exists
     output_o === nothing || rm(output_o, force=true)
@@ -2313,18 +2333,6 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     any(path -> path_sep in path, load_path) &&
         error("LOAD_PATH entries cannot contain $(repr(path_sep))")
 
-    deps_strs = String[]
-    function pkg_str(_pkg::PkgId)
-        if _pkg.uuid === nothing
-            "Base.PkgId($(repr(_pkg.name)))"
-        else
-            "Base.PkgId(Base.UUID(\"$(_pkg.uuid)\"), $(repr(_pkg.name)))"
-        end
-    end
-    for (pkg, build_id) in concrete_deps
-        push!(deps_strs, "$(pkg_str(pkg)) => $(repr(build_id))")
-    end
-
     if output_o !== nothing
         cpu_target = get(ENV, "JULIA_CPU_TARGET", nothing)
         opt_level = Base.JLOptions().opt_level
@@ -2334,8 +2342,6 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
         opts = `-O0 --output-ji $(output) --output-incremental=yes`
     end
 
-    deps_eltype = sprint(show, eltype(concrete_deps); context = :module=>nothing)
-    deps = deps_eltype * "[" * join(deps_strs, ",") * "]"
     trace = isassigned(PRECOMPILE_TRACE_COMPILE) ? `--trace-compile=$(PRECOMPILE_TRACE_COMPILE[])` : ``
     io = open(pipeline(addenv(`$(julia_cmd(;cpu_target)::Cmd) $(opts)
                               --startup-file=no --history-file=no --warn-overwrite=yes
@@ -2349,10 +2355,11 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
         empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
+        Base.loadable_extensions = $(_pkg_str(loadable_exts))
         Base.precompiling_extension = $(loading_extension)
-        Base.precompilation_target = $(pkg_str(pkg))
-        Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
-            $(repr(load_path)), $deps, $(repr(source_path(nothing))))
+        Base.precompilation_target = $(_pkg_str(pkg))
+        Base.include_package_for_output($(_pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
+            $(repr(load_path)), $(_pkg_str(concrete_deps)), $(repr(source_path(nothing))))
         """)
     close(io.in)
     return io
@@ -2395,17 +2402,17 @@ This can be used to reduce package load times. Cache files are stored in
 `DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
 """
-function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout)
+function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; loadable_exts::Union{Vector{PkgId},Nothing}=nothing)
     @nospecialize internal_stderr internal_stdout
     path = locate_package(pkg)
     path === nothing && throw(ArgumentError("$pkg not found during precompilation"))
-    return compilecache(pkg, path, internal_stderr, internal_stdout)
+    return compilecache(pkg, path, internal_stderr, internal_stdout; loadable_exts)
 end
 
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
 function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
-                      keep_loaded_modules::Bool = true)
+                      keep_loaded_modules::Bool = true; loadable_exts::Union{Vector{PkgId},Nothing} = nothing)
 
     @nospecialize internal_stderr internal_stdout
     # decide where to put the resulting cache file
@@ -2443,7 +2450,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             close(tmpio_o)
             close(tmpio_so)
         end
-        p = create_expr_cache(pkg, path, tmppath, tmppath_o, concrete_deps, internal_stderr, internal_stdout)
+        p = create_expr_cache(pkg, path, tmppath, tmppath_o, concrete_deps, internal_stderr, internal_stdout, loadable_exts)
 
         if success(p)
             if cache_objects
