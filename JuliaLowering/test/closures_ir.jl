@@ -655,39 +655,38 @@ end
 9   slot₂/#f_kw_closure#0
 10  (new %₈ %₉)
 11  (= slot₃/f_kw_closure %₁₀)
-12  (call core.svec :#f_kw_closure#0 :y)
-13  (call core.svec true false)
+12  (call core.svec :y)
+13  (call core.svec false)
 14  (call JuliaLowering.eval_closure_type TestMod :##f_kw_closure#0##0 %₁₂ %₁₃)
 15  latestworld
 16  TestMod.##f_kw_closure#0##0
 17  (call core.typeof slot₁/y)
 18  (call core.apply_type %₁₆ %₁₇)
-19  slot₂/#f_kw_closure#0
-20  (new %₁₈ %₁₉ slot₁/y)
-21  slot₂/#f_kw_closure#0
-22  (call core.setfield! %₂₁ :contents %₂₀)
-23  TestMod.##f_kw_closure#0##0
-24  TestMod.X
-25  TestMod.#f_kw_closure##0
-26  (call core.svec %₂₃ %₂₄ %₂₅)
-27  (call core.svec)
-28  SourceLocation::2:14
-29  (call core.svec %₂₆ %₂₇ %₂₈)
-30  --- method core.nothing %₂₉
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/#self#(!read)]
+19  (new %₁₈ slot₁/y)
+20  slot₂/#f_kw_closure#0
+21  (call core.setfield! %₂₀ :contents %₁₉)
+22  TestMod.##f_kw_closure#0##0
+23  TestMod.X
+24  TestMod.#f_kw_closure##0
+25  (call core.svec %₂₂ %₂₃ %₂₄)
+26  (call core.svec)
+27  SourceLocation::2:14
+28  (call core.svec %₂₅ %₂₆ %₂₇)
+29  --- method core.nothing %₂₈
+    slots: [slot₁/#f_kw_closure#0(!read) slot₂/x slot₃/#self#(!read)]
     1   (meta :nkw 1)
     2   TestMod.+
-    3   (call core.getfield slot₁/#self# :y)
+    3   (call core.getfield slot₁/#f_kw_closure#0 :y)
     4   (call %₂ slot₂/x %₃)
     5   (return %₄)
-31  latestworld
-32  (call core.typeof core.kwcall)
-33  TestMod.#f_kw_closure##0
-34  (call core.svec %₃₂ core.NamedTuple %₃₃)
-35  (call core.svec)
-36  SourceLocation::2:14
-37  (call core.svec %₃₄ %₃₅ %₃₆)
-38  --- method core.nothing %₃₇
+30  latestworld
+31  (call core.typeof core.kwcall)
+32  TestMod.#f_kw_closure##0
+33  (call core.svec %₃₁ core.NamedTuple %₃₂)
+34  (call core.svec)
+35  SourceLocation::2:14
+36  (call core.svec %₃₃ %₃₄ %₃₅)
+37  --- method core.nothing %₃₆
     slots: [slot₁/#kwcall_self#(!read) slot₂/kws slot₃/#self# slot₄/kwtmp slot₅/x(!read) slot₆/#f_kw_closure#0(!read,maybe_undef)]
     1   (newvar slot₅/x)
     2   (call core.isdefined slot₂/kws :x)
@@ -721,13 +720,13 @@ end
     30  (call core.getfield %₂₄ :contents)
     31  (call %₃₀ %₁₆ slot₃/#self#)
     32  (return %₃₁)
-39  latestworld
-40  TestMod.#f_kw_closure##0
-41  (call core.svec %₄₀)
-42  (call core.svec)
-43  SourceLocation::2:14
-44  (call core.svec %₄₁ %₄₂ %₄₃)
-45  --- method core.nothing %₄₄
+38  latestworld
+39  TestMod.#f_kw_closure##0
+40  (call core.svec %₃₉)
+41  (call core.svec)
+42  SourceLocation::2:14
+43  (call core.svec %₄₀ %₄₁ %₄₂)
+44  --- method core.nothing %₄₃
     slots: [slot₁/#self# slot₂/#f_kw_closure#0(!read,maybe_undef)]
     1   (call core.getfield slot₁/#self# :#f_kw_closure#0)
     2   (call core.isdefined %₁ :contents)
@@ -739,9 +738,9 @@ end
     8   TestMod.x_default
     9   (call %₇ %₈ slot₁/#self#)
     10  (return %₉)
-46  latestworld
-47  slot₃/f_kw_closure
-48  (return %₄₇)
+45  latestworld
+46  slot₃/f_kw_closure
+47  (return %₄₆)
 
 ########################################
 # Closure capturing a typed local must also capture the type expression

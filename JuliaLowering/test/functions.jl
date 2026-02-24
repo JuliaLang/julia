@@ -628,6 +628,16 @@ end
     @test f() isa Function
     @test f()() == (0, 1, 1)
     @test f(x=2)(y=3) == (0, 2, 3)
+
+    f = JuliaLowering.include_string(test_mod, """
+    function f_kw_anon(outervar)
+        (a,;kw=1)->a+kw+outervar
+    end
+    """)
+
+    @test f(100) isa Function
+    @test f(100)(2) == 103
+    @test f(100)(2;kw=2) == 104
 end
 
 @testset "pre-desugared arg::Vararg" begin
