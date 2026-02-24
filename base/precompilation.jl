@@ -1146,6 +1146,13 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
     pkg_watcher = if wait_for_pkg !== nothing
         Threads.@spawn :samepool begin
             @lock BG.pkg_done begin
+                # Wait for the package to appear in pending_pkgids (it may not be
+                # registered yet if the request was just injected via work_channel
+                # and drain_work_channel! hasn't processed it).
+                while wait_for_pkg ∉ BG.pending_pkgids && BG.completed_at === nothing
+                    wait(BG.pkg_done)
+                end
+                # Now wait for it to finish
                 while wait_for_pkg ∈ BG.pending_pkgids
                     wait(BG.pkg_done)
                 end
@@ -1758,7 +1765,10 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
                 notify(batch_wp[pkg_config])
                 continue
             end
-            @lock BG @lock BG.pkg_done push!(BG.pending_pkgids, pkg)
+            @lock BG @lock BG.pkg_done begin
+                push!(BG.pending_pkgids, pkg)
+                notify(BG.pkg_done)
+            end
             flags, cacheflags = config
             task = Threads.@spawn :samepool try
                 loaded = s.warn_loaded && (pkg in s.start_loaded_modules)
