@@ -2470,14 +2470,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 end
 
 demangle_function_name(name::Symbol) = Symbol(demangle_function_name(string(name)))
-function demangle_function_name(name::AbstractString)
-    demangle = split(name, '#')
-    # kw sorters and impl methods use the name scheme `f#...`
-    if length(demangle) >= 2 && demangle[1] != ""
-        return demangle[1]
-    end
-    return name
-end
+# kw sorters and impl methods use the name scheme `f#...`
+demangle_function_name(name::AbstractString) = replace(name, r"^(.+?)#[\d#]+$" => s"\1")
 
 # show the called object in a signature, given its type `ft`
 # `io` should contain the UnionAll env of the signature
