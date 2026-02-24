@@ -2243,6 +2243,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
 
     # Final output
     s.interrupted_or_done = true
+    notify(s.first_started) # unblock print loop if nothing ever started (no-op case)
     fancyprint && wait(t_print)
     return report_precompile_results!(s)
 end
