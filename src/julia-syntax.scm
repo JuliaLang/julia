@@ -5044,9 +5044,6 @@ f(x) = yt(x)
                      (if (has? label-nesting name)
                          (error (string "label \"" name "\" defined multiple times")))
                      (put! label-nesting name 'symbolicblock)))
-               ;; Initialize result-var to nothing (for break without value case)
-               (if result-var
-                   (emit `(= ,result-var (null))))
                ;; Compile body with this block in break-labels
                (let ((body-val (compile body
                                         (cons (list name endl handler-token-stack catch-token-stack result-var)
@@ -5056,6 +5053,18 @@ f(x) = yt(x)
                  (if (and result-var body-val)
                      (emit `(= ,result-var ,body-val))))
                (mark-label endl)
+               ;; Use isdefined to handle the case where initialization was
+               ;; skipped (e.g., by @goto jumping into the block body).
+               (if result-var
+                   (let ((val (make-ssavalue))
+                         (defined-label (make-label))
+                         (done-label (make-label)))
+                     (emit `(= ,val (isdefined ,result-var)))
+                     (emit `(gotoifnot ,val ,defined-label))
+                     (emit `(goto ,done-label))
+                     (mark-label defined-label)
+                     (emit `(= ,result-var (null)))
+                     (mark-label done-label)))
                ;; Return result-var if value is needed
                (cond (tail  (emit-return tail result-var))
                      (value result-var)
