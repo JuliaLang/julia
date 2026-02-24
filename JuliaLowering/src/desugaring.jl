@@ -2710,6 +2710,11 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
 
         push!(kw_name_syms, name_sym)
     end
+    # Mark the wrapper, not the body function, as the "self" arg to
+    # @__FUNCTION__.  TODO: We could probably unify this with is_kwcall_self
+    # with a generic "closure not on first arg" flag if we're willing to pass
+    # the closure to the body function through this arg instead of the first.
+    arg_names[1] = setmeta(arg_names[1], :thisfunction_original, true)
     append!(body_arg_names, arg_names)
     append!(body_arg_types, arg_types)
 

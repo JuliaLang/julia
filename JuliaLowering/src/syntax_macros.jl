@@ -103,6 +103,10 @@ function Base.var"@locals"(__context__::MacroContext)
     @ast __context__ __context__.macrocall [K"locals"]
 end
 
+function Base.var"@__FUNCTION__"(__context__::MacroContext)
+    @ast __context__ __context__.macrocall [K"thisfunction"]
+end
+
 function Base.var"@isdefined"(__context__::MacroContext, ex)
     @ast __context__ __context__.macrocall [K"isdefined" ex]
 end

@@ -288,9 +288,11 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"softscope" _] -> pass()
     [K"softscope"] -> pass()
     [K"generated"] -> pass()
-    [K"generated_function" callex gen nongen] ->
-        vst1_function_calldecl(vcx, callex) &
-        vst1(vcx, gen) & vst1(vcx, nongen)
+    [K"generated_function" callex gen nongen] -> let
+        f_vcx = with(vcx; return_ok=true, toplevel=false, in_gscope=false)
+        vst1_function_calldecl(with(f_vcx; return_ok=false), callex) &
+            vst1(f_vcx, gen) & vst1(f_vcx, nongen)
+    end
     [K"foreigncall" _...] -> pass() # TODO (ccall also?)
     [K"cfunction" [K"Value"] f rt at [K"inert" [K"Identifier"]]] ->
         vst1(vcx, f) & vst1(vcx, rt) & vst1(vcx, at)
@@ -311,6 +313,10 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"copyast" [K"inert" _]] -> pass()
     [K"new" t args...] -> vst1(vcx, t) & all(vst1, vcx, args)
     [K"splatnew" t arg] -> vst1(vcx, t) & vst1(vcx, arg)
+    [K"thisfunction"] -> vcx.toplevel ?
+        @fail(st, "can only be used inside a function") :
+        !vcx.return_ok ?
+        @fail(st, "current function not defined in comprehension or generator") : pass()
 
     #---------------------------------------------------------------------------
     # Invalid forms for which we want to produce detailed errors
