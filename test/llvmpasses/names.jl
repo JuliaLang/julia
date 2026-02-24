@@ -149,12 +149,12 @@ emit(f5, A)
 # CHECK: %ptls_load
 # CHECK: %safepoint
 # CHECK: %"e::E.f"
+# CHECK: @"+Main.Base.RefValue
 # CHECK: %"e::E.f.tag_addr"
 # CHECK: %"e::E.f.tag"
-# CHECK: @"+Main.Base.RefValue
-# CHECK: %gc_slot_addr_0
 # CHECK: @"jl_sym#g
 # CHECK: @"jl_sym#h
+# CHECK: %gc_slot_addr_0
 emit(f6, E)
 
 

@@ -88,6 +88,14 @@ JL_DLLEXPORT size_t jl_jit_total_bytes_fallback(void)
     return 0;
 }
 
+JL_DLLEXPORT void jl_jit_register_ci_fallback(jl_code_instance_t *ci)
+{
+}
+
+JL_DLLEXPORT void jl_jit_unregister_ci_fallback(jl_code_instance_t *ci)
+{
+}
+
 JL_DLLEXPORT void *jl_create_native_fallback(LLVMOrcThreadSafeModuleRef llvmmod, int _trim, int _external_linkage, size_t _world, jl_array_t *_mod_array, jl_array_t *_worklist, int _all, jl_array_t *_module_init_order) UNAVAILABLE
 JL_DLLEXPORT void *jl_emit_native_fallback(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _external_linkage) UNAVAILABLE
 

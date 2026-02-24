@@ -97,7 +97,10 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
     return st._id, src
 end
 
-function est_to_expr(st::SyntaxTree)
+# `suppress_linenodes` is true if `st`'s parent knows `st` is an exception to
+# normal linenode rules.  It only applies to `st`, and not transitively to its
+# children.
+function est_to_expr(st::SyntaxTree, suppress_linenodes=false)
     k = kind(st)
     return if k === K"core" && numchildren(st) === 0 && st.name_val === "nothing"
         nothing
@@ -116,22 +119,45 @@ function est_to_expr(st::SyntaxTree)
     elseif k === K"inert"
         QuoteNode(est_to_expr(st[1]))
     else
-        # TODO: should handle post-desugaring forms as well
+        # TODO: should handle post-lowering forms as well
         @assert !is_leaf(st) "est_to_expr should only be used pre-desugaring"
         # In a partially-expanded or quoted AST, there may be heads with no
         # corresponding kind
         head = Symbol(k === K"unknown_head" ? st.name_val : untokenize(k))
-        need_lnns = head in (:block, :toplevel)
         out = Expr(head)
-        for c in children(st)
+
+        # (Move the following assumptions to the docs if they turn out accurate)
+        # The only mandatory LineNumberNode is the second macrocall argument.
+        # Other than that, optional linenodes may show up anywhere within:
+        # - `block`, unless the block is the first child of `for` or `let`
+        # - `toplevel`
+        # Macro authors are responsible for handling any linenodes that follow
+        # the rules above (but the presence of optional linenodes can't be
+        # counted upon).
+        need_lnns = head in (:block, :toplevel) && !suppress_linenodes
+        for (i, c) in enumerate(children(st))
             need_lnns && push!(out.args, source_location(LineNumberNode, c))
-            push!(out.args, est_to_expr(c))
+            let suppress_c = i == 1 && (k == K"for" || k == K"let")
+                push!(out.args, est_to_expr(c, suppress_c))
+            end
         end
-        # extra linenodes
-        n = length(out.args)
-        if (k === K"module" && 3 <= n <= 4 && kind(st[end]) === K"block") ||
-            (k in KSet"function macro" && n === 2 && kind(st[end]) === K"block")
-            pushfirst!(out.args[end].args, source_location(LineNumberNode, st))
+        # Add extra linenodes to some blocks for better provenance
+        @stm st begin
+            ([K"block"], when=!suppress_linenodes) ->
+                push!(out.args, source_location(LineNumberNode, st))
+            [K"module" _... [K"block" _...]] ->
+                pushfirst!(out.args[end].args, source_location(LineNumberNode, st))
+            [K"function" _ [K"block" _...]] ->
+                pushfirst!(out.args[end].args, source_location(LineNumberNode, st))
+            [K"macro" _ [K"block" _...]] ->
+                pushfirst!(out.args[end].args, source_location(LineNumberNode, st))
+            [K"for" _ [K"block" _...]] ->
+                push!(out.args[end].args, source_location(
+                    LineNumberNode, sourcefile(st), last_byte(st)))
+            [K"while" _ [K"block" _...]] ->
+                push!(out.args[end].args, source_location(
+                    LineNumberNode, sourcefile(st), last_byte(st)))
+            _ -> nothing
         end
         out
     end

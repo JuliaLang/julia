@@ -68,6 +68,25 @@ global a_typed_global::Int = 10.0
 """) === 10.0
 @test Core.get_binding_type(test_mod, :a_typed_global) === Int
 @test test_mod.a_typed_global === 10
+@test JuliaLowering.include_string(test_mod, """
+global a_curly_typed_global::Union{Int, Float64} = 10.0
+""") === 10.0
+@test Core.get_binding_type(test_mod, :a_curly_typed_global) === Union{Int, Float64}
+@test test_mod.a_curly_typed_global === 10.0
+@test JuliaLowering.include_string(test_mod, """
+begin
+    global opassign_global = 1
+    global opassign_global += 1
+end
+""") === 2
+@test test_mod.opassign_global === 2
+@test JuliaLowering.include_string(test_mod, """
+begin
+    global dotopassign_global = [1,2,3]
+    global dotopassign_global .+= 1
+end
+""") == [2,3,4]
+@test test_mod.dotopassign_global == [2,3,4]
 
 # Also allowed in nontrivial scopes in a top level thunk
 @test JuliaLowering.include_string(test_mod, """
@@ -77,6 +96,29 @@ end
 """) === 10.0
 @test Core.get_binding_type(test_mod, :a_typed_global_2) === Int
 @test test_mod.a_typed_global_2 === 10
+@test JuliaLowering.include_string(test_mod, """
+let
+    global a_curly_typed_global_2::Union{Int, Float64} = 10.0
+end
+""") === 10.0
+@test Core.get_binding_type(test_mod, :a_curly_typed_global_2) === Union{Int, Float64}
+@test test_mod.a_curly_typed_global_2 === 10.0
+@test JuliaLowering.include_string(test_mod, """
+begin
+    global opassign_global_t::Int = 1
+    global opassign_global_t::Int += 1.0
+end
+""") === 2.0
+@test Core.get_binding_type(test_mod, :opassign_global_t) === Int
+@test test_mod.opassign_global_t === 2
+@test JuliaLowering.include_string(test_mod, """
+begin
+    global dotopassign_global_t::Vector{Int} = [1,2,3]
+    global dotopassign_global_t::Vector{Int} .+= [1.0,2.0,3.0]
+end
+""") == [2.0,4.0,6.0]
+@test Core.get_binding_type(test_mod, :dotopassign_global_t) === Vector{Int}
+@test test_mod.dotopassign_global_t == [2,4,6]
 
 @test JuliaLowering.include_string(test_mod, "const x_c_T::Int = 9") === 9
 @test Base.isdefinedglobal(test_mod, :x_c_T)
