@@ -751,6 +751,12 @@ BasicBlock *NewSinkState::findSinkTargetForValue(Instruction *I)
     if (!Target)
         return nullptr;
 
+    // Don't sink into or out of a loop — that's LICM/LoopSink's job.
+    Loop *CurLoop = LI.getLoopFor(CurrentBB);
+    Loop *TargetLoop = LI.getLoopFor(Target);
+    if (CurLoop != TargetLoop)
+        return nullptr;
+
     // For instructions that read memory, verify no intervening instructions
     // clobber the value between the instruction and the block terminator.
     // This catches both intervening writes and returns_twice barriers
@@ -822,9 +828,12 @@ BasicBlock *NewSinkState::findSinkTargetForWrite(Instruction *I)
         if (!Succ->hasNPredecessors(1))
             continue;
 
-        // Don't sink into a different loop
+        // Don't sink into or out of a loop. Sinking out of a loop would
+        // reduce a store that executes every iteration to one that only
+        // executes once (after the last iteration), which is wrong when the
+        // store target varies per iteration.
         Loop *SuccLoop = LI.getLoopFor(Succ);
-        if (SuccLoop != nullptr && SuccLoop != CurLoop)
+        if (CurLoop != nullptr && SuccLoop != CurLoop)
             continue;
 
         // In loops, require post-dominance so all iterations execute the store
