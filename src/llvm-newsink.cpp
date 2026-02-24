@@ -108,10 +108,6 @@ static bool isNoReturnBlock(const BasicBlock *BB)
     return isa<UnreachableInst>(BB->getTerminator());
 }
 
-struct ReadClobberInfo {
-    bool HasAliasAccessInSourceBlock = false;
-};
-
 // State struct holding all analysis dependencies, following DSE's pattern.
 struct NewSinkState {
     Function &F;
@@ -190,21 +186,19 @@ struct NewSinkState {
     void collectNoReturnBlocks();
     bool canSinkInstruction(Instruction *I) const;
     BasicBlock *canSinkMemoryWriteToSuccessor(Instruction *WriteInst,
-                                              BasicBlock *TargetSucc,
-                                              ReadClobberInfo &RCI);
+                                              BasicBlock *TargetSucc);
     BasicBlock *findSinkTargetForValue(Instruction *I);
     BasicBlock *findSinkTargetForWrite(Instruction *I);
     bool trySinkInstruction(Instruction *I);
     bool run();
 };
 
-// Collect blocks where all paths lead to unreachable (backward dataflow).
+// Collect blocks where all paths lead to unreachable.
+// Uses a worklist to propagate backward from unreachable terminators in O(V+E).
 void NewSinkState::collectNoReturnBlocks()
 {
     SmallVector<BasicBlock *, 8> Worklist;
     for (BasicBlock &BB : F) {
-        // Skip unreachable blocks - they're not in the dominator tree
-        // and shouldn't affect sinking decisions for reachable code
         if (!DT.isReachableFromEntry(&BB))
             continue;
         if (isNoReturnBlock(&BB)) {
@@ -213,26 +207,21 @@ void NewSinkState::collectNoReturnBlocks()
         }
     }
 
-    bool Changed = true;
-    while (Changed) {
-        Changed = false;
-        for (BasicBlock &BB : F) {
-            if (!DT.isReachableFromEntry(&BB))
+    while (!Worklist.empty()) {
+        BasicBlock *BB = Worklist.pop_back_val();
+        for (BasicBlock *Pred : predecessors(BB)) {
+            if (!DT.isReachableFromEntry(Pred))
                 continue;
-            if (NoReturnBlocks.count(&BB) || succ_empty(&BB))
+            if (NoReturnBlocks.count(Pred))
+                continue;
+            if (succ_empty(Pred))
                 continue;
 
-            bool AllSuccNoReturn = true;
-            for (BasicBlock *Succ : successors(&BB)) {
-                if (!NoReturnBlocks.count(Succ)) {
-                    AllSuccNoReturn = false;
-                    break;
-                }
-            }
-
-            if (AllSuccNoReturn) {
-                NoReturnBlocks.insert(&BB);
-                Changed = true;
+            if (llvm::all_of(successors(Pred), [&](BasicBlock *Succ) {
+                    return NoReturnBlocks.count(Succ);
+                })) {
+                NoReturnBlocks.insert(Pred);
+                Worklist.push_back(Pred);
             }
         }
     }
@@ -405,8 +394,7 @@ bool NewSinkState::pointerEscapesOutsideTarget(const Value *Ptr, BasicBlock *Tar
 // Check if a memory write can be safely sunk to target successor.
 // Uses MemorySSA to verify no reads observe the wrong value.
 BasicBlock *NewSinkState::canSinkMemoryWriteToSuccessor(Instruction *WriteInst,
-                                                        BasicBlock *TargetSucc,
-                                                        ReadClobberInfo &RCI)
+                                                        BasicBlock *TargetSucc)
 {
     if (!isSinkableMemoryWrite(WriteInst))
         return nullptr;
@@ -491,10 +479,8 @@ BasicBlock *NewSinkState::canSinkMemoryWriteToSuccessor(Instruction *WriteInst,
                 // (can't write to memory after its lifetime ended).
                 if (MABB == CurrentBB) {
                     ModRefInfo MRI = BatchAA.getModRefInfo(II, WriteLoc);
-                    if (isModOrRefSet(MRI)) {
-                        RCI.HasAliasAccessInSourceBlock = true;
+                    if (isModOrRefSet(MRI))
                         return nullptr;
-                    }
                 }
                 // Doesn't affect our write location - just follow users
                 if (auto *UserDef = dyn_cast<MemoryDef>(MA)) {
@@ -520,11 +506,9 @@ BasicBlock *NewSinkState::canSinkMemoryWriteToSuccessor(Instruction *WriteInst,
         if (MABB == CurrentBB) {
             // Check if this access aliases our write location
             ModRefInfo MRI = BatchAA.getModRefInfo(MemInst, WriteLoc);
-            if (isModOrRefSet(MRI)) {
+            if (isModOrRefSet(MRI))
                 // This access may observe or clobber our write - can't sink
-                RCI.HasAliasAccessInSourceBlock = true;
                 return nullptr;
-            }
             // Follow through MemoryDefs to find later accesses in the source block
             if (auto *UserDef = dyn_cast<MemoryDef>(MA)) {
                 for (User *U : UserDef->users())
@@ -557,18 +541,57 @@ BasicBlock *NewSinkState::canSinkMemoryWriteToSuccessor(Instruction *WriteInst,
     return TargetSucc;
 }
 
-// Check if a load can be sunk (no intervening writes to the loaded location).
-static bool canSinkLoad(LoadInst *LI, AliasAnalysis &AA)
+// Check if a memory-reading instruction (load or readonly call) can be sunk
+// past all instructions between it and the block terminator without observing
+// a different value. Walks forward from I to the terminator checking for
+// intervening clobbers via AA. Handles both loads and readonly calls uniformly.
+// The AA layer naturally handles returns_twice (BasicAA models setjmp as
+// clobbering non-local memory).
+static bool canSinkMemoryRead(Instruction *I, AliasAnalysis &AA)
 {
-    BasicBlock *BB = LI->getParent();
+    BasicBlock *BB = I->getParent();
     Instruction *Term = BB->getTerminator();
 
-    if (LI->getNextNode() == Term)
+    if (I->getNextNode() == Term)
         return true;
 
-    MemoryLocation LoadLoc = MemoryLocation::get(LI);
-    return !AA.canInstructionRangeModRef(*LI->getNextNode(), *Term, LoadLoc,
-                                         ModRefInfo::Mod);
+    // For loads, use the efficient MemoryLocation-based range query.
+    if (auto *LI = dyn_cast<LoadInst>(I)) {
+        MemoryLocation Loc = MemoryLocation::get(LI);
+        return !AA.canInstructionRangeModRef(*LI->getNextNode(), *Term, Loc,
+                                              ModRefInfo::Mod);
+    }
+
+    // For readonly calls, check each intervening instruction individually.
+    // We can't use canInstructionRangeModRef because calls don't have a
+    // single MemoryLocation, but the logic is the same: does any instruction
+    // between I and the terminator modify memory that I reads?
+    auto *CB = dyn_cast<CallBase>(I);
+    if (!CB)
+        return false;
+
+    for (Instruction *Cur = CB->getNextNode(); Cur != Term;
+         Cur = Cur->getNextNode()) {
+        if (!Cur->mayWriteToMemory())
+            continue;
+
+        if (auto *CurCB = dyn_cast<CallBase>(Cur)) {
+            if (isModSet(AA.getModRefInfo(CurCB, CB)))
+                return false;
+            continue;
+        }
+
+        if (auto Loc = MemoryLocation::getOrNone(Cur)) {
+            if (isRefSet(AA.getModRefInfo(CB, *Loc)))
+                return false;
+            continue;
+        }
+
+        // Unknown memory-writing instruction — conservatively block sinking.
+        return false;
+    }
+
+    return true;
 }
 
 // Check if a memcpy/memmove can be sunk (no intervening modifications to source).
@@ -645,6 +668,11 @@ bool NewSinkState::canSinkInstruction(Instruction *I) const
             return false;
         // nomerge attribute prevents code motion
         if (CB->cannotMerge())
+            return false;
+        // returns_twice (setjmp) is a control-flow barrier — it returns once
+        // normally and once via longjmp with potentially different memory state.
+        // Must not be sunk or reordered.
+        if (CB->hasFnAttr(Attribute::ReturnsTwice))
             return false;
     }
 
@@ -723,13 +751,17 @@ BasicBlock *NewSinkState::findSinkTargetForValue(Instruction *I)
     if (!Target)
         return nullptr;
 
-    // For loads, verify no writes clobber the value between source and target.
-    // canSinkLoad only checks the source block, so restrict loads to immediate
+    // For instructions that read memory, verify no intervening instructions
+    // clobber the value between the instruction and the block terminator.
+    // This catches both intervening writes and returns_twice barriers
+    // (BasicAA models setjmp as clobbering non-local memory).
+    //
+    // canSinkMemoryRead only checks the source block, so restrict to immediate
     // successors to avoid sinking past clobbering writes in intermediate blocks.
-    if (auto *LI = dyn_cast<LoadInst>(I)) {
+    if (I->mayReadFromMemory()) {
         if (!llvm::is_contained(successors(CurrentBB), Target))
             return nullptr;
-        if (!canSinkLoad(LI, AA))
+        if (!canSinkMemoryRead(I, AA))
             return nullptr;
     }
 
@@ -755,6 +787,8 @@ BasicBlock *NewSinkState::findSinkTargetForWrite(Instruction *I)
             return nullptr;
     }
 
+    Loop *CurLoop = LI.getLoopFor(CurrentBB);
+
     // Check noreturn successors first
     BasicBlock *NoReturnTarget = nullptr;
     for (BasicBlock *Succ : successors(CurrentBB)) {
@@ -766,19 +800,22 @@ BasicBlock *NewSinkState::findSinkTargetForWrite(Instruction *I)
         }
     }
 
-    // Verify noreturn target is safe via alias analysis
+    // Verify noreturn target is safe via alias analysis.
+    // Don't sink into a different loop. Post-dominance is NOT required here
+    // (unlike the general path) because the goal is to remove the store from
+    // the hot path — the MSSA walk in canSinkMemoryWriteToSuccessor ensures
+    // no reader on the non-noreturn path depends on this write.
     if (NoReturnTarget && NoReturnBlocks.count(NoReturnTarget) &&
         NoReturnTarget != CurrentBB) {
-        ReadClobberInfo RCI;
-        if (canSinkMemoryWriteToSuccessor(I, NoReturnTarget, RCI))
+        Loop *TargetLoop = LI.getLoopFor(NoReturnTarget);
+        bool LoopSafe = (TargetLoop == nullptr || TargetLoop == CurLoop);
+        if (LoopSafe && canSinkMemoryWriteToSuccessor(I, NoReturnTarget))
             return NoReturnTarget;
     }
 
     // General sinking requires multiple successors (otherwise no benefit)
     if (succ_size(CurrentBB) <= 1)
         return nullptr;
-
-    Loop *CurLoop = LI.getLoopFor(CurrentBB);
 
     BasicBlock *GeneralTarget = nullptr;
     for (BasicBlock *Succ : successors(CurrentBB)) {
@@ -794,8 +831,7 @@ BasicBlock *NewSinkState::findSinkTargetForWrite(Instruction *I)
         if (CurLoop && !PDT.dominates(Succ, CurrentBB))
             continue;
 
-        ReadClobberInfo RCI;
-        if (canSinkMemoryWriteToSuccessor(I, Succ, RCI)) {
+        if (canSinkMemoryWriteToSuccessor(I, Succ)) {
             if (GeneralTarget)
                 return nullptr; // Multiple valid targets - ambiguous
             GeneralTarget = Succ;
@@ -957,6 +993,6 @@ PreservedAnalyses NewSinkPass::run(Function &F, FunctionAnalysisManager &AM)
 #endif
     PreservedAnalyses PA;
     PA.preserveSet<CFGAnalyses>();
-    PA.preserve<DominatorTreeAnalysis>();
+    PA.preserve<MemorySSAAnalysis>();
     return PA;
 }
