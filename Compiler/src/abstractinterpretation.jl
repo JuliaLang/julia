@@ -2627,7 +2627,7 @@ function abstract_eval_replaceglobal!(interp::AbstractInterpreter, sv::AbsIntSta
                         partition_T = partition_restriction(partition)
                     end
                     partition_exct = Union{partition_rte.exct, global_assignment_binding_rt_exct(interp, partition, v′[])[2]}
-                    partition_rte = RTEffects(partition_rte.rt, partition_exct, partition_rte.effects)
+                    partition_rte = RTEffects(get_rt(partition_rte), partition_exct, partition_rte.effects)
                     Pair{RTEffects, Any}(partition_rte, partition_T)
                 end
                 update_valid_age!(sv, world, valid_worlds)
@@ -3050,9 +3050,9 @@ function abstract_eval_value(interp::AbstractInterpreter, @nospecialize(e), ssta
     if isa(e, Expr)
         return abstract_eval_value_expr(interp, e, sv)
     else
-        (;rt, effects) = abstract_eval_special_value(interp, e, sstate, sv)
-        merge_effects!(interp, sv, effects)
-        return collect_limitations!(rt, sv)
+        rte = abstract_eval_special_value(interp, e, sstate, sv)
+        merge_effects!(interp, sv, rte.effects)
+        return collect_limitations!(get_rt(rte), sv)
     end
 end
 
@@ -3069,19 +3069,33 @@ function collect_argtypes(interp::AbstractInterpreter, ea::Vector{Any}, sstate::
     return argtypes
 end
 
+const _RT_NOT_CONST = Const(nothing)
+
 struct RTEffects
-    rt::Any
+    _const_rt::Const
+    _other_rt::Any
     exct::Any
     effects::Effects
     refinements # ::Union{Nothing,SlotRefinement,Vector{Any}}
-    function RTEffects(rt, exct, effects::Effects, refinements=nothing)
-        @nospecialize rt exct refinements
-        return new(rt, exct, effects, refinements)
+
+    function RTEffects(rt::Const, exct, effects::Effects, refinements=nothing)
+        @nospecialize exct refinements
+        return new(rt, nothing, exct, effects, refinements)
+    end
+
+    function RTEffects(@nospecialize(rt), exct, effects::Effects, refinements=nothing)
+        @nospecialize exct refinements
+        return new(_RT_NOT_CONST, rt, exct, effects, refinements)
     end
 end
 
+@inline function get_rt(rte::RTEffects)
+    other = getfield(rte, :_other_rt)
+    return other === nothing ? getfield(rte, :_const_rt) : other
+end
+
 CallMeta(rte::RTEffects, info::CallInfo) =
-    CallMeta(rte.rt, rte.exct, rte.effects, info, rte.refinements)
+    CallMeta(get_rt(rte), rte.exct, rte.effects, info, rte.refinements)
 
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, sstate::StatementState, sv::InferenceState)
     unused = call_result_unused(sv, sv.currpc)
@@ -3358,7 +3372,7 @@ function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, mod::Module,
     # XXX: it is unsound to ignore valid_worlds here
     if rte.exct == Union{}
         rt = Const(true)
-    elseif rte.rt === Union{} && rte.exct === UndefVarError
+    elseif get_rt(rte) === Union{} && rte.exct === UndefVarError
         rt = Const(false)
     else
         effects = Effects(generic_isdefinedglobal_effects, nothrow=true)
@@ -3576,7 +3590,7 @@ function abstract_eval_phi(interp::AbstractInterpreter, phi::PhiNode, sstate::St
         val = phi.values[i]
         # N.B.: Phi arguments are restricted to not have effects, so we can drop
         # them here safely.
-        thisval = abstract_eval_special_value(interp, val, sstate, sv).rt
+        thisval = get_rt(abstract_eval_special_value(interp, val, sstate, sv))
         rt = tmerge(typeinf_lattice(interp), rt, thisval)
     end
     return rt
@@ -3624,7 +3638,7 @@ function abstract_eval_globalref_type(g::GlobalRef, src::Union{CodeInfo, IRCode,
     if min_world(valid_worlds) > min_world(worlds) || max_world(valid_worlds) < max_world(worlds)
         return Any
     end
-    return rte.rt
+    return get_rt(rte)
 end
 
 function lookup_binding_partition!(interp::AbstractInterpreter, g::Union{GlobalRef, Core.Binding}, sv::AbsIntState)
@@ -3854,7 +3868,8 @@ end
             stmt = stmt.args[2]
         end
         if !isa(stmt, Expr)
-            (; rt, exct, effects, refinements) = abstract_eval_special_value(interp, stmt, sstate, frame)
+            rte = abstract_eval_special_value(interp, stmt, sstate, frame)
+            rt, exct, effects, refinements = get_rt(rte), rte.exct, rte.effects, rte.refinements
         else
             hd = stmt.head
             if hd === :method
@@ -3883,7 +3898,7 @@ end
                     end
                 end
                 result = result[]
-                (; rt, exct, effects, refinements) = result
+                rt, exct, effects, refinements = get_rt(result), result.exct, result.effects, result.refinements
                 if effects.noub === NOUB_IF_NOINBOUNDS
                     if has_curr_ssaflag(frame, IR_FLAG_INBOUNDS)
                         effects = Effects(effects; noub=ALWAYS_FALSE)

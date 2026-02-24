@@ -163,7 +163,8 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
             end
             @assert length(irsv.callstack) == irsv.frameid && isempty(irsv.tasks)
             result isa Future && (result = result[])
-            (; rt, effects) = result
+            rt = get_rt(result)
+            effects = result.effects
             add_flag!(inst, flags_for_effects(effects))
         elseif head === :invoke  # COMBAK: || head === :invoke_modifyfield (similar to call, but for args[2:end])
             rt, (nothrow, noub) = abstract_eval_invoke_inst(interp, inst, irsv)
