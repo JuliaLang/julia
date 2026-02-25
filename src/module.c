@@ -2094,10 +2094,9 @@ static void _materialize_reexported_bindings(jl_module_t *m, size_t world, jl_ar
     }
 }
 
-void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, int usings)
+void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, int usings, size_t defined_since, size_t world)
 {
     // Materialize reexported bindings first
-    size_t world = jl_current_task->world_age;
     jl_array_t *visited_modules = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&visited_modules);
     _materialize_reexported_bindings(m, world, visited_modules);
@@ -2111,9 +2110,11 @@ void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, i
         jl_sym_t *asname = b->globalref->name;
         int hidden = jl_symbol_name(asname)[0]=='#';
         int main_public = (m == jl_main_module && !(asname == jl_eval_sym || asname == jl_include_sym));
-        jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+        jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
+        if (jl_atomic_load_relaxed(&bpart->min_world) < defined_since)
+            continue;
         enum jl_partition_kind kind = jl_binding_kind(bpart);
-        if (((jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_PUBLICP) ||
+        if ((((jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_PUBLICP) && !jl_bkind_is_some_guard(kind)) ||
              jl_bpart_is_exported(bpart->kind) ||
              (imported && (kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_IMPORTED)) ||
              (usings && kind == PARTITION_KIND_EXPLICIT) ||
@@ -2123,10 +2124,8 @@ void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, i
     }
 }
 
-void append_exported_names(jl_array_t* a, jl_module_t *m, int all)
+void append_exported_names(jl_array_t* a, jl_module_t *m, int all, size_t defined_since, size_t world)
 {
-    size_t world = jl_current_task->world_age;
-
     // First, materialize all reexported bindings
     jl_array_t *visited_modules = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&visited_modules);
@@ -2140,21 +2139,23 @@ void append_exported_names(jl_array_t* a, jl_module_t *m, int all)
         if ((void*)b == jl_nothing)
             break;
         jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
+        if (jl_atomic_load_relaxed(&bpart->min_world) < defined_since)
+            continue;
         if (jl_bpart_is_exported(bpart->kind) && (all || !(bpart->kind & PARTITION_FLAG_DEPRECATED)))
             _append_symbol_to_bindings_array(a, b->globalref->name);
     }
 }
 
-JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported, int usings)
+JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported, int usings, size_t defined_since, size_t world)
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_symbol_type, 0);
     JL_GC_PUSH1(&a);
-    append_module_names(a, m, all, imported, usings);
+    append_module_names(a, m, all, imported, usings, defined_since, world);
     if (usings) {
         // If `usings` is specified, traverse the list of `using`-ed modules and incorporate
         // the names exported by those modules into the list.
         for (int i = module_usings_length(m)-1; i >= 0; i--)
-            append_exported_names(a, module_usings_getmod(m, i), all);
+            append_exported_names(a, module_usings_getmod(m, i), all, defined_since, world);
     }
     JL_GC_POP();
     return (jl_value_t*)a;

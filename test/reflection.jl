@@ -285,6 +285,36 @@ let defaultset = Set((:A,))
     @test Set(names(TestMod54609.A, all=true, imported=true, usings=true)) == allset ∪ imported ∪ usings
 end
 
+@testset "names world and defined_since arguments" begin
+    # Create a module with one early binding, record world, then add a late binding
+    M = @eval module $(gensym())
+        export early_name
+        early_name = 1
+    end
+    world_mid = Base.get_world_counter()
+    @eval M begin
+        export late_name
+        late_name = 2
+    end
+    world_end = Base.get_world_counter()
+
+    # Both names visible at world_end
+    @test :early_name ∈ names(M; world=world_end)
+    @test :late_name ∈ names(M; world=world_end)
+
+    # Only early_name visible at world_mid (before late_name was added)
+    @test :early_name ∈ names(M; world=world_mid)
+    @test :late_name ∉ names(M; world=world_mid)
+
+    # defined_since: only names defined at or after world_mid+1
+    @test :early_name ∉ names(M; all=true, defined_since=world_mid + UInt(1))
+    @test :late_name ∈ names(M; all=true, defined_since=world_mid + UInt(1))
+
+    # defined_since=0 (default): all names visible
+    @test :early_name ∈ names(M; all=true, defined_since=UInt(0))
+    @test :late_name ∈ names(M; all=true, defined_since=UInt(0))
+end
+
 let
     using .TestMod7648
     @test Base.binding_module(@__MODULE__, :a9475) == TestMod7648.TestModSub9475
