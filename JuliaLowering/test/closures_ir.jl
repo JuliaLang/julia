@@ -1,6 +1,5 @@
 ########################################
 # Simple closure - single-assigned capture before control flow doesn't need Box
-# (FIXME: #self# should have `read` flag set)
 let
     x = 1
     function f(y)

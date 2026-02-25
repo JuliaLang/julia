@@ -116,7 +116,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
         add_remark!(interp, sv, "Cannot infer call, because we previously saw :latestworld")
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     end
-    matches = find_method_matches(interp, argtypes, atype; max_methods)
+    matches = find_method_matches(interp, argtypes, atype; max_methods, fargs=arginfo.fargs)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
@@ -331,20 +331,23 @@ end
 
 function find_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any}, @nospecialize(atype);
                              max_union_splitting::Int = InferenceParams(interp).max_union_splitting,
-                             max_methods::Int = InferenceParams(interp).max_methods)
-    if is_union_split_eligible(typeinf_lattice(interp), argtypes, max_union_splitting)
-        return find_union_split_method_matches(interp, argtypes, max_methods)
+                             max_methods::Int = InferenceParams(interp).max_methods,
+                             fargs::Union{Nothing,Vector{Any}}=nothing)
+    if is_union_split_eligible(typeinf_lattice(interp), argtypes, max_union_splitting; fargs)
+        return find_union_split_method_matches(interp, argtypes, max_methods; fargs)
     end
     return find_simple_method_matches(interp, atype, max_methods)
 end
 
 # NOTE this is valid as far as any "constant" lattice element doesn't represent `Union` type
-is_union_split_eligible(𝕃::AbstractLattice, argtypes::Vector{Any}, max_union_splitting::Int) =
-    1 < unionsplitcost(𝕃, argtypes) <= max_union_splitting
+is_union_split_eligible(𝕃::AbstractLattice, argtypes::Vector{Any}, max_union_splitting::Int;
+                        fargs::Union{Nothing,Vector{Any}}=nothing) =
+    1 < unionsplitcost(𝕃, argtypes; fargs) <= max_union_splitting
 
 function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any},
-                                         max_methods::Int)
-    split_argtypes = switchtupleunion(typeinf_lattice(interp), argtypes)
+                                         max_methods::Int;
+                                         fargs::Union{Nothing,Vector{Any}}=nothing)
+    split_argtypes = switchtupleunion(typeinf_lattice(interp), argtypes; fargs)
     infos = MethodMatchInfo[]
     applicable = MethodMatchTarget[]
     applicable_argtypes = Vector{Any}[] # arrays like `argtypes`, including constants, for each match
@@ -3617,14 +3620,15 @@ world_range(ci::CodeInfo) = WorldRange(ci.min_world, ci.max_world)
 world_range(ci::CodeInstance) = WorldRange(ci.min_world, ci.max_world)
 world_range(compact::IncrementalCompact) = world_range(compact.ir)
 
-# n.b. this function is not part of abstract eval (where it would be unsound) but rather for the optimizer to observe the result of abstract eval
+# n.b. this function is not part of abstract eval (where it would be unsound) but rather
+# for the optimizer to observe the result of abstract eval. Inference already guaranteed
+# consistency across the world range, so we just look up the partition at max_world.
 function abstract_eval_globalref_type(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact})
     worlds = world_range(src)
-    (valid_worlds, rte) = abstract_load_all_consistent_leaf_partitions(nothing, g, WorldWithRange(min_world(worlds), worlds))
-    if min_world(valid_worlds) > min_world(worlds) || max_world(valid_worlds) < max_world(worlds)
-        return Any
-    end
-    return rte.rt
+    binding = convert(Core.Binding, g)
+    partition = lookup_binding_partition(max_world(worlds), binding)
+    (_, (leaf_binding, leaf_partition)) = walk_binding_partition(binding, partition, max_world(worlds))
+    return abstract_eval_partition_load(nothing, leaf_binding, leaf_partition).rt
 end
 
 function lookup_binding_partition!(interp::AbstractInterpreter, g::Union{GlobalRef, Core.Binding}, sv::AbsIntState)
@@ -3704,33 +3708,40 @@ end
 
 function scan_specified_partitions(query::F1, walk_binding_partition::F2,
     interp::Union{AbstractInterpreter,Nothing}, g::GlobalRef, wwr::WorldWithRange) where {F1,F2}
-    local total_validity, rte, binding_partition
     binding = convert(Core.Binding, g)
     lookup_world = max_world(wwr.valid_worlds)
-    while true
-        # Partitions are ordered newest-to-oldest so start at the top
-        binding_partition = @isdefined(binding_partition) ?
-            lookup_binding_partition(lookup_world, binding, binding_partition) :
-            lookup_binding_partition(lookup_world, binding)
-        while lookup_world >= binding_partition.min_world && (!@isdefined(total_validity) || min_world(total_validity) > min_world(wwr.valid_worlds))
-            partition_validity, (leaf_binding, leaf_partition) = walk_binding_partition(binding, binding_partition, lookup_world)
-            @assert lookup_world in partition_validity
-            this_rte = query(interp, leaf_binding, leaf_partition)
-            if @isdefined(rte)
-                if this_rte === rte
-                    total_validity = union(total_validity, partition_validity)
-                    lookup_world = min_world(total_validity) - 1
-                    continue
-                end
-                if min_world(total_validity) <= wwr.this
-                    @goto out
-                end
-            end
-            total_validity = partition_validity
-            lookup_world = min_world(total_validity) - 1
-            rte = this_rte
+    wwr_min = min_world(wwr.valid_worlds)
+    # The @inlines are because copying RTEffects is surprisingly expensive.
+    binding_partition = lookup_binding_partition(lookup_world, binding)
+    partition_validity, (leaf_binding, leaf_partition) = @inline walk_binding_partition(binding, binding_partition, lookup_world)
+    @assert lookup_world in partition_validity
+    rte = @inline query(interp, leaf_binding, leaf_partition)
+    total_validity = partition_validity
+    total_min = min_world(total_validity)
+    lookup_world = total_min - 1
+
+    # Scan backwards to find the largest sub-range of valid_worlds that
+    # gives a consistent answer and contains wwr.this.
+    while total_min > wwr_min
+        if lookup_world < binding_partition.min_world
+            binding_partition = lookup_binding_partition(lookup_world, binding, binding_partition)
         end
-        min_world(total_validity) > min_world(wwr.valid_worlds) || break
+        while lookup_world >= binding_partition.min_world && total_min > wwr_min
+            partition_validity, (leaf_binding, leaf_partition) = @inline walk_binding_partition(binding, binding_partition, lookup_world)
+            @assert lookup_world in partition_validity
+            this_rte = @inline query(interp, leaf_binding, leaf_partition)
+            if this_rte === rte
+                total_validity = union(total_validity, partition_validity)
+            else
+                # Answer changed: if we already cover wwr.this, return current answer
+                total_min <= wwr.this && @goto out
+                # Otherwise the old answer wasn't for our world, start fresh
+                total_validity = partition_validity
+                rte = this_rte
+            end
+            total_min = min_world(total_validity)
+            lookup_world = total_min - 1
+        end
     end
 @label out
     return Pair{WorldRange, typeof(rte)}(total_validity, rte)

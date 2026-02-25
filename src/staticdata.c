@@ -384,21 +384,11 @@ enum RefTags {
 
 #define SYS_EXTERNAL_LINK_UNIT sizeof(void*)
 
-// calling conventions for internal entry points.
-// this is used to set the method-instance->invoke field
-typedef enum {
-    JL_API_NULL,
-    JL_API_BOXED,
-    JL_API_CONST,
-    JL_API_WITH_PARAMETERS,
-    JL_API_OC_CALL,
-    JL_API_INTERPRETED,
-    JL_API_BUILTIN,
-    JL_API_MAX
-} jl_callingconv_t;
-
 // Sub-divisions of some RefTags
 const uintptr_t BuiltinFunctionTag = ((uintptr_t)1 << (RELOC_TAG_OFFSET - 1));
+// Bit set on FunctionRef when invoke should be set to jl_fptr_args, and should
+// not be zeroed when we want to disable native code.
+const uintptr_t BuiltinInvokeTag = ((uintptr_t)1 << (RELOC_TAG_OFFSET - 2));
 
 
 #if RELOC_TAG_OFFSET <= 32
@@ -1751,40 +1741,27 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 // preserve only JL_CI_FLAGS_NATIVE_CACHE_VALID bits
                 jl_atomic_store_relaxed(&newci->flags, jl_atomic_load_relaxed(&newci->flags) & JL_CI_FLAGS_NATIVE_CACHE_VALID);
                 jl_atomic_store_relaxed(&newci->specptr.fptr, NULL);
-                int8_t fptr_id = JL_API_NULL;
+                uintptr_t fptr_type = JL_INVOKE_SPECSIG;
                 int8_t builtin_id = 0;
                 if (jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return) {
-                    fptr_id = JL_API_CONST;
+                    fptr_type = JL_INVOKE_CONST;
                 }
                 else {
                     if (jl_is_method(jl_get_ci_mi(ci)->def.method)) {
                         builtin_id = jl_fptr_id(jl_atomic_load_relaxed(&ci->specptr.fptr));
                         if (builtin_id) { // found in the table of builtins
                             assert(builtin_id >= 2);
-                            fptr_id = JL_API_BUILTIN;
+                            fptr_type = (uintptr_t)JL_INVOKE_ARGS | BuiltinInvokeTag;
                         }
                         else {
                             int32_t invokeptr_id = 0;
                             int32_t specfptr_id = 0;
                             jl_get_function_id(native_functions, ci, &invokeptr_id, &specfptr_id); // see if we generated code for it
                             if (invokeptr_id) {
-                                if (invokeptr_id == -1) {
-                                    fptr_id = JL_API_BOXED;
-                                }
-                                else if (invokeptr_id == -2) {
-                                    fptr_id = JL_API_WITH_PARAMETERS;
-                                }
-                                else if (invokeptr_id == -3) {
-                                    abort();
-                                }
-                                else if (invokeptr_id == -4) {
-                                    fptr_id = JL_API_OC_CALL;
-                                }
-                                else if (invokeptr_id == -5) {
-                                    abort();
-                                }
-                                else {
-                                    assert(invokeptr_id > 0);
+                                if (invokeptr_id < 0) {
+                                    fptr_type = (jl_invoke_api_t)-invokeptr_id;
+                                    assert(fptr_type != JL_INVOKE_SPECSIG);
+                                } else {
                                     ios_ensureroom(s->fptr_record, invokeptr_id * sizeof(void*));
                                     ios_seek(s->fptr_record, (invokeptr_id - 1) * sizeof(void*));
                                     write_reloc_t(s->fptr_record, (reloc_t)~reloc_offset);
@@ -1808,10 +1785,10 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     }
                 }
                 jl_atomic_store_relaxed(&newci->invoke, NULL); // relocation offset
-                if (fptr_id != JL_API_NULL) {
-                    assert(fptr_id < BuiltinFunctionTag && "too many functions to serialize");
+                if (fptr_type != JL_INVOKE_SPECSIG) {
+                    assert(fptr_type < BuiltinFunctionTag && "too many functions to serialize");
                     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_code_instance_t, invoke))); // relocation location
-                    arraylist_push(&s->relocs_list, (void*)(((uintptr_t)FunctionRef << RELOC_TAG_OFFSET) + fptr_id)); // relocation target
+                    arraylist_push(&s->relocs_list, (void*)(((uintptr_t)FunctionRef << RELOC_TAG_OFFSET) + fptr_type)); // relocation target
                 }
                 if (builtin_id >= 2) {
                     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_code_instance_t, specptr.fptr))); // relocation location
@@ -1960,7 +1937,8 @@ static uintptr_t get_reloc_for_item(uintptr_t reloc_item, size_t reloc_offset)
                 assert(offset < jl_n_builtins && "unknown function pointer id");
             }
             else {
-                assert(offset < JL_API_MAX && "unknown function pointer id");
+                assert((offset & ~BuiltinInvokeTag) < JL_INVOKE_SPECSIG &&
+                       "unknown function pointer id");
             }
             break;
         case SysimageLinkage:
@@ -2009,36 +1987,23 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         // offset -= 256;
         assert(0 && "corrupt relocation item id");
         jl_unreachable(); // terminate control flow if assertion is disabled.
-    case FunctionRef:
+    case FunctionRef: {
         if (offset & BuiltinFunctionTag) {
             offset &= ~BuiltinFunctionTag;
             assert(offset < jl_n_builtins && "unknown function pointer ID");
             return (uintptr_t)jl_builtin_f_addrs[offset];
         }
-        switch ((jl_callingconv_t)offset) {
-        case JL_API_BOXED:
-            if (s->image->fptrs.nptrs)
-                return (uintptr_t)jl_fptr_args;
-            return (uintptr_t)NULL;
-        case JL_API_WITH_PARAMETERS:
-            if (s->image->fptrs.nptrs)
-                return (uintptr_t)jl_fptr_sparam;
-            return (uintptr_t)NULL;
-        case JL_API_OC_CALL:
-            if (s->image->fptrs.nptrs)
-                return (uintptr_t)jl_f_opaque_closure_call;
-            return (uintptr_t)NULL;
-        case JL_API_CONST:
-            return (uintptr_t)jl_fptr_const_return;
-        case JL_API_INTERPRETED:
-            return (uintptr_t)jl_fptr_interpret_call;
-        case JL_API_BUILTIN:
-            return (uintptr_t)jl_fptr_args;
-        case JL_API_NULL:
-        case JL_API_MAX:
-        //default:
-            assert("corrupt relocation item id");
-        }
+        jl_invoke_api_t type = (jl_invoke_api_t)(offset & ~BuiltinInvokeTag);
+        uintptr_t fptr = (uintptr_t)jl_invoke_api_callptr(type);
+        assert(fptr && "corrupt relocation item id");
+        // If use_sysimage_native_code != yes, zero out the invoke pointer for
+        // CodeInstances with native code, but not if invoke is jl_fptr_args and
+        // the specptr is a builtin.
+        if (s->image->fptrs.nptrs == 0 && jl_jlcall_specptr_is_native(type) &&
+            !(offset & BuiltinInvokeTag))
+            return 0;
+        return fptr;
+    }
     case SysimageLinkage: {
 #ifdef _P64
         size_t depsidx = offset >> DEPS_IDX_OFFSET;
@@ -2316,9 +2281,13 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
                 break;
             }
             if (specfunc) {
+                uint8_t flags = jl_atomic_load_relaxed(&codeinst->flags);
+                flags |= JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR | JL_CI_FLAGS_FROM_IMAGE;
+                if (jl_callptr_invoke_api(jl_atomic_load_relaxed(&codeinst->invoke)) ==
+                    JL_INVOKE_SPECSIG)
+                    flags |= JL_CI_FLAGS_SPECPTR_SPECIALIZED;
                 jl_atomic_store_relaxed(&codeinst->specptr.fptr, fptr);
-                // TODO: set JL_CI_FLAGS_SPECPTR_SPECIALIZED only if confirmed to be true
-                jl_atomic_store_relaxed(&codeinst->flags, jl_atomic_load_relaxed(&codeinst->flags) | JL_CI_FLAGS_SPECPTR_SPECIALIZED | JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR | JL_CI_FLAGS_FROM_IMAGE);
+                jl_atomic_store_relaxed(&codeinst->flags, flags);
             }
             else {
                 jl_atomic_store_relaxed(&codeinst->invoke, (jl_callptr_t)fptr);
