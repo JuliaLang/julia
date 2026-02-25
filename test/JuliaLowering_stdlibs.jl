@@ -26,10 +26,10 @@ function compile_JL_sysimage(output_filepath)
         "JULIA_NUM_THREADS" => "1",
     )
     println("Compiling incremental sysimage with JuliaLowering...")
-    success(run(cmd))
+    @test success(cmd)
 
     cmd = Base.Linking.link_image_cmd(output_object, output_sysimage)
-    success(run(cmd))
+    @test success(cmd)
 
     return nothing
 end
@@ -59,7 +59,7 @@ mktempdir() do tmp_depot
         `$(JULIA_EXECUTABLE) --startup-file=no --project=$env_dir -e $setupproject_command`,
         ; inherit = true
     )
-    success(run(cmd))
+    @test success(cmd)
 
     # now actually perform the precompilation
     cmd = addenv(
@@ -71,5 +71,5 @@ mktempdir() do tmp_depot
         "JULIA_DEPOT_PATH" => tmp_depot,
         ; inherit = true
     )
-    success(run(cmd))
+    @test success(cmd)
 end
