@@ -1325,8 +1325,16 @@ julia> @. y = x + 3 * sin(x)
  3.4233600241796016
 ```
 """
-macro __dot__(x)
-    esc(__dot__(x))
+macro __dot__(args...)
+    if length(args) == 1
+        return esc(__dot__(args[1]))
+    end
+    # Parser ambiguity: `@. x = y +1` is parsed as `@__dot__(x = y, +1)`
+    # because `+1` after a space is treated as a unary expression, not binary `+`.
+    throw(ArgumentError(
+        "`@.` received $(length(args)) arguments; this is likely a parser ambiguity. " *
+        "For example, `@. x = y +1` is parsed as `@. (x = y) (+1)`. " *
+        "Try `@. x = y + 1` instead."))
 end
 
 @inline function broadcasted_kwsyntax(f, args...; kwargs...)

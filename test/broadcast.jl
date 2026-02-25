@@ -1044,6 +1044,17 @@ ret =  @macroexpand @.([Int, Number] <: Real)
 ret =  @macroexpand @.([Int, Number] >: Real)
 @test ret == :([Int, Number] .>: Real)
 
+# Issue #49968: @. with a signed literal after whitespace gives a helpful error
+let v = [1, 2, 3]
+    @. v = v + 1
+    @test v == [2, 3, 4]
+    @. v = v+1
+    @test v == [3, 4, 5]
+    @test_throws ArgumentError macroexpand(@__MODULE__, :(@. v = v +1))
+    @test_throws ArgumentError macroexpand(@__MODULE__, :(@. v = v -1))
+    @test_throws ArgumentError macroexpand(@__MODULE__, :(@. v +2))
+end
+
 # Threw mapany not defined
 p = rand(4,4); r = rand(2,4);
 p0 = copy(p)
