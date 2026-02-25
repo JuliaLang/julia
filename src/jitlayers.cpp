@@ -476,13 +476,6 @@ jl_emit_codeinst_to_jit_impl(jl_code_instance_t *codeinst, jl_code_info_t *src)
 
     auto &ES = jl_ExecutionEngine->getExecutionSession();
     jl_emitted_output_t emitted = out.finish(*ES.getSymbolStringPool());
-
-    // Bail out and clean up if another thread has started or finished compiling
-    // this CI.
-    jl_callptr_t expected = NULL;
-    if (!jl_atomic_cmpswap_relaxed(&codeinst->invoke, &expected,
-                                   jl_fptr_wait_for_compiled_addr))
-        return;
     jl_ExecutionEngine->addOutput(std::move(emitted));
 }
 
@@ -1882,6 +1875,18 @@ void JuliaOJIT::addOutput(jl_emitted_output_t O)
     timing_print_module_names(JL_TIMING_DEFAULT_BLOCK, O.module);
 #endif
     std::unique_lock Lock{LinkerMutex};
+
+    // If another thread beat us to compiling this CodeInstance, don't define it
+    // with this output.
+    for (auto It = O.linker_info->ci_funcs.begin(); It != O.linker_info->ci_funcs.end();
+         ++It) {
+        jl_callptr_t Expected = NULL;
+        // DenseMap never rehashes on deletion, so we can erase while iterating.
+        if (!jl_atomic_cmpswap_relaxed(&It->first->invoke, &Expected,
+                                       jl_fptr_wait_for_compiled_addr))
+            O.linker_info->ci_funcs.erase(It);
+    }
+
     auto MU = std::make_unique<JLMaterializationUnit>(
         JLMaterializationUnit::Create(*this, ObjectLayer, std::move(O)));
     ExitOnError check{"Failed to add objectfile to JIT!"};
