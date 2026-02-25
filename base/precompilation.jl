@@ -51,8 +51,6 @@ function clear_failure!(j::PrecompileJob)
     truncate(j.output, 0)
 end
 
-## Types
-
 # A request to do precompilation work, either in a new session or merged into a running one.
 struct PrecompileRequest
     pkgs::Vector{String}
@@ -87,6 +85,7 @@ Base.@kwdef mutable struct PrecompileSession
     time_start::UInt64
     print_lock::ReentrantLock
     parallel_limiter::Base.Semaphore
+    num_tasks::Int
     start_loaded_modules::Base.KeySet{PkgId, Dict{PkgId, Module}}
     requested_pkgids::Vector{PkgId}
 
@@ -107,7 +106,7 @@ Base.@kwdef mutable struct PrecompileSession
     interrupted::Bool                      = false
     interrupted_or_done::Bool              = false
     printloop_should_exit::Bool
-    target::Union{Nothing, String}
+    target::String
     pkg_liveprinted::Union{Nothing, PkgId} = nothing
 
     # Per-package tracking
@@ -129,6 +128,9 @@ Base.@kwdef mutable struct PrecompileSession
 end
 
 # Background precompilation state
+#
+# Lock ordering (outermost first): BG.lock → BG.pkg_done → BG.task_done
+# All three have independent ReentrantLocks. Always acquire in this order to avoid deadlocks.
 mutable struct BackgroundPrecompileState
     task::Union{Nothing, Task}
     interrupt_requested::Bool
@@ -238,11 +240,7 @@ function show_progress(io::IO, p::MiniProgressBar; termwidth=nothing, carriagere
     p.prev = p.current
     p.has_shown = true
 
-    progress_text = if false # p.percentage
-        # @sprintf "%2.1f %%" perc
-    else
-        string(p.current, "/",  p.max)
-    end
+    progress_text = string(p.current, "/",  p.max)
     termwidth = @something termwidth (displaysize(io)::Tuple{Int,Int})[2]
     max_progress_width = max(0, min(termwidth - textwidth(p.header) - textwidth(progress_text) - 10 , p.width))
     n_filled = floor(Int, max_progress_width * perc / 100)
@@ -918,9 +916,7 @@ end
 ## Background lifecycle
 
 function is_precompiling_in_background()
-    lock(BG) do
-        BG.task !== nothing && !istaskdone(BG.task)
-    end
+    @lock BG (BG.task !== nothing && !istaskdone(BG.task))
 end
 
 # Check if `pkg` is currently being precompiled by a background task.
@@ -945,7 +941,7 @@ end
 
 # Broadcast a signal to all active precompilation subprocesses.
 function broadcast_signal(sig::Int32)
-    lock(BG) do
+    @lock BG begin
         for ch in BG.signal_channels
             try; isopen(ch) && put!(ch, sig); catch e; e isa InvalidStateException || rethrow(); end
         end
@@ -954,7 +950,7 @@ end
 broadcast_signal(sig::Integer) = broadcast_signal(Int32(sig))
 
 function stop_background_precompile(; graceful::Bool = true)
-    return lock(BG) do
+    @lock BG begin
         if BG.task !== nothing && !istaskdone(BG.task)
             if graceful
                 BG.interrupt_requested = true
@@ -1017,7 +1013,7 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
             end
             printpkgstyle(io, :Info, "Background precompilation completed $time_str", color = Base.info_color())
             result = @lock BG BG.result
-            if result !== nothing
+            if result !== nothing && !isempty(result)
                 println(io, "  ", result)
             end
         else
@@ -1177,8 +1173,8 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
         if cancel_requested[]
             @lock BG BG.monitoring = false
             key_task !== nothing && wait(key_task)
-            print(io, "\e[?25h\e[J")  # enable cursor + clear to end
-            printpkgstyle(io, :Info, "Canceling precompilation...\e[J", color = Base.info_color())
+            print(io, ansi_enablecursor, ansi_cleartoend)
+            printpkgstyle(io, :Info, "Canceling precompilation...$(ansi_cleartoend)", color = Base.info_color())
             wait(task; throw=false)
             return
         end
@@ -1202,7 +1198,7 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                 wake_key_task()
                 wait(key_task)
             end
-            print(io, "\e[?25h\e[J")  # enable cursor + clear to end
+            print(io, ansi_enablecursor, ansi_cleartoend)
             return
         end
 
@@ -1210,8 +1206,10 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
         if exit_requested[]
             @lock BG BG.monitoring = false
             key_task !== nothing && wait(key_task)
-            print(io, "\e[?25h\e[J")  # enable cursor + clear to end
-            printpkgstyle(io, :Precompiling, "detached. Precompilation will continue in the background. Monitor with `precompile --monitor`.\e[J", color = Base.info_color())
+            print(io, ansi_enablecursor, ansi_cleartoend)
+            n_pending = @lock BG length(BG.pending_pkgids)
+            progress = n_pending > 0 ? " ($n_pending packages remaining)." : "."
+            printpkgstyle(io, :Precompiling, "detached$(progress) Precompilation will continue in the background. Monitor with `precompile --monitor`.$(ansi_cleartoend)", color = Base.info_color())
             return
         end
 
@@ -1247,7 +1245,7 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
                                        ignore_loaded::Bool,
                                        detachable::Bool)
     # Stop any existing background precompilation
-    lock(BG) do
+    @lock BG begin
         if BG.task !== nothing && !istaskdone(BG.task)
             BG.interrupt_requested = true
             @lock BG.task_done notify(BG.task_done)
@@ -1255,12 +1253,12 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
     end
 
     # Wait for previous task to complete
-    old_task = lock(() -> BG.task, BG)
+    old_task = @lock BG BG.task
     if old_task !== nothing
         wait(old_task)
     end
 
-    lock(BG) do
+    @lock BG begin
         BG.interrupt_requested = false
         BG.cancel_requested = false
         empty!(BG.signal_channels)
@@ -1281,7 +1279,7 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
     register_atexit_hook()
 
     # Launch new background precompilation
-    lock(BG) do
+    @lock BG begin
         wc = BG.work_channel
         BG.task = Threads.@spawn :samepool begin
             try
@@ -1535,8 +1533,8 @@ function spawn_print_loop!(s::PrecompileSession)
             wait(s.first_started)
             (isempty(s.pkg_queue) || s.interrupted_or_done) && return
             @lock s.print_lock begin
-                if BG.monitoring && s.target !== nothing
-                    printpkgstyle(s.logio, :Precompiling, something(s.target, ""))
+                if BG.monitoring
+                    printpkgstyle(s.logio, :Precompiling, s.target)
                 end
             end
             cursor_disabled = false
@@ -1579,6 +1577,7 @@ function spawn_print_loop!(s::PrecompileSession)
                         if i_local > 1
                             print(iostr, ansi_cleartoend)
                         end
+                        bar.header = verbose ? "Precompiling ($(s.num_tasks) tasks) " : "Precompiling packages "
                         bar.current = s.n_done - s.n_already_precomp
                         bar.max = s.n_total - s.n_already_precomp
                         termwidth = (displaysize(s.logio)::Tuple{Int,Int})[2]
@@ -1741,28 +1740,29 @@ function precompile_pkgs_maybe_cachefile_lock(f, s::PrecompileSession, pkg_confi
     return cachefile
 end
 
-function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch_configs, batch_circular,
-                                  batch_reqids, batch_names, batch_reqpkgs, batch_from_loading)
+function spawn_precompile_tasks!(s::PrecompileSession;
+        direct_deps, was_processed, configs, circular_deps,
+        requested_pkgids, pkg_names, requested_pkgs, from_loading)
     batch_tasks = Task[]
-    for (pkg, deps) in batch_dd
+    for (pkg, deps) in direct_deps
         cachepaths = Base.find_all_in_cache_path(pkg)
         freshpaths = String[]
         @lock s.cache_lock s.cachepath_cache[pkg] = freshpaths
         sourcespec = Base.locate_package_load_spec(pkg)
-        single_requested_pkg = length(batch_reqpkgs) == 1 &&
-            (pkg in batch_reqids || pkg.name in batch_names)
-        for config in batch_configs
+        single_requested_pkg = length(requested_pkgs) == 1 &&
+            (pkg in requested_pkgids || pkg.name in pkg_names)
+        for config in configs
             pkg_config = (pkg, config)
             if sourcespec === nothing
                 mark_failed!(s.jobs[pkg_config], "Error: Missing source file for $(pkg)")
-                notify(batch_wp[pkg_config])
+                notify(was_processed[pkg_config])
                 continue
             end
-            if batch_from_loading && single_requested_pkg && occursin(r"\b__precompile__\(\s*false\s*\)", read(sourcespec.path, String))
+            if from_loading && single_requested_pkg && occursin(r"\b__precompile__\(\s*false\s*\)", read(sourcespec.path, String))
                 @lock s.print_lock begin
                     Base.@logmsg s.logcalls "Disabled precompiling $(repr("text/plain", pkg)) since the text `__precompile__(false)` was found in file."
                 end
-                notify(batch_wp[pkg_config])
+                notify(was_processed[pkg_config])
                 continue
             end
             @lock BG @lock BG.pkg_done begin
@@ -1773,12 +1773,12 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
             task = Threads.@spawn :samepool try
                 loaded = s.warn_loaded && (pkg in s.start_loaded_modules)
                 for dep in deps
-                    wait(batch_wp[(dep,config)])
+                    wait(was_processed[(dep,config)])
                     if should_stop(s)
                         return
                     end
                 end
-                circular = pkg in batch_circular
+                circular = pkg in circular_deps
                 freshpath = @lock s.cache_lock Base.compilecache_freshest_path(pkg; ignore_loaded=s.ignore_loaded,
                     stale_cache=s.stale_cache, cachepath_cache=s.cachepath_cache, cachepaths, sourcespec, flags=cacheflags)
                 is_stale = freshpath === nothing
@@ -1794,11 +1794,11 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
                     t_monitor = Threads.@spawn :samepool precompilepkgs_monitor_std(s, pkg_config, std_pipe,
                         single_requested_pkg)
 
+                    name = describe_pkg(s, pkg, is_project_dep, is_serial_dep, flags, cacheflags)
                     try
-                        name = describe_pkg(s, pkg, is_project_dep, is_serial_dep, flags, cacheflags)
                         @lock s.print_lock begin
                             if !s.fancyprint && isempty(s.pkg_queue) && BG.monitoring
-                                printpkgstyle(s.logio, :Precompiling, something(s.target, "packages..."))
+                                printpkgstyle(s.logio, :Precompiling, s.target)
                             end
                             push!(s.pkg_queue, pkg_config)
                         end
@@ -1816,7 +1816,7 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
                         end
 
                         pid_ch = Channel{Int32}(1)
-                        if batch_from_loading && pkg in batch_reqids
+                        if from_loading && pkg in requested_pkgids
                             Base.errormonitor(Threads.@spawn :samepool begin
                                 pid = try; take!(pid_ch); catch; Int32(0); end
                                 pid > 0 && @lock s.print_lock set_pid!(s.jobs[pkg_config], pid)
@@ -1870,7 +1870,7 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
                                 @lock s.cache_lock s.stale_cache[stale_cache_key] = false
                             end
                         end
-                        loaded && (s.n_loaded += 1)
+                        loaded && @lock s.print_lock (s.n_loaded += 1)
                     catch err
                         close(std_pipe.in)
                         wait(t_monitor)
@@ -1885,17 +1885,17 @@ function spawn_precompile_tasks!(s::PrecompileSession, batch_dd, batch_wp, batch
                         try; close(pid_ch); catch; end
                         @lock s.print_lock clear_pid!(s.jobs[pkg_config])
                         Base.release(s.parallel_limiter)
-                        @lock BG @lock BG.pkg_done begin
-                            delete!(BG.pending_pkgids, pkg)
-                            notify(BG.pkg_done)
-                        end
                     end
                 else
-                    is_stale || (s.n_already_precomp += 1)
+                    is_stale || @lock s.print_lock (s.n_already_precomp += 1)
                 end
             finally
-                s.n_done += 1
-                notify(batch_wp[pkg_config])
+                @lock BG @lock BG.pkg_done begin
+                    delete!(BG.pending_pkgids, pkg)
+                    notify(BG.pkg_done)
+                end
+                @lock s.print_lock (s.n_done += 1)
+                notify(was_processed[pkg_config])
             end
             push!(batch_tasks, task)
         end
@@ -1905,74 +1905,86 @@ end
 
 function drain_work_channel!(s::PrecompileSession, work_channel::Channel{PrecompileRequest})
     drainer = Threads.@spawn :samepool begin
-        try
-            while true
-                isopen(work_channel) || break
-                should_stop(s) && break
-                request = try; take!(work_channel); catch; break; end
-                try
-                    new_env = ExplicitEnv()
-                    req_pkgids = PkgId[]
-                    for name in request.pkgs
-                        pkgid = Base.identify_package(name)
-                        pkgid !== nothing && push!(req_pkgids, pkgid)
+        while true
+            isopen(work_channel) || break
+            should_stop(s) && break
+            request = try; take!(work_channel); catch; break; end
+            waiter_spawned = false
+            try
+                new_env = ExplicitEnv()
+                req_pkgids = PkgId[]
+                for name in request.pkgs
+                    pkgid = Base.identify_package(name)
+                    pkgid !== nothing && push!(req_pkgids, pkgid)
+                end
+                new_graph = build_dep_graph(new_env, request._from_loading, req_pkgids)
+                @lock s.print_lock begin
+                    merge!(s.ext_to_parent, new_graph.ext_to_parent)
+                    merge!(s.parent_to_exts, new_graph.parent_to_exts)
+                    merge!(s.triggers, new_graph.triggers)
+                    for p in new_graph.project_deps
+                        p in s.project_deps || push!(s.project_deps, p)
                     end
-                    new_graph = build_dep_graph(new_env, request._from_loading, req_pkgids)
-                    @lock s.print_lock begin
-                        merge!(s.ext_to_parent, new_graph.ext_to_parent)
-                        merge!(s.parent_to_exts, new_graph.parent_to_exts)
-                        merge!(s.triggers, new_graph.triggers)
-                        for p in new_graph.project_deps
-                            p in s.project_deps || push!(s.project_deps, p)
-                        end
-                        for dep in new_graph.serial_deps
-                            dep in s.serial_deps || push!(s.serial_deps, dep)
-                        end
+                    for dep in new_graph.serial_deps
+                        dep in s.serial_deps || push!(s.serial_deps, dep)
                     end
-                    new_pkg_names = copy(request.pkgs)
-                    new_dd = new_graph.direct_deps
-                    filter_dep_graph!(new_dd, new_pkg_names, request.manifest, new_graph.project_deps, new_graph.ext_to_parent, req_pkgids)
-                    skip_pkgs = Set{PkgId}()
-                    @lock BG begin
-                        for pkgid in keys(new_dd)
-                            if pkgid in BG.pending_pkgids
-                                push!(skip_pkgs, pkgid)
-                            end
-                        end
-                    end
-                    for pkgid in skip_pkgs
-                        delete!(new_dd, pkgid)
-                    end
-                    for (_, deps) in new_dd
-                        setdiff!(deps, skip_pkgs)
-                    end
-                    new_wp = Dict{PkgConfig, Base.Event}()
-                    for config in request.configs
-                        for pkgid in keys(new_dd)
-                            pkg_config = (pkgid, config)
-                            @lock s.print_lock begin
-                                get!(PrecompileJob, s.jobs, pkg_config)
-                            end
-                            new_wp[pkg_config] = Base.Event()
+                end
+                new_pkg_names = copy(request.pkgs)
+                new_dd = new_graph.direct_deps
+                filter_dep_graph!(new_dd, new_pkg_names, request.manifest, new_graph.project_deps, new_graph.ext_to_parent, req_pkgids)
+                skip_pkgs = Set{PkgId}()
+                @lock BG begin
+                    for pkgid in keys(new_dd)
+                        if pkgid in BG.pending_pkgids
+                            push!(skip_pkgs, pkgid)
                         end
                     end
-                    new_circular = detect_circular_deps!(new_dd, new_graph.serial_deps, new_wp, s.io, s.ext_to_parent)
-                    s.n_total += length(new_dd) * length(request.configs)
-                    new_tasks = spawn_precompile_tasks!(s, new_dd, new_wp, request.configs, new_circular,
-                                                         req_pkgids, request.pkgs, request.pkgs, request._from_loading)
-                    append!(s.injected_tasks, new_tasks)
-                    s.n_batches += 1
-                    waiter = Threads.@spawn :samepool begin
+                end
+                for pkgid in skip_pkgs
+                    delete!(new_dd, pkgid)
+                end
+                for (_, deps) in new_dd
+                    setdiff!(deps, skip_pkgs)
+                end
+                new_wp = Dict{PkgConfig, Base.Event}()
+                for config in request.configs
+                    for pkgid in keys(new_dd)
+                        pkg_config = (pkgid, config)
+                        @lock s.print_lock begin
+                            get!(PrecompileJob, s.jobs, pkg_config)
+                        end
+                        new_wp[pkg_config] = Base.Event()
+                    end
+                end
+                new_circular = detect_circular_deps!(new_dd, new_graph.serial_deps, new_wp, s.io, s.ext_to_parent)
+                s.n_total += length(new_dd) * length(request.configs)
+                new_tasks = spawn_precompile_tasks!(s;
+                    direct_deps=new_dd, was_processed=new_wp, configs=request.configs,
+                    circular_deps=new_circular, requested_pkgids=req_pkgids,
+                    pkg_names=request.pkgs, requested_pkgs=request.pkgs,
+                    from_loading=request._from_loading)
+                append!(s.injected_tasks, new_tasks)
+                s.n_batches += 1
+                waiter = Threads.@spawn :samepool begin
+                    try
                         waitall(new_tasks; failfast=false, throw=false)
                         paths = @lock s.cache_lock collect(String, Iterators.flatten((v for (pkgid, v) in s.cachepath_cache if pkgid in req_pkgids)))
                         try; put!(request.result, paths); catch; end
+                    finally
+                        isready(request.result) || try; put!(request.result, String[]); catch; end
                     end
-                    push!(s.result_waiters, waiter)
-                catch e
-                    try; put!(request.result, e); catch; end
+                end
+                push!(s.result_waiters, waiter)
+                waiter_spawned = true
+            catch e
+                try; put!(request.result, e); catch; end
+            finally
+                # Only write the fallback here if no waiter was spawned — the waiter
+                # has its own finally that guarantees a result is written after tasks finish.
+                if !waiter_spawned && !isready(request.result)
+                    try; put!(request.result, String[]); catch; end
                 end
             end
-        catch
         end
     end
     return drainer
@@ -1980,8 +1992,10 @@ end
 
 function report_precompile_results!(s::PrecompileSession)
     s.interrupted_or_done = true
-    @lock Base.require_lock begin
-        Base.LOADING_CACHE[] = nothing
+    if !s._from_loading
+        @lock Base.require_lock begin
+            Base.LOADING_CACHE[] = nothing
+        end
     end
     notify(s.first_started) # in cases of no-op or !fancyprint
 
@@ -2085,7 +2099,7 @@ function report_precompile_results!(s::PrecompileSession)
                 end
             end
         end
-        isempty(str) || BG.monitoring && @lock s.print_lock begin
+        !isempty(str) && BG.monitoring && @lock s.print_lock begin
             println(s.io, str)
         end
     end
@@ -2145,7 +2159,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     time_start = time_ns()
     env = ExplicitEnv()
 
-    # Windows sometimes hits a ReadOnlyMemoryError, so we halve the default number of tasks. Issue #2323
+    # Windows sometimes hits a ReadOnlyMemoryError, so we halve the default number of tasks. Pkg.jl#2323
     # TODO: Investigate why this happens in windows and restore the full task limit
     default_num_tasks = Sys.iswindows() ? div(Sys.EFFECTIVE_CPU_THREADS::Int, 2) + 1 : Sys.EFFECTIVE_CPU_THREADS::Int + 1
     default_num_tasks = min(default_num_tasks, 16) # limit for better stability on shared resource systems
@@ -2190,15 +2204,16 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     circular_deps = detect_circular_deps!(graph.direct_deps, graph.serial_deps, was_processed, io, graph.ext_to_parent)
 
     if filter_dep_graph!(graph.direct_deps, pkg_names, manifest, graph.project_deps, graph.ext_to_parent, requested_pkgids)
+        @lock BG BG.result = ""
         return
     end
 
     nconfigs = length(configs)
-    target = nothing
-    if nconfigs == 1
-        !isempty(only(configs)[1]) && (target = "for configuration $(join(only(configs)[1], " "))")
+    target = if nconfigs == 1
+        flags = only(configs)[1]
+        isempty(flags) ? "project..." : "for configuration $(join(flags, " "))"
     else
-        target = "for $nconfigs compilation configurations"
+        "for $nconfigs compilation configurations"
     end
 
     print_lock = io.io isa Base.LibuvStream ? io.io.lock::ReentrantLock : ReentrantLock()
@@ -2206,7 +2221,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     s = PrecompileSession(;
         configs, io, logio, logcalls, fancyprint, hascolor,
         warn_loaded, ignore_loaded, internal_call, strict, _from_loading,
-        time_start, print_lock, parallel_limiter=Base.Semaphore(num_tasks),
+        time_start, print_lock, parallel_limiter=Base.Semaphore(num_tasks), num_tasks,
         start_loaded_modules=keys(Base.loaded_modules), requested_pkgids,
         ext_to_parent=graph.ext_to_parent, parent_to_exts=graph.parent_to_exts,
         triggers=graph.triggers, project_deps=graph.project_deps,
@@ -2227,8 +2242,9 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     @debug "precompile: starting precompilation loop" graph.direct_deps graph.project_deps
 
     # Initial pass
-    initial_tasks = spawn_precompile_tasks!(s, graph.direct_deps, was_processed, configs, circular_deps,
-                                             requested_pkgids, pkg_names, requested_pkgs, _from_loading)
+    initial_tasks = spawn_precompile_tasks!(s;
+        direct_deps=graph.direct_deps, was_processed, configs, circular_deps,
+        requested_pkgids, pkg_names, requested_pkgs, from_loading=_from_loading)
     append!(s.tasks, initial_tasks)
 
     # Concurrent drainer for injected requests
