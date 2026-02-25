@@ -487,7 +487,7 @@ information about some pitfalls with floating-point numbers.
 
 !!! note "big(x::BigFloat)"
     Unlike `BigFloat(x)`, `big(x)` is a no-op when `x` is already a `BigFloat`,
-    ie. when doing `x = big(x)`, the precision of `x` remains as is even if the
+    ie. when doing `x = big(x)`, the precision of `x` remains unchanged even if the
     current `BigFloat` precision is different.
     ```
 """
