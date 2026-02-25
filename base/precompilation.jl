@@ -617,13 +617,14 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     num_tasks = max(1, something(tryparse(Int, get(ENV, "JULIA_NUM_PRECOMPILE_TASKS", string(default_num_tasks))), 1))
     parallel_limiter = Base.Semaphore(num_tasks)
 
-    logio = io
+    quiet = JLOptions().quiet != 0
+    logio = quiet ? IOContext{IO}(devnull) : io
     logcalls = if _from_loading
         isinteractive() ? CoreLogging.Info : CoreLogging.Debug # sync with Base.compilecache
     else
         nothing
     end
-    fancyprint = fancyprint′
+    fancyprint = quiet ? false : fancyprint′
 
     nconfigs = length(configs)
     hascolor = get(logio, :color, false)::Bool
