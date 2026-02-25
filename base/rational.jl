@@ -288,9 +288,28 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
         nt = a*t+tt
     end
 
-    # find optimal semiconvergent
-    # smallest a such that x-a*y < a*t+tt
-    a = cld(x-tt,y+t)
+    if tol > 0 && y < 1 < a
+        # find optimal semiconvergent
+        # smallest a such that x-a*y < a*t+tt
+        if p == 0
+            # 1/a satisfies the tolerance with a = ⌊1/y⌋
+            e = eps(x)
+            if t ≤ e
+                # round to nearest with tie down
+                a = -mod(1, -y) < r ? a + 1 : a
+            else
+                # prevent over-minimization
+                t = t ≤ 2e ? e : t/2
+                a = min(a, cld(1, y + t))
+            end
+        else
+            # equivalent to cld(x-tt,y+t), avoid intermediate rounding
+            yt = y + t
+            yr = x % yt - tt % yt
+            a = round((x - (tt + yr)) / yt) + (yr > 0)
+        end
+    end
+
     try
         ia = convert(T,a)
         np = checked_add(checked_mul(ia,p),pp)
