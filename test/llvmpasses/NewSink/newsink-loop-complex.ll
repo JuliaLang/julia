@@ -327,3 +327,34 @@ continue2:
   %next2 = add i64 %i, 2
   br label %loop_header
 }
+
+; Store must not be sunk into a different loop.
+; CHECK-LABEL: @test_no_sink_into_different_loop
+; CHECK: between_loops:
+; CHECK: store i64 42, ptr %buf
+define void @test_no_sink_into_different_loop(i64 %n) {
+entry:
+  %buf = alloca i64, align 8
+  br label %loop1
+
+loop1:
+  %i = phi i64 [ 0, %entry ], [ %next1, %loop1 ]
+  %next1 = add nuw nsw i64 %i, 1
+  %done1 = icmp eq i64 %next1, %n
+  br i1 %done1, label %between_loops, label %loop1
+
+between_loops:
+  store i64 42, ptr %buf, align 8
+  br i1 true, label %loop2, label %exit
+
+loop2:
+  %j = phi i64 [ 0, %between_loops ], [ %next2, %loop2 ]
+  %v = load i64, ptr %buf, align 8
+  %next2 = add nuw nsw i64 %j, 1
+  %done2 = icmp eq i64 %next2, %n
+  br i1 %done2, label %exit, label %loop2
+
+exit:
+  call void @use(ptr %buf)
+  ret void
+}

@@ -4,8 +4,10 @@
 
 declare void @throw_error(ptr)
 declare void @use(i64)
+declare void @use_ptr(ptr)
 declare token @llvm.coro.id(i32, ptr, ptr, ptr)
 declare i1 @llvm.coro.alloc(token)
+declare i64 @may_not_return(i64) memory(none)
 
 ; Test: Convergent calls should not be sunk
 define i64 @test_convergent(i64 %val, i64 %bound) {
@@ -260,4 +262,53 @@ ok:
   %arrayptr = getelementptr double, ptr %array, i64 %loaded
   %val = load double, ptr %arrayptr, align 8
   ret double %val
+}
+
+; Test: Calls without willreturn should not be sunk
+; CHECK-LABEL: @test_no_willreturn
+; CHECK: entry:
+; CHECK: call i64 @may_not_return
+define i64 @test_no_willreturn(i64 %a, i1 %cond) {
+entry:
+  %v = call i64 @may_not_return(i64 %a)
+  br i1 %cond, label %use_it, label %skip
+
+use_it:
+  call void @use(i64 %v)
+  unreachable
+
+skip:
+  ret i64 0
+}
+
+; Test: Token-typed instructions should not be sunk
+; CHECK-LABEL: @test_token_type
+; CHECK: entry:
+; CHECK: call token @llvm.coro.id
+define void @test_token_type(i1 %cond) {
+entry:
+  %tok = call token @llvm.coro.id(i32 0, ptr null, ptr null, ptr null)
+  %alloc = call i1 @llvm.coro.alloc(token %tok)
+  br i1 %cond, label %use_it, label %skip
+
+use_it:
+  br label %skip
+
+skip:
+  ret void
+}
+
+; Test: Store in a block with one successor stays (no benefit from sinking)
+; CHECK-LABEL: @test_single_successor_store
+; CHECK: entry:
+; CHECK: store i64 42, ptr %p
+define void @test_single_successor_store() {
+entry:
+  %p = alloca i64, align 8
+  store i64 42, ptr %p, align 8
+  br label %next
+
+next:
+  call void @use_ptr(ptr %p)
+  ret void
 }

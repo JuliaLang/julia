@@ -89,3 +89,49 @@ error:
   call void @throw(ptr %buf)
   unreachable
 }
+
+; Memory read with two successors that both dominate all uses: ambiguous,
+; load stays put.
+; CHECK-LABEL: @test_load_ambiguous_successor
+; CHECK: entry:
+; CHECK: %v = load i64, ptr %p
+define i64 @test_load_ambiguous_successor(ptr %p, i1 %cond) {
+entry:
+  %v = load i64, ptr %p, align 8
+  br i1 %cond, label %left, label %right
+
+left:
+  br label %merge
+
+right:
+  br label %merge
+
+merge:
+  call void @use(i64 %v)
+  ret i64 %v
+}
+
+; The store sinks to right; %val stays in entry (used on both paths).
+; CHECK-LABEL: @test_operands_dont_dominate
+; CHECK: entry:
+; CHECK: %val = add i64 %a, %b
+; CHECK-NOT: store
+; CHECK: br i1
+; CHECK: right:
+; CHECK: store i64 %val, ptr %p
+declare void @use_i64(i64) nounwind willreturn memory(none)
+define void @test_operands_dont_dominate(i64 %a, i64 %b, i1 %cond) {
+entry:
+  %p = alloca i64, align 8
+  %val = add i64 %a, %b
+  store i64 %val, ptr %p, align 8
+  br i1 %cond, label %left, label %right
+
+left:
+  call void @use_i64(i64 %val)
+  ret void
+
+right:
+  call void @throw(ptr %p)
+  unreachable
+}
