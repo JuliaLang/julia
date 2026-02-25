@@ -32,6 +32,295 @@
 extern "C" {
 #endif
 
+int64_t jl_gc_collect_time = 0;
+int measuring = 0;
+
+typedef struct {
+    uint8_t dep;
+    uint8_t default_component;
+    uint8_t *graph;
+    uint8_t *tuple_components;
+    jl_tvar_t **vars;
+    /*jl_value_t *tags;*/
+    size_t n_xvars;
+    size_t sz;
+} var_dependence_t;
+
+static int get_root_index(var_dependence_t *uf, uint8_t idx) {
+    while (uf->graph[idx] != idx) {
+        // Apply path-splitting to speed up later finds.
+        uint8_t d = uf->graph[idx];
+        uf->graph[idx] = uf->graph[d];
+        idx = d;
+    }
+    return idx;
+}
+
+
+// TODO: Wrap this into an internal call (for default update)
+static void unipolar_mark_interacting_typevars(jl_value_t *v, var_dependence_t *uf, int8_t R) JL_NOTSAFEPOINT
+{
+    if (jl_typeis(v, jl_tvar_type)) {
+        //int i = R ? uf->n_xvars : 0;
+        //int end = R ? uf->sz : uf->n_xvars;
+        int i = 0;
+        jl_tvar_t *tv = (jl_tvar_t *)v;
+        while ((i < uf->sz) && (uf->vars[i] != tv)) { i++; }
+        if (uf->vars[i] != tv)
+            return;
+
+        if (uf->dep == 0xFF) {
+            uf->dep = i; // Back fill (for over-approximation)
+            // TODO: Clean up
+            int r = get_root_index(uf, uf->dep);
+            if (uf->tuple_components[r] == 0xFF) {
+                uf->tuple_components[r] = uf->default_component;
+            } else if (uf->tuple_components[r] != uf->default_component) {
+                uf->tuple_components[r] = 0xFE;
+            }
+        }
+
+        int r1 = get_root_index(uf, i);
+        int r2 = get_root_index(uf, uf->dep);
+        if (uf->tuple_components[r1] == 0xFF) { // First time encountering this type-var
+            uf->tuple_components[r1] = uf->tuple_components[r2];
+        }
+        if (r1 != r2) {
+            uf->graph[r2] = r1; // TODO: Union-by-rank
+            if (uf->tuple_components[r1] != uf->tuple_components[r2]) {
+                uf->tuple_components[r1] = 0xFE; // Mark conflict
+            }
+        }
+    } else if (jl_is_uniontype(v)) {
+        unipolar_mark_interacting_typevars(((jl_uniontype_t*)v)->a, uf, R);
+        unipolar_mark_interacting_typevars(((jl_uniontype_t*)v)->b, uf, R);
+    } else if (jl_is_vararg(v)) {
+        jl_vararg_t *vm = (jl_vararg_t *)v;
+        if (vm->T) unipolar_mark_interacting_typevars(vm->T, uf, R);
+        if (vm->N) unipolar_mark_interacting_typevars(vm->N, uf, R);
+    } else if (jl_is_unionall(v)) {
+        jl_unionall_t *ua = (jl_unionall_t*)v;
+        unipolar_mark_interacting_typevars(ua->var->lb, uf, R);
+        unipolar_mark_interacting_typevars(ua->var->ub, uf, R);
+        unipolar_mark_interacting_typevars(ua->body, uf, R);
+    } else if (jl_is_datatype(v)) {
+        if (!((jl_datatype_t*)v)->hasfreetypevars)
+            return;
+        size_t i;
+        for (i=0; i < jl_nparams(v); i++) {
+            unipolar_mark_interacting_typevars(jl_tparam(v,i), uf, R);
+        }
+    }
+}
+
+// test whether a type has vars bound by the given environment
+static void mark_interacting_typevars(jl_value_t *x, jl_value_t *y, var_dependence_t *uf, size_t tuple_component) JL_NOTSAFEPOINT
+{
+    if (jl_typeis(x, jl_tvar_type) || jl_typeis(y, jl_tvar_type)) {
+        int8_t R = !jl_typeis(x, jl_tvar_type);
+        jl_tvar_t *tv = (jl_tvar_t*)(R ? y : x);
+
+        // Lookup the union-find index for our typevar
+        int i = R ? uf->n_xvars : 0;
+        int end = R ? uf->sz : uf->n_xvars;
+        while ((i < end) && (uf->vars[i] != tv)) { i++; }
+        assert(uf->vars[i] == tv);
+
+        uint8_t r = get_root_index(uf, i);
+        if (uf->tuple_components[r] == 0xFF) {
+            // First time encountering this type-var
+            uf->tuple_components[r] = tuple_component;
+        } else if (uf->tuple_components[r] != tuple_component) {
+            uf->tuple_components[r] = 0xFE;
+        }
+
+        jl_value_t *other = R ? x : y;
+        uf->dep = r;
+        unipolar_mark_interacting_typevars(other, uf, R);
+    } else if (jl_is_uniontype(x)) {
+        // Consider every combination of unions between the LHS and RHS
+        mark_interacting_typevars(((jl_uniontype_t*)x)->a, y, uf, tuple_component);
+        mark_interacting_typevars(((jl_uniontype_t*)x)->b, y, uf, tuple_component);
+    } else if (jl_is_uniontype(y)) {
+        // Consider every combination of unions between the LHS and RHS
+        mark_interacting_typevars(x, ((jl_uniontype_t*)y)->a, uf, tuple_component);
+        mark_interacting_typevars(x, ((jl_uniontype_t*)y)->b, uf, tuple_component);
+    } else if (jl_is_vararg(x) || jl_is_vararg(y)) {
+        // Over-approximate through varargs for now.
+        uf->dep = 0xFF;
+        uf->default_component = tuple_component;
+        unipolar_mark_interacting_typevars(x, uf, 0);
+        unipolar_mark_interacting_typevars(y, uf, 1);
+    } else if (jl_is_unionall(x) || jl_is_unionall(y)) {
+        // Rather than expand the typevar set dynamically, we over-approximate
+        // here by marking any outer typevars found in x or y as interacting.
+        uf->dep = 0xFF;
+        uf->default_component = tuple_component;
+        unipolar_mark_interacting_typevars(x, uf, 0);
+        unipolar_mark_interacting_typevars(y, uf, 1);
+    } else if (jl_is_datatype(x) && jl_is_datatype(y)) {
+        if (!((jl_datatype_t*)x)->hasfreetypevars && !((jl_datatype_t*)y)->hasfreetypevars)
+            return;
+
+        size_t xn = jl_nparams(x), yn = jl_nparams(y);
+        if (xn == 0 || yn == 0)
+            return;
+
+        jl_value_t *xi = NULL;
+        jl_value_t *yi = NULL;
+        for (int i = 0; (i < xn) || (i < yn); i++) {
+            // This over-approximates, since we didn't check the name
+            // or super hierarchy, for example.
+            if (i < xn)
+                xi = jl_tparam(x, i);
+            if (i < yn)
+                yi = jl_tparam(y, i);
+
+            mark_interacting_typevars(xi, yi, uf, tuple_component);
+        }
+    }
+}
+
+/**
+ * Clean-up list:
+ *   [ ] 0xFE and 0xFF
+ *   [ ] Reduce params for unipolar
+ *   [ ] Add some helpers
+ *   [ ] Test from Base
+ **/
+
+/**
+ * "Push down" any UnionAll types that we've proven to have interactions
+ * isolated to a specific Tuple component.
+ *
+ * e.g. `Tuple{T, T, A, B, C} where {T, A<:Any, B<:Int, C<:Any}` can become
+ * `Tuple{T, T, Any, Int, Any} where T`, which avoids exponential explosion
+ * when considering different constraint strategies for nested UnionAlls.
+ **/
+static jl_value_t *apply_pushdown(jl_value_t *v, var_dependence_t *uf, size_t start, size_t end) {
+    jl_svec_t *params = jl_svec_copy(((jl_datatype_t *)v)->parameters);
+    jl_value_t *ndt = NULL;
+    JL_GC_PUSH2(&params, &ndt);
+
+    for (int i = end; i > start;) {
+        int r = get_root_index(uf, --i);
+        int c = uf->tuple_components[r];
+        if (c != 0xFF && c != 0xFE) {
+            jl_svecset(params, c, jl_new_struct(jl_unionall_type, uf->vars[i], jl_svecref(params, c)));
+        }
+    }
+    ndt = (jl_value_t*)jl_apply_tuple_type(params);
+    for (int i = end; i > start;) {
+        int r = get_root_index(uf, --i);
+        int c = uf->tuple_components[r];
+        if (c == 0xFE) {
+            ndt = jl_new_struct(jl_unionall_type, uf->vars[i], ndt);
+        }
+    }
+    JL_GC_POP();
+    return ndt;
+}
+
+JL_DLLEXPORT void jl_push_down_unionall(jl_value_t **x, jl_value_t **y) {
+    JL_GC_PUSH2(x, y);
+    size_t n_xvars = jl_subtype_env_size(*x);
+    size_t n_yvars = jl_subtype_env_size(*y);
+
+    assert(n_yvars + n_xvars <= 254);
+
+    uint8_t graph[256];
+    for (int i=0; i < n_yvars + n_xvars; i++) {
+        graph[i] = i;
+    }
+
+    uint8_t tuple_components[256];
+    memset(tuple_components, 0xff, n_xvars + n_yvars);
+
+    jl_tvar_t *(vars[256]);
+    // `vars` initialized below
+
+    var_dependence_t uf = {
+        0,
+        0xFE,
+        &graph[0],
+        &tuple_components[0],
+        &vars[0],
+        n_xvars,
+        n_xvars + n_yvars,
+    };
+
+    jl_value_t *x_tmp = *x, *y_tmp = *y;
+    {
+        // TODO: Maybe use helper function
+        int i = 0;
+        x_tmp = *x;
+        while (jl_is_unionall(x_tmp)) {
+            jl_unionall_t *ux = (jl_unionall_t *)x_tmp;
+            uf.vars[i++] = ux->var;
+
+            // Mark dependencies for any typevars that appear in the top-level bounds
+            uf.dep = i;
+            unipolar_mark_interacting_typevars(ux->var->ub, &uf, 0);
+            unipolar_mark_interacting_typevars(ux->var->lb, &uf, 0);
+            x_tmp = ux->body;
+        }
+        y_tmp = *y;
+        while (jl_is_unionall(y_tmp)) {
+            jl_unionall_t *uy = (jl_unionall_t *)y_tmp;
+            for (int j=0; j < n_xvars; j++) {
+                // Check for duplicate vars from x
+                if (uf.vars[j] == uy->var) uf.graph[i] = j;
+            }
+            uf.vars[i++] = uy->var;
+
+            // Mark dependencies for any typevars that appear in the top-level bounds
+            uf.dep = i;
+            unipolar_mark_interacting_typevars(uy->var->ub, &uf, 1);
+            unipolar_mark_interacting_typevars(uy->var->lb, &uf, 1);
+            y_tmp = uy->body;
+        }
+    }
+
+    if (jl_is_tuple_type(x_tmp) && jl_is_tuple_type(y_tmp)) {
+        size_t xn = jl_nparams(x_tmp), yn = jl_nparams(y_tmp);
+        if (xn != 0 && yn != 0) {
+            jl_value_t *xi = NULL;
+            jl_value_t *yi = NULL;
+            for (int i=0; (i < xn) || (i < yn); i++) {
+                if (i < xn)
+                    xi = jl_tparam(x_tmp, i);
+                if (i < yn)
+                    yi = jl_tparam(y_tmp, i);
+                
+                // TODO: Clean-up varargs handling
+                mark_interacting_typevars(xi, yi, &uf, (jl_is_vararg(xi) || jl_is_vararg(yi)) ? 0xFE : i);
+            }
+
+            uint8_t moves_possible = 0;
+            for (int i=0; i < n_xvars + n_yvars; i++) {
+                int r = get_root_index(&uf, i);
+                if (uf.tuple_components[r] != 0xFE) {
+                    moves_possible += 1;
+                }
+            }
+
+            // For the slow intersection paths, there's a 2^(moves_possible)
+            // advantage to performing this reduction. However, applying the
+            // reduction can also affect whether we take certain fast-paths,
+            // so here we are extra conservative.
+            //
+            // With more performance tuning to guarantee a monotonic
+            // improvement, this could become `if (moves_possible > 0)`
+            if (moves_possible >= 3) {
+                *x = apply_pushdown(x_tmp, &uf, 0, n_xvars);
+                *y = apply_pushdown(y_tmp, &uf, n_xvars, n_xvars + n_yvars);
+            }
+        }
+    }
+
+    JL_GC_POP();
+}
+
 // stack of bits to keep track of which combination of Union components we are
 // looking at (0 for Union.a, 1 for Union.b). forall_exists_subtype and
 // exists_subtype loop over all combinations by updating a binary count in
@@ -4421,6 +4710,9 @@ static int merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se, int co
 
 static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
+    // For types with many nested UnionAlls, reduce nesting
+    jl_push_down_unionall(&x, &y);
+
     e->Runions.depth = 0;
     e->Runions.more = 0;
     e->Runions.used = 0;
