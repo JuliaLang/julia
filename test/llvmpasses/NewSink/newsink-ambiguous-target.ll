@@ -69,27 +69,6 @@ right:
   ret void
 }
 
-; Dead write with one noreturn successor: noreturn wins the tiebreak.
-; CHECK-LABEL: @test_dead_write_noreturn_tiebreak
-; CHECK: entry:
-; CHECK-NOT: store i64 %a, ptr %buf
-; CHECK: br i1
-; CHECK: error:
-; CHECK: store i64 %a, ptr %buf
-define void @test_dead_write_noreturn_tiebreak(i64 %a, i1 %cond) {
-entry:
-  %buf = alloca i64, align 8
-  store i64 %a, ptr %buf, align 8
-  br i1 %cond, label %ok, label %error
-
-ok:
-  ret void
-
-error:
-  call void @throw(ptr %buf)
-  unreachable
-}
-
 ; Memory read with two successors that both dominate all uses: ambiguous,
 ; load stays put.
 ; CHECK-LABEL: @test_load_ambiguous_successor

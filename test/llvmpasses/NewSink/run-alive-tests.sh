@@ -1,29 +1,35 @@
 #!/bin/bash
 # Run alive-tv validation on all newsink tests in parallel
+#
+# Usage: ./run-alive-tests.sh
+#
+# Requires alive-tv on PATH or set ALIVE_TV to its location.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 JULIA_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 OPT="$JULIA_ROOT/usr/tools/opt"
-ALIVE_TV="${ALIVE_TV:-/home/gbaraldi/alive2/build/alive-tv}"
 PLUGIN="$JULIA_ROOT/usr/lib/libjulia-codegen.so"
+ALIVE_TV="${ALIVE_TV:-$(command -v alive-tv 2>/dev/null || true)}"
 TMPDIR="${TMPDIR:-/tmp}/newsink-alive-$$"
+
+if [ -z "$ALIVE_TV" ] || [ ! -x "$ALIVE_TV" ]; then
+    echo "alive-tv not found. Set ALIVE_TV or add it to PATH."
+    exit 1
+fi
 
 mkdir -p "$TMPDIR"
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 run_test() {
     local f="$1"
     local base=$(basename "$f" .ll)
     local transformed="$TMPDIR/${base}-transformed.ll"
 
-    # Transform the file
     "$OPT" -load-pass-plugin="$PLUGIN" -passes='NewSink' -S "$f" -o "$transformed" 2>/dev/null
 
-    # Run alive-tv
     local output=$("$ALIVE_TV" "$f" "$transformed" 2>&1)
     local incorrect=$(echo "$output" | grep -E "^\s*[1-9][0-9]* incorrect" || true)
 
@@ -41,18 +47,15 @@ run_test() {
 export -f run_test
 export OPT ALIVE_TV PLUGIN TMPDIR RED GREEN NC
 
-# Find all test files and run in parallel
 failed=0
 for f in "$SCRIPT_DIR"/*.ll; do
     run_test "$f" &
 done
 
-# Wait for all background jobs and collect exit statuses
 for job in $(jobs -p); do
     wait "$job" || ((failed++))
 done
 
-# Cleanup
 rm -rf "$TMPDIR"
 
 echo ""

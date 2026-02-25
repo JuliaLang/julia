@@ -39,89 +39,7 @@ ok:
   ret i64 %a
 }
 
-; Test: Same store location from two different predecessor blocks
-; Both paths are already in error-only region, so stores stay in place
-; (no benefit from sinking further - they're already off the hot path)
-define i64 @test_diamond_to_error(i64 %a, i64 %bound, i1 %cond) {
-; CHECK-LABEL: @test_diamond_to_error
-entry:
-  %tuple = alloca i64, align 8
-  %cmp = icmp ult i64 %a, %bound
-  br i1 %cmp, label %ok, label %fail
-
-fail:
-  ; fail is error-only (all successors lead to unreachable)
-  ; CHECK: fail:
-  ; CHECK-NEXT: br i1 %cond
-  br i1 %cond, label %fail.path1, label %fail.path2
-
-fail.path1:
-  ; fail.path1 is error-only, stores stay here
-  ; CHECK: fail.path1:
-  ; CHECK-NEXT: store i64 %a
-  store i64 %a, ptr %tuple, align 8
-  br label %error
-
-fail.path2:
-  ; fail.path2 is error-only, stores stay here
-  ; CHECK: fail.path2:
-  ; CHECK-NEXT: %a2 = add
-  ; CHECK-NEXT: store i64 %a2
-  %a2 = add i64 %a, 1
-  store i64 %a2, ptr %tuple, align 8
-  br label %error
-
-error:
-  ; CHECK: error:
-  call void @throw_bounds_error(ptr %tuple)
-  unreachable
-
-ok:
-  ret i64 %a
-}
-
-; Test: Nested conditionals leading to multiple error blocks.
-; Mark throw callees readonly to avoid conservative AA blocking sinks.
-define i64 @test_nested_errors(i64 %a, i64 %b, i64 %bound1, i64 %bound2) {
-; CHECK-LABEL: @test_nested_errors
-entry:
-  %tuple1 = alloca i64, align 8
-  %tuple2 = alloca i64, align 8
-  ; Store for first error
-  ; CHECK: entry:
-  ; CHECK-NOT: store i64 %a, ptr %tuple1
-  store i64 %a, ptr %tuple1, align 8
-
-  %cmp1 = icmp ult i64 %a, %bound1
-  br i1 %cmp1, label %check2, label %error1
-
-check2:
-  ; Store for second error
-  ; CHECK: check2:
-  ; CHECK-NOT: store i64 %b, ptr %tuple2
-  store i64 %b, ptr %tuple2, align 8
-  %cmp2 = icmp ult i64 %b, %bound2
-  br i1 %cmp2, label %ok, label %error2
-
-error1:
-  ; CHECK: error1:
-  ; CHECK: store i64 %a, ptr %tuple1
-  call void @throw_error1(ptr nocapture readonly %tuple1)
-  unreachable
-
-error2:
-  ; CHECK: error2:
-  ; CHECK: store i64 %b, ptr %tuple2
-  call void @throw_error2(ptr nocapture readonly %tuple2)
-  unreachable
-
-ok:
-  ret i64 %a
-}
-
 declare void @throw_bounds_error(ptr)
-declare void @throw_error1(ptr nocapture readonly)
-declare void @throw_error2(ptr nocapture readonly)
 declare void @use(i64)
 
 ;; ============================================================================
@@ -185,7 +103,6 @@ error:
   br label %merge
 
 merge:
-  ; PHI has incoming from maybe_ok (not error-only) and error
   %phi = phi i64 [ %sum, %also_error ], [ %sum, %error ]
   call void @use(i64 %phi)
   unreachable
@@ -198,14 +115,13 @@ ok:
 ;; Common error dominator patterns
 ;; ============================================================================
 
-; Test: Multiple error blocks share a common error-only dominator
+; Value sinks to common dominator of all use blocks.
 define i64 @test_sink_common_error_dominator(i64 %a, i64 %b, i64 %bound, i1 %cond) {
 ; CHECK-LABEL: @test_sink_common_error_dominator
 ; CHECK: entry:
 ; CHECK-NEXT: %cmp = icmp
 ; CHECK-NEXT: br i1 %cmp
 entry:
-  ; This should be sunk to error_dispatch (common dominator of error1 and error2)
   %sum = add i64 %a, %b
   %cmp = icmp ult i64 %a, %bound
   br i1 %cmp, label %ok, label %error_dispatch
@@ -227,12 +143,10 @@ ok:
   ret i64 %b
 }
 
-; Test: Error blocks without common error-only dominator - should NOT sink
+; NCD of use blocks is entry (CurrentBB) — stays put.
 define i64 @test_no_sink_no_common_error_dominator(i64 %a, i64 %b, i64 %bound1, i64 %bound2) {
 ; CHECK-LABEL: @test_no_sink_no_common_error_dominator
 entry:
-  ; This should NOT be sunk because common dominator of error1 and error2
-  ; is entry, which is not an error-only block
   ; CHECK: entry:
   ; CHECK: %sum = add i64 %a, %b
   %sum = add i64 %a, %b

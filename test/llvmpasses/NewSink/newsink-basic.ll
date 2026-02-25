@@ -35,14 +35,10 @@ ok:
 
 declare void @throw_error(ptr)
 
-; Test sinking stores to noalias argument (function-local object)
-; The noalias attribute means the pointer doesn't alias anything else,
-; so we can sink writes to it like we do for allocas.
-
+; Stores to noalias arguments can be sunk (isIdentifiedFunctionLocal).
 define i64 @test_sink_noalias_arg(ptr noalias %buf, i64 %val, i64 %bound) {
 ; CHECK-LABEL: @test_sink_noalias_arg
 entry:
-  ; This store should be sunk since %buf is noalias (function-local)
   ; CHECK: entry:
   ; CHECK-NEXT: %cmp = icmp ult i64 %val, %bound
   ; CHECK-NEXT: br i1 %cmp

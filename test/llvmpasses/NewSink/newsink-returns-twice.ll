@@ -1,14 +1,6 @@
 ; RUN: opt -load-pass-plugin=libjulia-codegen%shlibext -passes='NewSink' -S %s | FileCheck %s
 
-; Bug: The NewSink pass sinks memory(read) calls past returns_twice functions.
-; In Julia's exception handling, this causes ijl_excstack_state() to be sunk
-; from before __sigsetjmp() into the catch block, capturing the wrong exception
-; stack state and breaking exception cleanup.
-;
-; Root cause: findSinkTargetForValue only applies canSinkLoad (alias-based
-; clobber checking) to LoadInst. A CallInst with memory(read) is functionally
-; equivalent to a load but bypasses all clobber checks. Additionally, the pass
-; does not treat returns_twice as a sinking barrier.
+; Tests for returns_twice (setjmp) barriers and memory(read) call clobber checking.
 
 ; --- Function declarations with real Julia attributes ---
 
@@ -34,13 +26,8 @@ attributes #0 = { mustprogress nofree nounwind willreturn memory(read) }
 attributes #1 = { returns_twice }
 attributes #2 = { mustprogress nounwind willreturn }
 
-; ============================================================================
-; Test 1: Julia exception handling pattern
-;
-; ijl_excstack_state captures the exception stack BEFORE sigsetjmp.
-; If sunk to catch_enter, it captures state AFTER the exception is thrown,
-; so ijl_restore_excstack restores the wrong state and the exception leaks.
-; ============================================================================
+; ijl_excstack_state must stay before sigsetjmp — sinking it into catch
+; would capture the wrong exception stack state.
 
 define void @test_julia_eh_pattern(ptr %task, ptr %handler) {
 ; CHECK-LABEL: @test_julia_eh_pattern
@@ -70,13 +57,7 @@ done:
   ret void
 }
 
-; ============================================================================
-; Test 2: Minimal returns_twice barrier test
-;
-; A memory(read) call used only after the second return of a returns_twice
-; function must NOT be sunk past it, even when the returns_twice function
-; only writes to its argument (so alias analysis alone wouldn't block it).
-; ============================================================================
+; memory(read) call must not be sunk past a returns_twice call.
 
 declare i64 @read_global_state() #0
 declare i32 @pure_setjmp(ptr) #3
@@ -104,13 +85,7 @@ handler:
   ret i64 %state
 }
 
-; ============================================================================
-; Test 3: memory(read) call should not be sunk past a readwrite call
-;
-; Even without returns_twice, a memory(read) call should not be sunk past
-; an intervening call that may write to the same memory. This is analogous
-; to canSinkLoad's clobber check, but for call instructions.
-; ============================================================================
+; memory(read) call must not be sunk past a readwrite call.
 
 declare void @modify_state(ptr)
 

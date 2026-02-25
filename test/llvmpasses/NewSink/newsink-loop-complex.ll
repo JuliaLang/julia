@@ -153,8 +153,7 @@ exit:
   ret void
 }
 
-; Test: Store in inner loop, sink to inner error exit (unreachable)
-; CAN sink because error path is noreturn
+; Store in inner loop sinks to inner error exit.
 ; CHECK-LABEL: @test_nested_inner_error_exit
 ; CHECK: inner_header:
 ; CHECK-NOT: store i64 %j, ptr %buf

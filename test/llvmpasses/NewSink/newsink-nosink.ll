@@ -312,3 +312,42 @@ next:
   call void @use_ptr(ptr %p)
   ret void
 }
+
+; Test: Stores to global pointers are not sunk (not function-local)
+@global = external global i64
+; CHECK-LABEL: @test_no_sink_global_store
+; CHECK: entry:
+; CHECK: store i64 %a, ptr @global
+define i64 @test_no_sink_global_store(i64 %a, i64 %bound) {
+entry:
+  store i64 %a, ptr @global, align 8
+  %cmp = icmp ult i64 %a, %bound
+  br i1 %cmp, label %ok, label %error
+
+error:
+  %v = load i64, ptr @global, align 8
+  call void @use(i64 %v)
+  unreachable
+
+ok:
+  ret i64 %a
+}
+
+; Test: Stores to external pointers are not sunk (not function-local)
+; CHECK-LABEL: @test_no_sink_external_ptr_store
+; CHECK: entry:
+; CHECK: store i64 %a, ptr %p
+define i64 @test_no_sink_external_ptr_store(ptr %p, i64 %a, i64 %bound) {
+entry:
+  store i64 %a, ptr %p, align 8
+  %cmp = icmp ult i64 %a, %bound
+  br i1 %cmp, label %ok, label %error
+
+error:
+  %v = load i64, ptr %p, align 8
+  call void @use(i64 %v)
+  unreachable
+
+ok:
+  ret i64 %a
+}
