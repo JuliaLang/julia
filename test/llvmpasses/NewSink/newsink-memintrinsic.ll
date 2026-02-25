@@ -316,16 +316,14 @@ error:
   unreachable
 }
 
-; memcpy and store both sink together preserving order
-; CHECK-LABEL: @test_memcpy_store_both_sink
+; The store to %src is dead (ambiguous target) so it stays. That blocks
+; the memcpy too (store modifies %src between the memcpy and terminator).
+; CHECK-LABEL: @test_memcpy_dead_store_blocks_both
 ; CHECK: entry:
-; CHECK:   %src = alloca [64 x i8]
-; CHECK:   %dest = alloca [64 x i8]
-; CHECK-NEXT: %cmp = icmp
-; CHECK: error:
-; CHECK-NEXT: call void @llvm.memcpy
+; CHECK:   call void @llvm.memcpy
 ; CHECK-NEXT: store i8 99, ptr %src
-define i64 @test_memcpy_store_both_sink(i64 %a, i64 %bound) {
+; CHECK-NEXT: %cmp = icmp
+define i64 @test_memcpy_dead_store_blocks_both(i64 %a, i64 %bound) {
 entry:
   %src = alloca [64 x i8], align 8
   %dest = alloca [64 x i8], align 8
@@ -391,15 +389,15 @@ error:
   unreachable
 }
 
-; Unrelated memory operations sink independently
+; Memcpy sinks to error (read by @throw), but the dead store to %unrelated
+; stays (ambiguous — valid for both successors, neither reads it).
 ; CHECK-LABEL: @test_memcpy_unrelated_store_both_sink
 ; CHECK: entry:
-; CHECK:   %dest = alloca [64 x i8]
 ; CHECK:   %unrelated = alloca i64
+; CHECK-NEXT: store i64 42, ptr %unrelated
 ; CHECK-NEXT: %cmp = icmp
 ; CHECK: error:
 ; CHECK-NEXT: call void @llvm.memcpy
-; CHECK-NEXT: store i64 42, ptr %unrelated
 define i64 @test_memcpy_unrelated_store_both_sink(i64 %a, i64 %bound, ptr %src) {
 entry:
   %dest = alloca [64 x i8], align 8

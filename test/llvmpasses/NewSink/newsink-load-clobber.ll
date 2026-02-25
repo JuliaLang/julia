@@ -4,24 +4,28 @@
 ; intermediate blocks. This is a regression test for a bug where load
 ; sinking didn't check for writes in blocks between source and target.
 
-target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128-ni:10:11:12:13"
-target triple = "x86_64-unknown-linux-gnu"
 
 declare void @use(i64)
 
+; Both the initial store and load sink to %then. The load executes before the
+; clobbering store so it still reads the correct value (0).
 ; CHECK-LABEL: @test_load_not_sunk_past_clobber
 define void @test_load_not_sunk_past_clobber(i1 %cond) {
 entry:
   %p = alloca i64, align 8
   store i64 0, ptr %p, align 8
-; The load must stay here - it must not be sunk past the store in %then
 ; CHECK: entry:
-; CHECK: %v = load i64, ptr %p
+; CHECK-NOT: store
+; CHECK-NOT: load
 ; CHECK: br i1 %cond
   %v = load i64, ptr %p, align 8
   br i1 %cond, label %then, label %error
 
 then:
+; CHECK: then:
+; CHECK: store i64 0, ptr %p
+; CHECK-NEXT: %v = load i64, ptr %p
+; CHECK-NEXT: store i64 42, ptr %p
   store i64 42, ptr %p, align 8
   br label %use_block
 

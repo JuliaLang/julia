@@ -128,16 +128,17 @@ ok:
 
 declare i64 @argmem_write_fn(ptr, i64) nounwind willreturn memory(argmem: write)
 
-; Function that writes to its arguments with no return value
-; NOT sunk because we can't identify a specific destination location.
-; MemoryLocation::getForDest only works for known intrinsics (memset, memcpy)
-; and TLI-recognized library functions (strcpy), not arbitrary functions.
-; CHECK-LABEL: @test_no_sink_argmem_write_void
+; Function that writes to its arguments with no return value.
+; Sinks to error path because the write is only observed there.
+; CHECK-LABEL: @test_sink_argmem_write_void
 ; CHECK: entry:
 ; CHECK:   %buf = alloca i64
+; CHECK-NOT: call void @argmem_write_void_fn
+; CHECK: %cmp = icmp ult i64 %a, %bound
+; CHECK: error:
 ; CHECK-NEXT: call void @argmem_write_void_fn
-; CHECK-NEXT: %cmp = icmp ult i64 %a, %bound
-define i64 @test_no_sink_argmem_write_void(i64 %a, i64 %bound) {
+; CHECK-NEXT: call void @use_buffer
+define i64 @test_sink_argmem_write_void(i64 %a, i64 %bound) {
 entry:
   %buf = alloca i64, align 8
   call void @argmem_write_void_fn(ptr %buf, i64 %a)

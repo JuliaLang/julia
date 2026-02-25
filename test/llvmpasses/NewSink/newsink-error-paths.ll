@@ -115,7 +115,6 @@ merge:
 }
 
 ; Test: Sink to non-error block when it's a valid single-pred successor
-; (Unlike DSE which only sinks to noreturn paths, we sink to any valid target)
 ; CHECK-LABEL: @sink_to_normal_block
 ; CHECK: entry:
 ; CHECK-NEXT: %P = alloca i32

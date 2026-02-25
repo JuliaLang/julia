@@ -65,11 +65,15 @@ if.end:
 ;; From LLVM DSE/multiblock-unreachable.ll - Unreachable exits
 ;; ============================================================================
 
-; Test: Unreachable exit with no call - store before unreachable should be sinkable
+; Store sinks to if.then (only read there). The store in if.end writes a
+; different value and doesn't depend on the first store.
 define void @unreachable_exit_with_no_call(ptr %ptr, i1 %c.1) {
 ; CHECK-LABEL: @unreachable_exit_with_no_call
-; The store should NOT be sunk to unreachable block since it's also used in if.end
-; (DSE removes the first store because it's overwritten on all paths)
+; CHECK: entry:
+; CHECK-NOT: store
+; CHECK: br i1
+; CHECK: if.then:
+; CHECK-NEXT: store i64 1, ptr %loc
 entry:
   %loc = alloca i64, align 8
   store i64 1, ptr %loc, align 8
@@ -130,14 +134,11 @@ if.end:
 ;; From LLVM Sink/basic.ll - Diamond patterns
 ;; ============================================================================
 
-; Test: Diamond CFG where result is used in return (not an error path)
-; Our pass only sinks to error paths (unreachable blocks), so this mul is NOT sunk
-; (contrast with LLVM's general Sink pass which would sink it)
+; Test: Diamond CFG where both branches merge at X.
+; The mul is not sunk because X has multiple predecessors.
 define i32 @test_diamond_not_sunk_to_non_error(i32 %a, i32 %b, i32 %c) {
 ; CHECK-LABEL: @test_diamond_not_sunk_to_non_error
 entry:
-  ; This mul is used only in X, but X is not an error-only block
-  ; Our pass does NOT sink to non-error blocks
   ; CHECK: entry:
   ; CHECK: mul nsw
   %1 = mul nsw i32 %c, %b
@@ -151,7 +152,6 @@ B1:
   br label %X
 
 X:
-  ; X is a normal block (returns), not error-only
   %.01 = phi i32 [ %c, %B0 ], [ %a, %B1 ]
   %R = sub i32 %1, %.01
   ret i32 %R
@@ -245,14 +245,16 @@ bb53:
   br label %bb53
 }
 
-; Test: Multiple paths to same unreachable block
+; Test: Multiple paths to same unreachable block.
+; The store is sunk via edge splitting — each incoming edge to the multi-pred
+; error block gets the store in its own split-edge block.
 define i64 @test_multi_path_to_unreachable(i64 %a, i64 %bound1, i64 %bound2) {
 ; CHECK-LABEL: @test_multi_path_to_unreachable
 entry:
   %tuple = alloca i64, align 8
-  ; Store should be sunk since only used in error paths
   ; CHECK: entry:
-  ; CHECK-NOT: store i64 %a, ptr %tuple
+  ; CHECK-NOT: store
+  ; CHECK: br i1 %cmp1
   store i64 %a, ptr %tuple, align 8
   %cmp1 = icmp ult i64 %a, %bound1
   br i1 %cmp1, label %check2, label %error
@@ -261,9 +263,10 @@ check2:
   %cmp2 = icmp ult i64 %a, %bound2
   br i1 %cmp2, label %ok, label %error
 
+; CHECK: entry.error_crit_edge:
+; CHECK-NEXT: store i64 %a, ptr %tuple
+
 error:
-  ; CHECK: error:
-  ; CHECK: store i64 %a, ptr %tuple
   call void @throw(ptr %tuple)
   unreachable
 

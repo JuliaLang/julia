@@ -73,8 +73,8 @@ ok:
 
 declare void @use(i64)
 
-; Test: Store should sink when pointer is captured in a dominated block
-; The capture in 'cleanup' is fine because it's dominated by 'error' (where store will go)
+; Store sinks to error: the only reader is @throw on the error path.
+; @escape in cleanup is dominated by error, so the sunk store executes first.
 define i64 @test_sink_capture_in_dominated(i64 %a, i64 %bound) {
 ; CHECK-LABEL: @test_sink_capture_in_dominated
 ; CHECK: entry:
@@ -95,7 +95,7 @@ error:
   br label %cleanup
 
 cleanup:
-  ; Capture happens here, but it's dominated by 'error' where store lands
+  ; Dominated by error — store already executed
   call void @escape(ptr %p)
   unreachable
 
@@ -103,7 +103,7 @@ ok:
   ret i64 %a
 }
 
-; Test: Store should NOT sink when pointer is captured in a non-dominated block
+; Store stays: both error1 and error2 read %p, so neither is a unique target.
 define i64 @test_no_sink_capture_not_dominated(i64 %a, i64 %bound, i1 %cond) {
 ; CHECK-LABEL: @test_no_sink_capture_not_dominated
 ; CHECK: entry:
@@ -118,12 +118,10 @@ error_dispatch:
   br i1 %cond, label %error1, label %error2
 
 error1:
-  ; We'd want to sink to error1
   call void @throw(ptr %p)
   unreachable
 
 error2:
-  ; But capture here is not dominated by error1 - blocks sinking
   call void @escape(ptr %p)
   unreachable
 
