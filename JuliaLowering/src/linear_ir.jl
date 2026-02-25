@@ -727,9 +727,6 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end_label = make_label(ctx, ex)
         need_value = needs_value || in_tail_pos
         result_var = need_value ? new_local_binding(ctx, ex, "$(name)_result") : nothing
-        if !isnothing(result_var)
-            emit_assignment(ctx, ex, result_var, nothing_(ctx, ex))
-        end
         outer_target = get(ctx.break_targets, name, nothing)
         ctx.break_targets[name] = JumpTarget(end_label, ctx, result_var)
         push!(ctx.break_label_stack, name)
@@ -744,6 +741,18 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             ctx.break_targets[name] = outer_target
         end
         emit(ctx, end_label)
+        # Use isdefined to handle the case where initialization was
+        # skipped (e.g., by @goto jumping into a loop body).
+        if !isnothing(result_var)
+            defined_label = make_label(ctx, ex)
+            done_label = make_label(ctx, ex)
+            isdef = emit_assign_tmp(ctx, @ast ctx ex [K"isdefined" result_var])
+            emit(ctx, @ast ctx ex [K"gotoifnot" isdef defined_label])
+            emit(ctx, @ast ctx ex [K"goto" done_label])
+            emit(ctx, defined_label)
+            emit_assignment(ctx, ex, result_var, nothing_(ctx, ex))
+            emit(ctx, done_label)
+        end
         if in_tail_pos
             emit_return(ctx, ex, result_var)
             nothing

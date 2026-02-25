@@ -599,3 +599,13 @@ end
             end
         end
     end)
+
+# issue #61129 - @goto into a while loop with break should not error
+function goto_into_while_break()
+    @goto foo
+    while true
+        @label foo
+        break
+    end
+end
+@test goto_into_while_break() === nothing
