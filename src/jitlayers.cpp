@@ -923,7 +923,8 @@ public:
             CIs.push_back(CI);
         JIT.publishCIs(CIs);
 
-        JIT.linkOutput(*R, Obj->getMemBufferRef(), **G, std::move(Out.linker_info));
+        if (!JIT.linkOutput(*R, Obj->getMemBufferRef(), **G, std::move(Out.linker_info)))
+            return;
         OL.emit(std::move(R), std::move(*G), std::move(Obj));
     }
 
@@ -1983,7 +1984,7 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
             if (It == CISymbols.end()) {
                 errs()
                     << "Internal error: Attempted to publish code instance that was never successfully compiled.\n";
-                return;
+                abort();
             }
             auto CISym = It->second;
             if (CISym.invoke)
@@ -2002,7 +2003,7 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
             errs() << "Internal error: Lookup failed: " << SymsE.takeError() << "\n";
             if (P)
                 P->set_value();
-            return;
+            abort();
         }
         auto Syms = std::move(*SymsE);
         for (auto [i, CI] : llvm::enumerate(CIs)) {
@@ -2156,7 +2157,7 @@ linkGraphSymbols(jitlink::LinkGraph &G) JL_NOTSAFEPOINT
     return Syms;
 }
 
-void JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferRef ObjBuf,
+bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferRef ObjBuf,
                            jitlink::LinkGraph &G, std::unique_ptr<jl_linker_info_t> Info)
 {
     std::unique_lock Lock{LinkerMutex};
@@ -2180,7 +2181,10 @@ void JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
         if (!Syms.contains(T))
             continue;
         JL_GC_PROMISE_ROOTED(CI);
-        Syms.at(T)->setName(linkCallTarget(MR, CI, API));
+        auto Dest = linkCallTarget(MR, CI, API);
+        if (!Dest)
+            return false;
+        Syms.at(T)->setName(Dest);
     }
 
     // Rename globals and add mappings
@@ -2205,6 +2209,7 @@ void JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
     cantFail(JD.define(orc::absoluteSymbols(std::move(GlobalSyms))));
 
     DebuginfoPlugin->notifyMaterializingWithInfo(MR, G, ObjBuf, std::move(Info));
+    return true;
 }
 
 // Must hold LinkerMutex.
