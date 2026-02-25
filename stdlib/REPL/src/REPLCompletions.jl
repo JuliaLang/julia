@@ -1204,6 +1204,9 @@ function find_prefix_call(cur::CursorNode)
     else
         # Check that we are beyond the function name.
         is_call(n) && cur.index > children_nt(n)[1].index || return nothing, nothing
+        if kind(n) == K"dotcall" && length(children_nt(n)) == 1
+            return nothing, nothing
+        end
         n, :positional
     end
 end
@@ -1223,6 +1226,14 @@ function node_prefix(node::CursorNode, context_module::Module)
         # Don't use prefix if we are the value
         n !== node || return nothing
         return Expr(n)
+    end
+
+    # expr.() => expr (e.g. `Printf.|()`)
+    if kind(p) == K"dotcall"
+        n = children_nt(p)[1]
+        if kind(node) == K"." || kind(node) == K"(" || (kind(node) == K"tuple" && isempty(children_nt(node)))
+            return kind(n) == K"Identifier" ? n.val : Expr(n)
+        end
     end
 
     if kind(p) == K"importpath"
