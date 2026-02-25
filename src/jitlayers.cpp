@@ -369,12 +369,10 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
             gf_thunk_name = emit_abi_dispatcher(*out, from_abi, codeinst, llvminvoke);
         }
     }
-    int8_t gc_state = jl_gc_safe_enter(ct->ptls);
     auto &ES = jl_ExecutionEngine->getExecutionSession();
     auto emitted = out->finish(*ES.getSymbolStringPool());
     jl_ExecutionEngine->addOutput(std::move(emitted));
     uintptr_t Addr = jl_ExecutionEngine->getFunctionAddress(gf_thunk_name);
-    jl_gc_safe_leave(ct->ptls, gc_state);
     assert(Addr);
     return (void*)Addr;
 }
