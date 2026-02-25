@@ -127,6 +127,8 @@ rem(x, y, r::RoundingMode)
 rem(x, y, ::RoundingMode{:ToZero}) = rem(x, y)
 rem(x, y, ::RoundingMode{:Down}) = mod(x, y)
 rem(x, y, ::RoundingMode{:Up}) = mod(x, -y)
+rem(x, y::Unsigned, ::RoundingMode{:Up}) =
+    throw(ArgumentError("rem(x, y, RoundUp) cannot be used with unsigned y")) # issue #34325
 rem(x, y, r::RoundingMode{:Nearest}) = x - y * div(x, y, r)
 rem(x::Integer, y::Integer, r::RoundingMode{:Nearest}) = divrem(x, y, r)[2]
 

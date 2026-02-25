@@ -1752,6 +1752,13 @@ end
             @test rem(typemin(T), T(-1)) === T(0)
             @test mod(typemin(T), T(-1)) === T(0)
         end
+        @testset "issue #34325" for S in (Int8, Int16, Int32, Int64, Int128)
+            U = unsigned(S)
+            @test rem(S(10), S(7), RoundUp) == -4
+            @test rem(U(10), S(7), RoundUp) == -4
+            @test_throws ArgumentError rem(S(10), U(7), RoundUp)
+            @test_throws ArgumentError rem(U(10), U(7), RoundUp)
+        end
     end
     @testset "issue #4156" begin
         @test fld(1.4, 0.35667494393873234) == 3.0
