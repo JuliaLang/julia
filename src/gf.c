@@ -673,6 +673,9 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     jl_atomic_store_relaxed(&codeinst->next, NULL);
     jl_atomic_store_relaxed(&codeinst->ipo_purity_bits, effects);
     codeinst->analysis_results = analysis_results;
+
+    jl_jit_register_ci(codeinst);
+
     return codeinst;
 }
 
@@ -3772,15 +3775,8 @@ JL_DLLEXPORT int32_t jl_invoke_api(jl_code_instance_t *codeinst)
     jl_callptr_t f = jl_atomic_load_relaxed(&codeinst->invoke);
     if (f == NULL)
         return 0;
-    if (f == &jl_fptr_args)
-        return 1;
-    if (f == &jl_fptr_const_return)
-        return 2;
-    if (f == &jl_fptr_sparam)
-        return 3;
-    if (f == &jl_fptr_interpret_call)
-        return 4;
-    return -1;
+    jl_invoke_api_t t = jl_callptr_invoke_api(f);
+    return t == JL_INVOKE_SPECSIG ? -1 : (int32_t)t;
 }
 
 JL_DLLEXPORT jl_value_t *jl_normalize_to_compilable_sig(jl_tupletype_t *ti, jl_svec_t *env, jl_method_t *m,
@@ -4125,6 +4121,35 @@ JL_DLLEXPORT jl_value_t *jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t na
 {
     size_t world = jl_current_task->world_age;
     return _jl_invoke(F, args, nargs, mfunc, world);
+}
+
+// Used by jl_eval_thunk to invoke top-level thunks.  They will be
+// garbage-collectable as soon as they are invoked, so their ORC symbols must be
+// unregistered before we enter invoke, which may never return.
+JL_DLLEXPORT jl_value_t *jl_invoke_oneshot(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
+{
+    size_t world = jl_current_task->world_age;
+
+    int64_t last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
+    jl_code_instance_t *codeinst = jl_compile_method_internal(mfunc, world);
+    if (jl_options.malloc_log)
+        jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
+    uint8_t specsigflags;
+    jl_callptr_t invoke;
+    void *specptr;
+    jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &specptr, 1);
+    jl_jit_unregister_ci(codeinst);
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
+
+    jl_value_t *res = invoke(F, args,  nargs, codeinst);
+    return verify_type(res);
 }
 
 JL_DLLEXPORT jl_value_t *jl_invoke_oc(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)

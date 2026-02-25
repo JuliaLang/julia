@@ -146,7 +146,7 @@ AtomicOrdering get_llvm_atomic_order(enum jl_memory_order order)
 
 // --- string constants ---
 static Value *stringConstPtr(
-        jl_codegen_params_t &emission_context,
+        jl_codegen_output_t &emission_context,
         IRBuilder<> &irbuilder,
         const Twine &txt)
 {
@@ -229,7 +229,7 @@ static DICompileUnit *getOrCreateJuliaCU(Module &M,
     return CU;
 }
 
-static DIType *_julia_type_to_di(jl_codegen_params_t *ctx, jl_debugcache_t &debuginfo, jl_value_t *jt, DIBuilder *dbuilder, bool isboxed)
+static DIType *_julia_type_to_di(jl_codegen_output_t *ctx, jl_debugcache_t &debuginfo, jl_value_t *jt, DIBuilder *dbuilder, bool isboxed)
 {
     jl_datatype_t *jdt = (jl_datatype_t*)jt;
     if (isboxed || !jl_is_datatype(jt) || !jdt->isconcretetype)
@@ -568,10 +568,10 @@ static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_
 
 // --- emitting pointers directly into code ---
 
-static void jl_temporary_root(jl_codegen_params_t &ctx, jl_value_t *val);
+static void jl_temporary_root(jl_codegen_output_t &ctx, jl_value_t *val);
 static void jl_temporary_root(jl_codectx_t &ctx, jl_value_t *val);
 
-static Constant *julia_pgv(jl_codegen_params_t &params, Module *M, const char *cname, void *addr)
+static Constant *julia_pgv(jl_codegen_output_t &params, Module *M, const char *cname, void *addr)
 {
     // emit a GlobalVariable for a jl_value_t named "cname"
     // store the name given so we can reuse it (facilitating merging later)
@@ -580,8 +580,7 @@ static Constant *julia_pgv(jl_codegen_params_t &params, Module *M, const char *c
     StringRef localname;
     std::string gvname;
     if (!gv) {
-        uint64_t id = jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1); // TODO: use params.global_targets.size()
-        raw_string_ostream(gvname) << cname << id;
+        gvname = params.make_name(cname);
         localname = StringRef(gvname);
     }
     else {
@@ -603,7 +602,7 @@ static Constant *julia_pgv(jl_codegen_params_t &params, Module *M, const char *c
     return gv;
 }
 
-static Constant *julia_pgv(jl_codegen_params_t &params, Module *M, const char *prefix, jl_sym_t *name, jl_module_t *mod, void *addr)
+static Constant *julia_pgv(jl_codegen_output_t &params, Module *M, const char *prefix, jl_sym_t *name, jl_module_t *mod, void *addr)
 {
     // emit a GlobalVariable for a jl_value_t, using the prefix, name, and module to
     // to create a readable name of the form prefixModA.ModB.name#
@@ -632,8 +631,9 @@ static Constant *julia_pgv(jl_codegen_params_t &params, Module *M, const char *p
 }
 
 static JuliaVariable *julia_const_gv(jl_value_t *val);
-Constant *literal_pointer_val_slot(jl_codegen_params_t &params, Module *M, jl_value_t *p)
+Constant *literal_pointer_val_slot(jl_codegen_output_t &params, jl_value_t *p)
 {
+    Module *M = &params.get_module();
     // emit a pointer to a jl_value_t* which will allow it to be valid across reloading code
     // also, try to give it a nice name for gdb, for easy identification
     if (JuliaVariable *gv = julia_const_gv(p)) {
@@ -743,7 +743,7 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p)
 {
     if (p == NULL)
         return Constant::getNullValue(ctx.types().T_pjlvalue);
-    Value *pgv = literal_pointer_val_slot(ctx.emission_context, jl_Module, p);
+    Value *pgv = literal_pointer_val_slot(ctx.emission_context, p);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
     auto load = ai.decorateInst(maybe_mark_load_dereferenceable(
             ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, pgv, Align(sizeof(void*))),
@@ -805,9 +805,9 @@ static unsigned convert_struct_offset(jl_codectx_t &ctx, Type *lty, unsigned byt
     return convert_struct_offset(ctx.builder.GetInsertBlock()->getModule()->getDataLayout(), lty, byte_offset);
 }
 
-static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed, bool llvmcall=false);
+static Type *_julia_struct_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed, bool llvmcall=false);
 
-static Type *_julia_type_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed, bool no_boxing)
+static Type *_julia_type_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed, bool no_boxing)
 {
     // this function converts a Julia Type into the equivalent LLVM type
     if (isboxed) *isboxed = false;
@@ -922,7 +922,7 @@ static StructType *get_memoryref_type(LLVMContext &ctxt, Type *T_size, const jl_
     return get_jlmemoryref(ctxt, AS);
 }
 
-static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed, bool llvmcall)
+static Type *_julia_struct_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, jl_value_t *jt, bool *isboxed, bool llvmcall)
 {
     // this function converts a Julia Type into the equivalent LLVM struct
     // use this where C-compatible (unboxed) structs are desired
@@ -1505,7 +1505,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull
                     ptr = get_pointer_to_constant(ctx.emission_context, ConstantInt::get(expr_type, jt->smalltag << 4), Align(sizeof(jl_value_t*)), StringRef("_j_smalltag_") + jl_symbol_name(jt->name->name), *jl_Module);
                 }
                 else {
-                    ptr = ConstantExpr::getBitCast(literal_pointer_val_slot(ctx.emission_context, jl_Module, (jl_value_t*)jt), datatype_or_p->getType());
+                    ptr = ConstantExpr::getBitCast(literal_pointer_val_slot(ctx.emission_context, (jl_value_t*)jt), datatype_or_p->getType());
                 }
                 datatype_or_p = ctx.builder.CreateSelect(cmp, ptr, datatype_or_p);
                 setName(ctx.emission_context, datatype_or_p, "typetag_ptr");
@@ -4707,22 +4707,6 @@ static Value *emit_defer_signal(jl_codectx_t &ctx)
     Value *ptls = get_current_ptls(ctx);
     return emit_ptrgep(ctx, ptls, offsetof(jl_tls_states_t, defer_signal));
 }
-
-#ifndef JL_NDEBUG
-static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
-{
-    return
-           (a->track_allocations == b->track_allocations) &&
-           (a->code_coverage == b->code_coverage) &&
-           (a->prefer_specsig == b->prefer_specsig) &&
-           (a->gnu_pubnames == b->gnu_pubnames) &&
-           (a->debug_info_kind == b->debug_info_kind) &&
-           (a->safepoint_on_entry == b->safepoint_on_entry) &&
-           (a->gcstack_arg == b->gcstack_arg) &&
-           (a->use_jlplt == b->use_jlplt) &&
-           (a->force_emit_all == b->force_emit_all);
-}
-#endif
 
 // Emit allocation for variable-length GenericMemory
 // If zeroinit_nbytes is non-null, adds a zeroinit_indirect bundle to zero that many bytes
