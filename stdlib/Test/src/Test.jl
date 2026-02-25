@@ -398,20 +398,49 @@ function eval_test_comparison(comparison::Expr, quoted::Expr, source::LineNumber
              source)
 end
 
+"""
+    Test.test_call(func, args...; kwargs...) -> (result, context)
+
+Evaluate a function call and optionally return extra failure context for
+[`@test`](@ref). Returns `(result, context)` where `context` is `nothing`
+or a string with additional information to display when the test fails.
+
+Overload this function to provide more informative `@test` failure messages
+for specific functions.
+"""
+test_call(func, args...; kwargs...) = (func(args...; kwargs...), nothing)
+
+function test_call(::typeof(Base.isapprox), args...; kwargs...)
+    res = Base.isapprox(args...; kwargs...)
+    if res || isempty(kwargs)
+        return (res, nothing)
+    end
+    return (res, join(("$k=$v" for (k, v) in kwargs), ", "))
+end
+
+function test_call(::typeof(Base.success), cmd::Base.AbstractCmd)
+    proc = Base.run(cmd; wait=false)
+    res = Base.success(proc)
+    return (res, res ? nothing : "exitcode = $(proc.exitcode), termsignal = $(proc.termsignal)")
+end
+
 function eval_test_function(func, args, kwargs, quoted_func::Union{Expr,Symbol}, source::LineNumberNode, negate::Bool=false)
-    res = func(args...; kwargs...)
+    res, extra_context = test_call(func, args...; kwargs...)
 
     # Create "Evaluated" expression which looks like the original call but has all of
     # the arguments evaluated
-    kw_suffix = ""
-    if quoted_func === :≈ && !res
-        kw_suffix = " ($(join(["$k=$v" for (k, v) in kwargs], ", ")))"
+    if extra_context !== nothing
         quoted_args = args
     elseif isempty(kwargs)
         quoted_args = args
     else
         kwargs_expr = Expr(:parameters, [Expr(:kw, k, v) for (k, v) in kwargs]...)
         quoted_args = [kwargs_expr, args...]
+    end
+
+    kw_suffix = ""
+    if extra_context !== nothing && res === false
+        kw_suffix = " ($extra_context)"
     end
 
     # Properly render broadcast function call syntax, e.g. `(==).(1, 2)` or `Base.:(==).(1, 2)`.

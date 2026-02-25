@@ -21,21 +21,21 @@ function readchomperrors(exename::Cmd)
     p = run(exename, devnull, out, err, wait=false)
     o = @async(readchomp(out))
     e = @async(readchomp(err))
-    return (success(p), fetch(o), fetch(e))
+    return (p, fetch(o), fetch(e))
 end
 
 # helper function for tests that expect successful command execution
 # logs detailed error information if the command fails
 function test_read_success(cmd::Cmd, expected_type::Type=String)
-    success, out, err = readchomperrors(cmd)
-    if !success
+    p, out, err = readchomperrors(cmd)
+    if !success(p)
         println("---- Command failed: ")
         show(cmd)
         println("stdout:\n", out)
         println("stderr:\n", err)
         println("----")
     end
-    @test success
+    @test success(p)
     return expected_type == String ? out : parse(expected_type, out)
 end
 
