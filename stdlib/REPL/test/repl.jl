@@ -386,23 +386,22 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true,style_input=fa
     write(stdin_write, "\e[B\n")
     readuntil(stdout_read, s2)
 
-    # test that prefix history search "passes through" key bindings to parent mode
+    # test that key bindings work after history recall (cursor at beginning of line)
     write(stdin_write, "0x321\n")
     readuntil(stdout_read, "0x321")
     write(stdin_write, "\e[A\e[1;3C|||") # uparrow (go up history) and then Meta-rightarrow (indent right)
     s2 = readuntil(stdout_read, "|||", keep=true)
-    @test endswith(s2, " 0x321\r\e[13C|||") # should have a space (from Meta-rightarrow) and not
-                                            # have a spurious C before ||| (the one here is not spurious!)
+    @test endswith(s2, " |||") # cursor at beginning, indent adds space, then ||| typed after space
 
-    # "pass through" for ^x^x
+    # key bindings for ^x^x work after history recall
     write(stdin_write, "\x030x4321\n") # \x03 == ^c
     readuntil(stdout_read, "0x4321")
     write(stdin_write, "\e[A\x18\x18||\x18\x18||||") # uparrow, ^x^x||^x^x||||
     s3 = readuntil(stdout_read, "||||", keep=true)
-    @test endswith(s3, "||0x4321\r\e[15C||||")
+    @test endswith(s3, "||||")
 
-    # Delete line (^U) and close REPL (^D)
-    write(stdin_write, "\x15\x04")
+    # Cancel line (^C) and close REPL (^D)
+    write(stdin_write, "\x03\x04")
     Base.wait(repltask)
 
     nothing
@@ -503,8 +502,6 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         shell_mode = repl.interface.modes[2]
         help_mode = repl.interface.modes[3]
         pkg_mode = repl.interface.modes[4]
-        # histp = repl.interface.modes[5]
-        prefix_mode = repl.interface.modes[5]
 
         hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
                                                        :shell => shell_mode,
@@ -515,7 +512,6 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         REPL.history_do_initialize(hp)
         REPL.history_reset_state(hp)
 
-        # histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
         repl_mode.hist = shell_mode.hist = help_mode.hist = hp
 
         # Some manual setup
@@ -548,7 +544,7 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         LineEdit.history_next(s, hp)
         @test LineEdit.mode(s) == repl_mode
         @test buffercontents(LineEdit.buffer(s)) == "wip"
-        @test position(LineEdit.buffer(s)) == 3
+        @test position(LineEdit.buffer(s)) == 0
         LineEdit.history_next(s, hp)
         @test buffercontents(LineEdit.buffer(s)) == "wip"
         LineEdit.history_prev(s, hp, 2)
@@ -568,7 +564,7 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         @test buffercontents(LineEdit.buffer(s)) == "ls"
         LineEdit.history_last(s, hp)
         @test buffercontents(LineEdit.buffer(s)) == "wip"
-        @test position(LineEdit.buffer(s)) == 3
+        @test position(LineEdit.buffer(s)) == 0
         # test that history_first jumps to beginning of current session's history
         @test hp.start_idx == 11
         hp.start_idx -= 5 # temporarily alter history
@@ -584,41 +580,36 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         LineEdit.move_line_start(s)
         @test position(LineEdit.buffer(s)) == 0
 
-        # Test that the same holds for prefix search
-        ps = LineEdit.state(s, prefix_mode)::LineEdit.PrefixSearchState
-        @test LineEdit.input_string(ps) == ""
-        LineEdit.enter_prefix_search(s, prefix_mode, true)
-        LineEdit.history_prev_prefix(ps, hp, "")
-        @test ps.prefix == ""
-        @test ps.parent == repl_mode
-        @test LineEdit.input_string(ps) == "2 + 2"
+        # Test prefix search (non-modal, directly on MIState)
+        LineEdit.history_prev_prefix(s, hp, "")
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "2 + 2"
         @test position(LineEdit.buffer(s)) == 5
-        LineEdit.history_prev_prefix(ps, hp, "")
-        @test ps.parent == shell_mode
-        @test LineEdit.input_string(ps) == "ls"
+        LineEdit.history_prev_prefix(s, hp, "")
+        @test LineEdit.mode(s) == shell_mode
+        @test buffercontents(LineEdit.buffer(s)) == "ls"
         @test position(LineEdit.buffer(s)) == 2
-        LineEdit.history_prev_prefix(ps, hp, "sh")
-        @test ps.parent == repl_mode
-        @test LineEdit.input_string(ps) == "shell"
+        LineEdit.history_prev_prefix(s, hp, "sh")
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "shell"
         @test position(LineEdit.buffer(s)) == 2
-        LineEdit.history_next_prefix(ps, hp, "sh")
-        @test ps.parent == repl_mode
-        @test LineEdit.input_string(ps) == "wip"
+        LineEdit.history_next_prefix(s, hp, "sh")
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "wip"
         @test position(LineEdit.buffer(s)) == 0
         LineEdit.move_input_end(s)
-        LineEdit.history_prev_prefix(ps, hp, "é")
-        @test ps.parent == repl_mode
-        @test LineEdit.input_string(ps) == "éé"
+        LineEdit.history_prev_prefix(s, hp, "é")
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "éé"
         @test position(LineEdit.buffer(s)) == sizeof("é") > 1
-        LineEdit.history_prev_prefix(ps, hp, "é")
-        @test ps.parent == repl_mode
-        @test LineEdit.input_string(ps) == "é"
+        LineEdit.history_prev_prefix(s, hp, "é")
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "é"
         @test position(LineEdit.buffer(s)) == sizeof("é")
-        LineEdit.history_next_prefix(ps, hp, "zzz")
-        @test ps.parent == repl_mode
-        @test LineEdit.input_string(ps) == "wip"
+        LineEdit.history_next_prefix(s, hp, "zzz")
+        @test LineEdit.mode(s) == repl_mode
+        @test buffercontents(LineEdit.buffer(s)) == "wip"
         @test position(LineEdit.buffer(s)) == 3
-        LineEdit.accept_result(s, prefix_mode)
     end
 end
 
@@ -728,7 +719,7 @@ fake_repl() do stdin_write, stdout_read, repl
         on_enter = s->true)
 
     hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:parse => panel))
-    search_prompt, skeymap = LineEdit.setup_prefix_keymap(hp, panel)
+    _, skeymap = LineEdit.setup_prefix_keymap(hp, panel)
     REPL.history_reset_state(hp)
 
     panel.hist = hp
@@ -746,7 +737,7 @@ fake_repl() do stdin_write, stdout_read, repl
         nothing
     end
 
-    repltask = @async REPL.run_interface(repl.t, LineEdit.ModalInterface(Any[panel, search_prompt]))
+    repltask = @async REPL.run_interface(repl.t, LineEdit.ModalInterface(Any[panel]))
 
     write(stdin_write, "a\n")
     @test wait(c) == "a"
@@ -973,7 +964,7 @@ for keys = [altkeys, merge(altkeys...)],
 
             sendrepl3("1 + 1;")                        # a simple line
             sendrepl3("multi=2;\e\nline=2;")           # a multiline input
-            sendrepl3("ignoreme\e[A\b\b3;\e[B\b\b1;")  # edit the previous multiline input
+            sendrepl3("ignoreme\e[A\x05\b\b3;\e[B\b\b1;")  # edit the previous multiline input (^E to end of line after recall)
             sendrepl3("1 +\e[5~\b*")                   # use prefix search to edit the 1st input
 
             # Close REPL ^D
@@ -1617,8 +1608,6 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         shell_mode = repl.interface.modes[2]
         help_mode = repl.interface.modes[3]
         pkg_mode = repl.interface.modes[4]
-        # histp = repl.interface.modes[5]
-        prefix_mode = repl.interface.modes[5]
 
         hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:julia => repl_mode,
                                                        :shell => shell_mode,
@@ -1630,9 +1619,9 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         REPL.history_do_initialize(hp)
         REPL.history_reset_state(hp)
 
-        # histp.hp = repl_mode.hist = shell_mode.hist = help_mode.hist = hp
+        repl_mode.hist = shell_mode.hist = help_mode.hist = hp
 
-        s = LineEdit.init_state(repl.t, prefix_mode)
+        s = LineEdit.init_state(repl.t, repl.interface)
         prefix_prev() = REPL.history_prev_prefix(s, hp, "x")
         prefix_prev()
         @test LineEdit.mode(s) == repl_mode

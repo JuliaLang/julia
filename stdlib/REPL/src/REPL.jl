@@ -974,9 +974,6 @@ function history_prev(s::LineEdit.MIState, hist::REPLHistoryProvider,
     m = history_move(s, hist, hist.cur_idx-num, save_idx)
     if m === :ok
         LineEdit.move_input_start(s)
-        LineEdit.reset_key_repeats(s) do
-            LineEdit.move_line_end(s)
-        end
         return LineEdit.refresh_line(s)
     elseif m === :skip
         return history_prev(s, hist, num+1, save_idx)
@@ -1002,7 +999,7 @@ function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider,
     end
     m = history_move(s, hist, cur_idx+num, save_idx)
     if m === :ok
-        LineEdit.move_input_end(s)
+        LineEdit.move_input_start(s)
         return LineEdit.refresh_line(s)
     elseif m === :skip
         return history_next(s, hist, num+1, save_idx)
@@ -1018,7 +1015,7 @@ history_first(s::LineEdit.MIState, hist::REPLHistoryProvider) =
 history_last(s::LineEdit.MIState, hist::REPLHistoryProvider) =
     history_next(s, hist, length(update!(hist.history)) - hist.cur_idx + 1)
 
-function history_move_prefix(s::LineEdit.PrefixSearchState,
+function history_move_prefix(s::Union{LineEdit.MIState, LineEdit.PrefixSearchState},
                              hist::REPLHistoryProvider,
                              prefix::AbstractString,
                              backwards::Bool,
@@ -1057,9 +1054,9 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
     Terminals.beep(s)
     nothing
 end
-history_next_prefix(s::LineEdit.PrefixSearchState, hist::REPLHistoryProvider, prefix::AbstractString) =
+history_next_prefix(s::Union{LineEdit.MIState, LineEdit.PrefixSearchState}, hist::REPLHistoryProvider, prefix::AbstractString) =
     history_move_prefix(s, hist, prefix, false)
-history_prev_prefix(s::LineEdit.PrefixSearchState, hist::REPLHistoryProvider, prefix::AbstractString) =
+history_prev_prefix(s::Union{LineEdit.MIState, LineEdit.PrefixSearchState}, hist::REPLHistoryProvider, prefix::AbstractString) =
     history_move_prefix(s, hist, prefix, true)
 
 function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, response_buffer::IOBuffer,
@@ -1644,7 +1641,7 @@ function setup_interface(
         end,
     )
 
-    prefix_prompt, prefix_keymap = LineEdit.setup_prefix_keymap(hp, julia_prompt)
+    _, prefix_keymap = LineEdit.setup_prefix_keymap(hp, julia_prompt)
 
     # Build keymap list - add bracket insertion if enabled
     base_keymaps = Dict{Any,Any}[repl_keymap, prefix_keymap, LineEdit.history_keymap]
@@ -1672,7 +1669,7 @@ function setup_interface(
 
     shell_mode.keymap_dict = help_mode.keymap_dict = dummy_pkg_mode.keymap_dict = LineEdit.keymap(b)
 
-    allprompts = LineEdit.TextInterface[julia_prompt, shell_mode, help_mode, dummy_pkg_mode, prefix_prompt]
+    allprompts = LineEdit.TextInterface[julia_prompt, shell_mode, help_mode, dummy_pkg_mode]
     return ModalInterface(allprompts)
 end
 
