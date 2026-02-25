@@ -4088,6 +4088,84 @@ end
     end
 end
 
+@testset "alias-aware union splitting" begin
+    let 𝕃 = Compiler.fallback_lattice
+        argtypes = Any[typeof(+), Union{Int,Float64}, Union{Int,Float64}]
+        # without aliasing: 2 * 2 = 4
+        @test Compiler.unionsplitcost(𝕃, argtypes) == 4
+        @test length(Compiler.switchtupleunion(𝕃, argtypes)) == 4
+        # with aliasing: only one independent union, cost should be 2
+        slot = SlotNumber(2)
+        fargs = Any[SSAValue(1), slot, slot]
+        @test Compiler.unionsplitcost(𝕃, argtypes; fargs) == 2
+        tunion = Compiler.switchtupleunion(𝕃, argtypes; fargs)
+        @test length(tunion) == 2
+        @test Any[typeof(+), Int, Int] in tunion
+        @test Any[typeof(+), Float64, Float64] in tunion
+    end
+
+    # unionsplitcost with 3 aliased args: cost 2 instead of 8
+    let 𝕃 = Compiler.fallback_lattice
+        slot = SlotNumber(2)
+        fargs = Any[SSAValue(1), slot, slot, slot]
+        argtypes = Any[typeof(+), Union{Int,Float64}, Union{Int,Float64}, Union{Int,Float64}]
+        # without aliasing: 2*2*2 = 8
+        @test Compiler.unionsplitcost(𝕃, argtypes) == 8
+        @test length(Compiler.switchtupleunion(𝕃, argtypes)) == 8
+        # with aliasing: only one independent union, cost should be 2
+        @test Compiler.unionsplitcost(𝕃, argtypes; fargs) == 2
+        tunion = Compiler.switchtupleunion(𝕃, argtypes; fargs)
+        @test length(tunion) == 2
+        @test Any[typeof(+), Int, Int, Int] in tunion
+        @test Any[typeof(+), Float64, Float64, Float64] in tunion
+    end
+
+    # MustAlias-based aliasing: different SSAValues but same (slot, ssadef, fldidx)
+    # e.g. f(a.x, a.x) where two getfield calls produce different SSAValues
+    let 𝕃 = Compiler.MustAliasesLattice(Compiler.fallback_lattice)
+        ma1 = Compiler.MustAlias(2, 0, AliasableField{Union{Int,Float64}}, 1, Union{Int,Float64})
+        ma2 = Compiler.MustAlias(2, 0, AliasableField{Union{Int,Float64}}, 1, Union{Int,Float64})
+        fargs = Any[SSAValue(1), SSAValue(2), SSAValue(3)]
+        argtypes = Any[typeof(+), ma1, ma2]
+        @test Compiler.unionsplitcost(𝕃, argtypes; fargs) == 2
+        tunion = Compiler.switchtupleunion(𝕃, argtypes; fargs)
+        @test length(tunion) == 2
+        @test Any[typeof(+), Int, Int] in tunion
+        @test Any[typeof(+), Float64, Float64] in tunion
+    end
+
+    # MustAlias with different slot should NOT be aliased
+    let 𝕃 = Compiler.MustAliasesLattice(Compiler.fallback_lattice)
+        ma1 = Compiler.MustAlias(2, 0, AliasableField{Union{Int,Float64}}, 1, Union{Int,Float64})
+        ma2 = Compiler.MustAlias(3, 0, AliasableField{Union{Int,Float64}}, 1, Union{Int,Float64})
+        fargs = Any[SSAValue(1), SSAValue(2), SSAValue(3)]
+        argtypes = Any[typeof(+), ma1, ma2]
+        @test Compiler.unionsplitcost(𝕃, argtypes; fargs) == 4
+        @test length(Compiler.switchtupleunion(𝕃, argtypes; fargs)) == 4
+    end
+end
+
+# Integration test: alias-aware splitting eliminates impossible cross-type methods
+# When `a::Union{A,B}`, `f(a, a, a)` can only ever call the diagonal methods.
+# The cross-type method `f(::A, ::B, ::A)` is impossible when all args are aliased.
+# Without alias-aware splitting, inference includes `f(::A, ::B, ::A)` and returns
+# `Union{Int, String}`. With alias-aware splitting, only diagonal combinations are
+# considered, giving the precise return type `Int`.
+struct AliasUnionSplitA end
+struct AliasUnionSplitB end
+alias_union_split_f(::AliasUnionSplitA, ::AliasUnionSplitA) = 1
+alias_union_split_f(::AliasUnionSplitB, ::AliasUnionSplitB) = 2
+alias_union_split_f(::AliasUnionSplitA, ::AliasUnionSplitB) = "bad1"
+alias_union_split_f(::AliasUnionSplitB, ::AliasUnionSplitA) = "bad2"
+@test Base.infer_return_type((Union{AliasUnionSplitA,AliasUnionSplitB},)) do a
+    alias_union_split_f(a, a)
+end == Int
+# MustAlias integration: `getfield` produces MustAlias which enables alias detection
+# across different SSAValues that access the same field of the same slot
+@test Base.infer_return_type((AliasableField{Union{AliasUnionSplitA,AliasUnionSplitB}},); interp=MustAliasInterpreter()) do x
+    alias_union_split_f(getfield(x, :f), getfield(x, :f))
+end == Int
+
 @testset "constant prop' for union split signature" begin
     # indexing into tuples really relies on constant prop', and we will get looser result
     # (`Union{Int,String,Char}`) if constant prop' doesn't happen for splitunion signatures
