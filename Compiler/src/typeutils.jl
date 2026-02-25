@@ -324,7 +324,7 @@ function _switchtupleunion(𝕃::AbstractLattice, t::Vector{Any}, i::Int, tunion
         origti = ti = t[i]
         followers = Int[]
         if groups !== nothing
-            for j in i+1:length(t)
+            for j in 1:length(t)
                 if groups[j] == i # Collect follower indices for this leader
                     push!(followers, j)
                 end
