@@ -88,7 +88,7 @@ function moduleloc(m::Module)
 end
 
 """
-    names(x::Module; all::Bool=false, imported::Bool=false, usings::Bool=false)::Vector{Symbol}
+    names(x::Module; all::Bool=false, imported::Bool=false, usings::Bool=false, defined_since::UInt=UInt(0), world::UInt=Base.tls_world_age())::Vector{Symbol}
 
 Get a vector of the public names of a `Module`, excluding deprecated names.
 If `all` is true, then the list also includes non-public names defined in the module,
@@ -100,6 +100,11 @@ Names are returned in sorted order.
 
 As a special case, all names defined in `Main` are considered \"public\",
 since it is not idiomatic to explicitly mark names from `Main` as public.
+
+The `world` argument controls the world age used to look up binding partitions, defaulting
+to the current task's world age. Pass `world=Base.get_world_counter()` to include names
+from the latest world. The `defined_since` argument excludes names defined
+before the given world age.
 
 !!! note
     `sym ∈ names(SomeModule)` does *not* imply `isdefined(SomeModule, sym)`.
@@ -116,8 +121,9 @@ since it is not idiomatic to explicitly mark names from `Main` as public.
 See also [`Base.isexported`](@ref), [`Base.ispublic`](@ref), [`Base.@locals`](@ref), [`@__MODULE__`](@ref).
 """
 names(m::Module; kwargs...) = sort!(unsorted_names(m; kwargs...))
-unsorted_names(m::Module; all::Bool=false, imported::Bool=false, usings::Bool=false) =
-    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint, Cint), m, all, imported, usings)
+unsorted_names(m::Module; all::Bool=false, imported::Bool=false, usings::Bool=false,
+               defined_since::UInt=UInt(0), world::UInt=tls_world_age()) =
+    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint, Cint, UInt, UInt), m, all, imported, usings, defined_since, world)
 
 """
     isexported(m::Module, s::Symbol)::Bool

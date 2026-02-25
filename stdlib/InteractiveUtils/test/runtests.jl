@@ -1056,3 +1056,36 @@ end # module
     using .OuterModule
     @test_nowarn subtypes(Integer);
 end
+
+@testset "world argument for varinfo, subtypes, methodswith" begin
+    # varinfo: name added after recorded world should not appear with old world
+    M_varinfo = @eval module $(gensym()) end
+    world_no_var = Base.get_world_counter()
+    @eval M_varinfo begin
+        export tracked_var
+        tracked_var = 42
+    end
+    @test occursin("tracked_var", repr(varinfo(M_varinfo)))
+    @test !occursin("tracked_var", repr(varinfo(M_varinfo; world=world_no_var)))
+
+    # subtypes: subtype added after recorded world should not appear with old world
+    M_sub = @eval module $(gensym())
+        abstract type MyAbstractParent end
+    end
+    world_no_subtype = Base.get_world_counter()
+    @eval M_sub struct MyConcreteChild <: MyAbstractParent end
+    @test length(subtypes(M_sub, M_sub.MyAbstractParent)) == 1
+    @test isempty(subtypes(M_sub, M_sub.MyAbstractParent; world=world_no_subtype))
+
+    # methodswith: method added after recorded world should not appear with old world
+    M_meth = @eval module $(gensym())
+        struct MySpecialArgType end
+    end
+    world_no_method = Base.get_world_counter()
+    @eval M_meth begin
+        export my_special_func
+        my_special_func(::MySpecialArgType) = nothing
+    end
+    @test !isempty(methodswith(M_meth.MySpecialArgType, M_meth))
+    @test isempty(methodswith(M_meth.MySpecialArgType, M_meth; world=world_no_method))
+end
