@@ -34,7 +34,7 @@ export TestLogger, LogRecord
 using Random
 using Random: AbstractRNG, default_rng
 using InteractiveUtils: gen_call_with_extracted_types
-using Base: typesplit, remove_linenums!
+using Base: typesplit, remove_linenums!, mapany, quoted
 using Serialization: Serialization
 using Base.ScopedValues: LazyScopedValue, ScopedValue, @with
 
@@ -368,33 +368,35 @@ struct Threw <: ExecutionResult
     source::LineNumberNode
 end
 
-function eval_test_comparison(comparison::Expr, quoted::Expr, source::LineNumberNode, negate::Bool=false)
+function eval_test_comparison(comparison::Expr, ops::Vector{Any}, source::LineNumberNode, negate::Bool=false)
     comparison.head === :comparison || throw(ArgumentError("$comparison is not a comparison expression"))
     comparison_args = comparison.args
-    quoted_args = quoted.args
     n = length(comparison_args)
     kw_suffix = ""
 
     res = true
-    i = 1
-    while i < n
+    for i = 1:2:n - 2
         a, op, b = comparison_args[i], comparison_args[i+1], comparison_args[i+2]
         if res
+            # chained comparisons stop running at the first `false`
             res = op(a, b)
         end
-        quoted_args[i] = a
-        quoted_args[i+2] = b
-        i += 2
     end
 
+    for i = 1:2:n
+        comparison_args[i] = quoted(comparison_args[i])
+    end
+    for i = 2:2:n
+        comparison_args[i] = ops[i]
+    end
     if negate
         res = !res
-        quoted = Expr(:call, :!, quoted)
+        comparison = Expr(:call, :!, comparison)
     end
 
     Returned(res,
              # stringify arguments in case of failure, for easy remote printing
-             res === true ? quoted : sprint(print, quoted, context=(:limit => true)) * kw_suffix,
+             res === true ? comparison : sprint(print, comparison, context=(:limit => true)) * kw_suffix,
              source)
 end
 
@@ -404,18 +406,16 @@ function eval_test_function(func, args, kwargs, quoted_func::Union{Expr,Symbol},
     # Create "Evaluated" expression which looks like the original call but has all of
     # the arguments evaluated
     kw_suffix = ""
+    quoted_args = mapany(quoted, args)
     if quoted_func === :≈ && !res
         kw_suffix = " ($(join(["$k=$v" for (k, v) in kwargs], ", ")))"
-        quoted_args = args
-    elseif isempty(kwargs)
-        quoted_args = args
-    else
-        kwargs_expr = Expr(:parameters, [Expr(:kw, k, v) for (k, v) in kwargs]...)
-        quoted_args = [kwargs_expr, args...]
+    elseif !isempty(kwargs)
+        kwargs_expr = Expr(:parameters, Any[Expr(:kw, k, quoted(v)) for (k, v) in kwargs]...)
+        pushfirst!(quoted_args, kwargs_expr)
     end
 
     # Properly render broadcast function call syntax, e.g. `(==).(1, 2)` or `Base.:(==).(1, 2)`.
-    quoted = if isa(quoted_func, Expr) && quoted_func.head === :. && length(quoted_func.args) == 1
+    callexpr = if isa(quoted_func, Expr) && quoted_func.head === :. && length(quoted_func.args) == 1
         Expr(:., quoted_func.args[1], Expr(:tuple, quoted_args...))
     else
         Expr(:call, quoted_func, quoted_args...)
@@ -423,12 +423,12 @@ function eval_test_function(func, args, kwargs, quoted_func::Union{Expr,Symbol},
 
     if negate
         res = !res
-        quoted = Expr(:call, :!, quoted)
+        callexpr = Expr(:call, :!, callexpr)
     end
 
     Returned(res,
              # stringify arguments in case of failure, for easy remote printing
-             res === true ? quoted : sprint(print, quoted, context=(:limit => true)) * kw_suffix,
+             res === true ? callexpr : sprint(print, callexpr, context=(:limit => true)) * kw_suffix,
              source)
 end
 
@@ -730,11 +730,11 @@ end
 # evaluate each term in the comparison individually so the results
 # can be displayed nicely.
 function get_test_result(ex, source)
-    negate = QuoteNode(false)
+    negate = false
     orig_ex = ex
     # Evaluate `not` wrapped functions separately for pretty-printing failures
     if isa(ex, Expr) && ex.head === :call && length(ex.args) == 2 && ex.args[1] === :!
-        negate = QuoteNode(true)
+        negate = true
         ex = ex.args[2]
     end
     # Normalize non-dot comparison operator calls to :comparison expressions
@@ -751,12 +751,11 @@ function get_test_result(ex, source)
         ex = Expr(:comparison, ex.args[1], ex.head, ex.args[2])
     end
     if isa(ex, Expr) && ex.head === :comparison
-        # pass all terms of the comparison to `eval_test_comparison`, as a tuple
-        escaped_terms = [esc(arg) for arg in ex.args]
-        quoted_terms = [QuoteNode(arg) for arg in ex.args]
+        # pass all terms of the comparison to `eval_test_comparison`, as a list
+        escaped_terms = Any[esc(arg) for arg in ex.args]
         testret = :(eval_test_comparison(
             Expr(:comparison, $(escaped_terms...)),
-            Expr(:comparison, $(quoted_terms...)),
+            $(ex.args),
             $(QuoteNode(source)),
             $negate,
         ))
@@ -1357,9 +1356,9 @@ function _remove_linenums(ex::Expr)
         if length(args) == 1
             return _remove_linenums(args[1])
         end
-        return Expr(ex.head, map(_remove_linenums, args)...)
+        return Expr(ex.head, mapany(_remove_linenums, args)...)
     end
-    return Expr(ex.head, map(_remove_linenums, ex.args)...)
+    return Expr(ex.head, mapany(_remove_linenums, ex.args)...)
 end
 
 #-----------------------------------------------------------------------
