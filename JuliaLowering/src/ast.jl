@@ -91,6 +91,8 @@ Lexical scope ID
 """
 const ScopeId = Int
 
+JuliaSyntax.SyntaxList(ctx::AbstractLoweringContext) = SyntaxList(syntax_graph(ctx))
+
 function JuliaSyntax.newleaf(ctx::AbstractLoweringContext,
                     prov::Union{SyntaxTree, SourceAttrType},
                     k::Kind)
@@ -106,7 +108,7 @@ function JuliaSyntax.newleaf(ctx, prov, k, @nospecialize(value))
         setattr!(leaf._graph, leaf._id, :var_id, value)
     elseif k == K"label"
         setattr!(leaf._graph, leaf._id, :id, value)
-    elseif k == K"symboliclabel"
+    elseif k == K"symboliclabel" || k == K"symbolicgoto"
         setattr!(leaf._graph, leaf._id, :name_val, value)
     elseif k in KSet"TOMBSTONE SourceLocation latestworld latestworld_if_toplevel
                      softscope"

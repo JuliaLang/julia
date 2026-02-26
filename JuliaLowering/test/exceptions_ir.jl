@@ -235,24 +235,27 @@ while true
     end
 end
 #---------------------
-1   (= slot₁/loop_exit_result core.nothing)
-2   (gotoifnot true label₁₆)
-3   (enter label₁₀)
-4   (= slot₂/finally_tag -1)
-5   TestMod.a
-6   (leave %₃)
-7   (goto label₁₇)
-8   (leave %₃)
-9   (goto label₁₁)
-10  (= slot₂/finally_tag 1)
-11  TestMod.b
-12  (call core.=== slot₂/finally_tag 1)
-13  (gotoifnot %₁₂ label₁₅)
-14  (call top.rethrow)
-15  (goto label₂)
-16  (= slot₁/loop_exit_result core.nothing)
-17  slot₁/loop_exit_result
-18  (return %₁₇)
+1   (gotoifnot true label₁₅)
+2   (enter label₉)
+3   (= slot₂/finally_tag -1)
+4   TestMod.a
+5   (leave %₂)
+6   (goto label₁₆)
+7   (leave %₂)
+8   (goto label₁₀)
+9   (= slot₂/finally_tag 1)
+10  TestMod.b
+11  (call core.=== slot₂/finally_tag 1)
+12  (gotoifnot %₁₁ label₁₄)
+13  (call top.rethrow)
+14  (goto label₁)
+15  (= slot₁/loop_exit_result core.nothing)
+16  (isdefined slot₁/loop_exit_result)
+17  (gotoifnot %₁₆ label₁₉)
+18  (goto label₂₀)
+19  (= slot₁/loop_exit_result core.nothing)
+20  slot₁/loop_exit_result
+21  (return %₂₀)
 
 ########################################
 # try/catch/finally

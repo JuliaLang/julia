@@ -888,10 +888,10 @@ end
 
 # annotate types of all symbols in AST, preparing for optimization
 function type_annotate!(::AbstractInterpreter, sv::InferenceState)
-    # widen `Conditional`s from `slottypes`
+    # widen slot wrappers from `slottypes`
     slottypes = sv.slottypes
     for i = 1:length(slottypes)
-        slottypes[i] = widenconditional(slottypes[i])
+        slottypes[i] = widenslotwrapper(slottypes[i])
     end
 
     # compute the required type for each slot
