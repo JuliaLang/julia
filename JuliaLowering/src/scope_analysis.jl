@@ -13,7 +13,7 @@ function Base.isless(a::NameKey, b::NameKey)
 end
 
 function NameKey(ex::SyntaxTree)
-    @chk kind(ex) == K"Identifier"
+    @jl_assert kind(ex) === K"Identifier" ex
     NameKey(ex.name_val, ex.scope_layer)
 end
 

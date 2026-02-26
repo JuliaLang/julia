@@ -1,50 +1,6 @@
 #-------------------------------------------------------------------------------
-# @chk: Basic AST structure checking tool
-#
-# Check a condition involving an expression, throwing a LoweringError if it
-# doesn't evaluate to true. Does some very simple pattern matching to attempt
-# to extract the expression variable from the left hand side.
-#
-# Forms:
-# @chk pred(ex)
-# @chk pred(ex) msg
-# @chk pred(ex) (msg_display_ex, msg)
-macro chk(cond, msg=nothing)
-    if Meta.isexpr(msg, :tuple)
-        ex = msg.args[1]
-        msg = msg.args[2]
-    else
-        ex = cond
-        while true
-            if ex isa Symbol
-                break
-            elseif ex.head == :call
-                ex = ex.args[2]
-            elseif ex.head == :ref
-                ex = ex.args[1]
-            elseif ex.head == :.
-                ex = ex.args[1]
-            elseif ex.head in (:(==), :(in), :<, :>)
-                ex = ex.args[1]
-            else
-                error("Can't analyze $cond")
-            end
-        end
-    end
-    quote
-        ex = $(esc(ex))
-        @assert ex isa SyntaxTree
-        ok = try
-            $(esc(cond))
-        catch
-            false
-        end
-        if !ok
-            throw(LoweringError(ex, $(isnothing(msg) ? "expected `$cond`" : esc(msg))))
-        end
-    end
-end
-
+# @jl_assert: Produce an internal error that surfaces one or more trees.
+# Example: `@jl_assert 1 === 1 (tree1, "message1"), tree2, (tree3, "message3")`
 if DEBUG
     macro jl_assert(cond, args...)
         usage = "usage: @jl_assert(condition, tree|(tree, message)...)"
@@ -478,8 +434,8 @@ end
 
 function extension_type(ex)
     @jl_assert kind(ex) == K"assert" ex
-    @chk numchildren(ex) >= 1
-    @chk kind(ex[1]) == K"Symbol"
+    @jl_assert numchildren(ex) >= 1 ex
+    @jl_assert kind(ex[1]) == K"Symbol" ex
     ex[1].name_val
 end
 

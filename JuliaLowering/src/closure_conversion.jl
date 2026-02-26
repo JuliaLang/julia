@@ -186,7 +186,7 @@ function convert_assignment(ctx, ex)
     if kind(var) == K"Placeholder"
         return @ast ctx ex [K"=" var rhs0]
     end
-    @chk kind(var) == K"BindingId"
+    @jl_assert kind(var) == K"BindingId" ex
     binfo = get_binding(ctx, var)
     if binfo.kind == :global
         convert_global_assignment(ctx, ex, var, rhs0)

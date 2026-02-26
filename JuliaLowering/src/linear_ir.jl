@@ -489,7 +489,6 @@ end
 #
 # See the devdocs for further discussion.
 function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
-    @chk numchildren(ex) <= 3
     (try_block, catch_block, else_block, finally_block, catch_label, scope) = @stm ex begin
          [K"trycatchelse" t c] -> (t, c, nothing, nothing, make_label(ctx, c), nothing)
          [K"trycatchelse" t c e] -> (t, c, e, nothing, make_label(ctx, c), nothing)
@@ -646,7 +645,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
         nothing
     elseif k == K"TOMBSTONE"
-        @chk !needs_value (ex,"TOMBSTONE encountered in value position")
+        @jl_assert !needs_value (ex,"TOMBSTONE encountered in value position")
         nothing
     elseif k == K"call" || k == K"new" || k == K"splatnew" || k == K"foreigncall" ||
             k == K"new_opaque_closure" || k == K"cfunction"
@@ -789,7 +788,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             nothing
         end
     elseif k == K"if" || k == K"elseif"
-        @chk numchildren(ex) <= 3
+        @jl_assert numchildren(ex) <= 3 ex
         has_else = numchildren(ex) > 2
         else_label = make_label(ctx, ex)
         compile_conditional(ctx, ex[1], else_label)
@@ -841,7 +840,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
                 emit(ctx, ex)
             end
         else
-            @chk numchildren(ex) == 3
+            @jl_assert numchildren(ex) == 3 ex
             fname = ex[1]
             sig = compile(ctx, ex[2], true, false)
             if !is_valid_ir_argument(ctx, sig)
@@ -885,7 +884,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         emit(ctx, ex)
         nothing
     elseif k == K"meta"
-        @chk numchildren(ex) >= 1
+        @jl_assert numchildren(ex) >= 1 ex
         if ex[1].name_val in ("inline", "noinline", "propagate_inbounds",
                               "nospecializeinfer", "aggressive_constprop", "no_constprop")
             for c in children(ex)

@@ -103,7 +103,7 @@ function _binding_id(id::Integer)
 end
 
 function _binding_id(ex::SyntaxTree)
-    @chk kind(ex) == K"BindingId"
+    @jl_assert kind(ex) == K"BindingId" ex
     ex.var_id
 end
 

@@ -527,6 +527,10 @@ vst1_ident(vcx, st; lhs=false) = @stm st begin
 end
 
 vst1_call(vcx, st) = @stm st begin
+    ([K"call" [K"Identifier"] args...], when=st[1].name_val==="cglobal") ->
+        (1 <= length(args) <= 2 ? pass() :
+            @fail(st, "cglobal must have one or two arguments")) &
+        all(vst1_call_arg, vcx, args)
     [K"call" f [K"parameters" kwargs...] args...] ->
         vst1(vcx, f) &
         all(vst1_call_arg, vcx, args) &
