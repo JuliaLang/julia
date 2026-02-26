@@ -416,6 +416,8 @@ end
 function flatten_blocks(st::SyntaxTree)
     if kind(st) === K"block"
         mknode(st, _flatten_blocks(st))
+    elseif is_quoted(st)
+        st
     else
         mapchildren(flatten_blocks, st._graph, st)
     end
