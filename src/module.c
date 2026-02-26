@@ -2114,7 +2114,9 @@ void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, i
         if (jl_atomic_load_relaxed(&bpart->min_world) < defined_since)
             continue;
         enum jl_partition_kind kind = jl_binding_kind(bpart);
-        if ((((jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_PUBLICP) && !jl_bkind_is_some_guard(kind)) ||
+        if (jl_bkind_is_some_guard(kind) && !jl_bpart_is_exported(bpart->kind))
+            continue;
+        if (((jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_PUBLICP) ||
              jl_bpart_is_exported(bpart->kind) ||
              (imported && (kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_IMPORTED)) ||
              (usings && kind == PARTITION_KIND_EXPLICIT) ||
