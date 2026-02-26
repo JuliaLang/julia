@@ -428,7 +428,7 @@ myappend (generic function with 1 method)
 The type parameter `T` in this example ensures that the added element `x` is a subtype of the
 existing eltype of the vector `v`.
 The `where` keyword introduces a list of those constraints after the method signature definition.
-This works the same for one-line definitions, as seen above, and must appear _before_ the [return
+This works the same for one-line definitions, as seen above, and must appear _after_ the [return
 type declaration](@ref man-functions-return-type), if present, as illustrated below:
 
 ```jldoctest
