@@ -725,7 +725,7 @@ function is_already_cached(interp::AbstractInterpreter, result::InferenceResult)
     cache = code_cache(interp, result.valid_worlds)
     if haskey(cache, mi)
         # n.b.: accurate edge representation might cause the CodeInstance for this to be constructed later
-        @assert isdefined(cache[mi], :inferred)
+        @assert isdefined(cache[mi]::CodeInstance, :inferred)
         return true
     end
     return false
@@ -1158,6 +1158,10 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             if need_inlineable_code
                 src = ci_get_source(interp, codeinst, inferred)
                 if src === nothing
+                    if is_edge_recursed(codeinst, caller)
+                        @assert codeinst.def === mi "MethodInstance for cached edge does not match"
+                        return return_cached_result(interp, method, code, nothing, caller, edgecycle, edgelimited)
+                    end
                     # Re-infer to get the appropriate source representation
                     cache_mode = CACHE_MODE_LOCAL
                     edge_ci = codeinst
@@ -1205,6 +1209,10 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                 if need_inlineable_code
                     src = ci_get_source(interp, codeinst, inferred)
                     if src === nothing
+                        if is_edge_recursed(codeinst, caller)
+                            @assert codeinst.def === mi "MethodInstance for cached edge does not match"
+                            return return_cached_result(interp, method, code, nothing, caller, edgecycle, edgelimited)
+                        end
                         cache_mode = CACHE_MODE_LOCAL
                         edge_ci = codeinst
                     else
