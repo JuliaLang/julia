@@ -1758,6 +1758,21 @@ end
 
 end
 
+@testset "tohtml SVG rendering" begin
+    io = IOBuffer()
+    Markdown.tohtml(io, MIME"image/svg+xml"(), "<svg><circle r=\"10\"/></svg>")
+    @test String(take!(io)) == "<svg><circle r=\"10\"/></svg>"
+
+    svg_bytes = Vector{UInt8}(codeunits("<svg></svg>"))
+    io = IOBuffer()
+    Markdown.tohtml(io, MIME"image/svg+xml"(), svg_bytes)
+    @test String(take!(io)) == "<svg></svg>"
+
+    io = IOBuffer()
+    Markdown.tohtml(io, MIME"image/png"(), UInt8[0x89, 0x50, 0x4e, 0x47])
+    @test startswith(String(take!(io)), "<img src=\"data:image/png;base64,")
+end
+
 include("test_spec_roundtrip_common.jl")
 include("test_spec_roundtrip_github.jl")
 include("test_spec_roundtrip_julia.jl")
