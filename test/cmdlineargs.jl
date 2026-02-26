@@ -21,21 +21,21 @@ function readchomperrors(exename::Cmd)
     p = run(exename, devnull, out, err, wait=false)
     o = @async(readchomp(out))
     e = @async(readchomp(err))
-    return (success(p), fetch(o), fetch(e))
+    return (p, fetch(o), fetch(e))
 end
 
 # helper function for tests that expect successful command execution
 # logs detailed error information if the command fails
 function test_read_success(cmd::Cmd, expected_type::Type=String)
-    success, out, err = readchomperrors(cmd)
-    if !success
+    p, out, err = readchomperrors(cmd)
+    if !success(p)
         println("---- Command failed: ")
         show(cmd)
         println("stdout:\n", out)
         println("stderr:\n", err)
         println("----")
     end
-    @test success
+    @test success(p)
     return expected_type == String ? out : parse(expected_type, out)
 end
 
@@ -230,7 +230,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             '`)
         # simulate not having a working version of InteractiveUtils,
         # make sure this is a non-fatal error and the REPL still loads
-        @test v[1]
+        @test success(v[1])
         @test isempty(v[2])
         # Can't load REPL if it's outside the sysimg if we break the load path.
         # Need to rewrite this test nicer
@@ -241,26 +241,27 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     real_threads = string(ccall(:jl_cpu_threads, Int32, ()))
     for nc in ("0", "-2", "x", "2x", " ", "")
         v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc, "HOME" => homedir()))
-        @test v == (true, real_threads,
-            "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $real_threads.")
+        @test success(v[1])
+        @test v[2] == real_threads
+        @test v[3] == "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $real_threads."
     end
     for nc in ("1", " 1 ", " +1 ", " 0x1 ")
         @testset let v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc, "HOME" => homedir()))
-            @test v[1]
+            @test success(v[1])
             @test v[2] == "1"
             @test isempty(v[3])
         end
     end
 
     @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options", "HOME" => homedir()))
-        @test v[1]
+        @test success(v[1])
         @test contains(v[2], r"print-options + = 1")
         @test contains(v[2], r"combiner-store-merge-dependence-limit + = 4")
         @test contains(v[2], r"enable-tail-merge + = 2")
         @test isempty(v[3])
     end
     @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -combiner-store-merge-dependence-limit=6", "HOME" => homedir()))
-        @test v[1]
+        @test success(v[1])
         @test contains(v[2], r"print-options + = 1")
         @test contains(v[2], r"combiner-store-merge-dependence-limit + = 6")
         @test contains(v[2], r"enable-tail-merge + = 1")
@@ -268,7 +269,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     end
     if Base.libllvm_version < v"15" #LLVM over 15 doesn't care for multiple options
         @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -enable-tail-merge=1", "HOME" => homedir()))
-            @test !v[1]
+            @test !success(v[1])
             @test isempty(v[2])
             @test v[3] == "julia: for the --enable-tail-merge option: may only occur zero or one times!"
         end
@@ -279,7 +280,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             # Use forward slashes on Windows to avoid LLVM command line parser issues with backslashes
             tracefile_arg = Sys.iswindows() ? replace(tracefile, "\\" => "/") : tracefile
             v = readchomperrors(setenv(`$exename -e "1+1"`, "JULIA_LLVM_ARGS" => "-time-trace -time-trace-file=$tracefile_arg", "HOME" => homedir()))
-            @test v[1]
+            @test success(v[1])
             @test isfile(tracefile)
             content = read(tracefile, String)
             @test startswith(content, "{\"traceEvents\":")
@@ -757,7 +758,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     if !Sys.iswindows()
         withenv("JULIA_LLVM_ARGS" => "--print-before=BeforeOptimization") do
             let code = readchomperrors(`$exename -g0 -E "@eval Int64(1)+Int64(1)"`)
-                @test code[1]
+                @test success(code[1])
                 code = code[3]
                 @test occursin("llvm.module.flags", code)
                 @test !occursin("llvm.dbg.cu", code)
@@ -765,7 +766,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 @test !occursin("name: \"Int64\"", code)
             end
             let code = readchomperrors(`$exename -g1 -E "@eval Int64(1)+Int64(1)"`)
-                @test code[1]
+                @test success(code[1])
                 code = code[3]
                 @test occursin("llvm.module.flags", code)
                 @test occursin("llvm.dbg.cu", code)
@@ -775,7 +776,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 @test !occursin("name: \"Int64\"", code)
             end
             let code = readchomperrors(`$exename -g2 -E "@eval Int64(1)+Int64(1)"`)
-                @test code[1]
+                @test success(code[1])
                 code = code[3]
                 @test occursin("llvm.module.flags", code)
                 @test occursin("llvm.dbg.cu", code)
@@ -832,11 +833,17 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
         @test errors_not_signals(`$exename -E "$code" --depwarn=error`)
 
-        @test readchomperrors(`$exename -E "$code" --depwarn=yes`) ==
-            (true, "true", "WARNING: Use of Foo.Deprecated is deprecated, use NotDeprecated instead.\n  likely near none:8")
+        let (p, out, err) = readchomperrors(`$exename -E "$code" --depwarn=yes`)
+            @test success(p)
+            @test out == "true"
+            @test err == "WARNING: Use of Foo.Deprecated is deprecated, use NotDeprecated instead.\n  likely near none:8"
+        end
 
-        @test readchomperrors(`$exename -E "$code" --depwarn=no`) ==
-            (true, "true", "")
+        let (p, out, err) = readchomperrors(`$exename -E "$code" --depwarn=no`)
+            @test success(p)
+            @test out == "true"
+            @test err == ""
+        end
     end
 
     # --inline
@@ -942,8 +949,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         mktempdir() do dir
             testfile = joinpath(dir, "test.jl")
             write(testfile, "x = 1 + 1\ny = x * 2")
-            success, out, err = readchomperrors(`$exename --trace-eval=loc $testfile`)
-            @test success
+            p, out, err = readchomperrors(`$exename --trace-eval=loc $testfile`)
+            @test success(p)
             @test occursin("eval: #=", err)
             @test !occursin("eval: \$(Expr(:toplevel", err)  # Should not show full expressions
         end
@@ -954,8 +961,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         mktempdir() do dir
             testfile = joinpath(dir, "test.jl")
             write(testfile, "x = 1 + 1\ny = x * 2")
-            success, out, err = readchomperrors(`$exename --trace-eval=full $testfile`)
-            @test success
+            p, out, err = readchomperrors(`$exename --trace-eval=full $testfile`)
+            @test success(p)
             @test occursin("eval: \$(Expr(:toplevel", err)  # Should show full expressions
             @test occursin("x = 1 + 1", err)
         end
@@ -966,8 +973,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         mktempdir() do dir
             testfile = joinpath(dir, "test.jl")
             write(testfile, "x = 1 + 1\ny = x * 2")
-            success, out, err = readchomperrors(`$exename --trace-eval=no $testfile`)
-            @test success
+            p, out, err = readchomperrors(`$exename --trace-eval=no $testfile`)
+            @test success(p)
             @test !occursin("eval:", err)  # Should not show any eval traces
         end
     end
@@ -982,8 +989,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 Base.TRACE_EVAL = :no
                 y = x * 2
                 """)
-            success, out, err = readchomperrors(`$exename --trace-eval=loc $testfile`)  # Command line says :loc, but code overrides
-            @test success
+            p, out, err = readchomperrors(`$exename --trace-eval=loc $testfile`)  # Command line says :loc, but code overrides
+            @test success(p)
             # Should show full expression for x = 1 + 1 (Base.TRACE_EVAL = :full)
             @test occursin("eval: \$(Expr(:toplevel", err)
             @test occursin("x = 1 + 1", err)
@@ -1082,16 +1089,26 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test readchomp(`$exename -e 'println(ARGS);' ''`) == "[\"\"]"
 
     # issue #12679
-    @test readchomperrors(`$exename --startup-file=no --compile=yes -ioo`) ==
-        (false, "", "ERROR: unknown option `-o`")
-    @test readchomperrors(`$exename --startup-file=no -p`) ==
-        (false, "", "ERROR: option `-p/--procs` is missing an argument")
-    @test readchomperrors(`$exename --startup-file=no --inline`) ==
-        (false, "", "ERROR: option `--inline` is missing an argument")
-    @test readchomperrors(`$exename --startup-file=no -e "@show ARGS" -now -- julia RUN.jl`) ==
-        (false, "", "ERROR: unknown option `-n`")
-    @test readchomperrors(`$exename --interactive=yes`) ==
-        (false, "", "ERROR: option `-i/--interactive` does not accept an argument")
+    let (p, out, err) = readchomperrors(`$exename --startup-file=no --compile=yes -ioo`)
+        @test !success(p)
+        @test err == "ERROR: unknown option `-o`"
+    end
+    let (p, out, err) = readchomperrors(`$exename --startup-file=no -p`)
+        @test !success(p)
+        @test err == "ERROR: option `-p/--procs` is missing an argument"
+    end
+    let (p, out, err) = readchomperrors(`$exename --startup-file=no --inline`)
+        @test !success(p)
+        @test err == "ERROR: option `--inline` is missing an argument"
+    end
+    let (p, out, err) = readchomperrors(`$exename --startup-file=no -e "@show ARGS" -now -- julia RUN.jl`)
+        @test !success(p)
+        @test err == "ERROR: unknown option `-n`"
+    end
+    let (p, out, err) = readchomperrors(`$exename --interactive=yes`)
+        @test !success(p)
+        @test err == "ERROR: option `-i/--interactive` does not accept an argument"
+    end
 
     # --compiled-modules={yes|no}
     @test readchomp(`$exename -E "Bool(Base.JLOptions().use_compiled_modules)"`) == "true"
@@ -1131,23 +1148,23 @@ end
     # The cmd is checked for `--object-o` as soon as it is run. So, to avoid long
     # testing times, intentionally don't pass `--sysimage`; when we reach the
     # corresponding error, we know that `check_cmdline` has already passed
-    let v = readchomperrors(`$julia_path
+    let (p, out, err) = readchomperrors(`$julia_path
         --cpu-target='native;native'
         --output-o=$object_file $outputo_file
         --pkgimages=no`)
 
-        @test v[1] == false
-        @test v[2] == ""
-        @test !contains(v[3], "More than one command line CPU targets specified")
-        @test v[3] == "ERROR: File \"boot.jl\" not found"
+        @test !success(p)
+        @test out == ""
+        @test !contains(err, "More than one command line CPU targets specified")
+        @test err == "ERROR: File \"boot.jl\" not found"
     end
 
     # This is to test that with `pkgimages=yes`, multiple CPU targets are parsed.
     # We intentionally fail fast due to a lack of an `--output-o` flag.
-    let v = readchomperrors(`$julia_path --cpu-target='native;native' --pkgimages=yes`)
-        @test v[1] == false
-        @test v[2] == ""
-        @test contains(v[3], "More than one command line CPU targets specified")
+    let (p, out, err) = readchomperrors(`$julia_path --cpu-target='native;native' --pkgimages=yes`)
+        @test !success(p)
+        @test out == ""
+        @test contains(err, "More than one command line CPU targets specified")
     end
 
     # Testing this more precisely would be very platform and build system dependent and brittle.
@@ -1219,16 +1236,18 @@ end
 run(pipeline(devnull, `$(joinpath(Sys.BINDIR, Base.julia_exename())) --lisp`, devnull))
 
 # Test that `julia [some other option] --lisp` is disallowed
-@test readchomperrors(`$(joinpath(Sys.BINDIR, Base.julia_exename())) -Cnative --lisp`) ==
-    (false, "", "ERROR: --lisp must be specified as the first argument")
+let (p, out, err) = readchomperrors(`$(joinpath(Sys.BINDIR, Base.julia_exename())) -Cnative --lisp`)
+    @test !success(p)
+    @test err == "ERROR: --lisp must be specified as the first argument"
+end
 
 # backtrace contains line number info (esp. on windows #17179)
 let
     # TODO: Make this safe in the presence of two single-thread threadpools with
     # --sysimage-native-code=no, though that option is deprecated.
     # see https://github.com/JuliaLang/julia/issues/57198
-    succ, out, bt = readchomperrors(`$(Base.julia_cmd()) --startup-file=no -E 'sqrt(-2)'`)
-    @test !succ
+    p, out, bt = readchomperrors(`$(Base.julia_cmd()) --startup-file=no -E 'sqrt(-2)'`)
+    @test !success(p)
     @test out == ""
     @test occursin(r"\.jl:(\d+)", bt)
 end
@@ -1379,11 +1398,11 @@ if Sys.islinux() && Sys.ARCH in (:i686, :x86_64) # rr is only available on these
         cmd = setenv(`$(Base.julia_cmd()) --bug-report=rr-local -e 'exit()'`,
                      "JULIA_RR_RECORD_ARGS" => "-n --nested=ignore",
                      "_RR_TRACE_DIR" => temp_trace_dir)
-        success, out, err = readchomperrors(cmd)
+        p, out, err = readchomperrors(cmd)
         # rr cannot read perf counters if running in containers, allow it to fail in this case
         allowed_failure = occursin("Unable to open performance counter", err)
         @testset let cmd=cmd, stdout=out, stderr=err
-            @test success || allowed_failure
+            @test success(p) || allowed_failure
         end
     end
 end

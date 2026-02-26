@@ -1352,14 +1352,14 @@ end
     x, y = 0.9, 0.1
     @test x ≈ y atol=0.01
     """)
-    @test occursin("Evaluated: 0.9 ≈ 0.1 (atol=0.01)", msg)
+    @test occursin("Evaluated: ≈(0.9, 0.1; atol = 0.01)", msg)
 
     msg = f("""
     using Test
     x, y = 0.9, 0.1
     @test x ≈ y nans=true atol=0.01
     """)
-    @test occursin("Evaluated: 0.9 ≈ 0.1 (nans=true, atol=0.01)", msg)
+    @test occursin("Evaluated: ≈(0.9, 0.1; nans = true, atol = 0.01)", msg)
 end
 
 erronce() = @error "an error" maxlog=1

@@ -373,7 +373,7 @@ function eval_test_comparison(comparison::Expr, quoted::Expr, source::LineNumber
     comparison_args = comparison.args
     quoted_args = quoted.args
     n = length(comparison_args)
-    kw_suffix = ""
+    context_suffix = ""
 
     res = true
     i = 1
@@ -394,24 +394,66 @@ function eval_test_comparison(comparison::Expr, quoted::Expr, source::LineNumber
 
     Returned(res,
              # stringify arguments in case of failure, for easy remote printing
-             res === true ? quoted : sprint(print, quoted, context=(:limit => true)) * kw_suffix,
+             res === true ? quoted : sprint(print, quoted, context=(:limit => true)) * context_suffix,
              source)
 end
 
+"""
+    Test.test_call(func, args...; kwargs...) -> (result, context)
+
+Evaluate a function call and optionally return extra failure context for
+[`@test`](@ref). Returns `(result, context)` where `context` is `nothing`
+or a string with additional information to display when the test fails.
+
+Overload this function to provide more informative `@test` failure messages
+for specific functions.
+"""
+test_call(func, args...; kwargs...) = (func(args...; kwargs...), nothing)
+
+function _process_failure_context(proc::Base.Process)
+    return "exitcode = $(proc.exitcode), termsignal = $(proc.termsignal)"
+end
+
+function _processchain_failure_context(chain::Base.ProcessChain)
+    for p in chain.processes
+        if p.exitcode != 0 || p.termsignal != 0
+            return _process_failure_context(p)
+        end
+    end
+    return nothing
+end
+
+for T in (Base.Cmd, Base.CmdRedirect)
+    @eval function test_call(::typeof(Base.success), cmd::$T)
+        proc = Base.run(cmd; wait=false)
+        res = Base.success(proc)
+        return (res, res ? nothing : _process_failure_context(proc))
+    end
+end
+
+for T in (Base.OrCmds, Base.AndCmds, Base.ErrOrCmds)
+    @eval function test_call(::typeof(Base.success), cmd::$T)
+        chain = Base.run(cmd; wait=false)
+        res = Base.success(chain)
+        return (res, res ? nothing : _processchain_failure_context(chain))
+    end
+end
+
 function eval_test_function(func, args, kwargs, quoted_func::Union{Expr,Symbol}, source::LineNumberNode, negate::Bool=false)
-    res = func(args...; kwargs...)
+    res, extra_context = test_call(func, args...; kwargs...)
 
     # Create "Evaluated" expression which looks like the original call but has all of
     # the arguments evaluated
-    kw_suffix = ""
-    if quoted_func === :≈ && !res
-        kw_suffix = " ($(join(["$k=$v" for (k, v) in kwargs], ", ")))"
-        quoted_args = args
-    elseif isempty(kwargs)
+    if isempty(kwargs)
         quoted_args = args
     else
         kwargs_expr = Expr(:parameters, [Expr(:kw, k, v) for (k, v) in kwargs]...)
         quoted_args = [kwargs_expr, args...]
+    end
+
+    context_suffix = ""
+    if extra_context !== nothing && res === false
+        context_suffix = " ($extra_context)"
     end
 
     # Properly render broadcast function call syntax, e.g. `(==).(1, 2)` or `Base.:(==).(1, 2)`.
@@ -428,7 +470,7 @@ function eval_test_function(func, args, kwargs, quoted_func::Union{Expr,Symbol},
 
     Returned(res,
              # stringify arguments in case of failure, for easy remote printing
-             res === true ? quoted : sprint(print, quoted, context=(:limit => true)) * kw_suffix,
+             res === true ? quoted : sprint(print, quoted, context=(:limit => true)) * context_suffix,
              source)
 end
 
