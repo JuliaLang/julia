@@ -1,11 +1,11 @@
 struct ValidationDiagnostic
     sts::SyntaxList
-    msg::String
+    msgs::Vector{String}
     loc::LineNumberNode # for noting where failures come from in this file
 end
 ValidationDiagnostic(st::SyntaxTree, msg, loc) =
     ValidationDiagnostic(
-        SyntaxList(syntax_graph(st), NodeId[st._id]), msg, loc)
+        SyntaxList(syntax_graph(st), NodeId[st._id]), String[msg], loc)
 
 """
 The type returned by all `vst` functions.  There are three answers this can
@@ -56,18 +56,6 @@ function Base.all(f::Function, vcx::ValidationContext, itr; kws...)
         ok &= f(vcx, i; kws...)
     end
     return ok
-end
-
-# TODO: pretty-printing
-function showerrors(vr::ValidationResult)
-    isnothing(vr.errors) && return
-    for (i, e) in enumerate(vr.errors)
-        printstyled("error $i:\n"; color=:red)
-        showerror(stdout, LoweringError(e.sts[1], e.msg))
-        for st_ in e.sts[2:end]; show(st_); end
-        show(e.loc)
-        printstyled("\n---------------------------------\n"; color=:red)
-    end
 end
 
 #-------------------------------------------------------------------------------
@@ -142,7 +130,7 @@ We don't check some other things:
 function valid_st1(st::SyntaxTree)
     DEBUG && assert_syntaxtree(st)
     vr = vst1(Validation1Context(), st)
-    @assert is_known(vr)
+    @jl_assert is_known(vr) st
     return vr
 end
 
@@ -1032,11 +1020,12 @@ end
 
 function assert_syntaxtree(st::SyntaxTree)
     vr = _assert_syntaxtree(st, NodeId[], pass())
-    @assert is_known(vr)
+    @jl_assert is_known(vr) st
     if !vr.ok
         msg = string("assert_syntaxtree failed: ", node_string(st), "\n")
         for err in vr.errors
-            msg *= "node: " * node_string(only(err.sts)) * "\nreason: " * err.msg
+            msg *= "node: " * node_string(only(err.sts)) *
+                "\nreason: " * string(err.msgs)
         end
         throw(error(msg))
     end

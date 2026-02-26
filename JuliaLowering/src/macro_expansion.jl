@@ -270,7 +270,7 @@ function fix_toplevel_expansion(ctx, ex::SyntaxTree, mod::Module, lnn::LineNumbe
 end
 
 function expand_macro(ctx, ex)
-    @assert kind(ex) == K"macrocall"
+    @jl_assert kind(ex) == K"macrocall" ex
 
     macname = ex[1]
     mctx = MacroContext(ctx.graph, ex, current_layer(ctx), ctx.expr_compat_mode)

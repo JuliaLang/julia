@@ -223,7 +223,7 @@ end
 #
 # flisp: sink-assignment
 function sink_assignment(ctx, srcref, lhs, rhs)
-    @assert is_identifier_like(lhs)
+    @jl_assert is_identifier_like(lhs) lhs
     if kind(rhs) == K"block" && numchildren(rhs) > 0
         @ast ctx srcref [K"block"
             rhs[1:end-1]...
@@ -377,14 +377,14 @@ end
 
 # Expands cases of property destructuring
 function expand_property_destruct(ctx, ex, is_const)
-    @assert numchildren(ex) == 2
+    @jl_assert numchildren(ex) == 2 ex
     lhs = ex[1]
-    @assert kind(lhs) == K"tuple"
+    @jl_assert kind(lhs) == K"tuple" ex
     if numchildren(lhs) != 1
         throw(LoweringError(lhs, "Property destructuring must use a single `;` before the property names, eg `(; a, b) = rhs`"))
     end
     params = lhs[1]
-    @assert kind(params) == K"parameters"
+    @jl_assert kind(params) == K"parameters" ex
     rhs = ex[2]
     stmts = SyntaxList(ctx)
     rhs1 = emit_assign_tmp(stmts, ctx, expand_forms_2(ctx, rhs))
@@ -409,7 +409,7 @@ end
 #   (x,y) = (a,b)
 function expand_tuple_destruct(ctx, ex, is_const)
     lhs = ex[1]
-    @assert kind(lhs) == K"tuple"
+    @jl_assert kind(lhs) == K"tuple" ex
     rhs = ex[2]
 
     num_slurp = 0
@@ -487,7 +487,7 @@ end
 # a < b < c .< d .< e   ==>  (a < b && b < c) .& (c .< d) .& (d .< e)
 # a .< b .< c < d < e   ==>  (a .< b) .& (b .< c) .& (c < d && d < e)
 function expand_compare_chain(ctx, ex)
-    @assert kind(ex) == K"comparison"
+    @jl_assert kind(ex) == K"comparison" ex
     terms = children(ex)
     @chk numchildren(ex) >= 3
     @chk isodd(numchildren(ex))
@@ -649,7 +649,7 @@ end
 # * `idxs` - List of indices
 function expand_ref_components(sctx::StatementListCtx, ex)
     check_no_parameters(ex, "unexpected semicolon in array expression")
-    @assert kind(ex) == K"ref"
+    @jl_assert kind(ex) == K"ref" ex
     @chk numchildren(ex) >= 1
     arr = ex[1]
     idxs = ex[2:end]
@@ -661,7 +661,7 @@ function expand_ref_components(sctx::StatementListCtx, ex)
 end
 
 function expand_setindex(ctx, ex)
-    @assert kind(ex) == K"=" && numchildren(ex) == 2
+    @jl_assert kind(ex) == K"=" && numchildren(ex) == 2 ex
     lhs = ex[1]
     sctx = with_stmts(ctx)
     (arr, idxs) = expand_ref_components(sctx, lhs)
@@ -825,7 +825,7 @@ function expand_generator(ctx, ex)
         for iterspecs in ex[2:end-1]
             for iterspec in children(iterspecs)
                 foreach_lhs_name(iterspec[1]) do var
-                    @assert kind(var) == K"Identifier" # Todo: K"BindingId"?
+                    @jl_assert kind(var) == K"Identifier" ex # Todo: K"BindingId"?
                     outervars_by_key[NameKey(var)] = var
                 end
             end
@@ -901,15 +901,15 @@ function expand_generator(ctx, ex)
 end
 
 function expand_comprehension_to_loops(ctx, ex)
-    @assert kind(ex) == K"typed_comprehension"
+    @jl_assert kind(ex) == K"typed_comprehension" ex
     element_type = ex[1]
     gen = ex[2]
-    @assert kind(gen) == K"generator"
+    @jl_assert kind(gen) == K"generator" ex
     body = gen[1]
     check_no_return(body)
     # TODO: check_no_break_continue
     iterspecs = gen[2]
-    @assert kind(iterspecs) == K"iteration"
+    @jl_assert kind(iterspecs) == K"iteration" ex
     new_iterspecs = SyntaxList(ctx)
     iters = SyntaxList(ctx)
     iter_defs = SyntaxList(ctx)
@@ -1196,7 +1196,7 @@ function expand_ncat(ctx, ex)
             i += 1
         end
         is_balanced || break
-        @assert dimspan % prev_dimspan == 0
+        @jl_assert dimspan % prev_dimspan == 0 ex
         dim_lengths[layout_dim] = dimspan ÷ prev_dimspan
         prev_dimspan = dimspan
     end
@@ -1479,7 +1479,7 @@ function expand_condition(ctx, ex)
         # `||` and `&&` get special lowering so that they compile directly to
         # jumps rather than first computing a bool and then jumping.
         cs = expand_cond_children(ctx, test)
-        @assert length(cs) > 1
+        @jl_assert length(cs) > 1 ex
         test = newnode(ctx, test, k, cs)
     else
         test = expand_forms_2(ctx, test)
@@ -1686,7 +1686,7 @@ function expand_named_tuple(ctx, ex, kws, eq_is_kw;
         current_nt = _merge_named_tuple(ctx, ex, current_nt,
                                         _named_tuple_expr(ctx, ex, names, values))
     end
-    @assert !isnothing(current_nt)
+    @jl_assert !isnothing(current_nt) ex
     current_nt
 end
 
@@ -1735,7 +1735,7 @@ function expand_C_library_symbol(ctx, ex)
 end
 
 function expand_ccall(ctx, ex)
-    @assert kind(ex) == K"call" && is_core_ref(ex[1], "ccall")
+    @jl_assert kind(ex) == K"call" && is_core_ref(ex[1], "ccall") ex
     if numchildren(ex) < 4
         throw(LoweringError(ex, "too few arguments to ccall"))
     end
@@ -2215,7 +2215,7 @@ end
 # local x, (y=2), z ==> local x; local z; y = 2
 function expand_decls(ctx, ex)
     declkind = kind(ex)
-    @assert declkind in KSet"local global"
+    @jl_assert declkind in KSet"local global" ex
     stmts = SyntaxList(ctx)
     for c in children(ex)
         simple = kind(c) in KSet"Identifier :: Value Placeholder"
@@ -2496,7 +2496,7 @@ function expand_function_generator(ctx, srcref, callex_srcref, func_name,
             # flisp lowering calls these unnamed arguments "#unused#", but JL does
             # not accept that as a repeated argument name
             return "#arg" * string(i) * "#"
-        else @assert false "Unexpected argument kind: $(kind(n))" end
+        else @jl_assert false ("Unexpected argument kind", n) end
     end
 
     # Extract non-generated body
@@ -2904,7 +2904,7 @@ end
 
 function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=identity; doc_only=false)
     if kind(ex) === K"generated_function"
-        @assert numchildren(ex) === 3 && rewrite_body == identity
+        @jl_assert numchildren(ex) === 3 && rewrite_body == identity ex
     else
         @chk numchildren(ex) in (1,2)
     end
@@ -3067,7 +3067,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         # This is a bit of a messy case in the docsystem which we'll hopefully
         # be able to delete at some point.
         sig_stmts = SyntaxList(ctx)
-        @assert first_default != 1 && length(arg_types) >= 1
+        @jl_assert first_default != 1 && length(arg_types) >= 1 ex
         last_required = first_default === 0 ? length(arg_types) : first_default - 1
         for i in last_required:length(arg_types)
             push!(sig_stmts, @ast(ctx, ex, [K"curly" "Tuple"::K"core" arg_types[2:i]...]))
@@ -3468,7 +3468,7 @@ function expand_abstract_or_primitive_type(ctx, ex)
     if is_abstract
         @chk numchildren(ex) == 1
     else
-        @assert kind(ex) == K"primitive"
+        @jl_assert kind(ex) == K"primitive" ex
         @chk numchildren(ex) == 2
     end
     nbits = is_abstract ? nothing : ex[2]
@@ -3710,7 +3710,7 @@ end
 # Rewrite inner constructor signatures for struct `X` from `X(...)`
 # to `(ctor_self::Type{X})(...)`
 function _rewrite_ctor_sig(ctx, callex, struct_name, global_struct_name, struct_typevars, ctor_self)
-    @assert kind(callex) == K"call"
+    @jl_assert kind(callex) == K"call" callex
     name = callex[1]
     if is_same_identifier_like(struct_name, name)
         # X(x,y)  ==>  (#ctor-self#::Type{X})(x,y)
@@ -4177,7 +4177,7 @@ end
 
 # Match implicit where parameters for `Foo{<:Bar}` ==> `Foo{T} where T<:Bar`
 function expand_curly(ctx, ex)
-    @assert kind(ex) == K"curly"
+    @jl_assert kind(ex) == K"curly" ex
     check_no_parameters(ex, "unexpected semicolon in type parameter list")
     check_no_assignment(children(ex), "misplaced assignment in type parameter list")
 
@@ -4679,8 +4679,7 @@ ensure_desugaring_attributes!(graph) = ensure_attributes!(
     vr = valid_st1(ex)
     # surface only one error until we have pretty-printing for multiple
     if !vr.ok
-        # showerrors(vr)
-        throw(LoweringError(vr.errors[1].sts[1], vr.errors[1].msg))
+        throw(LoweringError(vr.errors[1].sts, vr.errors[1].msgs, false))
     end
     ex_out = expand_forms_2(ctx_out, est_to_dst(ex))
     ctx_out, ex_out

@@ -238,7 +238,7 @@ end
 # An integer tag is created to identify the current code path and select the
 # on_exit action to be taken at finally handler exit.
 function enter_finally_block(ctx, srcref, on_exit, value)
-    @assert on_exit ∈ (:rethrow, :break, :return)
+    @jl_assert on_exit ∈ (:rethrow, :break, :return) srcref
     handler = last(ctx.finally_handlers)
     push!(handler.exit_actions, (on_exit, value))
     tag = length(handler.exit_actions)
@@ -590,7 +590,7 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             elseif on_exit === :rethrow
                 emit(ctx, @ast ctx srcref [K"call" "rethrow"::K"top"])
             else
-                @assert false
+                @jl_assert false finally_block
             end
             if !isnothing(next_action_label)
                 emit(ctx, next_action_label)
@@ -669,7 +669,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
                 binfo = get_binding(ctx, ex[1])
                 binfo.mod, binfo.name
             else
-                @assert kind(ex[1]) == K"Value" && typeof(ex[1].value) === GlobalRef
+                @jl_assert kind(ex[1]) == K"Value" && typeof(ex[1].value) === GlobalRef ex
                 gr = ex[1].value
                 gr.mod, String(gr.name)
             end
@@ -831,7 +831,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     elseif k == K"trycatchelse" || k == K"tryfinally"
         compile_try(ctx, ex, needs_value, in_tail_pos)
     elseif k == K"method"
-        ctx.is_toplevel_thunk || internal_error(ex, "method not at top level")
+        @jl_assert ctx.is_toplevel_thunk (ex, "method not at top level")
         res = if numchildren(ex) == 1
             if in_tail_pos
                 emit_return(ctx, ex)
@@ -854,7 +854,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
                 lam = emit_assign_tmp(ctx, compile(ctx, lam, true, false))
             end
             emit(ctx, @ast ctx ex [K"method" fname sig lam])
-            @assert !needs_value && !in_tail_pos
+            @jl_assert !needs_value && !in_tail_pos ex
             nothing
         end
         emit_latestworld(ctx, ex)
@@ -932,7 +932,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             ex
         end
     elseif k == K"newvar"
-        @assert !needs_value
+        @jl_assert !needs_value ex
         is_duplicate = !isempty(ctx.code) &&
             (e = last(ctx.code); kind(e) == K"newvar" && e[1].var_id == ex[1].var_id)
         if !is_duplicate
@@ -1023,18 +1023,18 @@ function compile_body(ctx::LinearIRContext, ex)
         pop_ex = compile_pop_exception(ctx, origin.goto, origin.catch_token_stack,
                                      target.catch_token_stack)
         if !isnothing(pop_ex)
-            @assert kind(ctx.code[i]) == K"TOMBSTONE"
+            @jl_assert kind(ctx.code[i]) == K"TOMBSTONE" ctx.code[i]
             ctx.code[i] = pop_ex
             i += 1
         end
         leave_ex = compile_leave_handler(ctx, origin.goto, origin.handler_token_stack,
                                          target.handler_token_stack)
         if !isnothing(leave_ex)
-            @assert kind(ctx.code[i]) == K"TOMBSTONE"
+            @jl_assert kind(ctx.code[i]) == K"TOMBSTONE" ctx.code[i]
             ctx.code[i] = leave_ex
             i += 1
         end
-        @assert kind(ctx.code[i]) == K"TOMBSTONE"
+        @jl_assert kind(ctx.code[i]) == K"TOMBSTONE" ctx.code[i]
         ctx.code[i] = @ast ctx origin.goto [K"goto" target.label]
     end
 
@@ -1152,11 +1152,11 @@ function compile_lambda(outer_ctx, ex)
                           lambda_bindings, ret_var)
     for arg in children(lambda_args)
         kind(arg) == K"Placeholder" && continue
-        @assert kind(arg) == K"BindingId"
+        @jl_assert kind(arg) == K"BindingId" ex
         id = arg.var_id
         binfo = get_binding(ctx, id)
         if binfo.is_assigned
-            @assert !haskey(ctx.argmap, binfo.id)
+            @jl_assert !haskey(ctx.argmap, binfo.id) ex arg
             ctx.argmap[binfo.id] = new_local_binding(ctx, binding_ex(ctx, binfo), binfo.name).var_id
         end
     end
@@ -1174,10 +1174,10 @@ function compile_lambda(outer_ctx, ex)
             push!(slots, Slot(arg.name_val, :argument, getmeta(arg, :nospecialize, false),
                               false, false, false, false))
         else
-            @assert kind(arg) == K"BindingId"
+            @jl_assert kind(arg) == K"BindingId" ex arg
             id = arg.var_id
             binfo = get_binding(ctx, id)
-            @assert binfo.kind == :local || binfo.kind == :argument
+            @jl_assert binfo.kind == :local || binfo.kind == :argument ex arg
             push!(slots, Slot(binfo.name, :argument, binfo.is_nospecialize,
                               binfo.is_read, binfo.is_assigned_once,
                               binfo.is_used_undef, binfo.is_called))
@@ -1197,10 +1197,10 @@ function compile_lambda(outer_ctx, ex)
         end
     end
     for (i,arg) in enumerate(children(static_parameters))
-        @assert kind(arg) == K"BindingId"
+        @jl_assert kind(arg) == K"BindingId" arg
         id = arg.var_id
         info = get_binding(ctx.bindings, id)
-        @assert info.kind == :static_parameter
+        @jl_assert info.kind == :static_parameter arg
         slot_rewrites[id] = i
     end
     code = renumber_body(ctx, ctx.code, slot_rewrites)

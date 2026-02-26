@@ -45,6 +45,34 @@ macro chk(cond, msg=nothing)
     end
 end
 
+if DEBUG
+    macro jl_assert(cond, args...)
+        usage = "usage: @jl_assert(condition, tree|(tree, message)...)"
+        @assert(!isempty(args), usage)
+        sts = Expr(:call, SyntaxList)
+        msgs = Expr(:call, Base.vect)
+        for a in args
+            if Meta.isexpr(a, :tuple, 2)
+                push!(sts.args, a.args[1])
+                push!(msgs.args, a.args[2])
+            else
+                push!(sts.args, a)
+                push!(msgs.args, QuoteNode(a))
+            end
+        end
+        # just add assertion string to first msg
+        msgs.args[2] = Expr(
+            :string, "`jl_assert(", QuoteNode(cond), ", _)`: ", msgs.args[2])
+        :($(esc(cond)) ? nothing : begin
+              throw(LoweringError($(esc(sts)), $(esc(msgs)), true))
+          end)
+    end
+else
+    macro jl_assert(cond, args...)
+        nothing
+    end
+end
+
 #-------------------------------------------------------------------------------
 abstract type AbstractLoweringContext end
 
@@ -449,7 +477,7 @@ function is_quoted(ex)
 end
 
 function extension_type(ex)
-    @assert kind(ex) == K"assert"
+    @jl_assert kind(ex) == K"assert" ex
     @chk numchildren(ex) >= 1
     @chk kind(ex[1]) == K"Symbol"
     ex[1].name_val
@@ -573,7 +601,7 @@ function new_scope_layer(ctx, mod_ref::Module=ctx.mod)
 end
 
 function new_scope_layer(ctx, mod_ref::SyntaxTree)
-    @assert kind(mod_ref) == K"Identifier"
+    @jl_assert kind(mod_ref) == K"Identifier" mod_ref
     new_scope_layer(ctx, ctx.scope_layers[mod_ref.scope_layer].mod)
 end
 

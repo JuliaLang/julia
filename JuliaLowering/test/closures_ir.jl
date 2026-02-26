@@ -1109,3 +1109,7 @@ end
 #---------------------
 LoweringError:
 #= line 1 =# - Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension
+Expression:
+  (call JuliaLowering.eval_closure_type Main.TestMod :#->##2 (call core.svec) (call core.svec))
+Containing expressions:
+  (call JuliaLowering.eval_closure_type Main.TestMod :#->##2 (call core.svec) (call core.svec))
