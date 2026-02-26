@@ -4,7 +4,7 @@ attrsummary(name, value::LineNumberNode) = "$name=L$(value.line)"
 
 function _value_string(ex)
     k = kind(ex)
-    str = k == K"Identifier" || JuliaSyntax.is_operator(k) ? ex.name_val :
+    str = k == K"Identifier"  ? ex.name_val           :
           k == K"Placeholder" ? ex.name_val           :
           k == K"SSAValue"    ? "%"                   :
           k == K"BindingId"   ? "#"                   :
@@ -22,7 +22,7 @@ function _value_string(ex)
               "SourceLocation:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
           k == K"Value" && ex.value isa SourceRef ?
               "SourceRef:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
-          repr(get(ex, :value, nothing))
+              hasattr(ex, :value) ? repr(ex.value) : "::K\"$(untokenize(k))\""
     id = get(ex, :var_id, nothing)
     if isnothing(id)
         id = get(ex, :id, nothing)
@@ -45,7 +45,6 @@ function _value_string(ex)
 end
 
 function _show_syntax_tree(io, ex, indent, show_kinds)
-    val = get(ex, :value, nothing)
     nodestr = !is_leaf(ex) ? "[$(untokenize(head(ex)))]" : _value_string(ex)
 
     treestr = rpad(string(indent, nodestr), 40)
@@ -70,6 +69,7 @@ end
 function Base.show(io::IO, ::MIME"text/plain", ex::SyntaxTree, show_kinds=true)
     anames = join(string.(JuliaSyntax.attrnames(syntax_graph(ex))), ",")
     println(io, "SyntaxTree with attributes $anames")
+    assert_syntaxtree(ex)
     _show_syntax_tree(io, ex, "", show_kinds)
 end
 function _show_syntax_tree_sexpr(io, ex)
@@ -92,10 +92,12 @@ function _show_syntax_tree_sexpr(io, ex)
 end
 
 function Base.show(io::IO, ::MIME"text/x.sexpression", node::SyntaxTree)
+    assert_syntaxtree(node)
     _show_syntax_tree_sexpr(io, node)
 end
 
 function Base.show(io::IO, node::SyntaxTree)
+    assert_syntaxtree(node)
     _show_syntax_tree_sexpr(io, node)
 end
 

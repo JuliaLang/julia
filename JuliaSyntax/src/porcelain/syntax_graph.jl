@@ -208,14 +208,30 @@ struct SyntaxTree{Attrs}
     _id::NodeId
 end
 
+# fallback printing
+function node_string(ex::SyntaxTree, depth=2)
+    out = "(_id="*string(ex._id)
+    for n in sort!(attrnames(ex))
+        out *= ", "*string(n)*"="*repr(getproperty(ex, n))
+    end
+    if is_leaf(ex)
+        out *= ", leaf"
+    elseif depth > 1
+        out *= ", children=["
+        for c in children(ex)
+            out *= "\n"*node_string(c, depth-1)
+        end
+        out *= "]"
+    end
+    out *= ")"
+end
+
 function Base.getproperty(ex::SyntaxTree, name::Symbol)
     name === :_graph && return getfield(ex, :_graph)
     name === :_id  && return getfield(ex, :_id)
     _id = getfield(ex, :_id)
     return get(getproperty(getfield(ex, :_graph), name), _id) do
-        attrstr = join(["\n    $n = $(getproperty(ex, n))"
-                        for n in attrnames(ex)], ",")
-        error("Property `$name[$_id]` not found. Available attributes:$attrstr")
+        error("Property `$name` not defined on node: $(node_string(ex))")
     end
 end
 
@@ -1200,8 +1216,6 @@ function SyntaxTree(graph::SyntaxGraph, sf::SourceFile, cursor::RedTreeCursor)
     return out
 end
 
-# TODO: Do we really need all trivia?  K"parens" can be good to keep, but things
-# like K"(" and whitespace might not be useful.
 function _insert_green(graph::SyntaxGraph, sf::SourceFile,
                        txtbuf::Vector{UInt8}, offset::Int,
                        cursor::RedTreeCursor)

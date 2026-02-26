@@ -494,6 +494,13 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         end
         push!(stmts, locals_dict)
         newnode(ctx, ex, K"block", stmts)
+    elseif k == K"thisfunction"
+        lam = SyntaxTree(ex._graph, enclosing_lambda(ctx, scope::ScopeInfo).node_id)
+        self_arg = lam[1][1]
+        for a in children(lam[1])
+            getmeta(a, :thisfunction_original, false) && (self_arg = a)
+        end
+        return _resolve_scopes(ctx, self_arg, scope)
     elseif k == K"assert"
         etype = extension_type(ex)
         if etype == "require_existing_locals"

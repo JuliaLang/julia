@@ -367,4 +367,64 @@ let s = test_mod.ShadowTypeParam("hello")
     @test s.x === "hello"
 end
 
+# Inner kwarg constructor
+@test JuliaLowering.include_string(test_mod, """
+struct CheckConfig
+    field::Int
+    function CheckConfig(parg::String; kw::Int = 4)
+        new(length(parg) + kw)
+    end
+    function CheckConfig(optarg1=1, optarg2=10; kw1, kw2 = 1000)
+        new(optarg1+optarg2+kw1+kw2)
+    end
+    function CheckConfig(optarg1=1, optarg2=10; kw1, kw2 = 1000)
+        new(optarg1+optarg2+kw1+kw2)
+    end
+end
+""") === nothing
+
+@test isdefined(test_mod, :CheckConfig)
+
+let s = test_mod.CheckConfig("")
+    @test s isa test_mod.CheckConfig
+    @test s.field == 4
+end
+let s = test_mod.CheckConfig("";kw=5)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 5
+end
+let s = test_mod.CheckConfig(;kw1=100)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 1111
+end
+let s = test_mod.CheckConfig(;kw1=100, kw2=0)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 111
+end
+let s = test_mod.CheckConfig(0;kw1=100, kw2=0)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 110
+end
+let s = test_mod.CheckConfig(0,0;kw1=100)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 1100
+end
+
+let s = test_mod.CheckConfig(;kw1=100)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 1111
+end
+let s = test_mod.CheckConfig(;kw1=100, kw2=0)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 111
+end
+let s = test_mod.CheckConfig(0;kw1=100, kw2=0)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 110
+end
+let s = test_mod.CheckConfig(0,0;kw1=100)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 1100
+end
+
 end
