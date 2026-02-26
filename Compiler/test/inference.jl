@@ -2597,6 +2597,16 @@ getsomethingx(b::GetSomethingB) = b.x
     getsomethingx(x)
 end == Int
 
+# https://github.com/JuliaLang/julia/issues/59975
+struct Issue59975; a; end
+function issue59975(x::Issue59975)
+   if x.a isa Int
+        return x.a
+    end
+    return 0
+end
+@test Base.infer_return_type(issue59975, (Issue59975,)) == Int
+
 @testset "issue #56913: `BoundsError` in type inference" begin
     R = UnitRange{Int}
     @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, Vararg{R}})
