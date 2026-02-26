@@ -28,6 +28,161 @@ export run_interface, Prompt, ModalInterface, transition, reset_state, edit_inse
 
 const StringLike = Union{Char,String,SubString{String}}
 
+const RGBATuple = NTuple{4, UInt16}
+
+mutable struct TerminalProperties
+    foreground::Union{Nothing, RGBATuple}    # OSC 10
+    background::Union{Nothing, RGBATuple}    # OSC 11
+    ansi_colors::Vector{Union{Nothing, RGBATuple}}  # OSC 4;0..15
+    da1::Union{Nothing, Set{Int}}            # DA1 feature parameters
+    function TerminalProperties()
+        new(nothing, nothing, Union{Nothing, RGBATuple}[nothing for _ in 1:16], nothing)
+    end
+end
+
+# Scale an `nr`-hex-digit color component to 16-bit by replicating its bits
+# to fill the full UInt16 range. E.g. for nr==2: 0xAB → 0xAB*0x0101 = 0xABAB.
+# For nr==3 the multiplication factor isn't an integer, so we use a bit shift
+# instead: 0xABC → (0xABC<<4)|(0xABC>>8) = 0xABC0|0x00A = 0xABCA.
+# This maps [0, 2^(4nr)-1] onto [0, 0xFFFF] with both endpoints exact.
+function _scale_to_16bit(v::UInt16, nr::Int)
+    if nr == 1
+        v * 0x1111
+    elseif nr == 2
+        v * 0x0101
+    elseif nr == 3
+        (v << 4) | (v >> 8)
+    else
+        v
+    end
+end
+
+"""
+    parse_osc_color(s::AbstractString) -> Union{Nothing, RGBATuple}
+
+Parse an OSC color response string like `rgb:RR/GG/BB`, `rgb:RRRR/GGGG/BBBB`,
+or `rgba:RR/GG/BB/AA` variants. Returns an `RGBATuple` `(r, g, b, a)` with
+values scaled to 16-bit. For `rgb:` inputs without an alpha component, alpha
+defaults to `0xffff` (fully opaque). Returns `nothing` if the string cannot be
+parsed.
+"""
+function parse_osc_color(s::AbstractString)
+    m = match(r"^rgba?:([0-9a-fA-F]+)/([0-9a-fA-F]+)/([0-9a-fA-F]+)(?:/([0-9a-fA-F]+))?"i, s)
+    m === nothing && return nothing
+    rs, gs, bs, as = m.captures
+    # All RGB components must have the same number of hex digits (1, 2, 3, or 4)
+    nr = length(rs)
+    (nr == length(gs) == length(bs) && 1 <= nr <= 4) || return nothing
+    r = _scale_to_16bit(parse(UInt16, rs; base=16), nr)
+    g = _scale_to_16bit(parse(UInt16, gs; base=16), nr)
+    b = _scale_to_16bit(parse(UInt16, bs; base=16), nr)
+    if as !== nothing
+        na = length(as)
+        (1 <= na <= 4) || return nothing
+        a = _scale_to_16bit(parse(UInt16, as; base=16), na)
+    else
+        a = 0xffff
+    end
+    return (r, g, b, a)
+end
+
+"""
+    read_osc_response(io::IO) -> String
+
+Read the body of an OSC response from `io` (bytes after `\\e]`).
+Reads until BEL (`\\a`), ST (`\\e\\\\`), 8-bit ST (`0x9c`), or `^C` (bail-out).
+"""
+function read_osc_response(io::IO)
+    buf = IOBuffer()
+    while !eof(io)
+        b = read(io, UInt8)
+        if b == 0x07  # BEL
+            break
+        elseif b == 0x1b  # ESC — expect ST (\e\\)
+            if !eof(io)
+                b2 = read(io, UInt8)
+                b2 == UInt8('\\') && break
+                # Not ST; discard and stop
+            end
+            break
+        elseif b == 0x9c  # 8-bit ST
+            break
+        elseif b == 0x03  # ^C bail-out
+            break
+        else
+            write(buf, b)
+        end
+    end
+    return String(take!(buf))
+end
+
+"""
+    receive_osc!(props::TerminalProperties, io::IO)
+
+Read and parse an OSC response from `io` (after `\\e]` has been consumed by the keymap).
+Handles OSC 10 (foreground), OSC 11 (background), and OSC 4;N (ANSI color N).
+"""
+function receive_osc!(props::TerminalProperties, io::IO)
+    body = read_osc_response(io)
+    parts = split(body, ';')
+    length(parts) >= 2 || return
+    opcode = parts[1]
+    if opcode == "10" && length(parts) >= 2
+        color = parse_osc_color(parts[2])
+        if color !== nothing
+            props.foreground = color
+        end
+    elseif opcode == "11" && length(parts) >= 2
+        color = parse_osc_color(parts[2])
+        if color !== nothing
+            props.background = color
+        end
+    elseif opcode == "4" && length(parts) >= 3
+        idx = tryparse(Int, parts[2])
+        if idx !== nothing && 0 <= idx <= 15
+            color = parse_osc_color(parts[3])
+            if color !== nothing
+                props.ansi_colors[idx + 1] = color
+            end
+        end
+    end
+    return
+end
+
+"""
+    receive_da1!(props::TerminalProperties, io::IO)
+
+Read and parse a DA1 (Device Attributes) response from `io`
+(after `\\e[?` has been consumed by the keymap).
+Reads until `c` (DA1 terminator) or `^C` (bail-out), parses the semicolon-separated
+parameters as integers, and stores them in `props.da1`.
+"""
+function receive_da1!(props::TerminalProperties, io::IO)
+    buf = IOBuffer()
+    while !eof(io)
+        b = read(io, UInt8)
+        if b == UInt8('c')  # DA1 terminator
+            break
+        elseif b == 0x03  # ^C bail-out
+            break
+        else
+            write(buf, b)
+        end
+    end
+    body = String(take!(buf))
+    params = Set{Int}()
+    for part in split(body, ';')
+        n = tryparse(Int, part)
+        if n !== nothing
+            push!(params, n)
+        end
+    end
+    if !isempty(params)
+        props.da1 = params
+    end
+    return
+end
+
 # interface for TextInterface
 function Base.getproperty(ti::TextInterface, name::Symbol)
     if name === :hp
@@ -87,9 +242,10 @@ mutable struct MIState
     n_keys_pressed::Int
     # Optional event that gets notified each time the prompt is ready for input
     prompt_ready_event::Union{Nothing, Base.Event}
+    terminal_properties::TerminalProperties
 end
 
-MIState(i, mod, c, a, m) = MIState(i, mod, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}(), Base.ReentrantLock(), Base.ReentrantLock(), 0, nothing)
+MIState(i, mod, c, a, m) = MIState(i, mod, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}(), Base.ReentrantLock(), Base.ReentrantLock(), 0, nothing, TerminalProperties())
 
 const BufferLike = Union{MIState,ModeState,IOBuffer}
 const State = Union{MIState,ModeState}
@@ -2074,6 +2230,9 @@ const escape_defaults = merge!(
         "\e*" => nothing,
         "\e[*" => nothing,
         "\eO*" => nothing,
+        # Intercept OSC responses (terminal color queries) and DA1 responses
+        "\e]"  => (s::MIState, o...) -> receive_osc!(s.terminal_properties, terminal(s)),
+        "\e[?" => (s::MIState, o...) -> receive_da1!(s.terminal_properties, terminal(s)),
         # Also ignore extended escape sequences
         # TODO: Support ranges of characters
         "\e[1**" => nothing,
@@ -2762,6 +2921,8 @@ const prefix_history_keymap = merge!(
         "\e*" => "*",
         "\e[*" => "*",
         "\eO*"  => "*",
+        "\e]"  => "*",
+        "\e[?" => "*",
         "\e[1;5*" => "*", # Ctrl-Arrow
         "\e[1;2*" => "*", # Shift-Arrow
         "\e[1;3*" => "*", # Meta-Arrow
