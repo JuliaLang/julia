@@ -276,9 +276,12 @@ function expand_macro(ctx, ex)
     mctx = MacroContext(ctx.graph, ex, current_layer(ctx), ctx.expr_compat_mode)
     macfunc = eval_macro_name(ctx, mctx, macname)
     raw_args = ex[3:end]
-    macro_loc = let loc = source_location(LineNumberNode, ex)
+    macro_loc = if ex[2].value isa LineNumberNode
         # Some macros, e.g. @cmd, don't play nicely with file == nothing
+        loc = ex[2].value
         isnothing(loc.file) ? LineNumberNode(loc.line, :none) : loc
+    elseif ex[2].value isa Core.MacroSource
+        ex[2].value.lno
     end
     # We use a specific well defined world age for the next checks and macro
     # expansion invocations. This avoids inconsistencies if the latest world
