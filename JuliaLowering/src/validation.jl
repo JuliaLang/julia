@@ -260,6 +260,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
 
     #---------------------------------------------------------------------------
     # Forms not produced by the parser
+    [K"ssavalue" [K"Value"]] -> pass()
     [K"inert" _] -> pass()
     [K"inert_syntaxtree" _] -> pass()
     [K"core"] -> st.name_val === "nothing" ? pass() :
@@ -907,6 +908,7 @@ vst1_assign_lhs(vcx, st; in_const=false, in_tuple=false) = @stm st begin
 end
 vst1_assign_lhs_nontuple(vcx, st; in_const=false, in_tuple=false) = @stm st begin
     [K"Identifier"] -> pass()
+    [K"ssavalue" [K"Value"]] -> in_const ? @fail(st, "cannot declare ssavalue const") : pass()
     ([K"Value"], when=(st.value isa GlobalRef)) -> pass()
     (_, when=(is_eventually_call(st))) ->
         vst1_function_calldecl(vcx, st)

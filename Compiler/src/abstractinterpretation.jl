@@ -1450,6 +1450,9 @@ function ssa_def_slot(@nospecialize(arg), sv::InferenceState)
         init = arg.id
         arg = code[init]
     end
+    if isa(arg, Argument)
+        arg = SlotNumber(arg.n)
+    end
     if arg isa SlotNumber
         # found this kind of pattern:
         # %init = SlotNumber(x)
