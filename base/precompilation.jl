@@ -86,7 +86,7 @@ Base.@kwdef mutable struct PrecompileSession
     print_lock::ReentrantLock
     parallel_limiter::Base.Semaphore
     num_tasks::Int
-    start_loaded_modules::Base.KeySet{PkgId, Dict{PkgId, Module}}
+    start_loaded_modules::Set{PkgId}
     requested_pkgids::Vector{PkgId}
 
     # Dependency graph (built by setup, extended by drainer)
@@ -1923,12 +1923,10 @@ function drain_work_channel!(s::PrecompileSession, work_channel::Channel{Precomp
                     merge!(s.ext_to_parent, new_graph.ext_to_parent)
                     merge!(s.parent_to_exts, new_graph.parent_to_exts)
                     merge!(s.triggers, new_graph.triggers)
-                    for p in new_graph.project_deps
-                        p in s.project_deps || push!(s.project_deps, p)
-                    end
-                    for dep in new_graph.serial_deps
-                        dep in s.serial_deps || push!(s.serial_deps, dep)
-                    end
+                    union!(s.project_deps, new_graph.project_deps)
+                    union!(s.serial_deps, new_graph.serial_deps)
+                    # When no specific packages were requested, treat project deps as the requested set
+                    union!(s.requested_pkgids, isempty(req_pkgids) ? new_graph.project_deps : req_pkgids)
                 end
                 new_pkg_names = copy(request.pkgs)
                 new_dd = new_graph.direct_deps
@@ -2105,7 +2103,7 @@ function report_precompile_results!(s::PrecompileSession)
                 filter!(!isempty∘last, std_outputs)
                 if !isempty(std_outputs)
                     plural1 = length(std_outputs) == 1 ? "y" : "ies"
-                    print(iostr, "\n  ", color_string("$(length(std_outputs))", Base.warn_color(), s.hascolor), " dependenc$(plural1) had output during precompilation:")
+                    print(iostr, "  ", color_string("$(length(std_outputs))", Base.warn_color(), s.hascolor), " dependenc$(plural1) had output during precompilation:")
                     for (pkg_config, err) in std_outputs
                         pkg, config = pkg_config
                         err = if pkg == s.pkg_liveprinted
@@ -2242,7 +2240,7 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
         configs, io, logio, logcalls, fancyprint, hascolor,
         warn_loaded, ignore_loaded, internal_call, strict, _from_loading,
         time_start, print_lock, parallel_limiter=Base.Semaphore(num_tasks), num_tasks,
-        start_loaded_modules=keys(Base.loaded_modules), requested_pkgids,
+        start_loaded_modules=Set{PkgId}(keys(Base.loaded_modules)), requested_pkgids,
         ext_to_parent=graph.ext_to_parent, parent_to_exts=graph.parent_to_exts,
         triggers=graph.triggers, project_deps=graph.project_deps,
         serial_deps=graph.serial_deps, circular_deps,
