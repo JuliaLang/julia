@@ -1543,6 +1543,10 @@ If `types` is specified, return an array of methods whose types match.
 If `module` is specified, return an array of methods defined in that module.
 A list of modules can also be specified as an array or set.
 
+The methods are ordered from most to least specific. The relative order of
+methods without a specificity relationship (i.e. ambiguous or incomparable)
+is unspecified.
+
 !!! compat "Julia 1.4"
     At least Julia 1.4 is required for specifying a module.
 
