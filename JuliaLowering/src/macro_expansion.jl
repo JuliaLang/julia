@@ -283,6 +283,8 @@ function expand_macro(ctx, ex)
         isnothing(loc.file) ? LineNumberNode(loc.line, :none) : loc
         elseif loc isa Core.MacroSource
             loc.lno
+        else
+            LineNumberNode(0, :none)
         end
     else
         LineNumberNode(0, :none)
