@@ -564,6 +564,11 @@ public:
         : name(StringRef(cname, N-1)), _type(_type), _attrs(_attrs) {}
     JuliaFunction(StringRef cname, TypeFn_t _type, llvm::AttributeList (*_attrs)(llvm::LLVMContext &C))
         : name(cname), _type(_type), _attrs(_attrs) {}
+    template <size_t N>
+    JuliaFunction(const char (&cname)[N], TypeFn_t _type, llvm::AttributeList (*_attrs)(llvm::LLVMContext &C), std::initializer_list<JuliaFunction*> _variants)
+        : name(StringRef(cname, N-1)), _type(_type), _attrs(_attrs), variants(_variants) {}
+    JuliaFunction(StringRef cname, TypeFn_t _type, llvm::AttributeList (*_attrs)(llvm::LLVMContext &C), std::initializer_list<JuliaFunction*> _variants)
+        : name(cname), _type(_type), _attrs(_attrs), variants(_variants) {}
     JuliaFunction(char *cname, TypeFn_t _type, llvm::AttributeList (*_attrs)(llvm::LLVMContext &C)) = delete;
 
     llvm::StringRef name;
