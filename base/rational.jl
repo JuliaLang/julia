@@ -293,7 +293,7 @@ function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
         # smallest a such that x-a*y < a*t+tt
         if p == 0
             # 1/a satisfies the tolerance with a = ⌊1/y⌋
-            e = eps(x)
+            e = eps(y)
             if t ≤ e
                 # round to nearest with tie down
                 a = -mod(1, -y) < r ? a + 1 : a
