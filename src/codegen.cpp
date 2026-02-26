@@ -1466,6 +1466,10 @@ static const auto jldnd_func = new JuliaFunction<>{
 };
 
 // placeholder functions
+
+// The `julia.gcroot_flush` intrinsic is a marker function to flush all current
+// GC roots, to the shadow stack. It is used in the codegen of `GC.safepoint`/`jl_gc_safepoint`
+// and `jl_sigatomic_{begin,end}`. It is removed in late-gc-lowering (no-effect).
 static const auto gcroot_flush_func = new JuliaFunction<>{
     "julia.gcroot_flush",
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C), false); },
