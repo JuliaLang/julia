@@ -305,7 +305,7 @@ void Optimizer::optimizeAll()
         // if all objects are jlvalue_t's. However, if part of the allocation is an unboxed value (e.g. it is a { float, jlvaluet }),
         // then moveToStack will create a [2 x jlvaluet] bitcast to { float, jlvaluet }.
         // This later causes the GC rooting pass, to miss-characterize the float as a pointer to a GC value
-        if (has_unboxed && has_ref) {
+        if (has_ref && (has_unboxed || use_info.addrescaped)) {
             REMARK([&]() {
                 std::string str;
                 llvm::raw_string_ostream rso(str);

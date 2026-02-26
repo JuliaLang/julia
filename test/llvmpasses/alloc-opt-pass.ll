@@ -301,6 +301,27 @@ define ptr addrspace(10) @objref_no_multiloc(ptr addrspace(10) %val) {
 }
 ; CHECK-LABEL: }{{$}}
 
+; Test that an allocation with ref fields and an escaped address stays on the heap.
+; pointer_from_objref sets addrescaped; the ref store sets has_ref.
+; moveToStack with has_ref would create alloca T_prjlvalue[], causing the GC to
+; scan all slots as pointers, but non-ref data may be written through the escaped address.
+; CHECK-LABEL: @ref_with_addrescaped_no_stack
+; CHECK: call{{.*}}@julia.gc_alloc_obj
+; CHECK: ret void
+define void @ref_with_addrescaped_no_stack(ptr addrspace(10) %val) {
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %ptls = call ptr @julia.ptls_states()
+  %v = call noalias nonnull align 8 dereferenceable(16) ptr addrspace(10) @julia.gc_alloc_obj(ptr %ptls, i64 16, ptr addrspace(10) @tag) #7
+  %v_derived = addrspacecast ptr addrspace(10) %v to ptr addrspace(11)
+  store ptr addrspace(10) %val, ptr addrspace(11) %v_derived, align 8, !tbaa !20
+  %raw = call ptr @julia.pointer_from_objref(ptr addrspace(11) %v_derived)
+  %tok = call token (...) @llvm.julia.gc_preserve_begin(ptr addrspace(10) %v)
+  call void @external_function()
+  call void @llvm.julia.gc_preserve_end(token %tok)
+  ret void
+}
+; CHECK-LABEL: }{{$}}
+
 ; Test that higher alignment from the original allocation is inherited
 ; 8 bytes with 32-byte alignment uses i64 (element size capped at 64 bits)
 ; CHECK-LABEL: @align_inherit
