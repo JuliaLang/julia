@@ -549,6 +549,9 @@ including Tasks and Threads (and any previously defined `@generated` functions).
 Let's start with an example to see what this means:
 
 ```julia-repl
+julia> function newfun end
+newfun (generic function with 0 methods)
+
 julia> function tryeval()
            @eval newfun() = 1
            newfun()
