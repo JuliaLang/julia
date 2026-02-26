@@ -1183,5 +1183,48 @@ end
         expected_msg = "Conflicting definitions for keyseq a within one keymap"
         @test_throws ErrorException(expected_msg) REPL.LineEdit.add_nested_key!(keymap, 'a', "abdef")
         @test keymap == Dict('a' => "abc")
+   end
+end
+
+# Test TerminalProperties and DA1 parsing
+@testset "TerminalProperties" begin
+    @testset "receive_da1!" begin
+        # Typical DA1 response body (after \e[? already consumed): "64;1;2;6;22c"
+        props = LineEdit.TerminalProperties()
+        io = IOBuffer("64;1;2;6;22c")
+        LineEdit.receive_da1!(props, io)
+        @test props.da1 == [64, 1, 2, 6, 22]
+
+        # Single parameter
+        props2 = LineEdit.TerminalProperties()
+        io = IOBuffer("1c")
+        LineEdit.receive_da1!(props2, io)
+        @test props2.da1 == [1]
+    end
+
+    @testset "receive_da1! with ^C bail-out" begin
+        props = LineEdit.TerminalProperties()
+        io = IOBuffer("64;1\x03")
+        LineEdit.receive_da1!(props, io)
+        @test props.da1 == [64, 1]
+    end
+
+    @testset "receive_da1! with empty response" begin
+        # Empty response should store empty vector, not remain nothing
+        props = LineEdit.TerminalProperties()
+        io = IOBuffer("c")
+        LineEdit.receive_da1!(props, io)
+        @test props.da1 == Int[]
+    end
+
+    @testset "TerminalProperties default initialization" begin
+        props = LineEdit.TerminalProperties()
+        @test props.da1 === nothing
+    end
+
+    @testset "MIState has terminal_properties" begin
+        s = new_state()
+        @test s.terminal_properties isa LineEdit.TerminalProperties
+        @test s.terminal_properties.da1 === nothing
     end
 end
