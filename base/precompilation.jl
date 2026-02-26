@@ -143,7 +143,8 @@ mutable struct BackgroundPrecompileState
     lock::ReentrantLock
     task_done::Threads.Condition
     signal_channels::Vector{Channel{Int32}}  # channels for broadcasting signals to all subprocesses
-    pending_pkgids::Set{PkgId}  # packages queued and currently being precompiled
+    pending_pkgids::Dict{PkgId, Int}  # packages queued and currently being precompiled (refcount for multi-config)
+    completed_pkgids::Set{PkgId}  # packages that have finished precompiling (for fast-finish detection)
     pkg_done::Threads.Condition  # notified when a package finishes precompiling
     work_channel::Channel{PrecompileRequest}  # channel for injecting requests into running task
     verbose::Bool  # show PIDs and CPU% for each worker
@@ -155,7 +156,7 @@ Base.lock(f, bg::BackgroundPrecompileState) = lock(f, bg.lock)
 Base.lock(bg::BackgroundPrecompileState) = lock(bg.lock)
 Base.unlock(bg::BackgroundPrecompileState) = unlock(bg.lock)
 
-const BG = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Set{PkgId}(), Threads.Condition(), Channel{PrecompileRequest}(Inf), false, false, false, 0.0)
+const BG = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Dict{PkgId, Int}(), Set{PkgId}(), Threads.Condition(), Channel{PrecompileRequest}(Inf), false, false, false, 0.0)
 
 ## Constants and formatting utilities
 
@@ -164,6 +165,7 @@ const ansi_cleartoend = "\e[0J"
 const ansi_cleartoendofline = "\e[0K"
 const ansi_enablecursor = "\e[?25h"
 const ansi_disablecursor = "\e[?25l"
+const ansi_clearline = "\e[2K"
 ansi_moveup(n::Int) = string("\e[", n, "A")
 
 struct PkgPrecompileError <: Exception
@@ -214,10 +216,7 @@ end
 const PROGRESS_BAR_TIME_GRANULARITY = Ref(1 / 30.0) # 30 fps
 const PROGRESS_BAR_PERCENTAGE_GRANULARITY = Ref(0.1)
 
-function start_progress(io::IO, _::MiniProgressBar)
-    ansi_disablecursor = "\e[?25l"
-    print(io, ansi_disablecursor)
-end
+start_progress(io::IO, _::MiniProgressBar) = print(io, ansi_disablecursor)
 
 function show_progress(io::IO, p::MiniProgressBar; termwidth=nothing, carriagereturn=true)
     if p.max == 0
@@ -269,18 +268,9 @@ function show_progress(io::IO, p::MiniProgressBar; termwidth=nothing, carriagere
     print(io, to_print)
 end
 
-function end_progress(io, p::MiniProgressBar)
-    ansi_enablecursor = "\e[?25h"
-    ansi_clearline = "\e[2K"
-    print(io, ansi_enablecursor * ansi_clearline)
-end
+end_progress(io, p::MiniProgressBar) = print(io, ansi_enablecursor, ansi_clearline)
 
-function print_progress_bottom(io::IO)
-    ansi_clearline = "\e[2K"
-    ansi_movecol1 = "\e[1G"
-    ansi_moveup(n::Int) = string("\e[", n, "A")
-    print(io, "\e[S" * ansi_moveup(1) * ansi_clearline * ansi_movecol1)
-end
+print_progress_bottom(io::IO) = print(io, "\e[S", ansi_moveup(1), ansi_clearline, ansi_movecol1)
 
 ## ExplicitEnv
 
@@ -926,7 +916,7 @@ function is_package_pending(pkg::PkgId)
     @lock BG begin
         BG.task === nothing && return false
         istaskdone(BG.task) && return false
-        return pkg ∈ BG.pending_pkgids
+        return get(BG.pending_pkgids, pkg, 0) > 0
     end
 end
 
@@ -956,7 +946,7 @@ function stop_background_precompile(; graceful::Bool = true)
                 BG.interrupt_requested = true
             else
                 BG.cancel_requested = true
-                broadcast_signal(Base.SIGKILL)
+                broadcast_signal(Base.SIGKILL) # re-entrant: broadcast_signal also @lock's BG
             end
             try; close(BG.work_channel); catch; end
             return true
@@ -1145,11 +1135,13 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                 # Wait for the package to appear in pending_pkgids (it may not be
                 # registered yet if the request was just injected via work_channel
                 # and drain_work_channel! hasn't processed it).
-                while wait_for_pkg ∉ BG.pending_pkgids && BG.completed_at === nothing
+                # Also check completed_pkgids in case the package was added and
+                # removed before we started watching.
+                while get(BG.pending_pkgids, wait_for_pkg, 0) == 0 && wait_for_pkg ∉ BG.completed_pkgids && BG.completed_at === nothing
                     wait(BG.pkg_done)
                 end
                 # Now wait for it to finish
-                while wait_for_pkg ∈ BG.pending_pkgids
+                while get(BG.pending_pkgids, wait_for_pkg, 0) > 0
                     wait(BG.pkg_done)
                 end
             end
@@ -1268,6 +1260,7 @@ function launch_background_precompile(pkgs::Union{Vector{String}, Vector{PkgId}}
         BG.return_value = nothing
         BG.exception = nothing
         empty!(BG.pending_pkgids)
+        empty!(BG.completed_pkgids)
         BG.work_channel = Channel{PrecompileRequest}(Inf)
     end
 
@@ -1493,11 +1486,13 @@ function should_stop(s::PrecompileSession)
         BG.interrupt_requested, BG.cancel_requested
     end
     if ir || cr
-        s.interrupted = s.interrupted || ir
-        if !s.interrupted_or_done
-            s.interrupted_or_done = true
-            foreach(notify, values(s.was_processed))
-            notify(s.first_started)
+        @lock s.print_lock begin
+            s.interrupted = s.interrupted || ir
+            if !s.interrupted_or_done
+                s.interrupted_or_done = true
+                foreach(notify, values(s.was_processed))
+                notify(s.first_started)
+            end
         end
         return true
     end
@@ -1766,7 +1761,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                 continue
             end
             @lock BG @lock BG.pkg_done begin
-                push!(BG.pending_pkgids, pkg)
+                BG.pending_pkgids[pkg] = get(BG.pending_pkgids, pkg, 0) + 1
                 notify(BG.pkg_done)
             end
             flags, cacheflags = config
@@ -1891,7 +1886,13 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                 end
             finally
                 @lock BG @lock BG.pkg_done begin
-                    delete!(BG.pending_pkgids, pkg)
+                    n = get(BG.pending_pkgids, pkg, 0) - 1
+                    if n <= 0
+                        delete!(BG.pending_pkgids, pkg)
+                        push!(BG.completed_pkgids, pkg)
+                    else
+                        BG.pending_pkgids[pkg] = n
+                    end
                     notify(BG.pkg_done)
                 end
                 @lock s.print_lock (s.n_done += 1)
@@ -1935,36 +1936,57 @@ function drain_work_channel!(s::PrecompileSession, work_channel::Channel{Precomp
                 skip_pkgs = Set{PkgId}()
                 @lock BG begin
                     for pkgid in keys(new_dd)
-                        if pkgid in BG.pending_pkgids
+                        if haskey(BG.pending_pkgids, pkgid)
                             push!(skip_pkgs, pkgid)
                         end
                     end
                 end
+                # Replace skip_pkgs with leaf nodes so circular dep detection
+                # can traverse through them, but no tasks will be spawned.
                 for pkgid in skip_pkgs
-                    delete!(new_dd, pkgid)
-                end
-                for (_, deps) in new_dd
-                    setdiff!(deps, skip_pkgs)
+                    new_dd[pkgid] = PkgId[]
                 end
                 new_wp = Dict{PkgConfig, Base.Event}()
                 for config in request.configs
                     for pkgid in keys(new_dd)
                         pkg_config = (pkgid, config)
-                        @lock s.print_lock begin
-                            get!(PrecompileJob, s.jobs, pkg_config)
+                        if pkgid in skip_pkgs
+                            # Wire existing event so new tasks wait for the already-compiling dep
+                            if haskey(s.was_processed, pkg_config)
+                                new_wp[pkg_config] = s.was_processed[pkg_config]
+                            else
+                                evt = Base.Event()
+                                notify(evt)
+                                new_wp[pkg_config] = evt
+                            end
+                        else
+                            @lock s.print_lock begin
+                                get!(PrecompileJob, s.jobs, pkg_config)
+                            end
+                            evt = Base.Event()
+                            new_wp[pkg_config] = evt
+                            s.was_processed[pkg_config] = evt
                         end
-                        new_wp[pkg_config] = Base.Event()
                     end
                 end
                 new_circular = detect_circular_deps!(new_dd, new_graph.serial_deps, new_wp, s.io, s.ext_to_parent)
-                s.n_total += length(new_dd) * length(request.configs)
+                for pkgid in skip_pkgs
+                    delete!(new_dd, pkgid)
+                end
+                if isempty(new_dd)
+                    try; put!(request.result, String[]); catch; end
+                    continue
+                end
+                @lock s.print_lock begin
+                    s.n_total += length(new_dd) * length(request.configs)
+                    s.n_batches += 1
+                end
                 new_tasks = spawn_precompile_tasks!(s;
                     direct_deps=new_dd, was_processed=new_wp, configs=request.configs,
                     circular_deps=new_circular, requested_pkgids=req_pkgids,
                     pkg_names=request.pkgs, requested_pkgs=request.pkgs,
                     from_loading=request._from_loading)
                 append!(s.injected_tasks, new_tasks)
-                s.n_batches += 1
                 waiter = Threads.@spawn :samepool begin
                     try
                         waitall(new_tasks; failfast=false, throw=false)
@@ -1991,7 +2013,6 @@ function drain_work_channel!(s::PrecompileSession, work_channel::Channel{Precomp
 end
 
 function report_precompile_results!(s::PrecompileSession)
-    s.interrupted_or_done = true
     if !s._from_loading
         @lock Base.require_lock begin
             Base.LOADING_CACHE[] = nothing
@@ -2084,7 +2105,6 @@ function report_precompile_results!(s::PrecompileSession)
                 filter!(!isempty∘last, std_outputs)
                 if !isempty(std_outputs)
                     plural1 = length(std_outputs) == 1 ? "y" : "ies"
-                    plural2 = length(std_outputs) == 1 ? "" : "s"
                     print(iostr, "\n  ", color_string("$(length(std_outputs))", Base.warn_color(), s.hascolor), " dependenc$(plural1) had output during precompilation:")
                     for (pkg_config, err) in std_outputs
                         pkg, config = pkg_config
