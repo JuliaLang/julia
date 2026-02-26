@@ -15,7 +15,12 @@ $(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted: $(SRCCACHE)/p7zip-$(P7ZIP_VER).
 checksum-p7zip: $(SRCCACHE)/p7zip-$(P7ZIP_VER).tar.gz
 	$(JLCHECKSUM) $<
 
-$(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted
+$(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-zipitem.patch-applied: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/source-extracted
+	cd $(BUILDDIR)/p7zip-$(P7ZIP_VER) && \
+		patch -p1 -f < $(SRCDIR)/patches/p7zip-zipitem.patch
+	echo 1 > $@
+
+$(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/p7zip-zipitem.patch-applied
 $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-compiled: $(BUILDDIR)/p7zip-$(P7ZIP_VER)/build-configured
 	$(MAKE) -C $(dir $<) $(MAKE_COMMON) CC="$(CC)" CXX="$(CXX)" 7za
 	echo 1 > $@
