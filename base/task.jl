@@ -1161,32 +1161,6 @@ function throwto(t::Task, @nospecialize exc)
     return try_yieldto(identity)
 end
 
-function wait_forever()
-    while true
-        try
-            while true
-                wait()
-            end
-        catch e
-            local errs = stderr
-            # try to display the failure atomically
-            errio = IOContext(PipeBuffer(), errs::IO)
-            emphasize(errio, "Internal Task ")
-            display_error(errio, current_exceptions())
-            write(errs, errio)
-            # victimize another random Task also
-            if Threads.threadid() == 1 && isa(e, InterruptException) && isempty(Workqueue)
-                backend = repl_backend_task()
-                backend isa Task && throwto(backend, e)
-            end
-        end
-    end
-end
-
-const get_sched_task = OncePerThread{Task}() do
-    Task(wait_forever)
-end
-
 function ensure_rescheduled(othertask::Task)
     ct = current_task()
     W = workqueue_for(Threads.threadid())
@@ -1223,30 +1197,26 @@ end
 
 checktaskempty = Partr.multiq_check_empty
 
+@noinline function poptask(W::StickyWorkqueue)
+    task = trypoptask(W)
+    if !(task isa Task)
+        task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)
+    end
+    set_next_task(task)
+    nothing
+end
+
 function wait()
     ct = current_task()
     # [task] user_time -yield-or-done-> wait_time
     record_running_time!(ct)
-    # let GC run
     GC.safepoint()
-    # check for libuv events
-    process_events()
-
-    # get the next task to run
     W = workqueue_for(Threads.threadid())
-    task = trypoptask(W)
-    if task === nothing
-        # No tasks to run; switch to the scheduler task to run the
-        # thread sleep logic.
-        sched_task = get_sched_task()
-        if ct !== sched_task
-            istaskdone(sched_task) && (sched_task = @task wait())
-            return yieldto(sched_task)
-        end
-        task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)
-    end
-    set_next_task(task)
-    return try_yieldto(ensure_rescheduled)
+    poptask(W)
+    result = try_yieldto(ensure_rescheduled)
+    process_events()
+    # return when we come out of the queue
+    return result
 end
 
 if Sys.iswindows()
