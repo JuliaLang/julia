@@ -259,3 +259,31 @@ end
 10  latestworld
 11  TestMod.foo
 12  (return %₁₁)
+
+########################################
+# Error: thisfunction disallowed in comprehension/generator
+[@__FUNCTION__() for x in 1:2]
+#---------------------
+LoweringError:
+[@__FUNCTION__() for x in 1:2]
+#└─────────────┘ ── current function not defined in comprehension or generator
+
+########################################
+# Error: thisfunction disallowed in comprehension/generator
+f(@__FUNCTION__() for x in 1:2)
+#---------------------
+LoweringError:
+f(@__FUNCTION__() for x in 1:2)
+# └─────────────┘ ── current function not defined in comprehension or generator
+
+########################################
+# Error: thisfunction disallowed outside of function
+let
+    @__FUNCTION__()
+end
+#---------------------
+LoweringError:
+let
+    @__FUNCTION__()
+#   └─────────────┘ ── can only be used inside a function
+end

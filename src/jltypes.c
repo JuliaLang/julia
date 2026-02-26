@@ -3205,6 +3205,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                        jl_perm_symsvec(1, "n"),
                                        jl_svec1(jl_long_type),
                                        jl_emptysvec, 0, 0, 1);
+    XX(argument);
 
     jl_bool_type = NULL;
     jl_bool_type = jl_new_primitivetype((jl_value_t*)jl_symbol("Bool"), core,
@@ -3314,6 +3315,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_svec(3, jl_module_type, jl_symbol_type, jl_binding_type),
                         jl_emptysvec, 0, 0, 3);
     jl_globalref_type->name->mayinlinealloc = 0; // not at all worthwhile, since the only constructor returns a boxed object
+    XX(globalref);
 
     jl_core_module = jl_new_module(jl_symbol("Core"), NULL);
 
@@ -3437,54 +3439,63 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_perm_symsvec(1, "label"),
                         jl_svec(1, jl_long_type),
                         jl_emptysvec, 0, 0, 1);
+    XX(gotonode);
 
     jl_gotoifnot_type =
         jl_new_datatype(jl_symbol("GotoIfNot"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(2, "cond", "dest"),
                         jl_svec(2, jl_any_type, jl_long_type),
                         jl_emptysvec, 0, 0, 2);
+    XX(gotoifnot);
 
     jl_enternode_type =
         jl_new_datatype(jl_symbol("EnterNode"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(2, "catch_dest", "scope"),
                         jl_svec(2, jl_long_type, jl_any_type),
                         jl_emptysvec, 0, 0, 1);
+    XX(enternode);
 
     jl_returnnode_type =
         jl_new_datatype(jl_symbol("ReturnNode"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(1, "val"),
                         jl_svec(1, jl_any_type),
                         jl_emptysvec, 0, 0, 0);
+    XX(returnnode);
 
     jl_pinode_type =
         jl_new_datatype(jl_symbol("PiNode"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(2, "val", "typ"),
                         jl_svec(2, jl_any_type, jl_any_type),
                         jl_emptysvec, 0, 0, 2);
+    XX(pinode);
 
     jl_phinode_type =
         jl_new_datatype(jl_symbol("PhiNode"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(2, "edges", "values"),
                         jl_svec(2, jl_array_int32_type, jl_array_any_type),
                         jl_emptysvec, 0, 0, 2);
+    XX(phinode);
 
     jl_phicnode_type =
         jl_new_datatype(jl_symbol("PhiCNode"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(1, "values"),
                         jl_svec(1, jl_array_any_type),
                         jl_emptysvec, 0, 0, 1);
+    XX(phicnode);
 
     jl_upsilonnode_type =
         jl_new_datatype(jl_symbol("UpsilonNode"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(1, "val"),
                         jl_svec(1, jl_any_type),
                         jl_emptysvec, 0, 0, 0);
+    XX(upsilonnode);
 
     jl_quotenode_type =
         jl_new_datatype(jl_symbol("QuoteNode"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(1, "value"),
                         jl_svec(1, jl_any_type),
                         jl_emptysvec, 0, 0, 1);
+    XX(quotenode);
 
     jl_newvarnode_type =
         jl_new_datatype(jl_symbol("NewvarNode"), core, jl_any_type, jl_emptysvec,

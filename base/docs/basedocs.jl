@@ -1172,7 +1172,10 @@ kw"finally"
 """
     break
 
-Break out of a loop immediately.
+Break out of the innermost loop or [`@label`](@ref) block immediately.
+
+`break` exits the innermost breakable scope, which may be a `for` or `while` loop, or
+an `@label` block.
 
 # Examples
 ```jldoctest

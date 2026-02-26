@@ -178,15 +178,18 @@ The updating versions of all the binary arithmetic and bitwise operators are:
 
 ## [Vectorized "dot" operators](@id man-dot-operators)
 
-For *every* binary operation like `^`, there is a corresponding
-"dot" operation `.^` that is *automatically* defined
-to perform `^` element-by-element on arrays. For example,
+For most operators (for example `^`), there is a corresponding
+"dot" operator (like `.^`) that is *automatically* defined
+to perform `^` element-by-element on arrays.[^1] For example,
 `[1, 2, 3] ^ 3` is not defined, since there is no standard
 mathematical meaning to "cubing" a (non-square) array, but
 `[1, 2, 3] .^ 3` is defined as computing the elementwise
 (or "vectorized") result `[1^3, 2^3, 3^3]`. Similarly for unary
 operators like `!` or `√`, there is a corresponding `.√` that
 applies the operator elementwise.
+
+[^1]:
+    Exceptions to this are `:= $= ?: in isa : .. $ :: . ' ... -> ,`
 
 ```jldoctest
 julia> [1, 2, 3] .^ 3
@@ -404,16 +407,16 @@ operators, the precedence and associativity determine how the expression is pars
 calls — though parentheses can always be used to explicitly specify the desired order of
 operations.
 
-Most of these [operators are functions](@ref Operators-Are-Functions).[^1]  They can be used with
+Most of these [operators are functions](@ref Operators-Are-Functions).[^2]  They can be used with
 either functional notation (e.g., `+(a, b)`) or "infix" notation (e.g., `a + b`) — the parser
 essentially rewrites infix expressions as function calls.  In functional notation, the grouping of
 operations is explicit from the parentheses, so the expression is parsed unambiguously.  When
 infix notation is used with more than one operator in an expression and parentheses do not
 disambiguate the order, precedence and associativity rules determine how the expression is parsed.
 
-[^1]:
+[^2]:
     Some operators are parsed specially: `&& || = += -= *= /= //= \= ^= ÷= %= <<= >>= >>>= |= &=
-    ⊻= := $= . ... -> $ & ::`, as well as the ternary conditional `a ? b : c`.
+    ⊻= := $= . ... , -> $ & ::`, as well as the ternary conditional `a ? b : c` and unary quote `:`.
 
 In an expression with different operators, *precedence* determines the order.  For example, `*`
 has higher precedence than `+` when used as binary operators, so `1 + 2 * 3` is parsed as
@@ -427,10 +430,36 @@ fixed order of evaluation.  Another such group is the [*varargs*](@ref Varargs-F
 operators `+`, `++`, and `*` (but not other addition or multiplication operators).  These are
 parsed as varargs calls when chained, rather than nested binary calls: `a + b + c` is parsed as
 `+(a, b, c)` and `a*b*c` is parsed as `*(a, b, c)`.  The `++` operator is also parsed in this
-way, but note that it has no methods defined in `Base`.  Also note that juxtaposition of numeric
-literal coefficients to denote multiplication — like `2x` to mean `2*x` — is more of a syntactic
-form than an operator.  Describing its associativity doesn't make sense, except to state the
-obvious point that `24x` means `24*x` rather than `2*(4*x)` or `(2*4)*x`.
+way, but note that it has no methods defined in `Base`.  Also note that juxtaposition of
+[numeric literal coefficients](@ref man-numeric-literal-coefficients) to denote multiplication
+(for example `2x` to mean `2*x`) is more of a syntactic form than an operator.  Describing its
+associativity doesn't make sense, except to state the obvious point that `24x` means `24*x`
+rather than `2*(4*x)` or `(2*4)*x`. They are treated as multiplications with higher precedence
+than any other binary operation, with the exception of `^` where they have higher precedence
+only as the exponent.
+
+```jldoctest
+julia> x = 3; 2x^2
+18
+
+julia> x = 3; 2^2x
+64
+```
+
+It is also possible to define additional operators by appending suffixes to most operators.[^3]
+The valid suffixes include the Unicode combining characters, along with the subscripts, superscripts, and various
+primes (such as `′ ″ ‴ ⁗ ‵ ‶ ‷`) listed in
+[`src/flisp/julia_opsuffs.h`](https://github.com/JuliaLang/julia/blob/master/src/flisp/julia_opsuffs.h).  The
+resulting operators can be used with either functional or infix notation, and have the same precedence and
+associativity as the base operator.  For example, `⋆̂ᵝ₁′` could be defined as a function, and used as an infix operator
+with the same precedence and associativity as `⋆` and `*`.  However, operators ending with a subscript or superscript
+letter must be followed by a space when used in infix notation to distinguish them from variable names that begin
+with a subscript or superscript letter.  For example, if `+ᵃ` is an operator, then `+ᵃx` must be written as `+ᵃ x`
+to distinguish it from `+ ᵃx`.
+
+[^3]:
+    Exceptions to this are tuple, assignment, ternary if, control flow, dots, unary, declaration, field access, and unary quote operators,
+    as well as `<: >: in isa $`
 
 The following table lists Julia's operators, from highest precedence to lowest.  Those listed
 outside of parentheses are already defined in the `Base` module; those listed inside parentheses
@@ -440,45 +469,48 @@ packages, or user code.  For example, `⋅` and `×` are defined in the standard
 *every* Julia operator and its precedence, see the top of this file:
 [`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm).
 
-| Category       | Operators                                                                                         | Associativity              |
-|:-------------- |:------------------------------------------------------------------------------------------------- |:-------------------------- |
-| Syntax         | `.` followed by `::` followed by `'`                                                              | Left                       |
-| Exponentiation | `^` (`↑ ↓ ⇵ ⟰ ⟱ ⤈ ⤉ ⤊ ⤋ ⤒ ⤓`, etc.)                                                               | Right[^2]                  |
-| Unary          | `+ - ! ~ √ ∛ ∜ <: >:` (`¬ ⋆ ± ∓`)                                                                 | Right[^3]                  |
-| Juxtaposition  | Implicit multiplication by numeric literal coefficients; e.g., `2x` is parsed as `2*x`            | Not applicable             |
-| Bitshifts      | `<< >> >>>`                                                                                       | Left                       |
-| Fractions      | `//`                                                                                              | Left                       |
-| Multiplication | `* / ÷ % & ∘ \ ∩ ⊼` (`⋅ × ⋆ ⊗ ⊘ ⊠ ⊡ ⊓ ∧`, etc.)                                                   | Left[^4]                   |
-| Addition       | `+ - \| ∪ ⊻ ⊽` (`++ ± ∓ ⊕ ⊖ ⊞ ⊟ ⊔ ∨`, etc.)                                                       | Left[^4]                   |
-| Syntax         | `:` (`.. … ⁝ ⋮ ⋱ ⋰ ⋯`)                                                                            | Left                       |
-| Syntax         | `\|>`                                                                                             | Left                       |
-| Syntax         | `<\|`                                                                                             | Right                      |
-| Comparisons    | `in isa > < >= ≥ <= ≤ == === ≡ != ≠ !== ≢ ∈ ∉ ∋ ∌ ⊆ ⊈ ⊊ ≈ ≉ ⊇ ⊉ ⊋ <: >:` (`⊂ ⊄ ∝ ∥`, etc.)        | Chaining[^5]               |
-| Control flow   | `&&` followed by `\|\|`                                                                           | Right                      |
-| Arrows         | (`← → ↔ ↚ ↛ ↢ ↣ ↦ ↤ ↮ ⇎ ⇍ ⇏ ⇐ ⇒ ⇔`, etc.)                                                         | Right                      |
-| Control flow   | `?`                                                                                               | Right                      |
-| Pair           | `=>`                                                                                              | Right                      |
-| Assignments    | `= += -= *= /= //= \= ^= ÷= %= <<= >>= >>>= \|= &= ⊻= ~` (`≔ ⩴ ≕ :=`)                             | Right                      |
+| Category       | Operators                                                                                  | Associativity      |
+|:-------------- |:------------------------------------------------------------------------------------------ |:--------------     |
+| Unary quote    | `:`                                                                                        | Not composable[^4] |
+| Field access   | `.`                                                                                        | Left[^4]           |
+| Postfix unary  | `'`                                                                                        | Left               |
+| Declaration    | `::`                                                                                       | Left               |
+| Exponentiation | `^` (`↑ ↓ ⇵ ⟰ ⟱ ⤈ ⤉ ⤊ ⤋ ⤒ ⤓`, etc.)                                                        | Right[^5]          |
+| Unary          | `+ - ! ~ √ ∛ ∜ <: >:` (`¬ ⋆ ± ∓`)                                                          | Right[^6]          |
+| Juxtaposition  | Implicit multiplication by numeric literal coefficients                                    | Not composable     |
+| Bitshift       | `<< >> >>>`                                                                                | Left               |
+| Fraction       | `//`                                                                                       | Left               |
+| Multiplication | `* / ÷ % & ∘ \ ∩ ⊼` (`⋅ × ⋆ ⊗ ⊘ ⊠ ⊡ ⊓ ∧`, etc.)                                            | Left[^7]           |
+| Addition       | `+ - \| ∪ ⊻ ⊽` (`++ ± ∓ ⊕ ⊖ ⊞ ⊟ ⊔ ∨ $`, etc.)                                              | Left[^7]           |
+| Dots           | `: ...` (`.. … ⁝ ⋮ ⋱ ⋰ ⋯`)                                                                 | Left[^8]           |
+| Pipe           | `\|>`                                                                                      | Left               |
+| Pipe           | (`<\|`)                                                                                    | Right              |
+| Comparison     | `in isa > < >= ≥ <= ≤ == === ≡ != ≠ !== ≢ ∈ ∉ ∋ ∌ ⊆ ⊈ ⊊ ≈ ≉ ⊇ ⊉ ⊋ <: >:` (`⊂ ⊄ ∝ ∥`, etc.) | Chaining[^9]       |
+| Control flow   | `&&` followed by `\|\|`                                                                    | Right              |
+| Arrow          | (`← → ↔ ↚ ↛ ↢ ↣ ↦ ↤ ↮ ⇎ ⇍ ⇏ ⇐ ⇒ ⇔`, etc.)                                                  | Right              |
+| Ternary if     | `?:`                                                                                       | Right[^10]         |
+| Pair           | `=>`                                                                                       | Right              |
+| Assignment     | `= += -= *= /= //= \= ^= ÷= %= <<= >>= >>>= \|= &= ⊻= ->` (`~ ≔ ⩴ ≕ :=`)                   | Right[^11]         |
+| Tuple          | `,`                                                                                        | Vararg             |
 
-[^2]:
-    Unary operators and juxtaposition of numeric literals take precedence over `^` only *within the exponent*.  For example, `2^-3`, `x^√2`, and `2^3x` are parsed as `2^(-3)`, `x^(√2)`, and `2^(3*x)`; whereas `-2^3`, `√x^2`, `2^3*x`, and `2x^3` are parsed as `-(2^3)`, `√(x^2)`, `(2^3)*x`, and `2*(x^3)`.
-[^3]:
-    Note that most unary operators can be composed, except `++` which is a distinct *binary* operator, and `--` which produces a `ParseError`.  Other compositions of unary operators are parsed with right-associativity — e.g., `√√-a` as `√(√(-a))`.
 [^4]:
-    The operators `+`, `++` and `*` are parsed differently.  For example, `a + b + c` is parsed as `+(a, b, c)` not `+(+(a, b),c)`.  However, the fallback methods for `+(a, b, c, d...)` and `*(a, b, c, d...)` both default to left-associative evaluation.  Note that `++` is not defined in `Base`, but is parsed in the same way.
+    Spaces are not allowed around the `.` getproperty or the `:` expr operators
 [^5]:
-    Comparisons can be [chained](@ref "Chaining comparisons").  For example, `a < b < c` is essentially the same as `a < b && b < c`.  However, the order of evaluation is undefined.
-
-It is also possible to define additional operators by appending suffixes to most of the binary operators.  The valid
-suffixes include the Unicode combining characters, along with the subscripts, superscripts, and various primes
-(`′ ″ ‴ ⁗ ‵ ‶ ‷`) listed in
-[`src/flisp/julia_opsuffs.h`](https://github.com/JuliaLang/julia/blob/master/src/flisp/julia_opsuffs.h).  The
-resulting operators can be used with either functional or infix notation, and have the same precedence and
-associativity as the base operator.  For example, `⋆̂ᵝ₁′` could be defined as a function, and used as an infix operator
-with the same precedence and associativity as `⋆` and `*`.  However, operators ending with a subscript or superscript
-letter must be followed by a space when used in infix notation to distinguish them from variable names that begin
-with a subscript or superscript letter.  For example, if `+ᵃ` is an operator, then `+ᵃx` must be written as `+ᵃ x`
-to distinguish it from `+ ᵃx`.
+    Unary operators and juxtaposition of numeric literals are lower precedence than `^` only as the *first argument*.  For example, `2^-3`, `x^√2`, and `2^3x` are parsed as `2^(-3)`, `x^(√2)`, and `2^(3*x)`; whereas `-2^3`, `√x^2`, `2^3*x`, and `2x^3` are parsed as `-(2^3)`, `√(x^2)`, `(2^3)*x`, and `2*(x^3)`
+[^6]:
+    Most unary operators can be composed, except `++` which is a distinct *binary* operator, and `--` which produces a `ParseError`.  Other compositions of unary operators are parsed with right-associativity — e.g., `√√-a` as `√(√(-a))`
+[^7]:
+    The operators `+`, `++` and `*` are vararg calls rather than left-associative.  For example, `a + b + c` is parsed as `+(a, b, c)` not `+(+(a, b),c)`.  However, the fallback methods for `+(a, b, c, d...)` and `*(a, b, c, d...)` both default to left-associative evaluation.  Note that `++` is not defined in `Base`, but is parsed in the same way
+[^8]:
+    The operator `:` is parsed into groups of three. For example `a : b : c : d : e` is parsed as `(:)((:)(a, b, c), d, e)`\
+    The postfix unary operator `...` may only be followed by an operator of lower precedence\
+    Due to a parser bug ([#58763](https://github.com/JuliaLang/julia/issues/58763)), dots operators other than `:` cannot currently be composed. This may be fixed to 3-arg grouping like `:` or normal left associativity in a future version
+[^9]:
+    Comparisons can be [chained](@ref "Chaining comparisons").  For example, `a < b < c` is essentially the same as `a < b && b < c`.  However, the order of evaluation is undefined
+[^10]:
+    Pair and assignment operators are lower precedence than `?:` only as the *first argument*. For example, `a => b ? c => d : e => f` parses as `a => (b ? (c => d) : (e => f))`
+[^11]:
+    Except for the `->` function operator, assignment operators become lower precedence than commas if they are a top-level expression. For example, `a, b = c` parses as `(a, b) = c`; but `(a, b = c)` parses as `(a, (b = c))`
 
 You can also find the numerical precedence for any binary or ternary operator via the
 built-in function `Base.operator_precedence`, where higher numbers take precedence:
@@ -505,18 +537,6 @@ Note that symbols such as `:sin` return precedence `0`. This value represents in
 operators of lowest precedence. Similarly, such operators are assigned associativity `:none`.
 Some valid operators, such as `+`, `++`, `*`, and the comparison operators, also report associativity
 `:none` because they are neither left- nor right-associative.
-
-[Numeric literal coefficients](@ref man-numeric-literal-coefficients), e.g. `2x`, are treated as multiplications with higher precedence than any other binary operation, with the exception of `^` where they have higher precedence only as the exponent.
-
-```jldoctest
-julia> x = 3; 2x^2
-18
-
-julia> x = 3; 2^2x
-64
-```
-
-Juxtaposition parses like a unary operator, which has the same natural asymmetry around exponents: `-x^y` and `2x^y` parse as `-(x^y)` and `2(x^y)` whereas `x^-y` and `x^2y` parse as `x^(-y)` and `x^(2y)`.
 
 ## Numerical Conversions
 

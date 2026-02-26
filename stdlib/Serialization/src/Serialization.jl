@@ -460,7 +460,7 @@ function serialize(s::AbstractSerializer, meth::Method)
         serialize(s, nothing)
     end
     if isdefined(meth, :recursion_relation)
-        serialize(s, method.recursion_relation)
+        serialize(s, meth.recursion_relation)
     else
         serialize(s, nothing)
     end
@@ -689,6 +689,11 @@ serialize(s::AbstractSerializer, @nospecialize(x)) = serialize_any(s, x)
 function serialize(s::AbstractSerializer, x::Core.AddrSpace)
     serialize_type(s, typeof(x))
     write(s.io, Core.bitcast(UInt8, x))
+end
+
+function serialize(s::AbstractSerializer, x::Core.IntrinsicFunction)
+    serialize_type(s, typeof(x))
+    serialize(s, nameof(x))
 end
 
 function serialize_any(s::AbstractSerializer, @nospecialize(x))
@@ -1446,6 +1451,11 @@ end
 
 function deserialize(s::AbstractSerializer, X::Type{Core.AddrSpace{M}} where M)
     Core.bitcast(X, read(s.io, UInt8))
+end
+
+function deserialize(s::AbstractSerializer, ::Type{Core.IntrinsicFunction})
+    name = deserialize(s)::Symbol
+    return getfield(Core.Intrinsics, name)::Core.IntrinsicFunction
 end
 
 function deserialize_expr(s::AbstractSerializer, len)
