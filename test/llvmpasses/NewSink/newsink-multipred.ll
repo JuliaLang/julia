@@ -4,32 +4,28 @@
 ; Adapted from D136218 multiblock-sink.ll patterns
 
 ; Test: Error block has multiple predecessors, stores from different blocks.
-; Both stores should be sunk via edge splitting — each gets its own block
-; on the critical edge from its source to the multi-pred error block.
+; Stores are NOT sunk to multi-predecessor targets because the MSSA walk
+; cannot guarantee reads in the target see correct values from all incoming
+; edges after a critical edge split. This is a conservative restriction
+; that prevents miscompilation when an object escapes and is read later.
 define i64 @test_multi_pred_error_block(i64 %a, i64 %b, i64 %bound1, i64 %bound2) {
 ; CHECK-LABEL: @test_multi_pred_error_block
 entry:
   %tuple = alloca i64, align 8
   ; CHECK: entry:
-  ; CHECK-NOT: store
+  ; CHECK: store i64 %a, ptr %tuple
   ; CHECK: br i1 %cmp1
   store i64 %a, ptr %tuple, align 8
   %cmp1 = icmp ult i64 %a, %bound1
   br i1 %cmp1, label %check2, label %error
 
-; CHECK: entry.error_crit_edge:
-; CHECK-NEXT: store i64 %a, ptr %tuple
-
 check2:
   ; CHECK: check2:
-  ; CHECK-NOT: store
+  ; CHECK: store i64 %b, ptr %tuple
   ; CHECK: br i1 %cmp2
   store i64 %b, ptr %tuple, align 8
   %cmp2 = icmp ult i64 %b, %bound2
   br i1 %cmp2, label %ok, label %error
-
-; CHECK: check2.error_crit_edge:
-; CHECK-NEXT: store i64 %b, ptr %tuple
 
 error:
   call void @throw_bounds_error(ptr %tuple)

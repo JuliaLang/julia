@@ -35,6 +35,7 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/Statistic.h>
 #include <llvm/Analysis/AliasAnalysis.h>
+#include <llvm/Analysis/CaptureTracking.h>
 #include <llvm/Analysis/MemoryLocation.h>
 #include <llvm/Analysis/MemorySSA.h>
 #include <llvm/Analysis/MemorySSAUpdater.h>
@@ -162,6 +163,9 @@ struct NewSinkState {
     }
 
     void collectNoReturnBlocks();
+    bool pointerEscapesOutsideTarget(const Value *Ptr, Instruction *WriteInst,
+                                     BasicBlock *CurrentBB,
+                                     BasicBlock *TargetSucc);
     bool canSinkInstruction(Instruction *I) const;
     BasicBlock *canSinkMemoryWriteToSuccessor(Instruction *WriteInst,
                                               BasicBlock *TargetSucc);
@@ -205,6 +209,96 @@ void NewSinkState::collectNoReturnBlocks()
     }
 }
 
+// Path-sensitive CaptureTracker: ignores captures in blocks where
+// predicate returns true (target block or blocks dominated by it).
+template <typename BlockPredicate>
+struct PathSensitiveCaptureTracker : public CaptureTracker {
+    BlockPredicate IgnoreBlock;
+    bool Captured = false;
+
+    PathSensitiveCaptureTracker(BlockPredicate Pred) : IgnoreBlock(Pred) {}
+
+    void tooManyUses() override { Captured = true; }
+
+    bool captured(const Use *U) override
+    {
+        if (auto *I = dyn_cast<Instruction>(U->getUser())) {
+            if (IgnoreBlock(I->getParent()))
+                return false;
+        }
+        Captured = true;
+        return true;
+    }
+};
+
+// Check if pointer escapes outside where the sunk write will dominate.
+// When sinking to a single-predecessor target, the write dominates the
+// target and its subtree, so captures there are safe to ignore.
+// When splitting a critical edge to a multi-predecessor target, the new
+// block dominates the target only if all other predecessors are backedges
+// (SplitBlockDominatesTarget). If not, captures anywhere are unsafe
+// because the sunk write won't dominate the target.
+bool NewSinkState::pointerEscapesOutsideTarget(const Value *Ptr,
+                                                Instruction *WriteInst,
+                                                BasicBlock *CurrentBB,
+                                                BasicBlock *TargetSucc)
+{
+    const Value *UnderlyingObj = getUnderlyingObject(Ptr);
+
+    // After sinking (possibly via edge split), the write dominates the
+    // target only if the target has a single predecessor or all other
+    // predecessors are backedges. When this holds, we can safely ignore
+    // captures in the target's dominator subtree.
+    bool WriteDominatesTarget = true;
+    if (!TargetSucc->hasNPredecessors(1)) {
+        for (BasicBlock *Pred : predecessors(TargetSucc)) {
+            if (Pred != CurrentBB && !DT.dominates(TargetSucc, Pred)) {
+                WriteDominatesTarget = false;
+                break;
+            }
+        }
+    }
+
+    PathSensitiveCaptureTracker Tracker([&](BasicBlock *BB) {
+        // The write instruction itself will move to the target — ignore
+        // any capture through it (it will be in the target after sinking).
+        // We check this per-use inside captured(), but for block-level
+        // filtering we also ignore the target subtree when applicable.
+        if (!WriteDominatesTarget)
+            return false; // Can't ignore any captures
+        return BB == TargetSucc || DT.dominates(TargetSucc, BB);
+    });
+
+    // Override captured() to also skip uses by the write instruction itself
+    struct WriteAwareCaptureTracker : public CaptureTracker {
+        CaptureTracker &Inner;
+        const Instruction *WriteInst;
+        bool Captured = false;
+
+        WriteAwareCaptureTracker(CaptureTracker &Inner, const Instruction *WI)
+            : Inner(Inner), WriteInst(WI) {}
+
+        void tooManyUses() override { Captured = true; }
+
+        bool captured(const Use *U) override
+        {
+            // The write instruction will be sunk — its uses of the pointer
+            // will be in the target block after sinking, so ignore them.
+            if (U->getUser() == WriteInst)
+                return false;
+            if (Inner.captured(U)) {
+                Captured = true;
+                return true;
+            }
+            return false;
+        }
+    };
+
+    WriteAwareCaptureTracker OuterTracker(Tracker, WriteInst);
+    PointerMayBeCaptured(UnderlyingObj, &OuterTracker);
+    return OuterTracker.Captured;
+}
+
 // Check if a memory write can be safely sunk to target successor.
 // Uses MemorySSA to verify no reads observe the wrong value.
 BasicBlock *NewSinkState::canSinkMemoryWriteToSuccessor(Instruction *WriteInst,
@@ -227,6 +321,11 @@ BasicBlock *NewSinkState::canSinkMemoryWriteToSuccessor(Instruction *WriteInst,
     if (!isIdentifiedFunctionLocal(UnderlyingObj))
         return nullptr;
 
+    // If the pointer escapes outside the target's dominator subtree,
+    // external code may read the field — MSSA can't see those reads.
+    if (pointerEscapesOutsideTarget(WritePtr, WriteInst, CurrentBB, TargetSucc))
+        return nullptr;
+
     MemoryAccess *WriteDef = MSSA.getMemoryAccess(WriteInst);
     if (!WriteDef)
         return nullptr;
@@ -241,11 +340,30 @@ BasicBlock *NewSinkState::canSinkMemoryWriteToSuccessor(Instruction *WriteInst,
         if (auto *MA = dyn_cast<MemoryAccess>(U))
             Worklist.push_back(MA);
 
+    // After splitting edge CurrentBB→TargetSucc, the new block dominates
+    // TargetSucc only if all other predecessors are dominated by TargetSucc
+    // (i.e. they are backedges). When this holds, reads in TargetSucc will
+    // see the sunk write and can be safely skipped in the MSSA walk.
+    bool SplitBlockDominatesTarget = true;
+    if (!TargetSucc->hasNPredecessors(1)) {
+        for (BasicBlock *Pred : predecessors(TargetSucc)) {
+            if (Pred != CurrentBB && !DT.dominates(TargetSucc, Pred)) {
+                SplitBlockDominatesTarget = false;
+                break;
+            }
+        }
+    }
+
+    LLVM_DEBUG(dbgs() << "NewSink:   MSSA walk for target "
+                      << TargetSucc->getName() << " (splitdom="
+                      << SplitBlockDominatesTarget << ")\n");
+
     while (!Worklist.empty()) {
         // Bail out if we've visited too many accesses
         if (Visited.size() >= MemorySSAScanLimit) {
             ++NumAbortedMSSAWalk;
-            LLVM_DEBUG(dbgs() << "NewSink: MSSA scan limit reached\n");
+            LLVM_DEBUG(dbgs() << "NewSink:   MSSA scan limit reached ("
+                              << Visited.size() << " visited)\n");
             return nullptr;
         }
 
@@ -256,6 +374,8 @@ BasicBlock *NewSinkState::canSinkMemoryWriteToSuccessor(Instruction *WriteInst,
         BasicBlock *MABB = MA->getBlock();
 
         if (isa<MemoryPhi>(MA)) {
+            LLVM_DEBUG(dbgs() << "NewSink:   MSSA phi in "
+                              << MABB->getName() << "\n");
             for (User *U : MA->users())
                 if (auto *UserMA = dyn_cast<MemoryAccess>(U))
                     Worklist.push_back(UserMA);
@@ -269,15 +389,28 @@ BasicBlock *NewSinkState::canSinkMemoryWriteToSuccessor(Instruction *WriteInst,
         if (!MemInst || MemInst == WriteInst)
             continue;
 
-        // Reads in the target or blocks dominated by it will see the sunk write.
-        if (MABB == TargetSucc || DT.dominates(TargetSucc, MABB))
+        // Reads in the target or blocks dominated by it will see the sunk
+        // write — but only when the split block will dominate the target.
+        // For single-predecessor targets, we sink directly and dominate.
+        // For multi-predecessor targets, the edge is split. The new block
+        // dominates the target only if all other predecessors are dominated
+        // by the target (i.e. they are backedges). This follows the same
+        // legality check as MachineSink::isLegalToBreakCriticalEdge.
+        if (SplitBlockDominatesTarget &&
+            (MABB == TargetSucc || DT.dominates(TargetSucc, MABB))) {
+            LLVM_DEBUG(dbgs() << "NewSink:   skip (in target/dominated): "
+                              << *MemInst << " in " << MABB->getName() << "\n");
             continue;
+        }
 
         // In the source block, any aliasing access blocks sinking.
         if (MABB == CurrentBB) {
             ModRefInfo MRI = BatchAA.getModRefInfo(MemInst, WriteLoc);
-            if (isModOrRefSet(MRI))
+            if (isModOrRefSet(MRI)) {
+                LLVM_DEBUG(dbgs() << "NewSink:   blocked by source-block access: "
+                                  << *MemInst << "\n");
                 return nullptr;
+            }
             if (auto *UserDef = dyn_cast<MemoryDef>(MA)) {
                 for (User *U : UserDef->users())
                     if (auto *UserMA = dyn_cast<MemoryAccess>(U))
@@ -291,6 +424,8 @@ BasicBlock *NewSinkState::canSinkMemoryWriteToSuccessor(Instruction *WriteInst,
         if (!isRefSet(MRI)) {
             // Doesn't read our location. Follow through MemoryDefs because
             // MSSA chains all memory ops, not just aliasing ones.
+            LLVM_DEBUG(dbgs() << "NewSink:   no-ref (" << MABB->getName()
+                              << "): " << *MemInst << "\n");
             if (auto *UserDef = dyn_cast<MemoryDef>(MA)) {
                 for (User *U : UserDef->users())
                     if (auto *UserMA = dyn_cast<MemoryAccess>(U))
@@ -299,9 +434,13 @@ BasicBlock *NewSinkState::canSinkMemoryWriteToSuccessor(Instruction *WriteInst,
             continue;
         }
 
+        LLVM_DEBUG(dbgs() << "NewSink:   blocked by reader: "
+                          << *MemInst << " in " << MABB->getName() << "\n");
         return nullptr;
     }
 
+    LLVM_DEBUG(dbgs() << "NewSink:   MSSA walk succeeded ("
+                      << Visited.size() << " visited)\n");
     return TargetSucc;
 }
 
@@ -403,12 +542,20 @@ BasicBlock *NewSinkState::findSinkTargetForValue(Instruction *I)
     // For memory reads, we can only check for clobbers in the source block,
     // so the target must be an immediate successor. Find which successor
     // dominates all uses instead of computing a potentially distant NCD.
+    // The target must also have a single predecessor (our block) to ensure
+    // no other incoming path can modify the read location.
     if (I->mayReadFromMemory()) {
         BasicBlock *Target = nullptr;
         for (BasicBlock *Succ : successors(CurrentBB)) {
             // Skip self-loops and backedges — sinking a load backward
             // in the CFG could move it before a store it depends on.
             if (Succ == CurrentBB || DT.dominates(Succ, CurrentBB))
+                continue;
+            // Multi-predecessor targets are unsafe: other incoming paths
+            // may write to the read location between our block and the
+            // target. We only check clobbers in the source block, not on
+            // other paths through the CFG.
+            if (!Succ->hasNPredecessors(1))
                 continue;
             bool DominatesAll = llvm::all_of(UserBlocks, [&](BasicBlock *UB) {
                 return UB == Succ || DT.dominates(Succ, UB);
