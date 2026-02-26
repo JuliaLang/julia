@@ -252,6 +252,10 @@ end
     isa(x, Const) && return true
     return is_forwardable_argtype(widenlattice(𝕃), x)
 end
+@nospecializeinfer function is_forwardable_argtype(𝕃::MustAliasesLattice, @nospecialize x)
+    isa(x, MustAlias) && return true
+    return is_forwardable_argtype(widenlattice(𝕃), x)
+end
 @nospecializeinfer is_forwardable_argtype(::JLTypeLattice, @nospecialize x) = false
 
 """

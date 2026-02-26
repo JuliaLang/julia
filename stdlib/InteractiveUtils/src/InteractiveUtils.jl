@@ -253,7 +253,7 @@ function methodswith(@nospecialize(t::Type); supertypes::Bool=false)
 end
 
 # subtypes
-function _subtypes_in!(mods::Array, x::Type)
+function _subtypes_in!(mods::Array, @nospecialize(x::Type))
     xt = unwrap_unionall(x)
     if !isabstracttype(x) || !isa(xt, DataType)
         # Fast path

@@ -7,6 +7,7 @@ include("utils.jl")
 @testset "JuliaLowering.jl" begin
     include("ir_tests.jl")
 
+    include("ast.jl")
     include("arrays.jl")
     include("assignments.jl")
     include("branching.jl")

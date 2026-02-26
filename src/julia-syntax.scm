@@ -770,35 +770,6 @@
    (params bounds) (sparam-name-bounds params)
    (struct-def-expr- name params bounds super (flatten-blocks fields) mut)))
 
-;; definition with Any for all arguments (except type, which is exact)
-;; field-kinds:
-;;   -1 no convert (e.g. because it is Any)
-;;    0 normal convert to fieldtype
-;;   1+ static_parameter N
-(define (default-inner-ctor-body field-kinds file line)
-  (let* ((name '|#ctor-self#|)
-         (field-names (map (lambda (idx) (symbol (string "_" (+ idx 1)))) (iota (length field-kinds))))
-         (field-convert (lambda (fld fty val)
-              (cond ((eq? fty -1) val)
-                    ((> fty 0) (convert-for-type-decl val `(static_parameter ,fty) #f #f))
-                    (else (convert-for-type-decl val `(call (core fieldtype) ,name ,(+ fld 1)) #f #f)))))
-         (field-vals (map field-convert (iota (length field-names)) field-kinds field-names))
-         (body `(block
-                 (line ,line ,file)
-                 (return (new ,name ,@field-vals)))))
-    `(lambda ,(cons name field-names) () (scope-block ,body))))
-
-;; definition with exact types for all arguments (except type, which is not parameterized)
-(define (default-outer-ctor-body thistype field-count sparam-count file line)
-  (let* ((name '|#ctor-self#|)
-         (field-names (map (lambda (idx) (symbol (string "_" (+ idx 1)))) (iota field-count)))
-         (sparams (map (lambda (idx) `(static_parameter ,(+ idx 1))) (iota sparam-count)))
-         (type (if (null? sparams) name `(curly ,thistype ,@sparams)))
-         (body `(block
-                 (line ,line ,file)
-                 (return (new ,type ,@field-names)))))
-    `(lambda ,(cons name field-names) () (scope-block ,body))))
-
 (define (num-non-varargs args)
   (count (lambda (a) (not (vararg? a))) args))
 
@@ -1034,7 +1005,7 @@
        ;; Commonly Revise.jl should be used to figure out actually which methods should
        ;; actually be deleted or added anew.
        ,(if (null? defs)
-          `(call (core _defaultctors) ,newdef (inert ,loc))
+          `(call (top _defaultctors) ,newdef (inert ,loc))
           `(scope-block
             (block
              (hardscope)
@@ -5044,9 +5015,6 @@ f(x) = yt(x)
                      (if (has? label-nesting name)
                          (error (string "label \"" name "\" defined multiple times")))
                      (put! label-nesting name 'symbolicblock)))
-               ;; Initialize result-var to nothing (for break without value case)
-               (if result-var
-                   (emit `(= ,result-var (null))))
                ;; Compile body with this block in break-labels
                (let ((body-val (compile body
                                         (cons (list name endl handler-token-stack catch-token-stack result-var)
@@ -5056,6 +5024,18 @@ f(x) = yt(x)
                  (if (and result-var body-val)
                      (emit `(= ,result-var ,body-val))))
                (mark-label endl)
+               ;; Use isdefined to handle the case where initialization was
+               ;; skipped (e.g., by @goto jumping into the block body).
+               (if result-var
+                   (let ((val (make-ssavalue))
+                         (defined-label (make-label))
+                         (done-label (make-label)))
+                     (emit `(= ,val (isdefined ,result-var)))
+                     (emit `(gotoifnot ,val ,defined-label))
+                     (emit `(goto ,done-label))
+                     (mark-label defined-label)
+                     (emit `(= ,result-var (null)))
+                     (mark-label done-label)))
                ;; Return result-var if value is needed
                (cond (tail  (emit-return tail result-var))
                      (value result-var)

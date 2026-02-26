@@ -666,4 +666,204 @@ end
     @test test_mod.g_boundscheck(1:2, 2) == 2
 end
 
+@testset "@__FUNCTION__ and Expr(:thisfunction)" begin
+    @testset "Basic usage" begin
+        # @__FUNCTION__ in regular functions
+        JuliaLowering.include_string(test_mod, raw"""
+        test_function_basic() = @__FUNCTION__
+        """; expr_compat_mode=true)
+        @test test_mod.test_function_basic() === test_mod.test_function_basic
+
+        # Expr(:thisfunction) in regular functions
+        JuliaLowering.include_string(test_mod, raw"""
+            @eval regular_func() = @__FUNCTION__
+        """; expr_compat_mode=true)
+        @test test_mod.regular_func() === test_mod.regular_func
+    end
+
+    @testset "Recursion" begin
+        # Factorial with @__FUNCTION__
+        JuliaLowering.include_string(test_mod, raw"""
+        factorial_function(n) = n <= 1 ? 1 : n * (@__FUNCTION__)(n - 1)
+        """; expr_compat_mode=true)
+        @test test_mod.factorial_function(5) == 120
+
+        # Fibonacci with Expr(:thisfunction)
+        JuliaLowering.include_string(test_mod, raw"""
+        struct RecursiveCallableStruct; end
+        (::RecursiveCallableStruct)(n) = n <= 1 ? n : @__FUNCTION__()(n-1) + @__FUNCTION__()(n-2)
+        """; expr_compat_mode=true)
+        @test test_mod.RecursiveCallableStruct()(10) === 55
+
+        # Anonymous function recursion
+        @test JuliaLowering.include_string(test_mod, raw"""
+        (n -> n <= 1 ? 1 : n * (@__FUNCTION__)(n - 1))(5)
+        """; expr_compat_mode=true) == 120
+    end
+
+    @testset "Closures and nested functions" begin
+        # Prevents boxed closures
+        JuliaLowering.include_string(test_mod, raw"""
+        function make_closure()
+            fib(n) = n <= 1 ? 1 : (@__FUNCTION__)(n - 1) + (@__FUNCTION__)(n - 2)
+            return fib
+        end
+        """; expr_compat_mode=true)
+        Test.@inferred test_mod.make_closure()
+        closure = test_mod.make_closure()
+        @test closure(5) == 8
+        Test.@inferred closure(5)
+
+        # Complex closure of closures
+        JuliaLowering.include_string(test_mod, raw"""
+        function f1()
+            function f2()
+                function f3()
+                    return @__FUNCTION__
+                end
+                return (@__FUNCTION__), f3()
+            end
+            return (@__FUNCTION__), f2()...
+        end
+        """; expr_compat_mode=true)
+        Test.@inferred test_mod.f1()
+        @test test_mod.f1()[1] === test_mod.f1
+        @test test_mod.f1()[2] !== test_mod.f1
+        @test test_mod.f1()[3] !== test_mod.f1
+        @test test_mod.f1()[3]() === test_mod.f1()[3]
+        @test test_mod.f1()[2]()[2]() === test_mod.f1()[3]
+    end
+
+    @testset "Do blocks" begin
+        function test_do_block()
+            result = JuliaLowering.include_string(test_mod, raw"""
+            map([1, 2, 3]) do x
+                return (@__FUNCTION__, x)
+            end
+            """; expr_compat_mode=true)
+            # All should refer to the same do-block function
+            @test all(r -> r[1] === result[1][1], result)
+            # Values should be different
+            @test [r[2] for r in result] == [1, 2, 3]
+            # It should be different than `test_do_block`
+            @test result[1][1] !== test_do_block
+        end
+        test_do_block()
+    end
+
+    @testset "Keyword arguments" begin
+        # @__FUNCTION__ with kwargs
+        JuliaLowering.include_string(test_mod, raw"""
+        f_thisfunction_kw(; n) = n <= 1 ? 1 : n * (@__FUNCTION__)(; n = n - 1)
+        """; expr_compat_mode=true)
+        @test test_mod.f_thisfunction_kw(n = 5) == 120
+
+        # Expr(:thisfunction) with kwargs
+        JuliaLowering.include_string(test_mod, raw"""
+        f_thisfunction_kw2(; n=1) = n <= 1 ? n : n * @__FUNCTION__()(; n=n-1)
+        """; expr_compat_mode=true)
+        result = test_mod.f_thisfunction_kw2(n=5)
+        @test result == 120
+    end
+
+    @testset "Callable structs" begin
+        # @__FUNCTION__ in callable structs
+        JuliaLowering.include_string(test_mod, raw"""
+        module A
+            struct CallableStruct{T}; val::T; end
+            (c::CallableStruct)() = @__FUNCTION__
+        end
+        """; expr_compat_mode=true)
+        JuliaLowering.include_string(test_mod, raw"""
+        using .A: CallableStruct
+        """; expr_compat_mode=true)
+        c = test_mod.CallableStruct(5)
+        @test c() === c
+
+        # In closures, var"#self#" should refer to the enclosing function,
+        # NOT the enclosing struct instance
+        JuliaLowering.include_string(test_mod, raw"""
+        struct CallableStruct2; end
+        @eval function (obj::CallableStruct2)()
+            function inner_func()
+                @__FUNCTION__
+            end
+            inner_func
+        end
+        """; expr_compat_mode=true)
+
+        let cs = test_mod.CallableStruct2()
+            @test cs()() === cs()
+            @test cs()() !== cs
+        end
+
+        # Accessing values via self-reference
+        JuliaLowering.include_string(test_mod, raw"""
+        struct CallableStruct3
+            value::Int
+        end
+        (obj::CallableStruct3)() = @__FUNCTION__()
+        (obj::CallableStruct3)(x) = @__FUNCTION__().value + x
+        """; expr_compat_mode=true)
+
+        let cs = test_mod.CallableStruct3(42)
+            @test cs() === cs
+            @test cs(10) === 52
+        end
+
+        # Callable struct with args and kwargs
+        JuliaLowering.include_string(test_mod, raw"""
+        struct CallableStruct4
+        end
+        @eval function (obj::CallableStruct4)(x, args...; y=2, kws...)
+            return (; func=(@__FUNCTION__), x, args, y, kws)
+        end
+        """; expr_compat_mode=true)
+        c = test_mod.CallableStruct4()
+        @test c(1).func === c
+        @test c(2, 3).args == (3,)
+        @test c(2; y=4).y == 4
+        @test c(2; y=4, a=5, b=6, c=7).kws[:c] == 7
+    end
+
+    @testset "Special cases" begin
+        # Generated functions
+        JuliaLowering.include_string(test_mod, raw"""
+        let
+            @generated foo2() = @__FUNCTION__
+            foo2() === foo2
+        end
+        """; expr_compat_mode=true)
+
+        # Struct constructors
+        let
+            JuliaLowering.include_string(test_mod, raw"""
+            struct Cols{T<:Tuple}
+                cols::T
+                operator
+                Cols(args...; operator=union) = (new{typeof(args)}(args, operator); string(@__FUNCTION__))
+            end
+            """; expr_compat_mode=true)
+            result = @invokelatest test_mod.Cols(1, 2, 3)
+            @test occursin("Cols", result)
+        end
+
+        # Should not access arg-map for local variables
+        # TODO: worth the special case?
+        JuliaLowering.include_string(test_mod, raw"""
+            function f_thisfunction_argmap end
+            function (f_thisfunction_argmap::typeof(f_thisfunction_argmap))()
+                f_thisfunction_argmap = 1
+                @__FUNCTION__
+            end
+        """; expr_compat_mode=true)
+        @test_broken test_mod.f_thisfunction_argmap() ===
+            test_mod.f_thisfunction_argmap
+    end
+
+    @test JuliaLowering.include_string(test_mod, """
+        @eval let f=[ ()->$(Expr(:thisfunction)) for i = 1:1 ][1]; f() === f; end
+    """; expr_compat_mode=true)
+end
+
 end

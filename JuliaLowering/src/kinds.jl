@@ -65,6 +65,7 @@ function _register_kinds()
             "islocal"
             "isglobal"
             "locals"
+            "thisfunction"
         "END_EXTENSION_KINDS"
 
         # The following kinds are internal to lowering

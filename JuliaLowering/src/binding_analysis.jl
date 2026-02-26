@@ -20,35 +20,24 @@
 # These variables may temporarily lose their status when considering uses /
 # captures in inner blocks, but this is restored later if dominated by an
 # outer assignment.
-#
-# XXX: This pass under-approximates the "is_always_defined" flag to mean something
-#      closer to "is_always_defined_and_not_modified_after_any_capture" (which is
-#      the real condition needed to apply unboxing safely)
 
 """
     analyze_def_and_use!(ctx, ex)
 
-Perform tree-based def-use analysis to find captured variables that are
-assigned before any closure captures them (never-undef) and not modified
-afterward. For such variables, as an abuse of binding flags we can mark them
-as `is_always_defined=true` to avoid unnecessary `Core.Box` allocations during
-closure conversion.
+Perform tree-based def-use analysis to find captured variables that are assigned
+before any closure captures them and not modified afterward. For such variables,
+as an abuse of binding flags we can mark them as `unboxed=true` to avoid
+unnecessary `Core.Box` allocations during closure conversion.
 
 This is called on the outermost lambda, and recursively processes nested lambdas.
 """
 function analyze_def_and_use!(ctx, ex)
-    k = kind(ex)
-    if k != K"lambda"
-        return
+    @stm ex begin
+        [K"lambda" _ _ body _...] -> begin
+            _analyze_nested_lambdas!(ctx, body)
+            _analyze_lambda_vars!(ctx, ex)
+        end
     end
-
-    # First, recursively analyze nested lambdas (depth-first)
-    if numchildren(ex) >= 3
-        _analyze_nested_lambdas!(ctx, ex[3])
-    end
-
-    # Now analyze this lambda
-    _analyze_lambda_vars!(ctx, ex)
 end
 
 function _analyze_nested_lambdas!(ctx, ex)
@@ -319,40 +308,27 @@ function _analyze_lambda_vars!(ctx, ex)
     # Collect candidate variables: captured and single-assigned
     candidates = Set{IdTag}()
     for (id, from_outer_lambda) in lambda_bindings.locals_capt
-        binfo = get_binding(ctx, id)
-        maybe_boxed = binfo.is_captured && binfo.kind in (:local, :argument)
-        safe_to_analyze = binfo.is_assigned_once
-        if !from_outer_lambda && maybe_boxed && safe_to_analyze
+        b = get_binding(ctx, id)
+        !b.is_captured && continue
+        from_outer_lambda && continue
+        if b.is_assigned_once && b.kind in (:local, :argument)
             push!(candidates, id)
-            # For arguments, reset is_always_defined so we can determine if the
-            # outer-scope assignment dominates the capture. Arguments start with
-            # is_always_defined=true, but if they're reassigned inside a closure
-            # (not in outer scope), we need the def-use analysis to decide.
-            if binfo.kind == :argument
-                binfo.is_always_defined = false
-            end
         end
     end
     isempty(candidates) && return
 
     state = DefUseState(ctx, candidates)
-
-    # Visit the lambda body
-    if numchildren(ex) >= 3
-        body = ex[3]
-        if kind(body) == K"block"
-            for stmt in children(body)
-                du_visit!(ctx, state, stmt)
-            end
-        else
-            du_visit!(ctx, state, body)
-        end
+    @stm ex begin
+        [K"lambda" _ _ body] -> du_visit!(ctx, state, body)
+        [K"lambda" _ _ body rett] -> (du_visit!(ctx, state, body);
+                                      du_visit!(ctx, state, rett))
     end
 
-    # Variables in live or unused (that were seen assigned) are never-undef
     for id in union(state.live, state.unused)
         if id in state.seen
-            get_binding(ctx, id).is_always_defined = true
+            b = get_binding(ctx, id)
+            b.unboxed = true
+            b.is_always_defined = true
         end
     end
 end
