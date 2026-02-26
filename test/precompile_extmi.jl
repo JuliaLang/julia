@@ -11,10 +11,10 @@ precompile_test_harness() do load_path
 
         struct ExampleInterpreter <: CC.AbstractInterpreter
             world::UInt
-            inf_cache::Vector{CC.InferenceResult}
+            inf_cache::CC.InferenceCache
         end
         ExampleInterpreter(world::UInt) =
-            ExampleInterpreter(world, CC.InferenceResult[])
+            ExampleInterpreter(world, CC.InferenceCache())
 
         CC.InferenceParams(::ExampleInterpreter) = CC.InferenceParams()
         CC.OptimizationParams(::ExampleInterpreter) = CC.OptimizationParams()
