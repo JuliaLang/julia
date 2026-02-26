@@ -1105,6 +1105,7 @@ end
 
 """
     replace([io::IO], s::AbstractString, pat=>r, [pat2=>r2, ...]; [count::Integer])
+    replace(f, [io::IO], s::AbstractString, pat; [count::Integer])
 
 Search for the given pattern `pat` in `s`, and replace each occurrence with `r`.
 If `count` is provided, replace at most `count` occurrences.
@@ -1152,6 +1153,22 @@ julia> replace("The quick foxes run quickly.", r"fox(es)?" => s"bus\\1")
 julia> replace("abcabc", "a" => "b", "b" => "c", r".+" => "a")
 "bca"
 ```
+
+The replacement `r` can also be passed as a function as the first argument to
+enable `do`-block syntax:
+
+```jldoctest
+julia> replace(uppercase, "hello world", r"\\w+")
+"HELLO WORLD"
+
+julia> replace("Hello, world.", r"\\w+") do word
+           string(length(word))
+       end
+"5, 6."
+```
+
+!!! compat "Julia 1.14"
+    The `replace(f, s, pat)` form requires Julia 1.14.
 """
 replace(io::IO, s::AbstractString, pat_f::Pair...; count=typemax(Int)) =
     _replace_(io, String(s), pat_f, Int(count))
@@ -1160,7 +1177,11 @@ replace(s::AbstractString, pat_f::Pair...; count=typemax(Int)) =
     _replace_(String(s), pat_f, Int(count))
 
 
-# TODO: allow transform as the first argument to replace?
+replace(f::Callable, s::AbstractString, pat; count::Integer=typemax(Int)) =
+    replace(s, pat => f; count)
+
+replace(f::Callable, io::IO, s::AbstractString, pat; count::Integer=typemax(Int)) =
+    replace(io, s, pat => f; count)
 
 # hex <-> bytes conversion
 

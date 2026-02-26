@@ -450,6 +450,18 @@ end
             rm(tempfile, force=true)
         end
     end
+
+    # Issue #24598: function-first replace for do-block syntax
+    @test replace(uppercase, "foo bar", r"\w+") == "FOO BAR"
+    @test replace(uppercase, "foo bar", r"\w+", count=1) == "FOO bar"
+    @test replace(uppercase, "abc", 'b') == "aBc"
+    @test replace("Hello, world.", r"\w+") do word
+        string(length(word))
+    end == "5, 6."
+    let buf = IOBuffer()
+        replace(uppercase, buf, "foo bar", r"\w+")
+        @test String(take!(buf)) == "FOO BAR"
+    end
 end
 
 @testset "replace many" begin

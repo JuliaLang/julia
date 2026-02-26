@@ -42,6 +42,9 @@ New library functions
 New library features
 --------------------
 
+* `replace` for strings now supports passing the replacement function as the first argument,
+  enabling `do`-block syntax: `replace(f, s, pat)` is equivalent to `replace(s, pat => f)` ([#24598]).
+
 * `IOContext` supports a new boolean `hexunsigned` option that allows for
   printing unsigned integers in decimal instead of hexadecimal ([#60267]).
 
