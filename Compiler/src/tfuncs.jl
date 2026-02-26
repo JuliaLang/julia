@@ -2566,7 +2566,6 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     # _apply_iterate,
     # Core._call_in_world_total,
     # Core._compute_sparams,
-    # Core._defaultctors,
     # Core._equiv_typedef,
     Core._expr,
     # Core._primitivetype,
