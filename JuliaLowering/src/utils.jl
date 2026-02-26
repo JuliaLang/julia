@@ -407,6 +407,8 @@ function _flatten_blocks(st::SyntaxTree)
             push!(out, @ast st._graph st[end] "nothing"::K"core")
         end
         return out
+    elseif is_quoted(st)
+        SyntaxList(st)
     else
         SyntaxList(mapchildren(flatten_blocks, st._graph, st))
     end
