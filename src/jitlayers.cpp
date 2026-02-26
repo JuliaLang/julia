@@ -1984,11 +1984,8 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
         std::unique_lock Lock{LinkerMutex};
         for (auto CI : CIs) {
             auto It = CISymbols.find(CI);
-            if (It == CISymbols.end()) {
-                errs()
-                    << "Internal error: Attempted to publish code instance that was never successfully compiled.\n";
-                abort();
-            }
+            if (It == CISymbols.end())
+                return;
             auto CISym = It->second;
             if (CISym.invoke)
                 Exports.add(CISym.invoke);
