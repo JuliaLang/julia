@@ -601,7 +601,7 @@ vst1_lam_lhs(vcx, st) = @stm st begin
     # syntax TODO: This is handled badly in the parser
     [K"block" p1 p2] -> pass()
     # unwrapped single arg
-    _ -> let ps = SyntaxList(st._graph, tree_ids(st))
+    _ -> let ps = SyntaxList(st)
         _calldecl_positionals(vcx, ps, K"=")
     end
 end
