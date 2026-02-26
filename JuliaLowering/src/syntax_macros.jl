@@ -50,49 +50,7 @@ end
 #     @ast __context__ __context__.macrocall [K"atomic" ex]
 # end
 
-function Base.var"@label"(__context__::MacroContext, ex)
-    k = kind(ex)
-    if k == K"Identifier"
-        # `@label name` — goto label form
-        @ast __context__ ex [K"symboliclabel" ex]
-    elseif k == K"Placeholder"
-        # `@label _` — disallowed
-        throw(MacroExpansionError(ex, "use `@label expr` for anonymous blocks; `@label _` is not allowed"))
-    else
-        # `@label body` — 1-arg anonymous block form using `loop_exit` as the default scope
-        name = @ast __context__ __context__.macrocall "loop_exit"::K"symboliclabel"
-        @ast __context__ __context__.macrocall [K"symbolicblock" name ex]
-    end
-end
-
-function Base.var"@label"(__context__::MacroContext, name, body)
-    k = kind(name)
-    if k == K"Placeholder"
-        # `@label _ body` — disallowed
-        throw(MacroExpansionError(name, "use `@label expr` for anonymous blocks; `@label _ expr` is not allowed"))
-    elseif k == K"Identifier"
-        # `@label name body` - plain identifier
-    elseif is_contextual_keyword(k)
-        # Contextual keyword used as label name (e.g., `@label outer body`)
-    else
-        throw(MacroExpansionError(name, "Expected identifier for block label"))
-    end
-    # If body is a syntactic loop, wrap its body in a continue block
-    # This allows `continue name` to work by breaking to `name#cont`
-    body_kind = kind(body)
-    if body_kind == K"for" || body_kind == K"while"
-        cont_name = mkleaf(name) # use name's scope and attrs
-        setattr!(name, :kind, K"Identifier")
-        setattr!(name, :name_val, string(name.name_val, "#cont"))
-        loop_body = body[2]
-        wrapped_body = @ast __context__ loop_body [K"symbolicblock"
-            cont_name
-            loop_body
-        ]
-        body = @ast __context__ body [body_kind body[1] wrapped_body]
-    end
-    @ast __context__ __context__.macrocall [K"symbolicblock" name body]
-end
+# TODO: @label
 
 function Base.var"@goto"(__context__::MacroContext, ex)
     @chk kind(ex) == K"Identifier"
@@ -125,7 +83,7 @@ function Base.var"@generated"(__context__::MacroContext, ex)
             ex[2]
             [K"block"
                 [K"meta" "generated_only"::K"Identifier"]
-                [K"return"]
+                [K"return" "nothing"::K"core"]
             ]
         ]
     ]

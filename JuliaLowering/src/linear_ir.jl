@@ -305,9 +305,9 @@ function emit_break(ctx, ex)
     name = ex[1].name_val
     target = get(ctx.break_targets, name, nothing)
     if isnothing(target)
-        if name == "loop_exit"
+        if name == "loop-exit"
             throw(LoweringError(ex, "`break` must be used inside a `while`, `for` loop, or `@label` block"))
-        elseif name == "loop_cont"
+        elseif name == "loop-cont"
             throw(LoweringError(ex, "`continue` must be used inside a `while` or `for` loop"))
         elseif endswith(name, "#cont")
             label = name[1:end-5]
@@ -316,23 +316,23 @@ function emit_break(ctx, ex)
             throw(LoweringError(ex, "`break $name` is not inside a `@label $name` block"))
         end
     end
-    # If targeting loop_exit, check for intervening named @label blocks
-    if name == "loop_exit"
+    # If targeting loop-exit, check for intervening named @label blocks
+    if name == "loop-exit"
         for i in lastindex(ctx.break_label_stack):-1:1
             lbl = ctx.break_label_stack[i]
-            lbl == "loop_exit" && break
-            if lbl != "loop_cont" && !contains(lbl, '#')
+            lbl == "loop-exit" && break
+            if lbl != "loop-cont" && !contains(lbl, '#')
                 throw(LoweringError(ex,
                     "plain `break` inside `@label $lbl` block is disallowed; use `break $lbl` to exit the block"))
             end
         end
     end
-    # If targeting loop_cont, check for intervening loop_exit (@label block)
-    if name == "loop_cont"
+    # If targeting loop-cont, check for intervening loop-exit (@label block)
+    if name == "loop-cont"
         for i in lastindex(ctx.break_label_stack):-1:1
             lbl = ctx.break_label_stack[i]
-            lbl == "loop_cont" && break
-            if lbl == "loop_exit"
+            lbl == "loop-cont" && break
+            if lbl == "loop-exit"
                 throw(LoweringError(ex, "`continue` inside an anonymous `@label` block is not allowed"))
             end
         end
@@ -717,8 +717,8 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
     elseif k == K"symbolicblock"
         name = ex[1].name_val
-        # Skip duplicate check for default-scope labels (loop_exit, loop_cont) which allow nesting
-        if name != "loop_exit" && name != "loop_cont"
+        # Skip duplicate check for default-scope labels (loop-exit, loop-cont) which allow nesting
+        if name != "loop-exit" && name != "loop-cont"
             if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
                 throw(LoweringError(ex, "Label `$name` defined multiple times"))
             end

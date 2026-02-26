@@ -477,6 +477,11 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
         ]
         [K"symbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
         [K"symboliclabel" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
+        [K"symbolicblock" id body] -> if all(==('_'), id.name_val)
+            @ast g st [K"symbolicblock" id=>K"Placeholder" rec(body)]
+        else
+            @ast g st [K"symbolicblock" id=>K"symboliclabel" rec(body)]
+        end
         [K"unknown_head" cs...] -> let head = st.name_val
             if head === "latestworld-if-toplevel"
                 newleaf(g, st, K"latestworld_if_toplevel")
