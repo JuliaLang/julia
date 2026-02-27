@@ -2,7 +2,7 @@
 
 julia_version = "1.14.0-DEV"
 manifest_format = "2.1"
-project_hash = "6ffe32f6ba6335cf51104ef8b025301b81ced713"
+project_hash = "6de5e8b1c4d9b467a5c126490dbc755dc0575a9c"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -70,9 +70,8 @@ version = "1.11.0"
 
 [[deps.JuliaInterpreter]]
 deps = ["CodeTracking", "InteractiveUtils", "Random", "UUIDs"]
-git-tree-sha1 = "c6a0611d4fbc9ee502e02afb3a15e571b45fadbe"
-repo-rev = "master"
-repo-url = "https://github.com/JuliaDebug/JuliaInterpreter.jl.git"
+git-tree-sha1 = "80580012d4ed5a3e8b18c7cd86cebe4b816d17a6"
+registries = "General"
 uuid = "aa1ae85d-cabe-5617-a682-6adf51b2e16a"
 version = "0.10.9"
 
@@ -120,9 +119,8 @@ version = "1.11.0"
 
 [[deps.LoweredCodeUtils]]
 deps = ["CodeTracking", "Compiler", "JuliaInterpreter"]
-git-tree-sha1 = "33ed9090b43f7e209ceff1f858fba1f906f869b5"
-repo-rev = "master"
-repo-url = "https://github.com/JuliaDebug/LoweredCodeUtils.jl.git"
+git-tree-sha1 = "65ae3db6ab0e5b1b5f217043c558d9d1d33cc88d"
+registries = "General"
 uuid = "6f1432cf-f94c-5a45-995e-cdbf5db27b0b"
 version = "3.5.0"
 
@@ -205,7 +203,7 @@ version = "1.11.0"
 
 [[deps.Revise]]
 deps = ["CodeTracking", "FileWatching", "InteractiveUtils", "JuliaInterpreter", "LibGit2", "LoweredCodeUtils", "OrderedCollections", "Preferences", "REPL", "UUIDs"]
-git-tree-sha1 = "a2db34dd8371e016edc4b20ad800dde5036463e8"
+git-tree-sha1 = "c123d83838e2cf3ae4799ebec6e4331bdb0b703a"
 repo-rev = "master"
 repo-url = "https://github.com/timholy/Revise.jl.git"
 uuid = "295af30f-e4ad-537b-8983-00126c2a3abe"

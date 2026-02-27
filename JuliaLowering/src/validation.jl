@@ -194,8 +194,6 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"return" val] -> vcx.return_ok ?
         vst1(vcx, val) :
         @fail(st, "`return` not allowed inside comprehension or generator")
-    [K"return"] -> vcx.return_ok ? pass() :
-        @fail(st, "`return` not allowed inside comprehension or generator")
     ([K"continue"], when=vcx.in_loop) -> pass()
     ([K"continue" lab], when=vcx.in_loop) -> vst1_ident(vcx, lab; lhs=true)
     ([K"break"], when=vcx.in_loop) -> pass()
@@ -275,17 +273,15 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"symboliclabel" lab] -> vst1_ident(vcx, lab; lhs=true)
     [K"symbolicgoto" lab] -> vst1_ident(vcx, lab; lhs=true)
     [K"symbolicblock" lab body] ->
-        (kind(lab) == K"symboliclabel" ? pass() : vst1_ident(vcx, lab; lhs=true)) &
-        vst1(with(vcx; in_symblock=true), body)
+        vst1_ident(vcx, lab; lhs=true) & vst1(with(vcx; in_symblock=true), body)
     [K"gc_preserve" x ids...] -> vst1(vcx, x) & all(vst1_ident, vcx, ids)
     [K"gc_preserve_begin" ids...] -> all(vst1_ident, vcx, ids)
     [K"gc_preserve_end" ids...] -> all(vst1_ident, vcx, ids)
     [K"isdefined" [K"Identifier"]] -> pass()
-    [K"lambda" [K"block" b1...] [K"block" b2...] _] ->
+    [K"lambda" [K"block" b1...] [K"block" b2...] [K"->" _...]] ->
         all(vst1_ident, vcx, b1) &
         all(vst1_ident, vcx, b2) &
-        (kind(st[3]) === K"->" ? vst1_lam(vcx, st[3]) :
-            vst1(with(vcx; return_ok=true, toplevel=false, in_gscope=false), st[3]))
+        vst1_lam(vcx, st[3])
     [K"softscope" _] -> pass()
     [K"softscope"] -> pass()
     [K"generated"] -> pass()
@@ -601,7 +597,7 @@ vst1_lam_lhs(vcx, st) = @stm st begin
     # syntax TODO: This is handled badly in the parser
     [K"block" p1 p2] -> pass()
     # unwrapped single arg
-    _ -> let ps = SyntaxList(st._graph, tree_ids(st))
+    _ -> let ps = SyntaxList(st)
         _calldecl_positionals(vcx, ps, K"=")
     end
 end
@@ -1059,6 +1055,7 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
         vr &= hasattr(st, a) ? pass() : @fail(st, string("needs attribute ", a))
     end
     if is_leaf(st)
+        # Note some kinds can show up in non-leaves too
         required_attrs = @stm st begin
             [K"Identifier"] -> (:name_val,)
             [K"core"] -> (:name_val,)
