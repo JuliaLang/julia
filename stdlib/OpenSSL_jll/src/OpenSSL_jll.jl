@@ -5,7 +5,7 @@
 baremodule OpenSSL_jll
 using Base, Libdl, Base.BinaryPlatforms
 
-export libcrypto, libssl
+export libcrypto, libssl, openssl
 
 # These get calculated in __init__()
 const PATH = Ref("")
@@ -13,6 +13,13 @@ const PATH_list = String[]
 const LIBPATH = Ref("")
 const LIBPATH_list = String[]
 artifact_dir::String = ""
+openssl_path::String = ""
+
+if Sys.iswindows()
+    const openssl_exe = "openssl.exe"
+else
+    const openssl_exe = "openssl"
+end
 
 libcrypto_path::String = ""
 const libcrypto = LazyLibrary(
@@ -49,6 +56,18 @@ const libssl = LazyLibrary(
     dependencies = LazyLibrary[libcrypto]
 )
 
+openssl(; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true) = `$openssl_path`
+
+function init_openssl_path()
+    # Looks for bundled openssl in BINDIR, falls back to system PATH
+    bundled_openssl_path = joinpath(Sys.BINDIR, openssl_exe)
+    if isfile(bundled_openssl_path)
+        global openssl_path = abspath(bundled_openssl_path)
+    else
+        global openssl_path = something(Sys.which(openssl_exe), openssl_exe)
+    end
+end
+
 function eager_mode()
     dlopen(libcrypto)
     dlopen(libssl)
@@ -61,6 +80,7 @@ function __init__()
     global artifact_dir = dirname(Sys.BINDIR)
     LIBPATH[] = dirname(libssl_path)
     push!(LIBPATH_list, LIBPATH[])
+    init_openssl_path()
 end
 
 if Base.generating_output()

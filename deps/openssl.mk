@@ -72,10 +72,16 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 
-# Override bindir and only install runtime libraries, otherwise they'll go into build_depsbindir.
+# # Override bindir and only install runtime libraries, otherwise they'll go into build_depsbindir.
+# OPENSSL_INSTALL = \
+# 	mkdir -p $2$$(build_shlibdir) && \
+# 	$$(MAKE) -C $1 install_dev $$(MAKE_COMMON) bindir=$$(build_shlibdir) $3 DESTDIR="$2"
+
 OPENSSL_INSTALL = \
 	mkdir -p $2$$(build_shlibdir) && \
-	$$(MAKE) -C $1 install_dev $$(MAKE_COMMON) bindir=$$(build_shlibdir) $3 DESTDIR="$2"
+	mkdir -p $2$$(build_bindir) && \
+	$$(MAKE) -C $1 install_dev $$(MAKE_COMMON) bindir=$$(build_shlibdir) $3 DESTDIR="$2" && \
+	cp -a $1/apps/openssl$(EXE) $2$$(build_bindir)/openssl$(EXE)
 
 OPENSSL_POST_INSTALL := \
 	$(WIN_MAKE_HARD_LINK) $(build_bindir)/libcrypto-*.dll $(build_bindir)/libcrypto.dll && \
