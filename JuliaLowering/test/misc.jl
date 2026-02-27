@@ -424,7 +424,7 @@ end
 @testset "jl_assert" begin
     st = @ast_ [K"function" "foo"::K"Identifier"]
     err = try
-        JL.@jl_assert(1 == 2, (st, "error message 1"), (st, "error message 2"))
+        JuliaLowering.@jl_assert(1 == 2, (st, "error message 1"), (st, "error message 2"))
         nothing
     catch err
         err
