@@ -23,6 +23,7 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
+#include <llvm/Transforms/Utils/LowerAtomic.h>
 #include <llvm/Transforms/Utils/PromoteMemToReg.h>
 
 #include <llvm/InitializePasses.h>
@@ -1150,7 +1151,6 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             return;
         }
         else if (isa<AtomicCmpXchgInst>(user) || isa<AtomicRMWInst>(user)) {
-            // TODO: Downgrade atomics here potentially
             auto slot_idx = find_slot(offset);
             auto &slot = slots[slot_idx];
             assert(slot.offset <= offset && slot.offset + slot.size >= offset);
@@ -1165,6 +1165,10 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 newptr = slot_gep(slot, offset, Val->getType(), builder);
             }
             *use = newptr;
+            if (auto *rmw = dyn_cast<AtomicRMWInst>(user))
+                lowerAtomicRMWInst(rmw);
+            else
+                lowerAtomicCmpXchgInst(cast<AtomicCmpXchgInst>(user));
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
             auto callee = call->getCalledOperand();

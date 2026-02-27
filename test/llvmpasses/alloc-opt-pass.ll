@@ -353,6 +353,24 @@ define void @legal_int_i64() {
 }
 ; CHECK-LABEL: }{{$}}
 
+; Test that atomicrmw on a non-escaping ref field is lowered to load+store
+; CHECK-LABEL: @atomicrmw_ref_split
+; CHECK-NOT: @julia.gc_alloc_obj
+; CHECK-NOT: atomicrmw
+; CHECK: ret ptr addrspace(10)
+define ptr addrspace(10) @atomicrmw_ref_split(ptr addrspace(10) %val) {
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %ptls = call ptr @julia.ptls_states()
+  %v = call noalias nonnull align 8 dereferenceable(8) ptr addrspace(10) @julia.gc_alloc_obj(ptr %ptls, i64 8, ptr addrspace(10) @tag) #7
+  %v_derived = addrspacecast ptr addrspace(10) %v to ptr addrspace(11)
+  store ptr addrspace(10) null, ptr addrspace(11) %v_derived, align 8, !tbaa !20
+  %tok = call token (...) @llvm.julia.gc_preserve_begin(ptr addrspace(10) %v)
+  %old = atomicrmw xchg ptr addrspace(11) %v_derived, ptr addrspace(10) %val seq_cst, align 8, !tbaa !20
+  call void @llvm.julia.gc_preserve_end(token %tok)
+  ret ptr addrspace(10) %old
+}
+; CHECK-LABEL: }{{$}}
+
 declare ptr @julia.ptls_states()
 
 declare ptr @julia.pointer_from_objref(ptr addrspace(11))
