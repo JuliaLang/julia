@@ -630,7 +630,7 @@ function parse_assignment_with_initial_ex(ps::ParseState, mark, down::T) where {
         # is_short_form_func is true, to prevent `f() = 1 = 2` from parsing.
         parse_assignment(ps, down)
         emit(ps, mark,
-             is_short_form_func ? K"function" : (isdot ? dotted(k) : k),
+             is_short_form_func ? K"function" : (isdot ? dotted(ps, k) : k),
              is_short_form_func ? SHORT_FORM_FUNCTION_FLAG : flags(t))
     end
 end
@@ -756,7 +756,7 @@ function parse_arrow(ps::ParseState)
     end
 end
 
-function dotted(k)
+function dotted(ps::ParseState, k)
     if k == K"||"
         return K".||"
     elseif k == K"&&"
@@ -766,7 +766,8 @@ function dotted(k)
     elseif k == K"op="
         return K".op="
     else
-        error("Unexpected dotted operator: $k")
+        emit_diagnostic(ps, error = "Operator is invalid for broadcasting")
+        return K"error"
     end
 end
 
@@ -779,7 +780,7 @@ function parse_lazy_cond(ps::ParseState, down, is_op, self)
     if is_op(k)
         bump_dotted(ps, isdot, TRIVIA_FLAG)
         self(ps)
-        emit(ps, mark, isdot ? dotted(k) : k, flags(t))
+        emit(ps, mark, isdot ? dotted(ps, k) : k, flags(t))
         if isdot
             min_supported_version(v"1.7", ps, mark, "dotted operators `.||` and `.&&`")
         end
