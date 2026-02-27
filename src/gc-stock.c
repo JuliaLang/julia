@@ -3804,6 +3804,28 @@ JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void)
 
 // allocation wrappers that add to gc pressure
 
+JL_DLLEXPORT void jl_gc_heap_increment(size_t sz)
+{
+    jl_gcframe_t **pgcstack = jl_get_pgcstack();
+    jl_task_t *ct = jl_current_task;
+    if (pgcstack != NULL && ct->world_age) {
+        jl_ptls_t ptls = ct->ptls;
+        maybe_collect(ptls);
+        jl_atomic_store_relaxed(&ptls->gc_tls.gc_num.allocd,
+            jl_atomic_load_relaxed(&ptls->gc_tls.gc_num.allocd) + sz);
+        jl_batch_accum_heap_size(ptls, sz);
+    }
+}
+
+JL_DLLEXPORT void jl_gc_heap_decrement(size_t sz)
+{
+    jl_gcframe_t **pgcstack = jl_get_pgcstack();
+    jl_task_t *ct = jl_current_task;
+    if (pgcstack != NULL && ct->world_age) {
+        jl_batch_accum_free_size(ct->ptls, sz);
+    }
+}
+
 JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
     void *data = malloc(sz);
