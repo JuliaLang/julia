@@ -241,7 +241,7 @@ void PropagateJuliaAddrspacesVisitor::visitMemSetInst(MemSetInst &MI) {
     unsigned AS = MI.getDestAddressSpace();
     if (!isSpecialAS(AS))
         return;
-    Value *Replacement = LiftPointer(MI.getModule(), MI.getRawDest());
+    Value *Replacement = LiftPointer(MI.getModule(), MI.getRawDest(), &MI);
     if (!Replacement)
         return;
 #if JL_LLVM_VERSION >= 200000
