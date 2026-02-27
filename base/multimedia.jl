@@ -269,39 +269,91 @@ close(d::TextDisplay) = close(d.io)
 # We keep a stack of Displays, and calling display(x) uses the topmost
 # AbstractDisplay that is capable of displaying x (doesn't throw an error)
 
+# this stays as is for now and represents all displays of priority 0 for
+# backwards compatibility
 const displays = AbstractDisplay[]
+const display_stack = Vector{Pair{Int, Vector{AbstractDisplay}}}()
 
 """
-    pushdisplay(d::AbstractDisplay)
+    pushdisplay(d::AbstractDisplay, priority=0)
 
-Pushes a new display `d` on top of the global display-backend stack. Calling `display(x)` or
-`display(mime, x)` will display `x` on the topmost compatible backend in the stack (i.e.,
+Inserts a new display `d` into the global display-backend stack. Calling `display(x)` or
+`display(mime, x)` will display `x` on the backend with the highest priority (i.e.,
 the topmost backend that does not throw a [`MethodError`](@ref)).
+If there are multiple displays with the same priority, the display that was inserted
+the last will be used.
+
+The normal text based displays have a priority of `0`, while e.g. a plotting package
+is expected to use a slightly higher priority. If a display needs to catch all
+`display` calls, use `priority=typemax(Int)` -- this is helpful for IDE-like
+functionality.
 """
-function pushdisplay(d::AbstractDisplay)
-    global displays
-    push!(displays, d)
+function pushdisplay(d::AbstractDisplay, priority::Int=0)
+    display_ind = findfirst(p -> first(p) == priority, display_stack)
+    if display_ind === nothing
+        prio_displays = AbstractDisplay[]
+        push!(display_stack, priority => prio_displays)
+    else
+        prio_displays = display_stack[display_ind][2]
+    end
+    push!(prio_displays, d)
+    sort!(display_stack, lt = (a, b) -> first(a) < first(b), rev = true)
+    d
 end
 
 """
     popdisplay()
     popdisplay(d::AbstractDisplay)
+    popdisplay(priority::Int)
+    popdisplay(d::AbstractDisplay, priority::Int)
 
 Pop the topmost backend off of the display-backend stack, or the topmost copy of `d` in the
-second variant.
+second variant. `popdisplay` will only search through displays with priority `priority`
+if that argument is specified.
 """
-popdisplay() = pop!(displays)
+function popdisplay()
+    scrub_display_stack()
+    isempty(display_stack) && throw(ArgumentError("display stack is empty"))
+    highest_prio_displays = first(display_stack)[2]
+    pop!(highest_prio_displays)
+end
+function popdisplay(priority::Int)
+    scrub_display_stack()
+    display_ind = findfirst(p -> first(p) == priority, display_stack)
+    display_ind === nothing && throw(ArgumentError("display stack is empty"))
+    pop!(display_stack[display_ind][2])
+end
 function popdisplay(d::AbstractDisplay)
-    for i = length(displays):-1:1
-        if d == displays[i]
-            return splice!(displays, i)
+    scrub_display_stack()
+    for (_, prio_displays) in display_stack
+        for i = length(prio_displays):-1:1
+            if d == prio_displays[i]
+                return splice!(prio_displays, i)
+            end
         end
     end
     throw(KeyError(d))
 end
+function popdisplay(d::AbstractDisplay, priority::Int)
+    scrub_display_stack()
+    display_ind = findfirst(p -> first(p) == priority, display_stack)
+    display_ind === nothing && throw(KeyError(d))
+    prio_displays = display_stack[display_ind][2]
+    for i = length(prio_displays):-1:1
+        if d == prio_displays[i]
+            return splice!(prio_displays, i)
+        end
+    end
+    throw(KeyError(d))
+end
+
+scrub_display_stack(stack=display_stack) = filter!(p -> !isempty(p[2]), display_stack)
+
 function reinit_displays()
+    global display_stack, displays
     empty!(displays)
-    pushdisplay(TextDisplay(stdout))
+    empty!(display_stack)
+    pushdisplay(TextDisplay(stdout), 0)
 end
 
 xdisplayable(D::AbstractDisplay, @nospecialize args...) = applicable(display, D, args...)
@@ -334,13 +386,15 @@ To customize how instances of a type are displayed, overload [`show`](@ref) rath
 as explained in the manual section on [custom pretty-printing](@ref man-custom-pretty-printing).
 """
 function display(@nospecialize x)
-    for i = length(displays):-1:1
-        if xdisplayable(displays[i], x)
-            try
-                return display(displays[i], x)
-            catch e
-                isa(e, MethodError) && (e.f === display || e.f === show) ||
-                    rethrow()
+    for (_, prio_displays) in display_stack
+        for i = length(prio_displays):-1:1
+            if xdisplayable(prio_displays[i], x)
+                try
+                    return display(prio_displays[i], x)
+                catch e
+                    isa(e, MethodError) && (e.f === display || e.f === show) ||
+                        rethrow()
+                end
             end
         end
     end
@@ -348,13 +402,15 @@ function display(@nospecialize x)
 end
 
 function display(m::MIME, @nospecialize x)
-    for i = length(displays):-1:1
-        if xdisplayable(displays[i], m, x)
-            try
-                return display(displays[i], m, x)
-            catch e
-                isa(e, MethodError) && e.f == display ||
-                    rethrow()
+    for (_, prio_displays) in display_stack
+        for i = length(prio_displays):-1:1
+            if xdisplayable(prio_displays[i], m, x)
+                try
+                    return display(prio_displays[i], x)
+                catch e
+                    isa(e, MethodError) && e.f in (display, show) ||
+                        rethrow()
+                end
             end
         end
     end
@@ -365,8 +421,10 @@ displayable(d::D, ::MIME{mime}) where {D<:AbstractDisplay,mime} =
     hasmethod(display, Tuple{D,MIME{mime},Any})
 
 function displayable(m::MIME)
-    for d in displays
-        displayable(d, m) && return true
+    for (_, prio_displays) in display_stack
+        for d in prio_displays
+            displayable(d, m) && return true
+        end
     end
     return false
 end
@@ -393,13 +451,15 @@ several times, and the backend may choose to defer the display until
 (for example) the next interactive prompt.
 """
 function redisplay(@nospecialize x)
-    for i = length(displays):-1:1
-        if xdisplayable(displays[i], x)
-            try
-                return redisplay(displays[i], x)
-            catch e
-                isa(e, MethodError) && e.f in (redisplay, display, show) ||
-                    rethrow()
+    for (_, prio_displays) in display_stack
+        for i = length(prio_displays):-1:1
+            if xdisplayable(prio_displays[i], x)
+                try
+                    return redisplay(prio_displays[i], x)
+                catch e
+                    isa(e, MethodError) && e.f in (display, show) ||
+                        rethrow()
+                end
             end
         end
     end
@@ -407,13 +467,15 @@ function redisplay(@nospecialize x)
 end
 
 function redisplay(m::Union{MIME,AbstractString}, @nospecialize x)
-    for i = length(displays):-1:1
-        if xdisplayable(displays[i], m, x)
-            try
-                return redisplay(displays[i], m, x)
-            catch e
-                isa(e, MethodError) && e.f in (redisplay, display) ||
-                    rethrow()
+    for (_, prio_displays) in display_stack
+        for i = length(prio_displays):-1:1
+            if xdisplayable(prio_displays[i], m, x)
+                try
+                    return redisplay(prio_displays[i], x)
+                catch e
+                    isa(e, MethodError) && e.f in (display, show) ||
+                        rethrow()
+                end
             end
         end
     end
