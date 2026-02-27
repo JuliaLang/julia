@@ -1,0 +1,4 @@
+name = "RelocationTestPkg5"
+uuid = "4c39e1d3-80fc-478e-8fc9-3bafa33dd728"
+authors = ["Florian Atteneder <florian.atteneder@gmail.com>"]
+version = "0.1.0"
