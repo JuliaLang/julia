@@ -552,8 +552,10 @@ const SIGHUP  = 1
 const SIGINT  = 2
 const SIGQUIT = 3 # !windows
 const SIGKILL = 9
+const SIGUSR1 = Sys.isapple() ? 30 : 10 # !windows
 const SIGPIPE = 13 # !windows
 const SIGTERM = 15
+const SIGINFO = 29 # apple/BSD only; use SIGUSR1 on linux
 
 function test_success(proc::Process)
     @assert process_exited(proc)
