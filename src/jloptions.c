@@ -181,7 +181,7 @@ static const char opts[]  =
     " --help-hidden                                 Print uncommon options not shown by `-h`\n\n"
 
     // startup options
-    " --project[={<dir>|@temp|@.|@script[<rel>]}]   Set <dir> as the active project/environment.\n"
+    " -P, --project[={<dir>|@temp|@.|@script[<rel>]}]  Set <dir> as the active project/environment.\n"
     "                                               Or, create a temporary environment with `@temp`\n"
     "                                               The default @. option will search through parent\n"
     "                                               directories until a Project.toml or JuliaProject.toml\n"
@@ -410,7 +410,6 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_compiled_modules,
            opt_pkgimages,
            opt_machine_file,
-           opt_project,
            opt_bug_report,
            opt_image_codegen,
            opt_rr_detach,
@@ -428,7 +427,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_compress_sysimage,
            opt_target_sanitize,
     };
-    static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:";
+    static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:P:";
     static const struct option longopts[] = {
         // exposed command line options
         // NOTE: This set of required arguments need to be kept in sync
@@ -454,7 +453,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "threads",         required_argument, 0, 't' },
         { "gcthreads",       required_argument, 0, opt_gc_threads },
         { "machine-file",    required_argument, 0, opt_machine_file },
-        { "project",         optional_argument, 0, opt_project },
+        { "project",         optional_argument, 0, 'P' },
         { "color",           required_argument, 0, opt_color },
         { "history-file",    required_argument, 0, opt_history_file },
         { "startup-file",    required_argument, 0, opt_startup_file },
@@ -750,7 +749,7 @@ restart_switch:
             if (!jl_options.machine_file)
                 jl_error("julia: failed to allocate memory");
             break;
-        case opt_project:
+        case 'P':
             jl_options.project = optarg ? strdup(optarg) : "@.";
             break;
         case opt_color:
