@@ -12,6 +12,9 @@ using .Base: Indices, OneTo, tail, to_shape, isoperator, promote_typejoin, promo
              _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache, unalias, negate
 import .Base: copy, copyto!, axes
 export broadcast, broadcast!, BroadcastStyle, broadcast_axes, broadcastable, dotview, @__dot__, BroadcastFunction
+public AbstractArrayStyle, ArrayStyle, Broadcasted, DefaultArrayStyle,
+    Unknown, Style, combine_axes, combine_styles, flatten, instantiate,
+    materialize, result_style
 
 ## Computing the result's axes: deprecated name
 const broadcast_axes = axes
