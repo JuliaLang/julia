@@ -1243,6 +1243,12 @@ end
     let i=49248
         @test String(lazy"PR n°$i") == "PR n°49248"
     end
+    let
+        a = Ref{Any}(nothing)
+        l = lazy"$a"
+        a[] = l
+        @test repr(a) isa String
+    end
 end
 
 @testset "String Effects" begin
