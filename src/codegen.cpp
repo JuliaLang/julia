@@ -9238,8 +9238,6 @@ static jl_llvm_functions_t
                     func = debuginfo->def; // this is inlined
                 struct jl_codeloc_t lineidx = jl_uncompress1_codeloc(debuginfo->codelocs, pc);
                 size_t i = lineidx.line;
-                if (i < 0) // pc out of range: broken debuginfo?
-                    return false;
                 if (i == 0 && lineidx.to == 0) // no update
                     return false;
                 if (pc > 0 && (jl_value_t*)debuginfo->linetable != jl_nothing) {
