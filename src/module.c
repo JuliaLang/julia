@@ -135,8 +135,11 @@ static jl_binding_partition_t *jl_implicit_import_resolved(jl_binding_t *b, stru
     size_t new_max_world = gap.max_world < resolution.max_world ? gap.max_world : resolution.max_world;
     size_t new_min_world = gap.min_world > resolution.min_world ? gap.min_world : resolution.min_world;
     jl_binding_partition_t *next = gap.replace;
-    if (jl_is_binding_partition(gap.parent)) {
-        // Check if we can merge this into the previous binding partition
+    if (jl_is_binding_partition(gap.parent) && !jl_bkind_is_some_guard((enum jl_partition_kind)(new_kind & PARTITION_MASK_KIND))) {
+        // Check if we can merge this into the previous binding partition.
+        // Guard partitions are not merged backward: the min_world of the earliest guard
+        // partition is semantically meaningful (it records the module's creation world,
+        // i.e. the world at which the using relationships were first established).
         jl_binding_partition_t *prev = (jl_binding_partition_t *)gap.parent;
         assert(new_max_world != ~(size_t)0); // It is inconsistent to have a gap with `gap.parent` set, but max_world == ~(size_t)0
         size_t expected_prev_min_world = new_max_world + 1;
@@ -636,7 +639,10 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
                 size_t prev_bpart_min_world = jl_atomic_load_relaxed(&prev_bpart->min_world);
                 if (prev_bpart_min_world == 0)
                     break;
-                prev_bpart = jl_get_binding_partition(b, prev_bpart_min_world - 1);
+                struct implicit_search_gap bdate_gap;
+                prev_bpart = jl_get_binding_partition_if_present(b, prev_bpart_min_world - 1, &bdate_gap);
+                if (!prev_bpart)
+                    break;
             }
         }
         // If backdate is required, replace each existing partition by a new one.

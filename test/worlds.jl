@@ -616,3 +616,42 @@ end
 # Test that the hash function works without world age issues
 @test hash(bar59429, UInt(0)) isa UInt
 end
+
+# Test that GUARD partition min_world is preserved as the module's creation timestamp
+# and is not backdated when the binding is accessed from older worlds.
+let world_before = Base.tls_world_age()
+    @eval module GuardMinWorldPreserveModule end
+    b = convert(Core.Binding, GlobalRef(GuardMinWorldPreserveModule, :undef_sym))
+    bpart = Base.lookup_binding_partition(Base.tls_world_age(), b)
+    guard_min_world = bpart.min_world
+    @test Base.binding_kind(bpart) == Base.PARTITION_KIND_GUARD
+    @test guard_min_world > world_before  # reflects module creation world, not 0
+    # Accessing at an older world (before module creation) previously merged the
+    # GUARD partition backward, erasing the meaningful min_world boundary.
+    Base.lookup_binding_partition(UInt(world_before), b)
+    bpart2 = Base.lookup_binding_partition(Base.tls_world_age(), b)
+    @test Base.binding_kind(bpart2) == Base.PARTITION_KIND_GUARD
+    @test bpart2.min_world == guard_min_world  # min_world must not be backdated to 0
+end
+
+# Test that the backdate loop in jl_declare_constant_val3 does not extend
+# BACKDATED_CONST to worlds before the module existed.
+# Previously, jl_get_binding_partition in the backdate loop triggered implicit
+# resolution, creating pre-creation GUARD partitions that caused BACKDATED_CONST
+# to cover worlds where the module did not yet exist.
+let
+    @eval module BackdateLoopGuardModule end
+    module_creation_world = Base.tls_world_age()
+    # Declare a self-referential struct, which triggers jl_declare_constant_val3's
+    # backdate loop.
+    Core.eval(BackdateLoopGuardModule, quote
+        struct BackdateSelfRef
+            x::Vector{BackdateSelfRef}
+            BackdateSelfRef() = new(BackdateSelfRef[])
+        end
+    end)
+    b = convert(Core.Binding, GlobalRef(BackdateLoopGuardModule, :BackdateSelfRef))
+    # At world 0 (before the module existed), the binding must not be BACKDATED_CONST
+    bpart_at_0 = Base.lookup_binding_partition(UInt(0), b)
+    @test Base.binding_kind(bpart_at_0) != Base.PARTITION_KIND_BACKDATED_CONST
+end
