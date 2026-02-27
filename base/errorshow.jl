@@ -394,13 +394,24 @@ function showerror(io::IO, ex::MethodError)
                       "\nYou can convert to a column vector with the vec() function.")
         end
     end
-    Experimental.show_error_hints(io, ex, san_arg_types_param, kwargs)
     try
         show_method_candidates(io, ex, kwargs)
     catch ex
         @error "Error showing method candidates, aborted" exception=ex,catch_backtrace()
     end
+    Experimental.show_error_hints(io, ex, san_arg_types_param, kwargs)
     nothing
+end
+
+Experimental.register_error_hint(MethodError) do io, exc, argtypes, kwargs
+    if exc.f == convert && Core._hasmethod(Tuple{argtypes...}) && length(argtypes) ≥ 1 && isType(argtypes[1])
+        args = join(("::$(T)" for T ∈ argtypes[2:end]), ", ")
+        fstr = argtypes[1].parameters[1]
+        println(io, "\nHint: Did you mean to call $(fstr)($args) ?")
+    elseif exc.f isa Type && hasmethod(convert, Tuple{Type{exc.f}, argtypes...})
+        args = join(("::$(T)" for T ∈ argtypes), ", ")
+        println(io, "\nHint: Did you mean to call convert($(exc.f), $args) ?")
+    end
 end
 
 function showerror(io::IO, exc::FieldError)
@@ -469,19 +480,8 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     # These functions are special cased to only show if first argument is matched.
     special = f === convert || f === getindex || f === setindex!
     f isa Core.Builtin && return # `methods` isn't very useful for a builtin
-    funcs = Tuple{Any,Vector{Any}}[(f, arg_types_param)]
 
-    # An incorrect call method produces a MethodError for convert.
-    # It also happens that users type convert when they mean call. So
-    # pool MethodErrors for these two functions.
-    if f === convert && !isempty(arg_types_param)
-        at1 = arg_types_param[1]
-        if isType(at1) && !has_free_typevars(at1) && at1.parameters[1] isa Type
-            push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
-        end
-    end
-
-    for (func, arg_types_param) in funcs
+    let func = f
         for method in methods(func)
             buf = IOBuffer()
             iob0 = iob = IOContext(buf, io)
