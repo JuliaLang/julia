@@ -481,6 +481,19 @@ function run_fallback_repl(interactive::Bool)
     nothing
 end
 
+function get_active_repl(quiet::Bool=True, history_file::Bool=False)
+    term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
+    term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)    
+    if term.term_type == "dumb"
+        repl = REPL.BasicREPL(term)
+        quiet || @warn "Terminal not fully functional"
+    else
+        repl = REPL.LineEditREPL(term, get(stdout, :color, false), true)
+        repl.history_file = history_file
+    end
+    return repl
+end
+
 function run_std_repl(REPL::Module, quiet::Bool, banner::Symbol, history_file::Bool)
     term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
     term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
