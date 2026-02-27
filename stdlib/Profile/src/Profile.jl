@@ -1438,9 +1438,9 @@ function _stream_heap_snapshot(prefix::AbstractString, all_one::Bool, redact_dat
                     Base.@_lock_ios(json,
                         ccall(:jl_gc_take_heap_snapshot,
                             Cvoid,
-                            (Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid}, Cchar, Cchar),
+                            (Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid}, Cchar),
                             nodes.handle, edges.handle, strings.handle, json.handle,
-                            Cchar(all_one), Cchar(redact_data))
+                            Cchar(redact_data))
                     )
                     )
                     )

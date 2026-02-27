@@ -55,6 +55,7 @@ typedef struct {
     const char *outputasm;
     const char *outputji;
     const char *output_code_coverage;
+    const char *output_heap_snapshot;
     int8_t incremental;
     int8_t image_file_specified;
     int8_t warn_scope;

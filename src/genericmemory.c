@@ -198,9 +198,9 @@ JL_DLLEXPORT jl_value_t *jl_genericmemory_to_string(jl_genericmemory_t *m, size_
     }
     int how = jl_genericmemory_how(m);
     size_t mlength = m->length;
-    if (how != 0) {
+    if (how != JL_GENERICMEMORY_INLINED) {
         jl_value_t *o = jl_genericmemory_data_owner_field(m);
-        if (how == 3 && // implies jl_is_string(o)
+        if (how == JL_GENERICMEMORY_STRINGOWNED && // implies jl_is_string(o)
              ((mlength + sizeof(void*) + 1 <= GC_MAX_SZCLASS) == (len + sizeof(void*) + 1 <= GC_MAX_SZCLASS))) {
             if (jl_string_data(o)[len] != '\0')
                 jl_string_data(o)[len] = '\0';
@@ -213,7 +213,7 @@ JL_DLLEXPORT jl_value_t *jl_genericmemory_to_string(jl_genericmemory_t *m, size_
         JL_GC_POP();
         return str;
     }
-    // n.b. how == 0 is always pool-allocated, so the freed bytes are computed from the pool not the object
+    // n.b. how == JL_GENERICMEMORY_INLINED is always pool-allocated, so the freed bytes are computed from the pool not the object
     return jl_pchar_to_string((const char*)m->ptr, len);
 }
 
