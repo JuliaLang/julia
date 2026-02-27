@@ -15,16 +15,11 @@ function tohtml(io::IO, m::MIME"image/png", img)
 end
 
 function tohtml(io::IO, m::MIME"image/svg+xml", img)
-    show(io, m, img)
-end
-
-function tohtml(io::IO, ::MIME"image/svg+xml", img::AbstractString)
-    write(io, img)
-    nothing
-end
-
-function tohtml(io::IO, ::MIME"image/svg+xml", img::AbstractVector{UInt8})
-    write(io, img)
+    if img isa AbstractString || img isa AbstractVector{UInt8}
+        write(io, img)
+    else
+        show(io, m, img)
+    end
     nothing
 end
 
