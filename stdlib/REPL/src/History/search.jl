@@ -8,12 +8,13 @@ Launch the interactive REPL history search interface.
 Spawns prompt and display tasks, waits for user confirm or abort,
 and returns the final selection (if any).
 """
-function runsearch(histfile::HistoryFile, term, prefix::String = "\e[90m")
+function runsearch(histfile::HistoryFile, term, prefix::String = "\e[90m",
+                   terminal_properties::REPL.LineEdit.TerminalProperties = REPL.LineEdit.TerminalProperties())
     update!(histfile)
     events = Channel{Symbol}(Inf)
-    pspec = create_prompt(events, term, prefix)
-    ptask = @spawn runprompt!(pspec, events)
-    dtask = @spawn run_display!(pspec, events, histfile.records)
+    pspec = create_prompt(events, term, prefix, terminal_properties)
+    ptask = @spawn runprompt!(pspec, events, terminal_properties)
+    dtask = @spawn run_display!(pspec, events, histfile.records, terminal_properties)
     wait(ptask)
     fullselection(fetch(dtask))
 end
@@ -46,7 +47,8 @@ Drive the display event loop until confirm or abort.
 Listens for navigation, edits, save, and abort events, re-filters history
 incrementally, and re-renders via `redisplay_all`.
 """
-function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{HistEntry})
+function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{HistEntry},
+                      terminal_properties::REPL.LineEdit.TerminalProperties)
     # Output-related variables
     out = term.out_stream
     outsize = displaysize(out)
@@ -177,7 +179,7 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
             continue
         elseif event === :copy
             content = strip(fullselection(state).text)
-            isempty(content) || saveclipboard(term.out_stream, content)
+            isempty(content) || saveclipboard(term, content, terminal_properties)
             return EMPTY_STATE
         elseif event === :filesave
             content = strip(fullselection(state).text)
@@ -376,13 +378,50 @@ function savefile(term::Base.Terminals.TTYTerminal, content::AbstractString)
 end
 
 """
-    saveclipboard(term::Base.Terminals.TTYTerminal, content::AbstractString)
+    osc52_copy(io::IO, content::AbstractString)
 
-Save `content` to the clipboard and record the action.
+Write the OSC 52 escape sequence to set the system clipboard via the terminal.
 """
-function saveclipboard(msgio::IO, content::AbstractString)
+function osc52_copy(io::IO, content::AbstractString)
+    write(io, "\e]52;c;", base64encode(content), "\e\\")
+end
+
+"""
+    _has_osc52(props::REPL.LineEdit.TerminalProperties) -> Bool
+
+Return `true` if the terminal advertises OSC 52 clipboard support via DA1.
+"""
+_has_osc52(props::REPL.LineEdit.TerminalProperties) =
+    props.da1 !== nothing && 52 in props.da1
+
+"""
+    clipboard_available(props::REPL.LineEdit.TerminalProperties) -> Bool
+
+Return `true` if clipboard saving is possible, either via system clipboard
+commands or via OSC 52 terminal escape sequences.
+"""
+clipboard_available(props::REPL.LineEdit.TerminalProperties) =
+    InteractiveUtils.has_system_clipboard() || _has_osc52(props)
+
+"""
+    saveclipboard(term::Base.Terminals.TTYTerminal, content::AbstractString,
+                  props::REPL.LineEdit.TerminalProperties)
+
+Save `content` to the clipboard and record the action. Falls back to OSC 52
+terminal escape sequences when no system clipboard command is available.
+"""
+function saveclipboard(term::Base.Terminals.TTYTerminal, content::AbstractString,
+                       props::REPL.LineEdit.TerminalProperties)
+    out = term.out_stream
     nlines = count('\n', content) + 1
-    clipboard(content)
-    println(msgio, S"\e[1G\e[2K{grey,bold:history>} {shadow:Copied $nlines \
+    if _has_osc52(props)
+        osc52_copy(out, content)
+    elseif InteractiveUtils.has_system_clipboard()
+        InteractiveUtils.clipboard(content)
+    else
+        println(out, S"\e[1G\e[2K{grey,bold:history>} {red:No clipboard mechanism available}\n")
+        return
+    end
+    println(out, S"\e[1G\e[2K{grey,bold:history>} {shadow:Copied $nlines \
                      $(ifelse(nlines == 1, \"line\", \"lines\")) to clipboard}\n")
 end
