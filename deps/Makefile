@@ -154,6 +154,10 @@ ifeq ($(USE_SYSTEM_UTF8PROC), 0)
 DEP_LIBS += utf8proc
 endif
 
+ifeq ($(USE_ARCHSPEC), 1)
+DEP_LIBS += archspec
+endif
+
 ifeq ($(USE_SYSTEM_ZLIB), 0)
 DEP_LIBS += zlib
 endif
@@ -210,7 +214,7 @@ DEP_LIBS_STAGED := $(DEP_LIBS)
 DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
 	objconv openssl libssh2 nghttp2 curl libgit2 libwhich zlib zstd p7zip csl \
-	sanitizers libsuitesparse lld libtracyclient ittapi nvtx \
+	sanitizers libsuitesparse lld libtracyclient ittapi nvtx archspec \
 	terminfo mmtk_julia
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
 
@@ -275,6 +279,7 @@ include $(SRCDIR)/objconv.mk
 include $(SRCDIR)/blastrampoline.mk
 include $(SRCDIR)/openblas.mk
 include $(SRCDIR)/utf8proc.mk
+include $(SRCDIR)/archspec.mk
 include $(SRCDIR)/libsuitesparse.mk
 include $(SRCDIR)/zlib.mk
 include $(SRCDIR)/zstd.mk
