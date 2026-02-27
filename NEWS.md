@@ -44,6 +44,8 @@ New library features
 
 * `IOContext` supports a new boolean `hexunsigned` option that allows for
   printing unsigned integers in decimal instead of hexadecimal ([#60267]).
+* The `StringView` type wraps an `AbstractVector{UInt8}` and interprets it as a UTF-8 encoded string,
+  superseding the [StringViews.jl](https://github.com/JuliaStrings/StringViews.jl) package ([#60526]).
 
 Standard library changes
 ------------------------

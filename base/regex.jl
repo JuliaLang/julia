@@ -308,7 +308,7 @@ function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     return PCRE.exec_r(r.regex, String(s), offset, r.match_options)
 end
 
-function occursin(r::Regex, s::SubString{String}; offset::Integer=0)
+function occursin(r::Regex, s::DenseUTF8String; offset::Integer=0)
     compile(r)
     return PCRE.exec_r(r.regex, s, offset, r.match_options)
 end
@@ -340,7 +340,7 @@ function startswith(s::AbstractString, r::Regex)
     return PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ANCHORED)
 end
 
-function startswith(s::SubString{String}, r::Regex)
+function startswith(s::DenseUTF8String, r::Regex)
     compile(r)
     return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ANCHORED)
 end
@@ -372,7 +372,7 @@ function endswith(s::AbstractString, r::Regex)
     return PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ENDANCHORED)
 end
 
-function endswith(s::SubString{String}, r::Regex)
+function endswith(s::DenseUTF8String, r::Regex)
     compile(r)
     return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ENDANCHORED)
 end
@@ -427,7 +427,7 @@ true
 """
 function match end
 
-function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer,
+function match(re::Regex, str::DenseUTF8String, idx::Integer,
                add_opts::UInt32=UInt32(0))
     compile(re)
     opts = re.match_options | add_opts
@@ -439,7 +439,12 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer,
     n = div(PCRE.ovec_length(data), 2) - 1
     p = PCRE.ovec_ptr(data)
     mat = SubString(str, unsafe_load(p, 1)+1, prevind(str, unsafe_load(p, 2)+1))
-    cap = Union{Nothing,SubString{String}}[unsafe_load(p,2i+1) == PCRE.UNSET ? nothing :
+    T = if str isa SubString
+        typeof(str)
+    else
+        SubString{typeof(str)}
+    end
+    cap = Union{Nothing,T}[unsafe_load(p,2i+1) == PCRE.UNSET ? nothing :
                                         SubString(str, unsafe_load(p,2i+1)+1,
                                                   prevind(str, unsafe_load(p,2i+2)+1)) for i=1:n]
     off = Int[ unsafe_load(p,2i+1)+1 for i=1:n ]
@@ -479,7 +484,9 @@ match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
     "regex matching is only available for the String and AnnotatedString types; use String(s) to convert"
 ))
 
-findnext(re::Regex, str::Union{String,SubString}, idx::Integer) = _findnext_re(re, str, idx, C_NULL)
+function findnext(re::Regex, str::DenseUTF8String, idx::Integer)
+    _findnext_re(re, str, idx, C_NULL)
+end
 
 # TODO: return only start index and update deprecation
 # duck-type str so that external UTF-8 string packages like StringViews can hook in
