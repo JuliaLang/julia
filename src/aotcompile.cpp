@@ -1912,7 +1912,7 @@ static unsigned compute_image_thread_count(const ModuleInfo &info) {
         return 1;
     }
 
-    unsigned threads = std::max(jl_effective_threads() / 2, 1);
+    unsigned threads = std::max(jl_effective_threads(), 1);
 
     auto max_threads = info.globals / 100;
     if (max_threads < threads) {
