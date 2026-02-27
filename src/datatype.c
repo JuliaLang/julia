@@ -524,7 +524,6 @@ void jl_get_genericmemory_layout(jl_datatype_t *st)
         // this is expected to have a layout, but since it is not constructable, we don't care too much what it is
         static const jl_datatype_layout_t opaque_ptr_layout = {0, 0, 1, -1, sizeof(void*), {0}};
         st->layout = &opaque_ptr_layout;
-        st->has_concrete_subtype = 0;
         return;
     }
 
@@ -610,7 +609,6 @@ void jl_get_genericmemory_layout(jl_datatype_t *st)
     assert(!st->layout);
     st->layout = jl_get_layout(elsz, nfields, npointers, al, haspadding, isbitsegal, arrayelem, NULL, pointers);
     st->zeroinit = zi;
-    //st->has_concrete_subtype = 1;
     //st->isbitstype = 0;
     //st->ismutationfree = 0;
     //st->isidentityfree = 0;
@@ -640,7 +638,6 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         // this check allows us to force re-computation of the layout for some types during init
         st->layout = NULL;
         st->zeroinit = 0;
-        st->has_concrete_subtype = 1;
     }
     if (st->name == jl_genericmemory_typename) {
         jl_get_genericmemory_layout(st);
@@ -654,7 +651,6 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     if (w->layout) {
         st->layout = w->layout;
         st->zeroinit = w->zeroinit;
-        st->has_concrete_subtype = w->has_concrete_subtype;
         if (!jl_is_layout_opaque(st->layout)) { // e.g. jl_simplevector_type
             st->isbitstype = isbitstype && st->layout->npointers == 0;
             jl_maybe_allocate_singleton_instance(st);
@@ -683,14 +679,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         }
     }
     else {
-        // compute a conservative estimate of whether there could exist an instance of a subtype of this
-        for (i = 0; st->has_concrete_subtype && i < nfields - st->name->n_uninitialized; i++) {
-            jl_value_t *fld = jl_svecref(st->types, i);
-            if (fld == jl_bottom_type)
-                st->has_concrete_subtype = 0;
-            else
-                st->has_concrete_subtype = !jl_is_datatype(fld) || ((jl_datatype_t *)fld)->has_concrete_subtype;
-        }
+        jl_compute_has_concrete_subtype_from_fields(st);
         // compute layout for the wrapper object if the field types have no free variables
         if (!st->isconcretetype && !jl_has_fixed_layout(st)) {
             assert(st == w); // otherwise caller should not have requested this layout

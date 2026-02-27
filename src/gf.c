@@ -5199,7 +5199,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
 // that type will not be constructable, for example, tested recursively
 JL_DLLEXPORT int jl_has_concrete_subtype(jl_value_t *typ)
 {
-    if (typ == jl_bottom_type)
+    if (typ == jl_bottom_type || (jl_is_typevar(typ) && ((jl_tvar_t*)typ)->ub == jl_bottom_type))
         return 0;
     typ = jl_unwrap_unionall(typ);
     if (jl_is_vararg(typ))
