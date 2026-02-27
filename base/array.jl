@@ -2463,6 +2463,9 @@ Return `nothing` if there is no such element.
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
+An optimized method is used for `findfirst(isequal(x), A)` when `A` is a range and
+`Base.RangeStepStyle(A) === Base.RangeStepRegular()`.
+
 # Examples
 ```jldoctest
 julia> A = [1, 4, 2, 2]
@@ -2489,7 +2492,9 @@ julia> findfirst(iseven, A)
 CartesianIndex(2, 1)
 ```
 """
-function findfirst(testf::Function, A)
+findfirst(testf::Function, A) = _findfirst(testf, A)
+
+function _findfirst(testf::Function, A)
     for (i, a) in pairs(A)
         testf(a) && return i
     end
@@ -2513,6 +2518,7 @@ function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::Abst
 end
 
 function findfirst(p::Union{Fix2{typeof(isequal),T},Fix2{typeof(==),T}}, r::StepRange{T,S}) where {T,S}
+    RangeStepStyle(r) isa RangeStepRegular || return _findfirst(p, r)
     isempty(r) && return nothing
     minimum(r) <= p.x <= maximum(r) || return nothing
     d = p.x - first(r)
