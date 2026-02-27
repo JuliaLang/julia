@@ -23,7 +23,7 @@ import .Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
 using .Base: sign_mask, exponent_mask, exponent_one,
             exponent_half, uinttype, significand_mask,
             significand_bits, exponent_bits, exponent_bias,
-            exponent_max, exponent_raw_max, clamp, clamp!
+            exponent_max, exponent_raw_max, clamp, clamp!, reduce_empty_iter
 
 using Core.Intrinsics: sqrt_llvm, min_float, max_float
 
@@ -96,7 +96,7 @@ julia> evalpoly(2, (1, 2, 3))
 function evalpoly(x, p::Tuple)
     if @generated
         N = length(p.parameters::Core.SimpleVector)
-        ex = :(p[end])
+        ex = :(oftype(one(x) * p[end], p[end]))
         for i in N-1:-1:1
             ex = :(muladd(x, $ex, p[$i]))
         end
@@ -105,20 +105,23 @@ function evalpoly(x, p::Tuple)
         _evalpoly(x, p)
     end
 end
+evalpoly(x, ::Tuple{}) = zero(one(x)) # dimensionless zero, i.e. 0 * x^0
 
 evalpoly(x, p::AbstractVector) = _evalpoly(x, p)
 
 function _evalpoly(x, p)
     Base.require_one_based_indexing(p)
     N = length(p)
-    ex = p[end]
+    p0 = iszero(N) ? reduce_empty_iter(+, p) : @inbounds p[N]
+    s = oftype(one(x) * p0, p0)
     for i in N-1:-1:1
-        ex = muladd(x, ex, p[i])
+        s = muladd(x, s, @inbounds p[i])
     end
-    ex
+    return s
 end
 
-function evalpoly(z::Complex, p::Tuple)
+# Goertzel-like algorithm from Knuth, TAOCP vol. 2, section 4.6.4:
+function evalpoly(z::Complex, p::Tuple{Any, Any, Vararg})
     if @generated
         N = length(p.parameters)
         a = :(p[end])
@@ -143,17 +146,14 @@ function evalpoly(z::Complex, p::Tuple)
         _evalpoly(z, p)
     end
 end
-evalpoly(z::Complex, p::Tuple{<:Any}) = p[1]
-
-
-evalpoly(z::Complex, p::AbstractVector) = _evalpoly(z, p)
 
 function _evalpoly(z::Complex, p)
     Base.require_one_based_indexing(p)
-    length(p) == 1 && return p[1]
     N = length(p)
-    a = p[end]
-    b = p[end-1]
+    p0 = iszero(N) ? reduce_empty_iter(+, p) : @inbounds p[N]
+    N <= 1 && return oftype(one(z) * p0, p0)
+    a = p0
+    @inbounds b = p[N-1]
 
     x = real(z)
     y = imag(z)
@@ -162,7 +162,7 @@ function _evalpoly(z::Complex, p)
     for i in N-2:-1:1
         ai = a
         a = muladd(r, ai, b)
-        b = muladd(-s, ai, p[i])
+        b = muladd(-s, ai, @inbounds p[i])
     end
     ai = a
     muladd(ai, z, b)
