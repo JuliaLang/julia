@@ -770,6 +770,7 @@ const latex_symbols = Dict(
     "\\lessdot" => "⋖",
     "\\gtrdot" => "⋗",
     "\\verymuchless" => "⋘",
+    "\\lll" => "⋘",
     "\\ggg" => "⋙",
     "\\lesseqgtr" => "⋚",
     "\\gtreqless" => "⋛",
