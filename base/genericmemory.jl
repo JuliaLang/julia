@@ -422,3 +422,65 @@ function replaceindex_atomic!(
         @_boundscheck,
     )
 end
+
+"""
+     allocatedinline(::Type{T}) :: Bool
+
+Returns whether an object of type `T` is able to be stored inline inside of enclosing structs or arrays,
+or if it must be allocated as a reference. Generally, types which are immutable and whose instances have a
+finite, statically determinable size can be allocated inline, whereas everything else is allocated using
+reference pointers.
+
+# Examples
+```jldoctest
+julia> Base.allocatedinline(Int)
+true
+
+julia> Base.allocatedinline(Union{Int, Float64})
+true
+
+julia> Base.allocatedinline(Complex)
+false
+
+julia> Base.allocatedinline(Complex{Int})
+true
+```
+
+Whether or not a type is `allocatedinline` determines whether or not objects of that type can be undefined
+in arrays or as fields of enclosing types, or if it will be replaced with garbage bits read from memory.
+```
+julia> Vector{Int}(undef, 1)
+1-element Vector{Int64}:
+ 8
+
+julia> Vector{Union{Int, Float64}}(undef, 1)
+1-element Vector{Union{Float64, Int64}}:
+ 0.0
+
+julia> Vector{Complex}(undef, 1)
+1-element Vector{Complex}:
+ #undef
+
+julia> Vector{Complex{Int}}(undef, 1)
+1-element Vector{Complex{Int64}}:
+ 139934851180016 + 7957332965790215680im
+```
+See also [`isdefined`](@ref), [`isassigned`](@ref)
+"""
+allocatedinline(@nospecialize T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
+
+"""
+    Base.isbitsunion(::Type{T})
+
+Returns whether a type is an "is-bits" Union type, meaning each type included in a Union is [`isbitstype`](@ref).
+
+# Examples
+```jldoctest
+julia> Base.isbitsunion(Union{Float64, UInt8})
+true
+
+julia> Base.isbitsunion(Union{Float64, String})
+false
+```
+"""
+isbitsunion(u::Type) = u isa Union && allocatedinline(u)

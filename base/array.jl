@@ -187,24 +187,6 @@ end
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (size(a,n), asize_from(a, n+1)...)
 
-allocatedinline(@nospecialize T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
-
-"""
-    Base.isbitsunion(::Type{T})
-
-Return whether a type is an "is-bits" Union type, meaning each type included in a Union is [`isbitstype`](@ref).
-
-# Examples
-```jldoctest
-julia> Base.isbitsunion(Union{Float64, UInt8})
-true
-
-julia> Base.isbitsunion(Union{Float64, String})
-false
-```
-"""
-isbitsunion(u::Type) = u isa Union && allocatedinline(u)
-
 function _unsetindex!(A::Array, i::Int)
     @inline
     @boundscheck checkbounds(A, i)
