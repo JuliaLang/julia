@@ -786,7 +786,7 @@ function compileable_specialization(code::Union{MethodInstance,CodeInstance}, ef
         # If this caller does not want us to optimize calls to use their
         # declared compilesig, then it is also likely they would handle sparams
         # incorrectly if there were any unknown typevars, so we conservatively return nothing
-        if any(@nospecialize(t)->isa(t, TypeVar), mi.sparam_vals)
+        if _svec_any_typevar(mi.sparam_vals)
             return nothing
         end
     end
@@ -800,6 +800,13 @@ function compileable_specialization(code::Union{MethodInstance,CodeInstance}, ef
     end
     add_inlining_edge!(et, code) # to the code and edges
     return InvokeCase(code, effects, info)
+end
+
+function _svec_any_typevar(sv::SimpleVector)
+    for i in 1:length(sv)
+        isa(sv[i], TypeVar) && return true
+    end
+    return false
 end
 
 struct InferredCode
