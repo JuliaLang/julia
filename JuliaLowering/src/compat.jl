@@ -61,24 +61,6 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
         ident = newleaf(graph, src, K"Identifier")
         setattr!(ident, :name_val, String(e.args[1]))
         setattr!(ident, :scope_layer, e.args[2])
-    elseif e isa Expr && e.head === :static_parameter
-        setattr!(newleaf(graph, src, K"Value"), :value, e)
-    elseif e isa Expr && e.head === :lambda
-        ensure_desugaring_attributes!(graph)
-        argnames = e.args[1]::Vector{Any}
-        arg_cs = NodeId[]
-        for name in argnames
-            id = newleaf(graph, src, K"Identifier")
-            setattr!(id, :name_val, String(name::Symbol))
-            push!(arg_cs, id._id)
-        end
-        body_id, src = _expr_to_est(graph, e.args[2], src)
-        args_block = newnode(graph, src, K"block", arg_cs)
-        tvars_block = newnode(graph, src, K"block", NodeId[])
-        st = newnode(graph, src, K"lambda",
-                     NodeId[args_block._id, tvars_block._id, body_id])
-        setattr!(st, :is_toplevel_thunk, false)
-        setattr!(st, :toplevel_pure, false)
     elseif e isa Expr
         head_s = string(e.head)
         st_k = find_kind(head_s)
@@ -358,7 +340,7 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
             ]
         end
         [K"flatten" _] -> let
-            out_iters = SyntaxList(st)
+            out_iters = SyntaxList(g)
             next = st
             while kind(next) === K"flatten"
                 push!(out_iters, _dst_iterspec(next, next[1][2:end]))
@@ -433,7 +415,7 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
             out_cs = mapsyntax(_dst_importpath, paths)
             if !isnothing(maybe_colon)
                 out_c1 = @ast g maybe_colon [K":" out_cs...]
-                out_cs = SyntaxList(g, tree_ids(out_c1))
+                out_cs = SyntaxList(out_c1)
             end
             mknode(st, out_cs)
         end
@@ -477,6 +459,11 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
         ]
         [K"symbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
         [K"symboliclabel" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
+        [K"symbolicblock" id body] -> if all(==('_'), id.name_val)
+            @ast g st [K"symbolicblock" id=>K"Placeholder" rec(body)]
+        else
+            @ast g st [K"symbolicblock" id=>K"symboliclabel" rec(body)]
+        end
         [K"unknown_head" cs...] -> let head = st.name_val
             if head === "latestworld-if-toplevel"
                 newleaf(g, st, K"latestworld_if_toplevel")
