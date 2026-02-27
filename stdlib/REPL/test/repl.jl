@@ -618,6 +618,14 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
         @test ps.parent == repl_mode
         @test LineEdit.input_string(ps) == "wip"
         @test position(LineEdit.buffer(s)) == 3
+        # Test that key_repeats is reset after history recall (issue with Ctrl-A behavior)
+        # Simulate a multi-line history entry and recalling it
+        s.key_repeats = 1
+        empty!(s.previous_key)
+        push!(s.previous_key, '\x01')
+        LineEdit.history_prev(s, hp)
+        @test s.key_repeats == 0 "key_repeats should be reset after history recall"
+        @test isempty(s.previous_key) "previous_key should be reset after history recall"
         LineEdit.accept_result(s, prefix_mode)
     end
 end
