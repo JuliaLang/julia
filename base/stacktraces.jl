@@ -308,10 +308,27 @@ function show_spec_sig(io::IO, m::Method, @nospecialize(sig::Type))
             io = IOContext(io, :displaysize => displaysize(io))
         end
     end
+
+    # Show module prefix when method extends a function from a different module
+    func_module = let
+        sig_types = Base.unwrap_unionall(m.sig)
+        if sig_types isa DataType && length(sig_types.parameters) > 0
+            func_type = sig_types.parameters[1]
+            if func_type isa Type
+                parentmodule(func_type)
+            else
+                m.module
+            end
+        else
+            m.module
+        end
+    end
+    method_module = m.module
+    fname = m.name
+
     argnames = Base.method_argnames(m)
     argnames = replace(argnames, :var"#unused#" => :var"")
     if m.nkw > 0
-        # rearrange call kw_impl(kw_args..., func, pos_args...) to func(pos_args...; kw_args)
         kwarg_types = Any[ fieldtype(sig, i) for i = 2:(1+m.nkw) ]
         uw = Base.unwrap_unionall(sig)::DataType
         pos_sig = Base.rewrap_unionall(Tuple{uw.parameters[(m.nkw+2):end]...}, sig)
@@ -322,12 +339,13 @@ function show_spec_sig(io::IO, m::Method, @nospecialize(sig::Type))
                 kwnames[i] = Symbol(str[1:end-3])
             end
         end
-        Base.show_tuple_as_call(io, m.name, pos_sig;
+        Base.show_tuple_as_call(io, fname, pos_sig;
+                                qualified=(func_module !== method_module),
                                 demangle=true,
                                 kwargs=zip(kwnames, kwarg_types),
                                 argnames=argnames[m.nkw+2:end])
     else
-        Base.show_tuple_as_call(io, m.name, sig; demangle=true, argnames)
+        Base.show_tuple_as_call(io, fname, sig; qualified=(func_module !== method_module), demangle=true, argnames)
     end
 end
 
