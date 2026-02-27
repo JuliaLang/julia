@@ -394,3 +394,33 @@ macro SyntaxTree(ex_old)
     Expr(:call, :interpolate_ast, SyntaxTree, ex1[3][1],
          map(e->_scope_layer_1_to_esc!(Expr(e)), ex1[4:end])...)
 end
+
+function _flatten_blocks(st::SyntaxTree)
+    if kind(st) === K"block"
+        out = SyntaxList(st._graph)
+        for c in children(st)
+            append!(out, _flatten_blocks(c))
+        end
+        # special case: an empty final block has value nothing
+        if (length(children(st)) > 0 && kind(st[end]) === K"block" &&
+            numchildren(st[end]) == 0)
+            push!(out, @ast st._graph st[end] "nothing"::K"core")
+        end
+        return out
+    elseif is_quoted(st)
+        SyntaxList(st)
+    else
+        SyntaxList(mapchildren(flatten_blocks, st._graph, st))
+    end
+end
+
+# Splat the contents of any block whose parent is also a block
+function flatten_blocks(st::SyntaxTree)
+    if kind(st) === K"block"
+        mknode(st, _flatten_blocks(st))
+    elseif is_quoted(st)
+        st
+    else
+        mapchildren(flatten_blocks, st._graph, st)
+    end
+end
