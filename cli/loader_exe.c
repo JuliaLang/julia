@@ -17,7 +17,9 @@ JULIA_DEFINE_FAST_TLS
 #ifdef _COMPILER_ASAN_ENABLED_
 JL_DLLEXPORT const char* __asan_default_options(void)
 {
-    return "allow_user_segv_handler=1:detect_leaks=0";
+    // detect_container_overflow=0 is needed when Julia is built with ASAN but LLVM is not,
+    // to avoid false positives from std::vector in non-instrumented LLVM code.
+    return "allow_user_segv_handler=1:detect_leaks=0:detect_container_overflow=0";
     // FIXME: enable LSAN after fixing leaks & defining __lsan_default_suppressions(),
     //        or defining __lsan_default_options = exitcode=0 once publicly available
     //        (here and in flisp/flmain.c)

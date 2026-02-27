@@ -153,10 +153,15 @@ namespace {
                 // Opts.UseAfterScope = CodeGenOpts.SanitizeAddressUseAfterScope;
                 // Opts.UseAfterReturn = CodeGenOpts.getSanitizeAddressUseAfterReturn();
                 // MPM.addPass(RequireAnalysisPass<ASanGlobalsMetadataAnalysis, Module>());
-                //Let's assume the defaults are actually fine for our purposes
-                // MPM.addPass(AddressSanitizerPass(
-                //     Opts, UseGlobalGC, UseOdrIndicator, DestructorKind));
+#if defined(_CPU_AARCH64_)
+                // Disable ASAN module ctor/dtor which register globals - not compatible
+                // with JITLink on ARM64 due to Page21 relocation range limits.
+                // Stack/heap/use-after-free detection still works.
+                MPM.addPass(AddressSanitizerPass(AddressSanitizerOptions(), true, false,
+                                                 AsanDtorKind::None, AsanCtorKind::None));
+#else
                 MPM.addPass(AddressSanitizerPass(AddressSanitizerOptions(), true, false));
+#endif
                 //   }
             };
             ASanPass(/*SanitizerKind::Address, */false);

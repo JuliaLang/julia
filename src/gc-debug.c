@@ -494,10 +494,13 @@ void jl_gc_debug_print(void)
 
 // a list of tasks for conservative stack scan during gc_scrub
 static arraylist_t jl_gc_debug_tasks;
+static pthread_mutex_t gc_debug_tasks_lock = PTHREAD_MUTEX_INITIALIZER;
 
 void gc_scrub_record_task(jl_task_t *t)
 {
+    pthread_mutex_lock(&gc_debug_tasks_lock);
     arraylist_push(&jl_gc_debug_tasks, t);
+    pthread_mutex_unlock(&gc_debug_tasks_lock);
 }
 
 JL_NO_ASAN static void gc_scrub_range(char *low, char *high)
@@ -557,9 +560,11 @@ static void gc_scrub_task(jl_task_t *ta)
 
 void gc_scrub(void)
 {
+    pthread_mutex_lock(&gc_debug_tasks_lock);
     for (size_t i = 0; i < jl_gc_debug_tasks.len; i++)
         gc_scrub_task((jl_task_t*)jl_gc_debug_tasks.items[i]);
     jl_gc_debug_tasks.len = 0;
+    pthread_mutex_unlock(&gc_debug_tasks_lock);
 }
 #else
 void jl_gc_debug_fprint_critical_error(ios_t *s)
