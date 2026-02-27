@@ -426,6 +426,22 @@ function load_InteractiveUtils(mod::Module=Main)
     return Core.eval(mod, :(using Base.MainInclude.InteractiveUtils; Base.MainInclude.InteractiveUtils))
 end
 
+function load_LinearAlgebra(mod::Module=Main)
+    # load LinearAlgebra stdlib
+    if !isdefined(MainInclude, :LinearAlgebra)
+        try
+            let  LinearAlgebra = Base.require_stdlib(Base.PkgId(Base.UUID((0x37e2e46d_f89d_539d,0xb4ee_838fcccc9c8e)), "LinearAlgebra"))
+                MainInclude.LinearAlgebra = LinearAlgebra
+            end
+        catch ex
+            @warn "Failed to import LinearAlgebra into module $mod" exception=(ex, catch_backtrace())
+            return nothing
+        end
+    end
+    Core._using(mod, MainInclude.LinearAlgebra)
+    return MainInclude.LinearAlgebra
+end
+
 function load_REPL()
     # load interactive-only libraries
     try
@@ -516,6 +532,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
     fallback_repl = parse(Bool, get(ENV, "JULIA_FALLBACK_REPL", "false"))
     if !fallback_repl && interactive
         load_InteractiveUtils()
+        load_LinearAlgebra()
         REPL = REPL_MODULE_REF[]
         if REPL === Base
             load_REPL()
