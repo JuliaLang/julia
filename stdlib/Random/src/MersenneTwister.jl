@@ -634,8 +634,6 @@ function advance!(r::MersenneTwister, adv_jump, adv, adv_vals, idxF, adv_ints, i
         _advance_F!(r, adv_vals, idxF, work)
     elseif advI
         _advance_I!(r, adv_ints, idxI, work)
-    else
-        @assert adv == 0
     end
     _advance_to!(r, adv, work)
     r
