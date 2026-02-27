@@ -979,6 +979,7 @@ protected:
             std::unique_lock Lock{Mutex};
             FinalizedCallbacks.push_back(std::move(OnFinalized));
 
+            assert(InFlight > 0);
             if (--InFlight > 0)
                 return;
 
@@ -1061,12 +1062,13 @@ void JLJITLinkMemoryManager::allocate(const jitlink::JITLinkDylib *JD,
             Seg.Addr = orc::ExecutorAddr::fromPtr(Alloc.rt_addr);
             Seg.WorkingMem = (char *)Alloc.wr_addr;
         }
+
+        if (auto Err = BL.apply())
+            return OnAllocated(std::move(Err));
+
+        ++InFlight;
     }
 
-    if (auto Err = BL.apply())
-        return OnAllocated(std::move(Err));
-
-    ++InFlight;
     OnAllocated(std::make_unique<InFlightAlloc>(*this, G));
 }
 }

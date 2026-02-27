@@ -62,7 +62,7 @@ function setproperty!(x, f::Symbol, v)
     return setfield!(x, f, val)
 end
 
-typeof(function getproperty end).name.constprop_heuristic = Core.FORCE_CONST_PROP
+typeof(function getproperty end).name.constprop_heuristic = or_int(Core.FORCE_CONST_PROP, Core.DISABLE_SEMI_CONCRETE_EVAL)
 typeof(function setproperty! end).name.constprop_heuristic = Core.FORCE_CONST_PROP
 
 dotgetproperty(x, f) = getproperty(x, f)

@@ -208,6 +208,7 @@ int prev_sweep_full = 1;
 int current_sweep_full = 0;
 int next_sweep_full = 0;
 int under_pressure = 0;
+int gc_disable_auto_full_sweep = 0; // when set, automatic full collections are inhibited
 
 // Full collection heuristics
 static int64_t live_bytes = 0;
@@ -3186,6 +3187,9 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         recollect = 1;
         gc_record_full_sweep_reason(FULL_SWEEP_REASON_FORCED_FULL_SWEEP);
     }
+    if (gc_disable_auto_full_sweep && collection != JL_GC_FULL) {
+        sweep_full = 0;
+    }
     // 5. start sweeping
     uint64_t start_sweep_time = jl_hrtime();
     JL_PROBE_GC_SWEEP_BEGIN(sweep_full);
@@ -4158,6 +4162,18 @@ void jl_gc_notify_image_alloc(const char* img_data, size_t len)
 
 JL_DLLEXPORT const char* jl_gc_active_impl(void) {
     return "Built with stock GC";
+}
+
+JL_DLLEXPORT int jl_gc_enable_auto_full_collection(int on)
+{
+    int prev = !gc_disable_auto_full_sweep;
+    gc_disable_auto_full_sweep = (on == 0);
+    return prev;
+}
+
+JL_DLLEXPORT int jl_gc_auto_full_collection_is_enabled(void)
+{
+    return !gc_disable_auto_full_sweep;
 }
 
 #ifdef __cplusplus

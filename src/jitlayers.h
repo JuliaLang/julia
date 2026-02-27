@@ -784,8 +784,9 @@ protected:
     // void registerJITOutput(MemoryBufferRef Obj, const jl_linker_info_t &Info);
 
     // Rename LinkGraph symbols to match the previously chosen names and
-    // register debug info for defined symbols.
-    void linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferRef ObjBuf,
+    // register debug info for defined symbols.  Returns true on success, and
+    // false after calling MR.failMaterialization().
+    bool linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferRef ObjBuf,
                     jitlink::LinkGraph &G,
                     std::unique_ptr<jl_linker_info_t> Info) JL_NOTSAFEPOINT;
 

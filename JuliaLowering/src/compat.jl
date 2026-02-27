@@ -358,7 +358,7 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
             ]
         end
         [K"flatten" _] -> let
-            out_iters = SyntaxList(st)
+            out_iters = SyntaxList(g)
             next = st
             while kind(next) === K"flatten"
                 push!(out_iters, _dst_iterspec(next, next[1][2:end]))
@@ -433,7 +433,7 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
             out_cs = mapsyntax(_dst_importpath, paths)
             if !isnothing(maybe_colon)
                 out_c1 = @ast g maybe_colon [K":" out_cs...]
-                out_cs = SyntaxList(g, tree_ids(out_c1))
+                out_cs = SyntaxList(out_c1)
             end
             mknode(st, out_cs)
         end
