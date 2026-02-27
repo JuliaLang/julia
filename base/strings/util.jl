@@ -1177,10 +1177,10 @@ replace(s::AbstractString, pat_f::Pair...; count=typemax(Int)) =
     _replace_(String(s), pat_f, Int(count))
 
 
-replace(f::Callable, s::AbstractString, pat; count::Integer=typemax(Int)) =
+replace(f, s::AbstractString, pat; count::Integer=typemax(Int)) =
     replace(s, pat => f; count)
 
-replace(f::Callable, io::IO, s::AbstractString, pat; count::Integer=typemax(Int)) =
+replace(f, io::IO, s::AbstractString, pat; count::Integer=typemax(Int)) =
     replace(io, s, pat => f; count)
 
 # hex <-> bytes conversion
