@@ -214,7 +214,7 @@ int gc_disable_auto_full_sweep = 0; // when set, automatic full collections are 
 static int64_t live_bytes = 0;
 static int64_t promoted_bytes = 0;
 static int64_t last_live_bytes = 0; // live_bytes at last collection
-#ifdef __GLIBC__
+#if defined(__GLIBC__) || defined(MIMALLOC_ENABLED)
 // maxrss at last malloc_trim
 static int64_t last_trim_maxrss = 0;
 #endif
@@ -489,7 +489,7 @@ FORCE_INLINE void sweep_unlink_and_free(bigval_t *v) JL_NOTSAFEPOINT
     memset(v, 0xbb, v->sz);
 #endif
     gc_invoke_callbacks(jl_gc_cb_notify_external_free_t, gc_cblist_notify_external_free, (v));
-    jl_free_aligned(v);
+    jl_free_aligned_wrapper(v);
 }
 
 static bigval_t *sweep_list_of_young_bigvals(bigval_t *young) JL_NOTSAFEPOINT
@@ -637,16 +637,26 @@ void jl_gc_reset_alloc_count(void) JL_NOTSAFEPOINT
 static void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT
 {
     assert(jl_is_genericmemory(m));
-    assert(jl_genericmemory_how(m) == 1);
+    assert(jl_genericmemory_how(m) == 1 || jl_genericmemory_how(m) == 4);
     char *d = (char*)m->ptr;
-    size_t freed_bytes = memory_block_usable_size(d, isaligned);
-    assert(freed_bytes != 0);
-    if (isaligned)
-        jl_free_aligned(d);
-    else
+    size_t freed_bytes;
+    if (jl_genericmemory_how(m) == 4) {
+        size_t elsz = ((jl_datatype_t*)jl_typetagof(m))->layout->size;
+        freed_bytes = m->length * elsz;
+        assert(freed_bytes != 0);
         free(d);
-    jl_atomic_store_relaxed(&gc_heap_stats.heap_size,
-        jl_atomic_load_relaxed(&gc_heap_stats.heap_size) - freed_bytes);
+        jl_atomic_store_relaxed(&gc_heap_stats.heap_size,
+            jl_atomic_load_relaxed(&gc_heap_stats.heap_size) - freed_bytes);
+    } else {
+        freed_bytes = memory_block_usable_size(d, isaligned);
+        assert(freed_bytes != 0);
+        if (isaligned)
+            jl_free_aligned_wrapper(d);
+        else
+            jl_free_wrapper(d);
+        jl_atomic_store_relaxed(&gc_heap_stats.heap_size,
+            jl_atomic_load_relaxed(&gc_heap_stats.heap_size) - freed_bytes);
+    }
     gc_num.freed += freed_bytes;
     gc_num.freecall++;
 }
@@ -3407,13 +3417,17 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
         }
     }
 
-#ifdef __GLIBC__
+#if defined(__GLIBC__) || defined(MIMALLOC_ENABLED)
     if (sweep_full) {
         // issue #30653
         // empirically, the malloc runaway seemed to occur within a growth gap
         // of about 20-25%
         if (jl_maxrss() > (last_trim_maxrss/4)*5) {
+#ifdef MIMALLOC_ENABLED
+            mi_collect(true);
+#else
             malloc_trim(0);
+#endif
             last_trim_maxrss = jl_maxrss();
         }
     }
@@ -3806,7 +3820,7 @@ JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void)
 
 JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
-    void *data = malloc(sz);
+    void *data = jl_malloc_wrapper(sz);
     jl_task_t *ct = jl_get_current_task();
     if (data != NULL && ct != NULL) {
         sz = memory_block_usable_size(data, 0);
@@ -3823,7 +3837,7 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 
 JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 {
-    void *data = calloc(nm, sz);
+    void *data = jl_calloc_wrapper(nm, sz);
     jl_task_t *ct = jl_get_current_task();
     if (data != NULL && ct != NULL) {
         sz = memory_block_usable_size(data, 0);
@@ -3840,7 +3854,7 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 
 JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 {
-    free(p);
+    jl_free_wrapper(p);
     jl_task_t *ct = jl_get_current_task();
     if (ct != NULL)
         jl_batch_accum_free_size(ct->ptls, sz);
@@ -3848,7 +3862,7 @@ JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 
 JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
 {
-    void *data = realloc(p, sz);
+    void *data = jl_realloc_wrapper(p, sz);
     jl_task_t *ct = jl_get_current_task();
     if (data != NULL && ct != NULL) {
         sz = memory_block_usable_size(data, 0);
