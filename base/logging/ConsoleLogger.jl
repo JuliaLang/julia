@@ -174,9 +174,9 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     end
     for (i, (indent, msg)) in enumerate(msglines)
         boxstr = length(msglines) == 1 ? "[ " :
-                 i == 1                ? "┌ " :
-                 i < length(msglines)  ? "│ " :
-                                         "└ "
+                 i == 1                ? "⎡ " :
+                 i < length(msglines)  ? "⎜ " :
+                                         "⎣ "
         printstyled(iob, boxstr, bold=true, color=color)
         if i == 1 && !isempty(prefix)
             printstyled(iob, prefix, " ", bold=true, color=color)
