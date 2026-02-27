@@ -1278,6 +1278,35 @@ JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
     return result;
 }
 
+jl_code_info_t *jl_outer_ctor_body(jl_value_t *thistype, size_t nfields, size_t nsparams, jl_module_t *inmodule, const char *file, int line)
+{
+    JL_TIMING(LOWERING, LOWERING);
+    jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
+    jl_expr_t *expr = jl_exprn(jl_empty_sym, 3);
+    JL_GC_PUSH1(&expr);
+    jl_exprargset(expr, 0, thistype);
+    jl_exprargset(expr, 1, jl_box_long(nfields));
+    jl_exprargset(expr, 2, jl_box_long(nsparams));
+    jl_code_info_t *ci = (jl_code_info_t*)jl_call_scm_on_ast_and_loc("jl-default-outer-ctor-body", (jl_value_t*)expr, inmodule, file, line);
+    JL_GC_POP();
+    assert(jl_is_code_info(ci));
+    return ci;
+}
+
+jl_code_info_t *jl_inner_ctor_body(jl_array_t *fieldkinds, jl_module_t *inmodule, const char *file, int line)
+{
+    JL_TIMING(LOWERING, LOWERING);
+    jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
+    jl_expr_t *expr = jl_exprn(jl_empty_sym, 0);
+    JL_GC_PUSH1(&expr);
+    expr->args = fieldkinds;
+    jl_code_info_t *ci = (jl_code_info_t*)jl_call_scm_on_ast_and_loc("jl-default-inner-ctor-body", (jl_value_t*)expr, inmodule, file, line);
+    JL_GC_POP();
+    assert(jl_is_code_info(ci));
+    return ci;
+}
+
+
 //------------------------------------------------------------------------------
 // Parsing API and utils for calling parser from runtime
 
