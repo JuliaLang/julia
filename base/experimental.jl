@@ -513,6 +513,9 @@ usage, by eliminating the tracking of those possible invalidation.
 """
 disable_new_worlds() = ccall(:jl_disable_new_worlds, Cvoid, ())
 
+# SIMD utilities
+include("simd.jl")
+
 ### Task metrics
 
 """
