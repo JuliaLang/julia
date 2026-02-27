@@ -378,6 +378,8 @@ for (name, f) in l
         verbose && println("$name readeach...")
         @test collect(readeach(io(), Char)) == Vector{Char}(text)
         @test collect(readeach(io(), UInt8)) == Vector{UInt8}(text)
+        @test eltype(readeach(io(), Char)) <: Char
+        @test eltype(readeach(io(), UInt8)) <: UInt8
 
         cleanup()
 
