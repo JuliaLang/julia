@@ -2877,7 +2877,12 @@ function history_search(mistate::MIState)
     else
         mimode.prompt_prefix
     end
-    result = histsearch(mimode.hist.history, term, prefix)
+    # Issue a DA1 query if we haven't received one yet, so that the
+    # terminal's OSC 52 clipboard capability can be detected.
+    if mistate.terminal_properties.da1 === nothing
+        write(term, "\e[c")
+    end
+    result = histsearch(mimode.hist.history, term, prefix, mistate.terminal_properties)
     mimode = if isnothing(result.mode)
         mistate.current_mode
     else
