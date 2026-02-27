@@ -1708,7 +1708,8 @@ JuliaOJIT::JuliaOJIT()
     sys::DynamicLibrary libjulia_internal_dylib = sys::DynamicLibrary::addPermanentLibrary(
       jl_libjulia_internal_handle, &ErrorStr);
     if(!ErrorStr.empty())
-        report_fatal_error(llvm::Twine("FATAL: unable to dlopen libjulia-internal\n") + ErrorStr);
+        if (ErrorStr != "Library already loaded")
+            report_fatal_error(llvm::Twine("FATAL: unable to dlopen libjulia-internal\n") + ErrorStr);
 
     // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve
     // symbols in the program as well. The nullptr argument to the function
