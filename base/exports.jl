@@ -500,6 +500,8 @@ export
     step,
     stride,
     strides,
+    has_strided_get,
+    has_strided_set,
     sum!,
     sum,
     to_indices,

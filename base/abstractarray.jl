@@ -606,6 +606,34 @@ function stride(A::AbstractArray, k::Integer)
     return s
 end
 
+"""
+    has_strided_get(A::AbstractArray)::Bool
+
+Return `true` if `A` can be read from as a strided array.
+
+See also: [`has_strided_set`](@ref).
+
+!!! compat "Julia 1.14"
+     This function requires at least Julia 1.14.
+"""
+function has_strided_get(A::AbstractArray)
+    false
+end
+
+"""
+    has_strided_set(A::AbstractArray)::Bool
+
+Return `true` if `A` can be written to as a strided array.
+
+See also: [`has_strided_get`](@ref).
+
+!!! compat "Julia 1.14"
+     This function requires at least Julia 1.14.
+"""
+function has_strided_set(A::AbstractArray)
+    false
+end
+
 @inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * d, sz...)...)
 size_to_strides(s, d) = (s,)
 size_to_strides(s) = ()

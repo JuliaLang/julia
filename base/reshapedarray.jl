@@ -410,6 +410,14 @@ function cconvert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIn
     )
 end
 
+function has_strided_get(V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {T,N,P}
+    has_strided_get(V.parent)
+end
+
+function has_strided_set(V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {T,N,P}
+    has_strided_set(V.parent)
+end
+
 _checkcontiguous(::Type{Bool}, A::AbstractArray) = false
 # `strides(A::DenseArray)` calls `size_to_strides` by default.
 # Thus it's OK to assume all `DenseArray`s are contiguously stored.
@@ -424,6 +432,34 @@ function strides(a::ReshapedArray)
     msz, mst, n = merge_adjacent_dim(apsz, apst) # Try to perform "lazy" reshape
     n == ndims(a.parent) && return size_to_strides(mst, size(a)...) # Parent is stridevector like
     return _reshaped_strides(size(a), 1, msz, mst, n, apsz, apst)
+end
+
+function has_strided_get(a::ReshapedArray)::Bool
+    has_strided_get(parent(a)) && _check_strides(a)
+end
+
+function has_strided_set(a::ReshapedArray)::Bool
+    has_strided_set(parent(a)) && _check_strides(a)
+end
+
+# Return true if a is strided, assuming the parent is strided.
+function _check_strides(a::ReshapedArray)::Bool
+    _checkcontiguous(Bool, a) && return true
+    apsz::Dims = size(a.parent)
+    apst::Dims = strides(a.parent)
+    msz::Int, mst::Int, n::Int = merge_adjacent_dim(apsz, apst)
+    n == ndims(a.parent) && return true # Parent is stridevector like
+    asz::Dims = size(a)
+    reshaped::Int = asz[1]
+    for i in 2:length(asz)
+        local sz = asz[i]
+        if reshaped == msz && sz != 1
+            msz, mst, n = merge_adjacent_dim(apsz, apst, n+1)
+            reshaped = 1
+        end
+        reshaped = reshaped*sz
+    end
+    reshaped == msz
 end
 
 function _reshaped_strides(::Dims{0}, reshaped::Int, msz::Int, ::Int, ::Int, ::Dims, ::Dims)
