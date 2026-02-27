@@ -105,11 +105,7 @@ function is_valid_body_ir_argument(ctx, ex)
     if is_valid_ir_argument(ctx, ex)
         true
     elseif kind(ex) == K"BindingId"
-        binfo = get_binding(ctx, ex)
-        # arguments are inherently always-defined, but the closure
-        # box analysis overrides this flag to mean "valid to leave
-        # unboxed" so we check for them specifically here
-        binfo.kind == :argument || binfo.is_always_defined
+        get_binding(ctx, ex).is_always_defined
     else
         false
     end
@@ -309,9 +305,9 @@ function emit_break(ctx, ex)
     name = ex[1].name_val
     target = get(ctx.break_targets, name, nothing)
     if isnothing(target)
-        if name == "loop_exit"
+        if name == "loop-exit"
             throw(LoweringError(ex, "`break` must be used inside a `while`, `for` loop, or `@label` block"))
-        elseif name == "loop_cont"
+        elseif name == "loop-cont"
             throw(LoweringError(ex, "`continue` must be used inside a `while` or `for` loop"))
         elseif endswith(name, "#cont")
             label = name[1:end-5]
@@ -320,23 +316,23 @@ function emit_break(ctx, ex)
             throw(LoweringError(ex, "`break $name` is not inside a `@label $name` block"))
         end
     end
-    # If targeting loop_exit, check for intervening named @label blocks
-    if name == "loop_exit"
+    # If targeting loop-exit, check for intervening named @label blocks
+    if name == "loop-exit"
         for i in lastindex(ctx.break_label_stack):-1:1
             lbl = ctx.break_label_stack[i]
-            lbl == "loop_exit" && break
-            if lbl != "loop_cont" && !contains(lbl, '#')
+            lbl == "loop-exit" && break
+            if lbl != "loop-cont" && !contains(lbl, '#')
                 throw(LoweringError(ex,
                     "plain `break` inside `@label $lbl` block is disallowed; use `break $lbl` to exit the block"))
             end
         end
     end
-    # If targeting loop_cont, check for intervening loop_exit (@label block)
-    if name == "loop_cont"
+    # If targeting loop-cont, check for intervening loop-exit (@label block)
+    if name == "loop-cont"
         for i in lastindex(ctx.break_label_stack):-1:1
             lbl = ctx.break_label_stack[i]
-            lbl == "loop_cont" && break
-            if lbl == "loop_exit"
+            lbl == "loop-cont" && break
+            if lbl == "loop-exit"
                 throw(LoweringError(ex, "`continue` inside an anonymous `@label` block is not allowed"))
             end
         end
@@ -721,8 +717,8 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
     elseif k == K"symbolicblock"
         name = ex[1].name_val
-        # Skip duplicate check for default-scope labels (loop_exit, loop_cont) which allow nesting
-        if name != "loop_exit" && name != "loop_cont"
+        # Skip duplicate check for default-scope labels (loop-exit, loop-cont) which allow nesting
+        if name != "loop-exit" && name != "loop-cont"
             if haskey(ctx.symbolic_jump_targets, name) || name in ctx.symbolic_block_labels
                 throw(LoweringError(ex, "Label `$name` defined multiple times"))
             end
@@ -731,9 +727,6 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end_label = make_label(ctx, ex)
         need_value = needs_value || in_tail_pos
         result_var = need_value ? new_local_binding(ctx, ex, "$(name)_result") : nothing
-        if !isnothing(result_var)
-            emit_assignment(ctx, ex, result_var, nothing_(ctx, ex))
-        end
         outer_target = get(ctx.break_targets, name, nothing)
         ctx.break_targets[name] = JumpTarget(end_label, ctx, result_var)
         push!(ctx.break_label_stack, name)
@@ -748,6 +741,18 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             ctx.break_targets[name] = outer_target
         end
         emit(ctx, end_label)
+        # Use isdefined to handle the case where initialization was
+        # skipped (e.g., by @goto jumping into a loop body).
+        if !isnothing(result_var)
+            defined_label = make_label(ctx, ex)
+            done_label = make_label(ctx, ex)
+            isdef = emit_assign_tmp(ctx, @ast ctx ex [K"isdefined" result_var])
+            emit(ctx, @ast ctx ex [K"gotoifnot" isdef defined_label])
+            emit(ctx, @ast ctx ex [K"goto" done_label])
+            emit(ctx, defined_label)
+            emit_assignment(ctx, ex, result_var, nothing_(ctx, ex))
+            emit(ctx, done_label)
+        end
         if in_tail_pos
             emit_return(ctx, ex, result_var)
             nothing

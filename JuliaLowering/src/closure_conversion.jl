@@ -224,14 +224,14 @@ end
 
 # Compute fields for a closure type, one field for each captured variable.
 function closure_type_fields(ctx, srcref, closure_binds, is_opaque)
-    capture_ids = Vector{IdTag}()
+    capture_ids = Set{IdTag}()
     for lambda_bindings in closure_binds.lambdas
         for (id, is_capt) in lambda_bindings.locals_capt
             is_capt && push!(capture_ids, id)
         end
     end
-    # sort here to avoid depending on undefined Dict iteration order.
-    capture_ids = sort!(unique(capture_ids))
+    # sort here to avoid depending on undefined Set iteration order
+    capture_ids = sort!(collect(capture_ids))
 
     field_syms = SyntaxList(ctx)
     if is_opaque
@@ -292,20 +292,15 @@ function type_for_closure(ctx::ClosureConversionCtx, srcref, name_str, field_sym
     type_ex, type_binding
 end
 
+# No box needed for:
+# - non-captured vars
+# - static params (can't be reassigned)
+# - any local our optimizations have determined to be unboxed
 function is_boxed(binfo::BindingInfo)
-    # Static parameters can't be reassigned, so they never need boxing
     binfo.kind === :static_parameter && return false
-    # No box needed for:
-    # * :argument when it's not reassigned
-    defined_but_not_assigned = binfo.is_always_defined && !binfo.is_assigned
-    # * Single-assigned variables (local or argument) assigned before any closure captures them
-    #   (identified by liveness analysis in optimize_captured_vars!)
-    #   For arguments, the liveness analysis resets is_always_defined and only sets it back
-    #   if the outer-scope assignment dominates all captures. This distinguishes arguments
-    #   reassigned in outer scope (no box) from those reassigned only inside closures (needs box).
-    single_assigned_never_undef = binfo.kind in (:local, :argument) &&
-                                  binfo.is_always_defined && binfo.is_assigned_once
-    return binfo.is_captured && !defined_but_not_assigned && !single_assigned_never_undef
+    binfo.unboxed && return false
+    binfo.kind === :argument && !binfo.is_assigned && return false
+    return binfo.is_captured
 end
 
 function is_boxed(ctx, x)
@@ -445,9 +440,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                     push!(init_closure_args, field_val)
                     if !boxed
                         push!(type_params, @ast ctx ex [K"call"
-                              # TODO: Update to use _typeof_captured_variable (#40985)
-                              #"_typeof_captured_variable"::K"core"
-                              "typeof"::K"core"
+                              "_typeof_captured_variable"::K"core"
                               field_val])
                     end
                 end
@@ -629,5 +622,5 @@ Invariants:
     if !isempty(ctx_out.toplevel_stmts)
         throw(LoweringError(first(ctx_out.toplevel_stmts), "Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension"))
     end
-    ctx_out, ex_out
+    ctx_out, flatten_blocks(ex_out)
 end

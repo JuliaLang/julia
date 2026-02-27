@@ -116,7 +116,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
         add_remark!(interp, sv, "Cannot infer call, because we previously saw :latestworld")
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     end
-    matches = find_method_matches(interp, argtypes, atype; max_methods)
+    matches = find_method_matches(interp, argtypes, atype; max_methods, fargs=arginfo.fargs)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
@@ -331,20 +331,23 @@ end
 
 function find_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any}, @nospecialize(atype);
                              max_union_splitting::Int = InferenceParams(interp).max_union_splitting,
-                             max_methods::Int = InferenceParams(interp).max_methods)
-    if is_union_split_eligible(typeinf_lattice(interp), argtypes, max_union_splitting)
-        return find_union_split_method_matches(interp, argtypes, max_methods)
+                             max_methods::Int = InferenceParams(interp).max_methods,
+                             fargs::Union{Nothing,Vector{Any}}=nothing)
+    if is_union_split_eligible(typeinf_lattice(interp), argtypes, max_union_splitting; fargs)
+        return find_union_split_method_matches(interp, argtypes, max_methods; fargs)
     end
     return find_simple_method_matches(interp, atype, max_methods)
 end
 
 # NOTE this is valid as far as any "constant" lattice element doesn't represent `Union` type
-is_union_split_eligible(𝕃::AbstractLattice, argtypes::Vector{Any}, max_union_splitting::Int) =
-    1 < unionsplitcost(𝕃, argtypes) <= max_union_splitting
+is_union_split_eligible(𝕃::AbstractLattice, argtypes::Vector{Any}, max_union_splitting::Int;
+                        fargs::Union{Nothing,Vector{Any}}=nothing) =
+    1 < unionsplitcost(𝕃, argtypes; fargs) <= max_union_splitting
 
 function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any},
-                                         max_methods::Int)
-    split_argtypes = switchtupleunion(typeinf_lattice(interp), argtypes)
+                                         max_methods::Int;
+                                         fargs::Union{Nothing,Vector{Any}}=nothing)
+    split_argtypes = switchtupleunion(typeinf_lattice(interp), argtypes; fargs)
     infos = MethodMatchInfo[]
     applicable = MethodMatchTarget[]
     applicable_argtypes = Vector{Any}[] # arrays like `argtypes`, including constants, for each match
@@ -442,8 +445,6 @@ function from_intermustalias(𝕃ᵢ::AbstractLattice, rt::InterMustAlias, argin
             if rt.vartyp ⊑ argtyp
                 vtyp = vtypes[slot_id(arg)]
                 return MustAlias(arg, vtyp.ssadef, rt.vartyp, rt.fldidx, rt.fldtyp)
-            else
-                # TODO optimize this case?
             end
         end
     end
@@ -1302,7 +1303,10 @@ return_localcache_result(::AbstractInterpreter, inf_result::InferenceResult, ::A
 
 function compute_forwarded_argtypes(interp::AbstractInterpreter, arginfo::ArgInfo, sv::AbsIntState)
     𝕃ᵢ = typeinf_lattice(interp)
-    return has_conditional(𝕃ᵢ, sv) ? ConditionalSimpleArgtypes(arginfo, sv) : SimpleArgtypes(arginfo.argtypes)
+    if has_mustalias(𝕃ᵢ, sv) || has_conditional(𝕃ᵢ, sv)
+        return ForwardableArgtypes(arginfo, sv)
+    end
+    return SimpleArgtypes(arginfo.argtypes)
 end
 
 function const_prop_call(interp::AbstractInterpreter,
@@ -1364,10 +1368,10 @@ function const_prop_call(interp::AbstractInterpreter,
     @assert frame.frameid != 0 && frame.cycleid == frame.frameid
     @assert frame.parentid == sv.frameid
     @assert inf_result.result !== nothing
-    # ConditionalSimpleArgtypes is allowed, because the only case in which it modifies
-    # the argtypes is when one of the argtypes is a `Conditional`, which case
-    # concrete_eval_result will not be available.
-    if concrete_eval_result !== nothing && isa(forwarded_argtypes, Union{SimpleArgtypes, ConditionalSimpleArgtypes})
+    # ForwardableArgtypes is allowed, because the only case in which it modifies
+    # the argtypes is when one of the argtypes is a `Conditional` or `MustAlias`, in
+    # which case concrete_eval_result will not be available (all args must be `Const`).
+    if concrete_eval_result !== nothing && isa(forwarded_argtypes, Union{SimpleArgtypes,ForwardableArgtypes})
         # override return type and effects with concrete evaluation result if available
         inf_result.result = concrete_eval_result.rt
         inf_result.ipo_effects = concrete_eval_result.effects
@@ -1375,17 +1379,26 @@ function const_prop_call(interp::AbstractInterpreter,
     return const_prop_result(inf_result)
 end
 
-# TODO implement MustAlias forwarding
-
-struct ConditionalSimpleArgtypes
+struct ForwardableArgtypes
     arginfo::ArgInfo
     sv::InferenceState
 end
 
+function find_mustalias_target_arg(ma::MustAlias, fargs::Vector{Any}, sv::InferenceState)
+    slot = ma.slot
+    for i in 1:length(fargs)
+        arg = ssa_def_slot(fargs[i], sv)
+        if isa(arg, SlotNumber) && slot_id(arg) == slot
+            return i
+        end
+    end
+    return nothing
+end
+
 function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
-                                 conditional_argtypes::ConditionalSimpleArgtypes,
+                                 forwardable_argtypes::ForwardableArgtypes,
                                  cache_argtypes::Vector{Any})
-    (; arginfo, sv) = conditional_argtypes
+    (; arginfo, sv) = forwardable_argtypes
     (; fargs, argtypes) = arginfo
     given_argtypes = Vector{Any}(undef, length(argtypes))
     def = mi.def::Method
@@ -1410,6 +1423,17 @@ function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
                     given_argtypes[i] = Conditional(slotid, #= ssadef =# 0, thentype, elsetype)
                 end
                 continue
+            end
+        end
+        # forward `MustAlias` if it conveys aliasing on any other argument
+        if isa(argtype, MustAlias) && fargs !== nothing
+            slotid = find_mustalias_target_arg(argtype, fargs, sv)
+            if slotid !== nothing
+                sigt = widenconst(slotid > nargs ? argtypes[slotid] : cache_argtypes[slotid])
+                if ⊑(𝕃, argtype.vartyp, sigt)
+                    given_argtypes[i] = MustAlias(slotid, 0, argtype.vartyp, argtype.fldidx, argtype.fldtyp)
+                    continue
+                end
             end
         end
         given_argtypes[i] = widenslotwrapper(argtype)
@@ -2923,8 +2947,6 @@ function abstract_call_unknown(interp::AbstractInterpreter, @nospecialize(ft),
     atype === Bottom && return Future(CallMeta(Union{}, Union{}, EFFECTS_THROWS, NoCallInfo())) # accidentally unreachable
     return abstract_call_gf_by_type(interp, nothing, arginfo, si, atype, vtypes, sv, max_methods)::Future
 end
-
-# TODO: abstract
 
 # call where the function is any lattice element
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtInfo,

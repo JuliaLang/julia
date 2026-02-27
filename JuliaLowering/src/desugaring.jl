@@ -2038,7 +2038,7 @@ function expand_for(ctx, ex)
         body = if i == numchildren(iterspecs)
             # Innermost loop gets the continue label and copied vars
             @ast ctx ex [K"symbolicblock"
-                "loop_cont"::K"symboliclabel"
+                "loop-cont"::K"symboliclabel"
                 [K"let"(scope_type=:neutral)
                      [K"block"
                          copied_vars...
@@ -2084,7 +2084,7 @@ function expand_for(ctx, ex)
         ]
     end
 
-    @ast ctx ex [K"symbolicblock" "loop_exit"::K"symboliclabel"
+    @ast ctx ex [K"symbolicblock" "loop-exit"::K"symboliclabel"
         loop
     ]
 end
@@ -2372,7 +2372,7 @@ function method_def_expr(ctx, srcref, callex_srcref, method_table,
             ::K"SourceLocation"(callex_srcref)
         ]
         [K"method"
-            isnothing(method_table) ? "nothing"::K"core" : method_table
+            method_table
             method_metadata
             [K"lambda"(body, is_toplevel_thunk=false, toplevel_pure=false)
                 [K"block" arg_names...]
@@ -2483,7 +2483,7 @@ function expand_function_generator(ctx, srcref, callex_srcref, func_name,
         [K"method_defs"
             gen_name
             [K"block"
-                method_def_expr(ctx, srcref, callex_srcref, nothing, SyntaxList(ctx),
+                method_def_expr(ctx, srcref, callex_srcref, "nothing"::K"core", SyntaxList(ctx),
                                 gen_arg_names, gen_arg_types, gen_body, nothing)
             ]
         ]
@@ -2595,10 +2595,10 @@ function scope_nest(ctx, names, values, body)
 end
 
 # Generate body function and `Core.kwcall` overloads for functions taking keywords.
-function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_names,
-                               typevar_stmts, new_typevar_stmts, arg_names,
-                               arg_types, has_slurp, first_default, arg_defaults,
-                               keywords, body, ret_var)
+function keyword_function_defs(ctx, srcref, callex_srcref, orig_name, name_str,
+                               typevar_names, typevar_stmts, new_typevar_stmts,
+                               arg_names, arg_types, has_slurp, first_default,
+                               arg_defaults, keywords, body, ret_var)
     mangled_name = let n = isnothing(name_str) ? "_" : name_str
         reserve_module_binding_i(ctx.mod, string(startswith(n, '#') ? "" : "#", n, "#"))
     end
@@ -2623,7 +2623,7 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
 
     body_arg_names = SyntaxList(ctx)
     body_arg_types = SyntaxList(ctx)
-    push!(body_arg_names, newsym(ctx, keywords, "#self#"))
+    push!(body_arg_names, body_func_name)
     push!(body_arg_types, @ast ctx body_func_name [K"function_type" body_func_name])
 
     non_positional_typevars = typevar_names[map(!,
@@ -2710,6 +2710,11 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
 
         push!(kw_name_syms, name_sym)
     end
+    # Mark the wrapper, not the body function, as the "self" arg to
+    # @__FUNCTION__.  TODO: We could probably unify this with is_kwcall_self
+    # with a generic "closure not on first arg" flag if we're willing to pass
+    # the closure to the body function through this arg instead of the first.
+    arg_names[1] = setmeta(arg_names[1], :thisfunction_original, true)
     append!(body_arg_names, arg_names)
     append!(body_arg_types, arg_types)
 
@@ -2849,11 +2854,14 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_nam
                                 ret_var)
             ]
         ]
+        if is_identifier_like(orig_name)
+            [K"function_decl" orig_name]
+        end
         [K"method_defs"
-            # This should inherit the local / global status of the body func, so
-            # provide that here for closure conversion, even though this is
-            # really a method on Core.kwcall
-            body_func_name
+            # This should inherit the local / global status of the original
+            # func, so provide that here for closure conversion, even though
+            # this is really a method on Core.kwcall
+            is_identifier_like(orig_name) ? orig_name : "nothing"::K"core"
             [K"block"
                 new_typevar_stmts...
                 kwcall_method_defs...
@@ -3115,7 +3123,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     else
         # Rewrite `body` here so that the positional-only versions dispatch there.
         kw_func_method_defs, body =
-            keyword_function_defs(ctx, ex, callex, name_str, typevar_names, typevar_stmts,
+            keyword_function_defs(ctx, ex, callex, name, name_str, typevar_names, typevar_stmts,
                                   new_typevar_stmts, arg_names, arg_types, has_slurp,
                                   first_default, arg_defaults, keywords, body, ret_var)
         # The main function (but without keywords) needs its typevars trimmed,
@@ -3156,8 +3164,6 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
 
     @ast ctx ex [K"block"
         if !isnothing(bare_func_name)
-            # Need the main function type created here before running any code
-            # in kw_func_method_defs
             [K"function_decl"(bare_func_name) bare_func_name]
         end
         gen_func_method_defs
@@ -4423,47 +4429,30 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"="
         expand_assignment(ctx, ex)
     elseif k == K"break"
-        nc = numchildren(ex)
-        if nc == 0
-            @ast ctx ex [K"break" "loop_exit"::K"symboliclabel"]
-        else
-            @chk nc <= 2 (ex, "Too many arguments to break")
-            label = ex[1]
-            label_kind = kind(label)
-            # Convert Symbol (from Expr conversion) to symboliclabel
-            if label_kind == K"Symbol"
-                label = @ast ctx label label.name_val::K"symboliclabel"
-            elseif label_kind == K"Placeholder"
-                # `break _` maps to the default break scope (loop_exit)
-                label = @ast ctx label "loop_exit"::K"symboliclabel"
-            elseif !(label_kind == K"Identifier" ||
-                     label_kind == K"symboliclabel" || is_contextual_keyword(label_kind))
-                throw(LoweringError(label, "Invalid break label: expected identifier"))
+        @stm ex begin
+            [K"break"] ->
+                @ast ctx ex [K"break" "loop-exit"::K"symboliclabel"]
+            [K"break" [K"Placeholder"]] ->
+                @ast ctx ex [K"break" "loop-exit"::K"symboliclabel"]
+            [K"break" [K"Identifier"]] -> begin
+                @ast ctx ex [K"break" ex[1]=>K"symboliclabel"]
             end
-            if nc == 2
-                @ast ctx ex [K"break" label expand_forms_2(ctx, ex[2])]
-            else
-                @ast ctx ex [K"break" label]
+            [K"break" [K"Placeholder"] val] ->
+                @ast ctx ex [K"break" "loop-exit"::K"symboliclabel"
+                             expand_forms_2(ctx, val)]
+            [K"break" [K"Identifier"] val] -> begin
+                @ast ctx ex [K"break" ex[1]=>K"symboliclabel"
+                             expand_forms_2(ctx, val)]
             end
         end
     elseif k == K"continue"
-        nc = numchildren(ex)
-        if nc == 0
-            @ast ctx ex [K"break" "loop_cont"::K"symboliclabel"]
-        else
-            @chk nc == 1 (ex, "Too many arguments to continue")
-            label = ex[1]
-            label_kind = kind(label)
-            if label_kind == K"Placeholder"
-                # `continue _` maps to the default continue scope (loop_cont)
-                cont_label = @ast ctx label "loop_cont"::K"symboliclabel"
-            elseif !(label_kind == K"Identifier" ||
-                     label_kind == K"Symbol" || is_contextual_keyword(label_kind))
-                throw(LoweringError(label, "Invalid continue label: expected identifier"))
-            else
-                cont_label = @ast ctx label string(label.name_val, "#cont")::K"symboliclabel"
-            end
-            @ast ctx ex [K"break" cont_label]
+        @stm ex begin
+            [K"continue"] ->
+                @ast ctx ex [K"break" "loop-cont"::K"symboliclabel"]
+            [K"continue" [K"Placeholder"]] ->
+                @ast ctx ex [K"break" "loop-cont"::K"symboliclabel"]
+            [K"continue" [K"Identifier"]] ->
+                @ast ctx ex [K"break" string(label.name_val, "#cont")::K"symboliclabel"]
         end
     elseif k == K"comparison"
         expand_forms_2(ctx, expand_compare_chain(ctx, ex))
@@ -4613,10 +4602,10 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         expand_forms_2(ctx, expand_ncat(ctx, ex))
     elseif k == K"while"
         @chk numchildren(ex) == 2
-        @ast ctx ex [K"symbolicblock" "loop_exit"::K"symboliclabel"
+        @ast ctx ex [K"symbolicblock" "loop-exit"::K"symboliclabel"
             [K"_while"
                 expand_condition(ctx, ex[1])
-                [K"symbolicblock" "loop_cont"::K"symboliclabel"
+                [K"symbolicblock" "loop-cont"::K"symboliclabel"
                     [K"scope_block"(scope_type=:neutral)
                          expand_forms_2(ctx, ex[2])
                     ]
@@ -4634,11 +4623,6 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
                 @ast ctx ex [K"static_eval" expand_forms_2(ctx, c)])
         end
         @ast ctx ex [K"foreigncall" expand_C_library_symbol(ctx, ex[1]) args...]
-    elseif k == K"symbolicblock"
-        # @label name body -> (symbolicblock name expanded_body)
-        # The @label macro inserts the continue block for loops, so we just expand the body
-        @chk numchildren(ex) == 2
-        @ast ctx ex [K"symbolicblock" ex[1] expand_forms_2(ctx, ex[2])]
     elseif k == K"gc_preserve"
         s = ssavar(ctx, ex)
         r = ssavar(ctx, ex)
