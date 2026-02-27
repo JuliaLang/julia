@@ -31,7 +31,7 @@ export BINDIR,
        username,
        which
 
-import ..Base: DATAROOTDIR, show
+import ..Base: PRIVATE_LIBDIR, show
 
 """
     Sys.BINDIR::String
@@ -45,7 +45,7 @@ global BINDIR::String = ccall(:jl_get_julia_bindir, Any, ())::String
 
 A string containing the full path to the directory containing the `stdlib` packages.
 """
-global STDLIB::String = "$BINDIR/$DATAROOTDIR/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
+global STDLIB::String = "$BINDIR/$PRIVATE_LIBDIR/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
 # In case STDLIB change after julia is built, the variable below can be used
 # to update cached method locations to updated ones.
 const BUILD_STDLIB_PATH = STDLIB
@@ -178,7 +178,7 @@ end
 function __init_build()
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
     vers = "v$(string(VERSION.major)).$(string(VERSION.minor))"
-    global STDLIB = abspath(BINDIR, DATAROOTDIR, "julia", "stdlib", vers)
+    global STDLIB = abspath(BINDIR, PRIVATE_LIBDIR, "stdlib", vers)
     nothing
 end
 

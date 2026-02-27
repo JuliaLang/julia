@@ -14,7 +14,7 @@ include $(JULIAHOME)/deps/*.version
 
 
 VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
-DIRS := $(build_datarootdir)/julia/stdlib/$(VERSDIR) $(build_prefix)/manifest/$(VERSDIR)
+DIRS := $(build_private_libdir)/stdlib/$(VERSDIR) $(build_prefix)/manifest/$(VERSDIR)
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 
@@ -56,10 +56,10 @@ ifneq ($(filter $(STDLIBS),$(STDLIBS_EXT)),)
 $(error ERROR duplicated STDLIBS in list)
 endif
 
-# Generate symlinks to all stdlibs at usr/share/julia/stdlib/vX.Y/
-$(foreach module, $(STDLIBS), $(eval $(call symlink_target,$$(JULIAHOME)/stdlib/$(module),$$(build_datarootdir)/julia/stdlib/$$(VERSDIR),$(module))))
+# Generate symlinks to all stdlibs at usr/lib/julia/stdlib/vX.Y/
+$(foreach module, $(STDLIBS), $(eval $(call symlink_target,$$(JULIAHOME)/stdlib/$(module),$$(build_private_libdir)/stdlib/$$(VERSDIR),$(module))))
 
-STDLIBS_LINK_TARGETS := $(addprefix $(build_datarootdir)/julia/stdlib/$(VERSDIR)/,$(STDLIBS))
+STDLIBS_LINK_TARGETS := $(addprefix $(build_private_libdir)/stdlib/$(VERSDIR)/,$(STDLIBS))
 
 remove-gpl-libs:
 ifeq ($(USE_GPL_LIBS),0)

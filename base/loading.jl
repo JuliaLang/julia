@@ -1353,7 +1353,7 @@ end
 
 function find_source_file(path::AbstractString)
     (isabspath(path) || isfile(path)) && return path
-    base_path = joinpath(Sys.BINDIR, DATAROOTDIR, "julia", "base", path)
+    base_path = joinpath(Sys.BINDIR, PRIVATE_LIBDIR, "base", path)
     return isfile(base_path) ? normpath(base_path) : nothing
 end
 
@@ -4482,7 +4482,7 @@ function prepare_compiler_stub_image!()
 end
 
 function expand_compiler_path(tup)
-    (tup[1], joinpath(Sys.BINDIR, DATAROOTDIR, tup[2]), tup[3:end]...)
+    (tup[1], joinpath(Sys.BINDIR, PRIVATE_LIBDIR, tup[2]), tup[3:end]...)
 end
 compiler_chi(tup::Tuple) = CacheHeaderIncludes(expand_compiler_path(tup))
 

@@ -23,7 +23,7 @@ EXE := $(suffix $(abspath $(JULIA)))
 
 # get compiler and linker flags. (see: `contrib/julia-config.jl`)
 JULIA_CONFIG := $(JULIA) -e 'include(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "julia-config.jl"))' --
-JULIA_LIBDIR := $(shell $(JULIA)  --startup-file=no -e 'println(joinpath(Sys.BINDIR, "..", "lib"))' --)
+JULIA_LIBDIR := $(shell $(JULIA)  --startup-file=no -e 'println(joinpath(Sys.BINDIR, Base.LIBDIR))' --)
 CPPFLAGS_ADD :=
 CFLAGS_ADD = $(shell $(JULIA_CONFIG) --cflags)
 LDFLAGS_ADD = -lm $(shell $(JULIA_CONFIG) --ldflags --ldlibs) -ljulia-internal

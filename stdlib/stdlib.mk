@@ -17,8 +17,8 @@ VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
 SYSIMG_STDLIBS_SRCS =
 INDEPENDENT_STDLIBS_SRCS =
 define STDLIB_srcs
-$1_SRCS := $$(shell find $$(build_datarootdir)/julia/stdlib/$$(VERSDIR)/$1/src -name \*.jl) \
-$$(wildcard $$(build_prefix)/manifest/$$(VERSDIR)/$1) $$(build_datarootdir)/julia/stdlib/$$(VERSDIR)/$1/Project.toml
+$1_SRCS := $$(shell find $$(build_private_libdir)/stdlib/$$(VERSDIR)/$1/src -name \*.jl) \
+$$(wildcard $$(build_prefix)/manifest/$$(VERSDIR)/$1) $$(build_private_libdir)/stdlib/$$(VERSDIR)/$1/Project.toml
 
 ifneq ($(filter $(1),$(STDLIBS_WITHIN_SYSIMG)),)
 	SYSIMG_STDLIBS_SRCS += $$($1_SRCS)

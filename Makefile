@@ -29,7 +29,7 @@ default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
 
 # sort is used to remove potential duplicates
-DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_private_libexecdir) $(build_libexecdir) $(build_includedir) $(build_includedir)/julia $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_datarootdir)/julia/stdlib $(build_man1dir))
+DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_private_libexecdir) $(build_libexecdir) $(build_includedir) $(build_includedir)/julia $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_private_libdir)/stdlib $(build_man1dir))
 ifneq ($(BUILDROOT),$(JULIAHOME))
 BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src src/flisp src/support src/clangsa cli doc deps stdlib test test/clangsa test/embedding test/gcext test/llvmpasses)
 BUILDDIRMAKE := $(addsuffix /Makefile,$(BUILDDIRS)) $(BUILDROOT)/sysimage.mk $(BUILDROOT)/pkgimage.mk
@@ -59,7 +59,9 @@ configure:
 endif
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
-$(foreach link,base $(JULIAHOME)/test,$(eval $(call symlink_target,$(link),$$(build_datarootdir)/julia,$(notdir $(link)))))
+$(eval $(call symlink_target,base,$$(build_private_libdir),base))
+$(eval $(call symlink_target,$(JULIAHOME)/test,$$(build_datarootdir)/julia,test))
+
 
 julia_flisp.boot.inc.phony: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
@@ -81,13 +83,13 @@ endif
 
 TOP_LEVEL_PKGS := Compiler JuliaSyntax JuliaLowering
 
-TOP_LEVEL_PKG_LINK_TARGETS := $(addprefix $(build_datarootdir)/julia/,$(TOP_LEVEL_PKGS))
+TOP_LEVEL_PKG_LINK_TARGETS := $(addprefix $(build_private_libdir)/,$(TOP_LEVEL_PKGS))
 
-# Generate symlinks for top level pkgs in usr/share/julia/
-$(foreach module, $(TOP_LEVEL_PKGS), $(eval $(call symlink_target,$$(JULIAHOME)/$(module),$$(build_datarootdir)/julia,$(module))))
+# Generate symlinks for top level pkgs in usr/lib/julia/
+$(foreach module, $(TOP_LEVEL_PKGS), $(eval $(call symlink_target,$$(JULIAHOME)/$(module),$$(build_private_libdir),$(module))))
 
 .PHONY: julia-deps
-julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test
+julia-deps: | $(DIRS) $(build_private_libdir)/base $(build_datarootdir)/julia/test
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/deps
 
 # `julia-stdlib` depends on `julia-deps` so that the fake JLL stdlibs can copy in their Artifacts.toml files.
@@ -227,10 +229,10 @@ $(build_depsbindir)/stringreplace: $(JULIAHOME)/contrib/stringreplace.c | $(buil
 	@$(call PRINT_CC, $(HOSTCC) -o $(build_depsbindir)/stringreplace $(JULIAHOME)/contrib/stringreplace.c)
 
 .PHONY: julia-base-cache
-julia-base-cache: julia-sysimg-$(JULIA_BUILD_MODE) | $(DIRS) $(build_datarootdir)/julia
+julia-base-cache: julia-sysimg-$(JULIA_BUILD_MODE) | $(DIRS) $(build_private_libdir)
 	@JULIA_BINDIR=$(call cygpath_w,$(build_bindir)) JULIA_FALLBACK_REPL=1 WINEPATH="$(call cygpath_w,$(build_bindir));$$WINEPATH" \
 		$(call spawn, $(JULIA_EXECUTABLE) --startup-file=no $(call cygpath_w,$(JULIAHOME)/contrib/write_base_cache.jl) \
-		$(call cygpath_w,$(build_datarootdir)/julia/base.cache))
+		$(call cygpath_w,$(build_private_libdir)/base.cache))
 
 # public libraries, that are installed in $(prefix)/lib
 ifeq ($(JULIA_BUILD_MODE),release)
@@ -352,7 +354,7 @@ endef
 .PHONY: install
 install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index.html
 	@$(MAKE) $(QUIET_MAKE) $(JULIA_BUILD_MODE)
-	@for subdir in $(bindir) $(datarootdir)/julia/stdlib/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir) $(private_libexecdir); do \
+	@for subdir in $(bindir) $(private_libdir)/stdlib/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir) $(private_libexecdir); do \
 		mkdir -p $(DESTDIR)$$subdir; \
 	done
 
@@ -441,28 +443,30 @@ else ifeq ($(JULIA_BUILD_MODE),debug)
 endif
 
 	# Copy in all .jl sources as well
-	mkdir -p $(DESTDIR)$(datarootdir)/julia/base $(DESTDIR)$(datarootdir)/julia/test
-	cp -R -L $(JULIAHOME)/base/* $(DESTDIR)$(datarootdir)/julia/base
+	mkdir -p $(DESTDIR)$(private_libdir)/base $(DESTDIR)$(datarootdir)/julia/test
+	cp -R -L $(build_private_libdir)/base/* $(DESTDIR)$(private_libdir)/base
+	cp -R -L $(build_private_libdir)/stdlib/* $(DESTDIR)$(private_libdir)/stdlib
+	cp -R -L $(TOP_LEVEL_PKG_LINK_TARGETS) $(DESTDIR)$(private_libdir)
 	cp -R -L $(JULIAHOME)/test/* $(DESTDIR)$(datarootdir)/julia/test
 	cp -R -L $(build_datarootdir)/julia/* $(DESTDIR)$(datarootdir)/julia
 
 	# Set .jl sources as read-only to match package directories
-	find $(DESTDIR)$(datarootdir)/julia/base -type f -name \*.jl -exec chmod 0444 '{}' \;
+	find $(DESTDIR)$(private_libdir)/base -type f -name \*.jl -exec chmod 0444 '{}' \;
 	find $(DESTDIR)$(datarootdir)/julia/test -type f -name \*.jl -exec chmod 0444 '{}' \;
 
 	# Copy documentation
 	cp -R -L $(BUILDROOT)/doc/_build/html $(DESTDIR)$(docdir)/
 	# Remove various files which should not be installed
-	-rm -f $(DESTDIR)$(datarootdir)/julia/base/version_git.sh
 	-rm -f $(DESTDIR)$(datarootdir)/julia/test/Makefile
-	-rm -f $(DESTDIR)$(datarootdir)/julia/base/*/source-extracted
-	-rm -f $(DESTDIR)$(datarootdir)/julia/base/*/build-configured
-	-rm -f $(DESTDIR)$(datarootdir)/julia/base/*/build-compiled
-	-rm -f $(DESTDIR)$(datarootdir)/julia/base/*/build-checked
-	-rm -f $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/*/source-extracted
-	-rm -f $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/*/build-configured
-	-rm -f $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/*/build-compiled
-	-rm -f $(DESTDIR)$(datarootdir)/julia/stdlib/$(VERSDIR)/*/build-checked
+	-rm -f $(DESTDIR)$(private_libdir)/version_git.sh
+	-rm -f $(DESTDIR)$(private_libdir)/base/*/source-extracted
+	-rm -f $(DESTDIR)$(private_libdir)/base/*/build-configured
+	-rm -f $(DESTDIR)$(private_libdir)/base/*/build-compiled
+	-rm -f $(DESTDIR)$(private_libdir)/base/*/build-checked
+	-rm -f $(DESTDIR)$(private_libdir)/stdlib/$(VERSDIR)/*/source-extracted
+	-rm -f $(DESTDIR)$(private_libdir)/stdlib/$(VERSDIR)/*/build-configured
+	-rm -f $(DESTDIR)$(private_libdir)/stdlib/$(VERSDIR)/*/build-compiled
+	-rm -f $(DESTDIR)$(private_libdir)/stdlib/$(VERSDIR)/*/build-checked
 	# Copy in beautiful new man page
 	$(INSTALL_F) $(build_man1dir)/julia.1 $(DESTDIR)$(man1dir)/
 	# Copy .desktop file
