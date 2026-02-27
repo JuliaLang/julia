@@ -236,6 +236,37 @@ let (:)(a,b) = (i for i in Base.:(:)(1,10) if i%2==0)
     @test Int8[ i for i = 1:2 ] == [2,4,6,8,10]
 end
 
+@testset "`Base.TypeWrapper`" begin
+    @test let type = Float32
+        type === Base.TypeWrapper{type}()[]
+    end
+    @test let type = Float32
+        local t::Type{type}
+        t = Base.TypeWrapper{type}()
+        type === t
+    end
+    @test let type = Float32
+        local w::Base.TypeWrapper{type}
+        w = type
+        w === Base.TypeWrapper{type}()
+    end
+end
+
+@testset "`sizeof` tests for `Fix`, `ComposedFunction`, `Splat`, `Broadcasted`; issue #59619" begin
+    local args = (nothing, sin, Float32)
+    for x in args
+        @test (iszero ∘ sizeof ∘ splat)(x)
+        @test (iszero ∘ sizeof ∘ Broadcast.Broadcasted)(x, ())
+        @test (iszero ∘ sizeof ∘ Broadcast.Broadcasted)(nothing, x, ())
+        for n in [1, 2, 3, 999]
+            @test (iszero ∘ sizeof ∘ Base.Fix{n})(x, nothing)
+        end
+        for y in args
+            @test (iszero ∘ sizeof ∘ (∘))(x, y)
+        end
+    end
+end
+
 @testset "Basic tests of Fix1, Fix2, and Fix" begin
     function test_fix1(Fix1=Base.Fix1)
         increment = Fix1(+, 1)
@@ -357,7 +388,7 @@ end
                 x::Int
             end
             f = Fix{1}(MyStruct, 1)
-            @test f isa Fix{1,Type{MyStruct},Int}
+            @test f isa Fix{1,Base.TypeWrapper{MyStruct},Int}
         end
     end
 

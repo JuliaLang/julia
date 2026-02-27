@@ -190,7 +190,7 @@ end
     @test ∘(FreeMagma(1), FreeMagma(2), FreeMagma(3)) === FreeMagma(((1,2), 3))
     @test ∘(FreeMagma(1), FreeMagma(2), FreeMagma(3), FreeMagma(4)) === FreeMagma((((1,2), 3), 4))
 
-    @test fieldtypes(typeof(Float64 ∘ Int)) == (Type{Float64}, Type{Int})
+    @test fieldtypes(typeof(Float64 ∘ Int)) == (Base.TypeWrapper{Float64}, Base.TypeWrapper{Int})
 
     @test repr(uppercase ∘ first) == "uppercase ∘ first"
     @test sprint(show, "text/plain", uppercase ∘ first) == "uppercase ∘ first"
