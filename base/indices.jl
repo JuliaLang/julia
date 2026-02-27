@@ -520,11 +520,22 @@ julia> linear[1,2]
 """
 struct LinearIndices{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{Int,N}
     indices::R
+    function LinearIndices{N,R}(indices::R) where {N,R<:NTuple{N,AbstractUnitRange{Int}}}
+        if N > 0
+            indexcount = 1 # == one(eltype(LinearIndices{N,R}))
+            for r in indices
+                indexcount = Base.checked_mul(indexcount, length(r))
+            end
+        end
+        new{N,R}(indices)
+    end
 end
 convert(::Type{LinearIndices{N,R}}, inds::LinearIndices{N}) where {N,R<:NTuple{N,AbstractUnitRange{Int}}} =
     LinearIndices{N,R}(convert(R, inds.indices))::LinearIndices{N,R}
 
 LinearIndices(::Tuple{}) = LinearIndices{0,typeof(())}(())
+LinearIndices(inds::NTuple{N,AbstractUnitRange{Int}}) where {N} =
+    LinearIndices{N,typeof(inds)}(inds)
 LinearIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} =
     LinearIndices(map(r->convert(AbstractUnitRange{Int}, r), inds))
 LinearIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) where {N} =
