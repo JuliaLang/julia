@@ -770,6 +770,35 @@
    (params bounds) (sparam-name-bounds params)
    (struct-def-expr- name params bounds super (flatten-blocks fields) mut)))
 
+;; definition with Any for all arguments (except type, which is exact)
+;; field-kinds:
+;;   -1 no convert (e.g. because it is Any)
+;;    0 normal convert to fieldtype
+;;   1+ static_parameter N
+(define (default-inner-ctor-body field-kinds file line)
+  (let* ((name '|#ctor-self#|)
+         (field-names (map (lambda (idx) (symbol (string "_" (+ idx 1)))) (iota (length field-kinds))))
+         (field-convert (lambda (fld fty val)
+              (cond ((eq? fty -1) val)
+                    ((> fty 0) (convert-for-type-decl val `(static_parameter ,fty) #f #f))
+                    (else (convert-for-type-decl val `(call (core fieldtype) ,name ,(+ fld 1)) #f #f)))))
+         (field-vals (map field-convert (iota (length field-names)) field-kinds field-names))
+         (body `(block
+                 (line ,line ,file)
+                 (return (new ,name ,@field-vals)))))
+    `(lambda ,(cons name field-names) () (scope-block ,body))))
+
+;; definition with exact types for all arguments (except type, which is not parameterized)
+(define (default-outer-ctor-body thistype field-count sparam-count file line)
+  (let* ((name '|#ctor-self#|)
+         (field-names (map (lambda (idx) (symbol (string "_" (+ idx 1)))) (iota field-count)))
+         (sparams (map (lambda (idx) `(static_parameter ,(+ idx 1))) (iota sparam-count)))
+         (type (if (null? sparams) name `(curly ,thistype ,@sparams)))
+         (body `(block
+                 (line ,line ,file)
+                 (return (new ,type ,@field-names)))))
+    `(lambda ,(cons name field-names) () (scope-block ,body))))
+
 (define (num-non-varargs args)
   (count (lambda (a) (not (vararg? a))) args))
 
@@ -1005,7 +1034,7 @@
        ;; Commonly Revise.jl should be used to figure out actually which methods should
        ;; actually be deleted or added anew.
        ,(if (null? defs)
-          `(call (top _defaultctors) ,newdef (inert ,loc))
+          `(call (core _defaultctors) ,newdef (inert ,loc))
           `(scope-block
             (block
              (hardscope)

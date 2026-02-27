@@ -281,11 +281,10 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"gc_preserve_begin" ids...] -> all(vst1_ident, vcx, ids)
     [K"gc_preserve_end" ids...] -> all(vst1_ident, vcx, ids)
     [K"isdefined" [K"Identifier"]] -> pass()
-    [K"lambda" [K"block" b1...] [K"block" b2...] _] ->
+    [K"lambda" [K"block" b1...] [K"block" b2...] [K"->" _...]] ->
         all(vst1_ident, vcx, b1) &
         all(vst1_ident, vcx, b2) &
-        (kind(st[3]) === K"->" ? vst1_lam(vcx, st[3]) :
-            vst1(with(vcx; return_ok=true, toplevel=false, in_gscope=false), st[3]))
+        vst1_lam(vcx, st[3])
     [K"softscope" _] -> pass()
     [K"softscope"] -> pass()
     [K"generated"] -> pass()
