@@ -609,6 +609,14 @@ end
     @test parent(view(B, 0x1, :)) === parent(view(B, 0x1, :)) === A
 end
 
+@testset "views with unsigned range indices" begin
+    A = reshape(1:24, 4, 6)
+    for T in (UInt8, UInt16, UInt32, UInt64, UInt128)
+        @test view(A, T(2):T(3), T(4):T(5)) == A[2:3, 4:5]
+        @test view(A, 1, T(1):T(2):T(5)) == A[1, 1:2:5]
+    end
+end
+
 @testset "issue #15168" begin
     A = rand(10)
     sA = view(copy(A), :)
