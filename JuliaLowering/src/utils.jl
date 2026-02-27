@@ -121,10 +121,11 @@ end
 LoweringError(ex::SyntaxTree, msg::String) =
     LoweringError(SyntaxList(ex), String[msg], false)
 
-# Collect some context for error printing.  >1 answer will only be produced with
-# a non-tree DAG.
-function _scan_parents(sts::SyntaxList, depth=3)
-    depth === 0 && return sts
+# Returns a set of ancestors within `depth` distance from the nodes in
+# `sts`. Slow, intended for error printing only.  >1 answer will only be
+# produced with a non-tree DAG.
+function _scan_parents(sts::SyntaxList; depth::Int=3)
+    depth <= 0 && return sts
     g = sts.graph
     out = SyntaxList(sts.graph)
     for st in sts
@@ -141,7 +142,7 @@ function _scan_parents(sts::SyntaxList, depth=3)
         end
         n_parents === 0 && push!(out, st)
     end
-    return _scan_parents(out, depth-1)
+    return _scan_parents(out; depth=depth-1)
 end
 
 function Base.showerror(io::IO, exc::LoweringError; show_detail=true)
