@@ -13,7 +13,7 @@ end
 4   (call JuliaLowering.eval_closure_type TestMod :#f##0 %₂ %₃)
 5   latestworld
 6   TestMod.#f##0
-7   (call core.typeof slot₂/x)
+7   (call core._typeof_captured_variable slot₂/x)
 8   (call core.apply_type %₆ %₇)
 9   (new %₈ slot₂/x)
 10  (= slot₁/f %₉)
@@ -186,7 +186,7 @@ end
     6   (= slot₃/x 5)
     7   TestMod.#foo#->##0
     8   slot₃/x
-    9   (call core.typeof %₈)
+    9   (call core._typeof_captured_variable %₈)
     10  (call core.apply_type %₇ %₉)
     11  slot₃/x
     12  (new %₁₀ %₁₁)
@@ -232,7 +232,7 @@ end
 20  --- method core.nothing %₁₉
     slots: [slot₁/#self#(!read) slot₂/x slot₃/g(single_assign) slot₄/z(!read,single_assign)]
     1   TestMod.#f#g##1
-    2   (call core.typeof slot₂/x)
+    2   (call core._typeof_captured_variable slot₂/x)
     3   (call core.apply_type %₁ %₂)
     4   (new %₃ slot₂/x)
     5   (= slot₃/g %₄)
@@ -282,7 +282,7 @@ end
     slots: [slot₁/#self#(!read) slot₂/#arg1#(!read) slot₃/g(single_assign)]
     1   TestMod.#f#g##2
     2   static_parameter₁
-    3   (call core.typeof %₂)
+    3   (call core._typeof_captured_variable %₂)
     4   (call core.apply_type %₁ %₃)
     5   static_parameter₁
     6   (new %₄ %₅)
@@ -337,7 +337,7 @@ end
     slots: [slot₁/#self#(!read) slot₂/x slot₃/g(single_assign) slot₄/y(single_assign)]
     1   (= slot₄/y (call core.Box))
     2   TestMod.#f#g##3
-    3   (call core.typeof slot₂/x)
+    3   (call core._typeof_captured_variable slot₂/x)
     4   (call core.apply_type %₂ %₃)
     5   slot₄/y
     6   (new %₄ slot₂/x %₅)
@@ -368,8 +368,8 @@ end
 slots: [slot₁/#self#(!read) slot₂/y slot₃/h_nest(single_assign)]
 1   TestMod.#f_nest#g_nest#h_nest##0
 2   (call core.getfield slot₁/#self# :x)
-3   (call core.typeof %₂)
-4   (call core.typeof slot₂/y)
+3   (call core._typeof_captured_variable %₂)
+4   (call core._typeof_captured_variable slot₂/y)
 5   (call core.apply_type %₁ %₃ %₄)
 6   (call core.getfield slot₁/#self# :x)
 7   (new %₅ %₆ slot₂/y)
@@ -655,39 +655,38 @@ end
 9   slot₂/#f_kw_closure#0
 10  (new %₈ %₉)
 11  (= slot₃/f_kw_closure %₁₀)
-12  (call core.svec :#f_kw_closure#0 :y)
-13  (call core.svec true false)
+12  (call core.svec :y)
+13  (call core.svec false)
 14  (call JuliaLowering.eval_closure_type TestMod :##f_kw_closure#0##0 %₁₂ %₁₃)
 15  latestworld
 16  TestMod.##f_kw_closure#0##0
-17  (call core.typeof slot₁/y)
+17  (call core._typeof_captured_variable slot₁/y)
 18  (call core.apply_type %₁₆ %₁₇)
-19  slot₂/#f_kw_closure#0
-20  (new %₁₈ %₁₉ slot₁/y)
-21  slot₂/#f_kw_closure#0
-22  (call core.setfield! %₂₁ :contents %₂₀)
-23  TestMod.##f_kw_closure#0##0
-24  TestMod.X
-25  TestMod.#f_kw_closure##0
-26  (call core.svec %₂₃ %₂₄ %₂₅)
-27  (call core.svec)
-28  SourceLocation::2:14
-29  (call core.svec %₂₆ %₂₇ %₂₈)
-30  --- method core.nothing %₂₉
-    slots: [slot₁/#self#(!read) slot₂/x slot₃/#self#(!read)]
+19  (new %₁₈ slot₁/y)
+20  slot₂/#f_kw_closure#0
+21  (call core.setfield! %₂₀ :contents %₁₉)
+22  TestMod.##f_kw_closure#0##0
+23  TestMod.X
+24  TestMod.#f_kw_closure##0
+25  (call core.svec %₂₂ %₂₃ %₂₄)
+26  (call core.svec)
+27  SourceLocation::2:14
+28  (call core.svec %₂₅ %₂₆ %₂₇)
+29  --- method core.nothing %₂₈
+    slots: [slot₁/#f_kw_closure#0(!read) slot₂/x slot₃/#self#(!read)]
     1   (meta :nkw 1)
     2   TestMod.+
-    3   (call core.getfield slot₁/#self# :y)
+    3   (call core.getfield slot₁/#f_kw_closure#0 :y)
     4   (call %₂ slot₂/x %₃)
     5   (return %₄)
-31  latestworld
-32  (call core.typeof core.kwcall)
-33  TestMod.#f_kw_closure##0
-34  (call core.svec %₃₂ core.NamedTuple %₃₃)
-35  (call core.svec)
-36  SourceLocation::2:14
-37  (call core.svec %₃₄ %₃₅ %₃₆)
-38  --- method core.nothing %₃₇
+30  latestworld
+31  (call core.typeof core.kwcall)
+32  TestMod.#f_kw_closure##0
+33  (call core.svec %₃₁ core.NamedTuple %₃₂)
+34  (call core.svec)
+35  SourceLocation::2:14
+36  (call core.svec %₃₃ %₃₄ %₃₅)
+37  --- method core.nothing %₃₆
     slots: [slot₁/#kwcall_self#(!read) slot₂/kws slot₃/#self# slot₄/kwtmp slot₅/x(!read) slot₆/#f_kw_closure#0(!read,maybe_undef)]
     1   (newvar slot₅/x)
     2   (call core.isdefined slot₂/kws :x)
@@ -721,13 +720,13 @@ end
     30  (call core.getfield %₂₄ :contents)
     31  (call %₃₀ %₁₆ slot₃/#self#)
     32  (return %₃₁)
-39  latestworld
-40  TestMod.#f_kw_closure##0
-41  (call core.svec %₄₀)
-42  (call core.svec)
-43  SourceLocation::2:14
-44  (call core.svec %₄₁ %₄₂ %₄₃)
-45  --- method core.nothing %₄₄
+38  latestworld
+39  TestMod.#f_kw_closure##0
+40  (call core.svec %₃₉)
+41  (call core.svec)
+42  SourceLocation::2:14
+43  (call core.svec %₄₀ %₄₁ %₄₂)
+44  --- method core.nothing %₄₃
     slots: [slot₁/#self# slot₂/#f_kw_closure#0(!read,maybe_undef)]
     1   (call core.getfield slot₁/#self# :#f_kw_closure#0)
     2   (call core.isdefined %₁ :contents)
@@ -739,9 +738,9 @@ end
     8   TestMod.x_default
     9   (call %₇ %₈ slot₁/#self#)
     10  (return %₉)
-46  latestworld
-47  slot₃/f_kw_closure
-48  (return %₄₇)
+45  latestworld
+46  slot₃/f_kw_closure
+47  (return %₄₆)
 
 ########################################
 # Closure capturing a typed local must also capture the type expression
@@ -808,7 +807,7 @@ end
     3   (call %₂ "hello")
     4   (= slot₃/y 1)
     5   TestMod.#f_after_if#->##0
-    6   (call core.typeof slot₃/y)
+    6   (call core._typeof_captured_variable slot₃/y)
     7   (call core.apply_type %₅ %₆)
     8   (new %₇ slot₃/y)
     9   (return %₈)
@@ -857,7 +856,7 @@ end
     8   slot₄/if_val
     9   (= slot₃/y %₈)
     10  TestMod.#f_ternary#->##0
-    11  (call core.typeof slot₃/y)
+    11  (call core._typeof_captured_variable slot₃/y)
     12  (call core.apply_type %₁₀ %₁₁)
     13  (new %₁₂ slot₃/y)
     14  (return %₁₃)
@@ -914,7 +913,7 @@ end
     15  slot₂/x
     16  (= slot₃/y %₁₅)
     17  TestMod.#f_or_guard#->##0
-    18  (call core.typeof slot₃/y)
+    18  (call core._typeof_captured_variable slot₃/y)
     19  (call core.apply_type %₁₇ %₁₈)
     20  (new %₁₉ slot₃/y)
     21  (return %₂₀)
@@ -957,7 +956,7 @@ end
     2   (= slot₃/x 1)
     3   TestMod.#f_arg_reassign#->##0
     4   slot₃/x
-    5   (call core.typeof %₄)
+    5   (call core._typeof_captured_variable %₄)
     6   (call core.apply_type %₃ %₅)
     7   slot₃/x
     8   (new %₆ %₇)
@@ -1039,7 +1038,7 @@ end
     slots: [slot₁/#self#(!read) slot₂/x(single_assign)]
     1   (= slot₂/x 1)
     2   TestMod.#f_local_no_box#->##0
-    3   (call core.typeof slot₂/x)
+    3   (call core._typeof_captured_variable slot₂/x)
     4   (call core.apply_type %₂ %₃)
     5   (new %₄ slot₂/x)
     6   (return %₅)
@@ -1090,7 +1089,7 @@ end
     9   slot₃/tmp
     10  (= slot₂/x %₉)
     11  TestMod.#f_typed_local_no_box#->##0
-    12  (call core.typeof slot₂/x)
+    12  (call core._typeof_captured_variable slot₂/x)
     13  (call core.apply_type %₁₁ %₁₂)
     14  (new %₁₃ slot₂/x)
     15  (return %₁₄)

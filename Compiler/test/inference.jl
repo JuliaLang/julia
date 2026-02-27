@@ -2462,12 +2462,12 @@ end |> only === Int
 # handle multiple call-site refinement targets
 isasome(_) = true
 isasome(::Nothing) = false
-@test_broken Base.return_types((AliasableField{Union{Int,Nothing}},); interp=MustAliasInterpreter()) do a
+@test Base.infer_return_type((AliasableField{Union{Int,Nothing}},); interp=MustAliasInterpreter()) do a
     if isasome(a.f)
         return a.f
     end
     return 0
-end |> only === Int
+end === Int
 
 # appropriate lattice order
 @test Base.return_types((AliasableField{Any},); interp=MustAliasInterpreter()) do x
@@ -2562,18 +2562,18 @@ end |> only === Int
     end
     return 0
 end |> only === Int
-@test_broken Base.return_types((AliasableField{Union{Nothing,Int}},); interp=MustAliasInterpreter()) do x
+@test Base.infer_return_type((AliasableField{Union{Nothing,Int}},); interp=MustAliasInterpreter()) do x
     if !isnothing(x.f)
         return x.f
     end
     return 0
-end |> only === Int
-@test_broken Base.return_types((AliasableField{Union{Some{Int},Nothing}},); interp=MustAliasInterpreter()) do x
+end === Int
+@test Base.infer_return_type((AliasableField{Union{Some{Int},Nothing}},); interp=MustAliasInterpreter()) do x
     if !isnothing(x.f)
         return x.f
     end
     throw()
-end |> only === Some{Int}
+end === Some{Int}
 
 # handle the edge case
 @eval intermustalias_edgecase(_) = $(Compiler.InterMustAlias(2, Some{Any}, 1, Int))
@@ -4164,6 +4164,10 @@ end == Int
 # across different SSAValues that access the same field of the same slot
 @test Base.infer_return_type((AliasableField{Union{AliasUnionSplitA,AliasUnionSplitB}},); interp=MustAliasInterpreter()) do x
     alias_union_split_f(getfield(x, :f), getfield(x, :f))
+end == Int
+# `getproperty` (`x.f`) produces MustAlias via InterMustAlias pipeline
+@test Base.infer_return_type((AliasableField{Union{AliasUnionSplitA,AliasUnionSplitB}},); interp=MustAliasInterpreter()) do x
+    alias_union_split_f(x.f, x.f)
 end == Int
 
 @testset "constant prop' for union split signature" begin

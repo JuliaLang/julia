@@ -133,14 +133,14 @@ Validation1Context.
 
 We don't check some other things:
 - This pass assumes that required attributes exist, that leaf-only (or not)
-  kinds are leaves (or not), and that syntax flags are valid per kind.  Those
-  should be checked before this validation in a linear pass over the nodes.
+  kinds are leaves (or not).  See `assert_syntaxtree`.
 - Scope issues are caught later in lowering, e.g. declaring something local and
   global.
 - Checking that certain forms don't appear in value position is also handled
   later in lowering.
 """
 function valid_st1(st::SyntaxTree)
+    DEBUG && assert_syntaxtree(st)
     vr = vst1(Validation1Context(), st)
     @assert is_known(vr)
     return vr
@@ -193,8 +193,6 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         vst1(vcx, x) # BroadcastFunction(x)
     [K"return" val] -> vcx.return_ok ?
         vst1(vcx, val) :
-        @fail(st, "`return` not allowed inside comprehension or generator")
-    [K"return"] -> vcx.return_ok ? pass() :
         @fail(st, "`return` not allowed inside comprehension or generator")
     ([K"continue"], when=vcx.in_loop) -> pass()
     ([K"continue" lab], when=vcx.in_loop) -> vst1_ident(vcx, lab; lhs=true)
@@ -275,8 +273,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"symboliclabel" lab] -> vst1_ident(vcx, lab; lhs=true)
     [K"symbolicgoto" lab] -> vst1_ident(vcx, lab; lhs=true)
     [K"symbolicblock" lab body] ->
-        (kind(lab) == K"symboliclabel" ? pass() : vst1_ident(vcx, lab; lhs=true)) &
-        vst1(with(vcx; in_symblock=true), body)
+        vst1_ident(vcx, lab; lhs=true) & vst1(with(vcx; in_symblock=true), body)
     [K"gc_preserve" x ids...] -> vst1(vcx, x) & all(vst1_ident, vcx, ids)
     [K"gc_preserve_begin" ids...] -> all(vst1_ident, vcx, ids)
     [K"gc_preserve_end" ids...] -> all(vst1_ident, vcx, ids)
@@ -600,7 +597,7 @@ vst1_lam_lhs(vcx, st) = @stm st begin
     # syntax TODO: This is handled badly in the parser
     [K"block" p1 p2] -> pass()
     # unwrapped single arg
-    _ -> let ps = SyntaxList(st._graph, tree_ids(st))
+    _ -> let ps = SyntaxList(st)
         _calldecl_positionals(vcx, ps, K"=")
     end
 end
@@ -988,6 +985,7 @@ end
 Assumes `st` is parsed from surface syntax, and not a partially-expanded tree.
 """
 function valid_st0(st::SyntaxTree)
+    DEBUG && assert_syntaxtree(st)
     vr = vst1(with(Validation1Context(), unexpanded=true), st)
     # hack: A macrocall can show up almost anywhere, so filter errors pointing
     # at macrocalls instead of adding cases to every function above.
@@ -1025,4 +1023,77 @@ vst0_quoted(vcx, st; quote_level) = @stm st begin
     [K"quote" x] ->
         vst0_quoted(vcx, x; quote_level=quote_level+1)
     _ -> all(vst0_quoted, vcx, children(st); quote_level)
+end
+
+#-------------------------------------------------------------------------------
+# Tree invariants assumed everywhere, including `show`, so fallback printing
+# should be used on failure.  (These checks really belong in the type system,
+# but failure should only be possible working on AST-internal functions.)
+
+function assert_syntaxtree(st::SyntaxTree)
+    vr = _assert_syntaxtree(st, NodeId[], pass())
+    @assert is_known(vr)
+    if !vr.ok
+        msg = string("assert_syntaxtree failed: ", node_string(st), "\n")
+        for err in vr.errors
+            msg *= "node: " * node_string(only(err.sts)) * "\nreason: " * err.msg
+        end
+        throw(error(msg))
+    end
+    nothing
+end
+
+function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
+    if st._id in parents
+        err = "cycle detected: ["
+        for p in parents
+            err *= "\n" * node_string(SyntaxTree(st._graph, p))
+        end
+        return vr & @fail(st, err*"]")
+    end
+    for a in (:kind, :source)
+        vr &= hasattr(st, a) ? pass() : @fail(st, string("needs attribute ", a))
+    end
+    if is_leaf(st)
+        # Note some kinds can show up in non-leaves too
+        required_attrs = @stm st begin
+            [K"Identifier"] -> (:name_val,)
+            [K"core"] -> (:name_val,)
+            [K"top"] -> (:name_val,)
+            [K"Symbol"] -> (:name_val,)
+            [K"globalref"] -> (:name_val,:mod)
+            [K"Placeholder"] -> ()
+            [K"BindingId"] -> (:var_id,)
+            [K"label"] -> (:id,)
+            [K"symboliclabel"] -> (:name_val,)
+            [K"symbolicgoto"] -> (:name_val,)
+            [K"Value"] -> (:value,)
+            [K"slot"] -> (:var_id,)
+            [K"static_parameter"] -> (:var_id,)
+            [K"SSAValue"] -> (:var_id,)
+            [K"TOMBSTONE"] -> ()
+            [K"SourceLocation"] -> ()
+            [K"latestworld"] -> ()
+            [K"latestworld_if_toplevel"] -> ()
+            (_, when=JuliaSyntax.is_literal(st)) -> (:value,)
+            (_, when=JuliaSyntax.is_trivia(st)) -> () # green tree only
+            (_, when=JuliaSyntax.is_operator(st)) -> (:name_val) # TODO: remove
+            _ -> return vr & @fail(st, "unrecognized leaf kind")
+        end
+    else
+        required_attrs = @stm st begin
+            [K"code_info" _...] -> (:slots, :is_toplevel_thunk)
+            [K"unknown_head" _...] -> (:name_val,)
+            _ -> ()
+        end
+    end
+    for a in required_attrs
+        vr &= hasattr(st, a) ? pass() : @fail(st, string("needs attribute ", a))
+    end
+    push!(parents, st._id)
+    for c in children(st)
+        vr &= _assert_syntaxtree(c, parents, vr)
+    end
+    pop!(parents)
+    vr
 end

@@ -98,6 +98,7 @@ end
     # worth replicating this behaviour.  We would likely need to copy the way
     # flisp nests an extra scope block in every lambda.
     @testset "arg,global" begin
+        local f
         s = "function (a); global a = 1; a; end"
         @test_broken f = JuliaLowering.include_string(test_mod, s)
         @test_broken f isa Function
@@ -105,6 +106,7 @@ end
         @test_broken isdefinedglobal(test_mod, :a)
     end
     @testset "sparam,global" begin
+        local f
         s = "function (a::s) where {s}; global s = 1; s; end"
         @test_broken f = JuliaLowering.include_string(test_mod, s)
         @test_broken f isa Function
