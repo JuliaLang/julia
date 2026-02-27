@@ -457,7 +457,7 @@ end
     @test replace(uppercase, "abc", 'b') == "aBc"
     @test replace("Hello, world.", r"\w+") do word
         string(length(word))
-    end == "5, 6."
+    end == "5, 5."
     let buf = IOBuffer()
         replace(uppercase, buf, "foo bar", r"\w+")
         @test String(take!(buf)) == "FOO BAR"

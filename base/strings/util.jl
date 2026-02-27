@@ -1164,7 +1164,7 @@ julia> replace(uppercase, "hello world", r"\\w+")
 julia> replace("Hello, world.", r"\\w+") do word
            string(length(word))
        end
-"5, 6."
+"5, 5."
 ```
 
 !!! compat "Julia 1.14"
