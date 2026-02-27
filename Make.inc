@@ -1434,18 +1434,23 @@ endif
 USE_BINARYBUILDER ?= 0
 endif
 
+define abi_version
+$(or $(shell echo '#include <string>' | $(CXX) $(CXXFLAGS) -x c++ -dM -E - 2>/dev/null | grep $(1) | awk '{ print $$3 }'),$(2))
+endef
+
 # Auto-detect triplet once, create different versions that we use as defaults below for each BB install target
 FC_VERSION := $(shell $(FC) -dM -E - < /dev/null 2>/dev/null | grep __GNUC__ | cut -d' ' -f3)
 ifeq ($(USEGCC)$(FC_VERSION),1)
 FC_OR_CC_VERSION := $(shell $(CC) -dumpfullversion -dumpversion 2>/dev/null | cut -d'.' -f1)
 # n.b. clang's __GNUC__ macro pretends to be gcc 4.2.1, so leave it as the empty string here if the compiler is not certain to be GCC
 endif
-BB_TRIPLET_LIBGFORTRAN_CXXABI := $(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) "$(FC_OR_CC_VERSION)" "$(or $(shell echo '\#include <string>' | $(CXX) $(CXXFLAGS) -x c++ -dM -E - | grep _GLIBCXX_USE_CXX11_ABI | awk '{ print $$3 }' ),1)")
+BB_TRIPLET_LIBGFORTRAN_CXXABI := $(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) "$(FC_OR_CC_VERSION)" "$(call abi_version,_GLIBCXX_USE_CXX11_ABI,1)")
 BB_TRIPLET_LIBGFORTRAN := $(subst $(SPACE),-,$(filter-out cxx%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
 BB_TRIPLET_CXXABI := $(subst $(SPACE),-,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
 BB_TRIPLET := $(subst $(SPACE),-,$(filter-out cxx%,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI)))))
 
 LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN))))
+LIBM_VERSION := $(call abi_version,__GNU_LIBRARY__,6)
 
 # CSL_NEXT_GLIBCXX_VERSION is a triple of the symbols representing support for whatever
 # the next libstdc++ version would be. This is used for two things.
@@ -1768,7 +1773,7 @@ else ifdef JULIA_VAGRANT_BUILD
 	@cp -R $$(abspath $(1)) $$@.tmp
 	@mv $$@.tmp $$@
 else
-	@ln -sf $$(abspath $(1)) $$@
+	@test -h $$@ || ln -sf $$(abspath $(1)) $$@
 endif
 endef
 
@@ -1884,13 +1889,15 @@ endif
 
 # USE_SYSTEM_LIBM and USE_SYSTEM_OPENLIBM causes it to get symlinked into build_private_shlibdir
 ifeq ($(USE_SYSTEM_LIBM),1)
-LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
+LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT)).$(LIBM_VERSION))
+LIBM_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT)).$(LIBM_VERSION))
 else ifeq ($(USE_SYSTEM_OPENLIBM),1)
 LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
+LIBM_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
 else
 LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
-endif
 LIBM_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
+endif
 
 # We list:
 #  * libgcc_s, because FreeBSD needs to load ours, not the system one.
