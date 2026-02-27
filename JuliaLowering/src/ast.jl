@@ -91,6 +91,8 @@ Lexical scope ID
 """
 const ScopeId = Int
 
+JuliaSyntax.SyntaxList(ctx::AbstractLoweringContext) = SyntaxList(syntax_graph(ctx))
+
 function JuliaSyntax.newleaf(ctx::AbstractLoweringContext,
                     prov::Union{SyntaxTree, SourceAttrType},
                     k::Kind)

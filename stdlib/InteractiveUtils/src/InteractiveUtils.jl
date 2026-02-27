@@ -16,7 +16,7 @@ export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, 
 
 import Base.Docs.apropos
 
-using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, summarysize,
+using Base: unsorted_names, unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, summarysize,
     signature_type, format_bytes
 using Base.Libc
 using Markdown
@@ -263,7 +263,7 @@ function _subtypes_in!(mods::Array, @nospecialize(x::Type))
     while !isempty(mods)
         m = pop!(mods)
         xt = xt::DataType
-        for s in names(m, all = true)
+        for s in unsorted_names(m, all = true)
             if !isdeprecated(m, s) && isdefinedglobal(m, s)
                 t = getglobal(m, s)
                 dt = isa(t, UnionAll) ? unwrap_unionall(t) : t
