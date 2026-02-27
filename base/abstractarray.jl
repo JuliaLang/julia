@@ -3385,6 +3385,8 @@ end
 # map on collections
 map(f, A::AbstractArray) = collect_similar(A, Generator(f,A))
 
+filter(f, itr) = collect(Iterators.filter(f, itr))
+
 mapany(f, A::AbstractArray) = map!(f, Vector{Any}(undef, length(A)), A)
 mapany(f, itr) = Any[f(x) for x in itr]
 
