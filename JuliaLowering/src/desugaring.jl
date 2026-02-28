@@ -6,6 +6,7 @@ struct DesugaringContext{Attrs} <: AbstractLoweringContext
     scope_layers::Vector{ScopeLayer}
     mod::Module
     expr_compat_mode::Bool
+    ssa_mapping::Dict{Int, IdTag}
 end
 
 function DesugaringContext(graph, ctx)
@@ -13,7 +14,18 @@ function DesugaringContext(graph, ctx)
                       ctx.bindings,
                       ctx.scope_layers,
                       current_layer(ctx).mod,
-                      ctx.expr_compat_mode)
+                      ctx.expr_compat_mode,
+                      Dict{Int, IdTag}())
+end
+
+# Translate a K"ssavalue" node from pre-lowered code into a normal SSA binding.
+# Uses ctx.ssa_mapping to ensure the same external SSA id maps to the same binding.
+function _resolve_ssavalue(ctx::DesugaringContext, ex)
+    binding_id = get!(ctx.ssa_mapping, ex[1].value) do
+        s = ssavar(ctx, ex)
+        s.var_id
+    end
+    binding_ex(ctx, binding_id)
 end
 
 #-------------------------------------------------------------------------------
@@ -1305,6 +1317,8 @@ function expand_assignment(ctx, ex, is_const=false)
                 [K"removable" rr]
             ]
         )
+    elseif kl == K"ssavalue"
+        sink_assignment(ctx, ex, _resolve_ssavalue(ctx, lhs), expand_forms_2(ctx, rhs))
     elseif is_identifier_like(lhs)
         if is_const
             @ast ctx ex [K"block"
@@ -4109,9 +4123,9 @@ function expand_struct_def(ctx, ex, docs)
         ]
 
         if isempty(inner_defs)
-            # Default constructors are generated at runtime by Core._defaultctors.
+            # Default constructors are generated at runtime by Base._defaultctors.
             [K"call"
-                "_defaultctors"::K"core"
+                "_defaultctors"::K"top"
                 global_struct_name
                 ::K"SourceLocation"(ex)
             ]
@@ -4638,6 +4652,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         throw(LoweringError(ex, "`\$` expression outside string or quote"))
     elseif k == K"..."
         throw(LoweringError(ex, "`...` expression outside call"))
+    elseif k == K"ssavalue"
+        _resolve_ssavalue(ctx, ex)
     elseif is_leaf(ex)
         ex
     elseif k == K"return"
@@ -4675,7 +4691,8 @@ ensure_desugaring_attributes!(graph) = ensure_attributes!(
     graph = ensure_desugaring_attributes!(copy_attrs(ctx.graph))
     ex = reparent(graph, ex)
     ctx_out = DesugaringContext(graph, ctx.bindings, ctx.scope_layers,
-                                current_layer(ctx).mod, ctx.expr_compat_mode)
+                                current_layer(ctx).mod, ctx.expr_compat_mode,
+                                Dict{Int, IdTag}())
     vr = valid_st1(ex)
     # surface only one error until we have pretty-printing for multiple
     if !vr.ok

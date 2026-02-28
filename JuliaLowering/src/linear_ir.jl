@@ -618,10 +618,10 @@ end
 # the needed value.
 function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     k = kind(ex)
-    if k == K"BindingId" || is_literal(k) || k == K"quote" || k == K"inert" ||
-            k == K"inert_syntaxtree" || k == K"top" || k == K"core" ||
-            k == K"Value" || k == K"Symbol" || k == K"SourceLocation" ||
-            k == K"static_eval"
+    if k == K"BindingId" || is_literal(k) || k == K"quote" ||
+            k == K"inert" || k == K"inert_syntaxtree" || k == K"top" ||
+            k == K"core" || k == K"Value" || k == K"Symbol" ||
+            k == K"SourceLocation" || k == K"static_eval"
         ex1 = ex
         if kind(ex1) == K"BindingId"
             binfo = get_binding(ctx, ex1)
@@ -1227,7 +1227,7 @@ statements (ie, Julia's linear/untyped IR).
 
 Most of the compliexty of this pass is in lowering structured control flow (if,
 loops, etc) to gotos and exception handling to enter/leave. We also convert
-`K"BindingId"` into K"slot", `K"globalref"` or `K"SSAValue` as appropriate.
+`K"BindingId"` into `K"slot"`, `K"globalref"` or `K"SSAValue"` as appropriate.
 """
 @fzone "JL: linearize" function linearize_ir(ctx::ClosureConversionCtx, ex)
     graph = ensure_linearization_attributes!(copy_attrs(ctx.graph))
