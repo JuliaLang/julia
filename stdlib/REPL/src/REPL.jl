@@ -72,6 +72,9 @@ using .StylingPasses
 
 function histsearch end # To work around circular dependency
 
+include("term_osc.jl")
+using .TermOSC
+
 include("LineEdit.jl")
 using .LineEdit
 import .LineEdit:
@@ -1686,6 +1689,9 @@ function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     else
         interface = repl.interface
     end
+    # Collect color state
+    TermOSC.get_all_colors(StyledStrings.setcolors!, terminal(repl))
+    # Do it
     repl.backendref = backend
     repl.mistate = LineEdit.init_state(terminal(repl), interface)
     # Copy prompt_ready_event from repl to mistate (used by precompilation)
