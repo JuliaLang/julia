@@ -836,8 +836,6 @@ end
         @test prod(permutedims!(A,perm), dims=2) ≈ prod(PermutedDimsArray(A,perm), dims=2)
         @test prod(permutedims!(A,perm), dims=(2,4)) ≈ prod(PermutedDimsArray(A,perm), dims=(2,4))
     end
-
-
 end
 
 @testset "circshift" begin
