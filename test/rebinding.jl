@@ -469,3 +469,84 @@ module ReexportTests
     end
     @test User3.same_name == 42
 end
+
+# Test PARTITION_KIND_DECLARED_GUARD: `export` or `public` on an undefined name creates
+# a DECLARED_GUARD partition rather than leaving the binding as an implicit GUARD.
+module DeclaredGuardTests
+    using Test
+
+    # `export` on an undefined name creates DECLARED_GUARD
+    export exported_undef
+    @test Base.binding_kind(@__MODULE__, :exported_undef) == Base.PARTITION_KIND_DECLARED_GUARD
+    @test Base.is_some_guard(Base.PARTITION_KIND_DECLARED_GUARD)
+    @test Base.is_some_implicit(Base.PARTITION_KIND_DECLARED_GUARD)
+
+    # `public` on an undefined name also creates DECLARED_GUARD
+    public public_undef
+    @test Base.binding_kind(@__MODULE__, :public_undef) == Base.PARTITION_KIND_DECLARED_GUARD
+
+    # The binding shows the right description via print_partition
+    bpart = Base.lookup_binding_partition(Base.tls_world_age(), GlobalRef(@__MODULE__, :exported_undef))
+    @test occursin("explicitly declared", sprint(Base.print_partition, bpart))
+
+    # The exported name appears in names() (exported = true by default with export keyword)
+    @test :exported_undef in names(@__MODULE__)
+
+    # UndefVarError hint says "declared but not assigned" for DECLARED_GUARD
+    Base.Experimental.register_error_hint(Base.UndefVarError_hint, UndefVarError)
+    ex = try; @eval exported_undef; catch e; e; end
+    @test ex isa UndefVarError
+    @test occursin("declared but not assigned", sprint(Base.showerror, ex))
+
+    # DECLARED_GUARD is re-resolvable via implicit import when a source binding appears
+    module DeclGuardSource
+        export resolvable_sym
+    end
+    module DeclGuardConsumer
+        using Test
+        using ..DeclGuardSource
+        export resolvable_sym  # creates DECLARED_GUARD
+        @test Base.binding_kind(@__MODULE__, :resolvable_sym) == Base.PARTITION_KIND_DECLARED_GUARD
+        Core.eval(DeclGuardSource, :(resolvable_sym = 99))
+        @test resolvable_sym == 99
+        @test Base.is_some_imported(Base.binding_kind(@__MODULE__, :resolvable_sym))
+    end
+end
+
+@testset "Rebinding worlds" begin
+    # Test that partition lists preserve the world age of creation
+    w0 = Base.get_world_counter()
+    M = @eval module $(gensym())
+        export x
+        public y
+    end
+    w = Base.get_world_counter()
+    @eval M begin
+        const x = 1
+        const y = 2
+    end
+    bx = convert(Core.Binding, GlobalRef(M, :x))
+    by = convert(Core.Binding, GlobalRef(M, :y))
+    px = bx.partitions
+    @test px.min_world > w
+    @test (px.kind & Base.PARTITION_FLAG_EXPORTED) != 0
+    @test (px.kind & Base.PARTITION_MASK_KIND) == Base.PARTITION_KIND_CONST
+    px = px.next
+    @test w0 + 1 < px.min_world < w
+    @test px.max_world == w
+    @test (px.kind & Base.PARTITION_FLAG_EXPORTED) != 0
+    @test (px.kind & Base.PARTITION_MASK_KIND) == Base.PARTITION_KIND_BACKDATED_CONST
+    px = px.next
+    @test w0 + 1 == px.min_world
+    py = by.partitions
+    @test py.min_world > w
+    @test (py.kind & Base.PARTITION_FLAG_EXPORTED) == 0
+    @test (py.kind & Base.PARTITION_MASK_KIND) == Base.PARTITION_KIND_CONST
+    py = py.next
+    @test w0 + 1 < py.min_world <= w
+    @test py.max_world == w + 1
+    @test (py.kind & Base.PARTITION_FLAG_EXPORTED) == 0
+    @test (py.kind & Base.PARTITION_MASK_KIND) == Base.PARTITION_KIND_BACKDATED_CONST
+    py = py.next
+    @test w0 + 1 == py.min_world
+end

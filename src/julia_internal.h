@@ -1098,7 +1098,7 @@ STATIC_INLINE int jl_bkind_is_some_explicit_import(enum jl_partition_kind kind) 
 }
 
 STATIC_INLINE int jl_bkind_is_some_guard(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
-    return kind == PARTITION_KIND_FAILED || kind == PARTITION_KIND_GUARD;
+    return kind == PARTITION_KIND_FAILED || kind == PARTITION_KIND_GUARD || kind == PARTITION_KIND_DECLARED_GUARD;
 }
 
 STATIC_INLINE int jl_bkind_is_some_implicit(enum jl_partition_kind kind) JL_NOTSAFEPOINT {

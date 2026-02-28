@@ -667,11 +667,11 @@ typedef struct _jl_weakref_t {
 //      PARTITION_KIND_FAILED
 //
 // 2. Weakly Declared Bindings (Weak)
-//    The binding was declared using `global`. It is treated as a mutable, `Any` type global
-//    for almost all purposes, except that it receives slightly worse optimizations, since it
-//    may be replaced.
+//    The binding was explicitly declared without being given a value. These bindings may be
+//    replaced by a stronger binding and may be backdated by PARTITION_KIND_BACKDATED_CONST.
 //
-//      PARTITION_KIND_DECLARED
+//      PARTITION_KIND_DECLARED        (declared with `global x`)
+//      PARTITION_KIND_DECLARED_GUARD  (declared with `public x` or `export x` without a value)
 //
 // 3. Strong Declared Bindings (Weak)
 //    All other bindings are explicitly declared using a keyword or global assignment.
@@ -702,6 +702,7 @@ typedef struct _jl_weakref_t {
 //  - PARTITION_KIND_GUARD
 //  - PARTITION_KIND_FAILED
 //  - PARTITION_KIND_DECLARED
+//  - PARTITION_KIND_DECLARED_GUARD
 enum jl_partition_kind {
     // Constant: This binding partition is a constant declared using `const _ = ...`
     //  ->restriction holds the constant value
@@ -747,7 +748,15 @@ enum jl_partition_kind {
     // This is not a real binding kind, but can be used to ask for a re-resolution
     // of the implicit binding kind
     PARTITION_FAKE_KIND_IMPLICIT_RECOMPUTE = 0xc,
-    PARTITION_FAKE_KIND_CYCLE = 0xd
+    PARTITION_FAKE_KIND_CYCLE = 0xd,
+
+    // Declared Guard: The binding was declared using `public x` or `export x`, but no value
+    // has been assigned. Unlike PARTITION_KIND_GUARD, this kind is explicit (not implicit):
+    // it will not be replaced by implicit resolution and blocks implicit import resolution.
+    // Like PARTITION_KIND_DECLARED, this kind may be replaced by a stronger binding and may
+    // be backdated by PARTITION_KIND_BACKDATED_CONST.
+    //  ->restriction is NULL
+    PARTITION_KIND_DECLARED_GUARD = 0xe
 };
 
 static const uint8_t PARTITION_MASK_KIND = 0x0f;

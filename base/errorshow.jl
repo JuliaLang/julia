@@ -1265,7 +1265,7 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
                 else
                     print(io, "\nSuggestion: check for spelling errors or missing imports.")
                 end
-            elseif kind === PARTITION_KIND_GLOBAL || kind === PARTITION_KIND_UNDEF_CONST || kind == PARTITION_KIND_DECLARED
+            elseif kind === PARTITION_KIND_GLOBAL || kind === PARTITION_KIND_UNDEF_CONST || kind == PARTITION_KIND_DECLARED || kind == PARTITION_KIND_DECLARED_GUARD
                 print(io, "\nSuggestion: add an appropriate import or assignment. This global was declared but not assigned.")
             elseif kind === PARTITION_KIND_FAILED
                 print(io, "\nHint: It looks like two or more modules export different ",
