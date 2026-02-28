@@ -1602,6 +1602,23 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
     end
 end
 
+mutable struct AbstractIterationState
+    stateordonet
+    stateordonet_widened
+    valtype
+    statetype
+    may_have_terminated::Bool
+    nextstate::UInt8
+    call2future::Future{CallMeta}
+    function AbstractIterationState(
+            stateordonet, stateordonet_widened, valtype, statetype,
+            may_have_terminated::Bool, nextstate::UInt8
+        )
+        @nospecialize stateordonet stateordonet_widened valtype statetype
+        new(stateordonet, stateordonet_widened, valtype, statetype, may_have_terminated, nextstate)
+    end
+end
+
 # simulate iteration protocol on container type up to fixpoint
 function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @nospecialize(itertype),
                             vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
@@ -1616,91 +1633,91 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
         call1future = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[itft, itertype]), StmtInfo(true, false), vtypes, sv)::Future
         function inferiterate(interp, sv)
             call1 = call1future[]
-            stateordonet = call1.rt
             # Return Bottom if this is not an iterator.
             # WARNING: Changes to the iteration protocol must be reflected here,
             # this is not just an optimization.
             # TODO: this doesn't realize that Array, GenericMemory, SimpleVector, Tuple, and NamedTuple do not use the iterate protocol
-            if stateordonet === Bottom
+            if call1.rt === Bottom
                 iterateresult[] = AbstractIterationResult(Any[Bottom], AbstractIterationInfo(CallMeta[CallMeta(Bottom, Any, call1.effects, call1.info)], true))
                 return true
             end
-            stateordonet_widened = widenconst(stateordonet)
             calls = CallMeta[call1]
-            valtype = statetype = Bottom
             ret = Any[]
             𝕃ᵢ = typeinf_lattice(interp)
-            may_have_terminated = false
-            local call2future::Future{CallMeta}
+            state = AbstractIterationState(call1.rt, widenconst(call1.rt), Bottom, Bottom, false, 0x00)
 
-            nextstate::UInt8 = 0x0
             function inferiterate_2arg(interp, sv)
-                if nextstate === 0x1
-                    nextstate = 0xff
+                if state.nextstate === 0x1
+                    state.nextstate = 0xff
                     @goto state1
-                elseif nextstate === 0x2
-                    nextstate = 0xff
+                elseif state.nextstate === 0x2
+                    state.nextstate = 0xff
                     @goto state2
                 else
-                    @assert nextstate === 0x0
-                    nextstate = 0xff
+                    @assert state.nextstate === 0x0
+                    state.nextstate = 0xff
                 end
 
                 # Try to unroll the iteration up to max_tuple_splat, which covers any finite
                 # length iterators, or interesting prefix
                 while true
-                    if stateordonet_widened === Nothing
+                    if state.stateordonet_widened === Nothing
                         iterateresult[] = AbstractIterationResult(ret, AbstractIterationInfo(calls, true))
                         return true
                     end
-                    if Nothing <: stateordonet_widened || length(ret) >= InferenceParams(interp).max_tuple_splat
+                    if Nothing <: state.stateordonet_widened || length(ret) >= InferenceParams(interp).max_tuple_splat
                         break
                     end
-                    if !isa(stateordonet_widened, DataType) || !(stateordonet_widened <: Tuple) || isvatuple(stateordonet_widened) || length(stateordonet_widened.parameters) != 2
+                    if (!isa(state.stateordonet_widened, DataType) ||
+                        !(state.stateordonet_widened <: Tuple) ||
+                        isvatuple(state.stateordonet_widened) ||
+                        length(state.stateordonet_widened.parameters) != 2)
                         break
                     end
-                    nstatetype = getfield_tfunc(𝕃ᵢ, stateordonet, Const(2))
+                    nstatetype = getfield_tfunc(𝕃ᵢ, state.stateordonet, Const(2))
                     # If there's no new information in this statetype, don't bother continuing,
                     # the iterator won't be finite.
-                    if ⊑(𝕃ᵢ, nstatetype, statetype)
+                    if ⊑(𝕃ᵢ, nstatetype, state.statetype)
                         iterateresult[] = AbstractIterationResult(Any[Bottom], AbstractIterationInfo(calls, false), EFFECTS_THROWS)
                         return true
                     end
-                    valtype = getfield_tfunc(𝕃ᵢ, stateordonet, Const(1))
-                    push!(ret, valtype)
-                    statetype = nstatetype
-                    call2future = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, statetype]), StmtInfo(true, false), vtypes, sv)::Future
-                    if !isready(call2future)
-                        nextstate = 0x1
+                    state.valtype = getfield_tfunc(𝕃ᵢ, state.stateordonet, Const(1))
+                    push!(ret, state.valtype)
+                    state.statetype = nstatetype
+                    state.call2future = abstract_call_known(
+                        interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, state.statetype]),
+                        StmtInfo(true, false), vtypes, sv)::Future{CallMeta}
+                    if !isready(state.call2future)
+                        state.nextstate = 0x1
                         return false
                         @label state1
                     end
-                    let call = call2future[]
+                    let call = state.call2future[]
                         push!(calls, call)
-                        stateordonet = call.rt
-                        stateordonet_widened = widenconst(stateordonet)
+                        state.stateordonet = call.rt
+                        state.stateordonet_widened = widenconst(state.stateordonet)
                     end
                 end
                 # From here on, we start asking for results on the widened types, rather than
                 # the precise (potentially const) state type
                 # statetype and valtype are reinitialized in the first iteration below from the
                 # (widened) stateordonet, which has not yet been fully analyzed in the loop above
-                valtype = statetype = Bottom
-                may_have_terminated = Nothing <: stateordonet_widened
-                while valtype !== Any
-                    nounion = typeintersect(stateordonet_widened, Tuple{Any,Any})
+                state.valtype = state.statetype = Bottom
+                state.may_have_terminated = Nothing <: state.stateordonet_widened
+                while state.valtype !== Any
+                    nounion = typeintersect(state.stateordonet_widened, Tuple{Any,Any})
                     if nounion !== Union{} && !isa(nounion, DataType)
                         # nounion is of a type we cannot handle
-                        valtype = Any
+                        state.valtype = Any
                         break
                     end
-                    if nounion === Union{} || (nounion.parameters[1] <: valtype && nounion.parameters[2] <: statetype)
+                    if nounion === Union{} || (nounion.parameters[1] <: state.valtype && nounion.parameters[2] <: state.statetype)
                         # reached a fixpoint or iterator failed/gave invalid answer
-                        if !hasintersect(stateordonet_widened, Nothing)
+                        if !hasintersect(state.stateordonet_widened, Nothing)
                             # ... but cannot terminate
-                            if may_have_terminated
+                            if state.may_have_terminated
                                 # ... and iterator may have terminated prior to this loop, but not during it
-                                valtype = Bottom
+                                state.valtype = Bottom
                             else
                                 #  ... or cannot have terminated prior to this loop
                                 iterateresult[] = AbstractIterationResult(Any[Bottom], AbstractIterationInfo(calls, false), Effects())
@@ -1709,22 +1726,24 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
                         end
                         break
                     end
-                    valtype = tmerge(valtype, nounion.parameters[1])
-                    statetype = tmerge(statetype, nounion.parameters[2])
-                    call2future = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, statetype]), StmtInfo(true, false), vtypes, sv)::Future
-                    if !isready(call2future)
-                        nextstate = 0x2
+                    state.valtype = tmerge(state.valtype, nounion.parameters[1])
+                    state.statetype = tmerge(state.statetype, nounion.parameters[2])
+                    state.call2future = abstract_call_known(
+                        interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, state.statetype]),
+                        StmtInfo(true, false), vtypes, sv)::Future{CallMeta}
+                    if !isready(state.call2future)
+                        state.nextstate = 0x2
                         return false
                         @label state2
                     end
-                    let call = call2future[]
+                    let call = state.call2future[]
                         push!(calls, call)
-                        stateordonet = call.rt
-                        stateordonet_widened = widenconst(stateordonet)
+                        state.stateordonet = call.rt
+                        state.stateordonet_widened = widenconst(state.stateordonet)
                     end
                 end
-                if valtype !== Union{}
-                    push!(ret, Vararg{valtype})
+                if state.valtype !== Union{}
+                    push!(ret, Vararg{state.valtype})
                 end
                 iterateresult[] = AbstractIterationResult(ret, AbstractIterationInfo(calls, false))
                 return true
