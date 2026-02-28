@@ -821,6 +821,23 @@ end
     z = TSlow([1 2; 3 4])
     x_slow = PermutedDimsArray(z, (2, 1))
     @test similar(x_slow, 3,3) isa TSlow
+
+    # test the single argument inplace version of permutedims
+    for A in [rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1), [rand(ComplexF64, 2,2) for _ in 1:2, _ in 1:3, _ in 1:2, _ in 1:4]]
+        perm = randperm(4)
+        @test isequal(A,permutedims!(permutedims!(A,perm),invperm(perm)))
+        @test isequal(A,permutedims!(permutedims!(A,invperm(perm)),perm))
+
+        @test sum(permutedims!(A,perm)) ≈ sum(PermutedDimsArray(A,perm))
+        @test sum(permutedims!(A,perm), dims=2) ≈ sum(PermutedDimsArray(A,perm), dims=2)
+        @test sum(permutedims!(A,perm), dims=(2,4)) ≈ sum(PermutedDimsArray(A,perm), dims=(2,4))
+
+        @test prod(permutedims!(A,perm)) ≈ prod(PermutedDimsArray(A,perm))
+        @test prod(permutedims!(A,perm), dims=2) ≈ prod(PermutedDimsArray(A,perm), dims=2)
+        @test prod(permutedims!(A,perm), dims=(2,4)) ≈ prod(PermutedDimsArray(A,perm), dims=(2,4))
+    end
+
+
 end
 
 @testset "circshift" begin

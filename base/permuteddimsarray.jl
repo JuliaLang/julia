@@ -390,8 +390,9 @@ function construct_cycles(dims::NTuple{N}, perms::NTuple{N}) where {N}
     cycles
 end
 
-permutedims!(arr::AbstractArray, perm) = _permutedims!(arr, Val(size(arr)), Val(perm))
 permutedims!(arr::AbstractArray, p::Val) = _permutedims!(arr, Val(size(arr)), p)
+permutedims!(arr::AbstractArray, perm::Tuple) = permutedims!(arr, Val(perm))
+permutedims!(arr::AbstractArray, perm) = permutedims!(arr, Tuple(perm))
 
 @generated function _permutedims!(arr::AbstractArray{T,N}, ::Val{dims}, ::Val{perm}) where {T,N,dims,perm}
 
