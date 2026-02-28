@@ -4109,9 +4109,9 @@ function expand_struct_def(ctx, ex, docs)
         ]
 
         if isempty(inner_defs)
-            # Default constructors are generated at runtime by Core._defaultctors.
+            # Default constructors are generated at runtime by Base._defaultctors.
             [K"call"
-                "_defaultctors"::K"core"
+                "_defaultctors"::K"top"
                 global_struct_name
                 ::K"SourceLocation"(ex)
             ]
