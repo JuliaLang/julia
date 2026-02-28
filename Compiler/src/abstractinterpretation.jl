@@ -1760,6 +1760,31 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     end
 end
 
+mutable struct AbstractApplyState
+    res
+    exctype
+    i::Int
+    j::Int
+    nextstate::UInt8
+    all_effects::Effects
+    ctypes::Vector{Vector{Any}}
+    ctypes´::Vector{Vector{Any}}
+    infos::Vector{Vector{MaybeAbstractIterationInfo}}
+    infos´::Vector{Vector{MaybeAbstractIterationInfo}}
+    argtypesi::Vector{Any}
+    ctfuture::Future{AbstractIterationResult}
+    callfuture::Future{CallMeta}
+    function AbstractApplyState(
+            res, exctype, i::Int, j::Int, nextstate::UInt8, all_effects::Effects,
+            ctypes::Vector{Vector{Any}}, ctypes´::Vector{Vector{Any}},
+            infos::Vector{Vector{MaybeAbstractIterationInfo}},
+            infos´::Vector{Vector{MaybeAbstractIterationInfo}},
+        )
+        @nospecialize res exctype
+        return new(res, exctype, i, j, nextstate, all_effects, ctypes, ctypes´, infos, infos´)
+    end
+end
+
 # do apply(af, fargs...), where af is a function value
 function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo,
                         vtypes::Union{VarTable,Nothing}, sv::AbsIntState,
@@ -1777,66 +1802,55 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
             return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
         end
     end
-    res = Union{}
     splitunions = 1 < unionsplitcost(typeinf_lattice(interp), aargtypes) <= InferenceParams(interp).max_apply_union_enum
-    ctypes::Vector{Vector{Any}} = [Any[aft]]
-    infos::Vector{Vector{MaybeAbstractIterationInfo}} = Vector{MaybeAbstractIterationInfo}[MaybeAbstractIterationInfo[]]
-    all_effects::Effects = EFFECTS_TOTAL
     retinfos = ApplyCallInfo[]
     retinfo = UnionSplitApplyCallInfo(retinfos)
-    exctype = Union{}
-    ctypes´::Vector{Vector{Any}} = Vector{Any}[]
-    infos´::Vector{Vector{MaybeAbstractIterationInfo}} = Vector{MaybeAbstractIterationInfo}[]
-    local ti, argtypesi
-    local ctfuture::Future{AbstractIterationResult}
-    local callfuture::Future{CallMeta}
-
     applyresult = Future{CallMeta}()
-    # split the rest into a resumable state machine
-    i::Int = 1
-    j::Int = 1
-    nextstate::UInt8 = 0x0
+    state = AbstractApplyState(Union{}, Union{}, 1, 1, 0x00, EFFECTS_TOTAL,
+        Vector{Any}[Any[aft]], Vector{Any}[],
+        Vector{MaybeAbstractIterationInfo}[MaybeAbstractIterationInfo[]], Vector{MaybeAbstractIterationInfo}[])
+
     function infercalls(interp, sv)
         # n.b. Remember that variables will lose their values across restarts,
         # so be sure to manually hoist any values that must be preserved and do
         # not rely on program order.
         # This is a little more complex than the closure continuations often used elsewhere, but avoids needing to manage all of that indentation
-        if nextstate === 0x1
-            nextstate = 0xff
+        if state.nextstate === 0x1
+            state.nextstate = 0xff
             @goto state1
-        elseif nextstate === 0x2
-            nextstate = 0xff
+        elseif state.nextstate === 0x2
+            state.nextstate = 0xff
             @goto state2
-        elseif nextstate === 0x3
-            nextstate = 0xff
+        elseif state.nextstate === 0x3
+            state.nextstate = 0xff
             @goto state3
         else
-            @assert nextstate === 0x0
-            nextstate = 0xff
+            @assert state.nextstate === 0x0
+            state.nextstate = 0xff
         end
-        while i <= length(aargtypes)
-            argtypesi = (splitunions ? uniontypes(aargtypes[i]) : Any[aargtypes[i]])
-            i += 1
-            j = 1
-            while j <= length(argtypesi)
-                ti = argtypesi[j]
-                j += 1
+        while state.i <= length(aargtypes)
+            state.argtypesi = (splitunions ? uniontypes(aargtypes[state.i]) : Any[aargtypes[state.i]])
+            state.i += 1
+            state.j = 1
+            while state.j <= length(state.argtypesi)
+                ti = state.argtypesi[state.j]
+                state.j += 1
                 if !isvarargtype(ti)
-                    ctfuture = precise_container_type(interp, itft.contents, ti, vtypes, sv)::Future
-                    if !isready(ctfuture)
-                        nextstate = 0x1
+                    state.ctfuture = precise_container_type(interp, itft.contents, ti, vtypes, sv)::Future{AbstractIterationResult}
+                    if !isready(state.ctfuture)
+                        state.nextstate = 0x1
                         return false
                         @label state1
                     end
-                    (;cti, info, ai_effects) = ctfuture[]
+                    (;cti, info, ai_effects) = state.ctfuture[]
                 else
-                    ctfuture = precise_container_type(interp, itft.contents, unwrapva(ti), vtypes, sv)::Future
-                    if !isready(ctfuture)
-                        nextstate = 0x2
+                    state.ctfuture = precise_container_type(interp, itft.contents, unwrapva(ti), vtypes, sv)::Future{AbstractIterationResult}
+                    if !isready(state.ctfuture)
+                        state.nextstate = 0x2
                         return false
                         @label state2
                     end
-                    (;cti, info, ai_effects) = ctfuture[]
+                    (;cti, info, ai_effects) = state.ctfuture[]
                     # We can't represent a repeating sequence of the same types,
                     # so tmerge everything together to get one type that represents
                     # everything.
@@ -1849,41 +1863,41 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
                     end
                     cti = Any[Vararg{argt}]
                 end
-                all_effects = merge_effects(all_effects, ai_effects)
+                state.all_effects = merge_effects(state.all_effects, ai_effects)
                 if info !== nothing
                     for call in info.each
-                        all_effects = merge_effects(all_effects, call.effects)
+                        state.all_effects = merge_effects(state.all_effects, call.effects)
                     end
                 end
                 if any(@nospecialize(t) -> t === Bottom, cti)
                     continue
                 end
-                for k = 1:length(ctypes)
-                    ct = ctypes[k]
+                for k = 1:length(state.ctypes)
+                    ct = state.ctypes[k]
                     if isvarargtype(ct[end])
                         # This is vararg, we're not gonna be able to do any inlining,
                         # drop the info
                         info = nothing
                         tail = tuple_tail_elem(typeinf_lattice(interp), unwrapva(ct[end]), cti)
-                        push!(ctypes´, push!(ct[1:(end - 1)], tail))
+                        push!(state.ctypes´, push!(ct[1:(end - 1)], tail))
                     else
-                        push!(ctypes´, append!(ct[:], cti))
+                        push!(state.ctypes´, append!(ct[:], cti))
                     end
-                    push!(infos´, push!(copy(infos[k]), info))
+                    push!(state.infos´, push!(copy(state.infos[k]), info))
                 end
             end
             # swap for the new array and empty the temporary one
-            ctypes´, ctypes = ctypes, ctypes´
-            infos´, infos = infos, infos´
-            empty!(ctypes´)
-            empty!(infos´)
+            state.ctypes´, state.ctypes = state.ctypes, state.ctypes´
+            state.infos´, state.infos = state.infos, state.infos´
+            empty!(state.ctypes´)
+            empty!(state.infos´)
         end
-        all_effects.nothrow || (exctype = Any)
+        state.all_effects.nothrow || (state.exctype = Any)
 
-        i = 1
-        while i <= length(ctypes)
-            ct = ctypes[i]
-            if bail_out_apply(interp, InferenceLoopState(res, all_effects), sv)
+        state.i = 1
+        while state.i <= length(state.ctypes)
+            ct = state.ctypes[state.i]
+            if bail_out_apply(interp, InferenceLoopState(state.res, state.all_effects), sv)
                 add_remark!(interp, sv, "_apply_iterate inference reached maximally imprecise information: bailing on analysis of more methods.")
                 # there is unanalyzed candidate, widen type and effects to the top
                 let retinfo = NoCallInfo() # NOTE this is necessary to prevent the inlining processing
@@ -1901,23 +1915,23 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
                     break
                 end
             end
-            callfuture = abstract_call(interp, ArgInfo(nothing, ct), si, vtypes, sv, max_methods)::Future
-            if !isready(callfuture)
-                nextstate = 0x3
+            state.callfuture = abstract_call(interp, ArgInfo(nothing, ct), si, vtypes, sv, max_methods)::Future{CallMeta}
+            if !isready(state.callfuture)
+                state.nextstate = 0x3
                 return false
                 @label state3
             end
-            let (; info, rt, exct, effects) = callfuture[]
-                push!(retinfos, ApplyCallInfo(info, infos[i]))
-                res = tmerge(typeinf_lattice(interp), res, rt)
-                exctype = tmerge(typeinf_lattice(interp), exctype, exct)
-                all_effects = merge_effects(all_effects, effects)
+            let (; info, rt, exct, effects) = state.callfuture[]
+                push!(retinfos, ApplyCallInfo(info, state.infos[state.i]))
+                state.res = tmerge(typeinf_lattice(interp), state.res, rt)
+                state.exctype = tmerge(typeinf_lattice(interp), state.exctype, exct)
+                state.all_effects = merge_effects(state.all_effects, effects)
             end
-            i += 1
+            state.i += 1
         end
         # TODO: Add a special info type to capture all the iteration info.
         # For now, only propagate info if we don't also union-split the iteration
-        applyresult[] = CallMeta(res, exctype, all_effects, retinfo)
+        applyresult[] = CallMeta(state.res, state.exctype, state.all_effects, retinfo)
         return true
     end # function infercalls
     # start making progress on the first call
