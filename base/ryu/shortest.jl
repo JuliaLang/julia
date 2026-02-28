@@ -1,228 +1,144 @@
-"""
-    b, e10 = reduce_shortest(f[, maxsignif])
-
-Reduce to shortest decimal representation where `abs(f) == b * 10^e10` and `b` is an
-integer. If a `maxsignif` argument is provided, then `b < maxsignif`.
-"""
-@inline function reduce_shortest(f::T, maxsignif=nothing) where {T}
-    U = uinttype(T)
-    uf = reinterpret(U, f)
-    m = uf & significand_mask(T)
-    e = ((uf & exponent_mask(T)) >> significand_bits(T)) % Int
-
-    ## Step 1
-    #  mf * 2^ef == f
-    mf = (one(U) << significand_bits(T)) | m
-    ef = e - exponent_bias(T) - significand_bits(T)
-    f_isinteger = mf & ((one(U) << -ef) - one(U)) == 0
-
-    if ef > 0 || ef < -Base.significand_bits(T) || !f_isinteger
-        # fixup subnormals
-        if e == 0
-            ef = 1 - exponent_bias(T) - significand_bits(T)
-            mf = m
-        end
-
-        ## Step 2
-        #  u * 2^e2 == (f + prevfloat(f))/2
-        #  v * 2^e2 == f
-        #  w * 2^e2 == (f + nextfloat(f))/2
-        e2 = ef - 2
-        mf_iseven = iseven(mf) # trailing bit of significand is zero
-
-        v = U(4) * mf
-        w = v + U(2)
-        u_shift_half = m == 0 && e > 1 # if first element of binade, other than first normal one
-        u = v - U(2) + u_shift_half
-
-        ## Step 3
-        #  a == floor(u * 2^e2 / 10^e10), exact if a_allzero
-        #  b == floor(v * 2^e2 / 10^e10), exact if b_allzero
-        #  c == floor(w * 2^e2 / 10^e10)
-        a_allzero = false
-        b_allzero = false
-        b_lastdigit = 0x00
-        if e2 >= 0
-            q = log10pow2(e2) - (T == Float64 ? (e2 > 3) : 0)
-            e10 = q
-            k = pow5_inv_bitcount(T) + pow5bits(q) - 1
-            i = -e2 + q + k
-            a, b, c = mulshiftinvsplit(T, u, v, w, q, i)
-            if T == Float32 || T == Float16
-                if q != 0 && div(c - 1, 10) <= div(a, 10)
-                    l = pow5_inv_bitcount(T) + pow5bits(q - 1) - 1
-                    mul = pow5invsplit_lookup(T, q-1)
-                    b_lastdigit = (mulshift(v, mul, -e2 + q - 1 + l) % 10) % UInt8
-                end
-            end
-            if q <= qinvbound(T)
-                if ((v % UInt32) - 5 * div(v, 5)) == 0
-                    b_allzero = pow5(v, q)
-                elseif mf_iseven
-                    a_allzero = pow5(u, q)
-                else
-                    c -= pow5(w, q)
-                end
-            end
-        else
-            q = log10pow5(-e2) - (T == Float64 ? (-e2 > 1) : 0)
-            e10 = q + e2
-            i = -e2 - q
-            k = pow5bits(i) - pow5_bitcount(T)
-            j = q - k
-            a, b, c = mulshiftsplit(T, u, v, w, i, j)
-            if T == Float32 || T == Float16
-                if q != 0 && div(c - 1, 10) <= div(a, 10)
-                    j = q - 1 - (pow5bits(i + 1) - pow5_bitcount(T))
-                    mul = pow5split_lookup(T, i+1)
-                    b_lastdigit = (mulshift(v, mul, j) % 10) % UInt8
-                end
-            end
-            if q <= 1
-                b_allzero = true
-                if mf_iseven
-                    a_allzero = !u_shift_half
-                else
-                    c -= 1
-                end
-            elseif q < qbound(T)
-                b_allzero = pow2(v, q - (T != Float64))
-            end
-        end
-
-        ## Step 4: reduction
-        if a_allzero || b_allzero
-            # a) slow loop
-            while true
-                c_div10 = div(c, 10)
-                a_div10 = div(a, 10)
-                if c_div10 <= a_div10
-                    break
-                end
-                a_mod10 = (a % UInt32) - UInt32(10) * (a_div10 % UInt32)
-                b_div10 = div(b, 10)
-                b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
-                a_allzero &= a_mod10 == 0
-                b_allzero &= b_lastdigit == 0
-                b_lastdigit = b_mod10 % UInt8
-                b = b_div10
-                c = c_div10
-                a = a_div10
-                e10 += 1
-            end
-            if a_allzero
-                while true
-                    a_div10 = div(a, 10)
-                    a_mod10 = (a % UInt32) - UInt32(10) * (a_div10 % UInt32)
-                    if a_mod10 != 0 && (maxsignif === nothing || b < maxsignif)
-                        break
-                    end
-                    c_div10 = div(c, 10)
-                    b_div10 = div(b, 10)
-                    b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
-                    b_allzero &= b_lastdigit == 0
-                    b_lastdigit = b_mod10 % UInt8
-                    b = b_div10
-                    c = c_div10
-                    a = a_div10
-                    e10 += 1
-                end
-            end
-            if b_allzero && b_lastdigit == 5 && iseven(b)
-                b_lastdigit = UInt8(4)
-            end
-            roundup = (b == a && (!mf_iseven || !a_allzero)) || b_lastdigit >= 5
-        else
-            # b) specialized for common case (99% Float64, 96% Float32)
-            roundup = b_lastdigit >= 5
-            c_div100 = div(c, 100)
-            a_div100 = div(a, 100)
-            if c_div100 > a_div100
-                b_div100 = div(b, 100)
-                b_mod100 = (b % UInt32) - UInt32(100) * (b_div100 % UInt32)
-                roundup = b_mod100 >= 50
-                b = b_div100
-                c = c_div100
-                a = a_div100
-                e10 += 2
-            end
-            while true
-                c_div10 = div(c, 10)
-                a_div10 = div(a, 10)
-                if c_div10 <= a_div10
-                    break
-                end
-                b_div10 = div(b, 10)
-                b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
-                roundup = b_mod10 >= 5
-                b = b_div10
-                c = c_div10
-                a = a_div10
-                e10 += 1
-            end
-            roundup = (b == a || roundup)
-        end
-        if maxsignif !== nothing && b > maxsignif
-            # reduce to max significant digits
-            while true
-                b_div10 = div(b, 10)
-                b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
-                if b <= maxsignif
-                    break
-                end
-                b = b_div10
-                roundup = (b_allzero && iseven(b)) ? b_mod10 > 5 : b_mod10 >= 5
-                b_allzero &= b_mod10 == 0
-                e10 += 1
-            end
-            b = b + roundup
-
-            # remove trailing zeros
-            while true
-                b_div10 = div(b, 10)
-                b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
-                if b_mod10 != 0
-                    break
-                end
-                b = b_div10
-                e10 += 1
-            end
-        else
-            b = b + roundup
-        end
+# 128-bit significands of strict overestimates of powers of 10.
+# Negate dec_pow_min and dec_pow_max because we need negative powers 10^-k.
+const pow10_significands = Memory{UInt128}(undef, length(-292:325))
+for (i, dec_exp) in enumerate(-292:325)
+    # dec_exp is -k in the paper.
+    bin_exp = floor(Int, dec_exp * log2(10)) - 127
+    bin_pow = big(2)^(abs(bin_exp))
+    dec_pow = big(10)^(abs(dec_exp))
+    if dec_exp < 0
+        result = bin_pow ÷ dec_pow
+    elseif bin_exp < 0
+        result = dec_pow * bin_pow
     else
-        # c) specialized f an integer < 2^53
-        b = mf >> -ef
-        e10 = 0
+        result = dec_pow ÷ bin_pow
+    end
+    pow10_significands[i] = result + 1
+end
 
-        if maxsignif !== nothing && b > maxsignif
-            roundup = false
-            b_allzero = true
-            # reduce to max significant digits
-            while true
-                b_div10 = div(b, 10)
-                b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
-                if b <= maxsignif
-                    break
-                end
-                b = b_div10
-                roundup = (b_allzero && iseven(b)) ? b_mod10 > 5 : b_mod10 >= 5
-                b_allzero &= b_mod10 == 0
-                e10 += 1
-            end
-            b = b + roundup
-        end
-        while true
-            b_div10 = div(b, 10)
-            b_mod10 = (b % UInt32) - UInt32(10) * (b_div10 % UInt32)
-            if b_mod10 != 0
-                break
-            end
-            b = b_div10
-            e10 += 1
+
+high64(x::UInt128) = x >> 64 % UInt64
+function umul192_upper128(x::UInt128, y::UInt64)
+    x_hi, x_lo = high64(x), x%UInt64
+    p = widemul(x_hi, y)
+    lo = (p%UInt64) + (widemul(x_lo, y) >> 64) % UInt64
+    return reinterpret(UInt128, (lo, high64(p) + (lo < (p%UInt64))))
+end
+
+# Computes upper 64 bits of multiplication of x and y,
+# discards the least significant bit and rounds to odd.
+function umul192_upper64_inexact_to_odd(x::UInt128, y::UInt64)
+    r = umul192_upper128(x, y)
+    return high64(r) | !iszero((r%Int64) >> 1)
+end
+
+"""
+    b, exp = reduce_shortest(v)
+
+Reduce positive Float64 to shortest decimal representation 
+`abs(v) == b * 10^exp` and `b` is an integer.
+"""
+function reduce_shortest(v::T) where {T<:Float64}
+    bits = reinterpret(UInt64, v)
+    bin_sig = bits & significand_mask(T);  # binary_significand
+    bin_exp = ((bits & exponent_mask(T)) >> significand_bits(T)) % Int  # binary exponent
+
+    regular = bin_sig != 0
+    implicit_bit = significand_mask(T)+1
+    # Handle subnormals if value is subnormal.
+    if bits < implicit_bit
+        bin_sig |= implicit_bit
+        bin_exp = 1
+        regular = true
+    end
+
+    bin_sig ⊻= implicit_bit
+    bin_exp -= significand_bits(T) + exponent_bias(T)
+
+    # Handle small integers.
+    if -significand_bits(T) <= bin_exp < 0
+        f = bin_sig >> -bin_exp
+        if (f << -bin_exp) == bin_sig
+            return return (f, 0)
         end
     end
-    return b, e10
+
+    # Compute the decimal exponent as floor(log10(exp2(bin_exp))) if regular or
+    # floor(log10(3/4 * exp2(bin_exp))) otherwise, without branching.
+    # log10_3_over_4_sig = round(log10(3/4) * exp2(log10_2_exp))
+    log10_3_over_4_sig = -131008
+    # log10_2_sig = round(log10(2) * exp2(log10_2_exp))
+    log10_2_sig = 315653
+    log10_2_exp = 20
+    dec_exp = (bin_exp * log10_2_sig + (!regular) * log10_3_over_4_sig) >> log10_2_exp
+
+    dec_exp_min = -292
+    pow10 = pow10_significands[0x1 - dec_exp - dec_exp_min]
+
+    # log2_pow10_sig = round(log2(10) * exp2(log2_pow10_exp)) + 1
+    log2_pow10_sig = 217707
+    log2_pow10_exp = 16
+    # pow10_bin_exp = floor(-dec_exp*log2(10))
+    pow10_bin_exp = (-dec_exp * log2_pow10_sig) >> log2_pow10_exp;
+    # pow10 = pow10 * exp2(pow10_bin_exp - 127)
+
+    # Shift to ensure the intermediate result of multiplying by a power of 10
+    # has a fixed 128-bit fractional part. For example, 3 * 2**59 and 3 * 2**60
+    # both have dec_exp = 2 and dividing them by 10**dec_exp would have the
+    # decimal point in different (bit) positions without the shift:
+    #   3 * 2**59 / 100 = 1.72...e+16 (shift = 1 + 1)
+    #   3 * 2**60 / 100 = 3.45...e+16 (shift = 2 + 1)
+    shift = bin_exp + pow10_bin_exp + 1
+
+    if regular
+        r = umul192_upper128(pow10 - 1, bin_sig << shift)
+        digit = high64(r) % 10
+
+        num_fractional_bits = 60
+        ten = UInt64(10) << num_fractional_bits
+        # Fixed-point remainder of the scaled significand modulo 10.
+        rem10 = (digit << num_fractional_bits) | ((r%UInt64) >> 4)
+        half_ulp = pow10 >> (64+5 - shift)
+        upper = rem10 + half_ulp
+
+        # An optimization from yy_double by Yaoyuan Guo:
+        if r%UInt64 != (UInt64(1) << 63) && rem10 != half_ulp && ten - upper > 1
+            round = (upper >> num_fractional_bits) >= 10
+            shorter = high64(r) - digit + round * 10
+            longer = high64(r) + (r%UInt64 >= (UInt64(1) << 63))
+
+            return (((half_ulp >= rem10) + round)!=0 ? shorter : longer, dec_exp)
+        end
+    end
+
+    # Shift the significand so that boundaries are integer.
+    bin_sig_shifted = bin_sig << 2
+
+    # Compute the estimates of lower and upper bounds of the rounding interval
+    # by multiplying them by the power of 10 and applying modified rounding.
+    lsb = bin_sig & 1;
+    lower = umul192_upper64_inexact_to_odd(
+          pow10, (bin_sig_shifted - (regular + 1)) << shift) + lsb
+    upper = umul192_upper64_inexact_to_odd(
+        pow10, (bin_sig_shifted + 2) << shift) - lsb
+
+    # The idea of using a single shorter candidate is by Cassio Neri.
+    # It is less or equal to the upper bound by construction.
+    shorter = 10 * ((upper >> 2) ÷ 10)
+    if (shorter << 2) >= lower
+        return (shorter, dec_exp)
+    end
+
+    scaled_sig = umul192_upper64_inexact_to_odd(pow10, bin_sig_shifted << shift);
+    under = scaled_sig >> 2
+    over = under + 1
+
+    # Pick the closest of dec_sig_under and dec_sig_over and check if it's in
+    # the rounding interval.
+    cmp = Int64(scaled_sig - ((under + over) << 1))
+    under_closer = cmp < 0 || (cmp == 0 && !(under & 1))
+    under_in = (under << 2) >= lower
+    return ((under_closer && under_in) ? under : over, dec_exp)
 end
 
 function writeshortest(buf::AbstractVector{UInt8}, pos, x::T,
