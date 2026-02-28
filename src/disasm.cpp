@@ -501,6 +501,13 @@ jl_value_t *jl_dump_function_ir_impl(jl_llvmf_dump_t *dump, char strip_ir_metada
     std::string code;
     raw_string_ostream stream(code);
 
+    // Prepend pass instrumentation output if present
+    if (dump->pass_output) {
+        stream << dump->pass_output;
+        free(dump->pass_output);
+        dump->pass_output = nullptr;
+    }
+
     if (dump->F) {
         //RAII will release the module
         auto TSM = std::unique_ptr<orc::ThreadSafeModule>(unwrap(dump->TSM));
@@ -1038,10 +1045,7 @@ static void jl_dump_asm_internal(
                     if (!buf.empty()) {
                         Streamer->emitRawText(buf);
                     }
-                    if (++di_lineIter != di_lineEnd)
-                        nextLineAddr = di_lineIter->first;
-                    else
-                        nextLineAddr = (uint64_t)-1;
+                    nextLineAddr = (++di_lineIter)->first;
                 }
             }
 
@@ -1221,6 +1225,12 @@ public:
 extern "C" JL_DLLEXPORT_CODEGEN
 jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const char* asm_variant, const char *debuginfo, char binary, char raw)
 {
+    // Free pass instrumentation output if present (we don't use it for ASM output)
+    if (dump->pass_output) {
+        free(dump->pass_output);
+        dump->pass_output = nullptr;
+    }
+
     // precise printing via IR assembler
     SmallVector<char, 4096> ObjBufferSV;
     if (dump->F) { // scope block also
