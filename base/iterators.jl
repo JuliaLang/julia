@@ -32,7 +32,7 @@ import Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek, intersect
 
-export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap, partition, nth, findeach
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, called, product, flatten, flatmap, partition, nth, findeach
 public accumulate, filter, map, peel, reverse, Stateful
 
 """
@@ -1076,6 +1076,52 @@ IteratorEltype(::Type{<:Repeated}) = HasEltype()
 
 reverse(it::Union{Repeated,Take{<:Repeated}}) = it
 last(it::Union{Repeated,Take{<:Repeated}}) = first(it)
+
+struct Called{F}
+    f::F
+
+    Called(f::F) where {F} = new{F}(f)
+end
+
+called(f) = Called(f)
+
+"""
+    called(f[, n::Int])
+
+An iterator that calles the function `f` forever. If `n` is specified, `f()`
+is called that many times (equivalent to `take(called(f), n)`).
+
+!!! compat "Julia 1.13"
+    The method `called(f, n)` was added in Julia 1.13.
+
+# Examples
+```jldoctest
+julia> a = Iterators.called(() -> Dict{UInt, UInt}(), 4);
+
+julia> a_collected = collect(a)
+4-element Vector{Dict{UInt64, UInt64}}:
+ Dict()
+ Dict()
+ Dict()
+ Dict()
+
+julia> a_collected == fill(Dict{UInt, UInt}(), 4)
+true
+
+julia> a_collected[1] === a_collected[2]
+false
+```
+"""
+called(f, n::Integer) = take(called(f), Int(n))
+
+IteratorSize(::Type{<:Called}) = IsInfinite()
+
+iterate(it::Called{F}, state...) where {F} = (it.f(), nothing)
+
+reverse(it::Union{Called, Take{<:Called}}) = it
+
+last(it::Union{Called, Take{<:Called}}) = first(it)
+
 
 # Product -- cartesian product of iterators
 struct ProductIterator{T<:Tuple}
