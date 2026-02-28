@@ -5314,7 +5314,20 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
         if (returninfo.all_roots) {
             result = emit_static_roots(ctx, returninfo.union_bytes / sizeof(void *));
         } else {
-            result = emit_static_alloca(ctx, returninfo.union_bytes, Align(returninfo.union_align));
+            Align alloca_align(returninfo.union_align);
+            if (returninfo.cc == jl_returninfo_t::SRet) {
+                // The callee determines the sret parameter alignment from the LLVM
+                // preferred type alignment (which may exceed julia_alignment), and
+                // generates loads/stores accordingly. Match that here so the alloca
+                // satisfies the callee's alignment assumptions.
+                Type *srt = returninfo.attrs.getParamStructRetType(0);
+                const DataLayout &DL = jl_Module->getDataLayout();
+                Align sret_align = DL.getPrefTypeAlign(srt);
+                if (sret_align > Align(MAX_ALIGN))
+                    sret_align = Align(MAX_ALIGN);
+                alloca_align = std::max(alloca_align, sret_align);
+            }
+            result = emit_static_alloca(ctx, returninfo.union_bytes, alloca_align);
         }
         setName(ctx.emission_context, result, [&]() {
             std::string type_str = jl_is_datatype(jlretty) ? jl_symbol_name(((jl_datatype_t*)jlretty)->name->name) : "<unknown type>";

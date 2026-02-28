@@ -1085,3 +1085,37 @@ function union_phi_inline_roots(x::Bool)
     end
 end
 @test union_phi_inline_roots(true) === ("Q8", 1)
+
+# sret alloca alignment must match the callee's sret parameter alignment.
+# A mismatch causes misaligned memory accesses on strict-alignment targets (e.g. NVPTX).
+@testset "sret alloca alignment" begin
+    struct SretAlignDual
+        value::Float32
+        partials::NTuple{6,Float32}
+    end
+    @noinline mul_partials_srettest(val, dp) =
+        SretAlignDual(val, ntuple(i -> dp[i]*val + dp[i]*val, 6))
+    @noinline Base.:*(x::SretAlignDual, y::SretAlignDual) =
+        mul_partials_srettest(x.value*y.value, x.partials)
+    @noinline Base.:+(x::SretAlignDual, y::SretAlignDual) =
+        SretAlignDual(x.value+y.value, x.partials)
+    @noinline f_srettest(u) =
+        (u[1]*u[1]+u[1]*u[1], u[1]*u[1], u[1]*u[1])
+
+    ir = get_llvm(f_srettest, Tuple{NTuple{3,SretAlignDual}}, true, true, true)
+
+    # Find the required alignment from the callee's sret parameter attribute
+    sret_param_align = 0
+    for m in eachmatch(r"sret\([^)]+\) align (\d+)", ir)
+        sret_param_align = max(sret_param_align, parse(Int, m.captures[1]))
+    end
+
+    # Check every sret alloca meets that alignment
+    for m in eachmatch(r"%\"?sret\S* = alloca .+, align (\d+)", ir)
+        alloca_align = parse(Int, m.captures[1])
+        @test alloca_align >= sret_param_align
+    end
+
+    # Sanity: we actually found sret allocas to check
+    @test sret_param_align > 0
+end
