@@ -715,6 +715,14 @@ fake_repl() do stdin_write, stdout_read, repl
     @test @world(Main.B, ∞) == 2
     end # redirect_stdout
 
+    # Test that comments in pasted sessions don't break prompt detection (#61197)
+    sendrepl2("""\e[200~
+            julia> #commented out line
+
+            julia> A = 61197\e[201~
+             """)
+    @test @world(Main.A, ∞) == 61197
+
     # Close repl
     write(stdin_write, '\x04')
     Base.wait(repltask)
