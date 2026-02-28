@@ -715,6 +715,22 @@ fake_repl() do stdin_write, stdout_read, repl
     @test @world(Main.B, ∞) == 2
     end # redirect_stdout
 
+    # Test that empty or comment-only lines in pasted sessions
+    # don't break prompt detection
+    sendrepl2("""\e[200~
+            julia> #commented out line
+
+            julia> A = 53497\e[201~
+             """)
+    @test @world(Main.A, ∞) == 53497
+
+    sendrepl2("""\e[200~
+            julia>
+
+            julia> A = 53498\e[201~
+             """)
+    @test @world(Main.A, ∞) == 53498
+
     # Close repl
     write(stdin_write, '\x04')
     Base.wait(repltask)
