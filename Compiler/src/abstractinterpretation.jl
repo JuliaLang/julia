@@ -2314,11 +2314,11 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
             argtype = argtypes_to_type(pushfirst!(argtype_tail(argtypes, 4), ft))
             specsig = get_ci_abi(method_or_ci)
             defdef = get_ci_mi(method_or_ci).def
-            exct = method_or_ci.exctype
+            exct_ci = method_or_ci.exctype
             if !hasintersect(argtype, specsig)
                 return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
             elseif !(argtype <: specsig) || ((!isa(method_or_ci.def, ABIOverride) && isa(defdef, Method)) && !(argtype <: defdef.sig))
-                exct = Union{exct, TypeError}
+                exct_ci = Union{exct_ci, TypeError}
             end
             callee_valid_range = WorldRange(method_or_ci.min_world, method_or_ci.max_world)
             if !(our_world in callee_valid_range)
@@ -2331,10 +2331,10 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
             end
             # TODO: When we add curing, we may want to assume this is nothrow
             if (method_or_ci.owner === Nothing && method_or_ci.def.def isa Method)
-                exct = Union{exct, ErrorException}
+                exct_ci = Union{exct_ci, ErrorException}
             end
             update_valid_age!(sv, our_world, callee_valid_range)
-            return Future(CallMeta(method_or_ci.rettype, exct, Effects(decode_effects(method_or_ci.ipo_purity_bits), nothrow=(exct===Bottom)),
+            return Future(CallMeta(method_or_ci.rettype, exct_ci, Effects(decode_effects(method_or_ci.ipo_purity_bits), nothrow=(exct_ci===Bottom)),
                 InvokeCICallInfo(method_or_ci)))
         else
             method = method_or_ci::Method
