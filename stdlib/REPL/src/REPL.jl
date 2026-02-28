@@ -1394,7 +1394,7 @@ function setup_interface(
 
     shell_prompt_len = length(SHELL_PROMPT)
     help_prompt_len = length(HELP_PROMPT)
-    jl_prompt_regex = Regex("^In \\[[0-9]+\\]: |^(?:\\(.+\\) )?$JULIA_PROMPT")
+    jl_prompt_regex = Regex("^In \\[[0-9]+\\]: |^(?:\\(.+\\) )?$(rstrip(JULIA_PROMPT))(?: |(?=\\n|\$))")
     pkg_prompt_regex = Regex("^(?:\\(.+\\) )?$PKG_PROMPT")
 
     # Canonicalize user keymap input
@@ -1558,7 +1558,19 @@ function setup_interface(
                 dump_tail = false
                 nl_pos = findfirst('\n', input[oldpos:end])
                 if s.current_mode == julia_prompt
-                    ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false, mod=Base.active_module(s))
+                    if isprompt_paste
+                        end_ind = isnothing(nl_pos) ? lastindex(input) : prevind(input, oldpos + nl_pos - 1)
+                        line_ast, _ = Meta.parse(SubString(input, oldpos, end_ind), 1, raise=false, depwarn=false, mod=Base.active_module(s))
+
+                        if line_ast === nothing
+                            ast = nothing
+                            pos = isnothing(nl_pos) ? lastindex(input) + 1 : oldpos + nl_pos
+                        else
+                            ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false, mod=Base.active_module(s))
+                        end
+                    else
+                        ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false, mod=Base.active_module(s))
+                    end
                     if (isa(ast, Expr) && (ast.head === :error || ast.head === :incomplete)) ||
                             (pos > ncodeunits(input) && !endswith(input, '\n'))
                         # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
