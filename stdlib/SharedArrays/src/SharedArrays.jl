@@ -153,10 +153,8 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
         shm_seg_name = ""
 
     finally
-        if !isempty(shm_seg_name)
-            if @isdefined shmmem_create_pid
-                remotecall_fetch(shm_unlink, shmmem_create_pid, shm_seg_name)
-            end
+        if !isempty(shm_seg_name) && @isdefined shmmem_create_pid
+            remotecall_fetch(shm_unlink, shmmem_create_pid, shm_seg_name)
         end
     end
     S
