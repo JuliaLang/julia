@@ -2038,7 +2038,7 @@ function expand_for(ctx, ex)
         body = if i == numchildren(iterspecs)
             # Innermost loop gets the continue label and copied vars
             @ast ctx ex [K"symbolicblock"
-                "loop_cont"::K"symboliclabel"
+                "loop-cont"::K"symboliclabel"
                 [K"let"(scope_type=:neutral)
                      [K"block"
                          copied_vars...
@@ -2084,7 +2084,7 @@ function expand_for(ctx, ex)
         ]
     end
 
-    @ast ctx ex [K"symbolicblock" "loop_exit"::K"symboliclabel"
+    @ast ctx ex [K"symbolicblock" "loop-exit"::K"symboliclabel"
         loop
     ]
 end
@@ -4109,9 +4109,9 @@ function expand_struct_def(ctx, ex, docs)
         ]
 
         if isempty(inner_defs)
-            # Default constructors are generated at runtime by Base._defaultctors.
+            # Default constructors are generated at runtime by Core._defaultctors.
             [K"call"
-                "_defaultctors"::K"top"
+                "_defaultctors"::K"core"
                 global_struct_name
                 ::K"SourceLocation"(ex)
             ]
@@ -4429,47 +4429,30 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"="
         expand_assignment(ctx, ex)
     elseif k == K"break"
-        nc = numchildren(ex)
-        if nc == 0
-            @ast ctx ex [K"break" "loop_exit"::K"symboliclabel"]
-        else
-            @chk nc <= 2 (ex, "Too many arguments to break")
-            label = ex[1]
-            label_kind = kind(label)
-            # Convert Symbol (from Expr conversion) to symboliclabel
-            if label_kind == K"Symbol"
-                label = @ast ctx label label.name_val::K"symboliclabel"
-            elseif label_kind == K"Placeholder"
-                # `break _` maps to the default break scope (loop_exit)
-                label = @ast ctx label "loop_exit"::K"symboliclabel"
-            elseif !(label_kind == K"Identifier" ||
-                     label_kind == K"symboliclabel" || is_contextual_keyword(label_kind))
-                throw(LoweringError(label, "Invalid break label: expected identifier"))
+        @stm ex begin
+            [K"break"] ->
+                @ast ctx ex [K"break" "loop-exit"::K"symboliclabel"]
+            [K"break" [K"Placeholder"]] ->
+                @ast ctx ex [K"break" "loop-exit"::K"symboliclabel"]
+            [K"break" [K"Identifier"]] -> begin
+                @ast ctx ex [K"break" ex[1]=>K"symboliclabel"]
             end
-            if nc == 2
-                @ast ctx ex [K"break" label expand_forms_2(ctx, ex[2])]
-            else
-                @ast ctx ex [K"break" label]
+            [K"break" [K"Placeholder"] val] ->
+                @ast ctx ex [K"break" "loop-exit"::K"symboliclabel"
+                             expand_forms_2(ctx, val)]
+            [K"break" [K"Identifier"] val] -> begin
+                @ast ctx ex [K"break" ex[1]=>K"symboliclabel"
+                             expand_forms_2(ctx, val)]
             end
         end
     elseif k == K"continue"
-        nc = numchildren(ex)
-        if nc == 0
-            @ast ctx ex [K"break" "loop_cont"::K"symboliclabel"]
-        else
-            @chk nc == 1 (ex, "Too many arguments to continue")
-            label = ex[1]
-            label_kind = kind(label)
-            if label_kind == K"Placeholder"
-                # `continue _` maps to the default continue scope (loop_cont)
-                cont_label = @ast ctx label "loop_cont"::K"symboliclabel"
-            elseif !(label_kind == K"Identifier" ||
-                     label_kind == K"Symbol" || is_contextual_keyword(label_kind))
-                throw(LoweringError(label, "Invalid continue label: expected identifier"))
-            else
-                cont_label = @ast ctx label string(label.name_val, "#cont")::K"symboliclabel"
-            end
-            @ast ctx ex [K"break" cont_label]
+        @stm ex begin
+            [K"continue"] ->
+                @ast ctx ex [K"break" "loop-cont"::K"symboliclabel"]
+            [K"continue" [K"Placeholder"]] ->
+                @ast ctx ex [K"break" "loop-cont"::K"symboliclabel"]
+            [K"continue" [K"Identifier"]] ->
+                @ast ctx ex [K"break" string(label.name_val, "#cont")::K"symboliclabel"]
         end
     elseif k == K"comparison"
         expand_forms_2(ctx, expand_compare_chain(ctx, ex))
@@ -4619,10 +4602,10 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         expand_forms_2(ctx, expand_ncat(ctx, ex))
     elseif k == K"while"
         @chk numchildren(ex) == 2
-        @ast ctx ex [K"symbolicblock" "loop_exit"::K"symboliclabel"
+        @ast ctx ex [K"symbolicblock" "loop-exit"::K"symboliclabel"
             [K"_while"
                 expand_condition(ctx, ex[1])
-                [K"symbolicblock" "loop_cont"::K"symboliclabel"
+                [K"symbolicblock" "loop-cont"::K"symboliclabel"
                     [K"scope_block"(scope_type=:neutral)
                          expand_forms_2(ctx, ex[2])
                     ]
@@ -4640,11 +4623,6 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
                 @ast ctx ex [K"static_eval" expand_forms_2(ctx, c)])
         end
         @ast ctx ex [K"foreigncall" expand_C_library_symbol(ctx, ex[1]) args...]
-    elseif k == K"symbolicblock"
-        # @label name body -> (symbolicblock name expanded_body)
-        # The @label macro inserts the continue block for loops, so we just expand the body
-        @chk numchildren(ex) == 2
-        @ast ctx ex [K"symbolicblock" ex[1] expand_forms_2(ctx, ex[2])]
     elseif k == K"gc_preserve"
         s = ssavar(ctx, ex)
         r = ssavar(ctx, ex)

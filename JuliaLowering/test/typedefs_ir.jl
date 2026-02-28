@@ -381,7 +381,7 @@ end
 26  latestworld
 27  TestMod.X
 28  SourceLocation::1:1
-29  (call top._defaultctors %₂₇ %₂₈)
+29  (call core._defaultctors %₂₇ %₂₈)
 30  (return core.nothing)
 
 ########################################
@@ -467,7 +467,7 @@ end
 27  latestworld
 28  TestMod.X
 29  SourceLocation::1:1
-30  (call top._defaultctors %₂₈ %₂₉)
+30  (call core._defaultctors %₂₈ %₂₉)
 31  (return core.nothing)
 
 ########################################
@@ -520,7 +520,7 @@ end
 43  latestworld
 44  TestMod.X
 45  SourceLocation::1:1
-46  (call top._defaultctors %₄₄ %₄₅)
+46  (call core._defaultctors %₄₄ %₄₅)
 47  (return core.nothing)
 
 ########################################
@@ -559,7 +559,7 @@ end
 26  latestworld
 27  TestMod.X
 28  SourceLocation::1:1
-29  (call top._defaultctors %₂₇ %₂₈)
+29  (call core._defaultctors %₂₇ %₂₈)
 30  (return core.nothing)
 
 ########################################
@@ -661,7 +661,7 @@ end
 34  latestworld
 35  TestMod.X
 36  SourceLocation::1:1
-37  (call top._defaultctors %₃₅ %₃₆)
+37  (call core._defaultctors %₃₅ %₃₆)
 38  (return core.nothing)
 
 ########################################
@@ -719,7 +719,7 @@ end
 46  latestworld
 47  TestMod.X
 48  SourceLocation::1:1
-49  (call top._defaultctors %₄₇ %₄₈)
+49  (call core._defaultctors %₄₇ %₄₈)
 50  (return core.nothing)
 
 ########################################
