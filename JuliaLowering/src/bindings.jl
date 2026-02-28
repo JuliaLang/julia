@@ -103,7 +103,7 @@ function _binding_id(id::Integer)
 end
 
 function _binding_id(ex::SyntaxTree)
-    @chk kind(ex) == K"BindingId"
+    @jl_assert kind(ex) == K"BindingId" ex
     ex.var_id
 end
 
@@ -136,7 +136,7 @@ end
 # Create a new local mutable binding or lambda argument
 function new_local_binding(ctx::AbstractLoweringContext, srcref, name;
                            kind=:local, kws...)
-    @assert kind === :local || kind === :argument
+    @jl_assert kind === :local || kind === :argument srcref
     nameref = newleaf(ctx, srcref, K"Identifier", name)
     b = _new_binding(ctx, nameref, name, kind; is_internal=true, kws...)
     lbindings = current_lambda_bindings(ctx)
@@ -183,7 +183,6 @@ LambdaBindings(self::IdTag = 0, scope_id::ScopeId = 0) =
     LambdaBindings(self, scope_id, Dict{IdTag,LambdaBindings}())
 
 function init_lambda_binding(bindings::LambdaBindings, b::BindingInfo, capt::Bool)
-    @assert !haskey(bindings.locals_capt, b.id)
     bindings.locals_capt[b.id] = capt
     b.lambda_id = bindings.scope_id
 end

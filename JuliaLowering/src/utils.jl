@@ -108,30 +108,75 @@ TODO(msg::AbstractString) = throw(ErrorException("Lowering TODO: $msg"))
 TODO(ex::SyntaxTree, msg="") = throw(LoweringError(ex, "Lowering TODO: $msg"))
 
 """
-An error generated while lowering user code `ex` (flisp: `Expr(:error, msg)`).
-For errors in lowering itself, use `@assert`.
+An error with detailed printing containing one or more SyntaxTrees and one
+message per tree.  If `!internal`, caused by bad user code in `syntax` (flisp:
+`Expr(:error, msg)`).
 """
 struct LoweringError <: Exception
-    ex::SyntaxTree
-    msg::String
+    sts::SyntaxList
+    msgs::Vector{String}
+    internal::Bool
 end
 
-internal_error(ex, msg) = throw(
-    LoweringError(ex, string("Internal lowering error: ", msg)))
+LoweringError(ex::SyntaxTree, msg::String) =
+    LoweringError(SyntaxList(ex), String[msg], false)
+
+# Returns a set of ancestors within `depth` distance from the nodes in
+# `sts`. Slow, intended for error printing only.  >1 answer will only be
+# produced with a non-tree DAG.
+function _scan_parents(sts::SyntaxList; depth::Int=3)
+    depth <= 0 && return sts
+    g = sts.graph
+    out = SyntaxList(sts.graph)
+    for st in sts
+        n_parents = 0
+        for candidate_id in lastindex(g.edge_ranges):-1:firstindex(g.edge_ranges)
+            candidate = SyntaxTree(g, candidate_id)
+            if st in children(candidate)
+                push!(out, SyntaxTree(g, candidate_id))
+                n_parents += 1
+                # ideally we just want one; don't be spammy if we find many.
+                # iterating in reverse means get chronologically latest results.
+                n_parents >= 3 && break
+            end
+        end
+        n_parents === 0 && push!(out, st)
+    end
+    return _scan_parents(out; depth=depth-1)
+end
 
 function Base.showerror(io::IO, exc::LoweringError; show_detail=true)
-    print(io, "LoweringError:\n")
-    src = sourceref(exc.ex)
-    highlight(io, src; note=exc.msg)
+    println(io, exc.internal ? "internal lowering bug:" : "LoweringError:")
+    for i in eachindex(exc.sts)
+        st = exc.sts[i]
+        msg = exc.msgs[i]
+        src = sourceref(st)
+        highlight(io, src; note=msg)
+        if exc.internal || src isa LineNumberNode
+            print(io, "\nExpression:\n  ")
+            show(io, MIME"text/x.sexpression"(), st)
+            parents = _scan_parents(SyntaxList(st))
+            print(io, "\nContaining expressions:")
+            for p in parents
+                print(io, "\n  ")
+                show(io, MIME"text/x.sexpression"(), p)
+            end
+        end
+        i !== lastindex(exc.sts) && print(io, "\n\n")
+    end
 
-    if show_detail
-        print(io, "\n\nDetailed provenance:\n")
-        showprov(io, exc.ex, tree=true)
+    if show_detail || exc.internal
+        print(io, "\n\nDetailed provenance:\n  ")
+        _show_provtree(io, exc.sts[1], "  ")
     end
 end
 
 function _show_provtree(io::IO, ex::SyntaxTree, indent)
-    print(io, ex, "\n")
+    print(io, ex)
+    if hasattr(ex, :jl_source)
+        printstyled(io, " @$(ex.jl_source)", color=:light_black)
+    end
+    print(io, "\n")
     prov = provenance(ex)
     for (i, e) in enumerate(prov)
         islast = i == length(prov)
@@ -169,16 +214,8 @@ function showprov(io::IO, exs::AbstractVector;
     end
 end
 
-function showprov(io::IO, ex::SyntaxTree; tree::Bool=false, showprov_kwargs...)
-    if tree
-        _show_provtree(io, ex, "")
-    else
-        showprov(io, flattened_provenance(ex); showprov_kwargs...)
-    end
-end
-
-function showprov(x; kws...)
-    showprov(stdout, x; kws...)
+function showprov(io::IO, ex::SyntaxTree; showprov_kwargs...)
+    showprov(io, flattened_provenance(ex); showprov_kwargs...)
 end
 
 function subscript_str(i)
@@ -195,16 +232,16 @@ function _deref_ssa(stmts, ex)
 end
 
 function _find_method_lambda(ex, name)
-    @assert kind(ex) == K"code_info"
+    @jl_assert kind(ex) == K"code_info" ex
     # Heuristic search through outer thunk for the method in question.
     method_found = false
     stmts = children(ex[1])
     for e in stmts
         if kind(e) == K"method" && numchildren(e) >= 2
             sig = _deref_ssa(stmts, e[2])
-            @assert kind(sig) == K"call"
+            @jl_assert kind(sig) == K"call" ex
             arg_types = _deref_ssa(stmts, sig[2])
-            @assert kind(arg_types) == K"call"
+            @jl_assert kind(arg_types) == K"call" ex
             self_type = _deref_ssa(stmts, arg_types[2])
             if kind(self_type) == K"globalref" && occursin(name, self_type.name_val)
                 return e[3]
@@ -214,7 +251,7 @@ function _find_method_lambda(ex, name)
 end
 
 function print_ir(io::IO, ex, method_filter=nothing)
-    @assert kind(ex) == K"code_info"
+    @jl_assert kind(ex) == K"code_info" ex
     if !isnothing(method_filter)
         filtered = _find_method_lambda(ex, method_filter)
         if isnothing(filtered)
@@ -229,7 +266,8 @@ end
 # TODO: JuliaLowering-the-module should always print the same way, ignoring parent modules
 function _print_ir(io::IO, ex, indent)
     added_indent = "    "
-    @assert (kind(ex) == K"lambda" || kind(ex) == K"code_info") && kind(ex[1]) == K"block"
+    @jl_assert ((kind(ex) == K"lambda" || kind(ex) == K"code_info")
+                && kind(ex[1]) == K"block") ex
     if !ex.is_toplevel_thunk && kind(ex) == K"code_info"
         slots = ex.slots
         print(io, indent, "slots: [")
@@ -262,7 +300,7 @@ function _print_ir(io::IO, ex, indent)
                 println(io, " ", string(e[3]))
             end
         elseif kind(e) == K"opaque_closure_method"
-            @assert numchildren(e) == 5
+            @jl_assert numchildren(e) == 5 e
             print(io, indent, lno, " --- opaque_closure_method ")
             for i=1:4
                 print(io, " ", e[i])
@@ -282,7 +320,8 @@ end
 # Wrap a function body in Base.Compiler.@zone for profiling
 if isdefined(Base.Compiler, Symbol("@zone"))
     macro fzone(str, f)
-        @assert f isa Expr && f.head === :function && length(f.args) === 2 && str isa String
+        @assert(f isa Expr && f.head === :function && length(f.args) === 2 && str isa String,
+                "usage: @fzone name_string <function expression>")
         esc(Expr(:function, f.args[1],
                  # Use source of our caller, not of this macro.
                  Expr(:macrocall, :(Base.Compiler.var"@zone"), __source__, str, f.args[2])))
@@ -297,7 +336,7 @@ end
 # @SyntaxTree(::Expr)
 
 function _find_SyntaxTree_macro(ex, line)
-    @assert !is_leaf(ex)
+    @jl_assert !is_leaf(ex) ex
     for c in children(ex)
         rng = byte_range(c)
         firstline = JuliaSyntax.source_line(sourcefile(c), first(rng))
@@ -311,13 +350,13 @@ function _find_SyntaxTree_macro(ex, line)
                     if kind(name) == K"."
                         name = name[2]
                     end
-                    @assert kind(name) == K"Identifier"
+                    @jl_assert kind(name) == K"Identifier" name
                     name.name_val == "@SyntaxTree"
                 end
             # We find the node we're looking for. NB: Currently assuming a max
             # of one @SyntaxTree invocation per line. Though we could relax
             # this with more heuristic matching of the Expr-AST...
-            @assert numchildren(c) == 2
+            @jl_assert numchildren(c) == 2 c
             return c[2]
         elseif !is_leaf(c)
             # Recurse
@@ -390,7 +429,7 @@ macro SyntaxTree(ex_old)
     # 4. Do the first step of JuliaLowering's syntax lowering to get
     # syntax interpolations to work
     _, ex1 = expand_forms_1(__module__, ex, false, Base.tls_world_age())
-    @assert kind(ex1) == K"call" && ex1[1].value == interpolate_ast
+    @jl_assert kind(ex1) == K"call" && ex1[1].value == interpolate_ast ex1
     Expr(:call, :interpolate_ast, SyntaxTree, ex1[3][1],
          map(e->_scope_layer_1_to_esc!(Expr(e)), ex1[4:end])...)
 end
