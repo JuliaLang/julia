@@ -86,6 +86,7 @@ exception frames, and taking/releasing locks.
 * `jl_method_t.writelock`
 * `typecache_lock`
 * `libmap_lock`
+* `JuliaOJIT.LinkerMutex` (`std::mutex`)
 
 ### Level 4
 

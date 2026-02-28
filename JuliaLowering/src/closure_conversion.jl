@@ -44,7 +44,7 @@ function captured_var_access(ctx, ex)
         ]
     else
         interpolations = cap_rewrite
-        @assert !isnothing(cap_rewrite)
+        @jl_assert !isnothing(cap_rewrite) ex
         if isempty(interpolations) || !is_same_identifier_like(interpolations[end], ex)
             push!(interpolations, ex)
         end
@@ -138,7 +138,7 @@ end
 
 function convert_global_assignment(ctx, ex, var, rhs0)
     binfo = get_binding(ctx, var)
-    @assert binfo.kind == :global
+    @jl_assert binfo.kind == :global ex var
     stmts = SyntaxList(ctx)
     decl = make_globaldecl(ctx, ex, binfo.mod, binfo.name, true)
     if kind(decl) !== K"TOMBSTONE"
@@ -186,12 +186,12 @@ function convert_assignment(ctx, ex)
     if kind(var) == K"Placeholder"
         return @ast ctx ex [K"=" var rhs0]
     end
-    @chk kind(var) == K"BindingId"
+    @jl_assert kind(var) == K"BindingId" ex
     binfo = get_binding(ctx, var)
     if binfo.kind == :global
         convert_global_assignment(ctx, ex, var, rhs0)
     else
-        @assert binfo.kind == :local || binfo.kind == :argument
+        @jl_assert binfo.kind == :local || binfo.kind == :argument ex
         boxed = is_boxed(binfo)
         if isnothing(binfo.type) && !boxed
             @ast ctx ex [K"=" var rhs0]
@@ -224,14 +224,14 @@ end
 
 # Compute fields for a closure type, one field for each captured variable.
 function closure_type_fields(ctx, srcref, closure_binds, is_opaque)
-    capture_ids = Vector{IdTag}()
+    capture_ids = Set{IdTag}()
     for lambda_bindings in closure_binds.lambdas
         for (id, is_capt) in lambda_bindings.locals_capt
             is_capt && push!(capture_ids, id)
         end
     end
-    # sort here to avoid depending on undefined Dict iteration order.
-    capture_ids = sort!(unique(capture_ids))
+    # sort here to avoid depending on undefined Set iteration order
+    capture_ids = sort!(collect(capture_ids))
 
     field_syms = SyntaxList(ctx)
     if is_opaque
@@ -292,20 +292,15 @@ function type_for_closure(ctx::ClosureConversionCtx, srcref, name_str, field_sym
     type_ex, type_binding
 end
 
+# No box needed for:
+# - non-captured vars
+# - static params (can't be reassigned)
+# - any local our optimizations have determined to be unboxed
 function is_boxed(binfo::BindingInfo)
-    # Static parameters can't be reassigned, so they never need boxing
     binfo.kind === :static_parameter && return false
-    # No box needed for:
-    # * :argument when it's not reassigned
-    defined_but_not_assigned = binfo.is_always_defined && !binfo.is_assigned
-    # * Single-assigned variables (local or argument) assigned before any closure captures them
-    #   (identified by liveness analysis in optimize_captured_vars!)
-    #   For arguments, the liveness analysis resets is_always_defined and only sets it back
-    #   if the outer-scope assignment dominates all captures. This distinguishes arguments
-    #   reassigned in outer scope (no box) from those reassigned only inside closures (needs box).
-    single_assigned_never_undef = binfo.kind in (:local, :argument) &&
-                                  binfo.is_always_defined && binfo.is_assigned_once
-    return binfo.is_captured && !defined_but_not_assigned && !single_assigned_never_undef
+    binfo.unboxed && return false
+    binfo.kind === :argument && !binfo.is_assigned && return false
+    return binfo.is_captured
 end
 
 function is_boxed(ctx, x)
@@ -377,7 +372,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             ex
         end
     elseif k == K"decl"
-        @assert kind(ex[1]) == K"BindingId"
+        @jl_assert kind(ex[1]) == K"BindingId" ex
         binfo = get_binding(ctx, ex[1])
         if binfo.kind == :global
             # flisp has this, but our K"assert" handling is in a previous pass
@@ -390,11 +385,11 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         # Leftover `global` forms become weak globals.
         mod, name = if kind(ex[1]) == K"BindingId"
             binfo = get_binding(ctx, ex[1])
-            @assert binfo.kind == :global
+            @jl_assert binfo.kind == :global ex
             binfo.mod, binfo.name
         else
             # See note about using eval on Expr(:global/:const, GlobalRef(...))
-            @assert ex[1].value isa GlobalRef
+            @jl_assert ex[1].value isa GlobalRef ex[1]
             ex[1].value.mod, String(ex[1].value.name)
         end
         @ast ctx ex [K"unused_only" make_globaldecl(ctx, ex, mod, name, false)]
@@ -412,7 +407,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         closure_convert_lambda(ctx, ex)
     elseif k == K"function_decl"
         func_name = ex[1]
-        @assert kind(func_name) == K"BindingId"
+        @jl_assert kind(func_name) == K"BindingId" ex
         func_name_id = func_name.var_id
         if haskey(ctx.closure_bindings, func_name_id)
             closure_info = get(ctx.closure_infos, func_name_id, nothing)
@@ -445,9 +440,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                     push!(init_closure_args, field_val)
                     if !boxed
                         push!(type_params, @ast ctx ex [K"call"
-                              # TODO: Update to use _typeof_captured_variable (#40985)
-                              #"_typeof_captured_variable"::K"core"
-                              "typeof"::K"core"
+                              "_typeof_captured_variable"::K"core"
                               field_val])
                     end
                 end
@@ -545,7 +538,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
 end
 
 function closure_convert_lambda(ctx, ex)
-    @assert kind(ex) == K"lambda"
+    @jl_assert kind(ex) == K"lambda" ex
     lambda_bindings = ex.lambda_bindings
     interpolations = nothing
     if isnothing(ctx.capture_rewriting)
@@ -584,7 +577,7 @@ function closure_convert_lambda(ctx, ex)
 
     if numchildren(ex) > 3
         # Convert return type
-        @assert numchildren(ex) == 4
+        @jl_assert numchildren(ex) == 4 ex
         push!(lambda_children, _convert_closures(ctx2, ex[4]))
     end
 
@@ -629,5 +622,5 @@ Invariants:
     if !isempty(ctx_out.toplevel_stmts)
         throw(LoweringError(first(ctx_out.toplevel_stmts), "Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension"))
     end
-    ctx_out, ex_out
+    ctx_out, flatten_blocks(ex_out)
 end

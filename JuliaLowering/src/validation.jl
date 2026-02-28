@@ -1,11 +1,11 @@
 struct ValidationDiagnostic
     sts::SyntaxList
-    msg::String
+    msgs::Vector{String}
     loc::LineNumberNode # for noting where failures come from in this file
 end
 ValidationDiagnostic(st::SyntaxTree, msg, loc) =
     ValidationDiagnostic(
-        SyntaxList(syntax_graph(st), NodeId[st._id]), msg, loc)
+        SyntaxList(syntax_graph(st), NodeId[st._id]), String[msg], loc)
 
 """
 The type returned by all `vst` functions.  There are three answers this can
@@ -56,18 +56,6 @@ function Base.all(f::Function, vcx::ValidationContext, itr; kws...)
         ok &= f(vcx, i; kws...)
     end
     return ok
-end
-
-# TODO: pretty-printing
-function showerrors(vr::ValidationResult)
-    isnothing(vr.errors) && return
-    for (i, e) in enumerate(vr.errors)
-        printstyled("error $i:\n"; color=:red)
-        showerror(stdout, LoweringError(e.sts[1], e.msg))
-        for st_ in e.sts[2:end]; show(st_); end
-        show(e.loc)
-        printstyled("\n---------------------------------\n"; color=:red)
-    end
 end
 
 #-------------------------------------------------------------------------------
@@ -133,16 +121,16 @@ Validation1Context.
 
 We don't check some other things:
 - This pass assumes that required attributes exist, that leaf-only (or not)
-  kinds are leaves (or not), and that syntax flags are valid per kind.  Those
-  should be checked before this validation in a linear pass over the nodes.
+  kinds are leaves (or not).  See `assert_syntaxtree`.
 - Scope issues are caught later in lowering, e.g. declaring something local and
   global.
 - Checking that certain forms don't appear in value position is also handled
   later in lowering.
 """
 function valid_st1(st::SyntaxTree)
+    DEBUG && assert_syntaxtree(st)
     vr = vst1(Validation1Context(), st)
-    @assert is_known(vr)
+    @jl_assert is_known(vr) st
     return vr
 end
 
@@ -180,9 +168,9 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"=" l r] ->
         vst1_assign_lhs(vcx, l) & vst1(vcx, r)
     [K".=" l r] ->
-        vst1_dotassign_lhs(vcx, l) & vst1(vcx, r)
+        vst1_dotted_or_op_assign(vcx, st)
     ([K"unknown_head" l r], when=Base.isoperator(st.name_val)) ->
-        vst1_op_assign(vcx, st)
+        vst1_dotted_or_op_assign(vcx, st)
     [K"unknown_head"] -> let head = st.name_val
         head === "latestworld-if-toplevel" ?
             pass() : @fail(st, string("unknown expr head: ", head))
@@ -193,8 +181,6 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         vst1(vcx, x) # BroadcastFunction(x)
     [K"return" val] -> vcx.return_ok ?
         vst1(vcx, val) :
-        @fail(st, "`return` not allowed inside comprehension or generator")
-    [K"return"] -> vcx.return_ok ? pass() :
         @fail(st, "`return` not allowed inside comprehension or generator")
     ([K"continue"], when=vcx.in_loop) -> pass()
     ([K"continue" lab], when=vcx.in_loop) -> vst1_ident(vcx, lab; lhs=true)
@@ -262,6 +248,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
 
     #---------------------------------------------------------------------------
     # Forms not produced by the parser
+    [K"ssavalue" [K"Value"]] -> pass()
     [K"inert" _] -> pass()
     [K"inert_syntaxtree" _] -> pass()
     [K"core"] -> st.name_val === "nothing" ? pass() :
@@ -280,16 +267,19 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"gc_preserve_begin" ids...] -> all(vst1_ident, vcx, ids)
     [K"gc_preserve_end" ids...] -> all(vst1_ident, vcx, ids)
     [K"isdefined" [K"Identifier"]] -> pass()
-    [K"lambda" [K"block" b1...] [K"block" b2...] [K"->" _...]] ->
+    [K"lambda" [K"block" b1...] [K"block" b2...] _] ->
         all(vst1_ident, vcx, b1) &
         all(vst1_ident, vcx, b2) &
-        vst1_lam(vcx, st[3])
+        (kind(st[3]) === K"->" ? vst1_lam(vcx, st[3]) :
+            vst1(with(vcx; return_ok=true, toplevel=false, in_gscope=false), st[3]))
     [K"softscope" _] -> pass()
     [K"softscope"] -> pass()
     [K"generated"] -> pass()
-    [K"generated_function" callex gen nongen] ->
-        vst1_function_calldecl(vcx, callex) &
-        vst1(vcx, gen) & vst1(vcx, nongen)
+    [K"generated_function" callex gen nongen] -> let
+        f_vcx = with(vcx; return_ok=true, toplevel=false, in_gscope=false)
+        vst1_function_calldecl(with(f_vcx; return_ok=false), callex) &
+            vst1(f_vcx, gen) & vst1(f_vcx, nongen)
+    end
     [K"foreigncall" _...] -> pass() # TODO (ccall also?)
     [K"cfunction" [K"Value"] f rt at [K"inert" [K"Identifier"]]] ->
         vst1(vcx, f) & vst1(vcx, rt) & vst1(vcx, at)
@@ -310,6 +300,10 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"copyast" [K"inert" _]] -> pass()
     [K"new" t args...] -> vst1(vcx, t) & all(vst1, vcx, args)
     [K"splatnew" t arg] -> vst1(vcx, t) & vst1(vcx, arg)
+    [K"thisfunction"] -> vcx.toplevel ?
+        @fail(st, "can only be used inside a function") :
+        !vcx.return_ok ?
+        @fail(st, "current function not defined in comprehension or generator") : pass()
 
     #---------------------------------------------------------------------------
     # Invalid forms for which we want to produce detailed errors
@@ -388,7 +382,7 @@ end
 
 vst1_local_arg(vcx, st) = @stm st begin
     [K"function" _...] -> vst1_function(vcx, st)
-    _ -> vst1_symdecl_or_assign(vcx, st) | vst1_op_assign(vcx, st) |
+    _ -> vst1_symdecl_or_assign(vcx, st) | vst1_dotted_or_op_assign(vcx, st) |
         @fail(st, "invalid local declaration: expected identifier or assignment")
 end
 
@@ -396,16 +390,13 @@ vst1_global_arg(vcx, st) = @stm st begin
     [K"Identifier"] -> pass()
     ([K"Value"], when=(st.value isa GlobalRef)) -> pass
     [K"=" l r] ->
-        vst1_assign_lhs(vcx, l; disallow_type=!vcx.toplevel) &
-        vst1(vcx, r)
+        vst1_assign_lhs(vcx, l) & vst1(vcx, r)
     [K"function" _...] -> vcx.toplevel ?
         vst1_function(vcx, st) :
         @fail(st, "global function needs to be placed at top level, or use eval")
-    [K"::" [K"Identifier"] t] -> vcx.toplevel ?
-        vst1(vcx, t) :
-        @fail(st, "type declarations for globals cannot be inside a function")
-    (_, when=vst1_op_assign(vcx, st).ok) -> pass()
-    _ -> @fail(st, "invalid global declaration: expected identifier or assignment")
+    [K"::" [K"Identifier"] t] -> vst1(vcx, t)
+    _ -> vst1_dotted_or_op_assign(vcx, st) |
+        @fail(st, "invalid global declaration: expected identifier or assignment")
 end
 
 # @stm doesn't work so well with n dots and m identifiers
@@ -538,6 +529,10 @@ vst1_ident(vcx, st; lhs=false) = @stm st begin
 end
 
 vst1_call(vcx, st) = @stm st begin
+    ([K"call" [K"Identifier"] args...], when=st[1].name_val==="cglobal") ->
+        (1 <= length(args) <= 2 ? pass() :
+            @fail(st, "cglobal must have one or two arguments")) &
+        all(vst1_call_arg, vcx, args)
     [K"call" f [K"parameters" kwargs...] args...] ->
         vst1(vcx, f) &
         all(vst1_call_arg, vcx, args) &
@@ -596,7 +591,7 @@ vst1_lam_lhs(vcx, st) = @stm st begin
     # syntax TODO: This is handled badly in the parser
     [K"block" p1 p2] -> pass()
     # unwrapped single arg
-    _ -> let ps = SyntaxList(st._graph, tree_ids(st))
+    _ -> let ps = SyntaxList(st)
         _calldecl_positionals(vcx, ps, K"=")
     end
 end
@@ -866,11 +861,11 @@ end
 #
 # Note simple `op` and `.op` are calls to (dotted) identifiers, so this special
 # handling isn't necessary.
-vst1_op_assign(vcx, st) = let op_s = get(st, :name_val, "")
+vst1_dotted_or_op_assign(vcx, st) = let op_s = get(st, :name_val, "")
     @stm st begin
+        [K".=" l r] -> vst1_dotassign_lhs(vcx, l) & vst1(vcx, r)
         (_, when=(!Base.isoperator(op_s))) -> unknown()
-        (_, when=(isempty(op_s) || op_s[end] !== '=')) ->
-            @fail(st, "expected op= or .op=")
+        (_, when=(isempty(op_s) || op_s[end] !== '=')) -> unknown()
         ([K"unknown_head" l r], when=(op_s[1] === '.')) ->
              vst1_dotassign_lhs(vcx, l) & vst1(vcx, r)
         ([K"unknown_head" l r]) ->
@@ -887,9 +882,7 @@ end
 # - in curly, typevars are checked for structure, but not used.
 # - (local/global (= lhs rhs)) forms should probably reject the same
 #   lhss as const (ref and .)
-vst1_assign_lhs(
-    vcx, st; in_const=false, in_tuple=false, disallow_type=false
-) = @stm st begin
+vst1_assign_lhs(vcx, st; in_const=false, in_tuple=false) = @stm st begin
     [K"tuple" [K"parameters" xs...]] -> all(vst1_symdecl, vcx, xs)
     [K"tuple" xs...] ->
         all(vst1_assign_lhs, vcx, xs; in_const, in_tuple=true) &
@@ -899,21 +892,19 @@ vst1_assign_lhs(
     # [K"::" [K"tuple" _...] t] -> ???
     [K"..." x] -> !in_tuple ?
         @fail(st, "splat on left side of assignment must be in a tuple") :
-        vst1_assign_lhs_nontuple(vcx, x; in_const, disallow_type)
+        vst1_assign_lhs_nontuple(vcx, x; in_const)
     ([K"parameters" _...], when=in_tuple) -> @fail(st, """
         property destructuring must use a single `;` before the property \
         names, e.g. `(; a, b) = rhs`""")
     _ -> vst1_assign_lhs_nontuple(vcx, st; in_const)
 end
-vst1_assign_lhs_nontuple(
-    vcx, st; in_const=false, in_tuple=false, disallow_type=false
-) = @stm st begin
+vst1_assign_lhs_nontuple(vcx, st; in_const=false, in_tuple=false) = @stm st begin
     [K"Identifier"] -> pass()
+    [K"ssavalue" [K"Value"]] -> in_const ? @fail(st, "cannot declare ssavalue const") : pass()
     ([K"Value"], when=(st.value isa GlobalRef)) -> pass()
     (_, when=(is_eventually_call(st))) ->
         vst1_function_calldecl(vcx, st)
-    [K"::" x t] -> disallow_type ?
-        @fail(st, "type declarations for globals cannot be inside a function") :
+    [K"::" x t] ->
         vst1_assign_lhs(vcx, x; in_const, in_tuple) & vst1(vcx, t)
     [K"." x y] ->
         in_const ? @fail(st, "cannot declare this form constant") :
@@ -989,6 +980,7 @@ end
 Assumes `st` is parsed from surface syntax, and not a partially-expanded tree.
 """
 function valid_st0(st::SyntaxTree)
+    DEBUG && assert_syntaxtree(st)
     vr = vst1(with(Validation1Context(), unexpanded=true), st)
     # hack: A macrocall can show up almost anywhere, so filter errors pointing
     # at macrocalls instead of adding cases to every function above.
@@ -1026,4 +1018,78 @@ vst0_quoted(vcx, st; quote_level) = @stm st begin
     [K"quote" x] ->
         vst0_quoted(vcx, x; quote_level=quote_level+1)
     _ -> all(vst0_quoted, vcx, children(st); quote_level)
+end
+
+#-------------------------------------------------------------------------------
+# Tree invariants assumed everywhere, including `show`, so fallback printing
+# should be used on failure.  (These checks really belong in the type system,
+# but failure should only be possible working on AST-internal functions.)
+
+function assert_syntaxtree(st::SyntaxTree)
+    vr = _assert_syntaxtree(st, NodeId[], pass())
+    @jl_assert is_known(vr) st
+    if !vr.ok
+        msg = string("assert_syntaxtree failed: ", node_string(st), "\n")
+        for err in vr.errors
+            msg *= "node: " * node_string(only(err.sts)) *
+                "\nreason: " * string(err.msgs)
+        end
+        throw(error(msg))
+    end
+    nothing
+end
+
+function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
+    if st._id in parents
+        err = "cycle detected: ["
+        for p in parents
+            err *= "\n" * node_string(SyntaxTree(st._graph, p))
+        end
+        return vr & @fail(st, err*"]")
+    end
+    for a in (:kind, :source)
+        vr &= hasattr(st, a) ? pass() : @fail(st, string("needs attribute ", a))
+    end
+    if is_leaf(st)
+        # Note some kinds can show up in non-leaves too
+        required_attrs = @stm st begin
+            [K"Identifier"] -> (:name_val,)
+            [K"core"] -> (:name_val,)
+            [K"top"] -> (:name_val,)
+            [K"Symbol"] -> (:name_val,)
+            [K"globalref"] -> (:name_val,:mod)
+            [K"Placeholder"] -> ()
+            [K"BindingId"] -> (:var_id,)
+            [K"label"] -> (:id,)
+            [K"symboliclabel"] -> (:name_val,)
+            [K"symbolicgoto"] -> (:name_val,)
+            [K"Value"] -> (:value,)
+            [K"slot"] -> (:var_id,)
+            [K"static_parameter"] -> (:var_id,)
+            [K"SSAValue"] -> (:var_id,)
+            [K"TOMBSTONE"] -> ()
+            [K"SourceLocation"] -> ()
+            [K"latestworld"] -> ()
+            [K"latestworld_if_toplevel"] -> ()
+            (_, when=JuliaSyntax.is_literal(st)) -> (:value,)
+            (_, when=JuliaSyntax.is_trivia(st)) -> () # green tree only
+            (_, when=JuliaSyntax.is_operator(st)) -> (:name_val) # TODO: remove
+            _ -> return vr & @fail(st, "unrecognized leaf kind")
+        end
+    else
+        required_attrs = @stm st begin
+            [K"code_info" _...] -> (:slots, :is_toplevel_thunk)
+            [K"unknown_head" _...] -> (:name_val,)
+            _ -> ()
+        end
+    end
+    for a in required_attrs
+        vr &= hasattr(st, a) ? pass() : @fail(st, string("needs attribute ", a))
+    end
+    push!(parents, st._id)
+    for c in children(st)
+        vr &= _assert_syntaxtree(c, parents, vr)
+    end
+    pop!(parents)
+    vr
 end

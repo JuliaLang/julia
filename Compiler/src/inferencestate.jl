@@ -980,6 +980,8 @@ is_effect_overridden(override::EffectsOverride, effect::Symbol) = getfield(overr
 
 has_conditional(𝕃::AbstractLattice, ::InferenceState) = has_conditional(𝕃)
 has_conditional(::AbstractLattice, ::IRInterpretationState) = false
+has_mustalias(𝕃::AbstractLattice, ::InferenceState) = has_mustalias(𝕃)
+has_mustalias(::AbstractLattice, ::IRInterpretationState) = false
 
 # work towards converging the valid age range for sv
 function update_valid_age!(sv::AbsIntState, world, valid_worlds::WorldRange)

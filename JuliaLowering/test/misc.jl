@@ -350,4 +350,92 @@ end
 emptyblock_result = JuliaLowering.eval(test_mod, Expr(:(=), :emptyblock_144, Expr(:block)))
 @test emptyblock_result == nothing
 
+@testset "string forms" begin
+    @test JuliaLowering.include_string(test_mod, raw"""
+        "str"
+    """) == "str"
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = 1
+        "str$x"
+    end
+    """) == "str1"
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = 1
+        "str$(x)"
+    end
+    """) == "str1"
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = [1,2,3]
+        "str$(x...)"
+    end
+    """) == "str123"
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = [1,2,3]
+        "str$(x)"
+    end
+    """) == "str[1, 2, 3]"
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = [1,2,3]
+        "str$("innerstr$(x...)")"
+    end
+    """) == "strinnerstr123"
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = [1,2,3]
+        "str$(["innerstr$(x...)"]...)"
+    end
+    """) == "strinnerstr123"
+
+    # cmds
+    @test JuliaLowering.include_string(test_mod, raw"""
+        `cmdstr`
+    """) == `cmdstr`
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = 1
+        `cmdstr$x`
+    end
+    """) == `cmdstr1`
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = 1
+        `cmdstr$(x)`
+    end
+    """) == `cmdstr1`
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = [1,2,3]
+        `cmdstr$(x...)`
+    end
+    """) == `cmdstr123`
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = [1,2,3]
+        `cmdstr$(x)`
+    end
+    """) == `cmdstr1 cmdstr2 cmdstr3`
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = [1,2,3]
+        `cmdstr$("innerstr$(x...)")`
+    end
+    """) == `cmdstrinnerstr123`
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = [1,2,3]
+        `cmdstr$(["innerstr$(x...)"]...)`
+    end
+    """) == `cmdstrinnerstr123`
+end
+
+@testset "jl_assert" begin
+    st = @ast_ [K"function" "foo"::K"Identifier"]
+    err = try
+        JuliaLowering.@jl_assert(1 == 2, (st, "error message 1"), (st, "error message 2"))
+        nothing
+    catch err
+        err
+    end
+    @test err isa LoweringError
+    @test err.internal === true
+    @test length(err.sts) == 2
+    @test length(err.msgs) == 2
+    shown = sprint(show, err)
+    @test contains(shown, "error message 1")
+    @test contains(shown, "error message 2")
+end
+
 end

@@ -91,10 +91,10 @@ static bool runtime_sym_gvs(jl_codectx_t &ctx, const native_sym_arg_t &symarg,
         return false;
     }
 
-    auto M = &ctx.emission_context.shared_module();
+    auto M = &ctx.emission_context.get_module();
     bool runtime_lib = false;
     GlobalVariable *libptrgv;
-    jl_codegen_params_t::SymMapGV *symMap;
+    jl_codegen_output_t::SymMapGV *symMap;
     if ((intptr_t)f_lib == (intptr_t)JL_EXE_LIBNAME) {
         libptrgv = prepare_global_in(M, jlexe_var);
         symMap = &ctx.emission_context.symMapExe;
@@ -147,7 +147,7 @@ static bool runtime_sym_gvs(jl_codectx_t &ctx, const native_sym_arg_t &symarg,
 }
 
 static Value *runtime_sym_lookup(
-        jl_codegen_params_t &emission_context,
+        jl_codegen_output_t &emission_context,
         IRBuilder<> &irbuilder,
         jl_codectx_t *pctx,
         const native_sym_arg_t &symarg, Function *f,
@@ -265,7 +265,7 @@ static GlobalVariable *emit_plt_thunk(
     ++PLTThunks;
     bool shared = libptrgv != nullptr;
     assert(shared && "not yet supported by runtime_sym_lookup");
-    Module *M = shared ? &ctx.emission_context.shared_module() : jl_Module;
+    auto M = &ctx.emission_context.get_module();
     if (shared) {
         assert(symarg.f_name);
         libptrgv = prepare_global_in(M, libptrgv);
@@ -1192,7 +1192,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     // save the module to be linked later.
     // we cannot do this right now, because linking mutates the destination module,
     // which might invalidate LLVM values cached in cgval_t's (specifically constant arrays)
-    ctx.llvmcall_modules.push_back(std::move(Mod));
+    ctx.emission_context.llvmcall_modules.push_back(std::move(Mod));
 
     JL_GC_POP();
 
@@ -1257,9 +1257,9 @@ public:
     jl_unionall_t *unionall_env; // UnionAll environment for `at` and `rt`
     size_t nccallargs; // number of actual arguments
     size_t nreqargs; // number of required arguments in ccall function definition
-    jl_codegen_params_t *ctx;
+    jl_codegen_output_t *ctx;
 
-    function_sig_t(const char *fname, Type *lrt, jl_value_t *rt, bool retboxed, bool gc_safe, jl_svec_t *at, jl_unionall_t *unionall_env, size_t nreqargs, CallingConv::ID cc, bool llvmcall, jl_codegen_params_t *ctx)
+    function_sig_t(const char *fname, Type *lrt, jl_value_t *rt, bool retboxed, bool gc_safe, jl_svec_t *at, jl_unionall_t *unionall_env, size_t nreqargs, CallingConv::ID cc, bool llvmcall, jl_codegen_output_t *ctx)
       : lrt(lrt), retboxed(retboxed), gc_safe(gc_safe),
         prt(NULL), sret(0), cc(cc), llvmcall(llvmcall),
         at(at), rt(rt), unionall_env(unionall_env),
@@ -1485,7 +1485,7 @@ static bool verify_ref_type(jl_codectx_t &ctx, jl_value_t* ref, jl_unionall_t *u
 
 static const std::string verify_ccall_sig(jl_value_t *&rt, jl_value_t *at,
                                           jl_unionall_t *unionall_env, jl_svec_t *sparam_vals,
-                                          jl_codegen_params_t *ctx,
+                                          jl_codegen_output_t *ctx,
                                           Type *&lrt, LLVMContext &ctxt,
                                           bool &retboxed, bool &static_rt, bool llvmcall=false)
 {

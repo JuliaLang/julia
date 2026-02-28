@@ -12,8 +12,10 @@ New language features
     operator suffixes, accessible as `\^alpha`, `\^epsilon`, `\^ltphi`, `\_<`, `\_>`, and `\_schwa` at the REPL
     ([#60285]).
   - The `@label` macro can now create labeled blocks that can be exited early with `break name [value]`. Use
-    `@label name expr` for named blocks or `@label _ expr` for anonymous blocks. The `continue` statement also
-    supports labels with `continue name` to continue a labeled loop ([#60481]).
+    `@label name expr` for named blocks or `@label expr` for anonymous blocks. Anonymous `@label` blocks
+    participate in the default break scope: a plain `break` or `break _` exits the innermost breakable scope,
+    whether it is a loop or an `@label` block. The `continue` statement also supports labels with
+    `continue name` to continue a labeled loop ([#60481]).
 
 Language changes
 ----------------

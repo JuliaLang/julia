@@ -13,7 +13,7 @@ function Base.isless(a::NameKey, b::NameKey)
 end
 
 function NameKey(ex::SyntaxTree)
-    @chk kind(ex) == K"Identifier"
+    @jl_assert kind(ex) === K"Identifier" ex
     NameKey(ex.name_val, ex.scope_layer)
 end
 
@@ -48,7 +48,7 @@ end
 function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
     id = length(ctx.scopes) + 1
     if parent_id == 0
-        @assert kind(ex) === K"lambda"
+        @jl_assert kind(ex) === K"lambda" ex
         lambda_id = id
         is_permeable = ex.is_toplevel_thunk
         is_lifted = false
@@ -112,10 +112,8 @@ function maybe_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
     if kind(ex) === K"BindingId"
         bid = ex.var_id
         b = get_binding(ctx, bid)
-        @assert b.kind === new_k
-        if b.lambda_id !== 0
-            internal_error(ex, "cannot declare a BindingId in multiple scopes")
-        end
+        @jl_assert b.kind === new_k ex
+        @jl_assert b.lambda_id !== 0 (ex, "cannot declare a BindingId in multiple scopes")
         add_lambda_local!(ctx, scope, b)
         return bid
     elseif kind(ex) === K"Placeholder"
@@ -167,7 +165,8 @@ function add_lambda_local!(ctx, scope::ScopeInfo, b)
         return
     end
     lam = scope.is_lifted ? top_scope(ctx) : enclosing_lambda(ctx, scope)
-    @assert !haskey(lam.locals_capt, b.id)
+    @jl_assert !haskey(lam.locals_capt, b.id) (
+        binding_ex(ctx, b), "adding lambda local twice")
     lam.locals_capt[b.id] = false
     b.lambda_id = lam.id
     nothing
@@ -182,7 +181,9 @@ function ensure_captured!(ctx, scope::ScopeInfo, b)
         b.is_captured = true
         lam.locals_capt[b.id] = true
         s2 = parent(ctx, lam)
-        @assert !isnothing(s2) "tried to capture local before declaration in any parent"
+        @jl_assert !isnothing(s2) (
+            binding_ex(ctx, b),
+            "tried to capture local before declaration in any parent")
         ensure_captured!(ctx, s2, b)
     end
     nothing
@@ -218,26 +219,20 @@ function _find_scope_decls!(ctx, scope, ex)
         if k1 === K"BindingId"
             b = get_binding(ctx, ex[1])
             if k === K"function_decl" && !b.is_ssa && b.kind !== :global
-                @assert false "allow local BindingId as function name?"
+                @jl_assert false (ex, "allow local BindingId as function name?")
             end
             get!(scope.binding_assignments, b.id, ex[1]._id)
         elseif k1 === K"Identifier"
             get!(scope.assignments, NameKey(ex[1]), ex[1]._id)
         elseif k1 === K"Placeholder"
-            @assert k !== K"function_decl"
+            @jl_assert k !== K"function_decl" ex
         else
-            @assert false "Unknown kind in assignment"
+            @jl_assert false (ex, "unknown kind in assignment")
         end
         if (k === K"=" || k === K"assign_or_constdecl_if_global" ||
             k === K"constdecl" && numchildren(ex) == 2)
             _find_scope_decls!(ctx, scope, ex[2])
         end
-    elseif k === K"symbolicblock"
-        # Only recurse into the body (second child), not the label name (first child)
-        _find_scope_decls!(ctx, scope, ex[2])
-    elseif k === K"break" && numchildren(ex) >= 2
-        # For break with value, only recurse into the value expression (second child), not the label
-        _find_scope_decls!(ctx, scope, ex[2])
     elseif needs_resolution(ex) && !(k in KSet"scope_block lambda method_defs")
         for e in children(ex)
             _find_scope_decls!(ctx, scope, e)
@@ -249,7 +244,7 @@ end
 # means finding all variables declared and used in the scope `ex` and generating
 # the (identifier,layer)=>binding_id mapping `scope.vars`
 function enter_scope!(ctx, ex)
-    @assert kind(ex) in KSet"lambda scope_block method_defs"
+    @jl_assert kind(ex) in KSet"lambda scope_block method_defs" ex
     # Note that generated functions produce lambdas with this false
     is_toplevel_thunk = kind(ex) === K"lambda" && ex.is_toplevel_thunk
     parent_id = (is_toplevel_thunk || isempty(ctx.scope_stack)) ?
@@ -262,11 +257,11 @@ function enter_scope!(ctx, ex)
     # Find explicit decls that may influence assignment assignment resolution
     if kind(ex) === K"lambda"
         for c in children(ex[1])
-            @assert kind(c) in KSet"Identifier BindingId Placeholder"
+            @jl_assert kind(c) in KSet"Identifier BindingId Placeholder" c
             maybe_declare_in_scope!(ctx, scope, c, :argument)
         end
         for c in children(ex[2])
-            @assert kind(c) in KSet"Identifier BindingId Placeholder"
+            @jl_assert kind(c) in KSet"Identifier BindingId Placeholder" c
             maybe_declare_in_scope!(ctx, scope, c, :static_parameter)
         end
         for c in children(ex)[3:end]
@@ -342,7 +337,7 @@ end
 function _resolve_scopes(ctx, ex::SyntaxTree,
                          @nospecialize(scope::Union{Nothing, ScopeInfo}))
     k = kind(ex)
-    @assert scope isa ScopeInfo || k === K"lambda"
+    @jl_assert scope isa ScopeInfo || k === K"lambda" ex
     if k == K"Identifier"
         b = resolve_name(ctx, ex)
         # Unresolved names are assumed global
@@ -350,15 +345,16 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
             gid = declare_in_scope!(ctx, top_scope(ctx), ex, :global)
             b = get_binding(ctx, gid)
         end
+        # Body-level @nospecialize sets :nospecialize metadata on identifiers.
+        # Propagate this to the binding so the slot gets the nospecialize flag.
+        if getmeta(ex, :nospecialize, false) && b.kind === :argument
+            b.is_nospecialize = true
+        end
         newleaf(ctx, ex, K"BindingId", b.id)
     elseif k === K"BindingId"
         ex
     elseif k == K"softscope"
         newleaf(ctx, ex, K"TOMBSTONE")
-    elseif k == K"break" && numchildren(ex) >= 2
-        # For break with value (break label value), process the value expression but not the label
-        # This must come BEFORE !needs_resolution check since K"break" is in is_quoted
-        @ast ctx ex [K"break" ex[1] _resolve_scopes(ctx, ex[2], scope)]
     elseif !needs_resolution(ex)
         ex
     elseif k == K"local"
@@ -378,7 +374,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         id = ex_out[1]
         if kind(id) != K"Placeholder"
             binfo = get_binding(ctx, id)
-            if !isnothing(binfo.type)
+            if !isnothing(binfo.type) && binfo.kind !== :global
                 throw(LoweringError(ex, "multiple type declarations found for `$(binfo.name)`"))
             end
             binfo.type = ex_out[2]._id
@@ -413,7 +409,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
 
         @ast ctx ex [K"lambda"(;lambda_bindings=lambda_bindings,
                                is_toplevel_thunk=ex.is_toplevel_thunk,
-                               toplevel_pure=false)
+                               toplevel_pure=ex.toplevel_pure)
             arg_bindings
             sparam_bindings
             [K"block"
@@ -489,6 +485,13 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         end
         push!(stmts, locals_dict)
         newnode(ctx, ex, K"block", stmts)
+    elseif k == K"thisfunction"
+        lam = SyntaxTree(ex._graph, enclosing_lambda(ctx, scope::ScopeInfo).node_id)
+        self_arg = lam[1][1]
+        for a in children(lam[1])
+            getmeta(a, :thisfunction_original, false) && (self_arg = a)
+        end
+        return _resolve_scopes(ctx, self_arg, scope)
     elseif k == K"assert"
         etype = extension_type(ex)
         if etype == "require_existing_locals"
@@ -509,7 +512,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
                 throw(LoweringError(e, "this syntax is only allowed in top level code"))
             end
         else
-            internal_error(ex, "unknown syntax assertion")
+            @jl_assert false (ex, "unknown syntax assertion")
         end
         newleaf(ctx, ex, K"TOMBSTONE")
     elseif k == K"function_decl"
@@ -528,7 +531,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         resolved
     elseif k == K"constdecl"
         resolved = mapchildren(e->_resolve_scopes(ctx, e, scope), ctx, ex)
-        @assert kind(resolved[1]) === K"BindingId"
+        @jl_assert kind(resolved[1]) === K"BindingId" resolved[1]
         if get_binding(ctx, resolved[1].var_id).kind === :local
             throw(LoweringError(ex, "unsupported `const` declaration on local variable"))
         elseif !is_top_scope(enclosing_lambda(ctx, scope))
@@ -538,12 +541,9 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
     elseif k == K"assign_or_constdecl_if_global"
         id = _resolve_scopes(ctx, ex[1], scope)
         bk = get_binding(ctx, id).kind
-        @assert numchildren(ex) === 2
+        @jl_assert numchildren(ex) === 2 ex
         assignment_kind = bk == :global ? K"constdecl" : K"="
         @ast ctx ex _resolve_scopes(ctx, [assignment_kind ex[1] ex[2]], scope)
-    elseif k == K"symbolicblock"
-        # Only recurse into the body (second child), not the label name (first child)
-        @ast ctx ex [K"symbolicblock" ex[1] _resolve_scopes(ctx, ex[2], scope)]
     else
         mapchildren(e->_resolve_scopes(ctx, e, scope), ctx, ex)
     end
@@ -582,7 +582,7 @@ end
 
 function init_closure_bindings!(ctx, fname)
     func_name_id = fname.var_id
-    @assert get_binding(ctx, func_name_id).kind === :local
+    @jl_assert get_binding(ctx, func_name_id).kind === :local fname
     get!(ctx.closure_bindings, func_name_id) do
         name_stack = Vector{String}()
         for parentname in ctx.method_def_stack
@@ -628,9 +628,11 @@ function analyze_variables!(ctx, ex)
         # but is filled in here.
         scope = ctx.scopes[ctx.lambda_bindings.scope_id]
         ensure_captured!(ctx, scope, b)
-        @assert b.kind === :global || b.is_ssa || haskey(ctx.lambda_bindings.locals_capt, b.id)
+        @jl_assert (b.kind === :global ||
+            b.is_ssa ||
+            haskey(ctx.lambda_bindings.locals_capt, b.id)) ex binding_ex(ctx, b.id)
     elseif k == K"Identifier"
-        @assert false
+        @jl_assert false ex
     elseif k == K"break" && numchildren(ex) >= 2
         # For break with value, only analyze the value expression (second child), not the label
         # This must come BEFORE !needs_resolution check since K"break" is in is_quoted
@@ -712,9 +714,6 @@ function analyze_variables!(ctx, ex)
             ctx.graph, ctx.bindings, ctx.mod, ctx.scopes, lambda_bindings,
             ctx.method_def_stack, ctx.closure_bindings)
         foreach(e->analyze_variables!(ctx2, e), ex[3:end]) # body & return type
-    elseif k == K"symbolicblock"
-        # Only analyze the body (second child), not the label name (first child)
-        analyze_variables!(ctx, ex[2])
     else
         foreach(e->analyze_variables!(ctx, e), children(ex))
     end

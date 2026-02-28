@@ -426,6 +426,7 @@ makedocs(
     authors   = "The Julia Project",
     pages     = PAGES,
     remotes   = documenter_stdlib_remotes,
+    meta      = Dict(:DocTestSyntax => VERSION),
 )
 
 # Update URLs to external stdlibs (JuliaLang/julia#43199)
