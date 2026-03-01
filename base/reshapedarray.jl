@@ -183,11 +183,6 @@ end
 @inline _after_colon(dim::Any, tail...) =  _after_colon(tail...)
 @inline _after_colon(dim::Colon, tail...) = tail
 
-reshape(parent::AbstractArray{T,N}, ndims::Val{N}) where {T,N} = parent
-function reshape(parent::AbstractArray, ndims::Val{N}) where N
-    reshape(parent, rdims(Val(N), axes(parent)))
-end
-
 # Move elements from inds to out until out reaches the desired
 # dimensionality N, either filling with OneTo(1) or collapsing the
 # product of trailing dims into the last element

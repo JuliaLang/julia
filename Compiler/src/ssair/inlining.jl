@@ -158,7 +158,7 @@ function cfg_inline_item!(ir::IRCode, idx::Int, todo::InliningTodo, state::CFGIn
         l = length(state.new_cfg_blocks)
         bb_rename_range = (l:length(inlinee_cfg.blocks)+l-1)
         append!(state.new_cfg_blocks[end].succs, inlinee_cfg.blocks[1].succs)
-        append!(state.new_cfg_blocks, inlinee_cfg.blocks[2:end])
+        append!(state.new_cfg_blocks, view(inlinee_cfg.blocks, 2:length(inlinee_cfg.blocks)))
     end
     if need_split
         push!(state.new_cfg_blocks, BasicBlock(state.cfg.blocks[block].stmts,
