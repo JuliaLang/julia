@@ -3057,6 +3057,23 @@ function (==)(A::AbstractArray, B::AbstractArray)
     return anymissing ? missing : true
 end
 
+"""
+    <(A::AbstractVector, B::AbstractVector)
+
+Compare `A` and `B` in lexicographic order by applying `<` to their elements.
+"""
+function <(A::AbstractVector, B::AbstractVector)
+    for (a, b) in zip(A, B)
+        eq = a == b
+        if ismissing(eq)
+            return missing
+        elseif !eq
+            return a < b
+        end
+    end
+    return length(A) < length(B)
+end
+
 # _sub2ind and _ind2sub
 # fallbacks
 function _sub2ind(A::AbstractArray, I...)
