@@ -880,3 +880,37 @@ end
     @test 1.0 != big(1//0)
     @test Inf == big(1//0)
 end
+
+@testset "rationalize(Rational) (issue #60768)" begin
+    x = float(pi)
+    r = rationalize(x)
+    @test rationalize(Int32, r, tol=0.0) === Rational{Int32}(r) == r
+    @test rationalize(r) === rationalize(r, tol=0) === r
+    @test rationalize(r, tol=eps(float(r))) === r
+    @test rationalize(r, tol=0.1) == 16//5
+    for n=1:10
+        @test rationalize(r, tol=1/10^n) == rationalize(float(r), tol=1/10^n)
+    end
+    @test_throws OverflowError rationalize(UInt, -r)
+end
+
+@testset "rationalize(x) with tiny x (issue #49803, #49848)" begin
+    for T in (Float16, Float32, Float64), n in 0:24
+        # inv(x) ≥ maxintfloat(T)
+        x = prevfloat(inv(maxintfloat(T)), n)
+        @test abs(rationalize(Base.inttype(T), x) - x) ≤ eps(x)
+        @test abs(rationalize(widen(Base.inttype(T)), x, 0) - x) == 0
+        # x subnormal
+        x = prevfloat(floatmin(T), n)
+        setprecision(BigFloat, 1 - exponent(x)) do
+            @test abs(rationalize(BigInt, x) - x) ≤ eps(x)
+            @test abs(rationalize(BigInt, x, 0) - x) == 0
+        end
+        # inv(x) infinite
+        x = nextfloat(zero(T), n + 1)
+        setprecision(BigFloat, 8 - exponent(x)) do
+            @test abs(rationalize(BigInt, x) - x) ≤ eps(x)
+            @test abs(rationalize(BigInt, x, 0) - x) == 0
+        end
+    end
+end
