@@ -1877,14 +1877,27 @@ end
     @test view(1:10, :) === 1:10
     @test view(1:2:9, :) === 1:2:9
 
+    @test view(1:10, CartesianIndices((1:5,))) === 1:5
+
     # Ensure we don't hit a fallback `view` if there's a better `getindex` implementation
-    vmt = collect(methods(view, Tuple{AbstractRange, AbstractRange}))
+    vmt = collect(methods(Base.unsafe_view, Tuple{AbstractRange, AbstractRange}))
     for m in methods(getindex, Tuple{AbstractRange, AbstractRange})
         tt = Base.tuple_type_tail(m.sig)
         tt == Tuple{AbstractArray,Vararg{Any,N}} where N && continue
         vm = findfirst(sig->tt <: Base.tuple_type_tail(sig.sig), vmt)
         @test vmt[vm].sig != Tuple{typeof(view),AbstractArray,Vararg{Any,N}} where N
     end
+
+    struct MyRange{T,A<:AbstractRange{T}} <: AbstractRange{T}
+        r::A
+    end
+    Base.first(r::MyRange) = first(r.r)
+    Base.last(r::MyRange) = last(r.r)
+    Base.step(r::MyRange) = step(r.r)
+    Base.length(r::MyRange) = length(r.r)
+    Base.getindex(r::MyRange, i::Int) = getindex(r.r, i)
+
+    @test view(MyRange(1:10), :) === MyRange(1:10)
 end
 
 @testset "Issue #26608" begin
