@@ -2686,4 +2686,104 @@ end
     end
 end
 
+# Issue #61198
+@testset "no false staleness in precompilation of dynamic dependencies" begin
+    mkdepottempdir() do depot
+        project_path = joinpath(depot, "testenv")
+        mkpath(project_path)
+
+        dummy_uuid = "10000000-0000-0000-0000-000000000034"
+        slow_uuid  = "10000000-0000-0000-0000-000000000035"
+        fast_uuid  = "10000000-0000-0000-0000-000000000036"
+
+        dummy_dir = joinpath(depot, "dev", "DummyPkg")
+        mkpath(joinpath(dummy_dir, "src"))
+        write(joinpath(dummy_dir, "Project.toml"), """
+            name = "DummyPkg"
+            uuid = "$dummy_uuid"
+            version = "0.1.0"
+            """)
+        write(joinpath(dummy_dir, "src", "DummyPkg.jl"), """
+            module DummyPkg
+            end
+            """)
+
+        slow_dir = joinpath(depot, "dev", "SlowPkg")
+        mkpath(joinpath(slow_dir, "src"))
+        write(joinpath(slow_dir, "Project.toml"), """
+            name = "SlowPkg"
+            uuid = "$slow_uuid"
+            version = "0.1.0"
+
+            [deps]
+            DummyPkg = "$dummy_uuid"
+            """)
+        write(joinpath(slow_dir, "src", "SlowPkg.jl"), """
+            module SlowPkg
+            using DummyPkg
+            end
+            """)
+
+        # FastPkg has no declared deps but dynamically loads SlowPkg during
+        # compilation, putting SlowPkg in its required_modules.
+        fast_dir = joinpath(depot, "dev", "FastPkg")
+        mkpath(joinpath(fast_dir, "src"))
+        write(joinpath(fast_dir, "Project.toml"), """
+            name = "FastPkg"
+            uuid = "$fast_uuid"
+            version = "0.1.0"
+            """)
+        write(joinpath(fast_dir, "src", "FastPkg.jl"), """
+            module FastPkg
+            Base.require(Base.PkgId(Base.UUID("$slow_uuid"), "SlowPkg"))
+            end
+            """)
+
+        write(joinpath(project_path, "Project.toml"), """
+            [deps]
+            DummyPkg = "$dummy_uuid"
+            SlowPkg = "$slow_uuid"
+            FastPkg = "$fast_uuid"
+            """)
+
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.DummyPkg]]
+            path = "../dev/DummyPkg/"
+            uuid = "$dummy_uuid"
+            version = "0.1.0"
+
+            [[deps.SlowPkg]]
+            deps = ["DummyPkg"]
+            path = "../dev/SlowPkg/"
+            uuid = "$slow_uuid"
+            version = "0.1.0"
+
+            [[deps.FastPkg]]
+            path = "../dev/FastPkg/"
+            uuid = "$fast_uuid"
+            version = "0.1.0"
+            """)
+
+        original_depot_path = copy(Base.DEPOT_PATH)
+        old_proj = Base.active_project()
+        try
+            push!(empty!(DEPOT_PATH), depot)
+            Base.set_active_project(project_path)
+
+            # First call: compiles everything
+            Base.Precompilation.precompilepkgs(; io=IOBuffer(), fancyprint=false)
+
+            # Second call: nothing should need recompiling
+            io2 = IOBuffer()
+            Base.Precompilation.precompilepkgs(; io=io2, fancyprint=false)
+            @test isempty(takestring!(io2))
+        finally
+            Base.set_active_project(old_proj)
+            append!(empty!(DEPOT_PATH), original_depot_path)
+        end
+    end
+end
+
 finish_precompile_test!()
