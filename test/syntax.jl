@@ -2137,7 +2137,7 @@ end
     # deprecation is.
     f33987(args::(Vararg{Any, N} where N); kwargs...) = args
     @test f33987(1,2,3) === (1,2,3)
-end)
+end) from_c=true
 
 macro id_for_kwarg(x); x; end
 Xo65KdlD = @id_for_kwarg let x = 1
