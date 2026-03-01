@@ -1748,9 +1748,12 @@ end
 ## AST printing ##
 
 function show_unquoted(io::IO, val::SSAValue, ::Int, ::Int)
+    unstable_ssa = get(io, :unstable_ssa, nothing)
     if get(io, :maxssaid, typemax(Int))::Int < val.id
         # invalid SSAValue, print this in red for better recognition
         printstyled(io, "%", val.id; color=:red)
+    elseif unstable_ssa isa BitSet && val.id in unstable_ssa
+        printstyled(io, "%", val.id; color=:light_red, bold=true)
     else
         print(io, "%", val.id)
     end
