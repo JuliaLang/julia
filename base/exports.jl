@@ -571,6 +571,7 @@ export
     lastindex,
     filter!,
     filter,
+    filterfirst,
     foldl,
     foldr,
     foreach,
