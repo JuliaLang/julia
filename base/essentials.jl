@@ -1212,7 +1212,33 @@ values(itr) = itr
 import Core: !==
 (+)(x::Int, y::Int) = add_int(x, y)
 (-)(x::Int, y::Int) = sub_int(x, y)
+
+"""
+    !(x)
+
+Boolean not. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
+returning [`missing`](@ref) if `x` is `missing`.
+
+See also [`~`](@ref) for bitwise not.
+
+# Examples
+```jldoctest
+julia> !true
+false
+
+julia> !false
+true
+
+julia> !missing
+missing
+
+julia> .![true false true]
+1×3 BitMatrix:
+ 0  1  0
+```
+"""
 !(x::Bool) = not_int(x)
+
 length(a::Array{T,1}) where {T} = getfield(getfield(a, :size), 1)
 const C_NULL = bitcast(Ptr{Cvoid}, 0)
 has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Int32, (Any, Any), t, v) !== Int32(0)
@@ -1255,8 +1281,12 @@ function _defaultctors(@nospecialize(ty), functionloc)
     argnames = Array{Any,1}(Core.undef, n + 1)
     @inbounds argnames[1] = self
     i = 1
+    nany = 0
     while i !== n + 1
         @inbounds argnames[i + 1] = names[i]::Symbol
+        if fts[i] === Any
+            nany = nany + 1
+        end
         i = i + 1
     end
 
@@ -1361,24 +1391,39 @@ function _defaultctors(@nospecialize(ty), functionloc)
 
     # Inner constructor: (::Type{T{A,B,...}})(x, y, ...) with convert calls
     # Build lambda body using Core.Argument references
-    body_args = Array{Any,1}(Core.undef, n + 1)
-    @inbounds body_args[1] = Core.Argument(1)
+    nstmts = ((n - nany) + (n - nany)) + 1
+    body_args = Array{Any,1}(Core.undef, nstmts)
+    new_args = Array{Any,1}(Core.undef, n)
     i = 1
+    bidx = 1
     while i !== n + 1
         ft = fts[i]
         if ft === Any
-            @inbounds body_args[i + 1] = Core.Argument(i + 1)
+            @inbounds new_args[i] = Core.Argument(i + 1)
         else
-            @inbounds body_args[i + 1] = Expr(:call, GlobalRef(Base, :convert),
-                                               Expr(:call, GlobalRef(Core, :fieldtype),
-                                                    Core.Argument(1), i),
-                                               Core.Argument(i + 1))
+            # Use an isa check to avoid depending on convert inlining.
+            # This matches the old convert-for-type-decl pattern:
+            #   isa(arg, fieldtype(self, i)) ? arg : convert(fieldtype(self, i), arg)
+            # The isa check is important because user code may define ambiguous
+            # convert methods (e.g. convert(::Any, v::T) = v) that prevent the
+            # optimizer from inlining convert(fieldtype(self, i), arg) when the
+            # field type is Any after specialization.
+            ft_expr = Expr(:call, GlobalRef(Core, :fieldtype), Core.Argument(1), i)
+            ft_ssa = Expr(:ssavalue, bidx)
+            cnvt_ssa = Expr(:ssavalue, bidx + 1)
+            isa_check = Expr(:call, GlobalRef(Core, :isa), Core.Argument(i + 1), ft_ssa)
+            convert_expr = Expr(:call, GlobalRef(Base, :convert), ft_ssa, Core.Argument(i + 1))
+            @inbounds body_args[bidx] = Expr(:(=), ft_ssa, ft_expr)
+            @inbounds body_args[bidx + 1] = Expr(:(=), cnvt_ssa, Expr(:if, isa_check,
+                                               Core.Argument(i + 1), convert_expr))
+            @inbounds new_args[i] = cnvt_ssa
+            bidx = bidx + 2
         end
         i = i + 1
     end
-    new_expr = Expr(:new, body_args...)
+    body_args[nstmts] = Expr(:return, Expr(:new, Core.Argument(1), new_args...))
     lambda = Expr(:lambda, argnames,
-        Expr(:block, functionloc, Expr(:return, new_expr)))
+        Expr(:block, functionloc, body_args...))
     ci = ccall(:jl_lower, Any, (Any, Any, Ptr{UInt8}, UInt, UInt, Int32),
                lambda, mod, src_file, src_line, sub_int(UInt(0), UInt(1)), Int32(0))[1]
 

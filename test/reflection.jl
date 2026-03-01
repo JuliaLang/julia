@@ -62,6 +62,86 @@ str = String(take!(io))
 
 end # module ReflectionTest
 
+# code_llvm llvm_options parameter tests
+@testset "code_llvm llvm_options" begin
+    using InteractiveUtils: code_llvm
+
+    # Test that llvm_options parameter works without crashing
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="")
+    @test !isempty(String(take!(io)))
+
+    # Test print-after-all produces IR dump output
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after-all")
+    output = String(take!(io))
+    @test occursin("IR Dump After", output)
+    @test occursin("define", output)  # Final IR should also be present
+
+    # Test print-after with specific pass name
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after=AfterOptimization")
+    output = String(take!(io))
+    @test occursin("IR Dump After", output)
+    @test occursin("AfterOptimization", output)
+
+    # Test print-before-all
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-before-all")
+    output = String(take!(io))
+    @test occursin("IR Dump Before", output)
+
+    # Test print-module-scope shows module structure
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after=AfterOptimization -print-module-scope")
+    output = String(take!(io))
+    @test occursin("ModuleID", output) || occursin("source_filename", output)
+
+    # Test comma-separated pass names
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after=BeforeOptimization,AfterOptimization")
+    output = String(take!(io))
+    @test occursin("IR Dump After BeforeOptimizationMarkerPass", output)
+    @test occursin("IR Dump After AfterOptimizationMarkerPass", output)
+
+    # Test repeated flags accumulate
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after=BeforeOptimization -print-after=AfterOptimization")
+    output = String(take!(io))
+    @test occursin("IR Dump After BeforeOptimizationMarkerPass", output)
+    @test occursin("IR Dump After AfterOptimizationMarkerPass", output)
+
+    # Test unknown option warning appears in output
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-unknown-flag")
+    output = String(take!(io))
+    @test occursin("Warning: unknown llvm_options flag", output)
+
+    # Test missing value warning appears in output
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after")
+    output = String(take!(io))
+    @test occursin("Warning: -print-after requires a value", output)
+
+    # Test filter-print-funcs with non-matching names suppresses all output
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after-all -filter-print-funcs=julia_doesnotexist1,julia_doesnotexist2")
+    output = String(take!(io))
+    @test !occursin("IR Dump After", output)
+
+    # Test filter-print-funcs with comma-separated list matches multiple functions
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after-all -filter-print-funcs=julia_")
+    output_one = String(take!(io))
+    dumps_one = count("IR Dump After", output_one)
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after-all -filter-print-funcs=julia_,jfptr_")
+    output_both = String(take!(io))
+    dumps_both = count("IR Dump After", output_both)
+    # Matching both julia_ and jfptr_ prefixes should produce more dumps
+    @test dumps_both > dumps_one > 0
+end
+
 # isbits, isbitstype
 
 @test !isbitstype(Array{Int})

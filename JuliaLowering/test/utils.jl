@@ -28,7 +28,7 @@ end
 
 function _source_node(graph, src)
     id = new_id!(graph)
-    setattr!(graph, id, :kind, K"None")
+    setattr!(graph, id, :kind, K"TOMBSTONE")
     setattr!(graph, id, :source, src)
     SyntaxTree(graph, id)
 end
