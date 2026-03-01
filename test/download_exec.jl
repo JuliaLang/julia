@@ -5,15 +5,34 @@ module TestDownload
 using Test
 
 mktempdir() do temp_dir
-    url = try
-        download("https://httpbingo.julialang.org")
-        "https://httpbingo.julialang.org"
-    catch ex
-        bt = catch_backtrace()
-        @info "Looks like there is a problem with a JuliaLang mirror of httpbingo"
-        @info "Trying httpbin" exception=(ex,bt)
-        "https://httpbin.julialang.org/"
+    candidate1 = strip(get(ENV, "JULIA_TEST_HTTPBINGO_SERVER", ""))
+    candidate2 = "https://httpbingo.julialang.org"
+    candidate3 = "https://httpbin.julialang.org"
+    # httpbingo and httpbin do not have the same API in general, but for the purposes of this specific testset, either will work.
+    url = nothing
+    # We try candidate1 and candidate2, to see if either work
+    # We use the first one that works
+    for candidate in [candidate1, candidate2]
+        if !isempty(candidate)
+            did_succeed = try
+                download(candidate)
+                true
+            catch ex
+                bt = catch_backtrace()
+                @warn "Encountered error with server candidate" candidate exception=(ex,bt)
+                false
+            end
+            if did_succeed
+                url = candidate
+            end
+        end
     end
+    if url === nothing
+        # If we have to fall back to candidate3, we don't bother trying it, we just use it
+        url = candidate3
+    end
+    @debug "Selected server: $url"
+
     # Download a file
     file = joinpath(temp_dir, "ip")
     @test download("$url/ip", file) == file
