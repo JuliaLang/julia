@@ -438,14 +438,16 @@ static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
 // emit code to unpack a raw value from a box into registers
 static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x)
 {
-    assert(to != getVoidTy(ctx.builder.getContext()));
+    if (type_is_ghost(to)) {
+        if (x.isghost)
+            return nullptr;
+        CreateTrap(ctx.builder);
+        return nullptr;
+    }
     if (x.isghost) {
         // this can happen when a branch yielding a different type ends
         // up being dead code, and type inference knows that the other
         // branch's type is the only one that matters.
-        if (type_is_ghost(to)) {
-            return nullptr;
-        }
         CreateTrap(ctx.builder);
         return UndefValue::get(to); // type mismatch error
     }
