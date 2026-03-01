@@ -1166,3 +1166,125 @@ end
     @test content(s) == "\"()\""
     @test position(buffer(s)) == 2
 end
+
+# Test TerminalProperties and OSC/DA1 parsing
+@testset "TerminalProperties" begin
+    @testset "parse_osc_color" begin
+        # Helper: opaque RGBA tuple from RGB values
+        rgba(r, g, b) = (UInt16(r), UInt16(g), UInt16(b), UInt16(0xffff))
+
+        # 8-bit (2 hex digits per component), scaled to 16-bit
+        @test LineEdit.parse_osc_color("rgb:ff/00/80") === rgba(0xffff, 0x0000, 0x8080)
+        @test LineEdit.parse_osc_color("rgb:00/00/00") === rgba(0x0000, 0x0000, 0x0000)
+        @test LineEdit.parse_osc_color("rgb:ab/cd/ef") === rgba(0xabab, 0xcdcd, 0xefef)
+
+        # 16-bit (4 hex digits per component), stored as-is
+        @test LineEdit.parse_osc_color("rgb:ffff/0000/8080") === rgba(0xffff, 0x0000, 0x8080)
+        @test LineEdit.parse_osc_color("rgb:1234/5678/9abc") === rgba(0x1234, 0x5678, 0x9abc)
+
+        # 12-bit (3 hex digits per component), scaled to 16-bit
+        @test LineEdit.parse_osc_color("rgb:fff/000/888") === rgba(0xffff, 0x0000, 0x8888)
+
+        # 4-bit (1 hex digit per component), scaled to 16-bit
+        @test LineEdit.parse_osc_color("rgb:f/0/8") === rgba(0xffff, 0x0000, 0x8888)
+
+        # rgba variant with alpha channel
+        @test LineEdit.parse_osc_color("rgba:ff/00/80/cc") ===
+            (UInt16(0xffff), UInt16(0x0000), UInt16(0x8080), UInt16(0xcccc))
+        @test LineEdit.parse_osc_color("rgba:ffff/0000/8080/4000") ===
+            (UInt16(0xffff), UInt16(0x0000), UInt16(0x8080), UInt16(0x4000))
+
+        # Invalid strings
+        @test LineEdit.parse_osc_color("not a color") === nothing
+        @test LineEdit.parse_osc_color("rgb:ff/00") === nothing
+        @test LineEdit.parse_osc_color("") === nothing
+
+        # Mismatched component lengths
+        @test LineEdit.parse_osc_color("rgb:ff/0/80") === nothing
+    end
+
+    @testset "receive_osc! with OSC 10 (foreground)" begin
+        props = LineEdit.TerminalProperties()
+        # BEL-terminated OSC 10 response (body after \e] already consumed)
+        io = IOBuffer("10;rgb:ff/a0/00\a")
+        LineEdit.receive_osc!(props, io)
+        @test props.foreground === (UInt16(0xffff), UInt16(0xa0a0), UInt16(0x0000), UInt16(0xffff))
+    end
+
+    @testset "receive_osc! with OSC 11 (background)" begin
+        props = LineEdit.TerminalProperties()
+        # ST-terminated (\e\\) OSC 11 response
+        io = IOBuffer("11;rgb:00/00/00\e\\")
+        LineEdit.receive_osc!(props, io)
+        @test props.background === (UInt16(0x0000), UInt16(0x0000), UInt16(0x0000), UInt16(0xffff))
+    end
+
+    @testset "receive_osc! with OSC 4 (ANSI colors)" begin
+        props = LineEdit.TerminalProperties()
+        # OSC 4;0 (color index 0), BEL-terminated
+        io = IOBuffer("4;0;rgb:00/00/00\a")
+        LineEdit.receive_osc!(props, io)
+        @test props.ansi_colors[1] === (UInt16(0x0000), UInt16(0x0000), UInt16(0x0000), UInt16(0xffff))
+
+        # OSC 4;15 (color index 15)
+        io = IOBuffer("4;15;rgb:ff/ff/ff\a")
+        LineEdit.receive_osc!(props, io)
+        @test props.ansi_colors[16] === (UInt16(0xffff), UInt16(0xffff), UInt16(0xffff), UInt16(0xffff))
+
+        # OSC 4 with out-of-range index (should be ignored)
+        io = IOBuffer("4;16;rgb:aa/bb/cc\a")
+        LineEdit.receive_osc!(props, io)
+        # Verify other colors are unchanged
+        @test props.ansi_colors[1] === (UInt16(0x0000), UInt16(0x0000), UInt16(0x0000), UInt16(0xffff))
+    end
+
+    @testset "receive_osc! with 16-bit colors" begin
+        props = LineEdit.TerminalProperties()
+        io = IOBuffer("10;rgb:ffff/0000/8080\a")
+        LineEdit.receive_osc!(props, io)
+        @test props.foreground === (UInt16(0xffff), UInt16(0x0000), UInt16(0x8080), UInt16(0xffff))
+    end
+
+    @testset "receive_osc! with 8-bit ST terminator" begin
+        props = LineEdit.TerminalProperties()
+        io = IOBuffer("11;rgb:12/34/56\x9c")
+        LineEdit.receive_osc!(props, io)
+        @test props.background === (UInt16(0x1212), UInt16(0x3434), UInt16(0x5656), UInt16(0xffff))
+    end
+
+    @testset "receive_da1!" begin
+        props = LineEdit.TerminalProperties()
+        # Typical DA1 response body (after \e[? already consumed): "64;1;2;6;22c"
+        io = IOBuffer("64;1;2;6;22c")
+        LineEdit.receive_da1!(props, io)
+        @test props.da1 == Set([64, 1, 2, 6, 22])
+
+        # Single parameter
+        props2 = LineEdit.TerminalProperties()
+        io = IOBuffer("1c")
+        LineEdit.receive_da1!(props2, io)
+        @test props2.da1 == Set([1])
+    end
+
+    @testset "receive_da1! with ^C bail-out" begin
+        props = LineEdit.TerminalProperties()
+        io = IOBuffer("64;1\x03")
+        LineEdit.receive_da1!(props, io)
+        @test props.da1 == Set([64, 1])
+    end
+
+    @testset "TerminalProperties default initialization" begin
+        props = LineEdit.TerminalProperties()
+        @test props.foreground === nothing
+        @test props.background === nothing
+        @test length(props.ansi_colors) == 16
+        @test all(c -> c === nothing, props.ansi_colors)
+        @test props.da1 === nothing
+    end
+
+    @testset "MIState has terminal_properties" begin
+        s = new_state()
+        @test s.terminal_properties isa LineEdit.TerminalProperties
+        @test s.terminal_properties.foreground === nothing
+    end
+end
