@@ -720,7 +720,7 @@ function sptypes_from_meth_instance(mi::MethodInstance)
         v = spvals[i]
         if v isa TypeVar
             temp = sig
-            for j = 1:i-1
+            for _ = 1:i-1
                 temp = temp.body
             end
             vᵢ = (temp::UnionAll).var
@@ -860,7 +860,7 @@ mutable struct IRInterpretationState
             argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], given_argtypes[i])
                 for i = 1:length(given_argtypes)]
         else
-            argtypes_refined = Bool[false for i = 1:length(given_argtypes)]
+            argtypes_refined = Bool[false for _ = 1:length(given_argtypes)]
         end
         empty!(ir.argtypes)
         append!(ir.argtypes, given_argtypes)
@@ -1087,7 +1087,7 @@ end
 merge_effects!(::AbstractInterpreter, ::IRInterpretationState, ::Effects) = return
 
 decode_statement_effects_override(sv::InferenceState) = decode_statement_effects_override(sv.src.ssaflags[sv.currpc])
-decode_statement_effects_override(sv::IRInterpretationState) = decode_statement_effects_override(UInt32(0))
+decode_statement_effects_override(::IRInterpretationState) = decode_statement_effects_override(UInt32(0))
 
 struct InferenceLoopState
     rt
@@ -1110,8 +1110,8 @@ bail_out_apply(::AbstractInterpreter, state::InferenceLoopState, ::InferenceStat
 bail_out_apply(::AbstractInterpreter, state::InferenceLoopState, ::IRInterpretationState) =
     state.rt === Any
 
-add_remark!(::AbstractInterpreter, ::InferenceState, remark) = return
-add_remark!(::AbstractInterpreter, ::IRInterpretationState, remark) = return
+add_remark!(::AbstractInterpreter, ::InferenceState, _remark) = return
+add_remark!(::AbstractInterpreter, ::IRInterpretationState, _remark) = return
 
 function get_max_methods(interp::AbstractInterpreter, @nospecialize(f), sv::AbsIntState)
     fmax = get_max_methods_for_func(f)
