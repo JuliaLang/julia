@@ -48,6 +48,8 @@ function Slices(A::P, slicemap::SM, ax::AX) where {P,SM,AX}
     Slices{P,SM,AX,S,N}(A, slicemap, ax)
 end
 
+similar(s::Slices{P,SM,AX,S,N}) where {P,SM,AX,S,N} = Slices{P,SM,AX,S,N}(similar(s.parent), s.slicemap, s.axes)
+
 _slice_check_dims(N) = nothing
 function _slice_check_dims(N, dim, dims...)
     1 <= dim || throw(DimensionMismatch("Invalid dimension $dim"))
