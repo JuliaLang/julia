@@ -2709,8 +2709,9 @@ function history_search(mistate::MIState)
     termbuf = TerminalBuffer(IOBuffer())
     term = terminal(mistate)
     mimode = mode(mistate)
-    mimode.hist.last_mode = mimode
-    mimode.hist.last_buffer = copy(buffer(mistate))
+    hist = mimode.hist
+    hist.last_mode = mimode
+    hist.last_buffer = copy(buffer(mistate))
     mistate.mode_state[mimode] =
         deactivate(mimode, state(mistate), termbuf, term)
     prefix = if mimode.prompt_prefix isa Function
@@ -2718,7 +2719,7 @@ function history_search(mistate::MIState)
     else
         mimode.prompt_prefix
     end
-    result = histsearch(mimode.hist.history, term, prefix)
+    result = histsearch(hist.history, term, prefix)
     mimode = if isnothing(result.mode)
         mistate.current_mode
     else
@@ -2731,12 +2732,15 @@ function history_search(mistate::MIState)
     mistate.current_mode = mimode
     activate(mimode, state(mistate, mimode), termbuf, term)
     commit_changes(term, termbuf)
-if !isempty(result.text)
-    pstate.input_buffer.ptr = 1
-    pstate.input_buffer.size = 0
-    write(pstate.input_buffer, result.text)
-    seekend(pstate.input_buffer)
-end
+    if !isempty(result.text)
+        pstate.input_buffer.ptr = 1
+        pstate.input_buffer.size = 0
+        write(pstate.input_buffer, result.text)
+        seek(pstate.input_buffer, 0)
+        if result.index > 0
+            hist.cur_idx = result.index
+        end
+    end
     refresh_multi_line(mistate)
     nothing
 end
@@ -2775,18 +2779,34 @@ const prefix_history_keymap = merge!(
     AnyDict("\e[$(c)l" => "*" for c in 1:20)
 )
 
+function _prefix_or_history(s::MIState, backwards::Bool)
+    pos = position(buffer(s))
+    if pos == 0
+        if backwards
+            history_prev(s, mode(s).hist)
+        else
+            history_next(s, mode(s).hist)
+        end
+    else
+        prefix = String(buffer(s).data[1:pos])
+        if backwards
+            history_prev_prefix(s, mode(s).hist, prefix)
+        else
+            history_next_prefix(s, mode(s).hist, prefix)
+        end
+    end
+end
+
 function setup_prefix_keymap(hp::HistoryProvider, parent_prompt::Prompt)
-    p = PrefixHistoryPrompt(hp, parent_prompt)
-    p.keymap_dict = keymap([prefix_history_keymap])
     pkeymap = AnyDict(
-        "^P" => (s::MIState,o...)->(edit_move_up(s) || enter_prefix_search(s, p, true)),
-        "^N" => (s::MIState,o...)->(edit_move_down(s) || enter_prefix_search(s, p, false)),
+        "^P" => (s::MIState,o...)->(edit_move_up(s) || _prefix_or_history(s, true)),
+        "^N" => (s::MIState,o...)->(edit_move_down(s) || _prefix_or_history(s, false)),
         # Up Arrow
-        "\e[A" => (s::MIState,o...)->(edit_move_up(s) || enter_prefix_search(s, p, true)),
+        "\e[A" => (s::MIState,o...)->(edit_move_up(s) || _prefix_or_history(s, true)),
         # Down Arrow
-        "\e[B" => (s::MIState,o...)->(edit_move_down(s) || enter_prefix_search(s, p, false)),
+        "\e[B" => (s::MIState,o...)->(edit_move_down(s) || _prefix_or_history(s, false)),
     )
-    return (p, pkeymap)
+    return (nothing, pkeymap)
 end
 
 function deactivate(p::TextInterface, s::ModeState, termbuf::AbstractTerminal, term::TextTerminal)
@@ -2847,8 +2867,14 @@ function reset_state(s::PromptState)
 end
 
 function reset_state(s::MIState)
+    hists_reset = Set{HistoryProvider}()
     for (mode, state) in s.mode_state
         reset_state(state)
+        hp = mode.hist
+        if hp ∉ hists_reset
+            push!(hists_reset, hp)
+            reset_state(hp)
+        end
     end
 end
 

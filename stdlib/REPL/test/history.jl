@@ -281,7 +281,7 @@ end
                 empty!(results)
                 cset = ConditionSet("hello")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
+                seen = Dict{Tuple{Symbol,String}, Int}()
                 @test filterchunkrev!(results, entries, spec, seen) == 0
                 @test results == [entries[1], entries[7]]
                 empty!(results)
@@ -301,7 +301,7 @@ end
                 empty!(results)
                 cset = ConditionSet("=test")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
+                seen = Dict{Tuple{Symbol,String}, Int}()
                 @test filterchunkrev!(results, entries, spec, seen; maxresults = 2) == 5
                 @test results == [entries[6], entries[9]]
                 empty!(results)
@@ -315,7 +315,7 @@ end
                 empty!(results)
                 cset = ConditionSet("!hello ; !test;! cos")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
+                seen = Dict{Tuple{Symbol,String}, Int}()
                 @test filterchunkrev!(results, entries, spec, seen) == 0
                 @test results == [entries[2], entries[7], entries[8]]
             end
@@ -323,7 +323,7 @@ end
                 empty!(results)
                 cset = ConditionSet("`tc")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
+                seen = Dict{Tuple{Symbol,String}, Int}()
                 @test filterchunkrev!(results, entries, spec, seen) == 0
                 @test results == [entries[3]]
                 empty!(results)
@@ -337,7 +337,7 @@ end
                 empty!(results)
                 cset = ConditionSet("/^c.s\\b")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
+                seen = Dict{Tuple{Symbol,String}, Int}()
                 @test filterchunkrev!(results, entries, spec, seen) == 0
                 @test results == [entries[4], entries[5]]
             end
@@ -345,7 +345,7 @@ end
                 empty!(results)
                 cset = ConditionSet("shell>")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
+                seen = Dict{Tuple{Symbol,String}, Int}()
                 @test filterchunkrev!(results, entries, spec, seen) == 0
                 @test results == [entries[7]]
             end
@@ -353,7 +353,7 @@ end
                 empty!(results)
                 cset = ConditionSet("~cs")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
+                seen = Dict{Tuple{Symbol,String}, Int}()
                 @test filterchunkrev!(results, entries, spec, seen) == 0
                 @test results == entries[3:6]
             end
@@ -369,10 +369,10 @@ end
                     HistEntry(:julia, now(UTC), "println(\"hello\")", 6),  # duplicate
                     HistEntry(:julia, now(UTC), "tan(π/4)", 7),
                 ]
-                # When filtering with seen Set, duplicates are removed
+                # When filtering with seen Dict, duplicates are removed
                 cset = ConditionSet("cos")
                 spec = FilterSpec(cset)
-                seen = Set{Tuple{Symbol,String}}()
+                seen = Dict{Tuple{Symbol,String}, Int}()
                 @test filterchunkrev!(results, dup_entries, spec, seen) == 0
                 # Should only get unique entries matching the filter
                 # Since we iterate in reverse (7->1), we keep the most recent occurrence of each unique content

@@ -29,6 +29,27 @@ function select_keymap(events::Channel{Symbol})
             # Down Arrow
             "\e[B" => Event(events, :down),
             "^N" => Event(events, :down),
+            # Right Arrow (expand duplicates when at end of query)
+            "\e[C" => function(s, _...)
+                buf = REPL.LineEdit.buffer(s)
+                if position(buf) >= buf.size
+                    push!(events, :expand)
+                    :ignore
+                else
+                    REPL.LineEdit.edit_move_right(s)
+                    :ok
+                end
+            end,
+            "\eOC" => function(s, _...)
+                buf = REPL.LineEdit.buffer(s)
+                if position(buf) >= buf.size
+                    push!(events, :expand)
+                    :ignore
+                else
+                    REPL.LineEdit.edit_move_right(s)
+                    :ok
+                end
+            end,
             # Tab
             '\t' => Event(events, :tab),
             # Page up

@@ -95,6 +95,9 @@ const FILTER_LONGHELP = S"""
  Multiple search results can be selected with {code:Tab} and confirmed with {code:Enter}.
  You may use {code:Ctrl+S} to save selected entries to a file or the clipboard.
 
+ Deduplicated entries show a {code:×N} count. Press {code:→} (at end of query) to
+ expand/collapse the individual instances with timestamps.
+
  To abort the search, use {code:Ctrl+C}, {code:Ctrl+D}, {code:Ctrl+G}, or {code:Esc Esc}.
 """
 
@@ -276,14 +279,16 @@ collected, then returns the new resume index. Only unique entries (by mode and c
 are added to avoid showing duplicate history items.
 """
 function filterchunkrev!(out::Vector{HistEntry}, candidates::DenseVector{HistEntry},
-                         spec::FilterSpec, seen::Set{Tuple{Symbol,String}}, idx::Int = length(candidates);
+                         spec::FilterSpec, seen::Dict{Tuple{Symbol,String}, Int}, idx::Int = length(candidates);
                          maxtime::Float64 = Inf, maxresults::Int = length(candidates))
     batchsize = clamp(length(candidates) ÷ 512, 10, 1000)
     for batch in Iterators.partition(idx:-1:1, batchsize)
         time() > maxtime && break
         for outer idx in batch
             entry = candidates[idx]
-            if (entry.mode, entry.content) ∈ seen
+            key = (entry.mode, entry.content)
+            if haskey(seen, key)
+                seen[key] += 1
                 continue
             end
             if !isempty(spec.modes)
@@ -311,7 +316,7 @@ function filterchunkrev!(out::Vector{HistEntry}, candidates::DenseVector{HistEnt
                 end
             end
             matchfail && continue
-            push!(seen, (entry.mode, entry.content))
+            seen[key] = 1
             pushfirst!(out, entry)
             length(out) == maxresults && break
         end

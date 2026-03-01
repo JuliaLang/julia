@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    runsearch() -> (; mode::Union{Symbol, Nothing}, text::String)
+    runsearch() -> (; mode::Union{Symbol, Nothing}, text::String, index::Int)
 
 Launch the interactive REPL history search interface.
 
@@ -19,9 +19,11 @@ function runsearch(histfile::HistoryFile, term, prefix::String = "\e[90m")
 end
 
 """
-    fullselection(state::SelectorState) -> (; mode::Symbol, text::String)
+    fullselection(state::SelectorState) -> (; mode::Symbol, text::String, index::Int)
 
 Gather all selected and hovered entries and return them as joined text.
+The `index` field is the index of the latest (most recent) selected entry,
+suitable for setting `hist.cur_idx` after search.
 """
 function fullselection(state::SelectorState)
     text = IOBuffer()
@@ -34,8 +36,9 @@ function fullselection(state::SelectorState)
     end
     sort!(entries, by = e -> e.index)
     mainmode = if !isempty(entries) first(entries).mode end
+    mainindex = if !isempty(entries) Int(last(entries).index) else 0 end
     join(text, Iterators.map(e -> e.content, entries), '\n')
-    (mode = mainmode, text = String(take!(text)))
+    (mode = mainmode, text = String(take!(text)), index = mainindex)
 end
 
 """
@@ -53,16 +56,28 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
     buf = IOContext(IOBuffer(), out)
     # Main state variables
     state = SelectorState(outsize, "", FilterSpec(), hist)
-    redisplay_all(out, EMPTY_STATE, state, pstate; buf)
+    # Filter state
+    filter_idx = 0
+    filter_seen = Dict{Tuple{Symbol,String}, Int}()
+    # Precompute duplicate counts from the full history (independent of query)
+    hist_dupcounts = Dict{Tuple{Symbol,String}, Int}()
+    for entry in hist
+        key = (entry.mode, entry.content)
+        hist_dupcounts[key] = get(hist_dupcounts, key, 0) + 1
+    end
+    # Expand/collapse state for duplicate entries
+    expanded_key::Union{Nothing, Tuple{Symbol,String}} = nothing
+    expanded_entries = HistEntry[]
+    expanded_hover = 0
+    # Active duplicate counts for display (nothing when no filter, hist_dupcounts when filtering)
+    active_dupcounts::Union{Nothing, Dict{Tuple{Symbol,String}, Int}} = nothing
     # Candidate cache
     cands_cache = Pair{ConditionSet{String}, Vector{HistEntry}}[]
     cands_cachestate = zero(UInt8)
     cands_current = HistEntry[]
     cands_cond = ConditionSet{String}()
     cands_temp = HistEntry[]
-    # Filter state
-    filter_idx = 0
-    filter_seen = Set{Tuple{Symbol,String}}()
+    redisplay_all(out, EMPTY_STATE, state, pstate; buf)
     # Event loop
     while true
         event = @lock events if !isempty(events) take!(events) end
@@ -72,16 +87,50 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
             return EMPTY_STATE
         elseif event === :confirm
             print(out, "\e[1G\e[J")
+            if expanded_hover > 0 && expanded_hover <= length(expanded_entries)
+                entry = expanded_entries[expanded_hover]
+                return SelectorState(state.area, state.query, state.filter,
+                    [entry], 0, (active = Int[], gathered = HistEntry[]), 1)
+            end
             return state
         elseif event === :clear
             print(out, "\e[H\e[2J")
-            redisplay_all(out, EMPTY_STATE, state, pstate; buf)
+            redisplay_all(out, EMPTY_STATE, state, pstate; buf,
+                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
             continue
         elseif event === :redraw
             print(out, "\e[1G\e[J")
-            redisplay_all(out, EMPTY_STATE, state, pstate; buf)
+            redisplay_all(out, EMPTY_STATE, state, pstate; buf,
+                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
             continue
         elseif event ∈ (:up, :down, :pageup, :pagedown)
+            # Handle navigation within expanded entries
+            if !isnothing(expanded_key) && expanded_hover > 0
+                if event ∈ (:up, :pageup)
+                    expanded_hover -= 1
+                    # expanded_hover=0 returns to the main entry
+                elseif expanded_hover < length(expanded_entries)
+                    expanded_hover += 1
+                else
+                    # Past the last expanded entry, exit and move down
+                    expanded_hover = 0
+                    prevstate, state = state, movehover(state, false, event === :pagedown)
+                end
+                redisplay_all(out, EMPTY_STATE, state, pstate; buf,
+                              dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
+                continue
+            end
+            # Check if we should enter expanded entries (on main entry, pressing down)
+            if !isnothing(expanded_key) && event ∈ (:down, :pagedown) && !isempty(expanded_entries)
+                hov = gethover(state)
+                if !isnothing(hov) && (hov.mode, hov.content) == expanded_key
+                    expanded_hover = 1
+                    redisplay_all(out, EMPTY_STATE, state, pstate; buf,
+                                  dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
+                    continue
+                end
+            end
+            # Normal navigation
             prevstate, state = state, movehover(state, event ∈ (:up, :pageup), event ∈ (:pageup, :pagedown))
             @lock events begin
                 nextevent = if !isempty(events) first(events.data) end
@@ -91,7 +140,8 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
                     nextevent = if !isempty(events) first(events.data) end
                 end
             end
-            redisplay_all(out, prevstate, state, pstate; buf)
+            redisplay_all(out, prevstate, state, pstate; buf,
+                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
             continue
         elseif event === :jumpfirst
             prevstate = state
@@ -99,18 +149,57 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
                 state.area, state.query, state.filter, state.candidates,
                 length(state.candidates) - componentrows(state).candidates,
                 state.selection, length(state.candidates))
-            redisplay_all(out, prevstate, state, pstate; buf)
+            redisplay_all(out, prevstate, state, pstate; buf,
+                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
             continue
         elseif event === :jumplast
             prevstate = state
             state = SelectorState(
                 state.area, state.query, state.filter, state.candidates,
                 0, state.selection, 1)
-            redisplay_all(out, prevstate, state, pstate; buf)
+            redisplay_all(out, prevstate, state, pstate; buf,
+                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
             continue
         elseif event === :tab
             prevstate, state = state, toggleselection(state)
-            redisplay_all(out, prevstate, state, pstate; buf)
+            redisplay_all(out, prevstate, state, pstate; buf,
+                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
+            continue
+        elseif event === :expand
+            # Only expand when dedup is active (non-empty query with filter)
+            if isnothing(active_dupcounts) || filter_idx != 0
+                continue
+            end
+            hovered = gethover(state)
+            if isnothing(hovered) || !isempty(state.selection.gathered)
+                continue
+            end
+            ekey = (hovered.mode, hovered.content)
+            dc = get(hist_dupcounts, ekey, 1)
+            if dc <= 1
+                continue
+            end
+            if expanded_key == ekey
+                # Collapse: already expanded, toggle off
+                expanded_key = nothing
+                empty!(expanded_entries)
+            else
+                # Expand: find all instances in hist, excluding the most recent
+                expanded_key = ekey
+                empty!(expanded_entries)
+                for entry in hist
+                    if entry.mode == ekey[1] && entry.content == ekey[2]
+                        push!(expanded_entries, entry)
+                    end
+                end
+                if !isempty(expanded_entries)
+                    _, max_idx = findmax(e -> e.index, expanded_entries)
+                    deleteat!(expanded_entries, max_idx)
+                end
+            end
+            expanded_hover = 0
+            redisplay_all(out, EMPTY_STATE, state, pstate; buf,
+                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
             continue
         elseif event === :edit
             @lock events begin
@@ -120,9 +209,14 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
             end
             query = REPL.LineEdit.input_string(pstate)
             if query === state.query
-                redisplay_all(out, state, state, pstate; buf)
+                redisplay_all(out, state, state, pstate; buf,
+                              dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
                 continue
             end
+            # Reset expanded state on query change
+            expanded_key = nothing
+            empty!(expanded_entries)
+            expanded_hover = 0
             # Determine the conditions/filter spec
             cands_cond = ConditionSet(query)
             filter_spec = FilterSpec(cands_cond)
@@ -142,7 +236,8 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
             end
             # Show help?
             if query ∈ (FILTER_SHORTHELP_QUERY,FILTER_LONGHELP_QUERY)
-                redisplay_all(out, prevstate, state, pstate; buf)
+                redisplay_all(out, prevstate, state, pstate; buf,
+                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
                 continue
             end
             # Parse the conditions and find a good candidate list
@@ -154,15 +249,17 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
                 end
             end
             # Start filtering candidates
-            # Only deduplicate when user has entered a search query. When browsing
-            # with no filter (empty query), show all history including duplicates.
+            # Only deduplicate when user has entered a search query with conditions.
+            # When browsing with no filter (empty query), show all history including duplicates.
             if isempty(filter_spec.exacts) && isempty(filter_spec.negatives) &&
                isempty(filter_spec.regexps) && isempty(filter_spec.modes)
                 # No filtering needed, just copy all candidates
                 append!(state.candidates, cands_current)
                 filter_idx = 0
+                active_dupcounts = nothing
             else
-                # Filtering needed, deduplicate results
+                # Filtering needed, deduplicate results and show ×N badges
+                active_dupcounts = hist_dupcounts
                 empty!(filter_seen)
                 filter_idx = filterchunkrev!(
                     state, cands_current, filter_seen;
@@ -173,7 +270,8 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
                 cands_cachestate = addcache!(
                     cands_cache, cands_cachestate, cands_cond => state.candidates)
             end
-            redisplay_all(out, prevstate, state, pstate; buf)
+            redisplay_all(out, prevstate, state, pstate; buf,
+                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
             continue
         elseif event === :copy
             content = strip(fullselection(state).text)
@@ -191,7 +289,8 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
             prevstate, state = state, SelectorState(
                 outsize, state.query, state.filter, state.candidates,
                 state.scroll, state.selection, state.hover)
-            redisplay_all(out, prevstate, state, pstate; buf)
+            redisplay_all(out, prevstate, state, pstate; buf,
+                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
         elseif filter_idx != 0
             append!(empty!(cands_temp), state.candidates)
             prevstate = SelectorState(
@@ -207,7 +306,8 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
             # If there are now new candidates in the view, update
             length(state.candidates) != length(prevstate.candidates) &&
                 length(prevstate.candidates) - state.hover < outsize[1] &&
-                redisplay_all(out, prevstate, state, pstate; buf)
+                redisplay_all(out, prevstate, state, pstate; buf,
+                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
         elseif isnothing(event)
             yield()
             sleep(0.01)
@@ -216,7 +316,7 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
 end
 
 function filterchunkrev!(state::SelectorState, candidates::DenseVector{HistEntry},
-                         seen::Set{Tuple{Symbol,String}}, idx::Int = length(candidates);
+                         seen::Dict{Tuple{Symbol,String}, Int}, idx::Int = length(candidates);
                          maxtime::Float64 = Inf, maxresults::Int = length(candidates))
     oldlen = length(state.candidates)
     idx = filterchunkrev!(state.candidates, candidates, state.filter, seen, idx;
