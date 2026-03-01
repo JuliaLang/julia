@@ -1,7 +1,16 @@
 import Libdl
 
-# known precompilation failures under JL
-const INCOMPATIBLE_STDLIBS = String[]
+# known test failures under JL
+const INCOMPATIBLE_STDLIBS = String[
+    "Artifacts",   # incorrect __source__ for macro expansion (JuliaLang/JuliaLowering.jl#150)
+    "Distributed", # uses post-lowering `Expr(:const, ...)` form (JuliaLang/JuliaLowering.jl#149)
+    "InteractiveUtils", # highlighting test failure (issue TBD)
+    "SparseArrays",     # broadcasted type regression (JuliaLang/JuliaLowering.jl#152)
+    "LibGit2",          # missing "testgroups" file
+
+    # these take too long to run, even if they did run
+    "LinearAlgebra", # also fails due to @inferred regressions
+]
 
 const JULIA_EXECUTABLE = Base.unsafe_string(Base.JLOptions().julia_bin)
 const JULIA_CPU_TARGET = get(ENV, "JULIA_CPU_TARGET", Base.unsafe_string(Base.JLOptions().cpu_target))
@@ -42,17 +51,21 @@ else
     # Standalone test run (CI), compile every time
     compile_JL_sysimage(JL_sysimage)
 end
-stdlibs_to_test = filter(name -> !in(name, INCOMPATIBLE_STDLIBS), readdir(Sys.STDLIB))
+stdlibs = readdir(Sys.STDLIB)
+stdlibs_to_test = filter(name -> !in(name, INCOMPATIBLE_STDLIBS), stdlibs)
 
 configs = [
     ``=>Base.CacheFlags(check_bounds=0, debug_level=2, opt_level=3),
     ``=>Base.CacheFlags(check_bounds=1, debug_level=2, opt_level=3),
 ]
-setupproject_command = "using Pkg; Pkg.add($(stdlibs_to_test))"
-compilecache_command = "using Base: CacheFlags; Base.Precompilation.precompilepkgs($(stdlibs_to_test); configs=$(configs))"
+setupproject_command = "using Pkg; Pkg.add($(stdlibs))"
+compilecache_command = "using Base: CacheFlags; Base.Precompilation.precompilepkgs($(stdlibs); configs=$(configs))"
+testpkgs_command = "using Pkg; Pkg.test($(stdlibs_to_test))"
 
 # pre-compile stdlibs (into temporary depot)
 mktempdir() do tmp_depot
+    tmp_depot = abspath("./JuliaLowering_depot")
+
     # first setup the project / environment
     env_dir = joinpath(tmp_depot, "environments", "v$(VERSION.major).$(VERSION.minor)")
     cmd = addenv(
@@ -64,6 +77,18 @@ mktempdir() do tmp_depot
     # now actually perform the precompilation
     cmd = addenv(
         `$(JULIA_EXECUTABLE) --sysimage $(JL_sysimage) --startup-file=no -e $compilecache_command`,
+        "JULIA_LOAD_PATH" => "@stdlib$(Base.Linking.pathsep)$(env_dir)",
+        "JULIA_CPU_TARGET" => "sysimage",
+        "JULIA_USE_FLISP_LOWERING" => "0",
+        "JULIA_USE_FALLBACK_REPL" => "0",
+        "JULIA_DEPOT_PATH" => tmp_depot,
+        ; inherit = true
+    )
+    success(run(cmd))
+
+    # and then run the stdlib tests
+    cmd = addenv(
+        `$(JULIA_EXECUTABLE) --sysimage $(JL_sysimage) --startup-file=no -e $testpkgs_command`,
         "JULIA_LOAD_PATH" => "@stdlib$(Base.Linking.pathsep)$(env_dir)",
         "JULIA_CPU_TARGET" => "sysimage",
         "JULIA_USE_FLISP_LOWERING" => "0",
