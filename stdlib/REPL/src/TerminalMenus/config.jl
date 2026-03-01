@@ -18,7 +18,7 @@ struct MultiSelectConfig <: AbstractConfig
 end
 
 """
-    Config(; scroll_wrap=false, ctrl_c_interrupt=true, charset=:ascii, cursor::Char, up_arrow::Char, down_arrow::Char)
+    Config(; scroll_wrap=false, ctrl_c_interrupt=false, charset=:ascii, cursor::Char, up_arrow::Char, down_arrow::Char)
 
 Configure behavior for selection menus via keyword arguments:
 
@@ -49,7 +49,7 @@ function Config(;
                 down_arrow::Char = '\0',
                 updown_arrow::Char = '\0',
                 scroll_wrap::Bool = false,
-                ctrl_c_interrupt::Bool = true)
+                ctrl_c_interrupt::Bool = false)
     charset === :ascii || charset === :unicode ||
         throw(ArgumentError("charset should be :ascii or :unicode, received $charset"))
     if cursor == '\0'
@@ -128,7 +128,7 @@ Keyword-only function to configure global menu parameters
  - `unchecked::String="[ ]"|"⬚")`: string to use for unchecked
  - `scroll::Symbol=:nowrap`: If `:wrap` wrap cursor around top and bottom, if :`nowrap` do not wrap cursor
  - `supress_output::Bool=false`: Ignored legacy argument, pass `suppress_output` as a keyword argument to `request` instead.
- - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
+ - `ctrl_c_interrupt::Bool=false`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
 
 !!! compat "Julia 1.6"
     As of Julia 1.6, `config` is deprecated. Use `Config` or `MultiSelectConfig` instead.
@@ -180,4 +180,4 @@ function config(;charset::Symbol = :na,
 end
 
 # Set up defaults
-config(charset=:ascii, scroll=:nowrap, supress_output=false, ctrl_c_interrupt=true)
+config(charset=:ascii, scroll=:nowrap, supress_output=false, ctrl_c_interrupt=false)

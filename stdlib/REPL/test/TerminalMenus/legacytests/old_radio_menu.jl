@@ -41,3 +41,6 @@ radio_menu = RadioMenu(["single option"], warn=false)
 @test simulate_input(radio_menu, :up, :up, :down, :up, :enter) == 1
 radio_menu = RadioMenu(string.(1:3), pagesize=1, warn=false)
 @test simulate_input(radio_menu, :down, :down, :down, :down, :enter) == 3
+
+radio_menu = RadioMenu(string.(1:3), warn=false)
+@test simulate_input(radio_menu, '\x03') == -1
