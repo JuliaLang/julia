@@ -4134,19 +4134,18 @@ function update_bbstate!(
         saw_latestworld::Bool, frame::InferenceState
     )
     frame.bb_saw_latestworld[bb] |= saw_latestworld
-    bbtable = frame.bb_vartables[bb]
-    if bbtable === nothing
+    bbstate = frame.bb_states[bb]
+    if bbstate === nothing
         # if a basic block hasn't been analyzed yet,
         # we can update its state a bit more aggressively
-        frame.bb_vartables[bb] = copy(vartable)
-        frame.bb_slot_aliases[bb] = copy(slot_aliases)
+        frame.bb_states[bb] = BBEntryState(copy(vartable), copy(slot_aliases))
         return true
     else
         pc = first(frame.cfg.blocks[bb].stmts)
         # Minus sign marks this as a "virtual" PC so that it is
         # not confused with a real assignment at this PC.
-        changed = stupdate!(𝕃ᵢ, bbtable, vartable, -pc)
-        changed |= intersect_alias_tables!(frame.bb_slot_aliases[bb]::Vector{Int}, slot_aliases)
+        changed = stupdate!(𝕃ᵢ, bbstate.vartable, vartable, -pc)
+        changed |= intersect_alias_tables!(bbstate.aliases, slot_aliases)
         return changed
     end
 end
@@ -4272,7 +4271,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
     bbs = frame.cfg.blocks
     nbbs = length(bbs)
     𝕃ᵢ = typeinf_lattice(interp)
-    states = frame.bb_vartables
+    states = frame.bb_states
     saw_latestworld = frame.bb_saw_latestworld
     currbb = frame.currbb
     currpc = frame.currpc
@@ -4292,9 +4291,9 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
     if currbb != 1
         currbb = frame.currbb = _bits_findnext(W.bits, 1)::Int # next basic block
     end
-    currstate = copy(states[currbb]::VarTable)
+    currstate = copy((states[currbb]::BBEntryState).vartable)
     currsaw_latestworld = saw_latestworld[currbb]
-    slot_aliases = copy(frame.bb_slot_aliases[1]::Vector{Int})
+    slot_aliases = copy((states[1]::BBEntryState).aliases)
     while currbb <= nbbs
         delete!(W, currbb)
         bbstart = first(bbs[currbb].stmts)
@@ -4507,11 +4506,11 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
             currbb == -1 && break # the working set is empty
             currbb > nbbs && break
 
-            nexttable = states[currbb]
-            if nexttable === nothing
+            nextstate = states[currbb]
+            if nextstate === nothing
                 init_vartable!(currstate, frame)
             else
-                stoverwrite!(currstate, nexttable)
+                stoverwrite!(currstate, nextstate.vartable)
             end
         end
     end # while currbb <= nbbs
@@ -4545,9 +4544,9 @@ function apply_refinement!(
 end
 
 function init_slot_aliases!(slot_aliases::Vector{Int}, frame::InferenceState, bb::Int)
-    entry = frame.bb_slot_aliases[bb]
+    entry = frame.bb_states[bb]
     if entry !== nothing
-        copyto!(slot_aliases, entry)
+        copyto!(slot_aliases, entry.aliases)
     else
         fill!(slot_aliases, 0)
     end

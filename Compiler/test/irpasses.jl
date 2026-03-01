@@ -1500,9 +1500,9 @@ let code = Any[
     interp = Compiler.NativeInterpreter()
     sv = Compiler.OptimizationState(mi, src, interp)
     # (_4 !== nothing) conditional narrows the type, triggering PiNodes
-    sv.bb_vartables[#= block_id =# 3][#= slot_id =# 4] = VarState(Bool, #= def =# 5, #= maybe_undef =# false)
-    sv.bb_vartables[#= block_id =# 4][#= slot_id =# 4] = VarState(Bool, #= def =# 7, #= maybe_undef =# false)
-    sv.bb_vartables[#= block_id =# 5][#= slot_id =# 4] = VarState(Bool, #= def =# 7, #= maybe_undef =# false)
+    sv.bb_states[#=block_id=#3].vartable[#=slot_id=#4] = VarState(Bool, #=def=#5, #=maybe_undef=#false)
+    sv.bb_states[#=block_id=#4].vartable[#=slot_id=#4] = VarState(Bool, #=def=#7, #=maybe_undef=#false)
+    sv.bb_states[#=block_id=#5].vartable[#=slot_id=#4] = VarState(Bool, #=def=#7, #=maybe_undef=#false)
 
     ir = Compiler.convert_to_ircode(src, sv)
     ir = Compiler.slot2reg(ir, src, sv)
