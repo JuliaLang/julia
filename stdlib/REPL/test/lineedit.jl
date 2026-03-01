@@ -959,3 +959,22 @@ end
         @test keymap == Dict('a' => "abc")
     end
 end
+
+@testset "Conflicting definitions for keyseq" begin
+    @testset "string" begin
+        keymap = Dict{Char, Any}()
+        REPL.LineEdit.add_nested_key!(keymap, "a", "abc")
+        @test keymap == Dict('a' => "abc")
+        expected_msg = "Conflicting definitions for keyseq a within one keymap"
+        @test_throws ErrorException(expected_msg) REPL.LineEdit.add_nested_key!(keymap, "a", "abdef")
+        @test keymap == Dict('a' => "abc")
+    end
+    @testset "char" begin
+        keymap = Dict{Char, Any}()
+        REPL.LineEdit.add_nested_key!(keymap, 'a', "abc")
+        @test keymap == Dict('a' => "abc")
+        expected_msg = "Conflicting definitions for keyseq a within one keymap"
+        @test_throws ErrorException(expected_msg) REPL.LineEdit.add_nested_key!(keymap, 'a', "abdef")
+        @test keymap == Dict('a' => "abc")
+    end
+end
