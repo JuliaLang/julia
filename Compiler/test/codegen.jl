@@ -22,7 +22,7 @@ end
 # The tests below assume a certain format and safepoint_on_entry=true breaks that.
 function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
     params = Base.CodegenParams(safepoint_on_entry=false, gcstack_arg = false, debug_info_level=Cint(2))
-    d = InteractiveUtils._dump_function(InteractiveUtils.ArgInfo(f, t), false, false, raw, dump_module, :att, optimize, :none, false, params)
+    d = InteractiveUtils._dump_function(InteractiveUtils.ArgInfo(f, t), false, false, raw, dump_module, :att, optimize, :none, false, "", params)
     sprint(print, d)
 end
 
@@ -1085,3 +1085,20 @@ function union_phi_inline_roots(x::Bool)
     end
 end
 @test union_phi_inline_roots(true) === ("Q8", 1)
+
+mutable struct AnyBoxEA val::Any end
+function preserve_any_ea(x)
+    b = AnyBoxEA(x)
+    GC.@preserve b begin
+        return b.val
+    end
+end
+function loop_preserve_any_ea(n)
+    s = "v"
+    for _ in 1:n
+        s = preserve_any_ea(s)::String
+    end
+    s
+end
+loop_preserve_any_ea(10)
+@test (@allocated loop_preserve_any_ea(10)) == 0

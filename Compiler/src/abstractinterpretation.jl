@@ -4115,19 +4115,39 @@ function handle_control_backedge!(interp::AbstractInterpreter, frame::InferenceS
     return nothing
 end
 
-function update_bbstate!(𝕃ᵢ::AbstractLattice, frame::InferenceState, bb::Int, vartable::VarTable, saw_latestworld::Bool)
+# Intersect `dest` alias table with `src` in-place (meet operation at CFG join points).
+# A slot is considered aliased in the merged state only if it has the same alias on all
+# incoming paths. Returns true if `dest` changed.
+function intersect_alias_tables!(dest::Vector{Int}, src::Vector{Int})
+    changed = false
+    for i in 1:length(dest)
+        if dest[i] != 0 && dest[i] != src[i]
+            dest[i] = 0
+            changed = true
+        end
+    end
+    return changed
+end
+
+function update_bbstate!(
+        𝕃ᵢ::AbstractLattice, vartable::VarTable, slot_aliases::Vector{Int}, bb::Int,
+        saw_latestworld::Bool, frame::InferenceState
+    )
     frame.bb_saw_latestworld[bb] |= saw_latestworld
     bbtable = frame.bb_vartables[bb]
     if bbtable === nothing
         # if a basic block hasn't been analyzed yet,
         # we can update its state a bit more aggressively
         frame.bb_vartables[bb] = copy(vartable)
+        frame.bb_slot_aliases[bb] = copy(slot_aliases)
         return true
     else
         pc = first(frame.cfg.blocks[bb].stmts)
         # Minus sign marks this as a "virtual" PC so that it is
         # not confused with a real assignment at this PC.
-        return stupdate!(𝕃ᵢ, bbtable, vartable, -pc)
+        changed = stupdate!(𝕃ᵢ, bbtable, vartable, -pc)
+        changed |= intersect_alias_tables!(frame.bb_slot_aliases[bb]::Vector{Int}, slot_aliases)
+        return changed
     end
 end
 
@@ -4206,14 +4226,17 @@ function update_exc_bestguess!(interp::AbstractInterpreter, @nospecialize(exct),
     end
 end
 
-function propagate_to_error_handler!(currstate::VarTable, currsaw_latestworld::Bool, frame::InferenceState, 𝕃ᵢ::AbstractLattice)
+function propagate_to_error_handler!(
+        𝕃ᵢ::AbstractLattice, currstate::VarTable, slot_aliases::Vector{Int},
+        currsaw_latestworld::Bool, frame::InferenceState,
+    )
     # If this statement potentially threw, propagate the currstate to the
     # exception handler, BEFORE applying any state changes.
     curr_hand = gethandler(frame)
     if curr_hand !== nothing
         enter = frame.src.code[curr_hand.enter_idx]::EnterNode
         exceptbb = block_for_inst(frame.cfg, enter.catch_dest)
-        if update_bbstate!(𝕃ᵢ, frame, exceptbb, currstate, currsaw_latestworld)
+        if update_bbstate!(𝕃ᵢ, currstate, slot_aliases, exceptbb, currsaw_latestworld, frame)
             push!(frame.ip, exceptbb)
         end
     end
@@ -4231,11 +4254,14 @@ end
 struct CurrentState
     result::Future{RTEffects}
     currstate::VarTable
+    slot_aliases::Vector{Int}
     currsaw_latestworld::Bool
     bbstart::Int
     bbend::Int
-    CurrentState(result::Future{RTEffects}, currstate::VarTable, currsaw_latestworld::Bool, bbstart::Int, bbend::Int) =
-        new(result, currstate, currsaw_latestworld, bbstart, bbend)
+    CurrentState(
+        result::Future{RTEffects}, currstate::VarTable, slot_aliases::Vector{Int},
+        currsaw_latestworld::Bool, bbstart::Int, bbend::Int
+    ) = new(result, currstate, slot_aliases, currsaw_latestworld, bbstart, bbend)
     CurrentState() = new()
 end
 
@@ -4257,6 +4283,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
         bbend = nextresult.bbend
         currstate = nextresult.currstate
         currsaw_latestworld = nextresult.currsaw_latestworld
+        slot_aliases = nextresult.slot_aliases
         stmt = frame.src.code[currpc]
         result = abstract_eval_basic_statement(interp, stmt, StatementState(currstate, currsaw_latestworld), frame, nextresult.result)
         @goto injected_result
@@ -4267,10 +4294,12 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
     end
     currstate = copy(states[currbb]::VarTable)
     currsaw_latestworld = saw_latestworld[currbb]
+    slot_aliases = copy(frame.bb_slot_aliases[1]::Vector{Int})
     while currbb <= nbbs
         delete!(W, currbb)
         bbstart = first(bbs[currbb].stmts)
         bbend = last(bbs[currbb].stmts)
+        init_slot_aliases!(slot_aliases, frame, currbb)
 
         currpc = bbstart - 1
         while currpc < bbend
@@ -4310,7 +4339,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                         add_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
                     else
                         update_exc_bestguess!(interp, TypeError, frame)
-                        propagate_to_error_handler!(currstate, currsaw_latestworld, frame, 𝕃ᵢ)
+                        propagate_to_error_handler!(𝕃ᵢ, currstate, slot_aliases, currsaw_latestworld, frame)
                         merge_effects!(interp, frame, EFFECTS_THROWS)
                     end
 
@@ -4352,6 +4381,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                             if else_change !== nothing
                                 elsestate = copy(currstate)
                                 strefine1!(elsestate, else_change)
+                                propagate_aliased_condition!(𝕃ᵢ, elsestate, condt, :else, slot_aliases)
                             elseif condslot isa SlotNumber
                                 elsestate = copy(currstate)
                             else
@@ -4360,17 +4390,18 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                             if condslot isa SlotNumber # refine the type of this conditional object itself for this else branch
                                 strefine1!(elsestate, condition_object_change(currstate, condt, condslot, :else))
                             end
-                            else_changed = update_bbstate!(𝕃ᵢ, frame, falsebb, elsestate, currsaw_latestworld)
+                            else_changed = update_bbstate!(𝕃ᵢ, elsestate, slot_aliases, falsebb, currsaw_latestworld, frame)
                             then_change = conditional_change(𝕃ᵢ, currstate, condt, :then)
                             thenstate = currstate
                             if then_change !== nothing
                                 strefine1!(thenstate, then_change)
+                                propagate_aliased_condition!(𝕃ᵢ, thenstate, condt, :then, slot_aliases)
                             end
                             if condslot isa SlotNumber # refine the type of this conditional object itself for this then branch
                                 strefine1!(thenstate, condition_object_change(currstate, condt, condslot, :then))
                             end
                         else
-                            else_changed = update_bbstate!(𝕃ᵢ, frame, falsebb, currstate, currsaw_latestworld)
+                            else_changed = update_bbstate!(𝕃ᵢ, currstate, slot_aliases, falsebb, currsaw_latestworld, frame)
                         end
                         if else_changed
                             handle_control_backedge!(interp, frame, currpc, stmt.dest)
@@ -4416,7 +4447,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
             sstate = StatementState(currstate, currsaw_latestworld)
             result = abstract_eval_basic_statement(interp, stmt, sstate, frame)
             if result isa Future{RTEffects}
-                return CurrentState(result, currstate, currsaw_latestworld, bbstart, bbend)
+                return CurrentState(result, currstate, slot_aliases, currsaw_latestworld, bbstart, bbend)
             else
                 @label injected_result
                 (; rt, exct, effects, changes, refinements, currsaw_latestworld) = result
@@ -4428,7 +4459,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                     # TODO: assert that these conditions match. For now, we assume the `nothrow` flag
                     # to be correct, but allow the exct to be an over-approximation.
                 end
-                propagate_to_error_handler!(currstate, currsaw_latestworld, frame, 𝕃ᵢ)
+                propagate_to_error_handler!(𝕃ᵢ, currstate, slot_aliases, currsaw_latestworld, frame)
             end
             if rt === Bottom
                 ssavaluetypes[currpc] = Bottom
@@ -4440,14 +4471,15 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
             end
             if changes !== nothing
                 stoverwrite1!(currstate, changes)
+                update_alias_table!(slot_aliases, stmt, frame.src.code)
             end
             if refinements isa SlotRefinement
-                apply_refinement!(𝕃ᵢ, refinements.slot, refinements.typ, currstate, changes)
+                apply_refinement!(𝕃ᵢ, refinements.slot, refinements.typ, currstate, changes, slot_aliases)
             elseif refinements isa Vector{Any}
                 for i = 1:length(refinements)
                     newtyp = refinements[i]
                     newtyp === nothing && continue
-                    apply_refinement!(𝕃ᵢ, SlotNumber(i), newtyp, currstate, changes)
+                    apply_refinement!(𝕃ᵢ, SlotNumber(i), newtyp, currstate, changes, slot_aliases)
                 end
             end
             if rt === nothing
@@ -4464,7 +4496,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
 
         # Case 2: Directly branch to a different BB
         begin @label branch
-            if update_bbstate!(𝕃ᵢ, frame, nextbb, currstate, currsaw_latestworld)
+            if update_bbstate!(𝕃ᵢ, currstate, slot_aliases, nextbb, currsaw_latestworld, frame)
                 push!(W, nextbb)
             end
         end
@@ -4487,17 +4519,102 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
     return CurrentState()
 end
 
-function apply_refinement!(𝕃ᵢ::AbstractLattice, slot::SlotNumber, @nospecialize(newtyp),
-                           currstate::VarTable, currchanges::Union{Nothing,StateUpdate})
+function apply_refinement!(
+        𝕃ᵢ::AbstractLattice, slot::SlotNumber, @nospecialize(newtyp),
+        currstate::VarTable, currchanges::Union{Nothing,StateUpdate},
+        slot_aliases::Vector{Int}
+    )
     if currchanges !== nothing && currchanges.var == slot
         return # type propagation from statement (like assignment) should have the precedence
     end
-    vtype = currstate[slot_id(slot)]
+    slotid = slot_id(slot)
+    vtype = currstate[slotid]
     oldtyp = vtype.typ
     ⊏ = strictpartialorder(𝕃ᵢ)
     if newtyp ⊏ oldtyp
-        refinement = StateRefinement(slot_id(slot), newtyp, vtype.undef)
+        refinement = StateRefinement(slotid, newtyp, vtype.undef)
         strefine1!(currstate, refinement)
+        for i in 1:length(currstate)
+            slot_aliases[i] == slotid || continue
+            alias_vtype = currstate[i]
+            if newtyp ⊏ alias_vtype.typ
+                strefine1!(currstate, StateRefinement(i, newtyp, alias_vtype.undef))
+            end
+        end
+    end
+end
+
+function init_slot_aliases!(slot_aliases::Vector{Int}, frame::InferenceState, bb::Int)
+    entry = frame.bb_slot_aliases[bb]
+    if entry !== nothing
+        copyto!(slot_aliases, entry)
+    else
+        fill!(slot_aliases, 0)
+    end
+end
+
+function clear_slot_aliases!(aliases::Vector{Int}, slot::Int)
+    for i in 1:length(aliases)
+        if aliases[i] == slot
+            aliases[i] = 0
+        end
+    end
+    aliases[slot] = 0
+    return aliases
+end
+
+# Core transfer function: update an alias table for a single statement.
+# Handles assignments (`y = x`) and `NewvarNode` declaration
+function update_alias_table!(aliases::Vector{Int}, @nospecialize(stmt), code::Vector{Any})
+    if isa(stmt, Expr) && stmt.head === :method && length(stmt.args) >= 1
+        fname = stmt.args[1]
+        if isa(fname, SlotNumber)
+            # :method can assign to a slot without an explicit `=` wrapper.
+            # Kill alias information for that slot and any slots pointing to it.
+            clear_slot_aliases!(aliases, slot_id(fname))
+        end
+        return
+    end
+    if isa(stmt, NewvarNode)
+        # When a slot is killed, also clear any slots that alias it, since
+        # those aliases are now stale (the target has a new undefined value).
+        clear_slot_aliases!(aliases, slot_id(stmt.slot))
+        return
+    end
+    lhs = rhs = nothing
+    if isexpr(stmt, :(=)) && length(stmt.args) == 2
+        lhs = stmt.args[1]
+        rhs = stmt.args[2]
+    end
+    isa(lhs, SlotNumber) || return
+    lhs_id = slot_id(lhs)
+    # When a slot is reassigned, clear any slots that were aliasing it.
+    # They still hold the OLD value of lhs, so the alias lhs_id→... is stale.
+    clear_slot_aliases!(aliases, lhs_id)
+    rhs === nothing && return
+    while isa(rhs, SSAValue)
+        rhs = code[rhs.id]
+    end
+    if isa(rhs, SlotNumber)
+        rhs_id = slot_id(rhs)
+        rhs_alias = aliases[rhs_id]
+        aliases[lhs_id] = rhs_alias == 0 ? rhs_id : rhs_alias
+    end
+end
+
+# When a Conditional refines slot `x`, propagate the same refinement to all slots aliased to `x`.
+function propagate_aliased_condition!(
+        𝕃ᵢ::AbstractLattice, state::VarTable, condt::Conditional, then_or_else::Symbol,
+        slot_aliases::Vector{Int}
+    )
+    condslot = condt.slot
+    for i in 1:length(state)
+        slot_aliases[i] == condslot || continue
+        alias_condt = Conditional(i, state[i].ssadef, condt.thentype, condt.elsetype)
+        alias_change = conditional_change(𝕃ᵢ, state, alias_condt, then_or_else)
+        if alias_change !== nothing
+            strefine1!(state, alias_change)
+        end
     end
 end
 
