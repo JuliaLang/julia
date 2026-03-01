@@ -1663,10 +1663,14 @@ function permutedims(B::StridedArray, perm)
     permutedims!(P, B, perm)
 end
 
+function checkperm(perm, N)
+    isperm(perm) || throw(ArgumentError("input is not a permutation"))
+    length(perm) == N || throw(ArgumentError(LazyString("expected permutation of size ", N, ", but length(perm)=", length(perm))))
+end
+
 checkdims_perm(P::AbstractArray{TP,N}, B::AbstractArray{TB,N}, perm) where {TP,TB,N} = checkdims_perm(axes(P), axes(B), perm)
 function checkdims_perm(indsP::NTuple{N, AbstractUnitRange}, indsB::NTuple{N, AbstractUnitRange}, perm) where {N}
-    length(perm) == N || throw(ArgumentError(LazyString("expected permutation of size ", N, ", but length(perm)=", length(perm))))
-    isperm(perm) || throw(ArgumentError("input is not a permutation"))
+    checkperm(perm, N)
     for i in eachindex(perm)
         indsP[i] == indsB[perm[i]] || throw(DimensionMismatch("destination tensor of incorrect size"))
     end
@@ -1748,8 +1752,8 @@ function construct_cycles(dims::NTuple{N}, perms::NTuple{N}) where {N}
     cycles
 end
 
-function permutedims!(arr::AbstractArray, p::Val{perm}) where {perm}
-    checkdims_perm(arr, arr, perm)
+function permutedims!(arr::AbstractArray{T, N}, p::Val{perm}) where {T, N, perm}
+    @boundscheck checkperm(perm, N)
     _permutedims!(arr, Val(size(arr)), p)
 end
 permutedims!(arr::AbstractArray, perm::Tuple) = permutedims!(arr, Val(perm))
