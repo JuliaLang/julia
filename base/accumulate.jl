@@ -42,14 +42,20 @@ end
 
 
 """
-    cumsum!(B, A; dims::Integer)
+    cumsum!(B, A=B; dims::Integer)
 
-Cumulative sum of `A` along the dimension `dims`, storing the result in `B`. See also [`cumsum`](@ref).
+Cumulative sum of `A` along the dimension `dims`, storing the result in `B`.
+If `A` is omitted, the computation is performed in-place on `B`.
+See also [`cumsum`](@ref).
 
 $(_DOCS_ALIASING_WARNING)
 """
-cumsum!(B::AbstractArray{T}, A; dims::Integer) where {T} =
+cumsum!(B::AbstractArray{T}, A=B; dims::Integer) where {T} =
     accumulate!(add_sum, B, A, dims=dims)
+
+function cumsum!(v::AbstractVector; dims::Integer=1)
+    _cumsum!(v, v, dims, Base.ArithmeticStyle(eltype(v)))
+end
 
 function cumsum!(out::AbstractArray, v::AbstractVector; dims::Integer=1)
     # we dispatch on the possibility of numerical stability issues
@@ -151,26 +157,28 @@ cumsum(itr) = accumulate(add_sum, itr)
 
 
 """
-    cumprod!(B, A; dims::Integer)
+    cumprod!(B, A=B; dims::Integer)
 
 Cumulative product of `A` along the dimension `dims`, storing the result in `B`.
+If `A` is omitted, the computation is performed in-place on `B`.
 See also [`cumprod`](@ref).
 
 $(_DOCS_ALIASING_WARNING)
 """
-cumprod!(B::AbstractArray{T}, A; dims::Integer) where {T} =
+
+cumprod!(B::AbstractArray{T}, A=B; dims::Integer) where {T} =
     accumulate!(mul_prod, B, A, dims=dims)
 
 """
-    cumprod!(y::AbstractVector, x::AbstractVector)
+    cumprod!(y::AbstractVector, x::AbstractVector=y)
 
 Cumulative product of a vector `x`, storing the result in `y`.
+If `y` is omitted, the computation is performed in-place on `y`.
 See also [`cumprod`](@ref).
 
 $(_DOCS_ALIASING_WARNING)
 """
-cumprod!(y::AbstractVector, x::AbstractVector) = cumprod!(y, x, dims=1)
-
+cumprod!(y::AbstractVector, x::AbstractVector=y) = cumprod!(y, x, dims=1)
 """
     cumprod(A; dims::Integer)
 
@@ -293,7 +301,7 @@ function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
     accumulate!(op, out, A; dims=dims, kw...)
 end
 
-function accumulate(op, xs::Tuple; init = _InitialValue())
+function accumulate(op, xs::Tuple; init=_InitialValue())
     rf = BottomRF(op)
     ys, = afoldl(((), init), xs...) do (ys, acc), x
         acc = rf(acc, x)
@@ -344,7 +352,7 @@ julia> accumulate!(*, B, A, dims=2, init=10)
  40  200  1200
 ```
 """
-function accumulate!(op, B, A; dims::Union{Integer, Nothing} = nothing, kw...)
+function accumulate!(op, B, A; dims::Union{Integer,Nothing}=nothing, kw...)
     nt = values(kw)
     if isempty(kw)
         _accumulate!(op, B, A, dims, nothing)
@@ -355,7 +363,7 @@ function accumulate!(op, B, A; dims::Union{Integer, Nothing} = nothing, kw...)
     end
 end
 
-function _accumulate!(op, B, A, dims::Nothing, init::Union{Nothing, Some})
+function _accumulate!(op, B, A, dims::Nothing, init::Union{Nothing,Some})
     throw(ArgumentError("Keyword argument dims must be provided for multidimensional arrays"))
 end
 
@@ -371,7 +379,7 @@ function _accumulate!(op, B, A::AbstractVector, dims::Nothing, init::Some)
     _accumulate1!(op, B, v1, A, 1)
 end
 
-function _accumulate!(op, B, A, dims::Integer, init::Union{Nothing, Some})
+function _accumulate!(op, B, A, dims::Integer, init::Union{Nothing,Some})
     dims > 0 || throw(ArgumentError("dims must be a positive integer"))
     inds_t = axes(A)
     axes(B) == inds_t || throw(DimensionMismatch("shape of B must match A"))
