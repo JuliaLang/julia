@@ -17,7 +17,7 @@ import Serialization: serialize, deserialize
 import Distributed: RRID, procs, remotecall_fetch
 import Base.Filesystem: JL_O_CREAT, JL_O_RDWR, S_IRUSR, S_IWUSR
 
-export SharedArray, SharedVector, SharedMatrix, sdata, indexpids, localindices
+export SharedArray, SharedVector, SharedMatrix, sdata, indexpids, localindices, unshare!
 
 mutable struct SharedArray{T,N} <: DenseArray{T,N}
     id::RRID
@@ -107,27 +107,31 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
 
     pids, onlocalhost = shared_pids(pids)
 
-    local shm_seg_name = ""
     local s = Array{T}(undef, ntuple(d->0,N))
+    local io = nothing
     local S
     local shmmem_create_pid
     try
         # On OSX, the shm_seg_name length must be <= 31 characters (including the terminating NULL character)
-        seg_name = "/jl$(lpad(string(getpid() % 10^6), 6, "0"))$(randstring(20))"
-        shm_seg_name = seg_name
+        # Name only needs to be unique for the time it takes to instantiate the arrays; most likely case for
+        # collision is during unit testing when RNG state is re-used.
+        seg_name = "/jl" *
+            "$(lpad(string(getpid() % 10^6), 6, "0"))" *                               # Ensure uniqueness from other processes
+            "$(randstring(12))" *                                                      # Ensure uniqueness within process
+            "$(bytes2hex(reverse(reinterpret(NTuple{4, UInt8}, time_ns() % UInt32))))" # Guard against RNG reset over ~4 s
+
         if onlocalhost
             shmmem_create_pid = myid()
-            s = shm_mmap_array(T, dims, seg_name, JL_O_CREAT | JL_O_RDWR)
+            s, io = shm_mmap_array(T, dims, seg_name, JL_O_CREAT | JL_O_RDWR, false)
         else
             # The shared array is created on a remote machine
             shmmem_create_pid = pids[1]
-            remotecall_fetch(pids[1]) do
-                shm_mmap_array(T, dims, seg_name, JL_O_CREAT | JL_O_RDWR)
-                nothing
+            io = remotecall_fetch(pids[1]) do
+                last(shm_mmap_array(T, dims, seg_name, JL_O_CREAT | JL_O_RDWR, false))
             end
         end
 
-        func_mapshmem = () -> shm_mmap_array(T, dims, seg_name, JL_O_RDWR)
+        func_mapshmem = () -> first(shm_mmap_array(T, dims, seg_name, JL_O_RDWR, true))
 
         refs = Vector{Future}(undef, length(pids))
         for (i, p) in enumerate(pids)
@@ -142,19 +146,18 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
         # All good, immediately unlink the segment.
         if (prod(dims) > 0) && (sizeof(T) > 0)
             if onlocalhost
-                rc = shm_unlink(seg_name)
+                close(io)
             else
-                rc = remotecall_fetch(shm_unlink, shmmem_create_pid, seg_name)
+                remotecall_fetch(close, shmmem_create_pid, io)
             end
-            systemerror("Error unlinking shmem segment " * seg_name, rc != 0)
         end
         S = SharedArray{T,N}(dims, pids, refs, seg_name, s)
         initialize_shared_array(S, onlocalhost, init, pids)
-        shm_seg_name = ""
+        io = nothing
 
     finally
-        if !isempty(shm_seg_name)
-            remotecall_fetch(shm_unlink, shmmem_create_pid, shm_seg_name)
+        if io !== nothing
+            remotecall_fetch(close, shmmem_create_pid, io)
         end
     end
     S
@@ -269,6 +272,7 @@ function finalize_refs(S::SharedArray{T,N}) where T where N
         empty!(S.pids)
         empty!(S.refs)
         init_loc_flds(S)
+        finalize(S.s)
         S.s = Array{T}(undef, ntuple(d->0,N))
         delete!(sa_refs, S.id)
     end
@@ -608,10 +612,32 @@ function copyto!(S::SharedArray, R::SharedArray)
     return S
 end
 
+"""
+    unshare!(S::SharedArray)
+
+Release resources from workers and make the memory no longer available to them. The array is still usable
+on the main process.
+
+!!! note
+     Relying on the finalizers to perform cleanup requires multiple GC rounds to release the underlying
+     mmap. Call this function proactively to ensure a single GC round is sufficient.
+"""
+function unshare!(S::SharedArray)
+    if !isempty(S.pids)
+        @sync begin
+            for i in eachindex(S.pids)
+                @async remotecall_wait(finalize, S.pids[i], fetch(S.refs[i]))
+            end
+        end
+        empty!(S.pids)
+        empty!(S.refs)
+    end
+end
+
 function print_shmem_limits(slen)
     try
         if Sys.islinux()
-            pfx = "kernel"
+            return # Not relevant to Linux, which uses a tmpfs-backed system
         elseif Sys.isapple()
             pfx = "kern.sysv"
         elseif Sys.KERNEL === :FreeBSD || Sys.KERNEL === :DragonFly
@@ -634,74 +660,34 @@ function print_shmem_limits(slen)
             "\nIf not, increase system limits and try again."
         )
     catch e
-        nothing # Ignore any errors in this
+        @warn "Unable to print shared memory limits."
     end
 end
 
 # utilities
-function shm_mmap_array(T, dims, shm_seg_name, mode)
-    local s = nothing
-    local A = nothing
-
+function shm_mmap_array(T, dims, shm_seg_name, mode, closeio)
     if (prod(dims) == 0) || (sizeof(T) == 0)
-        return Array{T}(undef, dims)
+        return Array{T}(undef, dims), nothing
     end
-
     try
-        A = _shm_mmap_array(T, dims, shm_seg_name, mode)
+        return _shm_mmap_array(T, dims, shm_seg_name, mode, closeio)
     catch
         print_shmem_limits(prod(dims)*sizeof(T))
         rethrow()
-
-    finally
-        if s !== nothing
-            close(s)
-        end
     end
-    A
 end
 
-
-# platform-specific code
-
-if Sys.iswindows()
-function _shm_mmap_array(T, dims, shm_seg_name, mode)
+function _shm_mmap_array(T, dims, shm_seg_name, mode, closeio)
     readonly = !((mode & JL_O_RDWR) == JL_O_RDWR)
     create = (mode & JL_O_CREAT) == JL_O_CREAT
-    s = Mmap.Anonymous(shm_seg_name, readonly, create)
-    mmap(s, Array{T,length(dims)}, dims, zero(Int64))
-end
-
-# no-op in windows
-shm_unlink(shm_seg_name) = 0
-
-else # !windows
-function _shm_mmap_array(T, dims, shm_seg_name, mode)
-    fd_mem = shm_open(shm_seg_name, mode, S_IRUSR | S_IWUSR)
-    systemerror("shm_open() failed for " * shm_seg_name, fd_mem < 0)
-
-    s = fdio(fd_mem, true)
-
-    # On OSX, ftruncate must to used to set size of segment, just lseek does not work.
-    # and only at creation time
-    if (mode & JL_O_CREAT) == JL_O_CREAT
-        rc = ccall(:jl_ftruncate, Cint, (Cint, Int64), fd_mem, prod(dims)*sizeof(T))
-        systemerror("ftruncate() failed for shm segment " * shm_seg_name, rc != 0)
+    io = open(Mmap.SharedMemory, shm_seg_name, prod(dims) * sizeof(T); readonly, create)
+    A = mmap(io, Array{T,length(dims)}, dims, zero(Int64))
+    # Workers can immediately close the virtual file after mapping
+    if closeio
+        close(io)
+        io = nothing
     end
-
-    mmap(s, Array{T,length(dims)}, dims, zero(Int64); grow=false)
+    return A, io
 end
-
-shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Cstring,), shm_seg_name)
-function shm_open(shm_seg_name, oflags, permissions)
-    # On macOS, `shm_open()` is a variadic function, so to properly match
-    # calling ABI, we must declare our arguments as variadic as well.
-    @static if Sys.isapple()
-        return ccall(:shm_open, Cint, (Cstring, Cint, Base.Cmode_t...), shm_seg_name, oflags, permissions)
-    else
-        return ccall(:shm_open, Cint, (Cstring, Cint, Base.Cmode_t), shm_seg_name, oflags, permissions)
-    end
-end
-end # os-test
 
 end # module

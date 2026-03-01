@@ -280,14 +280,7 @@ A2 = A3 = A4 = nothing
 GC.gc()
 rm(fname)
 
-# Mmap.Anonymous
-m = Mmap.Anonymous()
-@test m.name == ""
-@test !m.readonly
-@test m.create
-@test isopen(m)
-@test isreadable(m)
-@test iswritable(m)
+# Anonymous mmaps
 
 m = mmap(Vector{UInt8}, 12)
 @test length(m) == 12
@@ -318,6 +311,189 @@ n = similar(m, 12)
 @test length(n) == 12
 @test size(n) == (12,)
 finalize(m); m = nothing; GC.gc()
+
+m = mmap(BitVector, 12)
+@test length(m) == 12
+@test !any(m)
+finalize(m); m = nothing; GC.gc()
+
+@static if Sys.islinux()
+
+    function has_open_fd(name)
+        for fd in readdir("/proc/self/fd")
+            try
+                basename(name) == basename(Base.Filesystem.readlink("/proc/self/fd/$fd")) && return true
+            catch
+                # fd may close between listing and reading the link
+            end
+        end
+        return false
+    end
+
+elseif Sys.iswindows()
+
+function named_mapping_open(segname)
+    try
+        io = open(Mmap.SharedMemory, segname, 1; readonly=true, create=false)
+        close(io)
+        return true
+    catch
+        return false
+    end
+end
+
+end
+
+@testset "SharedMemory" begin
+    @testset "Properties" begin
+        io = open(Mmap.SharedMemory, "", 12; readonly = false, create = true)
+        @test io.name == ""
+        @static if Sys.isunix()
+            # On Unix systems, anonymous mappings are handled by `mmap` alone
+            @test io.handle == Base.INVALID_OS_HANDLE
+        else # Sys.iswindows()
+            @test io.handle != Base.INVALID_OS_HANDLE
+        end
+        @test !io.readonly
+        @test io.create
+        @test io.size == 12
+        @test io.ismapped == false
+        @test isopen(io)
+        @test !isfile(io)
+        @test filesize(io) == io.size
+        @test position(io) == 0
+        @test isreadable(io)
+        @test iswritable(io)
+        @test Mmap.isanonymous(io)
+        close(io)
+        @test !isopen(io)
+
+        name = "/jlsharedsegment"
+        io = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
+        @test io.name == name
+        @test io.handle != Base.INVALID_OS_HANDLE
+        @test isopen(io)
+        @test !Mmap.isanonymous(io)
+        close(io)
+        @test !isopen(io)
+    end
+
+    @testset "SharedMemory is single-use" begin
+        io = open(Mmap.SharedMemory, "", 12; readonly = false, create = true)
+        m = mmap(io, Vector{UInt8}, 12)
+        @test_throws ArgumentError mmap(io, Vector{UInt8}, 12)
+        close(io); finalize(m); m = nothing; GC.gc()
+
+        io = open(Mmap.SharedMemory, "/jlsharedsegment", 12; readonly = false, create = true)
+        m = mmap(io, Vector{UInt8}, 12)
+        @test_throws ArgumentError mmap(io, Vector{UInt8}, 12)
+        close(io); finalize(m); m = nothing; GC.gc()
+    end
+
+    @testset "Anonymous SharedMemory mmaps are independent" begin
+        io1 = open(Mmap.SharedMemory, "", 12; readonly = false, create = true)
+        io2 = open(Mmap.SharedMemory, "", 12; readonly = false, create = true)
+        m1 = mmap(io1, Vector{UInt8}, 12)
+        m2 = mmap(io2, Vector{UInt8}, 12)
+        @test all(m1 .== 0)
+        @test all(m2 .== 0)
+        m1 .= 1
+        @test all(m1 .== 1)
+        @test all(m2 .== 0)
+        close(io1); close(io2); finalize(m1); finalize(m2); m1 = m2 = nothing; GC.gc()
+    end
+
+    @testset "SharedMemory modes" begin
+        @test_throws ArgumentError open(Mmap.SharedMemory, "", 12; readonly = false, create = false)
+        @test_throws ArgumentError open(Mmap.SharedMemory, "", 12; readonly = true, create = true)
+        @test_throws Base.IOError open(Mmap.SharedMemory, "/jlsharedsegment", 12; readonly = false, create = false)
+
+        io1 = open(Mmap.SharedMemory, "/jlsharedsegment", 12; readonly = false, create = true)
+        @test_throws Base.IOError open(Mmap.SharedMemory, "/jlsharedsegment", 12; readonly = false, create = true)
+        io2 = open(Mmap.SharedMemory, "/jlsharedsegment", 12; readonly = true, create = false)
+        m = mmap(io2, Vector{UInt8}, 12)
+        @test_throws ReadOnlyMemoryError m .= 1
+        close(io1); close(io2); finalize(m); m = nothing; GC.gc()
+    end
+
+    @testset "Named SharedMemory mmaps are shared" begin
+        io1 = open(Mmap.SharedMemory, "/jlsharedsegment", 12; readonly = false, create = true)
+        io2 = open(Mmap.SharedMemory, "/jlsharedsegment", 12; readonly = false, create = false)
+        m1 = mmap(io1, Vector{UInt8}, 12)
+        m2 = mmap(io2, Vector{UInt8}, 12)
+        @test all(m1 .== 0)
+        @test all(m2 .== 0)
+        m1 .= 1
+        @test all(m1 .== 1)
+        @test all(m2 .== 1)
+        close(io1); close(io2); finalize(m1); finalize(m2); m1 = m2 = nothing; GC.gc()
+    end
+
+    @testset "Resource cleanup" begin
+        name = "/jlsharedsegment"
+
+        @static if Sys.islinux()
+
+            io = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
+            @test has_open_fd(name)
+            close(io)
+            @test !has_open_fd(name)
+
+            io = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
+            @test has_open_fd(name)
+            finalize(io)
+            @test !has_open_fd(name)
+            io = nothing; GC.gc()
+
+        elseif Sys.iswindows()
+
+            io = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
+            @test named_mapping_open(name)
+            close(io)
+            @test !named_mapping_open(name)
+
+            io = open(Mmap.SharedMemory, name, 12; readonly = false, create = true)
+            @test named_mapping_open(name)
+            finalize(io)
+            @test !named_mapping_open(name)
+            io = nothing; GC.gc()
+
+        else # other Unix, tests TODO
+
+        end
+    end
+
+    @testset "String mode" begin
+        name = "/jlsharedsegment"
+        io1 = open(Mmap.SharedMemory, name, 12, "w+")
+        @test isreadable(io1)
+        @test iswritable(io1)
+        io2 = open(Mmap.SharedMemory, name, 12, "r+")
+        @test isreadable(io2)
+        @test iswritable(io2)
+        io3 = open(Mmap.SharedMemory, name, 12, "r")
+        @test isreadable(io3)
+        @test !iswritable(io3)
+        @test_throws Base.IOError open(Mmap.SharedMemory, name, 12, "w+")
+        @test_throws ArgumentError open(Mmap.SharedMemory, name, 12, "w")
+        @test_throws ArgumentError open(Mmap.SharedMemory, name, 12, "a")
+        @test_throws ArgumentError open(Mmap.SharedMemory, name, 12, "a+")
+        close(io1); close(io2); close(io3);
+    end
+
+    # TODO: Test for validation in `mmap`, `shared` kwarg usage, sync method, size == 0 error
+end
+
+# Can't do because deprecation warnings are errors and there's no way around that right now.
+#=@testset "Anonymous (deprecated)" begin
+    m = @test_deprecated Mmap.Anonymous()
+    @test m.name == ""
+    @test !m.readonly
+    @test m.create
+    @test isopen(m)
+    @test isreadable(m)
+    @test iswritable(m)
+end=#
 
 if Sys.isunix()
     file = tempname()

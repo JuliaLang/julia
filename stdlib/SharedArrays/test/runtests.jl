@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed, SharedArrays, Random
+using Test, Distributed, Mmap, SharedArrays, Random
 include(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test", "testenv.jl"))
 
 @test isempty(Test.detect_closure_boxes(SharedArrays))
@@ -13,7 +13,8 @@ addprocs_with_testenv(4; rr_allowed=false)
 @everywhere using Test, SharedArrays
 
 id_me = myid()
-id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
+id_others = filter(x -> x != id_me, procs())
+id_other = id_others[rand(1:(nprocs()-1))]
 
 dims = (20,20,20)
 
@@ -145,12 +146,12 @@ filedata = Vector{UInt8}(undef, len)
 read!(fn3, filedata)
 @test all(filedata[1:4] .== 0x01)
 @test all(filedata[5:end] .== 0x02)
+unshare!(S)
 finalize(S)
 @test Base.elsize(S) == Base.elsize(typeof(S)) == Base.elsize(Vector{UInt8})
-
-# call gc 3 times to avoid unlink: operation not permitted (EPERM) on Windows
 S = nothing
-@everywhere GC.gc(true)
+
+# release files so they can be deleted on Windows; requires multiple GC passes to be sure
 @everywhere GC.gc(true)
 @everywhere GC.gc(true)
 rm(fn); rm(fn2); rm(fn3)
@@ -327,6 +328,125 @@ end
 @test_throws MethodError SharedVector(rand(4,4))
 @test_throws MethodError SharedMatrix(rand(4))
 
+# Resource cleanup
+@static if Sys.islinux()
+
+# If open, an fd will exist with contents matching the name, e.g. "/dev/shm/jltestsegname"
+@everywhere function has_open_fd(name)
+    for fd in readdir("/proc/self/fd")
+        try
+            return basename(name) == Base.Filesystem.readlink("/proc/self/fd/$fd")
+        catch
+            # fd may close between listing and reading the link
+        end
+    end
+    return false
+end
+
+# If a named memory segment file descriptor was created, mapped, and closed, the line will look like
+# ["7d3d9c0ed000-7d3d9c0ee000", "rw-s", "00000000", "00:3f", "44", "/dev/shm/jltestsegname", "(deleted)"]
+@everywhere function shmem_mapped(segname)
+    maps = split.(readlines("/proc/self/maps"))
+    i = findfirst(x -> length(x) ≥ 6 && basename(x[6]) == basename(segname), maps)
+    ismapped = i !== nothing
+    isdeleted = ismapped && length(maps[i]) > 6 && maps[i][7] == "(deleted)"
+    return ismapped, isdeleted
+end
+
+elseif Sys.iswindows()
+
+# Attempting to open a named memory object will throw an exception if it has been closed
+@everywhere function named_mapping_open(segname)
+    try
+        io = open(Mmap.SharedMemory, segname, 1; readonly=true, create=false)
+        close(io)
+        return true
+    catch
+        return false
+    end
+end
+
+end
+
+@testset "Resource cleanup" begin
+    @testset "Backing file descriptors/handles closed after construction" begin
+        S = SharedArray{Int64}(100, 100)
+        segname = S.segname
+        pids = procs(S)
+
+        @static if Sys.islinux()
+
+            @test !has_open_fd(segname)
+            ismapped, isdeleted = shmem_mapped(segname)
+            @test ismapped
+            @test isdeleted
+
+            @test all(pids) do p
+                hasfd = remotecall_fetch(has_open_fd, p, segname)
+                ismapped, isdeleted = remotecall_fetch(shmem_mapped, p, segname)
+                return !hasfd && ismapped && isdeleted
+            end
+
+        elseif Sys.iswindows()
+
+            @test !named_mapping_open(segname)
+            @test !any(pids) do p
+                remotecall_fetch(named_mapping_open, p, segname)
+            end
+
+        else # other Unix, tests TODO
+
+        end
+    end
+
+    @testset "`unshare!` allows remaining resources to be cleared in a single GC round." begin
+        S = SharedArray{Int64}(100, 100)
+        segname = S.segname
+        pids = procs(S)
+        unshare!(S)
+        @everywhere GC.gc(true)
+
+        @static if Sys.islinux()
+
+            # parent array still mapped
+            ismapped, _ = shmem_mapped(segname)
+            @test ismapped
+
+            # worker arrays unmapped
+            @test all(pids) do p
+                ismapped, _ = remotecall_fetch(shmem_mapped, p, segname)
+                return !ismapped
+            end
+
+        else # Other platforms TODO, if possible
+
+        end
+    end
+
+    @testset "Zero-element SharedArray creates no shared memory segment" begin
+        S = SharedArray{Int64}(0)
+        segname = S.segname
+        pids = procs(S)
+
+        @static if Sys.islinux()
+
+            @test !ispath("/dev/shm" * segname)
+            ismapped, _ = shmem_mapped(segname)
+            @test !ismapped
+
+            @test all(pids) do p
+                ismapped, _ = shmem_mapped(segname)
+                return !ismapped
+            end
+
+        else
+            # Cannot be tested?
+        end
+    end
+end
+
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(SharedArrays))
 end
+
+rmprocs(id_others)
