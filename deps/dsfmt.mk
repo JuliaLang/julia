@@ -48,7 +48,7 @@ $(eval $(call staged-install, \
 	dsfmt,dsfmt-$(DSFMT_VER), \
 	DSFMT_INSTALL,, \
 	$$(DSFMT_OBJ_TARGET), \
-	$$(INSTALL_NAME_CMD)libdSFMT.$$(SHLIB_EXT) $$(build_shlibdir)/libdSFMT.$$(SHLIB_EXT)))
+	$$(INSTALL_NAME_CMD)libdSFMT.$$(SHLIB_EXT) $$(build_private_shlibdir)/libdSFMT.$$(SHLIB_EXT)))
 
 clean-dsfmt:
 	-rm -f $(BUILDDIR)/dsfmt-$(DSFMT_VER)/build-compiled

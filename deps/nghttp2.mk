@@ -34,7 +34,7 @@ endif
 $(eval $(call staged-install, \
 	nghttp2,nghttp2-$(NGHTTP2_VER), \
 	MAKE_INSTALL,,, \
-	$$(INSTALL_NAME_CMD)libnghttp2.$$(SHLIB_EXT) $$(build_shlibdir)/libnghttp2.$$(SHLIB_EXT)))
+	$$(INSTALL_NAME_CMD)libnghttp2.$$(SHLIB_EXT) $$(build_private_shlibdir)/libnghttp2.$$(SHLIB_EXT)))
 
 clean-nghttp2:
 	-rm -f $(BUILDDIR)/nghttp2-$(NGHTTP2_VER)/build-configured $(BUILDDIR)/nghttp2-$(NGHTTP2_VER)/build-compiled

@@ -11,13 +11,13 @@ $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
 endef
 
 define copy_sanitizer_lib
-install-sanitizers: $$(addprefix $$(build_libdir)/, $$(notdir $$(call pathsearch_all,$(1),$$(SANITIZER_LIB_PATH)))) | $$(build_shlibdir)
+install-sanitizers: $$(addprefix $$(build_private_shlibdir)/, $$(notdir $$(call pathsearch_all,$(1),$$(SANITIZER_LIB_PATH)))) | $$(build_private_shlibdir)
 	@result=$$(call pathsearch_all,$(1),$$(SANITIZER_LIB_PATH)); \
 	if [ -z "$$$$result" ]; then \
 		echo "Sanitizer library $(1) not found in $$(SANITIZER_LIB_PATH)"; \
 		exit 1; \
 	fi
-$$(addprefix $$(build_shlibdir)/,$(2)): $$(addprefix $$(dir $$(call pathsearch_all,$(1),$$(SANITIZER_LIB_PATH))),$(2)) $$(PATCHELF_MANIFEST) | $$(build_shlibdir)
+$$(addprefix $$(build_private_shlibdir)/,$(2)): $$(addprefix $$(dir $$(call pathsearch_all,$(1),$$(SANITIZER_LIB_PATH))),$(2)) $$(PATCHELF_MANIFEST) | $$(build_private_shlibdir)
 	-cp $$< $$@
 ifneq (,$(findstring $(OS),Linux))
 	-$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$$$ORIGIN' $$@
@@ -33,5 +33,5 @@ endif
 
 get-sanitizers:
 clean-sanitizers:
-	-rm -f $(build_shlibdir)/libclang_rt.asan*$(SHLIB_EXT)*
+	-rm -f $(build_private_shlibdir)/libclang_rt.asan*$(SHLIB_EXT)*
 distclean-sanitizers: clean-sanitizers

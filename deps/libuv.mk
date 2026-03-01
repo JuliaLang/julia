@@ -56,7 +56,7 @@ endif
 $(eval $(call staged-install, \
 	libuv,$$(LIBUV_SRC_DIR), \
 	MAKE_INSTALL,,, \
-	$$(INSTALL_NAME_CMD)libuv.$$(SHLIB_EXT) $$(build_shlibdir)/libuv.$$(SHLIB_EXT)))
+	$$(INSTALL_NAME_CMD)libuv.$$(SHLIB_EXT) $$(build_private_shlibdir)/libuv.$$(SHLIB_EXT)))
 
 clean-libuv:
 	rm -rf $(LIBUV_BUILDDIR)/build-configured $(LIBUV_BUILDDIR)/build-compiled

@@ -375,13 +375,13 @@ ifneq ($(DARWIN_FRAMEWORK),1)
 ifeq ($(OS),Darwin)
 ifeq ($(JULIA_BUILD_MODE),release)
 	cp -a $(build_libdir)/libjulia.*.dSYM $(DESTDIR)$(libdir)
-	cp -a $(build_libdir)/libjulia-internal.*.dSYM $(DESTDIR)$(private_libdir)
-	cp -a $(build_libdir)/libjulia-codegen.*.dSYM $(DESTDIR)$(private_libdir)
+	cp -a $(build_private_libdir)/libjulia-internal.*.dSYM $(DESTDIR)$(private_libdir)
+	cp -a $(build_private_libdir)/libjulia-codegen.*.dSYM $(DESTDIR)$(private_libdir)
 	cp -a $(build_private_libdir)/sys.dylib.dSYM $(DESTDIR)$(private_libdir)
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	cp -a $(build_libdir)/libjulia-debug.*.dSYM $(DESTDIR)$(libdir)
-	cp -a $(build_libdir)/libjulia-internal-debug.*.dSYM $(DESTDIR)$(private_libdir)
-	cp -a $(build_libdir)/libjulia-codegen-debug.*.dSYM $(DESTDIR)$(private_libdir)
+	cp -a $(build_private_libdir)/libjulia-internal-debug.*.dSYM $(DESTDIR)$(private_libdir)
+	cp -a $(build_private_libdir)/libjulia-codegen-debug.*.dSYM $(DESTDIR)$(private_libdir)
 	cp -a $(build_private_libdir)/sys-debug.dylib.dSYM $(DESTDIR)$(private_libdir)
 endif
 endif
@@ -408,7 +408,7 @@ endif
 endif
 
 	for suffix in $(JL_PRIVATE_LIBS-0) ; do \
-		for lib in $(build_libdir)/$${suffix}.*$(SHLIB_EXT)*; do \
+		for lib in $(build_private_libdir)/$${suffix}.*$(SHLIB_EXT)*; do \
 			if [ "$${lib##*.}" != "dSYM" ]; then \
 				$(INSTALL_M) $$lib $(DESTDIR)$(private_libdir) || exit 1; \
 			fi \
@@ -496,11 +496,6 @@ endif
 	else \
 		RELEASE_TARGET=$(DESTDIR)$(prefix)/$(framework_dylib); \
 		DEBUG_TARGET=$(DESTDIR)$(prefix)/$(framework_dylib)_debug; \
-	fi; \
-	if [ "$(JULIA_BUILD_MODE)" = "release" ]; then \
-		$(call stringreplace,$${RELEASE_TARGET},sys.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys.$(SHLIB_EXT)); \
-	elif [ "$(JULIA_BUILD_MODE)" = "debug" ]; then \
-		$(call stringreplace,$${DEBUG_TARGET},sys-debug.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys-debug.$(SHLIB_EXT)); \
 	fi;
 endif
 
@@ -781,13 +776,13 @@ endif
 	@printf $(JULCOLOR)' ==> ./julia binary sizes\n'$(ENDCOLOR)
 	$(call spawn,$(LLVM_SIZE) -A $(call cygpath_w,$(build_private_libdir)/sys.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_shlibdir)/libjulia.$(SHLIB_EXT)) \
-		$(call cygpath_w,$(build_shlibdir)/libjulia-internal.$(SHLIB_EXT)) \
-		$(call cygpath_w,$(build_shlibdir)/libjulia-codegen.$(SHLIB_EXT)) \
+		$(call cygpath_w,$(build_private_shlibdir)/libjulia-internal.$(SHLIB_EXT)) \
+		$(call cygpath_w,$(build_private_shlibdir)/libjulia-codegen.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_bindir)/julia$(EXE)))
 ifeq ($(OS),Darwin)
-	$(call spawn,$(LLVM_SIZE) -A $(call cygpath_w,$(build_shlibdir)/libLLVM.$(SHLIB_EXT)))
+	$(call spawn,$(LLVM_SIZE) -A $(call cygpath_w,$(build_private_shlibdir)/libLLVM.$(SHLIB_EXT)))
 else
-	$(call spawn,$(LLVM_SIZE) -A $(call cygpath_w,$(build_shlibdir)/$(LLVM_SHARED_LIB_NAME).$(SHLIB_EXT)))
+	$(call spawn,$(LLVM_SIZE) -A $(call cygpath_w,$(build_private_shlibdir)/$(LLVM_SHARED_LIB_NAME).$(SHLIB_EXT)))
 endif
 	@printf $(JULCOLOR)' ==> ./julia launch speedtest\n'$(ENDCOLOR)
 	@time $(call spawn,$(build_bindir)/julia$(EXE) -e '')

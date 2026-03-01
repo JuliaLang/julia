@@ -68,7 +68,7 @@ $(eval $(call staged-install, \
 	gmp,gmp-$(GMP_VER), \
 	MAKE_INSTALL,,, \
 	$$(WIN_MAKE_HARD_LINK) $(build_bindir)/libgmp-*.dll $(build_bindir)/libgmp.dll && \
-		$$(INSTALL_NAME_CMD)libgmp.$$(SHLIB_EXT) $$(build_shlibdir)/libgmp.$$(SHLIB_EXT)))
+		$$(INSTALL_NAME_CMD)libgmp.$$(SHLIB_EXT) $$(build_private_shlibdir)/libgmp.$$(SHLIB_EXT)))
 
 clean-gmp:
 	-rm -f $(BUILDDIR)/gmp-$(GMP_VER)/build-configured $(BUILDDIR)/gmp-$(GMP_VER)/build-compiled

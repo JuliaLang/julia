@@ -30,7 +30,7 @@ $(eval $(call staged-install, \
 	blastrampoline,$(BLASTRAMPOLINE_SRC_DIR), \
 	BLASTRAMPOLINE_INSTALL,, \
 	$$(BLASTRAMPOLINE_OBJ_TARGET), \
-	$$(INSTALL_NAME_CMD)libblastrampoline.$$(SHLIB_EXT) $$(build_shlibdir)/libblastrampoline.$$(SHLIB_EXT)))
+	$$(INSTALL_NAME_CMD)libblastrampoline.$$(SHLIB_EXT) $$(build_private_shlibdir)/libblastrampoline.$$(SHLIB_EXT)))
 
 clean-blastrampoline:
 	-if [ -d $(BLASTRAMPOLINE_BUILD_ROOT) ]; then $(MAKE) -C $(BLASTRAMPOLINE_BUILD_ROOT) clean; fi

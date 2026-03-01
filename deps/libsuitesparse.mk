@@ -23,10 +23,10 @@ LIBSUITESPARSE_CMAKE_FLAGS := $(CMAKE_COMMON) \
 	  -DSUITESPARSE_USE_OPENMP=OFF \
 	  -DCHOLMOD_PARTITION=ON \
 	  -DBLAS_FOUND=1 \
-	  -DBLAS_LIBRARIES="$(build_shlibdir)/lib$(BLAS_LIB_NAME_NO_EXT).$(SHLIB_EXT)" \
+	  -DBLAS_LIBRARIES="$(build_private_shlibdir)/lib$(BLAS_LIB_NAME_NO_EXT).$(SHLIB_EXT)" \
 	  -DBLAS_LINKER_FLAGS="$(BLAS_LIB_NAME_NO_EXT)" \
 	  -DBLA_VENDOR="$(BLAS_LIB_NAME_NO_EXT)" \
-	  -DLAPACK_LIBRARIES="$(build_shlibdir)/lib$(BLAS_LIB_NAME_NO_EXT).$(SHLIB_EXT)" \
+	  -DLAPACK_LIBRARIES="$(build_private_shlibdir)/lib$(BLAS_LIB_NAME_NO_EXT).$(SHLIB_EXT)" \
 	  -DLAPACK_LINKER_FLAGS="${BLAS_LIB_NAME_NO_EXT}"
 
 ifeq ($(BINARY),64)
@@ -67,7 +67,7 @@ $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteS
 ifeq ($(OS),WINNT)
 LIBSUITESPARSE_SHLIB_ENV:=PATH="$(abspath $(dir $<))lib:$(build_bindir):$(PATH)"
 else
-LIBSUITESPARSE_SHLIB_ENV:=LD_LIBRARY_PATH="$(build_shlibdir)"
+LIBSUITESPARSE_SHLIB_ENV:=LD_LIBRARY_PATH="$(build_private_shlibdir)"
 endif
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-checked: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled
 	for PROJ in $(shell echo $(subst ;, ,$(LIBSUITESPARSE_PROJECTS))); do \

@@ -18,13 +18,14 @@ endif
 ifeq ($(OS),WINNT)
 CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) -Wl,--stack,8388608"
 else
-CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) $(RPATH_ESCAPED_ORIGIN) $(SANITIZE_LDFLAGS)"
+CONFIGURE_COMMON += LDFLAGS="$(LDFLAGS) -L$(build_private_shlibdir) $(RPATH_ESCAPED_ORIGIN) $(SANITIZE_LDFLAGS)"
 endif
 CONFIGURE_COMMON += F77="$(FC)" CC="$(CC) $(SANITIZE_OPTS)" CXX="$(CXX) $(SANITIZE_OPTS)" LD="$(LD)"
 
 ifneq ($(OS),WINNT)
 CMAKE_COMMON += -DCMAKE_INSTALL_LIBDIR=$(build_libdir)
 endif
+CMAKE_COMMON += -DCMAKE_LIBRARY_PATH=$(build_private_shlibdir)
 
 ifeq ($(OS), Darwin)
 CMAKE_COMMON += -DCMAKE_MACOSX_RPATH=1
@@ -156,7 +157,7 @@ endif
 
 ## PATHS ##
 # sort is used to remove potential duplicates
-DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_includedir) $(build_sysconfdir) $(build_datarootdir) $(build_staging) $(build_prefix)/manifest)
+DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_shlibdir) $(build_includedir) $(build_sysconfdir) $(build_datarootdir) $(build_staging) $(build_prefix)/manifest)
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(build_prefix): | $(DIRS)
@@ -192,6 +193,18 @@ define BINFILE_INSTALL
 	cp $3 $2/$$(build_depsbindir)
 endef
 
+# Rewrite libdir in pkgconfig files from lib/ to lib/julia/ to match the
+# private shared library layout. Operates only on .pc files listed in the tarball.
+# $1 = tar listing flags (e.g. -tf or -tzf)
+# Called via $$(call ...) from within recipe lines of staged-install / bb-install.
+define REWRITE_PKGCONFIG_LIBDIR
+	$(TAR) $1 $< | sed -n 's,^./,,;s,^\(lib/pkgconfig/[^/]*\.pc\)$$,\1,p' | while read pc; do \
+		pc="$(build_prefix)/$$pc"; \
+		sed 's|libdir=\$${exec_prefix}/lib$$|libdir=\$${exec_prefix}/lib/julia|' "$$pc" > "$$pc.tmp" && \
+		mv "$$pc.tmp" "$$pc"; \
+	done
+endef
+
 define staged-install
 stage-$(strip $1): $$(build_staging)/$2.tar
 install-$(strip $1): $$(build_prefix)/manifest/$(strip $1)
@@ -223,7 +236,11 @@ UNINSTALL_$(strip $1) := $2 staged-uninstaller
 
 $$(build_prefix)/manifest/$(strip $1): $$(build_staging)/$2.tar | $(build_prefix)/manifest
 	-+[ ! -e $$@ ] || $$(MAKE) uninstall-$(strip $1)
-	$$(UNTAR) $$< -C $$(build_prefix)
+ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
+	$$(TAR) -tf $$< | sed $(SED_TRANSFORM_PRIVATE) | xargs -n 1 dirname | sort -u | (cd $$(build_prefix) && xargs -t mkdir -p)
+endif
+	$$(UNTAR_PRIVATE) $$< -C $$(build_prefix)
+	$$(call REWRITE_PKGCONFIG_LIBDIR,-tf)
 	$6
 	echo '$$(UNINSTALL_$(strip $1))' > $$@
 .PHONY: $(addsuffix -$(strip $1),stage install distclean uninstall reinstall)
@@ -231,7 +248,7 @@ endef
 
 define staged-uninstaller
 uninstall-$(strip $1):
-	-cd $$(build_prefix) && rm -fv -- $$$$($$(TAR) -tf $$(build_staging)/$2.tar | grep -v '/$$$$')
+	-cd $$(build_prefix) && rm -fv -- $$$$($$(TAR) -tf $$(build_staging)/$2.tar | sed $(SED_TRANSFORM_PRIVATE) | grep -v '/$$$$')
 	-rm -f $$(build_prefix)/manifest/$(strip $1)
 endef
 
@@ -281,9 +298,11 @@ endef
 ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
 #gnu tar
 UNTAR = $(TAR) -xmf
+UNTAR_PRIVATE = $(TAR) $(TAR_TRANSFORM_PRIVATE) -xmf
 else
 #bsd tar
 UNTAR = $(TAR) -xmUf
+UNTAR_PRIVATE = $(TAR) $(TAR_TRANSFORM_PRIVATE) -xmUf
 endif
 
 

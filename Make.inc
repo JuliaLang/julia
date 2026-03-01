@@ -349,12 +349,16 @@ build_libdir := $(build_prefix)/lib/$(MULTIARCH)
 endif
 
 # Private library directories
+# Note: build_private_libdir is unified with private_libdir so that
+# dependencies are unpacked/built directly into their final private locations
+# at make time, eliminating the need for rearrangement at install time.
 ifeq ($(DARWIN_FRAMEWORK), 1)
 private_libdir := $(prefix)/$(framework_frameworks)
+build_private_libdir := $(build_prefix)/$(framework_frameworks)
 else
 private_libdir := $(libdir)/julia
-endif
 build_private_libdir := $(build_libdir)/julia
+endif
 
 private_libexecdir := $(libexecdir)/julia
 build_private_libexecdir := $(build_libexecdir)/julia
@@ -391,8 +395,10 @@ reverse_private_libdir_rel_eval = $(call rel_path,$(private_libdir),$(libdir))
 reverse_private_libdir_rel = $(call hit_cache,reverse_private_libdir_rel_eval)
 reverse_private_libexecdir_rel_eval = $(call rel_path,$(private_libexecdir),$(private_libdir))
 reverse_private_libexecdir_rel = $(call hit_cache,reverse_private_libexecdir_rel_eval)
-reverse_build_private_libexecdir_rel_eval = $(call rel_path,$(build_private_libexecdir),$(build_libdir))
+reverse_build_private_libexecdir_rel_eval = $(call rel_path,$(build_private_libexecdir),$(build_private_libdir))
 reverse_build_private_libexecdir_rel = $(call hit_cache,reverse_build_private_libexecdir_rel_eval)
+reverse_build_depsbindir_rel_eval = $(call rel_path,$(build_depsbindir),$(build_private_libdir))
+reverse_build_depsbindir_rel = $(call hit_cache,reverse_build_depsbindir_rel_eval)
 
 INSTALL_F := $(JULIAHOME)/contrib/install.sh 644
 INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
@@ -852,6 +858,39 @@ endif
 
 # Do not try to extract owner uids, even if we're root (e.g. in sandboxes)
 TAR += --no-same-owner
+# Transform rules for unpacking dependencies directly into private locations
+# This eliminates the need for layout rearrangement at install time.
+# GNU tar uses --transform, BSD tar (macOS) uses -s.
+# We detect which to use based on whether 'strip-components' is supported (GNU tar feature).
+# Note: Syntax differs between the two:
+#   GNU tar:  --transform 's|pattern|replacement|'  (with 's' prefix, like sed)
+#   BSD tar:           -s  '|pattern|replacement|'  (without 's' prefix)
+TAR_TRANSFORM_CMD :=
+ifeq (,$(findstring components,$(TAR_TEST)))
+    # BSD tar (macOS)
+    IS_BSD_TAR := true
+    TAR_TRANSFORM_CMD := -s
+else
+    # GNU tar
+    TAR_TRANSFORM_CMD := --transform
+endif
+
+# Transform all files with extensions directly in `lib/` to `lib/julia/`
+# Files in lib/ subdirectories (lib/pkgconfig/, lib/cmake/, etc.) remain in place
+# Pattern explanation:
+#   ^\(\./\)\{0,1\}      - Optional `./` prefix (BRE syntax)
+#   lib/\([^/]*\.[^/]*\) - `lib/` followed by: filename, dot, extension (matches files, not dirs)
+#   lib/julia/\2         - Move to `lib/julia/` preserving the filename (second capture group)
+ifeq ($(IS_BSD_TAR),true)
+    # BSD tar: -s '|pattern|replacement|' (no 's' prefix)
+    TAR_TRANSFORM_PRIVATE := -s '|^\(\./\)\{0,1\}lib/\([^/]*\.[^/]*\)|lib/julia/\2|'
+else
+    # GNU tar: --transform 's|pattern|replacement|' (with 's' prefix)
+    TAR_TRANSFORM_PRIVATE := --transform 's|^\(\./\)\{0,1\}lib/\([^/]*\.[^/]*\)|lib/julia/\2|'
+endif
+
+# Equivalent sed expression for transforming file listings (e.g. for mkdir pre-pass and uninstaller)
+SED_TRANSFORM_PRIVATE := -e 's|^\(\./\)\{0,1\}lib/\([^/]*\.[^/]*\)|lib/julia/\2|'
 
 ifeq ($(WITH_GC_VERIFY), 1)
 JCXXFLAGS += -DGC_VERIFY
@@ -1361,14 +1400,14 @@ ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(OS), Darwin)
 USE_BLAS64 := 0
 USE_SYSTEM_LAPACK := 0
-LIBBLAS := -L$(build_libdir) -lgfortblas
+LIBBLAS := -L$(build_private_libdir) -lgfortblas
 LIBBLASNAME := libgfortblas
 else
 LIBBLAS ?= -lblas
 LIBBLASNAME ?= libblas
 endif
 else
-LIBBLAS := -L$(build_shlibdir) -lopenblas
+LIBBLAS := -L$(build_private_shlibdir) -lopenblas
 LIBBLASNAME := libopenblas
 endif
 
@@ -1382,7 +1421,7 @@ ifeq ($(USE_SYSTEM_LAPACK), 1)
 LIBLAPACK ?= -llapack
 LIBLAPACKNAME ?= liblapack
 else
-LIBLAPACK := -L$(build_shlibdir) -llapack $(LIBBLAS)
+LIBLAPACK := -L$(build_private_shlibdir) -llapack $(LIBBLAS)
 LIBLAPACKNAME := liblapack
 endif
 endif
@@ -1399,7 +1438,7 @@ ifeq ($(USE_SYSTEM_LIBUV), 1)
   LIBUV := $(LOCALBASE)/lib/libuv-julia.a
   LIBUV_INC := $(LOCALBASE)/include
 else
-  LIBUV := $(build_libdir)/libuv.a
+  LIBUV := $(build_private_libdir)/libuv.a
   LIBUV_INC := $(build_includedir)
 endif
 
@@ -1407,7 +1446,7 @@ ifeq ($(USE_SYSTEM_UTF8PROC), 1)
   LIBUTF8PROC := -lutf8proc
   UTF8PROC_INC := $(LOCALBASE)/include
 else
-  LIBUTF8PROC := $(build_libdir)/libutf8proc.a
+  LIBUTF8PROC := $(build_private_libdir)/libutf8proc.a
   UTF8PROC_INC := $(build_includedir)
 endif
 
@@ -1536,13 +1575,13 @@ ifneq (,$(filter $(OS),WINNT emscripten))
   RPATH_ORIGIN :=
   RPATH_ESCAPED_ORIGIN :=
 else ifeq ($(OS), Darwin)
-  RPATH := -Wl,-rpath,'@executable_path/$(build_libdir_rel)'
+  RPATH := -Wl,-rpath,'@executable_path/$(build_libdir_rel)' -Wl,-rpath,'@executable_path/$(build_private_libdir_rel)'
   RPATH_ORIGIN := -Wl,-rpath,'@loader_path/'
   RPATH_ESCAPED_ORIGIN := $(RPATH_ORIGIN)
 else
-  RPATH := -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-rpath,'$$ORIGIN/$(build_private_libdir_rel)' -Wl,-rpath-link,$(build_shlibdir) -Wl,-z,origin -Wl,--enable-new-dtags
+  RPATH := -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-rpath,'$$ORIGIN/$(build_private_libdir_rel)' -Wl,-rpath-link,$(build_private_shlibdir) -Wl,-rpath-link,$(build_shlibdir) -Wl,-z,origin -Wl,--enable-new-dtags
   RPATH_ORIGIN := -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin -Wl,--enable-new-dtags
-  RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin -Wl,-rpath-link,$(build_shlibdir) -Wl,--enable-new-dtags
+  RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin -Wl,-rpath-link,$(build_private_shlibdir) -Wl,-rpath-link,$(build_shlibdir) -Wl,--enable-new-dtags
 endif
 RPATH_LIB := $(RPATH_ORIGIN)
 
@@ -1676,7 +1715,7 @@ ifeq ($(USE_SYSTEM_BLAS), 0)
 ifeq ($(USE_BLAS64), 1)
 OPENBLAS_SYMBOLSUFFIX := 64_
 OPENBLAS_LIBNAMESUFFIX := 64_
-LIBBLAS := -L$(build_shlibdir) -lopenblas$(OPENBLAS_LIBNAMESUFFIX)
+LIBBLAS := -L$(build_private_shlibdir) -lopenblas$(OPENBLAS_LIBNAMESUFFIX)
 LIBLAPACK := $(LIBBLAS)
 LIBBLASNAME := $(LIBBLASNAME)$(OPENBLAS_LIBNAMESUFFIX)
 LIBLAPACKNAME := $(LIBBLASNAME)
@@ -1832,17 +1871,17 @@ define dep_lib_path
 $(call normalize_path,$(shell $(PYTHON) $(call python_cygpath,$(JULIAHOME)/contrib/relative_path.py) $(1) $(2)))
 endef
 
-LIBJULIAINTERNAL_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_shlibdir)/libjulia-internal.$(JL_MAJOR_SHLIB_EXT))
-LIBJULIAINTERNAL_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/libjulia-internal.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIAINTERNAL_BUILD_DEPLIB         := $(call dep_lib_path,$(build_shlibdir),$(build_private_shlibdir)/libjulia-internal.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIAINTERNAL_INSTALL_DEPLIB       := $(call dep_lib_path,      $(shlibdir),      $(private_shlibdir)/libjulia-internal.$(JL_MAJOR_SHLIB_EXT))
 
-LIBJULIAINTERNAL_DEBUG_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT))
-LIBJULIAINTERNAL_DEBUG_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIAINTERNAL_DEBUG_BUILD_DEPLIB   := $(call dep_lib_path,$(build_shlibdir),$(build_private_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIAINTERNAL_DEBUG_INSTALL_DEPLIB := $(call dep_lib_path,      $(shlibdir),      $(private_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_SHLIB_EXT))
 
-LIBJULIACODEGEN_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_SHLIB_EXT))
-LIBJULIACODEGEN_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/libjulia-codegen.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIACODEGEN_BUILD_DEPLIB          := $(call dep_lib_path,$(build_shlibdir),$(build_private_shlibdir)/libjulia-codegen.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIACODEGEN_INSTALL_DEPLIB        := $(call dep_lib_path,      $(shlibdir),      $(private_shlibdir)/libjulia-codegen.$(JL_MAJOR_SHLIB_EXT))
 
-LIBJULIACODEGEN_DEBUG_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT))
-LIBJULIACODEGEN_DEBUG_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIACODEGEN_DEBUG_BUILD_DEPLIB    := $(call dep_lib_path,$(build_shlibdir),$(build_private_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT))
+LIBJULIACODEGEN_DEBUG_INSTALL_DEPLIB  := $(call dep_lib_path,      $(shlibdir),      $(private_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_SHLIB_EXT))
 
 ifeq ($(OS),WINNT)
 ifeq ($(BINARY),32)
@@ -1872,7 +1911,7 @@ endif
 ifeq ($(USE_SYSTEM_CSL),1)
 LIBGCC_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_private_shlibdir)/$(LIBGCC_NAME))
 else
-LIBGCC_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_shlibdir)/$(LIBGCC_NAME))
+LIBGCC_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_private_shlibdir)/$(LIBGCC_NAME))
 endif
 LIBGCC_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/$(LIBGCC_NAME))
 
@@ -1883,7 +1922,7 @@ LIBSTDCXX_NAME := libstdc++.so.6
 ifeq ($(USE_SYSTEM_CSL),1)
 LIBSTDCXX_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_private_shlibdir)/$(LIBSTDCXX_NAME))
 else
-LIBSTDCXX_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_shlibdir)/$(LIBSTDCXX_NAME))
+LIBSTDCXX_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_private_shlibdir)/$(LIBSTDCXX_NAME))
 endif
 LIBSTDCXX_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/$(LIBSTDCXX_NAME))
 endif
@@ -1895,7 +1934,7 @@ LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_private_shlib
 else ifeq ($(USE_SYSTEM_OPENLIBM),1)
 LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
 else
-LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
+LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_shlibdir),$(build_private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
 endif
 LIBM_INSTALL_DEPLIB := $(call dep_lib_path,$(shlibdir),$(private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
 

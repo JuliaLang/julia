@@ -56,7 +56,7 @@ $(eval $(call staged-install, \
 	mpfr,mpfr-$(MPFR_VER), \
 	MAKE_INSTALL,,, \
 	$$(WIN_MAKE_HARD_LINK) $(build_bindir)/libmpfr-*.dll $(build_bindir)/libmpfr.dll && \
-		$$(INSTALL_NAME_CMD)libmpfr.$$(SHLIB_EXT) $$(build_shlibdir)/libmpfr.$$(SHLIB_EXT)))
+		$$(INSTALL_NAME_CMD)libmpfr.$$(SHLIB_EXT) $$(build_private_shlibdir)/libmpfr.$$(SHLIB_EXT)))
 
 clean-mpfr:
 	-rm -f $(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured $(BUILDDIR)/mpfr-$(MPFR_VER)/build-compiled
