@@ -1162,11 +1162,71 @@ julia> filter(!isletter, str)
 !(f::ComposedFunction{typeof(!)}) = f.inner #allows !!f === f
 
 """
+    FixNullaryCallable{N}(f, g)
+
+For `N`, `f`, `g`, such that `N isa Int`, `0 < N`, `f` is callable, `g` is callable
+with no arguments (like so: `g()`), `FixNullaryCallable{N}(f, g)` returns a
+callable, say `z`. `z(args_z...; kwargs...)` calls `f(args_f...; kwargs...)`,
+returning the result. `length(args_f) == length(args_z) + 1`, where the extra
+argument is placed at position `N` and is obtained by calling `g()`.
+
+Generalizes [`Base.Fix`](@ref).
+
+!!! compat "Julia 1.14"
+    `Base.FixNullaryCallable` is only available for Julia 1.14 and up.
+"""
+struct FixNullaryCallable{N,F,G} <: Function
+    f::F
+    g::G
+
+    function FixNullaryCallable{N}(f::F, g::G) where {N,F,G}
+        if !(N isa Int)
+            throw(ArgumentError(LazyString("expected type parameter to be `Int`, got `", N, "::", typeof(N), "`")))
+        elseif N < 1
+            throw(ArgumentError(LazyString("expected `N` to be integer greater than 0, got ", N)))
+        end
+        new{N,_stable_typeof(f),_stable_typeof(g)}(f, g)
+    end
+end
+
+function (f::FixNullaryCallable{N})(args::Vararg{Any,M}; kws...) where {N,M}
+    n = N::Int
+    M < n-1 && throw(ArgumentError(LazyString("expected at least ", n-1, " arguments, got ", M)))
+    (left, right) = _split_tuple(args, n-1)
+    return f.f(left..., f.g(), right...; kws...)
+end
+
+# Special cases for improved constant propagation
+function (f::FixNullaryCallable{1})(arg; kws...)
+    f.f(f.g(), arg; kws...)
+end
+function (f::FixNullaryCallable{2})(arg; kws...)
+    f.f(arg, f.g(); kws...)
+end
+
+function Base.show(io::IO, fix::FixNullaryCallable{N}) where {N}
+    constr = FixNullaryCallable{N}
+    callable = fix.f
+    fixed_nullary = fix.g
+    print(io, '(')
+    show(io, constr)
+    print(io, ')')
+    print(io, '(')
+    show(io, callable)
+    print(io, ',')
+    print(io, ' ')
+    show(io, fixed_nullary)
+    print(io, ')')
+end
+
+"""
     Fix{N}(f, x)
 
 A type representing a partially-applied version of a function `f`, with the argument
 `x` fixed at position `N::Int`. In other words, `Fix{3}(f, x)` behaves similarly to
 `(y1, y2, y3...; kws...) -> f(y1, y2, x, y3...; kws...)`.
+
+Special case of [`Base.FixNullaryCallable`](@ref).
 
 !!! compat "Julia 1.12"
     This general functionality requires at least Julia 1.12, while `Fix1` and `Fix2`
@@ -1178,41 +1238,34 @@ A type representing a partially-applied version of a function `f`, with the argu
     `Fix{1}(Fix{2}(f, 4), 4)` fixes the first and second arg, while `Fix{2}(Fix{1}(f, 4), 4)`
     fixes the first and third arg.
 """
-struct Fix{N,F,T} <: Function
-    f::F
-    x::T
+const Fix = FixNullaryCallable{N,F,Returns{T}} where {N,F,T}
 
-    function Fix{N}(f::F, x) where {N,F}
-        if !(N isa Int)
-            throw(ArgumentError(LazyString("expected type parameter in `Fix` to be `Int`, but got `", N, "::", typeof(N), "`")))
-        elseif N < 1
-            throw(ArgumentError(LazyString("expected `N` in `Fix{N}` to be integer greater than 0, but got ", N)))
-        end
-        new{N,_stable_typeof(f),_stable_typeof(x)}(f, x)
-    end
+function Fix{N}(f::F, x::X) where {N,F,X}
+    g = Returns(x)
+    FixNullaryCallable{N}(f, g)
 end
-
-function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
-    M < N-1 && throw(ArgumentError(LazyString("expected at least ", N-1, " arguments to `Fix{", N, "}`, but got ", M)))
-    (left, right) = _split_tuple(args, N-1)
-    return f.f(left..., f.x, right...; kws...)
-end
-
-# Special cases for improved constant propagation
-(f::Fix{1})(arg; kws...) = f.f(f.x, arg; kws...)
-(f::Fix{2})(arg; kws...) = f.f(arg, f.x; kws...)
 
 function Base.show(io::IO, fix::Fix{N}) where {N}
     constr = Fix{N}
     callable = fix.f
     fixed_argument = fix.x
+    print(io, '(')
     show(io, constr)
+    print(io, ')')
     print(io, '(')
     show(io, callable)
     print(io, ',')
     print(io, ' ')
     show(io, fixed_argument)
     print(io, ')')
+end
+
+# instance properties: compatibility, `Fix` used to have an `x` property
+function getproperty(f::Fix, p::Symbol)
+    if p != :x
+        return getfield(f, p)
+    end
+    f.g()
 end
 
 """
