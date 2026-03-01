@@ -1765,35 +1765,40 @@ permutedims!(arr::AbstractArray, perm) = permutedims!(arr, Tuple(perm))
 
     cycles = construct_cycles(dims, perm)
 
-    max_exprs = 2500
+    max_exprs = 5
     nexpr = 0
 
     exs = Expr[]
-    for cycle in cycles
-        length(cycle) == 1 && continue # skip fixed points
+    breaknext = false
+    rest_i = 1
+    for i in eachindex(cycles)
+        cycle = cycles[i]
+        length(cycle) == 1 && continue
 
-        leader, rest... = cycle
-        rest = Tuple(reverse(rest))
         # (a1 a2 ... an) = (a1 an)(a1 an-1)(a1 an-2)...(a1 a3)(a1 a2)
         # unroll the swaps up to a max N of expression to curb the compilation times
-        while !isempty(rest) && nexpr < max_exprs
-            i, rest... = rest
+        leader = cycle[1]
+        for j in length(cycle):-1:2
             push!(exs, quote
-                @inbounds arr[$leader], arr[$i] = arr[$i], arr[$leader]
+                @inbounds arr[$leader], arr[$(cycle[j])] = arr[$(cycle[j])], arr[$leader]
             end)
             nexpr += 1
+            if nexpr >= max_exprs; breaknext = true end
         end
+        rest_i = i+1
+        breaknext && break
+    end
 
-        # if we've reached the max or we still have leftover in the current cycle,
-        # simply emit a for loop
-        if !isempty(rest)
-            push!(exs, quote
-                cycle = $rest
-                @inbounds for i in cycle
-                    arr[$leader], arr[i] = arr[i], arr[$leader]
-                end
-            end)
-        end
+    if rest_i <= length(cycles)
+      push!(exs, quote
+          cycles = $(cycles[rest_i:end])
+          @inbounds for cycle in cycles
+              leader = first(cycle)
+              for i in length(cycle):-1:2
+                  arr[leader], arr[cycle[i]] = arr[cycle[i]], arr[leader]
+              end
+          end
+      end)
     end
 
     # we return the array rewrapped with the correct dimensions
