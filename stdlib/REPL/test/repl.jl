@@ -1992,3 +1992,9 @@ end
     r = REPL.BasicREPL(term)
     @test !REPL.hascolor(r)
 end
+
+@testset "REPL.hascolor(::BasicREPL)" begin
+    term = REPL.Terminals.TTYTerminal("dumb",IOBuffer("1+2\n"),IOContext(IOBuffer(),:foo=>true),IOBuffer())
+    r = REPL.BasicREPL(term)
+    @test !REPL.hascolor(r)
+end
