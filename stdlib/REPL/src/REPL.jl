@@ -1555,6 +1555,16 @@ function setup_interface(
                         continue
                     end
                 end
+                # In prompt paste mode, skip comment-only lines so that
+                # Meta.parse does not consume past the next prompt (#61197)
+                if isprompt_paste && s.current_mode == julia_prompt
+                    nl = findnext('\n', input, oldpos)
+                    linetext = SubString(input, oldpos, prevind(input, something(nl, lastindex(input) + 1)))
+                    if startswith(lstrip(linetext), '#')
+                        oldpos = something(nl, lastindex(input) + 1)
+                        continue
+                    end
+                end
                 dump_tail = false
                 nl_pos = findfirst('\n', input[oldpos:end])
                 if s.current_mode == julia_prompt
