@@ -69,14 +69,11 @@ end
 # Keyword calls
 Base.eval(test_mod, :(
 begin
-    function kwtest(; kws...)
+    function kwtest_with_kws(; kws...)
         values(kws)
     end
 
-    # Note this definition generates an arguably-spurious warning when run via
-    # `Pkg.test()` due to the use of `--warn-override=true` in the test
-    # harness.
-    function kwtest()
+    function kwtest_no_kws()
         "non-kw version of kwtest"
     end
 end
@@ -85,14 +82,14 @@ end
 @test JuliaLowering.include_string(test_mod, """
 let
     kws = (c=3,d=4)
-    kwtest(; kws..., a=1, d=0, e=5)
+    kwtest_with_kws(; kws..., a=1, d=0, e=5)
 end
 """) == (c=3, d=0, a=1, e=5)
 
 @test JuliaLowering.include_string(test_mod, """
 let
     kws = (;)
-    kwtest(; kws..., kws...)
+    kwtest_no_kws(; kws..., kws...)
 end
 """) == "non-kw version of kwtest"
 

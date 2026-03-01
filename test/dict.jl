@@ -1353,6 +1353,28 @@ end
     @test d == Dict(1 => 6, 2 => 5, 3 => 10)
 end
 
+@testset "AbstractDict merge! sizehint! keywords" begin
+    # Ensure merge!/copy don't assume sizehint!(; shrink=...) exists for custom dicts.
+    mutable struct NoShrinkSizehintDict{K,V} <: AbstractDict{K,V}
+        data::Dict{K,V}
+    end
+    Base.iterate(d::NoShrinkSizehintDict, state...) = iterate(d.data, state...)
+    Base.length(d::NoShrinkSizehintDict) = length(d.data)
+    Base.getindex(d::NoShrinkSizehintDict, k) = getindex(d.data, k)
+    Base.setindex!(d::NoShrinkSizehintDict, v, k) = (d.data[k] = v; d)
+    Base.empty(d::NoShrinkSizehintDict{K,V}) where {K,V} = NoShrinkSizehintDict(Dict{K,V}())
+    Base.sizehint!(d::NoShrinkSizehintDict, n) = (sizehint!(d.data, n); d)
+
+    d1 = NoShrinkSizehintDict(Dict("A" => 1, "B" => 2))
+    d2 = NoShrinkSizehintDict(Dict("B" => 3, "C" => 4))
+    @test merge!(d1, d2) === d1
+    @test d1.data == Dict("A" => 1, "B" => 3, "C" => 4)
+
+    d3 = copy(d2)
+    @test d3 isa NoShrinkSizehintDict
+    @test d3.data == d2.data
+end
+
 @testset "misc error/io" begin
     d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
     @test_throws ErrorException 'a' in d

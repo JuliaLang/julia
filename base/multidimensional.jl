@@ -1066,7 +1066,14 @@ end
     $(_generate_unsafe_setindex!_body(2))
 end
 
-diff(a::AbstractVector) = diff(a, dims=1)
+function diff(a::AbstractVector; dims::Integer=1)
+    require_one_based_indexing(a)
+    dims == 1 || throw(ArgumentError("dimension $dims out of range (1:1)"))
+    r = axes(a, 1)
+    r0 = UnitRange(1, last(r) - 1)
+    r1 = UnitRange(2, last(r))
+    return view(a, r1) .- view(a, r0)
+end
 
 """
     diff(A::AbstractVector)

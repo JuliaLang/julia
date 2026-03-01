@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 eltype(::Type{<:AbstractSet{T}}) where {T} = @isdefined(T) ? T : Any
-sizehint!(s::AbstractSet, n) = s
+sizehint!(s::AbstractSet, n; shrink::Bool=true) = s
 
 function copy!(dst::AbstractSet, src::AbstractSet)
     dst === src && return dst
@@ -101,7 +101,7 @@ max_values(::Type{Bool}) = 2
 max_values(::Type{Nothing}) = 1
 
 function union!(s::AbstractSet{T}, itr) where T
-    haslength(itr) && sizehint!(s, length(s) + Int(length(itr))::Int; shrink = false)
+    haslength(itr) && _compat_sizehint!(s, length(s) + Int(length(itr))::Int; shrink=false)
     for x in itr
         push!(s, x)
         length(s) == max_values(T) && break

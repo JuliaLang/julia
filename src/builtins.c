@@ -1700,7 +1700,18 @@ JL_CALLABLE(jl_f_applicable)
 {
     JL_NARGSV(applicable, 1);
     size_t world = jl_current_task->world_age;
-    return jl_method_lookup(args, nargs, world) != NULL ? jl_true : jl_false;
+    jl_method_instance_t *mi = jl_method_lookup(args, nargs, world);
+    if (mi != NULL &&
+        nargs >= 2 &&
+        jl_kwcall_type != NULL &&
+        (jl_datatype_t*)jl_typeof(args[0]) == jl_kwcall_type &&
+        jl_is_namedtuple(args[1]) &&
+        jl_nfields(args[1]) > 0) {
+        jl_method_t *m = mi->def.method;
+        if (m != NULL && m->is_kwcall_stub)
+            mi = NULL;
+    }
+    return mi != NULL ? jl_true : jl_false;
 }
 
 JL_CALLABLE(jl_f_invoke)

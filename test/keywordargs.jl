@@ -375,6 +375,22 @@ no_kw_args(x::Int) = 0
 @test_throws MethodError no_kw_args(1, k=1)
 @test_throws MethodError no_kw_args("", k=1)
 
+# issue #9498: keyword arguments should not affect method dispatch
+let
+    kwdispatch_9498(x::Integer) = :int
+    kwdispatch_9498(x::Number; kw...) = :numkw
+    @test kwdispatch_9498(1) === :int
+    @test_throws MethodError kwdispatch_9498(1; a=2)
+end
+
+# issue #42207: redefining a method without keywords should also remove its kwcall sorter
+let
+    redef_42207(a, b; kwargs...) = :kw
+    redef_42207(a, b) = :no_kw
+    @test redef_42207(1, 2) === :no_kw
+    @test_throws MethodError redef_42207(1, 2; x=1)
+end
+
 # issue #40964
 f40964(xs::Int...=1; k = 2) = (xs, k)
 @test f40964() === ((1,), 2)

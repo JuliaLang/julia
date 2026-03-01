@@ -1440,6 +1440,8 @@ end
     m2 = 3
     @check_bit_operation maximum(b1, dims=(m1, m2)) BitArray{4}
     @check_bit_operation minimum(b1, dims=(m1, m2)) BitArray{4}
+    @check_bit_operation any(b1, dims=(m1, m2)) BitArray{4}
+    @check_bit_operation all(b1, dims=(m1, m2)) BitArray{4}
     @check_bit_operation sum(b1, dims=(m1, m2)) Array{Int,4}
 
     @check_bit_operation maximum(b1) Bool
@@ -1447,6 +1449,12 @@ end
     @check_bit_operation any(b1) Bool
     @check_bit_operation all(b1) Bool
     @check_bit_operation sum(b1) Int
+
+    let A = reshape(1:6, 6, 1) .== 3
+        r = all(A; dims=1)
+        @test r isa BitMatrix
+        @test r == falses(1, 1)
+    end
 
     b0 = falses(0)
     @check_bit_operation any(b0) Bool

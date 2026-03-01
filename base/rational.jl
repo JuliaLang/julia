@@ -567,7 +567,11 @@ for (S, T) in ((Rational, Integer), (Integer, Rational), (Rational, Rational))
     end
 end
 
-round(x::Rational, r::RoundingMode=RoundNearest) = round(typeof(x), x, r)
+function round(x::Rational, r::RoundingMode=RoundNearest;
+               digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base::Union{Nothing,Integer}=nothing)
+    digits === nothing && sigdigits === nothing && return round(typeof(x), x, r)
+    _round_kwargs(x, r, digits, sigdigits, base)
+end
 
 function round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {T,Tr}
     if iszero(denominator(x)) && !(T <: Integer)

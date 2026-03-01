@@ -47,7 +47,15 @@ abstract type Algorithm end
 
 ## functions requiring only ordering ##
 
-function issorted(itr, order::Ordering)
+function issorted(itr, order::Ordering;
+        lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing)
+    if lt === isless && by === identity && rev === nothing
+        return _issorted_ordering(itr, order)
+    end
+    return _issorted_ordering(itr, ord(lt, by, rev, order))
+end
+
+function _issorted_ordering(itr, order::Ordering)
     y = iterate(itr)
     y === nothing && return true
     prev, state = y

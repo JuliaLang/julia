@@ -278,6 +278,21 @@
 (define (overlay? e)
   (and (pair? e) (eq? (car e) 'overlay)))
 
+(define (hash-sym-ref? e)
+  (cond ((symbol? e)
+         (let ((s (string e)))
+           (and (> (length s) 0) (eqv? (string.char s 0) #\#))))
+        ((globalref? e) (hash-sym-ref? (caddr e)))
+        (else #f)))
+
+(define (sig-has-local-decls? argl)
+  (any (lambda (ty)
+         (expr-contains-p
+          (lambda (e) (and (pair? e) (eq? (car e) 'local)))
+          ty
+          (lambda (x) (not (function-def? x)))))
+       (llist-types argl)))
+
 (define (sym-ref-or-overlay? e)
   (or (overlay? e)
       (sym-ref? e)))
@@ -352,8 +367,10 @@
     functionloc))
 
 ;; construct the (method ...) expression for one primitive method definition,
-;; assuming optional and keyword args are already handled
-(define (method-def-expr- name sparams argl body (rett '(core Any)))
+;; assuming optional and keyword args are already handled.
+;; declare?: when #f, skip generating the (method name) short-form declaration.
+;; This is used for kwcall stubs where the original method already generated the declaration.
+(define (method-def-expr- name sparams argl body (rett '(core Any)) (declare? #t))
   (if
    (any kwarg? argl)
    ;; has optional positional args
@@ -373,7 +390,7 @@
         (receive
          (vararg req) (separate vararg? argl)
          (optional-positional-defs name sparams req opt dfl body
-                                   (append req opt vararg) rett)))))
+                                   (append req opt vararg) rett declare?)))))
    ;; no optional positional args
    (let* ((names (map car sparams))
           (anames (llist-vars argl))
@@ -439,13 +456,13 @@
                                  (call (core svec) ,@temps)
                                  (inert ,loc)))
                           ,body))))
-       (if (or (symbol? name) (globalref? name))
+       (if (and declare? (or (symbol? name) (globalref? name)))
            `(block ,@generator (method ,name) (latestworld-if-toplevel) ,mdef (unnecessary ,name))  ;; return the function
            (if (overlay? name)
              (if (not (null? generator))
                 `(block ,@generator ,mdef)
                 mdef)
-            `(block ,@generator ,mdef (null))))))))
+            `(block ,@generator (latestworld-if-toplevel) ,mdef (null))))))))
 
 ;; wrap expr in nested scopes assigning names to vals
 (define (scopenest names vals expr)
@@ -583,8 +600,8 @@
         ,(method-def-expr-
           name positional-sparams
           `((|::|
-             ;; if there are optional positional args, we need to be able to reference the function name
-             ,(if (any kwarg? `(,@pargl ,@vararg)) (gensy) UNUSED)
+             ;; give the kw-sorter function slot a usable name
+             ,(gensy)
              (call (core kwftype) ,ftype)) ,kwdecl ,@pargl ,@vararg)
           `(block
             ;; propagate method metadata to keyword sorter
@@ -683,7 +700,7 @@
           (else
            (loop filtered (cdr params))))))
 
-(define (optional-positional-defs name sparams req opt dfl body overall-argl rett)
+(define (optional-positional-defs name sparams req opt dfl body overall-argl rett (declare? #t))
   (let ((prologue (without-generated (extract-method-prologue body))))
     `(block
       ,@(map (lambda (n)
@@ -715,9 +732,9 @@
                                `(block
                                  ,@prologue
                                  (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals))))))
-                 (method-def-expr- name sp passed body)))
+                 (method-def-expr- name sp passed body '(core Any) declare?)))
              (iota (length opt)))
-      ,(method-def-expr- name sparams overall-argl body rett))))
+      ,(method-def-expr- name sparams overall-argl body rett declare?))))
 
 ;; strip empty (parameters ...), normalizing `f(x;)` to `f(x)`.
 (define (remove-empty-parameters argl)
@@ -750,6 +767,66 @@
             (cdr argl))
       argl))
 
+;; For methods without keyword arguments, create a corresponding `kwcall` method
+;; that participates in dispatch for keyword calls but throws an error if any
+;; keyword arguments are provided.
+(define (rename-kwcall-arg arg)
+  (cond ((kwarg? arg)
+         (cons (car arg)
+               (cons (rename-kwcall-arg (cadr arg)) (cddr arg))))
+        ((vararg? arg)
+         (cons (car arg)
+               (cons (rename-kwcall-arg (cadr arg)) (cddr arg))))
+        ((varargexpr? arg)
+         (cons (car arg)
+               (cons (rename-kwcall-arg (cadr arg)) (cddr arg))))
+        ((nospecialize-meta? arg #t)
+         (list (car arg) (cadr arg) (rename-kwcall-arg (caddr arg))))
+        ((decl? arg)
+         (let ((name (decl-var arg)))
+           (if (or (eq? name UNUSED) (eq? name '|#self#|))
+               (make-decl (gensy) (decl-type arg))
+               arg)))
+        ((and (symbol? arg) (or (eq? arg UNUSED) (eq? arg '|#self#|)))
+         (gensy))
+        (else arg)))
+
+(define (kwcall-stub-method-def-expr name sparams argl orig-body)
+  (let* ((pargl (map rename-kwcall-arg argl))  ;; positional args (including the function itself)
+         (ftype (decl-type (car pargl)))
+         (prologue (extract-method-prologue orig-body))
+         ;; 1-element list of vararg argument, or empty if none
+         (vararg (let* ((l (if (null? pargl) '() (last pargl)))
+                        ;; handle vararg with default value
+                        (l- (if (kwarg? l) (cadr l) l)))
+                   (if (or (vararg? l-) (varargexpr? l-))
+                       (list l) '())))
+         ;; expression to forward varargs to another call
+         (splatted-vararg (if (null? vararg) '()
+                              (list `(... ,(arg-name (car vararg))))))
+         ;; positional args without vararg
+         (pargl (if (null? vararg) pargl (butlast pargl)))
+         (forward-pargl (map (lambda (a) (if (kwarg? a) (cadr a) a)) pargl))
+         (kw (gensy))
+         (kwdecl `(|::| ,kw (core NamedTuple))))
+    (method-def-expr-
+     name sparams
+         `((|::|
+            ;; if there are optional positional args, we need to be able to reference the function name
+            ,(gensy)
+            (call (core kwftype) ,ftype)) ,kwdecl ,@pargl ,@vararg)
+         (let* ((callee (arg-name (car forward-pargl)))
+                (args (map arg-name (cdr forward-pargl))))
+           `(block
+             (meta kwcall_stub)
+             ;; propagate method metadata to kwcall stub
+             ,@(map propagate-method-meta (filter meta? prologue))
+             (if (call (top isempty) ,kw)
+                 (return (call ,callee ,@args ,@splatted-vararg))
+                 (return (call (top kwerr) ,kw ,callee ,@args ,@splatted-vararg)))))
+         '(core Any)
+         #f)))  ;; skip declaration; original method already generated it
+
 ;; method-def-expr checks for keyword arguments, and if there are any, calls
 ;; keywords-method-def-expr to expand the definition into several method
 ;; definitions that do not use keyword arguments.
@@ -762,8 +839,19 @@
         ;; has keywords
         (begin (check-kw-args (cdar argl))
                (keywords-method-def-expr name sparams argl body rett))
-        ;; no keywords
-        (method-def-expr- name sparams argl body rett))))
+            ;; no keywords
+            (if (and (pair? argl) (pair? body)
+                     (or (symbol? name) (globalref? name))
+                     (not (hash-sym-ref? name))
+                     (not (sig-has-local-decls? argl)))
+                (let ((mdef (method-def-expr- name sparams argl body rett)))
+                  `(block
+                    ,mdef
+                    (if (call (core isdefinedglobal) (core Core) (inert kwftype) (false))
+                        ,(kwcall-stub-method-def-expr name sparams argl body)
+                        (null))
+                    ,(if (or (symbol? name) (globalref? name)) `(unnecessary ,name) '(null))))
+                (method-def-expr- name sparams argl body rett)))))
 
 (define (struct-def-expr name params super fields mut)
   (receive
@@ -2595,7 +2683,24 @@
                         (error "Opaque closure argument type may not be specified both in the method signature and separately"))
                     (if (or (varargexpr? lastarg) (vararg? lastarg))
                         '(true) '(false))))
-            (meth  (cadddr (caddr (expand-forms F)))) ;; `method` expr
+            ;; Expand the function expression and locate the (method ...) expression.
+            ;; This must be robust to boilerplate inserted by function lowering.
+            (expanded-F (expand-forms F))
+            (meths (expr-find-all
+                    (lambda (x)
+                      (and (pair? x) (eq? (car x) 'method) (length> x 3)))
+                    expanded-F
+                    (lambda (x) x)))
+            ;; Prefer the positional method (not any kwcall sorter/stub methods).
+            (meths (filter
+                    (lambda (m)
+                      (not (contains
+                            (lambda (x) (or (eq? x 'kwftype) (equal? x '(core kwcall))))
+                            (caddr m))))
+                    meths))
+            (meth (if (null? meths)
+                      (error "malformed opaque closure")
+                      (last meths)))
             (lam       (cadddr meth))
             (sig-block (caddr meth))
             (sig-block (if (and (pair? sig-block) (eq? (car sig-block) 'block))
@@ -4421,7 +4526,10 @@ f(x) = yt(x)
                         (mk-method ;; expression to make the method
                          (if short '()
                              (let* ((iskw ;; TODO jb/functions need more robust version of this
-                                     (contains (lambda (x) (eq? x 'kwftype)) sig))
+                                     (contains (lambda (x)
+                                                 (or (eq? x 'kwftype)
+                                                     (equal? x '(core kwcall))))
+                                               sig))
                                     (renamemap (map cons closure-param-names closure-param-syms))
                                     (arg-defs (replace-vars
                                                (fix-function-arg-type sig `(globalref (thismodule) ,type-name) iskw namemap closure-param-syms)

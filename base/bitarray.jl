@@ -793,8 +793,8 @@ end
 prepend!(B::BitVector, items) = prepend!(B, BitArray(items))
 prepend!(A::Vector{Bool}, items::BitVector) = prepend!(A, Array(items))
 
-function sizehint!(B::BitVector, sz::Integer)
-    sizehint!(B.chunks, num_bit_chunks(sz))
+function sizehint!(B::BitVector, sz::Integer; shrink::Bool=true)
+    sizehint!(B.chunks, num_bit_chunks(sz); shrink)
     return B
 end
 
@@ -1602,8 +1602,9 @@ function _findprev_int(testf::Function, B::BitArray, start::Int)
 end
 #findlast(testf::Function, B::BitArray) = findprev(testf, B, 1)  ## defined in array.jl
 
-function findmax(a::BitArray)
+function findmax(a::BitArray; dims=:)
     isempty(a) && throw(ArgumentError("BitArray must be non-empty"))
+    dims !== (:) && return invoke(findmax, Tuple{AbstractArray}, a; dims=dims)
     m, mi = false, 1
     ti = 1
     ac = a.chunks
@@ -1615,8 +1616,9 @@ function findmax(a::BitArray)
     return m, @inbounds keys(a)[mi]
 end
 
-function findmin(a::BitArray)
+function findmin(a::BitArray; dims=:)
     isempty(a) && throw(ArgumentError("BitArray must be non-empty"))
+    dims !== (:) && return invoke(findmin, Tuple{AbstractArray}, a; dims=dims)
     m, mi = true, 1
     ti = 1
     ac = a.chunks
@@ -1706,7 +1708,7 @@ findall(::typeof(!iszero), B::BitArray) = findall(B)
 _sum(A::BitArray, dims)    = reduce(+, A, dims=dims)
 _sum(B::BitArray, ::Colon) = count(B)
 
-function all(B::BitArray)
+function _all_bitarray(B::BitArray)
     isempty(B) && return true
     Bc = B.chunks
     @inbounds begin
@@ -1718,7 +1720,12 @@ function all(B::BitArray)
     return true
 end
 
-function any(B::BitArray)
+function all(B::BitArray; dims=:)
+    dims === (:) && return _all_bitarray(B)
+    return reduce(&, B; dims=dims)
+end
+
+function _any_bitarray(B::BitArray)
     isempty(B) && return false
     Bc = B.chunks
     @inbounds begin
@@ -1729,8 +1736,26 @@ function any(B::BitArray)
     return false
 end
 
-minimum(B::BitArray) = isempty(B) ? throw(ArgumentError("argument must be non-empty")) : all(B)
-maximum(B::BitArray) = isempty(B) ? throw(ArgumentError("argument must be non-empty")) : any(B)
+function any(B::BitArray; dims=:)
+    dims === (:) && return _any_bitarray(B)
+    return reduce(|, B; dims=dims)
+end
+
+function minimum(B::BitArray; dims=:)
+    if dims === (:)
+        isempty(B) && throw(ArgumentError("argument must be non-empty"))
+        return _all_bitarray(B)
+    end
+    return reduce(&, B; dims=dims)
+end
+
+function maximum(B::BitArray; dims=:)
+    if dims === (:)
+        isempty(B) && throw(ArgumentError("argument must be non-empty"))
+        return _any_bitarray(B)
+    end
+    return reduce(|, B; dims=dims)
+end
 
 ## map over bitarrays ##
 

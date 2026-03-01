@@ -2048,11 +2048,12 @@ static void method_overwrite(jl_typemap_entry_t *newentry, jl_method_t *oldvalue
     jl_module_t *newmod = method->module;
     jl_module_t *oldmod = oldvalue->module;
     jl_datatype_t *dt = jl_nth_argument_datatype(oldvalue->sig, 1);
-    if (jl_kwcall_type && dt == jl_kwcall_type)
+    int is_kwcall = (jl_kwcall_type && dt == jl_kwcall_type);
+    if (is_kwcall)
         dt = jl_nth_argument_datatype(oldvalue->sig, 3);
     int anon = dt && is_anonfn_typename(jl_symbol_name(dt->name->name));
-    if ((jl_options.warn_overwrite == JL_OPTIONS_WARN_OVERWRITE_ON) ||
-        (jl_options.incremental && jl_generating_output()) || anon) {
+    if (!is_kwcall && ((jl_options.warn_overwrite == JL_OPTIONS_WARN_OVERWRITE_ON) ||
+        (jl_options.incremental && jl_generating_output()) || anon)) {
         JL_STREAM *s = JL_STDERR;
         jl_printf(s, "WARNING: Method definition ");
         jl_static_show_func_sig(s, (jl_value_t*)newentry->sig);

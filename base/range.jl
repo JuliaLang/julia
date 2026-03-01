@@ -864,10 +864,15 @@ last(r::OrdinalRange{T}) where {T} = convert(T, r.stop) # via steprange_last
 last(r::StepRangeLen) = unsafe_getindex(r, length(r))
 last(r::LinRange) = r.stop
 
-minimum(r::AbstractUnitRange) = isempty(r) ? throw(ArgumentError("range must be non-empty")) : first(r)
-maximum(r::AbstractUnitRange) = isempty(r) ? throw(ArgumentError("range must be non-empty")) : last(r)
-minimum(r::AbstractRange)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : min(first(r), last(r))
-maximum(r::AbstractRange)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : max(first(r), last(r))
+function _extremum_range(f::F, r::AbstractRange, m, init) where {F}
+    isempty(r) && return init isa _InitialValue ? throw(ArgumentError("range must be non-empty")) : init
+    return init isa _InitialValue ? m : f(m, init)
+end
+
+minimum(r::AbstractUnitRange; init=_InitialValue()) = _extremum_range(min, r, first(r), init)
+maximum(r::AbstractUnitRange; init=_InitialValue()) = _extremum_range(max, r, last(r), init)
+minimum(r::AbstractRange; init=_InitialValue()) = _extremum_range(min, r, min(first(r), last(r)), init)
+maximum(r::AbstractRange; init=_InitialValue()) = _extremum_range(max, r, max(first(r), last(r)), init)
 
 """
     argmin(r::AbstractRange)
@@ -1430,22 +1435,51 @@ _reverse(r::LinRange{T}, ::Colon) where {T} = typeof(r)(r.stop, r.start, length(
 
 ## sorting ##
 
-issorted(r::AbstractUnitRange) = true
-issorted(r::AbstractRange) = length(r) <= 1 || step(r) >= zero(step(r))
+function issorted(r::AbstractUnitRange; lt=isless, by=identity, rev::Bool=false)
+    if by === identity && !rev && (lt == isless || lt == (<=))
+        return true
+    end
+    return issorted(collect(r); lt=lt, by=by, rev=rev)
+end
+function issorted(r::AbstractRange; lt=isless, by=identity, rev::Bool=false)
+    if by === identity && !rev && (lt == isless || lt == (<=))
+        return length(r) <= 1 || step(r) >= zero(step(r))
+    end
+    return issorted(collect(r); lt=lt, by=by, rev=rev)
+end
 
-sort(r::AbstractUnitRange) = r
+function sort(r::AbstractUnitRange; kws...)
+    isempty(kws) && return r
+    sort!(collect(r); kws...)
+end
 sort!(r::AbstractUnitRange) = r
 
-sort(r::AbstractRange) = issorted(r) ? r : reverse(r)
+function sort(r::AbstractRange; kws...)
+    isempty(kws) && return issorted(r) ? r : reverse(r)
+    sort!(collect(r); kws...)
+end
 
-sortperm(r::AbstractUnitRange) = eachindex(r)
-sortperm(r::AbstractRange) = issorted(r) ? (firstindex(r):1:lastindex(r)) : (lastindex(r):-1:firstindex(r))
+function sortperm(r::AbstractUnitRange; kws...)
+    if isempty(kws)
+        return eachindex(r)
+    end
+    return sortperm(collect(r); kws...)
+end
+function sortperm(r::AbstractRange; kws...)
+    if isempty(kws)
+        return issorted(r) ? (firstindex(r):1:lastindex(r)) : (lastindex(r):-1:firstindex(r))
+    end
+    return sortperm(collect(r); kws...)
+end
 
-function sum(r::AbstractRange{<:Real})
+function sum(r::AbstractRange{<:Real}; init=_InitialValue())
+    isempty(r) && return init isa _InitialValue ? zero(eltype(r)) : init
+
     l = length(r)
     # note that a little care is required to avoid overflow in l*(l-1)/2
-    return l * first(r) + (iseven(l) ? (step(r) * (l-1)) * (l>>1)
-                                     : (step(r) * l) * ((l-1)>>1))
+    s = l * first(r) + (iseven(l) ? (step(r) * (l-1)) * (l>>1)
+                                  : (step(r) * l) * ((l-1)>>1))
+    return init isa _InitialValue ? s : init + s
 end
 
 function _in_range(x, r::AbstractRange)

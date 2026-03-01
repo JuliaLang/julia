@@ -685,13 +685,19 @@ function gcdx(a::BigInt, b::BigInt)
 end
 
 +(x::BigInt, y::BigInt, rest::BigInt...) = sum(tuple(x, y, rest...))
-sum(arr::Union{AbstractArray{BigInt}, Tuple{BigInt, Vararg{BigInt}}}) =
+function sum(arr::Union{AbstractArray{BigInt}, Tuple{BigInt, Vararg{BigInt}}}; kws...)
+    isempty(kws) || return sum(identity, arr; kws...)
     foldl(MPZ.add!, arr; init=BigInt(0))
-
-function prod(arr::AbstractArray{BigInt})
-    any(iszero, arr) && return zero(BigInt)
-    _prod(arr, firstindex(arr), lastindex(arr))
 end
+
+function prod(arr::AbstractArray{BigInt}; dims=:, kw...)
+    if dims === (:) && isempty(kw)
+        any(iszero, arr) && return zero(BigInt)
+        return _prod(arr, firstindex(arr), lastindex(arr))
+    end
+    return invoke(prod, Tuple{AbstractArray}, arr; dims=dims, kw...)
+end
+
 function _prod(arr::AbstractArray{BigInt}, lo, hi)
     if hi - lo + 1 <= 16
         # compute first the needed number of bits for the result,

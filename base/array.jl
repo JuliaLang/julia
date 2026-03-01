@@ -1419,7 +1419,7 @@ append!(a::AbstractVector, iter...) = (foreach(v -> append!(a, v), iter); a)
 
 function _append!(a::AbstractVector, ::Union{HasLength,HasShape}, iter)
     n = Int(length(iter))::Int
-    sizehint!(a, length(a) + n; shrink=false)
+    _compat_sizehint!(a, length(a) + n; shrink=false)
     for item in iter
         push!(a, item)
     end

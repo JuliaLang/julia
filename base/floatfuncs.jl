@@ -48,7 +48,6 @@ isinteger(x::AbstractFloat) = iszero(x - trunc(x)) # note: x == trunc(x) would b
 
 # See rounding.jl for docstring.
 
-# NOTE: this relies on the current keyword dispatch behaviour (#9498).
 function round(x::Real, r::RoundingMode=RoundNearest;
                digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base::Union{Nothing,Integer}=nothing)
     if digits === nothing
@@ -143,10 +142,13 @@ function _round_sigdigits(x, r::RoundingMode, sigdigits::Integer, base)
     _round_digits(x, r, sigdigits-h, base)
 end
 
-# C-style round
-function round(x::AbstractFloat, ::RoundingMode{:NearestTiesAway})
-    y = trunc(x)
-    ifelse(x==y,y,trunc(2*x-y))
+function round(x::AbstractFloat, r::RoundingMode{:NearestTiesAway};
+               digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base::Union{Nothing,Integer}=nothing)
+    if digits === nothing && sigdigits === nothing && base === nothing
+        y = trunc(x)
+        return ifelse(x==y, y, trunc(2*x-y))
+    end
+    return Base._round_kwargs(x, r, digits, sigdigits, base)
 end
 # Java-style round
 function round(x::T, ::RoundingMode{:NearestTiesUp}) where {T <: AbstractFloat}
