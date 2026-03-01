@@ -69,7 +69,7 @@ struct TermInfo
     aliases::Dict{Symbol, Symbol}
 end
 
-TermInfo() = TermInfo([], Dict(), Dict(), Dict(), nothing, Dict())
+TermInfo() = TermInfo(String[], Dict{Symbol, Bool}(), Dict{Symbol, Int}(), Dict{Symbol, String}(), nothing, Dict{Symbol, Symbol}())
 
 function read(data::IO, ::Type{TermInfoRaw})
     # Parse according to `term(5)`

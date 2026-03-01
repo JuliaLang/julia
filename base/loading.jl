@@ -261,7 +261,16 @@ struct LoadingCache
     located::Dict{Tuple{PkgId, Union{String, Nothing}}, Union{Tuple{String, String}, Nothing}}
 end
 const LOADING_CACHE = Ref{Union{LoadingCache, Nothing}}(nothing) # n.b.: all access to and through this are protected by require_lock
-LoadingCache() = LoadingCache(load_path(), Dict(), Dict(), Dict(), Set(), Dict(), Dict(), Dict())
+LoadingCache() = LoadingCache(
+    load_path(),
+    Dict{String, UUID}(),
+    Dict{String, Union{Bool, String}}(),
+    Dict{String, Union{Nothing, String}}(),
+    Set{String}(),
+    Dict{Tuple{PkgId, String}, Union{Nothing, Tuple{PkgId, String}}}(),
+    Dict{String, Union{Nothing, Tuple{PkgId, String}}}(),
+    Dict{Tuple{PkgId, Union{String, Nothing}}, Union{Tuple{String, String}, Nothing}}()
+)
 
 
 struct TOMLCache{Dates}
