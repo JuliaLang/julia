@@ -3356,6 +3356,8 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         print(io, "undefined const binding")
     elseif kind == PARTITION_KIND_GUARD
         print(io, "undefined binding - guard entry")
+    elseif kind == PARTITION_KIND_DECLARED_GUARD
+        print(io, "undefined binding - explicitly declared with `public` or `export`")
     elseif kind == PARTITION_KIND_FAILED
         print(io, "ambiguous binding - guard entry")
     elseif kind == PARTITION_KIND_DECLARED
