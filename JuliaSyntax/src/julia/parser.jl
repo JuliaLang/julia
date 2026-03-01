@@ -21,24 +21,27 @@ struct ParseState
     whitespace_newline::Bool
     # Enable parsing `where` with high precedence
     where_enabled::Bool
+    # Treat newline like ordinary whitespace, but specifically for macro arguments
+    macro_whitespace_newline::Bool
 end
 
 # Normal context
 function ParseState(stream::ParseStream)
-    ParseState(stream, true, false, false, false, false, true)
+    ParseState(stream, true, false, false, false, false, true, false)
 end
 
 function ParseState(ps::ParseState; range_colon_enabled=nothing,
                     space_sensitive=nothing, for_generator=nothing,
                     end_symbol=nothing, whitespace_newline=nothing,
-                    where_enabled=nothing)
+                    where_enabled=nothing, macro_whitespace_newline=nothing)
     ParseState(ps.stream,
         range_colon_enabled === nothing ? ps.range_colon_enabled : range_colon_enabled,
         space_sensitive === nothing ? ps.space_sensitive : space_sensitive,
         for_generator === nothing ? ps.for_generator : for_generator,
         end_symbol === nothing ? ps.end_symbol : end_symbol,
         whitespace_newline === nothing ? ps.whitespace_newline : whitespace_newline,
-        where_enabled === nothing ? ps.where_enabled : where_enabled)
+        where_enabled === nothing ? ps.where_enabled : where_enabled,
+        macro_whitespace_newline === nothing ? ps.macro_whitespace_newline : macro_whitespace_newline)
 end
 
 # Functions to change parse state
@@ -50,7 +53,8 @@ function normal_context(ps::ParseState)
                where_enabled=true,
                for_generator=false,
                end_symbol=false,
-               whitespace_newline=false)
+               whitespace_newline=false,
+               macro_whitespace_newline=false)
 end
 
 function with_space_sensitive(ps::ParseState)
@@ -2819,9 +2823,16 @@ function parse_space_separated_exprs(ps::ParseState)
     n_sep = 0
     while true
         k = peek(ps)
-        if is_closing_token(ps, k) || k == K"NewlineWs" ||
-                (ps.for_generator && k == K"for")
+        if is_closing_token(ps, k) || (ps.for_generator && k == K"for")
             break
+        end
+        if k == K"NewlineWs"
+            if ps.macro_whitespace_newline
+                bump(ps, TRIVIA_FLAG)
+                continue
+            else
+                break
+            end
         end
         parse_eq(ps)
         n_sep += 1
@@ -3268,7 +3279,8 @@ function parse_brackets(after_parse::F,
     ps = ParseState(ps, range_colon_enabled=true,
                     space_sensitive=false,
                     where_enabled=true,
-                    whitespace_newline=true)
+                    whitespace_newline=true,
+                    macro_whitespace_newline=closing_kind==K")")
     params_positions = acquire_positions(ps.stream)
     last_eq_before_semi = 0
     num_subexprs = 0
