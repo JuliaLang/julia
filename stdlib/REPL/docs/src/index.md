@@ -919,20 +919,20 @@ options = ["apple", "orange", "grape", "strawberry",
 
 The RadioMenu allows the user to select one option from the list. The `request`
 function displays the interactive menu and returns the index of the selected
-choice. If a user presses 'q' or `ctrl-c`, `request` will return a `-1`.
-
+choice. If a user presses 'q' or `ctrl-c`, `request` will return `nothing`
+(if `on_cancel` not provided, the return on cancel is `-1`, which is legacy).
 
 ```julia
 # `pagesize` is the number of items to be displayed at a time.
 #  The UI will scroll if the number of options is greater
 #   than the `pagesize`
-menu = RadioMenu(options, pagesize=4)
+menu = RadioMenu(options, on_cancel=nothing, pagesize=4)
 
 # `request` displays the menu and returns the index after the
 #   user has selected a choice
 choice = request("Choose your favorite fruit:", menu)
 
-if choice != -1
+if !isnothing(choice)
     println("Your favorite fruit is ", options[choice], "!")
 else
     println("Menu canceled.")
@@ -957,19 +957,21 @@ The MultiSelectMenu allows users to select many choices from a list.
 
 ```julia
 # here we use the default `pagesize` 10
-menu = MultiSelectMenu(options)
+menu = MultiSelectMenu(options, on_cancel=nothing)
 
 # `request` returns a `Set` of selected indices
-# if the menu us canceled (ctrl-c or q), return an empty set
+# if the menu is canceled (ctrl-c or q), return `nothing`
 choices = request("Select the fruits you like:", menu)
 
-if length(choices) > 0
+if isnothing(choices)
+    println("Menu canceled.")
+elseif length(choices) > 0
     println("You like the following fruits:")
     for i in choices
         println("  - ", options[i])
     end
 else
-    println("Menu canceled.")
+    println("You don't like any fruits.")
 end
 ```
 
@@ -1000,7 +1002,7 @@ Starting with Julia 1.6, the recommended way to configure menus is via the const
 For instance, the default multiple-selection menu
 
 ```
-julia> menu = MultiSelectMenu(options, pagesize=5);
+julia> menu = MultiSelectMenu(options, on_cancel=nothing, pagesize=5),
 
 julia> request(menu) # ASCII is used by default
 [press: Enter=toggle, a=all, n=none, d=done, q=abort]
@@ -1048,11 +1050,18 @@ Aside from the overall `charset` option, for `RadioMenu` the configurable option
  - `updown_arrow::Char='I'|'↕'`: character to use for up/down arrow in one-line page
  - `scroll_wrap::Bool=false`: optionally wrap-around at the beginning/end of a menu
  - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
+ - `on_cancel::Union{Nothing, Int}`: added in REPL v1.12; recommended value is `nothing` for consistency
+ - `header::String`: added in REPL v1.12; default is "".
+ Call `RadioMenu` constructor with kwarg `header=true` to set header to "[press: Enter=select, q=abort]"
 
-`MultiSelectMenu` adds:
+In `MultiSelectMenu`, the added/differing fields are:
 
  - `checked::String="[X]"|"✓"`: string to use for checked
  - `unchecked::String="[ ]"|"⬚")`: string to use for unchecked
+ - `on_cancel::Union{Nothing, Set{Int}}`: added in REPL v1.12; default is empty set for backward compat.
+ It is recommended to set `on_cancel=nothing` to be able to discriminate between "nothing selected" vs. "aborted".
+ - `header::String`: added in REPL v1.12; default is "[press: Enter=toggle, a=all, n=none, d=done, q=abort]. "
+ Call `MultiSelectMenu` constructor with kwarg `header=false` to display no header.
 
 You can create new menu types of your own.
 Types that are derived from `TerminalMenus.ConfiguredMenu` configure the menu options at construction time.
@@ -1101,7 +1110,6 @@ Any subtype must also implement the following functions:
 
 ```@docs
 REPL.TerminalMenus.pick
-REPL.TerminalMenus.cancel
 REPL.TerminalMenus.writeline
 ```
 
@@ -1121,6 +1129,7 @@ REPL.TerminalMenus.selected
 The following are optional but can allow additional customization:
 
 ```@docs
+REPL.TerminalMenus.cancel
 REPL.TerminalMenus.header
 REPL.TerminalMenus.keypress
 ```
