@@ -6713,4 +6713,10 @@ throwconditional(c, x) = c ? throw(x isa Int) : throw(x isa Float64)
     throwconditional(c, x)
 end == Bool
 
+# issue #61177
+f61177(x) = x isa Int ? @inline(f61177(x + 1)) + x : 0
+let eff = Base.infer_effects(f61177)
+    @test eff == Base.infer_effects(f61177)
+end
+
 end # module inference
