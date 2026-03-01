@@ -502,7 +502,7 @@ static jl_array_t *queue_external_cis(jl_array_t *list, jl_query_cache *query_ca
         int dispatch_status = jl_atomic_load_relaxed(&m->dispatch_status);
         if (!(dispatch_status & METHOD_SIG_LATEST_WHICH))
             continue; // ignore replaced methods
-        if (ci->owner == jl_nothing && jl_atomic_load_relaxed(&ci->inferred) && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
+        if (jl_atomic_load_relaxed(&ci->inferred) && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
             int found = has_backedge_to_worklist(mi, &visited, &stack, query_cache);
             assert(found == 0 || found == 1 || found == 2);
             assert(stack.len == 0);

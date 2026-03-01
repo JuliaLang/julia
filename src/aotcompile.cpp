@@ -531,7 +531,7 @@ static bool canPartition(const Function &F)
 // `external_linkage` create linkages between pkgimages.
 extern "C" JL_DLLEXPORT_CODEGEN
 void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int external_linkage, size_t world,
-                           jl_array_t *mod_array, jl_array_t *worklist, int all, jl_array_t *module_init_order)
+                           jl_array_t *mod_array, jl_array_t *worklist, int all, jl_array_t *module_init_order, jl_array_t *ext_foreign_cis)
 {
     JL_TIMING(INFERENCE, INFERENCE);
     auto ct = jl_current_task;
@@ -547,7 +547,7 @@ void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int ex
         compiler_start_time = jl_hrtime();
 
     jl_value_t **fargs;
-    JL_GC_PUSHARGS(fargs, 8);
+    JL_GC_PUSHARGS(fargs, 9);
 #ifdef _P64
     jl_value_t *jl_array_ulong_type = jl_array_uint64_type;
 #else
@@ -568,10 +568,11 @@ void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int ex
     fargs[5] = mod_array ? (jl_value_t*)mod_array : jl_nothing; // mod_array (or nothing)
     fargs[6] = jl_box_bool(all);
     fargs[7] = module_init_order ? (jl_value_t*)module_init_order : jl_nothing; // module_init_order (or nothing)
+    fargs[8] = ext_foreign_cis ? (jl_value_t*)ext_foreign_cis : jl_nothing; // ext_foreign_cis (or nothing)
     size_t last_age = ct->world_age;
     ct->world_age = jl_typeinf_world;
-    fargs[0] = jl_apply(fargs, 8);
-    fargs[1] = fargs[2] = fargs[3] = fargs[4] = fargs[5] = fargs[6] = fargs[7] = NULL;
+    fargs[0] = jl_apply(fargs, 9);
+    fargs[1] = fargs[2] = fargs[3] = fargs[4] = fargs[5] = fargs[6] = fargs[7] = fargs[8] = NULL;
     ct->world_age = last_age;
     jl_value_t *codeinfos = fargs[0];
     JL_TYPECHK(jl_create_native, array_any, codeinfos);
