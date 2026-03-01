@@ -1404,6 +1404,12 @@
     (cond ((and (length> e 4) (not (equal? (caddddr e) '(false))))
            (if (has-unmatched-symbolic-goto? tryb)
                (error "goto from a try/finally block is not permitted"))
+           (if (and (not (equal? catchb '(false)))
+                    (has-unmatched-symbolic-goto? catchb))
+               (error "goto from a catch/finally block is not permitted"))
+           (if (and (length> e 5)
+                    (has-unmatched-symbolic-goto? (cons 'block (cdddddr e))))
+               (error "goto from an else/finally block is not permitted"))
            (let ((finalb (caddddr e)))
              (expand-forms
               `(tryfinally

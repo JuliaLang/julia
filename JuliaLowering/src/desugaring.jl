@@ -2135,6 +2135,7 @@ function expand_try(ctx, ex)
 
     if !isnothing(finally_)
         # TODO: check unmatched symbolic gotos in try.
+        # TODO: Disallow @goto from try/catch/else blocks when there's a finally clause
     end
 
     try_body = @ast ctx try_ [K"scope_block"(scope_type=:neutral) try_]
