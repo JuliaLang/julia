@@ -2626,11 +2626,11 @@
 
    '|.|
    (lambda (e)
-     (if (length= e 2)
-         ;; e = (|.| op)
-         `(call (top BroadcastFunction) ,(cadr e))
-         ;; e = (|.| f x)
-         (expand-fuse-broadcast '() e)))
+     (cond  ;; e = (|.| op)
+      ((length= e 2) `(call (top BroadcastFunction) ,(cadr e)))
+      ;; e = (|.| f x)
+      ((length= e 3) (expand-fuse-broadcast '() e))
+      (else (error "wrong number of arguments in `.` expression"))))
 
    '.&&
    (lambda (e) (expand-fuse-broadcast '() e))
