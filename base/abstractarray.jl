@@ -1208,8 +1208,55 @@ function copymutable(a::AbstractArray)
 end
 copymutable(itr) = collect(itr)
 
-zero(x::AbstractArray{T}) where {T<:Number} = fill!(similar(x, typeof(zero(T))), zero(T))
-zero(x::AbstractArray{S}) where {S<:Union{Missing, Number}} = fill!(similar(x, typeof(zero(S))), zero(S))
+"""
+    HasTypeZero
+    NoTypeZero
+
+Marker types returned by [`ZeroStyle`](@ref).
+"""
+struct HasTypeZero end
+struct NoTypeZero end
+
+"""
+    ZeroStyle(::Type{T}) -> HasTypeZero() | NoTypeZero()
+
+Trait used by `zero(::AbstractArray{<:Number})` to choose between:
+
+  * `HasTypeZero()`: `zero(T)` is valid and can be used to construct an array filled with zeros.
+  * `NoTypeZero()`: `zero(T)` should not be assumed; `zero` must be computed from values (e.g. `zero(x)`).
+
+Custom numeric types that only support value-based `zero(x)` should define:
+
+    Base.ZeroStyle(::Type{MyNumber}) = Base.NoTypeZero()
+
+This ensures `zero(::AbstractArray{MyNumber})` falls back to `map(zero, x)` for correctness.
+"""
+ZeroStyle(::Type) = HasTypeZero()
+
+# `zero` dispatches on element type, not container type; this overload documents that
+# array types are not constructible by `zero(::Type)` and must be handled by
+# per-element `map(zero, x)` if queried directly.
+ZeroStyle(::Type{<:Array}) = NoTypeZero()
+
+@inline zero(x::AbstractArray{T}) where {T<:Number} = _zero_numberarray(x, ZeroStyle(T))
+
+@inline _zero_numberarray(x::AbstractArray{T}, ::HasTypeZero) where {T<:Number} =
+    fill!(similar(x, typeof(zero(T))), zero(T))
+
+@inline _zero_numberarray(x::AbstractArray{T}, ::NoTypeZero) where {T<:Number} = map(zero, x)
+
+@inline zero(x::AbstractArray{S}) where {S<:Union{Missing, Number}} =
+    _zero_missingnumberarray(x, ZeroStyle(nonmissingtype(S)))
+
+@inline _zero_missingnumberarray(x::AbstractArray{S}, ::HasTypeZero) where {S<:Union{Missing, Number}} = begin
+    T = nonmissingtype(S)
+    z = zero(T)
+    fill!(similar(x, typeof(z)), z)
+end
+
+@inline _zero_missingnumberarray(x::AbstractArray{S}, ::NoTypeZero) where {S<:Union{Missing, Number}} =
+    map(zero, x)
+
 zero(x::AbstractArray) = map(zero, x)
 
 function _one(unit::T, mat::AbstractMatrix) where {T}
