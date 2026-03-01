@@ -539,6 +539,11 @@ isequal_normalized_naive(s1, s2; kws...) = normalize(s1; kws...) == normalize(s2
     end
 end
 
+@testset "combining_class" begin
+    @test Unicode.combining_class('\u0302') === 0x00e6 # combining class "Above"
+    @test Unicode.combining_class(reinterpret(Char, UInt32(0xc0) << 24)) === 0x0000 # malformed
+end
+
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(Unicode))
 end
