@@ -5227,6 +5227,22 @@ let 𝕃ᵢ = Compiler.fallback_lattice
     @test t.fields == Any[Const(42), Int]
 end
 
+# issue #60715
+let 𝕃 = Compiler.fallback_lattice
+    local fn, fn1, pn, pn1
+    F(n) = iszero(n) ? Union{} : Tuple{Int, Union{Int, F(n-1)}}
+    P(n) = (f = F(n); Compiler.PartialStruct(𝕃, f, [Const(0), fieldtype(f, 2)]))
+
+    n = 0
+    while Compiler.issimpleenoughtype(F(n+1))
+        n += 1
+        fn, fn1, pn, pn1 = F(n), F(n+1), P(n), P(n+1)
+        @test Compiler.:⊑(𝕃, pn, pn1)
+    end
+    @test !Compiler.issimplertype(𝕃, pn1, pn)
+    @test !isa(Compiler.tmerge(𝕃, pn, pn1), Compiler.PartialStruct)
+end
+
 foo_empty_vararg(i...) = i[2]
 bar_empty_vararg(i) = foo_empty_vararg(10, 20, 30, i...)
 @test bar_empty_vararg(Union{}[]) === 20
@@ -6712,5 +6728,11 @@ throwconditional(c, x) = c ? throw(x isa Int) : throw(x isa Float64)
 @test Base.infer_exception_type((Bool, Any)) do c, x
     throwconditional(c, x)
 end == Bool
+
+# issue #60715
+let
+    f() = 1; f(_, x...) = (0, f(x...))
+    @test f(1, 2, 3) == (0, (0, (0, 1)))
+end
 
 end # module inference
