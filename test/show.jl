@@ -1648,6 +1648,24 @@ end
 # Test that static show prints something reasonable for `<:Function` types
 @test static_shown(:) == "Base.Colon()"
 
+# Test basic CodeInstance, MethodInstance printing in jl_static_show
+f_test_static_show_mi_ci() = nothing
+let
+    f = f_test_static_show_mi_ci
+    m = first(methods(f, Tuple{}))
+    mi = Base.specialize_method(m, Tuple{typeof(f)}, Core.svec())
+    Base.return_types(f, Tuple{}) # populate .cache
+    @test mi.cache isa Core.CodeInstance
+    ci = mi.cache
+
+    mi_s = static_shown(mi)
+    ci_s = static_shown(ci)
+    @test occursin("MethodInstance", mi_s)
+    @test occursin("CodeInstance", ci_s)
+    @test occursin("f_test_static_show_mi_ci", mi_s)
+    @test occursin("f_test_static_show_mi_ci", ci_s)
+end
+
 # Test @show
 let fname = tempname()
     try

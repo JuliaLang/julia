@@ -921,6 +921,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_static_show_func_sig(out, m->sig);
     }
     else if (vt == jl_method_instance_type) {
+        n += jl_printf(out, "MethodInstance ");
         jl_method_instance_t *li = (jl_method_instance_t*)v;
         if (jl_is_method(li->def.method)) {
             n += jl_static_show_func_sig(out, li->specTypes);
@@ -932,6 +933,21 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             n += jl_printf(out, ".<toplevel thunk> -> ");
             n += jl_static_show_x(out, jl_atomic_load_relaxed(&jl_cached_uninferred(
                 jl_atomic_load_relaxed(&li->cache), 1)->inferred), depth, ctx);
+        }
+    }
+    else if (vt == jl_code_instance_type) {
+        jl_code_instance_t *ci = (jl_code_instance_t*)v;
+        n += jl_printf(
+            out, "CodeInstance(min_world=0x%zx, max_world=0x%zx) for ",
+            jl_atomic_load_relaxed(&ci->min_world),
+            jl_atomic_load_relaxed(&ci->max_world));
+        if (jl_is_method_instance(ci->def)) {
+            n += jl_static_show_x(out, ci->def, depth, ctx);
+        }
+        else if (jl_is_abioverride(ci->def)) {
+            jl_abi_override_t* def = (jl_abi_override_t*)ci->def;
+            n += jl_static_show_x(out, (jl_value_t*)def->def, depth, ctx);
+            jl_printf(out, " (ABI overridden)");
         }
     }
     else if (vt == jl_typename_type) {
