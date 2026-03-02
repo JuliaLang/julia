@@ -372,3 +372,5 @@ function Base.close(lock::LockMonitor)
 end
 
 end # module
+
+public Pidfile
