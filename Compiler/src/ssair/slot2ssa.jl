@@ -608,13 +608,13 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                 # The slot is live-in into this block. We need to
                 # Create a PhiC node in the catch entry block and
                 # an upsilon node in the corresponding enter block
-                varstate = sv.bb_vartables[li]
-                if varstate === nothing
+                bbstate = sv.bb_states[li]
+                if bbstate === nothing
                     continue
                 end
                 node = PhiCNode(Any[])
                 insertpoint = first_insert_for_bb(code, cfg, li)
-                vt = varstate[idx]
+                vt = bbstate.vartable[idx]
                 phic_ssa = NewSSAValue(
                     insert_node!(ir, insertpoint,
                         NewInstruction(node, vt.typ)).id - length(ir.stmts))
@@ -640,9 +640,9 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         for block in phiblocks
             push!(phi_slots[block], idx)
             node = PhiNode()
-            varstate = sv.bb_vartables[block]
-            @assert varstate !== nothing
-            vt = varstate[idx]
+            bbstate = sv.bb_states[block]
+            @assert bbstate !== nothing
+            vt = bbstate.vartable[idx]
             ssaval = NewSSAValue(insert_node!(ir,
                 first_insert_for_bb(code, cfg, block), NewInstruction(node, vt.typ)).id - length(ir.stmts))
             undef_node = undef_ssaval = nothing
@@ -673,7 +673,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     new_nodes = ir.new_nodes
     @zone "CC: SSA_RENAME" while !isempty(worklist)
         (item, pred, incoming_vals) = pop!(worklist)
-        if sv.bb_vartables[item] === nothing
+        if sv.bb_states[item] === nothing
             continue
         end
         # Rename existing phi nodes first, because their uses occur on the edge
@@ -730,9 +730,9 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
             (ival === SSAValue(-2)) && continue
             (ival === UNDEF_TOKEN) && continue
 
-            varstate = sv.bb_vartables[item]
-            @assert varstate !== nothing
-            typ = varstate[slot].typ
+            bbstate = sv.bb_states[item]
+            @assert bbstate !== nothing
+            typ = bbstate.vartable[slot].typ
             if !⊑(𝕃ₒ, sv.slottypes[slot], typ)
                 node = PiNode(ival, typ)
                 ival = NewSSAValue(insert_node!(ir,

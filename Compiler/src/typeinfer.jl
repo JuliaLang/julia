@@ -924,13 +924,14 @@ function type_annotate!(::AbstractInterpreter, sv::InferenceState)
         end
     end
 
-    # widen slot wrappers (`Conditional` and `MustAlias`) in `bb_vartables`
-    for varstate in sv.bb_vartables
-        if varstate !== nothing
+    # widen slot wrappers (`Conditional` and `MustAlias`) in `bb_states`
+    for bbstate in sv.bb_states
+        if bbstate !== nothing
+            vartable = bbstate.vartable
             for slot in 1:nslots
-                vt = varstate[slot]
+                vt = vartable[slot]
                 widened_type = widenslotwrapper(ignorelimited(vt.typ))
-                varstate[slot] = VarState(widened_type, vt.ssadef, vt.undef)
+                vartable[slot] = VarState(widened_type, vt.ssadef, vt.undef)
             end
         end
     end
