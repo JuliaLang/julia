@@ -1463,6 +1463,46 @@ function deserialize_expr(s::AbstractSerializer, len)
     resolve_ref_immediately(s, e)
     e.head = deserialize(s)::Symbol
     e.args = Any[ deserialize(s) for i = 1:len ]
+
+    # Rewrite old :method expressions to define_method calls
+    if e.head === :method
+        mod = current_module[]
+        if mod === nothing
+            # No current module context, keep the :method expression and hope for the best
+            # This shouldn't happen in practice for deserialization of top-level code
+            return e
+        end
+
+        if len == 1
+            # Short form: (:method name) → (call Core.define_method module (inert name))
+            name = e.args[1]
+            if name isa GlobalRef
+                # Extract module and name from GlobalRef
+                mod_ref = name.mod
+                sym = name.name
+                e = Expr(:call, GlobalRef(Core, :define_method), mod_ref, QuoteNode(sym))
+            else
+                # Simple symbol - use the current module
+                e = Expr(:call, GlobalRef(Core, :define_method), mod, QuoteNode(name))
+            end
+        elseif len == 3
+            # Long form: (:method name_or_mt sigtype code) → (call Core.define_method module name_or_mt sigtype code)
+            name_or_mt = e.args[1]
+            sigtype = e.args[2]
+            code = e.args[3]
+            if name_or_mt isa Symbol
+                name_or_mt = QuoteNode(name_or_mt)
+                e = Expr(:call, GlobalRef(Core, :define_method), mod, name_or_mt, sigtype, code)
+            elseif name_or_mt isa GlobalRef
+                mod_ref = name_or_mt.mod
+                sym = name_or_mt.name
+                e = Expr(:call, GlobalRef(Core, :define_method), mod_ref, QuoteNode(sym), sigtype, code)
+            else
+                # name_or_mt is already something else (like false or a method table)
+                e = Expr(:call, GlobalRef(Core, :define_method), mod, name_or_mt, sigtype, code)
+            end
+        end
+    end
     e
 end
 
