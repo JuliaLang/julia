@@ -5,7 +5,7 @@
 module StylingPasses
 
 using StyledStrings
-using StyledStrings: Face
+using StyledStrings: Face, addface!
 using JuliaSyntaxHighlighting
 import Base: AnnotatedString, annotate!, annotations, JuliaSyntax
 
@@ -65,30 +65,26 @@ function (::SyntaxHighlightPass)(input::String, ast, ::StylingContext)
     end
 end
 
-# Applies inverse video styling to the selected region
+# Applies :REPL_region face to the selected region
 struct RegionHighlightPass <: StylingPass end
 
 function (::RegionHighlightPass)(input::String, ::Any, context::StylingContext)
     result = AnnotatedString(input)
 
     if context.region_start > 0 && context.region_stop >= context.region_start
-        # Add inverse face to the region
+        # Add :REPL_region face to the region
         # Region positions are 1-based byte positions
         region_range = context.region_start:context.region_stop
-        annotate!(result, region_range, :face, Face(inverse=true))
+        annotate!(result, region_range, :face, :REPL_region)
     end
 
     return result
 end
 
-# Applies bold styling to parentheses that enclose the cursor position
-struct EnclosingParenHighlightPass <: StylingPass
-    face::Face
-end
+# Applies :REPL_enclosing_paren face to parentheses that enclose the cursor position
+struct EnclosingParenHighlightPass <: StylingPass end
 
-EnclosingParenHighlightPass() = EnclosingParenHighlightPass(Face(weight=:bold, underline=true))
-
-function (pass::EnclosingParenHighlightPass)(input::String, ast, context::StylingContext)
+function (::EnclosingParenHighlightPass)(input::String, ast, context::StylingContext)
     result = AnnotatedString(input)
 
     if isempty(input) || context.cursor_pos < 1
@@ -99,8 +95,8 @@ function (pass::EnclosingParenHighlightPass)(input::String, ast, context::Stylin
         paren_pairs = find_enclosing_parens(input, ast, context.cursor_pos)
 
         for (open_pos, close_pos) in paren_pairs
-            annotate!(result, open_pos:open_pos, :face, pass.face)
-            annotate!(result, close_pos:close_pos, :face, pass.face)
+            annotate!(result, open_pos:open_pos, :face, :REPL_enclosing_paren)
+            annotate!(result, close_pos:close_pos, :face, :REPL_enclosing_paren)
         end
     catch e
         @error "Error in EnclosingParenHighlightPass" exception=(e, catch_backtrace()) maxlog=1
@@ -160,6 +156,11 @@ function walk_tree(f::Function, node, content::String, offset::UInt32)
             offset += JuliaSyntax.span(child)
         end
     end
+end
+
+function __init__()
+    addface!(:REPL_region => Face(inverse=true))
+    addface!(:REPL_enclosing_paren => Face(weight=:bold, underline=true))
 end
 
 end # module StylingPasses
