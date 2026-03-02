@@ -368,6 +368,7 @@ kwcall(kwargs, ::Type{Union{}}, a...) = Union{}(a...)
 abstract type Exception end
 struct ErrorException <: Exception
     msg::AbstractString
+    ErrorException(msg::AbstractString) = new(msg)
 end
 
 struct BoundsError <: Exception
@@ -377,12 +378,24 @@ struct BoundsError <: Exception
     BoundsError(@nospecialize(a)) = (@noinline; new(a))
     BoundsError(@nospecialize(a), i) = (@noinline; new(a,i))
 end
-struct DivideError         <: Exception end
-struct OutOfMemoryError    <: Exception end
-struct ReadOnlyMemoryError <: Exception end
-struct SegmentationFault   <: Exception end
-struct StackOverflowError  <: Exception end
-struct UndefRefError       <: Exception end
+struct DivideError         <: Exception
+    DivideError() = new()
+end
+struct OutOfMemoryError    <: Exception
+    OutOfMemoryError() = new()
+end
+struct ReadOnlyMemoryError <: Exception
+    ReadOnlyMemoryError() = new()
+end
+struct SegmentationFault   <: Exception
+    SegmentationFault() = new()
+end
+struct StackOverflowError  <: Exception
+    StackOverflowError() = new()
+end
+struct UndefRefError       <: Exception
+    UndefRefError() = new()
+end
 struct UndefVarError <: Exception
     var::Symbol
     world::UInt
@@ -392,11 +405,15 @@ struct UndefVarError <: Exception
 end
 struct ConcurrencyViolationError <: Exception
     msg::AbstractString
+    ConcurrencyViolationError(msg::AbstractString) = new(msg)
 end
 struct MissingCodeError <: Exception
     mi::MethodInstance
+    MissingCodeError(mi::MethodInstance) = new(mi)
 end
-struct InterruptException <: Exception end
+struct InterruptException <: Exception
+    InterruptException() = new()
+end
 struct DomainError <: Exception
     val
     msg::AbstractString
@@ -425,13 +442,16 @@ struct InexactError <: Exception
 end
 struct OverflowError <: Exception
     msg::AbstractString
+    OverflowError(msg::AbstractString) = new(msg)
 end
 
 struct ArgumentError <: Exception
     msg::AbstractString
+    ArgumentError(msg::AbstractString) = new(msg)
 end
 struct UndefKeywordError <: Exception
     var::Symbol
+    UndefKeywordError(var::Symbol) = new(var)
 end
 
 const typemax_UInt = Intrinsics.sext_int(UInt, 0xFF)
@@ -447,12 +467,14 @@ MethodError(@nospecialize(f), @nospecialize(args)) = MethodError(f, args, typema
 
 struct AssertionError <: Exception
     msg::AbstractString
+    AssertionError(msg::AbstractString) = new(msg)
 end
 AssertionError() = AssertionError("")
 
 struct FieldError <: Exception
     type::DataType
     field::Symbol
+    FieldError(type::DataType, field::Symbol) = new(type, field)
 end
 
 abstract type WrappedException <: Exception end
@@ -461,11 +483,13 @@ struct LoadError <: WrappedException
     file::AbstractString
     line::Int
     error
+    LoadError(file::AbstractString, line::Int, @nospecialize(error)) = new(file, line, error)
 end
 
 struct InitError <: WrappedException
     mod::Symbol
     error
+    InitError(mod::Symbol, @nospecialize(error)) = new(mod, error)
 end
 
 struct ABIOverride
@@ -474,8 +498,12 @@ struct ABIOverride
     ABIOverride(@nospecialize(abi::Type), def::MethodInstance) = new(abi, def)
 end
 
-struct PrecompilableError <: Exception end
-struct TrimFailure <: Exception end
+struct PrecompilableError <: Exception
+    PrecompilableError() = new()
+end
+struct TrimFailure <: Exception
+    TrimFailure() = new()
+end
 
 String(s::String) = s  # no constructor yet
 
@@ -490,6 +518,7 @@ eval(m::Module, @nospecialize(e)) = (@noinline; ccall(:jl_toplevel_eval_in, Any,
 
 struct EvalInto <: Function
     m::Module
+    EvalInto(m::Module) = new(m)
 end
 (this::EvalInto)(@nospecialize(e)) = eval(this.m, e)
 
@@ -608,7 +637,9 @@ end
 const NTuple{N,T} = Tuple{Vararg{T,N}}
 
 ## primitive Array constructors
-struct UndefInitializer end
+struct UndefInitializer
+    UndefInitializer() = new()
+end
 const undef = UndefInitializer()
 
 # type and dimensionality specified
@@ -821,8 +852,12 @@ macro cmd end
 
 # simple stand-alone print definitions for debugging
 abstract type IO end
-struct CoreSTDOUT <: IO end
-struct CoreSTDERR <: IO end
+struct CoreSTDOUT <: IO
+    CoreSTDOUT() = new()
+end
+struct CoreSTDERR <: IO
+    CoreSTDERR() = new()
+end
 const stdout = CoreSTDOUT()
 const stderr = CoreSTDERR()
 io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout, Ptr{Cvoid}), 1, 1)
@@ -856,6 +891,7 @@ struct GeneratedFunctionStub
     gen
     argnames::SimpleVector
     spnames::SimpleVector
+    GeneratedFunctionStub(@nospecialize(gen), argnames::SimpleVector, spnames::SimpleVector) = new(gen, argnames, spnames)
 end
 
 # If the generator is a subtype of this trait, inference caches the generated unoptimized
@@ -1173,6 +1209,7 @@ include(Core, "optimized_generics.jl")
 struct MacroSource
     lno::Any # ::LineNumberNode, but needs to be a pointer
     syntax_ver::Any # ::VersionNumber =#
+    MacroSource(@nospecialize(lno), @nospecialize(syntax_ver)) = new(lno, syntax_ver)
 end
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

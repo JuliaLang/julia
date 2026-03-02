@@ -1113,6 +1113,7 @@ The singleton instance of `Colon` is also a function used to construct ranges;
 see [`:`](@ref).
 """
 struct Colon <: Function
+    Colon() = new()
 end
 const (:) = Colon()
 
@@ -1142,6 +1143,7 @@ julia> f(Val(true))
 ```
 """
 struct Val{x}
+    Val{x}() where {x} = new()
 end
 
 Val(x) = Val{x}()
@@ -1205,6 +1207,247 @@ julia> values([2])
 ```
 """
 values(itr) = itr
+
+# Bootstrap operator definitions needed before _defaultctors
+import Core: !==
+(+)(x::Int, y::Int) = add_int(x, y)
+(-)(x::Int, y::Int) = sub_int(x, y)
+
+"""
+    !(x)
+
+Boolean not. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
+returning [`missing`](@ref) if `x` is `missing`.
+
+See also [`~`](@ref) for bitwise not.
+
+# Examples
+```jldoctest
+julia> !true
+false
+
+julia> !false
+true
+
+julia> !missing
+missing
+
+julia> .![true false true]
+1×3 BitMatrix:
+ 0  1  0
+```
+"""
+!(x::Bool) = not_int(x)
+
+length(a::Array{T,1}) where {T} = getfield(getfield(a, :size), 1)
+const C_NULL = bitcast(Ptr{Cvoid}, 0)
+has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Int32, (Any, Any), t, v) !== Int32(0)
+
+# Default constructor generation for structs without explicit inner constructors.
+# Called by lowered code from struct definitions (both flisp and JuliaLowering).
+# Uses jl_method_def directly with type objects, avoiding type-to-expression conversion.
+
+function _defaultctors(@nospecialize(ty), functionloc)
+    # Walk the UnionAll chain to collect type variables and get the DataType
+    nparams = 0
+    ua = ty
+    while isa(ua, UnionAll)
+        nparams = nparams + 1
+        ua = ua.body
+    end
+    dt = ua::DataType
+    tvars = Array{Any,1}(Core.undef, nparams)
+    ua = ty
+    i = 1
+    while i !== nparams + 1
+        @inbounds tvars[i] = (ua::UnionAll).var
+        ua = (ua::UnionAll).body
+        i = i + 1
+    end
+
+    mod = dt.name.module
+    fts = ccall(:jl_get_fieldtypes, Any, (Any,), dt)::Core.SimpleVector
+    n = length(fts)
+    names = dt.name.names::Core.SimpleVector
+    src_file = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), functionloc.file)
+    src_line = UInt(functionloc.line)
+
+    is_parametric = nparams !== 0
+
+    # Build argument names using actual field names for slot names (better debugging).
+    # The body references arguments via Core.Argument(N) to avoid issues with
+    # all-underscore field names being write-only in lowering.
+    self = Symbol("#ctor-self#")
+    argnames = Array{Any,1}(Core.undef, n + 1)
+    @inbounds argnames[1] = self
+    i = 1
+    nany = 0
+    while i !== n + 1
+        @inbounds argnames[i + 1] = names[i]::Symbol
+        if fts[i] === Any
+            nany = nany + 1
+        end
+        i = i + 1
+    end
+
+    # Check if all type params are constrained by fields or other constrained tvars
+    constrains_all = true
+    i = nparams
+    while i !== 0
+        @inbounds tv = tvars[i]::TypeVar
+        constrained = false
+        j = 1
+        while j !== n + 1
+            ft = fts[j]
+            if has_typevar(ft, tv)
+                constrained = true
+                break
+            end
+            j = j + 1
+        end
+        if !constrained
+            j = i + 1
+            remaining = nparams - i
+            while remaining !== 0
+                @inbounds tv2 = tvars[j]::TypeVar
+                if has_typevar(tv2.ub, tv)
+                    constrained = true
+                    break
+                end
+                if tv2 === tv
+                    constrained = false
+                    break
+                end
+                j = j + 1
+                remaining = remaining - 1
+            end
+        end
+        if !constrained
+            constrains_all = false
+            break
+        end
+        i = i - 1
+    end
+
+    if constrains_all
+        # Outer constructor: T(x::FT1, y::FT2, ...) = new{A,B,...}(x, y, ...)
+        # Build lambda body with direct `new`, no convert calls
+        if is_parametric
+            # new(apply_type(ty, static_parameter(1), ...), args...)
+            curly_args = Array{Any,1}(Core.undef, nparams + 1)
+            @inbounds curly_args[1] = ty
+            i = 1
+            while i !== nparams + 1
+                @inbounds curly_args[i + 1] = Expr(:static_parameter, i)
+                i = i + 1
+            end
+            new_target = Expr(:curly, curly_args...)
+        else
+            new_target = Core.Argument(1)
+        end
+        new_args = Array{Any,1}(Core.undef, n + 1)
+        @inbounds new_args[1] = new_target
+        i = 1
+        while i !== n + 1
+            @inbounds new_args[i + 1] = Core.Argument(i + 1)
+            i = i + 1
+        end
+        new_expr = Expr(:new, new_args...)
+        lambda = Expr(:lambda, argnames,
+            Expr(:block, functionloc, Expr(:return, new_expr)))
+        ci = ccall(:jl_lower, Any, (Any, Any, Ptr{UInt8}, UInt, UInt, Int32),
+                   lambda, mod, src_file, src_line, sub_int(UInt(0), UInt(1)), Int32(0))[1]
+
+        # Build argdata: svec(svec(Type{ty}, ft1, ft2, ...), svec(tvars...), functionloc)
+        atypes_arr = Array{Any,1}(Core.undef, n + 1)
+        @inbounds atypes_arr[1] = Core.apply_type(Type, ty)
+        i = 1
+        while i !== n + 1
+            @inbounds atypes_arr[i + 1] = fts[i]
+            i = i + 1
+        end
+        outer_atypes = Core.svec(atypes_arr...)
+        outer_tvars = Core.svec(tvars...)
+        argdata = Core.svec(outer_atypes, outer_tvars, functionloc)
+        ccall(:jl_method_def, Any, (Any, Ptr{Nothing}, Any, Any),
+              argdata, C_NULL, ci, mod)
+
+        # For non-parametric types where all fields are Any, outer constructor suffices
+        if nparams === 0
+            all_any = true
+            i = 1
+            while i !== n + 1
+                if fts[i] !== Any
+                    all_any = false
+                    break
+                end
+                i = i + 1
+            end
+            if all_any
+                return
+            end
+        end
+    end
+
+    # Inner constructor: (::Type{T{A,B,...}})(x, y, ...) with convert calls
+    # Build lambda body using Core.Argument references
+    nstmts = ((n - nany) + (n - nany)) + 1
+    body_args = Array{Any,1}(Core.undef, nstmts)
+    new_args = Array{Any,1}(Core.undef, n)
+    i = 1
+    bidx = 1
+    while i !== n + 1
+        ft = fts[i]
+        if ft === Any
+            @inbounds new_args[i] = Core.Argument(i + 1)
+        else
+            # Use an isa check to avoid depending on convert inlining.
+            # This matches the old convert-for-type-decl pattern:
+            #   isa(arg, fieldtype(self, i)) ? arg : convert(fieldtype(self, i), arg)
+            # The isa check is important because user code may define ambiguous
+            # convert methods (e.g. convert(::Any, v::T) = v) that prevent the
+            # optimizer from inlining convert(fieldtype(self, i), arg) when the
+            # field type is Any after specialization.
+            ft_expr = Expr(:call, GlobalRef(Core, :fieldtype), Core.Argument(1), i)
+            ft_ssa = Expr(:ssavalue, bidx)
+            cnvt_ssa = Expr(:ssavalue, bidx + 1)
+            isa_check = Expr(:call, GlobalRef(Core, :isa), Core.Argument(i + 1), ft_ssa)
+            convert_expr = Expr(:call, GlobalRef(Base, :convert), ft_ssa, Core.Argument(i + 1))
+            @inbounds body_args[bidx] = Expr(:(=), ft_ssa, ft_expr)
+            @inbounds body_args[bidx + 1] = Expr(:(=), cnvt_ssa, Expr(:if, isa_check,
+                                               Core.Argument(i + 1), convert_expr))
+            @inbounds new_args[i] = cnvt_ssa
+            bidx = bidx + 2
+        end
+        i = i + 1
+    end
+    body_args[nstmts] = Expr(:return, Expr(:new, Core.Argument(1), new_args...))
+    lambda = Expr(:lambda, argnames,
+        Expr(:block, functionloc, body_args...))
+    ci = ccall(:jl_lower, Any, (Any, Any, Ptr{UInt8}, UInt, UInt, Int32),
+               lambda, mod, src_file, src_line, sub_int(UInt(0), UInt(1)), Int32(0))[1]
+
+    # Build argdata: svec(svec(UnionAll...Type{dt}..., Any, Any, ...), svec(), functionloc)
+    inner_atypes_arr = Array{Any,1}(Core.undef, n + 1)
+    typedt = Core.apply_type(Type, dt)
+    i = nparams
+    while i !== 0
+        @inbounds typedt = UnionAll(tvars[i], typedt)
+        i = i - 1
+    end
+    @inbounds inner_atypes_arr[1] = typedt
+    i = 1
+    while i !== n + 1
+        @inbounds inner_atypes_arr[i + 1] = Any
+        i = i + 1
+    end
+    inner_atypes = Core.svec(inner_atypes_arr...)
+    inner_tvars = Core.svec()
+    argdata = Core.svec(inner_atypes, inner_tvars, functionloc)
+    ccall(:jl_method_def, Any, (Any, Ptr{Nothing}, Any, Any),
+          argdata, C_NULL, ci, mod)
+    return
+end
 
 """
     Missing

@@ -30,6 +30,7 @@ include(path::String) = include(Base, path)
 
 struct IncludeInto <: Function
     m::Module
+    IncludeInto(m::Module) = new(m)
 end
 (this::IncludeInto)(fname::AbstractString) = include(this.m, fname)
 

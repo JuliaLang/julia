@@ -731,9 +731,9 @@ function CFGTransformState!(blocks::Vector{BasicBlock}, allow_cfg_transforms::Bo
     if allow_cfg_transforms
         bb_rename = Vector{Int}(undef, length(blocks))
         cur_bb = 1
-        domtree = construct_domtree(blocks)
+        dfs = DFS(blocks)
         for i = 1:length(bb_rename)
-            if bb_unreachable(domtree, i)
+            if i != 1 && dfs.to_pre[i] == 0 # if i is unreachable
                 bb_rename[i] = -1
             else
                 bb_rename[i] = cur_bb

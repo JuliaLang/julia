@@ -61,6 +61,24 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
         ident = newleaf(graph, src, K"Identifier")
         setattr!(ident, :name_val, String(e.args[1]))
         setattr!(ident, :scope_layer, e.args[2])
+    elseif e isa Expr && e.head === :static_parameter
+        setattr!(newleaf(graph, src, K"Value"), :value, e)
+    elseif e isa Expr && e.head === :lambda
+        ensure_desugaring_attributes!(graph)
+        argnames = e.args[1]::Vector{Any}
+        arg_cs = NodeId[]
+        for name in argnames
+            id = newleaf(graph, src, K"Identifier")
+            setattr!(id, :name_val, String(name::Symbol))
+            push!(arg_cs, id._id)
+        end
+        body_id, src = _expr_to_est(graph, e.args[2], src)
+        args_block = newnode(graph, src, K"block", arg_cs)
+        tvars_block = newnode(graph, src, K"block", NodeId[])
+        st = newnode(graph, src, K"lambda",
+                     NodeId[args_block._id, tvars_block._id, body_id])
+        setattr!(st, :is_toplevel_thunk, false)
+        setattr!(st, :toplevel_pure, false)
     elseif e isa Expr
         head_s = string(e.head)
         st_k = find_kind(head_s)
@@ -92,7 +110,7 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
         end
         setattr!(newleaf(graph, src, K"Value"), :value, e)
     end
-    @assert isa_lowering_ast_node(e) || is_expr_value(st)
+    @jl_assert isa_lowering_ast_node(e) || is_expr_value(st) st
 
     return st._id, src
 end
@@ -120,7 +138,7 @@ function est_to_expr(st::SyntaxTree, suppress_linenodes=false)
         QuoteNode(est_to_expr(st[1]))
     else
         # TODO: should handle post-lowering forms as well
-        @assert !is_leaf(st) "est_to_expr should only be used pre-desugaring"
+        @jl_assert !is_leaf(st) (st, "est_to_expr should only be used pre-desugaring")
         # In a partially-expanded or quoted AST, there may be heads with no
         # corresponding kind
         head = Symbol(k === K"unknown_head" ? st.name_val : untokenize(k))
@@ -176,7 +194,7 @@ function _dst_separate_dotop(st::SyntaxTree)
         return @ast st._graph st [K"." op_leaf]
     elseif k === K"Value" && st.value isa GlobalRef &&
         is_dotted_operator(string(st.value.name))
-        @assert false "TODO: handle dotted globalref"
+        @jl_assert false (st, "TODO: handle dotted globalref")
     else
         return est_to_dst(st)
     end
@@ -346,7 +364,7 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
                 push!(out_iters, _dst_iterspec(next, next[1][2:end]))
                 next = next[1][1]
             end
-            @assert kind(next) === K"generator"
+            @jl_assert kind(next) === K"generator" st next
             push!(out_iters, _dst_iterspec(next, next[2:end]))
             @ast g st [K"generator" rec(next[1]) out_iters...]
         end
@@ -468,9 +486,9 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
             if head === "latestworld-if-toplevel"
                 newleaf(g, st, K"latestworld_if_toplevel")
             else
-                @assert(false, string(
+                @jl_assert(false, (st, string(
                     "unknown expr head (corresponding to no kind) between",
-                    "macro-expansion and desugaring: ", st))
+                    "macro-expansion and desugaring: ")))
             end
         end
         [K"cfunction" typ fptr rt at sym] -> @ast g st [K"cfunction"

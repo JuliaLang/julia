@@ -46,14 +46,14 @@ end
 
 # TODO: support all forms that the original supports
 # function Base.var"@atomic"(__context__::MacroContext, ex)
-#     @chk kind(ex) == K"Identifier" || kind(ex) == K"::" (ex, "Expected identifier or declaration")
+#     @jl_assert kind(ex) == K"Identifier" || kind(ex) == K"::" (ex, "Expected identifier or declaration")
 #     @ast __context__ __context__.macrocall [K"atomic" ex]
 # end
 
 # TODO: @label
 
 function Base.var"@goto"(__context__::MacroContext, ex)
-    @chk kind(ex) == K"Identifier"
+    @jl_assert kind(ex) == K"Identifier" ex
     @ast __context__ ex [K"symbolicgoto" ex]
 end
 
@@ -238,7 +238,7 @@ function Base.GC.var"@preserve"(__context__::MacroContext, exs...)
 end
 
 function Base.Experimental.var"@opaque"(__context__::MacroContext, ex)
-    @chk kind(ex) == K"->"
+    @jl_assert kind(ex) == K"->" ex
     @ast __context__ __context__.macrocall [K"opaque_closure"
         "nothing"::K"core"
         "nothing"::K"core"
@@ -287,7 +287,7 @@ end
 #
 # For now we have our own versions
 function var"@islocal"(__context__::MacroContext, ex)
-    @chk kind(ex) == K"Identifier"
+    @jl_assert kind(ex) == K"Identifier" ex
     @ast __context__ __context__.macrocall [K"islocal" ex]
 end
 
@@ -345,6 +345,6 @@ etc. Needs careful thought - we should probably just copy what lisp does with
 quote+quasiquote 😅
 """
 function var"@inert"(__context__::MacroContext, ex)
-    @chk kind(ex) == K"quote"
+    @jl_assert kind(ex) == K"quote" ex
     @ast __context__ __context__.macrocall [K"inert" ex]
 end

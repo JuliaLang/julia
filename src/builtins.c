@@ -2468,13 +2468,6 @@ JL_CALLABLE(jl_f__equiv_typedef)
     return equiv_type(args[0], args[1]) ? jl_true : jl_false;
 }
 
-JL_CALLABLE(jl_f__defaultctors)
-{
-    JL_NARGS(_defaultctors, 2, 2);
-    jl_ctor_def(args[0], args[1]);
-    return jl_nothing;
-}
-
 // IntrinsicFunctions ---------------------------------------------------------
 
 static void (*runtime_fp[num_intrinsics])(void);

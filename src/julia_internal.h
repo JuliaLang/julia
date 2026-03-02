@@ -1451,9 +1451,6 @@ JL_DLLEXPORT int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
                                   size_t lineno, size_t offset, jl_value_t *options, jl_module_t *inmodule);
-jl_code_info_t *jl_inner_ctor_body(jl_array_t *fieldkinds, jl_module_t *inmodule, const char *file, int line);
-jl_code_info_t *jl_outer_ctor_body(jl_value_t *thistype, size_t nfields, size_t nsparams, jl_module_t *inmodule, const char *file, int line);
-void jl_ctor_def(jl_value_t *ty, jl_value_t *functionloc);
 
 //--------------------------------------------------
 // Backtraces
@@ -2170,11 +2167,12 @@ JL_DLLIMPORT void jl_emit_codeinst_to_jit(jl_code_instance_t *codeinst, jl_code_
 typedef struct {
     LLVMOrcThreadSafeModuleRef TSM;
     LLVMValueRef F;
+    char *pass_output;  // LLVM pass instrumentation output (freed by jl_dump_function_ir or jl_dump_function_asm)
 } jl_llvmf_dump_t;
 
 JL_DLLIMPORT jl_value_t *jl_dump_method_asm(jl_method_instance_t *linfo, size_t world,
         char emit_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary);
-JL_DLLIMPORT void jl_get_llvmf_defn(jl_llvmf_dump_t* dump, jl_method_instance_t *linfo, jl_code_info_t *src, char getwrapper, char optimize, const jl_cgparams_t params);
+JL_DLLIMPORT void jl_get_llvmf_defn(jl_llvmf_dump_t* dump, jl_method_instance_t *linfo, jl_code_info_t *src, char getwrapper, char optimize, const char *llvm_options, const jl_cgparams_t params);
 JL_DLLIMPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, char emit_mc, const char* asm_variant, const char *debuginfo, char binary);
 JL_DLLIMPORT jl_value_t *jl_dump_function_ir(jl_llvmf_dump_t *dump, char strip_ir_metadata, char dump_module, const char *debuginfo);
 JL_DLLIMPORT jl_value_t *jl_dump_function_asm(jl_llvmf_dump_t *dump, char emit_mc, const char* asm_variant, const char *debuginfo, char binary, char raw);

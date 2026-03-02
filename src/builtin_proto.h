@@ -13,7 +13,6 @@ extern "C" {
     XX(_apply_iterate,"_apply_iterate") \
     XX(_call_in_world_total,"_call_in_world_total") \
     XX(_compute_sparams,"_compute_sparams") \
-    XX(_defaultctors,"_defaultctors") \
     XX(_equiv_typedef,"_equiv_typedef") \
     XX(_expr,"_expr") \
     XX(_import, "_import") \

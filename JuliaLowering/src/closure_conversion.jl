@@ -44,7 +44,7 @@ function captured_var_access(ctx, ex)
         ]
     else
         interpolations = cap_rewrite
-        @assert !isnothing(cap_rewrite)
+        @jl_assert !isnothing(cap_rewrite) ex
         if isempty(interpolations) || !is_same_identifier_like(interpolations[end], ex)
             push!(interpolations, ex)
         end
@@ -138,7 +138,7 @@ end
 
 function convert_global_assignment(ctx, ex, var, rhs0)
     binfo = get_binding(ctx, var)
-    @assert binfo.kind == :global
+    @jl_assert binfo.kind == :global ex var
     stmts = SyntaxList(ctx)
     decl = make_globaldecl(ctx, ex, binfo.mod, binfo.name, true)
     if kind(decl) !== K"TOMBSTONE"
@@ -186,12 +186,12 @@ function convert_assignment(ctx, ex)
     if kind(var) == K"Placeholder"
         return @ast ctx ex [K"=" var rhs0]
     end
-    @chk kind(var) == K"BindingId"
+    @jl_assert kind(var) == K"BindingId" ex
     binfo = get_binding(ctx, var)
     if binfo.kind == :global
         convert_global_assignment(ctx, ex, var, rhs0)
     else
-        @assert binfo.kind == :local || binfo.kind == :argument
+        @jl_assert binfo.kind == :local || binfo.kind == :argument ex
         boxed = is_boxed(binfo)
         if isnothing(binfo.type) && !boxed
             @ast ctx ex [K"=" var rhs0]
@@ -372,7 +372,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             ex
         end
     elseif k == K"decl"
-        @assert kind(ex[1]) == K"BindingId"
+        @jl_assert kind(ex[1]) == K"BindingId" ex
         binfo = get_binding(ctx, ex[1])
         if binfo.kind == :global
             # flisp has this, but our K"assert" handling is in a previous pass
@@ -385,11 +385,11 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         # Leftover `global` forms become weak globals.
         mod, name = if kind(ex[1]) == K"BindingId"
             binfo = get_binding(ctx, ex[1])
-            @assert binfo.kind == :global
+            @jl_assert binfo.kind == :global ex
             binfo.mod, binfo.name
         else
             # See note about using eval on Expr(:global/:const, GlobalRef(...))
-            @assert ex[1].value isa GlobalRef
+            @jl_assert ex[1].value isa GlobalRef ex[1]
             ex[1].value.mod, String(ex[1].value.name)
         end
         @ast ctx ex [K"unused_only" make_globaldecl(ctx, ex, mod, name, false)]
@@ -407,7 +407,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         closure_convert_lambda(ctx, ex)
     elseif k == K"function_decl"
         func_name = ex[1]
-        @assert kind(func_name) == K"BindingId"
+        @jl_assert kind(func_name) == K"BindingId" ex
         func_name_id = func_name.var_id
         if haskey(ctx.closure_bindings, func_name_id)
             closure_info = get(ctx.closure_infos, func_name_id, nothing)
@@ -538,7 +538,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
 end
 
 function closure_convert_lambda(ctx, ex)
-    @assert kind(ex) == K"lambda"
+    @jl_assert kind(ex) == K"lambda" ex
     lambda_bindings = ex.lambda_bindings
     interpolations = nothing
     if isnothing(ctx.capture_rewriting)
@@ -577,7 +577,7 @@ function closure_convert_lambda(ctx, ex)
 
     if numchildren(ex) > 3
         # Convert return type
-        @assert numchildren(ex) == 4
+        @jl_assert numchildren(ex) == 4 ex
         push!(lambda_children, _convert_closures(ctx2, ex[4]))
     end
 
