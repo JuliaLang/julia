@@ -2687,82 +2687,133 @@ end
 end
 
 # Issue #61198
+# UUIDs are chosen so that Dict iteration order is:
+#   TrigA, TrigB, ParentPkg, ExtA, TopPkg, ExtAB
+# This guarantees TopPkg's task runs before ExtAB's
 @testset "no false staleness in precompilation of dynamic dependencies" begin
     mkdepottempdir() do depot
         project_path = joinpath(depot, "testenv")
         mkpath(project_path)
 
-        dummy_uuid = "10000000-0000-0000-0000-000000000034"
-        slow_uuid  = "10000000-0000-0000-0000-000000000035"
-        fast_uuid  = "10000000-0000-0000-0000-000000000036"
+        parent_uuid = "10000000-0000-0000-0000-000000000023"
+        triga_uuid  = "10000000-0000-0000-0000-000000000050"
+        trigb_uuid  = "20000000-0000-0000-0000-000000000001"
+        top_uuid    = "10000000-0000-0000-0000-000000000064"
 
-        dummy_dir = joinpath(depot, "dev", "DummyPkg")
-        mkpath(joinpath(dummy_dir, "src"))
-        write(joinpath(dummy_dir, "Project.toml"), """
-            name = "DummyPkg"
-            uuid = "$dummy_uuid"
+        # ParentPkg with two extensions: ExtA triggered by TrigA,
+        # ExtAB triggered by [TrigA, TrigB] (superset of ExtA's triggers)
+        parent_dir = joinpath(depot, "dev", "ParentPkg")
+        mkpath(joinpath(parent_dir, "src"))
+        mkpath(joinpath(parent_dir, "ext"))
+        write(joinpath(parent_dir, "Project.toml"), """
+            name = "ParentPkg"
+            uuid = "$parent_uuid"
             version = "0.1.0"
+
+            [weakdeps]
+            TrigA = "$triga_uuid"
+            TrigB = "$trigb_uuid"
+
+            [extensions]
+            ExtA = "TrigA"
+            ExtAB = ["TrigA", "TrigB"]
             """)
-        write(joinpath(dummy_dir, "src", "DummyPkg.jl"), """
-            module DummyPkg
+        write(joinpath(parent_dir, "src", "ParentPkg.jl"), """
+            module ParentPkg
+            end
+            """)
+        write(joinpath(parent_dir, "ext", "ExtA.jl"), """
+            module ExtA
+            using ParentPkg, TrigA
+            end
+            """)
+        write(joinpath(parent_dir, "ext", "ExtAB.jl"), """
+            module ExtAB
+            using ParentPkg, TrigA, TrigB
             end
             """)
 
-        slow_dir = joinpath(depot, "dev", "SlowPkg")
-        mkpath(joinpath(slow_dir, "src"))
-        write(joinpath(slow_dir, "Project.toml"), """
-            name = "SlowPkg"
-            uuid = "$slow_uuid"
+        triga_dir = joinpath(depot, "dev", "TrigA")
+        mkpath(joinpath(triga_dir, "src"))
+        write(joinpath(triga_dir, "Project.toml"), """
+            name = "TrigA"
+            uuid = "$triga_uuid"
+            version = "0.1.0"
+            """)
+        write(joinpath(triga_dir, "src", "TrigA.jl"), """
+            module TrigA
+            end
+            """)
+
+        trigb_dir = joinpath(depot, "dev", "TrigB")
+        mkpath(joinpath(trigb_dir, "src"))
+        write(joinpath(trigb_dir, "Project.toml"), """
+            name = "TrigB"
+            uuid = "$trigb_uuid"
+            version = "0.1.0"
+            """)
+        write(joinpath(trigb_dir, "src", "TrigB.jl"), """
+            module TrigB
+            end
+            """)
+
+        # TopPkg depends on ParentPkg + both triggers, so both extensions fire
+        top_dir = joinpath(depot, "dev", "TopPkg")
+        mkpath(joinpath(top_dir, "src"))
+        write(joinpath(top_dir, "Project.toml"), """
+            name = "TopPkg"
+            uuid = "$top_uuid"
             version = "0.1.0"
 
             [deps]
-            DummyPkg = "$dummy_uuid"
+            ParentPkg = "$parent_uuid"
+            TrigA = "$triga_uuid"
+            TrigB = "$trigb_uuid"
             """)
-        write(joinpath(slow_dir, "src", "SlowPkg.jl"), """
-            module SlowPkg
-            using DummyPkg
-            end
-            """)
-
-        # FastPkg has no declared deps but dynamically loads SlowPkg during
-        # compilation, putting SlowPkg in its required_modules.
-        fast_dir = joinpath(depot, "dev", "FastPkg")
-        mkpath(joinpath(fast_dir, "src"))
-        write(joinpath(fast_dir, "Project.toml"), """
-            name = "FastPkg"
-            uuid = "$fast_uuid"
-            version = "0.1.0"
-            """)
-        write(joinpath(fast_dir, "src", "FastPkg.jl"), """
-            module FastPkg
-            Base.require(Base.PkgId(Base.UUID("$slow_uuid"), "SlowPkg"))
+        write(joinpath(top_dir, "src", "TopPkg.jl"), """
+            module TopPkg
+            using ParentPkg, TrigA, TrigB
             end
             """)
 
         write(joinpath(project_path, "Project.toml"), """
             [deps]
-            DummyPkg = "$dummy_uuid"
-            SlowPkg = "$slow_uuid"
-            FastPkg = "$fast_uuid"
+            ParentPkg = "$parent_uuid"
+            TrigA = "$triga_uuid"
+            TrigB = "$trigb_uuid"
+            TopPkg = "$top_uuid"
             """)
 
         write(joinpath(project_path, "Manifest.toml"), """
             manifest_format = "2.0"
 
-            [[deps.DummyPkg]]
-            path = "../dev/DummyPkg/"
-            uuid = "$dummy_uuid"
+            [[deps.ParentPkg]]
+            path = "../dev/ParentPkg/"
+            uuid = "$parent_uuid"
             version = "0.1.0"
 
-            [[deps.SlowPkg]]
-            deps = ["DummyPkg"]
-            path = "../dev/SlowPkg/"
-            uuid = "$slow_uuid"
+            [deps.ParentPkg.weakdeps]
+            TrigA = "$triga_uuid"
+            TrigB = "$trigb_uuid"
+
+            [deps.ParentPkg.extensions]
+            ExtA = "TrigA"
+            ExtAB = ["TrigA", "TrigB"]
+
+            [[deps.TrigA]]
+            path = "../dev/TrigA/"
+            uuid = "$triga_uuid"
             version = "0.1.0"
 
-            [[deps.FastPkg]]
-            path = "../dev/FastPkg/"
-            uuid = "$fast_uuid"
+            [[deps.TrigB]]
+            path = "../dev/TrigB/"
+            uuid = "$trigb_uuid"
+            version = "0.1.0"
+
+            [[deps.TopPkg]]
+            deps = ["ParentPkg", "TrigA", "TrigB"]
+            path = "../dev/TopPkg/"
+            uuid = "$top_uuid"
             version = "0.1.0"
             """)
 
@@ -2772,13 +2823,30 @@ end
             push!(empty!(DEPOT_PATH), depot)
             Base.set_active_project(project_path)
 
-            # First call: compiles everything
-            Base.Precompilation.precompilepkgs(; io=IOBuffer(), fancyprint=false)
+            # TopPkg may fail on the first attempt if ExtAB is not ready yet
+            for _ in 1:2
+                Base.Precompilation.precompilepkgs(; io=IOBuffer(), fancyprint=false)
+            end
 
-            # Second call: nothing should need recompiling
-            io2 = IOBuffer()
-            Base.Precompilation.precompilepkgs(; io=io2, fancyprint=false)
-            @test isempty(takestring!(io2))
+            top_pkg = Base.PkgId(Base.UUID(top_uuid), "TopPkg")
+            extab_pkg = Base.PkgId(Base.uuid5(Base.UUID(parent_uuid), "ExtAB"), "ExtAB")
+
+            # Verify ExtAB was loaded during TopPkg's compilation (appears in required_modules)
+            top_cachepaths = Base.find_all_in_cache_path(top_pkg)
+            @test !isempty(top_cachepaths)
+            _, _, required_modules, _... = Base.parse_cache_header(first(top_cachepaths))
+            req_pkgids = Set(pkgid for (pkgid, _) in required_modules)
+            @test extab_pkg in req_pkgids
+
+            # ExtAB's paths are found via find_all_in_cache_path fallback.
+            @test Base.compilecache_freshest_path(top_pkg;
+                cachepath_cache=Dict{Base.PkgId, Vector{String}}(),
+                stale_cache=Dict{Base.StaleCacheKey, Bool}()) !== nothing
+
+            # precompilepkgs should not recompile anything
+            io = IOBuffer()
+            Base.Precompilation.precompilepkgs(; io, fancyprint=false)
+            @test isempty(takestring!(io))
         finally
             Base.set_active_project(old_proj)
             append!(empty!(DEPOT_PATH), original_depot_path)
