@@ -28,6 +28,43 @@ export run_interface, Prompt, ModalInterface, transition, reset_state, edit_inse
 
 const StringLike = Union{Char,String,SubString{String}}
 
+mutable struct TerminalProperties
+    da1::Union{Nothing, Vector{Int}}  # DA1 feature parameters
+    TerminalProperties() = new(nothing)
+end
+
+"""
+    receive_da1!(props::TerminalProperties, io::IO)
+
+Read and parse a DA1 (Device Attributes) response from `io`
+(after `\\e[?` has been consumed by the keymap).
+Reads until `c` (DA1 terminator) or `^C` (bail-out), parses the semicolon-separated
+parameters as integers, and stores them in `props.da1`.
+"""
+function receive_da1!(props::TerminalProperties, io::IO)
+    buf = IOBuffer()
+    while !eof(io)
+        b = read(io, UInt8)
+        if b == UInt8('c')  # DA1 terminator
+            break
+        elseif b == 0x03  # ^C bail-out
+            break
+        else
+            write(buf, b)
+        end
+    end
+    body = String(take!(buf))
+    params = Int[]
+    for part in split(body, ';')
+        n = tryparse(Int, part)
+        if n !== nothing
+            push!(params, n)
+        end
+    end
+    props.da1 = params
+    return
+end
+
 # interface for TextInterface
 function Base.getproperty(ti::TextInterface, name::Symbol)
     if name === :hp
@@ -87,9 +124,10 @@ mutable struct MIState
     n_keys_pressed::Int
     # Optional event that gets notified each time the prompt is ready for input
     prompt_ready_event::Union{Nothing, Base.Event}
+    terminal_properties::TerminalProperties
 end
 
-MIState(i, mod, c, a, m) = MIState(i, mod, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}(), Base.ReentrantLock(), Base.ReentrantLock(), 0, nothing)
+MIState(i, mod, c, a, m) = MIState(i, mod, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}(), Base.ReentrantLock(), Base.ReentrantLock(), 0, nothing, TerminalProperties())
 
 const BufferLike = Union{MIState,ModeState,IOBuffer}
 const State = Union{MIState,ModeState}
@@ -2074,6 +2112,8 @@ const escape_defaults = merge!(
         "\e*" => nothing,
         "\e[*" => nothing,
         "\eO*" => nothing,
+        # Intercept DA1 responses
+        "\e[?" => (s::MIState, o...) -> receive_da1!(s.terminal_properties, terminal(s)),
         # Also ignore extended escape sequences
         # TODO: Support ranges of characters
         "\e[1**" => nothing,
@@ -2762,6 +2802,7 @@ const prefix_history_keymap = merge!(
         "\e*" => "*",
         "\e[*" => "*",
         "\eO*"  => "*",
+        "\e[?" => "*",
         "\e[1;5*" => "*", # Ctrl-Arrow
         "\e[1;2*" => "*", # Shift-Arrow
         "\e[1;3*" => "*", # Meta-Arrow
