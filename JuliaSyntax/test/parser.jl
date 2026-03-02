@@ -447,6 +447,9 @@ tests = [
         "A.@x"      =>  "(macrocall (. A (macro_name x)))"
         "A.@x a"    =>  "(macrocall (. A (macro_name x)) a)"
         "@A.B.@x a" =>  "(macrocall (macro_name (. (. A B) (error-t) x)) a)"
+        # .[ and .{ disallowed
+        "f.[x]"  =>  "(error f x)"
+        "f.{x}"  =>  "(error f x)"
         # .' discontinued
         "f.'"    =>  "(dotcall-post f (error '))"
         # Field/property syntax
