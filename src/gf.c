@@ -3336,7 +3336,8 @@ JL_DLLEXPORT void jl_force_trace_compile_timing_disable(void)
     jl_atomic_fetch_add(&jl_force_trace_compile_timing_enabled, -1);
 }
 
-static void record_precompile_statement(jl_method_instance_t *mi, double compilation_time, int is_recompile)
+static void record_precompile_statement(jl_method_instance_t *mi, double compilation_time,
+    int is_recompile, int is_nested)
 {
     static ios_t f_precompile;
     static JL_STREAM* s_precompile = NULL;
@@ -3374,6 +3375,9 @@ static void record_precompile_statement(jl_method_instance_t *mi, double compila
             if (s_precompile == JL_STDERR && jl_options.color != JL_OPTIONS_COLOR_OFF) {
                 jl_printf(s_precompile, "\e[0m");
             }
+        }
+        if (is_nested) {
+            jl_printf(s_precompile, " # nested const compilation");
         }
         jl_printf(s_precompile, "\n");
         if (s_precompile != JL_STDERR)
@@ -3586,7 +3590,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                     // unspec is probably not specsig, but might be using specptr
                     jl_atomic_store_relaxed(&codeinst->flags, specsigflags & JL_CI_FLAGS_INVOKE_MATCHES_SPECPTR);
                     jl_mi_cache_insert(mi, codeinst);
-                    record_precompile_statement(mi, 0, 0);
+                    record_precompile_statement(mi, 0, 0, 0);
                     return codeinst;
                 }
             }
@@ -3605,7 +3609,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                 0, 1, ~(size_t)0, 0, jl_nothing, di, edges);
             jl_atomic_store_release(&codeinst->invoke, jl_fptr_interpret_call);
             jl_mi_cache_insert(mi, codeinst);
-            record_precompile_statement(mi, 0, 0);
+            record_precompile_statement(mi, 0, 0, 0);
             return codeinst;
         }
         if (compile_option == JL_OPTIONS_COMPILE_OFF) {
@@ -3619,6 +3623,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
 
     // Everything from here on is considered (user facing) compile time
     uint64_t compilation_start = jl_hrtime();
+    int is_nested_compile = (jl_current_task->reentrant_timing & 1);
     uint64_t inference_start = jl_typeinf_timing_begin(); // Special-handling for reentrancy
 
     // Is a recompile if there is cached code, and it was compiled (not only inferred) before
@@ -3660,7 +3665,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
             codeinst = NULL;
         }
         else if (did_compile && codeinst->owner == jl_nothing) {
-            record_precompile_statement(mi, compile_time, is_recompile);
+            record_precompile_statement(mi, compile_time, is_recompile, is_nested_compile);
         }
         JL_GC_POP();
     }
