@@ -182,11 +182,11 @@ exit:
 }
 
 ; Loop-invariant destination with a load on the backedge.
-; The load stays in latch — sinking to loop would be a backedge.
+; The load must NOT be sunk within the loop — sinking reads deeper
+; within a loop causes the loop vectorizer to emit masked loads.
 ; CHECK-LABEL: @test_no_sink_loop_invariant_with_backedge_reader
 ; CHECK: loop:
 ; CHECK: store i64 %i, ptr %buf
-; CHECK: latch:
 ; CHECK: %val = load i64, ptr %buf
 define i64 @test_no_sink_loop_invariant_with_backedge_reader(i64 %n) {
 entry:
@@ -348,6 +348,72 @@ loop_latch:
 exit_path:
   call void @use_state_p(ptr %state)
   ret void
+}
+
+; ============================================================================
+; Must NOT sink reads deeper within the same loop (vectorization hazard)
+; ============================================================================
+
+; Sinking loads from the loop header to a conditional block within the
+; loop causes the loop vectorizer to emit masked loads instead of
+; unconditional vector loads. This is the perf_countequals pattern:
+; the union type tag is checked first, and the value load is only needed
+; in one branch — but keeping it unconditional enables full vectorization.
+; CHECK-LABEL: @test_no_sink_read_within_loop
+define i64 @test_no_sink_read_within_loop(ptr %tags, ptr %vals, i64 %n) {
+entry:
+  br label %loop
+
+; CHECK: loop:
+; CHECK: %tag = load i8, ptr %tag_ptr
+; CHECK: %val = load i64, ptr %val_ptr
+; CHECK: br i1 %is_valid
+loop:
+  %i = phi i64 [ 0, %entry ], [ %next, %merge ]
+  %sum = phi i64 [ 0, %entry ], [ %new_sum, %merge ]
+  %tag_ptr = getelementptr i8, ptr %tags, i64 %i
+  %tag = load i8, ptr %tag_ptr, align 1
+  %val_ptr = getelementptr i64, ptr %vals, i64 %i
+  %val = load i64, ptr %val_ptr, align 8
+  %is_valid = icmp ne i8 %tag, 0
+  br i1 %is_valid, label %use_val, label %merge
+
+use_val:
+  %add = add i64 %sum, %val
+  br label %merge
+
+merge:
+  %new_sum = phi i64 [ %add, %use_val ], [ %sum, %loop ]
+  %next = add nuw i64 %i, 1
+  %done = icmp eq i64 %next, %n
+  br i1 %done, label %exit, label %loop
+
+exit:
+  ret i64 %new_sum
+}
+
+; Negative test: sinking a read OUT of a loop to an exit block IS allowed.
+; The load reads from %other (not clobbered by the store to %buf).
+; CHECK-LABEL: @test_sink_read_to_loop_exit
+define i64 @test_sink_read_to_loop_exit(ptr noalias %buf, ptr noalias %other, i64 %n) {
+entry:
+  br label %loop
+
+; CHECK: loop:
+; CHECK-NOT: %result = load
+; CHECK: br i1 %done
+loop:
+  %i = phi i64 [ 0, %entry ], [ %next, %loop ]
+  %result = load i64, ptr %other, align 8
+  store i64 %i, ptr %buf, align 8
+  %next = add nuw i64 %i, 1
+  %done = icmp eq i64 %next, %n
+  br i1 %done, label %exit, label %loop
+
+; CHECK: exit:
+; CHECK: %result = load i64, ptr %other
+exit:
+  ret i64 %result
 }
 
 declare void @throw_bounds_error(ptr)

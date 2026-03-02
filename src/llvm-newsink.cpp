@@ -545,11 +545,19 @@ BasicBlock *NewSinkState::findSinkTargetForValue(Instruction *I)
     // The target must also have a single predecessor (our block) to ensure
     // no other incoming path can modify the read location.
     if (I->mayReadFromMemory()) {
+        Loop *CurLoop = LI.getLoopFor(CurrentBB);
         BasicBlock *Target = nullptr;
         for (BasicBlock *Succ : successors(CurrentBB)) {
             // Skip self-loops and backedges — sinking a load backward
             // in the CFG could move it before a store it depends on.
             if (Succ == CurrentBB || DT.dominates(Succ, CurrentBB))
+                continue;
+            // Don't sink reads deeper within the same loop. Moving loads
+            // from unconditional positions to conditional blocks causes
+            // the loop vectorizer to emit masked loads, which are slower
+            // on most targets. LLVM's standard Sink pass similarly avoids
+            // sinking into loops for this reason.
+            if (CurLoop && CurLoop == LI.getLoopFor(Succ))
                 continue;
             // Multi-predecessor targets are unsafe: other incoming paths
             // may write to the read location between our block and the
