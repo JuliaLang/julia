@@ -808,11 +808,11 @@ void gc_time_mallocd_memory_end(void)
 void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
                         int64_t perm_scanned_bytes)
 {
-    int64_t last_remset_len = 0;
+    int64_t remset_len = 0;
     int64_t remset_nptr = 0;
     for (int t_i = 0; t_i < gc_n_threads; t_i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[t_i];
-        last_remset_len += ptls2->gc_tls.heap.last_remset->len;
+        remset_len += ptls2->gc_tls.heap.remset.len;
         remset_nptr = ptls2->gc_tls.heap.remset_nptr;
     }
     jl_safe_printf("GC mark pause %.2f ms | "
@@ -821,7 +821,7 @@ void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
                    jl_ns2ms(gc_premark_end - t0),
                    (scanned_bytes + perm_scanned_bytes) / 1024,
                    scanned_bytes / 1024, perm_scanned_bytes / 1024,
-                   last_remset_len, remset_nptr);
+                   remset_len, remset_nptr);
 }
 
 void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
