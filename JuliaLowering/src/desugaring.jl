@@ -3970,6 +3970,218 @@ function insert_struct_shim(ctx, fieldtypes, name)
     map(ex->_insert_fieldtype_struct_shim(ctx, name, ex), fieldtypes)
 end
 
+# Replace all (call core.apply_type ...) with (call core.apply_type_or_typeapp ...)
+# in an expression tree. Used for typegroup to handle TypeVar/TypeApp references
+# during type resolution before real DataTypes exist.
+function _replace_type_constructors(ctx, ex)
+    if is_leaf(ex)
+        return ex
+    end
+    k = kind(ex)
+    if k == K"call" && numchildren(ex) >= 1 && kind(ex[1]) == K"core" && ex[1].name_val == "apply_type"
+        new_head = @ast ctx ex[1] "apply_type_or_typeapp"::K"core"
+        new_children = SyntaxList(ctx)
+        push!(new_children, new_head)
+        for i in 2:numchildren(ex)
+            push!(new_children, _replace_type_constructors(ctx, ex[i]))
+        end
+        return @ast ctx ex [K"call" new_children...]
+    else
+        return mapchildren(e->_replace_type_constructors(ctx, e), ctx, ex)
+    end
+end
+
+function expand_typegroup_def(ctx, ex)
+    @chk numchildren(ex) == 1
+    body = ex[1]
+    if kind(body) != K"block"
+        throw(LoweringError(body, "expected block for `typegroup` body"))
+    end
+
+    # Collect struct definitions from block children
+    struct_defs = SyntaxList(ctx)
+    for child in children(body)
+        if kind(child) == K"struct"
+            push!(struct_defs, child)
+        else
+            throw(LoweringError(child, "`typegroup` only supports `struct` definitions"))
+        end
+    end
+    if isempty(struct_defs)
+        return nothing_(ctx, ex)
+    end
+
+    # First pass: analyze all struct definitions, collect names and info
+    n = length(struct_defs)
+    struct_names = SyntaxList(ctx)      # local name bindings
+    global_names = SyntaxList(ctx)      # global name bindings
+    info_vars = SyntaxList(ctx)         # SSA vars for struct info svecs
+    all_typevar_names = Vector{Any}()   # typevar_names per struct
+    all_typevar_stmts = Vector{Any}()   # typevar_stmts per struct
+    all_field_names = Vector{Any}()
+    all_field_types = Vector{Any}()
+    all_field_attrs = Vector{Any}()
+    all_supertypes = SyntaxList(ctx)
+    all_is_mutable = Vector{Bool}()
+    all_min_initialized = Vector{Int}()
+    all_inner_defs = Vector{Any}()
+    all_field_docs = Vector{Any}()
+
+    for sdef in struct_defs
+        @chk numchildren(sdef) == 2
+        type_sig = sdef[1]
+        type_body = sdef[2]
+        if kind(type_body) != K"block"
+            throw(LoweringError(type_body, "expected block for `struct` fields"))
+        end
+        struct_name, type_params, supertype = analyze_type_sig(ctx, type_sig)
+        typevar_names, typevar_stmts = expand_typevars(ctx, type_params)
+        field_names = SyntaxList(ctx)
+        field_types = SyntaxList(ctx)
+        field_attrs = SyntaxList(ctx)
+        field_docs = SyntaxList(ctx)
+        inner_defs = SyntaxList(ctx)
+        _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs,
+                               inner_defs, children(type_body))
+
+        if !isempty(inner_defs)
+            throw(LoweringError(sdef, "method definitions are not allowed inside `typegroup` blocks"))
+        end
+
+        is_mutable = has_flags(sdef, JuliaSyntax.MUTABLE_FLAG)
+        min_initialized = length(field_names)
+
+        push!(struct_names, struct_name)
+        layer = new_scope_layer(ctx, struct_name)
+        push!(global_names, adopt_scope(struct_name, layer))
+        push!(info_vars, ssavar(ctx, sdef, "struct_info"))
+        push!(all_typevar_names, typevar_names)
+        push!(all_typevar_stmts, typevar_stmts)
+        push!(all_field_names, field_names)
+        push!(all_field_types, field_types)
+        push!(all_field_attrs, field_attrs)
+        push!(all_supertypes, supertype)
+        push!(all_is_mutable, is_mutable)
+        push!(all_min_initialized, min_initialized)
+        push!(all_inner_defs, inner_defs)
+        push!(all_field_docs, field_docs)
+    end
+
+    # Build the lowered code
+    #
+    # Structure:
+    # 1. Assert toplevel-only
+    # 2. scope_block(hard) {
+    #   a. Declare all names as locals
+    #   b. Create TypeVar placeholders for each name
+    #   c. For each struct: create TypeVar params, collect info into svec
+    #   d. Call resolve_typegroup
+    #   e. Bind to global constants
+    #   f. latestworld
+    #   g. Constructor definitions
+    # }
+
+    stmts = SyntaxList(ctx)
+
+    # 2a. Declare all names as locals
+    for name in struct_names
+        push!(stmts, @ast ctx name [K"local" name])
+    end
+
+    # 2b. Create TypeVar placeholders for each name
+    for name in struct_names
+        push!(stmts, @ast ctx name [K"=" name [K"call" "TypeVar"::K"core" name=>K"Symbol"]])
+    end
+
+    # 2c. For each struct: create scope_block with TypeVar params and collect info into svec
+    for i in 1:n
+        sdef = struct_defs[i]
+        typevar_names = all_typevar_names[i]
+        typevar_stmts = all_typevar_stmts[i]
+        field_names = all_field_names[i]
+        field_types = all_field_types[i]
+        field_attrs = all_field_attrs[i]
+        supertype = all_supertypes[i]
+        is_mutable = all_is_mutable[i]
+        min_initialized = all_min_initialized[i]
+        info_var = info_vars[i]
+        struct_name = struct_names[i]
+
+        inner_stmts = SyntaxList(ctx)
+        for tv_name in typevar_names
+            push!(inner_stmts, @ast ctx sdef [K"local" tv_name])
+        end
+        append!(inner_stmts, typevar_stmts)
+        push!(inner_stmts, @ast ctx sdef [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" sdef]])
+        push!(inner_stmts, @ast ctx sdef [K"="
+            info_var
+            [K"call" "svec"::K"core"
+                [K"call" "svec"::K"core" typevar_names...]
+                [K"call" "svec"::K"core" [fname=>K"Symbol" for fname in field_names]...]
+                [K"call" "svec"::K"core" field_attrs...]
+                is_mutable::K"Bool"
+                min_initialized::K"Integer"
+                supertype
+                [K"call" "svec"::K"core" field_types...]
+            ]
+        ])
+
+        push!(stmts, @ast ctx sdef [K"scope_block"(scope_type=:hard)
+            [K"block" inner_stmts...]
+        ])
+    end
+
+    # 2d. Call resolve_typegroup
+    push!(stmts, @ast ctx ex [K"="
+        [K"tuple" struct_names...]
+        [K"call" "resolve_typegroup"::K"core"
+            ctx.mod::K"Value"
+            [K"call" "svec"::K"core" struct_names...]
+            [K"call" "svec"::K"core" info_vars...]
+        ]
+    ])
+
+    # 2e. Bind to global constants
+    for i in 1:n
+        push!(stmts, @ast ctx struct_defs[i] [K"constdecl" global_names[i] struct_names[i]])
+    end
+
+    # 2f. latestworld
+    push!(stmts, @ast ctx ex (::K"latestworld"))
+
+    # 2g. Constructor definitions (using _defaultctors for each struct)
+    for i in 1:n
+        sdef = struct_defs[i]
+        push!(stmts, @ast ctx sdef [K"call"
+            "_defaultctors"::K"core"
+            global_names[i]
+            ::K"SourceLocation"(sdef)
+        ])
+    end
+
+    push!(stmts, @ast ctx ex (::K"latestworld"))
+    push!(stmts, nothing_(ctx, ex))
+
+    # Build the toplevel assertion + scope block, then do the expand and replace
+    scope_block_stmts = SyntaxList(ctx)
+    for name in global_names
+        push!(scope_block_stmts, @ast ctx ex [K"global" name])
+    end
+    push!(scope_block_stmts, @ast ctx ex [K"block" stmts...])
+
+    result = @ast ctx ex [K"block"
+        [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex]]
+        [K"scope_block"(scope_type=:hard)
+            scope_block_stmts...
+        ]
+        nothing_(ctx, ex)
+    ]
+
+    # Expand, then replace apply_type with apply_type_or_typeapp
+    expanded = expand_forms_2(ctx, result)
+    return _replace_type_constructors(ctx, expanded)
+end
+
 function expand_struct_def(ctx, ex, docs)
     @jl_assert numchildren(ex) == 2 ex
     type_sig = ex[1]
@@ -4568,6 +4780,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         expand_forms_2(ctx, expand_abstract_or_primitive_type(ctx, ex))
     elseif k == K"struct"
         expand_forms_2(ctx, expand_struct_def(ctx, ex, docs))
+    elseif k == K"typegroup"
+        expand_typegroup_def(ctx, ex)
     elseif k == K"ref"
         sctx = with_stmts(ctx)
         (arr, idxs) = expand_ref_components(sctx, ex)

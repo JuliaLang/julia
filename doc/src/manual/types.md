@@ -508,6 +508,47 @@ ERROR: setfield!: const field .b of type Baz cannot be changed
 [...]
 ```
 
+## Mutually Recursive Types
+
+Because julia's top level scope is procedural, types defined later in a file are not available for
+earlier field types. This is generally not a problem if types are written in the order they are
+used, but of course this does not work if that are cycles in the field type definitions:
+
+```julia
+struct Node
+    edges::Vector{Edge} # Error: Edge not defined
+end
+struct Edge
+    from::Node
+    to::Node
+end
+```
+
+The `typegroup` block solves this by introducing temporary variables for all structs
+defined therein at the top of the block and then atomically defining them all together
+at the end of the block.
+
+```jldoctest recursivetypes
+julia> typegroup
+           struct Node
+               edges::Vector{Edge}
+           end
+           struct Edge
+               from::Node
+               to::Node
+           end
+       end
+
+julia> fieldtype(Node, :edges)
+Vector{Edge} (alias for Array{Edge, 1})
+```
+
+!!! note
+    Only (`mutable`) `struct` definitions are allowed inside a `typegroup` block. All
+    other declarations, including method definitions are disallowed (Inner constructor
+    definitions are allowed inside the `struct` definition and will semantically run
+    after all types have been atomically instantiated).
+
 ## [Declared Types](@id man-declared-types)
 
 The three kinds of types (abstract, primitive, composite) discussed in the previous

@@ -155,7 +155,7 @@
 
 (define initial-reserved-words '(begin while if for try return break continue
                          function macro quote let local global const do
-                         struct
+                         struct typegroup
                          module baremodule using import export))
 
 (define initial-reserved-word?
@@ -1094,7 +1094,7 @@
              (fix-syntactic-unary (list op arg)))))))
 
 (define block-form? (Set '(block quote if for while let function macro abstract primitive struct
-                                 try module)))
+                                 try module typegroup)))
 
 ;; handle ^ and .^
 ;; -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
@@ -1522,6 +1522,13 @@
                           (nb   (with-space-sensitive (parse-cond s))))
                      (begin0 (list 'primitive spec nb)
                              (expect-end (take-lineendings s) "primitive type"))))))
+
+       ((typegroup)
+        ;; Grouped type definitions (mutually recursive)
+        ;; typegroup struct A ... end end  ==>  (typegroup (block ...))
+        (let ((body (parse-block s)))
+          (begin0 (list 'typegroup body)
+                  (expect-end s "typegroup"))))
 
        ((try)
         (let ((try-block (if (memq (peek-token s) '(catch finally))

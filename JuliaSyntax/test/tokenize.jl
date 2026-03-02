@@ -977,6 +977,7 @@ const all_kws = Set([
     "return",
     "struct",
     "try",
+    "typegroup",
     "using",
     "while",
     # Contextual keywords

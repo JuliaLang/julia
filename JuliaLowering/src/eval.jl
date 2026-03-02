@@ -525,8 +525,8 @@ end
 Like `include`, except reads code from the given string rather than from a file.
 """
 function include_string(mod::Module, code::AbstractString, filename::AbstractString="string";
-                        expr_compat_mode=false)
-    eval(mod, parseall(SyntaxTree, code; filename=filename); expr_compat_mode)
+                        expr_compat_mode=false, version::VersionNumber=VERSION)
+    eval(mod, parseall(SyntaxTree, code; filename=filename, version=version); expr_compat_mode)
 end
 
 include(path::AbstractString) = include(JuliaLowering, path)
