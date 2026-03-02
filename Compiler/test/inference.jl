@@ -4170,6 +4170,74 @@ end == Int
     alias_union_split_f(x.f, x.f)
 end == Int
 
+# Slot alias conditional refinement: when `y = x` and a branch refines `x`,
+# the refinement should propagate to `y` as well.
+@testset "slot alias conditional refinement" begin
+    # basic case: `y = x; if x isa Int; sin(y)` should infer y::Int
+    @test Base.infer_return_type((Any,)) do x
+        y = x
+        if x isa Int
+            return sin(y)
+        end
+    end == Union{Nothing, Float64}
+    # else branch should also refine aliases
+    @test Base.infer_return_type((Union{Int,String},)) do x
+        y = x
+        if x isa Int
+            return y
+        else
+            return y
+        end
+    end == Union{Int, String}
+    # chained alias: z = y = x, refining x should also refine z
+    @test Base.infer_return_type((Union{Int,Float64},)) do x
+        z = y = x
+        if x isa Int
+            return z
+        end
+        return nothing
+    end == Union{Nothing, Int}
+    # alias should be broken by reassignment
+    @test Base.infer_return_type((Any,)) do x
+        y = x
+        if x isa Int
+            y = "hello"
+            return y
+        end
+        return nothing
+    end == Union{Nothing, String}
+    # typeassert-based refinement should also propagate to aliases
+    @test Base.infer_return_type((Any,)) do x
+        y = x
+        typeassert(x, Int)
+        return y
+    end == Int
+    # cross-BB: alias established before join point should survive to condition check
+    @test Base.infer_return_type((Union{Int,String}, Bool)) do x, cond
+        if cond
+            y = x
+        else
+            y = x
+        end
+        if x isa Int
+            return sin(y)
+        end
+        return nothing
+    end == Union{Nothing, Float64}
+    # cross-BB: alias broken on one path → no refinement at join point
+    @test Base.infer_return_type((Union{Int,String}, Bool)) do x, cond
+        if cond
+            y = x
+        else
+            y = "broken"
+        end
+        if x isa Int
+            return y
+        end
+        return nothing
+    end == Union{Nothing, String, Int}
+end
+
 @testset "constant prop' for union split signature" begin
     # indexing into tuples really relies on constant prop', and we will get looser result
     # (`Union{Int,String,Char}`) if constant prop' doesn't happen for splitunion signatures

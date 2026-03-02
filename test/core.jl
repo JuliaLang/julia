@@ -4297,6 +4297,30 @@ let z1 = Z14477C()
     @test !isdefined(z1.fld, :fld)
 end
 
+# Test _defaultctors "lowering"
+mutable struct _CtorLoweredQualityTest
+    x::Int
+end
+let cis = code_lowered(_CtorLoweredQualityTest, (Any,))
+    # The generic inner constructor is the longer one (with fieldtype/convert)
+    ci = last(cis)
+    # fieldtype should appear exactly once (not duplicated)
+    ft_count = sum(s -> count("Core.fieldtype", sprint(show, s)), ci.code)
+    @test ft_count == 1
+end
+
+struct _CtorSlotNarrowVal end
+struct _CtorSlotNarrowVal2 end
+Base.convert(::Type{_CtorSlotNarrowVal}, ::Any) = _CtorSlotNarrowVal()
+Base.convert(::Type{_CtorSlotNarrowVal}, x::_CtorSlotNarrowVal) = x
+mutable struct _CtorSlotNarrowHolder
+    x::_CtorSlotNarrowVal
+end
+let effects = Base.infer_effects((Union{_CtorSlotNarrowVal, _CtorSlotNarrowVal2},)) do a
+        _CtorSlotNarrowHolder(a)
+    end
+    @test Core.Compiler.is_nothrow(effects)
+end
 
 # issue #8846, generic macros
 macro m8846(a, b=0)

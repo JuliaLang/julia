@@ -1,11 +1,11 @@
 struct ValidationDiagnostic
     sts::SyntaxList
-    msg::String
+    msgs::Vector{String}
     loc::LineNumberNode # for noting where failures come from in this file
 end
 ValidationDiagnostic(st::SyntaxTree, msg, loc) =
     ValidationDiagnostic(
-        SyntaxList(syntax_graph(st), NodeId[st._id]), msg, loc)
+        SyntaxList(syntax_graph(st), NodeId[st._id]), String[msg], loc)
 
 """
 The type returned by all `vst` functions.  There are three answers this can
@@ -56,18 +56,6 @@ function Base.all(f::Function, vcx::ValidationContext, itr; kws...)
         ok &= f(vcx, i; kws...)
     end
     return ok
-end
-
-# TODO: pretty-printing
-function showerrors(vr::ValidationResult)
-    isnothing(vr.errors) && return
-    for (i, e) in enumerate(vr.errors)
-        printstyled("error $i:\n"; color=:red)
-        showerror(stdout, LoweringError(e.sts[1], e.msg))
-        for st_ in e.sts[2:end]; show(st_); end
-        show(e.loc)
-        printstyled("\n---------------------------------\n"; color=:red)
-    end
 end
 
 #-------------------------------------------------------------------------------
@@ -142,7 +130,7 @@ We don't check some other things:
 function valid_st1(st::SyntaxTree)
     DEBUG && assert_syntaxtree(st)
     vr = vst1(Validation1Context(), st)
-    @assert is_known(vr)
+    @jl_assert is_known(vr) st
     return vr
 end
 
@@ -193,8 +181,6 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         vst1(vcx, x) # BroadcastFunction(x)
     [K"return" val] -> vcx.return_ok ?
         vst1(vcx, val) :
-        @fail(st, "`return` not allowed inside comprehension or generator")
-    [K"return"] -> vcx.return_ok ? pass() :
         @fail(st, "`return` not allowed inside comprehension or generator")
     ([K"continue"], when=vcx.in_loop) -> pass()
     ([K"continue" lab], when=vcx.in_loop) -> vst1_ident(vcx, lab; lhs=true)
@@ -262,6 +248,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
 
     #---------------------------------------------------------------------------
     # Forms not produced by the parser
+    [K"ssavalue" [K"Value"]] -> pass()
     [K"inert" _] -> pass()
     [K"inert_syntaxtree" _] -> pass()
     [K"core"] -> st.name_val === "nothing" ? pass() :
@@ -275,8 +262,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"symboliclabel" lab] -> vst1_ident(vcx, lab; lhs=true)
     [K"symbolicgoto" lab] -> vst1_ident(vcx, lab; lhs=true)
     [K"symbolicblock" lab body] ->
-        (kind(lab) == K"symboliclabel" ? pass() : vst1_ident(vcx, lab; lhs=true)) &
-        vst1(with(vcx; in_symblock=true), body)
+        vst1_ident(vcx, lab; lhs=true) & vst1(with(vcx; in_symblock=true), body)
     [K"gc_preserve" x ids...] -> vst1(vcx, x) & all(vst1_ident, vcx, ids)
     [K"gc_preserve_begin" ids...] -> all(vst1_ident, vcx, ids)
     [K"gc_preserve_end" ids...] -> all(vst1_ident, vcx, ids)
@@ -543,6 +529,10 @@ vst1_ident(vcx, st; lhs=false) = @stm st begin
 end
 
 vst1_call(vcx, st) = @stm st begin
+    ([K"call" [K"Identifier"] args...], when=st[1].name_val==="cglobal") ->
+        (1 <= length(args) <= 2 ? pass() :
+            @fail(st, "cglobal must have one or two arguments")) &
+        all(vst1_call_arg, vcx, args)
     [K"call" f [K"parameters" kwargs...] args...] ->
         vst1(vcx, f) &
         all(vst1_call_arg, vcx, args) &
@@ -601,7 +591,7 @@ vst1_lam_lhs(vcx, st) = @stm st begin
     # syntax TODO: This is handled badly in the parser
     [K"block" p1 p2] -> pass()
     # unwrapped single arg
-    _ -> let ps = SyntaxList(st._graph, tree_ids(st))
+    _ -> let ps = SyntaxList(st)
         _calldecl_positionals(vcx, ps, K"=")
     end
 end
@@ -910,6 +900,7 @@ vst1_assign_lhs(vcx, st; in_const=false, in_tuple=false) = @stm st begin
 end
 vst1_assign_lhs_nontuple(vcx, st; in_const=false, in_tuple=false) = @stm st begin
     [K"Identifier"] -> pass()
+    [K"ssavalue" [K"Value"]] -> in_const ? @fail(st, "cannot declare ssavalue const") : pass()
     ([K"Value"], when=(st.value isa GlobalRef)) -> pass()
     (_, when=(is_eventually_call(st))) ->
         vst1_function_calldecl(vcx, st)
@@ -1036,11 +1027,12 @@ end
 
 function assert_syntaxtree(st::SyntaxTree)
     vr = _assert_syntaxtree(st, NodeId[], pass())
-    @assert is_known(vr)
+    @jl_assert is_known(vr) st
     if !vr.ok
         msg = string("assert_syntaxtree failed: ", node_string(st), "\n")
         for err in vr.errors
-            msg *= "node: " * node_string(only(err.sts)) * "\nreason: " * err.msg
+            msg *= "node: " * node_string(only(err.sts)) *
+                "\nreason: " * string(err.msgs)
         end
         throw(error(msg))
     end
@@ -1059,6 +1051,7 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
         vr &= hasattr(st, a) ? pass() : @fail(st, string("needs attribute ", a))
     end
     if is_leaf(st)
+        # Note some kinds can show up in non-leaves too
         required_attrs = @stm st begin
             [K"Identifier"] -> (:name_val,)
             [K"core"] -> (:name_val,)

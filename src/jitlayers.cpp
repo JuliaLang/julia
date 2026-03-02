@@ -369,12 +369,10 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
             gf_thunk_name = emit_abi_dispatcher(*out, from_abi, codeinst, llvminvoke);
         }
     }
-    int8_t gc_state = jl_gc_safe_enter(ct->ptls);
     auto &ES = jl_ExecutionEngine->getExecutionSession();
     auto emitted = out->finish(*ES.getSymbolStringPool());
     jl_ExecutionEngine->addOutput(std::move(emitted));
     uintptr_t Addr = jl_ExecutionEngine->getFunctionAddress(gf_thunk_name);
-    jl_gc_safe_leave(ct->ptls, gc_state);
     assert(Addr);
     return (void*)Addr;
 }
@@ -476,13 +474,6 @@ jl_emit_codeinst_to_jit_impl(jl_code_instance_t *codeinst, jl_code_info_t *src)
 
     auto &ES = jl_ExecutionEngine->getExecutionSession();
     jl_emitted_output_t emitted = out.finish(*ES.getSymbolStringPool());
-
-    // Bail out and clean up if another thread has started or finished compiling
-    // this CI.
-    jl_callptr_t expected = NULL;
-    if (!jl_atomic_cmpswap_relaxed(&codeinst->invoke, &expected,
-                                   jl_fptr_wait_for_compiled_addr))
-        return;
     jl_ExecutionEngine->addOutput(std::move(emitted));
 }
 
@@ -923,7 +914,8 @@ public:
             CIs.push_back(CI);
         JIT.publishCIs(CIs);
 
-        JIT.linkOutput(*R, Obj->getMemBufferRef(), **G, std::move(Out.linker_info));
+        if (!JIT.linkOutput(*R, Obj->getMemBufferRef(), **G, std::move(Out.linker_info)))
+            return;
         OL.emit(std::move(R), std::move(*G), std::move(Obj));
     }
 
@@ -1881,6 +1873,18 @@ void JuliaOJIT::addOutput(jl_emitted_output_t O)
     timing_print_module_names(JL_TIMING_DEFAULT_BLOCK, O.module);
 #endif
     std::unique_lock Lock{LinkerMutex};
+
+    // If another thread beat us to compiling this CodeInstance, don't define it
+    // with this output.
+    for (auto It = O.linker_info->ci_funcs.begin(); It != O.linker_info->ci_funcs.end();
+         ++It) {
+        jl_callptr_t Expected = NULL;
+        // DenseMap never rehashes on deletion, so we can erase while iterating.
+        if (!jl_atomic_cmpswap_relaxed(&It->first->invoke, &Expected,
+                                       jl_fptr_wait_for_compiled_addr))
+            O.linker_info->ci_funcs.erase(It);
+    }
+
     auto MU = std::make_unique<JLMaterializationUnit>(
         JLMaterializationUnit::Create(*this, ObjectLayer, std::move(O)));
     ExitOnError check{"Failed to add objectfile to JIT!"};
@@ -1980,11 +1984,8 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
         std::unique_lock Lock{LinkerMutex};
         for (auto CI : CIs) {
             auto It = CISymbols.find(CI);
-            if (It == CISymbols.end()) {
-                errs()
-                    << "Internal error: Attempted to publish code instance that was never successfully compiled.\n";
+            if (It == CISymbols.end())
                 return;
-            }
             auto CISym = It->second;
             if (CISym.invoke)
                 Exports.add(CISym.invoke);
@@ -2002,7 +2003,7 @@ void JuliaOJIT::publishCIs(ArrayRef<jl_code_instance_t *> CIs, bool Wait)
             errs() << "Internal error: Lookup failed: " << SymsE.takeError() << "\n";
             if (P)
                 P->set_value();
-            return;
+            abort();
         }
         auto Syms = std::move(*SymsE);
         for (auto [i, CI] : llvm::enumerate(CIs)) {
@@ -2156,7 +2157,7 @@ linkGraphSymbols(jitlink::LinkGraph &G) JL_NOTSAFEPOINT
     return Syms;
 }
 
-void JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferRef ObjBuf,
+bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferRef ObjBuf,
                            jitlink::LinkGraph &G, std::unique_ptr<jl_linker_info_t> Info)
 {
     std::unique_lock Lock{LinkerMutex};
@@ -2180,7 +2181,10 @@ void JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
         if (!Syms.contains(T))
             continue;
         JL_GC_PROMISE_ROOTED(CI);
-        Syms.at(T)->setName(linkCallTarget(MR, CI, API));
+        auto Dest = linkCallTarget(MR, CI, API);
+        if (!Dest)
+            return false;
+        Syms.at(T)->setName(Dest);
     }
 
     // Rename globals and add mappings
@@ -2205,6 +2209,7 @@ void JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
     cantFail(JD.define(orc::absoluteSymbols(std::move(GlobalSyms))));
 
     DebuginfoPlugin->notifyMaterializingWithInfo(MR, G, ObjBuf, std::move(Info));
+    return true;
 }
 
 // Must hold LinkerMutex.

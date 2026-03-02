@@ -277,6 +277,21 @@ mutable struct InferenceState
     ssavalue_uses::Vector{BitSet} # ssavalue sparsity and restart info
     # TODO: Could keep this sparsely by doing structural liveness analysis ahead of time.
     bb_vartables::Vector{Union{Nothing,VarTable}} # nothing if not analyzed yet
+
+    # Slot alias tracking
+    #
+    # `slot_aliases[i] == j` means slot `i` currently holds the same value as slot `j`.
+    # `slot_aliases[i] == 0` means slot `i` is not known to be aliased to any other slot.
+    # The table is always kept "flat": aliases always point directly to the root slot, not
+    # through a chain, so a single lookup suffices to find all aliases of a given slot.
+    #
+    # `bb_slot_aliases[bb]` stores the alias state at the **entry** of BB `bb`. Like
+    # `bb_vartables`, it is populated lazily during the main inference loop by
+    # `update_bbstate!`, which intersects the current exit state into each successor.
+    # The working alias table for the BB currently being analyzed is kept as a local
+    # variable `slot_aliases` in `typeinf_local` (analogous to `currstate`).
+    bb_slot_aliases::Vector{Union{Nothing,Vector{Int}}}
+
     bb_saw_latestworld::Vector{Bool}
     ssavaluetypes::Vector{Any}
     ssaflags::Vector{UInt32}
@@ -343,6 +358,8 @@ mutable struct InferenceState
 
         nslots = length(src.slotflags)
         slottypes = Vector{Any}(undef, nslots)
+        bb_slot_aliases = Union{Nothing,Vector{Int}}[nothing for _ = 1:length(cfg.blocks)]
+        bb_slot_aliases[1] = zeros(Int, nslots)  # entry BB: no aliases at function entry
         bb_saw_latestworld = Bool[false for _ = 1:length(cfg.blocks)]
         bb_vartables = Union{Nothing,VarTable}[ nothing for _ = 1:length(cfg.blocks) ]
         bb_vartable1 = bb_vartables[1] = VarTable(undef, nslots)
@@ -392,7 +409,7 @@ mutable struct InferenceState
 
         this = new(
             mi, valid_worlds, mod, sptypes, slottypes, src, cfg, spec_info,
-            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, bb_saw_latestworld, ssavaluetypes, ssaflags, edges, stmt_info,
+            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, bb_slot_aliases, bb_saw_latestworld, ssavaluetypes, ssaflags, edges, stmt_info,
             tasks, pclimitations, limitations, cycle_backedges, callstack, parentid, frameid, cycleid,
             result, unreachable, bestguess, exc_bestguess, ipo_effects,
             _time_ns(), 0.0, 0, 0,

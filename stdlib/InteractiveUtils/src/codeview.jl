@@ -207,6 +207,7 @@ const OC_MISMATCH_WARNING =
 function _dump_function(arginfo::ArgInfo, native::Bool, wrapper::Bool,
                         raw::Bool, dump_module::Bool, syntax::Symbol,
                         optimize::Bool, debuginfo::Symbol, binary::Bool,
+                        llvm_options::String="",
                         params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=raw, gcstack_arg=raw))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     warning = ""
@@ -263,7 +264,7 @@ function _dump_function(arginfo::ArgInfo, native::Bool, wrapper::Bool,
             src, rt = Base.get_oc_code_rt(nothing, arginfo.oc, arginfo.tt, true)
         end
         src isa Core.CodeInfo || error("failed to infer source for $mi")
-        str = _dump_function_llvm(mi, src, wrapper, !raw, dump_module, optimize, debuginfo, params)
+        str = _dump_function_llvm(mi, src, wrapper, !raw, dump_module, optimize, debuginfo, llvm_options, params)
     end
     str = warning * str
     return str
@@ -281,6 +282,7 @@ end
 struct LLVMFDump
     tsm::Ptr{Cvoid} # opaque
     f::Ptr{Cvoid} # opaque
+    pass_output::Cstring # LLVM pass instrumentation output (lifetime managed by jl_dump_function_ir or jl_dump_function_asm)
 end
 
 function _dump_function_native_assembly(mi::Core.MethodInstance, src::Core.CodeInfo,
@@ -288,7 +290,7 @@ function _dump_function_native_assembly(mi::Core.MethodInstance, src::Core.CodeI
                                         binary::Bool, raw::Bool, params::CodegenParams)
     llvmf_dump = Ref{LLVMFDump}()
     @ccall jl_get_llvmf_defn(llvmf_dump::Ptr{LLVMFDump}, mi::Any, src::Any, wrapper::Bool,
-                             true::Bool, params::CodegenParams)::Cvoid
+                             true::Bool, ""::Cstring, params::CodegenParams)::Cvoid
     llvmf_dump[].f == C_NULL && error("could not compile the specified method")
     str = @ccall jl_dump_function_asm(llvmf_dump::Ptr{LLVMFDump}, false::Bool,
                                       syntax::Ptr{UInt8}, debuginfo::Ptr{UInt8},
@@ -300,18 +302,21 @@ function _dump_function_llvm(
         mi::Core.MethodInstance, src::Core.CodeInfo, wrapper::Bool,
         strip_ir_metadata::Bool, dump_module::Bool,
         optimize::Bool, debuginfo::Symbol,
+        llvm_options::String,
         params::CodegenParams)
     llvmf_dump = Ref{LLVMFDump}()
     @ccall jl_get_llvmf_defn(llvmf_dump::Ptr{LLVMFDump}, mi::Any, src::Any,
-                             wrapper::Bool, optimize::Bool, params::CodegenParams)::Cvoid
+                             wrapper::Bool, optimize::Bool, llvm_options::Cstring,
+                             params::CodegenParams)::Cvoid
     llvmf_dump[].f == C_NULL && error("could not compile the specified method")
+    # jl_dump_function_ir handles pass_output internally (prepends it and frees it)
     str = @ccall jl_dump_function_ir(llvmf_dump::Ptr{LLVMFDump}, strip_ir_metadata::Bool,
                                      dump_module::Bool, debuginfo::Ptr{UInt8})::Ref{String}
     return str
 end
 
 """
-    code_llvm([io=stdout,], f, types; raw=false, dump_module=false, optimize=true, debuginfo=:default)
+    code_llvm([io=stdout,], f, types; raw=false, dump_module=false, optimize=true, debuginfo=:default, llvm_options="")
 
 Prints the LLVM bitcodes generated for running the method matching the given generic
 function and type signature to `io`.
@@ -321,12 +326,22 @@ All metadata and dbg.* calls are removed from the printed bitcode. For the full 
 To dump the entire module that encapsulates the function (with declarations), set the `dump_module` keyword to true.
 Keyword argument `debuginfo` may be one of source (default) or none, to specify the verbosity of code comments.
 
+The `llvm_options` keyword argument allows passing LLVM options to control the optimization pipeline output.
+Supported options include:
+- `-print-after-all`: Print IR after each pass
+- `-print-before-all`: Print IR before each pass
+- `-print-after=<passname>`: Print IR after a specific pass (e.g., `-print-after=InstCombinePass`). Comma-separated lists and repeated flags are supported.
+- `-print-before=<passname>`: Print IR before a specific pass. Comma-separated lists and repeated flags are supported.
+- `-print-module-scope`: Print entire module instead of just the function
+- `-filter-print-funcs=<name>`: Only print IR for functions matching the name
+
 See also: [`@code_llvm`](@ref), [`code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref), [`code_native`](@ref).
 """
 function code_llvm(io::IO, arginfo::ArgInfo;
                    raw::Bool=false, dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default,
+                   llvm_options::String="",
                    params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=raw, gcstack_arg=raw))
-    d = _dump_function(arginfo, false, false, raw, dump_module, :intel, optimize, debuginfo, false, params)
+    d = _dump_function(arginfo, false, false, raw, dump_module, :intel, optimize, debuginfo, false, llvm_options, params)
     if highlighting[:llvm] && get(io, :color, false)::Bool
         print_llvm(io, d)
     else
@@ -354,8 +369,9 @@ See also: [`@code_native`](@ref), [`code_warntype`](@ref), [`code_typed`](@ref),
 function code_native(io::IO, arginfo::ArgInfo;
                      dump_module::Bool=true, syntax::Symbol=:intel, raw::Bool=false,
                      debuginfo::Symbol=:default, binary::Bool=false,
+                     llvm_options::String="",
                      params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=raw, gcstack_arg=raw))
-    d = _dump_function(arginfo, true, false, raw, dump_module, syntax, true, debuginfo, binary, params)
+    d = _dump_function(arginfo, true, false, raw, dump_module, syntax, true, debuginfo, binary, llvm_options, params)
     if highlighting[:native] && get(io, :color, false)::Bool
         print_native(io, d)
     else

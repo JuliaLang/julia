@@ -1833,7 +1833,7 @@ function add_nested_key!(keymap::Dict{Char, Any}, key::Union{String, Char}, valu
         c, i = y
         y = iterate(key, i)
         if !override && c in keys(keymap) && (y === nothing || !isa(keymap[c], Dict))
-            error("Conflicting definitions for keyseq " * escape_string(key) *
+            error("Conflicting definitions for keyseq " * escape_string(string(key)) *
                   " within one keymap")
         end
         if y === nothing

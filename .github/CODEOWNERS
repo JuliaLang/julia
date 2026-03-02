@@ -15,3 +15,4 @@ CODEOWNERS @JuliaLang/github-actions
 /src/julia_gcext.h @fingolfin
 /test/gcext/gcext.c @fingolfin
 /src/gc-* @udesou @qinsoon @d-netto
+/stdlib/Markdown @fingolfin

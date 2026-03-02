@@ -337,6 +337,18 @@ JL_DLLEXPORT const char* jl_gc_active_impl(void) {
     return mmtk_version;
 }
 
+JL_DLLEXPORT int jl_gc_enable_auto_full_collection(int on)
+{
+    // MMTk does not currently support collection type control
+    return 1;
+}
+
+JL_DLLEXPORT int jl_gc_auto_full_collection_is_enabled(void)
+{
+    return 1;
+}
+
+
 int64_t last_gc_total_bytes = 0;
 int64_t last_live_bytes = 0; // live_bytes at last collection
 int64_t live_bytes = 0;
