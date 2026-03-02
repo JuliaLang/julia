@@ -7882,6 +7882,26 @@ const orig_P36104 = P36104
 primitive type P36104 16 end
 @test P36104 !== orig_P36104
 
+# Test redefinition undoing
+struct X57253
+    a::Int
+    b::String
+end
+a = X57253
+struct X57253
+    a::Int
+    b::String
+    c::Float64
+end
+b = X57253
+struct X57253
+    a::Int
+    b::String
+end
+c = X57253
+@test a != b
+@test a === c
+
 # Malformed invoke
 f_bad_invoke(x::Int) = invoke(x, (Any,), x)
 @test_throws TypeError f_bad_invoke(1)
