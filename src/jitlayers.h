@@ -834,6 +834,11 @@ protected:
                                         jl_code_instance_t *CI,
                                         jl_invoke_api_t API) JL_NOTSAFEPOINT;
 
+    // If the provided CodeInstance is neither compiled nor has an ORC symbol in
+    // CISymbols, look for a compatible CodeInstance in the MethodInstance's
+    // cache that does.  Returns the original CodeInstance if none exists.
+    jl_code_instance_t *findCompatibleCI(jl_code_instance_t *CI);
+
     // Create an ORC symbol and entry in CISymbols for the CI's specptr,
     // returning a pointer into CISymbols or NULL if the CI is not compiled.
     CISymbolPtr *linkCISymbol(jl_code_instance_t *CI) JL_NOTSAFEPOINT;
