@@ -278,7 +278,7 @@ function _subtypes_in!(mods::Array, @nospecialize(x::Type))
             end
         end
     end
-    return permute!(sts, sortperm(map(string, sts)))
+    return sts
 end
 
 subtypes(m::Module, x::Type) = _subtypes_in!([m], x)
