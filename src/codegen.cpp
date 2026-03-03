@@ -7916,6 +7916,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
         param.addAttribute(Attribute::NoAlias);
         param.addAttribute(Attribute::NoCapture);
         param.addAttribute(Attribute::NoUndef);
+        param.addAlignmentAttr(Align(props.union_align));
         attrs.push_back(AttributeSet::get(M->getContext(), param));
         assert(fsig.size() == 1);
     }
@@ -8688,13 +8689,10 @@ static jl_llvm_functions_t
             const DataLayout &DL = jl_Module->getDataLayout();
             Type *RT = Arg->getParamStructRetType();
             TypeSize sz = DL.getTypeAllocSize(RT);
-            Align al = DL.getPrefTypeAlign(RT);
-            if (al > MAX_ALIGN)
-                al = Align(MAX_ALIGN);
             param.addAttribute(Attribute::NonNull);
             // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
             param.addDereferenceableAttr(sz);
-            param.addAlignmentAttr(al);
+            // Alignment is already set by get_specsig_function.
         }
         attrs[Arg->getArgNo()] = AttributeSet::get(Arg->getContext(), param); // function declaration attributes
     }

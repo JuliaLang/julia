@@ -1064,3 +1064,15 @@ let io = IOBuffer()
     str = String(take!(io))
     @test occursin("julia.write_barrier", str)
 end
+
+# sret parameters must have an alignment attribute (required by LLVM LangRef).
+@testset "sret alignment attribute" begin
+    struct SretAlignTest
+        a::Float32
+        b::Float32
+        c::Float32
+    end
+    @noinline f_srettest(x::Float32) = SretAlignTest(x, x+1, x+2)
+    ir = get_llvm(f_srettest, Tuple{Float32}, true, true, true)
+    @test occursin(r"sret\([^)]+\) align \d+", ir)
+end
