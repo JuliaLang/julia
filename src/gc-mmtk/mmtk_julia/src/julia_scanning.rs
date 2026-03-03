@@ -89,6 +89,15 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
         || vtag_usize == ((jl_small_typeof_tags_jl_uniontype_tag as usize) << 4)
         || vtag_usize == ((jl_small_typeof_tags_jl_tvar_tag as usize) << 4)
         || vtag_usize == ((jl_small_typeof_tags_jl_vararg_tag as usize) << 4)
+        || vtag_usize == ((jl_small_typeof_tags_jl_globalref_tag as usize) << 4)
+        || vtag_usize == ((jl_small_typeof_tags_jl_gotoifnot_tag as usize) << 4)
+        || vtag_usize == ((jl_small_typeof_tags_jl_returnnode_tag as usize) << 4)
+        || vtag_usize == ((jl_small_typeof_tags_jl_enternode_tag as usize) << 4)
+        || vtag_usize == ((jl_small_typeof_tags_jl_pinode_tag as usize) << 4)
+        || vtag_usize == ((jl_small_typeof_tags_jl_phinode_tag as usize) << 4)
+        || vtag_usize == ((jl_small_typeof_tags_jl_phicnode_tag as usize) << 4)
+        || vtag_usize == ((jl_small_typeof_tags_jl_upsilonnode_tag as usize) << 4)
+        || vtag_usize == ((jl_small_typeof_tags_jl_quotenode_tag as usize) << 4)
     {
         // these objects have pointers in them, but no other special handling
         // so we want these to fall through to the end
