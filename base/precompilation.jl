@@ -619,7 +619,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
 
     quiet = JLOptions().quiet != 0
     logio = quiet ? IOContext{IO}(devnull) : io
-    logcalls = if _from_loading
+    logcalls = if _from_loading && !quiet
         isinteractive() ? CoreLogging.Info : CoreLogging.Debug # sync with Base.compilecache
     else
         nothing
