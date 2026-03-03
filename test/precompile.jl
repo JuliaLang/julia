@@ -1872,6 +1872,7 @@ end
     dir = @__DIR__
     @test success(pipeline(Cmd(`$(Base.julia_cmd()) --startup-file=no precompile_absint1.jl`; dir); stdout, stderr))
     @test success(pipeline(Cmd(`$(Base.julia_cmd()) --startup-file=no precompile_absint2.jl`; dir); stdout, stderr))
+    @test success(pipeline(Cmd(`$(Base.julia_cmd()) --startup-file=no precompile_extmi.jl`; dir); stdout, stderr))
 end
 
 precompile_test_harness("Recursive types") do load_path
