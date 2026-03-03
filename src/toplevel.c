@@ -326,7 +326,7 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
                 if (jl_atomic_load_relaxed(&bpart->min_world) == new_world) {
                     bpart->kind = new_kind | (bpart->kind & PARTITION_MASK_FLAG);
                     if (global_type)
-                        jl_write(bpart, bpart->restriction, global_type);
+                        jl_write(bpart, (void**)&(bpart->restriction), global_type);
                     else
                         bpart->restriction = global_type;
                     continue;

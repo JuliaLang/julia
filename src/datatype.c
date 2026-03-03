@@ -1889,8 +1889,6 @@ inline void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t
         jl_value_t *rty = jl_typeof(rhs);
         int hasptr;
         int isunion = jl_is_uniontype(ty);
-        if (hasptr)
-            jl_gc_multi_wb_pre(v, rhs); // rhs is immutable
         if (isunion) {
             assert(!isatomic);
             size_t fsz = jl_field_size(st, i);
@@ -1904,6 +1902,7 @@ inline void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t
             hasptr = 0;
         }
         else {
+            jl_gc_multi_wb_pre(v, rhs); // rhs is immutable
             hasptr = ((jl_datatype_t*)ty)->layout->first_ptr >= 0;
         }
         size_t fsz = jl_datatype_size((jl_datatype_t*)rty); // need to shrink-wrap the final copy

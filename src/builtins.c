@@ -830,7 +830,7 @@ JL_CALLABLE(jl_f__apply_iterate)
                         jl_gc_wb_pre(arg_heap, arg);
                     newargs[n++] = arg;
                     if (arg_heap)
-                        jl_gc_wb_pre(arg_heap, arg);
+                        jl_gc_wb_post(arg_heap, arg);
                 }
             }
             else {
