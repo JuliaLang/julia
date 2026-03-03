@@ -3998,11 +3998,22 @@ function expand_typegroup_def(ctx, ex)
         throw(LoweringError(body, "expected block for `typegroup` body"))
     end
 
-    # Collect struct definitions from block children
+    # Collect struct definitions from block children.
+    # A child can be a bare K"struct" or a K"doc" wrapping a K"struct".
     struct_defs = SyntaxList(ctx)
+    type_docs = Vector{Any}()  # nothing or the K"doc" node per struct
     for child in children(body)
         if kind(child) == K"struct"
             push!(struct_defs, child)
+            push!(type_docs, nothing)
+        elseif kind(child) == K"doc"
+            @jl_assert numchildren(child) == 2 child
+            sdef = child[2]
+            if kind(sdef) != K"struct"
+                throw(LoweringError(sdef, "`typegroup` only supports `struct` definitions"))
+            end
+            push!(struct_defs, sdef)
+            push!(type_docs, child)
         else
             throw(LoweringError(child, "`typegroup` only supports `struct` definitions"))
         end
@@ -4044,12 +4055,9 @@ function expand_typegroup_def(ctx, ex)
         _collect_struct_fields(ctx, field_names, field_types, field_attrs, field_docs,
                                inner_defs, children(type_body))
 
-        if !isempty(inner_defs)
-            throw(LoweringError(sdef, "method definitions are not allowed inside `typegroup` blocks"))
-        end
-
         is_mutable = has_flags(sdef, JuliaSyntax.MUTABLE_FLAG)
-        min_initialized = length(field_names)
+        min_initialized = minimum((_constructor_min_initialized(e) for e in inner_defs),
+                                  init=length(field_names))
 
         push!(struct_names, struct_name)
         layer = new_scope_layer(ctx, struct_name)
@@ -4148,19 +4156,56 @@ function expand_typegroup_def(ctx, ex)
 
     # 2f. latestworld
     push!(stmts, @ast ctx ex (::K"latestworld"))
+    push!(stmts, nothing_(ctx, ex))
 
-    # 2g. Constructor definitions (using _defaultctors for each struct)
+    # 2g. Constructor definitions — placed outside the scope_block so that
+    # type names in constructor bodies resolve to globals, not captured locals.
+    fdef_stmts = SyntaxList(ctx)
     for i in 1:n
         sdef = struct_defs[i]
-        push!(stmts, @ast ctx sdef [K"call"
-            "_defaultctors"::K"top"
-            global_names[i]
-            ::K"SourceLocation"(sdef)
-        ])
+        inner_defs = all_inner_defs[i]
+        if isempty(inner_defs)
+            push!(fdef_stmts, @ast ctx sdef [K"call"
+                "_defaultctors"::K"top"
+                global_names[i]
+                ::K"SourceLocation"(sdef)
+            ])
+        else
+            # Rewrite inner constructors: replace `new()` calls with proper
+            # type references, using global_names[i] so they resolve via the
+            # global binding.
+            map!(inner_defs, inner_defs) do def
+                rewrite_new_calls(ctx, def, struct_names[i], global_names[i],
+                                  all_typevar_names[i], all_field_names[i], all_field_types[i])
+            end
+            push!(fdef_stmts, @ast ctx sdef [K"scope_block"(scope_type=:hard)
+                [K"block" inner_defs...]
+            ])
+        end
     end
 
-    push!(stmts, @ast ctx ex (::K"latestworld"))
-    push!(stmts, nothing_(ctx, ex))
+    push!(fdef_stmts, @ast ctx ex (::K"latestworld"))
+
+    # 2h. Documentation — after constructors and latestworld so types are fully defined
+    for i in 1:n
+        docs = type_docs[i]
+        field_docs = all_field_docs[i]
+        if !isnothing(docs) || !isempty(field_docs)
+            sdef = struct_defs[i]
+            push!(fdef_stmts, @ast ctx sdef [K"call"(isnothing(docs) ? sdef : docs)
+                bind_docs!::K"Value"
+                struct_names[i]
+                isnothing(docs) ? nothing_(ctx, sdef) : docs[1]
+                ::K"SourceLocation"(sdef)
+                [K"kw"
+                    "field_docs"::K"Identifier"
+                    [K"call" "svec"::K"core" field_docs...]
+                ]
+            ])
+        end
+    end
+
+    push!(fdef_stmts, nothing_(ctx, ex))
 
     # Build the toplevel assertion + scope block, then do the expand and replace
     scope_block_stmts = SyntaxList(ctx)
@@ -4174,7 +4219,7 @@ function expand_typegroup_def(ctx, ex)
         [K"scope_block"(scope_type=:hard)
             scope_block_stmts...
         ]
-        nothing_(ctx, ex)
+        fdef_stmts...
     ]
 
     # Expand, then replace apply_type with apply_type_or_typeapp

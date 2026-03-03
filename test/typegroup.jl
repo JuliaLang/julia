@@ -704,4 +704,151 @@ using Test
     end
     =#
 
+    @testset "invalid supertype errors" begin
+        # Cannot subtype a tuple type
+        @test_throws ErrorException eval(:(typegroup
+            struct TG_BadTuple <: Tuple{Int}
+                x::Int
+            end
+        end))
+        # Cannot subtype a named tuple type
+        @test_throws ErrorException eval(:(typegroup
+            struct TG_BadNT <: @NamedTuple{x::Int}
+                x::Int
+            end
+        end))
+        # Cannot add subtypes to Type
+        @test_throws ErrorException eval(:(typegroup
+            struct TG_BadType <: Type{Int}
+                x::Int
+            end
+        end))
+        # Can only subtype abstract types
+        @test_throws ErrorException eval(:(typegroup
+            struct TG_BadConcrete <: Int
+                x::Int
+            end
+        end))
+    end
+
+    @testset "inner constructors" begin
+        # Basic inner constructor with no arguments
+        typegroup
+            struct TG_InnerBasicA
+                x::Int
+                TG_InnerBasicA() = new(0)
+            end
+            struct TG_InnerBasicB
+                a::TG_InnerBasicA
+            end
+        end
+        @test TG_InnerBasicA().x == 0
+        @test TG_InnerBasicB(TG_InnerBasicA()).a.x == 0
+
+        # Inner constructor with arguments
+        typegroup
+            struct TG_InnerArgsA
+                x::Int
+                y::Float64
+                TG_InnerArgsA(x::Int) = new(x, float(x))
+            end
+            struct TG_InnerArgsB
+                a::TG_InnerArgsA
+            end
+        end
+        @test TG_InnerArgsA(3).y == 3.0
+        @test TG_InnerArgsB(TG_InnerArgsA(5)).a.x == 5
+
+        # Inner constructor with new{T}(...) for parametric types
+        typegroup
+            struct TG_InnerParamA{T}
+                x::T
+                TG_InnerParamA{T}(x) where {T} = new{T}(x)
+                TG_InnerParamA(x::T) where {T} = new{T}(x)
+            end
+            struct TG_InnerParamB{T}
+                a::TG_InnerParamA{T}
+            end
+        end
+        @test TG_InnerParamA{Int}(42).x == 42
+        @test TG_InnerParamA(3.14).x == 3.14
+        @test TG_InnerParamB{Int}(TG_InnerParamA(1)).a.x == 1
+
+        # Inner constructor in one type referencing the other typegroup type
+        typegroup
+            struct TG_InnerCrossA
+                x::Int
+                b::Union{Nothing, TG_InnerCrossB}
+                TG_InnerCrossA(x::Int) = new(x, nothing)
+            end
+            struct TG_InnerCrossB
+                a::TG_InnerCrossA
+                TG_InnerCrossB(x::Int) = new(TG_InnerCrossA(x))
+            end
+        end
+        @test TG_InnerCrossA(1).b === nothing
+        @test TG_InnerCrossB(42).a.x == 42
+
+        # Multiple inner constructors
+        typegroup
+            struct TG_InnerMultiA
+                x::Int
+                y::Int
+                TG_InnerMultiA() = new(0, 0)
+                TG_InnerMultiA(x::Int) = new(x, x)
+                TG_InnerMultiA(x::Int, y::Int) = new(x, y)
+            end
+            struct TG_InnerMultiB
+                a::TG_InnerMultiA
+            end
+        end
+        @test TG_InnerMultiA().x == 0
+        @test TG_InnerMultiA(3).y == 3
+        @test TG_InnerMultiA(1, 2).y == 2
+    end
+
+    @testset "docstrings on typegroup types" begin
+        # Docstrings on individual types within a typegroup
+        typegroup
+            "TG_DocA: a documented node type"
+            struct TG_DocA
+                edges::Vector{TG_DocB}
+            end
+            "TG_DocB: a documented edge type"
+            struct TG_DocB
+                from::TG_DocA
+                to::TG_DocA
+            end
+        end
+
+        @test fieldtype(TG_DocA, :edges) == Vector{TG_DocB}
+        @test fieldtype(TG_DocB, :from) == TG_DocA
+
+        meta = Base.Docs.meta(@__MODULE__)
+        bind_a = Base.Docs.Binding(@__MODULE__, :TG_DocA)
+        bind_b = Base.Docs.Binding(@__MODULE__, :TG_DocB)
+        @test haskey(meta, bind_a)
+        @test haskey(meta, bind_b)
+        @test contains(string(meta[bind_a].docs[Union{}]), "TG_DocA: a documented node type")
+        @test contains(string(meta[bind_b].docs[Union{}]), "TG_DocB: a documented edge type")
+
+        # Mix of documented and undocumented types
+        typegroup
+            "TG_DocC: only this one has a docstring"
+            struct TG_DocC
+                other::TG_DocD
+            end
+            struct TG_DocD
+                other::TG_DocC
+            end
+        end
+
+        @test fieldtype(TG_DocC, :other) == TG_DocD
+        bind_c = Base.Docs.Binding(@__MODULE__, :TG_DocC)
+        bind_d = Base.Docs.Binding(@__MODULE__, :TG_DocD)
+        @test haskey(meta, bind_c)
+        @test contains(string(meta[bind_c].docs[Union{}]), "TG_DocC: only this one has a docstring")
+        @test !haskey(meta, bind_d)
+    end
+
 end

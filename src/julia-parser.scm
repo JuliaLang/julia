@@ -1526,7 +1526,7 @@
        ((typegroup)
         ;; Grouped type definitions (mutually recursive)
         ;; typegroup struct A ... end end  ==>  (typegroup (block ...))
-        (let ((body (parse-block s)))
+        (let ((body (parse-block s (lambda (s) (parse-docstring s parse-eq)))))
           (begin0 (list 'typegroup body)
                   (expect-end s "typegroup"))))
 

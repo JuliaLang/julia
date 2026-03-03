@@ -1022,7 +1022,7 @@
           `(scope-block
             (block
              (hardscope)
-             (global ,name)
+             ,@(if incomp '() `((global ,name)))
              ,@(map (lambda (c) (rewrite-ctor c name params field-names field-types)) defs))))))))
 
 (define (abstract-type-def-expr name params super)
@@ -1395,6 +1395,37 @@
          `(call (core apply_type_or_typeapp) ,@(map replace-type-constructors (cddr expr))))
         (else (map replace-type-constructors expr))))
 
+;; Extract a struct definition from a typegroup block child.
+;; Returns (values struct-expr doc-calls) where doc-calls is a list of
+;; documentation expressions to emit after the types are bound.
+;; A child may be a bare (struct ...) or a block from @doc macro expansion:
+;;   (block (= gensym (struct ...)) (call Docs.doc! ...) gensym)
+(define (typegroup-extract-struct x)
+  (cond ((and (pair? x) (eq? (car x) 'struct))
+         (values x '()))
+        ((and (pair? x) (eq? (car x) 'block)
+              (let ((body (cdr x)))
+                (and (pair? body)
+                     (pair? (car body))
+                     (eq? (caar body) '=)
+                     (pair? (cddar body))
+                     (let ((rhs (caddar body)))
+                       (and (pair? rhs) (eq? (car rhs) 'struct))))))
+         ;; Expanded @doc block: (block (= gensym (struct ...)) doc-calls... gensym)
+         (let* ((body (cdr x))
+                (struct-expr (caddar body))   ; the (struct ...) from (= gensym (struct ...))
+                (rest (cdr body))             ; everything after the assignment
+                ;; Drop the trailing gensym return value, keep the doc calls
+                (doc-calls (if (and (pair? rest) (not (null? (cdr rest))))
+                               (let loop ((r rest) (acc '()))
+                                 (if (null? (cdr r))
+                                     (reverse acc)  ; skip last element (the gensym)
+                                     (loop (cdr r) (cons (car r) acc))))
+                               '())))
+           (values struct-expr doc-calls)))
+        (else
+         (error (string "typegroup only supports struct definitions, got: " (deparse x))))))
+
 (define (expand-typegroup-def e)
   (let* ((body (cadr e))
          (stmts (if (and (pair? body) (eq? (car body) 'block))
@@ -1402,51 +1433,57 @@
                     (list body))))
     ;; First pass: collect names and process structs
     (let loop ((remaining stmts)
-               (names '()) (sdefs '()) (fdefs '()) (info-vars '()))
+               (names '()) (sdefs '()) (fdefs '()) (info-vars '()) (doc-stmts '()))
       (if (null? remaining)
           ;; Generate the full lowered code
           (let* ((names (reverse names))
                  (sdefs (reverse sdefs))
                  (fdefs (reverse fdefs))
                  (info-vars (reverse info-vars))
+                 (doc-stmts (reverse doc-stmts))
                  ;; Build the block structure:
                  ;; 1. Declare all names as locals
                  ;; 2. Create TypeVar placeholders for each name
                  ;; 3. Run sdefs (assigns struct info svecs to SSA values)
                  ;; 4. Resolve typegroup via C
                  ;; 5. Bind to global constants
-                 ;; 6. Run fdefs (constructors)
-                 (code `(scope-block
-                         (block
-                          ,@(map (lambda (n) `(local ,n)) names)
-                          ,@(map (lambda (n) `(= ,n (call (core TypeVar) (inert ,n)))) names)
-                          ,@sdefs
-                          (= (tuple ,@names)
-                             (call (core resolve_typegroup) (thismodule)
-                                   (call (core svec) ,@names)
-                                   (call (core svec) ,@info-vars)))
-                          ,@(map (lambda (n) `(const (globalref (thismodule) ,n) ,n)) names)
-                          (latestworld)
-                          ,@fdefs
-                          (latestworld)
-                          (null))))
+                 ;; 6. Run fdefs (constructors) — outside scope-block so
+                 ;;    type names resolve to globals, not captured locals
+                 ;; 7. Run doc-stmts (documentation calls from @doc)
+                 (code `(block
+                         (scope-block
+                          (block
+                           ,@(map (lambda (n) `(local ,n)) names)
+                           ,@(map (lambda (n) `(= ,n (call (core TypeVar) (inert ,n)))) names)
+                           ,@sdefs
+                           (= (tuple ,@names)
+                              (call (core resolve_typegroup) (thismodule)
+                                    (call (core svec) ,@names)
+                                    (call (core svec) ,@info-vars)))
+                           ,@(map (lambda (n) `(const (globalref (thismodule) ,n) ,n)) names)
+                           (latestworld)
+                           (null)))
+                         ,@fdefs
+                         (latestworld)
+                         ,@doc-stmts
+                         (null)))
                  (expanded (expand-forms code))
                  (replaced (replace-type-constructors expanded)))
             replaced)
           (let ((x (car remaining)))
             (cond ((linenum? x)
-                   (loop (cdr remaining) names sdefs fdefs info-vars))
-                  ((not (and (pair? x) (eq? (car x) 'struct)))
-                   (error (string "typegroup only supports struct definitions, got: " (deparse x))))
+                   (loop (cdr remaining) names sdefs fdefs info-vars doc-stmts))
                   (else
-                   (let* ((mut (cadr x))
-                          (sig (caddr x))
-                          (fields (cdr (cadddr x)))
-                          (info-var (make-ssavalue)))
-                     (receive (name sdef fdef) (struct-def-expr sig fields mut info-var)
-                       (loop (cdr remaining)
-                             (cons name names) (cons sdef sdefs)
-                             (cons fdef fdefs) (cons info-var info-vars)))))))))))
+                   (receive (struct-expr doc-calls) (typegroup-extract-struct x)
+                     (let* ((mut (cadr struct-expr))
+                            (sig (caddr struct-expr))
+                            (fields (cdr (cadddr struct-expr)))
+                            (info-var (make-ssavalue)))
+                       (receive (name sdef fdef) (struct-def-expr sig fields mut info-var)
+                         (loop (cdr remaining)
+                               (cons name names) (cons sdef sdefs)
+                               (cons fdef fdefs) (cons info-var info-vars)
+                               (append (reverse doc-calls) doc-stmts))))))))))))
 
 ;; the following are for expanding `try` blocks
 

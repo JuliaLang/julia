@@ -2140,23 +2140,11 @@ JL_CALLABLE(jl_f__primitivetype)
 
 static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
-    const char *error = NULL;
-    if (!jl_is_datatype(super))
-        error = "can only subtype data types";
-    else if (tt->super != NULL)
+    const char *error = jl_check_valid_supertype(super);
+    if (!error && tt->super != NULL)
         error = "type already has a supertype";
-    else if (tt->name == ((jl_datatype_t*)super)->name)
+    else if (!error && tt->name == ((jl_datatype_t*)super)->name)
         error = "a type cannot subtype itself";
-    else if (jl_is_tuple_type(super))
-        error = "cannot subtype a tuple type";
-    else if (jl_is_namedtuple_type(super))
-        error = "cannot subtype a named tuple type";
-    else if (jl_subtype(super, (jl_value_t*)jl_type_type))
-        error = "cannot add subtypes to Type";
-    else if (jl_subtype(super, (jl_value_t*)jl_builtin_type))
-        error = "cannot add subtypes to Core.Builtin";
-    else if (!jl_is_abstracttype(super))
-        error = "can only subtype abstract types";
     if (error)
          jl_errorf("invalid subtyping in definition of %s: %s.", jl_symbol_name(tt->name->name), error);
     tt->super = (jl_datatype_t*)super;
@@ -2327,14 +2315,7 @@ JL_CALLABLE(jl_f__typebody)
         jl_value_t *ft = args[2];
         JL_TYPECHK(_typebody!, simplevector, ft);
         size_t nf = jl_svec_len(ft);
-        for (size_t i = 0; i < nf; i++) {
-            jl_value_t *elt = jl_svecref(ft, i);
-            if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
-                jl_type_error_rt(jl_symbol_name(dt->name->name),
-                                 "type definition",
-                                 (jl_value_t*)jl_type_type, elt);
-            }
-        }
+        jl_check_field_types((jl_svec_t*)ft, dt->name->name);
         // Optimization: To avoid lots of unnecessary churning, lowering contains an optimization
         // that re-uses the typevars of an existing definition (if any exists) for compute the field
         // types. If such a previous type exists, there are two possibilities:

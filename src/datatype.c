@@ -2589,6 +2589,40 @@ static jl_datatype_t *unwrap_to_datatype(jl_value_t *v) JL_NOTSAFEPOINT
     return (jl_datatype_t*)v;
 }
 
+// Check if `super` is a valid supertype for subtyping.
+// Returns an error message string, or NULL if valid.
+const char *jl_check_valid_supertype(jl_value_t *super)
+{
+    if (!jl_is_datatype(super))
+        return "can only subtype data types";
+    if (jl_is_tuple_type(super))
+        return "cannot subtype a tuple type";
+    if (jl_is_namedtuple_type(super))
+        return "cannot subtype a named tuple type";
+    if (jl_subtype(super, (jl_value_t*)jl_type_type))
+        return "cannot add subtypes to Type";
+    if (jl_subtype(super, (jl_value_t*)jl_builtin_type))
+        return "cannot add subtypes to Core.Builtin";
+    if (!jl_is_abstracttype(super))
+        return "can only subtype abstract types";
+    return NULL;
+}
+
+// Check that all elements of `ftypes` are types or typevars.
+// Throws a type error if any element is invalid.
+void jl_check_field_types(jl_svec_t *ftypes, jl_sym_t *type_name)
+{
+    size_t nf = jl_svec_len(ftypes);
+    for (size_t i = 0; i < nf; i++) {
+        jl_value_t *elt = jl_svecref(ftypes, i);
+        if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
+            jl_type_error_rt(jl_symbol_name(type_name),
+                             "type definition",
+                             (jl_value_t*)jl_type_type, elt);
+        }
+    }
+}
+
 // Resolve multiple typegroup types atomically into real DataTypes
 // Arguments: module, SimpleVector of TypeVars, SimpleVector of struct info SimpleVectors
 // Each struct info svec contains:
@@ -2686,10 +2720,9 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
                 jl_value_t *resolved_super = NULL;
                 JL_GC_PUSH3(&tv, &super, &resolved_super);
                 resolved_super = resolve_type_refs(super, &subst_map);
-                if (!jl_is_datatype(resolved_super) || !((jl_datatype_t*)resolved_super)->name->abstract) {
-                    jl_errorf("invalid subtyping: supertype of %s must be an abstract type",
-                             type_name);
-                }
+                const char *error = jl_check_valid_supertype(resolved_super);
+                if (error)
+                    jl_errorf("invalid subtyping in definition of %s: %s.", type_name, error);
                 datatypes[i]->super = (jl_datatype_t*)resolved_super;
                 jl_gc_wb(datatypes[i], datatypes[i]->super);
                 JL_GC_POP();
@@ -2735,6 +2768,8 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
                 jl_value_t *resolved = resolve_type_refs(ft, &subst_map);
                 jl_svecset(ftypes, j, resolved);
             }
+            jl_tvar_t *tv = (jl_tvar_t*)jl_svecref(typevars, i);
+            jl_check_field_types(ftypes, tv->name);
             jl_datatype_t *dt = unwrap_to_datatype(results[i]);
             dt->types = ftypes;
             jl_gc_wb(dt, ftypes);
@@ -2753,7 +2788,7 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
 
             uint32_t *atomicfields = NULL;
             uint32_t *constfields = NULL;
-            jl_process_field_attrs(fattrs, fnames, mutabl, 0, &atomicfields, &constfields);
+            jl_process_field_attrs(fattrs, fnames, mutabl, 1, &atomicfields, &constfields);
             dt->name->atomicfields = atomicfields;
             dt->name->constfields = constfields;
 
@@ -2762,17 +2797,24 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             }
 
             if (!mutabl && dt->types != NULL) {
+                size_t nf = jl_svec_len(dt->types);
+                // Mirror _typebody!: if the supertype can reference this type,
+                // we can't inline-allocate (the layout may not be known yet).
                 htable_t visited;
                 htable_new(&visited, 8);
-                size_t nf = jl_svec_len(dt->types);
-                int mayinlinealloc = 1;
-                for (size_t j = 0; j < nf && mayinlinealloc; j++) {
-                    jl_value_t *fld = jl_svecref(dt->types, j);
-                    if (is_typename_reachable(fld, dt->name, &visited))
-                        mayinlinealloc = 0;
-                }
+                int super_refs = is_typename_reachable((jl_value_t*)dt->super, dt->name, &visited);
                 htable_free(&visited);
-                dt->name->mayinlinealloc = mayinlinealloc;
+                if (nf == 0 || !super_refs) {
+                    htable_new(&visited, 8);
+                    int mayinlinealloc = 1;
+                    for (size_t j = 0; j < nf && mayinlinealloc; j++) {
+                        jl_value_t *fld = jl_svecref(dt->types, j);
+                        if (is_typename_reachable(fld, dt->name, &visited))
+                            mayinlinealloc = 0;
+                    }
+                    htable_free(&visited);
+                    dt->name->mayinlinealloc = mayinlinealloc;
+                }
             }
 
             jl_precompute_memoized_dt(dt, 0);
