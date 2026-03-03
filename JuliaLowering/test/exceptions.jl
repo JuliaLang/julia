@@ -1,5 +1,3 @@
-@testset "try/catch" begin
-
 test_mod = Module()
 
 @test isempty(current_exceptions())
@@ -260,8 +258,6 @@ end
 
 @test isempty(current_exceptions())
 
-end
-
 #-------------------------------------------------------------------------------
 @testset "try/finally" begin
 
@@ -351,5 +347,4 @@ begin
     )
 end
 """) == (1,2)
-
 end

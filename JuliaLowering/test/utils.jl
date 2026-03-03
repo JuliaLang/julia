@@ -4,6 +4,9 @@ using Test
 using JuliaLowering
 using JuliaSyntax
 
+const JS = JuliaSyntax
+const JL = JuliaLowering
+
 import FileWatching
 
 # The following are for docstrings testing. We need to load the REPL module
@@ -371,10 +374,41 @@ function reduce_any_failing_toplevel(mod::Module, filename::AbstractString; do_e
     nothing
 end
 
-function reference_lower(mod::Module, x)
+function fl_macroexpand(mod::Module, x::Expr)
+    ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, m, recursive, false, legacyscope)
+end
+
+function fl_lower(mod::Module, x::Expr)
     Base.fl_lower(x, mod, @__FILE__, @__LINE__, Base.get_world_counter())[1]
 end
 
-function reference_eval(mod::Module, x)
-    Core.eval(mod, reference_lower(mod, x))
+function fl_eval(mod::Module, x::Expr)
+    Core.eval(mod, fl_lower(mod, x))
 end
+
+function jl_macroexpand(mod::Module, x::SyntaxTree; expr_compat_mode=false)
+    JuliaLowering.expand_forms_1(mod, x, expr_compat_mode, Base.get_world_counter())
+end
+
+function jl_lower(mod::Module, st::SyntaxTree; expr_compat_mode=false)
+    JuliaLowering.lower(mod, st; expr_compat_mode)
+end
+
+function jl_eval(mod::Module, st::SyntaxTree; expr_compat_mode=false)
+    JuliaLowering.eval(mod, st; expr_compat_mode)
+end
+
+
+fl_macroexpand(mod::Module, st::SyntaxTree; kws...) =
+    fl_macroexpand(mod, JuliaLowering.est_to_expr(st); kws...)
+fl_lower(mod::Module, st::SyntaxTree; kws...) =
+    fl_lower(mod, JuliaLowering.est_to_expr(st); kws...)
+fl_eval(mod::Module, st::SyntaxTree; kws...) =
+    fl_eval(mod, JuliaLowering.est_to_expr(st); kws...)
+
+jl_macroexpand(mod::Module, ex::Expr; kws...) =
+    jl_macroexpand(mod, JuliaLowering.expr_to_est(ex); kws...)
+jl_lower(mod::Module, ex::Expr; kws...) =
+    jl_lower(mod, JuliaLowering.expr_to_est(ex); kws...)
+jl_eval(mod::Module, ex::Expr; kws...) =
+    jl_eval(mod, JuliaLowering.expr_to_est(ex); kws...)

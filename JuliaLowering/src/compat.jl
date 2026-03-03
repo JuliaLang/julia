@@ -18,7 +18,7 @@ end
 
 function expr_to_est(@nospecialize(e),
                      lnn::LineNumberNode=LineNumberNode(0, :none))
-    graph = ensure_macro_attributes!(SyntaxGraph())
+    graph = ensure_desugaring_attributes!(SyntaxGraph())
     expr_to_est(graph, e, lnn)
 end
 
@@ -63,8 +63,7 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
         setattr!(ident, :scope_layer, e.args[2])
     elseif e isa Expr && e.head === :static_parameter
         setattr!(newleaf(graph, src, K"Value"), :value, e)
-    elseif e isa Expr && e.head === :lambda
-        ensure_desugaring_attributes!(graph)
+    elseif e isa Expr && e.head === :lambda && length(e.args) == 2
         argnames = e.args[1]::Vector{Any}
         arg_cs = NodeId[]
         for name in argnames

@@ -1,5 +1,3 @@
-@testset "assignments" begin
-
 test_mod = Module()
 
 Base.include_string(test_mod,
@@ -109,4 +107,183 @@ let
 end
 """) == ([2,4,6], 1, 1)
 
+@testset "distinction between `=`` and `kw`" begin
+    eq = Expr(:(=), :a, 1)
+    peq = Expr(:parameters, eq)
+    kw = Expr(:kw, :b, 2)
+    pkw = Expr(:parameters, kw)
+
+    function outer_ab(ex::Expr)
+        Expr(:let, Expr(:block, :(a = 0), :(b = 0)),
+             Expr(:block, ex,
+                  Expr(:tuple, :a, :b)))
+    end
+
+    @eval test_mod function collect_args(args...; kws...)
+        (args..., :semicolon, kws...)
+    end
+
+    @testset "in :call" begin
+        # call
+        @testset let ex = Expr(:call, :collect_args, eq)
+            @test fl_eval(test_mod, ex) == (1, :semicolon)
+            @test jl_eval(test_mod, ex) == (1, :semicolon)
+            # `=` in a call assigns the value
+            @test fl_eval(test_mod, outer_ab(ex)) == (1, 0)
+            @test jl_eval(test_mod, outer_ab(ex)) == (1, 0)
+        end
+        @testset let ex = Expr(:call, :collect_args, peq)
+            @test fl_eval(test_mod, ex) == (:semicolon, :a=>1)
+            @test_broken jl_eval(test_mod, ex) == (:semicolon, :a=>1)
+            @test fl_eval(test_mod, outer_ab(ex)) == (0, 0)
+            @test_broken jl_eval(test_mod, outer_ab(ex)) == (0, 0)
+        end
+        # `kw` always passes a kwarg and does not assign a value
+        @testset let ex = Expr(:call, :collect_args, kw)
+            @test fl_eval(test_mod, ex) == (:semicolon, :b=>2)
+            @test jl_eval(test_mod, ex) == (:semicolon, :b=>2)
+            @test fl_eval(test_mod, outer_ab(ex)) == (0, 0)
+            @test jl_eval(test_mod, outer_ab(ex)) == (0, 0)
+        end
+        @testset let ex = Expr(:call, :collect_args, pkw)
+            @test fl_eval(test_mod, ex) == (:semicolon, :b=>2)
+            @test jl_eval(test_mod, ex) == (:semicolon, :b=>2)
+            @test fl_eval(test_mod, outer_ab(ex)) == (0, 0)
+            @test jl_eval(test_mod, outer_ab(ex)) == (0, 0)
+        end
+    end
+
+    @testset "in dotcall" begin
+        let eq = Expr(:(=), :a, [1]),
+            peq = Expr(:parameters, eq),
+            kw = Expr(:kw, :b, 2),
+            pkw = Expr(:parameters, kw)
+
+            @testset let ex = Expr(:(.), :collect_args, Expr(:tuple, eq))
+                @test fl_eval(test_mod, ex) == [(1, :semicolon)]
+                @test jl_eval(test_mod, ex) == [(1, :semicolon)]
+                @test fl_eval(test_mod, outer_ab(ex)) == ([1], 0)
+                @test jl_eval(test_mod, outer_ab(ex)) == ([1], 0)
+            end
+            @testset let ex = Expr(:(.), :collect_args, Expr(:tuple, peq))
+                @test fl_eval(test_mod, ex) == (:semicolon, :a=>[1])
+                @test_broken jl_eval(test_mod, ex) == (:semicolon, :a=>[1])
+                @test fl_eval(test_mod, outer_ab(ex)) == (0, 0)
+                @test_broken jl_eval(test_mod, outer_ab(ex)) == (0, 0)
+            end
+            @testset let ex = Expr(:(.), :collect_args, Expr(:tuple, kw))
+                @test fl_eval(test_mod, ex) == (:semicolon, :b=>2)
+                @test jl_eval(test_mod, ex) == (:semicolon, :b=>2)
+                @test fl_eval(test_mod, outer_ab(ex)) == (0, 0)
+                @test jl_eval(test_mod, outer_ab(ex)) == (0, 0)
+            end
+            @testset let ex = Expr(:(.), :collect_args, Expr(:tuple, pkw))
+                @test fl_eval(test_mod, ex) == (:semicolon, :b=>2)
+                @test jl_eval(test_mod, ex) == (:semicolon, :b=>2)
+                @test fl_eval(test_mod, outer_ab(ex)) == (0, 0)
+                @test jl_eval(test_mod, outer_ab(ex)) == (0, 0)
+            end
+        end
+    end
+
+    @testset "in :ref" begin
+        @eval test_mod struct DummyGetIndex; field; end
+        @eval test_mod function Base.getindex(s::DummyGetIndex, args...; kws...)
+            (args..., :semicolon, kws...)
+        end
+        @testset let ex = Expr(:ref, test_mod.DummyGetIndex(1), eq)
+            @test fl_eval(test_mod, ex) == (1, :semicolon)
+            @test_broken jl_eval(test_mod, ex) == (1, :semicolon)
+            @test fl_eval(test_mod, outer_ab(ex)) == (1, 0)
+            @test_broken jl_eval(test_mod, outer_ab(ex)) == (1, 0)
+        end
+        @testset let ex = Expr(:ref, test_mod.DummyGetIndex(1), peq)
+            @test_throws "unexpected semicolon" fl_eval(test_mod, ex)
+            @test_throws "unexpected semicolon" jl_eval(test_mod, ex)
+        end
+        @testset let ex = Expr(:ref, test_mod.DummyGetIndex(1), kw)
+            @test fl_eval(test_mod, ex) == (:semicolon, :b=>2)
+            @test_broken jl_eval(test_mod, ex) == (:semicolon, :b=>2)
+            @test fl_eval(test_mod, outer_ab(ex)) == (0, 0)
+            @test_broken jl_eval(test_mod, outer_ab(ex)) == (0, 0)
+        end
+        @testset let ex = Expr(:ref, test_mod.DummyGetIndex(1), pkw)
+            @test_throws "unexpected semicolon" fl_eval(test_mod, ex)
+            @test_throws "unexpected semicolon" jl_eval(test_mod, ex)
+        end
+    end
+
+    @testset "in :tuple" begin
+        @testset let ex = Expr(:tuple, eq)
+            @test fl_eval(test_mod, ex) == (a=1,)
+            @test jl_eval(test_mod, ex) == (a=1,)
+        end
+        @testset let ex = Expr(:tuple, peq)
+            @test fl_eval(test_mod, ex) == (a=1,)
+            @test_broken jl_eval(test_mod, ex) == (a=1,)
+        end
+        @testset let ex = Expr(:tuple, kw) # calls tuple constructor with kw
+            @test_throws MethodError fl_eval(test_mod, ex)
+            @test_throws MethodError jl_eval(test_mod, ex) broken=true
+        end
+        @testset let ex = Expr(:tuple, pkw)
+            @test fl_eval(test_mod, ex) == (b=2,)
+            @test jl_eval(test_mod, ex) == (b=2,)
+        end
+    end
+
+    @testset "in :curly" begin
+        @testset let ex = Expr(:curly, Array, Int, eq)
+            @test_throws ErrorException fl_eval(test_mod, ex)
+            @test_throws LoweringError jl_eval(test_mod, ex)
+        end
+        @testset let ex = Expr(:curly, Array, Int, peq)
+            @test_throws ErrorException fl_eval(test_mod, ex)
+            @test_throws LoweringError jl_eval(test_mod, ex)
+        end
+        @testset let ex = Expr(:curly, Array, Int, kw) # calls constructor with kw
+            @test_throws MethodError fl_eval(test_mod, ex)
+            @test_throws MethodError jl_eval(test_mod, ex) broken=true
+        end
+        @testset let ex = Expr(:curly, Array, Int, pkw)
+            @test_throws ErrorException fl_eval(test_mod, ex)
+            @test_throws LoweringError jl_eval(test_mod, ex)
+        end
+    end
+    @testset "in :vect" begin
+        @testset let ex = Expr(:vect, eq)
+            @test_throws ErrorException fl_eval(test_mod, ex)
+            @test_throws LoweringError jl_eval(test_mod, ex)
+        end
+        @testset let ex = Expr(:vect, peq)
+            @test_throws ErrorException fl_eval(test_mod, ex)
+            @test_throws LoweringError jl_eval(test_mod, ex)
+        end
+        @testset let ex = Expr(:vect, kw) # calls vect constructor with kw
+            @test_throws MethodError fl_eval(test_mod, ex)
+            @test_throws MethodError jl_eval(test_mod, ex) broken=true
+        end
+        @testset let ex = Expr(:vect, pkw)
+            @test_throws ErrorException fl_eval(test_mod, ex)
+            @test_throws LoweringError jl_eval(test_mod, ex)
+        end
+    end
+    @testset "in :braces" begin
+        @testset let ex = Expr(:braces, eq)
+            @test_throws ErrorException fl_eval(test_mod, ex)
+            @test_throws LoweringError jl_eval(test_mod, ex)
+        end
+        @testset let ex = Expr(:braces, peq)
+            @test_throws ErrorException fl_eval(test_mod, ex)
+            @test_throws LoweringError jl_eval(test_mod, ex)
+        end
+        @testset let ex = Expr(:braces, kw) # calls braces constructor with kw
+            @test_throws ErrorException fl_eval(test_mod, ex)
+            @test_throws LoweringError jl_eval(test_mod, ex)
+        end
+        @testset let ex = Expr(:braces, pkw)
+            @test_throws ErrorException fl_eval(test_mod, ex)
+            @test_throws LoweringError jl_eval(test_mod, ex)
+        end
+    end
 end

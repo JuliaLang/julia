@@ -248,6 +248,38 @@ end
 19  (return 1)
 
 ########################################
+# Error: const ref
+const x[] = 1
+#---------------------
+LoweringError:
+const x[] = 1
+#     └─┘ ── cannot declare this form constant
+
+########################################
+# Error: const setproperty
+const Main.x = 1
+#---------------------
+LoweringError:
+const Main.x = 1
+#     └────┘ ── cannot declare this form constant
+
+########################################
+# Error: const ref, tuple-nested
+const (a, (b, x[])) = (1, (2, 3))
+#---------------------
+LoweringError:
+const (a, (b, x[])) = (1, (2, 3))
+#             └─┘ ── cannot declare this form constant
+
+########################################
+# Error: const setproperty, tuple-nested
+const (a, (b, x.y)) = (1, (2, 3))
+#---------------------
+LoweringError:
+const (a, (b, x.y)) = (1, (2, 3))
+#             └─┘ ── cannot declare this form constant
+
+########################################
 # Error: Const not supported on locals
 const local x = 1
 #---------------------
@@ -265,6 +297,50 @@ LoweringError:
 let
     const x = 1
 #        └────┘ ── unsupported `const` declaration on local variable
+end
+
+########################################
+# Error: Const not supported on locals
+begin
+    local x
+    const x = 1
+end
+#---------------------
+LoweringError:
+begin
+    local x
+    const x = 1
+#        └────┘ ── unsupported `const` declaration on local variable
+end
+
+########################################
+# Error: local in let first arg
+let local a = 1
+end
+#---------------------
+LoweringError:
+let local a = 1
+#   └─────────┘ ── expected identifier or assignment
+end
+
+########################################
+# Error: global in let first arg
+let global a = 1
+end
+#---------------------
+LoweringError:
+let global a = 1
+#   └──────────┘ ── expected identifier or assignment
+end
+
+########################################
+# Error: const in let first arg
+let const a = 1
+end
+#---------------------
+LoweringError:
+let const a = 1
+#   └─────────┘ ── expected identifier or assignment
 end
 
 ########################################

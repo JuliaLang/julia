@@ -1,7 +1,3 @@
-using Test
-const JS = JuliaSyntax
-const JL = JuliaLowering
-
 test_mod = Module()
 
 const JL_DIR = joinpath(@__DIR__, "..")

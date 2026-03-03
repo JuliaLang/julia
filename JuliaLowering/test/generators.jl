@@ -1,5 +1,3 @@
-@testset "Generators" begin
-
 test_mod = Module()
 
 @test JuliaLowering.include_string(test_mod, """
@@ -72,5 +70,3 @@ Tuple{Int,Int}[(x,y) for x in 1:2, y in 1:3]
     (3, 5, 6)
     (3, 5, 7)
 ]
-
-end
