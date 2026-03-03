@@ -19,7 +19,7 @@ STATES = Pair{SelectorState, SelectorState}[]
 
 const LABELS = (
     gatherdivider = S"{italic:carried over}",
-    preview_suggestion = S"Ctrl+S to save",
+    preview_suggestion = S"Alt+S to save",
     help_prompt = S"{REPL_History_search_hint,shadow:try {REPL_History_search_hint,(slant=normal):?} for help} ",
 )
 
@@ -38,9 +38,8 @@ Uses ANSI sync sequences to update only changed regions between
 function redisplay_all(io::IO, oldstate::SelectorState, newstate::SelectorState, pstate::REPL.LineEdit.PromptState;
                        buf::IOContext{IOBuffer} = IOContext(IOBuffer(), io),
                        dupcounts::Union{Nothing, Dict{Tuple{Symbol,String}, Int}} = nothing,
-                       expanded_key::Union{Nothing, Tuple{Symbol,String}} = nothing,
-                       expanded_entries::Vector{HistEntry} = HistEntry[],
-                       expanded_hover::Int = 0)
+                       instance_key::Union{Nothing, Tuple{Symbol,String}} = nothing,
+                       instance_offset::Int = 0)
     # Calculate dimensions
     oldrows = componentrows(oldstate)
     newrows = componentrows(newstate)
@@ -67,14 +66,13 @@ function redisplay_all(io::IO, oldstate::SelectorState, newstate::SelectorState,
             oldstate.scroll != newstate.scroll ||
             oldstate.selection.active != newstate.selection.active ||
             oldstate.hover != newstate.hover ||
-            oldstate.filter != newstate.filter ||
-            !isnothing(expanded_key)
+            oldstate.filter != newstate.filter
         refresh_preview = refresh_cands ||
             oldstate.selection.gathered != newstate.selection.gathered ||
             gethover(oldstate) != gethover(newstate)
         if refresh_cands
             redisplay_candidates(buf, oldstate, oldrows.candidates, newstate, newrows.candidates;
-                                 dupcounts, expanded_key, expanded_entries, expanded_hover)
+                                 dupcounts, instance_key, instance_offset)
             currentrow += newrows.candidates
         end
         if refresh_preview
@@ -374,9 +372,8 @@ unchanged lines remain.
 """
 function redisplay_candidates(io::IO, oldstate::SelectorState, oldrows::Int, newstate::SelectorState, newrows::Int;
                               dupcounts::Union{Nothing, Dict{Tuple{Symbol,String}, Int}} = nothing,
-                              expanded_key::Union{Nothing, Tuple{Symbol,String}} = nothing,
-                              expanded_entries::Vector{HistEntry} = HistEntry[],
-                              expanded_hover::Int = 0)
+                              instance_key::Union{Nothing, Tuple{Symbol,String}} = nothing,
+                              instance_offset::Int = 0)
     danglingdivider = false
     if oldstate.scroll < 0 && newstate.scroll == 0
         newrows -= 1
@@ -388,7 +385,7 @@ function redisplay_candidates(io::IO, oldstate::SelectorState, oldrows::Int, new
     # Redisplay active candidates
     update_candidates(io, oldcands.active, newcands.active,
                       !samefilter || oldstate.scroll == 0 && !isempty(oldstate.selection.gathered);
-                      dupcounts, expanded_key, expanded_entries, expanded_hover)
+                      dupcounts, instance_key, instance_offset)
     # Redisplay gathered candidates
     gathchange = oldrows != newrows || length(oldcands.gathered.entries) != length(newcands.gathered.entries)
     if isempty(newcands.gathered.entries) && !danglingdivider
@@ -412,9 +409,8 @@ Only changes are printed, and exactly `length(newcands.entries)` lines are print
 """
 function update_candidates(io::IO, oldcands::CandsState, newcands::CandsState, force::Bool = false;
                            dupcounts::Union{Nothing, Dict{Tuple{Symbol,String}, Int}} = nothing,
-                           expanded_key::Union{Nothing, Tuple{Symbol,String}} = nothing,
-                           expanded_entries::Vector{HistEntry} = HistEntry[],
-                           expanded_hover::Int = 0)
+                           instance_key::Union{Nothing, Tuple{Symbol,String}} = nothing,
+                           instance_offset::Int = 0)
     totalrows = newcands.rows
     thisline = 1
     for (i, (old, new)) in enumerate(zip(oldcands.entries, newcands.entries))
@@ -422,22 +418,18 @@ function update_candidates(io::IO, oldcands::CandsState, newcands::CandsState, f
         dc = if !isnothing(dupcounts)
             get(dupcounts, (new.mode, new.content), 1)
         else 1 end
+        inst = if !isnothing(instance_key) && (new.mode, new.content) == instance_key
+            instance_offset
+        else 0 end
         oldsel, newsel = i ∈ oldcands.selected, i ∈ newcands.selected
         oldhov, newhov = i == oldcands.hover, i == newcands.hover
-        if !force && old == new && oldsel == newsel && oldhov == newhov && oldcands.width == newcands.width && dc <= 1
+        if !force && old == new && oldsel == newsel && oldhov == newhov && oldcands.width == newcands.width && dc <= 1 && inst == 0
             println(io)
         else
             print_candidate(io, newcands.search, new, newcands.width;
-                            selected = newsel, hover = newhov, dupcount = dc)
+                            selected = newsel, hover = newhov, dupcount = dc, instance = inst)
         end
         thisline += 1
-        if !isnothing(expanded_key) && (new.mode, new.content) == expanded_key
-            for (j, sub) in enumerate(expanded_entries)
-                thisline > totalrows && break
-                print_expanded_entry(io, sub, newcands.width; hover = j == expanded_hover)
-                thisline += 1
-            end
-        end
     end
     for (i, new) in enumerate(newcands.entries)
         i <= length(oldcands.entries) && continue
@@ -445,17 +437,13 @@ function update_candidates(io::IO, oldcands::CandsState, newcands::CandsState, f
         dc = if !isnothing(dupcounts)
             get(dupcounts, (new.mode, new.content), 1)
         else 1 end
+        inst = if !isnothing(instance_key) && (new.mode, new.content) == instance_key
+            instance_offset
+        else 0 end
         print_candidate(io, newcands.search, new, newcands.width;
                         selected = i ∈ newcands.selected,
-                        hover = i == newcands.hover, dupcount = dc)
+                        hover = i == newcands.hover, dupcount = dc, instance = inst)
         thisline += 1
-        if !isnothing(expanded_key) && (new.mode, new.content) == expanded_key
-            for (j, sub) in enumerate(expanded_entries)
-                thisline > totalrows && break
-                print_expanded_entry(io, sub, newcands.width; hover = j == expanded_hover)
-                thisline += 1
-            end
-        end
     end
     for _ in thisline:totalrows
         print(io, "\e[K ", LIST_MARKERS.pending, '\n')
@@ -501,7 +489,7 @@ Render one history entry line with markers, mode hint, age, and highlighted cont
 Truncates and focuses on matches to fit `width`.
 """
 function print_candidate(io::IO, search::FilterSpec, cand::HistEntry, width::Int;
-                         selected::Bool, hover::Bool, dupcount::Int = 1)
+                         selected::Bool, hover::Bool, dupcount::Int = 1, instance::Int = 0)
     print(io, ' ', if selected
               LIST_MARKERS.selected
           elseif hover
@@ -511,7 +499,9 @@ function print_candidate(io::IO, search::FilterSpec, cand::HistEntry, width::Int
           end, ' ')
     age = humanage(floor(Int, ((now(UTC) - cand.date)::Millisecond).value ÷ 1000))
     agedec = S" {shadow,light,italic:$age}"
-    dupdec = if dupcount > 1
+    dupdec = if dupcount > 1 && instance > 0
+        S" {shadow:$(dupcount - instance)/$dupcount}"
+    elseif dupcount > 1
         S" {shadow:×$dupcount}"
     else
         S""
@@ -537,25 +527,6 @@ function print_candidate(io::IO, search::FilterSpec, cand::HistEntry, width::Int
         face!(dupdec, :region)
     end
     println(io, candstr, modehint, dupdec, agedec, ' ')
-end
-
-"""
-    print_expanded_entry(io::IO, entry::HistEntry, width::Int; hover::Bool)
-
-Render a single expanded sub-entry line showing its age and history index.
-"""
-function print_expanded_entry(io::IO, entry::HistEntry, width::Int; hover::Bool = false)
-    age = humanage(floor(Int, ((now(UTC) - entry.date)::Millisecond).value ÷ 1000))
-    marker = if hover
-        S" {REPL_History_search_selected:▸} "
-    else
-        S"   "
-    end
-    line = S"\e[K  $(marker){shadow,italic:$age ago} {shadow:│} {shadow:#$(entry.index)}"
-    if hover
-        face!(line, :region)
-    end
-    println(io, line)
 end
 
 """

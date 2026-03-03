@@ -13,14 +13,14 @@ function (e::Event)(_...)
 end
 
 """
-    select_keymap(events::Channel{Symbol})
+    select_keymap(events::Channel{Symbol}, bounds::Channel{Bool})
 
 Build a REPL.LineEdit keymap that pushes symbols into `events`.
 
 Binds arrows, page keys, Tab, Ctrl-C/D/S, and meta-< / > to
 `Event` or `Returns` actions for driving the prompt loop.
 """
-function select_keymap(events::Channel{Symbol})
+function select_keymap(events::Channel{Symbol}, bounds::Channel{Bool})
     REPL.LineEdit.keymap([
         Dict{Any, Any}(
             # Up Arrow
@@ -29,26 +29,11 @@ function select_keymap(events::Channel{Symbol})
             # Down Arrow
             "\e[B" => Event(events, :down),
             "^N" => Event(events, :down),
-            # Right Arrow (expand duplicates when at end of query)
-            "\e[C" => function(s, _...)
-                buf = REPL.LineEdit.buffer(s)
-                if position(buf) >= buf.size
-                    push!(events, :expand)
-                    :ignore
-                else
-                    REPL.LineEdit.edit_move_right(s)
-                    :ok
-                end
-            end,
-            "\eOC" => function(s, _...)
-                buf = REPL.LineEdit.buffer(s)
-                if position(buf) >= buf.size
-                    push!(events, :expand)
-                    :ignore
-                else
-                    REPL.LineEdit.edit_move_right(s)
-                    :ok
-                end
+            # Ctrl-R: previous (older) duplicate instance
+            "^R" => function(s, _...)
+                push!(events, :previnstance)
+                take!(bounds) && REPL.LineEdit.beep(s)
+                :ignore
             end,
             # Tab
             '\t' => Event(events, :tab),
@@ -68,7 +53,14 @@ function select_keymap(events::Channel{Symbol})
             "^D" => Returns(:abort),
             "^G" => Returns(:abort),
             "\e\e" => Returns(:abort),
-            "^S" => Returns(:save),
+            # Ctrl-S: next (newer) duplicate instance
+            "^S" => function(s, _...)
+                push!(events, :nextinstance)
+                take!(bounds) && REPL.LineEdit.beep(s)
+                :ignore
+            end,
+            # Alt-S: save to clipboard/file
+            "\es" => Returns(:save),
             "^Y" => Returns(:copy),
         ),
         REPL.LineEdit.default_keymap,
@@ -76,19 +68,19 @@ function select_keymap(events::Channel{Symbol})
 end
 
 """
-    create_prompt(events::Channel{Symbol}, term)
+    create_prompt(events::Channel{Symbol}, bounds::Channel{Bool}, term)
 
 Initialize a custom REPL prompt tied to `events` using the existing `term`.
 
 Returns a tuple `(term, prompt, istate, pstate)` ready for
 input handling and display.
 """
-function create_prompt(events::Channel{Symbol}, term, prefix::String = "\e[90m")
+function create_prompt(events::Channel{Symbol}, bounds::Channel{Bool}, term, prefix::String = "\e[90m")
     prompt = REPL.LineEdit.Prompt(
         PROMPT_TEXT, # prompt
         prefix, "\e[0m", # prompt_prefix, prompt_suffix
         "", "", "", # output_prefix, output_prefix_prefix, output_prefix_suffix
-        select_keymap(events), # keymap_dict
+        select_keymap(events, bounds), # keymap_dict
         nothing, # repl
         REPL.LatexCompletions(), # complete
         _ -> true, # on_enter

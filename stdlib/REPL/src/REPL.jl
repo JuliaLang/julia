@@ -102,7 +102,7 @@ include("docview.jl")
 include("History/History.jl")
 using .History
 
-histsearch(args...) = runsearch(args...)
+histsearch(args...; kwargs...) = runsearch(args...; kwargs...)
 
 include("Pkg_beforeload.jl")
 
@@ -999,7 +999,7 @@ function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider,
     end
     m = history_move(s, hist, cur_idx+num, save_idx)
     if m === :ok
-        LineEdit.move_input_start(s)
+        LineEdit.move_input_end(s)
         return LineEdit.refresh_line(s)
     elseif m === :skip
         return history_next(s, hist, num+1, save_idx)

@@ -2719,7 +2719,7 @@ function history_search(mistate::MIState)
     else
         mimode.prompt_prefix
     end
-    result = histsearch(hist.history, term, prefix)
+    result = histsearch(hist.history, term, prefix; cur_idx = hist.cur_idx)
     mimode = if isnothing(result.mode)
         mistate.current_mode
     else

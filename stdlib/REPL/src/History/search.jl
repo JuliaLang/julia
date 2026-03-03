@@ -8,12 +8,13 @@ Launch the interactive REPL history search interface.
 Spawns prompt and display tasks, waits for user confirm or abort,
 and returns the final selection (if any).
 """
-function runsearch(histfile::HistoryFile, term, prefix::String = "\e[90m")
+function runsearch(histfile::HistoryFile, term, prefix::String = "\e[90m"; cur_idx::Int = 0)
     update!(histfile)
     events = Channel{Symbol}(Inf)
-    pspec = create_prompt(events, term, prefix)
+    bounds = Channel{Bool}(1)
+    pspec = create_prompt(events, bounds, term, prefix)
     ptask = @spawn runprompt!(pspec, events)
-    dtask = @spawn run_display!(pspec, events, histfile.records)
+    dtask = @spawn run_display!(pspec, events, bounds, histfile.records; cur_idx)
     wait(ptask)
     fullselection(fetch(dtask))
 end
@@ -49,7 +50,7 @@ Drive the display event loop until confirm or abort.
 Listens for navigation, edits, save, and abort events, re-filters history
 incrementally, and re-renders via `redisplay_all`.
 """
-function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{HistEntry})
+function run_display!((; term, pstate), events::Channel{Symbol}, bounds::Channel{Bool}, hist::Vector{HistEntry}; cur_idx::Int = 0)
     # Output-related variables
     out = term.out_stream
     outsize = displaysize(out)
@@ -65,10 +66,10 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
         key = (entry.mode, entry.content)
         hist_dupcounts[key] = get(hist_dupcounts, key, 0) + 1
     end
-    # Expand/collapse state for duplicate entries
-    expanded_key::Union{Nothing, Tuple{Symbol,String}} = nothing
-    expanded_entries = HistEntry[]
-    expanded_hover = 0
+    # Instance navigation state (for cycling through duplicates with Ctrl-R/Ctrl-S)
+    instance_offset = 0  # 0 = most recent instance, 1 = second most recent, etc.
+    instance_key::Union{Nothing, Tuple{Symbol,String}} = nothing
+    instance_entries = HistEntry[]  # all instances of the current key, sorted newest-first
     # Active duplicate counts for display (nothing when no filter, hist_dupcounts when filtering)
     active_dupcounts::Union{Nothing, Dict{Tuple{Symbol,String}, Int}} = nothing
     # Candidate cache
@@ -77,6 +78,21 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
     cands_current = HistEntry[]
     cands_cond = ConditionSet{String}()
     cands_temp = HistEntry[]
+    # Position hover at cur_idx if provided, centered in the display
+    if cur_idx > 0
+        for (i, entry) in enumerate(hist)
+            if entry.index == cur_idx
+                newhover = length(hist) - i + 1
+                candrows = componentrows(state).candidates
+                newscroll = newhover - (candrows + 1) ÷ 2
+                newscroll = clamp(newscroll, max(0, newhover - candrows), newhover - 1)
+                state = SelectorState(
+                    state.area, state.query, state.filter, state.candidates,
+                    newscroll, state.selection, newhover)
+                break
+            end
+        end
+    end
     redisplay_all(out, EMPTY_STATE, state, pstate; buf)
     # Event loop
     while true
@@ -87,8 +103,9 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
             return EMPTY_STATE
         elseif event === :confirm
             print(out, "\e[1G\e[J")
-            if expanded_hover > 0 && expanded_hover <= length(expanded_entries)
-                entry = expanded_entries[expanded_hover]
+            # If on a specific duplicate instance, return a state with that instance
+            if instance_offset > 0 && instance_offset < length(instance_entries)
+                entry = instance_entries[instance_offset + 1]
                 return SelectorState(state.area, state.query, state.filter,
                     [entry], 0, (active = Int[], gathered = HistEntry[]), 1)
             end
@@ -96,40 +113,18 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
         elseif event === :clear
             print(out, "\e[H\e[2J")
             redisplay_all(out, EMPTY_STATE, state, pstate; buf,
-                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
+                          dupcounts=active_dupcounts, instance_key, instance_offset)
             continue
         elseif event === :redraw
             print(out, "\e[1G\e[J")
             redisplay_all(out, EMPTY_STATE, state, pstate; buf,
-                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
+                          dupcounts=active_dupcounts, instance_key, instance_offset)
             continue
         elseif event ∈ (:up, :down, :pageup, :pagedown)
-            # Handle navigation within expanded entries
-            if !isnothing(expanded_key) && expanded_hover > 0
-                if event ∈ (:up, :pageup)
-                    expanded_hover -= 1
-                    # expanded_hover=0 returns to the main entry
-                elseif expanded_hover < length(expanded_entries)
-                    expanded_hover += 1
-                else
-                    # Past the last expanded entry, exit and move down
-                    expanded_hover = 0
-                    prevstate, state = state, movehover(state, false, event === :pagedown)
-                end
-                redisplay_all(out, EMPTY_STATE, state, pstate; buf,
-                              dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
-                continue
-            end
-            # Check if we should enter expanded entries (on main entry, pressing down)
-            if !isnothing(expanded_key) && event ∈ (:down, :pagedown) && !isempty(expanded_entries)
-                hov = gethover(state)
-                if !isnothing(hov) && (hov.mode, hov.content) == expanded_key
-                    expanded_hover = 1
-                    redisplay_all(out, EMPTY_STATE, state, pstate; buf,
-                                  dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
-                    continue
-                end
-            end
+            # Reset instance offset when moving to a different entry
+            instance_offset = 0
+            instance_key = nothing
+            empty!(instance_entries)
             # Normal navigation
             prevstate, state = state, movehover(state, event ∈ (:up, :pageup), event ∈ (:pageup, :pagedown))
             @lock events begin
@@ -141,65 +136,104 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
                 end
             end
             redisplay_all(out, prevstate, state, pstate; buf,
-                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
+                          dupcounts=active_dupcounts, instance_key, instance_offset)
             continue
         elseif event === :jumpfirst
+            instance_offset = 0
+            instance_key = nothing
+            empty!(instance_entries)
             prevstate = state
             state = SelectorState(
                 state.area, state.query, state.filter, state.candidates,
                 length(state.candidates) - componentrows(state).candidates,
                 state.selection, length(state.candidates))
             redisplay_all(out, prevstate, state, pstate; buf,
-                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
+                          dupcounts=active_dupcounts, instance_key, instance_offset)
             continue
         elseif event === :jumplast
+            instance_offset = 0
+            instance_key = nothing
+            empty!(instance_entries)
             prevstate = state
             state = SelectorState(
                 state.area, state.query, state.filter, state.candidates,
                 0, state.selection, 1)
             redisplay_all(out, prevstate, state, pstate; buf,
-                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
+                          dupcounts=active_dupcounts, instance_key, instance_offset)
             continue
         elseif event === :tab
             prevstate, state = state, toggleselection(state)
             redisplay_all(out, prevstate, state, pstate; buf,
-                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
+                          dupcounts=active_dupcounts, instance_key, instance_offset)
             continue
-        elseif event === :expand
-            # Only expand when dedup is active (non-empty query with filter)
-            if isnothing(active_dupcounts) || filter_idx != 0
-                continue
-            end
+        elseif event ∈ (:previnstance, :nextinstance)
             hovered = gethover(state)
-            if isnothing(hovered) || !isempty(state.selection.gathered)
+            if isnothing(hovered)
+                push!(bounds, true)
                 continue
             end
-            ekey = (hovered.mode, hovered.content)
-            dc = get(hist_dupcounts, ekey, 1)
-            if dc <= 1
-                continue
-            end
-            if expanded_key == ekey
-                # Collapse: already expanded, toggle off
-                expanded_key = nothing
-                empty!(expanded_entries)
-            else
-                # Expand: find all instances in hist, excluding the most recent
-                expanded_key = ekey
-                empty!(expanded_entries)
-                for entry in hist
-                    if entry.mode == ekey[1] && entry.content == ekey[2]
-                        push!(expanded_entries, entry)
+            hkey = (hovered.mode, hovered.content)
+            dc = get(hist_dupcounts, hkey, 1)
+            at_bounds = dc <= 1
+            if !at_bounds && isnothing(active_dupcounts)
+                # Non-dedup mode: physically navigate between duplicate entries
+                curpos = length(state.candidates) - state.hover + 1
+                target = nothing
+                if event === :previnstance
+                    for j in (curpos-1):-1:1
+                        cand = state.candidates[j]
+                        if cand.mode == hkey[1] && cand.content == hkey[2]
+                            target = j
+                            break
+                        end
+                    end
+                else
+                    for j in (curpos+1):length(state.candidates)
+                        cand = state.candidates[j]
+                        if cand.mode == hkey[1] && cand.content == hkey[2]
+                            target = j
+                            break
+                        end
                     end
                 end
-                if !isempty(expanded_entries)
-                    _, max_idx = findmax(e -> e.index, expanded_entries)
-                    deleteat!(expanded_entries, max_idx)
+                if isnothing(target)
+                    at_bounds = true
+                else
+                    newhover = length(state.candidates) - target + 1
+                    candrows = componentrows(state).candidates
+                    newscroll = newhover - (candrows + 1) ÷ 2
+                    newscroll = clamp(newscroll, max(0, newhover - candrows), newhover - 1)
+                    prevstate, state = state, SelectorState(
+                        state.area, state.query, state.filter, state.candidates,
+                        newscroll, state.selection, newhover)
+                    redisplay_all(out, prevstate, state, pstate; buf,
+                                  dupcounts=active_dupcounts, instance_key, instance_offset)
                 end
+            elseif !at_bounds
+                # Dedup mode: cycle through instance_offset
+                if instance_key != hkey
+                    instance_key = hkey
+                    empty!(instance_entries)
+                    for entry in Iterators.reverse(hist)  # newest first
+                        if entry.mode == hkey[1] && entry.content == hkey[2]
+                            push!(instance_entries, entry)
+                        end
+                    end
+                    instance_offset = 0
+                end
+                old_offset = instance_offset
+                if event === :previnstance
+                    instance_offset = min(instance_offset + 1, length(instance_entries) - 1)
+                else
+                    instance_offset = max(instance_offset - 1, 0)
+                end
+                if instance_offset == old_offset
+                    at_bounds = true
+                end
+                redisplay_all(out, EMPTY_STATE, state, pstate; buf,
+                              dupcounts=active_dupcounts, instance_key, instance_offset)
             end
-            expanded_hover = 0
-            redisplay_all(out, EMPTY_STATE, state, pstate; buf,
-                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
+            push!(bounds, at_bounds)
             continue
         elseif event === :edit
             @lock events begin
@@ -210,13 +244,25 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
             query = REPL.LineEdit.input_string(pstate)
             if query === state.query
                 redisplay_all(out, state, state, pstate; buf,
-                              dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
+                              dupcounts=active_dupcounts, instance_key, instance_offset)
                 continue
             end
-            # Reset expanded state on query change
-            expanded_key = nothing
-            empty!(expanded_entries)
-            expanded_hover = 0
+            # Remember hovered entry and instance state before re-filtering.
+            prev_hovered = gethover(state)
+            prev_instance_key = instance_key
+            prev_instance_offset = instance_offset
+            prev_target_idx = if !isnothing(prev_hovered)
+                if instance_offset > 0 && prev_instance_key == (prev_hovered.mode, prev_hovered.content) &&
+                   instance_offset < length(instance_entries)
+                    instance_entries[instance_offset + 1].index
+                else
+                    prev_hovered.index
+                end
+            end
+            # Reset instance state on query change (restored below if same entry)
+            instance_offset = 0
+            instance_key = nothing
+            empty!(instance_entries)
             # Determine the conditions/filter spec
             cands_cond = ConditionSet(query)
             filter_spec = FilterSpec(cands_cond)
@@ -237,7 +283,7 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
             # Show help?
             if query ∈ (FILTER_SHORTHELP_QUERY,FILTER_LONGHELP_QUERY)
                 redisplay_all(out, prevstate, state, pstate; buf,
-                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
+                          dupcounts=active_dupcounts, instance_key, instance_offset)
                 continue
             end
             # Parse the conditions and find a good candidate list
@@ -258,7 +304,7 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
                 filter_idx = 0
                 active_dupcounts = nothing
             else
-                # Filtering needed, deduplicate results and show ×N badges
+                # Filtering needed, deduplicate results and show badges
                 active_dupcounts = hist_dupcounts
                 empty!(filter_seen)
                 filter_idx = filterchunkrev!(
@@ -270,8 +316,60 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
                 cands_cachestate = addcache!(
                     cands_cache, cands_cachestate, cands_cond => state.candidates)
             end
+            # Preserve hover position.
+            # Try exact index match first (preserves position in non-dedup mode),
+            # then fall back to content match (for dedup where exact index may not exist).
+            if !isnothing(prev_hovered)
+                match_i = nothing
+                if !isnothing(prev_target_idx)
+                    for i in reverse(eachindex(state.candidates))
+                        if state.candidates[i].index == prev_target_idx
+                            match_i = i
+                            break
+                        end
+                    end
+                end
+                if isnothing(match_i)
+                    for i in reverse(eachindex(state.candidates))
+                        cand = state.candidates[i]
+                        if cand.mode == prev_hovered.mode && cand.content == prev_hovered.content
+                            match_i = i
+                            break
+                        end
+                    end
+                end
+                if !isnothing(match_i)
+                    matched = state.candidates[match_i]
+                    newhover = length(state.candidates) - match_i + 1
+                    new_candrows = componentrows(state).candidates
+                    newscroll = if length(state.candidates) == length(prevstate.candidates)
+                        # Same number of candidates: preserve visual row
+                        old_candrows = componentrows(prevstate).candidates
+                        old_visual = old_candrows + prevstate.scroll - prevstate.hover + 1
+                        old_visual - new_candrows + newhover - 1
+                    else
+                        # Candidate count changed: center the entry
+                        newhover - (new_candrows + 1) ÷ 2
+                    end
+                    newscroll = clamp(newscroll, max(0, newhover - new_candrows), newhover - 1)
+                    state = SelectorState(
+                        state.area, state.query, state.filter, state.candidates,
+                        newscroll, state.selection, newhover)
+                    # Restore instance cycling state if same entry is still hovered
+                    mkey = (matched.mode, matched.content)
+                    if prev_instance_key == mkey && prev_instance_offset > 0
+                        instance_key = mkey
+                        for entry in Iterators.reverse(hist)
+                            if entry.mode == mkey[1] && entry.content == mkey[2]
+                                push!(instance_entries, entry)
+                            end
+                        end
+                        instance_offset = min(prev_instance_offset, length(instance_entries) - 1)
+                    end
+                end
+            end
             redisplay_all(out, prevstate, state, pstate; buf,
-                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
+                          dupcounts=active_dupcounts, instance_key, instance_offset)
             continue
         elseif event === :copy
             content = strip(fullselection(state).text)
@@ -290,7 +388,7 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
                 outsize, state.query, state.filter, state.candidates,
                 state.scroll, state.selection, state.hover)
             redisplay_all(out, prevstate, state, pstate; buf,
-                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
+                          dupcounts=active_dupcounts, instance_key, instance_offset)
         elseif filter_idx != 0
             append!(empty!(cands_temp), state.candidates)
             prevstate = SelectorState(
@@ -307,7 +405,7 @@ function run_display!((; term, pstate), events::Channel{Symbol}, hist::Vector{Hi
             length(state.candidates) != length(prevstate.candidates) &&
                 length(prevstate.candidates) - state.hover < outsize[1] &&
                 redisplay_all(out, prevstate, state, pstate; buf,
-                          dupcounts=active_dupcounts, expanded_key, expanded_entries, expanded_hover)
+                          dupcounts=active_dupcounts, instance_key, instance_offset)
         elseif isnothing(event)
             yield()
             sleep(0.01)
