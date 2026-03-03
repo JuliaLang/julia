@@ -2653,6 +2653,9 @@ code, paired with the boxed variable names. Variable names are `:unknown` when a
 slot name cannot be resolved.
 
 See also [`detect_closure_boxes_all_modules`](@ref) to check all loaded modules.
+
+!!! compat "Julia 1.14"
+    This method requires Julia 1.14 or later.
 """
 function detect_closure_boxes(mods::Module...)
     @nospecialize
@@ -2729,6 +2732,9 @@ Return a sorted `Vector{Pair{Method, Vector{Symbol}}}` of all methods in current
 loaded modules that allocate `Core.Box` in their lowered code.
 
 See also [`detect_closure_boxes`](@ref) to check specific modules.
+
+!!! compat "Julia 1.14"
+    This method requires Julia 1.14 or later.
 """
 detect_closure_boxes_all_modules() = detect_closure_boxes(Base.loaded_modules_array()...)
 
