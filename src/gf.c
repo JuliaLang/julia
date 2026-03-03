@@ -980,6 +980,8 @@ int jl_foreach_reachable_mtable(int (*visit)(jl_methtable_t *mt, void *env), jl_
 
     arraylist_t workqueue;
     arraylist_new(&workqueue, 0);
+    htable_t visited_mts;
+    htable_new(&visited_mts, 0);
 
     // Add initial toplevel modules to workqueue
     for (size_t i = 0; i < jl_array_nrows(mod_array); i++) {
@@ -1012,7 +1014,8 @@ int jl_foreach_reachable_mtable(int (*visit)(jl_methtable_t *mt, void *env), jl_
                 }
                 else if (jl_is_mtable(v)) {
                     jl_methtable_t *mt = (jl_methtable_t*)v;
-                    if (mt && mt != jl_method_table) {
+                    if (mt && mt != jl_method_table && !ptrhash_has(&visited_mts, mt)) {
+                        ptrhash_put(&visited_mts, mt, mt);
                         if (!visit(mt, env)) {
                             result = 0;
                             goto cleanup;
@@ -1026,6 +1029,7 @@ int jl_foreach_reachable_mtable(int (*visit)(jl_methtable_t *mt, void *env), jl_
 
 cleanup:
     arraylist_free(&workqueue);
+    htable_free(&visited_mts);
     return result;
 }
 
