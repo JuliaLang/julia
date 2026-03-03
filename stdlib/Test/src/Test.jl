@@ -2726,7 +2726,7 @@ function detect_closure_boxes(mods::Module...)
 end
 
 """
-    ()
+    detect_closure_boxes_all_modules()
 
 Return a sorted `Vector{Pair{Method, Vector{Symbol}}}` of all methods in currently
 loaded modules that allocate `Core.Box` in their lowered code.
