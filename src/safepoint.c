@@ -106,7 +106,7 @@ void jl_safepoint_init(void)
 #endif
     if (addr == NULL) {
         jl_printf(JL_STDERR, "could not allocate GC synchronization page\n");
-        jl_gc_debug_critical_error();
+        jl_gc_debug_fprint_critical_error(ios_safe_stderr);
         abort();
     }
 //    // If we able to skip past the faulting safepoint instruction conditionally,
@@ -157,7 +157,7 @@ void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
                     uv_mutex_unlock(&safepoint_lock);
                 }
                 else {
-                    const int64_t timeout = jl_options.timeout_for_safepoint_straggler_s * 1000000000; // convert to nanoseconds
+                    const int64_t timeout = jl_options.timeout_for_safepoint_straggler_s * 1000000000LL; // convert to nanoseconds
                     int ret = 0;
                     uv_mutex_lock(&safepoint_lock);
                     if (!jl_atomic_load_relaxed(&ptls2->gc_state)) {
@@ -172,7 +172,7 @@ void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
                         size_t bt_size = jl_try_record_thread_backtrace(ptls2, ptls->bt_data, JL_MAX_BT_SIZE);
                         // Print the backtrace of the straggler
                         for (size_t i = 0; i < bt_size; i += jl_bt_entry_size(ptls->bt_data + i)) {
-                            jl_print_bt_entry_codeloc(ptls->bt_data + i);
+                            jl_fprint_bt_entry_codeloc(ios_safe_stderr, ptls->bt_data + i);
                         }
                     }
                 }

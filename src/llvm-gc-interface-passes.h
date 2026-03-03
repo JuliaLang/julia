@@ -46,6 +46,7 @@
 #include "llvm-pass-helpers.h"
 #include <map>
 #include <string>
+#include <optional>
 
 #ifndef LLVM_GC_PASSES_H
 #define LLVM_GC_PASSES_H
@@ -250,11 +251,13 @@ struct BBState {
     // These get updated during dataflow
     LargeSparseBitVector LiveIn;
     LargeSparseBitVector LiveOut;
-    SmallVector<int, 0> Safepoints;
-    int TopmostSafepoint = -1;
+    // auto Safepoints = std::range(LastSafepoint, FirstSafepoint);
     bool HasSafepoint = false;
-    // Have we gone through this basic block in our local scan yet?
-    bool Done = false;
+    // This lets us refine alloca tracking to avoid creating GC frames in
+    // some simple functions that only have the initial safepoint.
+    int FirstSafepoint = -1;
+    int LastSafepoint = -1;
+    int FirstSafepointAfterFirstDef = -1;
 };
 
 struct State {
@@ -291,21 +294,18 @@ struct State {
     // of its uses need to preserve the values listed in the map value.
     std::map<Instruction *, SmallVector<int, 0>> GCPreserves;
 
-    // The assignment of numbers to safepoints. The indices in the map
-    // are indices into the next three maps which store safepoint properties
-    std::map<Instruction *, int> SafepointNumbering;
+    // The assignment of numbers to safepoints. These have the same ordering as
+    // LiveSets, LiveIfLiveOut, and CalleeRoots.
+    SmallVector<Instruction*, 0> SafepointNumbering;
 
-    // Reverse mapping index -> safepoint
-    SmallVector<Instruction *, 0> ReverseSafepointNumbering;
-
-    // Instructions that can return twice. For now, all values live at these
-    // instructions will get their own, dedicated GC frame slots, because they
-    // have unobservable control flow, so we can't be sure where they're
-    // actually live. All of these are also considered safepoints.
-    SmallVector<Instruction *, 0> ReturnsTwice;
+    // Safepoint number of instructions that can return twice. For now, all
+    // values live at these instructions will get their own, dedicated GC frame
+    // slots, because they have unobservable control flow, so we can't be sure
+    // where they're actually live.
+    SmallVector<int, 0> ReturnsTwice;
 
     // The set of values live at a particular safepoint
-    SmallVector< LargeSparseBitVector , 0> LiveSets;
+    SmallVector<LargeSparseBitVector, 0> LiveSets;
     // Those values that - if live out from our parent basic block - are live
     // at this safepoint.
     SmallVector<SmallVector<int, 0>> LiveIfLiveOut;
@@ -328,10 +328,10 @@ public:
     bool runOnFunction(Function &F, bool *CFGModified = nullptr);
 
 private:
-    CallInst *pgcstack;
+    Value *pgcstack;
     Function *smallAllocFunc;
 
-    void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const ArrayRef<int> &SafepointsSoFar,
+    bool MaybeNoteDef(State &S, BBState &BBS, Value *Def,
                       SmallVector<int, 1> &&RefinedPtr = SmallVector<int, 1>());
     void NoteUse(State &S, BBState &BBS, Value *V, LargeSparseBitVector &Uses, Function &F);
     void NoteUse(State &S, BBState &BBS, Value *V, Function &F) {
@@ -366,9 +366,6 @@ private:
     SmallVector<int, 1> GetPHIRefinements(PHINode *phi, State &S);
     void FixUpRefinements(ArrayRef<int> PHINumbers, State &S);
     void RefineLiveSet(LargeSparseBitVector &LS, State &S, ArrayRef<int> CalleeRoots);
-    Value *EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size, Value *V);
-    Value *EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V);
-    Value* lowerGCAllocBytesLate(CallInst *target, Function &F);
 };
 
 // The final GC lowering pass. This pass lowers platform-agnostic GC
@@ -388,7 +385,7 @@ private:
     Function *smallAllocFunc;
     Function *bigAllocFunc;
     Function *allocTypedFunc;
-    Instruction *pgcstack;
+    Value *pgcstack;
     Type *T_size;
 
     // Lowers a `julia.new_gc_frame` intrinsic.
@@ -404,13 +401,48 @@ private:
     void lowerGetGCFrameSlot(CallInst *target, Function &F);
 
     // Lowers a `julia.gc_alloc_bytes` intrinsic.
-    void lowerGCAllocBytes(CallInst *target, Function &F);
+    Value* lowerGCAllocBytes(CallInst *target, Function &F);
 
     // Lowers a `julia.queue_gc_root` intrinsic.
     void lowerQueueGCRoot(CallInst *target, Function &F);
 
     // Lowers a `julia.safepoint` intrinsic.
     void lowerSafepoint(CallInst *target, Function &F);
+
+    // Lowers a `julia.write_barrier` function.
+    void lowerWriteBarrier(CallInst *target, Function &F);
+
+    // Check if the pass should be run
+    bool shouldRunFinalGC();
 };
+
+// These are used by LateLower and FinalLower
+
+// Size of T is assumed to be `sizeof(void*)`
+inline Value *EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size, Value *V)
+{
+    assert(T == T_size || isa<PointerType>(T));
+    return builder.CreateInBoundsGEP(T, V, ConstantInt::get(T_size, -1), V->getName() + ".tag_addr");
+}
+
+inline Value *EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V, llvm::MDNode *tbaa_tag)
+{
+    auto addr = EmitTagPtr(builder, T_size, T_size, V);
+    auto &M = *builder.GetInsertBlock()->getModule();
+    LoadInst *load = builder.CreateAlignedLoad(T_size, addr, M.getDataLayout().getPointerABIAlignment(0), V->getName() + ".tag");
+    load->setOrdering(AtomicOrdering::Unordered);
+    // Mark as volatile to prevent optimizers from treating GC tag loads as constants
+    // since GC mark bits can change during runtime (issue #59547)
+    load->setVolatile(true);
+    load->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
+    MDBuilder MDB(load->getContext());
+    auto *NullInt = ConstantInt::get(T_size, 0);
+    // We can be sure that the tag is at least 16 (1<<4)
+    // Hopefully this is enough to convince LLVM that the value is still not NULL
+    // after masking off the tag bits
+    auto *NonNullInt = ConstantExpr::getAdd(NullInt, ConstantInt::get(T_size, 16));
+    load->setMetadata(LLVMContext::MD_range, MDB.createRange(NonNullInt, NullInt));
+    return load;
+}
 
 #endif // LLVM_GC_PASSES_H

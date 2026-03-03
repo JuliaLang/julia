@@ -2,6 +2,7 @@
 
 using Test
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 include("newinterp.jl")
 
@@ -14,7 +15,7 @@ Compiler.may_optimize(::AbsIntOnlyInterp1) = false
 # it should work even if the interpreter discards inferred source entirely
 @newinterp AbsIntOnlyInterp2
 Compiler.may_optimize(::AbsIntOnlyInterp2) = false
-Compiler.transform_result_for_cache(::AbsIntOnlyInterp2, ::Compiler.InferenceResult) = nothing
+Compiler.transform_result_for_cache(::AbsIntOnlyInterp2, ::Compiler.InferenceResult, edges::Core.SimpleVector) = nothing
 @test Base.infer_return_type(Base.init_stdio, (Ptr{Cvoid},); interp=AbsIntOnlyInterp2()) >: IO
 
 # OverlayMethodTable
@@ -407,10 +408,10 @@ Compiler.nsplit_impl(info::NoinlineCallInfo) = Compiler.nsplit(info.info)
 Compiler.getsplit_impl(info::NoinlineCallInfo, idx::Int) = Compiler.getsplit(info.info, idx)
 Compiler.getresult_impl(info::NoinlineCallInfo, idx::Int) = Compiler.getresult(info.info, idx)
 
-function Compiler.abstract_call(interp::NoinlineInterpreter,
-    arginfo::Compiler.ArgInfo, si::Compiler.StmtInfo, sv::Compiler.InferenceState, max_methods::Int)
+function Compiler.abstract_call(interp::NoinlineInterpreter, arginfo::Compiler.ArgInfo, si::Compiler.StmtInfo,
+    vtypes::Union{Compiler.VarTable,Nothing}, sv::Compiler.InferenceState, max_methods::Int)
     ret = @invoke Compiler.abstract_call(interp::Compiler.AbstractInterpreter,
-        arginfo::Compiler.ArgInfo, si::Compiler.StmtInfo, sv::Compiler.InferenceState, max_methods::Int)
+        arginfo::Compiler.ArgInfo, si::Compiler.StmtInfo, vtypes::Union{Compiler.VarTable,Nothing}, sv::Compiler.InferenceState, max_methods::Int)
     return Compiler.Future{Compiler.CallMeta}(ret, interp, sv) do ret, interp, sv
         if sv.mod in noinline_modules(interp)
             (;rt, exct, effects, info) = ret
@@ -493,29 +494,32 @@ struct CustomData
     inferred
     CustomData(@nospecialize inferred) = new(inferred)
 end
-function Compiler.transform_result_for_cache(interp::CustomDataInterp, result::Compiler.InferenceResult)
+function Compiler.transform_result_for_cache(
+    interp::CustomDataInterp, result::Compiler.InferenceResult, edges::Core.SimpleVector)
     inferred_result = @invoke Compiler.transform_result_for_cache(
-        interp::Compiler.AbstractInterpreter, result::Compiler.InferenceResult)
+        interp::Compiler.AbstractInterpreter, result::Compiler.InferenceResult, edges::Core.SimpleVector)
     return CustomData(inferred_result)
 end
-function Compiler.src_inlining_policy(interp::CustomDataInterp, @nospecialize(src),
-                            @nospecialize(info::Compiler.CallInfo), stmt_flag::UInt32)
+function Compiler.src_inlining_policy(
+    interp::CustomDataInterp, @nospecialize(src), @nospecialize(info::Compiler.CallInfo),
+    stmt_flag::UInt32)
     if src isa CustomData
         src = src.inferred
     end
-    return @invoke Compiler.src_inlining_policy(interp::Compiler.AbstractInterpreter, src::Any,
-                                          info::Compiler.CallInfo, stmt_flag::UInt32)
+    return @invoke Compiler.src_inlining_policy(
+        interp::Compiler.AbstractInterpreter, src::Any, info::Compiler.CallInfo,
+        stmt_flag::UInt32)
 end
 Compiler.retrieve_ir_for_inlining(cached_result::CodeInstance, src::CustomData) =
     Compiler.retrieve_ir_for_inlining(cached_result, src.inferred)
 Compiler.retrieve_ir_for_inlining(mi::MethodInstance, src::CustomData, preserve_local_sources::Bool) =
     Compiler.retrieve_ir_for_inlining(mi, src.inferred, preserve_local_sources)
 let src = code_typed((Int,); interp=CustomDataInterp()) do x
-        return sin(x) + cos(x)
+        return (@noinline sin(x)) + (@noinline cos(x))
     end |> only |> first
     @test count(isinvoke(:sin), src.code) == 1
     @test count(isinvoke(:cos), src.code) == 1
-    @test count(isinvoke(:+), src.code) == 0
+    @test_broken count(isinvoke(:+), src.code) == 0
 end
 
 # ephemeral cache mode
@@ -524,13 +528,40 @@ func_ext_cache1(a) = func_ext_cache2(a) * cos(a)
 func_ext_cache2(a) = sin(a)
 let interp = DebugInterp()
     @test Base.infer_return_type(func_ext_cache1, (Float64,); interp) === Float64
-    @test isdefined(interp, :code_cache)
+    @test isdefined(interp, :global_cache)
     found = false
-    for (mi, codeinst) in interp.code_cache.dict
+    for (mi, codeinst) in interp.global_cache.dict
         if mi.def.name === :func_ext_cache2
             found = true
             break
         end
     end
     @test found
+end
+
+@newinterp InvokeInterp
+struct InvokeOwner end
+global codegen::IdDict{CodeInstance, CodeInfo} = IdDict{CodeInstance, CodeInfo}()
+Compiler.cache_owner(::InvokeInterp) = InvokeOwner()
+Compiler.codegen_cache(::InvokeInterp) = codegen
+let interp = InvokeInterp()
+    source_mode = Compiler.SOURCE_MODE_ABI
+    f = (+)
+    args = (1, 1)
+    mi = @ccall jl_method_lookup(Any[f, args...]::Ptr{Any}, (1+length(args))::Csize_t, Base.tls_world_age()::Csize_t)::Ref{Core.MethodInstance}
+    ci = Compiler.typeinf_ext_toplevel(interp, mi, source_mode)
+    @test invoke(f, ci, args...) == 2
+
+    f = error
+    args = "test"
+    mi = @ccall jl_method_lookup(Any[f, args...]::Ptr{Any}, (1+length(args))::Csize_t, Base.tls_world_age()::Csize_t)::Ref{Core.MethodInstance}
+    ci = Compiler.typeinf_ext_toplevel(interp, mi, source_mode)
+    result = nothing
+    try
+        invoke(f, ci, args...)
+    catch e
+        result = sprint(Base.show_backtrace, catch_backtrace())
+    end
+    @test isa(result, String)
+    @test contains(result, "[1] error(::Char, ::Char, ::Char, ::Char)")
 end

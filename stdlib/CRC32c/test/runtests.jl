@@ -3,12 +3,14 @@
 using Test, Random
 using CRC32c
 
-const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays: Origin
 
 isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
 using .Main.FillArrays: Fill
+
+@test isempty(Test.detect_closure_boxes(CRC32c))
 
 function test_crc32c(crc32c)
     # CRC32c checksum (test data generated from @andrewcooke's CRC.jl package)

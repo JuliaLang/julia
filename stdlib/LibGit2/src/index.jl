@@ -14,7 +14,7 @@ function GitIndex(repo::GitRepo)
 end
 
 """
-    read!(idx::GitIndex, force::Bool = false) -> GitIndex
+    read!(idx::GitIndex, force::Bool = false)::GitIndex
 
 Update the contents of `idx` by reading changes made on disk. For example, `idx`
 might be updated if a file has been added to the repository since it was created.
@@ -30,7 +30,7 @@ function read!(idx::GitIndex, force::Bool = false)
 end
 
 """
-    write!(idx::GitIndex) -> GitIndex
+    write!(idx::GitIndex)::GitIndex
 
 Write the state of index `idx` to disk using a file lock.
 """
@@ -41,7 +41,7 @@ function write!(idx::GitIndex)
 end
 
 """
-    write_tree!(idx::GitIndex) -> GitHash
+    write_tree!(idx::GitIndex)::GitHash
 
 Write the index `idx` as a [`GitTree`](@ref) on disk. Trees will be recursively
 created for each subtree in `idx`. The returned [`GitHash`](@ref) can be used to
@@ -53,6 +53,32 @@ function write_tree!(idx::GitIndex)
     oid_ptr = Ref(GitHash())
     @check ccall((:git_index_write_tree, libgit2), Cint,
                  (Ptr{GitHash}, Ptr{Cvoid}), oid_ptr, idx)
+    return oid_ptr[]
+end
+
+"""
+    write_tree_to!(repo::GitRepo, idx::GitIndex)::GitHash
+
+Write the index `idx` as a [`GitTree`](@ref) to the given repository `repo`.
+This is similar to [`write_tree!`](@ref) but allows writing the index to a
+different repository than the one it may be associated with.
+
+Trees will be recursively created for each subtree in `idx`. The returned
+[`GitHash`](@ref) can be used to create a [`GitCommit`](@ref).
+
+This is equivalent to [`git_index_write_tree_to`](https://libgit2.org/libgit2/#HEAD/group/index/git_index_write_tree_to).
+
+# Examples
+```julia
+idx = LibGit2.GitIndex(source_repo)
+tree_oid = LibGit2.write_tree_to!(target_repo, idx)
+```
+"""
+function write_tree_to!(repo::GitRepo, idx::GitIndex)
+    ensure_initialized()
+    oid_ptr = Ref(GitHash())
+    @check ccall((:git_index_write_tree_to, libgit2), Cint,
+                 (Ptr{GitHash}, Ptr{Cvoid}, Ptr{Cvoid}), oid_ptr, idx, repo)
     return oid_ptr[]
 end
 
@@ -198,7 +224,7 @@ function Base.findall(path::String, idx::GitIndex)
 end
 
 """
-    stage(ie::IndexEntry) -> Cint
+    stage(ie::IndexEntry)::Cint
 
 Get the stage number of `ie`. The stage number `0` represents the current state
 of the working tree, but other numbers can be used in the case of a merge conflict.

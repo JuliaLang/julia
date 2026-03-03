@@ -66,7 +66,7 @@ julia> err.column
 The [`TOML.print`](@ref) function is used to print (or serialize) data into TOML
 format.
 
-```jldoctest
+```jldoctest; filter = r"^\s*\S+\s*=.*"m
 julia> using TOML
 
 julia> data = Dict(

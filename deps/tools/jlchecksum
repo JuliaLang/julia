@@ -56,8 +56,8 @@ find_checksum()
 {
     for pack in "$DEPSDIR"/checksums/*; do
         if [ -f "$pack" ]; then
-            TRUE_CHECKSUM=$(awk -F / "{ if (\$1 == \"$BASENAME\" && \$2 == \"$CHECKSUM_TYPE\") print \$3 }" "$pack")
-            if [ $TRUE_CHECKSUM ]; then
+            TRUE_CHECKSUM=$(awk -F / "{ if (\$1 == \"$BASENAME\" && \$2 == \"$CHECKSUM_TYPE\") { print \$3; exit } }" "$pack")
+            if [ "$TRUE_CHECKSUM" ]; then
                 return
             fi
         fi

@@ -105,6 +105,9 @@ function compute_basic_blocks(stmts::Vector{Any})
     end
     # Compute successors/predecessors
     for (num, b) in enumerate(blocks)
+        if b.stmts.start == 1
+            push!(b.preds, 0) # the entry block has a virtual predecessor
+        end
         terminator = stmts[last(b.stmts)]
         if isa(terminator, ReturnNode)
             # return never has any successors
@@ -524,42 +527,69 @@ end
 struct OOBToken end; const OOB_TOKEN = OOBToken()
 struct UndefToken end; const UNDEF_TOKEN = UndefToken()
 
-@noinline function _useref_getindex(@nospecialize(stmt), op::Int)
+# Split into op==1 and op>1 cases to avoid redundant comparisons. Most IR node
+# types only have a single operand, so the op==1 path can return directly without
+# checking `op == 1 || return OOB_TOKEN` for each type. The op>1 path only needs
+# to handle Expr, PhiNode, and PhiCNode which can have multiple operands.
+function _useref_getindex(@nospecialize(stmt), op::Int)
+    if op == 1
+        return _useref_getindex_op1(stmt)
+    else
+        return _useref_getindex_opN(stmt, op)
+    end
+end
+
+@noinline function _useref_getindex_op1(@nospecialize(stmt))
     if isa(stmt, Expr) && stmt.head === :(=)
         rhs = stmt.args[2]
-        if isa(rhs, Expr)
-            if is_relevant_expr(rhs)
-                op > length(rhs.args) && return OOB_TOKEN
-                return rhs.args[op]
-            end
+        if isa(rhs, Expr) && is_relevant_expr(rhs)
+            length(rhs.args) < 1 && return OOB_TOKEN
+            return rhs.args[1]
         end
-        op == 1 || return OOB_TOKEN
         return rhs
     elseif isa(stmt, Expr) # @assert is_relevant_expr(stmt)
-        op > length(stmt.args) && return OOB_TOKEN
-        return stmt.args[op]
+        length(stmt.args) < 1 && return OOB_TOKEN
+        return stmt.args[1]
     elseif isa(stmt, GotoIfNot)
-        op == 1 || return OOB_TOKEN
         return stmt.cond
     elseif isa(stmt, ReturnNode)
         isdefined(stmt, :val) || return OOB_TOKEN
-        op == 1 || return OOB_TOKEN
         return stmt.val
     elseif isa(stmt, EnterNode)
         isdefined(stmt, :scope) || return OOB_TOKEN
-        op == 1 || return OOB_TOKEN
         return stmt.scope
     elseif isa(stmt, PiNode)
         isdefined(stmt, :val) || return OOB_TOKEN
-        op == 1 || return OOB_TOKEN
         return stmt.val
     elseif isa(stmt, Union{AnySSAValue, GlobalRef})
-        op == 1 || return OOB_TOKEN
         return stmt
     elseif isa(stmt, UpsilonNode)
         isdefined(stmt, :val) || return OOB_TOKEN
-        op == 1 || return OOB_TOKEN
         return stmt.val
+    elseif isa(stmt, PhiNode)
+        length(stmt.values) < 1 && return OOB_TOKEN
+        isassigned(stmt.values, 1) || return UNDEF_TOKEN
+        return stmt.values[1]
+    elseif isa(stmt, PhiCNode)
+        length(stmt.values) < 1 && return OOB_TOKEN
+        isassigned(stmt.values, 1) || return UNDEF_TOKEN
+        return stmt.values[1]
+    else
+        return OOB_TOKEN
+    end
+end
+
+@noinline function _useref_getindex_opN(@nospecialize(stmt), op::Int)
+    if isa(stmt, Expr) && stmt.head === :(=)
+        rhs = stmt.args[2]
+        if isa(rhs, Expr) && is_relevant_expr(rhs)
+            op > length(rhs.args) && return OOB_TOKEN
+            return rhs.args[op]
+        end
+        return OOB_TOKEN
+    elseif isa(stmt, Expr) # @assert is_relevant_expr(stmt)
+        op > length(stmt.args) && return OOB_TOKEN
+        return stmt.args[op]
     elseif isa(stmt, PhiNode)
         op > length(stmt.values) && return OOB_TOKEN
         isassigned(stmt.values, op) || return UNDEF_TOKEN
@@ -609,7 +639,7 @@ end
     elseif isa(stmt, EnterNode)
         op == 1 || throw(BoundsError())
         stmt = EnterNode(stmt.catch_dest, v)
-    elseif isa(stmt, Union{AnySSAValue, GlobalRef})
+    elseif isa(stmt, Union{AnySSAValue, Argument, GlobalRef})
         op == 1 || throw(BoundsError())
         stmt = v
     elseif isa(stmt, UpsilonNode)
@@ -640,7 +670,7 @@ end
 function userefs(@nospecialize(x))
     relevant = (isa(x, Expr) && is_relevant_expr(x)) ||
         isa(x, GotoIfNot) || isa(x, ReturnNode) || isa(x, SSAValue) || isa(x, OldSSAValue) || isa(x, NewSSAValue) ||
-        isa(x, PiNode) || isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode) || isa(x, EnterNode)
+        isa(x, PiNode) || isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode) || isa(x, EnterNode) || isa(x, Argument)
     return UseRefIterator(x, relevant)
 end
 
@@ -701,9 +731,9 @@ function CFGTransformState!(blocks::Vector{BasicBlock}, allow_cfg_transforms::Bo
     if allow_cfg_transforms
         bb_rename = Vector{Int}(undef, length(blocks))
         cur_bb = 1
-        domtree = construct_domtree(blocks)
+        dfs = DFS(blocks)
         for i = 1:length(bb_rename)
-            if bb_unreachable(domtree, i)
+            if i != 1 && dfs.to_pre[i] == 0 # if i is unreachable
                 bb_rename[i] = -1
             else
                 bb_rename[i] = cur_bb
@@ -810,7 +840,7 @@ end
 types(ir::Union{IRCode, IncrementalCompact}) = TypesView(ir)
 
 function getindex(compact::IncrementalCompact, ssa::SSAValue)
-    (1 ≤ ssa.id ≤ compact.result_idx) || throw(InvalidIRError())
+    (1 ≤ ssa.id < compact.result_idx) || throw(InvalidIRError())
     return compact.result[ssa.id]
 end
 
@@ -1265,39 +1295,48 @@ function process_phinode_values(old_values::Vector{Any}, late_fixup::Vector{Int}
     values = Vector{Any}(undef, length(old_values))
     for i = 1:length(old_values)
         isassigned(old_values, i) || continue
-        val = old_values[i]
-        if isa(val, SSAValue)
-            if do_rename_ssa
-                if !already_inserted(i, OldSSAValue(val.id))
-                    push!(late_fixup, result_idx)
-                    val = OldSSAValue(val.id)
-                else
-                    val = renumber_ssa2(val, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
-                end
-            else
-                used_ssas[val.id] += 1
-            end
-        elseif isa(val, OldSSAValue)
-            if !already_inserted(i, val)
-                push!(late_fixup, result_idx)
-            else
-                # Always renumber these. do_rename_ssa applies only to actual SSAValues
-                val = renumber_ssa2(SSAValue(val.id), ssa_rename, used_ssas, new_new_used_ssas, true, mark_refined!)
-            end
-        elseif isa(val, NewSSAValue)
-            if val.id < 0
-                new_new_used_ssas[-val.id] += 1
-            else
-                @assert do_rename_ssa
-                val = SSAValue(val.id)
-            end
-        end
-        if isa(val, NewSSAValue)
-            push!(late_fixup, result_idx)
-        end
-        values[i] = val
+        values[i] = process_phinode_value(old_values, i, late_fixup, already_inserted, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
     end
     return values
+end
+
+function process_phinode_value(old_values::Vector{Any}, i::Int, late_fixup::Vector{Int},
+                               already_inserted, result_idx::Int,
+                               ssa_rename::Vector{Any}, used_ssas::Vector{Int},
+                               new_new_used_ssas::Vector{Int},
+                               do_rename_ssa::Bool,
+                               mark_refined!::Union{Refiner, Nothing})
+    val = old_values[i]
+    if isa(val, SSAValue)
+        if do_rename_ssa
+            if !already_inserted(i, OldSSAValue(val.id))
+                push!(late_fixup, result_idx)
+                val = OldSSAValue(val.id)
+            else
+                val = renumber_ssa2(val, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
+            end
+        else
+            used_ssas[val.id] += 1
+        end
+    elseif isa(val, OldSSAValue)
+        if !already_inserted(i, val)
+            push!(late_fixup, result_idx)
+        else
+            # Always renumber these. do_rename_ssa applies only to actual SSAValues
+            val = renumber_ssa2(SSAValue(val.id), ssa_rename, used_ssas, new_new_used_ssas, true, mark_refined!)
+        end
+    elseif isa(val, NewSSAValue)
+        if val.id < 0
+            new_new_used_ssas[-val.id] += 1
+        else
+            @assert do_rename_ssa
+            val = SSAValue(val.id)
+        end
+    end
+    if isa(val, NewSSAValue)
+        push!(late_fixup, result_idx)
+    end
+    return val
 end
 
 function renumber_ssa2(val::SSAValue, ssanums::Vector{Any}, used_ssas::Vector{Int},
@@ -1370,8 +1409,19 @@ function kill_edge!(ir::IRCode, from::Int, to::Int, callback=nothing)
     kill_edge!(ir.cfg.blocks, from, to, callback)
 end
 
-# N.B.: from and to are non-renamed indices
-function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::Int)
+@inline function compacted_stmt_range(compact::IncrementalCompact, bb::BasicBlock, active_bb::Int, to::Int)
+    to == active_bb && return StmtRange(first(bb.stmts), compact.result_idx - 1)
+    return bb.stmts
+end
+
+"""
+    kill_edge_terminator!(compact::IncrementalCompact, active_bb::Int, from::Int, to::Int)
+
+Kill a CFG edge while compacting a terminator in `active_bb`. Assumes all PhiNode
+block statements in `to` have already been processed, so the active BB may only
+scan the compacted prefix when `to == active_bb`. `from` and `to` are non-renamed indices.
+"""
+function kill_edge_terminator!(compact::IncrementalCompact, active_bb::Int, from::Int, to::Int)
     # Note: We recursively kill as many edges as are obviously dead.
     (; bb_rename_pred, bb_rename_succ, result_bbs, domtree) = compact.cfg_transform
     preds = result_bbs[bb_rename_succ[to]].preds
@@ -1387,7 +1437,7 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
         for succ in copy(to_succs)
             new_succ = findfirst(x::Int->x==succ, bb_rename_pred)
             new_succ === nothing && continue
-            kill_edge!(compact, active_bb, to, new_succ)
+            kill_edge_terminator!(compact, active_bb, to, new_succ)
         end
         empty!(preds)
         empty!(to_succs)
@@ -1409,8 +1459,9 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
         # Remove this edge from all phi nodes in `to` block
         # NOTE: It is possible for `to` to contain only `nothing` statements,
         #       so we must be careful to stop at its last statement
-        if to < active_bb
-            stmts = result_bbs[bb_rename_succ[to]].stmts
+        if to <= active_bb
+            bb = result_bbs[bb_rename_succ[to]]
+            stmts = compacted_stmt_range(compact, bb, active_bb, to)
             idx = first(stmts)
             while idx <= last(stmts)
                 stmt = compact.result[idx][:stmt]
@@ -1490,14 +1541,14 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             if cond
                 ssa_rename[idx] = nothing
                 result[result_idx][:stmt] = nothing
-                kill_edge!(compact, active_bb, active_bb, stmt.dest)
+                kill_edge_terminator!(compact, active_bb, active_bb, stmt.dest)
                 # Don't increment result_idx => Drop this statement
             else
                 label = bb_rename_succ[stmt.dest]
                 @assert label > 0
                 ssa_rename[idx] = SSAValue(result_idx)
                 result[result_idx][:stmt] = GotoNode(label)
-                kill_edge!(compact, active_bb, active_bb, active_bb+1)
+                kill_edge_terminator!(compact, active_bb, active_bb, active_bb+1)
                 result_idx += 1
             end
         else
@@ -1672,7 +1723,10 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 stmt = ssa_rename[stmt.id]
             end
         elseif isa(stmt, NewSSAValue)
-            stmt = SSAValue(stmt.id)
+            if stmt.id > 0
+                # Negative ids reference new_new_nodes and must remain NewSSAValue.
+                stmt = SSAValue(stmt.id)
+            end
         else
             # Constant assign, replace uses of this ssa value with its result
         end

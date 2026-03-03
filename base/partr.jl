@@ -107,7 +107,6 @@ function multiq_sift_down(heap::taskheap, idx::Int32)
     end
 end
 
-
 function multiq_size(tpid::Int8)
     nt = UInt32(Threads._nthreads_in_pool(tpid))
     tp = tpid + 1
@@ -137,7 +136,6 @@ function multiq_size(tpid::Int8)
 
     return heap_p
 end
-
 
 function multiq_insert(task::Task, priority::UInt16)
     tpid = ccall(:jl_get_task_threadpoolid, Int8, (Any,), task)
@@ -171,10 +169,9 @@ function multiq_insert(task::Task, priority::UInt16)
     return true
 end
 
-
 function multiq_deletemin()
-    local rn1, rn2
-    local prio1, prio2
+    local rn1::UInt32
+    local heap, task
 
     tid = Threads.threadid()
     tp = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1) + 1
@@ -183,36 +180,40 @@ function multiq_deletemin()
     end
     tpheaps = heaps[tp]
 
-    @label retry
-    GC.safepoint()
-    heap_p = UInt32(length(tpheaps))
-    for i = UInt32(0):heap_p
-        if i == heap_p
-            return nothing
+    while true
+        GC.safepoint()
+        heap_p = UInt32(length(tpheaps))
+        for i = UInt32(0):heap_p
+            if i == heap_p
+                return nothing
+            end
+            rn1 = cong(heap_p)
+            rn2 = cong(heap_p)
+            prio1 = tpheaps[rn1].priority
+            prio2 = tpheaps[rn2].priority
+            if prio1 > prio2
+                prio1 = prio2
+                rn1 = rn2
+            elseif prio1 == prio2 && prio1 == typemax(UInt16)
+                continue
+            end
+            if trylock(tpheaps[rn1].lock)
+                if prio1 == tpheaps[rn1].priority
+                    break
+                end
+                unlock(tpheaps[rn1].lock)
+            end
         end
-        rn1 = cong(heap_p)
-        rn2 = cong(heap_p)
-        prio1 = tpheaps[rn1].priority
-        prio2 = tpheaps[rn2].priority
-        if prio1 > prio2
-            prio1 = prio2
-            rn1 = rn2
-        elseif prio1 == prio2 && prio1 == typemax(UInt16)
+
+        @assert @isdefined(rn1) "Assertion to tell the compiler about the definedness of this variable"
+
+        heap = tpheaps[rn1]
+        task = heap.tasks[1]
+        if ccall(:jl_set_task_tid, Cint, (Any, Cint), task, tid-1) == 0
+            unlock(heap.lock)
             continue
         end
-        if trylock(tpheaps[rn1].lock)
-            if prio1 == tpheaps[rn1].priority
-                break
-            end
-            unlock(tpheaps[rn1].lock)
-        end
-    end
-
-    heap = tpheaps[rn1]
-    task = heap.tasks[1]
-    if ccall(:jl_set_task_tid, Cint, (Any, Cint), task, tid-1) == 0
-        unlock(heap.lock)
-        @goto retry
+        break
     end
     ntasks = heap.ntasks
     @atomic :monotonic heap.ntasks = ntasks - Int32(1)

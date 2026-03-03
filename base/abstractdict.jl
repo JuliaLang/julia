@@ -92,7 +92,7 @@ But `keys(a)`, `values(a)` and `pairs(a)` all iterate `a`
 and return the elements in the same order.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+'\\S'.*\$"m
 julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char, Int64} with 2 entries:
   'a' => 2
@@ -118,7 +118,7 @@ But `keys(a)`, `values(a)` and `pairs(a)` all iterate `a`
 and return the elements in the same order.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+(\\s+=>\\s+\\d)?\$"m
 julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char, Int64} with 2 entries:
   'a' => 2
@@ -144,7 +144,7 @@ But `keys(a)`, `values(a)` and `pairs(a)` all iterate `a`
 and return the elements in the same order.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> a = Dict(zip(["a", "b", "c"], [1, 2, 3]))
 Dict{String, Int64} with 3 entries:
   "c" => 3
@@ -207,7 +207,7 @@ Update collection with pairs from the other collections.
 See also [`merge`](@ref).
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> d1 = Dict(1 => 2, 3 => 4);
 
 julia> d2 = Dict(1 => 4, 4 => 5);
@@ -251,7 +251,7 @@ compatibility.
     `mergewith!` requires Julia 1.5 or later.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> d1 = Dict(1 => 2, 3 => 4);
 
 julia> d2 = Dict(1 => 4, 4 => 5);
@@ -332,7 +332,7 @@ value for that key will be the value it has in the last collection listed.
 See also [`mergewith`](@ref) for custom handling of values with the same key.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\S+\$"m
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
 Dict{String, Float64} with 2 entries:
   "bar" => 42.0
@@ -362,7 +362,6 @@ merge(d::AbstractDict, others::AbstractDict...) =
 """
     mergewith(combine, d::AbstractDict, others::AbstractDict...)
     mergewith(combine)
-    merge(combine, d::AbstractDict, others::AbstractDict...)
 
 Construct a merged collection from the given collections. If necessary, the
 types of the resulting collection will be promoted to accommodate the types of
@@ -370,14 +369,11 @@ the merged collections. Values with the same key will be combined using the
 combiner function.  The curried form `mergewith(combine)` returns the function
 `(args...) -> mergewith(combine, args...)`.
 
-Method `merge(combine::Union{Function,Type}, args...)` as an alias of
-`mergewith(combine, args...)` is still available for backward compatibility.
-
 !!! compat "Julia 1.5"
     `mergewith` requires Julia 1.5 or later.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\S+\$"m
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
 Dict{String, Float64} with 2 entries:
   "bar" => 42.0
@@ -405,8 +401,6 @@ Dict{Any, Any} with 1 entry:
 mergewith(combine, d::AbstractDict, others::AbstractDict...) =
     mergewith!(combine, _typeddict(d, others...), others...)
 mergewith(combine) = (args...) -> mergewith(combine, args...)
-merge(combine::Callable, d::AbstractDict, others::AbstractDict...) =
-    merge!(combine, _typeddict(d, others...), others...)
 
 promoteK(K) = K
 promoteV(V) = V
@@ -425,7 +419,7 @@ Update `d`, removing elements for which `f` is `false`.
 The function `f` is passed `key=>value` pairs.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\\s+=>\\s+\\S+\$"m
 julia> d = Dict(1=>"a", 2=>"b", 3=>"c")
 Dict{Int64, String} with 3 entries:
   2 => "b"
@@ -467,7 +461,7 @@ Return a copy of `d`, removing elements for which `f` is `false`.
 The function `f` is passed `key=>value` pairs.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\\s+=>\\s+\\S+\$"m
 julia> d = Dict(1=>"a", 2=>"b")
 Dict{Int64, String} with 2 entries:
   2 => "b"
@@ -660,7 +654,7 @@ of `dict` then it will be converted to the value type if possible and otherwise 
     `map!(f, values(dict::AbstractDict))` requires Julia 1.2 or later.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+(\\s+=>\\s+\\d)?\$"m
 julia> d = Dict(:a => 1, :b => 2)
 Dict{Symbol, Int64} with 2 entries:
   :a => 1

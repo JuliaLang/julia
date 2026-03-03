@@ -66,7 +66,7 @@ struct HasShape{N} <: IteratorSize end
 struct IsInfinite <: IteratorSize end
 
 """
-    IteratorSize(itertype::Type) -> IteratorSize
+    IteratorSize(itertype::Type)::IteratorSize
 
 Given the type of an iterator, return one of the following values:
 
@@ -98,7 +98,7 @@ IteratorSize(::Type{Any}) = SizeUnknown()
 
 IteratorSize(::Type{<:Tuple}) = HasLength()
 IteratorSize(::Type{<:AbstractArray{<:Any,N}})  where {N} = HasShape{N}()
-IteratorSize(::Type{Generator{I,F}}) where {I,F} = IteratorSize(I)
+IteratorSize(::Type{<:Generator{I}}) where {I} = (@isdefined I) ? IteratorSize(I) : SizeUnknown()
 
 haslength(iter) = IteratorSize(iter) isa Union{HasShape, HasLength}
 
@@ -107,7 +107,7 @@ struct EltypeUnknown <: IteratorEltype end
 struct HasEltype <: IteratorEltype end
 
 """
-    IteratorEltype(itertype::Type) -> IteratorEltype
+    IteratorEltype(itertype::Type)::IteratorEltype
 
 Given the type of an iterator, return one of the following values:
 

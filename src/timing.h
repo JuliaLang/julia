@@ -55,6 +55,8 @@ JL_DLLEXPORT jl_timing_event_t *_jl_timing_event_create(const char *subsystem, c
 JL_DLLEXPORT void _jl_timing_block_init(char *buf, size_t size, jl_timing_event_t *event);
 JL_DLLEXPORT void _jl_timing_block_start(jl_timing_block_t *cur_block);
 JL_DLLEXPORT void _jl_timing_block_end(jl_timing_block_t *cur_block);
+JL_DLLEXPORT int jl_timing_enabled(void);
+
 
 #ifdef __cplusplus
 }
@@ -66,7 +68,8 @@ JL_DLLEXPORT void _jl_timing_block_end(jl_timing_block_t *cur_block);
 #define HAVE_TIMING_SUPPORT
 #endif
 
-#if defined( USE_TRACY ) || defined( USE_ITTAPI ) || defined( USE_NVTX ) || defined( USE_TIMING_COUNTS )
+#if defined( USE_TRACY ) || defined( USE_ITTAPI ) || defined( USE_NVTX ) ||  \
+            defined( USE_TIMING_COUNTS ) || defined( USE_APPLE_OSLOG )
 #define ENABLE_TIMINGS
 #endif
 
@@ -113,6 +116,11 @@ typedef struct ___tracy_source_location_data TracySrcLocData;
 
 #ifdef USE_ITTAPI
 #include <ittapi/ittnotify.h>
+#endif
+
+#ifdef USE_APPLE_OSLOG
+#include <os/log.h>
+#include <os/signpost.h>
 #endif
 
 #ifdef USE_NVTX
@@ -187,6 +195,7 @@ JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
         X(STACKWALK)             \
         X(DL_OPEN)               \
         X(JULIA_INIT)            \
+        X(CORE_COMPILER)        \
 
 
 #define JL_TIMING_COUNTERS \
@@ -295,7 +304,27 @@ typedef struct _jl_timing_counts_t {
 #define _NVTX_STOP(block)
 #endif
 
+#ifdef USE_APPLE_OSLOG
 
+typedef struct {
+    os_log_t log; // This stores the subsystem
+    const char *name; // Event name
+} _jl_os_log_event_t;
+
+
+
+#define _APPLE_OSLOG_EVENT_MEMBER      _jl_os_log_event_t os_log_event;
+#define _APPLE_OSLOG_BLOCK_MEMBER      os_signpost_id_t signpost_id; \
+                                       char oslog_metadata[80]; \
+                                       size_t oslog_metadata_len;
+#define _APPLE_OSLOG_START(block)      _jl_timing_os_signpost_start(block);
+#define _APPLE_OSLOG_STOP(block)       _jl_timing_os_signpost_stop(block);
+#else
+#define _APPLE_OSLOG_EVENT_MEMBER
+#define _APPLE_OSLOG_BLOCK_MEMBER
+#define _APPLE_OSLOG_START(block)
+#define _APPLE_OSLOG_STOP(block)
+#endif // USE_APPLE_OSLOG
 /**
  * Top-level jl_timing implementation
  **/
@@ -313,6 +342,7 @@ struct _jl_timing_event_t { // typedef in julia.h
     _TRACY_EVENT_MEMBER
     _ITTAPI_EVENT_MEMBER
     _NVTX_EVENT_MEMBER
+    _APPLE_OSLOG_EVENT_MEMBER
     _COUNTS_EVENT_MEMBER
 
     int subsystem;
@@ -332,6 +362,7 @@ struct _jl_timing_block_t { // typedef in julia.h
     _TRACY_BLOCK_MEMBER
     _ITTAPI_BLOCK_MEMBER
     _NVTX_BLOCK_MEMBER
+    _APPLE_OSLOG_BLOCK_MEMBER
     _COUNTS_BLOCK_MEMBER
 
     uint8_t is_running;
@@ -384,11 +415,6 @@ STATIC_INLINE void _jl_timing_suspend_destroy(jl_timing_suspend_t *suspend) JL_N
 #define _ITTAPI_COUNTER_MEMBER
 #endif
 
-#ifdef USE_NVTX
-#define _NVTX_COUNTER_MEMBER void * __nvtx_null;
-#else
-#define _NVTX_COUNTER_MEMBER
-#endif
 
 #ifdef USE_TRACY
 # define _TRACY_COUNTER_MEMBER jl_tracy_counter_t tracy_counter;
@@ -396,17 +422,11 @@ STATIC_INLINE void _jl_timing_suspend_destroy(jl_timing_suspend_t *suspend) JL_N
 # define _TRACY_COUNTER_MEMBER
 #endif
 
-#ifdef USE_TIMING_COUNTS
-#define _COUNTS_MEMBER _Atomic(uint64_t) basic_counter;
-#else
-#define _COUNTS_MEMBER
-#endif
 
 typedef struct {
     _ITTAPI_COUNTER_MEMBER
-    _NVTX_COUNTER_MEMBER
     _TRACY_COUNTER_MEMBER
-    _COUNTS_MEMBER
+    _Atomic(uint64_t) basic_counter;
 } jl_timing_counter_t;
 
 JL_DLLEXPORT extern jl_timing_counter_t jl_timing_counters[JL_TIMING_COUNTER_LAST];

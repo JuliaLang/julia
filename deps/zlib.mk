@@ -6,11 +6,11 @@ $(eval $(call git-external,zlib,ZLIB,,,$(SRCCACHE)))
 
 # use `-DUNIX=true` to ensure that it is always named `libz`
 ZLIB_BUILD_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DUNIX=true
-ZLIB_BUILD_OPTS += -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+ZLIB_BUILD_OPTS += -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DZLIB_BUILD_TESTING=OFF -DZLIB_BUILD_STATIC=OFF
 
 $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured: $(SRCCACHE)/$(ZLIB_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
-	cd $(dir $@) && $(CMAKE) $(ZLIB_BUILD_OPTS) $(dir $<)
+	cd $(dir $@) && $(CMAKE) -G"Unix Makefiles" $(ZLIB_BUILD_OPTS) $(dir $<)
 	echo 1 > $@
 
 $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-compiled: $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured

@@ -269,7 +269,7 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         if isType(t)
             # Type is fairly important, so do not widen it as fast as other types if avoidable
             tt = tP[1]
-            ttu = unwrap_unionall(tt) # TODO: use argument_datatype(tt) after #50692 fixed
+            # ttu = unwrap_unionall(tt) # TODO: use argument_datatype(tt) after #50692 fixed
             if isType(c)
                 ct = c.parameters[1]
             else
@@ -325,6 +325,11 @@ function n_initialized(t::Const)
     nf = nfields(t.val)
     return something(findfirst(i::Int->!isdefined(t.val,i), 1:nf), nf+1)-1
 end
+function n_initialized(pstruct::PartialStruct)
+    undefs = _getundefs(pstruct)
+    nf = length(undefs)
+    return something(findfirst(i::Int->undefs[i]!==false, 1:nf), nf+1)-1
+end
 
 # A simplified type_more_complex query over the extended lattice
 # (assumes typeb ⊑ typea)
@@ -333,10 +338,11 @@ end
     typea === typeb && return true
     if typea isa PartialStruct
         aty = widenconst(typea)
-        if typeb isa Const
-            @assert length(typea.fields) ≤ n_initialized(typeb) "typeb ⊑ typea is assumed"
+        if typeb isa Const || typeb isa PartialStruct
+            @assert n_initialized(typea) ≤ n_initialized(typeb) "typeb ⊑ typea is assumed"
         elseif typeb isa PartialStruct
-            @assert length(typea.fields) ≤ length(typeb.fields) "typeb ⊑ typea is assumed"
+            @assert n_initialized(typea) ≤ n_initialized(typeb) &&
+                all(b === nothing || a === b for (a, b) in zip(_getundefs(typea), _getundefs(typeb))) "typeb ⊑ typea is assumed"
         else
             return false
         end
@@ -494,16 +500,16 @@ end
     # type-lattice for Conditional wrapper (NOTE never be merged with InterConditional)
     if isa(typea, Conditional) && isa(typeb, Const)
         if typeb.val === true
-            typeb = Conditional(typea.slot, Any, Union{})
+            typeb = Conditional(typea.slot, typea.ssadef, Any, Union{})
         elseif typeb.val === false
-            typeb = Conditional(typea.slot, Union{}, Any)
+            typeb = Conditional(typea.slot, typea.ssadef, Union{}, Any)
         end
     end
     if isa(typeb, Conditional) && isa(typea, Const)
         if typea.val === true
-            typea = Conditional(typeb.slot, Any, Union{})
+            typea = Conditional(typeb.slot, typeb.ssadef, Any, Union{})
         elseif typea.val === false
-            typea = Conditional(typeb.slot, Union{}, Any)
+            typea = Conditional(typeb.slot, typeb.ssadef, Union{}, Any)
         end
     end
     if isa(typea, Conditional) && isa(typeb, Conditional)
@@ -511,7 +517,7 @@ end
             thentype = tmerge(widenlattice(lattice), typea.thentype, typeb.thentype)
             elsetype = tmerge(widenlattice(lattice), typea.elsetype, typeb.elsetype)
             if thentype !== elsetype
-                return Conditional(typea.slot, thentype, elsetype)
+                return Conditional(typea.slot, typea.ssadef, thentype, elsetype)
             end
         end
         val = maybe_extract_const_bool(typea)
@@ -590,18 +596,22 @@ end
     if aty === bty && !isType(aty)
         if typea isa PartialStruct
             if typeb isa PartialStruct
-                nflds = min(length(typea.fields), length(typeb.fields))
+                nflds = length(typea.fields)
+                @assert nflds == length(typeb.fields)
             else
-                nflds = min(length(typea.fields), n_initialized(typeb::Const))
+                nflds = length(typea.fields)
             end
         elseif typeb isa PartialStruct
-            nflds = min(n_initialized(typea::Const), length(typeb.fields))
+            nflds = length(typeb.fields)
         else
-            nflds = min(n_initialized(typea::Const), n_initialized(typeb::Const))
+            nflds = fieldcount(aty)
         end
         nflds == 0 && return nothing
+        undefs = Union{Nothing,Bool}[nothing for _ in 1:nflds]
         fields = Vector{Any}(undef, nflds)
-        anyrefine = nflds > datatype_min_ninitialized(aty)
+        fldmin = datatype_min_ninitialized(aty)
+        n_initialized_merged = min(n_initialized(typea), n_initialized(typeb))
+        anyrefine = n_initialized_merged > fldmin
         for i = 1:nflds
             ai = getfield_tfunc(𝕃, typea, Const(i))
             bi = getfield_tfunc(𝕃, typeb, Const(i))
@@ -633,12 +643,34 @@ end
                 end
             end
             fields[i] = tyi
+            if typea isa PartialStruct
+                aundefᵢ = _getundefs(typea)[i]
+                if typeb isa PartialStruct
+                    if aundefᵢ === _getundefs(typeb)[i]
+                        undefs[i] = aundefᵢ
+                    end
+                else
+                    if aundefᵢ === !isdefined(typeb.val, i)
+                        undefs[i] = aundefᵢ
+                    end
+                end
+            elseif typeb isa PartialStruct
+                bundefᵢ = _getundefs(typeb)[i]
+                if !isdefined(typea.val, i) === bundefᵢ
+                    undefs[i] = bundefᵢ
+                end
+            else
+                aundefᵢ = isdefined(typea.val, i)
+                if aundefᵢ === isdefined(typeb.val, i)
+                    undefs[i] = !aundefᵢ
+                end
+            end
             if !anyrefine
                 anyrefine = has_nontrivial_extended_info(𝕃, tyi) || # extended information
                             ⋤(𝕃, tyi, ft) # just a type-level information, but more precise than the declared type
             end
         end
-        anyrefine && return PartialStruct(𝕃, aty, fields)
+        anyrefine && return PartialStruct(𝕃, aty, undefs, fields)
     end
     return nothing
 end

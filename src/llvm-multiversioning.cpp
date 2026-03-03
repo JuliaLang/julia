@@ -216,7 +216,7 @@ static void annotate_module_clones(Module &M) {
     if (auto maybe_specs = get_target_specs(M)) {
         specs = std::move(*maybe_specs);
     } else {
-        auto full_specs = jl_get_llvm_clone_targets();
+        auto full_specs = jl_get_llvm_clone_targets(jl_options.cpu_target);
         specs.reserve(full_specs.size());
         for (auto &spec: full_specs) {
             specs.push_back(TargetSpec::fromSpec(spec));
@@ -378,6 +378,8 @@ private:
     void clone_partial(Group &grp, Target &tgt);
     uint32_t get_func_id(Function *F) const;
     std::pair<uint32_t,GlobalVariable*> get_reloc_slot(Function *F) const;
+
+    Function *create_trampoline(Function *F, GlobalVariable *slot, bool autoinit=false);
     void rewrite_alias(GlobalAlias *alias, Function* F);
 
     MDNode *tbaa_const;
@@ -487,9 +489,57 @@ void CloneCtx::prepare_vmap(ValueToValueMapTy &vmap)
     // The `DISubprogram` cloning on LLVM 5.0 handles this
     // but it doesn't hurt to enforce the identity either.
     auto &MD = vmap.MD();
-    for (auto cu: M.debug_compile_units()) {
-        MD[cu].reset(cu);
+    if (M.getNamedMetadata("llvm.dbg.cu"))
+        for (auto cu: M.getNamedMetadata("llvm.dbg.cu")->operands()) {
+            MD[cu].reset(cu);
     }
+}
+
+Function *CloneCtx::create_trampoline(Function *F, GlobalVariable *slot, bool autoinit)
+{
+    Function *trampoline =
+        Function::Create(F->getFunctionType(), GlobalValue::ExternalLinkage, "", &M);
+
+    trampoline->copyAttributesFrom(F);
+    trampoline->setVisibility(GlobalValue::HiddenVisibility);
+    trampoline->setDSOLocal(true);
+
+    // drop multiversioning attributes
+    trampoline->removeFnAttr("julia.mv.reloc");
+    trampoline->removeFnAttr("julia.mv.clones");
+
+    auto BB = BasicBlock::Create(F->getContext(), "top", trampoline);
+    IRBuilder<> irbuilder(BB);
+
+    if (autoinit) {
+        irbuilder.CreateCall(F->getParent()->getOrInsertFunction(
+            XSTR(jl_autoinit_and_adopt_thread),
+            PointerType::get(F->getContext(), 0)
+        ));
+    }
+
+    auto ptr = irbuilder.CreateLoad(F->getType(), slot);
+    ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+    ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(F->getContext(), {}));
+
+    SmallVector<Value *, 0> Args;
+    for (auto &arg : trampoline->args())
+        Args.push_back(&arg);
+    auto call = irbuilder.CreateCall(F->getFunctionType(), ptr, ArrayRef<Value *>(Args));
+    if (F->isVarArg()) {
+        assert(!TT.isARM() && !TT.isPPC() && "musttail not supported on ARM/PPC!");
+        call->setTailCallKind(CallInst::TCK_MustTail);
+    } else {
+        call->setTailCallKind(CallInst::TCK_Tail);
+
+    }
+
+    if (F->getReturnType() == Type::getVoidTy(F->getContext()))
+        irbuilder.CreateRetVoid();
+    else
+        irbuilder.CreateRet(call);
+
+    return trampoline;
 }
 
 void CloneCtx::prepare_slots()
@@ -506,7 +556,12 @@ void CloneCtx::prepare_slots()
             else {
                 auto id = get_func_id(F);
                 const_relocs[id] = GV;
-                GV->setInitializer(Constant::getNullValue(F->getType()));
+
+                // Initialize with a single-use trampoline that calls `jl_autoinit_and_adopt_thread`,
+                // so that auto-initialization works with multi-versioned entrypoints.
+                Function *trampoline = create_trampoline(F, GV, /* autoinit */ true);
+                trampoline->setName(F->getName() + ".autoinit_trampoline");
+                GV->setInitializer(trampoline);
             }
         }
     }
@@ -664,45 +719,21 @@ void CloneCtx::rewrite_alias(GlobalAlias *alias, Function *F)
 {
     assert(!is_vector(F->getFunctionType()));
 
-    Function *trampoline =
-        Function::Create(F->getFunctionType(), alias->getLinkage(), "", &M);
-    trampoline->copyAttributesFrom(F);
-    trampoline->takeName(alias);
-    trampoline->setVisibility(alias->getVisibility());
-    trampoline->setDSOLocal(alias->isDSOLocal());
-    // drop multiversioning attributes, add alias attribute for testing purposes
-    trampoline->removeFnAttr("julia.mv.reloc");
-    trampoline->removeFnAttr("julia.mv.clones");
-    trampoline->addFnAttr("julia.mv.alias");
-    trampoline->setDLLStorageClass(alias->getDLLStorageClass());
-    alias->eraseFromParent();
-
     uint32_t id;
     GlobalVariable *slot;
     std::tie(id, slot) = get_reloc_slot(F);
+    assert(slot);
 
-    auto BB = BasicBlock::Create(F->getContext(), "top", trampoline);
-    IRBuilder<> irbuilder(BB);
+    Function *trampoline = create_trampoline(F, slot, /* autoinit */ false);
+    trampoline->addFnAttr("julia.mv.alias"); // add alias attribute for testing purposes
 
-    auto ptr = irbuilder.CreateLoad(F->getType(), slot);
-    ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-    ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(F->getContext(), None));
+    trampoline->takeName(alias);
+    trampoline->setLinkage(alias->getLinkage());
+    trampoline->setVisibility(alias->getVisibility());
+    trampoline->setDSOLocal(alias->isDSOLocal());
+    trampoline->setDLLStorageClass(alias->getDLLStorageClass());
 
-    SmallVector<Value *, 0> Args;
-    for (auto &arg : trampoline->args())
-        Args.push_back(&arg);
-    auto call = irbuilder.CreateCall(F->getFunctionType(), ptr, ArrayRef<Value *>(Args));
-    if (F->isVarArg()) {
-        assert(!TT.isARM() && !TT.isPPC() && "musttail not supported on ARM/PPC!");
-        call->setTailCallKind(CallInst::TCK_MustTail);
-    } else {
-        call->setTailCallKind(CallInst::TCK_Tail);
-    }
-
-    if (F->getReturnType() == Type::getVoidTy(F->getContext()))
-        irbuilder.CreateRetVoid();
-    else
-        irbuilder.CreateRet(call);
+    alias->eraseFromParent();
 }
 
 void CloneCtx::fix_gv_uses()
@@ -767,7 +798,11 @@ std::pair<uint32_t,GlobalVariable*> CloneCtx::get_reloc_slot(Function *F) const
 }
 
 template<typename Stack>
+#if JL_LLVM_VERSION >= 200000
+static Value *rewrite_inst_use(const Stack& stack, Type *T_size, Value *replace, InsertPosition& insert_before)
+#else
 static Value *rewrite_inst_use(const Stack& stack, Type *T_size, Value *replace, Instruction *insert_before)
+#endif
 {
     SmallVector<Constant*, 8> args;
     uint32_t nlevel = stack.size();
@@ -828,12 +863,20 @@ static void replaceUsesWithLoad(Function &F, Type *T_size, I2GV should_replace, 
             GlobalVariable *slot = should_replace(*use_i);
             if (!slot)
                 continue;
+#if JL_LLVM_VERSION >= 200000
+            InsertPosition insert_before = use_i->getIterator();
+#else
             Instruction *insert_before = use_i;
+#endif
             if (auto phi = dyn_cast<PHINode>(use_i))
+#if JL_LLVM_VERSION >= 200000
+                insert_before = phi->getIncomingBlock(*info.use)->getTerminator()->getIterator();
+#else
                 insert_before = phi->getIncomingBlock(*info.use)->getTerminator();
+#endif
             Instruction *ptr = new LoadInst(F.getType(), slot, "", false, insert_before);
             ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-            ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(ptr->getContext(), None));
+            ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(ptr->getContext(), {}));
             use_i->setOperand(info.use->getOperandNo(),
                                 rewrite_inst_use(uses.get_stack(), T_size, ptr,
                                                 insert_before));
@@ -884,11 +927,11 @@ static void emit_table(Module &M, Type *T_size, ArrayRef<Constant*> vars, String
     uint32_t nvars = vars.size();
     SmallVector<Constant*,0> castvars(nvars);
     for (size_t i = 0; i < nvars; i++)
-        castvars[i] = ConstantExpr::getBitCast(vars[i], T_size->getPointerTo());
+        castvars[i] = ConstantExpr::getBitCast(vars[i], PointerType::getUnqual(T_size->getContext()));
     auto gv = new GlobalVariable(M, T_size, true, GlobalValue::ExternalLinkage, ConstantInt::get(T_size, nvars), name + "_count" + suffix);
     gv->setVisibility(GlobalValue::HiddenVisibility);
     gv->setDSOLocal(true);
-    ArrayType *vars_type = ArrayType::get(T_size->getPointerTo(), nvars);
+    ArrayType *vars_type = ArrayType::get(PointerType::getUnqual(T_size->getContext()), nvars);
     gv = new GlobalVariable(M, vars_type, false,
                             GlobalVariable::ExternalLinkage,
                             ConstantArray::get(vars_type, castvars),
@@ -962,7 +1005,7 @@ void CloneCtx::emit_metadata()
     {
         SmallVector<uint32_t, 0> idxs;
         SmallVector<Constant*, 0> fptrs;
-        Type *Tfptr = T_size->getPointerTo();
+        Type *Tfptr = PointerType::getUnqual(T_size->getContext());
         for (uint32_t i = 0; i < ntargets; i++) {
             auto tgt = linearized[i];
             auto &spec = specs[i];

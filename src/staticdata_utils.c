@@ -86,6 +86,23 @@ static jl_array_t *newly_inferred JL_GLOBALLY_ROOTED /*FIXME*/;
 // Mutex for newly_inferred
 jl_mutex_t newly_inferred_mutex;
 extern jl_mutex_t world_counter_lock;
+static _Atomic(uint8_t) jl_tag_newly_inferred_enabled = 0;
+
+/**
+ * @brief Enable tagging of all newly inferred CodeInstances.
+ */
+JL_DLLEXPORT void jl_tag_newly_inferred_enable(void)
+{
+    jl_atomic_fetch_add(&jl_tag_newly_inferred_enabled, 1);  // FIXME overflow?
+}
+/**
+ * @brief Disable tagging of all newly inferred CodeInstances.
+ */
+JL_DLLEXPORT void jl_tag_newly_inferred_disable(void)
+{
+    jl_atomic_fetch_add(&jl_tag_newly_inferred_enabled, -1);  // FIXME underflow?
+}
+
 
 // Register array of newly-inferred MethodInstances
 // This gets called as the first step of Base.include_package_for_output
@@ -97,10 +114,29 @@ JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
     newly_inferred = (jl_array_t*) _newly_inferred;
 }
 
+static jl_array_t *queue_external_cis(jl_array_t *list, jl_query_cache *query_cache);
+
+JL_DLLEXPORT jl_array_t* jl_compute_new_ext_cis(void)
+{
+    if (newly_inferred == NULL)
+        return jl_alloc_vec_any(0);
+    jl_query_cache query_cache;
+    init_query_cache(&query_cache);
+    jl_array_t *new_ext_cis = queue_external_cis(newly_inferred, &query_cache);
+    destroy_query_cache(&query_cache);
+    return new_ext_cis;
+}
+
 JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
 {
     if (!newly_inferred)
         return;
+    uint8_t tag_newly_inferred = jl_atomic_load_relaxed(&jl_tag_newly_inferred_enabled);
+    if (tag_newly_inferred) {
+        jl_method_instance_t *mi = jl_get_ci_mi((jl_code_instance_t*)ci);
+        uint8_t miflags = jl_atomic_load_relaxed(&mi->flags);
+        jl_atomic_store_relaxed(&mi->flags, miflags | JL_MI_FLAGS_MASK_PRECOMPILED);
+    }
     JL_LOCK(&newly_inferred_mutex);
     size_t end = jl_array_nrows(newly_inferred);
     jl_array_grow_end(newly_inferred, 1);
@@ -109,110 +145,335 @@ JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
 }
 
 
+static jl_array_t *inference_entrance_backtraces JL_GLOBALLY_ROOTED /*FIXME*/ = NULL;
+// Mutex for inference_entrance_backtraces
+jl_mutex_t inference_entrance_backtraces_mutex;
+
+// Register array of inference entrance backtraces
+JL_DLLEXPORT void jl_set_inference_entrance_backtraces(jl_value_t* _inference_entrance_backtraces)
+{
+    assert(_inference_entrance_backtraces == NULL || _inference_entrance_backtraces == jl_nothing || jl_is_array(_inference_entrance_backtraces));
+    if (_inference_entrance_backtraces == jl_nothing)
+        _inference_entrance_backtraces = NULL;
+    JL_LOCK(&inference_entrance_backtraces_mutex);
+    inference_entrance_backtraces = (jl_array_t*) _inference_entrance_backtraces;
+    JL_UNLOCK(&inference_entrance_backtraces_mutex);
+}
+
+
+JL_DLLEXPORT void jl_push_inference_entrance_backtraces(jl_value_t* ci)
+{
+    JL_LOCK(&inference_entrance_backtraces_mutex);
+    if (inference_entrance_backtraces == NULL) {
+        JL_UNLOCK(&inference_entrance_backtraces_mutex);
+        return;
+    }
+    jl_value_t* backtrace = jl_backtrace_from_here(0, 1);
+    size_t end = jl_array_nrows(inference_entrance_backtraces);
+    jl_array_grow_end(inference_entrance_backtraces, 2);
+    jl_array_ptr_set(inference_entrance_backtraces, end, ci);
+    jl_array_ptr_set(inference_entrance_backtraces, end + 1, backtrace);
+    JL_UNLOCK(&inference_entrance_backtraces_mutex);
+}
+
 // compute whether a type references something internal to worklist
 // and thus could not have existed before deserialize
 // and thus does not need delayed unique-ing
-static int type_in_worklist(jl_value_t *v) JL_NOTSAFEPOINT
+static int type_in_worklist(jl_value_t *v, jl_query_cache *cache) JL_NOTSAFEPOINT
 {
     if (jl_object_in_image(v))
         return 0; // fast-path for rejection
+
+    void *cached = HT_NOTFOUND;
+    if (cache != NULL)
+        cached = ptrhash_get(&cache->type_in_worklist, v);
+
+    // fast-path for memoized results
+    if (cached != HT_NOTFOUND)
+        return cached == v;
+
+    int result = 0;
     if (jl_is_uniontype(v)) {
         jl_uniontype_t *u = (jl_uniontype_t*)v;
-        return type_in_worklist(u->a) ||
-               type_in_worklist(u->b);
+        result = type_in_worklist(u->a, cache) ||
+                 type_in_worklist(u->b, cache);
     }
     else if (jl_is_unionall(v)) {
         jl_unionall_t *ua = (jl_unionall_t*)v;
-        return type_in_worklist((jl_value_t*)ua->var) ||
-               type_in_worklist(ua->body);
+        result = type_in_worklist((jl_value_t*)ua->var, cache) ||
+                 type_in_worklist(ua->body, cache);
     }
     else if (jl_is_typevar(v)) {
         jl_tvar_t *tv = (jl_tvar_t*)v;
-        return type_in_worklist(tv->lb) ||
-               type_in_worklist(tv->ub);
+        result = type_in_worklist(tv->lb, cache) ||
+                 type_in_worklist(tv->ub, cache);
     }
     else if (jl_is_vararg(v)) {
         jl_vararg_t *tv = (jl_vararg_t*)v;
-        if (tv->T && type_in_worklist(tv->T))
-            return 1;
-        if (tv->N && type_in_worklist(tv->N))
-            return 1;
+        result = ((tv->T && type_in_worklist(tv->T, cache)) ||
+                  (tv->N && type_in_worklist(tv->N, cache)));
     }
     else if (jl_is_datatype(v)) {
         jl_datatype_t *dt = (jl_datatype_t*)v;
-        if (!jl_object_in_image((jl_value_t*)dt->name))
-            return 1;
-        jl_svec_t *tt = dt->parameters;
-        size_t i, l = jl_svec_len(tt);
-        for (i = 0; i < l; i++)
-            if (type_in_worklist(jl_tparam(dt, i)))
-                return 1;
+        if (!jl_object_in_image((jl_value_t*)dt->name)) {
+            result = 1;
+        }
+        else {
+            jl_svec_t *tt = dt->parameters;
+            size_t i, l = jl_svec_len(tt);
+            for (i = 0; i < l; i++) {
+                if (type_in_worklist(jl_tparam(dt, i), cache)) {
+                    result = 1;
+                    break;
+                }
+            }
+        }
     }
     else {
-        return type_in_worklist(jl_typeof(v));
+        return type_in_worklist(jl_typeof(v), cache);
     }
-    return 0;
+
+    // Memoize result
+    if (cache != NULL)
+        ptrhash_put(&cache->type_in_worklist, (void*)v, result ? (void*)v : NULL);
+
+    return result;
 }
+
+// Stack frame for iterative has_backedge_to_worklist implementation
+enum backedge_state {
+    STATE_VISITING,                 // Initial visit, setup phase
+    STATE_PROCESSING_EDGES,         // Processing backedges loop
+    STATE_FINISHING                 // Cleanup and result propagation
+};
+
+typedef struct {
+    jl_method_instance_t *mi;           // Current method instance
+    size_t edge_index;                  // Current position in backedges array
+    size_t backedges_len;               // Total backedges count
+    jl_array_t *backedges;              // Backedges array
+    int depth;                          // Stack depth when this frame was created
+    int cycle;                          // Cycle depth tracking
+    int found;                          // Result found flag
+    int child_result;                   // Result from child recursive call
+    enum backedge_state state;
+} backedge_stack_frame_t;
 
 // When we infer external method instances, ensure they link back to the
 // package. Otherwise they might be, e.g., for external macros.
 // Implements Tarjan's SCC (strongly connected components) algorithm, simplified to remove the count variable
-static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited, arraylist_t *stack)
+static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited, arraylist_t *stack, jl_query_cache *query_cache)
 {
-    jl_module_t *mod = mi->def.module;
-    if (jl_is_method(mod))
-        mod = ((jl_method_t*)mod)->module;
-    assert(jl_is_module(mod));
-    uint8_t is_precompiled = jl_atomic_load_relaxed(&mi->flags) & JL_MI_FLAGS_MASK_PRECOMPILED;
-    if (is_precompiled || !jl_object_in_image((jl_value_t*)mod) || type_in_worklist(mi->specTypes)) {
-        return 1;
-    }
-    if (!mi->backedges) {
-        return 0;
-    }
-    void **bp = ptrhash_bp(visited, mi);
-    // HT_NOTFOUND: not yet analyzed
-    // HT_NOTFOUND + 1: no link back
-    // HT_NOTFOUND + 2: does link back
-    // HT_NOTFOUND + 3: does link back, and included in new_ext_cis already
-    // HT_NOTFOUND + 4 + depth: in-progress
-    int found = (char*)*bp - (char*)HT_NOTFOUND;
-    if (found)
-        return found - 1;
-    arraylist_push(stack, (void*)mi);
-    int depth = stack->len;
-    *bp = (void*)((char*)HT_NOTFOUND + 4 + depth); // preliminarily mark as in-progress
-    size_t i = 0, n = jl_array_nrows(mi->backedges);
-    int cycle = depth;
-    while (i < n) {
-        jl_code_instance_t *be;
-        i = get_next_edge(mi->backedges, i, NULL, &be);
-        JL_GC_PROMISE_ROOTED(be); // get_next_edge propagates the edge for us here
-        int child_found = has_backedge_to_worklist(jl_get_ci_mi(be), visited, stack);
-        if (child_found == 1 || child_found == 2) {
-            // found what we were looking for, so terminate early
-            found = 1;
-            break;
+    // Use arraylist_t for explicit stack of processing frames
+    arraylist_t frame_stack;
+    arraylist_new(&frame_stack, 0);
+
+    // Push initial frame
+    backedge_stack_frame_t initial_frame = {
+        .mi = mi,
+        .edge_index = 0,
+        .backedges_len = 0,
+        .backedges = NULL,
+        .depth = 0,
+        .cycle = 0,
+        .found = 0,
+        .child_result = 0,
+        .state = STATE_VISITING
+    };
+    arraylist_push(&frame_stack, memcpy(malloc(sizeof(backedge_stack_frame_t)), &initial_frame, sizeof(backedge_stack_frame_t)));
+
+    int final_result = 0;
+    while (1) {
+        backedge_stack_frame_t *current = (backedge_stack_frame_t*)frame_stack.items[frame_stack.len - 1];
+        JL_GC_PROMISE_ROOTED(current->mi);
+        JL_GC_PROMISE_ROOTED(current->backedges);
+
+        switch (current->state) {
+            case STATE_VISITING: {
+                jl_module_t *mod = current->mi->def.module;
+                if (jl_is_method(mod))
+                    mod = ((jl_method_t*)mod)->module;
+                assert(jl_is_module(mod));
+                uint8_t is_precompiled = jl_atomic_load_relaxed(&current->mi->flags) & JL_MI_FLAGS_MASK_PRECOMPILED;
+
+                if (is_precompiled || !jl_object_in_image((jl_value_t*)mod) || type_in_worklist(current->mi->specTypes, query_cache)) {
+                    if (frame_stack.len > 1) {
+                        final_result = 1;
+                        goto propagate_to_parent;
+                    }
+                    current->found = 1;
+                    // Continue to setup below, then go to finishing
+                }
+                else if (!current->mi->backedges) {
+                    if (frame_stack.len > 1) {
+                        final_result = 0;
+                        goto propagate_to_parent;
+                    }
+                    current->found = 0;
+                    // Setup minimal state for cleanup, skip backedges processing
+                    arraylist_push(stack, (void*)current->mi);
+                    current->depth = stack->len;
+                    void **bp = ptrhash_bp(visited, current->mi);
+                    *bp = (void*)((char*)HT_NOTFOUND + 4 + current->depth);
+                    current->cycle = current->depth;
+                    current->state = STATE_FINISHING;
+                    break;
+                }
+
+                void **bp = ptrhash_bp(visited, current->mi);
+                // HT_NOTFOUND: not yet analyzed
+                // HT_NOTFOUND + 1: no link back
+                // HT_NOTFOUND + 2: does link back
+                // HT_NOTFOUND + 3: does link back, and included in new_ext_cis already
+                // HT_NOTFOUND + 4 + depth: in-progress
+                int found = (char*)*bp - (char*)HT_NOTFOUND;
+                if (found) {
+                    if (frame_stack.len > 1) {
+                        final_result = found - 1;
+                        goto propagate_to_parent;
+                    }
+                    current->found = found - 1;
+                }
+
+                // Setup for processing
+                arraylist_push(stack, (void*)current->mi);
+                current->depth = stack->len;
+                *bp = (void*)((char*)HT_NOTFOUND + 4 + current->depth); // preliminarily mark as in-progress
+                current->backedges = jl_mi_get_backedges(current->mi);
+                current->backedges_len = current->backedges ? jl_array_nrows(current->backedges) : 0;
+                current->cycle = current->depth;
+                current->edge_index = 0;
+                // Don't reset current->found if it was already set by early termination logic above
+                if (current->found == 0) {
+                    current->state = STATE_PROCESSING_EDGES;
+                }
+                else {
+                    // Early termination case - skip processing and go straight to finishing
+                    current->state = STATE_FINISHING;
+                }
+                break;
+            }
+
+            case STATE_PROCESSING_EDGES: {
+                // If we have a child result to process, handle it first
+                if (current->child_result != 0) {
+                    if (current->child_result == 1 || current->child_result == 2) {
+                        // found what we were looking for, so terminate early
+                        current->found = 1;
+                        current->state = STATE_FINISHING;
+                        break;
+                    }
+                    else if (current->child_result >= 3 && current->child_result - 3 < current->cycle) {
+                        // record the cycle will resolve at depth "cycle"
+                        current->cycle = current->child_result - 3;
+                        assert(current->cycle);
+                    }
+                    current->child_result = 0; // Clear after processing
+                }
+
+                // Process backedges iteratively
+                while (current->edge_index < current->backedges_len && current->backedges) {
+                    jl_code_instance_t *be;
+                    current->edge_index = get_next_edge(current->backedges, current->edge_index, NULL, &be);
+                    if (!be)
+                        continue;
+                    JL_GC_PROMISE_ROOTED(be); // get_next_edge propagates the edge for us here
+
+                    jl_method_instance_t *child_mi = jl_get_ci_mi(be);
+
+                    // Check if we need to recurse (push new frame) or handle result
+                    jl_module_t *child_mod = child_mi->def.module;
+                    if (jl_is_method(child_mod))
+                        child_mod = ((jl_method_t*)child_mod)->module;
+                    assert(jl_is_module(child_mod));
+                    uint8_t child_is_precompiled = jl_atomic_load_relaxed(&child_mi->flags) & JL_MI_FLAGS_MASK_PRECOMPILED;
+
+                    // Early termination check for child
+                    if (child_is_precompiled || !jl_object_in_image((jl_value_t*)child_mod) || type_in_worklist(child_mi->specTypes, query_cache)) {
+                        // found what we were looking for, so terminate early
+                        current->found = 1;
+                        break;
+                    }
+
+                    if (!child_mi->backedges) {
+                        // This child returns 0, continue with next edge
+                        continue;
+                    }
+
+                    void **child_bp = ptrhash_bp(visited, child_mi);
+                    int child_found = (char*)*child_bp - (char*)HT_NOTFOUND;
+                    if (child_found) {
+                        int child_result = child_found - 1;
+                        if (child_result == 1 || child_result == 2) {
+                            // found what we were looking for, so terminate early
+                            current->found = 1;
+                            break;
+                        }
+                        else if (child_result >= 3 && child_result - 3 < current->cycle) {
+                            // record the cycle will resolve at depth "cycle"
+                            current->cycle = child_result - 3;
+                            assert(current->cycle);
+                        }
+                    }
+                    else {
+                        // Need to process child - push new frame and pause current processing
+                        backedge_stack_frame_t child_frame = {
+                            .mi = child_mi,
+                            .edge_index = 0,
+                            .backedges_len = 0,
+                            .backedges = NULL,
+                            .depth = 0,
+                            .cycle = 0,
+                            .found = 0,
+                            .child_result = 0,
+                            .state = STATE_VISITING
+                        };
+                        arraylist_push(&frame_stack, memcpy(malloc(sizeof(backedge_stack_frame_t)), &child_frame, sizeof(backedge_stack_frame_t)));
+                        goto continue_main_loop; // Resume processing after child completes
+                    }
+                }
+
+                current->state = STATE_FINISHING;
+                break;
+            }
+
+            case STATE_FINISHING: {
+                if (!current->found && current->cycle != current->depth) {
+                    final_result = current->cycle + 3;
+                    goto propagate_to_parent;
+                }
+
+                // If we are the top of the current cycle, now mark all other parts of
+                // our cycle with what we found.
+                // Or if we found a backedge, also mark all of the other parts of the
+                // cycle as also having an backedge.
+                while (stack->len >= current->depth) {
+                    void *mi_ptr = arraylist_pop(stack);
+                    void **bp = ptrhash_bp(visited, mi_ptr);
+                    assert((char*)*bp - (char*)HT_NOTFOUND == 5 + stack->len);
+                    *bp = (void*)((char*)HT_NOTFOUND + 1 + current->found);
+                }
+
+                final_result = current->found;
+                goto propagate_to_parent;
+            }
         }
-        else if (child_found >= 3 && child_found - 3 < cycle) {
-            // record the cycle will resolve at depth "cycle"
-            cycle = child_found - 3;
-            assert(cycle);
-        }
+
+        continue_main_loop:
+            continue;
+
+        propagate_to_parent:
+            // Propagate result to parent
+            free(arraylist_pop(&frame_stack));
+            if (frame_stack.len == 0)
+                break;
+            backedge_stack_frame_t *parent = (backedge_stack_frame_t*)frame_stack.items[frame_stack.len - 1];
+            parent->child_result = final_result;
     }
-    if (!found && cycle != depth)
-        return cycle + 3;
-    // If we are the top of the current cycle, now mark all other parts of
-    // our cycle with what we found.
-    // Or if we found a backedge, also mark all of the other parts of the
-    // cycle as also having an backedge.
-    while (stack->len >= depth) {
-        void *mi = arraylist_pop(stack);
-        bp = ptrhash_bp(visited, mi);
-        assert((char*)*bp - (char*)HT_NOTFOUND == 5 + stack->len);
-        *bp = (void*)((char*)HT_NOTFOUND + 1 + found);
-    }
-    return found;
+    // Cleanup remaining frames
+    assert(frame_stack.len == 0);
+    arraylist_free(&frame_stack);
+    return final_result;
 }
 
 // Given the list of CodeInstances that were inferred during the build, select
@@ -220,7 +481,7 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
 // from the worklist or explicitly added by a `precompile` statement, and
 // (4) are the most recently computed result for that method.
 // These will be preserved in the image.
-static jl_array_t *queue_external_cis(jl_array_t *list)
+static jl_array_t *queue_external_cis(jl_array_t *list, jl_query_cache *query_cache)
 {
     if (list == NULL)
         return NULL;
@@ -238,11 +499,14 @@ static jl_array_t *queue_external_cis(jl_array_t *list)
         assert(jl_is_code_instance(ci));
         jl_method_instance_t *mi = jl_get_ci_mi(ci);
         jl_method_t *m = mi->def.method;
+        int dispatch_status = jl_atomic_load_relaxed(&m->dispatch_status);
+        if (!(dispatch_status & METHOD_SIG_LATEST_WHICH))
+            continue; // ignore replaced methods
         if (ci->owner == jl_nothing && jl_atomic_load_relaxed(&ci->inferred) && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
-            int found = has_backedge_to_worklist(mi, &visited, &stack);
+            int found = has_backedge_to_worklist(mi, &visited, &stack, query_cache);
             assert(found == 0 || found == 1 || found == 2);
             assert(stack.len == 0);
-            if (found == 1 && jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0) {
+            if (found == 1) {
                 jl_array_ptr_1d_push(new_ext_cis, (jl_value_t*)ci);
             }
         }
@@ -261,51 +525,6 @@ static jl_array_t *queue_external_cis(jl_array_t *list)
     return new_ext_cis;
 }
 
-// New roots for external methods
-static void jl_collect_new_roots(jl_array_t *roots, jl_array_t *new_ext_cis, uint64_t key)
-{
-    htable_t mset;
-    htable_new(&mset, 0);
-    size_t l = new_ext_cis ? jl_array_nrows(new_ext_cis) : 0;
-    for (size_t i = 0; i < l; i++) {
-        jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(new_ext_cis, i);
-        assert(jl_is_code_instance(ci));
-        jl_method_t *m = jl_get_ci_mi(ci)->def.method;
-        assert(jl_is_method(m));
-        ptrhash_put(&mset, (void*)m, (void*)m);
-    }
-    int nwithkey;
-    void *const *table = mset.table;
-    jl_array_t *newroots = NULL;
-    JL_GC_PUSH1(&newroots);
-    for (size_t i = 0; i < mset.size; i += 2) {
-        if (table[i+1] != HT_NOTFOUND) {
-            jl_method_t *m = (jl_method_t*)table[i];
-            assert(jl_is_method(m));
-            nwithkey = nroots_with_key(m, key);
-            if (nwithkey) {
-                jl_array_ptr_1d_push(roots, (jl_value_t*)m);
-                newroots = jl_alloc_vec_any(nwithkey);
-                jl_array_ptr_1d_push(roots, (jl_value_t*)newroots);
-                rle_iter_state rootiter = rle_iter_init(0);
-                uint64_t *rletable = NULL;
-                size_t nblocks2 = 0, nroots = jl_array_nrows(m->roots), k = 0;
-                if (m->root_blocks) {
-                    rletable = jl_array_data(m->root_blocks, uint64_t);
-                    nblocks2 = jl_array_nrows(m->root_blocks);
-                }
-                while (rle_iter_increment(&rootiter, nroots, rletable, nblocks2))
-                    if (rootiter.key == key)
-                        jl_array_ptr_set(newroots, k++, jl_array_ptr_ref(m->roots, rootiter.i));
-                assert(k == nwithkey);
-            }
-        }
-    }
-    JL_GC_POP();
-    htable_free(&mset);
-}
-
-
 // For every method:
 // - if the method is owned by a worklist module, add it to the list of things to be
 //   verified on reloading
@@ -315,7 +534,6 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure)
     jl_array_t *s = (jl_array_t*)closure;
     jl_method_t *m = ml->func.method;
     if (!jl_object_in_image((jl_value_t*)m->module)) {
-        jl_array_ptr_1d_push(internal_methods, (jl_value_t*)m);
         if (s)
             jl_array_ptr_1d_push(s, (jl_value_t*)m); // extext
     }
@@ -333,43 +551,9 @@ static int jl_collect_methtable_from_mod(jl_methtable_t *mt, void *env)
 // Collect methods of external functions defined by modules in the worklist
 // "extext" = "extending external"
 // Also collect relevant backedges
-static void jl_collect_extext_methods_from_mod(jl_array_t *s, jl_module_t *m)
+static void jl_collect_extext_methods(jl_array_t *s, jl_array_t *mod_array)
 {
-    foreach_mtable_in_module(m, jl_collect_methtable_from_mod, s);
-}
-
-static void jl_record_edges(jl_method_instance_t *caller, jl_array_t *edges)
-{
-    jl_code_instance_t *ci = jl_atomic_load_relaxed(&caller->cache);
-    while (ci != NULL) {
-        if (jl_atomic_load_relaxed(&ci->edges) &&
-            jl_atomic_load_relaxed(&ci->edges) != jl_emptysvec &&
-            jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0)
-            jl_array_ptr_1d_push(edges, (jl_value_t*)ci);
-        ci = jl_atomic_load_relaxed(&ci->next);
-    }
-}
-
-// Extract `edges` and `ext_targets` from `edges_map`
-// `edges` = [caller1, ...], the list of codeinstances internal to methods
-static void jl_collect_internal_cis(jl_array_t *edges, size_t world)
-{
-    for (size_t i = 0; i < jl_array_nrows(internal_methods); i++) {
-        jl_method_t *m = (jl_method_t*)jl_array_ptr_ref(internal_methods, i);
-        jl_value_t *specializations = jl_atomic_load_relaxed(&m->specializations);
-        if (!jl_is_svec(specializations)) {
-            jl_method_instance_t *mi = (jl_method_instance_t*)specializations;
-            jl_record_edges(mi, edges);
-        }
-        else {
-            size_t j, l = jl_svec_len(specializations);
-            for (j = 0; j < l; j++) {
-                jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(specializations, j);
-                if ((jl_value_t*)mi != jl_nothing)
-                    jl_record_edges(mi, edges);
-            }
-        }
-    }
+    jl_foreach_reachable_mtable(jl_collect_methtable_from_mod, mod_array, s);
 }
 
 // Headers
@@ -468,7 +652,7 @@ static const char *jl_git_commit(void)
 
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 12;
+static const int JI_FORMAT_VERSION = 13;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 static int64_t write_header(ios_t *s, uint8_t pkgimage)
@@ -533,35 +717,40 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
 {
     int64_t initial_pos = 0;
     int64_t pos = 0;
-    static jl_array_t *deps = NULL;
-    if (!deps)
-        deps = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("_require_dependencies"));
-
-    // unique(deps) to eliminate duplicates while preserving order:
-    // we preserve order so that the topmost included .jl file comes first
-    static jl_value_t *unique_func = NULL;
-    if (!unique_func)
-        unique_func = jl_get_global(jl_base_module, jl_symbol("unique"));
-    jl_value_t *uniqargs[2] = {unique_func, (jl_value_t*)deps};
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-    jl_array_t *udeps = (*udepsp = deps && unique_func ? (jl_array_t*)jl_apply(uniqargs, 2) : NULL);
-    ct->world_age = last_age;
-
-    static jl_value_t *replace_depot_func = NULL;
-    if (!replace_depot_func)
-        replace_depot_func = jl_get_global(jl_base_module, jl_symbol("replace_depot_path"));
-    static jl_value_t *normalize_depots_func = NULL;
-    if (!normalize_depots_func)
-        normalize_depots_func = jl_get_global(jl_base_module, jl_symbol("normalize_depots_for_relocation"));
-
     jl_value_t *depots = NULL, *prefs_hash = NULL, *prefs_list = NULL;
-    JL_GC_PUSH2(&depots, &prefs_list);
-    last_age = ct->world_age;
-    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+    jl_value_t *unique_func = NULL;
+    jl_value_t *replace_depot_func = NULL;
+    jl_value_t *normalize_depots_func = NULL;
+    jl_value_t *toplevel = NULL;
+    jl_value_t *prefs_hash_func = NULL;
+    jl_value_t *get_compiletime_prefs_func = NULL;
+    JL_GC_PUSH8(&depots, &prefs_list, &unique_func, &replace_depot_func, &normalize_depots_func, &toplevel, &prefs_hash_func, &get_compiletime_prefs_func);
+
+    jl_array_t *udeps = (jl_array_t*)jl_get_global_value(jl_base_module, jl_symbol("_require_dependencies"), ct->world_age);
+    *udepsp = udeps;
+
+    // unique(udeps) to eliminate duplicates while preserving order:
+    // we preserve order so that the topmost included .jl file comes first
+    if (udeps) {
+        unique_func = jl_eval_global_var(jl_base_module, jl_symbol("unique"), ct->world_age);
+        jl_value_t *uniqargs[2] = {unique_func, (jl_value_t*)udeps};
+        udeps = (jl_array_t*)jl_apply(uniqargs, 2);
+        *udepsp = udeps;
+        JL_TYPECHK(write_dependency_list, array_any, (jl_value_t*)udeps);
+    }
+
+    replace_depot_func = jl_get_global_value(jl_base_module, jl_symbol("replace_depot_path"), ct->world_age);
+    normalize_depots_func = jl_eval_global_var(jl_base_module, jl_symbol("normalize_depots_for_relocation"), ct->world_age);
+
     depots = jl_apply(&normalize_depots_func, 1);
-    ct->world_age = last_age;
+
+    jl_datatype_t *deptuple_p[5] = {jl_module_type, jl_string_type, jl_uint64_type, jl_uint32_type, jl_float64_type};
+    jl_value_t *jl_deptuple_type = jl_apply_tuple_type_v((jl_value_t**)deptuple_p, 5);
+    JL_GC_PROMISE_ROOTED(jl_deptuple_type);
+#define jl_is_deptuple(v) (jl_typeis((v), jl_deptuple_type))
 
     // write a placeholder for total size so that we can quickly seek past all of the
     // dependencies if we don't need them
@@ -570,20 +759,16 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     size_t i, l = udeps ? jl_array_nrows(udeps) : 0;
     for (i = 0; i < l; i++) {
         jl_value_t *deptuple = jl_array_ptr_ref(udeps, i);
-        jl_value_t *deppath = jl_fieldref(deptuple, 1);
+        JL_TYPECHK(write_dependency_list, deptuple, deptuple);
+        jl_value_t *deppath = jl_fieldref_noalloc(deptuple, 1);
 
         if (replace_depot_func) {
-            jl_value_t **replace_depot_args;
-            JL_GC_PUSHARGS(replace_depot_args, 3);
+            jl_value_t *replace_depot_args[3];
             replace_depot_args[0] = replace_depot_func;
             replace_depot_args[1] = deppath;
             replace_depot_args[2] = depots;
-            ct = jl_current_task;
-            size_t last_age = ct->world_age;
-            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
             deppath = (jl_value_t*)jl_apply(replace_depot_args, 3);
-            ct->world_age = last_age;
-            JL_GC_POP();
+            JL_TYPECHK(write_dependency_list, string, deppath);
         }
 
         size_t slen = jl_string_len(deppath);
@@ -592,7 +777,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
         write_uint64(s, jl_unbox_uint64(jl_fieldref(deptuple, 2)));    // fsize
         write_uint32(s, jl_unbox_uint32(jl_fieldref(deptuple, 3)));    // hash
         write_float64(s, jl_unbox_float64(jl_fieldref(deptuple, 4)));  // mtime
-        jl_module_t *depmod = (jl_module_t*)jl_fieldref(deptuple, 0);  // evaluating module
+        jl_module_t *depmod = (jl_module_t*)jl_fieldref_noalloc(deptuple, 0);  // evaluating module
         jl_module_t *depmod_top = depmod;
         while (!is_serialization_root_module(depmod_top))
             depmod_top = depmod_top->parent;
@@ -616,34 +801,31 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     // Calculate Preferences hash for current package.
     if (jl_base_module) {
         // Toplevel module is the module we're currently compiling, use it to get our preferences hash
-        jl_value_t * toplevel = (jl_value_t*)jl_get_global(jl_base_module, jl_symbol("__toplevel__"));
-        jl_value_t * prefs_hash_func = jl_get_global(jl_base_module, jl_symbol("get_preferences_hash"));
-        jl_value_t * get_compiletime_prefs_func = jl_get_global(jl_base_module, jl_symbol("get_compiletime_preferences"));
+        toplevel = jl_get_global_value(jl_base_module, jl_symbol("__toplevel__"), ct->world_age);
+        prefs_hash_func = jl_eval_global_var(jl_base_module, jl_symbol("get_preferences_hash"), ct->world_age);
+        get_compiletime_prefs_func = jl_eval_global_var(jl_base_module, jl_symbol("get_compiletime_preferences"), ct->world_age);
 
-        if (toplevel && prefs_hash_func && get_compiletime_prefs_func) {
-            // Temporary invoke in newest world age
-            size_t last_age = ct->world_age;
-            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-
+        if (toplevel) {
             // call get_compiletime_prefs(__toplevel__)
             jl_value_t *args[3] = {get_compiletime_prefs_func, (jl_value_t*)toplevel, NULL};
             prefs_list = (jl_value_t*)jl_apply(args, 2);
+            JL_TYPECHK(write_dependency_list, array, prefs_list);
 
             // Call get_preferences_hash(__toplevel__, prefs_list)
             args[0] = prefs_hash_func;
             args[2] = prefs_list;
             prefs_hash = (jl_value_t*)jl_apply(args, 3);
-
-            // Reset world age to normal
-            ct->world_age = last_age;
+            JL_TYPECHK(write_dependency_list, uint64, prefs_hash);
         }
     }
+    ct->world_age = last_age;
 
     // If we successfully got the preferences, write it out, otherwise write `0` for this `.ji` file.
     if (prefs_hash != NULL && prefs_list != NULL) {
         size_t i, l = jl_array_nrows(prefs_list);
         for (i = 0; i < l; i++) {
             jl_value_t *pref_name = jl_array_ptr_ref(prefs_list, i);
+            JL_TYPECHK(write_dependency_list, string, pref_name);
             size_t slen = jl_string_len(pref_name);
             write_int32(s, slen);
             ios_write(s, jl_string_data(pref_name), slen);
@@ -661,6 +843,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
         write_uint64(s, 0);
     }
     JL_GC_POP(); // for depots, prefs_list
+#undef jl_is_deptuple
 
     // write a dummy file position to indicate the beginning of the source-text
     pos = ios_pos(s);
@@ -707,9 +890,7 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
         else if (jl_is_method(obj)) {
             jl_method_t *m = (jl_method_t*)obj;
             assert(jl_atomic_load_relaxed(&m->primary_world) == ~(size_t)0);
-            assert(jl_atomic_load_relaxed(&m->deleted_world) == WORLD_AGE_REVALIDATION_SENTINEL);
             jl_atomic_store_release(&m->primary_world, world);
-            jl_atomic_store_release(&m->deleted_world, ~(size_t)0);
         }
         else if (jl_is_code_instance(obj)) {
             jl_code_instance_t *ci = (jl_code_instance_t*)obj;
@@ -730,24 +911,40 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
         }
         for (i = 0; i < l; i++) {
             jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_array_ptr_ref(external, i);
-            jl_methtable_t *mt = jl_method_get_table(entry->func.method);
-            assert((jl_value_t*)mt != jl_nothing);
-            jl_method_table_activate(mt, entry);
+            //uint64_t t0 = uv_hrtime();
+            jl_method_table_activate(entry);
+            //jl_printf(JL_STDERR, "%f ", (double)(uv_hrtime() - t0) / 1e6);
+            //jl_static_show(JL_STDERR, entry->func.value);
+            //jl_printf(JL_STDERR, "\n");
         }
     }
 }
 
-static void jl_copy_roots(jl_array_t *method_roots_list, uint64_t key)
+static int jl_copy_roots(jl_array_t *method_roots_list, uint64_t key)
 {
     size_t i, l = jl_array_nrows(method_roots_list);
+    int failed = 0;
     for (i = 0; i < l; i+=2) {
         jl_method_t *m = (jl_method_t*)jl_array_ptr_ref(method_roots_list, i);
         jl_array_t *roots = (jl_array_t*)jl_array_ptr_ref(method_roots_list, i+1);
         if (roots) {
             assert(jl_is_array(roots));
+            if (m->root_blocks) {
+                // check for key collision
+                uint64_t *blocks = jl_array_data(m->root_blocks, uint64_t);
+                size_t nx2 = jl_array_nrows(m->root_blocks);
+                for (size_t i = 0; i < nx2; i+=2) {
+                    if (blocks[i] == key) {
+                        // found duplicate block
+                        failed = -1;
+                    }
+                }
+            }
+
             jl_append_method_roots(m, key, roots);
         }
     }
+    return failed;
 }
 
 static jl_value_t *read_verify_mod_list(ios_t *s, jl_array_t *depmods)

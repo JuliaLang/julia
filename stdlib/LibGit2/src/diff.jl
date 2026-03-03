@@ -35,7 +35,7 @@ function diff_tree(repo::GitRepo, tree::GitTree, pathspecs::AbstractString=""; c
                      (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{DiffOptionsStruct}),
                      diff_ptr_ptr, repo, tree, isempty(pathspecs) ? C_NULL : pathspecs)
     end
-    return GitDiff(repo, diff_ptr_ptr[])
+    return GitDiff(diff_ptr_ptr[])
 end
 
 """
@@ -54,7 +54,7 @@ function diff_tree(repo::GitRepo, oldtree::GitTree, newtree::GitTree)
     @check ccall((:git_diff_tree_to_tree, libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Ptr{DiffOptionsStruct}),
                    diff_ptr_ptr, repo, oldtree, newtree, C_NULL)
-    return GitDiff(repo, diff_ptr_ptr[])
+    return GitDiff(diff_ptr_ptr[])
 end
 
 """
@@ -70,11 +70,11 @@ function GitDiffStats(diff::GitDiff)
     @check ccall((:git_diff_get_stats, libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}),
                   diff_stat_ptr_ptr, diff)
-    return GitDiffStats(diff.owner, diff_stat_ptr_ptr[])
+    return GitDiffStats(diff_stat_ptr_ptr[])
 end
 
 """
-    files_changed(diff_stat::GitDiffStats) -> Csize_t
+    files_changed(diff_stat::GitDiffStats)::Csize_t
 
 Return how many files were changed (added/modified/deleted) in the [`GitDiff`](@ref)
 summarized by `diff_stat`. The result may vary depending on the [`DiffOptionsStruct`](@ref)
@@ -87,7 +87,7 @@ function files_changed(diff_stat::GitDiffStats)
 end
 
 """
-    insertions(diff_stat::GitDiffStats) -> Csize_t
+    insertions(diff_stat::GitDiffStats)::Csize_t
 
 Return the total number of insertions (lines added) in the [`GitDiff`](@ref)
 summarized by `diff_stat`. The result may vary depending on the [`DiffOptionsStruct`](@ref)
@@ -100,7 +100,7 @@ function insertions(diff_stat::GitDiffStats)
 end
 
 """
-    deletions(diff_stat::GitDiffStats) -> Csize_t
+    deletions(diff_stat::GitDiffStats)::Csize_t
 
 Return the total number of deletions (lines removed) in the [`GitDiff`](@ref)
 summarized by `diff_stat`. The result may vary depending on the [`DiffOptionsStruct`](@ref)
@@ -141,4 +141,35 @@ function Base.show(io::IO, diff::GitDiff)
     println(io, "GitDiff:")
     println(io, "Number of deltas: $(count(diff))")
     show(io, GitDiffStats(diff))
+end
+
+"""
+    GitDiff(content::AbstractString)
+
+Parse a diff from a buffer. The `content` should be in unified diff format.
+Returns a [`GitDiff`](@ref) object.
+
+This is equivalent to [`git_diff_from_buffer`](https://libgit2.org/libgit2/#HEAD/group/diff/git_diff_from_buffer).
+
+# Examples
+```julia
+diff_str = \"\"\"
+diff --git a/file.txt b/file.txt
+index 1234567..abcdefg 100644
+--- a/file.txt
++++ b/file.txt
+@@ -1 +1 @@
+-old content
++new content
+\"\"\"
+diff = LibGit2.GitDiff(diff_str)
+```
+"""
+function GitDiff(content::AbstractString)
+    ensure_initialized()
+    diff_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
+    @check ccall((:git_diff_from_buffer, libgit2), Cint,
+                 (Ptr{Ptr{Cvoid}}, Cstring, Csize_t),
+                 diff_ptr_ptr, content, sizeof(content))
+    return GitDiff(diff_ptr_ptr[])
 end

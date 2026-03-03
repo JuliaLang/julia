@@ -19,6 +19,34 @@ todouble(sign, exp, mant) = Core.bitcast(Float64, (UInt64(sign) << 63) | (UInt64
     @test Ryu.writeshortest(-Inf) == "-Inf"
 end
 
+@testset "OutputOptions" begin
+    # plus
+    @test "+1" == Base.Ryu.writeshortest(1.0, true, false, false)
+    @test "-1" == Base.Ryu.writeshortest(-1.0, true, false, false)
+
+    # space
+    @test " 1" == Ryu.writeshortest(1.0, false,  true,  false)
+
+    # hash
+    @test "0" == Ryu.writeshortest(0.0, false, false, false)
+
+    # precision
+    @test "9.9900" == Ryu.writeshortest(9.99, false, false, true, 5)
+    @test "1." == Ryu.writeshortest(1.0, false, false, true, 1)
+
+    # expchar
+    @test "1.0d6" == Ryu.writeshortest(1e6, false, false, true, -1, UInt8('d'))
+
+    # padexp
+    @test "3.0e+08" == Ryu.writeshortest(3e8, false, false, true, -1, UInt8('e'), true)
+
+    # decchar
+    @test "3,14" == Ryu.writeshortest(3.14, false, false, true, -1, UInt8('e'), false, UInt8(','))
+
+    # compact
+    @test "0.333333" == Ryu.writeshortest(1/3, false, false, true, -1, UInt8('e'), false, UInt8('.'), false, true)
+end
+
 @testset "SwitchToSubnormal" begin
     @test "2.2250738585072014e-308" == Ryu.writeshortest(2.2250738585072014e-308)
 end
@@ -122,11 +150,13 @@ end
     # 64-bit opt-size=0:  52 <= dist <= 52
     # 64-bit opt-size=1:  52 <= dist <= 59
     @test "2.900835519859558e-216" == Ryu.writeshortest(todouble(false, 307, 0))
+    @test "-2.900835519859558e-216" == Ryu.writeshortest(todouble(true, 307, 0))
     # 32-bit opt-size=0:  51 <= dist <= 51
     # 32-bit opt-size=1:  51 <= dist <= 59
     # 64-bit opt-size=0:  52 <= dist <= 52
     # 64-bit opt-size=1:  52 <= dist <= 59
     @test "5.801671039719115e-216" == Ryu.writeshortest(todouble(false, 306, maxMantissa))
+    @test "-5.801671039719115e-216" == Ryu.writeshortest(todouble(true, 306, maxMantissa))
 
     # https:#github.com/ulfjack/ryu/commit/19e44d16d80236f5de25800f56d82606d1be00b9#commitcomment-30146483
     # 32-bit opt-size=0:  49 <= dist <= 49
@@ -134,6 +164,7 @@ end
     # 64-bit opt-size=0:  50 <= dist <= 50
     # 64-bit opt-size=1:  44 <= dist <= 50
     @test "3.196104012172126e-27" == Ryu.writeshortest(todouble(false, 934, 0x000FA7161A4D6E0C))
+    @test "-3.196104012172126e-27" == Ryu.writeshortest(todouble(true, 934, 0x000FA7161A4D6E0C))
 end
 
 @testset "SmallIntegers" begin
@@ -241,6 +272,17 @@ end # Float64
     @test "-Inf" == Ryu.writeshortest(Float32(-Inf))
 end
 
+@testset "OutputOptions" begin
+    # typed
+    @test "1.0f0" == Ryu.writeshortest(Float32(1.0), false, false, true, -1, UInt8('e'), false, UInt8('.'), true)
+    @test "Inf32" == Ryu.writeshortest(Float32(Inf), false, false, true, -1, UInt8('e'), false, UInt8('.'), true)
+    @test "NaN32" == Ryu.writeshortest(Float32(NaN), false, false, true, -1, UInt8('e'), false, UInt8('.'), true)
+    @test "3.14f0" == Ryu.writeshortest(Float32(3.14), false, false, true, -1, UInt8('e'), false, UInt8('.'), true)
+
+    # typed and no-hash
+    @test "1f0" == Ryu.writeshortest(1.0f0, false, false, false, -1, UInt8('e'), false, UInt8('.'), true)
+end
+
 @testset "SwitchToSubnormal" begin
     @test "1.1754944e-38" == Ryu.writeshortest(1.1754944f-38)
 end
@@ -304,6 +346,7 @@ end
     @test "1.00014165e-36" == Ryu.writeshortest(1.00014165f-36)
     @test "200.0" == Ryu.writeshortest(200f0)
     @test "3.3554432e7" == Ryu.writeshortest(3.3554432f7)
+    @test "-1.00000075e-36" == Ryu.writeshortest(-1.00000075f-36) #longest Float32
 end
 
 @testset "LooksLikePow5" begin
@@ -341,6 +384,17 @@ end # Float32
     @test "-Inf" == Ryu.writeshortest(Float16(-Inf))
 end
 
+@testset "OutputOptions" begin
+    # typed
+    @test "Float16(1.0)" == Ryu.writeshortest(Float16(1.0), false, false, true, -1, UInt8('e'), false, UInt8('.'), true)
+    @test "Inf16" == Ryu.writeshortest(Float16(Inf), false, false, true, -1, UInt8('e'), false, UInt8('.'), true)
+    @test "NaN16" == Ryu.writeshortest(Float16(NaN), false, false, true, -1, UInt8('e'), false, UInt8('.'), true)
+    @test "Float16(3.14)" == Ryu.writeshortest(Float16(3.14), false, false, true, -1, UInt8('e'), false, UInt8('.'), true)
+
+    # typed and no-hash
+    @test "Float16(1)" == Ryu.writeshortest(Float16(1.0), false, false, false, -1, UInt8('e'), false, UInt8('.'), true)
+end
+
 let x=floatmin(Float16)
     while x <= floatmax(Float16)
         @test parse(Float16, Ryu.writeshortest(x)) == x
@@ -368,6 +422,7 @@ end
 #     return fails / (fails + success)
 # end
 
+@test "-0.00010014" == Ryu.writeshortest(Float16(-0.00010014)) #longest Float16
 end # Float16
 
 @testset "writeshortest(::AbstractVector, pos, ...)" begin

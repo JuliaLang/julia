@@ -11,8 +11,9 @@
 typedef struct {
     const llvm::object::ObjectFile *obj;
     llvm::DIContext *ctx;
-    int64_t slide;
-} objfileentry_t;
+    uint64_t slide;
+    std::map<uintptr_t, StringRef, std::greater<size_t>> *symbolmap;
+} jl_object_file_entry_t;
 
 // Central registry for resolving function addresses to `jl_code_instance_t`s and
 // originating `ObjectFile`s (for the DWARF debug info).
@@ -111,7 +112,7 @@ private:
     struct SectionInfo {
         LazyObjectInfo *object;
         size_t SectionSize;
-        ptrdiff_t slide;
+        uint64_t slide;
         uint64_t SectionIndex;
         SectionInfo() = delete;
         ~SectionInfo() JL_NOTSAFEPOINT = default;
@@ -121,21 +122,14 @@ private:
     using rev_map = std::map<KeyT, ValT, std::greater<KeyT>>;
 
     typedef rev_map<size_t, SectionInfo> objectmap_t;
-    typedef rev_map<uint64_t, objfileentry_t> objfilemap_t;
+    typedef rev_map<uint64_t, jl_object_file_entry_t> objfilemap_t;
 
     objectmap_t objectmap{};
     rev_map<size_t, std::pair<size_t, jl_code_instance_t *>> cimap{};
 
-    // Maintain a mapping of unrealized function names -> linfo objects
-    // so that when we see it get emitted, we can add a link back to the linfo
-    // that it came from (providing name, type signature, file info, etc.)
-    Locked<llvm::StringMap<jl_code_instance_t*>> codeinst_in_flight{};
-
     Locked<llvm::DenseMap<uint64_t, image_info_t>> image_info{};
 
     Locked<objfilemap_t> objfilemap{};
-
-    static std::string mangle(llvm::StringRef Name, const llvm::DataLayout &DL) JL_NOTSAFEPOINT;
 
 public:
 
@@ -144,12 +138,14 @@ public:
 
     libc_frames_t libc_frames{};
 
-    void add_code_in_flight(llvm::StringRef name, jl_code_instance_t *codeinst, const llvm::DataLayout &DL) JL_NOTSAFEPOINT;
     jl_code_instance_t *lookupCodeInstance(size_t pointer) JL_NOTSAFEPOINT;
     void registerJITObject(const llvm::object::ObjectFile &Object,
-                        std::function<uint64_t(const llvm::StringRef &)> getLoadAddress) JL_NOTSAFEPOINT;
+                           std::function<uint64_t(const llvm::StringRef &)> getLoadAddress,
+                           const jl_linker_info_t &Info) JL_NOTSAFEPOINT;
     objectmap_t& getObjectMap() JL_NOTSAFEPOINT;
     void add_image_info(image_info_t info) JL_NOTSAFEPOINT;
     bool get_image_info(uint64_t base, image_info_t *info) const JL_NOTSAFEPOINT;
     Locked<objfilemap_t>::LockT get_objfile_map() JL_NOTSAFEPOINT;
+
+    std::shared_mutex symbol_mutex;
 };
