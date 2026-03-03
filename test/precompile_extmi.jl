@@ -72,4 +72,29 @@ precompile_test_harness() do load_path
     end
 end
 
+# Test that methods with non-standard (foreign) source survive precompilation round-trip
+precompile_test_harness() do load_path
+    write(joinpath(load_path, "ForeignIR.jl"), """
+    module ForeignIR
+        struct MyIR
+            data::Vector{UInt8}
+        end
+        function foreign_func(x)
+            return x + 1
+        end
+        let m = first(methods(foreign_func))
+            m.source = MyIR(UInt8[1,2,3])
+        end
+    end
+    """)
+    Base.compilecache(Base.PkgId("ForeignIR"))
+
+    @eval let
+        using ForeignIR
+        m = first(methods(ForeignIR.foreign_func))
+        @test m.source isa ForeignIR.MyIR
+        @test !Base.has_image_globalref(m)
+    end
+end
+
 finish_precompile_test!()
