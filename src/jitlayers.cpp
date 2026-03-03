@@ -2217,6 +2217,8 @@ orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibilit
                                                jl_code_instance_t *CI, jl_invoke_api_t API)
 {
     auto It = CISymbols.find(CI);
+    if (It == CISymbols.end())
+        It = CISymbols.find(findCompatibleCI(CI));
     if (It != CISymbols.end() && It->second.invoke_api == API)
         return It->second.specptr;
 
@@ -2247,6 +2249,32 @@ orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibilit
 
     assert(Sym->invoke_api == API);
     return Sym->specptr;
+}
+
+jl_code_instance_t *JuliaOJIT::findCompatibleCI(jl_code_instance_t *CI)
+{
+    // add_codeinsts_to_jit! may have added an equivalent CI to the JIT, but
+    // the invoke itself won't be updated.
+    auto MI = jl_get_ci_mi(CI);
+    jl_value_t *Def = CI->def;
+    jl_value_t *Owner = CI->owner;
+    jl_value_t *RetType = CI->rettype;
+    size_t MinWorld = jl_atomic_load_relaxed(&CI->min_world);
+    size_t MaxWorld = jl_atomic_load_relaxed(&CI->max_world);
+    auto IsCompatible = [=](jl_code_instance_t *CI2) JL_NOTSAFEPOINT {
+        return jl_atomic_load_relaxed(&CI2->min_world) <= MinWorld &&
+               jl_atomic_load_relaxed(&CI2->max_world) >= MaxWorld &&
+               jl_egal(CI2->def, Def) && jl_egal(CI2->owner, Owner) &&
+               jl_egal(CI2->rettype, RetType);
+    };
+    for (auto CI2 = jl_atomic_load_relaxed(&MI->cache); CI2;
+         CI2 = jl_atomic_load_relaxed(&CI2->next)) {
+        if (CI2 != CI && IsCompatible(CI) &&
+            (CISymbols.contains(CI2) || jl_atomic_load_relaxed(&CI2->invoke))) {
+            return CI2;
+        }
+    }
+    return CI;
 }
 
 CISymbolPtr *JuliaOJIT::linkCISymbol(jl_code_instance_t *CI)
