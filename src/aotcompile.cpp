@@ -1666,27 +1666,27 @@ void jl_dump_native_impl(void *native_code,
     };
 
     sem_t *par_precomp_sem = SEM_FAILED;
-    const char *sem_name = getenv("JL_AOT_PRECOMPILE_SEMAPHORE");
-    if (sem_name != NULL) {
-        // The count for the semaphore will be initialized by the parent process that spawns compilation sub-processes.
-        // This is to ensure that only already created semaphores are used and that we don't end up in a situation
-        // where every spawned compilation subprocess creates its own semaphore. Cleanup is handled by the parent process.
-        par_precomp_sem = sem_open(sem_name, 0);
+    // Hard-coded semaphore name to avoid thread-unsafe getenv() calls (RAI-47876)
+    const char *sem_name = "/jl_aot_par_precomp_semaphore";
+    // Try to open the semaphore without O_CREAT. If it doesn't exist, sem_open will fail
+    // and we'll skip semaphore-based coordination (normal path when not using compcache).
+    // The count for the semaphore will be initialized by the parent process that spawns compilation sub-processes.
+    // This is to ensure that only already created semaphores are used and that we don't end up in a situation
+    // where every spawned compilation subprocess creates its own semaphore. Cleanup is handled by the parent process.
+    par_precomp_sem = sem_open(sem_name, 0);
+    if (par_precomp_sem != SEM_FAILED) {
+        // Semaphore exists, use it for coordination
         std::unique_ptr<sem_t, decltype(cleanup)> sem_guard(par_precomp_sem, cleanup);
-        if (par_precomp_sem == SEM_FAILED) {
-            jl_errorf("Failed to open parallel precompilation semaphore '%s': %s", sem_name, strerror(errno));
-        } else {
-            // Wait for the semaphore, retrying if interrupted by a signal (EINTR).
-            int ret;
-            do {
-                ret = sem_wait(par_precomp_sem);
-            } while (ret == -1 && errno == EINTR);
+        // Wait for the semaphore, retrying if interrupted by a signal (EINTR).
+        int ret;
+        do {
+            ret = sem_wait(par_precomp_sem);
+        } while (ret == -1 && errno == EINTR);
 
-            if (ret == 0) {
-                lock_acquired = true;
-            } else {
-                jl_errorf("Failed to wait on semaphore '%s': %s", sem_name, strerror(errno));
-            }
+        if (ret == 0) {
+            lock_acquired = true;
+        } else {
+            jl_errorf("Failed to wait on semaphore '%s': %s", sem_name, strerror(errno));
         }
     }
 #endif
