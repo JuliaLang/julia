@@ -11,11 +11,14 @@
 extern "C" {
 #endif
 
+extern void mmtk_object_reference_write_pre(void* mutator, const void* parent, const void* ptr);
 extern void mmtk_object_reference_write_post(void* mutator, const void* parent, const void* ptr);
 extern void mmtk_object_reference_write_slow(void* mutator, const void* parent, const void* ptr);
 extern const void* MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
 
-#define MMTK_OBJECT_BARRIER (1)
+#define MMTK_OBJECT_NO_BARRIER (0)
+#define MMTK_OBJECT_POST_WRITE_BARRIER (1)
+#define MMTK_OBJECT_PRE_WRITE_BARRIER (2)
 // Stickyimmix needs write barrier. Immix does not need write barrier.
 #ifdef MMTK_PLAN_IMMIX
 #define MMTK_NEEDS_WRITE_BARRIER (0)
@@ -23,9 +26,20 @@ extern const void* MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
 #ifdef MMTK_PLAN_STICKYIMMIX
 #define MMTK_NEEDS_WRITE_BARRIER (1)
 #endif
+#ifdef MMTK_PLAN_CONCURRENTIMMIX
+#define MMTK_NEEDS_WRITE_BARRIER (2)
+#endif
 
 // Directly call into MMTk for write barrier (debugging only)
-STATIC_INLINE void mmtk_gc_wb_full(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+STATIC_INLINE void mmtk_gc_wb_pre(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    mmtk_object_reference_write_pre(&ptls->gc_tls.mmtk_mutator, parent, ptr);
+}
+
+// Directly call into MMTk for write barrier (debugging only)
+STATIC_INLINE void mmtk_gc_wb_post(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
@@ -35,7 +49,7 @@ STATIC_INLINE void mmtk_gc_wb_full(const void *parent, const void *ptr) JL_NOTSA
 // Inlined fastpath
 STATIC_INLINE void mmtk_gc_wb_fast(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 {
-    if (MMTK_NEEDS_WRITE_BARRIER == MMTK_OBJECT_BARRIER) {
+    if (MMTK_NEEDS_WRITE_BARRIER == MMTK_OBJECT_POST_WRITE_BARRIER) {
         intptr_t addr = (intptr_t) (void*) parent;
         uint8_t* meta_addr = (uint8_t*) (MMTK_SIDE_LOG_BIT_BASE_ADDRESS) + (addr >> 6);
         intptr_t shift = (addr >> 3) & 0b111;
@@ -45,6 +59,8 @@ STATIC_INLINE void mmtk_gc_wb_fast(const void *parent, const void *ptr) JL_NOTSA
             jl_ptls_t ptls = ct->ptls;
             mmtk_object_reference_write_slow(&ptls->gc_tls.mmtk_mutator, parent, ptr);
         }
+    } else if (MMTK_NEEDS_WRITE_BARRIER == MMTK_OBJECT_PRE_WRITE_BARRIER) {
+        mmtk_gc_wb_pre(parent, ptr);
     }
 }
 

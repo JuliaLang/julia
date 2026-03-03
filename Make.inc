@@ -882,13 +882,16 @@ ifeq (${USE_THIRD_PARTY_GC},mmtk)
 JCXXFLAGS += -DWITH_THIRD_PARTY_HEAP=1
 JCFLAGS += -DWITH_THIRD_PARTY_HEAP=1
 
-# Must specify a supported MMTk Plan: Immix or StickyImmix
+# Must specify a supported MMTk Plan: Immix, StickyImmix, or ConcurrentImmix
 ifeq (${MMTK_PLAN},Immix)
 JCXXFLAGS += -DMMTK_PLAN_IMMIX
 JCFLAGS += -DMMTK_PLAN_IMMIX
 else ifeq (${MMTK_PLAN},StickyImmix)
 JCXXFLAGS += -DMMTK_PLAN_STICKYIMMIX
 JCFLAGS += -DMMTK_PLAN_STICKYIMMIX
+else ifeq (${MMTK_PLAN}, ConcurrentImmix)
+JCXXFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX
+JCFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX
 else
 $(error "Unsupported MMTk plan: $(MMTK_PLAN). Supported plan(s): Immix or StickyImmix.")
 endif
