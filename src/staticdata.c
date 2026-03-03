@@ -3519,20 +3519,6 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
     }
 }
 
-
-static void jl_prefetch_system_image(const char *data, size_t size)
-{
-    size_t page_size = jl_getpagesize(); /* jl_page_size is not set yet when loading sysimg */
-    void *start = (void *)((uintptr_t)data & ~(page_size - 1));
-    size_t size_aligned = LLT_ALIGN(size, page_size);
-#ifdef _OS_WINDOWS_
-    WIN32_MEMORY_RANGE_ENTRY entry = {start, size_aligned};
-    PrefetchVirtualMemory(GetCurrentProcess(), 1, &entry, 0);
-#else
-    madvise(start, size_aligned, MADV_WILLNEED);
-#endif
-}
-
 JL_DLLEXPORT void jl_image_unpack_uncomp(void *handle, jl_image_buf_t *image)
 {
     size_t *plen;
@@ -3540,7 +3526,6 @@ JL_DLLEXPORT void jl_image_unpack_uncomp(void *handle, jl_image_buf_t *image)
     jl_dlsym(handle, "jl_system_image_data", (void **)&image->data, 1, 0);
     jl_dlsym(handle, "jl_image_pointers", (void**)&image->pointers, 1, 0);
     image->size = *plen;
-    jl_prefetch_system_image(image->data, image->size);
 }
 
 JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image)
@@ -3550,7 +3535,6 @@ JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image)
     jl_dlsym(handle, "jl_system_image_size", (void **)&plen, 1, 0);
     jl_dlsym(handle, "jl_system_image_data", (void **)&data, 1, 0);
     jl_dlsym(handle, "jl_image_pointers", (void **)&image->pointers, 1, 0);
-    jl_prefetch_system_image(data, *plen);
     image->size = ZSTD_getFrameContentSize(data, *plen);
     size_t page_size = jl_getpagesize(); /* jl_page_size is not set yet when loading sysimg */
     size_t aligned_size = LLT_ALIGN(image->size, page_size);
