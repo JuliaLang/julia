@@ -19,7 +19,7 @@ STATES = Pair{SelectorState, SelectorState}[]
 
 const LABELS = (
     gatherdivider = S"{italic:carried over}",
-    preview_suggestion = S"Ctrl+S to save",
+    preview_suggestion = S"Alt+S to save",
     help_prompt = S"{REPL_History_search_hint,shadow:try {REPL_History_search_hint,(slant=normal):?} for help} ",
 )
 
@@ -36,7 +36,10 @@ Uses ANSI sync sequences to update only changed regions between
 `oldstate` and `newstate`, then reprints the prompt.
 """
 function redisplay_all(io::IO, oldstate::SelectorState, newstate::SelectorState, pstate::REPL.LineEdit.PromptState;
-                       buf::IOContext{IOBuffer} = IOContext(IOBuffer(), io))
+                       buf::IOContext{IOBuffer} = IOContext(IOBuffer(), io),
+                       dupcounts::Union{Nothing, Dict{Tuple{Symbol,String}, Int}} = nothing,
+                       instance_key::Union{Nothing, Tuple{Symbol,String}} = nothing,
+                       instance_offset::Int = 0)
     # Calculate dimensions
     oldrows = componentrows(oldstate)
     newrows = componentrows(newstate)
@@ -68,7 +71,8 @@ function redisplay_all(io::IO, oldstate::SelectorState, newstate::SelectorState,
             oldstate.selection.gathered != newstate.selection.gathered ||
             gethover(oldstate) != gethover(newstate)
         if refresh_cands
-            redisplay_candidates(buf, oldstate, oldrows.candidates, newstate, newrows.candidates)
+            redisplay_candidates(buf, oldstate, oldrows.candidates, newstate, newrows.candidates;
+                                 dupcounts, instance_key, instance_offset)
             currentrow += newrows.candidates
         end
         if refresh_preview
@@ -366,7 +370,10 @@ Diff and redraw the candidate list pane between two states.
 Only lines that changed (entry text, selection, hover, width) are reprinted;
 unchanged lines remain.
 """
-function redisplay_candidates(io::IO, oldstate::SelectorState, oldrows::Int, newstate::SelectorState, newrows::Int)
+function redisplay_candidates(io::IO, oldstate::SelectorState, oldrows::Int, newstate::SelectorState, newrows::Int;
+                              dupcounts::Union{Nothing, Dict{Tuple{Symbol,String}, Int}} = nothing,
+                              instance_key::Union{Nothing, Tuple{Symbol,String}} = nothing,
+                              instance_offset::Int = 0)
     danglingdivider = false
     if oldstate.scroll < 0 && newstate.scroll == 0
         newrows -= 1
@@ -377,7 +384,8 @@ function redisplay_candidates(io::IO, oldstate::SelectorState, oldrows::Int, new
     samefilter = oldstate.filter == newstate.filter
     # Redisplay active candidates
     update_candidates(io, oldcands.active, newcands.active,
-                      !samefilter || oldstate.scroll == 0 && !isempty(oldstate.selection.gathered))
+                      !samefilter || oldstate.scroll == 0 && !isempty(oldstate.selection.gathered);
+                      dupcounts, instance_key, instance_offset)
     # Redisplay gathered candidates
     gathchange = oldrows != newrows || length(oldcands.gathered.entries) != length(newcands.gathered.entries)
     if isempty(newcands.gathered.entries) && !danglingdivider
@@ -399,27 +407,45 @@ Write an update to `io` that changes the display from `oldcands` to `newcands`.
 
 Only changes are printed, and exactly `length(newcands.entries)` lines are printed.
 """
-function update_candidates(io::IO, oldcands::CandsState, newcands::CandsState, force::Bool = false)
+function update_candidates(io::IO, oldcands::CandsState, newcands::CandsState, force::Bool = false;
+                           dupcounts::Union{Nothing, Dict{Tuple{Symbol,String}, Int}} = nothing,
+                           instance_key::Union{Nothing, Tuple{Symbol,String}} = nothing,
+                           instance_offset::Int = 0)
+    totalrows = newcands.rows
     thisline = 1
     for (i, (old, new)) in enumerate(zip(oldcands.entries, newcands.entries))
+        thisline > totalrows && break
+        dc = if !isnothing(dupcounts)
+            get(dupcounts, (new.mode, new.content), 1)
+        else 1 end
+        inst = if !isnothing(instance_key) && (new.mode, new.content) == instance_key
+            instance_offset
+        else 0 end
         oldsel, newsel = i ∈ oldcands.selected, i ∈ newcands.selected
         oldhov, newhov = i == oldcands.hover, i == newcands.hover
-        if !force && old == new && oldsel == newsel && oldhov == newhov && oldcands.width == newcands.width
+        if !force && old == new && oldsel == newsel && oldhov == newhov && oldcands.width == newcands.width && dc <= 1 && inst == 0
             println(io)
         else
             print_candidate(io, newcands.search, new, newcands.width;
-                            selected = newsel, hover = newhov)
+                            selected = newsel, hover = newhov, dupcount = dc, instance = inst)
         end
-        thisline = i + 1
+        thisline += 1
     end
     for (i, new) in enumerate(newcands.entries)
         i <= length(oldcands.entries) && continue
+        thisline > totalrows && break
+        dc = if !isnothing(dupcounts)
+            get(dupcounts, (new.mode, new.content), 1)
+        else 1 end
+        inst = if !isnothing(instance_key) && (new.mode, new.content) == instance_key
+            instance_offset
+        else 0 end
         print_candidate(io, newcands.search, new, newcands.width;
                         selected = i ∈ newcands.selected,
-                        hover = i == newcands.hover)
-        thisline = i + 1
+                        hover = i == newcands.hover, dupcount = dc, instance = inst)
+        thisline += 1
     end
-    for _ in thisline:newcands.rows
+    for _ in thisline:totalrows
         print(io, "\e[K ", LIST_MARKERS.pending, '\n')
     end
 end
@@ -462,7 +488,8 @@ Render one history entry line with markers, mode hint, age, and highlighted cont
 
 Truncates and focuses on matches to fit `width`.
 """
-function print_candidate(io::IO, search::FilterSpec, cand::HistEntry, width::Int; selected::Bool, hover::Bool)
+function print_candidate(io::IO, search::FilterSpec, cand::HistEntry, width::Int;
+                         selected::Bool, hover::Bool, dupcount::Int = 1, instance::Int = 0)
     print(io, ' ', if selected
               LIST_MARKERS.selected
           elseif hover
@@ -472,6 +499,13 @@ function print_candidate(io::IO, search::FilterSpec, cand::HistEntry, width::Int
           end, ' ')
     age = humanage(floor(Int, ((now(UTC) - cand.date)::Millisecond).value ÷ 1000))
     agedec = S" {shadow,light,italic:$age}"
+    dupdec = if dupcount > 1 && instance > 0
+        S" {shadow:$(dupcount - instance)/$dupcount}"
+    elseif dupcount > 1
+        S" {shadow:×$dupcount}"
+    else
+        S""
+    end
     modehint = if cand.mode == BASE_MODE
         S""
     else
@@ -484,14 +518,15 @@ function print_candidate(io::IO, search::FilterSpec, cand::HistEntry, width::Int
             S" {$modeface:◼} "
         end
     end
-    decorationlen = 3 #= spc + marker + spc =# + textwidth(modehint) + textwidth(agedec) + 1 #= spc =#
+    decorationlen = 3 #= spc + marker + spc =# + textwidth(modehint) + textwidth(agedec) + textwidth(dupdec) + 1 #= spc =#
     flatcand = replace(highlightcand(cand), r"\r?\n\s*" => NEWLINE_MARKER)
     candstr = focus_matches(search, flatcand, width - decorationlen)
     if hover
         face!(candstr, :region)
         face!(agedec, :region)
+        face!(dupdec, :region)
     end
-    println(io, candstr, modehint, agedec, ' ')
+    println(io, candstr, modehint, dupdec, agedec, ' ')
 end
 
 """
