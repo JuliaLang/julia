@@ -75,10 +75,19 @@ end
 function method_instance(@nospecialize(argtypes::Union{Tuple,Type{<:Tuple}});
                          world=Base.get_world_counter(), method_table=nothing)
     tt = to_tuple_type(argtypes)
-    mi = ccall(:jl_method_lookup_by_tt, Any,
-                (Any, Csize_t, Any),
-                tt, world, method_table)
-    return mi::Union{Nothing, MethodInstance}
+    if isdispatchtuple(tt)
+        # Fast path: use the dispatch cache
+        mi = ccall(:jl_method_lookup_by_tt, Any,
+                    (Any, Csize_t, Any),
+                    tt, world, method_table)
+        return mi::Union{Nothing, MethodInstance}
+    else
+        # Non-dispatch tuple (abstract types, free typevars): uncached lookup
+        matches = _methods_by_ftype(tt, method_table, 1, world)
+        matches === nothing && return nothing
+        length(matches) != 1 && return nothing
+        return specialize_method(matches[1]::Core.MethodMatch)
+    end
 end
 
 function method_instance(@nospecialize(f), @nospecialize(t);

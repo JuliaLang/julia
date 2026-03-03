@@ -1231,6 +1231,17 @@ end
     mi3 = @ccall jl_method_lookup(Any[+, 1, 1]::Ptr{Any}, 3::Csize_t, Base.get_world_counter()::Csize_t)::Ref{Core.MethodInstance}
     @test mi1 == mi3
     @test mi2 == mi3
+
+    # Non-dispatch tuples (abstract argument types) should work via uncached fallback
+    mi4 = Base.method_instance(+, (Any, Int))
+    @test mi4 isa Core.MethodInstance
+    @test mi4.def.name == :+
+    mi5 = Base.method_instance(+, (Integer, Integer))
+    @test mi5 isa Core.MethodInstance
+    @test mi5.def.name == :+
+    # No matching method returns nothing
+    mi_test_f(::Int) = 1
+    @test Base.method_instance(mi_test_f, (String,)) === nothing
 end
 
 Base.@assume_effects :terminates_locally function issue41694(x::Int)
