@@ -1482,3 +1482,6 @@ end
 
 # https://github.com/JuliaLang/julia/issues/58229 Recursion in jitlinking with inline=no
 @test "" == test_read_success(`$(Base.julia_cmd()) --inline=no -e 'Base.compilecache(Base.identify_package("Pkg"))'`)
+
+# https://github.com/JuliaLang/julia/issues/59103
+@test test_read_success(setenv(`$(Base.julia_cmd()) -g2 -e 'println("done")'`, "ENABLE_GDBLISTENER" => "1")) == "done"
