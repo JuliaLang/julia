@@ -1281,7 +1281,7 @@ CFI_NORETURN
         }
 skip_pop_exception:;
     }
-    jl_write(ct, ct->result, res);
+    jl_write(ct, (void**)&(ct->result), res);
     jl_finish_task(ct);
     jl_gc_debug_fprint_critical_error(ios_safe_stderr);
     abort();

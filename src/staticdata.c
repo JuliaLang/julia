@@ -2553,7 +2553,7 @@ static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, jl_code_
         ci = (jl_code_info_t*)ci_;
     }
     strip_slotnames(ci->slotnames, jl_array_len(ci->slotnames));
-    jl_write(ci, ci->debuginfo, jl_nulldebuginfo);
+    jl_write(ci, (void**)&(ci->debuginfo), jl_nulldebuginfo);
     jl_value_t *ret = (jl_value_t*)ci;
     if (compressed)
         ret = (jl_value_t*)jl_compress_ir(m, ci);
@@ -2621,7 +2621,7 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
         }
         if (jl_options.strip_metadata) {
             if (!stripped_ir) {
-                jl_write(m, m->source, strip_codeinfo_meta(m, m->source, NULL));
+                jl_write(m, (void**)&(m->source), strip_codeinfo_meta(m, m->source, NULL));
             }
             jl_array_t *slotnames = jl_uncompress_argnames(m->slot_syms);
             JL_GC_PUSH1(&slotnames);
@@ -2630,7 +2630,7 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
             if (jl_tparam0(jl_unwrap_unionall(m->sig)) == (jl_value_t*)jl_kwcall_type)
                 tostrip = m->nargs;
             strip_slotnames(slotnames, tostrip);
-            jl_write(m, m->slot_syms, jl_compress_argnames(slotnames));
+            jl_write(m, (void**)&(m->slot_syms), jl_compress_argnames(slotnames));
             JL_GC_POP();
         }
     }
@@ -3865,7 +3865,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         export_jl_sysimg_globals();
         jl_global_roots_list = (jl_genericmemory_t*)jl_read_value(&s);
         jl_global_roots_keyset = (jl_genericmemory_t*)jl_read_value(&s);
-        jl_write(s.ptls->root_task, s.ptls->root_task->tls, jl_read_value(&s));
+        jl_write(s.ptls->root_task, (void**)&(s.ptls->root_task->tls), jl_read_value(&s));
 
         uint32_t gs_ctr = read_uint32(f);
         jl_require_world = read_uint(f);
@@ -4184,7 +4184,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             jl_globalref_t *r = (jl_globalref_t*)obj;
             if (r->binding == NULL) {
                 jl_globalref_t *gr = (jl_globalref_t*)jl_module_globalref(r->mod, r->name);
-                jl_write(r, r->binding, gr->binding);
+                jl_write(r, (void**)&(r->binding), gr->binding);
             }
         }
         else if (jl_is_module(obj)) {

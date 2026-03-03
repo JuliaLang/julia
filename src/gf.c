@@ -689,7 +689,7 @@ JL_DLLEXPORT void jl_update_codeinst(
 {
     assert(min_world <= max_world && "attempting to set invalid world constraints");
     //assert((!jl_is_method(codeinst->def->def.value) || max_world != ~(size_t)0 || min_world <= 1 || jl_svec_len(edges) != 0) && "missing edges");
-    jl_write(codeinst, &(codeinst->analysis_results), analysis_results);
+    jl_write(codeinst, (void**)&(codeinst->analysis_results), analysis_results);
     codeinst->time_infer_total = julia_double_to_half(time_infer_total);
     codeinst->time_infer_cache_saved = julia_double_to_half(time_infer_cache_saved);
     codeinst->time_infer_self = julia_double_to_half(time_infer_self);
@@ -721,10 +721,10 @@ JL_DLLEXPORT void jl_fill_codeinst(
 {
     assert(min_world <= max_world && "attempting to set invalid world constraints");
     //assert((!jl_is_method(codeinst->def->def.value) || max_world != ~(size_t)0 || min_world <= 1 || jl_svec_len(edges) != 0) && "missing edges");
-    jl_write(codeinst, &(codeinst->rettype), rettype);
-    jl_write(codeinst, &(codeinst->exctype), exctype);
+    jl_write(codeinst, (void**)&(codeinst->rettype), rettype);
+    jl_write(codeinst, (void**)&(codeinst->exctype), exctype);
     if ((const_flags & 2) != 0) {
-        jl_write(codeinst, &(codeinst->rettype_const), inferred_const);
+        jl_write(codeinst, (void**)&(codeinst->rettype_const), inferred_const);
     }
     jl_gc_wb_pre(codeinst, edges);
     jl_atomic_store_relaxed(&codeinst->edges, edges);
@@ -2349,7 +2349,7 @@ JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, 
         if (!backedges) {
             // lazy-init the backedges array
             backedges = jl_alloc_vec_any(0);
-            jl_write(callee, &(callee->backedges), backedges);
+            jl_write(callee, (void**)&(callee->backedges), backedges);
         }
         push_edge(backedges, invokesig, caller);
     }
@@ -2380,7 +2380,7 @@ static void _typename_add_backedge(jl_typename_t *tn, int explct, void *env0)
         jl_genericmemory_t *newtable = jl_eqtable_put(allbackedges, (jl_value_t*)tn, (jl_value_t*)backedges, NULL);
         JL_GC_POP();
         if (newtable != allbackedges) {
-            jl_write(jl_method_table, &(jl_method_table->backedges), newtable);
+            jl_write(jl_method_table, (void**)&(jl_method_table->backedges), newtable);
         }
     }
     // check if the edge is already present and avoid adding a duplicate
@@ -3532,7 +3532,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                 jl_atomic_load_relaxed(&codeinst2->debuginfo),
                 jl_atomic_load_relaxed(&codeinst2->edges));
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
-            jl_write(codeinst, &(codeinst->rettype_const), codeinst->rettype_const);
+            jl_write(codeinst, (void**)&(codeinst->rettype_const), codeinst->rettype_const);
             uint8_t specsigflags;
             jl_callptr_t invoke;
             void *fptr;
@@ -4492,10 +4492,10 @@ jl_value_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *
             0, 0, 0);
     assert(jl_is_datatype(ftype));
     JL_GC_PUSH1(&ftype);
-    jl_write(ftype->name, &(ftype->name->singletonname), name);
+    jl_write(ftype->name, (void**)&(ftype->name->singletonname), name);
     jl_declare_constant_val3(NULL, module, tname, (jl_value_t*)ftype, PARTITION_KIND_CONST, new_world);
     jl_value_t *f = jl_new_struct(ftype);
-    jl_write(ftype, &(ftype->instance), f);
+    jl_write(ftype, (void**)&(ftype->instance), f);
     JL_GC_POP();
     return (jl_value_t*)f;
 }
@@ -5273,9 +5273,9 @@ JL_DLLEXPORT void jl_extern_c(jl_value_t *name, jl_value_t *declrt, jl_tupletype
         jl_error("@ccallable: could not find requested method");
     JL_GC_PUSH1(&meth);
     if (name == jl_nothing)
-        jl_write(meth, &(meth->ccallable), jl_svec2(declrt, (jl_value_t*)sigt));
+        jl_write(meth, (void**)&(meth->ccallable), jl_svec2(declrt, (jl_value_t*)sigt));
     else
-        jl_write(meth, &(meth->ccallable), jl_svec3(declrt, (jl_value_t*)sigt, name));
+        jl_write(meth, (void**)&(meth->ccallable), jl_svec3(declrt, (jl_value_t*)sigt, name));
     JL_GC_POP();
 }
 

@@ -951,7 +951,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
         jl_write(t->name, (void**)&(t->name->wrapper), t);
         int i, np = jl_svec_len(parameters);
         for (i = np - 1; i >= 0; i--) {
-            jl_write(t->name, &(t->name->wrapper), jl_new_struct(jl_unionall_type, jl_svecref(parameters, i), t->name->wrapper));
+            jl_write(t->name, (void**)&(t->name->wrapper), jl_new_struct(jl_unionall_type, jl_svecref(parameters, i), t->name->wrapper));
         }
         if (!mutabl && !abstract && ftypes != NULL)
             tn->mayinlinealloc = 1;
