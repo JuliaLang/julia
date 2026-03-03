@@ -957,18 +957,44 @@ macro test_throws(args...)
     broken = broken !== nothing ? esc(broken) : nothing
     skip = skip !== nothing ? esc(skip) : nothing
 
-    if nargs == 2
-        extype, ex = args
-        pattern = nothing
-    elseif nargs == 3
-        extype, pattern, ex = args
-        pattern = esc(pattern)
+    is_zero_arg_anon = (x) -> begin
+        if Meta.isexpr(x, :->)
+            args_part = x.args[1]
+            return Meta.isexpr(args_part, :tuple) && isempty(args_part.args)
+        elseif Meta.isexpr(x, :function)
+            call_part = x.args[1]
+            return Meta.isexpr(call_part, :tuple) && isempty(call_part.args)
+        end
+        return false
+    end
+
+    # A do block passes a zero-argument closure as the first argument
+    if nargs >= 1 && is_zero_arg_anon(args[1])
+        ex = args[1]
+        if nargs == 2
+            extype = args[2]
+            pattern = nothing
+        elseif nargs == 3
+            extype, pattern = args[2], args[3]
+            pattern = esc(pattern)
+        else
+            error("@test_throws expects 2 or 3 positional arguments (plus optional keyword arguments)")
+        end
     else
-        error("@test_throws expects 2 or 3 positional arguments (plus optional keyword arguments)")
+        if nargs == 2
+            extype, ex = args
+            pattern = nothing
+        elseif nargs == 3
+            extype, pattern, ex = args
+            pattern = esc(pattern)
+        else
+            error("@test_throws expects 2 or 3 positional arguments (plus optional keyword arguments)")
+        end
     end
 
     orig_ex = Expr(:inert, ex)
-    testex = Expr(:block, __source__, esc(ex))
+    is_anon_func = Meta.isexpr(ex, :->) || Meta.isexpr(ex, :function)
+    testex = is_anon_func ? Expr(:block, __source__, Expr(:call, esc(ex))) : Expr(:block, __source__, esc(ex))
     source = QuoteNode(__source__)
 
     # Build the try-catch expression
