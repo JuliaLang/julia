@@ -614,15 +614,12 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_ci_equiv(jl_code_instance_t *ci JL_PROPA
     jl_method_instance_t *mi = jl_get_ci_mi(ci);
     jl_value_t *owner = ci->owner;
     jl_value_t *rettype = ci->rettype;
-    size_t min_world = jl_atomic_load_relaxed(&ci->min_world);
-    size_t max_world = jl_atomic_load_relaxed(&ci->max_world);
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     while (codeinst) {
         if (codeinst != ci &&
             jl_atomic_load_relaxed(&codeinst->inferred) != NULL &&
-            (target_world ? 1 : jl_atomic_load_relaxed(&codeinst->invoke) != NULL) &&
-            jl_atomic_load_relaxed(&codeinst->min_world) <= (target_world ? target_world : min_world) &&
-            jl_atomic_load_relaxed(&codeinst->max_world) >= (target_world ? target_world : max_world) &&
+            jl_atomic_load_relaxed(&codeinst->min_world) <= target_world &&
+            jl_atomic_load_relaxed(&codeinst->max_world) >= target_world &&
             jl_egal(codeinst->def, def) &&
             jl_egal(codeinst->owner, owner) &&
             jl_egal(codeinst->rettype, rettype)) {

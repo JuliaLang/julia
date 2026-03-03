@@ -1215,7 +1215,7 @@ end
 # where we would spend a lot of time, but are probably unlikely to get an improved
 # result anyway.
 function const_prop_methodinstance_heuristic(interp::AbstractInterpreter,
-    inf_result::Union{InferenceResult,Nothing}, mi::MethodInstance, arginfo::ArgInfo, sv::AbsIntState)
+    inf_result::Union{InferenceResult,Nothing}, mi::MethodInstance, ::ArgInfo, sv::AbsIntState)
     method = mi.def::Method
     if method.is_for_opaque_closure
         # Not inlining an opaque closure can be very expensive, so be generous
@@ -1602,6 +1602,23 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
     end
 end
 
+mutable struct AbstractIterationState
+    stateordonet
+    stateordonet_widened
+    valtype
+    statetype
+    may_have_terminated::Bool
+    nextstate::UInt8
+    call2future::Future{CallMeta}
+    function AbstractIterationState(
+            stateordonet, stateordonet_widened, valtype, statetype,
+            may_have_terminated::Bool, nextstate::UInt8
+        )
+        @nospecialize stateordonet stateordonet_widened valtype statetype
+        new(stateordonet, stateordonet_widened, valtype, statetype, may_have_terminated, nextstate)
+    end
+end
+
 # simulate iteration protocol on container type up to fixpoint
 function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @nospecialize(itertype),
                             vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
@@ -1616,91 +1633,91 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
         call1future = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[itft, itertype]), StmtInfo(true, false), vtypes, sv)::Future
         function inferiterate(interp, sv)
             call1 = call1future[]
-            stateordonet = call1.rt
             # Return Bottom if this is not an iterator.
             # WARNING: Changes to the iteration protocol must be reflected here,
             # this is not just an optimization.
             # TODO: this doesn't realize that Array, GenericMemory, SimpleVector, Tuple, and NamedTuple do not use the iterate protocol
-            if stateordonet === Bottom
+            if call1.rt === Bottom
                 iterateresult[] = AbstractIterationResult(Any[Bottom], AbstractIterationInfo(CallMeta[CallMeta(Bottom, Any, call1.effects, call1.info)], true))
                 return true
             end
-            stateordonet_widened = widenconst(stateordonet)
             calls = CallMeta[call1]
-            valtype = statetype = Bottom
             ret = Any[]
             𝕃ᵢ = typeinf_lattice(interp)
-            may_have_terminated = false
-            local call2future::Future{CallMeta}
+            state = AbstractIterationState(call1.rt, widenconst(call1.rt), Bottom, Bottom, false, 0x00)
 
-            nextstate::UInt8 = 0x0
             function inferiterate_2arg(interp, sv)
-                if nextstate === 0x1
-                    nextstate = 0xff
+                if state.nextstate === 0x1
+                    state.nextstate = 0xff
                     @goto state1
-                elseif nextstate === 0x2
-                    nextstate = 0xff
+                elseif state.nextstate === 0x2
+                    state.nextstate = 0xff
                     @goto state2
                 else
-                    @assert nextstate === 0x0
-                    nextstate = 0xff
+                    @assert state.nextstate === 0x0
+                    state.nextstate = 0xff
                 end
 
                 # Try to unroll the iteration up to max_tuple_splat, which covers any finite
                 # length iterators, or interesting prefix
                 while true
-                    if stateordonet_widened === Nothing
+                    if state.stateordonet_widened === Nothing
                         iterateresult[] = AbstractIterationResult(ret, AbstractIterationInfo(calls, true))
                         return true
                     end
-                    if Nothing <: stateordonet_widened || length(ret) >= InferenceParams(interp).max_tuple_splat
+                    if Nothing <: state.stateordonet_widened || length(ret) >= InferenceParams(interp).max_tuple_splat
                         break
                     end
-                    if !isa(stateordonet_widened, DataType) || !(stateordonet_widened <: Tuple) || isvatuple(stateordonet_widened) || length(stateordonet_widened.parameters) != 2
+                    if (!isa(state.stateordonet_widened, DataType) ||
+                        !(state.stateordonet_widened <: Tuple) ||
+                        isvatuple(state.stateordonet_widened) ||
+                        length(state.stateordonet_widened.parameters) != 2)
                         break
                     end
-                    nstatetype = getfield_tfunc(𝕃ᵢ, stateordonet, Const(2))
+                    nstatetype = getfield_tfunc(𝕃ᵢ, state.stateordonet, Const(2))
                     # If there's no new information in this statetype, don't bother continuing,
                     # the iterator won't be finite.
-                    if ⊑(𝕃ᵢ, nstatetype, statetype)
+                    if ⊑(𝕃ᵢ, nstatetype, state.statetype)
                         iterateresult[] = AbstractIterationResult(Any[Bottom], AbstractIterationInfo(calls, false), EFFECTS_THROWS)
                         return true
                     end
-                    valtype = getfield_tfunc(𝕃ᵢ, stateordonet, Const(1))
-                    push!(ret, valtype)
-                    statetype = nstatetype
-                    call2future = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, statetype]), StmtInfo(true, false), vtypes, sv)::Future
-                    if !isready(call2future)
-                        nextstate = 0x1
+                    state.valtype = getfield_tfunc(𝕃ᵢ, state.stateordonet, Const(1))
+                    push!(ret, state.valtype)
+                    state.statetype = nstatetype
+                    state.call2future = abstract_call_known(
+                        interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, state.statetype]),
+                        StmtInfo(true, false), vtypes, sv)::Future{CallMeta}
+                    if !isready(state.call2future)
+                        state.nextstate = 0x1
                         return false
                         @label state1
                     end
-                    let call = call2future[]
+                    let call = state.call2future[]
                         push!(calls, call)
-                        stateordonet = call.rt
-                        stateordonet_widened = widenconst(stateordonet)
+                        state.stateordonet = call.rt
+                        state.stateordonet_widened = widenconst(state.stateordonet)
                     end
                 end
                 # From here on, we start asking for results on the widened types, rather than
                 # the precise (potentially const) state type
                 # statetype and valtype are reinitialized in the first iteration below from the
                 # (widened) stateordonet, which has not yet been fully analyzed in the loop above
-                valtype = statetype = Bottom
-                may_have_terminated = Nothing <: stateordonet_widened
-                while valtype !== Any
-                    nounion = typeintersect(stateordonet_widened, Tuple{Any,Any})
+                state.valtype = state.statetype = Bottom
+                state.may_have_terminated = Nothing <: state.stateordonet_widened
+                while state.valtype !== Any
+                    nounion = typeintersect(state.stateordonet_widened, Tuple{Any,Any})
                     if nounion !== Union{} && !isa(nounion, DataType)
                         # nounion is of a type we cannot handle
-                        valtype = Any
+                        state.valtype = Any
                         break
                     end
-                    if nounion === Union{} || (nounion.parameters[1] <: valtype && nounion.parameters[2] <: statetype)
+                    if nounion === Union{} || (nounion.parameters[1] <: state.valtype && nounion.parameters[2] <: state.statetype)
                         # reached a fixpoint or iterator failed/gave invalid answer
-                        if !hasintersect(stateordonet_widened, Nothing)
+                        if !hasintersect(state.stateordonet_widened, Nothing)
                             # ... but cannot terminate
-                            if may_have_terminated
+                            if state.may_have_terminated
                                 # ... and iterator may have terminated prior to this loop, but not during it
-                                valtype = Bottom
+                                state.valtype = Bottom
                             else
                                 #  ... or cannot have terminated prior to this loop
                                 iterateresult[] = AbstractIterationResult(Any[Bottom], AbstractIterationInfo(calls, false), Effects())
@@ -1709,22 +1726,24 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
                         end
                         break
                     end
-                    valtype = tmerge(valtype, nounion.parameters[1])
-                    statetype = tmerge(statetype, nounion.parameters[2])
-                    call2future = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, statetype]), StmtInfo(true, false), vtypes, sv)::Future
-                    if !isready(call2future)
-                        nextstate = 0x2
+                    state.valtype = tmerge(state.valtype, nounion.parameters[1])
+                    state.statetype = tmerge(state.statetype, nounion.parameters[2])
+                    state.call2future = abstract_call_known(
+                        interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, state.statetype]),
+                        StmtInfo(true, false), vtypes, sv)::Future{CallMeta}
+                    if !isready(state.call2future)
+                        state.nextstate = 0x2
                         return false
                         @label state2
                     end
-                    let call = call2future[]
+                    let call = state.call2future[]
                         push!(calls, call)
-                        stateordonet = call.rt
-                        stateordonet_widened = widenconst(stateordonet)
+                        state.stateordonet = call.rt
+                        state.stateordonet_widened = widenconst(state.stateordonet)
                     end
                 end
-                if valtype !== Union{}
-                    push!(ret, Vararg{valtype})
+                if state.valtype !== Union{}
+                    push!(ret, Vararg{state.valtype})
                 end
                 iterateresult[] = AbstractIterationResult(ret, AbstractIterationInfo(calls, false))
                 return true
@@ -1738,6 +1757,31 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
             push!(sv.tasks, inferiterate)
         end
         return iterateresult
+    end
+end
+
+mutable struct AbstractApplyState
+    res
+    exctype
+    i::Int
+    j::Int
+    nextstate::UInt8
+    all_effects::Effects
+    ctypes::Vector{Vector{Any}}
+    ctypes´::Vector{Vector{Any}}
+    infos::Vector{Vector{MaybeAbstractIterationInfo}}
+    infos´::Vector{Vector{MaybeAbstractIterationInfo}}
+    argtypesi::Vector{Any}
+    ctfuture::Future{AbstractIterationResult}
+    callfuture::Future{CallMeta}
+    function AbstractApplyState(
+            res, exctype, i::Int, j::Int, nextstate::UInt8, all_effects::Effects,
+            ctypes::Vector{Vector{Any}}, ctypes´::Vector{Vector{Any}},
+            infos::Vector{Vector{MaybeAbstractIterationInfo}},
+            infos´::Vector{Vector{MaybeAbstractIterationInfo}},
+        )
+        @nospecialize res exctype
+        return new(res, exctype, i, j, nextstate, all_effects, ctypes, ctypes´, infos, infos´)
     end
 end
 
@@ -1758,66 +1802,55 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
             return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
         end
     end
-    res = Union{}
     splitunions = 1 < unionsplitcost(typeinf_lattice(interp), aargtypes) <= InferenceParams(interp).max_apply_union_enum
-    ctypes::Vector{Vector{Any}} = [Any[aft]]
-    infos::Vector{Vector{MaybeAbstractIterationInfo}} = Vector{MaybeAbstractIterationInfo}[MaybeAbstractIterationInfo[]]
-    all_effects::Effects = EFFECTS_TOTAL
     retinfos = ApplyCallInfo[]
     retinfo = UnionSplitApplyCallInfo(retinfos)
-    exctype = Union{}
-    ctypes´::Vector{Vector{Any}} = Vector{Any}[]
-    infos´::Vector{Vector{MaybeAbstractIterationInfo}} = Vector{MaybeAbstractIterationInfo}[]
-    local ti, argtypesi
-    local ctfuture::Future{AbstractIterationResult}
-    local callfuture::Future{CallMeta}
-
     applyresult = Future{CallMeta}()
-    # split the rest into a resumable state machine
-    i::Int = 1
-    j::Int = 1
-    nextstate::UInt8 = 0x0
+    state = AbstractApplyState(Union{}, Union{}, 1, 1, 0x00, EFFECTS_TOTAL,
+        Vector{Any}[Any[aft]], Vector{Any}[],
+        Vector{MaybeAbstractIterationInfo}[MaybeAbstractIterationInfo[]], Vector{MaybeAbstractIterationInfo}[])
+
     function infercalls(interp, sv)
         # n.b. Remember that variables will lose their values across restarts,
         # so be sure to manually hoist any values that must be preserved and do
         # not rely on program order.
         # This is a little more complex than the closure continuations often used elsewhere, but avoids needing to manage all of that indentation
-        if nextstate === 0x1
-            nextstate = 0xff
+        if state.nextstate === 0x1
+            state.nextstate = 0xff
             @goto state1
-        elseif nextstate === 0x2
-            nextstate = 0xff
+        elseif state.nextstate === 0x2
+            state.nextstate = 0xff
             @goto state2
-        elseif nextstate === 0x3
-            nextstate = 0xff
+        elseif state.nextstate === 0x3
+            state.nextstate = 0xff
             @goto state3
         else
-            @assert nextstate === 0x0
-            nextstate = 0xff
+            @assert state.nextstate === 0x0
+            state.nextstate = 0xff
         end
-        while i <= length(aargtypes)
-            argtypesi = (splitunions ? uniontypes(aargtypes[i]) : Any[aargtypes[i]])
-            i += 1
-            j = 1
-            while j <= length(argtypesi)
-                ti = argtypesi[j]
-                j += 1
+        while state.i <= length(aargtypes)
+            state.argtypesi = (splitunions ? uniontypes(aargtypes[state.i]) : Any[aargtypes[state.i]])
+            state.i += 1
+            state.j = 1
+            while state.j <= length(state.argtypesi)
+                ti = state.argtypesi[state.j]
+                state.j += 1
                 if !isvarargtype(ti)
-                    ctfuture = precise_container_type(interp, itft.contents, ti, vtypes, sv)::Future
-                    if !isready(ctfuture)
-                        nextstate = 0x1
+                    state.ctfuture = precise_container_type(interp, itft.contents, ti, vtypes, sv)::Future{AbstractIterationResult}
+                    if !isready(state.ctfuture)
+                        state.nextstate = 0x1
                         return false
                         @label state1
                     end
-                    (;cti, info, ai_effects) = ctfuture[]
+                    (;cti, info, ai_effects) = state.ctfuture[]
                 else
-                    ctfuture = precise_container_type(interp, itft.contents, unwrapva(ti), vtypes, sv)::Future
-                    if !isready(ctfuture)
-                        nextstate = 0x2
+                    state.ctfuture = precise_container_type(interp, itft.contents, unwrapva(ti), vtypes, sv)::Future{AbstractIterationResult}
+                    if !isready(state.ctfuture)
+                        state.nextstate = 0x2
                         return false
                         @label state2
                     end
-                    (;cti, info, ai_effects) = ctfuture[]
+                    (;cti, info, ai_effects) = state.ctfuture[]
                     # We can't represent a repeating sequence of the same types,
                     # so tmerge everything together to get one type that represents
                     # everything.
@@ -1830,41 +1863,41 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
                     end
                     cti = Any[Vararg{argt}]
                 end
-                all_effects = merge_effects(all_effects, ai_effects)
+                state.all_effects = merge_effects(state.all_effects, ai_effects)
                 if info !== nothing
                     for call in info.each
-                        all_effects = merge_effects(all_effects, call.effects)
+                        state.all_effects = merge_effects(state.all_effects, call.effects)
                     end
                 end
                 if any(@nospecialize(t) -> t === Bottom, cti)
                     continue
                 end
-                for k = 1:length(ctypes)
-                    ct = ctypes[k]
+                for k = 1:length(state.ctypes)
+                    ct = state.ctypes[k]
                     if isvarargtype(ct[end])
                         # This is vararg, we're not gonna be able to do any inlining,
                         # drop the info
                         info = nothing
                         tail = tuple_tail_elem(typeinf_lattice(interp), unwrapva(ct[end]), cti)
-                        push!(ctypes´, push!(ct[1:(end - 1)], tail))
+                        push!(state.ctypes´, push!(ct[1:(end - 1)], tail))
                     else
-                        push!(ctypes´, append!(ct[:], cti))
+                        push!(state.ctypes´, append!(ct[:], cti))
                     end
-                    push!(infos´, push!(copy(infos[k]), info))
+                    push!(state.infos´, push!(copy(state.infos[k]), info))
                 end
             end
             # swap for the new array and empty the temporary one
-            ctypes´, ctypes = ctypes, ctypes´
-            infos´, infos = infos, infos´
-            empty!(ctypes´)
-            empty!(infos´)
+            state.ctypes´, state.ctypes = state.ctypes, state.ctypes´
+            state.infos´, state.infos = state.infos, state.infos´
+            empty!(state.ctypes´)
+            empty!(state.infos´)
         end
-        all_effects.nothrow || (exctype = Any)
+        state.all_effects.nothrow || (state.exctype = Any)
 
-        i = 1
-        while i <= length(ctypes)
-            ct = ctypes[i]
-            if bail_out_apply(interp, InferenceLoopState(res, all_effects), sv)
+        state.i = 1
+        while state.i <= length(state.ctypes)
+            ct = state.ctypes[state.i]
+            if bail_out_apply(interp, InferenceLoopState(state.res, state.all_effects), sv)
                 add_remark!(interp, sv, "_apply_iterate inference reached maximally imprecise information: bailing on analysis of more methods.")
                 # there is unanalyzed candidate, widen type and effects to the top
                 let retinfo = NoCallInfo() # NOTE this is necessary to prevent the inlining processing
@@ -1882,23 +1915,23 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
                     break
                 end
             end
-            callfuture = abstract_call(interp, ArgInfo(nothing, ct), si, vtypes, sv, max_methods)::Future
-            if !isready(callfuture)
-                nextstate = 0x3
+            state.callfuture = abstract_call(interp, ArgInfo(nothing, ct), si, vtypes, sv, max_methods)::Future{CallMeta}
+            if !isready(state.callfuture)
+                state.nextstate = 0x3
                 return false
                 @label state3
             end
-            let (; info, rt, exct, effects) = callfuture[]
-                push!(retinfos, ApplyCallInfo(info, infos[i]))
-                res = tmerge(typeinf_lattice(interp), res, rt)
-                exctype = tmerge(typeinf_lattice(interp), exctype, exct)
-                all_effects = merge_effects(all_effects, effects)
+            let (; info, rt, exct, effects) = state.callfuture[]
+                push!(retinfos, ApplyCallInfo(info, state.infos[state.i]))
+                state.res = tmerge(typeinf_lattice(interp), state.res, rt)
+                state.exctype = tmerge(typeinf_lattice(interp), state.exctype, exct)
+                state.all_effects = merge_effects(state.all_effects, effects)
             end
-            i += 1
+            state.i += 1
         end
         # TODO: Add a special info type to capture all the iteration info.
         # For now, only propagate info if we don't also union-split the iteration
-        applyresult[] = CallMeta(res, exctype, all_effects, retinfo)
+        applyresult[] = CallMeta(state.res, state.exctype, state.all_effects, retinfo)
         return true
     end # function infercalls
     # start making progress on the first call
@@ -2281,11 +2314,11 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
             argtype = argtypes_to_type(pushfirst!(argtype_tail(argtypes, 4), ft))
             specsig = get_ci_abi(method_or_ci)
             defdef = get_ci_mi(method_or_ci).def
-            exct = method_or_ci.exctype
+            exct_ci = method_or_ci.exctype
             if !hasintersect(argtype, specsig)
                 return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
             elseif !(argtype <: specsig) || ((!isa(method_or_ci.def, ABIOverride) && isa(defdef, Method)) && !(argtype <: defdef.sig))
-                exct = Union{exct, TypeError}
+                exct_ci = Union{exct_ci, TypeError}
             end
             callee_valid_range = WorldRange(method_or_ci.min_world, method_or_ci.max_world)
             if !(our_world in callee_valid_range)
@@ -2298,10 +2331,10 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
             end
             # TODO: When we add curing, we may want to assume this is nothrow
             if (method_or_ci.owner === Nothing && method_or_ci.def.def isa Method)
-                exct = Union{exct, ErrorException}
+                exct_ci = Union{exct_ci, ErrorException}
             end
             update_valid_age!(sv, our_world, callee_valid_range)
-            return Future(CallMeta(method_or_ci.rettype, exct, Effects(decode_effects(method_or_ci.ipo_purity_bits), nothrow=(exct===Bottom)),
+            return Future(CallMeta(method_or_ci.rettype, exct_ci, Effects(decode_effects(method_or_ci.ipo_purity_bits), nothrow=(exct_ci===Bottom)),
                 InvokeCICallInfo(method_or_ci)))
         else
             method = method_or_ci::Method
@@ -3379,7 +3412,7 @@ function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, mod::Module,
     end
 
     world = get_inference_world(interp)
-    (valid_worlds, rte) = abstract_load_all_consistent_leaf_partitions(interp, gr, binding_world_hints(world, sv))
+    (_valid_worlds, rte) = abstract_load_all_consistent_leaf_partitions(interp, gr, binding_world_hints(world, sv))
     # XXX: it is unsound to ignore valid_worlds here
     if rte.exct == Union{}
         rt = Const(true)
@@ -4115,19 +4148,38 @@ function handle_control_backedge!(interp::AbstractInterpreter, frame::InferenceS
     return nothing
 end
 
-function update_bbstate!(𝕃ᵢ::AbstractLattice, frame::InferenceState, bb::Int, vartable::VarTable, saw_latestworld::Bool)
+# Intersect `dest` alias table with `src` in-place (meet operation at CFG join points).
+# A slot is considered aliased in the merged state only if it has the same alias on all
+# incoming paths. Returns true if `dest` changed.
+function intersect_alias_tables!(dest::Vector{Int}, src::Vector{Int})
+    changed = false
+    for i in 1:length(dest)
+        if dest[i] != 0 && dest[i] != src[i]
+            dest[i] = 0
+            changed = true
+        end
+    end
+    return changed
+end
+
+function update_bbstate!(
+        𝕃ᵢ::AbstractLattice, vartable::VarTable, slot_aliases::Vector{Int}, bb::Int,
+        saw_latestworld::Bool, frame::InferenceState
+    )
     frame.bb_saw_latestworld[bb] |= saw_latestworld
-    bbtable = frame.bb_vartables[bb]
-    if bbtable === nothing
+    bbstate = frame.bb_states[bb]
+    if bbstate === nothing
         # if a basic block hasn't been analyzed yet,
         # we can update its state a bit more aggressively
-        frame.bb_vartables[bb] = copy(vartable)
+        frame.bb_states[bb] = BBEntryState(copy(vartable), copy(slot_aliases))
         return true
     else
         pc = first(frame.cfg.blocks[bb].stmts)
         # Minus sign marks this as a "virtual" PC so that it is
         # not confused with a real assignment at this PC.
-        return stupdate!(𝕃ᵢ, bbtable, vartable, -pc)
+        changed = stupdate!(𝕃ᵢ, bbstate.vartable, vartable, -pc)
+        changed |= intersect_alias_tables!(bbstate.aliases, slot_aliases)
+        return changed
     end
 end
 
@@ -4206,14 +4258,17 @@ function update_exc_bestguess!(interp::AbstractInterpreter, @nospecialize(exct),
     end
 end
 
-function propagate_to_error_handler!(currstate::VarTable, currsaw_latestworld::Bool, frame::InferenceState, 𝕃ᵢ::AbstractLattice)
+function propagate_to_error_handler!(
+        𝕃ᵢ::AbstractLattice, currstate::VarTable, slot_aliases::Vector{Int},
+        currsaw_latestworld::Bool, frame::InferenceState,
+    )
     # If this statement potentially threw, propagate the currstate to the
     # exception handler, BEFORE applying any state changes.
     curr_hand = gethandler(frame)
     if curr_hand !== nothing
         enter = frame.src.code[curr_hand.enter_idx]::EnterNode
         exceptbb = block_for_inst(frame.cfg, enter.catch_dest)
-        if update_bbstate!(𝕃ᵢ, frame, exceptbb, currstate, currsaw_latestworld)
+        if update_bbstate!(𝕃ᵢ, currstate, slot_aliases, exceptbb, currsaw_latestworld, frame)
             push!(frame.ip, exceptbb)
         end
     end
@@ -4231,11 +4286,14 @@ end
 struct CurrentState
     result::Future{RTEffects}
     currstate::VarTable
+    slot_aliases::Vector{Int}
     currsaw_latestworld::Bool
     bbstart::Int
     bbend::Int
-    CurrentState(result::Future{RTEffects}, currstate::VarTable, currsaw_latestworld::Bool, bbstart::Int, bbend::Int) =
-        new(result, currstate, currsaw_latestworld, bbstart, bbend)
+    CurrentState(
+        result::Future{RTEffects}, currstate::VarTable, slot_aliases::Vector{Int},
+        currsaw_latestworld::Bool, bbstart::Int, bbend::Int
+    ) = new(result, currstate, slot_aliases, currsaw_latestworld, bbstart, bbend)
     CurrentState() = new()
 end
 
@@ -4246,7 +4304,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
     bbs = frame.cfg.blocks
     nbbs = length(bbs)
     𝕃ᵢ = typeinf_lattice(interp)
-    states = frame.bb_vartables
+    states = frame.bb_states
     saw_latestworld = frame.bb_saw_latestworld
     currbb = frame.currbb
     currpc = frame.currpc
@@ -4257,6 +4315,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
         bbend = nextresult.bbend
         currstate = nextresult.currstate
         currsaw_latestworld = nextresult.currsaw_latestworld
+        slot_aliases = nextresult.slot_aliases
         stmt = frame.src.code[currpc]
         result = abstract_eval_basic_statement(interp, stmt, StatementState(currstate, currsaw_latestworld), frame, nextresult.result)
         @goto injected_result
@@ -4265,12 +4324,14 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
     if currbb != 1
         currbb = frame.currbb = _bits_findnext(W.bits, 1)::Int # next basic block
     end
-    currstate = copy(states[currbb]::VarTable)
+    currstate = copy((states[currbb]::BBEntryState).vartable)
     currsaw_latestworld = saw_latestworld[currbb]
+    slot_aliases = copy((states[1]::BBEntryState).aliases)
     while currbb <= nbbs
         delete!(W, currbb)
         bbstart = first(bbs[currbb].stmts)
         bbend = last(bbs[currbb].stmts)
+        init_slot_aliases!(slot_aliases, frame, currbb)
 
         currpc = bbstart - 1
         while currpc < bbend
@@ -4310,7 +4371,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                         add_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
                     else
                         update_exc_bestguess!(interp, TypeError, frame)
-                        propagate_to_error_handler!(currstate, currsaw_latestworld, frame, 𝕃ᵢ)
+                        propagate_to_error_handler!(𝕃ᵢ, currstate, slot_aliases, currsaw_latestworld, frame)
                         merge_effects!(interp, frame, EFFECTS_THROWS)
                     end
 
@@ -4352,6 +4413,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                             if else_change !== nothing
                                 elsestate = copy(currstate)
                                 strefine1!(elsestate, else_change)
+                                propagate_aliased_condition!(𝕃ᵢ, elsestate, condt, :else, slot_aliases)
                             elseif condslot isa SlotNumber
                                 elsestate = copy(currstate)
                             else
@@ -4360,17 +4422,18 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                             if condslot isa SlotNumber # refine the type of this conditional object itself for this else branch
                                 strefine1!(elsestate, condition_object_change(currstate, condt, condslot, :else))
                             end
-                            else_changed = update_bbstate!(𝕃ᵢ, frame, falsebb, elsestate, currsaw_latestworld)
+                            else_changed = update_bbstate!(𝕃ᵢ, elsestate, slot_aliases, falsebb, currsaw_latestworld, frame)
                             then_change = conditional_change(𝕃ᵢ, currstate, condt, :then)
                             thenstate = currstate
                             if then_change !== nothing
                                 strefine1!(thenstate, then_change)
+                                propagate_aliased_condition!(𝕃ᵢ, thenstate, condt, :then, slot_aliases)
                             end
                             if condslot isa SlotNumber # refine the type of this conditional object itself for this then branch
                                 strefine1!(thenstate, condition_object_change(currstate, condt, condslot, :then))
                             end
                         else
-                            else_changed = update_bbstate!(𝕃ᵢ, frame, falsebb, currstate, currsaw_latestworld)
+                            else_changed = update_bbstate!(𝕃ᵢ, currstate, slot_aliases, falsebb, currsaw_latestworld, frame)
                         end
                         if else_changed
                             handle_control_backedge!(interp, frame, currpc, stmt.dest)
@@ -4416,7 +4479,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
             sstate = StatementState(currstate, currsaw_latestworld)
             result = abstract_eval_basic_statement(interp, stmt, sstate, frame)
             if result isa Future{RTEffects}
-                return CurrentState(result, currstate, currsaw_latestworld, bbstart, bbend)
+                return CurrentState(result, currstate, slot_aliases, currsaw_latestworld, bbstart, bbend)
             else
                 @label injected_result
                 (; rt, exct, effects, changes, refinements, currsaw_latestworld) = result
@@ -4428,7 +4491,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                     # TODO: assert that these conditions match. For now, we assume the `nothrow` flag
                     # to be correct, but allow the exct to be an over-approximation.
                 end
-                propagate_to_error_handler!(currstate, currsaw_latestworld, frame, 𝕃ᵢ)
+                propagate_to_error_handler!(𝕃ᵢ, currstate, slot_aliases, currsaw_latestworld, frame)
             end
             if rt === Bottom
                 ssavaluetypes[currpc] = Bottom
@@ -4440,14 +4503,15 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
             end
             if changes !== nothing
                 stoverwrite1!(currstate, changes)
+                update_alias_table!(slot_aliases, stmt, frame.src.code)
             end
             if refinements isa SlotRefinement
-                apply_refinement!(𝕃ᵢ, refinements.slot, refinements.typ, currstate, changes)
+                apply_refinement!(𝕃ᵢ, refinements.slot, refinements.typ, currstate, changes, slot_aliases)
             elseif refinements isa Vector{Any}
                 for i = 1:length(refinements)
                     newtyp = refinements[i]
                     newtyp === nothing && continue
-                    apply_refinement!(𝕃ᵢ, SlotNumber(i), newtyp, currstate, changes)
+                    apply_refinement!(𝕃ᵢ, SlotNumber(i), newtyp, currstate, changes, slot_aliases)
                 end
             end
             if rt === nothing
@@ -4464,7 +4528,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
 
         # Case 2: Directly branch to a different BB
         begin @label branch
-            if update_bbstate!(𝕃ᵢ, frame, nextbb, currstate, currsaw_latestworld)
+            if update_bbstate!(𝕃ᵢ, currstate, slot_aliases, nextbb, currsaw_latestworld, frame)
                 push!(W, nextbb)
             end
         end
@@ -4475,11 +4539,11 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
             currbb == -1 && break # the working set is empty
             currbb > nbbs && break
 
-            nexttable = states[currbb]
-            if nexttable === nothing
+            nextstate = states[currbb]
+            if nextstate === nothing
                 init_vartable!(currstate, frame)
             else
-                stoverwrite!(currstate, nexttable)
+                stoverwrite!(currstate, nextstate.vartable)
             end
         end
     end # while currbb <= nbbs
@@ -4487,17 +4551,102 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
     return CurrentState()
 end
 
-function apply_refinement!(𝕃ᵢ::AbstractLattice, slot::SlotNumber, @nospecialize(newtyp),
-                           currstate::VarTable, currchanges::Union{Nothing,StateUpdate})
+function apply_refinement!(
+        𝕃ᵢ::AbstractLattice, slot::SlotNumber, @nospecialize(newtyp),
+        currstate::VarTable, currchanges::Union{Nothing,StateUpdate},
+        slot_aliases::Vector{Int}
+    )
     if currchanges !== nothing && currchanges.var == slot
         return # type propagation from statement (like assignment) should have the precedence
     end
-    vtype = currstate[slot_id(slot)]
+    slotid = slot_id(slot)
+    vtype = currstate[slotid]
     oldtyp = vtype.typ
     ⊏ = strictpartialorder(𝕃ᵢ)
     if newtyp ⊏ oldtyp
-        refinement = StateRefinement(slot_id(slot), newtyp, vtype.undef)
+        refinement = StateRefinement(slotid, newtyp, vtype.undef)
         strefine1!(currstate, refinement)
+        for i in 1:length(currstate)
+            slot_aliases[i] == slotid || continue
+            alias_vtype = currstate[i]
+            if newtyp ⊏ alias_vtype.typ
+                strefine1!(currstate, StateRefinement(i, newtyp, alias_vtype.undef))
+            end
+        end
+    end
+end
+
+function init_slot_aliases!(slot_aliases::Vector{Int}, frame::InferenceState, bb::Int)
+    entry = frame.bb_states[bb]
+    if entry !== nothing
+        copyto!(slot_aliases, entry.aliases)
+    else
+        fill!(slot_aliases, 0)
+    end
+end
+
+function clear_slot_aliases!(aliases::Vector{Int}, slot::Int)
+    for i in 1:length(aliases)
+        if aliases[i] == slot
+            aliases[i] = 0
+        end
+    end
+    aliases[slot] = 0
+    return aliases
+end
+
+# Core transfer function: update an alias table for a single statement.
+# Handles assignments (`y = x`) and `NewvarNode` declaration
+function update_alias_table!(aliases::Vector{Int}, @nospecialize(stmt), code::Vector{Any})
+    if isa(stmt, Expr) && stmt.head === :method && length(stmt.args) >= 1
+        fname = stmt.args[1]
+        if isa(fname, SlotNumber)
+            # :method can assign to a slot without an explicit `=` wrapper.
+            # Kill alias information for that slot and any slots pointing to it.
+            clear_slot_aliases!(aliases, slot_id(fname))
+        end
+        return
+    end
+    if isa(stmt, NewvarNode)
+        # When a slot is killed, also clear any slots that alias it, since
+        # those aliases are now stale (the target has a new undefined value).
+        clear_slot_aliases!(aliases, slot_id(stmt.slot))
+        return
+    end
+    lhs = rhs = nothing
+    if isexpr(stmt, :(=)) && length(stmt.args) == 2
+        lhs = stmt.args[1]
+        rhs = stmt.args[2]
+    end
+    isa(lhs, SlotNumber) || return
+    lhs_id = slot_id(lhs)
+    # When a slot is reassigned, clear any slots that were aliasing it.
+    # They still hold the OLD value of lhs, so the alias lhs_id→... is stale.
+    clear_slot_aliases!(aliases, lhs_id)
+    rhs === nothing && return
+    while isa(rhs, SSAValue)
+        rhs = code[rhs.id]
+    end
+    if isa(rhs, SlotNumber)
+        rhs_id = slot_id(rhs)
+        rhs_alias = aliases[rhs_id]
+        aliases[lhs_id] = rhs_alias == 0 ? rhs_id : rhs_alias
+    end
+end
+
+# When a Conditional refines slot `x`, propagate the same refinement to all slots aliased to `x`.
+function propagate_aliased_condition!(
+        𝕃ᵢ::AbstractLattice, state::VarTable, condt::Conditional, then_or_else::Symbol,
+        slot_aliases::Vector{Int}
+    )
+    condslot = condt.slot
+    for i in 1:length(state)
+        slot_aliases[i] == condslot || continue
+        alias_condt = Conditional(i, state[i].ssadef, condt.thentype, condt.elsetype)
+        alias_change = conditional_change(𝕃ᵢ, state, alias_condt, then_or_else)
+        if alias_change !== nothing
+            strefine1!(state, alias_change)
+        end
     end
 end
 
