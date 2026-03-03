@@ -64,7 +64,12 @@ STATIC_INLINE void mmtk_gc_wb_fast(const void *parent, const void *ptr) JL_NOTSA
     }
 }
 
-STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_gc_wb_pre(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+{
+    mmtk_gc_wb_fast(parent, ptr);
+}
+
+STATIC_INLINE void jl_gc_wb_post(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 {
     mmtk_gc_wb_fast(parent, ptr);
 }
@@ -74,7 +79,12 @@ STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_
     mmtk_gc_wb_fast(ptr, (void*)0);
 }
 
-STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_gc_multi_wb_pre(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
+{
+    mmtk_gc_wb_fast(parent, (void*)0);
+}
+
+STATIC_INLINE void jl_gc_multi_wb_post(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
 {
     mmtk_gc_wb_fast(parent, (void*)0);
 }

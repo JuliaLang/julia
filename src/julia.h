@@ -1217,8 +1217,9 @@ STATIC_INLINE jl_value_t *jl_svecset(
     // while svec is supposedly immutable, in practice we sometimes publish it
     // first and set the values lazily. Those users occasionally might need to
     // instead use jl_atomic_store_release here.
+    jl_gc_wb_pre(t, x);
     jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)jl_svec_data(t) + i, (jl_value_t*)x);
-    jl_gc_wb(t, x);
+    jl_gc_wb_post(t, x);
     return (jl_value_t*)x;
 }
 #endif
@@ -1256,6 +1257,13 @@ STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAG
 #endif
 #endif
 #endif
+// Utility for doing a basic write with appropriate barriers
+STATIC_INLINE void jl_write(void *x, void **field, void *b) JL_NOTSAFEPOINT
+{
+    jl_gc_wb_pre(x, b);
+    *field = b;
+    jl_gc_wb_post(x, b);
+}
 
 /*
   how - allocation style
@@ -1305,9 +1313,12 @@ STATIC_INLINE jl_value_t *jl_genericmemory_ptr_set(
     jl_genericmemory_t *m_ = (jl_genericmemory_t*)m;
     assert(((jl_datatype_t*)jl_typetagof(m_))->layout->flags.arrayelem_isboxed);
     assert(i < m_->length);
+    if (x) {
+        jl_gc_wb_pre(m, x);
+    }
     jl_atomic_store_release(((_Atomic(jl_value_t*)*)(m_->ptr)) + i, (jl_value_t*)x);
     if (x) {
-        jl_gc_wb(m, x);
+        jl_gc_wb_post(m, x);
     }
     return (jl_value_t*)x;
 }
@@ -1353,9 +1364,12 @@ STATIC_INLINE jl_value_t *jl_array_ptr_set(
 {
     assert(((jl_datatype_t*)jl_typetagof(((jl_array_t*)a)->ref.mem))->layout->flags.arrayelem_isboxed);
     assert(i < jl_array_len(a));
+    if (x) {
+        jl_gc_wb_pre(jl_array_owner((jl_array_t*)a), x);
+    }
     jl_atomic_store_release(jl_array_data(a, _Atomic(jl_value_t*)) + i, (jl_value_t*)x);
     if (x) {
-        jl_gc_wb(jl_array_owner((jl_array_t*)a), x);
+        jl_gc_wb_post(jl_array_owner((jl_array_t*)a), x);
     }
     return (jl_value_t*)x;
 }

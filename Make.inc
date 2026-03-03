@@ -893,7 +893,7 @@ else ifeq (${MMTK_PLAN}, ConcurrentImmix)
 JCXXFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX
 JCFLAGS += -DMMTK_PLAN_CONCURRENTIMMIX
 else
-$(error "Unsupported MMTk plan: $(MMTK_PLAN). Supported plan(s): Immix or StickyImmix.")
+$(error "Unsupported MMTk plan: $(MMTK_PLAN). Supported plan(s): Immix, StickyImmix, or ConcurrentImmix.")
 endif
 
 # Do a release build on the binding by default

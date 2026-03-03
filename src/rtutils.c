@@ -396,8 +396,7 @@ static void jl_reserve_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_
     new_s->reserved_size = reserved_size;
     if (s)
         jl_copy_excstack(new_s, s);
-    *stack = new_s;
-    jl_gc_wb(ct, new_s);
+    jl_write(ct, *stack, new_s);
 }
 
 void jl_push_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,

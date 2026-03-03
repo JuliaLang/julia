@@ -198,8 +198,7 @@ JL_DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc)
     size_t newnrows = n + inc;
     if (!isbitsunion && elsz == 0) {
         jl_genericmemory_t *newmem = jl_alloc_genericmemory(mtype, MAXINTVAL - 2);
-        a->ref.mem = newmem;
-        jl_gc_wb(a, newmem);
+        jl_write(a, &(a->ref.mem), newmem);
         a->dimsize[0] = newnrows;
         return;
     }
@@ -227,8 +226,7 @@ JL_DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc)
             char *newtypetagdata = (char*)newmem->ptr + newmaxsize * elsz + oldoffset;
             memcpy(newtypetagdata, typetagdata, n);
         }
-        a->ref.mem = newmem;
-        jl_gc_wb(a, newmem);
+        jl_write(a, &(a->ref.mem), newmem);
         if (isbitsunion)
             a->ref.ptr_or_offset = (void*)oldoffset;
         else

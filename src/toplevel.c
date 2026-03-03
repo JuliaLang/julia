@@ -325,9 +325,10 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
                 check_safe_newbinding(gm, gs);
                 if (jl_atomic_load_relaxed(&bpart->min_world) == new_world) {
                     bpart->kind = new_kind | (bpart->kind & PARTITION_MASK_FLAG);
-                    bpart->restriction = global_type;
                     if (global_type)
-                        jl_gc_wb(bpart, global_type);
+                        jl_write(bpart, bpart->restriction, global_type);
+                    else
+                        bpart->restriction = global_type;
                     continue;
                 } else {
                     jl_replace_binding_locked(b, bpart, global_type, new_kind, new_world);
@@ -532,8 +533,9 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_instance_for_thunk(jl_code_info_t *
     JL_GC_PUSH1(&mi);
 
     jl_code_instance_t *ci = jl_new_codeinst_for_uninferred(mi, src);
+    jl_gc_wb_pre(mi, ci);
     jl_atomic_store_relaxed(&mi->cache, ci);
-    jl_gc_wb(mi, ci);
+    jl_gc_wb_post(mi, ci);
 
     JL_GC_POP();
     return mi;

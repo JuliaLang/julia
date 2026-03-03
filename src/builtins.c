@@ -806,9 +806,11 @@ JL_CALLABLE(jl_f__apply_iterate)
             assert(newargs != NULL); // inform GCChecker that we didn't write a NULL here
             for (j = 0; j < al; j++) {
                 // jl_fieldref may allocate.
+                if (arg_heap)
+                    jl_gc_wb_pre(arg_heap, newargs[n - 1]);
                 newargs[n++] = jl_fieldref(ai, j);
                 if (arg_heap)
-                    jl_gc_wb(arg_heap, newargs[n - 1]);
+                    jl_gc_wb_post(arg_heap, newargs[n - 1]);
             }
         }
         else if (jl_is_genericmemory(ai)) {
@@ -824,16 +826,20 @@ JL_CALLABLE(jl_f__apply_iterate)
                     // apply with array splatting may have embedded NULL value (#11772)
                     if (__unlikely(arg == NULL))
                         jl_throw(jl_undefref_exception);
+                    if (arg_heap)
+                        jl_gc_wb_pre(arg_heap, arg);
                     newargs[n++] = arg;
                     if (arg_heap)
-                        jl_gc_wb(arg_heap, arg);
+                        jl_gc_wb_pre(arg_heap, arg);
                 }
             }
             else {
                 for (j = 0; j < al; j++) {
+                    if (arg_heap)
+                        jl_gc_wb_pre(arg_heap, newargs[n - 1]);
                     newargs[n++] = jl_genericmemoryref(mem, j);
                     if (arg_heap)
-                        jl_gc_wb(arg_heap, newargs[n - 1]);
+                        jl_gc_wb_post(arg_heap, newargs[n - 1]);
                 }
             }
         }
@@ -850,16 +856,20 @@ JL_CALLABLE(jl_f__apply_iterate)
                     // apply with array splatting may have embedded NULL value (#11772)
                     if (__unlikely(arg == NULL))
                         jl_throw(jl_undefref_exception);
+                    if (arg_heap)
+                        jl_gc_wb_pre(arg_heap, arg);
                     newargs[n++] = arg;
                     if (arg_heap)
-                        jl_gc_wb(arg_heap, arg);
+                        jl_gc_wb_post(arg_heap, arg);
                 }
             }
             else {
                 for (j = 0; j < al; j++) {
+                    if (arg_heap)
+                        jl_gc_wb_pre(arg_heap, newargs[n - 1]);
                     newargs[n++] = jl_arrayref(aai, j);
                     if (arg_heap)
-                        jl_gc_wb(arg_heap, newargs[n - 1]);
+                        jl_gc_wb_post(arg_heap, newargs[n - 1]);
                 }
             }
         }
@@ -876,9 +886,11 @@ JL_CALLABLE(jl_f__apply_iterate)
                 roots[stackalloc] = state;
                 _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, n + precount + 1, extra);
                 JL_GC_ASSERT_LIVE(value);
+                if (arg_heap)
+                    jl_gc_wb_pre(arg_heap, value);
                 newargs[n++] = value;
                 if (arg_heap)
-                    jl_gc_wb(arg_heap, value);
+                    jl_gc_wb_post(arg_heap, value);
                 roots[stackalloc + 1] = NULL;
                 JL_GC_ASSERT_LIVE(state);
                 args[1] = state;
@@ -2159,8 +2171,7 @@ static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
         error = "can only subtype abstract types";
     if (error)
          jl_errorf("invalid subtyping in definition of %s: %s.", jl_symbol_name(tt->name->name), error);
-    tt->super = (jl_datatype_t*)super;
-    jl_gc_wb(tt, tt->super);
+    jl_write(tt, (void**)&(tt->super), super);
 }
 
 JL_CALLABLE(jl_f__setsuper)
@@ -2364,8 +2375,7 @@ JL_CALLABLE(jl_f__typebody)
                 }
             }
         }
-        dt->types = (jl_svec_t*)ft;
-        jl_gc_wb(dt, ft);
+        jl_write(dt, (void**)&(dt->types), ft);
         // If a supertype can reference the same type, then we may not be
         // able to compute the layout of the object before needing to
         // publish it, so we must assume it cannot be inlined, if that

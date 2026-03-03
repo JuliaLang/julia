@@ -57,13 +57,16 @@ JL_DLLEXPORT void jl_emit_codeinst_to_jit_fallback(jl_code_instance_t *codeinst,
     if (jl_is_code_info(inferred))
         return;
     if (jl_is_svec(src->edges)) {
+        jl_gc_wb_pre(codeinst, src->edges);
         jl_atomic_store_release(&codeinst->inferred, (jl_value_t*)src->edges);
-        jl_gc_wb(codeinst, src->edges);
+        jl_gc_wb_post(codeinst, src->edges);
     }
+    jl_gc_wb_pre(codeinst, src->debuginfo);
     jl_atomic_store_release(&codeinst->debuginfo, src->debuginfo);
-    jl_gc_wb(codeinst, src->debuginfo);
+    jl_gc_wb_post(codeinst, src->debuginfo);
+    jl_gc_wb_pre(codeinst, src);
     jl_atomic_store_release(&codeinst->inferred, (jl_value_t*)src);
-    jl_gc_wb(codeinst, src);
+    jl_gc_wb_post(codeinst, src);
 }
 
 JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION_fallback(void)
