@@ -26,7 +26,7 @@ $(eval $(call staged-install, \
 
 clean-zstd:
 	-rm -f $(BUILDDIR)/$(ZSTD_SRC_DIR)/build-configured $(BUILDDIR)/$(ZSTD_SRC_DIR)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/$(ZSTD_SRC_DIR) $(MAKE_COMMON) $(ZSTD_BUILD_OPTS) clean
+	-if [ -d $(BUILDDIR)/$(ZSTD_SRC_DIR) ]; then $(MAKE) -C $(BUILDDIR)/$(ZSTD_SRC_DIR) $(MAKE_COMMON) $(ZSTD_BUILD_OPTS) clean; fi
 
 get-zstd: $(ZSTD_SRC_FILE)
 extract-zstd: $(BUILDDIR)/$(ZSTD_SRC_DIR)/source-extracted

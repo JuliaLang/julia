@@ -86,7 +86,7 @@ $(eval $(call staged-install, \
 clean-libgit2:
 	-rm -f $(build_datarootdir)/julia/cert.pem
 	-rm -f $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/$(LIBGIT2_SRC_DIR) clean
+	-if [ -d $(BUILDDIR)/$(LIBGIT2_SRC_DIR) ]; then $(MAKE) -C $(BUILDDIR)/$(LIBGIT2_SRC_DIR) clean; fi
 
 get-libgit2: $(LIBGIT2_SRC_FILE)
 extract-libgit2: $(SRCCACHE)/$(LIBGIT2_SRC_DIR)/source-extracted

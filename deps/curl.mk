@@ -86,7 +86,7 @@ $(eval $(call staged-install, \
 
 clean-curl:
 	-rm -f $(BUILDDIR)/curl-$(CURL_VER)/build-configured $(BUILDDIR)/curl-$(CURL_VER)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/curl-$(CURL_VER) clean
+	-if [ -d $(BUILDDIR)/curl-$(CURL_VER) ]; then $(MAKE) -C $(BUILDDIR)/curl-$(CURL_VER) clean; fi
 
 distclean-curl:
 	rm -rf $(SRCCACHE)/curl-$(CURL_VER).tar.bz2 $(SRCCACHE)/curl-$(CURL_VER) $(BUILDDIR)/curl-$(CURL_VER)

@@ -24,7 +24,7 @@ $(eval $(call staged-install, \
 
 clean-zlib:
 	-rm -f $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/$(ZLIB_SRC_DIR) clean
+	-if [ -d $(BUILDDIR)/$(ZLIB_SRC_DIR) ]; then $(MAKE) -C $(BUILDDIR)/$(ZLIB_SRC_DIR) clean; fi
 
 get-zlib: $(ZLIB_SRC_FILE)
 extract-zlib: $(BUILDDIR)/$(ZLIB_SRC_DIR)/source-extracted
