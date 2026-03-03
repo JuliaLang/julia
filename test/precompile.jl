@@ -2687,9 +2687,6 @@ end
 end
 
 # Issue #61198
-# UUIDs are chosen so that Dict iteration order is:
-#   TrigA, TrigB, ParentPkg, ExtA, TopPkg, ExtAB
-# This guarantees TopPkg's task runs before ExtAB's
 @testset "no false staleness in precompilation of dynamic dependencies" begin
     mkdepottempdir() do depot
         project_path = joinpath(depot, "testenv")
@@ -2699,6 +2696,26 @@ end
         triga_uuid  = "10000000-0000-0000-0000-000000000050"
         trigb_uuid  = "20000000-0000-0000-0000-000000000001"
         top_uuid    = "10000000-0000-0000-0000-000000000064"
+
+        # UUIDs are chosen so that Dict iteration order is:
+        #   TrigA, TrigB, ParentPkg, ExtA, TopPkg, ExtAB
+        # This guarantees TopPkg's task runs before ExtAB's
+        # If hash values or Dict iteration changes, the uuids
+        # will need to be adjusted (rather than this test)
+        let pkgids = [
+                Base.PkgId(Base.UUID(triga_uuid), "TrigA"),
+                Base.PkgId(Base.UUID(trigb_uuid), "TrigB"),
+                Base.PkgId(Base.UUID(parent_uuid), "ParentPkg"),
+                Base.PkgId(Base.uuid5(Base.UUID(parent_uuid), "ExtA"), "ExtA"),
+                Base.PkgId(Base.UUID(top_uuid), "TopPkg"),
+                Base.PkgId(Base.uuid5(Base.UUID(parent_uuid), "ExtAB"), "ExtAB"),
+            ]
+            d = Dict(pkg => nothing for pkg in pkgids)
+            order = collect(keys(d))
+            top_idx = findfirst(p -> p.name == "TopPkg", order)
+            extab_idx = findfirst(p -> p.name == "ExtAB", order)
+            @test top_idx < extab_idx
+        end
 
         # ParentPkg with two extensions: ExtA triggered by TrigA,
         # ExtAB triggered by [TrigA, TrigB] (superset of ExtA's triggers)
