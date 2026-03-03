@@ -898,7 +898,11 @@ MMTK_BUILD ?= release
 
 # Location of mmtk-julia binding
 # (needed for api/*.h and .so file)
-MMTK_JULIA_DIR ?= $(BUILDROOT)/usr/lib/mmtk_julia
+ifdef MMTK_JULIA_DIR
+MMTK_JULIA_DIR := $(abspath $(MMTK_JULIA_DIR))
+else
+MMTK_JULIA_DIR := $(BUILDROOT)/usr/lib/mmtk_julia
+endif
 MMTK_DIR = ${MMTK_JULIA_DIR}/mmtk
 MMTK_API_INC = ${MMTK_DIR}/api
 MMTK_LIB := -lmmtk_julia
