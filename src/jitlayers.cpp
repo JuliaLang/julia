@@ -2261,7 +2261,7 @@ jl_code_instance_t *JuliaOJIT::findCompatibleCI(jl_code_instance_t *CI)
     jl_value_t *RetType = CI->rettype;
     size_t MinWorld = jl_atomic_load_relaxed(&CI->min_world);
     size_t MaxWorld = jl_atomic_load_relaxed(&CI->max_world);
-    auto IsCompatible = [=](jl_code_instance_t *CI2) {
+    auto IsCompatible = [=](jl_code_instance_t *CI2) JL_NOTSAFEPOINT {
         return jl_atomic_load_relaxed(&CI2->min_world) <= MinWorld &&
                jl_atomic_load_relaxed(&CI2->max_world) >= MaxWorld &&
                jl_egal(CI2->def, Def) && jl_egal(CI2->owner, Owner) &&
