@@ -729,6 +729,12 @@ using Test
                 x::Int
             end
         end))
+        # A type cannot subtype itself
+        @test_throws "a type cannot subtype itself" eval(:(typegroup
+            struct TG_SelfSub <: TG_SelfSub
+                x::Int
+            end
+        end))
     end
 
     @testset "inner constructors" begin

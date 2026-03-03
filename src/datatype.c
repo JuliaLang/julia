@@ -2720,6 +2720,11 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
                 jl_value_t *resolved_super = NULL;
                 JL_GC_PUSH3(&tv, &super, &resolved_super);
                 resolved_super = resolve_type_refs(super, &subst_map);
+                // Check self-subtyping before jl_check_valid_supertype, which
+                // calls jl_subtype and would crash on types with super == NULL.
+                if (jl_is_datatype(resolved_super) &&
+                    datatypes[i]->name == ((jl_datatype_t*)resolved_super)->name)
+                    jl_errorf("invalid subtyping in definition of %s: a type cannot subtype itself.", type_name);
                 const char *error = jl_check_valid_supertype(resolved_super);
                 if (error)
                     jl_errorf("invalid subtyping in definition of %s: %s.", type_name, error);

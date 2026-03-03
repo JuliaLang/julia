@@ -2140,11 +2140,16 @@ JL_CALLABLE(jl_f__primitivetype)
 
 static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
-    const char *error = jl_check_valid_supertype(super);
-    if (!error && tt->super != NULL)
+    // Check context-specific conditions first, before jl_check_valid_supertype
+    // which calls jl_subtype and would crash walking the supertype chain of a
+    // type with super == NULL.
+    const char *error = NULL;
+    if (tt->super != NULL)
         error = "type already has a supertype";
-    else if (!error && tt->name == ((jl_datatype_t*)super)->name)
+    else if (jl_is_datatype(super) && tt->name == ((jl_datatype_t*)super)->name)
         error = "a type cannot subtype itself";
+    if (!error)
+        error = jl_check_valid_supertype(super);
     if (error)
          jl_errorf("invalid subtyping in definition of %s: %s.", jl_symbol_name(tt->name->name), error);
     tt->super = (jl_datatype_t*)super;
