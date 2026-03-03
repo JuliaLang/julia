@@ -582,6 +582,11 @@ Stacktrace:
 ```
 """
 macro kwdef(expr)
+    if isexpr(expr, :struct)
+        fieldsblock = expr.args[3]
+        kwdef_preprocess_atomic_fields!(fieldsblock)
+    end
+
     expr = macroexpand(__module__, expr) # to expand @static
     isexpr(expr, :struct) || error("Invalid usage of @kwdef")
     _, T, fieldsblock = expr.args
@@ -632,6 +637,26 @@ macro kwdef(expr)
     return quote
         $(esc(:($Base.@__doc__ $expr)))
         $kwdefs
+    end
+end
+
+# Pre-process @atomic field definitions in @kwdef structs to move default values
+# outside the @atomic macrocall. This transforms `@atomic x::Int = 1` (parsed as
+# `@atomic (x::Int = 1)`) into `(@atomic x::Int) = 1`, preventing @atomic from
+# misinterpreting the `=` as an atomic modify operation during macroexpand.
+function kwdef_preprocess_atomic_fields!(ex)
+    ex isa Expr || return
+    for (i, item) in pairs(ex.args)
+        if isexpr(item, :macrocall) &&
+               item.args[1] === Symbol("@atomic") && isexpr(item.args[end], :(=))
+            eq_expr = item.args[end]
+            lhs, rhs = eq_expr.args
+            # Replace @atomic (field = default) with (@atomic field) = default
+            atomic_call = Expr(:macrocall, item.args[1:end-1]..., lhs)
+            ex.args[i] = Expr(:(=), atomic_call, rhs)
+        else
+            kwdef_preprocess_atomic_fields!(item)
+        end
     end
 end
 
