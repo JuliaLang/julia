@@ -18,11 +18,11 @@ id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 dims = (20,20,20)
 
 if Sys.islinux()
-    S = SharedArray{Int64,3}(dims)
+    S = SharedArray{Int64,3}(undef, dims)
     @test startswith(S.segname, "/jl")
     @test !ispath("/dev/shm" * S.segname)
 
-    S = SharedArray{Int64,3}(dims; pids=[id_other])
+    S = SharedArray{Int64,3}(undef, dims; pids=[id_other])
     @test startswith(S.segname, "/jl")
     @test !ispath("/dev/shm" * S.segname)
 end
@@ -85,7 +85,7 @@ copyto!(s, sdata(d))
 a = rand(Float64, dims)
 @test sdata(a) == a
 
-d = SharedArray{Int}(dims, init = D->fill!(D.loc_subarr_1d, myid()))
+d = SharedArray{Int}(undef, dims, init = D->fill!(D.loc_subarr_1d, myid()))
 for p in procs(d)
     idxes_in_p = remotecall_fetch(p, d) do D
         parentindices(D.loc_subarr_1d)[1]
@@ -96,7 +96,7 @@ for p in procs(d)
     @test d[idxl] == p
 end
 
-d = @inferred(SharedArray{Float64,2}((2,3)))
+d = @inferred(SharedArray{Float64,2}(undef, (2,3)))
 @test isa(d[:,2], Vector{Float64})
 
 ### SharedArrays from a file
@@ -158,16 +158,16 @@ rm(fn); rm(fn2); rm(fn3)
 ### Utility functions
 
 # construct PR #13514
-S = @inferred(SharedArray{Int}((1,2,3)))
+S = @inferred(SharedArray{Int}(undef, (1,2,3)))
 @test size(S) == (1,2,3)
 @test typeof(S) <: SharedArray{Int}
-S = @inferred(SharedArray{Int}(2))
+S = @inferred(SharedArray{Int}(undef, 2))
 @test size(S) == (2,)
 @test typeof(S) <: SharedArray{Int}
-S = @inferred(SharedArray{Int}(1,2))
+S = @inferred(SharedArray{Int}(undef, 1,2))
 @test size(S) == (1,2)
 @test typeof(S) <: SharedArray{Int}
-S = @inferred(SharedArray{Int}(1,2,3))
+S = @inferred(SharedArray{Int}(undef, 1,2,3))
 @test size(S) == (1,2,3)
 @test typeof(S) <: SharedArray{Int}
 @test Base.elsize(S) == Base.elsize(typeof(S)) == Base.elsize(Vector{Int})
@@ -248,12 +248,12 @@ map!(x->1, d, d)
 # Shared arrays of singleton immutables
 @everywhere struct ShmemFoo end
 for T in [Nothing, ShmemFoo]
-    local s = @inferred(SharedArray{T}(10))
+    local s = @inferred(SharedArray{T}(undef, 10))
     @test T() === remotecall_fetch(x->x[3], workers()[1], s)
 end
 
 # Issue #14664
-d = SharedArray{Int}(10)
+d = SharedArray{Int}(undef, 10)
 @sync @distributed for i=1:10
     d[i] = i
 end
@@ -263,8 +263,8 @@ for (x,i) in enumerate(d)
 end
 
 # complex
-sd = SharedArray{Int}(10)
-se = SharedArray{Int}(10)
+sd = SharedArray{Int}(undef, 10)
+se = SharedArray{Int}(undef, 10)
 @sync @distributed for i=1:10
     sd[i] = i
     se[i] = i
@@ -288,13 +288,13 @@ for id in [id_me, id_other]
     finalize_and_test((r=RemoteChannel(id); put!(r, 1); r))
 end
 
-d = SharedArray{Int}(10)
+d = SharedArray{Int}(undef, 10)
 finalize(d)
 @test_throws BoundsError d[1]
 
 # Issue 22139
 let
-    aorig = a1 = SharedArray{Float64}((3, 3))
+    aorig = a1 = SharedArray{Float64}(undef, (3, 3))
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
     @test objectid(aorig) == objectid(a1)
     id = a1.id
