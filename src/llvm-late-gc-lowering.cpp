@@ -1156,8 +1156,10 @@ static SmallSetVector<AllocaInst *, 1> FindAllocaBases(Value *V) {
         allocas.insert(AI); // Found it directly
     }
     else {
-        SmallSetVector<Value *, 8> worklist;
-        worklist.insert(V);
+        SmallVector<Value *, 8> worklist;
+        SmallPtrSet<Value *, 8> visited;
+        worklist.push_back(V);
+        visited.insert(V);
         while (!worklist.empty()) {
             Value *W = worklist.pop_back_val();
             if (AllocaInst *Alloca = dyn_cast<AllocaInst>(W->stripInBoundsOffsets())) {
@@ -1165,12 +1167,15 @@ static SmallSetVector<AllocaInst *, 1> FindAllocaBases(Value *V) {
             }
             else if (PHINode *Phi = dyn_cast<PHINode>(W)) {
                 for (Value *Incoming : Phi->incoming_values()) {
-                    worklist.insert(Incoming);
+                    if (visited.insert(Incoming).second)
+                        worklist.push_back(Incoming);
                 }
             }
             else if (SelectInst *SI = dyn_cast<SelectInst>(W)) {
-                worklist.insert(SI->getTrueValue());
-                worklist.insert(SI->getFalseValue());
+                if (visited.insert(SI->getTrueValue()).second)
+                    worklist.push_back(SI->getTrueValue());
+                if (visited.insert(SI->getFalseValue()).second)
+                    worklist.push_back(SI->getFalseValue());
             }
             else {
                 allocas.clear();

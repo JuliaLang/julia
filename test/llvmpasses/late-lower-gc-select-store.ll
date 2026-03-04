@@ -24,6 +24,29 @@ define void @store_select(ptr addrspace(10) %val, i1 %cond) {
   ret void
 }
 
+; Store through a phi with a cycle (phi references itself via loop back-edge).
+; This is a regression test for an infinite loop in FindAllocaBases.
+define void @store_phi_cycle(ptr addrspace(10) %val, i1 %cond) {
+top:
+  ; CHECK-LABEL: @store_phi_cycle
+  ; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 4)
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %alloca1 = alloca [2 x ptr addrspace(10)], align 8
+  %alloca2 = alloca [2 x ptr addrspace(10)], align 8
+  br label %loop
+
+loop:
+  %phi = phi ptr [ %alloca1, %top ], [ %sel, %loop ]
+  %sel = select i1 %cond, ptr %phi, ptr %alloca2
+  store ptr addrspace(10) %val, ptr %sel, align 8
+  call void @safepoint()
+  br i1 %cond, label %loop, label %exit
+
+exit:
+  ; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret void
+}
+
 ; Store through a phi of two allocas
 define void @store_phi(ptr addrspace(10) %val, i1 %cond) {
 top:
