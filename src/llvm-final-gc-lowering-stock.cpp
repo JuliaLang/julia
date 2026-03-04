@@ -48,7 +48,11 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
     return newI;
 }
 
-void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
+
+void FinalLowerGC::lowerWriteBarrierPre(CallInst *target, Function &F) {
+}
+
+void FinalLowerGC::lowerWriteBarrierPost(CallInst *target, Function &F) {
     auto parent = target->getArgOperand(0);
     IRBuilder<> builder(target);
     builder.SetCurrentDebugLocation(target->getDebugLoc());
