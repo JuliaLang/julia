@@ -17,6 +17,9 @@ extern "C" {
 // System-wide heap statistics
 gc_heapstatus_t gc_heap_stats = {0};
 
+// Currently active heap snapshot
+void *g_snapshot = NULL; // TODO: handle prev_sweep_full condition
+
 // Memory upper bound on 32-bit systems
 const uint64_t max_mem_32bit_systems = 1536 * 1024 * 1024; // 1.5 GiB
 // Julia's GC heuristics will try to keep the heap size below the `max_total_memory` soft limit,
@@ -637,7 +640,7 @@ void jl_gc_reset_alloc_count(void) JL_NOTSAFEPOINT
 static void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT
 {
     assert(jl_is_genericmemory(m));
-    assert(jl_genericmemory_how(m) == 1);
+    assert(jl_genericmemory_how(m) == JL_GENERICMEMORY_GCMANAGED);
     char *d = (char*)m->ptr;
     size_t freed_bytes = memory_block_usable_size(d, isaligned);
     assert(freed_bytes != 0);
@@ -1735,7 +1738,7 @@ STATIC_INLINE jl_value_t *gc_mark_obj8(jl_ptls_t ptls, char *obj8_parent, uint8_
                 nptr |= !gc_old(o->header);
                 if (!gc_try_setmark_tag(o, GC_MARKED)) new_obj = NULL;
             }
-            gc_heap_snapshot_record_object_edge((jl_value_t*)obj8_parent, slot);
+            gc_heap_snapshot_record_object_edge(g_snapshot, (jl_value_t*)obj8_parent, slot);
         }
     }
     gc_mark_push_remset(ptls, (jl_value_t *)obj8_parent, nptr);
@@ -1767,7 +1770,7 @@ STATIC_INLINE jl_value_t *gc_mark_obj16(jl_ptls_t ptls, char *obj16_parent, uint
                 nptr |= !gc_old(o->header);
                 if (!gc_try_setmark_tag(o, GC_MARKED)) new_obj = NULL;
             }
-            gc_heap_snapshot_record_object_edge((jl_value_t*)obj16_parent, slot);
+            gc_heap_snapshot_record_object_edge(g_snapshot, (jl_value_t*)obj16_parent, slot);
         }
     }
     gc_mark_push_remset(ptls, (jl_value_t *)obj16_parent, nptr);
@@ -1799,7 +1802,7 @@ STATIC_INLINE jl_value_t *gc_mark_obj32(jl_ptls_t ptls, char *obj32_parent, uint
                 nptr |= !gc_old(o->header);
                 if (!gc_try_setmark_tag(o, GC_MARKED)) new_obj = NULL;
             }
-            gc_heap_snapshot_record_object_edge((jl_value_t*)obj32_parent, slot);
+            gc_heap_snapshot_record_object_edge(g_snapshot, (jl_value_t*)obj32_parent, slot);
         }
     }
     gc_mark_push_remset(ptls, (jl_value_t *)obj32_parent, nptr);
@@ -1830,7 +1833,7 @@ STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_v
                     nptr |= 1;
                 if (!gc_marked(o->header))
                     break;
-                gc_heap_snapshot_record_array_edge(obj_parent, slot);
+                gc_heap_snapshot_record_array_edge(g_snapshot, obj_parent, slot);
             }
         }
     }
@@ -1859,7 +1862,7 @@ STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_v
                         gc_slot_to_arrayidx(obj_parent, obj_begin));
             gc_assert_parent_validity(obj_parent, new_obj);
             gc_try_claim_and_push(mq, new_obj, &nptr);
-            gc_heap_snapshot_record_array_edge(obj_parent, slot);
+            gc_heap_snapshot_record_array_edge(g_snapshot, obj_parent, slot);
         }
     }
     if (too_big) {
@@ -1902,7 +1905,7 @@ STATIC_INLINE void gc_mark_memory8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_v
                         early_end = 1;
                         break;
                     }
-                    gc_heap_snapshot_record_array_edge(ary8_parent, slot);
+                    gc_heap_snapshot_record_array_edge(g_snapshot, ary8_parent, slot);
                 }
             }
             if (early_end)
@@ -1935,7 +1938,7 @@ STATIC_INLINE void gc_mark_memory8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_v
                                gc_slot_to_arrayidx(ary8_parent, ary8_begin));
                 gc_assert_parent_validity(ary8_parent, new_obj);
                 gc_try_claim_and_push(mq, new_obj, &nptr);
-                gc_heap_snapshot_record_array_edge(ary8_parent, slot);
+                gc_heap_snapshot_record_array_edge(g_snapshot, ary8_parent, slot);
             }
         }
     }
@@ -1979,7 +1982,7 @@ STATIC_INLINE void gc_mark_memory16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl
                         early_end = 1;
                         break;
                     }
-                    gc_heap_snapshot_record_array_edge(ary16_parent, slot);
+                    gc_heap_snapshot_record_array_edge(g_snapshot, ary16_parent, slot);
                 }
             }
             if (early_end)
@@ -2012,7 +2015,7 @@ STATIC_INLINE void gc_mark_memory16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl
                                gc_slot_to_arrayidx(ary16_parent, ary16_begin));
                 gc_assert_parent_validity(ary16_parent, new_obj);
                 gc_try_claim_and_push(mq, new_obj, &nptr);
-                gc_heap_snapshot_record_array_edge(ary16_parent, slot);
+                gc_heap_snapshot_record_array_edge(g_snapshot, ary16_parent, slot);
             }
         }
     }
@@ -2059,12 +2062,12 @@ STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroot
                     continue;
             }
             gc_try_claim_and_push(mq, new_obj, NULL);
-            gc_heap_snapshot_record_frame_to_object_edge(s, new_obj);
+            gc_heap_snapshot_record_frame_to_object_edge(g_snapshot, s, new_obj);
         }
         jl_gcframe_t *sprev = (jl_gcframe_t *)gc_read_stack(&s->prev, offset, lb, ub);
         if (sprev == NULL)
             break;
-        gc_heap_snapshot_record_frame_to_frame_edge(s, sprev);
+        gc_heap_snapshot_record_frame_to_frame_edge(g_snapshot, s, sprev);
         s = sprev;
         uintptr_t new_nroots = gc_read_stack(&s->nroots, offset, lb, ub);
         assert(new_nroots <= UINT32_MAX);
@@ -2092,14 +2095,14 @@ STATIC_INLINE void gc_mark_excstack(jl_ptls_t ptls, jl_excstack_t *excstack, siz
             for (size_t jlval_index = 0; jlval_index < njlvals; jlval_index++) {
                 new_obj = jl_bt_entry_jlvalue(bt_entry, jlval_index);
                 gc_try_claim_and_push(mq, new_obj, NULL);
-                gc_heap_snapshot_record_frame_to_object_edge(bt_entry, new_obj);
+                gc_heap_snapshot_record_frame_to_object_edge(g_snapshot, bt_entry, new_obj);
             }
         }
         // The exception comes last - mark it
         new_obj = jl_excstack_exception(excstack, itr);
         itr = jl_excstack_next(excstack, itr);
         gc_try_claim_and_push(mq, new_obj, NULL);
-        gc_heap_snapshot_record_frame_to_object_edge(excstack, new_obj);
+        gc_heap_snapshot_record_frame_to_object_edge(g_snapshot, excstack, new_obj);
     }
 }
 
@@ -2114,15 +2117,15 @@ STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent
     jl_value_t *bindingkeyset = (jl_value_t *)jl_atomic_load_relaxed(&mb_parent->bindingkeyset);
     gc_assert_parent_validity((jl_value_t *)mb_parent, bindingkeyset);
     gc_try_claim_and_push(mq, bindingkeyset, &nptr);
-    gc_heap_snapshot_record_module_to_binding(mb_parent, bindings, bindingkeyset);
+    gc_heap_snapshot_record_module_to_binding(g_snapshot, mb_parent, bindings, bindingkeyset);
     gc_assert_parent_validity((jl_value_t *)mb_parent, (jl_value_t *)mb_parent->parent);
     gc_try_claim_and_push(mq, (jl_value_t *)mb_parent->parent, &nptr);
     gc_assert_parent_validity((jl_value_t *)mb_parent, (jl_value_t *)mb_parent->usings_backedges);
     gc_try_claim_and_push(mq, (jl_value_t *)mb_parent->usings_backedges, &nptr);
-    gc_heap_snapshot_record_binding_partition_edge((jl_value_t*)mb_parent, mb_parent->usings_backedges);
+    gc_heap_snapshot_record_binding_partition_edge(g_snapshot, (jl_value_t*)mb_parent, mb_parent->usings_backedges);
     gc_assert_parent_validity((jl_value_t *)mb_parent, (jl_value_t *)mb_parent->scanned_methods);
     gc_try_claim_and_push(mq, (jl_value_t *)mb_parent->scanned_methods, &nptr);
-    gc_heap_snapshot_record_binding_partition_edge((jl_value_t*)mb_parent, mb_parent->scanned_methods);
+    gc_heap_snapshot_record_binding_partition_edge(g_snapshot, (jl_value_t*)mb_parent, mb_parent->scanned_methods);
     size_t nusings = module_usings_length(mb_parent);
     if (nusings > 0) {
         // this is only necessary because bindings for "using" modules
@@ -2166,11 +2169,11 @@ void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t *fl_parent, jl_value_t *
             continue;
         gc_try_claim_and_push(mq, new_obj, NULL);
         if (fl_parent != NULL) {
-            gc_heap_snapshot_record_array_edge(fl_parent, slot);
+            gc_heap_snapshot_record_array_edge(g_snapshot, fl_parent, slot);
         } else {
             // This is a list of objects following the same format as a finlist
             // if `fl_parent` is NULL
-            gc_heap_snapshot_record_finlist(new_obj, ++i);
+            gc_heap_snapshot_record_finlist(g_snapshot, new_obj, ++i);
         }
     }
 }
@@ -2349,13 +2352,13 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
         #endif
                 if (s != NULL) {
                     nroots = gc_read_stack(&s->nroots, offset, lb, ub);
-                    gc_heap_snapshot_record_task_to_frame_edge(ta, s);
+                    gc_heap_snapshot_record_task_to_frame_edge(g_snapshot, ta, s);
                     assert(nroots <= UINT32_MAX);
                     gc_mark_stack(ptls, s, (uint32_t)nroots, offset, lb, ub);
                 }
                 if (ta->excstack) {
                     jl_excstack_t *excstack = ta->excstack;
-                    gc_heap_snapshot_record_task_to_frame_edge(ta, excstack);
+                    gc_heap_snapshot_record_task_to_frame_edge(g_snapshot, ta, excstack);
                     size_t itr = ta->excstack->top;
                     gc_setmark_buf_(ptls, excstack, bits,
                                     sizeof(jl_excstack_t) +
@@ -2408,13 +2411,13 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     gc_setmark_big(ptls, o, bits);
             }
             int how = jl_genericmemory_how(m);
-            if (how == 0 || how == 2) {
-                gc_heap_snapshot_record_hidden_edge(new_obj, m->ptr, jl_genericmemory_nbytes(m), how == 0 ? 2 : 0);
+            if (how == JL_GENERICMEMORY_MALLOCD) {
+                gc_heap_snapshot_record_foreign_memory_edge(g_snapshot,
+                    new_obj, m->ptr, jl_genericmemory_nbytes(m));
             }
-            else if (how == 1) {
+            else if (how == JL_GENERICMEMORY_GCMANAGED) {
                 if (update_meta || foreign_alloc) {
                     size_t nb = jl_genericmemory_nbytes(m);
-                    gc_heap_snapshot_record_hidden_edge(new_obj, m->ptr, nb, 0);
                     if (bits == GC_OLD_MARKED) {
                         ptls->gc_tls.gc_cache.perm_scanned_bytes += nb;
                     }
@@ -2423,11 +2426,11 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                     }
                 }
             }
-            else if (how == 3) {
+            else if (how == JL_GENERICMEMORY_STRINGOWNED) {
                 jl_value_t *owner = jl_genericmemory_data_owner_field(m);
                 uintptr_t nptr = (1 << 2) | (bits & GC_OLD);
                 gc_try_claim_and_push(mq, owner, &nptr);
-                gc_heap_snapshot_record_internal_array_edge(new_obj, owner);
+                gc_heap_snapshot_record_internal_array_edge(g_snapshot, new_obj, owner);
                 gc_mark_push_remset(ptls, new_obj, nptr);
                 return;
             }
@@ -2775,26 +2778,26 @@ static void gc_queue_thread_local(jl_gc_markqueue_t *mq, jl_ptls_t ptls2) JL_NOT
     task = ptls2->root_task;
     if (task != NULL) {
         gc_try_claim_and_push(mq, task, NULL);
-        gc_heap_snapshot_record_root((jl_value_t*)task, "root task");
+        gc_heap_snapshot_record_root(g_snapshot, (jl_value_t*)task, "root task");
     }
     task = jl_atomic_load_relaxed(&ptls2->current_task);
     if (task != NULL) {
         gc_try_claim_and_push(mq, task, NULL);
-        gc_heap_snapshot_record_root((jl_value_t*)task, "current task");
+        gc_heap_snapshot_record_root(g_snapshot, (jl_value_t*)task, "current task");
     }
     task = ptls2->next_task;
     if (task != NULL) {
         gc_try_claim_and_push(mq, task, NULL);
-        gc_heap_snapshot_record_root((jl_value_t*)task, "next task");
+        gc_heap_snapshot_record_root(g_snapshot, (jl_value_t*)task, "next task");
     }
     task = ptls2->previous_task;
     if (task != NULL) {
         gc_try_claim_and_push(mq, task, NULL);
-        gc_heap_snapshot_record_root((jl_value_t*)task, "previous task");
+        gc_heap_snapshot_record_root(g_snapshot, (jl_value_t*)task, "previous task");
     }
     if (ptls2->previous_exception) {
         gc_try_claim_and_push(mq, ptls2->previous_exception, NULL);
-        gc_heap_snapshot_record_root((jl_value_t*)ptls2->previous_exception, "previous exception");
+        gc_heap_snapshot_record_root(g_snapshot, (jl_value_t*)ptls2->previous_exception, "previous exception");
     }
 }
 
@@ -2846,40 +2849,40 @@ static void gc_mark_roots(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
     // modules
     gc_try_claim_and_push(mq, jl_main_module, NULL);
-    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_main_module, "main_module");
+    gc_heap_snapshot_record_gc_roots(g_snapshot, (jl_value_t*)jl_main_module, "main_module");
     // invisible builtin values
     gc_try_claim_and_push(mq, jl_method_table, NULL);
-    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_method_table, "global_method_table");
+    gc_heap_snapshot_record_gc_roots(g_snapshot, (jl_value_t*)jl_method_table, "global_method_table");
     gc_try_claim_and_push(mq, jl_an_empty_vec_any, NULL);
-    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_an_empty_vec_any, "an_empty_vec_any");
+    gc_heap_snapshot_record_gc_roots(g_snapshot, (jl_value_t*)jl_an_empty_vec_any, "an_empty_vec_any");
     gc_try_claim_and_push(mq, jl_module_init_order, NULL);
-    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_module_init_order, "module_init_order");
+    gc_heap_snapshot_record_gc_roots(g_snapshot, (jl_value_t*)jl_module_init_order, "module_init_order");
     for (size_t i = 0; i < jl_current_modules.size; i += 2) {
         if (jl_current_modules.table[i + 1] != HT_NOTFOUND) {
             gc_try_claim_and_push(mq, jl_current_modules.table[i], NULL);
-            gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_current_modules.table[i], "top level module");
+            gc_heap_snapshot_record_gc_roots(g_snapshot, (jl_value_t*)jl_current_modules.table[i], "top level module");
         }
     }
     gc_try_claim_and_push(mq, jl_anytuple_type_type, NULL);
-    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_anytuple_type_type, "anytuple_type_type");
+    gc_heap_snapshot_record_gc_roots(g_snapshot, (jl_value_t*)jl_anytuple_type_type, "anytuple_type_type");
     for (size_t i = 0; i < N_CALL_CACHE; i++) {
         jl_typemap_entry_t *v = jl_atomic_load_relaxed(&call_cache[i]);
         gc_try_claim_and_push(mq, v, NULL);
-        gc_heap_snapshot_record_array_edge_index((jl_value_t*)jl_anytuple_type_type, (jl_value_t*)v, i);
+        gc_heap_snapshot_record_array_edge_index(g_snapshot, (jl_value_t*)jl_anytuple_type_type, (jl_value_t*)v, i);
     }
     gc_try_claim_and_push(mq, _jl_debug_method_invalidation, NULL);
-    gc_heap_snapshot_record_gc_roots((jl_value_t*)_jl_debug_method_invalidation, "debug_method_invalidation");
+    gc_heap_snapshot_record_gc_roots(g_snapshot, (jl_value_t*)_jl_debug_method_invalidation, "debug_method_invalidation");
     // constants
     gc_try_claim_and_push(mq, jl_emptytuple_type, NULL);
-    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_emptytuple_type, "emptytuple_type");
+    gc_heap_snapshot_record_gc_roots(g_snapshot, (jl_value_t*)jl_emptytuple_type, "emptytuple_type");
     gc_try_claim_and_push(mq, cmpswap_names, NULL);
-    gc_heap_snapshot_record_gc_roots((jl_value_t*)cmpswap_names, "cmpswap_names");
+    gc_heap_snapshot_record_gc_roots(g_snapshot, (jl_value_t*)cmpswap_names, "cmpswap_names");
     gc_try_claim_and_push(mq, jl_global_roots_list, NULL);
-    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_global_roots_list, "global_roots_list");
+    gc_heap_snapshot_record_gc_roots(g_snapshot, (jl_value_t*)jl_global_roots_list, "global_roots_list");
     gc_try_claim_and_push(mq, jl_global_roots_keyset, NULL);
-    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_global_roots_keyset, "global_roots_keyset");
+    gc_heap_snapshot_record_gc_roots(g_snapshot, (jl_value_t*)jl_global_roots_keyset, "global_roots_keyset");
     gc_try_claim_and_push(mq, precompile_field_replace, NULL);
-    gc_heap_snapshot_record_gc_roots((jl_value_t*)precompile_field_replace, "precompile_field_replace");
+    gc_heap_snapshot_record_gc_roots(g_snapshot, (jl_value_t*)precompile_field_replace, "precompile_field_replace");
 }
 
 // find unmarked objects that need to be finalized from the finalizer list "list".
@@ -3065,7 +3068,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTS
     {
         JL_TIMING(GC, GC_Mark);
         assert(gc_n_threads != 0);
-        int single_threaded_mark = (jl_n_markthreads == 0 || gc_heap_snapshot_enabled);
+        int single_threaded_mark = (jl_n_markthreads == 0 || g_snapshot);
         for (int t_i = 0; t_i < gc_n_threads; t_i++) {
             jl_ptls_t ptls2 = gc_all_tls_states[t_i];
             jl_ptls_t ptls_dest = ptls;
