@@ -4,7 +4,7 @@
 
 module PCRE
 
-import ..RefValue
+import ..RefValue, ..DenseUTF8String
 
 # include($BUILDROOT/base/pcre_h.jl)
 include(string(Base.BUILDROOT, "pcre_h.jl"))
@@ -196,7 +196,7 @@ function err_message(errno::Integer)
     return GC.@preserve buffer unsafe_string(pointer(buffer))
 end
 
-exec(re, subject::Union{String,SubString{String}}, offset, options, match_data) =
+exec(re, subject::DenseUTF8String, offset, options, match_data) =
     _exec(re, subject, offset, options, match_data)
 exec(re, subject, offset, options, match_data) =
     _exec(re, String(subject)::String, offset, options, match_data)
