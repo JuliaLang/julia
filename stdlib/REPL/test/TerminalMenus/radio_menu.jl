@@ -52,3 +52,9 @@ radio_menu = RadioMenu(string.(1:3), pagesize=1, charset=:ascii)
 @test simulate_input(radio_menu, :down, :down, :down, :down, :enter) == 3
 radio_menu = RadioMenu(["apple", "banana", "cherry"]; keybindings=collect('a':'c'), charset=:ascii)
 @test simulate_input(radio_menu, 'b') == 2
+
+radio_menu = RadioMenu(string.(1:3); charset=:ascii)
+@test simulate_input(radio_menu, '\x03') == -1
+
+radio_menu = RadioMenu(string.(1:3); charset=:ascii, ctrl_c_interrupt=true)
+@test_throws InterruptException simulate_input(radio_menu, '\x03')
