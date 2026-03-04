@@ -66,6 +66,8 @@ end
     for platform in platforms
         @test platform_name(P("x86_64", platform)) == platform
     end
+    # `validate_strict=false` with unrecognized OS/arch
+    @test platform_name(Platform("x86", "winnt")) == "winnt"
 
     # Test `arch()`
     arch_names = ("x86_64", "i686", "powerpc64le", "armv7l", "armv6l", "aarch64")
@@ -420,4 +422,22 @@ end
     @test !platforms_match(ac, bc)
     @test platforms_match(ac, ac)
     @test platforms_match(bc, bc)
+end
+
+@testset "Platform printing" begin
+    # No additional tags
+    p = Platform("x86_64", "Windows")
+    @test sprint(show, p) == "Platform(\"x86_64\", \"windows\")"
+    @test sprint(show, MIME("text/plain"), p) == "Windows x86_64"
+    # One additional tag
+    p = Platform("aarch64", "freebsd"; os_version="14.3")
+    @test sprint(show, p) == "Platform(\"aarch64\", \"freebsd\"; os_version=\"14.3.0\")"
+    @test sprint(show, MIME("text/plain"), p) == "FreeBSD aarch64 {os_version=14.3.0}"
+    # Multiple tags; ensure they appear in sorted order for consistency/stability
+    p = Platform("armv7l", "linux"; libc="musl", libgfortran_version=v"3", cxxstring_abi="cxx11")
+    @test sprint(show, p) == "Platform(\"armv7l\", \"linux\"; call_abi=\"eabihf\", cxxstring_abi=\"cxx11\", libc=\"musl\", libgfortran_version=\"3.0.0\")"
+    @test sprint(show, MIME("text/plain"), p) == "Linux armv7l {call_abi=eabihf, cxxstring_abi=cxx11, libc=musl, libgfortran_version=3.0.0}"
+    # Unrecognized OS without strict validation
+    weirdos = Platform("x86", "winnt")
+    @test sprint(show, MIME("text/plain"), weirdos) == "winnt x86"
 end
