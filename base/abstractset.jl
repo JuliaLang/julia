@@ -581,17 +581,6 @@ function isdisjoint(a, b)
     _isdisjoint(a, b)
 end
 
-function isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T
-    (isempty(a) || isempty(b)) && return true
-    fa, la = extrema(a)
-    fb, lb = extrema(b)
-    if (la < fb) | (lb < fa)
-        return true
-    else
-        return _overlapping_range_isdisjoint(a, b)
-    end
-end
-
 """
     isdisjoint(x)
 
@@ -604,16 +593,6 @@ used to implement specialized methods.
     This functionality requires at least Julia 1.11.
 """
 isdisjoint(a) = Fix2(isdisjoint, a)
-
-_overlapping_range_isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T = invoke(isdisjoint, Tuple{Any,Any}, a, b)
-
-function _overlapping_range_isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T<:Integer
-    if abs(step(a)) == abs(step(b))
-        return mod(minimum(a), step(a)) != mod(minimum(b), step(a))
-    else
-        return invoke(isdisjoint, Tuple{Any,Any}, a, b)
-    end
-end
 
 ## partial ordering of sets by containment
 

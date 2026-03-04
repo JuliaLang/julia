@@ -1288,6 +1288,11 @@ function _findin(r::AbstractRange{<:Integer}, span::AbstractUnitRange{<:Integer}
     r isa AbstractUnitRange ? (ifirst:ilast) : (ifirst:1:ilast)
 end
 
+function isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where {T}
+    c = intersect(a, b)
+    isempty(c)
+end
+
 issubset(r::OneTo, s::OneTo) = r.stop <= s.stop
 
 issubset(r::AbstractUnitRange{<:Integer}, s::AbstractUnitRange{<:Integer}) =
