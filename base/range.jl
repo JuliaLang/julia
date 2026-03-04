@@ -392,6 +392,8 @@ steprange_last_empty(start, step, stop) = stop
 StepRange{T}(start, step::S, stop) where {T,S} = StepRange{T,S}(start, step, stop)
 StepRange(start::T, step::S, stop::T) where {T,S} = StepRange{T,S}(start, step, stop)
 
+RangeStepStyle(::Type{<:StepRange{<:Any,<:Integer}}) = RangeStepRegular()
+
 """
     UnitRange{T<:Real}
 
@@ -534,6 +536,8 @@ StepRangeLen(ref::R, step::S, len::Integer, offset::Integer = 1) where {R,S} =
     StepRangeLen{typeof(ref+zero(step)),R,S,promote_type(Int,typeof(len))}(ref, step, len, offset)
 StepRangeLen{T}(ref::R, step::S, len::Integer, offset::Integer = 1) where {T,R,S} =
     StepRangeLen{T,R,S,promote_type(Int,typeof(len))}(ref, step, len, offset)
+
+RangeStepStyle(::Type{<:StepRangeLen{<:Any,<:Any,<:Integer}}) = RangeStepRegular()
 
 ## range with computed step
 

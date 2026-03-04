@@ -2860,3 +2860,12 @@ const EXAMPLE_RANGES = AbstractRange[
         @test try cmp(a, b) catch e; e end == try cmp(collect(a), collect(b)) catch e; e end
     end
 end
+
+@testset "Char ranges are regular" begin
+    r = 'a':'z'
+    r2 = 'α':2:'ω'
+    r3 = StepRangeLen('a',3,10)
+    @test Base.RangeStepStyle(r) === Base.RangeStepRegular()
+    @test Base.RangeStepStyle(r2) === Base.RangeStepRegular()
+    @test Base.RangeStepStyle(r3) === Base.RangeStepRegular()
+end
