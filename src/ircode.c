@@ -1239,7 +1239,10 @@ JL_DLLEXPORT uint8_t jl_ir_flag_has_image_globalref(jl_string_t *data)
 {
     if (jl_is_code_info(data))
         return ((jl_code_info_t*)data)->has_image_globalref;
-    assert(jl_is_string(data));
+    if (!jl_is_string(data)) {
+        // foreign CodeInstance with custom source/IR, doesn't track GlobalRef edges
+        return 0;
+    }
     jl_code_info_flags_t flags;
     flags.packed = jl_string_data(data)[ir_offset_flags];
     return flags.bits.has_image_globalref;
