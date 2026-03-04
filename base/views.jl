@@ -332,3 +332,20 @@ julia> A
 macro views(x)
     esc(_views(replace_ref_begin_end!(__module__, x)))
 end
+
+function Iterators.take(xs::AbstractVector, n::Integer)
+    n = Int(n)::Int
+    Iterators.Take(xs, n)  # error handling
+    f = firstindex(xs)
+    l = lastindex(xs)
+    ran = f:min(l, f + n - 1)
+    view(xs, ran)
+end
+function Iterators.drop(xs::AbstractVector, n::Integer)
+    n = Int(n)::Int
+    Iterators.Drop(xs, n)  # error handling
+    f = firstindex(xs)
+    l = lastindex(xs)
+    ran = (f + n):l
+    view(xs, ran)
+end
