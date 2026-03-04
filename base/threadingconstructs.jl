@@ -183,7 +183,7 @@ function threading_run(fun, static)
                 # TODO: this should be the current pool (except interactive) if there
                 # are ever more than two pools.
                 _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default))
-                @assert _result == 1
+                @assert _result == 1 "_result != 1"
             end
             tasks[i] = t
             schedule(t)
@@ -444,7 +444,7 @@ function _spawn_set_thrpool(t::Task, tp::Symbol)
         tpid = _sym_to_tpid(:default)
     end
     _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, tpid)
-    @assert _result == 1
+    @assert _result == 1 "_result != 1"
     nothing
 end
 

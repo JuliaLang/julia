@@ -229,7 +229,7 @@ function writeshortest(buf::AbstractVector{UInt8}, pos, x::T,
                        plus=false, space=false, hash=true,
                        precision=-1, expchar=UInt8('e'), padexp=false, decchar=UInt8('.'),
                        typed=false, compact=false) where {T}
-    @assert 0 < pos <= length(buf)
+    @assert 0 < pos <= length(buf) "invalid pos"
     # special cases
     if x == 0
         if typed && x isa Float16

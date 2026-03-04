@@ -494,7 +494,7 @@ function copyuntil(out::IOBuffer, s::IOStream, delim::UInt8; keep::Bool=false)
         (eof(s) || len == out.maxsize) && break
         len = min(2len + 64, out.maxsize)
         ensureroom(out, len)
-        @assert length(out.data) >= len
+        @assert length(out.data) >= len "length(out.data) < len"
     end
     return out
 end

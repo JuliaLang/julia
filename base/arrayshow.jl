@@ -183,7 +183,7 @@ function _print_matrix(io, @nospecialize(X::AbstractVecOrMat), pre, sep, post, h
     screenwidth -= length(pre)::Int + length(post)::Int
     presp = repeat(" ", length(pre)::Int)  # indent each row to match pre string
     postsp = ""
-    @assert textwidth(hdots) == textwidth(ddots)
+    @assert textwidth(hdots) == textwidth(ddots) "hdots and ddots must have same textwidth"
     sepsize = length(sep)::Int
     m, n = length(rowsA), length(colsA)
     # To figure out alignments, only need to look at as many rows as could
@@ -414,7 +414,7 @@ _show_nonempty(io::IO, X::AbstractMatrix, prefix::String) =
     _show_nonempty(io, inferencebarrier(X), prefix, false, axes(X))
 
 function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String, drop_brackets::Bool, axs::Tuple{AbstractUnitRange,AbstractUnitRange})
-    @assert !isempty(X)
+    @assert !isempty(X) "X should be non-empty"
     limit = get(io, :limit, false)::Bool
     indr, indc = axs
     nr, nc = length(indr), length(indc)
