@@ -26,7 +26,7 @@ function replace_ref_begin_end_!(__module__::Module, ex, withex, in_quote_contex
         return ex
     end
     function handle_refexpr!(__module__::Module, ref_ex::Expr, main_ex::Expr, withex, in_quote_context, escs::Int)
-        @assert !in_quote_context
+        @assert !in_quote_context "handle_refexpr! should not be called in quote context"
         local used_withex
         ref_ex.args[1], used_withex = replace_ref_begin_end_!(__module__, ref_ex.args[1], withex, in_quote_context, escs)
         S = gensym(:S) # temp var to cache ex.args[1] if needed. if S is a global or expression, then it has side effects to use
