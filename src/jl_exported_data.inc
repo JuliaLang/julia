@@ -108,6 +108,8 @@
     XX(pinode_type, jl_datatype_t*) \
     XX(pointer_type, jl_unionall_t*) \
     XX(pointer_typename, jl_typename_t*) \
+    XX(taggedpointer_type, jl_unionall_t*) \
+    XX(taggedpointer_typename, jl_typename_t*) \
     XX(precompilable_error, jl_value_t*) \
     XX(quotenode_type, jl_datatype_t*) \
     XX(readonlymemory_exception, jl_value_t*) \

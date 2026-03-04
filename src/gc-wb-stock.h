@@ -37,7 +37,7 @@ STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_
         return; // ptr is old and not in remset (thus it does not point to young)
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(ptr);
     const jl_datatype_layout_t *ly = dt->layout;
-    if (ly->npointers)
+    if (ly->npointers || ly->ntaggedptrs)
         jl_gc_queue_multiroot((jl_value_t*)parent, ptr, dt);
 }
 

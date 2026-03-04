@@ -696,6 +696,12 @@ function serialize(s::AbstractSerializer, x::Core.IntrinsicFunction)
     serialize(s, nameof(x))
 end
 
+function serialize(s::AbstractSerializer, x::ImmediateOrRef)
+    serialize_type(s, typeof(x))
+    write(s.io, Base.getrawvalue(x))
+    nothing
+end
+
 function serialize_any(s::AbstractSerializer, @nospecialize(x))
     tag = sertag(x)
     if tag > 0
@@ -1447,6 +1453,10 @@ function deserialize(s::AbstractSerializer, X::Type{MemoryRef{T}} where T)
     i = deserialize(s)::Int
     i == 2 || (x = Core.memoryrefnew(x, i, true))
     return x::X
+end
+
+function deserialize(s::AbstractSerializer, X::Type{ImmediateOrRef{T}}) where T
+    Base._taggedptr_from_raw(X, read(s.io, UInt))
 end
 
 function deserialize(s::AbstractSerializer, X::Type{Core.AddrSpace{M}} where M)

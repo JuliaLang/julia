@@ -529,6 +529,14 @@ static jl_value_t *get_replaceable_field(jl_value_t **addr, int mutabl) JL_GC_DI
     return fld;
 }
 
+static jl_value_t *get_taggedptr_field(uintptr_t *addr) JL_NOTSAFEPOINT
+{
+    uintptr_t raw = *addr;
+    if (!jl_taggedptr_is_reference(raw))
+        return NULL;
+    return (jl_value_t*)raw;
+}
+
 static uintptr_t jl_fptr_id(void *fptr)
 {
     void **pbp = ptrhash_bp(&fptr_to_id, fptr);
@@ -834,7 +842,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     if (immediate) // must be things that can be recursively handled, and valid as type parameters
         assert(jl_is_immutable(t) || jl_is_typevar(v) || jl_is_symbol(v) || jl_is_svec(v));
 
-    if (layout->npointers == 0) {
+    if (layout->npointers == 0 && layout->ntaggedptrs == 0) {
         // bitstypes do not require recursion
     }
     else if (jl_is_svec(v)) {
@@ -922,6 +930,17 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[ptr], mutabl);
             jl_queue_for_serialization_(s, fld, 1, immediate);
         }
+        size_t nt = layout->ntaggedptrs;
+        fldidx = 1;
+        for (i = 0; i < nt; i++) {
+            uint32_t ptr = jl_taggedptr_offset(t, i);
+            size_t offset = ptr * sizeof(uintptr_t);
+            while (offset >= (fldidx == layout->nfields ? jl_datatype_size(t) : jl_field_offset(t, fldidx)))
+                fldidx++;
+            jl_value_t *fld = get_taggedptr_field(&((uintptr_t*)data)[ptr]);
+            if (fld != NULL)
+                jl_queue_for_serialization_(s, fld, 1, immediate);
+        }
     }
 
 done_fields: ;
@@ -955,6 +974,15 @@ done_fields: ;
             int mutabl = 1;
             jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[ptr], mutabl);
             jl_queue_for_serialization_(s, fld, 1, immediate);
+        }
+        size_t nt = layout->ntaggedptrs;
+        for (i = 0; i < nt; i++) {
+            uint32_t ptr = jl_taggedptr_offset(t, i);
+            if (ptr * sizeof(uintptr_t) == offsetof(jl_datatype_t, super))
+                continue;
+            jl_value_t *fld = get_taggedptr_field(&((uintptr_t*)data)[ptr]);
+            if (fld != NULL)
+                jl_queue_for_serialization_(s, fld, 1, immediate);
         }
     }
 }
@@ -1353,7 +1381,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
         int mutabl = t->name->mutabl;
         ios_t *f = s->s;
         if (t->smalltag) {
-            if (t->layout->npointers == 0 || t == jl_string_type) {
+            if ((t->layout->npointers == 0 && t->layout->ntaggedptrs == 0) || t == jl_string_type) {
                 if (jl_datatype_nfields(t) == 0 || mutabl == 0 || t == jl_string_type) {
                     f = s->const_data;
                 }
@@ -1573,7 +1601,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
         }
         else if (jl_datatype_nfields(t) == 0) {
             // The object has no fields, so we just snapshot its byte representation
-            assert(t->layout->npointers == 0);
+            assert(t->layout->npointers == 0 && t->layout->ntaggedptrs == 0);
             ios_write(f, (char*)v, jl_datatype_size(t));
         }
         else if (jl_bigint_type && jl_typetagis(v, jl_bigint_type)) {
@@ -1634,6 +1662,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             }
 
             size_t np = t->layout->npointers;
+            size_t nt = t->layout->ntaggedptrs;
             size_t fldidx = 1;
             for (i = 0; i < np; i++) {
                 size_t offset = jl_ptr_offset(t, i) * sizeof(jl_value_t*);
@@ -1648,6 +1677,20 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     record_uniquing(s, fld, fld_pos);
                 }
                 memset(&f->buf[fld_pos], 0, sizeof(fld)); // relocation offset (none)
+            }
+            fldidx = 1;
+            for (i = 0; i < nt; i++) {
+                size_t offset = jl_taggedptr_offset(t, i) * sizeof(uintptr_t);
+                while (offset >= (fldidx == nf ? jl_datatype_size(t) : jl_field_offset(t, fldidx)))
+                    fldidx++;
+                jl_value_t *fld = get_taggedptr_field((uintptr_t*)&data[offset]);
+                if (fld != NULL) {
+                    size_t fld_pos = offset + reloc_offset;
+                    arraylist_push(&s->relocs_list, (void*)(uintptr_t)(fld_pos)); // relocation location
+                    arraylist_push(&s->relocs_list, (void*)backref_id(s, fld, s->link_ids_relocs)); // relocation target
+                    record_uniquing(s, fld, fld_pos);
+                    memset(&f->buf[fld_pos], 0, sizeof(fld)); // relocation offset (none)
+                }
             }
 
             // Need do a tricky fieldtype walk an record all memoryref we find inlined in this value
@@ -1803,6 +1846,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 if (dt->layout != NULL) {
                     size_t nf = dt->layout->nfields;
                     size_t np = dt->layout->npointers;
+                    size_t ntp = dt->layout->ntaggedptrs;
                     size_t fieldsize = 0;
                     uint8_t is_foreign_type = dt->layout->flags.fielddesc_type == 3;
                     if (!is_foreign_type) {
@@ -1812,6 +1856,8 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     size_t fldsize = sizeof(jl_datatype_layout_t) + nf * fieldsize;
                     if (!is_foreign_type && dt->layout->first_ptr != -1)
                         fldsize += np << dt->layout->flags.fielddesc_type;
+                    if (!is_foreign_type)
+                        fldsize += ntp << dt->layout->flags.fielddesc_type;
                     uintptr_t layout = LLT_ALIGN(ios_pos(s->const_data), sizeof(void*));
                     write_padding(s->const_data, layout - ios_pos(s->const_data)); // realign stream
                     newdt->layout = NULL; // relocation offset
@@ -2906,6 +2952,14 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                 for (j = 0; j < np; j++) {
                     uint32_t ptr = jl_ptr_offset(rty, j);
                     record_field_change((jl_value_t**)fldaddr + ptr, *(((jl_value_t**)newval) + ptr));
+                }
+                size_t nt = layout->ntaggedptrs;
+                for (j = 0; j < nt; j++) {
+                    uint32_t ptr = jl_taggedptr_offset(rty, j);
+                    uintptr_t raw = ((uintptr_t*)newval)[ptr];
+                    if (jl_taggedptr_is_reference(raw)) {
+                        record_field_change((jl_value_t**)fldaddr + ptr, (jl_value_t*)raw);
+                    }
                 }
             }
         }
