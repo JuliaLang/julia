@@ -339,7 +339,7 @@ Multiple conditions are taken as signifying truecolor support, specifically any 
 - The VTE version is at least 3600 (detected via the `VTE_VERSION` environment variable)
 - The current terminal has the `XTERM_VERSION` environment variable set
 - The current terminal appears to be iTerm according to the `TERMINAL_PROGRAM` environment variable
-- The `TERM` environment variable corresponds to: linuxvt, rxvt, or st
+- The `TERM` environment variable corresponds to: linuxvt or st
 
 [^1]: Added to Ncurses 6.1, and used in `TERM=*-direct` terminfos.
 [^2]: Convention [added to tmux in 2016](https://github.com/tmux/tmux/commit/427b8204268af5548d09b830e101c59daa095df9),
@@ -371,7 +371,6 @@ function ttyhastruecolor()
         haskey(ENV, "KONSOLE_DBUS_SESSION") ||
         let term = get(ENV, "TERM", "")
             startswith(term, "linux") || # Linux 4.8+ supports true-colour SGR.
-                startswith(term, "rxvt") || # See <http://lists.schmorp.de/pipermail/rxvt-unicode/2016q2/002261.html>
                 startswith(term, "st") # From experimentation
         end
 end
