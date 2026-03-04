@@ -5,6 +5,8 @@ using Unicode
 using Unicode: normalize, isassigned, julia_chartransform
 import Random
 
+@test isempty(Test.detect_closure_boxes(Unicode))
+
 Random.seed!(12345)
 
 @testset "string normalization" begin
@@ -535,6 +537,11 @@ isequal_normalized_naive(s1, s2; kws...) = normalize(s1; kws...) == normalize(s2
         # combining characters in the same class are inequivalent if re-ordered:
         @test !isequal_normalized("x\u0334\u0335", "x\u0335\u0334")
     end
+end
+
+@testset "combining_class" begin
+    @test Unicode.combining_class('\u0302') === 0x00e6 # combining class "Above"
+    @test Unicode.combining_class(reinterpret(Char, UInt32(0xc0) << 24)) === 0x0000 # malformed
 end
 
 @testset "Docstrings" begin

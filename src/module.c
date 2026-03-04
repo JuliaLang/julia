@@ -12,9 +12,6 @@
 extern "C" {
 #endif
 
-// In this translation unit and this translation unit only emit this symbol `extern` for use by julia
-EXTERN_INLINE_DEFINE uint8_t jl_bpart_get_kind(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT;
-
 static jl_binding_partition_t *new_binding_partition(void)
 {
     jl_binding_partition_t *bpart = (jl_binding_partition_t*)jl_gc_alloc(jl_current_task->ptls, sizeof(jl_binding_partition_t), jl_binding_partition_type);
@@ -106,7 +103,6 @@ static void update_implicit_resolution(struct implicit_search_resolution *to_upd
         return;
     }
     if (to_update->ultimate_kind == PARTITION_KIND_GUARD) {
-        assert(resolution.binding_or_const);
         to_update->ultimate_kind = resolution.ultimate_kind;
         to_update->binding_or_const = resolution.binding_or_const;
         to_update->debug_only_import_from = resolution.debug_only_import_from;
@@ -329,6 +325,10 @@ struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t *b, mo
                 imp_resolution.binding_or_const = tempbpart->restriction;
                 imp_resolution.debug_only_ultimate_binding = tempb;
                 imp_resolution.ultimate_kind = PARTITION_KIND_IMPLICIT_CONST;
+            } else if (kind == PARTITION_KIND_FAILED) {
+                imp_resolution.binding_or_const = NULL;
+                imp_resolution.debug_only_ultimate_binding = tempb;
+                imp_resolution.ultimate_kind = PARTITION_KIND_FAILED;
             }
         }
         // If this using has the reexport flag, mark that the binding should be reexported
@@ -393,6 +393,8 @@ JL_DLLEXPORT void jl_update_loaded_bpart(jl_binding_t *b, jl_binding_partition_t
     jl_atomic_store_relaxed(&bpart->min_world, resolution.min_world);
     jl_atomic_store_relaxed(&bpart->max_world, resolution.max_world);
     bpart->restriction = resolution.binding_or_const;
+    if (resolution.binding_or_const)
+        jl_gc_wb(bpart, resolution.binding_or_const);
     bpart->kind = resolution.ultimate_kind;
 }
 
@@ -776,6 +778,7 @@ static jl_globalref_t *jl_new_globalref(jl_module_t *mod, jl_sym_t *name, jl_bin
 {
     jl_task_t *ct = jl_current_task;
     jl_globalref_t *g = (jl_globalref_t*)jl_gc_alloc(ct->ptls, sizeof(jl_globalref_t), jl_globalref_type);
+    jl_set_typetagof(g, jl_globalref_tag, 0);
     g->mod = mod;
     jl_gc_wb_fresh(g, g->mod);
     g->name = name;
@@ -1510,6 +1513,31 @@ int jl_module_public_(jl_module_t *from, jl_sym_t *s, int exported, size_t new_w
     return 0;
 }
 
+// Declare `symbols` in module `from` public or public+exported
+JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_value_t **symbols, size_t nsymbols, int exported)
+{
+    volatile int any_new = 0;
+    JL_LOCK(&world_counter_lock);
+    size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
+    JL_TRY {
+        for (size_t i = 0; i < nsymbols; i++) {
+            jl_sym_t *name = (jl_sym_t*)symbols[i];
+            JL_TYPECHK(jl_module_public, symbol, (jl_value_t*)name);
+            if (jl_module_public_(from, name, exported, new_world))
+                any_new = 1;
+        }
+    }
+    JL_CATCH {
+        if (any_new)
+            jl_atomic_store_release(&jl_world_counter, new_world);
+        JL_UNLOCK(&world_counter_lock);
+        jl_rethrow();
+    }
+    if (any_new)
+        jl_atomic_store_release(&jl_world_counter, new_world);
+    JL_UNLOCK(&world_counter_lock);
+}
+
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var, int allow_import) // unlike most queries here, this is currently seq_cst
 {
     jl_binding_t *b = jl_get_module_binding(m, var, allow_import);
@@ -1767,6 +1795,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
             new_bpart->kind |= PARTITION_FLAG_IMPLICITLY_EXPORTED;
         }
         new_bpart->restriction = resolution.binding_or_const;
+        jl_gc_wb_fresh(new_bpart, resolution.binding_or_const);
         assert(resolution.min_world <= new_world && resolution.max_world == ~(size_t)0);
         if (new_bpart->kind == old_bpart->kind && new_bpart->restriction == old_bpart->restriction) {
             JL_GC_POP();

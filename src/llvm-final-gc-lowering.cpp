@@ -7,7 +7,6 @@ STATISTIC(NewGCFrameCount, "Number of lowered newGCFrameFunc intrinsics");
 STATISTIC(PushGCFrameCount, "Number of lowered pushGCFrameFunc intrinsics");
 STATISTIC(PopGCFrameCount, "Number of lowered popGCFrameFunc intrinsics");
 STATISTIC(GetGCFrameSlotCount, "Number of lowered getGCFrameSlotFunc intrinsics");
-STATISTIC(GCAllocBytesCount, "Number of lowered GCAllocBytesFunc intrinsics");
 STATISTIC(QueueGCRootCount, "Number of lowered queueGCRootFunc intrinsics");
 STATISTIC(SafepointCount, "Number of lowered safepoint intrinsics");
 
@@ -117,51 +116,6 @@ void FinalLowerGC::lowerSafepoint(CallInst *target, Function &F)
     target->eraseFromParent();
 }
 
-void FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
-{
-    ++GCAllocBytesCount;
-    assert(target->arg_size() == 3);
-    CallInst *newI;
-
-    IRBuilder<> builder(target);
-    auto ptls = target->getArgOperand(0);
-    auto type = target->getArgOperand(2);
-    uint64_t derefBytes = 0;
-    if (auto CI = dyn_cast<ConstantInt>(target->getArgOperand(1))) {
-        size_t sz = (size_t)CI->getZExtValue();
-        // This is strongly architecture and OS dependent
-        int osize;
-        int offset = jl_gc_classify_pools(sz, &osize);
-        if (offset < 0) {
-            newI = builder.CreateCall(
-                bigAllocFunc,
-                { ptls, ConstantInt::get(T_size, sz + sizeof(void*)), type });
-            if (sz > 0)
-                derefBytes = sz;
-        }
-        else {
-            auto pool_offs = ConstantInt::get(Type::getInt32Ty(F.getContext()), offset);
-            auto pool_osize = ConstantInt::get(Type::getInt32Ty(F.getContext()), osize);
-            newI = builder.CreateCall(smallAllocFunc, { ptls, pool_offs, pool_osize, type });
-            if (sz > 0)
-                derefBytes = sz;
-        }
-    } else {
-        auto size = builder.CreateZExtOrTrunc(target->getArgOperand(1), T_size);
-        // allocTypedFunc does not include the type tag in the allocation size!
-        newI = builder.CreateCall(allocTypedFunc, { ptls, size, type });
-        derefBytes = sizeof(void*);
-    }
-    newI->setAttributes(newI->getCalledFunction()->getAttributes());
-    unsigned align = std::max((unsigned)target->getRetAlign().valueOrOne().value(), (unsigned)sizeof(void*));
-    newI->addRetAttr(Attribute::getWithAlignment(F.getContext(), Align(align)));
-    if (derefBytes > 0)
-        newI->addDereferenceableRetAttr(derefBytes);
-    newI->takeName(target);
-    target->replaceAllUsesWith(newI);
-    target->eraseFromParent();
-}
-
 static bool hasUse(const JuliaPassContext &ctx, const jl_intrinsics::IntrinsicDescription &v)
 {
     auto Intr = ctx.getOrNull(v);
@@ -178,6 +132,7 @@ bool FinalLowerGC::shouldRunFinalGC()
     should_run |= hasUse(*this, jl_intrinsics::GCAllocBytes);
     should_run |= hasUse(*this, jl_intrinsics::queueGCRoot);
     should_run |= hasUse(*this, jl_intrinsics::safepoint);
+    should_run |= (write_barrier_func && !write_barrier_func->use_empty());
     return should_run;
 }
 
@@ -185,6 +140,11 @@ bool FinalLowerGC::runOnFunction(Function &F)
 {
     initAll(*F.getParent());
     pgcstack = getPGCstack(F);
+
+    auto gc_alloc_bytes = getOrNull(jl_intrinsics::GCAllocBytes);
+    SmallVector<CallInst*, 0> write_barriers;
+    SmallVector<CallInst*, 0> alloc_bytes;
+
     if (!pgcstack || !shouldRunFinalGC())
         goto verify_skip;
 
@@ -194,6 +154,51 @@ bool FinalLowerGC::runOnFunction(Function &F)
     bigAllocFunc = getOrDeclare(jl_well_known::GCBigAlloc);
     allocTypedFunc = getOrDeclare(jl_well_known::GCAllocTyped);
     T_size = F.getParent()->getDataLayout().getIntPtrType(F.getContext());
+
+
+    // The replacement for these may require creating new BasicBlocks
+    // So we process them separately
+    for (auto &BB : F) {
+        for (auto it = BB.begin(); it != BB.end();) {
+            auto *CI = dyn_cast<CallInst>(&*it);
+            if (!CI) {
+                ++it;
+                continue;
+            }
+            Value *callee = CI->getCalledOperand();
+
+            if (write_barrier_func && callee == write_barrier_func) {
+                assert(CI->arg_size() >= 1);
+                write_barriers.push_back(CI);
+            }
+            if (gc_alloc_bytes && callee == gc_alloc_bytes) {
+                assert(CI->arg_size() >= 1);
+                alloc_bytes.push_back(CI);
+            }
+
+            ++it;
+        }
+    }
+
+    if (gc_alloc_bytes) {
+        for (auto CI : alloc_bytes ) {
+            auto newI = lowerGCAllocBytes(CI, F);
+            if (newI != CI) {
+                CI->replaceAllUsesWith(newI);
+                CI->eraseFromParent();
+                continue;
+            }
+        }
+    }
+
+    // Write barriers should always be processed beforehand
+    // since they may insert julia.queue_gc_root intrinsics
+    if(write_barrier_func) {
+        for (auto CI : write_barriers) {
+            lowerWriteBarrier(CI, F);
+            CI->eraseFromParent();
+        }
+    }
 
     // Lower all calls to supported intrinsics.
     for (auto &BB : F) {
@@ -217,7 +222,6 @@ bool FinalLowerGC::runOnFunction(Function &F)
             LOWER_INTRINSIC(getGCFrameSlot, lowerGetGCFrameSlot);
             LOWER_INTRINSIC(pushGCFrame, lowerPushGCFrame);
             LOWER_INTRINSIC(popGCFrame, lowerPopGCFrame);
-            LOWER_INTRINSIC(GCAllocBytes, lowerGCAllocBytes);
             LOWER_INTRINSIC(queueGCRoot, lowerQueueGCRoot);
             LOWER_INTRINSIC(safepoint, lowerSafepoint);
 
@@ -236,6 +240,12 @@ bool FinalLowerGC::runOnFunction(Function &F)
 
             Value *callee = CI->getCalledOperand();
             assert(callee);
+            if (write_barrier_func == callee) {
+                errs() << "Final-GC-lowering didn't eliminate all write barriers from '" << F.getName() << "', dumping entire module!\n\n";
+                errs() << *F.getParent() << "\n";
+                abort();
+            }
+
             auto IS_INTRINSIC = [&](auto intrinsic) {
                 auto intrinsic2 = getOrNull(intrinsic);
                 if (intrinsic2 == callee) {

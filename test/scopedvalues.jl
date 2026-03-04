@@ -225,3 +225,63 @@ end
     end
     sf2()
 end
+
+using Base.ScopedValues: ScopedValue, with
+@noinline function test_59483()
+    sv = ScopedValue([])
+    ch = Channel{Bool}()
+
+    # Spawn a child task, which inherits the parent's Scope
+    @noinline function inner_function()
+        # Block until the parent task has left the scope.
+        take!(ch)
+        # Now, per issue 59483, this task's scope is not rooted, except by the task itself.
+
+        # Now switch to an inner scope, leaving the current scope possibly unrooted.
+        val = with(sv=>Any[2]) do
+            # Inside this new scope, when we perform GC, the parent scope can be freed.
+            # The fix for this issue made sure that the first scope in this task remains
+            # rooted.
+            GC.gc()
+            GC.gc()
+            sv[]
+        end
+        @test val == Any[2]
+        # Finally, we've returned to the original scope, but that could be a dangling
+        # pointer if the scope itself was freed by the above GCs. So these GCs could crash:
+        GC.gc()
+        GC.gc()
+    end
+    @noinline function spawn_inner()
+        # Set a new Scope in the parent task - this is the scope that could be freed.
+        with(sv=>Any[1]) do
+            return @async inner_function()
+        end
+    end
+
+    # RUN THE TEST:
+    t = spawn_inner()
+    # Exit the scope, and let the child task proceed
+    put!(ch, true)
+    wait(t)
+end
+@testset "issue 59483" begin
+    test_59483()
+end
+
+# issue #53584 - ScopedValue should not allocate when accessed
+const sv_53584 = ScopedValue([0])
+@noinline function access_scoped_53584()
+    v = sv_53584[]
+    v[1] += 1
+    return nothing
+end
+function run_53584()
+    @with sv_53584=>[0] for _ in 1:100_000
+        access_scoped_53584()
+    end
+end
+@testset "issue #53584" begin
+    run_53584() # warmup
+    @test (@allocated run_53584()) < 10_000
+end

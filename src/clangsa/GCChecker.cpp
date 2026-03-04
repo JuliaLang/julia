@@ -179,6 +179,8 @@ public:
 private:
   template <typename callback>
   static bool isJuliaType(callback f, QualType QT) {
+    if (QT->isReferenceType())
+      return isJuliaType(f, QT->getPointeeType().getUnqualifiedType());
     if (QT->isPointerType() || QT->isArrayType())
       return isJuliaType(
           f, clang::QualType(QT->getPointeeOrArrayElementType(), 0));
@@ -390,12 +392,12 @@ PDP GCChecker::SafepointBugVisitor::VisitNode(const ExplodedNode *N,
     if (OldSafepointDisabled == (unsigned)-1) {
       if (Ann) {
         Pos = PathDiagnosticLocation{Ann->getLoc(), BRC.getSourceManager()};
-        return MakePDP(Pos, "Tracking JL_NOT_SAFEPOINT annotation here.");
+        return MakePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
       } else {
         PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
             N->getLocationContext(), BRC.getSourceManager());
         if (Pos.isValid())
-          return MakePDP(Pos, "Tracking JL_NOT_SAFEPOINT annotation here.");
+          return MakePDP(Pos, "Tracking JL_NOTSAFEPOINT annotation here.");
         //N->getLocation().dump();
       }
     } else if (NewSafepointDisabled == (unsigned)-1) {
@@ -857,7 +859,9 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.ends_with_insensitive("jl_stenv_t") ||
                    Name.ends_with_insensitive("jl_varbinding_t") ||
                    Name.ends_with_insensitive("set_world") ||
-                   Name.ends_with_insensitive("jl_codectx_t")) {
+                   Name.ends_with_insensitive("jl_codectx_t") ||
+                   Name.ends_with_insensitive("jl_codegen_params_t") ||
+                   Name.ends_with_insensitive("egal_set")) {
                  return true;
                }
                return false;
@@ -919,7 +923,7 @@ bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
         // A pseudo-destructor is an expression that looks like a member
         // access to a destructor of a scalar type. A pseudo-destructor
         // expression has no run-time semantics beyond evaluating the base
-        // expression (which would have it's own CallEvent, if applicable).
+        // expression (which would have its own CallEvent, if applicable).
         isCalleeSafepoint = false;
       }
     } else if (FD) {
@@ -1421,10 +1425,8 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
   // These checks should have no effect on the surrounding environment
   // (globals should not be invalidated, etc), hence the use of evalCall.
   const CallExpr *CE = dyn_cast<CallExpr>(Call.getOriginExpr());
-  if (!CE)
-    return false;
   unsigned CurrentDepth = C.getState()->get<GCDepth>();
-  auto name = C.getCalleeName(CE);
+  auto name = CE ? C.getCalleeName(CE) : "";
   if (name == "JL_GC_POP") {
     if (CurrentDepth == 0) {
       report_error(C, "JL_GC_POP without corresponding push");
@@ -1717,7 +1719,7 @@ void GCChecker::checkLocation(SVal SLoc, bool IsLoad, const Stmt *S,
       }
     }
   }
-  // If it's just the symbol by itself, let it be. We allow dead pointer to be
+  // If it's just the symbol by itself, let it be. We allow dead pointers to be
   // passed around, so long as they're not accessed. However, we do want to
   // start tracking any globals that may have been accessed.
   if (rootRegionIfGlobal(SLoc.getAsRegion(), State, C)) {

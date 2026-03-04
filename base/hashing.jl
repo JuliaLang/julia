@@ -35,7 +35,7 @@ julia> hash(10, a) # only use the output of another hash function as the second 
 0x03158cd61b1b0bd1
 ```
 
-See also: [`objectid`](@ref), [`Dict`](@ref), [`Set`](@ref).
+See also [`objectid`](@ref), [`Dict`](@ref), [`Set`](@ref).
 """
 hash(data::Any) = hash(data, HASH_SEED)
 hash(w::WeakRef, h::UInt) = hash(w.value, h)

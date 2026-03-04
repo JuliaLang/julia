@@ -144,10 +144,10 @@ For more information see [`@code_lowered`](@ref), [`@code_typed`](@ref), [`@code
 The aforementioned functions and macros take the keyword argument `debuginfo` that controls the level
 of debug information printed.
 
-```jldoctest; setup = :(using InteractiveUtils), filter = r"int.jl:\d+"
+```jldoctest; setup = :(using InteractiveUtils), filter = r"\w+\.jl:\d+"
 julia> InteractiveUtils.@code_typed debuginfo=:source +(1,1)
 CodeInfo(
-    @ int.jl:87 within `+`
+    @ essentials.jl:1190 within `+`
 1 ─ %1 = intrinsic Base.add_int(x, y)::Int64
 └──      return %1
 ) => Int64

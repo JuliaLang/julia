@@ -16,7 +16,7 @@ module MacroMethods
 end
 
 macro strmac_str(ex, suff=nothing)
-    s = "$(ex[1].value) from strmac"
+    s = "$(ex.value) from strmac"
     if !isnothing(suff)
         s = "$s with suffix $(suff.value)"
     end
@@ -24,7 +24,7 @@ macro strmac_str(ex, suff=nothing)
 end
 
 macro cmdmac_cmd(ex, suff=nothing)
-    s = "$(ex[1].value) from cmdmac"
+    s = "$(ex.value) from cmdmac"
     if !isnothing(suff)
         s = "$s with suffix $(suff.value)"
     end
@@ -51,7 +51,7 @@ end
 9   --- method core.nothing %₈
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/ex]
     1   (call core.tuple slot₃/ex)
-    2   (call JuliaLowering.interpolate_ast SyntaxTree (inert (block (call-i ($ ex) + 1))) %₁)
+    2   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (block (call-i + ($ ex) 1))) %₁)
     3   (return %₂)
 10  latestworld
 11  TestMod.@add_one
@@ -72,7 +72,7 @@ end
 7   SourceLocation::1:7
 8   (call core.svec %₅ %₆ %₇)
 9   --- method core.nothing %₈
-    slots: [slot₁/#self#(!read) slot₂/__context__ slot₃/ex(!read) slot₄/ctx(!read)]
+    slots: [slot₁/#self#(!read) slot₂/__context__ slot₃/ex(!read) slot₄/ctx(!read,single_assign)]
     1   slot₂/__context__
     2   (= slot₄/ctx %₁)
     3   (return %₁)
@@ -98,7 +98,7 @@ end
 #---------------------
 LoweringError:
 macro mmm(a; b=2)
-#          └───┘ ── macros cannot accept keyword arguments
+#         ╙ ── macros cannot accept keyword arguments
 end
 
 ########################################
@@ -138,7 +138,7 @@ function f()
 #   ┌──────────
     macro foo()
     end
-#─────┘ ── macro is only allowed in global scope
+#─────┘ ── this syntax is only allowed at top level
 end
 
 ########################################
@@ -147,7 +147,7 @@ _never_exist = @m_not_exist 42
 #---------------------
 MacroExpansionError while expanding @m_not_exist in module Main.TestMod:
 _never_exist = @m_not_exist 42
-#               └─────────┘ ── Macro not found
+#              └──────────┘ ── Macro not found
 Caused by:
 UndefVarError: `@m_not_exist` not defined in `Main.TestMod`
 Suggestion: check for spelling errors or missing imports.
@@ -208,3 +208,82 @@ end
 10  latestworld
 11  TestMod.foo
 12  (return %₁₁)
+
+########################################
+# @nospecialize (single arg in body)
+function foo(a, b)
+    @nospecialize a
+    a + b
+end
+#---------------------
+1   (method TestMod.foo)
+2   latestworld
+3   TestMod.foo
+4   (call core.Typeof %₃)
+5   (call core.svec %₄ core.Any core.Any)
+6   (call core.svec)
+7   SourceLocation::1:10
+8   (call core.svec %₅ %₆ %₇)
+9   --- method core.nothing %₈
+    slots: [slot₁/#self#(!read) slot₂/a(nospecialize) slot₃/b]
+    1   slot₂/a
+    2   TestMod.+
+    3   (call %₂ slot₂/a slot₃/b)
+    4   (return %₃)
+10  latestworld
+11  TestMod.foo
+12  (return %₁₁)
+
+########################################
+# @nospecialize (multi-arg in body)
+function foo(x, y, z)
+    @nospecialize x z
+    x + y + z
+end
+#---------------------
+1   (method TestMod.foo)
+2   latestworld
+3   TestMod.foo
+4   (call core.Typeof %₃)
+5   (call core.svec %₄ core.Any core.Any core.Any)
+6   (call core.svec)
+7   SourceLocation::1:10
+8   (call core.svec %₅ %₆ %₇)
+9   --- method core.nothing %₈
+    slots: [slot₁/#self#(!read) slot₂/x(nospecialize) slot₃/y slot₄/z(nospecialize)]
+    1   slot₂/x
+    2   slot₄/z
+    3   TestMod.+
+    4   (call %₃ slot₂/x slot₃/y slot₄/z)
+    5   (return %₄)
+10  latestworld
+11  TestMod.foo
+12  (return %₁₁)
+
+########################################
+# Error: thisfunction disallowed in comprehension/generator
+[@__FUNCTION__() for x in 1:2]
+#---------------------
+LoweringError:
+[@__FUNCTION__() for x in 1:2]
+#└─────────────┘ ── current function not defined in comprehension or generator
+
+########################################
+# Error: thisfunction disallowed in comprehension/generator
+f(@__FUNCTION__() for x in 1:2)
+#---------------------
+LoweringError:
+f(@__FUNCTION__() for x in 1:2)
+# └─────────────┘ ── current function not defined in comprehension or generator
+
+########################################
+# Error: thisfunction disallowed outside of function
+let
+    @__FUNCTION__()
+end
+#---------------------
+LoweringError:
+let
+    @__FUNCTION__()
+#   └─────────────┘ ── can only be used inside a function
+end

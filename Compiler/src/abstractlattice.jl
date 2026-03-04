@@ -80,8 +80,8 @@ const AnyConditionalsLattice{𝕃<:AbstractLattice} = Union{ConditionalsLattice{
 const AnyMustAliasesLattice{𝕃<:AbstractLattice} = Union{MustAliasesLattice{𝕃}, InterMustAliasesLattice{𝕃}}
 
 const SimpleInferenceLattice = typeof(PartialsLattice(ConstsLattice()))
-const BaseInferenceLattice = typeof(ConditionalsLattice(SimpleInferenceLattice.instance))
-const IPOResultLattice = typeof(InterConditionalsLattice(SimpleInferenceLattice.instance))
+const BaseInferenceLattice = typeof(MustAliasesLattice(ConditionalsLattice(SimpleInferenceLattice.instance)))
+const IPOResultLattice = typeof(InterMustAliasesLattice(InterConditionalsLattice(SimpleInferenceLattice.instance)))
 
 """
     struct InferenceLattice{𝕃<:AbstractLattice} <: AbstractLattice
@@ -250,6 +250,10 @@ end
 end
 @nospecializeinfer function is_forwardable_argtype(𝕃::ConstsLattice, @nospecialize x)
     isa(x, Const) && return true
+    return is_forwardable_argtype(widenlattice(𝕃), x)
+end
+@nospecializeinfer function is_forwardable_argtype(𝕃::MustAliasesLattice, @nospecialize x)
+    isa(x, MustAlias) && return true
     return is_forwardable_argtype(widenlattice(𝕃), x)
 end
 @nospecializeinfer is_forwardable_argtype(::JLTypeLattice, @nospecialize x) = false

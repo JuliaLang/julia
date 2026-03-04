@@ -366,9 +366,6 @@ private:
     SmallVector<int, 1> GetPHIRefinements(PHINode *phi, State &S);
     void FixUpRefinements(ArrayRef<int> PHINumbers, State &S);
     void RefineLiveSet(LargeSparseBitVector &LS, State &S, ArrayRef<int> CalleeRoots);
-    Value *EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size, Value *V);
-    Value *EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V);
-    Value* lowerGCAllocBytesLate(CallInst *target, Function &F);
 };
 
 // The final GC lowering pass. This pass lowers platform-agnostic GC
@@ -404,7 +401,7 @@ private:
     void lowerGetGCFrameSlot(CallInst *target, Function &F);
 
     // Lowers a `julia.gc_alloc_bytes` intrinsic.
-    void lowerGCAllocBytes(CallInst *target, Function &F);
+    Value* lowerGCAllocBytes(CallInst *target, Function &F);
 
     // Lowers a `julia.queue_gc_root` intrinsic.
     void lowerQueueGCRoot(CallInst *target, Function &F);
@@ -412,8 +409,40 @@ private:
     // Lowers a `julia.safepoint` intrinsic.
     void lowerSafepoint(CallInst *target, Function &F);
 
+    // Lowers a `julia.write_barrier` function.
+    void lowerWriteBarrier(CallInst *target, Function &F);
+
     // Check if the pass should be run
     bool shouldRunFinalGC();
 };
+
+// These are used by LateLower and FinalLower
+
+// Size of T is assumed to be `sizeof(void*)`
+inline Value *EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size, Value *V)
+{
+    assert(T == T_size || isa<PointerType>(T));
+    return builder.CreateInBoundsGEP(T, V, ConstantInt::get(T_size, -1), V->getName() + ".tag_addr");
+}
+
+inline Value *EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V, llvm::MDNode *tbaa_tag)
+{
+    auto addr = EmitTagPtr(builder, T_size, T_size, V);
+    auto &M = *builder.GetInsertBlock()->getModule();
+    LoadInst *load = builder.CreateAlignedLoad(T_size, addr, M.getDataLayout().getPointerABIAlignment(0), V->getName() + ".tag");
+    load->setOrdering(AtomicOrdering::Unordered);
+    // Mark as volatile to prevent optimizers from treating GC tag loads as constants
+    // since GC mark bits can change during runtime (issue #59547)
+    load->setVolatile(true);
+    load->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
+    MDBuilder MDB(load->getContext());
+    auto *NullInt = ConstantInt::get(T_size, 0);
+    // We can be sure that the tag is at least 16 (1<<4)
+    // Hopefully this is enough to convince LLVM that the value is still not NULL
+    // after masking off the tag bits
+    auto *NonNullInt = ConstantExpr::getAdd(NullInt, ConstantInt::get(T_size, 16));
+    load->setMetadata(LLVMContext::MD_range, MDB.createRange(NonNullInt, NullInt));
+    return load;
+}
 
 #endif // LLVM_GC_PASSES_H

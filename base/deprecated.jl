@@ -540,7 +540,7 @@ end
 
 Return whether the binding of a symbol in a module is resolved.
 
-See also: [`isexported`](@ref), [`ispublic`](@ref), [`isdeprecated`](@ref)
+See also [`isexported`](@ref), [`ispublic`](@ref), [`isdeprecated`](@ref).
 
 ```jldoctest
 julia> module Mod
@@ -572,3 +572,14 @@ to_power_type(x) = oftype(x*x, x)
 @deprecate merge(combine::Callable, d::AbstractDict, others::AbstractDict...) mergewith(combine, d, others...)
 
 # end 1.13 deprecations
+
+# BEGIN 1.14 deprecations
+
+# Revise calls this
+function explicit_manifest_entry_path(args...)
+    spec = explicit_manifest_entry_load_spec(args...)
+    spec === nothing && return nothing
+    return spec.path
+end
+
+# END 1.14 deprecations

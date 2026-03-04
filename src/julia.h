@@ -688,7 +688,7 @@ typedef struct _jl_weakref_t {
 // in the new world age) from any partition kind to any other.
 //
 // However, not all transitions are allowed syntactically. We have the following rules for SYNTACTIC invalidation:
-// 1. It is always syntactically permissable to replace a weaker binding by a stronger binding
+// 1. It is always syntactically permissible to replace a weaker binding by a stronger binding
 // 2. Implicit bindings can be syntactically changed to other implicit bindings by changing the `using` set.
 // 3. Finally, we syntactically permit replacing one PARTITION_KIND_CONST(_IMPORT) by another of a different value.
 //
@@ -992,10 +992,20 @@ typedef struct {
     XX(addrspacecore) \
     XX(intrinsic) \
     /* AST objects */ \
-    /* XX(argument) */ \
+    XX(argument) \
     /* XX(newvarnode) */ \
     XX(slotnumber) \
     XX(ssavalue) \
+    XX(gotoifnot) \
+    XX(returnnode) \
+    XX(enternode) \
+    XX(pinode) \
+    XX(phinode) \
+    XX(phicnode) \
+    XX(upsilonnode) \
+    XX(globalref) \
+    XX(gotonode) \
+    XX(quotenode) \
     /* end of JL_SMALL_TYPEOF */
 enum jl_small_typeof_tags {
     jl_null_tag = 0,
@@ -1574,17 +1584,17 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_expr(v)        jl_typetagis(v,jl_expr_type)
 #define jl_is_binding(v)     jl_typetagis(v,jl_binding_type)
 #define jl_is_binding_partition(v) jl_typetagis(v,jl_binding_partition_type)
-#define jl_is_globalref(v)   jl_typetagis(v,jl_globalref_type)
-#define jl_is_gotonode(v)    jl_typetagis(v,jl_gotonode_type)
-#define jl_is_gotoifnot(v)   jl_typetagis(v,jl_gotoifnot_type)
-#define jl_is_returnnode(v)  jl_typetagis(v,jl_returnnode_type)
-#define jl_is_enternode(v)   jl_typetagis(v,jl_enternode_type)
-#define jl_is_argument(v)    jl_typetagis(v,jl_argument_type)
-#define jl_is_pinode(v)      jl_typetagis(v,jl_pinode_type)
-#define jl_is_phinode(v)     jl_typetagis(v,jl_phinode_type)
-#define jl_is_phicnode(v)    jl_typetagis(v,jl_phicnode_type)
-#define jl_is_upsilonnode(v) jl_typetagis(v,jl_upsilonnode_type)
-#define jl_is_quotenode(v)   jl_typetagis(v,jl_quotenode_type)
+#define jl_is_globalref(v)   jl_typetagis(v,jl_globalref_tag<<4)
+#define jl_is_gotonode(v)    jl_typetagis(v,jl_gotonode_tag<<4)
+#define jl_is_gotoifnot(v)   jl_typetagis(v,jl_gotoifnot_tag<<4)
+#define jl_is_returnnode(v)  jl_typetagis(v,jl_returnnode_tag<<4)
+#define jl_is_enternode(v)   jl_typetagis(v,jl_enternode_tag<<4)
+#define jl_is_argument(v)    jl_typetagis(v,jl_argument_tag<<4)
+#define jl_is_pinode(v)      jl_typetagis(v,jl_pinode_tag<<4)
+#define jl_is_phinode(v)     jl_typetagis(v,jl_phinode_tag<<4)
+#define jl_is_phicnode(v)    jl_typetagis(v,jl_phicnode_tag<<4)
+#define jl_is_upsilonnode(v) jl_typetagis(v,jl_upsilonnode_tag<<4)
+#define jl_is_quotenode(v)   jl_typetagis(v,jl_quotenode_tag<<4)
 #define jl_is_newvarnode(v)  jl_typetagis(v,jl_newvarnode_type)
 #define jl_is_linenode(v)    jl_typetagis(v,jl_linenumbernode_type)
 #define jl_is_linenumbernode(v) jl_typetagis(v,jl_linenumbernode_type)
@@ -2048,7 +2058,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b JL
 JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *asname, jl_sym_t *s, int explici);
 JL_DLLEXPORT void jl_import_module(jl_task_t *ct, jl_module_t *m, jl_module_t *import, jl_sym_t *asname);
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from, size_t flags);
-int jl_module_public_(jl_module_t *from, jl_sym_t *s, int exported, size_t new_world);
+JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_value_t **symbols, size_t nsymbols, int exported);
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s);
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var);
 
@@ -2066,6 +2076,7 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_effective_threads(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT long jl_getpagesize(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT long jl_getallocationgranularity(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT long jl_gethugepagesize(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_is_debugbuild(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void) JL_NOTSAFEPOINT;
@@ -2662,6 +2673,8 @@ typedef struct {
     int sanitize_memory;
     int sanitize_thread;
     int sanitize_address;
+
+    int unique_names;   // Emit globally unique names
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;

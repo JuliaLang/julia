@@ -154,7 +154,7 @@ end
 @static if Base.USING_STOCK_GC
 # must be kept in sync with `src/gc-stock.h``
 const FULL_SWEEP_REASONS = [:FULL_SWEEP_REASON_SWEEP_ALWAYS_FULL, :FULL_SWEEP_REASON_FORCED_FULL_SWEEP,
-                            :FULL_SWEEP_REASON_USER_MAX_EXCEEDED, :FULL_SWEEP_REASON_LARGE_PROMOTION_RATE]
+                            :FULL_SWEEP_REASON_USER_MAX_EXCEEDED, :FULL_SWEEP_REASON_LARGE_PROMOTION_RATE, :FULL_SWEEP_REASON_LARGE_HEAP_GROWTH]
 end
 
 """
@@ -261,30 +261,31 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_confl
         print(io, timestr, " seconds")
         parens = bytes != 0 || allocs != 0 || gctime > 0 || lock_conflicts > 0 || compile_time > 0
         parens && print(io, " (")
-        if bytes != 0 || allocs != 0
-            allocs, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
+        had_allocs = bytes != 0 || allocs != 0
+        if had_allocs
+            allocs_scaled, ma = prettyprint_getunits(allocs, length(_cnt_units), Int64(1000))
             if ma == 1
-                print(io, Int(allocs), _cnt_units[ma], allocs==1 ? " allocation: " : " allocations: ")
+                print(io, Int(allocs_scaled), _cnt_units[ma], allocs_scaled==1 ? " allocation: " : " allocations: ")
             else
-                print(io, Ryu.writefixed(Float64(allocs), 2), _cnt_units[ma], " allocations: ")
+                print(io, Ryu.writefixed(Float64(allocs_scaled), 2), _cnt_units[ma], " allocations: ")
             end
             print(io, format_bytes(bytes))
         end
         if gctime > 0
-            if bytes != 0 || allocs != 0
+            if had_allocs
                 print(io, ", ")
             end
             print(io, Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
         end
         if lock_conflicts > 0
-            if bytes != 0 || allocs != 0 || gctime > 0
+            if had_allocs || gctime > 0
                 print(io, ", ")
             end
             plural = lock_conflicts == 1 ? "" : "s"
             print(io, lock_conflicts, " lock conflict$plural")
         end
         if compile_time > 0
-            if bytes != 0 || allocs != 0 || gctime > 0 || lock_conflicts > 0
+            if had_allocs || gctime > 0 || lock_conflicts > 0
                 print(io, ", ")
             end
             print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
@@ -539,6 +540,14 @@ function is_simply_call(@nospecialize ex)
         Meta.isexpr(a, :..., 1) && is_simple_atom(a.args[1]) && continue
         return false
     end
+    # Ensure Expr(:call, .+, ...) get wrapped
+    if ex.args[1] isa Symbol
+        sa = String(ex.args[1]::Symbol)
+        startswith(sa, ".") &&
+            !endswith(sa, ".") &&
+            isoperator(Symbol(sa[2:end])) &&
+            return false
+    end
     return true
 end
 
@@ -641,7 +650,7 @@ A macro to evaluate an expression, discard the resulting value, and instead retu
 total number of lock conflicts during evaluation, where a lock attempt on a [`ReentrantLock`](@ref)
 resulted in a wait because the lock was already held.
 
-See also [`@time`](@ref), [`@timev`](@ref) and [`@timed`](@ref).
+See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref).
 
 ```julia-repl
 julia> @lock_conflicts begin

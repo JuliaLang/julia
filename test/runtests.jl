@@ -91,8 +91,10 @@ move_to_node1("stress")
 limited_worker_rss && move_to_node1("Distributed")
 
 # Move LinearAlgebra and Pkg tests to the front, because they take a while, so we might
-# as well get them all started early.
-for prependme in ["LinearAlgebra", "Pkg"]
+# as well get them all started early. JuliaLowering_stdlibs both takes a while and
+# uses a lot of a memory at the beginning so try to run it early to keep total memory
+# use flatter.
+for prependme in ["LinearAlgebra", "Pkg", "JuliaLowering_stdlibs"]
     prependme_test_ids = findall(x->occursin(prependme, x), tests)
     prependme_tests = tests[prependme_test_ids]
     deleteat!(tests, prependme_test_ids)

@@ -28,6 +28,43 @@ export run_interface, Prompt, ModalInterface, transition, reset_state, edit_inse
 
 const StringLike = Union{Char,String,SubString{String}}
 
+mutable struct TerminalProperties
+    da1::Union{Nothing, Vector{Int}}  # DA1 feature parameters
+    TerminalProperties() = new(nothing)
+end
+
+"""
+    receive_da1!(props::TerminalProperties, io::IO)
+
+Read and parse a DA1 (Device Attributes) response from `io`
+(after `\\e[?` has been consumed by the keymap).
+Reads until `c` (DA1 terminator) or `^C` (bail-out), parses the semicolon-separated
+parameters as integers, and stores them in `props.da1`.
+"""
+function receive_da1!(props::TerminalProperties, io::IO)
+    buf = IOBuffer()
+    while !eof(io)
+        b = read(io, UInt8)
+        if b == UInt8('c')  # DA1 terminator
+            break
+        elseif b == 0x03  # ^C bail-out
+            break
+        else
+            write(buf, b)
+        end
+    end
+    body = String(take!(buf))
+    params = Int[]
+    for part in split(body, ';')
+        n = tryparse(Int, part)
+        if n !== nothing
+            push!(params, n)
+        end
+    end
+    props.da1 = params
+    return
+end
+
 # interface for TextInterface
 function Base.getproperty(ti::TextInterface, name::Symbol)
     if name === :hp
@@ -85,9 +122,12 @@ mutable struct MIState
     line_modify_lock::Base.ReentrantLock
     hint_generation_lock::Base.ReentrantLock
     n_keys_pressed::Int
+    # Optional event that gets notified each time the prompt is ready for input
+    prompt_ready_event::Union{Nothing, Base.Event}
+    terminal_properties::TerminalProperties
 end
 
-MIState(i, mod, c, a, m) = MIState(i, mod, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}(), Base.ReentrantLock(), Base.ReentrantLock(), 0)
+MIState(i, mod, c, a, m) = MIState(i, mod, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}(), Base.ReentrantLock(), Base.ReentrantLock(), 0, nothing, TerminalProperties())
 
 const BufferLike = Union{MIState,ModeState,IOBuffer}
 const State = Union{MIState,ModeState}
@@ -1802,6 +1842,8 @@ function normalize_key(key::Union{String,SubString{String}})
                 c, i = iterate(key, i)
                 write(buf, '\e')
                 write(buf, c)
+            elseif c == '^'
+                write(buf, c)
             end
         else
             write(buf, c)
@@ -1829,7 +1871,7 @@ function add_nested_key!(keymap::Dict{Char, Any}, key::Union{String, Char}, valu
         c, i = y
         y = iterate(key, i)
         if !override && c in keys(keymap) && (y === nothing || !isa(keymap[c], Dict))
-            error("Conflicting definitions for keyseq " * escape_string(key) *
+            error("Conflicting definitions for keyseq " * escape_string(string(key)) *
                   " within one keymap")
         end
         if y === nothing
@@ -2070,6 +2112,8 @@ const escape_defaults = merge!(
         "\e*" => nothing,
         "\e[*" => nothing,
         "\eO*" => nothing,
+        # Intercept DA1 responses
+        "\e[?" => (s::MIState, o...) -> receive_da1!(s.terminal_properties, terminal(s)),
         # Also ignore extended escape sequences
         # TODO: Support ranges of characters
         "\e[1**" => nothing,
@@ -2179,7 +2223,7 @@ let
     for (left, right) in bracket_pairs
         # Left bracket: insert both and move cursor between them
         bracket_insert_keymap[left] = (s::MIState, o...) -> begin
-            buf = buffer(s)
+            local buf = buffer(s)
             edit_insert(buf, left)
             if eof(buf) || peek(buf, Char) in right_brackets_ws
                 edit_insert(buf, right)
@@ -2190,7 +2234,7 @@ let
 
         # Right bracket: skip over if next char matches, otherwise insert
         bracket_insert_keymap[right] = (s::MIState, o...) -> begin
-            buf = buffer(s)
+            local buf = buffer(s)
             if !eof(buf) && peek(buf, Char) == right
                 edit_move_right(buf)
             else
@@ -2203,7 +2247,7 @@ let
     # Quote characters (need special handling for transpose detection)
     for quote_char in ('"', '\'', '`')
         bracket_insert_keymap[quote_char] = (s::MIState, o...) -> begin
-            buf = buffer(s)
+            local buf = buffer(s)
             if !eof(buf) && peek(buf, Char) == quote_char
                 # Skip over closing quote
                 edit_move_right(buf)
@@ -2231,15 +2275,14 @@ let
             repl = Base.active_repl
             mirepl = isdefined(repl, :mi) ? repl.mi : repl
             main_mode = mirepl.interface.modes[1]
-            buf = copy(buffer(s))
+            local buf = copy(buffer(s))
             transition(s, main_mode) do
                 state(s, main_mode).input_buffer = buf
             end
             return
         end
 
-        buf = buffer(s)
-        if try_remove_paired_delimiter(buf)
+        if try_remove_paired_delimiter(buffer(s))
             return refresh_line(s)
         end
         return edit_backspace(s)
@@ -2715,7 +2758,12 @@ function history_search(mistate::MIState)
     else
         mimode.prompt_prefix
     end
-    result = histsearch(mimode.hist.history, term, prefix)
+    # Issue a DA1 query if we haven't received one yet, so that the
+    # terminal's OSC 52 clipboard capability can be detected.
+    if mistate.terminal_properties.da1 === nothing
+        write(term, "\e[c")
+    end
+    result = histsearch(mimode.hist.history, term, prefix, mistate.terminal_properties)
     mimode = if isnothing(result.mode)
         mistate.current_mode
     else
@@ -2728,7 +2776,12 @@ function history_search(mistate::MIState)
     mistate.current_mode = mimode
     activate(mimode, state(mistate, mimode), termbuf, term)
     commit_changes(term, termbuf)
-    edit_insert(pstate, result.text)
+if !isempty(result.text)
+    pstate.input_buffer.ptr = 1
+    pstate.input_buffer.size = 0
+    write(pstate.input_buffer, result.text)
+    seekend(pstate.input_buffer)
+end
     refresh_multi_line(mistate)
     nothing
 end
@@ -2754,6 +2807,7 @@ const prefix_history_keymap = merge!(
         "\e*" => "*",
         "\e[*" => "*",
         "\eO*"  => "*",
+        "\e[?" => "*",
         "\e[1;5*" => "*", # Ctrl-Arrow
         "\e[1;2*" => "*", # Shift-Arrow
         "\e[1;3*" => "*", # Meta-Arrow
@@ -2977,6 +3031,10 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
     enable_bracketed_paste(term)
     try
         activate(prompt, s, term, term)
+        # Notify that prompt is ready for input
+        if s.prompt_ready_event !== nothing
+            notify(s.prompt_ready_event)
+        end
         old_state = mode(s)
         # spawn this because the main repl task is sticky (due to use of @async and _wait2)
         # and we want to not block typing when the repl task thread is busy

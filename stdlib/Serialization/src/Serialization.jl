@@ -460,7 +460,7 @@ function serialize(s::AbstractSerializer, meth::Method)
         serialize(s, nothing)
     end
     if isdefined(meth, :recursion_relation)
-        serialize(s, method.recursion_relation)
+        serialize(s, meth.recursion_relation)
     else
         serialize(s, nothing)
     end
@@ -689,6 +689,11 @@ serialize(s::AbstractSerializer, @nospecialize(x)) = serialize_any(s, x)
 function serialize(s::AbstractSerializer, x::Core.AddrSpace)
     serialize_type(s, typeof(x))
     write(s.io, Core.bitcast(UInt8, x))
+end
+
+function serialize(s::AbstractSerializer, x::Core.IntrinsicFunction)
+    serialize_type(s, typeof(x))
+    serialize(s, nameof(x))
 end
 
 function serialize_any(s::AbstractSerializer, @nospecialize(x))
@@ -1067,11 +1072,10 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     nospecializeinfer = false
     constprop = 0x00
     purity = 0x0000
-    local template_or_is_opaque, template
-    with(current_module => mod) do
-        template_or_is_opaque = deserialize(s)
+    template_or_is_opaque = with(current_module => mod) do
+        deserialize(s)
     end
-    if isa(template_or_is_opaque, Bool)
+    template = if isa(template_or_is_opaque, Bool)
         is_for_opaque_closure = template_or_is_opaque
         if format_version(s) >= 24
             nospecializeinfer = deserialize(s)::Bool
@@ -1085,10 +1089,10 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
             purity = UInt16(deserialize(s)::UInt8)
         end
         with(current_module => mod) do
-            template = deserialize(s)
+            deserialize(s)
         end
     else
-        template = template_or_is_opaque
+        template_or_is_opaque
     end
     generator = deserialize(s)
     recursion_relation = nothing
@@ -1441,12 +1445,17 @@ end
 function deserialize(s::AbstractSerializer, X::Type{MemoryRef{T}} where T)
     x = Core.memoryref(deserialize(s))::X
     i = deserialize(s)::Int
-    i == 2 || (x = Core.memoryref(x, i, true))
+    i == 2 || (x = Core.memoryrefnew(x, i, true))
     return x::X
 end
 
 function deserialize(s::AbstractSerializer, X::Type{Core.AddrSpace{M}} where M)
     Core.bitcast(X, read(s.io, UInt8))
+end
+
+function deserialize(s::AbstractSerializer, ::Type{Core.IntrinsicFunction})
+    name = deserialize(s)::Symbol
+    return getfield(Core.Intrinsics, name)::Core.IntrinsicFunction
 end
 
 function deserialize_expr(s::AbstractSerializer, len)

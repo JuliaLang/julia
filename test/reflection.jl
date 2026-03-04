@@ -62,6 +62,86 @@ str = String(take!(io))
 
 end # module ReflectionTest
 
+# code_llvm llvm_options parameter tests
+@testset "code_llvm llvm_options" begin
+    using InteractiveUtils: code_llvm
+
+    # Test that llvm_options parameter works without crashing
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="")
+    @test !isempty(String(take!(io)))
+
+    # Test print-after-all produces IR dump output
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after-all")
+    output = String(take!(io))
+    @test occursin("IR Dump After", output)
+    @test occursin("define", output)  # Final IR should also be present
+
+    # Test print-after with specific pass name
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after=AfterOptimization")
+    output = String(take!(io))
+    @test occursin("IR Dump After", output)
+    @test occursin("AfterOptimization", output)
+
+    # Test print-before-all
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-before-all")
+    output = String(take!(io))
+    @test occursin("IR Dump Before", output)
+
+    # Test print-module-scope shows module structure
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after=AfterOptimization -print-module-scope")
+    output = String(take!(io))
+    @test occursin("ModuleID", output) || occursin("source_filename", output)
+
+    # Test comma-separated pass names
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after=BeforeOptimization,AfterOptimization")
+    output = String(take!(io))
+    @test occursin("IR Dump After BeforeOptimizationMarkerPass", output)
+    @test occursin("IR Dump After AfterOptimizationMarkerPass", output)
+
+    # Test repeated flags accumulate
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after=BeforeOptimization -print-after=AfterOptimization")
+    output = String(take!(io))
+    @test occursin("IR Dump After BeforeOptimizationMarkerPass", output)
+    @test occursin("IR Dump After AfterOptimizationMarkerPass", output)
+
+    # Test unknown option warning appears in output
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-unknown-flag")
+    output = String(take!(io))
+    @test occursin("Warning: unknown llvm_options flag", output)
+
+    # Test missing value warning appears in output
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after")
+    output = String(take!(io))
+    @test occursin("Warning: -print-after requires a value", output)
+
+    # Test filter-print-funcs with non-matching names suppresses all output
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after-all -filter-print-funcs=julia_doesnotexist1,julia_doesnotexist2")
+    output = String(take!(io))
+    @test !occursin("IR Dump After", output)
+
+    # Test filter-print-funcs with comma-separated list matches multiple functions
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after-all -filter-print-funcs=julia_")
+    output_one = String(take!(io))
+    dumps_one = count("IR Dump After", output_one)
+    io = IOBuffer()
+    code_llvm(io, +, (Int, Int); llvm_options="-print-after-all -filter-print-funcs=julia_,jfptr_")
+    output_both = String(take!(io))
+    dumps_both = count("IR Dump After", output_both)
+    # Matching both julia_ and jfptr_ prefixes should produce more dumps
+    @test dumps_both > dumps_one > 0
+end
+
 # isbits, isbitstype
 
 @test !isbitstype(Array{Int})
@@ -189,7 +269,7 @@ let
     @test Base.binding_module(TestMod7648.TestModSub9475, :b9475) == TestMod7648.TestModSub9475
     defaultset = Set(Symbol[:Foo7648, :TestMod7648, :a9475, :c7648, :f9475, :foo7648, :foo7648_nomethods])
     allset = defaultset ∪ Set(Symbol[
-        Symbol("#foo7648"), Symbol("#foo7648_nomethods"),
+        Symbol("#foo7648"), Symbol("#foo7648_nomethods"), Symbol("#_internal_julia_parse"),
         :TestModSub9475, :d7648, :eval, :f7648, :include])
     imported = Set(Symbol[:convert, :curmod_name, :curmod])
     usings_from_Test = Set(Symbol[
@@ -197,7 +277,7 @@ let
         Symbol("@test_logs"), Symbol("@test_nowarn"), Symbol("@test_skip"), Symbol("@test_throws"),
         Symbol("@test_warn"), Symbol("@testset"), :GenericArray, :GenericDict, :GenericOrder,
         :GenericSet, :GenericString, :LogRecord, :Test, :TestLogger, :TestSetException,
-        :detect_ambiguities, :detect_unbound_args])
+        :detect_ambiguities, :detect_closure_boxes, :detect_closure_boxes_all_modules, :detect_unbound_args])
     usings_from_Base = delete!(Set(names(Module(); usings=true)), :anonymous) # the name of the anonymous module itself
     usings = Set(Symbol[:x36529, :TestModSub9475, :f54609]) ∪ usings_from_Test ∪ usings_from_Base
     @test Set(names(TestMod7648)) == defaultset
@@ -275,7 +355,7 @@ let defaultset = Set((:A,))
     imported = Set((:M2,))
     usings_from_Base = delete!(Set(names(Module(); usings=true)), :anonymous) # the name of the anonymous module itself
     usings = Set((:A, :f, :C, :y, :M1, :m1_x)) ∪ usings_from_Base
-    allset = Set((:A, :B, :C, :eval, :include))
+    allset = Set((:A, :B, :C, :eval, :include, Symbol("#_internal_julia_parse")))
     @test Set(names(TestMod54609.A)) == defaultset
     @test Set(names(TestMod54609.A, imported=true)) == defaultset ∪ imported
     @test Set(names(TestMod54609.A, usings=true)) == defaultset ∪ usings

@@ -683,8 +683,8 @@ julia> 2^2x
 64
 ```
 
-The precedence of numeric literal coefficients is slightly lower than that of
-unary operators such as negation.
+The [precedence](@ref Operator-Precedence-and-Associativity) of numeric literal
+coefficients is slightly lower than that of unary operators such as negation.
 So `-2x` is parsed as `(-2) * x` and `√2x` is parsed as `(√2) * x`.
 However, numeric literal coefficients parse similarly to unary operators when
 combined with exponentiation.

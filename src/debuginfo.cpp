@@ -82,20 +82,6 @@ static void processFDEs(const char *EHFrameAddr, size_t EHFrameSize, callback f)
 }
 #endif
 
-std::string JITDebugInfoRegistry::mangle(StringRef Name, const DataLayout &DL)
-{
-    std::string MangledName;
-    {
-        raw_string_ostream MangledNameStream(MangledName);
-        Mangler::getNameWithPrefix(MangledNameStream, Name, DL);
-    }
-    return MangledName;
-}
-
-void JITDebugInfoRegistry::add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL) {
-    (**codeinst_in_flight)[mangle(name, DL)] = codeinst;
-}
-
 jl_code_instance_t *JITDebugInfoRegistry::lookupCodeInstance(size_t pointer)
 {
     jl_lock_profile();
@@ -163,23 +149,7 @@ static void jl_profile_atomic(T f) JL_NOTSAFEPOINT
         jl_unlock_profile_wr();
 }
 
-
 // --- storing and accessing source location metadata ---
-void jl_add_code_in_flight(StringRef name, jl_code_instance_t *codeinst, const DataLayout &DL) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
-{
-    // Non-opaque-closure MethodInstances are considered globally rooted
-    // through their methods, but for OC, we need to create a global root
-    // here.
-    jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
-    if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure) {
-        jl_task_t *ct = jl_current_task;
-        int8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
-        jl_as_global_root((jl_value_t*)mi, 1);
-        jl_gc_unsafe_leave(ct->ptls, gc_state);
-    }
-    getJITDebugRegistry().add_code_in_flight(name, codeinst, DL);
-}
-
 
 #if defined(_OS_WINDOWS_)
 static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnname,
@@ -235,10 +205,25 @@ static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnnam
 }
 #endif
 
-void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
-                        std::function<uint64_t(const StringRef &)> getLoadAddress)
+void JITDebugInfoRegistry::registerJITObject(
+    const object::ObjectFile &Object,
+    std::function<uint64_t(const StringRef &)> getLoadAddress,
+    const jl_linker_info_t &Info)
 {
     object::section_iterator EndSection = Object.section_end();
+
+    StringMap<jl_code_instance_t *> sym_to_ci;
+    for (auto &[ci, funcs] : Info.ci_funcs) {
+        // don't remember toplevel thunks because
+        // they may not be rooted in the gc for the life of the program,
+        // and the runtime doesn't notify us when the code becomes unreachable :(
+        if (!jl_is_method(jl_get_ci_mi(ci)->def.method))
+            continue;
+        if (funcs.invoke)
+            sym_to_ci[*funcs.invoke] = ci;
+        if (funcs.specptr)
+            sym_to_ci[*funcs.specptr] = ci;
+    }
 
     bool anyfunctions = false;
     for (const object::SymbolRef &sym_iter : Object.symbols()) {
@@ -379,14 +364,9 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
                 (uint8_t*)(uintptr_t)SectionLoadAddr, (size_t)SectionSize, UnwindData);
 #endif
         jl_code_instance_t *codeinst = NULL;
-        {
-            auto lock = *this->codeinst_in_flight;
-            auto &codeinst_in_flight = *lock;
-            StringMap<jl_code_instance_t*>::iterator codeinst_it = codeinst_in_flight.find(sName);
-            if (codeinst_it != codeinst_in_flight.end()) {
-                codeinst = codeinst_it->second;
-                codeinst_in_flight.erase(codeinst_it);
-            }
+        auto it = sym_to_ci.find(sName);
+        if (it != sym_to_ci.end()) {
+            codeinst = it->second;
         }
         jl_profile_atomic([&]() JL_NOTSAFEPOINT {
             if (codeinst)
@@ -405,9 +385,10 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
 }
 
 void jl_register_jit_object(const object::ObjectFile &Object,
-                            std::function<uint64_t(const StringRef &)> getLoadAddress)
+                            std::function<uint64_t(const StringRef &)> getLoadAddress,
+                            const jl_linker_info_t &Info)
 {
-    getJITDebugRegistry().registerJITObject(Object, getLoadAddress);
+    getJITDebugRegistry().registerJITObject(Object, getLoadAddress, Info);
 }
 
 // TODO: convert the safe names from aotcomile.cpp:makeSafeName back into symbols
@@ -505,8 +486,13 @@ static int lookup_pointer(
         else {
             int havelock = jl_lock_profile_wr();
             assert(havelock); (void)havelock;
-            info = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
+            auto lineinfo = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
             jl_unlock_profile_wr();
+#if JL_LLVM_VERSION < 210000
+            info = std::move(lineinfo);
+#else
+            info = std::move(lineinfo.value());
+#endif
         }
 
         jl_frame_t *frame = &(*frames)[i];
@@ -1076,6 +1062,9 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, uint64_t 
     IMAGEHLP_MODULE64 ModuleInfo;
     ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
     uv_mutex_lock(&jl_in_stackwalk);
+    uv_mutex_lock(&jl_dll_notify_lock);
+    jl_profile_process_dll_events();
+    uv_mutex_unlock(&jl_dll_notify_lock);
     bool isvalid = SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
     uv_mutex_unlock(&jl_in_stackwalk);
     if (!isvalid)
@@ -1177,6 +1166,9 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
     static IMAGEHLP_LINE64 frame_info_line;
     DWORD dwDisplacement = 0;
     uv_mutex_lock(&jl_in_stackwalk);
+    uv_mutex_lock(&jl_dll_notify_lock);
+    jl_profile_process_dll_events();
+    uv_mutex_unlock(&jl_dll_notify_lock);
     DWORD64 dwAddress = pointer;
     frame_info_line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
     if (SymGetLineFromAddr64(GetCurrentProcess(), dwAddress, &dwDisplacement, &frame_info_line)) {
@@ -1444,7 +1436,7 @@ static DW_EH_PE parseCIE(const uint8_t *Addr, const uint8_t *End) JL_NOTSAFEPOIN
     else {
         p = consume_leb128(p, cie_end);
     }
-    // Now it's the augmentation data. which may have the information we
+    // Now it's the augmentation data, which may have the information we
     // are interested in...
     for (const char *augp = augmentation;;augp++) {
         switch (*augp) {

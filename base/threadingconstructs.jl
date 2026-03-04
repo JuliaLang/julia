@@ -173,24 +173,27 @@ function threading_run(fun, static)
     n = threadpoolsize()
     tid_offset = threadpoolsize(:interactive)
     tasks = Vector{Task}(undef, n)
-    for i = 1:n
-        t = Task(() -> fun(i)) # pass in tid
-        t.sticky = static
-        if static
-            ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
-        else
-            # TODO: this should be the current pool (except interactive) if there
-            # are ever more than two pools.
-            _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default))
-            @assert _result == 1
+    try
+        for i = 1:n
+            t = Task(() -> fun(i)) # pass in tid
+            t.sticky = static
+            if static
+                ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
+            else
+                # TODO: this should be the current pool (except interactive) if there
+                # are ever more than two pools.
+                _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default))
+                @assert _result == 1
+            end
+            tasks[i] = t
+            schedule(t)
         end
-        tasks[i] = t
-        schedule(t)
+        for i = 1:n
+            Base._wait(tasks[i])
+        end
+    finally
+        ccall(:jl_exit_threaded_region, Cvoid, ())
     end
-    for i = 1:n
-        Base._wait(tasks[i])
-    end
-    ccall(:jl_exit_threaded_region, Cvoid, ())
     failed_tasks = filter!(istaskfailed, tasks)
     if !isempty(failed_tasks)
         throw(CompositeException(map(TaskFailedException, failed_tasks)))

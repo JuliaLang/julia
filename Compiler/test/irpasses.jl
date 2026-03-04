@@ -1499,11 +1499,10 @@ let code = Any[
     # Simulate the important results from inference
     interp = Compiler.NativeInterpreter()
     sv = Compiler.OptimizationState(mi, src, interp)
-    slot_id = 4
-    for block_id = 3:5
-        # (_4 !== nothing) conditional narrows the type, triggering PiNodes
-        sv.bb_vartables[block_id][slot_id] = VarState(Bool, #= maybe_undef =# false)
-    end
+    # (_4 !== nothing) conditional narrows the type, triggering PiNodes
+    sv.bb_states[#=block_id=#3].vartable[#=slot_id=#4] = VarState(Bool, #=def=#5, #=maybe_undef=#false)
+    sv.bb_states[#=block_id=#4].vartable[#=slot_id=#4] = VarState(Bool, #=def=#7, #=maybe_undef=#false)
+    sv.bb_states[#=block_id=#5].vartable[#=slot_id=#4] = VarState(Bool, #=def=#7, #=maybe_undef=#false)
 
     ir = Compiler.convert_to_ircode(src, sv)
     ir = Compiler.slot2reg(ir, src, sv)
@@ -2134,4 +2133,36 @@ let src = code_typed1((Vector{Any},)) do xs
         println(stdout, 1, xs...) # convert tuples represented by `PartialStruct`
     end
     @test count(iscall((src, Core.svec)), src.code) == 1
+end
+
+# Negative NewSSAValue ids must be preserved during compaction
+function f_57827(op, init, x)
+    v = op(init, x)
+    i = 0
+    while i < 1
+        v = op(v, x)
+        i += 1
+    end
+    return v
+end
+let rf = (acc, x) -> ifelse(x > acc[1], (x,), (acc[1],))
+    @test f_57827(rf, (0.0,), 1) === (1,)
+    ir = first(only(Base.code_ircode(f_57827, (typeof(rf), Tuple{Float64}, Int64); optimize_until="CC: SROA")))
+    @test ir isa Compiler.IRCode
+end
+
+# Test that SROA lifting cache deduplicates phi nodes when multiple
+# getfield calls access the same field of the same phi node.
+struct LiftCachePoint
+    x::Float64
+    y::Float64
+end
+let src = code_typed1((Bool,)) do cond
+        p = cond ? LiftCachePoint(1.0, 2.0) : LiftCachePoint(3.0, 4.0)
+        return abs(p.x) + p.x * 2.0
+    end
+    @test count(isnew, src.code) == 0
+    @test !any(iscall((src, getfield)), src.code)
+    # the lifting cache should deduplicate: only 1 phi for `p.x`, not 2
+    @test count(x -> isa(x, Core.PhiNode), src.code) == 1
 end

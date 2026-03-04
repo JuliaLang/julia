@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module Sys
+# NB: This file is `Core.eval`-uated into the (pre-existing) module Sys
+
 @doc """
 Provide methods for retrieving information about hardware and the operating system.
 """ Sys
@@ -13,7 +14,6 @@ export BINDIR,
        WORD_SIZE,
        ARCH,
        MACHINE,
-       KERNEL,
        JIT,
        PAGESIZE,
        cpu_info,
@@ -25,22 +25,11 @@ export BINDIR,
        total_memory,
        free_physical_memory,
        total_physical_memory,
-       isapple,
-       isbsd,
-       isdragonfly,
-       isfreebsd,
-       islinux,
-       isnetbsd,
-       isopenbsd,
-       isunix,
-       iswindows,
-       isjsvm,
        isexecutable,
        isreadable,
        iswritable,
        username,
-       which,
-       detectwsl
+       which
 
 import ..Base: DATAROOTDIR, show
 
@@ -103,13 +92,6 @@ const ARCH = ccall(:jl_get_ARCH, Any, ())::Symbol
 
 
 """
-    Sys.KERNEL::Symbol
-
-A symbol representing the name of the operating system, as returned by `uname` of the build configuration.
-"""
-const KERNEL = ccall(:jl_get_UNAME, Any, ())::Symbol
-
-"""
     Sys.MACHINE::String
 
 A string containing the build triple.
@@ -128,8 +110,6 @@ const WORD_SIZE = Core.sizeof(Int) * 8
 
 The number of system "clock ticks" per second, corresponding to `sysconf(_SC_CLK_TCK)` on
 POSIX systems, or `0` if it is unknown.
-
-CPU times, e.g. as returned by `Sys.cpu_info()`, are in units of ticks, i.e. units of `1 / Sys.SC_CLK_TCK` seconds if `Sys.SC_CLK_TCK > 0`.
 """
 global SC_CLK_TCK::Clong
 
@@ -224,8 +204,7 @@ The `CPUinfo` type is a mutable struct with the following fields:
 - `cpu_times!idle::UInt64`: Time spent in idle mode. CPU state shows the CPU time that's not actively being used.
 - `cpu_times!irq::UInt64`: Time spent handling interrupts. CPU state shows the amount of time the CPU has been servicing hardware interrupts.
 
-The times are in units of `1/Sys.SC_CLK_TCK` seconds if `Sys.SC_CLK_TCK > 0`; otherwise they are in
-unknown units.
+The times are in units of milliseconds.
 
 Note: Included in the detailed system information via `versioninfo(verbose=true)`.
 """
@@ -246,7 +225,6 @@ CPUinfo(info::UV_cpu_info_t) = CPUinfo(unsafe_string(info.model), info.speed,
 public CPUinfo
 
 function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::AbstractString="    ")
-    tck = SC_CLK_TCK
     if header
         println(io, info.model, ": ")
         print(io, " "^length(prefix))
@@ -254,16 +232,13 @@ function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::Abs
                 lpad("sys", 9), "    ", lpad("idle", 9), "    ", lpad("irq", 9))
     end
     print(io, prefix)
-    unit = tck > 0 ? " s  " : "    "
-    tc = max(tck, 1)
+    ms_per_s = 1000
+    unit = " s  "
     d(i, unit=unit) = lpad(string(round(Int64,i)), 9) * unit
     print(io,
           lpad(string(info.speed), 5), " MHz  ",
-          d(info.cpu_times!user / tc), d(info.cpu_times!nice / tc), d(info.cpu_times!sys / tc),
-          d(info.cpu_times!idle / tc), d(info.cpu_times!irq / tc, tck > 0 ? " s" : "  "))
-    if tck <= 0
-        print(io, "ticks")
-    end
+          d(info.cpu_times!user / ms_per_s), d(info.cpu_times!nice / ms_per_s), d(info.cpu_times!sys / ms_per_s),
+          d(info.cpu_times!idle / ms_per_s), d(info.cpu_times!irq / ms_per_s))
 end
 
 show(io::IO, ::MIME"text/plain", info::CPUinfo) = _show_cpuinfo(io, info, true, "    ")
@@ -453,157 +428,6 @@ See also:
 """
 maxrss() = ccall(:jl_maxrss, Csize_t, ())
 
-"""
-    Sys.isunix([os])
-
-Predicate for testing if the OS provides a Unix-like interface.
-See documentation in [Handling Operating System Variation](@ref).
-"""
-function isunix(os::Symbol)
-    if iswindows(os)
-        return false
-    elseif islinux(os) || isbsd(os)
-        return true
-    elseif os === :Emscripten
-        # Emscripten implements the POSIX ABI and provides traditional
-        # Unix-style operating system functions such as file system support.
-        # Therefore, we consider it a unix, even though this need not be
-        # generally true for a jsvm embedding.
-        return true
-    else
-        throw(ArgumentError("unknown operating system \"$os\""))
-    end
-end
-
-"""
-    Sys.islinux([os])
-
-Predicate for testing if the OS is a derivative of Linux.
-See documentation in [Handling Operating System Variation](@ref).
-"""
-islinux(os::Symbol) = (os === :Linux)
-
-"""
-    Sys.isbsd([os])
-
-Predicate for testing if the OS is a derivative of BSD.
-See documentation in [Handling Operating System Variation](@ref).
-
-!!! note
-    The Darwin kernel descends from BSD, which means that `Sys.isbsd()` is
-    `true` on macOS systems. To exclude macOS from a predicate, use
-    `Sys.isbsd() && !Sys.isapple()`.
-"""
-isbsd(os::Symbol) = (isfreebsd(os) || isopenbsd(os) || isnetbsd(os) || isdragonfly(os) || isapple(os))
-
-"""
-    Sys.isfreebsd([os])
-
-Predicate for testing if the OS is a derivative of FreeBSD.
-See documentation in [Handling Operating System Variation](@ref).
-
-!!! note
-    Not to be confused with `Sys.isbsd()`, which is `true` on FreeBSD but also on
-    other BSD-based systems. `Sys.isfreebsd()` refers only to FreeBSD.
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
-"""
-isfreebsd(os::Symbol) = (os === :FreeBSD)
-
-"""
-    Sys.isopenbsd([os])
-
-Predicate for testing if the OS is a derivative of OpenBSD.
-See documentation in [Handling Operating System Variation](@ref).
-
-!!! note
-    Not to be confused with `Sys.isbsd()`, which is `true` on OpenBSD but also on
-    other BSD-based systems. `Sys.isopenbsd()` refers only to OpenBSD.
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
-"""
-isopenbsd(os::Symbol) = (os === :OpenBSD)
-
-"""
-    Sys.isnetbsd([os])
-
-Predicate for testing if the OS is a derivative of NetBSD.
-See documentation in [Handling Operating System Variation](@ref).
-
-!!! note
-    Not to be confused with `Sys.isbsd()`, which is `true` on NetBSD but also on
-    other BSD-based systems. `Sys.isnetbsd()` refers only to NetBSD.
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
-"""
-isnetbsd(os::Symbol) = (os === :NetBSD)
-
-"""
-    Sys.isdragonfly([os])
-
-Predicate for testing if the OS is a derivative of DragonFly BSD.
-See documentation in [Handling Operating System Variation](@ref).
-
-!!! note
-    Not to be confused with `Sys.isbsd()`, which is `true` on DragonFly but also on
-    other BSD-based systems. `Sys.isdragonfly()` refers only to DragonFly.
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
-"""
-isdragonfly(os::Symbol) = (os === :DragonFly)
-
-"""
-    Sys.iswindows([os])
-
-Predicate for testing if the OS is a derivative of Microsoft Windows NT.
-See documentation in [Handling Operating System Variation](@ref).
-"""
-iswindows(os::Symbol) = (os === :Windows || os === :NT)
-
-"""
-    Sys.isapple([os])
-
-Predicate for testing if the OS is a derivative of Apple Macintosh OS X or Darwin.
-See documentation in [Handling Operating System Variation](@ref).
-"""
-isapple(os::Symbol) = (os === :Apple || os === :Darwin)
-
-"""
-    Sys.isjsvm([os])
-
-Predicate for testing if Julia is running in a JavaScript VM (JSVM),
-including e.g. a WebAssembly JavaScript embedding in a web browser.
-
-!!! compat "Julia 1.2"
-    This function requires at least Julia 1.2.
-"""
-isjsvm(os::Symbol) = (os === :Emscripten)
-
-"""
-    Sys.detectwsl()
-
-Runtime predicate for testing if Julia is running inside
-Windows Subsystem for Linux (WSL).
-
-!!! note
-    Unlike `Sys.iswindows`, `Sys.islinux` etc., this is a runtime test, and thus
-    cannot meaningfully be used in `@static if` constructs.
-
-!!! compat "Julia 1.12"
-    This function requires at least Julia 1.12.
-"""
-function detectwsl()
-    # We use the same approach as canonical/snapd do to detect WSL
-    islinux() && (
-        isfile("/proc/sys/fs/binfmt_misc/WSLInterop")
-        || isdir("/run/WSL")
-    )
-end
-
-for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
-    @eval $f() = $(getfield(@__MODULE__, f)(KERNEL))
-end
-
 if iswindows()
     function windows_version()
         verinfo = ccall(:GetVersion, UInt32, ())
@@ -728,5 +552,3 @@ function username()
     isempty(pw.username) && Base.uv_error("username", Base.UV_ENOENT)
     return pw.username
 end
-
-end # module Sys

@@ -32,9 +32,9 @@ end
 # We might consider changing at least the second of these choices, depending on
 # how we end up putting this into Base.
 
-struct LoweringIterator{GraphType}
+struct LoweringIterator{Attrs}
     expr_compat_mode::Bool # later stored in module?
-    todo::Vector{Tuple{SyntaxTree{GraphType}, Bool, Int}}
+    todo::Vector{Tuple{SyntaxTree{Attrs}, Bool, Int}}
 end
 
 function lower_init(ex::SyntaxTree{T};
@@ -70,19 +70,19 @@ function lower_step(iter, mod, world=Base.get_world_counter())
         push!(iter.todo, (ex, false, 1))
         return lower_step(iter, mod)
     elseif k == K"module"
-        name = ex[1]
+        (version, notbare, name, body) = @stm ex begin
+            [K"module" version nb_st name body] ->
+                (version.value, nb_st.value, name, body)
+            [K"module" nb_st name body] ->
+                (nothing, nb_st.value, name, body)
+        end
         if kind(name) != K"Identifier"
             throw(LoweringError(name, "Expected module name"))
         end
         newmod_name = Symbol(name.name_val)
-        body = ex[2]
-        if kind(body) != K"block"
-            throw(LoweringError(body, "Expected block in module body"))
-        end
-        std_defs = !has_flags(ex, JuliaSyntax.BARE_MODULE_FLAG)
         loc = source_location(LineNumberNode, ex)
         push!(iter.todo, (body, true, 1))
-        return Core.svec(:begin_module, newmod_name, std_defs, loc)
+        return Core.svec(:begin_module, version, newmod_name, notbare, loc)
     else
         # Non macro expansion parts of lowering
         ctx2, ex2 = expand_forms_2(ctx1, ex)
@@ -182,10 +182,10 @@ function add_ir_debug_info!(current_codelocs_stack, stmt)
             push!(current_codelocs_stack, (locstk[j][1], [], Vector{Int32}()))
         end
     end
-    @assert length(locstk) === length(current_codelocs_stack)
+    @jl_assert length(locstk) === length(current_codelocs_stack) stmt
     for (j, (file,line)) in enumerate(locstk)
         fn, edges, codelocs = current_codelocs_stack[j]
-        @assert fn == file
+        @jl_assert fn == file stmt
         if j < length(locstk)
             edge_index = length(edges) + 1
             edge_codeloc_index = fld1(length(current_codelocs_stack[j+1][3]) + 1, 3)
@@ -360,8 +360,9 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     elseif k == K"return"
         Core.ReturnNode(_to_lowered_expr(ex[1], stmt_offset))
     elseif k == K"inert"
-        e1 = ex[1]
-        getmeta(ex, :as_Expr, false) ? QuoteNode(Expr(e1)) : e1
+        est_to_expr(ex)
+    elseif k == K"inert_syntaxtree"
+        ex[1]
     elseif k == K"code_info"
         ir = to_code_info(ex[1], ex.slots, ex.meta)
         if ex.is_toplevel_thunk
@@ -376,7 +377,7 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     elseif k == K"gotoifnot"
         Core.GotoIfNot(_to_lowered_expr(ex[1], stmt_offset), ex[2].id + stmt_offset)
     elseif k == K"enter"
-        catch_idx = ex[1].id
+        catch_idx = ex[1].id + stmt_offset
         numchildren(ex) == 1 ?
             Core.EnterNode(catch_idx) :
             Core.EnterNode(catch_idx, _to_lowered_expr(ex[2], stmt_offset))
@@ -393,25 +394,28 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
         # opaque_closure_method has special non-evaluated semantics for the
         # `functionloc` line number node so we need to undo a level of quoting
         arg4 = args[4]
-        @assert arg4 isa QuoteNode
+        @jl_assert arg4 isa QuoteNode e
         args[4] = arg4.value
         Expr(:opaque_closure_method, args...)
     elseif k == K"meta"
         args = Any[_to_lowered_expr(e, stmt_offset) for e in children(ex)]
         # Unpack K"Symbol" QuoteNode as `Expr(:meta)` requires an identifier here.
         arg1 = args[1]
-        @assert arg1 isa QuoteNode
+        @jl_assert arg1 isa QuoteNode e
         args[1] = arg1.value
         Expr(:meta, args...)
     elseif k == K"static_eval"
-        @assert numchildren(ex) == 1
-        _to_lowered_expr(ex[1], stmt_offset)
-    elseif k == K"cfunction"
-        args = Any[_to_lowered_expr(e, stmt_offset) for e in children(ex)]
-        if kind(ex[2]) == K"static_eval"
-            args[2] = QuoteNode(args[2])
+        @jl_assert numchildren(ex) == 1 e
+        @stm ex[1] begin
+            # tuple should just be ccall library spec
+            [K"tuple" s lib] -> Expr(:tuple,
+                                     _to_lowered_expr(s, stmt_offset),
+                                     _to_lowered_expr(lib, stmt_offset))
+            [K"tuple" s] -> Expr(:tuple,
+                                 _to_lowered_expr(s, stmt_offset))
+            [K"function" _...] -> QuoteNode(est_to_expr(ex[1]))
+            _ -> _to_lowered_expr(ex[1], stmt_offset)
         end
-        Expr(:cfunction, args...)
     else
         # Allowed forms according to https://docs.julialang.org/en/v1/devdocs/ast/
         #
@@ -425,12 +429,15 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
                k == K"="         ? :(=)        :
                k == K"leave"     ? :leave      :
                k == K"isdefined" ? :isdefined  :
+               k == K"loopinfo"  ? :loopinfo   :
+               k == K"boundscheck"       ? :boundscheck       :
                k == K"latestworld"       ? :latestworld       :
                k == K"pop_exception"     ? :pop_exception     :
                k == K"captured_local"    ? :captured_local    :
                k == K"gc_preserve_begin" ? :gc_preserve_begin :
                k == K"gc_preserve_end"   ? :gc_preserve_end   :
                k == K"foreigncall"       ? :foreigncall       :
+               k == K"cfunction"         ? :cfunction         :
                k == K"new_opaque_closure" ? :new_opaque_closure :
                nothing
         if isnothing(head)
@@ -455,7 +462,7 @@ end
 
 # Version of eval() taking `Expr` (or Expr tree leaves of any type)
 function eval(mod::Module, ex; opts...)
-    eval(mod, expr_to_syntaxtree(ex); opts...)
+    eval(mod, expr_to_est(ex); opts...)
 end
 
 function _eval(mod, iter)
@@ -467,10 +474,10 @@ function _eval(mod, iter)
         if type == :done
             break
         elseif type == :begin_module
-            filename = something(thunk[4].file, :none)
+            filename = something(thunk[5].file, :none)
             mod = @ccall jl_begin_new_module(
-                modules[end]::Any, thunk[2]::Symbol, thunk[3]::Cint,
-                filename::Cstring, thunk[4].line::Cint)::Module
+                modules[end]::Any, thunk[3]::Symbol, thunk[2]::Any, thunk[4]::Cint,
+                filename::Cstring, thunk[5].line::Cint)::Module
             push!(modules, mod)
         elseif type == :end_module
             @ccall jl_end_new_module(modules[end]::Module)::Cvoid
@@ -521,3 +528,5 @@ function include_string(mod::Module, code::AbstractString, filename::AbstractStr
                         expr_compat_mode=false)
     eval(mod, parseall(SyntaxTree, code; filename=filename); expr_compat_mode)
 end
+
+include(path::AbstractString) = include(JuliaLowering, path)

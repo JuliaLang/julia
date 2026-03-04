@@ -500,16 +500,16 @@ end
     # type-lattice for Conditional wrapper (NOTE never be merged with InterConditional)
     if isa(typea, Conditional) && isa(typeb, Const)
         if typeb.val === true
-            typeb = Conditional(typea.slot, Any, Union{})
+            typeb = Conditional(typea.slot, typea.ssadef, Any, Union{})
         elseif typeb.val === false
-            typeb = Conditional(typea.slot, Union{}, Any)
+            typeb = Conditional(typea.slot, typea.ssadef, Union{}, Any)
         end
     end
     if isa(typeb, Conditional) && isa(typea, Const)
         if typea.val === true
-            typea = Conditional(typeb.slot, Any, Union{})
+            typea = Conditional(typeb.slot, typeb.ssadef, Any, Union{})
         elseif typea.val === false
-            typea = Conditional(typeb.slot, Union{}, Any)
+            typea = Conditional(typeb.slot, typeb.ssadef, Union{}, Any)
         end
     end
     if isa(typea, Conditional) && isa(typeb, Conditional)
@@ -517,7 +517,7 @@ end
             thentype = tmerge(widenlattice(lattice), typea.thentype, typeb.thentype)
             elsetype = tmerge(widenlattice(lattice), typea.elsetype, typeb.elsetype)
             if thentype !== elsetype
-                return Conditional(typea.slot, thentype, elsetype)
+                return Conditional(typea.slot, typea.ssadef, thentype, elsetype)
             end
         end
         val = maybe_extract_const_bool(typea)

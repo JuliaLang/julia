@@ -3,6 +3,8 @@
 using Test, UUIDs, Random
 using UUIDs: _build_uuid1, _build_uuid7
 
+@test isempty(Test.detect_closure_boxes(UUIDs))
+
 # results similar to Python builtin uuid
 # To reproduce the sequence
 #=

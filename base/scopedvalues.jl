@@ -212,7 +212,7 @@ function get(val::AbstractScopedValue{T}) where {T}
     else
         v = Base.KeyValue.get(scope.values, val)
         v === nothing && return nothing
-        return Some{T}(only(v)::T)
+        return Some{T}(something(v)::T)
     end
     return nothing
 end

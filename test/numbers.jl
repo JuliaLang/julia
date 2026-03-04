@@ -3,6 +3,7 @@
 using Base.MathConstants
 using Random
 using LinearAlgebra
+using Test
 
 const ≣ = isequal # convenient for comparing NaNs
 
@@ -1770,7 +1771,7 @@ end
         @test cld(-1.1, 0.1) == div(-1.1, 0.1, RoundUp)   ==  ceil(big(-1.1)/big(0.1)) == -11.0
         @test fld(-1.1, 0.1) == div(-1.1, 0.1, RoundDown) == floor(big(-1.1)/big(0.1)) == -12.0
     end
-    @testset "issue  #49450" begin
+    @testset "issue #49450" begin
         @test div(514, Float16(0.75)) === Float16(685)
         @test fld(514, Float16(0.75)) === Float16(685)
         @test cld(515, Float16(0.75)) === Float16(687)
@@ -1790,6 +1791,42 @@ end
         @test fld(11, Float32(1.4305115e-6)) === Float32(7_689_557)
         @test cld(16, Float32(2.8014183e-6)) === Float32(5_711_393)
         @test cld(17, Float32(2.2053719e-6)) === Float32(7_708_451)
+
+        @test fld(1.5046328f-36, -3.3409559485880944e-52) === -4.503599545179259e15
+        @test cld(1.5046328f-36, -3.3409559485880944e-52) === -4.503599545179258e15
+
+        @test fld(9007199254740994.0, 3.0) === 3002399751580331.0
+        @test cld(9007199254740994.0, 3.0) === 3002399751580332.0
+
+        @test fld(2.0^52, 1.5) === 3.00239975158033e15
+        @test cld(2.0^52, 1.5) === 3.002399751580331e15
+
+        @test fld(1.0, 1.1102230246251568e-16) === 9.00719925474099e15
+        @test cld(1.0, 1.1102230246251568e-16) === 9.007199254740991e15
+
+        @test fld(5.368709120000001e8, 5.960464521947985e-8) === 9.007199187632128e15
+        @test cld(5.368709120000001e8, 5.960464521947985e-8) === 9.007199187632129e15
+
+        @test fld(1.6856322854563416e16, 3.8274770451988434) === 4.40402977091864e15
+        @test cld(1.6856322854563416e16, 3.8274770451988434) === 4.404029770918641e15
+
+        Random.seed!(123)
+        for T in (Float16, Float32, Float64, BigFloat)
+            p = precision(T)
+            for e in T(2).^(-6:2), s1 in (+1, -1), s2 in (+1, -1), r in 1:5
+                z = rand(T)
+                x = s1 * ldexp(1 + rand(T), rand(0:p))
+                y = s2 * z * eps(x/z) / e
+                _fld, _cld = e ≤ 1 ? (fld, cld) : (/, /)
+                if T == BigFloat
+                    @test fld(x, y) == T(setprecision(() -> _fld(x, y), p + 16))
+                    @test cld(x, y) == T(setprecision(() -> _cld(x, y), p + 16))
+                else
+                    @test fld(x, y) == T(_fld(widen(x), widen(y)))
+                    @test cld(x, y) == T(_cld(widen(x), widen(y)))
+                end
+            end
+        end
     end
 end
 @testset "return types" begin

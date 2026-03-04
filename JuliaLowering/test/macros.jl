@@ -51,7 +51,8 @@ module M
     end
 
     macro set_global_in_parent(ex)
-        e1 = adopt_scope(:(sym_introduced_from_M), __context__)
+        sym_ex = quote; sym_introduced_from_M; end
+        e1 = adopt_scope(sym_ex[1], __context__)
         quote
             $e1 = $ex
             nothing
@@ -59,7 +60,7 @@ module M
     end
 
     macro inner()
-        :(y)
+        :(y, z)
     end
 
     macro outer()
@@ -119,32 +120,45 @@ ctx, expanded = JuliaLowering.expand_forms_1(test_mod, ex, false, Base.get_world
 @test JuliaLowering.sourcetext.(JuliaLowering.flattened_provenance(expanded[2])) == [
     "M.@outer()"
     "@inner"
-    "y"
+    "(y, z)"
 ]
+
+@test JuliaLowering.include_string(test_mod, raw"""
+v"1.14"
+""") isa VersionNumber
+@test JuliaLowering.include_string(test_mod, raw"""
+v"1.14"
+""";expr_compat_mode=true) isa VersionNumber
+@test JuliaLowering.include_string(test_mod, raw"""
+Base.Experimental.@VERSION
+""") isa NamedTuple
+@test JuliaLowering.include_string(test_mod, raw"""
+Base.Experimental.@VERSION
+""";expr_compat_mode=true) isa NamedTuple
 
 # World age support for macro expansion
 JuliaLowering.include_string(test_mod, raw"""
 macro world_age_test()
-    :(world1)
+    1
 end
 """)
 world1 = Base.get_world_counter()
 JuliaLowering.include_string(test_mod, raw"""
 macro world_age_test()
-    :(world2)
+    2
 end
 """)
 world2 = Base.get_world_counter()
 
 call_world_arg_test = JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "@world_age_test()")
-@test JuliaLowering.expand_forms_1(test_mod, call_world_arg_test, false, world1)[2] ≈
-    @ast_ "world1"::K"Identifier"
-@test JuliaLowering.expand_forms_1(test_mod, call_world_arg_test, false, world2)[2] ≈
-    @ast_ "world2"::K"Identifier"
+    @test JuliaLowering.expand_forms_1(test_mod, call_world_arg_test, false, world1)[2] ≈
+        @ast_ 1::K"Value"
+    @test JuliaLowering.expand_forms_1(test_mod, call_world_arg_test, false, world2)[2] ≈
+        @ast_ 2::K"Value"
 
 # Layer parenting
 @test expanded[1].scope_layer == 2
-@test expanded[2].scope_layer == 3
+@test expanded[2][1].scope_layer == 3
 @test getfield.(ctx.scope_layers, :parent_layer) == [0,1,2]
 
 JuliaLowering.include_string(test_mod, """
@@ -176,7 +190,7 @@ let err = try
 end
 
 @test JuliaLowering.include_string(test_mod, "@ccall strlen(\"foo\"::Cstring)::Csize_t") == 3
-@test JuliaLowering.include_string(test_mod, "@ccall strlen(\"asdf\"::Cstring)::Csize_t gc_safe=true") == 4
+@test JuliaLowering.include_string(test_mod, "@ccall gc_safe=true strlen(\"asdf\"::Cstring)::Csize_t") == 4
 @test JuliaLowering.include_string(test_mod, """
 begin
     buf = zeros(UInt8, 20)
@@ -191,7 +205,7 @@ let (err, st) = try
         e, stacktrace(catch_backtrace())
     end
     @test err isa JuliaLowering.MacroExpansionError
-    @test err.msg == "Expected a return type annotation `::SomeType`"
+    @test err.msg == "expected a return type annotation `::SomeType`"
     @test isnothing(err.err)
     # Check that `catch_backtrace` can capture the stacktrace of the macro function
     @test any(sf->sf.func===:ccall_macro_parse, st)
@@ -268,7 +282,7 @@ Some error in old style macro"""
 @test sprint(
     showerror,
     JuliaLowering.MacroExpansionError(
-        JuliaLowering.expr_to_syntaxtree(:(foo), LineNumberNode(1)),
+        JuliaLowering.expr_to_est(:(foo), LineNumberNode(1)),
         "fake error")) ==
             "MacroExpansionError:\n#= line 1 =# - fake error"
 
@@ -323,7 +337,7 @@ end
     @sig_mismatch(1, 2, 3, 4)
     └───────────────────────┘ ── Error expanding macro
     Caused by:
-    MethodError: no method matching var"@sig_mismatch"(::JuliaLowering.MacroContext, ::JuliaLowering.SyntaxTree""")
+    MethodError: no method matching var"@sig_mismatch"(""")
 end
 
 @testset "old macros producing exotic expr heads" begin
@@ -333,6 +347,33 @@ end
         p = Base.unsafe_convert(Ptr{Int}, x)
         GC.@preserve x unsafe_load(p)
     end""") === 101 # Expr(:gc_preserve)
+
+    # JuliaLowering.jl/issues/121
+    @test JuliaLowering.include_string(test_mod, """
+    GC.@preserve @static if true @__MODULE__ else end
+    """) isa Module
+    @test JuliaLowering.include_string(test_mod, """
+    GC.@preserve @static if true v"1.14" else end
+    """) isa VersionNumber
+
+    # JuliaLowering.jl/issues/144
+    @test JuliaLowering.include_string(test_mod, """
+    f_preserve144() = let
+        val = Any[]
+        GC.@preserve val begin; end
+    end
+    f_preserve144()
+    """) == nothing
+
+    # JuliaLowering.jl/issues/145
+    @test JuliaLowering.include_string(test_mod, """
+    f_preserve145() = let
+        debug_buffer = IOBuffer()
+        # inside function to force compilation
+        GC.@preserve debug_buffer 1
+    end
+    f_preserve145()
+    """) == 1
 
     # only invokelatest produces :isglobal now, so MWE here
     Base.eval(test_mod, :(macro isglobal(x); esc(Expr(:isglobal, x)); end))
@@ -367,6 +408,18 @@ end
     """; expr_compat_mode=true)
     @test test_mod.SOME_ENUM <: Enum
     @test test_mod.X1 isa Enum
+
+    # @testset produces :tryfinally with secret third arg
+    @eval test_mod :(using Test)
+    @test JuliaLowering.include_string(test_mod, "@test true") isa Test.Pass
+    @testset let jltestset = JuliaLowering.include_string(test_mod, """
+    @testset begin
+        @test true
+    end
+    """; expr_compat_mode=true)
+        @test jltestset isa Test.AbstractTestSet
+        @test jltestset.n_passed == 1
+    end
 end
 
 @testset "macros producing meta forms" begin
@@ -421,7 +474,7 @@ end
     end
     """) ≈ @ast_ [K"."
         "A"::K"Identifier"
-        "hi"::K"Identifier"
+        [K"inert" "hi"::K"Identifier"]
     ]
     # module
     @test JuliaLowering.include_string(test_mod, raw"""
@@ -431,9 +484,10 @@ end
         )
     end
     """) ≈ @ast_ [K"module"
+        v"1.14.0"::K"Value"
+        true::K"Value"
         "AA"::K"Identifier"
-        [K"block"
-        ]
+        [K"block"]
     ]
 
     # In macro expansion, require that expressions passed in as macro
@@ -476,7 +530,7 @@ end
             $init
             ($y, x)
         end)
-        @ast q q [K"inert" q]
+        @ast q._graph q [K"inert_syntaxtree" q]
     end
     """)
     code = JuliaLowering.include_string(test_mod, """@make_quoted_code(x="outer x", x)""")
@@ -536,6 +590,298 @@ code = JuliaLowering.include_string(test_mod, """Mod1.@indirect_MODULE()""")
 
     @test JuliaLowering.include_string(
         test_mod, "@make_and_use_macro_toplevel()"; expr_compat_mode=false) === 123
+end
+
+@testset "SIMD loopinfo" begin
+    @test JuliaLowering.include_string(test_mod, raw"""
+    @eval let
+        n = 10
+        x = zeros(n)
+        i = 1
+        while i ≤ n
+            x[i] += 1
+            i += 1
+            $(Expr(:loopinfo, Symbol("julia.simdloop"), nothing))  # Mark loop as SIMD loop
+        end
+        sum(x)
+    end
+    """; expr_compat_mode=true) == 10.0
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    @eval let
+        n = 10
+        x = zeros(n)
+        i = 1
+        while i ≤ n
+            x[i] += 1
+            i += 1
+            $(Expr(:loopinfo, Symbol("julia.simdloop"), Symbol("julia.ivdep")))  # Mark loop as SIMD loop
+        end
+        sum(x)
+    end
+    """; expr_compat_mode=true) == 10.0
+
+    JuliaLowering.include_string(test_mod, """
+    @noinline function inner(x, y)
+        s = zero(eltype(x))
+        for i in eachindex(x, y)
+            @inbounds s += x[i]*y[i]
+        end
+        return s
+    end
+    """)
+
+    JuliaLowering.include_string(test_mod, """
+    @noinline function innersimd(x, y)
+        s = zero(eltype(x))
+        @simd for i in eachindex(x, y)
+            @inbounds s += x[i] * y[i]
+        end
+        return s
+    end
+    """)
+
+    @test test_mod.inner([1,2,3], [1,2,3]) == 14
+    @test test_mod.innersimd([1,2,3], [1,2,3]) == 14
+end
+
+@testset "@boundscheck / @inbounds" begin
+    JuliaLowering.include_string(test_mod, """
+    function sum_inbounds(A::AbstractArray)
+        r = zero(eltype(A))
+        for i in eachindex(A)
+            @inbounds r += A[i]
+        end
+        return r
+    end
+    """; expr_compat_mode=true)
+    @test test_mod.sum_inbounds([1,2,3]) == 6
+
+    JuliaLowering.include_string(test_mod, """
+    @inline function g_boundscheck(A, i)
+        @boundscheck checkbounds(A, i)
+        return A[i]
+    end
+    """; expr_compat_mode=true)
+    @test test_mod.g_boundscheck(1:2, 2) == 2
+end
+
+@testset "@__FUNCTION__ and Expr(:thisfunction)" begin
+    @testset "Basic usage" begin
+        # @__FUNCTION__ in regular functions
+        JuliaLowering.include_string(test_mod, raw"""
+        test_function_basic() = @__FUNCTION__
+        """; expr_compat_mode=true)
+        @test test_mod.test_function_basic() === test_mod.test_function_basic
+
+        # Expr(:thisfunction) in regular functions
+        JuliaLowering.include_string(test_mod, raw"""
+            @eval regular_func() = @__FUNCTION__
+        """; expr_compat_mode=true)
+        @test test_mod.regular_func() === test_mod.regular_func
+    end
+
+    @testset "Recursion" begin
+        # Factorial with @__FUNCTION__
+        JuliaLowering.include_string(test_mod, raw"""
+        factorial_function(n) = n <= 1 ? 1 : n * (@__FUNCTION__)(n - 1)
+        """; expr_compat_mode=true)
+        @test test_mod.factorial_function(5) == 120
+
+        # Fibonacci with Expr(:thisfunction)
+        JuliaLowering.include_string(test_mod, raw"""
+        struct RecursiveCallableStruct; end
+        (::RecursiveCallableStruct)(n) = n <= 1 ? n : @__FUNCTION__()(n-1) + @__FUNCTION__()(n-2)
+        """; expr_compat_mode=true)
+        @test test_mod.RecursiveCallableStruct()(10) === 55
+
+        # Anonymous function recursion
+        @test JuliaLowering.include_string(test_mod, raw"""
+        (n -> n <= 1 ? 1 : n * (@__FUNCTION__)(n - 1))(5)
+        """; expr_compat_mode=true) == 120
+    end
+
+    @testset "Closures and nested functions" begin
+        # Prevents boxed closures
+        JuliaLowering.include_string(test_mod, raw"""
+        function make_closure()
+            fib(n) = n <= 1 ? 1 : (@__FUNCTION__)(n - 1) + (@__FUNCTION__)(n - 2)
+            return fib
+        end
+        """; expr_compat_mode=true)
+        Test.@inferred test_mod.make_closure()
+        closure = test_mod.make_closure()
+        @test closure(5) == 8
+        Test.@inferred closure(5)
+
+        # Complex closure of closures
+        JuliaLowering.include_string(test_mod, raw"""
+        function f1()
+            function f2()
+                function f3()
+                    return @__FUNCTION__
+                end
+                return (@__FUNCTION__), f3()
+            end
+            return (@__FUNCTION__), f2()...
+        end
+        """; expr_compat_mode=true)
+        Test.@inferred test_mod.f1()
+        @test test_mod.f1()[1] === test_mod.f1
+        @test test_mod.f1()[2] !== test_mod.f1
+        @test test_mod.f1()[3] !== test_mod.f1
+        @test test_mod.f1()[3]() === test_mod.f1()[3]
+        @test test_mod.f1()[2]()[2]() === test_mod.f1()[3]
+    end
+
+    @testset "Do blocks" begin
+        function test_do_block()
+            result = JuliaLowering.include_string(test_mod, raw"""
+            map([1, 2, 3]) do x
+                return (@__FUNCTION__, x)
+            end
+            """; expr_compat_mode=true)
+            # All should refer to the same do-block function
+            @test all(r -> r[1] === result[1][1], result)
+            # Values should be different
+            @test [r[2] for r in result] == [1, 2, 3]
+            # It should be different than `test_do_block`
+            @test result[1][1] !== test_do_block
+        end
+        test_do_block()
+    end
+
+    @testset "Keyword arguments" begin
+        # @__FUNCTION__ with kwargs
+        JuliaLowering.include_string(test_mod, raw"""
+        f_thisfunction_kw(; n) = n <= 1 ? 1 : n * (@__FUNCTION__)(; n = n - 1)
+        """; expr_compat_mode=true)
+        @test test_mod.f_thisfunction_kw(n = 5) == 120
+
+        # Expr(:thisfunction) with kwargs
+        JuliaLowering.include_string(test_mod, raw"""
+        f_thisfunction_kw2(; n=1) = n <= 1 ? n : n * @__FUNCTION__()(; n=n-1)
+        """; expr_compat_mode=true)
+        result = test_mod.f_thisfunction_kw2(n=5)
+        @test result == 120
+    end
+
+    @testset "Callable structs" begin
+        # @__FUNCTION__ in callable structs
+        JuliaLowering.include_string(test_mod, raw"""
+        module A
+            struct CallableStruct{T}; val::T; end
+            (c::CallableStruct)() = @__FUNCTION__
+        end
+        """; expr_compat_mode=true)
+        JuliaLowering.include_string(test_mod, raw"""
+        using .A: CallableStruct
+        """; expr_compat_mode=true)
+        c = test_mod.CallableStruct(5)
+        @test c() === c
+
+        # In closures, var"#self#" should refer to the enclosing function,
+        # NOT the enclosing struct instance
+        JuliaLowering.include_string(test_mod, raw"""
+        struct CallableStruct2; end
+        @eval function (obj::CallableStruct2)()
+            function inner_func()
+                @__FUNCTION__
+            end
+            inner_func
+        end
+        """; expr_compat_mode=true)
+
+        let cs = test_mod.CallableStruct2()
+            @test cs()() === cs()
+            @test cs()() !== cs
+        end
+
+        # Accessing values via self-reference
+        JuliaLowering.include_string(test_mod, raw"""
+        struct CallableStruct3
+            value::Int
+        end
+        (obj::CallableStruct3)() = @__FUNCTION__()
+        (obj::CallableStruct3)(x) = @__FUNCTION__().value + x
+        """; expr_compat_mode=true)
+
+        let cs = test_mod.CallableStruct3(42)
+            @test cs() === cs
+            @test cs(10) === 52
+        end
+
+        # Callable struct with args and kwargs
+        JuliaLowering.include_string(test_mod, raw"""
+        struct CallableStruct4
+        end
+        @eval function (obj::CallableStruct4)(x, args...; y=2, kws...)
+            return (; func=(@__FUNCTION__), x, args, y, kws)
+        end
+        """; expr_compat_mode=true)
+        c = test_mod.CallableStruct4()
+        @test c(1).func === c
+        @test c(2, 3).args == (3,)
+        @test c(2; y=4).y == 4
+        @test c(2; y=4, a=5, b=6, c=7).kws[:c] == 7
+    end
+
+    @testset "Special cases" begin
+        # Generated functions
+        JuliaLowering.include_string(test_mod, raw"""
+        let
+            @generated foo2() = @__FUNCTION__
+            foo2() === foo2
+        end
+        """; expr_compat_mode=true)
+
+        # Struct constructors
+        let
+            JuliaLowering.include_string(test_mod, raw"""
+            struct Cols{T<:Tuple}
+                cols::T
+                operator
+                Cols(args...; operator=union) = (new{typeof(args)}(args, operator); string(@__FUNCTION__))
+            end
+            """; expr_compat_mode=true)
+            result = @invokelatest test_mod.Cols(1, 2, 3)
+            @test occursin("Cols", result)
+        end
+
+        # Should not access arg-map for local variables
+        # TODO: worth the special case?
+        JuliaLowering.include_string(test_mod, raw"""
+            function f_thisfunction_argmap end
+            function (f_thisfunction_argmap::typeof(f_thisfunction_argmap))()
+                f_thisfunction_argmap = 1
+                @__FUNCTION__
+            end
+        """; expr_compat_mode=true)
+        @test_broken test_mod.f_thisfunction_argmap() ===
+            test_mod.f_thisfunction_argmap
+    end
+
+    @test JuliaLowering.include_string(test_mod, """
+        @eval let f=[ ()->$(Expr(:thisfunction)) for i = 1:1 ][1]; f() === f; end
+    """; expr_compat_mode=true)
+end
+
+@testset "macro source LineNumberNode" begin
+    Base.include_string(test_mod, raw"""
+    macro srcfile()
+        string(__source__.file)
+    end
+    """)
+
+    mac_ex = Expr(:macrocall, Symbol("@srcfile"), LineNumberNode(1, "goodfile"))
+    mac_st = JuliaLowering.expr_to_est(mac_ex, LineNumberNode(1, "badfile"))
+
+    @test JuliaLowering.eval(test_mod, mac_st) === "goodfile"
+
+    # tolerate nothing
+    mac_ex = Expr(:macrocall, Symbol("@srcfile"), nothing)
+    mac_st = JuliaLowering.expr_to_est(mac_ex, LineNumberNode(1, "badfile"))
+    @test JuliaLowering.eval(test_mod, mac_st) == "none"
 end
 
 end

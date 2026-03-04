@@ -311,8 +311,7 @@ function enqueue_specialization!(all::Bool, worklist, mi::Core.MethodInstance)
     while codeinst !== nothing
         do_compile = false
         if codeinst.owner !== nothing
-            # TODO(vchuravy) native code caching for foreign interpreters
-            # Skip foreign code instances
+            # This code instance is from a foreign interpreter, so we skip it
         elseif use_const_api(codeinst) # Check if invoke is jl_fptr_const_return
             do_compile = true
         elseif codeinst.invoke != C_NULL || codeinst.precompile
@@ -344,7 +343,8 @@ function compile_and_emit_native(worlds::Vector{UInt},
                                  newmodules, # Vector{Module} or Nothing
                                  mod_array, # Vector{Module} or Nothing
                                  all::Bool,
-                                 module_init_order::Vector{Any}) # Vector{Module}
+                                 module_init_order::Vector{Any}, # Vector{Module}
+                                 ext_foreign_cis::Vector{Any}) # Vector{CodeInstance}
     latestworld = worlds[end]
 
     # Step 1: Precompile all __init__ methods that will be required
@@ -375,7 +375,13 @@ function compile_and_emit_native(worlds::Vector{UInt},
             if new_ext_cis !== nothing
                 for i in 1:length(new_ext_cis::Vector{Any})
                     ci = new_ext_cis[i]::CodeInstance
-                    enqueue_specialization!(all, specialization_worklist, get_ci_mi(ci))
+                    if ci.owner !== nothing
+                        # enqueue_specialization will skip over CIs from foreign interpreters
+                        # and currently will visit at most one (do_compile) CI per method instance
+                        push!(ext_foreign_cis, ci)
+                    else
+                        enqueue_specialization!(all, specialization_worklist, get_ci_mi(ci))
+                    end
                 end
             end
         end
@@ -418,7 +424,7 @@ function compile_and_emit_native(worlds::Vector{UInt},
         isa(exc, Core.TrimFailure) || rethrow()
         # The verification check failed. The error message should already have
         # been printed, so give up here and exit (w/o a stack trace).
-        invokelatest(exit, 1)
+        invokelatest(invokelatest(getglobal, Base, :exit), 1)
     end
 
     return codeinfos
@@ -448,7 +454,7 @@ function add_entrypoint(types::Type)
     mi = ccall(:jl_get_compile_hint_specialization, Any,
                    (Any, Csize_t, Cint),
                    types, world, 1)
-    if mi == nothing
+    if mi === nothing
         return false
     end
     push!(_entrypoint_mis, mi::Core.MethodInstance)

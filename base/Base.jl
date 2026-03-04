@@ -106,6 +106,29 @@ include("lock.jl")
 # strings & printing
 include("intfuncs.jl")
 include("strings/strings.jl")
+
+#=
+isdebugbuild is defined here as this is imported in libdl.jl (included in libc.jl)
+=#
+"""
+    isdebugbuild()
+
+Return `true` if julia is a debug version.
+"""
+function isdebugbuild()
+    return ccall(:jl_is_debugbuild, Cint, ()) != 0
+end
+
+# Enable dynamic library loading
+module Sys end # Sys is populated in stages during bootstrap
+Core.eval(Sys, :(include("osinfo.jl")))
+module Filesystem end # Filesystem is populated in stages during bootstrap
+Core.eval(Filesystem, :(include("path.jl")))
+using .Filesystem
+include("libc.jl") # Libdl (include in libc.jl) is required for regex.jl
+using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
+
+# More strings & printing
 include("regex.jl")
 include("parse.jl")
 include("shell.jl")
@@ -130,16 +153,8 @@ include("missing.jl")
 # version
 include("version.jl")
 
-#=
-isdebugbuild is defined here as this is imported in libdl.jl (included in libc.jl)
-The method is added in util.jl
-=#
-function isdebugbuild end
-
 # system & environment
-include("sysinfo.jl")
-include("libc.jl")
-using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
+Core.eval(Sys, :(include("sysinfo.jl")))
 
 const USING_STOCK_GC = occursin("stock", GC.gc_active_impl())
 
@@ -175,8 +190,7 @@ include("libuv.jl")
 include("asyncevent.jl")
 include("iostream.jl")
 include("stream.jl")
-include("filesystem.jl")
-using .Filesystem
+Core.eval(Filesystem, :(include("filesystem.jl")))
 include("cmd.jl")
 include("process.jl")
 include("terminfo.jl")
@@ -318,6 +332,11 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 # Compiler frontend
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
 include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
+# May be replaced in incremental sysimage build after-the-fact
+const JuliaLowering = nothing
+
+# Now that JuliaSyntax is bootstrapped and ready to use, set Base's syntax version.
+set_syntax_version(Base, VERSION)
 
 end_base_include = time_ns()
 
@@ -396,6 +415,11 @@ function __init__()
     delete!(ENV, "JULIA_WAIT_FOR_TRACY")
     if get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
         JuliaSyntax.enable_in_core!()
+    end
+    if JuliaLowering !== nothing && get_bool_env("JULIA_USE_FLISP_LOWERING", true) === false
+        # This is not available by default, but JuliaLowering can be added to
+        # Base after-the-fact via an incremental sysimage build.
+        JuliaLowering.activate!()
     end
 
     CoreLogging.global_logger(CoreLogging.ConsoleLogger())

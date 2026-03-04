@@ -80,7 +80,7 @@ else
 endif
 ifeq ($(OS), Darwin)
 	@printf "%s\n" "const MACOS_PRODUCT_VERSION = \"$(shell sw_vers -productVersion)\"" >> $@
-	@printf "%s\n" "const MACOS_PLATFORM_VERSION = \"$(shell xcrun --show-sdk-version)\"" >> $@
+	@printf "%s\n" "const MACOS_PLATFORM_VERSION = \"$(shell xcrun --sdk macosx --show-sdk-version)\"" >> $@
 endif
 	@printf "%s\n" "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)\"" >> $@
 
@@ -183,14 +183,14 @@ endif
 endef
 
 # libexec executables
-symlink_p7zip: $(build_bindir)/7z$(EXE)
+symlink_p7zip: $(build_private_libexecdir)/7z$(EXE)
 
 ifneq ($(USE_SYSTEM_P7ZIP),0)
 SYMLINK_SYSTEM_LIBRARIES += symlink_p7zip
 7Z_PATH := $(shell which 7z$(EXE))
 endif
 
-$(build_bindir)/7z$(EXE):
+$(build_private_libexecdir)/7z$(EXE):
 	[ -e "$(7Z_PATH)" ] && \
 	rm -f "$@" && \
 	ln -sf "$(7Z_PATH)" "$@"

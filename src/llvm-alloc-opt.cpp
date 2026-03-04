@@ -23,6 +23,7 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
+#include <llvm/Transforms/Utils/LowerAtomic.h>
 #include <llvm/Transforms/Utils/PromoteMemToReg.h>
 
 #include <llvm/InitializePasses.h>
@@ -305,7 +306,7 @@ void Optimizer::optimizeAll()
         // if all objects are jlvalue_t's. However, if part of the allocation is an unboxed value (e.g. it is a { float, jlvaluet }),
         // then moveToStack will create a [2 x jlvaluet] bitcast to { float, jlvaluet }.
         // This later causes the GC rooting pass, to miss-characterize the float as a pointer to a GC value
-        if (has_unboxed && has_ref) {
+        if (has_ref && (has_unboxed || use_info.addrescaped)) {
             REMARK([&]() {
                 std::string str;
                 llvm::raw_string_ostream rso(str);
@@ -678,11 +679,8 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
     // The allocation does not escape or get used in a phi node so none of the derived
     // SSA from it are live when we run the allocation again.
     // It is now safe to promote the allocation to an entry block alloca.
-    size_t align = 1;
-    // TODO: This is overly conservative. May want to instead pass this as a
-    //       parameter to the allocation function directly.
-    if (sz > 1)
-        align = MinAlign(JL_SMALL_BYTE_ALIGNMENT, NextPowerOf2(sz));
+    // Inherit alignment from the original allocation, with GC alignment as minimum.
+    Align align(std::max((unsigned)orig_inst->getRetAlign().valueOrOne().value(), (unsigned)JL_SMALL_BYTE_ALIGNMENT));
     // No debug info for prolog instructions
     IRBuilder<> prolog_builder(&F.getEntryBlock().front());
     AllocaInst *buff;
@@ -698,17 +696,21 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
         const DataLayout &DL = F.getParent()->getDataLayout();
         auto asize = ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), sz / DL.getTypeAllocSize(pass.T_prjlvalue));
         buff = prolog_builder.CreateAlloca(pass.T_prjlvalue, asize);
-        buff->setAlignment(Align(align));
+        buff->setAlignment(align);
         ptr = cast<Instruction>(buff);
     }
     else {
+        // Use alignment-sized chunks so SROA splits the alloca into aligned pieces
+        // which is better for performance and vectorization (see emit_static_alloca).
+        // Cap element size at 64 bits since not all backends support larger integers.
         Type *buffty;
-        if (pass.DL->isLegalInteger(sz * 8))
-            buffty = Type::getIntNTy(pass.getLLVMContext(), sz * 8);
+        unsigned elsize = std::min(align.value(), (uint64_t)8);
+        if (alignTo(sz, elsize) == elsize)
+            buffty = Type::getIntNTy(pass.getLLVMContext(), elsize * 8);
         else
-            buffty = ArrayType::get(Type::getInt8Ty(pass.getLLVMContext()), sz);
+            buffty = ArrayType::get(Type::getIntNTy(pass.getLLVMContext(), elsize * 8), alignTo(sz, elsize) / elsize);
         buff = prolog_builder.CreateAlloca(buffty);
-        buff->setAlignment(Align(align));
+        buff->setAlignment(align);
         ptr = cast<Instruction>(buff);
     }
     insertLifetime(ptr, ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), sz), orig_inst);
@@ -717,6 +719,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
         initializeAlloca(builder, buff, allockind);
     }
     Instruction *new_inst = cast<Instruction>(ptr);
+    new_inst->copyMetadata(*orig_inst);
     new_inst->takeName(orig_inst);
 
     auto simple_replace = [&] (Instruction *orig_i, Instruction *new_i) {
@@ -978,6 +981,8 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         uint32_t size;
     };
     SmallVector<SplitSlot,8> slots;
+    // Inherit alignment from the original allocation, with GC alignment as minimum.
+    Align align(std::max((unsigned)orig_inst->getRetAlign().valueOrOne().value(), (unsigned)JL_SMALL_BYTE_ALIGNMENT));
     for (auto memop: use_info.memops) {
         auto offset = memop.first;
         auto &field = memop.second;
@@ -993,15 +998,28 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         else if (field.elty && !field.multiloc) {
             allocty = field.elty;
         }
-        else if (pass.DL->isLegalInteger(field.size * 8)) {
-            allocty = Type::getIntNTy(pass.getLLVMContext(), field.size * 8);
-        } else {
-            allocty = ArrayType::get(Type::getInt8Ty(pass.getLLVMContext()), field.size);
+        else {
+            // Use alignment-sized chunks so SROA splits the alloca into aligned pieces
+            // which is better for performance and vectorization (see emit_static_alloca).
+            // Cap element size at 64 bits since not all backends support larger integers.
+            unsigned elsize = std::min(align.value(), (uint64_t)8);
+            if (alignTo(field.size, elsize) == elsize)
+                allocty = Type::getIntNTy(pass.getLLVMContext(), elsize * 8);
+            else
+                allocty = ArrayType::get(Type::getIntNTy(pass.getLLVMContext(), elsize * 8), alignTo(field.size, elsize) / elsize);
         }
         slot.slot = prolog_builder.CreateAlloca(allocty);
+        slot.slot->setAlignment(align);
         IRBuilder<> builder(orig_inst);
         insertLifetime(slot.slot, ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), field.size), orig_inst);
-        initializeAlloca(builder, slot.slot, use_info.allockind);
+        if (field.hasobjref) {
+            // alloca must be promotable for PromoteMemToReg below
+            if ((use_info.allockind & AllocFnKind::Uninitialized) == AllocFnKind::Unknown)
+                builder.CreateStore(Constant::getNullValue(pass.T_prjlvalue), slot.slot);
+        }
+        else {
+            initializeAlloca(builder, slot.slot, use_info.allockind);
+        }
         slots.push_back(std::move(slot));
     }
     const auto nslots = slots.size();
@@ -1133,7 +1151,6 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             return;
         }
         else if (isa<AtomicCmpXchgInst>(user) || isa<AtomicRMWInst>(user)) {
-            // TODO: Downgrade atomics here potentially
             auto slot_idx = find_slot(offset);
             auto &slot = slots[slot_idx];
             assert(slot.offset <= offset && slot.offset + slot.size >= offset);
@@ -1148,6 +1165,10 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 newptr = slot_gep(slot, offset, Val->getType(), builder);
             }
             *use = newptr;
+            if (auto *rmw = dyn_cast<AtomicRMWInst>(user))
+                lowerAtomicRMWInst(rmw);
+            else
+                lowerAtomicCmpXchgInst(cast<AtomicCmpXchgInst>(user));
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
             auto callee = call->getCalledOperand();

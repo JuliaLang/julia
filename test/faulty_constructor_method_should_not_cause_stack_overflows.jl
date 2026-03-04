@@ -1,3 +1,4 @@
+# new types with invalid constructors
 for (typ, sup) in (
     (:Char, :AbstractChar),
     (:String, :AbstractString),
@@ -8,6 +9,18 @@ for (typ, sup) in (
     @eval struct $fau <: $sup end
     @eval function Base.$typ(x::$fau) x end
 end
+
+# valid new subtype of `AbstractString`
+struct MyString <: AbstractString
+    str::String
+end
+Base.lastindex(s::MyString) = lastindex(s.str)
+Base.iterate(s::MyString) = iterate(s, 1)
+Base.iterate(s::MyString, state) = iterate(s, Int(state)::Int)
+Base.iterate(s::MyString, state::Integer) = iterate(s, Int(state)::Int)
+Base.iterate(s::MyString, state::Int) = iterate(s.str, state)
+Base.isequal(a::MyString, b::MyString) = isequal(a.str, b.str)
+Base.:(==)(a::MyString, b::MyString) = (a.str == b.str)
 
 using Test
 using Unicode: Unicode
@@ -39,14 +52,18 @@ using Unicode: Unicode
     end
     @testset let x = FaultyInt()
         @test_throws exc readbytes!(IOBuffer(), Vector{UInt8}(undef, 0), x)
-        @test_throws exc length("", x, x)
-        @test_throws exc thisind("", x)
-        @test_throws exc prevind("", x)
-        @test_throws exc prevind("", x, x)
-        @test_throws exc nextind("", x)
-        @test_throws exc nextind("", x, x)
-        @test_throws exc codeunit("", x)
-        @test_throws exc SubString("", x, x)
+        for s in ("", MyString(""))
+            @test_throws exc iterate(s, x)
+            @test_throws exc isvalid(s, x)
+            @test_throws exc length(s, x, x)
+            @test_throws exc thisind(s, x)
+            @test_throws exc prevind(s, x)
+            @test_throws exc prevind(s, x, x)
+            @test_throws exc nextind(s, x)
+            @test_throws exc nextind(s, x, x)
+            @test_throws exc codeunit(s, x)
+            @test_throws exc SubString(s, x, x)
+        end
     end
     @testset let x = FaultyUInt32()
         @test_throws exc Char(x)

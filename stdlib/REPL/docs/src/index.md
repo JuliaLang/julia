@@ -298,7 +298,7 @@ Julia's REPL keybindings may be fully customized to a user's preferences by pass
 to `REPL.setup_interface`. The keys of this dictionary may be characters or strings. The key
 `'*'` refers to the default action. Control plus character `x` bindings are indicated with `"^x"`.
 Meta plus `x` can be written `"\\M-x"` or `"\ex"`, and Control plus `x` can be written
-`"\\C-x"` or `"^x"`.
+`"\\C-x"` or `"^x"`. A literal `^` can be escaped as `"\\^"`.
 The values of the custom keymap must be `nothing` (indicating
 that the input should be ignored) or functions that accept the signature
 `(PromptState, AbstractREPL, Char)`.

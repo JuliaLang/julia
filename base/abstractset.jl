@@ -203,7 +203,7 @@ intersect!(s::AbstractSet, itr) =
 Construct the set of elements in `s` but not in any of the iterables in `itrs`.
 Maintain order with arrays. The result will have the same element type as `s`.
 
-See also [`setdiff!`](@ref), [`union`](@ref) and [`intersect`](@ref).
+See also [`setdiff!`](@ref), [`union`](@ref), [`intersect`](@ref).
 
 # Examples
 ```jldoctest
@@ -259,7 +259,7 @@ end
 Construct the symmetric difference of elements in the passed in sets.
 When `s` is not an `AbstractSet`, the order is maintained.
 
-See also [`symdiff!`](@ref), [`setdiff`](@ref), [`union`](@ref) and [`intersect`](@ref).
+See also [`symdiff!`](@ref), [`setdiff`](@ref), [`union`](@ref), [`intersect`](@ref).
 
 # Examples
 ```jldoctest
@@ -505,7 +505,7 @@ used to implement specialized methods.
 Determine whether `a` and `b` have the same elements. Equivalent
 to `a ⊆ b && b ⊆ a` but more efficient when possible.
 
-See also: [`isdisjoint`](@ref), [`union`](@ref).
+See also [`isdisjoint`](@ref), [`union`](@ref).
 
 # Examples
 ```jldoctest
@@ -553,7 +553,7 @@ issetequal(a) = Fix2(issetequal, a)
 Determine whether the collections `a` and `b` are disjoint.
 Equivalent to `isempty(a ∩ b)` but more efficient when possible.
 
-See also: [`intersect`](@ref), [`isempty`](@ref), [`issetequal`](@ref).
+See also [`intersect`](@ref), [`isempty`](@ref), [`issetequal`](@ref).
 
 !!! compat "Julia 1.5"
     This function requires at least Julia 1.5.

@@ -501,6 +501,13 @@ jl_value_t *jl_dump_function_ir_impl(jl_llvmf_dump_t *dump, char strip_ir_metada
     std::string code;
     raw_string_ostream stream(code);
 
+    // Prepend pass instrumentation output if present
+    if (dump->pass_output) {
+        stream << dump->pass_output;
+        free(dump->pass_output);
+        dump->pass_output = nullptr;
+    }
+
     if (dump->F) {
         //RAII will release the module
         auto TSM = std::unique_ptr<orc::ThreadSafeModule>(unwrap(dump->TSM));
@@ -924,7 +931,11 @@ static void jl_dump_asm_internal(
     // LLVM will destroy the formatted stream, and we keep the raw stream.
     std::unique_ptr<formatted_raw_ostream> ustream(new formatted_raw_ostream(rstream));
     std::unique_ptr<MCStreamer> Streamer(
-#if JL_LLVM_VERSION >= 190000
+#if JL_LLVM_VERSION >= 210000
+        TheTarget->createAsmStreamer(Ctx, std::move(ustream),
+
+                                     std::move(IP), std::move(CE), std::move(MAB))
+#elif JL_LLVM_VERSION >= 190000
         TheTarget->createAsmStreamer(Ctx, std::move(ustream),
 
                                      IP.release(), std::move(CE), std::move(MAB))
@@ -1214,6 +1225,12 @@ public:
 extern "C" JL_DLLEXPORT_CODEGEN
 jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const char* asm_variant, const char *debuginfo, char binary, char raw)
 {
+    // Free pass instrumentation output if present (we don't use it for ASM output)
+    if (dump->pass_output) {
+        free(dump->pass_output);
+        dump->pass_output = nullptr;
+    }
+
     // precise printing via IR assembler
     SmallVector<char, 4096> ObjBufferSV;
     if (dump->F) { // scope block also
@@ -1268,8 +1285,8 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
                 OutputAsmDialect = 0;
             if (!strcmp(asm_variant, "intel"))
                 OutputAsmDialect = 1;
-            MCInstPrinter *InstPrinter = TM->getTarget().createMCInstPrinter(
-                jl_ExecutionEngine->getTargetTriple(), OutputAsmDialect, MAI, MII, MRI);
+            std::unique_ptr<MCInstPrinter> InstPrinter(TM->getTarget().createMCInstPrinter(
+                                                           jl_ExecutionEngine->getTargetTriple(), OutputAsmDialect, MAI, MII, MRI));
             std::unique_ptr<MCAsmBackend> MAB(TM->getTarget().createMCAsmBackend(
                 STI, MRI, Options));
             std::unique_ptr<MCCodeEmitter> MCE;
@@ -1278,8 +1295,10 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
             }
             auto FOut = std::make_unique<formatted_raw_ostream>(asmfile);
             std::unique_ptr<MCStreamer> S(TM->getTarget().createAsmStreamer(
-#if JL_LLVM_VERSION >= 190000
-                *Context, std::move(FOut), InstPrinter, std::move(MCE), std::move(MAB)
+#if JL_LLVM_VERSION >= 210000
+                *Context, std::move(FOut), std::move(InstPrinter), std::move(MCE), std::move(MAB)
+#elif JL_LLVM_VERSION >= 190000
+                *Context, std::move(FOut), InstPrinter.release(), std::move(MCE), std::move(MAB)
 #else
                 *Context, std::move(FOut), true, true, InstPrinter, std::move(MCE),
                 std::move(MAB), false
