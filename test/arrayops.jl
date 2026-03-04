@@ -2735,7 +2735,22 @@ end
 #issue #18336
 @test cumsum([-0.0, -0.0])[1] === cumsum([-0.0, -0.0])[2] === -0.0
 @test cumprod(-0.0im .+ (0:0))[1] === Complex(0.0, -0.0)
+# Issue #33599
+@testset "Single Argument cumsum! and cumprod!" begin
+    @test cumsum!(Int[]) == Int[]
+    @test cumsum!([5]) == [5]
+    @test cumsum!([1, 2, 3, 4]) == [1, 3, 6, 10]
+    @test cumsum!([1.0, 2.0, 3.0, 4.0]) ≈ [1.0, 3.0, 6.0, 10.0]
+    @test cumsum!([1 2; 3 4], dims=1) == [1 2; 4 6]
+    @test cumsum!([1 2; 3 4], dims=2) == [1 3; 3 7]
 
+    @test cumprod!(Int[]) == Int[]
+    @test cumprod!([5]) == [5]
+    @test cumprod!([1, 2, 3, 4]) == [1, 2, 6, 24]
+    @test cumprod!([1.0, 2.0, 3.0, 4.0]) ≈ [1.0, 2.0, 6.0, 24.0]
+    @test cumprod!([1 2; 3 4], dims=1) == [1 2; 3 8]
+    @test cumprod!([1 2; 3 4], dims=2) == [1 2; 3 12]
+end
 module TestNLoops15895
 
 using Base.Cartesian

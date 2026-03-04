@@ -42,6 +42,8 @@ New library functions
 New library features
 --------------------
 
+* `cumsum!` and `cumprod!` now allow for a single argument format `cumsum!(x)` ([#61010])
+
 * `IOContext` supports a new boolean `hexunsigned` option that allows for
   printing unsigned integers in decimal instead of hexadecimal ([#60267]).
 
