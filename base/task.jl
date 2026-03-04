@@ -160,7 +160,7 @@ const task_state_failed   = UInt8(2)
         elseif st === task_state_failed
             return :failed
         else
-            @assert false
+            @assert false "unexpected state"
         end
     elseif field === :backtrace
         # TODO: this field name should be deprecated in 2.0
