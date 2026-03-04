@@ -75,7 +75,7 @@ void FinalLowerGC::lowerWriteBarrierPost(CallInst *target, Function &F) {
                                                 MDB.createBranchWeights(Weights));
     trigTerm->getParent()->setName("trigger_wb");
     builder.SetInsertPoint(trigTerm);
-    if (target->getCalledOperand() == write_barrier_func) {
+    if (target->getCalledOperand() == write_barrier_post_func) {
         builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), parent);
     }
     else {
