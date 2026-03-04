@@ -104,7 +104,12 @@ function parentindices end
 parentindices(a::AbstractArray) = map(oneto, size(a))
 
 ## Aliasing detection
-dataids(A::SubArray) = (dataids(A.parent)..., _splatmap(dataids, A.indices)...)
+function dataids(A::SubArray)
+    read_write_dataids = dataids(A.parent)
+    read_only_dataids_1 = _splatmap(dataids, A.indices)
+    read_only_dataids_2 = map(_canonicalize_dataid_as_readonly, read_only_dataids_1)
+    (read_write_dataids..., read_only_dataids_2...)
+end
 _splatmap(f, ::Tuple{}) = ()
 _splatmap(f, t::Tuple) = (f(t[1])..., _splatmap(f, tail(t))...)
 unaliascopy(A::SubArray) = typeof(A)(unaliascopy(A.parent), map(unaliascopy, A.indices), A.offset1, A.stride1)

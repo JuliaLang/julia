@@ -1184,6 +1184,11 @@ union(r::OneTo, s::OneTo) = OneTo(max(r.stop,s.stop))
 
 intersect(r::AbstractUnitRange{<:Integer}, s::AbstractUnitRange{<:Integer}) = max(first(r),first(s)):min(last(r),last(s))
 
+function isdisjoint(r::AbstractUnitRange{T}, s::AbstractUnitRange{T}) where {T <: Integer}
+    p = intersect(r, s)
+    isempty(p)
+end
+
 intersect(i::Integer, r::AbstractUnitRange{<:Integer}) = range(max(i, first(r)), length=in(i, r))
 
 intersect(r::AbstractUnitRange{<:Integer}, i::Integer) = intersect(i, r)
