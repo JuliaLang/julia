@@ -2222,10 +2222,23 @@ STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroot
     while (1) {
         jl_value_t ***rts = (jl_value_t ***)(((void **)s) + 2);
         for (uint32_t i = 0; i < nr; i++) {
+            // The low bit of nroots distinguishes the frame layout:
+            // set: JL_GC_PUSH1..8 frame; each slot holds the address of a
+            //   local `jl_value_t*` variable, hence the double dereference.
+            // clear: slots hold object pointers directly (JL_GC_PUSHARGS,
+            //   codegen, interpreter frames), including finalizer lists
+            //   pushed as frames by jl_gc_run_finalizers_in_list — the only
+            //   frames that contain GC_FIN_*-tagged pointers.
             if (nroots & 1) {
                 void **slot = (void **)gc_read_stack(&rts[i], offset, lb, ub);
                 new_obj = (jl_value_t *)gc_read_stack(slot, offset, lb, ub);
                 if (new_obj == NULL)
+                    continue;
+                // GC frame slots created by JL_GC_PUSH* are expected to hold
+                // either NULL or heap object pointers. Be tolerant of foreign
+                // runtimes that encode immediate values in the same nominal
+                // pointer type and may root those locals through this API.
+                if (((uintptr_t)new_obj & 0x3) != 0)
                     continue;
             }
             else {
