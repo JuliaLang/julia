@@ -126,13 +126,13 @@ mutable struct Timer
         associate_julia_struct(this.handle, this)
         iolock_begin()
         err = ccall(:uv_timer_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}), loop, this)
-        @assert err == 0
+        @assert err == 0 "failed to initialize timer"
         finalizer(uvfinalize, this)
         ccall(:uv_update_time, Cvoid, (Ptr{Cvoid},), loop)
         err = ccall(:uv_timer_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
             this, @cfunction(uv_timercb, Cvoid, (Ptr{Cvoid},)),
             timeoutms, intervalms)
-        @assert err == 0
+        @assert err == 0 "failed to start timer"
         iolock_end()
         return this
     end
