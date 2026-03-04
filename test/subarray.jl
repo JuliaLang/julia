@@ -626,7 +626,7 @@ end
         "Invalid use of @view macro: argument must be a reference expression A[...]."
     ) var"@view"(LineNumberNode(@__LINE__), @__MODULE__, 1)
 
-    X = reshape(1:24,2,3,4)
+    X = reshape(collect(1:24),2,3,4)
     Y = 4:-1:1
 
     @test isa(@view(X[1:3]), SubArray)

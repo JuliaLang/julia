@@ -211,7 +211,7 @@ julia> view(2:5, 2:3) # returns a range as type is immutable
 ```
 """
 function view(A::AbstractArray, I::Vararg{Any,M}) where {M}
-    @inline
+    @_propagate_inbounds_meta
     J = map(i->unalias(A,i), to_indices(A, I))
     @boundscheck checkbounds(A, J...)
     J′ = rm_singleton_indices(ntuple(Returns(true), Val(ndims(A))), J...)
@@ -219,23 +219,24 @@ function view(A::AbstractArray, I::Vararg{Any,M}) where {M}
 end
 
 # Ranges implement getindex to return recomputed ranges; use that for views, too (when possible)
-function view(r1::AbstractUnitRange, r2::AbstractUnitRange{<:Integer})
+# we specialize on unsafe_view to ensure that conversions from Colons or CartesainIndices have already taken place
+function unsafe_view(r1::AbstractUnitRange, r2::AbstractUnitRange{<:Integer})
     @_propagate_inbounds_meta
     getindex(r1, r2)
 end
-function view(r1::AbstractUnitRange, r2::StepRange{<:Integer})
+function unsafe_view(r1::AbstractUnitRange, r2::StepRange{<:Integer})
     @_propagate_inbounds_meta
     getindex(r1, r2)
 end
-function view(r1::StepRange, r2::AbstractRange{<:Integer})
+function unsafe_view(r1::StepRange, r2::AbstractRange{<:Integer})
     @_propagate_inbounds_meta
     getindex(r1, r2)
 end
-function view(r1::StepRangeLen, r2::OrdinalRange{<:Integer})
+function unsafe_view(r1::StepRangeLen, r2::OrdinalRange{<:Integer})
     @_propagate_inbounds_meta
     getindex(r1, r2)
 end
-function view(r1::LinRange, r2::OrdinalRange{<:Integer})
+function unsafe_view(r1::LinRange, r2::OrdinalRange{<:Integer})
     @_propagate_inbounds_meta
     getindex(r1, r2)
 end
