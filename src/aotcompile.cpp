@@ -531,7 +531,7 @@ static bool canPartition(const Function &F)
 // `external_linkage` create linkages between pkgimages.
 extern "C" JL_DLLEXPORT_CODEGEN
 void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int external_linkage, size_t world,
-                           jl_array_t *mod_array, jl_array_t *worklist, int all, jl_array_t *module_init_order)
+                           jl_array_t *mod_array, jl_array_t *worklist, int all, jl_array_t *module_init_order, jl_array_t *ext_foreign_cis)
 {
     JL_TIMING(INFERENCE, INFERENCE);
     auto ct = jl_current_task;
@@ -547,7 +547,7 @@ void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int ex
         compiler_start_time = jl_hrtime();
 
     jl_value_t **fargs;
-    JL_GC_PUSHARGS(fargs, 8);
+    JL_GC_PUSHARGS(fargs, 9);
 #ifdef _P64
     jl_value_t *jl_array_ulong_type = jl_array_uint64_type;
 #else
@@ -568,10 +568,11 @@ void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int ex
     fargs[5] = mod_array ? (jl_value_t*)mod_array : jl_nothing; // mod_array (or nothing)
     fargs[6] = jl_box_bool(all);
     fargs[7] = module_init_order ? (jl_value_t*)module_init_order : jl_nothing; // module_init_order (or nothing)
+    fargs[8] = ext_foreign_cis ? (jl_value_t*)ext_foreign_cis : jl_nothing; // ext_foreign_cis (or nothing)
     size_t last_age = ct->world_age;
     ct->world_age = jl_typeinf_world;
-    fargs[0] = jl_apply(fargs, 8);
-    fargs[1] = fargs[2] = fargs[3] = fargs[4] = fargs[5] = fargs[6] = fargs[7] = NULL;
+    fargs[0] = jl_apply(fargs, 9);
+    fargs[1] = fargs[2] = fargs[3] = fargs[4] = fargs[5] = fargs[6] = fargs[7] = fargs[8] = NULL;
     ct->world_age = last_age;
     jl_value_t *codeinfos = fargs[0];
     JL_TYPECHK(jl_create_native, array_any, codeinfos);
@@ -2364,7 +2365,7 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instanc
     jl_printf(stream, "\n----\n");
 
     jl_printf(stream, "\n---- unoptimized IR ----\n");
-    jl_get_llvmf_defn(&llvmf_dump, mi, src, 0, false, jl_default_cgparams);
+    jl_get_llvmf_defn(&llvmf_dump, mi, src, 0, false, nullptr, jl_default_cgparams);
     if (llvmf_dump.F) {
         jl_value_t *ir = jl_dump_function_ir(&llvmf_dump, 0, 1, "source");
         if (ir != NULL && jl_is_string(ir))
@@ -2373,7 +2374,7 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instanc
     jl_printf(stream, "\n----\n");
 
     jl_printf(stream, "\n---- optimized IR ----\n");
-    jl_get_llvmf_defn(&llvmf_dump, mi, src, 0, true, jl_default_cgparams);
+    jl_get_llvmf_defn(&llvmf_dump, mi, src, 0, true, nullptr, jl_default_cgparams);
     if (llvmf_dump.F) {
         jl_value_t *ir = jl_dump_function_ir(&llvmf_dump, 0, 1, "source");
         if (ir != NULL && jl_is_string(ir))
@@ -2382,7 +2383,7 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instanc
     jl_printf(stream, "\n----\n");
 
     jl_printf(stream, "\n---- assembly ----\n");
-    jl_get_llvmf_defn(&llvmf_dump, mi, src, 0, true, jl_default_cgparams);
+    jl_get_llvmf_defn(&llvmf_dump, mi, src, 0, true, nullptr, jl_default_cgparams);
     if (llvmf_dump.F) {
         jl_value_t *ir = jl_dump_function_asm(&llvmf_dump, 0, "", "source", 0, true);
         if (ir != NULL && jl_is_string(ir))
@@ -2399,11 +2400,12 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instanc
 // for use in reflection from Julia.
 // This is paired with jl_dump_function_ir and jl_dump_function_asm, either of which will free all memory allocated here
 extern "C" JL_DLLEXPORT_CODEGEN
-void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_code_info_t *src, char getwrapper, char optimize, const jl_cgparams_t params)
+void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_code_info_t *src, char getwrapper, char optimize, const char *llvm_options, const jl_cgparams_t params)
 {
     // emit this function into a new llvm module
     dump->F = nullptr;
     dump->TSM = nullptr;
+    dump->pass_output = nullptr;
     if (src && jl_is_code_info(src)) {
         const auto &DL = jl_ExecutionEngine->getDataLayout();
         const auto &TT = jl_ExecutionEngine->getTargetTriple();
@@ -2457,10 +2459,21 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                     opts.sanitize_memory = params.sanitize_memory;
                     opts.sanitize_thread = params.sanitize_thread;
                     opts.sanitize_address = params.sanitize_address;
-                    NewPM PM{jl_ExecutionEngine->cloneTargetMachine(), getOptLevel(jl_options.opt_level), opts};
+                    PrintOptions print_opts;
+                    std::string pass_output_buffer;
+                    raw_string_ostream pass_output_stream(pass_output_buffer);
+                    if (llvm_options && llvm_options[0] != '\0') {
+                        parseLLVMOptions(llvm_options, print_opts);
+                        print_opts.out = &pass_output_stream;
+                    }
+                    NewPM PM{jl_ExecutionEngine->cloneTargetMachine(), getOptLevel(jl_options.opt_level), opts, print_opts};
                     //Safe b/c context lock is held by output
                     PM.run(output.get_module());
                     assert(!verifyLLVMIR(output.get_module()));
+                    // Capture pass output (freed by jl_dump_function_ir or jl_dump_function_asm)
+                    if (!pass_output_buffer.empty()) {
+                        dump->pass_output = strdup(pass_output_buffer.c_str());
+                    }
                 }
                 const std::string *fname;
                 if (decls->invoke_api == JL_INVOKE_ARGS || decls->invoke_api == JL_INVOKE_SPARAM)

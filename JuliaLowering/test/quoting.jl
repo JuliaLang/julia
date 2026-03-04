@@ -24,7 +24,7 @@ end
 @test sourcetext(ex[1]) == "f(\$(x+1), \$y)"
 @test sourcetext(ex[1][2]) == "\$(x+1)"
 @test sourcetext.(flattened_provenance(ex[1][3])) == ["\$y", "g(z)"]
-@test sprint(io->showprov(io, ex[1][3], tree=true)) == raw"""
+@test sprint(io->JuliaLowering._show_provtree(io, ex[1][3], "")) == raw"""
     (call g z)
     ├─ (call g z)
     │  └─ (call g z)
@@ -188,30 +188,24 @@ let
     :(:($$(args...)))
 end
 """)
-@test try
+
+err = try
     JuliaLowering.eval(test_mod, multi_interp_ex)
     nothing
 catch exc
     @test exc isa LoweringError
     sprint(io->Base.showerror(io, exc, show_detail=false))
-end == raw"""
-LoweringError:
-let
-    args = (:(x), :(y))
-    :(:($$(args...)))
-#       └─────────┘ ── More than one value in bare `$` expression
-end"""
+end
+@test contains(err, raw"More than one value in bare `$` expression")
 
-@test try
+err = try
     JuliaLowering.eval(test_mod, multi_interp_ex, expr_compat_mode=true)
     nothing
 catch exc
     @test exc isa LoweringError
     sprint(io->Base.showerror(io, exc, show_detail=false))
-end == raw"""
-LoweringError:
-#= none:0 =# - More than one value in bare `$` expression"""
-# ^ TODO: Improve error messages involving expr_to_syntaxtree!
+end
+@test contains(err, raw"More than one value in bare `$` expression")
 
 # Interpolation of SyntaxTree Identifier vs plain Symbol
 @eval test_mod using JuliaLowering

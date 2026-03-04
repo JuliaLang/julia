@@ -866,4 +866,22 @@ end
     """; expr_compat_mode=true)
 end
 
+@testset "macro source LineNumberNode" begin
+    Base.include_string(test_mod, raw"""
+    macro srcfile()
+        string(__source__.file)
+    end
+    """)
+
+    mac_ex = Expr(:macrocall, Symbol("@srcfile"), LineNumberNode(1, "goodfile"))
+    mac_st = JuliaLowering.expr_to_est(mac_ex, LineNumberNode(1, "badfile"))
+
+    @test JuliaLowering.eval(test_mod, mac_st) === "goodfile"
+
+    # tolerate nothing
+    mac_ex = Expr(:macrocall, Symbol("@srcfile"), nothing)
+    mac_st = JuliaLowering.expr_to_est(mac_ex, LineNumberNode(1, "badfile"))
+    @test JuliaLowering.eval(test_mod, mac_st) == "none"
+end
+
 end

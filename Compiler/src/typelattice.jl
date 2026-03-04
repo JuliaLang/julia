@@ -372,9 +372,15 @@ end
                 elsefields === nothing || push!(elsefields, t)
             end
         end
-        return Conditional(slot, ssadef,
-            thenfields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp_widened, thenfields),
-            elsefields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp_widened, elsefields))
+        thentype_r = thenfields === nothing ? Bottom : begin
+            undefs = partialstruct_init_undefs(vartyp_widened, thenfields)
+            undefs === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp_widened, undefs, thenfields)
+        end
+        elsetype_r = elsefields === nothing ? Bottom : begin
+            undefs = partialstruct_init_undefs(vartyp_widened, elsefields)
+            undefs === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp_widened, undefs, elsefields)
+        end
+        return Conditional(slot, ssadef, thentype_r, elsetype_r)
     end
 end
 

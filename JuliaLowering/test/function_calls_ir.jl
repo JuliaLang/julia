@@ -72,6 +72,10 @@ x^42.0
 #---------------------
 LoweringError:
 #= line 1 =# - malformed `call`
+Expression:
+  (call)
+Containing expressions:
+  (call)
 
 ########################################
 # Simple broadcast

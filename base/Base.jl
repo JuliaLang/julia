@@ -332,9 +332,11 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 # Compiler frontend
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
 include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
-
 # May be replaced in incremental sysimage build after-the-fact
 const JuliaLowering = nothing
+
+# Now that JuliaSyntax is bootstrapped and ready to use, set Base's syntax version.
+set_syntax_version(Base, VERSION)
 
 end_base_include = time_ns()
 

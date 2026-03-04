@@ -1,47 +1,31 @@
 #-------------------------------------------------------------------------------
-# @chk: Basic AST structure checking tool
-#
-# Check a condition involving an expression, throwing a LoweringError if it
-# doesn't evaluate to true. Does some very simple pattern matching to attempt
-# to extract the expression variable from the left hand side.
-#
-# Forms:
-# @chk pred(ex)
-# @chk pred(ex) msg
-# @chk pred(ex) (msg_display_ex, msg)
-macro chk(cond, msg=nothing)
-    if Meta.isexpr(msg, :tuple)
-        ex = msg.args[1]
-        msg = msg.args[2]
-    else
-        ex = cond
-        while true
-            if ex isa Symbol
-                break
-            elseif ex.head == :call
-                ex = ex.args[2]
-            elseif ex.head == :ref
-                ex = ex.args[1]
-            elseif ex.head == :.
-                ex = ex.args[1]
-            elseif ex.head in (:(==), :(in), :<, :>)
-                ex = ex.args[1]
+# @jl_assert: Produce an internal error that surfaces one or more trees.
+# Example: `@jl_assert 1 === 1 (tree1, "message1"), tree2, (tree3, "message3")`
+if DEBUG
+    macro jl_assert(cond, args...)
+        usage = "usage: @jl_assert(condition, tree|(tree, message)...)"
+        @assert(!isempty(args), usage)
+        sts = Expr(:call, SyntaxList)
+        msgs = Expr(:call, Base.vect)
+        for a in args
+            if Meta.isexpr(a, :tuple, 2)
+                push!(sts.args, a.args[1])
+                push!(msgs.args, a.args[2])
             else
-                error("Can't analyze $cond")
+                push!(sts.args, a)
+                push!(msgs.args, QuoteNode(a))
             end
         end
+        # just add assertion string to first msg
+        msgs.args[2] = Expr(
+            :string, "`jl_assert(", QuoteNode(cond), ", _)`: ", msgs.args[2])
+        :($(esc(cond)) ? nothing : begin
+              throw(LoweringError($(esc(sts)), $(esc(msgs)), true))
+          end)
     end
-    quote
-        ex = $(esc(ex))
-        @assert ex isa SyntaxTree
-        ok = try
-            $(esc(cond))
-        catch
-            false
-        end
-        if !ok
-            throw(LoweringError(ex, $(isnothing(msg) ? "expected `$cond`" : esc(msg))))
-        end
+else
+    macro jl_assert(cond, args...)
+        nothing
     end
 end
 
@@ -449,9 +433,9 @@ function is_quoted(ex)
 end
 
 function extension_type(ex)
-    @assert kind(ex) == K"assert"
-    @chk numchildren(ex) >= 1
-    @chk kind(ex[1]) == K"Symbol"
+    @jl_assert kind(ex) == K"assert" ex
+    @jl_assert numchildren(ex) >= 1 ex
+    @jl_assert kind(ex[1]) == K"Symbol" ex
     ex[1].name_val
 end
 
@@ -573,7 +557,7 @@ function new_scope_layer(ctx, mod_ref::Module=ctx.mod)
 end
 
 function new_scope_layer(ctx, mod_ref::SyntaxTree)
-    @assert kind(mod_ref) == K"Identifier"
+    @jl_assert kind(mod_ref) == K"Identifier" mod_ref
     new_scope_layer(ctx, ctx.scope_layers[mod_ref.scope_layer].mod)
 end
 

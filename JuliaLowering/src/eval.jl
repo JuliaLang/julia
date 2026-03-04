@@ -182,10 +182,10 @@ function add_ir_debug_info!(current_codelocs_stack, stmt)
             push!(current_codelocs_stack, (locstk[j][1], [], Vector{Int32}()))
         end
     end
-    @assert length(locstk) === length(current_codelocs_stack)
+    @jl_assert length(locstk) === length(current_codelocs_stack) stmt
     for (j, (file,line)) in enumerate(locstk)
         fn, edges, codelocs = current_codelocs_stack[j]
-        @assert fn == file
+        @jl_assert fn == file stmt
         if j < length(locstk)
             edge_index = length(edges) + 1
             edge_codeloc_index = fld1(length(current_codelocs_stack[j+1][3]) + 1, 3)
@@ -394,18 +394,18 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
         # opaque_closure_method has special non-evaluated semantics for the
         # `functionloc` line number node so we need to undo a level of quoting
         arg4 = args[4]
-        @assert arg4 isa QuoteNode
+        @jl_assert arg4 isa QuoteNode e
         args[4] = arg4.value
         Expr(:opaque_closure_method, args...)
     elseif k == K"meta"
         args = Any[_to_lowered_expr(e, stmt_offset) for e in children(ex)]
         # Unpack K"Symbol" QuoteNode as `Expr(:meta)` requires an identifier here.
         arg1 = args[1]
-        @assert arg1 isa QuoteNode
+        @jl_assert arg1 isa QuoteNode e
         args[1] = arg1.value
         Expr(:meta, args...)
     elseif k == K"static_eval"
-        @assert numchildren(ex) == 1
+        @jl_assert numchildren(ex) == 1 e
         @stm ex[1] begin
             # tuple should just be ccall library spec
             [K"tuple" s lib] -> Expr(:tuple,
