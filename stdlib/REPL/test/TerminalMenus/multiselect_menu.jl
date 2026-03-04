@@ -11,6 +11,9 @@
 @test MultiSelectMenu(string.(1:30), pagesize=-1, charset=:ascii).pagesize == 30
 @test MultiSelectMenu(string.(1:4), pagesize=10, charset=:ascii).pagesize == 4
 @test MultiSelectMenu(string.(1:100), charset=:ascii).pagesize == 10
+cursor, up_arrow, down_arrow = styled"{bold:>↑↓}"
+@test MultiSelectMenu([styled"{red:one}", styled"{yellow:two}", styled"{green:three}"];
+    checked = styled"[{red:X}]", cursor, up_arrow, down_arrow) isa MultiSelectMenu
 
 multi_menu = MultiSelectMenu(string.(1:20), charset=:ascii)
 @test TerminalMenus.options(multi_menu) == string.(1:20)

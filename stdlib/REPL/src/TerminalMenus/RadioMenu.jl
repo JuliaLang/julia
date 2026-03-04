@@ -20,7 +20,7 @@ Your favorite fruit is blueberry!
 
 """
 mutable struct RadioMenu{C} <: _ConfiguredMenu{C}
-    options::Array{String,1}
+    options::Vector{<:AbstractString}
     keybindings::Vector{Char}
     pagesize::Int
     pageoffset::Int
@@ -31,7 +31,7 @@ end
 
 """
 
-    RadioMenu(options::Vector{String}; pagesize::Int=10,
+    RadioMenu(options::Vector{<:AbstractString}; pagesize::Int=10,
                                        keybindings::Vector{Char}=Char[],
                                        kwargs...)
 
@@ -41,7 +41,7 @@ user.
 
 # Arguments
 
-  - `options::Vector{String}`: Options to be displayed
+  - `options::Vector{<:AbstractString}`: Options to be displayed
   - `pagesize::Int=10`: The number of options to be displayed at one time, the menu will scroll if length(options) > pagesize
   - `keybindings::Vector{Char}=Char[]`: Shortcuts to pick corresponding entry from `options`
 
@@ -50,7 +50,7 @@ Any additional keyword arguments will be passed to [`TerminalMenus.Config`](@ref
 !!! compat "Julia 1.8"
     The `keybindings` argument requires Julia 1.8 or later.
 """
-function RadioMenu(options::Array{String,1}; pagesize::Int=10, warn::Bool=true, keybindings::Vector{Char}=Char[], kwargs...)
+function RadioMenu(options::Vector{<:AbstractString}; pagesize::Int=10, warn::Bool=true, keybindings::Vector{Char}=Char[], kwargs...)
     length(options) < 1 && error("RadioMenu must have at least one option")
     length(keybindings) in [0, length(options)] || error("RadioMenu must have either no keybindings, or one per option")
 
@@ -87,7 +87,7 @@ function pick(menu::RadioMenu, cursor::Int)
     return true #break out of the menu
 end
 
-function writeline(buf::IOBuffer, menu::RadioMenu{Config}, idx::Int, iscursor::Bool)
+function writeline(buf::IO, menu::RadioMenu{Config}, idx::Int, iscursor::Bool)
     print(buf, replace(menu.options[idx], "\n" => "\\n"))
 end
 
@@ -100,7 +100,7 @@ function keypress(m::RadioMenu, i::UInt32)
 end
 
 # Legacy interface
-function writeLine(buf::IOBuffer, menu::RadioMenu{<:Dict}, idx::Int, cursor::Bool)
+function writeLine(buf::IO, menu::RadioMenu{<:Dict}, idx::Int, cursor::Bool)
     # print a ">" on the selected entry
     cursor ? print(buf, menu.config[:cursor] ," ") : print(buf, "  ")
 

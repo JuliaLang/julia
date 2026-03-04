@@ -3,22 +3,22 @@
 abstract type AbstractConfig end
 
 struct Config <: AbstractConfig
-    cursor::Char
-    up_arrow::Char
-    down_arrow::Char
-    updown_arrow::Char
+    cursor::AbstractChar
+    up_arrow::AbstractChar
+    down_arrow::AbstractChar
+    updown_arrow::AbstractChar
     scroll_wrap::Bool
     ctrl_c_interrupt::Bool
 end
 
 struct MultiSelectConfig <: AbstractConfig
     config::Config
-    checked::String
-    unchecked::String
+    checked::AbstractString
+    unchecked::AbstractString
 end
 
 """
-    Config(; scroll_wrap=false, ctrl_c_interrupt=true, charset=:ascii, cursor::Char, up_arrow::Char, down_arrow::Char)
+    Config(; scroll_wrap=false, ctrl_c_interrupt=true, charset=:ascii, cursor::AbstractChar, up_arrow::AbstractChar, down_arrow::AbstractChar)
 
 Configure behavior for selection menus via keyword arguments:
 
@@ -44,10 +44,10 @@ as needed, your `writeline` method should not print them.
 """
 function Config(;
                 charset::Symbol = :ascii,
-                cursor::Char = '\0',
-                up_arrow::Char = '\0',
-                down_arrow::Char = '\0',
-                updown_arrow::Char = '\0',
+                cursor::AbstractChar = '\0',
+                up_arrow::AbstractChar = '\0',
+                down_arrow::AbstractChar = '\0',
+                updown_arrow::AbstractChar = '\0',
                 scroll_wrap::Bool = false,
                 ctrl_c_interrupt::Bool = true)
     charset === :ascii || charset === :unicode ||
@@ -68,7 +68,7 @@ function Config(;
 end
 
 """
-    MultiSelectConfig(; charset=:ascii, checked::String, unchecked::String, kwargs...)
+    MultiSelectConfig(; charset=:ascii, checked::AbstractString, unchecked::AbstractString, kwargs...)
 
 Configure behavior for a multiple-selection menu via keyword arguments:
 
@@ -86,8 +86,8 @@ your `writeline` method.
 """
 function MultiSelectConfig(;
                            charset::Symbol = :ascii,
-                           checked::String = "",
-                           unchecked::String = "",
+                           checked::AbstractString = "",
+                           unchecked::AbstractString = "",
                            kwargs...)
     charset === :ascii || charset === :unicode || throw(ArgumentError("charset should be :ascii or :unicode, received $charset"))
     if isempty(checked)
@@ -112,7 +112,7 @@ Global menu configuration parameters
 !!! compat "Julia 1.6"
     `CONFIG` is deprecated, instead configure menus via their constructors.
 """
-const CONFIG = Dict{Symbol,Union{Char,String,Bool}}()
+const CONFIG = Dict{Symbol,Union{AbstractChar,AbstractString,Bool}}()
 
 """
     config( <see arguments> )
@@ -121,11 +121,11 @@ Keyword-only function to configure global menu parameters
 
 # Arguments
  - `charset::Symbol=:na`: ui characters to use (`:ascii` or `:unicode`); overridden by other arguments
- - `cursor::Char='>'|'→'`: character to use for cursor
- - `up_arrow::Char='^'|'↑'`: character to use for up arrow
- - `down_arrow::Char='v'|'↓'`: character to use for down arrow
- - `checked::String="[X]"|"✓"`: string to use for checked
- - `unchecked::String="[ ]"|"⬚")`: string to use for unchecked
+ - `cursor::AbstractChar='>'|'→'`: character to use for cursor
+ - `up_arrow::AbstractChar='^'|'↑'`: character to use for up arrow
+ - `down_arrow::AbstractChar='v'|'↓'`: character to use for down arrow
+ - `checked::AbstractString="[X]"|"✓"`: string to use for checked
+ - `unchecked::AbstractString="[ ]"|"⬚")`: string to use for unchecked
  - `scroll::Symbol=:nowrap`: If `:wrap` wrap cursor around top and bottom, if :`nowrap` do not wrap cursor
  - `supress_output::Bool=false`: Ignored legacy argument, pass `suppress_output` as a keyword argument to `request` instead.
  - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
@@ -135,12 +135,12 @@ Keyword-only function to configure global menu parameters
 """
 function config(;charset::Symbol = :na,
                 scroll::Symbol = :na,
-                cursor::Char = '\0',
-                up_arrow::Char = '\0',
-                down_arrow::Char = '\0',
-                updown_arrow::Char = '\0',
-                checked::String = "",
-                unchecked::String = "",
+                cursor::AbstractChar = '\0',
+                up_arrow::AbstractChar = '\0',
+                down_arrow::AbstractChar = '\0',
+                updown_arrow::AbstractChar = '\0',
+                checked::AbstractString = "",
+                unchecked::AbstractString = "",
                 supress_output::Union{Nothing, Bool}=nothing,   # typo was documented, unfortunately
                 ctrl_c_interrupt::Union{Nothing, Bool}=nothing)
 
