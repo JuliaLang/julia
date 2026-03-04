@@ -145,6 +145,7 @@ JL_DLLEXPORT jl_module_t *jl_begin_new_module(jl_module_t *parent_module, jl_sym
     JL_UNLOCK(&jl_modules_mutex);
     // copy parent environment info into submodule
     newm->uuid = parent_module->uuid;
+    jl_gc_wb_pre(newm, newm->file); // TODO: Optimize
     newm->file = jl_symbol(filename);
     jl_gc_wb_knownold(newm, newm->file);
     newm->line = lineno;

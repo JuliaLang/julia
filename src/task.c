@@ -1582,6 +1582,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->result = jl_nothing;
     ct->donenotify = jl_nothing;
     jl_atomic_store_relaxed(&ct->_isexception, 0);
+    jl_gc_wb_knownold(ct, ct->scope); // TODO: Optimize
     ct->scope = jl_nothing;
     jl_gc_wb_knownold(ct, ct->scope);
     ct->eh = NULL;
