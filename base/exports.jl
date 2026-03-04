@@ -741,6 +741,8 @@ export
 # tasks and conditions
     Condition,
     current_task,
+    main_task,
+    ismaintask,
     islocked,
     istaskdone,
     istaskstarted,
