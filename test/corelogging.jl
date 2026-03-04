@@ -389,32 +389,32 @@ end
     # Simple
     @test genmsg_err(Info, "msg", Main, "some/path.jl", 101) ==
     """
-    ┌ Info: msg
-    └ @ Main some/path.jl:101
+    ⎡ Info: msg
+    ⎣ @ Main some/path.jl:101
     """
 
     # Multiline message
     @test genmsg_err(Warn, "line1\nline2", Main, "some/path.jl", 101) ==
     """
-    ┌ Warning: line1
-    │ line2
-    └ @ Main some/path.jl:101
+    ⎡ Warning: line1
+    ⎜ line2
+    ⎣ @ Main some/path.jl:101
     """
 
     # Keywords
     @test genmsg(Error, "msg", Base, "other.jl", 101, a=1, b="asdf") ==
     """
-    ┌ Error: msg
-    │   a = 1
-    │   b = asdf
-    └ @ Base other.jl:101
+    ⎡ Error: msg
+    ⎜   a = 1
+    ⎜   b = asdf
+    ⎣ @ Base other.jl:101
     """
 
     # nothing values
     @test genmsg(Warn, "msg", nothing, nothing, nothing) ==
     """
-    ┌ Warning: msg
-    └ @ nothing nothing:nothing
+    ⎡ Warning: msg
+    ⎣ @ nothing nothing:nothing
     """
 end
 
