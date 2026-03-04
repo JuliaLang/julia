@@ -4010,7 +4010,7 @@ void post_boot_hooks(void)
     jl_atomic_store_relaxed(&jl_kwcall_type->name->max_args, 0);
 
     // Initialize TypeApp type reference for mutually recursive types
-    jl_init_typeapp_type();
+    jl_typeapp_type = (jl_datatype_t*)core("TypeApp");
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;

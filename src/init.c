@@ -600,8 +600,8 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
     }
 
     // Initialize TypeApp type reference (needed for recursive type support)
-    // This must be called after Core module is available, whether from sysimage or boot.jl
-    jl_init_typeapp_type();
+    // This must be set after Core module is available, whether from sysimage or boot.jl
+    jl_typeapp_type = (jl_datatype_t*)jl_get_global(jl_core_module, jl_symbol("TypeApp"));
 
     jl_init_flisp();
     jl_init_serializer();

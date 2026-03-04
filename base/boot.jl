@@ -1176,20 +1176,6 @@ function _contains_typeapp(@nospecialize(x))
     if x isa UnionAll
         return _contains_typeapp(x.body)
     end
-    if x isa Union
-        return _contains_typeapp(x.a) || _contains_typeapp(x.b)
-    end
-    if x isa DataType
-        p = x.parameters::SimpleVector
-        n = _svec_len(p)
-        i = 1
-        while sle_int(i, n)
-            if _contains_typeapp(_svec_ref(p, i))
-                return true
-            end
-            i = add_int(i, 1)
-        end
-    end
     return false
 end
 

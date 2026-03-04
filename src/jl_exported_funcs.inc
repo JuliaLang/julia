@@ -238,7 +238,6 @@
     XX(jl_idtable_rehash) \
     XX(jl_init) \
     XX(jl_init_) \
-    XX(jl_init_typeapp_type) \
     XX(jl_init_options) \
     XX(jl_init_restored_module) \
     XX(jl_init_with_image) \

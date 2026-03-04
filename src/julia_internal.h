@@ -1326,7 +1326,7 @@ typedef struct {
     jl_value_t *param;
 } jl_typeapp_t;
 
-JL_DLLEXPORT void jl_init_typeapp_type(void);
+extern jl_datatype_t *jl_typeapp_type;
 JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *typevars, jl_svec_t *struct_infos);
 int jl_is_typeapp(jl_value_t *v) JL_NOTSAFEPOINT;
 void jl_init_tasks(void) JL_GC_DISABLED;

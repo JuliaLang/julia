@@ -2396,14 +2396,7 @@ JL_DLLEXPORT int jl_nth_pointer_isdefined(jl_value_t *v, size_t i)
 // ============================================================================
 
 // Cache for TypeApp DataType (looked up from Core after boot.jl loads)
-static jl_datatype_t *jl_typeapp_type = NULL;
-
-// Initialize TypeApp type reference from Core module
-// Called after boot.jl is loaded
-JL_DLLEXPORT void jl_init_typeapp_type(void)
-{
-    jl_typeapp_type = (jl_datatype_t*)jl_get_global(jl_core_module, jl_symbol("TypeApp"));
-}
+jl_datatype_t *jl_typeapp_type = NULL;
 
 // Type predicate for TypeApp
 int jl_is_typeapp(jl_value_t *v) JL_NOTSAFEPOINT {
@@ -2445,8 +2438,8 @@ static int is_typename_reachable(jl_value_t *t, jl_typename_t *target, htable_t 
         }
         if (types == NULL)
             return 1; // if types aren't computable, conservatively assume potentially recursive
-        if (ptrhash_get(visited, dt->name) == HT_NOTFOUND) {
-            ptrhash_put(visited, dt->name, dt->name);
+        if (ptrhash_get(visited, dt) == HT_NOTFOUND) {
+            ptrhash_put(visited, dt, dt);
             size_t nf = jl_svec_len(types);
             for (size_t i = 0; i < nf; i++) {
                 if (is_typename_reachable(jl_svecref(types, i), target, visited))
@@ -2646,7 +2639,8 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
     htable_t subst_map;
     htable_new(&subst_map, n);
 
-    JL_TRY {
+    // Steps 1-4: Create types, resolve references using subst_map
+    { JL_TRY {
         // Step 1: Create empty DataTypes for each type in the typegroup
         for (size_t i = 0; i < n; i++) {
             jl_tvar_t *tv = (jl_tvar_t*)jl_svecref(typevars, i);
@@ -2734,22 +2728,10 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             }
         }
 
-        // Step 3a: Check for circular supertype chains among typegroup types
-        // Walk each type's supertype chain and verify it doesn't reach any typegroup type.
-        // This catches A <: A, A <: B + B <: A, and longer cycles.
-        for (size_t i = 0; i < n; i++) {
-            jl_datatype_t *cur = datatypes[i]->super;
-            while (cur != jl_any_type) {
-                for (size_t j = 0; j < n; j++) {
-                    if (cur->name == datatypes[j]->name) {
-                        jl_errorf("invalid subtyping: circular supertype chain involving %s and %s",
-                                 jl_symbol_name(((jl_tvar_t*)jl_svecref(typevars, i))->name),
-                                 jl_symbol_name(((jl_tvar_t*)jl_svecref(typevars, j))->name));
-                    }
-                }
-                cur = cur->super;
-            }
-        }
+        // Note: circular supertype chain checking is not needed here because
+        // typegroup only supports struct definitions (not abstract types), so
+        // types within the group can never be valid supertypes of each other.
+        // Self-subtyping is already caught by the check above.
 
         // Step 3.5: Precompute hash values BEFORE resolving field types
         for (size_t i = 0; i < n; i++) {
@@ -2780,27 +2762,25 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
             jl_gc_wb(dt, ftypes);
             JL_GC_POP();
         }
+    }
+    JL_CATCH {
+        htable_free(&subst_map);
+        JL_GC_POP();
+        jl_rethrow();
+    } }
+    htable_free(&subst_map);
 
-        // Step 5: Process field attributes and compute layouts
+    // Steps 5-6: Compute layouts and finalize types (subst_map no longer needed)
+    { JL_TRY {
+        // Step 5a: Compute mayinlinealloc for ALL types before computing layouts.
+        // jl_compute_field_offsets uses mayinlinealloc from field types (via
+        // jl_datatype_isinlinealloc), so all types need correct values first.
+        // Mirrors jl_new_datatype: set mayinlinealloc=1 for immutable types,
+        // then _typebody! sets it to 0 if self-recursion is detected.
         for (size_t i = 0; i < n; i++) {
             jl_svec_t *info = (jl_svec_t*)jl_svecref(struct_infos, i);
-            jl_svec_t *fattrs = (jl_svec_t*)jl_svecref(info, 2);
-            jl_svec_t *fnames = (jl_svec_t*)jl_svecref(info, 1);
             int mutabl = jl_unbox_bool(jl_svecref(info, 3));
-
             jl_datatype_t *dt = unwrap_to_datatype(results[i]);
-            JL_GC_PUSH3(&dt, &fattrs, &fnames);
-
-            uint32_t *atomicfields = NULL;
-            uint32_t *constfields = NULL;
-            jl_process_field_attrs(fattrs, fnames, mutabl, 1, &atomicfields, &constfields);
-            dt->name->atomicfields = atomicfields;
-            dt->name->constfields = constfields;
-
-            if (dt->types != NULL) {
-                jl_compute_field_offsets(dt);
-            }
-
             if (!mutabl && dt->types != NULL) {
                 size_t nf = jl_svec_len(dt->types);
                 // Mirror _typebody!: if the supertype can reference this type,
@@ -2821,13 +2801,34 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
                     dt->name->mayinlinealloc = mayinlinealloc;
                 }
             }
+        }
+
+        // Step 5b: Process field attributes and compute layouts
+        for (size_t i = 0; i < n; i++) {
+            jl_svec_t *info = (jl_svec_t*)jl_svecref(struct_infos, i);
+            jl_svec_t *fattrs = (jl_svec_t*)jl_svecref(info, 2);
+            jl_svec_t *fnames = (jl_svec_t*)jl_svecref(info, 1);
+            int mutabl = jl_unbox_bool(jl_svecref(info, 3));
+
+            jl_datatype_t *dt = unwrap_to_datatype(results[i]);
+            JL_GC_PUSH3(&dt, &fattrs, &fnames);
+
+            uint32_t *atomicfields = NULL;
+            uint32_t *constfields = NULL;
+            jl_process_field_attrs(fattrs, fnames, mutabl, 1, &atomicfields, &constfields);
+            dt->name->atomicfields = atomicfields;
+            dt->name->constfields = constfields;
+
+            if (dt->types != NULL) {
+                jl_compute_field_offsets(dt);
+            }
 
             jl_precompute_memoized_dt(dt, 0);
             jl_maybe_allocate_singleton_instance(dt);
             JL_GC_POP();
         }
 
-        // Step 5.5: Reinstantiate inner types
+        // Step 6: Reinstantiate inner types
         for (size_t i = 0; i < n; i++) {
             jl_datatype_t *dt = unwrap_to_datatype(results[i]);
             JL_GC_PUSH1(&dt);
@@ -2843,12 +2844,9 @@ JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *ty
         }
     }
     JL_CATCH {
-        htable_free(&subst_map);
         JL_GC_POP();
         jl_rethrow();
-    }
-
-    htable_free(&subst_map);
+    } }
 
     // Build result tuple
     jl_value_t *result = jl_f_tuple(NULL, results, n);
