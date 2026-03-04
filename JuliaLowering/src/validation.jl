@@ -257,7 +257,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         vst1_ident(vcx, lab; lhs=true) & vst1(with(vcx; in_symblock=true), body)
     [K"gc_preserve" x ids...] -> vst1(vcx, x) & all(vst1_ident, vcx, ids)
     # lowering TODO: 0 args segfaults
-    [K"gc_preserve_begin" ids...] -> minlen(st, ids, 1) & all(vst1_ident, vcx, ids)
+    [K"gc_preserve_begin" ids...] -> all(vst1_ident, vcx, ids)
     [K"gc_preserve_end" ids...] -> all(vst1_ident, vcx, ids)
     [K"isdefined" [K"Identifier"]] -> pass()
     [K"lambda" [K"block" b1...] [K"block" b2...] _] ->
@@ -516,13 +516,12 @@ vst1_symdecl(vcx, st) = @stm st begin
 end
 
 # TODO: globalref might not be valid everywhere; check usage of this function
-vst1_ident(vcx, st; lhs=false) = @stm st begin
+vst1_ident(vcx, st; lhs=false, ccall_ok=false) = @stm st begin
     ([K"Identifier"], when=(s=st.name_val; true)) -> if all(==('_'), s)
         lhs || vcx.in_param_t ? pass() :
             @fail(st, "all-underscore identifiers are write-only and their values cannot be used in expressions")
-    elseif s in ("ccall", "cglobal")
-        # TODO
-        pass()
+    elseif !ccall_ok && s in ("ccall", "cglobal")
+        @fail(st, string(s, " is a reserved identifier"))
     else
         pass()
     end
@@ -536,11 +535,11 @@ vst1_call(vcx, st) = @stm st begin
             @fail(st, "cglobal must have one or two arguments")) &
         all(vst1_call_arg, vcx, args)
     [K"call" f [K"parameters" kwargs...] args...] ->
-        vst1(vcx, f) &
+        (vst1_ident(vcx, f; ccall_ok=true) | vst1(vcx, f)) &
         all(vst1_call_arg, vcx, args) &
         all(vst1_call_kwarg, vcx, kwargs)
     [K"call" f args...] ->
-        vst1(vcx, f) &
+        (vst1_ident(vcx, f; ccall_ok=true) | vst1(vcx, f)) &
         all(vst1_call_arg, vcx, args)
     [K"call" _...] -> @fail(st, "malformed `call`")
     _ -> unknown()

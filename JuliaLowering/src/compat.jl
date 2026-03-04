@@ -490,6 +490,7 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
                     "macro-expansion and desugaring: ")))
             end
         end
+        ([K"latestworld"], when=!is_leaf(st)) -> newleaf(g, st, K"latestworld")
         [K"cfunction" typ fptr rt at sym] -> @ast g st [K"cfunction"
             rec(typ) rec(fptr)
             [K"static_eval"(meta=name_hint("cfunction return type")) rec(rt)]

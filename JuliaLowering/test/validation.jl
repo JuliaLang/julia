@@ -91,7 +91,6 @@ let
         "typed_ncat",
         "import",
         "using",
-        "gc_preserve_begin",
     ]
     standalone_heads = String[
         "block",
@@ -101,7 +100,6 @@ let
         "string",
         "&&",
         "-->",
-        "gc_preserve_end",
         "&&",
         "||",
         "toplevel",
