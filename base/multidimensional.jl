@@ -10,7 +10,7 @@ module IteratorsMD
     import .Base: +, -, *, (:)
     import .Base: simd_outer_range, simd_inner_length, simd_index, setindex
     import Core: Tuple
-    using .Base: to_index, fill_to_length, tail, safe_tail
+    using .Base: to_index, fill_to_length, tail, safe_tail, _splitrest
     using .Base: IndexLinear, IndexCartesian, AbstractCartesianIndex,
         ReshapedArray, ReshapedArrayLF, OneTo, Fix1
     using .Base.Iterators: Reverse, PartitionIterator
@@ -525,14 +525,10 @@ module IteratorsMD
         _split1(t, ref), _splitrest(t, ref)
     end
     @inline _split1(t, ref) = (t[1], _split1(tail(t), tail(ref))...)
-    @inline _splitrest(t, ref) = _splitrest(tail(t), tail(ref))
     # exit either when we've exhausted the input or reference tuple
     _split1(::Tuple{}, ::Tuple{}) = ()
     _split1(::Tuple{}, ref) = ()
     _split1(t, ::Tuple{}) = ()
-    _splitrest(::Tuple{}, ::Tuple{}) = ()
-    _splitrest(t, ::Tuple{}) = t
-    _splitrest(::Tuple{}, ref) = ()
 
     @inline function split(I::CartesianIndex, V::Val)
         i, j = split(I.I, V)
@@ -788,25 +784,12 @@ end
 
 # combined count of all indices, including CartesianIndex and
 # AbstractArray{CartesianIndex}
-# rather than returning N, it returns an NTuple{N,Bool} so the result is inferable
-@inline index_ndims(i1, I...) = (true, index_ndims(I...)...)
 @inline function index_ndims(i1::CartesianIndex, I...)
     (map(Returns(true), i1.I)..., index_ndims(I...)...)
 end
 @inline function index_ndims(i1::AbstractArray{CartesianIndex{N}}, I...) where N
     (ntuple(Returns(true), Val(N))..., index_ndims(I...)...)
 end
-index_ndims() = ()
-
-# combined dimensionality of all indices
-# rather than returning N, it returns an NTuple{N,Bool} so the result is inferable
-@inline index_dimsum(i1, I...) = (index_dimsum(I...)...,)
-@inline index_dimsum(::Colon, I...) = (true, index_dimsum(I...)...)
-@inline index_dimsum(::AbstractArray{Bool}, I...) = (true, index_dimsum(I...)...)
-@inline function index_dimsum(::AbstractArray{<:Any,N}, I...) where N
-    (ntuple(Returns(true), Val(N))..., index_dimsum(I...)...)
-end
-index_dimsum() = ()
 
 # Recursively compute the lengths of a list of indices, without dropping scalars
 index_lengths() = ()
@@ -915,8 +898,6 @@ checkindex(::Type{Bool}, inds::Tuple, I::AbstractArray{Bool}) = _check_boolean_a
 _check_boolean_axes(inds::Tuple, axes::Tuple) = (inds[1] == axes[1]) & _check_boolean_axes(tail(inds), tail(axes))
 _check_boolean_axes(::Tuple{}, axes::Tuple) = all(==(OneTo(1)), axes)
 
-ensure_indexable(I::Tuple{}) = ()
-@inline ensure_indexable(I::Tuple{Any, Vararg{Any}}) = (I[1], ensure_indexable(tail(I))...)
 @inline ensure_indexable(I::Tuple{LogicalIndex, Vararg{Any}}) = (collect(I[1]), ensure_indexable(tail(I))...)
 
 # In simple cases, we know that we don't need to use axes(A). Optimize those
