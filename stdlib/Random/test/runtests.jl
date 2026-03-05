@@ -976,6 +976,13 @@ end
         m = MersenneTwister(0); rand(m, Int64); rand(m)
         @test string(m) == "MersenneTwister(0x48d73dc42d195740db2fa90498613fdf, 0x1911b814c02405e88c49bc52dc8a77ea, 0, 2256, 1254, 1, 0, 1)"
         @test m == MersenneTwister(0x48d73dc42d195740db2fa90498613fdf, 0x1911b814c02405e88c49bc52dc8a77ea, 0, 2256, 1254, 1, 0, 1)
+
+        # generate then jump
+        m = MersenneTwister(123)
+        rand(m)
+        Random.jump!(m, 2*big(10)^20)
+        @test string(m) == "MersenneTwister(0xf80cc98e147960c1fefa8d41b8f5dca5, 0xea7a7dcb2e787c0120e2ccc17662fc1d, 200000000000000000000, 1002)"
+        @test m == MersenneTwister(0xf80cc98e147960c1fefa8d41b8f5dca5, 0xea7a7dcb2e787c0120e2ccc17662fc1d, 200000000000000000000, 1002)
     end
 
     @testset "RandomDevice" begin
