@@ -502,7 +502,7 @@ static jl_array_t *queue_external_cis(jl_array_t *list, jl_query_cache *query_ca
         int dispatch_status = jl_atomic_load_relaxed(&m->dispatch_status);
         if (!(dispatch_status & METHOD_SIG_LATEST_WHICH))
             continue; // ignore replaced methods
-        if (ci->owner == jl_nothing && jl_atomic_load_relaxed(&ci->inferred) && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
+        if (jl_atomic_load_relaxed(&ci->inferred) && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
             int found = has_backedge_to_worklist(mi, &visited, &stack, query_cache);
             assert(found == 0 || found == 1 || found == 2);
             assert(stack.len == 0);
@@ -720,14 +720,11 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-    jl_value_t *depots = NULL, *prefs_hash = NULL, *prefs_list = NULL;
+    jl_value_t *depots = NULL, *prefs_blob = NULL;
     jl_value_t *unique_func = NULL;
     jl_value_t *replace_depot_func = NULL;
     jl_value_t *normalize_depots_func = NULL;
-    jl_value_t *toplevel = NULL;
-    jl_value_t *prefs_hash_func = NULL;
-    jl_value_t *get_compiletime_prefs_func = NULL;
-    JL_GC_PUSH8(&depots, &prefs_list, &unique_func, &replace_depot_func, &normalize_depots_func, &toplevel, &prefs_hash_func, &get_compiletime_prefs_func);
+    JL_GC_PUSH5(&depots, &prefs_blob, &unique_func, &replace_depot_func, &normalize_depots_func);
 
     jl_array_t *udeps = (jl_array_t*)jl_get_global_value(jl_base_module, jl_symbol("_require_dependencies"), ct->world_age);
     *udepsp = udeps;
@@ -798,51 +795,22 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     }
     write_int32(s, 0); // terminator, for ease of reading
 
-    // Calculate Preferences hash for current package.
-    if (jl_base_module) {
-        // Toplevel module is the module we're currently compiling, use it to get our preferences hash
-        toplevel = jl_get_global_value(jl_base_module, jl_symbol("__toplevel__"), ct->world_age);
-        prefs_hash_func = jl_eval_global_var(jl_base_module, jl_symbol("get_preferences_hash"), ct->world_age);
-        get_compiletime_prefs_func = jl_eval_global_var(jl_base_module, jl_symbol("get_compiletime_preferences"), ct->world_age);
-
-        if (toplevel) {
-            // call get_compiletime_prefs(__toplevel__)
-            jl_value_t *args[3] = {get_compiletime_prefs_func, (jl_value_t*)toplevel, NULL};
-            prefs_list = (jl_value_t*)jl_apply(args, 2);
-            JL_TYPECHK(write_dependency_list, array, prefs_list);
-
-            // Call get_preferences_hash(__toplevel__, prefs_list)
-            args[0] = prefs_hash_func;
-            args[2] = prefs_list;
-            prefs_hash = (jl_value_t*)jl_apply(args, 3);
-            JL_TYPECHK(write_dependency_list, uint64, prefs_hash);
-        }
-    }
+    // Serialize any compile-time dependencies on preferences.
+    assert(jl_base_module);
+    jl_value_t *get_preferences_blob = jl_eval_global_var(
+        jl_base_module, jl_symbol("get_preferences_blob"), ct->world_age);
+    assert(get_preferences_blob);
+    jl_value_t *args[1] = { get_preferences_blob };
+    prefs_blob = jl_apply(args, 1);
+    JL_TYPECHK(write_dependency_list, string, prefs_blob);
     ct->world_age = last_age;
 
-    // If we successfully got the preferences, write it out, otherwise write `0` for this `.ji` file.
-    if (prefs_hash != NULL && prefs_list != NULL) {
-        size_t i, l = jl_array_nrows(prefs_list);
-        for (i = 0; i < l; i++) {
-            jl_value_t *pref_name = jl_array_ptr_ref(prefs_list, i);
-            JL_TYPECHK(write_dependency_list, string, pref_name);
-            size_t slen = jl_string_len(pref_name);
-            write_int32(s, slen);
-            ios_write(s, jl_string_data(pref_name), slen);
-        }
-        write_int32(s, 0); // terminator
-        write_uint64(s, jl_unbox_uint64(prefs_hash));
-    }
-    else {
-        // This is an error path, but let's at least generate a valid `.ji` file.
-        // We declare an empty list of preference names, followed by a zero-hash.
-        // The zero-hash is not what would be generated for an empty set of preferences,
-        // and so this `.ji` file will be invalidated by a future non-erroring pass
-        // through this function.
-        write_int32(s, 0);
-        write_uint64(s, 0);
-    }
-    JL_GC_POP(); // for depots, prefs_list
+    // Write out the serialized preferences "blob"
+    size_t slen = jl_string_len(prefs_blob);
+    write_int32(s, slen);
+    ios_write(s, jl_string_data(prefs_blob), slen);
+
+    JL_GC_POP(); // for depots, prefs_blob
 #undef jl_is_deptuple
 
     // write a dummy file position to indicate the beginning of the source-text

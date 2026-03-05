@@ -269,7 +269,7 @@ function read(f::File, ::Type{UInt8})
     ret = ccall(:jl_fs_read, Int32, (OS_HANDLE, Ptr{Cvoid}, Csize_t),
                 f.handle, p, 1)
     uv_error("read", ret)
-    @assert ret <= sizeof(p) == 1
+    @assert ret <= sizeof(p) == 1 "unexpected read size"
     ret < 1 && throw(EOFError())
     return p[] % UInt8
 end

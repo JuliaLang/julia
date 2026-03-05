@@ -345,8 +345,8 @@ of type `Channel{Any}(0)`.
 Returns a tuple, `(Array{Channel}, Array{Task})`, of the created channels and tasks.
 """
 function channeled_tasks(n::Int, funcs...; ctypes=fill(Any,n), csizes=fill(0,n))
-    @assert length(csizes) == n
-    @assert length(ctypes) == n
+    @assert length(csizes) == n "length(csizes) != n"
+    @assert length(ctypes) == n "length(ctypes) != n"
 
     chnls = map(i -> Channel{ctypes[i]}(csizes[i]), 1:n)
     tasks = Task[ Task(() -> f(chnls...)) for f in funcs ]

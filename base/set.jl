@@ -881,8 +881,8 @@ askey(k, ::AbstractSet) = k
 
 function _replace!(new::Callable, res::Union{AbstractDict,AbstractSet},
                    A::Union{AbstractDict,AbstractSet}, count::Int)
-    @assert res isa AbstractDict && A isa AbstractDict ||
-        res isa AbstractSet && A isa AbstractSet
+    @assert (res isa AbstractDict && A isa AbstractDict ||
+             res isa AbstractSet && A isa AbstractSet) "type mismatch"
     count == 0 && return res
     c = 0
     if res === A # cannot replace elements while iterating over A

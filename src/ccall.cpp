@@ -1311,6 +1311,7 @@ std::string generate_func_sig(const char *fname)
             if (!ctx->TargetTriple.isOSWindows()) {
                 // llvm used to use the old mingw ABI, skipping this marking works around that difference
                 retattrs.addStructRetAttr(lrt);
+                retattrs.addAlignmentAttr(Align(julia_alignment(rt)));
             }
             retattrs.addAttribute(Attribute::NoAlias);
             paramattrs.push_back(AttributeSet::get(LLVMCtx, retattrs));
