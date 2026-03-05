@@ -352,4 +352,59 @@ begin
 end
 """) == (1,2)
 
+@testset "goto from try/catch/else with finally" begin
+    # Test that @goto from try block with finally is prevented
+    @test_throws JuliaLowering.LoweringError r"goto from a try/finally block is not permitted" JuliaLowering.include_string(test_mod, """
+    function f()
+        try
+            @goto skip
+        finally
+            println("cleanup")
+        end
+        @label skip
+    end
+    """) broken=true
+
+    # Test that @goto from catch block with finally is prevented
+    @test_throws JuliaLowering.LoweringError r"goto from a catch/finally block is not permitted" JuliaLowering.include_string(test_mod, """
+    function f()
+        try
+            error()
+        catch
+            @goto skip
+        finally
+            println("cleanup")
+        end
+        @label skip
+    end
+    """) broken=true
+
+    # Test that @goto from else block with finally is prevented
+    @test_throws JuliaLowering.LoweringError r"goto from an else/finally block is not permitted" JuliaLowering.include_string(test_mod, """
+    function f()
+        try
+        catch
+        else
+            @goto skip
+        finally
+            println("cleanup")
+        end
+        @label skip
+    end
+    """) broken=true
+
+    # Test that @goto within try/catch/else is allowed when there's no finally
+    @test JuliaLowering.include_string(test_mod, """
+    function f()
+        try
+            @goto skip
+        catch
+        end
+        @label skip
+        return 42
+    end
+    f()
+    """) == 42
+end
+
 end

@@ -99,6 +99,34 @@ end
         end
     end)
 
+@test Expr(:error, "goto from a catch/finally block is not permitted around $(@__FILE__):$(3 + @__LINE__)") ==
+    Meta.lower(@__MODULE__, quote
+        function goto_test6_catch()
+            try
+                error()
+            catch
+                @goto a
+            finally
+            end
+            @label a
+            return
+        end
+    end)
+
+@test Expr(:error, "goto from an else/finally block is not permitted around $(@__FILE__):$(3 + @__LINE__)") ==
+    Meta.lower(@__MODULE__, quote
+        function goto_test6_else()
+            try
+            catch
+            else
+                @goto a
+            finally
+            end
+            @label a
+            return
+        end
+    end)
+
 
 function goto_test6()
     @goto a
