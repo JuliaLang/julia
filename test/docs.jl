@@ -447,6 +447,8 @@ end
 
 @test_throws ErrorException @doc("...", "error")
 @test_throws ErrorException @doc("...", @time 0)
+@test_throws ErrorException @doc("...", function () end)
+@test_throws ErrorException @doc("...", function (x) x end)
 
 # test that when no docs exist, they fallback to
 # the docs for the typeof(value)

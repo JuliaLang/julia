@@ -745,7 +745,7 @@ function _docm(source::LineNumberNode, mod::Module, meta, x, define::Bool = true
     #   f(::T, ::U) where T where U
     #
     isexpr(x, FUNC_HEADS) && is_signature((x::Expr).args[1]) ? objectdoc(source, mod, meta, def, x::Expr, signature(x::Expr)) :
-    (isexpr(x, :function) || isexpr(x, :macro)) && !isexpr((x::Expr).args[1], :call) ? objectdoc(source, mod, meta, def, x::Expr) :
+    (isexpr(x, :function) || isexpr(x, :macro)) && !isexpr((x::Expr).args[1], :call) && !isexpr((x::Expr).args[1], :tuple) ? objectdoc(source, mod, meta, def, x::Expr) :
     iscallexpr(x) ? calldoc(source, mod, meta, x::Expr) :
 
     # Type definitions.
