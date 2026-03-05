@@ -228,7 +228,7 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
         }
         else if (auto CI = dyn_cast<CallInst>(CurrentV)) {
             auto callee = CI->getCalledFunction();
-            if (callee && callee->getName() == "julia.gc_loaded") {
+            if (callee && callee->getName().starts_with("julia.gc_loaded")) {
                 CurrentV = CI->getArgOperand(0);
                 continue;
             }
@@ -916,7 +916,7 @@ static bool isLoadFromConstGV(Value *v, bool &task_local, PhiSet *seen = nullptr
             task_local = true;
             return true;
         }
-        if (callee && callee->getName() == "julia.gc_loaded") {
+        if (callee && callee->getName().starts_with("julia.gc_loaded")) {
             return isLoadFromConstGV(call->getArgOperand(0), task_local, seen) &&
                    isLoadFromConstGV(call->getArgOperand(1), task_local, seen);
         }
@@ -1243,7 +1243,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 if (callee && callee == typeof_func) {
                     MaybeNoteDef(S, BBS, CI, SmallVector<int, 1>{-2});
                 }
-                else if (callee && callee->getName() == "julia.gc_loaded") {
+                else if (callee && callee->getName().starts_with("julia.gc_loaded")) {
                     continue;
                 }
                 else {
@@ -1936,7 +1936,8 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 ASCI->takeName(CI);
                 CI->replaceAllUsesWith(ASCI);
                 UpdatePtrNumbering(CI, ASCI, S);
-            } else if (gc_loaded_func != nullptr && callee == gc_loaded_func) {
+            } else if ((gc_loaded_func != nullptr && callee == gc_loaded_func) ||
+		       callee->getName().starts_with("julia.gc_loaded")) {
                 auto *obj = CI->getOperand(1);
 #if JL_LLVM_VERSION >= 200000
                 auto *ASCI = new AddrSpaceCastInst(obj, CI->getType(), "", CI->getIterator());
