@@ -795,8 +795,28 @@ static size_t jl_static_show_symbol(JL_STREAM *out, jl_sym_t *name) JL_NOTSAFEPO
         n += jl_printf(out, "%s", sn);
     }
     else {
-        n += jl_printf(out, "var");
-        n += jl_static_show_string(out, sn, strlen(sn), 1, 1);
+        
+        size_t len = strlen(sn);
+        int needs_symbol_syntax = 0;
+        for (size_t i = 0; i < len; i++) {
+            char c = sn[i];
+            if (c == '\n' || c == '\t' || c == '\r' || c < 32 || c == 127) {
+                needs_symbol_syntax = 1;
+                break;
+            }
+        }
+        
+        if (needs_symbol_syntax) {
+            
+            n += jl_printf(out, "Symbol(");
+            n += jl_static_show_string(out, sn, len, 1, 0);
+            n += jl_printf(out, ")");
+        }
+        else {
+            
+            n += jl_printf(out, "var");
+            n += jl_static_show_string(out, sn, strlen(sn), 1, 1);
+        }
     }
     return n;
 }
