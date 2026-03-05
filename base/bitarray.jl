@@ -325,7 +325,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
         bind += 1
     end
     @inbounds if bind ≤ kd1
-        @assert bind == kd1
+        @assert bind == kd1 "bind != kd1"
         c = UInt64(0)
         for j = 0:ld1
             c |= (UInt64(C[ind]) << j)
