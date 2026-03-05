@@ -433,6 +433,17 @@ tlayout = TLayout(5,7,11)
 @test !hasfield(Complex, :qxq)
 @test hasproperty(tlayout, :x)
 @test !hasproperty(tlayout, :p)
+# hasproperty with private parameter
+@test hasproperty(tlayout, :x, false)
+@test hasproperty(tlayout, :x, true)
+@test !hasproperty(tlayout, :p, true)
+# propertynames and hasproperty on Module with private parameter
+@test :sin in propertynames(Base)
+@test !(:sin in propertynames(Main))
+@test :Enums in propertynames(Base, true)
+@test hasproperty(Base, :sin)
+@test hasproperty(Base, :Enums, true)
+@test !hasproperty(Base, :Enums, false)
 @test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:fieldcount(TLayout)] ==
     [(0, :x, Int8), (2, :y, Int16), (4, :z, Int32)]
 @test [fieldoffset(TLayout, s) for s = (:x, :y, :z)] == [0, 2, 4]
