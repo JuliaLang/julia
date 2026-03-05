@@ -236,6 +236,24 @@ let (:)(a,b) = (i for i in Base.:(:)(1,10) if i%2==0)
     @test Int8[ i for i = 1:2 ] == [2,4,6,8,10]
 end
 
+@testset "`Base.FixNullaryCallable`" begin
+    @test let g, n, r
+        n = 0
+        function g()
+            n = 1
+            3
+        end
+        r = Base.FixNullaryCallable{1}(+, g)(7)
+        (r === 10) && (n === 1)
+    end
+end
+
+@testset "consistency between `Base.Fix` and `Base.FixNullaryCallable`" begin
+    for n in 1:5
+        @test Base.Fix{n}(+, 3) === Base.FixNullaryCallable{n}(+, Returns(3))
+    end
+end
+
 @testset "Basic tests of Fix1, Fix2, and Fix" begin
     function test_fix1(Fix1=Base.Fix1)
         increment = Fix1(+, 1)
@@ -308,7 +326,7 @@ end
 
                 # One over
                 fixed_g3 = Fix{3}(g, 100)
-                @test_throws ArgumentError("expected at least 2 arguments to `Fix{3}`, but got 1") fixed_g3(1)
+                @test_throws ArgumentError("expected at least 2 arguments, got 1") fixed_g3(1)
             end
         end
         @testset "Type Stability and Inference" begin
@@ -348,9 +366,9 @@ end
             @test f() == 'a'
         end
         @testset "Dummy-proofing" begin
-            @test_throws ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0, but got 0") Fix{0}(>, 1)
-            @test_throws ArgumentError("expected type parameter in `Fix` to be `Int`, but got `0.5::Float64`") Fix{0.5}(>, 1)
-            @test_throws ArgumentError("expected type parameter in `Fix` to be `Int`, but got `1::UInt64`") Fix{UInt64(1)}(>, 1)
+            @test_throws ArgumentError("expected `N` to be integer greater than 0, got 0") Fix{0}(>, 1)
+            @test_throws ArgumentError("expected type parameter to be `Int`, got `0.5::Float64`") Fix{0.5}(>, 1)
+            @test_throws ArgumentError("expected type parameter to be `Int`, got `1::UInt64`") Fix{UInt64(1)}(>, 1)
         end
         @testset "Specialize to structs not in `Base`" begin
             struct MyStruct
