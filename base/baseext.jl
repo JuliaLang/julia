@@ -19,9 +19,6 @@ convert(::Type{T}, arg::T) where {T<:VecElement} = arg
 convert(::Type{T}, arg)  where {T<:VecElement} = T(arg)::T
 
 # ## dims-type-converting Array constructors for convenience
-# type and dimensionality specified, accepting dims as series of Integers
-Vector{T}(::UndefInitializer, m::Integer) where {T} = Vector{T}(undef, Int(m))
-Matrix{T}(::UndefInitializer, m::Integer, n::Integer) where {T} = Matrix{T}(undef, Int(m), Int(n))
 Array{T,N}(::UndefInitializer, d::Vararg{Integer,N}) where {T,N} = Array{T,N}(undef, convert(Tuple{Vararg{Int}}, d))
 # type but not dimensionality specified, accepting dims as series of Integers
 Array{T}(::UndefInitializer, m::Integer) where {T} = Array{T,1}(undef, Int(m))
@@ -39,8 +36,8 @@ Vector() = Vector{Any}(undef, 0)
 
 # Array constructors for nothing and missing
 # type and dimensionality specified
-Array{T,N}(::Nothing, d...) where {T,N} = fill!(Array{T,N}(undef, d...), nothing)
-Array{T,N}(::Missing, d...) where {T,N} = fill!(Array{T,N}(undef, d...), missing)
+Array{T,N}(::Nothing, d...) where {T,N} = fill!(Array{T,N}(undef, convert(Tuple{Vararg{Int}}, d)), nothing)
+Array{T,N}(::Missing, d...) where {T,N} = fill!(Array{T,N}(undef, convert(Tuple{Vararg{Int}}, d)), missing)
 # type but not dimensionality specified
-Array{T}(::Nothing, d...) where {T} = fill!(Array{T}(undef, d...), nothing)
-Array{T}(::Missing, d...) where {T} = fill!(Array{T}(undef, d...), missing)
+Array{T}(::Nothing, d...) where {T} = fill!(Array{T}(undef, convert(Tuple{Vararg{Int}}, d)), nothing)
+Array{T}(::Missing, d...) where {T} = fill!(Array{T}(undef, convert(Tuple{Vararg{Int}}, d)), missing)
