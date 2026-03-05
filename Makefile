@@ -281,7 +281,9 @@ endif
 JL_PRIVATE_TOOLS += lld$(EXE) dsymutil$(EXE)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUNWIND) += libunwind
 
-ifeq ($(USE_SYSTEM_LIBM),0)
+ifeq ($(USE_SYSTEM_LIBM),1)
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBM) += libm
+else
 JL_PRIVATE_LIBS-$(USE_SYSTEM_OPENLIBM) += libopenlibm
 endif
 
