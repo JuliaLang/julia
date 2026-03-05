@@ -296,6 +296,7 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh)
     sig_atomic_t old_defer_signal = ptls->defer_signal;
     ct->eh = eh->prev;
     ct->gcstack = eh->gcstack;
+    jl_gc_wb_pre(ct, ct->scope);
     ct->scope = eh->scope;
     jl_gc_wb_current_task(ct, ct->scope);
     small_arraylist_t *locks = &ptls->locks;
@@ -336,6 +337,7 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh)
 JL_DLLEXPORT void jl_eh_restore_state_noexcept(jl_task_t *ct, jl_handler_t *eh)
 {
     assert(ct->gcstack == eh->gcstack && "Incorrect GC usage under try catch");
+    jl_gc_wb_pre(ct, ct->scope);
     ct->scope = eh->scope;
     jl_gc_wb_current_task(ct, ct->scope);
     ct->eh = eh->prev;

@@ -47,7 +47,7 @@ STATIC_INLINE void mmtk_gc_wb_post(const void *parent, const void *ptr) JL_NOTSA
 }
 
 // Inlined fastpath
-STATIC_INLINE void mmtk_gc_wb_fast(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+STATIC_INLINE void mmtk_gc_wb_post_fast(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 {
     if (MMTK_NEEDS_WRITE_BARRIER == MMTK_OBJECT_POST_WRITE_BARRIER) {
         intptr_t addr = (intptr_t) (void*) parent;
@@ -59,47 +59,45 @@ STATIC_INLINE void mmtk_gc_wb_fast(const void *parent, const void *ptr) JL_NOTSA
             jl_ptls_t ptls = ct->ptls;
             mmtk_object_reference_write_slow(&ptls->gc_tls.mmtk_mutator, parent, ptr);
         }
-    } else if (MMTK_NEEDS_WRITE_BARRIER == MMTK_OBJECT_PRE_WRITE_BARRIER) {
-        mmtk_gc_wb_pre(parent, ptr);
     }
 }
 
 STATIC_INLINE void jl_gc_wb_pre(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 {
-    mmtk_gc_wb_fast(parent, ptr);
+    mmtk_gc_wb_pre(parent, ptr);
 }
 
 STATIC_INLINE void jl_gc_wb_post(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 {
-    mmtk_gc_wb_fast(parent, ptr);
+    mmtk_gc_wb_post_fast(parent, ptr);
 }
 
 STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_value_t*
 {
-    mmtk_gc_wb_fast(ptr, (void*)0);
+    mmtk_gc_wb_post_fast(ptr, (void*)0);
 }
 
 STATIC_INLINE void jl_gc_multi_wb_pre(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
 {
-    mmtk_gc_wb_fast(parent, (void*)0);
+    mmtk_gc_wb_post_fast(parent, (void*)0);
 }
 
 STATIC_INLINE void jl_gc_multi_wb_post(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
 {
-    mmtk_gc_wb_fast(parent, (void*)0);
+    mmtk_gc_wb_post_fast(parent, (void*)0);
 }
 
 STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const jl_value_t *dest_owner, _Atomic(void*) * dest_p,
                                           jl_genericmemory_t *src, _Atomic(void*) * src_p,
                                           size_t* n) JL_NOTSAFEPOINT
 {
-    mmtk_gc_wb_fast(dest_owner, (void*)0);
+    mmtk_gc_wb_post_fast(dest_owner, (void*)0);
 }
 
 STATIC_INLINE void jl_gc_wb_genericmemory_copy_ptr(const jl_value_t *owner, jl_genericmemory_t *src, char* src_p,
                                           size_t n, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
-    mmtk_gc_wb_fast(owner, (void*)0);
+    mmtk_gc_wb_post_fast(owner, (void*)0);
 }
 
 

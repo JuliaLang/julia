@@ -188,7 +188,9 @@ static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt
     if (lastt->ctx.bufsz < nb) {
         asan_free_copy_stack(lastt->ctx.stkbuf, lastt->ctx.bufsz);
         buf = (void*)jl_gc_alloc_buf(ptls, nb);
-        lastt->ctx.stkbuf = buf;
+        //jl_write(lastt, (void**)&lastt->ctx.stkbuf, buf);
+        jl_gc_wb_pre(lastt, lastt->ctx.stkbuf);
+        lastt->ctx.stkbuf = buf;// TODO: confirm
         lastt->ctx.bufsz = nb;
     }
     else {
@@ -460,13 +462,14 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
         jl_stack_context_t copy_ctx;
     } lasttstate;
 
+    
     if (killed) {
         *pt = NULL; // can't fail after here: clear the gc-root for the target task now
         lastt->gcstack = NULL;
         lastt->eh = NULL;
         if (!lastt->ctx.copy_stack && lastt->ctx.stkbuf) {
             // early free of stkbuf back to the pool
-            jl_release_task_stack(ptls, lastt);
+            jl_release_task_stack(ptls, lastt); // no wb needed
         }
     }
     else {
@@ -1132,6 +1135,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     t->donenotify = completion_future;
     jl_atomic_store_relaxed(&t->_isexception, 0);
     // Inherit scope from parent task
+    jl_gc_wb_pre(t, t->scope);
     t->scope = ct->scope;
     jl_gc_wb_fresh(t, t->scope);
     // Fork task-local random state from parent
@@ -1582,7 +1586,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->result = jl_nothing;
     ct->donenotify = jl_nothing;
     jl_atomic_store_relaxed(&ct->_isexception, 0);
-    jl_gc_wb_knownold(ct, ct->scope); // TODO: Optimize
+    jl_gc_wb_pre(ct, ct->scope);
     ct->scope = jl_nothing;
     jl_gc_wb_knownold(ct, ct->scope);
     ct->eh = NULL;
