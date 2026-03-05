@@ -160,8 +160,8 @@ endif
 #	printf "%s\n" "$$P"
 
 define symlink_system_library
-libname_$2 := $$(notdir $(call versioned_libname,$2,$3))
-libpath_$2 := $$(shell $$(call spawn,$$(LIBWHICH)) -p $$(libname_$2) 2>/dev/null)
+libname_$2 = $$(notdir $(call versioned_libname,$2,$3))
+libpath_$2 = $$(shell $$(call spawn,$$(LIBWHICH)) -p $$(libname_$2) 2>/dev/null)
 symlink_$2: $$(build_private_libdir)/$$(libname_$2)
 $$(build_private_libdir)/$$(libname_$2):
 	@if [ -e "$$(libpath_$2)" ]; then \
