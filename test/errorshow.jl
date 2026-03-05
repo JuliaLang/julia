@@ -72,7 +72,8 @@ Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, "")))
 Base.show_method_candidates(IOContext(buf, :color => true), Base.MethodError(method_c1,(1, 1, "")))
 
 mod_col = Base.text_colors[Base.STACKTRACE_FIXEDCOLORS[modul]]
-@test occursin("\n\n\e[0mClosest candidates are:\n\e[0m  method_c1(\e[91m::Float64\e[39m, \e[91m::AbstractString...\e[39m)\n\e[0m\e[90m   @\e[39m $mod_col$modul\e[39m \e[90m$dname$sep\e[39m\e[90m\e[4m$fname:$c1line\e[24m\e[39m\n", String(take!(buf)))
+file_col = Base.text_colors[Base.get_filecolor(file, modul)]
+@test occursin("\n\n\e[0mClosest candidates are:\n\e[0m  method_c1(\e[91m::Float64\e[39m, \e[91m::AbstractString...\e[39m)\n\e[0m\e[90m   @\e[39m $mod_col$modul\e[39m $file_col$dname$sep\e[39m$file_col\e[4m$fname:$c1line\e[24m\e[39m\n", String(take!(buf)))
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, "", "")))
 @test occursin("\n\nClosest candidates are:\n  method_c1(!Matched::Float64, ::AbstractString...)$cmod$cfile$c1line\n", String(take!(buf)))
 
@@ -1530,4 +1531,35 @@ end
     err_strA = @except_str memoryref(refA, 2) BoundsError
     @test occursin("AtomicMemoryRef", err_strA)
     @test occursin("1-element", err_strA)
+end
+
+module GetFilecolorA end
+module GetFilecolorB end
+
+@testset "`get_filecolor`" begin
+    local_path = joinpath(pwd(), "get_filecolor.jl")
+    modulecolordict = Dict(GetFilecolorA => :cyan)
+    modulecolorcycler = [:blue]
+    cases = [
+        local_path => GetFilecolorA => :cyan
+        local_path => GetFilecolorB => :blue
+        ".." => GetFilecolorA => :cyan
+        ".." => GetFilecolorB => :blue
+        "." => GetFilecolorA => :cyan
+        "." => GetFilecolorB => :blue
+        "none" => GetFilecolorA => :cyan
+        "none" => GetFilecolorB => :blue
+        "REPL[10]" => GetFilecolorA => :cyan
+        "REPL[1]" => GetFilecolorB => :blue
+        "REPL[]" => GetFilecolorA => :light_black
+        "REPL[]" => GetFilecolorB => :light_black
+        "" => GetFilecolorA => :light_black
+        "" => GetFilecolorB => :light_black
+    ]
+
+    Sys.isunix() && push!(cases, "~" => GetFilecolorA => :cyan, "~" => GetFilecolorB => :blue)
+
+    for (file, (modul, color)) in cases
+        @test Base.get_filecolor(file, modul; modulecolordict, modulecolorcycler) == color
+    end
 end
