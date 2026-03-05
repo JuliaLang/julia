@@ -191,10 +191,11 @@ function TimeVal()
 end
 
 """
-    TmStruct([seconds])
+    TmStruct([seconds]; utc=false)
 
-Convert a number of seconds since the epoch to broken-down format, with fields `sec`, `min`,
-`hour`, `mday`, `month`, `year`, `wday`, `yday`, and `isdst`.
+Convert a number of seconds since the epoch to broken-down format, with fields
+`sec`, `min`, `hour`, `mday`, `month`, `year`, `wday`, `yday`, and `isdst`. If
+`utc` is `true`, the time is given in UTC, otherwise it is in local time.
 """
 mutable struct TmStruct
     sec::Int32
@@ -216,11 +217,14 @@ mutable struct TmStruct
     TmStruct(sec, min, hour, mday, month, year, wday, yday, isdst) =
         new(sec, min, hour, mday, month, year, wday, yday, isdst, 0,0,0,0,0)
     TmStruct() = new(0,0,0,0,0,0,0,0,0,0,0,0,0,0)
-    function TmStruct(t::Real)
+    function TmStruct(t::Real; utc=false)
         t = floor(t)
         tm = TmStruct()
-        # TODO: add support for UTC via gmtime_r()
-        ccall(:localtime_r, Ptr{TmStruct}, (Ref{Int}, Ref{TmStruct}), t, tm)
+        if utc
+            ccall(:gmtime_r, Ptr{TmStruct}, (Ref{Int}, Ref{TmStruct}), t, tm)
+        else
+            ccall(:localtime_r, Ptr{TmStruct}, (Ref{Int}, Ref{TmStruct}), t, tm)
+        end
         return tm
     end
 end
