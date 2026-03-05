@@ -69,6 +69,7 @@ public
     isexported,
     ispublic,
     remove_linenums!,
+    allocatedinline,
 
 # AST handling
     IR,
