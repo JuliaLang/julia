@@ -2335,6 +2335,35 @@ JL_CALLABLE(jl_f__typebody)
                                  (jl_value_t*)jl_type_type, elt);
             }
         }
+
+
+        // Before propceeding, look through the module's bindings, and check if there
+        // is already an existing struct definition that is `equiv_type`.
+        jl_datatype_t *existing;
+        // First, get the existing binding:
+        jl_module_t *module = dt->name->module;
+        jl_sym_t *name = dt->name->name;
+        jl_binding_t *b = jl_get_binding(module, name);
+        jl_binding_partition_t *partition = b->partitions;
+        while (partition != NULL) {
+            // If the partition is a datatype, check if it is equivalent to the one we just
+            // created. If it is, we can return the existing one instead.
+            existing = (jl_datatype_t*)partition->restriction;
+            jl_static_show(JL_STDOUT, (jl_value_t*)existing); jl_safe_printf("\n");
+            jl_safe_printf("nathan\n");
+            if (existing != NULL && jl_is_datatype(existing) &&
+                    equiv_type((jl_value_t*)dt, (jl_value_t*)existing)) {
+                // If the existing datatype is equivalent, we can return it instead of the new one.
+                jl_safe_printf("Found existing equivalent type for %s in module %s\n",
+                            jl_symbol_name(name), jl_symbol_name(module->name));
+                prev = (jl_value_t*)existing;
+            }
+            // If not, continue searching through the bindings.
+            partition = partition->next;
+        }
+
+
+
         // Optimization: To avoid lots of unnecessary churning, lowering contains an optimization
         // that re-uses the typevars of an existing definition (if any exists) for compute the field
         // types. If such a previous type exists, there are two possibilities:
@@ -2399,7 +2428,7 @@ have_type:
 }
 
 // this is a heuristic for allowing "redefining" a type to something identical
-static int equiv_type(jl_value_t *ta, jl_value_t *tb)
+int equiv_type(jl_value_t *ta, jl_value_t *tb)
 {
     jl_datatype_t *dta = (jl_datatype_t*)jl_unwrap_unionall(ta);
     if (!jl_is_datatype(dta))
