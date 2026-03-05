@@ -338,17 +338,19 @@ function Iterators.take(xs::AbstractVector, n::Integer)
     Iterators.Take(xs, n)  # error handling
     f = firstindex(xs)
     l = lastindex(xs)
-    typ = promote_type(typeof(f), typeof(l), typeof(n))
+    typ_f = typeof(f)
+    typ_l = typeof(l)
+    typ = promote_type(typ_f, typ_l, typeof(n))
     typ_wide = widen(typ)
     x = typ_wide(f) + n - 1  # avoid overflow in arithmetic
     ran = if f <= x
         if l <= x
             f:l
         else
-            f:(typeof(l)(x))
+            f:(typ_l(x))
         end
     else
-        empty(f:l)
+        (typ_f(1)):(typ_l(0))  # empty range
     end
     view(xs, ran)
 end
@@ -357,13 +359,15 @@ function Iterators.drop(xs::AbstractVector, n::Integer)
     Iterators.Drop(xs, n)  # error handling
     f = firstindex(xs)
     l = lastindex(xs)
-    typ = promote_type(typeof(f), typeof(n))
+    typ_f = typeof(f)
+    typ_l = typeof(l)
+    typ = promote_type(typ_f, typeof(n))
     typ_wide = widen(typ)
     x = typ_wide(f) + n  # avoid overflow in arithmetic
     ran = if x <= l
-        (typeof(f)(x)):l
+        (typ_f(x)):l
     else
-        empty(f:l)
+        (typ_f(1)):(typ_l(0))  # empty range
     end
     view(xs, ran)
 end
