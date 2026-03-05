@@ -16,7 +16,6 @@ using Random.DSFMT
 using Random: default_rng, Sampler, SamplerRangeFast, SamplerRangeInt, SamplerRangeNDL, MT_CACHE_F, MT_CACHE_I
 using Random: jump_128, jump_192, jump_128!, jump_192!, SeedHasher
 
-import SHA
 import Future # randjump
 
 function test_uniform(xs::AbstractArray{T}) where {T<:AbstractFloat}
@@ -1217,11 +1216,15 @@ end
 end
 
 
-@testset "seed! and hash_seed" begin
+@testset "seed! and hashseed!" begin
     function hash_seed(seed)
-        ctx = SHA.SHA2_256_CTX()
-        Random.hash_seed(seed, ctx)
-        bytes2hex(SHA.digest!(ctx))
+        # prepare SeedHasher like in seed!(::SeedHasher, seed)
+        rng = SeedHasher(undef)
+        rng.len = 0
+        rng.idx = 0
+        rng.hash_const = 0x43b0d7e5
+        Random.hashseed!(rng, seed)
+        bytes2hex(view(reinterpret(UInt8, rng.mixer), 1:rng.idx))
     end
 
     # Test that:
