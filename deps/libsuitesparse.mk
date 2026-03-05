@@ -4,7 +4,6 @@ include $(SRCDIR)/libsuitesparse.version
 ifneq ($(USE_BINARYBUILDER_LIBSUITESPARSE), 1)
 
 LIBSUITESPARSE_PROJECTS := "suitesparse_config;amd;btf;camd;ccolamd;colamd;cholmod;klu;ldl;umfpack;rbio;spqr"
-LIBSUITESPARSE_LIBS := $(addsuffix .*$(SHLIB_EXT)*,suitesparseconfig $(subst ;, ,$(LIBSUITESPARSE_PROJECTS)))
 
 ifeq ($(OS),WINNT)
 BLAS_LIB_NAME_NO_EXT:=blastrampoline-5
@@ -55,12 +54,14 @@ checksum-libsuitesparse: $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted
 	echo 1 > $@
 
+$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-configured: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched
+	cd $(dir $<) && $(CMAKE) -G"Unix Makefiles" . $(LIBSUITESPARSE_CMAKE_FLAGS)
+	echo 1 > $@
+
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: | $(build_prefix)/manifest/blastrampoline
 
-$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched
-	cd $(dir $<) && $(CMAKE) -G"Unix Makefiles" . $(LIBSUITESPARSE_CMAKE_FLAGS)
+$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-configured
 	$(MAKE) -C $(dir $<)
-	$(MAKE) -C $(dir $<) install
 	echo 1 > $@
 
 ifeq ($(OS),WINNT)
@@ -74,15 +75,12 @@ $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-checked: $(BUILDDIR)/SuiteSp
 	done
 	echo 1 > $@
 
-UNINSTALL_libsuitesparse := $(LIBSUITESPARSE_VER) manual_libsuitesparse $(LIBSUITESPARSE_LIBS)
+$(eval $(call staged-install, \
+	libsuitesparse,SuiteSparse-$$(LIBSUITESPARSE_VER), \
+	MAKE_INSTALL,,,))
 
-$(build_prefix)/manifest/libsuitesparse: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled | $(build_prefix)/manifest $(build_shlibdir)
-	echo $(UNINSTALL_libsuitesparse) > $@
-
-clean-libsuitesparse: uninstall-libsuitesparse
-	-rm -f $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled
-	-rm -fr $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/lib
-	-rm -fr $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/include
+clean-libsuitesparse:
+	-rm -f $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-configured $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled
 	-if [ -d $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER) ]; then $(MAKE) -C $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER) clean; fi
 
 distclean-libsuitesparse:
@@ -91,11 +89,11 @@ distclean-libsuitesparse:
 
 get-libsuitesparse: $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz
 extract-libsuitesparse: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted
-configure-libsuitesparse: extract-libsuitesparse
+configure-libsuitesparse: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-configured
 compile-libsuitesparse: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled
 fastcheck-libsuitesparse: #none
 check-libsuitesparse: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-checked
-install-libsuitesparse: $(build_prefix)/manifest/libsuitesparse remove-libsuitesparse-gpl-lib
+install-libsuitesparse: | remove-libsuitesparse-gpl-lib
 
 else # USE_BINARYBUILDER_LIBSUITESPARSE
 
@@ -105,12 +103,6 @@ $(eval $(call bb-install,libsuitesparse,LIBSUITESPARSE,false))
 compile-libsuitesparse: | $(build_prefix)/manifest/blastrampoline
 install-libsuitesparse: | remove-libsuitesparse-gpl-lib
 endif
-
-define manual_libsuitesparse
-uninstall-libsuitesparse:
-	-rm -f $(build_prefix)/manifest/libsuitesparse
-	-rm -f $(addprefix $(build_shlibdir)/lib,$3)
-endef
 
 remove-libsuitesparse-gpl-lib:
 ifeq ($(USE_GPL_LIBS),0)
