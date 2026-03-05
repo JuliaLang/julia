@@ -1,4 +1,4 @@
-PKG_BRANCH = master
-PKG_SHA1 = adf516995ccde6190023640f95967fc1cbfff59e
+PKG_BRANCH = ib/background_precompile
+PKG_SHA1 = 1f04fd48361f6eee7b47267303cfe041cf6164de
 PKG_GIT_URL := https://github.com/JuliaLang/Pkg.jl.git
 PKG_TAR_URL = https://api.github.com/repos/JuliaLang/Pkg.jl/tarball/$1
