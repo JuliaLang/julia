@@ -1238,23 +1238,23 @@ ZeroStyle(::Type) = HasTypeZero()
 # per-element `map(zero, x)` if queried directly.
 ZeroStyle(::Type{<:Array}) = NoTypeZero()
 
-@inline zero(x::AbstractArray{T}) where {T<:Number} = _zero_numberarray(x, ZeroStyle(T))
+zero(x::AbstractArray{T}) where {T<:Number} = _zero_numberarray(x, ZeroStyle(T))
 
-@inline _zero_numberarray(x::AbstractArray{T}, ::HasTypeZero) where {T<:Number} =
+_zero_numberarray(x::AbstractArray{T}, ::HasTypeZero) where {T<:Number} =
     fill!(similar(x, typeof(zero(T))), zero(T))
 
-@inline _zero_numberarray(x::AbstractArray{T}, ::NoTypeZero) where {T<:Number} = map(zero, x)
+_zero_numberarray(x::AbstractArray{T}, ::NoTypeZero) where {T<:Number} = map(zero, x)
 
-@inline zero(x::AbstractArray{S}) where {S<:Union{Missing, Number}} =
+zero(x::AbstractArray{S}) where {S<:Union{Missing, Number}} =
     _zero_missingnumberarray(x, ZeroStyle(nonmissingtype(S)))
 
-@inline _zero_missingnumberarray(x::AbstractArray{S}, ::HasTypeZero) where {S<:Union{Missing, Number}} = begin
+_zero_missingnumberarray(x::AbstractArray{S}, ::HasTypeZero) where {S<:Union{Missing, Number}} = begin
     T = nonmissingtype(S)
     z = zero(T)
     fill!(similar(x, typeof(z)), z)
 end
 
-@inline _zero_missingnumberarray(x::AbstractArray{S}, ::NoTypeZero) where {S<:Union{Missing, Number}} =
+_zero_missingnumberarray(x::AbstractArray{S}, ::NoTypeZero) where {S<:Union{Missing, Number}} =
     map(zero, x)
 
 zero(x::AbstractArray) = map(zero, x)
