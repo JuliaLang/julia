@@ -1217,6 +1217,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     ci.code = code
     ci.debuginfo = NullDebugInfo
     # allow older-style IR with return and gotoifnot Exprs
+    if current_module[] !== nothing
+        map!(x->symbol_to_globalref(x, current_module[]), code)
+    end
     for i in 1:length(code)
         stmt = code[i]
         if isa(stmt, Expr)
@@ -1225,11 +1228,18 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
                 code[i] = ReturnNode(isempty(ex.args) ? nothing : ex.args[1])
             elseif ex.head === :gotoifnot
                 code[i] = GotoIfNot(ex.args[1], ex.args[2])
+            elseif ex.head === :(=) && ex.args[1] isa GlobalRef
+                # An explicit declaration is required before calling setglobal!, so doing this eval
+                # might make some code more likely to work. Clearly we do not want to do this kind of
+                # side effect during deserialization, but you can try it if you're desperate.
+                #Core.eval(ex.args[1].mod, Expr(:global, ex.args[1]))
+                code[i] = Expr(:call, GlobalRef(Core, :setglobal!), ex.args[1].mod, QuoteNode(ex.args[1].name), ex.args[2])
+            elseif format_version(s) < 30 && ex.head === :call && ex.args[1] == GlobalRef(Core, :_typebody!)
+                insert!(ex.args, 2, false)
+            elseif ex.head === :isdefined && ex.args[1] isa GlobalRef
+                code[i] = Expr(:call, GlobalRef(Core, :isdefinedglobal), ex.args[1].mod, QuoteNode(ex.args[1].name))
             end
         end
-    end
-    if current_module[] !== nothing
-        map!(x->symbol_to_globalref(x, current_module[]), code)
     end
     _x = deserialize(s)
     have_debuginfo = _x isa Core.DebugInfo
