@@ -1360,7 +1360,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
 
     m = jl_new_method_uninit(module);
     if (external_mt)
-        jl_gc_wb_pre(m, external_mt);
+        jl_gc_wb_pre(m, m->external_mt);
     m->external_mt = (jl_value_t*)external_mt;
     if (external_mt)
         jl_gc_wb_post(m, external_mt);

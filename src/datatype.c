@@ -1880,7 +1880,7 @@ inline void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t
         return;
     }
     if (jl_field_isptr(st, i)) {
-        jl_gc_wb_pre(v, rhs);
+        jl_gc_wb_pre(v, jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)((char*)v + offs)));
         jl_atomic_store_release((_Atomic(jl_value_t*)*)((char*)v + offs), rhs);
         jl_gc_wb_post(v, rhs);
     }
@@ -1985,7 +1985,7 @@ jl_value_t *swap_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_
     jl_value_t *r;
     char *p = (char*)v + offs;
     if (jl_field_isptr(st, i)) {
-        jl_gc_wb_pre(v, rhs);
+        jl_gc_wb_pre(v, jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)p));
         if (isatomic)
             r = jl_atomic_exchange((_Atomic(jl_value_t*)*)p, rhs);
         else
@@ -2020,7 +2020,7 @@ inline jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_valu
             jl_check_binding_assign_value(b, mod, name, y, "modifyglobal!");
         else if (!jl_isa(y, ty))
             jl_type_error(jl_is_genericmemory(parent) ? "memoryrefmodify!" : "modifyfield!", ty, y);
-        jl_gc_wb_pre(parent, y);
+        jl_gc_wb_pre(parent, r);
         if (isatomic ? jl_atomic_cmpswap(p, &r, y) : jl_atomic_cmpswap_release(p, &r, y)) {
             jl_gc_wb_post(parent, y);
             break;
@@ -2153,7 +2153,7 @@ inline jl_value_t *replace_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_val
     jl_value_t *r = expected;
     int success;
     while (1) {
-        jl_gc_wb_pre(parent, rhs);
+        jl_gc_wb_pre(parent, jl_atomic_load_relaxed(p));
         success = isatomic ? jl_atomic_cmpswap(p, &r, rhs) : jl_atomic_cmpswap_release(p, &r, rhs);
         if (success)
             jl_gc_wb_post(parent, rhs);
@@ -2293,8 +2293,8 @@ int set_nth_fieldonce(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rh
     if (jl_field_isptr(st, i)) {
         _Atomic(jl_value_t*) *px = (_Atomic(jl_value_t*)*)p;
         jl_value_t *r = NULL;
-        
-        jl_gc_wb_pre(v, rhs);
+
+        jl_gc_wb_pre(v, jl_atomic_load_relaxed(px));
         success = isatomic ? jl_atomic_cmpswap(px, &r, rhs) : jl_atomic_cmpswap_release(px, &r, rhs);
         if (success)
             jl_gc_wb_post(v, rhs);

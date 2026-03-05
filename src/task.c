@@ -1135,7 +1135,6 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_value_t *start, jl_value_t *completion_fu
     t->donenotify = completion_future;
     jl_atomic_store_relaxed(&t->_isexception, 0);
     // Inherit scope from parent task
-    jl_gc_wb_pre(t, t->scope);
     t->scope = ct->scope;
     jl_gc_wb_fresh(t, t->scope);
     // Fork task-local random state from parent
@@ -1586,9 +1585,8 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->result = jl_nothing;
     ct->donenotify = jl_nothing;
     jl_atomic_store_relaxed(&ct->_isexception, 0);
-    jl_gc_wb_pre(ct, ct->scope);
     ct->scope = jl_nothing;
-    jl_gc_wb_knownold(ct, ct->scope);
+    jl_gc_wb_fresh(ct, ct->scope);
     ct->eh = NULL;
     ct->gcstack = NULL;
     ct->excstack = NULL;

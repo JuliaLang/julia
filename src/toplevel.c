@@ -534,7 +534,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_instance_for_thunk(jl_code_info_t *
     JL_GC_PUSH1(&mi);
 
     jl_code_instance_t *ci = jl_new_codeinst_for_uninferred(mi, src);
-    jl_gc_wb_pre(mi, ci);
+    jl_gc_wb_pre(mi, jl_atomic_load_relaxed(&mi->cache));
     jl_atomic_store_relaxed(&mi->cache, ci);
     jl_gc_wb_post(mi, ci);
 

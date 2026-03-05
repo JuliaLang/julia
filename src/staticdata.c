@@ -2504,7 +2504,7 @@ static void jl_prune_idset(_Atomic(jl_svec_t*) *pkeys, _Atomic(jl_genericmemory_
     assert(serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] == keyset);
     ptrhash_put(&serialization_order, jl_atomic_load_relaxed(&keyset2), idx);
     serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = jl_atomic_load_relaxed(&keyset2);
-    jl_gc_wb_pre(parent, keys2);
+    jl_gc_wb_pre(parent, jl_atomic_load_relaxed(pkeys));
     jl_atomic_store_relaxed(pkeys, keys2);
     jl_gc_wb_post(parent, keys2);
     jl_gc_wb_pre(parent, jl_atomic_load_relaxed(&keyset2));
@@ -2573,7 +2573,7 @@ static void strip_specializations_(jl_method_instance_t *mi)
             }
             else if (jl_options.strip_metadata) {
                 jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, codeinst);
-                jl_gc_wb_pre(codeinst, stripped);
+                jl_gc_wb_pre(codeinst, inferred);
                 if (jl_atomic_cmpswap_relaxed(&codeinst->inferred, &inferred, stripped)) {
                     jl_gc_wb_post(codeinst, stripped);
                 }

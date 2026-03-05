@@ -200,7 +200,7 @@ retry:
     jl_atomic_store_relaxed(&new_bpart->min_world, new_min_world);
     jl_atomic_store_relaxed(&new_bpart->next, next);
     
-    jl_gc_wb_pre(gap.parent, new_bpart);
+    jl_gc_wb_pre(gap.parent, jl_atomic_load_relaxed(gap.insert));
     if (!jl_atomic_cmpswap(gap.insert, &gap.replace, new_bpart))
         return NULL;
     jl_gc_wb_post(gap.parent, new_bpart);
@@ -664,12 +664,12 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
                 if (!prev_bpart)
                     break;
                 jl_binding_partition_t *next_prev_bpart = new_binding_partition();
-                jl_gc_wb_pre(backdate_bpart, next_prev_bpart);
+                jl_gc_wb_pre(backdate_bpart, jl_atomic_load_relaxed(&backdate_bpart->next));
                 jl_atomic_store_relaxed(&backdate_bpart->next, next_prev_bpart);
                 jl_gc_wb_post(backdate_bpart, next_prev_bpart);
                 backdate_bpart = next_prev_bpart;
             }
-            jl_gc_wb_pre(new_bpart, new_prev_bpart);
+            jl_gc_wb_pre(new_bpart, jl_atomic_load_relaxed(&new_bpart->next));
             jl_atomic_store_release(&new_bpart->next, new_prev_bpart);
             jl_gc_wb_post(new_bpart, new_prev_bpart);
         }
@@ -787,13 +787,10 @@ static jl_globalref_t *jl_new_globalref(jl_module_t *mod, jl_sym_t *name, jl_bin
     jl_task_t *ct = jl_current_task;
     jl_globalref_t *g = (jl_globalref_t*)jl_gc_alloc(ct->ptls, sizeof(jl_globalref_t), jl_globalref_type);
     jl_set_typetagof(g, jl_globalref_tag, 0);
-    jl_gc_wb_pre(g, g->mod);
     g->mod = mod;
     jl_gc_wb_fresh(g, g->mod);
-    jl_gc_wb_pre(g, g->name);
     g->name = name;
     jl_gc_wb_fresh(g, g->name);
-    jl_gc_wb_pre(g, g->binding);
     g->binding = b;
     jl_gc_wb_fresh(g, g->binding);
     return g;
@@ -1380,7 +1377,7 @@ void jl_module_initial_using(jl_module_t *to, jl_module_t *from)
         .flags = 0
     };
     arraylist_grow(&to->usings, sizeof(struct _jl_module_using)/sizeof(void*));
-    jl_gc_wb_pre(to, from);
+    jl_gc_wb_pre(to, to->usings.items[to->usings.len-4]);
     memcpy(&to->usings.items[to->usings.len-4], &new_item, sizeof(struct _jl_module_using));
     jl_gc_wb_post(to, from);
     jl_add_usings_backedge(from, to);
@@ -1414,7 +1411,7 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from, size_t fla
             .flags = flags
         };
         arraylist_grow(&to->usings, sizeof(struct _jl_module_using)/sizeof(void*));
-        jl_gc_wb_pre(to, from);
+        jl_gc_wb_pre(to, to->usings.items[to->usings.len-4]);
         memcpy(&to->usings.items[to->usings.len-4], &new_item, sizeof(struct _jl_module_using));
         jl_gc_wb_post(to, from);
     } else {
@@ -1639,7 +1636,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m, jl_sym_t *var, 
                     memcpy((char*)jl_svec_data(nc), jl_svec_data(bindings), sizeof(void*) * i);
                 for (size_t j = i; j < ncl; j++)
                     jl_svec_data(nc)[j] = jl_nothing;
-                jl_gc_wb_pre(m, nc);
+                jl_gc_wb_pre(m, jl_atomic_load_relaxed(&m->bindings));
                 jl_atomic_store_release(&m->bindings, nc);
                 jl_gc_wb_post(m, nc);
                 bindings = nc;
@@ -1827,7 +1824,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
         jl_atomic_store_release(&b->globalref->mod->export_set_changed_since_require_world, 1);
     }
 
-    jl_gc_wb_pre(b, new_bpart);
+    jl_gc_wb_pre(b, jl_atomic_load_relaxed(&b->partitions));
     jl_atomic_store_release(&b->partitions, new_bpart);
     jl_gc_wb_post(b, new_bpart);
     JL_GC_POP();
@@ -1997,7 +1994,7 @@ jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
 {
     if (jl_check_binding_assign_value(b, mod, var, rhs, "setglobal!") != NULL) {
-        jl_gc_wb_pre(b, rhs);
+        jl_gc_wb_pre(b, jl_atomic_load_relaxed(&b->value));
         jl_atomic_store_release(&b->value, rhs);
         jl_gc_wb_post(b, rhs);
     }
@@ -2006,7 +2003,7 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sy
 JL_DLLEXPORT jl_value_t *jl_checked_swap(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
 {
     jl_check_binding_assign_value(b, mod, var, rhs, "swapglobal!");
-    jl_gc_wb_pre(b, rhs);
+    jl_gc_wb_pre(b, jl_atomic_load_relaxed(&b->value));
     jl_value_t *old = jl_atomic_exchange(&b->value, rhs);
     jl_gc_wb_post(b, rhs);
     if (__unlikely(old == NULL))
@@ -2037,7 +2034,7 @@ JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_module_t *mod
 {
     jl_check_binding_assign_value(b, mod, var, rhs, "setglobalonce!");
     jl_value_t *old = NULL;
-    jl_gc_wb_pre(b, rhs);
+    jl_gc_wb_pre(b, jl_atomic_load_relaxed(&b->value));
     if (jl_atomic_cmpswap(&b->value, &old, rhs))
         jl_gc_wb_post(b, rhs);
     return old;

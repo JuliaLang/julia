@@ -419,7 +419,7 @@ JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m JL_ROOTING_ARGUMENT, j
     }
     if (layout->flags.arrayelem_isboxed) {
         assert((char*)m.ptr_or_offset - (char*)m.mem->ptr < sizeof(jl_value_t*) * m.mem->length);
-        jl_gc_wb_pre(jl_genericmemory_owner(m.mem), rhs);
+        jl_gc_wb_pre(jl_genericmemory_owner(m.mem), jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)m.ptr_or_offset));
         if (isatomic)
             jl_atomic_store((_Atomic(jl_value_t*)*)m.ptr_or_offset, rhs);
         else
@@ -480,7 +480,7 @@ JL_DLLEXPORT jl_value_t *jl_memoryrefswap(jl_genericmemoryref_t m, jl_value_t *r
     if (layout->flags.arrayelem_isboxed) {
         assert(data - (char*)m.mem->ptr < sizeof(jl_value_t*) * m.mem->length);
         jl_value_t *r;
-        jl_gc_wb_pre(owner, rhs);
+        jl_gc_wb_pre(owner, jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)data));
         if (isatomic)
             r = jl_atomic_exchange((_Atomic(jl_value_t*)*)data, rhs);
         else
@@ -567,7 +567,7 @@ JL_DLLEXPORT jl_value_t *jl_memoryrefsetonce(jl_genericmemoryref_t m, jl_value_t
         jl_value_t *r = NULL;
         _Atomic(jl_value_t*) *px = (_Atomic(jl_value_t*)*)data;
         
-        jl_gc_wb_pre(owner, rhs);
+        jl_gc_wb_pre(owner, jl_atomic_load_relaxed(px));
         success = isatomic ? jl_atomic_cmpswap(px, &r, rhs) : jl_atomic_cmpswap_release(px, &r, rhs);
         if (success)
             jl_gc_wb_post(owner, rhs);

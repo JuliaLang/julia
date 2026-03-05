@@ -293,7 +293,7 @@ static void mtcache_hash_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t
     if (a == (jl_genericmemory_t*)jl_an_empty_memory_any) {
         a = jl_alloc_memory_any(16);
         if (parent)
-            jl_gc_wb_pre(parent, a);
+            jl_gc_wb_pre(parent, jl_atomic_load_relaxed(pcache));
         jl_atomic_store_release(pcache, a);
         if (parent)
             jl_gc_wb_post(parent, a);
@@ -302,7 +302,7 @@ static void mtcache_hash_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t
     assert(inserted);
     if (a != jl_atomic_load_relaxed(pcache)) {
         if (parent)
-            jl_gc_wb_pre(parent, a);
+            jl_gc_wb_pre(parent, jl_atomic_load_relaxed(pcache));
         jl_atomic_store_release(pcache, a);
         if (parent)
             jl_gc_wb_post(parent, a);
@@ -1348,10 +1348,10 @@ static void jl_typemap_list_insert_(
         l = jl_atomic_load_relaxed(&l->next);
     }
 
-    jl_gc_wb_pre(newrec, l);
+    jl_gc_wb_pre(newrec, jl_atomic_load_relaxed(&newrec->next));
     jl_atomic_store_relaxed(&newrec->next, l);
     jl_gc_wb_post(newrec, l);
-    jl_gc_wb_pre(parent, newrec);
+    jl_gc_wb_pre(parent, jl_atomic_load_relaxed(pml));
     jl_atomic_store_release(pml, newrec);
     jl_gc_wb_post(parent, newrec);
 }
@@ -1378,7 +1378,7 @@ static void jl_typemap_insert_generic(
     if (count > MAX_METHLIST_COUNT) {
         ml = jl_method_convert_list_to_cache(
             map, (jl_typemap_entry_t*)ml, tparam, offs, doublesplit != NULL);
-        jl_gc_wb_pre(parent, ml);
+        jl_gc_wb_pre(parent, jl_atomic_load_relaxed(pml));
         jl_atomic_store_release(pml, ml);
         jl_gc_wb_post(parent, ml);
         if (doublesplit)

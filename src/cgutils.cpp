@@ -2642,6 +2642,16 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
     if (needlock)
         emit_lockstate_value(ctx, needlock, true);
     jl_cgval_t oldval = rhs;
+    // Emit pre-write barrier before any store (for SATB / concurrent GC)
+    if (parent != NULL && tracked_pointers && (!isboxed || !type_is_permalloc(rhs.typ))) {
+        if (r) {
+            if (!isboxed)
+                emit_write_multibarrier_pre(ctx, parent, r, rhs.typ);
+            else
+                emit_write_barrier_pre(ctx, parent, r);
+        } else
+            emit_write_multibarrier_pre(ctx, parent, rhs);
+    }
     // TODO: we should do Release ordering for anything with CountTrackedPointers(elty).count > 0, instead of just isboxed
     if (op == StoreKind::Set || (Order == AtomicOrdering::NotAtomic && op == StoreKind::Swap)) {
         if (op == StoreKind::Swap) {
@@ -2974,13 +2984,6 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
     if (needlock)
         emit_lockstate_value(ctx, needlock, false);
     if (parent != NULL && tracked_pointers && (!isboxed || !type_is_permalloc(rhs.typ))) {
-        if (r) {
-            if (!isboxed)
-                emit_write_multibarrier_pre(ctx, parent, r, rhs.typ);
-            else
-                emit_write_barrier_pre(ctx, parent, r);
-        } else
-            emit_write_multibarrier_pre(ctx, parent, rhs);
         if (op == StoreKind::Replace || op == StoreKind::SetOnce) {
             BasicBlock *BB = BasicBlock::Create(ctx.builder.getContext(), "xchg_wb", ctx.f);
             DoneBB = BasicBlock::Create(ctx.builder.getContext(), "done_xchg_wb", ctx.f);

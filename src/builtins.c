@@ -807,7 +807,7 @@ JL_CALLABLE(jl_f__apply_iterate)
             for (j = 0; j < al; j++) {
                 // jl_fieldref may allocate.
                 if (arg_heap)
-                    jl_gc_wb_pre(arg_heap, newargs[n - 1]);
+                    jl_gc_wb_pre(arg_heap, newargs[n]);
                 newargs[n++] = jl_fieldref(ai, j);
                 if (arg_heap)
                     jl_gc_wb_post(arg_heap, newargs[n - 1]);
@@ -827,7 +827,7 @@ JL_CALLABLE(jl_f__apply_iterate)
                     if (__unlikely(arg == NULL))
                         jl_throw(jl_undefref_exception);
                     if (arg_heap)
-                        jl_gc_wb_pre(arg_heap, arg);
+                        jl_gc_wb_pre(arg_heap, newargs[n]);
                     newargs[n++] = arg;
                     if (arg_heap)
                         jl_gc_wb_post(arg_heap, arg);
@@ -836,7 +836,7 @@ JL_CALLABLE(jl_f__apply_iterate)
             else {
                 for (j = 0; j < al; j++) {
                     if (arg_heap)
-                        jl_gc_wb_pre(arg_heap, newargs[n - 1]);
+                        jl_gc_wb_pre(arg_heap, newargs[n]);
                     newargs[n++] = jl_genericmemoryref(mem, j);
                     if (arg_heap)
                         jl_gc_wb_post(arg_heap, newargs[n - 1]);
@@ -857,7 +857,7 @@ JL_CALLABLE(jl_f__apply_iterate)
                     if (__unlikely(arg == NULL))
                         jl_throw(jl_undefref_exception);
                     if (arg_heap)
-                        jl_gc_wb_pre(arg_heap, arg);
+                        jl_gc_wb_pre(arg_heap, newargs[n]);
                     newargs[n++] = arg;
                     if (arg_heap)
                         jl_gc_wb_post(arg_heap, arg);
@@ -866,7 +866,7 @@ JL_CALLABLE(jl_f__apply_iterate)
             else {
                 for (j = 0; j < al; j++) {
                     if (arg_heap)
-                        jl_gc_wb_pre(arg_heap, newargs[n - 1]);
+                        jl_gc_wb_pre(arg_heap, newargs[n]);
                     newargs[n++] = jl_arrayref(aai, j);
                     if (arg_heap)
                         jl_gc_wb_post(arg_heap, newargs[n - 1]);
@@ -887,7 +887,7 @@ JL_CALLABLE(jl_f__apply_iterate)
                 _grow_to(&roots[0], &newargs, &arg_heap, &n_alloc, n + precount + 1, extra);
                 JL_GC_ASSERT_LIVE(value);
                 if (arg_heap)
-                    jl_gc_wb_pre(arg_heap, value);
+                    jl_gc_wb_pre(arg_heap, newargs[n]);
                 newargs[n++] = value;
                 if (arg_heap)
                     jl_gc_wb_post(arg_heap, value);

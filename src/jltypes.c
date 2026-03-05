@@ -1167,7 +1167,7 @@ static int cache_insert_type_set_(jl_svec_t *a, jl_datatype_t *val, uint_t hv, i
     do {
         jl_value_t *tab_i = jl_atomic_load_relaxed(&tab[index]);
         if (tab_i == jl_nothing) {
-            jl_gc_wb_pre(a, val);
+            jl_gc_wb_pre(a, tab_i);
             if (atomic)
                 jl_atomic_store_release(&tab[index], (jl_value_t*)val);
             else
@@ -1203,7 +1203,7 @@ static void cache_insert_type_set(jl_datatype_t *val, uint_t hv)
         else
             newsz = sz << 2;
         a = cache_rehash_set(a, newsz);
-        jl_gc_wb_pre(val->name, a);
+        jl_gc_wb_pre(val->name, jl_atomic_load_relaxed(&val->name->cache));
         jl_atomic_store_release(&val->name->cache, a);
         jl_gc_wb_post(val->name, a);
     }
@@ -1242,7 +1242,7 @@ static void cache_insert_type_linear(jl_datatype_t *type, ssize_t insert_at)
     if (n == 0 || jl_svecref(cache, n - 1) != jl_nothing) {
         jl_svec_t *nc = jl_svec_fill(n < 4 ? 4 : n * 2, jl_nothing);
         memcpy(jl_svec_data(nc), jl_svec_data(cache), sizeof(void*) * n);
-        jl_gc_wb_pre(type->name, nc);
+        jl_gc_wb_pre(type->name, jl_atomic_load_relaxed(&type->name->linearcache));
         jl_atomic_store_release(&type->name->linearcache, nc);
         jl_gc_wb_post(type->name, nc);
         cache = nc;
@@ -1272,7 +1272,7 @@ void jl_cache_type_(jl_datatype_t *type)
         jl_value_t *uw = jl_unwrap_unionall(key[0]);
         if (jl_is_datatype(uw) && key[0] == ((jl_datatype_t*)uw)->name->wrapper) {
             jl_typename_t *tn2 = ((jl_datatype_t*)uw)->name;
-            jl_gc_wb_pre(tn2, type);
+            jl_gc_wb_pre(tn2, jl_atomic_load_relaxed(&tn2->Typeofwrapper));
             jl_atomic_store_release(&tn2->Typeofwrapper, (jl_value_t*)type);
             jl_gc_wb_post(tn2, type);
             return;
@@ -2169,7 +2169,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             jl_value_t *tw = extract_wrapper(pi);
             if (tw && tw != pi && (tn != jl_type_typename || jl_typeof(pi) == jl_typeof(tw)) &&
                     !jl_has_free_typevars(pi) && jl_types_equal(pi, tw)) {
-                if (p) jl_gc_wb_pre(p, tw);
+                if (p) jl_gc_wb_pre(p, pi);
                 iparams[i] = tw;
                 if (p) jl_gc_wb_post(p, tw);
             }
@@ -2250,7 +2250,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             jl_value_t *pi = iparams[i];
             jl_value_t *newp = normalize_unionalls(pi);
             if (newp != pi) {
-                if (p) jl_gc_wb_pre(p, newp);
+                if (p) jl_gc_wb_pre(p, pi);
                 iparams[i] = newp;
                 if (p) jl_gc_wb_post(p, newp);
                 changed = 1;
@@ -2287,7 +2287,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             if (cacheable || !jl_has_free_typevars(pi)) {
                 pi = jl_as_global_root(pi, cacheable);
                 if (pi != NULL) {
-                    if (p) jl_gc_wb_pre(p, pi);
+                    if (p) jl_gc_wb_pre(p, iparams[i]);
                     iparams[i] = pi;
                     if (p) jl_gc_wb_post(p, pi);
                 }
@@ -2592,7 +2592,7 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
             }
         }
         if (ip_heap)
-            jl_gc_wb_pre(ip_heap, pi);
+            jl_gc_wb_pre(ip_heap, iparams[i]);
         iparams[i] = pi;
         if (ip_heap)
             jl_gc_wb_post(ip_heap, pi);

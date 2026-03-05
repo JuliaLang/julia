@@ -61,7 +61,7 @@ static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, j
             }
             if (jl_egal(key, k2)) {
                 if (jl_atomic_load_relaxed(&tab[index + 1]) != NULL) {
-                    jl_gc_wb_pre(a, val);
+                    jl_gc_wb_pre(a, jl_atomic_load_relaxed(&tab[index + 1]));
                     jl_atomic_store_release(&tab[index + 1], val);
                     jl_gc_wb_post(a, val);
                     return 0;
@@ -81,10 +81,10 @@ static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, j
         } while (iter <= maxprobe && index != orig);
 
         if (empty_slot != -1) {
-            jl_gc_wb_pre(a, key);
+            jl_gc_wb_pre(a, jl_atomic_load_relaxed(&tab[empty_slot]));
             jl_atomic_store_release(&tab[empty_slot], key);
             jl_gc_wb_post(a, key);
-            jl_gc_wb_pre(a, val);
+            jl_gc_wb_pre(a, jl_atomic_load_relaxed(&tab[empty_slot + 1]));
             jl_atomic_store_release(&tab[empty_slot + 1], val);
             jl_gc_wb_post(a, val);
             return 1;

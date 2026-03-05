@@ -79,7 +79,7 @@ STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_
 
 STATIC_INLINE void jl_gc_multi_wb_pre(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
 {
-    mmtk_gc_wb_post_fast(parent, (void*)0);
+    mmtk_gc_wb_pre(parent, (void*)0);
 }
 
 STATIC_INLINE void jl_gc_multi_wb_post(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT

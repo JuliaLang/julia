@@ -208,7 +208,7 @@ static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PRO
     }
     jl_method_instance_t *mi = mi_insert ? mi_insert : jl_get_specialized(m, type, sparams);
     if (specializations == (jl_value_t*)jl_emptysvec) {
-        jl_gc_wb_pre(m, mi);
+        jl_gc_wb_pre(m, jl_atomic_load_relaxed(&m->specializations));
         jl_atomic_store_release(&m->specializations, (jl_value_t*)mi);
         jl_gc_wb_post(m, mi);
     }
@@ -223,7 +223,7 @@ static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PRO
             i = cl - 1;
             specializations = (jl_value_t*)jl_svec_fill(cl, jl_nothing);
             jl_svecset(specializations, hv ? 0 : i--, mi);
-            jl_gc_wb_pre(m, specializations);
+            jl_gc_wb_pre(m, jl_atomic_load_relaxed(&m->specializations));
             jl_atomic_store_release(&m->specializations, specializations);
             jl_gc_wb_post(m, specializations);
             if (hv)
@@ -251,7 +251,7 @@ static jl_method_instance_t *jl_specializations_get_linfo_(jl_method_t *m JL_PRO
                        (char*)jl_svec_data(specializations) + sizeof(void*) * i,
                        sizeof(void*) * (cl - i));
             specializations = (jl_value_t*)nc;
-            jl_gc_wb_pre(m, specializations);
+            jl_gc_wb_pre(m, jl_atomic_load_relaxed(&m->specializations));
             jl_atomic_store_release(&m->specializations, specializations);
             jl_gc_wb_post(m, specializations);
             if (!hv)
@@ -326,7 +326,7 @@ jl_method_t *jl_mk_builtin_func(jl_datatype_t *dt, jl_sym_t *sname, jl_fptr_args
     m->nospecialize = ~m->nospecialize;
 
     jl_method_instance_t *mi = jl_get_specialized(m, (jl_value_t*)tuptyp, jl_emptysvec);
-    jl_gc_wb_pre(m, mi);
+    jl_gc_wb_pre(m, jl_atomic_load_relaxed(&m->unspecialized));
     jl_atomic_store_relaxed(&m->unspecialized, mi);
     jl_gc_wb_post(m, mi);
 
@@ -694,17 +694,17 @@ JL_DLLEXPORT void jl_update_codeinst(
     codeinst->time_infer_cache_saved = julia_double_to_half(time_infer_cache_saved);
     codeinst->time_infer_self = julia_double_to_half(time_infer_self);
     jl_atomic_store_relaxed(&codeinst->ipo_purity_bits, effects);
-    jl_gc_wb_pre(codeinst, di);
+    jl_gc_wb_pre(codeinst, jl_atomic_load_relaxed(&codeinst->debuginfo));
     jl_atomic_store_relaxed(&codeinst->debuginfo, di);
     jl_gc_wb_post(codeinst, di);
-    jl_gc_wb_pre(codeinst, edges);
+    jl_gc_wb_pre(codeinst, jl_atomic_load_relaxed(&codeinst->edges));
     jl_atomic_store_relaxed(&codeinst->edges, edges);
     jl_gc_wb_post(codeinst, edges);
     if ((const_flags & 1) != 0) {
         assert(codeinst->rettype_const);
         jl_atomic_store_release(&codeinst->invoke, jl_fptr_const_return);
     }
-    jl_gc_wb_pre(codeinst, inferred);
+    jl_gc_wb_pre(codeinst, jl_atomic_load_relaxed(&codeinst->inferred));
     jl_atomic_store_release(&codeinst->inferred, inferred);
     jl_gc_wb_post(codeinst, inferred);
     jl_atomic_store_relaxed(&codeinst->min_world, min_world); // XXX: these should be unchanged?
@@ -726,11 +726,11 @@ JL_DLLEXPORT void jl_fill_codeinst(
     if ((const_flags & 2) != 0) {
         jl_write(codeinst, (void**)&(codeinst->rettype_const), inferred_const);
     }
-    jl_gc_wb_pre(codeinst, edges);
+    jl_gc_wb_pre(codeinst, jl_atomic_load_relaxed(&codeinst->edges));
     jl_atomic_store_relaxed(&codeinst->edges, edges);
     jl_gc_wb_post(codeinst, edges);
     if ((jl_value_t*)di != jl_nothing) {
-        jl_gc_wb_pre(codeinst, di);
+        jl_gc_wb_pre(codeinst, jl_atomic_load_relaxed(&codeinst->debuginfo));
         jl_atomic_store_relaxed(&codeinst->debuginfo, di);
         jl_gc_wb_post(codeinst, di);
     }
@@ -793,11 +793,11 @@ JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMEN
         oldci = jl_atomic_load_relaxed(slot);
     }
     if (oldci != ci) {
-        jl_gc_wb_pre(ci, oldci);
+        jl_gc_wb_pre(ci, jl_atomic_load_relaxed(&ci->next));
         jl_atomic_store_relaxed(&ci->next, oldci);
         if (oldci)
             jl_gc_wb_post(ci, oldci);
-        jl_gc_wb_pre(parent, ci);
+        jl_gc_wb_pre(parent, oldci);
         jl_atomic_store_release(slot, ci);
         jl_gc_wb_post(parent, ci);
         if (oldci != NULL) {
@@ -808,7 +808,7 @@ JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMEN
                 oldci = jl_atomic_load_relaxed(slot);
             } while (oldci && oldci != ci);
             if (oldci) {
-                jl_gc_wb_pre(parent, next);
+                jl_gc_wb_pre(parent, oldci);
                 jl_atomic_store_release(slot, next);
                 if (next)
                     jl_gc_wb_post(parent, next);
@@ -831,11 +831,11 @@ JL_DLLEXPORT int jl_mi_try_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMENT,
     jl_code_instance_t *oldci = jl_atomic_load_relaxed(&mi->cache);
     int ret = 0;
     if (oldci == expected_ci) {
-        jl_gc_wb_pre(ci, oldci);
+        jl_gc_wb_pre(ci, jl_atomic_load_relaxed(&ci->next));
         jl_atomic_store_relaxed(&ci->next, oldci);
         if (oldci)
             jl_gc_wb_post(ci, oldci);
-        jl_gc_wb_pre(mi, ci);
+        jl_gc_wb_pre(mi, oldci);
         jl_atomic_store_release(&mi->cache, ci);
         jl_gc_wb_post(mi, ci);
         ret = 1;
@@ -1818,12 +1818,12 @@ jl_method_instance_t *cache_method(
         }
         jl_genericmemory_t *oldcache = jl_atomic_load_relaxed(&mc->leafcache);
         jl_typemap_entry_t *old = (jl_typemap_entry_t*)jl_eqtable_get(oldcache, (jl_value_t*)tt, jl_nothing);
-        jl_gc_wb_pre(newentry, old);
+        jl_gc_wb_pre(newentry, jl_atomic_load_relaxed(&newentry->next));
         jl_atomic_store_relaxed(&newentry->next, old);
         jl_gc_wb_post(newentry, old);
         jl_genericmemory_t *newcache = jl_eqtable_put(jl_atomic_load_relaxed(&mc->leafcache), (jl_value_t*)tt, (jl_value_t*)newentry, NULL);
         if (newcache != oldcache) {
-            jl_gc_wb_pre(mc, newcache);
+            jl_gc_wb_pre(mc, oldcache);
             jl_atomic_store_release(&mc->leafcache, newcache);
             jl_gc_wb_post(mc, newcache);
         }
@@ -2960,7 +2960,7 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
             }
             ssize_t idx;
             m_interferences = jl_idset_put_key(m_interferences, (jl_value_t*)method, &idx);
-            jl_gc_wb_pre(m, m_interferences);
+            jl_gc_wb_pre(m, jl_atomic_load_relaxed(&m->interferences));
             jl_atomic_store_release(&m->interferences, m_interferences);
             jl_gc_wb_post(m, m_interferences);
             for (j = 0; j < n; j++) {
@@ -2969,7 +2969,7 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
                     jl_genericmemory_t *m2_interferences = jl_atomic_load_relaxed(&m2->interferences);
                     ssize_t idx;
                     m2_interferences = jl_idset_put_key(m2_interferences, (jl_value_t*)method, &idx);
-                    jl_gc_wb_pre(m2, m2_interferences);
+                    jl_gc_wb_pre(m2, jl_atomic_load_relaxed(&m2->interferences));
                     jl_atomic_store_release(&m2->interferences, m2_interferences);
                     jl_gc_wb_post(m2, m2_interferences);
                 }
@@ -3020,7 +3020,7 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
                     jl_genericmemory_t *m_interferences = jl_atomic_load_relaxed(&m->interferences);
                     ssize_t idx;
                     m_interferences = jl_idset_put_key(m_interferences, (jl_value_t*)method, &idx);
-                    jl_gc_wb_pre(m, m_interferences);
+                    jl_gc_wb_pre(m, jl_atomic_load_relaxed(&m->interferences));
                     jl_atomic_store_release(&m->interferences, m_interferences);
                     jl_gc_wb_post(m, m_interferences);
                 }
@@ -3134,7 +3134,7 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     }
     jl_atomic_store_relaxed(&newentry->max_world, ~(size_t)0);
     jl_atomic_store_relaxed(&method->dispatch_status, dispatch_bits); // TODO: this should be sequenced fully after the world counter store
-    jl_gc_wb_pre(method, interferences);
+    jl_gc_wb_pre(method, jl_atomic_load_relaxed(&method->interferences));
     jl_atomic_store_release(&method->interferences, interferences);
     jl_gc_wb_post(method, interferences);
     JL_GC_POP();
@@ -3265,7 +3265,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_get_unspecialized(jl_method_t *def JL_PROP
         unspec = jl_atomic_load_relaxed(&def->unspecialized);
         if (unspec == NULL) {
             unspec = jl_get_specialized(def, def->sig, jl_emptysvec);
-            jl_gc_wb_pre(def, unspec);
+            jl_gc_wb_pre(def, NULL);
             jl_atomic_store_release(&def->unspecialized, unspec);
             jl_gc_wb_post(def, unspec);
         }
