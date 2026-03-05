@@ -982,6 +982,9 @@ julia> [0 1; 2 3] .|> (x -> x^2) |> sum
 _stable_typeof(x) = typeof(x)
 _stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
 
+_type_is_complete(::Type{T}) where {T} = @isdefined(T) ? true : false
+_is_complete_type(x) = (x isa Type) && _type_is_complete(x)
+
 """
     f = Returns(value)
 
@@ -1098,7 +1101,11 @@ struct ComposedFunction{O,I} <: Function
     outer::O
     inner::I
     ComposedFunction{O, I}(outer, inner) where {O, I} = new{O, I}(outer, inner)
-    ComposedFunction(outer, inner) = new{Core.Typeof(outer),Core.Typeof(inner)}(outer, inner)
+    function ComposedFunction(outer, inner)
+        outer = _maybe_wrap_type(outer)
+        inner = _maybe_wrap_type(inner)
+        new{typeof(outer), typeof(inner)}(outer, inner)
+    end
 end
 
 (c::ComposedFunction)(x...; kw...) = call_composed(unwrap_composed(c), x, kw)
@@ -1106,6 +1113,63 @@ unwrap_composed(c::ComposedFunction) = (unwrap_composed(c.outer)..., unwrap_comp
 unwrap_composed(c) = (maybeconstructor(c),)
 call_composed(fs, x, kw) = (@inline; fs[1](call_composed(tail(fs), x, kw)))
 call_composed(fs::Tuple{Any}, x, kw) = fs[1](x...; kw...)
+
+"""
+    Base.TypeWrapper::Type
+
+`Base.TypeWrapper{parameter}()` is a sentinel value that represents `parameter`. A
+motivation for using it, instead of using `parameter` directly, is the following
+property: for any `x` such that `x isa Base.TypeWrapper`, we have
+`Base.issingletontype(typeof(x))`.
+
+A `getindex` call, without providing any indices, returns the type parameter:
+
+```jldoctest
+julia> w = Base.TypeWrapper{Float32}()
+Base.TypeWrapper{Float32}()
+
+julia> w[]
+Float32
+```
+
+Used for:
+
+* [`Base.Fix`](@ref)
+
+* [`ComposedFunction`](@ref)
+
+* [`splat`](@ref)
+
+!!! compat "Julia 1.13"
+    `Base.TypeWrapper` requires at least Julia 1.13.
+
+See also: [`Base.issingletontype`](@ref).
+"""
+struct TypeWrapper{T} end
+getindex(::TypeWrapper{T}) where {T} = T
+function _maybe_unwrap_type(x)
+    if x isa TypeWrapper
+        x[]
+    else
+        x
+    end
+end
+function _maybe_wrap_type(x)
+    if x isa TypeWrapper
+        throw(ArgumentError("ambiguous input"))
+    end
+    if _is_complete_type(x)
+        TypeWrapper{x}()
+    else
+        x
+    end
+end
+function convert(::Type{TypeWrapper{T}}, ::Type{T}) where {T}
+    TypeWrapper{T}()
+end
+function convert(::Type{Type{T}}, ::TypeWrapper{T}) where {T}
+    T
+end
 
 struct Constructor{F} <: Function end
 (::Constructor{F})(args...; kw...) where {F} = (@inline; F(args...; kw...))
@@ -1188,7 +1252,8 @@ struct Fix{N,F,T} <: Function
         elseif N < 1
             throw(ArgumentError(LazyString("expected `N` in `Fix{N}` to be integer greater than 0, but got ", N)))
         end
-        new{N,_stable_typeof(f),_stable_typeof(x)}(f, x)
+        f = _maybe_wrap_type(f)
+        new{N,typeof(f),_stable_typeof(x)}(f, x)
     end
 end
 
@@ -1196,6 +1261,15 @@ function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
     M < N-1 && throw(ArgumentError(LazyString("expected at least ", N-1, " arguments to `Fix{", N, "}`, but got ", M)))
     (left, right) = _split_tuple(args, N-1)
     return f.f(left..., f.x, right...; kws...)
+end
+
+function Base.getproperty(x::Fix, name::Symbol)
+    field_value = getfield(x, name)
+    if name === :f
+        _maybe_unwrap_type(field_value)
+    else
+        field_value
+    end
 end
 
 # Special cases for improved constant propagation
@@ -1358,10 +1432,17 @@ See also [`splat`](@ref).
 """
 struct Splat{F} <: Function
     f::F
-    Splat(f) = new{Core.Typeof(f)}(f)
+    function Splat(f)
+        f = _maybe_wrap_type(f)
+        new{typeof(f)}(f)
+    end
 end
 (s::Splat)(args) = s.f(args...)
 show(io::IO, s::Splat) = (print(io, "splat("); show(io, s.f); print(io, ")"))
+
+function Base.getproperty(x::Union{ComposedFunction,Splat}, name::Symbol)
+    _maybe_unwrap_type(getfield(x, name))
+end
 
 ## in and related operators
 
