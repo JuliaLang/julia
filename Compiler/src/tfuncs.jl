@@ -3161,6 +3161,17 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     end
 end
 
+function _is_kwcall_nonempty(argtypes::Vector{Any})
+    if length(argtypes) >= 2 && singleton_type(argtypes[1]) === Core.kwcall
+        kw = unwrap_unionall(widenconst(argtypes[2]))
+        if kw isa DataType && kw.name === typename(NamedTuple)
+            names = kw.parameters[1]
+            return names isa Tuple && !isempty(names)
+        end
+    end
+    return false
+end
+
 # a simplified model of abstract_call_gf_by_type for applicable
 function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
                              sv::AbsIntState, max_methods::Int)
@@ -3184,6 +3195,8 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
             elseif !fully_covering(matches) || any_ambig(matches)
                 # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
                 rt = Bool
+            elseif _is_kwcall_nonempty(argtypes) && applicable[1].match.method.is_kwcall_stub
+                rt = Const(false) # kwcall stub throws for nonempty kwargs
             else
                 rt = Const(true) # has applicable matches
             end

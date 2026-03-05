@@ -1120,9 +1120,11 @@ function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_c
     tt = rewrap_unionall(Tuple{typeof(Core.kwcall), NamedTuple, ft, u.parameters...}, t)
     match = ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world)
     match === nothing && return false
-    kws = ccall(:jl_uncompress_argnames, Array{Symbol,1}, (Any,), (match::Method).slot_syms)
-    kws = kws[((match::Method).nargs + 1):end] # remove positional arguments
-    isempty(kws) && return true # some kwfuncs simply forward everything directly
+    match = match::Method
+    match.is_kwcall_stub && return false
+    kws = ccall(:jl_uncompress_argnames, Array{Symbol,1}, (Any,), match.slot_syms)
+    kws = kws[(match.nargs + 1):end] # remove positional arguments
+    isempty(kws) && return true
     for kw in kws
         endswith(String(kw), "...") && return true
     end
