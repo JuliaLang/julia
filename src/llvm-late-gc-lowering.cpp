@@ -1435,7 +1435,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 }
             } else if (StoreInst *SI = dyn_cast<StoreInst>(&I)) {
                 NoteOperandUses(S, BBS, I);
-                MaybeTrackStore(S, SI);
+                if (MaybeTrackStore(S, SI))
+                    BBS.FirstSafepointAfterFirstDef = BBS.FirstSafepoint;
             } else if (isa<ReturnInst>(&I)) {
                 NoteOperandUses(S, BBS, I);
             } else if (auto *ASCI = dyn_cast<AddrSpaceCastInst>(&I)) {
@@ -1478,18 +1479,19 @@ State LateLowerGCFrame::LocalScan(Function &F) {
 //    return Ptrs.size();
 //}
 
-void LateLowerGCFrame::MaybeTrackStore(State &S, StoreInst *I) {
+bool LateLowerGCFrame::MaybeTrackStore(State &S, StoreInst *I) {
     Value *PtrBase = I->getPointerOperand()->stripInBoundsOffsets();
     auto tracked = CountTrackedPointers(I->getValueOperand()->getType());
     if (!tracked.count)
-        return; // nothing to track is being stored
+        return false; // nothing to track is being stored
     // Find all alloca bases, looking through selects and phis.
     // LLVM's SROA/InstCombine can merge conditional alloca stores into a
     // select/phi over alloca pointers (see #60985).
     auto Allocas = FindAllocaBases(PtrBase);
     if (Allocas.empty())
-        return; // assume it is rooted--TODO: should we be more conservative?
+        return false; // assume it is rooted--TODO: should we be more conservative?
     bool needsTrackedStore = false;
+    bool Tracked = false;
     for (AllocaInst *AI : Allocas) {
         Type *STy = AI->getAllocatedType();
         if (!AI->isStaticAlloca() || (isa<PointerType>(STy) && STy->getPointerAddressSpace() == AddressSpace::Tracked) || S.ArrayAllocas.count(AI))
@@ -1500,6 +1502,7 @@ void LateLowerGCFrame::MaybeTrackStore(State &S, StoreInst *I) {
             if (allocaTracked.all) {
                 // track the Alloca directly
                 S.ArrayAllocas[AI] = allocaTracked.count * cast<ConstantInt>(AI->getArraySize())->getZExtValue();
+                Tracked = true;
                 continue;
             }
         }
@@ -1515,7 +1518,9 @@ void LateLowerGCFrame::MaybeTrackStore(State &S, StoreInst *I) {
         //unsigned count = TrackWithShadow(Src, Src->getType(), false, AI, MI, TODO which slots are we actually clobbering?);
         //assert(count == tracked.count); (void)count;
         S.TrackedStores.push_back(std::make_pair(I, tracked.count));
+        Tracked = true;
     }
+    return Tracked;
 }
 
 /*
@@ -2530,19 +2535,12 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
     if (pgcstack) {
       State S = LocalScan(F);
       // If there is no safepoint after the first reachable def, then we don't need any roots (even those for allocas)
-      // However, if ArrayAllocas or TrackedStores have entries, we need a GC frame
-      // to replace those allocas with frame slots, even when the only safepoint
-      // is in the entry block with no numbered def before it (#60985).
-      bool HasSafepointAfterDef = std::any_of(S.BBStates.begin(), S.BBStates.end(),
+      if (std::any_of(S.BBStates.begin(), S.BBStates.end(),
                   [&F](auto BBS) {
                       if (BBS.first == &F.getEntryBlock())
                           return BBS.second.FirstSafepointAfterFirstDef != -1;
                       return BBS.second.HasSafepoint;
-                  });
-      bool HasAllocaTracking = !S.ArrayAllocas.empty() || !S.TrackedStores.empty();
-      bool HasAnySafepoint = HasAllocaTracking && std::any_of(S.BBStates.begin(), S.BBStates.end(),
-                  [](auto BBS) { return BBS.second.HasSafepoint; });
-      if (HasSafepointAfterDef || HasAnySafepoint) {
+                  })) {
         ComputeLiveness(S);
         auto Colors = ColorRoots(S);
         std::map<Value *, std::pair<int, int>> CallFrames; // = OptimizeCallFrames(S, Ordering);
