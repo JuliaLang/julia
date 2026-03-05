@@ -3647,18 +3647,14 @@ Tuple
 
 """
     NamedTuple{names}(args::Tuple)
-
-Construct a named tuple with the given `names` (a tuple of Symbols) from a tuple of values.
-"""
-NamedTuple{names}(args::Tuple)
-
-"""
     NamedTuple{names,T}(args::Tuple)
 
-Construct a named tuple with the given `names` (a tuple of Symbols) and field types `T`
+In the first form, construct a named tuple with the given `names` (a tuple of Symbols) from a tuple of values.
+In the second form, construct a named tuple with the given `names` (a tuple of Symbols) and field types `T`
 (a `Tuple` type) from a tuple of values.
 """
-NamedTuple{names,T}(args::Tuple)
+NamedTuple{names}(args::Tuple)
+# NamedTuple{names,T}(args::Tuple)   # redundant because of the same signature
 
 """
     NamedTuple{names}(nt::NamedTuple)
