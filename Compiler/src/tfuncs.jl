@@ -51,7 +51,7 @@ end
 
 const INT_INF = typemax(Int) # integer infinity
 
-const N_IFUNC = reinterpret(Int32, have_fma) + 1
+const N_IFUNC = reinterpret(Int32, preferred_vector_width) + 1
 const T_IFUNC = Vector{Tuple{Int, Int, Any}}(undef, N_IFUNC)
 const T_IFUNC_COST = Vector{Int}(undef, N_IFUNC)
 const T_FFUNC_KEY = Vector{Any}()
@@ -320,6 +320,28 @@ end
 add_tfunc(Core.Intrinsics.cglobal, 1, 2, cglobal_tfunc, 5)
 
 add_tfunc(Core.Intrinsics.have_fma, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bool), 1)
+
+@nospecs function preferred_vector_width_tfunc(𝕃::AbstractLattice, t)
+    return preferred_vector_width_tfunc(widenlattice(𝕃), t)
+end
+
+@nospecs function preferred_vector_width_tfunc(𝕃::ConstsLattice, t)
+    # Want to return Union(Const(1), Const(2))
+    # hardcode AVX256
+    if sizeof(widenconst(t)) === 1
+        return Const(32)
+    elseif sizeof(widenconst(t)) === 2
+        return Const(16)
+    elseif sizeof(widenconst(t)) === 4
+        return Const(8)
+    elseif sizeof(widenconst(t)) === 8
+        return Const(4)
+    elseif sizeof(widenconst(t)) === 16
+        return Const(2)
+    end
+    return Union{Nothing, Int}
+end
+add_tfunc(Core.Intrinsics.preferred_vector_width, 1, 1, preferred_vector_width_tfunc, 1)
 
 # builtin functions
 # =================
