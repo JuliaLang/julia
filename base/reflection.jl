@@ -20,7 +20,7 @@ function code_lowered(@nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}); gener
     if @isdefined(IRShow)
         debuginfo = IRShow.debuginfo(debuginfo)
     elseif debuginfo === :default
-        debuginfo = :source
+        debuginfo = :none
     end
     if debuginfo !== :source && debuginfo !== :none
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
@@ -373,7 +373,7 @@ function code_typed_by_type(@nospecialize(tt::Type);
     if @isdefined(IRShow)
         debuginfo = IRShow.debuginfo(debuginfo)
     elseif debuginfo === :default
-        debuginfo = :source
+        debuginfo = :none
     end
     if debuginfo !== :source && debuginfo !== :none
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
