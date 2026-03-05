@@ -400,6 +400,22 @@ function showerror(io::IO, ex::MethodError)
     catch ex
         @error "Error showing method candidates, aborted" exception=ex,catch_backtrace()
     end
+    # issue 56325, adding a hint when the error is due to the wrong number of arguments
+    ms = methods(f)
+    if !isempty(ms)
+        n = length(arg_types_param) # number of arguments provided by the user
+        samenum = all(m -> m.nargs == ms[1].nargs, methods(f))
+        toofew = all(m -> n < m.nargs - 1 - Int(isvatuple(m.sig)), ms)
+        toomany = all(m -> !isvatuple(m.sig) && n > m.nargs - 1, ms)
+        if toofew || toomany
+            print(io, 
+            "\nHint: no method of `", f, "` accepts ", n, " arguments, ",
+            samenum ? "all methods accept " * string(ms[1].nargs - 1) * " arguments.\n" :
+            (toofew ? "fewer" : "more") * " arguments provided than expected by any defined method.\n",
+                )
+
+        end
+    end
     nothing
 end
 
