@@ -855,6 +855,21 @@ mktempdir() do tmpdir
     rm(b_tmpdir)
 end
 
+
+@testset "checkfor_mv_cp_cptree - overwrite checks" begin
+    mktempdir() do dir
+        dst = joinpath(dir, "dst")
+        touch(dst)
+
+        # Case 1: dst exists, force=false
+        @test_throws ArgumentError Base.cp(dst, dst; force=false)
+
+        # Case 2: dst exists, force=true, src == dst
+        @test_throws ArgumentError Base.cp(dst, dst; force=true)
+    end
+end
+
+
 @testset "rename" begin
     # some of the windows specific behavior may be fixed in new versions of julia
     mktempdir() do dir
