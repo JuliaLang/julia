@@ -253,7 +253,7 @@ constexpr auto armv8_3a = armv8_2a | get_feature_masks(v8_3a, jsconv, complxnum,
 constexpr auto armv8_3a_crypto = armv8_3a | get_feature_masks(aes, sha2);
 constexpr auto armv8_4a = armv8_3a | get_feature_masks(v8_4a, dit, rcpc_immo, flagm);
 constexpr auto armv8_4a_crypto = armv8_4a | get_feature_masks(aes, sha2);
-constexpr auto armv8_5a = armv8_4a | get_feature_masks(v8_5a, sb, ccdp, altnzcv, fptoint);
+constexpr auto armv8_5a = armv8_4a | get_feature_masks(v8_5a, sb, ccdp, altnzcv, fptoint, bti);
 constexpr auto armv8_5a_crypto = armv8_5a | get_feature_masks(aes, sha2);
 constexpr auto armv8_6a = armv8_5a | get_feature_masks(v8_6a, i8mm, bf16);
 constexpr auto armv8_6a_crypto = armv8_6a | get_feature_masks(aes, sha2);
@@ -359,7 +359,7 @@ constexpr auto apple_a10 = armv8a_crc_crypto | get_feature_masks(rdm);
 constexpr auto apple_a11 = armv8_2a_crypto | get_feature_masks(fullfp16);
 constexpr auto apple_a12 = armv8_3a_crypto | get_feature_masks(fullfp16);
 constexpr auto apple_a13 = armv8_4a_crypto | get_feature_masks(fp16fml, fullfp16, sha3);
-constexpr auto apple_a14 = armv8_5a_crypto | get_feature_masks(dotprod, fp16fml, fullfp16, sha3);
+constexpr auto apple_a14 = armv8_4a_crypto | get_feature_masks(sb, ccdp, altnzcv, fptoint, dotprod, fp16fml, fullfp16, sha3);
 constexpr auto apple_a15 = armv8_6a_crypto | get_feature_masks(dotprod, fp16fml, fullfp16, sha3);
 constexpr auto apple_a16 = armv8_6a_crypto | get_feature_masks(dotprod, fp16fml, fullfp16, sha3);
 constexpr auto apple_a17 = armv8_6a_crypto | get_feature_masks(dotprod, fp16fml, fullfp16, sha3);
@@ -1564,6 +1564,7 @@ static inline void enable_depends(FeatureList<n> &features)
         set_bit(features, Feature::ccdp, true);
         set_bit(features, Feature::altnzcv, true);
         set_bit(features, Feature::fptoint, true);
+        set_bit(features, Feature::bti, true);
     }
     if (test_nbit(features, Feature::v8_6a)) {
         set_bit(features, Feature::i8mm, true);
