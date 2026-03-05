@@ -347,7 +347,7 @@ function Iterators.take(xs::AbstractVector, n::Integer)
         if l <= x
             l
         else
-            typ_l(x)
+            typ_l(x)  # has to be behind a branch to avoid a spurious throw
         end
     else
         typ_l(checked_sub(f, typ_f(1)))  # empty range
@@ -366,7 +366,7 @@ function Iterators.drop(xs::AbstractVector, n::Integer)
     typ_wide = widen(typ)
     x = typ_wide(f) + n  # avoid overflow in arithmetic
     y = if x <= l
-        typ_f(x)
+        typ_f(x)  # has to be behind a branch to avoid a spurious throw
     else
         typ_f(checked_add(l, typ_l(1)))  # empty range
     end
