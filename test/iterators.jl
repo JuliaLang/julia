@@ -722,6 +722,17 @@ for T in (UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int128, BigInt)
     @test collect(partition(1:5, T(5)))[1] == 1:5
 end
 
+@testset "take, drop of an `AbstractVector` return an `AbstractVector`" begin
+    for typ in (UnitRange, Vector{Float32}, Memory{Float32})
+        for f in (take, drop)
+            for n in 0:5
+                v = typ(2:10)
+                @test (@inferred f(v, n)) isa AbstractVector
+            end
+        end
+    end
+end
+
 @testset "collect finite iterators issue #12009" begin
     @test (@inferred eltype(collect(enumerate(Iterators.Filter(x -> x>0, randn(10)))))) == Tuple{Int, Float64}
 end
