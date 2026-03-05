@@ -2236,12 +2236,17 @@ function hvcat_fill!(a::Array, xs::Tuple)
     if nr*nc != len
         throw(ArgumentError("argument count $(len) does not match specified shape $((nr,nc))"))
     end
-    k = 1
-    for i=1:nr
-        @inbounds for j=1:nc
-            a[i,j] = xs[k]
-            k += 1
+    i = 1
+    j = 1
+    ntuple(Val(len)) do k
+        @inline
+        @inbounds a[i,j] = xs[k]
+        j += 1
+        if j == nc+1
+            i += 1
+            j = 1
         end
+        nothing
     end
     a
 end
