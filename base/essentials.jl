@@ -902,13 +902,14 @@ macro boundscheck(blk)
 end
 
 """
-    @inbounds(blk)
+    @inbounds block
 
-Eliminates array bounds checking within expressions.
+Eliminates bounds checking within the block.
+This macro can be used to improve performance by informing the compiler that accesses to
+array elements or object fields are assuredly within bounds.
 
-In the example below the in-range check for referencing
-element `i` of array `A` is skipped to improve performance.
-
+In the example below the in-range check for referencing element `i` of array `A` is skipped
+to improve performance.
 ```julia
 function sum(A::AbstractArray)
     r = zero(eltype(A))
@@ -920,7 +921,6 @@ end
 ```
 
 !!! warning
-
     Using `@inbounds` may return incorrect results/crashes/corruption
     for out-of-bounds indices. The user is responsible for checking it manually.
     Only use `@inbounds` when you are certain that all accesses are in bounds (as
@@ -928,6 +928,37 @@ end
     example, using `1:length(A)` instead of `eachindex(A)` in a function like
     the one above is _not_ safely inbounds because the first index of `A` may not
     be `1` for all user defined types that subtype `AbstractArray`.
+
+!!! note
+    `@inbounds` eliminates bounds checks in methods called within a given block, but not
+    those that are syntactically within the given block.
+    However, keep in mind that the `@inbounds` context propagates only one function call
+    layer deep. For example, if an `@inbounds` block includes a call to `f()`, which in turn
+    calls `g()`, bounds checks that are syntactically within `f()` will be eliminated,
+    while ones within `g()` will not.
+    If you want to eliminates bounds checks within `g()` also,
+    you need to annotate [`Base.@propagate_inbounds`](@ref) on `f()`.
+
+# Example
+
+```julia-repl
+julia> code_typed((Vector{Any},Int)) do a, i
+           a[i]
+       end |> only
+CodeInfo(
+1 ─ %1 = Base.arrayref(true, a, i)::Any
+└──      return %1
+) => Any
+
+julia> code_typed((Vector{Any},Int)) do a, i
+           @inbounds a[i] # The bounds check for `arrayref` is turned off.
+       end |> only
+CodeInfo(
+1 ─ %1 = Base.arrayref(false, a, i)::Any
+└──      return %1
+) => Any
+```
+
 """
 macro inbounds(blk)
     return Expr(:block,
