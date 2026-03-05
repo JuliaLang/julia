@@ -57,8 +57,11 @@ Standard library changes
 
 #### Markdown
 
-  * Strikethrough text via `~strike~` or `~~through~~` is now supported by the
-    Markdown parser. ([#60537])
+* Support "raw" or "inline" HTML inside Markdown data ([#60629], [#60632], [#60732])
+* Support autolinks for email addresses (#60570)
+* Many improvements and bugfixes for rendering Markdown lists in a terminal ([#55456], [#60519])
+* Strikethrough text via `~strike~` or `~~through~~` is now supported by the Markdown parser. ([#60537])
+* Many, many bug fixes and minor tweaks; overall behavior is now much closer to CommonMark ([#59977], [#60502])
 
 #### Profile
 
