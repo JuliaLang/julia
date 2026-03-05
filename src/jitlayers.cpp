@@ -1654,7 +1654,17 @@ void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER {
 void fixupTM(TargetMachine &TM) {
     auto TheTriple = TM.getTargetTriple();
     if (jl_options.opt_level < 2) {
-        if (!TheTriple.isARM() && !TheTriple.isPPC64() && !TheTriple.isAArch64())
+        // Try GlobalISel on AArch64 - it's the default in LLVM at -O0 and
+        // is apparently generally faster than SelectionDAG while producing good code.
+        // Use fallback mode so unsupported patterns fall back to SelectionDAG.
+        // Note: Requires RemoveJuliaAddrspacesPass to run before codegen
+        // because GlobalISel doesn't handle Julia's custom address spaces.
+        if (TheTriple.isAArch64()) {
+            TM.setGlobalISel(true);
+            TM.setGlobalISelAbort(GlobalISelAbortMode::Disable);
+            TM.setFastISel(false);
+        }
+        else if (!TheTriple.isARM() && !TheTriple.isPPC64())
             TM.setFastISel(true);
         else    // FastISel seems to be buggy Ref #13321
             TM.setFastISel(false);
