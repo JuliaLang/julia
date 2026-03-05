@@ -3532,7 +3532,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                 jl_atomic_load_relaxed(&codeinst2->debuginfo),
                 jl_atomic_load_relaxed(&codeinst2->edges));
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
-            jl_write(codeinst, (void**)&(codeinst->rettype_const), codeinst->rettype_const);
+            jl_write(codeinst, (void**)&(codeinst->rettype_const), codeinst2->rettype_const);
             uint8_t specsigflags;
             jl_callptr_t invoke;
             void *fptr;

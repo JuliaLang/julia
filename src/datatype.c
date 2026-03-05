@@ -2020,12 +2020,10 @@ inline jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_valu
             jl_check_binding_assign_value(b, mod, name, y, "modifyglobal!");
         else if (!jl_isa(y, ty))
             jl_type_error(jl_is_genericmemory(parent) ? "memoryrefmodify!" : "modifyfield!", ty, y);
-        else {
-            jl_gc_wb_pre(parent, y);
-            if (isatomic ? jl_atomic_cmpswap(p, &r, y) : jl_atomic_cmpswap_release(p, &r, y)) {
-                jl_gc_wb_post(parent, y);
-                break;
-            }
+        jl_gc_wb_pre(parent, y);
+        if (isatomic ? jl_atomic_cmpswap(p, &r, y) : jl_atomic_cmpswap_release(p, &r, y)) {
+            jl_gc_wb_post(parent, y);
+            break;
         }
         args[0] = r;
         jl_gc_safepoint();
