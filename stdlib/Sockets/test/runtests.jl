@@ -602,6 +602,43 @@ end
     end
 end
 
+# Test that closewrite (SHUT_WR) works for PipeEndpoint too
+@testset "closewrite half-duplex" begin
+    mktempdir() do dir
+        socketname = Sys.iswindows() ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(dir, "s.sock")
+        server = listen(socketname)
+        t = @async begin
+            c = accept(server)
+            try
+                close(server)
+                @test isreadable(c)
+                @test iswritable(c)
+                @test read(c, String) == "ping"
+                @test !isreadable(c)
+                sleep(0.05)
+                write(c, "pong")
+                @test iswritable(c)
+                :ok
+            finally
+                close(c)
+            end
+        end
+        client = connect(socketname)
+        write(client, "ping")
+        @test isreadable(client)
+        @test iswritable(client)
+        closewrite(client)
+        @test isreadable(client)
+        @test !iswritable(client)
+        out = read(client, String)
+        @test !isreadable(client)
+        close(client)
+        srv = fetch(t)
+        @test out == "pong"
+        @test srv === :ok
+    end
+end
+
 @testset "TCPSocket RawFD constructor" begin
     if Sys.islinux()
         let fd = ccall(:socket, Int32, (Int32, Int32, Int32),
