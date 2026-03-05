@@ -894,13 +894,6 @@ struct GeneratedFunctionStub
     GeneratedFunctionStub(@nospecialize(gen), argnames::SimpleVector, spnames::SimpleVector) = new(gen, argnames, spnames)
 end
 
-# If the generator is a subtype of this trait, inference caches the generated unoptimized
-# code, sacrificing memory space to improve the performance of subsequent inferences.
-# This tradeoff is not appropriate in general cases (e.g., for `GeneratedFunctionStub`s
-# generated from the front end), but it can be justified for generators involving complex
-# code transformations, such as a Cassette-like system.
-abstract type CachedGenerator end
-
 NamedTuple() = NamedTuple{(),Tuple{}}(())
 
 eval(Core, :(NamedTuple{names}(args::Tuple) where {names} =
