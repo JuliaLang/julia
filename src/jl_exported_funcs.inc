@@ -270,6 +270,7 @@
     XX(jl_is_compilable) \
     XX(jl_is_const) \
     XX(jl_is_assertsbuild) \
+    XX(jl_is_asanbuild) \
     XX(jl_is_debugbuild) \
     XX(jl_is_foreign_type) \
     XX(jl_is_identifier) \
