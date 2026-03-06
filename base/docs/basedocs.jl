@@ -1171,9 +1171,6 @@ kw"finally"
 
 """
     break
-
-Break out of the current, innermost loop immediately.
-
     break name
     break name expr
 
