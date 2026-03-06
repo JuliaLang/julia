@@ -114,3 +114,13 @@ Core.InterConditional
 
 Core.InterConditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype)) =
     InterConditional(slot_id(var), thentype, elsetype)
+
+"""
+    alias::InterMustAlias
+
+This lattice element used in a very similar way as `InterConditional`, but corresponds to `MustAlias`.
+"""
+Core.InterMustAlias
+
+InterMustAlias(var::SlotNumber, @nospecialize(vartyp), fldidx::Int, @nospecialize(fldtyp)) =
+    InterMustAlias(slot_id(var), vartyp, fldidx, fldtyp)

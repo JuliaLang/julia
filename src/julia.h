@@ -1264,16 +1264,21 @@ STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAG
   2 = malloc-allocated pointer (does not own it)
   3 = has a pointer to the String object that owns the data pointer (m must be isbits)
 */
+#define JL_GENERICMEMORY_INLINED     0
+#define JL_GENERICMEMORY_GCMANAGED   1
+#define JL_GENERICMEMORY_MALLOCD     2
+#define JL_GENERICMEMORY_STRINGOWNED 3
+
 STATIC_INLINE int jl_genericmemory_how(jl_genericmemory_t *m) JL_NOTSAFEPOINT
 {
     if (m->ptr == (void*)((char*)m + 16)) // JL_SMALL_BYTE_ALIGNMENT (from julia_internal.h)
-        return 0;
+        return JL_GENERICMEMORY_INLINED;
     jl_value_t *owner = jl_genericmemory_data_owner_field(m);
     if (owner == (jl_value_t*)m)
-        return 1;
+        return JL_GENERICMEMORY_GCMANAGED;
     if (owner == NULL)
-        return 2;
-    return 3;
+        return JL_GENERICMEMORY_MALLOCD;
+    return JL_GENERICMEMORY_STRINGOWNED;
 }
 
 STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
