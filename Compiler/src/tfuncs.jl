@@ -2715,6 +2715,11 @@ function builtin_effects(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any
     return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow, inaccessiblememonly)
 end
 
+function _builtin_tfe(𝕃::AbstractLattice, f::B, argtypes::Vector{Any}, tfunc::F, minarg::Int, maxarg::Int) where {B, F}
+    rt = call_tfunc(𝕃, tfunc, minarg, maxarg, argtypes)
+    return Pair{Any,Effects}(rt, builtin_effects(𝕃, f, argtypes, rt))
+end
+
 """
     builtin_tfunction_effects(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any})
 
@@ -2725,10 +2730,6 @@ Methods are defined per-builtin; the generic fallback returns `(Any, Effects())`
 Note: `Core.current_scope` and `Core.apply_type` are also handled specially
 in `abstract_call_builtin` because they require `interp`/`sv` for precise results.
 """
-function _builtin_tfe(𝕃::AbstractLattice, f::B, argtypes::Vector{Any}, tfunc::F, minarg::Int, maxarg::Int) where {B, F}
-    rt = call_tfunc(𝕃, tfunc, minarg, maxarg, argtypes)
-    return Pair{Any,Effects}(rt, builtin_effects(𝕃, f, argtypes, rt))
-end
 builtin_tfunction_effects(𝕃::AbstractLattice, f::typeof(getfield), a::Vector{Any}) = _builtin_tfe(𝕃, f, a, getfield_tfunc, 2, 4)
 builtin_tfunction_effects(𝕃::AbstractLattice, f::typeof(isdefined), a::Vector{Any}) = _builtin_tfe(𝕃, f, a, isdefined_tfunc, 2, 3)
 builtin_tfunction_effects(𝕃::AbstractLattice, f::typeof(setfield!), a::Vector{Any}) = _builtin_tfe(𝕃, f, a, setfield!_tfunc, 3, 4)
