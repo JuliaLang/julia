@@ -568,6 +568,14 @@ struct InterConditional
     InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) = new(slot, thentype, elsetype)
 end
 
+struct InterMustAlias
+    slot::Int
+    vartyp::Any
+    fldidx::Int
+    fldtyp::Any
+    InterMustAlias(slot::Int, @nospecialize(vartyp), fldidx::Int, @nospecialize(fldtyp)) = new(slot, vartyp, fldidx, fldtyp)
+end
+
 struct PartialOpaque
     typ::Type
     env
