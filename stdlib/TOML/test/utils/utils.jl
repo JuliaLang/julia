@@ -1,13 +1,11 @@
-# This converts the ground-truth JSON files to the Julia repr format so
-# we can use that without requiring a JSON parser during testing.
+# Download the official toml-test suite and extract it for testing.
 
 using Downloads
 using Tar
 using p7zip_jll
 
-const url = "https://github.com/KristofferC/toml-test-julia/archive/refs/tags/v1.2.0.tar.gz"
-const tarname = basename(url)
-const version = lstrip(split(tarname, ".tar.gz")[1], 'v')
+const url = "https://github.com/toml-lang/toml-test/archive/refs/tags/v2.1.0.tar.gz"
+const version = "2.1.0"
 
 # From Pkg
 function exe7z()
@@ -35,5 +33,5 @@ function get_data()
     path = joinpath(tmp, basename(url))
     retry(Downloads.download, delays=fill(10,5))(url, path)
     Tar.extract(`$(exe7z()) x $path -so`, joinpath(tmp, "testfiles"))
-    return joinpath(tmp, "testfiles", "toml-test-julia-$version", "testfiles")
+    return joinpath(tmp, "testfiles", "toml-test-$version", "tests")
 end

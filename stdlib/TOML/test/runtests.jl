@@ -18,6 +18,7 @@ function roundtrip(data)
 end
 
 include("readme.jl")
+include("jsonx.jl")
 include("utils/utils.jl")
 include("toml_test.jl")
 include("values.jl")
