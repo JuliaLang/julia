@@ -1310,8 +1310,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                             callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
                             callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
                             callee->getName() == XSTR(jl_lock_field) || callee->getName() == XSTR(jl_unlock_field) ||
-                            callee == write_barrier_func || callee == gc_loaded_func || callee == pop_handler_noexcept_func ||
-                            callee->getName() == "memcmp") {
+                            callee == write_barrier_pre_func || callee == write_barrier_pre_func || callee == gc_loaded_func ||
+                            callee == pop_handler_noexcept_func || callee->getName() == "memcmp") {
                             continue;
                         }
                         if (callee->getMemoryEffects().onlyReadsMemory() ||
@@ -1878,7 +1878,8 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
 #endif
         );
     }
-    SmallVector<CallInst*, 0> write_barriers;
+    SmallVector<CallInst*, 0> pre_write_barriers;
+    SmallVector<CallInst*, 0> post_write_barriers;
     for (BasicBlock &BB : F) {
         for (auto it = BB.begin(); it != BB.end();) {
             Instruction *I = &*it;
@@ -1915,9 +1916,16 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
             }
             Value *callee = CI->getCalledOperand();
 
-            if (write_barrier_func && callee == write_barrier_func) {
+            if (write_barrier_pre_func && callee == write_barrier_pre_func) {
                 assert(CI->arg_size() >= 1);
-                write_barriers.push_back(CI);
+                pre_write_barriers.push_back(CI);
+                ChangesMade = true;
+                ++it;
+                continue;
+            }
+            if (write_barrier_post_func && callee == write_barrier_post_func) {
+                assert(CI->arg_size() >= 1);
+                post_write_barriers.push_back(CI);
                 ChangesMade = true;
                 ++it;
                 continue;
@@ -2246,7 +2254,8 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
             ChangesMade = true;
         }
     }
-    CleanupWriteBarriers(F, S, write_barriers, CFGModified);
+    CleanupWriteBarriers(F, S, pre_write_barriers, CFGModified);
+    CleanupWriteBarriers(F, S, post_write_barriers, CFGModified);
     if (maxframeargs == 0 && Frame) {
         Frame->eraseFromParent();
     }

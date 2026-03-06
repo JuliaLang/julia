@@ -119,7 +119,25 @@ Value* FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 }
 
 
-void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
+void FinalLowerGC::lowerWriteBarrierPre(CallInst *target, Function &F) {
+    auto parent = target->getArgOperand(0);
+    IRBuilder<> builder(target);
+    builder.SetCurrentDebugLocation(target->getDebugLoc());
+
+    // FIXME: Currently we call write barrier with the src object (parent).
+    // This works fine for object barrier for generational plans (such as stickyimmix), which does not use the target object at all.
+    // But for other MMTk plans, we need to be careful.
+    // const bool INLINE_WRITE_BARRIER = true;
+    if (MMTK_NEEDS_WRITE_BARRIER == MMTK_OBJECT_PRE_WRITE_BARRIER) {
+        // TODO: INILE_WRITE_BARRIER
+        Function *wb_func = getOrDeclare(jl_intrinsics::queueGCRoot);
+        builder.CreateCall(wb_func, { parent });
+    } else {
+        // Using a plan that does not need pre_write barriers
+    }
+}
+
+void FinalLowerGC::lowerWriteBarrierPost(CallInst *target, Function &F) {
     auto parent = target->getArgOperand(0);
     IRBuilder<> builder(target);
     builder.SetCurrentDebugLocation(target->getDebugLoc());
@@ -128,7 +146,7 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
     // This works fine for object barrier for generational plans (such as stickyimmix), which does not use the target object at all.
     // But for other MMTk plans, we need to be careful.
     const bool INLINE_WRITE_BARRIER = true;
-    if (MMTK_NEEDS_WRITE_BARRIER == MMTK_OBJECT_BARRIER) {
+    if (MMTK_NEEDS_WRITE_BARRIER == MMTK_OBJECT_POST_WRITE_BARRIER) {
         if (INLINE_WRITE_BARRIER) {
             auto i8_ty = Type::getInt8Ty(F.getContext());
             auto intptr_ty = T_size;
@@ -167,6 +185,6 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
             builder.CreateCall(wb_func, { parent });
         }
     } else {
-        // Using a plan that does not need write barriers
+        // Using a plan that does not need post_write barriers
     }
 }

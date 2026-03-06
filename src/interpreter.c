@@ -543,6 +543,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 // GC preserve the old_scope, since it is not rooted in the `jl_handler_t *`,
                 // the newly entered scope is preserved through the current_task.
                 JL_GC_PUSH1(&old_scope);
+                jl_gc_wb_pre(ct, ct->scope);
                 ct->scope = eval_value(jl_enternode_scope(stmt), s);
                 jl_gc_wb_current_task(ct, ct->scope);
                 if (!jl_setjmp(__eh.eh_ctx, 0)) {
@@ -713,8 +714,7 @@ jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *mi, size_t world
                 // under the assumption that the interpreter may need to
                 // access it frequently. TODO: Have some sort of usage-based
                 // cache here.
-                m->source = (jl_value_t*)src;
-                jl_gc_wb(m, src);
+                jl_write(m, (void**)&(m->source), src);
             }
             ret = (jl_value_t*)src;
         }

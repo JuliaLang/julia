@@ -174,8 +174,9 @@ void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *par
     jl_genericmemory_t *a = jl_atomic_load_relaxed(pcache);
     if (val + 1 >= jl_max_int(a)) {
         a = smallintset_rehash(a, hash, data, a->length, val + 1);
+        if (parent) jl_gc_wb_pre(parent, jl_atomic_load_relaxed(pcache));
         jl_atomic_store_release(pcache, a);
-        if (parent) jl_gc_wb(parent, a);
+        if (parent) jl_gc_wb_post(parent, a);
     }
     while (1) {
         if (smallintset_insert_(a, hash(val, data), val + 1))
@@ -195,8 +196,9 @@ void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *par
         else
             newsz = sz << 2;
         a = smallintset_rehash(a, hash, data, newsz, 0);
+        if (parent) jl_gc_wb_pre(parent, jl_atomic_load_relaxed(pcache));
         jl_atomic_store_release(pcache, a);
-        if (parent) jl_gc_wb(parent, a);
+        if (parent) jl_gc_wb_post(parent, a);
     }
 }
 

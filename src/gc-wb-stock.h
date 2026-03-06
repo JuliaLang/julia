@@ -11,7 +11,10 @@
 extern "C" {
 #endif
 
-STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_gc_wb_pre(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+{}
+
+STATIC_INLINE void jl_gc_wb_post(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 {
     // parent and ptr isa jl_value_t*
     if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 /* GC_OLD_MARKED */ && // parent is old and not in remset
@@ -27,7 +30,10 @@ STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_
     }
 }
 
-STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_gc_multi_wb_pre(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
+{
+}
+STATIC_INLINE void jl_gc_multi_wb_post(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
 {
     // 3 == GC_OLD_MARKED
     // ptr is an immutable object

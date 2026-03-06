@@ -598,8 +598,7 @@ static jl_genericmemory_t *jl_decode_value_memory(jl_ircode_state *s, jl_value_t
         jl_value_t **data = (jl_value_t**)m->ptr;
         size_t i, numel = m->length;
         for (i = 0; i < numel; i++) {
-            data[i] = jl_decode_value(s);
-            jl_gc_wb(m, data[i]);
+            jl_write(m, (void**)&(data[i]), jl_decode_value(s));
         }
     }
     else if (layout->first_ptr >= 0) {
@@ -614,8 +613,7 @@ static jl_genericmemory_t *jl_decode_value_memory(jl_ircode_state *s, jl_value_t
                 jl_value_t **fld = &((jl_value_t**)data)[ptr];
                 if ((char*)fld != start)
                     ios_readall(s->s, start, (const char*)fld - start);
-                *fld = jl_decode_value(s);
-                jl_gc_wb(m, fld);
+                jl_write(m, (void**)&(fld), jl_decode_value(s));
                 start = (char*)&fld[1];
             }
             data += elsz;
@@ -681,8 +679,7 @@ static jl_value_t *jl_decode_value_expr(jl_ircode_state *s, uint8_t tag)
     jl_value_t **data = jl_array_ptr_data(e->args);
     jl_value_t *owner = jl_array_owner(e->args);
     for (i = 0; i < len; i++) {
-        data[i] = jl_decode_value(s);
-        jl_gc_wb(owner, data[i]);
+        jl_write(owner, (void**)&(data[i]), jl_decode_value(s));
     }
     JL_GC_POP();
     return (jl_value_t*)e;
@@ -711,8 +708,7 @@ static jl_value_t *jl_decode_value_phi(jl_ircode_state *s, uint8_t tag)
     }
     jl_value_t **data_v = jl_array_ptr_data(v);
     for (i = 0; i < len_v; i++) {
-        data_v[i] = jl_decode_value(s);
-        jl_gc_wb(jl_array_owner(v), data_v[i]);
+        jl_write(jl_array_owner(v), (void**)&(data_v[i]), jl_decode_value(s));
     }
     JL_GC_POP();
     return phi;
@@ -731,8 +727,7 @@ static jl_value_t *jl_decode_value_phic(jl_ircode_state *s, uint8_t tag)
     phic = jl_new_struct(jl_phicnode_type, v);
     jl_value_t **data = jl_array_ptr_data(v);
     for (i = 0; i < len; i++) {
-        data[i] = jl_decode_value(s);
-        jl_gc_wb(jl_array_owner(v), data[i]);
+        jl_write(jl_array_owner(v), (void**)&(data[i]), jl_decode_value(s));
     }
     JL_GC_POP();
     return phic;
@@ -768,8 +763,7 @@ static jl_value_t *jl_decode_value_any(jl_ircode_state *s)
             jl_value_t **fld = &((jl_value_t**)data)[ptr];
             if ((char*)fld != start)
                 ios_readall(s->s, start, (const char*)fld - start);
-            *fld = jl_decode_value(s);
-            jl_gc_wb(v, *fld);
+            jl_write(v, (void**)fld, jl_decode_value(s));
             start = (char*)&fld[1];
         }
         JL_GC_POP();
@@ -1026,8 +1020,7 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     ios_mem(&dest, 0);
 
     if (m->roots == NULL) {
-        m->roots = jl_alloc_vec_any(0);
-        jl_gc_wb(m, m->roots);
+        jl_write(m, (void**)&(m->roots), jl_alloc_vec_any(0));
     }
     jl_value_t *edges = code->edges;
     jl_ircode_state s = {
@@ -1147,8 +1140,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     code->inlining_cost = jl_decode_inlining_cost(read_uint8(s.s));
 
     size_t nslots = read_int32(s.s);
-    code->slotflags = jl_alloc_array_1d(jl_array_uint8_type, nslots);
-    jl_gc_wb(code, code->slotflags);
+    jl_write(code, (void**)&(code->slotflags), jl_alloc_array_1d(jl_array_uint8_type, nslots));
     ios_readall(s.s, jl_array_data(code->slotflags, char), nslots);
 
     if (flags.bits.nargsmatchesmethod) {
@@ -1158,17 +1150,14 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     }
 
     size_t i, l = read_uint64(s.s);
-    code->code = jl_alloc_array_1d(jl_array_any_type, l);
-    jl_gc_wb(code, code->code);
+    jl_write(code, (void**)&(code->code), jl_alloc_array_1d(jl_array_any_type, l));
     for (i = 0; i < l; i++) {
         s.ssaid = i;
         jl_array_ptr_set(code->code, i, jl_decode_value(&s));
     }
     s.ssaid = 0;
-    code->ssavaluetypes = jl_decode_value(&s);
-    jl_gc_wb(code, code->ssavaluetypes);
-    code->ssaflags = jl_alloc_array_1d(jl_array_uint32_type, l);
-    jl_gc_wb(code, code->ssaflags);
+    jl_write(code, (void**)&(code->ssavaluetypes), jl_decode_value(&s));
+    jl_write(code, (void**)&(code->ssaflags), jl_alloc_array_1d(jl_array_uint32_type, l));
     uint32_t *ssaflags_data = jl_array_data(code->ssaflags, uint32_t);
     if (flags.bits.has_ssaflags)
         ios_readall(s.s, (char*)ssaflags_data, l * sizeof(*ssaflags_data));
@@ -1176,21 +1165,20 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
         memset(ssaflags_data, 0, l * sizeof(*ssaflags_data));
 
     if (m->is_for_opaque_closure) {
-        code->slottypes = jl_decode_value(&s);
-        jl_gc_wb(code, code->slottypes);
+        jl_write(code, (void**)&(code->slottypes), jl_decode_value(&s));
     }
 
     slotnames = jl_decode_value(&s);
     if (!jl_is_string(slotnames))
         slotnames = m->slot_syms;
-    code->slotnames = jl_uncompress_argnames(slotnames);
-    jl_gc_wb(code, code->slotnames);
+    jl_write(code, (void**)&(code->slotnames), jl_uncompress_argnames(slotnames));
 
-    if (metadata)
+    if (metadata) {
+        jl_gc_wb_pre(code, code->debuginfo);
         code->debuginfo = jl_atomic_load_relaxed(&metadata->debuginfo);
-    else
-        code->debuginfo = m->debuginfo;
-    jl_gc_wb(code, code->debuginfo);
+        jl_gc_wb_post(code, code->debuginfo);
+    } else
+        jl_write(code, (void**)&(code->debuginfo), m->debuginfo);
     assert(code->debuginfo);
     assert(jl_array_nrows(code->code) == codelocs_nstmts(code->debuginfo->codelocs) || jl_string_len(code->debuginfo->codelocs) == 0);
 
@@ -1201,14 +1189,11 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     ios_close(s.s);
     JL_UNLOCK(&m->writelock); // Might GC
     if (metadata) {
-        code->parent = jl_get_ci_mi(metadata);
-        jl_gc_wb(code, code->parent);
-        code->rettype = metadata->rettype;
-        jl_gc_wb(code, code->rettype);
+        jl_write(code, (void**)&(code->parent), jl_get_ci_mi(metadata));
+        jl_write(code, (void**)&(code->rettype), metadata->rettype);
         code->min_world = jl_atomic_load_relaxed(&metadata->min_world);
         code->max_world = jl_atomic_load_relaxed(&metadata->max_world);
-        code->edges = (jl_value_t*)s.edges;
-        jl_gc_wb(code, s.edges);
+        jl_write(code, (void**)&(code->edges), s.edges);
     }
     JL_GC_POP();
 

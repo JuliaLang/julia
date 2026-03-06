@@ -132,7 +132,8 @@ bool FinalLowerGC::shouldRunFinalGC()
     should_run |= hasUse(*this, jl_intrinsics::GCAllocBytes);
     should_run |= hasUse(*this, jl_intrinsics::queueGCRoot);
     should_run |= hasUse(*this, jl_intrinsics::safepoint);
-    should_run |= (write_barrier_func && !write_barrier_func->use_empty());
+    should_run |= (write_barrier_pre_func && !write_barrier_pre_func->use_empty());
+    should_run |= (write_barrier_post_func && !write_barrier_post_func->use_empty());
     return should_run;
 }
 
@@ -142,7 +143,8 @@ bool FinalLowerGC::runOnFunction(Function &F)
     pgcstack = getPGCstack(F);
 
     auto gc_alloc_bytes = getOrNull(jl_intrinsics::GCAllocBytes);
-    SmallVector<CallInst*, 0> write_barriers;
+    SmallVector<CallInst*, 0> write_barriers_pre;
+    SmallVector<CallInst*, 0> write_barriers_post;
     SmallVector<CallInst*, 0> alloc_bytes;
 
     if (!pgcstack || !shouldRunFinalGC())
@@ -167,9 +169,13 @@ bool FinalLowerGC::runOnFunction(Function &F)
             }
             Value *callee = CI->getCalledOperand();
 
-            if (write_barrier_func && callee == write_barrier_func) {
+            if (write_barrier_pre_func && callee == write_barrier_pre_func) {
                 assert(CI->arg_size() >= 1);
-                write_barriers.push_back(CI);
+                write_barriers_pre.push_back(CI);
+            }
+            if (write_barrier_post_func && callee == write_barrier_post_func) {
+                assert(CI->arg_size() >= 1);
+                write_barriers_post.push_back(CI);
             }
             if (gc_alloc_bytes && callee == gc_alloc_bytes) {
                 assert(CI->arg_size() >= 1);
@@ -193,9 +199,15 @@ bool FinalLowerGC::runOnFunction(Function &F)
 
     // Write barriers should always be processed beforehand
     // since they may insert julia.queue_gc_root intrinsics
-    if(write_barrier_func) {
-        for (auto CI : write_barriers) {
-            lowerWriteBarrier(CI, F);
+    if(write_barrier_pre_func) {
+        for (auto CI : write_barriers_pre) {
+            lowerWriteBarrierPre(CI, F);
+            CI->eraseFromParent();
+        }
+    }
+    if(write_barrier_post_func) {
+        for (auto CI : write_barriers_post) {
+            lowerWriteBarrierPost(CI, F);
             CI->eraseFromParent();
         }
     }
@@ -240,7 +252,12 @@ bool FinalLowerGC::runOnFunction(Function &F)
 
             Value *callee = CI->getCalledOperand();
             assert(callee);
-            if (write_barrier_func == callee) {
+            if (write_barrier_pre_func == callee) {
+                errs() << "Final-GC-lowering didn't eliminate all write barriers from '" << F.getName() << "', dumping entire module!\n\n";
+                errs() << *F.getParent() << "\n";
+                abort();
+            }
+            if (write_barrier_post_func == callee) {
                 errs() << "Final-GC-lowering didn't eliminate all write barriers from '" << F.getName() << "', dumping entire module!\n\n";
                 errs() << *F.getParent() << "\n";
                 abort();

@@ -794,7 +794,12 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
                 }
                 return;
             }
-            if (pass.write_barrier_func == callee) {
+            if (pass.write_barrier_pre_func == callee) {
+                ++RemovedWriteBarriers;
+                call->eraseFromParent();
+                return;
+            }
+            if (pass.write_barrier_post_func == callee) {
                 ++RemovedWriteBarriers;
                 call->eraseFromParent();
                 return;
@@ -900,7 +905,12 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
                 call->eraseFromParent();
                 return;
             }
-            if (pass.write_barrier_func == callee) {
+            if (pass.write_barrier_pre_func == callee) {
+                ++RemovedWriteBarriers;
+                call->eraseFromParent();
+                return;
+            }
+            if (pass.write_barrier_post_func == callee) {
                 ++RemovedWriteBarriers;
                 call->eraseFromParent();
                 return;
@@ -1225,7 +1235,12 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 call->eraseFromParent();
                 return;
             }
-            if (pass.write_barrier_func == callee) {
+            if (pass.write_barrier_pre_func == callee) {
+                ++RemovedWriteBarriers;
+                call->eraseFromParent();
+                return;
+            }
+            if (pass.write_barrier_post_func == callee) {
                 ++RemovedWriteBarriers;
                 call->eraseFromParent();
                 return;
