@@ -531,7 +531,7 @@ function _gen_allocation_measurer(ex, fname::Symbol)
             b1[] - b0[]
         end
     else
-        @assert fname === :allocations
+        @assert fname === :allocations "unexpected fname"
         return quote
             Experimental.@force_compile
             # Note this value is unused, but without it `allocated` and `allocations`

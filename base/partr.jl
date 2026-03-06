@@ -139,7 +139,7 @@ end
 
 function multiq_insert(task::Task, priority::UInt16)
     tpid = ccall(:jl_get_task_threadpoolid, Int8, (Any,), task)
-    @assert tpid > -1
+    @assert tpid > -1 "invalid tpid"
     heap_p = multiq_size(tpid)
     tp = tpid + 1
 

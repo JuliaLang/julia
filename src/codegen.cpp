@@ -18,6 +18,8 @@
 #include <set>
 #include <unordered_set>
 #include <functional>
+#include <memory>
+#include <optional>
 
 // target machine computation
 #include <llvm/CodeGen/TargetSubtargetInfo.h>
@@ -2310,7 +2312,7 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v
         jl_datatype_t *dt = (jl_datatype_t *)v.typ;
         size_t npointers = dt->layout->first_ptr >= 0 ? dt->layout->npointers : 0;
         if (npointers > 0) {
-            auto InsertPoint = ctx.builder.saveIP();
+            IRBuilderBase::InsertPointGuard InsertPoint(ctx.builder);
             ctx.builder.SetInsertPoint(ctx.topalloca->getParent(), ++ctx.topalloca->getIterator());
             for (size_t i = 0; i < npointers; i++) {
                 // make sure these are nullptr early from LLVM's perspective, in case it decides to SROA it
@@ -2318,7 +2320,6 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v
                 ctx.builder.CreateAlignedStore(
                     Constant::getNullValue(ctx.types().T_prjlvalue), ptr_field, Align(sizeof(void *)));
             }
-            ctx.builder.restoreIP(InsertPoint);
         }
         auto tbaa = v.V == nullptr ? ctx.tbaa().tbaa_gcframe : ctx.tbaa().tbaa_stack;
         auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
@@ -3232,6 +3233,10 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
         if (!constval) {
             undef_var_error_ifnot(ctx, ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0), name, (jl_value_t*)mod);
             return jl_cgval_t();
+        }
+        if (jl_generating_output()) {
+            // root is required to allow bindings to be pruned, especially by `--trim`
+            jl_temporary_root(ctx, constval);
         }
         return mark_julia_const(ctx, constval);
     }
@@ -7911,6 +7916,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
         param.addAttribute(Attribute::NoAlias);
         param.addAttribute(Attribute::NoCapture);
         param.addAttribute(Attribute::NoUndef);
+        param.addAlignmentAttr(Align(props.union_align));
         attrs.push_back(AttributeSet::get(M->getContext(), param));
         assert(fsig.size() == 1);
     }
@@ -8683,13 +8689,10 @@ static jl_llvm_functions_t
             const DataLayout &DL = jl_Module->getDataLayout();
             Type *RT = Arg->getParamStructRetType();
             TypeSize sz = DL.getTypeAllocSize(RT);
-            Align al = DL.getPrefTypeAlign(RT);
-            if (al > MAX_ALIGN)
-                al = Align(MAX_ALIGN);
             param.addAttribute(Attribute::NonNull);
             // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
             param.addDereferenceableAttr(sz);
-            param.addAlignmentAttr(al);
+            // Alignment is already set by get_specsig_function.
         }
         attrs[Arg->getArgNo()] = AttributeSet::get(Arg->getContext(), param); // function declaration attributes
     }

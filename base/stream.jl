@@ -922,8 +922,8 @@ readbytes!(s::LibuvStream, a::Vector{UInt8}, nb = length(a)) = readbytes!(s, a, 
 function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
     iolock_begin()
     sbuf = s.buffer
-    @assert sbuf.seekable == false
-    @assert sbuf.maxsize >= nb
+    @assert sbuf.seekable == false "buffer should not be seekable"
+    @assert sbuf.maxsize >= nb "insufficient buffer size"
 
     function wait_locked(s, buf, nb)
         while bytesavailable(buf) < nb
@@ -970,8 +970,8 @@ end
 function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
     iolock_begin()
     sbuf = s.buffer
-    @assert sbuf.seekable == false
-    @assert sbuf.maxsize >= nb
+    @assert sbuf.seekable == false "buffer should not be seekable"
+    @assert sbuf.maxsize >= nb "insufficient buffer size"
 
     function wait_locked(s, buf, nb)
         while bytesavailable(buf) < nb
@@ -1006,7 +1006,7 @@ end
 function read(this::LibuvStream, ::Type{UInt8})
     iolock_begin()
     sbuf = this.buffer
-    @assert sbuf.seekable == false
+    @assert sbuf.seekable == false "buffer should not be seekable"
     while bytesavailable(sbuf) < 1
         iolock_end()
         eof(this) && throw(EOFError())
@@ -1021,7 +1021,7 @@ function readavailable(this::LibuvStream)
     wait_readnb(this, 1) # unlike the other `read` family of functions, this one doesn't guarantee error reporting
     iolock_begin()
     buf = this.buffer
-    @assert buf.seekable == false
+    @assert buf.seekable == false "buffer should not be seekable"
     bytes = take!(buf)
     iolock_end()
     return bytes
@@ -1030,7 +1030,7 @@ end
 function copyuntil(out::IO, x::LibuvStream, c::UInt8; keep::Bool=false)
     iolock_begin()
     buf = x.buffer
-    @assert buf.seekable == false
+    @assert buf.seekable == false "buffer should not be seekable"
     if !occursin(c, buf) # fast path checks first
         x.readerror === nothing || throw(x.readerror)
         if isopen(x) && x.status != StatusEOF
@@ -1562,7 +1562,7 @@ function readavailable(this::BufferStream)
     bytes = lock(this.cond) do
         wait_readnb(this, 1)
         buf = this.buffer
-        @assert buf.seekable == false
+        @assert buf.seekable == false "buffer should not be seekable"
         take!(buf)
     end
     return bytes
@@ -1578,8 +1578,8 @@ end
 
 function readbytes!(s::BufferStream, a::Vector{UInt8}, nb::Int)
     sbuf = s.buffer
-    @assert sbuf.seekable == false
-    @assert sbuf.maxsize >= nb
+    @assert sbuf.seekable == false "buffer should not be seekable"
+    @assert sbuf.maxsize >= nb "insufficient buffer size"
 
     function wait_locked(s, buf, nb)
         while bytesavailable(buf) < nb

@@ -599,7 +599,7 @@ struct WithoutMissingVector{T, U} <: AbstractVector{T}
 end
 Base.@propagate_inbounds function Base.getindex(v::WithoutMissingVector, i::Integer)
     out = v.data[i]
-    @assert !(out isa Missing)
+    @assert !(out isa Missing) "encountered `missing` in WithoutMissingVector"
     out::eltype(v)
 end
 Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector, x, i::Integer)
@@ -1251,13 +1251,13 @@ function move!(v, target, source)
     # This function never dominates runtime—only add `@inbounds` if you can demonstrate a
     # performance improvement. And if you do, also double check behavior when `target`
     # is out of bounds.
-    @assert length(target) == length(source)
+    @assert length(target) == length(source) "length mismatch"
     if length(target) == 1 || isdisjoint(target, source)
         for (i, j) in zip(target, source)
             v[i], v[j] = v[j], v[i]
         end
     else
-        @assert minimum(source) <= minimum(target)
+        @assert minimum(source) <= minimum(target) "range mismatch"
         reverse!(v, minimum(source), maximum(target))
         reverse!(v, minimum(target), maximum(target))
     end
@@ -1328,7 +1328,7 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
             # Specifically, this means that expected_middle_ln == ln, so
             # ln <= ... + 2.0expected_middle_ln && return ...
             # will trigger.
-            @assert false
+            @assert false "this should never happen"
             # But if it does happen, the kernel reduces to
             0, hi
         elseif lo_signpost_i <= lo

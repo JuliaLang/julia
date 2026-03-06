@@ -3109,6 +3109,28 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_get_llvm_mis(native_functions, &num_mis, NULL);
             arraylist_grow(&MIs, num_mis);
             jl_get_llvm_mis(native_functions, &num_mis, (jl_method_instance_t**)MIs.items);
+
+            // Record MethodInstances for built-ins (used when dynamically dispatching to a
+            // built-in, e.g., in the Core._apply_iterate implementation)
+            jl_datatype_t *tt = NULL;
+            JL_GC_PUSH1(&tt);
+            for (size_t i = 0; i < jl_n_builtins; i++) {
+                jl_value_t *builtin = jl_builtin_instances[i];
+                if (builtin == NULL)
+                    continue;
+
+                jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(builtin);
+                jl_value_t *params[2];
+                params[0] = dt->name->wrapper;
+                params[1] = jl_tparam0(jl_anytuple_type);
+                tt = (jl_datatype_t*)jl_apply_tuple_type_v(params, 2);
+                jl_method_instance_t *mi = (jl_method_instance_t *)jl_method_lookup_by_tt(
+                    tt, /* world */ 1, /* mt */ jl_nothing
+                );
+                assert(!jl_is_nothing(mi));
+                arraylist_push(&MIs, mi);
+            }
+            JL_GC_POP();
         }
     }
     if (jl_options.trim) {
