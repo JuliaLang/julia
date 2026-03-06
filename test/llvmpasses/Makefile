@@ -6,7 +6,10 @@ check: .
 
 TESTS_ll := $(filter-out update-%,$(patsubst $(SRCDIR)/%,%,$(wildcard $(SRCDIR)/*.ll)))
 TESTS_jl := $(patsubst $(SRCDIR)/%,%,$(wildcard $(SRCDIR)/*.jl))
-TESTS := $(TESTS_ll) $(TESTS_jl)
+# Include subdirectory tests (e.g., newsink/)
+SUBDIRS := $(patsubst $(SRCDIR)/%/,%,$(wildcard $(SRCDIR)/*/))
+TESTS_subdir_ll := $(foreach dir,$(SUBDIRS),$(patsubst $(SRCDIR)/%,%,$(wildcard $(SRCDIR)/$(dir)/*.ll)))
+TESTS := $(TESTS_ll) $(TESTS_jl) $(TESTS_subdir_ll) $(SUBDIRS)
 
 . $(TESTS):
 	$(MAKE) -C $(JULIAHOME)/deps install-llvm-tools
