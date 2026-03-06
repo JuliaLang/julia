@@ -1174,9 +1174,11 @@ kw"finally"
     break name
     break name expr
 
-Break out of a loop or [`@label`](@ref) block immediately, evaluating and returning `expr`.
+Break out of a loop or [`@label`](@ref) block immediately, making the loop or block
+evaluate to `expr`.
 
-If `expr` is not passed, `break` evaluates to `nothing`.
+If `expr` is not passed, it defaults to `nothing`.
+The expression `expr` is evaluated at the break statement.
 
 If `name` is passed, break out of the loop or block named with the corresponding
 `@label name`. Otherwise, break out of the current, innermost loop.

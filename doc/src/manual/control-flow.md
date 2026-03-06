@@ -999,11 +999,8 @@ manner. We mention them here only for completeness; for a full discussion see
 [Asynchronous Programming](@ref man-asynchronous).
 
 ## [Low level control flow with goto](@id goto)
-The control flow constructs mentioned above, such as while loops, for loops, and if/else statements
-are examples of *structured control flow*, where control is managed by structuring source code
-into (typically indented) blocks.
-
-Such structured control flow is implemented using a lower-level instruction called a goto statement,
+The user-friendly control flow constructs mentioned above, such as while loops, for loops, and if/else statements
+are implemented using a lower-level construct called a goto statement,
 which causes execution to jump directly from the goto statement statement to its destination,
 and continue execution from there.
 
@@ -1031,7 +1028,6 @@ x += 1
 
 Julia's `@goto` statements cannot jump to other top-level statements, e.g. from one function to another.
 
-Because structured control flow is easier to reason about than goto statements,
+Because loops and if-statements are easier to reason about than goto statements,
 goto statements should generally be avoided, and only reached for in the rare cases
 where the ordinary control flow mechanisms will not suffice.
-One such example is optimized state machines.
