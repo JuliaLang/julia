@@ -2387,6 +2387,37 @@ end
     @test sdastr(3, 3) == "[3, 4, 5]"
 end
 
+@testset "push/popdisplay" begin
+    mutable struct LogDisplay <: AbstractDisplay
+        log
+    end
+    function Base.display(d::LogDisplay, x)
+        d.log *= string(x)
+    end
+    Base.display(d::LogDisplay, mime, x) = display(d, x)
+    Base.displayable(d::LogDisplay, mime) = true
+    disp0 = LogDisplay("")
+    disp1 = LogDisplay("")
+    disp2 = LogDisplay("")
+    disp2′ = LogDisplay("")
+    pushdisplay(disp0)
+    display("hi")
+    @test disp0.log == "hi"
+    pushdisplay(disp2, 2)
+    pushdisplay(disp2′, 2)
+    display("prio top")
+    popdisplay(disp2′, 2)
+    display("prio2")
+    pushdisplay(disp1, 1)
+    display("prio")
+    popdisplay()
+    display("prio1")
+    popdisplay(disp1)
+    @test disp2.log == "prio2prio"
+    @test disp2′.log == "prio top"
+    @test disp1.log == "prio1"
+end
+              
 @testset "show Set" begin
     s = Set{Int}(1:22)
     str = showstr(s)
