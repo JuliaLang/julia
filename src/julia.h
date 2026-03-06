@@ -1263,7 +1263,10 @@ STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAG
   1 = owns the gc-managed data, exclusively (will free it)
   2 = malloc-allocated pointer (does not own it)
   3 = has a pointer to the String object that owns the data pointer (m must be isbits)
+  4 = malloc-allocated pointer but will be freed by the GC (relevant when switching the default allocator)
 */
+#define LIBC_ALLOCATED_POINTER (jl_value_t*)4
+
 STATIC_INLINE int jl_genericmemory_how(jl_genericmemory_t *m) JL_NOTSAFEPOINT
 {
     if (m->ptr == (void*)((char*)m + 16)) // JL_SMALL_BYTE_ALIGNMENT (from julia_internal.h)
@@ -1273,6 +1276,8 @@ STATIC_INLINE int jl_genericmemory_how(jl_genericmemory_t *m) JL_NOTSAFEPOINT
         return 1;
     if (owner == NULL)
         return 2;
+    if (owner == LIBC_ALLOCATED_POINTER)
+        return 4;
     return 3;
 }
 
