@@ -726,18 +726,17 @@ end
 function parse_inline_table(l::Parser)::Err{TOMLDict}
     dict = TOMLDict()
     push!(l.inline_tables, dict)
-    skip_ws(l)
+    skip_ws_nl(l)
     accept(l, '}') && return dict
     while true
         @try parse_entry(l, dict)
-        # SPEC: No newlines are allowed between the curly braces unless they are valid within a value.
-        skip_ws(l)
+        # TOML v1.1: newlines and trailing commas are allowed in inline tables
+        skip_ws_nl(l)
         accept(l, '}') && return dict
         if accept(l, ',')
-            skip_ws(l)
-            if accept(l, '}')
-                return ParserError(ErrTrailingCommaInlineTable)
-            end
+            skip_ws_nl(l)
+            # Trailing comma is allowed in TOML v1.1
+            accept(l, '}') && return dict
         else
             return ParserError(ErrExpectedCommaBetweenItemsInlineTable)
         end
@@ -1094,33 +1093,35 @@ function _parse_local_time(l::Parser, skip_hour=false)::Err{NTuple{4, Int64}}
     minute = parse_int(l, false)
     minute in 0:59 || return ParserError(ErrParsingDateTime)
 
-    accept(l, ':') || return ParserError(ErrParsingDateTime)
-
-    # second
-    set_marker!(l)
-    @try accept_two(l, isdigit)
-    second = parse_int(l, false)
-    second in 0:59 || return ParserError(ErrParsingDateTime)
-
-    # optional fractional second
+    # seconds are optional in TOML v1.1
+    second = Int64(0)
     millisecond = Int64(0)
-    if accept(l, '.')
+    if accept(l, ':')
+        # second
         set_marker!(l)
-        found_fractional_digit = false
-        for i in 1:3
-            found_fractional_digit |= accept(l, isdigit)
+        @try accept_two(l, isdigit)
+        second = parse_int(l, false)
+        second in 0:59 || return ParserError(ErrParsingDateTime)
+
+        # optional fractional second
+        if accept(l, '.')
+            set_marker!(l)
+            found_fractional_digit = false
+            for i in 1:3
+                found_fractional_digit |= accept(l, isdigit)
+            end
+            if !found_fractional_digit
+                return ParserError(ErrParsingDateTime)
+            end
+            # DateTime in base only manages 3 significant digits in fractional
+            # second. Interpret parsed digits as fractional seconds and scale to
+            # milliseconds precision (e.g., ".2" => 200ms, ".20" => 200ms).
+            ndigits = l.prevpos - l.marker
+            fractional_second = parse_int(l, false)::Int64
+            millisecond = fractional_second * 10^(3 - ndigits)
+            # Truncate off the rest eventual digits
+            accept_batch(l, isdigit)
         end
-        if !found_fractional_digit
-            return ParserError(ErrParsingDateTime)
-        end
-        # DateTime in base only manages 3 significant digits in fractional
-        # second. Interpret parsed digits as fractional seconds and scale to
-        # milliseconds precision (e.g., ".2" => 200ms, ".20" => 200ms).
-        ndigits = l.prevpos - l.marker
-        fractional_second = parse_int(l, false)::Int64
-        millisecond = fractional_second * 10^(3 - ndigits)
-        # Truncate off the rest eventual digits
-        accept_batch(l, isdigit)
     end
     return hour, minute, second, millisecond
 end
@@ -1184,8 +1185,9 @@ function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{St
                 start_chunk = l.prevpos
             else
                 c = eat_char(l) # eat the escaped character
-                if c == 'u'  || c == 'U'
-                    n = c == 'u' ? 4 : 6
+                if c == 'x' || c == 'u' || c == 'U'
+                    n = c == 'x' ? 2 :
+                        c == 'u' ? 4 : 8
                     set_marker!(l)
                     if !accept_n(l, n, isvalid_hex)
                         return ParserError(ErrInvalidUnicodeScalar)
@@ -1197,11 +1199,14 @@ function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{St
                     Any Unicode code point except high-surrogate and
                     low-surrogate code points.  In other words, the ranges of
                     integers 0 to D7FF16 and E00016 to 10FFFF16 inclusive.
+                    For \x, the range is 0x00-0xFF (U+0000-U+00FF).
                     =#
-                    if !(codepoint <= 0xD7FF || 0xE000 <= codepoint <= 0x10FFFF)
+                    if c == 'x'
+                        # \xHH is always valid (0x00-0xFF)
+                    elseif !(codepoint <= 0xD7FF || 0xE000 <= codepoint <= 0x10FFFF)
                         return ParserError(ErrInvalidUnicodeScalar)
                     end
-                elseif c != 'b' && c != 't' && c != 'n' && c != 'f' && c != 'r' && c != '"' && c!= '\\'
+                elseif c != 'b' && c != 't' && c != 'n' && c != 'f' && c != 'r' && c != 'e' && c != '"' && c!= '\\'
                     return ParserError(ErrInvalidEscapeCharacter)
                 end
                 contains_backslash = true
