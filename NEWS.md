@@ -25,6 +25,16 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
+  - Type inference now refines field types through conditional checks and call signatures.
+    For example, after `if !isnothing(x.field)`, inference knows `x.field` is not `nothing`
+    within the branch. Similarly, after a call like `func(x.field)` where `func(::Int)` is
+    the only matching method, inference refines `x.field` to `Int`.
+    This works for immutable struct fields and `const` fields of mutable structs.
+    Mutable (non-`const`) fields are not supported due to the lack of per-object memory
+    effect tracking; for those, the recommended pattern remains storing the field value in
+    a local variable before the check (e.g. `val = x.field; if !isnothing(val) ... end`)
+    ([#41199], [#47574]).
+
 Command-line option changes
 ---------------------------
 
