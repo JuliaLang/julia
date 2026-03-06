@@ -427,4 +427,70 @@ let s = test_mod.CheckConfig(0,0;kw1=100)
     @test s.field == 1100
 end
 
+# typegroup: basic mutual recursion
+@test JuliaLowering.include_string(test_mod, """
+typegroup
+    struct TG_Node
+        edges::Vector{TG_Edge}
+    end
+    struct TG_Edge
+        from::TG_Node
+        to::TG_Node
+    end
+end
+"""; version=v"1.14") === nothing
+@test fieldtype(test_mod.TG_Node, :edges) == Vector{test_mod.TG_Edge}
+@test fieldtype(test_mod.TG_Edge, :from) == test_mod.TG_Node
+@test fieldtype(test_mod.TG_Edge, :to) == test_mod.TG_Node
+let n1 = test_mod.TG_Node(test_mod.TG_Edge[]),
+    n2 = test_mod.TG_Node(test_mod.TG_Edge[]),
+    e = test_mod.TG_Edge(n1, n2)
+    push!(n1.edges, e)
+    @test n1.edges[1].to === n2
+end
+
+# typegroup: parametric mutual recursion
+@test JuliaLowering.include_string(test_mod, """
+typegroup
+    struct TG_PNode{T}
+        data::T
+        edges::Vector{TG_PEdge{T}}
+    end
+    struct TG_PEdge{T}
+        from::TG_PNode{T}
+        to::TG_PNode{T}
+    end
+end
+"""; version=v"1.14") === nothing
+@test fieldtype(test_mod.TG_PNode{Int}, :edges) == Vector{test_mod.TG_PEdge{Int}}
+@test fieldtype(test_mod.TG_PEdge{String}, :from) == test_mod.TG_PNode{String}
+
+# typegroup: mutable structs
+@test JuliaLowering.include_string(test_mod, """
+typegroup
+    mutable struct TG_MNode
+        edges::Vector{TG_MEdge}
+    end
+    mutable struct TG_MEdge
+        from::TG_MNode
+        to::TG_MNode
+    end
+end
+"""; version=v"1.14") === nothing
+@test ismutabletype(test_mod.TG_MNode)
+@test ismutabletype(test_mod.TG_MEdge)
+
+# typegroup: supertype referencing incomplete type
+@test JuliaLowering.include_string(test_mod, """
+typegroup
+    struct TG_SuperA <: AbstractVector{TG_SuperB}
+        data::Vector{TG_SuperB}
+    end
+    struct TG_SuperB
+        a::TG_SuperA
+    end
+end
+"""; version=v"1.14") === nothing
+@test test_mod.TG_SuperA <: AbstractVector{test_mod.TG_SuperB}
+
 end

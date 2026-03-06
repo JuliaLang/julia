@@ -5,13 +5,20 @@ using Random, LinearAlgebra
 # For curmod_*
 include("testenv.jl")
 
-# re-register only the error hints that are being tested here (
-Base.Experimental.register_error_hint(Base.noncallable_number_hint_handler, MethodError)
-Base.Experimental.register_error_hint(Base.string_concatenation_hint_handler, MethodError)
-Base.Experimental.register_error_hint(Base.methods_on_iterable, MethodError)
-Base.Experimental.register_error_hint(Base.nonsetable_type_hint_handler, MethodError)
-Base.Experimental.register_error_hint(Base.fielderror_listfields_hint_handler, FieldError)
-Base.Experimental.register_error_hint(Base.fielderror_dict_hint_handler, FieldError)
+# re-register only the error hints that are being tested here,
+# but only if they aren't already registered (they are in the sysimage)
+function _register_if_missing(@nospecialize(handler), @nospecialize(exct::Type))
+    list = get(Base.Experimental._hint_handlers, Core.typename(exct), nothing)
+    if list === nothing || !any(((_, h),) -> h === handler, list)
+        Base.Experimental.register_error_hint(handler, exct)
+    end
+end
+_register_if_missing(Base.noncallable_number_hint_handler, MethodError)
+_register_if_missing(Base.string_concatenation_hint_handler, MethodError)
+_register_if_missing(Base.methods_on_iterable, MethodError)
+_register_if_missing(Base.nonsetable_type_hint_handler, MethodError)
+_register_if_missing(Base.fielderror_listfields_hint_handler, FieldError)
+_register_if_missing(Base.fielderror_dict_hint_handler, FieldError)
 @testset "SystemError" begin
     err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
     errs = sprint(Base.showerror, err)
@@ -181,9 +188,10 @@ error_out3 = String(take!(buf))
 @test occursin("method_c6(; x) got unsupported keyword argument \"y\"$cmod$cfile$(c6line + 1)", error_out)
 @test occursin("method_c6(!Matched::Any; y)$cmod$cfile$(c6line + 2)", error_out)
 @test occursin("method_c6(::Any; y) got unsupported keyword argument \"x\"$cmod$cfile$(c6line + 2)", error_out1)
-@test occursin("method_c6_in_module(; x) got unsupported keyword argument \"y\"$cmod$cfile$(c6mline + 2)", error_out2)
-@test occursin("method_c6_in_module(!Matched::Any; y)$cmod$cfile$(c6mline + 3)", error_out2)
-@test occursin("method_c6_in_module(::Any; y) got unsupported keyword argument \"x\"$cmod$cfile$(c6mline + 3)", error_out3)
+c6mmod = "\n   @ $(Base.parentmodule_before_main(TestKWError))"
+@test occursin("method_c6_in_module(; x) got unsupported keyword argument \"y\"$c6mmod$cfile$(c6mline + 2)", error_out2)
+@test occursin("method_c6_in_module(!Matched::Any; y)$c6mmod$cfile$(c6mline + 3)", error_out2)
+@test occursin("method_c6_in_module(::Any; y) got unsupported keyword argument \"x\"$c6mmod$cfile$(c6mline + 3)", error_out3)
 
 c7line = @__LINE__() + 1
 method_c7(a, b; kargs...) = a
@@ -372,7 +380,7 @@ let undefvar
     err_str = @except_str Vector{Any}(undef, 1)[1] UndefRefError
     @test err_str == "UndefRefError: access to undefined reference"
     err_str = @except_str undefvar UndefVarError
-    @test err_str == "UndefVarError: `undefvar` not defined in local scope"
+    @test startswith(err_str, "UndefVarError: `undefvar` not defined in local scope")
     err_str = @except_str read(IOBuffer(), UInt8) EOFError
     @test err_str == "EOFError: read end of file"
     err_str = @except_str Dict()[:doesnotexist] KeyError

@@ -1,12 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-"""
-`Base.TOML` is an undocumented internal part of Julia's TOML parser
-implementation.  Users should call the documented interface in the
-TOML.jl standard library instead (by `import TOML` or `using TOML`).
-"""
-module TOML
-
 using Base: IdSet
 
 # we parse DateTime into these internal structs,
@@ -1232,6 +1225,4 @@ function take_chunks(l::Parser, unescape::Bool)::String
     end
     empty!(l.chunks)
     return unescape ? unescape_string(str) : str
-end
-
 end
