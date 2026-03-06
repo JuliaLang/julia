@@ -1012,7 +1012,7 @@ int jl_foreach_reachable_mtable(int (*visit)(jl_methtable_t *mt, void *env), jl_
                 }
                 else if (jl_is_mtable(v)) {
                     jl_methtable_t *mt = (jl_methtable_t*)v;
-                    if (mt && mt != jl_method_table) {
+                    if (mt && mt != jl_method_table && mt->module == current_m && mt->name == name) {
                         if (!visit(mt, env)) {
                             result = 0;
                             goto cleanup;
