@@ -910,7 +910,7 @@ function accessible(mod::Module)
     return collect(bindings)
 end
 
-function doc_completions(name, mod::Module=Main)
+function doc_completions(name::AbstractString, mod::Module=Main)
     res = fuzzysort(name, accessible(mod))
 
     # to insert an entry like `raw""` for `"@raw_str"` in `res`
@@ -924,7 +924,7 @@ function doc_completions(name, mod::Module=Main)
     end
     res
 end
-doc_completions(name::Symbol) = doc_completions(string(name), mod)
+doc_completions(name::Symbol, mod::Module=Main) = doc_completions(string(name), mod)
 
 
 # Searching and apropos

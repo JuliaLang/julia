@@ -147,7 +147,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
                 inferred_result = maybe_compress_codeinfo(interp, mi, inferred_result)
                 result.is_src_volatile = false
             elseif ci.owner === nothing
-                # The global cache can only handle objects that codegen understands
+                # The global cache can only handle objects that codegen understands (nothing or CodeInfo)
                 inferred_result = nothing
             end
         end

@@ -206,7 +206,7 @@ end
                 @test cset.regexps == [SubString("foo.*bar")]
             end
             @testset "Mode" begin
-                cset = ConditionSet(">shell")
+                cset = ConditionSet("shell>")
                 @test cset.modes == [SubString("shell")]
             end
             @testset "Fuzzy" begin
@@ -231,9 +231,11 @@ end
                 cset = ConditionSet("hello\\;world;=exact")
                 @test cset.words == [SubString("hello;world")]
                 @test cset.exacts == [SubString("exact")]
+                cset = ConditionSet("1 \\; 2")
+                @test cset.words == [SubString("1 ; 2")]
             end
             @testset "Complex query" begin
-                cset = ConditionSet("some = words ;; !error ;> julia;/^def.*;")
+                cset = ConditionSet("some = words ;; !error ; julia> ;/^def.*;")
                 @test cset.words == [SubString("some = words")]
                 @test cset.negatives == [SubString("error")]
                 @test cset.modes == [SubString("julia")]
@@ -254,7 +256,7 @@ end
                 @test isempty(spec2.regexps)
             end
             @testset "Complex query" begin
-                cset = ConditionSet("=exact;!neg;/foo.*bar;>julia")
+                cset = ConditionSet("=exact;!neg;/foo.*bar;julia>")
                 spec = FilterSpec(cset)
                 @test spec.exacts == ["exact"]
                 @test spec.negatives == ["neg"]
@@ -341,7 +343,7 @@ end
             end
             @testset "Mode" begin
                 empty!(results)
-                cset = ConditionSet(">shell")
+                cset = ConditionSet("shell>")
                 spec = FilterSpec(cset)
                 seen = Set{Tuple{Symbol,String}}()
                 @test filterchunkrev!(results, entries, spec, seen) == 0

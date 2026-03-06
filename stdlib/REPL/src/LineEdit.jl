@@ -28,6 +28,43 @@ export run_interface, Prompt, ModalInterface, transition, reset_state, edit_inse
 
 const StringLike = Union{Char,String,SubString{String}}
 
+mutable struct TerminalProperties
+    da1::Union{Nothing, Vector{Int}}  # DA1 feature parameters
+    TerminalProperties() = new(nothing)
+end
+
+"""
+    receive_da1!(props::TerminalProperties, io::IO)
+
+Read and parse a DA1 (Device Attributes) response from `io`
+(after `\\e[?` has been consumed by the keymap).
+Reads until `c` (DA1 terminator) or `^C` (bail-out), parses the semicolon-separated
+parameters as integers, and stores them in `props.da1`.
+"""
+function receive_da1!(props::TerminalProperties, io::IO)
+    buf = IOBuffer()
+    while !eof(io)
+        b = read(io, UInt8)
+        if b == UInt8('c')  # DA1 terminator
+            break
+        elseif b == 0x03  # ^C bail-out
+            break
+        else
+            write(buf, b)
+        end
+    end
+    body = String(take!(buf))
+    params = Int[]
+    for part in split(body, ';')
+        n = tryparse(Int, part)
+        if n !== nothing
+            push!(params, n)
+        end
+    end
+    props.da1 = params
+    return
+end
+
 # interface for TextInterface
 function Base.getproperty(ti::TextInterface, name::Symbol)
     if name === :hp
@@ -85,9 +122,10 @@ mutable struct MIState
     line_modify_lock::Base.ReentrantLock
     hint_generation_lock::Base.ReentrantLock
     n_keys_pressed::Int
+    terminal_properties::TerminalProperties
 end
 
-MIState(i, mod, c, a, m) = MIState(i, mod, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}(), Base.ReentrantLock(), Base.ReentrantLock(), 0)
+MIState(i, mod, c, a, m) = MIState(i, mod, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}(), Base.ReentrantLock(), Base.ReentrantLock(), 0, TerminalProperties())
 
 const BufferLike = Union{MIState,ModeState,IOBuffer}
 const State = Union{MIState,ModeState}
@@ -1829,7 +1867,7 @@ function add_nested_key!(keymap::Dict{Char, Any}, key::Union{String, Char}, valu
         c, i = y
         y = iterate(key, i)
         if !override && c in keys(keymap) && (y === nothing || !isa(keymap[c], Dict))
-            error("Conflicting definitions for keyseq " * escape_string(key) *
+            error("Conflicting definitions for keyseq " * escape_string(string(key)) *
                   " within one keymap")
         end
         if y === nothing
@@ -2070,6 +2108,8 @@ const escape_defaults = merge!(
         "\e*" => nothing,
         "\e[*" => nothing,
         "\eO*" => nothing,
+        # Intercept DA1 responses
+        "\e[?" => (s::MIState, o...) -> receive_da1!(s.terminal_properties, terminal(s)),
         # Also ignore extended escape sequences
         # TODO: Support ranges of characters
         "\e[1**" => nothing,
@@ -2714,7 +2754,12 @@ function history_search(mistate::MIState)
     else
         mimode.prompt_prefix
     end
-    result = histsearch(mimode.hist.history, term, prefix)
+    # Issue a DA1 query if we haven't received one yet, so that the
+    # terminal's OSC 52 clipboard capability can be detected.
+    if mistate.terminal_properties.da1 === nothing
+        write(term, "\e[c")
+    end
+    result = histsearch(mimode.hist.history, term, prefix, mistate.terminal_properties)
     mimode = if isnothing(result.mode)
         mistate.current_mode
     else
@@ -2727,7 +2772,12 @@ function history_search(mistate::MIState)
     mistate.current_mode = mimode
     activate(mimode, state(mistate, mimode), termbuf, term)
     commit_changes(term, termbuf)
-    edit_insert(pstate, result.text)
+if !isempty(result.text)
+    pstate.input_buffer.ptr = 1
+    pstate.input_buffer.size = 0
+    write(pstate.input_buffer, result.text)
+    seekend(pstate.input_buffer)
+end
     refresh_multi_line(mistate)
     nothing
 end
@@ -2753,6 +2803,7 @@ const prefix_history_keymap = merge!(
         "\e*" => "*",
         "\e[*" => "*",
         "\eO*"  => "*",
+        "\e[?" => "*",
         "\e[1;5*" => "*", # Ctrl-Arrow
         "\e[1;2*" => "*", # Shift-Arrow
         "\e[1;3*" => "*", # Meta-Arrow

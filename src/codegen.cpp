@@ -18,6 +18,8 @@
 #include <set>
 #include <unordered_set>
 #include <functional>
+#include <memory>
+#include <optional>
 
 // target machine computation
 #include <llvm/CodeGen/TargetSubtargetInfo.h>
@@ -2276,6 +2278,18 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v
         Align align(julia_alignment(v.typ));
         Type *ty = julia_type_to_llvm(ctx, v.typ);
         AllocaInst *loc = emit_static_alloca(ctx, ty, align);
+        jl_datatype_t *dt = (jl_datatype_t *)v.typ;
+        size_t npointers = dt->layout->first_ptr >= 0 ? dt->layout->npointers : 0;
+        if (npointers > 0) {
+            IRBuilderBase::InsertPointGuard InsertPoint(ctx.builder);
+            ctx.builder.SetInsertPoint(ctx.topalloca->getParent(), ++ctx.topalloca->getIterator());
+            for (size_t i = 0; i < npointers; i++) {
+                // make sure these are nullptr early from LLVM's perspective, in case it decides to SROA it
+                Value *ptr_field = emit_ptrgep(ctx, loc, jl_ptr_offset(dt, i) * sizeof(void *));
+                ctx.builder.CreateAlignedStore(
+                    Constant::getNullValue(ctx.types().T_prjlvalue), ptr_field, Align(sizeof(void *)));
+            }
+        }
         auto tbaa = v.V == nullptr ? ctx.tbaa().tbaa_gcframe : ctx.tbaa().tbaa_stack;
         auto stack_ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
         recombine_value(ctx, v, loc, stack_ai, align, false);
@@ -2671,17 +2685,12 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
     return jl_cgval_t(v, typ, new_tindex);
 }
 
-std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &context, const DataLayout &DL, const Triple &triple) JL_NOTSAFEPOINT
+std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &context,
+                                              const DataLayout &DL, const Triple &triple,
+                                              Module *source) JL_NOTSAFEPOINT
 {
     ++ModulesCreated;
     auto m = std::make_unique<Module>(name, context);
-    // According to clang darwin above 10.10 supports dwarfv4
-    if (!m->getModuleFlag("Dwarf Version")) {
-        m->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 4);
-    }
-    if (!m->getModuleFlag("Debug Info Version"))
-        m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
-            llvm::DEBUG_METADATA_VERSION);
     m->setDataLayout(DL);
     m->setTargetTriple(triple.str());
 
@@ -2692,9 +2701,29 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
         m->setOverrideStackAlignment(16);
     }
 
+    if (source) {
+        // Copy module flags from source module
+        SmallVector<Module::ModuleFlagEntry, 8> Flags;
+        source->getModuleFlagsMetadata(Flags);
+        for (const auto &Flag : Flags) {
+            m->addModuleFlag(Flag.Behavior, Flag.Key->getString(), Flag.Val);
+        }
+        // Copy other module-level properties
+        m->setStackProtectorGuard(source->getStackProtectorGuard());
+        m->setOverrideStackAlignment(source->getOverrideStackAlignment());
+    }
+    else {
+        // No source: set default Julia flags
+        // According to clang darwin above 10.10 supports dwarfv4
+        m->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 4);
+        m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
+                         llvm::DEBUG_METADATA_VERSION);
+
 #if defined(JL_DEBUG_BUILD)
-    m->setStackProtectorGuard("global");
+        m->setStackProtectorGuard("global");
 #endif
+    }
+
     return m;
 }
 
@@ -3195,6 +3224,10 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
         if (!constval) {
             undef_var_error_ifnot(ctx, ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0), name, (jl_value_t*)mod);
             return jl_cgval_t();
+        }
+        if (jl_generating_output()) {
+            // root is required to allow bindings to be pruned, especially by `--trim`
+            jl_temporary_root(ctx, constval);
         }
         return mark_julia_const(ctx, constval);
     }
@@ -7945,6 +7978,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
         param.addAttribute(Attribute::NoAlias);
         param.addAttribute(Attribute::NoCapture);
         param.addAttribute(Attribute::NoUndef);
+        param.addAlignmentAttr(Align(props.union_align));
         attrs.push_back(AttributeSet::get(M->getContext(), param));
         assert(fsig.size() == 1);
     }
@@ -8544,13 +8578,10 @@ static jl_llvm_functions_t
             const DataLayout &DL = jl_Module->getDataLayout();
             Type *RT = Arg->getParamStructRetType();
             TypeSize sz = DL.getTypeAllocSize(RT);
-            Align al = DL.getPrefTypeAlign(RT);
-            if (al > MAX_ALIGN)
-                al = Align(MAX_ALIGN);
             param.addAttribute(Attribute::NonNull);
             // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
             param.addDereferenceableAttr(sz);
-            param.addAlignmentAttr(al);
+            // Alignment is already set by get_specsig_function.
         }
         attrs[Arg->getArgNo()] = AttributeSet::get(Arg->getContext(), param); // function declaration attributes
     }

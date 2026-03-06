@@ -261,7 +261,16 @@ struct LoadingCache
     located::Dict{Tuple{PkgId, Union{String, Nothing}}, Union{Tuple{String, String}, Nothing}}
 end
 const LOADING_CACHE = Ref{Union{LoadingCache, Nothing}}(nothing) # n.b.: all access to and through this are protected by require_lock
-LoadingCache() = LoadingCache(load_path(), Dict(), Dict(), Dict(), Set(), Dict(), Dict(), Dict())
+LoadingCache() = LoadingCache(
+    load_path(),
+    Dict{String, UUID}(),
+    Dict{String, Union{Bool, String}}(),
+    Dict{String, Union{Nothing, String}}(),
+    Set{String}(),
+    Dict{Tuple{PkgId, String}, Union{Nothing, Tuple{PkgId, String}}}(),
+    Dict{String, Union{Nothing, Tuple{PkgId, String}}}(),
+    Dict{Tuple{PkgId, Union{String, Nothing}}, Union{Tuple{String, String}, Nothing}}()
+)
 
 
 struct TOMLCache{Dates}
@@ -617,13 +626,15 @@ the form `pkgversion(@__MODULE__)` can be used.
     This function was introduced in Julia 1.9.
 """
 function pkgversion(m::Module)
-    path = pkgdir(m)
-    path === nothing && return nothing
     @lock require_lock begin
-        v = get_pkgversion_from_path(path)
         pkgorigin = get(pkgorigins, PkgId(moduleroot(m)), nothing)
-        # Cache the version
-        if pkgorigin !== nothing && pkgorigin.version === nothing
+        if pkgorigin !== nothing && pkgorigin.version !== nothing
+            return pkgorigin.version
+        end
+        path = pkgdir(m)
+        path === nothing && return nothing
+        v = get_pkgversion_from_path(path)
+        if pkgorigin !== nothing
             pkgorigin.version = v
         end
         return v

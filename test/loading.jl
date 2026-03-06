@@ -874,6 +874,34 @@ pop!(Base.active_project_callbacks)
 Base.set_active_project(saved_active_project)
 @test watcher_counter[] == 3
 
+# pkgversion should return cached version even after source is deleted
+@testset "pkgversion after source deletion" begin
+    mktempdir() do tmp
+        pkg_dir = joinpath(tmp, "DeletedPkg")
+        src_dir = joinpath(pkg_dir, "src")
+        mkpath(src_dir)
+        write(joinpath(pkg_dir, "Project.toml"), """
+            name = "DeletedPkg"
+            uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+            version = "4.5.6"
+            """)
+        write(joinpath(src_dir, "DeletedPkg.jl"), "module DeletedPkg end")
+        old_act_proj = Base.ACTIVE_PROJECT[]
+        pushfirst!(LOAD_PATH, "@")
+        try
+            Base.set_active_project(pkg_dir)
+            @eval using DeletedPkg
+            m = @__MODULE__
+            @test pkgversion(@invokelatest(m.DeletedPkg)) == v"4.5.6"
+            rm(pkg_dir; recursive=true)
+            @test pkgversion(@invokelatest(m.DeletedPkg)) == v"4.5.6"
+        finally
+            Base.set_active_project(old_act_proj)
+            popfirst!(LOAD_PATH)
+        end
+    end
+end
+
 # issue #28190
 module Foo28190; import Libdl; end
 import .Foo28190.Libdl; import Libdl

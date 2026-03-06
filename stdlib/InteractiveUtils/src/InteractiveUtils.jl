@@ -11,8 +11,8 @@ Base.Experimental.@optlevel 1
 
 export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, varinfo,
     versioninfo, subtypes, supertypes, @which, @edit, @less, @functionloc, @code_warntype,
-    @code_typed, @code_lowered, @code_llvm, @code_native, @time_imports, clipboard, @trace_compile, @trace_dispatch,
-    @activate
+    @code_typed, @code_lowered, @code_llvm, @code_native, @time_imports, clipboard,
+    has_system_clipboard, @trace_compile, @trace_dispatch, @activate
 
 import Base.Docs.apropos
 
@@ -253,7 +253,7 @@ function methodswith(@nospecialize(t::Type); supertypes::Bool=false)
 end
 
 # subtypes
-function _subtypes_in!(mods::Array, x::Type)
+function _subtypes_in!(mods::Array, @nospecialize(x::Type))
     xt = unwrap_unionall(x)
     if !isabstracttype(x) || !isa(xt, DataType)
         # Fast path
