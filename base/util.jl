@@ -239,6 +239,9 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     elseif opts.color == 2
         push!(addflags, "--color=no")
     end
+    if opts.quiet != 0
+        push!(addflags, "-q")
+    end
     if opts.startupfile == 2
         push!(addflags, "--startup-file=no")
     end
