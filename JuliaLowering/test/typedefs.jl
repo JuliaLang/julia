@@ -490,4 +490,3 @@ typegroup
 end
 """; version=v"1.14") === nothing
 @test test_mod.TG_SuperA <: AbstractVector{test_mod.TG_SuperB}
-
