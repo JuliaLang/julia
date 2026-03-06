@@ -489,9 +489,99 @@ function repl_corrections(io::IO, s, mod::Module)
     else
         print(io, ", but a loadable package with that name exists. If you are looking for the package docs load the package first.\n")
     end
+    print_stdlib_hint(io, s)
     print_correction(io, s, mod)
 end
 repl_corrections(s) = repl_corrections(stdout, s)
+
+# Lazily-built map from exported name => list of stdlib package names
+const _stdlib_exports = Dict{String, Vector{String}}()
+
+"""
+    print_stdlib_hint(io, name)
+
+If `name` is exported by a standard library, print a hint suggesting
+`using <Stdlib>`.
+"""
+function print_stdlib_hint(io::IO, name::AbstractString)
+    _ensure_stdlib_exports!()
+    pkgs = get(_stdlib_exports, name, nothing)
+    pkgs === nothing && return
+    if length(pkgs) == 1
+        printstyled(io, "Hint", color=:light_cyan)
+        print(io, ": ")
+        printstyled(io, name, color=:cyan)
+        print(io, " is exported by the ")
+        printstyled(io, pkgs[1], color=:cyan)
+        print(io, " standard library. Try ")
+        printstyled(io, "using ", pkgs[1], color=:cyan)
+        println(io)
+    else
+        printstyled(io, "Hint", color=:light_cyan)
+        print(io, ": ")
+        printstyled(io, name, color=:cyan)
+        print(io, " is exported by standard libraries: ")
+        printstyled(io, join(pkgs, ", "), color=:cyan)
+        println(io)
+    end
+end
+
+function _ensure_stdlib_exports!()
+    isempty(_stdlib_exports) || return
+    stdlib_dir = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "stdlib",
+                          "v$(VERSION.major).$(VERSION.minor)")
+    isdir(stdlib_dir) || return
+    for pkg in readdir(stdlib_dir)
+        srcdir = joinpath(stdlib_dir, pkg, "src")
+        isdir(srcdir) || continue
+        # Skip JLL wrapper packages
+        endswith(pkg, "_jll") && continue
+        for (root, dirs, files) in walkdir(srcdir)
+            for f in files
+                endswith(f, ".jl") || continue
+                try
+                    _scan_exports!(read(joinpath(root, f), String), pkg)
+                catch
+                end
+            end
+        end
+    end
+end
+
+function _is_export_continuation(line::AbstractString)
+    stripped = lstrip(line)
+    isempty(stripped) && return true
+    startswith(stripped, '#') && return true
+    (startswith(line, ' ') || startswith(line, '\t')) || return false
+    occursin(r"^[ \t]*(?:export|public|import|using|module|end|function|struct|abstract|mutable|const|if|else|for|while|begin|let|macro|try|return|include)\b", line) && return false
+    occursin(r"^[ \t]+@?[A-Za-z_]", line)
+end
+
+function _scan_exports!(content::AbstractString, pkg::AbstractString)
+    lines = split(content, '\n')
+    i = 1
+    while i <= length(lines)
+        m = match(r"^[ \t]*(?:export|public)\b(.*)", lines[i])
+        if m !== nothing
+            block = m.captures[1]
+            while i < length(lines) && _is_export_continuation(lines[i + 1])
+                i += 1
+                ln = lstrip(lines[i])
+                if !isempty(ln) && !startswith(ln, '#')
+                    block = block * " " * lines[i]
+                end
+            end
+            for sym in eachmatch(r"@[A-Za-z_]\w*[!]?|(?<![@\"])\b[A-Za-z_]\w*[!]?", block)
+                name = sym.match
+                names_vec = get!(() -> String[], _stdlib_exports, name)
+                if pkg ∉ names_vec
+                    push!(names_vec, pkg)
+                end
+            end
+        end
+        i += 1
+    end
+end
 
 # inverse of latex_symbols Dict, lazily created as needed
 const symbols_latex = Dict{String,String}()
@@ -583,7 +673,22 @@ function repl(io::IO, s::Symbol; brief::Bool=true, mod::Module=Main, internal_ac
 end
 isregex(x) = isexpr(x, :macrocall, 3) && x.args[1] === Symbol("@r_str") && !isempty(x.args[3])
 
-repl(io::IO, ex::Expr; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex, brief, mod, internal_accesses)
+function repl(io::IO, ex::Expr; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing)
+    isregex(ex) && return :(apropos($io, $ex))
+    # For undefined macros, show search results and corrections (including stdlib hints)
+    if isexpr(ex, :macrocall) && !isempty(ex.args) && ex.args[1] isa Symbol
+        msym = ex.args[1]::Symbol
+        if !isdefined(mod, msym)
+            str = string(msym)
+            return quote
+                repl_search($io, $str, $mod)
+                repl_corrections($io, $str, $mod)
+                $(_repl(ex, brief, mod, internal_accesses))
+            end
+        end
+    end
+    _repl(ex, brief, mod, internal_accesses)
+end
 repl(io::IO, str::AbstractString; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = :(apropos($io, $str))
 repl(io::IO, other; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = esc(:(@doc $other)) # TODO: track internal_accesses
 
