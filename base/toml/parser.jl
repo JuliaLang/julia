@@ -72,6 +72,11 @@ mutable struct Parser{Dates}
     # actually defined
     defined_tables::IdSet{TOMLDict}
 
+    # Tables implicitly created as intermediates by dotted keys
+    # in key-value entries (e.g. `a` in `a.b = 1`).
+    # These cannot be reopened by [table] headers.
+    implicit_tables::IdSet{TOMLDict}
+
     # The table we will finally return to the user
     root::TOMLDict
 
@@ -95,6 +100,7 @@ function Parser{Dates}(str::String; filepath=nothing) where {Dates}
             IdSet{TOMLDict}(),    # inline_tables
             IdSet{Any}(),         # static_arrays
             IdSet{TOMLDict}(),    # defined_tables
+            IdSet{TOMLDict}(),    # implicit_tables
             root,
             filepath
         )
@@ -132,6 +138,7 @@ function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothin
     empty!(p.inline_tables)
     empty!(p.static_arrays)
     empty!(p.defined_tables)
+    empty!(p.implicit_tables)
     p.filepath = filepath
     startup(p)
     return p
@@ -207,6 +214,7 @@ end
     ErrUnexpectedEndString
     ErrInvalidEscapeCharacter
     ErrInvalidUnicodeScalar
+    ErrControlCharacter
 end
 
 const err_message = Dict(
@@ -242,6 +250,7 @@ const err_message = Dict(
     ErrInvalidEscapeCharacter               => "invalid escape character",
     ErrUnexpectedEofExpectedValue           => "unexpected end of file, expected a value",
     ErrSignInNonBase10Number                => "number not in base 10 is not allowed to have a sign",
+    ErrControlCharacter                     => "control characters are not allowed",
 )
 
 for err in instances(ErrorType)
@@ -395,16 +404,20 @@ end
 
 @inline iswhitespace(c::Char) = c == ' ' || c == '\t'
 @inline isnewline(c::Char) = c == '\n' || c == '\r'
+# Control characters not allowed in TOML (U+0000-U+0008, U+000A-U+001F, U+007F)
+# Tab (U+0009) is allowed everywhere; newlines are context-dependent
+@inline is_control_char(c::Char) = (c != '\t' && c != '\n' && c != '\r' &&
+    (c <= '\x08' || '\x0a' <= c <= '\x1f' || c == '\x7f'))
 
 skip_ws(l::Parser) = accept_batch(l, iswhitespace)
 
 skip_ws_nl_no_comment(l::Parser)::Bool = accept_batch(l, x -> iswhitespace(x) || isnewline(x))
 
-function skip_ws_nl(l::Parser)::Bool
+function skip_ws_nl(l::Parser)::Err{Bool}
     skipped = false
     while true
         skipped_ws = accept_batch(l, x -> iswhitespace(x) || isnewline(x))
-        skipped_comment = skip_comment(l)
+        skipped_comment = @try skip_comment(l)
         if !skipped_ws && !skipped_comment
             break
         end
@@ -414,15 +427,24 @@ function skip_ws_nl(l::Parser)::Bool
 end
 
 # Returns true if a comment was skipped
-function skip_comment(l::Parser)::Bool
+function skip_comment(l::Parser)::Err{Bool}
     found_comment = accept(l, '#')
     if found_comment
-        accept_batch(l, !isnewline)
+        while !isnewline(peek(l)) && peek(l) != EOF_CHAR
+            if is_control_char(peek(l))
+                eat_char(l)
+                return ParserError(ErrControlCharacter)
+            end
+            eat_char(l)
+        end
     end
     return found_comment
 end
 
-skip_ws_comment(l::Parser) = skip_ws(l) && skip_comment(l)
+function skip_ws_comment(l::Parser)::Err{Bool}
+    skip_ws(l) || return false
+    return skip_comment(l)
+end
 
 @inline set_marker!(l::Parser) = l.marker = l.prevpos
 take_substring(l::Parser) = SubString(l.str, l.marker:(l.prevpos-1))
@@ -441,7 +463,7 @@ end
 
 function tryparse(l::Parser)::Err{TOMLDict}
     while true
-        skip_ws_nl(l)
+        @try skip_ws_nl(l)
         peek(l) == EOF_CHAR && break
         v = parse_toplevel(l)
         if v isa ParserError
@@ -463,14 +485,14 @@ function parse_toplevel(l::Parser)::Err{Nothing}
     if accept(l, '[')
         l.active_table = l.root
         @try parse_table(l)
-        skip_ws_comment(l)
+        @try skip_ws_comment(l)
         if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == '#' || peek(l) == EOF_CHAR)
             eat_char(l)
             return ParserError(ErrExpectedNewLineKeyValue)
         end
     else
         @try parse_entry(l, l.active_table)
-        skip_ws_comment(l)
+        @try skip_ws_comment(l)
         # SPEC: "There must be a newline (or EOF) after a key/value pair."
         if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == '#' || peek(l) == EOF_CHAR)
             c = eat_char(l)
@@ -479,17 +501,27 @@ function parse_toplevel(l::Parser)::Err{Nothing}
     end
 end
 
-function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, check=true)::Err{TOMLDict}
+function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, check=true, define_implicit=false)::Err{TOMLDict}
     for i in 1:length(dotted_keys)
         d = d::TOMLDict
         key = dotted_keys[i]
         d = get!(TOMLDict, d, key)
         if d isa Vector{Any}
+            isempty(d) && return ParserError(ErrArrayTreatedAsDictionary)
             d = d[end]
         elseif d isa Vector
             return ParserError(ErrKeyAlreadyHasValue)
         end
-        check && @try check_allowed_add_key(l, d, i == length(dotted_keys))
+        if check
+            # When called from parse_entry (define_implicit=true), check
+            # defined_tables for ALL intermediates to prevent appending to
+            # tables that were closed by a different [table] section.
+            check_def = define_implicit ? true : (i == length(dotted_keys))
+            @try check_allowed_add_key(l, d, check_def)
+        end
+        if define_implicit && d isa TOMLDict
+            push!(l.implicit_tables, d)
+        end
     end
     return d::TOMLDict
 end
@@ -516,6 +548,9 @@ function parse_table(l)
         return ParserError(ErrExpectedEndOfTable)
     end
     l.active_table = @try recurse_dict!(l, l.root, table_key)
+    if l.active_table in l.implicit_tables
+        return ParserError(ErrDuplicatedKey)
+    end
     push!(l.defined_tables, l.active_table)
     return
 end
@@ -551,13 +586,16 @@ function parse_entry(l::Parser, d)::Union{Nothing, ParserError}
         return ParserError(ErrExpectedEqualAfterKey)
     end
     if length(key) > 1
-        d = @try recurse_dict!(l, d, @view(key[1:end-1]))
+        d = @try recurse_dict!(l, d, @view(key[1:end-1]), true, true)
     end
     last_key_part = l.dotted_keys[end]
 
     v = get(d, last_key_part, nothing)
     if v !== nothing
         @try check_allowed_add_key(l, v)
+        if v isa TOMLDict && v in l.implicit_tables
+            return ParserError(ErrDuplicatedKey)
+        end
     end
 
     skip_ws(l)
@@ -600,9 +638,9 @@ function _parse_key(l::Parser)
         return ParserError(ErrEmptyBareKey)
     end
     keyval = if accept(l, '"')
-        @try parse_string_start(l, false)
+        @try parse_string_start(l, false, false)
     elseif accept(l, '\'')
-        @try parse_string_start(l, true)
+        @try parse_string_start(l, true, false)
     else
         set_marker!(l)
         if accept_batch(l, isvalid_barekey_char)
@@ -667,16 +705,16 @@ function copyto_typed!(a::Vector{T}, b::Vector) where T
 end
 
 function parse_array(l::Parser{Dates})::Err{Vector} where Dates
-    skip_ws_nl(l)
+    @try skip_ws_nl(l)
     array = Vector{Any}()
     empty_array = accept(l, ']')
     while !empty_array
         v = @try parse_value(l)
         array = push!(array, v)
         # There can be an arbitrary number of newlines and comments before a value and before the closing bracket.
-        skip_ws_nl(l)
+        @try skip_ws_nl(l)
         comma = accept(l, ',')
-        skip_ws_nl(l)
+        @try skip_ws_nl(l)
         accept(l, ']') && break
         if !comma
             return ParserError(ErrExpectedCommaBetweenItemsArray)
@@ -726,15 +764,15 @@ end
 function parse_inline_table(l::Parser)::Err{TOMLDict}
     dict = TOMLDict()
     push!(l.inline_tables, dict)
-    skip_ws_nl(l)
+    @try skip_ws_nl(l)
     accept(l, '}') && return dict
     while true
         @try parse_entry(l, dict)
         # TOML v1.1: newlines and trailing commas are allowed in inline tables
-        skip_ws_nl(l)
+        @try skip_ws_nl(l)
         accept(l, '}') && return dict
         if accept(l, ',')
-            skip_ws_nl(l)
+            @try skip_ws_nl(l)
             # Trailing comma is allowed in TOML v1.1
             accept(l, '}') && return dict
         else
@@ -910,6 +948,7 @@ function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Int64}
         Base.parse(Int64, s; base=base)
     catch e
         e isa Base.OverflowError && return ParserError(ErrOverflowError)
+        e isa ArgumentError && return ParserError(ErrGenericValueError)
         rethrow()
     end
     return v
@@ -975,6 +1014,9 @@ ok_end_value(c::Char) = iswhitespace(c) || c == '#' || c == EOF_CHAR || c == ']'
 accept_two(l, f::F) where {F} = accept_n(l, 2, f) || return(ParserError(ErrParsingDateTime))
 function parse_datetime(l)
     # Year has already been eaten when we reach here
+    # SPEC: year must be exactly 4 digits
+    ndigits_year = l.prevpos - l.marker
+    ndigits_year == 4 || return ParserError(ErrParsingDateTime)
     year = @try parse_int(l, false)
     year in 0:9999 || return ParserError(ErrParsingDateTime)
 
@@ -1052,6 +1094,9 @@ function try_return_date(p::Parser{Dates}, year, month, day) where Dates
 end
 
 function parse_local_time(l::Parser)
+    # SPEC: hour must be exactly 2 digits
+    ndigits_hour = l.prevpos - l.marker
+    ndigits_hour == 2 || return ParserError(ErrParsingDateTime)
     h = @try parse_int(l, false)
     h in 0:23 || return ParserError(ErrParsingDateTime)
     _, m, s, ms = @try _parse_local_time(l, true)
@@ -1131,7 +1176,7 @@ end
 # String #
 ##########
 
-function parse_string_start(l::Parser, quoted::Bool)::Err{String}
+function parse_string_start(l::Parser, quoted::Bool, allow_multiline::Bool=true)::Err{String}
     # Have eaten a `'` if `quoted` is true, otherwise have eaten a `"`
     multiline = false
     c = quoted ? '\'' : '"'
@@ -1139,17 +1184,20 @@ function parse_string_start(l::Parser, quoted::Bool)::Err{String}
         if !accept(l, c)
             return ""
         end
-        accept(l, '\r') # Eat third quote
-        accept(l, '\n') # Eat third quote
+        if !allow_multiline
+            return ParserError(ErrInvalidBareKeyCharacter, c)
+        end
+        accept(l, '\r')
+        accept(l, '\n')
         multiline = true
     end
     return parse_string_continue(l, multiline, quoted)
 end
 
-@inline stop_candidates_multiline(x)         = x != '"'  &&  x != '\\'
-@inline stop_candidates_singleline(x)        = x != '"'  &&  x != '\\' && x != '\n'
-@inline stop_candidates_multiline_quoted(x)  = x != '\'' &&  x != '\\'
-@inline stop_candidates_singleline_quoted(x) = x != '\'' &&  x != '\\' && x != '\n'
+@inline stop_candidates_multiline(x)         = x != '"'  &&  x != '\\' && !is_control_char(x)
+@inline stop_candidates_singleline(x)        = x != '"'  &&  x != '\\' && x != '\n' && !is_control_char(x)
+@inline stop_candidates_multiline_quoted(x)  = x != '\'' && !is_control_char(x)
+@inline stop_candidates_singleline_quoted(x) = x != '\'' && x != '\n' && !is_control_char(x)
 
 function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{String}
     start_chunk = l.prevpos
@@ -1168,19 +1216,58 @@ function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{St
         if !multiline && peek(l) == '\n'
             return ParserError(ErrNewLineInString)
         end
+        if is_control_char(peek(l))
+            eat_char(l)
+            return ParserError(ErrControlCharacter)
+        end
         next_slash = peek(l) == '\\'
         if !next_slash
-            # TODO: Doesn't handle values with e.g. format `""""str""""`
-            if accept(l, q) && (!multiline || (accept(l, q) && accept(l, q)))
-                push!(l.chunks, start_chunk:(l.prevpos-offset-1))
-                return take_chunks(l, contains_backslash)
+            if accept(l, q)
+                if !multiline
+                    push!(l.chunks, start_chunk:(l.prevpos-offset-1))
+                    return take_chunks(l, contains_backslash)
+                end
+                if accept(l, q) && accept(l, q)
+                    # We ate 3 quotes. In multiline, up to 2 extra quotes
+                    # can appear before the closing delimiter as content.
+                    # Count how many extra quotes follow.
+                    extra = 0
+                    if peek(l) == q
+                        # We may have eaten content quotes as part of the delimiter.
+                        # Check: `"""""` = 2 content quotes + `"""`
+                        # `""""` = 1 content quote + `"""`
+                        eat_char(l)
+                        extra += 1
+                        if peek(l) == q
+                            eat_char(l)
+                            extra += 1
+                        end
+                    end
+                    # The chunk ends before the closing 3 quotes and any extra quotes
+                    push!(l.chunks, start_chunk:(l.prevpos - 3 - extra - 1))
+                    # Re-add the extra quotes as their own chunk
+                    if extra > 0
+                        push!(l.chunks, (l.prevpos - 3 - extra):(l.prevpos - 3 - 1))
+                    end
+                    return take_chunks(l, contains_backslash)
+                end
+                # Didn't get 3 quotes, the quote(s) we ate are content
             end
         end
         c = eat_char(l) # eat the character we stopped at
         next_slash = c == '\\'
         if next_slash && !quoted
-            if peek(l) == '\n' || peek(l) == '\r'
-                push!(l.chunks, start_chunk:(l.prevpos-1-1)) # -1 due to eating the slash
+            # Save position right after eating '\' (before any trailing whitespace)
+            pos_after_slash = l.prevpos
+            if peek(l) == '\n' || peek(l) == '\r' || (multiline && iswhitespace(peek(l)))
+                # TOML 1.1: whitespace between \ and newline is allowed in multiline strings
+                if multiline && iswhitespace(peek(l))
+                    accept_batch(l, iswhitespace)
+                    if !(peek(l) == '\n' || peek(l) == '\r')
+                        return ParserError(ErrInvalidEscapeCharacter)
+                    end
+                end
+                push!(l.chunks, start_chunk:(pos_after_slash-1-1)) # -1 for the slash byte
                 skip_ws_nl_no_comment(l)
                 start_chunk = l.prevpos
             else
@@ -1229,5 +1316,12 @@ function take_chunks(l::Parser, unescape::Bool)::String
         offset += n
     end
     empty!(l.chunks)
-    return unescape ? unescape_string(str) : str
+    if unescape
+        # TOML 1.1: \xHH represents Unicode codepoint U+00HH, not a raw byte.
+        # Julia's unescape_string treats \x as raw bytes, so convert to \u00HH.
+        # Use negative lookbehind to avoid matching \\xHH (escaped backslash + x).
+        str = replace(str, r"(?<!\\)\\x([0-9a-fA-F]{2})" => s"\\u00\1")
+        return unescape_string(str)
+    end
+    return str
 end

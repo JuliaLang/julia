@@ -62,11 +62,11 @@ end
 end
 
 @testset "special characters" begin
-    s = """
-    "\U1f355 \0 \x0 \x1 \t \b" = "\U1f355 \0 \x0 \x1 \t \b"
-    "\x7f" = "\x7f"
-    """
-    @test roundtrip(s)
+    # Control characters must be escaped in TOML; test print→parse roundtrip via Dict
+    d = Dict("\U1f355 \0 \x0 \x1 \t \b" => "\U1f355 \0 \x0 \x1 \t \b", "\x7f" => "\x7f")
+    io = IOBuffer()
+    TOML.print(io, d)
+    @test isequal(TOML.parse(String(take!(io))), d)
 
     d = Dict("str" => string(Char(0xd800)))
     @test_throws ErrorException TOML.print(devnull, d)

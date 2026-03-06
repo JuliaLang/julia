@@ -172,8 +172,9 @@ end
     @test testval("\"\\x00\"", "\0")
     @test testval("\"\\x41\"", "A")
     @test testval("\"\\x7f\"", "\x7f")
-    @test testval("\"\\xff\"", "\xff")
-    @test testval("\"\\xFF\"", "\xff")
+    # \xHH represents Unicode codepoint U+00HH (not raw bytes)
+    @test testval("\"\\xff\"", "ÿ")
+    @test testval("\"\\xFF\"", "ÿ")
     @test testval("\"\\x0A\"", "\n")
 
     # \xHH in multiline strings

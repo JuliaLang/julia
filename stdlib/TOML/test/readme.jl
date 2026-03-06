@@ -299,7 +299,8 @@ str = """
 # "This," she said, "is just a pointless statement."
 str7 = \"\"\"\"This,\" she said, \"is just a pointless statement.\"\"\"\"
 """
-@test_broken parse(str)
+d = parse(str)
+@test d["str7"] == "\"This,\" she said, \"is just a pointless statement.\""
 
 """
 str5 = \"\"\"Here are three quotation marks: \"\"\".\"\"\"  # INVALID
@@ -346,7 +347,10 @@ apos15 = "Here are fifteen apostrophes: '''''''''''''''"
 # 'That,' she said, 'is still pointless.'
 str = ''''That,' she said, 'is still pointless.''''
 """
-@test_broken parse(str)
+d = parse(str)
+@test d["quot15"] == "Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\""
+@test d["apos15"] == "Here are fifteen apostrophes: '''''''''''''''"
+@test d["str"] == "'That,' she said, 'is still pointless.'"
 
 str = """
 apos15 = '''Here are fifteen apostrophes: ''''''''''''''''''  # INVALID
