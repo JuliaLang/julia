@@ -610,7 +610,7 @@ function is_relevant_expr(e::Expr)
                       :gc_preserve_begin, :gc_preserve_end,
                       :foreigncall, :isdefined, :copyast,
                       :throw_undef_if_not,
-                      :cfunction, :method, :pop_exception,
+                      :cfunction, :pop_exception,
                       :leave,
                       :new_opaque_closure)
 end

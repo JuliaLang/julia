@@ -8,7 +8,6 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :static_parameter => 1:1,
     :(&) => 1:1,
     :(=) => 2:2,
-    :method => 1:4,
     :new => 1:typemax(Int),
     :splatnew => 2:2,
     :the_exception => 0:0,
@@ -49,7 +48,6 @@ const SLOTFLAGS_MISMATCH = "length(slotnames) < length(slotflags)"
 const SSAVALUETYPES_MISMATCH = "not all SSAValues in AST have a type in ssavaluetypes"
 const SSAVALUETYPES_MISMATCH_UNINFERRED = "uninferred CodeInfo ssavaluetypes field does not equal the number of present SSAValues"
 const SSAFLAGS_MISMATCH = "not all SSAValues have a corresponding `ssaflags`"
-const NON_TOP_LEVEL_METHOD = "encountered `Expr` head `:method` in non-top-level code (i.e. `nargs` > 0)"
 const SIGNATURE_NARGS_MISMATCH = "method signature does not match number of method arguments"
 const SLOTNAMES_NARGS_MISMATCH = "CodeInfo for method contains fewer slotnames than the number of method arguments"
 const INVALID_SIGNATURE_OPAQUE_CLOSURE = "invalid signature of method for opaque closure - `sig` field must always be set to `Tuple`"
@@ -119,9 +117,6 @@ function validate_code!(errors::Vector{InvalidCodeError}, c::CodeInfo, is_top_le
     for x in c.code
         if isa(x, Expr)
             head = x.head
-            if !is_top_level
-                head === :method && push!(errors, InvalidCodeError(NON_TOP_LEVEL_METHOD))
-            end
             narg_bounds = get(VALID_EXPR_HEADS, head, -1:-1)
             nargs = length(x.args)
             if narg_bounds == -1:-1
@@ -145,7 +140,7 @@ function validate_code!(errors::Vector{InvalidCodeError}, c::CodeInfo, is_top_le
                 head === :gc_preserve_end || head === :meta ||
                 head === :inbounds || head === :foreigncall || head === :cfunction ||
                 head === :leave || head === :pop_exception ||
-                head === :method || head === :static_parameter ||
+                head === :static_parameter ||
                 head === :new || head === :splatnew || head === :thunk || head === :loopinfo ||
                 head === :throw_undef_if_not || head === :code_coverage_effect || head === :inline || head === :noinline
                 validate_val!(x)

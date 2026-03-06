@@ -11,7 +11,8 @@
 7   (call core.svec)
 8   SourceLocation::1:2
 9   (call core.svec %₆ %₇ %₈)
-10  --- method core.nothing %₉
+10  (call core.define_method TestMod core.nothing %₉
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x]
     1   TestMod.+
     2   (call %₁ slot₂/x 1)
@@ -36,7 +37,8 @@
 7   (call core.svec)
 8   SourceLocation::1:2
 9   (call core.svec %₆ %₇ %₈)
-10  --- method core.nothing %₉
+10  (call core.define_method TestMod core.nothing %₉
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/destructured_arg slot₃/iterstate(single_assign) slot₄/x(single_assign) slot₅/y(single_assign)]
     1   (call top.indexed_iterate slot₂/destructured_arg 1)
     2   (= slot₄/x (call core.getfield %₁ 1))
@@ -71,7 +73,8 @@
 7   (call core.svec)
 8   SourceLocation::1:29
 9   (call core.svec %₆ %₇ %₈)
-10  --- method core.nothing %₉
+10  (call core.define_method TestMod core.nothing %₉
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/destructured_arg slot₃/iterstate(single_assign) slot₄/x(single_assign) slot₅/y(!read,single_assign)]
     1   (call top.indexed_iterate slot₂/destructured_arg 1)
     2   (= slot₄/x (call core.getfield %₁ 1))
@@ -104,7 +107,8 @@
 7   (call core.svec)
 8   SourceLocation::1:2
 9   (call core.svec %₆ %₇ %₈)
-10  --- method core.nothing %₉
+10  (call core.define_method TestMod core.nothing %₉
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/#arg1#(!read)]
     1   (return 1)
 11  latestworld
@@ -135,7 +139,8 @@ LoweringError:
 7   (call core.svec)
 8   SourceLocation::1:2
 9   (call core.svec %₆ %₇ %₈)
-10  --- method core.nothing %₉
+10  (call core.define_method TestMod core.nothing %₉
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/destructured_arg slot₃/iterstate slot₄/x(!read,single_assign) slot₅/y(!read,single_assign)]
     1   (call top.indexed_iterate slot₂/destructured_arg 1)
     2   (= slot₄/x (call core.getfield %₁ 1))
@@ -169,7 +174,8 @@ LoweringError:
 7   (call core.svec)
 8   SourceLocation::1:4
 9   (call core.svec %₆ %₇ %₈)
-10  --- method core.nothing %₉
+10  (call core.define_method TestMod core.nothing %₉
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/#arg1#(!read)]
     1   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (return x)))
     2   (return %₁)
@@ -205,7 +211,8 @@ LoweringError:
 11  (call core.svec)
 12  SourceLocation::1:2
 13  (call core.svec %₁₀ %₁₁ %₁₂)
-14  --- method core.nothing %₁₃
+14  (call core.define_method TestMod core.nothing %₁₃
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x slot₃/x(single_assign)]
     1   slot₂/x
     2   (= slot₃/x %₁)
@@ -217,7 +224,8 @@ LoweringError:
 18  (call core.svec)
 19  SourceLocation::1:2
 20  (call core.svec %₁₇ %₁₈ %₁₉)
-21  --- method core.nothing %₂₀
+21  (call core.define_method TestMod core.nothing %₂₀
+    --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(!read)]
     1   TestMod.#->#->##0
     2   (new %₁)
