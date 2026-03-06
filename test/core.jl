@@ -8495,6 +8495,45 @@ let load_path = mktempdir()
     end
 end
 
+# Deduplication of method tables in jl_foreach_reachable_mtable:
+# when a method table is imported, it should not be visited multiple times.
+let load_path = mktempdir()
+    depot_path = mkdepottempdir()
+    try
+        pushfirst!(LOAD_PATH, load_path)
+        pushfirst!(DEPOT_PATH, depot_path)
+
+        write(joinpath(load_path, "MtDef.jl"),
+            """
+            module MtDef
+            Base.Experimental.@MethodTable(mt)
+            end
+            """)
+
+        MtDef = Base.require(Main, :MtDef)
+        @test length(MtDef.mt) == 0
+
+        write(joinpath(load_path, "MtUser.jl"),
+            """
+            module MtUser
+            using MtDef: mt
+            Base.Experimental.@overlay mt sin(x::Int) = 42
+            end
+            """)
+
+        # MtUser imports mt from MtDef, making it reachable from both modules'
+        # bindings during precompilation. Without deduplication in
+        # jl_foreach_reachable_mtable, the overlay method would be serialized
+        # twice, causing an assertion failure when activating methods on load.
+        MtUser = Base.require(Main, :MtUser)
+        @test length(MtDef.mt) == 1
+    finally
+        filter!((≠)(load_path), LOAD_PATH)
+        filter!((≠)(depot_path), DEPOT_PATH)
+        rm(load_path, recursive=true, force=true)
+    end
+end
+
 # merging va tuple unions
 @test Tuple === Union{Tuple{},Tuple{Any,Vararg}}
 @test Tuple{Any,Vararg} === Union{Tuple{Any},Tuple{Any,Any,Vararg}}

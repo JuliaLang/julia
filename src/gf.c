@@ -923,7 +923,7 @@ static int foreach_mtable_in_module(
             }
             else if (jl_is_mtable(v)) {
                 jl_methtable_t *mt = (jl_methtable_t*)v;
-                if (mt && mt != jl_method_table) {
+                if (mt && mt != jl_method_table && mt->module == m && mt->name == name) {
                     if (!visit(mt, env))
                         return 0;
                 }
