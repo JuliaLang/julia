@@ -2269,7 +2269,7 @@ jl_code_instance_t *JuliaOJIT::findCompatibleCI(jl_code_instance_t *CI)
     };
     for (auto CI2 = jl_atomic_load_relaxed(&MI->cache); CI2;
          CI2 = jl_atomic_load_relaxed(&CI2->next)) {
-        if (CI2 != CI && IsCompatible(CI) &&
+        if (CI2 != CI && IsCompatible(CI2) &&
             (CISymbols.contains(CI2) || jl_atomic_load_relaxed(&CI2->invoke))) {
             return CI2;
         }
