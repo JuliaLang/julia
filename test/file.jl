@@ -392,27 +392,20 @@ if Sys.iswindows()
     @test filemode(file) & 0o777 == permissions
     chmod(dir, 0o666, recursive=true)  # Reset permissions in case someone wants to use these later
 else
-    function get_umask()
-        umask = ccall(:umask, UInt32, (UInt32,), 0)
-        ccall(:umask, UInt32, (UInt32,), umask)
-        return umask
-    end
-
     mktempdir() do tmpdir
-        umask = get_umask()
         tmpfile=joinpath(tmpdir, "tempfile.txt")
         tmpfile2=joinpath(tmpdir, "tempfile2.txt")
         touch(tmpfile)
         cp(tmpfile, tmpfile2)
-        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        @test filemode(tmpfile) == filemode(tmpfile2)
         rm(tmpfile2)
         chmod(tmpfile, 0o777)
         cp(tmpfile, tmpfile2)
-        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        @test filemode(tmpfile) == filemode(tmpfile2)
         rm(tmpfile2)
         chmod(tmpfile, 0o707)
         cp(tmpfile, tmpfile2)
-        @test filemode(tmpfile) & (~umask) == filemode(tmpfile2)
+        @test filemode(tmpfile) == filemode(tmpfile2)
         rm(tmpfile2)
         linkfile=joinpath(dir, "tempfile.txt")
         symlink(tmpfile, linkfile)
@@ -1357,8 +1350,8 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         @test_throws(ArgumentError("'$nonexisting_src' is not a directory. Use `cp(src, dst)`"),
                      Base.cptree(nonexisting_src, dst; force=true, follow_symlinks=true))
         # cp
-        @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=false)
-        @test_throws Base._UVError("open($(repr(nonexisting_src)), $(Base.JL_O_RDONLY), 0)", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=true)
+        @test_throws Base._UVError("copyfile", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=false)
+        @test_throws Base._UVError("copyfile", Base.UV_ENOENT) cp(nonexisting_src, dst; force=true, follow_symlinks=true)
         # mv
         @test_throws Base._UVError("rename($(repr(nonexisting_src)), $(repr(dst)))", Base.UV_ENOENT) mv(nonexisting_src, dst; force=true)
     end
