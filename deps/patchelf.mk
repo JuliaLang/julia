@@ -41,7 +41,7 @@ $(eval $(call staged-install, \
 clean-patchelf:
 	-rm -f $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured \
 		$(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/patchelf-$(PATCHELF_VER) clean
+	-if [ -d $(BUILDDIR)/patchelf-$(PATCHELF_VER) ]; then $(MAKE) -C $(BUILDDIR)/patchelf-$(PATCHELF_VER) clean; fi
 
 distclean-patchelf:
 	rm -rf $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2 \

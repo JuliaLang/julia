@@ -116,7 +116,7 @@ $(eval $(call staged-install, \
 
 clean-openblas:
 	-rm -f $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/$(OPENBLAS_SRC_DIR) clean
+	-if [ -d $(BUILDDIR)/$(OPENBLAS_SRC_DIR) ]; then $(MAKE) -C $(BUILDDIR)/$(OPENBLAS_SRC_DIR) clean; fi
 
 
 get-openblas: $(OPENBLAS_SRC_FILE)
@@ -187,7 +187,7 @@ $(eval $(call staged-install, \
 
 clean-lapack:
 	-rm -f $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled0 $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/lapack-$(LAPACK_VER) clean
+	-if [ -d $(BUILDDIR)/lapack-$(LAPACK_VER) ]; then $(MAKE) -C $(BUILDDIR)/lapack-$(LAPACK_VER) clean; fi
 
 distclean-lapack:
 	rm -rf $(SRCCACHE)/lapack-$(LAPACK_VER).tgz $(BUILDDIR)/lapack-$(LAPACK_VER)

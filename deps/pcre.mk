@@ -53,7 +53,7 @@ $(eval $(call staged-install, \
 
 clean-pcre:
 	-rm -f $(BUILDDIR)/pcre2-$(PCRE_VER)/build-configured $(BUILDDIR)/pcre2-$(PCRE_VER)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/pcre2-$(PCRE_VER) clean
+	-if [ -d $(BUILDDIR)/pcre2-$(PCRE_VER) ]; then $(MAKE) -C $(BUILDDIR)/pcre2-$(PCRE_VER) clean; fi
 
 distclean-pcre:
 	rm -rf $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2 $(SRCCACHE)/pcre2-$(PCRE_VER) $(BUILDDIR)/pcre2-$(PCRE_VER)

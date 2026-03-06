@@ -29,8 +29,8 @@ $(eval $(call staged-install, \
 	UTF8PROC_INSTALL,,,))
 
 clean-utf8proc:
-	-rm -f $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/$(UTF8PROC_SRC_DIR) clean
+	-rm -f $(UTF8PROC_BUILDDIR)/build-compiled
+	-if [ -d $(UTF8PROC_BUILDDIR) ]; then $(MAKE) -C $(UTF8PROC_BUILDDIR) clean; fi
 
 get-utf8proc: $(UTF8PROC_SRC_FILE)
 extract-utf8proc: $(UTF8PROC_BUILDDIR)/source-extracted

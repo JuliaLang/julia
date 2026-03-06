@@ -26,7 +26,7 @@ $(eval $(call staged-install, \
 
 clean-libwhich:
 	-rm -f $(BUILDDIR)/$(LIBWHICH_SRC_DIR)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/$(LIBWHICH_SRC_DIR) clean
+	-if [ -d $(BUILDDIR)/$(LIBWHICH_SRC_DIR) ]; then $(MAKE) -C $(BUILDDIR)/$(LIBWHICH_SRC_DIR) clean; fi
 
 get-libwhich: $(LIBWHICH_SRC_FILE)
 extract-libwhich: $(BUILDDIR)/$(LIBWHICH_SRC_DIR)/source-extracted
