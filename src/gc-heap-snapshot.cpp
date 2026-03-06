@@ -368,6 +368,16 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
     }
     else {
         self_size = (size_t)jl_datatype_size(type);
+        if (type->name == jl_genericmemory_typename) {
+            jl_genericmemory_t *mem = (jl_genericmemory_t*)a;
+            int how = jl_genericmemory_how(mem);
+            if (how != JL_GENERICMEMORY_STRINGOWNED && how != JL_GENERICMEMORY_MALLOCD) {
+                // Memory's that are string-owned or point to foreign memory have
+                // explicit snapshot edges to pointee data. Otherwise the array
+                // contents are treated as part of the Memory itself.
+                self_size += jl_genericmemory_nbytes(mem);
+            }
+        }
         // print full type into ios buffer and get StringRef to it.
         // The ios is cleaned up below.
         ios_need_close = 1;
@@ -559,26 +569,12 @@ void _gc_heap_snapshot_record_binding_partition_edge(jl_value_t *from, jl_value_
 }
 
 
-void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t bytes, uint16_t alloc_type) JL_NOTSAFEPOINT
+void _gc_heap_snapshot_record_foreign_memory_edge(jl_value_t *from, void* to, size_t bytes) JL_NOTSAFEPOINT
 {
-    // valid alloc_type values are 0, 1, 2
-    assert(alloc_type <= 2);
     size_t name_or_idx = g_snapshot->names.serialize_if_necessary(g_snapshot->strings, "<native>");
 
     auto from_node_idx = record_node_to_gc_snapshot(from);
-    const char *alloc_kind = NULL;
-    switch (alloc_type)
-    {
-    case 0:
-        alloc_kind = "<generic memory - malloc>";
-        break;
-    case 1:
-        alloc_kind = "<generic memory - pool alloc>";
-        break;
-    case 2:
-        alloc_kind = "<generic memory - inline alloc>";
-        break;
-    }
+    const char *alloc_kind = "<foreign memory - malloc>";
     auto to_node_idx = record_pointer_to_gc_snapshot(to, bytes, alloc_kind);
 
     _record_gc_just_edge("hidden", from_node_idx, to_node_idx, name_or_idx);

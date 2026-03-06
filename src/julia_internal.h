@@ -1064,6 +1064,8 @@ JL_DLLEXPORT jl_methcache_t *jl_method_get_cache(
 JL_DLLEXPORT int jl_pointer_egal(jl_value_t *t);
 JL_DLLEXPORT jl_value_t *jl_nth_slot_type(jl_value_t *sig JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 void jl_compute_field_offsets(jl_datatype_t *st);
+const char *jl_check_valid_supertype(jl_value_t *super);
+void jl_check_field_types(jl_svec_t *ftypes, jl_sym_t *type_name);
 void jl_module_run_initializer(jl_module_t *m);
 JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int alloc);
 JL_DLLEXPORT void jl_binding_deprecation_warning(jl_binding_t *b);
@@ -1316,6 +1318,17 @@ void jl_init_llvm(void);
 void jl_init_runtime_ccall(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_intrinsic_properties(void);
+// TypeApp: immutable struct with head::Any, param::Any
+// Represents a single lazy type application step (like UnionAll for where bindings).
+typedef struct {
+    JL_DATA_TYPE
+    jl_value_t *head;
+    jl_value_t *param;
+} jl_typeapp_t;
+
+extern jl_datatype_t *jl_typeapp_type;
+JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *typevars, jl_svec_t *struct_infos);
+int jl_is_typeapp(jl_value_t *v) JL_NOTSAFEPOINT;
 void jl_init_tasks(void) JL_GC_DISABLED;
 void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo) JL_NOTSAFEPOINT;
 jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi);

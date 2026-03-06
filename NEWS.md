@@ -16,6 +16,8 @@ New language features
     participate in the default break scope: a plain `break` or `break _` exits the innermost breakable scope,
     whether it is a loop or an `@label` block. The `continue` statement also supports labels with
     `continue name` to continue a labeled loop ([#60481]).
+  - `typegroup` blocks allow defining mutually recursive struct types that reference each other in their
+    field types. All types in the group are resolved atomically at the end of the block ([#60569]).
 
 Language changes
 ----------------
@@ -57,8 +59,11 @@ Standard library changes
 
 #### Markdown
 
-  * Strikethrough text via `~strike~` or `~~through~~` is now supported by the
-    Markdown parser. ([#60537])
+* Support "raw" or "inline" HTML inside Markdown data ([#60629], [#60632], [#60732])
+* Support autolinks for email addresses (#60570)
+* Many improvements and bugfixes for rendering Markdown lists in a terminal ([#55456], [#60519])
+* Strikethrough text via `~strike~` or `~~through~~` is now supported by the Markdown parser. ([#60537])
+* Many, many bug fixes and minor tweaks; overall behavior is now much closer to CommonMark ([#59977], [#60502])
 
 #### Profile
 
