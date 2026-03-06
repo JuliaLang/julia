@@ -1254,7 +1254,7 @@ function _prettify_bigfloat(s::String)::String
         else
             neg = startswith(int, '-')
             neg == true && (int = lstrip(int, '-'))
-            @assert length(int) == 1
+            @assert length(int) == 1 "length(int) != 1"
             string(neg ? '-' : "", '0', '.', '0'^(-expo-1), int, frac == "0" ? "" : frac)
         end
     else

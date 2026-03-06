@@ -747,3 +747,12 @@ for date_type in (:Date, :DateTime)
     # Parsable output will have type info displayed, thus it is implied
     @eval Base.typeinfo_implicit(::Type{$date_type}) = true
 end
+
+# minimal Base.TOML support
+Base.TOML.Printer.printvalue(f::Function, io::IO, value::Date, sorted::Bool) =
+    Base.print(io, Dates.format(value, dateformat"YYYY-mm-dd"))
+Base.TOML.Printer.printvalue(f::Function, io::IO, value::Time, sorted::Bool) =
+    Base.print(io, Dates.format(value, dateformat"HH:MM:SS.sss"))
+Base.TOML.Printer.printvalue(f::Function, io::IO, value::DateTime, sorted::Bool) =
+    Base.print(io, Dates.format(value, dateformat"YYYY-mm-dd\THH:MM:SS.sss\Z"))
+Base.TOML.Printer.is_valid_toml_value(@nospecialize(::Union{Date,Time,DateTime})) = true
