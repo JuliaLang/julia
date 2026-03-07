@@ -198,3 +198,23 @@ dango() = "🍡"
     lines = helplines("dango")
     @test startswith(lines[1], "search: dango TestSuggestPublic.dango dingo")
 end
+
+@testset "stdlib hints in repl_corrections" begin
+    # Test that repl_corrections suggests stdlib packages for known exported symbols
+    function get_corrections(name)
+        buf = IOBuffer()
+        REPL.repl_corrections(buf, name, Main)
+        String(take!(buf))
+    end
+    @test occursin("LinearAlgebra", get_corrections("svd"))
+    @test occursin("Printf", get_corrections("@printf"))
+    @test occursin("Dates", get_corrections("DateTime"))
+    @test occursin("Distributed", get_corrections("pmap"))
+    @test occursin("Test", get_corrections("@test"))
+    # A totally unknown name should not produce a stdlib hint
+    @test !occursin("Hint", get_corrections("zzzznotafunction"))
+    # Test end-to-end through helpmode for macros (which take the Expr path)
+    macro_out = get_help_io("@printf")
+    @test occursin("Hint", macro_out)
+    @test occursin("Printf", macro_out)
+end
