@@ -2115,6 +2115,26 @@ end
     @test zero([CustomNumber(5.0)]) == [CustomNumber(0.0)]
     @test zero(Union{CustomNumber, Missing}[missing]) == [CustomNumber(0.0)]
     @test zero(Vector{Union{CustomNumber, Missing}}(undef, 1)) == [CustomNumber(0.0)]
+
+    struct NeedsValueZero <: Number
+        a::Int
+        b::Int
+    end
+    Base.zero(x::NeedsValueZero) = NeedsValueZero(0, 0)
+    Base.:(==)(x::NeedsValueZero, y::NeedsValueZero) = x.a == y.a && x.b == y.b
+    Base.ZeroStyle(::Type{NeedsValueZero}) = Base.NoTypeZero()
+
+    @test_throws MethodError zero(NeedsValueZero)
+    @test zero([NeedsValueZero(1, 2)]) == [NeedsValueZero(0, 0)]
+    @test isequal(
+        zero(Union{NeedsValueZero, Missing}[missing]),
+        [missing],
+    )
+    @test isequal(
+        zero(Union{NeedsValueZero, Missing}[missing, NeedsValueZero(1, 2)]),
+        [missing, NeedsValueZero(0, 0)],
+    )
+    @test zero(Vector{Union{NeedsValueZero, Missing}}(undef, 0)) == Union{NeedsValueZero, Missing}[]
 end
 
 @testset "`_prechecked_iterate` optimization" begin
