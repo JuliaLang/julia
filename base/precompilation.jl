@@ -1029,7 +1029,6 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     for (pkg, deps) in direct_deps
         cachepaths = Base.find_all_in_cache_path(pkg)
         freshpaths = String[]
-        cachepath_cache[pkg] = freshpaths
         sourcespec = Base.locate_package_load_spec(pkg)
         single_requested_pkg = length(requested_pkgs) == 1 &&
             (pkg in requested_pkgids || pkg.name in pkg_names)
@@ -1170,6 +1169,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                         is_stale || (n_already_precomp[] += 1)
                     end
                     n_done[] += 1
+                    cachepath_cache[pkg] = freshpaths
                     notify(was_processed[pkg_config])
                 catch err_outer
                     # For debugging:
