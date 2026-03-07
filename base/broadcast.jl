@@ -1329,6 +1329,15 @@ macro __dot__(x)
     esc(__dot__(x))
 end
 
+macro __dot__(args...)
+    # Parser ambiguity: `@. x = y +1` is parsed as `@__dot__(x = y, +1)`
+    # because `+1` after a space is treated as a unary expression, not binary `+`.
+    throw(ArgumentError(
+        "`@.` received $(length(args)) arguments; this is likely a parser ambiguity. " *
+        "For example, `@. x = y +1` is parsed as `@. (x = y) (+1)`, " *
+        "which could be fixed by using `@. x = y + 1` instead."))
+end
+
 @inline function broadcasted_kwsyntax(f, args...; kwargs...)
     if isempty(kwargs) # some BroadcastStyles dispatch on `f`, so try to preserve its type
         return broadcasted(f, args...)
