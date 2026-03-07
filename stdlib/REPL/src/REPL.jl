@@ -1394,7 +1394,7 @@ function setup_interface(
 
     shell_prompt_len = length(SHELL_PROMPT)
     help_prompt_len = length(HELP_PROMPT)
-    jl_prompt_regex = Regex("^In \\[[0-9]+\\]: |^(?:\\(.+\\) )?$JULIA_PROMPT")
+    jl_prompt_regex = Regex("^In \\[[0-9]+\\]: |^(?:\\(.+\\) )?$(rstrip(JULIA_PROMPT))(?: |(?=\\n|\$))")
     pkg_prompt_regex = Regex("^(?:\\(.+\\) )?$PKG_PROMPT")
 
     # Canonicalize user keymap input
@@ -1552,6 +1552,17 @@ function setup_interface(
                             oldpos = nextind(input, oldpos)
                             oldpos >= sizeof(input) && return
                         end
+                        continue
+                    end
+                end
+                # In prompt paste mode, skip empty or comment-only lines so that
+                # Meta.parse does not consume past the next prompt
+                if isprompt_paste && s.current_mode == julia_prompt
+                    nl = findnext('\n', input, oldpos)
+                    linetext = SubString(input, oldpos, prevind(input, something(nl, lastindex(input) + 1)))
+                    stripped = lstrip(linetext)
+                    if isempty(stripped) || startswith(stripped, '#')
+                        oldpos = something(nl, lastindex(input) + 1)
                         continue
                     end
                 end
