@@ -249,6 +249,7 @@ const PARTITION_KIND_DECLARED           = 0x8
 const PARTITION_KIND_GUARD              = 0x9
 const PARTITION_KIND_UNDEF_CONST        = 0xa
 const PARTITION_KIND_BACKDATED_CONST    = 0xb
+const PARTITION_KIND_DECLARED_GUARD     = 0xe
 
 const PARTITION_FLAG_EXPORTED     = 0x10
 const PARTITION_FLAG_DEPRECATED   = 0x20
@@ -265,10 +266,10 @@ const JL_MODULE_USING_REEXPORT = 0x1
 is_defined_const_binding(kind::UInt8) = (kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_BACKDATED_CONST)
 is_some_const_binding(kind::UInt8) = (is_defined_const_binding(kind) || kind == PARTITION_KIND_UNDEF_CONST)
 is_some_imported(kind::UInt8) = (kind == PARTITION_KIND_IMPLICIT_GLOBAL || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED)
-is_some_implicit(kind::UInt8) = (kind == PARTITION_KIND_IMPLICIT_GLOBAL || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_GUARD || kind == PARTITION_KIND_FAILED)
+is_some_implicit(kind::UInt8) = (kind == PARTITION_KIND_IMPLICIT_GLOBAL || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_GUARD || kind == PARTITION_KIND_FAILED || kind == PARTITION_KIND_DECLARED_GUARD)
 is_some_explicit_imported(kind::UInt8) = (kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED)
 is_some_binding_imported(kind::UInt8) = is_some_explicit_imported(kind) || kind == PARTITION_KIND_IMPLICIT_GLOBAL
-is_some_guard(kind::UInt8) = (kind == PARTITION_KIND_GUARD || kind == PARTITION_KIND_FAILED || kind == PARTITION_KIND_UNDEF_CONST)
+is_some_guard(kind::UInt8) = (kind == PARTITION_KIND_GUARD || kind == PARTITION_KIND_FAILED || kind == PARTITION_KIND_UNDEF_CONST || kind == PARTITION_KIND_DECLARED_GUARD)
 
 function lookup_binding_partition(world::UInt, b::Core.Binding)
     ccall(:jl_get_binding_partition, Ref{Core.BindingPartition}, (Any, UInt), b, world)

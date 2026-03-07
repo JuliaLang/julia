@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using ..Compiler: _uncompressed_ir, specializations, get_ci_mi, convert, unsafe_load, cglobal, generating_output, has_image_globalref,
-    PARTITION_MASK_KIND, PARTITION_KIND_GUARD, PARTITION_FLAG_EXPORTED, PARTITION_FLAG_DEPRECATED,
+    PARTITION_MASK_KIND, PARTITION_KIND_GUARD, PARTITION_KIND_DECLARED_GUARD, PARTITION_FLAG_EXPORTED, PARTITION_FLAG_DEPRECATED,
     BINDING_FLAG_ANY_IMPLICIT_EDGES, binding_kind, partition_restriction, is_some_imported,
     is_some_binding_imported, is_some_implicit, SizeUnknown, maybe_add_binding_backedge!, walk_binding_partition, abstract_eval_partition_load, userefs
 using .Core: SimpleVector, CodeInfo
@@ -83,7 +83,7 @@ function invalidate_method_for_globalref!(gr::GlobalRef, method::Method, invalid
 end
 
 export_affecting_partition_flags(bpart::Core.BindingPartition) =
-    ((bpart.kind & PARTITION_MASK_KIND) == PARTITION_KIND_GUARD,
+    (let k = bpart.kind & PARTITION_MASK_KIND; k == PARTITION_KIND_GUARD || k == PARTITION_KIND_DECLARED_GUARD end,
      (bpart.kind & PARTITION_FLAG_EXPORTED) != 0,
      (bpart.kind & PARTITION_FLAG_DEPRECATED) != 0)
 

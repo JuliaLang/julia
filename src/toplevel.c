@@ -316,7 +316,7 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
         bpart = jl_get_binding_partition(b, new_world);
         enum jl_partition_kind kind = jl_binding_kind(bpart);
         if (kind != PARTITION_KIND_GLOBAL) {
-            if (jl_bkind_is_some_implicit(kind) || kind == PARTITION_KIND_DECLARED) {
+            if (jl_bkind_is_some_implicit(kind) || kind == PARTITION_KIND_DECLARED || kind == PARTITION_KIND_DECLARED_GUARD) {
                 if (kind == new_kind) {
                     if (!set_type)
                         goto done;

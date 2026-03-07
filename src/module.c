@@ -135,8 +135,11 @@ static jl_binding_partition_t *jl_implicit_import_resolved(jl_binding_t *b, stru
     size_t new_max_world = gap.max_world < resolution.max_world ? gap.max_world : resolution.max_world;
     size_t new_min_world = gap.min_world > resolution.min_world ? gap.min_world : resolution.min_world;
     jl_binding_partition_t *next = gap.replace;
-    if (jl_is_binding_partition(gap.parent)) {
-        // Check if we can merge this into the previous binding partition
+    if (jl_is_binding_partition(gap.parent) && !jl_bkind_is_some_guard((enum jl_partition_kind)(new_kind & PARTITION_MASK_KIND))) {
+        // Check if we can merge this into the previous binding partition.
+        // Guard partitions are not merged backward: the min_world of the earliest guard
+        // partition is semantically meaningful (it records the module's creation world,
+        // i.e. the world at which the using relationships were first established).
         jl_binding_partition_t *prev = (jl_binding_partition_t *)gap.parent;
         assert(new_max_world != ~(size_t)0); // It is inconsistent to have a gap with `gap.parent` set, but max_world == ~(size_t)0
         size_t expected_prev_min_world = new_max_world + 1;
@@ -636,7 +639,10 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
                 size_t prev_bpart_min_world = jl_atomic_load_relaxed(&prev_bpart->min_world);
                 if (prev_bpart_min_world == 0)
                     break;
-                prev_bpart = jl_get_binding_partition(b, prev_bpart_min_world - 1);
+                struct implicit_search_gap bdate_gap;
+                prev_bpart = jl_get_binding_partition_if_present(b, prev_bpart_min_world - 1, &bdate_gap);
+                if (!prev_bpart)
+                    break;
             }
         }
         // If backdate is required, replace each existing partition by a new one.
@@ -1337,7 +1343,7 @@ JL_DLLEXPORT void jl_import_module(jl_task_t *ct, jl_module_t *JL_NONNULL m, jl_
     size_t world = jl_atomic_load_acquire(&jl_world_counter);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
     enum jl_partition_kind kind = jl_binding_kind(bpart);
-    if (!jl_bkind_is_some_implicit(kind) && kind != PARTITION_KIND_DECLARED) {
+    if (!jl_bkind_is_some_implicit(kind) && kind != PARTITION_KIND_DECLARED && kind != PARTITION_KIND_DECLARED_GUARD) {
         // Unlike regular constant declaration, we allow this as long as we eventually end up at a constant.
         jl_walk_binding_inplace(&b, &bpart, world);
         if (jl_bkind_is_some_constant(jl_binding_kind(bpart))) {
@@ -1506,8 +1512,27 @@ int jl_module_public_(jl_module_t *from, jl_sym_t *s, int exported, size_t new_w
                       jl_symbol_name(from->name), jl_symbol_name(s));
     }
     jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_PUBLICP);
-    if (was_exported != exported) {
-        jl_replace_binding_locked2(b, bpart, bpart->restriction, bpart->kind | PARTITION_FLAG_EXPORTED, new_world);
+    enum jl_partition_kind kind = jl_binding_kind(bpart);
+    // If the binding is currently an implicit guard (unresolved lookup), replace it with an
+    // explicit declared-guard, which records that the user explicitly declared this name
+    // at a known world age, distinguishing it from purely implicit guard partitions.
+    int needs_declared_guard = (kind == PARTITION_KIND_GUARD);
+    if (was_exported != exported || needs_declared_guard) {
+        size_t new_kind;
+        jl_value_t *restriction;
+        if (needs_declared_guard) {
+            new_kind = (size_t)PARTITION_KIND_DECLARED_GUARD;
+            restriction = NULL;
+        }
+        else {
+            new_kind = (size_t)kind;
+            restriction = bpart->restriction;
+        }
+        // Preserve existing flags, updating the EXPORTED flag as needed
+        new_kind |= (bpart->kind & PARTITION_MASK_FLAG & ~PARTITION_FLAG_EXPORTED);
+        if (exported)
+            new_kind |= PARTITION_FLAG_EXPORTED;
+        jl_replace_binding_locked2(b, bpart, restriction, new_kind, new_world);
         return 1;
     }
     return 0;
@@ -2117,7 +2142,7 @@ void append_module_names(jl_array_t* a, jl_module_t *m, int all, int imported, i
              jl_bpart_is_exported(bpart->kind) ||
              (imported && (kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_IMPORTED)) ||
              (usings && kind == PARTITION_KIND_EXPLICIT) ||
-             ((kind == PARTITION_KIND_GLOBAL || kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_DECLARED) && (all || main_public))) &&
+             ((kind == PARTITION_KIND_GLOBAL || kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_DECLARED || kind == PARTITION_KIND_DECLARED_GUARD) && (all || main_public))) &&
             (all || (!(bpart->kind & PARTITION_FLAG_DEPRECATED) && !hidden)))
             _append_symbol_to_bindings_array(a, asname);
     }
