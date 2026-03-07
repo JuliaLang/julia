@@ -5,6 +5,8 @@ using Random
 using LinearAlgebra
 using Test
 
+using Test
+
 const ≣ = isequal # convenient for comparing NaNs
 
 @testset "basic booleans" begin
@@ -2770,22 +2772,30 @@ end
     @test rem(T(1), T(2), RoundDown)    == 1
     @test rem(T(1), T(2), RoundUp)      == -1
     @test rem(T(1), T(2), RoundFromZero) == -1
+    @test rem(T(1), T(2), RoundNearestTiesUp) == -1
+    @test rem(T(1), T(2), RoundNearestTiesAway) == -1
     @test rem(T(1.5), T(2), RoundToZero)  == 1.5
     @test rem(T(1.5), T(2), RoundNearest) == -0.5
     @test rem(T(1.5), T(2), RoundDown)    == 1.5
     @test rem(T(1.5), T(2), RoundUp)      == -0.5
     @test rem(T(1.5), T(2), RoundFromZero) == -0.5
+    @test rem(T(1.5), T(2), RoundNearestTiesUp) == -0.5
+    @test rem(T(1.5), T(2), RoundNearestTiesAway) == -0.5
     @test rem(T(-1), T(2), RoundToZero)  == -1
     @test rem(T(-1), T(2), RoundNearest) == -1
     @test rem(T(-1), T(2), RoundDown)    == 1
     @test rem(T(-1), T(2), RoundUp)      == -1
     @test rem(T(-1), T(2), RoundFromZero) == 1
+    @test rem(T(-1), T(2), RoundNearestTiesUp) == -1
+    @test rem(T(-1), T(2), RoundNearestTiesAway) == 1
     @test rem(T(-1.5), T(2), RoundToZero)  == -1.5
     @test rem(T(-1.5), T(2), RoundNearest) == 0.5
     @test rem(T(-1.5), T(2), RoundDown)    == 0.5
     @test rem(T(-1.5), T(2), RoundUp)      == -1.5
     @test rem(T(-1.5), T(2), RoundFromZero) == 0.5
-    for mode in [RoundToZero, RoundNearest, RoundDown, RoundUp, RoundFromZero]
+    @test rem(T(-1.5), T(2), RoundNearestTiesUp) == 0.5
+    @test rem(T(-1.5), T(2), RoundNearestTiesAway) == 0.5
+    for mode in [RoundToZero, RoundNearest, RoundDown, RoundUp, RoundFromZero, RoundNearestTiesUp, RoundNearestTiesAway]
         @test isnan(rem(T(1), T(0), mode))
         @test isnan(rem(T(Inf), T(2), mode))
         @test isnan(rem(T(1), T(NaN), mode))
@@ -2796,6 +2806,8 @@ end
     @test isequal(rem(nextfloat(typemin(T)), T(2), RoundDown),     0.0)
     @test isequal(rem(nextfloat(typemin(T)), T(2), RoundUp),      -0.0)
     @test isequal(rem(nextfloat(typemin(T)), T(2), RoundFromZero), 0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundNearestTiesUp), -0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundNearestTiesAway), 0.0)
 end
 
 @testset "rem for $T RoundNearest" for T in (Int8, Int16, Int32, Int64, Int128)
@@ -3350,5 +3362,39 @@ end
 @testset "irrational special values" begin
     for v ∈ (π, ℯ, γ, catalan, φ)
         @test v === typemin(v) === typemax(v)
+    end
+end
+
+@testset "rem rounded to nearest w/wo ties (#60916)" begin
+    Random.seed!(123)
+    setprecision(BigFloat, 64) do
+        for T in (Float16, Float32, Float64, BigFloat)
+            p = precision(T) + 1
+            step = T === BigFloat ? 3 : 1
+            for e1 in 0:p, e2 in e1-p:step:p+e1, s1 in (+1, -1), s2 in (+1, -1)
+                x = ldexp(s1*rand(T), e1)
+                y = ldexp(s2*rand(T), e2)
+                rd = rem(x, y, RoundDown)
+                ru = rem(x, y, RoundUp)
+                if abs(rd) != abs(ru)
+                    # no tie
+                    nearest = abs(rd) < abs(ru) ? rd : ru
+                    @test isequal(rem(x, y, RoundNearestTiesUp), nearest)
+                    @test isequal(rem(x, y, RoundNearestTiesAway), nearest)
+                    @test isequal(rem(x, y, RoundNearest), nearest)
+                    # try to find close x,y pair such that there is a tie
+                    y = Base.truncbits(y, trunc(Int, p/4))
+                    q = round(x/y, RoundFromZero)
+                    x = q*y + y/2
+                    rd = rem(x, y, RoundDown)
+                    ru = rem(x, y, RoundUp)
+                end
+                if abs(rd) == abs(ru)
+                    # tie
+                    @test rem(x, y, RoundNearestTiesUp) == rem(x, y, RoundUp)
+                    @test rem(x, y, RoundNearestTiesAway) == rem(x, y, RoundFromZero)
+                end
+            end
+        end
     end
 end
