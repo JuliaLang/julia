@@ -226,7 +226,7 @@ function promotecache!(interp::AbstractInterpreter, caller::InferenceState)
                     # when compiling the compiler to inject everything eagerly
                     # where codegen can start finding and using it right away
                     if mi.def isa Method && isa_compileable_sig(mi) && is_cached(caller)
-                        ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), ci, uncompressed)
+                        ccall(:jl_add_codeinsts_to_jit, Cvoid, (Any, Any), Any[ci], Any[uncompressed])
                     end
                 end
             end
@@ -1675,6 +1675,7 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
     codegen === nothing && return ci
     workqueue = CompilationQueue(; interp)
     push!(workqueue, ci)
+    codeinsts, srcs = Any[], Any[]
     while !isempty(workqueue)
         # ci_has_real_invoke(ci) && return ci # optimization: cease looping if ci happens to get compiled (not just jl_fptr_wait_for_compiled, but fully jl_is_compiled_codeinst)
         callee = pop!(workqueue)
@@ -1699,7 +1700,7 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
         if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
             cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, get_inference_world(workqueue.interp))::CodeInstance
             if cached === callee
-                # make sure callee is gc-rooted and cached, as required by jl_add_codeinst_to_jit
+                # make sure callee is gc-rooted and cached, as required by jl_add_codeinsts_to_jit
                 code_cache(workqueue.interp)[mi] = callee
             else
                 # use an existing CI from the cache, if there is available one that is compatible
@@ -1707,8 +1708,10 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
                 callee = cached
             end
         end
-        ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), callee, src)
+        push!(codeinsts, callee)
+        push!(srcs, src)
     end
+    ccall(:jl_add_codeinsts_to_jit, Cvoid, (Any, Any), codeinsts, srcs)
     return ci
 end
 

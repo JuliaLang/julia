@@ -51,19 +51,23 @@ JL_DLLEXPORT int jl_compile_codeinst_fallback(jl_code_instance_t *unspec)
     return 0;
 }
 
-JL_DLLEXPORT void jl_emit_codeinst_to_jit_fallback(jl_code_instance_t *codeinst, jl_code_info_t *src)
+JL_DLLEXPORT void jl_emit_codeinsts_to_jit_fallback(jl_code_instance_t **codeinsts, jl_code_info_t **srcs, int len)
 {
-    jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
-    if (jl_is_code_info(inferred))
-        return;
-    if (jl_is_svec(src->edges)) {
-        jl_atomic_store_release(&codeinst->inferred, (jl_value_t*)src->edges);
-        jl_gc_wb(codeinst, src->edges);
+    for (int i = 0; i < len; ++i) {
+        jl_code_instance_t *codeinst = codeinsts[i];
+        jl_code_info_t *src = srcs[i];
+        jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
+        if (jl_is_code_info(inferred))
+            continue;
+        if (jl_is_svec(src->edges)) {
+            jl_atomic_store_release(&codeinst->inferred, (jl_value_t*)src->edges);
+            jl_gc_wb(codeinst, src->edges);
+        }
+        jl_atomic_store_release(&codeinst->debuginfo, src->debuginfo);
+        jl_gc_wb(codeinst, src->debuginfo);
+        jl_atomic_store_release(&codeinst->inferred, (jl_value_t*)src);
+        jl_gc_wb(codeinst, src);
     }
-    jl_atomic_store_release(&codeinst->debuginfo, src->debuginfo);
-    jl_gc_wb(codeinst, src->debuginfo);
-    jl_atomic_store_release(&codeinst->inferred, (jl_value_t*)src);
-    jl_gc_wb(codeinst, src);
 }
 
 JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION_fallback(void)
