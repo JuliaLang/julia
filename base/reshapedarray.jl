@@ -410,6 +410,40 @@ function cconvert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIn
     )
 end
 
+function try_strides(V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {T,N,P}
+    try_substrides(try_strides(V.parent), V.indices)
+end
+
+# Recursively try to calculate the strides
+try_substrides(::Any, ::Any) = nothing
+try_substrides(strds::Tuple{}, ::Tuple{}) = ()
+function try_substrides(strds::Tuple{Int, Vararg{Int}}, I::Tuple{ScalarIndex, Vararg{Any}})
+    try_substrides(tail(strds), tail(I))
+end
+function try_substrides(strds::Tuple{Int, Vararg{Int}}, I::Tuple{Slice, Vararg{Any}})
+    rest = try_substrides(tail(strds), tail(I))
+    isnothing(rest) && return nothing
+    (first(strds), rest...)
+end
+function try_substrides(strds::Tuple{Int, Vararg{Int}}, I::Tuple{AbstractRange, Vararg{Any}})
+    rest = try_substrides(tail(strds), tail(I))
+    isnothing(rest) && return nothing
+    (first(strds)*Int(step(first(I))), rest...)
+end
+function try_substrides(strds::Tuple{Int, Vararg{Int}}, I::Tuple{ReshapedUnitRange, Vararg{Any}})
+    rest = try_substrides(tail(strds), tail(I))
+    isnothing(rest) && return nothing
+    (size_to_strides(first(strds), convert(Dims, size(first(I)))...)..., rest...)
+end
+
+function can_ptr_load(V::SubArray)
+    can_ptr_load(V.parent)
+end
+
+function can_ptr_store(V::SubArray)
+    can_ptr_store(V.parent)
+end
+
 _checkcontiguous(::Type{Bool}, A::AbstractArray) = false
 # `strides(A::DenseArray)` calls `size_to_strides` by default.
 # Thus it's OK to assume all `DenseArray`s are contiguously stored.
@@ -417,28 +451,57 @@ _checkcontiguous(::Type{Bool}, A::DenseArray) = true
 _checkcontiguous(::Type{Bool}, A::ReshapedArray) = _checkcontiguous(Bool, parent(A))
 _checkcontiguous(::Type{Bool}, A::FastContiguousSubArray) = _checkcontiguous(Bool, parent(A))
 
+function can_ptr_load(a::ReshapedArray)::Bool
+    can_ptr_load(a.parent)
+end
+
+function can_ptr_store(a::ReshapedArray)::Bool
+    can_ptr_store(a.parent)
+end
+
+function try_strides(a::ReshapedArray)
+    apst = try_strides(a.parent)
+    isnothing(apst) && return nothing
+    apsz::Dims = size(a.parent)
+    msz, mst, n = merge_adjacent_dim(apsz, apst) # Try to perform "lazy" reshape
+    if n == ndims(a.parent)
+        size_to_strides(mst, size(a)...)::Dims # Parent is stridevector like
+    else
+        _try_reshaped_strides(size(a), 1, msz, mst, n, apsz, apst)
+    end
+end
+
 function strides(a::ReshapedArray)
     _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
     apsz::Dims = size(a.parent)
     apst::Dims = strides(a.parent)
     msz, mst, n = merge_adjacent_dim(apsz, apst) # Try to perform "lazy" reshape
     n == ndims(a.parent) && return size_to_strides(mst, size(a)...) # Parent is stridevector like
-    return _reshaped_strides(size(a), 1, msz, mst, n, apsz, apst)
+    ret = _try_reshaped_strides(size(a), 1, msz, mst, n, apsz, apst)
+    isnothing(ret) && throw(ArgumentError("Input is not strided."))
+    ret
 end
 
-function _reshaped_strides(::Dims{0}, reshaped::Int, msz::Int, ::Int, ::Int, ::Dims, ::Dims)
-    reshaped == msz && return ()
-    throw(ArgumentError("Input is not strided."))
+function _try_reshaped_strides(::Dims{0}, reshaped::Int, msz::Int, ::Int, ::Int, ::Dims, ::Dims)
+    if reshaped == msz
+        ()
+    else
+        nothing
+    end
 end
-function _reshaped_strides(sz::Dims, reshaped::Int, msz::Int, mst::Int, n::Int, apsz::Dims, apst::Dims)
+function _try_reshaped_strides(sz::Dims, reshaped::Int, msz::Int, mst::Int, n::Int, apsz::Dims, apst::Dims)
     st = reshaped * mst
     reshaped = reshaped * sz[1]
     if length(sz) > 1 && reshaped == msz && sz[2] != 1
         msz, mst, n = merge_adjacent_dim(apsz, apst, n + 1)
         reshaped = 1
     end
-    sts = _reshaped_strides(tail(sz), reshaped, msz, mst, n, apsz, apst)
-    return (st, sts...)
+    sts = _try_reshaped_strides(tail(sz), reshaped, msz, mst, n, apsz, apst)
+    if isnothing(sts)
+        nothing
+    else
+        (st, sts...)
+    end
 end
 
 merge_adjacent_dim(::Dims{0}, ::Dims{0}) = 1, 1, 0

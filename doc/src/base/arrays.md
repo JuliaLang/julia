@@ -68,6 +68,9 @@ Base.IndexCartesian
 Base.conj!
 Base.stride
 Base.strides
+Base.try_strides
+Base.can_ptr_load
+Base.can_ptr_store
 ```
 
 ## Broadcast and vectorization
