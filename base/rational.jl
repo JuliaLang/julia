@@ -244,11 +244,8 @@ julia> typeof(numerator(a))
 BigInt
 ```
 """
-function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) where T<:Integer
-    if tol < 0
-        throw(ArgumentError("negative tolerance $tol"))
-    end
-
+function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
+    tol < 0 && throw(ArgumentError("Tolerance can not be negative. tol=$tol"))
     T<:Unsigned && x < 0 && __throw_negate_unsigned()
     isnan(x) && return T(x)//one(T)
     isinf(x) && return unsafe_rational(x < 0 ? -one(T) : one(T), zero(T))
@@ -291,9 +288,28 @@ function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) wh
         nt = a*t+tt
     end
 
-    # find optimal semiconvergent
-    # smallest a such that x-a*y < a*t+tt
-    a = cld(x-tt,y+t)
+    if tol > 0 && y < 1 < a
+        # find optimal semiconvergent
+        # smallest a such that x-a*y < a*t+tt
+        if p == 0
+            # 1/a satisfies the tolerance with a = ⌊1/y⌋
+            e = eps(y)
+            if t ≤ e
+                # round to nearest with tie down
+                a = -mod(1, -y) < r ? a + 1 : a
+            else
+                # prevent over-minimization
+                t = t ≤ 2e ? e : t/2
+                a = min(a, cld(1, y + t))
+            end
+        else
+            # equivalent to cld(x-tt,y+t), avoid intermediate rounding
+            yt = y + t
+            yr = x % yt - tt % yt
+            a = round((x - (tt + yr)) / yt) + (yr > 0)
+        end
+    end
+
     try
         ia = convert(T,a)
         np = checked_add(checked_mul(ia,p),pp)
@@ -309,7 +325,18 @@ rationalize(x::Real; kvs...) = rationalize(Int, x; kvs...)
 rationalize(::Type{T}, x::Complex; kvs...) where {T<:Integer} = Complex(rationalize(T, x.re; kvs...), rationalize(T, x.im; kvs...))
 rationalize(x::Complex; kvs...) = Complex(rationalize(Int, x.re; kvs...), rationalize(Int, x.im; kvs...))
 rationalize(::Type{T}, x::Rational; tol::Real = 0) where {T<:Integer} = rationalize(T, x, tol)
-rationalize(x::Rational; kvs...) = x
+rationalize(x::Rational{T}; kvs...) where {T<:Integer} = rationalize(T, x; kvs...)
+function rationalize(::Type{T}, x::Rational, tol::Real) where {T<:Integer}
+    T<:Unsigned && x < 0 && __throw_negate_unsigned()
+    if 0 ≤ tol ≤ eps(float(x))
+        try
+            return Rational{T}(x)
+        catch e
+            isa(e,InexactError) || rethrow()
+        end
+    end
+    return rationalize(T, float(x), tol)
+end
 rationalize(x::Integer; kvs...) = Rational(x)
 function rationalize(::Type{T}, x::Integer; kvs...) where {T<:Integer}
     T<:Unsigned && x < 0 && __throw_negate_unsigned()
