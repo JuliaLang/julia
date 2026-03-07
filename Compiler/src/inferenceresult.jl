@@ -199,7 +199,9 @@ function constprop_cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given
     indices = get_indices(cache, mi)
     for idx in indices
         cached_result = cache.results[idx]
-        cached_result.tombstone && continue # ignore deleted entries (due to LimitedAccuracy)
+        # N.B. don't skip tombstoned entries here: they indicate a previous const-prop
+        # attempt that hit a cycle and produced a limited result, and the caller needs
+        # to see them to avoid re-attempting the same work
         cache_argtypes = cached_result.argtypes
         @assert length(cache_argtypes) == nargtypes "invalid `cache_argtypes` for `mi`"
         cache_overridden_by_const = cached_result.overridden_by_const

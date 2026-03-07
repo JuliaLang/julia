@@ -563,7 +563,6 @@ function get(cache::OverlayCodeCache, mi::MethodInstance, default)
     # Iterate in reverse to get the most recent matching entry
     for i in length(indices):-1:1
         cached_result = localcache.results[indices[i]]
-        cached_result.tombstone && continue # ignore deleted entries (due to LimitedAccuracy)
         cached_result.overridden_by_const === nothing || continue
         isdefined(cached_result, :ci) || continue
         ci = cached_result.ci

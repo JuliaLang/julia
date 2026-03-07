@@ -1330,6 +1330,12 @@ function const_prop_call(interp::AbstractInterpreter,
             add_remark!(interp, sv, "[constprop] Found cached constant inference in a cycle")
             return nothing
         end
+        if inf_result.tombstone
+            # a previous const-prop attempt hit a cycle and produced a limited result;
+            # don't re-attempt the same work that would lead to the same limited outcome
+            add_remark!(interp, sv, "[constprop] Found cached but limited constant inference result")
+            return nothing
+        end
         @assert inf_result.linfo === mi "MethodInstance for cached inference result does not match"
         return return_localcache_result(interp, inf_result, sv)
     end
@@ -1361,6 +1367,14 @@ function const_prop_call(interp::AbstractInterpreter,
         pop!(callstack)
         # add to the cache to record that this will always fail
         push!(get_inference_cache(interp), inf_result)
+        return nothing
+    end
+    if inf_result.tombstone
+        # This const-prop attempt resolved but hit a cycle and produced a limited result.
+        # Cache the tombstoned entry so that `constprop_cache_lookup` can find it and
+        # prevent re-attempting the same work that would lead to the same limited outcome.
+        push!(get_inference_cache(interp), inf_result)
+        add_remark!(interp, sv, "[constprop] Constant inference produced a limited result")
         return nothing
     end
     existing_edge = result.edge
