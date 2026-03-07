@@ -59,7 +59,7 @@ JL_FEATURE_DEF(i8mm, 32 + 13, 110000) // HWCAP2_I8MM, ARMv8.2-I8MM. Required in 
 JL_FEATURE_DEF(bf16, 32 + 14, 110000) // HWCAP2_BF16, ARMv8.2-BF16. Required in ARMv8.6
 // JL_FEATURE_DEF(dgh, 32 + 15, UINT32_MAX) // HWCAP2_DGH, ARMv8.0-DGH. Not implement in LLVM yet
 JL_FEATURE_DEF(rand, 32 + 16, 0) // HWCAP2_RNG, ARMv8.5-RNG
-JL_FEATURE_DEF(bti, 32 + 17, 0) // HWCAP2_BTI
+JL_FEATURE_DEF(bti, 32 + 17, 0) // HWCAP2_BTI. Required in ARMv8.5
 JL_FEATURE_DEF(mte, 32 + 18, 0) // HWCAP2_MTE, ARMv8.5-MemTag (reserved as of kernel 5.9-rc1)
 
 // custom bits to match llvm model
