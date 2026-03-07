@@ -591,6 +591,67 @@ const RECURSION_UNUSED_MSG = "Bounded recursion detected with unused result. Ann
 const RECURSION_MSG = "Bounded recursion detected. Call was widened to force convergence."
 const RECURSION_MSG_HARDLIMIT = "Bounded recursion detected under hardlimit. Call was widened to force convergence."
 
+ipo_effects(code::CodeInstance) = decode_effects(code.ipo_purity_bits)
+
+function cached_return_type(code::CodeInstance)
+    rettype = code.rettype
+    isdefined(code, :rettype_const) || return rettype
+    rettype_const = code.rettype_const
+    # the second subtyping/egal conditions are necessary to distinguish usual cases
+    # from rare cases when `Const` wrapped those extended lattice type objects
+    if isa(rettype_const, Tuple{Vector{Union{Nothing,Bool}}, Vector{Any}}) && !(Tuple{Vector{Union{Nothing,Bool}}, Vector{Any}} <: rettype)
+        undefs, fields = rettype_const
+        return PartialStruct(fallback_lattice, rettype, undefs, fields)
+    elseif isa(rettype_const, PartialOpaque) && rettype <: Core.OpaqueClosure
+        return rettype_const
+    elseif isa(rettype_const, InterConditional) && rettype !== InterConditional
+        return rettype_const
+    elseif isa(rettype_const, InterMustAlias) && rettype !== InterMustAlias
+        return rettype_const
+    else
+        return Const(rettype_const)
+    end
+end
+
+# return cached result of regular inference
+function return_cached_result(interp::AbstractInterpreter, method::Method, codeinst::CodeInstance, @nospecialize(src), caller::AbsIntState, edgecycle::Bool, edgelimited::Bool)
+    rt = cached_return_type(codeinst)
+    exct = codeinst.exctype
+    effects = ipo_effects(codeinst)
+    valid_worlds = WorldRange(min_world(codeinst), max_world(codeinst))
+    if src !== nothing
+        # Create an InferenceResult to preserve cached source lookup
+        inf_result = InferenceResult(codeinst.def, typeinf_lattice(interp))
+        inf_result.result = rt
+        inf_result.exc_result = exct
+        inf_result.src = src::CodeInfo
+        inf_result.ipo_effects = effects
+        inf_result.ci_as_edge = inf_result.ci = codeinst
+        inf_result.valid_worlds = valid_worlds
+        push!(get_inference_cache(interp), inf_result)
+    else
+        inf_result = nothing
+    end
+    update_valid_age!(caller, get_inference_world(interp), valid_worlds)
+    caller.time_caches += reinterpret(Float16, codeinst.time_infer_total)
+    caller.time_caches += reinterpret(Float16, codeinst.time_infer_cache_saved)
+    return Future(MethodCallResult(interp, caller, method, rt, exct, effects, codeinst, edgecycle, edgelimited, inf_result))
+end
+
+function return_cached_result(interp::AbstractInterpreter, method::Method, inf_result::InferenceResult, @nospecialize(src), caller::AbsIntState, edgecycle::Bool, edgelimited::Bool)
+    rt = inf_result.result
+    exct = inf_result.exc_result
+    if src !== nothing
+        inf_result.src = src::CodeInfo
+    end
+    effects = inf_result.ipo_effects
+    codeinst = inf_result.ci
+    update_valid_age!(caller, get_inference_world(interp), inf_result.valid_worlds)
+    caller.time_caches += reinterpret(Float16, codeinst.time_infer_total)
+    caller.time_caches += reinterpret(Float16, codeinst.time_infer_cache_saved)
+    return Future(MethodCallResult(interp, caller, method, rt, exct, effects, codeinst, edgecycle, edgelimited, inf_result))
+end
+
 function abstract_call_method(interp::AbstractInterpreter,
                               method::Method, @nospecialize(sig), sparams::SimpleVector,
                               hardlimit::Bool, si::StmtInfo, sv::AbsIntState)
@@ -616,7 +677,13 @@ function abstract_call_method(interp::AbstractInterpreter,
         if method === infmi.def
             if infmi.specTypes::Type == sig::Type
                 # avoid widening when detecting self-recursion
-                # TODO: merge call cycle and return right away
+                # return the cached result to avoid re-entering typeinf_edge,
+                # which would use CACHE_MODE_LOCAL and poison effects
+                mi = specialize_method(method, sig, sparams)
+                code = get(code_cache(interp), mi, nothing)
+                if code !== nothing
+                    return return_cached_result(interp, method, code, nothing, sv, true, false)
+                end
                 topmost = nothing
                 edgecycle = true
                 break
@@ -835,6 +902,35 @@ struct MethodCallResult
                               call_result::Union{Nothing,InferredCallResult} = nothing)
         return new(rt, exct, effects, edge, edgecycle, edgelimited, call_result)
     end
+end
+
+function MethodCallResult(::AbstractInterpreter, sv::AbsIntState, method::Method,
+                          @nospecialize(rt), @nospecialize(exct), effects::Effects,
+                          edge::Union{Nothing,CodeInstance}, edgecycle::Bool, edgelimited::Bool,
+                          call_result::Union{Nothing,InferredCallResult} = nothing)
+    if edge === nothing
+        edgecycle = edgelimited = true
+    end
+
+    # we look for the termination effect override here as well, since the :terminates effect
+    # may have been tainted due to recursion at this point even if it's overridden
+    if is_effect_overridden(sv, :terminates_globally)
+        # this frame is known to terminate
+        effects = Effects(effects, terminates=true)
+    elseif is_effect_overridden(method, :terminates_globally)
+        # this edge is known to terminate
+        effects = Effects(effects; terminates=true)
+    elseif edgecycle
+        # Some sort of recursion was detected.
+        if edge !== nothing && !edgelimited && !is_edge_recursed(edge, sv)
+            # no `MethodInstance` cycles -- don't taint :terminate
+        else
+            # we cannot guarantee that the call will terminate
+            effects = Effects(effects; terminates=false)
+        end
+    end
+
+    return MethodCallResult(rt, exct, effects, edge, edgecycle, edgelimited, call_result)
 end
 
 struct InvokeCall
