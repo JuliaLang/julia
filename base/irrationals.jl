@@ -62,8 +62,8 @@ Complex{T}(x::AbstractIrrational) where {T<:Real} = Complex{T}(T(x))
 
 function _irrational_to_rational_at_current_precision(::Type{T}, x::AbstractIrrational) where {T <: Integer}
     bx = BigFloat(x)
-    r = rationalize(T, bx, tol = 0)
-    if abs(BigFloat(r) - bx) > eps(bx)
+    r = rationalize(T, bx, _eps(x)/2)
+    if abs(BigFloat(r) - bx) > _eps(x)
         r
     else
         nothing  # Error is too small, repeat with greater precision.
@@ -140,11 +140,28 @@ end
 <=(x::AbstractIrrational, y::AbstractFloat) = x < y
 <=(x::AbstractFloat, y::AbstractIrrational) = x < y
 
+function _throw_rationalize_irrational_zero_tol_bigint()
+    throw(ArgumentError("Cannot rationalize an irrational using arbitrary precision (Bigint) and zero tolerance"))
+end
+
 # Irrational vs Rational
 function _rationalize_irrational(::Type{T}, x::AbstractIrrational, tol::Real) where {T<:Integer}
-    return rationalize(T, big(x), tol=tol)
+    if iszero(tol)
+        T === BigInt && _throw_rationalize_irrational_zero_tol_bigint()
+        return _irrational_to_rational(T, x)
+    end
+    tol ≥ eps(Float64(x)) && return rationalize(T, Float64(x), tol/2)
+    tol ≥ _eps(x)/2 && return rationalize(T, big(x), tol)
+    # need more precision
+    p = exponent(x) - exponent(tol) + 8
+    setprecision(BigFloat, p) do
+        return rationalize(T, big(x), tol)
+    end
 end
-function rationalize(::Type{T}, x::AbstractIrrational; tol::Real=0) where {T<:Integer}
+function rationalize(::Type{T}, x::AbstractIrrational; tol::Real=_eps(x)/2) where {T<:Integer}
+    return _rationalize_irrational(T, x, tol)
+end
+function rationalize(::Type{T}, x::AbstractIrrational, tol::Real) where {T<:Integer}
     return _rationalize_irrational(T, x, tol)
 end
 function _lessrational(rx::Rational, x::AbstractIrrational)
@@ -171,8 +188,17 @@ function <(x::Rational{T}, y::AbstractIrrational) where T
         return x < ry
     end
 end
-<(x::AbstractIrrational, y::Rational{BigInt}) = big(x) < y
-<(x::Rational{BigInt}, y::AbstractIrrational) = x < big(y)
+function <(x::AbstractIrrational, y::Rational{BigInt})
+    Float64(x) != Float64(y) && return Float64(x) < Float64(y)
+    p = precision(BigFloat) + 32
+    more_p = max(32, exponent(x) + exponent(y.den))
+    while true
+        xf, yf = BigFloat.((x, y), precision=p)
+        xf != yf && return xf < yf
+        p += more_p
+    end
+end
+<(x::Rational{BigInt}, y::AbstractIrrational) = !(y < x)
 
 <=(x::AbstractIrrational, y::Rational) = x < y
 <=(x::Rational, y::AbstractIrrational) = x < y
@@ -289,3 +315,7 @@ end
 
 # inv
 inv(x::AbstractIrrational) = 1/x
+
+@assume_effects :foldable function _eps(x::AbstractIrrational)
+    return 2.0^(exponent(x) - precision(BigFloat) + 1)
+end

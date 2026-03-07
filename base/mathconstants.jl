@@ -29,7 +29,10 @@ end
 Base.@assume_effects :foldable function (::Type{T})(x::_KnownIrrational, r::RoundingMode) where {T<:Union{Float32,Float64}}
     Base._irrational_to_float(T, x, r)
 end
-Base.@assume_effects :foldable function Base.rationalize(::Type{T}, x::_KnownIrrational; tol::Real=0) where {T<:Integer}
+Base.@assume_effects :foldable function Base.rationalize(::Type{T}, x::_KnownIrrational; tol::Real=Base._eps(x)/2) where {T<:Integer}
+    Base._rationalize_irrational(T, x, tol)
+end
+Base.@assume_effects :foldable function Base.rationalize(::Type{T}, x::_KnownIrrational, tol::Real) where {T<:Integer}
     Base._rationalize_irrational(T, x, tol)
 end
 Base.@assume_effects :foldable function Base.lessrational(rx::Rational, x::_KnownIrrational)
