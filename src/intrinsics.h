@@ -53,6 +53,9 @@
     ADD_I(shl_int, 2) \
     ADD_I(lshr_int, 2) \
     ADD_I(ashr_int, 2) \
+    ADD_I(shl_int_native, 2) \
+    ADD_I(lshr_int_native, 2) \
+    ADD_I(ashr_int_native, 2) \
     ADD_I(bswap_int, 1) \
     ADD_I(ctpop_int, 1) \
     ADD_I(ctlz_int, 1) \
