@@ -2915,3 +2915,81 @@ let m = only(methods(f_show_method))
         @test "f_show_method(x::T) where T<:Integer" == s
     end
 end
+
+# Type node budget for depth-limited type printing
+@testset "type node budget" begin
+    @testset "default show produces full type output (no truncation)" begin
+        T = Vector{Vector{Vector{Vector{Int}}}}
+        full = repr(T)
+        @test full == "Vector{Vector{Vector{Vector{Int64}}}}"
+        @test !contains(full, "…")
+
+        T2 = Dict{String, Vector{Pair{Symbol, Int}}}
+        @test !contains(repr(T2), "…")
+
+        T3 = typeof(view([1,2,3], 1:2))
+        str3 = repr(T3)
+        @test !contains(str3, "…")
+        @test contains(str3, "SubArray")
+    end
+
+    @testset "explicit :type_budget truncates" begin
+        T = Vector{Vector{Vector{Vector{Int}}}}
+        full = "Vector{Vector{Vector{Vector{Int64}}}}"
+
+        str = sprint(show, T, context = :type_budget => Ref(100))
+        @test str == full
+
+        str = sprint(show, T, context = :type_budget => Ref(3))
+        @test contains(str, "…")
+        @test startswith(str, "Vector{")
+        @test sizeof(str) < sizeof(full)
+    end
+
+    @testset "budget is shared across recursive calls" begin
+        T = Tuple{Vector{Int}, Dict{String, Float64}, Set{Symbol}}
+        buf = IOBuffer()
+        io = IOContext(buf, :type_budget => Ref(5))
+        show(io, T)
+        str = String(take!(buf))
+        @test contains(str, "…")
+    end
+
+    @testset "no budget means no truncation" begin
+        T = Vector{Vector{Vector{Vector{Vector{Int}}}}}
+        buf = IOBuffer()
+        io = IOContext(buf)
+        show(io, T)
+        str = String(take!(buf))
+        @test !contains(str, "…")
+        @test str == "Vector{Vector{Vector{Vector{Vector{Int64}}}}}"
+    end
+
+    @testset "plain Int budget auto-wraps in Ref" begin
+        T = Vector{Vector{Vector{Vector{Int}}}}
+        full = "Vector{Vector{Vector{Vector{Int64}}}}"
+        str = sprint(show, T, context = :type_budget => 100)
+        @test str == full
+        str = sprint(show, T, context = :type_budget => 3)
+        @test contains(str, "…")
+        @test sizeof(str) < sizeof(full)
+    end
+
+    @testset "Union types under budget" begin
+        T = Union{Int, Float64, String, Vector{Int}, Dict{String, Float64}}
+        full = sprint(show, T)
+        @test !contains(full, "…")
+        str = sprint(show, T, context = :type_budget => 3)
+        @test contains(str, "…")
+        @test sizeof(str) < sizeof(full)
+    end
+
+    @testset "UnionAll types under budget" begin
+        T = Vector{T} where T<:AbstractVector{S} where S<:Real
+        full = sprint(show, T)
+        @test !contains(full, "…")
+        str = sprint(show, T, context = :type_budget => 2)
+        @test contains(str, "…")
+        @test sizeof(str) < sizeof(full)
+    end
+end
