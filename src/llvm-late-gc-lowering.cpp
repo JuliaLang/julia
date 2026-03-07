@@ -1923,7 +1923,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 continue;
             }
 
-            if (callee && (callee == gc_flush_func || callee == gc_preserve_begin_func
+            if (callee && (callee == gcroot_flush_func || callee == gc_preserve_begin_func
                         || callee == gc_preserve_end_func)) {
                 /* No replacement */
             } else if (pointer_from_objref_func != nullptr && callee == pointer_from_objref_func) {

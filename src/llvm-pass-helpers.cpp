@@ -28,7 +28,7 @@ JuliaPassContext::JuliaPassContext()
 
         tbaa_gcframe(nullptr), tbaa_tag(nullptr),
 
-        pgcstack_getter(nullptr), adoptthread_func(nullptr), gc_flush_func(nullptr),
+        pgcstack_getter(nullptr), adoptthread_func(nullptr), gcroot_flush_func(nullptr),
         gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
         pointer_from_objref_func(nullptr), gc_loaded_func(nullptr), alloc_obj_func(nullptr),
         typeof_func(nullptr), write_barrier_func(nullptr), pop_handler_noexcept_func(nullptr),
@@ -49,7 +49,7 @@ void JuliaPassContext::initFunctions(Module &M)
 
     pgcstack_getter = M.getFunction("julia.get_pgcstack");
     adoptthread_func = M.getFunction("julia.get_pgcstack_or_new");
-    gc_flush_func = M.getFunction("julia.gcroot_flush");
+    gcroot_flush_func = M.getFunction("julia.gcroot_flush");
     gc_preserve_begin_func = M.getFunction("llvm.julia.gc_preserve_begin");
     gc_preserve_end_func = M.getFunction("llvm.julia.gc_preserve_end");
     pointer_from_objref_func = M.getFunction("julia.pointer_from_objref");
