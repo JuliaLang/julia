@@ -2222,9 +2222,12 @@ bool JuliaOJIT::linkOutput(orc::MaterializationResponsibility &MR, MemoryBufferR
 orc::SymbolStringPtr JuliaOJIT::linkCallTarget(orc::MaterializationResponsibility &MR,
                                                jl_code_instance_t *CI, jl_invoke_api_t API)
 {
+    // This condition should match that in jl_add_codeinst_to_jit!, which will
+    // add a different, compatible CodeInstance to the JIT but not update the
+    // invoke statement.
+    if (!jl_mi_cache_has_ci(jl_get_ci_mi(CI), CI))
+        CI = findCompatibleCI(CI);
     auto It = CISymbols.find(CI);
-    if (It == CISymbols.end())
-        It = CISymbols.find(findCompatibleCI(CI));
     if (It != CISymbols.end() && It->second.invoke_api == API)
         return It->second.specptr;
 
