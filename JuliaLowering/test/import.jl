@@ -1,5 +1,3 @@
-@testset "using / import" begin
-
 test_mod = Module()
 
 # Test attributes are correctly set for export/public
@@ -76,5 +74,3 @@ import .H.I, .I.J
 @test test_mod.I === H.I
 @test test_mod.J === H.I.J
 @test test_mod.G_global === "exported from G"
-
-end

@@ -1,5 +1,3 @@
-@testset "Functions" begin
-
 test_mod = Module()
 
 # Function calls
@@ -737,8 +735,8 @@ end
                 f_st = JuliaLowering.expr_to_est(f_expr)
 
             local func_ref, func_test
-            @test ((func_ref = Core.eval(test_mod, reference_lower(test_mod, f_expr))) isa Function)
-            @test ((func_test = JuliaLowering.eval(test_mod, f_st)) isa Function)
+            @test ((func_ref = fl_eval(test_mod, f_expr)) isa Function)
+            @test ((func_test = jl_eval(test_mod, f_st)) isa Function)
             Core.@latestworld
             @test func_ref(args_i...) == func_test(args_i...)
         end
@@ -753,8 +751,8 @@ end
                     f_st = JuliaLowering.expr_to_est(f_expr)
 
             local func_ref, func_test
-            @test ((func_ref = Core.eval(test_mod, reference_lower(test_mod, f_expr))) isa Function)
-            @test ((func_test = JuliaLowering.eval(test_mod, f_st)) isa Function)
+            @test ((func_ref = fl_eval(test_mod, f_expr)) isa Function)
+            @test ((func_test = jl_eval(test_mod, f_st)) isa Function)
             Core.@latestworld
             @test func_ref(args_i...) == func_test(args_i...)
             @test func_ref() == func_test()
@@ -1106,6 +1104,4 @@ end
         x
     end
     """) == [0,4,6,0]
-end
-
 end

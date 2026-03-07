@@ -1,5 +1,3 @@
-@testset "Type definitions" begin
-
 test_mod = Module(:TestMod)
 
 Base.eval(test_mod, :(struct XX{S,T,U,W} end))
@@ -492,5 +490,3 @@ typegroup
 end
 """; version=v"1.14") === nothing
 @test test_mod.TG_SuperA <: AbstractVector{test_mod.TG_SuperB}
-
-end
