@@ -332,3 +332,44 @@ julia> A
 macro views(x)
     esc(_views(replace_ref_begin_end!(__module__, x)))
 end
+
+function Iterators.take(xs::AbstractVector, n::Integer)
+    n = Int(n)::Int
+    Iterators.Take(xs, n)  # error handling
+    f = firstindex(xs)
+    l = lastindex(xs)
+    typ_f = typeof(f)
+    typ_l = typeof(l)
+    typ = promote_type(typ_f, typ_l, typeof(n))
+    typ_wide = widen(typ)
+    x = typ_wide(f) + n - 1  # avoid overflow in arithmetic
+    y = if f <= x
+        if l <= x
+            l
+        else
+            typ_l(x)  # has to be behind a branch to avoid a spurious throw
+        end
+    else
+        typ_l(checked_sub(f, typ_f(1)))  # empty range
+    end
+    ran = f:y
+    view(xs, ran)
+end
+function Iterators.drop(xs::AbstractVector, n::Integer)
+    n = Int(n)::Int
+    Iterators.Drop(xs, n)  # error handling
+    f = firstindex(xs)
+    l = lastindex(xs)
+    typ_f = typeof(f)
+    typ_l = typeof(l)
+    typ = promote_type(typ_f, typeof(n))
+    typ_wide = widen(typ)
+    x = typ_wide(f) + n  # avoid overflow in arithmetic
+    y = if x <= l
+        typ_f(x)  # has to be behind a branch to avoid a spurious throw
+    else
+        typ_f(checked_add(l, typ_l(1)))  # empty range
+    end
+    ran = y:l
+    view(xs, ran)
+end
