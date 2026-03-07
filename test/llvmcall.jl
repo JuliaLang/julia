@@ -236,3 +236,7 @@ function too_many_args(x::Int32, y::Int32)
         x,y,x)
 end
 @test_throws ErrorException too_many_args(Int32(1), Int32(1))
+
+llvmcall_parametric_nothing_arg(x::T) where T = Core.Intrinsics.llvmcall("ret i8 0", Int8, Tuple{T}, x)
+@test_throws ErrorException llvmcall_parametric_nothing_arg(nothing)
+@test_throws ErrorException llvmcall_parametric_nothing_arg(missing)
