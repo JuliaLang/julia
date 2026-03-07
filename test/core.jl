@@ -6523,6 +6523,67 @@ t4 = vcat(A23567, t2, t3)
 
 using Serialization
 
+@testset "ImmediateOrRef serialization" begin
+    struct ImmediateOrRefImmutableHolder
+        x::ImmediateOrRef{Any}
+    end
+    mutable struct ImmediateOrRefSerializationHolder
+        x::ImmediateOrRef{Any}
+    end
+
+    for value in (
+        ImmediateOrRef{Any}(),
+        Base._taggedptr_from_raw(ImmediateOrRef{Any}, UInt(0x5)),
+        ImmediateOrRef{Any}(Int[1, 2, 3]),
+    )
+        holder = ImmediateOrRefSerializationHolder(value)
+        io = IOBuffer()
+        serialize(io, holder)
+        seekstart(io)
+        holder2 = deserialize(io)
+        @test holder2 isa ImmediateOrRefSerializationHolder
+        @test Base.getrawvalue(holder2.x) == Base.getrawvalue(holder.x)
+        if isassigned(holder.x)
+            @test holder2.x[] == holder.x[]
+            @test !Base.isimmediate(holder2.x)
+        elseif Base.isimmediate(holder.x)
+            @test !isassigned(holder2.x)
+            @test Base.isimmediate(holder2.x)
+            @test_throws ErrorException holder2.x[]
+        else
+            @test !isassigned(holder2.x)
+            @test !Base.isimmediate(holder2.x)
+            @test_throws UndefRefError holder2.x[]
+        end
+    end
+    for value in (
+        ImmediateOrRef{Any}(),
+        Base._taggedptr_from_raw(ImmediateOrRef{Any}, UInt(0x5)),
+        ImmediateOrRef{Any}(Int[4, 5, 6]),
+    )
+        holder = ImmediateOrRefImmutableHolder(value)
+        io = IOBuffer()
+        serialize(io, holder)
+        seekstart(io)
+        holder2 = deserialize(io)
+        @test holder2 isa ImmediateOrRefImmutableHolder
+        @test Base.getrawvalue(holder2.x) == Base.getrawvalue(holder.x)
+        if Base.isassigned(holder.x)
+            @test holder2.x[] == holder.x[]
+            @test isassigned(holder2.x)
+            @test !Base.isimmediate(holder2.x)
+        elseif Base.isimmediate(holder.x)
+            @test !isassigned(holder2.x)
+            @test Base.isimmediate(holder2.x)
+            @test_throws ErrorException holder2.x[]
+        else
+            @test !isassigned(holder2.x)
+            @test !Base.isimmediate(holder2.x)
+            @test_throws UndefRefError holder2.x[]
+        end
+    end
+end
+
 for U in unboxedunions
     local U
     for N in (1, 2, 3, 4)
