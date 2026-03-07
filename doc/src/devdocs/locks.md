@@ -101,7 +101,6 @@ exception frames, and taking/releasing locks.
 No Julia code may be called while holding a lock above this point.
 
 * `world_counter_lock`
-* `jl_typeinf_lock`
 
 ### Level 7
 
