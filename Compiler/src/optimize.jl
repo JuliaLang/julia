@@ -1413,13 +1413,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             elseif f === typeassert && isconstType(widenconst(argextype(ex.args[3], src, sptypes)))
                 return 1
             end
-            fidx = find_tfunc(f)
-            if fidx === nothing
-                # unknown/unhandled builtin
-                # Use the generic cost of a direct function call
-                return UNKNOWN_CALL_COST
-            end
-            return T_FFUNC_COST[fidx]
+            return builtin_cost(f)
         end
         extyp = line == -1 ? Any : argextype(SSAValue(line), src, sptypes)
         if extyp === Union{}

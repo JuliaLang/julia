@@ -36,9 +36,29 @@ function bootstrap!()
             typeinf_ext_tt, typeinf_tt, typeinf_edge_tt,
         ]
         # tfuncs can't be inferred from the inference entries above, so here we infer them manually
-        for x in T_FFUNC_VAL
-            push!(fs, x[3])
+        # Builtin tfuncs (previously registered via add_tfunc for builtins)
+        for tfunc in (
+            throw_methoderror_tfunc,
+            ifelse_tfunc, egal_tfunc, isdefined_tfunc, sizeof_tfunc,
+            nfields_tfunc, _expr_tfunc, svec_tfunc,
+            _svec_len_tfunc, _svec_ref_tfunc, typevar_tfunc,
+            donotdelete_tfunc, compilerbarrier_tfunc, finalizer_tfunc,
+            typeof_tfunc, typeassert_tfunc, isa_tfunc, subtype_tfunc,
+            getfield_tfunc, setfield!_tfunc, swapfield!_tfunc,
+            modifyfield!_tfunc, replacefield!_tfunc, setfieldonce!_tfunc,
+            fieldtype_tfunc, apply_type_tfunc,
+            memorynew_tfunc, memoryrefget_tfunc, memoryrefset!_tfunc,
+            memoryrefswap!_tfunc, memoryrefmodify!_tfunc, memoryrefreplace!_tfunc,
+            memoryrefsetonce!_tfunc, memoryref_isassigned_tfunc,
+            memoryref_tfunc, memoryrefoffset_tfunc,
+            applicable_tfunc,
+            _getglobal_tfunc, _setglobal!_tfunc, _swapglobal!_tfunc,
+            _modifyglobal!_tfunc, _replaceglobal!_tfunc, _setglobalonce!_tfunc,
+            _get_binding_type_tfunc,
+        )
+            push!(fs, tfunc)
         end
+        # Intrinsic tfuncs
         for i = 1:length(T_IFUNC)
             if isassigned(T_IFUNC, i)
                 x = T_IFUNC[i]

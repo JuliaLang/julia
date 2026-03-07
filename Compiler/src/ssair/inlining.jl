@@ -1637,9 +1637,9 @@ function early_inline_special_case(ir::IRCode, stmt::Expr, flag::UInt32,
             if is_pure_intrinsic_infer(f) && has_flag(flag, IR_FLAG_NOTHROW)
                 return SomeCase(quoted(val))
             end
-        elseif contains_is(_PURE_BUILTINS, f)
+        elseif f in _PURE_BUILTINS
             return SomeCase(quoted(val))
-        elseif contains_is(_EFFECT_FREE_BUILTINS, f)
+        elseif f in _EFFECT_FREE_BUILTINS
             if has_flag(flag, IR_FLAG_NOTHROW)
                 return SomeCase(quoted(val))
             end

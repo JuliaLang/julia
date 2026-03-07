@@ -2016,9 +2016,10 @@ end
     return ConditionalTypes(thentype, elsetype)
 end
 
+const BuiltinCallResult = Pair{Any, Pair{Any, Effects}}
+
 function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs, argtypes)::ArgInfo,
                                vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
-    @nospecialize f
     la = length(argtypes)
     𝕃ᵢ = typeinf_lattice(interp)
     ⊑, ⊏, ⊔, ⊓ = partialorder(𝕃ᵢ), strictpartialorder(𝕃ᵢ), join(𝕃ᵢ), meet(𝕃ᵢ)
@@ -2030,7 +2031,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
             ty = argtypes[4]
             if isa(newcnd, Const)
                 # if `cnd` is constant, we should just respect its constantness to keep inference accuracy
-                return newcnd.val::Bool ? tx : ty
+                rt = newcnd.val::Bool ? tx : ty
             else
                 # try to simulate this as a real conditional (`cnd ? x : y`), so that the penalty for using `ifelse` instead isn't too high
                 a = ssa_def_slot(fargs[3], sv)
@@ -2041,12 +2042,79 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                 if isa(b, SlotNumber) && cnd.slot == slot_id(b)
                     ty = (cnd.elsetype ⊑ ty ? cnd.elsetype : ty ⊓ widenconst(cnd.elsetype))
                 end
-                return tx ⊔ ty
+                rt = tx ⊔ ty
             end
+            ft = popfirst!(argtypes)
+            effects = builtin_effects(𝕃ᵢ, f, argtypes, rt)
+            exct = effects.nothrow ? Union{} : Any
+            pushfirst!(argtypes, ft)
+            return BuiltinCallResult(rt, Pair{Any, Effects}(exct, effects))
         end
     end
     ft = popfirst!(argtypes)
-    rt = builtin_tfunction(interp, f, argtypes, sv)
+    # Early constant evaluation for foldable builtins with all const args
+    if is_all_const_arg(argtypes, 1) && !isa(f, IntrinsicFunction) &&
+            (f in _PURE_BUILTINS || (f in _CONSISTENT_BUILTINS && f in _EFFECT_FREE_BUILTINS))
+        argvals = collect_const_args(argtypes, 1)
+        try
+            if length(argvals) == 1
+                rt = Const(f(argvals[1]))
+            elseif length(argvals) == 2
+                rt = Const(f(argvals[1], argvals[2]))
+            elseif length(argvals) == 3
+                rt = Const(f(argvals[1], argvals[2], argvals[3]))
+            else
+                rt = Const(f(argvals...))
+            end
+        catch ex
+            ex isa InterruptException && rethrow()
+            pushfirst!(argtypes, ft)
+            return BuiltinCallResult(Bottom, Pair{Any,Effects}(Any, EFFECTS_THROWS))
+        end
+        pushfirst!(argtypes, ft)
+        return BuiltinCallResult(rt, Pair{Any,Effects}(Union{}, EFFECTS_TOTAL))
+    end
+    # Per-builtin dispatch: special cases that need interp/sv stay here,
+    # everything else delegates to builtin_tfunction_effects
+    if isa(f, IntrinsicFunction)
+        rt = builtin_tfunction(interp, f, argtypes, sv)
+        effects = intrinsic_effects(f, argtypes)
+        exct = effects.nothrow ? Union{} : intrinsic_exct(𝕃ᵢ, f, argtypes)
+    elseif f === Core.current_scope
+        nothrow = true
+        if length(argtypes) != 0
+            if length(argtypes) != 1 || !isvarargtype(argtypes[1])
+                pushfirst!(argtypes, ft)
+                return BuiltinCallResult(Bottom, Pair{Any,Effects}(Any, EFFECTS_THROWS))
+            end
+            nothrow = false
+        end
+        rt = current_scope_tfunc(interp, sv)
+        effects = Effects(EFFECTS_TOTAL;
+            consistent = ALWAYS_FALSE,
+            notaskstate = false,
+            nothrow)
+    elseif f === tuple
+        rt = tuple_tfunc(𝕃ᵢ, argtypes)
+        effects = Effects(EFFECTS_TOTAL)
+    elseif f === Core.apply_type
+        rt = apply_type_tfunc(𝕃ᵢ, argtypes; max_union_splitting=InferenceParams(interp).max_union_splitting)
+        effects = builtin_effects(𝕃ᵢ, f, argtypes, rt)
+    else
+        tfe = builtin_tfunction_effects(𝕃ᵢ, f, argtypes)
+        rt = tfe.first
+        effects = tfe.second
+    end
+    # Compute exception type (intrinsics handled above)
+    if !isa(f, IntrinsicFunction)
+        if effects.nothrow
+            exct = Union{}
+        elseif f === Core._svec_ref
+            exct = BoundsError
+        else
+            exct = Any
+        end
+    end
     pushfirst!(argtypes, ft)
     if has_mustalias(𝕃ᵢ) && f === getfield && isa(fargs, Vector{Any}) && la ≥ 3
         a3 = argtypes[3]
@@ -2060,7 +2128,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                         # wrap this aliasable field into `MustAlias` for possible constraint propagations
                         @assert vtypes !== nothing
                         vtyp = vtypes[slot_id(var)]
-                        return MustAlias(var, vtyp.ssadef, vartyp, fldidx, rt)
+                        return BuiltinCallResult(MustAlias(var, vtyp.ssadef, vartyp, fldidx, rt), Pair{Any,Effects}(exct, effects))
                     end
                 end
             end
@@ -2077,14 +2145,14 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                 if cndt !== nothing
                     @assert vtypes !== nothing
                     vtyp = vtypes[slot_id(a)]
-                    return Conditional(a, vtyp.ssadef, cndt.thentype, cndt.elsetype)
+                    return BuiltinCallResult(Conditional(a, vtyp.ssadef, cndt.thentype, cndt.elsetype), Pair{Any,Effects}(exct, effects))
                 end
             end
             if isa(a2, MustAlias)
                 if !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
                     cndt = isa_condition(a2, a3, InferenceParams(interp).max_union_splitting)
                     if cndt !== nothing
-                        return form_mustalias_conditional(a2, cndt.thentype, cndt.elsetype)
+                        return BuiltinCallResult(form_mustalias_conditional(a2, cndt.thentype, cndt.elsetype), Pair{Any,Effects}(exct, effects))
                     end
                 end
             end
@@ -2097,7 +2165,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                     elsetype = typesubtract(a3, Type{widenconst(a2)}, InferenceParams(interp).max_union_splitting)
                     @assert vtypes !== nothing
                     vtyp = vtypes[slot_id(b)]
-                    return Conditional(b, vtyp.ssadef, a3, elsetype)
+                    return BuiltinCallResult(Conditional(b, vtyp.ssadef, a3, elsetype), Pair{Any,Effects}(exct, effects))
                 end
             end
         elseif f === (===)
@@ -2111,20 +2179,20 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                     @assert vtypes !== nothing
                     vtyp = vtypes[slot_id(b)]
                     cndt = egal_condition(aty, bty, InferenceParams(interp).max_union_splitting, rt)
-                    return Conditional(b, vtyp.ssadef, cndt.thentype, cndt.elsetype)
+                    return BuiltinCallResult(Conditional(b, vtyp.ssadef, cndt.thentype, cndt.elsetype), Pair{Any,Effects}(exct, effects))
                 elseif isa(bty, MustAlias) && !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
                     cndt = egal_condition(aty, bty.fldtyp, InferenceParams(interp).max_union_splitting)
-                    return form_mustalias_conditional(bty, cndt.thentype, cndt.elsetype)
+                    return BuiltinCallResult(form_mustalias_conditional(bty, cndt.thentype, cndt.elsetype), Pair{Any,Effects}(exct, effects))
                 end
             elseif isa(bty, Const)
                 if isa(a, SlotNumber)
                     @assert vtypes !== nothing
                     vtyp = vtypes[slot_id(a)]
                     cndt = egal_condition(bty, aty, InferenceParams(interp).max_union_splitting, rt)
-                    return Conditional(a, vtyp.ssadef, cndt.thentype, cndt.elsetype)
+                    return BuiltinCallResult(Conditional(a, vtyp.ssadef, cndt.thentype, cndt.elsetype), Pair{Any,Effects}(exct, effects))
                 elseif isa(aty, MustAlias) && !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
                     cndt = egal_condition(bty, aty.fldtyp, InferenceParams(interp).max_union_splitting)
-                    return form_mustalias_conditional(aty, cndt.thentype, cndt.elsetype)
+                    return BuiltinCallResult(form_mustalias_conditional(aty, cndt.thentype, cndt.elsetype), Pair{Any,Effects}(exct, effects))
                 end
             end
             # TODO enable multiple constraints propagation here, there are two possible improvements:
@@ -2138,13 +2206,13 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                     thentype = widenslotwrapper(aty)
                     elsetype = bty.fldtyp
                     if thentype ⊏ elsetype
-                        return form_mustalias_conditional(bty, thentype, elsetype)
+                        return BuiltinCallResult(form_mustalias_conditional(bty, thentype, elsetype), Pair{Any,Effects}(exct, effects))
                     end
                 elseif isa(aty, MustAlias)
                     thentype = widenslotwrapper(bty)
                     elsetype = aty.fldtyp
                     if thentype ⊏ elsetype
-                        return form_mustalias_conditional(aty, thentype, elsetype)
+                        return BuiltinCallResult(form_mustalias_conditional(aty, thentype, elsetype), Pair{Any,Effects}(exct, effects))
                     end
                 end
             end
@@ -2154,13 +2222,13 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                 elsetype = rt === Const(true)  ? Bottom : widenslotwrapper(bty)
                 @assert vtypes !== nothing
                 vtyp = vtypes[slot_id(b)]
-                return Conditional(b, vtyp.ssadef, thentype, elsetype)
+                return BuiltinCallResult(Conditional(b, vtyp.ssadef, thentype, elsetype), Pair{Any,Effects}(exct, effects))
             elseif isa(a, SlotNumber)
                 thentype = rt === Const(false) ? Bottom : widenslotwrapper(aty)
                 elsetype = rt === Const(true)  ? Bottom : widenslotwrapper(aty)
                 @assert vtypes !== nothing
                 vtyp = vtypes[slot_id(a)]
-                return Conditional(a, vtyp.ssadef, thentype, elsetype)
+                return BuiltinCallResult(Conditional(a, vtyp.ssadef, thentype, elsetype), Pair{Any,Effects}(exct, effects))
             end
         elseif f === Core.Intrinsics.not_int
             aty = argtypes[2]
@@ -2169,7 +2237,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                 elsetype = rt === Const(true)  ? Bottom : aty.thentype
                 @assert vtypes !== nothing
                 vtyp = vtypes[aty.slot]
-                return Conditional(aty.slot, vtyp.ssadef, thentype, elsetype)
+                return BuiltinCallResult(Conditional(aty.slot, vtyp.ssadef, thentype, elsetype), Pair{Any,Effects}(exct, effects))
             end
         elseif f === isdefined
             a = ssa_def_slot(fargs[2], sv)
@@ -2194,7 +2262,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                     end
                     @assert vtypes !== nothing
                     vtyp = vtypes[slot_id(a)]
-                    return Conditional(a, vtyp.ssadef, thentype, elsetype)
+                    return BuiltinCallResult(Conditional(a, vtyp.ssadef, thentype, elsetype), Pair{Any,Effects}(exct, effects))
                 else
                     thentype = form_partially_defined_struct(𝕃ᵢ, argtype2, argtypes[3])
                     if thentype !== nothing
@@ -2206,14 +2274,14 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                         end
                         @assert vtypes !== nothing
                         vtyp = vtypes[slot_id(a)]
-                        return Conditional(a, vtyp.ssadef, thentype, elsetype)
+                        return BuiltinCallResult(Conditional(a, vtyp.ssadef, thentype, elsetype), Pair{Any,Effects}(exct, effects))
                     end
                 end
             end
         end
     end
     @assert !isa(rt, TypeVar) "unhandled TypeVar"
-    return rt
+    return BuiltinCallResult(rt, Pair{Any,Effects}(exct, effects))
 end
 
 function form_partially_defined_struct(𝕃ᵢ::AbstractLattice, @nospecialize(obj), @nospecialize(name))
@@ -2468,7 +2536,6 @@ function abstract_throw_methoderror(::AbstractInterpreter, argtypes::Vector{Any}
     return Future(CallMeta(Union{}, exct, EFFECTS_THROWS, NoCallInfo()))
 end
 
-const generic_getglobal_effects = Effects(EFFECTS_THROWS, effect_free=ALWAYS_FALSE, consistent=ALWAYS_FALSE, inaccessiblememonly=ALWAYS_FALSE) #= effect_free for depwarn =#
 const generic_getglobal_exct = Union{ArgumentError, TypeError, ConcurrencyViolationError, UndefVarError}
 function abstract_eval_getglobal(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, @nospecialize(M), @nospecialize(s))
     ⊑ = partialorder(typeinf_lattice(interp))
@@ -2773,15 +2840,10 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         elseif f === Core.get_binding_type
             return Future(abstract_eval_get_binding_type(interp, sv, argtypes))
         end
-        rt = abstract_call_builtin(interp, f, arginfo, vtypes, sv)
-        ft = popfirst!(argtypes)
-        effects = builtin_effects(𝕃ᵢ, f, argtypes, rt)
-        if effects.nothrow
-            exct = Union{}
-        else
-            exct = builtin_exct(𝕃ᵢ, f, argtypes, rt)
-        end
-        pushfirst!(argtypes, ft)
+        acb = abstract_call_builtin(interp, f, arginfo, vtypes, sv)
+        rt = acb.first
+        exct = acb.second.first
+        effects = acb.second.second
         refinements = nothing
         if sv isa InferenceState
             if f === typeassert
