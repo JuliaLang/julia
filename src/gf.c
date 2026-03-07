@@ -361,7 +361,7 @@ static int emit_codeinst_and_edges(jl_code_instance_t *codeinst)
             if (jl_is_method(def))
                 code = (jl_value_t*)jl_uncompress_ir(def, codeinst, (jl_value_t*)code);
             if (jl_is_code_info(code)) {
-                jl_emit_codeinst_to_jit(codeinst, (jl_code_info_t*)code);
+                jl_emit_codeinsts_to_jit(&codeinst, (jl_code_info_t **)&code, 1);
                 if (0) {
                     // next emit all the invoke edges too (if this seems profitable)
                     jl_array_t *src = ((jl_code_info_t*)code)->code;
@@ -3487,10 +3487,12 @@ void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_c
 
 jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_PROPAGATES_ROOT);
 
-JL_DLLEXPORT void jl_add_codeinst_to_jit(jl_code_instance_t *codeinst, jl_code_info_t *src)
+JL_DLLEXPORT void jl_add_codeinsts_to_jit(jl_array_t *codeinsts, jl_array_t *srcs)
 {
-    assert(jl_is_code_info(src));
-    jl_emit_codeinst_to_jit(codeinst, src);
+    assert(jl_array_dim0(codeinsts) == jl_array_dim0(srcs));
+    jl_emit_codeinsts_to_jit((jl_code_instance_t **)jl_array_ptr_data(codeinsts),
+                             (jl_code_info_t **)jl_array_ptr_data(srcs),
+                             jl_array_dim0(codeinsts));
 }
 
 JL_DLLEXPORT int jl_method_is_macro(jl_method_t *m)

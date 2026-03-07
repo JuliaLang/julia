@@ -54,7 +54,7 @@ let world = Base.tls_world_age()
     ccall(:jl_mi_cache_insert, Cvoid, (Any, Any), mi, new_ci)
 
     # Poke the source code into the JIT for it
-    ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), new_ci, new_source)
+    ccall(:jl_add_codeinsts_to_jit, Cvoid, (Any, Any), Any[new_ci], Any[new_source])
 end
 
 @test contains(repr(new_ci), "ABI Overridden")

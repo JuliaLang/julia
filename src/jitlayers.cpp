@@ -162,7 +162,7 @@ void jl_dump_llvm_opt_impl(void *s)
 static void jl_decorate_module(Module &M) JL_NOTSAFEPOINT;
 
 // convert local roots into global roots, if they are needed
-static void jl_promote_method_roots(jl_codegen_output_t &out, jl_method_instance_t *mi, Module &M)
+static void jl_promote_method_roots(jl_codegen_output_t &out, jl_method_instance_t *mi)
 {
     JL_GC_PROMISE_ROOTED(out.temporary_roots); // rooted by caller
     if (jl_array_dim0(out.temporary_roots) == 0)
@@ -438,39 +438,49 @@ static void jl_do_dump_compile(jl_code_instance_t *codeinst, uint64_t time)
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN void
-jl_emit_codeinst_to_jit_impl(jl_code_instance_t *codeinst, jl_code_info_t *src)
+jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **srcs, int len)
 {
-    if (jl_atomic_load_relaxed(&codeinst->invoke))
-        return;
-
     JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
-    jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
-    jl_codegen_output_t out{name_from_method_instance(mi),
+
+    jl_codegen_output_t out{"jit",
                             jl_ExecutionEngine->getDataLayout(),
                             jl_ExecutionEngine->getTargetTriple()};
     out.get_context().setDiscardValueNames(true);
     out.imaging_mode = false;
-    out.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
     JL_GC_PUSH1(&out.temporary_roots);
 
-    if (!jl_emit_codeinst(out, codeinst, src)) { // contains safepoints
-        JL_GC_POP();
-        return;
+    for (int i = 0; i < len; ++i) {
+        jl_code_instance_t *codeinst = codeinsts[i];
+        jl_code_info_t *src = srcs[i];
+        jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
+
+        if (jl_atomic_load_relaxed(&codeinst->invoke))
+            continue;
+
+        out.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
+        out.temporary_roots_set.clear();
+        if (!jl_emit_codeinst(out, codeinst, src)) // contains safepoints
+            continue;
+
+        // contains safepoints
+        jl_promote_method_roots(out, mi);
+        emit_always_inline(out, jl_get_method_ir); // contains safepoints
+
+        // Non-opaque-closure MethodInstances are considered globally rooted
+        // through their methods, but for OC, we need to create a global root
+        // here.
+        if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
+            jl_as_global_root((jl_value_t*)mi, 1);
     }
 
-    // contains safepoints
-    jl_promote_method_roots(out, mi, out.get_module());
-    emit_always_inline(out, jl_get_method_ir); // contains safepoints
-    emit_llvmcall_modules(out);
     out.temporary_roots = nullptr;
     out.temporary_roots_set.clear();
     JL_GC_POP();
 
-    // Non-opaque-closure MethodInstances are considered globally rooted
-    // through their methods, but for OC, we need to create a global root
-    // here.
-    if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
-        jl_as_global_root((jl_value_t*)mi, 1);
+    if (out.ci_funcs.empty())
+        return;
+
+    emit_llvmcall_modules(out);
 
     auto &ES = jl_ExecutionEngine->getExecutionSession();
     jl_emitted_output_t emitted = out.finish(*ES.getSymbolStringPool());
@@ -534,7 +544,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
             jl_debuginfo_t *debuginfo = src->debuginfo;
             jl_atomic_store_release(&unspec->debuginfo, debuginfo); // n.b. this assumes the field was previously NULL, which is not entirely true
             jl_gc_wb(unspec, debuginfo);
-            jl_emit_codeinst_to_jit(unspec, src);
+            jl_emit_codeinsts_to_jit(&unspec, &src, 1);
             jl_ExecutionEngine->publishCIs(unspec, true);
         }
         JL_UNLOCK(&jitlock); // Might GC
@@ -828,16 +838,24 @@ public:
         auto &Syms = I.SymbolFlags;
         SmallSet<SymbolStringPtr, 2> CISyms;
         for (auto &[CI, Funcs] : Out.linker_info->ci_funcs) {
-            auto Unique = JIT.makeUniqueCIName(CI, Funcs);
-            if (Funcs.invoke) {
-                assert(Funcs.invoke_api == JL_INVOKE_SPECSIG);
-                Syms[Unique.invoke] = JITSymbolFlags::Callable | JITSymbolFlags::Exported;
+            if (Funcs.invoke)
                 CISyms.insert(Funcs.invoke);
-            }
-            if (Funcs.specptr) {
-                Syms[Unique.specptr] = JITSymbolFlags::Callable | JITSymbolFlags::Exported;
+            if (Funcs.specptr)
                 CISyms.insert(Funcs.specptr);
-            }
+
+            // If we discover that another thread added this CI to the JIT
+            // first, we'll still add the original symbols to CISyms (so they
+            // will be filtered out of the MU Interface), but we won't register them in
+            // CISymbols.
+            jl_callptr_t Expected = NULL;
+            CISymbolPtr Unique{};
+            if (jl_atomic_cmpswap_relaxed(&CI->invoke, &Expected,
+                                          jl_fptr_wait_for_compiled_addr))
+                Unique = JIT.makeUniqueCIName(CI, Funcs);
+            if (Unique.invoke)
+                Syms[Unique.invoke] = JITSymbolFlags::Callable | JITSymbolFlags::Exported;
+            if (Unique.specptr)
+                Syms[Unique.specptr] = JITSymbolFlags::Callable | JITSymbolFlags::Exported;
         }
 
         // Tell ORC about all the other definition in this module.  When
@@ -1873,18 +1891,6 @@ void JuliaOJIT::addOutput(jl_emitted_output_t O)
     timing_print_module_names(JL_TIMING_DEFAULT_BLOCK, O.module);
 #endif
     std::unique_lock Lock{LinkerMutex};
-
-    // If another thread beat us to compiling this CodeInstance, don't define it
-    // with this output.
-    for (auto It = O.linker_info->ci_funcs.begin(); It != O.linker_info->ci_funcs.end();
-         ++It) {
-        jl_callptr_t Expected = NULL;
-        // DenseMap never rehashes on deletion, so we can erase while iterating.
-        if (!jl_atomic_cmpswap_relaxed(&It->first->invoke, &Expected,
-                                       jl_fptr_wait_for_compiled_addr))
-            O.linker_info->ci_funcs.erase(It);
-    }
-
     auto MU = std::make_unique<JLMaterializationUnit>(
         JLMaterializationUnit::Create(*this, ObjectLayer, std::move(O)));
     ExitOnError check{"Failed to add objectfile to JIT!"};
