@@ -352,7 +352,7 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
             has_finally = length(rest) >= 1 && !_is_false(rest[1])
             has_else = length(rest) === 2
             @ast g st [K"try" rec(tryb)
-                has_catch ? [K"catch" cvar_out rec(catchb)] : nothing
+                has_catch ? [K"catch"(catchb) cvar_out rec(catchb)] : nothing
                 has_else ? [K"else" rec(rest[2])] : nothing
                 has_finally ? [K"finally" rec(rest[1])] : nothing
             ]
