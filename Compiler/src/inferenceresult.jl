@@ -183,7 +183,9 @@ function cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given_argtypes:
     method = mi.def::Method
     nargtypes = length(given_argtypes)
     for cached_result in cache
-        cached_result.tombstone && continue # ignore deleted entries (due to LimitedAccuracy)
+        # N.B. don't skip tombstoned entries here: they indicate a previous const-prop
+        # attempt that hit a cycle and produced a limited result, and the caller needs
+        # to see them to avoid re-attempting the same work
         cached_result.linfo === mi || continue
         cache_argtypes = cached_result.argtypes
         @assert length(cache_argtypes) == nargtypes "invalid `cache_argtypes` for `mi`"
