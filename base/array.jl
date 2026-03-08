@@ -3049,6 +3049,29 @@ function filter!(f, a::AbstractVector)
 end
 
 """
+    filterfirst(f, itr)
+
+Get the first element of an iterable collection `itr` for which the
+predicate `f` returns `true.`
+
+!!! compat "Julia 1.14"
+    This method requires at least Julia 1.14.
+
+# Examples
+```jldoctest
+julia> filterfirst(>=(5), 2:2:10)
+6
+
+julia> filterfirst(iseven, [1; 2; 3; 4])
+2
+
+julia> filterfirst(isodd, 2:2:10)
+ERROR: ArgumentError: collection must be non-empty
+```
+"""
+filterfirst(f, itr) = first(Iterators.filter(f, itr))
+
+"""
     filter(f)
 
 Create a function that filters its arguments with function `f` using [`filter`](@ref), i.e.
