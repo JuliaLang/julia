@@ -13,7 +13,7 @@ let exe_suffix = splitext(Base.julia_exename())[2]
     hello_exe = joinpath(bindir, "hello" * exe_suffix)
     @test readchomp(`$hello_exe arg1 arg2`) == "Hello, world!"
     @test filesize(hello_exe) < 2_000_000
-    
+
     trimmability_exe = joinpath(bindir, "trimmability" * exe_suffix)
     @test readchomp(`$trimmability_exe arg1 arg2`) == "Hello, world!\n$trimmability_exe\narg1\narg2\n$(4.0+pi)"
 
