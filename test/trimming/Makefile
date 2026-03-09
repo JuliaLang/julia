@@ -74,7 +74,7 @@ check: $(BIN)/hello$(EXE) $(BIN)/trimmability$(EXE) $(BIN)/basic_jll$(EXE) $(BIN
 	$(JULIA) --startup-file=no --history-file=no --depwarn=error $(call maybe_windows_path,$(SRCDIR))/trimming.jl $(call maybe_windows_path,$<)
 
 clean:
-	-rm -f $(BIN)/hello$(EXE) $(BIN)/trimmability$(EXE) $(BIN)/basic_jll$(EXE) $(BIN)/hello-o.a $(BIN)/trimmability-o.a $(BIN)/basic_jll-o.a $(BIN)/libsimple-o.a $(BIN)/libsimple.$(SHLIB_EXT) $(BIN)/capplication$(EXE) $(call maybe_windows_path,$(BIN)/bindinginfo_libsimple.json) $(BIN)/Manifest.toml
+	-rm -f $(BIN)/hello$(EXE) $(BIN)/trimmability$(EXE) $(BIN)/basic_jll$(EXE) $(BIN)/hello-o.a $(BIN)/trimmability-o.a $(BIN)/basic_jll-o.a $(BIN)/libsimple-o.a $(BIN)/libsimple.$(SHLIB_EXT) $(BIN)/capplication$(EXE) $(BIN)/bindinginfo_libsimple.json $(BIN)/Manifest.toml
 
 .PHONY: release clean check
 
