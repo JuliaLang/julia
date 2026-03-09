@@ -782,21 +782,31 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
         return indirect_deps
     end
 
-    # this loop must be run after the full direct_deps map has been populated
-    indirect_deps = expand_indirect_dependencies(direct_deps)
-    for ext in keys(ext_to_parent)
-        ext_loadable_in_pkg = Dict{Base.PkgId,Bool}()
-        for pkg in keys(direct_deps)
-            is_trigger = in(pkg, direct_deps[ext])
-            is_extension = in(pkg, keys(ext_to_parent))
-            has_triggers = issubset(direct_deps[ext], indirect_deps[pkg])
-            ext_loadable_in_pkg[pkg] = !is_extension && has_triggers && !is_trigger
-        end
-        for (pkg, ext_loadable) in ext_loadable_in_pkg
-            if ext_loadable && !any((dep)->ext_loadable_in_pkg[dep], direct_deps[pkg])
-                # add an edge if the extension is loadable by pkg, and was not loadable in any
-                # of the pkg's dependencies
-                push!(direct_deps[pkg], ext)
+    # This loop must be run after the full direct_deps map has been populated.
+    # Iterate to a fixed point because adding an extension edge (e.g. ExtA → TopPkg)
+    # may cause another extension (e.g. ExtAB, which depends on ExtA) to become
+    # loadable in TopPkg on the next iteration.
+    changed = true
+    while changed
+        changed = false
+        indirect_deps = expand_indirect_dependencies(direct_deps)
+        for ext in keys(ext_to_parent)
+            ext_loadable_in_pkg = Dict{Base.PkgId,Bool}()
+            for pkg in keys(direct_deps)
+                is_trigger = in(pkg, direct_deps[ext])
+                is_extension = in(pkg, keys(ext_to_parent))
+                has_triggers = issubset(direct_deps[ext], indirect_deps[pkg])
+                ext_loadable_in_pkg[pkg] = !is_extension && has_triggers && !is_trigger
+            end
+            for (pkg, ext_loadable) in ext_loadable_in_pkg
+                if ext_loadable && !any((dep)->ext_loadable_in_pkg[dep], direct_deps[pkg])
+                    if ext ∉ direct_deps[pkg]
+                        # add an edge if the extension is loadable by pkg, and was not loadable in any
+                        # of the pkg's dependencies
+                        push!(direct_deps[pkg], ext)
+                        changed = true
+                    end
+                end
             end
         end
     end
