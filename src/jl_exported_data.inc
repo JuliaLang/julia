@@ -61,6 +61,7 @@
     XX(int32_type, jl_datatype_t*) \
     XX(int64_type, jl_datatype_t*) \
     XX(int8_type, jl_datatype_t*) \
+    XX(inter_must_alias_type, jl_datatype_t*) \
     XX(interconditional_type, jl_datatype_t*) \
     XX(interrupt_exception, jl_value_t*) \
     XX(intrinsic_type, jl_datatype_t*) \

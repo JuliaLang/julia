@@ -209,6 +209,18 @@ to enable flow-sensitive analysis.
 """
 const VarTable = Vector{VarState}
 
+"""
+    BBEntryState
+
+Bundles the per-basic-block variable-type table ([`VarTable`](@ref)) and slot-alias table
+(`Vector{Int}`) into a single value. This ensures that both components are always present or
+absent together.
+"""
+struct BBEntryState
+    vartable::VarTable
+    aliases::Vector{Int}
+end
+
 struct StatementState
     vtypes::Union{VarTable,Nothing}
     saw_latestworld::Bool
@@ -275,8 +287,22 @@ mutable struct InferenceState
     ip::BitSet#=TODO BoundedMinPrioritySet=# # current active instruction pointers
     handler_info::Union{Nothing,HandlerInfo{TryCatchFrame}}
     ssavalue_uses::Vector{BitSet} # ssavalue sparsity and restart info
+    # Per-basic-block entry state. `nothing` if the BB has not been analyzed yet.
+    # Populated lazily during the main inference loop by `update_bbstate!`, which merges
+    # the current exit state into each successor. Both the variable-type table and the
+    # slot-alias table are bundled together in a `BBEntryState` so that the type system
+    # guarantees they are always in sync.
+    #
+    # Slot alias tracking:
+    # `aliases[i] == j` means slot `i` currently holds the same value as slot `j`.
+    # `aliases[i] == 0` means slot `i` is not known to be aliased to any other slot.
+    # The table is always kept "flat": aliases always point directly to the root slot, not
+    # through a chain, so a single lookup suffices to find all aliases of a given slot.
+    # The working alias table for the BB currently being analyzed is kept as a local
+    # variable `slot_aliases` in `typeinf_local` (analogous to `currstate`).
     # TODO: Could keep this sparsely by doing structural liveness analysis ahead of time.
-    bb_vartables::Vector{Union{Nothing,VarTable}} # nothing if not analyzed yet
+    bb_states::Vector{Union{Nothing,BBEntryState}}
+
     bb_saw_latestworld::Vector{Bool}
     ssavaluetypes::Vector{Any}
     ssaflags::Vector{UInt32}
@@ -344,8 +370,9 @@ mutable struct InferenceState
         nslots = length(src.slotflags)
         slottypes = Vector{Any}(undef, nslots)
         bb_saw_latestworld = Bool[false for _ = 1:length(cfg.blocks)]
-        bb_vartables = Union{Nothing,VarTable}[ nothing for _ = 1:length(cfg.blocks) ]
-        bb_vartable1 = bb_vartables[1] = VarTable(undef, nslots)
+        bb_vartable1 = VarTable(undef, nslots)
+        bb_states = Union{Nothing,BBEntryState}[nothing for _ = 1:length(cfg.blocks)]
+        bb_states[1] = BBEntryState(bb_vartable1, zeros(Int, nslots))
         argtypes = result.argtypes
 
         argtypes = va_process_argtypes(typeinf_lattice(interp), argtypes, src.nargs, src.isva, mi)
@@ -392,7 +419,7 @@ mutable struct InferenceState
 
         this = new(
             mi, valid_worlds, mod, sptypes, slottypes, src, cfg, spec_info,
-            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, bb_saw_latestworld, ssavaluetypes, ssaflags, edges, stmt_info,
+            currbb, currpc, ip, handler_info, ssavalue_uses, bb_states, bb_saw_latestworld, ssavaluetypes, ssaflags, edges, stmt_info,
             tasks, pclimitations, limitations, cycle_backedges, callstack, parentid, frameid, cycleid,
             result, unreachable, bestguess, exc_bestguess, ipo_effects,
             _time_ns(), 0.0, 0, 0,
@@ -703,7 +730,7 @@ function sptypes_from_meth_instance(mi::MethodInstance)
         v = spvals[i]
         if v isa TypeVar
             temp = sig
-            for j = 1:i-1
+            for _ = 1:i-1
                 temp = temp.body
             end
             vᵢ = (temp::UnionAll).var
@@ -843,7 +870,7 @@ mutable struct IRInterpretationState
             argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], given_argtypes[i])
                 for i = 1:length(given_argtypes)]
         else
-            argtypes_refined = Bool[false for i = 1:length(given_argtypes)]
+            argtypes_refined = Bool[false for _ = 1:length(given_argtypes)]
         end
         empty!(ir.argtypes)
         append!(ir.argtypes, given_argtypes)
@@ -1070,7 +1097,7 @@ end
 merge_effects!(::AbstractInterpreter, ::IRInterpretationState, ::Effects) = return
 
 decode_statement_effects_override(sv::InferenceState) = decode_statement_effects_override(sv.src.ssaflags[sv.currpc])
-decode_statement_effects_override(sv::IRInterpretationState) = decode_statement_effects_override(UInt32(0))
+decode_statement_effects_override(::IRInterpretationState) = decode_statement_effects_override(UInt32(0))
 
 struct InferenceLoopState
     rt
@@ -1093,8 +1120,8 @@ bail_out_apply(::AbstractInterpreter, state::InferenceLoopState, ::InferenceStat
 bail_out_apply(::AbstractInterpreter, state::InferenceLoopState, ::IRInterpretationState) =
     state.rt === Any
 
-add_remark!(::AbstractInterpreter, ::InferenceState, remark) = return
-add_remark!(::AbstractInterpreter, ::IRInterpretationState, remark) = return
+add_remark!(::AbstractInterpreter, ::InferenceState, _remark) = return
+add_remark!(::AbstractInterpreter, ::IRInterpretationState, _remark) = return
 
 function get_max_methods(interp::AbstractInterpreter, @nospecialize(f), sv::AbsIntState)
     fmax = get_max_methods_for_func(f)

@@ -248,7 +248,7 @@ end
 function is_initial_reserved_word(ps::ParseState, k)
     k = kind(k)
     is_iresword = k in KSet"begin while if for try return break continue function
-                            macro quote let local global const do struct module
+                            macro quote let local global const do struct typegroup module
                             baremodule using import export"
     # `begin` means firstindex(a) inside a[...]
     return is_iresword && !(k == K"begin" && ps.end_symbol)
@@ -277,7 +277,7 @@ end
 
 function is_block_form(k)
     kind(k) in KSet"block quote if for while let function macro
-                    abstract primitive struct try module"
+                    abstract primitive struct typegroup try module"
 end
 
 function is_syntactic_unary_op(k)
@@ -1744,6 +1744,14 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 emit(ps, emark, K"error",
                      error="the .' operator for transpose is discontinued")
                 emit(ps, mark, K"dotcall", POSTFIX_OP_FLAG)
+            elseif k == K"[" || k == K"{"
+                # f.[x]  ==>  (error f x)
+                # f.{x}  ==>  (error f x)
+                # Parse as broadcasted brackets, then wrap in error
+                close = k == K"[" ? K"]" : K"}"
+                bump(ps, TRIVIA_FLAG)
+                parse_cat(ParseState(ps, end_symbol=true), close, ps.end_symbol)
+                emit(ps, mark, K"error", error="brackets are not allowed after `.`")
             else
                 if saw_misplaced_atsym
                     # If we saw a misplaced `@` earlier, this might be the place
@@ -2060,6 +2068,14 @@ function parse_resword(ps::ParseState)
         bump_semicolon_trivia(ps)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"primitive")
+    elseif word == K"typegroup"
+        # Grouped type definitions (mutually recursive)
+        # typegroup struct A ... end end  ==> (typegroup (block ...))
+        bump(ps, TRIVIA_FLAG)
+        parse_block(ps, parse_docstring)
+        bump_closing_token(ps, K"end")
+        emit(ps, mark, K"typegroup")
+        min_supported_version(v"1.14", ps, mark, "typegroup")
     elseif word == K"try"
         parse_try(ps)
     elseif word == K"return"

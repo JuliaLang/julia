@@ -132,12 +132,42 @@ struct OptimizationOptions {
     }
 };
 
+struct PrintOptions {
+    bool print_before_all = false;
+    bool print_after_all = false;
+    bool print_module_scope = false;
+    // TODO: Add print_changed support using LLVM's ChangeReporter (a text diff).
+    // See https://llvm.org/doxygen/classllvm_1_1ChangeReporter.html
+    SmallVector<std::string, 1> print_before;  // specific pass names (comma-separated or repeated)
+    SmallVector<std::string, 1> print_after;   // specific pass names (comma-separated or repeated)
+    SmallVector<std::string, 1> filter_print_funcs;  // filter for function names (comma-separated or repeated)
+    std::string error;  // error messages from parsing
+    raw_ostream *out = nullptr; // output stream (default: errs())
+
+    PrintOptions() JL_NOTSAFEPOINT = default;
+    ~PrintOptions() JL_NOTSAFEPOINT = default;
+    PrintOptions(const PrintOptions &) JL_NOTSAFEPOINT = default;
+    PrintOptions(PrintOptions &&) JL_NOTSAFEPOINT = default;
+    PrintOptions &operator=(const PrintOptions &) JL_NOTSAFEPOINT = default;
+    PrintOptions &operator=(PrintOptions &&) JL_NOTSAFEPOINT = default;
+
+    static PrintOptions defaults() JL_NOTSAFEPOINT {
+        return PrintOptions();
+    }
+};
+
+// Parse LLVM-style option string into PrintOptions
+void parseLLVMOptions(const char *options, PrintOptions &out) JL_NOTSAFEPOINT;
+
 struct NewPM {
     std::unique_ptr<TargetMachine> TM;
     OptimizationLevel O;
     OptimizationOptions options;
+    PrintOptions print_options;
     TimePassesHandler TimePasses;
-    NewPM(std::unique_ptr<TargetMachine> TM, OptimizationLevel O, OptimizationOptions options = OptimizationOptions::defaults()) JL_NOTSAFEPOINT;
+    NewPM(std::unique_ptr<TargetMachine> TM, OptimizationLevel O,
+          OptimizationOptions options = OptimizationOptions::defaults(),
+          PrintOptions print_options = PrintOptions::defaults()) JL_NOTSAFEPOINT;
     ~NewPM() JL_NOTSAFEPOINT;
 
     void run(Module &M) JL_NOTSAFEPOINT;
@@ -803,6 +833,11 @@ protected:
     orc::SymbolStringPtr linkCallTarget(orc::MaterializationResponsibility &MR,
                                         jl_code_instance_t *CI,
                                         jl_invoke_api_t API) JL_NOTSAFEPOINT;
+
+    // If the provided CodeInstance is neither compiled nor has an ORC symbol in
+    // CISymbols, look for a compatible CodeInstance in the MethodInstance's
+    // cache that does.  Returns the original CodeInstance if none exists.
+    jl_code_instance_t *findCompatibleCI(jl_code_instance_t *CI) JL_NOTSAFEPOINT;
 
     // Create an ORC symbol and entry in CISymbols for the CI's specptr,
     // returning a pointer into CISymbols or NULL if the CI is not compiled.
