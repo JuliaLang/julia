@@ -1445,7 +1445,7 @@ end
 function deserialize(s::AbstractSerializer, X::Type{MemoryRef{T}} where T)
     x = Core.memoryref(deserialize(s))::X
     i = deserialize(s)::Int
-    i == 2 || (x = Core.memoryref(x, i, true))
+    i == 2 || (x = Core.memoryrefnew(x, i, true))
     return x::X
 end
 

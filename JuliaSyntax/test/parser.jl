@@ -447,6 +447,9 @@ tests = [
         "A.@x"      =>  "(macrocall (. A (macro_name x)))"
         "A.@x a"    =>  "(macrocall (. A (macro_name x)) a)"
         "@A.B.@x a" =>  "(macrocall (macro_name (. (. A B) (error-t) x)) a)"
+        # .[ and .{ disallowed
+        "f.[x]"  =>  "(error f x)"
+        "f.{x}"  =>  "(error f x)"
         # .' discontinued
         "f.'"    =>  "(dotcall-post f (error '))"
         # Field/property syntax
@@ -543,6 +546,11 @@ tests = [
         ((v=v"1.7",), "struct A const a end") => "(struct A (block (error (const a))))"
         "struct A end"    =>  "(struct A (block))"
         "struct try end"  =>  "(struct (error try) (block))"
+        # typegroup (1.14+)
+        ((v=v"1.14",), "typegroup struct A end end")  =>  "(typegroup (block (struct A (block))))"
+        ((v=v"1.14",), "typegroup\nstruct A\na::Int\nend\nend")  =>  "(typegroup (block (struct A (block (::-i a Int)))))"
+        ((v=v"1.14",), "typegroup\nstruct A end\nstruct B end\nend")  =>  "(typegroup (block (struct A (block)) (struct B (block))))"
+        ((v=v"1.13",), "typegroup struct A end end")  =>  "(error (typegroup (block (struct A (block)))))"
         # module/baremodule
         "module A end"      =>  "(module A (block))"
         "baremodule A end"  =>  "(module-bare A (block))"
