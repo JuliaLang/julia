@@ -931,6 +931,11 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         jl_value_t *tti = jl_svecref(tt,i);
         bool toboxed;
         Type *t = julia_type_to_llvm(ctx, tti, &toboxed);
+        if (type_is_ghost(t)) {
+            emit_error(ctx, make_errmsg("llvmcall", i + 1, " type doesn't correspond to a C type"));
+            JL_GC_POP();
+            return jl_cgval_t();
+        }
         argtypes.push_back(t);
         jl_value_t *argi = args[4 + i];
         jl_cgval_t arg = emit_expr(ctx, argi);

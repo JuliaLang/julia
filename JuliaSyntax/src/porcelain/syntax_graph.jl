@@ -472,6 +472,12 @@ syntax_graph(ex::SyntaxTree) = ex._graph
 sourcefile(ex::SyntaxTree) = sourcefile(sourceref(ex))
 byte_range(ex::SyntaxTree) = byte_range(sourceref(ex))
 
+function sourcetext(ex::SyntaxTree)
+    sf = sourcefile(ex)
+    sf isa LineNumberNode && return SubString("")
+    view(sf, byte_range(ex))
+end
+
 #-------------------------------------------------------------------------------
 # Lightweight vector of nodes ids with associated pointer to graph stored separately.
 mutable struct SyntaxList{Attrs, NodeIdVecType} <: AbstractVector{SyntaxTree}
