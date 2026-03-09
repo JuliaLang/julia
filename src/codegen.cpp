@@ -1114,7 +1114,7 @@ static const auto jl_excstack_state_func = new JuliaFunction<TypeFnContextAndSiz
             return AttributeList::get(C,
                 AttributeSet::get(C, FnAttrs),
                 AttributeSet(),
-                None);
+                {});
         },
 };
 static const auto jlegalx_func = new JuliaFunction<TypeFnContextAndSizeT>{
