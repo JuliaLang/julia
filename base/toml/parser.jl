@@ -1,12 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-"""
-`Base.TOML` is an undocumented internal part of Julia's TOML parser
-implementation.  Users should call the documented interface in the
-TOML.jl standard library instead (by `import TOML` or `using TOML`).
-"""
-module TOML
-
 using Base: IdSet
 
 # we parse DateTime into these internal structs,
@@ -297,7 +290,7 @@ end
 # used to show the interval where an error happened
 # Right now, it is only called with a == b
 function point_to_line(str::AbstractString, a::Int, b::Int, context)
-    @assert b >= a
+    @assert b >= a "invalid range"
     a = thisind(str, a)
     b = thisind(str, b)
     pos = something(findprev('\n', str, prevind(str, a)), 0) + 1
@@ -720,7 +713,7 @@ function parse_array(l::Parser{Dates})::Err{Vector} where Dates
         (Dates !== nothing && ((T === Dates.Date) || (T === Dates.Time) || (T === Dates.DateTime)))
         # do nothing, leave as Vector{Any}
         new = array
-    else @assert false end
+    else @assert false "unexpected type" end
     push!(l.static_arrays, new)
     return new
 end
@@ -1232,6 +1225,4 @@ function take_chunks(l::Parser, unescape::Bool)::String
     end
     empty!(l.chunks)
     return unescape ? unescape_string(str) : str
-end
-
 end

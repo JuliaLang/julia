@@ -351,7 +351,7 @@ private:
 
     void NoteOperandUses(State &S, BBState &BBS, Instruction &UI);
     void MaybeTrackDst(State &S, MemTransferInst *MI);
-    void MaybeTrackStore(State &S, StoreInst *I);
+    bool MaybeTrackStore(State &S, StoreInst *I);
     State LocalScan(Function &F);
     void ComputeLiveness(State &S);
     void ComputeLiveSets(State &S);

@@ -375,6 +375,8 @@ vst1_toplevel_only(vcx, st) = @stm st begin
     [K"public" xs...] -> all(vst1_ident, vcx, xs)
     [K"export" xs...] -> all(vst1_ident, vcx, xs)
     [K"latestworld"] -> pass()
+    [K"typegroup" [K"block" xs...]] ->
+        all(vst1, vcx, xs)
     _ -> unknown()
 end
 
