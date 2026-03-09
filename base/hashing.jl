@@ -21,6 +21,12 @@ Typically, any type that implements `hash` should also implement its own [`==`](
 
 The hash value may change when a new Julia process is started.
 
+!!! warning
+    When implementing the 2-argument form, the second argument `h` should _not_ be given a
+    default value such `h = UInt(0)` as this will implicitly create a 1-argument method that
+    is more specific than the fallback (see [Note on Optional and keyword Arguments](@ref)),
+    but potentially with the wrong seed, causing hash inconsistencies.
+
 ```jldoctest; filter = r"0x[0-9a-f]{16}"
 julia> a = hash(10)
 0x759d18cc5346a65f
@@ -29,7 +35,7 @@ julia> hash(10, a) # only use the output of another hash function as the second 
 0x03158cd61b1b0bd1
 ```
 
-See also: [`objectid`](@ref), [`Dict`](@ref), [`Set`](@ref).
+See also [`objectid`](@ref), [`Dict`](@ref), [`Set`](@ref).
 """
 hash(data::Any) = hash(data, HASH_SEED)
 hash(w::WeakRef, h::UInt) = hash(w.value, h)

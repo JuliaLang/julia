@@ -60,7 +60,7 @@ $(eval $(call staged-install, \
 
 clean-mpfr:
 	-rm -f $(BUILDDIR)/mpfr-$(MPFR_VER)/build-configured $(BUILDDIR)/mpfr-$(MPFR_VER)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/mpfr-$(MPFR_VER) clean
+	-if [ -d $(BUILDDIR)/mpfr-$(MPFR_VER) ]; then $(MAKE) -C $(BUILDDIR)/mpfr-$(MPFR_VER) clean; fi
 
 distclean-mpfr:
 	rm -rf $(SRCCACHE)/mpfr-$(MPFR_VER).tar.bz2 \

@@ -45,7 +45,7 @@ get(f::Callable, t::Tuple, i::Integer) = i in 1:length(t) ? getindex(t, i) : f()
 """
     setindex(t::Tuple, v, i::Integer)
 
-Creates a new tuple similar to `t` with the value at index `i` set to `v`.
+Create a new tuple similar to `t` with the value at index `i` set to `v`.
 Throws a `BoundsError` when out of bounds.
 
 # Examples
@@ -161,7 +161,7 @@ end
 # this allows partial evaluation of bounded sequences of next() calls on tuples,
 # while reducing to plain next() for arbitrary iterables.
 indexed_iterate(t::Tuple, i::Int, state=1) = (@inline; (getfield(t, i), i+1))
-indexed_iterate(a::Array, i::Int, state=1) = (@inline; (a[i], i+1))
+indexed_iterate(a::Union{Array,Memory}, i::Int, state=1) = (@inline; (a[i], i+1))
 function indexed_iterate(I, i)
     x = iterate(I)
     x === nothing && throw(BoundsError(I, i))
@@ -206,9 +206,12 @@ julia> first, Base.rest(a, state)
 """
 function rest end
 rest(t::Tuple) = t
-rest(t::Tuple, i::Int) = ntuple(x -> getfield(t, x+i-1), length(t)-i+1)
-rest(a::Array, i::Int=1) = a[i:end]
-rest(a::Core.SimpleVector, i::Int=1) = a[i:end]
+function rest(t::Tuple, i)
+    let i = i::Int
+        ntuple(x -> getfield(t, x+i-1), length(t)-i+1)
+    end
+end
+rest(a::Union{Array,Memory,Core.SimpleVector}, i=1) = a[(i::Int):end]
 rest(itr, state...) = Iterators.rest(itr, state...)
 
 """
@@ -261,7 +264,9 @@ function _split_rest(a::Union{AbstractArray, Core.SimpleVector}, n::Int)
     return a[begin:end-n], a[end-n+1:end]
 end
 
-@eval split_rest(t::Tuple, n::Int, i=1) = ($(Expr(:meta, :aggressive_constprop)); (t[i:end-n], t[end-n+1:end]))
+@eval _split_tuple(t::Tuple, n::Int, i::Int=1) = ($(Expr(:meta, :aggressive_constprop)); (t[i:n], t[n+1:end]))
+
+@eval split_rest(t::Tuple, n::Int, i=1) = ($(Expr(:meta, :aggressive_constprop)); _split_tuple(t, length(t)-n, Int(i)))
 
 # Use dispatch to avoid a branch in first
 first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))

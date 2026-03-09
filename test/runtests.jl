@@ -28,6 +28,7 @@ end
 
 const rmwait_timeout = running_under_rr() ? 300 : 30
 
+ENV["JULIA_TEST_BUILDROOT"] = buildroot
 if use_revise
     # First put this at the top of the DEPOT PATH to install revise if necessary.
     # Once it's loaded, we swizzle it to the end, to avoid confusing any tests.
@@ -90,8 +91,10 @@ move_to_node1("stress")
 limited_worker_rss && move_to_node1("Distributed")
 
 # Move LinearAlgebra and Pkg tests to the front, because they take a while, so we might
-# as well get them all started early.
-for prependme in ["LinearAlgebra", "Pkg"]
+# as well get them all started early. JuliaLowering_stdlibs both takes a while and
+# uses a lot of a memory at the beginning so try to run it early to keep total memory
+# use flatter.
+for prependme in ["LinearAlgebra", "Pkg", "JuliaLowering_stdlibs"]
     prependme_test_ids = findall(x->occursin(prependme, x), tests)
     prependme_tests = tests[prependme_test_ids]
     deleteat!(tests, prependme_test_ids)
@@ -116,7 +119,7 @@ cd(@__DIR__) do
     # multiple worker processes regardless of the value of `net_on`.
     # Otherwise, we use multiple worker processes if and only if `net_on` is true.
     if net_on || JULIA_TEST_USE_MULTIPLE_WORKERS
-        n = min(Sys.CPU_THREADS, length(tests))
+        n = min(Sys.EFFECTIVE_CPU_THREADS, length(tests))
         n > 1 && addprocs_with_testenv(n)
         LinearAlgebra.BLAS.set_num_threads(1)
     end

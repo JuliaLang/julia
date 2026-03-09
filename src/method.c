@@ -162,6 +162,86 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
     if (e->head == jl_foreigncall_sym) {
         JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, nreq, (cc, effects, gc_safe))
         jl_task_t *ct = jl_current_task;
+        jl_value_t *fptr = jl_exprarg(e, 0);
+        // Handle dot expressions in tuple arguments for ccall by converting to GlobalRef eagerly
+        jl_sym_t *tuple_sym = jl_symbol("tuple");
+        if (jl_is_quotenode(fptr)) {
+            if (jl_is_string(jl_quotenode_value(fptr)) || jl_is_tuple(jl_quotenode_value(fptr)))
+                fptr = jl_quotenode_value(fptr);
+        }
+        if (jl_is_tuple(fptr)) {
+            // convert literal Tuple to Expr tuple
+            jl_expr_t *tupex = jl_exprn(tuple_sym, jl_nfields(fptr));
+            jl_value_t *v = NULL;
+            JL_GC_PUSH2(&tupex, &v);
+            for (long i = 0; i < jl_nfields(fptr); i++) {
+                v = jl_fieldref(fptr, i);
+                if (!jl_is_string(v))
+                    v = jl_new_struct(jl_quotenode_type, v);
+                jl_exprargset(tupex, i, v);
+            }
+            jl_exprargset(e, 0, tupex);
+            fptr = (jl_value_t*)tupex;
+            JL_GC_POP();
+        }
+        if (jl_is_expr(fptr) && ((jl_expr_t*)fptr)->head == tuple_sym) {
+            // verify Expr tuple can be interpreted and handle
+            jl_expr_t *tuple_expr = (jl_expr_t*)fptr;
+            size_t nargs_tuple = jl_expr_nargs(tuple_expr);
+            if (nargs_tuple == 0)
+                jl_error("ccall function name cannot be empty tuple");
+            if (nargs_tuple > 2)
+                jl_error("ccall function name tuple can have at most 2 elements");
+            // Validate tuple elements are not more complicated than inference/codegen can safely handle
+            for (size_t i = 0; i < nargs_tuple; i++) {
+                jl_value_t *arg = jl_exprarg(tuple_expr, i);
+                // Handle dot expressions by converting to a GlobalRef
+                if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_dot_sym) {
+                    jl_expr_t *dot_expr = (jl_expr_t*)arg;
+                    if (jl_expr_nargs(dot_expr) != 2)
+                        jl_error("ccall function name: invalid dot expression");
+                    jl_value_t *mod_expr = jl_exprarg(dot_expr, 0);
+                    jl_value_t *sym_expr = jl_exprarg(dot_expr, 1);
+                    if (!(jl_is_quotenode(sym_expr) && jl_is_symbol(jl_quotenode_value(sym_expr))))
+                        jl_type_error("ccall name dot expression", (jl_value_t*)jl_symbol_type, sym_expr);
+                    JL_TRY {
+                        // Evaluate the module expression
+                        jl_value_t *mod_val = jl_toplevel_eval(module, mod_expr);
+                        JL_TYPECHK(ccall name dot expression, module, mod_val);
+                        JL_GC_PROMISE_ROOTED(mod_val);
+                        // Create GlobalRef from evaluated module and quoted symbol
+                        jl_sym_t *sym = (jl_sym_t*)jl_quotenode_value(sym_expr);
+                        jl_value_t *globalref = jl_module_globalref((jl_module_t*)mod_val, sym);
+                        jl_exprargset(tuple_expr, i, globalref);
+                    }
+                    JL_CATCH {
+                        if (jl_typetagis(jl_current_exception(ct), jl_errorexception_type))
+                            jl_error("could not evaluate ccall function/library name (it might depend on a local variable)");
+                        else
+                            jl_rethrow();
+                    }
+                }
+                else if (jl_is_quotenode(arg)) {
+                    if (i == 0) {
+                        // function name must be a symbol or string, library can be anything
+                        jl_value_t *quoted_val = jl_quotenode_value(arg);
+                        if (!jl_is_symbol(quoted_val) && !jl_is_string(quoted_val))
+                            jl_type_error("ccall function name", (jl_value_t*)jl_symbol_type, jl_quotenode_value(arg));
+                    }
+                }
+                else if (!jl_is_globalref(arg) && jl_isa_ast_node(arg)) {
+                    jl_type_error(i == 0 ? "ccall function name" : "ccall library name", (jl_value_t*)jl_symbol_type, arg);
+                }
+            }
+        }
+        else if (jl_is_string(fptr) || (jl_is_quotenode(fptr) && jl_is_symbol(jl_quotenode_value(fptr)))) {
+            // convert String to Expr (String,)
+            // convert QuoteNode(Symbol) to Expr (QuoteNode(Symbol),)
+            jl_expr_t *tupex = jl_exprn(tuple_sym, 1);
+            jl_exprargset(tupex, 0, fptr);
+            jl_exprargset(e, 0, tupex);
+            fptr = (jl_value_t*)tupex;
+        }
         jl_value_t *rt = jl_exprarg(e, 1);
         jl_value_t *at = jl_exprarg(e, 2);
         if (!jl_is_type(rt)) {
@@ -1078,7 +1158,7 @@ void jl_mi_done_backedges(jl_method_instance_t *mi JL_PROPAGATES_ROOT, uint8_t o
                     continue;
                 insb = set_next_edge(backedges, insb, invokesig, caller);
             }
-            if (insb == n) {
+            if (insb == 0) {
                 // All were deleted
                 mi->backedges = NULL;
             } else {
@@ -1311,135 +1391,6 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     JL_GC_POP();
 
     return m;
-}
-
-void jl_ctor_def(jl_value_t *ty, jl_value_t *functionloc)
-{
-    jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(ty);
-    JL_TYPECHK(ctor_def, datatype, (jl_value_t*)dt);
-    JL_TYPECHK(ctor_def, linenumbernode, functionloc);
-    jl_svec_t *fieldtypes = jl_get_fieldtypes(dt);
-    size_t nfields = jl_svec_len(fieldtypes);
-    size_t nparams = jl_subtype_env_size(ty);
-    jl_module_t *inmodule = dt->name->module;
-    jl_sym_t *file = (jl_sym_t*)jl_linenode_file(functionloc);
-    if (!jl_is_symbol(file))
-        file = jl_empty_sym;
-    int32_t line = jl_linenode_line(functionloc);
-
-    // argdata is svec(svec(types...), svec(typevars...), functionloc)
-    jl_svec_t *argdata = jl_alloc_svec(3);
-    jl_array_t *fieldkinds = NULL;
-    jl_code_info_t *body = NULL;
-    JL_GC_PUSH3(&argdata, &fieldkinds, &body);
-    jl_svecset(argdata, 2, functionloc);
-    jl_svec_t *tvars = jl_alloc_svec(nparams);
-    jl_svecset(argdata, 1, tvars);
-    jl_unionall_t *ua = (jl_unionall_t*)ty;
-    for (size_t i = 0; i < nparams; i++) {
-        assert(jl_is_unionall(ua));
-        jl_svecset(tvars, i, ua->var);
-        ua = (jl_unionall_t*)ua->body;
-    }
-    jl_svec_t *names = dt->name->names;
-
-    // define outer constructor (if all typevars are present (thus not definitely unconstrained) by the fields or other typevars which themselves are constrained)
-    int constrains_all_tvars = 1;
-    for (size_t i = nparams; i > 0; i--) {
-        jl_tvar_t *tv = (jl_tvar_t*)jl_svecref(tvars, i - 1);
-        int constrains_tvar = 0;
-        for (size_t i = 0; i < nfields; i++) {
-            jl_value_t *ft = jl_svecref(fieldtypes, i);
-            if (jl_has_typevar(ft, tv)) {
-                constrains_tvar = 1;
-                break;
-            }
-        }
-        for (size_t j = i; j < nparams; j++) {
-            jl_tvar_t *tv2 = (jl_tvar_t*)jl_svecref(tvars, j);
-            if (jl_has_typevar(tv2->ub, tv)) { // lb doesn't constrain, but jl_has_typevar doesn't have a way to specify that we care about may-constrain and not merely containment
-                constrains_tvar = 1;
-                break;
-            }
-            if (tv2 == tv) {
-                constrains_tvar = 0;
-                break;
-            }
-        }
-        if (!constrains_tvar) {
-            constrains_all_tvars = 0;
-            break;
-        }
-    }
-    if (constrains_all_tvars) {
-        jl_svec_t *atypes = jl_alloc_svec(nfields + 1);
-        jl_svecset(argdata, 0, atypes);
-        jl_svecset(atypes, 0, jl_wrap_Type(ty));
-        for (size_t i = 0; i < nfields; i++) {
-            jl_value_t *ft = jl_svecref(fieldtypes, i);
-            jl_svecset(atypes, i + 1, ft);
-        }
-        body = jl_outer_ctor_body(ty, nfields, nparams, inmodule, jl_symbol_name(file), line);
-        if (names) {
-            jl_array_t *slotnames = body->slotnames;
-            for (size_t i = 0; i < nfields; i++) {
-                jl_array_ptr_set(slotnames, i + 1, jl_svecref(names, i));
-            }
-        }
-        jl_method_def(argdata, NULL, body, inmodule);
-        if (nparams == 0) {
-            int all_Any = 1; // check if all fields are Any and the type is not parameterized, since inner constructor would be the same signature and code
-            for (size_t i = 0; i < nfields; i++) {
-                jl_value_t *ft = jl_svecref(fieldtypes, i);
-                if (ft != (jl_value_t*)jl_any_type) {
-                    all_Any = 0;
-                    break;
-                }
-            }
-            if (all_Any) {
-                JL_GC_POP();
-                return;
-            }
-        }
-    }
-
-    // define inner constructor
-    jl_svec_t *atypes = jl_svec_fill(nfields + 1, (jl_value_t*)jl_any_type);
-    jl_svecset(argdata, 0, atypes);
-    jl_value_t *typedt = (jl_value_t*)jl_wrap_Type((jl_value_t*)dt);
-    jl_svecset(atypes, 0, typedt);
-    fieldkinds = jl_alloc_vec_any(nfields);
-    for (size_t i = 0; i < nfields; i++) {
-        jl_value_t *ft = jl_svecref(fieldtypes, i);
-        int kind = ft == (jl_value_t*)jl_any_type ? -1 : 0;
-        // TODO: if more efficient to do so, we could reference the sparam instead of fieldtype
-        //if (jl_is_typevar(ft)) {
-        //    for (size_t i = 0; i < nparams; i++) {
-        //        if (jl_svecref(tvars, i) == ft) {
-        //            kind = i + 1;
-        //            break; // if repeated, must consider only the innermost
-        //        }
-        //    }
-        //}
-        jl_array_ptr_set(fieldkinds, i, jl_box_long(kind));
-    }
-    // rewrap_unionall(Type{dt}, ty)
-    for (size_t i = nparams; i > 0; i--) {
-        jl_value_t *tv = jl_svecref(tvars, i - 1);
-        typedt = jl_new_struct(jl_unionall_type, tv, typedt);
-        jl_svecset(atypes, 0, typedt);
-    }
-    tvars = jl_emptysvec;
-    jl_svecset(argdata, 1, tvars);
-    body = jl_inner_ctor_body(fieldkinds, inmodule, jl_symbol_name(file), line);
-    if (names) {
-        jl_array_t *slotnames = body->slotnames;
-        for (size_t i = 0; i < nfields; i++) {
-            jl_array_ptr_set(slotnames, i + 1, jl_svecref(names, i));
-        }
-    }
-    jl_method_def(argdata, NULL, body, inmodule);
-    JL_GC_POP();
 }
 
 // root blocks

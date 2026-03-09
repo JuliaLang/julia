@@ -1089,6 +1089,9 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T, N}, indices::Vararg{$Int, N})")
 # Printing of :(function (x...) end)
 @test startswith(replstr(Meta.parse("function (x...) end")), ":(function (x...,)")
 
+# Printing of (x...) -> x
+@test startswith(replstr(Meta.parse("(x...) -> x")), ":((x...,)->")
+
 # Printing of macro definitions
 @test sprint(show, :(macro m end)) == ":(macro m end)"
 @test_repr "macro m end"
@@ -1363,6 +1366,12 @@ end
     let repr = sprint(dump, Ptr{UInt8}(UInt(1)))
         @test repr == "Ptr{UInt8}($(Base.repr(UInt(1))))\n"
     end
+    let repr = sprint(show, UInt(42); context=(:hexunsigned => false))
+        @test repr == "$(UInt)(42)"
+    end
+    let repr = sprint(show, UInt16[1, 2]; context=(:hexunsigned => false))
+        @test repr == "UInt16[1, 2]"
+    end
     let repr = sprint(dump, Core.svec())
         @test repr == "empty SimpleVector\n"
     end
@@ -1452,6 +1461,8 @@ test_repr("(:).a")
 @test repr(@NamedTuple{kw::NTuple{7, Int64}}) == "@NamedTuple{kw::NTuple{7, Int64}}"
 @test repr(@NamedTuple{a::Float64, b}) == "@NamedTuple{a::Float64, b}"
 @test repr(@NamedTuple{var"#"::Int64}) == "@NamedTuple{var\"#\"::Int64}"
+# issue #60252. some abstract namedtuples cannot use this format
+@test repr(NamedTuple{(:a, :b), NTuple{N, Int64}} where N) == "NamedTuple{(:a, :b), NTuple{N, Int64}} where N"
 
 # Test general printing of `Base.Pairs` (it should not use the `@Kwargs` macro syntax)
 @test repr(@Kwargs{init::Int}) == "Base.Pairs{Symbol, $Int, Nothing, @NamedTuple{init::$Int}}"

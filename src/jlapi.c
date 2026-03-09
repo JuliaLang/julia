@@ -1173,21 +1173,20 @@ static const char *absformat(const char *in)
 static char *absrealpath(const char *in, int nprefix)
 { // compute an absolute realpath location, so that chdir doesn't change the file reference
   // ignores (copies directly over) nprefix characters at the start of abspath
-#ifndef _OS_WINDOWS_
-    char *out = realpath(in + nprefix, NULL);
-    if (out) {
-        if (nprefix > 0) {
-            size_t sz = strlen(out) + 1;
-            char *cpy = (char*)malloc_s(sz + nprefix);
-            memcpy(cpy, in, nprefix);
-            memcpy(cpy + nprefix, out, sz);
-            free(out);
-            out = cpy;
-        }
+    char *out;
+    uv_fs_t req;
+    int realpath_ret = uv_fs_realpath(NULL, &req, in + nprefix, NULL);
+    if (realpath_ret >= 0) {
+        size_t sz = strlen((char*)(req.ptr)) + 1;
+        out = (char*)malloc_s(sz + nprefix);
+        memcpy(out, in, nprefix);
+        memcpy(out + nprefix, req.ptr, sz);
+        uv_fs_req_cleanup(&req);
     }
     else {
+        uv_fs_req_cleanup(&req);
         size_t sz = strlen(in + nprefix) + 1;
-        if (in[nprefix] == PATHSEPSTRING[0]) {
+        if (jl_isabspath(in + nprefix)) {
             out = (char*)malloc_s(sz + nprefix);
             memcpy(out, in, sz + nprefix);
         }
@@ -1205,27 +1204,6 @@ static char *absrealpath(const char *in, int nprefix)
             free(path);
         }
     }
-#else
-    // GetFullPathName intentionally errors if given an empty string so manually insert `.` to invoke cwd
-    char *in2 = (char*)malloc_s(JL_PATH_MAX);
-    if (strlen(in) - nprefix == 0) {
-        memcpy(in2, in, nprefix);
-        in2[nprefix] = '.';
-        in2[nprefix+1] = '\0';
-        in = in2;
-    }
-    DWORD n = GetFullPathName(in + nprefix, 0, NULL, NULL);
-    if (n <= 0) {
-        jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
-    }
-    char *out = (char*)malloc_s(n + nprefix);
-    DWORD m = GetFullPathName(in + nprefix, n, out + nprefix, NULL);
-    if (n != m + 1) {
-        jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
-    }
-    memcpy(out, in, nprefix);
-    free(in2);
-#endif
     return out;
 }
 

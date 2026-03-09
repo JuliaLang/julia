@@ -65,6 +65,27 @@ IndexStyle(::Type{<:GenericMemory}) = IndexLinear()
 
 parent(ref::GenericMemoryRef) = ref.mem
 
+"""
+    memoryindex(ref::GenericMemoryRef)::Int
+
+Get the 1-based index of `ref` in its `GenericMemory`.
+
+# Examples
+```jldoctest
+julia> mem = Memory{String}(undef, 10);
+
+julia> ref = Base.memoryindex(memoryref(mem, 3))
+3
+
+julia> Base.memoryindex(memoryref(Memory{Nothing}(undef, 10), 8))
+8
+```
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
+"""
+memoryindex(ref::GenericMemoryRef) = memoryrefoffset(ref)
+
 pointer(mem::GenericMemoryRef) = unsafe_convert(Ptr{Cvoid}, mem) # no bounds check, even for empty array
 
 _unsetindex!(A::Memory, i::Int) =  (@_propagate_inbounds_meta; _unsetindex!(memoryref(A, i)); A)

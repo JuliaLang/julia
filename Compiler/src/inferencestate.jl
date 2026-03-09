@@ -209,6 +209,18 @@ to enable flow-sensitive analysis.
 """
 const VarTable = Vector{VarState}
 
+"""
+    BBEntryState
+
+Bundles the per-basic-block variable-type table ([`VarTable`](@ref)) and slot-alias table
+(`Vector{Int}`) into a single value. This ensures that both components are always present or
+absent together.
+"""
+struct BBEntryState
+    vartable::VarTable
+    aliases::Vector{Int}
+end
+
 struct StatementState
     vtypes::Union{VarTable,Nothing}
     saw_latestworld::Bool
@@ -217,7 +229,6 @@ end
 const CACHE_MODE_NULL     = 0x00      # not cached, optimization optional
 const CACHE_MODE_GLOBAL   = 0x01 << 0 # cached globally, optimization required
 const CACHE_MODE_LOCAL    = 0x01 << 1 # cached locally, optimization required
-const CACHE_MODE_VOLATILE = 0x01 << 2 # not cached, optimization required
 
 abstract type Handler end
 get_enter_idx(handler::Handler) = get_enter_idx_impl(handler)::Int
@@ -262,7 +273,7 @@ intersect(world::WorldWithRange, valid_worlds::WorldRange) =
 mutable struct InferenceState
     #= information about this method instance =#
     linfo::MethodInstance
-    world::WorldWithRange
+    valid_worlds::WorldRange
     mod::Module
     sptypes::Vector{VarState}
     slottypes::Vector{Any}
@@ -276,8 +287,22 @@ mutable struct InferenceState
     ip::BitSet#=TODO BoundedMinPrioritySet=# # current active instruction pointers
     handler_info::Union{Nothing,HandlerInfo{TryCatchFrame}}
     ssavalue_uses::Vector{BitSet} # ssavalue sparsity and restart info
+    # Per-basic-block entry state. `nothing` if the BB has not been analyzed yet.
+    # Populated lazily during the main inference loop by `update_bbstate!`, which merges
+    # the current exit state into each successor. Both the variable-type table and the
+    # slot-alias table are bundled together in a `BBEntryState` so that the type system
+    # guarantees they are always in sync.
+    #
+    # Slot alias tracking:
+    # `aliases[i] == j` means slot `i` currently holds the same value as slot `j`.
+    # `aliases[i] == 0` means slot `i` is not known to be aliased to any other slot.
+    # The table is always kept "flat": aliases always point directly to the root slot, not
+    # through a chain, so a single lookup suffices to find all aliases of a given slot.
+    # The working alias table for the BB currently being analyzed is kept as a local
+    # variable `slot_aliases` in `typeinf_local` (analogous to `currstate`).
     # TODO: Could keep this sparsely by doing structural liveness analysis ahead of time.
-    bb_vartables::Vector{Union{Nothing,VarTable}} # nothing if not analyzed yet
+    bb_states::Vector{Union{Nothing,BBEntryState}}
+
     bb_saw_latestworld::Vector{Bool}
     ssavaluetypes::Vector{Any}
     ssaflags::Vector{UInt32}
@@ -345,20 +370,21 @@ mutable struct InferenceState
         nslots = length(src.slotflags)
         slottypes = Vector{Any}(undef, nslots)
         bb_saw_latestworld = Bool[false for _ = 1:length(cfg.blocks)]
-        bb_vartables = Union{Nothing,VarTable}[ nothing for _ = 1:length(cfg.blocks) ]
-        bb_vartable1 = bb_vartables[1] = VarTable(undef, nslots)
+        bb_vartable1 = VarTable(undef, nslots)
+        bb_states = Union{Nothing,BBEntryState}[nothing for _ = 1:length(cfg.blocks)]
+        bb_states[1] = BBEntryState(bb_vartable1, zeros(Int, nslots))
         argtypes = result.argtypes
 
-        argtypes = va_process_argtypes(typeinf_lattice(interp), argtypes, src.nargs, src.isva)
+        argtypes = va_process_argtypes(typeinf_lattice(interp), argtypes, src.nargs, src.isva, mi)
 
         nargtypes = length(argtypes)
         for i = 1:nslots
             argtyp = (i > nargtypes) ? Bottom : argtypes[i]
             if argtyp === Bool && has_conditional(typeinf_lattice(interp))
-                argtyp = Conditional(i, Const(true), Const(false))
+                argtyp = Conditional(i, #= ssadef =# 0, Const(true), Const(false))
             end
             slottypes[i] = argtyp
-            bb_vartable1[i] = VarState(argtyp, i > nargtypes)
+            bb_vartable1[i] = VarState(argtyp, #= ssadef =# 0, i > nargtypes)
         end
         src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for _ = 1:nssavalues ]
         ssaflags = copy(src.ssaflags)
@@ -392,8 +418,8 @@ mutable struct InferenceState
         parentid = frameid = cycleid = 0
 
         this = new(
-            mi, WorldWithRange(world, valid_worlds), mod, sptypes, slottypes, src, cfg, spec_info,
-            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, bb_saw_latestworld, ssavaluetypes, ssaflags, edges, stmt_info,
+            mi, valid_worlds, mod, sptypes, slottypes, src, cfg, spec_info,
+            currbb, currpc, ip, handler_info, ssavalue_uses, bb_states, bb_saw_latestworld, ssavaluetypes, ssaflags, edges, stmt_info,
             tasks, pclimitations, limitations, cycle_backedges, callstack, parentid, frameid, cycleid,
             result, unreachable, bestguess, exc_bestguess, ipo_effects,
             _time_ns(), 0.0, 0, 0,
@@ -401,9 +427,6 @@ mutable struct InferenceState
             interp)
 
         # some more setups
-        if !iszero(cache_mode & CACHE_MODE_LOCAL)
-            push!(get_inference_cache(interp), result)
-        end
         if !iszero(cache_mode & CACHE_MODE_GLOBAL)
             push!(callstack, this)
             this.cycleid = this.frameid = length(callstack)
@@ -412,7 +435,7 @@ mutable struct InferenceState
         # Apply generated function restrictions
         if src.min_world != 1 || src.max_world != typemax(UInt)
             # From generated functions
-            update_valid_age!(this, WorldRange(src.min_world, src.max_world))
+            update_valid_age!(this, world, WorldRange(src.min_world, src.max_world))
         end
 
         return this
@@ -615,8 +638,6 @@ function convert_cache_mode(cache_mode::Symbol)
         return CACHE_MODE_GLOBAL
     elseif cache_mode === :local
         return CACHE_MODE_LOCAL
-    elseif cache_mode === :volatile
-        return CACHE_MODE_VOLATILE
     elseif cache_mode === :no
         return CACHE_MODE_NULL
     end
@@ -709,7 +730,7 @@ function sptypes_from_meth_instance(mi::MethodInstance)
         v = spvals[i]
         if v isa TypeVar
             temp = sig
-            for j = 1:i-1
+            for _ = 1:i-1
                 temp = temp.body
             end
             vᵢ = (temp::UnionAll).var
@@ -765,7 +786,7 @@ function sptypes_from_meth_instance(mi::MethodInstance)
             ty = Const(v)
             undef = false
         end
-        sptypes[i] = VarState(ty, undef)
+        sptypes[i] = VarState(ty, typemin(Int), undef)
     end
     return sptypes
 end
@@ -821,7 +842,7 @@ mutable struct IRInterpretationState
     const spec_info::SpecInfo
     const ir::IRCode
     const mi::MethodInstance
-    world::WorldWithRange
+    valid_worlds::WorldRange
     curridx::Int
     time_caches::Float64
     time_paused::UInt64
@@ -836,9 +857,10 @@ mutable struct IRInterpretationState
     frameid::Int
     parentid::Int
 
-    function IRInterpretationState(interp::AbstractInterpreter,
-        spec_info::SpecInfo, ir::IRCode, mi::MethodInstance, argtypes::Vector{Any},
-        world::UInt, min_world::UInt, max_world::UInt)
+    function IRInterpretationState(
+            interp::AbstractInterpreter, spec_info::SpecInfo, ir::IRCode,
+            mi::MethodInstance, argtypes::Vector{Any}, min_world::UInt, max_world::UInt
+        )
         curridx = 1
         given_argtypes = Vector{Any}(undef, length(argtypes))
         for i = 1:length(given_argtypes)
@@ -848,7 +870,7 @@ mutable struct IRInterpretationState
             argtypes_refined = Bool[!⊑(optimizer_lattice(interp), ir.argtypes[i], given_argtypes[i])
                 for i = 1:length(given_argtypes)]
         else
-            argtypes_refined = Bool[false for i = 1:length(given_argtypes)]
+            argtypes_refined = Bool[false for _ = 1:length(given_argtypes)]
         end
         empty!(ir.argtypes)
         append!(ir.argtypes, given_argtypes)
@@ -856,19 +878,23 @@ mutable struct IRInterpretationState
         ssa_refined = BitSet()
         lazyreachability = LazyCFGReachability(ir)
         valid_worlds = WorldRange(min_world, max_world == typemax(UInt) ? get_world_counter() : max_world)
+        if !(get_inference_world(interp) in valid_worlds)
+            error("invalid age range update")
+        end
         tasks = WorkThunk[]
         edges = Any[]
         callstack = AbsIntState[]
-        return new(spec_info, ir, mi, WorldWithRange(world, valid_worlds),
+        return new(spec_info, ir, mi, valid_worlds,
                 curridx, 0.0, 0, argtypes_refined, ir.sptypes, tpdum,
                 ssa_refined, lazyreachability, tasks, edges, callstack, 0, 0)
     end
 end
 
-function IRInterpretationState(interp::AbstractInterpreter,
-    codeinst::CodeInstance, mi::MethodInstance, argtypes::Vector{Any}, world::UInt)
+function IRInterpretationState(
+        interp::AbstractInterpreter, codeinst::CodeInstance, mi::MethodInstance,
+        argtypes::Vector{Any}, @nospecialize(src)
+    )
     @assert get_ci_mi(codeinst) === mi "method instance is not synced with code instance"
-    src = @atomic :monotonic codeinst.inferred
     if isa(src, String)
         src = _uncompressed_ir(codeinst, src)
     else
@@ -876,8 +902,8 @@ function IRInterpretationState(interp::AbstractInterpreter,
     end
     spec_info = SpecInfo(src)
     ir = inflate_ir(src, mi)
-    argtypes = va_process_argtypes(optimizer_lattice(interp), argtypes, src.nargs, src.isva)
-    return IRInterpretationState(interp, spec_info, ir, mi, argtypes, world,
+    argtypes = va_process_argtypes(optimizer_lattice(interp), argtypes, src.nargs, src.isva, mi)
+    return IRInterpretationState(interp, spec_info, ir, mi, argtypes,
                                  codeinst.min_world, codeinst.max_world)
 end
 
@@ -900,7 +926,7 @@ function print_callstack(frame::AbsIntState)
         end
         print("] ")
         print(frame_instance(sv))
-        is_cached(sv) || print("  [uncached]")
+        is_cached(sv) || print("  [not globally cached]")
         sv.parentid == idx - 1 || print(" [parent=", sv.parentid, "]")
         isempty(callers_in_cycle(sv)) || print(" [cycle=", sv.cycleid, "]")
         println()
@@ -964,9 +990,6 @@ spec_info(sv::IRInterpretationState) = sv.spec_info
 propagate_inbounds(sv::AbsIntState) = spec_info(sv).propagate_inbounds
 method_for_inference_limit_heuristics(sv::AbsIntState) = spec_info(sv).method_for_inference_limit_heuristics
 
-frame_world(sv::InferenceState) = sv.world.this
-frame_world(sv::IRInterpretationState) = sv.world.this
-
 function is_effect_overridden(sv::AbsIntState, effect::Symbol)
     if is_effect_overridden(frame_instance(sv), effect)
         return true
@@ -984,11 +1007,17 @@ is_effect_overridden(override::EffectsOverride, effect::Symbol) = getfield(overr
 
 has_conditional(𝕃::AbstractLattice, ::InferenceState) = has_conditional(𝕃)
 has_conditional(::AbstractLattice, ::IRInterpretationState) = false
+has_mustalias(𝕃::AbstractLattice, ::InferenceState) = has_mustalias(𝕃)
+has_mustalias(::AbstractLattice, ::IRInterpretationState) = false
 
 # work towards converging the valid age range for sv
-function update_valid_age!(sv::AbsIntState, valid_worlds::WorldRange)
-    sv.world = intersect(sv.world, valid_worlds)
-    return sv.world.valid_worlds
+function update_valid_age!(sv::AbsIntState, world, valid_worlds::WorldRange)
+    valid_worlds = intersect(sv.valid_worlds, valid_worlds)
+    if !(world in valid_worlds)
+        error("invalid age range update")
+    end
+    sv.valid_worlds = valid_worlds
+    return valid_worlds
 end
 
 """
@@ -1068,7 +1097,7 @@ end
 merge_effects!(::AbstractInterpreter, ::IRInterpretationState, ::Effects) = return
 
 decode_statement_effects_override(sv::InferenceState) = decode_statement_effects_override(sv.src.ssaflags[sv.currpc])
-decode_statement_effects_override(sv::IRInterpretationState) = decode_statement_effects_override(UInt32(0))
+decode_statement_effects_override(::IRInterpretationState) = decode_statement_effects_override(UInt32(0))
 
 struct InferenceLoopState
     rt
@@ -1091,8 +1120,8 @@ bail_out_apply(::AbstractInterpreter, state::InferenceLoopState, ::InferenceStat
 bail_out_apply(::AbstractInterpreter, state::InferenceLoopState, ::IRInterpretationState) =
     state.rt === Any
 
-add_remark!(::AbstractInterpreter, ::InferenceState, remark) = return
-add_remark!(::AbstractInterpreter, ::IRInterpretationState, remark) = return
+add_remark!(::AbstractInterpreter, ::InferenceState, _remark) = return
+add_remark!(::AbstractInterpreter, ::IRInterpretationState, _remark) = return
 
 function get_max_methods(interp::AbstractInterpreter, @nospecialize(f), sv::AbsIntState)
     fmax = get_max_methods_for_func(f)

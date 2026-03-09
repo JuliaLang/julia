@@ -5,6 +5,8 @@ using Dates
 
 using TOML: TOML, parse, tryparse, ParserError, Internals, print
 
+@test isempty(Test.detect_closure_boxes(TOML))
+
 function roundtrip(data)
     mktemp() do file, io
         data_parsed = TOML.parse(data)

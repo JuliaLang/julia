@@ -388,10 +388,11 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
     if isa(ex0, Expr) && ex0.head === :(=) && isa(ex0.args[1], Symbol)
         return gen_call_with_extracted_types(__module__, fcn, ex0.args[2], kws; is_source_reflection, supports_binding_reflection, use_signature_tuple)
     end
-    where_params = nothing
+    _where_params = nothing
     if isa(ex0, Expr)
-        ex0, where_params = extract_where_parameters(ex0)
+        ex0, _where_params = extract_where_parameters(ex0)
     end
+    where_params = _where_params
     if isa(ex0, Expr)
         if ex0.head === :do && isexpr(get(ex0.args, 1, nothing), :call)
             # Normalize `f(args...) do ... end` calls to `f(do_anonymous_function, args...)`

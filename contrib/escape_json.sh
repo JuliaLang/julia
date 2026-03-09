@@ -1,10 +1,9 @@
-#!/bin/bash
+#!/bin/sh
 # print arguments escaped as json list elements
 
 first=true
 for n in "$@"; do
   $first && first=false || printf ', '
-  n="${n//\\/\\\\}"
-  n="${n//\"/\\\"}"
+  n=$(printf '%s' "$n" | sed 's/\\/\\\\/g' | sed 's/"/\\"/g')
   printf '"%s"' "$n"
 done

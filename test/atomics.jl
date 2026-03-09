@@ -57,9 +57,8 @@ swap(x, y) = y
 struct UndefComplex{T}
     re::T
     im::T
-    UndefComplex{T}() where {T} = new{T}()
 end
-Base.convert(T::Type{<:UndefComplex}, S) = T()
+Base.convert(T::Type{<:UndefComplex}, S) = T(S, 0)
 
 let T1 = Refxy{NTuple{3,UInt8}},
     T2 = ARefxy{NTuple{3,UInt8}}

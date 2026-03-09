@@ -313,11 +313,15 @@ function ccall_macro_parse(exprs)
     # get the function symbols
     func = let f = call.args[1]
         if isexpr(f, :.)
-            :(($(f.args[2]), $(f.args[1])))
+            Expr(:tuple, f.args[2], f.args[1])
         elseif isexpr(f, :$)
-            f
+            func = f.args[1]
+            if isa(func, String) || (isa(func, QuoteNode) && !isa(func.value, Ptr)) || isa(func, Tuple) || isexpr(func, :tuple)
+                throw(ArgumentError("interpolated value should be a variable or expression, not a literal name or tuple"))
+            end
+            func
         elseif f isa Symbol
-            QuoteNode(f)
+            Expr(:tuple, QuoteNode(f))
         else
             throw(ArgumentError("@ccall function name must be a symbol, a `.` node (e.g. `libc.printf`) or an interpolated function pointer (with `\$`)"))
         end
@@ -363,33 +367,13 @@ end
 
 
 function ccall_macro_lower(convention, func, rettype, types, args, gc_safe, nreq)
-    statements = []
-
-    # if interpolation was used, ensure the value is a function pointer at runtime.
-    if isexpr(func, :$)
-        push!(statements, Expr(:(=), :func, esc(func.args[1])))
-        name = QuoteNode(func.args[1])
-        func = :func
-        check = quote
-            if !isa(func, Ptr{Cvoid})
-                name = $name
-                throw(ArgumentError(LazyString("interpolated function `", name, "` was not a Ptr{Cvoid}, but ", typeof(func))))
-            end
-        end
-        push!(statements, check)
-    else
-        func = esc(func)
-    end
-    cconv = nothing
     if convention isa Tuple
         cconv = Expr(:cconv, (convention..., gc_safe), nreq)
     else
         cconv = Expr(:cconv, (convention, UInt16(0), gc_safe), nreq)
     end
-
-    return Expr(:block, statements...,
-                Expr(:call, :ccall, func, cconv, esc(rettype),
-                     Expr(:tuple, map!(esc, types, types)...), map!(esc, args, args)...))
+    return Expr(:call, :ccall, esc(func), cconv, esc(rettype),
+                 Expr(:tuple, map!(esc, types, types)...), map!(esc, args, args)...)
 end
 
 """

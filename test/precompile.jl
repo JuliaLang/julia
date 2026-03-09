@@ -643,8 +643,7 @@ precompile_test_harness(false) do dir
           """)
 
     cachefile, _ = @test_logs (:debug, r"Generating object cache file for FooBar") min_level=Logging.Debug match_mode=:any Base.compilecache(Base.PkgId("FooBar"))
-    empty_prefs_hash = Base.get_preferences_hash(nothing, String[])
-    @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), empty_prefs_hash)
+    @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), "")
     @test isfile(joinpath(cachedir, "FooBar.ji"))
     Tsc = Bool(Base.JLOptions().use_pkgimages) ? Tuple{<:Vector, String, UInt128} : Tuple{<:Vector, Nothing, UInt128}
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
@@ -687,15 +686,7 @@ precompile_test_harness(false) do dir
           error("break me")
           end
           """)
-    try
-        Base.require(Main, :FooBar2)
-        error("the \"break me\" test failed")
-    catch exc
-        isa(exc, LoadError) || rethrow()
-        exc = exc.error
-        isa(exc, ErrorException) || rethrow()
-        "break me" == exc.msg || rethrow()
-    end
+    @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar2)
 
     # Test that trying to eval into closed modules during precompilation is an error
     FooBar3_file = joinpath(dir, "FooBar3.jl")
@@ -707,14 +698,7 @@ precompile_test_harness(false) do dir
         $code
         end
         """)
-        try
-            Base.require(Main, :FooBar3)
-        catch exc
-            isa(exc, LoadError) || rethrow()
-            exc = exc.error
-            isa(exc, ErrorException) || rethrow()
-            occursin("Evaluation into the closed module `Base` breaks incremental compilation", exc.msg) || rethrow()
-        end
+        @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :FooBar3)
     end
 
     # Test transitive dependency for #21266
@@ -1123,9 +1107,9 @@ precompile_test_harness("code caching") do dir
         if invalidations[idxv-1].def.def.name === :getproperty
             idxv = findnext(==("verify_methods"), invalidations, idxv+1)
         end
-        @test invalidations[idxv-1].def.def.name === :flbi
-        idxv = findnext(==("verify_methods"), invalidations, idxv+1)
-        @test invalidations[idxv-1].def.def.name === :useflbi
+        idxv = findnext(==(invalidations[idxv-1]), invalidations, idxv+1)
+        @test invalidations[idxv-1] == "verify_methods"
+        @test invalidations[idxv-2].def.def.name === :useflbi
 
         m = only(methods(MB.map_nbits))
         @test !hasvalid(m.specializations::Core.MethodInstance, world+1) # insert_backedges invalidations also trigger their backedges
@@ -1434,7 +1418,7 @@ precompile_test_harness("conflicting namespaces") do dir
         try
             for i = 1:2
                 @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
-                @test read(fname, String) == "Iterators\n"
+                @test endswith(read(fname, String), "Iterators\n")
             end
         finally
             rm(fname, force=true)
@@ -1887,6 +1871,7 @@ end
     dir = @__DIR__
     @test success(pipeline(Cmd(`$(Base.julia_cmd()) --startup-file=no precompile_absint1.jl`; dir); stdout, stderr))
     @test success(pipeline(Cmd(`$(Base.julia_cmd()) --startup-file=no precompile_absint2.jl`; dir); stdout, stderr))
+    @test success(pipeline(Cmd(`$(Base.julia_cmd()) --startup-file=no precompile_extmi.jl`; dir); stdout, stderr))
 end
 
 precompile_test_harness("Recursive types") do load_path
@@ -2138,7 +2123,7 @@ precompile_test_harness("Test flags") do load_path
     ji, ofile = Base.compilecache(Base.PkgId("TestFlags"); flags=`--check-bounds=no -O3`)
     open(ji, "r") do io
         Base.isvalid_cache_header(io)
-        _, _, _, _, _, _, _, flags = Base.parse_cache_header(io, ji)
+        _, _, _, _, _, _, flags = Base.parse_cache_header(io, ji)
         cacheflags = Base.CacheFlags(flags)
         @test cacheflags.check_bounds == 2
         @test cacheflags.opt_level == 3
@@ -2153,7 +2138,7 @@ if Base.get_bool_env("CI", false) && (Sys.ARCH === :x86_64 || Sys.ARCH === :aarc
         idx = findfirst(cachefiles) do cf
             Base.stale_cachefile(pkgpath, cf) !== true
         end
-        targets = Base.parse_image_targets(Base.parse_cache_header(cachefiles[idx])[7])
+        targets = Base.parse_image_targets(Base.parse_cache_header(cachefiles[idx])[6])
         @test length(targets) > 1
     end
 end
@@ -2249,7 +2234,7 @@ precompile_test_harness("Issue #52063") do load_path
         @test e isa SystemError
         @test e.prefix == "opening file or folder $(repr(fname))"
         true
-    end broken=Sys.iswindows()
+    end skip = (Sys.isunix() && Libc.geteuid() == 0)
     dir = mktempdir() do dir
         @test include_dependency(dir) === nothing
         chmod(dir, 0x000)
@@ -2259,7 +2244,7 @@ precompile_test_harness("Issue #52063") do load_path
             @test e isa SystemError
             @test e.prefix == "opening file or folder $(repr(dir))"
             true
-        end broken=Sys.iswindows()
+        end skip = (Sys.isunix() && Libc.geteuid() == 0)
         dir
     end
     @test try
@@ -2542,6 +2527,341 @@ end
 let io = IOBuffer()
     run(pipeline(`$(Base.julia_cmd()) --startup-file=no --trace-compile=stderr -e 'f() = sin(1.) == 0. ? 1 : 0; exit(f())'`, stderr=io))
     @test isempty(String(take!(io)))
+end
+
+# Test --compiled-modules=strict in precompilepkgs
+@testset "compiled-modules=strict with dependencies" begin
+    mkdepottempdir() do depot
+        # Create three packages: one that fails to precompile, one that loads it, one that doesn't
+        project_path = joinpath(depot, "testenv")
+        mkpath(project_path)
+
+        # Create FailPkg - a package that can't be precompiled
+        fail_pkg_path = joinpath(depot, "dev", "FailPkg")
+        mkpath(joinpath(fail_pkg_path, "src"))
+        write(joinpath(fail_pkg_path, "Project.toml"),
+              """
+              name = "FailPkg"
+              uuid = "10000000-0000-0000-0000-000000000001"
+              version = "0.1.0"
+              """)
+        write(joinpath(fail_pkg_path, "src", "FailPkg.jl"),
+              """
+              module FailPkg
+              print("Now FailPkg is running.\n")
+              error("expected fail")
+              end
+              """)
+
+        # Create LoadsFailPkg - depends on and loads FailPkg (should fail with strict)
+        loads_pkg_path = joinpath(depot, "dev", "LoadsFailPkg")
+        mkpath(joinpath(loads_pkg_path, "src"))
+        write(joinpath(loads_pkg_path, "Project.toml"),
+              """
+              name = "LoadsFailPkg"
+              uuid = "20000000-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [deps]
+              FailPkg = "10000000-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(loads_pkg_path, "src", "LoadsFailPkg.jl"),
+              """
+              module LoadsFailPkg
+              print("Now LoadsFailPkg is running.\n")
+              import FailPkg
+              print("unreachable\n")
+              end
+              """)
+
+        # Create DependsOnly - depends on FailPkg but doesn't load it (should succeed)
+        depends_pkg_path = joinpath(depot, "dev", "DependsOnly")
+        mkpath(joinpath(depends_pkg_path, "src"))
+        write(joinpath(depends_pkg_path, "Project.toml"),
+              """
+              name = "DependsOnly"
+              uuid = "30000000-0000-0000-0000-000000000003"
+              version = "0.1.0"
+
+              [deps]
+              FailPkg = "10000000-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(depends_pkg_path, "src", "DependsOnly.jl"),
+              """
+              module DependsOnly
+              # Has FailPkg as a dependency but doesn't load it
+              print("Now DependsOnly is running.\n")
+              end
+              """)
+
+        # Create main project with all packages
+        write(joinpath(project_path, "Project.toml"),
+              """
+              [deps]
+              LoadsFailPkg = "20000000-0000-0000-0000-000000000002"
+              DependsOnly = "30000000-0000-0000-0000-000000000003"
+              """)
+        write(joinpath(project_path, "Manifest.toml"),
+              """
+              julia_version = "1.13.0"
+              manifest_format = "2.0"
+
+              [[DependsOnly]]
+              deps = ["FailPkg"]
+              uuid = "30000000-0000-0000-0000-000000000003"
+              version = "0.1.0"
+
+              [[FailPkg]]
+              uuid = "10000000-0000-0000-0000-000000000001"
+              version = "0.1.0"
+
+              [[LoadsFailPkg]]
+              deps = ["FailPkg"]
+              uuid = "20000000-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [[deps.DependsOnly]]
+              deps = ["FailPkg"]
+              path = "../dev/DependsOnly/"
+              uuid = "30000000-0000-0000-0000-000000000003"
+              version = "0.1.0"
+
+              [[deps.FailPkg]]
+              path = "../dev/FailPkg/"
+              uuid = "10000000-0000-0000-0000-000000000001"
+              version = "0.1.0"
+
+              [[deps.LoadsFailPkg]]
+              deps = ["FailPkg"]
+              path = "../dev/LoadsFailPkg/"
+              uuid = "20000000-0000-0000-0000-000000000002"
+              version = "0.1.0"
+              """)
+
+        # Call precompilepkgs with output redirected to a file
+        LoadsFailPkg_output = joinpath(depot, "LoadsFailPkg_output.txt")
+        DependsOnly_output = joinpath(depot, "DependsOnly_output.txt")
+        original_depot_path = copy(Base.DEPOT_PATH)
+        old_proj = Base.active_project()
+        try
+            push!(empty!(DEPOT_PATH), depot)
+            Base.set_active_project(project_path)
+            precompile_capture(file, pkg) = open(file, "w") do io
+                try
+                    r = Base.Precompilation.precompilepkgs([pkg]; io, fancyprint=true)
+                    @test r isa Vector{String}
+                    r
+                catch ex
+                    ex isa Base.Precompilation.PkgPrecompileError || rethrow()
+                    ex
+                end
+            end
+            loadsfailpkg = precompile_capture(LoadsFailPkg_output, "LoadsFailPkg")
+            @test loadsfailpkg isa Base.Precompilation.PkgPrecompileError
+            dependsonly = precompile_capture(DependsOnly_output, "DependsOnly")
+            @test length(dependsonly) == 1
+        finally
+            Base.set_active_project(old_proj)
+            append!(empty!(DEPOT_PATH), original_depot_path)
+        end
+
+        output = read(LoadsFailPkg_output, String)
+        # LoadsFailPkg should fail because it tries to load FailPkg with --compiled-modules=strict
+        @test count("LoadError: expected fail", output) == 1
+        @test count("expected fail", output) == 1
+        @test count("✗ FailPkg", output) > 0
+        @test count("✗ LoadsFailPkg", output) > 0
+        @test count("Now FailPkg is running.", output) == 1
+        @test count("Now LoadsFailPkg is running.", output) == 1
+        @test count("DependsOnly precompiling.", output) == 0
+
+        # DependsOnly should succeed because it doesn't actually load FailPkg
+        output = read(DependsOnly_output, String)
+        @test count("LoadError: expected fail", output) == 0
+        @test count("expected fail", output) == 0
+        @test count("✗ FailPkg", output) > 0
+        @test count("Precompiling DependsOnly finished.", output) == 1
+        @test count("Now FailPkg is running.", output) == 0
+        @test count("Now DependsOnly is running.", output) == 1
+    end
+end
+
+precompile_test_harness("invalidation for 'foreign-keyed' Preferences") do load_path
+    # Test that compile-time preferences invalidate, even when queried from a
+    # "foreign" UUID / package namespace
+    foreign_uuid_str = "b5f1a95c-d45e-4b9e-84c6-b7ea3b5e5f22"
+    foreign_uuid = Base.UUID(foreign_uuid_str)
+
+    # Package that records compile-time preferences for a "foreign" UUID
+    write(joinpath(load_path, "PkgCrossPrefs.jl"),
+          """
+          module PkgCrossPrefs
+              # Query preferences for a foreign package UUID (cross-UUID tracking)
+              Base.record_compiletime_preference(Base.UUID("$foreign_uuid_str"), "debug")
+              # Also query a preference that won't be set
+              Base.record_compiletime_preference(Base.UUID("$foreign_uuid_str"), "unset_opt")
+          end
+          """)
+
+    env_base_dir    = mkpath(joinpath(load_path, "env_base"))
+    env_changed_dir = mkpath(joinpath(load_path, "env_changed"))
+    env_unset_dir   = mkpath(joinpath(load_path, "env_unset_set"))
+
+    env_base      = joinpath(env_base_dir, "Project.toml")
+    env_changed   = joinpath(env_changed_dir, "Project.toml")
+    env_unset_set = joinpath(env_unset_dir, "Project.toml")
+
+    write(env_base, """
+    [deps]
+    PkgForeign = "$foreign_uuid_str"
+
+    [preferences.PkgForeign]
+    debug = false
+    """)
+    write(env_changed, """
+    [deps]
+    PkgForeign = "$foreign_uuid_str"
+
+    [preferences.PkgForeign]
+    debug = true
+    """)
+    write(env_unset_set, """
+    [deps]
+    PkgForeign = "$foreign_uuid_str"
+
+    [preferences.PkgForeign]
+    debug = false
+    unset_opt = "now_set"
+    """)
+
+    old_proj = Base.active_project()
+    try
+        Base.set_active_project(env_base)
+        cachefile, _ = Base.compilecache(Base.PkgId("PkgCrossPrefs"))
+        pkg_file = joinpath(load_path, "PkgCrossPrefs.jl")
+
+        # Cache is not stale with the original preferences
+        @test Base.stale_cachefile(pkg_file, cachefile) !== true
+        # Changing the (foreign) preferences makes the cache stale
+        Base.set_active_project(env_changed)
+        @test Base.stale_cachefile(pkg_file, cachefile) === true
+        # Restoring the original preferences makes it not stale again
+        Base.set_active_project(env_base)
+        @test Base.stale_cachefile(pkg_file, cachefile) !== true
+        # Setting a previously-unset preference also causes staleness
+        Base.set_active_project(env_unset_set)
+        @test Base.stale_cachefile(pkg_file, cachefile) === true
+    finally
+        Base.set_active_project(old_proj)
+    end
+end
+
+precompile_test_harness("Preferences hash collision (issue #59344), part 1") do load_path
+    # Test for the preference hash collision bug (https://github.com/JuliaLang/julia/issues/59344)
+    # related to skipping unset preferences in preference hash
+    pkg_uuid_str = "c9de8a70-0fad-4996-b3e2-f9c45bce31af"
+    pkg_uuid = Base.UUID(pkg_uuid_str)
+
+    pkg_src_dir = mkpath(joinpath(load_path, "PkgHashCollision", "src"))
+    write(joinpath(pkg_src_dir, "PkgHashCollision.jl"),
+          """
+          module PkgHashCollision
+              Base.record_compiletime_preference(Base.UUID("$pkg_uuid_str"), "xyz")
+              Base.record_compiletime_preference(Base.UUID("$pkg_uuid_str"), "abc")
+          end
+          """)
+    write(joinpath(load_path, "PkgHashCollision", "Project.toml"), """
+          name = "PkgHashCollision"
+          uuid = "$pkg_uuid_str"
+          """)
+
+    env_xyz_dir = mkpath(joinpath(load_path, "env_xyz"))
+    env_abc_dir = mkpath(joinpath(load_path, "env_abc"))
+
+    env_xyz = joinpath(env_xyz_dir, "Project.toml")
+    env_abc = joinpath(env_abc_dir, "Project.toml")
+
+    # First config: xyz has the value, abc is unset
+    write(env_xyz, """
+    [deps]
+    PkgHashCollision = "$pkg_uuid_str"
+
+    [preferences.PkgHashCollision]
+    xyz = "same_value"
+    """)
+    # Second config: abc has the same value, xyz is unset
+    write(env_abc, """
+    [deps]
+    PkgHashCollision = "$pkg_uuid_str"
+
+    [preferences.PkgHashCollision]
+    abc = "same_value"
+    """)
+
+    old_proj = Base.active_project()
+    try
+        Base.set_active_project(env_xyz)
+        cachefile, _ = Base.compilecache(Base.PkgId(pkg_uuid, "PkgHashCollision"))
+        pkg_file = joinpath(load_path, "PkgHashCollision", "src", "PkgHashCollision.jl")
+
+        @test Base.stale_cachefile(pkg_file, cachefile) !== true
+        Base.set_active_project(env_abc)
+        @test Base.stale_cachefile(pkg_file, cachefile) === true
+    finally
+        Base.set_active_project(old_proj)
+    end
+end
+
+precompile_test_harness("Preferences hash collision (issue #59344), part 2") do load_path
+    # On Julia ≥1.13, `pref = false` and an unset preference triggered a hash collision,
+    # causing preference changes not to invalidate. Test that this invalidates as expected.
+    pkg_uuid_str = "d2e8c371-1b3f-4f5a-8c7e-9a2b1d4e6f8c"
+    pkg_uuid = Base.UUID(pkg_uuid_str)
+
+    pkg_src_dir = mkpath(joinpath(load_path, "PkgFalsePrefs", "src"))
+    write(joinpath(pkg_src_dir, "PkgFalsePrefs.jl"),
+          """
+          module PkgFalsePrefs
+              Base.record_compiletime_preference(Base.UUID("$pkg_uuid_str"), "flag")
+          end
+          """)
+    write(joinpath(load_path, "PkgFalsePrefs", "Project.toml"), """
+          name = "PkgFalsePrefs"
+          uuid = "$pkg_uuid_str"
+          """)
+
+    env_false_dir = mkpath(joinpath(load_path, "env_false"))
+    env_none_dir  = mkpath(joinpath(load_path, "env_none"))
+
+    env_false = joinpath(env_false_dir, "Project.toml")
+    env_none  = joinpath(env_none_dir,  "Project.toml")
+
+    # Compiled with flag = false
+    write(env_false, """
+    [deps]
+    PkgFalsePrefs = "$pkg_uuid_str"
+
+    [preferences.PkgFalsePrefs]
+    flag = false
+    """)
+    # Preference removed entirely
+    write(env_none, """
+    [deps]
+    PkgFalsePrefs = "$pkg_uuid_str"
+    """)
+
+    old_proj = Base.active_project()
+    try
+        Base.set_active_project(env_false)
+        cachefile, _ = Base.compilecache(Base.PkgId(pkg_uuid, "PkgFalsePrefs"))
+        pkg_file = joinpath(load_path, "PkgFalsePrefs", "src", "PkgFalsePrefs.jl")
+
+        @test Base.stale_cachefile(pkg_file, cachefile) !== true
+        Base.set_active_project(env_none)
+        @test Base.stale_cachefile(pkg_file, cachefile) === true
+    finally
+        Base.set_active_project(old_proj)
+    end
 end
 
 finish_precompile_test!()
