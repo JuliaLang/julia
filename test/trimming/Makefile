@@ -14,7 +14,7 @@ endif
 
 # When made in cygwin, paths generated herein will start with /cygdrive/c/,
 # but when passed as arguments into julia, they must start with C:/. This function
-# shoulde be used on all paths that are passed to and are to be used within a julia session. 
+# should be used on all paths that are passed to and are to be used within a Julia session.
 define maybe_windows_path
 $(if $(filter CYGWIN%,$(shell uname -s)),$(shell cygpath -m $(1)),$(1))
 endef
