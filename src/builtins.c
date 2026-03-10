@@ -2414,7 +2414,7 @@ static int equiv_field_types(jl_value_t *old, jl_value_t *ft) JL_CANSAFEPOINT
 // would be possible, so we cannot change the layout now if so.
 // affects_layout is a (conservative) analysis of layout_uses_free_typevars
 // freevars is a (conservative) analysis of what calling jl_has_bound_typevars from name->wrapper gives (TODO: just call this instead?)
-static int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout, int freevars) JL_NOTSAFEPOINT
+int references_name(jl_value_t *p, jl_typename_t *name, int affects_layout, int freevars) JL_NOTSAFEPOINT
 {
     if (freevars && !jl_has_free_typevars(p))
         freevars = 0;
@@ -2556,7 +2556,7 @@ have_type:
 }
 
 // this is a heuristic for allowing "redefining" a type to something identical
-static int equiv_type(jl_value_t *ta, jl_value_t *tb) JL_CANSAFEPOINT
+int equiv_type(jl_value_t *ta, jl_value_t *tb) JL_CANSAFEPOINT
 {
     jl_datatype_t *dta = (jl_datatype_t*)jl_unwrap_unionall(ta);
     if (!jl_is_datatype(dta))
