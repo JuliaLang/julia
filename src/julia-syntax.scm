@@ -765,12 +765,12 @@
         ;; no keywords
         (method-def-expr- name sparams argl body rett))))
 
-(define (struct-def-expr sig fields mut incomp)
+(define (struct-def-expr sig fields mut info-var use-shim)
   (receive
     (name params super) (analyze-type-sig sig)
     (receive
       (params bounds) (sparam-name-bounds params)
-      (struct-def-expr- name params bounds super (flatten-blocks fields) mut incomp))))
+      (struct-def-expr- name params bounds super (flatten-blocks fields) mut info-var use-shim))))
 
 (define (num-non-varargs args)
   (count (lambda (a) (not (vararg? a))) args))
@@ -937,7 +937,21 @@
                               (thismodule) ,name))))
         field-types))
 
-(define (struct-def-expr- name params bounds super fields0 mut incomp)
+;; Generate struct definition info and constructor definitions.
+;; All struct definitions use the typegroup mechanism (resolve_typegroup).
+;;
+;; info-var: SSA value that receives the struct info svec
+;; use-shim: when #t, apply insert-struct-shim to field types so that
+;;           module-qualified self-references (like M.T inside struct T
+;;           in module M) resolve correctly during field type evaluation.
+;;           This is a compatibility hack for single struct definitions;
+;;           typegroup blocks don't need it since all names are local.
+;;
+;; Returns: (values name sdef fdef)
+;;   name  — the struct name symbol
+;;   sdef  — code to compute the struct info svec
+;;   fdef  — code to define constructors
+(define (struct-def-expr- name params bounds super fields0 mut info-var use-shim)
   (receive
    (fields defs) (separate eventually-decl? fields0)
    (let* ((attrs ())
@@ -959,9 +973,9 @@
           (field-names (map decl-var fields))
           (field-types (map decl-type fields))
           (min-initialized (min (ctors-min-initialized defs) (length fields)))
-          (hasprev (make-ssavalue))
-          (prev (make-ssavalue))
-          (newdef (make-ssavalue)))
+          (ftypes-expr (if use-shim
+                           (insert-struct-shim field-types name)
+                           field-types)))
      (let ((dups (has-dups field-names)))
        (if dups (error (string "duplicate field name: \"" (car dups) "\" is not unique"))))
      (for-each (lambda (v)
@@ -969,60 +983,24 @@
                      (error (string "field name \"" (deparse v) "\" is not a symbol"))))
                field-names)
     (values name
-       (if incomp
-        `(scope-block
-          (block
-            (hardscope)
-            ,@(map (lambda (v) `(local ,v)) params)
-            ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
-            (toplevel-only struct (globalref (thismodule) ,name))
-            (= ,incomp (call (core svec)
-              (call (core svec) ,@params)
-              (call (core svec) ,@(map quotify field-names))
-              (call (core svec) ,@attrs)
-              ,mut ,min-initialized ,super (call (core svec) ,@field-types)))))
-        `(scope-block
-          (block
-            (hardscope)
-            (local-def ,name)
-            ,@(map (lambda (v) `(local ,v)) params)
-            ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
-            (toplevel-only struct (globalref (thismodule) ,name))
-            (= ,name (call (core _structtype) (thismodule) (inert ,name) (call (core svec) ,@params)
-                            (call (core svec) ,@(map quotify field-names))
-                            (call (core svec) ,@attrs)
-                            ,mut ,min-initialized))
-            (call (core _setsuper!) ,name ,super)
-            (= ,hasprev (&& (call (core isdefinedglobal) (thismodule) (inert ,name) (false)) (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name)))
-            (= ,prev (if ,hasprev (globalref (thismodule) ,name) (false)))
-            (if ,hasprev
-                ;; if this is compatible with an old definition, use the old parameters, but the
-                ;; new object. This will fail to capture recursive cases, but the call to typebody!
-                ;; below is permitted to choose either type definition to put into the binding table
-                (block ,@(if (pair? params)
-                              `((= (tuple ,@params) (|.|
-                                                    ,(foldl (lambda (_ x) `(|.| ,x (quote body)))
-                                                            prev
-                                                            params)
-                                                    (quote parameters))))
-                              '())))
-            (= ,newdef (call (core _typebody!) ,prev ,name (call (core svec) ,@(insert-struct-shim field-types name))))
-            (const (globalref (thismodule) ,name) ,newdef)
-            (latestworld)
-            (null))))
-       ;; Always define ctors even if we didn't change the definition.
-       ;; If newdef===prev, then this is a bit suspect, since we don't know what might be
-       ;; changing about the old ctor definitions (we don't even track whether we're
-       ;; replacing defaultctors with identical ones). But it seems better to have the ctors
-       ;; added alongside (replacing) the old ones, than to not have them and need them.
-       ;; Commonly Revise.jl should be used to figure out actually which methods should
-       ;; actually be deleted or added anew.
+       `(scope-block
+         (block
+           (hardscope)
+           ,@(map (lambda (v) `(local ,v)) params)
+           ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
+           (toplevel-only struct (globalref (thismodule) ,name))
+           (= ,info-var (call (core svec)
+             (call (core svec) ,@params)
+             (call (core svec) ,@(map quotify field-names))
+             (call (core svec) ,@attrs)
+             ,mut ,min-initialized ,super (call (core svec) ,@ftypes-expr)))))
+       ;; Constructor definitions: always define ctors so they are available
+       ;; alongside (replacing) old ones during redefinition.
        ,(if (null? defs)
           `(call (top _defaultctors) ,name (inert ,loc))
           `(scope-block
             (block
              (hardscope)
-             ,@(if incomp '() `((global ,name)))
              ,@(map (lambda (c) (rewrite-ctor c name params field-names field-types)) defs))))))))
 
 (define (abstract-type-def-expr name params super)
@@ -1367,6 +1345,37 @@
         (else
          (error "invalid macro definition"))))
 
+;; Generate the scope-block that creates TypeVar placeholders, evaluates
+;; struct info, resolves the typegroup, and binds the results as globals.
+;; Shared by both expand-struct-def and expand-typegroup-def.
+(define (typegroup-scope-block names sdefs info-vars)
+  (let ((old-type-vars (map (lambda (_) (make-ssavalue)) names))
+        (result-var (make-ssavalue)))
+    `(scope-block
+      (block
+        ,@(map (lambda (n) `(local ,n)) names)
+        ,@(map (lambda (n) `(= ,n (call (core TypeVar) (inert ,n)))) names)
+        ,@sdefs
+        ;; Look up old types for redefinition equivalence check
+        ,@(map (lambda (v n) `(= ,v (if (call (core isdefinedglobal) (thismodule) (inert ,n) (false))
+                                        (globalref (thismodule) ,n)
+                                        (null))))
+               old-type-vars names)
+        (= ,result-var
+           (call (core resolve_typegroup) (thismodule)
+                 (call (core svec) ,@names)
+                 (call (core svec) ,@info-vars)
+                 (call (core svec) ,@old-type-vars)))
+        ;; Extract results using getfield (not tuple destructuring, which
+        ;; requires indexed_iterate and is unavailable during bootstrap)
+        ,@(let loop ((ns names) (i 1) (acc '()))
+            (if (null? ns) (reverse acc)
+                (loop (cdr ns) (+ i 1)
+                      (cons `(= ,(car ns) (call (core getfield) ,result-var ,i)) acc))))
+        ,@(map (lambda (n) `(const (globalref (thismodule) ,n) ,n)) names)
+        (latestworld)
+        (null)))))
+
 (define (expand-struct-def e)
   (let ((mut (cadr e))
         (sig (caddr e))
@@ -1380,15 +1389,30 @@
                   ((and (assignment? x) (eventually-decl? (cadr x)))
                    (error (string "\"" (deparse x) "\" inside type definition is reserved")))
                   (else '())))))
-    (expand-forms
-     (receive (name sdef fdef) (struct-def-expr sig fields mut #f)
-       `(block (global ,name) ,sdef ,fdef (latestworld) (null))))))
+    ;; Use the typegroup mechanism for ordinary structs to ensure safety
+    ;; when accessing incomplete types during definition (issue #60919).
+    ;; use-shim=#t so module-qualified self-references (M.T) work.
+    (let ((info-var (make-ssavalue)))
+      (receive (name sdef fdef) (struct-def-expr sig fields mut info-var #t)
+        (let* ((code `(block
+                        (global ,name)
+                        ,(typegroup-scope-block (list name) (list sdef) (list info-var))
+                        ,fdef
+                        (latestworld)
+                        (null)))
+               (expanded (expand-forms code))
+               (replaced (replace-type-constructors expanded)))
+          replaced)))))
 
 ;; Replace (call (core apply_type) ...) with (call (core apply_type_or_typeapp) ...)
 ;; in an expression tree. Used for typegroup to handle TypeVar/TypeApp references.
+;; Skips method bodies since constructors should use plain apply_type for
+;; correct effects inference.
 (define (replace-type-constructors expr)
   (cond ((not (pair? expr)) expr)
         ((quoted? expr) expr)
+        ;; Skip method definitions — constructors should keep apply_type
+        ((eq? (car expr) 'method) expr)
         ((and (eq? (car expr) 'call)
               (pair? (cdr expr))
               (equal? (cadr expr) '(core apply_type)))
@@ -1435,34 +1459,14 @@
     (let loop ((remaining stmts)
                (names '()) (sdefs '()) (fdefs '()) (info-vars '()) (doc-stmts '()))
       (if (null? remaining)
-          ;; Generate the full lowered code
+          ;; Generate the full lowered code using shared typegroup resolution
           (let* ((names (reverse names))
                  (sdefs (reverse sdefs))
                  (fdefs (reverse fdefs))
                  (info-vars (reverse info-vars))
                  (doc-stmts (reverse doc-stmts))
-                 ;; Build the block structure:
-                 ;; 1. Declare all names as locals
-                 ;; 2. Create TypeVar placeholders for each name
-                 ;; 3. Run sdefs (assigns struct info svecs to SSA values)
-                 ;; 4. Resolve typegroup via C
-                 ;; 5. Bind to global constants
-                 ;; 6. Run fdefs (constructors) — outside scope-block so
-                 ;;    type names resolve to globals, not captured locals
-                 ;; 7. Run doc-stmts (documentation calls from @doc)
                  (code `(block
-                         (scope-block
-                          (block
-                           ,@(map (lambda (n) `(local ,n)) names)
-                           ,@(map (lambda (n) `(= ,n (call (core TypeVar) (inert ,n)))) names)
-                           ,@sdefs
-                           (= (tuple ,@names)
-                              (call (core resolve_typegroup) (thismodule)
-                                    (call (core svec) ,@names)
-                                    (call (core svec) ,@info-vars)))
-                           ,@(map (lambda (n) `(const (globalref (thismodule) ,n) ,n)) names)
-                           (latestworld)
-                           (null)))
+                         ,(typegroup-scope-block names sdefs info-vars)
                          ,@fdefs
                          (latestworld)
                          ,@doc-stmts
@@ -1479,7 +1483,7 @@
                             (sig (caddr struct-expr))
                             (fields (cdr (cadddr struct-expr)))
                             (info-var (make-ssavalue)))
-                       (receive (name sdef fdef) (struct-def-expr sig fields mut info-var)
+                       (receive (name sdef fdef) (struct-def-expr sig fields mut info-var #f)
                          (loop (cdr remaining)
                                (cons name names) (cons sdef sdefs)
                                (cons fdef fdefs) (cons info-var info-vars)

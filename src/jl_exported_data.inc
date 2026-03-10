@@ -147,6 +147,7 @@
     XX(vecelement_typename, jl_typename_t*) \
     XX(voidpointer_type, jl_datatype_t*) \
     XX(weakref_type, jl_datatype_t*) \
+    XX(typeapp_type, jl_datatype_t*)
 
 // Global constant values (jl_true, jl_false, jl_nothing)
 #define JL_CONST_GLOBAL_VARS(YY) \
