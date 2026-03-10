@@ -370,7 +370,7 @@ function (-)(x::TimeType, y::CompoundPeriod)
 end
 
 Base.iszero(x::CompoundPeriod) = isempty(canonicalize(x).periods)
-Base.zero(::Type{CompoundPeriod}) = CompoundPeriod()
+Base.zero(::Union{CompoundPeriod,Type{CompoundPeriod}}) = CompoundPeriod()
 
 # Fixed-value Periods (periods corresponding to a well-defined time interval,
 # as opposed to variable calendar intervals like Year).
