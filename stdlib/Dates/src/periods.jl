@@ -336,7 +336,7 @@ Base.convert(::Type{T}, x::CompoundPeriod) where T<:Period =
 # E.g. Year(1) - Month(1)
 (-)(x::Period, y::Period) = CompoundPeriod(Period[x, -y])
 (-)(x::CompoundPeriod, y::Period) = CompoundPeriod(vcat(x.periods, -y))
-(-)(x::CompoundPeriod) = CompoundPeriod(-x.periods)
+(-)(x::CompoundPeriod) = CompoundPeriod(Period[-p for p in x.periods])
 (-)(y::Union{Period, CompoundPeriod}, x::CompoundPeriod) = (-x) + y
 
 GeneralPeriod = Union{Period, CompoundPeriod}
