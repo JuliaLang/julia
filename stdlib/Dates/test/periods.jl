@@ -157,6 +157,7 @@ emptyperiod = ((y + d) - d) - y
     @test typeof(y + ns) <: Dates.CompoundPeriod
     @test zero(Dates.CompoundPeriod) == Dates.CompoundPeriod()
     @test iszero(Dates.CompoundPeriod())
+    @test iszero(Minute(1) - Second(60))
     @test y > m
     @test d < w
     @test mi < h
