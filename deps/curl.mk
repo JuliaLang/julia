@@ -54,9 +54,13 @@ CURL_CONFIGURE_FLAGS +=											\
 
 # We use different TLS libraries on different platforms.
 #   On Windows, we use schannel
+#   On macOS, we use OpenSSL and validate using SecTrust by default
 #   On other platforms, we use OpenSSL
 ifeq ($(OS), WINNT)
 CURL_TLS_CONFIGURE_FLAGS := --with-schannel
+else ifeq ($(OS), Darwin)
+CURL_TLS_CONFIGURE_FLAGS := --with-openssl
+CURL_TLS_CONFIGURE_FLAGS := --with-apple-sectrust
 else
 CURL_TLS_CONFIGURE_FLAGS := --with-openssl
 endif
