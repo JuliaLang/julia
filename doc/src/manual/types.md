@@ -512,7 +512,7 @@ ERROR: setfield!: const field .b of type Baz cannot be changed
 
 Because julia's top level scope is procedural, types defined later in a file are not available for
 earlier field types. This is generally not a problem if types are written in the order they are
-used, but of course this does not work if that are cycles in the field type definitions:
+used, but of course this does not work if there are cycles in the field type definitions:
 
 ```julia
 struct Node

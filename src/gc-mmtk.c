@@ -603,7 +603,8 @@ JL_DLLEXPORT void jl_gc_scan_julia_exc_obj(void* obj_raw, void* closure, Process
 static void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT
 {
     assert(jl_is_genericmemory(m));
-    assert(jl_genericmemory_how(m) == 1 || jl_genericmemory_how(m) == 2);
+    assert(jl_genericmemory_how(m) == JL_GENERICMEMORY_GCMANAGED ||
+           jl_genericmemory_how(m) == JL_GENERICMEMORY_MALLOCD);
     char *d = (char*)m->ptr;
     size_t freed_bytes = memory_block_usable_size(d, isaligned);
     assert(freed_bytes != 0);
@@ -657,7 +658,7 @@ JL_DLLEXPORT void jl_gc_update_inlined_array(void* from, void* to) {
         jl_genericmemory_t *b = (jl_genericmemory_t*)jl_to;
         int how = jl_genericmemory_how(a);
 
-        if (how == 0 && mmtk_object_is_managed_by_mmtk(a->ptr)) { // a is inlined (a->ptr points into the mmtk object)
+        if (how == JL_GENERICMEMORY_INLINED && mmtk_object_is_managed_by_mmtk(a->ptr)) { // a is inlined (a->ptr points into the mmtk object)
             size_t offset_of_data = ((size_t)a->ptr - (size_t)a);
             if (offset_of_data > 0) {
                 b->ptr = (void*)((size_t) b + offset_of_data);
@@ -789,13 +790,13 @@ JL_DLLEXPORT size_t jl_gc_genericmemory_how(void *arg) JL_NOTSAFEPOINT
 {
     jl_genericmemory_t* m = (jl_genericmemory_t*)arg;
     if (m->ptr == (void*)((char*)m + 16)) // JL_SMALL_BYTE_ALIGNMENT (from julia_internal.h)
-        return 0;
+        return JL_GENERICMEMORY_INLINED;
     jl_value_t *owner = jl_genericmemory_data_owner_field(m);
     if (owner == (jl_value_t*)m)
-        return 1;
+        return JL_GENERICMEMORY_GCMANAGED;
     if (owner == NULL)
-        return 2;
-    return 3;
+        return JL_GENERICMEMORY_MALLOCD;
+    return JL_GENERICMEMORY_STRINGOWNED;
 }
 
 // ========================================================================= //

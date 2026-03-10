@@ -34,11 +34,11 @@ struct Generator{I,F}
     iter::I
 end
 
-Generator(f, I1, I2, Is...) = Generator(a->f(a...), zip(I1, I2, Is...))
+Generator(f, I1, I2, Is...) = Generator(splat(f), zip(I1, I2, Is...))
 
 Generator(::Type{T}, iter::I) where {T,I} = Generator{I,Type{T}}(T, iter)
 
-Generator(::Type{T}, I1, I2, Is...) where {T} = Generator(a->T(a...), zip(I1, I2, Is...))
+Generator(::Type{T}, I1, I2, Is...) where {T} = Generator(splat(T), zip(I1, I2, Is...))
 
 function iterate(g::Generator, s...)
     @inline
