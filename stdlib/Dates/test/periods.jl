@@ -386,6 +386,8 @@ end
     @test convert(Dates.CompoundPeriod, y) + m == y + m
     @test Dates.periods(convert(Dates.CompoundPeriod, y)) == convert(Dates.CompoundPeriod, y).periods
     @test -Dates.CompoundPeriod() == Dates.CompoundPeriod()
+    @test -(d - h) == -23h
+    @test (d - h) - (d - h) == Dates.CompoundPeriod()
 end
 @testset "compound period simplification" begin
     # reduce compound periods into the most basic form
