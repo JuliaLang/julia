@@ -5,5 +5,5 @@ Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 
 [sources]
 JuliaInterpreter = {rev = "master", url = "https://github.com/JuliaDebug/JuliaInterpreter.jl.git"}
-LoweredCodeUtils = {rev = "master", url = "https://github.com/JuliaDebug/LoweredCodeUtils.jl.git"}
-Revise = {rev = "master", url = "https://github.com/timholy/Revise.jl.git"}
+LoweredCodeUtils = {rev = "kf/define_method", url = "https://github.com/JuliaDebug/LoweredCodeUtils.jl.git"}
+Revise = {rev = "kf/define_method", url = "https://github.com/timholy/Revise.jl.git"}
