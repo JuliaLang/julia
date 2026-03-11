@@ -214,6 +214,7 @@ end
     ErrUnexpectedEndString
     ErrInvalidEscapeCharacter
     ErrInvalidUnicodeScalar
+    ErrMultilineStringAsKey
 end
 
 const err_message = Dict(
@@ -247,6 +248,7 @@ const err_message = Dict(
     ErrOverflowError                        => "overflowed when parsing integer",
     ErrInvalidUnicodeScalar                 => "invalid unicode scalar",
     ErrInvalidEscapeCharacter               => "invalid escape character",
+    ErrMultilineStringAsKey                 => "multiline strings are not allowed as keys",
     ErrUnexpectedEofExpectedValue           => "unexpected end of file, expected a value",
     ErrSignInNonBase10Number                => "number not in base 10 is not allowed to have a sign",
 )
@@ -623,9 +625,9 @@ function _parse_key(l::Parser)
         return ParserError(ErrEmptyBareKey)
     end
     keyval = if accept(l, '"')
-        @try parse_string_start(l, false)
+        @try parse_string_start(l, false; allow_multiline=false)
     elseif accept(l, '\'')
-        @try parse_string_start(l, true)
+        @try parse_string_start(l, true; allow_multiline=false)
     else
         set_marker!(l)
         if accept_batch(l, isvalid_barekey_char)
@@ -1154,13 +1156,16 @@ end
 # String #
 ##########
 
-function parse_string_start(l::Parser, quoted::Bool)::Err{String}
+function parse_string_start(l::Parser, quoted::Bool; allow_multiline::Bool=true)::Err{String}
     # Have eaten a `'` if `quoted` is true, otherwise have eaten a `"`
     multiline = false
     c = quoted ? '\'' : '"'
     if accept(l, c) # Eat second quote
         if !accept(l, c)
             return ""
+        end
+        if !allow_multiline
+            return ParserError(ErrMultilineStringAsKey)
         end
         accept(l, '\r') # Eat third quote
         accept(l, '\n') # Eat third quote

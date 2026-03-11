@@ -170,16 +170,8 @@ failures_invalid = [
     "invalid/encoding/bad-utf8-in-multiline.toml",
     "invalid/encoding/bad-utf8-in-string-literal.toml",
     "invalid/encoding/bad-utf8-in-string.toml",
-    "invalid/key/multiline-key-01.toml",
-    "invalid/key/multiline-key-02.toml",
-    "invalid/key/multiline-key-03.toml",
-    "invalid/key/multiline-key-04.toml",
-    "invalid/key/newline-04.toml",
-    "invalid/key/newline-05.toml",
     "invalid/local-date/year-3digits.toml",
     "invalid/local-time/time-no-leads-01.toml",
-    "invalid/table/multiline-key-01.toml",
-    "invalid/table/multiline-key-02.toml",
 ]
 
 n_invalid = 0
