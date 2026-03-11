@@ -743,6 +743,8 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
         return std::make_pair((uint32_t)CPU::apple_m3, Feature::apple_m3);
     else if (cpu_name.find("M4") != StringRef ::npos)
         return std::make_pair((uint32_t)CPU::apple_m4, Feature::apple_m4);
+    else if (cpu_name.find("A18") != StringRef ::npos)
+        return std::make_pair((uint32_t)CPU::apple_a18, Feature::apple_a18);
     else if (cpu_name.find("M5") != StringRef ::npos)
         return std::make_pair((uint32_t)CPU::apple_m5, Feature::apple_m5);
     else
