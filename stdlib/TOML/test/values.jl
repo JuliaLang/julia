@@ -32,12 +32,12 @@ function failval(s, v)
 end
 
 @testset "Numbers" begin
-    @test failval("00"                   , Internals.ErrParsingDateTime)
-    @test failval("-00"                  , Internals.ErrParsingDateTime)
-    @test failval("+00"                  , Internals.ErrParsingDateTime)
-    @test failval("00.0"                 , Internals.ErrParsingDateTime)
-    @test failval("-00.0"                , Internals.ErrParsingDateTime)
-    @test failval("+00.0"                , Internals.ErrParsingDateTime)
+    @test failval("00"                   , Internals.ErrLeadingZeroNotAllowedInteger)
+    @test failval("-00"                  , Internals.ErrLeadingZeroNotAllowedInteger)
+    @test failval("+00"                  , Internals.ErrLeadingZeroNotAllowedInteger)
+    @test failval("00.0"                 , Internals.ErrLeadingZeroNotAllowedInteger)
+    @test failval("-00.0"                , Internals.ErrLeadingZeroNotAllowedInteger)
+    @test failval("+00.0"                , Internals.ErrLeadingZeroNotAllowedInteger)
 
     @test failval("0."        , Internals.ErrNoTrailingDigitAfterDot)
     @test failval("0.e"       , Internals.ErrNoTrailingDigitAfterDot)

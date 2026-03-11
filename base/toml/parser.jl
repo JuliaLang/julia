@@ -863,7 +863,16 @@ function parse_number_or_date_start(l::Parser)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_binary)
             ate && return parse_bin(l, contains_underscore)
         elseif accept(l, isdigit)
-            return parse_local_time(l)
+            # Could be a local time (00:30) or a zero-padded date (0001-01-01).
+            # Consume remaining digits, then check for ':' or '-'.
+            accept_batch(l, isdigit)
+            if peek(l) == ':'
+                return parse_local_time(l)
+            elseif peek(l) == '-'
+                return parse_datetime(l)
+            else
+                return ParserError(ErrLeadingZeroNotAllowedInteger)
+            end
         end
     end
 
@@ -1079,6 +1088,8 @@ function try_return_date(p::Parser{Dates}, year, month, day) where Dates
 end
 
 function parse_local_time(l::Parser)
+    # SPEC: partial-time = time-hour ":" ... where time-hour = 2DIGIT
+    (l.prevpos - l.marker) == 2 || return ParserError(ErrParsingDateTime)
     h = @try parse_int(l, false)
     h in 0:23 || return ParserError(ErrParsingDateTime)
     _, m, s, ms = @try _parse_local_time(l, true)

@@ -74,7 +74,6 @@ failures_valid = [
     # Cannot represent timezone offsets with Julia DateTime
     "valid/comment/everywhere.toml",
     "valid/datetime/datetime.toml",
-    "valid/datetime/edge.toml",
     "valid/datetime/milliseconds.toml",
     "valid/datetime/no-seconds.toml",
     "valid/datetime/timezone.toml",
@@ -170,7 +169,6 @@ failures_invalid = [
     "invalid/encoding/bad-utf8-in-multiline.toml",
     "invalid/encoding/bad-utf8-in-string-literal.toml",
     "invalid/encoding/bad-utf8-in-string.toml",
-    "invalid/local-time/time-no-leads-01.toml",
 ]
 
 n_invalid = 0
