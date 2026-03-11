@@ -1146,6 +1146,10 @@ static CPU get_cpu_name(CPUID cpuid)
             return CPU::apple_a18;
         case 0x62: // H17G Hidra e-Core used in Apple M5
         case 0x63: // H17G Hidra p-Core used in Apple M5
+        case 0x64: // H17S Sotra S m-Core used in Apple M5 Pro
+        case 0x65: // H17S Sotra S p-Core used in Apple M5 Pro
+        case 0x68: // H17C Sotra C m-Core used in Apple M5 Max
+        case 0x69: // H17C Sotra C p-Core used in Apple M5 Max
             return CPU::apple_m5;
         case 0x70: // H18P Thera e-Core used in Apple A19 Pro
         case 0x71: // H18P Thera p-Core used in Apple A19 Pro
