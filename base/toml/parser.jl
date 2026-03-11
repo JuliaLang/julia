@@ -72,6 +72,11 @@ mutable struct Parser{Dates}
     # actually defined
     defined_tables::IdSet{TOMLDict}
 
+    # Tables implicitly created as intermediates by dotted keys
+    # in key-value entries (e.g. `a` in `a.b = 1`).
+    # These cannot be reopened by [table] headers.
+    implicit_tables::IdSet{TOMLDict}
+
     # The table we will finally return to the user
     root::TOMLDict
 
@@ -95,6 +100,7 @@ function Parser{Dates}(str::String; filepath=nothing) where {Dates}
             IdSet{TOMLDict}(),    # inline_tables
             IdSet{Any}(),         # static_arrays
             IdSet{TOMLDict}(),    # defined_tables
+            IdSet{TOMLDict}(),    # implicit_tables
             root,
             filepath
         )
@@ -132,6 +138,7 @@ function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothin
     empty!(p.inline_tables)
     empty!(p.static_arrays)
     empty!(p.defined_tables)
+    empty!(p.implicit_tables)
     p.filepath = filepath
     startup(p)
     return p
@@ -479,17 +486,27 @@ function parse_toplevel(l::Parser)::Err{Nothing}
     end
 end
 
-function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, check=true)::Err{TOMLDict}
+function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, check=true, define_implicit=false)::Err{TOMLDict}
     for i in 1:length(dotted_keys)
         d = d::TOMLDict
         key = dotted_keys[i]
         d = get!(TOMLDict, d, key)
         if d isa Vector{Any}
+            isempty(d) && return ParserError(ErrArrayTreatedAsDictionary)
             d = d[end]
         elseif d isa Vector
             return ParserError(ErrKeyAlreadyHasValue)
         end
-        check && @try check_allowed_add_key(l, d, i == length(dotted_keys))
+        if check
+            # When called from parse_entry (define_implicit=true), check
+            # defined_tables for ALL intermediates to prevent appending to
+            # tables that were closed by a different [table] section.
+            check_def = define_implicit ? true : (i == length(dotted_keys))
+            @try check_allowed_add_key(l, d, check_def)
+        end
+        if define_implicit && d isa TOMLDict
+            push!(l.implicit_tables, d)
+        end
     end
     return d::TOMLDict
 end
@@ -516,6 +533,9 @@ function parse_table(l)
         return ParserError(ErrExpectedEndOfTable)
     end
     l.active_table = @try recurse_dict!(l, l.root, table_key)
+    if l.active_table in l.implicit_tables
+        return ParserError(ErrDuplicatedKey)
+    end
     push!(l.defined_tables, l.active_table)
     return
 end
@@ -551,13 +571,16 @@ function parse_entry(l::Parser, d)::Union{Nothing, ParserError}
         return ParserError(ErrExpectedEqualAfterKey)
     end
     if length(key) > 1
-        d = @try recurse_dict!(l, d, @view(key[1:end-1]))
+        d = @try recurse_dict!(l, d, @view(key[1:end-1]), true, true)
     end
     last_key_part = l.dotted_keys[end]
 
     v = get(d, last_key_part, nothing)
     if v !== nothing
         @try check_allowed_add_key(l, v)
+        if v isa TOMLDict && v in l.implicit_tables
+            return ParserError(ErrDuplicatedKey)
+        end
     end
 
     skip_ws(l)
