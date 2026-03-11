@@ -1138,6 +1138,14 @@ function maybe_kws_nt(x::DataType)
 end
 
 function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
+    # Display concrete Union specializations by their canonical Core binding names
+    if x === Core.UniqueUnion
+        print(io, "UniqueUnion")
+        return
+    elseif x === Core.NonUniqueUnion
+        print(io, "NonUniqueUnion")
+        return
+    end
     parameters = x.parameters::SimpleVector
     istuple = x.name === Tuple.name
     isnamedtuple = x.name === typename(NamedTuple)

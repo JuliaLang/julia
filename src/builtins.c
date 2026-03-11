@@ -206,7 +206,7 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
         jl_typeenv_t e = { ua->var, (jl_value_t*)ub->var, env };
         return egal_types(ua->body, ub->body, &e, tvar_names);
     }
-    if (dtag == jl_uniontype_tag << 4) {
+    if (dtag == jl_uniontype_tag << 4 || dtag == jl_unique_uniontype_tag << 4) {
         return egal_types(((jl_uniontype_t*)a)->a, ((jl_uniontype_t*)b)->a, env, tvar_names) &&
             egal_types(((jl_uniontype_t*)a)->b, ((jl_uniontype_t*)b)->b, env, tvar_names);
     }
@@ -288,7 +288,8 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
         case jl_unionall_tag:
             return egal_types(a, b, NULL, 1);
         case jl_uniontype_tag:
-            return compare_fields(a, b, jl_uniontype_type);
+        case jl_unique_uniontype_tag:
+            return compare_fields(a, b, jl_nonunique_uniontype_type);
         case jl_vararg_tag:
             return compare_fields(a, b, jl_vararg_type);
         case jl_task_tag:
@@ -399,7 +400,7 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
             return ((uintptr_t*)v)[-2];
         return inthash((uintptr_t)v);
     }
-    if (tv == jl_uniontype_type) {
+    if (tv == jl_nonunique_uniontype_type || tv == jl_unique_uniontype_type) {
         return bitmix(bitmix(jl_object_id((jl_value_t*)tv),
                              type_object_id_(((jl_uniontype_t*)v)->a, env)),
                       type_object_id_(((jl_uniontype_t*)v)->b, env));
@@ -512,6 +513,8 @@ static uintptr_t NOINLINE jl_object_id__cold(uintptr_t tv, jl_value_t *v) JL_NOT
             return ((uintptr_t*)v)[-2];
         return inthash((uintptr_t)v);
     }
+    if (dt == jl_nonunique_uniontype_type || dt == jl_unique_uniontype_type)
+        return type_object_id_(v, NULL);
     return immut_id_(dt, v, dt->hash);
 }
 
@@ -1663,7 +1666,9 @@ JL_CALLABLE(jl_f_apply_type)
         }
         return jl_apply_tuple_type_v(&args[1], nargs-1);
     }
-    else if (args[0] == (jl_value_t*)jl_uniontype_type) {
+    else if (args[0] == (jl_value_t*)jl_uniontype_type ||
+             args[0] == (jl_value_t*)jl_nonunique_uniontype_type ||
+             args[0] == (jl_value_t*)jl_unique_uniontype_type) {
         // Union{} has extra restrictions, so it needs to be checked after
         // substituting typevars (a valid_type_param check here isn't sufficient).
         return (jl_value_t*)jl_type_union(&args[1], nargs-1);
@@ -2593,6 +2598,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);
     add_builtin("UnionAll", (jl_value_t*)jl_unionall_type);
     add_builtin("Union", (jl_value_t*)jl_uniontype_type);
+    add_builtin("UniqueUnion", (jl_value_t*)jl_unique_uniontype_type);
+    add_builtin("NonUniqueUnion", (jl_value_t*)jl_nonunique_uniontype_type);
     add_builtin("TypeofBottom", (jl_value_t*)jl_typeofbottom_type);
     add_builtin("Tuple", (jl_value_t*)jl_anytuple_type);
     add_builtin("TypeofVararg", (jl_value_t*)jl_vararg_type);

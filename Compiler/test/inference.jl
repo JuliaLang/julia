@@ -655,6 +655,19 @@ f18450() = ifelse(true, Tuple{Vararg{Int}}, Tuple{Vararg})
 # issue #18569
 @test !Compiler.isconstType(Type{Tuple})
 
+# hasuniquerep: Union types with canonicalizable components
+@test Compiler.hasuniquerep(Union{Int64, Float64})
+@test Compiler.hasuniquerep(Union{Int8, Int16, Int32})
+@test Compiler.hasuniquerep(Union{Vector{Int}, Vector{Float64}})
+# Union sort comparator (datatype_name_cmp) gives up on non-DataType parameters,
+# so types like Val{1} vs Val{2} are not distinguishable and the sort does not
+# canonicalize them — Union{Val{1},Val{2}} and Union{Val{2},Val{1}} are
+# typeequal but not egal.
+@test !Compiler.hasuniquerep(Union{Val{1}, Val{2}})
+@test !Compiler.hasuniquerep(Union{Val{:a}, Val{:b}})
+# Wrapper UnionAlls are not uniquerep: Ref == Union{Ref{T}, Ref{S}} where {S, S<:T<:S}
+@test !Compiler.hasuniquerep(Ref)
+
 # issue #10880
 function cat10880(a, b)
     Tuple{a.parameters..., b.parameters...}
@@ -795,6 +808,8 @@ let fieldtype_tfunc(@nospecialize args...) =
     @test fieldtype_tfunc(Union{Type{Base.RefValue{<:Real}}, Type{Int32}}, Const(:x)) == Const(Real)
     @test fieldtype_tfunc(Const(Union{Base.RefValue{<:Real}, Type{Int32}}), Const(:x)) == Const(Real)
     @test fieldtype_tfunc(Type{Union{Base.RefValue{T}, Type{Int32}}} where {T<:Real}, Const(:x)) == Type{<:Real}
+    @test fieldtype_tfunc(Const(Base.RefValue{Union{Int64, Float64}}), Const(:x)) == Const(Union{Int64, Float64})
+    @test fieldtype_tfunc(Const(Base.RefValue{Vector{<:Integer}}), Const(:x)) isa Const
     @test fieldtype_tfunc(Type{<:Tuple}, Const(1)) == Any
     @test fieldtype_tfunc(Type{<:Tuple}, Any) == Any
     @test fieldtype_nothrow(Type{Base.RefValue{<:Real}}, Const(:x))
@@ -1374,7 +1389,7 @@ let isa_tfunc(@nospecialize xs...) =
     @test isa_tfunc(DataType, Const(Type{Array})) === Bool
     @test isa_tfunc(UnionAll, Const(Type{Int})) === Bool # could be improved
     @test isa_tfunc(UnionAll, Const(Type{Array})) === Bool
-    @test isa_tfunc(Union, Const(Union{Float32, Float64})) === Bool
+    @test isa_tfunc(Union, Const(Union{Float32, Float64})) === Const(false)
     @test isa_tfunc(Union, Type{Union}) === Const(true)
     @test isa_tfunc(typeof(Union{}), Const(Int)) === Const(false)
     @test isa_tfunc(typeof(Union{}), Const(Union{})) === Const(false)
@@ -2823,11 +2838,11 @@ end |> only === Int
 @test (() -> NamedTuple{(), <:Any})() isa UnionAll
 
 # Don't pessimize apply_type to anything worse than Type (or TypeVar) and yield Bottom for invalid Unions
-@test only(Base.return_types(Core.apply_type, Tuple{Type{Union}})) == Type{Union{}}
-@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any})) == Union{Type,TypeVar}
-@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any,Any})) == Type
-@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Int})) == Union{}
-@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any,Int})) == Union{}
+@test only(Base.return_types(Core.apply_type, Tuple{Type{Union}})) == Any
+@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any})) == Any
+@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any,Any})) == Any
+@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Int})) == Any
+@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any,Int})) == Any
 @test only(Base.return_types(Core.apply_type, Tuple{Any})) == Any
 @test only(Base.return_types(Core.apply_type, Tuple{Any,Any})) == Any
 

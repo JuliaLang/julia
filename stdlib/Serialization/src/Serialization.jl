@@ -1571,6 +1571,13 @@ function deserialize_datatype(s::AbstractSerializer, full::Bool)
             else
                 t = Tuple{Any[ deserialize(s) for i=1:np ]...}
             end
+        elseif ty === Union
+            # Union is a UnionAll parameterized by uniquerep (Bool).
+            # Cannot use t{param} since Union{x} syntax means type union.
+            # Instantiate via Core bindings instead.
+            @assert np == 1
+            param = deserialize(s)
+            t = param === true ? Core.UniqueUnion : Core.NonUniqueUnion
         else
             t = ty
             for i = 1:np

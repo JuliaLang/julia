@@ -141,7 +141,9 @@
     XX(undefvarerror_type, jl_datatype_t*) \
     XX(fielderror_type, jl_datatype_t*) \
     XX(unionall_type, jl_datatype_t*) \
-    XX(uniontype_type, jl_datatype_t*) \
+    XX(uniontype_type, jl_unionall_t*) \
+    XX(unique_uniontype_type, jl_datatype_t*) \
+    XX(nonunique_uniontype_type, jl_datatype_t*) \
     XX(upsilonnode_type, jl_datatype_t*) \
     XX(vararg_type, jl_datatype_t*) \
     XX(vecelement_typename, jl_typename_t*) \

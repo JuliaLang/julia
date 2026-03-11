@@ -1346,14 +1346,14 @@ end
 end
 @nospecs function modifyfield!_tfunc(𝕃::AbstractLattice, o, f, op, v, order=Symbol)
     o′ = widenconst(o)
-    T = _fieldtype_tfunc(𝕃, o′, f, isconcretetype(o′))
+    T = _fieldtype_tfunc(𝕃, o′, f, isconcretetype(o′), isa(o, Const) || hasuniquerep(o′))
     T === Bottom && return Bottom
     PT = Const(Pair)
     return instanceof_tfunc(apply_type_tfunc(𝕃, Any[PT, T, T]), true)[1]
 end
 @nospecs function replacefield!_tfunc(𝕃::AbstractLattice, o, f, x, v, success_order=Symbol, failure_order=Symbol)
     o′ = widenconst(o)
-    T = _fieldtype_tfunc(𝕃, o′, f, isconcretetype(o′))
+    T = _fieldtype_tfunc(𝕃, o′, f, isconcretetype(o′), isa(o, Const) || hasuniquerep(o′))
     T === Bottom && return Bottom
     PT = Const(ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T)
     return instanceof_tfunc(apply_type_tfunc(𝕃, Any[PT, T]), true)[1]
@@ -1540,17 +1540,17 @@ end
 
     s, exact = instanceof_tfunc(s0, false)
     s === Bottom && return Bottom
-    return _fieldtype_tfunc(𝕃, s, name, exact)
+    return _fieldtype_tfunc(𝕃, s, name, exact, isa(s0, Const) || hasuniquerep(s0))
 end
 
-@nospecs function _fieldtype_tfunc(𝕃::AbstractLattice, s, name, exact::Bool)
+@nospecs function _fieldtype_tfunc(𝕃::AbstractLattice, s, name, exact::Bool, s_uniquerep::Bool=false)
     exact = exact && !has_free_typevars(s)
     u = unwrap_unionall(s)
     if isa(u, Union)
-        ta0 = _fieldtype_tfunc(𝕃, rewrap_unionall(u.a, s), name, exact)
-        tb0 = _fieldtype_tfunc(𝕃, rewrap_unionall(u.b, s), name, exact)
-        ta0 ⊑ tb0 && return tb0
-        tb0 ⊑ ta0 && return ta0
+        ta0 = _fieldtype_tfunc(𝕃, rewrap_unionall(u.a, s), name, exact, s_uniquerep)
+        tb0 = _fieldtype_tfunc(𝕃, rewrap_unionall(u.b, s), name, exact, s_uniquerep)
+        ⊑(𝕃, ta0, tb0) && return tb0
+        ⊑(𝕃, tb0, ta0) && return ta0
         ta, exacta, _, istypea = instanceof_tfunc(ta0, false)
         tb, exactb, _, istypeb = instanceof_tfunc(tb0, false)
         if exact && exacta && exactb
@@ -1630,15 +1630,16 @@ end
         return Const(ft)
     end
 
-    exactft = exact || (!has_free_typevars(ft) && u.name !== Tuple.name)
+    exactft = !has_free_typevars(ft)
     ft = rewrap_unionall(ft, s)
-    if exactft
+    if exact && s_uniquerep
+        return Const(ft)
+    elseif exact || (exactft && u.name !== Tuple.name)
         if hasuniquerep(ft)
             return Const(ft) # ft unique via type cache
         end
         return Type{ft}
-    end
-    if u.name === Tuple.name && ft === Any
+    elseif u.name === Tuple.name && ft === Any
         # Tuple{:x} is possible
         return Any
     end

@@ -2101,7 +2101,9 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
         Value *typ = emit_typeof(ctx, x, false, true);
         auto val = ctx.builder.CreateOr(
             ctx.builder.CreateOr(
-                ctx.builder.CreateICmpEQ(typ, emit_tagfrom(ctx, jl_uniontype_type)),
+                ctx.builder.CreateOr(
+                    ctx.builder.CreateICmpEQ(typ, emit_tagfrom(ctx, jl_nonunique_uniontype_type)),
+                    ctx.builder.CreateICmpEQ(typ, emit_tagfrom(ctx, jl_unique_uniontype_type))),
                 ctx.builder.CreateICmpEQ(typ, emit_tagfrom(ctx, jl_datatype_type))),
             ctx.builder.CreateOr(
                 ctx.builder.CreateICmpEQ(typ, emit_tagfrom(ctx, jl_unionall_type)),

@@ -434,12 +434,13 @@ static int obviously_egal(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
     return !jl_is_type(a) && jl_egal(a,b);
 }
 
-static int obviously_unequal(jl_value_t *a, jl_value_t *b)
+static int obviously_unequal(jl_value_t *aarg, jl_value_t *barg)
 {
-    if (a == (jl_value_t*)jl_typeofbottom_type->super)
-        a = (jl_value_t*)jl_typeofbottom_type; // supertype(typeof(Union{})) is equal to, although distinct from, itself
-    if (b == (jl_value_t*)jl_typeofbottom_type->super)
-        b = (jl_value_t*)jl_typeofbottom_type; // supertype(typeof(Union{})) is equal to, although distinct from, itself
+    if (aarg == (jl_value_t*)jl_typeofbottom_type->super)
+        aarg = (jl_value_t*)jl_typeofbottom_type; // supertype(typeof(Union{})) is equal to, although distinct from, itself
+    if (barg == (jl_value_t*)jl_typeofbottom_type->super)
+        barg = (jl_value_t*)jl_typeofbottom_type; // supertype(typeof(Union{})) is equal to, although distinct from, itself
+    jl_value_t *a = aarg, *b = barg;
     if (a == b)
         return 0;
     if (jl_is_unionall(a))
@@ -486,10 +487,40 @@ static int obviously_unequal(jl_value_t *a, jl_value_t *b)
                 if (obviously_unequal(jl_tparam(ad, i), jl_tparam(bd, i)))
                     return 1;
             }
+        } else if (((jl_datatype_t*)a)->name != jl_tuple_typename && jl_is_uniontype(b)) {
+            // A non-Tuple DataType is never type-equal to a Union, unless the union
+            // has free typevars that might cause it to collapse, e.g.
+            // Ref == Union{Ref{T}, Ref{S}} where {S, S<:T<:S}
+            // (Tuples are covariant, so Union{Tuple{A,...}, Tuple{B,...}} can equal Tuple{Union{A,B},...})
+            if (!jl_has_free_typevars(b))
+                return 1;
         }
     }
     else if (a == jl_bottom_type && jl_is_datatype(b)) {
         return 1;
+    }
+    else if (jl_is_uniontype(a)) {
+        if (jl_is_datatype(b) && ((jl_datatype_t*)b)->name != jl_tuple_typename) {
+            if (!jl_has_free_typevars(a))
+                return 1;
+        }
+        if (jl_is_uniontype(b)) {
+            if (jl_typetagof(a) == (jl_unique_uniontype_tag << 4)) {
+                if (jl_typetagof(b) == (jl_unique_uniontype_tag << 4))
+                    // UniqueUnion vs UniqueUnion: canonical ordering means componentwise comparison works
+                    return obviously_unequal(((jl_uniontype_t*)a)->a, ((jl_uniontype_t*)b)->a) ||
+                        obviously_unequal(((jl_uniontype_t*)a)->b, ((jl_uniontype_t*)b)->b);
+                // UniqueUnion vs NonUniqueUnion: type-equal unions must have the same tag
+                // (unless b has free typevars that could collapse to match a's structure)
+                if (!jl_has_free_typevars(b))
+                    return 1;
+            }
+            else if (jl_typetagof(b) == (jl_unique_uniontype_tag << 4)) {
+                // NonUniqueUnion vs UniqueUnion: same logic, symmetric
+                if (!jl_has_free_typevars(a))
+                    return 1;
+            }
+        }
     }
     if (jl_is_typevar(a) && jl_is_typevar(b) && obviously_unequal(((jl_tvar_t*)a)->ub, ((jl_tvar_t*)b)->ub))
         return 1;
@@ -1569,7 +1600,15 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
                 // Int isa DataType, Int isa Type{Int}, Type{Int} more specific than DataType,
                 // !(Type{Int} <: DataType), !isleaftype(Type{Int}), because non-DataTypes can
                 // be type-equal to `Int`.
-                return jl_typeof(tp0) == (jl_value_t*)yd;
+                jl_value_t *tw = jl_typeof(tp0);
+                if (tw == (jl_value_t*)yd)
+                    return 1;
+                // For parameterized kind types (e.g. Union{uniquerep}), typeof(tp0) is
+                // a concrete specialization, not the body type. Use full subtype check
+                // to properly handle TypeVar matching.
+                if (jl_is_datatype(tw) && ((jl_datatype_t*)tw)->name == yd->name)
+                    return subtype(tw, (jl_value_t*)yd, e, param);
+                return 0;
             }
             return 0;
         }
@@ -1801,6 +1840,13 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     }
 
     if ((jl_is_uniontype(x) && jl_is_uniontype(y))) {
+        // For UniqueUnion, type-equal implies egal, and obviously_egal (line 1787) is a
+        // complete egal check for UniqueUnion types (all components have unique rep and
+        // are pointer-comparable at the leaves). So if obviously_egal returned 0, these
+        // unions are not type-equal; skip the expensive componentwise/full algorithm.
+        if (jl_typetagof(x) == (jl_unique_uniontype_tag << 4) &&
+            jl_typetagof(y) == (jl_unique_uniontype_tag << 4))
+            return 0;
         // For 2 unions, first try a more efficient greedy algorithm that compares the unions
         // componentwise. If failed, `exists_subtype` would memorize that this branch should be skipped.
         // Note: this is valid because the normal path checks `>:` locally.
@@ -2094,7 +2140,16 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
                     jl_value_t *t0 = jl_tparam0(x);
                     if (jl_is_typevar(t0))
                         return 0;
-                    *subtype = jl_typeof(t0) == y;
+                    jl_value_t *tw = jl_typeof(t0);
+                    if (tw == y) {
+                        *subtype = 1;
+                        return 1;
+                    }
+                    // For parameterized kind types (e.g. Union{T} where T),
+                    // typeof(t0) may be a specialization, not pointer-equal to y.
+                    if (((jl_datatype_t*)y)->hasfreetypevars)
+                        return 0; // uncertain, let full algorithm handle it
+                    *subtype = 0;
                     return 1;
                 }
                 if (jl_is_type_type(y)) {
@@ -2370,8 +2425,13 @@ JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b)
 {
     if (a == b)
         return 1;
-    if (jl_typeof(a) == jl_typeof(b) && jl_types_egal(a, b))
-        return 1;
+    jl_value_t *atyp = jl_typeof(a);
+    if (atyp == jl_typeof(b)) {
+        if (jl_types_egal(a, b))
+            return 1;
+        if (type_has_uniquerep(a))
+            return 0;
+    }
     if (obviously_unequal(a, b))
         return 0;
     // the following is an interleaved version of:
@@ -2559,7 +2619,9 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
                         }
                     }
                 }
-                else {
+                else if (!jl_is_kind((jl_value_t*)t2)) {
+                    // For non-kind parametric types, a type value can't be an instance.
+                    // Kind types (like Union{uniquerep}) need the general jl_subtype check below.
                     return 0;
                 }
             }
@@ -3929,8 +3991,15 @@ static jl_value_t *intersect_type_type(jl_value_t *x, jl_value_t *y, jl_stenv_t 
 {
     assert(e->Loffset == 0);
     jl_value_t *p0 = jl_tparam0(x);
-    if (!jl_is_typevar(p0))
-        return (jl_typeof(p0) == y) ? x : jl_bottom_type;
+    if (!jl_is_typevar(p0)) {
+        jl_value_t *tw = jl_typeof(p0);
+        if (tw == y) return x;
+        // For parameterized kind types, check if typeof is a specialization of y
+        if (jl_is_datatype(tw) && jl_is_datatype(y) &&
+                ((jl_datatype_t*)tw)->name == ((jl_datatype_t*)y)->name)
+            return x;
+        return jl_bottom_type;
+    }
     if (!jl_is_kind(y)) return jl_bottom_type;
     if (y == (jl_value_t*)jl_typeofbottom_type && ((jl_tvar_t*)p0)->lb == jl_bottom_type)
         return (jl_value_t*)jl_wrap_Type(jl_bottom_type);
@@ -5453,7 +5522,9 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, jl_value_t *a0, jl_v
                 return 1;
         }
         else if (b == (jl_value_t*)jl_datatype_type || b == (jl_value_t*)jl_unionall_type ||
-                 b == (jl_value_t*)jl_uniontype_type) {
+                 b == (jl_value_t*)jl_uniontype_type ||
+                 b == (jl_value_t*)jl_nonunique_uniontype_type ||
+                 b == (jl_value_t*)jl_unique_uniontype_type) {
             return 1;
         }
     }

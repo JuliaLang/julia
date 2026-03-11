@@ -3857,8 +3857,11 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         JL_CONST_GLOBAL_VARS(XX)
 #undef XX
 #define XX(name) \
-        ijl_small_typeof[(jl_##name##_tag << 4) / sizeof(*ijl_small_typeof)] = jl_##name##_type;
+        ijl_small_typeof[(jl_##name##_tag << 4) / sizeof(*ijl_small_typeof)] = (jl_datatype_t*)jl_##name##_type;
         JL_SMALL_TYPEOF(XX)
+        // jl_uniontype_type is a UnionAll; override with the concrete DataType variants.
+        ijl_small_typeof[(jl_uniontype_tag << 4) / sizeof(*ijl_small_typeof)] = jl_nonunique_uniontype_type;
+        ijl_small_typeof[(jl_unique_uniontype_tag << 4) / sizeof(*ijl_small_typeof)] = jl_unique_uniontype_type;
 #undef XX
         export_jl_small_typeof();
         export_jl_sysimg_globals();

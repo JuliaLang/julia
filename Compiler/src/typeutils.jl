@@ -17,6 +17,9 @@ function hasuniquerep(@nospecialize t)
     isa(t, TypeVar) && return false # TypeVars are identified by address, not equality
     iskindtype(typeof(t)) || return true # non-types are always compared by egal in the type system
     isconcretetype(t) && return true # these are also interned and pointer comparable
+    if isa(t, Union)
+        return ccall(:jl_union_hasuniquerep, Int32, (Any,), t) != 0
+    end
     if isa(t, DataType) && t.name !== Tuple.name && !isvarargtype(t) # invariant DataTypes
         return all(hasuniquerep, t.parameters)
     end

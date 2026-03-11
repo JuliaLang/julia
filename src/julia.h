@@ -964,6 +964,7 @@ typedef struct {
     XX(datatype) \
     XX(unionall) \
     XX(uniontype) \
+    XX(unique_uniontype) \
     /* type parameter objects */ \
     XX(vararg) \
     XX(tvar) \
@@ -1569,7 +1570,8 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_mutable_datatype(t) (jl_is_datatype(t) && (((jl_datatype_t*)t)->name->mutabl))
 #define jl_is_immutable(t)   (!((jl_datatype_t*)t)->name->mutabl)
 #define jl_may_be_immutable_datatype(t) (jl_is_datatype(t) && (!((jl_datatype_t*)t)->name->mutabl))
-#define jl_is_uniontype(v)   jl_typetagis(v,jl_uniontype_tag<<4)
+// uniontype and unique_uniontype tags are consecutive; range-check covers both
+#define jl_is_uniontype(v)   ((uintptr_t)(jl_typetagof(v) - (jl_uniontype_tag<<4)) <= (uintptr_t)(1<<4))
 #define jl_is_typevar(v)     jl_typetagis(v,jl_tvar_tag<<4)
 #define jl_is_unionall(v)    jl_typetagis(v,jl_unionall_tag<<4)
 #define jl_is_vararg(v)      jl_typetagis(v,jl_vararg_tag<<4)
@@ -1630,14 +1632,19 @@ int is_leaf_bound(jl_value_t *v) JL_NOTSAFEPOINT;
 
 STATIC_INLINE int jl_is_kind(jl_value_t *v) JL_NOTSAFEPOINT
 {
-    return (v==(jl_value_t*)jl_uniontype_type || v==(jl_value_t*)jl_datatype_type ||
-            v==(jl_value_t*)jl_unionall_type || v==(jl_value_t*)jl_typeofbottom_type);
+    // Union has multiple DataType variants (unique/non-unique) sharing the same TypeName,
+    // plus a body DataType for the UnionAll. Check via TypeName to cover all of them.
+    return (v==(jl_value_t*)jl_datatype_type ||
+            v==(jl_value_t*)jl_unionall_type || v==(jl_value_t*)jl_typeofbottom_type ||
+            (jl_nonunique_uniontype_type && jl_is_datatype(v) &&
+             ((jl_datatype_t*)v)->name == jl_nonunique_uniontype_type->name));
 }
 
 STATIC_INLINE int jl_is_kindtag(uintptr_t t) JL_NOTSAFEPOINT
 {
     t >>= 4;
-    return (t==(uintptr_t)jl_uniontype_tag || t==(uintptr_t)jl_datatype_tag ||
+    return (t==(uintptr_t)jl_uniontype_tag || t==(uintptr_t)jl_unique_uniontype_tag ||
+            t==(uintptr_t)jl_datatype_tag ||
             t==(uintptr_t)jl_unionall_tag || t==(uintptr_t)jl_typeofbottom_tag);
 }
 

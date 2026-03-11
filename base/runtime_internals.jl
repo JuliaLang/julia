@@ -993,7 +993,8 @@ or [`Core.TypeofBottom`](@ref).
 
 All kinds are [concrete](@ref isconcretetype) because types are Julia values.
 """
-iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
+iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === typeof(Bottom) ||
+                              (t isa DataType && t.name === Union.body.name))
 
 """
     Base.isconcretedispatch(T)

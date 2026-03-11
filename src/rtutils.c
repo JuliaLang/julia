@@ -963,6 +963,12 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         // Types are printed as a fully qualified name, with parameters, e.g.
         // `Base.Set{Int}`, and function types are printed as e.g. `typeof(Main.f)`
         jl_datatype_t *dv = (jl_datatype_t*)v;
+        // Print concrete Union specializations by their canonical names,
+        // since Union{true}/Union{false} is not valid syntax.
+        if (dv == jl_unique_uniontype_type)
+            return jl_printf(out, "UniqueUnion");
+        if (dv == jl_nonunique_uniontype_type)
+            return jl_printf(out, "NonUniqueUnion");
         if (dv->name == jl_tuple_typename) {
             if (dv == jl_tuple_type)
                 return jl_printf(out, "Tuple");
@@ -1102,7 +1108,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (v == jl_bottom_type) {
         n += jl_printf(out, "Union{}");
     }
-    else if (vt == jl_uniontype_type) {
+    else if (vt == jl_nonunique_uniontype_type || vt == jl_unique_uniontype_type) {
         n += jl_printf(out, "Union{");
         while (jl_is_uniontype(v)) {
             // tail-recurse on b to flatten the printing of the Union structure in the common case

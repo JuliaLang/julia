@@ -479,6 +479,7 @@
     XX(jl_method_morespecific) \
     XX(jl_type_union) \
     XX(jl_type_unionall) \
+    XX(jl_union_hasuniquerep) \
     XX(jl_unbox_bool) \
     XX(jl_unbox_float32) \
     XX(jl_unbox_float64) \

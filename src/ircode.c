@@ -1658,6 +1658,7 @@ void jl_init_serializer(void)
                      jl_vararg_type,
                      jl_densearray_type, jl_function_type, jl_typename_type,
                      jl_builtin_type, jl_task_type, jl_uniontype_type,
+                     jl_unique_uniontype_type, jl_nonunique_uniontype_type,
                      jl_array_any_type, jl_intrinsic_type,
                      jl_voidpointer_type, jl_newvarnode_type, jl_abstractstring_type,
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),

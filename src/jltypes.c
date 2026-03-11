@@ -566,19 +566,75 @@ static void flatten_type_union(jl_value_t **types, size_t n, jl_value_t **out, s
 }
 
 
-static void isort_union(jl_value_t **a, size_t len) JL_NOTSAFEPOINT
+// Sort union components and report whether the ordering is fully deterministic.
+// Returns 1 if all distinct non-NULL pairs were distinguishable by the comparator
+// (i.e. no ties between non-identical elements), 0 otherwise.
+static int isort_union(jl_value_t **a, size_t len) JL_NOTSAFEPOINT
 {
+    int deterministic = 1;
     size_t i, j;
     for (i = 1; i < len; i++) {
         jl_value_t *x = a[i];
         for (j = i; j > 0; j--) {
             jl_value_t *y = a[j - 1];
-            if (!(union_sort_cmp(x, y) < 0))
+            int cmp = union_sort_cmp(x, y);
+            if (cmp == 0 && x != NULL && y != NULL && x != y)
+                deterministic = 0;
+            if (!(cmp < 0))
                 break;
             a[j] = y;
         }
         a[j] = x;
     }
+    return deterministic;
+}
+
+// Allocate a union node with the given small tag (jl_uniontype_tag or jl_unique_uniontype_tag).
+static jl_value_t *jl_new_union_node(int smalltag, jl_value_t *a, jl_value_t *b)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_datatype_t *dt = (smalltag == jl_unique_uniontype_tag) ?
+        jl_unique_uniontype_type : jl_nonunique_uniontype_type;
+    jl_value_t *u = jl_gc_alloc(ct->ptls, sizeof(jl_uniontype_t), dt);
+    jl_set_typetagof(u, smalltag, 0);
+    ((jl_uniontype_t*)u)->a = a;
+    jl_gc_wb(u, a);
+    ((jl_uniontype_t*)u)->b = b;
+    jl_gc_wb(u, b);
+    return u;
+}
+
+// Test whether type t has a unique representation, s.t. T == S implies T === S.
+// This mirrors the Julia-level hasuniquerep (Compiler/src/typeutils.jl).
+int type_has_uniquerep(jl_value_t *t) JL_NOTSAFEPOINT
+{
+    if (t == (jl_value_t*)jl_typeofbottom_type)
+        return 0; // typeof(Union{}) is special
+    if (t == jl_bottom_type)
+        return 1;
+    if (jl_is_typevar(t))
+        return 0; // TypeVars are identified by address
+    if (!jl_is_type(t))
+        return 1; // non-types are always compared by egal
+    if (jl_is_concrete_type(t))
+        return 1; // concrete types are interned
+    if (jl_is_uniontype(t)) {
+        // For unions, the tag tells us: unique_uniontype means uniquerep
+        return jl_typetagof(t) == (jl_unique_uniontype_tag << 4);
+    }
+    if (jl_is_datatype(t)) {
+        jl_datatype_t *dt = (jl_datatype_t*)t;
+        if (dt->name == jl_tuple_typename || jl_is_vararg((jl_value_t*)dt))
+            return 0;
+        // invariant DataTypes: check all parameters
+        size_t i, l = jl_nparams(dt);
+        for (i = 0; i < l; i++) {
+            if (!type_has_uniquerep(jl_tparam(dt, i)))
+                return 0;
+        }
+        return 1;
+    }
+    return 0;
 }
 
 static int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion)
@@ -665,6 +721,13 @@ STATIC_INLINE void merge_vararg_unions(jl_value_t **temp, size_t nt)
     }
 }
 
+// Returns 1 if the union type has unique representation (tagged as unique_uniontype),
+// meaning T == S implies T === S for this union type.
+JL_DLLEXPORT int jl_union_hasuniquerep(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    return jl_is_uniontype(v) && jl_typetagof(v) == (jl_unique_uniontype_tag << 4);
+}
+
 JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
 {
     if (n == 0)
@@ -695,8 +758,30 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
             }
         }
     }
-    isort_union(temp, nt);
+    int deterministic = isort_union(temp, nt);
     merge_vararg_unions(temp, nt);
+    // Determine if the union has unique representation:
+    // sort must be deterministic AND all components must have uniquerep.
+    int uniquerep = deterministic;
+    if (uniquerep) {
+        int ntuples = 0;
+        for (i = 0; i < nt; i++) {
+            if (temp[i] != NULL) {
+                if (!type_has_uniquerep(temp[i])) {
+                    uniquerep = 0;
+                    break;
+                }
+                // Tuples are covariant, so Union{Tuple{A,...}, Tuple{B,...}} can be type-equal
+                // to Tuple{Union{A,B},...} (a non-Union). Limit to at most one tuple to preserve
+                // the UniqueUnion invariant that type-equal implies egal.
+                if (jl_is_datatype(temp[i]) && ((jl_datatype_t*)temp[i])->name == jl_tuple_typename)
+                    ntuples++;
+            }
+        }
+        if (ntuples > 1)
+            uniquerep = 0;
+    }
+    int tag = uniquerep ? jl_unique_uniontype_tag : jl_uniontype_tag;
     jl_value_t **ptu = &temp[nt];
     *ptu = jl_bottom_type;
     int k;
@@ -705,7 +790,7 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
             if (*ptu == jl_bottom_type)
                 *ptu = temp[k];
             else
-                *ptu = jl_new_struct(jl_uniontype_type, temp[k], *ptu);
+                *ptu = jl_new_union_node(tag, temp[k], *ptu);
         }
     }
     assert(*ptu != NULL);
@@ -801,8 +886,25 @@ jl_value_t *simple_union(jl_value_t *a, jl_value_t *b)
             }
         }
     }
-    isort_union(temp, nt);
+    int deterministic = isort_union(temp, nt);
     merge_vararg_unions(temp, nt);
+    int uniquerep = deterministic;
+    if (uniquerep) {
+        int ntuples = 0;
+        for (i = 0; i < nt; i++) {
+            if (temp[i] != NULL) {
+                if (!type_has_uniquerep(temp[i])) {
+                    uniquerep = 0;
+                    break;
+                }
+                if (jl_is_datatype(temp[i]) && ((jl_datatype_t*)temp[i])->name == jl_tuple_typename)
+                    ntuples++;
+            }
+        }
+        if (ntuples > 1)
+            uniquerep = 0;
+    }
+    int tag = uniquerep ? jl_unique_uniontype_tag : jl_uniontype_tag;
     temp[nt] = jl_bottom_type;
     size_t k;
     for (k = nt; k-- > 0; ) {
@@ -810,7 +912,7 @@ jl_value_t *simple_union(jl_value_t *a, jl_value_t *b)
             if (temp[nt] == jl_bottom_type)
                 temp[nt] = temp[k];
             else
-                temp[nt] = jl_new_struct(jl_uniontype_type, temp[k], temp[nt]);
+                temp[nt] = jl_new_union_node(tag, temp[k], temp[nt]);
         }
     }
     assert(temp[nt] != NULL);
@@ -910,7 +1012,25 @@ jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi)
                 temp[j] = NULL;
         }
     }
-    isort_union(&temp[i], count);
+    int deterministic = isort_union(&temp[i], count);
+    int uniquerep = deterministic;
+    if (uniquerep) {
+        int ntuples = 0;
+        size_t ki;
+        for (ki = i; ki < nt; ki++) {
+            if (temp[ki] != NULL) {
+                if (!type_has_uniquerep(temp[ki])) {
+                    uniquerep = 0;
+                    break;
+                }
+                if (jl_is_datatype(temp[ki]) && ((jl_datatype_t*)temp[ki])->name == jl_tuple_typename)
+                    ntuples++;
+            }
+        }
+        if (ntuples > 1)
+            uniquerep = 0;
+    }
+    int tag = uniquerep ? jl_unique_uniontype_tag : jl_uniontype_tag;
     temp[nt] = jl_bottom_type;
     size_t k;
     for (k = nt; k-- > i; ) {
@@ -918,7 +1038,7 @@ jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi)
             if (temp[nt] == jl_bottom_type)
                 temp[nt] = temp[k];
             else
-                temp[nt] = jl_new_struct(jl_uniontype_type, temp[k], temp[nt]);
+                temp[nt] = jl_new_union_node(tag, temp[k], temp[nt]);
         }
     }
     assert(temp[nt] != NULL);
@@ -1438,7 +1558,9 @@ jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n)
 {
     if (tc == (jl_value_t*)jl_anytuple_type)
         return jl_apply_tuple_type_v(params, n);
-    if (tc == (jl_value_t*)jl_uniontype_type)
+    if (tc == (jl_value_t*)jl_uniontype_type ||
+        tc == (jl_value_t*)jl_nonunique_uniontype_type ||
+        tc == (jl_value_t*)jl_unique_uniontype_type)
         return (jl_value_t*)jl_type_union(params, n);
     size_t i;
     if (n > 1) {
@@ -1714,6 +1836,10 @@ jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype
         JL_GC_POP();
     }
     else if jl_is_uniontype(t) { // recursively call itself on a and b
+        // UniqueUnion components all have uniquerep and thus no free TypeVars,
+        // so substitution cannot change them.
+        if (jl_typetagof(t) == (jl_unique_uniontype_tag << 4))
+            return t;
         jl_uniontype_t *u = (jl_uniontype_t*)t;
         jl_value_t *a = NULL;
         jl_value_t *b = NULL;
@@ -1721,7 +1847,7 @@ jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype
         a = jl_substitute_datatype(u->a, x, y);
         b = jl_substitute_datatype(u->b, x, y);
         if (a != u->a || b != u->b) {
-            t = jl_new_struct(jl_uniontype_type, a, b);
+            t = jl_new_union_node(jl_uniontype_tag, a, b);
         }
         JL_GC_POP();
     }
@@ -2051,7 +2177,7 @@ static jl_value_t *normalize_unionalls(jl_value_t *t)
         a = normalize_unionalls(u->a);
         b = normalize_unionalls(u->b);
         if (a != u->a || b != u->b) {
-            t = jl_new_struct(jl_uniontype_type, a, b);
+            t = jl_new_union_node(jl_typetagof(u) >> 4, a, b);
         }
         JL_GC_POP();
     }
@@ -2699,9 +2825,9 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
                 b = NULL;
         }
         if (a != u->a || b != u->b) {
-            if (!check) {
-                // fast path for `jl_rename_unionall`.
-                t = jl_new_struct(jl_uniontype_type, a, b);
+            if (!check && a != NULL && b != NULL) {
+                // fast path for `jl_rename_unionall` (check==0 implies nothrow==0 so a,b are non-NULL).
+                t = jl_new_union_node(jl_typetagof(u) >> 4, a, b);
             }
             else if (a == NULL || b == NULL) {
                 assert(nothrow);
@@ -3156,13 +3282,28 @@ void jl_init_types(void) JL_GC_DISABLED
     // It seems like we probably usually end up needing the box for kinds (often used in an Any context), so force it to exist
     jl_unionall_type->name->mayinlinealloc = 0;
 
-    jl_uniontype_type = jl_new_datatype(jl_symbol("Union"), core, type_type, jl_emptysvec,
-                                        jl_perm_symsvec(2, "a", "b"),
-                                        jl_svec(2, jl_any_type, jl_any_type),
-                                        jl_emptysvec, 0, 0, 2);
-    XX(uniontype);
-    // It seems like we probably usually end up needing the box for kinds (often used in an Any context), so force it to exist
-    jl_uniontype_type->name->mayinlinealloc = 0;
+    // Create the body DataType for the parametric Union{uniquerep} type.
+    // Union{uniquerep} where uniquerep is a UnionAll with Bool-valued parameter.
+    // Union{false} = non-unique unions, Union{true} = unique unions.
+    {
+        jl_tvar_t *ur_tvar = tvar("uniquerep");
+        jl_datatype_t *union_body = jl_new_datatype(jl_symbol("Union"), core, type_type,
+                                            jl_svec1(ur_tvar),
+                                            jl_perm_symsvec(2, "a", "b"),
+                                            jl_svec(2, jl_any_type, jl_any_type),
+                                            jl_emptysvec, 0, 0, 2);
+        union_body->name->mayinlinealloc = 0;
+        // Create the UnionAll wrapper: Union{uniquerep} where uniquerep
+        jl_uniontype_type = (jl_unionall_t*)jl_new_struct(jl_unionall_type, ur_tvar, (jl_value_t*)union_body);
+        union_body->name->wrapper = (jl_value_t*)jl_uniontype_type;
+        // Temporarily use the body as both union type variants for early bootstrap.
+        // Phase 2 (after Bool) will replace these with proper specializations.
+        jl_nonunique_uniontype_type = union_body;
+        jl_unique_uniontype_type = union_body;
+        union_body->smalltag = jl_uniontype_tag;
+        ijl_small_typeof[(jl_uniontype_tag << 4) / sizeof(*ijl_small_typeof)] = union_body;
+        ijl_small_typeof[(jl_unique_uniontype_tag << 4) / sizeof(*ijl_small_typeof)] = union_body;
+    }
 
     jl_tvar_t *tttvar = tvar("T");
     type_type->parameters = jl_svec(1, tttvar);
@@ -3241,6 +3382,20 @@ void jl_init_types(void) JL_GC_DISABLED
     XX(bool);
     jl_false = jl_permbox8(jl_bool_type, jl_bool_tag, 0);
     jl_true  = jl_permbox8(jl_bool_type, jl_bool_tag, 1);
+
+    // Phase 2: Now that Bool is available, create the proper Union{false} and Union{true}
+    // specializations of the Union{uniquerep} UnionAll.
+    {
+        jl_nonunique_uniontype_type = (jl_datatype_t*)jl_instantiate_unionall(jl_uniontype_type, (jl_value_t*)jl_false);
+        jl_nonunique_uniontype_type->smalltag = jl_uniontype_tag;
+        jl_nonunique_uniontype_type->ismutationfree = 1;
+        ijl_small_typeof[(jl_uniontype_tag << 4) / sizeof(*ijl_small_typeof)] = jl_nonunique_uniontype_type;
+
+        jl_unique_uniontype_type = (jl_datatype_t*)jl_instantiate_unionall(jl_uniontype_type, (jl_value_t*)jl_true);
+        jl_unique_uniontype_type->smalltag = jl_unique_uniontype_tag;
+        jl_unique_uniontype_type->ismutationfree = 1;
+        ijl_small_typeof[(jl_unique_uniontype_tag << 4) / sizeof(*ijl_small_typeof)] = jl_unique_uniontype_type;
+    }
 
     jl_abstractstring_type = jl_new_abstracttype((jl_value_t*)jl_symbol("AbstractString"), core, jl_any_type, jl_emptysvec);
     jl_string_type = jl_new_datatype(jl_symbol("String"), core, jl_abstractstring_type, jl_emptysvec,
@@ -3692,7 +3847,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "flags",
                             "dispatch_status"),
                         jl_svec(8,
-                            jl_new_struct(jl_uniontype_type, jl_method_type, jl_module_type),
+                            jl_new_union_node(jl_unique_uniontype_tag, (jl_value_t*)jl_method_type, (jl_value_t*)jl_module_type),
                             jl_any_type,
                             jl_simplevector_type,
                             jl_array_any_type,
@@ -3865,7 +4020,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_emptysvec,
                         0, 1, 6);
     XX(task);
-    jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
+    jl_value_t *listt = jl_new_union_node(jl_unique_uniontype_tag, (jl_value_t*)jl_task_type, (jl_value_t*)jl_nothing_type);
     jl_svecset(jl_task_type->types, 0, listt);
     // Set field 20 (metrics_enabled) as const
     // Set fields 8 (_state) and 24-27 (metric counters) as atomic
@@ -3915,7 +4070,8 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_compute_field_offsets(jl_datatype_type);
     jl_compute_field_offsets(jl_typename_type);
-    jl_compute_field_offsets(jl_uniontype_type);
+    jl_compute_field_offsets(jl_nonunique_uniontype_type);
+    jl_compute_field_offsets(jl_unique_uniontype_type);
     jl_compute_field_offsets(jl_tvar_type);
     jl_compute_field_offsets(jl_methtable_type);
     jl_compute_field_offsets(jl_methcache_type);
@@ -3932,7 +4088,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_simplevector_type->isidentityfree = 1;
     jl_typename_type->ismutationfree = 1;
     jl_datatype_type->ismutationfree = 1;
-    jl_uniontype_type->ismutationfree = 1;
+    jl_nonunique_uniontype_type->ismutationfree = 1;
+    jl_unique_uniontype_type->ismutationfree = 1;
     jl_unionall_type->ismutationfree = 1;
     assert(((jl_datatype_t*)jl_array_any_type)->ismutationfree == 0);
     assert(((jl_datatype_t*)jl_array_uint8_type)->ismutationfree == 0);
