@@ -132,6 +132,34 @@ escape_microsoft_c_args(cmd::Cmd) =
 escape_microsoft_c_args(io::IO, cmd::Cmd) =
     escape_microsoft_c_args(io::IO, cmd.exec...)
 
+# Patterns that indicate a sensitive environment variable name (case-insensitive).
+const _SENSITIVE_ENV_PATTERNS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "PASSWD", "CREDENTIAL", "CRED", "AUTH", "PRIVATE")
+
+function _is_sensitive_env_name(name::AbstractString)
+    uname = uppercase(name)
+    return any(p -> occursin(p, uname), _SENSITIVE_ENV_PATTERNS)
+end
+
+function _show_env(io::IO, env::Vector{String})
+    show_values = get(io, :show_env_values, false)::Bool
+    print(io, "[")
+    for (i, e) in enumerate(env)
+        i > 1 && print(io, ", ")
+        eqidx = findnext('=', e, 2)
+        if eqidx === nothing || show_values
+            show(io, e)
+        else
+            key = e[1:prevind(e, eqidx)]
+            if _is_sensitive_env_name(key)
+                show(io, string(key, "=***"))
+            else
+                show(io, e)
+            end
+        end
+    end
+    print(io, "]")
+end
+
 function show(io::IO, cmd::Cmd)
     print_env = cmd.env !== nothing
     print_dir = !isempty(cmd.dir)
@@ -162,7 +190,7 @@ function show(io::IO, cmd::Cmd)
         print(io, ")")
     end
     if print_env || print_dir
-        print_env && (print(io, ","); show(io, cmd.env))
+        print_env && (print(io, ","); _show_env(io, cmd.env))
         print_dir && (print(io, "; dir="); show(io, cmd.dir))
         print(io, ")")
     end
@@ -286,6 +314,11 @@ as desired, or use [`addenv`](@ref).
 The `dir` keyword argument can be used to specify a working directory for the command.
 `dir` defaults to the currently set `dir` for `command` (which is the current working
 directory if not specified already).
+
+!!! note
+    When displaying a `Cmd`, environment variables whose names match sensitive patterns
+    (e.g. containing "KEY", "TOKEN", "SECRET", "PASSWORD", "AUTH") have their values
+    redacted. Use `repr(cmd, context=:show_env_values=>true)` to show all values.
 
 See also [`Cmd`](@ref), [`addenv`](@ref), [`ENV`](@ref), [`pwd`](@ref).
 """

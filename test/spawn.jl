@@ -606,6 +606,25 @@ if !Sys.iswindows()
     @test string(cmd_both) == "setgid(setuid(`echo test`, 1001), 1000)"
 end
 
+# test redaction of sensitive env vars in Cmd display
+@testset "Cmd env display redaction" begin
+    cmd = setenv(`echo`, "API_KEY" => "secret123", "PATH" => "/usr/bin", "DATABASE_PASSWORD" => "hunter2")
+    s = repr(cmd)
+    # Sensitive vars are redacted
+    @test contains(s, "API_KEY=***")
+    @test contains(s, "DATABASE_PASSWORD=***")
+    @test !contains(s, "secret123")
+    @test !contains(s, "hunter2")
+    # Non-sensitive vars show full values
+    @test contains(s, "PATH=/usr/bin")
+
+    # Opt-in to show all values
+    s_full = repr(cmd, context=:show_env_values=>true)
+    @test contains(s_full, "secret123")
+    @test contains(s_full, "hunter2")
+    @test contains(s_full, "/usr/bin")
+end
+
 # test for interpolation of Cmd
 let c = setenv(`x`, "A"=>true)
     @test (`$c a`).env == String["A=true"]
