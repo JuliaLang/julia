@@ -1000,8 +1000,10 @@ ok_end_value(c::Char) = iswhitespace(c) || c == '#' || c == EOF_CHAR || c == ']'
 accept_two(l, f::F) where {F} = accept_n(l, 2, f) || return(ParserError(ErrParsingDateTime))
 function parse_datetime(l)
     # Year has already been eaten when we reach here
+    year_start = l.marker
     year = @try parse_int(l, false)
-    year in 0:9999 || return ParserError(ErrParsingDateTime)
+    # SPEC: date-fullyear = 4DIGIT (exactly 4 digits required)
+    (l.prevpos - year_start) == 4 || return ParserError(ErrParsingDateTime)
 
     # Month
     accept(l, '-') || return ParserError(ErrParsingDateTime)

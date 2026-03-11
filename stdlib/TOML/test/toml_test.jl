@@ -170,7 +170,6 @@ failures_invalid = [
     "invalid/encoding/bad-utf8-in-multiline.toml",
     "invalid/encoding/bad-utf8-in-string-literal.toml",
     "invalid/encoding/bad-utf8-in-string.toml",
-    "invalid/local-date/year-3digits.toml",
     "invalid/local-time/time-no-leads-01.toml",
 ]
 
