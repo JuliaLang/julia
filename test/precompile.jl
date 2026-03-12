@@ -2864,4 +2864,33 @@ precompile_test_harness("Preferences hash collision (issue #59344), part 2") do 
     end
 end
 
+# Workspace sub-environment precompilation should not precompile packages from other sub-environments
+@testset "workspace sub-environment precompilation scoping" begin
+    mkdepottempdir() do depot
+        workspace_path = joinpath(@__DIR__, "project", "Workspaces", "PrecompileExt")
+        fooenv_path = joinpath(workspace_path, "FooEnv")
+
+        original_depot_path = copy(Base.DEPOT_PATH)
+        old_proj = Base.active_project()
+        try
+            push!(empty!(DEPOT_PATH), depot)
+            # Activate FooEnv (only depends on Foo, not Bar)
+            Base.set_active_project(fooenv_path)
+
+            io = IOBuffer()
+            ioc = IOContext(io, :color => false)
+            Base.Precompilation.precompilepkgs(; io=ioc, fancyprint=false)
+            output = String(take!(io))
+
+            # Foo should be precompiled
+            @test occursin("Foo", output)
+            # Bar should NOT be precompiled (it's in another sub-environment)
+            @test !occursin("Bar", output)
+        finally
+            Base.set_active_project(old_proj)
+            append!(empty!(DEPOT_PATH), original_depot_path)
+        end
+    end
+end
+
 finish_precompile_test!()
