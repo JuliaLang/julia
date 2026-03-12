@@ -64,9 +64,12 @@ bt_context_t *jl_to_bt_context(void *sigctx) JL_NOTSAFEPOINT
 }
 
 static int thread0_exit_count = 0;
-static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size);
 
 int jl_simulate_longjmp(jl_jmp_buf mctx, bt_context_t *c) JL_NOTSAFEPOINT;
+
+static struct sigaction *get_prev_handler(int sig) JL_NOTSAFEPOINT;
+static int try_forward_signal(int sig, siginfo_t *info, void *context) JL_NOTSAFEPOINT;
+static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size);
 static void jl_longjmp_in_ctx(int sig, void *_ctx, jl_jmp_buf jmpbuf);
 
 #if !defined(_OS_DARWIN_)
@@ -353,7 +356,9 @@ static int is_addr_on_stack(jl_task_t *ct, void *addr) JL_NOTSAFEPOINT
             (char*)addr < (char*)ct->ctx.stkbuf + ct->ctx.bufsz);
 }
 
-static void sigdie_handler(int sig, siginfo_t *info, void *context)
+// Fatal signal handler — prints diagnostics and terminates. This is the
+// last-resort path used when no signal chaining is possible (or appropriate).
+static void fatal_handler(int sig, siginfo_t *info, void *context)
 {
     signal(sig, SIG_DFL);
     uv_tty_reset_mode();
@@ -393,6 +398,12 @@ static void sigdie_handler(int sig, siginfo_t *info, void *context)
     // error handler and the pgcstack having been destroyed)
 }
 
+static void sigdie_handler(int sig, siginfo_t *info, void *context)
+{
+    if (!try_forward_signal(sig, info, context))
+        fatal_handler(sig, info, context);
+}
+
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_)
 enum x86_trap_flags {
     USER_MODE = 0x4,
@@ -426,6 +437,72 @@ int exc_reg_is_write_fault(uintptr_t esr) {
 #endif
 
 static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx);
+
+// Previous signal handlers, saved during signal installation for chaining
+static struct sigaction *get_prev_handler(int sig) JL_NOTSAFEPOINT
+{
+    static struct sigaction prev_handlers[12];
+    switch (sig) {
+    case SIGSEGV:
+        return &prev_handlers[0];
+    case SIGBUS:
+        return &prev_handlers[1];
+    case SIGFPE:
+        return &prev_handlers[2];
+    case SIGILL:
+        return &prev_handlers[3];
+    case SIGABRT:
+        return &prev_handlers[4];
+    case SIGSYS:
+        return &prev_handlers[5];
+    case SIGTRAP:
+        return &prev_handlers[6];
+    case SIGUSR1:
+        return &prev_handlers[7];
+    case SIGUSR2:
+        return &prev_handlers[8];
+#ifdef SIGINFO
+    case SIGINFO:
+        return &prev_handlers[9];
+#endif
+    case SIGINT:
+        return &prev_handlers[10];
+    case SIGPIPE:
+        return &prev_handlers[11];
+    default:
+        assert(0); // unrecognized signal
+        return NULL;
+    }
+}
+
+// Forward a signal to the previous handler saved before Julia installed its own.
+// Returns 1 if the signal was forwarded, 0 otherwise.
+static int try_forward_signal(int sig, siginfo_t *info, void *context) JL_NOTSAFEPOINT
+{
+    struct sigaction *prev = get_prev_handler(sig);
+    if (prev == NULL || prev->sa_handler == SIG_DFL)
+        return 0; // not forwarded / no previous handler
+    if (prev->sa_handler == SIG_IGN)
+        return 1; // forwarded to an "ignore" handler
+
+    sigset_t mask = prev->sa_mask;
+    if ((prev->sa_flags & SA_NODEFER) == 0)
+        sigaddset(&mask, sig);
+    sigset_t oldmask;
+    pthread_sigmask(SIG_SETMASK, &mask, &oldmask);
+
+    if (prev->sa_flags & SA_SIGINFO)
+        prev->sa_sigaction(sig, info, context);
+    else
+        prev->sa_handler(sig);
+
+    if ((prev->sa_flags & SA_RESETHAND) != 0)
+        prev->sa_handler = SIG_DFL;
+
+    pthread_sigmask(SIG_SETMASK, &oldmask, NULL);
+
+    return 1; // forwarded successfully
+}
 
 #if defined(HAVE_MACH)
 #include "signals-mach.c"
@@ -520,11 +597,17 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
         return;
     }
     jl_task_t *ct = jl_get_current_task();
-    if (ct == NULL || ct->ptls == NULL || jl_atomic_load_relaxed(&ct->ptls->gc_state) == JL_GC_STATE_WAITING) {
-        sigdie_handler(sig, info, context);
+    if (ct == NULL || ct->ptls == NULL) {
+        // unadopted / foreign thread
+        if (!try_forward_signal(sig, info, context))
+            fatal_handler(sig, info, context);
         return;
     }
     if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && jl_addr_is_safepoint((uintptr_t)info->si_addr) && !is_write_fault(context)) {
+        if (jl_atomic_load_relaxed(&ct->ptls->gc_state) == JL_GC_STATE_WAITING) {
+            fatal_handler(sig, info, context);
+            return;
+        }
         jl_set_gc_and_wait(ct);
         // Do not raise sigint on worker thread
         if (jl_atomic_load_relaxed(&ct->tid) != 0)
@@ -544,9 +627,9 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
         }
         return;
     }
-    if (ct->eh == NULL)
-        sigdie_handler(sig, info, context);
     if ((sig != SIGBUS || info->si_code == BUS_ADRERR) && is_addr_on_stack(ct, info->si_addr)) { // stack overflow and not a BUS_ADRALN (alignment error)
+        if (ct->eh == NULL)
+            fatal_handler(sig, info, context);
         stack_overflow_warning();
         jl_throw_in_ctx(ct, jl_stackovf_exception, sig, context);
     }
@@ -560,10 +643,16 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
         jl_raise(sig);
     }
     else if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && is_write_fault(context)) {  // writing to read-only memory (e.g., mmap)
+        if (try_forward_signal(sig, info, context))
+            return; // successfully forwarded - assume the outer application handled it
+        if (ct->eh == NULL)
+            fatal_handler(sig, info, context);
         jl_throw_in_ctx(ct, jl_readonlymemory_exception, sig, context);
     }
     else {
-        sigdie_handler(sig, info, context);
+        if (!try_forward_signal(sig, info, context))
+            fatal_handler(sig, info, context);
+        return;
     }
 }
 
@@ -708,17 +797,21 @@ static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
 void usr2_handler(int sig, siginfo_t *info, void *ctx)
 {
     jl_task_t *ct = jl_get_current_task();
-    if (ct == NULL)
+    if (ct == NULL) {
+        try_forward_signal(sig, info, ctx);
         return;
+    }
     jl_ptls_t ptls = ct->ptls;
-    if (ptls == NULL)
+    if (ptls == NULL) {
+        try_forward_signal(sig, info, ctx);
         return;
+    }
     int errno_save = errno;
     sig_atomic_t request = jl_atomic_load(&ptls->signal_request);
-    if (request == 0)
+    if (request == 0 || !jl_atomic_cmpswap(&ptls->signal_request, &request, -1)) {
+        try_forward_signal(sig, info, ctx);
         return;
-    if (!jl_atomic_cmpswap(&ptls->signal_request, &request, -1))
-        return;
+    }
     if (request == 1) {
         usr2_signal_context = jl_to_bt_context(ctx);
         // acknowledge that we saw the signal_request and set usr2_signal_context
@@ -850,11 +943,11 @@ static void allocate_segv_handler(void)
     sigemptyset(&act.sa_mask);
     act.sa_sigaction = segv_handler;
     act.sa_flags = SA_ONSTACK | SA_SIGINFO;
-    if (sigaction(SIGSEGV, &act, NULL) < 0) {
+    if (sigaction(SIGSEGV, &act, get_prev_handler(SIGSEGV)) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
     // On AArch64, stack overflow triggers a SIGBUS
-    if (sigaction(SIGBUS, &act, NULL) < 0) {
+    if (sigaction(SIGBUS, &act, get_prev_handler(SIGBUS)) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
 }
@@ -909,7 +1002,7 @@ const static int sigwait_sigs[] = {
     0
 };
 
-static void jl_sigsetset(sigset_t *sset)
+static void set_sigwait_sigset(sigset_t *sset)
 {
     sigemptyset(sset);
     for (const int *sig = sigwait_sigs; *sig; sig++)
@@ -1044,7 +1137,7 @@ static void *signal_listener(void *arg)
 {
     sigset_t sset;
     int sig, critical, profile;
-    jl_sigsetset(&sset);
+    set_sigwait_sigset(&sset);
 #if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
     siginfo_t info;
 #endif
@@ -1242,7 +1335,7 @@ void restore_signals(void)
     sigaddset(&jl_sigint_sset, SIGINT);
 
     sigset_t sset;
-    jl_sigsetset(&sset);
+    set_sigwait_sigset(&sset);
     pthread_sigmask(SIG_SETMASK, &sset, 0);
 
 #if !defined(HAVE_MACH)
@@ -1268,11 +1361,13 @@ static void fpe_handler(int sig, siginfo_t *info, void *context)
         jl_longjmp_in_ctx(sig, context, *saferestore);
         return;
     }
-    jl_task_t *ct = jl_get_current_task();
-    if (ct == NULL || ct->eh == NULL) // exception on foreign thread is fatal
-        sigdie_handler(sig, info, context);
-    else
-        jl_throw_in_ctx(ct, jl_diverror_exception, sig, context);
+    if (!try_forward_signal(sig, info, context)) {
+        jl_task_t *ct = jl_get_current_task();
+        if (ct == NULL || ct->eh == NULL) // exception on foreign thread is fatal
+            fatal_handler(sig, info, context);
+        else
+            jl_throw_in_ctx(ct, jl_diverror_exception, sig, context);
+    }
 }
 
 static void jl_longjmp_in_ctx(int sig, void *_ctx, jl_jmp_buf jmpbuf)
@@ -1301,86 +1396,99 @@ static void sigtrap_handler(int sig, siginfo_t *info, void *context)
     uintptr_t pc = ((ucontext_t*)context)->uc_mcontext->__ss.__pc; // TODO: Do this in linux as well
     uint32_t* code = (uint32_t*)(pc);                              // https://gcc.gnu.org/legacy-ml/gcc-patches/2013-11/msg02228.html
     if (*code == 0xd4200020) { // brk #0x1 which is what LLVM defines as trap
-        signal(sig, SIG_DFL);
+        signal(SIGTRAP, SIG_DFL);
         sig = SIGILL; // redefine this as as an "unreachable reached" error message
-        sigdie_handler(sig, info, context);
+        fatal_handler(sig, info, context);
+    } else {
+        try_forward_signal(sig, info, context);
     }
+}
+#else
+static void sigtrap_handler(int sig, siginfo_t *info, void *context)
+{
+    try_forward_signal(sig, info, context);
+    return; // effectively SIG_IGN
 }
 #endif
 
+static void sigpipe_handler(int sig, siginfo_t *info, void *context)
+{
+    try_forward_signal(sig, info, context);
+    return; // effectively SIG_IGN
+}
+
 void jl_install_default_signal_handlers(void)
 {
-    struct sigaction actf;
-    memset(&actf, 0, sizeof(struct sigaction));
-    sigemptyset(&actf.sa_mask);
-    actf.sa_sigaction = fpe_handler;
-    actf.sa_flags = SA_SIGINFO;
-    if (sigaction(SIGFPE, &actf, NULL) < 0) {
+    struct sigaction actfpe;
+    memset(&actfpe, 0, sizeof(struct sigaction));
+    sigemptyset(&actfpe.sa_mask);
+    actfpe.sa_sigaction = fpe_handler;
+    actfpe.sa_flags = SA_SIGINFO;
+    if (sigaction(SIGFPE, &actfpe, get_prev_handler(SIGFPE)) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
-#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
     struct sigaction acttrap;
     memset(&acttrap, 0, sizeof(struct sigaction));
     sigemptyset(&acttrap.sa_mask);
     acttrap.sa_sigaction = sigtrap_handler;
     acttrap.sa_flags = SA_SIGINFO;
-    if (sigaction(SIGTRAP, &acttrap, NULL) < 0) {
+    if (sigaction(SIGTRAP, &acttrap, get_prev_handler(SIGTRAP)) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
-#else
-    if (signal(SIGTRAP, SIG_IGN) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGTRAP");
-    }
-#endif
     struct sigaction actint;
     memset(&actint, 0, sizeof(struct sigaction));
     sigemptyset(&actint.sa_mask);
     actint.sa_handler = sigint_handler;
     actint.sa_flags = 0;
-    if (sigaction(SIGINT, &actint, NULL) < 0) {
+    if (sigaction(SIGINT, &actint, get_prev_handler(SIGINT)) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
-    if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+    struct sigaction actpipe;
+    memset(&actpipe, 0, sizeof(struct sigaction));
+    sigemptyset(&actpipe.sa_mask);
+    actpipe.sa_sigaction = sigpipe_handler;
+    actpipe.sa_flags = SA_SIGINFO;
+    if (sigaction(SIGPIPE, &actpipe, get_prev_handler(SIGPIPE)) < 0) {
         jl_error("fatal error: Couldn't set SIGPIPE");
     }
 
 #if defined(HAVE_MACH)
     allocate_mach_handler();
 #else
-    struct sigaction act;
-    memset(&act, 0, sizeof(struct sigaction));
-    sigemptyset(&act.sa_mask);
-    act.sa_sigaction = usr2_handler;
-    act.sa_flags = SA_SIGINFO | SA_RESTART;
-    if (sigaction(SIGUSR2, &act, NULL) < 0) {
+    struct sigaction actusr2;
+    memset(&actusr2, 0, sizeof(struct sigaction));
+    sigemptyset(&actusr2.sa_mask);
+    actusr2.sa_sigaction = usr2_handler;
+    actusr2.sa_flags = SA_SIGINFO | SA_RESTART;
+    if (sigaction(SIGUSR2, &actusr2, get_prev_handler(SIGUSR2)) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
 #endif
 
     allocate_segv_handler();
 
-    struct sigaction act_die;
-    memset(&act_die, 0, sizeof(struct sigaction));
-    sigemptyset(&act_die.sa_mask);
-    act_die.sa_sigaction = sigdie_handler;
-    act_die.sa_flags = SA_SIGINFO | SA_RESETHAND;
-    if (sigaction(SIGILL, &act_die, NULL) < 0) {
+    struct sigaction actdie;
+    memset(&actdie, 0, sizeof(struct sigaction));
+    sigemptyset(&actdie.sa_mask);
+    actdie.sa_sigaction = sigdie_handler;
+    actdie.sa_flags = SA_SIGINFO | SA_RESETHAND;
+    if (sigaction(SIGILL, &actdie, get_prev_handler(SIGILL)) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
-    if (sigaction(SIGABRT, &act_die, NULL) < 0) {
+    if (sigaction(SIGABRT, &actdie, get_prev_handler(SIGABRT)) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
-    if (sigaction(SIGSYS, &act_die, NULL) < 0) {
+    if (sigaction(SIGSYS, &actdie, get_prev_handler(SIGSYS)) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
     // need to ensure the following signals are not SIG_IGN, even though they will be blocked
-    act_die.sa_flags = SA_SIGINFO | SA_RESTART | SA_RESETHAND;
+    actdie.sa_flags = SA_SIGINFO | SA_RESTART | SA_RESETHAND;
 #ifdef SIGINFO
-    if (sigaction(SIGINFO, &act_die, NULL) < 0) {
+    if (sigaction(SIGINFO, &actdie, get_prev_handler(SIGINFO)) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
 #else
-    if (sigaction(SIGUSR1, &act_die, NULL) < 0) {
+    if (sigaction(SIGUSR1, &actdie, get_prev_handler(SIGUSR1)) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
 #endif
