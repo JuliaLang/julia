@@ -511,6 +511,14 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
         return;
     }
     jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL) {
+        // On macOS, __thread TLV storage is cleaned up before pthread TSD
+        // destructors run, so jl_get_current_task() returns NULL during
+        // jl_delete_thread. Use the TSD key to recover ptls directly.
+        jl_ptls_t ptls = jl_get_task_exit_ptls();
+        if (ptls != NULL)
+            ct = jl_atomic_load_relaxed(&ptls->current_task);
+    }
     if (ct == NULL || ct->ptls == NULL || jl_atomic_load_relaxed(&ct->ptls->gc_state) == JL_GC_STATE_WAITING) {
         sigdie_handler(sig, info, context);
         return;

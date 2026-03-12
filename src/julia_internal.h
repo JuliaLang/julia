@@ -1398,6 +1398,9 @@ int jl_safepoint_consume_sigint(void);
 void jl_wake_libuv(void) JL_NOTSAFEPOINT;
 
 void jl_set_pgcstack(jl_gcframe_t **) JL_NOTSAFEPOINT;
+#ifndef _OS_WINDOWS_
+jl_ptls_t jl_get_task_exit_ptls(void) JL_NOTSAFEPOINT;
+#endif
 #if defined(_OS_WINDOWS_)
 typedef DWORD jl_pgcstack_key_t;
 #else

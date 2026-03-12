@@ -76,6 +76,11 @@ JL_DLLEXPORT jl_jmp_buf *jl_get_safe_restore(void)
     return (jl_jmp_buf*)pthread_getspecific(jl_safe_restore_key);
 }
 
+jl_ptls_t jl_get_task_exit_ptls(void) JL_NOTSAFEPOINT
+{
+    return (jl_ptls_t)pthread_getspecific(jl_task_exit_key);
+}
+
 JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *sr)
 {
 #ifdef _OS_DARWIN_
@@ -492,10 +497,13 @@ void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
 
 static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 {
-#ifndef _OS_WINDOWS_
-    pthread_setspecific(jl_task_exit_key, NULL);
-#endif
     jl_ptls_t ptls = (jl_ptls_t)value;
+#ifndef _OS_WINDOWS_
+    // On macOS __thread values like `jl_current_task` have already been cleaned
+    // up by now, so forward the PTLS to the GC safepoint logic (`jl_gc_*_enter`)
+    // via the task exit pthread key.
+    pthread_setspecific(jl_task_exit_key, value);
+#endif
     // safepoint until GC exit, in case GC was running concurrently while in
     // prior unsafe-region (before we let it release the stack memory)
     (void)jl_gc_unsafe_enter(ptls);
@@ -524,6 +532,10 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
     jl_free_thread_gc_state(ptls);
     // park in safe-region from here on (this may run GC again)
     (void)jl_gc_safe_enter(ptls);
+#ifndef _OS_WINDOWS_
+    // Clear the TSD key after the last safepoint operation.
+    pthread_setspecific(jl_task_exit_key, NULL);
+#endif
     // try to free some state we do not need anymore
 #ifndef _OS_WINDOWS_
     void *signal_stack = ptls->signal_stack;
