@@ -250,4 +250,56 @@ using Base.Threads
         @test result_static == expected
         @test result_static isa Vector{Any}
     end
+
+    # Test typed comprehensions
+    @testset "typed comprehensions" begin
+        n = 100
+
+        # Basic typed comprehension
+        result = @threads Float64[i^2 for i in 1:n]
+        @test result isa Vector{Float64}
+        @test length(result) == n
+        @test all(result[i] == Float64(i^2) for i in 1:n)
+
+        # Typed comprehension with different schedulers
+        result_static = @threads :static Float64[i for i in 1:n]
+        @test result_static isa Vector{Float64}
+        @test result_static == Float64.(1:n)
+
+        result_dynamic = @threads :dynamic Float64[i for i in 1:n]
+        @test result_dynamic isa Vector{Float64}
+        @test result_dynamic == Float64.(1:n)
+
+        result_greedy = @threads :greedy Float64[i for i in 1:n]
+        @test result_greedy isa Vector{Float64}
+        @test result_greedy == Float64.(1:n)
+
+        # Typed comprehension with filter
+        result_filtered = @threads Int[i^2 for i in 1:20 if iseven(i)]
+        expected_filtered = Int[i^2 for i in 1:20 if iseven(i)]
+        @test result_filtered isa Vector{Int}
+        @test result_filtered == expected_filtered
+
+        # Typed comprehension with filter and greedy
+        result_greedy_filt = @threads :greedy Float64[i for i in 1:20 if i > 10]
+        @test result_greedy_filt isa Vector{Float64}
+        @test sort(result_greedy_filt) == Float64.(11:20)
+
+        # Typed multi-dimensional comprehension
+        result_2d = @threads Float64[i + j for i in 1:3, j in 1:4]
+        expected_2d = Float64[i + j for i in 1:3, j in 1:4]
+        @test result_2d isa Matrix{Float64}
+        @test size(result_2d) == (3, 4)
+        @test result_2d == expected_2d
+
+        # Empty typed comprehension
+        result_empty = @threads Float64[i for i in 1:0]
+        @test result_empty isa Vector{Float64}
+        @test isempty(result_empty)
+
+        # Type conversion: body produces Int, but result is Float64
+        result_conv = @threads Float64[i for i in 1:5]
+        @test result_conv isa Vector{Float64}
+        @test result_conv == [1.0, 2.0, 3.0, 4.0, 5.0]
+    end
 end

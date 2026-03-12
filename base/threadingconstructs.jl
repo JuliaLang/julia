@@ -230,7 +230,7 @@ function _threadsfor(iter, lbody, schedule)
     end
 end
 
-function _threadsfor_comprehension(gen::Expr, schedule)
+function _threadsfor_comprehension(gen::Expr, schedule, result_type=nothing)
     @assert gen.head === :generator
 
     body = gen.args[1]
@@ -244,7 +244,7 @@ function _threadsfor_comprehension(gen::Expr, schedule)
 
         if length(iterators) == 1
             # Single loop with filter
-            return _threadsfor_single_iterator(body, iterators[1], condition, schedule)
+            return _threadsfor_single_iterator(body, iterators[1], condition, schedule; result_type)
         else
             # Multiple loops with filter: [expr for i in iter1, j in iter2, ... if cond]
             vars = [iter.args[1] for iter in iterators]
@@ -266,7 +266,7 @@ function _threadsfor_comprehension(gen::Expr, schedule)
             product_expr = :(Iterators.product($(ranges...)))
             synthetic_iter = :($(tuple_var) = $(product_expr))
 
-            return _threadsfor_single_iterator(new_body, synthetic_iter, new_condition, schedule)
+            return _threadsfor_single_iterator(new_body, synthetic_iter, new_condition, schedule; result_type)
         end
     elseif length(gen.args) > 2
         # Multiple loops without filter: [expr for i in iter1, j in iter2, ...]
@@ -289,21 +289,26 @@ function _threadsfor_comprehension(gen::Expr, schedule)
         # Need to track dimensions for reshaping - calculate lengths of each range
         dims_expr = :(tuple($([:(length($(esc(r)))) for r in ranges]...)))
 
-        return _threadsfor_single_iterator(new_body, synthetic_iter, true, schedule, dims_expr)
+        return _threadsfor_single_iterator(new_body, synthetic_iter, true, schedule, dims_expr; result_type)
     else
         # Single iterator without filter
         iterator = iter_or_filter
-        return _threadsfor_single_iterator(body, iterator, true, schedule)
+        return _threadsfor_single_iterator(body, iterator, true, schedule; result_type)
     end
 end
 
-function _threadsfor_single_iterator(body, iterator, condition, schedule, dims=nothing)
+function _threadsfor_single_iterator(body, iterator, condition, schedule, dims=nothing; result_type=nothing)
     lidx = iterator.args[1]
     range = iterator.args[2]
     esc_range = esc(range)
     esc_lidx = esc(lidx)
     esc_body = esc(body)
     esc_condition = condition === true ? true : esc(condition)
+
+    # Fast path: no filter and not greedy — pre-allocate and write directly
+    if condition === true && schedule !== :greedy
+        return _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule, dims, result_type)
+    end
 
     func = if schedule === :greedy
         greedy_comprehension_func(esc_range, esc_lidx, esc_body, esc_condition)
@@ -312,14 +317,28 @@ function _threadsfor_single_iterator(body, iterator, condition, schedule, dims=n
     end
 
     # Collect (index, result) pairs from channel and sort to preserve order
-    result_expr = quote
-        close(result_channel)
-        pairs = collect(result_channel)
-        if isempty(pairs)
-            []
-        else
-            sort!(pairs, by=first)
-            [p[2] for p in pairs]
+    result_expr = if result_type !== nothing
+        esc_result_type = esc(result_type)
+        quote
+            close(result_channel)
+            pairs = collect(result_channel)
+            if isempty(pairs)
+                $esc_result_type[]
+            else
+                sort!(pairs, by=first)
+                $esc_result_type[p[2] for p in pairs]
+            end
+        end
+    else
+        quote
+            close(result_channel)
+            pairs = collect(result_channel)
+            if isempty(pairs)
+                []
+            else
+                sort!(pairs, by=first)
+                [p[2] for p in pairs]
+            end
         end
     end
 
@@ -338,6 +357,53 @@ function _threadsfor_single_iterator(body, iterator, condition, schedule, dims=n
         $(_threading_run_expr(schedule))
         $result_expr
     end
+end
+
+# Fast path for non-filtered, non-greedy comprehensions: pre-allocate and write directly
+function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule, dims, result_type)
+    work_dist = _work_distribution_code()
+
+    if result_type !== nothing
+        esc_result_type = esc(result_type)
+        alloc_expr = :(Vector{$esc_result_type}(undef, niter))
+        narrow_expr = :(result)
+    else
+        alloc_expr = :(Vector{Any}(undef, niter))
+        narrow_expr = :(_narrow_threaded_result(result))
+    end
+
+    final_expr = dims !== nothing ? :(reshape($narrow_expr, $dims)) : narrow_expr
+
+    quote
+        let iter = $esc_range
+        local range = (iter isa AbstractArray || hasmethod(getindex, Tuple{typeof(iter), Int})) ? iter : collect(iter)
+        local niter = length(range)
+        local result = $alloc_expr
+        if niter > 0
+            let range = range, result = result
+            local threadsfor_fun
+            function threadsfor_fun(tid = 1; onethread = false)
+                $work_dist
+                for i = loop_first:loop_last
+                    local $esc_lidx = @inbounds r[i]
+                    @inbounds result[i] = $esc_body
+                end
+            end
+            $(_threading_run_expr(schedule))
+            end
+        end
+        $final_expr
+        end
+    end
+end
+
+# Narrow the element type of a Vector{Any} to the tightest common type
+function _narrow_threaded_result(result::AbstractVector)
+    eltype(result) !== Any && return result
+    isempty(result) && return result
+    T = mapreduce(typeof, promote_type, result)
+    T === Any && return result
+    return copyto!(similar(result, T), result)
 end
 
 function greedy_func(itr, lidx, lbody)
@@ -454,6 +520,7 @@ end
 """
     Threads.@threads [schedule] for ... end
     Threads.@threads [schedule] [expr for ... end]
+    Threads.@threads [schedule] T[expr for ... end]
 
 A macro to execute a `for` loop or array comprehension in parallel. The iteration space is distributed to
 coarse-grained tasks. This policy can be specified by the `schedule` argument. The
@@ -590,7 +657,11 @@ to run two of the 1-second iterations to complete the for loop.
 The `@threads` macro also supports array comprehensions, which return the collected results.
 Array comprehensions preserve element order for all scheduling options. Multi-dimensional
 comprehensions preserve the dimensions of the original comprehension (e.g., `[f(i,j) for i in 1:n, j in 1:m]`
-returns an `n×m` matrix).
+returns an `n×m` matrix). Typed comprehensions (`T[expr for ...]`) are also supported and
+return an array with the specified element type.
+
+For non-filtered comprehensions with non-`:greedy` scheduling, a fast path is used that
+pre-allocates the result array and writes directly by index, avoiding Channel overhead.
 
 ```julia-repl
 julia> Threads.@threads [i^2 for i in 1:5] # Simple comprehension
@@ -611,6 +682,14 @@ julia> Threads.@threads [i + j for i in 1:3, j in 1:3] # Multiple loops
  2  3  4
  3  4  5
  4  5  6
+
+julia> Threads.@threads Float64[i^2 for i in 1:5] # Typed comprehension
+5-element Vector{Float64}:
+  1.0
+  4.0
+  9.0
+ 16.0
+ 25.0
 ```
 
 When the iterator doesn't have a known length, such as a channel, the `:greedy` scheduling
@@ -655,9 +734,13 @@ macro threads(args...)
     else
         throw(ArgumentError("wrong number of arguments in @threads"))
     end
-    if isa(ex, Expr) && ex.head === :comprehension
-        # Handle array comprehensions
-        return _threadsfor_comprehension(ex.args[1], sched)
+    if isa(ex, Expr) && (ex.head === :comprehension || ex.head === :typed_comprehension)
+        # Handle array comprehensions (typed and untyped)
+        if ex.head === :typed_comprehension
+            return _threadsfor_comprehension(ex.args[2], sched, ex.args[1])
+        else
+            return _threadsfor_comprehension(ex.args[1], sched)
+        end
     elseif isa(ex, Expr) && ex.head === :for
         # Handle for loops
         if !(ex.args[1] isa Expr && ex.args[1].head === :(=))
