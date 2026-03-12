@@ -13,6 +13,10 @@ ifeq ($(USE_SYSTEM_ZLIB), 0)
 $(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/zlib
 endif
 
+ifeq ($(USE_SYSTEM_ZSTD), 0)
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/zstd
+endif
+
 ifeq ($(USE_SYSTEM_NGHTTP2), 0)
 $(BUILDDIR)/curl-$(CURL_VER)/build-configured: | $(build_prefix)/manifest/nghttp2
 endif
