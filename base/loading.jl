@@ -2652,6 +2652,8 @@ function __require_prelocked(pkg::PkgId, env)
             project = active_project()
             if !generating_output() && !parallel_precompile_attempted && !disable_parallel_precompile && @isdefined(Precompilation)
                 parallel_precompile_attempted = true
+                local verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
+                @logmsg verbosity "Precompiling $(repr("text/plain", pkg))$(list_reasons(reasons))"
                 unlock(require_lock)
                 try
                     Precompilation.precompilepkgs([pkg]; _from_loading=true, ignore_loaded=false)
