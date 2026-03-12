@@ -18,7 +18,7 @@
     memhash32*;
     memhash32_seed*;
     memhash_seed*;
-    restore_signals*;
+    allocate_signal_listener*;
     u8_*;
     uv_*;
     add_library_mapping*;

@@ -148,7 +148,7 @@ static void JL_NORETURN start_backtrace_fiber(void)
     abort();
 }
 
-void restore_signals(void)
+void allocate_signal_listener(void)
 {
     // turn on ctrl-c handler
     SetConsoleCtrlHandler(NULL, 0);

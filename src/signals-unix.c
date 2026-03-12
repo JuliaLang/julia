@@ -794,7 +794,7 @@ static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
 //     is reached
 //  3: raise `thread0_exit_signo` and try to exit
 //  4: no-op
-void usr2_handler(int sig, siginfo_t *info, void *ctx)
+void sigusr2_handler(int sig, siginfo_t *info, void *ctx)
 {
     jl_task_t *ct = jl_get_current_task();
     if (ct == NULL) {
@@ -936,22 +936,6 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
 #endif
 #endif // HAVE_MACH
 
-static void allocate_segv_handler(void)
-{
-    struct sigaction act;
-    memset(&act, 0, sizeof(struct sigaction));
-    sigemptyset(&act.sa_mask);
-    act.sa_sigaction = segv_handler;
-    act.sa_flags = SA_ONSTACK | SA_SIGINFO;
-    if (sigaction(SIGSEGV, &act, get_prev_handler(SIGSEGV)) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-    // On AArch64, stack overflow triggers a SIGBUS
-    if (sigaction(SIGBUS, &act, get_prev_handler(SIGBUS)) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-}
-
 void jl_install_thread_signal_handler(jl_ptls_t ptls)
 {
 #ifdef HAVE_MACH
@@ -991,12 +975,10 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
 
 const static int sigwait_sigs[] = {
     SIGINT, SIGTERM, SIGQUIT,
-#ifdef SIGINFO
+#if defined(SIGINFO)
     SIGINFO,
-#else
-    SIGUSR1,
 #endif
-#if defined(HAVE_TIMER)
+#if defined(HAVE_TIMER) || !defined(SIGINFO)
     SIGUSR1,
 #endif
     0
@@ -1006,6 +988,18 @@ static void set_sigwait_sigset(sigset_t *sset)
 {
     sigemptyset(sset);
     for (const int *sig = sigwait_sigs; *sig; sig++)
+        sigaddset(sset, *sig);
+}
+
+const static int sigaction_sigs[] = {
+    SIGFPE, SIGTRAP, SIGPIPE, SIGSEGV, SIGBUS,
+    SIGILL, SIGABRT, SIGSYS, SIGUSR2, 0
+};
+
+static void set_sigaction_sigset(sigset_t *sset)
+{
+    sigemptyset(sset);
+    for (const int *sig = sigaction_sigs; *sig; sig++)
         sigaddset(sset, *sig);
 }
 
@@ -1329,14 +1323,14 @@ static void *signal_listener(void *arg)
     return NULL;
 }
 
-void restore_signals(void)
+void allocate_signal_listener(void)
 {
     sigemptyset(&jl_sigint_sset);
     sigaddset(&jl_sigint_sset, SIGINT);
 
     sigset_t sset;
     set_sigwait_sigset(&sset);
-    pthread_sigmask(SIG_SETMASK, &sset, 0);
+    pthread_sigmask(SIG_BLOCK, &sset, 0);
 
 #if !defined(HAVE_MACH)
     exit_signal_cond = eventfd(0, EFD_CLOEXEC);
@@ -1385,9 +1379,13 @@ static void jl_longjmp_in_ctx(int sig, void *_ctx, jl_jmp_buf jmpbuf)
 #endif
 }
 
-static void sigint_handler(int sig)
+static void sigint_handler(int sig, siginfo_t *info, void *context)
 {
-    jl_sigint_passed = 1;
+    if (jl_options.handle_signals != JL_OPTIONS_HANDLE_SIGNALS_MINIMAL) {
+        jl_sigint_passed = 1;
+    } else {
+        try_forward_signal(sig, info, context);
+    }
 }
 
 #if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
@@ -1419,6 +1417,9 @@ static void sigpipe_handler(int sig, siginfo_t *info, void *context)
 
 void jl_install_default_signal_handlers(void)
 {
+    sigset_t unblock_sset;
+    set_sigaction_sigset(&unblock_sset);
+
     struct sigaction actfpe;
     memset(&actfpe, 0, sizeof(struct sigaction));
     sigemptyset(&actfpe.sa_mask);
@@ -1435,14 +1436,6 @@ void jl_install_default_signal_handlers(void)
     if (sigaction(SIGTRAP, &acttrap, get_prev_handler(SIGTRAP)) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
-    struct sigaction actint;
-    memset(&actint, 0, sizeof(struct sigaction));
-    sigemptyset(&actint.sa_mask);
-    actint.sa_handler = sigint_handler;
-    actint.sa_flags = 0;
-    if (sigaction(SIGINT, &actint, get_prev_handler(SIGINT)) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
     struct sigaction actpipe;
     memset(&actpipe, 0, sizeof(struct sigaction));
     sigemptyset(&actpipe.sa_mask);
@@ -1454,18 +1447,20 @@ void jl_install_default_signal_handlers(void)
 
 #if defined(HAVE_MACH)
     allocate_mach_handler();
-#else
-    struct sigaction actusr2;
-    memset(&actusr2, 0, sizeof(struct sigaction));
-    sigemptyset(&actusr2.sa_mask);
-    actusr2.sa_sigaction = usr2_handler;
-    actusr2.sa_flags = SA_SIGINFO | SA_RESTART;
-    if (sigaction(SIGUSR2, &actusr2, get_prev_handler(SIGUSR2)) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
 #endif
 
-    allocate_segv_handler();
+    struct sigaction act;
+    memset(&act, 0, sizeof(struct sigaction));
+    sigemptyset(&act.sa_mask);
+    act.sa_sigaction = segv_handler;
+    act.sa_flags = SA_ONSTACK | SA_SIGINFO;
+    if (sigaction(SIGSEGV, &act, get_prev_handler(SIGSEGV)) < 0) {
+        jl_errorf("fatal error: sigaction: %s", strerror(errno));
+    }
+    // On AArch64, stack overflow triggers a SIGBUS
+    if (sigaction(SIGBUS, &act, get_prev_handler(SIGBUS)) < 0) {
+        jl_errorf("fatal error: sigaction: %s", strerror(errno));
+    }
 
     struct sigaction actdie;
     memset(&actdie, 0, sizeof(struct sigaction));
@@ -1481,17 +1476,61 @@ void jl_install_default_signal_handlers(void)
     if (sigaction(SIGSYS, &actdie, get_prev_handler(SIGSYS)) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
-    // need to ensure the following signals are not SIG_IGN, even though they will be blocked
-    actdie.sa_flags = SA_SIGINFO | SA_RESTART | SA_RESETHAND;
+
+    if (jl_options.handle_signals != JL_OPTIONS_HANDLE_SIGNALS_MINIMAL) {
+        // These 'I/O-like' signal handlers cannot be reliably forwarded since
+        // they originate from the system / user rather than an application fault
+        // and are received in a `sigwait()` loop, which is not capable of signal
+        // chaining.
+        //
+        // In MINIMAL mode, the outer application keeps control of these signals.
+        // Julia does not respond to `Ctrl-C`, profiling requests, or system
+        // requests to terminate (SIGTERM / SIGQUIT) in this mode.
+
+        // These handlers are sigwait()'ed and will be blocked, but we still need
+        // to ensure they are not SIG_IGN.
+        struct sigaction actint;
+        memset(&actint, 0, sizeof(struct sigaction));
+        sigemptyset(&actint.sa_mask);
+        actint.sa_sigaction = sigint_handler;
+        actint.sa_flags = SA_SIGINFO;
+        if (sigaction(SIGINT, &actint, get_prev_handler(SIGINT)) < 0) {
+            jl_errorf("fatal error: sigaction: %s", strerror(errno));
+        }
+
+        actdie.sa_flags = SA_SIGINFO | SA_RESTART | SA_RESETHAND;
 #ifdef SIGINFO
-    if (sigaction(SIGINFO, &actdie, get_prev_handler(SIGINFO)) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
+        if (sigaction(SIGINFO, &actdie, get_prev_handler(SIGINFO)) < 0) {
+            jl_errorf("fatal error: sigaction: %s", strerror(errno));
+        }
 #else
-    if (sigaction(SIGUSR1, &actdie, get_prev_handler(SIGUSR1)) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
+        if (sigaction(SIGUSR1, &actdie, get_prev_handler(SIGUSR1)) < 0) {
+            jl_errorf("fatal error: sigaction: %s", strerror(errno));
+        }
 #endif
+
+#if !defined(HAVE_MACH)
+        // Not sigwait()'ed so this handler could reasonably forward signals to
+        // an outer application if you are not worried about the race condition
+        // on `ptls->signal_request`
+        //
+        // However this is only used for profiling / termination requests which
+        // all require `sigwait()` signals so keep it out of the "minimal" signal
+        // handler set for now.
+        struct sigaction actusr2;
+        memset(&actusr2, 0, sizeof(struct sigaction));
+        sigemptyset(&actusr2.sa_mask);
+        actusr2.sa_sigaction = sigusr2_handler;
+        actusr2.sa_flags = SA_SIGINFO | SA_RESTART;
+        if (sigaction(SIGUSR2, &actusr2, get_prev_handler(SIGUSR2)) < 0) {
+            jl_errorf("fatal error: sigaction: %s", strerror(errno));
+        }
+#endif
+    } else {
+        sigdelset(&unblock_sset, SIGUSR2);
+    }
+
+    pthread_sigmask(SIG_UNBLOCK, &unblock_sset, 0);
 }
 
 JL_DLLEXPORT void jl_install_sigint_handler(void)
