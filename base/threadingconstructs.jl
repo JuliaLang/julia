@@ -230,6 +230,31 @@ function _threadsfor(iter, lbody, schedule)
     end
 end
 
+function _threadsfor_multi_iterator(body, iterators, condition, schedule, dims, result_type)
+    vars = [iter.args[1] for iter in iterators]
+    ranges = [iter.args[2] for iter in iterators]
+
+    tuple_var = gensym("iter_tuple")
+    assignments = [:($(vars[i]) = $(tuple_var)[$i]) for i in 1:length(vars)]
+    new_body = quote
+        $(assignments...)
+        $(body)
+    end
+    new_condition = if condition === true
+        true
+    else
+        quote
+            $(assignments...)
+            $(condition)
+        end
+    end
+
+    product_expr = :(Iterators.product($(ranges...)))
+    synthetic_iter = :($(tuple_var) = $(product_expr))
+
+    return _threadsfor_single_iterator(new_body, synthetic_iter, new_condition, schedule, dims; result_type)
+end
+
 function _threadsfor_comprehension(gen::Expr, schedule, result_type=nothing)
     @assert gen.head === :generator
 
@@ -238,62 +263,21 @@ function _threadsfor_comprehension(gen::Expr, schedule, result_type=nothing)
     # Check if the second arg is a filter (handles both single and multi-loop with filters)
     iter_or_filter = gen.args[2]
     if isa(iter_or_filter, Expr) && iter_or_filter.head === :filter
-        # Has a filter
         condition = iter_or_filter.args[1]
-        iterators = iter_or_filter.args[2:end]  # Rest are iterators
+        iterators = iter_or_filter.args[2:end]
 
         if length(iterators) == 1
-            # Single loop with filter
             return _threadsfor_single_iterator(body, iterators[1], condition, schedule; result_type)
         else
-            # Multiple loops with filter: [expr for i in iter1, j in iter2, ... if cond]
-            vars = [iter.args[1] for iter in iterators]
-            ranges = [iter.args[2] for iter in iterators]
-
-            # Create product iterator and synthetic iterator with assignments
-            tuple_var = gensym("iter_tuple")
-            assignments = [:($(vars[i]) = $(tuple_var)[$i]) for i in 1:length(vars)]
-            new_body = quote
-                $(assignments...)
-                $(body)
-            end
-            # Also need to apply assignments in condition
-            new_condition = quote
-                $(assignments...)
-                $(condition)
-            end
-
-            product_expr = :(Iterators.product($(ranges...)))
-            synthetic_iter = :($(tuple_var) = $(product_expr))
-
-            return _threadsfor_single_iterator(new_body, synthetic_iter, new_condition, schedule; result_type)
+            return _threadsfor_multi_iterator(body, iterators, condition, schedule, nothing, result_type)
         end
     elseif length(gen.args) > 2
-        # Multiple loops without filter: [expr for i in iter1, j in iter2, ...]
         iterators = gen.args[2:end]
-
-        vars = [iter.args[1] for iter in iterators]
         ranges = [iter.args[2] for iter in iterators]
-
-        # Create product iterator and synthetic iterator with assignments
-        tuple_var = gensym("iter_tuple")
-        assignments = [:($(vars[i]) = $(tuple_var)[$i]) for i in 1:length(vars)]
-        new_body = quote
-            $(assignments...)
-            $(body)
-        end
-
-        product_expr = :(Iterators.product($(ranges...)))
-        synthetic_iter = :($(tuple_var) = $(product_expr))
-
-        # Need to track dimensions for reshaping - calculate lengths of each range
         dims_expr = :(tuple($([:(length($(esc(r)))) for r in ranges]...)))
-
-        return _threadsfor_single_iterator(new_body, synthetic_iter, true, schedule, dims_expr; result_type)
+        return _threadsfor_multi_iterator(body, iterators, true, schedule, dims_expr, result_type)
     else
-        # Single iterator without filter
-        iterator = iter_or_filter
-        return _threadsfor_single_iterator(body, iterator, true, schedule; result_type)
+        return _threadsfor_single_iterator(body, iter_or_filter, true, schedule; result_type)
     end
 end
 
