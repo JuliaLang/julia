@@ -1021,7 +1021,7 @@ function setindex!(A::Array{T}, x, i::Int) where {T}
 end
 function _setindex!(A::Array{T}, x::T, i::Int) where {T}
     @_noub_if_noinbounds_meta
-    @boundscheck checkbounds(Bool, A, i) || throw_boundserror(A, (i,))
+    @boundscheck checkbounds(A, i)
     memoryrefset!(memoryrefnew(A.ref, i, false), x, :not_atomic, false)
     return A
 end
@@ -2326,7 +2326,7 @@ function vcat(arrays::Vector{T}...) where T
     nd = 1
     for a in arrays
         na = length(a)
-        @assert nd + na <= 1 + length(arr) # Concurrent modification of arrays?
+        @assert nd + na <= 1 + length(arr) "Concurrent modification of arrays?"
         unsafe_copyto!(arr, nd, a, 1, na)
         nd += na
     end

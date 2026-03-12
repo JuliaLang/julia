@@ -660,6 +660,14 @@
         (else
          (map julia-expand-macroscopes- e))))
 
+;; Check if a symbol is a default-scope label that should not be renamed.
+;; `loop-exit` is the default break scope, `loop-cont` is the default continue scope.
+;; Anonymous `@label` blocks use `loop-exit` so they participate in the default scope.
+(define (default-scope-label? s)
+  (and (symbol? s)
+       (or (eq? s 'loop-exit)
+           (eq? s 'loop-cont))))
+
 (define (rename-symbolic-labels- e relabels parent-scope)
   (cond
    ((or (not (pair? e)) (quoted? e)) e)
@@ -679,15 +687,19 @@
       `(,(car e) ,newlabel)))
    ((eq? (car e) 'symbolicblock)
     ;; rename label and recurse into body
-    (let* ((s (cadr e))
-           (havelabel (if (or (null? parent-scope) (not (symbol? s))) s (get relabels s #f)))
-           (newlabel (if havelabel havelabel (named-gensy s))))
-      (if (not havelabel) (put! relabels s newlabel))
-      `(symbolicblock ,newlabel ,(rename-symbolic-labels- (caddr e) relabels parent-scope))))
+    ;; Skip renaming for default-scope labels (`_`)
+    (let* ((s (cadr e)))
+      (if (default-scope-label? s)
+          `(symbolicblock ,s ,(rename-symbolic-labels- (caddr e) relabels parent-scope))
+          (let* ((havelabel (if (or (null? parent-scope) (not (symbol? s))) s (get relabels s #f)))
+                 (newlabel (if havelabel havelabel (named-gensy s))))
+            (if (not havelabel) (put! relabels s newlabel))
+            `(symbolicblock ,newlabel ,(rename-symbolic-labels- (caddr e) relabels parent-scope))))))
    ((and (eq? (car e) 'break) (pair? (cdr e)) (symbol? (cadr e)))
     ;; rename break label if it exists in relabels
+    ;; Skip renaming for default-scope labels (`_`, `_#cont`)
     (let* ((s (cadr e))
-           (newlabel (if (null? parent-scope) s (get relabels s s))))
+           (newlabel (if (or (null? parent-scope) (default-scope-label? s)) s (get relabels s s))))
       (if (length> e 2)
           ;; break label val
           `(break ,newlabel ,(rename-symbolic-labels- (caddr e) relabels parent-scope))

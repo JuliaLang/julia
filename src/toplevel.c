@@ -749,12 +749,13 @@ JL_DLLEXPORT jl_value_t *jl_eval_thunk(jl_module_t *JL_NONNULL m, jl_code_info_t
             jl_get_module_compile(m) != JL_OPTIONS_COMPILE_MIN)) {
         // use codegen
         mfunc = jl_method_instance_for_thunk(thk, m);
-        jl_resolve_definition_effects_in_ir((jl_array_t*)thk->code, m, NULL, NULL, 0);
-        // Don't infer blocks containing e.g. method definitions, since it's probably not worthwhile.
+        jl_resolve_definition_effects_in_ir((jl_array_t *)thk->code, m, NULL, NULL, 0);
+        // Don't infer blocks containing e.g. method definitions, since it's probably
+        // not worthwhile.
         if (!has_defs && jl_get_module_infer(m) != 0) {
             (void)jl_type_infer(mfunc, world, SOURCE_MODE_ABI, jl_options.trim);
         }
-        result = jl_invoke(/*func*/NULL, /*args*/NULL, /*nargs*/0, mfunc);
+        result = jl_invoke_oneshot(/*func*/ NULL, /*args*/ NULL, /*nargs*/ 0, mfunc);
     }
     else {
         // use interpreter

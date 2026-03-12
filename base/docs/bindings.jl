@@ -28,7 +28,14 @@ function Base.show(io::IO, b::Binding)
     if b.mod === Base.active_module()
         print(io, b.var)
     else
-        print(io, b.mod, '.', Base.isoperator(b.var) ? ":" : "", b.var)
+        print(io, b.mod, '.')
+        if Base.isoperator(b.var)
+            # ensures symbols are quoted right, so e.g.  :(==), :(:), :+ or :-
+            show(io, b.var)
+        else
+            # print ordinary identifiers without any quoting
+            print(io, b.var)
+        end
     end
 end
 

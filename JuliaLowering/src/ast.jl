@@ -1,47 +1,31 @@
 #-------------------------------------------------------------------------------
-# @chk: Basic AST structure checking tool
-#
-# Check a condition involving an expression, throwing a LoweringError if it
-# doesn't evaluate to true. Does some very simple pattern matching to attempt
-# to extract the expression variable from the left hand side.
-#
-# Forms:
-# @chk pred(ex)
-# @chk pred(ex) msg
-# @chk pred(ex) (msg_display_ex, msg)
-macro chk(cond, msg=nothing)
-    if Meta.isexpr(msg, :tuple)
-        ex = msg.args[1]
-        msg = msg.args[2]
-    else
-        ex = cond
-        while true
-            if ex isa Symbol
-                break
-            elseif ex.head == :call
-                ex = ex.args[2]
-            elseif ex.head == :ref
-                ex = ex.args[1]
-            elseif ex.head == :.
-                ex = ex.args[1]
-            elseif ex.head in (:(==), :(in), :<, :>)
-                ex = ex.args[1]
+# @jl_assert: Produce an internal error that surfaces one or more trees.
+# Example: `@jl_assert 1 === 1 (tree1, "message1"), tree2, (tree3, "message3")`
+if DEBUG
+    macro jl_assert(cond, args...)
+        usage = "usage: @jl_assert(condition, tree|(tree, message)...)"
+        @assert(!isempty(args), usage)
+        sts = Expr(:call, SyntaxList)
+        msgs = Expr(:call, Base.vect)
+        for a in args
+            if Meta.isexpr(a, :tuple, 2)
+                push!(sts.args, a.args[1])
+                push!(msgs.args, a.args[2])
             else
-                error("Can't analyze $cond")
+                push!(sts.args, a)
+                push!(msgs.args, QuoteNode(a))
             end
         end
+        # just add assertion string to first msg
+        msgs.args[2] = Expr(
+            :string, "`jl_assert(", QuoteNode(cond), ", _)`: ", msgs.args[2])
+        :($(esc(cond)) ? nothing : begin
+              throw(LoweringError($(esc(sts)), $(esc(msgs)), true))
+          end)
     end
-    quote
-        ex = $(esc(ex))
-        @assert ex isa SyntaxTree
-        ok = try
-            $(esc(cond))
-        catch
-            false
-        end
-        if !ok
-            throw(LoweringError(ex, $(isnothing(msg) ? "expected `$cond`" : esc(msg))))
-        end
+else
+    macro jl_assert(cond, args...)
+        nothing
     end
 end
 
@@ -83,12 +67,15 @@ struct ScopeLayer
     mod::Module
     parent_layer::LayerId # Index of parent layer in a macro expansion. Equal to 0 for no parent
     is_macro_expansion::Bool # FIXME
+    is_internal::Bool
 end
 
 """
 Lexical scope ID
 """
 const ScopeId = Int
+
+JuliaSyntax.SyntaxList(ctx::AbstractLoweringContext) = SyntaxList(syntax_graph(ctx))
 
 function JuliaSyntax.newleaf(ctx::AbstractLoweringContext,
                     prov::Union{SyntaxTree, SourceAttrType},
@@ -105,7 +92,7 @@ function JuliaSyntax.newleaf(ctx, prov, k, @nospecialize(value))
         setattr!(leaf._graph, leaf._id, :var_id, value)
     elseif k == K"label"
         setattr!(leaf._graph, leaf._id, :id, value)
-    elseif k == K"symboliclabel"
+    elseif k == K"symboliclabel" || k == K"symbolicgoto"
         setattr!(leaf._graph, leaf._id, :name_val, value)
     elseif k in KSet"TOMBSTONE SourceLocation latestworld latestworld_if_toplevel
                      softscope"
@@ -232,7 +219,7 @@ function _match_kind(srcref, ex)
     return (kind, srcref, kws)
 end
 
-function _expand_ast_tree(ctx, srcref, tree)
+function _expand_ast_tree(ctx, srcref, tree, jl_line::QuoteNode)
     if Meta.isexpr(tree, :(::))
         # Leaf node
         if length(tree.args) == 2
@@ -247,13 +234,14 @@ function _expand_ast_tree(ctx, srcref, tree)
             for (attr, val) in kws
                 n = :(setattr!($n, $attr, $val))
             end
-            n
+            DEBUG ? :(setattr!($n, :jl_source, $jl_line)) : n
         end
     elseif Meta.isexpr(tree, :call) && tree.args[1] === :(=>)
         # Leaf node with copied attributes
         kind = esc(tree.args[3])
         srcref2 = esc(tree.args[2])
-        :(setattr!(mkleaf($srcref2), :kind, $kind))
+        n = :(setattr!(mkleaf($srcref2), :kind, $kind))
+        DEBUG ? :(setattr!($n, :jl_source, $jl_line)) : n
     elseif Meta.isexpr(tree, (:vcat, :hcat, :vect))
         # Interior node
         flatargs = []
@@ -268,7 +256,7 @@ function _expand_ast_tree(ctx, srcref, tree)
         end)
         child_stmts = children_ex.args[2].args
         for a in flatargs[2:end]
-            child = _expand_ast_tree(ctx, srcref, a)
+            child = _expand_ast_tree(ctx, srcref, a, jl_line)
             if Meta.isexpr(child, :(...))
                 push!(child_stmts, :(_append_nodeids!(graph, child_ids, $(child.args[1]))))
             else
@@ -281,11 +269,11 @@ function _expand_ast_tree(ctx, srcref, tree)
             for (attr, val) in kws
                 n = :(setattr!($n, $attr, $val))
             end
-            n
+            DEBUG ? :(setattr!($n, :jl_source, $jl_line)) : n
         end
     elseif Meta.isexpr(tree, :(:=))
         lhs = tree.args[1]
-        rhs = _expand_ast_tree(ctx, srcref, tree.args[2])
+        rhs = _expand_ast_tree(ctx, srcref, tree.args[2], jl_line)
         ssadef = gensym("ssadef")
         quote
             ($(esc(lhs)), $ssadef) = assign_tmp($ctx, $rhs, $(string(lhs)))
@@ -294,7 +282,7 @@ function _expand_ast_tree(ctx, srcref, tree)
     elseif Meta.isexpr(tree, :macrocall)
         esc(tree)
     elseif tree isa Expr
-        Expr(tree.head, map(a->_expand_ast_tree(ctx, srcref, a), tree.args)...)
+        Expr(tree.head, map(a->_expand_ast_tree(ctx, srcref, a, jl_line), tree.args)...)
     else
         esc(tree)
     end
@@ -356,7 +344,7 @@ macro ast(ctx, srcref, tree)
     quote
         ctx = $(esc(ctx))
         srcref::$SyntaxTree = $(_match_srcref(srcref))
-        $(_expand_ast_tree(:ctx, :srcref, tree))
+        $(_expand_ast_tree(:ctx, :srcref, tree, QuoteNode(__source__)))
     end
 end
 
@@ -445,9 +433,9 @@ function is_quoted(ex)
 end
 
 function extension_type(ex)
-    @assert kind(ex) == K"assert"
-    @chk numchildren(ex) >= 1
-    @chk kind(ex[1]) == K"Symbol"
+    @jl_assert kind(ex) == K"assert" ex
+    @jl_assert numchildren(ex) >= 1 ex
+    @jl_assert kind(ex[1]) == K"Symbol" ex
     ex[1].name_val
 end
 
@@ -563,13 +551,13 @@ function to_symbol(ctx, ex)
 end
 
 function new_scope_layer(ctx, mod_ref::Module=ctx.mod)
-    new_layer = ScopeLayer(length(ctx.scope_layers)+1, ctx.mod, 0, false)
+    new_layer = ScopeLayer(length(ctx.scope_layers)+1, ctx.mod, 0, false, true)
     push!(ctx.scope_layers, new_layer)
     new_layer.id
 end
 
 function new_scope_layer(ctx, mod_ref::SyntaxTree)
-    @assert kind(mod_ref) == K"Identifier"
+    @jl_assert kind(mod_ref) == K"Identifier" mod_ref
     new_scope_layer(ctx, ctx.scope_layers[mod_ref.scope_layer].mod)
 end
 

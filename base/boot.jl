@@ -368,6 +368,7 @@ kwcall(kwargs, ::Type{Union{}}, a...) = Union{}(a...)
 abstract type Exception end
 struct ErrorException <: Exception
     msg::AbstractString
+    ErrorException(msg::AbstractString) = new(msg)
 end
 
 struct BoundsError <: Exception
@@ -377,12 +378,24 @@ struct BoundsError <: Exception
     BoundsError(@nospecialize(a)) = (@noinline; new(a))
     BoundsError(@nospecialize(a), i) = (@noinline; new(a,i))
 end
-struct DivideError         <: Exception end
-struct OutOfMemoryError    <: Exception end
-struct ReadOnlyMemoryError <: Exception end
-struct SegmentationFault   <: Exception end
-struct StackOverflowError  <: Exception end
-struct UndefRefError       <: Exception end
+struct DivideError         <: Exception
+    DivideError() = new()
+end
+struct OutOfMemoryError    <: Exception
+    OutOfMemoryError() = new()
+end
+struct ReadOnlyMemoryError <: Exception
+    ReadOnlyMemoryError() = new()
+end
+struct SegmentationFault   <: Exception
+    SegmentationFault() = new()
+end
+struct StackOverflowError  <: Exception
+    StackOverflowError() = new()
+end
+struct UndefRefError       <: Exception
+    UndefRefError() = new()
+end
 struct UndefVarError <: Exception
     var::Symbol
     world::UInt
@@ -392,11 +405,15 @@ struct UndefVarError <: Exception
 end
 struct ConcurrencyViolationError <: Exception
     msg::AbstractString
+    ConcurrencyViolationError(msg::AbstractString) = new(msg)
 end
 struct MissingCodeError <: Exception
     mi::MethodInstance
+    MissingCodeError(mi::MethodInstance) = new(mi)
 end
-struct InterruptException <: Exception end
+struct InterruptException <: Exception
+    InterruptException() = new()
+end
 struct DomainError <: Exception
     val
     msg::AbstractString
@@ -425,13 +442,16 @@ struct InexactError <: Exception
 end
 struct OverflowError <: Exception
     msg::AbstractString
+    OverflowError(msg::AbstractString) = new(msg)
 end
 
 struct ArgumentError <: Exception
     msg::AbstractString
+    ArgumentError(msg::AbstractString) = new(msg)
 end
 struct UndefKeywordError <: Exception
     var::Symbol
+    UndefKeywordError(var::Symbol) = new(var)
 end
 
 const typemax_UInt = Intrinsics.sext_int(UInt, 0xFF)
@@ -447,12 +467,14 @@ MethodError(@nospecialize(f), @nospecialize(args)) = MethodError(f, args, typema
 
 struct AssertionError <: Exception
     msg::AbstractString
+    AssertionError(msg::AbstractString) = new(msg)
 end
 AssertionError() = AssertionError("")
 
 struct FieldError <: Exception
     type::DataType
     field::Symbol
+    FieldError(type::DataType, field::Symbol) = new(type, field)
 end
 
 abstract type WrappedException <: Exception end
@@ -461,11 +483,13 @@ struct LoadError <: WrappedException
     file::AbstractString
     line::Int
     error
+    LoadError(file::AbstractString, line::Int, @nospecialize(error)) = new(file, line, error)
 end
 
 struct InitError <: WrappedException
     mod::Symbol
     error
+    InitError(mod::Symbol, @nospecialize(error)) = new(mod, error)
 end
 
 struct ABIOverride
@@ -474,8 +498,12 @@ struct ABIOverride
     ABIOverride(@nospecialize(abi::Type), def::MethodInstance) = new(abi, def)
 end
 
-struct PrecompilableError <: Exception end
-struct TrimFailure <: Exception end
+struct PrecompilableError <: Exception
+    PrecompilableError() = new()
+end
+struct TrimFailure <: Exception
+    TrimFailure() = new()
+end
 
 String(s::String) = s  # no constructor yet
 
@@ -490,6 +518,7 @@ eval(m::Module, @nospecialize(e)) = (@noinline; ccall(:jl_toplevel_eval_in, Any,
 
 struct EvalInto <: Function
     m::Module
+    EvalInto(m::Module) = new(m)
 end
 (this::EvalInto)(@nospecialize(e)) = eval(this.m, e)
 
@@ -537,6 +566,14 @@ struct InterConditional
     thentype
     elsetype
     InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) = new(slot, thentype, elsetype)
+end
+
+struct InterMustAlias
+    slot::Int
+    vartyp::Any
+    fldidx::Int
+    fldtyp::Any
+    InterMustAlias(slot::Int, @nospecialize(vartyp), fldidx::Int, @nospecialize(fldtyp)) = new(slot, vartyp, fldidx, fldtyp)
 end
 
 struct PartialOpaque
@@ -608,7 +645,9 @@ end
 const NTuple{N,T} = Tuple{Vararg{T,N}}
 
 ## primitive Array constructors
-struct UndefInitializer end
+struct UndefInitializer
+    UndefInitializer() = new()
+end
 const undef = UndefInitializer()
 
 # type and dimensionality specified
@@ -821,8 +860,12 @@ macro cmd end
 
 # simple stand-alone print definitions for debugging
 abstract type IO end
-struct CoreSTDOUT <: IO end
-struct CoreSTDERR <: IO end
+struct CoreSTDOUT <: IO
+    CoreSTDOUT() = new()
+end
+struct CoreSTDERR <: IO
+    CoreSTDERR() = new()
+end
 const stdout = CoreSTDOUT()
 const stderr = CoreSTDERR()
 io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout, Ptr{Cvoid}), 1, 1)
@@ -856,6 +899,7 @@ struct GeneratedFunctionStub
     gen
     argnames::SimpleVector
     spnames::SimpleVector
+    GeneratedFunctionStub(@nospecialize(gen), argnames::SimpleVector, spnames::SimpleVector) = new(gen, argnames, spnames)
 end
 
 # If the generator is a subtype of this trait, inference caches the generated unoptimized
@@ -1120,6 +1164,70 @@ struct Pair{A, B}
     end
 end
 
+# TypeApp: lazy type application for typegroup blocks.
+# Represents a single type application step, like UnionAll represents a single where binding.
+# T{P1, P2} is TypeApp(TypeApp(T, P1), P2) -- nested left-to-right.
+# Allowed inside UnionAll; rejected by subtyping/intersection (like free typevars).
+struct TypeApp
+    head::Any            # Type constructor (TypeVar, Type, or outer TypeApp)
+    param::Any           # Single type parameter
+    function TypeApp(@nospecialize(head), @nospecialize(param))
+        return new(head, param)
+    end
+end
+
+# Check if a value contains a TypeApp anywhere in its structure
+function _contains_typeapp(@nospecialize(x))
+    if x isa TypeApp
+        return true
+    end
+    if x isa UnionAll
+        return _contains_typeapp(x.body)
+    end
+    return false
+end
+
+function apply_type_or_typeapp(@nospecialize(tc), @nospecialize params...)
+    # Head is TypeVar/TypeApp => must defer (apply_type requires UnionAll/DataType head)
+    if tc isa TypeVar || tc isa TypeApp
+        # Build nested TypeApp chain: TypeApp(TypeApp(tc, p1), p2), ...
+        n = nfields(params)
+        result = tc
+        i = 1
+        while sle_int(i, n)
+            result = TypeApp(result, getfield(params, i))
+            i = add_int(i, 1)
+        end
+        return result
+    end
+    # Any param contains TypeApp => must defer
+    n = nfields(params)
+    i = 1
+    while sle_int(i, n)
+        if _contains_typeapp(getfield(params, i))
+            # Build nested TypeApp chain for all params
+            result = tc
+            j = 1
+            while sle_int(j, n)
+                result = TypeApp(result, getfield(params, j))
+                j = add_int(j, 1)
+            end
+            return result
+        end
+        i = add_int(i, 1)
+    end
+    # All concrete -- real apply_type
+    return apply_type(tc, params...)
+end
+
+function resolve_typegroup(mod::Module, typevars::SimpleVector, struct_infos::SimpleVector)
+    n = _svec_len(typevars)
+    if n === 0
+        return ()
+    end
+    return ccall(:jl_resolve_typegroup, Any, (Any, Any, Any), mod, typevars, struct_infos)
+end
+
 function _hasmethod(@nospecialize(tt)) # this function has a special tfunc
     world = ccall(:jl_get_tls_world_age, UInt, ()) # tls_world_age()
     return Intrinsics.not_int(ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world) === nothing)
@@ -1138,10 +1246,11 @@ EnterNode(old::EnterNode, new_dest::Int) = isdefined(old, :scope) ?
     EnterNode(new_dest, old.scope) : EnterNode(new_dest)
 
 # typename(_).constprop_heuristic
-const FORCE_CONST_PROP      = 0x1
-const ARRAY_INDEX_HEURISTIC = 0x2
-const ITERATE_HEURISTIC     = 0x3
-const SAMETYPE_HEURISTIC    = 0x4
+const FORCE_CONST_PROP           = 0x01
+const ARRAY_INDEX_HEURISTIC      = 0x02
+const ITERATE_HEURISTIC          = 0x04
+const SAMETYPE_HEURISTIC         = 0x08
+const DISABLE_SEMI_CONCRETE_EVAL = 0x10
 
 # `typename` has special tfunc support in inference to improve
 # the result for `Type{Union{...}}`. It is defined here, so that the Compiler
@@ -1172,6 +1281,7 @@ include(Core, "optimized_generics.jl")
 struct MacroSource
     lno::Any # ::LineNumberNode, but needs to be a pointer
     syntax_ver::Any # ::VersionNumber =#
+    MacroSource(@nospecialize(lno), @nospecialize(syntax_ver)) = new(lno, syntax_ver)
 end
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

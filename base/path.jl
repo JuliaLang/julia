@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# NB: This file is `Core.eval`-uated into the (pre-existing) module Filesystem
+
 import Base: StringVector, utf8units
 
 export
@@ -22,14 +24,12 @@ export
 
 if Sys.isunix()
     const path_separator    = "/"
-    const path_separator_re = r"/+"sa # May be used by some external packages
     @inline isseparator(c::Char) = c === '/'
     @inline isseparator(c::UInt8) = c === UInt8('/')
 
     splitdrive(path::String) = ("",path)
 elseif Sys.iswindows()
     const path_separator    = "\\"
-    const path_separator_re = r"[/\\]+"sa # May be used by some external packages
     @inline isseparator(c::Char) = c === '/' || c === '\\'
     @inline isseparator(c::UInt8) = c === UInt8('/') || c === UInt8('\\')
 
@@ -158,6 +158,10 @@ first component is always the empty string.
 """
 splitdrive(path::AbstractString)
 
+# Average buffer size including null terminator for several filesystem operations.
+# On Windows we use the MAX_PATH = 260 value on Win32.
+const AVG_PATH = Sys.iswindows() ? 260 : 512
+
 """
     homedir()::String
 
@@ -172,7 +176,7 @@ See also [`Sys.username`](@ref).
 """
 function homedir()
     buf = Base.StringVector(AVG_PATH - 1) # space for null-terminator implied by StringVector
-    sz = RefValue{Csize_t}(length(buf) + 1) # total buffer size including null
+    sz = Base.RefValue{Csize_t}(length(buf) + 1) # total buffer size including null
     while true
         rc = ccall(:uv_os_homedir, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
         if rc == 0

@@ -100,6 +100,11 @@ function va_process_argtypes(𝕃::AbstractLattice, given_argtypes::Vector{Any},
                     newarg = widenconditional(newarg)
                 end
             end
+            if isva && has_mustalias(𝕃) && isa(newarg, MustAlias)
+                if newarg.slot > (nargs-isva)
+                    newarg = widenmustalias(newarg)
+                end
+            end
             isva_given_argtypes[i] = newarg
         end
         if isva
@@ -112,6 +117,14 @@ function va_process_argtypes(𝕃::AbstractLattice, given_argtypes::Vector{Any},
                         newarg = given_argtypes[i]
                         if isa(newarg, Conditional) && newarg.slot > (nargs-isva)
                             given_argtypes[i] = widenconditional(newarg)
+                        end
+                    end
+                end
+                if has_mustalias(𝕃)
+                    for i = last:length(given_argtypes)
+                        newarg = given_argtypes[i]
+                        if isa(newarg, MustAlias) && newarg.slot > (nargs-isva)
+                            given_argtypes[i] = widenmustalias(newarg)
                         end
                     end
                 end

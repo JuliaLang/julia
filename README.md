@@ -103,9 +103,9 @@ Then, acquire the source code by cloning the git repository:
 
 and then use the command prompt to change into the resulting julia directory. By default, you will be building the latest unstable version of
 Julia. However, most users should use the [most recent stable version](https://github.com/JuliaLang/julia/releases)
-of Julia. You can get this version by running:
+of Julia. You can get this version by running: (replace `[tag]` with the desired tag)
 
-    git checkout v1.12.2
+    git checkout [tag]
 
 To build the `julia` executable, run `make` from within the julia directory.
 

@@ -6,6 +6,7 @@ using Test
 
 include("setup_Compiler.jl")
 include("irutils.jl")
+include("newinterp.jl")
 
 # tests for Compiler correctness and precision
 using .Compiler: Conditional, ⊑
@@ -2279,21 +2280,11 @@ mutable struct AliasableConstField{S,T}
     f2::T
 end
 
-using .Compiler:
-    InferenceLattice, MustAliasesLattice, InterMustAliasesLattice,
-    BaseInferenceLattice, SimpleInferenceLattice, IPOResultLattice, typeinf_lattice, ipo_lattice, optimizer_lattice
-
-include("newinterp.jl")
-@newinterp MustAliasInterpreter
-Compiler.typeinf_lattice(::MustAliasInterpreter) = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance))
-Compiler.ipo_lattice(::MustAliasInterpreter) = InferenceLattice(InterMustAliasesLattice(IPOResultLattice.instance))
-Compiler.optimizer_lattice(::MustAliasInterpreter) = SimpleInferenceLattice.instance
-
 # lattice
 # -------
 
 using .Compiler: MustAlias, Const, PartialStruct, ⊑, tmerge
-let 𝕃ᵢ = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance))
+let 𝕃ᵢ = Compiler.InferenceLattice(Compiler.MustAliasesLattice(Compiler.BaseInferenceLattice.instance))
     ⊑(@nospecialize(a), @nospecialize(b)) = Compiler.:⊑(𝕃ᵢ, a, b)
     tmerge(@nospecialize(a), @nospecialize(b)) = Compiler.tmerge(𝕃ᵢ, a, b)
     isa_tfunc(@nospecialize xs...) = Compiler.isa_tfunc(𝕃ᵢ, xs...)
@@ -2318,7 +2309,7 @@ end
 
 maybeget_mustalias_tmerge(x::AliasableField) = x.f
 maybeget_mustalias_tmerge(x) = x
-@test Base.return_types((Union{Nothing,AliasableField{Any}},); interp=MustAliasInterpreter()) do x
+@test Base.return_types((Union{Nothing,AliasableField{Any}},)) do x
     isa(maybeget_mustalias_tmerge(x)#=::Any, not MustAlias=#, Int) && throw()
     x
 end |> only === Union{Nothing,AliasableField{Any}}
@@ -2327,38 +2318,38 @@ end |> only === Union{Nothing,AliasableField{Any}}
 # --------------
 
 # simple intra-procedural case
-@test Base.return_types((AliasableField,); interp=MustAliasInterpreter()) do a
+@test Base.return_types((AliasableField,)) do a
     if isa(getfield(a, :f), Int)
         return getfield(a, :f)
     end
     return 0
 end |> only === Int
-@test Base.return_types((AliasableField,); interp=MustAliasInterpreter()) do a
+@test Base.return_types((AliasableField,)) do a
     if isa(getfield(a, 1), Int)
         return getfield(a, 1)
     end
     return 0
 end |> only === Int
-@test Base.return_types((AliasableField{Union{Some{Int},Nothing}},); interp=MustAliasInterpreter()) do a
+@test Base.return_types((AliasableField{Union{Some{Int},Nothing}},)) do a
     if isa(getfield(a, 1), Some)
         return getfield(a, 1)
     end
     throw()
 end |> only === Some{Int}
-@test Base.return_types((Tuple{Any},); interp=MustAliasInterpreter()) do t
+@test Base.return_types((Tuple{Any},)) do t
     if isa(getfield(t, 1), Int)
         return getfield(t, 1)
     end
     return 0
 end |> only === Int
-@test Base.return_types((Any,); interp=MustAliasInterpreter()) do a
+@test Base.return_types((Any,)) do a
     x = AliasableFields(a, 0)     # x::PartialStruct(AliasableFields, Any[Any, Const(0)])
     if isa(getfield(x, :f1), Int) # x::PartialStruct(AliasableFields, Any[Int, Const(0)])
         return getfield(x, :f1)
     end
     return 0
 end |> only === Int
-@test Base.return_types((Any,Any); interp=MustAliasInterpreter()) do a, b
+@test Base.return_types((Any,Any)) do a, b
     x = AliasableFields(a, b)         # x::AliasableFields
     if isa(getfield(x, :f1), Int)     # x::PartialStruct(AliasableFields, Any[Int, Any])
         if isa(getfield(x, :f2), Int) # x::PartialStruct(AliasableFields, Any[Int, Int])
@@ -2367,7 +2358,7 @@ end |> only === Int
     end
     return 0, 0
 end |> only === Tuple{Int,Int}
-@test Base.return_types((Any,); interp=MustAliasInterpreter()) do a
+@test Base.return_types((Any,)) do a
     x = AliasableConstField(a, 0)
     if isa(getfield(x, :f1), Int)
         return getfield(x, :f1)
@@ -2376,14 +2367,14 @@ end |> only === Tuple{Int,Int}
 end |> only === Int
 
 # shouldn't use refinement information when not worthwhile
-@test Base.return_types((AliasableField{Int},); interp=MustAliasInterpreter()) do a
+@test Base.return_types((AliasableField{Int},)) do a
     if isa(getfield(a, :f), Any)
         return getfield(a, :f) # shouldn't be ::Any
     end
     return 0
 end |> only === Int
 # shouldn't assume anything about mutable field
-@test Base.return_types((Any,Any); interp=MustAliasInterpreter()) do a, b
+@test Base.return_types((Any,Any)) do a, b
     x = AliasableConstField{Any,Any}(a, b)
     if isa(getfield(x, :f2), Int)
         setfield!(x, :f2, z::Any)
@@ -2392,7 +2383,7 @@ end |> only === Int
     return 0
 end |> only === Any
 # when abstract type, we shouldn't assume anything
-@test Base.return_types((Any,); interp=MustAliasInterpreter()) do a
+@test Base.return_types((Any,)) do a
     if isa(getfield(a, :mayexist), Int)
         return getfield(a, :mayexist)
     end
@@ -2400,26 +2391,26 @@ end |> only === Any
 end |> only === Any
 
 # works inter-procedurally
-@test Base.return_types((AliasableField,); interp=MustAliasInterpreter()) do a
+@test Base.return_types((AliasableField,)) do a
     if isa(a.f, Int)
         return a.f
     end
     return 0
 end |> only === Int
-@test Base.return_types((Tuple{Any},); interp=MustAliasInterpreter()) do t
+@test Base.return_types((Tuple{Any},)) do t
     if isa(t[1], Int)
         return t[1]
     end
     return 0
 end |> only === Int
-@test Base.return_types((Any,); interp=MustAliasInterpreter()) do a
+@test Base.return_types((Any,)) do a
     x = AliasableFields(a, 0) # x::PartialStruct(AliasableFields, Any[Any, Const(0)])
     if isa(x.f1, Int)         # x::PartialStruct(AliasableFields, Any[Int, Const(0)])
         return x.f1
     end
     return 0
 end |> only === Int
-@test Base.return_types((Any,Any); interp=MustAliasInterpreter()) do a, b
+@test Base.return_types((Any,Any)) do a, b
     x = AliasableFields(a, b) # x::AliasableFields
     if isa(x.f1, Int)         # x::PartialStruct(AliasableFields, Any[Int, Any])
         if isa(x.f2, Int)     # x::PartialStruct(AliasableFields, Any[Int, Int])
@@ -2428,7 +2419,7 @@ end |> only === Int
     end
     return 0, 0
 end |> only === Tuple{Int,Int}
-@test Base.return_types((Any,); interp=MustAliasInterpreter()) do a
+@test Base.return_types((Any,)) do a
     x = AliasableConstField(a, 0)
     if isa(x.f1, Int)
         return x.f1
@@ -2436,7 +2427,7 @@ end |> only === Tuple{Int,Int}
     return 0
 end |> only === Int
 getf(a) = a.f
-@test Base.return_types((AliasableField,); interp=MustAliasInterpreter()) do a
+@test Base.return_types((AliasableField,)) do a
     if isa(getf(a), Int)
         return getf(a)
     end
@@ -2447,13 +2438,13 @@ end |> only === Int
 merge_same_aliases(b, a) = b ? _merge_same_aliases1(a) : _merge_same_aliases2(a) # MustAlias(a, Const(:f1), Union{Int,Nothing})
 _merge_same_aliases1(a) = (@assert isa(a.f, Int); a.f) # ::MustAlias(a, Const(:f1), Int)
 _merge_same_aliases2(a) = (@assert isa(a.f, Nothing); a.f) # ::MustAlias(a, Const(:f1), Nothing)
-@test Base.return_types((Bool,AliasableField,); interp=MustAliasInterpreter()) do b, a
+@test Base.return_types((Bool,AliasableField,)) do b, a
     return merge_same_aliases(b, a) # ::Union{Int,Nothing}
 end |> only === Union{Nothing,Int}
 
 # call-site refinement
 isaint(a) = isa(a, Int)
-@test Base.return_types((AliasableField,); interp=MustAliasInterpreter()) do a
+@test Base.return_types((AliasableField,)) do a
     if isaint(a.f)
         return a.f
     end
@@ -2462,15 +2453,15 @@ end |> only === Int
 # handle multiple call-site refinement targets
 isasome(_) = true
 isasome(::Nothing) = false
-@test_broken Base.return_types((AliasableField{Union{Int,Nothing}},); interp=MustAliasInterpreter()) do a
+@test Base.infer_return_type((AliasableField{Union{Int,Nothing}},)) do a
     if isasome(a.f)
         return a.f
     end
     return 0
-end |> only === Int
+end === Int
 
 # appropriate lattice order
-@test Base.return_types((AliasableField{Any},); interp=MustAliasInterpreter()) do x
+@test Base.return_types((AliasableField{Any},)) do x
     v = x.f        # ::MustAlias(2, AliasableField{Any}, 1, Any)
     if isa(v, Int) # ::Conditional(3, _, Int, Any)
         v = v      # ::Int (∵ Int ⊑ MustAlias(2, AliasableField{Any}, 1, Any))
@@ -2482,28 +2473,28 @@ end |> only === Int
 
 # complicated callsite refinement cases
 from_interconditional_check11(y::Int, ::AliasableField) = y > 0
-@test Base.return_types((AliasableField{Any},); interp=MustAliasInterpreter()) do x
+@test Base.return_types((AliasableField{Any},)) do x
     if from_interconditional_check11(x.f, x)
         return x.f
     end
     return 0
 end |> only === Int
 from_interconditional_check12(::AliasableField, y::Int) = y > 0
-@test Base.return_types((AliasableField{Any},); interp=MustAliasInterpreter()) do x
+@test Base.return_types((AliasableField{Any},)) do x
     if from_interconditional_check12(x, x.f)
         return x.f
     end
     return 0
 end |> only === Int
 from_interconditional_check21(y, ::Union{Int,String}) = isa(y, Int)
-@test Base.return_types((AliasableField{Any},); interp=MustAliasInterpreter()) do x
+@test Base.return_types((AliasableField{Any},)) do x
     if from_interconditional_check21(x.f, x.f)
         return x.f
     end
     return 0
 end |> only === Int
 from_interconditional_check22(::Union{Int,String}, y) = isa(y, Int)
-@test Base.return_types((AliasableField{Any},); interp=MustAliasInterpreter()) do x
+@test Base.return_types((AliasableField{Any},)) do x
     if from_interconditional_check22(x.f, x.f)
         return x.f
     end
@@ -2516,7 +2507,7 @@ struct JET509
     list::Union{Tuple{},Vector{Int}}
 end
 jet509_hasitems(list) = length(list) >= 1
-@test Base.return_types((JET509,); interp=MustAliasInterpreter()) do ilist::JET509
+@test Base.return_types((JET509,)) do ilist::JET509
     list = ilist.list
     if jet509_hasitems(list)
         return list
@@ -2525,7 +2516,7 @@ jet509_hasitems(list) = length(list) >= 1
 end |> only == Vector{Int}
 
 # don't form nested slot wrappers
-@test Base.infer_return_type((NullableAliasableFields{NullableAliasableFields},); interp=MustAliasInterpreter()) do x
+@test Base.infer_return_type((NullableAliasableFields{NullableAliasableFields},)) do x
     y = getfield(x, :f1)
     if isdefined(y, :f2) && isa(getfield(y, :f2), Int)
         return getfield(y, :f2)
@@ -2537,52 +2528,52 @@ end == Int
 # --------------
 
 # simple symmetric tests
-@test Base.return_types((AliasableField,); interp=MustAliasInterpreter()) do x
+@test Base.return_types((AliasableField,)) do x
     if x.f === 0
         return x.f
     end
     return 0
 end |> only === Int
-@test Base.return_types((AliasableField,); interp=MustAliasInterpreter()) do x
+@test Base.return_types((AliasableField,)) do x
     if 0 === x.f
         return x.f
     end
     return 0
 end |> only === Int
 # NOTE we prioritize constraints on aliased field over those on slots themselves
-@test Base.return_types((AliasableField,Int,); interp=MustAliasInterpreter()) do x, a
+@test Base.return_types((AliasableField,Int,)) do x, a
     if x.f === a
         return x.f
     end
     return 0
 end |> only === Int
-@test Base.return_types((AliasableField,Int,); interp=MustAliasInterpreter()) do x, a
+@test Base.return_types((AliasableField,Int,)) do x, a
     if a === x.f
         return x.f
     end
     return 0
 end |> only === Int
-@test_broken Base.return_types((AliasableField{Union{Nothing,Int}},); interp=MustAliasInterpreter()) do x
+@test Base.infer_return_type((AliasableField{Union{Nothing,Int}},)) do x
     if !isnothing(x.f)
         return x.f
     end
     return 0
-end |> only === Int
-@test_broken Base.return_types((AliasableField{Union{Some{Int},Nothing}},); interp=MustAliasInterpreter()) do x
+end === Int
+@test Base.infer_return_type((AliasableField{Union{Some{Int},Nothing}},)) do x
     if !isnothing(x.f)
         return x.f
     end
     throw()
-end |> only === Some{Int}
+end === Some{Int}
 
 # handle the edge case
 @eval intermustalias_edgecase(_) = $(Compiler.InterMustAlias(2, Some{Any}, 1, Int))
-Base.return_types(intermustalias_edgecase, (Any,); interp=MustAliasInterpreter()) # create cache
-@test Base.return_types((Any,); interp=MustAliasInterpreter()) do x
+Base.return_types(intermustalias_edgecase, (Any,)) # create cache
+@test Base.return_types((Any,)) do x
     intermustalias_edgecase(x)
 end |> only === Compiler.InterMustAlias
 
-@test Base.infer_return_type((AliasableField,Integer,); interp=MustAliasInterpreter()) do a, x
+@test Base.infer_return_type((AliasableField,Integer,)) do a, x
     s = (;x)
     if getfield(a, :f) isa Symbol
         return getfield(s, getfield(a, :f))
@@ -2591,7 +2582,7 @@ end |> only === Compiler.InterMustAlias
 end == Integer
 
 # `isdefined` accuracy for `MustAlias`
-@test Base.infer_return_type((Any,); interp=MustAliasInterpreter()) do x
+@test Base.infer_return_type((Any,)) do x
     xx = Ref{Any}(x)
     xxx = Some{Any}(xx)
     Val(isdefined(xxx.value, :x))
@@ -2602,9 +2593,19 @@ struct GetSomethingA; x::Union{Nothing,Int}; end
 struct GetSomethingB; x::Int; end
 getsomethingx(a::GetSomethingA) = something(a.x, 0)
 getsomethingx(b::GetSomethingB) = b.x
-@test Base.infer_return_type((Union{GetSomethingA,GetSomethingB},); interp=MustAliasInterpreter()) do x
+@test Base.infer_return_type((Union{GetSomethingA,GetSomethingB},)) do x
     getsomethingx(x)
 end == Int
+
+# https://github.com/JuliaLang/julia/issues/59975
+struct Issue59975; a; end
+function issue59975(x::Issue59975)
+   if x.a isa Int
+        return x.a
+    end
+    return 0
+end
+@test Base.infer_return_type(issue59975, (Issue59975,)) == Int
 
 @testset "issue #56913: `BoundsError` in type inference" begin
     R = UnitRange{Int}
@@ -2775,7 +2776,7 @@ end |> only == Union{Int,Tuple{Any,Any}}
 let A = Core.Const(true)
     B = Core.InterConditional(2, Tuple, Union{})
     C = Core.InterConditional(2, Any, Union{})
-    L = ipo_lattice(Compiler.NativeInterpreter())
+    L = Compiler.ipo_lattice(Compiler.NativeInterpreter())
     @test !⊑(L, A, B)
     @test ⊑(L, B, A)
     @test tmerge(L, A, B) == C
@@ -4086,6 +4087,156 @@ end
         @test Any[Int64, Float32, Core.Const(nothing)] in tunion
         @test Any[Int64, Float64, Core.Const(nothing)] in tunion
     end
+end
+
+@testset "alias-aware union splitting" begin
+    let 𝕃 = Compiler.fallback_lattice
+        argtypes = Any[typeof(+), Union{Int,Float64}, Union{Int,Float64}]
+        # without aliasing: 2 * 2 = 4
+        @test Compiler.unionsplitcost(𝕃, argtypes) == 4
+        @test length(Compiler.switchtupleunion(𝕃, argtypes)) == 4
+        # with aliasing: only one independent union, cost should be 2
+        slot = SlotNumber(2)
+        fargs = Any[SSAValue(1), slot, slot]
+        @test Compiler.unionsplitcost(𝕃, argtypes; fargs) == 2
+        tunion = Compiler.switchtupleunion(𝕃, argtypes; fargs)
+        @test length(tunion) == 2
+        @test Any[typeof(+), Int, Int] in tunion
+        @test Any[typeof(+), Float64, Float64] in tunion
+    end
+
+    # unionsplitcost with 3 aliased args: cost 2 instead of 8
+    let 𝕃 = Compiler.fallback_lattice
+        slot = SlotNumber(2)
+        fargs = Any[SSAValue(1), slot, slot, slot]
+        argtypes = Any[typeof(+), Union{Int,Float64}, Union{Int,Float64}, Union{Int,Float64}]
+        # without aliasing: 2*2*2 = 8
+        @test Compiler.unionsplitcost(𝕃, argtypes) == 8
+        @test length(Compiler.switchtupleunion(𝕃, argtypes)) == 8
+        # with aliasing: only one independent union, cost should be 2
+        @test Compiler.unionsplitcost(𝕃, argtypes; fargs) == 2
+        tunion = Compiler.switchtupleunion(𝕃, argtypes; fargs)
+        @test length(tunion) == 2
+        @test Any[typeof(+), Int, Int, Int] in tunion
+        @test Any[typeof(+), Float64, Float64, Float64] in tunion
+    end
+
+    # MustAlias-based aliasing: different SSAValues but same (slot, ssadef, fldidx)
+    # e.g. f(a.x, a.x) where two getfield calls produce different SSAValues
+    let 𝕃 = Compiler.MustAliasesLattice(Compiler.fallback_lattice)
+        ma1 = Compiler.MustAlias(2, 0, AliasableField{Union{Int,Float64}}, 1, Union{Int,Float64})
+        ma2 = Compiler.MustAlias(2, 0, AliasableField{Union{Int,Float64}}, 1, Union{Int,Float64})
+        fargs = Any[SSAValue(1), SSAValue(2), SSAValue(3)]
+        argtypes = Any[typeof(+), ma1, ma2]
+        @test Compiler.unionsplitcost(𝕃, argtypes; fargs) == 2
+        tunion = Compiler.switchtupleunion(𝕃, argtypes; fargs)
+        @test length(tunion) == 2
+        @test Any[typeof(+), Int, Int] in tunion
+        @test Any[typeof(+), Float64, Float64] in tunion
+    end
+
+    # MustAlias with different slot should NOT be aliased
+    let 𝕃 = Compiler.MustAliasesLattice(Compiler.fallback_lattice)
+        ma1 = Compiler.MustAlias(2, 0, AliasableField{Union{Int,Float64}}, 1, Union{Int,Float64})
+        ma2 = Compiler.MustAlias(3, 0, AliasableField{Union{Int,Float64}}, 1, Union{Int,Float64})
+        fargs = Any[SSAValue(1), SSAValue(2), SSAValue(3)]
+        argtypes = Any[typeof(+), ma1, ma2]
+        @test Compiler.unionsplitcost(𝕃, argtypes; fargs) == 4
+        @test length(Compiler.switchtupleunion(𝕃, argtypes; fargs)) == 4
+    end
+end
+
+# Integration test: alias-aware splitting eliminates impossible cross-type methods
+# When `a::Union{A,B}`, `f(a, a, a)` can only ever call the diagonal methods.
+# The cross-type method `f(::A, ::B, ::A)` is impossible when all args are aliased.
+# Without alias-aware splitting, inference includes `f(::A, ::B, ::A)` and returns
+# `Union{Int, String}`. With alias-aware splitting, only diagonal combinations are
+# considered, giving the precise return type `Int`.
+struct AliasUnionSplitA end
+struct AliasUnionSplitB end
+alias_union_split_f(::AliasUnionSplitA, ::AliasUnionSplitA) = 1
+alias_union_split_f(::AliasUnionSplitB, ::AliasUnionSplitB) = 2
+alias_union_split_f(::AliasUnionSplitA, ::AliasUnionSplitB) = "bad1"
+alias_union_split_f(::AliasUnionSplitB, ::AliasUnionSplitA) = "bad2"
+@test Base.infer_return_type((Union{AliasUnionSplitA,AliasUnionSplitB},)) do a
+    alias_union_split_f(a, a)
+end == Int
+# MustAlias integration: `getfield` produces MustAlias which enables alias detection
+# across different SSAValues that access the same field of the same slot
+@test Base.infer_return_type((AliasableField{Union{AliasUnionSplitA,AliasUnionSplitB}},)) do x
+    alias_union_split_f(getfield(x, :f), getfield(x, :f))
+end == Int
+# `getproperty` (`x.f`) produces MustAlias via InterMustAlias pipeline
+@test Base.infer_return_type((AliasableField{Union{AliasUnionSplitA,AliasUnionSplitB}},)) do x
+    alias_union_split_f(x.f, x.f)
+end == Int
+
+# Slot alias conditional refinement: when `y = x` and a branch refines `x`,
+# the refinement should propagate to `y` as well.
+@testset "slot alias conditional refinement" begin
+    # basic case: `y = x; if x isa Int; sin(y)` should infer y::Int
+    @test Base.infer_return_type((Any,)) do x
+        y = x
+        if x isa Int
+            return sin(y)
+        end
+    end == Union{Nothing, Float64}
+    # else branch should also refine aliases
+    @test Base.infer_return_type((Union{Int,String},)) do x
+        y = x
+        if x isa Int
+            return y
+        else
+            return y
+        end
+    end == Union{Int, String}
+    # chained alias: z = y = x, refining x should also refine z
+    @test Base.infer_return_type((Union{Int,Float64},)) do x
+        z = y = x
+        if x isa Int
+            return z
+        end
+        return nothing
+    end == Union{Nothing, Int}
+    # alias should be broken by reassignment
+    @test Base.infer_return_type((Any,)) do x
+        y = x
+        if x isa Int
+            y = "hello"
+            return y
+        end
+        return nothing
+    end == Union{Nothing, String}
+    # typeassert-based refinement should also propagate to aliases
+    @test Base.infer_return_type((Any,)) do x
+        y = x
+        typeassert(x, Int)
+        return y
+    end == Int
+    # cross-BB: alias established before join point should survive to condition check
+    @test Base.infer_return_type((Union{Int,String}, Bool)) do x, cond
+        if cond
+            y = x
+        else
+            y = x
+        end
+        if x isa Int
+            return sin(y)
+        end
+        return nothing
+    end == Union{Nothing, Float64}
+    # cross-BB: alias broken on one path → no refinement at join point
+    @test Base.infer_return_type((Union{Int,String}, Bool)) do x, cond
+        if cond
+            y = x
+        else
+            y = "broken"
+        end
+        if x isa Int
+            return y
+        end
+        return nothing
+    end == Union{Nothing, String, Int}
 end
 
 @testset "constant prop' for union split signature" begin
@@ -6557,5 +6708,10 @@ function issue60883()
     return b  # should not be narrowed to Const(false)
 end
 @test issue60883() === true
+
+throwconditional(c, x) = c ? throw(x isa Int) : throw(x isa Float64)
+@test Base.infer_exception_type((Bool, Any)) do c, x
+    throwconditional(c, x)
+end == Bool
 
 end # module inference

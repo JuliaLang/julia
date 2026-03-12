@@ -193,7 +193,7 @@ global xx::T = 10
 16  (return 10)
 
 ########################################
-# Error: x declared twice
+# Error: local with two type declarations
 begin
     local x::T = 1
     local x::S = 1
@@ -205,6 +205,47 @@ begin
     local x::S = 1
 #        └───────┘ ── multiple type declarations found for `x`
 end
+
+########################################
+# Error: local with two type declarations, requiring scope resolution
+begin
+    local x::Int = 1
+    x::Int = 1
+end
+#---------------------
+LoweringError:
+begin
+    local x::Int = 1
+    x::Int = 1
+#   └────────┘ ── multiple type declarations found for `x`
+end
+
+########################################
+# multiple type declarations is OK for globals
+begin
+    global x::Int
+    x::Int = 1
+end
+#---------------------
+1   TestMod.Int
+2   (call core.declare_global TestMod :x true %₁)
+3   latestworld
+4   (call core.declare_global TestMod :x false)
+5   latestworld
+6   TestMod.Int
+7   (call core.declare_global TestMod :x true %₆)
+8   latestworld
+9   (call core.declare_global TestMod :x true)
+10  latestworld
+11  (call core.get_binding_type TestMod :x)
+12  (= slot₁/tmp 1)
+13  (call core.isa slot₁/tmp %₁₁)
+14  (gotoifnot %₁₃ label₁₆)
+15  (goto label₁₇)
+16  (= slot₁/tmp (call top.convert %₁₁ slot₁/tmp))
+17  slot₁/tmp
+18  (call core.setglobal! TestMod :x %₁₇)
+19  (return 1)
 
 ########################################
 # Error: Const not supported on locals
@@ -282,6 +323,18 @@ end
 ########################################
 # Error: global type decls only allowed at top level
 function f()
+    global x::Int
+end
+#---------------------
+LoweringError:
+function f()
+    global x::Int
+#          └────┘ ── type declarations for global variables must be at top level, not inside a function
+end
+
+########################################
+# Error: global type decls only allowed at top level (=)
+function f()
     global x::Int = 1
 end
 #---------------------
@@ -289,4 +342,125 @@ LoweringError:
 function f()
     global x::Int = 1
 #         └─────────┘ ── type declarations for global variables must be at top level, not inside a function
+end
+
+########################################
+# Error: global type decls only allowed at top level, requiring scope resolution
+function f()
+    global x
+    x::Int = 1
+end
+#---------------------
+LoweringError:
+function f()
+    global x
+    x::Int = 1
+#   └────────┘ ── type declarations for global variables must be at top level, not inside a function
+end
+
+########################################
+# FIXME: Error: global type decls only allowed at top level (.=)
+function f()
+    global x::Int .= 1
+end
+#---------------------
+1   (method TestMod.f)
+2   latestworld
+3   (call core.declare_global TestMod :x false)
+4   latestworld
+5   TestMod.f
+6   (call core.Typeof %₅)
+7   (call core.svec %₆)
+8   (call core.svec)
+9   SourceLocation::1:10
+10  (call core.svec %₇ %₈ %₉)
+11  --- method core.nothing %₁₀
+    slots: [slot₁/#self#(!read)]
+    1   TestMod.x
+    2   TestMod.Int
+    3   (call core.typeassert %₁ %₂)
+    4   (call top.broadcasted top.identity 1)
+    5   (call top.materialize! %₃ %₄)
+    6   (return %₅)
+12  latestworld
+13  TestMod.f
+14  (return %₁₃)
+
+########################################
+# FIXME: Error: global type decls only allowed at top level (+=)
+function f()
+    global x::Int += 1
+end
+#---------------------
+1   (method TestMod.f)
+2   latestworld
+3   (call core.declare_global TestMod :x false)
+4   latestworld
+5   (call core.declare_global TestMod :x true)
+6   latestworld
+7   TestMod.f
+8   (call core.Typeof %₇)
+9   (call core.svec %₈)
+10  (call core.svec)
+11  SourceLocation::1:10
+12  (call core.svec %₉ %₁₀ %₁₁)
+13  --- method core.nothing %₁₂
+    slots: [slot₁/#self#(!read) slot₂/tmp(!read)]
+    1   TestMod.+
+    2   TestMod.x
+    3   TestMod.Int
+    4   (call core.typeassert %₂ %₃)
+    5   (call %₁ %₄ 1)
+    6   (call core.get_binding_type TestMod :x)
+    7   (= slot₂/tmp %₅)
+    8   (call core.isa slot₂/tmp %₆)
+    9   (gotoifnot %₈ label₁₁)
+    10  (goto label₁₂)
+    11  (= slot₂/tmp (call top.convert %₆ slot₂/tmp))
+    12  slot₂/tmp
+    13  (call core.setglobal! TestMod :x %₁₂)
+    14  (return %₅)
+14  latestworld
+15  TestMod.f
+16  (return %₁₅)
+
+########################################
+# FIXME: Error: global type decls only allowed at top level (.+=)
+function f()
+    global x::Int .+= 1
+end
+#---------------------
+1   (method TestMod.f)
+2   latestworld
+3   (call core.declare_global TestMod :x false)
+4   latestworld
+5   TestMod.f
+6   (call core.Typeof %₅)
+7   (call core.svec %₆)
+8   (call core.svec)
+9   SourceLocation::1:10
+10  (call core.svec %₇ %₈ %₉)
+11  --- method core.nothing %₁₀
+    slots: [slot₁/#self#(!read)]
+    1   TestMod.x
+    2   TestMod.+
+    3   TestMod.Int
+    4   (call core.typeassert %₁ %₃)
+    5   (call top.broadcasted %₂ %₄ 1)
+    6   (call top.materialize! %₁ %₅)
+    7   (return %₆)
+12  latestworld
+13  TestMod.f
+14  (return %₁₃)
+
+########################################
+# Error: global type decls only allowed at top level (tuple)
+function f()
+    global (x::Int, y) = 1,2
+end
+#---------------------
+LoweringError:
+function f()
+    global (x::Int, y) = 1,2
+#         └────────────────┘ ── type declarations for global variables must be at top level, not inside a function
 end
