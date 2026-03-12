@@ -80,13 +80,8 @@ JL_DLLEXPORT void jl_set_safe_restore(jl_jmp_buf *sr)
 {
 #ifdef _OS_DARWIN_
     jl_task_t *ct = jl_get_current_task();
-    if (ct != NULL && ct->ptls) {
-        if (sr == NULL)
-            pthread_setspecific(jl_safe_restore_key, (void*)sr);
+    if (ct != NULL && ct->ptls)
         ct->ptls->safe_restore = sr;
-        if (sr == NULL)
-            return;
-    }
 #endif
     pthread_setspecific(jl_safe_restore_key, (void*)sr);
 }

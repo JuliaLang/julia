@@ -158,10 +158,17 @@ extern void JL_NORETURN jl_fake_signal_return(void)
     abort();
 }
 #endif
+#endif // !defined(_OS_DARWIN_)
 
 static inline uintptr_t jl_get_rsp_from_ctx(const void *_ctx)
 {
-#if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
+#if defined(_OS_DARWIN_) && defined(_CPU_X86_64_)
+    const ucontext64_t *ctx = (const ucontext64_t*)_ctx;
+    return ctx->uc_mcontext64->__ss.__rsp;
+#elif defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+    const ucontext64_t *ctx = (const ucontext64_t*)_ctx;
+    return ctx->uc_mcontext64->__ss.__sp;
+#elif defined(_OS_LINUX_) && defined(_CPU_X86_64_)
     const ucontext_t *ctx = (const ucontext_t*)_ctx;
     return ctx->uc_mcontext.gregs[REG_RSP];
 #elif defined(_OS_LINUX_) && defined(_CPU_X86_)
@@ -199,6 +206,7 @@ static int is_addr_on_sigstack(jl_ptls_t ptls, void *ptr) JL_NOTSAFEPOINT
             (char*)ptr <= (char*)ptls->signal_stack + (ptls->signal_stack_size ? ptls->signal_stack_size : sig_stack_size));
 }
 
+#if !defined(_OS_DARWIN_)
 // Modify signal context `_ctx` so that `fptr` will execute when the signal returns
 // The function `fptr` itself must not return.
 JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_ctx)
@@ -427,35 +435,18 @@ int exc_reg_is_write_fault(uintptr_t esr) {
 
 static int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx);
 
-#if defined(HAVE_MACH)
-#include "signals-mach.c"
-#else
-#include <poll.h>
-#include <sys/eventfd.h>
-#include <link.h>
-
-typedef struct {
-    int16_t tid;
-    bt_context_t *ctx;
-    int success;
-} callback_data_t;
-static int with_dl_iterate_phdr_lock(struct dl_phdr_info *info, size_t size, void *data)
-{
-    jl_lock_profile();
-    callback_data_t *cb_data = (callback_data_t*)data;
-    cb_data->success = jl_thread_suspend_and_get_state(cb_data->tid, 1, cb_data->ctx);
-    jl_unlock_profile();
-    return 1; // only call this once
+// is_write_fault: determine from signal context whether this was a write fault
+#if defined(_OS_DARWIN_) && defined(_CPU_X86_64_)
+int is_write_fault(void *context) {
+    ucontext64_t *ctx = (ucontext64_t*)context;
+    return exc_reg_is_write_fault(ctx->uc_mcontext64->__es.__err);
 }
-
-int jl_thread_suspend(int16_t tid, bt_context_t *ctx)
-{
-    callback_data_t cb_data = {tid, ctx, 0};
-    dl_iterate_phdr(with_dl_iterate_phdr_lock, &cb_data);
-    return cb_data.success;
+#elif defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+int is_write_fault(void *context) {
+    ucontext64_t *ctx = (ucontext64_t*)context;
+    return exc_reg_is_write_fault(ctx->uc_mcontext64->__es.__esr);
 }
-
-#if defined(_OS_LINUX_) && (defined(_CPU_X86_64_) || defined(_CPU_X86_))
+#elif defined(_OS_LINUX_) && (defined(_CPU_X86_64_) || defined(_CPU_X86_))
 int is_write_fault(void *context) {
     ucontext_t *ctx = (ucontext_t*)context;
     return exc_reg_is_write_fault(ctx->uc_mcontext.gregs[REG_ERR]);
@@ -524,7 +515,14 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
         sigdie_handler(sig, info, context);
         return;
     }
-    if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && jl_addr_is_safepoint((uintptr_t)info->si_addr) && !is_write_fault(context)) {
+    // On Linux, protection faults (e.g. safepoint PROT_NONE) arrive as SIGSEGV/SEGV_ACCERR.
+    // On macOS, they arrive as SIGBUS (XNU maps KERN_PROTECTION_FAILURE to SIGBUS).
+    int is_protection_fault =
+#if defined(_OS_DARWIN_)
+        (sig == SIGBUS) ||
+#endif
+        (sig == SIGSEGV && info->si_code == SEGV_ACCERR);
+    if (is_protection_fault && jl_addr_is_safepoint((uintptr_t)info->si_addr) && !is_write_fault(context)) {
         jl_set_gc_and_wait(ct);
         // Do not raise sigint on worker thread
         if (jl_atomic_load_relaxed(&ct->tid) != 0)
@@ -559,12 +557,40 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
         jl_safe_printf("ERROR: Signal stack overflow, exit\n");
         jl_raise(sig);
     }
-    else if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && is_write_fault(context)) {  // writing to read-only memory (e.g., mmap)
+    else if (is_protection_fault && is_write_fault(context)) {  // writing to read-only memory (e.g., mmap)
         jl_throw_in_ctx(ct, jl_readonlymemory_exception, sig, context);
     }
     else {
         sigdie_handler(sig, info, context);
     }
+}
+
+#if defined(HAVE_MACH)
+#include "signals-mach.c"
+#else
+#include <poll.h>
+#include <sys/eventfd.h>
+#include <link.h>
+
+typedef struct {
+    int16_t tid;
+    bt_context_t *ctx;
+    int success;
+} callback_data_t;
+static int with_dl_iterate_phdr_lock(struct dl_phdr_info *info, size_t size, void *data)
+{
+    jl_lock_profile();
+    callback_data_t *cb_data = (callback_data_t*)data;
+    cb_data->success = jl_thread_suspend_and_get_state(cb_data->tid, 1, cb_data->ctx);
+    jl_unlock_profile();
+    return 1; // only call this once
+}
+
+int jl_thread_suspend(int16_t tid, bt_context_t *ctx)
+{
+    callback_data_t cb_data = {tid, ctx, 0};
+    dl_iterate_phdr(with_dl_iterate_phdr_lock, &cb_data);
+    return cb_data.success;
 }
 
 pthread_mutex_t in_signal_lock; // shared with jl_delete_thread
@@ -861,9 +887,6 @@ static void allocate_segv_handler(void)
 
 void jl_install_thread_signal_handler(jl_ptls_t ptls)
 {
-#ifdef HAVE_MACH
-    attach_exception_port(pthread_mach_thread_np(ptls->system_id), 0);
-#endif
     stack_t ss;
     if (sigaltstack(NULL, &ss) < 0)
         jl_errorf("fatal error: sigaltstack: %s", strerror(errno));
