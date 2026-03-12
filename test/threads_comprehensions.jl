@@ -302,4 +302,24 @@ using Base.Threads
         @test result_conv isa Vector{Float64}
         @test result_conv == [1.0, 2.0, 3.0, 4.0, 5.0]
     end
+
+    # Test that the typed fast path doesn't allocate per-element
+    @testset "typed fast path allocations" begin
+        n = 100_000
+        # Warm up
+        Int[i for i in 1:1]
+        @threads Int[i for i in 1:1]
+
+        # Typed threaded comprehension should have O(nthreads) allocs, not O(n)
+        allocs_typed = @allocations @threads Int[i for i in 1:n]
+        @test allocs_typed < 100  # ~35 allocs in practice
+
+        # Typed static scheduling
+        allocs_static = @allocations @threads :static Int[i for i in 1:n]
+        @test allocs_static < 100
+
+        # Typed dynamic scheduling
+        allocs_dynamic = @allocations @threads :dynamic Int[i for i in 1:n]
+        @test allocs_dynamic < 100
+    end
 end
