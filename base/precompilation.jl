@@ -931,6 +931,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     n_done = Ref(0)
     n_already_precomp = Ref(0)
     n_loaded = Ref(0)
+    loaded_pkgs = Base.PkgId[]
     interrupted = Ref(false)
     t_print = Ref{Task}()
 
@@ -1194,7 +1195,10 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                                     stale_cache[stale_cache_key] = false
                                 end
                             end
-                            loaded && (n_loaded[] += 1)
+                            if loaded
+                                n_loaded[] += 1
+                                @lock print_lock push!(loaded_pkgs, pkg)
+                            end
                         catch err
                             close(std_pipe.in) # close pipe to end the std output monitor
                             wait(t_monitor)
@@ -1212,7 +1216,13 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             Base.release(parallel_limiter)
                         end
                     else
-                        is_stale || (n_already_precomp[] += 1)
+                        if !is_stale
+                            n_already_precomp[] += 1
+                            if loaded
+                                n_loaded[] += 1
+                                @lock print_lock push!(loaded_pkgs, pkg)
+                            end
+                        end
                     end
                     n_done[] += 1
                     notify(was_processed[pkg_config])
@@ -1283,14 +1293,44 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                     local plural1 = length(configs) > 1 ? "dependency configurations" : n_loaded[] == 1 ? "dependency" : "dependencies"
                     local plural2 = n_loaded[] == 1 ? "a different version is" : "different versions are"
                     local plural3 = n_loaded[] == 1 ? "" : "s"
-                    local plural4 = n_loaded[] == 1 ? "this package" : "these packages"
+                    local loaded_names = join(sort!([full_name(ext_to_parent, p) for p in loaded_pkgs]), ", ", " and ")
+                    # compute how many precompiled packages transitively depend on the loaded packages
+                    local n_affected = 0
+                    local loaded_set = Set{Base.PkgId}(loaded_pkgs)
+                    let reverse_deps = Dict{Base.PkgId, Vector{Base.PkgId}}()
+                        for (p, deps) in direct_deps
+                            for d in deps
+                                push!(get!(Vector{Base.PkgId}, reverse_deps, d), p)
+                            end
+                        end
+                        affected = Set{Base.PkgId}()
+                        frontier = Base.PkgId[p for p in loaded_set]
+                        while !isempty(frontier)
+                            p = pop!(frontier)
+                            for rdep in get(reverse_deps, p, Base.PkgId[])
+                                if rdep ∉ affected && rdep ∉ loaded_set
+                                    push!(affected, rdep)
+                                    push!(frontier, rdep)
+                                end
+                            end
+                        end
+                        n_affected = length(affected)
+                    end
                     print(iostr, "\n  ",
                         color_string(string(n_loaded[]), Base.warn_color()),
                         " $(plural1) precompiled but ",
                         color_string("$(plural2) currently loaded", Base.warn_color()),
-                        ". Restart julia to access the new version$(plural3). \
-                        Otherwise, loading dependents of $(plural4) may trigger further precompilation to work with the unexpected version$(plural3)."
+                        " (", loaded_names, ")",
+                        ". Restart julia to access the new version$(plural3)."
                     )
+                    if n_affected > 0
+                        local affected_plural = length(configs) > 1 ? "dependency configurations" : n_affected == 1 ? "dependent" : "dependents"
+                        print(iostr,
+                            " Otherwise, $(n_affected) $(affected_plural) of ",
+                            n_loaded[] == 1 ? "this package" : "these packages",
+                            " may trigger further precompilation to work with the unexpected version$(plural3)."
+                        )
+                    end
                 end
                 if !isempty(precomperr_deps)
                     pluralpc = length(configs) > 1 ? "dependency configurations" : precomperr_deps == 1 ? "dependency" : "dependencies"
