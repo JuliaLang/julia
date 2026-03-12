@@ -307,19 +307,23 @@ using Base.Threads
     @testset "typed fast path allocations" begin
         n = 100_000
         # Warm up
-        Int[i for i in 1:1]
-        @threads Int[i for i in 1:1]
+        t1() = @threads Int[i for i in 1:1]
+        t1()
+        t2() = @threads :static Int[i for i in 1:1]
+        t2()
+        t3() = @threads :dynamic Int[i for i in 1:1]
+        t3()
 
         # Typed threaded comprehension should have O(nthreads) allocs, not O(n)
-        allocs_typed = @allocations @threads Int[i for i in 1:n]
+        allocs_typed = @allocations t1()
         @test allocs_typed < 100  # ~35 allocs in practice
 
         # Typed static scheduling
-        allocs_static = @allocations @threads :static Int[i for i in 1:n]
+        allocs_static = @allocations t2()
         @test allocs_static < 100
 
         # Typed dynamic scheduling
-        allocs_dynamic = @allocations @threads :dynamic Int[i for i in 1:n]
+        allocs_dynamic = @allocations t3()
         @test allocs_dynamic < 100
     end
 end
