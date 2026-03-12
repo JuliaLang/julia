@@ -607,6 +607,14 @@ function _visit_indirect_deps!(direct_deps::Dict{PkgId, Vector{PkgId}}, visited:
     return
 end
 
+function _collect_reachable!(pkg_uuids::Set{UUID}, deps::Dict{UUID, Vector{UUID}}, uuid::UUID)
+    uuid in pkg_uuids && return
+    push!(pkg_uuids, uuid)
+    for dep_uuid in get(Vector{UUID}, deps, uuid)
+        _collect_reachable!(pkg_uuids, deps, dep_uuid)
+    end
+end
+
 function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                          internal_call::Bool,
                          strict::Bool,
@@ -705,15 +713,8 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     # `manifest` controls the scope: workspace_deps (all members) vs project_deps (current project).
     roots = manifest ? env.workspace_deps : env.project_deps
     pkg_uuids = Set{UUID}()
-    function _collect_reachable!(uuid)
-        uuid in pkg_uuids && return
-        push!(pkg_uuids, uuid)
-        for dep_uuid in get(Vector{UUID}, env.deps, uuid)
-            _collect_reachable!(dep_uuid)
-        end
-    end
     for (_, uuid) in roots
-        _collect_reachable!(uuid)
+        _collect_reachable!(pkg_uuids, env.deps, uuid)
     end
 
     triggers = Dict{Base.PkgId,Vector{Base.PkgId}}()
