@@ -4,9 +4,9 @@
 # structs/constants #
 #####################
 
-# N.B.: Const/PartialStruct/InterConditional are defined in Core, to allow them to be used
-# inside the global code cache.
-import Core: Const, InterConditional, PartialStruct
+# N.B.: Const/PartialStruct/InterConditional/InterMustAlias are defined in Core,
+# to allow them to be used inside the global code cache.
+import Core: Const, InterConditional, PartialStruct, InterMustAlias
 
 function may_form_limited_typ(@nospecialize(aty), @nospecialize(bty), @nospecialize(xty))
     if aty isa LimitedAccuracy
@@ -110,32 +110,11 @@ end
 MustAlias(var::SlotNumber, ssadef::Int, @nospecialize(vartyp), fldidx::Int, @nospecialize(fldtyp)) =
     MustAlias(slot_id(var), ssadef, vartyp, fldidx, fldtyp)
 
-"""
-    alias::InterMustAlias
-
-This lattice element used in a very similar way as `InterConditional`, but corresponds to `MustAlias`.
-"""
-struct InterMustAlias
-    slot::Int
-    vartyp::Any
-    fldidx::Int
-    fldtyp::Any
-    function InterMustAlias(slot::Int, @nospecialize(vartyp), fldidx::Int, @nospecialize(fldtyp))
-        assert_nested_slotwrapper(vartyp)
-        assert_nested_slotwrapper(fldtyp)
-        # @assert !isalreadyconst(vartyp) "vartyp is already const"
-        # @assert !isalreadyconst(fldtyp) "fldtyp is already const"
-        limited = may_form_limited_typ(vartyp, fldtyp, fldtyp)
-        limited !== nothing && return limited
-        return new(slot, vartyp, fldidx, fldtyp)
-    end
-end
-InterMustAlias(var::SlotNumber, @nospecialize(vartyp), fldidx::Int, @nospecialize(fldtyp)) =
-    InterMustAlias(slot_id(var), vartyp, fldidx, fldtyp)
-
 const AnyMustAlias = Union{MustAlias,InterMustAlias}
 function InterMustAlias(alias::MustAlias)
     @assert alias.ssadef == 0
+    limited = may_form_limited_typ(alias.vartyp, alias.fldtyp, alias.fldtyp)
+    limited !== nothing && return limited
     InterMustAlias(alias.slot, alias.vartyp, alias.fldidx, alias.fldtyp)
 end
 

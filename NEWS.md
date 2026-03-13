@@ -16,12 +16,24 @@ New language features
     participate in the default break scope: a plain `break` or `break _` exits the innermost breakable scope,
     whether it is a loop or an `@label` block. The `continue` statement also supports labels with
     `continue name` to continue a labeled loop ([#60481]).
+  - `typegroup` blocks allow defining mutually recursive struct types that reference each other in their
+    field types. All types in the group are resolved atomically at the end of the block ([#60569]).
 
 Language changes
 ----------------
 
 Compiler/Runtime improvements
 -----------------------------
+
+  - Type inference now refines field types through conditional checks and call signatures.
+    For example, after `if !isnothing(x.field)`, inference knows `x.field` is not `nothing`
+    within the branch. Similarly, after a call like `func(x.field)` where `func(::Int)` is
+    the only matching method, inference refines `x.field` to `Int`.
+    This works for immutable struct fields and `const` fields of mutable structs.
+    Mutable (non-`const`) fields are not supported due to the lack of per-object memory
+    effect tracking; for those, the recommended pattern remains storing the field value in
+    a local variable before the check (e.g. `val = x.field; if !isnothing(val) ... end`)
+    ([#41199], [#47574]).
 
 Command-line option changes
 ---------------------------
@@ -57,8 +69,11 @@ Standard library changes
 
 #### Markdown
 
-  * Strikethrough text via `~strike~` or `~~through~~` is now supported by the
-    Markdown parser. ([#60537])
+* Support "raw" or "inline" HTML inside Markdown data ([#60629], [#60632], [#60732])
+* Support autolinks for email addresses (#60570)
+* Many improvements and bugfixes for rendering Markdown lists in a terminal ([#55456], [#60519])
+* Strikethrough text via `~strike~` or `~~through~~` is now supported by the Markdown parser. ([#60537])
+* Many, many bug fixes and minor tweaks; overall behavior is now much closer to CommonMark ([#59977], [#60502])
 
 #### Profile
 
