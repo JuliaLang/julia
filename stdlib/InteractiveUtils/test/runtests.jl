@@ -837,6 +837,10 @@ file, ln = functionloc(versioninfo, Tuple{})
 @test isfile(pathof(InteractiveUtils))
 @test isdir(pkgdir(InteractiveUtils))
 
+module ModuleWithoutPathForEdit
+end
+@test_throws ErrorException("could not find source file for module: $(ModuleWithoutPathForEdit)") edit(ModuleWithoutPathForEdit)
+
 # compiler stdlib path updating
 file, ln = functionloc(Core.Compiler.tmeet, Tuple{Int, Float64})
 @test isfile(file)
