@@ -1,7 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 //
-// Tests signal handling in --handle-signals=minimal mode:
-//   1. SIGSEGV forwarding to a pre-existing handler
+// Tests signal handling in --handle-signals=minimal mode (Unix):
+//   1. SIGSEGV forwarding to a pre-existing sigaction handler
 //   2. Multi-threaded workload with safepoints
 //   3. SIGINFO/SIGUSR1 handler not installed
 
@@ -17,7 +17,7 @@ JULIA_DEFINE_FAST_TLS
 
 // --- Test 1: SIGSEGV forwarding to pre-existing handler ---
 
-static volatile sig_atomic_t segv_forwarded = 0;
+static volatile int segv_forwarded = 0;
 static sigjmp_buf segv_jmpbuf;
 
 static void test_segv_handler(int sig, siginfo_t *info, void *ctx)
@@ -29,7 +29,7 @@ static void test_segv_handler(int sig, siginfo_t *info, void *ctx)
 static void *trigger_segv_thread(void *arg)
 {
     // Trigger a SIGSEGV on a non-Julia thread.
-    // Julia's segv_handler should forward this to our pre-existing handler.
+    // Julia's handler should forward this to our pre-existing handler.
     if (sigsetjmp(segv_jmpbuf, 1) == 0) {
         volatile int *p = NULL;
         *p = 42;
@@ -56,7 +56,7 @@ static jl_value_t *checked_eval_string(const char *code)
 
 int main()
 {
-    // Install a SIGSEGV handler before Julia initialization
+    // Install SIGSEGV handler before Julia initialization
     struct sigaction sa;
     memset(&sa, 0, sizeof(struct sigaction));
     sigemptyset(&sa.sa_mask);
@@ -81,7 +81,7 @@ int main()
     // Initialize Julia
     jl_init();
 
-    // Test 1: SIGSEGV forwarding
+    // Test 1: Exception forwarding to pre-existing handler
     {
         pthread_t tid;
         if (pthread_create(&tid, NULL, trigger_segv_thread, NULL) != 0) {
@@ -106,7 +106,7 @@ int main()
         fflush(stdout);
     }
 
-    // Test 3: SIGINFO / SIGUSR1 handlers should not be installed in minimal mode
+    // Test 3: I/O-like signal handlers should not be installed in minimal mode
     {
         struct sigaction current;
 #ifdef SIGINFO
