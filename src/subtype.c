@@ -117,6 +117,7 @@ typedef struct jl_stenv_t {
     // Used to represent the length difference between 2 vararg.
     // intersect(X, Y) ==> X = Y + Loffset
     int Loffset;
+    int ccheck_merging;       // prevents re-entrant merge loops in subtype_ccheck
 } jl_stenv_t;
 
 // state manipulation utilities
@@ -176,6 +177,17 @@ static int next_union_state(jl_stenv_t *e, int8_t R) JL_NOTSAFEPOINT
 {
     jl_unionstate_t *state = R ? &e->Runions : &e->Lunions;
     if (state->more == 0)
+        return 0;
+    // reset `used` and let `pick_union_decision` clean the stack.
+    state->used = state->more;
+    statestack_set(state, state->used - 1, 1);
+    return 1;
+}
+
+static int next_union_state_from(jl_stenv_t *e, int8_t R, int16_t min_used) JL_NOTSAFEPOINT
+{
+    jl_unionstate_t *state = R ? &e->Runions : &e->Lunions;
+    if (state->more <= min_used)
         return 0;
     // reset `used` and let `pick_union_decision` clean the stack.
     state->used = state->more;
@@ -679,8 +691,97 @@ static jl_value_t *simple_meet(jl_value_t *a, jl_value_t *b, int overesi)
 static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param);
 
 static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param, int limit_slow);
+static int merge_env(jl_stenv_t *e, jl_savedenv_t *me, jl_savedenv_t *se, int count);
 
-// subtype for variable bounds consistency check. needs its own forall/exists environment.
+// After merge_env merges lb/ub/occurs/innervars/max_offset across all
+// successful ∃ branches, this overrides the metadata fields with values
+// from the original saved env. Only lb/ub (merged via simple_meet/
+// simple_join) are kept from the merge result.
+// merge_env's metadata merging (max for occurs, min for max_offset,
+// append for innervars) tightens constraints, which is the opposite of
+// what ccheck needs (widest valid constraints).
+static void ccheck_restore_metadata(jl_stenv_t *e, jl_savedenv_t *se) JL_NOTSAFEPOINT
+{
+    jl_value_t **roots = NULL;
+    int nroots = 0;
+    if (se->gcframe.nroots == JL_GC_ENCODE_PUSHARGS(1)) {
+        jl_svec_t *sv = (jl_svec_t*)se->roots[0];
+        assert(jl_is_svec(sv));
+        roots = jl_svec_data(sv);
+        nroots = jl_svec_len(sv);
+    }
+    else if (se->gcframe.nroots) {
+        roots = se->roots;
+        nroots = JL_GC_DECODE_NROOTS(se->gcframe.nroots);
+    }
+    jl_varbinding_t *v = e->vars;
+    int i = 0, j = 0;
+    while (v != NULL) {
+        if (roots)
+            v->innervars = (jl_array_t*)roots[i + 2];
+        i += 3;
+        v->occurs_inv = se->buf[j];
+        v->occurs_cov = se->buf[j + 1];
+        v->max_offset = se->buf[j + 2];
+        j += 3;
+        v = v->prev;
+    }
+    assert(!roots || i == nroots); (void)nroots;
+}
+
+// Merge successful right-side Union branches' environments.
+// Enumerates all ∃ branches via next_union_state_from, running a full
+// ∀∃ check (local_forall_exists_subtype) for each. Successful branches
+// are merged via merge_env (simple_meet for lb, simple_join for ub),
+// then metadata is restored from the original env.
+// Kept separate (noinline) to avoid bloating subtype_ccheck's stack frame.
+NOINLINE static void ccheck_merge_env(
+    jl_value_t *x, jl_value_t *y, jl_stenv_t *e,
+    jl_savedenv_t *se,
+    jl_saved_unionstate_t *oldLunions,
+    int16_t oldRunions_used,
+    jl_value_t **saved_envout, int envout_n)
+{
+    jl_savedenv_t me;
+    int nmerge = 0;
+    e->ccheck_merging = 1;
+    nmerge = merge_env(e, &me, se, nmerge);
+    while (next_union_state_from(e, 1, oldRunions_used)) {
+        restore_env(e, se, 1);
+        if (saved_envout)
+            memcpy(&e->envout[e->envidx], saved_envout,
+                   envout_n * sizeof(jl_value_t *));
+        pop_unionstate(&e->Lunions, oldLunions);
+        e->Runions.more = 0;
+        e->Lunions.more = 0;
+        if (local_forall_exists_subtype(x, y, e, 0, 1))
+            nmerge = merge_env(e, &me, se, nmerge);
+    }
+    e->ccheck_merging = 0;
+    if (nmerge > 0) {
+        restore_env(e, &me, 1);
+        ccheck_restore_metadata(e, se);
+        if (saved_envout)
+            memcpy(&e->envout[e->envidx], saved_envout,
+                   envout_n * sizeof(jl_value_t *));
+        free_env(&me);
+    }
+}
+
+// Subtype check for variable bounds consistency.
+// Union state (Lunions/Runions) is isolated via push/pop so that
+// right-side Union choices from bounds checks do not leak into
+// the shared Runions statestack, which would cause O(2^N)
+// iteration in exists_subtype when many Union-bounded parameters
+// are present.
+//
+// When right-side Union choices are made (detected via Runions.used
+// growth), env constraints from all successful ∃ branches are merged
+// (lb via simple_meet, ub via simple_join) to keep constraints valid
+// for any branch. Metadata (occurs, max_offset, innervars) is restored
+// from the original env. When no Union choices are involved, constraints
+// are deterministic and kept — restoring unconditionally causes false
+// negatives that break the obvious_subtype invariant.
 static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
     if (jl_is_long(x) && jl_is_long(y))
@@ -695,8 +796,42 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         return 1;
     if (x == (jl_value_t*)jl_any_type && jl_is_datatype(y))
         return 0;
+    if (obviously_in_union(y, x))
+        return 1;
     jl_saved_unionstate_t oldLunions; push_unionstate(&oldLunions, &e->Lunions);
+    jl_saved_unionstate_t oldRunions; push_unionstate(&oldRunions, &e->Runions);
+    jl_savedenv_t se;
+    save_env(e, &se, 1);
     int sub = local_forall_exists_subtype(x, y, e, 0, 1);
+    if (e->Runions.used > oldRunions.used) {
+        // Right-side Union choices were made. Preserve envout
+        // for subtype_unionall before any env restore.
+        int envout_n = 0;
+        jl_value_t **saved_envout = NULL;
+        if (e->envout && e->envidx < e->envsz) {
+            envout_n = e->envsz - e->envidx;
+            saved_envout = (jl_value_t **)alloca(
+                envout_n * sizeof(jl_value_t *));
+            memcpy(saved_envout, &e->envout[e->envidx],
+                   envout_n * sizeof(jl_value_t *));
+        }
+        if (sub && !e->ccheck_merging && !e->intersection) {
+            // Merge constraints across all successful ∃ branches
+            // (lb via simple_meet, ub via simple_join).
+            ccheck_merge_env(x, y, e, &se, &oldLunions, oldRunions.used,
+                             saved_envout, envout_n);
+        }
+        else {
+            // sub == 0 or re-entrance/intersection: restore env
+            // to clean up stale constraints from the check.
+            restore_env(e, &se, 1);
+            if (saved_envout)
+                memcpy(&e->envout[e->envidx], saved_envout,
+                       envout_n * sizeof(jl_value_t *));
+        }
+    }
+    free_env(&se);
+    pop_unionstate(&e->Runions, &oldRunions);
     pop_unionstate(&e->Lunions, &oldLunions);
     return sub;
 }
@@ -1891,6 +2026,7 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     e->emptiness_only = 0;
     e->triangular = 0;
     e->Loffset = 0;
+    e->ccheck_merging = 0;
     e->Lunions.depth = 0;      e->Runions.depth = 0;
     e->Lunions.more = 0;       e->Runions.more = 0;
     e->Lunions.used = 0;       e->Runions.used = 0;
