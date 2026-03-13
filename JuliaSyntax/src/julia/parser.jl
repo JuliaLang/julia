@@ -251,7 +251,15 @@ function is_initial_reserved_word(ps::ParseState, k)
                             macro quote let local global const do struct typegroup module
                             baremodule using import export"
     # `begin` means firstindex(a) inside a[...]
-    return is_iresword && !(k == K"begin" && ps.end_symbol)
+    if k == K"begin" && ps.end_symbol
+        return false
+    end
+    # `typegroup` is only a keyword in Julia >= 1.14
+    # N.B: In some cases, we parse as typegroup anyway for error recovery - see below
+    if k == K"typegroup" && ps.stream.version < (1, 14)
+        return false
+    end
+    return is_iresword
 end
 
 function is_reserved_word(k)
@@ -270,6 +278,12 @@ function peek_initial_reserved_words(ps::ParseState)
         return (k == K"mutable"   && k2 == K"struct") ||
                (k == K"primitive" && k2 == K"type")   ||
                (k == K"abstract"  && k2 == K"type")
+    elseif k == K"typegroup" && ps.stream.version < (1, 14)
+        # On older versions, typegroup is an identifier. But if followed by
+        # a type definition keyword (which would be a syntax error in old
+        # Julia due to juxtaposition), parse as typegroup for error recovery.
+        k2 = peek(ps, 2, skip_newlines=false)
+        return k2 in KSet"struct mutable abstract primitive @ \" \"\"\""
     else
         return false
     end
