@@ -113,6 +113,11 @@ of the purpose of the changes made. Do not specifically mention added tests, com
 documentation, etc., unless this is the main purpose of the change. Do not mention
 the test plan, unless it differs from what you were instructed to do in AGENTS.md.
 If your change fixes one or more issues, use the syntax "Fixes #" at the end of the commit message, but do not include it in the title.
+When invoking `git commit` from the shell, avoid shell-sensitive formatting in inline
+`-m` arguments. In particular, do not use backticks inside double-quoted commit
+message text, since the shell will treat them as command substitution. Prefer plain
+text in inline commit bodies, or use a message file / other mechanism that bypasses
+shell interpolation when exact formatting is required.
 
 When referencing external GitHub PRs or issues, use proper GitHub interlinking format (e.g., `owner/repo#123` for PRs/issues).
 When fixing CI failures, include the link to the specific CI failure in the commit message.
