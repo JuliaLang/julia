@@ -343,51 +343,118 @@ function _threadsfor_single_iterator(body, iterator, condition, schedule, dims=n
     end
 end
 
-# Fast path for non-filtered, non-greedy comprehensions: pre-allocate and write directly
+# Fast path for non-filtered, non-greedy comprehensions: pre-allocate and write directly.
+# The result array is always 1-based; _base_idx maps from the iterator's index space.
 function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule, dims, result_type)
     work_dist = _work_distribution_code()
+    wrap_final = dims !== nothing ? (x -> :(reshape($x, $dims))) : identity
 
     if result_type !== nothing
+        # Typed path: pre-allocate with known element type
         esc_result_type = esc(result_type)
         alloc_expr = :(Vector{$esc_result_type}(undef, niter))
-        narrow_expr = :(result)
-    else
-        alloc_expr = :(Vector{Any}(undef, niter))
-        narrow_expr = :(_narrow_threaded_result(result))
-    end
-
-    final_expr = dims !== nothing ? :(reshape($narrow_expr, $dims)) : narrow_expr
-
-    quote
-        let iter = $esc_range
-        local range = (iter isa AbstractArray || hasmethod(getindex, Tuple{typeof(iter), Int})) ? iter : collect(iter)
-        local niter = length(range)
-        local result = $alloc_expr
-        if niter > 0
-            let range = range, result = result
-            local threadsfor_fun
-            function threadsfor_fun(tid = 1; onethread = false)
-                $work_dist
-                for i = loop_first:loop_last
-                    local $esc_lidx = @inbounds r[i]
-                    @inbounds result[i] = $esc_body
+        return quote
+            let iter = $esc_range
+            local range = iter isa AbstractArray ? iter : collect(iter)
+            local niter = length(range)
+            local result = $alloc_expr
+            if niter > 0
+                let range = range, result = result
+                local threadsfor_fun
+                function threadsfor_fun(tid = 1; onethread = false)
+                    $work_dist
+                    local _base_idx = firstindex(r) - 1
+                    for i = loop_first:loop_last
+                        local $esc_lidx = @inbounds r[i]
+                        @inbounds result[i - _base_idx] = $esc_body
+                    end
+                end
+                $(_threading_run_expr(schedule))
                 end
             end
-            $(_threading_run_expr(schedule))
+            $(wrap_final(:(result)))
             end
         end
-        $final_expr
+    else
+        # Untyped path: evaluate first element to determine result type,
+        # then fill in parallel with the body expression inlined directly
+        # in the closure. This avoids boxing that occurs when calling a
+        # lambda whose return type is a Union across closure boundaries.
+        return quote
+            let iter = $esc_range
+            local range = iter isa AbstractArray ? iter : collect(iter)
+            local niter = length(range)
+            if niter == 0
+                $(wrap_final(:(Any[])))
+            else
+                local $esc_lidx = @inbounds range[firstindex(range)]
+                local _probe_val = $esc_body
+                local result = Vector{typeof(_probe_val)}(undef, niter)
+                @inbounds result[1] = _probe_val
+                if niter > 1
+                    local _widen_pairs = Pair{Int,Any}[]
+                    local _widen_lock = SpinLock()
+                    local _base_idx = firstindex(range) - 1
+                    local _skip = firstindex(range)
+                    let range = range, result = result, _widen_pairs = _widen_pairs,
+                        _widen_lock = _widen_lock, _base_idx = _base_idx, _skip = _skip
+                    local threadsfor_fun
+                    function threadsfor_fun(tid = 1; onethread = false)
+                        $work_dist
+                        local _T = eltype(result)
+                        for i = loop_first:loop_last
+                            i == _skip && continue
+                            local $esc_lidx = @inbounds r[i]
+                            local _val = $esc_body
+                            if _val isa _T
+                                @inbounds result[i - _base_idx] = _val
+                            else
+                                lock(_widen_lock)
+                                try
+                                    push!(_widen_pairs, (i - _base_idx) => _val)
+                                finally
+                                    unlock(_widen_lock)
+                                end
+                            end
+                        end
+                    end
+                    $(_threading_run_expr(schedule))
+                    end
+                    if !isempty(_widen_pairs)
+                        result = _widen_threaded_result(result, _widen_pairs)
+                    end
+                end
+                $(wrap_final(:(result)))
+            end
+            end
         end
     end
 end
 
-# Narrow the element type of a Vector{Any} to the tightest common type
-function _narrow_threaded_result(result::AbstractVector)
-    eltype(result) !== Any && return result
-    isempty(result) && return result
-    T = mapreduce(typeof, promote_type, result)
-    T === Any && return result
-    return copyto!(similar(result, T), result)
+# Widen a speculatively-typed result vector when some elements had different types.
+# Only called when at least one element couldn't be stored in the original typed vector.
+function _widen_threaded_result(result::Vector, widen_pairs::Vector{Pair{Int, Any}})
+    new_T = eltype(result)
+    for p in widen_pairs
+        new_T = Union{new_T, typeof(p.second)}
+    end
+    # Function barrier: _widen_copy specializes on new_T so the compiler sees
+    # concrete element types for both source and destination vectors.
+    return _widen_copy(new_T, result, widen_pairs)
+end
+
+function _widen_copy(::Type{T}, result::Vector, widen_pairs::Vector{Pair{Int, Any}}) where T
+    widen_set = BitSet(p.first for p in widen_pairs)
+    new_result = Vector{T}(undef, length(result))
+    for i in eachindex(result)
+        if !(i in widen_set)
+            @inbounds new_result[i] = result[i]
+        end
+    end
+    for (i, val) in widen_pairs
+        @inbounds new_result[i] = val
+    end
+    return new_result
 end
 
 function greedy_func(itr, lidx, lbody)
@@ -409,12 +476,14 @@ end
 
 function greedy_comprehension_func(itr, esc_lidx, esc_body, esc_condition)
     quote
-        let c = Channel(threadpoolsize(), spawn=true) do ch
+        let c = Channel{Tuple{Int, eltype($itr)}}(threadpoolsize(), spawn=true) do ch
             for (idx, item) in enumerate($itr)
                 put!(ch, (idx, item))
             end
         end
-        result_channel = Channel(Inf)
+        # Channel uses Tuple{Int, Any} because the output type of the body expression
+        # is not known at macro expansion time.
+        result_channel = Channel{Tuple{Int, Any}}(Inf)
 
         function threadsfor_fun(tid)
             for (idx, item) in c
@@ -484,8 +553,10 @@ function default_comprehension_func(itr, esc_lidx, esc_body, esc_condition)
     quote
         let iter = $itr
         # Collect non-indexable iterators (like ProductIterator)
-        range = (iter isa AbstractArray || hasmethod(getindex, Tuple{typeof(iter), Int})) ? iter : collect(iter)
-        result_channel = Channel(Inf)
+        range = iter isa AbstractArray ? iter : collect(iter)
+        # Channel uses Tuple{Int, Any} because the output type of the body expression
+        # is not known at macro expansion time.
+        result_channel = Channel{Tuple{Int, Any}}(Inf)
 
         function threadsfor_fun(tid = 1; onethread = false)
             $work_dist
@@ -646,6 +717,11 @@ return an array with the specified element type.
 
 For non-filtered comprehensions with non-`:greedy` scheduling, a fast path is used that
 pre-allocates the result array and writes directly by index, avoiding Channel overhead.
+
+!!! tip "Performance tip"
+    For best performance, use typed comprehensions (`T[expr for ...]`) when the element type
+    is known. Untyped comprehensions infer the type from the first result; if later results
+    have incompatible types, a type-widening path is used which may be slower.
 
 ```julia-repl
 julia> Threads.@threads [i^2 for i in 1:5] # Simple comprehension

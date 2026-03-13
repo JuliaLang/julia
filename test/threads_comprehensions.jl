@@ -205,7 +205,7 @@ using Base.Threads
         close(ch)
         result_ch = @threads :greedy [i^2 for i in ch]
         @test length(result_ch) == 10
-        @test sort(result_ch) == [i^2 for i in 1:10]
+        @test result_ch == [i^2 for i in 1:10]
 
         # Test Channel with filter
         ch2 = Channel{Int}(10)
@@ -213,7 +213,7 @@ using Base.Threads
         close(ch2)
         result_ch_filter = @threads :greedy [i for i in ch2 if iseven(i)]
         @test length(result_ch_filter) == 5
-        @test sort(result_ch_filter) == [2, 4, 6, 8, 10]
+        @test result_ch_filter == [2, 4, 6, 8, 10]
     end
 
     # Test multi-dimensional with filters
@@ -237,8 +237,7 @@ using Base.Threads
         result = @threads [x for x in [1, 2.0, "3"]]
         expected = [x for x in [1, 2.0, "3"]]
         @test result == expected
-        @test result isa Vector{Any}
-        @test typeof(result) == typeof(expected)
+        @test eltype(result) == Union{Int, Float64, String}
 
         # Test with :greedy scheduler
         result_greedy = @threads :greedy [x for x in [1, 2.0, "3"]]
@@ -248,7 +247,28 @@ using Base.Threads
         # Test with :static scheduler
         result_static = @threads :static [x for x in [1, 2.0, "3"]]
         @test result_static == expected
-        @test result_static isa Vector{Any}
+        @test eltype(result_static) == Union{Int, Float64, String}
+    end
+
+    # Test type widening when body expression produces heterogeneous types
+    @testset "body expression type widening" begin
+        result = @threads [i == 50 ? 1.0 : i for i in 1:100]
+        expected = [i == 50 ? 1.0 : i for i in 1:100]
+        @test result == expected
+        # Threaded widens to Union (preserves element types), serial to Real
+        @test eltype(result) == Union{Int, Float64}
+        @test result[1] isa Int
+        @test result[50] isa Float64
+
+        result_large = @threads [i == 500 ? 1.0 : i for i in 1:1000]
+        @test result_large == [i == 500 ? 1.0 : i for i in 1:1000]
+        @test eltype(result_large) == Union{Int, Float64}
+
+        # Verify widening doesn't cause per-element allocations (use i == 100
+        # so the probe picks the majority type and only 1 element widens)
+        widen_test() = @threads [i == 100 ? 1.0 : i for i in 1:100_000]
+        widen_test()
+        @test @allocations(widen_test()) < 200
     end
 
     # Test typed comprehensions
@@ -283,7 +303,7 @@ using Base.Threads
         # Typed comprehension with filter and greedy
         result_greedy_filt = @threads :greedy Float64[i for i in 1:20 if i > 10]
         @test result_greedy_filt isa Vector{Float64}
-        @test sort(result_greedy_filt) == Float64.(11:20)
+        @test result_greedy_filt == Float64.(11:20)
 
         # Typed multi-dimensional comprehension
         result_2d = @threads Float64[i + j for i in 1:3, j in 1:4]
