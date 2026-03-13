@@ -966,9 +966,9 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         // Print concrete Union specializations by their canonical names,
         // since Union{true}/Union{false} is not valid syntax.
         if (dv == jl_unique_uniontype_type)
-            return jl_printf(out, "UniqueUnion");
+            return jl_printf(out, "Core.UniqueUnion");
         if (dv == jl_nonunique_uniontype_type)
-            return jl_printf(out, "NonUniqueUnion");
+            return jl_printf(out, "Core.NonUniqueUnion");
         if (dv->name == jl_tuple_typename) {
             if (dv == jl_tuple_type)
                 return jl_printf(out, "Tuple");
