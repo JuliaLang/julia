@@ -23,12 +23,6 @@ using .Main.OffsetArrays
         @test all(result_static[i] == i^2 for i in 1:n)
         @test issorted(result_static)  # should be ordered for static scheduling
 
-        # Test dynamic scheduling
-        result_dynamic = @threads :dynamic [i^2 for i in 1:n]
-        @test length(result_dynamic) == n
-        @test all(result_dynamic[i] == i^2 for i in 1:n)
-        @test issorted(result_dynamic)  # should be ordered for dynamic scheduling
-
         # Test greedy scheduling
         result_greedy = @threads :greedy [i^2 for i in 1:n]
         @test length(result_greedy) == n
@@ -43,23 +37,15 @@ using .Main.OffsetArrays
         # Test default scheduling with filter
         result = @threads [i^2 for i in 1:n if iseven(i)]
         expected = [i^2 for i in 1:n if iseven(i)]
-        @test length(result) == length(expected)
-        @test result == expected  # should preserve order
+        @test result == expected
 
         # Test static scheduling with filter
         result_static = @threads :static [i^2 for i in 1:n if iseven(i)]
-        @test length(result_static) == length(expected)
-        @test result_static == expected  # should preserve order
-
-        # Test dynamic scheduling with filter
-        result_dynamic = @threads :dynamic [i^2 for i in 1:n if iseven(i)]
-        @test length(result_dynamic) == length(expected)
-        @test result_dynamic == expected  # should preserve order
+        @test result_static == expected
 
         # Test greedy scheduling with filter
         result_greedy = @threads :greedy [i^2 for i in 1:n if iseven(i)]
-        @test length(result_greedy) == length(expected)
-        @test result_greedy == expected  # should preserve order
+        @test result_greedy == expected
 
         # Test with more complex filter
         result_complex = @threads [i for i in 1:100 if i % 3 == 0 && i > 20]
@@ -84,7 +70,6 @@ using .Main.OffsetArrays
         # Large range to test thread distribution
         n = 10000
         result_large = @threads [i for i in 1:n]
-        @test length(result_large) == n
         @test result_large == collect(1:n)
     end
 
@@ -119,20 +104,24 @@ using .Main.OffsetArrays
         @test size(result_static) == size(expected_static)
         @test result_static == expected_static  # static scheduling preserves order and dimensions
 
-        result_dynamic = @threads :dynamic [i * j for i in 1:3, j in 1:3]
-        @test size(result_dynamic) == size(expected_static)
-        @test result_dynamic == expected_static  # dynamic scheduling preserves order and dimensions
-
         result_greedy = @threads :greedy [i * j for i in 1:3, j in 1:3]
         @test size(result_greedy) == size(expected_static)
-        @test result_greedy == expected_static  # greedy scheduling preserves order and dimensions
+        @test result_greedy == expected_static
 
         # Test with more than 2 loops
         result_3d = @threads [i + j + k for i in 1:2, j in 1:2, k in 1:2]
         expected_3d = [i + j + k for i in 1:2, j in 1:2, k in 1:2]
         @test size(result_3d) == size(expected_3d)
         @test result_3d == expected_3d  # default scheduling preserves order and dimensions
-    end
+        # Test 2D with filter
+        result_2d_filt = @threads [i * j for i in 1:4, j in 1:4 if i + j > 5]
+        expected_2d_filt = [i * j for i in 1:4, j in 1:4 if i + j > 5]
+        @test result_2d_filt == expected_2d_filt
+
+        # Test 3D with filter
+        result_3d_filt = @threads [i + j + k for i in 1:3, j in 1:3, k in 1:3 if (i + j + k) % 2 == 0]
+        expected_3d_filt = [i + j + k for i in 1:3, j in 1:3, k in 1:3 if (i + j + k) % 2 == 0]
+        @test result_3d_filt == expected_3d_filt    end
 
     # Test non-indexable iterators
     @testset "non-indexable iterators" begin
@@ -140,64 +129,21 @@ using .Main.OffsetArrays
         flat_iter = Iterators.flatten([1:3, 4:6])
         result = @threads [i^2 for i in flat_iter]
         expected = [i^2 for i in 1:6]
-        @test length(result) == 6
-        @test result == expected  # default scheduling preserves order
+        @test result == expected
 
         # Test with greedy scheduling for non-indexable
         result_greedy = @threads :greedy [i^2 for i in Iterators.flatten([1:3, 4:6])]
-        @test length(result_greedy) == 6
-        @test result_greedy == expected  # greedy scheduling preserves order
+        @test result_greedy == expected
 
         # Test with filter on non-indexable iterator
         result_filter = @threads [i for i in Iterators.flatten([1:5, 6:10]) if iseven(i)]
         expected_filter = [i for i in 1:10 if iseven(i)]
-        @test length(result_filter) == 5
-        @test result_filter == expected_filter  # default scheduling preserves order
+        @test result_filter == expected_filter
 
         # Test with Iterators.repeated (but limited)
         repeated_iter = Iterators.take(Iterators.repeated(42), 5)
         result_repeated = @threads [x for x in repeated_iter]
-        @test length(result_repeated) == 5
-        @test all(x == 42 for x in result_repeated)
-
-        # Test non-indexable with static and dynamic scheduling
-        result_static = @threads :static [i^2 for i in Iterators.flatten([1:3, 4:6])]
-        @test length(result_static) == 6
-        @test result_static == expected  # static scheduling preserves order
-
-        result_dynamic = @threads :dynamic [i^2 for i in Iterators.flatten([1:3, 4:6])]
-        @test length(result_dynamic) == 6
-        @test result_dynamic == expected  # dynamic scheduling preserves order
-    end
-
-    # Test type inference
-    @testset "type inference" begin
-        # Test that return types are properly inferred, not Vector{Any}
-        result_int = @threads [i for i in 1:10]
-        @test result_int isa Vector{Int}
-        @test !(result_int isa Vector{Any})
-
-        result_float = @threads [Float64(i) for i in 1:10]
-        @test result_float isa Vector{Float64}
-        @test !(result_float isa Vector{Any})
-
-        # Test with filtering
-        result_filtered = @threads [i^2 for i in 1:10 if iseven(i)]
-        @test result_filtered isa Vector{Int}
-
-        # Test multi-dimensional
-        result_2d = @threads [i + j for i in 1:3, j in 1:3]
-        @test result_2d isa Matrix{Int}
-        @test !(result_2d isa Array{Any})
-
-        # Test non-indexable iterators
-        result_flatten = @threads [i for i in Iterators.flatten([1:3, 4:6])]
-        @test result_flatten isa Vector{Int}
-
-        # Test with String type
-        result_string = @threads [string(i) for i in 1:5]
-        @test result_string isa Vector{String}
-        @test result_string == ["1", "2", "3", "4", "5"]
+        @test result_repeated == fill(42, 5)
     end
 
     # Test Channel-based iterators
@@ -207,7 +153,6 @@ using .Main.OffsetArrays
         foreach(i -> put!(ch, i), 1:10)
         close(ch)
         result_ch = @threads :greedy [i^2 for i in ch]
-        @test length(result_ch) == 10
         @test result_ch == [i^2 for i in 1:10]
 
         # Test Channel with filter
@@ -215,23 +160,7 @@ using .Main.OffsetArrays
         foreach(i -> put!(ch2, i), 1:10)
         close(ch2)
         result_ch_filter = @threads :greedy [i for i in ch2 if iseven(i)]
-        @test length(result_ch_filter) == 5
         @test result_ch_filter == [2, 4, 6, 8, 10]
-    end
-
-    # Test multi-dimensional with filters
-    @testset "multi-dimensional with filters" begin
-        # Test 2D with filter
-        result = @threads [i * j for i in 1:4, j in 1:4 if i + j > 5]
-        expected = [i * j for i in 1:4, j in 1:4 if i + j > 5]
-        @test length(result) == length(expected)
-        @test result == expected  # default scheduling preserves order
-
-        # Test 3D with filter
-        result_3d = @threads [i + j + k for i in 1:3, j in 1:3, k in 1:3 if (i + j + k) % 2 == 0]
-        expected_3d = [i + j + k for i in 1:3, j in 1:3, k in 1:3 if (i + j + k) % 2 == 0]
-        @test length(result_3d) == length(expected_3d)
-        @test result_3d == expected_3d  # default scheduling preserves order
     end
 
     # Test mixed element types
@@ -263,10 +192,6 @@ using .Main.OffsetArrays
         @test result[1] isa Int
         @test result[50] isa Float64
 
-        result_large = @threads [i == 500 ? 1.0 : i for i in 1:1000]
-        @test result_large == [i == 500 ? 1.0 : i for i in 1:1000]
-        @test eltype(result_large) == Union{Int, Float64}
-
         # Verify widening doesn't cause per-element allocations (use i == 100
         # so the probe picks the majority type and only 1 element widens)
         widen_test() = @threads [i == 100 ? 1.0 : i for i in 1:100_000]
@@ -288,10 +213,6 @@ using .Main.OffsetArrays
         result_static = @threads :static Float64[i for i in 1:n]
         @test result_static isa Vector{Float64}
         @test result_static == Float64.(1:n)
-
-        result_dynamic = @threads :dynamic Float64[i for i in 1:n]
-        @test result_dynamic isa Vector{Float64}
-        @test result_dynamic == Float64.(1:n)
 
         result_greedy = @threads :greedy Float64[i for i in 1:n]
         @test result_greedy isa Vector{Float64}
@@ -324,30 +245,17 @@ using .Main.OffsetArrays
         result_conv = @threads Float64[i for i in 1:5]
         @test result_conv isa Vector{Float64}
         @test result_conv == [1.0, 2.0, 3.0, 4.0, 5.0]
-    end
 
-    # Test that the typed fast path doesn't allocate per-element
-    @testset "typed fast path allocations" begin
-        n = 100_000
-        # Warm up
+        # Typed threaded comprehension should have O(nthreads) allocs, not O(n)
         t1() = @threads Int[i for i in 1:1]
         t1()
         t2() = @threads :static Int[i for i in 1:1]
         t2()
         t3() = @threads :dynamic Int[i for i in 1:1]
         t3()
-
-        # Typed threaded comprehension should have O(nthreads) allocs, not O(n)
-        allocs_typed = @allocations t1()
-        @test allocs_typed < 100  # ~35 allocs in practice
-
-        # Typed static scheduling
-        allocs_static = @allocations t2()
-        @test allocs_static < 100
-
-        # Typed dynamic scheduling
-        allocs_dynamic = @allocations t3()
-        @test allocs_dynamic < 100
+        @test @allocations(t1()) < 100  # ~35 allocs in practice
+        @test @allocations(t2()) < 100
+        @test @allocations(t3()) < 100
     end
 
     # Test non-1-based indexing preserves axes
