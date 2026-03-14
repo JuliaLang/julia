@@ -236,17 +236,13 @@ function _threadsfor_multi_iterator(body, iterators, condition, schedule, dims, 
 
     tuple_var = gensym("iter_tuple")
     assignments = [:($(vars[i]) = $(tuple_var)[$i]) for i in 1:length(vars)]
-    new_body = quote
-        $(assignments...)
-        $(body)
-    end
+    # Use let blocks so destructured variables are local to each iteration,
+    # avoiding data races when multiple threads execute the body concurrently.
+    new_body = Expr(:let, Expr(:block, assignments...), body)
     new_condition = if condition === true
         true
     else
-        quote
-            $(assignments...)
-            $(condition)
-        end
+        Expr(:let, Expr(:block, assignments...), condition)
     end
 
     product_expr = :(Iterators.product($(ranges...)))
