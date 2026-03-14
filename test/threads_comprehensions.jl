@@ -4,6 +4,9 @@
 using Test
 using Base.Threads
 
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
 @testset "@threads comprehensions" begin
     # Test simple array comprehensions
     @testset "simple comprehensions" begin
@@ -345,5 +348,22 @@ using Base.Threads
         # Typed dynamic scheduling
         allocs_dynamic = @allocations t3()
         @test allocs_dynamic < 100
+    end
+
+    # Test non-1-based indexing preserves axes
+    @testset "non-1-based indexing" begin
+        r = OffsetArray(1:5, -2:2)
+        result = @threads [x^2 for x in r]
+        expected = [x^2 for x in r]
+        @test result == expected
+        @test axes(result) == axes(expected)
+
+        result_typed = @threads Int[x^2 for x in r]
+        @test result_typed == expected
+        @test axes(result_typed) == axes(expected)
+
+        result_static = @threads :static [x^2 for x in r]
+        @test result_static == expected
+        @test axes(result_static) == axes(expected)
     end
 end

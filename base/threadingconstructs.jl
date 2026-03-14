@@ -344,7 +344,7 @@ function _threadsfor_single_iterator(body, iterator, condition, schedule, dims=n
 end
 
 # Fast path for non-filtered, non-greedy comprehensions: pre-allocate and write directly.
-# The result array is always 1-based; _base_idx maps from the iterator's index space.
+# Uses similar() with axes() to preserve the iterator's index space in the result.
 function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule, dims, result_type)
     work_dist = _work_distribution_code()
     wrap_final = dims !== nothing ? (x -> :(reshape($x, $dims))) : identity
@@ -352,21 +352,19 @@ function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule,
     if result_type !== nothing
         # Typed path: pre-allocate with known element type
         esc_result_type = esc(result_type)
-        alloc_expr = :(Vector{$esc_result_type}(undef, niter))
         return quote
             let iter = $esc_range
             local range = iter isa AbstractArray ? iter : collect(iter)
             local niter = length(range)
-            local result = $alloc_expr
+            local result = similar(Vector{$esc_result_type}, axes(range))
             if niter > 0
                 let range = range, result = result
                 local threadsfor_fun
                 function threadsfor_fun(tid = 1; onethread = false)
                     $work_dist
-                    local _base_idx = firstindex(r) - 1
                     for i = loop_first:loop_last
                         local $esc_lidx = @inbounds r[i]
-                        @inbounds result[i - _base_idx] = $esc_body
+                        @inbounds result[i] = $esc_body
                     end
                 end
                 $(_threading_run_expr(schedule))
@@ -385,19 +383,18 @@ function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule,
             local range = iter isa AbstractArray ? iter : collect(iter)
             local niter = length(range)
             if niter == 0
-                $(wrap_final(:(Any[])))
+                $(wrap_final(:(similar(Vector{Any}, axes(range)))))
             else
-                local $esc_lidx = @inbounds range[firstindex(range)]
+                local _skip = firstindex(range)
+                local $esc_lidx = @inbounds range[_skip]
                 local _probe_val = $esc_body
-                local result = Vector{typeof(_probe_val)}(undef, niter)
-                @inbounds result[1] = _probe_val
+                local result = similar(Vector{typeof(_probe_val)}, axes(range))
+                @inbounds result[_skip] = _probe_val
                 if niter > 1
                     local _widen_pairs = Pair{Int,Any}[]
                     local _widen_lock = SpinLock()
-                    local _base_idx = firstindex(range) - 1
-                    local _skip = firstindex(range)
                     let range = range, result = result, _widen_pairs = _widen_pairs,
-                        _widen_lock = _widen_lock, _base_idx = _base_idx, _skip = _skip
+                        _widen_lock = _widen_lock, _skip = _skip
                     local threadsfor_fun
                     function threadsfor_fun(tid = 1; onethread = false)
                         $work_dist
@@ -407,11 +404,11 @@ function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule,
                             local $esc_lidx = @inbounds r[i]
                             local _val = $esc_body
                             if _val isa _T
-                                @inbounds result[i - _base_idx] = _val
+                                @inbounds result[i] = _val
                             else
                                 lock(_widen_lock)
                                 try
-                                    push!(_widen_pairs, (i - _base_idx) => _val)
+                                    push!(_widen_pairs, i => _val)
                                 finally
                                     unlock(_widen_lock)
                                 end
@@ -445,7 +442,7 @@ end
 
 function _widen_copy(::Type{T}, result::Vector, widen_pairs::Vector{Pair{Int, Any}}) where T
     widen_set = BitSet(p.first for p in widen_pairs)
-    new_result = Vector{T}(undef, length(result))
+    new_result = similar(Vector{T}, axes(result))
     for i in eachindex(result)
         if !(i in widen_set)
             @inbounds new_result[i] = result[i]
