@@ -5,6 +5,10 @@
 #abstract type Any <: Any end
 #abstract type Type{T} end
 
+#struct ConstType <: Type
+#    T
+#end
+
 #abstract type Vararg{T} end
 
 #mutable struct Symbol

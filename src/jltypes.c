@@ -1440,6 +1440,11 @@ jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n)
         return jl_apply_tuple_type_v(params, n);
     if (tc == (jl_value_t*)jl_uniontype_type)
         return (jl_value_t*)jl_type_union(params, n);
+    if (tc == (jl_value_t*)jl_consttype_type) {
+        if (n != 1)
+            jl_errorf("ConstType expects exactly 1 parameter");
+        return jl_wrap_ConstType(params[0]);
+    }
     size_t i;
     if (n > 1) {
         // detect common case of applying a wrapper, where we know that all parameters will
@@ -2815,6 +2820,14 @@ jl_datatype_t *jl_wrap_Type(jl_value_t *t)
     return (jl_datatype_t*)jl_instantiate_unionall(jl_type_type, t);
 }
 
+// Construct ConstType{t}. t must not have free typevars.
+jl_value_t *jl_wrap_ConstType(jl_value_t *t)
+{
+    if (jl_has_free_typevars(t))
+        jl_errorf("ConstType parameter must not have free type variables");
+    return jl_new_struct(jl_consttype_type, t);
+}
+
 jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow)
 {
     int valid = 1;
@@ -3163,6 +3176,16 @@ void jl_init_types(void) JL_GC_DISABLED
     XX(uniontype);
     // It seems like we probably usually end up needing the box for kinds (often used in an Any context), so force it to exist
     jl_uniontype_type->name->mayinlinealloc = 0;
+
+    // ConstType is a DataType (like Union), not a UnionAll.
+    // ConstType{T} is constructed via apply_type / jl_wrap_ConstType.
+    jl_consttype_type = jl_new_datatype(jl_symbol("ConstType"), core, type_type, jl_emptysvec,
+                                        jl_perm_symsvec(1, "T"),
+                                        jl_svec(1, jl_any_type),
+                                        jl_emptysvec, 0, 0, 1);
+    XX(consttype);
+    jl_consttype_type->name->mayinlinealloc = 0;
+    jl_consttype_type->ismutationfree = 1;
 
     jl_tvar_t *tttvar = tvar("T");
     type_type->parameters = jl_svec(1, tttvar);

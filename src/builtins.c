@@ -210,6 +210,9 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
         return egal_types(((jl_uniontype_t*)a)->a, ((jl_uniontype_t*)b)->a, env, tvar_names) &&
             egal_types(((jl_uniontype_t*)a)->b, ((jl_uniontype_t*)b)->b, env, tvar_names);
     }
+    if (dtag == jl_consttype_tag << 4) {
+        return egal_types(((jl_consttype_t*)a)->T, ((jl_consttype_t*)b)->T, env, tvar_names);
+    }
     if (dtag == jl_vararg_tag << 4) {
         jl_vararg_t *vma = (jl_vararg_t*)a;
         jl_vararg_t *vmb = (jl_vararg_t*)b;
@@ -289,6 +292,8 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
             return egal_types(a, b, NULL, 1);
         case jl_uniontype_tag:
             return compare_fields(a, b, jl_uniontype_type);
+        case jl_consttype_tag:
+            return compare_fields(a, b, jl_consttype_type);
         case jl_vararg_tag:
             return compare_fields(a, b, jl_vararg_type);
         case jl_task_tag:
@@ -2593,6 +2598,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);
     add_builtin("UnionAll", (jl_value_t*)jl_unionall_type);
     add_builtin("Union", (jl_value_t*)jl_uniontype_type);
+    add_builtin("ConstType", (jl_value_t*)jl_consttype_type);
     add_builtin("TypeofBottom", (jl_value_t*)jl_typeofbottom_type);
     add_builtin("Tuple", (jl_value_t*)jl_anytuple_type);
     add_builtin("TypeofVararg", (jl_value_t*)jl_vararg_type);

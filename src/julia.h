@@ -570,6 +570,11 @@ typedef struct {
     jl_value_t *JL_NONNULL b;
 } jl_uniontype_t;
 
+typedef struct {
+    JL_DATA_TYPE
+    jl_value_t *JL_NONNULL T;
+} jl_consttype_t;
+
 // in little-endian, isptr is always the first bit, avoiding the need for a branch in computing isptr
 typedef struct {
     uint8_t isptr:1;
@@ -964,6 +969,7 @@ typedef struct {
     XX(datatype) \
     XX(unionall) \
     XX(uniontype) \
+    XX(consttype) \
     /* type parameter objects */ \
     XX(vararg) \
     XX(tvar) \
@@ -1631,14 +1637,16 @@ int is_leaf_bound(jl_value_t *v) JL_NOTSAFEPOINT;
 STATIC_INLINE int jl_is_kind(jl_value_t *v) JL_NOTSAFEPOINT
 {
     return (v==(jl_value_t*)jl_uniontype_type || v==(jl_value_t*)jl_datatype_type ||
-            v==(jl_value_t*)jl_unionall_type || v==(jl_value_t*)jl_typeofbottom_type);
+            v==(jl_value_t*)jl_unionall_type || v==(jl_value_t*)jl_typeofbottom_type ||
+            v==(jl_value_t*)jl_consttype_type);
 }
 
 STATIC_INLINE int jl_is_kindtag(uintptr_t t) JL_NOTSAFEPOINT
 {
     t >>= 4;
     return (t==(uintptr_t)jl_uniontype_tag || t==(uintptr_t)jl_datatype_tag ||
-            t==(uintptr_t)jl_unionall_tag || t==(uintptr_t)jl_typeofbottom_tag);
+            t==(uintptr_t)jl_unionall_tag || t==(uintptr_t)jl_typeofbottom_tag ||
+            t==(uintptr_t)jl_consttype_tag);
 }
 
 STATIC_INLINE int jl_is_type(jl_value_t *v) JL_NOTSAFEPOINT
@@ -1774,6 +1782,11 @@ STATIC_INLINE int jl_is_type_type(jl_value_t *v) JL_NOTSAFEPOINT
 {
     return (jl_is_datatype(v) &&
             ((jl_datatype_t*)(v))->name == ((jl_datatype_t*)jl_type_type->body)->name);
+}
+
+STATIC_INLINE int jl_is_consttype_type(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    return jl_typetagis(v, jl_consttype_tag<<4);
 }
 
 STATIC_INLINE int jl_is_genericmemory_zeroinit(jl_genericmemory_t *m) JL_NOTSAFEPOINT
