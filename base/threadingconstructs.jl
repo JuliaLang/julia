@@ -359,8 +359,8 @@ end
 
 # Fast path for non-filtered, non-greedy comprehensions: pre-allocate and write directly.
 # Non-AbstractArray iterators (e.g. Iterators.flatten) are collected into a Vector
-# because the parallel work distribution indexes into the range with r[i].
-# AbstractArrays are used directly to preserve their index space (e.g. OffsetArrays).
+# because the parallel work distribution indexes into items with r[i].
+# AbstractArrays and Tuples are used directly to preserve their index space (e.g. OffsetArrays).
 function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule, dims, result_type)
     work_dist = _work_distribution_code()
     wrap_final = dims !== nothing ? (x -> :(reshape($x, $dims))) : identity
@@ -370,14 +370,14 @@ function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule,
         esc_result_type = esc(result_type)
         return quote
             let iter = $esc_range
-            local range = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
-            local niter = length(range)
-            local result = similar(Vector{$esc_result_type}, axes(range))
+            local items = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
+            local niter = length(items)
+            local result = similar(Vector{$esc_result_type}, axes(items))
             if niter > 0
-                let range = range, result = result
+                let items = items, result = result
                 local threadsfor_fun
                 function threadsfor_fun(tid = 1; onethread = false)
-                    # Reads: range, tid, onethread. Defines: r, loop_first, loop_last.
+                    # Reads: items, tid, onethread. Defines: r, loop_first, loop_last.
                     $work_dist
                     for i = loop_first:loop_last
                         local $esc_lidx = @inbounds r[i]
@@ -397,24 +397,24 @@ function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule,
         # lambda whose return type is a Union across closure boundaries.
         return quote
             let iter = $esc_range
-            local range = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
-            local niter = length(range)
+            local items = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
+            local niter = length(items)
             if niter == 0
-                $(wrap_final(:(similar(Vector{Any}, axes(range)))))
+                $(wrap_final(:(similar(Vector{Any}, axes(items)))))
             else
-                local _skip = firstindex(range)
-                local $esc_lidx = @inbounds range[_skip]
+                local _skip = firstindex(items)
+                local $esc_lidx = @inbounds items[_skip]
                 local _probe_val = $esc_body
-                local result = similar(Vector{typeof(_probe_val)}, axes(range))
+                local result = similar(Vector{typeof(_probe_val)}, axes(items))
                 @inbounds result[_skip] = _probe_val
                 if niter > 1
                     local _widen_pairs = Pair{Int,Any}[]
                     local _widen_lock = ReentrantLock()
-                    let range = range, result = result, _widen_pairs = _widen_pairs,
+                    let items = items, result = result, _widen_pairs = _widen_pairs,
                         _widen_lock = _widen_lock, _skip = _skip
                     local threadsfor_fun
                     function threadsfor_fun(tid = 1; onethread = false)
-                        # Reads: range, tid, onethread. Defines: r, loop_first, loop_last.
+                        # Reads: items, tid, onethread. Defines: r, loop_first, loop_last.
                         $work_dist
                         local _T = eltype(result)
                         for i = loop_first:loop_last
@@ -514,7 +514,7 @@ end
 # Helper function to generate work distribution code
 function _work_distribution_code()
     quote
-        r = range # Load into local variable
+        r = items # Load into local variable
         lenr = length(r)
         # divide loop iterations among threads
         if onethread
@@ -549,9 +549,9 @@ end
 function default_func(itr, lidx, lbody)
     work_dist = _work_distribution_code()
     quote
-        let range = $itr
+        let items = $itr
         function threadsfor_fun(tid = 1; onethread = false)
-            # Reads: range, tid, onethread. Defines: r, loop_first, loop_last.
+            # Reads: items, tid, onethread. Defines: r, loop_first, loop_last.
             $work_dist
             for i = loop_first:loop_last
                 local $(esc(lidx)) = @inbounds r[i]
@@ -567,13 +567,13 @@ function default_comprehension_func(itr, esc_lidx, esc_body, esc_condition)
     quote
         let iter = $itr
         # Collect non-indexable iterators for random access (r[i]) in work distribution
-        range = iter isa AbstractArray ? iter : collect(iter)
+        items = iter isa AbstractArray ? iter : collect(iter)
         # Channel uses Tuple{Int, Any} because the output type of the body expression
         # is not known at macro expansion time.
         result_channel = Channel{Tuple{Int, Any}}(Inf)
 
         function threadsfor_fun(tid = 1; onethread = false)
-            # Reads: range, tid, onethread. Defines: r, loop_first, loop_last.
+            # Reads: items, tid, onethread. Defines: r, loop_first, loop_last.
             $work_dist
             for i = loop_first:loop_last
                 local $esc_lidx = @inbounds r[i]
