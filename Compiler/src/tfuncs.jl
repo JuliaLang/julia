@@ -813,10 +813,8 @@ end
     if isConstType(t)
         return Const(typeof(t.T))
     elseif isType(t)
-        tp = t.parameters[1]
-        if hasuniquerep(tp)
-            return Const(typeof(tp))
-        end
+        # Type{T} does not guarantee identity (T == S does not imply T === S),
+        # so typeof(value) is not known precisely. Fall through to return DataType.
     elseif isa(t, DataType)
         if isconcretetype(t)
             return Const(t)
@@ -1592,11 +1590,7 @@ end
             exactft1 = exact || (!has_free_typevars(ft1) && u.name !== Tuple.name)
             ft1 = rewrap_unionall(ft1, s)
             if exactft1
-                if hasuniquerep(ft1)
-                    ft1 = Const(ft1) # ft unique via type cache
-                else
-                    ft1 = Type{ft1}
-                end
+                ft1 = Type{ft1}
             elseif ft1 isa Type || ft1 isa TypeVar
                 if ft1 === Any && u.name === Tuple.name
                     # Tuple{:x} is possible in this case
@@ -1635,9 +1629,6 @@ end
     exactft = exact || (!has_free_typevars(ft) && u.name !== Tuple.name)
     ft = rewrap_unionall(ft, s)
     if exactft
-        if hasuniquerep(ft)
-            return Const(ft) # ft unique via type cache
-        end
         return Type{ft}
     end
     if u.name === Tuple.name && ft === Any
@@ -1767,7 +1758,7 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
                 aty = ai.T
             elseif isType(ai)
                 aty = ai.parameters[1]
-                allconst &= hasuniquerep(aty)
+                allconst = false
             else
                 aty = (ai::Const).val
             end
@@ -1994,7 +1985,7 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
             elseif isType(x)
                 anyinfo = true
                 xparam = x.parameters[1]
-                if hasuniquerep(xparam) || xparam === Bottom
+                if xparam === Bottom
                     params[i] = typeof(xparam)
                 else
                     params[i] = Type

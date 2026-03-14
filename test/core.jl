@@ -850,9 +850,9 @@ end
 
 let f = g -> x -> g(x)
     @test f(Int)(1.0) === 1
-    @test @inferred(f(Int)) isa Function
+    @test_broken @inferred(f(Int)) isa Function # needs ConstType in specTypes
     @test fieldtype(typeof(f(Int)), 1) === Type{Int}
-    @test @inferred(f(Rational{Int})) isa Function
+    @test_broken @inferred(f(Rational{Int})) isa Function # needs ConstType in specTypes
     @test fieldtype(typeof(f(Rational{Int})), 1) === Type{Rational{Int}}
     @test_broken @inferred(f(Rational)) isa Function
     @test fieldtype(typeof(f(Rational)), 1) === Type{Rational}

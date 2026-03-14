@@ -10,24 +10,9 @@ isConstType(@nospecialize t) = typeof(t) === Core.ConstType
 # Extract the type parameter from Type{T} or ConstType{T}
 consttype_param(@nospecialize t) = isConstType(t) ? t.T : t.parameters[1]
 
-# true if Type{T} or ConstType{T} is inlineable as constant T
-# requires that T is a singleton, s.t. T == S implies T === S
-isconstType(@nospecialize t) = isConstType(t) || (isType(t) && hasuniquerep(t.parameters[1]))
-
-# test whether type T has a unique representation, s.t. T == S implies T === S
-function hasuniquerep(@nospecialize t)
-    # typeof(Bottom) is special since even though it is a leaftype,
-    # at runtime, it might be Type{Union{}} instead, so don't attempt inference of it
-    t === typeof(Union{}) && return false
-    t === Union{} && return true
-    isa(t, TypeVar) && return false # TypeVars are identified by address, not equality
-    iskindtype(typeof(t)) || return true # non-types are always compared by egal in the type system
-    isconcretetype(t) && return true # these are also interned and pointer comparable
-    if isa(t, DataType) && t.name !== Tuple.name && !isvarargtype(t) # invariant DataTypes
-        return all(hasuniquerep, t.parameters)
-    end
-    return false
-end
+# true if ConstType{T} is inlineable as constant T.
+# ConstType{T} guarantees T === S (identity), unlike Type{T} which only guarantees T == S.
+isconstType(@nospecialize t) = isConstType(t)
 
 """
     isTypeDataType(@nospecialize t)::Bool
@@ -52,7 +37,7 @@ has_extended_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isTy
 # some of these queries, this check can be used to somewhat protect against making incorrect
 # decisions based on incorrect subtyping. Note that this check, itself, is broken for
 # certain combinations of `a` and `b` where one/both isa/are `Union`/`UnionAll` type(s)s.
-isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || isConstType(a) || !isType(a) || hasuniquerep(a.parameters[1]) || b <: a)
+isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || isConstType(a) || !isType(a) || b <: a)
 
 function argtypes_to_type(argtypes::Vector{Any})
     argtypes = anymap(@nospecialize(a) -> isvarargtype(a) ? a : widenconst(a), argtypes)
