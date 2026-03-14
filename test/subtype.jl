@@ -2841,3 +2841,88 @@ let
     @test (r <: A) && (r <: B)
     @test r !== Union{}
 end
+
+# ConstType subtyping and free-typevar singleton semantics
+@testset "ConstType" begin
+    CT = Core.ConstType
+
+    # construction
+    ct_int = CT{Int}
+    ct_float = CT{Float64}
+    @test ct_int.T === Int
+    @test ct_float.T === Float64
+    @test typeof(ct_int) === CT
+    @test ct_int isa Type
+
+    # ConstType{A} <: ConstType{B} iff A === B
+    @test ct_int <: ct_int
+    @test !(ct_int <: ct_float)
+    @test !(ct_float <: ct_int)
+
+    # ConstType{A} <: Type{A}
+    @test ct_int <: Type{Int}
+    @test ct_float <: Type{Float64}
+    @test !(ct_int <: Type{Float64})
+
+    # Type{A} is NOT <: ConstType{A}
+    @test !(Type{Int} <: ct_int)
+
+    # ConstType{A} <: kind
+    @test ct_int <: DataType
+    @test !(ct_int <: UnionAll)
+
+    # ConstType{A} <: Any
+    @test ct_int <: Any
+
+    # Bottom <: ConstType{A}
+    @test Bottom <: ct_int
+
+    # ConstType <: Type (the UnionAll)
+    @test CT <: Type
+
+    # isa: identity-based
+    @test isa(Int, ct_int)
+    @test !isa(Float64, ct_int)
+    @test !isa(Int, ct_float)
+    @test isa(Float64, ct_float)
+
+    # Key soundness test: degenerate UnionAll not isa ConstType
+    degenerate = Union{T,S} where {T<:Int, S<:Int}
+    @test degenerate == Int  # type-equal
+    @test isa(degenerate, Type{Int})  # Type uses equality
+    @test !isa(degenerate, ct_int)    # ConstType uses identity
+
+    # intersection
+    ti(a, b) = ccall(:jl_intersect_types, Any, (Any, Any), a, b)
+    @test ti(ct_int, ct_int) == ct_int
+    @test ti(ct_int, ct_float) === Bottom
+    @test ti(ct_int, Type{Int}) == ct_int
+    @test ti(ct_float, Type{Int}) === Bottom
+
+    # ConstType with free typevars is an error
+    @test_throws ErrorException CT{Vector.body}
+end
+
+@testset "free-typevar singletons" begin
+    # Vector.body is a singleton — not equal to Vector
+    @test Vector.body !== Vector
+    @test Vector.body != Vector
+    @test Vector.body === Vector.body
+
+    # isa with free-typevar types
+    @test isa(Vector.body, Type{Vector.body})
+    @test !isa(Vector.body, Type{Vector})
+    @test !isa(Vector, Type{Vector.body})
+    @test isa(Vector, Type{Vector})
+
+    # dispatch with free-typevar bodies
+    f_sparam(::Type{T}) where T = T
+    @test f_sparam(Vector.body) === Vector.body
+    @test f_sparam(Vector) === Vector
+    @test f_sparam(Int) === Int
+
+    # Other partial applications
+    @test AbstractArray.body.body != AbstractArray
+    @test AbstractArray.body != AbstractArray
+    @test isa(AbstractArray.body.body, Type{AbstractArray.body.body})
+end
