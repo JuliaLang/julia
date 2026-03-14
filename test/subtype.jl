@@ -2934,4 +2934,8 @@ end
     @test AbstractArray.body.body != AbstractArray
     @test AbstractArray.body != AbstractArray
     @test isa(AbstractArray.body.body, Type{AbstractArray.body.body})
+
+    # Free-typevar singletons should not be subtypes of their wrappers
+    @test_broken !(Vector.body <: Vector) # needs subtype fix for free-typevar singletons
+    @test_broken !(Vector <: Vector.body)
 end
