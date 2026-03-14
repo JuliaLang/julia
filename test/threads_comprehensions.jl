@@ -271,5 +271,12 @@ using .Main.OffsetArrays
         result_static = @threads :static [x^2 for x in r]
         @test result_static == expected
         @test axes(result_static) == axes(expected)
+
+        # Multi-loop with OffsetArrays preserves offset axes in each dimension
+        r2 = OffsetArray(1:3, 0:2)
+        result_multi = @threads [x+y for x in r2, y in r2]
+        expected_multi = [x+y for x in r2, y in r2]
+        @test result_multi == expected_multi
+        @test axes(result_multi) == axes(expected_multi)
     end
 end

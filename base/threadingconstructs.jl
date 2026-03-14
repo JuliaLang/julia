@@ -270,6 +270,7 @@ function _threadsfor_comprehension(gen::Expr, schedule, result_type=nothing)
     elseif length(gen.args) > 2
         iterators = gen.args[2:end]
         ranges = [iter.args[2] for iter in iterators]
+        # Use axes to preserve offset index spaces (e.g. OffsetArrays)
         dims_expr = :(tuple($([:(axes($(esc(r)), 1)) for r in ranges]...)))
         return _threadsfor_multi_iterator(body, iterators, true, schedule, dims_expr, result_type)
     else
