@@ -933,14 +933,13 @@ static jl_value_t *widen_Type_to_union(jl_value_t *t, jl_value_t *bound, jl_sten
     return t;
 }
 
-// convert a type with free variables to a typevar bounded by a UnionAll-wrapped
-// version of that type.
-// TODO: This loses some inference precision. For example in a case where a
-// variable bound is `Vector{_}`, we could potentially infer `Type{Vector{_}} where _`,
-// but this causes us to infer the larger `Type{T} where T<:Vector` instead.
-// However this is needed because many contexts check `isa(sp, TypeVar)` to determine
-// when a static parameter value is not known exactly.
-static jl_value_t *fix_inferred_var_bound(jl_tvar_t *var, jl_value_t *ty JL_MAYBE_UNROOTED)
+// Re-wrap free typevars in an env value that were bound by UnionAlls in the
+// LHS but not free in the LHS itself. Typevars that are free in the LHS
+// (e.g. from Vector.body) are singletons and should be kept as-is.
+// When lhs_free is provided, typevars free in the LHS are preserved and the
+// result is returned directly. When lhs_free is NULL, all free typevars are
+// wrapped and the result is returned as a TypeVar bound (old behavior).
+static jl_value_t *fix_inferred_var_bound(jl_tvar_t *var, jl_value_t *ty JL_MAYBE_UNROOTED, jl_array_t *lhs_free)
 {
     if (ty == NULL) // may happen if the user is intersecting with an incomplete type
         return (jl_value_t*)var;
@@ -950,10 +949,33 @@ static jl_value_t *fix_inferred_var_bound(jl_tvar_t *var, jl_value_t *ty JL_MAYB
         JL_GC_PUSH2(&ans, &vs);
         vs = jl_find_free_typevars(ty);
         int i;
+        int any_lhs_free = 0;
         for (i = 0; i < jl_array_nrows(vs); i++) {
-            ans = jl_type_unionall((jl_tvar_t*)jl_array_ptr_ref(vs, i), ans);
+            jl_tvar_t *tv = (jl_tvar_t*)jl_array_ptr_ref(vs, i);
+            // Only re-wrap typevars that were NOT free in the LHS.
+            int is_lhs_free = 0;
+            if (lhs_free) {
+                for (int j = 0; j < jl_array_nrows(lhs_free); j++) {
+                    if (jl_array_ptr_ref(lhs_free, j) == (jl_value_t*)tv) {
+                        is_lhs_free = 1;
+                        any_lhs_free = 1;
+                        break;
+                    }
+                }
+            }
+            if (!is_lhs_free)
+                ans = jl_type_unionall(tv, ans);
         }
-        ans = (jl_value_t*)jl_new_typevar(var->name, jl_bottom_type, ans);
+        if (any_lhs_free && jl_has_free_typevars(ans)) {
+            // Remaining free typevars are from the LHS — the value is a
+            // singleton type known exactly. Return it directly.
+            JL_GC_POP();
+            return ans;
+        }
+        if (!any_lhs_free) {
+            // Old behavior: wrap in a TypeVar bound
+            ans = (jl_value_t*)jl_new_typevar(var->name, jl_bottom_type, ans);
+        }
         JL_GC_POP();
         return ans;
     }
@@ -2322,7 +2344,7 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
 // points to a rooted array of length `jl_subtype_env_size(y)`.
 // This will be populated with the values of variables from unionall
 // types at the outer level of `y`.
-JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, int envsz)
+static int jl_subtype_env_(jl_value_t *x, jl_value_t *y, jl_value_t **env, int envsz, jl_array_t *lhs_free)
 {
     jl_stenv_t e;
     if (y == (jl_value_t*)jl_any_type || x == jl_bottom_type)
@@ -2370,11 +2392,16 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
         for (i = 0; i < envsz; i++) {
             assert(jl_is_unionall(ub));
             jl_tvar_t *var = ub->var;
-            env[i] = fix_inferred_var_bound(var, env[i]);
+            env[i] = fix_inferred_var_bound(var, env[i], lhs_free);
             ub = (jl_unionall_t*)ub->body;
         }
     }
     return subtype;
+}
+
+JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, int envsz)
+{
+    return jl_subtype_env_(x, y, env, envsz, NULL);
 }
 
 static int subtype_in_env(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
@@ -4736,7 +4763,11 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
     *ans = jl_bottom_type;
     int lta = jl_is_concrete_type(a);
     int ltb = jl_is_concrete_type(b);
-    if (jl_subtype_env(a, b, env, szb)) {
+    jl_array_t *lhs_free = NULL;
+    JL_GC_PUSH1(&lhs_free);
+    if (jl_has_free_typevars(a))
+        lhs_free = jl_find_free_typevars(a);
+    if (jl_subtype_env_(a, b, env, szb, lhs_free)) {
         *ans = a; sz = szb;
         if (issubty) *issubty = 1;
     }
@@ -4810,7 +4841,8 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
         *penv = e;
     }
  bot:
-    JL_GC_POP();
+    JL_GC_POP(); // lhs_free
+    JL_GC_POP(); // env
     return *ans;
 }
 
