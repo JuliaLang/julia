@@ -4,9 +4,15 @@
 # lattice utilities #
 #####################
 
-# true if Type{T} is inlineable as constant T
+# true if the type is a ConstType{T} instance
+isConstType(@nospecialize t) = isa(t, Core.ConstType)
+
+# Extract the type parameter from Type{T} or ConstType{T}
+consttype_param(@nospecialize t) = isConstType(t) ? t.T : t.parameters[1]
+
+# true if Type{T} or ConstType{T} is inlineable as constant T
 # requires that T is a singleton, s.t. T == S implies T === S
-isconstType(@nospecialize t) = isType(t) && hasuniquerep(t.parameters[1])
+isconstType(@nospecialize t) = isConstType(t) || (isType(t) && hasuniquerep(t.parameters[1]))
 
 # test whether type T has a unique representation, s.t. T == S implies T === S
 function hasuniquerep(@nospecialize t)
@@ -40,13 +46,13 @@ function isTypeDataType(@nospecialize t)
     return t.name !== Tuple.name
 end
 
-has_extended_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isType(x)
+has_extended_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isType(x) || isConstType(x)
 
 # Subtyping currently intentionally answers certain queries incorrectly for kind types. For
 # some of these queries, this check can be used to somewhat protect against making incorrect
 # decisions based on incorrect subtyping. Note that this check, itself, is broken for
 # certain combinations of `a` and `b` where one/both isa/are `Union`/`UnionAll` type(s)s.
-isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || hasuniquerep(a.parameters[1]) || b <: a)
+isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || isConstType(a) || !isType(a) || hasuniquerep(a.parameters[1]) || b <: a)
 
 function argtypes_to_type(argtypes::Vector{Any})
     argtypes = anymap(@nospecialize(a) -> isvarargtype(a) ? a : widenconst(a), argtypes)

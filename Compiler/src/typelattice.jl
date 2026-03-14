@@ -702,6 +702,7 @@ widenconst(::PartialTypeVar) = TypeVar
 widenconst(t::Core.PartialStruct) = t.typ
 widenconst(t::PartialOpaque) = t.typ
 @nospecializeinfer widenconst(@nospecialize t::Type) = t
+widenconst(@nospecialize t::Core.ConstType) = t
 widenconst(::TypeVar) = error("unhandled TypeVar")
 widenconst(::TypeofVararg) = error("unhandled Vararg")
 widenconst(::LimitedAccuracy) = error("unhandled LimitedAccuracy")

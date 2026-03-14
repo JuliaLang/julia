@@ -122,7 +122,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             rettype_const = result_type
             const_flags = 0x2
         elseif isconstType(result_type)
-            rettype_const = result_type.parameters[1]
+            rettype_const = consttype_param(result_type)
             const_flags = 0x2
         elseif isa(result_type, PartialStruct)
             rettype_const = (_getundefs(result_type), result_type.fields)

@@ -408,7 +408,7 @@ end
     if arg1 isa MustAlias
         arg1 = widenmustalias(arg1)
     end
-    arg1t = arg1 isa Const ? typeof(arg1.val) : isconstType(arg1) ? typeof(arg1.parameters[1]) : widenconst(arg1)
+    arg1t = arg1 isa Const ? typeof(arg1.val) : isconstType(arg1) ? typeof(consttype_param(arg1)) : widenconst(arg1)
     a1 = unwrap_unionall(arg1t)
     if isa(a1, DataType) && !isabstracttype(a1)
         if a1 === Module
@@ -524,7 +524,7 @@ end
     x = widenmustalias(x)
     isa(x, Const) && return _const_sizeof(x.val)
     isa(x, Conditional) && return _const_sizeof(Bool)
-    isconstType(x) && return _const_sizeof(x.parameters[1])
+    isconstType(x) && return _const_sizeof(consttype_param(x))
     xu = unwrap_unionall(x)
     if isa(xu, Union)
         return tmerge(sizeof_tfunc(𝕃, rewrap_unionall(xu.a, x)),
@@ -556,7 +556,7 @@ add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 1)
     isa(x, Conditional) && return Const(0)
     xt = widenconst(x)
     x = unwrap_unionall(xt)
-    isconstType(x) && return Const(nfields(x.parameters[1]))
+    isconstType(x) && return Const(nfields(consttype_param(x)))
     if isa(x, DataType) && !isabstracttype(x)
         if x.name === Tuple.name
             isvatuple(x) && return Int
@@ -810,7 +810,9 @@ end
 @nospecs function typeof_tfunc(𝕃::AbstractLattice, t)
     isa(t, Const) && return Const(typeof(t.val))
     t = widenconst(t)
-    if isType(t)
+    if isConstType(t)
+        return Const(typeof(t.T))
+    elseif isType(t)
         tp = t.parameters[1]
         if hasuniquerep(tp)
             return Const(typeof(tp))
@@ -1021,7 +1023,7 @@ end
             nflds = fieldcount_noerror(sty)
             ismod = false
         else
-            sv = (s00::DataType).parameters[1]
+            sv = consttype_param(s00)
             sty = typeof(sv)
             nflds = nfields(sv)
             ismod = sv isa Module
@@ -1188,9 +1190,9 @@ end
         return tmerge(_getfield_tfunc(𝕃, rewrap_unionall(s.a, s00), name, setfield),
                       _getfield_tfunc(𝕃, rewrap_unionall(s.b, s00), name, setfield))
     end
-    if isType(s)
+    if isType(s) || isConstType(s)
         if isconstType(s)
-            sv = (s00::DataType).parameters[1]
+            sv = consttype_param(s00)
             if isa(name, Const)
                 r = _getfield_tfunc_const(sv, name)
                 r !== nothing && return r
@@ -1658,7 +1660,7 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
     if isa(headtypetype, Const)
         headtype = headtypetype.val
     elseif isconstType(headtypetype)
-        headtype = headtypetype.parameters[1]
+        headtype = consttype_param(headtypetype)
     else
         return false
     end
@@ -1678,7 +1680,7 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
                 return false
             end
         elseif (isa(ai, Const) && isa(ai.val, Type)) || isconstType(ai)
-            ai = isa(ai, Const) ? ai.val : (ai::DataType).parameters[1]
+            ai = isa(ai, Const) ? ai.val : consttype_param(ai)
             if has_free_typevars(u.var.lb) || has_free_typevars(u.var.ub)
                 return false
             end
@@ -1722,7 +1724,7 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
     if isa(headtypetype, Const)
         headtype = headtypetype.val
     elseif isconstType(headtypetype)
-        headtype = headtypetype.parameters[1]
+        headtype = consttype_param(headtypetype)
     else
         return Any
     end
@@ -1761,7 +1763,9 @@ function apply_type_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any};
         allconst = true
         for i = 2:largs
             ai = argtypes[i]
-            if isType(ai)
+            if isConstType(ai)
+                aty = ai.T
+            elseif isType(ai)
                 aty = ai.parameters[1]
                 allconst &= hasuniquerep(aty)
             else
@@ -1984,7 +1988,10 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
             # here we should turn such `Type{...}`-parameters to valid parameters, e.g.
             # (::Type{Int},) -> Tuple{DataType} (or PartialStruct for more accuracy)
             # (::Union{Type{Int32},Type{Int64}}) -> Tuple{Type}
-            if isType(x)
+            if isConstType(x)
+                anyinfo = true
+                params[i] = typeof(x.T)
+            elseif isType(x)
                 anyinfo = true
                 xparam = x.parameters[1]
                 if hasuniquerep(xparam) || xparam === Bottom
@@ -3091,7 +3098,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         return Future(UNKNOWN)
     end
 
-    af_argtype = isa(tt, Const) ? tt.val : (tt::DataType).parameters[1]
+    af_argtype = isa(tt, Const) ? tt.val : consttype_param(tt)
     if !isa(af_argtype, DataType) || !(af_argtype <: Tuple)
         return Future(UNKNOWN)
     end

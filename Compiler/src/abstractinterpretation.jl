@@ -989,7 +989,7 @@ collect_const_args(arginfo::ArgInfo, start::Int) = collect_const_args(arginfo.ar
 function collect_const_args(argtypes::Vector{Any}, start::Int)
     return Any[ let a = widenslotwrapper(argtypes[i])
                     isa(a, Const) ? a.val :
-                    isconstType(a) ? a.parameters[1] :
+                    isconstType(a) ? consttype_param(a) :
                     (a::DataType).instance
                 end for i = start:length(argtypes) ]
 end

@@ -35,6 +35,15 @@ After making changes, run static analysis checks:
   - Tests can also be rerun individually with `clang-sa-<filename>`, `clang-sagc-<filename>` or `clang-tidy-<filename>`.
   - If `clang-sagc-<filename>` fails, it may require adding `JL_GC_PUSH` statements, or `JL_GC_PROMISE_ROOTED` statements., or require fixing locks. Remember arguments are assumed rooted, so check the callers to make sure that is handled. If the value is being temporarily moved around in a struct or arraylist, `JL_GC_PROMISE_ROOTED(struct->field)` may be needed as a statement (it return void) immediately after reloading the struct before any use of struct. Put that promise as early in the code as is legal, near the definition not the use.
 
+## Testing Compiler changes
+
+If you have made changes to the `Compiler/` module, you can test them without
+rebuilding the sysimage by using `--project=Compiler`:
+```
+./usr/bin/julia --project=Compiler -e 'using Compiler; ...'
+```
+To run the Compiler test suite: `./usr/bin/julia --project=Compiler -e 'using Pkg; Pkg.test()'`
+
 ## Using Revise
 
 If you have made changes to files included in the system image (base/ or stdlib/),
