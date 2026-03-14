@@ -370,7 +370,7 @@ function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule,
         esc_result_type = esc(result_type)
         return quote
             let iter = $esc_range
-            local range = iter isa AbstractArray ? iter : collect(iter)
+            local range = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
             local niter = length(range)
             local result = similar(Vector{$esc_result_type}, axes(range))
             if niter > 0
@@ -397,7 +397,7 @@ function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule,
         # lambda whose return type is a Union across closure boundaries.
         return quote
             let iter = $esc_range
-            local range = iter isa AbstractArray ? iter : collect(iter)
+            local range = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
             local niter = length(range)
             if niter == 0
                 $(wrap_final(:(similar(Vector{Any}, axes(range)))))
