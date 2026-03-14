@@ -156,7 +156,7 @@ WS_CHECK_PATTERNS = *.1 *.c *.cpp *.h *.inc *.jl *.lsp *.make *.md *.mk *.rst *.
 .PHONY: check-whitespace
 check-whitespace:
 ifneq ($(NO_GIT), 1)
-	@git ls-files -- $(WS_CHECK_PATTERNS:%='%') | PATH="$(PATH):$(dir $(JULIA_EXECUTABLE))" julia $(call cygpath_w,$(JULIAHOME)/contrib/check-whitespace.jl) --stdin
+	@git ls-files -- $(WS_CHECK_PATTERNS:%='%') | PATH="$(dir $(JULIA_EXECUTABLE)):$(PATH)" julia $(call cygpath_w,$(JULIAHOME)/contrib/check-whitespace.jl) --stdin
 else
 	$(warn "Skipping whitespace check because git is unavailable")
 endif
@@ -164,7 +164,7 @@ endif
 .PHONY: fix-whitespace
 fix-whitespace:
 ifneq ($(NO_GIT), 1)
-	@git ls-files -- $(WS_CHECK_PATTERNS:%='%') | PATH="$(PATH):$(dir $(JULIA_EXECUTABLE))" julia $(call cygpath_w,$(JULIAHOME)/contrib/check-whitespace.jl) --stdin --fix
+	@git ls-files -- $(WS_CHECK_PATTERNS:%='%') | PATH="$(dir $(JULIA_EXECUTABLE)):$(PATH)" julia $(call cygpath_w,$(JULIAHOME)/contrib/check-whitespace.jl) --stdin --fix
 else
 	$(warn "Skipping whitespace fix because git is unavailable")
 endif
