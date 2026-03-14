@@ -545,8 +545,27 @@ int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
         return 0;
     if (specificity && a == (jl_value_t*)jl_typeofbottom_type)
         return 0;
-    if (jl_is_concrete_type(a) && jl_is_concrete_type(b) && jl_type_equality_is_identity(a, b))
-        return 1;
+    if (jl_is_concrete_type(a) && jl_is_concrete_type(b) && jl_type_equality_is_identity(a, b)) {
+        // ConstType{T} is concrete but has non-trivial subtyping (ConstType{T} <: DataType),
+        // so the concrete disjointness fast path doesn't apply for tuples containing ConstType.
+        if (jl_is_datatype(a) && ((jl_datatype_t*)a)->name == jl_tuple_typename &&
+            jl_is_datatype(b) && ((jl_datatype_t*)b)->name == jl_tuple_typename &&
+            jl_nparams(a) == jl_nparams(b)) {
+            size_t i, n = jl_nparams(a);
+            int has_consttype = 0;
+            for (i = 0; i < n; i++) {
+                if (jl_is_consttype_type(jl_tparam(a, i)) || jl_is_consttype_type(jl_tparam(b, i))) {
+                    has_consttype = 1;
+                    break;
+                }
+            }
+            if (!has_consttype)
+                return 1;
+        }
+        else {
+            return 1;
+        }
+    }
     if (jl_is_unionall(a)) a = jl_unwrap_unionall(a);
     if (jl_is_unionall(b)) b = jl_unwrap_unionall(b);
     if (jl_is_uniontype(a))
@@ -860,6 +879,8 @@ int is_leaf_bound(jl_value_t *v) JL_NOTSAFEPOINT
 {
     if (v == jl_bottom_type)
         return 1;
+    if (jl_is_consttype_type(v))
+        return 1; // ConstType{T} is a singleton, known by identity
     if (jl_is_datatype(v)) {
         if (((jl_datatype_t*)v)->name->abstract) {
             if (jl_is_type_type(v))
@@ -878,6 +899,8 @@ static int is_leaf_typevar(jl_tvar_t *v) JL_NOTSAFEPOINT
 
 static jl_value_t *widen_Type_if_concrete(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
+    if (jl_is_consttype_type(t))
+        return jl_typeof(((jl_consttype_t*)t)->T);
     if (jl_is_type_type(t) && !jl_is_typevar(jl_tparam0(t)))
         return jl_typeof(jl_tparam0(t));
     if (jl_is_uniontype(t)) {
@@ -943,6 +966,15 @@ static jl_value_t *fix_inferred_var_bound(jl_tvar_t *var, jl_value_t *ty JL_MAYB
 {
     if (ty == NULL) // may happen if the user is intersecting with an incomplete type
         return (jl_value_t*)var;
+    // Unwrap ConstType{T} to Type{T} in sparams — ConstType is a dispatch
+    // mechanism, not a user-level type. Sparams should see Type{T}.
+    if (jl_is_consttype_type(ty)) {
+        jl_value_t *inner = ((jl_consttype_t*)ty)->T;
+        JL_GC_PUSH1(&inner);
+        jl_value_t *wrapped = (jl_value_t*)jl_wrap_Type(inner);
+        JL_GC_POP();
+        return wrapped;
+    }
     if (!jl_is_typevar(ty) && jl_has_free_typevars(ty)) {
         jl_value_t *ans = ty;
         jl_array_t *vs = NULL;
@@ -1589,10 +1621,15 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             return jl_egal(xp, ((jl_consttype_t*)y)->T);
         }
         if (jl_is_type_type(y)) {
-            // ConstType{A} <: Type{B} iff A == B
+            // ConstType{A} <: Type{B} iff A == B (using subtype env for TypeVars in B)
             jl_value_t *yp = jl_tparam0(y);
-            if (jl_is_typevar(yp))
-                return subtype(xp, yp, e, 2);
+            if (jl_is_typevar(yp) || jl_has_free_typevars(yp)) {
+                // Increment invdepth since this is an invariant position (like Type{T} parameters)
+                e->invdepth++;
+                int r = forall_exists_equal(xp, yp, e);
+                e->invdepth--;
+                return r;
+            }
             return jl_types_equal(xp, yp);
         }
         if (y == (jl_value_t*)jl_any_type)
@@ -2564,6 +2601,8 @@ int jl_has_intersect_type_not_kind(jl_value_t *t)
                jl_has_intersect_type_not_kind(((jl_uniontype_t*)t)->b);
     if (jl_is_typevar(t))
         return jl_has_intersect_type_not_kind(((jl_tvar_t*)t)->ub);
+    if (jl_is_consttype_type(t))
+        return 1;
     if (jl_is_datatype(t))
         if (((jl_datatype_t*)t)->name == jl_type_typename)
             return 1;

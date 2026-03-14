@@ -1033,7 +1033,12 @@ static int typekeyvalue_eq(jl_datatype_t *tt, jl_value_t *key1, jl_value_t **key
     for (j = 0; j < n; j++) {
         jl_value_t *kj = j == 0 ? key1 : key[j - 1];
         jl_value_t *tj = jl_svecref(tt->parameters, j);
-        if (leaf && jl_is_type_type(tj)) {
+        if (leaf && jl_is_consttype_type(tj)) {
+            // ConstType{T} matches by identity
+            if (kj != ((jl_consttype_t*)tj)->T)
+                return 0;
+        }
+        else if (leaf && jl_is_type_type(tj)) {
             jl_value_t *tp0 = jl_tparam0(tj);
             if (!(kj == tp0 || (jl_typeof(tp0) == jl_typeof(kj) && jl_types_equal(tp0, kj))))
                 return 0;
@@ -1367,6 +1372,9 @@ static int has_concrete_supertype(jl_value_t *kj) JL_NOTSAFEPOINT
         return ca && cb;
     }
     else if (uw == jl_bottom_type) {
+        return 1;
+    }
+    else if (jl_is_consttype_type(uw)) {
         return 1;
     }
     else if (jl_is_typevar(uw)) {
@@ -1804,6 +1812,10 @@ static unsigned type_hash(jl_value_t *kj, int *failed) JL_NOTSAFEPOINT
         // since Union is associative
         return hasha + hashb;
     }
+    else if (jl_is_consttype_type(uw)) {
+        unsigned hashT = type_hash(((jl_consttype_t*)uw)->T, failed);
+        return bitmix(~jl_consttype_type->name->hash, hashT);
+    }
     else {
         return jl_object_id(uw);
     }
@@ -1853,9 +1865,21 @@ static unsigned typekeyvalue_hash(jl_typename_t *tn, jl_value_t *key1, jl_value_
         jl_value_t *kj = j == 0 ? key1 : key[j - 1];
         uint_t hj;
         if (leaf && jl_is_kind(jl_typeof(kj))) {
-            hj = typekey_hash(jl_type_typename, &kj, 1, 0);
-            if (hj == 0)
-                return 0;
+            // Hash to match the stored tuple parameter.
+            // Canonical types (no free typevars) are stored as ConstType{kj}.
+            // Types with free typevars are stored as Type{kj}.
+            if (!jl_has_free_typevars(kj)) {
+                int failed = 0;
+                unsigned hashT = type_hash(kj, &failed);
+                hj = bitmix(~jl_consttype_type->name->hash, hashT);
+                if (!hj)
+                    return 0;
+            }
+            else {
+                hj = typekey_hash(jl_type_typename, &kj, 1, 0);
+                if (hj == 0)
+                    return 0;
+            }
         }
         else {
             hj = ((jl_datatype_t*)jl_typeof(kj))->hash;
@@ -1883,12 +1907,14 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
         }
         if (istuple) {
             if (dt->isconcretetype)
-                dt->isconcretetype = (jl_is_datatype(p) && ((jl_datatype_t*)p)->isconcretetype) || p == jl_bottom_type;
+                dt->isconcretetype = jl_is_consttype_type(p) ||
+                    (jl_is_datatype(p) && ((jl_datatype_t*)p)->isconcretetype) || p == jl_bottom_type;
             if (dt->isdispatchtuple) {
-                dt->isdispatchtuple = jl_is_datatype(p) &&
+                dt->isdispatchtuple = jl_is_consttype_type(p) ||
+                    (jl_is_datatype(p) &&
                     ((!jl_is_kind(p) && ((jl_datatype_t*)p)->isconcretetype) ||
                      (p == (jl_value_t*)jl_typeofbottom_type) || // == Type{Union{}}, so needs to be consistent
-                     (((jl_datatype_t*)p)->name == jl_type_typename && !((jl_datatype_t*)p)->hasfreetypevars));
+                     (((jl_datatype_t*)p)->name == jl_type_typename && !((jl_datatype_t*)p)->hasfreetypevars)));
             }
         }
         if (jl_is_vararg(p))
@@ -2517,11 +2543,13 @@ jl_tupletype_t *jl_inst_arg_tuple_type(jl_value_t *arg1, jl_value_t **args, size
         for (i = 0; i < nargs; i++) {
             jl_value_t *ai = (i == 0 ? arg1 : args[i - 1]);
             if (leaf && jl_is_type(ai)) {
-                // if `ai` has free type vars this will not be a valid (concrete) type.
-                // TODO: it would be really nice to only dispatch and cache those as
-                // `jl_typeof(ai)`, but that will require some redesign of the caching
-                // logic.
-                ai = (jl_value_t*)jl_wrap_Type(ai);
+                // Use ConstType{T} for concrete DataType values (no free typevars).
+                // ConstType guarantees identity (T === S), enabling sound ghosting.
+                // UnionAlls and types with free typevars use Type{T} (equality-based).
+                if (jl_is_datatype(ai) && !jl_has_free_typevars(ai))
+                    ai = jl_wrap_ConstType(ai);
+                else
+                    ai = (jl_value_t*)jl_wrap_Type(ai);
             }
             else {
                 ai = jl_typeof(ai);
@@ -2828,7 +2856,11 @@ jl_value_t *jl_wrap_ConstType(jl_value_t *t)
 {
     if (jl_has_free_typevars(t))
         jl_errorf("ConstType parameter must not have free type variables");
-    return jl_new_struct(jl_consttype_type, t);
+    jl_task_t *ct = jl_current_task;
+    jl_consttype_t *c = (jl_consttype_t*)jl_gc_alloc(ct->ptls, sizeof(jl_consttype_t), jl_consttype_type);
+    jl_set_typetagof(c, jl_consttype_tag, 0);
+    c->T = t;
+    return (jl_value_t*)c;
 }
 
 jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow)

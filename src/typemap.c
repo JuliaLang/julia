@@ -9,6 +9,20 @@
 #endif
 #include "julia_assert.h"
 
+// Check if a type is Type{T} or ConstType{T}, and extract T
+static inline int is_type_or_consttype(jl_value_t *v, jl_value_t **tp0) JL_NOTSAFEPOINT
+{
+    if (jl_is_type_type(v)) {
+        *tp0 = jl_tparam0(v);
+        return 1;
+    }
+    if (jl_is_consttype_type(v)) {
+        *tp0 = ((jl_consttype_t*)v)->T;
+        return 1;
+    }
+    return 0;
+}
+
 #define MAX_METHLIST_COUNT 6 // this helps configure the sysimg size and speed.
 
 #ifdef __cplusplus
@@ -42,6 +56,10 @@ static jl_value_t *jl_type_extract_name(jl_value_t *t1 JL_PROPAGATES_ROOT, int i
             return (jl_value_t*)jl_type_typename;
         return (jl_value_t*)dt->name;
     }
+    else if (jl_is_consttype_type(t1)) {
+        // ConstType{T} is a subtype of typeof(T)
+        return (jl_value_t*)((jl_datatype_t*)jl_typeof(((jl_consttype_t*)t1)->T))->name;
+    }
     else if (jl_is_uniontype(t1)) {
         jl_uniontype_t *u1 = (jl_uniontype_t*)t1;
         jl_value_t *tn1 = jl_type_extract_name(u1->a, invariant);
@@ -68,6 +86,9 @@ static int jl_type_extract_name_precise(jl_value_t *t1, int invariant)
     }
     else if (t1 == jl_bottom_type || t1 == (jl_value_t*)jl_typeofbottom_type || t1 == (jl_value_t*)jl_typeofbottom_type->super) {
         return 1;
+    }
+    else if (jl_is_consttype_type(t1)) {
+        return 1; // ConstType{T} has a precise name (typeof(T))
     }
     else if (jl_is_datatype(t1)) {
         jl_datatype_t *dt = (jl_datatype_t*)t1;
@@ -111,8 +132,9 @@ static int sig_match_by_type_leaf(jl_value_t **types, jl_tupletype_t *sig, size_
     for (i = 0; i < n; i++) {
         jl_value_t *decl = jl_tparam(sig, i);
         jl_value_t *a = types[i];
-        if (jl_is_type_type(a)) // decl is not Type, because it wouldn't be leafsig
-            a = jl_typeof(jl_tparam0(a));
+        jl_value_t *tp0;
+        if (is_type_or_consttype(a, &tp0)) // decl is not Type, because it wouldn't be leafsig
+            a = jl_typeof(tp0);
         if (!jl_types_equal(a, decl))
             return 0;
     }
@@ -131,15 +153,16 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
             return 0;
         if (jl_is_type_type(unw)) {
             jl_value_t *tp0 = jl_tparam0(unw);
-            if (jl_is_type_type(a)) {
+            jl_value_t *a_inner;
+            if (is_type_or_consttype(a, &a_inner)) {
                 if (jl_is_typevar(tp0)) {
                     // in the case of Type{_}, the types don't have to match exactly.
                     // this is cached as `Type{T} where T`.
                     if (((jl_tvar_t*)tp0)->ub != (jl_value_t*)jl_any_type &&
-                        !jl_subtype(jl_tparam0(a), ((jl_tvar_t*)tp0)->ub))
+                        !jl_subtype(a_inner, ((jl_tvar_t*)tp0)->ub))
                         return 0;
                 }
-                else if (!jl_types_equal(jl_tparam0(a), tp0)) {
+                else if (jl_is_consttype_type(a) ? !jl_egal(a_inner, tp0) : !jl_types_equal(a_inner, tp0)) {
                     return 0;
                 }
             }
@@ -152,8 +175,9 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
         else if (decl == (jl_value_t*)jl_any_type) {
         }
         else {
-            if (jl_is_type_type(a)) // decl is not Type, because it would be caught above
-                a = jl_typeof(jl_tparam0(a));
+            jl_value_t *a_inner;
+            if (is_type_or_consttype(a, &a_inner)) // decl is not Type, because it would be caught above
+                a = jl_typeof(a_inner);
             if (!jl_types_equal(a, decl))
                 return 0;
         }
@@ -436,6 +460,12 @@ static int tname_intersection(jl_value_t *a, jl_typename_t *bname, int8_t tparam
         }
         return tname_intersection_dt((jl_datatype_t*)a, bname, jl_supertype_height((jl_datatype_t*)a));
     }
+    if (jl_is_consttype_type(a)) {
+        // ConstType{T} is a subtype of typeof(T), so check typeof(T)'s name
+        jl_value_t *inner = ((jl_consttype_t*)a)->T;
+        jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(inner);
+        return tname_intersection_dt(dt, bname, jl_supertype_height(dt));
+    }
     return 0;
 }
 
@@ -462,9 +492,11 @@ static int jl_typemap_intersection_memory_visitor(jl_genericmemory_t *a, jl_valu
     if (tparam & 2) {
         // try to extract a description of ty for intersections, but since we
         jl_value_t *ttype = jl_unwrap_unionall(ty);
-        if (tparam & 1)
-            // extract T from Type{T} (if possible)
-            ttype = jl_is_type_type(ttype) ? jl_tparam0(ttype) : NULL;
+        if (tparam & 1) {
+            // extract T from Type{T} or ConstType{T} (if possible)
+            jl_value_t *tp0;
+            ttype = is_type_or_consttype(ttype, &tp0) ? tp0 : NULL;
+        }
         if (ttype && jl_is_datatype(ttype)) {
             tydt = (jl_datatype_t*)ttype;
         }
@@ -638,7 +670,8 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                 maybe_type = maybe_kind || jl_has_intersect_type_not_kind(ty);
                 if (maybe_type && !maybe_kind) {
                     typetype = jl_unwrap_unionall(ty);
-                    typetype = jl_is_type_type(typetype) ? jl_tparam0(typetype) : NULL;
+                    jl_value_t *_tp0;
+                    typetype = is_type_or_consttype(typetype, &_tp0) ? _tp0 : NULL;
                     name = typetype ? jl_type_extract_name(typetype, 1) : NULL;
                     if (!typetype)
                         exclude_typeofbottom = !jl_subtype((jl_value_t*)jl_typeofbottom_type, ty);
@@ -701,6 +734,22 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                         if (!jl_typemap_intersection_memory_visitor(targ, exclude_typeofbottom && !maybe_kind ? ty : (jl_value_t*)jl_any_type, 3, offs, closure)) { JL_GC_POP(); return 0; }
                     }
                 }
+            }
+            // For ConstType{T}, also check arg1 cache since ConstType{T} <: typeof(T)
+            if (jl_is_consttype_type(ty)) {
+                jl_value_t *a0_typeof = jl_typeof(((jl_consttype_t*)ty)->T);
+                jl_genericmemory_t *cachearg1 = jl_atomic_load_relaxed(&cache->arg1);
+                if (cachearg1 != (jl_genericmemory_t*)jl_an_empty_memory_any && is_cache_leaf(a0_typeof, 0)) {
+                    jl_typename_t *name = ((jl_datatype_t*)a0_typeof)->name;
+                    jl_value_t *ml = mtcache_hash_lookup(cachearg1, (jl_value_t*)name);
+                    if (jl_is_genericmemory(ml))
+                        ml = mtcache_hash_lookup((jl_genericmemory_t*)ml, a0_typeof);
+                    if (ml != jl_nothing) {
+                        if (!jl_typemap_intersection_visitor(ml, offs+1, closure)) { JL_GC_POP(); return 0; }
+                    }
+                }
+                // The normal name1 walk below already handles ConstType
+                // via jl_type_extract_name returning typeof(T).name.
             }
             jl_genericmemory_t *cachearg1 = jl_atomic_load_relaxed(&cache->arg1);
             if (cachearg1 != (jl_genericmemory_t*)jl_an_empty_memory_any) {
@@ -787,6 +836,9 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                     while (1) {
                         name1 = jl_atomic_load_relaxed(&cache->name1); // reload after callback
                         jl_typemap_t *ml = mtcache_hash_lookup(name1, (jl_value_t*)super->name);
+                        if (jl_is_consttype_type(ty) && ml != jl_nothing &&
+                            super->name == jl_type_typename) {
+                        }
                         if (ml != jl_nothing) {
                             if (!jl_typemap_intersection_visitor(ml, offs+1, closure)) { JL_GC_POP(); return 0; }
                         }
@@ -964,9 +1016,30 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
                 ty = NULL;
         }
         if (ty) {
+            // For ConstType{T}, also check the arg1 cache since ConstType{T} <: typeof(T)
+            // (e.g. ConstType{Int} <: DataType, so methods with ::DataType should match)
+            if (jl_is_consttype_type(ty)) {
+                jl_value_t *a0_typeof = jl_typeof(((jl_consttype_t*)ty)->T);
+                if (is_cache_leaf(a0_typeof, 0)) {
+                    jl_genericmemory_t *cachearg1 = jl_atomic_load_relaxed(&cache->arg1);
+                    if (cachearg1 != (jl_genericmemory_t*)jl_an_empty_memory_any) {
+                        jl_typename_t *name = ((jl_datatype_t*)a0_typeof)->name;
+                        jl_value_t *ml = mtcache_hash_lookup(cachearg1, (jl_value_t*)name);
+                        if (jl_is_genericmemory(ml))
+                            ml = mtcache_hash_lookup((jl_genericmemory_t*)ml, a0_typeof);
+                        if (ml != jl_nothing) {
+                            jl_typemap_entry_t *li = jl_typemap_assoc_by_type((jl_typemap_t*)ml, search, offs + 1, subtype);
+                            if (li) return li;
+                        }
+                    }
+                    if (!subtype) return NULL;
+                }
+                // The normal name1 walk below already handles ConstType
+                // via jl_type_extract_name returning typeof(T).name.
+            }
             // now look at the optimized leaftype caches
-            if (jl_is_type_type(ty)) {
-                jl_value_t *a0 = jl_tparam0(ty);
+            if (jl_is_type_type(ty) || jl_is_consttype_type(ty)) {
+                jl_value_t *a0 = jl_is_consttype_type(ty) ? ((jl_consttype_t*)ty)->T : jl_tparam0(ty);
                 if (is_cache_leaf(a0, 1)) {
                     jl_genericmemory_t *targ = jl_atomic_load_relaxed(&cache->targ);
                     if (targ != (jl_genericmemory_t*)jl_an_empty_memory_any) {
@@ -1001,7 +1074,9 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
             // now look at the optimized TypeName caches
             jl_genericmemory_t *tname = jl_atomic_load_relaxed(&cache->tname);
             if (tname != (jl_genericmemory_t*)jl_an_empty_memory_any) {
-                jl_value_t *a0 = ty && jl_is_type_type(ty) ? jl_type_extract_name(jl_tparam0(ty), 1) : NULL;
+                jl_value_t *a0 = ty && (jl_is_type_type(ty) || jl_is_consttype_type(ty))
+                    ? jl_type_extract_name(jl_is_consttype_type(ty) ? ((jl_consttype_t*)ty)->T : jl_tparam0(ty), 1)
+                    : NULL;
                 if (a0) { // TODO: if we start analyzing Union types in jl_type_extract_name, then a0 might be over-approximated here, leading us to miss possible subtypes
                     jl_datatype_t *super = (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)a0)->wrapper);
                     while (1) {

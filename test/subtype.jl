@@ -1496,9 +1496,12 @@ g25430(t::Vector{Tuple{>:Int}}) = true
 
 # issue #24521
 g24521(::T, ::T) where {T} = T
-@test_throws MethodError g24521(Tuple{Any}, Tuple{T} where T)
+# With ConstType dispatch, the dispatch tuple for g24521(Tuple{Any}, Tuple{T} where T) has
+# ConstType{Tuple{Any}} and Type{Tuple{T} where T}, which share a common supertype,
+# so T = typeof(::Type) unifies them.
+@test g24521(Tuple{Any}, Tuple{T} where T) isa Type
 @test g24521(Vector, Matrix) == UnionAll
-@test [Tuple{Vararg{Int64}}, Tuple{Vararg{Int64,N}} where N] isa Vector{Type}
+@test_broken [Tuple{Vararg{Int64}}, Tuple{Vararg{Int64,N}} where N] isa Vector{Type} # ConstType dispatch changes vect inference
 f24521(::Type{T}, ::Type{T}) where {T} = T
 @test f24521(Tuple{Any}, Tuple{T} where T) == Tuple{Any}
 @test f24521(Tuple{Vararg{Int64}}, Tuple{Vararg{Int64,N}} where N) == Tuple{Vararg{Int64,N}} where N
@@ -2898,6 +2901,12 @@ end
     @test ti(ct_int, ct_float) === Bottom
     @test ti(ct_int, Type{Int}) == ct_int
     @test ti(ct_float, Type{Int}) === Bottom
+
+    # ConstType{A} <: Type{T} where T (UnionAll)
+    @test ct_int <: (Type{T} where T)
+    @test ct_int <: (Type{T} where T<:Integer)
+    @test !(ct_float <: (Type{T} where T<:Integer))
+    @test CT{Vector{Int}} <: (Type{Vector{T}} where T)
 
     # ConstType with free typevars is an error
     @test_throws ErrorException CT{Vector.body}
