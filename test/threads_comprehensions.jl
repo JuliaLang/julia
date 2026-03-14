@@ -144,6 +144,23 @@ using .Main.OffsetArrays
         @test result_repeated == fill(42, 5)
     end
 
+    # Test Tuple iterators (used directly without collect)
+    @testset "tuple iterators" begin
+        t = (10, 20, 30, 40, 50)
+        result = @threads [x^2 for x in t]
+        @test result == [x^2 for x in t]
+
+        result_typed = @threads Int[x + 1 for x in t]
+        @test result_typed == Int[x + 1 for x in t]
+        @test result_typed isa Vector{Int}
+
+        result_greedy = @threads :greedy [x for x in t]
+        @test sort(result_greedy) == sort(collect(t))
+
+        result_filter = @threads [x for x in t if x > 25]
+        @test result_filter == [x for x in t if x > 25]
+    end
+
     # Test Channel-based iterators
     @testset "channel iterators" begin
         # Test with Channel
