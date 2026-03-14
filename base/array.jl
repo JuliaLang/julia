@@ -2326,7 +2326,7 @@ function vcat(arrays::Vector{T}...) where T
     nd = 1
     for a in arrays
         na = length(a)
-        @assert nd + na <= 1 + length(arr) # Concurrent modification of arrays?
+        @assert nd + na <= 1 + length(arr) "Concurrent modification of arrays?"
         unsafe_copyto!(arr, nd, a, 1, na)
         nd += na
     end

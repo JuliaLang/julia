@@ -100,6 +100,7 @@ public
     @locals,
     @propagate_inbounds,
     @__doc__,
+    @nospecializeinfer,
 
 # External processes
     shell_escape,
