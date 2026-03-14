@@ -214,7 +214,7 @@ is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
     if isa(ft, Const)
         return ft.val
     elseif isconstType(ft)
-        return ft.parameters[1]
+        return consttype_param(ft)
     elseif issingletontype(ft)
         return ft.instance
     end
@@ -226,7 +226,7 @@ end
         if issingletontype(t)
             return Const(t.instance)
         elseif isconstType(t)
-            return Const(t.parameters[1])
+            return Const(consttype_param(t))
         end
     end
     return t

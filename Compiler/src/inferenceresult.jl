@@ -165,7 +165,7 @@ function most_general_argtypes(method::Union{Method,Nothing}, @nospecialize(spec
             # replace singleton types with their equivalent Const object
             atyp = Const(atyp.instance)
         elseif isconstType(atyp)
-            atyp = Const(atyp.parameters[1])
+            atyp = Const(consttype_param(atyp))
         else
             atyp = elim_free_typevars(rewrap_unionall(atyp, specTypes))
         end

@@ -5,7 +5,7 @@
 #####################
 
 # true if the type is a ConstType{T} instance
-isConstType(@nospecialize t) = isa(t, Core.ConstType)
+isConstType(@nospecialize t) = typeof(t) === Core.ConstType
 
 # Extract the type parameter from Type{T} or ConstType{T}
 consttype_param(@nospecialize t) = isConstType(t) ? t.T : t.parameters[1]
