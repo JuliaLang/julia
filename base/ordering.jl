@@ -28,6 +28,12 @@ Use [`Base.Order.lt`](@ref) to compare two elements according to the ordering.
 """
 abstract type Ordering end
 
+
+"""
+    ForwardOrdering
+
+Ordering that preserves the forward comparison order.
+"""
 struct ForwardOrdering <: Ordering end
 
 """
@@ -55,6 +61,11 @@ reverses ordering specified by `o`.
 """
 reverse(o::Ordering) = ReverseOrdering(o)
 
+"""
+    DirectOrdering
+
+Ordering that compares values directly using [`isless`](@ref).
+"""
 const DirectOrdering = Union{ForwardOrdering,ReverseOrdering{ForwardOrdering}}
 
 """
@@ -159,6 +170,13 @@ function ord(lt, by, rev::Bool, order::Ordering=Forward)
     return rev ? ReverseOrdering(o) : o
 end
 
+"""
+    ordtype(o, vs)
+
+Return the element type associated with the ordering `o`
+when applied to the array `vs`.
+"""
+function ordtype end
 
 # This function is not in use anywhere in Base but we observed
 # use in sorting-related packages (#34719). It's probably best to move
