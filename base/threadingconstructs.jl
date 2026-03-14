@@ -270,7 +270,7 @@ function _threadsfor_comprehension(gen::Expr, schedule, result_type=nothing)
     elseif length(gen.args) > 2
         iterators = gen.args[2:end]
         ranges = [iter.args[2] for iter in iterators]
-        dims_expr = :(tuple($([:(length($(esc(r)))) for r in ranges]...)))
+        dims_expr = :(tuple($([:(axes($(esc(r)), 1)) for r in ranges]...)))
         return _threadsfor_multi_iterator(body, iterators, true, schedule, dims_expr, result_type)
     else
         return _threadsfor_single_iterator(body, iter_or_filter, true, schedule; result_type)
@@ -357,7 +357,9 @@ function _threadsfor_single_iterator(body, iterator, condition, schedule, dims=n
 end
 
 # Fast path for non-filtered, non-greedy comprehensions: pre-allocate and write directly.
-# Uses similar() with axes() to preserve the iterator's index space in the result.
+# Non-AbstractArray iterators (e.g. Iterators.flatten) are collected into a Vector
+# because the parallel work distribution indexes into the range with r[i].
+# AbstractArrays are used directly to preserve their index space (e.g. OffsetArrays).
 function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule, dims, result_type)
     work_dist = _work_distribution_code()
     wrap_final = dims !== nothing ? (x -> :(reshape($x, $dims))) : identity
@@ -374,6 +376,7 @@ function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule,
                 let range = range, result = result
                 local threadsfor_fun
                 function threadsfor_fun(tid = 1; onethread = false)
+                    # Reads: range, tid, onethread. Defines: r, loop_first, loop_last.
                     $work_dist
                     for i = loop_first:loop_last
                         local $esc_lidx = @inbounds r[i]
@@ -405,11 +408,12 @@ function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule,
                 @inbounds result[_skip] = _probe_val
                 if niter > 1
                     local _widen_pairs = Pair{Int,Any}[]
-                    local _widen_lock = SpinLock()
+                    local _widen_lock = ReentrantLock()
                     let range = range, result = result, _widen_pairs = _widen_pairs,
                         _widen_lock = _widen_lock, _skip = _skip
                     local threadsfor_fun
                     function threadsfor_fun(tid = 1; onethread = false)
+                        # Reads: range, tid, onethread. Defines: r, loop_first, loop_last.
                         $work_dist
                         local _T = eltype(result)
                         for i = loop_first:loop_last
@@ -546,6 +550,7 @@ function default_func(itr, lidx, lbody)
     quote
         let range = $itr
         function threadsfor_fun(tid = 1; onethread = false)
+            # Reads: range, tid, onethread. Defines: r, loop_first, loop_last.
             $work_dist
             for i = loop_first:loop_last
                 local $(esc(lidx)) = @inbounds r[i]
@@ -560,13 +565,14 @@ function default_comprehension_func(itr, esc_lidx, esc_body, esc_condition)
     work_dist = _work_distribution_code()
     quote
         let iter = $itr
-        # Collect non-indexable iterators (like ProductIterator)
+        # Collect non-indexable iterators for random access (r[i]) in work distribution
         range = iter isa AbstractArray ? iter : collect(iter)
         # Channel uses Tuple{Int, Any} because the output type of the body expression
         # is not known at macro expansion time.
         result_channel = Channel{Tuple{Int, Any}}(Inf)
 
         function threadsfor_fun(tid = 1; onethread = false)
+            # Reads: range, tid, onethread. Defines: r, loop_first, loop_last.
             $work_dist
             for i = loop_first:loop_last
                 local $esc_lidx = @inbounds r[i]
@@ -732,6 +738,12 @@ pre-allocates the result array and writes directly by index, avoiding Channel ov
     For best performance, use typed comprehensions (`T[expr for ...]`) when the element type
     is known. Untyped comprehensions infer the type from the first result; if later results
     have incompatible types, a type-widening path is used which may be slower.
+
+!!! warning
+    The body expression of a threaded comprehension may execute on any thread and may
+    migrate between threads. Do not rely on [`threadid()`](@ref Threads.threadid) or
+    [`task_local_storage()`](@ref) returning consistent values within the body expression,
+    unless using `:static` scheduling.
 
 ```julia-repl
 julia> Threads.@threads [i^2 for i in 1:5] # Simple comprehension
