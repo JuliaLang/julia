@@ -458,7 +458,6 @@ int jl_pointer_egal(jl_value_t *t)
         jl_datatype_t *dt = (jl_datatype_t*)jl_tparam0(t);
         // `Core.TypeofBottom` and `Type{Union{}}` are used interchangeably
         // with different pointer values even though `Core.TypeofBottom` is a concrete type.
-        // See `Core.Compiler.hasuniquerep`
         if (dt != jl_typeofbottom_type &&
             (dt->isconcretetype || jl_svec_len(dt->parameters) == 0)) {
             // Concrete types have unique pointer values

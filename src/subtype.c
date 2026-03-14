@@ -2438,6 +2438,12 @@ static int jl_subtype_env_(jl_value_t *x, jl_value_t *y, jl_value_t **env, int e
 
 JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, int envsz)
 {
+    // Types with free typevars are singletons: only themselves and Bottom
+    // are subtypes. This check is at the public API level only — the internal
+    // jl_subtype_env_ is used by method matching where free typevars come
+    // from UnionAll peeling and should participate normally.
+    if (jl_has_free_typevars(y) && x != y && x != jl_bottom_type)
+        return 0;
     return jl_subtype_env_(x, y, env, envsz, NULL);
 }
 

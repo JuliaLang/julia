@@ -2546,6 +2546,10 @@ jl_tupletype_t *jl_inst_arg_tuple_type(jl_value_t *arg1, jl_value_t **args, size
                 // Use ConstType{T} for concrete DataType values (no free typevars).
                 // ConstType guarantees identity (T === S), enabling sound ghosting.
                 // UnionAlls and types with free typevars use Type{T} (equality-based).
+                // Use ConstType only for fully-constructed DataTypes.
+                // During recursive type definitions, partially-constructed types
+                // may have NULL/invalid super or name fields which crash
+                // dispatch cache lookups.
                 if (jl_is_datatype(ai) && !jl_has_free_typevars(ai))
                     ai = jl_wrap_ConstType(ai);
                 else

@@ -331,7 +331,9 @@ static void mtcache_hash_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t
 
 static jl_typemap_t *mtcache_hash_lookup(jl_genericmemory_t *cache JL_PROPAGATES_ROOT, jl_value_t *ty) JL_NOTSAFEPOINT
 {
-    if (cache == (jl_genericmemory_t*)jl_an_empty_memory_any)
+    if (cache == (jl_genericmemory_t*)jl_an_empty_memory_any || cache == NULL)
+        return (jl_typemap_t*)jl_nothing;
+    if (ty == NULL)
         return (jl_typemap_t*)jl_nothing;
     jl_typemap_t *ml = (jl_typemap_t*)jl_eqtable_get(cache, ty, jl_nothing);
     return ml;
@@ -1077,16 +1079,20 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
                 jl_value_t *a0 = ty && (jl_is_type_type(ty) || jl_is_consttype_type(ty))
                     ? jl_type_extract_name(jl_is_consttype_type(ty) ? ((jl_consttype_t*)ty)->T : jl_tparam0(ty), 1)
                     : NULL;
-                if (a0) { // TODO: if we start analyzing Union types in jl_type_extract_name, then a0 might be over-approximated here, leading us to miss possible subtypes
+                if (a0 && ((jl_typename_t*)a0)->wrapper != NULL) { // TODO: if we start analyzing Union types in jl_type_extract_name, then a0 might be over-approximated here, leading us to miss possible subtypes
                     jl_datatype_t *super = (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)a0)->wrapper);
+                    if (!jl_is_datatype(super) || super->name == NULL) super = jl_any_type;
                     while (1) {
                         tname = jl_atomic_load_relaxed(&cache->tname); // reload after tree descent (which may hit safepoints)
+                        if (super->name == NULL) break;
                         jl_typemap_t *ml = mtcache_hash_lookup(tname, (jl_value_t*)super->name);
                         if (ml != (void*)jl_nothing) {
                             jl_typemap_entry_t *li = jl_typemap_assoc_by_type(ml, search, offs + 1, subtype);
                             if (li) return li;
                         }
                         if (super == jl_any_type || !subtype)
+                            break;
+                        if (super->super == NULL || !jl_is_datatype(super->super))
                             break;
                         super = super->super;
                     }
@@ -1275,8 +1281,12 @@ jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_v
         if (jl_is_kind(ty) && tname != (jl_genericmemory_t*)jl_an_empty_memory_any) {
             jl_value_t *name = jl_type_extract_name(a1, 1);
             if (name) {
-                if (ty != (jl_value_t*)jl_datatype_type)
-                    a1 = jl_unwrap_unionall(((jl_typename_t*)name)->wrapper);
+                if (ty != (jl_value_t*)jl_datatype_type) {
+                    jl_value_t *w = ((jl_typename_t*)name)->wrapper;
+                    if (w != NULL)
+                        a1 = jl_unwrap_unionall(w);
+                }
+                if (jl_is_datatype(a1) && ((jl_datatype_t*)a1)->name != NULL) {
                 while (1) {
                     tname = jl_atomic_load_relaxed(&cache->tname); // reload after tree descent (which may hit safepoints)
                     jl_typemap_t *ml_or_cache = mtcache_hash_lookup(
@@ -1285,7 +1295,11 @@ jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_v
                     if (ml) return ml;
                     if (a1 == (jl_value_t*)jl_any_type)
                         break;
+                    if (((jl_datatype_t*)a1)->super == NULL ||
+                        !jl_is_datatype(((jl_datatype_t*)a1)->super))
+                        break;
                     a1 = (jl_value_t*)((jl_datatype_t*)a1)->super;
+                }
                 }
             }
             else {
