@@ -2576,6 +2576,14 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
         // bare ConstType: every type satisfies this (x === x is always true)
         if (t == (jl_value_t*)jl_consttype_type)
             return 1;
+        if (jl_has_free_typevars(x)) {
+            // Free-typevar types are singletons: isa checks by identity
+            if (jl_is_type_type(t))
+                return jl_egal(x, jl_tparam0(t));
+            if (jl_is_concrete_type(t))
+                return 0;
+            return jl_subtype(jl_typeof(x), t);
+        }
         if (!jl_has_free_typevars(x)) {
             if (jl_is_concrete_type(t))
                 return 0;

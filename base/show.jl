@@ -981,7 +981,12 @@ end
 
 show(io::IO, @nospecialize(x::Type)) = _show_type(io, inferencebarrier(x))
 function _show_type(io::IO, @nospecialize(x::Type))
-    if print_without_params(x)
+    if x isa Core.ConstType
+        print(io, "ConstType{")
+        show(io, x.T)
+        print(io, "}")
+        return
+    elseif print_without_params(x)
         show_type_name(io, (unwrap_unionall(x)::DataType).name)
         return
     elseif get(io, :compact, true)::Bool && show_typealias(io, x)

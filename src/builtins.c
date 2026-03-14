@@ -1684,6 +1684,9 @@ JL_CALLABLE(jl_f_apply_type)
             return (jl_value_t*)jl_wrap_vararg(vm->T, args[1], 1, 0);
         }
     }
+    else if (args[0] == (jl_value_t*)jl_consttype_type) {
+        return jl_apply_type(args[0], &args[1], nargs-1);
+    }
     else if (jl_is_unionall(args[0])) {
         for(i=1; i < nargs; i++) {
             jl_value_t *pi = args[i];
