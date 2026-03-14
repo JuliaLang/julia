@@ -529,23 +529,30 @@ JL_DLLEXPORT inline uintptr_t jl_object_id_(uintptr_t tv, jl_value_t *v, htable_
         return ((jl_typename_t*)v)->hash;
     }
 
+    htable_t local_object_table;
+    int is_local_table_initialized = 0;
     if (v != NULL) {
         if (object_table == NULL) {
-            htable_t object_table_to_initialize;
-            htable_new(&object_table_to_initialize, 0);
-            object_table = &object_table_to_initialize;
+            htable_new(&local_object_table, 0);
+            object_table = &local_object_table;
+            is_local_table_initialized = 1;
         }
+        else {
+            void *hashp = ptrhash_get(object_table, v);
 
-        void *hashp = ptrhash_get(object_table, v);
-
-        if ((hashp != HT_NOTFOUND)) {
-            return (uintptr_t)hashp;
+            if ((hashp != HT_NOTFOUND)) {
+                return (uintptr_t)hashp;
+            }
         }
     }
     // return jl_object_id__cold(tv, v);
     uintptr_t hash_val = jl_object_id__cold(tv, v, object_table);
     if (v != NULL && object_table != NULL) {
         ptrhash_put(object_table, v, (void*)hash_val);
+    }
+
+    if (is_local_table_initialized) {
+        htable_free(&local_object_table);
     }
 
     return hash_val;
