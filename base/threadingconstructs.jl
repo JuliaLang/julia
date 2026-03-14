@@ -300,28 +300,45 @@ function _threadsfor_single_iterator(body, iterator, condition, schedule, dims=n
         default_comprehension_func(esc_range, esc_lidx, esc_body, esc_condition)
     end
 
-    # Collect (index, result) pairs from channel and sort to preserve order
-    result_expr = if result_type !== nothing
-        esc_result_type = esc(result_type)
-        quote
-            close(result_channel)
-            pairs = collect(result_channel)
-            if isempty(pairs)
-                $esc_result_type[]
-            else
-                sort!(pairs, by=first)
-                $esc_result_type[p[2] for p in pairs]
+    result_expr = if schedule === :greedy
+        # Greedy: collect values in arrival order (no ordering guarantee)
+        if result_type !== nothing
+            esc_result_type = esc(result_type)
+            quote
+                close(result_channel)
+                vals = collect(result_channel)
+                isempty(vals) ? $esc_result_type[] : $esc_result_type[v for v in vals]
+            end
+        else
+            quote
+                close(result_channel)
+                collect(result_channel)
             end
         end
     else
-        quote
-            close(result_channel)
-            pairs = collect(result_channel)
-            if isempty(pairs)
-                []
-            else
-                sort!(pairs, by=first)
-                [p[2] for p in pairs]
+        # Default/static/dynamic: sort by index to preserve iteration order
+        if result_type !== nothing
+            esc_result_type = esc(result_type)
+            quote
+                close(result_channel)
+                pairs = collect(result_channel)
+                if isempty(pairs)
+                    $esc_result_type[]
+                else
+                    sort!(pairs, by=first)
+                    $esc_result_type[p[2] for p in pairs]
+                end
+            end
+        else
+            quote
+                close(result_channel)
+                pairs = collect(result_channel)
+                if isempty(pairs)
+                    []
+                else
+                    sort!(pairs, by=first)
+                    [p[2] for p in pairs]
+                end
             end
         end
     end
@@ -473,24 +490,22 @@ end
 
 function greedy_comprehension_func(itr, esc_lidx, esc_body, esc_condition)
     quote
-        let c = Channel{Tuple{Int, eltype($itr)}}(threadpoolsize(), spawn=true) do ch
-            for (idx, item) in enumerate($itr)
-                put!(ch, (idx, item))
+        let c = Channel{eltype($itr)}(threadpoolsize(), spawn=true) do ch
+            for item in $itr
+                put!(ch, item)
             end
         end
-        # Channel uses Tuple{Int, Any} because the output type of the body expression
-        # is not known at macro expansion time.
-        result_channel = Channel{Tuple{Int, Any}}(Inf)
+        result_channel = Channel{Any}(Inf)
 
         function threadsfor_fun(tid)
-            for (idx, item) in c
+            for item in c
                 local $esc_lidx = item
                 if $esc_condition
-                    put!(result_channel, (idx, $esc_body))
+                    put!(result_channel, $esc_body)
                 end
             end
         end
-        result_channel  # Return channel so results can be collected after threading_run
+        result_channel
         end
     end
 end
@@ -707,10 +722,12 @@ to run two of the 1-second iterations to complete the for loop.
 ### Array comprehensions
 
 The `@threads` macro also supports array comprehensions, which return the collected results.
-Array comprehensions preserve element order for all scheduling options. Multi-dimensional
-comprehensions preserve the dimensions of the original comprehension (e.g., `[f(i,j) for i in 1:n, j in 1:m]`
-returns an `n×m` matrix). Typed comprehensions (`T[expr for ...]`) are also supported and
-return an array with the specified element type.
+Array comprehensions preserve element order for `:static` and `:dynamic` (default) scheduling.
+The `:greedy` scheduler does not guarantee element order, since tasks consume work items as
+they become available. Multi-dimensional comprehensions preserve the dimensions of the
+original comprehension (e.g., `[f(i,j) for i in 1:n, j in 1:m]` returns an `n×m` matrix).
+Typed comprehensions (`T[expr for ...]`) are also supported and return an array with the
+specified element type.
 
 For non-filtered comprehensions with non-`:greedy` scheduling, a fast path is used that
 pre-allocates the result array and writes directly by index, avoiding Channel overhead.
