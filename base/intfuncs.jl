@@ -364,7 +364,7 @@ Inverse (modulo ``2^w``)* by Jeffrey Hurchalla](https://arxiv.org/abs/2204.04342
 !!! compat "Julia 1.11"
     The `invmod(n)` and `invmod(n, T)` methods require Julia 1.11 or later.
 """
-invmod(n::Integer, ::Type{T}) where {T<:BitInteger} = invmod(n % T)
+invmod(n::Integer, T::Type{<:BitInteger}) = invmod(n % T)
 
 function invmod(n::T) where {T<:BitInteger}
     isodd(n) || throw(DomainError(n, "Argument must be odd."))
@@ -1202,7 +1202,7 @@ end
 
 Return `true` if and only if the extrema `typemax(T)` and `typemin(T)` are defined.
 """
-hastypemax(::Type{T}) where {T} = applicable(typemax, T) && applicable(typemin, T)
+hastypemax(T::Type) = applicable(typemax, T) && applicable(typemin, T)
 
 """
     digits!(array, n::Integer; base::Integer = 10)
@@ -1466,7 +1466,7 @@ julia> trunc(Int, 4pi^2)
 39
 ```
 """
-function clamp(x, ::Type{T}) where {T<:Integer}
+function clamp(x, T::Type{<:Integer})
     # delegating to clamp(x, typemin(T), typemax(T)) would promote types
     # this way, we avoid unnecessary conversions
     # think of, e.g., clamp(big(2) ^ 200, Int16)

@@ -17,9 +17,9 @@ abstract type Enum{T<:Integer} end
 basetype(::Type{<:Enum{T}}) where {T<:Integer} = T
 
 (::Type{T})(x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(bitcast(T2, x))::T
-Base.cconvert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(x)::T
+Base.cconvert(T::Type{<:Integer}, x::Enum{T2}) where {T2<:Integer} = T(x)::T
 Base.write(io::IO, x::Enum{T}) where {T<:Integer} = write(io, T(x))
-Base.read(io::IO, ::Type{T}) where {T<:Enum} = T(read(io, basetype(T)))
+Base.read(io::IO, T::Type{<:Enum}) = T(read(io, basetype(T)))
 
 """
     _enum_hash(x::Enum, h::UInt)

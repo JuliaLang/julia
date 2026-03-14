@@ -298,7 +298,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
     throw(ArgumentError("Invalid DateTime string"))
 end
 
-function Base.parse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
+function Base.parse(T::Type{<:TimeType}, str::AbstractString, df::DateFormat=default_format(T))
     pos, len = firstindex(str), lastindex(str)
     pos > len && throw(ArgumentError("Cannot parse an empty string as a Date or Time"))
     val = tryparsenext_internal(T, str, pos, len, df, true)
@@ -307,7 +307,7 @@ function Base.parse(::Type{T}, str::AbstractString, df::DateFormat=default_forma
     return T(values...)::T
 end
 
-function Base.tryparse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
+function Base.tryparse(T::Type{<:TimeType}, str::AbstractString, df::DateFormat=default_format(T))
     pos, len = firstindex(str), lastindex(str)
     pos > len && return nothing
     res = tryparsenext_internal(T, str, pos, len, df, false)

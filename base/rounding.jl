@@ -219,7 +219,7 @@ See [`RoundingMode`](@ref) for available modes.
 setrounding_raw(::Type{<:Union{Float32,Float64}}, i::Integer) = ccall(:jl_set_fenv_rounding, Int32, (Int32,), i)
 rounding_raw(::Type{<:Union{Float32,Float64}}) = ccall(:jl_get_fenv_rounding, Int32, ())
 
-rounding(::Type{T}) where {T<:Union{Float32,Float64}} = from_fenv(rounding_raw(T))
+rounding(T::Type{<:Union{Float32,Float64}}) = from_fenv(rounding_raw(T))
 
 """
     setrounding(f::Function, T, mode)
@@ -234,7 +234,7 @@ equivalent to:
 
 See [`RoundingMode`](@ref) for available rounding modes.
 """
-function setrounding(f::Function, ::Type{T}, rounding::RoundingMode) where T
+function setrounding(f::Function, T::Type, rounding::RoundingMode)
     old_rounding_raw = rounding_raw(T)
     setrounding(T,rounding)
     try
@@ -243,7 +243,7 @@ function setrounding(f::Function, ::Type{T}, rounding::RoundingMode) where T
         setrounding_raw(T,old_rounding_raw)
     end
 end
-function setrounding_raw(f::Function, ::Type{T}, rounding) where T
+function setrounding_raw(f::Function, T::Type, rounding)
     old_rounding_raw = rounding_raw(T)
     setrounding_raw(T,rounding)
     try
@@ -264,16 +264,16 @@ end
 # To avoid ambiguous dispatch with methods in mpfr.jl:
 (::Type{T})(x::Real, r::RoundingMode) where {T<:AbstractFloat} = _convert_rounding(T,x,r)::T
 
-_convert_rounding(::Type{T}, x::Real, r::RoundingMode{:Nearest}) where {T<:AbstractFloat} = convert(T,x)::T
-function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:Down}) where T<:AbstractFloat
+_convert_rounding(T::Type{<:AbstractFloat}, x::Real, r::RoundingMode{:Nearest}) = convert(T,x)::T
+function _convert_rounding(T::Type{<:AbstractFloat}, x::Real, r::RoundingMode{:Down})
     y = convert(T,x)::T
     y > x ? prevfloat(y) : y
 end
-function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:Up}) where T<:AbstractFloat
+function _convert_rounding(T::Type{<:AbstractFloat}, x::Real, r::RoundingMode{:Up})
     y = convert(T,x)::T
     y < x ? nextfloat(y) : y
 end
-function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:ToZero}) where T<:AbstractFloat
+function _convert_rounding(T::Type{<:AbstractFloat}, x::Real, r::RoundingMode{:ToZero})
     y = convert(T,x)::T
     if x > 0.0
         y > x ? prevfloat(y) : y
@@ -281,7 +281,7 @@ function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:ToZero}) where T
         y < x ? nextfloat(y) : y
     end
 end
-function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:FromZero}) where T<:AbstractFloat
+function _convert_rounding(T::Type{<:AbstractFloat}, x::Real, r::RoundingMode{:FromZero})
     y = convert(T,x)::T
     if x < 0.0
         y > x ? prevfloat(y) : y
@@ -480,12 +480,12 @@ floor(x; kws...) = round(x, RoundDown; kws...)
  ceil(x; kws...) = round(x, RoundUp; kws...)
 round(x; kws...) = round(x, RoundNearest; kws...)
 
-trunc(::Type{T}, x) where T = round(T, x, RoundToZero)
-floor(::Type{T}, x) where T = round(T, x, RoundDown)
- ceil(::Type{T}, x) where T = round(T, x, RoundUp)
-round(::Type{T}, x) where T = round(T, x, RoundNearest)
+trunc(T::Type, x) = round(T, x, RoundToZero)
+floor(T::Type, x) = round(T, x, RoundDown)
+ ceil(T::Type, x) = round(T, x, RoundUp)
+round(T::Type, x) = round(T, x, RoundNearest)
 
-round(::Type{T}, x, r::RoundingMode) where T = _round_convert(T, round(x, r), x, r)
-_round_convert(::Type{T}, x_integer, x, r) where T = convert(T, x_integer)
+round(T::Type, x, r::RoundingMode) = _round_convert(T, round(x, r), x, r)
+_round_convert(T::Type, x_integer, x, r) = convert(T, x_integer)
 
 round(x::Integer, r::RoundingMode) = x

@@ -12,7 +12,7 @@ struct Some{T}
     value::T
 end
 
-Some(::Type{T}) where {T} = Some{Type{T}}(T)
+Some(T::Type) = Some{Type{T}}(T)
 
 nonnothingtype(@nospecialize(T::Type)) = typesplit(T, Nothing)
 promote_rule(T::Type{Nothing}, S::Type) = Union{S, Nothing}
@@ -32,7 +32,7 @@ function nonnothingtype_checked(T::Type)
 end
 
 convert(::Type{T}, x::T) where {T>:Nothing} = x
-convert(::Type{T}, x) where {T>:Nothing} = convert(nonnothingtype_checked(T), x)
+convert(T::Type{>:Nothing}, x) = convert(nonnothingtype_checked(T), x)
 convert(::Type{Some{T}}, x::Some{T}) where {T} = x
 convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))::Some{T}
 

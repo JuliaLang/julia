@@ -357,7 +357,7 @@ function unsafe_read(s::IO, p::Ptr{UInt8}, n::UInt)
     nothing
 end
 
-function peek(s::IO, ::Type{T}) where T
+function peek(s::IO, T::Type)
     mark(s)
     try read(s, T)::T
     finally
@@ -486,7 +486,7 @@ copyuntil(out::IO, io::AbstractPipe, arg::AbstractString; kw...) = copyuntil(out
 copyuntil(out::IO, io::AbstractPipe, arg::AbstractVector; kw...) = copyuntil(out, pipe_reader(io)::IO, arg; kw...)
 readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io)::IO, target, keep, out)
 readbytes!(io::AbstractPipe, target::AbstractVector{UInt8}, n=length(target)) = readbytes!(pipe_reader(io)::IO, target, n)
-peek(io::AbstractPipe, ::Type{T}) where {T} = peek(pipe_reader(io)::IO, T)::T
+peek(io::AbstractPipe, T::Type) = peek(pipe_reader(io)::IO, T)::T
 wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(pipe_reader(io)::IO, nb)
 eof(io::AbstractPipe) = eof(pipe_reader(io)::IO)::Bool
 
@@ -523,7 +523,7 @@ Open a file and read its contents. `args` is passed to `read`: this is equivalen
 """
 read(filename::AbstractString, args...) = open(io->read(io, args...), convert(String, filename)::String)
 
-read(filename::AbstractString, ::Type{T}) where {T} = open(io->read(io, T), convert(String, filename)::String)
+read(filename::AbstractString, T::Type) = open(io->read(io, T), convert(String, filename)::String)
 
 """
     read!(stream::IO, array::AbstractArray)

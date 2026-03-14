@@ -192,7 +192,7 @@ return for the given index and value types, by specializing on the three-argumen
 The default is to return an empty `Dict`.
 """
 empty(a::AbstractDict) = empty(a, keytype(a), valtype(a))
-empty(a::AbstractDict, ::Type{V}) where {V} = empty(a, keytype(a), V) # Note: this is the form which makes sense for `Vector`.
+empty(a::AbstractDict, V::Type) = empty(a, keytype(a), V) # Note: this is the form which makes sense for `Vector`.
 
 copy(a::AbstractDict) = merge!(empty(a), a)
 function copy!(dst::AbstractDict, src::AbstractDict)
@@ -568,7 +568,7 @@ push!(t::AbstractDict, p::Pair) = setindex!(t, p.second, p.first)
 # AbstractDicts are convertible
 convert(::Type{T}, x::T) where {T<:AbstractDict} = x
 
-function convert(::Type{T}, x::AbstractDict) where T<:AbstractDict
+function convert(T::Type{<:AbstractDict}, x::AbstractDict)
     h = T(x)::T
     if length(h) != length(x)
         error("key collision during dictionary conversion")

@@ -177,7 +177,7 @@ nextind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)+1
 
 convert(::Type{NT}, nt::NT) where {names, NT<:NamedTuple{names}} = nt
 convert(::Type{NT}, nt::NT) where {names, T<:Tuple, NT<:NamedTuple{names,T}} = nt
-convert(::Type{NT}, t::Tuple) where {NT<:NamedTuple} = (@inline NT(t))::NT
+convert(NT::Type{<:NamedTuple}, t::Tuple) = (@inline NT(t))::NT
 
 function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {names,T<:Tuple}
     NT = NamedTuple{names,T}
@@ -228,7 +228,7 @@ function show(io::IO, t::NamedTuple)
     end
 end
 
-eltype(::Type{T}) where T<:NamedTuple = nteltype(T)
+eltype(T::Type{<:NamedTuple}) = nteltype(T)
 nteltype(::Type) = Any
 nteltype(::Type{NamedTuple{names,T}} where names) where {T} = eltype(T)
 

@@ -38,7 +38,7 @@ julia> parse(Complex{Float64}, "3.2e-1 + 4.5im")
 parse(T::Type, str; base = Int)
 parse(::Type{Union{}}, slurp...; kwargs...) = error("cannot parse a value as Union{}")
 
-function parse(::Type{T}, c::AbstractChar; base::Integer = 10) where T<:Integer
+function parse(T::Type{<:Integer}, c::AbstractChar; base::Integer = 10)
     a::Int = (base <= 36 ? 10 : 36)
     2 <= base <= 62 || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
     d = '0' <= c <= '9' ? c-'0'    :
@@ -109,7 +109,7 @@ end
 end
 
 
-function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool) where T<:Integer
+function tryparse_internal(T::Type{<:Integer}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool)
     sgn, base, i = parseint_preamble(T<:Signed, Int(base_), s, startpos, endpos)
     if sgn == 0 && base == 0 && i == 0
         raise && throw(ArgumentError("input string is empty or only contains whitespace"))
@@ -245,12 +245,12 @@ end
 Like [`parse`](@ref), but returns either a value of the requested type,
 or [`nothing`](@ref) if the string does not contain a valid number.
 """
-function tryparse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
+function tryparse(T::Type{<:Integer}, s::AbstractString; base::Union{Nothing,Integer} = nothing)
     # Zero base means, "figure it out"
     tryparse_internal(T, s, firstindex(s), lastindex(s), base===nothing ? 0 : check_valid_base(base), false)
 end
 
-function parse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
+function parse(T::Type{<:Integer}, s::AbstractString; base::Union{Nothing,Integer} = nothing)
     v = tryparse_internal(T, s, firstindex(s), lastindex(s), base===nothing ? 0 : check_valid_base(base), true)
     v === nothing && error("should not happoen")
     convert(T, v)
@@ -299,7 +299,7 @@ function tryparse_internal(::Type{Float32}, s::SubString{String}, startpos::Int,
                           (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset+startpos-1, endpos-startpos+1)
     hasvalue ? val : nothing
 end
-tryparse(::Type{T}, s::AbstractString) where {T<:Union{Float32,Float64}} = tryparse(T, String(s)::String)
+tryparse(T::Type{<:Union{Float32,Float64}}, s::AbstractString) = tryparse(T, String(s)::String)
 tryparse(::Type{Float16}, s::AbstractString) =
     convert(Union{Float16, Nothing}, tryparse(Float32, s))
 tryparse_internal(::Type{Float16}, s::AbstractString, startpos::Int, endpos::Int) =
@@ -369,16 +369,16 @@ tryparse_internal(T::Type{Complex{S}}, s::AbstractString, i::Int, e::Int, raise:
     tryparse_internal(T, String(s), i, e, raise)
 
 # fallback methods for tryparse_internal
-tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int) where T<:Real =
+tryparse_internal(T::Type{<:Real}, s::AbstractString, startpos::Int, endpos::Int) =
     startpos == firstindex(s) && endpos == lastindex(s) ? tryparse(T, s) : tryparse(T, SubString(s, startpos, endpos))
-function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Real
+function tryparse_internal(T::Type{<:Real}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool)
     result = tryparse_internal(T, s, startpos, endpos)
     if raise && result === nothing
         _parse_failure(T, s, startpos, endpos)
     end
     return result
 end
-function tryparse_internal(::Type{T}, s::AbstractString, raise::Bool; kwargs...) where T<:Real
+function tryparse_internal(T::Type{<:Real}, s::AbstractString, raise::Bool; kwargs...)
     result = tryparse(T, s; kwargs...)
     if raise && result === nothing
         _parse_failure(T, s)
@@ -388,12 +388,12 @@ end
 @noinline _parse_failure(T, s::AbstractString, startpos = firstindex(s), endpos = lastindex(s)) =
     throw(ArgumentError(LazyString("cannot parse ", repr(s[startpos:endpos]), " as ", T)))
 
-tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Integer =
+tryparse_internal(T::Type{<:Integer}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) =
     tryparse_internal(T, s, startpos, endpos, 10, raise)
 
-parse(::Type{T}, s::AbstractString; kwargs...) where T<:Real =
+parse(T::Type{<:Real}, s::AbstractString; kwargs...) =
     convert(T, tryparse_internal(T, s, true; kwargs...))
-parse(::Type{T}, s::AbstractString) where T<:Complex =
+parse(T::Type{<:Complex}, s::AbstractString) =
     convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s), true))
 
 tryparse(T::Type{Complex{S}}, s::AbstractString) where S<:Real =

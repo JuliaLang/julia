@@ -11,7 +11,7 @@ struct Rational{T<:Integer} <: Real
     den::T
 
     # Unexported inner constructor of Rational that bypasses all checks
-    global unsafe_rational(::Type{T}, num, den) where {T} = new{T}(num, den)
+    global unsafe_rational(T::Type, num, den) = new{T}(num, den)
 end
 
 unsafe_rational(num::T, den::T) where {T<:Integer} = unsafe_rational(T, num, den)
@@ -218,9 +218,9 @@ big(q::Rational) = unsafe_rational(big(numerator(q)), big(denominator(q)))
 
 big(z::Complex{<:Rational{<:Integer}}) = Complex{Rational{BigInt}}(z)
 
-promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
+promote_rule(::Type{Rational{T}}, S::Type{<:Integer}) where {T<:Integer} = Rational{promote_type(T,S)}
 promote_rule(::Type{Rational{T}}, ::Type{Rational{S}}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
-promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:AbstractFloat} = promote_type(T,S)
+promote_rule(::Type{Rational{T}}, S::Type{<:AbstractFloat}) where {T<:Integer} = promote_type(T,S)
 
 widen(::Type{Rational{T}}) where {T} = Rational{widen(T)}
 
@@ -244,7 +244,7 @@ julia> typeof(numerator(a))
 BigInt
 ```
 """
-function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) where T<:Integer
+function rationalize(T::Type{<:Integer}, x::Union{AbstractFloat, Rational}, tol::Real)
     if tol < 0
         throw(ArgumentError("negative tolerance $tol"))
     end
@@ -304,14 +304,14 @@ function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) wh
         return p // q
     end
 end
-rationalize(::Type{T}, x::AbstractFloat; tol::Real = eps(x)) where {T<:Integer} = rationalize(T, x, tol)
+rationalize(T::Type{<:Integer}, x::AbstractFloat; tol::Real = eps(x)) = rationalize(T, x, tol)
 rationalize(x::Real; kvs...) = rationalize(Int, x; kvs...)
-rationalize(::Type{T}, x::Complex; kvs...) where {T<:Integer} = Complex(rationalize(T, x.re; kvs...), rationalize(T, x.im; kvs...))
+rationalize(T::Type{<:Integer}, x::Complex; kvs...) = Complex(rationalize(T, x.re; kvs...), rationalize(T, x.im; kvs...))
 rationalize(x::Complex; kvs...) = Complex(rationalize(Int, x.re; kvs...), rationalize(Int, x.im; kvs...))
-rationalize(::Type{T}, x::Rational; tol::Real = 0) where {T<:Integer} = rationalize(T, x, tol)
+rationalize(T::Type{<:Integer}, x::Rational; tol::Real = 0) = rationalize(T, x, tol)
 rationalize(x::Rational; kvs...) = x
 rationalize(x::Integer; kvs...) = Rational(x)
-function rationalize(::Type{T}, x::Integer; kvs...) where {T<:Integer}
+function rationalize(T::Type{<:Integer}, x::Integer; kvs...)
     T<:Unsigned && x < 0 && __throw_negate_unsigned()
     if Base.hastypemax(T) # BigInt doesn't
         x < typemin(T) && return unsafe_rational(-one(T), zero(T))
@@ -569,14 +569,14 @@ end
 
 round(x::Rational, r::RoundingMode=RoundNearest) = round(typeof(x), x, r)
 
-function round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {T,Tr}
+function round(T::Type, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {Tr}
     if iszero(denominator(x)) && !(T <: Integer)
         return convert(T, copysign(unsafe_rational(one(Tr), zero(Tr)), numerator(x)))
     end
     convert(T, div(numerator(x), denominator(x), r))
 end
 
-function round(::Type{T}, x::Rational{Bool}, ::RoundingMode=RoundNearest) where T
+function round(T::Type, x::Rational{Bool}, ::RoundingMode=RoundNearest)
     if denominator(x) == false && (T <: Integer)
         throw(DivideError())
     end

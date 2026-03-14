@@ -86,7 +86,7 @@ Return an integer of type `R`, consisting of the `len` most
 significant bits of `x`. If there are less than `len` bits in `x`,
 the least significant bits are zeroed.
 """
-function truncated(::Type{R}, x::BigFloatData, len::Int) where {R<:Integer}
+function truncated(R::Type{<:Integer}, x::BigFloatData, len::Int)
     ret = zero(R)
     if 0 < len
         word_count, bit_count_in_word = split_bit_index(x, len)

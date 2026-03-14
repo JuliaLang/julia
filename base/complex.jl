@@ -118,7 +118,7 @@ Float64
 ```
 """
 real(T::Type) = typeof(real(zero(T)))
-real(::Type{T}) where {T<:Real} = T
+real(T::Type{<:Real}) = T
 real(C::Type{<:Complex}) = fieldtype(C, 1)
 real(::Type{Union{}}, slurp...) = Union{}
 
@@ -186,7 +186,7 @@ julia> complex(Union{Int, Missing})
 Union{Missing, Complex{Int64}}
 ```
 """
-complex(::Type{T}) where {T<:Real} = Complex{T}
+complex(T::Type{<:Real}) = Complex{T}
 complex(::Type{Complex{T}}) where {T<:Real} = Complex{T}
 complex(::Type{Union{}}, slurp...) = Union{}
 

@@ -161,10 +161,10 @@ julia> transcode(String, transcode(UInt16, str))
 function transcode end
 
 transcode(::Type{T}, src::AbstractVector{T}) where {T<:Union{UInt8,UInt16,UInt32,Int32}} = src
-transcode(::Type{T}, src::String) where {T<:Union{Int32,UInt32}} = T[T(c) for c in src]
-transcode(::Type{T}, src::AbstractVector{UInt8}) where {T<:Union{Int32,UInt32}} =
+transcode(T::Type{<:Union{Int32,UInt32}}, src::String) = T[T(c) for c in src]
+transcode(T::Type{<:Union{Int32,UInt32}}, src::AbstractVector{UInt8}) =
     transcode(T, String(Vector(src)))
-transcode(::Type{T}, src::CodeUnits{UInt8,String}) where {T<:Union{Int32,UInt32}} =
+transcode(T::Type{<:Union{Int32,UInt32}}, src::CodeUnits{UInt8,String}) =
     transcode(T, String(src))
 
 function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})

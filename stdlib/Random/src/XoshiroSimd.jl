@@ -11,7 +11,7 @@ using Core.Intrinsics: llvmcall
 # Vector-width. Influences random stream.
 xoshiroWidth() = Val(8)
 # Simd threshold. Influences random stream.
-simdThreshold(::Type{T}) where T = 64
+simdThreshold(::Type) = 64
 simdThreshold(::Type{Bool}) = 640
 
 @inline _rotl45(x::UInt64) = (x<<45)|(x>>19)
@@ -250,7 +250,7 @@ end
 end
 
 
-@noinline function xoshiro_bulk_simd(rng::Union{TaskLocalRNG, Xoshiro}, dst::Ptr{UInt8}, len::Int, ::Type{T}, ::Val{N}, f::F) where {T,N,F}
+@noinline function xoshiro_bulk_simd(rng::Union{TaskLocalRNG, Xoshiro}, dst::Ptr{UInt8}, len::Int, T::Type, ::Val{N}, f::F) where {N,F}
     s0, s1, s2, s3 = forkRand(rng, Val(N))
 
     i = 0

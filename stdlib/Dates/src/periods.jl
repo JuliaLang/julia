@@ -50,8 +50,8 @@ Base.show(io::IO, ::MIME"text/plain", x::Period) = print(io, x)
 Base.show(io::IO, p::P) where {P<:Period} = print(io, P, '(', value(p), ')')
 Base.zero(::Union{Type{P},P}) where {P<:Period} = P(0)
 Base.one(::Union{Type{P},P}) where {P<:Period} = 1  # see #16116
-Base.typemin(::Type{P}) where {P<:Period} = P(typemin(Int64))
-Base.typemax(::Type{P}) where {P<:Period} = P(typemax(Int64))
+Base.typemin(P::Type{<:Period}) = P(typemin(Int64))
+Base.typemax(P::Type{<:Period}) = P(typemax(Int64))
 Base.isfinite(::Union{Type{P}, P}) where {P<:Period} = true
 
 # Default values (as used by TimeTypes)
@@ -105,7 +105,7 @@ Base.sign(x::Period) = sign(value(x))
 Base.signbit(x::Period) = signbit(value(x))
 
 # return (next coarser period, conversion factor):
-coarserperiod(::Type{P}) where {P<:Period} = (P, 1)
+coarserperiod(P::Type{<:Period}) = (P, 1)
 coarserperiod(::Type{Nanosecond})  = (Microsecond, 1000)
 coarserperiod(::Type{Microsecond}) = (Millisecond, 1000)
 coarserperiod(::Type{Millisecond}) = (Second, 1000)
@@ -325,7 +325,7 @@ function Base.string(x::CompoundPeriod)
 end
 Base.show(io::IO,x::CompoundPeriod) = print(io, string(x))
 
-Base.convert(::Type{T}, x::CompoundPeriod) where T<:Period =
+Base.convert(T::Type{<:Period}, x::CompoundPeriod) =
     isconcretetype(T) ? sum(T, x.periods; init = zero(T)) : throw(MethodError(convert,(T,x)))
 
 # E.g. Year(1) + Day(1)

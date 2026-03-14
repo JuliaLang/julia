@@ -70,7 +70,7 @@ empty(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 # by default, a Set is returned
 emptymutable(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 
-_similar_for(c::AbstractSet, ::Type{T}, itr, isz, len) where {T} = empty(c, T)
+_similar_for(c::AbstractSet, T::Type, itr, isz, len) = empty(c, T)
 
 function show(io::IO, s::Set)
     if isempty(s)
@@ -677,7 +677,7 @@ function hash(s::AbstractSet, h::UInt)
 end
 
 convert(::Type{T}, s::T) where {T<:AbstractSet} = s
-convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)::T
+convert(T::Type{<:AbstractSet}, s::AbstractSet) = T(s)::T
 
 
 ## replace/replace! ##
@@ -688,20 +688,20 @@ function check_count(count::Integer)
 end
 
 # TODO: use copy!, which is currently unavailable from here since it is defined in Future
-_copy_oftype(x, ::Type{T}) where {T} = copyto!(similar(x, T), x)
+_copy_oftype(x, T::Type) = copyto!(similar(x, T), x)
 # TODO: use similar() once deprecation is removed and it preserves keys
 _copy_oftype(x::AbstractDict, ::Type{Pair{K,V}}) where {K,V} = merge!(empty(x, K, V), x)
-_copy_oftype(x::AbstractSet, ::Type{T}) where {T} = union!(empty(x, T), x)
+_copy_oftype(x::AbstractSet, T::Type) = union!(empty(x, T), x)
 
 _copy_oftype(x::AbstractArray{T}, ::Type{T}) where {T} = copy(x)
 _copy_oftype(x::AbstractDict{K,V}, ::Type{Pair{K,V}}) where {K,V} = copy(x)
 _copy_oftype(x::AbstractSet{T}, ::Type{T}) where {T} = copy(x)
 
 _similar_or_copy(x::Any) = similar(x)
-_similar_or_copy(x::Any, ::Type{T}) where {T} = similar(x, T)
+_similar_or_copy(x::Any, T::Type) = similar(x, T)
 # Make a copy on construction since it is faster than inserting elements separately
 _similar_or_copy(x::Union{AbstractDict,AbstractSet}) = copy(x)
-_similar_or_copy(x::Union{AbstractDict,AbstractSet}, ::Type{T}) where {T} = _copy_oftype(x, T)
+_similar_or_copy(x::Union{AbstractDict,AbstractSet}, T::Type) = _copy_oftype(x, T)
 
 # to make replace/replace! work for a new container type Cont, only
 # _replace!(new::Callable, res::Cont, A::Cont, count::Int)
@@ -828,14 +828,14 @@ promote_valuetype(x::Pair{K, V}, y::Pair...) where {K, V} =
     promote_type(V, promote_valuetype(y...))
 
 # Subtract singleton types which are going to be replaced
-function subtract_singletontype(::Type{T}, x::Pair{K}) where {T, K}
+function subtract_singletontype(T::Type, x::Pair{K}) where {K}
     if issingletontype(K)
         typesplit(T, K)
     else
         T
     end
 end
-subtract_singletontype(::Type{T}, x::Pair{K}, y::Pair...) where {T, K} =
+subtract_singletontype(T::Type, x::Pair{K}, y::Pair...) where {K} =
     subtract_singletontype(subtract_singletontype(T, y...), x)
 
 """

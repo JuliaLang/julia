@@ -226,7 +226,7 @@ end
 
 ## Conversions ##
 
-convert(::Type{T}, a::AbstractArray) where {T<:Memory} = a isa T ? a : T(a)::T
+convert(T::Type{<:Memory}, a::AbstractArray) = a isa T ? a : T(a)::T
 
 promote_rule(a::Type{Memory{T}}, b::Type{Memory{S}}) where {T,S} = el_same(promote_type(T,S), a, b)
 

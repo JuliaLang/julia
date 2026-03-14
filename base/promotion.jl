@@ -187,7 +187,7 @@ _promote_typesubtract(@nospecialize(a)) =
     a >: Missing ? typesplit(a, Missing) :
     a
 
-function promote_typejoin_union(::Type{T}) where T
+function promote_typejoin_union(T::Type)
     if T === Union{}
         return Union{}
     elseif T isa UnionAll
@@ -309,10 +309,10 @@ promote_type(T, S, U, V...) = (@inline; afoldl(promote_type, promote_type(T, S, 
 
 promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
 promote_type(::Type{T}, ::Type{T}) where {T} = T
-promote_type(::Type{T}, ::Type{Bottom}) where {T} = T
-promote_type(::Type{Bottom}, ::Type{T}) where {T} = T
+promote_type(T::Type, ::Type{Bottom}) = T
+promote_type(::Type{Bottom}, T::Type) = T
 
-function promote_type(::Type{T}, ::Type{S}) where {T,S}
+function promote_type(T::Type, S::Type)
     @inline
     # Try promote_rule in both orders. Typically only one is defined,
     # and there is a fallback returning Bottom below, so the common case is
@@ -336,13 +336,13 @@ promote_rule(::Type, ::Type) = Bottom
 # with Type{<:T}, and return a value in general accordance with the result given by promote_type
 promote_rule(::Type{Bottom}, slurp...) = Bottom
 promote_rule(::Type{Bottom}, ::Type{Bottom}, slurp...) = Bottom # not strictly necessary, since the next method would match unambiguously anyways
-promote_rule(::Type{Bottom}, ::Type{T}, slurp...) where {T} = T
-promote_rule(::Type{T}, ::Type{Bottom}, slurp...) where {T} = T
+promote_rule(::Type{Bottom}, T::Type, slurp...) = T
+promote_rule(T::Type, ::Type{Bottom}, slurp...) = T
 
-promote_result(::Type,::Type,::Type{T},::Type{S}) where {T,S} = (@inline; promote_type(T,S))
+promote_result(::Type,::Type,T::Type,S::Type) = (@inline; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that
 # case use typejoin on the original types instead.
-promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@inline; typejoin(T, S))
+promote_result(T::Type,S::Type,::Type{Bottom},::Type{Bottom}) = (@inline; typejoin(T, S))
 
 """
     promote(xs...)
@@ -381,7 +381,7 @@ end
 promote_typeof(x) = typeof(x)
 promote_typeof(x, y) = (@inline; promote_type(typeof(x), typeof(y)))
 promote_typeof(x, y, z) = (@inline; promote_type(typeof(x), typeof(y), typeof(z)))
-promote_typeof(x, y, z, a...) = (@inline; afoldl(((::Type{T}, y) where {T}) -> promote_type(T, typeof(y)), promote_typeof(x, y, z), a...))
+promote_typeof(x, y, z, a...) = (@inline; afoldl((T::Type, y) -> promote_type(T, typeof(y)), promote_typeof(x, y, z), a...))
 function _promote(x, y, z)
     @inline
     R = promote_typeof(x, y, z)

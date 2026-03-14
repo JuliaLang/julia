@@ -87,7 +87,7 @@ function Base.sinh(a::Float16)
     return Float16(copysign(.5f0*(E - 1/E),x))
 end
 
-COSH_SMALL_X(::Type{T}) where T= one(T)
+COSH_SMALL_X(T::Type) = one(T)
 
 function cosh_kernel(x2::Float32)
     return evalpoly(x2, (1.0f0, 0.49999997f0, 0.041666888f0, 0.0013882756f0, 2.549933f-5))

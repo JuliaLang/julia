@@ -106,7 +106,7 @@ module IteratorsMD
     firstindex(index::CartesianIndex) = firstindex(index.I)
     lastindex(index::CartesianIndex) = lastindex(index.I)
     Base.get(A::AbstractArray, I::CartesianIndex, default) = get(A, I.I, default)
-    eltype(::Type{T}) where {T<:CartesianIndex} = eltype(fieldtype(T, :I))
+    eltype(T::Type{<:CartesianIndex}) = eltype(fieldtype(T, :I))
 
     # access to index tuple
     Tuple(index::CartesianIndex) = index.I
@@ -142,8 +142,8 @@ module IteratorsMD
     isless(I1::CartesianIndex{N}, I2::CartesianIndex{N}) where {N} = isless(reverse(I1.I), reverse(I2.I))
 
     # conversions
-    convert(::Type{T}, index::CartesianIndex{1}) where {T<:Number} = convert(T, index[1])
-    convert(::Type{T}, index::CartesianIndex) where {T<:Tuple} = convert(T, index.I)
+    convert(T::Type{<:Number}, index::CartesianIndex{1}) = convert(T, index[1])
+    convert(T::Type{<:Tuple}, index::CartesianIndex) = convert(T, index.I)
 
     # hashing
     const cartindexhash_seed = UInt == UInt64 ? 0xd60ca92f8284b8b0 : 0xf2ea7c2e

@@ -282,7 +282,7 @@ end
 hash(x::Symbol) = objectid(x)
 
 
-load_le(::Type{T}, ptr::Ptr{UInt8}, i) where {T <: Union{UInt32, UInt64}} =
+load_le(T::Type{<:Union{UInt32, UInt64}}, ptr::Ptr{UInt8}, i) =
     unsafe_load(convert(Ptr{T}, ptr + i - 1))
 
 @assume_effects :terminates_globally function hash_bytes(

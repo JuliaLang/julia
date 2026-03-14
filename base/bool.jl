@@ -3,7 +3,7 @@
 import Core: Bool
 
 # promote Bool to any other numeric type
-promote_rule(::Type{Bool}, ::Type{T}) where {T<:Number} = T
+promote_rule(::Type{Bool}, T::Type{<:Number}) = T
 
 typemin(::Type{Bool}) = false
 typemax(::Type{Bool}) = true

@@ -113,7 +113,7 @@ function decimallength(v::UInt16)
     return 1
 end
 
-function mulshiftinvsplit(::Type{T}, mv, mp, mm, i, j) where {T}
+function mulshiftinvsplit(T::Type, mv, mp, mm, i, j)
     mul = pow5invsplit_lookup(T, i)
     vr = mulshift(mv, mul, j)
     vp = mulshift(mp, mul, j)
@@ -121,7 +121,7 @@ function mulshiftinvsplit(::Type{T}, mv, mp, mm, i, j) where {T}
     return vr, vp, vm
 end
 
-function mulshiftsplit(::Type{T}, mv, mp, mm, i, j) where {T}
+function mulshiftsplit(T::Type, mv, mp, mm, i, j)
     mul = pow5split_lookup(T, i)
     vr = mulshift(mv, mul, j)
     vp = mulshift(mp, mul, j)
@@ -254,7 +254,7 @@ Compute `floor(2^k/5^i)+1`, where `k = pow5bits(i) - 1 + pow5_inv_bitcount(T)`. 
 is an unsigned integer twice as wide as `T` (i.e. a `UInt128` if `T == Float64`), with
 `pow5_inv_bitcount(T)` significant bits.
 """
-function pow5invsplit(::Type{T}, i) where {T<:AbstractFloat}
+function pow5invsplit(T::Type{<:AbstractFloat}, i)
     W = widen(uinttype(T))
     pow = big(5)^i
     inv = div(big(1) << (ndigits(pow, base=2) - 1 + pow5_inv_bitcount(T)), pow) + 1
@@ -283,7 +283,7 @@ Compute `floor(5^i/2^k)`, where `k = pow5bits(i) - pow5_bitcount(T)`. The result
 unsigned integer twice as wide as `T` (i.e. a `UInt128` if `T == Float64`), with
 `pow5_bitcount(T)` significant bits.
 """
-function pow5split(::Type{T}, i) where {T<:AbstractFloat}
+function pow5split(T::Type{<:AbstractFloat}, i)
     W = widen(uinttype(T))
     pow = big(5)^i
     return W(pow >> (ndigits(pow, base=2) - pow5_bitcount(T)))

@@ -67,8 +67,8 @@ end
 
 convert(::Type{T}, x::T) where {T>:Missing} = x
 convert(::Type{T}, x::T) where {T>:Union{Missing, Nothing}} = x
-convert(::Type{T}, x) where {T>:Missing} = convert(nonmissingtype_checked(T), x)
-convert(::Type{T}, x) where {T>:Union{Missing, Nothing}} = convert(nonmissingtype_checked(nonnothingtype_checked(T)), x)
+convert(T::Type{>:Missing}, x) = convert(nonmissingtype_checked(T), x)
+convert(T::Type{>:Union{Missing, Nothing}}, x) = convert(nonmissingtype_checked(nonnothingtype_checked(T)), x)
 
 # Comparison operators
 ==(::Missing, ::Missing) = missing
@@ -105,11 +105,11 @@ end
 for f in (:zero, :one, :oneunit)
     @eval ($f)(::Type{Any}) = throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
     @eval ($f)(::Type{Missing}) = missing
-    @eval ($f)(::Type{T}) where {T>:Missing} = $f(nonmissingtype_checked(T))
+    @eval ($f)(T::Type{>:Missing}) = $f(nonmissingtype_checked(T))
 end
 for f in (:float, :real, :complex)
     @eval ($f)(::Type{Any}) = throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
-    @eval ($f)(::Type{T}) where {T>:Missing} = Union{$f(nonmissingtype(T)), Missing}
+    @eval ($f)(T::Type{>:Missing}) = Union{$f(nonmissingtype(T)), Missing}
 end
 
 # Binary operators/functions
@@ -140,13 +140,13 @@ missing_conversion_msg(@nospecialize T) =
 # Rounding and related functions
 round(::Missing, ::RoundingMode=RoundNearest; sigdigits::Integer=0, digits::Integer=0, base::Integer=0) = missing
 round(::Type{>:Missing}, ::Missing, ::RoundingMode=RoundNearest) = missing
-round(::Type{T}, ::Missing, ::RoundingMode=RoundNearest) where {T} =
+round(T::Type, ::Missing, ::RoundingMode=RoundNearest) =
     throw(MissingException(missing_conversion_msg(T)))
-round(::Type{T}, x::Any, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
+round(T::Type{>:Missing}, x::Any, r::RoundingMode=RoundNearest) = round(nonmissingtype_checked(T), x, r)
 # to fix ambiguities
-round(::Type{T}, x::Real, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
-round(::Type{T}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {T>:Missing,Tr} = round(nonmissingtype_checked(T), x, r)
-round(::Type{T}, x::Rational{Bool}, r::RoundingMode=RoundNearest) where {T>:Missing} = round(nonmissingtype_checked(T), x, r)
+round(T::Type{>:Missing}, x::Real, r::RoundingMode=RoundNearest) = round(nonmissingtype_checked(T), x, r)
+round(T::Type{>:Missing}, x::Rational{Tr}, r::RoundingMode=RoundNearest) where {Tr} = round(nonmissingtype_checked(T), x, r)
+round(T::Type{>:Missing}, x::Rational{Bool}, r::RoundingMode=RoundNearest) = round(nonmissingtype_checked(T), x, r)
 
 # to avoid ambiguity warnings
 (^)(::Missing, ::Integer) = missing

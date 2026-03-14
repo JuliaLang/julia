@@ -442,12 +442,12 @@ function _unchecked_cast(::Type{BigInt}, x::BigFloat, r::MPFRRoundingMode)
     return z
 end
 
-function _unchecked_cast(::Type{T}, x::BigFloat, r::MPFRRoundingMode) where T<:Union{Signed, Unsigned}
+function _unchecked_cast(T::Type{<:Union{Signed, Unsigned}}, x::BigFloat, r::MPFRRoundingMode)
     CT = T <: Signed ? Int64 : UInt64
     typemax(T) < typemax(CT) ? _unchecked_cast(CT, x, r) : _unchecked_cast(BigInt, x, r)
 end
 
-function round(::Type{T}, x::BigFloat, r::Union{RoundingMode, MPFRRoundingMode}) where T<:Union{Signed, Unsigned}
+function round(T::Type{<:Union{Signed, Unsigned}}, x::BigFloat, r::Union{RoundingMode, MPFRRoundingMode})
     clear_flags()
     res = _unchecked_cast(T, x, r)
     if had_range_exception() || !(typemin(T) <= res <= typemax(T))
@@ -463,16 +463,16 @@ function round(::Type{BigInt}, x::BigFloat, r::Union{RoundingMode, MPFRRoundingM
     return res
 end
 
-round(::Type{T}, x::BigFloat, r::RoundingMode) where T<:Union{Signed, Unsigned} =
+round(T::Type{<:Union{Signed, Unsigned}}, x::BigFloat, r::RoundingMode) =
     invoke(round, Tuple{Type{<:Union{Signed, Unsigned}}, BigFloat, Union{RoundingMode, MPFRRoundingMode}}, T, x, r)
 round(::Type{BigInt}, x::BigFloat, r::RoundingMode) =
     invoke(round, Tuple{Type{BigInt}, BigFloat, Union{RoundingMode, MPFRRoundingMode}}, BigInt, x, r)
 
 
-unsafe_trunc(::Type{T}, x::BigFloat) where {T<:Integer} = unsafe_trunc(T, _unchecked_cast(T, x, RoundToZero))
+unsafe_trunc(T::Type{<:Integer}, x::BigFloat) = unsafe_trunc(T, _unchecked_cast(T, x, RoundToZero))
 unsafe_trunc(::Type{BigInt}, x::BigFloat) = _unchecked_cast(BigInt, x, RoundToZero)
 
-round(::Type{T}, x::BigFloat) where T<:Integer = round(T, x, rounding_raw(BigFloat))
+round(T::Type{<:Integer}, x::BigFloat) = round(T, x, rounding_raw(BigFloat))
 # these two methods are split to increase their precedence in disambiguation:
 round(::Type{Integer}, x::BigFloat, r::RoundingMode) = round(BigInt, x, r)
 round(::Type{Integer}, x::BigFloat, r::MPFRRoundingMode) = round(BigInt, x, r)
@@ -492,7 +492,7 @@ function (::Type{T})(x::BigFloat) where T<:Integer
     trunc(T,x)
 end
 
-function to_ieee754(::Type{T}, x::BigFloat, rm) where {T<:AbstractFloat}
+function to_ieee754(T::Type{<:AbstractFloat}, x::BigFloat, rm)
     sb = signbit(x)
     is_zero = iszero(x)
     is_inf = isinf(x)
@@ -1196,7 +1196,7 @@ Note: `nextfloat()`, `prevfloat()` do not use the precision mentioned by
 !!! compat "Julia 1.8"
     The `base` keyword requires at least Julia 1.8.
 """
-function setprecision(f::Function, ::Type{T}, prec::Integer; kws...) where T
+function setprecision(f::Function, T::Type, prec::Integer; kws...)
     depwarn("""
             The fallback `setprecision(::Function, ...)` method is deprecated. Packages overloading this method should
             implement their own specialization using `ScopedValue` instead.

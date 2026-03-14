@@ -4,7 +4,7 @@
 
 # Numbers are convertible
 convert(::Type{T}, x::T)      where {T<:Number} = x
-convert(::Type{T}, x::Number) where {T<:Number} = T(x)::T
+convert(T::Type{<:Number}, x::Number) = T(x)::T
 
 """
     isinteger(x)::Bool
@@ -87,7 +87,7 @@ size(x::Number) = ()
 size(x::Number, d::Integer) = d < 1 ? throw(BoundsError()) : 1
 axes(x::Number) = ()
 axes(x::Number, d::Integer) = d < 1 ? throw(BoundsError()) : OneTo(1)
-eltype(::Type{T}) where {T<:Number} = T
+eltype(T::Type{<:Number}) = T
 ndims(x::Number) = 0
 ndims(::Type{<:Number}) = 0
 length(x::Number) = 1
@@ -361,7 +361,7 @@ julia> zero(rand(2,2))
 ```
 """
 zero(x::Number) = oftype(x,0)
-zero(::Type{T}) where {T<:Number} = convert(T,0)
+zero(T::Type{<:Number}) = convert(T,0)
 zero(::Type{Union{}}, slurp...) = Union{}(0)
 
 """
@@ -402,7 +402,7 @@ julia> import Dates; one(Dates.Day(1))
 1
 ```
 """
-one(::Type{T}) where {T<:Number} = convert(T,1)
+one(T::Type{<:Number}) = convert(T,1)
 one(x::T) where {T<:Number} = one(T)
 one(::Type{Union{}}, slurp...) = Union{}(1)
 # note that convert(T, 1) should throw an error if T is dimensionful,
@@ -428,7 +428,7 @@ julia> import Dates; oneunit(Dates.Day)
 ```
 """
 oneunit(x::T) where {T} = T(one(x))
-oneunit(::Type{T}) where {T} = T(one(T))
+oneunit(T::Type) = T(one(T))
 oneunit(::Type{Union{}}, slurp...) = Union{}(1)
 
 """
@@ -449,5 +449,5 @@ julia> big(Complex{Int})
 Complex{BigInt}
 ```
 """
-big(::Type{T}) where {T<:Number} = typeof(big(zero(T)))
+big(T::Type{<:Number}) = typeof(big(zero(T)))
 big(::Type{Union{}}, slurp...) = Union{}(0)

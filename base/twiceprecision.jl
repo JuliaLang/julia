@@ -772,7 +772,7 @@ end
 # This version of lcm does not check for overflows
 lcm_unchecked(a::T, b::T) where T<:Integer = a * div(b, gcd(a, b))
 
-narrow(::Type{T}) where {T<:AbstractFloat} = Float64
+narrow(::Type{<:AbstractFloat}) = Float64
 narrow(::Type{Float64}) = Float32
 narrow(::Type{Float32}) = Float16
 narrow(::Type{Float16}) = Float16
