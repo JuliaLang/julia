@@ -2061,7 +2061,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             Value *args[] = {
                 emit_typeof(ctx, val, false, true),
                 val.isghost ? ConstantPointerNull::get(T_p_derived) :
-                        decay_derived(ctx, data_pointer(ctx, val))
+                        decay_derived(ctx, data_pointer(ctx, val)),
+                ConstantPointerNull::get(PointerType::get(ctx.builder.getContext(), 0))
             };
             Value *ret = ctx.builder.CreateCall(prepare_call(jl_object_id__func), ArrayRef<Value*>(args));
             setName(ctx.emission_context, ret, "object_id");

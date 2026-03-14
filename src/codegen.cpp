@@ -3,6 +3,7 @@
 #undef DEBUG
 #include "llvm-version.h"
 #include "platform.h"
+#include "htable.h"
 
 #ifndef __STDC_LIMIT_MACROS
 #define __STDC_LIMIT_MACROS
@@ -1266,7 +1267,7 @@ static const auto jlapplytype_func = new JuliaFunction<>{
 static const auto jl_object_id__func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_object_id_),
     [](LLVMContext &C, Type *T_size) { return FunctionType::get(T_size,
-            {T_size, PointerType::get(C, AddressSpace::Derived)}, false); },
+            {T_size, PointerType::get(C, AddressSpace::Derived), PointerType::get(C, 0)}, false); },
     nullptr,
 };
 static const auto setjmp_func = new JuliaFunction<TypeFnContextAndTriple>{
