@@ -1314,6 +1314,10 @@ static void jl_compilation_sig(
         }
     }
 
+    // TODO: Convert Type{T} to ConstType{T} in specTypes when T has no free typevars.
+    // This makes ghosting sound: ConstType{T} guarantees identity, not just equality.
+    // Disabled for now until the full pipeline supports ConstType in specTypes tuples.
+
     // for varargs methods, only specialize up to max_args.
     // in general, here we want to find the biggest type that's not a
     // supertype of any other method signatures. so far we are conservative
@@ -1465,6 +1469,10 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
             return 0;
         }
 
+        if (jl_is_consttype_type(elt)) {
+            // ConstType{T} in specTypes is always valid — it was converted from Type{T}
+            continue;
+        }
         if (jl_is_type_type(jl_unwrap_unionall(elt))) {
             int iscalled = (i_arg > 0 && i_arg <= 8 && (definition->called & (1 << (i_arg - 1)))) ||
                            jl_has_free_typevars(decl_i);
@@ -1563,7 +1571,12 @@ static int concretesig_equal(jl_value_t *tt, jl_value_t *simplesig) JL_NOTSAFEPO
         jl_value_t *decl = sigs[i];
         jl_value_t *a = types[i];
         if (a != decl && decl != (jl_value_t*)jl_any_type) {
-            if (!(jl_is_type_type(a) && jl_typeof(jl_tparam0(a)) == decl))
+            jl_value_t *tp0 = NULL;
+            if (jl_is_type_type(a))
+                tp0 = jl_tparam0(a);
+            else if (jl_is_consttype_type(a))
+                tp0 = ((jl_consttype_t*)a)->T;
+            if (!(tp0 && jl_typeof(tp0) == decl))
                 return 0;
         }
     }
@@ -1763,9 +1776,10 @@ jl_method_instance_t *cache_method(
         jl_value_t *elt = jl_svecref(cachett->parameters, i);
         if (jl_is_vararg(elt)) {
         }
-        else if (jl_is_type_type(elt)) {
+        else if (jl_is_type_type(elt) || jl_is_consttype_type(elt)) {
             // TODO: if (!jl_is_singleton(elt)) ...
-            jl_value_t *kind = jl_typeof(jl_tparam0(elt));
+            jl_value_t *tp0 = jl_is_type_type(elt) ? jl_tparam0(elt) : ((jl_consttype_t*)elt)->T;
+            jl_value_t *kind = jl_typeof(tp0);
             if (!newparams) newparams = jl_svec_copy(cachett->parameters);
             jl_svecset(newparams, i, kind);
         }

@@ -505,7 +505,16 @@ static bool type_has_unique_rep(jl_value_t *t)
 
 static bool is_uniquerep_Type(jl_value_t *t)
 {
-    return jl_is_type_type(t) && type_has_unique_rep(jl_tparam0(t));
+    return jl_is_consttype_type(t) ||
+           (jl_is_type_type(t) && type_has_unique_rep(jl_tparam0(t)));
+}
+
+// Get the type parameter from either Type{T} or ConstType{T}
+static jl_value_t *get_Type_param(jl_value_t *t)
+{
+    if (jl_is_consttype_type(t))
+        return ((jl_consttype_t*)t)->T;
+    return jl_tparam0(t);
 }
 
 class jl_codectx_t;
@@ -2344,11 +2353,11 @@ static inline jl_cgval_t ghostValue(jl_codectx_t &ctx, jl_value_t *typ)
         // normalize TypeofBottom to Type{Union{}}
         typ = (jl_value_t*)jl_typeofbottom_type->super;
     }
-    if (jl_is_type_type(typ)) {
+    if (jl_is_type_type(typ) || jl_is_consttype_type(typ)) {
         assert(is_uniquerep_Type(typ));
-        // replace T::Type{T} with T, by assuming that T must be a leaftype of some sort
+        // replace T::Type{T} or T::ConstType{T} with T, by assuming that T must be a leaftype of some sort
         jl_cgval_t constant(NULL, true, typ, NULL, best_tbaa(ctx.tbaa(), typ), jl_gc_roots_t());
-        constant.constant = jl_tparam0(typ);
+        constant.constant = get_Type_param(typ);
         if (typ == (jl_value_t*)jl_typeofbottom_type->super)
             constant.isghost = true;
         return constant;
@@ -2458,9 +2467,9 @@ static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, const jl_cgval_t &v
 
 static inline jl_cgval_t mark_julia_type(jl_codectx_t &ctx, Value *v, bool isboxed, jl_value_t *typ)
 {
-    if (jl_is_type_type(typ)) {
+    if (jl_is_type_type(typ) || jl_is_consttype_type(typ)) {
         if (is_uniquerep_Type(typ)) {
-            // replace T::Type{T} with T
+            // replace T::Type{T} or T::ConstType{T} with T
             return ghostValue(ctx, typ);
         }
     }
@@ -7155,7 +7164,7 @@ static void emit_specsig_to_specsig(
             et = julia_type_to_llvm(ctx, jt);
         }
         if (is_uniquerep_Type(jt)) {
-            myargs[i] = mark_julia_const(ctx, jl_tparam0(jt));
+            myargs[i] = mark_julia_const(ctx, get_Type_param(jt));
         }
         else if (type_is_ghost(et)) {
             assert(jl_is_datatype(jt) && jl_is_datatype_singleton((jl_datatype_t*)jt));
@@ -8391,7 +8400,7 @@ static jl_datatype_t *compute_va_type(jl_value_t *sig, size_t nreq)
         jl_value_t *argType = jl_nth_slot_type(sig, i);
         // n.b. specTypes is required to be a datatype by construction for specsig
         if (is_uniquerep_Type(argType))
-            argType = jl_typeof(jl_tparam0(argType));
+            argType = jl_typeof(get_Type_param(argType));
         else if (jl_has_intersect_type_not_kind(argType)) {
             jl_value_t *ts[2] = {argType, (jl_value_t*)jl_type_type};
             argType = jl_type_union(ts, 2);
@@ -9021,7 +9030,7 @@ static jl_llvm_functions_t
             return ghostValue(ctx, argType);
         }
         else if (is_uniquerep_Type(argType)) {
-            return mark_julia_const(ctx, jl_tparam0(argType));
+            return mark_julia_const(ctx, get_Type_param(argType));
         }
         Argument *Arg = &*AI;
         ++AI;
