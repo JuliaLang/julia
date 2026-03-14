@@ -1378,6 +1378,9 @@ static int has_concrete_supertype(jl_value_t *kj) JL_NOTSAFEPOINT
 
 int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT
 {
+    // ConstType satisfies equality-is-identity by definition
+    if (jl_is_consttype_type(t1) || jl_is_consttype_type(t2))
+        return 1;
     int c1 = jl_is_concrete_type(t1);
     int c2 = jl_is_concrete_type(t2);
     if (c1 && c2) {

@@ -555,6 +555,8 @@ int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
     if (jl_is_uniontype(b))
         return obviously_disjoint(a, ((jl_uniontype_t *)b)->a, specificity) &&
                obviously_disjoint(a, ((jl_uniontype_t *)b)->b, specificity);
+    if (jl_is_consttype_type(a) && jl_is_consttype_type(b))
+        return !jl_egal(((jl_consttype_t*)a)->T, ((jl_consttype_t*)b)->T);
     if (jl_is_datatype(a) && jl_is_datatype(b)) {
         jl_datatype_t *ad = (jl_datatype_t*)a, *bd = (jl_datatype_t*)b;
         if (ad->name != bd->name) {
@@ -1557,6 +1559,35 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
     }
     if (jl_is_unionall(y))
         return subtype_unionall(x, (jl_unionall_t*)y, e, 1, param);
+    // ConstType subtyping rules
+    if (jl_is_consttype_type(x)) {
+        jl_value_t *xp = ((jl_consttype_t*)x)->T;
+        if (jl_is_consttype_type(y)) {
+            // ConstType{A} <: ConstType{B} iff A === B
+            return jl_egal(xp, ((jl_consttype_t*)y)->T);
+        }
+        if (jl_is_type_type(y)) {
+            // ConstType{A} <: Type{B} iff A == B
+            jl_value_t *yp = jl_tparam0(y);
+            if (jl_is_typevar(yp))
+                return subtype(xp, yp, e, 2);
+            return jl_types_equal(xp, yp);
+        }
+        if (y == (jl_value_t*)jl_any_type)
+            return 1;
+        // ConstType{A} <: DataType iff typeof(A) == DataType, etc.
+        if (jl_is_datatype(y))
+            return jl_typeof(xp) == y;
+        // ConstType{A} <: Type (the UnionAll)
+        if (jl_is_type(y))
+            return jl_subtype(jl_typeof(xp), y);
+        return 0;
+    }
+    if (jl_is_consttype_type(y)) {
+        // Nothing is a subtype of ConstType{A} except ConstType{A} itself and Bottom
+        if (x == jl_bottom_type) return 1;
+        return 0;
+    }
     if (jl_is_datatype(x) && jl_is_datatype(y)) {
         if (x == y) return 1;
         if (y == (jl_value_t*)jl_any_type) return 1;
@@ -2372,6 +2403,9 @@ JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b)
         return 1;
     if (jl_typeof(a) == jl_typeof(b) && jl_types_egal(a, b))
         return 1;
+    // Free-typevar singletons: equality is identity (a != b already checked above)
+    if (jl_has_free_typevars(a) || jl_has_free_typevars(b))
+        return 0;
     if (obviously_unequal(a, b))
         return 0;
     // the following is an interleaved version of:
@@ -2452,7 +2486,8 @@ JL_DLLEXPORT int jl_is_not_broken_subtype(jl_value_t *a, jl_value_t *b)
 {
     // TODO: the final commented out check here isn't correct; it should be closer to the
     // `issingletype` check used by `isnotbrokensubtype` in `base/compiler/typeutils.jl`
-    return !jl_is_kind(b) || !jl_is_type_type(a); // || jl_is_datatype_singleton((jl_datatype_t*)jl_tparam0(a));
+    // ConstType never has the broken subtype issue
+    return !jl_is_kind(b) || jl_is_consttype_type(a) || !jl_is_type_type(a); // || jl_is_datatype_singleton((jl_datatype_t*)jl_tparam0(a));
 }
 
 int jl_tuple1_isa(jl_value_t *child1, jl_value_t **child, size_t cl, jl_datatype_t *pdt)
@@ -2534,6 +2569,12 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
         jl_error("internal error: TypeApp in jl_isa");
     if (jl_is_type(x)) {
         if (t == (jl_value_t*)jl_type_type)
+            return 1;
+        // ConstType{A}: x isa ConstType{A} iff x === A
+        if (jl_is_consttype_type(t))
+            return jl_egal(x, ((jl_consttype_t*)t)->T);
+        // bare ConstType: every type satisfies this (x === x is always true)
+        if (t == (jl_value_t*)jl_consttype_type)
             return 1;
         if (!jl_has_free_typevars(x)) {
             if (jl_is_concrete_type(t))
@@ -4278,6 +4319,33 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
     }
     if (jl_is_unionall(y))
         return intersect_unionall(x, (jl_unionall_t*)y, e, 1, param);
+    // ConstType intersection
+    if (jl_is_consttype_type(x) || jl_is_consttype_type(y)) {
+        if (jl_is_consttype_type(x) && jl_is_consttype_type(y)) {
+            // ConstType{A} ∩ ConstType{B} = ConstType{A} if A === B, else Bottom
+            return jl_egal(((jl_consttype_t*)x)->T, ((jl_consttype_t*)y)->T) ? x : jl_bottom_type;
+        }
+        if (jl_is_consttype_type(x) && jl_is_type_type(y)) {
+            // ConstType{A} ∩ Type{B} = ConstType{A} if A == B, else Bottom
+            jl_value_t *xp = ((jl_consttype_t*)x)->T;
+            jl_value_t *yp = jl_tparam0(y);
+            if (jl_is_typevar(yp))
+                return x; // conservative: ConstType{A} ∩ Type{T} = ConstType{A}
+            return jl_types_equal(xp, yp) ? x : jl_bottom_type;
+        }
+        if (jl_is_consttype_type(y) && jl_is_type_type(x)) {
+            jl_value_t *yp = ((jl_consttype_t*)y)->T;
+            jl_value_t *xp = jl_tparam0(x);
+            if (jl_is_typevar(xp))
+                return y;
+            return jl_types_equal(xp, yp) ? y : jl_bottom_type;
+        }
+        // ConstType{A} ∩ (non-ConstType, non-Type) = ConstType{A} if ConstType{A} <: y, else Bottom
+        if (jl_is_consttype_type(x))
+            return jl_subtype(x, y) ? x : jl_bottom_type;
+        // y is ConstType, x is not ConstType and not Type — no non-ConstType is <: ConstType
+        return jl_bottom_type;
+    }
     if (jl_is_datatype(x) && jl_is_datatype(y)) {
         jl_datatype_t *xd = (jl_datatype_t*)x, *yd = (jl_datatype_t*)y;
         if (param < 2) {
