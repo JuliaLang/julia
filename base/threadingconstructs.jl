@@ -451,7 +451,7 @@ end
 function _widen_threaded_result(result::Vector, widen_pairs::Vector{Pair{Int, Any}})
     new_T = eltype(result)
     for p in widen_pairs
-        new_T = Union{new_T, typeof(p.second)}
+        new_T = Base.promote_typejoin(new_T, typeof(p.second))
     end
     # Function barrier: _widen_copy specializes on new_T so the compiler sees
     # concrete element types for both source and destination vectors.
@@ -743,8 +743,7 @@ pre-allocates the result array and writes directly by index, avoiding Channel ov
 !!! warning
     The body expression of a threaded comprehension may execute on any thread and may
     migrate between threads. Do not rely on [`threadid()`](@ref Threads.threadid) or
-    [`task_local_storage()`](@ref) returning consistent values within the body expression,
-    unless using `:static` scheduling.
+    [`task_local_storage()`](@ref) returning consistent values within the body expression.
 
 ```julia-repl
 julia> Threads.@threads [i^2 for i in 1:5] # Simple comprehension

@@ -184,7 +184,7 @@ using .Main.OffsetArrays
         result = @threads [x for x in [1, 2.0, "3"]]
         expected = [x for x in [1, 2.0, "3"]]
         @test result == expected
-        @test eltype(result) == Union{Int, Float64, String}
+        @test eltype(result) == eltype(expected)
 
         # Test with :greedy scheduler (does not guarantee order)
         result_greedy = @threads :greedy [x for x in [1, 2.0, "3"]]
@@ -194,7 +194,7 @@ using .Main.OffsetArrays
         # Test with :static scheduler
         result_static = @threads :static [x for x in [1, 2.0, "3"]]
         @test result_static == expected
-        @test eltype(result_static) == Union{Int, Float64, String}
+        @test eltype(result_static) == eltype(expected)
     end
 
     # Test type widening when body expression produces heterogeneous types
@@ -202,16 +202,13 @@ using .Main.OffsetArrays
         result = @threads [i == 50 ? 1.0 : i for i in 1:100]
         expected = [i == 50 ? 1.0 : i for i in 1:100]
         @test result == expected
-        # Threaded widens to Union (preserves element types), serial to Real
-        @test eltype(result) == Union{Int, Float64}
-        @test result[1] isa Int
-        @test result[50] isa Float64
+        @test eltype(result) == eltype(expected)
 
-        # Verify widening doesn't cause per-element allocations (use i == 100
-        # so the probe picks the majority type and only 1 element widens)
-        widen_test() = @threads [i == 100 ? 1.0 : i for i in 1:100_000]
-        widen_test()
-        @test @allocations(widen_test()) < 200
+        # Verify widening allocations aren't significantly worse than serial
+        widen_threaded() = @threads [i == 100 ? 1.0 : i for i in 1:100_000]
+        widen_serial() = [i == 100 ? 1.0 : i for i in 1:100_000]
+        widen_threaded(); widen_serial()
+        @test @allocations(widen_threaded()) < @allocations(widen_serial()) + 200
     end
 
     # Test typed comprehensions
