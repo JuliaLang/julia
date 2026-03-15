@@ -1193,11 +1193,15 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                                     build_id, _ = Base.parse_cache_buildid(cachefile)
                                     stale_cache_key = (pkg, build_id, sourcespec, cachefile, ignore_loaded, cacheflags)::StaleCacheKey
                                     stale_cache[stale_cache_key] = false
+                                    if loaded && Base.module_build_id(Base.loaded_modules[pkg]) != build_id
+                                        n_loaded[] += 1
+                                        @lock print_lock push!(loaded_pkgs, pkg)
+                                    end
+                                elseif loaded
+                                    # another process compiled this package; conservatively warn
+                                    n_loaded[] += 1
+                                    @lock print_lock push!(loaded_pkgs, pkg)
                                 end
-                            end
-                            if loaded
-                                n_loaded[] += 1
-                                @lock print_lock push!(loaded_pkgs, pkg)
                             end
                         catch err
                             close(std_pipe.in) # close pipe to end the std output monitor
@@ -1219,8 +1223,11 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                         if !is_stale
                             n_already_precomp[] += 1
                             if loaded
-                                n_loaded[] += 1
-                                @lock print_lock push!(loaded_pkgs, pkg)
+                                fresh_build_id, _ = Base.parse_cache_buildid(freshpath)
+                                if Base.module_build_id(Base.loaded_modules[pkg]) != fresh_build_id
+                                    n_loaded[] += 1
+                                    @lock print_lock push!(loaded_pkgs, pkg)
+                                end
                             end
                         end
                     end

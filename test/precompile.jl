@@ -2896,18 +2896,35 @@ end
 # Test that warn_loaded names loaded packages and counts affected dependents
 @testset "warn_loaded names packages and counts dependents" begin
     mkdepottempdir() do depot; mktempdir() do dir
-        # Create LoadedDep — will be loaded before precompilepkgs runs
-        loaded_dep_path = joinpath(dir, "dev", "LoadedDep")
-        mkpath(joinpath(loaded_dep_path, "src"))
-        write(joinpath(loaded_dep_path, "Project.toml"),
+        # Create LoadedDep old source — loaded at the start of the script
+        loaded_dep_old_path = joinpath(dir, "dev", "LoadedDepOld")
+        mkpath(joinpath(loaded_dep_old_path, "src"))
+        write(joinpath(loaded_dep_old_path, "Project.toml"),
               """
               name = "LoadedDep"
               uuid = "a1a1a1a1-0000-0000-0000-000000000001"
               version = "0.1.0"
               """)
-        write(joinpath(loaded_dep_path, "src", "LoadedDep.jl"),
+        write(joinpath(loaded_dep_old_path, "src", "LoadedDep.jl"),
               """
               module LoadedDep
+              const _v = 1  # old version marker forces a different build_id
+              end
+              """)
+
+        # Create LoadedDep new source — resolved by the environment after switching
+        loaded_dep_new_path = joinpath(dir, "dev", "LoadedDepNew")
+        mkpath(joinpath(loaded_dep_new_path, "src"))
+        write(joinpath(loaded_dep_new_path, "Project.toml"),
+              """
+              name = "LoadedDep"
+              uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+              version = "0.2.0"
+              """)
+        write(joinpath(loaded_dep_new_path, "src", "LoadedDep.jl"),
+              """
+              module LoadedDep
+              const _v = 2  # new version marker forces a different build_id
               end
               """)
 
@@ -2930,7 +2947,111 @@ end
               end
               """)
 
-        # Create project environment referencing both packages
+        # old_project: used to load the old version of LoadedDep
+        old_project_path = joinpath(dir, "old_project")
+        mkpath(old_project_path)
+        write(joinpath(old_project_path, "Project.toml"),
+              """
+              [deps]
+              LoadedDep = "a1a1a1a1-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(old_project_path, "Manifest.toml"),
+              """
+              manifest_format = "2.0"
+
+              [[deps.LoadedDep]]
+              path = "../dev/LoadedDepOld/"
+              uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+              version = "0.1.0"
+              """)
+
+        # new_project: resolved after loading old version; has LoadedDep new source
+        new_project_path = joinpath(dir, "new_project")
+        mkpath(new_project_path)
+        write(joinpath(new_project_path, "Project.toml"),
+              """
+              [deps]
+              DepUser = "b2b2b2b2-0000-0000-0000-000000000002"
+              LoadedDep = "a1a1a1a1-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(new_project_path, "Manifest.toml"),
+              """
+              manifest_format = "2.0"
+
+              [[deps.DepUser]]
+              deps = ["LoadedDep"]
+              path = "../dev/DepUser/"
+              uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [[deps.LoadedDep]]
+              path = "../dev/LoadedDepNew/"
+              uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+              version = "0.2.0"
+              """)
+
+        # Load the old LoadedDep first, then switch to the new project whose manifest
+        # resolves a different source for LoadedDep — this causes a build_id mismatch
+        # and should trigger the warn_loaded warning.
+        script = """
+            using LoadedDep
+            Base.set_active_project($(repr(new_project_path)))
+            Base.Precompilation.precompilepkgs(; fancyprint=false, warn_loaded=true)
+            """
+
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(old_project_path) -e $script`,
+                     "JULIA_DEPOT_PATH" => depot)
+
+        out = Base.PipeEndpoint()
+        log = @async read(out, String)
+        try
+            proc = run(pipeline(cmd, stdout=out, stderr=out))
+            @test success(proc)
+        catch
+            @show fetch(log)
+            rethrow()
+        end
+        output = fetch(log)
+        @test occursin("currently loaded", output)
+        @test occursin("LoadedDep", output)
+    end end
+end
+
+# Test that warn_loaded does not warn when the loaded dep is already at the correct version
+@testset "warn_loaded does not warn when loaded dep matches env version" begin
+    mkdepottempdir() do depot; mktempdir() do dir
+        loaded_dep_path = joinpath(dir, "dev", "LoadedDep")
+        mkpath(joinpath(loaded_dep_path, "src"))
+        write(joinpath(loaded_dep_path, "Project.toml"),
+              """
+              name = "LoadedDep"
+              uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+              version = "0.1.0"
+              """)
+        write(joinpath(loaded_dep_path, "src", "LoadedDep.jl"),
+              """
+              module LoadedDep
+              end
+              """)
+
+        depuser_path = joinpath(dir, "dev", "DepUser")
+        mkpath(joinpath(depuser_path, "src"))
+        write(joinpath(depuser_path, "Project.toml"),
+              """
+              name = "DepUser"
+              uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [deps]
+              LoadedDep = "a1a1a1a1-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(depuser_path, "src", "DepUser.jl"),
+              """
+              module DepUser
+              import LoadedDep
+              end
+              """)
+
         project_path = joinpath(dir, "project")
         mkpath(project_path)
         write(joinpath(project_path, "Project.toml"),
@@ -2939,6 +3060,7 @@ end
               DepUser = "b2b2b2b2-0000-0000-0000-000000000002"
               LoadedDep = "a1a1a1a1-0000-0000-0000-000000000001"
               """)
+        # Manifest points to the same source as what gets loaded — versions match
         write(joinpath(project_path, "Manifest.toml"),
               """
               manifest_format = "2.0"
@@ -2955,6 +3077,8 @@ end
               version = "0.1.0"
               """)
 
+        # Load LoadedDep first (caching it), then run precompilepkgs — the env resolves the
+        # same version that is loaded, so no version-mismatch warning should appear.
         script = """
             using LoadedDep
             Base.Precompilation.precompilepkgs(; fancyprint=false, warn_loaded=true)
@@ -2973,8 +3097,7 @@ end
             rethrow()
         end
         output = fetch(log)
-        @test occursin("currently loaded", output)
-        @test occursin("LoadedDep", output)
+        @test !occursin("currently loaded", output)
     end end
 end
 
