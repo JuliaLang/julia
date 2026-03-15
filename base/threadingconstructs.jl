@@ -431,7 +431,7 @@ function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule,
                     end
                     $(_threading_run_expr(schedule))
                     end
-                    result = _widen_threaded_result(result, _widen_buffers)
+                    result = Base.setindices_widen_up_to(result, _widen_buffers)
                 end
                 $(wrap_final(:(result)))
             end
@@ -440,29 +440,6 @@ function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule,
     end
 end
 
-# Widen a speculatively-typed result array when some threads produced different types.
-# Each thread has its own buffer of (index => value) pairs to avoid lock contention.
-function _widen_threaded_result(result::AbstractArray, widen_buffers::Vector{Vector{Pair{Int, Any}}})
-    widen_pairs = reduce(vcat, widen_buffers; init=Pair{Int,Any}[])
-    isempty(widen_pairs) && return result
-    new_T = eltype(result)
-    for p in widen_pairs
-        new_T = Base.promote_typejoin(new_T, typeof(p.second))
-    end
-    new_T === eltype(result) && return result
-    # Function barrier: specializes on new_T so the compiler sees
-    # concrete element types for both source and destination arrays.
-    return _widen_copy(new_T, result, widen_pairs)
-end
-
-function _widen_copy(::Type{T}, result::AbstractArray, widen_pairs::Vector{Pair{Int, Any}}) where T
-    new_result = similar(result, T)
-    copyto!(new_result, result)
-    for (idx, val) in widen_pairs
-        @inbounds new_result[idx] = val
-    end
-    return new_result
-end
 
 function greedy_func(itr, lidx, lbody)
     quote
