@@ -1843,6 +1843,7 @@ end
 @testset "Parseable printing of types" begin
     @test repr(typeof(print)) == "typeof(print)"
     @test repr(typeof(Base.show_default)) == "typeof(Base.show_default)"
+    @test repr(Base.Fix2) == "Base.Fix2"
     @test repr(typeof(UnexportedOperators.:+)) == "typeof($(curmod_prefix)UnexportedOperators.:+)"
     @test repr(typeof(UnexportedOperators.:(==))) == "typeof($(curmod_prefix)UnexportedOperators.:(==))"
     anonfn = x->2x
@@ -2327,6 +2328,8 @@ replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color =>
 @test string(sin) == "sin"
 @test string(:) == "Colon()"
 @test string(Iterators.flatten) == "flatten"
+@test string(Base.Fix2) == "Fix2"
+@test string(typeof(Base.tail)) == "typeof(tail)"
 @test Symbol(Iterators.flatten) === :flatten
 @test startswith(string(x->x), "#")
 
@@ -2493,16 +2496,17 @@ const SimpleU = Union{AnInteger, AStruct, BStruct}
 end
 @test Base.make_typealias(M37012.AStruct{1}) === nothing
 @test isempty(Base.make_typealiases(M37012.AStruct{1})[1])
-@test string(M37012.AStruct{1}) == "$(curmod_prefix)M37012.AStruct{1}"
+@test string(M37012.AStruct{1}) == "AStruct{1}"
+@test repr(M37012.AStruct{1}) == "$(curmod_prefix)M37012.AStruct{1}"
 @test string(Union{Nothing, Number, Vector}) == "Union{Nothing, Number, Vector}"
 @test string(Union{Nothing, Number, Vector{<:Integer}}) == "Union{Nothing, Number, Vector{<:Integer}}"
 @test string(Union{Nothing, AbstractVecOrMat}) == "Union{Nothing, AbstractVecOrMat}"
 @test string(Union{Nothing, AbstractVecOrMat{<:Integer}}) == "Union{Nothing, AbstractVecOrMat{<:Integer}}"
-@test string(M37012.BStruct{T, T} where T) == "$(curmod_prefix)M37012.B2{T, T} where T"
-@test string(M37012.BStruct{T, S} where {T<:Unsigned, S<:Signed}) == "$(curmod_prefix)M37012.B2{S, T} where {T<:Unsigned, S<:Signed}"
-@test string(M37012.BStruct{T, S} where {T<:Signed, S<:T}) == "$(curmod_prefix)M37012.B2{S, T} where {T<:Signed, S<:T}"
-@test string(Union{M37012.SimpleU, Nothing}) == "Union{Nothing, $(curmod_prefix)M37012.SimpleU}"
-@test string(Union{M37012.SimpleU, Nothing, T} where T) == "Union{Nothing, $(curmod_prefix)M37012.SimpleU, T} where T"
+@test string(M37012.BStruct{T, T} where T) == "B2{T, T} where T"
+@test string(M37012.BStruct{T, S} where {T<:Unsigned, S<:Signed}) == "B2{S, T} where {T<:Unsigned, S<:Signed}"
+@test string(M37012.BStruct{T, S} where {T<:Signed, S<:T}) == "B2{S, T} where {T<:Signed, S<:T}"
+@test string(Union{M37012.SimpleU, Nothing}) == "Union{Nothing, SimpleU}"
+@test string(Union{M37012.SimpleU, Nothing, T} where T) == "Union{Nothing, SimpleU, T} where T"
 @test string(Union{AbstractVector{T}, T} where T) == "Union{AbstractVector{T}, T} where T"
 @test string(Union{AbstractVector, T} where T) == "Union{AbstractVector, T} where T"
 @test string(Union{Array, Memory}) == "Union{Array, Memory}"

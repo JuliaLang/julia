@@ -749,9 +749,9 @@ end
 function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, wheres::Vector)
     if !(get(io, :compact, false)::Bool)
         # Print module prefix unless alias is visible from module passed to
-        # IOContext. If :module is not set, default to Main.
+        # IOContext. If :module is not set, use the same Base-only context as functions.
         # nothing can be used to force printing prefix.
-        from = get(io, :module, Main)
+        from = get(io, :module, UsesBaseOnly)
         if (from === nothing || !isvisible(name.name, name.mod, from))
             show(io, name.mod)
             print(io, ".")
@@ -979,7 +979,12 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     end
 end
 
-show(io::IO, @nospecialize(x::Type)) = _show_type(io, inferencebarrier(x))
+show_type(io::IO, @nospecialize(x::Type), compact::Bool) =
+    _show_type(compact ? IOContext(io, :compact => true) : io, x)
+
+show(io::IO, @nospecialize(x::Type)) = show_type(io, inferencebarrier(x), get(io, :compact, false)::Bool)
+print(io::IO, @nospecialize(x::Type)) = (show_type(io, inferencebarrier(x), true); nothing)
+
 function _show_type(io::IO, @nospecialize(x::Type))
     if print_without_params(x)
         show_type_name(io, (unwrap_unionall(x)::DataType).name)
@@ -1097,9 +1102,9 @@ function show_type_name(io::IO, tn::Core.TypeName)
     world !== nothing && print(io, "@world(")
     if !(get(io, :compact, false)::Bool)
         # Print module prefix unless type is visible from module passed to
-        # IOContext If :module is not set, default to Main.
+        # IOContext. If :module is not set, use the same Base-only context as functions.
         # nothing can be used to force printing prefix
-        from = get(io, :module, Main)
+        from = get(io, :module, UsesBaseOnly)
         if isdefined(tn, :module) && (from === nothing || !isvisible(sym, tn.module, from::Module))
             show(io, tn.module)
             print(io, ".")
