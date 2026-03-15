@@ -408,15 +408,16 @@ function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule,
                 local result = similar(Vector{typeof(_probe_val)}, axes(items))
                 @inbounds result[_skip] = _probe_val
                 if niter > 1
-                    local _widen_pairs = Pair{Int,Any}[]
-                    local _widen_lock = ReentrantLock()
-                    let items = items, result = result, _widen_pairs = _widen_pairs,
-                        _widen_lock = _widen_lock, _skip = _skip
+                    local _npool = threadpoolsize()
+                    local _widen_buffers = [Pair{Int,Any}[] for _ in 1:_npool]
+                    let items = items, result = result, _widen_buffers = _widen_buffers,
+                        _skip = _skip
                     local threadsfor_fun
                     function threadsfor_fun(tid = 1; onethread = false)
                         # Reads: items, tid, onethread. Defines: r, loop_first, loop_last.
                         $work_dist
                         local _T = eltype(result)
+                        local _my_widen = _widen_buffers[tid]
                         for i = loop_first:loop_last
                             i == _skip && continue
                             local $esc_lidx = @inbounds r[i]
@@ -424,20 +425,13 @@ function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule,
                             if _val isa _T
                                 @inbounds result[i] = _val
                             else
-                                lock(_widen_lock)
-                                try
-                                    push!(_widen_pairs, i => _val)
-                                finally
-                                    unlock(_widen_lock)
-                                end
+                                push!(_my_widen, i => _val)
                             end
                         end
                     end
                     $(_threading_run_expr(schedule))
                     end
-                    if !isempty(_widen_pairs)
-                        result = _widen_threaded_result(result, _widen_pairs)
-                    end
+                    result = _widen_threaded_result(result, _widen_buffers)
                 end
                 $(wrap_final(:(result)))
             end
@@ -446,28 +440,26 @@ function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule,
     end
 end
 
-# Widen a speculatively-typed result vector when some elements had different types.
-# Only called when at least one element couldn't be stored in the original typed vector.
-function _widen_threaded_result(result::Vector, widen_pairs::Vector{Pair{Int, Any}})
+# Widen a speculatively-typed result array when some threads produced different types.
+# Each thread has its own buffer of (index => value) pairs to avoid lock contention.
+function _widen_threaded_result(result::AbstractArray, widen_buffers::Vector{Vector{Pair{Int, Any}}})
+    widen_pairs = reduce(vcat, widen_buffers; init=Pair{Int,Any}[])
+    isempty(widen_pairs) && return result
     new_T = eltype(result)
     for p in widen_pairs
         new_T = Base.promote_typejoin(new_T, typeof(p.second))
     end
-    # Function barrier: _widen_copy specializes on new_T so the compiler sees
-    # concrete element types for both source and destination vectors.
+    new_T === eltype(result) && return result
+    # Function barrier: specializes on new_T so the compiler sees
+    # concrete element types for both source and destination arrays.
     return _widen_copy(new_T, result, widen_pairs)
 end
 
-function _widen_copy(::Type{T}, result::Vector, widen_pairs::Vector{Pair{Int, Any}}) where T
-    widen_set = BitSet(p.first for p in widen_pairs)
-    new_result = similar(Vector{T}, axes(result))
-    for i in eachindex(result)
-        if !(i in widen_set)
-            @inbounds new_result[i] = result[i]
-        end
-    end
-    for (i, val) in widen_pairs
-        @inbounds new_result[i] = val
+function _widen_copy(::Type{T}, result::AbstractArray, widen_pairs::Vector{Pair{Int, Any}}) where T
+    new_result = similar(result, T)
+    copyto!(new_result, result)
+    for (idx, val) in widen_pairs
+        @inbounds new_result[idx] = val
     end
     return new_result
 end
