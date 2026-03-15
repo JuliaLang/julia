@@ -2864,4 +2864,118 @@ precompile_test_harness("Preferences hash collision (issue #59344), part 2") do 
     end
 end
 
+# Workspace sub-environment precompilation should not precompile packages from other sub-environments
+@testset "workspace sub-environment precompilation scoping" begin
+    mkdepottempdir() do depot
+        workspace_path = joinpath(@__DIR__, "project", "Workspaces", "PrecompileExt")
+        fooenv_path = joinpath(workspace_path, "FooEnv")
+
+        original_depot_path = copy(Base.DEPOT_PATH)
+        old_proj = Base.active_project()
+        try
+            push!(empty!(DEPOT_PATH), depot)
+            # Activate FooEnv (only depends on Foo, not Bar)
+            Base.set_active_project(fooenv_path)
+
+            io = IOBuffer()
+            ioc = IOContext(io, :color => false)
+            Base.Precompilation.precompilepkgs(; io=ioc, fancyprint=false)
+            output = String(take!(io))
+
+            # Foo should be precompiled
+            @test occursin("Foo", output)
+            # Bar should NOT be precompiled (it's in another sub-environment)
+            @test !occursin("Bar", output)
+        finally
+            Base.set_active_project(old_proj)
+            append!(empty!(DEPOT_PATH), original_depot_path)
+        end
+    end
+end
+
+# Test that warn_loaded names loaded packages and counts affected dependents
+@testset "warn_loaded names packages and counts dependents" begin
+    mkdepottempdir() do depot; mktempdir() do dir
+        # Create LoadedDep — will be loaded before precompilepkgs runs
+        loaded_dep_path = joinpath(dir, "dev", "LoadedDep")
+        mkpath(joinpath(loaded_dep_path, "src"))
+        write(joinpath(loaded_dep_path, "Project.toml"),
+              """
+              name = "LoadedDep"
+              uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+              version = "0.1.0"
+              """)
+        write(joinpath(loaded_dep_path, "src", "LoadedDep.jl"),
+              """
+              module LoadedDep
+              end
+              """)
+
+        # Create DepUser — depends on LoadedDep
+        depuser_path = joinpath(dir, "dev", "DepUser")
+        mkpath(joinpath(depuser_path, "src"))
+        write(joinpath(depuser_path, "Project.toml"),
+              """
+              name = "DepUser"
+              uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [deps]
+              LoadedDep = "a1a1a1a1-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(depuser_path, "src", "DepUser.jl"),
+              """
+              module DepUser
+              import LoadedDep
+              end
+              """)
+
+        # Create project environment referencing both packages
+        project_path = joinpath(dir, "project")
+        mkpath(project_path)
+        write(joinpath(project_path, "Project.toml"),
+              """
+              [deps]
+              DepUser = "b2b2b2b2-0000-0000-0000-000000000002"
+              LoadedDep = "a1a1a1a1-0000-0000-0000-000000000001"
+              """)
+        write(joinpath(project_path, "Manifest.toml"),
+              """
+              manifest_format = "2.0"
+
+              [[deps.DepUser]]
+              deps = ["LoadedDep"]
+              path = "../dev/DepUser/"
+              uuid = "b2b2b2b2-0000-0000-0000-000000000002"
+              version = "0.1.0"
+
+              [[deps.LoadedDep]]
+              path = "../dev/LoadedDep/"
+              uuid = "a1a1a1a1-0000-0000-0000-000000000001"
+              version = "0.1.0"
+              """)
+
+        script = """
+            using LoadedDep
+            Base.Precompilation.precompilepkgs(; fancyprint=false, warn_loaded=true)
+            """
+
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$(project_path) -e $script`,
+                     "JULIA_DEPOT_PATH" => depot)
+
+        out = Base.PipeEndpoint()
+        log = @async read(out, String)
+        try
+            proc = run(pipeline(cmd, stdout=out, stderr=out))
+            @test success(proc)
+        catch
+            @show fetch(log)
+            rethrow()
+        end
+        output = fetch(log)
+        @test occursin("currently loaded", output)
+        @test occursin("LoadedDep", output)
+    end end
+end
+
 finish_precompile_test!()

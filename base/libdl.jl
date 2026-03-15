@@ -223,6 +223,7 @@ find_library(libname::Union{Symbol,AbstractString}, extrapaths=String[]) =
 Given a library `handle` from `dlopen`, return the full path.
 """
 function dlpath(handle::Ptr{Cvoid})
+    handle == C_NULL && throw(ArgumentError("NULL library handle"))
     p = ccall(:jl_pathname_for_handle, Cstring, (Ptr{Cvoid},), handle)
     s = unsafe_string(p)
     Sys.iswindows() && Libc.free(p)
