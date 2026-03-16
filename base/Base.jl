@@ -216,6 +216,9 @@ include("compiler_frontend.jl")
 # * Compiler which happens to be used by Base during bootstrap
 # (these happen to be the same at this point)
 _default_compiler_frontend = FlispCompilerFrontend()
+function _set_default_compiler!(frontend::AbstractCompilerFrontend)
+    global _default_compiler_frontend = frontend
+end
 set_compiler_frontend!(Base, _default_compiler_frontend)
 for m in methods(eval)
     delete_method(m)
@@ -352,20 +355,19 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 # Compiler frontend
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
 include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
-Core.println("compiler_frontend_1.jl")
-include(@__MODULE__, "compiler_frontend_1.jl")
+
+# Now that JuliaSyntax is bootstrapped and ready to use, set it as the global
+# default for new modules.
+_set_default_compiler!(JuliaSyntax.DefaultCompilerFrontend(get_world_counter(), NON_VERSIONED_SYNTAX))
 function set_syntax_version(m::Module, ver::VersionNumber)
     set_compiler_frontend!(m, compiler_frontend(ver))
     nothing
 end
-_default_compiler_frontend = compiler_frontend(NON_VERSIONED_SYNTAX)
-set_compiler_frontend!(Base, _default_compiler_frontend)
+# Also set Base's syntax version
+set_syntax_version(Base, VERSION)
 
 # May be replaced in incremental sysimage build after-the-fact
 const JuliaLowering = nothing
-
-# Now that JuliaSyntax is bootstrapped and ready to use, set Base's syntax version.
-set_syntax_version(Base, VERSION)
 
 end_base_include = time_ns()
 

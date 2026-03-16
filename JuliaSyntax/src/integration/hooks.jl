@@ -5,6 +5,10 @@ const _has_v1_6_hooks  = VERSION >= v"1.6"
 const _has_v1_10_hooks = isdefined(Core, :_setparser!)
 const _has_v1_14_hooks = isdefined(Base, :CompilerFrontend)
 
+if _has_v1_14_hooks
+    include("compiler_frontend.jl")
+end
+
 struct ErrorSpec
     child_idx::Int
     node::RedTreeCursor
@@ -293,7 +297,9 @@ else
     Base.Meta.ParseError(e::JuliaSyntax.ParseError) = e
 end
 
-_default_system_parser = _has_v1_6_hooks ? Core._parse : nothing
+_default_system_parser = _has_v1_14_hooks ? Base._default_compiler_frontend :
+                         _has_v1_6_hooks  ? Core._parse :
+                         nothing
 
 # hook into InteractiveUtils.@activate
 activate!(enable=true) = enable_in_core!(enable)
@@ -317,9 +323,6 @@ function enable_in_core!(enable=true; freeze_world_age = true,
     if !_has_v1_6_hooks
         error("Cannot use JuliaSyntax as the main Julia parser in Julia version $VERSION < 1.6")
     end
-    if _has_v1_14_hooks
-        error("TODO: As of julia 1.14, JuliaSyntax integrates into Base via the Base.CompilerFrontend interface")
-    end
     if enable && !isnothing(debug_filename)
         _debug_log[] = open(debug_filename, "w")
     elseif !enable && !isnothing(_debug_log[])
@@ -328,10 +331,18 @@ function enable_in_core!(enable=true; freeze_world_age = true,
     end
     if enable
         world_age = freeze_world_age ? Base.get_world_counter() : typemax(UInt)
-        _set_core_parse_hook(fix_world_age(core_parser_hook, world_age))
+        if _has_v1_14_hooks
+            Base._set_default_compiler!(DefaultCompilerFrontend(world_age, Base.NON_VERSIONED_SYNTAX))
+        else
+            _set_core_parse_hook(fix_world_age(core_parser_hook, world_age))
+        end
     else
         @assert !isnothing(_default_system_parser)
-        _set_core_parse_hook(_default_system_parser)
+        if _has_v1_14_hooks
+            Base._set_default_compiler!(_default_system_parser)
+        else
+            _set_core_parse_hook(_default_system_parser)
+        end
     end
     nothing
 end
