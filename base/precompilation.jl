@@ -998,8 +998,11 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                         if i_local > 1
                             print(iostr, ansi_cleartoend)
                         end
-                        bar.current = n_done[] - n_already_precomp[]
-                        bar.max = n_total - n_already_precomp[]
+                        # max(0,...) guards against a race where the print loop runs after
+                        # n_already_precomp is incremented but before n_done is incremented,
+                        # which would otherwise produce a negative value and crash repeat().
+                        bar.current = max(0, n_done[] - n_already_precomp[])
+                        bar.max = max(0, n_total - n_already_precomp[])
                         # when sizing to the terminal width subtract a little to give some tolerance to resizing the
                         # window between print cycles
                         termwidth = (displaysize(io)::Tuple{Int,Int})[2] - 4
