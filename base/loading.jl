@@ -2617,13 +2617,13 @@ function workspace_setup_hint(mod::Symbol)
                     return "\n- Tip: Package `$mod_str` was found in the parent project at" *
                            " `$parent_project_file`, but the `[workspace]` there does not include" *
                            " the current project.\n" *
-                           "  Consider updating `$parent_project_file`:\n" *
-                           "    [workspace]\n      projects = [$projects_str]"
+                           "  Consider updating `$parent_project_file` to:\n" *
+                           "    [workspace]\n    projects = [$projects_str]"
                 else
                     return "\n- Tip: Package `$mod_str` was found in the parent project at" *
                            " `$parent_project_file`, but that project has no `[workspace]` configured.\n" *
-                           "  Consider adding to `$parent_project_file`:\n" *
-                           "    [workspace]\n      projects = [$(repr(rel))]"
+                           "  Consider adding the following to `$parent_project_file`:\n" *
+                           "    [workspace]\n    projects = [$(repr(rel))]"
                 end
             end
         end
