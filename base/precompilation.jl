@@ -350,8 +350,9 @@ function show_progress(io::IO, p::MiniProgressBar; termwidth=nothing, carriagere
     end
     termwidth = @something termwidth (displaysize(io)::Tuple{Int,Int})[2]
     max_progress_width = max(0, min(termwidth - textwidth(p.header) - textwidth(progress_text) - 10 , p.width))
-    n_filled = floor(Int, max_progress_width * perc / 100)
-    partial_filled = (max_progress_width * perc / 100) - n_filled
+    perc_clamped = clamp(perc, 0.0, 100.0)
+    n_filled = floor(Int, max_progress_width * perc_clamped / 100)
+    partial_filled = (max_progress_width * perc_clamped / 100) - n_filled
     n_left = max_progress_width - n_filled
     headers = split(p.header, ' ')
     to_print = sprint(; context=io) do io
