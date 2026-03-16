@@ -378,7 +378,7 @@ end
 
 @testset "tap" begin
     buf = IOBuffer()
-    @test (123 |> tap(Fix1(print, buf))) == 123
+    @test (123 |> tap(Base.Fix1(print, buf))) == 123
     @test takestring!(buf) == "123"
 
     val = [1, 2, 3]
