@@ -2016,6 +2016,55 @@ end
     end
 end
 
+@testset "workspace_setup_hint" begin
+    # Test the hint shown when `using Pkg` fails because a parent project knows about
+    # the package but the workspace isn't configured to include the current project.
+    old_active = Base.active_project()
+    try
+        d = mktempdir()
+
+        # Case 1: workspace already set up correctly -> no hint
+        pkgdir = joinpath(d, "MyPkg")
+        testdir = joinpath(pkgdir, "test")
+        mkpath(testdir)
+        write(joinpath(pkgdir, "Project.toml"),
+              "name = \"MyPkg\"\nuuid = \"12345678-1234-1234-1234-1234567890ab\"\n\n[workspace]\nprojects = [\"test\"]\n")
+        write(joinpath(testdir, "Project.toml"),
+              "[deps]\nTest = \"8dfed614-e22c-5e08-85e1-65c5234f0b40\"\n")
+        Base.set_active_project(joinpath(testdir, "Project.toml"))
+        @test Base.workspace_setup_hint(:MyPkg) == ""
+
+        # Case 2: [workspace] exists but current project not in it
+        pkgdir = joinpath(d, "MyPkg2")
+        testdir = joinpath(pkgdir, "test")
+        mkpath(testdir)
+        write(joinpath(pkgdir, "Project.toml"),
+              "name = \"MyPkg2\"\nuuid = \"22345678-1234-1234-1234-1234567890ab\"\n\n[workspace]\nprojects = [\"docs\"]\n")
+        write(joinpath(testdir, "Project.toml"),
+              "[deps]\nTest = \"8dfed614-e22c-5e08-85e1-65c5234f0b40\"\n")
+        Base.set_active_project(joinpath(testdir, "Project.toml"))
+        h = Base.workspace_setup_hint(:MyPkg2)
+        @test occursin("[workspace]", h)
+        @test occursin("does not include", h)
+        @test occursin("docs", h)  # existing projects preserved in suggestion
+
+        # Case 3: no [workspace] at all
+        pkgdir = joinpath(d, "MyPkg3")
+        testdir = joinpath(pkgdir, "test")
+        mkpath(testdir)
+        write(joinpath(pkgdir, "Project.toml"),
+              "name = \"MyPkg3\"\nuuid = \"32345678-1234-1234-1234-1234567890ab\"\n")
+        write(joinpath(testdir, "Project.toml"),
+              "[deps]\nTest = \"8dfed614-e22c-5e08-85e1-65c5234f0b40\"\n")
+        Base.set_active_project(joinpath(testdir, "Project.toml"))
+        h = Base.workspace_setup_hint(:MyPkg3)
+        @test occursin("[workspace]", h)
+        @test occursin("no `[workspace]`", h)
+    finally
+        Base.set_active_project(old_active)
+    end
+end
+
 @testset "project path handling" begin
     old_load_path = copy(LOAD_PATH)
     try

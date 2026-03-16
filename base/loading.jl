@@ -2574,6 +2574,63 @@ function check_for_hint(into, mod)
     end
 end
 
+# Check if a parent Project.toml knows about `mod` but hasn't set up a workspace
+# to include the current active project, and return a hint if so.
+function workspace_setup_hint(mod::Symbol)
+    project_file = active_project()
+    project_file === nothing && return ""
+    isfile(project_file) || return ""
+    project_dir = abspath(dirname(project_file))
+    home_dir = abspath(homedir())
+    started_in_home = startswith(project_dir, home_dir)
+    mod_str = String(mod)
+    current_dir = project_dir
+    while true
+        parent_dir = dirname(current_dir)
+        parent_dir == current_dir && return ""
+        if started_in_home && !startswith(parent_dir, home_dir)
+            return ""
+        end
+        parent_project_file = env_project_file(parent_dir)
+        if parent_project_file isa String
+            d = parsed_toml(parent_project_file)
+            parent_name = get(d, "name", nothing)
+            parent_deps = get(d, "deps", nothing)
+            if parent_name == mod_str || (parent_deps isa Dict && haskey(parent_deps, mod_str))
+                rel = relpath(project_dir, parent_dir)
+                workspace = get(d, "workspace", nothing)
+                if workspace isa Dict
+                    # Workspace exists but may not include our active project dir
+                    projects = get(workspace, "projects", nothing)
+                    if projects isa Vector
+                        workspace_root = dirname(parent_project_file)
+                        for proj in projects
+                            proj_path = joinpath(workspace_root, proj)
+                            if isdir(proj_path) && samefile(proj_path, project_dir)
+                                return ""  # workspace already set up correctly
+                            end
+                        end
+                    end
+                    existing = projects isa Vector ? projects : String[]
+                    new_projects = vcat(existing, rel)
+                    projects_str = join([repr(p) for p in new_projects], ", ")
+                    return "\n- Tip: Package `$mod_str` was found in the parent project at" *
+                           " `$parent_project_file`, but the `[workspace]` there does not include" *
+                           " the current project.\n" *
+                           "  Consider updating `$parent_project_file`:\n" *
+                           "    [workspace]\n      projects = [$projects_str]"
+                else
+                    return "\n- Tip: Package `$mod_str` was found in the parent project at" *
+                           " `$parent_project_file`, but that project has no `[workspace]` configured.\n" *
+                           "  Consider adding to `$parent_project_file`:\n" *
+                           "    [workspace]\n      projects = [$(repr(rel))]"
+                end
+            end
+        end
+        current_dir = parent_dir
+    end
+end
+
 function __require(into::Module, mod::Symbol)
     if into === __toplevel__ && generating_output(#=incremental=#true)
         error("`using/import $mod` outside of a Module detected. Importing a package outside of a module \
@@ -2599,8 +2656,9 @@ function __require(into::Module, mod::Symbol)
                 else  # for some reason Pkg itself isn't availability so do not tell them to use Pkg to install it.
                     ""
                 end
+                workspace_message = workspace_setup_hint(mod)
 
-                throw(ArgumentError("Package $mod not found in current path$hint_message.$install_message"))
+                throw(ArgumentError("Package $mod not found in current path$hint_message.$install_message$workspace_message"))
             else
                 manifest_warnings = collect_manifest_warnings()
                 throw(ArgumentError("""
