@@ -112,4 +112,31 @@ oneunit(::Type{<:MockUnitful{T}}) where T = MockUnitful(one(T))
     @test r.data ≈ 5.0
 end
 
+struct MockMeasurement{T<:AbstractFloat} <: AbstractFloat
+    data::T
+end
+import Base: promote_rule, floatmin, eps, ==, <, -, +, <=, sqrt
+MockMeasurement(x::Real) = MockMeasurement(float(x))
+one(::Type{<:MockMeasurement{T}}) where {T<:Real} = one(T)
+promote_rule(::Type{MockMeasurement{T}}, ::Type{<:Real}) where {T} = MockMeasurement{T}
+for f in (:floatmin, :eps, :oneunit)
+    @eval $f(::Type{MockMeasurement{T}}) where {T<:AbstractFloat} = $f(T)
+end
+for f in (:-, :sqrt)
+    @eval $f(x::MockMeasurement) = MockMeasurement($f(x.data))
+end
+for f in (:*, :+, :/)
+    @eval $f(x::MockMeasurement, y::MockMeasurement) = MockMeasurement($f(x.data,y.data))
+end
+for f in (:<, :(==), :(<=))
+    @eval $f(x::MockMeasurement, y::MockMeasurement) = $f(x.data,y.data)
+end
+
+@testset "measurement givens rotation unitful $T " for T in (Float64, ComplexF64)
+    g, r = givens(MockMeasurement(T(3)), MockMeasurement(T(4)), 1, 2)
+    @test g.c ≈ 3/5
+    @test g.s ≈ 4/5
+    @test r.data ≈ 5.0
+end
+
 end # module TestGivens

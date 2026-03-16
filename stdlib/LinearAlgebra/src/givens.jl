@@ -78,7 +78,7 @@ function givensAlgorithm(f::T, g::T) where T<:AbstractFloat
     onepar = one(T)
     twopar = 2one(T)
     T0 = typeof(onepar) # dimensionless
-    zeropar = T0(zero(T)) # must be dimensionless
+    zeropar = zero(onepar) # must be dimensionless
 
     # need both dimensionful and dimensionless versions of these:
     safmn2 = floatmin2(T0)
@@ -151,7 +151,7 @@ end
 function givensAlgorithm(f::Complex{T}, g::Complex{T}) where T<:AbstractFloat
     twopar, onepar = 2one(T), one(T)
     T0 = typeof(onepar) # dimensionless
-    zeropar = T0(zero(T)) # must be dimensionless
+    zeropar = zero(onepar) # must be dimensionless
     czero = complex(zeropar)
 
     abs1(ff) = max(abs(real(ff)), abs(imag(ff)))
