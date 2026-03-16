@@ -80,23 +80,22 @@ end
 function async_usemap(f, c...; ntasks=0, batch_size=nothing)
     ntasks = verify_ntasks(c[1], ntasks)
     batch_size = verify_batch_size(batch_size)
+    results = asyncmap_result_buffer(c...)
 
     if batch_size !== nothing
         exec_func = batch -> begin
-            # extract the Refs from the input tuple
-            batch_refs = map(x->x[1], batch)
-
-            # and the args tuple....
+            batch_tokens = map(x->x[1], batch)
             batched_args = map(x->x[2], batch)
-
-            results = f(batched_args)
-            foreach(x -> (batch_refs[x[1]].x = x[2]), enumerate(results))
+            batch_results = f(batched_args)
+            foreach(zip(batch_tokens, batch_results)) do (token, result)
+                results[token] = result
+            end
         end
     else
-        exec_func = (r,args) -> (r.x = f(args...))
+        exec_func = (token,args) -> (results[token] = f(args...))
     end
     chnl, worker_tasks = setup_chnl_and_tasks(exec_func, ntasks, batch_size)
-    return wrap_n_exec_twice(chnl, worker_tasks, ntasks, exec_func, c...)
+    return wrap_n_exec_twice(results, chnl, worker_tasks, ntasks, exec_func, batch_size, c...)
 end
 
 batch_size_err_str(batch_size) = string("batch_size must be specified as a positive integer. batch_size=", batch_size)
@@ -129,32 +128,40 @@ function verify_ntasks(iterable, ntasks)
     return ntasks
 end
 
-function wrap_n_exec_twice(chnl, worker_tasks, ntasks, exec_func, c...)
-    # The driver task, creates a Ref object and writes it and the args tuple to
-    # the communication channel for processing by a free worker task.
-    push_arg_to_channel = (x...) -> (r=Ref{Any}(nothing); put!(chnl,(r,x));r)
+function asyncmap_result_buffer(c...)
+    z = zip(c...)
+    return haslength(z) ? Vector{Any}(undef, length(z)) : Dict{Int,Any}()
+end
+
+function wrap_n_exec_twice(results, chnl, worker_tasks, ntasks, exec_func, batch_size, c...)
+    next_token = Ref(0)
+    push_arg_to_channel = (x...) -> begin
+        token = next_token[] + 1
+        next_token[] = token
+        put!(chnl, (token, x))
+        token
+    end
 
     if isa(ntasks, Function)
         map_f = (x...) -> begin
             # check number of tasks every time, and start one if required.
             # number_tasks > optimal_number is fine, the other way around is inefficient.
             if length(worker_tasks) < ntasks()
-                start_worker_task!(worker_tasks, exec_func, chnl)
+                start_worker_task!(worker_tasks, exec_func, chnl, batch_size)
             end
             push_arg_to_channel(x...)
         end
     else
         map_f = push_arg_to_channel
     end
-    maptwice(map_f, chnl, worker_tasks, c...)
+    maptwice(results, map_f, chnl, worker_tasks, c...)
 end
 
-function maptwice(wrapped_f, chnl, worker_tasks, c...)
-    # first run, returns a collection of Refs
+function maptwice(results, wrapped_f, chnl, worker_tasks, c...)
     asyncrun_excp = nothing
-    local asyncrun
+    local tokens
     try
-        asyncrun = map(wrapped_f, c...)
+        tokens = map(wrapped_f, c...)
     catch ex
         if isa(ex,InvalidStateException)
             # channel could be closed due to exceptions in the async tasks,
@@ -175,14 +182,12 @@ function maptwice(wrapped_f, chnl, worker_tasks, c...)
     # check if there was a genuine problem with asyncrun
     (asyncrun_excp !== nothing) && throw(asyncrun_excp)
 
-    if isa(asyncrun, Ref)
-        # scalar case
-        return asyncrun.x
-    else
-        # second run, extract values from the Refs and return
-        return map(ref->ref.x, asyncrun)
-    end
+    return finish_asyncmap(results, tokens, c...)
 end
+
+finish_asyncmap(results, token::Number, c...) = results[token]
+finish_asyncmap(results, tokens, c::AbstractArray, cs...) = collect_similar(c, (results[i] for i in tokens))
+finish_asyncmap(results, tokens, c...) = map(i -> results[i], tokens)
 
 function setup_chnl_and_tasks(exec_func, ntasks, batch_size=nothing)
     if isa(ntasks, Function)
