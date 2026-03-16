@@ -1,0 +1,4 @@
+name = "SomeOtherPackage"
+uuid = "178f68a2-4498-45ee-a775-452b36359b63"
+authors = ["Cody Tapscott <topolarity@tapscott.me>"]
+version = "0.1.0"

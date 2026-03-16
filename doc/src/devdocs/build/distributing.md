@@ -108,7 +108,7 @@ Alternatively, Julia may be built as a framework by invoking `make` with the
 Windows
 -------
 
-Instructions for reating a Julia distribution on Windows are described in the
+Instructions for creating a Julia distribution on Windows are described in the
 [build devdocs for Windows](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/windows.md).
 
 Notes on BLAS and LAPACK

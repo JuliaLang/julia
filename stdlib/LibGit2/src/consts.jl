@@ -45,8 +45,7 @@ const BLAME_USE_MAILMAP                     = Cuint(1 << 5)
 const BLAME_IGNORE_WHITESPACE               = Cuint(1 << 6)
 
 # checkout
-const CHECKOUT_NONE                    = Cuint(0)
-const CHECKOUT_SAFE                    = Cuint(1 << 0)
+const CHECKOUT_SAFE                    = Cuint(0)
 const CHECKOUT_FORCE                   = Cuint(1 << 1)
 const CHECKOUT_RECREATE_MISSING        = Cuint(1 << 2)
 const CHECKOUT_ALLOW_CONFLICTS         = Cuint(1 << 4)
@@ -67,6 +66,7 @@ const CHECKOUT_DONT_REMOVE_EXISTING    = Cuint(1 << 22)
 const CHECKOUT_DONT_WRITE_INDEX        = Cuint(1 << 23)
 const CHECKOUT_DRY_RUN                 = Cuint(1 << 24)
 const CHECKOUT_CONFLICT_STYLE_ZDIFF3   = Cuint(1 << 25)
+const CHECKOUT_NONE                    = Cuint(1 << 30)
 
 const CHECKOUT_UPDATE_SUBMODULES       = Cuint(1 << 16)
 const CHECKOUT_UPDATE_SUBMODULES_IF_CHANGED = Cuint(1 << 17)

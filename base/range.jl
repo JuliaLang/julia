@@ -49,6 +49,8 @@ The operator `:` is also used in indexing to select whole dimensions, e.g. in `A
 `:` is also used to [`quote`](@ref) code, e.g. `:(x + y) isa Expr` and `:x isa Symbol`.
 Since `:2 isa Int`, it does *not* create a range in indexing: `v[:2] == v[2] != v[begin:2]`.
 """
+(:)(::Any, ::Any, ::Any)
+
 (:)(start::T, step, stop::T) where {T} = _colon(start, step, stop)
 (:)(start::T, step, stop::T) where {T<:Real} = _colon(start, step, stop)
 # without the second method above, the first method above is ambiguous with
@@ -452,13 +454,20 @@ if isdefined(Main, :Base)
 end
 
 """
+    Base.AbstractOneTo
+
+Abstract type for ranges that start at 1 and have a step size of 1.
+"""
+abstract type AbstractOneTo{T} <: AbstractUnitRange{T} end
+
+"""
     Base.OneTo(n)
 
 Define an `AbstractUnitRange` that behaves like `1:n`, with the added
 distinction that the lower limit is guaranteed (by the type system) to
 be 1.
 """
-struct OneTo{T<:Integer} <: AbstractUnitRange{T}
+struct OneTo{T<:Integer} <: AbstractOneTo{T}
     stop::T # invariant: stop >= zero(stop)
     function OneTo{T}(stop) where {T<:Integer}
         throwbool(r)  = (@noinline; throw(ArgumentError("invalid index: $r of type Bool")))
@@ -562,7 +571,7 @@ julia> collect(LinRange(-0.1, 0.3, 5))
   0.3
 ```
 
-See also [`Logrange`](@ref Base.LogRange) for logarithmically spaced points.
+See also [`Base.LogRange`](@ref Base.LogRange) for logarithmically spaced points.
 """
 struct LinRange{T,L<:Integer} <: AbstractRange{T}
     start::T
@@ -680,7 +689,7 @@ end
 ## interface implementations
 
 length(r::AbstractRange) = error("length implementation missing") # catch mistakes
-size(r::AbstractRange) = (length(r),)
+size(r::AbstractRange) = (@inline; (length(r),))
 
 isempty(r::StepRange) =
     # steprange_last(r.start, r.step, r.stop) == r.stop
@@ -711,6 +720,7 @@ julia> step(range(2.5, stop=10.9, length=85))
 """
 step(r::StepRange) = r.step
 step(r::AbstractUnitRange{T}) where {T} = oneunit(T) - zero(T)
+step(r::AbstractUnitRange{Bool}) = true
 step(r::StepRangeLen) = r.step
 step(r::StepRangeLen{T}) where {T<:AbstractFloat} = T(r.step)
 step(r::LinRange) = (last(r)-first(r))/r.lendiv
@@ -797,17 +807,12 @@ let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128},
         s = step(r)
         diff = last(r) - first(r)
         isempty(r) && return zero(diff)
-        # if |s| > 1, diff might have overflowed, but unsigned(diff)÷s should
-        # therefore still be valid (if the result is representable at all)
-        # n.b. !(s isa T)
-        if s isa Unsigned || -1 <= s <= 1 || s == -s
-            a = div(diff, s) % typeof(diff)
-        elseif s < 0
-            a = div(unsigned(-diff), -s) % typeof(diff)
-        else
-            a = div(unsigned(diff), s) % typeof(diff)
-        end
-        return a + oneunit(a)
+        # Compute `(diff ÷ s) + 1` in a manner robust to signed overflow
+        # by using the absolute values as unsigneds for non-empty ranges.
+        # Note that `s` may be a different type from T and diff; it may not
+        # even be a BitInteger that supports `unsigned`. Handle with care.
+        a = div(unsigned(flipsign(diff, s)), s) % typeof(diff)
+        return flipsign(a, s) + oneunit(a)
     end
     function checked_length(r::OrdinalRange{T}) where T<:bigints
         s = step(r)
@@ -849,6 +854,11 @@ first(r::OrdinalRange{T}) where {T} = convert(T, r.start)
 first(r::OneTo{T}) where {T} = oneunit(T)
 first(r::StepRangeLen) = unsafe_getindex(r, 1)
 first(r::LinRange) = r.start
+
+function first(r::OneTo, n::Integer)
+    n < 0 && throw(ArgumentError("Number of elements must be non-negative"))
+    OneTo(oftype(r.stop, min(r.stop, n)))
+end
 
 last(r::OrdinalRange{T}) where {T} = convert(T, r.stop) # via steprange_last
 last(r::StepRangeLen) = unsafe_getindex(r, length(r))
@@ -948,7 +958,7 @@ function _getindex(v::UnitRange{T}, i::Integer) where {T<:OverflowSafe}
 end
 
 let BitInteger64 = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64} # for bootstrapping
-    function checkbounds(::Type{Bool}, v::StepRange{<:BitInteger64, <:BitInteger64}, i::BitInteger64)
+    global function checkbounds(::Type{Bool}, v::StepRange{<:BitInteger64, <:BitInteger64}, i::BitInteger64)
         res = widemul(step(v), i-oneunit(i)) + first(v)
         (0 < i) & ifelse(0 < step(v), res <= last(v), res >= last(v))
     end
@@ -1099,7 +1109,11 @@ function getindex(r::LinRange{T}, s::OrdinalRange{S}) where {T, S<:Integer}
 end
 
 show(io::IO, r::AbstractRange) = print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
-show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
+function show(io::IO, r::UnitRange)
+    show(io, first(r))
+    print(io, ':')
+    show(io, last(r))
+end
 show(io::IO, r::OneTo) = print(io, "Base.OneTo(", r.stop, ")")
 function show(io::IO, r::StepRangeLen)
     if !iszero(step(r))
@@ -1152,6 +1166,17 @@ function ==(r::AbstractRange, s::AbstractRange)
         yr, ys = iterate(r, yr[2]), iterate(s, ys[2])
     end
     return true
+end
+
+function cmp(r1::T, r2::T) where {T <: AbstractRange}
+    firstindex(r1) == firstindex(r2) || return cmp(firstindex(r1), firstindex(r2))
+    (isempty(r1) || isempty(r2)) && return cmp(isempty(r2), isempty(r1))
+    first(r1) != first(r2) && return cmp(first(r1), first(r2))
+    # Assume that ranges are monotonic and use the last shared element as a high precision proxy for step.
+    n = min(lastindex(r1), lastindex(r2))
+    x1, x2 = r1[n], r2[n]
+    x1 != x2 && return cmp(x1, x2)
+    cmp(length(r1), length(r2))
 end
 
 intersect(r::OneTo, s::OneTo) = OneTo(min(r.stop,s.stop))
@@ -1315,14 +1340,18 @@ function promote_rule(::Type{StepRange{T1a,T1b}}, ::Type{StepRange{T2a,T2b}}) wh
     el_same(promote_type(T1a, T2a), StepRange{T1a,Tb}, StepRange{T2a,Tb})
 end
 StepRange{T1,T2}(r::StepRange{T1,T2}) where {T1,T2} = r
+StepRange{T}(r::StepRange{T}) where {T} = r
+StepRange(r::StepRange) = r
 
 promote_rule(a::Type{StepRange{T1a,T1b}}, ::Type{UR}) where {T1a,T1b,UR<:AbstractUnitRange} =
     promote_rule(a, StepRange{eltype(UR), eltype(UR)})
 StepRange{T1,T2}(r::AbstractRange) where {T1,T2} =
     StepRange{T1,T2}(convert(T1, first(r)), convert(T2, step(r)), convert(T1, last(r)))
-StepRange(r::AbstractUnitRange{T}) where {T} =
-    StepRange{T,T}(first(r), step(r), last(r))
+StepRange(r::OrdinalRange{T,S}) where {T,S} = StepRange{T,S}(first(r), step(r), last(r))
+StepRange{T}(r::OrdinalRange{<:Any,S}) where {T,S} = StepRange{T,S}(first(r), step(r), last(r))
 (StepRange{T1,T2} where T1)(r::AbstractRange) where {T2} = StepRange{eltype(r),T2}(r)
+StepRange(r::StepRangeLen) = StepRange{eltype(r)}(r)
+StepRange{T}(r::StepRangeLen{<:Any,<:Any,S}) where {T,S} = StepRange{T,S}(r)
 
 function promote_rule(::Type{StepRangeLen{T1,R1,S1,L1}},::Type{StepRangeLen{T2,R2,S2,L2}}) where {T1,T2,R1,R2,S1,S2,L1,L2}
     R, S, L = promote_type(R1, R2), promote_type(S1, S2), promote_type(L1, L2)
@@ -1485,7 +1514,7 @@ end
 """
     mod(x::Integer, r::AbstractUnitRange)
 
-Find `y` in the range `r` such that ``x ≡ y (mod n)``, where `n = length(r)`,
+Find `y` in the range `r` such that `x` ≡ `y` (mod `n`), where `n = length(r)`,
 i.e. `y = mod(x - first(r), n) + first(r)`.
 
 See also [`mod1`](@ref).
@@ -1679,4 +1708,15 @@ function show(io::IO, r::LogRange{T}) where {T}
     print(io, ", ")
     show(io, length(r))
     print(io, ')')
+end
+
+# Implementation detail of @world
+# The rest of this is defined in essentials.jl, but UnitRange is not available
+function _resolve_in_world(worlds::UnitRange, gr::GlobalRef)
+    # Validate that this binding's reference covers the entire world range
+    bpart = lookup_binding_partition(UInt(first(worlds)), gr)
+    if bpart.max_world < last(worlds)
+        error("Binding does not cover the full world range")
+    end
+    _resolve_in_world(UInt(last(worlds)), gr)
 end

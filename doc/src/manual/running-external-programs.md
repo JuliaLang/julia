@@ -393,7 +393,7 @@ an existing `Cmd` or list of arguments:
 
 ```julia
 run(Cmd(`pwd`, dir=".."))
-run(Cmd(["pwd"], detach=true, ignorestatus=true))
+run(Cmd(Cmd(["pwd"]), detach=true, ignorestatus=true))
 ```
 
 This allows you to specify several aspects of the `Cmd`'s execution environment via keyword arguments. For

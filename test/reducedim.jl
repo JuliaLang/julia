@@ -88,12 +88,12 @@ safe_minabs(A::Array{T}, region) where {T} = safe_mapslices(minimum, abs.(A), re
     @test @inferred(count(!, Breduc, dims=region)) ≈ safe_count(.!Breduc, region)
 
     @test isequal(
-        @inferred(count(Breduc, dims=region, init=0x02)),
-        safe_count(Breduc, region) .% UInt8 .+ 0x02,
+        @inferred(Array{UInt8,ndims(Breduc)}, count(Breduc, dims=region, init=0x00)),
+        safe_count(Breduc, region),
     )
     @test isequal(
-        @inferred(count(!, Breduc, dims=region, init=Int16(0))),
-        safe_count(.!Breduc, region) .% Int16,
+        @inferred(Array{Int16,ndims(Breduc)}, count(!, Breduc, dims=region, init=Int16(0))),
+        safe_count(.!Breduc, region),
     )
 end
 
@@ -693,7 +693,7 @@ end
     @test_throws TypeError count!([1], [1])
 end
 
-@test @inferred(count(false:true, dims=:, init=0x0004)) === 0x0005
+@test @inferred(UInt16, count(false:true, dims=:, init=0x0000)) === 1
 @test @inferred(count(isodd, reshape(1:9, 3, 3), dims=:, init=Int128(0))) === Int128(5)
 
 @testset "reduced_index for BigInt (issue #39995)" begin

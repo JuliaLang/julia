@@ -3,6 +3,8 @@
 using Test, UUIDs, Random
 using UUIDs: _build_uuid1, _build_uuid7
 
+@test isempty(Test.detect_closure_boxes(UUIDs))
+
 # results similar to Python builtin uuid
 # To reproduce the sequence
 #=
@@ -40,6 +42,15 @@ u7 = uuid7()
     @test uuid_version(u4) == 4
     @test uuid_version(u5) == 5
     @test uuid_version(u7) == 7
+end
+
+@testset "Extraction of variant bits" begin
+    # RFC 4122, section 4.1.1
+    uuid_variant(u::UUID) = Int((u.value >> 62) & 0x3)
+    @test uuid_variant(u1) == 2
+    @test uuid_variant(u4) == 2
+    @test uuid_variant(u5) == 2
+    @test uuid_variant(u7) == 2
 end
 
 @testset "Parsing from string" begin

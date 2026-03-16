@@ -5,6 +5,8 @@ using Artifacts, Test, Base.BinaryPlatforms
 using Artifacts: with_artifacts_directory, pack_platform!, unpack_platform, load_overrides
 using TOML
 
+@test isempty(Test.detect_closure_boxes(Artifacts))
+
 # prepare for the package tests by ensuring the required artifacts are downloaded now
 artifacts_dir = mktempdir()
 run(addenv(`$(Base.julia_cmd()) --color=no $(joinpath(@__DIR__, "refresh_artifacts.jl")) $(artifacts_dir)`, "TERM"=>"dumb"))
@@ -195,8 +197,8 @@ end
     with_artifacts_directory(artifacts_dir) do
         win64 = Platform("x86_64", "windows")
         mac64 = Platform("x86_64", "macos")
-        @test basename(@artifact_str("HelloWorldC", win64)) == "2f1a6d4f82cd1eea785a5141b992423c09491f1b"
-        @test basename(@artifact_str("HelloWorldC", mac64)) == "f8ab5a03697f9afc82210d8a2be1d94509aea8bc"
+        @test basename(@artifact_str("HelloWorldC", win64)) == "6e1eb164b0651aa44621eac4dfa340d6e60295ef"
+        @test basename(@artifact_str("HelloWorldC", mac64)) == "2e1742c9c0addd693b0b025f7a1e7aa4c50a0e6c"
     end
 end
 
@@ -206,7 +208,7 @@ end
 
     # Check the first key in Artifacts.toml is hashed correctly
     @test artifact_hash("HelloWorldC", joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux) ==
-            SHA1("5a8288c8a30578c0d0f24a9cded29579517ce7a8")
+            SHA1("0a8e7b523ef6be31311aefe9983a488616e58201")
 
     # Check the second key in Artifacts.toml is hashed correctly
     @test artifact_hash("socrates", joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux) ==
@@ -214,18 +216,18 @@ end
 
     # Check artifact_hash() works for any AbstractString
     @test artifact_hash(SubString("HelloWorldC0", 1, 11), joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux) ==
-            SHA1("5a8288c8a30578c0d0f24a9cded29579517ce7a8")
+            SHA1("0a8e7b523ef6be31311aefe9983a488616e58201")
 end
 
 @testset "select_downloadable_artifacts()" begin
     armv7l_linux = Platform("armv7l", "linux")
     artifacts = select_downloadable_artifacts(joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux)
     @test length(keys(artifacts)) == 1
-    @test artifacts["HelloWorldC"]["git-tree-sha1"] == "5a8288c8a30578c0d0f24a9cded29579517ce7a8"
+    @test artifacts["HelloWorldC"]["git-tree-sha1"] == "0a8e7b523ef6be31311aefe9983a488616e58201"
 
     artifacts = select_downloadable_artifacts(joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux, include_lazy=true)
     @test length(keys(artifacts)) == 2
-    @test artifacts["HelloWorldC"]["git-tree-sha1"] == "5a8288c8a30578c0d0f24a9cded29579517ce7a8"
+    @test artifacts["HelloWorldC"]["git-tree-sha1"] == "0a8e7b523ef6be31311aefe9983a488616e58201"
     @test artifacts["socrates"]["git-tree-sha1"] == "43563e7631a7eafae1f9f8d9d332e3de44ad7239"
 end
 
@@ -242,14 +244,29 @@ end
                 anon = Module(:__anon__)
                 Core.eval(anon, Meta.parse("using $(imports), Test"))
                 # Ensure that we get the expected exception, since this test runs with --depwarn=error
-                Core.eval(anon, quote
-                    try
-                        artifact"socrates"
-                        @assert false "this @artifact_str macro invocation should have failed!"
-                    catch e
-                        @test startswith("using Pkg instead of using LazyArtifacts is deprecated", e.msg)
-                    end
-                end)
+                depwarn_flag = Base.JLOptions().depwarn
+                # 0: --depwarn=no
+                # 1: --depwarn=yes
+                # 2: --depwarn=error
+                if depwarn_flag == 0
+                    @warn "Skipping one test, because we are running with --depwarn=no"
+                    @test_skip false
+                elseif depwarn_flag == 1
+                    expected_msg = "using Pkg instead of using LazyArtifacts is deprecated"
+                    @test_logs (:warn,expected_msg) Core.eval(anon, :(artifact"socrates"))
+                elseif depwarn_flag == 2
+                    Core.eval(anon, quote
+                        try
+                            artifact"socrates"
+                            # The previous line should have thrown, so we should not reach the next line:
+                            error("this @artifact_str macro invocation should have failed!")
+                        catch e
+                            @test startswith("using Pkg instead of using LazyArtifacts is deprecated", e.msg)
+                        end
+                    end)
+                else
+                    error("Unexpected value for Base.JLOptions().depwarn: $(depwarn_flag)")
+                end
             end
         end
     end

@@ -198,7 +198,7 @@ end
         bar = Bar19921(foo, Dict(foo => 3))
         bar2 = deepcopy(bar)
         @test bar2.foo ∈ keys(bar2.fooDict)
-        @test bar2.fooDict[bar2.foo] != nothing
+        @test bar2.fooDict[bar2.foo] !== nothing
     end
 
     let d = IdDict(rand(2) => rand(2) for i = 1:100)
@@ -253,6 +253,15 @@ end
     @test copyto!(s, String[]) == [1, 2] # No error
 end
 
+@testset "circular reference arrays" begin
+    # issue 56775
+    p = Any[nothing]
+    p[1] = p
+    p2 = deepcopy(p)
+    @test p2 === p2[1]
+    @test p2 !== p
+end
+
 @testset "deepcopy_internal arrays" begin
     @test (@inferred Base.deepcopy_internal(zeros(), IdDict())) == zeros()
 end
@@ -282,6 +291,8 @@ end
 
 @testset "`deepcopy` a `GenericCondition`" begin
     a = Base.GenericCondition(ReentrantLock())
+    # Test printing
+    @test repr(a) == "Base.GenericCondition(ReentrantLock())"
     @test !islocked(a.lock)
     lock(a.lock)
     @test islocked(a.lock)

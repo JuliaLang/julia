@@ -18,7 +18,7 @@ On Windows Julia can be installed directly from the Windows store
 exactly the same version by executing
 
 ```
-winget install julia -s msstore
+winget install --name Julia --id 9NJNWW8PVKMN -e -s msstore
 ```
 
 in any shell.
@@ -44,21 +44,21 @@ curl -fsSL https://install.julialang.org | sh -s -- <ARGS>
 
 Here `<ARGS>` should be replaced with one or more of the following arguments:
 - `--yes` (or `-y`): Run the installer in a non-interactive mode. All
-configuration values use their default or a value supplied as a command line
-argument.
+  configuration values use their default or a value supplied as a command line
+  argument.
 - `--default-channel=<NAME>`: Configure the default Juliaup channel. For
-example `--default-channel lts` would install the `lts` channel and configure it
-as the default.
+  example `--default-channel lts` would install the `lts` channel and configure it
+  as the default.
 - `--add-to-path=<yes|no>`: Configure whether Julia should be added to the `PATH`
-environment variable. Valid values are `yes` (default) and `no`.
+  environment variable. Valid values are `yes` (default) and `no`.
 - `--background-selfupdate=<SECONDS>`: Configure an optional CRON job that
-auto-updates Juliaup if `<SECONDS>` has a value larger than 0. The actual value
-controls how often the CRON job will run to check for a new Juliaup version in
-seconds. The default value is 0, i.e. no CRON job will be created.
+  auto-updates Juliaup if `<SECONDS>` has a value larger than 0. The actual value
+  controls how often the CRON job will run to check for a new Juliaup version in
+  seconds. The default value is 0, i.e. no CRON job will be created.
 - `--startup-selfupdate=<MINUTES>`: Configure how often Julia will check for new
-versions of Juliaup when Julia is started. The default is every 1440 minutes.
+  versions of Juliaup when Julia is started. The default is every 1440 minutes.
 - `-p=<PATH>` (or `--path`): Configure where the Julia and Juliaup binaries are
-installed. The default is `~/.juliaup`.
+  installed. The default is `~/.juliaup`.
 
 ## Alternative installation methods
 
@@ -75,7 +75,12 @@ If the Windows Store is blocked on a system, we have an alternative
 [MSIX App Installer](https://learn.microsoft.com/en-us/windows/msix/app-installer/app-installer-file-overview)
 based setup. To use the App Installer version, download
 [this](https://install.julialang.org/Julia.appinstaller) file and open it by
-double clicking on it.
+double clicking on it. One can also install exactly the same version by executing
+the PowerShell command
+
+```
+Add-AppxPackage -AppInstallerFile https://install.julialang.org/Julia.appinstaller
+```
 
 ### MSI Installer (Windows)
 
