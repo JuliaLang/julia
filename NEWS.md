@@ -51,6 +51,8 @@ Build system changes
 New library functions
 ---------------------
 
+* `tap(f)` creates a function that calls `f(x)` for side effects and returns `x` unchanged. ([#61340]).
+
 New library features
 --------------------
 

@@ -882,6 +882,7 @@ export
     exit,
     ntuple,
     splat,
+    tap,
 
 # I/O and events
     close,
