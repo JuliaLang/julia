@@ -136,6 +136,10 @@ static int has_free_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
             env = newenv;
             v = ua->body;
         }
+        // After unwrapping UnionAll, body might be TypeApp or TypeVar;
+        // restart the loop so those checks at the top fire.
+        if (jl_is_typeapp(v) || jl_is_typevar(v))
+            continue;
         if (jl_is_datatype(v)) {
             int expect = ((jl_datatype_t*)v)->hasfreetypevars;
             if (expect == 0 || env == NULL)
@@ -263,6 +267,10 @@ int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
             }
             v = ua->body;
         }
+        // After unwrapping UnionAll, body might be TypeApp or TypeVar;
+        // restart the loop so those checks at the top fire.
+        if (jl_is_typeapp(v) || jl_is_typevar(v))
+            continue;
         if (jl_is_datatype(v)) {
             if (!((jl_datatype_t*)v)->hasfreetypevars)
                 return 0;

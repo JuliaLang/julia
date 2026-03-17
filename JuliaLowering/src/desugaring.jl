@@ -4127,17 +4127,36 @@ function expand_typegroup_def(ctx, ex)
         ])
     end
 
-    # 2d. Call resolve_typegroup
+    # 2d. Look up old types for redefinition equivalence check
+    old_type_vars = SyntaxList(ctx)
+    for i in 1:n
+        old_var = ssavar(ctx, ex, "old_type")
+        push!(stmts, @ast ctx ex [K"="
+            old_var
+            [K"if"
+                [K"call" "isdefinedglobal"::K"core"
+                    ctx.mod::K"Value"
+                    struct_names[i]=>K"Symbol"
+                    false::K"Bool"]
+                global_names[i]
+                nothing_(ctx, ex)
+            ]
+        ])
+        push!(old_type_vars, old_var)
+    end
+
+    # 2e. Call resolve_typegroup
     push!(stmts, @ast ctx ex [K"="
         [K"tuple" struct_names...]
         [K"call" "resolve_typegroup"::K"core"
             ctx.mod::K"Value"
             [K"call" "svec"::K"core" struct_names...]
             [K"call" "svec"::K"core" info_vars...]
+            [K"call" "svec"::K"core" old_type_vars...]
         ]
     ])
 
-    # 2e. Bind to global constants
+    # 2f. Bind to global constants
     for i in 1:n
         push!(stmts, @ast ctx entries[i].sdef [K"constdecl" global_names[i] struct_names[i]])
     end
@@ -4232,170 +4251,133 @@ function expand_struct_def(ctx, ex, docs)
     is_mutable = has_flags(ex, JuliaSyntax.MUTABLE_FLAG)
     min_initialized = minimum((_constructor_min_initialized(e) for e in inner_defs),
                               init=length(field_names))
-    newtype_var = ssavar(ctx, ex, "struct_type")
-    hasprev = ssavar(ctx, ex, "hasprev")
-    prev = ssavar(ctx, ex, "prev")
-    newdef = ssavar(ctx, ex, "newdef")
     layer = new_scope_layer(ctx, struct_name)
     global_struct_name = adopt_scope(struct_name, layer)
-    if !isempty(typevar_names)
-        # Generate expression like `prev_struct.body.body.parameters`
-        prev_typevars = global_struct_name
-        for _ in 1:length(typevar_names)
-            prev_typevars = @ast ctx type_sig [K"." prev_typevars "body"::K"Symbol"]
-        end
-        prev_typevars = @ast ctx type_sig [K"." prev_typevars "parameters"::K"Symbol"]
-    end
 
-    # New local variable names for constructor args to avoid clashing with any
-    # type names
+    # Use the typegroup mechanism for ordinary structs to ensure safety
+    # when accessing incomplete types during definition (issue #60919).
+    # The struct name is a TypeVar placeholder during field type evaluation,
+    # preventing segfaults from accessing incomplete types.
+    info_var = ssavar(ctx, ex, "struct_info")
+
+    stmts = SyntaxList(ctx)
+
+    # Declare struct name as local and create TypeVar placeholder
+    push!(stmts, @ast ctx struct_name [K"local" struct_name])
+    push!(stmts, @ast ctx struct_name [K"=" struct_name [K"call" "TypeVar"::K"core" struct_name=>K"Symbol"]])
+
+    # Inner scope_block for type parameters + info collection
+    inner_stmts = SyntaxList(ctx)
+    for tv_name in typevar_names
+        push!(inner_stmts, @ast ctx ex [K"local" tv_name])
+    end
+    append!(inner_stmts, typevar_stmts)
+    push!(inner_stmts, @ast ctx ex [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex]])
+    push!(inner_stmts, @ast ctx ex [K"="
+        info_var
+        [K"call" "svec"::K"core"
+            [K"call"(type_sig) "svec"::K"core" typevar_names...]
+            [K"call"(type_body) "svec"::K"core" [n=>K"Symbol" for n in field_names]...]
+            [K"call"(type_body) "svec"::K"core" field_attrs...]
+            is_mutable::K"Bool"
+            min_initialized::K"Integer"
+            supertype
+            [K"call" "svec"::K"core" insert_struct_shim(ctx, field_types, struct_name)...]
+        ]
+    ])
+    push!(stmts, @ast ctx ex [K"scope_block"(scope_type=:hard)
+        [K"block" inner_stmts...]
+    ])
+
+    # Look up old type for redefinition equivalence check
+    old_type_var = ssavar(ctx, ex, "old_type")
+    push!(stmts, @ast ctx ex [K"="
+        old_type_var
+        [K"if"
+            [K"call" "isdefinedglobal"::K"core"
+                ctx.mod::K"Value"
+                struct_name=>K"Symbol"
+                false::K"Bool"]
+            global_struct_name
+            nothing_(ctx, ex)
+        ]
+    ])
+
+    # Call resolve_typegroup and extract the single result with getfield
+    push!(stmts, @ast ctx ex [K"="
+        struct_name
+        [K"call" "getfield"::K"core"
+            [K"call" "resolve_typegroup"::K"core"
+                ctx.mod::K"Value"
+                [K"call" "svec"::K"core" struct_name]
+                [K"call" "svec"::K"core" info_var]
+                [K"call" "svec"::K"core" old_type_var]
+            ]
+            1::K"Integer"
+        ]
+    ])
+
+    # Bind to global constant
+    push!(stmts, @ast ctx ex [K"constdecl" global_struct_name struct_name])
+
+    # latestworld + nothing
+    push!(stmts, @ast ctx ex (::K"latestworld"))
+    push!(stmts, nothing_(ctx, ex))
+
+    # Constructor definitions — placed outside the scope_block so that
+    # type names in constructor bodies resolve to globals, not captured locals.
+    fdef_stmts = SyntaxList(ctx)
     if isempty(inner_defs)
-        field_names_2 = adopt_scope(field_names, layer)
-    end
-
-    need_outer_constructor = false
-    if isempty(inner_defs) && !isempty(typevar_names)
-        # To generate an outer constructor each struct type parameter must be
-        # able to be inferred from the list of fields passed as constructor
-        # arguments.
-        #
-        # More precisely, it must occur in a field type, or in the bounds of a
-        # subsequent type parameter. For example the following won't work
-        #     struct X{T}
-        #         a::Int
-        #     end
-        #     X(a::Int) where T = #... construct X{T} ??
-        #
-        # But the following does
-        #     struct X{T}
-        #         a::T
-        #     end
-        #     X(a::T) where {T} = # construct X{typeof(a)}(a)
-        need_outer_constructor = true
-        for i in 1:length(typevar_names)
-            typevar_name = typevar_names[i]
-            typevar_in_fields = any(contains_identifier(ft, typevar_name) for ft in field_types)
-            if !typevar_in_fields
-                typevar_in_bounds = any(type_params[i+1:end]) do param
-                    # Check the bounds of subsequent type params
-                    (_,lb,ub) = analyze_typevar(ctx, param)
-                    # todo: flisp lowering tests `lb` here so we also do. But
-                    # in practice this doesn't seem to constrain `typevar_name`
-                    # and the generated constructor doesn't work?
-                    (!isnothing(ub) && contains_identifier(ub, typevar_name)) ||
-                    (!isnothing(lb) && contains_identifier(lb, typevar_name))
-                end
-                if !typevar_in_bounds
-                    need_outer_constructor = false
-                    break
-                end
-            end
-        end
-    end
-
-    # User-defined inner constructors need to be rewritten to use proper type references.
-    # global_struct_name is used because it will be resolved via the top scope where
-    # the global declaration stores the binding.
-    if !isempty(inner_defs)
+        push!(fdef_stmts, @ast ctx ex [K"call"
+            "_defaultctors"::K"top"
+            global_struct_name
+            ::K"SourceLocation"(ex)
+        ])
+    else
+        # Rewrite inner constructors: replace `new()` calls with proper
+        # type references, using global_struct_name so they resolve via the
+        # global binding.
         map!(inner_defs, inner_defs) do def
             rewrite_new_calls(ctx, def, struct_name, global_struct_name,
                               typevar_names, field_names, field_types)
         end
+        push!(fdef_stmts, @ast ctx ex [K"scope_block"(scope_type=:hard)
+            [K"block" inner_defs...]
+        ])
     end
+    push!(fdef_stmts, @ast ctx ex (::K"latestworld"))
 
-    # The following lowering covers several subtle issues in the ordering of
-    # typevars when "redefining" structs.
-    # See https://github.com/JuliaLang/julia/pull/36121
-    @ast ctx ex [K"block"
-        [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex] ]
+    # Documentation — after constructors and latestworld so types are fully defined
+    if !isnothing(docs) || !isempty(field_docs)
+        push!(fdef_stmts, @ast ctx ex [K"call"(isnothing(docs) ? ex : docs)
+            bind_docs!::K"Value"
+            struct_name
+            isnothing(docs) ? nothing_(ctx, ex) : docs[1]
+            ::K"SourceLocation"(ex)
+            [K"kw"
+                "field_docs"::K"Identifier"
+                [K"call" "svec"::K"core" field_docs...]
+            ]
+        ])
+    end
+    push!(fdef_stmts, nothing_(ctx, ex))
+
+    # Build the toplevel assertion + scope block
+    scope_block_stmts = SyntaxList(ctx)
+    push!(scope_block_stmts, @ast ctx ex [K"global" global_struct_name])
+    push!(scope_block_stmts, @ast ctx ex [K"block" stmts...])
+
+    result = @ast ctx ex [K"block"
+        [K"assert" "toplevel_only"::K"Symbol" [K"inert_syntaxtree" ex]]
         [K"scope_block"(scope_type=:hard)
-            # Needed for later constdecl to work, though plain global form may be removed soon.
-            [K"global" global_struct_name]
-            [K"block"
-                [K"local" struct_name]
-                [K"always_defined" struct_name]
-                typevar_stmts...
-                [K"="
-                    newtype_var
-                    [K"call"
-                        "_structtype"::K"core"
-                        ctx.mod::K"Value"
-                        struct_name=>K"Symbol"
-                        [K"call"(type_sig) "svec"::K"core" typevar_names...]
-                        [K"call"(type_body) "svec"::K"core" [n=>K"Symbol" for n in field_names]...]
-                        [K"call"(type_body) "svec"::K"core" field_attrs...]
-                        is_mutable::K"Bool"
-                        min_initialized::K"Integer"
-                    ]
-                ]
-                [K"=" struct_name newtype_var]
-                [K"call"(supertype) "_setsuper!"::K"core" newtype_var supertype]
-                [K"=" hasprev
-                      [K"&&" [K"call" "isdefinedglobal"::K"core"
-                              ctx.mod::K"Value"
-                              struct_name=>K"Symbol"
-                              false::K"Bool"]
-                             [K"call" "_equiv_typedef"::K"core" global_struct_name newtype_var]
-                       ]]
-                [K"=" prev [K"if" hasprev global_struct_name false::K"Bool"]]
-                [K"if" hasprev
-                   [K"block"
-                    # if this is compatible with an old definition, use the old parameters, but the
-                    # new object. This will fail to capture recursive cases, but the call to typebody!
-                    # below is permitted to choose either type definition to put into the binding table
-                    if !isempty(typevar_names)
-                        # And resassign the typevar_names - these may be
-                        # referenced in the definition of the field
-                        # types below
-                        [K"=" [K"tuple" typevar_names...] prev_typevars]
-                    end
-                    ]
-                ]
-                [K"=" newdef
-                   [K"call"(type_body)
-                      "_typebody!"::K"core"
-                      prev
-                      newtype_var
-                      [K"call" "svec"::K"core" insert_struct_shim(ctx, field_types, struct_name)...]
-                   ]]
-                [K"constdecl"
-                    global_struct_name
-                    newdef
-                 ]
-            ]
+            scope_block_stmts...
         ]
-
-        if isempty(inner_defs)
-            # Default constructors are generated at runtime by Base._defaultctors.
-            [K"call"
-                "_defaultctors"::K"top"
-                global_struct_name
-                ::K"SourceLocation"(ex)
-            ]
-        else
-            # User-defined inner constructors are placed in a separate scope_block
-            # so that helper functions defined in the struct body don't leak to
-            # the module's global scope.
-            [K"scope_block"(scope_type=:hard)
-                [K"block" inner_defs...]
-            ]
-        end
-
-        # Documentation
-        if !isnothing(docs) || !isempty(field_docs)
-            [K"call"(isnothing(docs) ? ex : docs)
-                bind_docs!::K"Value"
-                struct_name
-                isnothing(docs) ? nothing_(ctx, ex) : docs[1]
-                ::K"SourceLocation"(ex)
-                [K"kw"
-                    "field_docs"::K"Identifier"
-                    [K"call" "svec"::K"core" field_docs...]
-                ]
-            ]
-        end
-        nothing_(ctx, ex)
+        fdef_stmts...
     ]
+
+    # Expand, then replace apply_type with apply_type_or_typeapp
+    expanded = expand_forms_2(ctx, result)
+    return _replace_type_constructors(ctx, expanded)
 end
 
 #-------------------------------------------------------------------------------
@@ -4810,7 +4792,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"abstract" || k == K"primitive"
         expand_forms_2(ctx, expand_abstract_or_primitive_type(ctx, ex))
     elseif k == K"struct"
-        expand_forms_2(ctx, expand_struct_def(ctx, ex, docs))
+        expand_struct_def(ctx, ex, docs)
     elseif k == K"typegroup"
         expand_typegroup_def(ctx, ex)
     elseif k == K"ref"

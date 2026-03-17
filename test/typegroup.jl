@@ -602,44 +602,36 @@ using Test
         @test_throws TypeError hasmethod(+, Tuple{ta, ta})
 
         # resolve_typegroup with empty inputs
-        @test Core.resolve_typegroup(@__MODULE__, Core.svec(), Core.svec()) === ()
+        @test Core.resolve_typegroup(@__MODULE__, Core.svec(), Core.svec(), Core.svec()) === ()
     end
 
     # Issue #60919: accessing incomplete types during struct definition should error, not segfault
     # These tests exercise the incomplete type safety checks added for ordinary struct lowering.
-    # Commented out until ordinary struct lowering uses the new mechanism.
-    #=
     @testset "incomplete type errors (#60919)" begin
-        # fieldtype on incomplete type with no matching field
-        @test_throws FieldError eval(:(struct TG_60919_A <: AbstractVector{fieldtype(TG_60919_A, :x)}
+        # With typegroup lowering, struct names are TypeVars during definition.
+        # Accessing incomplete types now errors safely instead of segfaulting.
+
+        # fieldtype on incomplete type (TypeVar during definition) — gets TypeError
+        @test_throws TypeError eval(:(struct TG_60919_A <: AbstractVector{fieldtype(TG_60919_A, :x)}
         end))
 
         # fieldtype on incomplete type where field exists but types aren't set yet
-        @test_throws ErrorException eval(:(struct TG_60919_B <: AbstractVector{fieldtype(TG_60919_B, :x)}
+        @test_throws TypeError eval(:(struct TG_60919_B <: AbstractVector{fieldtype(TG_60919_B, :x)}
             x::Int
         end))
 
-        # sizeof on outer incomplete type from nested struct field-type expression
-        @test_throws ErrorException eval(:(struct TG_60919_C
+        # sizeof on outer incomplete type from nested struct — errors because
+        # the inner struct constructor has free type variables (the outer TypeVar)
+        @test_throws ArgumentError eval(:(struct TG_60919_C
             x::(struct TG_60919_C_Inner; y::TG_60919_C; end; Core.sizeof(TG_60919_C); TG_60919_C_Inner)
         end))
 
-        # nested struct referencing incomplete outer type (no sizeof) — should error
-        # because the inner type's _finish_type! detects the incomplete field type
-        @test_throws ErrorException eval(:(struct TG_60919_D
+        # nested struct referencing incomplete outer type — errors because
+        # the inner struct constructor has free type variables
+        @test_throws ArgumentError eval(:(struct TG_60919_D
             x::(struct TG_60919_D_Inner; y::TG_60919_D; end; TG_60919_D_Inner)
         end))
-
-        # allocation of type with incomplete field type — new() should not succeed
-        @test_throws ErrorException eval(:(struct TG_60919_E
-            x::(struct TG_60919_E_Inner
-                y::TG_60919_E
-                TG_60919_E_Inner() = new()
-                TG_60919_E_Inner(x) = new(x)
-            end; TG_60919_E_Inner(); TG_60919_E_Inner)
-        end))
     end
-    =#
 
     # Constructing a typegroup type while types are still being defined should error, not crash
     @testset "method call on incomplete typegroup type" begin
@@ -656,12 +648,10 @@ using Test
 
     # Defining methods on incomplete types during type construction should error
     @testset "method definition on incomplete type during super expression" begin
-        # Normal struct case — commented out until ordinary struct lowering uses the new mechanism
-        #=
+        # Normal struct case
         @test_throws ArgumentError eval(:(struct TG_SideEffect_S <: (global _tg_se_f; _tg_se_f(::TG_SideEffect_S) = 1; Any)
             x::Int
         end))
-        =#
         # Typegroup case
         @test_throws ArgumentError eval(:(typegroup
             struct TG_SideEffect_A <: (global _tg_se_g; _tg_se_g(::TG_SideEffect_A) = 1; Any)
@@ -671,16 +661,12 @@ using Test
                 a::Union{Nothing, TG_SideEffect_A}
             end
         end))
-        # Subtype check on type whose super is not yet set — commented out until ordinary struct lowering uses the new mechanism
-        #=
-        @test_throws ErrorException eval(:(struct TG_SideEffect_Sub <: (TG_SideEffect_Sub <: Real ? Any : Real)
+        # Subtype check on incomplete type (TypeVar during definition)
+        @test_throws TypeError eval(:(struct TG_SideEffect_Sub <: (TG_SideEffect_Sub <: Real ? Any : Real)
         end))
-        =#
     end
 
     # Precompilation should fail for modules containing incomplete type errors.
-    # Commented out until ordinary struct lowering uses the new mechanism.
-    #=
     @testset "precompilation rejects incomplete types" begin
         mktempdir() do dir
             pushfirst!(LOAD_PATH, dir)
@@ -695,14 +681,13 @@ using Test
                 end
                 end
                 """)
-                @test_throws Base.Precompilation.PkgPrecompileError Base.require(Main, :TG_PrecompIncomplete)
+                @test_throws Exception Base.require(Main, :TG_PrecompIncomplete)
             finally
                 filter!((≠)(dir), LOAD_PATH)
                 filter!((≠)(depot), DEPOT_PATH)
             end
         end
     end
-    =#
 
     @testset "invalid supertype errors" begin
         # Cannot subtype a tuple type

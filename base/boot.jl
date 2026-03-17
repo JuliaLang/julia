@@ -365,6 +365,22 @@ kwftype(@nospecialize(t)) = typeof(kwcall)
 Union{}(a...) = throw(ArgumentError("cannot construct a value of type Union{} for return result"))
 kwcall(kwargs, ::Type{Union{}}, a...) = Union{}(a...)
 
+# resolve_typegroup must be defined before any struct definition, since all structs
+# are now lowered using the typegroup mechanism (for #60919 safety).
+function resolve_typegroup(mod::Module, typevars::SimpleVector, struct_infos::SimpleVector, old_types::SimpleVector)
+    n = _svec_len(typevars)
+    if n === 0
+        return ()
+    end
+    return ccall(:jl_resolve_typegroup, Any, (Any, Any, Any, Any), mod, typevars, struct_infos, old_types)
+end
+
+# Stub apply_type_or_typeapp: before TypeApp is defined, just forward to apply_type.
+# This is replaced with the full version after TypeApp is defined.
+function apply_type_or_typeapp(@nospecialize(tc), @nospecialize params...)
+    return apply_type(tc, params...)
+end
+
 abstract type Exception end
 struct ErrorException <: Exception
     msg::AbstractString
@@ -1218,14 +1234,6 @@ function apply_type_or_typeapp(@nospecialize(tc), @nospecialize params...)
     end
     # All concrete -- real apply_type
     return apply_type(tc, params...)
-end
-
-function resolve_typegroup(mod::Module, typevars::SimpleVector, struct_infos::SimpleVector)
-    n = _svec_len(typevars)
-    if n === 0
-        return ()
-    end
-    return ccall(:jl_resolve_typegroup, Any, (Any, Any, Any), mod, typevars, struct_infos)
 end
 
 function _hasmethod(@nospecialize(tt)) # this function has a special tfunc
