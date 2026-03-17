@@ -200,6 +200,19 @@ function threading_run(fun, static)
     end
 end
 
+# Helper to generate threading run code with schedule checking
+function _threading_run_expr(schedule)
+    quote
+        if $(schedule === :greedy || schedule === :dynamic || schedule === :default)
+            threading_run(threadsfor_fun, false)
+        elseif ccall(:jl_in_threaded_region, Cint, ()) != 0 # :static
+            error("`@threads :static` cannot be used concurrently or nested")
+        else # :static
+            threading_run(threadsfor_fun, true)
+        end
+    end
+end
+
 function _threadsfor(iter, lbody, schedule)
     lidx = iter.args[1]         # index
     range = iter.args[2]
@@ -212,16 +225,221 @@ function _threadsfor(iter, lbody, schedule)
     quote
         local threadsfor_fun
         $func
-        if $(schedule === :greedy || schedule === :dynamic || schedule === :default)
-            threading_run(threadsfor_fun, false)
-        elseif ccall(:jl_in_threaded_region, Cint, ()) != 0 # :static
-            error("`@threads :static` cannot be used concurrently or nested")
-        else # :static
-            threading_run(threadsfor_fun, true)
-        end
+        $(_threading_run_expr(schedule))
         nothing
     end
 end
+
+function _threadsfor_multi_iterator(body, iterators, condition, schedule, dims, result_type)
+    vars = [iter.args[1] for iter in iterators]
+    ranges = [iter.args[2] for iter in iterators]
+
+    tuple_var = gensym("iter_tuple")
+    assignments = [:($(vars[i]) = $(tuple_var)[$i]) for i in 1:length(vars)]
+    # Use let blocks so destructured variables are local to each iteration,
+    # avoiding data races when multiple threads execute the body concurrently.
+    new_body = Expr(:let, Expr(:block, assignments...), body)
+    new_condition = if condition === true
+        true
+    else
+        Expr(:let, Expr(:block, assignments...), condition)
+    end
+
+    product_expr = :(Iterators.product($(ranges...)))
+    synthetic_iter = :($(tuple_var) = $(product_expr))
+
+    return _threadsfor_single_iterator(new_body, synthetic_iter, new_condition, schedule, dims; result_type)
+end
+
+function _threadsfor_comprehension(gen::Expr, schedule, result_type=nothing)
+    @assert gen.head === :generator
+
+    body = gen.args[1]
+
+    # Check if the second arg is a filter (handles both single and multi-loop with filters)
+    iter_or_filter = gen.args[2]
+    if isa(iter_or_filter, Expr) && iter_or_filter.head === :filter
+        condition = iter_or_filter.args[1]
+        iterators = iter_or_filter.args[2:end]
+
+        if length(iterators) == 1
+            return _threadsfor_single_iterator(body, iterators[1], condition, schedule; result_type)
+        else
+            return _threadsfor_multi_iterator(body, iterators, condition, schedule, nothing, result_type)
+        end
+    elseif length(gen.args) > 2
+        iterators = gen.args[2:end]
+        ranges = [iter.args[2] for iter in iterators]
+        # Use axes to preserve offset index spaces (e.g. OffsetArrays)
+        dims_expr = :(tuple($([:(axes($(esc(r)), 1)) for r in ranges]...)))
+        return _threadsfor_multi_iterator(body, iterators, true, schedule, dims_expr, result_type)
+    else
+        return _threadsfor_single_iterator(body, iter_or_filter, true, schedule; result_type)
+    end
+end
+
+function _threadsfor_single_iterator(body, iterator, condition, schedule, dims=nothing; result_type=nothing)
+    lidx = iterator.args[1]
+    range = iterator.args[2]
+    esc_range = esc(range)
+    esc_lidx = esc(lidx)
+    esc_body = esc(body)
+    esc_condition = condition === true ? true : esc(condition)
+
+    # Fast path: no filter and not greedy — pre-allocate and write directly
+    if condition === true && schedule !== :greedy
+        return _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule, dims, result_type)
+    end
+
+    func = if schedule === :greedy
+        greedy_comprehension_func(esc_range, esc_lidx, esc_body, esc_condition)
+    else
+        default_comprehension_func(esc_range, esc_lidx, esc_body, esc_condition)
+    end
+
+    result_expr = if schedule === :greedy
+        # Greedy: collect values in arrival order (no ordering guarantee)
+        if result_type !== nothing
+            esc_result_type = esc(result_type)
+            quote
+                close(result_channel)
+                vals = collect(result_channel)
+                isempty(vals) ? $esc_result_type[] : $esc_result_type[v for v in vals]
+            end
+        else
+            quote
+                close(result_channel)
+                collect(result_channel)
+            end
+        end
+    else
+        # Default/static/dynamic: sort by index to preserve iteration order
+        if result_type !== nothing
+            esc_result_type = esc(result_type)
+            quote
+                close(result_channel)
+                pairs = collect(result_channel)
+                if isempty(pairs)
+                    $esc_result_type[]
+                else
+                    sort!(pairs, by=first)
+                    $esc_result_type[p[2] for p in pairs]
+                end
+            end
+        else
+            quote
+                close(result_channel)
+                pairs = collect(result_channel)
+                if isempty(pairs)
+                    []
+                else
+                    sort!(pairs, by=first)
+                    [p[2] for p in pairs]
+                end
+            end
+        end
+    end
+
+    # If dims is provided, reshape the result to match original comprehension dimensions
+    if dims !== nothing
+        result_expr = quote
+            let flat_result = $result_expr
+                reshape(flat_result, $(dims))
+            end
+        end
+    end
+
+    quote
+        local threadsfor_fun
+        local result_channel = $func
+        $(_threading_run_expr(schedule))
+        $result_expr
+    end
+end
+
+# Fast path for non-filtered, non-greedy comprehensions: pre-allocate and write directly.
+# Non-AbstractArray iterators (e.g. Iterators.flatten) are collected into a Vector
+# because the parallel work distribution indexes into items with r[i].
+# AbstractArrays and Tuples are used directly to preserve their index space (e.g. OffsetArrays).
+function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule, dims, result_type)
+    work_dist = _work_distribution_code()
+    wrap_final = dims !== nothing ? (x -> :(reshape($x, $dims))) : identity
+
+    if result_type !== nothing
+        # Typed path: pre-allocate with known element type
+        esc_result_type = esc(result_type)
+        return quote
+            let iter = $esc_range
+            local items = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
+            local niter = length(items)
+            local result = similar(Vector{$esc_result_type}, axes(items))
+            if niter > 0
+                let items = items, result = result
+                local threadsfor_fun
+                function threadsfor_fun(tid = 1; onethread = false)
+                    # Reads: items, tid, onethread. Defines: r, loop_first, loop_last.
+                    $work_dist
+                    for i = loop_first:loop_last
+                        local $esc_lidx = @inbounds r[i]
+                        @inbounds result[i] = $esc_body
+                    end
+                end
+                $(_threading_run_expr(schedule))
+                end
+            end
+            $(wrap_final(:(result)))
+            end
+        end
+    else
+        # Untyped path: evaluate first element to determine result type,
+        # then fill in parallel with the body expression inlined directly
+        # in the closure. This avoids boxing that occurs when calling a
+        # lambda whose return type is a Union across closure boundaries.
+        return quote
+            let iter = $esc_range
+            local items = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
+            local niter = length(items)
+            if niter == 0
+                $(wrap_final(:(similar(Vector{Any}, axes(items)))))
+            else
+                local _skip = firstindex(items)
+                local $esc_lidx = @inbounds items[_skip]
+                local _probe_val = $esc_body
+                local result = similar(Vector{typeof(_probe_val)}, axes(items))
+                @inbounds result[_skip] = _probe_val
+                if niter > 1
+                    local _npool = threadpoolsize()
+                    local _widen_buffers = [Pair{Int,Any}[] for _ in 1:_npool]
+                    let items = items, result = result, _widen_buffers = _widen_buffers,
+                        _skip = _skip
+                    local threadsfor_fun
+                    function threadsfor_fun(tid = 1; onethread = false)
+                        # Reads: items, tid, onethread. Defines: r, loop_first, loop_last.
+                        $work_dist
+                        local _T = eltype(result)
+                        local _my_widen = _widen_buffers[tid]
+                        for i = loop_first:loop_last
+                            i == _skip && continue
+                            local $esc_lidx = @inbounds r[i]
+                            local _val = $esc_body
+                            if _val isa _T
+                                @inbounds result[i] = _val
+                            else
+                                push!(_my_widen, i => _val)
+                            end
+                        end
+                    end
+                    $(_threading_run_expr(schedule))
+                    end
+                    result = Base.setindices_widen_up_to(result, _widen_buffers)
+                end
+                $(wrap_final(:(result)))
+            end
+            end
+        end
+    end
+end
+
 
 function greedy_func(itr, lidx, lbody)
     quote
@@ -240,41 +458,71 @@ function greedy_func(itr, lidx, lbody)
     end
 end
 
-function default_func(itr, lidx, lbody)
+function greedy_comprehension_func(itr, esc_lidx, esc_body, esc_condition)
     quote
-        let range = $itr
-        function threadsfor_fun(tid = 1; onethread = false)
-            r = range # Load into local variable
-            lenr = length(r)
-            # divide loop iterations among threads
-            if onethread
-                tid = 1
-                len, rem = lenr, 0
+        let c = Channel{eltype($itr)}(threadpoolsize(), spawn=true) do ch
+            for item in $itr
+                put!(ch, item)
+            end
+        end
+        result_channel = Channel{Any}(Inf)
+
+        function threadsfor_fun(tid)
+            for item in c
+                local $esc_lidx = item
+                if $esc_condition
+                    put!(result_channel, $esc_body)
+                end
+            end
+        end
+        result_channel
+        end
+    end
+end
+
+# Helper function to generate work distribution code
+function _work_distribution_code()
+    quote
+        r = items # Load into local variable
+        lenr = length(r)
+        # divide loop iterations among threads
+        if onethread
+            tid = 1
+            len, rem = lenr, 0
+        else
+            len, rem = divrem(lenr, threadpoolsize())
+        end
+        # not enough iterations for all the threads?
+        if len == 0
+            if tid > rem
+                return
+            end
+            len, rem = 1, 0
+        end
+        # compute this thread's iterations
+        loop_first = firstindex(r) + ((tid-1) * len)
+        loop_last = loop_first + len - 1
+        # distribute remaining iterations evenly
+        if rem > 0
+            if tid <= rem
+                loop_first = loop_first + (tid-1)
+                loop_last = loop_last + tid
             else
-                len, rem = divrem(lenr, threadpoolsize())
+                loop_first = loop_first + rem
+                loop_last = loop_last + rem
             end
-            # not enough iterations for all the threads?
-            if len == 0
-                if tid > rem
-                    return
-                end
-                len, rem = 1, 0
-            end
-            # compute this thread's iterations
-            f = firstindex(r) + ((tid-1) * len)
-            l = f + len - 1
-            # distribute remaining iterations evenly
-            if rem > 0
-                if tid <= rem
-                    f = f + (tid-1)
-                    l = l + tid
-                else
-                    f = f + rem
-                    l = l + rem
-                end
-            end
-            # run this thread's iterations
-            for i = f:l
+        end
+    end
+end
+
+function default_func(itr, lidx, lbody)
+    work_dist = _work_distribution_code()
+    quote
+        let items = $itr
+        function threadsfor_fun(tid = 1; onethread = false)
+            # Reads: items, tid, onethread. Defines: r, loop_first, loop_last.
+            $work_dist
+            for i = loop_first:loop_last
                 local $(esc(lidx)) = @inbounds r[i]
                 $(esc(lbody))
             end
@@ -283,12 +531,43 @@ function default_func(itr, lidx, lbody)
     end
 end
 
+function default_comprehension_func(itr, esc_lidx, esc_body, esc_condition)
+    work_dist = _work_distribution_code()
+    quote
+        let iter = $itr
+        # Collect non-indexable iterators for random access (r[i]) in work distribution
+        items = iter isa AbstractArray ? iter : collect(iter)
+        # Channel uses Tuple{Int, Any} because the output type of the body expression
+        # is not known at macro expansion time.
+        result_channel = Channel{Tuple{Int, Any}}(Inf)
+
+        function threadsfor_fun(tid = 1; onethread = false)
+            # Reads: items, tid, onethread. Defines: r, loop_first, loop_last.
+            $work_dist
+            for i = loop_first:loop_last
+                local $esc_lidx = @inbounds r[i]
+                if $esc_condition
+                    put!(result_channel, (i, $esc_body))
+                end
+            end
+        end
+        result_channel  # Return channel so results can be collected after threading_run
+        end
+    end
+end
+
 """
     Threads.@threads [schedule] for ... end
+    Threads.@threads [schedule] [expr for ... end]
+    Threads.@threads [schedule] T[expr for ... end]
 
-A macro to execute a `for` loop in parallel. The iteration space is distributed to
+A macro to execute a `for` loop or array comprehension in parallel. The iteration space is distributed to
 coarse-grained tasks. This policy can be specified by the `schedule` argument. The
 execution of the loop waits for the evaluation of all iterations.
+
+For `for` loops, the macro executes the loop body in parallel but does not return a value.
+For array comprehensions, the macro executes the comprehension in parallel and returns
+the collected results as an array.
 
 Tasks spawned by `@threads` are scheduled on the `:default` threadpool. This means that
 `@threads` will not use threads from the `:interactive` threadpool, even if called from
@@ -380,6 +659,8 @@ thread other than 1.
 
 ## Examples
 
+### For loops
+
 To illustrate of the different scheduling strategies, consider the following function
 `busywait` containing a non-yielding timed loop that runs for a given number of seconds.
 
@@ -409,6 +690,81 @@ julia> @time begin
 
 The `:dynamic` example takes 2 seconds since one of the non-occupied threads is able
 to run two of the 1-second iterations to complete the for loop.
+
+### Array comprehensions
+
+The `@threads` macro also supports array comprehensions, which return the collected results.
+Array comprehensions preserve element order for `:static` and `:dynamic` (default) scheduling.
+The `:greedy` scheduler does not guarantee element order, since tasks consume work items as
+they become available. Multi-dimensional comprehensions preserve the dimensions of the
+original comprehension (e.g., `[f(i,j) for i in 1:n, j in 1:m]` returns an `n×m` matrix).
+Typed comprehensions (`T[expr for ...]`) are also supported and return an array with the
+specified element type.
+
+For non-filtered comprehensions with non-`:greedy` scheduling, a fast path is used that
+pre-allocates the result array and writes directly by index, avoiding Channel overhead.
+
+!!! tip "Performance tip"
+    For best performance, use typed comprehensions (`T[expr for ...]`) when the element type
+    is known. Untyped comprehensions infer the type from the first result; if later results
+    have incompatible types, a type-widening path is used which may be slower.
+
+!!! warning
+    The body expression of a threaded comprehension may execute on any thread and may
+    migrate between threads. Do not rely on [`threadid()`](@ref Threads.threadid) or
+    [`task_local_storage()`](@ref) returning consistent values within the body expression.
+
+```julia-repl
+julia> Threads.@threads [i^2 for i in 1:5] # Simple comprehension
+5-element Vector{Int64}:
+   1
+   4
+   9
+  16
+  25
+
+julia> Threads.@threads [i^2 for i in 1:5 if iseven(i)] # Filtered comprehension
+2-element Vector{Int64}:
+   4
+  16
+
+julia> Threads.@threads [i + j for i in 1:3, j in 1:3] # Multiple loops
+3×3 Matrix{Int64}:
+ 2  3  4
+ 3  4  5
+ 4  5  6
+
+julia> Threads.@threads Float64[i^2 for i in 1:5] # Typed comprehension
+5-element Vector{Float64}:
+  1.0
+  4.0
+  9.0
+ 16.0
+ 25.0
+```
+
+When the iterator doesn't have a known length, such as a channel, the `:greedy` scheduling
+option can be used.
+```julia-repl
+julia> c = Channel(5, spawn=true) do ch
+           foreach(i -> put!(ch, i), 1:5)
+       end;
+
+julia> Threads.@threads :greedy [i^2 for i in c if iseven(i)]
+2-element Vector{Int64}:
+  4
+ 16
+
+julia> # Non-indexable iterators are also supported
+       Threads.@threads [i for i in Iterators.flatten([1:3, 4:6])]
+6-element Vector{Int64}:
+ 1
+ 2
+ 3
+ 4
+ 5
+ 6
+```
 """
 macro threads(args...)
     na = length(args)
@@ -429,13 +785,22 @@ macro threads(args...)
     else
         throw(ArgumentError("wrong number of arguments in @threads"))
     end
-    if !(isa(ex, Expr) && ex.head === :for)
-        throw(ArgumentError("@threads requires a `for` loop expression"))
+    if isa(ex, Expr) && (ex.head === :comprehension || ex.head === :typed_comprehension)
+        # Handle array comprehensions (typed and untyped)
+        if ex.head === :typed_comprehension
+            return _threadsfor_comprehension(ex.args[2], sched, ex.args[1])
+        else
+            return _threadsfor_comprehension(ex.args[1], sched)
+        end
+    elseif isa(ex, Expr) && ex.head === :for
+        # Handle for loops
+        if !(ex.args[1] isa Expr && ex.args[1].head === :(=))
+            throw(ArgumentError("nested outer loops are not currently supported by @threads"))
+        end
+        return _threadsfor(ex.args[1], ex.args[2], sched)
+    else
+        throw(ArgumentError("@threads requires a `for` loop or comprehension expression"))
     end
-    if !(ex.args[1] isa Expr && ex.args[1].head === :(=))
-        throw(ArgumentError("nested outer loops are not currently supported by @threads"))
-    end
-    return _threadsfor(ex.args[1], ex.args[2], sched)
 end
 
 function _spawn_set_thrpool(t::Task, tp::Symbol)

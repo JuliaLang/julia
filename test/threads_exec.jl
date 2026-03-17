@@ -1714,4 +1714,6 @@ end
     end
 end
 
+include("threads_comprehensions.jl")
+
 end # main testset

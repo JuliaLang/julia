@@ -1865,3 +1865,11 @@ end
 20  latestworld
 21  TestMod.f_partially_generated
 22  (return %₂₁)
+
+########################################
+# Error: juxtapose-assignment
+4a = 1
+#---------------------
+LoweringError:
+4a = 1
+╙ ── expected identifier or `identifier::type`

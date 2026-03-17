@@ -18,7 +18,7 @@ end
 
 function expr_to_est(@nospecialize(e),
                      lnn::LineNumberNode=LineNumberNode(0, :none))
-    graph = ensure_macro_attributes!(SyntaxGraph())
+    graph = ensure_desugaring_attributes!(SyntaxGraph())
     expr_to_est(graph, e, lnn)
 end
 
@@ -63,8 +63,7 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
         setattr!(ident, :scope_layer, e.args[2])
     elseif e isa Expr && e.head === :static_parameter
         setattr!(newleaf(graph, src, K"Value"), :value, e)
-    elseif e isa Expr && e.head === :lambda
-        ensure_desugaring_attributes!(graph)
+    elseif e isa Expr && e.head === :lambda && length(e.args) == 2
         argnames = e.args[1]::Vector{Any}
         arg_cs = NodeId[]
         for name in argnames
@@ -491,6 +490,7 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
                     "macro-expansion and desugaring: ")))
             end
         end
+        ([K"latestworld"], when=!is_leaf(st)) -> newleaf(g, st, K"latestworld")
         [K"cfunction" typ fptr rt at sym] -> @ast g st [K"cfunction"
             rec(typ) rec(fptr)
             [K"static_eval"(rt, meta=name_hint("cfunction return type")) rec(rt)]
