@@ -98,6 +98,21 @@ static int NOINLINE compare_svec(jl_svec_t *a, jl_svec_t *b) JL_NOTSAFEPOINT
     return 1;
 }
 
+static inline uint8_t last_byte_mask(jl_datatype_t *dt) JL_NOTSAFEPOINT
+{
+    uint32_t unused = jl_datatype_unusedbits(dt);
+    return unused ? (uint8_t)(0xff >> unused) : 0xff;
+}
+
+static inline int primitive_bits_equal(const void *a, const void *b, jl_datatype_t *dt) JL_NOTSAFEPOINT
+{
+    size_t sz = jl_datatype_size(dt);
+    if (sz == 0)
+        return 1;
+    return (sz <= 1 || bits_equal(a, b, sz - 1)) &&
+           ((((const uint8_t*)a)[sz - 1] ^ ((const uint8_t*)b)[sz - 1]) & last_byte_mask(dt)) == 0;
+}
+
 // See comment above for an explanation of NOINLINE.
 static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_datatype_t *dt) JL_NOTSAFEPOINT
 {
@@ -143,8 +158,11 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
                     return 0;
             }
             else {
-                assert(jl_datatype_nfields(ft) > 0);
-                if (!compare_fields((jl_value_t*)ao, (jl_value_t*)bo, ft))
+                if (jl_datatype_nfields(ft) == 0) {
+                    if (!primitive_bits_equal(ao, bo, ft))
+                        return 0;
+                }
+                else if (!compare_fields((jl_value_t*)ao, (jl_value_t*)bo, ft))
                     return 0;
             }
         }
@@ -334,7 +352,9 @@ inline int jl_egal__bits(const jl_value_t *a JL_MAYBE_UNROOTED, const jl_value_t
     if (sz == 0)
         return 1;
     size_t nf = jl_datatype_nfields(dt);
-    if (nf == 0 || (!dt->layout->flags.haspadding && dt->layout->flags.isbitsegal))
+    if (nf == 0)
+        return dt->layout->flags.haspadding ? primitive_bits_equal(a, b, dt) : bits_equal(a, b, sz);
+    if (!dt->layout->flags.haspadding && dt->layout->flags.isbitsegal)
         return bits_equal(a, b, sz);
     return compare_fields(a, b, dt);
 }
@@ -450,6 +470,12 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
         // a few select pointers (notably symbol) also have special hash values
         // which may affect the stability of the objectid hash, even though
         // they don't affect egal comparison
+        if (nf == 0 && dt->layout->flags.haspadding) {
+            void *buf = alloca(sz);
+            memcpy(buf, v, sz);
+            ((uint8_t*)buf)[sz - 1] &= last_byte_mask(dt);
+            return bits_hash(buf, sz) ^ h;
+        }
         return bits_hash(v, sz) ^ h;
     }
     if (dt == jl_unionall_type)
@@ -596,6 +622,26 @@ JL_CALLABLE(jl_f_sizeof)
     if (jl_is_genericmemory(x))
         sz = (sz + (dt->layout->flags.arrayelem_isunion ? 1 : 0)) * ((jl_genericmemory_t*)x)->length;
     return jl_box_long(sz);
+}
+
+JL_CALLABLE(jl_f_bitsizeof)
+{
+    JL_NARGS(bitsizeof, 1, 1);
+    jl_value_t *x = args[0];
+    if (jl_is_unionall(x) || jl_is_uniontype(x))
+        return jl_box_long(jl_unbox_long(jl_f_sizeof(F, args, 1)) * 8);
+    if (jl_is_datatype(x)) {
+        jl_datatype_t *dx = (jl_datatype_t*)x;
+        if (jl_is_primitivetype(dx))
+            return jl_box_long(jl_datatype_nbits(dx));
+        return jl_box_long(jl_unbox_long(jl_f_sizeof(F, args, 1)) * 8);
+    }
+    if (x == jl_bottom_type)
+        jl_error("The empty type does not have a definite size since it does not have instances.");
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
+    if (jl_is_primitivetype(dt))
+        return jl_box_long(jl_datatype_nbits(dt));
+    return jl_box_long(jl_unbox_long(jl_f_sizeof(F, args, 1)) * 8);
 }
 
 JL_CALLABLE(jl_f_issubtype)
@@ -2131,7 +2177,7 @@ JL_CALLABLE(jl_f__primitivetype)
         jl_errorf("invalid declaration of primitive type %s",
                   jl_symbol_name((jl_sym_t*)name));
     ssize_t nb = jl_unbox_long(vnb);
-    if (nb < 1 || nb >= (1 << 23) || (nb & 7) != 0)
+    if (nb < 1 || nb >= (1 << 23))
         jl_errorf("invalid number of bits in primitive type %s",
                   jl_symbol_name((jl_sym_t*)name));
     jl_datatype_t *dt = jl_new_primitivetype(args[1], (jl_module_t*)args[0], NULL, (jl_svec_t*)args[2], nb);

@@ -814,7 +814,7 @@ static Type *_julia_type_to_llvm(jl_codegen_output_t *ctx, LLVMContext &ctxt, jl
     if (jt == (jl_value_t*)jl_bottom_type || jt == (jl_value_t*)jl_typeofbottom_type || jt == (jl_value_t*)jl_typeofbottom_type->super)
         return getVoidTy(ctxt);
     if (jl_is_concrete_immutable(jt) || no_boxing) {
-        if (jl_datatype_nbits(jt) == 0)
+        if (jl_datatype_nbits((jl_datatype_t*)jt) == 0)
             return getVoidTy(ctxt);
         Type *t = _julia_struct_to_llvm(ctx, ctxt, jt, isboxed);
         assert(t != NULL);
@@ -874,8 +874,8 @@ static Type *bitstype_to_llvm(jl_value_t *bt, LLVMContext &ctxt, bool llvmcall =
             jl_error("invalid pointer address space");
         return PointerType::get(ctxt, as);
     }
-    int nb = jl_datatype_size(bt);
-    return Type::getIntNTy(ctxt, nb * 8);
+    int nb = jl_datatype_nbits((jl_datatype_t*)bt);
+    return Type::getIntNTy(ctxt, nb);
 }
 
 static bool jl_type_hasptr(jl_value_t* typ)
@@ -2435,7 +2435,8 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         }
         if (isa<IntegerType>(elty)) {
             unsigned nb2 = PowerOf2Ceil(nb);
-            if (nb != nb2)
+            unsigned bitwidth = cast<IntegerType>(elty)->getBitWidth();
+            if (nb != nb2 || bitwidth != 8 * nb)
                 elty = Type::getIntNTy(ctx.builder.getContext(), 8 * nb2);
         }
     }
@@ -2611,7 +2612,8 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         realelty = elty;
         if (Order != AtomicOrdering::NotAtomic && isa<IntegerType>(elty)) {
             unsigned nb2 = PowerOf2Ceil(nb);
-            if (nb != nb2)
+            unsigned bitwidth = cast<IntegerType>(elty)->getBitWidth();
+            if (nb != nb2 || bitwidth != 8 * nb)
                 elty = Type::getIntNTy(ctx.builder.getContext(), 8 * nb2);
         }
         if (op != StoreKind::Modify) {

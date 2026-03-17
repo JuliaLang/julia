@@ -300,10 +300,15 @@ The number of bits indicates how much storage the type requires and the name giv
 a name. A primitive type can optionally be declared to be a subtype of some supertype. If a supertype
 is omitted, then the type defaults to having `Any` as its immediate supertype. The declaration
 of [`Bool`](@ref) above therefore means that a boolean value takes eight bits to store, and has
-[`Integer`](@ref) as its immediate supertype. Currently, only sizes that are multiples of
-8 bits are supported and you are more likely to experience bugs with sizes other than those used above.
-Therefore, boolean values, although they really need just a single bit, cannot be declared to be any
-smaller than eight bits.
+[`Integer`](@ref) as its immediate supertype. Primitive types continue to use byte-rounded storage,
+so `sizeof(T)` rounds their storage size up to a whole number of bytes even when their logical width
+is not a multiple of 8 bits. Use `Core.bitsizeof(T)` to query the declared logical width.
+
+Non-byte primitive widths are accepted, but remain an expert-only feature. They are more likely to
+expose compiler, runtime, or ABI bugs than the standard built-in primitive widths, and arrays still
+use byte-rounded element storage rather than packed bit layouts. Therefore, boolean values, although
+they really need just a single bit, should still use the built-in eight-bit [`Bool`](@ref) unless
+you are deliberately working with these expert-only semantics.
 
 The types [`Bool`](@ref), [`Int8`](@ref) and [`UInt8`](@ref) all have identical representations:
 they are eight-bit chunks of memory. Since Julia's type system is nominative, however, they

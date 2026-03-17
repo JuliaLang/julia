@@ -4,6 +4,7 @@
 
 # For curmod_*
 include("testenv.jl")
+using InteractiveUtils: code_llvm
 
 # bits types
 @test isa((() -> Core.Intrinsics.bitcast(Ptr{Int8}, 0))(), Ptr{Int8})
@@ -79,6 +80,30 @@ let x, y, f
     @test string(y) == "$(curmod_prefix)Int24(0x468ace)"
 end
 
+# odd-bit primitive integers keep byte-rounded storage but logical bit widths
+primitive type Int63 <: Signed 63 end
+primitive type UInt63 <: Unsigned 63 end
+Int63(x::Int64) = Core.Intrinsics.trunc_int(Int63, x)
+UInt63(x::UInt64) = Core.Intrinsics.trunc_int(UInt63, x)
+Base.Int64(x::Int63) = Core.Intrinsics.sext_int(Int64, x)
+Base.UInt64(x::UInt63) = Core.Intrinsics.zext_int(UInt64, x)
+let x = UInt63(0xc000_ba98_8765_4321), y = Int63(-1)
+    @test sizeof(UInt63) == 8
+    @test Core.bitsizeof(UInt63) == 63
+    @test Core.bitsizeof(x) == 63
+    @test Core.bitsizeof(Int64) == 64
+    @test Core.bitsizeof(1.0) == 64
+    @test UInt64(x) === 0x4000_ba98_8765_4321
+    @test Int64(y) === -1
+    # Under Revise`, this `code_llvm` query can fail in InteractiveUtils'
+    # reflective inference path before it reaches the actual odd-bit lowering.
+    if !isdefined(Main, :Revise)
+        id_u63(x::UInt63) = x
+        ir = sprint(io -> code_llvm(io, id_u63, Tuple{UInt63}; debuginfo=:none))
+        @test occursin(r"\bi63\b", ir)
+    end
+end
+
 # test nonsensical valid conversions and errors
 
 compiled_addi(x, y) = Core.Intrinsics.add_int(x, y)
@@ -110,6 +135,10 @@ end
     (0x80000000, Int64(0x80000000), -Int64(0x80000000))
 @test compiled_conv(UInt32, UInt64(0xC000_BA98_8765_4321)) ==
     (0x87654321, 0x0000000087654321, 0xffffffff87654321)
+@test compiled_conv(UInt63, UInt64(0xC000_BA98_8765_4321)) ==
+    (UInt63(0x4000_BA98_8765_4321), 0x4000_BA98_8765_4321, 0xC000_BA98_8765_4321)
+@test compiled_conv(Int63, Int64(-1)) ==
+    (Int63(-1), typemax(Int64), -Int64(1))
 @test_throws ErrorException compiled_conv(Bool, im)
 
 function compiled_fptrunc(::Type{T}, x) where T
