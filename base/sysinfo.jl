@@ -116,7 +116,7 @@ global SC_CLK_TCK::Clong
 """
     Sys.CPU_NAME::String
 
-A string representing the name of CPU.
+A string representing the name of the host CPU.
 
 # Examples
 For example, `Sys.CPU_NAME` might equal `"tigerlake"` on an
