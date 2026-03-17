@@ -44,107 +44,6 @@ extern void _dyld_dlopen_atfork_parent(void) __attribute__((weak_import));
 
 static void attach_exception_port(thread_port_t thread, int segv_only);
 
-// low 16 bits are the thread id, the next 8 bits are the original gc_state
-static arraylist_t suspended_threads;
-extern uv_cond_t safepoint_cond_begin;
-
-#define GC_STATE_SHIFT 8*sizeof(int16_t)
-static inline int8_t decode_gc_state(uintptr_t item)
-{
-    return (int8_t)(item >> GC_STATE_SHIFT);
-}
-
-static inline int16_t decode_tid(uintptr_t item)
-{
-    return (int16_t)item;
-}
-
-static inline uintptr_t encode_item(int16_t tid, int8_t gc_state)
-{
-    return (uintptr_t)tid | ((uintptr_t)gc_state << GC_STATE_SHIFT);
-}
-
-// see jl_safepoint_wait_thread_resume
-void jl_safepoint_resume_thread_mach(jl_ptls_t ptls2, int16_t tid2)
-{
-    // must be called with uv_mutex_lock(&safepoint_lock) and uv_mutex_lock(&ptls2->sleep_lock) held (in that order)
-    for (size_t i = 0; i < suspended_threads.len; i++) {
-        uintptr_t item = (uintptr_t)suspended_threads.items[i];
-
-        int16_t tid = decode_tid(item);
-        int8_t gc_state = decode_gc_state(item);
-        if (tid != tid2)
-            continue;
-        jl_atomic_store_release(&ptls2->gc_state, gc_state);
-        thread_resume(pthread_mach_thread_np(ptls2->system_id));
-        suspended_threads.items[i] = suspended_threads.items[--suspended_threads.len];
-        break;
-    }
-    // thread hadn't actually reached a jl_mach_gc_wait call where we suspended it
-}
-
-void jl_mach_gc_end(void)
-{
-    // must be called with uv_mutex_lock(&safepoint_lock) held
-    size_t j = 0;
-    for (size_t i = 0; i < suspended_threads.len; i++) {
-        uintptr_t item = (uintptr_t)suspended_threads.items[i];
-        int16_t tid = decode_tid(item);
-        int8_t gc_state = decode_gc_state(item);
-        jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-        uv_mutex_lock(&ptls2->sleep_lock);
-        if (jl_atomic_load_relaxed(&ptls2->suspend_count) == 0) {
-            jl_atomic_store_release(&ptls2->gc_state, gc_state);
-            thread_resume(pthread_mach_thread_np(ptls2->system_id));
-        }
-        else {
-            // this is the check for jl_safepoint_wait_thread_resume
-            suspended_threads.items[j++] = (void*)item;
-        }
-        uv_mutex_unlock(&ptls2->sleep_lock);
-    }
-    suspended_threads.len = j;
-}
-
-// implement jl_set_gc_and_wait from a different thread
-static void jl_mach_gc_wait(jl_ptls_t ptls2, mach_port_t thread, int16_t tid)
-{
-    // relaxed, since we don't mind missing one--we will hit another soon (immediately probably)
-    uv_mutex_lock(&safepoint_lock);
-    // Since this gets set to zero only while the safepoint_lock was held this
-    // means we can tell for sure if GC is done before we got the message or
-    // the safepoint was enabled for SIGINT instead.
-    int doing_gc = jl_atomic_load_relaxed(&jl_gc_running);
-    int do_suspend = doing_gc;
-    int relaxed_suspend_count = !doing_gc && jl_atomic_load_relaxed(&ptls2->suspend_count) != 0;
-    if (relaxed_suspend_count) {
-        uv_mutex_lock(&ptls2->sleep_lock);
-        do_suspend = jl_atomic_load_relaxed(&ptls2->suspend_count) != 0;
-        // only do_suspend while holding the sleep_lock, otherwise we might miss a resume
-    }
-    if (do_suspend) {
-        // Set the gc state of the thread, suspend and record it
-        //
-        // TODO: TSAN will complain that it never saw the faulting task do an
-        // atomic release (it was in the kernel). And our attempt here does
-        // nothing, since we are a different thread, and it is not transitive).
-        //
-        // This also means we are not making this thread available for GC work.
-        // Eventually, we should probably release this signal to the original
-        // thread, (return KERN_FAILURE instead of KERN_SUCCESS) so that it
-        // triggers a SIGSEGV and gets handled by the usual codepath for unix.
-        int8_t gc_state = jl_atomic_load_acquire(&ptls2->gc_state);
-        jl_atomic_store_release(&ptls2->gc_state, JL_GC_STATE_WAITING);
-        uintptr_t item = encode_item(tid, gc_state);
-        arraylist_push(&suspended_threads, (void*)item);
-        thread_suspend(thread);
-    }
-    if (relaxed_suspend_count)
-        uv_mutex_unlock(&ptls2->sleep_lock);
-    uv_cond_broadcast(&safepoint_cond_begin);
-    uv_mutex_unlock(&safepoint_lock);
-}
-
 static mach_port_t segv_port = 0;
 
 #define HANDLE_MACH_ERROR(msg, retval) \
@@ -172,8 +71,6 @@ static void allocate_mach_handler(void)
     if (_keymgr_set_lockmode_processwide_ptr(KEYMGR_GCC3_DW2_OBJ_LIST, NM_ALLOW_RECURSION))
         jl_error("_keymgr_set_lockmode_processwide_ptr failed");
 
-    int16_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
-    arraylist_new(&suspended_threads, nthreads); // we will resize later (inside safepoint_lock), if needed
     pthread_t thread;
     pthread_attr_t attr;
     kern_return_t ret;
@@ -224,7 +121,7 @@ typedef arm_exception_state64_t host_exception_state_t;
 // Create a fake function that describes the register manipulations in jl_call_in_state
 // The callee-saved registers still may get smashed (by the cdecl fptr), since we didn't explicitly copy all of the
 // state to the stack (to build a real sigreturn frame).
-__attribute__((naked)) static void jl_fake_signal_return(void)
+__attribute__((naked, used)) void jl_fake_signal_return(void)
 {
 #if defined(_CPU_X86_64_)
 __asm__(
@@ -360,6 +257,166 @@ static void jl_throw_in_thread(jl_ptls_t ptls2, mach_port_t thread, jl_value_t *
     HANDLE_MACH_ERROR("thread_set_state", ret);
 }
 
+// Trampoline that runs on the faulting thread after being hijacked by the
+// Mach exception handler for a safepoint hit. This uses the same codepath
+// as the Unix signal handler (jl_set_gc_and_wait), so the faulting thread
+// participates in GC synchronization directly.
+//
+// ptls is passed as an argument (via x0/rdi) since __thread TLS may not
+// be valid (e.g. during thread teardown).
+static void mach_safepoint_trampoline(jl_ptls_t ptls)
+{
+    jl_task_t *ct = jl_atomic_load_relaxed(&ptls->current_task);
+    if (ct == NULL)
+        return; // thread is dead, just resume
+    jl_set_gc_and_wait(ct);
+    // Do not raise sigint on worker thread
+    if (jl_atomic_load_relaxed(&ct->tid) != 0)
+        return;
+    if (ptls->defer_signal) {
+        jl_safepoint_defer_sigint();
+    }
+    else if (jl_safepoint_consume_sigint()) {
+        jl_clear_force_sigint();
+        jl_throw(jl_interrupt_exception);
+    }
+}
+
+// Assembly stub that restores all registers from a host_thread_state_t
+// saved on the stack, then jumps back to the original PC. This is the
+// return address used when hijacking a thread to a C trampoline.
+//
+// On entry, sp points to a host_thread_state_t containing the full
+// register state to restore.
+#if defined(_CPU_AARCH64_)
+// arm_thread_state64_t layout:
+//   __x[29] at offset 0   (29 * 8 = 232 bytes, x0-x28)
+//   __fp    at offset 232  (x29)
+//   __lr    at offset 240  (x30)
+//   __sp    at offset 248  (x31)
+//   __pc    at offset 256
+//   __cpsr  at offset 264
+__attribute__((naked, used)) void jl_mach_restore_state(void)
+{
+    __asm__(
+        "  .cfi_signal_frame\n"
+        "  .cfi_def_cfa sp, 0\n"
+        "  .cfi_offset lr, 256\n"   // saved __pc
+        "  .cfi_offset sp, 248\n"   // saved __sp
+        "  .cfi_offset x29, 232\n"  // saved __fp
+        // sp points to the saved host_thread_state_t
+        // Use x16 as the base pointer (it's a scratch register)
+        "  mov x16, sp\n"
+        // Restore cpsr (condition flags)
+        "  ldr w17, [x16, #264]\n"
+        "  msr nzcv, x17\n"
+        // Restore x0-x15 (caller-saved)
+        "  ldp x0,  x1,  [x16, #0]\n"
+        "  ldp x2,  x3,  [x16, #16]\n"
+        "  ldp x4,  x5,  [x16, #32]\n"
+        "  ldp x6,  x7,  [x16, #48]\n"
+        "  ldp x8,  x9,  [x16, #64]\n"
+        "  ldp x10, x11, [x16, #80]\n"
+        "  ldp x12, x13, [x16, #96]\n"
+        "  ldp x14, x15, [x16, #112]\n"
+        // Restore x18-x28 (skip x16, x17 — used as scratch)
+        "  ldp x18, x19, [x16, #144]\n"
+        "  ldp x20, x21, [x16, #160]\n"
+        "  ldp x22, x23, [x16, #176]\n"
+        "  ldp x24, x25, [x16, #192]\n"
+        "  ldp x26, x27, [x16, #208]\n"
+        "  ldr x28,      [x16, #224]\n"
+        // Restore fp (x29) and lr (x30)
+        "  ldp x29, x30, [x16, #232]\n"
+        // Load sp and pc into scratch registers, then restore
+        "  ldp x16, x17, [x16, #248]\n" // x16 = saved sp, x17 = saved pc
+        "  mov sp, x16\n"
+        "  br x17\n"                     // jump to original pc
+    );
+}
+#elif defined(_CPU_X86_64_)
+// x86_thread_state64_t layout (macOS):
+//   __rax at offset 0, __rbx at 8, __rcx at 16, __rdx at 24
+//   __rdi at 32, __rsi at 40, __rbp at 48, __rsp at 56
+//   __r8 at 64, __r9 at 72, __r10 at 80, __r11 at 88
+//   __r12 at 96, __r13 at 104, __r14 at 112, __r15 at 120
+//   __rip at 128, __rflags at 136
+__attribute__((naked, used)) void jl_mach_restore_state(void)
+{
+    __asm__(
+        "  .cfi_signal_frame\n"
+        "  .cfi_def_cfa %rsp, 0\n"
+        "  .cfi_offset %rip, 128\n" // saved __rip
+        "  .cfi_offset %rsp, 56\n"  // saved __rsp
+        // rsp points to the saved host_thread_state_t
+        "  movq %rsp, %r11\n"         // use r11 as base pointer
+        // Restore rflags
+        "  pushq 136(%r11)\n"
+        "  popfq\n"
+        // Restore general purpose registers
+        "  movq 0(%r11), %rax\n"
+        "  movq 8(%r11), %rbx\n"
+        "  movq 16(%r11), %rcx\n"
+        "  movq 24(%r11), %rdx\n"
+        "  movq 32(%r11), %rdi\n"
+        "  movq 40(%r11), %rsi\n"
+        "  movq 48(%r11), %rbp\n"
+        // skip rsp (56) — restore last
+        "  movq 64(%r11), %r8\n"
+        "  movq 72(%r11), %r9\n"
+        "  movq 80(%r11), %r10\n"
+        // skip r11 — in use as base
+        "  movq 96(%r11), %r12\n"
+        "  movq 104(%r11), %r13\n"
+        "  movq 112(%r11), %r14\n"
+        "  movq 120(%r11), %r15\n"
+        // Restore rsp and jump to rip
+        "  movq 56(%r11), %rsp\n"
+        "  jmpq *128(%r11)\n"
+    );
+}
+#endif
+
+// Hijack a suspended thread to call fptr(arg0). The full register state is
+// saved on the target thread's stack as a host_thread_state_t. When fptr()
+// returns, jl_mach_restore_state restores all registers and jumps back
+// to the original PC.
+static void jl_hijack_thread(mach_port_t thread, void (*fptr)(void), uintptr_t arg0)
+{
+    unsigned int count = MACH_THREAD_STATE_COUNT;
+    host_thread_state_t state;
+    kern_return_t ret = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
+    HANDLE_MACH_ERROR("thread_get_state", ret);
+
+#ifdef _CPU_X86_64_
+    uintptr_t sp = state.__rsp;
+    sp = (sp - 256) & ~(uintptr_t)15; // redzone and re-alignment
+    sp -= sizeof(host_thread_state_t);
+    sp &= ~(uintptr_t)15;
+    memcpy((void*)sp, &state, sizeof(host_thread_state_t));
+    // Push the return address for the restore stub
+    sp -= sizeof(void*);
+    *(uintptr_t*)sp = (uintptr_t)&jl_mach_restore_state;
+    state.__rsp = sp;
+    state.__rip = (uint64_t)fptr;
+    state.__rdi = arg0;
+#elif defined(_CPU_AARCH64_)
+    uintptr_t sp = state.__sp;
+    sp = (sp - 256) & ~(uintptr_t)15;
+    sp -= sizeof(host_thread_state_t);
+    sp &= ~(uintptr_t)15;
+    memcpy((void*)sp, &state, sizeof(host_thread_state_t));
+    state.__sp = sp;
+    state.__pc = (uint64_t)fptr;
+    state.__lr = (uintptr_t)&jl_mach_restore_state;
+    state.__x[0] = arg0;
+#else
+#error "julia: hijack-thread not supported on this platform"
+#endif
+    ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
+    HANDLE_MACH_ERROR("thread_set_state", ret);
+}
+
 static void segv_handler(int sig, siginfo_t *info, void *context)
 {
     assert(sig == SIGSEGV || sig == SIGBUS);
@@ -405,15 +462,12 @@ kern_return_t catch_mach_exception_raise(
         return profiler_segv_handler(exception_port, thread, task, exception, code, codeCnt);
     }
 #endif
-    int16_t tid;
     jl_ptls_t ptls2 = NULL;
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
-    for (tid = 0; tid < nthreads; tid++) {
+    for (int16_t tid = 0; tid < nthreads; tid++) {
         jl_ptls_t _ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-        if (jl_atomic_load_relaxed(&_ptls2->current_task) == NULL) {
-            // this thread is dead
+        if (_ptls2 == NULL)
             continue;
-        }
         if (pthread_mach_thread_np(_ptls2->system_id) == thread) {
             ptls2 = _ptls2;
             break;
@@ -443,16 +497,9 @@ kern_return_t catch_mach_exception_raise(
     kern_return_t ret = thread_get_state(thread, HOST_EXCEPTION_STATE, (thread_state_t)&exc_state, &exc_count);
     HANDLE_MACH_ERROR("thread_get_state", ret);
     if (jl_addr_is_safepoint(fault_addr) && !is_write_fault(exc_state)) {
-        jl_mach_gc_wait(ptls2, thread, tid);
-        if (ptls2->tid != 0)
-            return KERN_SUCCESS;
-        if (ptls2->defer_signal) {
-            jl_safepoint_defer_sigint();
-        }
-        else if (jl_safepoint_consume_sigint()) {
-            jl_clear_force_sigint();
-            jl_throw_in_thread(ptls2, thread, jl_interrupt_exception);
-        }
+        // Hijack the faulting thread to handle the safepoint on its own
+        // stack, using the same jl_set_gc_and_wait() codepath as Unix signals.
+        jl_hijack_thread(thread, (void (*)(void))&mach_safepoint_trampoline, (uintptr_t)ptls2);
         return KERN_SUCCESS;
     }
     if (jl_atomic_load_relaxed(&ptls2->current_task)->eh == NULL)

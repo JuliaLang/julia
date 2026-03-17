@@ -1409,7 +1409,7 @@ JL_DLLEXPORT void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t
 extern pthread_mutex_t in_signal_lock;
 #endif
 
-void jl_set_gc_and_wait(jl_task_t *ct); // n.b. not used on _OS_DARWIN_
+void jl_set_gc_and_wait(jl_task_t *ct);
 
 // Query if a Julia object is if a permalloc region (due to part of a sys- pkg-image)
 STATIC_INLINE size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
@@ -1891,11 +1891,6 @@ JL_DLLEXPORT float julia_half_to_float(uint16_t param) JL_NOTSAFEPOINT;
 
 extern jl_mutex_t typecache_lock;
 extern jl_mutex_t world_counter_lock;
-
-#if defined(__APPLE__)
-void jl_mach_gc_end(void) JL_NOTSAFEPOINT;
-void jl_safepoint_resume_thread_mach(jl_ptls_t ptls2, int16_t tid2) JL_NOTSAFEPOINT;
-#endif
 
 // -- smallintset.c -- //
 
