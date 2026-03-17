@@ -292,49 +292,32 @@ function _threadsfor_single_iterator(body, iterator, condition, schedule, dims=n
     end
 
     func = if schedule === :greedy
-        greedy_comprehension_func(esc_range, esc_lidx, esc_body, esc_condition)
+        greedy_comprehension_func(esc_range, esc_lidx, esc_body, esc_condition, result_type)
     else
-        default_comprehension_func(esc_range, esc_lidx, esc_body, esc_condition)
+        default_comprehension_func(esc_range, esc_lidx, esc_body, esc_condition, result_type)
     end
 
-    result_expr = if schedule === :greedy
-        # Greedy: collect values in arrival order (no ordering guarantee)
-        if result_type !== nothing
-            esc_result_type = esc(result_type)
-            quote
-                close(result_channel)
-                vals = collect(result_channel)
-                isempty(vals) ? $esc_result_type[] : $esc_result_type[v for v in vals]
-            end
-        else
-            quote
-                close(result_channel)
-                collect(result_channel)
-            end
+    # Both greedy and default/static return Vector{Vector{T}} of per-task buffers.
+    # For the untyped case, we try vcat first (fast bulk copies). If the buffers have
+    # a Union or Any element type — indicating a type-unstable body — we fall back to
+    # grow_to! which replicates serial's promote_typejoin widening.
+    result_expr = if result_type !== nothing
+        esc_result_type = esc(result_type)
+        quote
+            vcat(result_channel...)::Vector{$esc_result_type}
         end
     else
-        # Default/static/dynamic: sort by index to preserve iteration order
-        if result_type !== nothing
-            esc_result_type = esc(result_type)
-            quote
-                close(result_channel)
-                pairs = collect(result_channel)
-                if isempty(pairs)
-                    $esc_result_type[]
+        quote
+            let _bufs = result_channel
+                _ET = eltype(eltype(_bufs))
+                if isconcretetype(_ET)
+                    # All buffers have a concrete element type (from promote_op inference
+                    # or a uniform body). Use bulk vcat — same result as grow_to! here.
+                    vcat(_bufs...)
                 else
-                    sort!(pairs, by=first)
-                    $esc_result_type[p[2] for p in pairs]
-                end
-            end
-        else
-            quote
-                close(result_channel)
-                pairs = collect(result_channel)
-                if isempty(pairs)
-                    []
-                else
-                    sort!(pairs, by=first)
-                    [p[2] for p in pairs]
+                    # Type-unstable body: grow_to! discovers the correct widened type,
+                    # matching the return type of the equivalent serial comprehension.
+                    Base.grow_to!(Any[], Iterators.flatten(_bufs))
                 end
             end
         end
@@ -458,24 +441,72 @@ function greedy_func(itr, lidx, lbody)
     end
 end
 
-function greedy_comprehension_func(itr, esc_lidx, esc_body, esc_condition)
+function greedy_comprehension_func(itr, esc_lidx, esc_body, esc_condition, result_type=nothing)
+    if result_type !== nothing
+        buf_init = :($(esc(result_type))[])
+        buf_type_setup = :()
+    else
+        # Use promote_op to pre-type the per-task buffers, avoiding boxing during the
+        # parallel phase for type-stable bodies. grow_to! in the result expression then
+        # gives the same final type as the equivalent serial comprehension.
+        # eltype(_raw) works for both AbstractArray and Channel/lazy iterators.
+        _ET = gensym(:ET)
+        buf_type_setup = :(local $_ET = Base.promote_op($esc_lidx -> $esc_body, eltype(_raw)))
+        buf_init = :($_ET[])
+    end
     quote
-        let c = Channel{eltype($itr)}(threadpoolsize(), spawn=true) do ch
-            for item in $itr
-                put!(ch, item)
+        let _raw = $itr
+        local _npool = threadpoolsize()
+        $buf_type_setup
+        local local_bufs = [$buf_init for _ in 1:_npool]
+        # Single conditional assignment avoids the method-overwrite issue that arises when
+        # two `function f(tid)` definitions appear in if/else branches (Julia compiles both,
+        # last one wins regardless of which branch runs at runtime).
+        threadsfor_fun = if _raw isa Union{AbstractArray, Tuple}
+            # Indexable path: atomic work-stealing over chunks amortizes
+            # synchronization cost while preserving greedy dynamic scheduling.
+            local _nitems = length(_raw)
+            local _fst = firstindex(_raw)
+            # ~64 chunks per thread: enough for good load balance, large enough to
+            # amortize atomic overhead.
+            local _chunk = max(1, _nitems ÷ (_npool * 64))
+            local _next = Threads.Atomic{Int}(0)  # 0-based chunk counter
+            (tid) -> begin
+                local buf = local_bufs[tid]
+                while true
+                    local ci = Threads.atomic_add!(_next, 1)
+                    local pos_start = ci * _chunk  # 0-based offset from firstindex
+                    pos_start >= _nitems && break
+                    local pos_end = min(pos_start + _chunk - 1, _nitems - 1)
+                    for pos in pos_start:pos_end
+                        local $esc_lidx = @inbounds _raw[_fst + pos]
+                        if $esc_condition
+                            push!(buf, $esc_body)
+                        end
+                    end
+                end
             end
-        end
-        result_channel = Channel{Any}(Inf)
-
-        function threadsfor_fun(tid)
-            for item in c
-                local $esc_lidx = item
-                if $esc_condition
-                    put!(result_channel, $esc_body)
+        else
+            # Non-indexable path (Channel, lazy iterators, etc.): preserve true
+            # greedy streaming semantics. A producer task feeds a bounded channel
+            # and worker tasks drain it concurrently without materializing the
+            # iterator up front.
+            local _c = Channel{eltype(_raw)}(threadpoolsize(), spawn=true) do ch
+                for item in _raw
+                    put!(ch, item)
+                end
+            end
+            (tid) -> begin
+                local buf = local_bufs[tid]
+                for item in _c
+                    local $esc_lidx = item
+                    if $esc_condition
+                        push!(buf, $esc_body)
+                    end
                 end
             end
         end
-        result_channel
+        local_bufs
         end
     end
 end
@@ -531,27 +562,42 @@ function default_func(itr, lidx, lbody)
     end
 end
 
-function default_comprehension_func(itr, esc_lidx, esc_body, esc_condition)
+function default_comprehension_func(itr, esc_lidx, esc_body, esc_condition, result_type=nothing)
     work_dist = _work_distribution_code()
+    if result_type !== nothing
+        # Typed comprehension: element type known at macro expansion time.
+        buf_init = :($(esc(result_type))[])
+        buf_type_setup = :()
+    else
+        # Untyped comprehension: use promote_op to pre-type the per-task buffers,
+        # avoiding boxing in the parallel phase for type-stable bodies.
+        # The result is flattened through grow_to! so the final element type matches
+        # serial's runtime promote_typejoin widening rather than the static promote_op type.
+        _ET = gensym(:ET)
+        buf_type_setup = :(local $_ET = Base.promote_op($esc_lidx -> $esc_body, eltype(items)))
+        buf_init = :($_ET[])
+    end
     quote
         let iter = $itr
-        # Collect non-indexable iterators for random access (r[i]) in work distribution
-        items = iter isa AbstractArray ? iter : collect(iter)
-        # Channel uses Tuple{Int, Any} because the output type of the body expression
-        # is not known at macro expansion time.
-        result_channel = Channel{Tuple{Int, Any}}(Inf)
+        local items = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
+        local _npool = threadpoolsize()
+        $buf_type_setup
+        # One buffer per task-id; tasks process contiguous ranges so concatenating
+        # in tid order preserves iteration order without a sort step.
+        local local_bufs = [$buf_init for _ in 1:_npool]
 
         function threadsfor_fun(tid = 1; onethread = false)
             # Reads: items, tid, onethread. Defines: r, loop_first, loop_last.
             $work_dist
+            local buf = local_bufs[tid]
             for i = loop_first:loop_last
                 local $esc_lidx = @inbounds r[i]
                 if $esc_condition
-                    put!(result_channel, (i, $esc_body))
+                    push!(buf, $esc_body)
                 end
             end
         end
-        result_channel  # Return channel so results can be collected after threading_run
+        local_bufs  # Return per-task buffers to be vcat'd after threading_run
         end
     end
 end
@@ -627,6 +673,8 @@ larger than the number of the worker threads and the run-time of `f(x)` is relat
 smaller than the cost of spawning and synchronizing a task (typically less than 10
 microseconds).
 
+Use `:dynamic` (or the default) for uniform workloads over indexable collections.
+
 !!! compat "Julia 1.8"
     The `:dynamic` option for the `schedule` argument is available and the default as of Julia 1.8.
 
@@ -637,6 +685,19 @@ the given iterated values as they are produced. As soon as one task finishes its
 the next value from the iterator. Work done by any individual task is not necessarily on
 contiguous values from the iterator. The given iterator may produce values forever, only the
 iterator interface is required (no indexing).
+
+Use `:greedy` when:
+- iteration times are non-uniform or have a large spread (e.g. one item takes 10× longer than another)
+- the iterator is non-indexable (e.g. a `Channel` or a lazy iterator)
+
+For array comprehensions, `:greedy` does **not** guarantee that the output elements appear
+in the same order as the input (unlike `:dynamic` and `:static`). Use `sort` on the result
+if order matters.
+
+For array comprehensions over an `AbstractArray`, workers steal chunks of indices atomically
+(fast, low-overhead). For non-indexable iterators (e.g. a `Channel`), a bounded producer
+channel feeds all worker tasks concurrently without materializing the iterator first,
+preserving true streaming semantics.
 
 This scheduling option is generally a good choice if the workload of individual iterations
 is not uniform/has a large spread.
@@ -651,6 +712,9 @@ them, assigning each task specifically to each thread. In particular, the value 
 [`threadid()`](@ref Threads.threadid) is guaranteed to be constant within one iteration.
 Specifying `:static` is an error if used from inside another `@threads` loop or from a
 thread other than 1.
+
+Use `:static` only when `threadid()` stability within an iteration is required for
+compatibility with existing code.
 
 !!! note
     `:static` scheduling exists for supporting transition of code written before Julia 1.3.

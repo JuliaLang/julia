@@ -34,22 +34,40 @@ using .Main.OffsetArrays
         n = 100
 
         # Test default scheduling with filter
-        result = @threads [i^2 for i in 1:n if iseven(i)]
         expected = [i^2 for i in 1:n if iseven(i)]
+        result = @threads [i^2 for i in 1:n if iseven(i)]
         @test result == expected
+        @test typeof(result) == typeof(expected)
 
         # Test static scheduling with filter
         result_static = @threads :static [i^2 for i in 1:n if iseven(i)]
         @test result_static == expected
+        @test typeof(result_static) == typeof(expected)
 
-        # Test greedy scheduling with filter (does not guarantee order)
+        # Test greedy scheduling with filter (does not guarantee element order)
         result_greedy = @threads :greedy [i^2 for i in 1:n if iseven(i)]
         @test sort(result_greedy) == expected
+        @test typeof(result_greedy) == typeof(expected)
+        g_untyped(m) = Threads.@threads :greedy [i for i in 1:m if iseven(i)]
+        g_typed(m)   = Threads.@threads :greedy Int[i for i in 1:m if iseven(i)]
+        g_untyped(10); g_typed(10)
+        @test @allocations(g_untyped(1_000_000)) < 1_000
+        @test @allocations(g_typed(1_000_000)) < 1_000
 
         # Test with more complex filter
-        result_complex = @threads [i for i in 1:100 if i % 3 == 0 && i > 20]
         expected_complex = [i for i in 1:100 if i % 3 == 0 && i > 20]
+        result_complex = @threads [i for i in 1:100 if i % 3 == 0 && i > 20]
         @test result_complex == expected_complex
+        @test typeof(result_complex) == typeof(expected_complex)
+
+        # Allocations must be O(nthreads), not O(n): thread-local buffers mean one
+        # push! per passing element with no per-element heap tuple or channel put!.
+        f_untyped(m) = Threads.@threads [i for i in 1:m if iseven(i)]
+        f_typed(m)   = Threads.@threads Int[i for i in 1:m if iseven(i)]
+        f_untyped(10); f_typed(10)  # warm up
+        for f in (f_untyped, f_typed)
+            @test @allocations(f(1_000_000)) < 1_000
+        end
     end
 
     # Test edge cases
@@ -92,8 +110,8 @@ using .Main.OffsetArrays
     # Test multiple loops comprehensions
     @testset "multiple loops comprehensions" begin
         # Test simple multiple loops
-        result = @threads [i + j for i in 1:3, j in 1:3]
         expected = [i + j for i in 1:3, j in 1:3]
+        result = @threads [i + j for i in 1:3, j in 1:3]
         @test size(result) == size(expected)
         @test result == expected  # default scheduling preserves order and dimensions
 
@@ -125,8 +143,8 @@ using .Main.OffsetArrays
     @testset "non-indexable iterators" begin
         # Test with Iterators.flatten
         flat_iter = Iterators.flatten([1:3, 4:6])
+        expected = [i^2 for i in flat_iter]
         result = @threads [i^2 for i in flat_iter]
-        expected = [i^2 for i in 1:6]
         @test result == expected
 
         # Test with greedy scheduling for non-indexable (does not guarantee order)
@@ -156,6 +174,13 @@ using .Main.OffsetArrays
 
         result_greedy = @threads :greedy [x for x in t]
         @test sort(result_greedy) == sort(collect(t))
+        @test typeof(result_greedy) == typeof([x for x in t])
+
+        # :greedy with filter over Tuple (uses atomic work-stealing path)
+        result_greedy_filt = @threads :greedy [x for x in t if x > 25]
+        expected_greedy_filt = [x for x in t if x > 25]
+        @test sort(result_greedy_filt) == expected_greedy_filt
+        @test typeof(result_greedy_filt) == typeof(expected_greedy_filt)
 
         result_filter = @threads [x for x in t if x > 25]
         @test result_filter == [x for x in t if x > 25]
@@ -175,34 +200,57 @@ using .Main.OffsetArrays
         foreach(i -> put!(ch2, i), 1:10)
         close(ch2)
         result_ch_filter = @threads :greedy [i for i in ch2 if iseven(i)]
-        @test sort(result_ch_filter) == [2, 4, 6, 8, 10]
+        expected_ch_filter = [i for i in 1:10 if iseven(i)]
+        @test sort(result_ch_filter) == expected_ch_filter
+        @test typeof(result_ch_filter) == typeof(expected_ch_filter)
     end
 
     # Test mixed element types
     @testset "mixed element types" begin
-        # Test that mixed types return Vector{Any} like normal comprehensions
-        result = @threads [x for x in [1, 2.0, "3"]]
+        # Test that mixed types return the same eltype as the serial comprehension
         expected = [x for x in [1, 2.0, "3"]]
+        result = @threads [x for x in [1, 2.0, "3"]]
         @test result == expected
-        @test eltype(result) == eltype(expected)
+        @test typeof(result) == typeof(expected)
 
         # Test with :greedy scheduler (does not guarantee order)
+        # :greedy with heterogeneous body — eltype must match serial
         result_greedy = @threads :greedy [x for x in [1, 2.0, "3"]]
         @test sort(result_greedy, by=string) == sort(expected, by=string)
-        @test result_greedy isa Vector{Any}
+        @test typeof(result_greedy) == typeof(expected)
+
+        # :greedy with filter and heterogeneous body
+        result_greedy_filt = @threads :greedy [x for x in [1, 2.0, "3", 4, 5.0] if x isa Number]
+        expected_greedy_filt = [x for x in [1, 2.0, "3", 4, 5.0] if x isa Number]
+        @test sort(result_greedy_filt, by=string) == sort(expected_greedy_filt, by=string)
+        @test typeof(result_greedy_filt) == typeof(expected_greedy_filt)
 
         # Test with :static scheduler
         result_static = @threads :static [x for x in [1, 2.0, "3"]]
         @test result_static == expected
-        @test eltype(result_static) == eltype(expected)
+        @test typeof(result_static) == typeof(expected)
     end
 
     # Test type widening when body expression produces heterogeneous types
     @testset "body expression type widening" begin
-        result = @threads [i == 50 ? 1.0 : i for i in 1:100]
         expected = [i == 50 ? 1.0 : i for i in 1:100]
+        result = @threads [i == 50 ? 1.0 : i for i in 1:100]
         @test result == expected
-        @test eltype(result) == eltype(expected)
+        @test typeof(result) == typeof(expected)
+
+        # Filtered body with type widening: must match serial's promote_typejoin result
+        expected_filt = [i == 50 ? 1.0 : i for i in 1:100 if iseven(i)]
+        result_filt = @threads [i == 50 ? 1.0 : i for i in 1:100 if iseven(i)]
+        result_filt_static = @threads :static [i == 50 ? 1.0 : i for i in 1:100 if iseven(i)]
+        @test result_filt == expected_filt
+        @test typeof(result_filt) == typeof(expected_filt)
+        @test result_filt_static == expected_filt
+        @test typeof(result_filt_static) == typeof(expected_filt)
+
+        # :greedy with type-widening body — must match serial's promote_typejoin result (does not guarantee order)
+        result_greedy = @threads :greedy [i == 50 ? 1.0 : i for i in 1:100]
+        @test sort(result_greedy) == sort(expected)
+        @test typeof(result_greedy) == typeof(expected)
 
         # Verify widening allocations aren't significantly worse than serial
         widen_threaded() = @threads [i == 100 ? 1.0 : i for i in 1:100_000]
@@ -233,13 +281,14 @@ using .Main.OffsetArrays
         # Typed comprehension with filter
         result_filtered = @threads Int[i^2 for i in 1:20 if iseven(i)]
         expected_filtered = Int[i^2 for i in 1:20 if iseven(i)]
-        @test result_filtered isa Vector{Int}
         @test result_filtered == expected_filtered
+        @test typeof(result_filtered) == typeof(expected_filtered)
 
         # Typed comprehension with filter and greedy (does not guarantee order)
         result_greedy_filt = @threads :greedy Float64[i for i in 1:20 if i > 10]
-        @test result_greedy_filt isa Vector{Float64}
-        @test sort(result_greedy_filt) == Float64.(11:20)
+        expected_greedy_filt = Float64[i for i in 1:20 if i > 10]
+        @test typeof(result_greedy_filt) == typeof(expected_greedy_filt)
+        @test sort(result_greedy_filt) == expected_greedy_filt
 
         # Typed multi-dimensional comprehension
         result_2d = @threads Float64[i + j for i in 1:3, j in 1:4]
@@ -273,8 +322,8 @@ using .Main.OffsetArrays
     # Test non-1-based indexing preserves axes
     @testset "non-1-based indexing" begin
         r = OffsetArray(1:5, -2:2)
-        result = @threads [x^2 for x in r]
         expected = [x^2 for x in r]
+        result = @threads [x^2 for x in r]
         @test result == expected
         @test axes(result) == axes(expected)
 
