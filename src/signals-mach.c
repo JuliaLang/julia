@@ -90,17 +90,6 @@ static void allocate_mach_handler(void)
     pthread_attr_destroy(&attr);
 }
 
-#ifdef LLVMLIBUNWIND
-volatile mach_port_t mach_profiler_thread = 0;
-static kern_return_t profiler_segv_handler(
-    mach_port_t exception_port,
-    mach_port_t thread,
-    mach_port_t task,
-    exception_type_t exception,
-    mach_exception_data_t code,
-    mach_msg_type_number_t codeCnt);
-#endif
-
 #if defined(_CPU_X86_64_)
 typedef x86_thread_state64_t host_thread_state_t;
 typedef x86_exception_state64_t host_exception_state_t;
@@ -116,6 +105,19 @@ typedef arm_exception_state64_t host_exception_state_t;
 #define MACH_THREAD_STATE_COUNT ARM_THREAD_STATE64_COUNT
 #define HOST_EXCEPTION_STATE ARM_EXCEPTION_STATE64
 #define HOST_EXCEPTION_STATE_COUNT ARM_EXCEPTION_STATE64_COUNT
+#endif
+
+#ifdef LLVMLIBUNWIND
+volatile mach_port_t mach_profiler_thread = 0;
+static kern_return_t profiler_segv_handler(
+    mach_port_t exception_port,
+    mach_port_t thread,
+    mach_port_t task,
+    exception_type_t exception,
+    mach_exception_data_t code,
+    mach_msg_type_number_t codeCnt,
+    host_thread_state_t *state,
+    mach_msg_type_number_t *new_stateCnt);
 #endif
 
 // Create a fake function that describes the register manipulations in jl_noreturn_call_in_state
@@ -210,19 +212,15 @@ int is_write_fault(host_exception_state_t exc_state) {
 }
 #endif
 
-static void jl_throw_in_thread(jl_ptls_t ptls2, mach_port_t thread, jl_value_t *exception)
+static void jl_throw_in_state(jl_ptls_t ptls2, host_thread_state_t *state, jl_value_t *exception)
 {
-    unsigned int count = MACH_THREAD_STATE_COUNT;
-    host_thread_state_t state;
-    kern_return_t ret = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
-    HANDLE_MACH_ERROR("thread_get_state", ret);
     if (ptls2->safe_restore) {
-        jl_longjmp_in_state(&state, *ptls2->safe_restore);
+        jl_longjmp_in_state(state, *ptls2->safe_restore);
     }
     else {
         assert(exception);
         ptls2->bt_size =
-            rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE, (bt_context_t *)&state,
+            rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE, (bt_context_t *)state,
                             NULL /*current_task?*/);
         ptls2->sig_exception = exception;
         ptls2->io_wait = 0;
@@ -230,12 +228,21 @@ static void jl_throw_in_thread(jl_ptls_t ptls2, mach_port_t thread, jl_value_t *
         jl_handler_t *eh = ct->eh;
         if (eh != NULL) {
             asan_unpoison_task_stack(ct, &eh->eh_ctx);
-            jl_longjmp_in_state(&state, eh->eh_ctx);
+            jl_longjmp_in_state(state, eh->eh_ctx);
         }
         else {
             jl_no_exc_handler(exception, ct);
         }
     }
+}
+
+static void jl_throw_in_thread(jl_ptls_t ptls2, mach_port_t thread, jl_value_t *exception)
+{
+    host_thread_state_t state;
+    unsigned int count = MACH_THREAD_STATE_COUNT;
+    kern_return_t ret = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
+    HANDLE_MACH_ERROR("thread_get_state", ret);
+    jl_throw_in_state(ptls2, &state, exception);
     ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
     HANDLE_MACH_ERROR("thread_set_state", ret);
 }
@@ -359,44 +366,37 @@ __attribute__((naked, used)) void jl_mach_restore_state(void)
 }
 #endif
 
-// Hijack a suspended thread to call fptr(arg0). The full register state is
-// saved on the target thread's stack as a host_thread_state_t. When fptr()
-// returns, jl_mach_restore_state restores all registers and jumps back
-// to the original PC.
-static void jl_hijack_thread(mach_port_t thread, void (*fptr)(void), uintptr_t arg0)
+// Set up state to call fptr(arg0). The full register state is saved on the
+// target thread's stack as a host_thread_state_t. When fptr() returns,
+// jl_mach_restore_state restores all registers and jumps back to the
+// original PC.
+static void jl_call_in_state(host_thread_state_t *state, void (*fptr)(void), uintptr_t arg0)
 {
-    unsigned int count = MACH_THREAD_STATE_COUNT;
-    host_thread_state_t state;
-    kern_return_t ret = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
-    HANDLE_MACH_ERROR("thread_get_state", ret);
-
 #ifdef _CPU_X86_64_
-    uintptr_t sp = state.__rsp;
+    uintptr_t sp = state->__rsp;
     sp = (sp - 256) & ~(uintptr_t)15; // redzone and re-alignment
     sp -= sizeof(host_thread_state_t);
     sp &= ~(uintptr_t)15;
-    memcpy((void*)sp, &state, sizeof(host_thread_state_t));
+    memcpy((void*)sp, state, sizeof(host_thread_state_t));
     // Push the return address for the restore stub
     sp -= sizeof(void*);
     *(uintptr_t*)sp = (uintptr_t)&jl_mach_restore_state;
-    state.__rsp = sp;
-    state.__rip = (uint64_t)fptr;
-    state.__rdi = arg0;
+    state->__rsp = sp;
+    state->__rip = (uint64_t)fptr;
+    state->__rdi = arg0;
 #elif defined(_CPU_AARCH64_)
-    uintptr_t sp = state.__sp;
+    uintptr_t sp = state->__sp;
     sp = (sp - 256) & ~(uintptr_t)15;
     sp -= sizeof(host_thread_state_t);
     sp &= ~(uintptr_t)15;
-    memcpy((void*)sp, &state, sizeof(host_thread_state_t));
-    state.__sp = sp;
-    state.__pc = (uint64_t)fptr;
-    state.__lr = (uintptr_t)&jl_mach_restore_state;
-    state.__x[0] = arg0;
+    memcpy((void*)sp, state, sizeof(host_thread_state_t));
+    state->__sp = sp;
+    state->__pc = (uint64_t)fptr;
+    state->__lr = (uintptr_t)&jl_mach_restore_state;
+    state->__x[0] = arg0;
 #else
-#error "julia: hijack-thread not supported on this platform"
+#error "julia: call-in-state not supported on this platform"
 #endif
-    ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
-    HANDLE_MACH_ERROR("thread_set_state", ret);
 }
 
 static void segv_handler(int sig, siginfo_t *info, void *context)
@@ -429,19 +429,28 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
  * code for mach_msg_server ever destroy those references (only the message
  * itself).
  */
-kern_return_t catch_mach_exception_raise(
+kern_return_t catch_mach_exception_raise_state_identity(
     mach_port_t exception_port,
     mach_port_t thread,
     mach_port_t task,
     exception_type_t exception,
     mach_exception_data_t code,
-    mach_msg_type_number_t codeCnt)
+    mach_msg_type_number_t codeCnt,
+    int *flavor,
+    thread_state_t old_state,
+    mach_msg_type_number_t old_stateCnt,
+    thread_state_t new_state,
+    mach_msg_type_number_t *new_stateCnt)
 {
-    unsigned int exc_count = HOST_EXCEPTION_STATE_COUNT;
-    host_exception_state_t exc_state;
+    host_thread_state_t *state = (host_thread_state_t*)new_state;
+    assert(old_stateCnt >= MACH_THREAD_STATE_COUNT);
+    // Copy old state to new state — we'll modify new_state in place
+    memcpy(new_state, old_state, old_stateCnt * sizeof(natural_t));
+    *new_stateCnt = old_stateCnt;
 #ifdef LLVMLIBUNWIND
     if (thread == mach_profiler_thread) {
-        return profiler_segv_handler(exception_port, thread, task, exception, code, codeCnt);
+        return profiler_segv_handler(exception_port, thread, task, exception, code, codeCnt,
+                                     state, new_stateCnt);
     }
 #endif
     jl_ptls_t ptls2 = NULL;
@@ -463,25 +472,27 @@ kern_return_t catch_mach_exception_raise(
         return KERN_INVALID_ARGUMENT;
     }
     if (ptls2->safe_restore) {
-        jl_throw_in_thread(ptls2, thread, NULL);
+        jl_throw_in_state(ptls2, state, NULL);
         return KERN_SUCCESS;
     }
     if (jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_WAITING)
         return KERN_FAILURE;
     if (exception == EXC_ARITHMETIC) {
-        jl_throw_in_thread(ptls2, thread, jl_diverror_exception);
+        jl_throw_in_state(ptls2, state, jl_diverror_exception);
         return KERN_SUCCESS;
     }
     assert(exception == EXC_BAD_ACCESS); // SIGSEGV or SIGBUS
     if (codeCnt < 2 || code[0] != KERN_PROTECTION_FAILURE) // SEGV_ACCERR or BUS_ADRERR or BUS_ADRALN
         return KERN_FAILURE;
     uint64_t fault_addr = code[1];
+    unsigned int exc_count = HOST_EXCEPTION_STATE_COUNT;
+    host_exception_state_t exc_state;
     kern_return_t ret = thread_get_state(thread, HOST_EXCEPTION_STATE, (thread_state_t)&exc_state, &exc_count);
     HANDLE_MACH_ERROR("thread_get_state", ret);
     if (jl_addr_is_safepoint(fault_addr) && !is_write_fault(exc_state)) {
         // Hijack the faulting thread to handle the safepoint on its own
         // stack, using the same jl_set_gc_and_wait() codepath as Unix signals.
-        jl_hijack_thread(thread, (void (*)(void))&mach_safepoint_trampoline, (uintptr_t)ptls2);
+        jl_call_in_state(state, (void (*)(void))&mach_safepoint_trampoline, (uintptr_t)ptls2);
         return KERN_SUCCESS;
     }
     if (jl_atomic_load_relaxed(&ptls2->current_task)->eh == NULL)
@@ -495,7 +506,7 @@ kern_return_t catch_mach_exception_raise(
         excpt = jl_readonlymemory_exception;
     else
         return KERN_FAILURE;
-    jl_throw_in_thread(ptls2, thread, excpt);
+    jl_throw_in_state(ptls2, state, excpt);
     return KERN_SUCCESS;
 }
 
@@ -511,24 +522,19 @@ kern_return_t catch_mach_exception_raise_state(
     thread_state_t new_state,
     mach_msg_type_number_t *new_stateCnt)
 {
-    return KERN_INVALID_ARGUMENT; // we only use EXCEPTION_DEFAULT
+    return KERN_INVALID_ARGUMENT; // we only use EXCEPTION_STATE_IDENTITY
 }
 
 //mach_exc_server expects us to define this symbol locally
-kern_return_t catch_mach_exception_raise_state_identity(
+kern_return_t catch_mach_exception_raise(
     mach_port_t exception_port,
     mach_port_t thread,
     mach_port_t task,
     exception_type_t exception,
     mach_exception_data_t code,
-    mach_msg_type_number_t codeCnt,
-    int *flavor,
-    thread_state_t old_state,
-    mach_msg_type_number_t old_stateCnt,
-    thread_state_t new_state,
-    mach_msg_type_number_t *new_stateCnt)
+    mach_msg_type_number_t codeCnt)
 {
-    return KERN_INVALID_ARGUMENT; // we only use EXCEPTION_DEFAULT
+    return KERN_INVALID_ARGUMENT; // we only use EXCEPTION_STATE_IDENTITY
 }
 
 static void attach_exception_port(thread_port_t thread, int segv_only)
@@ -538,7 +544,7 @@ static void attach_exception_port(thread_port_t thread, int segv_only)
     exception_mask_t mask = EXC_MASK_BAD_ACCESS;
     if (!segv_only)
         mask |= EXC_MASK_ARITHMETIC;
-    ret = thread_set_exception_ports(thread, mask, segv_port, EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES, MACH_THREAD_STATE);
+    ret = thread_set_exception_ports(thread, mask, segv_port, EXCEPTION_STATE_IDENTITY | MACH_EXCEPTION_CODES, MACH_THREAD_STATE);
     HANDLE_MACH_ERROR("thread_set_exception_ports", ret);
 }
 
@@ -665,10 +671,11 @@ static kern_return_t profiler_segv_handler(
     mach_port_t task,
     exception_type_t exception,
     mach_exception_data_t code,
-    mach_msg_type_number_t codeCnt)
+    mach_msg_type_number_t codeCnt,
+    host_thread_state_t *state,
+    mach_msg_type_number_t *new_stateCnt)
 {
     assert(thread == mach_profiler_thread);
-    host_thread_state_t state;
 
     // Not currently unwinding. Raise regular segfault
     if (forceDwarf == -2)
@@ -679,36 +686,30 @@ static kern_return_t profiler_segv_handler(
     else
         forceDwarf = -1;
 
-    unsigned int count = MACH_THREAD_STATE_COUNT;
-
-    thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
-
 #ifdef _CPU_X86_64_
     // don't change cs fs gs rflags
-    uint64_t cs = state.__cs;
-    uint64_t fs = state.__fs;
-    uint64_t gs = state.__gs;
-    uint64_t rflags = state.__rflags;
+    uint64_t cs = state->__cs;
+    uint64_t fs = state->__fs;
+    uint64_t gs = state->__gs;
+    uint64_t rflags = state->__rflags;
 #elif defined(_CPU_AARCH64_)
-    uint64_t cpsr = state.__cpsr;
+    uint64_t cpsr = state->__cpsr;
 #else
 #error Unknown CPU
 #endif
 
-    memcpy(&state, &profiler_uc, sizeof(state));
+    memcpy(state, &profiler_uc, sizeof(*state));
 
 #ifdef _CPU_X86_64_
-    state.__cs = cs;
-    state.__fs = fs;
-    state.__gs = gs;
-    state.__rflags = rflags;
+    state->__cs = cs;
+    state->__fs = fs;
+    state->__gs = gs;
+    state->__rflags = rflags;
 #else
-    state.__cpsr = cpsr;
+    state->__cpsr = cpsr;
 #endif
 
-    kern_return_t ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
-    HANDLE_MACH_ERROR("thread_set_state", ret);
-
+    *new_stateCnt = MACH_THREAD_STATE_COUNT;
     return KERN_SUCCESS;
 }
 #endif
