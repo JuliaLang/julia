@@ -888,4 +888,7 @@ end
     @test Rational{Int128}(γ) == 97212752342586318089728837786470353304//168416691115217442842548201681665445093
     @test Rational{Int16}(catalan) == 29179//31856
     @test Rational{Int64}(catalan) == 8335279125496428529//9099991504575811608
+
+    @test rationalize(Int8, 1.007) == 127//126
+    @test rationalize(Int8, -1.1531944694388938) == -128//111
 end
