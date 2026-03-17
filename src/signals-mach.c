@@ -22,6 +22,24 @@
 
 #include "julia_assert.h"
 
+#if defined(_CPU_X86_64_)
+// Size of the xsave area for this CPU, queried via CPUID at init time.
+// Used by jl_call_protect_fp_state to save/restore full AVX/AVX-512 state.
+// Initialized to 0; a value of 0 means xsave is not available (fallback to fxsave).
+uint32_t jl_xsave_size = 0;
+static void jl_init_xsave_size(void)
+{
+    uint32_t eax, ebx, ecx, edx;
+    // Check for xsave support: CPUID.01H:ECX.XSAVE[bit 26] and OSXSAVE[bit 27]
+    asm("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(1), "c"(0));
+    if (!(ecx & (1 << 26)) || !(ecx & (1 << 27)))
+        return; // no xsave or OS hasn't enabled it
+    // CPUID leaf 0DH, subleaf 0: EBX = size required for currently-enabled features (XCR0)
+    asm("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(0xD), "c"(0));
+    jl_xsave_size = ebx;
+}
+#endif
+
 // private keymgr stuff
 #define KEYMGR_GCC3_DW2_OBJ_LIST 302
 enum {
@@ -60,6 +78,9 @@ void *mach_segv_listener(void *arg)
 
 static void allocate_mach_handler(void)
 {
+#if defined(_CPU_X86_64_)
+    jl_init_xsave_size();
+#endif
     // ensure KEYMGR_GCC3_DW2_OBJ_LIST is initialized, as this requires malloc
     // and thus can deadlock when used without first initializing it.
     // Apple caused this problem in their libunwind in 10.9 (circa keymgr-28)
@@ -271,14 +292,124 @@ static void mach_safepoint_trampoline(jl_ptls_t ptls)
     }
 }
 
-// Assembly stub that restores all registers from a host_thread_state_t
+// Assembly wrapper that saves and restores FP/SIMD registers around a
+// function call. This runs on the hijacked thread itself, so it can
+// save/restore FP state with direct register access — no syscall needed.
+//
+// On entry: arg0 in x0/rdi, fptr in x1/rsi (set by jl_call_in_state)
+// Calls fptr(arg0) with FP/SIMD state preserved across the call.
+#if defined(_CPU_AARCH64_)
+// Saves all 32 NEON q-registers (512 bytes) + fpsr + fpcr.
+__attribute__((naked, used)) static void jl_call_protect_fp_state(void)
+{
+    __asm__(
+        // Save frame pointer and link register
+        "  stp x29, x30, [sp, #-16]!\n"
+        "  mov x29, sp\n"
+        // Allocate 528 bytes for NEON state (32*16 + fpsr/fpcr + padding)
+        "  sub sp, sp, #528\n"
+        // Save fpsr and fpcr (x1 = fptr, so use x2/x3 as scratch)
+        "  mrs x2, fpsr\n"
+        "  mrs x3, fpcr\n"
+        "  str w2, [sp, #512]\n"
+        "  str w3, [sp, #516]\n"
+        // Save q0-q31 (4 registers per instruction)
+        "  mov x2, sp\n"
+        "  st1 {v0.2d,  v1.2d,  v2.2d,  v3.2d},  [x2], #64\n"
+        "  st1 {v4.2d,  v5.2d,  v6.2d,  v7.2d},  [x2], #64\n"
+        "  st1 {v8.2d,  v9.2d,  v10.2d, v11.2d}, [x2], #64\n"
+        "  st1 {v12.2d, v13.2d, v14.2d, v15.2d}, [x2], #64\n"
+        "  st1 {v16.2d, v17.2d, v18.2d, v19.2d}, [x2], #64\n"
+        "  st1 {v20.2d, v21.2d, v22.2d, v23.2d}, [x2], #64\n"
+        "  st1 {v24.2d, v25.2d, v26.2d, v27.2d}, [x2], #64\n"
+        "  st1 {v28.2d, v29.2d, v30.2d, v31.2d}, [x2], #64\n"
+        // Call fptr(arg0): x0 = arg0 (untouched), x1 = fptr
+        "  blr x1\n"
+        // Restore fpsr and fpcr
+        "  ldr w0, [sp, #512]\n"
+        "  ldr w1, [sp, #516]\n"
+        "  msr fpsr, x0\n"
+        "  msr fpcr, x1\n"
+        // Restore q0-q31 (4 registers per instruction)
+        "  mov x0, sp\n"
+        "  ld1 {v0.2d,  v1.2d,  v2.2d,  v3.2d},  [x0], #64\n"
+        "  ld1 {v4.2d,  v5.2d,  v6.2d,  v7.2d},  [x0], #64\n"
+        "  ld1 {v8.2d,  v9.2d,  v10.2d, v11.2d}, [x0], #64\n"
+        "  ld1 {v12.2d, v13.2d, v14.2d, v15.2d}, [x0], #64\n"
+        "  ld1 {v16.2d, v17.2d, v18.2d, v19.2d}, [x0], #64\n"
+        "  ld1 {v20.2d, v21.2d, v22.2d, v23.2d}, [x0], #64\n"
+        "  ld1 {v24.2d, v25.2d, v26.2d, v27.2d}, [x0], #64\n"
+        "  ld1 {v28.2d, v29.2d, v30.2d, v31.2d}, [x0], #64\n"
+        // Deallocate and return to jl_mach_restore_state
+        "  add sp, sp, #528\n"
+        "  ldp x29, x30, [sp], #16\n"
+        "  ret\n"
+    );
+}
+#elif defined(_CPU_X86_64_)
+// Saves all FP/SIMD state: uses xsave64/xrstor64 if available (preserves
+// AVX/AVX-512), otherwise falls back to fxsave64/fxrstor64 (SSE only).
+__attribute__((naked, used)) static void jl_call_protect_fp_state(void)
+{
+    __asm__(
+        // On entry: rdi = arg0, rsi = fptr.
+        // rsp is 8 mod 16 (return addr pushed by jl_call_in_state).
+        // Use rbp as frame pointer so we can do dynamic stack allocation.
+        "  pushq %rbp\n"             // rsp now 0 mod 16
+        "  movq %rsp, %rbp\n"
+        // Check if xsave is available (jl_xsave_size > 0)
+        "  movl _jl_xsave_size(%rip), %eax\n"
+        "  testl %eax, %eax\n"
+        "  jz 1f\n"
+        // --- xsave path ---
+        // Allocate xsave buffer on the stack, 64-byte aligned
+        "  subq %rax, %rsp\n"
+        "  andq $-64, %rsp\n"        // xsave requires 64-byte alignment
+        // Zero the XSAVE header's XCOMP_BV (bytes 520-527) and reserved
+        // fields (bytes 528-575) before xsave64. xsave does NOT write these
+        // bytes, but xrstor requires them to be zero in standard format —
+        // otherwise it raises #GP.
+        "  movq $0, 520(%rsp)\n"
+        "  movq $0, 528(%rsp)\n"
+        "  movq $0, 536(%rsp)\n"
+        "  movq $0, 544(%rsp)\n"
+        "  movq $0, 552(%rsp)\n"
+        "  movq $0, 560(%rsp)\n"
+        "  movq $0, 568(%rsp)\n"
+        "  movl $-1, %eax\n"         // save all state components
+        "  movl $-1, %edx\n"
+        "  xsave64 (%rsp)\n"
+        "  callq *%rsi\n"            // fptr(arg0): rdi untouched, rsi = fptr
+        "  movl $-1, %eax\n"
+        "  movl $-1, %edx\n"
+        "  xrstor64 (%rsp)\n"
+        "  jmp 2f\n"
+        // --- fxsave fallback path ---
+        "1:\n"
+        "  subq $512, %rsp\n"        // 512 bytes for fxsave, rsp now 0 mod 16
+        "  andq $-16, %rsp\n"        // fxsave requires 16-byte alignment
+        "  fxsave64 (%rsp)\n"
+        "  callq *%rsi\n"
+        "  fxrstor64 (%rsp)\n"
+        // --- common epilogue ---
+        "2:\n"
+        "  movq %rbp, %rsp\n"
+        "  popq %rbp\n"
+        "  retq\n"
+    );
+}
+#endif
+
+// Assembly stub that restores GP registers from a host_thread_state_t
 // saved on the stack, then jumps back to the original PC. This is the
 // return address used when hijacking a thread to a C trampoline.
 //
 // On entry, sp points to a host_thread_state_t containing the full
-// register state to restore.
+// GP register state to restore.
+// On AArch64, x16 (IP0) is not restored — it ends up holding saved_pc.
+// LLVM reserves IP0 on Darwin, so it is never live at a safepoint poll.
 #if defined(_CPU_AARCH64_)
-// arm_thread_state64_t layout:
+// arm_thread_state64_t layout (272 bytes):
 //   __x[29] at offset 0   (29 * 8 = 232 bytes, x0-x28)
 //   __fp    at offset 232  (x29)
 //   __lr    at offset 240  (x30)
@@ -294,7 +425,7 @@ __attribute__((naked, used)) void jl_mach_restore_state(void)
         "  .cfi_offset sp, 248\n"   // saved __sp
         "  .cfi_offset x29, 232\n"  // saved __fp
         // sp points to the saved host_thread_state_t
-        // Use x16 as the base pointer (it's a scratch register)
+        // Use x16 as the base pointer (scratch register, reserved by LLVM)
         "  mov x16, sp\n"
         // Restore cpsr (condition flags)
         "  ldr w17, [x16, #264]\n"
@@ -308,23 +439,22 @@ __attribute__((naked, used)) void jl_mach_restore_state(void)
         "  ldp x10, x11, [x16, #80]\n"
         "  ldp x12, x13, [x16, #96]\n"
         "  ldp x14, x15, [x16, #112]\n"
-        // Restore x18-x28 (skip x16, x17 — used as scratch)
-        "  ldp x18, x19, [x16, #144]\n"
-        "  ldp x20, x21, [x16, #160]\n"
-        "  ldp x22, x23, [x16, #176]\n"
-        "  ldp x24, x25, [x16, #192]\n"
-        "  ldp x26, x27, [x16, #208]\n"
-        "  ldr x28,      [x16, #224]\n"
-        // Restore fp (x29) and lr (x30)
-        "  ldp x29, x30, [x16, #232]\n"
-        // Load sp and pc into scratch registers, then restore
-        "  ldp x16, x17, [x16, #248]\n" // x16 = saved sp, x17 = saved pc
-        "  mov sp, x16\n"
-        "  br x17\n"                     // jump to original pc
+        // Skip x18: platform register (reserved on macOS)
+        // Skip x19-x28: callee-saved, preserved by the ABI-compliant
+        // wrapper and trampoline.
+        // Restore lr (x30) — was overwritten by jl_call_in_state
+        "  ldr x30, [x16, #240]\n"
+        // Skip x29 (fp) — callee-saved, already preserved
+        // Restore sp, x17, and jump to saved pc.
+        "  ldr x17, [x16, #248]\n"      // x17 = saved sp
+        "  mov sp, x17\n"               // restore sp
+        "  ldr x17, [x16, #136]\n"      // restore x17 (17*8)
+        "  ldr x16, [x16, #256]\n"      // x16 = saved pc (base lost)
+        "  br x16\n"                    // jump to saved pc
     );
 }
 #elif defined(_CPU_X86_64_)
-// x86_thread_state64_t layout (macOS):
+// x86_thread_state64_t layout (168 bytes):
 //   __rax at offset 0, __rbx at 8, __rcx at 16, __rdx at 24
 //   __rdi at 32, __rsi at 40, __rbp at 48, __rsp at 56
 //   __r8 at 64, __r9 at 72, __r10 at 80, __r11 at 88
@@ -342,34 +472,31 @@ __attribute__((naked, used)) void jl_mach_restore_state(void)
         // Restore rflags
         "  pushq 136(%r11)\n"
         "  popfq\n"
-        // Restore general purpose registers
+        // Restore caller-saved GP registers
         "  movq 0(%r11), %rax\n"
-        "  movq 8(%r11), %rbx\n"
+        // skip rbx (8) — callee-saved
         "  movq 16(%r11), %rcx\n"
         "  movq 24(%r11), %rdx\n"
         "  movq 32(%r11), %rdi\n"
         "  movq 40(%r11), %rsi\n"
-        "  movq 48(%r11), %rbp\n"
-        // skip rsp (56) — restore last
+        // skip rbp (48), rsp (56) — callee-saved / restored separately
         "  movq 64(%r11), %r8\n"
         "  movq 72(%r11), %r9\n"
         "  movq 80(%r11), %r10\n"
-        // skip r11 — in use as base
-        "  movq 96(%r11), %r12\n"
-        "  movq 104(%r11), %r13\n"
-        "  movq 112(%r11), %r14\n"
-        "  movq 120(%r11), %r15\n"
-        // Restore rsp and jump to rip
-        "  movq 56(%r11), %rsp\n"
-        "  jmpq *128(%r11)\n"
+        // skip r12 (96), r13 (104), r14 (112), r15 (120) — callee-saved
+        // Restore rsp and r11, then jump to saved rip.
+        // The saved rip was stored at orig_rsp - 136 by jl_call_in_state
+        // (below the 128-byte red zone) to avoid corrupting it.
+        "  movq 56(%r11), %rsp\n"    // restore original rsp
+        "  movq 88(%r11), %r11\n"    // restore r11 (base lost)
+        "  jmpq *-136(%rsp)\n"       // jump to saved rip below red zone
     );
 }
 #endif
 
-// Set up state to call fptr(arg0). The full register state is saved on the
-// target thread's stack as a host_thread_state_t. When fptr() returns,
-// jl_mach_restore_state restores all registers and jumps back to the
-// original PC.
+// Set up state to call fptr(arg0) with full register preservation.
+// GP state is saved on the target thread's stack (restored by jl_mach_restore_state).
+// FP/SIMD state is saved by jl_call_protect_fp_state which runs on the target thread.
 static void jl_call_in_state(host_thread_state_t *state, void (*fptr)(void), uintptr_t arg0)
 {
 #ifdef _CPU_X86_64_
@@ -378,6 +505,10 @@ static void jl_call_in_state(host_thread_state_t *state, void (*fptr)(void), uin
     sp -= sizeof(host_thread_state_t);
     sp &= ~(uintptr_t)15;
     memcpy((void*)sp, state, sizeof(host_thread_state_t));
+    // Store saved rip below the original red zone (128 bytes) so that
+    // jl_mach_restore_state can jump back without writing into the red zone.
+    // This slot is at orig_rsp - 136, safely within our 256-byte gap.
+    *(uintptr_t*)(state->__rsp - 136) = state->__rip;
     // Push the return address for the restore stub
     sp -= sizeof(void*);
     *(uintptr_t*)sp = (uintptr_t)&jl_mach_restore_state;
