@@ -582,6 +582,34 @@ function collect_slot_refinements(𝕃ᵢ::AbstractLattice, applicable::Vector{M
                 end
                 slotrefinements[fidx] = sigt
             end
+        elseif argtypes[i] isa MustAlias
+            alias = argtypes[i]::MustAlias
+            argt = alias.fldtyp
+            if isvarargtype(argt)
+                argt = unwrapva(argt)
+            end
+            sigt = Bottom
+            for j = 1:length(applicable)
+                (;match) = applicable[j]
+                valid_as_lattice(match.spec_types, true) || continue
+                sigt = sigt ⊔ fieldtype(match.spec_types, i)
+            end
+            if sigt ⊏ argt # i.e. signature type is strictly more specific than the field type
+                newtyp = form_mustalias_refinement(alias, sigt)
+                if newtyp !== nothing
+                    aidx = alias.slot
+                    if slotrefinements === nothing
+                        slotrefinements = fill!(Vector{Any}(undef, length(sv.slottypes)), nothing)
+                    end
+                    # TODO: if multiple MustAlias arguments refer to different fields
+                    # of the same slot, we only apply the first refinement. Merging
+                    # multiple PartialStruct refinements would require a meet operation
+                    # on PartialStruct, which is not currently implemented.
+                    if slotrefinements[aidx] === nothing
+                        slotrefinements[aidx] = newtyp
+                    end
+                end
+            end
         end
     end
     return slotrefinements
