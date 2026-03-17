@@ -72,6 +72,11 @@ mutable struct Parser{Dates}
     # actually defined
     defined_tables::IdSet{TOMLDict}
 
+    # Tables implicitly created as intermediates by dotted keys
+    # in key-value entries (e.g. `a` in `a.b = 1`).
+    # These cannot be reopened by [table] headers.
+    implicit_tables::IdSet{TOMLDict}
+
     # The table we will finally return to the user
     root::TOMLDict
 
@@ -95,6 +100,7 @@ function Parser{Dates}(str::String; filepath=nothing) where {Dates}
             IdSet{TOMLDict}(),    # inline_tables
             IdSet{Any}(),         # static_arrays
             IdSet{TOMLDict}(),    # defined_tables
+            IdSet{TOMLDict}(),    # implicit_tables
             root,
             filepath
         )
@@ -132,6 +138,7 @@ function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothin
     empty!(p.inline_tables)
     empty!(p.static_arrays)
     empty!(p.defined_tables)
+    empty!(p.implicit_tables)
     p.filepath = filepath
     startup(p)
     return p
@@ -207,6 +214,7 @@ end
     ErrUnexpectedEndString
     ErrInvalidEscapeCharacter
     ErrInvalidUnicodeScalar
+    ErrMultilineStringAsKey
 end
 
 const err_message = Dict(
@@ -240,6 +248,7 @@ const err_message = Dict(
     ErrOverflowError                        => "overflowed when parsing integer",
     ErrInvalidUnicodeScalar                 => "invalid unicode scalar",
     ErrInvalidEscapeCharacter               => "invalid escape character",
+    ErrMultilineStringAsKey                 => "multiline strings are not allowed as keys",
     ErrUnexpectedEofExpectedValue           => "unexpected end of file, expected a value",
     ErrSignInNonBase10Number                => "number not in base 10 is not allowed to have a sign",
 )
@@ -479,17 +488,27 @@ function parse_toplevel(l::Parser)::Err{Nothing}
     end
 end
 
-function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, check=true)::Err{TOMLDict}
+function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, check=true, define_implicit=false)::Err{TOMLDict}
     for i in 1:length(dotted_keys)
         d = d::TOMLDict
         key = dotted_keys[i]
         d = get!(TOMLDict, d, key)
         if d isa Vector{Any}
+            isempty(d) && return ParserError(ErrArrayTreatedAsDictionary)
             d = d[end]
         elseif d isa Vector
             return ParserError(ErrKeyAlreadyHasValue)
         end
-        check && @try check_allowed_add_key(l, d, i == length(dotted_keys))
+        if check
+            # When called from parse_entry (define_implicit=true), check
+            # defined_tables for ALL intermediates to prevent appending to
+            # tables that were closed by a different [table] section.
+            check_def = define_implicit ? true : (i == length(dotted_keys))
+            @try check_allowed_add_key(l, d, check_def)
+        end
+        if define_implicit && d isa TOMLDict
+            push!(l.implicit_tables, d)
+        end
     end
     return d::TOMLDict
 end
@@ -516,6 +535,9 @@ function parse_table(l)
         return ParserError(ErrExpectedEndOfTable)
     end
     l.active_table = @try recurse_dict!(l, l.root, table_key)
+    if l.active_table in l.implicit_tables
+        return ParserError(ErrDuplicatedKey)
+    end
     push!(l.defined_tables, l.active_table)
     return
 end
@@ -551,13 +573,16 @@ function parse_entry(l::Parser, d)::Union{Nothing, ParserError}
         return ParserError(ErrExpectedEqualAfterKey)
     end
     if length(key) > 1
-        d = @try recurse_dict!(l, d, @view(key[1:end-1]))
+        d = @try recurse_dict!(l, d, @view(key[1:end-1]), true, true)
     end
     last_key_part = l.dotted_keys[end]
 
     v = get(d, last_key_part, nothing)
     if v !== nothing
         @try check_allowed_add_key(l, v)
+        if v isa TOMLDict && v in l.implicit_tables
+            return ParserError(ErrDuplicatedKey)
+        end
     end
 
     skip_ws(l)
@@ -600,9 +625,9 @@ function _parse_key(l::Parser)
         return ParserError(ErrEmptyBareKey)
     end
     keyval = if accept(l, '"')
-        @try parse_string_start(l, false)
+        @try parse_string_start(l, false; allow_multiline=false)
     elseif accept(l, '\'')
-        @try parse_string_start(l, true)
+        @try parse_string_start(l, true; allow_multiline=false)
     else
         set_marker!(l)
         if accept_batch(l, isvalid_barekey_char)
@@ -838,7 +863,16 @@ function parse_number_or_date_start(l::Parser)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_binary)
             ate && return parse_bin(l, contains_underscore)
         elseif accept(l, isdigit)
-            return parse_local_time(l)
+            # Could be a local time (00:30) or a zero-padded date (0001-01-01).
+            # Consume remaining digits, then check for ':' or '-'.
+            accept_batch(l, isdigit)
+            if peek(l) == ':'
+                return parse_local_time(l)
+            elseif peek(l) == '-'
+                return parse_datetime(l)
+            else
+                return ParserError(ErrLeadingZeroNotAllowedInteger)
+            end
         end
     end
 
@@ -975,8 +1009,10 @@ ok_end_value(c::Char) = iswhitespace(c) || c == '#' || c == EOF_CHAR || c == ']'
 accept_two(l, f::F) where {F} = accept_n(l, 2, f) || return(ParserError(ErrParsingDateTime))
 function parse_datetime(l)
     # Year has already been eaten when we reach here
+    year_start = l.marker
     year = @try parse_int(l, false)
-    year in 0:9999 || return ParserError(ErrParsingDateTime)
+    # SPEC: date-fullyear = 4DIGIT (exactly 4 digits required)
+    (l.prevpos - year_start) == 4 || return ParserError(ErrParsingDateTime)
 
     # Month
     accept(l, '-') || return ParserError(ErrParsingDateTime)
@@ -1052,6 +1088,8 @@ function try_return_date(p::Parser{Dates}, year, month, day) where Dates
 end
 
 function parse_local_time(l::Parser)
+    # SPEC: partial-time = time-hour ":" ... where time-hour = 2DIGIT
+    (l.prevpos - l.marker) == 2 || return ParserError(ErrParsingDateTime)
     h = @try parse_int(l, false)
     h in 0:23 || return ParserError(ErrParsingDateTime)
     _, m, s, ms = @try _parse_local_time(l, true)
@@ -1131,13 +1169,16 @@ end
 # String #
 ##########
 
-function parse_string_start(l::Parser, quoted::Bool)::Err{String}
+function parse_string_start(l::Parser, quoted::Bool; allow_multiline::Bool=true)::Err{String}
     # Have eaten a `'` if `quoted` is true, otherwise have eaten a `"`
     multiline = false
     c = quoted ? '\'' : '"'
     if accept(l, c) # Eat second quote
         if !accept(l, c)
             return ""
+        end
+        if !allow_multiline
+            return ParserError(ErrMultilineStringAsKey)
         end
         accept(l, '\r') # Eat third quote
         accept(l, '\n') # Eat third quote

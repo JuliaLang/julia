@@ -103,7 +103,6 @@ failures = [
     "invalid/control/comment-null.toml",
     "invalid/control/comment-us.toml",
     "invalid/control/comment-cr.toml",
-    "invalid/datetime/time-no-leads.toml",
     "invalid/control/multi-del.toml",
     "invalid/control/multi-lf.toml",
     "invalid/control/multi-null.toml",
@@ -123,10 +122,6 @@ failures = [
     "invalid/control/string-us.toml",
     "invalid/encoding/bad-utf8-in-comment.toml",
     "invalid/encoding/bad-utf8-in-string.toml",
-    "invalid/key/multiline.toml",
-    "invalid/table/append-with-dotted-keys-2.toml",
-    "invalid/table/duplicate-key-dotted-table.toml",
-    "invalid/table/duplicate-key-dotted-table2.toml",
 ]
 
 n_invalid = 0
