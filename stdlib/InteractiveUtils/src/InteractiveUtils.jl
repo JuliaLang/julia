@@ -147,13 +147,18 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     if verbose
         cpuio = IOBuffer() # print cpu_summary with correct alignment
         Sys.cpu_summary(cpuio)
-        for (i, line) in enumerate(split(chomp(takestring!(cpuio)), "\n"))
+        for (i, _line) in enumerate(split(chomp(takestring!(cpuio)), "\n"))
             prefix = i == 1 ? "  CPU: " : "       "
+            line = if i == 1
+                strip(x -> isspace(x) || x == ':', _line) * " (" * Sys.CPU_NAME * "):"
+            else
+                _line
+            end
             println(io, prefix, line)
         end
     else
         cpu = Sys.cpu_info()
-        println(io, "  CPU: ", length(cpu), " × ", cpu[1].model)
+        println(io, "  CPU: ", length(cpu), " × ", cpu[1].model, " (", Sys.CPU_NAME, ")")
     end
 
     if verbose
@@ -164,7 +169,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
         println(io)
         println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
     end
-    println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
+    println(io, "  LLVM: libLLVM-", Base.libllvm_version, " (", Sys.JIT, ")")
     println(io, """Threads: $(Threads.nthreads(:default)) default, $(Threads.nthreads(:interactive)) interactive, \
       $(Threads.ngcthreads()) GC (on $(Sys.CPU_THREADS) virtual cores)""")
 
