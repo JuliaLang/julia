@@ -202,6 +202,9 @@ typedef struct _jl_tls_states_t {
     struct _jl_value_t *previous_exception;
 #ifdef _OS_DARWIN_
     jl_jmp_buf *volatile safe_restore;
+    // Saved previous Mach exception handlers for signal forwarding.
+    // Opaque pointer to prev_mach_exc_handler_t[], managed by signals-mach.c.
+    void *mach_exc_prev;
 #endif
 
     // currently-held locks, to be released when an exception is thrown

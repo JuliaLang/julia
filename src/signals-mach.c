@@ -12,6 +12,8 @@
 #include <AvailabilityMacros.h>
 #include <stdint.h>
 #include "mach_excServer.c"
+#include "mach_excUser.c"
+#include "excUser.c"
 
 #ifdef MAC_OS_X_VERSION_10_9
 #include <sys/_types/_ucontext64.h>
@@ -40,6 +42,17 @@ static void jl_init_xsave_size(void)
 }
 #endif
 
+// Saved previous Mach exception handler for a single exception type.
+typedef struct {
+    mach_port_t port;
+    exception_behavior_t behavior;
+    thread_state_flavor_t flavor;
+} prev_mach_exc_handler_t;
+
+// Maximum exception type index we save handlers for.
+// Covers EXC_BAD_ACCESS (1) through EXC_ARITHMETIC (3).
+#define PREV_MACH_EXC_MAX 4
+
 // private keymgr stuff
 #define KEYMGR_GCC3_DW2_OBJ_LIST 302
 enum {
@@ -60,7 +73,7 @@ extern void _dyld_dlopen_atfork_prepare(void) __attribute__((weak_import));
 extern void _dyld_dlopen_atfork_parent(void) __attribute__((weak_import));
 //extern void _dyld_dlopen_atfork_child(void) __attribute__((weak_import));
 
-static void attach_exception_port(thread_port_t thread, int segv_only);
+static void attach_exception_port(thread_port_t thread, int segv_only, jl_ptls_t ptls);
 
 static mach_port_t segv_port = 0;
 
@@ -266,6 +279,148 @@ static void jl_throw_in_thread(jl_ptls_t ptls2, mach_port_t thread, jl_value_t *
     jl_throw_in_state(ptls2, &state, exception);
     ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
     HANDLE_MACH_ERROR("thread_set_state", ret);
+}
+
+// Forward a Mach exception to the previous handler saved before Julia installed
+// its own. Handles the three standard exception behaviors (DEFAULT, STATE,
+// STATE_IDENTITY) and both 32-bit and 64-bit code variants.
+//
+// Returns KERN_SUCCESS if the previous handler handled the exception,
+// KERN_FAILURE if there was no previous handler or forwarding wasn't possible,
+// or another error code propagated from the previous handler.
+static kern_return_t try_forward_mach_exception(
+    jl_ptls_t ptls2,
+    mach_port_t thread,
+    mach_port_t task,
+    exception_type_t exception,
+    mach_exception_data_t code,
+    mach_msg_type_number_t codeCnt,
+    int *flavor,
+    thread_state_t old_state,
+    mach_msg_type_number_t old_stateCnt,
+    thread_state_t new_state,
+    mach_msg_type_number_t *new_stateCnt)
+{
+    prev_mach_exc_handler_t *handlers = (prev_mach_exc_handler_t *)ptls2->mach_exc_prev;
+    if (!handlers || exception < 1 || exception >= PREV_MACH_EXC_MAX)
+        return KERN_FAILURE;
+
+    prev_mach_exc_handler_t *prev = &handlers[exception];
+    if (!MACH_PORT_VALID(prev->port))
+        return KERN_FAILURE;
+
+    assert(prev->port != segv_port); // checked during attach_exception_port
+
+    exception_behavior_t behavior = prev->behavior;
+    int code64 = behavior & MACH_EXCEPTION_CODES;
+    // Strip all behavior flag bits, matching the kernel's use of MACH_EXCEPTION_MASK.
+#ifdef MACH_EXCEPTION_MASK
+    exception_behavior_t base_behavior = behavior & ~MACH_EXCEPTION_MASK;
+#else
+    exception_behavior_t base_behavior = behavior & ~0xe0000000U;
+#endif
+
+    // Truncate to 32-bit codes for non-MACH_EXCEPTION_CODES handlers
+    exception_data_type_t code32[2] = {
+        (exception_data_type_t)(codeCnt > 0 ? code[0] : 0),
+        (exception_data_type_t)(codeCnt > 1 ? code[1] : 0)
+    };
+
+    kern_return_t kr;
+
+    switch (base_behavior) {
+    case EXCEPTION_DEFAULT: {
+        // DEFAULT handlers receive thread/task ports and may modify thread
+        // state directly via thread_set_state. After forwarding, we read
+        // back the state to capture any modifications and return it in our
+        // STATE_IDENTITY reply (the kernel always applies new_state on
+        // KERN_SUCCESS, so we must provide valid state).
+        if (code64)
+            kr = mach_exception_raise(prev->port, thread, task,
+                exception, code, codeCnt);
+        else
+            kr = exception_raise(prev->port, thread, task,
+                exception, code32, codeCnt);
+        if (kr == KERN_SUCCESS) {
+            mach_port_t thread_control = pthread_mach_thread_np(ptls2->system_id);
+            *new_stateCnt = old_stateCnt;
+            kern_return_t kr2 = thread_get_state(thread_control, *flavor,
+                new_state, new_stateCnt);
+            if (kr2 != KERN_SUCCESS)
+                kr = kr2;
+        }
+        break;
+    }
+
+    case EXCEPTION_STATE:
+    case EXCEPTION_STATE_IDENTITY: {
+        // If the previous handler expects a different state flavor, we need
+        // to fetch old_state separately. new_state / *new_stateCnt / *flavor
+        // are passed through directly — the kernel applies new_state in
+        // whatever flavor we return.
+        int flavor_mismatch = (prev->flavor != *flavor);
+        thread_state_t fwd_old = old_state;
+        mach_msg_type_number_t fwd_old_count = old_stateCnt;
+        if (flavor_mismatch) {
+            fwd_old = (thread_state_t)malloc(sizeof(natural_t) * THREAD_STATE_MAX);
+            if (!fwd_old)
+                return KERN_FAILURE;
+            mach_port_t thread_control = pthread_mach_thread_np(ptls2->system_id);
+            fwd_old_count = THREAD_STATE_MAX;
+            kr = thread_get_state(thread_control, prev->flavor,
+                fwd_old, &fwd_old_count);
+            if (kr != KERN_SUCCESS) {
+                free(fwd_old);
+                return kr;
+            }
+            *flavor = prev->flavor;
+        }
+
+        // Forward the exception. The handler writes directly into
+        // new_state / *new_stateCnt / *flavor, and MIG already
+        // guarantees sizeof(new_state) == THREAD_STATE_MAX * sizeof(natural_t)
+        *new_stateCnt = fwd_old_count;
+        if (base_behavior == EXCEPTION_STATE) {
+            if (code64)
+                kr = mach_exception_raise_state(prev->port, exception,
+                    code, codeCnt, flavor,
+                    fwd_old, fwd_old_count, new_state, new_stateCnt);
+            else
+                kr = exception_raise_state(prev->port, exception,
+                    code32, codeCnt, flavor,
+                    fwd_old, fwd_old_count, new_state, new_stateCnt);
+        }
+        else { // EXCEPTION_STATE_IDENTITY
+            if (code64)
+                kr = mach_exception_raise_state_identity(prev->port,
+                    thread, task, exception, code, codeCnt, flavor,
+                    fwd_old, fwd_old_count, new_state, new_stateCnt);
+            else
+                kr = exception_raise_state_identity(prev->port,
+                    thread, task, exception, code32, codeCnt, flavor,
+                    fwd_old, fwd_old_count, new_state, new_stateCnt);
+        }
+
+        // On failure, restore the caller's state so fallback logic sees
+        // clean buffers. Our flavor is always MACH_THREAD_STATE.
+        if (kr != KERN_SUCCESS) {
+            memcpy(new_state, old_state, old_stateCnt * sizeof(natural_t));
+            *new_stateCnt = old_stateCnt;
+            *flavor = MACH_THREAD_STATE;
+        }
+        if (flavor_mismatch)
+            free(fwd_old);
+        break;
+    }
+
+    default:
+        // Includes EXCEPTION_IDENTITY_PROTECTED and similar behaviors
+        // that cannot be forwarded from userspace.
+        kr = KERN_FAILURE;
+        break;
+    }
+
+    return kr;
 }
 
 // Trampoline that runs on the faulting thread after being hijacked by the
@@ -575,7 +730,7 @@ kern_return_t catch_mach_exception_raise_state_identity(
 {
     host_thread_state_t *state = (host_thread_state_t*)new_state;
     assert(old_stateCnt >= MACH_THREAD_STATE_COUNT);
-    // Copy old state to new state — we'll modify new_state in place
+    // Copy old state to new state — we'll modify new_state in place.
     memcpy(new_state, old_state, old_stateCnt * sizeof(natural_t));
     *new_stateCnt = old_stateCnt;
 #ifdef LLVMLIBUNWIND
@@ -602,10 +757,26 @@ kern_return_t catch_mach_exception_raise_state_identity(
         jl_safe_printf("ERROR: Exception handler triggered on unmanaged thread.\n");
         return KERN_INVALID_ARGUMENT;
     }
+    unsigned int exc_count = HOST_EXCEPTION_STATE_COUNT;
+    host_exception_state_t exc_state;
+    kern_return_t ret = thread_get_state(thread, HOST_EXCEPTION_STATE, (thread_state_t)&exc_state, &exc_count);
+    HANDLE_MACH_ERROR("thread_get_state", ret);
+    uint64_t fault_kind = code[0];
+    uint64_t fault_addr = code[1];
+    if (exception == EXC_BAD_ACCESS && codeCnt >= 2) { // SIGSEGV or SIGBUS
+        if (fault_kind == KERN_PROTECTION_FAILURE && jl_addr_is_safepoint(fault_addr)  && !is_write_fault(exc_state)) {
+            // Hijack the faulting thread to handle the safepoint on its own
+            // stack, using the same jl_set_gc_and_wait() codepath as Unix signals.
+            jl_call_in_state(state, (void (*)(void))&mach_safepoint_trampoline, (uintptr_t)ptls2);
+            return KERN_SUCCESS;
+        }
+    }
     if (ptls2->safe_restore) {
         jl_throw_in_state(ptls2, state, NULL);
         return KERN_SUCCESS;
     }
+    if (try_forward_mach_exception(ptls2, thread, task, exception, code, codeCnt, flavor, old_state, old_stateCnt, new_state, new_stateCnt) == KERN_SUCCESS)
+        return KERN_SUCCESS;
     if (jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_WAITING)
         return KERN_FAILURE;
     if (exception == EXC_ARITHMETIC) {
@@ -613,19 +784,6 @@ kern_return_t catch_mach_exception_raise_state_identity(
         return KERN_SUCCESS;
     }
     assert(exception == EXC_BAD_ACCESS); // SIGSEGV or SIGBUS
-    if (codeCnt < 2 || code[0] != KERN_PROTECTION_FAILURE) // SEGV_ACCERR or BUS_ADRERR or BUS_ADRALN
-        return KERN_FAILURE;
-    uint64_t fault_addr = code[1];
-    unsigned int exc_count = HOST_EXCEPTION_STATE_COUNT;
-    host_exception_state_t exc_state;
-    kern_return_t ret = thread_get_state(thread, HOST_EXCEPTION_STATE, (thread_state_t)&exc_state, &exc_count);
-    HANDLE_MACH_ERROR("thread_get_state", ret);
-    if (jl_addr_is_safepoint(fault_addr) && !is_write_fault(exc_state)) {
-        // Hijack the faulting thread to handle the safepoint on its own
-        // stack, using the same jl_set_gc_and_wait() codepath as Unix signals.
-        jl_call_in_state(state, (void (*)(void))&mach_safepoint_trampoline, (uintptr_t)ptls2);
-        return KERN_SUCCESS;
-    }
     if (jl_atomic_load_relaxed(&ptls2->current_task)->eh == NULL)
         return KERN_FAILURE;
     jl_value_t *excpt;
@@ -633,10 +791,12 @@ kern_return_t catch_mach_exception_raise_state_identity(
         stack_overflow_warning();
         excpt = jl_stackovf_exception;
     }
-    else if (is_write_fault(exc_state)) // false for alignment errors
-        excpt = jl_readonlymemory_exception;
-    else
-        return KERN_FAILURE;
+    else {
+        if (is_write_fault(exc_state)) // false for alignment errors
+            excpt = jl_readonlymemory_exception;
+        else
+            return KERN_FAILURE;
+    }
     jl_throw_in_state(ptls2, state, excpt);
     return KERN_SUCCESS;
 }
@@ -668,15 +828,51 @@ kern_return_t catch_mach_exception_raise(
     return KERN_INVALID_ARGUMENT; // we only use EXCEPTION_STATE_IDENTITY
 }
 
-static void attach_exception_port(thread_port_t thread, int segv_only)
+// attach new exception port and save any disconnected handlers in `ptls->mach_exc_prev`
+static void swap_exception_ports(thread_port_t thread, exception_mask_t mask, jl_ptls_t ptls)
 {
-    kern_return_t ret;
-    // https://www.opensource.apple.com/source/xnu/xnu-2782.1.97/osfmk/man/thread_set_exception_ports.html
+    exception_mask_t old_masks[EXC_TYPES_COUNT];
+    mach_port_t old_ports[EXC_TYPES_COUNT];
+    exception_behavior_t old_behaviors[EXC_TYPES_COUNT];
+    thread_state_flavor_t old_flavors[EXC_TYPES_COUNT];
+    mach_msg_type_number_t old_count = EXC_TYPES_COUNT;
+
+    kern_return_t ret = thread_swap_exception_ports(thread, mask, segv_port,
+        EXCEPTION_STATE_IDENTITY | MACH_EXCEPTION_CODES, MACH_THREAD_STATE,
+        old_masks, &old_count, old_ports, old_behaviors, old_flavors);
+    HANDLE_MACH_ERROR("thread_swap_exception_ports", ret);
+
+    if (!ptls->mach_exc_prev)
+        ptls->mach_exc_prev = calloc(PREV_MACH_EXC_MAX, sizeof(prev_mach_exc_handler_t));
+    prev_mach_exc_handler_t *handlers = (prev_mach_exc_handler_t *)ptls->mach_exc_prev;
+
+    // Distribute the swap results into per-exception-type slots.
+    for (mach_msg_type_number_t i = 0; i < old_count; i++) {
+        assert(old_ports[i] != segv_port); // registered twice on same thread?
+        for (int exc = 1; exc < PREV_MACH_EXC_MAX; exc++) {
+            if (old_masks[i] & (1 << exc)) {
+                handlers[exc].port = old_ports[i];
+                handlers[exc].behavior = old_behaviors[i];
+                handlers[exc].flavor = old_flavors[i];
+            }
+        }
+    }
+}
+
+static void attach_exception_port(thread_port_t thread, int segv_only, jl_ptls_t ptls)
+{
     exception_mask_t mask = EXC_MASK_BAD_ACCESS;
     if (!segv_only)
         mask |= EXC_MASK_ARITHMETIC;
-    ret = thread_set_exception_ports(thread, mask, segv_port, EXCEPTION_STATE_IDENTITY | MACH_EXCEPTION_CODES, MACH_THREAD_STATE);
-    HANDLE_MACH_ERROR("thread_set_exception_ports", ret);
+
+    if (ptls) {
+        swap_exception_ports(thread, mask, ptls);
+    }
+    else {
+        kern_return_t ret = thread_set_exception_ports(thread, mask, segv_port,
+            EXCEPTION_STATE_IDENTITY | MACH_EXCEPTION_CODES, MACH_THREAD_STATE);
+        HANDLE_MACH_ERROR("thread_set_exception_ports", ret);
+    }
 }
 
 static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx) JL_NOTSAFEPOINT
@@ -971,7 +1167,7 @@ void *mach_profile_listener(void *arg)
 {
     (void)arg;
     const int max_size = 512;
-    attach_exception_port(mach_thread_self(), 1);
+    attach_exception_port(mach_thread_self(), 1, NULL);
 #ifdef LLVMLIBUNWIND
     mach_profiler_thread = mach_thread_self();
 #endif

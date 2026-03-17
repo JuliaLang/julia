@@ -939,7 +939,7 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
 void jl_install_thread_signal_handler(jl_ptls_t ptls)
 {
 #ifdef HAVE_MACH
-    attach_exception_port(pthread_mach_thread_np(ptls->system_id), 0);
+    attach_exception_port(pthread_mach_thread_np(ptls->system_id), 0, ptls);
 #endif
     stack_t ss;
     if (sigaltstack(NULL, &ss) < 0)

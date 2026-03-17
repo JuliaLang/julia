@@ -44,6 +44,9 @@ ifeq ($(OS),Windows_NT)
 TESTS += embedding-signals-win
 else
 TESTS += embedding-signals-unix libdl-embedding
+ifeq ($(shell uname -s),Darwin)
+TESTS += embedding-signals-macos
+endif
 endif
 
 TARGETS       := $(addprefix $(BIN)/,$(addsuffix $(EXE),$(TESTS)))
