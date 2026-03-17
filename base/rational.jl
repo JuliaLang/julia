@@ -296,9 +296,9 @@ function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) wh
 
     # find optimal semiconvergent
     # smallest a such that x-a*y < a*t+tt
-    a = cld(x-tt,y+t)
+    a_min = cld(x-tt,y+t)
     try
-        ia = convert(T,a)
+        ia = convert(T,a_min)
         np = checked_add(checked_mul(ia,p),pp)
         nq = checked_add(checked_mul(ia,q),qq)
         return np // nq
@@ -307,7 +307,7 @@ function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) wh
         (isinf(p // q) || iszero(p // q) || a ≤ 2 || -p == p) && return p // q
         z, zz = abs(p) ≥ q ? (abs(p), abs(pp)) : (q, qq)
         ia = fld(typemax(T) - zz, z)
-        return ia > div(x,y)/2 ? (ia*p + pp) // (ia*q + qq) : p // q
+        return ia > a/2 ? (ia*p + pp) // (ia*q + qq) : p // q
     end
 end
 rationalize(::Type{T}, x::AbstractFloat; tol::Real = eps(x)) where {T<:Integer} = rationalize(T, x, tol)
