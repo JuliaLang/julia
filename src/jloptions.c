@@ -193,7 +193,9 @@ static const char opts[]  =
     " --startup-file={yes*|no}                      Load `JULIA_DEPOT_PATH/config/startup.jl`; \n"
     "                                               if `JULIA_DEPOT_PATH` environment variable is unset,\n"
     "                                               load `~/.julia/config/startup.jl`\n"
-    " --handle-signals={yes*|no}                    Enable or disable Julia's default signal handlers\n"
+    " --handle-signals={yes*|minimal|no}            Enable or disable Julia's default signal handlers.\n"
+    "                                               Select 'minimal' to setup only handlers essential\n"
+    "                                               for the operation of the Julia runtime.\n"
     " --sysimage-native-code={yes*|no}              Use native code from system image if available\n"
     " --compiled-modules={yes*|no|existing|strict}  Enable or disable incremental precompilation of\n"
     "                                               modules. The `existing` option allows use of existing\n"
@@ -210,7 +212,7 @@ static const char opts[]  =
     " -e, --eval <expr>                             Evaluate <expr>\n"
     " -E, --print <expr>                            Evaluate <expr> and display the result\n"
     " -m, --module <Package> [args]                 Run entry point of `Package` (`@main` function) with\n"
-    "                                               `args'.\n"
+    "                                               `args`.\n"
     " -L, --load <file>                             Load <file> immediately on all processors\n\n"
 
     // parallel options
@@ -997,6 +999,8 @@ restart_switch:
         case opt_handle_signals:
             if (!strcmp(optarg,"yes"))
                 jl_options.handle_signals = JL_OPTIONS_HANDLE_SIGNALS_ON;
+            else if (!strcmp(optarg,"minimal") || !strcmp(optarg,"min"))
+                jl_options.handle_signals = JL_OPTIONS_HANDLE_SIGNALS_MINIMAL;
             else if (!strcmp(optarg,"no"))
                 jl_options.handle_signals = JL_OPTIONS_HANDLE_SIGNALS_OFF;
             else

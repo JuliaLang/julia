@@ -148,7 +148,7 @@ static void JL_NORETURN start_backtrace_fiber(void)
     abort();
 }
 
-void restore_signals(void)
+void allocate_signal_listener(void)
 {
     // turn on ctrl-c handler
     SetConsoleCtrlHandler(NULL, 0);
@@ -256,7 +256,46 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     return 1;
 }
 
+// Vectored exception handler: processes Julia-specific exceptions with first
+// priority. Returns EXCEPTION_CONTINUE_SEARCH for anything not handled here,
+// allowing SEH frames and other handlers to process the exception.
 LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
+{
+    if (ExceptionInfo->ExceptionRecord->ExceptionFlags != 0)
+        return EXCEPTION_CONTINUE_SEARCH;
+    jl_task_t *ct = jl_get_current_task();
+    if (ct != NULL && ct->ptls != NULL && ct->ptls->gc_state != JL_GC_STATE_WAITING) {
+        jl_ptls_t ptls = ct->ptls;
+        switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
+        case EXCEPTION_ACCESS_VIOLATION:
+            if (jl_addr_is_safepoint(ExceptionInfo->ExceptionRecord->ExceptionInformation[1])) {
+                jl_set_gc_and_wait(ct);
+                // Do not raise sigint on worker thread
+                if (ptls->tid != 0)
+                    return EXCEPTION_CONTINUE_EXECUTION;
+                if (ptls->defer_signal) {
+                    jl_safepoint_defer_sigint();
+                }
+                else if (jl_safepoint_consume_sigint()) {
+                    jl_clear_force_sigint();
+                    jl_throw_in_ctx(ct, jl_interrupt_exception, ExceptionInfo->ContextRecord);
+                }
+                return EXCEPTION_CONTINUE_EXECUTION;
+            }
+            if (jl_get_safe_restore()) {
+                jl_throw_in_ctx(NULL, NULL, ExceptionInfo->ContextRecord);
+                return EXCEPTION_CONTINUE_EXECUTION;
+            }
+        default:
+            break;
+        }
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+
+// Unhandled exception filter: last-resort fatal error reporting.
+// Only called if no vectored handler, SEH frame, or other filter handled the exception.
+LONG WINAPI jl_fatal_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 {
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags != 0)
         return EXCEPTION_CONTINUE_SEARCH;
@@ -279,24 +318,6 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
             }
             break;
         case EXCEPTION_ACCESS_VIOLATION:
-            if (jl_addr_is_safepoint(ExceptionInfo->ExceptionRecord->ExceptionInformation[1])) {
-                jl_set_gc_and_wait(ct);
-                // Do not raise sigint on worker thread
-                if (ptls->tid != 0)
-                    return EXCEPTION_CONTINUE_EXECUTION;
-                if (ptls->defer_signal) {
-                    jl_safepoint_defer_sigint();
-                }
-                else if (jl_safepoint_consume_sigint()) {
-                    jl_clear_force_sigint();
-                    jl_throw_in_ctx(ct, jl_interrupt_exception, ExceptionInfo->ContextRecord);
-                }
-                return EXCEPTION_CONTINUE_EXECUTION;
-            }
-            if (jl_get_safe_restore()) {
-                jl_throw_in_ctx(NULL, NULL, ExceptionInfo->ContextRecord);
-                return EXCEPTION_CONTINUE_EXECUTION;
-            }
             if (ct->eh != NULL) {
                 if (ExceptionInfo->ExceptionRecord->ExceptionInformation[0] == 1) { // writing to read-only memory (e.g. mmap)
                     jl_throw_in_ctx(ct, jl_readonlymemory_exception, ExceptionInfo->ContextRecord);
@@ -401,7 +422,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 
 JL_DLLEXPORT void jl_install_sigint_handler(void)
 {
-    SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
+    SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler, 1);
 }
 
 static TIMECAPS timecaps;
@@ -631,25 +652,35 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
 
 void jl_install_default_signal_handlers(void)
 {
+    // TODO: consider these signals when 'chaining' as well
     if (signal(SIGFPE, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
         jl_error("fatal error: Couldn't set SIGFPE");
     }
     if (signal(SIGILL, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
         jl_error("fatal error: Couldn't set SIGILL");
     }
-    if (signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGINT");
-    }
     if (signal(SIGSEGV, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
         jl_error("fatal error: Couldn't set SIGSEGV");
     }
-    if (signal(SIGTERM, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGTERM");
+    if (jl_options.handle_signals != JL_OPTIONS_HANDLE_SIGNALS_MINIMAL) {
+        // In MINIMAL mode, the outer application keeps control of I/O-like
+        // signals. Julia does not respond to Ctrl-C or termination requests
+        // in this mode.
+        if (signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
+            jl_error("fatal error: Couldn't set SIGINT");
+        }
+        if (signal(SIGTERM, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
+            jl_error("fatal error: Couldn't set SIGTERM");
+        }
+        if (signal(SIGABRT, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
+            jl_error("fatal error: Couldn't set SIGABRT");
+        }
+
+        // TODO: Is this still necessary if we have SEH configured on all threads
+        //       to the same handler anyway?
+        SetUnhandledExceptionFilter(jl_fatal_exception_handler);
     }
-    if (signal(SIGABRT, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGABRT");
-    }
-    SetUnhandledExceptionFilter(jl_exception_handler);
+    AddVectoredExceptionHandler(1, jl_exception_handler);
 }
 
 void jl_install_thread_signal_handler(jl_ptls_t ptls)

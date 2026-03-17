@@ -12,6 +12,8 @@
 #include <AvailabilityMacros.h>
 #include <stdint.h>
 #include "mach_excServer.c"
+#include "mach_excUser.c"
+#include "excUser.c"
 
 #ifdef MAC_OS_X_VERSION_10_9
 #include <sys/_types/_ucontext64.h>
@@ -21,6 +23,35 @@
 #endif
 
 #include "julia_assert.h"
+
+#if defined(_CPU_X86_64_)
+// Size of the xsave area for this CPU, queried via CPUID at init time.
+// Used by jl_call_protect_fp_state to save/restore full AVX/AVX-512 state.
+// Initialized to 0; a value of 0 means xsave is not available (fallback to fxsave).
+uint32_t jl_xsave_size = 0;
+static void jl_init_xsave_size(void)
+{
+    uint32_t eax, ebx, ecx, edx;
+    // Check for xsave support: CPUID.01H:ECX.XSAVE[bit 26] and OSXSAVE[bit 27]
+    asm("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(1), "c"(0));
+    if (!(ecx & (1 << 26)) || !(ecx & (1 << 27)))
+        return; // no xsave or OS hasn't enabled it
+    // CPUID leaf 0DH, subleaf 0: EBX = size required for currently-enabled features (XCR0)
+    asm("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "a"(0xD), "c"(0));
+    jl_xsave_size = ebx;
+}
+#endif
+
+// Saved previous Mach exception handler for a single exception type.
+typedef struct {
+    mach_port_t port;
+    exception_behavior_t behavior;
+    thread_state_flavor_t flavor;
+} prev_mach_exc_handler_t;
+
+// Maximum exception type index we save handlers for.
+// Covers EXC_BAD_ACCESS (1) through EXC_ARITHMETIC (3).
+#define PREV_MACH_EXC_MAX 4
 
 // private keymgr stuff
 #define KEYMGR_GCC3_DW2_OBJ_LIST 302
@@ -42,108 +73,7 @@ extern void _dyld_dlopen_atfork_prepare(void) __attribute__((weak_import));
 extern void _dyld_dlopen_atfork_parent(void) __attribute__((weak_import));
 //extern void _dyld_dlopen_atfork_child(void) __attribute__((weak_import));
 
-static void attach_exception_port(thread_port_t thread, int segv_only);
-
-// low 16 bits are the thread id, the next 8 bits are the original gc_state
-static arraylist_t suspended_threads;
-extern uv_cond_t safepoint_cond_begin;
-
-#define GC_STATE_SHIFT 8*sizeof(int16_t)
-static inline int8_t decode_gc_state(uintptr_t item)
-{
-    return (int8_t)(item >> GC_STATE_SHIFT);
-}
-
-static inline int16_t decode_tid(uintptr_t item)
-{
-    return (int16_t)item;
-}
-
-static inline uintptr_t encode_item(int16_t tid, int8_t gc_state)
-{
-    return (uintptr_t)tid | ((uintptr_t)gc_state << GC_STATE_SHIFT);
-}
-
-// see jl_safepoint_wait_thread_resume
-void jl_safepoint_resume_thread_mach(jl_ptls_t ptls2, int16_t tid2)
-{
-    // must be called with uv_mutex_lock(&safepoint_lock) and uv_mutex_lock(&ptls2->sleep_lock) held (in that order)
-    for (size_t i = 0; i < suspended_threads.len; i++) {
-        uintptr_t item = (uintptr_t)suspended_threads.items[i];
-
-        int16_t tid = decode_tid(item);
-        int8_t gc_state = decode_gc_state(item);
-        if (tid != tid2)
-            continue;
-        jl_atomic_store_release(&ptls2->gc_state, gc_state);
-        thread_resume(pthread_mach_thread_np(ptls2->system_id));
-        suspended_threads.items[i] = suspended_threads.items[--suspended_threads.len];
-        break;
-    }
-    // thread hadn't actually reached a jl_mach_gc_wait call where we suspended it
-}
-
-void jl_mach_gc_end(void)
-{
-    // must be called with uv_mutex_lock(&safepoint_lock) held
-    size_t j = 0;
-    for (size_t i = 0; i < suspended_threads.len; i++) {
-        uintptr_t item = (uintptr_t)suspended_threads.items[i];
-        int16_t tid = decode_tid(item);
-        int8_t gc_state = decode_gc_state(item);
-        jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-        uv_mutex_lock(&ptls2->sleep_lock);
-        if (jl_atomic_load_relaxed(&ptls2->suspend_count) == 0) {
-            jl_atomic_store_release(&ptls2->gc_state, gc_state);
-            thread_resume(pthread_mach_thread_np(ptls2->system_id));
-        }
-        else {
-            // this is the check for jl_safepoint_wait_thread_resume
-            suspended_threads.items[j++] = (void*)item;
-        }
-        uv_mutex_unlock(&ptls2->sleep_lock);
-    }
-    suspended_threads.len = j;
-}
-
-// implement jl_set_gc_and_wait from a different thread
-static void jl_mach_gc_wait(jl_ptls_t ptls2, mach_port_t thread, int16_t tid)
-{
-    // relaxed, since we don't mind missing one--we will hit another soon (immediately probably)
-    uv_mutex_lock(&safepoint_lock);
-    // Since this gets set to zero only while the safepoint_lock was held this
-    // means we can tell for sure if GC is done before we got the message or
-    // the safepoint was enabled for SIGINT instead.
-    int doing_gc = jl_atomic_load_relaxed(&jl_gc_running);
-    int do_suspend = doing_gc;
-    int relaxed_suspend_count = !doing_gc && jl_atomic_load_relaxed(&ptls2->suspend_count) != 0;
-    if (relaxed_suspend_count) {
-        uv_mutex_lock(&ptls2->sleep_lock);
-        do_suspend = jl_atomic_load_relaxed(&ptls2->suspend_count) != 0;
-        // only do_suspend while holding the sleep_lock, otherwise we might miss a resume
-    }
-    if (do_suspend) {
-        // Set the gc state of the thread, suspend and record it
-        //
-        // TODO: TSAN will complain that it never saw the faulting task do an
-        // atomic release (it was in the kernel). And our attempt here does
-        // nothing, since we are a different thread, and it is not transitive).
-        //
-        // This also means we are not making this thread available for GC work.
-        // Eventually, we should probably release this signal to the original
-        // thread, (return KERN_FAILURE instead of KERN_SUCCESS) so that it
-        // triggers a SIGSEGV and gets handled by the usual codepath for unix.
-        int8_t gc_state = jl_atomic_load_acquire(&ptls2->gc_state);
-        jl_atomic_store_release(&ptls2->gc_state, JL_GC_STATE_WAITING);
-        uintptr_t item = encode_item(tid, gc_state);
-        arraylist_push(&suspended_threads, (void*)item);
-        thread_suspend(thread);
-    }
-    if (relaxed_suspend_count)
-        uv_mutex_unlock(&ptls2->sleep_lock);
-    uv_cond_broadcast(&safepoint_cond_begin);
-    uv_mutex_unlock(&safepoint_lock);
-}
+static void attach_exception_port(thread_port_t thread, int segv_only, jl_ptls_t ptls);
 
 static mach_port_t segv_port = 0;
 
@@ -161,6 +91,9 @@ void *mach_segv_listener(void *arg)
 
 static void allocate_mach_handler(void)
 {
+#if defined(_CPU_X86_64_)
+    jl_init_xsave_size();
+#endif
     // ensure KEYMGR_GCC3_DW2_OBJ_LIST is initialized, as this requires malloc
     // and thus can deadlock when used without first initializing it.
     // Apple caused this problem in their libunwind in 10.9 (circa keymgr-28)
@@ -172,8 +105,6 @@ static void allocate_mach_handler(void)
     if (_keymgr_set_lockmode_processwide_ptr(KEYMGR_GCC3_DW2_OBJ_LIST, NM_ALLOW_RECURSION))
         jl_error("_keymgr_set_lockmode_processwide_ptr failed");
 
-    int16_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
-    arraylist_new(&suspended_threads, nthreads); // we will resize later (inside safepoint_lock), if needed
     pthread_t thread;
     pthread_attr_t attr;
     kern_return_t ret;
@@ -193,17 +124,6 @@ static void allocate_mach_handler(void)
     pthread_attr_destroy(&attr);
 }
 
-#ifdef LLVMLIBUNWIND
-volatile mach_port_t mach_profiler_thread = 0;
-static kern_return_t profiler_segv_handler(
-    mach_port_t exception_port,
-    mach_port_t thread,
-    mach_port_t task,
-    exception_type_t exception,
-    mach_exception_data_t code,
-    mach_msg_type_number_t codeCnt);
-#endif
-
 #if defined(_CPU_X86_64_)
 typedef x86_thread_state64_t host_thread_state_t;
 typedef x86_exception_state64_t host_exception_state_t;
@@ -221,10 +141,23 @@ typedef arm_exception_state64_t host_exception_state_t;
 #define HOST_EXCEPTION_STATE_COUNT ARM_EXCEPTION_STATE64_COUNT
 #endif
 
-// Create a fake function that describes the register manipulations in jl_call_in_state
+#ifdef LLVMLIBUNWIND
+volatile mach_port_t mach_profiler_thread = 0;
+static kern_return_t profiler_segv_handler(
+    mach_port_t exception_port,
+    mach_port_t thread,
+    mach_port_t task,
+    exception_type_t exception,
+    mach_exception_data_t code,
+    mach_msg_type_number_t codeCnt,
+    host_thread_state_t *state,
+    mach_msg_type_number_t *new_stateCnt);
+#endif
+
+// Create a fake function that describes the register manipulations in jl_noreturn_call_in_state
 // The callee-saved registers still may get smashed (by the cdecl fptr), since we didn't explicitly copy all of the
 // state to the stack (to build a real sigreturn frame).
-__attribute__((naked)) static void jl_fake_signal_return(void)
+__attribute__((naked, used)) void jl_fake_signal_return(void)
 {
 #if defined(_CPU_X86_64_)
 __asm__(
@@ -250,7 +183,8 @@ __asm__(
 #endif
 }
 
-static void jl_call_in_state1(host_thread_state_t *state, void (*fptr)(void), uintptr_t arg0)
+// Optimized version of `jl_call_in_state` that avoids saving most CPU registers.
+static void jl_noreturn_call_in_state(host_thread_state_t *state, void (*fptr)(void), uintptr_t arg0, uintptr_t arg1)
 {
 #ifdef _CPU_X86_64_
     uintptr_t sp = state->__rsp;
@@ -271,8 +205,9 @@ static void jl_call_in_state1(host_thread_state_t *state, void (*fptr)(void), ui
     state->__rsp = sp; // set stack pointer
     state->__rip = (uint64_t)fptr; // "call" the function
     state->__rdi = arg0;
+    state->__rsi = arg1;
 #elif defined(_CPU_AARCH64_)
-    // push {%sp, %pc}
+    // push {%pc, %sp}
     sp -= sizeof(void*);
     *(uintptr_t*)sp = state->__sp;
     sp -= sizeof(void*);
@@ -281,6 +216,7 @@ static void jl_call_in_state1(host_thread_state_t *state, void (*fptr)(void), ui
     state->__pc = (uint64_t)fptr; // pc
     state->__lr = (uintptr_t)&jl_fake_signal_return + 4; // x30
     state->__x[0] = arg0;
+    state->__x[1] = arg1;
 #else
 #error "julia: throw-in-context not supported on this platform"
 #endif
@@ -291,27 +227,7 @@ static void jl_longjmp_in_state(host_thread_state_t *state, jl_jmp_buf jmpbuf)
     if (!jl_simulate_longjmp(jmpbuf, (bt_context_t*)state)) {
         // for sanitizer builds, fallback to calling longjmp on the original stack
         // (this will fail for stack overflow, but that is hardly sanitizer-legal anyways)
-#ifdef _CPU_X86_64_
-        uintptr_t sp = state->__rsp;
-#elif defined(_CPU_AARCH64_)
-        uintptr_t sp = state->__sp;
-#endif
-        sp = (sp - 256) & ~(uintptr_t)15; // redzone and re-alignment
-        assert(sp % 16 == 0);
-#ifdef _CPU_X86_64_
-        state->__rdi = (uintptr_t)jmpbuf;
-        state->__rsi = 1;
-        state->__rsp = sp; // set stack pointer
-        state->__rip = (uint64_t)longjmp; // "call" the function
-#elif defined(_CPU_AARCH64_)
-        state->__x[0] = (uintptr_t)jmpbuf;
-        state->__x[1] = 1;
-        state->__sp = sp; // x31
-        state->__pc = (uint64_t)longjmp; // pc
-        state->__lr = (uintptr_t)0; // x30
-#else
-#error "julia: throw-in-context not supported on this platform"
-#endif
+        jl_noreturn_call_in_state(state, (void (*)(void))longjmp, (uintptr_t)jmpbuf, 1);
     }
 }
 
@@ -330,19 +246,15 @@ int is_write_fault(host_exception_state_t exc_state) {
 }
 #endif
 
-static void jl_throw_in_thread(jl_ptls_t ptls2, mach_port_t thread, jl_value_t *exception)
+static void jl_throw_in_state(jl_ptls_t ptls2, host_thread_state_t *state, jl_value_t *exception)
 {
-    unsigned int count = MACH_THREAD_STATE_COUNT;
-    host_thread_state_t state;
-    kern_return_t ret = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
-    HANDLE_MACH_ERROR("thread_get_state", ret);
     if (ptls2->safe_restore) {
-        jl_longjmp_in_state(&state, *ptls2->safe_restore);
+        jl_longjmp_in_state(state, *ptls2->safe_restore);
     }
     else {
         assert(exception);
         ptls2->bt_size =
-            rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE, (bt_context_t *)&state,
+            rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE, (bt_context_t *)state,
                             NULL /*current_task?*/);
         ptls2->sig_exception = exception;
         ptls2->io_wait = 0;
@@ -350,14 +262,427 @@ static void jl_throw_in_thread(jl_ptls_t ptls2, mach_port_t thread, jl_value_t *
         jl_handler_t *eh = ct->eh;
         if (eh != NULL) {
             asan_unpoison_task_stack(ct, &eh->eh_ctx);
-            jl_longjmp_in_state(&state, eh->eh_ctx);
+            jl_longjmp_in_state(state, eh->eh_ctx);
         }
         else {
             jl_no_exc_handler(exception, ct);
         }
     }
+}
+
+static void jl_throw_in_thread(jl_ptls_t ptls2, mach_port_t thread, jl_value_t *exception)
+{
+    host_thread_state_t state;
+    unsigned int count = MACH_THREAD_STATE_COUNT;
+    kern_return_t ret = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
+    HANDLE_MACH_ERROR("thread_get_state", ret);
+    jl_throw_in_state(ptls2, &state, exception);
     ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
     HANDLE_MACH_ERROR("thread_set_state", ret);
+}
+
+// Forward a Mach exception to the previous handler saved before Julia installed
+// its own. Handles the three standard exception behaviors (DEFAULT, STATE,
+// STATE_IDENTITY) and both 32-bit and 64-bit code variants.
+//
+// Returns KERN_SUCCESS if the previous handler handled the exception,
+// KERN_FAILURE if there was no previous handler or forwarding wasn't possible,
+// or another error code propagated from the previous handler.
+static kern_return_t try_forward_mach_exception(
+    jl_ptls_t ptls2,
+    mach_port_t thread,
+    mach_port_t task,
+    exception_type_t exception,
+    mach_exception_data_t code,
+    mach_msg_type_number_t codeCnt,
+    int *flavor,
+    thread_state_t old_state,
+    mach_msg_type_number_t old_stateCnt,
+    thread_state_t new_state,
+    mach_msg_type_number_t *new_stateCnt)
+{
+    prev_mach_exc_handler_t *handlers = (prev_mach_exc_handler_t *)ptls2->mach_exc_prev;
+    if (!handlers || exception < 1 || exception >= PREV_MACH_EXC_MAX)
+        return KERN_FAILURE;
+
+    prev_mach_exc_handler_t *prev = &handlers[exception];
+    if (!MACH_PORT_VALID(prev->port))
+        return KERN_FAILURE;
+
+    assert(prev->port != segv_port); // checked during attach_exception_port
+
+    exception_behavior_t behavior = prev->behavior;
+    int code64 = behavior & MACH_EXCEPTION_CODES;
+    // Strip all behavior flag bits, matching the kernel's use of MACH_EXCEPTION_MASK.
+#ifdef MACH_EXCEPTION_MASK
+    exception_behavior_t base_behavior = behavior & ~MACH_EXCEPTION_MASK;
+#else
+    exception_behavior_t base_behavior = behavior & ~0xe0000000U;
+#endif
+
+    // Truncate to 32-bit codes for non-MACH_EXCEPTION_CODES handlers
+    exception_data_type_t code32[2] = {
+        (exception_data_type_t)(codeCnt > 0 ? code[0] : 0),
+        (exception_data_type_t)(codeCnt > 1 ? code[1] : 0)
+    };
+
+    kern_return_t kr;
+
+    switch (base_behavior) {
+    case EXCEPTION_DEFAULT: {
+        // DEFAULT handlers receive thread/task ports and may modify thread
+        // state directly via thread_set_state. After forwarding, we read
+        // back the state to capture any modifications and return it in our
+        // STATE_IDENTITY reply (the kernel always applies new_state on
+        // KERN_SUCCESS, so we must provide valid state).
+        if (code64)
+            kr = mach_exception_raise(prev->port, thread, task,
+                exception, code, codeCnt);
+        else
+            kr = exception_raise(prev->port, thread, task,
+                exception, code32, codeCnt);
+        if (kr == KERN_SUCCESS) {
+            mach_port_t thread_control = pthread_mach_thread_np(ptls2->system_id);
+            *new_stateCnt = old_stateCnt;
+            kern_return_t kr2 = thread_get_state(thread_control, *flavor,
+                new_state, new_stateCnt);
+            if (kr2 != KERN_SUCCESS)
+                kr = kr2;
+        }
+        break;
+    }
+
+    case EXCEPTION_STATE:
+    case EXCEPTION_STATE_IDENTITY: {
+        // If the previous handler expects a different state flavor, we need
+        // to fetch old_state separately. new_state / *new_stateCnt / *flavor
+        // are passed through directly — the kernel applies new_state in
+        // whatever flavor we return.
+        int flavor_mismatch = (prev->flavor != *flavor);
+        thread_state_t fwd_old = old_state;
+        mach_msg_type_number_t fwd_old_count = old_stateCnt;
+        if (flavor_mismatch) {
+            fwd_old = (thread_state_t)malloc(sizeof(natural_t) * THREAD_STATE_MAX);
+            if (!fwd_old)
+                return KERN_FAILURE;
+            mach_port_t thread_control = pthread_mach_thread_np(ptls2->system_id);
+            fwd_old_count = THREAD_STATE_MAX;
+            kr = thread_get_state(thread_control, prev->flavor,
+                fwd_old, &fwd_old_count);
+            if (kr != KERN_SUCCESS) {
+                free(fwd_old);
+                return kr;
+            }
+            *flavor = prev->flavor;
+        }
+
+        // Forward the exception. The handler writes directly into
+        // new_state / *new_stateCnt / *flavor, and MIG already
+        // guarantees sizeof(new_state) == THREAD_STATE_MAX * sizeof(natural_t)
+        *new_stateCnt = fwd_old_count;
+        if (base_behavior == EXCEPTION_STATE) {
+            if (code64)
+                kr = mach_exception_raise_state(prev->port, exception,
+                    code, codeCnt, flavor,
+                    fwd_old, fwd_old_count, new_state, new_stateCnt);
+            else
+                kr = exception_raise_state(prev->port, exception,
+                    code32, codeCnt, flavor,
+                    fwd_old, fwd_old_count, new_state, new_stateCnt);
+        }
+        else { // EXCEPTION_STATE_IDENTITY
+            if (code64)
+                kr = mach_exception_raise_state_identity(prev->port,
+                    thread, task, exception, code, codeCnt, flavor,
+                    fwd_old, fwd_old_count, new_state, new_stateCnt);
+            else
+                kr = exception_raise_state_identity(prev->port,
+                    thread, task, exception, code32, codeCnt, flavor,
+                    fwd_old, fwd_old_count, new_state, new_stateCnt);
+        }
+
+        // On failure, restore the caller's state so fallback logic sees
+        // clean buffers. Our flavor is always MACH_THREAD_STATE.
+        if (kr != KERN_SUCCESS) {
+            memcpy(new_state, old_state, old_stateCnt * sizeof(natural_t));
+            *new_stateCnt = old_stateCnt;
+            *flavor = MACH_THREAD_STATE;
+        }
+        if (flavor_mismatch)
+            free(fwd_old);
+        break;
+    }
+
+    default:
+        // Includes EXCEPTION_IDENTITY_PROTECTED and similar behaviors
+        // that cannot be forwarded from userspace.
+        kr = KERN_FAILURE;
+        break;
+    }
+
+    return kr;
+}
+
+// Trampoline that runs on the faulting thread after being hijacked by the
+// Mach exception handler for a safepoint hit. This uses the same codepath
+// as the Unix signal handler (jl_set_gc_and_wait), so the faulting thread
+// participates in GC synchronization directly.
+//
+// ptls is passed as an argument (via x0/rdi) since __thread TLS may not
+// be valid (e.g. during thread teardown).
+static void mach_safepoint_trampoline(jl_ptls_t ptls)
+{
+    jl_task_t *ct = jl_atomic_load_relaxed(&ptls->current_task);
+    if (ct == NULL)
+        return; // thread is dead, just resume
+    jl_set_gc_and_wait(ct);
+    if (jl_atomic_load_relaxed(&ct->tid) != 0)
+        return;
+    if (ptls->defer_signal) {
+        jl_safepoint_defer_sigint();
+    }
+    else if (jl_safepoint_consume_sigint()) {
+        jl_clear_force_sigint();
+        jl_throw(jl_interrupt_exception);
+    }
+}
+
+// Assembly wrapper that saves and restores FP/SIMD registers around a
+// function call. This runs on the hijacked thread itself, so it can
+// save/restore FP state with direct register access — no syscall needed.
+//
+// On entry: arg0 in x0/rdi, fptr in x1/rsi (set by jl_call_in_state)
+// Calls fptr(arg0) with FP/SIMD state preserved across the call.
+#if defined(_CPU_AARCH64_)
+// Saves all 32 NEON q-registers (512 bytes) + fpsr + fpcr.
+__attribute__((naked, used)) static void jl_call_protect_fp_state(void)
+{
+    __asm__(
+        // Save frame pointer and link register
+        "  stp x29, x30, [sp, #-16]!\n"
+        "  mov x29, sp\n"
+        // Allocate 528 bytes for NEON state (32*16 + fpsr/fpcr + padding)
+        "  sub sp, sp, #528\n"
+        // Save fpsr and fpcr (x1 = fptr, so use x2/x3 as scratch)
+        "  mrs x2, fpsr\n"
+        "  mrs x3, fpcr\n"
+        "  str w2, [sp, #512]\n"
+        "  str w3, [sp, #516]\n"
+        // Save q0-q31 (4 registers per instruction)
+        "  mov x2, sp\n"
+        "  st1 {v0.2d,  v1.2d,  v2.2d,  v3.2d},  [x2], #64\n"
+        "  st1 {v4.2d,  v5.2d,  v6.2d,  v7.2d},  [x2], #64\n"
+        "  st1 {v8.2d,  v9.2d,  v10.2d, v11.2d}, [x2], #64\n"
+        "  st1 {v12.2d, v13.2d, v14.2d, v15.2d}, [x2], #64\n"
+        "  st1 {v16.2d, v17.2d, v18.2d, v19.2d}, [x2], #64\n"
+        "  st1 {v20.2d, v21.2d, v22.2d, v23.2d}, [x2], #64\n"
+        "  st1 {v24.2d, v25.2d, v26.2d, v27.2d}, [x2], #64\n"
+        "  st1 {v28.2d, v29.2d, v30.2d, v31.2d}, [x2], #64\n"
+        // Call fptr(arg0): x0 = arg0 (untouched), x1 = fptr
+        "  blr x1\n"
+        // Restore fpsr and fpcr
+        "  ldr w0, [sp, #512]\n"
+        "  ldr w1, [sp, #516]\n"
+        "  msr fpsr, x0\n"
+        "  msr fpcr, x1\n"
+        // Restore q0-q31 (4 registers per instruction)
+        "  mov x0, sp\n"
+        "  ld1 {v0.2d,  v1.2d,  v2.2d,  v3.2d},  [x0], #64\n"
+        "  ld1 {v4.2d,  v5.2d,  v6.2d,  v7.2d},  [x0], #64\n"
+        "  ld1 {v8.2d,  v9.2d,  v10.2d, v11.2d}, [x0], #64\n"
+        "  ld1 {v12.2d, v13.2d, v14.2d, v15.2d}, [x0], #64\n"
+        "  ld1 {v16.2d, v17.2d, v18.2d, v19.2d}, [x0], #64\n"
+        "  ld1 {v20.2d, v21.2d, v22.2d, v23.2d}, [x0], #64\n"
+        "  ld1 {v24.2d, v25.2d, v26.2d, v27.2d}, [x0], #64\n"
+        "  ld1 {v28.2d, v29.2d, v30.2d, v31.2d}, [x0], #64\n"
+        // Deallocate and return to jl_mach_restore_state
+        "  add sp, sp, #528\n"
+        "  ldp x29, x30, [sp], #16\n"
+        "  ret\n"
+    );
+}
+#elif defined(_CPU_X86_64_)
+// Saves all FP/SIMD state: uses xsave64/xrstor64 if available (preserves
+// AVX/AVX-512), otherwise falls back to fxsave64/fxrstor64 (SSE only).
+__attribute__((naked, used)) static void jl_call_protect_fp_state(void)
+{
+    __asm__(
+        // On entry: rdi = arg0, rsi = fptr.
+        // rsp is 8 mod 16 (return addr pushed by jl_call_in_state).
+        // Use rbp as frame pointer so we can do dynamic stack allocation.
+        "  pushq %rbp\n"             // rsp now 0 mod 16
+        "  movq %rsp, %rbp\n"
+        // Check if xsave is available (jl_xsave_size > 0)
+        "  movl _jl_xsave_size(%rip), %eax\n"
+        "  testl %eax, %eax\n"
+        "  jz 1f\n"
+        // --- xsave path ---
+        // Allocate xsave buffer on the stack, 64-byte aligned
+        "  subq %rax, %rsp\n"
+        "  andq $-64, %rsp\n"        // xsave requires 64-byte alignment
+        // Zero the XSAVE header's XCOMP_BV (bytes 520-527) and reserved
+        // fields (bytes 528-575) before xsave64. xsave does NOT write these
+        // bytes, but xrstor requires them to be zero in standard format —
+        // otherwise it raises #GP.
+        "  movq $0, 520(%rsp)\n"
+        "  movq $0, 528(%rsp)\n"
+        "  movq $0, 536(%rsp)\n"
+        "  movq $0, 544(%rsp)\n"
+        "  movq $0, 552(%rsp)\n"
+        "  movq $0, 560(%rsp)\n"
+        "  movq $0, 568(%rsp)\n"
+        "  movl $-1, %eax\n"         // save all state components
+        "  movl $-1, %edx\n"
+        "  xsave64 (%rsp)\n"
+        "  callq *%rsi\n"            // fptr(arg0): rdi untouched, rsi = fptr
+        "  movl $-1, %eax\n"
+        "  movl $-1, %edx\n"
+        "  xrstor64 (%rsp)\n"
+        "  jmp 2f\n"
+        // --- fxsave fallback path ---
+        "1:\n"
+        "  subq $512, %rsp\n"        // 512 bytes for fxsave, rsp now 0 mod 16
+        "  andq $-16, %rsp\n"        // fxsave requires 16-byte alignment
+        "  fxsave64 (%rsp)\n"
+        "  callq *%rsi\n"
+        "  fxrstor64 (%rsp)\n"
+        // --- common epilogue ---
+        "2:\n"
+        "  movq %rbp, %rsp\n"
+        "  popq %rbp\n"
+        "  retq\n"
+    );
+}
+#endif
+
+// Assembly stub that restores GP registers from a host_thread_state_t
+// saved on the stack, then jumps back to the original PC. This is the
+// return address used when hijacking a thread to a C trampoline.
+//
+// On entry, sp points to a host_thread_state_t containing the full
+// GP register state to restore.
+// On AArch64, x16 (IP0) is not restored — it ends up holding saved_pc.
+// LLVM reserves IP0 on Darwin, so it is never live at a safepoint poll.
+#if defined(_CPU_AARCH64_)
+// arm_thread_state64_t layout (272 bytes):
+//   __x[29] at offset 0   (29 * 8 = 232 bytes, x0-x28)
+//   __fp    at offset 232  (x29)
+//   __lr    at offset 240  (x30)
+//   __sp    at offset 248  (x31)
+//   __pc    at offset 256
+//   __cpsr  at offset 264
+__attribute__((naked, used)) void jl_mach_restore_state(void)
+{
+    __asm__(
+        "  .cfi_signal_frame\n"
+        "  .cfi_def_cfa sp, 0\n"
+        "  .cfi_offset lr, 256\n"   // saved __pc
+        "  .cfi_offset sp, 248\n"   // saved __sp
+        "  .cfi_offset x29, 232\n"  // saved __fp
+        // sp points to the saved host_thread_state_t
+        // Use x16 as the base pointer (scratch register, reserved by LLVM)
+        "  mov x16, sp\n"
+        // Restore cpsr (condition flags)
+        "  ldr w17, [x16, #264]\n"
+        "  msr nzcv, x17\n"
+        // Restore x0-x15 (caller-saved)
+        "  ldp x0,  x1,  [x16, #0]\n"
+        "  ldp x2,  x3,  [x16, #16]\n"
+        "  ldp x4,  x5,  [x16, #32]\n"
+        "  ldp x6,  x7,  [x16, #48]\n"
+        "  ldp x8,  x9,  [x16, #64]\n"
+        "  ldp x10, x11, [x16, #80]\n"
+        "  ldp x12, x13, [x16, #96]\n"
+        "  ldp x14, x15, [x16, #112]\n"
+        // Skip x18: platform register (reserved on macOS)
+        // Skip x19-x28: callee-saved, preserved by the ABI-compliant
+        // wrapper and trampoline.
+        // Restore lr (x30) — was overwritten by jl_call_in_state
+        "  ldr x30, [x16, #240]\n"
+        // Skip x29 (fp) — callee-saved, already preserved
+        // Restore sp, x17, and jump to saved pc.
+        "  ldr x17, [x16, #248]\n"      // x17 = saved sp
+        "  mov sp, x17\n"               // restore sp
+        "  ldr x17, [x16, #136]\n"      // restore x17 (17*8)
+        "  ldr x16, [x16, #256]\n"      // x16 = saved pc (base lost)
+        "  br x16\n"                    // jump to saved pc
+    );
+}
+#elif defined(_CPU_X86_64_)
+// x86_thread_state64_t layout (168 bytes):
+//   __rax at offset 0, __rbx at 8, __rcx at 16, __rdx at 24
+//   __rdi at 32, __rsi at 40, __rbp at 48, __rsp at 56
+//   __r8 at 64, __r9 at 72, __r10 at 80, __r11 at 88
+//   __r12 at 96, __r13 at 104, __r14 at 112, __r15 at 120
+//   __rip at 128, __rflags at 136
+__attribute__((naked, used)) void jl_mach_restore_state(void)
+{
+    __asm__(
+        "  .cfi_signal_frame\n"
+        "  .cfi_def_cfa %rsp, 0\n"
+        "  .cfi_offset %rip, 128\n" // saved __rip
+        "  .cfi_offset %rsp, 56\n"  // saved __rsp
+        // rsp points to the saved host_thread_state_t
+        "  movq %rsp, %r11\n"         // use r11 as base pointer
+        // Restore rflags
+        "  pushq 136(%r11)\n"
+        "  popfq\n"
+        // Restore caller-saved GP registers
+        "  movq 0(%r11), %rax\n"
+        // skip rbx (8) — callee-saved
+        "  movq 16(%r11), %rcx\n"
+        "  movq 24(%r11), %rdx\n"
+        "  movq 32(%r11), %rdi\n"
+        "  movq 40(%r11), %rsi\n"
+        // skip rbp (48), rsp (56) — callee-saved / restored separately
+        "  movq 64(%r11), %r8\n"
+        "  movq 72(%r11), %r9\n"
+        "  movq 80(%r11), %r10\n"
+        // skip r12 (96), r13 (104), r14 (112), r15 (120) — callee-saved
+        // Restore rsp and r11, then jump to saved rip.
+        // The saved rip was stored at orig_rsp - 136 by jl_call_in_state
+        // (below the 128-byte red zone) to avoid corrupting it.
+        "  movq 56(%r11), %rsp\n"    // restore original rsp
+        "  movq 88(%r11), %r11\n"    // restore r11 (base lost)
+        "  jmpq *-136(%rsp)\n"       // jump to saved rip below red zone
+    );
+}
+#endif
+
+// Set up state to call fptr(arg0) with full register preservation.
+// GP state is saved on the target thread's stack (restored by jl_mach_restore_state).
+// FP/SIMD state is saved by jl_call_protect_fp_state which runs on the target thread.
+static void jl_call_in_state(host_thread_state_t *state, void (*fptr)(void), uintptr_t arg0)
+{
+#ifdef _CPU_X86_64_
+    uintptr_t sp = state->__rsp;
+    sp = (sp - 256) & ~(uintptr_t)15; // redzone and re-alignment
+    sp -= sizeof(host_thread_state_t);
+    sp &= ~(uintptr_t)15;
+    memcpy((void*)sp, state, sizeof(host_thread_state_t));
+    // Store saved rip below the original red zone (128 bytes) so that
+    // jl_mach_restore_state can jump back without writing into the red zone.
+    // This slot is at orig_rsp - 136, safely within our 256-byte gap.
+    *(uintptr_t*)(state->__rsp - 136) = state->__rip;
+    // Push the return address for the restore stub
+    sp -= sizeof(void*);
+    *(uintptr_t*)sp = (uintptr_t)&jl_mach_restore_state;
+    state->__rsp = sp;
+    state->__rip = (uint64_t)fptr;
+    state->__rdi = arg0;
+#elif defined(_CPU_AARCH64_)
+    uintptr_t sp = state->__sp;
+    sp = (sp - 256) & ~(uintptr_t)15;
+    sp -= sizeof(host_thread_state_t);
+    sp &= ~(uintptr_t)15;
+    memcpy((void*)sp, state, sizeof(host_thread_state_t));
+    state->__sp = sp;
+    state->__pc = (uint64_t)fptr;
+    state->__lr = (uintptr_t)&jl_mach_restore_state;
+    state->__x[0] = arg0;
+#else
+#error "julia: call-in-state not supported on this platform"
+#endif
 }
 
 static void segv_handler(int sig, siginfo_t *info, void *context)
@@ -390,30 +715,36 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
  * code for mach_msg_server ever destroy those references (only the message
  * itself).
  */
-kern_return_t catch_mach_exception_raise(
+kern_return_t catch_mach_exception_raise_state_identity(
     mach_port_t exception_port,
     mach_port_t thread,
     mach_port_t task,
     exception_type_t exception,
     mach_exception_data_t code,
-    mach_msg_type_number_t codeCnt)
+    mach_msg_type_number_t codeCnt,
+    int *flavor,
+    thread_state_t old_state,
+    mach_msg_type_number_t old_stateCnt,
+    thread_state_t new_state,
+    mach_msg_type_number_t *new_stateCnt)
 {
-    unsigned int exc_count = HOST_EXCEPTION_STATE_COUNT;
-    host_exception_state_t exc_state;
+    host_thread_state_t *state = (host_thread_state_t*)new_state;
+    assert(old_stateCnt >= MACH_THREAD_STATE_COUNT);
+    // Copy old state to new state — we'll modify new_state in place.
+    memcpy(new_state, old_state, old_stateCnt * sizeof(natural_t));
+    *new_stateCnt = old_stateCnt;
 #ifdef LLVMLIBUNWIND
     if (thread == mach_profiler_thread) {
-        return profiler_segv_handler(exception_port, thread, task, exception, code, codeCnt);
+        return profiler_segv_handler(exception_port, thread, task, exception, code, codeCnt,
+                                     state, new_stateCnt);
     }
 #endif
-    int16_t tid;
     jl_ptls_t ptls2 = NULL;
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
-    for (tid = 0; tid < nthreads; tid++) {
+    for (int16_t tid = 0; tid < nthreads; tid++) {
         jl_ptls_t _ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-        if (jl_atomic_load_relaxed(&_ptls2->current_task) == NULL) {
-            // this thread is dead
+        if (_ptls2 == NULL)
             continue;
-        }
         if (pthread_mach_thread_np(_ptls2->system_id) == thread) {
             ptls2 = _ptls2;
             break;
@@ -426,35 +757,33 @@ kern_return_t catch_mach_exception_raise(
         jl_safe_printf("ERROR: Exception handler triggered on unmanaged thread.\n");
         return KERN_INVALID_ARGUMENT;
     }
+    unsigned int exc_count = HOST_EXCEPTION_STATE_COUNT;
+    host_exception_state_t exc_state;
+    kern_return_t ret = thread_get_state(thread, HOST_EXCEPTION_STATE, (thread_state_t)&exc_state, &exc_count);
+    HANDLE_MACH_ERROR("thread_get_state", ret);
+    uint64_t fault_kind = code[0];
+    uint64_t fault_addr = code[1];
+    if (exception == EXC_BAD_ACCESS && codeCnt >= 2) { // SIGSEGV or SIGBUS
+        if (fault_kind == KERN_PROTECTION_FAILURE && jl_addr_is_safepoint(fault_addr)  && !is_write_fault(exc_state)) {
+            // Hijack the faulting thread to handle the safepoint on its own
+            // stack, using the same jl_set_gc_and_wait() codepath as Unix signals.
+            jl_call_in_state(state, (void (*)(void))&mach_safepoint_trampoline, (uintptr_t)ptls2);
+            return KERN_SUCCESS;
+        }
+    }
     if (ptls2->safe_restore) {
-        jl_throw_in_thread(ptls2, thread, NULL);
+        jl_throw_in_state(ptls2, state, NULL);
         return KERN_SUCCESS;
     }
+    if (try_forward_mach_exception(ptls2, thread, task, exception, code, codeCnt, flavor, old_state, old_stateCnt, new_state, new_stateCnt) == KERN_SUCCESS)
+        return KERN_SUCCESS;
     if (jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_WAITING)
         return KERN_FAILURE;
     if (exception == EXC_ARITHMETIC) {
-        jl_throw_in_thread(ptls2, thread, jl_diverror_exception);
+        jl_throw_in_state(ptls2, state, jl_diverror_exception);
         return KERN_SUCCESS;
     }
     assert(exception == EXC_BAD_ACCESS); // SIGSEGV or SIGBUS
-    if (codeCnt < 2 || code[0] != KERN_PROTECTION_FAILURE) // SEGV_ACCERR or BUS_ADRERR or BUS_ADRALN
-        return KERN_FAILURE;
-    uint64_t fault_addr = code[1];
-    kern_return_t ret = thread_get_state(thread, HOST_EXCEPTION_STATE, (thread_state_t)&exc_state, &exc_count);
-    HANDLE_MACH_ERROR("thread_get_state", ret);
-    if (jl_addr_is_safepoint(fault_addr) && !is_write_fault(exc_state)) {
-        jl_mach_gc_wait(ptls2, thread, tid);
-        if (ptls2->tid != 0)
-            return KERN_SUCCESS;
-        if (ptls2->defer_signal) {
-            jl_safepoint_defer_sigint();
-        }
-        else if (jl_safepoint_consume_sigint()) {
-            jl_clear_force_sigint();
-            jl_throw_in_thread(ptls2, thread, jl_interrupt_exception);
-        }
-        return KERN_SUCCESS;
-    }
     if (jl_atomic_load_relaxed(&ptls2->current_task)->eh == NULL)
         return KERN_FAILURE;
     jl_value_t *excpt;
@@ -462,11 +791,13 @@ kern_return_t catch_mach_exception_raise(
         stack_overflow_warning();
         excpt = jl_stackovf_exception;
     }
-    else if (is_write_fault(exc_state)) // false for alignment errors
-        excpt = jl_readonlymemory_exception;
-    else
-        return KERN_FAILURE;
-    jl_throw_in_thread(ptls2, thread, excpt);
+    else {
+        if (is_write_fault(exc_state)) // false for alignment errors
+            excpt = jl_readonlymemory_exception;
+        else
+            return KERN_FAILURE;
+    }
+    jl_throw_in_state(ptls2, state, excpt);
     return KERN_SUCCESS;
 }
 
@@ -482,35 +813,66 @@ kern_return_t catch_mach_exception_raise_state(
     thread_state_t new_state,
     mach_msg_type_number_t *new_stateCnt)
 {
-    return KERN_INVALID_ARGUMENT; // we only use EXCEPTION_DEFAULT
+    return KERN_INVALID_ARGUMENT; // we only use EXCEPTION_STATE_IDENTITY
 }
 
 //mach_exc_server expects us to define this symbol locally
-kern_return_t catch_mach_exception_raise_state_identity(
+kern_return_t catch_mach_exception_raise(
     mach_port_t exception_port,
     mach_port_t thread,
     mach_port_t task,
     exception_type_t exception,
     mach_exception_data_t code,
-    mach_msg_type_number_t codeCnt,
-    int *flavor,
-    thread_state_t old_state,
-    mach_msg_type_number_t old_stateCnt,
-    thread_state_t new_state,
-    mach_msg_type_number_t *new_stateCnt)
+    mach_msg_type_number_t codeCnt)
 {
-    return KERN_INVALID_ARGUMENT; // we only use EXCEPTION_DEFAULT
+    return KERN_INVALID_ARGUMENT; // we only use EXCEPTION_STATE_IDENTITY
 }
 
-static void attach_exception_port(thread_port_t thread, int segv_only)
+// attach new exception port and save any disconnected handlers in `ptls->mach_exc_prev`
+static void swap_exception_ports(thread_port_t thread, exception_mask_t mask, jl_ptls_t ptls)
 {
-    kern_return_t ret;
-    // https://www.opensource.apple.com/source/xnu/xnu-2782.1.97/osfmk/man/thread_set_exception_ports.html
+    exception_mask_t old_masks[EXC_TYPES_COUNT];
+    mach_port_t old_ports[EXC_TYPES_COUNT];
+    exception_behavior_t old_behaviors[EXC_TYPES_COUNT];
+    thread_state_flavor_t old_flavors[EXC_TYPES_COUNT];
+    mach_msg_type_number_t old_count = EXC_TYPES_COUNT;
+
+    kern_return_t ret = thread_swap_exception_ports(thread, mask, segv_port,
+        EXCEPTION_STATE_IDENTITY | MACH_EXCEPTION_CODES, MACH_THREAD_STATE,
+        old_masks, &old_count, old_ports, old_behaviors, old_flavors);
+    HANDLE_MACH_ERROR("thread_swap_exception_ports", ret);
+
+    if (!ptls->mach_exc_prev)
+        ptls->mach_exc_prev = calloc(PREV_MACH_EXC_MAX, sizeof(prev_mach_exc_handler_t));
+    prev_mach_exc_handler_t *handlers = (prev_mach_exc_handler_t *)ptls->mach_exc_prev;
+
+    // Distribute the swap results into per-exception-type slots.
+    for (mach_msg_type_number_t i = 0; i < old_count; i++) {
+        assert(old_ports[i] != segv_port); // registered twice on same thread?
+        for (int exc = 1; exc < PREV_MACH_EXC_MAX; exc++) {
+            if (old_masks[i] & (1 << exc)) {
+                handlers[exc].port = old_ports[i];
+                handlers[exc].behavior = old_behaviors[i];
+                handlers[exc].flavor = old_flavors[i];
+            }
+        }
+    }
+}
+
+static void attach_exception_port(thread_port_t thread, int segv_only, jl_ptls_t ptls)
+{
     exception_mask_t mask = EXC_MASK_BAD_ACCESS;
     if (!segv_only)
         mask |= EXC_MASK_ARITHMETIC;
-    ret = thread_set_exception_ports(thread, mask, segv_port, EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES, MACH_THREAD_STATE);
-    HANDLE_MACH_ERROR("thread_set_exception_ports", ret);
+
+    if (ptls) {
+        swap_exception_ports(thread, mask, ptls);
+    }
+    else {
+        kern_return_t ret = thread_set_exception_ports(thread, mask, segv_port,
+            EXCEPTION_STATE_IDENTITY | MACH_EXCEPTION_CODES, MACH_THREAD_STATE);
+        HANDLE_MACH_ERROR("thread_set_exception_ports", ret);
+    }
 }
 
 static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx) JL_NOTSAFEPOINT
@@ -611,7 +973,7 @@ static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
     ptls2->bt_size = bt_size; // <= JL_MAX_BT_SIZE
     memcpy(ptls2->bt_data, bt_data, ptls2->bt_size * sizeof(bt_data[0]));
 
-    jl_call_in_state1(&state, (void (*)(void))&jl_exit_thread0_cb, signo);
+    jl_noreturn_call_in_state(&state, (void (*)(void))&jl_exit_thread0_cb, signo, 0);
     unsigned int count = MACH_THREAD_STATE_COUNT;
     ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
     HANDLE_MACH_ERROR("thread_set_state", ret);
@@ -636,10 +998,11 @@ static kern_return_t profiler_segv_handler(
     mach_port_t task,
     exception_type_t exception,
     mach_exception_data_t code,
-    mach_msg_type_number_t codeCnt)
+    mach_msg_type_number_t codeCnt,
+    host_thread_state_t *state,
+    mach_msg_type_number_t *new_stateCnt)
 {
     assert(thread == mach_profiler_thread);
-    host_thread_state_t state;
 
     // Not currently unwinding. Raise regular segfault
     if (forceDwarf == -2)
@@ -650,36 +1013,30 @@ static kern_return_t profiler_segv_handler(
     else
         forceDwarf = -1;
 
-    unsigned int count = MACH_THREAD_STATE_COUNT;
-
-    thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
-
 #ifdef _CPU_X86_64_
     // don't change cs fs gs rflags
-    uint64_t cs = state.__cs;
-    uint64_t fs = state.__fs;
-    uint64_t gs = state.__gs;
-    uint64_t rflags = state.__rflags;
+    uint64_t cs = state->__cs;
+    uint64_t fs = state->__fs;
+    uint64_t gs = state->__gs;
+    uint64_t rflags = state->__rflags;
 #elif defined(_CPU_AARCH64_)
-    uint64_t cpsr = state.__cpsr;
+    uint64_t cpsr = state->__cpsr;
 #else
 #error Unknown CPU
 #endif
 
-    memcpy(&state, &profiler_uc, sizeof(state));
+    memcpy(state, &profiler_uc, sizeof(*state));
 
 #ifdef _CPU_X86_64_
-    state.__cs = cs;
-    state.__fs = fs;
-    state.__gs = gs;
-    state.__rflags = rflags;
+    state->__cs = cs;
+    state->__fs = fs;
+    state->__gs = gs;
+    state->__rflags = rflags;
 #else
-    state.__cpsr = cpsr;
+    state->__cpsr = cpsr;
 #endif
 
-    kern_return_t ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
-    HANDLE_MACH_ERROR("thread_set_state", ret);
-
+    *new_stateCnt = MACH_THREAD_STATE_COUNT;
     return KERN_SUCCESS;
 }
 #endif
@@ -810,7 +1167,7 @@ void *mach_profile_listener(void *arg)
 {
     (void)arg;
     const int max_size = 512;
-    attach_exception_port(mach_thread_self(), 1);
+    attach_exception_port(mach_thread_self(), 1, NULL);
 #ifdef LLVMLIBUNWIND
     mach_profiler_thread = mach_thread_self();
 #endif
