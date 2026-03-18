@@ -368,6 +368,10 @@ function metadata(__source__, __module__, expr, ismodule)
         last_docstr = nothing
         for each in (expr.args[3]::Expr).args
             eachex = unescape(each)
+            # Unwrap `const` or `atomic` field modifiers in mutable structs
+            if isexpr(eachex, :const, 1) || isexpr(eachex, :atomic, 1)
+                eachex = eachex.args[1]
+            end
             if isa(eachex, Symbol) || isexpr(eachex, :(::))
                 # a field declaration
                 if last_docstr !== nothing
