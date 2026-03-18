@@ -127,9 +127,15 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
             """
         )
     end
+
+    jit_triple = let _jit = ccall(:JLJITGetJuliaOJIT, Ptr{Cvoid}, ())
+        unsafe_string(ccall(:JLJITGetTripleString, Cstring, (Ptr{Cvoid},), _jit))
+    end
+    jit_cpu = first(Base.current_image_targets()).name
+
     println(io, "Platform Info:")
     println(io, "  OS: ", Sys.iswindows() ? "Windows" : Sys.isapple() ?
-        "macOS" : Sys.KERNEL, " (", Sys.MACHINE, ")")
+        "macOS" : Sys.KERNEL, " (", jit_triple, ")")
 
     if verbose
         lsb = ""
@@ -172,7 +178,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
         println(io)
         println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
     end
-    println(io, "  LLVM: libLLVM-", Base.libllvm_version, " (", Sys.JIT, ")")
+    println(io, "  LLVM: libLLVM-", Base.libllvm_version, " (", Sys.JIT, ", ", jit_cpu, ")")
     println(io, """Threads: $(Threads.nthreads(:default)) default, $(Threads.nthreads(:interactive)) interactive, \
       $(Threads.ngcthreads()) GC (on $(Sys.CPU_THREADS) virtual cores)""")
 
