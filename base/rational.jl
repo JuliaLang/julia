@@ -275,10 +275,11 @@ function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) wh
             q, qq = nq, q
         catch e
             isa(e,InexactError) || isa(e,OverflowError) || rethrow()
-            (isinf(p // q) || iszero(p // q) || a ≤ 2 || -p == p) && return p // q
+            (a ≤ 2 || ((-p == p) && (p < 0))) && return p // q
             # find best semiconvergent that fits in T
-            z, zz = abs(p) ≥ q ? (abs(p), abs(pp)) : (q, qq)
-            ia = fld(typemax(T) - zz, z)
+            ia_p = iszero(p) ? typemax(T) : fld(typemax(T) - abs(pp), abs(p))
+            ia_q = iszero(q) ? typemax(T) : fld(typemax(T) - qq, q)
+            ia = min(ia_p, ia_q)
             return ia > a/2 ? (ia*p + pp) // (ia*q + qq) : p // q
         end
 
@@ -304,9 +305,10 @@ function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) wh
         return np // nq
     catch e
         isa(e,InexactError) || isa(e,OverflowError) || rethrow()
-        (isinf(p // q) || iszero(p // q) || a ≤ 2 || -p == p) && return p // q
-        z, zz = abs(p) ≥ q ? (abs(p), abs(pp)) : (q, qq)
-        ia = fld(typemax(T) - zz, z)
+        (a ≤ 2 || ((-p == p) && (p < 0))) && return p // q
+        ia_p = iszero(p) ? typemax(T) : fld(typemax(T) - abs(pp), abs(p))
+        ia_q = iszero(q) ? typemax(T) : fld(typemax(T) - qq, q)
+        ia = min(ia_p, ia_q)
         return ia > a/2 ? (ia*p + pp) // (ia*q + qq) : p // q
     end
 end
