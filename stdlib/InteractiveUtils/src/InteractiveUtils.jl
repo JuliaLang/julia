@@ -113,6 +113,9 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
         println(io, "  Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")
     end
     println(io, "  GC: ", unsafe_string(ccall(:jl_gc_active_impl, Ptr{UInt8}, ())))
+    if verbose
+        println(io, "  Sysimage: ", Sys.sysimage_target(), " (", Sys.MACHINE, ")")
+    end
     official_release = Base.TAGGED_RELEASE_BANNER == "Official https://julialang.org release"
     if Base.GIT_VERSION_INFO.tagged_commit && !official_release
         println(io,
