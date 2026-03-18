@@ -11,7 +11,7 @@
 #include <mach/mig_errors.h>
 #include <AvailabilityMacros.h>
 #include <stdint.h>
-#include "mach_excServer.c"
+#include "mig/mach_excServer.c"
 
 #ifdef MAC_OS_X_VERSION_10_9
 #include <sys/_types/_ucontext64.h>

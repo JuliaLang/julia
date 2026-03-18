@@ -4420,6 +4420,16 @@ end == Int
     callsig_backprop_invalidation_outer(a)
 end ≠ Int
 
+# MustAlias signature constraint propagation:
+# when a call like `f(x.value)` constrains `x.value` via the method signature,
+# the refinement should propagate back to the slot `x` as a PartialStruct
+check_int_positive(x::Int) = x > 0 || error("x must be positive")
+# basic case: field type should be narrowed after the call
+@test Base.infer_return_type((Some{Any},)) do x
+    check_int_positive(x.value)
+    return sin(x.value)
+end == Float64
+
 # https://github.com/JuliaLang/julia/issues/37866
 function issue37866(v::Vector{Union{Nothing,Float64}})
     for x in v

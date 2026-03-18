@@ -561,7 +561,7 @@ INCLUDED_C_FILES := \
 	crc32c.c:crc32c-tables.c \
 	signal-handling.c:signals-win.c \
 	signal-handling.c:signals-unix.c \
-	signal-handling.c:mach_excServer.c \
+	signal-handling.c:mig/mach_excServer.c \
 	signal-handling.c:signals-mach.c \
 	staticdata.c:staticdata_utils.c \
 	staticdata.c:precompile_utils.c
