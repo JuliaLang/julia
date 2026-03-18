@@ -4709,7 +4709,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             [K"continue" [K"Placeholder"]] ->
                 @ast ctx ex [K"break" "loop-cont"::K"symboliclabel"]
             [K"continue" [K"Identifier"]] ->
-                @ast ctx ex [K"break" string(label.name_val, "#cont")::K"symboliclabel"]
+                @ast ctx ex [K"break" string(ex[1].name_val, "#cont")::K"symboliclabel"]
         end
     elseif k == K"comparison"
         expand_forms_2(ctx, expand_compare_chain(ctx, ex))
