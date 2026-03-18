@@ -469,7 +469,7 @@ vst1_try(vcx, st) = @stm st begin
     _ -> @fail(st, "malformed `try` expression")
 end
 
-vst1_try_catchvar(vcx, st) = @stm st begin
+vst1_try_catchvar(_vcx, st) = @stm st begin
     [K"Identifier"] -> pass()
     ([K"Value"], when=st.value===false) -> pass()
 end
@@ -497,7 +497,7 @@ end
 
 # syntax TODO: all-underscore variables may be read from with dot syntax
 # syntax TODO: disallow string
-vst1_simple_dot_rhs(vcx, st; lhs=false) = @stm st begin
+vst1_simple_dot_rhs(vcx, st) = @stm st begin
     [K"inert" x] -> vst1_simple_dot_rhs(vcx, x)
     [K"Identifier"] -> pass()
     [K"String"] -> pass()
@@ -630,7 +630,7 @@ vst1_function_calldecl(vcx, st) = @stm st begin
     _ -> vst1_simple_calldecl(vcx, st)
 end
 
-vst1_simple_calldecl(vcx, st; in_macro=false) = @stm st begin
+vst1_simple_calldecl(vcx, st) = @stm st begin
     [K"call" f [K"parameters" _...] ps...] ->
         vst1_calldecl_name(vcx, f) &
         _calldecl_positionals(vcx, ps, K"kw") &
@@ -1032,7 +1032,6 @@ function valid_st0(st::SyntaxTree)
         isempty(err.sts) || !(kind(err.sts[1]) === K"macrocall")
     end
     vr2 = ValidationResult(isempty(vr2_errors), vr2_errors)
-    showerrors(vr2)
     return vr2.ok
 end
 

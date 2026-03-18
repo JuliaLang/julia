@@ -388,7 +388,7 @@ function _destructure(ctx, assignment_srcref, stmts, lhs, rhs, is_const)
 end
 
 # Expands cases of property destructuring
-function expand_property_destruct(ctx, ex, is_const)
+function expand_property_destruct(ctx, ex)
     @jl_assert numchildren(ex) == 2 ex
     lhs = ex[1]
     @jl_assert kind(lhs) == K"tuple" ex
@@ -576,7 +576,7 @@ function remove_argument_side_effects(ctx, stmts, ex)
             emit_assign_tmp(stmts, ctx, ex)
         else
             args = SyntaxList(ctx)
-            for (i,e) in enumerate(children(ex))
+            for e in children(ex)
                 push!(args, _arg_to_temp(ctx, stmts, e))
             end
             # TODO: Copy attributes?
@@ -843,7 +843,7 @@ function expand_generator(ctx, ex)
             end
         end
         outervar_assignments = SyntaxList(ctx)
-        for (k,v) in sort(collect(pairs(outervars_by_key)), by=first)
+        for (_,v) in sort(collect(pairs(outervars_by_key)), by=first)
             push!(outervar_assignments, @ast ctx v [K"=" v v])
         end
         body = @ast ctx ex [K"let"
@@ -1353,7 +1353,7 @@ function expand_assignment(ctx, ex, is_const=false)
         ]
     elseif kl == K"tuple"
         if has_parameters(lhs)
-            expand_property_destruct(ctx, ex, is_const)
+            expand_property_destruct(ctx, ex)
         else
             expand_tuple_destruct(ctx, ex, is_const)
         end
@@ -1635,7 +1635,7 @@ function expand_named_tuple(ctx, ex, kws; field_name="named tuple field",
     for kw in kws
         k = kind(kw)
         appended_nt = nothing
-        name = nothing
+        name = value = nothing
         if kind(k) == K"Identifier"
             # x  ==>  x = x
             name = to_symbol(ctx, kw)
@@ -1674,7 +1674,7 @@ function expand_named_tuple(ctx, ex, kws; field_name="named tuple field",
         else
             throw(LoweringError(kw, "Invalid $element_name"))
         end
-        if !isnothing(name)
+        if !isnothing(name) && !isnothing(value)
             if kind(name) == K"Symbol"
                 name_str = name.name_val
                 if name_str in name_strs
@@ -2183,7 +2183,6 @@ end
 #   (x::T, (y::U, z))
 #   strip out stmts = (local x) (decl x T) (local x) (decl y U) (local z)
 function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
-    k = kind(ex)
     declname = @stm ex begin
         [K"Identifier"] -> ex
         # TODO: consider removing support for Expr(:global, GlobalRef(...)) and
@@ -2503,7 +2502,7 @@ function expand_function_generator(ctx, srcref, callex_srcref, func_name,
         ]
     ]
 
-    function stub_argname(n::SyntaxTree, i)
+    stub_argname = function (n::SyntaxTree, i)
         if kind(n) == K"Identifier"
             return n.name_val::String
         elseif kind(n) == K"BindingId"
@@ -2985,7 +2984,6 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     name = callex[1]
     bare_func_name = nothing
     name_str = nothing
-    doc_obj = nothing
     self_name = nothing
     if kind(name) == K"::"
         # Self argument is specified by user
@@ -3377,7 +3375,7 @@ end
 
 # Match `x<:T<:y` etc, returning `(name, lower_bound, upper_bound)`
 # A bound is `nothing` if not specified
-function analyze_typevar(ctx, ex)
+function analyze_typevar(_ctx, ex)
     k = kind(ex)
     if k == K"Identifier"
         (ex, nothing, nothing)
@@ -3619,7 +3617,6 @@ function default_inner_constructors(ctx, srcref, global_struct_name,
     # TODO: Consider using srcref = @HERE ?
     exact_ctor = if isempty(typevar_names)
         # Definition with exact types for all arguments
-        field_decls = SyntaxList(ctx)
         @ast ctx srcref [K"function"
             [K"call"
                 [K"::" [K"curly" "Type"::K"core" global_struct_name]]
@@ -4104,7 +4101,6 @@ function expand_typegroup_def(ctx, ex)
         typevar_names = e.typevar_names
         typevar_stmts = e.typevar_stmts
         info_var = info_vars[i]
-        struct_name = struct_names[i]
 
         inner_stmts = SyntaxList(ctx)
         for tv_name in typevar_names
@@ -4250,13 +4246,6 @@ function expand_struct_def(ctx, ex, docs)
         prev_typevars = @ast ctx type_sig [K"." prev_typevars "parameters"::K"Symbol"]
     end
 
-    # New local variable names for constructor args to avoid clashing with any
-    # type names
-    if isempty(inner_defs)
-        field_names_2 = adopt_scope(field_names, layer)
-    end
-
-    need_outer_constructor = false
     if isempty(inner_defs) && !isempty(typevar_names)
         # To generate an outer constructor each struct type parameter must be
         # able to be inferred from the list of fields passed as constructor
@@ -4274,7 +4263,6 @@ function expand_struct_def(ctx, ex, docs)
         #         a::T
         #     end
         #     X(a::T) where {T} = # construct X{typeof(a)}(a)
-        need_outer_constructor = true
         for i in 1:length(typevar_names)
             typevar_name = typevar_names[i]
             typevar_in_fields = any(contains_identifier(ft, typevar_name) for ft in field_types)
@@ -4289,7 +4277,6 @@ function expand_struct_def(ctx, ex, docs)
                     (!isnothing(lb) && contains_identifier(lb, typevar_name))
                 end
                 if !typevar_in_bounds
-                    need_outer_constructor = false
                     break
                 end
             end
@@ -4524,7 +4511,6 @@ function expand_import_or_using(ctx, ex)
     # Here we represent the paths as quoted `Expr` data structures
     path_specs = SyntaxList(ctx)
     for spec in paths
-        as_name = nothing
         if kind(spec) == K"as"
             @jl_assert numchildren(spec) == 2 spec
             @jl_assert kind(spec[2]) == K"Identifier" spec
@@ -4610,7 +4596,7 @@ function isquotedmacrocall(ex)
     end
 end
 
-function expand_doc(ctx, ex, docex, mod=ctx.mod)
+function expand_doc(ctx, ex, docex)
     if kind(ex) in (K"Identifier", K".")
         expand_forms_2(ctx, @ast ctx docex [K"call"
             bind_static_docs!::K"Value"
@@ -4881,8 +4867,6 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         end
         @ast ctx ex [K"foreigncall" expand_C_library_symbol(ctx, ex[1]) args...]
     elseif k == K"gc_preserve"
-        s = ssavar(ctx, ex)
-        r = ssavar(ctx, ex)
         @ast ctx ex [K"block"
             s := [K"gc_preserve_begin" children(ex)[2:end]...]
             r := expand_forms_2(ctx, children(ex)[1])

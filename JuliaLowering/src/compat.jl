@@ -270,7 +270,7 @@ We may drop cases from this conversion, for example, if...
 We can assume `st` has passed `valid_st1`.  Errors arising from invalid AST
 (including finding `macrocall/escape/quote` forms) should be handled there.
 """
-function est_to_dst(st::SyntaxTree; all_expanded=true)
+function est_to_dst(st::SyntaxTree)
     g = st._graph
     rec = var"#self#"
 

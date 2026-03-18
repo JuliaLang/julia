@@ -250,7 +250,6 @@ function enter_scope!(ctx, ex)
     parent_id = (is_toplevel_thunk || isempty(ctx.scope_stack)) ?
         0 : ctx.scopes[ctx.scope_stack[end]].id
     scope = ScopeInfo(ctx, parent_id, ex)
-    lambda_scope = ctx.scopes[scope.lambda_id]
     push!(ctx.scope_stack, scope.id)
 
     #---------------------------------------------------------------------------
@@ -275,7 +274,7 @@ function enter_scope!(ctx, ex)
 
     #---------------------------------------------------------------------------
     # Find assignment targets, possibly introducing implicit locals and globals
-    for (bid, node_id) in sort!(collect(scope.binding_assignments))
+    for (bid, _node_id) in sort!(collect(scope.binding_assignments))
         # Mutable nameless bindings may be introduced in desugaring.  These
         # should be capturable, and may be local to the nearest lambda or
         # global.  Desugaring should ensure these are never used undef.

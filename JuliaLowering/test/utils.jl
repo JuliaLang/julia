@@ -15,17 +15,14 @@ import FileWatching
 using Markdown
 import REPL
 
-using .JuliaSyntax: SourceAttrType, sourcetext, set_numeric_flags
+using .JuliaSyntax: SourceAttrType, new_id!, set_numeric_flags, sourcetext
 
-using .JuliaLowering:
-    SyntaxGraph, new_id!,
-    Kind, SourceRef, SyntaxTree, NodeId,
-    setattr!, is_leaf, numchildren, children,
-    @ast, flattened_provenance, showprov, LoweringError, MacroExpansionError,
-    syntax_graph, Bindings, ScopeLayer, mapchildren
+using .JuliaLowering: @ast, Bindings, Kind, LoweringError, MacroExpansionError, NodeId,
+    ScopeLayer, SourceRef, SyntaxGraph, SyntaxTree, children, flattened_provenance,
+    is_leaf, mapchildren, numchildren, setattr!, showprov, syntax_graph
 
 function _ast_test_graph()
-    graph = JuliaLowering.ensure_desugaring_attributes!(
+    JuliaLowering.ensure_desugaring_attributes!(
         JuliaLowering.ensure_macro_attributes!(SyntaxGraph()))
 end
 
@@ -375,7 +372,7 @@ function reduce_any_failing_toplevel(mod::Module, filename::AbstractString; do_e
 end
 
 function fl_macroexpand(mod::Module, x::Expr)
-    ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, m, recursive, false, legacyscope)
+    ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, mod, recursive, false, legacyscope)
 end
 
 function fl_lower(mod::Module, x::Expr)
