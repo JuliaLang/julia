@@ -158,7 +158,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     end
 
     if verbose
-        println(io, "  Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
+        println(io, "  Memory: $(Sys.total_memory()/2^30) GiB ($(Sys.free_memory()/2^20) MiB free)")
         try println(io, "  Uptime: $(Sys.uptime()) sec"); catch; end
         print(io, "  Load Avg: ")
         Base.print_matrix(io, Sys.loadavg()')
