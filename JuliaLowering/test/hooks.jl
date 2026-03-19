@@ -1,5 +1,3 @@
-const JL = JuliaLowering
-
 @testset "hooks" begin
     test_mod = Module()
 

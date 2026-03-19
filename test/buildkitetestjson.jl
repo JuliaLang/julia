@@ -149,7 +149,9 @@ function get_test_call_str(result)
     end
     prefix = get(TEST_TYPE_MAP, result.test_type, nothing)
     prefix === nothing && return error("Unknown test type $(repr(result.test_type))")
-    return prefix == "@test_throws" ? "@test_throws $(result.data) $(result.orig_expr)" : "$prefix $(result.orig_expr)"
+    return (prefix == "@test_throws" && result isa Test.Pass) ?
+        "@test_throws $(result.data) $(result.orig_expr)" :
+        "$prefix $(result.orig_expr)"
 end
 
 get_rid(rdata) = (rdata["location"], rdata["result"], haskey(rdata, "failure_expanded") ? hash(rdata["failure_expanded"]) : UInt64(0))

@@ -142,8 +142,15 @@ JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem);
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection);
 // Returns whether the thread with `tid` is a collector thread
 JL_DLLEXPORT int gc_is_collector_thread(int tid) JL_NOTSAFEPOINT;
+// Enables or disables automatic full (non-generational) collections.
+// When disabled (on == 0), automatic collections will only be incremental
+// (young generation only). Explicit full collections via jl_gc_collect(JL_GC_FULL)
+// are still honored. Returns whether automatic full collections were previously enabled.
+JL_DLLEXPORT int jl_gc_enable_auto_full_collection(int on);
+// Returns whether automatic full (non-generational) collections are enabled.
+JL_DLLEXPORT int jl_gc_auto_full_collection_is_enabled(void);
 // Returns which GC implementation is being used and possibly its version according to the list of supported GCs
-// NB: it should clearly identify the GC by including e.g. ‘stock’ or ‘mmtk’ as a substring.
+// NB: it should clearly identify the GC by including e.g. 'stock' or 'mmtk' as a substring.
 JL_DLLEXPORT const char* jl_gc_active_impl(void);
 // Sweep Julia's stack pools and mtarray buffers. Note that this function has been added to the interface as
 // each GC should implement it but it will most likely not be used by other code in the runtime.
@@ -255,6 +262,10 @@ struct _jl_value_t *jl_gc_permobj(struct _jl_tls_states_t *ptls, size_t sz, void
 // The GC may use that information to, for instance, determine that such objects should
 // be treated as marked and belonged to the old generation in nursery collections.
 void jl_gc_notify_image_load(const char* img_data, size_t len);
+// This function notifies the GC about memory addresses that are set when allocating the boot image.
+// The GC may use that information to, for instance, determine that all objects in that chunk of memory should
+// be treated as marked and belonged to the old generation in nursery collections.
+void jl_gc_notify_image_alloc(const char* img_data, size_t len);
 
 // ========================================================================= //
 // Runtime Write-Barriers
@@ -300,13 +311,11 @@ STATIC_INLINE void jl_gc_wb_knownold(const void *parent JL_UNUSED, const void *p
 // per field of the object being copied, but may be special-cased for performance reasons.
 STATIC_INLINE void jl_gc_multi_wb(const void *parent,
                                   const struct _jl_value_t *ptr) JL_NOTSAFEPOINT;
-
 // Write-barrier function that must be used after copying fields of elements of genericmemory objects
 // into another. It should be semantically equivalent to triggering multiple write barriers – one
 // per field of the object being copied, but may be special-cased for performance reasons.
 STATIC_INLINE void jl_gc_wb_genericmemory_copy_ptr(const struct _jl_value_t *owner, struct _jl_genericmemory_t *src, char* src_p,
                                           size_t n, struct _jl_datatype_t *dt) JL_NOTSAFEPOINT;
-
 // Similar to jl_gc_wb_genericmemory_copy but must be used when copying *boxed* elements of a genericmemory
 // object. Note that this barrier also performs the copying unlike jl_gc_wb_genericmemory_copy_ptr.
 // The parameters src_p, dest_p and n will be modified and will contain information about

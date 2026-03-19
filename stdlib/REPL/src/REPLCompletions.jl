@@ -527,13 +527,13 @@ struct REPLInterpreter <: CC.AbstractInterpreter
     world::UInt
     inf_params::CC.InferenceParams
     opt_params::CC.OptimizationParams
-    inf_cache::Vector{CC.InferenceResult}
+    inf_cache::CC.InferenceCache
     function REPLInterpreter(limit_aggressive_inference::Bool=false;
                              world::UInt = Base.get_world_counter(),
                              inf_params::CC.InferenceParams = CC.InferenceParams(;
                                  aggressive_constant_propagation=true),
                              opt_params::CC.OptimizationParams = CC.OptimizationParams(),
-                             inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[])
+                             inf_cache::CC.InferenceCache = CC.InferenceCache())
         return new(limit_aggressive_inference, world, inf_params, opt_params, inf_cache)
     end
 end

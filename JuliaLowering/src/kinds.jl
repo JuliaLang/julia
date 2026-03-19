@@ -65,6 +65,7 @@ function _register_kinds()
             "islocal"
             "isglobal"
             "locals"
+            "thisfunction"
         "END_EXTENSION_KINDS"
 
         # The following kinds are internal to lowering
@@ -76,7 +77,6 @@ function _register_kinds()
             "BindingId"
             # Various heads harvested from flisp lowering.
             # (TODO: May or may not need all these - assess later)
-            "break_block"
             # Like block, but introduces a lexical scope; used during scope resolution.
             "scope_block"
             # Equivalent to Expr(:softscope).  If found in the top-level thunk,
@@ -138,6 +138,9 @@ function _register_kinds()
             "constdecl"
             # Returned from statements that should error if the result is used.
             "unused_only"
+            # Pre-lowered SSA value reference from Expr(:ssavalue, N).
+            # Translated to a BindingId during desugaring.
+            "ssavalue"
         "END_LOWERING_KINDS"
 
         # The following kinds are emitted by lowering and used in Julia's untyped IR

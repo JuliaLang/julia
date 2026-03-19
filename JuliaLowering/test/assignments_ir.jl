@@ -337,6 +337,14 @@ end
 13  (return %₁₀)
 
 ########################################
+# Error: invalid LHS: block
+begin; x; end = 1
+#---------------------
+LoweringError:
+begin; x; end = 1
+└───────────┘ ── invalid syntax in left-hand side of assignment
+
+########################################
 # Error: Updating assignment with invalid left hand side
 f() += y
 #---------------------

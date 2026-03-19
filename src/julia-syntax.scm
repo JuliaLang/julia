@@ -765,39 +765,12 @@
         ;; no keywords
         (method-def-expr- name sparams argl body rett))))
 
-(define (struct-def-expr name params super fields mut)
+(define (struct-def-expr sig fields mut incomp)
   (receive
-   (params bounds) (sparam-name-bounds params)
-   (struct-def-expr- name params bounds super (flatten-blocks fields) mut)))
-
-;; definition with Any for all arguments (except type, which is exact)
-;; field-kinds:
-;;   -1 no convert (e.g. because it is Any)
-;;    0 normal convert to fieldtype
-;;   1+ static_parameter N
-(define (default-inner-ctor-body field-kinds file line)
-  (let* ((name '|#ctor-self#|)
-         (field-names (map (lambda (idx) (symbol (string "_" (+ idx 1)))) (iota (length field-kinds))))
-         (field-convert (lambda (fld fty val)
-              (cond ((eq? fty -1) val)
-                    ((> fty 0) (convert-for-type-decl val `(static_parameter ,fty) #f #f))
-                    (else (convert-for-type-decl val `(call (core fieldtype) ,name ,(+ fld 1)) #f #f)))))
-         (field-vals (map field-convert (iota (length field-names)) field-kinds field-names))
-         (body `(block
-                 (line ,line ,file)
-                 (return (new ,name ,@field-vals)))))
-    `(lambda ,(cons name field-names) () (scope-block ,body))))
-
-;; definition with exact types for all arguments (except type, which is not parameterized)
-(define (default-outer-ctor-body thistype field-count sparam-count file line)
-  (let* ((name '|#ctor-self#|)
-         (field-names (map (lambda (idx) (symbol (string "_" (+ idx 1)))) (iota field-count)))
-         (sparams (map (lambda (idx) `(static_parameter ,(+ idx 1))) (iota sparam-count)))
-         (type (if (null? sparams) name `(curly ,thistype ,@sparams)))
-         (body `(block
-                 (line ,line ,file)
-                 (return (new ,type ,@field-names)))))
-    `(lambda ,(cons name field-names) () (scope-block ,body))))
+    (name params super) (analyze-type-sig sig)
+    (receive
+      (params bounds) (sparam-name-bounds params)
+      (struct-def-expr- name params bounds super (flatten-blocks fields) mut incomp))))
 
 (define (num-non-varargs args)
   (count (lambda (a) (not (vararg? a))) args))
@@ -964,7 +937,7 @@
                               (thismodule) ,name))))
         field-types))
 
-(define (struct-def-expr- name params bounds super fields0 mut)
+(define (struct-def-expr- name params bounds super fields0 mut incomp)
   (receive
    (fields defs) (separate eventually-decl? fields0)
    (let* ((attrs ())
@@ -995,37 +968,48 @@
                  (if (not (symbol? v))
                      (error (string "field name \"" (deparse v) "\" is not a symbol"))))
                field-names)
-     `(block
-       (global ,name)
-       (scope-block
-        (block
-         (hardscope)
-         (local-def ,name)
-         ,@(map (lambda (v) `(local ,v)) params)
-         ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
-         (toplevel-only struct (globalref (thismodule) ,name))
-         (= ,name (call (core _structtype) (thismodule) (inert ,name) (call (core svec) ,@params)
-                        (call (core svec) ,@(map quotify field-names))
-                        (call (core svec) ,@attrs)
-                        ,mut ,min-initialized))
-         (call (core _setsuper!) ,name ,super)
-         (= ,hasprev (&& (call (core isdefinedglobal) (thismodule) (inert ,name) (false)) (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name)))
-         (= ,prev (if ,hasprev (globalref (thismodule) ,name) (false)))
-         (if ,hasprev
-            ;; if this is compatible with an old definition, use the old parameters, but the
-            ;; new object. This will fail to capture recursive cases, but the call to typebody!
-            ;; below is permitted to choose either type definition to put into the binding table
-            (block ,@(if (pair? params)
-                          `((= (tuple ,@params) (|.|
-                                                ,(foldl (lambda (_ x) `(|.| ,x (quote body)))
-                                                        prev
-                                                        params)
-                                                (quote parameters))))
-                          '())))
-         (= ,newdef (call (core _typebody!) ,prev ,name (call (core svec) ,@(insert-struct-shim field-types name))))
-         (const (globalref (thismodule) ,name) ,newdef)
-         (latestworld)
-         (null)))
+    (values name
+       (if incomp
+        `(scope-block
+          (block
+            (hardscope)
+            ,@(map (lambda (v) `(local ,v)) params)
+            ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
+            (toplevel-only struct (globalref (thismodule) ,name))
+            (= ,incomp (call (core svec)
+              (call (core svec) ,@params)
+              (call (core svec) ,@(map quotify field-names))
+              (call (core svec) ,@attrs)
+              ,mut ,min-initialized ,super (call (core svec) ,@field-types)))))
+        `(scope-block
+          (block
+            (hardscope)
+            (local-def ,name)
+            ,@(map (lambda (v) `(local ,v)) params)
+            ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
+            (toplevel-only struct (globalref (thismodule) ,name))
+            (= ,name (call (core _structtype) (thismodule) (inert ,name) (call (core svec) ,@params)
+                            (call (core svec) ,@(map quotify field-names))
+                            (call (core svec) ,@attrs)
+                            ,mut ,min-initialized))
+            (call (core _setsuper!) ,name ,super)
+            (= ,hasprev (&& (call (core isdefinedglobal) (thismodule) (inert ,name) (false)) (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name)))
+            (= ,prev (if ,hasprev (globalref (thismodule) ,name) (false)))
+            (if ,hasprev
+                ;; if this is compatible with an old definition, use the old parameters, but the
+                ;; new object. This will fail to capture recursive cases, but the call to typebody!
+                ;; below is permitted to choose either type definition to put into the binding table
+                (block ,@(if (pair? params)
+                              `((= (tuple ,@params) (|.|
+                                                    ,(foldl (lambda (_ x) `(|.| ,x (quote body)))
+                                                            prev
+                                                            params)
+                                                    (quote parameters))))
+                              '())))
+            (= ,newdef (call (core _typebody!) ,prev ,name (call (core svec) ,@(insert-struct-shim field-types name))))
+            (const (globalref (thismodule) ,name) ,newdef)
+            (latestworld)
+            (null))))
        ;; Always define ctors even if we didn't change the definition.
        ;; If newdef===prev, then this is a bit suspect, since we don't know what might be
        ;; changing about the old ctor definitions (we don't even track whether we're
@@ -1034,14 +1018,12 @@
        ;; Commonly Revise.jl should be used to figure out actually which methods should
        ;; actually be deleted or added anew.
        ,(if (null? defs)
-          `(call (core _defaultctors) ,newdef (inert ,loc))
+          `(call (top _defaultctors) ,name (inert ,loc))
           `(scope-block
             (block
              (hardscope)
-             (global ,name)
-             ,@(map (lambda (c) (rewrite-ctor c name params field-names field-types)) defs))))
-       (latestworld)
-       (null)))))
+             ,@(if incomp '() `((global ,name)))
+             ,@(map (lambda (c) (rewrite-ctor c name params field-names field-types)) defs))))))))
 
 (define (abstract-type-def-expr name params super)
   (receive
@@ -1399,8 +1381,109 @@
                    (error (string "\"" (deparse x) "\" inside type definition is reserved")))
                   (else '())))))
     (expand-forms
-     (receive (name params super) (analyze-type-sig sig)
-              (struct-def-expr name params super fields mut)))))
+     (receive (name sdef fdef) (struct-def-expr sig fields mut #f)
+       `(block (global ,name) ,sdef ,fdef (latestworld) (null))))))
+
+;; Replace (call (core apply_type) ...) with (call (core apply_type_or_typeapp) ...)
+;; in an expression tree. Used for typegroup to handle TypeVar/TypeApp references.
+(define (replace-type-constructors expr)
+  (cond ((not (pair? expr)) expr)
+        ((quoted? expr) expr)
+        ((and (eq? (car expr) 'call)
+              (pair? (cdr expr))
+              (equal? (cadr expr) '(core apply_type)))
+         `(call (core apply_type_or_typeapp) ,@(map replace-type-constructors (cddr expr))))
+        (else (map replace-type-constructors expr))))
+
+;; Extract a struct definition from a typegroup block child.
+;; Returns (values struct-expr doc-calls) where doc-calls is a list of
+;; documentation expressions to emit after the types are bound.
+;; A child may be a bare (struct ...) or a block from @doc macro expansion:
+;;   (block (= gensym (struct ...)) (call Docs.doc! ...) gensym)
+(define (typegroup-extract-struct x)
+  (cond ((and (pair? x) (eq? (car x) 'struct))
+         (values x '()))
+        ((and (pair? x) (eq? (car x) 'block)
+              (let ((body (cdr x)))
+                (and (pair? body)
+                     (pair? (car body))
+                     (eq? (caar body) '=)
+                     (pair? (cddar body))
+                     (let ((rhs (caddar body)))
+                       (and (pair? rhs) (eq? (car rhs) 'struct))))))
+         ;; Expanded @doc block: (block (= gensym (struct ...)) doc-calls... gensym)
+         (let* ((body (cdr x))
+                (struct-expr (caddar body))   ; the (struct ...) from (= gensym (struct ...))
+                (rest (cdr body))             ; everything after the assignment
+                ;; Drop the trailing gensym return value, keep the doc calls
+                (doc-calls (if (and (pair? rest) (not (null? (cdr rest))))
+                               (let loop ((r rest) (acc '()))
+                                 (if (null? (cdr r))
+                                     (reverse acc)  ; skip last element (the gensym)
+                                     (loop (cdr r) (cons (car r) acc))))
+                               '())))
+           (values struct-expr doc-calls)))
+        (else
+         (error (string "typegroup only supports struct definitions, got: " (deparse x))))))
+
+(define (expand-typegroup-def e)
+  (let* ((body (cadr e))
+         (stmts (if (and (pair? body) (eq? (car body) 'block))
+                    (cdr body)
+                    (list body))))
+    ;; First pass: collect names and process structs
+    (let loop ((remaining stmts)
+               (names '()) (sdefs '()) (fdefs '()) (info-vars '()) (doc-stmts '()))
+      (if (null? remaining)
+          ;; Generate the full lowered code
+          (let* ((names (reverse names))
+                 (sdefs (reverse sdefs))
+                 (fdefs (reverse fdefs))
+                 (info-vars (reverse info-vars))
+                 (doc-stmts (reverse doc-stmts))
+                 ;; Build the block structure:
+                 ;; 1. Declare all names as locals
+                 ;; 2. Create TypeVar placeholders for each name
+                 ;; 3. Run sdefs (assigns struct info svecs to SSA values)
+                 ;; 4. Resolve typegroup via C
+                 ;; 5. Bind to global constants
+                 ;; 6. Run fdefs (constructors) — outside scope-block so
+                 ;;    type names resolve to globals, not captured locals
+                 ;; 7. Run doc-stmts (documentation calls from @doc)
+                 (code `(block
+                         (scope-block
+                          (block
+                           ,@(map (lambda (n) `(local ,n)) names)
+                           ,@(map (lambda (n) `(= ,n (call (core TypeVar) (inert ,n)))) names)
+                           ,@sdefs
+                           (= (tuple ,@names)
+                              (call (core resolve_typegroup) (thismodule)
+                                    (call (core svec) ,@names)
+                                    (call (core svec) ,@info-vars)))
+                           ,@(map (lambda (n) `(const (globalref (thismodule) ,n) ,n)) names)
+                           (latestworld)
+                           (null)))
+                         ,@fdefs
+                         (latestworld)
+                         ,@doc-stmts
+                         (null)))
+                 (expanded (expand-forms code))
+                 (replaced (replace-type-constructors expanded)))
+            replaced)
+          (let ((x (car remaining)))
+            (cond ((linenum? x)
+                   (loop (cdr remaining) names sdefs fdefs info-vars doc-stmts))
+                  (else
+                   (receive (struct-expr doc-calls) (typegroup-extract-struct x)
+                     (let* ((mut (cadr struct-expr))
+                            (sig (caddr struct-expr))
+                            (fields (cdr (cadddr struct-expr)))
+                            (info-var (make-ssavalue)))
+                       (receive (name sdef fdef) (struct-def-expr sig fields mut info-var)
+                         (loop (cdr remaining)
+                               (cons name names) (cons sdef sdefs)
+                               (cons fdef fdefs) (cons info-var info-vars)
+                               (append (reverse doc-calls) doc-stmts))))))))))))
 
 ;; the following are for expanding `try` blocks
 
@@ -1981,7 +2064,7 @@
                   (apply append
                          (map lhs-vars
                               (filter (lambda (x) (not (outer? x))) (butlast lhss))))))))
-    `(break-block
+    `(symbolicblock
       loop-exit
       ,(let nest ((lhss lhss)
                   (itrs itrs))
@@ -2001,7 +2084,7 @@
                        ,(nest (cdr lhss) (cdr itrs))))
                     (body
                      (if (null? (cdr lhss))
-                         `(break-block
+                         `(symbolicblock
                            loop-cont
                            (soft-let (block ,@(map (lambda (v) `(= ,v ,v)) copied-vars))
                              ,body))
@@ -2283,10 +2366,10 @@
   (list* (car e) (expand-condition (cadr e)) (map expand-forms (cddr e))))
 
 (define (expand-while e)
-  `(break-block loop-exit
-                (_while ,(expand-condition (cadr e))
-                        (break-block loop-cont
-                                     (scope-block ,(blockify (expand-forms (caddr e))))))))
+  `(symbolicblock loop-exit
+                  (_while ,(expand-condition (cadr e))
+                          (symbolicblock loop-cont
+                                        (scope-block ,(blockify (expand-forms (caddr e))))))))
 
 (define (expand-vcat e
                      (vcat '((top vcat)))
@@ -2600,6 +2683,7 @@
    'soft-let       (lambda (e) (expand-let e #f))
    'macro          expand-macro-def
    'struct         expand-struct-def
+   'typegroup      expand-typegroup-def
    'try            expand-try
 
    'lambda
@@ -2870,7 +2954,9 @@
                                    (memq (car label-expr) '(quote inert))
                                    (symbol? (cadr label-expr)))
                               (cadr label-expr))
-                             (else (error "invalid break label: expected identifier")))))
+                             (else (error "invalid break label: expected identifier"))))
+                ;; `_` maps to the default break scope (loop-exit)
+                (label (if (eq? label '_) 'loop-exit label)))
            (if (length> e 2)
                ;; (break label val) -> expand val
                `(break ,label ,(expand-forms (caddr e)))
@@ -2889,8 +2975,11 @@
                                   (symbol? (cadr label-expr)))
                              (cadr label-expr))
                             (else (error "invalid continue label: expected identifier")))))
-           ;; (continue name) -> (break name#cont)
-           `(break ,(symbol (string name "#cont"))))
+           ;; `_` maps to the default continue scope (loop-cont)
+           (if (eq? name '_)
+               '(break loop-cont)
+               ;; (continue name) -> (break name#cont)
+               `(break ,(symbol (string name "#cont")))))
          '(break loop-cont)))
 
    'symbolicblock
@@ -3462,9 +3551,6 @@
            ))
         ((eq? (car e) 'module)
          (error "\"module\" expression not at top level"))
-        ((eq? (car e) 'break-block)
-         `(break-block ,(cadr e) ;; ignore type symbol of break-block expression
-                       ,(resolve-scopes- (caddr e) scope '() loc))) ;; body of break-block expression
         ((eq? (car e) 'symbolicblock)
          `(symbolicblock ,(cadr e) ;; label name of symbolic block
                          ,(resolve-scopes- (caddr e) scope '() loc))) ;; body of symbolic block
@@ -3511,7 +3597,6 @@
   (cond ((or (eq? e UNUSED) (underscore-symbol? e)) tab)
         ((symbol? e) (put! tab e #t))
         ((and (pair? e) (memq (car e) '(global globalref))) tab)
-        ((and (pair? e) (eq? (car e) 'break-block)) (free-vars- (caddr e) tab))
         ((and (pair? e) (eq? (car e) 'symbolicblock)) (free-vars- (caddr e) tab))
         ((and (pair? e) (eq? (car e) 'with-static-parameters)) (free-vars- (cadr e) tab))
         ((or (atom? e) (quoted? e)) tab)
@@ -4054,8 +4139,6 @@ f(x) = yt(x)
              (visit (cadr e)))
             ((memq (car e) '(block call new splatnew new_opaque_closure))
              (eager-any visit (cdr e)))
-            ((eq? (car e) 'break-block)
-             (visit (caddr e)))
             ((eq? (car e) 'symbolicblock)
              (visit (caddr e)))
             ((eq? (car e) 'return)
@@ -4843,7 +4926,7 @@ f(x) = yt(x)
           (emit-assignment-or-setglobal lhs `(null) op)) ; in unreachable code (such as after return), still emit the assignment so that the structure of those uses is preserved
       #f)
     ;; the interpreter loop. `break-labels` keeps track of the labels to jump to
-    ;; for all currently closing break-blocks.
+    ;; for all currently closing symbolicblocks.
     ;; `value` means we are in a context where a value is required; a meaningful
     ;; value must be returned.
     ;; `tail` means we are in tail position, where a value needs to be `return`ed
@@ -4891,7 +4974,8 @@ f(x) = yt(x)
                                (compile-args (list-head (cdr e) 4) break-labels)
                                (list (append (butlast oc_method) (list lambda)))
                                (compile-args (list-tail (cdr e) 5) break-labels))))
-                           ;; NOTE: 1st argument to cglobal treated same as for ccall
+                           ;; NOTE: 1st argument to cglobal is similar to ccall,
+                           ;; but tuple should be a value, not literal expr
                            ((and (length> e 2)
                                  (or (eq? (cadr e) 'cglobal)
                                      (equal? (cadr e) '(globalref (thismodule) cglobal))))
@@ -5030,29 +5114,20 @@ f(x) = yt(x)
                (emit `(goto ,topl))
                (mark-label endl))
              (if value (compile '(null) break-labels value tail)))
-            ((break-block)
-             (let ((endl (make-label)))
-               (compile (caddr e)
-                        (cons (list (cadr e) endl handler-token-stack catch-token-stack)
-                              break-labels)
-                        #f #f)
-               (mark-label endl))
-             (if value (compile '(null) break-labels value tail)))
             ((symbolicblock)
              ;; Labeled block/loop that can be exited with `break name value`
              (let* ((name (cadr e))
                     (body (caddr e))
                     (endl (make-label))
                     (need-value (or value tail))
-                    ;; Create result-var if value is needed (for break name val support)
                     (result-var (if need-value (new-mutable-var name) #f)))
                ;; Register the symbolic block to prevent mixing with @goto
-               (if (has? label-nesting name)
-                   (error (string "label \"" name "\" defined multiple times")))
-               (put! label-nesting name 'symbolicblock)
-               ;; Initialize result-var to nothing (for break without value case)
-               (if result-var
-                   (emit `(= ,result-var (null))))
+               ;; Skip duplicate check for default-scope labels (loop-exit, loop-cont) which allow nesting
+               (if (not (default-scope-label? name))
+                   (begin
+                     (if (has? label-nesting name)
+                         (error (string "label \"" name "\" defined multiple times")))
+                     (put! label-nesting name 'symbolicblock)))
                ;; Compile body with this block in break-labels
                (let ((body-val (compile body
                                         (cons (list name endl handler-token-stack catch-token-stack result-var)
@@ -5062,6 +5137,18 @@ f(x) = yt(x)
                  (if (and result-var body-val)
                      (emit `(= ,result-var ,body-val))))
                (mark-label endl)
+               ;; Use isdefined to handle the case where initialization was
+               ;; skipped (e.g., by @goto jumping into the block body).
+               (if result-var
+                   (let ((val (make-ssavalue))
+                         (defined-label (make-label))
+                         (done-label (make-label)))
+                     (emit `(= ,val (isdefined ,result-var)))
+                     (emit `(gotoifnot ,val ,defined-label))
+                     (emit `(goto ,done-label))
+                     (mark-label defined-label)
+                     (emit `(= ,result-var (null)))
+                     (mark-label done-label)))
                ;; Return result-var if value is needed
                (cond (tail  (emit-return tail result-var))
                      (value result-var)
@@ -5070,14 +5157,39 @@ f(x) = yt(x)
              (let ((labl (assq (cadr e) break-labels)))
                (if (not labl)
                    (let ((name (cadr e)))
-                     (if (memq name '(loop-exit loop-cont))
-                         (error "break or continue outside loop")
-                         (error (string "`break " name "` not in a block with label `" name "`"))))
+                     (cond ((eq? name 'loop-exit)
+                            (error "`break` must be used inside a `while`, `for` loop, or `@label` block"))
+                           ((eq? name 'loop-cont)
+                            (error "`continue` must be used inside a `while` or `for` loop"))
+                           (else
+                            (error (string "`break " name "` not in a block with label `" name "`")))))
                    (begin
+                     ;; If targeting loop-exit, check that there is no named @label
+                     ;; block between here and the target.
+                     ;; Plain `break` inside `@label name` is disallowed.
+                     (if (eq? (cadr e) 'loop-exit)
+                         (let check ((labels break-labels))
+                           (if (not (eq? (car labels) labl))
+                               (let ((name (caar labels)))
+                                 (if (not (or (default-scope-label? name)
+                                              (string.find (symbol->string name) "#")))
+                                     (error (string "plain `break` inside `@label " name
+                                                    "` block is disallowed; "
+                                                    "use `break " name "` to exit the block")))
+                                 (check (cdr labels))))))
+                     ;; If targeting loop-cont, check that there is no loop-exit
+                     ;; (anonymous @label block) between here and the target.
+                     ;; `continue` inside `@label` block is disallowed.
+                     (if (eq? (cadr e) 'loop-cont)
+                         (let check ((labels break-labels))
+                           (if (not (eq? (car labels) labl))
+                               (begin
+                                 (if (eq? (caar labels) 'loop-exit)
+                                     (error "`continue` inside an anonymous `@label` block is not allowed"))
+                                 (check (cdr labels))))))
                      ;; Check if this is a valued break (break name val)
                      (if (length> e 2)
-                         ;; symbolicblock entries have 5 elements, regular break-block entries have 4
-                         (let ((result-var (and (length> labl 4) (list-ref labl 4))))
+                         (let ((result-var (list-ref labl 4)))
                            (if (not result-var)
                                (error (string "break with value not allowed for label \"" (cadr e) "\""))
                                (let ((val (compile (caddr e) break-labels #t #f)))

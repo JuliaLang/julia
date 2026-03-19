@@ -100,6 +100,11 @@ function va_process_argtypes(𝕃::AbstractLattice, given_argtypes::Vector{Any},
                     newarg = widenconditional(newarg)
                 end
             end
+            if isva && has_mustalias(𝕃) && isa(newarg, MustAlias)
+                if newarg.slot > (nargs-isva)
+                    newarg = widenmustalias(newarg)
+                end
+            end
             isva_given_argtypes[i] = newarg
         end
         if isva
@@ -112,6 +117,14 @@ function va_process_argtypes(𝕃::AbstractLattice, given_argtypes::Vector{Any},
                         newarg = given_argtypes[i]
                         if isa(newarg, Conditional) && newarg.slot > (nargs-isva)
                             given_argtypes[i] = widenconditional(newarg)
+                        end
+                    end
+                end
+                if has_mustalias(𝕃)
+                    for i = last:length(given_argtypes)
+                        newarg = given_argtypes[i]
+                        if isa(newarg, MustAlias) && newarg.slot > (nargs-isva)
+                            given_argtypes[i] = widenmustalias(newarg)
                         end
                     end
                 end
@@ -181,12 +194,12 @@ function elim_free_typevars(@nospecialize t)
     end
 end
 
-function constprop_cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given_argtypes::Vector{Any}, cache::Vector{InferenceResult})
-    method = mi.def::Method
+function constprop_cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given_argtypes::Vector{Any}, cache::InferenceCache)
     nargtypes = length(given_argtypes)
-    for cached_result in cache
-        cached_result.tombstone && continue # ignore deleted entries (due to LimitedAccuracy)
-        cached_result.linfo === mi || continue
+    indices = get_indices(cache, mi)
+    found_tombstone = false
+    for idx in indices
+        cached_result = cache.results[idx]
         cache_argtypes = cached_result.argtypes
         @assert length(cache_argtypes) == nargtypes "invalid `cache_argtypes` for `mi`"
         cache_overridden_by_const = cached_result.overridden_by_const
@@ -197,8 +210,15 @@ function constprop_cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given
                 @goto next_cache
             end
         end
+        # Don't return tombstoned entries as cache items: they represent rejected work
+        # (due to LimitedAccuracy). Instead, record that a tombstone was found so the
+        # caller can avoid re-attempting the same const-prop that would hit the same limit.
+        if cached_result.tombstone
+            found_tombstone = true
+            @goto next_cache
+        end
         return cached_result
         @label next_cache
     end
-    return nothing
+    return found_tombstone ? missing : nothing
 end

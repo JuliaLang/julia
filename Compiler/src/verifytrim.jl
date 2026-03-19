@@ -310,7 +310,6 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
             end
             # TODO: check for calls to Base.atexit?
         elseif isexpr(stmt, :call)
-            error = "unresolved call"
             farg = stmt.args[1]
             ftyp = widenconst(argextype(farg, codeinfo, sptypes))
             if ftyp <: IntrinsicFunction
@@ -371,6 +370,8 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                 elseif Core.memoryrefmodify! isa ftyp
                     error = "trim verification not yet implemented for builtin `Core.memoryrefmodify!`"
                 else @assert false "unexpected builtin" end
+            else
+                error = "unresolved call"
             end
             extyp = argextype(SSAValue(i), codeinfo, sptypes)
             if extyp === Union{}
