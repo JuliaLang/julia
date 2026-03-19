@@ -213,21 +213,25 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
                 APFloat(lt->getFltSemantics(), APInt(64, data64)));
     }
     if (lt->isFloatingPointTy() || lt->isIntegerTy() || lt->isPointerTy()) {
-        int nb = jl_datatype_size(bt);
-        APInt val(8 * nb, 0);
+        int nbytes = jl_datatype_size(bt);
+        int nbits_logical = jl_datatype_nbits(bt);
+        APInt val(nbits_logical, 0);
         void *bits = const_cast<uint64_t*>(val.getRawData());
         assert(sys::IsLittleEndianHost);
-        memcpy(bits, ptr, nb);
+        memcpy(bits, ptr, nbytes);
+        // Clear any padding bits in the last meaningful byte
+        if (nbytes > 0 && (nbits_logical % 8) != 0)
+            ((uint8_t*)bits)[(nbits_logical - 1) / 8] &= (uint8_t)((1u << (nbits_logical % 8)) - 1);
         if (lt->isFloatingPointTy()) {
             return ConstantFP::get(ctx.builder.getContext(),
                     APFloat(lt->getFltSemantics(), val));
         }
         if (lt->isPointerTy()) {
-            Type *Ty = IntegerType::get(ctx.builder.getContext(), 8 * nb);
+            Type *Ty = IntegerType::get(ctx.builder.getContext(), nbytes * 8);
             Constant *addr = ConstantInt::get(Ty, val);
             return ConstantExpr::getIntToPtr(addr, lt);
         }
-        assert(cast<IntegerType>(lt)->getBitWidth() == 8u * nb);
+        assert(cast<IntegerType>(lt)->getBitWidth() == (unsigned)nbits_logical);
         return ConstantInt::get(lt, val);
     }
 
@@ -491,9 +495,23 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x)
         ai = combined_ai;
     }
     assert(p); // clang-sa doesn't know that x.ispointer() implied this is true
-    Instruction *load = ctx.builder.CreateAlignedLoad(to, p, Align(alignment));
+    // For primitive types where the LLVM type is narrower than the storage
+    // (e.g. i24 in 4 bytes), load the full storage width and truncate.
+    // This avoids a partial-width load from a wider slot.
+    Type *loadty = to;
+    if (jl_is_primitivetype(x.typ)) {
+        unsigned store_bits = jl_datatype_size(x.typ) * 8;
+        if (auto *ity = dyn_cast<IntegerType>(to)) {
+            if (ity->getBitWidth() < store_bits)
+                loadty = IntegerType::get(ctx.builder.getContext(), store_bits);
+        }
+    }
+    Instruction *load = ctx.builder.CreateAlignedLoad(loadty, p, Align(alignment));
     setName(ctx.emission_context, load, p->getName() + ".unbox");
-    return ai.decorateInst(load);
+    ai.decorateInst(load);
+    if (loadty != to)
+        return ctx.builder.CreateTrunc(load, to);
+    return load;
 }
 
 // emit code to store a raw value into a destination
@@ -516,6 +534,17 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
     if (!x.ispointer()) { // already unboxed, but sometimes need conversion (e.g. f32 -> i32)
         assert(x.V);
         Value *unboxed = zext_struct(ctx, x.V);
+        // If the LLVM type is narrower than the storage size (e.g. i24 stored
+        // in 4 bytes), widen the value to the storage width so the store
+        // covers all bytes including padding.
+        if (jl_is_primitivetype(x.typ)) {
+            unsigned store_bits = jl_datatype_size(x.typ) * 8;
+            if (auto *ity = dyn_cast<IntegerType>(unboxed->getType())) {
+                if (ity->getBitWidth() < store_bits) {
+                    unboxed = ctx.builder.CreateZExt(unboxed, IntegerType::get(ctx.builder.getContext(), store_bits));
+                }
+            }
+        }
         StoreInst *store = ctx.builder.CreateAlignedStore(unboxed, dest, align_dst);
         store->setVolatile(isVolatile);
         dest_ai.decorateInst(store);
@@ -564,6 +593,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
 
     Type *llvmt = bitstype_to_llvm((jl_value_t*)bt, ctx.builder.getContext(), true);
     uint32_t nb = jl_datatype_size(bt);
+    uint32_t nbits = jl_datatype_nbits(bt);
 
     Value *bt_value_rt = NULL;
     if (!jl_is_concrete_type((jl_value_t*)bt)) {
@@ -574,32 +604,20 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
     // Examine the second argument //
     bool isboxed;
     Type *vxt = julia_type_to_llvm(ctx, v.typ, &isboxed);
-    if (!jl_is_primitivetype(v.typ) || jl_datatype_size(v.typ) != nb) {
+    if (!jl_is_primitivetype(v.typ)) {
         Value *typ = emit_typeof(ctx, v, false, false);
-        if (!jl_is_primitivetype(v.typ)) {
-            if (jl_is_datatype(v.typ) && !jl_is_abstracttype(v.typ)) {
-                emit_error(ctx, "bitcast: value not a primitive type");
-                return jl_cgval_t();
-            }
-            else {
-                Value *isprimitive = emit_datatype_isprimitivetype(ctx, typ);
-                error_unless(ctx, isprimitive, "bitcast: value not a primitive type");
-            }
-        }
         if (jl_is_datatype(v.typ) && !jl_is_abstracttype(v.typ)) {
-            emit_error(ctx, "bitcast: argument size does not match size of target type");
+            emit_error(ctx, "bitcast: value not a primitive type");
             return jl_cgval_t();
         }
-        else {
-            Value *size = emit_datatype_size(ctx, typ);
-            auto sizecheck = ctx.builder.CreateICmpEQ(size, ConstantInt::get(size->getType(), nb));
-            setName(ctx.emission_context, sizecheck, "sizecheck");
-            error_unless(ctx,
-                    sizecheck,
-                    "bitcast: argument size does not match size of target type");
-        }
+        Value *isprimitive = emit_datatype_isprimitivetype(ctx, typ);
+        error_unless(ctx, isprimitive, "bitcast: value not a primitive type");
+        return emit_runtime_call(ctx, bitcast, argv, 2);
     }
-
+    if (jl_datatype_nbits((jl_datatype_t*)v.typ) != nbits) {
+        emit_error(ctx, "bitcast: argument bitsize does not match bitsize of target type");
+        return jl_cgval_t();
+    }
     assert(!v.isghost);
     Value *vx = NULL;
     if (v.inline_roots.empty() && !v.ispointer())
@@ -659,6 +677,10 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         unsigned align = sizeof(void*); // Allocations are at least pointer aligned
         Value *box = emit_allocobj(ctx, nb, bt_value_rt, true, align);
         setName(ctx.emission_context, box, "bitcast_box");
+        if (auto *ity = dyn_cast<IntegerType>(vx->getType())) {
+            if (ity->getBitWidth() < nb * 8)
+                vx = ctx.builder.CreateZExt(vx, IntegerType::get(ctx.builder.getContext(), nb * 8));
+        }
         init_bits_value(ctx, box, vx, ctx.tbaa().tbaa_immut);
         return mark_julia_type(ctx, box, true, bt->name->wrapper);
     }
@@ -733,6 +755,10 @@ static jl_cgval_t generic_cast(
         unsigned align = sizeof(void*); // Allocations are at least pointer aligned
         Value *box = emit_allocobj(ctx, nb, targ_rt, true, align);
         setName(ctx.emission_context, box, "cast_box");
+        if (auto *ity = dyn_cast<IntegerType>(ans->getType())) {
+            if (ity->getBitWidth() < nb * 8)
+                ans = ctx.builder.CreateZExt(ans, IntegerType::get(ctx.builder.getContext(), nb * 8));
+        }
         init_bits_value(ctx, box, ans, ctx.tbaa().tbaa_immut);
         return mark_julia_type(ctx, box, true, jlto->name->wrapper);
     }

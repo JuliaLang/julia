@@ -874,8 +874,8 @@ static Type *bitstype_to_llvm(jl_value_t *bt, LLVMContext &ctxt, bool llvmcall =
             jl_error("invalid pointer address space");
         return PointerType::get(ctxt, as);
     }
-    int nb = jl_datatype_size(bt);
-    return Type::getIntNTy(ctxt, nb * 8);
+    int nb = jl_datatype_nbits((jl_datatype_t*)bt);
+    return Type::getIntNTy(ctxt, nb);
 }
 
 static bool jl_type_hasptr(jl_value_t* typ)
@@ -2427,11 +2427,18 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
         return mark_julia_slot(val, jltype, NULL, result_tbaa, std::move(roots));
     }
     Type *realelty = elty;
+    // For primitive types where the LLVM type is narrower than the storage
+    // (e.g. i24 in 4 bytes), widen the load type to the storage width.
+    if (!isboxed && isa<IntegerType>(elty)) {
+        unsigned bitwidth = cast<IntegerType>(elty)->getBitWidth();
+        if (bitwidth != 8 * nb)
+            elty = Type::getIntNTy(ctx.builder.getContext(), 8 * nb);
+    }
     if (Order != AtomicOrdering::NotAtomic) {
         if (!isboxed && !elty->isIntOrPtrTy()) {
-            intcast = emit_static_alloca(ctx, elty, Align(alignment));
+            intcast = emit_static_alloca(ctx, realelty, Align(alignment));
             setName(ctx.emission_context, intcast, "atomic_load_box");
-            realelty = elty = Type::getIntNTy(ctx.builder.getContext(), 8 * nb);
+            elty = Type::getIntNTy(ctx.builder.getContext(), 8 * nb);
         }
         if (isa<IntegerType>(elty)) {
             unsigned nb2 = PowerOf2Ceil(nb);
@@ -2607,6 +2614,13 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 intcast = emit_static_alloca(ctx, elty, Align(alignment));
                 setName(ctx.emission_context, intcast, "atomic_store_box");
             }
+        }
+        // For primitive types where the LLVM type is narrower than the storage,
+        // widen to the storage width for loads and stores.
+        if (!isboxed && isa<IntegerType>(elty)) {
+            unsigned bitwidth = cast<IntegerType>(elty)->getBitWidth();
+            if (bitwidth != 8 * nb)
+                elty = Type::getIntNTy(ctx.builder.getContext(), 8 * nb);
         }
         realelty = elty;
         if (Order != AtomicOrdering::NotAtomic && isa<IntegerType>(elty)) {

@@ -594,6 +594,7 @@ typedef struct {
     uint32_t nfields;
     uint32_t npointers; // number of pointers embedded inside
     int32_t first_ptr; // index of the first pointer (or -1)
+    uint32_t nbits; // declared logical bit width of a primitive type
     uint16_t alignment; // strictest alignment over all fields
     struct { // combine these fields into a struct so that we can take addressof them
         uint16_t haspadding : 1; // has internal undefined bytes
@@ -1449,7 +1450,7 @@ STATIC_INLINE const jl_datatype_layout_t *jl_datatype_layout(jl_datatype_t *t) J
 }
 #define jl_datatype_size(t)    (jl_datatype_layout((jl_datatype_t*)(t))->size)
 #define jl_datatype_align(t)   (jl_datatype_layout((jl_datatype_t*)(t))->alignment)
-#define jl_datatype_nbits(t)   ((jl_datatype_layout((jl_datatype_t*)(t))->size)*8)
+#define jl_datatype_nbits(t)   (jl_datatype_layout((jl_datatype_t*)(t))->nbits)
 #define jl_datatype_nfields(t) (jl_datatype_layout((jl_datatype_t*)(t))->nfields)
 
 JL_DLLEXPORT void *jl_symbol_name(jl_sym_t *s);

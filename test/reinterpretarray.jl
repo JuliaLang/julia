@@ -692,3 +692,96 @@ end
     @test reinterpret(reshape, UInt8, fill(x)) == [0x67, 0x45, 0x23, 0x01, 0xef, 0xcd, 0xab, 0x00]
     @test reinterpret(reshape, UInt8, [x]) == [0x67; 0x45; 0x23; 0x01; 0xef; 0xcd; 0xab; 0x00;;]
 end
+
+# reinterpret with non-power-of-two and non-byte-aligned primitive types
+@testset "non-standard-width primitive reinterpret" begin
+    primitive type RUInt24 24 end
+    primitive type RUInt40 40 end
+    primitive type RUInt48 48 end
+    primitive type RUInt23 23 end
+    primitive type RUInt63 63 end
+
+    # padding and packedsize for non-power-of-two byte-aligned types
+    @test Base.packedsize(RUInt24) == 3
+    @test Base.packedsize(RUInt40) == 5
+    @test Base.packedsize(RUInt48) == 6
+    @test !Base.ispacked(RUInt24)  # 24 bits in 4 bytes
+    @test !Base.ispacked(RUInt40)  # 40 bits in 8 bytes
+    @test !Base.ispacked(RUInt48)  # 48 bits in 8 bytes
+
+    primitive type RUInt17 17 end
+
+    # padding reports the correct gap
+    @test Base.padding(RUInt24) == Core.svec(Base.Padding(4, 1))
+    @test Base.padding(RUInt40) == Core.svec(Base.Padding(8, 3))
+    @test Base.padding(RUInt48) == Core.svec(Base.Padding(8, 2))
+
+    # padding/packedsize errors for non-byte-aligned types
+    @test_throws ArgumentError Base.padding(RUInt17)
+    @test_throws ArgumentError Base.packedsize(RUInt17)
+    @test_throws ArgumentError Base.padding(RUInt23)
+    @test_throws ArgumentError Base.packedsize(RUInt23)
+    @test_throws ArgumentError Base.padding(RUInt63)
+    @test_throws ArgumentError Base.packedsize(RUInt63)
+
+    # reinterpret: bare non-power-of-two <-> tuple round-trip
+    r24 = reinterpret(RUInt24, (0xAA, 0xBB, 0xCC))
+    @test reinterpret(Tuple{UInt8,UInt8,UInt8}, r24) === (0xAA, 0xBB, 0xCC)
+
+    r40 = reinterpret(RUInt40, (0x01, 0x02, 0x03, 0x04, 0x05))
+    @test reinterpret(NTuple{5,UInt8}, r40) === (0x01, 0x02, 0x03, 0x04, 0x05)
+
+    r48 = reinterpret(RUInt48, (0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F))
+    @test reinterpret(NTuple{6,UInt8}, r48) === (0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F)
+
+    # reinterpret: non-byte-aligned types should be rejected
+    @test_throws ArgumentError reinterpret(RUInt17, (0x01, 0x02, 0x03))
+    @test_throws ArgumentError reinterpret(RUInt23, (0x01, 0x02, 0x03))
+    @test_throws ArgumentError reinterpret(RUInt63, NTuple{8,UInt8}(ntuple(i->UInt8(i), 8)))
+
+    # reinterpret: struct containing non-power-of-two primitive
+    struct RFoo; x::RUInt24; y::UInt8; end
+    @test Base.packedsize(RFoo) == 4
+    f = reinterpret(RFoo, (0xAA, 0xBB, 0xCC, 0xDD))
+    @test f.y === 0xDD
+    @test reinterpret(NTuple{4,UInt8}, f) === (0xAA, 0xBB, 0xCC, 0xDD)
+
+    # reinterpret: struct with UInt24 field at non-zero offset
+    struct RBar; a::UInt8; b::RUInt24; end
+    @test Base.packedsize(RBar) == 4
+    b = reinterpret(RBar, (0x11, 0xAA, 0xBB, 0xCC))
+    @test b.a === 0x11
+    @test reinterpret(NTuple{4,UInt8}, b) === (0x11, 0xAA, 0xBB, 0xCC)
+
+    # reinterpret: struct with two non-power-of-two fields
+    struct RBaz; x::RUInt24; y::RUInt24; end
+    @test Base.packedsize(RBaz) == 6
+    bz = reinterpret(RBaz, (0x01, 0x02, 0x03, 0x04, 0x05, 0x06))
+    @test reinterpret(NTuple{6,UInt8}, bz) === (0x01, 0x02, 0x03, 0x04, 0x05, 0x06)
+
+    # reinterpret: struct with mixed non-power-of-two fields
+    struct RMixed; x::RUInt24; y::RUInt40; end
+    @test Base.packedsize(RMixed) == 8
+    m = reinterpret(RMixed, (0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08))
+    @test reinterpret(NTuple{8,UInt8}, m) === (0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08)
+
+    # reinterpret: struct containing non-byte-aligned should fail
+    struct RHasUInt17; x::RUInt17; y::UInt8; end
+    @test_throws ArgumentError reinterpret(RHasUInt17, (0x01, 0x02, 0x03, 0x04))
+    @test_throws ArgumentError reinterpret(NTuple{4,UInt8}, RHasUInt17(
+        Core.Intrinsics.trunc_int(RUInt17, UInt32(1)), 0x02))
+
+    struct RHasUInt23; x::RUInt23; y::UInt8; end
+    @test_throws ArgumentError reinterpret(RHasUInt23, (0x01, 0x02, 0x03, 0x04))
+
+    struct RHasUInt63; x::RUInt63; y::UInt8; end
+    @test_throws ArgumentError reinterpret(RHasUInt63, NTuple{9,UInt8}(ntuple(i->UInt8(i), 9)))
+
+    # reinterpret: mixed non-power-of-two + non-byte-aligned struct should fail
+    struct RMixedBad; x::RUInt24; y::RUInt17; end
+    @test_throws ArgumentError reinterpret(RMixedBad, NTuple{6,UInt8}(ntuple(i->UInt8(i), 6)))
+
+    # reinterpret: between two non-power-of-two types
+    r24_2 = reinterpret(RUInt24, reinterpret(Tuple{UInt8,UInt8,UInt8}, r24))
+    @test reinterpret(Tuple{UInt8,UInt8,UInt8}, r24_2) === (0xAA, 0xBB, 0xCC)
+end

@@ -770,6 +770,21 @@ end
 """
 @assume_effects :foldable function padding(T::DataType, baseoffset::Int = 0)
     pads = Padding[]
+    if isprimitivetype(T)
+        if Core.bitsizeof(T) % 8 != 0
+            throw(ArgumentError(LazyString(
+                "padding cannot be computed for non-byte-aligned primitive type ", T)))
+        end
+        # Primitive types may have padding bytes between the byte-rounded
+        # logical size and the aligned storage size.
+        nbytes = Core.bitsizeof(T) >> 3
+        if nbytes < sizeof(T)
+            # The padding fills bytes nbytes..sizeof(T)-1 within the field.
+            # Next valid byte after the padding is at baseoffset + sizeof(T).
+            push!(pads, Padding(baseoffset + sizeof(T), sizeof(T) - nbytes))
+        end
+        return Core.svec(pads...)
+    end
     last_end::Int = baseoffset
     for i = 1:fieldcount(T)
         offset = baseoffset + Int(fieldoffset(T, i))
@@ -829,11 +844,31 @@ end
 end
 
 @assume_effects :foldable function packedsize(::Type{T}) where T
+    if isprimitivetype(T)
+        Core.bitsizeof(T) % 8 != 0 && throw(ArgumentError(LazyString(
+            "packed size cannot be computed for non-byte-aligned primitive type ", T)))
+        return Core.bitsizeof(T) >> 3
+    end
     pads = padding(T)
     return sizeof(T) - sum((p.size for p ∈ pads), init = 0)
 end
 
-@assume_effects :foldable ispacked(::Type{T}) where T = isempty(padding(T))
+@assume_effects :foldable function ispacked(::Type{T}) where T
+    isprimitivetype(T) && return Core.bitsizeof(T) == sizeof(T) * 8
+    return isempty(padding(T))
+end
+
+# Check whether a type (recursively) contains any non-byte-aligned primitive fields,
+# which cannot be faithfully represented in a byte-level packed format.
+@assume_effects :foldable function has_bit_padding(::Type{T}) where T
+    if isprimitivetype(T)
+        return Core.bitsizeof(T) % 8 != 0
+    end
+    for i in 1:fieldcount(T)
+        has_bit_padding(fieldtype(T, i)) && return true
+    end
+    return false
+end
 
 function _copytopacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
     writeoffset = 0
@@ -842,6 +877,11 @@ function _copytopacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
         fT = fieldtype(In, i)
         if ispacked(fT)
             readsize = sizeof(fT)
+            memcpy(ptr_out + writeoffset, ptr_in + readoffset, readsize)
+            writeoffset += readsize
+        elseif isprimitivetype(fT)
+            # Primitive with byte-level padding: copy only the meaningful bytes
+            readsize = packedsize(fT)
             memcpy(ptr_out + writeoffset, ptr_in + readoffset, readsize)
             writeoffset += readsize
         else # nested padded type
@@ -860,6 +900,11 @@ function _copyfrompacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
             writesize = sizeof(fT)
             memcpy(ptr_out + writeoffset, ptr_in + readoffset, writesize)
             readoffset += writesize
+        elseif isprimitivetype(fT)
+            # Primitive with byte-level padding: copy only the meaningful bytes
+            writesize = packedsize(fT)
+            memcpy(ptr_out + writeoffset, ptr_in + readoffset, writesize)
+            readoffset += writesize
         else # nested padded type
             _copyfrompacked!(Ptr{fT}(ptr_out + writeoffset), ptr_in + readoffset)
             readoffset += packedsize(fT)
@@ -871,6 +916,14 @@ end
     # handle non-primitive types
     isbitstype(Out) || throw(ArgumentError("Target type for `reinterpret` must be isbits"))
     isbitstype(In) || throw(ArgumentError("Source type for `reinterpret` must be isbits"))
+    # Reject types containing non-byte-aligned primitives: their sub-byte padding
+    # cannot be faithfully represented in a byte-level packed format.
+    if has_bit_padding(Out)
+        throw(ArgumentError(LazyString("cannot `reinterpret` type ", Out, " containing non-byte-aligned primitive fields")))
+    end
+    if has_bit_padding(In)
+        throw(ArgumentError(LazyString("cannot `reinterpret` type ", In, " containing non-byte-aligned primitive fields")))
+    end
     inpackedsize = packedsize(In)
     outpackedsize = packedsize(Out)
     inpackedsize == outpackedsize ||
@@ -902,7 +955,22 @@ function _reinterpret_padding(::Type{Out}, x::In) where {Out, In}
         ptr_in = unsafe_convert(Ptr{In}, in)
         ptr_out = unsafe_convert(Ptr{Out}, out)
 
-        if fieldcount(In) > 0 && ispacked(Out)
+        if isprimitivetype(Out) && isprimitivetype(In)
+            # Both are primitive types with matching packed sizes —
+            # copy the meaningful bytes directly.
+            memcpy(ptr_out, ptr_in, inpackedsize)
+        elseif isprimitivetype(Out)
+            # Packed struct → primitive: copy packed data into the low bytes
+            packed = Ref{NTuple{inpackedsize, UInt8}}()
+            GC.@preserve packed begin
+                ptr_packed = unsafe_convert(Ptr{NTuple{inpackedsize, UInt8}}, packed)
+                _copytopacked!(ptr_packed, ptr_in)
+                memcpy(ptr_out, ptr_packed, inpackedsize)
+            end
+        elseif isprimitivetype(In)
+            # Primitive → packed struct: copy the low bytes into struct fields
+            _copyfrompacked!(ptr_out, ptr_in)
+        elseif fieldcount(In) > 0 && ispacked(Out)
             _copytopacked!(ptr_out, ptr_in)
         elseif fieldcount(Out) > 0 && ispacked(In)
             _copyfrompacked!(ptr_out, ptr_in)

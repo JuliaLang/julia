@@ -79,6 +79,168 @@ let x, y, f
     @test string(y) == "$(curmod_prefix)Int24(0x468ace)"
 end
 
+# non-power-of-two and non-byte-aligned primitive types
+@testset "non-standard-width primitives" begin
+    # sizeof and bitsizeof for non-power-of-two byte-aligned types
+    primitive type TestUInt24 24 end
+    primitive type TestUInt40 40 end
+    primitive type TestUInt48 48 end
+    @test sizeof(TestUInt24) == 4
+    @test Core.bitsizeof(TestUInt24) == 24
+    @test sizeof(TestUInt24) == Base.aligned_sizeof(TestUInt24)
+    @test sizeof(TestUInt40) == 8
+    @test Core.bitsizeof(TestUInt40) == 40
+    @test sizeof(TestUInt40) == Base.aligned_sizeof(TestUInt40)
+    @test sizeof(TestUInt48) == 8
+    @test Core.bitsizeof(TestUInt48) == 48
+    @test sizeof(TestUInt48) == Base.aligned_sizeof(TestUInt48)
+
+    # sizeof and bitsizeof for non-byte-aligned types
+    primitive type TestUInt17 17 end
+    primitive type TestUInt23 23 end
+    primitive type TestUInt5 5 end
+    primitive type TestUInt63 63 end
+    @test sizeof(TestUInt17) == 4
+    @test Core.bitsizeof(TestUInt17) == 17
+    @test sizeof(TestUInt23) == 4
+    @test Core.bitsizeof(TestUInt23) == 23
+    @test sizeof(TestUInt5) == 1
+    @test Core.bitsizeof(TestUInt5) == 5
+    @test sizeof(TestUInt63) == 8
+    @test Core.bitsizeof(TestUInt63) == 63
+
+    # sizeof == aligned_sizeof for all primitive types
+    for T in [TestUInt5, TestUInt17, TestUInt23, TestUInt24, TestUInt40, TestUInt48, TestUInt63]
+        @test sizeof(T) == Base.aligned_sizeof(T)
+    end
+
+    # trunc_int / zext_int / sext_int
+    # Non-power-of-two, byte-aligned: trunc from larger storage size
+    x24 = Core.Intrinsics.trunc_int(TestUInt24, UInt64(0xFFEEDDCCBBAA9988))
+    @test Core.Intrinsics.zext_int(UInt64, x24) === UInt64(0x0000000000AA9988)
+
+    x40 = Core.Intrinsics.trunc_int(TestUInt40, UInt64(0xFFEEDDCCBBAA9988))
+    @test Core.Intrinsics.zext_int(UInt64, x40) === UInt64(0x000000CCBBAA9988)
+
+    x48 = Core.Intrinsics.trunc_int(TestUInt48, UInt64(0xFFEEDDCCBBAA9988))
+    @test Core.Intrinsics.zext_int(UInt64, x48) === UInt64(0x0000DDCCBBAA9988)
+
+    # Non-byte-aligned
+    x17 = Core.Intrinsics.trunc_int(TestUInt17, UInt32(0xFFFFFFFF))
+    @test Core.Intrinsics.zext_int(UInt32, x17) === UInt32(0x0001FFFF)
+
+    x23 = Core.Intrinsics.trunc_int(TestUInt23, UInt32(0xFFFFFFFF))
+    @test Core.Intrinsics.zext_int(UInt32, x23) === UInt32(0x007FFFFF)
+
+    x5 = Core.Intrinsics.trunc_int(TestUInt5, UInt16(0xFFFF))
+    @test Core.Intrinsics.zext_int(UInt16, x5) === UInt16(0x001F)
+
+    x63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64(0xFFFFFFFFFFFFFFFF))
+    @test Core.Intrinsics.zext_int(UInt64, x63) === UInt64(0x7FFFFFFFFFFFFFFF)
+
+    # sext_int for signed non-standard types
+    primitive type TestInt17 <: Signed 17 end
+    primitive type TestInt24 <: Signed 24 end
+    primitive type TestInt63 <: Signed 63 end
+
+    si17 = Core.Intrinsics.trunc_int(TestInt17, Int32(-1))
+    @test Core.Intrinsics.sext_int(Int32, si17) === Int32(-1)
+    si17_pos = Core.Intrinsics.trunc_int(TestInt17, Int32(1))
+    @test Core.Intrinsics.sext_int(Int32, si17_pos) === Int32(1)
+    # -2^16 in 17 bits
+    si17_min = Core.Intrinsics.trunc_int(TestInt17, Int32(-65536))
+    @test Core.Intrinsics.sext_int(Int32, si17_min) === Int32(-65536)
+
+    si24 = Core.Intrinsics.trunc_int(TestInt24, Int32(-1))
+    @test Core.Intrinsics.sext_int(Int32, si24) === Int32(-1)
+    si24_pos = Core.Intrinsics.trunc_int(TestInt24, Int32(42))
+    @test Core.Intrinsics.sext_int(Int32, si24_pos) === Int32(42)
+
+    si63 = Core.Intrinsics.trunc_int(TestInt63, Int64(-1))
+    @test Core.Intrinsics.sext_int(Int64, si63) === Int64(-1)
+    si63_pos = Core.Intrinsics.trunc_int(TestInt63, Int64(1))
+    @test Core.Intrinsics.sext_int(Int64, si63_pos) === Int64(1)
+
+    # bitcast between same-bitsizeof types
+    bc = Core.Intrinsics.bitcast(TestUInt24, x24)
+    @test Core.Intrinsics.zext_int(UInt32, bc) === UInt32(0x00AA9988)
+
+    bc63 = Core.Intrinsics.bitcast(TestUInt63, si63)
+    @test Core.Intrinsics.zext_int(UInt64, bc63) === UInt64(0x7FFFFFFFFFFFFFFF)
+
+    # bitcast between types with different bitsizeof should fail
+    @test_throws ErrorException Core.Intrinsics.bitcast(TestUInt24, x40)
+    @test_throws ErrorException Core.Intrinsics.bitcast(TestUInt63, x24)
+    @test_throws ErrorException Core.Intrinsics.bitcast(TestUInt17, x24)
+    @test_throws ErrorException Core.Intrinsics.bitcast(TestUInt23, x24)
+
+    # add_int on non-standard widths
+    a24 = Core.Intrinsics.trunc_int(TestUInt24, UInt32(1))
+    b24 = Core.Intrinsics.trunc_int(TestUInt24, UInt32(2))
+    @test Core.Intrinsics.zext_int(UInt32, Core.Intrinsics.add_int(a24, b24)) === UInt32(3)
+
+    a63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64(100))
+    b63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64(200))
+    @test Core.Intrinsics.zext_int(UInt64, Core.Intrinsics.add_int(a63, b63)) === UInt64(300)
+
+    # egal (===) with padding bits
+    p = Core.Intrinsics.trunc_int(TestUInt24, UInt32(42))
+    q = Core.Intrinsics.trunc_int(TestUInt24, UInt32(42))
+    @test p === q
+    r = Core.Intrinsics.trunc_int(TestUInt24, UInt32(43))
+    @test !(p === r)
+
+    # egal for non-byte-aligned
+    p63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64(42))
+    q63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64(42))
+    @test p63 === q63
+
+    # objectid consistency
+    @test objectid(p) == objectid(q)
+    @test objectid(p63) == objectid(q63)
+
+    # add_int on non-byte-aligned widths
+    a17 = Core.Intrinsics.trunc_int(TestUInt17, UInt32(1))
+    b17 = Core.Intrinsics.trunc_int(TestUInt17, UInt32(2))
+    @test Core.Intrinsics.zext_int(UInt32, Core.Intrinsics.add_int(a17, b17)) === UInt32(3)
+
+    # cross-width trunc chains: UInt64 -> UInt40 -> UInt24 -> UInt17
+    chain = Core.Intrinsics.trunc_int(TestUInt40, UInt64(0x000000AABBCCDDEE))
+    @test Core.Intrinsics.zext_int(UInt64, chain) === UInt64(0x000000AABBCCDDEE)
+    chain2 = Core.Intrinsics.trunc_int(TestUInt24, chain)
+    @test Core.Intrinsics.zext_int(UInt64, chain2) === UInt64(0x0000000000CCDDEE)
+    chain3 = Core.Intrinsics.trunc_int(TestUInt17, chain2)
+    # 0xCCDDEE & 0x1FFFF = 0xDDEE (bit 16 of 0xCC is 0)
+    @test Core.Intrinsics.zext_int(UInt32, chain3) === UInt32(0x0000DDEE)
+
+    # zext chains: UInt17 -> UInt24 -> UInt40 -> UInt64
+    back1 = Core.Intrinsics.zext_int(TestUInt24, chain3)
+    @test Core.Intrinsics.zext_int(UInt32, back1) === UInt32(0x0000DDEE)
+    back2 = Core.Intrinsics.zext_int(TestUInt40, back1)
+    @test Core.Intrinsics.zext_int(UInt64, back2) === UInt64(0x000000000000DDEE)
+
+    # same chains with all-bits-set input to exercise partial-byte clearing
+    allones = UInt64(0xFFFFFFFFFFFFFFFF)
+    c40 = Core.Intrinsics.trunc_int(TestUInt40, allones)
+    @test Core.Intrinsics.zext_int(UInt64, c40) === UInt64(0x000000FFFFFFFFFF)
+    c24 = Core.Intrinsics.trunc_int(TestUInt24, c40)
+    @test Core.Intrinsics.zext_int(UInt64, c24) === UInt64(0x0000000000FFFFFF)
+    c17 = Core.Intrinsics.trunc_int(TestUInt17, c24)
+    @test Core.Intrinsics.zext_int(UInt32, c17) === UInt32(0x0001FFFF)
+    b1 = Core.Intrinsics.zext_int(TestUInt24, c17)
+    @test Core.Intrinsics.zext_int(UInt32, b1) === UInt32(0x0001FFFF)
+    b2 = Core.Intrinsics.zext_int(TestUInt40, b1)
+    @test Core.Intrinsics.zext_int(UInt64, b2) === UInt64(0x000000000001FFFF)
+
+    # bitstring
+    @test bitstring(Core.Intrinsics.trunc_int(TestUInt63, UInt64(0x7FFFFFFFFFFFFFFF))) ==
+        repeat("1", 63)
+    @test bitstring(Core.Intrinsics.trunc_int(TestUInt24, UInt32(0xABCDEF))) ==
+        "101010111100110111101111"
+    @test bitstring(Core.Intrinsics.trunc_int(TestUInt17, UInt32(0x1FFFF))) ==
+        repeat("1", 17)
+end
+
 # test nonsensical valid conversions and errors
 
 compiled_addi(x, y) = Core.Intrinsics.add_int(x, y)

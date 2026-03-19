@@ -189,6 +189,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
                                            uint32_t nfields,
                                            uint32_t npointers,
                                            uint32_t alignment,
+                                           uint32_t nbits,
                                            int haspadding,
                                            int isbitsegal,
                                            int arrayelem,
@@ -235,6 +236,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
     assert(flddesc);
     flddesc->size = sz;
     flddesc->nfields = nfields;
+    flddesc->nbits = nbits;
     flddesc->alignment = alignment;
     flddesc->flags.haspadding = haspadding;
     flddesc->flags.isbitsegal = isbitsegal;
@@ -337,6 +339,11 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
         // extra bits on most platforms when computing alignment but not when
         // computing type size, but adds no extra bytes for each element, so
         // their effect on offsets are never what you may naturally expect).
+        return 0;
+    if (jl_datatype_nbits(ty) != elsz * 8)
+        // Reject primitive types with padding bits (e.g. a 24-bit type stored
+        // in 4 bytes). SIMD operations would act on the full storage width,
+        // ignoring the logical bit width, which would be semantically wrong.
         return 0;
     size_t size = nfields * elsz;
     // Use natural alignment for this vector: this matches LLVM and clang.
@@ -523,7 +530,7 @@ void jl_get_genericmemory_layout(jl_datatype_t *st)
     }
     if (!jl_is_type(eltype)) {
         // this is expected to have a layout, but since it is not constructable, we don't care too much what it is
-        static const jl_datatype_layout_t opaque_ptr_layout = {0, 0, 1, -1, sizeof(void*), {0}};
+        static const jl_datatype_layout_t opaque_ptr_layout = {0, 0, 1, -1, 0, sizeof(void*), {0}};
         st->layout = &opaque_ptr_layout;
         st->has_concrete_subtype = 0;
         return;
@@ -609,7 +616,7 @@ void jl_get_genericmemory_layout(jl_datatype_t *st)
             arrayelem |= 8;  // arrayelem_islocked
     }
     assert(!st->layout);
-    st->layout = jl_get_layout(elsz, nfields, npointers, al, haspadding, isbitsegal, arrayelem, NULL, pointers);
+    st->layout = jl_get_layout(elsz, nfields, npointers, al, elsz * 8, haspadding, isbitsegal, arrayelem, NULL, pointers);
     st->zeroinit = zi;
     //st->has_concrete_subtype = 1;
     //st->isbitstype = 0;
@@ -669,17 +676,17 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         // if we have no fields, we can trivially skip the rest
         if (st == jl_symbol_type || st == jl_string_type) {
             // opaque layout - heap-allocated blob
-            static const jl_datatype_layout_t opaque_byte_layout = {0, 0, 1, -1, 1, { .isbitsegal=1 }};
+            static const jl_datatype_layout_t opaque_byte_layout = {0, 0, 1, -1, 0, 1, { .isbitsegal=1 }};
             st->layout = &opaque_byte_layout;
             return;
         }
         else if (st == jl_simplevector_type || st == jl_module_type) {
-            static const jl_datatype_layout_t opaque_ptr_layout = {0, 0, 1, -1, sizeof(void*), { .isbitsegal=1 }};
+            static const jl_datatype_layout_t opaque_ptr_layout = {0, 0, 1, -1, 0, sizeof(void*), { .isbitsegal=1 }};
             st->layout = &opaque_ptr_layout;
             return;
         }
         else {
-            static const jl_datatype_layout_t singleton_layout = {0, 0, 0, -1, 1, { .isbitsegal=1 }};
+            static const jl_datatype_layout_t singleton_layout = {0, 0, 0, -1, 0, 1, { .isbitsegal=1 }};
             st->layout = &singleton_layout;
         }
     }
@@ -844,7 +851,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             }
         }
         assert(ptr_i == npointers);
-        st->layout = jl_get_layout(sz, nfields, npointers, alignm, haspadding, isbitsegal, 0, desc, pointers);
+        st->layout = jl_get_layout(sz, nfields, npointers, alignm, sz * 8, haspadding, isbitsegal, 0, desc, pointers);
         if (should_malloc) {
             free(desc);
             if (npointers)
@@ -1017,6 +1024,10 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
 # endif
     if (alignm > MAX_ALIGN)
         alignm = MAX_ALIGN;
+    // Round the storage size up to the alignment so that
+    // sizeof(T) == Base.aligned_sizeof(T), matching C23 _BitInt semantics.
+    nbytes = LLT_ALIGN(nbytes, alignm);
+    int haspadding = (nbits != nbytes * 8);
     // memoize isprimitivetype, since it is much easier than checking
     // (dta->name->names == svec() && dta->layout && dta->layout->size != 0)
     // and we easily have a free bit for it in the DataType flags
@@ -1024,7 +1035,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
     bt->ismutationfree = 1;
     bt->isidentityfree = 1;
     bt->isbitstype = (parameters == jl_emptysvec);
-    bt->layout = jl_get_layout(nbytes, 0, 0, alignm, 0, 1, 0, NULL, NULL);
+    bt->layout = jl_get_layout(nbytes, 0, 0, alignm, nbits, haspadding, !haspadding, 0, NULL, NULL);
     bt->instance = NULL;
     return bt;
 }
