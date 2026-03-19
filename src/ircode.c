@@ -467,6 +467,12 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal)
         write_uint8(s->s, TAG_UINT8);
         write_int8(s->s, *(int8_t*)jl_data_ptr(v));
     }
+    else if (jl_typetagis(v, jl_unionall_tag << 4)) {
+        write_uint8(s->s, TAG_UNIONALL);
+        jl_unionall_t *ua = (jl_unionall_t*)v;
+        jl_encode_value(s, ua->var);
+        jl_encode_value(s, ua->body);
+    }
     else if (((jl_datatype_t*)jl_typeof(v))->instance == v) {
         write_uint8(s->s, TAG_SINGLETON);
         jl_encode_value(s, jl_typeof(v));
@@ -946,6 +952,17 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s)
         v = jl_alloc_string(n);
         ios_readall(s->s, jl_string_data(v), n);
         return v;
+    case TAG_UNIONALL:
+    {
+        jl_value_t *var = NULL;
+        jl_value_t *body = NULL;
+        JL_GC_PUSH2(&var, &body);
+        var = jl_decode_value(s);
+        body = jl_decode_value(s);
+        v = (jl_value_t*)jl_new_unionall((jl_tvar_t*)var, body);
+        JL_GC_POP();
+        return v;
+    }
     default:
         assert(tag == TAG_GENERAL);
         return jl_decode_value_any(s);

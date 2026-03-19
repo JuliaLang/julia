@@ -67,6 +67,9 @@ end
 
 const DATATYPE_TYPES_FIELDINDEX = fieldindex(DataType, :types)
 const DATATYPE_NAME_FIELDINDEX = fieldindex(DataType, :name)
+const _PTR_NAME = peelall_unionall(Ptr).second.name
+const _REF_NAME = peelall_unionall(Ref).second.name
+const _GENERICMEMORY_NAME = peelall_unionall(GenericMemory).second.name
 
 ##########
 # tfuncs #
@@ -118,9 +121,11 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(tro
         end
         return tp, !has_free_typevars(tp), isconcretetype(tp), true
     elseif isa(t, UnionAll)
-        t′ = unwrap_unionall(t)
-        t′′, isexact, isconcrete, istype = instanceof_tfunc(t′, astag, rewrap_unionall(t, troot))
-        tr = rewrap_unionall(t′′, t)
+        (_t_vars, t′) = peelall_unionall(t)
+        (_troot_vars, _troot_body) = peelall_unionall(troot)
+        _rewrapped_t_in_troot = foldr_unionall(t, _troot_vars)
+        t′′, isexact, isconcrete, istype = instanceof_tfunc(t′, astag, _rewrapped_t_in_troot)
+        tr = foldr_unionall(t′′, _t_vars)
         if t′′ isa DataType && t′′.name !== Tuple.name && !has_free_typevars(tr)
             # a real instance must be within the declared bounds of the type,
             # so we can intersect with the original wrapper.
@@ -409,7 +414,7 @@ end
         arg1 = widenmustalias(arg1)
     end
     arg1t = arg1 isa Const ? typeof(arg1.val) : isconstType(arg1) ? typeof(arg1.parameters[1]) : widenconst(arg1)
-    a1 = unwrap_unionall(arg1t)
+    (_arg1t_vars, a1) = peelall_unionall(arg1t)
     if isa(a1, DataType) && !isabstracttype(a1)
         if a1 === Module
             hasintersect(widenconst(sym), Symbol) || return Bottom
@@ -460,9 +465,11 @@ end
         end
     elseif isa(a1, Union)
         # Results can only be `Const` or `Bool`
+        _rewrap_a = foldr_unionall(a1.a, _arg1t_vars)
+        _rewrap_b = foldr_unionall(a1.b, _arg1t_vars)
         return tmerge(𝕃,
-                      isdefined_tfunc(𝕃, rewrap_unionall(a1.a, arg1t), sym),
-                      isdefined_tfunc(𝕃, rewrap_unionall(a1.b, arg1t), sym))
+                      isdefined_tfunc(𝕃, _rewrap_a, sym),
+                      isdefined_tfunc(𝕃, _rewrap_b, sym))
     end
     return Bool
 end
@@ -475,10 +482,10 @@ function sizeof_nothrow(@nospecialize(x))
             return true
         end
     end
-    xu = unwrap_unionall(x)
+    (_x_vars, xu) = peelall_unionall(x)
     if isa(xu, Union)
-        return sizeof_nothrow(rewrap_unionall(xu.a, x)) &&
-               sizeof_nothrow(rewrap_unionall(xu.b, x))
+        return sizeof_nothrow(foldr_unionall(xu.a, _x_vars)) &&
+               sizeof_nothrow(foldr_unionall(xu.b, _x_vars))
     end
     t, exact, isconcrete = instanceof_tfunc(x, false)
     if t === Bottom
@@ -486,7 +493,7 @@ function sizeof_nothrow(@nospecialize(x))
         x = widenconst(x)
         return !hasintersect(x, Type)
     end
-    x = unwrap_unionall(t)
+    x = peelall_unionall(t).second
     if isconcrete
         if isa(x, DataType) && x.layout != C_NULL
             # there's just a few concrete types with an opaque layout
@@ -525,10 +532,10 @@ end
     isa(x, Const) && return _const_sizeof(x.val)
     isa(x, Conditional) && return _const_sizeof(Bool)
     isconstType(x) && return _const_sizeof(x.parameters[1])
-    xu = unwrap_unionall(x)
+    (_x_vars, xu) = peelall_unionall(x)
     if isa(xu, Union)
-        return tmerge(sizeof_tfunc(𝕃, rewrap_unionall(xu.a, x)),
-                      sizeof_tfunc(𝕃, rewrap_unionall(xu.b, x)))
+        return tmerge(sizeof_tfunc(𝕃, foldr_unionall(xu.a, _x_vars)),
+                      sizeof_tfunc(𝕃, foldr_unionall(xu.b, _x_vars)))
     end
     # Core.sizeof operates on either a type or a value. First check which
     # case we're in.
@@ -536,7 +543,7 @@ end
     if t !== Bottom
         # The value corresponding to `x` at runtime could be a type.
         # Normalize the query to ask about that type.
-        x = unwrap_unionall(t)
+        x = peelall_unionall(t).second
         if exact && isa(x, Union)
             isinline = uniontype_layout(x)[1]
             return isinline ? Const(Int(Core.sizeof(x))) : Bottom
@@ -555,7 +562,7 @@ add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 1)
     isa(x, Const) && return Const(nfields(x.val))
     isa(x, Conditional) && return Const(0)
     xt = widenconst(x)
-    x = unwrap_unionall(xt)
+    (_xt_vars, x) = peelall_unionall(xt)
     isconstType(x) && return Const(nfields(x.parameters[1]))
     if isa(x, DataType) && !isabstracttype(x)
         if x.name === Tuple.name
@@ -564,7 +571,9 @@ add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 1)
         elseif x.name === _NAMEDTUPLE_NAME
             length(x.parameters) == 2 || return Int
             names = x.parameters[1]
-            isa(names, Tuple{Vararg{Symbol}}) || return nfields_tfunc(𝕃, rewrap_unionall(x.parameters[2], xt))
+            if !(isa(names, Tuple{Vararg{Symbol}}))
+                return nfields_tfunc(𝕃, foldr_unionall(x.parameters[2], _xt_vars))
+            end
             return Const(length(names))
         else
             return Const(isdefined(x, :types) ? length(x.types) : length(x.name.names))
@@ -697,11 +706,11 @@ end
 function pointer_eltype(@nospecialize(ptr))
     a = widenconst(ptr)
     if !has_free_typevars(a)
-        unw = unwrap_unionall(a)
-        if isa(unw, DataType) && unw.name === Ptr.body.name
+        (_pe_vars, unw) = peelall_unionall(a)
+        if isa(unw, DataType) && unw.name === _PTR_NAME
             T = unw.parameters[1]
             valid_as_lattice(T, true) || return Bottom
-            return rewrap_unionall(T, a)
+            return foldr_unionall(T, _pe_vars)
         end
     end
     return Any
@@ -731,12 +740,12 @@ end
 @nospecs function atomic_pointermodify_tfunc(𝕃::AbstractLattice, ptr, op, v, order)
     a = widenconst(ptr)
     if !has_free_typevars(a)
-        unw = unwrap_unionall(a)
-        if isa(unw, DataType) && unw.name === Ptr.body.name
+        (_apm_vars, unw) = peelall_unionall(a)
+        if isa(unw, DataType) && unw.name === _PTR_NAME
             T = unw.parameters[1]
             # note: we could sometimes refine this to a PartialStruct if we analyzed `op(T, T)::T`
             valid_as_lattice(T, true) || return Bottom
-            return rewrap_unionall(Pair{T, T}, a)
+            return foldr_unionall(Pair{T, T}, _apm_vars)
         end
     end
     return Pair
@@ -744,11 +753,11 @@ end
 @nospecs function atomic_pointerreplace_tfunc(𝕃::AbstractLattice, ptr, x, v, success_order, failure_order)
     a = widenconst(ptr)
     if !has_free_typevars(a)
-        unw = unwrap_unionall(a)
-        if isa(unw, DataType) && unw.name === Ptr.body.name
+        (_apr_vars, unw) = peelall_unionall(a)
+        if isa(unw, DataType) && unw.name === _PTR_NAME
             T = unw.parameters[1]
             valid_as_lattice(T) || return Bottom
-            return rewrap_unionall(ccall(:jl_apply_cmpswap_type, Any, (Any,), T), a)
+            return foldr_unionall(ccall(:jl_apply_cmpswap_type, Any, (Any,), T), _apr_vars)
         end
     end
     return ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T
@@ -832,18 +841,18 @@ end
         b = widenconst(_typeof_tfunc(𝕃, t.b))
         return Union{a, b}
     elseif isa(t, UnionAll)
-        u = unwrap_unionall(t)
+        (_typeof_vars, u) = peelall_unionall(t)
         if isa(u, DataType) && !isabstracttype(u)
             if u.name === Tuple.name
                 uu = typeof_concrete_vararg(u)
                 if uu !== nothing
-                    return rewrap_unionall(uu, t)
+                    return foldr_unionall(uu, _typeof_vars)
                 end
             else
-                return rewrap_unionall(Type{u}, t)
+                return foldr_unionall(Type{u}, _typeof_vars)
             end
         end
-        return rewrap_unionall(widenconst(typeof_tfunc(𝕃, u)), t)
+        return foldr_unionall(widenconst(typeof_tfunc(𝕃, u)), _typeof_vars)
     end
     return DataType # typeof(anything)::DataType
 end
@@ -855,6 +864,17 @@ end
     return typeof_tfunc(𝕃, t)
 end
 add_tfunc(typeof, 1, 1, typeof_tfunc, 1)
+
+# peel_unionall is intentionally modeled as inconsistent:
+# two === UnionAll values may have different var/body,
+# so we never narrow beyond Pair{TypeVar, Any}.
+@nospecs function peel_unionall_tfunc(𝕃::AbstractLattice, t)
+    if !hasintersect(widenconst(t), UnionAll)
+        return Bottom
+    end
+    return Pair{TypeVar, Any}
+end
+add_tfunc(Core.peel_unionall, 1, 1, peel_unionall_tfunc, 0)
 
 @nospecs function typeassert_tfunc(𝕃::AbstractLattice, v, t)
     t = instanceof_tfunc(t, true)[1]
@@ -1017,7 +1037,7 @@ end
             nflds = nfields(sv)
             ismod = sv isa Module
         elseif isa(s00, PartialStruct)
-            sty = unwrap_unionall(s00.typ)
+            sty = peelall_unionall(s00.typ).second
             nflds = fieldcount_noerror(sty)
             ismod = false
         else
@@ -1049,10 +1069,10 @@ end
     end
 
     s0 = widenconst(s00)
-    s = unwrap_unionall(s0)
+    (_gfnt_vars, s) = peelall_unionall(s0)
     if isa(s, Union)
-        return getfield_nothrow(𝕃, rewrap_unionall(s.a, s00), name, boundscheck) &&
-               getfield_nothrow(𝕃, rewrap_unionall(s.b, s00), name, boundscheck)
+        return getfield_nothrow(𝕃, foldr_unionall(s.a, _gfnt_vars), name, boundscheck) &&
+               getfield_nothrow(𝕃, foldr_unionall(s.b, _gfnt_vars), name, boundscheck)
     elseif isType(s) && isTypeDataType(s.parameters[1])
         s = s0 = DataType
     end
@@ -1144,7 +1164,7 @@ end
 @nospecs function _getfield_tfunc(𝕃::PartialsLattice, s00, name, setfield::Bool)
     if isa(s00, PartialStruct)
         s = widenconst(s00)
-        sty = unwrap_unionall(s)::DataType
+        sty = peelall_unionall(s).second::DataType
         if isa(name, Const)
             nv = _getfield_fieldindex(sty, name)
             if isa(nv, Int)
@@ -1183,10 +1203,10 @@ end
 end
 
 @nospecs function _getfield_tfunc(𝕃::JLTypeLattice, s00, name, setfield::Bool)
-    s = unwrap_unionall(s00)
+    (_s00_vars, s) = peelall_unionall(s00)
     if isa(s, Union)
-        return tmerge(_getfield_tfunc(𝕃, rewrap_unionall(s.a, s00), name, setfield),
-                      _getfield_tfunc(𝕃, rewrap_unionall(s.b, s00), name, setfield))
+        return tmerge(_getfield_tfunc(𝕃, foldr_unionall(s.a, _s00_vars), name, setfield),
+                      _getfield_tfunc(𝕃, foldr_unionall(s.b, _s00_vars), name, setfield))
     end
     if isType(s)
         if isconstType(s)
@@ -1229,8 +1249,7 @@ end
         elseif Symbol ⊑ name
             name = Int
         end
-        _ts = unwraptv(s.parameters[2])
-        _ts = rewrap_unionall(_ts, s00)
+        _ts = foldr_unionall(unwraptv(s.parameters[2]), _s00_vars)
         if !(_ts <: Tuple)
             return Any
         end
@@ -1260,7 +1279,7 @@ end
                 _ft = unwrapva(ftypes[i])
                 valid_as_lattice(_ft, true) || continue
                 setfield && isconst(s, i) && continue
-                t = tmerge(t, rewrap_unionall(_ft, s00))
+                t = tmerge(t, foldr_unionall(_ft, _s00_vars))
                 t === Any && break
             end
             return t
@@ -1283,7 +1302,7 @@ end
             return R
         end
     end
-    return rewrap_unionall(R, s00)
+    return foldr_unionall(R, _s00_vars)
 end
 
 @nospecs function setfield!_tfunc(𝕃::AbstractLattice, o, f, v, order)
@@ -1301,10 +1320,10 @@ end
 end
 mutability_errorcheck(@nospecialize obj) = _mutability_errorcheck(widenconst(obj))
 function _mutability_errorcheck(@nospecialize objt0)
-    objt = unwrap_unionall(objt0)
+    (_me_vars, objt) = peelall_unionall(objt0)
     if isa(objt, Union)
-        return _mutability_errorcheck(rewrap_unionall(objt.a, objt0)) ||
-               _mutability_errorcheck(rewrap_unionall(objt.b, objt0))
+        return _mutability_errorcheck(foldr_unionall(objt.a, _me_vars)) ||
+               _mutability_errorcheck(foldr_unionall(objt.b, _me_vars))
     elseif isa(objt, DataType)
         # Can't say anything about abstract types
         isabstracttype(objt) && return true
@@ -1319,10 +1338,10 @@ end
 end
 @nospecs function setfield!_nothrow(𝕃::AbstractLattice, s00, name, v)
     s0 = widenconst(s00)
-    s = unwrap_unionall(s0)
+    (_sf_vars, s) = peelall_unionall(s0)
     if isa(s, Union)
-        return setfield!_nothrow(𝕃, rewrap_unionall(s.a, s00), name, v) &&
-               setfield!_nothrow(𝕃, rewrap_unionall(s.b, s00), name, v)
+        return setfield!_nothrow(𝕃, foldr_unionall(s.a, _sf_vars), name, v) &&
+               setfield!_nothrow(𝕃, foldr_unionall(s.b, _sf_vars), name, v)
     elseif isa(s, DataType)
         # Can't say anything about abstract types
         isabstracttype(s) && return false
@@ -1467,10 +1486,10 @@ add_tfunc(setfieldonce!, 3, 5, setfieldonce!_tfunc, 3)
         return false
     end
 
-    su = unwrap_unionall(s0)
+    (_ftn_vars, su) = peelall_unionall(s0)
     if isa(su, Union)
-        return fieldtype_nothrow(𝕃, rewrap_unionall(su.a, s0), name) &&
-               fieldtype_nothrow(𝕃, rewrap_unionall(su.b, s0), name)
+        return fieldtype_nothrow(𝕃, foldr_unionall(su.a, _ftn_vars), name) &&
+               fieldtype_nothrow(𝕃, foldr_unionall(su.b, _ftn_vars), name)
     end
 
     s, exact = instanceof_tfunc(s0, false)
@@ -1479,7 +1498,7 @@ add_tfunc(setfieldonce!, 3, 5, setfieldonce!_tfunc, 3)
 end
 
 function _fieldtype_nothrow(@nospecialize(s), exact::Bool, name::Const)
-    u = unwrap_unionall(s)
+    u = peelall_unionall(s).second
     if isa(u, Union)
         a = _fieldtype_nothrow(u.a, exact, name)
         b = _fieldtype_nothrow(u.b, exact, name)
@@ -1532,10 +1551,10 @@ end
         return Bottom
     end
 
-    su = unwrap_unionall(s0)
+    (_ft_vars, su) = peelall_unionall(s0)
     if isa(su, Union)
-        return tmerge(fieldtype_tfunc(𝕃, rewrap_unionall(su.a, s0), name),
-                      fieldtype_tfunc(𝕃, rewrap_unionall(su.b, s0), name))
+        return tmerge(fieldtype_tfunc(𝕃, foldr_unionall(su.a, _ft_vars), name),
+                      fieldtype_tfunc(𝕃, foldr_unionall(su.b, _ft_vars), name))
     end
 
     s, exact = instanceof_tfunc(s0, false)
@@ -1545,10 +1564,10 @@ end
 
 @nospecs function _fieldtype_tfunc(𝕃::AbstractLattice, s, name, exact::Bool)
     exact = exact && !has_free_typevars(s)
-    u = unwrap_unionall(s)
+    (_fdt_vars, u) = peelall_unionall(s)
     if isa(u, Union)
-        ta0 = _fieldtype_tfunc(𝕃, rewrap_unionall(u.a, s), name, exact)
-        tb0 = _fieldtype_tfunc(𝕃, rewrap_unionall(u.b, s), name, exact)
+        ta0 = _fieldtype_tfunc(𝕃, foldr_unionall(u.a, _fdt_vars), name, exact)
+        tb0 = _fieldtype_tfunc(𝕃, foldr_unionall(u.b, _fdt_vars), name, exact)
         ta0 ⊑ tb0 && return tb0
         tb0 ⊑ ta0 && return ta0
         ta, exacta, _, istypea = instanceof_tfunc(ta0, false)
@@ -1593,7 +1612,7 @@ end
                 continue
             end
             exactft1 = exact || (!has_free_typevars(ft1) && u.name !== Tuple.name)
-            ft1 = rewrap_unionall(ft1, s)
+            ft1 = foldr_unionall(ft1, _fdt_vars)
             if exactft1
                 if hasuniquerep(ft1)
                     ft1 = Const(ft1) # ft unique via type cache
@@ -1636,7 +1655,7 @@ end
     end
 
     exactft = exact || (!has_free_typevars(ft) && u.name !== Tuple.name)
-    ft = rewrap_unionall(ft, s)
+    ft = foldr_unionall(ft, _fdt_vars)
     if exactft
         if hasuniquerep(ft)
             return Const(ft) # ft unique via type cache
@@ -1654,7 +1673,7 @@ add_tfunc(fieldtype, 2, 3, fieldtype_tfunc, 0)
 # Like `valid_tparam`, but in the type domain.
 valid_tparam_type(T::DataType) = valid_typeof_tparam(T)
 valid_tparam_type(U::Union) = valid_tparam_type(U.a) && valid_tparam_type(U.b)
-valid_tparam_type(U::UnionAll) = valid_tparam_type(unwrap_unionall(U))
+valid_tparam_type(U::UnionAll) = valid_tparam_type(peelall_unionall(U).second)
 
 function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize(rt))
     rt === Type && return false
@@ -1675,25 +1694,26 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
     # TODO: implement optimization for isvarargtype(u) and istuple occurrences (which are valid but are not UnionAll)
     for i = 2:length(argtypes)
         isa(u, UnionAll) || return false
+        (uv, u) = peel_unionall(u)
         ai = widenconditional(argtypes[i])
         if ⊑(𝕃, ai, TypeVar) || ai === DataType
             # We don't know anything about the bounds of this typevar, but as
             # long as the UnionAll is not constrained, that's ok.
-            if !(u.var.lb === Union{} && u.var.ub === Any)
+            if !(uv.lb === Union{} && uv.ub === Any)
                 return false
             end
         elseif (isa(ai, Const) && isa(ai.val, Type)) || isconstType(ai)
             ai = isa(ai, Const) ? ai.val : (ai::DataType).parameters[1]
-            if has_free_typevars(u.var.lb) || has_free_typevars(u.var.ub)
+            if has_free_typevars(uv.lb) || has_free_typevars(uv.ub)
                 return false
             end
-            if !(u.var.lb <: ai <: u.var.ub)
+            if !(uv.lb <: ai <: uv.ub)
                 return false
             end
         else
             T, exact, _, istype = instanceof_tfunc(ai, false)
             if T === Bottom
-                if !(u.var.lb === Union{} && u.var.ub === Any)
+                if !(uv.lb === Union{} && uv.ub === Any)
                     return false
                 end
                 if !valid_tparam_type(widenconst(ai))
@@ -1701,15 +1721,14 @@ function apply_type_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospe
                 end
             else
                 istype || return false
-                if isa(u.var.ub, TypeVar) || !(T <: u.var.ub)
+                if isa(uv.ub, TypeVar) || !(T <: uv.ub)
                     return false
                 end
-                if exact ? !(u.var.lb <: T) : !(u.var.lb === Bottom)
+                if exact ? !(uv.lb <: T) : !(uv.lb === Bottom)
                     return false
                 end
             end
         end
-        u = u.body
     end
     return true
 end
@@ -1792,7 +1811,7 @@ end
     if !istuple && !isa(headtype, UnionAll) && !isvarargtype(headtype)
         return Union{}
     end
-    uw = unwrap_unionall(headtype)
+    uw = peelall_unionall(headtype).second
     uncertain = false
     canconst = true
     tparams = Any[]
@@ -1801,10 +1820,10 @@ end
     # first push the tailing vars from headtype into outervars
     outer_start, ua = 0, headtype
     while isa(ua, UnionAll)
+        (uav, ua) = peel_unionall(ua)
         if (outer_start += 1) > largs - 1
-            push!(outervars, ua.var)
+            push!(outervars, uav)
         end
-        ua = ua.body
     end
     if largs - 1 > outer_start && isa(headtype, UnionAll) # e.g. !isvarargtype(ua) && !istuple
         return Bottom # too many arguments
@@ -1827,11 +1846,11 @@ end
             push!(tparams, ai.tv)
         else
             uncertain = true
-            unw = unwrap_unionall(ai)
+            (_ai_vars, unw) = peelall_unionall(ai)
             isT = isType(unw)
             # compute our desired upper bound value
             if isT
-                ub = rewrap_unionall(unw.parameters[1], ai)
+                ub = foldr_unionall(unw.parameters[1], _ai_vars)
             else
                 ub = Any
             end
@@ -1840,11 +1859,13 @@ end
                 # outer type, use the wrapper type, instead of letting it nest more
                 # complexity here. This is not monotonic, but seems to work out pretty well.
                 if isT
-                    ub = unwrap_unionall(unw.parameters[1])
+                    ub = peelall_unionall(unw.parameters[1]).second
                     if ub isa DataType
                         ub = ub.name.wrapper
-                        unw = Type{unwrap_unionall(ub)}
-                        ai = rewrap_unionall(unw, ub)
+                        _ub_inner = peelall_unionall(ub).second
+                        unw = Type{_ub_inner}
+                        (_ub_vars, _) = peelall_unionall(ub)
+                        ai = foldr_unionall(unw, _ub_vars)
                     else
                         isT = false
                         ai = unw = ub = Any
@@ -1868,23 +1889,21 @@ end
             elseif isT
                 tai = ai
                 while isa(tai, UnionAll)
+                    (taiv, tai) = peel_unionall(tai)
                     # make sure vars introduced here are unique
-                    if contains_is(outervars, tai.var)
+                    if contains_is(outervars, taiv)
                         ai = rename_unionall(ai)
-                        unw = unwrap_unionall(ai)::DataType
-                        # ub = rewrap_unionall(unw, ai)
+                        unw = peelall_unionall(ai).second::DataType
+                        # ub = rewrap ai's UnionAll chain around unw
                         break
                     end
-                    tai = tai.body
                 end
                 push!(tparams, unw.parameters[1])
-                while isa(ai, UnionAll)
-                    push!(outervars, ai.var)
-                    ai = ai.body
-                end
+                (_aiv_vars, ai) = peelall_unionall(ai)
+                append!(outervars, _aiv_vars)
             else
                 # Is this the second parameter to a NamedTuple?
-                if isa(uw, DataType) && uw.name === _NAMEDTUPLE_NAME && isa(ua, UnionAll) && uw.parameters[2] === ua.var
+                if isa(uw, DataType) && uw.name === _NAMEDTUPLE_NAME && isa(ua, UnionAll) && uw.parameters[2] === peel_unionall(ua)[1]
                     # If the names are known, keep the upper bound, but otherwise widen to Tuple.
                     # This is a widening heuristic to avoid keeping type information
                     # that's unlikely to be useful.
@@ -1902,7 +1921,7 @@ end
             end
         end
         if ua isa UnionAll
-            ua = ua.body
+            (_, ua) = peel_unionall(ua)
             #otherwise, sometimes ua isa Vararg (Core.TypeofVararg) or Tuple (DataType)
         end
     end
@@ -1932,8 +1951,8 @@ end
         if isa(appl, UnionAll)
             for _ = 2:largs
                 appl = appl::UnionAll
-                push!(outervars, appl.var)
-                appl = appl.body
+                (applv, appl) = peel_unionall(appl)
+                push!(outervars, applv)
             end
         end
     end
@@ -2075,13 +2094,13 @@ add_tfunc(memoryref_isassigned, 3, 3, memoryref_isassigned_tfunc, 20)
 @nospecs function memoryref_tfunc(𝕃::AbstractLattice, mem)
     a = widenconst(unwrapva(mem))
     if !has_free_typevars(a)
-        unw = unwrap_unionall(a)
-        if isa(unw, DataType) && unw.name === GenericMemory.body.body.body.name
+        (_mr_vars, unw) = peelall_unionall(a)
+        if isa(unw, DataType) && unw.name === _GENERICMEMORY_NAME
             A = unw.parameters[1]
             T = unw.parameters[2]
             AS = unw.parameters[3]
             T isa Type || T isa TypeVar || return Bottom
-            return rewrap_unionall(GenericMemoryRef{A, T, AS}, a)
+            return foldr_unionall(GenericMemoryRef{A, T, AS}, _mr_vars)
         end
     end
     return GenericMemoryRef
@@ -2116,14 +2135,11 @@ end
 @nospecs function memoryref_elemtype(mem)
     m = widenconst(mem)
     if !has_free_typevars(m) && m <: GenericMemoryRef
-        m0 = m
-        if isa(m, UnionAll)
-            m = unwrap_unionall(m0)
-        end
+        (_mre_vars, m) = peelall_unionall(m)
         if isa(m, DataType)
             T = m.parameters[2]
             valid_as_lattice(T, true) || return Bottom
-            return rewrap_unionall(T, m0)
+            return foldr_unionall(T, _mre_vars)
         end
     end
     return Any
@@ -2132,15 +2148,12 @@ end
 @nospecs function _memoryref_elemtype(mem)
     m = widenconst(mem)
     if !has_free_typevars(m) && m <: GenericMemoryRef
-        m0 = m
-        if isa(m, UnionAll)
-            m = unwrap_unionall(m0)
-        end
+        (_mre2_vars, m) = peelall_unionall(m)
         if isa(m, DataType)
             T = m.parameters[2]
             valid_as_lattice(T, true) || return Bottom
             has_free_typevars(T) || return Const(T)
-            return rewrap_unionall(Type{T}, m0)
+            return foldr_unionall(Type{T}, _mre2_vars)
         end
     end
     return Type
@@ -2165,7 +2178,7 @@ end
 
 # whether getindex for the elements can potentially throw UndefRef
 @nospecs function array_type_undefable(arytype)
-    arytype = unwrap_unionall(arytype)
+    arytype = peelall_unionall(arytype).second
     if isa(arytype, Union)
         return array_type_undefable(arytype.a) || array_type_undefable(arytype.b)
     elseif arytype isa DataType
@@ -2339,6 +2352,9 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
     elseif f === Core._svec_ref
         na == 2 || return false
         return _svec_ref_tfunc(𝕃, argtypes[1], argtypes[2]) isa Const
+    elseif f === Core.peel_unionall
+        na == 1 || return false
+        return widenconst(argtypes[1]) <: UnionAll
     end
     return false
 end
@@ -2400,6 +2416,7 @@ const _EFFECT_FREE_BUILTINS = [
     compilerbarrier,
     Core._svec_len,
     Core._svec_ref,
+    Core.peel_unionall,
 ]
 
 const _INACCESSIBLEMEM_BUILTINS = Any[
@@ -2421,6 +2438,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     Core._typevar,
     donotdelete,
     Core.memorynew,
+    Core.peel_unionall,
 ]
 
 const _ARGMEM_BUILTINS = Any[
@@ -2587,6 +2605,7 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     Core.finalizer,
     Core.get_binding_type,
     Core.ifelse,
+    Core.peel_unionall,
     # Core.invoke_in_world,
     # invokelatest,
     Core.memorynew,
@@ -2683,7 +2702,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
             consistent = ALWAYS_TRUE
         elseif f === memoryrefget || f === memoryrefset! || f === memoryref_isassigned || f === Core._svec_len || f === Core._svec_ref
             consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
-        elseif f === Core._typevar || f === Core.memorynew
+        elseif f === Core._typevar || f === Core.memorynew || f === Core.peel_unionall
             consistent = CONSISTENT_IF_NOTRETURNED
         else
             consistent = ALWAYS_FALSE
@@ -3215,13 +3234,13 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
     end
     (types, isexact, _, _) = instanceof_tfunc(argtype_by_index(argtypes, typeidx), false)
     isexact || return CallMeta(Bool, Any, Effects(), NoCallInfo())
-    unwrapped = unwrap_unionall(types)
+    (_hm_vars, unwrapped) = peelall_unionall(types)
     if types === Bottom || !(unwrapped isa DataType) || unwrapped.name !== Tuple.name
         return CallMeta(Bool, Any, EFFECTS_THROWS, NoCallInfo())
     end
     if typeidx == 3
         isdispatchelem(ft) || return CallMeta(Bool, Any, Effects(), NoCallInfo()) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
-        types = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
+        types = foldr_unionall(Tuple{ft, unwrapped.parameters...}, _hm_vars)::Type
     end
     match, valid_worlds = findsup(types, method_table(interp))
     update_valid_age!(sv, get_inference_world(interp), valid_worlds)
@@ -3242,7 +3261,7 @@ end
 function typename_static(@nospecialize(t))
     t isa Const && return _typename(t.val)
     t isa Conditional && return Bool.name
-    t = unwrap_unionall(widenconst(t))
+    t = peelall_unionall(widenconst(t)).second
     return isType(t) ? _typename(t.parameters[1]) : Core.TypeName
 end
 

@@ -174,15 +174,15 @@ end
 @test isconcretetype(Union)
 @test !isconcretetype(Union{})
 @test !isconcretetype(Complex)
-@test !isconcretetype(Complex.body)
+@test !isconcretetype(peel_unionall(Complex).second)
 @test !isconcretetype(AbstractArray{Int,1})
 struct AlwaysHasLayout{T}
     x
 end
-@test !isconcretetype(AlwaysHasLayout) && !isconcretetype(AlwaysHasLayout.body)
+@test !isconcretetype(AlwaysHasLayout) && !isconcretetype(peel_unionall(AlwaysHasLayout).second)
 @test isconcretetype(AlwaysHasLayout{Any})
 @test isconcretetype(Ptr{Cvoid})
-@test !isconcretetype(Ptr) && !isconcretetype(Ptr.body)
+@test !isconcretetype(Ptr) && !isconcretetype(peel_unionall(Ptr).second)
 
 # issue #10165
 i10165(::Type) = 0

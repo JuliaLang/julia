@@ -10,7 +10,7 @@ module Serialization
 import Base: Bottom, unsafe_convert
 import Base.ScopedValues: ScopedValue, with
 import Core: svec, SimpleVector
-using Base: unaliascopy, unwrap_unionall, require_one_based_indexing, ntupleany
+using Base: unaliascopy, require_one_based_indexing, ntupleany, peel_unionall, peelall_unionall
 using Core.IR
 
 export serialize, deserialize, AbstractSerializer, Serializer
@@ -518,7 +518,7 @@ function serialize(s::AbstractSerializer, g::GlobalRef)
         (g.mod === Main && isdefined(g.mod, g.name) && isconst(g.mod, g.name))
 
         v = getglobal(g.mod, g.name)
-        unw = unwrap_unionall(v)
+        unw = peelall_unionall(v).second
         if isa(unw,DataType) && v === unw.name.wrapper && should_send_whole_type(s, unw)
             # handle references to types in Main by sending the whole type.
             # needed to be able to send nested functions (#15451).
@@ -542,7 +542,7 @@ end
 function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, t.name)
     serialize(s, t.names)
-    primary = unwrap_unionall(t.wrapper)
+    primary = peelall_unionall(t.wrapper).second
     serialize(s, primary.super)
     serialize(s, primary.parameters)
     serialize(s, primary.types)
@@ -586,7 +586,7 @@ end
 
 function serialize_type_data(s, @nospecialize(t::DataType))
     whole = should_send_whole_type(s, t)
-    iswrapper = (t === unwrap_unionall(t.name.wrapper))
+    iswrapper = (t === peelall_unionall(t.name.wrapper).second)
     if whole && iswrapper
         writetag(s.io, WRAPPER_DATATYPE_TAG)
         serialize(s, t.name)
@@ -668,19 +668,18 @@ serialize(s::AbstractSerializer, ::Type{Bottom}) = write_as_tag(s.io, BOTTOM_TAG
 
 function serialize(s::AbstractSerializer, u::UnionAll)
     writetag(s.io, UNIONALL_TAG)
-    n = 0; t = u
-    while isa(t, UnionAll)
-        t = t.body
-        n += 1
-    end
-    if isa(t, DataType) && t === unwrap_unionall(t.name.wrapper)
+    (_sua_vars, t) = peelall_unionall(u)
+    n = length(_sua_vars)
+    _sua_u = t isa DataType ? peelall_unionall(t.name.wrapper).second : nothing
+    if isa(t, DataType) && t === _sua_u
         write(s.io, UInt8(1))
         write(s.io, Int16(n))
         serialize(s, t)
     else
+        (uvar, ubody) = peel_unionall(u)
         write(s.io, UInt8(0))
-        serialize(s, u.var)
-        serialize(s, u.body)
+        serialize(s, uvar)
+        serialize(s, ubody)
     end
 end
 
@@ -911,7 +910,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return deserialize_datatype(s, true)
     elseif b == WRAPPER_DATATYPE_TAG
         tname = deserialize(s)::Core.TypeName
-        return unwrap_unionall(tname.wrapper)
+        return peelall_unionall(tname.wrapper).second
     elseif b == OBJECT_TAG
         t = deserialize(s)
         if t === Missing
@@ -946,7 +945,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return GlobalRef(deserialize(s)::Module, deserialize(s)::Symbol)
     elseif b == FULL_GLOBALREF_TAG
         ty = deserialize(s)
-        tn = unwrap_unionall(ty).name
+        tn = peelall_unionall(ty).second.name
         return GlobalRef(tn.module, tn.name)
     elseif b == LONGTUPLE_TAG
         return deserialize_tuple(s, Int(read(s.io, Int32)::Int32))
@@ -1557,7 +1556,7 @@ function deserialize_datatype(s::AbstractSerializer, full::Bool)
     else
         np = Int(read(s.io, Int32)::Int32)
         if np == 0
-            t = unwrap_unionall(ty)
+            t = peelall_unionall(ty).second
         elseif ty === Tuple
             # note np==0 has its own tag
             if np == 1
@@ -1591,16 +1590,11 @@ function deserialize(s::AbstractSerializer, ::Type{UnionAll})
     else
         n = read(s.io, Int16)
         t = deserialize(s)::DataType
-        w = t.name.wrapper
-        k = 0
-        while isa(w, UnionAll)
-            w = w.body
-            k += 1
-        end
+        k = length(peelall_unionall(t.name.wrapper).first)
         w = t.name.wrapper
         k -= n
         while k > 0
-            w = w.body
+            (_, w) = peel_unionall(w)
             k -= 1
         end
         return w

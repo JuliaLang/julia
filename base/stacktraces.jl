@@ -313,8 +313,10 @@ function show_spec_sig(io::IO, m::Method, @nospecialize(sig::Type))
     if m.nkw > 0
         # rearrange call kw_impl(kw_args..., func, pos_args...) to func(pos_args...; kw_args)
         kwarg_types = Any[ fieldtype(sig, i) for i = 2:(1+m.nkw) ]
-        uw = Base.unwrap_unionall(sig)::DataType
-        pos_sig = Base.rewrap_unionall(Tuple{uw.parameters[(m.nkw+2):end]...}, sig)
+        (_st_vars, uw) = Base.peelall_unionall(sig)
+        uw = uw::DataType
+        _st_new = Tuple{uw.parameters[(m.nkw+2):end]...}
+        pos_sig = Base.foldr_unionall(_st_new, _st_vars)
         kwnames = argnames[2:(m.nkw+1)]
         for i = 1:length(kwnames)
             str = string(kwnames[i])::String

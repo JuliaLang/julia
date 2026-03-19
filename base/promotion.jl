@@ -38,9 +38,11 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     elseif b <: a
         return a
     elseif isa(a, UnionAll)
-        return UnionAll(a.var, typejoin(a.body, b))
+        _pa = peel_unionall(a)
+        return UnionAll(_pa[1], typejoin(_pa[2], b))
     elseif isa(b, UnionAll)
-        return UnionAll(b.var, typejoin(a, b.body))
+        _pb = peel_unionall(b)
+        return UnionAll(_pb[1], typejoin(a, _pb[2]))
     elseif isa(a, Union)
         return typejoin(typejoin(a.a, a.b), b)
     elseif isa(b, Union)
@@ -102,7 +104,7 @@ function typejoin(@nospecialize(a), @nospecialize(b))
             while !(a.name === b.name)
                 a = supertype(a)::DataType
             end
-            if a.name === Type.body.name
+            if a.name === _TYPE_NAME
                 ap = a.parameters[1]
                 bp = b.parameters[1]
                 if ((isa(ap,TypeVar) && ap.lb === Bottom && ap.ub === Any) ||
@@ -124,10 +126,11 @@ function typejoin(@nospecialize(a), @nospecialize(b))
                     aprimary = aprimary{ai}
                 else
                     aprimary = aprimary::UnionAll
-                    # pushfirst!(vars, aprimary.var)
+                    _pp = peel_unionall(aprimary)
+                    # pushfirst!(vars, _pp[1])
                     _growbeg!(vars, 1)
-                    vars[1] = aprimary.var
-                    aprimary = aprimary.body
+                    vars[1] = _pp[1]
+                    aprimary = _pp[2]
                 end
             end
             for v in vars
@@ -228,7 +231,8 @@ function typejoin_union_tuple(T::DataType)
             c[i] = ci
         end
     end
-    return Base.rewrap_unionall(Tuple{c...}, T)
+    _rw_vars = getfield(peelall_unionall(T), 1)
+    return foldr_unionall(Tuple{c...}, _rw_vars)
 end
 
 # Returns length, isfixed

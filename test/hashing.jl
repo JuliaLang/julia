@@ -293,11 +293,11 @@ let t1 = Tuple{AbstractVector,AbstractVector{<:Integer},UnitRange{<:Integer}},
 end
 
 struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
-@test AUnionParam.body.hash == 0
+@test peel_unionall(AUnionParam).second.hash == 0
 @test Type{AUnionParam}.hash != 0
 @test Type{AUnionParam{<:Union{Float32,Float64}}}.hash == 0
 @test Type{AUnionParam{<:Union{Nothing,Float32,Float64}}} === Type{AUnionParam}
-@test Type{AUnionParam.body}.hash == 0
+@test Type{peel_unionall(AUnionParam).second}.hash == 0
 @test Type{Base.Broadcast.Broadcasted}.hash != 0
 
 

@@ -4986,6 +4986,35 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         return true;
     }
 
+    else if (f == BUILTIN(peel_unionall) && nargs == 1) {
+        // peel_unionall(ua::UnionAll) -> Pair{TypeVar, Any}
+        // Intentionally never constant-folded (inconsistent builtin:
+        // two === UnionAll values may have different var/body).
+        const jl_cgval_t &ua = argv[1];
+        if (jl_is_concrete_type(rt) && ua.typ != jl_bottom_type) {
+            // Load the boxed UnionAll object
+            Value *boxed_ua = boxed(ctx, ua);
+            Value *ua_derived = decay_derived(ctx, boxed_ua);
+            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_immut);
+            // Load var field (offset 0 from object start)
+            Value *var_val = ai.decorateInst(
+                ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, ua_derived, Align(sizeof(void*))));
+            setName(ctx.emission_context, var_val, "ua_var");
+            // Load body field (offset sizeof(void*))
+            Value *body_ptr = emit_ptrgep(ctx, ua_derived, sizeof(void*));
+            Value *body_val = ai.decorateInst(
+                ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, body_ptr, Align(sizeof(void*))));
+            setName(ctx.emission_context, body_val, "ua_body");
+            // Construct Pair{TypeVar, Any}
+            jl_cgval_t fields[2] = {
+                mark_julia_type(ctx, var_val, true, (jl_value_t*)jl_tvar_type),
+                mark_julia_type(ctx, body_val, true, jl_any_type)
+            };
+            *ret = emit_new_struct(ctx, rt, 2, ArrayRef<jl_cgval_t>(fields, 2));
+            return true;
+        }
+    }
+
     else if (f == BUILTIN(fieldtype) && (nargs == 2 || nargs == 3)) {
         const jl_cgval_t &typ = argv[1];
         const jl_cgval_t &fld = argv[2];
@@ -7656,7 +7685,8 @@ static Function *gen_cfun_wrapper(
                         ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, val, Align(sizeof(void*))),
                         true, jl_any_type);
             }
-            else if (static_at && jl_is_concrete_immutable(jargty)) { // anything that could be stored unboxed
+            else if (static_at && jl_is_concrete_immutable(jargty) && // anything that could be stored unboxed
+                     !(jl_is_datatype(jargty) && ((jl_datatype_t*)jargty)->layout && jl_is_layout_opaque(((jl_datatype_t*)jargty)->layout))) {
                 bool isboxed;
                 Type *T = julia_type_to_llvm(ctx, jargty, &isboxed);
                 assert(!isboxed);

@@ -31,7 +31,7 @@ export Core,
     getglobal, setglobal!, swapglobal!, modifyglobal!, replaceglobal!, setglobalonce!, isdefinedglobal,
     # ifelse, sizeof    # not exported, to avoid conflicting with Base
     # type reflection
-    <:, typeof, isa, typeassert,
+    <:, typeof, isa, typeassert, peel_unionall, peelall_unionall, foldr_unionall,
     # method reflection
     applicable, invoke,
     # constants

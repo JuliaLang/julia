@@ -4,6 +4,27 @@
 # lattice utilities #
 #####################
 
+# Import peelall_unionall/foldr_unionall from Base if available, otherwise define local copies.
+if isdefined(Base, :peelall_unionall)
+    using Base: peelall_unionall, foldr_unionall
+else
+    function peelall_unionall(@nospecialize(t))
+        vars = TypeVar[]
+        while t isa UnionAll
+            _p = peel_unionall(t)
+            push!(vars, getfield(_p, 1))
+            t = getfield(_p, 2)
+        end
+        return Pair{Vector{TypeVar}, Any}(vars, t)
+    end
+    function foldr_unionall(@nospecialize(body), vars::Vector{TypeVar})
+        for i in length(vars):-1:1
+            body = UnionAll(vars[i], body)
+        end
+        return body
+    end
+end
+
 # true if Type{T} is inlineable as constant T
 # requires that T is a singleton, s.t. T == S implies T === S
 isconstType(@nospecialize t) = isType(t) && hasuniquerep(t.parameters[1])
@@ -70,7 +91,7 @@ has_concrete_subtype(d::DataType) = d.flags & 0x0020 == 0x0020 # n.b. often comp
 function valid_as_lattice(@nospecialize(x), astag::Bool=false)
     x === Bottom && false
     x isa TypeVar && return valid_as_lattice(x.ub, astag)
-    x isa UnionAll && (x = unwrap_unionall(x))
+    x = peelall_unionall(x).second
     if x isa Union
         # the Union constructor ensures this (and we'll recheck after
         # operations that might remove the Union itself)
@@ -127,14 +148,14 @@ function typesubtract(@nospecialize(a), @nospecialize(b), max_union_splitting::I
     if a <: b && isnotbrokensubtype(a, b)
         return Bottom
     end
-    ua = unwrap_unionall(a)
+    (_ts_vars, ua) = peelall_unionall(a)
     if isa(ua, Union)
-        uua = typesubtract(rewrap_unionall(ua.a, a), b, max_union_splitting)
-        uub = typesubtract(rewrap_unionall(ua.b, a), b, max_union_splitting)
+        uua = typesubtract(foldr_unionall(ua.a, _ts_vars), b, max_union_splitting)
+        uub = typesubtract(foldr_unionall(ua.b, _ts_vars), b, max_union_splitting)
         return Union{valid_as_lattice(uua, true) ? uua : Union{},
                      valid_as_lattice(uub, true) ? uub : Union{}}
     elseif a isa DataType
-        ub = unwrap_unionall(b)
+        ub = peelall_unionall(b).second
         if ub isa DataType
             if a.name === ub.name === Tuple.name && length(a.parameters) == length(ub.parameters)
                 if 1 < unionsplitcost(JLTypeLattice(), a.parameters) <= max_union_splitting
@@ -180,7 +201,7 @@ function _typename(a::Union)
     (ta isa Const && tb isa Const) && return Union{} # will throw an error (different type-names)
     return Core.TypeName # uncertain result
 end
-_typename(union::UnionAll) = _typename(union.body)
+_typename(union::UnionAll) = _typename(peel_unionall(union)[2])
 _typename(a::DataType) = Const(a.name)
 
 function tuple_tail_elem(𝕃::AbstractLattice, @nospecialize(init), ct::Vector{Any})
@@ -293,7 +314,8 @@ end
 # and return an array such that those Unions are removed
 # and `Union{return...} == ty`
 function switchtupleunion(@nospecialize(ty))
-    tparams = (unwrap_unionall(ty)::DataType).parameters
+    _uw_ty = peelall_unionall(ty).second
+    tparams = (_uw_ty::DataType).parameters
     return _switchtupleunion(JLTypeLattice(), Any[tparams...], length(tparams), [], ty)
 end
 
@@ -310,7 +332,7 @@ function _switchtupleunion(𝕃::AbstractLattice, t::Vector{Any}, i::Int, tunion
         if origt === nothing
             push!(tunion, copy(t))
         else
-            tpl = rewrap_unionall(Tuple{t...}, origt)
+            tpl = foldr_unionall(Tuple{t...}, peelall_unionall(origt).first)
             push!(tunion, tpl)
         end
         return tunion
@@ -379,7 +401,8 @@ function _unioncomplexity(@nospecialize x)
     elseif isa(x, Union)
         return unioncomplexity(x.a) + unioncomplexity(x.b) + 1
     elseif isa(x, UnionAll)
-        return max(unioncomplexity(x.body), unioncomplexity(x.var.ub))
+        (v, b) = peel_unionall(x)
+        return max(unioncomplexity(b), unioncomplexity(v.ub))
     elseif isa(x, TypeofVararg)
         return isdefined(x, :T) ? unioncomplexity(x.T) + 1 : 1
     else
@@ -388,12 +411,7 @@ function _unioncomplexity(@nospecialize x)
 end
 
 function unionall_depth(@nospecialize ua) # aka subtype_env_size
-    depth = 0
-    while ua isa UnionAll
-        depth += 1
-        ua = ua.body
-    end
-    return depth
+    return length(peelall_unionall(ua).first)
 end
 
 function unwraptv_ub(@nospecialize t)
@@ -433,7 +451,9 @@ objects. Otherwise, we need to additionally prove that the non-immutable object 
 global object to prove the `:consistent`-cy.
 """
 is_immutable_argtype(@nospecialize argtype) = is_immutable_type(widenconst(ignorelimited(argtype)))
-is_immutable_type(@nospecialize ty) = _is_immutable_type(unwrap_unionall(ty))
+function is_immutable_type(@nospecialize ty)
+    return _is_immutable_type(peelall_unionall(ty).second)
+end
 function _is_immutable_type(@nospecialize ty)
     if isa(ty, Union)
         return _is_immutable_type(ty.a) && _is_immutable_type(ty.b)

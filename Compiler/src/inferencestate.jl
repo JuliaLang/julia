@@ -663,9 +663,9 @@ parameters, however, some callers would like to ignore this corner case.
 function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool, type_constrains::Bool=false)
     typ === var && return true
     while typ isa UnionAll
-        covariant && constrains_param(var, typ.var.ub, covariant, type_constrains) && return true
-        # typ.var.lb doesn't constrain var
-        typ = typ.body
+        (tv, typ) = peel_unionall(typ)
+        covariant && constrains_param(var, tv.ub, covariant, type_constrains) && return true
+        # tv.lb doesn't constrain var
     end
     if typ isa Union
         # for unions, verify that both options would constrain var
@@ -683,7 +683,7 @@ function constrains_param(var::TypeVar, @nospecialize(typ), covariant::Bool, typ
                     constrains_param(var, p, covariant, type_constrains) && return true
                 end
                 lastp = typ.parameters[fc]
-                vararg = unwrap_unionall(lastp)
+                vararg = peelall_unionall(lastp).second
                 if vararg isa Core.TypeofVararg && isdefined(vararg, :N)
                     constrains_param(var, vararg.N, covariant, type_constrains) && return true
                     # T = vararg.parameters[1] doesn't constrain var
@@ -715,12 +715,7 @@ function sptypes_from_meth_instance(mi::MethodInstance)
     if isempty(mi.sparam_vals)
         isa(sig, UnionAll) || return EMPTY_SPTYPES
         # mi is unspecialized
-        spvals = Any[]
-        sig′ = sig
-        while isa(sig′, UnionAll)
-            push!(spvals, sig′.var)
-            sig′ = sig′.body
-        end
+        spvals = Any[peelall_unionall(sig).first...]
     else
         spvals = mi.sparam_vals
     end
@@ -731,10 +726,10 @@ function sptypes_from_meth_instance(mi::MethodInstance)
         if v isa TypeVar
             temp = sig
             for _ = 1:i-1
-                temp = temp.body
+                (_, temp) = peel_unionall(temp)
             end
-            vᵢ = (temp::UnionAll).var
-            sigtypes = (unwrap_unionall(temp)::DataType).parameters
+            (vᵢ, _) = peel_unionall(temp::UnionAll)
+            sigtypes = (peelall_unionall(temp).second::DataType).parameters
             for j = 1:length(sigtypes)
                 sⱼ = sigtypes[j]
                 if isType(sⱼ) && sⱼ.parameters[1] === vᵢ
@@ -793,7 +788,7 @@ end
 
 function va_from_vatuple(@nospecialize(t))
     @_foldable_meta
-    t = unwrap_unionall(t)
+    t = peelall_unionall(t).second
     if isa(t, DataType)
         n = length(t.parameters)
         if n > 0

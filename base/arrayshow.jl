@@ -602,7 +602,7 @@ function typeinfo_prefix(io::IO, X)
         elseif !isempty(X) && _typeinfo_implicit(eltype_X)
             "", true
         elseif print_without_params(eltype_X)
-            sprint(show_type_name, unwrap_unionall(eltype_X).name; context=io), false # Print "Array" rather than "Array{T,N}"
+            sprint(show_type_name, peelall_unionall(eltype_X).second.name; context=io), false # Print "Array" rather than "Array{T,N}"
         else
             sprint(print, eltype_X; context=io), false
         end

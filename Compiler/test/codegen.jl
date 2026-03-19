@@ -629,16 +629,16 @@ struct B41438{T}
     x::T
 end
 f41438(y) = y[].x
-@test A41438.body.layout != C_NULL
-@test B41438.body.layout === C_NULL
+@test Base.peel_unionall(A41438).second.layout != C_NULL
+@test Base.peel_unionall(B41438).second.layout === C_NULL
 @test f41438(Ref{A41438}(A41438(C_NULL))) === C_NULL
 @test f41438(Ref{B41438}(B41438(C_NULL))) === C_NULL
 
 const S41438 = Pair{Any, Ptr{T}} where T
 g41438() = Array{S41438,1}(undef,1)[1].first
 get_llvm(g41438, ()); # cause allocation of layout
-@test S41438.body.layout != C_NULL
-@test !Base.datatype_pointerfree(S41438.body)
+@test Base.peel_unionall(S41438).second.layout != C_NULL
+@test !Base.datatype_pointerfree(Base.peel_unionall(S41438).second)
 @test S41438{Int}.layout != C_NULL
 @test !Base.datatype_pointerfree(S41438{Int})
 
@@ -647,9 +647,9 @@ get_llvm(g41438, ()); # cause allocation of layout
 struct A43303{T}
     x::Pair{Ptr{T},Ptr{T}}
 end
-@test A43303.body.layout != C_NULL
+@test Base.peel_unionall(A43303).second.layout != C_NULL
 @test isbitstype(A43303{Int})
-@test A43303.body.types[1].layout != C_NULL
+@test Base.peel_unionall(A43303).second.types[1].layout != C_NULL
 
 # issue #41157
 f41157(a, b) = a[1] = b[1]

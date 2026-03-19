@@ -59,6 +59,7 @@ extern "C" {
     XX(modifyglobal,"modifyglobal!") \
     XX(nfields,"nfields") \
     XX(opaque_closure_call,"opaque_closure_call") \
+    XX(peel_unionall,"peel_unionall") \
     XX(replacefield,"replacefield!") \
     XX(replaceglobal,"replaceglobal!") \
     XX(declare_const,"declare_const") \

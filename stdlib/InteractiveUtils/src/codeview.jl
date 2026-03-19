@@ -99,7 +99,8 @@ function print_warntype_mi(io::IO, mi::Core.MethodInstance)
         warn_color = Base.warn_color() # more mild user notification
         for i = 1:length(mi.sparam_vals)
             sig = sig::UnionAll
-            name = sig.var.name
+            (sigvar, sig) = peel_unionall(sig)
+            name = sigvar.name
             val = mi.sparam_vals[i]
             print_highlighted(io::IO, v::String, color::Symbol) =
                 if highlighting[:warntype]
@@ -112,23 +113,22 @@ function print_warntype_mi(io::IO, mi::Core.MethodInstance)
                     print(io, "  ", name, " <: ")
                     print_highlighted(io, "$(val.ub)", warn_color)
                 elseif val.ub === Any
-                    print(io, "  ", sig.var.name, " >: ")
+                    print(io, "  ", name, " >: ")
                     print_highlighted(io, "$(val.lb)", warn_color)
                 else
                     print(io, "  ")
                     print_highlighted(io, "$(val.lb)", warn_color)
-                    print(io, " <: ", sig.var.name, " <: ")
+                    print(io, " <: ", name, " <: ")
                     print_highlighted(io, "$(val.ub)", warn_color)
                 end
             elseif val isa typeof(Vararg)
                 print(io, "  ", name, "::")
                 print_highlighted(io, "Int", warn_color)
             else
-                print(io, "  ", sig.var.name, " = ")
+                print(io, "  ", name, " = ")
                 print_highlighted(io, "$(val)", :cyan) # show the "good" type
             end
             println(io)
-            sig = sig.body
         end
     end
 end

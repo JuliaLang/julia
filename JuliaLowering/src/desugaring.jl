@@ -4237,15 +4237,13 @@ function expand_struct_def(ctx, ex, docs)
     newdef = ssavar(ctx, ex, "newdef")
     layer = new_scope_layer(ctx, struct_name)
     global_struct_name = adopt_scope(struct_name, layer)
-    if !isempty(typevar_names)
-        # Generate expression like `prev_struct.body.body.parameters`
-        prev_typevars = global_struct_name
-        for _ in 1:length(typevar_names)
-            prev_typevars = @ast ctx type_sig [K"." prev_typevars "body"::K"Symbol"]
-        end
-        prev_typevars = @ast ctx type_sig [K"." prev_typevars "parameters"::K"Symbol"]
+    # New local variable names for constructor args to avoid clashing with any
+    # type names
+    if isempty(inner_defs)
+        field_names_2 = adopt_scope(field_names, layer)
     end
 
+    need_outer_constructor = false
     if isempty(inner_defs) && !isempty(typevar_names)
         # To generate an outer constructor each struct type parameter must be
         # able to be inferred from the list of fields passed as constructor
@@ -4328,25 +4326,13 @@ function expand_struct_def(ctx, ex, docs)
                              [K"call" "_equiv_typedef"::K"core" global_struct_name newtype_var]
                        ]]
                 [K"=" prev [K"if" hasprev global_struct_name false::K"Bool"]]
-                [K"if" hasprev
-                   [K"block"
-                    # if this is compatible with an old definition, use the old parameters, but the
-                    # new object. This will fail to capture recursive cases, but the call to typebody!
-                    # below is permitted to choose either type definition to put into the binding table
-                    if !isempty(typevar_names)
-                        # And resassign the typevar_names - these may be
-                        # referenced in the definition of the field
-                        # types below
-                        [K"=" [K"tuple" typevar_names...] prev_typevars]
-                    end
-                    ]
-                ]
                 [K"=" newdef
                    [K"call"(type_body)
                       "_typebody!"::K"core"
                       prev
                       newtype_var
                       [K"call" "svec"::K"core" insert_struct_shim(ctx, field_types, struct_name)...]
+                      [K"call"(type_sig) "svec"::K"core" typevar_names...]
                    ]]
                 [K"constdecl"
                     global_struct_name

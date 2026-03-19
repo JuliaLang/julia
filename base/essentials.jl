@@ -535,44 +535,56 @@ ERROR: ArgumentError: Cannot call tail on an empty tuple.
 tail(x::Tuple) = argtail(x...)
 tail(::Tuple{}) = throw(ArgumentError("Cannot call tail on an empty tuple."))
 
-function unwrap_unionall(@nospecialize(a))
-    @_foldable_meta
-    while isa(a,UnionAll)
-        a = a.body
-    end
-    return a
-end
-
-function rewrap_unionall(@nospecialize(t), @nospecialize(u))
-    @_foldable_meta
-    if !isa(u, UnionAll)
-        return t
-    end
-    return UnionAll(u.var, rewrap_unionall(t, u.body))
-end
-
-function rewrap_unionall(t::Core.TypeofVararg, @nospecialize(u))
-    @_foldable_meta
-    isdefined(t, :T) || return t
-    if !isa(u, UnionAll)
-        return t
-    end
-    T = rewrap_unionall(t.T, u)
-    if !isdefined(t, :N) || t.N === u.var
-        return Vararg{T}
-    end
-    return Vararg{T, t.N}
-end
-
 # replace TypeVars in all enclosing UnionAlls with fresh TypeVars
 function rename_unionall(@nospecialize(u))
     if !isa(u, UnionAll)
         return u
     end
-    var = u.var::TypeVar
-    body = UnionAll(var, rename_unionall(u.body))
+    _p = peel_unionall(u)
+    var = getfield(_p, 1)::TypeVar
+    body = UnionAll(var, rename_unionall(getfield(_p, 2)))
     nv = TypeVar(var.name, var.lb, var.ub)
     return UnionAll(nv, body{nv})
+end
+
+"""
+    peelall_unionall(t) -> Pair{Array{Any,1}, Any}
+
+Strip all `UnionAll` wrappers from `t`, returning the collected `TypeVar`s and the inner body.
+The first element is an `Array{Any,1}` of `TypeVar`s.
+"""
+function peelall_unionall(@nospecialize(t))
+    # Count the number of UnionAll layers
+    n = 0
+    u = t
+    while u isa UnionAll
+        n = n + 1
+        u = getfield(peel_unionall(u), 2)
+    end
+    # Allocate and fill the vars array (use Array{Any,1} for bootstrap compatibility)
+    vars = Array{Any,1}(Core.undef, n)
+    i = 1
+    while t isa UnionAll
+        _p = peel_unionall(t)
+        vars[i] = getfield(_p, 1)
+        t = getfield(_p, 2)
+        i = i + 1
+    end
+    return Pair{Array{Any,1}, Any}(vars, t)
+end
+
+"""
+    foldr_unionall(body, vars)
+
+Wrap `body` in `UnionAll` layers for each `TypeVar` in `vars` (first element outermost).
+This is the inverse of `peelall_unionall`: `foldr_unionall(body, vars)` reconstructs the
+original type from `(vars, body) = peelall_unionall(t)`.
+"""
+function foldr_unionall(@nospecialize(body), vars::Array{Any,1})
+    for i in length(vars):-1:1
+        body = UnionAll(vars[i], body)
+    end
+    return body
 end
 
 # remove concrete constraint on diagonal TypeVar if it comes from troot
@@ -586,7 +598,7 @@ end
 
 function isvatuple(@nospecialize(t))
     @_foldable_meta
-    t = unwrap_unionall(t)
+    t = getfield(peelall_unionall(t), 2)
     if isa(t, DataType)
         n = length(t.parameters)
         return n > 0 && isvarargtype(t.parameters[n])
@@ -609,7 +621,7 @@ end
 # Compute the minimum number of initialized fields for a particular datatype
 # (therefore also a lower bound on the number of fields)
 function datatype_min_ninitialized(@nospecialize t0)
-    t = unwrap_unionall(t0)
+    t = getfield(peelall_unionall(t0), 2)
     t isa DataType || return 0
     isabstracttype(t) && return 0
     if t.name === _NAMEDTUPLE_NAME
@@ -1253,15 +1265,16 @@ function _defaultctors(@nospecialize(ty), functionloc)
     ua = ty
     while isa(ua, UnionAll)
         nparams = nparams + 1
-        ua = ua.body
+        ua = getfield(peel_unionall(ua), 2)
     end
     dt = ua::DataType
     tvars = Array{Any,1}(Core.undef, nparams)
     ua = ty
     i = 1
     while i !== nparams + 1
-        @inbounds tvars[i] = (ua::UnionAll).var
-        ua = (ua::UnionAll).body
+        _p = peel_unionall(ua::UnionAll)
+        @inbounds tvars[i] = getfield(_p, 1)
+        ua = getfield(_p, 2)
         i = i + 1
     end
 

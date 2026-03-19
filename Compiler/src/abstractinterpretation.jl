@@ -154,7 +154,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
             end
             # TODO: this is unmaintained now as it didn't seem to improve things, though it does avoid hard-coding the union split at the higher level,
             # it also can hurt infer-ability of some constrained parameter types (e.g. quacks like a duck)
-            # sigtuple = unwrap_unionall(sig)::DataType
+            # sigtuple = sig; while sigtuple isa UnionAll; (_, sigtuple) = peel_unionall(sigtuple); end; sigtuple = sigtuple::DataType
             # splitunions = 1 < unionsplitcost(sigtuple.parameters) * napplicable <= InferenceParams(interp).max_union_splitting
             #if splitunions
             #    splitsigs = switchtupleunion(sig)
@@ -622,7 +622,7 @@ const RECURSION_MSG_HARDLIMIT = "Bounded recursion detected under hardlimit. Cal
 function abstract_call_method(interp::AbstractInterpreter,
                               method::Method, @nospecialize(sig), sparams::SimpleVector,
                               hardlimit::Bool, si::StmtInfo, sv::AbsIntState)
-    sigtuple = unwrap_unionall(sig)
+    sigtuple = peelall_unionall(sig).second
     sigtuple isa DataType ||
         return Future(MethodCallResult(Any, Any, Effects(), nothing, false, false))
     all(@nospecialize(x) -> isvarargtype(x) || valid_as_lattice(x, true), sigtuple.parameters) ||
@@ -659,7 +659,7 @@ function abstract_call_method(interp::AbstractInterpreter,
     washardlimit = hardlimit
 
     if topmost !== nothing
-        msig = unwrap_unionall(method.sig)::DataType
+        msig = peelall_unionall(method.sig).second::DataType
         spec_len = length(msig.parameters) + 1
         mi = frame_instance(sv)
 
@@ -673,13 +673,17 @@ function abstract_call_method(interp::AbstractInterpreter,
             # Under direct self-recursion, permit much greater use of reducers.
             # here we assume that complexity(specTypes) :>= complexity(sig)
             comparison = mi.specTypes
-            l_comparison = length((unwrap_unionall(comparison)::DataType).parameters)
+            l_comparison = length((peelall_unionall(comparison).second::DataType).parameters)
             spec_len = max(spec_len, l_comparison)
         elseif !hardlimit && isa(topmost, InferenceState)
             # Without a hardlimit, permit use of reducers too.
             comparison = frame_instance(topmost).specTypes
             # n.b. currently don't allow vararg reducers
-            #l_comparison = length((unwrap_unionall(comparison)::DataType).parameters)
+            #_unwrapped_comparison2 = comparison
+            #while _unwrapped_comparison2 isa UnionAll
+            #    (_, _unwrapped_comparison2) = peel_unionall(_unwrapped_comparison2)
+            #end
+            #l_comparison = length((_unwrapped_comparison2::DataType).parameters)
             #spec_len = max(spec_len, l_comparison)
         else
             comparison = method.sig
@@ -745,7 +749,8 @@ function abstract_call_method(interp::AbstractInterpreter,
         #     seen = IdSet()
         #     while !(newsig in seen)
         #         push!(seen, newsig)
-        #         lsig = length((unwrap_unionall(sig)::DataType).parameters)
+        #         _sig_unwrapped = sig; while _sig_unwrapped isa UnionAll; (_, _sig_unwrapped) = peel_unionall(_sig_unwrapped); end
+        #         lsig = length((_sig_unwrapped::DataType).parameters)
         #         newsig = limit_type_size(newsig, sig, sv.linfo.specTypes, InferenceParams(interp).tuple_complexity_limit_depth, lsig)
         #         recomputed = ccall(:jl_type_intersection_with_env, Any, (Any, Any), newsig, method.sig)::SimpleVector
         #         newsig = recomputed[2]
@@ -1571,12 +1576,12 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
     end
 
     tti0 = widenconst(typ)
-    tti = unwrap_unionall(tti0)
+    (_tti0_vars, tti) = peelall_unionall(tti0)
     if isa(tti, DataType) && tti.name === _NAMEDTUPLE_NAME
         # A NamedTuple iteration is the same as the iteration of its Tuple parameter:
-        # compute a new `tti == unwrap_unionall(tti0)` based on that Tuple type
+        # compute a new `tti` based on that Tuple type and rewrap into tti0
         tti = unwraptv(tti.parameters[2])
-        tti0 = rewrap_unionall(tti, tti0)
+        tti0 = foldr_unionall(tti, _tti0_vars)
     end
     if isa(tti, Union)
         utis = uniontypes(tti)
@@ -1586,7 +1591,10 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
             return Future(AbstractIterationResult(Any[], nothing)) # oops, this statement was actually unreachable
         elseif length(utis) == 1
             tti = utis[1]
-            tti0 = rewrap_unionall(tti, tti0)
+            tti0 = tti
+            for _i in length(_tti0_vars):-1:1
+                tti0 = UnionAll(_tti0_vars[_i], tti0)
+            end
         else
             if any(@nospecialize(t) -> !isa(t, DataType) || !(t <: Tuple) || !isknownlength(t), utis)
                 return Future(AbstractIterationResult(Any[Vararg{Any}], nothing, Effects()))
@@ -1602,7 +1610,11 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
                 tps = (t::DataType).parameters
                 for j in 1:ltp
                     @assert valid_as_lattice(tps[j], true)
-                    result[j] = tmerge(result[j], rewrap_unionall(tps[j], tti0))
+                    _rewrapped = tps[j]
+                    for _i in length(_tti0_vars):-1:1
+                        _rewrapped = UnionAll(_tti0_vars[_i], _rewrapped)
+                    end
+                    result[j] = tmerge(result[j], _rewrapped)
                 end
             end
             return Future(AbstractIterationResult(result, nothing))
@@ -2259,7 +2271,7 @@ function form_partially_defined_struct(𝕃ᵢ::AbstractLattice, @nospecialize(o
     obj isa Const && return nothing # nothing to refine
     name isa Const || return nothing
     objt0 = widenconst(obj)
-    objt = unwrap_unionall(objt0)
+    objt = peelall_unionall(objt0).second
     objt isa DataType || return nothing
     isabstracttype(objt) && return nothing
     objt <: Tuple && return nothing
@@ -2389,7 +2401,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         hasintersect(widenconst(types), Union{Method, CodeInstance}) && return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
         types, isexact, _, _ = instanceof_tfunc(argtype_by_index(argtypes, 3), false)
         isexact || return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
-        unwrapped = unwrap_unionall(types)
+        (_types_vars, unwrapped) = peelall_unionall(types)
         types === Bottom && return Future(CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo()))
         if !(unwrapped isa DataType && unwrapped.name === Tuple.name)
             return Future(CallMeta(Bottom, TypeError, EFFECTS_THROWS, NoCallInfo()))
@@ -2400,7 +2412,11 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         nargtype isa DataType || return Future(CallMeta(Any, Any, Effects(), NoCallInfo())) # other cases are not implemented below
         isdispatchelem(ft) || return Future(CallMeta(Any, Any, Effects(), NoCallInfo())) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
         ft = ft::DataType
-        lookupsig = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
+        lookupsig = Tuple{ft, unwrapped.parameters...}
+        for _i in length(_types_vars):-1:1
+            lookupsig = UnionAll(_types_vars[_i], lookupsig)
+        end
+        lookupsig = lookupsig::Type
         nargtype = Tuple{ft, nargtype.parameters...}
         argtype = Tuple{ft, argtype.parameters...}
         matched, valid_worlds = findsup(lookupsig, method_table(interp))
@@ -2932,15 +2948,20 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::Part
     arginfo::ArgInfo, si::StmtInfo, vtypes::Union{VarTable,Nothing}, sv::AbsIntState, check::Bool=true)
     sig = argtypes_to_type(arginfo.argtypes)
     tt = closure.typ
-    ocargsig = rewrap_unionall((unwrap_unionall(tt)::DataType).parameters[1], tt)
-    ocargsig′ = unwrap_unionall(ocargsig)
+    (_tt_vars, _tt_body) = peelall_unionall(tt)
+    _tt_body = _tt_body::DataType
+    ocargsig = foldr_unionall(_tt_body.parameters[1], _tt_vars)
+    (_ocargsig_vars, ocargsig′) = peelall_unionall(ocargsig)
     ocargsig′ isa DataType || return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
-    ocsig = rewrap_unionall(Tuple{Tuple, ocargsig′.parameters...}, ocargsig)
+    ocsig = foldr_unionall(Tuple{Tuple, ocargsig′.parameters...}, _ocargsig_vars)
     hasintersect(sig, ocsig) || return Future(CallMeta(Union{}, Union{MethodError,TypeError}, EFFECTS_THROWS, NoCallInfo()))
     ocmethod = closure.source::Method
     if !isdefined(ocmethod, :source)
         # This opaque closure was created from optimized source. We cannot infer it further.
-        ocrt = rewrap_unionall((unwrap_unionall(tt)::DataType).parameters[2], tt)
+        ocrt = _tt_body.parameters[2]
+        for _i in length(_tt_vars):-1:1
+            ocrt = UnionAll(_tt_vars[_i], ocrt)
+        end
         if isa(ocrt, DataType)
             return Future(CallMeta(ocrt, Any, Effects(), NoCallInfo()))
         end
@@ -2975,8 +2996,10 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::Part
         end
         if check # analyze implicit type asserts on argument and return type
             ftt = closure.typ
-            rty = (unwrap_unionall(ftt)::DataType).parameters[2]
-            rty = rewrap_unionall(rty isa TypeVar ? rty.ub : rty, ftt)
+            (_ftt_vars, _ftt_body) = peelall_unionall(ftt)
+            rty = (_ftt_body::DataType).parameters[2]
+            rty = rty isa TypeVar ? rty.ub : rty
+            rty = foldr_unionall(rty, _ftt_vars)
             if !(rt ⊑ rty && sig ⊑ ocsig_box.contents)
                 effects = Effects(effects; nothrow=false)
                 exct = exct ⊔ TypeError
@@ -2990,7 +3013,7 @@ end
 
 function most_general_argtypes(closure::PartialOpaque)
     cc = widenconst(closure)
-    argt = (unwrap_unionall(cc)::DataType).parameters[1]
+    argt = (peelall_unionall(cc).second::DataType).parameters[1]
     if !isa(argt, DataType) || argt.name !== typename(Tuple)
         argt = Tuple
     end
@@ -3011,9 +3034,9 @@ function abstract_call_unknown(interp::AbstractInterpreter, @nospecialize(ft),
         add_remark!(interp, sv, "Could not identify method table for call")
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     elseif hasintersect(wft, Core.OpaqueClosure)
-        uft = unwrap_unionall(wft)
+        (_wft_vars, uft) = peelall_unionall(wft)
         if isa(uft, DataType)
-            return Future(CallMeta(rewrap_unionall(uft.parameters[2], wft), Any, Effects(), NoCallInfo()))
+            return Future(CallMeta(foldr_unionall(uft.parameters[2], _wft_vars), Any, Effects(), NoCallInfo()))
         end
         return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))
     end
@@ -3041,7 +3064,7 @@ function sp_type_rewrap(@nospecialize(T), mi::MethodInstance, isreturn::Bool)
     if unwrapva(T) === Bottom
         return Bottom
     elseif isa(T, Type)
-        if isa(T, DataType) && (T::DataType).name === Ref.body.name
+        if isa(T, DataType) && (T::DataType).name === _REF_NAME
             isref = true
             T = T.parameters[1]
             if isreturn && T === Any
@@ -3071,7 +3094,7 @@ function sp_type_rewrap(@nospecialize(T), mi::MethodInstance, isreturn::Bool)
                     end
                 end
             else
-                T = rewrap_unionall(T, spsig)
+                T = foldr_unionall(T, peelall_unionall(spsig).first)
             end
         end
     end
@@ -3222,7 +3245,7 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
                            sv::AbsIntState)
     𝕃ᵢ = typeinf_lattice(interp)
     rt, _... = instanceof_tfunc(abstract_eval_value(interp, e.args[1], sstate, sv), true)
-    ut = unwrap_unionall(rt)
+    ut = peelall_unionall(rt).second
     exct = Union{ErrorException,TypeError}
     if isa(ut, DataType) && !isabstracttype(ut)
         ismutable = ismutabletype(ut)
@@ -3612,7 +3635,7 @@ end
 
 # refine the result of instantiation of partially-known type `t` if some invariant can be assumed
 function refine_partial_type(@nospecialize t)
-    t′ = unwrap_unionall(t)
+    t′ = peelall_unionall(t).second
     if isa(t′, DataType) && t′.name === _NAMEDTUPLE_NAME && length(t′.parameters) == 2 &&
         (t′.parameters[1] === () || t′.parameters[2] === Tuple{})
         # if the first/second parameter of `NamedTuple` is known to be empty,

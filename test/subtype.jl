@@ -673,7 +673,7 @@ function test_properties()
 
         # equality under renaming
         if isa(T, UnionAll)
-            lb, ub = T.var.lb, T.var.ub
+            lb, ub = peel_unionall(T).first.lb, peel_unionall(T).first.ub
             @test isequal_type(T, (@UnionAll lb<:Y<:ub T{Y}))
         end
 
@@ -1132,14 +1132,9 @@ test_properties()
 test_intersection_properties()
 
 
-let S = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, [TypeVar(:T), Any], 2),
-    VS = TypeVar(:T),
-    T = ccall(:jl_new_structv, Any, (Any, Ptr{Cvoid}, UInt32), UnionAll, [VS, VS], 2)
-    # check (T where T) == (Any where T)
-    # these types are not normally valid, but check them just to make sure subtyping is robust
-    @test T <: S
-    @test S <: T
-end
+# Removed: previously tested subtyping robustness with malformed UnionAll values
+# created via jl_new_structv. UnionAll is now opaque and these values can no longer
+# be constructed.
 
 # issue #20121
 @test NTuple{170,Matrix{Int}} <: (Tuple{Vararg{Union{Vector{T},Matrix{T},Array{T,3}}}} where T)
@@ -1910,7 +1905,7 @@ end
                Tuple{Union, F36869{Int64, Missing}})
 
 # issue #37180
-@test !(typeintersect(Tuple{AbstractArray{T}, VecOrMat{T}} where T, Tuple{Array, Any}).body.parameters[1] isa Union)
+@test !(peel_unionall(typeintersect(Tuple{AbstractArray{T}, VecOrMat{T}} where T, Tuple{Array, Any})).second.parameters[1] isa Union)
 
 # issue #37255
 @test Type{Union{}} == Type{T} where {Union{}<:T<:Union{}}
@@ -2302,7 +2297,7 @@ let
     @test env_tuple(Tuple{TT1,Missing}, TT0) ===
           env_tuple(Tuple{TT1,Nothing}, TT0) ===
           env_tuple(Tuple{TT1,Int}, TT0) ===
-          Core.svec(TT0.var)
+          Core.svec(peel_unionall(TT0).first)
 
     TT0 = Tuple{T1,T2,Union{Real,Missing,Nothing}} where {T1,T2}
     TT1 = Tuple{T1,T2,Union{Real,Missing,Nothing}} where {T2,T1}
@@ -2559,7 +2554,7 @@ struct S48695{T, N, H<:AbstractArray{T, N}} <: AbstractArray{T, N} end
 let S = Tuple{Type{S48695{T, 2, T48695{B, 2, C}}} where {T<:(Union{Missing, A} where A), B, C}, T48695{T, 2} where T},
     T = Tuple{Type{S48695{T, N, H}}, H} where {T, N, H<:AbstractArray{T, N}}
     V = typeintersect(S, T)
-    vars_in_unionall(s) = s isa UnionAll ? (s.var, vars_in_unionall(s.body)...) : ()
+    vars_in_unionall(s) = s isa UnionAll ? let _p = peel_unionall(s); (_p.first, vars_in_unionall(_p.second)...); end : ()
     @test V != Union{}
     @test allunique(vars_in_unionall(V))
     @test typeintersect(V, T) != Union{}
@@ -2633,7 +2628,7 @@ end
 #issue 53366
 let Y = Tuple{Val{T}, Val{Val{T}}} where T
     A = Val{Val{T}} where T
-    T = TypeVar(:T, UnionAll(A.var, Val{A.var}))
+    T = let _av = peel_unionall(A).first; TypeVar(:T, UnionAll(_av, Val{_av})); end
     B = UnionAll(T, Val{T})
     X = Tuple{A, B}
     @testintersect(X, Y, !Union{})

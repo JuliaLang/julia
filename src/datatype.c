@@ -678,6 +678,21 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             st->layout = &opaque_ptr_layout;
             return;
         }
+        else if (st == jl_unionall_type) {
+            // UnionAll is opaque but has 2 pointer fields (var, body) that the GC must scan.
+            static const struct {
+                jl_datatype_layout_t header;
+                uint8_t ptrs[2];
+            } unionall_layout = {
+                { .size = sizeof(jl_unionall_t),
+                  .nfields = 0,
+                  .npointers = 2,
+                  .first_ptr = 0,
+                  .alignment = sizeof(void*), { } },
+                { 0, 1 }
+            };
+            st->layout = &unionall_layout.header;
+        }
         else {
             static const jl_datatype_layout_t singleton_layout = {0, 0, 0, -1, 1, { .isbitsegal=1 }};
             st->layout = &singleton_layout;
@@ -926,7 +941,7 @@ static void jl_setup_type_wrapper(jl_typename_t *tn, jl_svec_t *parameters, jl_v
     jl_gc_wb(tn, *wrapper);
     int np = jl_svec_len(parameters);
     for (int i = np - 1; i >= 0; i--) {
-        *wrapper = jl_new_struct(jl_unionall_type, jl_svecref(parameters, i), *wrapper);
+        *wrapper = (jl_value_t*)jl_new_unionall((jl_tvar_t*)jl_svecref(parameters, i), *wrapper);
         tn->wrapper = *wrapper;
         jl_gc_wb(tn, *wrapper);
     }

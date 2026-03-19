@@ -821,7 +821,7 @@ end
 # test single, non-dispatchtuple callsite inlining
 
 @constprop :none @inline test_single_nondispatchtuple(@nospecialize(t)) =
-    isa(t, DataType) && t.name === Type.body.name
+    isa(t, DataType) && t.name === typename(Type)
 let
     src = code_typed1((Any,)) do x
         test_single_nondispatchtuple(x)
@@ -832,7 +832,7 @@ let
 end
 
 @constprop :aggressive @inline test_single_nondispatchtuple(c, @nospecialize(t)) =
-    c && isa(t, DataType) && t.name === Type.body.name
+    c && isa(t, DataType) && t.name === typename(Type)
 let
     src = code_typed1((Any,)) do x
         test_single_nondispatchtuple(true, x)
@@ -2063,7 +2063,7 @@ end
 
 # inlining of `TypeName`
 @test fully_eliminated() do
-    Ref.body.name
+    Base.typename(Ref)
 end
 
 # Regression for finalizer inlining with more complex control flow
@@ -2309,7 +2309,7 @@ end
 path = Ref{Symbol}(:unknown)
 function f59018_generator(x)
     if @generated
-        if x isa DataType && x.name === Type.body.name
+        if x isa DataType && x.name === Base.typename(Type)
             path[] = :generator
             return Core.sizeof(x.parameters[1])
         end

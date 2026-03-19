@@ -969,7 +969,7 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
         return body;
     //if (v->lb == v->ub)  // TODO maybe
     //    return jl_substitute_var(body, v, v->ub);
-    return jl_new_struct(jl_unionall_type, v, body);
+    return (jl_value_t*)jl_new_unionall(v, body);
 }
 
 // --- type instantiation and cache ---
@@ -1567,7 +1567,7 @@ jl_unionall_t *jl_rename_unionall(jl_unionall_t *u)
     JL_GC_PUSH2(&v, &t);
     jl_typeenv_t env = { u->var, (jl_value_t *)v, NULL };
     t = inst_type_w_(u->body, &env, NULL, 0, 0);
-    t = jl_new_struct(jl_unionall_type, v, t);
+    t = (jl_value_t*)jl_new_unionall(v, t);
     JL_GC_POP();
     return (jl_unionall_t*)t;
 }
@@ -1602,21 +1602,21 @@ jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u)
 {
     if (!jl_is_unionall(u))
         return t;
-    t = jl_rewrap_unionall(t, ((jl_unionall_t*)u)->body);
+    jl_value_t *rewrapped = jl_rewrap_unionall(t, ((jl_unionall_t*)u)->body);
     jl_tvar_t *v = ((jl_unionall_t*)u)->var;
     // normalize `T where T<:S` => S
-    if (t == (jl_value_t*)v)
+    if (rewrapped == (jl_value_t*)v)
         return v->ub;
     // where var doesn't occur in body just return body
-    if (!jl_has_typevar(t, v))
-        return t;
-    JL_GC_PUSH1(&t);
+    if (!jl_has_typevar(rewrapped, v))
+        return rewrapped;
+    JL_GC_PUSH1(&rewrapped);
     //if (v->lb == v->ub)  // TODO maybe
     //    t = jl_substitute_var(body, v, v->ub);
     //else
-    t = jl_new_struct(jl_unionall_type, v, t);
+    rewrapped = (jl_value_t*)jl_new_unionall(v, rewrapped);
     JL_GC_POP();
-    return t;
+    return rewrapped;
 }
 
 // wrap `t` in the same unionalls that surround `u`
@@ -1627,7 +1627,7 @@ jl_value_t *jl_rewrap_unionall_(jl_value_t *t, jl_value_t *u)
         return t;
     t = jl_rewrap_unionall_(t, ((jl_unionall_t*)u)->body);
     JL_GC_PUSH1(&t);
-    t = jl_new_struct(jl_unionall_type, ((jl_unionall_t*)u)->var, t);
+    t = (jl_value_t*)jl_new_unionall(((jl_unionall_t*)u)->var, t);
     JL_GC_POP();
     return t;
 }
@@ -1705,11 +1705,11 @@ jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype
             jl_tvar_t *newtvar = jl_new_typevar(ut->var->name, lb, ub);
             JL_GC_PUSH1(&newtvar);
             body = jl_substitute_var(body, ut->var, (jl_value_t*)newtvar);
-            t = jl_new_struct(jl_unionall_type, newtvar, body);
+            t = (jl_value_t*)jl_new_unionall(newtvar, body);
             JL_GC_POP();
         }
         else if (body != ut->body) {
-            t = jl_new_struct(jl_unionall_type, ut->var, body);
+            t = (jl_value_t*)jl_new_unionall(ut->var, body);
         }
         JL_GC_POP();
     }
@@ -2060,7 +2060,7 @@ static jl_value_t *normalize_unionalls(jl_value_t *t)
         jl_value_t *body = normalize_unionalls(u->body);
         JL_GC_PUSH2(&body, &t);
         if (body != u->body) {
-            t = jl_new_struct(jl_unionall_type, u->var, body);
+            t = (jl_value_t*)jl_new_unionall(u->var, body);
             u = (jl_unionall_t*)t;
         }
 
@@ -2679,7 +2679,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
             }
             else if (newbody != ua->body || var != (jl_value_t*)ua->var) {
                 // if t's parameters are not bound in the environment, return it uncopied (#9378)
-                t = jl_new_struct(jl_unionall_type, var, newbody);
+                t = (jl_value_t*)jl_new_unionall((jl_tvar_t*)var, newbody);
             }
         }
         JL_GC_POP();
@@ -3149,12 +3149,17 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_typeofbottom_type->instance = jl_bottom_type;
 
     jl_unionall_type = jl_new_datatype(jl_symbol("UnionAll"), core, type_type, jl_emptysvec,
-                                       jl_perm_symsvec(2, "var", "body"),
-                                       jl_svec(2, jl_tvar_type, jl_any_type),
-                                       jl_emptysvec, 0, 0, 2);
+                                       jl_emptysvec,
+                                       jl_emptysvec,
+                                       jl_emptysvec, 0, 1, 0);
     XX(unionall);
     // It seems like we probably usually end up needing the box for kinds (often used in an Any context), so force it to exist
     jl_unionall_type->name->mayinlinealloc = 0;
+
+    // UnionAll is immutable, but we need to suppress the creation of a singleton instance, since Julia does not know about
+    // the opaque pointers and the layout can't computed until jl_unionall_type is assigned.
+    jl_unionall_type->name->mutabl = 0;
+    jl_compute_field_offsets(jl_unionall_type);
 
     jl_uniontype_type = jl_new_datatype(jl_symbol("Union"), core, type_type, jl_emptysvec,
                                         jl_perm_symsvec(2, "a", "b"),
@@ -3169,7 +3174,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_precompute_memoized_dt(type_type, 0); // update the hash value ASAP
     type_type->hasfreetypevars = 1;
     type_type->ismutationfree = 1;
-    jl_type_typename->wrapper = jl_new_struct(jl_unionall_type, tttvar, (jl_value_t*)jl_type_type);
+    jl_type_typename->wrapper = (jl_value_t*)jl_new_unionall(tttvar, (jl_value_t*)jl_type_type);
     jl_type_type = (jl_unionall_t*)jl_type_typename->wrapper;
 
     jl_vararg_type = jl_new_datatype(jl_symbol("TypeofVararg"), core, jl_any_type, jl_emptysvec,
@@ -3789,7 +3794,7 @@ void jl_init_types(void) JL_GC_DISABLED
     tttvar = jl_new_typevar(jl_symbol("T"),
                             (jl_value_t*)jl_bottom_type,
                             (jl_value_t*)jl_anytuple_type);
-    jl_anytuple_type_type = (jl_unionall_t*)jl_new_struct(jl_unionall_type,
+    jl_anytuple_type_type = (jl_unionall_t*)jl_new_unionall(
                                                           tttvar, (jl_value_t*)jl_wrap_Type((jl_value_t*)tttvar));
 
     jl_tvar_t *ntval_var = jl_new_typevar(jl_symbol("T"), (jl_value_t*)jl_bottom_type,

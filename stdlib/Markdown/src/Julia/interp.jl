@@ -47,8 +47,9 @@ toexpr(xs::Union{Vector{Any},Vector{Vector{Any}}}) =
     Expr(:call, GlobalRef(Base,:getindex), Any, mapany(toexpr, xs)...)
 
 for T in Any[MD, Paragraph, Header, Link, Bold, Italic, Strikethrough, Footnote, Admonition, BlockQuote]
+    _fnames = fieldnames(Base.peelall_unionall(T).second)
     @eval function toexpr(md::$T)
-        Expr(:call, typeof(md), $(map(x->:(toexpr(md.$x)), fieldnames(Base.unwrap_unionall(T)))...))
+        Expr(:call, typeof(md), $(map(x->:(toexpr(md.$x)), _fnames)...))
     end
 end
 

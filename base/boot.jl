@@ -1182,7 +1182,7 @@ function _contains_typeapp(@nospecialize(x))
         return true
     end
     if x isa UnionAll
-        return _contains_typeapp(x.body)
+        return _contains_typeapp(getfield(peel_unionall(x), 2))
     end
     return false
 end
@@ -1268,7 +1268,7 @@ function typename(a::Union)
     ta === tb || throw(TypeNameError(a))
     return tb
 end
-typename(union::UnionAll) = typename(union.body)
+typename(union::UnionAll) = (@_foldable_meta; typename(getfield(peel_unionall(union), 2)))
 
 # Special inference support to avoid execess specialization of these methods.
 # TODO: Replace this by a generic heuristic.

@@ -443,6 +443,8 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
     size_t sz = jl_datatype_size(dt);
     if (sz == 0)
         return ~h;
+    if (dt == jl_unionall_type)
+        return type_object_id_(v, NULL);
     size_t f, nf = jl_datatype_nfields(dt);
     if (nf == 0 || (!dt->layout->flags.haspadding && dt->layout->flags.isbitsegal && dt->layout->npointers == 0)) {
         // operate element-wise if there are unused bits inside,
@@ -452,8 +454,6 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
         // they don't affect egal comparison
         return bits_hash(v, sz) ^ h;
     }
-    if (dt == jl_unionall_type)
-        return type_object_id_(v, NULL);
     for (f = 0; f < nf; f++) {
         size_t offs = jl_field_offset(dt, f);
         char *vo = (char*)v + offs;
@@ -1068,6 +1068,8 @@ JL_CALLABLE(jl_f_getfield)
     jl_value_t *vt = jl_typeof(v);
     if (vt == (jl_value_t*)jl_module_type)
         return jl_f_getglobal(NULL, args, 2); // we just ignore the atomic order and boundschecks
+    if (jl_is_unionall(v))
+        jl_errorf("type UnionAll is opaque; use `peel_unionall` instead of `getfield`");
     jl_datatype_t *st = (jl_datatype_t*)vt;
     size_t idx = get_checked_fieldindex("getfield", st, v, args[1], 0);
     int isatomic = jl_field_isatomic(st, idx);
@@ -1296,8 +1298,25 @@ JL_CALLABLE(jl_f_fieldtype)
 JL_CALLABLE(jl_f_nfields)
 {
     JL_NARGS(nfields, 1, 1);
+    if (jl_is_unionall(args[0]))
+        return jl_box_long(0);
     jl_datatype_t *xt = (jl_datatype_t*)jl_typeof(args[0]);
     return jl_box_long(jl_datatype_nfields(xt));
+}
+
+JL_CALLABLE(jl_f_peel_unionall)
+{
+    JL_NARGS(peel_unionall, 1, 1);
+    jl_value_t *v = args[0];
+    JL_TYPECHK(peel_unionall, unionall, v);
+    jl_unionall_t *ua = (jl_unionall_t*)v;
+    // Cache Pair{TypeVar, Any} type - concrete types are permanent (JL_ALWAYS_LEAFTYPE)
+    static jl_datatype_t *pair_tvar_any = NULL;
+    if (pair_tvar_any == NULL)
+        pair_tvar_any = (jl_datatype_t*)jl_apply_type2(jl_pair_type, (jl_value_t*)jl_tvar_type, (jl_value_t*)jl_any_type);
+    JL_GC_PROMISE_ROOTED(pair_tvar_any);
+    jl_value_t *pair_args[2] = { (jl_value_t*)ua->var, ua->body };
+    return jl_new_structv(pair_tvar_any, pair_args, 2);
 }
 
 JL_CALLABLE(jl_f_isdefined)
@@ -2311,42 +2330,55 @@ static int references_name(jl_value_t *p, jl_typename_t *name, int affects_layou
 
 JL_CALLABLE(jl_f__typebody)
 {
-    JL_NARGS(_typebody!, 2, 3);
+    JL_NARGS(_typebody!, 2, 4);
     jl_value_t *prev = args[0];
     jl_value_t *tret = args[1];
     jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(args[1]);
     JL_TYPECHK(_typebody!, datatype, (jl_value_t*)dt);
-    if (nargs == 3) {
+    if (nargs >= 3) {
         jl_value_t *ft = args[2];
         JL_TYPECHK(_typebody!, simplevector, ft);
+        jl_svec_t *new_tvars = nargs >= 4 ? (jl_svec_t*)args[3] : jl_emptysvec;
+        if (nargs >= 4)
+            JL_TYPECHK(_typebody!, simplevector, args[3]);
         size_t nf = jl_svec_len(ft);
         jl_check_field_types((jl_svec_t*)ft, dt->name->name);
-        // Optimization: To avoid lots of unnecessary churning, lowering contains an optimization
-        // that re-uses the typevars of an existing definition (if any exists) for compute the field
-        // types. If such a previous type exists, there are two possibilities:
-        //  1. The field types are identical, we don't need to do anything and can proceed with the
-        //     old type as if it was the new one.
-        //  2. The field types are not identical, in which case we need to rename the typevars
-        //     back to their equivalents in the new type before proceeding.
+        // When redefining a struct, field types are expressed in terms of the new
+        // TypeVars. To check equivalence with the old definition, we rename
+        // new TypeVars → old TypeVars for comparison. If they match, we reuse
+        // the old type. If not, the field types already use new TypeVars which
+        // is correct for the new DataType.
         if (prev == jl_false) {
             if (dt->types != NULL)
                 jl_errorf("Internal Error: Expected type fields to be unset");
         } else {
             jl_datatype_t *prev_dt = (jl_datatype_t*)jl_unwrap_unionall(prev);
             JL_TYPECHK(_typebody!, datatype, (jl_value_t*)prev_dt);
-            if (equiv_field_types((jl_value_t*)prev_dt->types, ft)) {
-                tret = prev;
-                goto have_type;
+            size_t nparams = jl_svec_len(new_tvars);
+            if (jl_svec_len(prev_dt->parameters) != nparams)
+                jl_errorf("Internal Error: Types should not have been considered equivalent");
+            if (nparams == 0) {
+                // No type parameters: direct comparison
+                if (equiv_field_types((jl_value_t*)prev_dt->types, ft)) {
+                    tret = prev;
+                    goto have_type;
+                }
             } else {
-                if (jl_svec_len(prev_dt->parameters) != jl_svec_len(dt->parameters))
-                    jl_errorf("Internal Error: Types should not have been considered equivalent");
+                // Rename new TypeVars → old TypeVars in a temporary copy for comparison
+                jl_svec_t *ft_renamed = jl_alloc_svec(nf);
+                JL_GC_PUSH1(&ft_renamed);
                 for (size_t i = 0; i < nf; i++) {
                     jl_value_t *elt = jl_svecref(ft, i);
-                    for (int j = 0; j < jl_svec_len(prev_dt->parameters); ++j) {
-                        // Only the last svecset matters for semantics, but we re-use the GC root
-                        elt = jl_substitute_var(elt, (jl_tvar_t *)jl_svecref(prev_dt->parameters, j), jl_svecref(dt->parameters, j));
-                        jl_svecset(ft, i, elt);
+                    for (size_t j = 0; j < nparams; ++j) {
+                        elt = jl_substitute_var(elt, (jl_tvar_t *)jl_svecref(new_tvars, j), jl_svecref(prev_dt->parameters, j));
+                        jl_svecset(ft_renamed, i, elt); // GC root for intermediate results
                     }
+                }
+                int match = equiv_field_types((jl_value_t*)prev_dt->types, (jl_value_t*)ft_renamed);
+                JL_GC_POP();
+                if (match) {
+                    tret = prev;
+                    goto have_type;
                 }
             }
         }

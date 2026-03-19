@@ -319,9 +319,9 @@ end
 
 # requires assertions enabled
 let root = NTuple
-    N = root.var
-    T = root.body.var
-    x1 = root.body.body
+    N = peel_unionall(root).first
+    T = peel_unionall(peel_unionall(root).second).first
+    x1 = peelall_unionall(root).second
     x2 = Dict{T,Tuple{N}}
     A = UnionAll(N, UnionAll(T, Tuple{Union{x1, x2}}))
     B = Tuple{Union{UnionAll(N, UnionAll(T, x1)), UnionAll(N, UnionAll(T, x2))}}

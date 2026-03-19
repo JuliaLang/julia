@@ -584,7 +584,7 @@ show(io::IO, ::Core.TypeofBottom) = print(io, "Union{}")
 show(io::IO, ::MIME"text/plain", ::Core.TypeofBottom) = print(io, "Union{}")
 
 function print_without_params(@nospecialize(x))
-    b = unwrap_unionall(x)
+    b = peelall_unionall(x).second
     return isa(b, DataType) && b.name.wrapper === x
 end
 
@@ -600,7 +600,7 @@ io_has_tvar_name(io::IO, name::Symbol, @nospecialize(x)) = false
 
 modulesof!(s::Set{Module}, x::TypeVar) = modulesof!(s, x.ub)
 function modulesof!(s::Set{Module}, x::Type)
-    x = unwrap_unionall(x)
+    x = peelall_unionall(x).second
     if x isa DataType
         push!(s, parentmodule(x))
     elseif x isa Union
@@ -633,7 +633,8 @@ function make_typealias(@nospecialize(x::Type))
     replace!(mods, Core=>Base)
     aliases = Tuple{GlobalRef,SimpleVector}[]
     xenv = UnionAll[]
-    for p in uniontypes(unwrap_unionall(x))
+    _uw_mta = peelall_unionall(x).second
+    for p in uniontypes(_uw_mta)
         p isa UnionAll && push!(xenv, p)
     end
     x isa UnionAll && push!(xenv, x)
@@ -664,7 +665,7 @@ function make_typealias(@nospecialize(x::Type))
                                 continue
                             end
                         for p in xenv
-                            applied = rewrap_unionall(applied, p)
+                            applied = foldr_unionall(applied, peelall_unionall(p).first)
                         end
                         has_free_typevars(applied) && continue
                         applied === x || continue # it couldn't figure out the parameter matching
@@ -763,12 +764,8 @@ function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, whe
     for p in wheres
         io = IOContext(io, :unionall_env => p)
     end
-    orig = getfield(name.mod, name.name)
-    vars = TypeVar[]
-    while orig isa UnionAll
-        push!(vars, orig.var)
-        orig = orig.body
-    end
+    orig_pa = peelall_unionall(getfield(name.mod, name.name))
+    vars = orig_pa.first
     show_typeparams(io, env, Core.svec(vars...), wheres)
     nothing
 end
@@ -785,12 +782,11 @@ function make_wheres(io::IO, env::SimpleVector, @nospecialize(x::Type))
         end
     end
     # record things in x to print outermost
-    while x isa UnionAll
-        if !(x.var in seen)
-            push!(seen, x.var)
-            push!(wheres, x.var)
+    for v in peelall_unionall(x).first
+        if !(v in seen)
+            push!(seen, v)
+            push!(wheres, v)
         end
-        x = x.body
     end
     # record remaining things in env to print innermost
     for i = length(env):-1:1
@@ -836,9 +832,12 @@ function make_typealiases(@nospecialize(x::Type))
     vars = Dict{Symbol,TypeVar}()
     xenv = UnionAll[]
     each = Any[]
-    for p in uniontypes(unwrap_unionall(x))
+    _mtas_pa = peelall_unionall(x)
+    _rw_mtas_vars = _mtas_pa.first
+    _uw_mtas = _mtas_pa.second
+    for p in uniontypes(_uw_mtas)
         p isa UnionAll && push!(xenv, p)
-        push!(each, rewrap_unionall(p, x))
+        push!(each, foldr_unionall(p, _rw_mtas_vars))
     end
     x isa UnionAll && push!(xenv, x)
     for mod in mods
@@ -868,7 +867,7 @@ function make_typealiases(@nospecialize(x::Type))
                     end
                     ul = unionlen(applied)
                     for p in xenv
-                        applied = rewrap_unionall(applied, p)
+                        applied = foldr_unionall(applied, peelall_unionall(p).first)
                     end
                     has_free_typevars(applied) && continue
                     applied <: x || continue # parameter matching didn't make a subtype
@@ -918,8 +917,11 @@ function show_unionaliases(io::IO, x::Union)
         if isa(typ, TypeVar)
             tvar = true # sort bare TypeVars to the end
             continue
-        elseif rewrap_unionall(typ, properx) <: applied
-            continue
+        else
+            _rw_sua = foldr_unionall(typ, peelall_unionall(properx).first)
+            if _rw_sua <: applied
+                continue
+            end
         end
         print(io, first ? "Union{" : ", ")
         first = false
@@ -956,7 +958,8 @@ end
 function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     if !print_without_params(x)
         properx = makeproper(io, x)
-        if make_typealias(properx) !== nothing || (unwrap_unionall(x) isa Union && x <: make_typealiases(properx)[2])
+        _uw_shtp = peelall_unionall(x).second
+        if make_typealias(properx) !== nothing || (_uw_shtp isa Union && x <: make_typealiases(properx)[2])
             show(IOContext(io, :compact => true), x)
             if !(get(io, :compact, false)::Bool)
                 printstyled(io, " (alias for "; color = :light_black)
@@ -982,7 +985,8 @@ end
 show(io::IO, @nospecialize(x::Type)) = _show_type(io, inferencebarrier(x))
 function _show_type(io::IO, @nospecialize(x::Type))
     if print_without_params(x)
-        show_type_name(io, (unwrap_unionall(x)::DataType).name)
+        _uw_sht = peelall_unionall(x).second
+        show_type_name(io, (_uw_sht::DataType).name)
         return
     elseif get(io, :compact, true)::Bool && show_typealias(io, x)
         return
@@ -1002,7 +1006,7 @@ function _show_type(io::IO, @nospecialize(x::Type))
     wheres = TypeVar[]
     let io = IOContext(io)
         while x isa UnionAll
-            var = x.var
+            (var, body) = peel_unionall(x)
             if var.name === :_ || io_has_tvar_name(io, var.name, x)
                 counter = 1
                 while true
@@ -1015,7 +1019,7 @@ function _show_type(io::IO, @nospecialize(x::Type))
                     counter += 1
                 end
             else
-                x = x.body
+                x = body
             end
             push!(wheres, var)
             io = IOContext(io, :unionall_env => var)
@@ -1230,7 +1234,8 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
     end
 
     show_type_name(io, x.name)
-    show_typeparams(io, parameters, (unwrap_unionall(x.name.wrapper)::DataType).parameters, wheres)
+    _uw_wnw = peelall_unionall(x.name.wrapper).second
+    show_typeparams(io, parameters, (_uw_wnw::DataType).parameters, wheres)
 end
 
 function show_at_namedtuple(io::IO, syms::Tuple, types::DataType)
@@ -2484,7 +2489,7 @@ end
 # show the called object in a signature, given its type `ft`
 # `io` should contain the UnionAll env of the signature
 function show_signature_function(io::IO, @nospecialize(ft), demangle=false, fargname="", html=false, qualified=false)
-    uw = unwrap_unionall(ft)
+    uw = peelall_unionall(ft).second
     if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) && _isself(uw)
         uwmod = parentmodule(uw)
         if qualified && !isexported(uwmod, uw.name.singletonname) && uwmod !== Main
@@ -2493,7 +2498,7 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
         s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.singletonname), context=io)
         print_within_stacktrace(io, s, bold=true)
     elseif isType(ft) && (f = ft.parameters[1]; !isa(f, TypeVar))
-        uwf = unwrap_unionall(f)
+        uwf = peelall_unionall(f).second
         parens = isa(f, UnionAll) && !(isa(uwf, DataType) && f === uwf.name.wrapper)
         parens && print(io, "(")
         print_within_stacktrace(io, f, bold=true)
@@ -2524,14 +2529,13 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
         print(out, demangle ? demangle_function_name(name) : name, "(...)")
         return
     end
-    tv = Any[]
+    (sig_vars, sig) = peelall_unionall(sig)
+    tv = Any[sig_vars...]
     buf = IOBuffer()
     io = IOContext(buf, out)
     env_io = io
-    while isa(sig, UnionAll)
-        push!(tv, sig.var)
-        env_io = IOContext(env_io, :unionall_env => sig.var)
-        sig = sig.body
+    for v in sig_vars
+        env_io = IOContext(env_io, :unionall_env => v)
     end
     n = 1
     sig = (sig::DataType).parameters
@@ -2910,6 +2914,22 @@ dump(io::IOContext, x::String, n::Int, indent) = (print(io, "String "); show(io,
 dump(io::IOContext, x::Symbol, n::Int, indent) = print(io, typeof(x), " ", x)
 dump(io::IOContext, x::Union,  n::Int, indent) = print(io, x)
 dump(io::IOContext, x::Ptr,    n::Int, indent) = print(io, x)
+
+function dump(io::IOContext, x::UnionAll, n::Int, indent)
+    print(io, "UnionAll")
+    _p = peel_unionall(x)
+    var = getfield(_p, 1)
+    body = getfield(_p, 2)
+    if n > 0
+        println(io)
+        print(io, indent, "  var: ")
+        dump(io, var, n - 1, string(indent, "  "))
+        println(io)
+        print(io, indent, "  body: ")
+        dump(io, body, n - 1, string(indent, "  "))
+    end
+    nothing
+end
 
 function dump_elts(io::IOContext, x::Array, n::Int, indent, i0, i1)
     for i in i0:i1

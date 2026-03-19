@@ -1360,7 +1360,7 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                       jl_symbol_name(file),
                       line,
                       jl_symbol_name(((jl_tvar_t*)tv)->name));
-        argtype = jl_new_struct(jl_unionall_type, tv, argtype);
+        argtype = (jl_value_t*)jl_new_unionall((jl_tvar_t*)tv, argtype);
     }
     if (jl_has_free_typevars(argtype)) {
         jl_exceptionf(jl_argumenterror_type,

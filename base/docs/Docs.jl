@@ -221,7 +221,8 @@ mutable struct MultiDoc
     "Ordered (via definition order) vector of object signatures."
     order::Vector{Type}
     "Documentation for each object. Keys are signatures."
-    docs::METAType
+    docs::METAType # N.B.: This relies on signatures having stable objectid across serialization
+
 
     MultiDoc() = new(Type[], METAType())
 end
@@ -632,7 +633,9 @@ function _doc(binding::Binding, sig::Type = Union{})
 end
 
 # Some additional convenience `doc` methods that take objects rather than `Binding`s.
-_doc(obj::UnionAll) = _doc(Base.unwrap_unionall(obj))
+function _doc(obj::UnionAll)
+    _doc(Base.peelall_unionall(obj).second)
+end
 _doc(object, sig::Type = Union{}) = _doc(aliasof(object, typeof(object)), sig)
 _doc(object, sig...)              = _doc(object, Tuple{sig...})
 

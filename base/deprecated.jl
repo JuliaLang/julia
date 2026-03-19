@@ -28,6 +28,7 @@ const __internal_changes_list = (
     :ocnopartial,
     :printcodeinfocalls,
     :syntacticccall, #59165
+    :opaqueunionall, #53593
     # Add new change names above this line
 )
 
@@ -414,7 +415,10 @@ tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
 @assume_effects :foldable tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S =
     Tuple{S, T.parameters...}
 @assume_effects :foldable parameter_upper_bound(t::UnionAll, idx) =
-    rewrap_unionall((unwrap_unionall(t)::DataType).parameters[idx], t)
+    begin
+        (vars, body) = peelall_unionall(t)
+        foldr_unionall((body::DataType).parameters[idx], vars)
+    end
 
 # these were internal functions, but some packages seem to be relying on them
 @deprecate cat_shape(dims, shape::Tuple{}, shapes::Tuple...) cat_shape(dims, shapes) false
@@ -580,6 +584,59 @@ function explicit_manifest_entry_path(args...)
     spec = explicit_manifest_entry_load_spec(args...)
     spec === nothing && return nothing
     return spec.path
+end
+
+"""
+    unwrap_unionall(a)
+
+Deprecated. Use `peel_unionall` instead. `unwrap_unionall` is unsound because it
+discards TypeVar identities that are not stable under `===` for UnionAll types.
+"""
+function unwrap_unionall(@nospecialize(a))
+    depwarn("`unwrap_unionall` is deprecated, use `peel_unionall` instead.", :unwrap_unionall)
+    return peelall_unionall(a).second
+end
+
+"""
+    rewrap_unionall(t, u)
+
+Deprecated. Use `peel_unionall` and explicit `UnionAll` construction instead.
+`rewrap_unionall` is unsound because it relies on stable TypeVar identities
+in the body and the rewrap, which are not guaranteed under `===` for UnionAll types.
+"""
+function rewrap_unionall(@nospecialize(t), @nospecialize(u))
+    depwarn("`rewrap_unionall` is deprecated, use `peel_unionall` instead.", :rewrap_unionall)
+    if !isa(u, UnionAll)
+        return t
+    end
+    (var, body) = peel_unionall(u)
+    return UnionAll(var, rewrap_unionall(t, body))
+end
+
+function rewrap_unionall(t::Core.TypeofVararg, @nospecialize(u))
+    depwarn("`rewrap_unionall` is deprecated, use `peel_unionall` instead.", :rewrap_unionall)
+    isdefined(t, :T) || return t
+    if !isa(u, UnionAll)
+        return t
+    end
+    (var, body) = peel_unionall(u)
+    T = rewrap_unionall(t.T, u)
+    if !isdefined(t, :N) || t.N === var
+        return Vararg{T}
+    end
+    return Vararg{T, t.N}
+end
+
+function getproperty(ua::UnionAll, s::Symbol)
+    depwarn("accessing UnionAll fields via `.$(s)` is deprecated, use `peel_unionall` instead.", :getproperty)
+    (var, body) = peel_unionall(ua)
+    if s === :var
+        return var
+    elseif s === :body
+        return body
+    else
+        error("type UnionAll has no field $s")
+    end
 end
 
 # END 1.14 deprecations

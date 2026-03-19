@@ -107,7 +107,8 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
         end
         # XXX: this is wrong if `sig` is not a concretetype method
         # more correct would be to use `fieldtype(sig, i)`, but that would obscure / discard Varargs information in show
-        sig = abi == Tuple ? Core.svec() : Base.unwrap_unionall(abi).parameters::Core.SimpleVector
+        _uw_abi = peelall_unionall(abi).second
+        sig = abi == Tuple ? Core.svec() : _uw_abi.parameters::Core.SimpleVector
         f = stmt.args[2]
         ft = maybe_argextype(f, code, sptypes)
 

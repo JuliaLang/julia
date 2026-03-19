@@ -844,6 +844,13 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             jl_queue_for_serialization_(s, data[i], 1, immediate);
         }
     }
+    else if (jl_is_unionall(v)) {
+        jl_unionall_t *ua = (jl_unionall_t*)v;
+        jl_value_t *var = get_replaceable_field((jl_value_t**)&ua->var, 0);
+        jl_queue_for_serialization_(s, var, 1, immediate);
+        jl_value_t *body = get_replaceable_field(&ua->body, 0);
+        jl_queue_for_serialization_(s, body, 1, immediate);
+    }
     else if (jl_is_array(v)) {
         jl_array_t *ar = (jl_array_t*)v;
         jl_value_t *mem = get_replaceable_field((jl_value_t**)&ar->ref.mem, 1);
@@ -1563,6 +1570,13 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             for (ii = 0; ii < l; ii++) {
                 write_pointerfield(s, jl_svecref(v, ii));
             }
+        }
+        else if (jl_is_unionall(v)) {
+            jl_unionall_t *ua = (jl_unionall_t*)v;
+            jl_value_t *var = get_replaceable_field((jl_value_t**)&ua->var, 0);
+            write_pointerfield(s, var);
+            jl_value_t *body = get_replaceable_field((jl_value_t**)&ua->body, 0);
+            write_pointerfield(s, body);
         }
         else if (jl_is_string(v)) {
             ios_write(f, (char*)v, sizeof(void*) + jl_string_len(v));

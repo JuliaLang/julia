@@ -261,8 +261,10 @@ function showerror(io::IO, ex::MethodError)
     # a tuple of the arguments otherwise.
     is_arg_types = !isa(ex.args, Tuple)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
-    arg_types_param::SimpleVector = (unwrap_unionall(arg_types)::DataType).parameters
-    san_arg_types_param = Any[rewrap_unionall(arg_types_param[i], arg_types) for i in 1:length(arg_types_param)]
+    _me_pa = peelall_unionall(arg_types)
+    _me_vars = _me_pa.first
+    arg_types_param::SimpleVector = (_me_pa.second::DataType).parameters
+    san_arg_types_param = Any[foldr_unionall(arg_types_param[i], _me_vars) for i in 1:length(arg_types_param)]
     f = ex.f
     meth = methods_including_ambiguous(f, arg_types)
     if isa(meth, MethodList) && length(meth) > 1
@@ -286,7 +288,7 @@ function showerror(io::IO, ex::MethodError)
         san_arg_types_param = san_arg_types_param[3:end]
         keys = kwt.parameters[1]::Tuple
         kwargs = Any[(keys[i], fieldtype(kwt, i)) for i in eachindex(keys)]
-        arg_types = rewrap_unionall(Tuple{arg_types_param...}, arg_types)
+        arg_types = foldr_unionall(Tuple{arg_types_param...}, _me_vars)
     end
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
@@ -425,7 +427,8 @@ function showerror_ambiguous(io::IO, meths, f, args::Type)
         println(io)
         sigfix = typeintersect(m.sig, sigfix)
     end
-    if isa(unwrap_unionall(sigfix), DataType) && sigfix <: Tuple
+    _sf_uw = peelall_unionall(sigfix).second
+    if isa(_sf_uw, DataType) && sigfix <: Tuple
         let sigfix=Core.Box(sigfix)
             if all(m->morespecific(sigfix.contents, m.sig), meths)
                 print(io, "\nPossible fix, define\n  ")
@@ -458,8 +461,9 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     @nospecialize io
     is_arg_types = !isa(ex.args, Tuple)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
-    arg_types_param = Any[(unwrap_unionall(arg_types)::DataType).parameters...]
-    arg_types_param = Any[rewrap_unionall(a, arg_types) for a in arg_types_param]
+    _smc_pa = peelall_unionall(arg_types)
+    _smc_vars = _smc_pa.first
+    arg_types_param = Any[foldr_unionall(a, _smc_vars) for a in (_smc_pa.second::DataType).parameters]
     # Displays the closest candidates of the given function by looping over the
     # functions methods and counting the number of matching arguments.
     f = ex.f
@@ -491,14 +495,16 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             else
                 sig0 = method.sig
             end
-            while isa(sig0, UnionAll)
-                push!(tv, sig0.var)
-                iob = IOContext(iob, :unionall_env => sig0.var)
-                sig0 = sig0.body
+            (sig0_vars, sig0) = peelall_unionall(sig0)
+            for v in sig0_vars
+                push!(tv, v)
+                iob = IOContext(iob, :unionall_env => v)
             end
             sig0 = sig0::DataType
             s1 = sig0.parameters[1]
-            if !isa(func, rewrap_unionall(s1, method.sig))
+            _rw_s1_vars = peelall_unionall(method.sig).first
+            _rw_s1 = foldr_unionall(s1, _rw_s1_vars)
+            if !isa(func, _rw_s1)
                 # function itself doesn't match
                 continue
             else
@@ -514,15 +520,17 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
                 # If isvarargtype then it checks whether the rest of the input arguments matches
                 # the varargtype
                 if Base.isvarargtype(sig[i])
-                    sigstr = Core.svec(unwrapva(unwrap_unionall(sig[i])), "...")
+                    _uw_sigi = peelall_unionall(sig[i]).second
+                    sigstr = Core.svec(unwrapva(_uw_sigi), "...")
                     j = length(t_i)
                 else
                     sigstr = Core.svec(sig[i],)
                     j = i
                 end
                 # Checks if the type of arg 1:i of the input intersects with the current method
-                t_in = typeintersect(rewrap_unionall(Tuple{sig[1:i]...}, method.sig),
-                                     rewrap_unionall(Tuple{t_i[1:j]...}, method.sig))
+                _rw_tin1 = foldr_unionall(Tuple{sig[1:i]...}, _rw_s1_vars)
+                _rw_tin2 = foldr_unionall(Tuple{t_i[1:j]...}, _rw_s1_vars)
+                t_in = typeintersect(_rw_tin1, _rw_tin2)
                 # If the function is one of the special cased then it should break the loop if
                 # the type of the first argument is not matched.
                 t_in === Union{} && special && i == 1 && break
@@ -551,7 +559,8 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
                 # It ensures that methods like f(a::AbstractString...) gets the correct
                 # number of right_matches
                 for t in arg_types_param[length(sig):end]
-                    if t <: rewrap_unionall(unwrapva(unwrap_unionall(sig[end])), method.sig)
+                    _rw_sigend = foldr_unionall(unwrapva(peelall_unionall(sig[end]).second), _rw_s1_vars)
+                    if t <: _rw_sigend
                         right_matches += 1
                     end
                 end
@@ -561,7 +570,9 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
                 # If the methods args is longer than input then the method
                 # arguments is printed as not a match
                 for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
-                    sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
+                    if isvarargtype(sigtype)
+                        sigtype = peelall_unionall(sigtype).second
+                    end
                     if Base.isvarargtype(sigtype)
                         sigstr = Core.svec(unwrapva(sigtype::Core.TypeofVararg), "...")
                     else
@@ -1063,7 +1074,9 @@ function _backtrace_collapse_repeated_locations!(trace)
             m, last_m = StackTraces.frame_method_or_module(frame),
                         StackTraces.frame_method_or_module(last_frame)
             if m isa Method && last_m isa Method
-                params, last_params = Base.unwrap_unionall(m.sig).parameters::SimpleVector, Base.unwrap_unionall(last_m.sig).parameters::SimpleVector
+                _uw_msig = Base.peelall_unionall(m.sig).second
+                _uw_lmsig = Base.peelall_unionall(last_m.sig).second
+                params, last_params = _uw_msig.parameters::SimpleVector, _uw_lmsig.parameters::SimpleVector
                 if last_m.nkw != 0
                     pos_sig_params = last_params[(last_m.nkw+2):end]
                     issame = true

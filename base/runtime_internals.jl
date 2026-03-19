@@ -223,7 +223,7 @@ function binding_module(m::Module, s::Symbol)
     return unsafe_pointer_to_objref(p)::Module
 end
 
-const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
+const _NAMEDTUPLE_NAME = getfield(peelall_unionall(NamedTuple), 2).name
 
 function _fieldnames(@nospecialize t)
     if t.name === _NAMEDTUPLE_NAME
@@ -347,7 +347,9 @@ function fieldname(t::DataType, i::Integer)
     return @inbounds names[i]::Symbol
 end
 
-fieldname(t::UnionAll, i::Integer) = fieldname(unwrap_unionall(t), i)
+function fieldname(t::UnionAll, i::Integer)
+    fieldname(getfield(peelall_unionall(t), 2), i)
+end
 fieldname(t::Type{<:Tuple}, i::Integer) =
     i < 1 || i > fieldcount(t) ? throw(BoundsError(t, i)) : Int(i)
 
@@ -375,7 +377,9 @@ julia> fieldnames(Tuple{String,Int})
 """
 fieldnames(t::DataType) = (fieldcount(t); # error check to make sure type is specific enough
                            (_fieldnames(t)...,))::Tuple{Vararg{Symbol}}
-fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
+function fieldnames(t::UnionAll)
+    fieldnames(getfield(peelall_unionall(t), 2))
+end
 fieldnames(::Core.TypeofBottom) =
     throw(ArgumentError("The empty type does not have field names since it does not have instances."))
 fieldnames(t::Type{<:Tuple}) = ntuple(identity, fieldcount(t))
@@ -424,7 +428,9 @@ julia> nameof(Foo.S{T} where T)
 ```
 """
 nameof(t::DataType) = t.name.name
-nameof(t::UnionAll) = nameof(unwrap_unionall(t))::Symbol
+function nameof(t::UnionAll)
+    nameof(getfield(peelall_unionall(t), 2))::Symbol
+end
 
 """
     parentmodule(t::DataType)::Module
@@ -446,7 +452,9 @@ Foo
 ```
 """
 parentmodule(t::DataType) = t.name.module
-parentmodule(t::UnionAll) = parentmodule(unwrap_unionall(t))
+function parentmodule(t::UnionAll)
+    parentmodule(getfield(peelall_unionall(t), 2))
+end
 
 """
     isconst(m::Module, s::Symbol)::Bool
@@ -476,13 +484,13 @@ they always throw).
 """
 function isconst(@nospecialize(t::Type), s::Symbol)
     @_foldable_meta
-    t = unwrap_unionall(t)
+    t = getfield(peelall_unionall(t), 2)
     isa(t, DataType) || return false
     return isconst(t, fieldindex(t, s, false))
 end
 function isconst(@nospecialize(t::Type), s::Int)
     @_foldable_meta
-    t = unwrap_unionall(t)
+    t = getfield(peelall_unionall(t), 2)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false # uncertain
     ismutabletype(t) || return true # immutable structs are always const
@@ -500,13 +508,13 @@ Determine whether a field `s` is declared `@atomic` in a given type `t`.
 """
 function isfieldatomic(@nospecialize(t::Type), s::Symbol)
     @_foldable_meta
-    t = unwrap_unionall(t)
+    t = getfield(peelall_unionall(t), 2)
     isa(t, DataType) || return false
     return isfieldatomic(t, fieldindex(t, s, false))
 end
 function isfieldatomic(@nospecialize(t::Type), s::Int)
     @_foldable_meta
-    t = unwrap_unionall(t)
+    t = getfield(peelall_unionall(t), 2)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false # uncertain
     ismutabletype(t) || return false # immutable structs are never atomic
@@ -812,7 +820,7 @@ If `T` is not a type, then return `false`.
 """
 function ismutabletype(@nospecialize t)
     @_total_meta
-    t = unwrap_unionall(t)
+    t = getfield(peelall_unionall(t), 2)
     # TODO: what to do for `Union`?
     return isa(t, DataType) && ismutabletypename(t.name)
 end
@@ -828,7 +836,7 @@ If `T` is not a type, then return `false`.
 """
 function isstructtype(@nospecialize t)
     @_total_meta
-    t = unwrap_unionall(t)
+    t = getfield(peelall_unionall(t), 2)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
     return !isprimitivetype(t) && !isabstracttype(t)
@@ -843,7 +851,7 @@ If `T` is not a type, then return `false`.
 """
 function isprimitivetype(@nospecialize t)
     @_total_meta
-    t = unwrap_unionall(t)
+    t = getfield(peelall_unionall(t), 2)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
     return (t.flags & 0x0080) == 0x0080
@@ -954,7 +962,7 @@ type is `ismutabletype`, but also `ismutationfree`.
 If `T` is not a type, then return `false`.
 """
 function ismutationfree(@nospecialize(t))
-    t = unwrap_unionall(t)
+    t = getfield(peelall_unionall(t), 2)
     if isa(t, DataType)
         return datatype_ismutationfree(t)
     elseif isa(t, Union)
@@ -974,7 +982,7 @@ reachable through its fields has non-content-based identity.
 If `T` is not a type, then return `false`.
 """
 function isidentityfree(@nospecialize(t))
-    t = unwrap_unionall(t)
+    t = getfield(peelall_unionall(t), 2)
     if isa(t, DataType)
         return datatype_isidentityfree(t)
     elseif isa(t, Union)
@@ -1029,7 +1037,7 @@ function isdispatchelem(@nospecialize v)
         (isType(v) && !has_free_typevars(v))
 end
 
-const _TYPE_NAME = Type.body.name
+const _TYPE_NAME = getfield(peelall_unionall(Type), 2).name
 isType(@nospecialize t) = isa(t, DataType) && t.name === _TYPE_NAME
 
 """
@@ -1106,7 +1114,7 @@ false
 """
 function isabstracttype(@nospecialize(t))
     @_total_meta
-    t = unwrap_unionall(t)
+    t = getfield(peelall_unionall(t), 2)
     # TODO: what to do for `Union`?
     return isa(t, DataType) && (t.name.flags & 0x1) == 0x1
 end
@@ -1391,7 +1399,8 @@ function to_tuple_type(@nospecialize(t))
         t = Tuple{t...}
     end
     if isa(t, Type) && t <: Tuple
-        for p in (unwrap_unionall(t)::DataType).parameters
+        _uw_ttt = getfield(peelall_unionall(t), 2)
+        for p in (_uw_ttt::DataType).parameters
             if isa(p, Core.TypeofVararg)
                 p = unwrapva(p)
             end
@@ -1408,8 +1417,11 @@ end
 function signature_type(@nospecialize(f), @nospecialize(argtypes))
     argtypes = to_tuple_type(argtypes)
     ft = Core.Typeof(f)
-    u = unwrap_unionall(argtypes)::DataType
-    return rewrap_unionall(Tuple{ft, u.parameters...}, argtypes)
+    _pa = peelall_unionall(argtypes)
+    _sig_vars = getfield(_pa, 1)
+    _sig_u = getfield(_pa, 2)
+    _sig_new = Tuple{ft, (_sig_u::DataType).parameters...}
+    return foldr_unionall(_sig_new, _sig_vars)
 end
 
 function get_methodtable(m::Method)
@@ -1432,7 +1444,9 @@ function has_bottom_parameter(t::DataType)
     return false
 end
 has_bottom_parameter(t::typeof(Bottom)) = true
-has_bottom_parameter(t::UnionAll) = has_bottom_parameter(unwrap_unionall(t))
+function has_bottom_parameter(t::UnionAll)
+    has_bottom_parameter(getfield(peelall_unionall(t), 2))
+end
 has_bottom_parameter(t::Union) = has_bottom_parameter(t.a) & has_bottom_parameter(t.b)
 has_bottom_parameter(t::TypeVar) = has_bottom_parameter(t.ub)
 has_bottom_parameter(::Any) = false
@@ -1689,7 +1703,7 @@ function may_invoke_generator(method::Method, @nospecialize(atype), sparams::Sim
     isdefined(generator_method, :source) || return false
     code = generator_method.source
     nslots = ccall(:jl_ir_nslots, Int, (Any,), code)
-    at = unwrap_unionall(atype)
+    at = getfield(peelall_unionall(atype), 2)
     at isa DataType || return false
     (nslots >= 1 + length(sparams) + length(at.parameters)) || return false
 
@@ -1731,7 +1745,9 @@ function subst_trivial_bounds(@nospecialize(atype))
     if !isa(atype, UnionAll)
         return atype
     end
-    v = atype.var
+    _p = peel_unionall(atype)
+    v = getfield(_p, 1)
+    body = getfield(_p, 2)
     if isconcretetype(v.ub) || v.lb === v.ub
         subst = try
             atype{v.ub}
@@ -1743,7 +1759,7 @@ function subst_trivial_bounds(@nospecialize(atype))
             return subst_trivial_bounds(subst)
         end
     end
-    return UnionAll(v, subst_trivial_bounds(atype.body))
+    return UnionAll(v, subst_trivial_bounds(body))
 end
 
 # If removing trivial vars from atype results in an equivalent type, use that

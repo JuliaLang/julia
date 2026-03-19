@@ -1159,7 +1159,8 @@ end
 
 function invoke_signature(argtypes::Vector{Any})
     ft, argtyps = widenconst(argtypes[2]), instanceof_tfunc(widenconst(argtypes[3]), false)[1]
-    return rewrap_unionall(Tuple{ft, unwrap_unionall(argtyps).parameters...}, argtyps)
+    (_inv_vars, _inv_body) = peelall_unionall(argtyps)
+    return foldr_unionall(Tuple{ft, _inv_body.parameters...}, _inv_vars)
 end
 
 function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info::CallInfo), state::InliningState)
