@@ -173,17 +173,6 @@ static void statestack_set(jl_unionstate_t *st, int i, int val) JL_NOTSAFEPOINT
 
 #define has_next_union_state(e, R) ((((R) ? &(e)->Runions : &(e)->Lunions)->more) != 0)
 
-static int next_union_state(jl_stenv_t *e, int8_t R) JL_NOTSAFEPOINT
-{
-    jl_unionstate_t *state = R ? &e->Runions : &e->Lunions;
-    if (state->more == 0)
-        return 0;
-    // reset `used` and let `pick_union_decision` clean the stack.
-    state->used = state->more;
-    statestack_set(state, state->used - 1, 1);
-    return 1;
-}
-
 static int next_union_state_from(jl_stenv_t *e, int8_t R, int16_t min_used) JL_NOTSAFEPOINT
 {
     jl_unionstate_t *state = R ? &e->Runions : &e->Lunions;
@@ -193,6 +182,11 @@ static int next_union_state_from(jl_stenv_t *e, int8_t R, int16_t min_used) JL_N
     state->used = state->more;
     statestack_set(state, state->used - 1, 1);
     return 1;
+}
+
+static int next_union_state(jl_stenv_t *e, int8_t R) JL_NOTSAFEPOINT
+{
+    return next_union_state_from(e, R, 0);
 }
 
 static int pick_union_decision(jl_stenv_t *e, int8_t R) JL_NOTSAFEPOINT
@@ -754,11 +748,9 @@ NOINLINE static void ccheck_merge_env(
             nmerge = merge_env(e, &me, se, nmerge);
     }
     e->ccheck_merging = 0;
-    if (nmerge > 0) {
-        restore_env(e, &me, 1);
-        ccheck_restore_metadata(e, se);
-        free_env(&me);
-    }
+    restore_env(e, &me, 1);
+    ccheck_restore_metadata(e, se);
+    free_env(&me);
 }
 
 // Subtype check for variable bounds consistency.
