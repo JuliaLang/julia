@@ -58,6 +58,10 @@ Build system changes
 New library functions
 ---------------------
 
+- `Base.generating_output()` has been made `public` (but not exported) to allow
+  checking whether the current process is performing compilation for a
+  pkgimage/sysimage ([#61224]).
+
 New library features
 --------------------
 
