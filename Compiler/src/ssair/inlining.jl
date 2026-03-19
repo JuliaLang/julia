@@ -786,7 +786,7 @@ function compileable_specialization(code::Union{MethodInstance,CodeInstance}, ef
         # If this caller does not want us to optimize calls to use their
         # declared compilesig, then it is also likely they would handle sparams
         # incorrectly if there were any unknown typevars, so we conservatively return nothing
-        if any(@nospecialize(t)->isa(t, TypeVar), mi.sparam_vals)
+        if any(@nospecialize(t)->isa(t, Core.SimpleVector), mi.sparam_vals)
             return nothing
         end
     end
@@ -855,7 +855,7 @@ end
 function validate_sparams(sparams::SimpleVector)
     for i = 1:length(sparams)
         spᵢ = sparams[i]
-        (isa(spᵢ, TypeVar) || isvarargtype(spᵢ)) && return false
+        (isa(spᵢ, Core.SimpleVector) || isvarargtype(spᵢ)) && return false
     end
     return true
 end
@@ -1749,22 +1749,32 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction, @no
         if head === :static_parameter
             spidx = e.args[1]::Int
             val = sparam_vals[spidx]
-            if !isa(val, TypeVar) && val !== Vararg
+            if !isa(val, Core.SimpleVector) && val !== Vararg
                 return quoted(val)
             else
                 flag = subst_inst[:flag]
-                maybe_undef = !has_flag(flag, IR_FLAG_NOTHROW) && isa(val, TypeVar)
+                maybe_undef = !has_flag(flag, IR_FLAG_NOTHROW) && isa(val, Core.SimpleVector)
                 (ret, tcheck_not) = insert_spval!(insert_node!, ssa_substitute.spvals_ssa::SSAValue, spidx, maybe_undef)
                 if maybe_undef
+                    spsig = ssa_substitute.mi.def.sig
+                    for j = 1:spidx
+                        spsig = (spsig::UnionAll).body
+                    end
+                    # Get the var name from the method signature, not from the sparam value
+                    # (which is now an svec marker, not a TypeVar)
+                    spname = let sig = ssa_substitute.mi.def.sig
+                        for _ = 1:spidx-1; sig = (sig::UnionAll).body; end
+                        (sig::UnionAll).var.name
+                    end
                     insert_node!(
-                        NewInstruction(Expr(:throw_undef_if_not, val.name, tcheck_not), Nothing))
+                        NewInstruction(Expr(:throw_undef_if_not, spname, tcheck_not), Nothing))
                 end
                 return ret
             end
         elseif head === :isdefined && isa(e.args[1], Expr) && e.args[1].head === :static_parameter
             spidx = (e.args[1]::Expr).args[1]::Int
             val = sparam_vals[spidx]
-            if !isa(val, TypeVar)
+            if !isa(val, Core.SimpleVector)
                 return true
             else
                 (_, tcheck_not) = insert_spval!(insert_node!, ssa_substitute.spvals_ssa::SSAValue, spidx, true)

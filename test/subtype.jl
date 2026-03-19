@@ -994,7 +994,7 @@ function test_intersection()
     # first union component sets N==0, but for the second N is unknown
     _, E = intersection_env(Tuple{Tuple{Vararg{Int}}, Any},
                             Tuple{Union{Base.DimsInteger{N},Base.Indices{N}}, Int} where N)
-    @test length(E)==1 && isa(E[1],TypeVar)
+    @test length(E)==1 && isa(E[1],Core.SimpleVector)
 
     @testintersect(Tuple{Dict{Int,Int}, Ref{Pair{K,V}}} where V where K,
                    Tuple{AbstractDict{Int,Int}, Ref{Pair{T,T}} where T},
@@ -1007,7 +1007,7 @@ function test_intersection()
 
     # issue #20998
     _, E = intersection_env(Tuple{Int,Any,Any}, Tuple{T,T,S} where {T,S})
-    @test length(E) == 2 && E[1] == Int && isa(E[2], TypeVar)
+    @test length(E) == 2 && E[1] == Int && isa(E[2], Core.SimpleVector)
     _, E = intersection_env(Tuple{Dict{Int,Type}, Type, Any},
                             Tuple{Dict{K,V}, Any, Int} where {K,V})
     @test E[2] == Type
@@ -1479,7 +1479,7 @@ end
 
 # PR #24399
 let (t, e) = intersection_env(Tuple{Union{Int,Int8}}, Tuple{T} where T)
-    @test e[1] isa TypeVar
+    @test e[1] isa Core.SimpleVector
 end
 
 # issue #25430
@@ -2283,8 +2283,12 @@ function equal_envs(env1, env2)
     for i = 1:length(env1)
         a = env1[i]
         b = env2[i]
-        if a isa TypeVar
-            if !(b isa TypeVar && a.name == b.name && a.lb == b.lb && a.ub == b.ub)
+        if a isa Core.SimpleVector && b isa Core.SimpleVector
+            a_ub = a[end]
+            a_lb = length(a) == 2 ? a[1] : Union{}
+            b_ub = b[end]
+            b_lb = length(b) == 2 ? b[1] : Union{}
+            if !(a_lb == b_lb && a_ub == b_ub)
                 return false
             end
         elseif !(a == b)
@@ -2299,25 +2303,26 @@ let
     env_tuple(@nospecialize(x), @nospecialize(y)) = intersection_env(x, y)[2]
     TT0 = Tuple{Type{T},Union{Real,Missing,Nothing}} where {T}
     TT1 = Union{Type{Int8},Type{Int16}}
-    @test env_tuple(Tuple{TT1,Missing}, TT0) ===
-          env_tuple(Tuple{TT1,Nothing}, TT0) ===
-          env_tuple(Tuple{TT1,Int}, TT0) ===
-          Core.svec(TT0.var)
+    # env entry is an svec marker for an uncertain TypeVar value
+    @test env_tuple(Tuple{TT1,Missing}, TT0) ==
+          env_tuple(Tuple{TT1,Nothing}, TT0) ==
+          env_tuple(Tuple{TT1,Int}, TT0)
+    @test env_tuple(Tuple{TT1,Missing}, TT0)[1] isa Core.SimpleVector
 
     TT0 = Tuple{T1,T2,Union{Real,Missing,Nothing}} where {T1,T2}
     TT1 = Tuple{T1,T2,Union{Real,Missing,Nothing}} where {T2,T1}
     TT2 = Tuple{Union{Int,Int8},Union{Int,Int8},Int}
     TT3 = Tuple{Int,Union{Int,Int8},Int}
-    @test equal_envs(env_tuple(TT2, TT0), Core.svec(TypeVar(:T1, Union{Int, Int8}), TypeVar(:T2, Union{Int, Int8})))
-    @test equal_envs(env_tuple(TT2, TT1), Core.svec(TypeVar(:T2, Union{Int, Int8}), TypeVar(:T1, Union{Int, Int8})))
-    @test equal_envs(env_tuple(TT3, TT0), Core.svec(Int, TypeVar(:T2, Union{Int, Int8})))
-    @test equal_envs(env_tuple(TT3, TT1), Core.svec(TypeVar(:T2, Union{Int, Int8}), Int))
+    @test equal_envs(env_tuple(TT2, TT0), Core.svec(Core.svec(Union{}, Union{Int, Int8}), Core.svec(Union{}, Union{Int, Int8})))
+    @test equal_envs(env_tuple(TT2, TT1), Core.svec(Core.svec(Union{}, Union{Int, Int8}), Core.svec(Union{}, Union{Int, Int8})))
+    @test equal_envs(env_tuple(TT3, TT0), Core.svec(Int, Core.svec(Union{}, Union{Int, Int8})))
+    @test equal_envs(env_tuple(TT3, TT1), Core.svec(Core.svec(Union{}, Union{Int, Int8}), Int))
 
     TT0 = Tuple{T1,T2,T1,Union{Real,Missing,Nothing}} where {T1,T2}
     TT1 = Tuple{T1,T2,T1,Union{Real,Missing,Nothing}} where {T2,T1}
     TT2 = Tuple{Int,Union{Int,Int8},Int,Int}
-    @test equal_envs(env_tuple(TT2, TT0), Core.svec(Int, TypeVar(:T2, Union{Int, Int8})))
-    @test equal_envs(env_tuple(TT2, TT1), Core.svec(TypeVar(:T2, Union{Int, Int8}), Int))
+    @test equal_envs(env_tuple(TT2, TT0), Core.svec(Int, Core.svec(Union{}, Union{Int, Int8})))
+    @test equal_envs(env_tuple(TT2, TT1), Core.svec(Core.svec(Union{}, Union{Int, Int8}), Int))
 end
 
 #issue #46735
@@ -2354,7 +2359,7 @@ struct Z38497{T>:Int} <: Y38497{T} end
 @test Vector{Vector{Tuple{T,T}} where Int<:T<:Int} <: Vector{Vector{Tuple{S1,S1} where S<:S1<:S}} where S
 
 #issue #46970
-@test only(intersection_env(Union{S, Matrix{Int}} where S<:Matrix, Matrix)[2]) isa TypeVar
+@test only(intersection_env(Union{S, Matrix{Int}} where S<:Matrix, Matrix)[2]) isa Core.SimpleVector
 T46784{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}}, M, Union{AbstractMatrix{B}, AbstractMatrix{<:Vector{<:B}}}}
 @testintersect(T46784{T,S} where {T,S}, T46784, !Union{})
 @test T46784 <: T46784{T,S} where {T,S}

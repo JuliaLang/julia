@@ -3036,6 +3036,26 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtIn
     return abstract_call_known(interp, f, arginfo, si, vtypes, sv, max_methods)
 end
 
+function reconstitute_sp_env(sparam_vals::Core.SimpleVector, spsig::UnionAll)
+    sparam_env = Any[]
+    i = 1
+    while isa(spsig, UnionAll)
+        val = sparam_vals[i]
+        if isa(val, Core.SimpleVector)
+            ub = val[end]
+            lb = length(val) == 2 ? val[1] : Union{}
+            push!(sparam_env, TypeVar(spsig.var.name, lb, ub))
+        elseif isvarargtype(val)
+            push!(sparam_env, TypeVar(:N, Union{}, Any))
+        else
+            push!(sparam_env, val)
+        end
+        spsig = spsig.body
+        i += 1
+    end
+    return sparam_env
+end
+
 function sp_type_rewrap(@nospecialize(T), mi::MethodInstance, isreturn::Bool)
     isref = false
     if unwrapva(T) === Bottom
@@ -3055,11 +3075,10 @@ function sp_type_rewrap(@nospecialize(T), mi::MethodInstance, isreturn::Bool)
         spsig = mi.def.sig
         if isa(spsig, UnionAll)
             if !isempty(mi.sparam_vals)
-                sparam_vals = Any[isvarargtype(v) ? TypeVar(:N, Union{}, Any) :
-                                  v for v in  mi.sparam_vals]
-                T = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), T, spsig, sparam_vals)
+                sparam_env = reconstitute_sp_env(mi.sparam_vals, spsig)
+                T = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), T, spsig, sparam_env)
                 isref && isreturn && T === Any && return Bottom # catch invalid return Ref{T} where T = Any
-                for v in sparam_vals
+                for v in sparam_env
                     if isa(v, TypeVar)
                         T = UnionAll(v, T)
                     end

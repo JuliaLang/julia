@@ -941,8 +941,8 @@ static jl_value_t *widen_Type_to_union(jl_value_t *t, jl_value_t *bound, jl_sten
 static jl_value_t *fix_inferred_var_bound(jl_tvar_t *var, jl_value_t *ty JL_MAYBE_UNROOTED)
 {
     if (ty == NULL) // may happen if the user is intersecting with an incomplete type
-        return (jl_value_t*)var;
-    if (!jl_is_typevar(ty) && jl_has_free_typevars(ty)) {
+        return (jl_value_t*)jl_svec2(var->lb, var->ub);
+    if (!jl_is_svec(ty) && !jl_is_typevar(ty) && jl_has_free_typevars(ty)) {
         jl_value_t *ans = ty;
         jl_array_t *vs = NULL;
         JL_GC_PUSH2(&ans, &vs);
@@ -951,7 +951,7 @@ static jl_value_t *fix_inferred_var_bound(jl_tvar_t *var, jl_value_t *ty JL_MAYB
         for (i = 0; i < jl_array_nrows(vs); i++) {
             ans = jl_type_unionall((jl_tvar_t*)jl_array_ptr_ref(vs, i), ans);
         }
-        ans = (jl_value_t*)jl_new_typevar(var->name, jl_bottom_type, ans);
+        ans = (jl_value_t*)jl_svec2(jl_bottom_type, ans);
         JL_GC_POP();
         return ans;
     }
@@ -1067,22 +1067,20 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         if (vb.intvalued && vb.lb == (jl_value_t*)jl_any_type)
             val = (jl_value_t*)jl_wrap_vararg(NULL, NULL, 0, 0); // special token result that represents N::Int in the envout
         else if (!vb.occurs_inv && vb.lb != jl_bottom_type)
-            val = is_leaf_bound(vb.lb) ? vb.lb : (jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, vb.lb);
+            val = is_leaf_bound(vb.lb) ? vb.lb : (jl_value_t*)jl_svec2(jl_bottom_type, vb.lb);
         else if (vb.lb == vb.ub)
-            val = vb.lb;
+            val = jl_is_typevar(vb.lb) ? (jl_value_t*)jl_svec2(vb.lb, vb.ub) : vb.lb;
         else if (vb.lb != jl_bottom_type)
             // TODO: for now return the least solution, which is what
             // method parameters expect.
-            val = vb.lb;
-        else if (vb.lb == u->var->lb && vb.ub == u->var->ub)
-            val = (jl_value_t*)u->var;
+            val = jl_is_typevar(vb.lb) ? (jl_value_t*)jl_svec2(vb.lb, vb.ub) : vb.lb;
         else
-            val = (jl_value_t*)jl_new_typevar(u->var->name, vb.lb, vb.ub);
+            val = (jl_value_t*)jl_svec2(vb.lb, vb.ub);
         jl_value_t *oldval = e->envout[e->envidx];
         // if we try to assign different variable values (due to checking
         // multiple union members), consider the value unknown.
         if (oldval && !jl_egal(oldval, val))
-            e->envout[e->envidx] = (jl_value_t*)u->var;
+            e->envout[e->envidx] = (jl_value_t*)jl_svec1(jl_any_type);
         else
             e->envout[e->envidx] = val;
         // TODO: substitute the value (if any) of this variable into previous envout entries
@@ -1875,7 +1873,7 @@ static int forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, in
     return sub;
 }
 
-static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
+static void init_stenv(jl_stenv_t *e, jl_value_t **env JL_REQUIRE_ROOTED_SLOT, int envsz)
 {
     e->vars = NULL;
     e->envsz = envsz;
@@ -2291,7 +2289,7 @@ JL_DLLEXPORT int jl_obvious_subtype(jl_value_t *x, jl_value_t *y, int *subtype)
 // points to a rooted array of length `jl_subtype_env_size(y)`.
 // This will be populated with the values of variables from unionall
 // types at the outer level of `y`.
-JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, int envsz)
+JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env JL_REQUIRE_ROOTED_SLOT, int envsz)
 {
     jl_stenv_t e;
     if (y == (jl_value_t*)jl_any_type || x == jl_bottom_type)
@@ -2305,7 +2303,7 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
             int i;
             for (i = 0; i < envsz; i++) {
                 assert(jl_is_unionall(ua));
-                env[i] = (jl_value_t*)ua->var;
+                env[i] = (jl_value_t*)jl_svec2(ua->var->lb, ua->var->ub);
                 ua = (jl_unionall_t*)ua->body;
             }
         }
@@ -3425,8 +3423,8 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     if (vb->right && e->envidx < e->envsz) {
         jl_value_t *oldval = e->envout[e->envidx];
         if (!varval || (!is_leaf_bound(varval) && !vb->occurs_inv))
-            e->envout[e->envidx] = (jl_value_t*)vb->var;
-        else if (!(oldval && jl_is_typevar(oldval) && jl_is_long(varval)))
+            e->envout[e->envidx] = (jl_value_t*)jl_svec1(jl_any_type);
+        else if (!(oldval && jl_is_svec(oldval) && jl_is_long(varval)))
             e->envout[e->envidx] = varval;
     }
 
@@ -4720,7 +4718,7 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
     if (sz == 0 && szb > 0) {
         jl_unionall_t *ub = (jl_unionall_t*)b;
         while (jl_is_unionall(ub)) {
-            env[i++] = (jl_value_t*)ub->var;
+            env[i++] = (jl_value_t*)jl_svec2(ub->var->lb, ub->var->ub);
             ub = (jl_unionall_t*)ub->body;
         }
         sz = szb;

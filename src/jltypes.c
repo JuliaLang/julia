@@ -2787,13 +2787,29 @@ jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n)
     return instantiate_with(t, env, n, NULL);
 }
 
-static jl_value_t *_jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals, jl_typeenv_t *prev, jl_typestack_t *stack)
+static jl_value_t *__jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t *val, jl_value_t **vals, jl_typeenv_t *prev, jl_typestack_t *stack)
 {
-    jl_typeenv_t en = { env->var, vals[0], prev };
+    jl_typeenv_t en = { env->var, val, prev };
     if (jl_is_unionall(env->body))
-        return _jl_instantiate_type_in_env(ty, (jl_unionall_t*)env->body, vals + 1, &en, stack);
+        return _jl_instantiate_type_in_env(ty, (jl_unionall_t*)env->body, vals, &en, stack);
     else
         return inst_type_w_(ty, &en, stack, 1, 0);
+}
+
+static jl_value_t *_jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals, jl_typeenv_t *prev, jl_typestack_t *stack)
+{
+    jl_value_t *val = vals[0];
+    if (jl_is_svec(val)) {
+        size_t len = jl_svec_len((jl_svec_t*)val);
+        jl_value_t *ub = jl_svecref((jl_svec_t*)val, len - 1);
+        jl_value_t *lb = len == 2 ? jl_svecref((jl_svec_t*)val, 0) : jl_bottom_type;
+        jl_tvar_t *var = jl_new_typevar(env->var->name, lb, ub);
+        JL_GC_PUSH1(&var);
+        jl_value_t *ret = __jl_instantiate_type_in_env(ty, env, (jl_value_t*)var, vals + 1, prev, stack);
+        JL_GC_POP();
+        return ret;
+    }
+    return __jl_instantiate_type_in_env(ty, env, val, vals + 1, prev, stack);
 }
 
 JL_DLLEXPORT jl_value_t *jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals)
