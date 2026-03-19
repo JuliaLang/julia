@@ -112,7 +112,6 @@ filter!(x->x!=".", LOAD_PATH)
 
 # Support for Revise
 function revise_trackall()
-    Revise.track(Core.Compiler)
     Revise.track(Base)
     for (id, mod) in Base.loaded_modules
         if id.name in STDLIBS
