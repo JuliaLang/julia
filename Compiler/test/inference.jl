@@ -4687,10 +4687,13 @@ let x = Tuple{Int,Any}[
     @test map(x->x[1] == 0 ? 0 : Compiler.get_enter_idx(handlers[x[1]]), handler_at) == first.(x)
 end
 
-# Similar to the Windows ConnectEx path in Reseau: an outer try/catch, an
-# `@static` early-return region with a try/finally + swallowed cleanup error,
-# and a still-present sibling path after it. This used to make
-# `ComputeTryCatch` pop from an empty current handler stack even though the
+# This shape was discovered while investigating Reseau.jl's Windows TCP connect
+# path (`TCP._connect_socketaddr_impl`):
+# https://github.com/JuliaServices/Reseau.jl/blob/50919ecbf452536b0b38ddb95ab9895fc2711057/src/3_tcp.jl#L478-L550
+# The reduced repro keeps the relevant structure: an outer try/catch, an
+# `@static` early-return region, a try/finally with swallowed cleanup error,
+# and the still-present sibling path after the `@static` branch. This used to
+# make `ComputeTryCatch` pop from an empty current handler stack even though the
 # explicit `:leave` target still carried the right outer handler.
 let
     struct DummyFDConnectShape
