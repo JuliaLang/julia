@@ -52,7 +52,7 @@ let t = Tuple{Ref{T},T,T} where T, c = Tuple{Ref, T, T} where T # #36407
 end
 
 # obtain Vararg with 2 undefined fields
-let va = ccall(:jl_type_intersection_with_env, Any, (Any, Any), Tuple{Tuple}, Tuple{Tuple{Vararg{Any, N}}} where N)[2][1]
+let va = Base.typeintersect_with_env(Tuple{Tuple}, Tuple{Tuple{Vararg{Any, N}}} where N)[2][1]
     @test Compiler.__limit_type_size(Tuple, va, Core.svec(va, Union{}), 2, 2) === Tuple
 end
 

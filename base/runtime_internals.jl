@@ -1695,7 +1695,7 @@ function may_invoke_generator(method::Method, @nospecialize(atype), sparams::Sim
 
     firstarg = 1
     for i = 1:nsparams
-        if isa(sparams[i], TypeVar)
+        if isa(sparams[i], Core.SimpleVector)
             if (ast_slotflag(code, firstarg + i) & SLOT_USED) != 0
                 return false
             end
@@ -1746,6 +1746,55 @@ function subst_trivial_bounds(@nospecialize(atype))
     return UnionAll(v, subst_trivial_bounds(atype.body))
 end
 
+"""
+    typeintersect_with_env(T::Type, S::Type)
+
+Return a pair `ti=>env` of the intersection and result environment of `T` and `S`.
+The type intersection `ti` is the same as computed by [`typeintersect`](@ref).
+The environment `env` is a [`SimpleVector`](@ref) of the same length as the number
+of type variables in `S` and contains the values that were matched to said type variables.
+
+This function is used internally to determine the value of type variables declared in a
+method signature. It is possible for type intersection to be unable to determine the value
+of a type variable (e.g. because it is in an unused union branch). This corresponds to the
+case where accessing the type variable in a function body would result in an [`UndefVarError`](@ref).
+
+In this case, the corresponding entry in env will be a [`SimpleVector`](@ref) containing any bounds that
+the type variable is known to satisfy. If the simple vector is of length 1, the entry
+is the upper bound (and the lower bound is implicitly `Union{}`). Otherwise,
+the first entry is the lower bound and the second entry is the upper bound.
+
+Note that there are no semantic guarantees on the values of `env` other than that - if
+`env` does not contain a `SimpleVector`, then `ti <: S{env...}`. Note also that the values
+in `env` may depend on the structure of `T` and `S`. It is therefore possible that replacing
+`T` and `S` by type-equal types may change the values in `env`. However, if a particular entry
+in `env` is not a `SimpleVector`, then type-equal inputs will result in type-equal outputs for that entry.
+"""
+function typeintersect_with_env(@nospecialize(a), @nospecialize(b))
+    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), a, b)::SimpleVector
+    Pair{Any,SimpleVector}(ti, env::SimpleVector)
+end
+
+function reconstitute_sp_env(sparam_vals::Core.SimpleVector, spsig::UnionAll)
+    sparam_env = Any[]
+    i = 1
+    while isa(spsig, UnionAll)
+        val = sparam_vals[i]
+        if isa(val, Core.SimpleVector)
+            ub = val[end]
+            lb = length(val) == 2 ? val[1] : Union{}
+            push!(sparam_env, TypeVar(spsig.var.name, lb, ub))
+        elseif isvarargtype(val)
+            push!(sparam_env, TypeVar(:N, Union{}, Any))
+        else
+            push!(sparam_env, val)
+        end
+        spsig = spsig.body
+        i += 1
+    end
+    return sparam_env
+end
+
 # If removing trivial vars from atype results in an equivalent type, use that
 # instead. Otherwise we can get a case like issue #38888, where a signature like
 #   f(x::S) where S<:Int
@@ -1754,8 +1803,7 @@ function normalize_typevars(method::Method, @nospecialize(atype), sparams::Simpl
     at2 = subst_trivial_bounds(atype)
     if at2 !== atype && at2 == atype
         atype = at2
-        sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), at2, method.sig)::SimpleVector
-        sparams = sp_[2]::SimpleVector
+        (_, sparams) = typeintersect_with_env(at2, method.sig)
     end
     return Pair{Any,SimpleVector}(atype, sparams)
 end

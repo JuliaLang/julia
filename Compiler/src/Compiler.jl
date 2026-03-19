@@ -63,7 +63,7 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     partition_restriction, quoted, rename_unionall, rewrap_unionall, specialize_method,
     structdiff, tls_world_age, unconstrain_vararg_length, unionlen, uniontype_layout,
     uniontypes, unsafe_convert, unwrap_unionall, unwrapva, vect, widen_diagonal,
-    _uncompressed_ir, datatype_min_ninitialized,
+    _uncompressed_ir, datatype_min_ninitialized, typeintersect_with_env, reconstitute_sp_env,
     partialstruct_init_undefs, fieldcount_noerror, _eval_import, _eval_using,
     get_ci_mi, get_methodtable, morespecific, specializations, has_image_globalref,
     PARTITION_MASK_KIND, PARTITION_KIND_GUARD, PARTITION_FLAG_EXPORTED, PARTITION_FLAG_DEPRECATED,

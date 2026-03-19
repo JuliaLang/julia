@@ -4579,7 +4579,7 @@ function precompile(@nospecialize(f), @nospecialize(argtypes::Tuple), m::Method)
 end
 
 function precompile(@nospecialize(argt::Type), m::Method)
-    atype, sparams = ccall(:jl_type_intersection_with_env, Any, (Any, Any), argt, m.sig)::SimpleVector
+    atype, sparams = typeintersect_with_env(argt, m.sig)
     mi = Base.Compiler.specialize_method(m, atype, sparams)
     return precompile(mi)
 end

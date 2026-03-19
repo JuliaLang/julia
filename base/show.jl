@@ -638,28 +638,49 @@ function make_typealias(@nospecialize(x::Type))
     end
     x isa UnionAll && push!(xenv, x)
     for mod in mods
-        for name in unsorted_names(mod)
+        @label names for name in unsorted_names(mod)
             if isdefinedglobal(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
                 alias = getglobal(mod, name)
                 if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && x <: alias
-                    if alias isa UnionAll
-                        (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
+                    if alias === x
+                        envs = TypeVar[]
+                        while isa(alias, UnionAll)
+                            push!(envs, alias.var)
+                            alias = alias.body
+                        end
+                        env = Core.svec(envs...)
+                    elseif alias isa UnionAll
+                        (ti, env) = typeintersect_with_env(x, alias)
                         # ti === Union{} && continue # impossible, since we already checked that x <: alias
-                        env = env::SimpleVector
                         # TODO: In some cases (such as the following), the `env` is over-approximated.
                         #       We'd like to disable `fix_inferred_var_bound` since we'll already do that fix-up here.
                         #       (or detect and reverse the computation of it here).
                         #   T = Array{Array{T,1}, 1} where T
                         #   (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), T, Vector)
                         #   env[1].ub.var == T.var
+                        newenv = Any[]
+                        # TODO: This relies on `typeintersect` producing typevars with identity from the LHS, which is not
+                        # guaranteed.
+                        for v in env
+                            if isa(v, Core.SimpleVector)
+                                if length(v) != 2 || v[1] !== v[2] || !isa(v[1], TypeVar)
+                                    continue names
+                                end
+                                push!(newenv, v[1])
+                            else
+                                push!(newenv, v)
+                            end
+                        end
+                        env = Core.svec(newenv...)
                         applied = try
                                 # this can fail if `x` contains a covariant
                                 # union, and the non-matching branch of the
                                 # union has additional restrictions on the
                                 # bounds of the environment that are not met by
                                 # the instantiation found above
-                                alias{env...}
+                                alias{newenv...}
                             catch ex
+                                ccall(:jl_, Cvoid, (Any,), ex)
                                 ex isa TypeError || rethrow()
                                 continue
                             end
@@ -668,8 +689,6 @@ function make_typealias(@nospecialize(x::Type))
                         end
                         has_free_typevars(applied) && continue
                         applied === x || continue # it couldn't figure out the parameter matching
-                    elseif alias === x
-                        env = Core.svec()
                     else
                         continue # not a complete match
                     end
@@ -842,29 +861,40 @@ function make_typealiases(@nospecialize(x::Type))
     end
     x isa UnionAll && push!(xenv, x)
     for mod in mods
-        for name in unsorted_names(mod)
+        @label names for name in unsorted_names(mod)
             if isdefinedglobal(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
                 alias = getglobal(mod, name)
                 if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && !(alias <: Tuple)
-                    (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
+                    (ti, env) = typeintersect_with_env(x, alias)
                     ti === Union{} && continue
                     # make sure this alias wasn't from an unrelated part of the Union
                     mod2 = modulesof!(Set{Module}(), alias)
                     mod in mod2 || (mod === Base && Core in mod2) || continue
-                    env = env::SimpleVector
                     applied = alias
                     if !isempty(env)
+                        newenv = Any[]
+                        for v in env
+                            if isa(v, Core.SimpleVector)
+                                if length(v) != 2 || v[1] !== v[2] || !isa(v[1], TypeVar)
+                                    continue names
+                                end
+                                push!(newenv, v[1])
+                            else
+                                push!(newenv, v)
+                            end
+                        end
                         applied = try
                                 # this can fail if `x` contains a covariant
                                 # union, and the non-matching branch of the
                                 # union has additional restrictions on the
                                 # bounds of the environment that are not met by
                                 # the instantiation found above
-                                alias{env...}
+                                alias{newenv...}
                             catch ex
                                 ex isa TypeError || rethrow()
                                 continue
                             end
+                        env = Core.svec(newenv...)
                     end
                     ul = unionlen(applied)
                     for p in xenv

@@ -308,8 +308,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                         csig = get_compileable_sig(method, sig, match.sparams)
                         if csig !== nothing && (!seenall || csig !== sig) # corresponds to whether the first look already looked at this, so repeating abstract_call_method is not useful
                             #println(sig, " changed to ", csig, " for ", method)
-                            sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), csig, method.sig)::SimpleVector
-                            sparams = sp_[2]::SimpleVector
+                            (_, sparams) = typeintersect_with_env(csig, method.sig)
                             mresult = abstract_call_method(interp, method, csig, sparams, multiple_matches, StmtInfo(false, false), sv)::Future
                             isready(mresult) || return false # wait for mresult Future to resolve off the callstack before continuing
                         end
@@ -730,7 +729,7 @@ function abstract_call_method(interp::AbstractInterpreter,
 
     # if sig changed, may need to recompute the sparams environment
     if isa(method.sig, UnionAll) && isempty(sparams)
-        recomputed = ccall(:jl_type_intersection_with_env, Any, (Any, Any), sig, method.sig)::SimpleVector
+        (_, sparams) = typeintersect_with_env(sig, method.sig)
         #@assert recomputed[1] !== Bottom
         # We must not use `sig` here, since that may re-introduce structural complexity that
         # our limiting heuristic sought to eliminate. The alternative would be to not increment depth over covariant contexts,
@@ -751,7 +750,6 @@ function abstract_call_method(interp::AbstractInterpreter,
         #         newsig = recomputed[2]
         #     end
         #     sig = ?
-        sparams = recomputed[2]::SimpleVector
     end
 
     return typeinf_edge(interp, method, sig, sparams, sv, edgecycle, edgelimited)
@@ -2408,9 +2406,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         update_valid_age!(sv, our_world, valid_worlds)
         method = matched.method
     end
-    tienv = ccall(:jl_type_intersection_with_env, Any, (Any, Any), nargtype, method.sig)::SimpleVector
-    ti = tienv[1]
-    env = tienv[2]::SimpleVector
+    (ti, env) = typeintersect_with_env(nargtype, method.sig)
     mresult = abstract_call_method(interp, method, ti, env, false, si, sv)::Future
     match = MethodMatch(ti, env, method, argtype <: method.sig)
     ft′_box = Core.Box(ft′)
@@ -3055,11 +3051,10 @@ function sp_type_rewrap(@nospecialize(T), mi::MethodInstance, isreturn::Bool)
         spsig = mi.def.sig
         if isa(spsig, UnionAll)
             if !isempty(mi.sparam_vals)
-                sparam_vals = Any[isvarargtype(v) ? TypeVar(:N, Union{}, Any) :
-                                  v for v in  mi.sparam_vals]
-                T = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), T, spsig, sparam_vals)
+                sparam_env = reconstitute_sp_env(mi.sparam_vals, spsig)
+                T = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), T, spsig, sparam_env)
                 isref && isreturn && T === Any && return Bottom # catch invalid return Ref{T} where T = Any
-                for v in sparam_vals
+                for v in sparam_env
                     if isa(v, TypeVar)
                         T = UnionAll(v, T)
                     end

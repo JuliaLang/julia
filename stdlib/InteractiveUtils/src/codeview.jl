@@ -107,24 +107,26 @@ function print_warntype_mi(io::IO, mi::Core.MethodInstance)
                 else
                     Base.print(io, v)
                 end
-            if val isa TypeVar
-                if val.lb === Union{}
+            if val isa Core.SimpleVector
+                ub = val[end]
+                lb = length(val) == 2 ? val[1] : Union{}
+                if lb === Union{}
                     print(io, "  ", name, " <: ")
-                    print_highlighted(io, "$(val.ub)", warn_color)
-                elseif val.ub === Any
-                    print(io, "  ", sig.var.name, " >: ")
-                    print_highlighted(io, "$(val.lb)", warn_color)
+                    print_highlighted(io, "$(ub)", warn_color)
+                elseif ub === Any
+                    print(io, "  ", name, " >: ")
+                    print_highlighted(io, "$(lb)", warn_color)
                 else
                     print(io, "  ")
-                    print_highlighted(io, "$(val.lb)", warn_color)
-                    print(io, " <: ", sig.var.name, " <: ")
-                    print_highlighted(io, "$(val.ub)", warn_color)
+                    print_highlighted(io, "$(lb)", warn_color)
+                    print(io, " <: ", name, " <: ")
+                    print_highlighted(io, "$(ub)", warn_color)
                 end
             elseif val isa typeof(Vararg)
                 print(io, "  ", name, "::")
                 print_highlighted(io, "Int", warn_color)
             else
-                print(io, "  ", sig.var.name, " = ")
+                print(io, "  ", name, " = ")
                 print_highlighted(io, "$(val)", :cyan) # show the "good" type
             end
             println(io)

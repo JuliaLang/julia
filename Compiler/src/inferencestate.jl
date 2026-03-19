@@ -728,7 +728,7 @@ function sptypes_from_meth_instance(mi::MethodInstance)
     sptypes = Vector{VarState}(undef, nvals)
     for i = 1:nvals
         v = spvals[i]
-        if v isa TypeVar
+        if v isa SimpleVector
             temp = sig
             for _ = 1:i-1
                 temp = temp.body
@@ -751,18 +751,18 @@ function sptypes_from_meth_instance(mi::MethodInstance)
                     end
                 end
             end
-            ub = unwraptv_ub(v)
+            ub = v[end]
             if has_free_typevars(ub)
                 ub = Any
             end
-            lb = unwraptv_lb(v)
+            lb = length(v) == 2 ? v[1] : Bottom
             if has_free_typevars(lb)
                 lb = Bottom
             end
             if Any === ub && lb === Bottom
                 ty = Any
             else
-                tv = TypeVar(v.name, lb, ub)
+                tv = TypeVar(vᵢ.name, lb, ub)
                 ty = UnionAll(tv, Type{tv})
             end
             @label ty_computed
@@ -775,7 +775,7 @@ function sptypes_from_meth_instance(mi::MethodInstance)
                     sig = mi.specTypes
                 end
                 @assert !has_free_typevars(sig)
-                constrains_param(v, sig, #=covariant=#true)
+                constrains_param(vᵢ, sig, #=covariant=#true)
             end)
         elseif isvarargtype(v)
             # if this parameter came from `func(..., ::Vararg{T,v})`,
