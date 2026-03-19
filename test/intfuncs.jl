@@ -514,6 +514,9 @@ primitive type BitString128 128 end
         "0000000000000000000000000000000000000000000000000000010000001011")
     @test bitstring(Int128(3)) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
     @test bitstring(reinterpret(BitString128, Int128(3))) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
+    primitive type BitString6 <: Unsigned 6 end
+    bit6(x::UInt64) = Core.Intrinsics.trunc_int(BitString6, x)
+    @test bitstring(bit6(UInt64(0x11))) == "010001"
     primitive type BitString63 <: Unsigned 63 end
     bit63(x::UInt64) = Core.Intrinsics.trunc_int(BitString63, x)
     @test bitstring(bit63(0x7fff_ffff_ffff_ffff)) == repeat("1", 63)
