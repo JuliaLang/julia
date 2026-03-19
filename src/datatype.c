@@ -192,7 +192,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
                                            int haspadding,
                                            int isbitsegal,
                                            int arrayelem,
-                                           uint8_t padding,
+                                           uint8_t unused_bits,
                                            jl_fielddesc32_t desc[],
                                            uint32_t pointers[]) JL_NOTSAFEPOINT
 {
@@ -244,7 +244,8 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
     flddesc->flags.arrayelem_isunion = (arrayelem & 2) != 0;
     flddesc->flags.arrayelem_isatomic = (arrayelem & 4) != 0;
     flddesc->flags.arrayelem_islocked = (arrayelem & 8) != 0;
-    flddesc->flags.padding = padding;
+    flddesc->flags.unused_bits = unused_bits;
+    flddesc->flags.padding = 0;
     flddesc->npointers = npointers;
     flddesc->first_ptr = first_ptr;
 
@@ -1051,6 +1052,7 @@ JL_DLLEXPORT jl_datatype_t * jl_new_foreign_type(jl_sym_t *name,
     layout->flags.haspadding = 1;
     layout->flags.isbitsegal = 0;
     layout->flags.fielddesc_type = 3;
+    layout->flags.unused_bits = 0;
     layout->flags.padding = 0;
     layout->flags.arrayelem_isboxed = 0;
     layout->flags.arrayelem_isunion = 0;

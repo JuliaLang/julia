@@ -606,8 +606,8 @@ typedef struct {
         // If set, this type's egality can be determined entirely by comparing
         // the non-padding bits of this datatype.
         uint16_t isbitsegal : 1;
-        // Low 3 bits encode how many bits in the last storage byte are unused.
-        uint16_t padding : 8;
+        uint16_t unused_bits : 3;
+        uint16_t padding : 5;
     } flags;
     // union {
     //     jl_fielddesc8_t field8[nfields];
@@ -1453,12 +1453,12 @@ STATIC_INLINE const jl_datatype_layout_t *jl_datatype_layout(jl_datatype_t *t) J
 #define jl_datatype_nfields(t) (jl_datatype_layout((jl_datatype_t*)(t))->nfields)
 STATIC_INLINE uint32_t jl_datatype_unusedbits(jl_datatype_t *t) JL_NOTSAFEPOINT
 {
-    return jl_datatype_layout(t)->flags.padding & 0x7;
+    return jl_datatype_layout(t)->flags.unused_bits;
 }
 STATIC_INLINE uint32_t jl_datatype_nbits(jl_datatype_t *t) JL_NOTSAFEPOINT
 {
     const jl_datatype_layout_t *layout = jl_datatype_layout(t);
-    return layout->size * 8 - (layout->flags.padding & 0x7);
+    return layout->size * 8 - layout->flags.unused_bits;
 }
 
 JL_DLLEXPORT void *jl_symbol_name(jl_sym_t *s);
