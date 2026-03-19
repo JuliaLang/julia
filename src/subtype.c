@@ -739,8 +739,7 @@ NOINLINE static void ccheck_merge_env(
     jl_value_t *x, jl_value_t *y, jl_stenv_t *e,
     jl_savedenv_t *se,
     jl_saved_unionstate_t *oldLunions,
-    int16_t oldRunions_used,
-    jl_value_t **saved_envout, int envout_n)
+    int16_t oldRunions_used)
 {
     jl_savedenv_t me;
     int nmerge = 0;
@@ -748,9 +747,6 @@ NOINLINE static void ccheck_merge_env(
     nmerge = merge_env(e, &me, se, nmerge);
     while (next_union_state_from(e, 1, oldRunions_used)) {
         restore_env(e, se, 1);
-        if (saved_envout)
-            memcpy(&e->envout[e->envidx], saved_envout,
-                   envout_n * sizeof(jl_value_t *));
         pop_unionstate(&e->Lunions, oldLunions);
         e->Runions.more = 0;
         e->Lunions.more = 0;
@@ -761,9 +757,6 @@ NOINLINE static void ccheck_merge_env(
     if (nmerge > 0) {
         restore_env(e, &me, 1);
         ccheck_restore_metadata(e, se);
-        if (saved_envout)
-            memcpy(&e->envout[e->envidx], saved_envout,
-                   envout_n * sizeof(jl_value_t *));
         free_env(&me);
     }
 }
@@ -798,36 +791,25 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         return 0;
     if (obviously_in_union(y, x))
         return 1;
+    // Bounds checks happen after all outer-chain right-side UnionAlls have
+    // been entered, so envidx >= envsz and restore_env cannot touch envout.
+    assert(e->envidx >= e->envsz);
     jl_saved_unionstate_t oldLunions; push_unionstate(&oldLunions, &e->Lunions);
     jl_saved_unionstate_t oldRunions; push_unionstate(&oldRunions, &e->Runions);
     jl_savedenv_t se;
     save_env(e, &se, 1);
     int sub = local_forall_exists_subtype(x, y, e, 0, 1);
     if (e->Runions.used > oldRunions.used) {
-        // Right-side Union choices were made. Preserve envout
-        // for subtype_unionall before any env restore.
-        int envout_n = 0;
-        jl_value_t **saved_envout = NULL;
-        if (e->envout && e->envidx < e->envsz) {
-            envout_n = e->envsz - e->envidx;
-            saved_envout = (jl_value_t **)alloca(
-                envout_n * sizeof(jl_value_t *));
-            memcpy(saved_envout, &e->envout[e->envidx],
-                   envout_n * sizeof(jl_value_t *));
-        }
+        // Right-side Union choices were made during the bounds check.
         if (sub && !e->ccheck_merging && !e->intersection) {
             // Merge constraints across all successful ∃ branches
             // (lb via simple_meet, ub via simple_join).
-            ccheck_merge_env(x, y, e, &se, &oldLunions, oldRunions.used,
-                             saved_envout, envout_n);
+            ccheck_merge_env(x, y, e, &se, &oldLunions, oldRunions.used);
         }
         else {
             // sub == 0 or re-entrance/intersection: restore env
             // to clean up stale constraints from the check.
             restore_env(e, &se, 1);
-            if (saved_envout)
-                memcpy(&e->envout[e->envidx], saved_envout,
-                       envout_n * sizeof(jl_value_t *));
         }
     }
     free_env(&se);
