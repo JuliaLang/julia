@@ -4687,6 +4687,104 @@ let x = Tuple{Int,Any}[
     @test map(x->x[1] == 0 ? 0 : Compiler.get_enter_idx(handlers[x[1]]), handler_at) == first.(x)
 end
 
+# Similar to the Windows ConnectEx path in Reseau: an outer try/catch, an
+# `@static` early-return region with a try/finally + swallowed cleanup error,
+# and a still-present sibling path after it. This used to make
+# `ComputeTryCatch` pop from an empty current handler stack even though the
+# explicit `:leave` target still carried the right outer handler.
+let
+    struct DummyFDConnectShape
+        family::Int
+    end
+
+    @noinline addr_family_connect_shape(x) = x
+    @noinline open_fd_connect_shape(; family = 1) = DummyFDConnectShape(family)
+    @noinline bind_socket_connect_shape(fd, addr) = nothing
+    @noinline bind_local_connect_shape(fd, family) = nothing
+    @noinline set_nonblocking_connect_shape(fd, value) = nothing
+    @noinline register_connect_shape(fd) = nothing
+    @noinline set_deadline_connect_shape(fd, value) = nothing
+    @noinline wait_complete_connect_shape(fd, remote, cancel) = nothing
+    @noinline connect_socket_connect_shape(fd, remote) = Int32(1)
+    @noinline finalize_connect_shape(fd, remote) = nothing
+    @noinline apply_opts_connect_shape(fd) = nothing
+    @noinline close_fd_connect_shape(fd) = nothing
+    @noinline conn_connect_shape(fd) = fd
+    @noinline is_pending_connect_shape(errno) = true
+
+    function connect_shape(
+            remote_addr::Int,
+            local_addr::Union{Nothing, Int},
+            connect_deadline_ns::Int64,
+            cancel_state,
+        )
+        family = addr_family_connect_shape(remote_addr)
+        if local_addr !== nothing && addr_family_connect_shape(local_addr) != family
+            throw(ArgumentError("local and remote address families must match"))
+        end
+        fd = open_fd_connect_shape(; family = family)
+        try
+            if local_addr !== nothing
+                bind_socket_connect_shape(fd, local_addr)
+            elseif true
+                bind_local_connect_shape(fd, family)
+            end
+            set_nonblocking_connect_shape(fd, true)
+            @static if true
+                register_connect_shape(fd)
+                if connect_deadline_ns != 0
+                    set_deadline_connect_shape(fd, connect_deadline_ns)
+                end
+                try
+                    wait_complete_connect_shape(fd, remote_addr, cancel_state)
+                finally
+                    if connect_deadline_ns != 0
+                        try
+                            set_deadline_connect_shape(fd, Int64(0))
+                        catch
+                        end
+                    end
+                end
+                apply_opts_connect_shape(fd)
+                return conn_connect_shape(fd)
+            end
+            errno = connect_socket_connect_shape(fd, remote_addr)
+            if errno == Int32(0) || errno == Int32(106)
+                register_connect_shape(fd)
+                finalize_connect_shape(fd, remote_addr)
+                apply_opts_connect_shape(fd)
+                return conn_connect_shape(fd)
+            end
+            is_pending_connect_shape(errno) || throw(SystemError("connect", Int(errno)))
+            register_connect_shape(fd)
+            if connect_deadline_ns != 0
+                set_deadline_connect_shape(fd, connect_deadline_ns)
+            end
+            try
+                wait_complete_connect_shape(fd, remote_addr, cancel_state)
+            finally
+                if connect_deadline_ns != 0
+                    try
+                        set_deadline_connect_shape(fd, Int64(0))
+                    catch
+                    end
+                end
+            end
+            apply_opts_connect_shape(fd)
+            return conn_connect_shape(fd)
+        catch
+            close_fd_connect_shape(fd)
+            rethrow()
+        end
+    end
+
+    argtypes = Tuple{Int, Union{Nothing, Int}, Int64, Nothing}
+    ci = only(code_lowered(connect_shape, argtypes))
+    info = Compiler.ComputeTryCatch{Compiler.TryCatchFrame}()(ci.code)
+    @test length(info.handlers) == 7
+    @test length(Base.code_typed(connect_shape, argtypes; optimize = false)) == 1
+end
+
 @test only(Base.return_types((Bool,)) do y
         x = 1
         try
