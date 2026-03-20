@@ -65,7 +65,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const
     // rewrite integer sized (non-sret) struct to the corresponding integer
     if (!dt->layout->nfields && !dt->layout->npointers)
         return NULL;
-    return Type::getIntNTy(ctx, jl_datatype_nbits(dt));
+    return Type::getIntNTy(ctx, jl_datatype_size(dt) * 8);
 }
 
 };

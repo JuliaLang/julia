@@ -80,6 +80,65 @@ let x, y, f
     @test string(y) == "$(curmod_prefix)Int24(0x468ace)"
 end
 
+@testset "non-standard integer widths" begin
+    primitive type TestUInt24 24 end
+    primitive type TestUInt40 40 end
+    primitive type TestUInt48 48 end
+    primitive type TestUInt5 5 end
+    primitive type TestUInt17 17 end
+    primitive type TestUInt63 63 end
+    primitive type TestInt17 <: Signed 17 end
+    primitive type TestInt63 <: Signed 63 end
+
+    @test Core.bitsizeof(TestUInt24) == 24
+    @test Core.bitsizeof(TestUInt40) == 40
+    @test Core.bitsizeof(TestUInt48) == 48
+    @test Core.bitsizeof(TestUInt5) == 5
+    @test Core.bitsizeof(TestUInt17) == 17
+    @test Core.bitsizeof(TestUInt63) == 63
+
+    x24 = Core.Intrinsics.trunc_int(TestUInt24, UInt64(0xffee_ddcc_bbaa_9988))
+    @test Core.Intrinsics.zext_int(UInt64, x24) === 0x0000_0000_00aa_9988
+
+    x40 = Core.Intrinsics.trunc_int(TestUInt40, UInt64(0xffee_ddcc_bbaa_9988))
+    @test Core.Intrinsics.zext_int(UInt64, x40) === 0x0000_00cc_bbaa_9988
+
+    x48 = Core.Intrinsics.trunc_int(TestUInt48, UInt64(0xffee_ddcc_bbaa_9988))
+    @test Core.Intrinsics.zext_int(UInt64, x48) === 0x0000_ddcc_bbaa_9988
+
+    x5 = Core.Intrinsics.trunc_int(TestUInt5, UInt16(0xffff))
+    @test Core.Intrinsics.zext_int(UInt16, x5) === 0x001f
+
+    x17 = Core.Intrinsics.trunc_int(TestUInt17, UInt32(0xffff_ffff))
+    @test Core.Intrinsics.zext_int(UInt32, x17) === 0x0001_ffff
+
+    x63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64(0xffff_ffff_ffff_ffff))
+    @test Core.Intrinsics.zext_int(UInt64, x63) === 0x7fff_ffff_ffff_ffff
+
+    i17 = Core.Intrinsics.trunc_int(TestInt17, Int32(-1))
+    @test Core.Intrinsics.sext_int(Int32, i17) === Int32(-1)
+    i17min = Core.Intrinsics.trunc_int(TestInt17, Int32(-65536))
+    @test Core.Intrinsics.sext_int(Int32, i17min) === Int32(-65536)
+
+    i63 = Core.Intrinsics.trunc_int(TestInt63, Int64(-1))
+    @test Core.Intrinsics.sext_int(Int64, i63) === Int64(-1)
+
+    @test Core.Intrinsics.bitcast(TestUInt24, x24) === x24
+    @test Core.Intrinsics.bitcast(TestUInt63, i63) === Core.Intrinsics.trunc_int(TestUInt63, typemax(UInt64))
+    @test_throws ErrorException Core.Intrinsics.bitcast(TestUInt24, x40)
+    @test_throws ErrorException Core.Intrinsics.bitcast(TestUInt63, x24)
+
+    chain40 = Core.Intrinsics.trunc_int(TestUInt40, UInt64(0x0000_00aa_bbcc_ddee))
+    chain24 = Core.Intrinsics.trunc_int(TestUInt24, chain40)
+    chain17 = Core.Intrinsics.trunc_int(TestUInt17, chain24)
+    @test Core.Intrinsics.zext_int(UInt64, chain24) === 0x0000_0000_00cc_ddee
+    @test Core.Intrinsics.zext_int(UInt32, chain17) === 0x0000_ddee
+
+    primitive type TestBits63 63 end
+    bits63 = Core.Intrinsics.trunc_int(TestBits63, UInt64(0xffff_ffff_ffff_ffff))
+    @test repr(bits63) == "$(curmod_prefix)TestBits63(0x7fffffffffffffff)"
+end
+
 # odd-bit primitive integers keep byte-rounded storage but logical bit widths
 primitive type Int63 <: Signed 63 end
 primitive type UInt63 <: Unsigned 63 end

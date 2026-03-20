@@ -525,10 +525,18 @@ function _show_default(io::IO, @nospecialize(x))
     else
         print(io, "0x")
         r = Ref{Any}(x)
+        nbits = Core.bitsizeof(t)
+        nbytes = cld(nbits, 8)
         GC.@preserve r begin
             p = unsafe_convert(Ptr{Cvoid}, r)
-            for i in (nb - 1):-1:0
-                print(io, string(unsafe_load(convert(Ptr{UInt8}, p + i)), base = 16, pad = 2))
+            for i in (nbytes - 1):-1:0
+                byte = unsafe_load(convert(Ptr{UInt8}, p + i))
+                if i == nbytes - 1 && nbits % 8 != 0
+                    byte &= (UInt8(1) << (nbits % 8)) - UInt8(1)
+                    print(io, string(byte, base = 16))
+                else
+                    print(io, string(byte, base = 16, pad = 2))
+                end
             end
         end
     end
@@ -1299,7 +1307,7 @@ show(io::IO, ::Nothing) = print(io, "nothing")
 show(io::IO, n::Signed) = (write(io, string(n)); nothing)
 function show(io::IO, n::Unsigned)
     if get(io, :hexunsigned, true)::Bool
-        print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
+        print(io, "0x", string(n, pad = cld(Core.bitsizeof(n), 4), base = 16))
     else
         if get(io, :typeinfo, Nothing)::Type == typeof(n)
             print(io, n)
