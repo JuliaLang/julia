@@ -767,6 +767,7 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
 #endif
 
     jl_init_rand();
+    jl_init_staticdata();
     jl_init_runtime_ccall();
     jl_init_tasks();
     jl_init_threading();
@@ -775,14 +776,6 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
         jl_install_default_signal_handlers();
 
     jl_gc_init();
-
-    arraylist_new(&jl_linkage_blobs, 0);
-    arraylist_new(&jl_image_relocs, 0);
-    arraylist_new(&jl_top_mods, 0);
-    arraylist_new(&eytzinger_image_tree, 0);
-    arraylist_new(&eytzinger_idxs, 0);
-    arraylist_push(&eytzinger_idxs, (void*)0);
-    arraylist_push(&eytzinger_image_tree, (void*)1); // outside image
 
     jl_ptls_t ptls = jl_init_threadtls(0);
 #pragma GCC diagnostic push
