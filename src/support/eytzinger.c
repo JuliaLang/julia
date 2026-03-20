@@ -38,7 +38,7 @@ static void rebuild_tree(eyt_tree_t *t) JL_NOTSAFEPOINT
     uintptr_t *idxs = (uintptr_t*)t->idxs.items;
 
     // Sentinel: outside any range
-    idxs[end] = nranges;
+    idxs[end] = (uintptr_t)EYT_NOTFOUND;
     tree[end] = 1;
 
     for (size_t i = 0; i < end; i++) {
@@ -69,9 +69,9 @@ static void rebuild_tree(eyt_tree_t *t) JL_NOTSAFEPOINT
         assert(tree[eyt_idx] == eyt_val &&
                "Eytzinger tree failed to find boundary!");
         if (i & 1)
-            idxs[eyt_idx] = nranges;
+            idxs[eyt_idx] = (uintptr_t)EYT_NOTFOUND; // end boundary: not in range
         else
-            idxs[eyt_idx] = i / 2;
+            idxs[eyt_idx] = (uintptr_t)t->userdata.items[i / 2]; // start boundary: caller data
     }
 
     t->n = end;
@@ -81,16 +81,17 @@ JL_DLLEXPORT void eyt_tree_init(eyt_tree_t *t) JL_NOTSAFEPOINT
 {
     memset(t, 0, sizeof(*t));
     arraylist_new(&t->blobs, 0);
+    arraylist_new(&t->userdata, 0);
     arraylist_new(&t->tree, 0);
     arraylist_new(&t->idxs, 0);
     uv_rwlock_init(&t->rwlock);
 
     // Initialize sentinel
-    arraylist_push(&t->tree, (void*)1); // outside image
-    arraylist_push(&t->idxs, (void*)0);
+    arraylist_push(&t->tree, (void*)1);
+    arraylist_push(&t->idxs, EYT_NOTFOUND);
 }
 
-JL_DLLEXPORT void eyt_tree_add_range(eyt_tree_t *t, uintptr_t start, uintptr_t end) JL_NOTSAFEPOINT
+JL_DLLEXPORT void eyt_tree_add_range(eyt_tree_t *t, uintptr_t start, uintptr_t end, void *data) JL_NOTSAFEPOINT
 {
     assert(start % 4 == 0 && "Range start not 4-byte aligned");
     assert(end % 4 == 0 && "Range end not 4-byte aligned");
@@ -100,6 +101,7 @@ JL_DLLEXPORT void eyt_tree_add_range(eyt_tree_t *t, uintptr_t start, uintptr_t e
 
     arraylist_push(&t->blobs, (void*)start);
     arraylist_push(&t->blobs, (void*)end);
+    arraylist_push(&t->userdata, data);
     rebuild_tree(t);
 
     uv_rwlock_wrunlock(&t->rwlock);

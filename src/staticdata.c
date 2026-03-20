@@ -157,23 +157,18 @@ static arraylist_t serialization_queue;
 static arraylist_t layout_table;     // cache of `position(s)` for each `id` in `serialization_order`
 static arraylist_t object_worklist;  // used to mimic recursion by jl_serialize_reachable
 
-// image_tree.blobs stores (begin, end+1) pairs of system/package images loaded previously
-// image_tree.blobs.items[2i:2i+1] correspond to build_ids[i]   (0-offset indexing)
-//
-// XXX: If image_tree ever has multiple concurrent writers, then image_tree.blobs accesses
-//      (and also the related metadata just below) need to take the image_tree.rwlock.
+// Track image locations and some associated metadata for all loaded sys / pkgimages.
+// (image_tree.userdata.items[i] is an image_metadata_t* for build_ids[i])
 static eyt_tree_t image_tree;
-
-// relocs_base for each image blob
-static arraylist_t jl_image_relocs;
-// Keep track of which image corresponds to which top module.
-static arraylist_t jl_top_mods;
+typedef struct {
+    uintptr_t base;          // base address of the image
+    void *relocs_base;       // reloc_t* for GC sweep
+    jl_module_t *top_mod;    // owning top-level module
+    size_t idx;              // range index in image_tree (for serialization)
+} image_metadata_t;
 
 void jl_init_staticdata(void)
 {
-    arraylist_new(&jl_image_relocs, 0);
-    arraylist_new(&jl_top_mods, 0);
-
     eyt_tree_init(&image_tree);
 }
 
@@ -192,16 +187,23 @@ static void *to_seroder_entry(size_t idx) JL_NOTSAFEPOINT
 static htable_t new_methtables;
 //static size_t precompilation_world;
 
-// Query if a Julia object is if a permalloc region (due to part of a sys- pkg-image)
-size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
+// Query if a Julia object is in a permalloc region (due to part of a sys- pkg-image)
+static size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
 {
-    return jl_image_relocs.len;
+    return image_tree.userdata.len;
 }
 
-size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
+static image_metadata_t *external_blob_metadata(jl_value_t *v) JL_NOTSAFEPOINT
 {
     assert((uintptr_t) v % 4 == 0 && "Object not 4-byte aligned!");
-    return eyt_tree_find_range_idx(&image_tree, (uintptr_t)v);
+    void *data = eyt_tree_find_data(&image_tree, (uintptr_t)v);
+    return data == EYT_NOTFOUND ? NULL : (image_metadata_t*)data;
+}
+
+static size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    image_metadata_t *meta = external_blob_metadata(v);
+    return meta ? meta->idx : (size_t)-1;
 }
 
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
@@ -214,14 +216,12 @@ JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
     return in_image;
 }
 
-// Map an object to it's "owning" top module
+// Map an object to its "owning" top module
 JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT
 {
-    size_t idx = external_blob_index(v);
-    size_t lbids = n_linkage_blobs();
-    if (idx < lbids) {
-        return (jl_value_t*)jl_top_mods.items[idx];
-    }
+    image_metadata_t *meta = external_blob_metadata(v);
+    if (meta)
+        return (jl_value_t*)meta->top_mod;
     // The object is runtime allocated
     return (jl_value_t*)jl_nothing;
 }
@@ -258,7 +258,7 @@ typedef struct {
     // record of build_ids for all external linkages, in order of serialization for the current sysimg/pkgimg
     // conceptually, the base pointer for the jth externally-linked item is determined from
     //     i = findfirst(==(link_ids[j]), build_ids)
-    //     blob_base = image_tree.blobs.items[2i]                     # 0-offset indexing
+    //     blob_base = ((image_metadata_t*)image_tree.userdata.items[i])->base
     // We need separate lists since they are intermingled at creation but split when written.
     jl_array_t *link_ids_relocs;
     jl_array_t *link_ids_gctags;
@@ -980,11 +980,12 @@ static void write_pointer(ios_t *s) JL_NOTSAFEPOINT
 // Records the buildid holding `v` and returns the tagged offset within the corresponding image
 static uintptr_t add_external_linkage(jl_serializer_state *s, jl_value_t *v, jl_array_t *link_ids) JL_GC_DISABLED
 {
-    size_t i = external_blob_index(v);
-    if (i < n_linkage_blobs()) {
+    image_metadata_t *meta = external_blob_metadata(v);
+    if (meta) {
+        size_t i = meta->idx;
         // We found the sysimg/pkg that this item links against
         // Compute the relocation code
-        size_t offset = (uintptr_t)v - (uintptr_t)image_tree.blobs.items[2*i];
+        size_t offset = (uintptr_t)v - meta->base;
         assert((offset % SYS_EXTERNAL_LINK_UNIT) == 0);
         offset /= SYS_EXTERNAL_LINK_UNIT;
         assert(n_linkage_blobs() == jl_array_nrows(s->buildid_depmods_idxs));
@@ -1930,8 +1931,9 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
 #endif
         assert(s->buildid_depmods_idxs && depsidx < jl_array_len(s->buildid_depmods_idxs));
         size_t i = jl_array_data(s->buildid_depmods_idxs, uint32_t)[depsidx];
-        assert(2*i < image_tree.blobs.len);
-        return (uintptr_t)image_tree.blobs.items[2*i] + offset*SYS_EXTERNAL_LINK_UNIT;
+        assert(i < image_tree.userdata.len);
+        image_metadata_t *meta = (image_metadata_t*)image_tree.userdata.items[i];
+        return meta->base + offset*SYS_EXTERNAL_LINK_UNIT;
     }
     case ExternalLinkage: {
         assert(link_ids);
@@ -1941,8 +1943,9 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         *link_index += 1;
         assert(depsidx < jl_array_len(s->buildid_depmods_idxs));
         size_t i = jl_array_data(s->buildid_depmods_idxs, uint32_t)[depsidx];
-        assert(2*i < image_tree.blobs.len);
-        return (uintptr_t)image_tree.blobs.items[2*i] + offset*SYS_EXTERNAL_LINK_UNIT;
+        assert(i < image_tree.userdata.len);
+        image_metadata_t *meta = (image_metadata_t*)image_tree.userdata.items[i];
+        return meta->base + offset*SYS_EXTERNAL_LINK_UNIT;
     }
     }
     abort();
@@ -2073,15 +2076,12 @@ void gc_sweep_sysimg(void) JL_NOTSAFEPOINT
     size_t nblobs = n_linkage_blobs();
     if (nblobs == 0)
         return;
-    assert(image_tree.blobs.len == 2*nblobs);
-    assert(jl_image_relocs.len == nblobs);
-    for (size_t i = 0; i < 2*nblobs; i+=2) {
-        // This access bypasses jl_image_relocs.wrlock, but it
-        // is safe since any writes are JL_NOTSAFEPOINT.
-        reloc_t *relocs = (reloc_t*)jl_image_relocs.items[i>>1];
+    for (size_t i = 0; i < nblobs; i++) {
+        image_metadata_t *meta = (image_metadata_t*)image_tree.userdata.items[i];
+        reloc_t *relocs = (reloc_t*)meta->relocs_base;
         if (!relocs)
             continue;
-        uintptr_t base = (uintptr_t)image_tree.blobs.items[i];
+        uintptr_t base = meta->base;
         uintptr_t last_pos = 0;
         uint8_t *current = (uint8_t *)relocs;
         while (1) {
@@ -3694,7 +3694,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     int en = jl_gc_enable(0);
     ios_t sysimg, const_data, symbols, relocs, gvar_record, fptr_record;
     jl_serializer_state s = {0};
-    s.incremental = restored != NULL; // image_tree.blobs.len > 0;
+    s.incremental = restored != NULL; // n_linkage_blobs() > 0;
     s.image = image;
     s.s = NULL;
     s.const_data = &const_data;
@@ -4208,12 +4208,12 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
 
     // Prepare for later external linkage against the sysimg
     // Also sets up images for protection against garbage collection
-    eyt_tree_add_range(&image_tree,
-        (uintptr_t)image_base,
-        (uintptr_t)image_base + sizeof_sysimg);
-    arraylist_push(&jl_image_relocs, (void*)relocs_base);
+    image_metadata_t *meta = (image_metadata_t*)malloc_s(sizeof(image_metadata_t));
+    meta->base = (uintptr_t)image_base;
+    meta->relocs_base = (void*)relocs_base;
+    meta->idx = n_linkage_blobs();
     if (restored == NULL) {
-        arraylist_push(&jl_top_mods, (void*)jl_top_module);
+        meta->top_mod = jl_top_module;
     } else {
         size_t len = jl_array_nrows(*restored);
         assert(len > 0);
@@ -4222,8 +4222,12 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         // just returns a reference to the sysimage version, so we set it here.
         topmod->build_id.hi = checksum;
         assert(jl_is_module(topmod));
-        arraylist_push(&jl_top_mods, (void*)topmod);
+        meta->top_mod = topmod;
     }
+    eyt_tree_add_range(&image_tree,
+        (uintptr_t)image_base,
+        (uintptr_t)image_base + sizeof_sysimg,
+        (void*)meta);
     jl_timing_counter_inc(JL_TIMING_COUNTER_ImageSize, sizeof_sysimg + sizeof(uintptr_t));
 
     // jl_printf(JL_STDOUT, "%ld blobs to link against\n", image_tree.blobs.len >> 1);

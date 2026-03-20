@@ -1,7 +1,7 @@
 
 // Forward declarations for private staticdata.c methods
-size_t n_linkage_blobs(void) JL_NOTSAFEPOINT;
-size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
+static size_t n_linkage_blobs(void) JL_NOTSAFEPOINT;
+static size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
 
 // inverse of backedges graph (caller=>callees hash)
 jl_array_t *internal_methods JL_GLOBALLY_ROOTED = NULL; // rooted for the duration of our uses of this

@@ -44,18 +44,22 @@ typedef struct eyt_tree_t {
 
     size_t n; // 2 * n_ranges (tree/idxs have n+1 entries)
     arraylist_t tree;
-    arraylist_t idxs;
+    arraylist_t idxs; // Eytzinger-ordered: void* userdata for start boundaries, EYT_NOTFOUND for end/sentinel
     uintptr_t min_addr;
     uintptr_t max_addr;
 
-    arraylist_t blobs;
+    arraylist_t blobs;    // internal: (start, end) pairs, used only by rebuild_tree
+    arraylist_t userdata; // insertion-ordered: one void* per range (caller-defined)
 } eyt_tree_t;
+
+// Sentinel value stored in `idxs` for end-boundaries and out-of-range positions.
+#define EYT_NOTFOUND ((void*)1)
 
 JL_DLLEXPORT void eyt_tree_init(eyt_tree_t *t) JL_NOTSAFEPOINT;
 
-// Add a [start, end) range and rebuild the tree.
+// Add a [start, end) range with caller-defined data and rebuild the tree.
 // Thread-safe for concurrent access.
-JL_DLLEXPORT void eyt_tree_add_range(eyt_tree_t *t, uintptr_t start, uintptr_t end) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void eyt_tree_add_range(eyt_tree_t *t, uintptr_t start, uintptr_t end, void *data) JL_NOTSAFEPOINT;
 
 // Returns whether `addr` is inside any registered range.
 // Thread-safe for concurrent readers and writers.
@@ -68,13 +72,13 @@ static inline int eyt_tree_is_in_range(eyt_tree_t *t, uintptr_t addr) JL_NOTSAFE
     return result;
 }
 
-// Returns which registered range `addr` is inside, if any.
+// Returns the caller-defined data for the range containing `addr`, or EYT_NOTFOUND.
 // Thread-safe for concurrent readers and writers.
-static inline size_t eyt_tree_find_range_idx(eyt_tree_t *t, uintptr_t addr) JL_NOTSAFEPOINT
+static inline void *eyt_tree_find_data(eyt_tree_t *t, uintptr_t addr) JL_NOTSAFEPOINT
 {
     uv_rwlock_rdlock(&t->rwlock);
     size_t idx = _eyt_obj_idx(addr, (uintptr_t*)t->tree.items, t->n, t->min_addr, t->max_addr);
-    size_t result = (uintptr_t)t->idxs.items[idx];
+    void *result = t->idxs.items[idx];
     uv_rwlock_rdunlock(&t->rwlock);
     return result;
 }
