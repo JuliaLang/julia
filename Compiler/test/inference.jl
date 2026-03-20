@@ -814,7 +814,19 @@ let fieldtype_tfunc(@nospecialize args...) =
     @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(42))
     @test !fieldtype_nothrow(Type{<:Tuple{Vararg{Int}}}, Const(1))
     @test TypeVar <: fieldtype_tfunc(Any, Any)
+    # JuliaLang/julia#30807: malformed types like `NTuple{<:Any, 3}` should not crash `fieldtype_tfunc`
+    @test fieldtype_tfunc(Const(NTuple{<:Any, 3}), Const(1)) == Union{}
+    @test fieldtype_tfunc(Const(NTuple{<:Any, 3}), Int) == Union{}
 end
+
+# JuliaLang/julia#30807: malformed types like `NTuple{<:Any, 3}` should not crash `fieldtype_tfunc`
+struct Issue30807
+    xs::NTuple{<:Any, 3}
+    Issue30807(xs...) = new(xs)
+end
+@test Base.infer_return_type((Int,Int,Int)) do x, y, z
+    Issue30807(x, y, z)
+end === Union{}
 
 # issue #11480
 @noinline f11480(x,y) = x
