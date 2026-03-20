@@ -128,11 +128,66 @@ end
     @test_throws ErrorException Core.Intrinsics.bitcast(TestUInt24, x40)
     @test_throws ErrorException Core.Intrinsics.bitcast(TestUInt63, x24)
 
+    function compiled_sitofp(::Type{T}, x) where T
+        Core.Intrinsics.sitofp(Float64, x)::Float64
+    end
+    function compiled_uitofp(::Type{T}, x) where T
+        Core.Intrinsics.uitofp(Float64, x)::Float64
+    end
+    function compiled_fptosi(::Type{T}, x) where T
+        Core.Intrinsics.fptosi(T, x)
+    end
+    function compiled_fptoui(::Type{T}, x) where T
+        Core.Intrinsics.fptoui(T, x)
+    end
+
+    si17 = Core.Intrinsics.trunc_int(TestInt17, Int32(-12345))
+    @test compiled_sitofp(TestInt17, si17) === -12345.0
+    @test compiled_fptosi(TestInt17, -12345.0) === si17
+
+    ui17 = Core.Intrinsics.trunc_int(TestUInt17, UInt32(54321))
+    @test compiled_uitofp(TestUInt17, ui17) === 54321.0
+    @test compiled_fptoui(TestUInt17, 54321.0) === ui17
+
+    si63 = Core.Intrinsics.trunc_int(TestInt63, Int64(-(Int64(1) << 52) + 3))
+    @test compiled_sitofp(TestInt63, si63) === -4.503599627370493e15
+    @test compiled_fptosi(TestInt63, -4.503599627370493e15) === si63
+
+    ui63 = Core.Intrinsics.trunc_int(TestUInt63, UInt64((UInt64(1) << 52) + 3))
+    @test compiled_uitofp(TestUInt63, ui63) === 4.503599627370499e15
+    @test compiled_fptoui(TestUInt63, 4.503599627370499e15) === ui63
+
     chain40 = Core.Intrinsics.trunc_int(TestUInt40, UInt64(0x0000_00aa_bbcc_ddee))
     chain24 = Core.Intrinsics.trunc_int(TestUInt24, chain40)
     chain17 = Core.Intrinsics.trunc_int(TestUInt17, chain24)
     @test Core.Intrinsics.zext_int(UInt64, chain24) === 0x0000_0000_00cc_ddee
     @test Core.Intrinsics.zext_int(UInt32, chain17) === 0x0000_ddee
+
+    ref63 = Ref(ui63)
+    @test ref63[] === ui63
+    ref63[] = x63
+    @test ref63[] === x63
+
+    struct FieldWrap63
+        x::TestUInt63
+        y::UInt8
+    end
+    field_wrap = FieldWrap63(ui63, 0x12)
+    @test field_wrap.x === ui63
+    @test field_wrap.y === 0x12
+
+    struct HashWrap63
+        x::TestUInt63
+    end
+    hw1 = Ref(HashWrap63(Core.Intrinsics.trunc_int(TestUInt63, UInt64(1))))
+    hw2 = Ref(HashWrap63(Core.Intrinsics.trunc_int(TestUInt63, UInt64(1))))
+    GC.@preserve hw1 hw2 begin
+        p2 = Ptr{UInt8}(Base.unsafe_convert(Ptr{HashWrap63}, hw2))
+        unsafe_store!(p2 + 7, unsafe_load(p2 + 7) | 0x80)
+    end
+    @test hw1[] === hw2[]
+    @test hash(hw1[]) == hash(hw2[])
+    @test objectid(hw1[]) == objectid(hw2[])
 
     primitive type TestBits63 63 end
     bits63 = Core.Intrinsics.trunc_int(TestBits63, UInt64(0xffff_ffff_ffff_ffff))

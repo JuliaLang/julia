@@ -704,9 +704,18 @@ end
     @test Base.ispacked(RUInt24)
     @test Base.ispacked(RUInt40)
     @test Base.ispacked(RUInt48)
+    @test !Base.datatype_haspadding(RUInt24)
+    @test !Base.datatype_haspadding(RUInt40)
+    @test !Base.datatype_haspadding(RUInt48)
     @test Base.packedsize(RUInt24) == 3
     @test Base.packedsize(RUInt40) == 5
     @test Base.packedsize(RUInt48) == 6
+    @test !Base.ispacked(RUInt17)
+    @test !Base.ispacked(RUInt23)
+    @test !Base.ispacked(RUInt63)
+    @test Base.datatype_haspadding(RUInt17)
+    @test Base.datatype_haspadding(RUInt23)
+    @test Base.datatype_haspadding(RUInt63)
 
     r24 = reinterpret(RUInt24, (0xaa, 0xbb, 0xcc))
     @test reinterpret(NTuple{3, UInt8}, r24) === (0xaa, 0xbb, 0xcc)
