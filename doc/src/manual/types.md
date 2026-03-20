@@ -296,13 +296,14 @@ primitive type «name» «bits» end
 primitive type «name» <: «supertype» «bits» end
 ```
 
-The number of bits indicates how much storage the type requires and the name gives the new type
-a name. A primitive type can optionally be declared to be a subtype of some supertype. If a supertype
-is omitted, then the type defaults to having `Any` as its immediate supertype. The declaration
-of [`Bool`](@ref) above therefore means that a boolean value takes eight bits to store, and has
-[`Integer`](@ref) as its immediate supertype. Primitive types continue to use byte-rounded storage,
-so `sizeof(T)` rounds their storage size up to a whole number of bytes even when their logical width
-is not a multiple of 8 bits. Use `Core.bitsizeof(T)` to query the declared logical width.
+The number of bits gives the declared logical width of the primitive type, and the name gives the
+new type a name. A primitive type can optionally be declared to be a subtype of some supertype. If a
+supertype is omitted, then the type defaults to having `Any` as its immediate supertype. The
+declaration of [`Bool`](@ref) above therefore means that a boolean value has a logical width of eight
+bits, and has [`Integer`](@ref) as its immediate supertype. Primitive types continue to use
+byte-rounded storage, so `sizeof(T)` rounds their storage size up to a whole number of bytes even
+when their logical width is not a multiple of 8 bits. Use `Core.bitsizeof(T)` to query the declared
+logical width.
 
 Non-byte primitive widths are accepted, but remain an expert-only feature. They are more likely to
 expose compiler, runtime, or ABI bugs than the standard built-in primitive widths, and arrays still
