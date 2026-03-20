@@ -24,10 +24,10 @@ static int eytzinger(uintptr_t *src, uintptr_t *dest,
     return i;
 }
 
-// Rebuild the tree from the current blobs. Caller must hold wrlock.
+// Rebuild the tree from the current ranges. Caller must hold wrlock.
 static void rebuild_tree(eyt_tree_t *t) JL_NOTSAFEPOINT
 {
-    size_t nranges = t->blobs.len / 2;
+    size_t nranges = t->nranges;
     size_t end = 2 * nranges;
     size_t needed = end + 1; // + 1 for sentinel
 
@@ -42,15 +42,16 @@ static void rebuild_tree(eyt_tree_t *t) JL_NOTSAFEPOINT
     tree[end] = 1;
 
     for (size_t i = 0; i < end; i++) {
-        assert((uintptr_t)t->blobs.items[i] % 4 == 0 && "Blob not 4-byte aligned!");
+        eyt_range_t *r = &t->ranges[i / 2];
+        uintptr_t val = (i & 1) ? r->end : r->start;
+        assert(val % 4 == 0 && "Range boundary not 4-byte aligned!");
         // We abuse the pointer here a little so that a couple of properties are true:
         // 1. a start and an end are never the same value. This simplifies the binary search.
         // 2. ends are always after starts. This also simplifies the binary search.
-        // We assume that there exist no 0-size blobs, but that's a safe assumption
+        // We assume that there exist no 0-size ranges, but that's a safe assumption
         // since it means nothing could be there anyways
         //
         // FIXME: https://github.com/JuliaLang/julia/issues/61385
-        uintptr_t val = (uintptr_t)t->blobs.items[i];
         idxs[i] = val + (i & 1);
     }
     qsort(idxs, end, sizeof(uintptr_t), ptr_cmp);
@@ -58,10 +59,11 @@ static void rebuild_tree(eyt_tree_t *t) JL_NOTSAFEPOINT
     t->max_addr = idxs[end - 1] + 1;
     eytzinger(idxs, tree, 0, 1, end);
 
-    // Reuse the scratch memory to store the indices
+    // Reuse the scratch memory to store the userdata pointers
     // Still O(nlogn) because binary search
     for (size_t i = 0; i < end; i++) {
-        uintptr_t val = (uintptr_t)t->blobs.items[i];
+        eyt_range_t *r = &t->ranges[i / 2];
+        uintptr_t val = (i & 1) ? r->end : r->start;
         // This is the same computation as in the prior for loop
         uintptr_t eyt_val = val + (i & 1);
         size_t eyt_idx = _eyt_obj_idx(eyt_val + 1, tree, end, t->min_addr, t->max_addr);
@@ -69,9 +71,9 @@ static void rebuild_tree(eyt_tree_t *t) JL_NOTSAFEPOINT
         assert(tree[eyt_idx] == eyt_val &&
                "Eytzinger tree failed to find boundary!");
         if (i & 1)
-            idxs[eyt_idx] = (uintptr_t)EYT_NOTFOUND; // end boundary: not in range
+            idxs[eyt_idx] = (uintptr_t)EYT_NOTFOUND;
         else
-            idxs[eyt_idx] = (uintptr_t)t->userdata.items[i / 2]; // start boundary: caller data
+            idxs[eyt_idx] = (uintptr_t)r->data;
     }
 
     t->n = end;
@@ -80,11 +82,12 @@ static void rebuild_tree(eyt_tree_t *t) JL_NOTSAFEPOINT
 JL_DLLEXPORT void eyt_tree_init(eyt_tree_t *t) JL_NOTSAFEPOINT
 {
     memset(t, 0, sizeof(*t));
-    arraylist_new(&t->blobs, 0);
-    arraylist_new(&t->userdata, 0);
     arraylist_new(&t->tree, 0);
     arraylist_new(&t->idxs, 0);
     uv_rwlock_init(&t->rwlock);
+
+    t->nranges = 0;
+    t->ranges = NULL;
 
     // Initialize sentinel
     arraylist_push(&t->tree, (void*)1);
@@ -99,9 +102,9 @@ JL_DLLEXPORT void eyt_tree_add_range(eyt_tree_t *t, uintptr_t start, uintptr_t e
 
     uv_rwlock_wrlock(&t->rwlock);
 
-    arraylist_push(&t->blobs, (void*)start);
-    arraylist_push(&t->blobs, (void*)end);
-    arraylist_push(&t->userdata, data);
+    t->nranges++;
+    t->ranges = (eyt_range_t*)realloc(t->ranges, t->nranges * sizeof(eyt_range_t));
+    t->ranges[t->nranges - 1] = (eyt_range_t){start, end, data};
     rebuild_tree(t);
 
     uv_rwlock_wrunlock(&t->rwlock);

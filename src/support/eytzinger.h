@@ -39,6 +39,12 @@ static inline size_t _eyt_obj_idx(uintptr_t addr, uintptr_t *tree, size_t n,
     return k - 1;
 }
 
+typedef struct {
+    uintptr_t start;
+    uintptr_t end;
+    void *data; // caller-defined per-range metadata
+} eyt_range_t;
+
 typedef struct eyt_tree_t {
     uv_rwlock_t rwlock;
 
@@ -48,8 +54,8 @@ typedef struct eyt_tree_t {
     uintptr_t min_addr;
     uintptr_t max_addr;
 
-    arraylist_t blobs;    // internal: (start, end) pairs, used only by rebuild_tree
-    arraylist_t userdata; // insertion-ordered: one void* per range (caller-defined)
+    size_t nranges;
+    eyt_range_t *ranges; // one entry per registered range
 } eyt_tree_t;
 
 // Sentinel value stored in `idxs` for end-boundaries and out-of-range positions.
