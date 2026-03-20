@@ -102,6 +102,16 @@ macro mmm(a; b=2)
 end
 
 ########################################
+# Error: Macro with `where`
+macro mmm(a::T) where T
+end
+#---------------------
+LoweringError:
+macro mmm(a::T) where T
+#     └───────────────┘ ── `where` not allowed in macro signatures
+end
+
+########################################
 # Error: Bad macro name
 macro mmm[](ex)
 end

@@ -138,6 +138,9 @@ function _register_kinds()
             "constdecl"
             # Returned from statements that should error if the result is used.
             "unused_only"
+            # Pre-lowered SSA value reference from Expr(:ssavalue, N).
+            # Translated to a BindingId during desugaring.
+            "ssavalue"
         "END_LOWERING_KINDS"
 
         # The following kinds are emitted by lowering and used in Julia's untyped IR

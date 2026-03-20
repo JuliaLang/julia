@@ -1,5 +1,3 @@
-@testset "Functions" begin
-
 test_mod = Module()
 
 # Function calls
@@ -628,6 +626,16 @@ end
     @test f() isa Function
     @test f()() == (0, 1, 1)
     @test f(x=2)(y=3) == (0, 2, 3)
+
+    f = JuliaLowering.include_string(test_mod, """
+    function f_kw_anon(outervar)
+        (a,;kw=1)->a+kw+outervar
+    end
+    """)
+
+    @test f(100) isa Function
+    @test f(100)(2) == 103
+    @test f(100)(2;kw=2) == 104
 end
 
 @testset "pre-desugared arg::Vararg" begin
@@ -727,8 +735,8 @@ end
                 f_st = JuliaLowering.expr_to_est(f_expr)
 
             local func_ref, func_test
-            @test ((func_ref = Core.eval(test_mod, reference_lower(test_mod, f_expr))) isa Function)
-            @test ((func_test = JuliaLowering.eval(test_mod, f_st)) isa Function)
+            @test ((func_ref = fl_eval(test_mod, f_expr)) isa Function)
+            @test ((func_test = jl_eval(test_mod, f_st)) isa Function)
             Core.@latestworld
             @test func_ref(args_i...) == func_test(args_i...)
         end
@@ -743,8 +751,8 @@ end
                     f_st = JuliaLowering.expr_to_est(f_expr)
 
             local func_ref, func_test
-            @test ((func_ref = Core.eval(test_mod, reference_lower(test_mod, f_expr))) isa Function)
-            @test ((func_test = JuliaLowering.eval(test_mod, f_st)) isa Function)
+            @test ((func_ref = fl_eval(test_mod, f_expr)) isa Function)
+            @test ((func_test = jl_eval(test_mod, f_st)) isa Function)
             Core.@latestworld
             @test func_ref(args_i...) == func_test(args_i...)
             @test func_ref() == func_test()
@@ -1096,6 +1104,4 @@ end
         x
     end
     """) == [0,4,6,0]
-end
-
 end

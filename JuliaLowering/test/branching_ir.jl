@@ -224,19 +224,27 @@ begin
 end
 #---------------------
 LoweringError:
-begin
-    @label foo
-    @label foo
-#          └─┘ ── Label `foo` defined multiple times
-end
+#= none:3 =# - Label `foo` defined multiple times
+Expression:
+  label:foo
+Containing expressions:
+  (lambda (block) (block) (block label:foo label:foo))
+  (lambda (block) (block) (block label:foo label:foo))
+  (lambda (block) (block) (block label:foo label:foo))
 
 ########################################
 # Error: using value of symbolic label
 x = @label foo
 #---------------------
 LoweringError:
-x = @label foo
-#          └─┘ ── misplaced label in value position
+#= none:1 =# - misplaced label in value position
+Expression:
+  label:foo
+Containing expressions:
+  (lambda (block) (block) (block (call core.declare_global Main.TestMod :x true) latestworld core.nothing (= #₂/tmp label:foo) (= #₃/binding_type (call core.get_binding_type Main.TestMod :x)) (= #₁/x (block (= #₅/type_tmp #₃/binding_type) (= #₄/tmp #₂/tmp) (if (call core.isa #₄/tmp #₅/type_tmp) core.nothing (= #₄/tmp (call top.convert #₅/type_tmp #₄/tmp))) #₄/tmp)) #₂/tmp))
+  (block (block (block (call core.declare_global Main.TestMod :x true) latestworld core.nothing) (= #₂/tmp label:foo) (= #₃/binding_type (call core.get_binding_type Main.TestMod :x)) (= #₁/x (block (= #₅/type_tmp #₃/binding_type) (= #₄/tmp #₂/tmp) (if (call core.isa #₄/tmp #₅/type_tmp) core.nothing (= #₄/tmp (call top.convert #₅/type_tmp #₄/tmp))) #₄/tmp)) #₂/tmp))
+  (lambda (block) (block) (block (= #₁/x label:foo)))
+  (lambda (block) (block) (= x label:foo))
 
 ########################################
 # Anonymous labeled block with valued break
@@ -247,13 +255,13 @@ x = @label foo
 end
 #---------------------
 1   TestMod.a
-2   (= slot₁/loop_exit_result 42)
+2   (= slot₁/loop-exit_result 42)
 3   (goto label₆)
 4   TestMod.b
-5   (= slot₁/loop_exit_result %₄)
-6   (isdefined slot₁/loop_exit_result)
+5   (= slot₁/loop-exit_result %₄)
+6   (isdefined slot₁/loop-exit_result)
 7   (gotoifnot %₆ label₉)
 8   (goto label₁₀)
-9   (= slot₁/loop_exit_result core.nothing)
-10  slot₁/loop_exit_result
+9   (= slot₁/loop-exit_result core.nothing)
+10  slot₁/loop-exit_result
 11  (return %₁₀)

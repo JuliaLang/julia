@@ -121,6 +121,14 @@ let gen = Base.Generator(+, 1:10, 1:10, 1:10)
     @test collect(gen) == 3:3:30
 end
 
+@testset "`Generator` constructor for multiple iterators uses `zip` and `splat`" begin
+    for f in (hypot, Pair)
+        for typ in (Base.Generator{<:Iterators.Zip, <:Base.Splat}, Base.Generator{typeof(zip(1:3, 2:4)), typeof(splat(f))})
+            @test (@inferred Base.Generator(f, 1:3, 2:4)) isa typ
+        end
+    end
+end
+
 let gen = (x for x in 1:10 if x % 2 == 0), gen2 = Iterators.filter(x->x % 2 == 0, x for x in 1:10)
     @test collect(gen) == collect(gen2)
     @test collect(gen) == 2:2:10

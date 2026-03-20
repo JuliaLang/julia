@@ -1,9 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import Dates
-
 import Base: @invokelatest
-import ..isvalid_barekey_char
+import ..isvalid_barekey_char # from Parser
 
 function print_toml_escaped(io::IO, s::AbstractString)
     for c::AbstractChar in s
@@ -33,9 +31,11 @@ function print_toml_escaped(io::IO, s::AbstractString)
     end
 end
 
-const TOMLValue = Union{AbstractVector, AbstractDict, Bool, Integer, AbstractFloat, AbstractString,
-                        Dates.DateTime, Dates.Time, Dates.Date, Base.TOML.DateTime, Base.TOML.Time, Base.TOML.Date}
+const BaseTOMLValue = Union{AbstractVector, AbstractDict, Bool, Integer, AbstractFloat, AbstractString,
+                            Base.TOML.DateTime, Base.TOML.Time, Base.TOML.Date}
 
+is_valid_toml_value(@nospecialize(::Any)) = false
+is_valid_toml_value(@nospecialize(::BaseTOMLValue)) = true
 
 ########
 # Keys #
@@ -63,7 +63,7 @@ function to_toml_value(@nospecialize(f::Function), value)
         error("type `$(typeof(value))` is not a valid TOML type, pass a conversion function to `TOML.print`")
     end
     toml_value = f(value)
-    if !(toml_value isa TOMLValue)
+    if !is_valid_toml_value(toml_value)
         error("TOML syntax function for type `$(typeof(value))` did not return a valid TOML type but a `$(typeof(toml_value))`")
     end
     return toml_value
@@ -88,32 +88,64 @@ function printvalue(f::Function, io::IO, value::AbstractVector, sorted::Bool)
     Base.print(io, "]")
 end
 
-function printvalue(f::Function, io::IO, value::TOMLValue, sorted::Bool)
-    value isa Base.TOML.DateTime && (value = Dates.DateTime(value))
-    value isa Base.TOML.Time && (value = Dates.Time(value))
-    value isa Base.TOML.Date && (value = Dates.Date(value))
-    value isa Dates.DateTime ? Base.print(io, Dates.format(value, Dates.dateformat"YYYY-mm-dd\THH:MM:SS.sss\Z")) :
-    value isa Dates.Time     ? Base.print(io, Dates.format(value, Dates.dateformat"HH:MM:SS.sss")) :
-    value isa Dates.Date     ? Base.print(io, Dates.format(value, Dates.dateformat"YYYY-mm-dd")) :
-    value isa Bool           ? Base.print(io, value ? "true" : "false") :
-    value isa Integer        ? print_integer(io, value) :  # Julia's own printing should be compatible with TOML on integers
-    value isa AbstractFloat  ? Base.print(io, isnan(value) ? "nan" :
-                                              isinf(value) ? string(value > 0 ? "+" : "-", "inf") :
-                                              Float64(value)) :  # TOML specifies IEEE 754 binary64 for float
-    value isa AbstractString ? (qmark = Base.contains(value, "\n") ? "\"\"\"" : "\"";
-                                Base.print(io, qmark);
-                                print_toml_escaped(io, value);
-                                Base.print(io, qmark)) :
-    value isa AbstractDict ? print_inline_table(f, io, value, sorted) :
-    error("internal error in TOML printing, unhandled value")
+function printvalue(f::Function, io::IO, value::Base.TOML.DateTime, sorted::Bool)
+    printvalue(f, io, value.date, sorted)
+    Base.print(io, "T")
+    printvalue(f, io, value.time, sorted)
+    Base.print(io, "Z")
 end
 
-function print_integer(io::IO, value::Integer)
+function printvalue(f::Function, io::IO, value::Base.TOML.Time, sorted::Bool)
+    Base.print(io, string(value.hour, pad=2))
+    Base.print(io, ":")
+    Base.print(io, string(value.minute, pad=2))
+    Base.print(io, ":")
+    Base.print(io, string(value.second, pad=2))
+    if value.ms != 0
+        Base.print(io, ".")
+        Base.print(io, string(value.ms, pad=3))
+    end
+end
+
+function printvalue(f::Function, io::IO, value::Base.TOML.Date, sorted::Bool)
+    Base.print(io, string(value.year, pad=4))
+    Base.print(io, "-")
+    Base.print(io, string(value.month, pad=2))
+    Base.print(io, "-")
+    Base.print(io, string(value.day, pad=2))
+end
+
+function printvalue(f::Function, io::IO, value::Bool, sorted::Bool)
+    Base.print(io, value ? "true" : "false")
+end
+
+function printvalue(f::Function, io::IO, value::Integer, sorted::Bool)
     value isa Signed && return Base.show(io, value)
     # unsigned integers are printed as hex
     n = 2 * ndigits(value, base=256)
     Base.print(io, "0x", string(value, base=16, pad=n))
     return
+end
+
+function printvalue(f::Function, io::IO, value::AbstractFloat, sorted::Bool)
+    if isnan(value)
+        Base.print(io, "nan")
+    elseif isinf(value)
+        Base.print(io, value > 0 ? "+inf" : "-inf")
+    else
+        Base.print(io, Float64(value)) # TOML specifies IEEE 754 binary64 for float
+    end
+end
+
+function printvalue(f::Function, io::IO, value::AbstractString, sorted::Bool)
+    qmark = Base.contains(value, "\n") ? "\"\"\"" : "\""
+    Base.print(io, qmark)
+    print_toml_escaped(io, value)
+    Base.print(io, qmark)
+end
+
+function printvalue(f::Function, io::IO, value::AbstractDict, sorted::Bool)
+    print_inline_table(f, io, value, sorted)
 end
 
 function print_inline_table(f::Function, io::IO, value::AbstractDict, sorted::Bool)
@@ -166,7 +198,7 @@ function print_table(f::Function, io::IO, a::AbstractDict,
     # First print non-tabular entries
     for key in akeys
         value = a[key]
-        if !isa(value, TOMLValue)
+        if !is_valid_toml_value(value)
             value = to_toml_value(f, value)
         end
         if is_tabular(value) && !(value in inline_tables)
@@ -183,7 +215,7 @@ function print_table(f::Function, io::IO, a::AbstractDict,
 
     for key in akeys
         value = a[key]
-        if !isa(value, TOMLValue)
+        if !is_valid_toml_value(value)
             value = to_toml_value(f, value)
         end
         if is_table(value) && !(value in inline_tables)

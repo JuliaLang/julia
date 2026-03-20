@@ -837,6 +837,10 @@ file, ln = functionloc(versioninfo, Tuple{})
 @test isfile(pathof(InteractiveUtils))
 @test isdir(pkgdir(InteractiveUtils))
 
+module ModuleWithoutPathForEdit
+end
+@test_throws ErrorException("could not find source file for module: $(ModuleWithoutPathForEdit)") edit(ModuleWithoutPathForEdit)
+
 # compiler stdlib path updating
 file, ln = functionloc(Core.Compiler.tmeet, Tuple{Int, Float64})
 @test isfile(file)
@@ -1104,4 +1108,18 @@ end
 
     me = (@macroexpand @which [string() ;;; string()])
     test_which_expand(me, hvncat, 3, :(string()), :(string()))
+end
+
+let code = """
+        using InteractiveUtils
+        @activate Compiler[:codegen, :reflection]
+        println("done compiling")
+    """
+    orig_compiler = realpath(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "Compiler"))
+    mktempdir() do dir
+        new_compiler = joinpath(dir, "Compiler")
+        cp(orig_compiler, new_compiler)
+        output = read(`$(Base.julia_cmd()) -g0 -O0 --startup-file=no --project=$(new_compiler) -e $code`, String)
+        @test occursin("done compiling", output)
+    end
 end

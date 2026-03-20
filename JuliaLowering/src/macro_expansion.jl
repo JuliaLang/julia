@@ -270,15 +270,24 @@ function fix_toplevel_expansion(ctx, ex::SyntaxTree, mod::Module, lnn::LineNumbe
 end
 
 function expand_macro(ctx, ex)
-    @assert kind(ex) == K"macrocall"
+    @jl_assert kind(ex) == K"macrocall" ex
 
     macname = ex[1]
     mctx = MacroContext(ctx.graph, ex, current_layer(ctx), ctx.expr_compat_mode)
     macfunc = eval_macro_name(ctx, mctx, macname)
     raw_args = ex[3:end]
-    macro_loc = let loc = source_location(LineNumberNode, ex)
+    macro_loc = if kind(ex[2]) === K"Value"
+        loc = ex[2].value
+        if loc isa LineNumberNode
         # Some macros, e.g. @cmd, don't play nicely with file == nothing
         isnothing(loc.file) ? LineNumberNode(loc.line, :none) : loc
+        elseif loc isa Core.MacroSource
+            loc.lno
+        else
+            LineNumberNode(0, :none)
+        end
+    else
+        LineNumberNode(0, :none)
     end
     # We use a specific well defined world age for the next checks and macro
     # expansion invocations. This avoids inconsistencies if the latest world
@@ -415,7 +424,9 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         out = mkleaf(ex)
         setattr!(out, :scope_layer, scope_layer)
     elseif k == K"escape"
-        @chk numchildren(ex) === 1 "`escape` requires one argument"
+        if numchildren(ex) !== 1
+            throw(LoweringError(ex, "`escape` requires one argument"))
+        end
         if length(ctx.scope_layer_stack) === 1
             throw(MacroExpansionError(ex, "`escape` node in outer context"))
         end
@@ -424,8 +435,9 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         push!(ctx.scope_layer_stack, top_layer)
         escaped_ex
     elseif k == K"hygienic-scope"
-        @chk(2 <= numchildren(ex) <= 3 && ex[2].value isa Module,
-             (ex,"`hygienic-scope` requires an AST and a module"))
+        if !(2 <= numchildren(ex) <= 3 && ex[2].value isa Module)
+            throw(LoweringError(ex,"`hygienic-scope` requires an AST and a module"))
+        end
         new_layer = ScopeLayer(length(ctx.scope_layers)+1, ex[2].value,
                                current_layer_id(ctx), true, false)
         push!(ctx.scope_layers, new_layer)
@@ -434,7 +446,9 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         pop!(ctx.scope_layer_stack)
         hyg_ex
     elseif k == K"quote"
-        @chk numchildren(ex) == 1
+        if numchildren(ex) !== 1
+            throw(LoweringError(ex,"`quote` expects one argument"))
+        end
         expand_forms_1(ctx, expand_quote(ctx, ex[1]))
     elseif k == K"macrocall"
         expand_macro(ctx, ex)

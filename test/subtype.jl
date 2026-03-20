@@ -554,6 +554,13 @@ function test_Type()
 
     @test isequal_type(Core.TypeofBottom, Type{Union{}})
     @test issub(Core.TypeofBottom, Type{T} where T<:Real)
+
+    for b in (Type{T} where T, Type{Union{T,S}} where {T,S})
+        for a in (Type{Union{}}, Core.TypeofBottom)
+            @test issub(a, b)
+        end
+        @test isa(Union{}, b)
+    end
 end
 
 # old subtyping tests from test/core.jl

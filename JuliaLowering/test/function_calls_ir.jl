@@ -72,6 +72,10 @@ x^42.0
 #---------------------
 LoweringError:
 #= line 1 =# - malformed `call`
+Expression:
+  (call)
+Containing expressions:
+  (call)
 
 ########################################
 # Simple broadcast
@@ -559,7 +563,7 @@ end
 #---------------------
 LoweringError:
 function ccall()
-#        └───┘ ── Invalid function name
+#        └───┘ ── invalid function name
 end
 
 ########################################
@@ -579,7 +583,7 @@ end
 #---------------------
 LoweringError:
 function ccall{<:T}()
-#        └───┘ ── Invalid function name
+#        └───┘ ── invalid function name
 end
 
 ########################################

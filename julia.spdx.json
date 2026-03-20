@@ -411,7 +411,7 @@
         {
             "name": "7-Zip",
             "SPDXID": "SPDXRef-7zip",
-            "downloadLocation": "https://sourceforge.net/projects/p7zip/files/p7zip",
+            "downloadLocation": "https://downloads.sourceforge.net/project/sevenzip/7-Zip",
             "filesAnalyzed": false,
             "homepage": "https://www.7-zip.org",
             "sourceInfo": "The version in use can be found in the file deps/p7zip.version",
