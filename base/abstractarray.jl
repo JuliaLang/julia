@@ -2770,6 +2770,67 @@ end
     Ai
 end
 
+
+"""
+    flatten(iters)
+
+Given an iterator that yields iterators, return a `Vector` that contains the elements of those iterators.
+
+Put differently, the elements of the argument iterator are concatenated.
+
+This is equivalent to [`collect`](@ref)`(`[`Iterators.flatten`](@ref)`(iters))`, but may be more performant.
+"""
+flatten(iters) = collect(Iterators.flatten(iters))
+
+function flatten(iters::Union{AbstractArray, Tuple})
+    len = 0
+    unknown = false
+    isconcrete = isconcretetype(eltype(iters))
+    et = Union{}
+    for iter in iters
+        itersize = Base.IteratorSize(iter)
+        itersize === Base.IsInfinite() && throw(ArgumentError("cannot flatten an infinite iterator $(iter)"))
+        if itersize !== Base.SizeUnknown()
+            len += length(iter)
+        else
+            unknown = true
+        end
+        if !isconcrete
+            et = typejoin(et, eltype(typeof(iter)))
+        end
+    end
+
+    if isconcrete
+        et = eltype(eltype(iters))
+    end
+    # len = sum(length, iters)
+
+    res = Vector{et}(undef, unknown ? 1 << Base.top_set_bit(len) : len)
+    i = firstindex(res)
+    if unknown
+        for iter in iters
+            for element in iter
+                res[i] = element
+                i += 1
+                if i > lastindex(res)
+                    resize!(res, length(res) * 2)
+                end
+            end
+        end
+        resize!(res, i - firstindex(res))
+    else
+        for iter in iters
+            for element in iter
+                res[i] = element
+                i += 1
+            end
+        end
+        @assert i == lastindex(res) + 1
+    end
+    return res
+end
+
+
 """
     stack(iter; [dims])
 
