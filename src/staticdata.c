@@ -206,8 +206,12 @@ size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
 {
+    if (obj == NULL)
+        return 0;
+    uint8_t in_image = jl_astaggedvalue(obj)->bits.in_image != 0;
     assert((uintptr_t) obj % 4 == 0 && "Object not 4-byte aligned!");
-    return eyt_tree_is_in_range(&image_tree, (uintptr_t)obj);
+    assert(eyt_tree_is_in_range(&image_tree, (uintptr_t)obj) == in_image);
+    return in_image;
 }
 
 // Map an object to it's "owning" top module
