@@ -29,3 +29,18 @@ let original_depot_path = copy(Base.DEPOT_PATH)
         append!(Base.LOAD_PATH, original_load_path)
     end
 end
+
+function check_presence(mi, token)
+    ci = isdefined(mi, :cache) ? mi.cache : nothing
+    while ci !== nothing
+        # CI should have been validated
+        @test ci.max_world != Base.ReinferUtils.WORLD_AGE_REVALIDATION_SENTINEL
+        @test ci.min_world != ~zero(UInt)
+        # Chose a CI with the right owner and current validity.
+        if ci.owner === token && ci.max_world == typemax(UInt)
+            return ci
+        end
+        ci = isdefined(ci, :next) ? ci.next : nothing
+    end
+    return nothing
+end

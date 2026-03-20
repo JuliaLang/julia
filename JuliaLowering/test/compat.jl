@@ -1,7 +1,3 @@
-using Test
-const JS = JuliaSyntax
-const JL = JuliaLowering
-
 test_mod = Module()
 
 const JL_DIR = joinpath(@__DIR__, "..")
@@ -102,6 +98,7 @@ end
 
     # TODO: `@ast_` escaping is broken
     unused = JuliaSyntax.parsestmt(JuliaSyntax.SyntaxTree, "foo")
+    JuliaLowering.ensure_macro_attributes!(unused._graph)
     local st_wrappers = Function[
         x->(@assert(!isnothing(x)); @ast unused._graph unused (x::K"Value"))
         x->(@assert(!isnothing(x)); @ast unused._graph unused [K"inert" x::K"Value"])
@@ -480,6 +477,28 @@ test_toplevel_programs = [
         end
 
     end
+
+    @testset "test exceptions to blocks containing linenodes" begin
+        # Macro authors are otherwise expected to handle LineNumberNode in
+        # blocks, but since they were never emitted in `let` or `for` assignment
+        # blocks, test that we have the same behaviour.
+        @testset "linenodes equal in `let`" begin
+            s = """
+            let a=1, b=2, c=3
+                a,b,c
+            end
+            """
+            @test JL.est_to_expr(JS.parsestmt(SyntaxTree, s)) == JS.parsestmt(Expr, s)
+        end
+        @testset "linenodes equal in `for`" begin
+            s = """
+            for a in 1:2, b in 3:4, c in 5:6
+                a,b,c
+            end
+            """
+            @test JL.est_to_expr(JS.parsestmt(SyntaxTree, s)) == JS.parsestmt(Expr, s)
+        end
+    end
 end
 
 @testset "non-ASCII operator handling" begin
@@ -487,4 +506,27 @@ end
     @test JuliaLowering.include_string(test_mod, raw"""
     @noinline (x = 0xF; x ⊻= 1; x)
     """; expr_compat_mode=true) == 0xE
+end
+
+@testset "Expr(:ssavalue) conversion" begin
+    # Expr(:ssavalue, N) should be converted to [K"ssavalue" N::K"Value"]
+    st = JuliaLowering.expr_to_est(Expr(:ssavalue, 0))
+    @test kind(st) === K"ssavalue"
+    @test st[1].value == 0
+
+    st = JuliaLowering.expr_to_est(Expr(:ssavalue, 42))
+    @test kind(st) === K"ssavalue"
+    @test st[1].value == 42
+
+    # Roundtrip: ssavalue should convert back to Expr(:ssavalue, N)
+    @test JL.est_to_expr(JuliaLowering.expr_to_est(Expr(:ssavalue, 5))) ==
+        Expr(:ssavalue, 5)
+
+    # ssavalue references inside a lambda body should lower successfully
+    lambda = Expr(:lambda, Any[:x],
+        Expr(:block,
+            Expr(:(=), Expr(:ssavalue, 0), Expr(:call, GlobalRef(Core, :typeof), :x)),
+            Expr(:return, Expr(:ssavalue, 0))))
+    out = JL.core_lowering_hook(lambda, test_mod)
+    @test out isa Core.SimpleVector && out[1] isa Core.CodeInfo
 end

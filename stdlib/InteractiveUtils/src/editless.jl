@@ -272,7 +272,11 @@ edit(@nospecialize(f), idx::Integer) = edit(methods(f).ms[idx])
 edit(f, t) = (@nospecialize; edit(functionloc(f, t)...))
 edit(@nospecialize argtypes::Union{Tuple, Type{<:Tuple}}) = edit(functionloc(argtypes)...)
 edit(file::Nothing, line::Integer) = error("could not find source file for function")
-edit(m::Module) = edit(pathof(m))
+function edit(m::Module)
+    path = pathof(m)
+    path === nothing && error("could not find source file for module: $m")
+    edit(path)
+end
 
 # terminal pager
 

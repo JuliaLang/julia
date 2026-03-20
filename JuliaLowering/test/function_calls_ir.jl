@@ -72,6 +72,10 @@ x^42.0
 #---------------------
 LoweringError:
 #= line 1 =# - malformed `call`
+Expression:
+  (call)
+Containing expressions:
+  (call)
 
 ########################################
 # Simple broadcast
@@ -500,11 +504,15 @@ ccall(:foo, Csize_t, (Cstring..., Cstring...), "asdfg", "blah")
 
 ########################################
 # cglobal special support for (sym, lib) tuple
+# unlike flisp we outline the tuple and allow constant propagation to put it
+# back before codegen generates code for `cglobal`
 cglobal((:sym, lib), Int)
 #---------------------
-1   TestMod.Int
-2   (call core.cglobal (static_eval (tuple :sym TestMod.lib)) %₁)
-3   (return %₂)
+1   TestMod.lib
+2   (call core.tuple :sym %₁)
+3   TestMod.Int
+4   (call core.cglobal %₂ %₃)
+5   (return %₄)
 
 ########################################
 # cglobal - non-tuple expressions in first arg are lowered as normal
@@ -515,18 +523,6 @@ cglobal(f(), Int)
 3   TestMod.Int
 4   (call core.cglobal %₂ %₃)
 5   (return %₄)
-
-########################################
-# Error: cglobal with library name referencing local variable
-let func="myfunc"
-    cglobal((func, "somelib"), Int)
-end
-#---------------------
-LoweringError:
-let func="myfunc"
-    cglobal((func, "somelib"), Int)
-#            └──┘ ── function name and library expression cannot reference local variable
-end
 
 ########################################
 # Error: cglobal too many arguments
@@ -567,7 +563,7 @@ end
 #---------------------
 LoweringError:
 function ccall()
-#        └───┘ ── Invalid function name
+#        └───┘ ── invalid function name
 end
 
 ########################################
@@ -587,7 +583,7 @@ end
 #---------------------
 LoweringError:
 function ccall{<:T}()
-#        └───┘ ── Invalid function name
+#        └───┘ ── invalid function name
 end
 
 ########################################

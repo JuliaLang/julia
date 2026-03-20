@@ -69,6 +69,7 @@ public
     isexported,
     ispublic,
     remove_linenums!,
+    generating_output,
 
 # AST handling
     IR,
@@ -100,6 +101,7 @@ public
     @locals,
     @propagate_inbounds,
     @__doc__,
+    @nospecializeinfer,
 
 # External processes
     shell_escape,

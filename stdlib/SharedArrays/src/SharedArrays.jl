@@ -156,7 +156,7 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
         io = nothing
 
     finally
-        if io !== nothing
+        if io !== nothing && @isdefined shmmem_create_pid
             remotecall_fetch(close, shmmem_create_pid, io)
         end
     end

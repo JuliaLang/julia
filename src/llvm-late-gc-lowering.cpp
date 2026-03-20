@@ -1148,50 +1148,44 @@ void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
     }
 }
 
-// Look through instructions to find all possible allocas that might become the sret argument
-static SmallSetVector<AllocaInst *, 1> FindSretAllocas(Value* SRetArg) {
+// Look through selects and phis to find all possible alloca bases of a pointer.
+// Returns an empty set if a non-alloca base is encountered.
+static SmallSetVector<AllocaInst *, 1> FindAllocaBases(Value *V) {
     SmallSetVector<AllocaInst *, 1> allocas;
-    if (AllocaInst *OneSRet = dyn_cast<AllocaInst>(SRetArg)) {
-        allocas.insert(OneSRet); // Found it directly
+    if (AllocaInst *AI = dyn_cast<AllocaInst>(V)) {
+        allocas.insert(AI); // Found it directly
     }
     else {
-        SmallSetVector<Value *, 8> worklist;
-        worklist.insert(SRetArg);
+        SmallVector<Value *, 8> worklist;
+        SmallPtrSet<Value *, 8> visited;
+        worklist.push_back(V);
+        visited.insert(V);
         while (!worklist.empty()) {
-            Value *V = worklist.pop_back_val();
-            if (AllocaInst *Alloca = dyn_cast<AllocaInst>(V->stripInBoundsOffsets())) {
+            Value *W = worklist.pop_back_val();
+            if (AllocaInst *Alloca = dyn_cast<AllocaInst>(W->stripInBoundsOffsets())) {
                 allocas.insert(Alloca); // Found a candidate
             }
-            else if (PHINode *Phi = dyn_cast<PHINode>(V)) {
+            else if (PHINode *Phi = dyn_cast<PHINode>(W)) {
                 for (Value *Incoming : Phi->incoming_values()) {
-                    worklist.insert(Incoming);
+                    if (visited.insert(Incoming).second)
+                        worklist.push_back(Incoming);
                 }
             }
-            else if (SelectInst *SI = dyn_cast<SelectInst>(V)) {
-                auto TrueBranch = SI->getTrueValue();
-                auto FalseBranch = SI->getFalseValue();
-                if (TrueBranch && FalseBranch) {
-                    worklist.insert(TrueBranch);
-                    worklist.insert(FalseBranch);
-                }
-                else {
-                    llvm_dump(SI);
-                    dbgs() << "Malformed Select\n";
-                    allocas.clear();
-                    return allocas;
-                }
+            else if (SelectInst *SI = dyn_cast<SelectInst>(W)) {
+                if (visited.insert(SI->getTrueValue()).second)
+                    worklist.push_back(SI->getTrueValue());
+                if (visited.insert(SI->getFalseValue()).second)
+                    worklist.push_back(SI->getFalseValue());
             }
             else {
-                llvm_dump(V);
-                dbgs() << "Unexpected SRet argument\n";
                 allocas.clear();
                 return allocas;
             }
         }
     }
-    assert(std::all_of(allocas.begin(), allocas.end(), [&] (AllocaInst* SRetAlloca) JL_NOTSAFEPOINT {
-            return (SRetAlloca->getArraySize() == allocas[0]->getArraySize() &&
-                SRetAlloca->getAllocatedType() == allocas[0]->getAllocatedType());
+    assert(std::all_of(allocas.begin(), allocas.end(), [&] (AllocaInst *AI) JL_NOTSAFEPOINT {
+            return (AI->getArraySize() == allocas[0]->getArraySize() &&
+                AI->getAllocatedType() == allocas[0]->getAllocatedType());
         }
     ));
     return allocas;
@@ -1259,7 +1253,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         size_t return_roots = atol(RetRootsAttr.getValueAsString().data());
                         assert(return_roots);
                         HasDefBefore = true;
-                        auto gc_allocas = FindSretAllocas(CI->getArgOperand(i)->stripInBoundsOffsets());
+                        auto gc_allocas = FindAllocaBases(CI->getArgOperand(i)->stripInBoundsOffsets());
                         // We know that with the right optimizations we can forward a sret directly from an argument
                         // This hasn't been seen without adding IPO effects to julia functions but it's possible we need to handle that too
                         if (gc_allocas.size() == 0) {
@@ -1441,7 +1435,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 }
             } else if (StoreInst *SI = dyn_cast<StoreInst>(&I)) {
                 NoteOperandUses(S, BBS, I);
-                MaybeTrackStore(S, SI);
+                if (MaybeTrackStore(S, SI))
+                    BBS.FirstSafepointAfterFirstDef = BBS.FirstSafepoint;
             } else if (isa<ReturnInst>(&I)) {
                 NoteOperandUses(S, BBS, I);
             } else if (auto *ASCI = dyn_cast<AddrSpaceCastInst>(&I)) {
@@ -1484,37 +1479,48 @@ State LateLowerGCFrame::LocalScan(Function &F) {
 //    return Ptrs.size();
 //}
 
-void LateLowerGCFrame::MaybeTrackStore(State &S, StoreInst *I) {
+bool LateLowerGCFrame::MaybeTrackStore(State &S, StoreInst *I) {
     Value *PtrBase = I->getPointerOperand()->stripInBoundsOffsets();
     auto tracked = CountTrackedPointers(I->getValueOperand()->getType());
     if (!tracked.count)
-        return; // nothing to track is being stored
-    if (AllocaInst *AI = dyn_cast<AllocaInst>(PtrBase)) {
+        return false; // nothing to track is being stored
+    // Find all alloca bases, looking through selects and phis.
+    // LLVM's SROA/InstCombine can merge conditional alloca stores into a
+    // select/phi over alloca pointers (see #60985).
+    auto Allocas = FindAllocaBases(PtrBase);
+    if (Allocas.empty())
+        return false; // assume it is rooted--TODO: should we be more conservative?
+    bool needsTrackedStore = false;
+    bool Tracked = false;
+    for (AllocaInst *AI : Allocas) {
         Type *STy = AI->getAllocatedType();
         if (!AI->isStaticAlloca() || (isa<PointerType>(STy) && STy->getPointerAddressSpace() == AddressSpace::Tracked) || S.ArrayAllocas.count(AI))
-            return; // already numbered this
-        auto tracked = CountTrackedPointers(STy);
-        if (tracked.count) {
-            assert(!tracked.derived);
-            if (tracked.all) {
+            continue; // already numbered this
+        auto allocaTracked = CountTrackedPointers(STy);
+        if (allocaTracked.count) {
+            assert(!allocaTracked.derived);
+            if (allocaTracked.all) {
                 // track the Alloca directly
-                S.ArrayAllocas[AI] = tracked.count * cast<ConstantInt>(AI->getArraySize())->getZExtValue();
-                return;
+                S.ArrayAllocas[AI] = allocaTracked.count * cast<ConstantInt>(AI->getArraySize())->getZExtValue();
+                Tracked = true;
+                continue;
             }
         }
+        needsTrackedStore = true;
     }
-    else {
-        return; // assume it is rooted--TODO: should we be more conservative?
+    if (needsTrackedStore) {
+        // track the Store with a Shadow
+        //auto &Shadow = S.ShadowAllocas[AI];
+        //if (!Shadow)
+        //    Shadow = new AllocaInst(ArrayType::get(T_prjlvalue, tracked.count), 0, "", MI);
+        //AI = Shadow;
+        //Value *Src = I->getValueOperand();
+        //unsigned count = TrackWithShadow(Src, Src->getType(), false, AI, MI, TODO which slots are we actually clobbering?);
+        //assert(count == tracked.count); (void)count;
+        S.TrackedStores.push_back(std::make_pair(I, tracked.count));
+        Tracked = true;
     }
-    // track the Store with a Shadow
-    //auto &Shadow = S.ShadowAllocas[AI];
-    //if (!Shadow)
-    //    Shadow = new AllocaInst(ArrayType::get(T_prjlvalue, tracked.count), 0, "", MI);
-    //AI = Shadow;
-    //Value *Src = I->getValueOperand();
-    //unsigned count = TrackWithShadow(Src, Src->getType(), false, AI, MI, TODO which slots are we actually clobbering?);
-    //assert(count == tracked.count); (void)count;
-    S.TrackedStores.push_back(std::make_pair(I, tracked.count));
+    return Tracked;
 }
 
 /*
@@ -2025,6 +2031,54 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 store->setOrdering(AtomicOrdering::Unordered);
                 store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
 
+                // Zero GC pointer fields if the operand bundle specifies offsets
+                // This ensures GC sees valid pointers even if initialization is delayed
+                // Note: ptr_offsets and zeroinit bundles are mutually exclusive
+                auto ptr_offsets_bundle = CI->getOperandBundle("julia.gc_alloc_ptr_offsets");
+                auto zeroinit_bundle = CI->getOperandBundle("julia.gc_alloc_zeroinit");
+                assert(!(ptr_offsets_bundle && zeroinit_bundle) &&
+                       "julia.gc_alloc_ptr_offsets and julia.gc_alloc_zeroinit bundles are mutually exclusive");
+
+                if (ptr_offsets_bundle) {
+                    Value *derived = builder.CreateAddrSpaceCast(newI,
+                        PointerType::get(newI->getContext(), AddressSpace::Derived));
+                    Constant *null_ptr = ConstantPointerNull::get(cast<PointerType>(T_prjlvalue));
+                    for (Value *offset_val : ptr_offsets_bundle->Inputs) {
+                        if (auto *CI_offset = dyn_cast<ConstantInt>(offset_val)) {
+                            uint64_t offset = CI_offset->getZExtValue();
+                            Value *ptr = builder.CreateInBoundsGEP(
+                                Type::getInt8Ty(newI->getContext()), derived,
+                                ConstantInt::get(T_size, offset));
+                            builder.CreateAlignedStore(null_ptr, ptr, Align(sizeof(void*)));
+                        }
+                    }
+                }
+
+                // Zero a region if the operand bundle specifies it (for GenericMemory with boxed elements)
+                // Bundle contains: (offset, size) where offset is start byte and size is bytes to zero
+                // Both offset and size can be constants or dynamic SSA values
+                if (zeroinit_bundle) {
+                    assert(zeroinit_bundle->Inputs.size() == 2 &&
+                           "julia.gc_alloc_zeroinit bundle requires exactly 2 arguments (offset, size)");
+                    Value *offset_val = zeroinit_bundle->Inputs[0];
+                    Value *size_val = zeroinit_bundle->Inputs[1];
+                    // Skip if size is known to be zero at compile time
+                    bool skip = false;
+                    if (auto *const_size = dyn_cast<ConstantInt>(size_val)) {
+                        if (const_size->isZero())
+                            skip = true;
+                    }
+                    if (!skip) {
+                        Value *derived = builder.CreateAddrSpaceCast(newI,
+                            PointerType::get(newI->getContext(), AddressSpace::Derived));
+                        Value *ptr = builder.CreateInBoundsGEP(
+                            Type::getInt8Ty(newI->getContext()), derived, offset_val);
+                        builder.CreateMemSet(ptr,
+                            ConstantInt::get(Type::getInt8Ty(newI->getContext()), 0),
+                            size_val, Align(sizeof(void*)));
+                    }
+                }
+
                 // Replace uses of the call to `julia.gc_alloc_obj` with the call to
                 // `julia.gc_alloc_bytes`.
                 CI->replaceAllUsesWith(newI);
@@ -2103,6 +2157,47 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 CI->replaceAllUsesWith(NewCall);
                 UpdatePtrNumbering(CI, NewCall, S);
             } else {
+                // Assert that ptr_offsets and zeroinit bundles are only used with gc_alloc_obj
+                assert(!CI->getOperandBundle("julia.gc_alloc_ptr_offsets") &&
+                       "julia.gc_alloc_ptr_offsets bundle should only be on julia.gc_alloc_obj calls");
+                assert(!CI->getOperandBundle("julia.gc_alloc_zeroinit") &&
+                       "julia.gc_alloc_zeroinit bundle should only be on julia.gc_alloc_obj calls");
+
+                // Handle zeroinit_indirect bundle for jl_alloc_genericmemory_unchecked
+                // This bundle specifies: (ptr_field_offset, size) where:
+                // - ptr_field_offset: offset in the allocation where the data pointer is stored
+                // - size: number of bytes to zero at the location pointed to by that pointer
+                if (auto bundle = CI->getOperandBundle("julia.gc_alloc_zeroinit_indirect")) {
+                    assert(callee && callee->getName() == "jl_alloc_genericmemory_unchecked" &&
+                           "julia.gc_alloc_zeroinit_indirect bundle should only be on jl_alloc_genericmemory_unchecked calls");
+                    assert(bundle->Inputs.size() == 2 &&
+                           "julia.gc_alloc_zeroinit_indirect bundle requires exactly 2 arguments (ptr_offset, size)");
+                    Value *ptr_field_offset = bundle->Inputs[0];
+                    Value *size_val = bundle->Inputs[1];
+                    // Skip if size is known to be zero at compile time
+                    bool skip = false;
+                    if (auto *const_size = dyn_cast<ConstantInt>(size_val)) {
+                        if (const_size->isZero())
+                            skip = true;
+                    }
+                    if (!skip) {
+                        IRBuilder<> builder(CI->getNextNode());
+                        builder.SetCurrentDebugLocation(CI->getDebugLoc());
+                        // Load the data pointer from the specified offset in the allocation
+                        Value *derived = builder.CreateAddrSpaceCast(CI,
+                            PointerType::get(CI->getContext(), AddressSpace::Derived));
+                        Value *ptr_field = builder.CreateInBoundsGEP(
+                            Type::getInt8Ty(CI->getContext()), derived, ptr_field_offset);
+                        Value *data_ptr = builder.CreateAlignedLoad(
+                            PointerType::get(CI->getContext(), 0), ptr_field, Align(sizeof(void*)));
+                        // Zero the data region
+                        builder.CreateMemSet(data_ptr,
+                            ConstantInt::get(Type::getInt8Ty(CI->getContext()), 0),
+                            size_val, Align(sizeof(void*)));
+                        ChangesMade = true;
+                    }
+                }
+
                 SmallVector<OperandBundleDef,2> bundles;
                 CI->getOperandBundlesAsDefs(bundles);
                 bool gc_transition = false;
@@ -2429,6 +2524,9 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
 }
 
 bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
+    if (F.hasFnAttribute("thunk"))
+        return false;
+
     initAll(*F.getParent());
     smallAllocFunc = getOrDeclare(jl_well_known::GCSmallAlloc);
     LLVM_DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");

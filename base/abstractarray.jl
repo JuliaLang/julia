@@ -697,11 +697,7 @@ end
 
 Throw an error if the specified indices `I` are not in bounds for the given array `A`.
 """
-function checkbounds(A::AbstractArray, I...)
-    @inline
-    checkbounds(Bool, A, I...) || throw_boundserror(A, I)
-    nothing
-end
+checkbounds(A::AbstractArray, I...)
 
 """
     checkbounds_indices(Bool, IA, I)
@@ -3490,7 +3486,7 @@ julia> map!(+, zeros(Int, 5), 100:999, 1:3)
 ```
 """
 function map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F}
-    @assert !isempty(As) # should dispatch to map!(f, A)
+    @assert !isempty(As) "should dispatch to map!(f, A)"
     map_n!(f, dest, As)
 end
 

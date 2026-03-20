@@ -1,5 +1,6 @@
 #include "gc-common.h"
 #include "gc-tls-mmtk.h"
+#include "gc-wb-mmtk.h"
 #include "mmtkMutator.h"
 #include "threading.h"
 
@@ -336,6 +337,18 @@ JL_DLLEXPORT const char* jl_gc_active_impl(void) {
     return mmtk_version;
 }
 
+JL_DLLEXPORT int jl_gc_enable_auto_full_collection(int on)
+{
+    // MMTk does not currently support collection type control
+    return 1;
+}
+
+JL_DLLEXPORT int jl_gc_auto_full_collection_is_enabled(void)
+{
+    return 1;
+}
+
+
 int64_t last_gc_total_bytes = 0;
 int64_t last_live_bytes = 0; // live_bytes at last collection
 int64_t live_bytes = 0;
@@ -590,7 +603,8 @@ JL_DLLEXPORT void jl_gc_scan_julia_exc_obj(void* obj_raw, void* closure, Process
 static void jl_gc_free_memory(jl_genericmemory_t *m, int isaligned) JL_NOTSAFEPOINT
 {
     assert(jl_is_genericmemory(m));
-    assert(jl_genericmemory_how(m) == 1 || jl_genericmemory_how(m) == 2);
+    assert(jl_genericmemory_how(m) == JL_GENERICMEMORY_GCMANAGED ||
+           jl_genericmemory_how(m) == JL_GENERICMEMORY_MALLOCD);
     char *d = (char*)m->ptr;
     size_t freed_bytes = memory_block_usable_size(d, isaligned);
     assert(freed_bytes != 0);
@@ -644,7 +658,7 @@ JL_DLLEXPORT void jl_gc_update_inlined_array(void* from, void* to) {
         jl_genericmemory_t *b = (jl_genericmemory_t*)jl_to;
         int how = jl_genericmemory_how(a);
 
-        if (how == 0 && mmtk_object_is_managed_by_mmtk(a->ptr)) { // a is inlined (a->ptr points into the mmtk object)
+        if (how == JL_GENERICMEMORY_INLINED && mmtk_object_is_managed_by_mmtk(a->ptr)) { // a is inlined (a->ptr points into the mmtk object)
             size_t offset_of_data = ((size_t)a->ptr - (size_t)a);
             if (offset_of_data > 0) {
                 b->ptr = (void*)((size_t) b + offset_of_data);
@@ -776,13 +790,13 @@ JL_DLLEXPORT size_t jl_gc_genericmemory_how(void *arg) JL_NOTSAFEPOINT
 {
     jl_genericmemory_t* m = (jl_genericmemory_t*)arg;
     if (m->ptr == (void*)((char*)m + 16)) // JL_SMALL_BYTE_ALIGNMENT (from julia_internal.h)
-        return 0;
+        return JL_GENERICMEMORY_INLINED;
     jl_value_t *owner = jl_genericmemory_data_owner_field(m);
     if (owner == (jl_value_t*)m)
-        return 1;
+        return JL_GENERICMEMORY_GCMANAGED;
     if (owner == NULL)
-        return 2;
-    return 3;
+        return JL_GENERICMEMORY_MALLOCD;
+    return JL_GENERICMEMORY_STRINGOWNED;
 }
 
 // ========================================================================= //
@@ -868,10 +882,23 @@ STATIC_INLINE void* mmtk_immortal_alloc_fast(MMTkMutatorContext* mutator, size_t
     return bump_alloc_fast(mutator, (uintptr_t*)&allocator->cursor, (uintptr_t)allocator->limit, size, align, offset, 1);
 }
 
+inline void mmtk_set_side_metadata(const void* side_metadata_base, void* obj) {
+        intptr_t addr = (intptr_t) obj;
+        uint8_t* meta_addr = (uint8_t*) side_metadata_base + (addr >> 6);
+        intptr_t shift = (addr >> 3) & 0b111;
+        while(1) {
+            uint8_t old_val = *meta_addr;
+            uint8_t new_val = old_val | (1 << shift);
+            if (jl_atomic_cmpswap((_Atomic(uint8_t)*)meta_addr, &old_val, new_val)) {
+                break;
+            }
+        }
+}
+
 STATIC_INLINE void mmtk_immortal_post_alloc_fast(MMTkMutatorContext* mutator, void* obj, size_t size) {
-    // FIXME: Similarly, for now, we do nothing
-    // but when supporting moving, this is where we set the valid object (VO) bit
-    // and log (old gen) bit
+    if (MMTK_NEEDS_WRITE_BARRIER == MMTK_OBJECT_BARRIER) {
+        mmtk_set_side_metadata(MMTK_SIDE_LOG_BIT_BASE_ADDRESS, obj);
+    }
 }
 
 JL_DLLEXPORT jl_value_t *jl_mmtk_gc_alloc_default(jl_ptls_t ptls, int osize, size_t align, void *ty)
@@ -1087,6 +1114,11 @@ void jl_gc_notify_image_load(const char* img_data, size_t len)
     mmtk_set_vm_space((void*)img_data, len);
 }
 
+void jl_gc_notify_image_alloc(const char* img_data, size_t len)
+{
+    mmtk_immortal_region_post_alloc((void*)img_data, len);
+}
+
 // ========================================================================= //
 // Code specific to stock that is not supported by MMTk
 // ========================================================================= //
@@ -1134,7 +1166,9 @@ _Atomic(int) gc_stack_free_idx = 0;
 
 JL_DLLEXPORT void jl_gc_queue_root(const struct _jl_value_t *ptr) JL_NOTSAFEPOINT
 {
-    mmtk_unreachable();
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    mmtk_object_reference_write_slow(&ptls->gc_tls.mmtk_mutator, ptr, (const void*) 0);
 }
 
 JL_DLLEXPORT void jl_gc_queue_multiroot(const struct _jl_value_t *root, const void *stored,
