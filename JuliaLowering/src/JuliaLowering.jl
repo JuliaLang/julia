@@ -12,17 +12,13 @@ else
     using JuliaSyntax
 end
 
-using .JuliaSyntax: highlight, Kind, @KSet_str, is_leaf, children, numchildren,
-    head, kind, flags, has_flags, filename, first_byte, last_byte, byte_range,
-    sourcefile, source_location, span, sourcetext, is_literal, is_infix_op_call,
-    is_postfix_op_call, @isexpr, SyntaxHead, is_syntactic_operator,
-    is_contextual_keyword, node_string,
-    SyntaxGraph, SyntaxTree, SyntaxList, NodeId, SourceRef, SourceAttrType,
-    ensure_attributes, ensure_attributes!, delete_attributes, new_id!, hasattr,
-    copy_attrs, setattr, setattr!, syntax_graph, is_compatible_graph,
-    check_compatible_graph, copy_node, copy_ast, provenance, sourceref,
-    reparent, mapchildren, flattened_provenance, mkleaf, mknode, newleaf,
-    newnode, tree_ids, @stm, mapsyntax
+using .JuliaSyntax: @KSet_str, @stm, Kind, NodeId, SourceAttrType, SourceRef, SyntaxGraph,
+    SyntaxList, SyntaxTree, byte_range, check_compatible_graph, children, copy_ast,
+    copy_attrs, copy_node, delete_attributes, ensure_attributes!, filename, first_byte,
+    flags, flattened_provenance, has_flags, hasattr, head, highlight, is_compatible_graph,
+    is_leaf, is_literal, kind, last_byte, mapchildren, mapsyntax, mkleaf, mknode, newleaf,
+    newnode, node_string, numchildren, provenance, reparent, setattr, setattr!,
+    source_location, sourcefile, sourceref, syntax_graph, tree_ids
 
 const DEBUG = true
 

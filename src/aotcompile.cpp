@@ -71,6 +71,8 @@ static void addComdat(GlobalValue *G, Triple &T)
 }
 
 typedef struct {
+    orc::ThreadSafeModule TSM;
+    orc::ThreadSafeModule *TSM_ref;
     std::unique_ptr<jl_codegen_output_t> out;
     SmallVector<GlobalValue*, 0> jl_sysimg_fvars;
     SmallVector<GlobalValue*, 0> jl_sysimg_gvars;
@@ -166,7 +168,7 @@ LLVMOrcThreadSafeModuleRef jl_get_llvm_module_impl(void *native_code)
 {
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     if (data)
-        return wrap(&data->out->get_tsm());
+        return wrap(data->TSM_ref);
     else
         return NULL;
 }
@@ -581,7 +583,7 @@ void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int ex
 
     // move everything inside, now that we've merged everything
     // (before adding the exported headers)
-    data->out->get_tsm().withModuleDo([&](Module &M) {
+    data->TSM_ref->withModuleDo([&](Module &M) {
         auto TT = Triple(M.getTargetTriple());
         Function *juliapersonality_func = nullptr;
         if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
@@ -770,32 +772,14 @@ static void aot_link_output(jl_codegen_output_t &out)
     }
 }
 
-// also be used be extern consumers like GPUCompiler.jl to obtain a module containing
-// all reachable & inferrrable functions.
-extern "C" JL_DLLEXPORT_CODEGEN
-void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int external_linkage)
+static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *codeinfos,
+                                      const jl_cgparams_t *cgparams, int external_linkage)
 {
-    JL_TIMING(NATIVE_AOT, NATIVE_Create);
-    ++CreateNativeCalls;
-    CreateNativeMax.updateMax(jl_array_nrows(codeinfos));
-    if (cgparams == NULL)
-        cgparams = &jl_default_cgparams;
     jl_cgparams_t target_cgparams = *cgparams;
     target_cgparams.sanitize_memory = jl_options.target_sanitize_memory;
     target_cgparams.sanitize_thread = jl_options.target_sanitize_thread;
     target_cgparams.sanitize_address = jl_options.target_sanitize_address;
-    jl_native_code_desc_t *data = new jl_native_code_desc_t;
-    if (llvmmod) {
-        data->out = std::make_unique<jl_codegen_output_t>(*unwrap(llvmmod));
-    }
-    else {
-        const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
-        const Triple &triple = jl_ExecutionEngine->getTargetTriple();
-        data->out = std::make_unique<jl_codegen_output_t>("text", DL, triple);
-        data->out->get_context().setDiscardValueNames(true);
-    }
     auto &out = *data->out;
-
     // compile all methods for the current world and type-inference world
     DenseMap<jl_code_instance_t *, jl_code_info_t *> ci_infos;
     egal_set method_roots;
@@ -895,8 +879,36 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
         }
         data->jl_fvar_map[ci] = {invoke_id, specptr_id};
     }
+}
 
-    out.unlock();
+// also be used be extern consumers like GPUCompiler.jl to obtain a module containing
+// all reachable & inferrrable functions.
+extern "C" JL_DLLEXPORT_CODEGEN
+void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int external_linkage)
+{
+    JL_TIMING(NATIVE_AOT, NATIVE_Create);
+    ++CreateNativeCalls;
+    CreateNativeMax.updateMax(jl_array_nrows(codeinfos));
+    if (cgparams == NULL)
+        cgparams = &jl_default_cgparams;
+    jl_native_code_desc_t *data = new jl_native_code_desc_t;
+    if (llvmmod) {
+        data->TSM_ref = unwrap(llvmmod);
+    } else {
+        const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
+        const Triple &triple = jl_ExecutionEngine->getTargetTriple();
+        auto ctx = std::make_unique<LLVMContext>();
+        auto M = jl_create_llvm_module("text", *ctx, DL, triple);
+        ctx->setDiscardValueNames(true);
+        data->TSM = orc::ThreadSafeModule(std::move(M), std::move(ctx));
+        data->TSM_ref = &data->TSM;
+    }
+
+    data->TSM_ref->withModuleDo([&](Module &M) {
+        data->out = std::make_unique<jl_codegen_output_t>(M);
+        jl_emit_native_to_output(data, codeinfos, cgparams, external_linkage);
+    });
+
     return (void *)data;
 }
 
@@ -1957,30 +1969,11 @@ static unsigned compute_image_thread_count(const ModuleInfo &info) {
 
 jl_emission_params_t default_emission_params = { 1 };
 
-// takes the running content that has collected in the shadow module and dump it to disk
-// this builds the object file portion of the sysimage files for fast startup
-extern "C" JL_DLLEXPORT_CODEGEN
-void jl_dump_native_impl(void *native_code,
-        const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname,
-        const char *asm_fname,
-        ios_t *z, ios_t *s,
-        jl_emission_params_t *params)
+void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
+                           const char *unopt_bc_fname, const char *obj_fname,
+                           const char *asm_fname, ios_t *z, ios_t *s,
+                           jl_emission_params_t *params, Module &dataM)
 {
-    JL_TIMING(NATIVE_AOT, NATIVE_Dump);
-    jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
-    if (!bc_fname && !unopt_bc_fname && !obj_fname && !asm_fname) {
-        LLVM_DEBUG(dbgs() << "No output requested, skipping native code dump?\n");
-        delete data;
-        return;
-    }
-
-    if (!params) {
-        params = &default_emission_params;
-    }
-
-    data->out->lock();
-    Module &dataM = data->out->get_module();
-
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
     // want less optimizations there.
@@ -2349,6 +2342,33 @@ void jl_dump_native_impl(void *native_code,
     }
 }
 
+// takes the running content that has collected in the shadow module and dump it to disk
+// this builds the object file portion of the sysimage files for fast startup
+extern "C" JL_DLLEXPORT_CODEGEN
+void jl_dump_native_impl(void *native_code,
+        const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname,
+        const char *asm_fname,
+        ios_t *z, ios_t *s,
+        jl_emission_params_t *params)
+{
+    JL_TIMING(NATIVE_AOT, NATIVE_Dump);
+    jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
+    if (!bc_fname && !unopt_bc_fname && !obj_fname && !asm_fname) {
+        LLVM_DEBUG(dbgs() << "No output requested, skipping native code dump?\n");
+        delete data;
+        return;
+    }
+
+    if (!params) {
+        params = &default_emission_params;
+    }
+
+    data->TSM_ref->withModuleDo([&](Module &dataM) {
+        jl_dump_native_locked(data, bc_fname, unopt_bc_fname, obj_fname, asm_fname, z, s,
+                              params, dataM);
+    });
+}
+
 
 // sometimes in GDB you want to find out what code would be created from a mi
 extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instance_t *mi)
@@ -2409,7 +2429,9 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
     if (src && jl_is_code_info(src)) {
         const auto &DL = jl_ExecutionEngine->getDataLayout();
         const auto &TT = jl_ExecutionEngine->getTargetTriple();
-        jl_codegen_output_t output{name_from_method_instance(mi), DL, TT};
+        auto ctx = std::make_unique<LLVMContext>();
+        auto mod = jl_create_llvm_module(name_from_method_instance(mi), *ctx, DL, TT);
+        jl_codegen_output_t output{*mod};
         Function *F = nullptr;
         {
             uint64_t compiler_start_time = 0;
@@ -2490,8 +2512,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
             }
         }
         if (F) {
-            output.unlock();
-            dump->TSM = wrap(new orc::ThreadSafeModule(std::move(output.get_tsm())));
+            dump->TSM = wrap(new orc::ThreadSafeModule(std::move(mod), std::move(ctx)));
             dump->F = wrap(F);
             return;
         }

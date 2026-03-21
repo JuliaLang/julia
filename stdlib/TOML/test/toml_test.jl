@@ -49,8 +49,9 @@ function jsn2data(jsn)
 end
 
 const testfiles = get_toml_test_data()
-const toml_1_0_files = Set(readlines(joinpath(testfiles, "files-toml-1.0.0")))
+const toml_1_1_files = Set(readlines(joinpath(testfiles, "files-toml-1.1.0")))
 
+@testset "toml-test" begin
 
 #########
 # Valid #
@@ -73,15 +74,18 @@ failures_valid = [
     # Cannot represent timezone offsets with Julia DateTime
     "valid/comment/everywhere.toml",
     "valid/datetime/datetime.toml",
-    "valid/datetime/edge.toml",
     "valid/datetime/milliseconds.toml",
+    "valid/datetime/no-seconds.toml",
     "valid/datetime/timezone.toml",
-    "valid/spec-1.0.0/offset-date-time-0.toml",
+    "valid/spec-1.1.0/common-27.toml",
+    "valid/spec-1.1.0/common-29.toml",
+    "valid/spec-1.1.0/common-12.toml",
+    "valid/spec-1.1.0/common-16.toml",
+    "valid/spec-1.1.0/common-19.toml",
     "valid/spec-example-1-compact.toml",
     "valid/spec-example-1.toml",
-    "valid/spec-1.0.0/string-4.toml",
-    "valid/spec-1.0.0/string-7.toml",
     "valid/string/ends-in-whitespace-escape.toml",
+    "valid/string/hex-escape.toml",
     "valid/string/multiline-empty.toml",
     "valid/string/multiline-quotes.toml",
     "valid/string/multiline.toml",
@@ -100,7 +104,7 @@ for (root, dirs, files) in walkdir(valid_test_folder)
             if Sys.iswindows()
                 rel = replace(rel, '\\' => '/')
             end
-            rel in toml_1_0_files || continue
+            rel in toml_1_1_files || continue
             push!(tested_valid, rel)
             v = check_valid(splitext(file)[1])
             @test v broken=rel in failures_valid context = rel
@@ -137,10 +141,12 @@ failures_invalid = [
     "invalid/control/comment-lf.toml",
     "invalid/control/comment-null.toml",
     "invalid/control/comment-us.toml",
+    "invalid/control/multi-cr.toml",
     "invalid/control/multi-del.toml",
     "invalid/control/multi-lf.toml",
     "invalid/control/multi-null.toml",
     "invalid/control/multi-us.toml",
+    "invalid/control/rawmulti-cr.toml",
     "invalid/control/rawmulti-del.toml",
     "invalid/control/rawmulti-lf.toml",
     "invalid/control/rawmulti-null.toml",
@@ -163,27 +169,6 @@ failures_invalid = [
     "invalid/encoding/bad-utf8-in-multiline.toml",
     "invalid/encoding/bad-utf8-in-string-literal.toml",
     "invalid/encoding/bad-utf8-in-string.toml",
-    "invalid/key/multiline-key-01.toml",
-    "invalid/key/multiline-key-02.toml",
-    "invalid/key/multiline-key-03.toml",
-    "invalid/key/multiline-key-04.toml",
-    "invalid/key/newline-04.toml",
-    "invalid/key/newline-05.toml",
-    "invalid/local-date/year-3digits.toml",
-    "invalid/local-time/time-no-leads-01.toml",
-    "invalid/spec-1.0.0/table-9-0.toml",
-    "invalid/spec-1.0.0/table-9-1.toml",
-    "invalid/table/duplicate-key-10.toml",
-    "invalid/table/append-with-dotted-keys-02.toml",
-    "invalid/table/append-with-dotted-keys-05.toml",
-    "invalid/table/duplicate-key-04.toml",
-    "invalid/table/duplicate-key-05.toml",
-    "invalid/table/multiline-key-01.toml",
-    "invalid/table/multiline-key-02.toml",
-    "invalid/table/redefine-02.toml",
-    "invalid/table/redefine-03.toml",
-    "invalid/string/bad-uni-esc-03.toml",
-    "invalid/string/bad-uni-esc-ml-03.toml",
 ]
 
 n_invalid = 0
@@ -198,7 +183,7 @@ for (root, dirs, files) in walkdir(invalid_test_folder)
             if Sys.iswindows()
                 rel = replace(rel, '\\' => '/')
             end
-            rel in toml_1_0_files || continue
+            rel in toml_1_1_files || continue
             push!(tested_invalid, rel)
             v = check_invalid(file)
             @test v broken=rel in failures_invalid context=rel
@@ -208,5 +193,7 @@ end
 @test n_invalid > 50
 # Ensure no stale entries in the failures list
 @assert failures_invalid ⊆ tested_invalid "stale entries in failures_invalid: $(setdiff(failures_invalid, tested_invalid))"
+
+end # testset
 
 end # testset

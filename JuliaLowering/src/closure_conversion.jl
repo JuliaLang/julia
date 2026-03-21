@@ -118,7 +118,6 @@ end
 
 # TODO: Avoid producing redundant calls to declare_global
 function make_globaldecl(ctx, src_ex, mod, name, strong=false, type=nothing)
-    ctx.toplevel_pure && return newleaf(ctx, decl, K"TOMBSTONE")
     decl = @ast ctx src_ex [K"block"
         [K"call"
             "declare_global"::K"core"
@@ -128,6 +127,7 @@ function make_globaldecl(ctx, src_ex, mod, name, strong=false, type=nothing)
         (::K"latestworld")
         "nothing"::K"core"
     ]
+    ctx.toplevel_pure && return newleaf(ctx, decl, K"TOMBSTONE")
     if !ctx.is_toplevel_seq_point
         push!(ctx.toplevel_stmts, decl)
         newleaf(ctx, decl, K"TOMBSTONE")
@@ -238,7 +238,7 @@ function closure_type_fields(ctx, srcref, closure_binds, is_opaque)
         field_orig_bindings = capture_ids
         # For opaque closures we don't try to generate sensible names for the
         # fields as there's no closure type to generate.
-        for (i,id) in enumerate(field_orig_bindings)
+        for i in eachindex(field_orig_bindings)
             push!(field_syms, @ast ctx srcref i::K"Integer")
         end
     else
@@ -500,7 +500,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         end
     elseif k == K"_opaque_closure"
         closure_binds = ctx.closure_bindings[ex[1].var_id]
-        field_syms, field_orig_bindings, field_inds, field_is_box =
+        field_syms, field_orig_bindings, field_inds, _field_is_box =
             closure_type_fields(ctx, ex, closure_binds, true)
 
         capture_rewrites = ClosureInfo(ex #=unused=#, field_syms, field_inds)

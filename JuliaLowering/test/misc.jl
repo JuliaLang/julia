@@ -214,7 +214,7 @@ let raw_foreigncall_ex = Expr(
 
     # test flisp does this: it's unclear how much desugaring the user is
     # responsible for here
-    @test Core.eval(test_mod, reference_lower(test_mod, raw_foreigncall_ex)) == 11 + 18im
+    @test fl_eval(test_mod, raw_foreigncall_ex) == 11 + 18im
 
     @test JuliaLowering.eval(test_mod, JuliaLowering.expr_to_est(raw_foreigncall_ex)) == 11 + 18im
 end

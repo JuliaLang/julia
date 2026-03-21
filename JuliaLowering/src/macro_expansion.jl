@@ -187,11 +187,11 @@ function eval_macro_name(ctx::MacroExpansionContext, mctx::MacroContext, ex0::Sy
             # `ex` might contain a nontrivial mix of scope layers so we can't
             # just `eval()` it, as it's already been partially lowered by this
             # point.  Instead, we repeat the latter parts of `lower()` here.
-            ctx2, ex2 = expand_forms_2(ctx, ex)
-            ctx3, ex3 = resolve_scopes(ctx2, ex2)
-            ctx4, ex4 = convert_closures(ctx3, ex3)
-            ctx5, ex5 = linearize_ir(ctx4, ex4)
-            expr_form = to_lowered_expr(ex5)
+             ctx2, ex2 = expand_forms_2(ctx, ex)
+             ctx3, ex3 = resolve_scopes(ctx2, ex2)
+             ctx4, ex4 = convert_closures(ctx3, ex3)
+            _ctx5, ex5 = linearize_ir(ctx4, ex4)
+            expr_form  = to_lowered_expr(ex5)
             ccall(:jl_toplevel_eval, Any, (Any, Any), mod, expr_form)
         end
     catch err
@@ -368,8 +368,6 @@ function expand_macro(ctx, ex)
         # method was defined (may be different from `parentmodule(macfunc)`)
         mod_for_ast = lookup_method_instance(macfunc, macro_args,
                                              ctx.macro_world).def.module
-        new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod_for_ast,
-                               current_layer_id(ctx), true, false)
         push_layer!(ctx, mod_for_ast)
         expanded = expand_forms_1(ctx, expanded)
         pop_layer!(ctx)
@@ -379,7 +377,7 @@ end
 
 _unpack_srcref(graph, srcref::SyntaxTree) = _node_id(graph, srcref)
 _unpack_srcref(graph, srcref::Tuple)      = _node_ids(graph, srcref...)
-_unpack_srcref(graph, srcref)             = srcref
+_unpack_srcref(_graph, srcref)            = srcref
 
 # Add a secondary source of provenance to each expression in the tree `ex`.
 function append_sourceref(ctx, ex, secondary_prov)

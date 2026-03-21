@@ -18,7 +18,7 @@ end
 
 function expr_to_est(@nospecialize(e),
                      lnn::LineNumberNode=LineNumberNode(0, :none))
-    graph = ensure_macro_attributes!(SyntaxGraph())
+    graph = ensure_desugaring_attributes!(SyntaxGraph())
     expr_to_est(graph, e, lnn)
 end
 
@@ -63,8 +63,7 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
         setattr!(ident, :scope_layer, e.args[2])
     elseif e isa Expr && e.head === :static_parameter
         setattr!(newleaf(graph, src, K"Value"), :value, e)
-    elseif e isa Expr && e.head === :lambda
-        ensure_desugaring_attributes!(graph)
+    elseif e isa Expr && e.head === :lambda && length(e.args) == 2
         argnames = e.args[1]::Vector{Any}
         arg_cs = NodeId[]
         for name in argnames
@@ -271,7 +270,7 @@ We may drop cases from this conversion, for example, if...
 We can assume `st` has passed `valid_st1`.  Errors arising from invalid AST
 (including finding `macrocall/escape/quote` forms) should be handled there.
 """
-function est_to_dst(st::SyntaxTree; all_expanded=true)
+function est_to_dst(st::SyntaxTree)
     g = st._graph
     rec = var"#self#"
 
@@ -320,10 +319,10 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
         [K"module" _...] -> st
         [K"toplevel" _...] -> st
         [K"for" [K"=" _ _] body] ->
-            @ast g st [K"for" [K"iteration" _dst_eq_to_in(st[1])] rec(body)]
+            @ast g st [K"for" [K"iteration"(st[1]) _dst_eq_to_in(st[1])] rec(body)]
         [K"for" [K"block" iters...] body] ->
             @ast g st [K"for"
-                [K"iteration" mapsyntax(_dst_eq_to_in, iters)...]
+                [K"iteration"(st[1]) mapsyntax(_dst_eq_to_in, iters)...]
                 rec(body)
             ]
         ([K"where" t tds...],
@@ -352,9 +351,9 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
             has_finally = length(rest) >= 1 && !_is_false(rest[1])
             has_else = length(rest) === 2
             @ast g st [K"try" rec(tryb)
-                has_catch ? [K"catch" cvar_out rec(catchb)] : nothing
-                has_else ? [K"else" rec(rest[2])] : nothing
-                has_finally ? [K"finally" rec(rest[1])] : nothing
+                has_catch ? [K"catch"(catchb) cvar_out rec(catchb)] : nothing
+                has_else ? [K"else"(rest[2]) rec(rest[2])] : nothing
+                has_finally ? [K"finally"(rest[1]) rec(rest[1])] : nothing
             ]
         end
         [K"flatten" _] -> let
@@ -412,7 +411,7 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
             ]
         end
         ([K"let" binds body], when=(kind(binds) !== K"block")) ->
-            @ast g st [K"let" [K"block" rec(binds)] rec(body)]
+            @ast g st [K"let" [K"block"(binds) rec(binds)] rec(body)]
         [K"struct" mut sig body] -> let
             flags = JS.flags(st) | (_is_false(mut) ? 0 : JS.MUTABLE_FLAG)
             @ast g st [K"struct"(syntax_flags=flags)
@@ -473,7 +472,7 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
         [K"copyast" [K"inert" ex]] -> @ast g st [K"call"
             interpolate_ast::K"Value"
             Expr::K"Value"
-            [K"inert" ex]
+            [K"inert"(st[1]) ex]
         ]
         [K"symbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
         [K"symboliclabel" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
@@ -491,10 +490,11 @@ function est_to_dst(st::SyntaxTree; all_expanded=true)
                     "macro-expansion and desugaring: ")))
             end
         end
+        ([K"latestworld"], when=!is_leaf(st)) -> newleaf(g, st, K"latestworld")
         [K"cfunction" typ fptr rt at sym] -> @ast g st [K"cfunction"
             rec(typ) rec(fptr)
-            [K"static_eval"(meta=name_hint("cfunction return type")) rec(rt)]
-            [K"static_eval"(meta=name_hint("cfunction argument type")) rec(at)]
+            [K"static_eval"(rt, meta=name_hint("cfunction return type")) rec(rt)]
+            [K"static_eval"(at, meta=name_hint("cfunction argument type")) rec(at)]
             rec(sym)
         ]
 

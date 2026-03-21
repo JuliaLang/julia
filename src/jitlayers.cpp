@@ -43,6 +43,10 @@
 #include <llvm/Bitcode/BitcodeWriter.h>
 
 #include <llvm/ExecutionEngine/JITLink/JITLink.h>
+#if JL_LLVM_VERSION >= 210000
+#include <llvm/ExecutionEngine/JITLink/EHFrameSupport.h>
+#include <llvm/ExecutionEngine/Orc/Shared/WrapperFunctionUtils.h>
+#endif
 #include <llvm/ExecutionEngine/Orc/ObjectFileInterface.h>
 #include <llvm/ExecutionEngine/Orc/DebugUtils.h>
 #include <llvm/Object/MachO.h>
@@ -281,9 +285,10 @@ StringRef jl_codegen_output_t::get_call_target(jl_code_instance_t *ci, bool spec
     return target.decl->getName();
 }
 
-jl_emitted_output_t jl_codegen_output_t::finish(orc::SymbolStringPool &SSP)
+jl_emitted_output_t jl_codegen_output_t::finish(std::unique_ptr<LLVMContext> ctx,
+                                                std::unique_ptr<Module> mod,
+                                                orc::SymbolStringPool &SSP)
 {
-
     auto info = std::make_unique<jl_linker_info_t>();
     auto intern = [&](StringRef name) {
         SmallString<128> buf;
@@ -304,8 +309,7 @@ jl_emitted_output_t jl_codegen_output_t::finish(orc::SymbolStringPool &SSP)
         info->global_targets[val] = intern(gv->getName());
     }
 
-    unlock();
-    return {std::move(get_tsm()), std::move(info)};
+    return {std::move(ctx), std::move(mod), std::move(info)};
 }
 
 // Return a specptr that is ABI-compatible with `from_abi` which invokes `codeinst`.
@@ -350,27 +354,28 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
 
     orc::ThreadSafeModule result_m;
     std::string gf_thunk_name;
-    auto out = std::make_unique<jl_codegen_output_t>("gfthunk",
-                                                     jl_ExecutionEngine->getDataLayout(),
-                                                     jl_ExecutionEngine->getTargetTriple());
+    auto ctx = std::make_unique<LLVMContext>();
+    auto mod = jl_create_llvm_module("gfthunk", *ctx, jl_ExecutionEngine->getDataLayout(),
+                                     jl_ExecutionEngine->getTargetTriple());
+    jl_codegen_output_t out{*mod};
     {
-        out->get_context().setDiscardValueNames(true);
-        out->imaging_mode = 0;
-        auto &ctx = out->get_context();
+        ctx->setDiscardValueNames(true);
+        out.imaging_mode = 0;
         if (target) {
-            Value *llvmtarget = literal_static_pointer_val((void*)target, PointerType::get(ctx, 0));
-            gf_thunk_name = emit_abi_converter(*out, from_abi, codeinst, llvmtarget, target_specsig);
+            Value *llvmtarget = literal_static_pointer_val((void*)target, PointerType::get(*ctx, 0));
+            gf_thunk_name = emit_abi_converter(out, from_abi, codeinst, llvmtarget, target_specsig);
         }
         else if (invoke == jl_fptr_const_return_addr) {
-            gf_thunk_name = emit_abi_constreturn(*out, from_abi, codeinst->rettype_const);
+            assert(codeinst);   // Convince the static analyzer
+            gf_thunk_name = emit_abi_constreturn(out, from_abi, codeinst->rettype_const);
         }
         else {
-            Value *llvminvoke = invoke ? literal_static_pointer_val((void*)invoke, PointerType::get(ctx, 0)) : nullptr;
-            gf_thunk_name = emit_abi_dispatcher(*out, from_abi, codeinst, llvminvoke);
+            Value *llvminvoke = invoke ? literal_static_pointer_val((void*)invoke, PointerType::get(*ctx, 0)) : nullptr;
+            gf_thunk_name = emit_abi_dispatcher(out, from_abi, codeinst, llvminvoke);
         }
     }
     auto &ES = jl_ExecutionEngine->getExecutionSession();
-    auto emitted = out->finish(*ES.getSymbolStringPool());
+    auto emitted = out.finish(std::move(ctx), std::move(mod), *ES.getSymbolStringPool());
     jl_ExecutionEngine->addOutput(std::move(emitted));
     uintptr_t Addr = jl_ExecutionEngine->getFunctionAddress(gf_thunk_name);
     assert(Addr);
@@ -445,9 +450,12 @@ jl_emit_codeinst_to_jit_impl(jl_code_instance_t *codeinst, jl_code_info_t *src)
 
     JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
     jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
-    jl_codegen_output_t out{name_from_method_instance(mi),
-                            jl_ExecutionEngine->getDataLayout(),
-                            jl_ExecutionEngine->getTargetTriple()};
+    const char *name = name_from_method_instance(mi);
+    auto ctx = std::make_unique<LLVMContext>();
+    auto &dl = jl_ExecutionEngine->getDataLayout();
+    auto &tt = jl_ExecutionEngine->getTargetTriple();
+    auto mod = jl_create_llvm_module(name, *ctx, dl, tt);
+    jl_codegen_output_t out{*mod};
     out.get_context().setDiscardValueNames(true);
     out.imaging_mode = false;
     out.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
@@ -473,7 +481,8 @@ jl_emit_codeinst_to_jit_impl(jl_code_instance_t *codeinst, jl_code_info_t *src)
         jl_as_global_root((jl_value_t*)mi, 1);
 
     auto &ES = jl_ExecutionEngine->getExecutionSession();
-    jl_emitted_output_t emitted = out.finish(*ES.getSymbolStringPool());
+    jl_emitted_output_t emitted =
+        out.finish(std::move(ctx), std::move(mod), *ES.getSymbolStringPool());
     jl_ExecutionEngine->addOutput(std::move(emitted));
 }
 
@@ -604,37 +613,31 @@ static auto countBasicBlocks(const Function &F) JL_NOTSAFEPOINT
 
 static constexpr size_t N_optlevels = 4;
 
-static orc::ThreadSafeModule selectOptLevel(orc::ThreadSafeModule TSM) JL_NOTSAFEPOINT {
-    TSM.withModuleDo([](Module &M) JL_NOTSAFEPOINT {
-        size_t opt_level = std::max(static_cast<int>(jl_options.opt_level), 0);
-        do {
-            if (jl_generating_output()) {
-                opt_level = 0;
-                break;
-            }
-            size_t opt_level_min = std::max(static_cast<int>(jl_options.opt_level_min), 0);
-            for (auto &F : M) {
-                if (!F.isDeclaration()) {
-                    Attribute attr = F.getFnAttribute("julia-optimization-level");
-                    StringRef val = attr.getValueAsString();
-                    if (val != "") {
-                        size_t ol = (size_t)val[0] - '0';
-                        if (ol < opt_level)
-                            opt_level = ol;
-                    }
+static void selectOptLevel(Module &M) JL_NOTSAFEPOINT {
+    size_t opt_level = std::max(static_cast<int>(jl_options.opt_level), 0);
+    do {
+        if (jl_generating_output()) {
+            opt_level = 0;
+            break;
+        }
+        size_t opt_level_min = std::max(static_cast<int>(jl_options.opt_level_min), 0);
+        for (auto &F : M) {
+            if (!F.isDeclaration()) {
+                Attribute attr = F.getFnAttribute("julia-optimization-level");
+                StringRef val = attr.getValueAsString();
+                if (val != "") {
+                    size_t ol = (size_t)val[0] - '0';
+                    if (ol < opt_level)
+                        opt_level = ol;
                 }
             }
-            if (opt_level < opt_level_min)
-                opt_level = opt_level_min;
-        } while (0);
-        // currently -O3 is max
-        opt_level = std::min(opt_level, N_optlevels - 1);
-        M.addModuleFlag(Module::Warning, "julia.optlevel", opt_level);
-    });
-    return TSM;
-}
-static orc::ThreadSafeModule selectOptLevel(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) JL_NOTSAFEPOINT {
-    return selectOptLevel(std::move(TSM));
+        }
+        if (opt_level < opt_level_min)
+            opt_level = opt_level_min;
+    } while (0);
+    // currently -O3 is max
+    opt_level = std::min(opt_level, N_optlevels - 1);
+    M.addModuleFlag(Module::Warning, "julia.optlevel", opt_level);
 }
 
 void jl_register_jit_object(const object::ObjectFile &Object,
@@ -843,20 +846,18 @@ public:
         // Tell ORC about all the other definition in this module.  When
         // linker_info contains enough information to produce the full
         // Interface, remove this.
-        Out.module.withModuleDo([&](Module &M) JL_NOTSAFEPOINT {
-            auto SSP = JIT.getExecutionSession().getSymbolStringPool();
-            for (auto &G : M.global_objects()) {
-                if (G.isDeclaration() || !G.hasExternalLinkage())
-                    continue;
-                auto Flags = JITSymbolFlags::Exported;
-                if (isa<Function>(&G))
-                    Flags |= JITSymbolFlags::Callable;
-                auto S = JIT.mangle(G.getName());
-                if (CISyms.contains(S))
-                    continue;
-                Syms[S] = Flags;
-            }
-        });
+        auto SSP = JIT.getExecutionSession().getSymbolStringPool();
+        for (auto &G : Out.module->global_objects()) {
+            if (G.isDeclaration() || !G.hasExternalLinkage())
+                continue;
+            auto Flags = JITSymbolFlags::Exported;
+            if (isa<Function>(&G))
+                Flags |= JITSymbolFlags::Callable;
+            auto S = JIT.mangle(G.getName());
+            if (CISyms.contains(S))
+                continue;
+            Syms[S] = Flags;
+        }
 
         return JLMaterializationUnit{JIT, OL, std::move(Out), std::move(I)};
     }
@@ -870,22 +871,24 @@ public:
         // TODO: Tell GCChecker that materialize can have safepoints.
 #ifndef __clang_analyzer__
         {
-            auto Lock = Out.module.getContext().getLock();
             uint8_t state = jl_gc_unsafe_enter(ct->ptls);
-            JIT.optimizeDLSyms(*Out.module.getModuleUnlocked()); // May safepoint
+            JIT.optimizeDLSyms(*Out.module); // May safepoint
             jl_gc_unsafe_leave(ct->ptls, state);
         }
 #endif
         std::unique_ptr<MemoryBuffer> Obj;
         uint64_t start_time = jl_hrtime();
         {
-            TimeTraceScope CompileScope(
-                "JIT Compile", Out.module.getModuleUnlocked()->getModuleIdentifier());
-            Obj = JIT.compileModule(JIT.optimizeModule(std::move(Out.module)));
+            TimeTraceScope CompileScope("JIT Compile", Out.module->getModuleIdentifier());
+            JIT.optimizeModule(*Out.module);
+            Obj = JIT.compileModule(*Out.module);
             if (!Obj) {
                 R->failMaterialization();
                 return;
             }
+            // Save some memory
+            auto Ctx = std::move(Out.ctx);
+            auto M = std::move(Out.module);
         }
         uint64_t end_time = jl_hrtime();
 
@@ -921,8 +924,7 @@ public:
 
     StringRef getName() const override JL_NOTSAFEPOINT
     {
-        return Out.module.withModuleDo([](Module &M)
-                                           JL_NOTSAFEPOINT { return M.getName(); });
+        return Out.module->getName();
     }
 
     void discard(const JITDylib &JD, const SymbolStringPtr &Name) override {}
@@ -962,7 +964,10 @@ public:
     // During materializtion: finalizers disabled, GC safe
     void materialize(std::unique_ptr<MaterializationResponsibility> R) override
     {
-        jl_codegen_output_t Out{*Sym, JIT.getDataLayout(), JIT.getTargetTriple()};
+        auto Ctx = std::make_unique<LLVMContext>();
+        auto Mod =
+            jl_create_llvm_module(*Sym, *Ctx, JIT.getDataLayout(), JIT.getTargetTriple());
+        jl_codegen_output_t Out{*Mod};
 
         jl_task_t *ct = jl_current_task;
         uint8_t state = jl_gc_unsafe_enter(ct->ptls);
@@ -977,7 +982,8 @@ public:
         if (auto Err = R->replace(
                 std::make_unique<JLMaterializationUnit>(JLMaterializationUnit::Create(
                     JIT, OL,
-                    Out.finish(*R->getExecutionSession().getSymbolStringPool()))))) {
+                    Out.finish(std::move(Ctx), std::move(Mod),
+                               *R->getExecutionSession().getSymbolStringPool()))))) {
             R->getExecutionSession().reportError(std::move(Err));
             R->failMaterialization();
         }
@@ -995,18 +1001,49 @@ private:
     jl_invoke_api_t API;
 };
 
+#if defined(LLVM_SHLIB)
+namespace JLEHFrames {
+Error registerEHFrames(orc::ExecutorAddrRange EHFrameSection) {
+    register_eh_frames(EHFrameSection.Start.toPtr<uint8_t *>(), static_cast<size_t>(EHFrameSection.size()));
+    return Error::success();
+}
+
+Error deregisterEHFrames(orc::ExecutorAddrRange EHFrameSection) {
+    deregister_eh_frames(EHFrameSection.Start.toPtr<uint8_t *>(), static_cast<size_t>(EHFrameSection.size()));
+    return Error::success();
+}
+}
+#if JL_LLVM_VERSION < 210000
 class JLEHFrameRegistrar final : public jitlink::EHFrameRegistrar {
 public:
     Error registerEHFrames(orc::ExecutorAddrRange EHFrameSection) override {
-        register_eh_frames(EHFrameSection.Start.toPtr<uint8_t *>(), static_cast<size_t>(EHFrameSection.size()));
-        return Error::success();
+        return JLEHFrames::registerEHFrames(EHFrameSection);
     }
 
     Error deregisterEHFrames(orc::ExecutorAddrRange EHFrameSection) override {
-        deregister_eh_frames(EHFrameSection.Start.toPtr<uint8_t *>(), static_cast<size_t>(EHFrameSection.size()));
-        return Error::success();
+        return JLEHFrames::deregisterEHFrames(EHFrameSection);
     }
 };
+#else
+namespace JLEHFrames {
+    static orc::shared::CWrapperFunctionResult
+    registerEHFrameSectionAllocAction(const char *ArgData, size_t ArgSize) {
+        using namespace llvm::orc::shared;
+        return WrapperFunction<SPSError(SPSExecutorAddrRange)>::handle(
+            ArgData, ArgSize, registerEHFrames)
+            .release();
+    }
+
+    static orc::shared::CWrapperFunctionResult
+    deregisterEHFrameSectionAllocAction(const char *ArgData, size_t ArgSize) {
+        using namespace llvm::orc::shared;
+        return WrapperFunction<SPSError(SPSExecutorAddrRange)>::handle(
+            ArgData, ArgSize, deregisterEHFrames)
+            .release();
+    }
+}
+#endif
+#endif
 
 RTDyldMemoryManager *createRTDyldMemoryManager(void) JL_NOTSAFEPOINT;
 std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() JL_NOTSAFEPOINT;
@@ -1221,113 +1258,110 @@ namespace {
             }
         }
 
-        orc::ThreadSafeModule operator()(orc::ThreadSafeModule TSM) JL_NOTSAFEPOINT {
-            TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT {
-                auto PoolIdx = cast<ConstantInt>(cast<ConstantAsMetadata>(M.getModuleFlag("julia.optlevel"))->getValue())->getZExtValue();
-                assert(PoolIdx < N && "Invalid optimization pool index");
+        void operator()(Module &M) JL_NOTSAFEPOINT {
+            auto PoolIdx = cast<ConstantInt>(cast<ConstantAsMetadata>(M.getModuleFlag("julia.optlevel"))->getValue())->getZExtValue();
+            assert(PoolIdx < N && "Invalid optimization pool index");
 
-                uint64_t start_time = 0;
+            uint64_t start_time = 0;
 
-                struct Stat {
-                    std::string name;
-                    uint64_t insts;
-                    uint64_t bbs;
+            struct Stat {
+                std::string name;
+                uint64_t insts;
+                uint64_t bbs;
 
-                    void dump(ios_t *stream) JL_NOTSAFEPOINT {
-                        ios_printf(stream, "    \"%s\":\n", name.c_str());
-                        ios_printf(stream, "        instructions: %u\n", insts);
-                        ios_printf(stream, "        basicblocks: %zd\n", bbs);
+                void dump(ios_t *stream) JL_NOTSAFEPOINT {
+                    ios_printf(stream, "    \"%s\":\n", name.c_str());
+                    ios_printf(stream, "        instructions: %u\n", insts);
+                    ios_printf(stream, "        basicblocks: %zd\n", bbs);
+                }
+
+                Stat(Function &F) JL_NOTSAFEPOINT : name(F.getName().str()), insts(F.getInstructionCount()), bbs(countBasicBlocks(F)) {}
+
+                ~Stat() JL_NOTSAFEPOINT = default;
+            };
+            SmallVector<Stat, 8> before_stats;
+            {
+                if (*jl_ExecutionEngine->get_dump_llvm_opt_stream()) {
+                    for (auto &F : M.functions()) {
+                        if (F.isDeclaration() || F.getName().starts_with(JL_SYM_INVOKE_SPECSIG)) {
+                            continue;
+                        }
+                        // Each function is printed as a YAML object with several attributes
+                        before_stats.emplace_back(F);
                     }
 
-                    Stat(Function &F) JL_NOTSAFEPOINT : name(F.getName().str()), insts(F.getInstructionCount()), bbs(countBasicBlocks(F)) {}
+                    start_time = jl_hrtime();
+                }
+            }
 
-                    ~Stat() JL_NOTSAFEPOINT = default;
-                };
-                SmallVector<Stat, 8> before_stats;
-                {
-                    if (*jl_ExecutionEngine->get_dump_llvm_opt_stream()) {
-                        for (auto &F : M.functions()) {
-                            if (F.isDeclaration() || F.getName().starts_with(JL_SYM_INVOKE_SPECSIG)) {
-                                continue;
-                            }
-                            // Each function is printed as a YAML object with several attributes
-                            before_stats.emplace_back(F);
+            {
+                JL_TIMING(LLVM_JIT, JIT_Opt);
+                TimeTraceScope OptimizeScope("JIT Optimize", M.getModuleIdentifier());
+                //Run the optimization
+                (****PMs[PoolIdx]).run(M);
+                assert(!verifyLLVMIR(M));
+            }
+
+            {
+                // Print optimization statistics as a YAML object
+                // Looks like:
+                // -
+                //   before:
+                //     "foo":
+                //       instructions: uint64
+                //       basicblocks: uint64
+                //    "bar":
+                //       instructions: uint64
+                //       basicblocks: uint64
+                //   time_ns: uint64
+                //   optlevel: int
+                //   after:
+                //     "foo":
+                //       instructions: uint64
+                //       basicblocks: uint64
+                //    "bar":
+                //       instructions: uint64
+                //       basicblocks: uint64
+                if (auto stream = *jl_ExecutionEngine->get_dump_llvm_opt_stream()) {
+                    uint64_t end_time = jl_hrtime();
+                    ios_printf(stream, "- \n");
+
+                    // Print LLVM function statistic _before_ optimization
+                    ios_printf(stream, "  before: \n");
+                    for (auto &s : before_stats) {
+                        s.dump(stream);
+                    }
+                    ios_printf(stream, "  time_ns: %" PRIu64 "\n", end_time - start_time);
+                    ios_printf(stream, "  optlevel: %d\n", PoolIdx);
+
+                    // Print LLVM function statistics _after_ optimization
+                    ios_printf(stream, "  after: \n");
+                    for (auto &F : M.functions()) {
+                        if (F.isDeclaration() || F.getName().starts_with(JL_SYM_INVOKE_SPECSIG)) {
+                            continue;
                         }
-
-                        start_time = jl_hrtime();
+                        Stat(F).dump(stream);
                     }
                 }
-
-                {
-                    JL_TIMING(LLVM_JIT, JIT_Opt);
-                    TimeTraceScope OptimizeScope("JIT Optimize", M.getModuleIdentifier());
-                    //Run the optimization
-                    (****PMs[PoolIdx]).run(M);
-                    assert(!verifyLLVMIR(M));
-                }
-
-                {
-                    // Print optimization statistics as a YAML object
-                    // Looks like:
-                    // -
-                    //   before:
-                    //     "foo":
-                    //       instructions: uint64
-                    //       basicblocks: uint64
-                    //    "bar":
-                    //       instructions: uint64
-                    //       basicblocks: uint64
-                    //   time_ns: uint64
-                    //   optlevel: int
-                    //   after:
-                    //     "foo":
-                    //       instructions: uint64
-                    //       basicblocks: uint64
-                    //    "bar":
-                    //       instructions: uint64
-                    //       basicblocks: uint64
-                    if (auto stream = *jl_ExecutionEngine->get_dump_llvm_opt_stream()) {
-                        uint64_t end_time = jl_hrtime();
-                        ios_printf(stream, "- \n");
-
-                        // Print LLVM function statistic _before_ optimization
-                        ios_printf(stream, "  before: \n");
-                        for (auto &s : before_stats) {
-                            s.dump(stream);
-                        }
-                        ios_printf(stream, "  time_ns: %" PRIu64 "\n", end_time - start_time);
-                        ios_printf(stream, "  optlevel: %d\n", PoolIdx);
-
-                        // Print LLVM function statistics _after_ optimization
-                        ios_printf(stream, "  after: \n");
-                        for (auto &F : M.functions()) {
-                            if (F.isDeclaration() || F.getName().starts_with(JL_SYM_INVOKE_SPECSIG)) {
-                                continue;
-                            }
-                            Stat(F).dump(stream);
-                        }
-                    }
-                }
-                ++ModulesOptimized;
-                switch (PoolIdx) {
-                    case 0:
-                        ++OptO0;
-                        break;
-                    case 1:
-                        ++OptO1;
-                        break;
-                    case 2:
-                        ++OptO2;
-                        break;
-                    case 3:
-                        ++OptO3;
-                        break;
-                    default:
-                        // Change this if we ever gain other optlevels
-                        llvm_unreachable("optlevel is between 0 and 3!");
-                }
-            });
-            return TSM;
+            }
+            ++ModulesOptimized;
+            switch (PoolIdx) {
+                case 0:
+                    ++OptO0;
+                    break;
+                case 1:
+                    ++OptO1;
+                    break;
+                case 2:
+                    ++OptO2;
+                    break;
+                case 3:
+                    ++OptO3;
+                    break;
+                default:
+                    // Change this if we ever gain other optlevels
+                    llvm_unreachable("optlevel is between 0 and 3!");
+            }
         }
     private:
         std::array<std::unique_ptr<JuliaOJIT::ResourcePool<std::unique_ptr<PassManager>>>, N> PMs;
@@ -1338,7 +1372,10 @@ namespace {
     struct IRTransformRef {
         IRTransformRef(T &transform) : transform(transform) {}
         OptimizerResultT operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) JL_NOTSAFEPOINT {
-            return transform(std::move(TSM), R);
+            TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT {
+                transform(M, R);
+            });
+            return std::move(TSM);
         }
     private:
         T &transform;
@@ -1397,11 +1434,11 @@ namespace {
 struct JuliaOJIT::OptimizerT {
     OptimizerT(TargetMachine &TM, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex)
         : opt(TM, printers, llvm_printing_mutex) {}
-    orc::ThreadSafeModule operator()(orc::ThreadSafeModule TSM) JL_NOTSAFEPOINT {
-        return opt(std::move(TSM));
+    void operator()(Module &M) JL_NOTSAFEPOINT {
+        opt(M);
     }
-    OptimizerResultT operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) JL_NOTSAFEPOINT {
-        return opt(std::move(TSM));
+    void operator()(Module &M, orc::MaterializationResponsibility &R) JL_NOTSAFEPOINT {
+        return opt(M);
     }
 private:
     struct sizedOptimizerT<N_optlevels> opt;
@@ -1411,26 +1448,23 @@ struct JuliaOJIT::JITPointersT {
     JITPointersT(SharedBytesT &SharedBytes, std::mutex &Lock) JL_NOTSAFEPOINT
         : SharedBytes(SharedBytes), Lock(Lock) {}
 
-    orc::ThreadSafeModule operator()(orc::ThreadSafeModule TSM) JL_NOTSAFEPOINT {
-        TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT {
-            std::lock_guard<std::mutex> locked(Lock);
-            for (auto &GV : make_early_inc_range(M.globals())) {
-                if (auto *Shared = getSharedBytes(GV)) {
-                    ++InternedGlobals;
-                    GV.replaceAllUsesWith(Shared);
-                    GV.eraseFromParent();
-                }
+    void operator()(Module &M) JL_NOTSAFEPOINT {
+        std::lock_guard<std::mutex> locked(Lock);
+        for (auto &GV : make_early_inc_range(M.globals())) {
+            if (auto *Shared = getSharedBytes(GV)) {
+                ++InternedGlobals;
+                GV.replaceAllUsesWith(Shared);
+                GV.eraseFromParent();
             }
+        }
 
-            // Windows needs some inline asm to help
-            // build unwind tables, if they have any functions to decorate
-            if (!M.functions().empty())
-                jl_decorate_module(M);
-        });
-        return TSM;
+        // Windows needs some inline asm to help
+        // build unwind tables, if they have any functions to decorate
+        if (!M.functions().empty())
+            jl_decorate_module(M);
     }
-    Expected<orc::ThreadSafeModule> operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) JL_NOTSAFEPOINT {
-        return operator()(std::move(TSM));
+    void operator()(Module &M, orc::MaterializationResponsibility &R) JL_NOTSAFEPOINT {
+        return operator()(M);
     }
 
 private:
@@ -1683,9 +1717,9 @@ JuliaOJIT::JuliaOJIT()
     JITPointersLayer(ES, CompileLayer, IRTransformRef(*JITPointers)),
     Optimizers(std::make_unique<OptimizerT>(*TM, PrintLLVMTimers, llvm_printing_mutex)),
     OptimizeLayer(ES, JITPointersLayer, IRTransformRef(*Optimizers)),
-    OptSelLayer(ES, OptimizeLayer, static_cast<orc::ThreadSafeModule (*)(orc::ThreadSafeModule, orc::MaterializationResponsibility&)>(selectOptLevel)),
     DebuginfoPlugin(std::make_shared<JLDebuginfoPlugin>())
 {
+#if JL_LLVM_VERSION < 210000
 # if defined(LLVM_SHLIB)
     // When dynamically linking against LLVM, use our custom EH frame registration code
     // also used with RTDyld to inform both our and the libc copy of libunwind.
@@ -1695,6 +1729,16 @@ JuliaOJIT::JuliaOJIT()
 # endif
     ObjectLayer.addPlugin(std::make_unique<EHFrameRegistrationPlugin>(
         ES, std::move(ehRegistrar)));
+#else
+    // LLVM 21+ removed EHFrameRegistrar. Use our own plugin for custom registration
+    // when dynamically linking, plus the built-in plugin for standard registration.
+# if defined(LLVM_SHLIB)
+    ObjectLayer.addPlugin(std::make_unique<EHFrameRegistrationPlugin>(
+        ExecutorAddr::fromPtr(JLEHFrames::registerEHFrameSectionAllocAction),
+        ExecutorAddr::fromPtr(JLEHFrames::deregisterEHFrameSectionAllocAction)));
+#endif
+    ObjectLayer.addPlugin(cantFail(EHFrameRegistrationPlugin::Create(ES)));
+#endif
 
     ObjectLayer.addPlugin(DebuginfoPlugin);
     ObjectLayer.addPlugin(std::make_unique<JLMemoryUsagePlugin>(&jit_bytes_size));
@@ -1853,15 +1897,13 @@ void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
 
 #ifdef ENABLE_TIMINGS
 static void timing_print_module_names(jl_timing_block_t *block,
-                                      ThreadSafeModule &TSM) JL_NOTSAFEPOINT
+                                      Module &M) JL_NOTSAFEPOINT
 {
-    TSM.withModuleDo([block](Module &M) {
-        for (auto &f : M) {
-            if (!f.isDeclaration()) {
-                jl_timing_puts(block, f.getName().str().c_str());
-            }
+    for (auto &f : M) {
+        if (!f.isDeclaration()) {
+            jl_timing_puts(block, f.getName().str().c_str());
         }
-    });
+    }
 }
 #endif
 
@@ -1870,7 +1912,7 @@ void JuliaOJIT::addOutput(jl_emitted_output_t O)
     JL_TIMING(LLVM_JIT, JIT_Total);
     ++ModulesAdded;
 #ifdef ENABLE_TIMINGS
-    timing_print_module_names(JL_TIMING_DEFAULT_BLOCK, O.module);
+    timing_print_module_names(JL_TIMING_DEFAULT_BLOCK, *O.module);
 #endif
     std::unique_lock Lock{LinkerMutex};
 
@@ -2310,18 +2352,15 @@ CISymbolPtr *JuliaOJIT::linkCISymbol(jl_code_instance_t *CI)
     return &CISym;
 }
 
-orc::ThreadSafeModule JuliaOJIT::optimizeModule(orc::ThreadSafeModule TSM)
+void JuliaOJIT::optimizeModule(Module &M)
 {
-    TSM = selectOptLevel(std::move(TSM));
-    TSM = (*Optimizers)(std::move(TSM));
-    TSM = (*JITPointers)(std::move(TSM));
-    return TSM;
+    selectOptLevel(M);
+    (*Optimizers)(M);
+    (*JITPointers)(M);
 }
 
-std::unique_ptr<MemoryBuffer> JuliaOJIT::compileModule(orc::ThreadSafeModule TSM)
+std::unique_ptr<MemoryBuffer> JuliaOJIT::compileModule(Module &M)
 {
-    auto Lock = TSM.getContext().getLock();
-    Module &M = *TSM.getModuleUnlocked();
     // Treat this as if one of the passes might contain a safepoint
     // even though that shouldn't be the case and might be unwise
     Expected<std::unique_ptr<MemoryBuffer>> Obj = CompileLayer.getCompiler()(M);

@@ -325,7 +325,8 @@ struct jl_linker_info_t {
 };
 
 struct jl_emitted_output_t {
-    orc::ThreadSafeModule module;
+    std::unique_ptr<LLVMContext> ctx;
+    std::unique_ptr<Module> module;
     std::unique_ptr<jl_linker_info_t> linker_info;
 
     jl_emitted_output_t() JL_NOTSAFEPOINT = default;
@@ -334,23 +335,19 @@ struct jl_emitted_output_t {
     ~jl_emitted_output_t() JL_NOTSAFEPOINT = default;
 };
 
-// A jl_codegen_output_t is the target for LLVM IR generation, containing an
-// LLVM module and the metadata for linking it into the current session or a
-// system image.  Many code instances can be emitted to a single codegen output.
+// A jl_codegen_output_t is the target for LLVM IR generation, containing a
+// reference to the destination LLVM module and the metadata for linking it into
+// the current session or a system image.  Many code instances can be emitted to
+// a single codegen output.
 class jl_codegen_output_t {
 private:
-    orc::ThreadSafeModule owned_TSM;
-    orc::ThreadSafeModule *TSM;
-    orc::ThreadSafeContext::Lock tsctx_lock;
+    Module &M;
 
     jl_name_counter_t names;
 
 public:
-    LLVMContext &get_context() { return *get_tsm().getContext().getContext(); }
-    Module &get_module() { return *get_tsm().getModuleUnlocked(); }
-    orc::ThreadSafeModule &get_tsm() { return owned_TSM ? owned_TSM : *TSM; }
-    void lock() { tsctx_lock = get_tsm().getContext().getLock(); }
-    void unlock() { auto _ = std::move(tsctx_lock); }
+    LLVMContext &get_context() { return M.getContext(); }
+    Module &get_module() { return M; }
 
     StringRef strip_linux(StringRef name);
     std::string make_name(jl_symbol_prefix_t type, jl_invoke_api_t api,
@@ -361,8 +358,10 @@ public:
     StringRef get_call_target(jl_code_instance_t *ci, bool specsig, bool always_inline);
 
     // Discard all the context that will be invalidated when we compile the
-    // module.  Must hold the context lock.
-    jl_emitted_output_t finish(orc::SymbolStringPool &SSP) JL_NOTSAFEPOINT;
+    // module.  The context and module will be moved to the jl_emitted_output_t.
+    jl_emitted_output_t finish(std::unique_ptr<LLVMContext> ctx,
+                               std::unique_ptr<Module> mod,
+                               orc::SymbolStringPool &SSP) JL_NOTSAFEPOINT;
 
 public:
     // outputs
@@ -407,30 +406,8 @@ public:
     bool safepoint_on_entry = true;
     bool use_swiftcc = true;
 
-    jl_codegen_output_t(orc::ThreadSafeModule &TSM)
-      : TSM(&TSM),
-        tsctx_lock(TSM.getContext().getLock()),
-        DL(TSM.getModuleUnlocked()->getDataLayout()),
-        TargetTriple(TSM.getModuleUnlocked()->getTargetTriple())
-    {
-        if (TargetTriple.isRISCV())
-            use_swiftcc = false;
-    }
-
-    static orc::ThreadSafeModule create_ts_module(StringRef name, const DataLayout &DL,
-                                                  const Triple &triple)
-    {
-        auto ctx = std::make_unique<LLVMContext>();
-        auto M = jl_create_llvm_module(name, *ctx, DL, triple);
-        return orc::ThreadSafeModule(std::move(M), std::move(ctx));
-    }
-
-    jl_codegen_output_t(StringRef name, const DataLayout &DL, const Triple &triple)
-      : owned_TSM(create_ts_module(name, DL, triple)),
-        TSM(nullptr),
-        tsctx_lock(owned_TSM.getContext().getLock()),
-        DL(DL),
-        TargetTriple(triple)
+    jl_codegen_output_t(Module &M)
+      : M(M), DL(M.getDataLayout()), TargetTriple(M.getTargetTriple())
     {
         if (TargetTriple.isRISCV())
             use_swiftcc = false;
@@ -605,13 +582,18 @@ private:
     // any verification the user wants to do when adding an OwningResource to the pool
     template <typename AnyT>
     static void verifyResource(AnyT &resource) JL_NOTSAFEPOINT { }
-    static void verifyResource(orc::ThreadSafeContext &context) JL_NOTSAFEPOINT { assert(context.getContext()); }
+    static void verifyResource(orc::ThreadSafeContext &context) JL_NOTSAFEPOINT {
+#if JL_LLVM_VERSION < 210000
+        assert(context.getContext());
+#else
+        context.withContextDo([](LLVMContext *ctx) { assert(ctx); });
+#endif
+    }
 public:
     typedef orc::ObjectLinkingLayer ObjLayerT;
     typedef orc::IRCompileLayer CompileLayerT;
     typedef orc::IRTransformLayer JITPointersLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
-    typedef orc::IRTransformLayer OptSelLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
     template
     <typename ResourceT, size_t max = 0,
@@ -843,8 +825,8 @@ protected:
     // returning a pointer into CISymbols or NULL if the CI is not compiled.
     CISymbolPtr *linkCISymbol(jl_code_instance_t *CI) JL_NOTSAFEPOINT;
 
-    orc::ThreadSafeModule optimizeModule(orc::ThreadSafeModule TSM) JL_NOTSAFEPOINT;
-    std::unique_ptr<MemoryBuffer> compileModule(orc::ThreadSafeModule TSM) JL_NOTSAFEPOINT;
+    void optimizeModule(Module &M) JL_NOTSAFEPOINT;
+    std::unique_ptr<MemoryBuffer> compileModule(Module &M) JL_NOTSAFEPOINT;
 
 private:
 
@@ -885,19 +867,9 @@ private:
     JITPointersLayerT JITPointersLayer;
     std::unique_ptr<OptimizerT> Optimizers;
     OptimizeLayerT OptimizeLayer;
-    OptSelLayerT OptSelLayer;
     std::shared_ptr<JLDebuginfoPlugin> DebuginfoPlugin;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
-
-inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafeContext ctx,
-                                                 const DataLayout &DL, const Triple &triple,
-                                                 Module *source = nullptr) JL_NOTSAFEPOINT
-{
-    auto lock = ctx.getLock();
-    return orc::ThreadSafeModule(
-        jl_create_llvm_module(name, *ctx.getContext(), DL, triple, source), ctx);
-}
 
 void fixupTM(TargetMachine &TM) JL_NOTSAFEPOINT;
 
