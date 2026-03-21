@@ -799,10 +799,10 @@ endif
 # Allow the user to specify this in Make.user
 GCCPATH ?= $(LOCALBASE)/lib/gcc$(_GCCVER)
 
-# We're going to copy over the libraries we need from GCCPATH into build_libdir, then
-# tell everyone to look for them there. At install time, the build_libdir added into
+# We're going to copy over the libraries we need from GCCPATH into build_private_libdir, then
+# tell everyone to look for them there. At install time, the build_private_libdir added into
 # the RPATH here is removed by patchelf.
-LDFLAGS += -L$(build_libdir) -Wl,-rpath,$(build_libdir)
+LDFLAGS += -L$(build_private_libdir) -Wl,-rpath,$(build_private_libdir)
 
 endif # gfortran
 endif # FreeBSD
