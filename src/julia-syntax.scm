@@ -4059,7 +4059,7 @@ f(x) = yt(x)
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          thunk with-static-parameters toplevel-only
          global globalref global-if-global assign-const-if-global isglobal thismodule thisfunction
-         const atomic null true false ssavalue isdefined toplevel module lambda
+         const atomic null true false ssavalue toplevel module lambda
          error gc_preserve_begin gc_preserve_end export public inline noinline purity)))
 
 (define (local-in? s lam (tab #f))
@@ -4092,7 +4092,7 @@ f(x) = yt(x)
     ;; Collect candidate variables: those that are captured (and hence we want to optimize)
     ;; and only assigned once. This populates the initial `unused` table.
     (for-each (lambda (v)
-                (if (and (vinfo:capt v) (vinfo:sa v))
+                (if (vinfo:sa v)
                     (put! unused (car v) #t)))
               vi)
     ;; Initialize decl with arguments since they're implicitly declared outside any loop
@@ -4214,7 +4214,7 @@ f(x) = yt(x)
               (append (table.keys live) (table.keys unused)))
     (for-each (lambda (v)
                 (if (and (vinfo:sa v) (vinfo:never-undef v))
-                    (set-car! (cddr v) (logand (caddr v) (lognot 5)))))
+                    (vinfo:set-capt! v #f)))
               vi)
     lam))
 
@@ -5496,59 +5496,13 @@ f(x) = yt(x)
                       (let ((pexc (pop-exc-expr src-catch-tokens target-catch-tokens)))
                         (if pexc (set-cdr! point (cons pexc (cdr point)))))))))
               handler-goto-fixups)
-    (let* ((stmts (reverse! code))
-           (di    (definitely-initialized-vars stmts vi))
-           (body  (cons 'block (filter (lambda (e)
-                                         (not (and (pair? e) (eq? (car e) 'newvar)
-                                                   (has? di (cadr e)))))
-                                       stmts))))
+    (let* ((body (cons 'block (reverse! code))))
       (if arg-map
           (insert-after-meta
            body
            (table.foldl (lambda (k v lst) (cons `(= ,v ,k) lst))
                         '() arg-map))
           body))))
-
-(define (for-each-isdefined f e)
-  (cond ((or (atom? e) (quoted? e)) #f)
-        ((and (pair? e) (eq? (car e) 'isdefined))
-         (f (cadr e)))
-        (else
-         (for-each (lambda (x) (for-each-isdefined f x))
-                   (cdr e)))))
-
-;; Find newvar nodes that are unnecessary because (1) the variable is not
-;; captured, and (2) the variable is assigned before any branches.
-;; This is used to remove newvar nodes that are not needed for re-initializing
-;; variables to undefined (see issue #11065).
-;; It doesn't look for variable *uses*, because any variables used-before-def
-;; that also pass this test are *always* used undefined, and therefore don't need
-;; to be *re*-initialized.
-;; The one exception to that is `@isdefined`, which can observe an undefined
-;; variable without throwing an error.
-(define (definitely-initialized-vars stmts vi)
-  (let ((vars (table))
-        (di   (table)))
-    (let loop ((stmts stmts))
-      (if (null? stmts)
-          di
-          (begin
-            (let ((e (car stmts)))
-              (for-each-isdefined (lambda (x) (if (has? vars x) (del! vars x)))
-                                  e)
-              (cond ((and (pair? e) (eq? (car e) 'newvar))
-                     (let ((vinf (var-info-for (cadr e) vi)))
-                       (if (and vinf (not (vinfo:capt vinf)))
-                           (put! vars (cadr e) #t))))
-                    ((and (pair? e) (or (memq (car e) '(goto gotoifnot))
-                                        (and (eq? (car e) '=) (pair? (caddr e))
-                                             (eq? (car (caddr e)) 'enter))))
-                     (set! vars (table)))
-                    ((and (pair? e) (eq? (car e) '=))
-                     (if (has? vars (cadr e))
-                         (begin (del! vars (cadr e))
-                                (put! di (cadr e) #t))))))
-            (loop (cdr stmts)))))))
 
 ;; pass 6: renumber slots and labels
 
