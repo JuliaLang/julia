@@ -124,7 +124,7 @@ macro nospecialize(vars...)
             var.head = :kw
         end
     end
-    return Expr(:meta, :nospecialize, vars...)
+    return Expr(:escape, Expr(:meta, :nospecialize, vars...))
 end
 
 """
@@ -141,7 +141,7 @@ macro specialize(vars...)
             var.head = :kw
         end
     end
-    return Expr(:meta, :specialize, vars...)
+    return Expr(:escape, Expr(:meta, :specialize, vars...))
 end
 
 """

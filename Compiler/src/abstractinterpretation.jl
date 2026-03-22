@@ -582,6 +582,34 @@ function collect_slot_refinements(𝕃ᵢ::AbstractLattice, applicable::Vector{M
                 end
                 slotrefinements[fidx] = sigt
             end
+        elseif argtypes[i] isa MustAlias
+            alias = argtypes[i]::MustAlias
+            argt = alias.fldtyp
+            if isvarargtype(argt)
+                argt = unwrapva(argt)
+            end
+            sigt = Bottom
+            for j = 1:length(applicable)
+                (;match) = applicable[j]
+                valid_as_lattice(match.spec_types, true) || continue
+                sigt = sigt ⊔ fieldtype(match.spec_types, i)
+            end
+            if sigt ⊏ argt # i.e. signature type is strictly more specific than the field type
+                newtyp = form_mustalias_refinement(alias, sigt)
+                if newtyp !== nothing
+                    aidx = alias.slot
+                    if slotrefinements === nothing
+                        slotrefinements = fill!(Vector{Any}(undef, length(sv.slottypes)), nothing)
+                    end
+                    # TODO: if multiple MustAlias arguments refer to different fields
+                    # of the same slot, we only apply the first refinement. Merging
+                    # multiple PartialStruct refinements would require a meet operation
+                    # on PartialStruct, which is not currently implemented.
+                    if slotrefinements[aidx] === nothing
+                        slotrefinements[aidx] = newtyp
+                    end
+                end
+            end
         end
     end
     return slotrefinements
@@ -1312,7 +1340,6 @@ end
 function const_prop_call(interp::AbstractInterpreter,
     mi::MethodInstance, result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState,
     concrete_eval_result::Union{Nothing,ConstCallResult}=nothing)
-    inf_cache = get_inference_cache(interp)
     𝕃ᵢ = typeinf_lattice(interp)
     forwarded_argtypes = compute_forwarded_argtypes(interp, arginfo, sv)
     # use `cache_argtypes` that has been constructed for fresh regular inference if available
@@ -1323,8 +1350,13 @@ function const_prop_call(interp::AbstractInterpreter,
         cache_argtypes = matching_cache_argtypes(𝕃ᵢ, mi)
     end
     argtypes = matching_cache_argtypes(𝕃ᵢ, mi, forwarded_argtypes, cache_argtypes)
-    inf_result = constprop_cache_lookup(𝕃ᵢ, mi, argtypes, inf_cache)
-    if inf_result !== nothing
+    inf_result = constprop_cache_lookup(𝕃ᵢ, mi, argtypes, get_inference_cache(interp))
+    if inf_result === missing
+        # a previous const-prop attempt hit a cycle and produced a limited result;
+        # don't re-attempt the same work that would lead to the same limited outcome
+        add_remark!(interp, sv, "[constprop] Found cached but limited constant inference result")
+        return nothing
+    elseif inf_result isa InferenceResult
         # found the cache for this constant prop'
         if inf_result.result === nothing
             add_remark!(interp, sv, "[constprop] Found cached constant inference in a cycle")
@@ -1361,6 +1393,13 @@ function const_prop_call(interp::AbstractInterpreter,
         pop!(callstack)
         # add to the cache to record that this will always fail
         push!(get_inference_cache(interp), inf_result)
+        return nothing
+    end
+    if inf_result.tombstone
+        # This const-prop attempt resolved but hit a cycle and produced a limited result.
+        # The tombstoned entry is already cached by `promotecache!` via the normal local
+        # cache mechanism, so `constprop_cache_lookup` will find it on subsequent lookups.
+        add_remark!(interp, sv, "[constprop] Constant inference produced a limited result")
         return nothing
     end
     existing_edge = result.edge

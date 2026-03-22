@@ -878,6 +878,29 @@ function setindex_widen_up_to(dest::AbstractArray{T}, el, i) where T
     return new
 end
 
+# Batch-widen an array given (index => value) pairs that don't fit the current element type.
+function setindices_widen_up_to(dest::AbstractArray, widen_buffers::Vector{Vector{Pair{Int, Any}}})
+    widen_pairs = reduce(vcat, widen_buffers; init=Pair{Int,Any}[])
+    isempty(widen_pairs) && return dest
+    new_T = eltype(dest)
+    for p in widen_pairs
+        new_T = promote_typejoin(new_T, typeof(p.second))
+    end
+    new_T === eltype(dest) && return dest
+    # Function barrier: specializes on new_T so the compiler sees
+    # concrete element types for both source and destination arrays.
+    return _setindices_widen_up_to(new_T, dest, widen_pairs)
+end
+
+function _setindices_widen_up_to(::Type{T}, dest::AbstractArray, widen_pairs::Vector{Pair{Int, Any}}) where T
+    new = similar(dest, T)
+    copyto!(new, dest)
+    for (idx, val) in widen_pairs
+        @inbounds new[idx] = val
+    end
+    return new
+end
+
 function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
     # collect to dest array, checking the type of each result. if a result does not
     # match, widen the result type and re-dispatch.

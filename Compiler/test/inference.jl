@@ -814,7 +814,19 @@ let fieldtype_tfunc(@nospecialize args...) =
     @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(42))
     @test !fieldtype_nothrow(Type{<:Tuple{Vararg{Int}}}, Const(1))
     @test TypeVar <: fieldtype_tfunc(Any, Any)
+    # JuliaLang/julia#30807: malformed types like `NTuple{<:Any, 3}` should not crash `fieldtype_tfunc`
+    @test fieldtype_tfunc(Const(NTuple{<:Any, 3}), Const(1)) == Union{}
+    @test fieldtype_tfunc(Const(NTuple{<:Any, 3}), Int) == Union{}
 end
+
+# JuliaLang/julia#30807: malformed types like `NTuple{<:Any, 3}` should not crash `fieldtype_tfunc`
+struct Issue30807
+    xs::NTuple{<:Any, 3}
+    Issue30807(xs...) = new(xs)
+end
+@test Base.infer_return_type((Int,Int,Int)) do x, y, z
+    Issue30807(x, y, z)
+end === Union{}
 
 # issue #11480
 @noinline f11480(x,y) = x
@@ -4419,6 +4431,16 @@ end == Int
     # since inference will bail out at the first matched `_inner!` and so call signature constraint won't be available
     callsig_backprop_invalidation_outer(a)
 end ≠ Int
+
+# MustAlias signature constraint propagation:
+# when a call like `f(x.value)` constrains `x.value` via the method signature,
+# the refinement should propagate back to the slot `x` as a PartialStruct
+check_int_positive(x::Int) = x > 0 || error("x must be positive")
+# basic case: field type should be narrowed after the call
+@test Base.infer_return_type((Some{Any},)) do x
+    check_int_positive(x.value)
+    return sin(x.value)
+end == Float64
 
 # https://github.com/JuliaLang/julia/issues/37866
 function issue37866(v::Vector{Union{Nothing,Float64}})

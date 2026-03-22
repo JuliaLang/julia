@@ -43,14 +43,14 @@ _numchildren(ex::SyntaxTree) = numchildren(ex)
 _numchildren(@nospecialize(ex)) = ex isa Expr ? length(ex.args) : 0
 
 _syntax_list(ctx::InterpolationContext) = SyntaxList(ctx)
-_syntax_list(ctx::ExprInterpolationContext) = Any[]
+_syntax_list(::ExprInterpolationContext) = Any[]
 
-_interp_makenode(ctx::InterpolationContext, ex, args) = mknode(ex, args)
-_interp_makenode(ctx::ExprInterpolationContext, ex, args) = Expr((ex::Expr).head, args...)
+_interp_makenode(::InterpolationContext, ex, args) = mknode(ex, args)
+_interp_makenode(::ExprInterpolationContext, ex, args) = Expr((ex::Expr).head, args...)
 
 _is_leaf(ex::SyntaxTree) = is_leaf(ex)
-_is_leaf(ex::Expr) = false
-_is_leaf(@nospecialize(ex)) = true
+_is_leaf(::Expr) = false
+_is_leaf(@nospecialize(_)) = true
 
 # Produce interpolated node for `$x` syntax
 function _interpolated_value(ctx::InterpolationContext, srcref, ex)
@@ -359,7 +359,7 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
 
     # Rest of lowering
     ctx4, ex4 = convert_closures(ctx3, ex3)
-    ctx5, ex5 = linearize_ir(ctx4, ex4)
+    _ctx5, ex5 = linearize_ir(ctx4, ex4)
     ci = to_lowered_expr(ex5)
     @assert ci isa Core.CodeInfo
 

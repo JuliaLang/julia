@@ -563,7 +563,7 @@ end
 #---------------------
 LoweringError:
 function ccall()
-#        └───┘ ── Invalid function name
+#        └───┘ ── invalid function name
 end
 
 ########################################
@@ -583,7 +583,7 @@ end
 #---------------------
 LoweringError:
 function ccall{<:T}()
-#        └───┘ ── Invalid function name
+#        └───┘ ── invalid function name
 end
 
 ########################################

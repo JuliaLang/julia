@@ -496,7 +496,8 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
          [K"tryfinally" t f scope] -> (t, nothing, nothing, f, make_label(ctx, f), scope)
      end
 
-    end_label = !in_tail_pos || !isnothing(finally_block) ? make_label(ctx, ex) : nothing
+    has_finally_block = !isnothing(finally_block)
+    end_label = !in_tail_pos || has_finally_block ? make_label(ctx, ex) : nothing
     try_result = needs_value && !in_tail_pos ? new_local_binding(ctx, ex, "try_result") : nothing
 
     enter_scope_arg = SyntaxList(ctx)
@@ -511,7 +512,7 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         handler_token
         [K"enter" catch_label enter_scope_arg...]
     ])
-    if !isnothing(finally_block)
+    if has_finally_block
         # TODO: Trivial finally block optimization from JuliaLang/julia#52593 (or
         # support a special form for @with)?
         finally_handler = FinallyHandler(new_local_binding(ctx, finally_block, "finally_tag"),
@@ -558,7 +559,8 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     # Emit either catch or finally block. A combined try/catch/finally block
     # was split into separate trycatchelse and tryfinally blocks earlier.
     emit(ctx, catch_label) # <- Exceptional control flow enters here
-    if !isnothing(finally_block)
+    if has_finally_block
+        @assert @isdefined(finally_handler) "compiler hint"
         # Attribute the postfix and prefix to the finally block as a whole.
         srcref = finally_block
         enter_finally_block(ctx, srcref, :rethrow, nothing)

@@ -34,7 +34,7 @@ end
 
 function Base.var"@nospecialize"(__context__::MacroContext, exs::SyntaxTree...)
     if length(exs) == 0
-        @ast __context__ __context__.macrocall [K"meta" "nospecialize"::K"Symbol"]
+        @ast __context__ __context__.macrocall [K"meta" "nospecialize"::K"Identifier"]
     elseif length(exs) == 1
         _apply_nospecialize(__context__, only(exs))
     else
