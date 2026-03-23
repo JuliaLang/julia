@@ -29,6 +29,8 @@ FLAGS_GCC += -Wno-unused-result
 # GCC is throwing warnings like `warning: 'int __builtin_memcmp_eq(const void*, const void*, long unsigned int)' specified bound 18446744073709551615 exceeds maximum object size 9223372036854775807` in llvm's StringRef.h == seemingly because it doesn't realise the size can't be 0.
 FLAGS_GCC += -Wno-stringop-overflow
 FLAGS_GCC += -Wno-stringop-overread
+# LLVM 21 causes maybe uninitialized warnings in include/llvm/ADT/DenseMap.h
+FLAGS_GCC += -Wno-maybe-uninitialized
 
 # Required to be allowed to use nullability extension and not be required to annotate all of everything
 JCFLAGS_CLANG += -Wno-atomic-alignment -Wno-nullability-extension -Wno-nullability-completeness
