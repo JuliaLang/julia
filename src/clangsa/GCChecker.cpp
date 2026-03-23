@@ -1050,7 +1050,7 @@ bool GCChecker::processAllocationOfResult(const CallEvent &Call,
   SymbolRef Sym = Call.getReturnValue().getAsSymbol();
   if (!Sym) {
     SVal S = C.getSValBuilder().conjureSymbolVal(
-        Call.getOriginExpr(), C.getLocationContext(), QT, C.blockCount());
+        C.getCFGElementRef(), C.getLocationContext(), QT, C.blockCount());
     State = State->BindExpr(Call.getOriginExpr(), C.getLocationContext(), S);
     Sym = S.getAsSymbol();
   }
@@ -1146,8 +1146,8 @@ SymbolRef GCChecker::getSymbolForResult(const Expr *Result,
   if (Loaded.isUnknown() || !Loaded.getAsSymbol()) {
     if (OldValS || GCChecker::isGCTracked(Result)) {
       Loaded = C.getSValBuilder().conjureSymbolVal(
-          nullptr, Result, C.getLocationContext(), Result->getType(),
-          C.blockCount());
+          nullptr, C.getCFGElementRef(), C.getLocationContext(),
+          Result->getType(), C.blockCount());
       State = State->bindLoc(*ValLoc, Loaded, C.getLocationContext());
       // State = State->BindExpr(Result, C.getLocationContext(),
       // State->getSVal(*ValLoc));
@@ -1201,7 +1201,7 @@ void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
       return;
     }
     ResultVal = C.getSValBuilder().conjureSymbolVal(
-        Result, C.getLocationContext(), Result->getType(),
+        C.getCFGElementRef(), C.getLocationContext(), Result->getType(),
         C.blockCount());
     State = State->BindExpr(Result, C.getLocationContext(), ResultVal);
   }
@@ -1544,7 +1544,8 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
       SVal Items = State->getSVal(ItemsLoc);
       if (Items.isUnknown()) {
         Items = C.getSValBuilder().conjureSymbolVal(
-            CE, C.getLocationContext(), FD->getType(), C.blockCount());
+            C.getCFGElementRef(), C.getLocationContext(), FD->getType(),
+            C.blockCount());
         State = State->bindLoc(ItemsLoc, Items, C.getLocationContext());
       }
       assert(Items.getAsRegion());
