@@ -1568,6 +1568,34 @@ JL_CALLABLE(jl_f_declare_const)
     return nargs > 2 ? args[2] : jl_nothing;
 }
 
+// define_method(module::Module, name::Symbol) - declare generic function
+// define_method(module::Module, fname_or_mt, argdata, code) - define method
+JL_CALLABLE(jl_f_define_method)
+{
+    if (nargs != 2 && nargs != 4)
+        jl_error("define_method requires 2 or 4 arguments");
+    JL_TYPECHK(define_method, module, args[0]);
+    jl_module_t *module = (jl_module_t *)args[0];
+    jl_check_top_level_effect(module, "define_method");
+
+    // Generic function declaration: define_method(module, name)
+    if (nargs == 2) {
+        JL_TYPECHK(define_method, symbol, args[1]);
+        jl_sym_t *fname = (jl_sym_t*)args[1];
+        return jl_declare_const_gf(module, fname);
+    }
+
+    // Method definition: define_method(module, fname_or_mt, argdata, code)
+    jl_value_t *fname = args[1];
+    jl_methtable_t *mt = NULL;
+    if (jl_is_mtable(fname))
+        mt = (jl_methtable_t*)fname;
+    jl_value_t *atypes = args[2];
+    jl_value_t *meth = args[3];
+    jl_method_t *ret = jl_method_def((jl_svec_t*)atypes, mt, (jl_code_info_t*)meth, module);
+    return (jl_value_t *)ret;
+}
+
 // import, using --------------------------------------------------------------
 
 // Import binding `from.sym` as `asname` into `to`:
