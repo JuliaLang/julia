@@ -4,7 +4,7 @@
 """
     Base.RefValue{T}(x::T) <: Ref{T}
 
-`Base.RefValue{T}`` is a mutable container for a single value of type T,
+`Base.RefValue{T}` is a mutable container for a single value of type T,
 and is the return type of `Ref(x)`. See also [`Ref`](@ref).
 
 """
