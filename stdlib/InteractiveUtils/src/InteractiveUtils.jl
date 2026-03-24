@@ -112,6 +112,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     if !isempty(Base.GIT_VERSION_INFO.commit_short_raw)
         println(io, "  Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")
     end
+    println(io, "  GC: ", unsafe_string(ccall(:jl_gc_active_impl, Ptr{UInt8}, ())))
     official_release = Base.TAGGED_RELEASE_BANNER == "Official https://julialang.org release"
     if Base.GIT_VERSION_INFO.tagged_commit && !official_release
         println(io,
@@ -164,7 +165,6 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
         println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
     end
     println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
-    println(io, "  GC: ", unsafe_string(ccall(:jl_gc_active_impl, Ptr{UInt8}, ())))
     println(io, """Threads: $(Threads.nthreads(:default)) default, $(Threads.nthreads(:interactive)) interactive, \
       $(Threads.ngcthreads()) GC (on $(Sys.CPU_THREADS) virtual cores)""")
 
