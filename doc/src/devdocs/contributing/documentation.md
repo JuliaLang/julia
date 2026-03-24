@@ -2,7 +2,7 @@
 
 *By contributing documentation to Julia, you are agreeing to release it under the [MIT License](https://github.com/JuliaLang/julia/tree/master/LICENSE.md).*
 
-Julia's documentation source files are stored in the `doc/` directory and all docstrings are found in `base/`. Like everything else these can be modified using `git`. Documentation is built with [Documenter.jl](https://github.com/JuliaDocs/Documenter.jl), which uses Markdown syntax. The HTML documentation can be built locally by running
+Julia's documentation source files are stored in the `doc/` directory and all docstrings are found in `base/`. Like everything else, these can be modified using `git`. Documentation is built with [Documenter.jl](https://github.com/JuliaDocs/Documenter.jl), which uses Markdown syntax. The HTML documentation can be built locally by running
 
 ```
 make docs
@@ -13,6 +13,7 @@ from Julia's root directory. This will rebuild the Julia system image, then inst
 > **Note**
 >
 > When making changes to any of Julia's documentation it is recommended that you run `make docs` to check that your changes are valid and do not produce any errors before opening a pull request.
+> If not already on your system, the `make` command can be installed using [GNUWin32](https://gnuwin32.sourceforge.net/packages/make.htm) on Windows and [XCode Tools](https://developer.apple.com/documentation/xcode/installing-the-command-line-tools/) on Mac.
 
 Below are outlined the three most common types of documentation changes and the steps required to perform them. Please note that the following instructions do not cover the full range of features provided by Documenter.jl. Refer to [Documenter's documentation](https://juliadocs.github.io/Documenter.jl/stable) if you encounter anything that is not covered by the sections below.
 
