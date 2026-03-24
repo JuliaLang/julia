@@ -9,7 +9,7 @@ JCPPFLAGS_COMMON += $(CPPFLAGS) $(JL_CPPFLAGS)
 JLDFLAGS += $(LDFLAGS) $(JL_LDFLAGS)
 
 SRCS := hashing timefuncs ptrhash operators utf8 ios htable bitvector \
-	int2str libsupportinit arraylist strtod rle
+	int2str libsupportinit arraylist strtod rle eytzinger
 ifeq ($(OS),WINNT)
 SRCS += asprintf strptime
 ifeq ($(ARCH),i686)

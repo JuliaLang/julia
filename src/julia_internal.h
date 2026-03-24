@@ -516,11 +516,6 @@ extern tracer_cb jl_newmeth_tracer;
 void jl_call_tracer(tracer_cb callback, jl_value_t *tracee);
 void print_func_loc(JL_STREAM *s, jl_method_t *m);
 extern jl_array_t *_jl_debug_method_invalidation JL_GLOBALLY_ROOTED;
-JL_DLLEXPORT extern arraylist_t jl_linkage_blobs; // external linkage: sysimg/pkgimages
-JL_DLLEXPORT extern arraylist_t jl_image_relocs;  // external linkage: sysimg/pkgimages
-JL_DLLEXPORT extern arraylist_t jl_top_mods;  // external linkage: sysimg/pkgimages
-extern arraylist_t eytzinger_image_tree;
-extern arraylist_t eytzinger_idxs;
 
 extern JL_DLLEXPORT size_t jl_page_size;
 extern JL_DLLEXPORT size_t jl_hugepage_size;
@@ -1324,6 +1319,7 @@ void jl_init_llvm(void);
 void jl_init_runtime_ccall(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_intrinsic_properties(void);
+void jl_init_staticdata(void);
 // TypeApp: immutable struct with head::Any, param::Any
 // Represents a single lazy type application step (like UnionAll for where bindings).
 typedef struct {
@@ -1410,14 +1406,6 @@ extern pthread_mutex_t in_signal_lock;
 #endif
 
 void jl_set_gc_and_wait(jl_task_t *ct);
-
-// Query if a Julia object is if a permalloc region (due to part of a sys- pkg-image)
-STATIC_INLINE size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
-{
-    return jl_image_relocs.len;
-}
-
-size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
 
 // Query if this object is perm-allocated in an image.
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
