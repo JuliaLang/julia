@@ -100,5 +100,11 @@ for op in (:rem, :mod)
 end
 Base.sqrt(x::Furlong) = _div(sqrt(x.val), x, Val(2))
 Base.muladd(x::Furlong, y::Furlong, z::Furlong) = x*y + z
+Base.muladd(x::Furlong, y::Number, z::Number) = x*y + z
+Base.muladd(x::Furlong, y::Furlong, z::Number) = x*y + z
+Base.muladd(x::Number, y::Furlong, z::Number) = x*y + z
+Base.muladd(x::Number, y::Number, z::Furlong) = x*y + z
+Base.muladd(x::Number, y::Furlong, z::Furlong) = x*y + z
+Base.muladd(x::Furlong, y::Number, z::Furlong) = x*y + z
 
 end

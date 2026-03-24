@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Prevent this from putting anything into the Main namespace
-@eval Core.Module() begin
+@eval Base module __precompile_script
 
 if Threads.maxthreadid() != 1
     @warn "Running this file with multiple Julia threads may lead to a build error" Threads.maxthreadid()
@@ -34,19 +34,33 @@ hardcoded_precompile_statements = """
 precompile(Base.unsafe_string, (Ptr{UInt8},))
 precompile(Base.unsafe_string, (Ptr{Int8},))
 
-# loading.jl
+# used by REPL
+precompile(Tuple{typeof(Base.getproperty), Base.Terminals.TTYTerminal, Symbol})
+precompile(Tuple{typeof(Base.reseteof), Base.Terminals.TTYTerminal})
+precompile(Tuple{typeof(Base.Terminals.enable_bracketed_paste), Base.Terminals.TTYTerminal})
+precompile(Tuple{typeof(Base.Terminals.width), Base.Terminals.TTYTerminal})
+precompile(Tuple{typeof(Base.Terminals.height), Base.Terminals.TTYTerminal})
+precompile(Tuple{typeof(Base.write), Base.Terminals.TTYTerminal, Array{UInt8, 1}})
+precompile(Tuple{typeof(Base.isempty), Base.AnnotatedString{String}}
+
+# loading.jl - without these each precompile worker would precompile these because they're hit before pkgimages are loaded
 precompile(Base.__require, (Module, Symbol))
 precompile(Base.__require, (Base.PkgId,))
 precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
 precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
 precompile(Tuple{typeof(Base.Threads.atomic_add!), Base.Threads.Atomic{Int}, Int})
 precompile(Tuple{typeof(Base.Threads.atomic_sub!), Base.Threads.Atomic{Int}, Int})
+precompile(Tuple{Type{Pair{A, B} where B where A}, Base.PkgId, UInt128})
+precompile(Tuple{typeof(Base.in!), Tuple{Module, String, UInt64, UInt32, Float64}, Base.Set{Any}})
+precompile(Tuple{typeof(Base.Compiler.ir_to_codeinf!), Base.Compiler.OptimizationState{Base.Compiler.NativeInterpreter}})
+precompile(Tuple{typeof(Base.getindex), Type{Pair{Base.PkgId, UInt128}}, Pair{Base.PkgId, UInt128}, Pair{Base.PkgId, UInt128}, Pair{Base.PkgId, UInt128}, Vararg{Pair{Base.PkgId, UInt128}}})
+precompile(Tuple{typeof(Base.Compiler.ir_to_codeinf!), Base.Compiler.OptimizationState{Base.Compiler.NativeInterpreter}, Core.SimpleVector})
+precompile(Tuple{typeof(Base.Compiler.ir_to_codeinf!), Base.Compiler.OptimizationState{Base.Compiler.NativeInterpreter}})
 
 # LazyArtifacts (but more generally helpful)
 precompile(Tuple{Type{Base.Val{x} where x}, Module})
 precompile(Tuple{Type{NamedTuple{(:honor_overrides,), T} where T<:Tuple}, Tuple{Bool}})
 precompile(Tuple{typeof(Base.unique!), Array{String, 1}})
-precompile(Tuple{typeof(Base.invokelatest), Any})
 precompile(Tuple{typeof(Base.vcat), Array{String, 1}, Array{String, 1}})
 
 # Pkg loading
@@ -55,8 +69,6 @@ precompile(Tuple{typeof(Base.append!), Array{String, 1}, Array{String, 1}})
 precompile(Tuple{typeof(Base.join), Array{String, 1}, Char})
 precompile(Tuple{typeof(Base.getindex), Base.Dict{Any, Any}, Char})
 precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, Char})
-precompile(Tuple{typeof(Base.convert), Type{Base.Dict{String, Base.Dict{String, String}}}, Base.Dict{String, Any}})
-precompile(Tuple{typeof(Base.convert), Type{Base.Dict{String, Array{String, 1}}}, Base.Dict{String, Any}})
 
 # REPL
 precompile(isequal, (String, String))
@@ -74,6 +86,7 @@ precompile(Tuple{typeof(Base.promoteK), Type, Base.Dict{String, Any}})
 precompile(Tuple{typeof(Base.promoteV), Type, Base.Dict{String, Any}, Base.Dict{String, Any}})
 precompile(Tuple{typeof(Base.eval_user_input), Base.PipeEndpoint, Any, Bool})
 precompile(Tuple{typeof(Base.get), Base.PipeEndpoint, Symbol, Bool})
+precompile(Tuple{typeof(Base.HashArrayMappedTries.next), Base.HashArrayMappedTries.HashState{Base.ScopedValues.ScopedValue{Any}}})
 
 # used by Revise.jl
 precompile(Tuple{typeof(Base.parse_cache_header), String})
@@ -106,6 +119,10 @@ precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, 
 precompile(Base.CoreLogging.env_override_minlevel, (Symbol, Module))
 precompile(Base.StackTraces.lookup, (Ptr{Nothing},))
 precompile(Tuple{typeof(Base.run_module_init), Module, Int})
+precompile(Tuple{Type{Base.VersionNumber}, Int32, Int32, Int32})
+
+# Presence tested in the tests
+precompile(Tuple{typeof(Base.print), Base.IOStream, String})
 
 # precompilepkgs
 precompile(Tuple{typeof(Base.get), Type{Array{String, 1}}, Base.Dict{String, Any}, String})
@@ -140,6 +157,9 @@ for match = Base._methods(+, (Int, Int), -1, Base.get_world_counter())
 end
 empty!(Set())
 push!(push!(Set{Union{GlobalRef,Symbol}}(), :two), GlobalRef(Base, :two))
+get!(ENV, "___DUMMY", "")
+ENV["___DUMMY"]
+delete!(ENV, "___DUMMY")
 (setindex!(Dict{String,Base.PkgId}(), Base.PkgId(Base), "file.jl"))["file.jl"]
 (setindex!(Dict{Symbol,Vector{Int}}(), [1], :two))[:two]
 (setindex!(Dict{Base.PkgId,String}(), "file.jl", Base.PkgId(Base)))[Base.PkgId(Base)]
@@ -208,6 +228,10 @@ if Artifacts !== nothing
       cd(oldpwd)
     end
     dlopen("libjulia$(Base.isdebugbuild() ? "-debug" : "")", RTLD_LAZY | RTLD_DEEPBIND)
+    """
+    hardcoded_precompile_statements *= """
+    precompile(Tuple{typeof(Artifacts._artifact_str), Module, String, Base.SubString{String}, String, Base.Dict{String, Any}, Base.SHA1, Base.BinaryPlatforms.Platform, Base.Val{Artifacts}})
+    precompile(Tuple{typeof(Base.tryparse), Type{Base.BinaryPlatforms.Platform}, String})
     """
 end
 
@@ -323,8 +347,8 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             uuid = "$pkguuid"
             """)
         touch(joinpath(pkgpath, "Manifest.toml"))
-        tmp_prec = tempname(prec_path)
-        tmp_proc = tempname(prec_path)
+        tmp_prec = tempname(prec_path; cleanup=false)
+        tmp_proc = tempname(prec_path; cleanup=false)
         s = """
             pushfirst!(DEPOT_PATH, $(repr(joinpath(prec_path,"depot"))));
             Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp_prec));
@@ -352,10 +376,10 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
     PrecompileStagingArea = Module()
     for (_pkgid, _mod) in Base.loaded_modules
         if !(_pkgid.name in ("Main", "Core", "Base"))
-            eval(PrecompileStagingArea, :(const $(Symbol(_mod)) = $_mod))
+            Core.eval(PrecompileStagingArea, :(const $(Symbol(_mod)) = $_mod))
         end
     end
-    eval(PrecompileStagingArea, :(const Compiler = Base.Compiler))
+    Core.eval(PrecompileStagingArea, :(const Compiler = Base.Compiler))
 
     n_succeeded = 0
     # Make statements unique
@@ -381,6 +405,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             if precompile(ps...)
                 n_succeeded += 1
             else
+                Base.get_bool_env("CI", false) && error("Precompilation failed for $statement")
                 @warn "Failed to precompile expression" form=statement _module=nothing _file=nothing _line=0
             end
             failed = length(statements) - n_succeeded
@@ -388,6 +413,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             print_state("step3" => string("R$n_succeeded", failed > 0 ? " ($failed failed)" : ""))
         catch ex
             # See #28808
+            Base.get_bool_env("CI", false) && error("Precompilation failed for $statement")
             @warn "Failed to precompile expression" form=statement exception=(ex,catch_backtrace()) _module=nothing _file=nothing _line=0
         end
     end

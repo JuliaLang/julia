@@ -562,8 +562,7 @@ Passing `sample_rate=1.0` will make it record everything (which is slow);
 
     Since Julia 1.11, all allocations should have a type reported.
 
-For more details on how to use this tool, please see the following talk from JuliaCon 2022:
-https://www.youtube.com/watch?v=BFvpwC8hEWQ
+For more details on how to use this tool, please see [the talk from JuliaCon 2022](https://www.youtube.com/watch?v=BFvpwC8hEWQ).
 
 ##### Allocation Profiler Example
 

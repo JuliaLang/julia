@@ -303,6 +303,31 @@ end
     @test @fastmath (1 + 1 / n) ^ 4503599627370496 ≈ ℯ
 end
 
+# Test that x^2 is inlined to fmul for all float types (issue #60639)
+@testset "pow_fast inlining for literal powers" begin
+    for T in (Float16, Float32, Float64)
+        f(x) = @fastmath x^2
+        llvm = sprint(code_llvm, f, (T,))
+        # Should be inlined to fmul, not call power_by_squaring
+        @test occursin("fmul", llvm)
+        @test !occursin("power_by_squaring", llvm)
+    end
+end
+
+# Test correctness of pow_fast for Float32/Float16 with various exponents (issue #60639)
+@testset "pow_fast correctness" begin
+    for T in (Float16, Float32)
+        x = T(2.5)
+        # Exponents that fit in Int32
+        @test (@fastmath x^2) ≈ x^2
+        @test (@fastmath x^10) ≈ x^10
+        @test (@fastmath x^(-3)) ≈ x^(-3)
+        # Exponents that don't fit in Int32
+        big_exp = Int64(2)^40
+        @test (@fastmath x^big_exp) ≈ x^big_exp
+    end
+end
+
 @testset "sincos fall-backs" begin
     struct FloatWrapper
         inner::Float64

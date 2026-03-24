@@ -163,6 +163,10 @@ end
 @test merge(NamedTuple(), [:a=>1, :b=>2, :c=>3, :a=>4, :c=>5]) == (a=4, b=2, c=5)
 @test merge((c=0, z=1), [:a=>1, :b=>2, :c=>3, :a=>4, :c=>5]) == (c=5, z=1, a=4, b=2)
 
+# https://github.com/JuliaLang/julia/issues/59292
+@test merge((; a = 1), Base.Pairs((; b = 2, c = 3), (:b,))) == (a = 1, b = 2)
+@test merge((; a = 1), Base.pairs((; b = 2, c = 3))) == (a = 1, b = 2, c = 3)
+
 @test keys((a=1, b=2, c=3)) == (:a, :b, :c)
 @test keys(NamedTuple()) == ()
 @test keys((a=1,)) == (:a,)

@@ -138,7 +138,8 @@ void _maybe_record_alloc_to_profile(jl_value_t *val, size_t size, jl_datatype_t 
 
     auto& profile = global_profile.per_thread_profiles[thread_id];
 
-    auto sample_val = double(rand()) / double(RAND_MAX);
+    jl_ptls_t ptls = jl_current_task->ptls;
+    auto sample_val = double(cong(UINT64_MAX, &ptls->rngseed)) / double(UINT64_MAX);
     auto should_record = sample_val <= global_profile.sample_rate;
     if (!should_record) {
         return;

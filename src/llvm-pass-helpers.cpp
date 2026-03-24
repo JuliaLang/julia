@@ -18,6 +18,9 @@
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
 
+#define STR(csym)           #csym
+#define XSTR(csym)          STR(csym)
+
 using namespace llvm;
 
 JuliaPassContext::JuliaPassContext()
@@ -72,17 +75,24 @@ void JuliaPassContext::initAll(Module &M)
     T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
 }
 
-llvm::CallInst *JuliaPassContext::getPGCstack(llvm::Function &F) const
+llvm::Value *JuliaPassContext::getPGCstack(llvm::Function &F) const
 {
-    if (!pgcstack_getter && !adoptthread_func)
-        return nullptr;
-    for (auto &I : F.getEntryBlock()) {
-        if (CallInst *callInst = dyn_cast<CallInst>(&I)) {
-            Value *callee = callInst->getCalledOperand();
-            if ((pgcstack_getter && callee == pgcstack_getter) ||
-                (adoptthread_func && callee == adoptthread_func)) {
-                return callInst;
+    if (pgcstack_getter || adoptthread_func) {
+        for (auto &I : F.getEntryBlock()) {
+            if (CallInst *callInst = dyn_cast<CallInst>(&I)) {
+                Value *callee = callInst->getCalledOperand();
+                if ((pgcstack_getter && callee == pgcstack_getter) ||
+                    (adoptthread_func && callee == adoptthread_func)) {
+                    return callInst;
+                }
             }
+        }
+    }
+    for (auto &arg : F.args()) {
+        // Check for the "gcstack" attribute
+        AttributeSet attrs = F.getAttributes().getParamAttrs(arg.getArgNo());
+        if (attrs.hasAttribute("gcstack")) {
+            return &arg;
         }
     }
     return nullptr;
@@ -234,7 +244,7 @@ namespace jl_intrinsics {
         SAFEPOINT_NAME,
         [](Type *T_size) {
             auto &ctx = T_size->getContext();
-            auto T_psize = T_size->getPointerTo();
+            auto T_psize = PointerType::getUnqual(ctx);
             auto intrinsic = Function::Create(
                 FunctionType::get(
                     Type::getVoidTy(ctx),

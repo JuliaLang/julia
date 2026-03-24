@@ -176,7 +176,7 @@ debug info, respectively, and so will make debugging more difficult.
 We have identified many small changes to Base that significantly increase the set of programs
 that can be reliably trimmed. Unfortunately some of those changes would be considered breaking,
 and so are only applied when trimming is requested (this is done by an external build script,
-currently maintained inside the test suite as `contrib/juliac-buildscript.jl`).
+currently maintained inside the test suite as `contrib/juliac/juliac-buildscript.jl`).
 Therefore in many cases trimming will require you to opt in to new variants of Base and some
 standard libraries.
 

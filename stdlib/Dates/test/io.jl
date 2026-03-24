@@ -5,7 +5,7 @@ module IOTests
 using Test
 using Dates
 
-const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
 include(joinpath(BASE_TEST_PATH, "testhelpers", "withlocales.jl"))
 
 @testset "string/show representation of Date" begin

@@ -229,8 +229,8 @@ display(d::AbstractDisplay, mime::AbstractString, @nospecialize x) = display(d, 
 display(mime::AbstractString, @nospecialize x) = display(MIME(mime), x)
 
 """
-    displayable(mime) -> Bool
-    displayable(d::AbstractDisplay, mime) -> Bool
+    displayable(mime)::Bool
+    displayable(d::AbstractDisplay, mime)::Bool
 
 Return a boolean value indicating whether the given `mime` type (string) is displayable by
 any of the displays in the current display stack, or specifically by the display `d` in the
@@ -372,7 +372,7 @@ function displayable(m::MIME)
 end
 
 ###########################################################################
-# The redisplay method can be overridden by a AbstractDisplay in order to
+# The redisplay method can be overridden by an AbstractDisplay in order to
 # update an existing display (instead of, for example, opening a new
 # window), and is used by the IJulia interface to defer display
 # until the next interactive prompt.  This is especially useful

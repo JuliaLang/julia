@@ -31,7 +31,7 @@ $(SRCCACHE)/curl-$(CURL_VER).tar.bz2: | $(SRCCACHE)
 
 $(SRCCACHE)/curl-$(CURL_VER)/source-extracted: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 	$(JLCHECKSUM) $<
-	cd $(dir $<) && $(TAR) jxf $(notdir $<)
+	cd $(dir $<) && $(TAR) -jxf $(notdir $<)
 	echo 1 > $@
 
 checksum-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
@@ -49,17 +49,18 @@ CURL_CONFIGURE_FLAGS := $(CONFIGURE_COMMON)				\
         --without-brotli
 # A few things we actually enable
 CURL_CONFIGURE_FLAGS +=											\
-        --with-libssh2=${build_prefix} --with-zlib=${build_prefix} --with-nghttp2=${build_prefix}	\
+        --with-libssh2=${build_prefix} --with-zlib=${build_prefix} --with-zstd=${build_prefix} --with-nghttp2=${build_prefix}	\
         --enable-versioned-symbols
 
 # We use different TLS libraries on different platforms.
 #   On Windows, we use schannel
-#   On MacOS, we use SecureTransport
-#   On Linux, we use OpenSSL
+#   On macOS, we use OpenSSL and validate using SecTrust by default
+#   On other platforms, we use OpenSSL
 ifeq ($(OS), WINNT)
 CURL_TLS_CONFIGURE_FLAGS := --with-schannel
 else ifeq ($(OS), Darwin)
-CURL_TLS_CONFIGURE_FLAGS := --with-secure-transport
+CURL_TLS_CONFIGURE_FLAGS := --with-openssl
+CURL_TLS_CONFIGURE_FLAGS := --with-apple-sectrust
 else
 CURL_TLS_CONFIGURE_FLAGS := --with-openssl
 endif
@@ -89,7 +90,7 @@ $(eval $(call staged-install, \
 
 clean-curl:
 	-rm -f $(BUILDDIR)/curl-$(CURL_VER)/build-configured $(BUILDDIR)/curl-$(CURL_VER)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/curl-$(CURL_VER) clean
+	-if [ -d $(BUILDDIR)/curl-$(CURL_VER) ]; then $(MAKE) -C $(BUILDDIR)/curl-$(CURL_VER) clean; fi
 
 distclean-curl:
 	rm -rf $(SRCCACHE)/curl-$(CURL_VER).tar.bz2 $(SRCCACHE)/curl-$(CURL_VER) $(BUILDDIR)/curl-$(CURL_VER)

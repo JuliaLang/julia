@@ -23,7 +23,7 @@ environments provide a way to access documentation directly:
 `Docs.hasdoc(module, name)::Bool` tells whether a name has a docstring. `Docs.undocumented_names(module; all)`
 returns the undocumented names in a module.
 
-## Writing Documentation
+## [Writing Documentation](@id man-writing-documentation)
 
 Julia enables package developers and users to document functions, types and other objects easily
 via a built-in documentation system.
@@ -34,9 +34,11 @@ The basic syntax is simple: any string appearing just before an object
 the documented object. Here is a basic example:
 
 ```julia
-"Tell whether there are too foo items in the array."
+"Tell whether there are too many foo items in the array."
 foo(xs::Array) = ...
 ```
+!!! note "Reminder"
+    Any empty lines between the docstring and the object being documented detach the former from the latter, making the docstring ineffective.
 
 Documentation is interpreted as [Markdown](https://en.wikipedia.org/wiki/Markdown), so you can
 use indentation and code fences to delimit code examples from text. Technically, any object can
@@ -81,6 +83,35 @@ As in the example above, we recommend following some simple conventions when wri
    accepts many keyword arguments, only include a `<keyword arguments>` placeholder in the signature
    (i.e. `f(x; <keyword arguments>)`), and give the complete list under an `# Arguments` section
    (see point 4 below).
+
+   Use this style to document the return type or give the return value a name:
+
+   ```julia
+   # Naming the return value or its type is not necessary (this is the most common case)
+   """
+      sum(itr; [init])
+
+   ...
+   """
+
+   # The return type is easily documented and critical to the semantics of this function
+   """
+      vec(x::AbstractArray)::AbstractVector
+
+   ...
+   """
+
+   # Naming and/or destructuring the return value clarifies the semantics of this function
+   """
+      splitdir(path::AbstractString) -> (dir::AbstractString, file::AbstractString)
+   ...
+   """
+   ```
+   When included, a return type should be written after the signature, separated by `::`,
+   while a named return value should be separated by ` -> `, with a space on both sides.
+   Return types and return values should be valid Julia expressions when possible.
+   Macro docstring signatures that annotate return types or return values should use
+   parentheses to clarify where the macro arguments end and return type or return value begins.
 2. Include a single one-line sentence describing what the function does or what the object represents
    after the simplified signature block. If needed, provide more details in a second paragraph, after
    a blank line.
@@ -217,12 +248,12 @@ As in the example above, we recommend following some simple conventions when wri
 
    Docstrings are edited using the same tools as code. Therefore, the same conventions should apply.
    It is recommended that lines are at most 92 characters wide.
-6. Provide information allowing custom types to implement the function in an
+10. Provide information allowing custom types to implement the function in an
    `# Implementation` section. These implementation details are intended for developers
    rather than users, explaining e.g. which functions should be overridden and which
    functions automatically use appropriate fallbacks. Such details are best kept separate
    from the main description of the function's behavior.
-5. For long docstrings, consider splitting the documentation with an
+11. For long docstrings, consider splitting the documentation with an
    `# Extended help` header. The typical help-mode will show only the
    material above the header; you can access the full help by adding a '?'
    at the beginning of the expression (i.e., "??foo" rather than "?foo").
@@ -274,7 +305,7 @@ with the `catdoc` function, which can of course be overridden for custom types.
 
 ## Advanced Usage
 
-The `@doc` macro associates its first argument with its second in a per-module dictionary called
+The [`@doc`](@ref Core.@doc) macro associates its first argument with its second in a per-module dictionary called
 `META`.
 
 To make it easier to write documentation, the parser treats the macro name `@doc` specially:
@@ -289,7 +320,8 @@ Therefore the following syntax is parsed as a 2-argument call to `@doc`:
 f(x) = x
 ```
 
-This makes it possible to use expressions other than normal string literals (such as the `raw""` string macro) as a docstring.
+This makes it possible to use expressions other than normal string literals (such as the
+[`raw"..."`](@ref @raw_str) string macro) as a docstring.
 
 When used for retrieving documentation, the `@doc` macro (or equally, the `doc` function) will
 search all `META` dictionaries for metadata relevant to the given object and return it. The returned
@@ -301,6 +333,10 @@ documentation between different versions of a function:
 @doc "..." foo!
 @doc (@doc foo!) foo
 ```
+
+!!! compat "Julia 1.11"
+    In Julia 1.11 and newer, retrieving documentation with the `@doc` macro requires that
+    the `REPL` stdlib is loaded.
 
 Or for use with Julia's metaprogramming functionality:
 
@@ -374,10 +410,10 @@ In the following examples `"..."` is used to illustrate an arbitrary docstring.
 
 ### `$` and `\` characters
 
-The `$` and `\` characters are still parsed as string interpolation or start of an escape sequence
-in docstrings too. The `raw""` string macro together with the `@doc` macro can be used to avoid
-having to escape them. This is handy when the docstrings include LaTeX or Julia source code examples
-containing interpolation:
+The `$` and `\` characters are still parsed as string interpolation or start of an escape
+sequence in docstrings too. The [`raw"..."`](@ref @raw_str) string macro together with the
+[`@doc`](@ref Core.@doc) macro can be used to avoid having to escape them. This is handy
+when the docstrings include LaTeX or Julia source code examples containing interpolation:
 
 ````julia
 @doc raw"""

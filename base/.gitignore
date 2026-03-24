@@ -7,5 +7,6 @@
 /uv_constants.jl
 /version_git.jl
 /version_git.jl.phony
+/version_git_dirty
 /userimg.jl
 /JuliaSyntax

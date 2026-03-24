@@ -45,8 +45,8 @@ function includeDir()
     return abspath(Sys.BINDIR, Base.INCLUDEDIR, "julia")
 end
 
-function ldflags(doframework)
-    doframework && return "-F$(shell_escape(frameworkDir()))"
+function ldflags(; framework::Bool=false)
+    framework && return "-F$(shell_escape(frameworkDir()))"
     fl = "-L$(shell_escape(libDir()))"
     if Sys.iswindows()
         fl = fl * " -Wl,--stack,8388608"
@@ -56,27 +56,40 @@ function ldflags(doframework)
     return fl
 end
 
-function ldlibs(doframework)
+function ldrpath()
+    libname = if Base.isdebugbuild()
+        "julia-debug"
+    else
+        "julia"
+    end
+    return "-Wl,-rpath,$(shell_escape(private_libDir())) -Wl,-rpath,$(shell_escape(libDir())) -l$libname"
+end
+
+function ldlibs(; framework::Bool=false, rpath::Bool=true)
     # Return "Julia" for the framework even if this is a debug build.
     # If the user wants the debug framework, DYLD_IMAGE_SUFFIX=_debug
     # should be used (refer to man 1 dyld).
-    doframework && return "-framework $(Base.DARWIN_FRAMEWORK_NAME)"
+    framework && return "-framework $(Base.DARWIN_FRAMEWORK_NAME)"
     libname = if Base.isdebugbuild()
         "julia-debug"
     else
         "julia"
     end
     if Sys.isunix()
-        return "-L$(shell_escape(private_libDir())) -Wl,-rpath,$(shell_escape(libDir())) -Wl,-rpath,$(shell_escape(private_libDir())) -l$libname"
+        if rpath
+            return "-L$(shell_escape(private_libDir())) $(ldrpath())"
+        else
+            return "-L$(shell_escape(private_libDir()))"
+        end
     else
         return "-l$libname -lopenlibm"
     end
 end
 
-function cflags(doframework)
+function cflags(; framework::Bool=false)
     flags = IOBuffer()
     print(flags, "-std=gnu11")
-    if doframework
+    if framework
         include = shell_escape(frameworkDir())
         print(flags, " -F", include)
     else
@@ -89,8 +102,8 @@ function cflags(doframework)
     return String(take!(flags))
 end
 
-function allflags(doframework)
-    return "$(cflags(doframework)) $(ldflags(doframework)) $(ldlibs(doframework))"
+function allflags(; framework::Bool=false, rpath::Bool=true)
+    return "$(cflags(; framework)) $(ldflags(; framework)) $(ldlibs(; framework, rpath))"
 end
 
 function check_args(args)
@@ -102,31 +115,29 @@ function check_args(args)
 end
 
 function check_framework_flag(args)
-    doframework = "--framework" in args
-    if doframework && !Base.DARWIN_FRAMEWORK
+    framework = "--framework" in args
+    if framework && !Base.DARWIN_FRAMEWORK
         println(stderr, "NOTICE: Ignoring --framework because Julia is not packaged as a framework.")
         return false
-    elseif !doframework && Base.DARWIN_FRAMEWORK
+    elseif !framework && Base.DARWIN_FRAMEWORK
         println(stderr, "NOTICE: Consider using --framework because Julia is packaged as a framework.")
         return false
     end
-    return doframework
+    return framework
 end
 
-function main()
-    check_args(ARGS)
-    doframework = check_framework_flag(ARGS)
-    for args in ARGS
+function (@main)(args)
+    check_args(args)
+    framework = check_framework_flag(args)
+    for args in args
         if args == "--ldflags"
-            println(ldflags(doframework))
+            println(ldflags(; framework))
         elseif args == "--cflags"
-            println(cflags(doframework))
+            println(cflags(; framework))
         elseif args == "--ldlibs"
-            println(ldlibs(doframework))
+            println(ldlibs(; framework))
         elseif args == "--allflags"
-            println(allflags(doframework))
+            println(allflags(; framework))
         end
     end
 end
-
-main()

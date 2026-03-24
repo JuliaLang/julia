@@ -58,7 +58,7 @@ $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched: $(BUILDDIR)/SuiteS
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: | $(build_prefix)/manifest/blastrampoline
 
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched
-	cd $(dir $<) && $(CMAKE) . $(LIBSUITESPARSE_CMAKE_FLAGS)
+	cd $(dir $<) && $(CMAKE) -G"Unix Makefiles" . $(LIBSUITESPARSE_CMAKE_FLAGS)
 	$(MAKE) -C $(dir $<)
 	$(MAKE) -C $(dir $<) install
 	echo 1 > $@
@@ -83,7 +83,7 @@ clean-libsuitesparse: uninstall-libsuitesparse
 	-rm -f $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled
 	-rm -fr $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/lib
 	-rm -fr $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/include
-	-$(MAKE) -C $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER) clean
+	-if [ -d $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER) ]; then $(MAKE) -C $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER) clean; fi
 
 distclean-libsuitesparse:
 	rm -rf $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz \

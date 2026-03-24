@@ -12,7 +12,8 @@ using .Compiler: ALWAYS_FALSE, ALWAYS_TRUE, argextype, BasicBlock, block_for_ins
     CachedMethodTable, CFG, compute_basic_blocks, DebugInfoStream, Effects,
     EMPTY_SPTYPES, getdebugidx, IncrementalCompact, InferenceResult, InferenceState,
     InvalidIRError, IRCode, LimitedAccuracy, NativeInterpreter, scan_ssa_use!,
-    singleton_type, sptypes_from_meth_instance, StmtRange, Timings, VarState, widenconst
+    singleton_type, sptypes_from_meth_instance, StmtRange, Timings, VarState, widenconst,
+    get_ci_mi, get_ci_abi
 
 @nospecialize
 
@@ -67,7 +68,7 @@ function builtin_call_has_dispatch(
                 return true
             end
         end
-    elseif (f === Core._apply_pure || f === Core._call_in_world || f === Core._call_in_world_total || f === Core._call_latest)
+    elseif (f === Core.invoke_in_world || f === Core._call_in_world_total || f === Core.invokelatest)
         # These apply-like builtins are effectively dynamic calls
         return true
     end
@@ -95,22 +96,39 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
     elseif isexpr(stmt, :invoke) && length(stmt.args) >= 2 && isa(stmt.args[1], Union{MethodInstance,CodeInstance})
         stmt = stmt::Expr
         # TODO: why is this here, and not in Base.show_unquoted
-        printstyled(io, "   invoke "; color = :light_black)
-        mi = stmt.args[1]
-        if !(mi isa Core.MethodInstance)
-            mi = (mi::Core.CodeInstance).def
-        end
-        if isa(mi, Core.ABIOverride)
-            abi = mi.abi
-            mi = mi.def
+        ci = stmt.args[1]
+        if ci isa Core.CodeInstance
+            printstyled(io, "   invoke "; color = :light_black)
+            mi = get_ci_mi(ci)
+            abi = get_ci_abi(ci)
         else
-            abi = mi.specTypes
+            printstyled(io, "dynamic invoke "; color = :yellow)
+            abi = (ci::Core.MethodInstance).specTypes
         end
-        show_unquoted(io, stmt.args[2], indent)
-        print(io, "(")
         # XXX: this is wrong if `sig` is not a concretetype method
         # more correct would be to use `fieldtype(sig, i)`, but that would obscure / discard Varargs information in show
         sig = abi == Tuple ? Core.svec() : Base.unwrap_unionall(abi).parameters::Core.SimpleVector
+        f = stmt.args[2]
+        ft = maybe_argextype(f, code, sptypes)
+
+        # We can elide the type for arg0 if it...
+        skip_ftype = (length(sig) == 0) # doesn't exist...
+        skip_ftype = skip_ftype || (
+            # ... or, f prints as a user-accessible value...
+            (f isa GlobalRef) &&
+            # ... and matches the value of the singleton type of the invoked MethodInstance
+            (singleton_type(ft) === singleton_type(sig[1]) !== nothing)
+        )
+        if skip_ftype
+            show_unquoted(io, f, indent)
+        else
+            print(io, "(")
+            show_unquoted(io, f, indent)
+            print(io, "::", sig[1], ")")
+        end
+
+        # Print the remaining arguments (with type annotations from the invoked MethodInstance)
+        print(io, "(")
         print_arg(i) = sprint(; context=io) do io
             show_unquoted(io, stmt.args[i], indent)
             if (i - 1) <= length(sig)
@@ -201,7 +219,7 @@ end
 end
 
 """
-    Compute line number annotations for an IRCode
+    Compute line number annotations for an IRCode or CodeInfo.
 
 This functions compute three sets of annotations for each IR line. Take the following
 example (taken from `@code_typed sin(1.0)`):
@@ -260,7 +278,7 @@ to catch up and print the intermediate scopes. Which scope is printed is indicat
 by the indentation of the method name and by an increased thickness of the appropriate
 line for the scope.
 """
-function compute_ir_line_annotations(code::IRCode)
+function compute_ir_line_annotations(code::Union{IRCode,CodeInfo})
     loc_annotations = String[]
     loc_methods = String[]
     loc_lineno = String[]
@@ -270,7 +288,8 @@ function compute_ir_line_annotations(code::IRCode)
     last_printed_depth = 0
     debuginfo = code.debuginfo
     def = :var"unknown scope"
-    for idx in 1:length(code.stmts)
+    n = isa(code, IRCode) ? length(code.stmts) : length(code.code)
+    for idx in 1:n
         buf = IOBuffer()
         print(buf, "│")
         stack = buildLineInfoNode(debuginfo, def, idx)
@@ -282,7 +301,7 @@ function compute_ir_line_annotations(code::IRCode)
             x = min(length(last_stack), length(stack))
             depth = length(stack) - 1
             # Compute the last depth that was in common
-            first_mismatch = let last_stack=last_stack
+            first_mismatch = let last_stack=last_stack, stack=stack
                 findfirst(i->last_stack[i] != stack[i], 1:x)
             end
             # If the first mismatch is the last stack frame, that might just
@@ -329,7 +348,7 @@ function compute_ir_line_annotations(code::IRCode)
             loc_method = string(" "^printing_depth, loc_method)
             last_stack = stack
         end
-        push!(loc_annotations, String(take!(buf)))
+        push!(loc_annotations, takestring!(buf))
         push!(loc_lineno, (lineno != 0 && lineno != last_lineno) ? string(lineno) : "")
         push!(loc_methods, loc_method)
         (lineno != 0) && (last_lineno = lineno)
@@ -361,7 +380,7 @@ end
 # utility function to extract the first line number and file of a block of code
 function debuginfo_firstline(debuginfo::Union{DebugInfo,DebugInfoStream})
     linetable = debuginfo.linetable
-    while linetable != nothing
+    while linetable !== nothing
         debuginfo = linetable
         linetable = debuginfo.linetable
     end
@@ -515,37 +534,33 @@ function DILineInfoPrinter(debuginfo, def, showtypes::Bool=false)
                 started::Bool = false
                 if !update_line_only && showtypes && !isa(frame.method, Symbol) && nctx != 1
                     print(io, linestart)
-                    with_output_color(linecolor, io) do io
-                        print(io, indent("│"))
-                        print(io, "┌ invoke ", frame.method)
-                        println(io)
-                    end
+                    printstyled(io, indent("│"), color=linecolor)
+                    printstyled(io, "┌ invoke ", frame.method, color=linecolor)
+                    println(io)
                     started = true
                 end
                 print(io, linestart)
-                with_output_color(linecolor, io) do io
-                    print(io, indent("│"))
-                    push!(context, frame)
-                    if update_line_only
-                        update_line_only = false
-                    else
-                        context_depth[] += 1
-                        nctx != 1 && print(io, started ? "│" : "┌")
-                    end
-                    print(io, " @ ", frame.file)
-                    if frame.line != typemax(frame.line) && frame.line != 0
-                        print(io, ":", frame.line)
-                    end
-                    print(io, " within `", method_name(frame), "`")
-                    if collapse
-                        method = method_name(frame)
-                        while nctx < nframes
-                            frame = DI[nframes - nctx]
-                            method_name(frame) === method || break
-                            nctx += 1
-                            push!(context, frame)
-                            print(io, " @ ", frame.file, ":", frame.line)
-                        end
+                printstyled(io, indent("│"), color=linecolor)
+                push!(context, frame)
+                if update_line_only
+                    update_line_only = false
+                else
+                    context_depth[] += 1
+                    nctx != 1 && printstyled(io, started ? "│" : "┌", color=linecolor)
+                end
+                printstyled(io, " @ ", frame.file, color=linecolor)
+                if frame.line != typemax(frame.line) && frame.line != 0
+                    printstyled(io, ":", frame.line, color=linecolor)
+                end
+                printstyled(io, " within `", method_name(frame), "`", color=linecolor)
+                if collapse
+                    method = method_name(frame)
+                    while nctx < nframes
+                        frame = DI[nframes - nctx]
+                        method_name(frame) === method || break
+                        nctx += 1
+                        push!(context, frame)
+                        printstyled(io, " @ ", frame.file, ":", frame.line, color=linecolor)
                     end
                 end
                 println(io)
@@ -662,6 +677,60 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
                         sptypes, used, cfg, bb_idx; pop_new_node!, only_after, config.bb_color, config.label_dynamic_calls)
 end
 
+function _print_ir_indentation(io::IO, cfg::CFG, bb_idx::Int, max_bb_idx_size::Int, bb_color,
+                               line_info_preprinter, idx::Int, i::Int; final::Bool=true)
+    # Compute BB guard rail
+    if bb_idx > length(cfg.blocks)
+        # If invariants are violated, print a special leader
+        linestart = " "^(max_bb_idx_size + 2) # not inside a basic block bracket
+        inlining_indent = line_info_preprinter(io, linestart, i == 1 ? idx : 0)
+        printstyled(io, "!!! ", "─"^max_bb_idx_size, color=bb_color)
+    else
+        bbrange = cfg.blocks[bb_idx].stmts
+        # Print line info update
+        linestart = idx == first(bbrange) ? "  " : sprint(io -> printstyled(io, "│ ", color=bb_color), context=io)
+        linestart *= " "^max_bb_idx_size
+        # idx == 0 means only indentation is printed, so we don't print linfos
+        # multiple times if the are new nodes
+        inlining_indent = line_info_preprinter(io, linestart, i == 1 ? idx : 0)
+
+        if i == 1 && idx == first(bbrange)
+            bb_idx_str = string(bb_idx)
+            bb_pad = max_bb_idx_size - length(bb_idx_str)
+            bb_type = length(cfg.blocks[bb_idx].preds) <= 1 ? "─" : "┄"
+            printstyled(io, bb_idx_str, " ", bb_type, "─"^bb_pad, color=bb_color)
+        elseif final && idx == last(bbrange) # print separator
+            printstyled(io, "└", "─"^(1 + max_bb_idx_size), color=bb_color)
+        else
+            printstyled(io, "│ ", " "^max_bb_idx_size, color=bb_color)
+        end
+    end
+    print(io, inlining_indent, " ")
+    return nothing
+end
+
+function _print_ir_new_node(io::IO, node, code, sptypes::Vector{VarState}, used::BitSet, maxlength_idx::Int,
+                            label_dynamic_calls::Bool, line_info_postprinter, cfg::CFG, bb_idx::Int,
+                            max_bb_idx_size::Int, bb_color, line_info_preprinter, idx::Int, i::Int; final::Bool=true)
+    _print_ir_indentation(io, cfg, bb_idx, max_bb_idx_size, bb_color, line_info_preprinter, idx, i; final)
+
+    node_idx, new_node_inst, new_node_type = node
+    @assert new_node_inst !== UNDEF # we filtered these out earlier
+    show_type = should_print_ssa_type(new_node_inst)
+    with_output_color(:green, io) do io′
+        print_stmt(io′, node_idx, new_node_inst, code, sptypes, used, maxlength_idx, false, show_type, label_dynamic_calls)
+    end
+
+    if new_node_type === UNDEF
+        # Try to be robust against errors
+        printstyled(io, "::#UNDEF", color=:red)
+    else
+        line_info_postprinter(io; type = new_node_type, used = node_idx in used, show_type, idx = node_idx)
+    end
+    println(io)
+    return nothing
+end
+
 function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, line_info_preprinter, line_info_postprinter,
                       sptypes::Vector{VarState}, used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), only_after::Bool=false,
                       bb_color=:light_black, label_dynamic_calls::Bool=true)
@@ -684,58 +753,11 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
     end
 
     i = 1
-    function print_indentation(final::Bool=true)
-        # Compute BB guard rail
-        if bb_idx > length(cfg.blocks)
-            # If invariants are violated, print a special leader
-            linestart = " "^(max_bb_idx_size + 2) # not inside a basic block bracket
-            inlining_indent = line_info_preprinter(io, linestart, i == 1 ? idx : 0)
-            printstyled(io, "!!! ", "─"^max_bb_idx_size, color=bb_color)
-        else
-            bbrange = cfg.blocks[bb_idx].stmts
-            # Print line info update
-            linestart = idx == first(bbrange) ? "  " : sprint(io -> printstyled(io, "│ ", color=bb_color), context=io)
-            linestart *= " "^max_bb_idx_size
-            # idx == 0 means only indentation is printed, so we don't print linfos
-            # multiple times if the are new nodes
-            inlining_indent = line_info_preprinter(io, linestart, i == 1 ? idx : 0)
-
-            if i == 1 && idx == first(bbrange)
-                bb_idx_str = string(bb_idx)
-                bb_pad = max_bb_idx_size - length(bb_idx_str)
-                bb_type = length(cfg.blocks[bb_idx].preds) <= 1 ? "─" : "┄"
-                printstyled(io, bb_idx_str, " ", bb_type, "─"^bb_pad, color=bb_color)
-            elseif final && idx == last(bbrange) # print separator
-                printstyled(io, "└", "─"^(1 + max_bb_idx_size), color=bb_color)
-            else
-                printstyled(io, "│ ", " "^max_bb_idx_size, color=bb_color)
-            end
-        end
-        print(io, inlining_indent, " ")
-    end
-
     # first, print new nodes that are to be inserted before the current statement
-    function print_new_node(node; final::Bool=true)
-        print_indentation(final)
-
-        node_idx, new_node_inst, new_node_type = node
-        @assert new_node_inst !== UNDEF # we filtered these out earlier
-        show_type = should_print_ssa_type(new_node_inst)
-        let maxlength_idx=maxlength_idx, show_type=show_type
-            with_output_color(:green, io) do io′
-                print_stmt(io′, node_idx, new_node_inst, code, sptypes, used, maxlength_idx, false, show_type, label_dynamic_calls)
-            end
-        end
-
-        if new_node_type === UNDEF # try to be robust against errors
-            printstyled(io, "::#UNDEF", color=:red)
-        else
-            line_info_postprinter(io; type = new_node_type, used = node_idx in used, show_type, idx = node_idx)
-        end
-        println(io)
-    end
     while (next = pop_new_node!(idx)) !== nothing
-        only_after || print_new_node(next; final=false)
+        only_after || _print_ir_new_node(io, next, code, sptypes, used, maxlength_idx, label_dynamic_calls,
+                                         line_info_postprinter, cfg, bb_idx, max_bb_idx_size, bb_color,
+                                         line_info_preprinter, idx, i; final=false)
         i += 1
     end
 
@@ -747,7 +769,7 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
     # FIXME: `only_after` is hack so that we can call this function to print uncompacted
     #        attach-after nodes when the current node has already been compated already
     if !only_after
-        print_indentation(next===nothing)
+        _print_ir_indentation(io, cfg, bb_idx, max_bb_idx_size, bb_color, line_info_preprinter, idx, i; final=next===nothing)
         if code isa CodeInfo
             stmt = statement_indices_to_labels(stmt, cfg)
         end
@@ -767,7 +789,9 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
 
     # finally, print new nodes that are to be inserted after the current statement
     while next !== nothing
-        print_new_node(next)
+        _print_ir_new_node(io, next, code, sptypes, used, maxlength_idx, label_dynamic_calls,
+                           line_info_postprinter, cfg, bb_idx, max_bb_idx_size, bb_color,
+                           line_info_preprinter, idx, i)
         i += 1
         next = pop_new_node!(idx; attach_after=true)
     end
@@ -834,7 +858,7 @@ function new_nodes_iter(compact::IncrementalCompact)
 end
 
 # print only line numbers on the left, some of the method names and nesting depth on the right
-function inline_linfo_printer(code::IRCode)
+function inline_linfo_printer(code::Union{IRCode,CodeInfo})
     loc_annotations, loc_methods, loc_lineno = compute_ir_line_annotations(code)
     max_loc_width = maximum(length, loc_annotations)
     max_lineno_width = maximum(length, loc_lineno)
@@ -903,12 +927,15 @@ function stmts_used(::IO, code::CodeInfo)
     return used
 end
 
-function default_config(code::IRCode; verbose_linetable=false)
-    return IRShowConfig(verbose_linetable ? statementidx_lineinfo_printer(code)
-                                          : inline_linfo_printer(code);
-                        bb_color=:normal)
+function default_config(code::IRCode; debuginfo = :source_inline)
+    return IRShowConfig(get_debuginfo_printer(code, debuginfo); bb_color=:normal)
 end
-default_config(code::CodeInfo) = IRShowConfig(statementidx_lineinfo_printer(code))
+default_config(code::CodeInfo; debuginfo = :source) = IRShowConfig(get_debuginfo_printer(code, debuginfo))
+function default_config(io::IO, src)
+    debuginfo = get(io, :debuginfo, nothing)
+    debuginfo !== nothing && return default_config(src; debuginfo)
+    return default_config(src)
+end
 
 function show_ir_stmts(io::IO, ir::Union{IRCode, CodeInfo, IncrementalCompact}, inds, config::IRShowConfig,
                        sptypes::Vector{VarState}, used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing))
@@ -928,8 +955,7 @@ function finish_show_ir(io::IO, cfg::CFG, config::IRShowConfig)
     return nothing
 end
 
-function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(ir);
-                 pop_new_node! = new_nodes_iter(ir))
+function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(io, ir); pop_new_node! = new_nodes_iter(ir))
     used = stmts_used(io, ir)
     cfg = ir.cfg
     maxssaid = length(ir.stmts) + length(ir.new_nodes)
@@ -939,7 +965,7 @@ function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(ir);
     finish_show_ir(io, cfg, config)
 end
 
-function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(ci);
+function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(io, ci);
                  pop_new_node! = Returns(nothing))
     used = stmts_used(io, ci)
     cfg = compute_basic_blocks(ci.code)
@@ -953,7 +979,7 @@ function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(ci);
     finish_show_ir(io, cfg, config)
 end
 
-function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=default_config(compact.ir))
+function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=default_config(io, compact.ir))
     cfg = compact.ir.cfg
 
 
@@ -1133,7 +1159,7 @@ function Base.show(io::IO, mi_info::Timings.InferenceFrameInfo)
             show_tuple_as_call(io, def.name, mi.specTypes; argnames, qualified=true)
         end
     else
-        di = mi.cache.inferred.debuginfo
+        di = mi.cache.debuginfo
         file, line = debuginfo_firstline(di)
         file = string(file)
         line = isempty(file) || line < 0 ? "<unknown>" : "$file:$line"
@@ -1155,3 +1181,47 @@ const __debuginfo = Dict{Symbol, Any}(
     )
 const default_debuginfo = Ref{Symbol}(:none)
 debuginfo(sym) = sym === :default ? default_debuginfo[] : sym
+
+const __debuginfo = Dict{Symbol, Any}(
+    # :full => src -> statementidx_lineinfo_printer(src), # and add variable slot information
+    :source => src -> statementidx_lineinfo_printer(src),
+    :source_inline => src -> inline_linfo_printer(src),
+    # :oneliner => src -> statementidx_lineinfo_printer(PartialLineInfoPrinter, src),
+    :none => src -> lineinfo_disabled,
+    )
+
+const debuginfo_modes = [:none, :source, :source_inline]
+@assert Set(debuginfo_modes) == Set(keys(__debuginfo))
+
+function validate_debuginfo_mode(mode::Symbol)
+    in(mode, debuginfo_modes) && return true
+    throw(ArgumentError("`debuginfo` must be one of the following: $(join([repr(mode) for mode in debuginfo_modes], ", "))"))
+end
+
+const default_debuginfo_mode = Ref{Symbol}(:none)
+function expand_debuginfo_mode(mode::Symbol, default = default_debuginfo_mode[])
+    if mode === :default
+        mode = default
+    end
+    validate_debuginfo_mode(mode)
+    return mode
+end
+
+function get_debuginfo_printer(mode::Symbol)
+    mode = expand_debuginfo_mode(mode)
+    return __debuginfo[mode]
+end
+
+get_debuginfo_printer(src, mode::Symbol) = get_debuginfo_printer(mode)(src)
+
+# True if one can be pretty certain that the compiler handles this union well,
+# i.e. must be small with concrete types.
+function is_expected_union(u::Union)
+    Base.unionlen(u) < 4 || return false
+    for x in Base.uniontypes(u)
+        if !Base.isdispatchelem(x) || x == Core.Box
+            return false
+        end
+    end
+    return true
+end

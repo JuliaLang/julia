@@ -67,7 +67,7 @@ $(eval $(call staged-install, \
 
 clean-libtracyclient:
 	rm -rf $(LIBTRACYCLIENT_BUILDDIR)/build-configured $(LIBTRACYCLIENT_BUILDDIR)/build-compiled
-	-$(MAKE) -C $(LIBTRACYCLIENT_BUILDDIR) clean
+	-if [ -d $(LIBTRACYCLIENT_BUILDDIR) ]; then $(MAKE) -C $(LIBTRACYCLIENT_BUILDDIR) clean; fi
 
 get-libtracyclient: $(LIBTRACYCLIENT_SRC_FILE)
 extract-libtracyclient: $(LIBTRACYCLIENT_BUILDDIR)/source-extracted

@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Core: Bool
+
 # promote Bool to any other numeric type
 promote_rule(::Type{Bool}, ::Type{T}) where {T<:Number} = T
 
@@ -7,32 +9,6 @@ typemin(::Type{Bool}) = false
 typemax(::Type{Bool}) = true
 
 ## boolean operations ##
-
-"""
-    !(x)
-
-Boolean not. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
-returning [`missing`](@ref) if `x` is `missing`.
-
-See also [`~`](@ref) for bitwise not.
-
-# Examples
-```jldoctest
-julia> !true
-false
-
-julia> !false
-true
-
-julia> !missing
-missing
-
-julia> .![true false true]
-1×3 BitMatrix:
- 0  1  0
-```
-"""
-!(x::Bool) = not_int(x)
 
 (~)(x::Bool) = !x
 (&)(x::Bool, y::Bool) = and_int(x, y)
@@ -154,6 +130,7 @@ abs(x::Bool) = x
 abs2(x::Bool) = x
 iszero(x::Bool) = !x
 isone(x::Bool) = x
+ispositive(x::Bool) = x # could use fallback once #21712 is resolved
 
 <(x::Bool, y::Bool) = y&!x
 <=(x::Bool, y::Bool) = y|!x

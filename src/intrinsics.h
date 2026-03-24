@@ -17,6 +17,8 @@
     ADD_I(sub_float, 2) \
     ADD_I(mul_float, 2) \
     ADD_I(div_float, 2) \
+    ADD_I(min_float, 2) \
+    ADD_I(max_float, 2) \
     ADD_I(fma_float, 3) \
     ADD_I(muladd_float, 3) \
     /*  fast arithmetic */ \
@@ -25,6 +27,8 @@
     ALIAS(sub_float_fast, sub_float) \
     ALIAS(mul_float_fast, mul_float) \
     ALIAS(div_float_fast, div_float) \
+    ALIAS(min_float_fast, min_float) \
+    ALIAS(max_float_fast, max_float) \
     /*  same-type comparisons */ \
     ADD_I(eq_int, 2) \
     ADD_I(ne_int, 2) \
@@ -91,7 +95,7 @@
     ADD_I(pointerref, 3) \
     ADD_I(pointerset, 4) \
     /*  pointer atomics */ \
-    ADD_I(atomic_fence, 1) \
+    ADD_I(atomic_fence, 2) \
     ADD_I(atomic_pointerref, 2) \
     ADD_I(atomic_pointerset, 3) \
     ADD_I(atomic_pointerswap, 3) \

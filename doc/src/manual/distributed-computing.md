@@ -1,4 +1,4 @@
-# Multi-processing and Distributed Computing
+# Multiprocessing and Distributed Computing
 
 An implementation of distributed memory parallel computing is provided by module [`Distributed`](@ref man-distributed)
 as part of the standard library shipped with Julia.
@@ -197,7 +197,7 @@ loaded
       From worker 2:    loaded
 ```
 
-As usual, this does not bring `DummyModule` into scope on any of the process, which requires
+As usual, this does not bring `DummyModule` into scope on any of the processes, which requires
 [`using`](@ref) or [`import`](@ref). Moreover, when `DummyModule` is brought into scope on one process, it
 is not on any other:
 
@@ -333,7 +333,7 @@ Expressions executed remotely via [`@spawnat`](@ref), or closures specified for 
 a little differently compared to global bindings in other modules. Consider the following code
 snippet:
 
-```julia-repl
+```julia
 A = rand(10,10)
 remotecall_fetch(()->sum(A), 2)
 ```
@@ -664,8 +664,8 @@ julia> for p in workers() # start tasks on the workers to process requests in pa
        end
 
 julia> @elapsed while n > 0 # print out results
-           job_id, exec_time, where = take!(results)
-           println("$job_id finished in $(round(exec_time; digits=2)) seconds on worker $where")
+           job_id, exec_time, worker_id = take!(results)
+           println("$job_id finished in $(round(exec_time; digits=2)) seconds on worker $worker_id")
            global n = n - 1
        end
 1 finished in 0.18 seconds on worker 4
