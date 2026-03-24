@@ -2102,8 +2102,9 @@ JL_DLLEXPORT enum jl_memory_order jl_get_atomic_order_checked(jl_sym_t *order, c
 
 struct _jl_image_fptrs_t;
 
-JL_DLLEXPORT void jl_write_coverage_data(const char*);
+void jl_init_coverage(void);
 void jl_write_malloc_log(void);
+JL_DLLEXPORT void jl_write_coverage_data(const char*);
 
 extern uv_mutex_t symtab_lock;
 jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;

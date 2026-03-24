@@ -3116,9 +3116,9 @@ static std::pair<bool, bool> uses_specsig(jl_value_t *abi, jl_method_instance_t 
 
 // Logging for code coverage and memory allocation
 
-JL_DLLEXPORT void jl_coverage_alloc_line(StringRef filename, int line);
-JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(StringRef filename, int line);
-JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(StringRef filename, int line);
+extern "C" JL_DLLEXPORT void jl_coverage_alloc_line(const char *filename, int line);
+extern "C" JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(const char *filename, int line);
+extern "C" JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(const char *filename, int line);
 
 static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const char *name)
 {
@@ -3138,7 +3138,7 @@ static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
         return; // TODO
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
-    visitLine(ctx, jl_coverage_data_pointer(filename, line), ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 1), "lcnt");
+    visitLine(ctx, jl_coverage_data_pointer(filename.data(), line), ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 1), "lcnt");
 }
 
 // Memory allocation log (malloc_log)
@@ -3152,7 +3152,7 @@ static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line, Val
     Value *addend = sync
         ? ctx.builder.CreateCall(prepare_call(sync_gc_total_bytes_func), {sync})
         : ctx.builder.CreateCall(prepare_call(diff_gc_total_bytes_func), {});
-    visitLine(ctx, jl_malloc_data_pointer(filename, line), addend, "bytecnt");
+    visitLine(ctx, jl_malloc_data_pointer(filename.data(), line), addend, "bytecnt");
 }
 
 // --- constant determination ---
@@ -9462,7 +9462,7 @@ static jl_llvm_functions_t
                     if (lineidx.line == -1)
                         break;
                     if (lineidx.line > 0)
-                        jl_coverage_alloc_line(file, lineidx.line);
+                        jl_coverage_alloc_line(file.data(), lineidx.line);
                 }
             }
         };

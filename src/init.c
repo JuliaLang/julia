@@ -767,6 +767,7 @@ JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
 #endif
 
     jl_init_rand();
+    jl_init_coverage();
     jl_init_staticdata();
     jl_init_runtime_ccall();
     jl_init_tasks();
