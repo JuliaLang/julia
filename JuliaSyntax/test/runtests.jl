@@ -4,6 +4,11 @@ end
 
 using Test
 
+# JuliaSyntax is not only tested on master
+if isdefined(Test, :detect_closure_boxes)
+    @test isempty(Test.detect_closure_boxes(JuliaSyntax))
+end
+
 include("test_utils.jl")
 include("test_utils_tests.jl")
 include("fuzz_test.jl")

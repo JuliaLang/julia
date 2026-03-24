@@ -963,6 +963,9 @@ end
         @test +(A) == A
         @test *(A) == A
     end
+
+    # Unary addition is valid for Arrays over anything, not just numbers
+    @test +[[1]] == [[1]]
 end
 
 @testset "reverse dim on empty" begin

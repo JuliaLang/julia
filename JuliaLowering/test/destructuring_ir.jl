@@ -382,4 +382,4 @@ LoweringError:
 #---------------------
 LoweringError:
 (; a=1, b) = rhs
-#  └─┘ ── expected identifier or `::`
+#  └─┘ ── expected identifier or `identifier::type`

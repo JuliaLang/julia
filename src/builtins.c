@@ -263,7 +263,28 @@ JL_DLLEXPORT int jl_egal__bitstag(const jl_value_t *a JL_MAYBE_UNROOTED, const j
             return *(uint64_t*)a == *(uint64_t*)b;
         case jl_ssavalue_tag:
         case jl_slotnumber_tag:
+        case jl_argument_tag:
             return *(size_t*)a == *(size_t*)b;
+        case jl_gotoifnot_tag:
+            return compare_fields(a, b, jl_gotoifnot_type);
+        case jl_returnnode_tag:
+            return compare_fields(a, b, jl_returnnode_type);
+        case jl_enternode_tag:
+            return compare_fields(a, b, jl_enternode_type);
+        case jl_pinode_tag:
+            return compare_fields(a, b, jl_pinode_type);
+        case jl_phinode_tag:
+            return compare_fields(a, b, jl_phinode_type);
+        case jl_phicnode_tag:
+            return compare_fields(a, b, jl_phicnode_type);
+        case jl_upsilonnode_tag:
+            return compare_fields(a, b, jl_upsilonnode_type);
+        case jl_globalref_tag:
+            return compare_fields(a, b, jl_globalref_type);
+        case jl_gotonode_tag:
+            return *(size_t*)a == *(size_t*)b;
+        case jl_quotenode_tag:
+            return compare_fields(a, b, jl_quotenode_type);
         case jl_unionall_tag:
             return egal_types(a, b, NULL, 1);
         case jl_uniontype_tag:
@@ -1721,7 +1742,7 @@ JL_CALLABLE(jl_f_invoke)
             if (codeinst->owner != jl_nothing) {
                 jl_error("Failed to invoke or compile external codeinst");
             }
-            return jl_invoke(args[0], &args[2], nargs - 1, mi);
+            return jl_invoke(args[0], &args[2], nargs - 2, mi);
         }
     }
     if (!jl_is_tuple_type(jl_unwrap_unionall(argtypes)))
@@ -2119,23 +2140,16 @@ JL_CALLABLE(jl_f__primitivetype)
 
 static void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
+    // Check context-specific conditions first, before jl_check_valid_supertype
+    // which calls jl_subtype and would crash walking the supertype chain of a
+    // type with super == NULL.
     const char *error = NULL;
-    if (!jl_is_datatype(super))
-        error = "can only subtype data types";
-    else if (tt->super != NULL)
+    if (tt->super != NULL)
         error = "type already has a supertype";
-    else if (tt->name == ((jl_datatype_t*)super)->name)
+    else if (jl_is_datatype(super) && tt->name == ((jl_datatype_t*)super)->name)
         error = "a type cannot subtype itself";
-    else if (jl_is_tuple_type(super))
-        error = "cannot subtype a tuple type";
-    else if (jl_is_namedtuple_type(super))
-        error = "cannot subtype a named tuple type";
-    else if (jl_subtype(super, (jl_value_t*)jl_type_type))
-        error = "cannot add subtypes to Type";
-    else if (jl_subtype(super, (jl_value_t*)jl_builtin_type))
-        error = "cannot add subtypes to Core.Builtin";
-    else if (!jl_is_abstracttype(super))
-        error = "can only subtype abstract types";
+    if (!error)
+        error = jl_check_valid_supertype(super);
     if (error)
          jl_errorf("invalid subtyping in definition of %s: %s.", jl_symbol_name(tt->name->name), error);
     tt->super = (jl_datatype_t*)super;
@@ -2306,14 +2320,7 @@ JL_CALLABLE(jl_f__typebody)
         jl_value_t *ft = args[2];
         JL_TYPECHK(_typebody!, simplevector, ft);
         size_t nf = jl_svec_len(ft);
-        for (size_t i = 0; i < nf; i++) {
-            jl_value_t *elt = jl_svecref(ft, i);
-            if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
-                jl_type_error_rt(jl_symbol_name(dt->name->name),
-                                 "type definition",
-                                 (jl_value_t*)jl_type_type, elt);
-            }
-        }
+        jl_check_field_types((jl_svec_t*)ft, dt->name->name);
         // Optimization: To avoid lots of unnecessary churning, lowering contains an optimization
         // that re-uses the typevars of an existing definition (if any exists) for compute the field
         // types. If such a previous type exists, there are two possibilities:
@@ -2445,13 +2452,6 @@ JL_CALLABLE(jl_f__equiv_typedef)
 {
     JL_NARGS(_equiv_typedef, 2, 2);
     return equiv_type(args[0], args[1]) ? jl_true : jl_false;
-}
-
-JL_CALLABLE(jl_f__defaultctors)
-{
-    JL_NARGS(_defaultctors, 2, 2);
-    jl_ctor_def(args[0], args[1]);
-    return jl_nothing;
 }
 
 // IntrinsicFunctions ---------------------------------------------------------

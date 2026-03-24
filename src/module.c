@@ -393,6 +393,8 @@ JL_DLLEXPORT void jl_update_loaded_bpart(jl_binding_t *b, jl_binding_partition_t
     jl_atomic_store_relaxed(&bpart->min_world, resolution.min_world);
     jl_atomic_store_relaxed(&bpart->max_world, resolution.max_world);
     bpart->restriction = resolution.binding_or_const;
+    if (resolution.binding_or_const)
+        jl_gc_wb(bpart, resolution.binding_or_const);
     bpart->kind = resolution.ultimate_kind;
 }
 
@@ -776,6 +778,7 @@ static jl_globalref_t *jl_new_globalref(jl_module_t *mod, jl_sym_t *name, jl_bin
 {
     jl_task_t *ct = jl_current_task;
     jl_globalref_t *g = (jl_globalref_t*)jl_gc_alloc(ct->ptls, sizeof(jl_globalref_t), jl_globalref_type);
+    jl_set_typetagof(g, jl_globalref_tag, 0);
     g->mod = mod;
     jl_gc_wb_fresh(g, g->mod);
     g->name = name;
@@ -1792,6 +1795,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
             new_bpart->kind |= PARTITION_FLAG_IMPLICITLY_EXPORTED;
         }
         new_bpart->restriction = resolution.binding_or_const;
+        jl_gc_wb_fresh(new_bpart, resolution.binding_or_const);
         assert(resolution.min_world <= new_world && resolution.max_world == ~(size_t)0);
         if (new_bpart->kind == old_bpart->kind && new_bpart->restriction == old_bpart->restriction) {
             JL_GC_POP();

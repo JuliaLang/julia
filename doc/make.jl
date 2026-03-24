@@ -242,6 +242,7 @@ DevDocs = [
         "devdocs/init.md",
         "devdocs/ast.md",
         "devdocs/types.md",
+        "devdocs/ub.md",
         "devdocs/object.md",
         "devdocs/eval.md",
         "devdocs/callconv.md",
@@ -426,6 +427,7 @@ makedocs(
     authors   = "The Julia Project",
     pages     = PAGES,
     remotes   = documenter_stdlib_remotes,
+    meta      = Dict(:DocTestSyntax => VERSION),
 )
 
 # Update URLs to external stdlibs (JuliaLang/julia#43199)

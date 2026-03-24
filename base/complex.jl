@@ -513,7 +513,7 @@ function ssqs(x::T, y::T) where T<:Real
         ρ = convert(T, Inf)
     elseif isinf(ρ) || (ρ==0 && (x!=0 || y!=0)) || ρ<nextfloat(zero(T))/(2*eps(T)^2)
         m::T = max(abs(x), abs(y))
-        k = m==0 ? m : exponent(m)
+        k = m==0 ? 0 : exponent(m)
         xk, yk = ldexp(x,-k), ldexp(y,-k)
         ρ = xk*xk + yk*yk
     end

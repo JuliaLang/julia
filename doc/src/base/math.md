@@ -47,21 +47,6 @@ Base.cmp
 Base.isapprox
 ```
 
-## Bit Operators
-
-```@docs
-Base.:(<<)
-Base.:(>>)
-Base.:(>>>)
-Base.bitrotate
-Base.:(~)
-Base.:(&)
-Base.:(|)
-Base.xor
-Base.nand
-Base.nor
-```
-
 ## Logical Operators
 
 ```@docs

@@ -461,23 +461,23 @@ end
 
 # duck-type s so that external UTF-8 string packages like StringViews can hook in
 function iterate_continued(s, i::Int, u::UInt32)
-    @label _ begin
-        u < 0xc0000000 && (i += 1; break _)
+    @label begin
+        u < 0xc0000000 && (i += 1; break)
         n = ncodeunits(s)
         # first continuation byte
-        (i += 1) > n && break _
+        (i += 1) > n && break
         @inbounds b = codeunit(s, i)
-        b & 0xc0 == 0x80 || break _
+        b & 0xc0 == 0x80 || break
         u |= UInt32(b) << 16
         # second continuation byte
-        ((i += 1) > n) | (u < 0xe0000000) && break _
+        ((i += 1) > n) | (u < 0xe0000000) && break
         @inbounds b = codeunit(s, i)
-        b & 0xc0 == 0x80 || break _
+        b & 0xc0 == 0x80 || break
         u |= UInt32(b) << 8
         # third continuation byte
-        ((i += 1) > n) | (u < 0xf0000000) && break _
+        ((i += 1) > n) | (u < 0xf0000000) && break
         @inbounds b = codeunit(s, i)
-        b & 0xc0 == 0x80 || break _
+        b & 0xc0 == 0x80 || break
         u |= UInt32(b); i += 1
     end
     return reinterpret(Char, u), i
@@ -492,27 +492,27 @@ end
 
 # duck-type s so that external UTF-8 string packages like StringViews can hook in
 function getindex_continued(s, i::Int, u::UInt32)
-    @label _ begin
+    @label begin
         if u < 0xc0000000
             # called from `getindex` which checks bounds
-            @inbounds isvalid(s, i) && break _
+            @inbounds isvalid(s, i) && break
             string_index_err(s, i)
         end
         n = ncodeunits(s)
 
-        (i += 1) > n && break _
+        (i += 1) > n && break
         @inbounds b = codeunit(s, i) # cont byte 1
-        b & 0xc0 == 0x80 || break _
+        b & 0xc0 == 0x80 || break
         u |= UInt32(b) << 16
 
-        ((i += 1) > n) | (u < 0xe0000000) && break _
+        ((i += 1) > n) | (u < 0xe0000000) && break
         @inbounds b = codeunit(s, i) # cont byte 2
-        b & 0xc0 == 0x80 || break _
+        b & 0xc0 == 0x80 || break
         u |= UInt32(b) << 8
 
-        ((i += 1) > n) | (u < 0xf0000000) && break _
+        ((i += 1) > n) | (u < 0xf0000000) && break
         @inbounds b = codeunit(s, i) # cont byte 3
-        b & 0xc0 == 0x80 || break _
+        b & 0xc0 == 0x80 || break
         u |= UInt32(b)
     end
     return reinterpret(Char, u)

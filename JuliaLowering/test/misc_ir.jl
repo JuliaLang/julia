@@ -35,6 +35,10 @@ x."b"
 #---------------------
 LoweringError:
 #= line 1 =# - invalid syntax: unknown form `.` or number of arguments 3
+Expression:
+  (. x a 3)
+Containing expressions:
+  (. x a 3)
 
 ########################################
 # Error: Placeholder value used
@@ -148,7 +152,7 @@ LoweringError:
 #---------------------
 LoweringError:
 (a=1; b=2, c=3)
-#└─┘ ── cannot mix tuple `(a,b,c)` and named tuple `(;a,b,c)` syntax
+#   └────────┘ ── cannot mix tuple `(a,b,c)` and named tuple `(;a,b,c)` syntax
 
 ########################################
 # Error: Named tuple field dots in rhs
@@ -253,6 +257,10 @@ LoweringError:
 #---------------------
 LoweringError:
 #= line 1 =# - expected (if cond body) or (if cond body else)
+Expression:
+  (if)
+Containing expressions:
+  (if)
 
 ########################################
 # Error: @atomic in wrong position
@@ -262,6 +270,10 @@ end
 #---------------------
 LoweringError:
 #= none:2 =# - unimplemented or unsupported `atomic` declaration
+Expression:
+  (atomic x)
+Containing expressions:
+  (let (block) (block (atomic x)))
 
 ########################################
 # GC.@preserve support
@@ -271,14 +283,13 @@ end
 #---------------------
 1   TestMod.a
 2   TestMod.b
-3   (= slot₂/s (gc_preserve_begin %₁ %₂))
+3   (gc_preserve_begin %₁ %₂)
 4   TestMod.f
 5   TestMod.a
 6   TestMod.b
-7   (= slot₁/r (call %₄ %₅ %₆))
-8   (gc_preserve_end slot₂/s)
-9   slot₁/r
-10  (return %₉)
+7   (call %₄ %₅ %₆)
+8   (gc_preserve_end %₃)
+9   (return %₇)
 
 ########################################
 # Error: GC.@preserve bad args

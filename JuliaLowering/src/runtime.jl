@@ -43,14 +43,14 @@ _numchildren(ex::SyntaxTree) = numchildren(ex)
 _numchildren(@nospecialize(ex)) = ex isa Expr ? length(ex.args) : 0
 
 _syntax_list(ctx::InterpolationContext) = SyntaxList(ctx)
-_syntax_list(ctx::ExprInterpolationContext) = Any[]
+_syntax_list(::ExprInterpolationContext) = Any[]
 
-_interp_makenode(ctx::InterpolationContext, ex, args) = mknode(ex, args)
-_interp_makenode(ctx::ExprInterpolationContext, ex, args) = Expr((ex::Expr).head, args...)
+_interp_makenode(::InterpolationContext, ex, args) = mknode(ex, args)
+_interp_makenode(::ExprInterpolationContext, ex, args) = Expr((ex::Expr).head, args...)
 
 _is_leaf(ex::SyntaxTree) = is_leaf(ex)
-_is_leaf(ex::Expr) = false
-_is_leaf(@nospecialize(ex)) = true
+_is_leaf(::Expr) = false
+_is_leaf(@nospecialize(_)) = true
 
 # Produce interpolated node for `$x` syntax
 function _interpolated_value(ctx::InterpolationContext, srcref, ex)
@@ -122,9 +122,7 @@ function interpolate_ast(::Type{SyntaxTree}, ex::SyntaxTree, values...)
         end
     end
     if isnothing(graph)
-        graph = ensure_attributes(
-            SyntaxGraph(), kind=Kind, syntax_flags=UInt16, source=SourceAttrType,
-            value=Any, name_val=String, scope_layer=LayerId)
+        graph = ensure_macro_attributes!(SyntaxGraph())
     end
     ctx = InterpolationContext(graph, values, Ref(1))
 
@@ -308,17 +306,7 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
     #
     # TODO: Reduce duplication where possible.
 
-    # Attributes from parsing
-    graph = ensure_attributes(SyntaxGraph(), kind=Kind, syntax_flags=UInt16, source=SourceAttrType,
-                              value=Any, name_val=String)
-    # Attributes for macro expansion
-    graph = ensure_attributes(ensure_macro_attributes(graph),
-                              # Additional attribute for resolve_scopes, for
-                              # adding our custom lambda below
-                              is_toplevel_thunk=Bool,
-                              toplevel_pure=Bool,
-                              )
-
+    graph = ensure_desugaring_attributes!(SyntaxGraph())
     __module__ = source.module
 
     # Macro expansion. Note that we expand in `tls_world_age()` (see
@@ -371,7 +359,7 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
 
     # Rest of lowering
     ctx4, ex4 = convert_closures(ctx3, ex3)
-    ctx5, ex5 = linearize_ir(ctx4, ex4)
+    _ctx5, ex5 = linearize_ir(ctx4, ex4)
     ci = to_lowered_expr(ex5)
     @assert ci isa Core.CodeInfo
 

@@ -519,7 +519,6 @@ Docs.undocumented_names
 ```@docs
 Base.identify_package
 Base.locate_package
-Base.require
 Base.compilecache
 Base.isprecompiled
 Base.get_extension
@@ -548,6 +547,7 @@ Base.code_lowered
 Base.code_typed
 Base.precompile
 Base.jit_total_bytes
+Base.generating_output
 ```
 
 ## Meta

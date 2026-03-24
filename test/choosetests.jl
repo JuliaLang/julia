@@ -7,7 +7,7 @@ const STDLIBS = filter!(x -> isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")), 
 
 const TESTNAMES = [
         "subarray", "core", "compiler", "compiler_extras", "worlds", "atomics",
-        "keywordargs", "numbers", "subtype",
+        "keywordargs", "numbers", "subtype", "typegroup",
         "char", "strings", "triplequote", "unicode", "intrinsics",
         "dict", "hashing", "iobuffer", "staged", "offsetarray",
         "arrayops", "tuple", "reduce", "reducedim", "abstractarray",
@@ -31,7 +31,7 @@ const TESTNAMES = [
         "smallarrayshrink", "opaque_closure", "filesystem", "download",
         "scopedvalues", "compileall", "rebinding",
         "faulty_constructor_method_should_not_cause_stack_overflows",
-        "JuliaSyntax", "JuliaLowering", "JuliaLowering_stdlibs",
+        "JuliaSyntax", "JuliaLowering", "JuliaLowering_stdlibs", "jit",
 ]
 
 const INTERNET_REQUIRED_LIST = [

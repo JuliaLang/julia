@@ -102,7 +102,7 @@ $(eval $(call staged-install, \
 
 clean-bolt:
 	-rm -f $(BOLT_BUILDDIR)/build-configured $(BOLT_BUILDDIR)/build-compiled
-	-$(MAKE) -C $(BOLT_BUILDDIR) clean
+	-if [ -d $(BOLT_BUILDDIR) ]; then $(MAKE) -C $(BOLT_BUILDDIR) clean; fi
 
 get-bolt: $(BOLT_SRC_FILE)
 extract-bolt: $(SRCCACHE)/$(BOLT_SRC_DIR)/source-extracted

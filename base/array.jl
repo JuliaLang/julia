@@ -878,6 +878,29 @@ function setindex_widen_up_to(dest::AbstractArray{T}, el, i) where T
     return new
 end
 
+# Batch-widen an array given (index => value) pairs that don't fit the current element type.
+function setindices_widen_up_to(dest::AbstractArray, widen_buffers::Vector{Vector{Pair{Int, Any}}})
+    widen_pairs = reduce(vcat, widen_buffers; init=Pair{Int,Any}[])
+    isempty(widen_pairs) && return dest
+    new_T = eltype(dest)
+    for p in widen_pairs
+        new_T = promote_typejoin(new_T, typeof(p.second))
+    end
+    new_T === eltype(dest) && return dest
+    # Function barrier: specializes on new_T so the compiler sees
+    # concrete element types for both source and destination arrays.
+    return _setindices_widen_up_to(new_T, dest, widen_pairs)
+end
+
+function _setindices_widen_up_to(::Type{T}, dest::AbstractArray, widen_pairs::Vector{Pair{Int, Any}}) where T
+    new = similar(dest, T)
+    copyto!(new, dest)
+    for (idx, val) in widen_pairs
+        @inbounds new[idx] = val
+    end
+    return new
+end
+
 function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
     # collect to dest array, checking the type of each result. if a result does not
     # match, widen the result type and re-dispatch.
@@ -1021,7 +1044,7 @@ function setindex!(A::Array{T}, x, i::Int) where {T}
 end
 function _setindex!(A::Array{T}, x::T, i::Int) where {T}
     @_noub_if_noinbounds_meta
-    @boundscheck checkbounds(Bool, A, i) || throw_boundserror(A, (i,))
+    @boundscheck checkbounds(A, i)
     memoryrefset!(memoryrefnew(A.ref, i, false), x, :not_atomic, false)
     return A
 end
@@ -2326,7 +2349,7 @@ function vcat(arrays::Vector{T}...) where T
     nd = 1
     for a in arrays
         na = length(a)
-        @assert nd + na <= 1 + length(arr) # Concurrent modification of arrays?
+        @assert nd + na <= 1 + length(arr) "Concurrent modification of arrays?"
         unsafe_copyto!(arr, nd, a, 1, na)
         nd += na
     end

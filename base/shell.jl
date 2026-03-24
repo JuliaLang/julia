@@ -200,7 +200,7 @@ function print_shell_word(io::IO, word::AbstractString, special::AbstractString 
     else
         print(io, '"')
         for c in word
-            if c == '"' || c == '$'
+            if c == '"' || c == '$' || c == '\\'
                 print(io, '\\')
             end
             print(io, c)

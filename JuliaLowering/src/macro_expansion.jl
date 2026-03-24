@@ -10,13 +10,13 @@ struct MacroExpansionContext{Attrs} <: AbstractLoweringContext
 end
 
 function MacroExpansionContext(graph::SyntaxGraph, mod::Module, expr_compat_mode::Bool, world::UInt)
-    layers = ScopeLayer[ScopeLayer(1, mod, 0, false)]
+    layers = ScopeLayer[ScopeLayer(1, mod, 0, false, false)]
     MacroExpansionContext(graph, Bindings(), layers, LayerId[length(layers)], expr_compat_mode, world)
 end
 
-function push_layer!(ctx::MacroExpansionContext, mod::Module, is_macro_expansion::Bool)
+function push_layer!(ctx::MacroExpansionContext, mod::Module)
     new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod,
-                           current_layer_id(ctx), is_macro_expansion)
+                           current_layer_id(ctx), true, false)
     push!(ctx.scope_layers, new_layer)
     push!(ctx.scope_layer_stack, new_layer.id)
 end
@@ -187,11 +187,11 @@ function eval_macro_name(ctx::MacroExpansionContext, mctx::MacroContext, ex0::Sy
             # `ex` might contain a nontrivial mix of scope layers so we can't
             # just `eval()` it, as it's already been partially lowered by this
             # point.  Instead, we repeat the latter parts of `lower()` here.
-            ctx2, ex2 = expand_forms_2(ctx, ex)
-            ctx3, ex3 = resolve_scopes(ctx2, ex2)
-            ctx4, ex4 = convert_closures(ctx3, ex3)
-            ctx5, ex5 = linearize_ir(ctx4, ex4)
-            expr_form = to_lowered_expr(ex5)
+             ctx2, ex2 = expand_forms_2(ctx, ex)
+             ctx3, ex3 = resolve_scopes(ctx2, ex2)
+             ctx4, ex4 = convert_closures(ctx3, ex3)
+            _ctx5, ex5 = linearize_ir(ctx4, ex4)
+            expr_form  = to_lowered_expr(ex5)
             ccall(:jl_toplevel_eval, Any, (Any, Any), mod, expr_form)
         end
     catch err
@@ -270,15 +270,24 @@ function fix_toplevel_expansion(ctx, ex::SyntaxTree, mod::Module, lnn::LineNumbe
 end
 
 function expand_macro(ctx, ex)
-    @assert kind(ex) == K"macrocall"
+    @jl_assert kind(ex) == K"macrocall" ex
 
     macname = ex[1]
     mctx = MacroContext(ctx.graph, ex, current_layer(ctx), ctx.expr_compat_mode)
     macfunc = eval_macro_name(ctx, mctx, macname)
     raw_args = ex[3:end]
-    macro_loc = let loc = source_location(LineNumberNode, ex)
+    macro_loc = if kind(ex[2]) === K"Value"
+        loc = ex[2].value
+        if loc isa LineNumberNode
         # Some macros, e.g. @cmd, don't play nicely with file == nothing
         isnothing(loc.file) ? LineNumberNode(loc.line, :none) : loc
+        elseif loc isa Core.MacroSource
+            loc.lno
+        else
+            LineNumberNode(0, :none)
+        end
+    else
+        LineNumberNode(0, :none)
     end
     # We use a specific well defined world age for the next checks and macro
     # expansion invocations. This avoids inconsistencies if the latest world
@@ -359,9 +368,7 @@ function expand_macro(ctx, ex)
         # method was defined (may be different from `parentmodule(macfunc)`)
         mod_for_ast = lookup_method_instance(macfunc, macro_args,
                                              ctx.macro_world).def.module
-        new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod_for_ast,
-                               current_layer_id(ctx), true)
-        push_layer!(ctx, mod_for_ast, true)
+        push_layer!(ctx, mod_for_ast)
         expanded = expand_forms_1(ctx, expanded)
         pop_layer!(ctx)
     end
@@ -370,7 +377,7 @@ end
 
 _unpack_srcref(graph, srcref::SyntaxTree) = _node_id(graph, srcref)
 _unpack_srcref(graph, srcref::Tuple)      = _node_ids(graph, srcref...)
-_unpack_srcref(graph, srcref)             = srcref
+_unpack_srcref(_graph, srcref)            = srcref
 
 # Add a secondary source of provenance to each expression in the tree `ex`.
 function append_sourceref(ctx, ex, secondary_prov)
@@ -415,7 +422,9 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         out = mkleaf(ex)
         setattr!(out, :scope_layer, scope_layer)
     elseif k == K"escape"
-        @chk numchildren(ex) === 1 "`escape` requires one argument"
+        if numchildren(ex) !== 1
+            throw(LoweringError(ex, "`escape` requires one argument"))
+        end
         if length(ctx.scope_layer_stack) === 1
             throw(MacroExpansionError(ex, "`escape` node in outer context"))
         end
@@ -424,17 +433,20 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         push!(ctx.scope_layer_stack, top_layer)
         escaped_ex
     elseif k == K"hygienic-scope"
-        @chk(2 <= numchildren(ex) <= 3 && ex[2].value isa Module,
-             (ex,"`hygienic-scope` requires an AST and a module"))
+        if !(2 <= numchildren(ex) <= 3 && ex[2].value isa Module)
+            throw(LoweringError(ex,"`hygienic-scope` requires an AST and a module"))
+        end
         new_layer = ScopeLayer(length(ctx.scope_layers)+1, ex[2].value,
-                               current_layer_id(ctx), true)
+                               current_layer_id(ctx), true, false)
         push!(ctx.scope_layers, new_layer)
         push!(ctx.scope_layer_stack, new_layer.id)
         hyg_ex = expand_forms_1(ctx, ex[1])
         pop!(ctx.scope_layer_stack)
         hyg_ex
     elseif k == K"quote"
-        @chk numchildren(ex) == 1
+        if numchildren(ex) !== 1
+            throw(LoweringError(ex,"`quote` expects one argument"))
+        end
         expand_forms_1(ctx, expand_quote(ctx, ex[1]))
     elseif k == K"macrocall"
         expand_macro(ctx, ex)
@@ -489,13 +501,13 @@ split_generated(st::SyntaxTree, gen_part) = JuliaSyntax.@stm st begin
     _ -> mapchildren(x->split_generated(x, gen_part), st._graph, st)
 end
 
-function ensure_macro_attributes(graph)
-    ensure_attributes(graph,
-                      var_id=IdTag,
-                      scope_layer=LayerId,
-                      __macro_ctx__=Nothing,
-                      meta=CompileHints)
-end
+ensure_macro_attributes!(graph) = ensure_attributes!(
+    graph;
+    var_id=IdTag,
+    scope_layer=LayerId,
+    __macro_ctx__=Nothing,
+    meta=CompileHints,
+    (DEBUG ? (:jl_source=>LineNumberNode,) : ())...)
 
 @fzone "JL: macroexpand" function expand_forms_1(mod::Module, ex::SyntaxTree, expr_compat_mode::Bool, macro_world::UInt)
     if kind(ex) == K"local"
@@ -503,14 +515,16 @@ end
         # we might want to make that more explicit in the pass system.
         throw(LoweringError(ex, "local declarations have no effect outside a scope"))
     end
-    graph = ensure_macro_attributes(syntax_graph(ex))
-    ctx = MacroExpansionContext(graph, mod, expr_compat_mode, macro_world)
-    ex2 = expand_forms_1(ctx, reparent(ctx, ex))
-    graph2 = delete_attributes(graph, :__macro_ctx__)
+    graph = ensure_macro_attributes!(copy_attrs(syntax_graph(ex)))
+    ex = reparent(graph, ex)
+    ctx_out = MacroExpansionContext(graph, mod, expr_compat_mode, macro_world)
+    ex_out = expand_forms_1(ctx_out, ex)
+    graph2 = delete_attributes(ex._graph, :__macro_ctx__)
     # TODO: Returning the context with pass-specific mutable data is a bad way
     # to carry state into the next pass. We might fix this by attaching such
     # data to the graph itself as global attributes?
-    ctx2 = MacroExpansionContext(graph2, ctx.bindings, ctx.scope_layers, ctx.scope_layer_stack,
+    ctx2 = MacroExpansionContext(graph2, ctx_out.bindings, ctx_out.scope_layers,
+                                 ctx_out.scope_layer_stack,
                                  expr_compat_mode, macro_world)
-    return ctx2, reparent(ctx2, ex2)
+    return ctx2, reparent(ctx2.graph, ex_out)
 end

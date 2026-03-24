@@ -2,16 +2,16 @@
 # May be removed?
 
 function lower(mod::Module, ex0; expr_compat_mode=false, world=Base.get_world_counter())
-    ctx1, ex1 = expand_forms_1(  mod,  ex0, expr_compat_mode, world)
-    ctx2, ex2 = expand_forms_2(  ctx1, ex1)
-    ctx3, ex3 = resolve_scopes(  ctx2, ex2)
-    ctx4, ex4 = convert_closures(ctx3, ex3)
-    ctx5, ex5 = linearize_ir(    ctx4, ex4)
+     ctx1, ex1 = expand_forms_1(  mod,  ex0, expr_compat_mode, world)
+     ctx2, ex2 = expand_forms_2(  ctx1, ex1)
+     ctx3, ex3 = resolve_scopes(  ctx2, ex2)
+     ctx4, ex4 = convert_closures(ctx3, ex3)
+    _ctx5, ex5 = linearize_ir(    ctx4, ex4)
     ex5
 end
 
 function macroexpand(mod::Module, ex; expr_compat_mode=false, world=Base.get_world_counter())
-    ctx1, ex1 = expand_forms_1(mod, ex, expr_compat_mode, world)
+    _ctx1, ex1 = expand_forms_1(mod, ex, expr_compat_mode, world)
     ex1
 end
 
@@ -85,10 +85,11 @@ function lower_step(iter, mod, world=Base.get_world_counter())
         return Core.svec(:begin_module, version, newmod_name, notbare, loc)
     else
         # Non macro expansion parts of lowering
-        ctx2, ex2 = expand_forms_2(ctx1, ex)
-        ctx3, ex3 = resolve_scopes(ctx2, ex2)
-        ctx4, ex4 = convert_closures(ctx3, ex3)
-        ctx5, ex5 = linearize_ir(ctx4, ex4)
+        @assert @isdefined(ctx1) "Assertion to tell the compiler about the definedness of this variable"
+         ctx2, ex2 = expand_forms_2(ctx1, ex)
+         ctx3, ex3 = resolve_scopes(ctx2, ex2)
+         ctx4, ex4 = convert_closures(ctx3, ex3)
+        _ctx5, ex5 = linearize_ir(ctx4, ex4)
         thunk = to_lowered_expr(ex5)
         return Core.svec(:thunk, thunk)
     end
@@ -182,10 +183,10 @@ function add_ir_debug_info!(current_codelocs_stack, stmt)
             push!(current_codelocs_stack, (locstk[j][1], [], Vector{Int32}()))
         end
     end
-    @assert length(locstk) === length(current_codelocs_stack)
+    @jl_assert length(locstk) === length(current_codelocs_stack) stmt
     for (j, (file,line)) in enumerate(locstk)
         fn, edges, codelocs = current_codelocs_stack[j]
-        @assert fn == file
+        @jl_assert fn == file stmt
         if j < length(locstk)
             edge_index = length(edges) + 1
             edge_codeloc_index = fld1(length(current_codelocs_stack[j+1][3]) + 1, 3)
@@ -394,18 +395,18 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
         # opaque_closure_method has special non-evaluated semantics for the
         # `functionloc` line number node so we need to undo a level of quoting
         arg4 = args[4]
-        @assert arg4 isa QuoteNode
+        @jl_assert arg4 isa QuoteNode ex
         args[4] = arg4.value
         Expr(:opaque_closure_method, args...)
     elseif k == K"meta"
         args = Any[_to_lowered_expr(e, stmt_offset) for e in children(ex)]
         # Unpack K"Symbol" QuoteNode as `Expr(:meta)` requires an identifier here.
         arg1 = args[1]
-        @assert arg1 isa QuoteNode
+        @jl_assert arg1 isa QuoteNode ex
         args[1] = arg1.value
         Expr(:meta, args...)
     elseif k == K"static_eval"
-        @assert numchildren(ex) == 1
+        @jl_assert numchildren(ex) == 1 ex
         @stm ex[1] begin
             # tuple should just be ccall library spec
             [K"tuple" s lib] -> Expr(:tuple,
@@ -525,8 +526,8 @@ end
 Like `include`, except reads code from the given string rather than from a file.
 """
 function include_string(mod::Module, code::AbstractString, filename::AbstractString="string";
-                        expr_compat_mode=false)
-    eval(mod, parseall(SyntaxTree, code; filename=filename); expr_compat_mode)
+                        expr_compat_mode=false, version::VersionNumber=VERSION)
+    eval(mod, parseall(SyntaxTree, code; filename=filename, version=version); expr_compat_mode)
 end
 
 include(path::AbstractString) = include(JuliaLowering, path)
