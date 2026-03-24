@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
+using Base.MathConstants
 
 @testset "Rationals" begin
     @test 1//1 == 1
@@ -39,6 +40,7 @@ using Test
     @test @inferred(rationalize(Int8, 1000//3)) === Rational{Int8}(1//0)
     @test @inferred(rationalize(Int8, 1000)) === Rational{Int8}(1//0)
     @test_throws OverflowError rationalize(UInt, -2.0)
+    @test_throws OverflowError rationalize(UInt, -2)
     @test_throws ArgumentError rationalize(Int, big(3.0), -1.)
     # issue 26823
     @test_throws InexactError rationalize(Int, NaN)
@@ -203,6 +205,29 @@ end
     end
 
     @test Rational(rand_int, 3)/Complex(3, 2) == Complex(Rational(rand_int, 13), -Rational(rand_int*2, 39))
+    @test (1//1) / complex(0, 1) === 0//1 - 1//1*im
+    @test (0//1) / complex(0, 1) === 0//1 + 0//1*im
+    @test (0//1) / complex(1, 0) === 0//1 + 0//1*im
+    @test (0//1) / complex(1, 1) === 0//1 + 0//1*im
+    @test (1//1) / complex(1, 1) === 1//2 - 1//2*im
+    @test (0//1) / complex(1//1, 1//1) === 0//1 + 0//1*im
+    @test (1//1) / complex(1//1, 1//1) === 1//2 - 1//2*im
+    @test (0//1) / complex(1//0, 0//1) === 0//1 + 0//1*im
+    @test (1//1) / complex(1//1, 1//0) === 0//1 + 0//1*im
+    @test_throws DivideError (0//1) / complex(0, 0)
+    @test_throws DivideError (1//1) / complex(0, 0)
+    @test_throws DivideError (1//0) / complex(0, 0)
+    @test_throws DivideError complex(1//0) // complex(1//0, 1//0)
+    @test_throws DivideError 1 // complex(0, 0)
+    @test_throws DivideError 0 // complex(0, 0)
+    @test_throws DivideError complex(1) // complex(0, 0)
+    @test_throws DivideError complex(0) // complex(0, 0)
+
+    # 1//200 - 1//200*im cannot be represented as Complex{Rational{Int8}}
+    @test_throws OverflowError (Int8(1)//Int8(1)) / (Int8(100) + Int8(100)im)
+    @test_throws OverflowError (Int8(1)//Int8(1)) // (Int8(100) + Int8(100)im)
+    @test_throws OverflowError Int8(1) // (Int8(100) + Int8(100)im)
+    @test_throws OverflowError complex(Int8(1)) // (Int8(100) + Int8(100)im)
 
     @test Complex(rand_int, 0) == Rational(rand_int)
     @test Rational(rand_int) == Complex(rand_int, 0)
@@ -226,6 +251,14 @@ end
                 @test (a+b*im)//(c+d*im) == (a*c+b*d+(b*c-a*d)*im)//(c^2+d^2)
                 @test Complex(Rational(a)+b*im)//Complex(Rational(c)+d*im) == Complex(a+b*im)//Complex(c+d*im)
             end
+        end
+    end
+    @testset "exact division by an infinite complex number" begin
+        for y ∈ (1 // 0, -1 // 0)
+            @test (7 // complex(y)) == 0
+            @test (Rational(7) // complex(y)) == 0
+            @test (complex(7) // complex(y)) == 0
+            @test (complex(Rational(7)) // complex(y)) == 0
         end
     end
 end
@@ -538,7 +571,7 @@ end
 @testset "issue 16513" begin
     @test convert(Rational{Int32}, pi) == 1068966896 // 340262731
     @test convert(Rational{Int64}, pi) == 2646693125139304345 // 842468587426513207
-    @test convert(Rational{Int128}, pi) == 60728338969805745700507212595448411044 // 19330430665609526556707216376512714945
+    @test convert(Rational{Int128}, pi) == 135383245921877291206888365157940675591//43093825600584903152997992180848828034
     @test_throws ArgumentError convert(Rational{BigInt}, pi)
 end
 @testset "issue 5935" begin
@@ -571,8 +604,8 @@ end
     @test rationalize(BigInt,nextfloat(parse(BigFloat,"0.1")),tol=0) == 46316835694926478169428394003475163141307993866256225615783033603165251855975//463168356949264781694283940034751631413079938662562256157830336031652518559744
 
 
-    @test rationalize(Int8, 200f0) == 1//0
-    @test rationalize(Int8, -200f0) == -1//0
+    @test rationalize(Int8, 200f0) == 127//1
+    @test rationalize(Int8, -200f0) == -127//1
 
     @test [rationalize(1pi,tol=0.1^n) for n=1:10] == [
                  16//5
@@ -610,6 +643,10 @@ end
 
 # issue #16282
 @test_throws MethodError 3 // 4.5im
+
+# issue #60137
+@test_throws MethodError 3.0 // (1 + 0im)
+@test_throws MethodError 3.0 // (1//0 + 0im)
 
 # issue #31396
 @test round(1//2, RoundNearestTiesUp) === 1//1
@@ -836,4 +873,24 @@ end
     @testset "do not overflow silently" begin
         @test_throws OverflowError numerator(Int8(1)//Int8(31) + Int8(8)im//Int8(3))
     end
+end
+
+@testset "Float-Rational comparison" begin
+    @test Float16(6.0e-8) == big(1//16777216) == 1//16777216
+    @test Float16(6.0e-8) == 1//16777216
+    @test 1.0 != big(1//0)
+    @test Inf == big(1//0)
+end
+
+@testset "rationalize fallback result (#61296) " begin
+    @test Rational{Int128}(pi) == 135383245921877291206888365157940675591//43093825600584903152997992180848828034
+    @test Rational{Int64}(γ) == 4434255124552851345//7682146196273606513
+    @test Rational{Int128}(γ) == 97212752342586318089728837786470353304//168416691115217442842548201681665445093
+    @test Rational{Int16}(catalan) == 29179//31856
+    @test Rational{Int64}(catalan) == 8335279125496428529//9099991504575811608
+
+    @test rationalize(Int8, 1.007) == 127//126
+    @test rationalize(Int8, 0.995) == 126//127
+    @test rationalize(Int8, -1.1531944694388938) == -128//111
+    @test rationalize(Int16, 3e-5) == 1//32767
 end

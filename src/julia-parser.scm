@@ -10,7 +10,7 @@
 ;; comma - higher than assignment outside parentheses, lower when inside
 (define prec-pair (add-dots '(=>)))
 (define prec-conditional '(?))
-(define prec-arrow       (add-dots '(← → ↔ ↚ ↛ ↞ ↠ ↢ ↣ ↦ ↤ ↮ ⇎ ⇍ ⇏ ⇐ ⇒ ⇔ ⇴ ⇶ ⇷ ⇸ ⇹ ⇺ ⇻ ⇼ ⇽ ⇾ ⇿ ⟵ ⟶ ⟷ ⟹ ⟺ ⟻ ⟼ ⟽ ⟾ ⟿ ⤀ ⤁ ⤂ ⤃ ⤄ ⤅ ⤆ ⤇ ⤌ ⤍ ⤎ ⤏ ⤐ ⤑ ⤔ ⤕ ⤖ ⤗ ⤘ ⤝ ⤞ ⤟ ⤠ ⥄ ⥅ ⥆ ⥇ ⥈ ⥊ ⥋ ⥎ ⥐ ⥒ ⥓ ⥖ ⥗ ⥚ ⥛ ⥞ ⥟ ⥢ ⥤ ⥦ ⥧ ⥨ ⥩ ⥪ ⥫ ⥬ ⥭ ⥰ ⧴ ⬱ ⬰ ⬲ ⬳ ⬴ ⬵ ⬶ ⬷ ⬸ ⬹ ⬺ ⬻ ⬼ ⬽ ⬾ ⬿ ⭀ ⭁ ⭂ ⭃ ⥷ ⭄ ⥺ ⭇ ⭈ ⭉ ⭊ ⭋ ⭌ ￩ ￫ ⇜ ⇝ ↜ ↝ ↩ ↪ ↫ ↬ ↼ ↽ ⇀ ⇁ ⇄ ⇆ ⇇ ⇉ ⇋ ⇌ ⇚ ⇛ ⇠ ⇢ ↷ ↶ ↺ ↻ --> <-- <-->)))
+(define prec-arrow       (add-dots '(← → ↔ ↚ ↛ ↞ ↠ ↢ ↣ ↦ ↤ ↮ ⇎ ⇍ ⇏ ⇐ ⇒ ⇔ ⇴ ⇶ ⇷ ⇸ ⇹ ⇺ ⇻ ⇼ ⇽ ⇾ ⇿ ⟵ ⟶ ⟷ ⟹ ⟺ ⟻ ⟼ ⟽ ⟾ ⟿ ⤀ ⤁ ⤂ ⤃ ⤄ ⤅ ⤆ ⤇ ⤌ ⤍ ⤎ ⤏ ⤐ ⤑ ⤔ ⤕ ⤖ ⤗ ⤘ ⤝ ⤞ ⤟ ⤠ ⥄ ⥅ ⥆ ⥇ ⥈ ⥊ ⥋ ⥎ ⥐ ⥒ ⥓ ⥖ ⥗ ⥚ ⥛ ⥞ ⥟ ⥢ ⥤ ⥦ ⥧ ⥨ ⥩ ⥪ ⥫ ⥬ ⥭ ⥰ ⧴ ⬱ ⬰ ⬲ ⬳ ⬴ ⬵ ⬶ ⬷ ⬸ ⬹ ⬺ ⬻ ⬼ ⬽ ⬾ ⬿ ⭀ ⭁ ⭂ ⭃ ⥷ ⭄ ⥺ ⭇ ⭈ ⭉ ⭊ ⭋ ⭌ ￩ ￫ ⇜ ⇝ ↜ ↝ ↩ ↪ ↫ ↬ ↼ ↽ ⇀ ⇁ ⇄ ⇆ ⇇ ⇉ ⇋ ⇌ ⇚ ⇛ ⇠ ⇢ ↷ ↶ ↺ ↻ --> <-- <--> 🢲)))
 (define prec-lazy-or     (add-dots '(|\|\||)))
 (define prec-lazy-and    (add-dots '(&&)))
 (define prec-comparison
@@ -155,7 +155,7 @@
 
 (define initial-reserved-words '(begin while if for try return break continue
                          function macro quote let local global const do
-                         struct
+                         struct typegroup
                          module baremodule using import export))
 
 (define initial-reserved-word?
@@ -1094,7 +1094,7 @@
              (fix-syntactic-unary (list op arg)))))))
 
 (define block-form? (Set '(block quote if for while let function macro abstract primitive struct
-                                 try module)))
+                                 try module typegroup)))
 
 ;; handle ^ and .^
 ;; -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
@@ -1523,6 +1523,13 @@
                      (begin0 (list 'primitive spec nb)
                              (expect-end (take-lineendings s) "primitive type"))))))
 
+       ((typegroup)
+        ;; Grouped type definitions (mutually recursive)
+        ;; typegroup struct A ... end end  ==>  (typegroup (block ...))
+        (let ((body (parse-block s (lambda (s) (parse-docstring s parse-eq)))))
+          (begin0 (list 'typegroup body)
+                  (expect-end s "typegroup"))))
+
        ((try)
         (let ((try-block (if (memq (peek-token s) '(catch finally))
                              '(block)
@@ -1597,13 +1604,60 @@
                             (if (or (eqv? t #\newline) (closing-token? t))
                                 (list 'return '(null))
                                 (list 'return (parse-eq s)))))
-       ((break continue)
+       ((continue)
         (let ((t (peek-token s)))
-          (if (or (eof-object? t)
-                  (and (eq? t 'end) (not end-symbol))
-                  (memv t '(#\newline #\; #\) :)))
-              (list word)
-              (error (string "unexpected \"" t "\" after " word)))))
+          (cond ((or (eof-object? t)
+                     (and (eq? t 'end) (not end-symbol))
+                     (memv t '(#\newline #\; #\))))
+                 ;; continue with no arguments
+                 (list word))
+                ((and range-colon-enabled (eq? t ':))
+                 ;; Could be :label or ternary. Take : and check if immediately followed by identifier.
+                 (take-token s)
+                 (let ((nxt (peek-token s)))
+                   (if (or (closing-token? nxt) (newline? nxt) (ts:space? s))
+                       ;; Space after : or closer - this is ternary, put back :
+                       (begin (ts:put-back! s ': #t)  ;; had space before :
+                              (list word))
+                       ;; No space after :, parse as atom (label validated in lowering)
+                       (begin
+                         (ts:put-back! s ': #f)  ;; put back : with no preceding space
+                         (list word (parse-atom s))))))
+                (else
+                 ;; Parse label as atom (validated in lowering)
+                 (list word (parse-atom s))))))
+
+       ((break)
+        (let ((t (peek-token s)))
+          (define (parse-break-value lbl)
+            (let ((t2 (peek-token s)))
+              (if (or (eof-object? t2)
+                      (and (eq? t2 'end) (not end-symbol))
+                      (memv t2 '(#\newline #\; #\) :)))
+                  ;; break label
+                  (list word lbl)
+                  ;; break label value
+                  (list word lbl (parse-eq s)))))
+          (cond ((or (eof-object? t)
+                     (and (eq? t 'end) (not end-symbol))
+                     (memv t '(#\newline #\; #\))))
+                 ;; break with no arguments
+                 (list word))
+                ((and range-colon-enabled (eq? t ':))
+                 ;; Could be :label or ternary. Take : and check if immediately followed by identifier.
+                 (take-token s)
+                 (let ((nxt (peek-token s)))
+                   (if (or (closing-token? nxt) (newline? nxt) (ts:space? s))
+                       ;; Space after : or closer - this is ternary, put back :
+                       (begin (ts:put-back! s ': #t)  ;; had space before :
+                              (list word))
+                       ;; No space after :, parse as atom (label validated in lowering)
+                       (begin
+                         (ts:put-back! s ': #f)  ;; put back : with no preceding space
+                         (parse-break-value (parse-atom s))))))
+                (else
+                 ;; Parse label as atom (validated in lowering)
+                 (parse-break-value (parse-atom s))))))
 
        ((module baremodule)
         (let* ((name (parse-unary-prefix s))

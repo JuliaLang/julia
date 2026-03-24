@@ -34,11 +34,11 @@ struct Generator{I,F}
     iter::I
 end
 
-Generator(f, I1, I2, Is...) = Generator(a->f(a...), zip(I1, I2, Is...))
+Generator(f, I1, I2, Is...) = Generator(splat(f), zip(I1, I2, Is...))
 
 Generator(::Type{T}, iter::I) where {T,I} = Generator{I,Type{T}}(T, iter)
 
-Generator(::Type{T}, I1, I2, Is...) where {T} = Generator(a->T(a...), zip(I1, I2, Is...))
+Generator(::Type{T}, I1, I2, Is...) where {T} = Generator(splat(T), zip(I1, I2, Is...))
 
 function iterate(g::Generator, s...)
     @inline
@@ -98,7 +98,7 @@ IteratorSize(::Type{Any}) = SizeUnknown()
 
 IteratorSize(::Type{<:Tuple}) = HasLength()
 IteratorSize(::Type{<:AbstractArray{<:Any,N}})  where {N} = HasShape{N}()
-IteratorSize(::Type{Generator{I,F}}) where {I,F} = IteratorSize(I)
+IteratorSize(::Type{<:Generator{I}}) where {I} = (@isdefined I) ? IteratorSize(I) : SizeUnknown()
 
 haslength(iter) = IteratorSize(iter) isa Union{HasShape, HasLength}
 

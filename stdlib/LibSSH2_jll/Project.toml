@@ -6,9 +6,12 @@ version = "1.11.3+1"
 OpenSSL_jll = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+Zlib_jll = "83775a58-1f1d-513f-b197-d71354ab007a"
+CompilerSupportLibraries_jll = "e66e0078-7015-5450-92f7-15fbd957f2ae"
 
 [compat]
 julia = "1.8"
+CompilerSupportLibraries_jll = "1.3.0"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

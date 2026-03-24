@@ -764,7 +764,7 @@ define i8 @gather_arrayptrs_alltrue() {
 ; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 3
 
 
-; OPAQUE: %arrayptrs = call <2 x ptr addrspace(13)> @llvm.masked.gather.v2p13.v2p11(<2 x ptr addrspace(11)> %arrayptrptrs, i32 16, <2 x i1> <i1 true, i1 true>, <2 x ptr addrspace(13)> zeroinitializer)
+; OPAQUE: %arrayptrs = call <2 x ptr addrspace(13)> @llvm.masked.gather.v2p13.v2p11(<2 x ptr addrspace(11)> %arrayptrptrs, i32 16, <2 x i1> {{(<i1 true, i1 true>|splat \(i1 true\))}}, <2 x ptr addrspace(13)> zeroinitializer)
 ; OPAQUE: [[GEP0:%.*]] = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 2
 ; OPAQUE: store ptr addrspace(10) %obj1, ptr [[GEP0]]
 ;

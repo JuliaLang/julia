@@ -2,139 +2,276 @@
 
 ## dummy stub for https://github.com/JuliaBinaryWrappers/SuiteSparse_jll.jl
 baremodule SuiteSparse_jll
-using Base, Libdl, libblastrampoline_jll
-
-const PATH_list = String[]
-const LIBPATH_list = String[]
+using Base, Libdl
+using libblastrampoline_jll
+if !(Sys.isfreebsd() || Sys.isapple())
+    using CompilerSupportLibraries_jll
+end
 
 export libamd, libbtf, libcamd, libccolamd, libcholmod, libcolamd, libklu, libldl, librbio, libspqr, libsuitesparseconfig, libumfpack
 
 # These get calculated in __init__()
 # Man I can't wait until these are automatically handled by an in-Base JLLWrappers clone.
 const PATH = Ref("")
+const PATH_list = String[]
 const LIBPATH = Ref("")
+const LIBPATH_list = String[]
 artifact_dir::String = ""
-libamd_handle::Ptr{Cvoid} = C_NULL
-libamd_path::String = ""
-libbtf_handle::Ptr{Cvoid} = C_NULL
-libbtf_path::String = ""
-libcamd_handle::Ptr{Cvoid} = C_NULL
-libcamd_path::String = ""
-libccolamd_handle::Ptr{Cvoid} = C_NULL
-libccolamd_path::String = ""
-libcholmod_handle::Ptr{Cvoid} = C_NULL
-libcholmod_path::String = ""
-libcolamd_handle::Ptr{Cvoid} = C_NULL
-libcolamd_path::String = ""
-libklu_handle::Ptr{Cvoid} = C_NULL
-libklu_path::String = ""
-libldl_handle::Ptr{Cvoid} = C_NULL
-libldl_path::String = ""
-librbio_handle::Ptr{Cvoid} = C_NULL
-librbio_path::String = ""
-libspqr_handle::Ptr{Cvoid} = C_NULL
-libspqr_path::String = ""
-libsuitesparseconfig_handle::Ptr{Cvoid} = C_NULL
+
 libsuitesparseconfig_path::String = ""
-libumfpack_handle::Ptr{Cvoid} = C_NULL
+const libsuitesparseconfig = LazyLibrary(
+    if Sys.iswindows()
+        BundledLazyLibraryPath("libsuitesparseconfig.dll")
+    elseif Sys.isapple()
+        BundledLazyLibraryPath("libsuitesparseconfig.7.dylib")
+    elseif Sys.islinux() || Sys.isfreebsd()
+        BundledLazyLibraryPath("libsuitesparseconfig.so.7")
+    else
+        error("SuiteSparse_jll: Library 'libsuitesparseconfig' is not available for $(Sys.KERNEL)")
+    end
+)
+
+libldl_path::String = ""
+const libldl = LazyLibrary(
+    if Sys.iswindows()
+        BundledLazyLibraryPath("libldl.dll")
+    elseif Sys.isapple()
+        BundledLazyLibraryPath("libldl.3.dylib")
+    elseif Sys.islinux() || Sys.isfreebsd()
+        BundledLazyLibraryPath("libldl.so.3")
+    else
+        error("SuiteSparse_jll: Library 'libldl' is not available for $(Sys.KERNEL)")
+    end
+)
+
+libbtf_path::String = ""
+const libbtf = LazyLibrary(
+    if Sys.iswindows()
+        BundledLazyLibraryPath("libbtf.dll")
+    elseif Sys.isapple()
+        BundledLazyLibraryPath("libbtf.2.dylib")
+    elseif Sys.islinux() || Sys.isfreebsd()
+        BundledLazyLibraryPath("libbtf.so.2")
+    else
+        error("SuiteSparse_jll: Library 'libbtf' is not available for $(Sys.KERNEL)")
+    end
+)
+
+libcolamd_path::String = ""
+const libcolamd = LazyLibrary(
+    if Sys.iswindows()
+        BundledLazyLibraryPath("libcolamd.dll")
+    elseif Sys.isapple()
+        BundledLazyLibraryPath("libcolamd.3.dylib")
+    elseif Sys.islinux() || Sys.isfreebsd()
+        BundledLazyLibraryPath("libcolamd.so.3")
+    else
+        error("SuiteSparse_jll: Library 'libcolamd' is not available for $(Sys.KERNEL)")
+    end;
+    dependencies = if Sys.iswindows() && Sys.WORD_SIZE == 32
+        LazyLibrary[libsuitesparseconfig, libgcc_s]
+    else
+        LazyLibrary[libsuitesparseconfig]
+    end
+)
+
+libamd_path::String = ""
+const libamd = LazyLibrary(
+    if Sys.iswindows()
+        BundledLazyLibraryPath("libamd.dll")
+    elseif Sys.isapple()
+        BundledLazyLibraryPath("libamd.3.dylib")
+    elseif Sys.islinux() || Sys.isfreebsd()
+        BundledLazyLibraryPath("libamd.so.3")
+    else
+        error("SuiteSparse_jll: Library 'libamd' is not available for $(Sys.KERNEL)")
+    end;
+    dependencies = if Sys.iswindows() && Sys.WORD_SIZE == 32
+        LazyLibrary[libsuitesparseconfig, libgcc_s]
+    else
+        LazyLibrary[libsuitesparseconfig]
+    end
+)
+
+libcamd_path::String = ""
+const libcamd = LazyLibrary(
+    if Sys.iswindows()
+        BundledLazyLibraryPath("libcamd.dll")
+    elseif Sys.isapple()
+        BundledLazyLibraryPath("libcamd.3.dylib")
+    elseif Sys.islinux() || Sys.isfreebsd()
+        BundledLazyLibraryPath("libcamd.so.3")
+    else
+        error("SuiteSparse_jll: Library 'libcamd' is not available for $(Sys.KERNEL)")
+    end;
+    dependencies = if Sys.iswindows() && Sys.WORD_SIZE == 32
+        LazyLibrary[libsuitesparseconfig, libgcc_s]
+    else
+        LazyLibrary[libsuitesparseconfig]
+    end
+)
+
+libccolamd_path::String = ""
+const libccolamd = LazyLibrary(
+    if Sys.iswindows()
+        BundledLazyLibraryPath("libccolamd.dll")
+    elseif Sys.isapple()
+        BundledLazyLibraryPath("libccolamd.3.dylib")
+    elseif Sys.islinux() || Sys.isfreebsd()
+        BundledLazyLibraryPath("libccolamd.so.3")
+    else
+        error("SuiteSparse_jll: Library 'libccolamd' is not available for $(Sys.KERNEL)")
+    end;
+    dependencies = if Sys.iswindows() && Sys.WORD_SIZE == 32
+        LazyLibrary[libsuitesparseconfig, libgcc_s]
+    else
+        LazyLibrary[libsuitesparseconfig]
+    end
+)
+
+librbio_path::String = ""
+const librbio = LazyLibrary(
+    if Sys.iswindows()
+        BundledLazyLibraryPath("librbio.dll")
+    elseif Sys.isapple()
+        BundledLazyLibraryPath("librbio.4.dylib")
+    elseif Sys.islinux() || Sys.isfreebsd()
+        BundledLazyLibraryPath("librbio.so.4")
+    else
+        error("SuiteSparse_jll: Library 'librbio' is not available for $(Sys.KERNEL)")
+    end;
+    dependencies = if Sys.iswindows() && Sys.WORD_SIZE == 32
+        LazyLibrary[libsuitesparseconfig, libgcc_s]
+    else
+        LazyLibrary[libsuitesparseconfig]
+    end
+)
+
+libcholmod_path::String = ""
+const libcholmod = LazyLibrary(
+    if Sys.iswindows()
+        BundledLazyLibraryPath("libcholmod.dll")
+    elseif Sys.isapple()
+        BundledLazyLibraryPath("libcholmod.5.dylib")
+    elseif Sys.islinux() || Sys.isfreebsd()
+        BundledLazyLibraryPath("libcholmod.so.5")
+    else
+        error("SuiteSparse_jll: Library 'libcholmod' is not available for $(Sys.KERNEL)")
+    end;
+    dependencies = if Sys.iswindows()
+        LazyLibrary[
+            libsuitesparseconfig, libamd, libcamd, libccolamd, libcolamd, libblastrampoline, libgcc_s
+        ]
+    else
+        LazyLibrary[
+            libsuitesparseconfig, libamd, libcamd, libccolamd, libcolamd, libblastrampoline
+        ]
+    end
+)
+
+libklu_path::String = ""
+const libklu = LazyLibrary(
+    if Sys.iswindows()
+        BundledLazyLibraryPath("libklu.dll")
+    elseif Sys.isapple()
+        BundledLazyLibraryPath("libklu.2.dylib")
+    elseif Sys.islinux() || Sys.isfreebsd()
+        BundledLazyLibraryPath("libklu.so.2")
+    else
+        error("SuiteSparse_jll: Library 'libklu' is not available for $(Sys.KERNEL)")
+    end;
+    dependencies = if Sys.iswindows() && Sys.WORD_SIZE == 32
+        LazyLibrary[libsuitesparseconfig, libamd, libcolamd, libbtf, libgcc_s]
+    else
+        LazyLibrary[libsuitesparseconfig, libamd, libcolamd, libbtf]
+    end
+)
+
+libspqr_path::String = ""
+const libspqr = LazyLibrary(
+    if Sys.iswindows()
+        BundledLazyLibraryPath("libspqr.dll")
+    elseif Sys.isapple()
+        BundledLazyLibraryPath("libspqr.4.dylib")
+    elseif Sys.islinux() || Sys.isfreebsd()
+        BundledLazyLibraryPath("libspqr.so.4")
+    else
+        error("SuiteSparse_jll: Library 'libspqr' is not available for $(Sys.KERNEL)")
+    end;
+    dependencies = if Sys.iswindows()
+        LazyLibrary[libsuitesparseconfig, libcholmod, libblastrampoline, libgcc_s]
+    elseif Sys.isfreebsd() || Sys.isapple()
+        LazyLibrary[libsuitesparseconfig, libcholmod, libblastrampoline]
+    else
+        LazyLibrary[libsuitesparseconfig, libcholmod, libblastrampoline, libstdcxx, libgcc_s]
+    end
+)
+
 libumfpack_path::String = ""
+const libumfpack = LazyLibrary(
+    if Sys.iswindows()
+        BundledLazyLibraryPath("libumfpack.dll")
+    elseif Sys.isapple()
+        BundledLazyLibraryPath("libumfpack.6.dylib")
+    elseif Sys.islinux() || Sys.isfreebsd()
+        BundledLazyLibraryPath("libumfpack.so.6")
+    else
+        error("SuiteSparse_jll: Library 'libumfpack' is not available for $(Sys.KERNEL)")
+    end;
+    dependencies = if Sys.iswindows() && Sys.WORD_SIZE == 32
+        LazyLibrary[libsuitesparseconfig, libamd, libcholmod, libblastrampoline, libgcc_s]
+    else
+        LazyLibrary[libsuitesparseconfig, libamd, libcholmod, libblastrampoline]
+    end
+)
 
-if Sys.iswindows()
-    const libamd = "libamd.dll"
-    const libbtf = "libbtf.dll"
-    const libcamd = "libcamd.dll"
-    const libccolamd = "libccolamd.dll"
-    const libcholmod = "libcholmod.dll"
-    const libcolamd = "libcolamd.dll"
-    const libklu = "libklu.dll"
-    const libldl = "libldl.dll"
-    const librbio = "librbio.dll"
-    const libspqr = "libspqr.dll"
-    const libsuitesparseconfig = "libsuitesparseconfig.dll"
-    const libumfpack = "libumfpack.dll"
-elseif Sys.isapple()
-    const libamd = "@rpath/libamd.3.dylib"
-    const libbtf = "@rpath/libbtf.2.dylib"
-    const libcamd = "@rpath/libcamd.3.dylib"
-    const libccolamd = "@rpath/libccolamd.3.dylib"
-    const libcholmod = "@rpath/libcholmod.5.dylib"
-    const libcolamd = "@rpath/libcolamd.3.dylib"
-    const libklu = "@rpath/libklu.2.dylib"
-    const libldl = "@rpath/libldl.3.dylib"
-    const librbio = "@rpath/librbio.4.dylib"
-    const libspqr = "@rpath/libspqr.4.dylib"
-    const libsuitesparseconfig = "@rpath/libsuitesparseconfig.7.dylib"
-    const libumfpack = "@rpath/libumfpack.6.dylib"
-else
-    const libamd = "libamd.so.3"
-    const libbtf = "libbtf.so.2"
-    const libcamd = "libcamd.so.3"
-    const libccolamd = "libccolamd.so.3"
-    const libcholmod = "libcholmod.so.5"
-    const libcolamd = "libcolamd.so.3"
-    const libklu = "libklu.so.2"
-    const libldl = "libldl.so.3"
-    const librbio = "librbio.so.4"
-    const libspqr = "libspqr.so.4"
-    const libsuitesparseconfig = "libsuitesparseconfig.so.7"
-    const libumfpack = "libumfpack.so.6"
-end
-
-function __init__()
+function eager_mode()
+    @static if @isdefined CompilerSupportLibraries_jll
+        CompilerSupportLibraries_jll.eager_mode()
+    end
     libblastrampoline_jll.eager_mode()
 
+    dlopen(libamd)
+    dlopen(libbtf)
+    dlopen(libcamd)
+    dlopen(libccolamd)
+    dlopen(libcholmod)
+    dlopen(libcolamd)
+    dlopen(libklu)
+    dlopen(libldl)
+    dlopen(librbio)
+    dlopen(libspqr)
+    dlopen(libsuitesparseconfig)
+    dlopen(libumfpack)
+end
+is_available() = true
+
+function __init__()
     # BSD-3-Clause
-    global libamd_handle = dlopen(libamd)
-    global libamd_path = dlpath(libamd_handle)
-    global libcamd_handle = dlopen(libcamd)
-    global libcamd_path = dlpath(libcamd_handle)
-    global libccolamd_handle = dlopen(libccolamd)
-    global libccolamd_path = dlpath(libccolamd_handle)
-    global libcolamd_handle = dlopen(libcolamd)
-    global libcolamd_path = dlpath(libcolamd_handle)
-    global libsuitesparseconfig_handle = dlopen(libsuitesparseconfig)
-    global libsuitesparseconfig_path = dlpath(libsuitesparseconfig_handle)
+    global libamd_path = string(libamd.path)
+    global libcamd_path = string(libcamd.path)
+    global libccolamd_path = string(libccolamd.path)
+    global libcolamd_path = string(libcolamd.path)
+    global libsuitesparseconfig_path = string(libsuitesparseconfig.path)
 
     # LGPL-2.1+
-    global libbtf_handle = dlopen(libbtf)
-    global libbtf_path = dlpath(libbtf_handle)
-    global libklu_handle = dlopen(libklu)
-    global libklu_path = dlpath(libklu_handle)
-    global libldl_handle = dlopen(libldl)
-    global libldl_path = dlpath(libldl_handle)
+    global libbtf_path = string(libbtf.path)
+    global libklu_path = string(libklu.path)
+    global libldl_path = string(libldl.path)
 
     # GPL-2.0+
     if Base.USE_GPL_LIBS
-        global libcholmod_handle = dlopen(libcholmod)
-        global libcholmod_path = dlpath(libcholmod_handle)
-        global librbio_handle = dlopen(librbio)
-        global librbio_path = dlpath(librbio_handle)
-        global libspqr_handle = dlopen(libspqr)
-        global libspqr_path = dlpath(libspqr_handle)
-        global libumfpack_handle = dlopen(libumfpack)
-        global libumfpack_path = dlpath(libumfpack_handle)
+        global libcholmod_path = string(libcholmod.path)
+        global librbio_path = string(librbio.path)
+        global libspqr_path = string(libspqr.path)
+        global libumfpack_path = string(libumfpack.path)
     end
     global artifact_dir = dirname(Sys.BINDIR)
 end
 
-# JLLWrappers API compatibility shims.  Note that not all of these will really make sense.
-# For instance, `find_artifact_dir()` won't actually be the artifact directory, because
-# there isn't one.  It instead returns the overall Julia prefix.
-is_available() = true
-find_artifact_dir() = artifact_dir
-dev_jll() = error("stdlib JLLs cannot be dev'ed")
-best_wrapper = nothing
-get_libamd_path() = libamd_path
-get_libbtf_path() = libbtf_path
-get_libcamd_path() = libcamd_path
-get_libccolamd_path() = libccolamd_path
-get_libcholmod_path() = libcholmod_path
-get_libcolamd_path() = libcolamd_path
-get_libklu_path() = libklu_path
-get_libldl_path() = libldl_path
-get_librbio_path() = librbio_path
-get_libspqr_path() = libspqr_path
-get_libsuitesparseconfig_path() = libsuitesparseconfig_path
-get_libumfpack_path() = libumfpack_path
+if Base.generating_output()
+    precompile(eager_mode, ())
+    precompile(is_available, ())
+end
 
 end  # module SuiteSparse_jll

@@ -109,8 +109,8 @@ end
         if mod ∉ visited
             push!(visited, mod)
             for name in names(mod, all=true)
-                isdefined(mod, name) || continue
-                value = getfield(mod, name)
+                isdefinedglobal(mod, name) || continue
+                value = getglobal(mod, name)
                 if value isa Module
                     value === Main && continue
                     test_exceptions(value, visited)

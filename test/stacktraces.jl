@@ -90,7 +90,7 @@ f(x) = (y = h(x); y)
 trace = (try; f(3); catch; stacktrace(catch_backtrace()); end)[1:3]
 can_inline = Bool(Base.JLOptions().can_inline)
 for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false))
-    @test frame.func === typeof(func).name.mt.name
+    @test frame.func === typeof(func).name.singletonname
     # broken until #50082 can be addressed
     mi = isa(frame.linfo, Core.CodeInstance) ? frame.linfo.def : frame.linfo
     @test mi.def.module === which(func, (Any,)).module broken=inlined
@@ -109,10 +109,10 @@ let src = Meta.lower(Main, quote let x = 1 end end).args[1]::Core.CodeInfo
     repr = string(sf)
     @test repr == "Toplevel MethodInstance thunk at b:3"
 end
-let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
+let li = only(methods(fieldtype)).unspecialized,
     sf = StackFrame(:a, :b, 3, li, false, false, 0),
     repr = string(sf)
-    @test repr == "fieldtype(...) at b:3"
+    @test repr == "fieldtype(::Vararg{Any}) at b:3"
 end
 
 let ctestptr = cglobal((:ctest, "libccalltest")),
@@ -248,7 +248,7 @@ struct F49231{a,b,c,d,e,f,g} end
         stacktrace(catch_backtrace())
     end
     str = sprint(Base.show_backtrace, st, context = (:limit=>true, :stacktrace_types_limited => Ref(false), :color=>true, :displaysize=>(50,105)))
-    @test contains(str, "[5] \e[0m\e[1mcollect_to!\e[22m\e[0m\e[1m(\e[22m\e[90mdest\e[39m::\e[0mVector\e[90m{…}\e[39m, \e[90mitr\e[39m::\e[0mBase.Generator\e[90m{…}\e[39m, \e[90moffs\e[39m::\e[0m$Int, \e[90mst\e[39m::\e[0mTuple\e[90m{…}\e[39m\e[0m\e[1m)\e[22m\n\e[90m")
+    @test contains(str, "[5] \e[0m\e[1mcollect_to!\e[22m\e[0m\e[1m(\e[22m\e[90mdest\e[39m::\e[0mVector\e[90m{…}\e[39m, \e[90mitr\e[39m::\e[0mBase.Generator\e[90m{…}\e[39m, \e[90moffs\e[39m::\e[0m$Int, \e[90mst\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n")
 
     st = try
         F49231{Vector,Val{'}'},Vector{Vector{Vector{Vector}}},Tuple{Int,Int,Int,Int,Int,Int,Int},Int,Int,Int}()(1,2,3)
@@ -256,9 +256,45 @@ struct F49231{a,b,c,d,e,f,g} end
         stacktrace(catch_backtrace())
     end
     str = sprint(Base.show_backtrace, st, context = (:limit=>true, :stacktrace_types_limited => Ref(false), :color=>true, :displaysize=>(50,132)))
-    @test contains(str, "[2] \e[0m\e[1m(::$F49231{Vector, Val{…}, Vector{…}, NTuple{…}, $Int, $Int, $Int})\e[22m\e[0m\e[1m(\e[22m\e[90ma\e[39m::\e[0m$Int, \e[90mb\e[39m::\e[0m$Int, \e[90mc\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n\e[90m")
+    @test contains(str, "[2] \e[0m\e[1m(::$F49231{Vector, Val{…}, Vector{…}, NTuple{…}, $Int, $Int, $Int})\e[22m\e[0m\e[1m(\e[22m\e[90ma\e[39m::\e[0m$Int, \e[90mb\e[39m::\e[0m$Int, \e[90mc\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n")
 end
 
 @testset "Base.StackTraces docstrings" begin
     @test isempty(Docs.undocumented_names(StackTraces))
+end
+
+
+@testset "Dispatch backtraces" begin
+    # Check that it's possible to capture a backtrace upon entrance to inference
+    # This test ensures that SnoopCompile will continue working
+    # See in particular SnoopCompile/SnoopCompileCore/src/snoop_inference.jl
+    # and the "diagnostics" devdoc.
+    @noinline callee(x::Int) = sin(x)
+    caller(x) = invokelatest(callee, x)
+
+    @test sin(0) == 0  # force compilation of sin(::Int)
+    dispatch_backtraces = []
+    ccall(:jl_set_inference_entrance_backtraces, Cvoid, (Any,), dispatch_backtraces)
+    caller(3)
+    ccall(:jl_set_inference_entrance_backtraces, Cvoid, (Any,), nothing)
+    ln = @__LINE__() - 2
+    fl = Symbol(@__FILE__())
+    @test length(dispatch_backtraces) == 4  # 2 ci-backtrace pairs, stored as 4 separate elements
+    mcallee, mcaller = only(methods(callee)), only(methods(caller))
+    # Extract pairs from the flattened array format: ci at odd indices, backtrace at even indices
+    pairs = [(dispatch_backtraces[i], dispatch_backtraces[i+1]) for i in 1:2:length(dispatch_backtraces)]
+    @test any(pairs) do (ci, trace)
+        # trace is a SimpleVector from jl_backtrace_from_here, need to reformat before stacktrace
+        bt = Base._reformat_bt(trace[1], trace[2])
+        ci.def.def === mcallee && any(stacktrace(bt)) do sf
+            sf.file == fl && sf.line == ln
+        end
+    end
+    @test any(pairs) do (ci, trace)
+        # trace is a SimpleVector from jl_backtrace_from_here, need to reformat before stacktrace
+        bt = Base._reformat_bt(trace[1], trace[2])
+        ci.def.def === mcaller && any(stacktrace(bt)) do sf
+            sf.file == fl && sf.line == ln
+        end
+    end
 end

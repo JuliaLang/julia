@@ -372,7 +372,7 @@ function displayable(m::MIME)
 end
 
 ###########################################################################
-# The redisplay method can be overridden by a AbstractDisplay in order to
+# The redisplay method can be overridden by an AbstractDisplay in order to
 # update an existing display (instead of, for example, opening a new
 # window), and is used by the IJulia interface to defer display
 # until the next interactive prompt.  This is especially useful

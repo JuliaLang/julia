@@ -3,16 +3,20 @@
 using Test, SparseArrays
 using Test: guardseed
 
-const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+using Random
+
+@test isempty(Test.detect_closure_boxes(Random))
+
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
-using Random
 using Random.DSFMT
 
 using Random: default_rng, Sampler, SamplerRangeFast, SamplerRangeInt, SamplerRangeNDL, MT_CACHE_F, MT_CACHE_I
-using Random: jump_128, jump_192, jump_128!, jump_192!
+using Random: jump_128, jump_192, jump_128!, jump_192!, SeedHasher
 
+import SHA
 import Future # randjump
 
 function test_uniform(xs::AbstractArray{T}) where {T<:AbstractFloat}
@@ -297,7 +301,7 @@ for f in (:<, :<=, :>, :>=, :(==), :(!=))
 end
 
 # test all rand APIs
-for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
+for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro(0)], [SeedHasher(0)])
     realrng = rng == [] ? default_rng() : only(rng)
     ftypes = [Float16, Float32, Float64, FakeFloat64, BigFloat]
     cftypes = [ComplexF16, ComplexF32, ComplexF64, ftypes...]
@@ -453,7 +457,8 @@ function hist(X, n)
 end
 
 @testset "uniform distribution of floats" begin
-    for rng in [MersenneTwister(), RandomDevice(), Xoshiro()],
+    seed = rand(UInt128)
+    for rng in [MersenneTwister(seed), RandomDevice(), Xoshiro(seed), SeedHasher(seed)],
         T in [Float16, Float32, Float64, BigFloat],
         prec in (T == BigFloat ? [3, 53, 64, 100, 256, 1000] : [256])
 
@@ -480,7 +485,8 @@ end
         # but also for 3 linear combinations of positions (for the array version)
         lcs = unique!.([rand(1:n, 2), rand(1:n, 3), rand(1:n, 5)])
         aslcs = zeros(Int, 3)
-        for rng = (MersenneTwister(), RandomDevice(), Xoshiro())
+        seed = rand(UInt128)
+        for rng = (MersenneTwister(seed), RandomDevice(), Xoshiro(seed), SeedHasher(seed))
             for scalar = [false, true]
                 fill!(a, 0)
                 fill!(as, 0)
@@ -550,6 +556,14 @@ end
     @test randcycle(mta,10) == randcycle(mtb,10)
     @test randcycle!(mta, A) == randcycle!(mtb, B)
     @test randcycle!(A) === A
+
+    @testset "non-`Array` `randperm!` and `randcycle!`" begin
+        x, y = Memory{Int}(undef, 10), Memory{Int}(undef, 10)
+        @test randperm!(mta, x) == randperm!(mtb, y)
+        @test randperm!(x) === x
+        @test randcycle!(mta, x) == randcycle!(mtb, y)
+        @test randcycle!(x) === x
+    end
 
     let p = randcycle(UInt16(10))
         @test typeof(p) ≡ Vector{UInt16}
@@ -635,34 +649,10 @@ end
 # MersenneTwister initialization with invalid values
 @test_throws DomainError DSFMT.DSFMT_state(zeros(Int32, rand(0:DSFMT.JN32-1)))
 
-@test_throws DomainError MersenneTwister(zeros(UInt32, 1), DSFMT.DSFMT_state(),
-                                         zeros(Float64, 10), zeros(UInt128, MT_CACHE_I>>4), 0, 0, 0, 0, -1, -1)
-
-@test_throws DomainError MersenneTwister(zeros(UInt32, 1), DSFMT.DSFMT_state(),
-                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), -1, 0, 0, 0, -1, -1)
-
-@test_throws DomainError MersenneTwister(zeros(UInt32, 1), DSFMT.DSFMT_state(),
-                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>3), 0, 0, 0, 0, -1, -1)
-
-@test_throws DomainError MersenneTwister(zeros(UInt32, 1), DSFMT.DSFMT_state(),
-                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), 0, -1, 0, 0, -1, -1)
-
-# seed is private to MersenneTwister
-let seed = rand(UInt32, 10)
-    r = MersenneTwister(seed)
-    @test r.seed == seed && r.seed !== seed
-    let r2 = Future.randjump(r, big(10)^20)
-        Random.seed!(r2)
-        @test seed == r.seed != r2.seed
-    end
-    resize!(seed, 4)
-    @test r.seed != seed
-end
-
 @testset "Random.seed!(rng, ...) returns rng" begin
     # issue #21248
     seed = rand(UInt)
-    for m = ([MersenneTwister(seed)], [Xoshiro(seed)], [])
+    for m = ([MersenneTwister(seed)], [Xoshiro(seed)], [SeedHasher(seed)], [])
         m2 = m == [] ? default_rng() : m[1]
         @test Random.seed!(m...) === m2
         @test Random.seed!(m..., rand(UInt)) === m2
@@ -675,6 +665,7 @@ end
         @test Random.seed!(m..., typemax(UInt)) === m2
         @test Random.seed!(m..., typemax(UInt128)) === m2
         @test Random.seed!(m..., "a random seed") === m2
+        @test Random.seed!(m..., Random.default_rng()) === m2
     end
 end
 
@@ -704,10 +695,16 @@ let b = ['0':'9';'A':'Z';'a':'z']
     @test randstring(MersenneTwister(0)) == randstring(MersenneTwister(0), b)
 end
 
+@testset "`randstring` with $T" for T in (UInt8, UInt16, UInt32, Int8, Int16, Int32, UInt, Int)
+    # clamp it to a small value so that we don't allocate too much unnecessarily
+    n = clamp(rand(T), Int8) % T
+    @test randstring(n) isa String
+end
+
 # this shouldn't crash (#22403)
 @test_throws MethodError rand!(Union{UInt,Int}[1, 2, 3])
 
-@testset "$RNG() & Random.seed!(rng::$RNG) initializes randomly" for RNG in (MersenneTwister, RandomDevice, Xoshiro)
+@testset "$RNG() & Random.seed!(rng::$RNG) initializes randomly" for RNG in (MersenneTwister, RandomDevice, Xoshiro, SeedHasher)
     m = RNG()
     a = rand(m, Int)
     m = RNG()
@@ -728,7 +725,7 @@ end
     @test rand(m, Int) ∉ (a, b, c, d)
 end
 
-@testset "$RNG(seed) & Random.seed!(m::$RNG, seed) produce the same stream" for RNG=(MersenneTwister,Xoshiro)
+@testset "$RNG(seed) & Random.seed!(m::$RNG, seed) produce the same stream" for RNG=(MersenneTwister, Xoshiro, SeedHasher)
     seeds = Any[0, 1, 2, 10000, 10001, rand(UInt32, 8), randstring(), randstring(), rand(UInt128, 3)...]
     if RNG == Xoshiro
         push!(seeds, rand(UInt64, rand(1:4)))
@@ -739,6 +736,11 @@ end
         Random.seed!(m, seed)
         @test a == [rand(m) for _=1:100]
     end
+    # rng as a seed
+    m = RNG(Xoshiro(0))
+    a = [rand(m) for _=1:100]
+    Random.seed!(m, Xoshiro(0))
+    @test a == [rand(m) for _=1:100]
 end
 
 @testset "Random.seed!(seed) sets Random.GLOBAL_SEED" begin
@@ -763,7 +765,10 @@ struct RandomStruct23964 end
     @test_throws MethodError rand(RandomStruct23964())
 end
 
-@testset "rand(::$(typeof(RNG)), ::UnitRange{$T}" for RNG ∈ (MersenneTwister(rand(UInt128)), RandomDevice(), Xoshiro()),
+@testset "rand(::$(typeof(RNG)), ::UnitRange{$T}" for RNG ∈ (MersenneTwister(rand(UInt128)),
+                                                             RandomDevice(),
+                                                             Xoshiro(rand(UInt128)),
+                                                             SeedHasher(rand(UInt128))),
                                                         T ∈ (Bool, Int8, Int16, Int32, UInt32, Int64, Int128, UInt128)
     if T === Bool
         @test rand(RNG, false:true) ∈ (false, true)
@@ -824,6 +829,20 @@ end
     @inferred rand(Tuple{Int32,Int64,Float64})
     @inferred rand(NTuple{20,Int})
     @test_throws TypeError rand(Tuple{1:2,3:4})
+
+    @testset "rand(::RandomDevice, ::Type{NTuple{N, Int}})" begin
+        # RandomDevice has a specialization for homogeneous tuple types of builtin integers
+        rd = RandomDevice()
+        @test () == rand(rd, Tuple{})
+        xs = rand(rd, Tuple{Int, Int})
+        @test xs isa Tuple{Int, Int} && xs[1] != xs[2]
+        xs = rand(rd, NTuple{2, Int})
+        @test xs isa Tuple{Int, Int} && xs[1] != xs[2]
+        xs = rand(rd, Tuple{Int, UInt}) # not NTuple
+        @test xs isa Tuple{Int, UInt} && xs[1] != xs[2]
+        xs = rand(rd, Tuple{Bool}) # not included in the specialization
+        @test xs isa Tuple{Bool}
+    end
 end
 
 @testset "GLOBAL_RNG" begin
@@ -892,8 +911,11 @@ end
     @test rand(rng) == rand(GLOBAL_RNG)
 end
 
-@testset "RNGs broadcast as scalars: T" for T in (MersenneTwister, RandomDevice)
-    @test length.(rand.(T(), 1:3)) == 1:3
+@testset "RNGs broadcast as scalars: $(typeof(RNG))" for RNG in (MersenneTwister(0),
+                                                                 RandomDevice(),
+                                                                 Xoshiro(0),
+                                                                 SeedHasher(0))
+    @test length.(rand.(RNG, 1:3)) == 1:3
 end
 
 @testset "generated scalar integers do not overlap" begin
@@ -932,42 +954,28 @@ end
 @testset "show" begin
     @testset "MersenneTwister" begin
         m = MersenneTwister(123)
-        @test string(m) == "MersenneTwister(123)"
+        @test string(m) == "MersenneTwister(0xf80cc98e147960c1fefa8d41b8f5dca5, 0xea7a7dcb2e787c0120e2ccc17662fc1d)"
+        @test m == MersenneTwister(0xf80cc98e147960c1fefa8d41b8f5dca5, 0xea7a7dcb2e787c0120e2ccc17662fc1d)
         Random.jump!(m, 2*big(10)^20)
-        @test string(m) == "MersenneTwister(123, (200000000000000000000, 0))"
-        @test m == MersenneTwister(123, (200000000000000000000, 0))
+        @test string(m) == "MersenneTwister(0xf80cc98e147960c1fefa8d41b8f5dca5, 0xea7a7dcb2e787c0120e2ccc17662fc1d, 200000000000000000000, 0)"
+        @test m == MersenneTwister(0xf80cc98e147960c1fefa8d41b8f5dca5, 0xea7a7dcb2e787c0120e2ccc17662fc1d, 200000000000000000000, 0)
         rand(m)
-        @test string(m) == "MersenneTwister(123, (200000000000000000000, 1002, 0, 1))"
+        @test string(m) == "MersenneTwister(0xf80cc98e147960c1fefa8d41b8f5dca5, 0xea7a7dcb2e787c0120e2ccc17662fc1d, 200000000000000000000, 1002, 0, 1)"
 
-        @test m == MersenneTwister(123, (200000000000000000000, 1002, 0, 1))
+        @test m == MersenneTwister(0xf80cc98e147960c1fefa8d41b8f5dca5, 0xea7a7dcb2e787c0120e2ccc17662fc1d, 200000000000000000000, 1002, 0, 1)
         rand(m, Int64)
-        @test string(m) == "MersenneTwister(123, (200000000000000000000, 2256, 0, 1, 1002, 1))"
-        @test m == MersenneTwister(123, (200000000000000000000, 2256, 0, 1, 1002, 1))
+        @test string(m) == "MersenneTwister(0xf80cc98e147960c1fefa8d41b8f5dca5, 0xea7a7dcb2e787c0120e2ccc17662fc1d, 200000000000000000000, 2256, 0, 1, 1002, 1)"
+        @test m == MersenneTwister(0xf80cc98e147960c1fefa8d41b8f5dca5, 0xea7a7dcb2e787c0120e2ccc17662fc1d, 200000000000000000000, 2256, 0, 1, 1002, 1)
 
         m = MersenneTwister(0x0ecfd77f89dcd508caa37a17ebb7556b)
-        @test string(m) == "MersenneTwister(0x0ecfd77f89dcd508caa37a17ebb7556b)"
+        @test string(m) == "MersenneTwister(0x07a0cc280198a55c39fa6f802d242f8b, 0x8472a002c9dd8879235ae29f67bc7496)"
         rand(m, Int64)
-        @test string(m) == "MersenneTwister(0x0ecfd77f89dcd508caa37a17ebb7556b, (0, 1254, 0, 0, 0, 1))"
-        @test m == MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b, (0, 1254, 0, 0, 0, 1))
+        @test string(m) == "MersenneTwister(0x07a0cc280198a55c39fa6f802d242f8b, 0x8472a002c9dd8879235ae29f67bc7496, 0, 1254, 0, 0, 0, 1)"
+        @test m == MersenneTwister(0x07a0cc280198a55c39fa6f802d242f8b, 0x8472a002c9dd8879235ae29f67bc7496, 0, 1254, 0, 0, 0, 1)
 
         m = MersenneTwister(0); rand(m, Int64); rand(m)
-        @test string(m) == "MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))"
-        @test m == MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))
-
-        # negative seeds
-        Random.seed!(m, -3)
-        @test string(m) == "MersenneTwister(-3)"
-        Random.seed!(m, typemin(Int8))
-        @test string(m) == "MersenneTwister(-128)"
-
-        # string seeds
-        Random.seed!(m, "seed 1")
-        @test string(m) == "MersenneTwister(\"seed 1\")"
-        x = rand(m)
-        @test x == rand(MersenneTwister("seed 1"))
-        @test string(m) == """MersenneTwister("seed 1", (0, 1002, 0, 1))"""
-        # test that MersenneTwister's fancy constructors accept string seeds
-        @test MersenneTwister("seed 1", (0, 1002, 0, 1)) == m
+        @test string(m) == "MersenneTwister(0x48d73dc42d195740db2fa90498613fdf, 0x1911b814c02405e88c49bc52dc8a77ea, 0, 2256, 1254, 1, 0, 1)"
+        @test m == MersenneTwister(0x48d73dc42d195740db2fa90498613fdf, 0x1911b814c02405e88c49bc52dc8a77ea, 0, 2256, 1254, 1, 0, 1)
     end
 
     @testset "RandomDevice" begin
@@ -1032,6 +1040,23 @@ end
     # 10% chance of having a true in it, so each value should converge to 0.1.
     @test minimum(m) >= 0.094
     @test maximum(m) <= 0.106
+end
+
+@testset "`shuffle(::NTuple)`" begin
+    @testset "sorted" begin
+        for n ∈ 0:20
+            tup = ntuple(identity, n)
+            @test tup === sort(@inferred shuffle(tup))
+        end
+    end
+    @testset "not identity" begin
+        function shuffle_is_identity()
+            tup = ntuple(identity, 9)
+            tup === shuffle(tup)
+        end
+        # shuffling may behave as the identity sometimes, but if it doesn't manage to actually reorder some of the elements at least once, something is wrong
+        @test any((_ -> !shuffle_is_identity()), 1:1000000)
+    end
 end
 
 # issue #42752
@@ -1191,7 +1216,14 @@ end
     end
 end
 
+
 @testset "seed! and hash_seed" begin
+    function hash_seed(seed)
+        ctx = SHA.SHA2_256_CTX()
+        Random.hash_seed(seed, ctx)
+        bytes2hex(SHA.digest!(ctx))
+    end
+
     # Test that:
     # 1) if n == m, then hash_seed(n) == hash_seed(m)
     # 2) if n != m, then hash_seed(n) != hash_seed(m)
@@ -1204,12 +1236,12 @@ end
         T <: Signed && push!(seeds, T(0), T(1), T(2), T(-1), T(-2))
     end
 
-    vseeds = Dict{Vector{UInt8}, BigInt}()
+    vseeds = Dict{String, BigInt}()
     for seed = seeds
         bigseed = big(seed)
-        vseed = Random.hash_seed(bigseed)
+        vseed = hash_seed(bigseed)
         # test property 1) above
-        @test Random.hash_seed(seed) == vseed
+        @test hash_seed(seed) == vseed
         # test property 2) above
         @test bigseed == get!(vseeds, vseed, bigseed)
         # test that the property 1) is actually inherited by `seed!`
@@ -1221,16 +1253,16 @@ end
     end
 
     seed32 = rand(UInt32, rand(1:9))
-    hash32 = Random.hash_seed(seed32)
-    @test Random.hash_seed(map(UInt64, seed32)) == hash32
+    hash32 = hash_seed(seed32)
+    @test hash_seed(map(UInt64, seed32)) == hash32
     @test hash32 ∉ keys(vseeds)
 
     seed_str = randstring()
     seed_gstr = GenericString(seed_str)
-    @test Random.hash_seed(seed_str) == Random.hash_seed(seed_gstr)
-    string_seeds = Set{Vector{UInt8}}()
+    @test hash_seed(seed_str) == hash_seed(seed_gstr)
+    string_seeds = Set{String}()
     for ch = 'A':'z'
-        vseed = Random.hash_seed(string(ch))
+        vseed = hash_seed(string(ch))
         @test vseed ∉ keys(vseeds)
         @test vseed ∉ string_seeds
         push!(string_seeds, vseed)

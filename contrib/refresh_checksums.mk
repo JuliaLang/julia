@@ -24,7 +24,7 @@ CLANG_TRIPLETS=$(filter %-darwin %-freebsd,$(TRIPLETS))
 NON_CLANG_TRIPLETS=$(filter-out %-darwin %-freebsd,$(TRIPLETS))
 
 # These are the projects currently using BinaryBuilder; both GCC-expanded and non-GCC-expanded:
-BB_PROJECTS=openssl libssh2 nghttp2 mpfr curl libgit2 pcre libuv unwind llvmunwind dsfmt objconv p7zip zlib libsuitesparse openlibm blastrampoline libtracyclient mmtk_julia
+BB_PROJECTS=openssl libssh2 nghttp2 mpfr curl libgit2 pcre libuv unwind llvmunwind dsfmt objconv p7zip zlib zstd libsuitesparse openlibm blastrampoline libtracyclient mmtk_julia
 BB_GCC_EXPANDED_PROJECTS=openblas csl
 BB_CXX_EXPANDED_PROJECTS=gmp llvm clang llvm-tools lld
 # These are non-BB source-only deps
@@ -57,10 +57,6 @@ checksum-$(1)-$(2)-$(3): clean-$(1)
 
 # Add this guy to his project target
 checksum-$(1): checksum-$(1)-$(2)-$(3)
-
-# Add a dependency to the pack target
-# TODO: can we make this so it only adds an ordering but not a dependency?
-pack-checksum-$(1): | checksum-$(1)
 
 # Add this guy to the `checksum` and `pack-checksum` default targets (e.g. `make -f contrib/refresh_checksums.mk openblas`)
 checksum: checksum-$1
@@ -100,7 +96,7 @@ checksum-doc-unicodedata:
 all: checksum-doc-unicodedata
 .PHONY: checksum-doc-unicodedata
 
-# merge substring project names to avoid races
+# merge substring project names (llvm and llvm-tools, libsuitesparse and suitesparse) to avoid races
 pack-checksum-llvm-tools: | pack-checksum-llvm
 	@# nothing to do but disable the prefix rule
 pack-checksum-llvm: | checksum-llvm-tools
@@ -110,18 +106,21 @@ pack-checksum-compilersupportlibraries: | checksum-csl
 pack-checksum-libsuitesparse: | pack-checksum-suitesparse
 	@# nothing to do but disable the prefix rule
 pack-checksum-suitesparse: | checksum-libsuitesparse
-# This is a bit tricky: we want llvmunwind to be separate from unwind and llvm,
+# This is a bit tricky: we want llvmunwind, clang, and lld to be separate from unwind and llvm,
 # so we add a rule to process those first
 pack-checksum-llvm pack-checksum-unwind: | pack-checksum-llvmunwind
-# and the name for LLVMLibUnwind is awkward, so handle that with a regex
-pack-checksum-llvmunwind: | pack-checksum-llvm.*unwind
+pack-checksum-llvm: | pack-checksum-clang pack-checksum-lld
+# and the name for LLVMLibUnwind is awkward, so handle that packing with a regex
+checksum-llvm.*unwind: checksum-llvmunwind
+	@# nothing to do but disable the prefix rule
+pack-checksum-llvmunwind: | pack-checksum-llvm.*unwind # override general rule below
 	cd "$(JULIAHOME)/deps/checksums" && mv 'llvm.*unwind' llvmunwind
 
 clean-%: FORCE
 	-rm "$(JULIAHOME)/deps/checksums"/'$*'
 
 # define how to pack parallel checksums into a single file format
-pack-checksum-%: FORCE
+pack-checksum-%: FORCE | checksum-%
 	@echo making "$(JULIAHOME)/deps/checksums/"'$*'
 	@cd "$(JULIAHOME)/deps/checksums" && \
 		for each in $$(ls | grep -i '$*'); do \

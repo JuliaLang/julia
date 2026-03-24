@@ -90,7 +90,7 @@ function getalladdrinfo(host::String)
     finally
         Base.sigatomic_end()
         iolock_begin()
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::Base.IntrusiveLinkedList{Task}, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we don't get spurious notifications later
@@ -129,7 +129,7 @@ Uses the operating system's underlying getaddrinfo implementation, which may do
 a DNS lookup.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"(ip\\"::1\\"|ERROR: DNSError:.*|Stacktrace:(\\n \\[0-9]+\\].*)*)"
 julia> getaddrinfo("localhost", IPv6)
 ip"::1"
 
@@ -223,7 +223,7 @@ function getnameinfo(address::Union{IPv4, IPv6})
     finally
         Base.sigatomic_end()
         iolock_begin()
-        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::Base.IntrusiveLinkedList{Task}, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we don't get spurious notifications later

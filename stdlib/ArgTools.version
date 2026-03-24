@@ -1,4 +1,4 @@
 ARGTOOLS_BRANCH = master
-ARGTOOLS_SHA1 = 1314758ad02ff5e9e5ca718920c6c633b467a84a
+ARGTOOLS_SHA1 = 89d19599208c02bfa9609d4578ab72eabe6e8eee
 ARGTOOLS_GIT_URL := https://github.com/JuliaIO/ArgTools.jl.git
 ARGTOOLS_TAR_URL = https://api.github.com/repos/JuliaIO/ArgTools.jl/tarball/$1

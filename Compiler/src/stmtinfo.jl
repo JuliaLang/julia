@@ -24,6 +24,23 @@ end
 struct NoCallInfo <: CallInfo end
 add_edges_impl(::Vector{Any}, ::NoCallInfo) = nothing
 
+# InferredCallResult is defined in types.jl so that InferenceResult can inherit from it
+
+struct ConcreteResult <: InferredCallResult
+    edge::CodeInstance
+    effects::Effects
+    result
+    ConcreteResult(edge::CodeInstance, effects::Effects) = new(edge, effects)
+    ConcreteResult(edge::CodeInstance, effects::Effects, @nospecialize val) = new(edge, effects, val)
+end
+
+struct SemiConcreteResult <: InferredCallResult
+    edge::CodeInstance
+    ir::IRCode
+    effects::Effects
+    spec_info::SpecInfo
+end
+
 """
     info::MethodMatchInfo <: CallInfo
 
@@ -38,30 +55,31 @@ struct MethodMatchInfo <: CallInfo
     atype
     fullmatch::Bool
     edges::Vector{Union{Nothing,CodeInstance}}
+    call_results::Vector{Union{Nothing,InferredCallResult}}
     function MethodMatchInfo(
         results::MethodLookupResult, mt::MethodTable, @nospecialize(atype), fullmatch::Bool)
         edges = fill!(Vector{Union{Nothing,CodeInstance}}(undef, length(results)), nothing)
-        return new(results, mt, atype, fullmatch, edges)
+        call_results = fill!(Vector{Union{Nothing,InferredCallResult}}(undef, length(results)), nothing)
+        return new(results, mt, atype, fullmatch, edges, call_results)
     end
 end
 add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo) = _add_edges_impl(edges, info)
 function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Bool=false)
     if !fully_covering(info)
-        # add legacy-style missing backedge info also
         exists = false
         for i in 2:length(edges)
-            if edges[i] === info.mt && edges[i-1] == info.atype
+            if edges[i] === Core.methodtable && edges[i-1] == info.atype
                 exists = true
                 break
             end
         end
         if !exists
             push!(edges, info.atype)
-            push!(edges, info.mt)
+            push!(edges, Core.methodtable)
         end
     end
     nmatches = length(info.results)
-    if nmatches == length(info.edges) == 1
+    if nmatches == length(info.edges) == 1 && fully_covering(info)
         # try the optimized format for the representation, if possible and applicable
         # if this doesn't succeed, the backedge will be less precise,
         # but the forward edge will maintain the precision
@@ -79,13 +97,15 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
         end
     end
     # add check for whether this lookup already existed in the edges list
+    # encode nmatches as negative if fully_covers is false
+    encoded_nmatches = fully_covering(info) ? nmatches : -nmatches
     for i in 1:length(edges)
-        if edges[i] === nmatches && edges[i+1] == info.atype
+        if edges[i] === encoded_nmatches && edges[i+1] == info.atype
             # TODO: must also verify the CodeInstance match too
             return nothing
         end
     end
-    push!(edges, nmatches, info.atype)
+    push!(edges, encoded_nmatches, info.atype)
     for i = 1:nmatches
         edge = info.edges[i]
         m = info.results[i]
@@ -102,7 +122,7 @@ function add_one_edge!(edges::Vector{Any}, edge::MethodInstance)
     i = 1
     while i <= length(edges)
         edgeᵢ = edges[i]
-        edgeᵢ isa Int && (i += 2 + edgeᵢ; continue)
+        edgeᵢ isa Int && (i += 2 + abs(edgeᵢ); continue)
         edgeᵢ isa CodeInstance && (edgeᵢ = get_ci_mi(edgeᵢ))
         edgeᵢ isa MethodInstance || (i += 1; continue)
         if edgeᵢ === edge && !(i > 1 && edges[i-1] isa Type)
@@ -117,7 +137,7 @@ function add_one_edge!(edges::Vector{Any}, edge::CodeInstance)
     i = 1
     while i <= length(edges)
         edgeᵢ_orig = edgeᵢ = edges[i]
-        edgeᵢ isa Int && (i += 2 + edgeᵢ; continue)
+        edgeᵢ isa Int && (i += 2 + abs(edgeᵢ); continue)
         edgeᵢ isa CodeInstance && (edgeᵢ = get_ci_mi(edgeᵢ))
         edgeᵢ isa MethodInstance || (i += 1; continue)
         if edgeᵢ === edge.def && !(i > 1 && edges[i-1] isa Type)
@@ -134,9 +154,9 @@ function add_one_edge!(edges::Vector{Any}, edge::CodeInstance)
     push!(edges, edge)
     nothing
 end
-nsplit_impl(info::MethodMatchInfo) = 1
+nsplit_impl(::MethodMatchInfo) = 1
 getsplit_impl(info::MethodMatchInfo, idx::Int) = (@assert idx == 1; info.results)
-getresult_impl(::MethodMatchInfo, ::Int) = nothing
+getresult_impl(info::MethodMatchInfo, idx::Int) = info.call_results[idx]
 
 """
     info::UnionSplitInfo <: CallInfo
@@ -156,52 +176,16 @@ _add_edges_impl(edges::Vector{Any}, info::UnionSplitInfo, mi_edge::Bool=false) =
     for split in info.split; _add_edges_impl(edges, split, mi_edge); end
 nsplit_impl(info::UnionSplitInfo) = length(info.split)
 getsplit_impl(info::UnionSplitInfo, idx::Int) = getsplit(info.split[idx], 1)
-getresult_impl(::UnionSplitInfo, ::Int) = nothing
-
-abstract type ConstResult end
-
-struct ConstPropResult <: ConstResult
-    result::InferenceResult
+function getresult_impl(info::UnionSplitInfo, idx::Int)
+    for split in info.split
+        n = length(split.call_results)
+        if idx ≤ n
+            return split.call_results[idx]
+        else
+            idx -= n
+        end
+    end
 end
-
-struct ConcreteResult <: ConstResult
-    edge::CodeInstance
-    effects::Effects
-    result
-    ConcreteResult(edge::CodeInstance, effects::Effects) = new(edge, effects)
-    ConcreteResult(edge::CodeInstance, effects::Effects, @nospecialize val) = new(edge, effects, val)
-end
-
-struct SemiConcreteResult <: ConstResult
-    edge::CodeInstance
-    ir::IRCode
-    effects::Effects
-    spec_info::SpecInfo
-end
-
-# XXX Technically this does not represent a result of constant inference, but rather that of
-#     regular edge inference. It might be more appropriate to rename `ConstResult` and
-#     `ConstCallInfo` to better reflect the fact that they represent either of local or
-#     volatile inference result.
-struct VolatileInferenceResult <: ConstResult
-    inf_result::InferenceResult
-end
-
-"""
-    info::ConstCallInfo <: CallInfo
-
-The precision of this call was improved using constant information.
-In addition to the original call information `info.call`, this info also keeps the results
-of constant inference `info.results::Vector{Union{Nothing,ConstResult}}`.
-"""
-struct ConstCallInfo <: CallInfo
-    call::Union{MethodMatchInfo,UnionSplitInfo}
-    results::Vector{Union{Nothing,ConstResult}}
-end
-add_edges_impl(edges::Vector{Any}, info::ConstCallInfo) = add_edges!(edges, info.call)
-nsplit_impl(info::ConstCallInfo) = nsplit(info.call)
-getsplit_impl(info::ConstCallInfo, idx::Int) = getsplit(info.call, idx)
-getresult_impl(info::ConstCallInfo, idx::Int) = info.results[idx]
 
 """
     info::MethodResultPure <: CallInfo
@@ -278,6 +262,7 @@ struct InvokeCICallInfo <: CallInfo
 end
 add_edges_impl(edges::Vector{Any}, info::InvokeCICallInfo) =
     add_inlining_edge!(edges, info.edge)
+nsplit_impl(::InvokeCICallInfo) = 0
 
 """
     info::InvokeCallInfo
@@ -289,7 +274,7 @@ Optionally keeps `info.result::InferenceResult` that keeps constant information.
 struct InvokeCallInfo <: CallInfo
     edge::Union{Nothing,CodeInstance}
     match::MethodMatch
-    result::Union{Nothing,ConstResult}
+    result::Union{Nothing,InferredCallResult}
     atype # ::Type
 end
 add_edges_impl(edges::Vector{Any}, info::InvokeCallInfo) =
@@ -390,6 +375,10 @@ function add_inlining_edge!(edges::Vector{Any}, edge::CodeInstance)
     nothing
 end
 
+nsplit_impl(::InvokeCallInfo) = 1
+getsplit_impl(info::InvokeCallInfo, idx::Int) = (@assert idx == 1; MethodLookupResult(Core.MethodMatch[info.match],
+    WorldRange(typemin(UInt), typemax(UInt)), false))
+getresult_impl(info::InvokeCallInfo, idx::Int) = (@assert idx == 1; info.result)
 
 """
     info::OpaqueClosureCallInfo
@@ -401,7 +390,7 @@ Optionally keeps `info.result::InferenceResult` that keeps constant information.
 struct OpaqueClosureCallInfo <: CallInfo
     edge::Union{Nothing,CodeInstance}
     match::MethodMatch
-    result::Union{Nothing,ConstResult}
+    result::Union{Nothing,InferredCallResult}
 end
 function add_edges_impl(edges::Vector{Any}, info::OpaqueClosureCallInfo)
     edge = info.edge

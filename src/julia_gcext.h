@@ -63,7 +63,6 @@ JL_DLLEXPORT int jl_reinit_foreign_type(
 JL_DLLEXPORT int jl_is_foreign_type(jl_datatype_t *dt) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT size_t jl_gc_max_internal_obj_size(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT size_t jl_gc_external_obj_hdr_size(void) JL_NOTSAFEPOINT;
 
 // Field layout descriptor for custom types that do
 // not fit Julia layout conventions. This is associated with
@@ -119,7 +118,7 @@ JL_DLLEXPORT int jl_gc_enable_conservative_gc_support(void);
 // This function returns whether support for conservative scanning has
 // been enabled. The return values are the same as for
 // jl_gc_enable_conservative_gc_support().
-JL_DLLEXPORT int jl_gc_conservative_gc_support_enabled(void);
+JL_DLLEXPORT int jl_gc_conservative_gc_support_enabled(void) JL_NOTSAFEPOINT;
 
 // Returns the base address of a memory block, assuming it is stored in
 // a julia memory pool. Return NULL otherwise. Conservative support

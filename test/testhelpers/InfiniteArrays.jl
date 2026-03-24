@@ -31,7 +31,7 @@ Base.max(::Infinity, ::Int) = Infinity()
 Base.max(::Int, ::Infinity) = Infinity()
 
 """
-    OneToInf(n)
+    OneToInf()
 
 Define an `AbstractInfUnitRange` that behaves like `1:∞`, with the added
 distinction that the limits are guaranteed (by the type system) to

@@ -14,7 +14,7 @@ macro code_typed1(ex0...)
 end
 get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
 macro get_code(ex0...)
-    return gen_call_with_extracted_types_and_kwargs(__module__, :get_code, ex0)
+    return gen_call_with_extracted_types_and_kwargs(__module__, :get_code, ex0; is_source_reflection = false)
 end
 
 # check if `x` is a statement with a given `head`
@@ -58,7 +58,7 @@ function fully_eliminated(code::Vector{Any}; retval=(@__FILE__), kwargs...)
     return retval′ == retval
 end
 macro fully_eliminated(ex0...)
-    return gen_call_with_extracted_types_and_kwargs(__module__, :fully_eliminated, ex0)
+    return gen_call_with_extracted_types_and_kwargs(__module__, :fully_eliminated, ex0; is_source_reflection = false)
 end
 
 let m = Meta.@lower 1 + 1

@@ -25,7 +25,7 @@ julia> io = IOBuffer();
 
 julia> print(io, "Hello", ' ', :World!)
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Hello World!"
 ```
 """
@@ -51,8 +51,6 @@ function print(io::IO, xs...)
     return nothing
 end
 
-setfield!(typeof(print).name.mt, :max_args, 10, :monotonic)
-
 """
     println([io::IO], xs...)
 
@@ -70,13 +68,11 @@ julia> io = IOBuffer();
 
 julia> println(io, "Hello", ',', " world.")
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Hello, world.\\n"
 ```
 """
 println(io::IO, xs...) = print(io, xs..., "\n")
-
-setfield!(typeof(println).name.mt, :max_args, 10, :monotonic)
 ## conversion of general objects to strings ##
 
 """
@@ -112,7 +108,7 @@ function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     else
         f(s, args...)
     end
-    String(_unsafe_take!(s))
+    takestring!(s)
 end
 
 function _str_sizehint(x)
@@ -146,9 +142,8 @@ function print_to_string(xs...)
     for x in xs
         print(s, x)
     end
-    String(_unsafe_take!(s))
+    takestring!(s)
 end
-setfield!(typeof(print_to_string).name.mt, :max_args, 10, :monotonic)
 
 function string_with_env(env, xs...)
     if isempty(xs)
@@ -164,7 +159,7 @@ function string_with_env(env, xs...)
     for x in xs
         print(env_io, x)
     end
-    String(_unsafe_take!(s))
+    takestring!(s)
 end
 
 """
@@ -178,7 +173,7 @@ highly efficient, then it may make sense to add a method to `string` and
 define `print(io::IO, x::MyType) = print(io, string(x))` to ensure the
 functions are consistent.
 
-See also: [`String`](@ref), [`repr`](@ref), [`sprint`](@ref), [`show`](@ref @show).
+See also [`String`](@ref), [`repr`](@ref), [`sprint`](@ref), [`show`](@ref @show).
 
 # Examples
 ```jldoctest
@@ -294,10 +289,10 @@ Create a read-only `IOBuffer` on the data underlying the given string.
 ```jldoctest
 julia> io = IOBuffer("Haho");
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Haho"
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Haho"
 ```
 """
@@ -596,9 +591,9 @@ end
 Create a raw string without interpolation and unescaping.
 The exception is that quotation marks still must be escaped. Backslashes
 escape both quotation marks and other backslashes, but only when a sequence
-of backslashes precedes a quote character. Thus, 2n backslashes followed by
-a quote encodes n backslashes and the end of the literal while 2n+1 backslashes
-followed by a quote encodes n backslashes followed by a quote character.
+of backslashes precedes a quote character. Thus, ``2n`` backslashes followed by
+a quote encode ``n`` backslashes and the end of the literal while ``2n+1`` backslashes
+followed by a quote encode ``n`` backslashes followed by a quote character.
 
 # Examples
 ```jldoctest
@@ -774,7 +769,7 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
             print(buf, ' ')
         end
     end
-    String(take!(buf))
+    takestring!(buf)
 end
 
 function String(a::AbstractVector{Char})

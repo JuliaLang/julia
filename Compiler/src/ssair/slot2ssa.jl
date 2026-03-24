@@ -8,7 +8,7 @@ end
 SlotInfo() = SlotInfo(Int[], Int[], false)
 
 function scan_entry!(result::Vector{SlotInfo}, idx::Int, @nospecialize(stmt))
-    # NewVarNodes count as defs for the purpose
+    # NewvarNodes count as defs for the purpose
     # of liveness analysis (i.e. they kill use chains)
     if isa(stmt, NewvarNode)
         result[slot_id(stmt.slot)].any_newvar = true
@@ -574,7 +574,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     for (; leave_block) in catch_entry_blocks
         new_phic_nodes[leave_block] = NewPhiCNode2[]
     end
-    @timeit "idf" for (idx, slot) in Iterators.enumerate(defuses)
+    @zone "CC: IDF" for (idx, slot) in Iterators.enumerate(defuses)
         # No uses => no need for phi nodes
         isempty(slot.uses) && continue
         # TODO: Restore this optimization
@@ -600,7 +600,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
             continue
         end
 
-        @timeit "liveness" (live = compute_live_ins(cfg, slot))
+        @zone "CC: LIVENESS" (live = compute_live_ins(cfg, slot))
         for li in live.live_in_bbs
             push!(live_slots[li], idx)
             cidx = findfirst(x::TryCatchRegion->x.leave_block==li, catch_entry_blocks)
@@ -608,13 +608,13 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                 # The slot is live-in into this block. We need to
                 # Create a PhiC node in the catch entry block and
                 # an upsilon node in the corresponding enter block
-                varstate = sv.bb_vartables[li]
-                if varstate === nothing
+                bbstate = sv.bb_states[li]
+                if bbstate === nothing
                     continue
                 end
                 node = PhiCNode(Any[])
                 insertpoint = first_insert_for_bb(code, cfg, li)
-                vt = varstate[idx]
+                vt = bbstate.vartable[idx]
                 phic_ssa = NewSSAValue(
                     insert_node!(ir, insertpoint,
                         NewInstruction(node, vt.typ)).id - length(ir.stmts))
@@ -640,9 +640,9 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         for block in phiblocks
             push!(phi_slots[block], idx)
             node = PhiNode()
-            varstate = sv.bb_vartables[block]
-            @assert varstate !== nothing
-            vt = varstate[idx]
+            bbstate = sv.bb_states[block]
+            @assert bbstate !== nothing
+            vt = bbstate.vartable[idx]
             ssaval = NewSSAValue(insert_node!(ir,
                 first_insert_for_bb(code, cfg, block), NewInstruction(node, vt.typ)).id - length(ir.stmts))
             undef_node = undef_ssaval = nothing
@@ -671,9 +671,9 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     worklist = Tuple{Int, Int, Vector{Pair{Any, Any}}}[(1, 0, initial_incoming_vals)]
     visited = BitSet()
     new_nodes = ir.new_nodes
-    @timeit "SSA Rename" while !isempty(worklist)
+    @zone "CC: SSA_RENAME" while !isempty(worklist)
         (item, pred, incoming_vals) = pop!(worklist)
-        if sv.bb_vartables[item] === nothing
+        if sv.bb_states[item] === nothing
             continue
         end
         # Rename existing phi nodes first, because their uses occur on the edge
@@ -730,9 +730,9 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
             (ival === SSAValue(-2)) && continue
             (ival === UNDEF_TOKEN) && continue
 
-            varstate = sv.bb_vartables[item]
-            @assert varstate !== nothing
-            typ = varstate[slot].typ
+            bbstate = sv.bb_states[item]
+            @assert bbstate !== nothing
+            typ = bbstate.vartable[slot].typ
             if !⊑(𝕃ₒ, sv.slottypes[slot], typ)
                 node = PiNode(ival, typ)
                 ival = NewSSAValue(insert_node!(ir,
@@ -891,6 +891,6 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         local node = new_nodes.stmts[i]
         node[:stmt] = new_to_regular(renumber_ssa!(node[:stmt], ssavalmap), nstmts)
     end
-    @timeit "domsort" ir = domsort_ssa!(ir, domtree)
+    @zone "CC: DOMSORT" ir = domsort_ssa!(ir, domtree)
     return ir
 end

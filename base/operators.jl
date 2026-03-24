@@ -288,12 +288,11 @@ orderings such as [`isless`](@ref).
 !!! compat "Julia 1.7"
     This function requires Julia 1.7 or later.
 """
-isunordered(x) = false
+isunordered(_) = false
 isunordered(x::AbstractFloat) = isnan(x)
-isunordered(x::Missing) = true
+isunordered(::Missing) = true
 
 ==(T::Type, S::Type) = (@_total_meta; ccall(:jl_types_equal, Cint, (Any, Any), T, S) != 0)
-!=(T::Type, S::Type) = (@_total_meta; !(T == S))
 ==(T::TypeVar, S::Type) = false
 ==(T::Type, S::TypeVar) = false
 
@@ -454,6 +453,14 @@ const ≤ = <=
 
 Greater-than-or-equals comparison operator. Falls back to `y <= x`.
 
+# Implementation
+
+New types should prefer to implement [`<=`](@ref) instead of this function,
+and rely on the fallback definition `>=(x, y) = y <= x`.
+
+Furthermore, in many cases it is enough to implement just [`<`](@ref) and
+[`==`](@ref), relying on the fallback definitions of both `<=` and `>=`.
+
 # Examples
 ```jldoctest
 julia> 'a' >= 'b'
@@ -566,7 +573,7 @@ minmax(x,y) = isless(y, x) ? (y, x) : (x, y)
 
 The identity function. Returns its argument.
 
-See also: [`one`](@ref), [`oneunit`](@ref), and [`LinearAlgebra`](@ref man-linalg)'s `I`.
+See also [`one`](@ref), [`oneunit`](@ref), [`LinearAlgebra.I`](@ref).
 
 # Examples
 ```jldoctest
@@ -633,7 +640,7 @@ function afoldl(op, a, bs...)
     end
     return y
 end
-setfield!(typeof(afoldl).name.mt, :max_args, 34, :monotonic)
+setfield!(typeof(afoldl).name, :max_args, Int32(34), :monotonic)
 
 for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
     @eval begin
@@ -809,7 +816,7 @@ end
 Remainder from Euclidean division, returning a value of the same sign as `x`, and smaller in
 magnitude than `y`. This value is always exact.
 
-See also: [`div`](@ref), [`mod`](@ref), [`mod1`](@ref), [`divrem`](@ref).
+See also [`div`](@ref), [`mod`](@ref), [`mod1`](@ref), [`divrem`](@ref).
 
 # Examples
 ```jldoctest
@@ -836,7 +843,7 @@ const % = rem
 The quotient from Euclidean (integer) division. Generally equivalent
 to a mathematical operation x/y without a fractional part.
 
-See also: [`cld`](@ref), [`fld`](@ref), [`rem`](@ref), [`divrem`](@ref).
+See also [`cld`](@ref), [`fld`](@ref), [`rem`](@ref), [`divrem`](@ref).
 
 # Examples
 ```jldoctest
@@ -1187,12 +1194,26 @@ end
 
 function (f::Fix{N})(args::Vararg{Any,M}; kws...) where {N,M}
     M < N-1 && throw(ArgumentError(LazyString("expected at least ", N-1, " arguments to `Fix{", N, "}`, but got ", M)))
-    return f.f(args[begin:begin+(N-2)]..., f.x, args[begin+(N-1):end]...; kws...)
+    (left, right) = _split_tuple(args, N-1)
+    return f.f(left..., f.x, right...; kws...)
 end
 
 # Special cases for improved constant propagation
 (f::Fix{1})(arg; kws...) = f.f(f.x, arg; kws...)
 (f::Fix{2})(arg; kws...) = f.f(arg, f.x; kws...)
+
+function Base.show(io::IO, fix::Fix{N}) where {N}
+    constr = Fix{N}
+    callable = fix.f
+    fixed_argument = fix.x
+    show(io, constr)
+    print(io, '(')
+    show(io, callable)
+    print(io, ',')
+    print(io, ' ')
+    show(io, fixed_argument)
+    print(io, ')')
+end
 
 """
 Alias for `Fix{1}`. See [`Fix`](@ref Base.Fix).
@@ -1357,18 +1378,7 @@ used to implement specialized methods.
 """
 in(x) = Fix2(in, x)
 
-function in(x, itr::Any)
-    anymissing = false
-    for y in itr
-        v = (y == x)
-        if ismissing(v)
-            anymissing = true
-        elseif v
-            return true
-        end
-    end
-    return anymissing ? missing : false
-end
+in(x, itr::Any) = any(==(x), itr)
 
 # Specialized variant of in for Tuple, which can generate typed comparisons for each element
 # of the tuple, skipping values that are statically known to be != at compile time.
@@ -1452,7 +1462,7 @@ corresponding position in `collection`. To get a vector indicating whether each 
 in `items` is in `collection`, wrap `collection` in a tuple or a `Ref` like this:
 `in.(items, Ref(collection))` or `items .∈ Ref(collection)`.
 
-See also: [`∉`](@ref), [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
+See also [`∉`](@ref), [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
 
 # Examples
 ```jldoctest

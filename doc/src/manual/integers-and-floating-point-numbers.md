@@ -59,7 +59,7 @@ julia> 1234
 The default type for an integer literal depends on whether the target system has a 32-bit architecture
 or a 64-bit architecture:
 
-```julia-repl
+```julia-repl ; nodoctest = "Results depend on system word size"
 # 32-bit system:
 julia> typeof(1)
 Int32
@@ -72,7 +72,7 @@ Int64
 The Julia internal variable [`Sys.WORD_SIZE`](@ref) indicates whether the target system is 32-bit
 or 64-bit:
 
-```julia-repl
+```julia-repl ; nodoctest = "Results depend on system word size"
 # 32-bit system:
 julia> Sys.WORD_SIZE
 32
@@ -85,7 +85,7 @@ julia> Sys.WORD_SIZE
 Julia also defines the types `Int` and `UInt`, which are aliases for the system's signed and unsigned
 native integer types respectively:
 
-```julia-repl
+```julia-repl ; nodoctest = "Results depend on system word size"
 # 32-bit system:
 julia> Int
 Int32
@@ -600,7 +600,7 @@ julia> parse(BigFloat, "1.23456789012345678901")
 1.234567890123456789010000000000000000000000000000000000000000000000000000000004
 
 julia> BigFloat(2.0^66) / 3
-2.459565876494606882133333333333333333333333333333333333333333333333333333333344e+19
+2.459565876494606882133333333333333333333333333333333333333333333333333333333344e19
 
 julia> factorial(BigInt(40))
 815915283247897734345611269596115894272000000000
@@ -683,8 +683,8 @@ julia> 2^2x
 64
 ```
 
-The precedence of numeric literal coefficients is slightly lower than that of
-unary operators such as negation.
+The [precedence](@ref Operator-Precedence-and-Associativity) of numeric literal
+coefficients is slightly lower than that of unary operators such as negation.
 So `-2x` is parsed as `(-2) * x` and `√2x` is parsed as `(√2) * x`.
 However, numeric literal coefficients parse similarly to unary operators when
 combined with exponentiation.

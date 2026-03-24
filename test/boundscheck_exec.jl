@@ -239,6 +239,13 @@ if bc_opt != bc_off
     @test_throws BoundsError BadVector20469([1,2,3])[:]
 end
 
+# Accumulate: do not set inbounds context for user-supplied functions
+if bc_opt != bc_off
+    Base.@propagate_inbounds op58200(a, b) = (1, 2)[a] + (1, 2)[b]
+    @test_throws BoundsError accumulate(op58200, 1:10)
+    @test_throws BoundsError Base.accumulate_pairwise(op58200, 1:10)
+end
+
 # Ensure iteration over arrays is vectorizable
 function g27079(X)
     r = 0
@@ -311,8 +318,7 @@ if bc_opt == bc_default
     for T in [Memory] # This requires changing the pointer_from_objref to something llvm sees through
         for ET in [Int, Float32, Union{Int, Float64}]
             no_allocate(T{ET}) #compile
-            # allocations aren't removed for Union eltypes which they theoretically could be eventually
-            test_alloc(T{ET}, broken=(ET==Union{Int, Float64}))
+            test_alloc(T{ET})
         end
     end
     function f() # this was causing a bug on an in progress version of #55913.
@@ -342,8 +348,25 @@ if bc_opt == bc_default
         m2 = Memory{Int}(undef,n)
         m1 === m2
     end
-    no_alias_prove(1)
-    @test_broken (@allocated no_alias_prove(5)) == 0
+    no_alias_prove5() = no_alias_prove(5)
+    no_alias_prove5()
+    @test (@allocated no_alias_prove5()) == 0
+end
+
+@testset "automatic boundscheck elision for iteration on some important types" begin
+    if bc_opt != bc_on
+        @test !contains(sprint(code_llvm, iterate, (Memory{UInt8}, Int)), "unreachable")
+
+        @test !contains(sprint(code_llvm, iterate, (Vector{UInt8}, Int)), "unreachable")
+        @test !contains(sprint(code_llvm, iterate, (Matrix{UInt8}, Int)), "unreachable")
+        @test !contains(sprint(code_llvm, iterate, (Array{UInt8,3}, Int)), "unreachable")
+
+        @test !contains(sprint(code_llvm, iterate, (SubArray{Float64, 1, Vector{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}}, true}, Int)), "unreachable")
+        @test !contains(sprint(code_llvm, iterate, (SubArray{Float64, 2, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Base.Slice{Base.OneTo{Int64}}}, true}, Int)), "unreachable")
+        @test !contains(sprint(code_llvm, iterate, (SubArray{Float64, 2, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, UnitRange{Int64}}, true}, Int)), "unreachable")
+
+        @test !contains(sprint(code_llvm, iterate, (Base.CodeUnits{UInt8,String}, Int)), "unreachable")
+    end
 end
 
 end
