@@ -805,10 +805,11 @@ typedef union {
 #define METHOD_SIG_LATEST_ONLY              0b0010
 #define METHOD_SIG_PRECOMPILE_MANY          0b0100
 
-JL_DLLEXPORT jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner);
-JL_DLLEXPORT void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src);
+void jl_init_engine(void);
 void jl_engine_sweep(jl_ptls_t *gc_all_tls_states) JL_NOTSAFEPOINT;
 int jl_engine_hasreserved(jl_method_instance_t *m, jl_value_t *owner) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner);
+JL_DLLEXPORT void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src);
 
 JL_DLLEXPORT jl_code_instance_t *jl_type_infer(jl_method_instance_t *li JL_PROPAGATES_ROOT, size_t world, uint8_t source_mode, uint8_t trim_mode);
 JL_DLLEXPORT jl_code_info_t *jl_gdbcodetyped1(jl_method_instance_t *mi, size_t world);
