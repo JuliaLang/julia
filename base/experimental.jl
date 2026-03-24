@@ -768,7 +768,7 @@ end
 
 function Base.set_syntax_version(m::Module, ver::VersionNumber)
     parser = Base.VersionedParse(ver)
-    Core.declare_const(m, :_internal_julia_parse, parser)
+    Core.declare_const(m, Symbol("#_internal_julia_parse"), parser)
     #lowerer = VersionedLower(ver)
     #Core.declare_const(m, :_internal_julia_lower, lowerer)
     nothing

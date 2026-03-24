@@ -7,6 +7,8 @@ using Distributed: RemoteException
 
 import Logging: Debug, Info, Warn, with_logger
 
+@test isempty(Test.detect_closure_boxes(Test))
+
 @testset "@test" begin
     atol = 1
     a = (; atol=2)
@@ -29,6 +31,59 @@ import Logging: Debug, Info, Warn, with_logger
     @test 'a' .. 'a'
     @test !('a' .. 'b')
 end
+
+
+module ClosureBoxTest
+    function boxed()
+        x = 1
+        inner() = (x += 1)
+        inner()
+    end
+
+    module Sub
+        function boxed_sub()
+            x = 0
+            inner() = (x += 1)
+            inner()
+        end
+    end
+end
+
+module ClosureBoxRedefTest
+    function boxed()
+        x = 1
+        inner() = (x += 1)
+        inner()
+    end
+end
+
+@testset "detect_closure_boxes" begin
+    boxes = Test.detect_closure_boxes(ClosureBoxTest)
+    @test any(p -> p.first.name === :boxed, boxes)
+    @test any(p -> p.first.name === :boxed_sub, boxes)
+
+    sub_boxes = Test.detect_closure_boxes(ClosureBoxTest.Sub)
+    @test any(p -> p.first.name === :boxed_sub, sub_boxes)
+    @test all(p -> parentmodule(p.first) === ClosureBoxTest.Sub, sub_boxes)
+
+    @test isempty(Test.detect_closure_boxes())
+
+    # _all version checks all loaded modules
+    all_boxes = Test.detect_closure_boxes_all_modules()
+    @test any(p -> p.first.name === :boxed, all_boxes)
+
+    # Redefinition should drop closure boxes from shadowed methods.
+    @test !isempty(Test.detect_closure_boxes(ClosureBoxRedefTest))
+    @eval ClosureBoxRedefTest begin
+        function boxed()
+            x = 1
+            inner() = x + 1
+            inner()
+        end
+    end
+    @test isempty(Test.detect_closure_boxes(ClosureBoxRedefTest))
+end
+
 @testset "@test with skip/broken kwargs" begin
     # Make sure the local variables can be used in conditions
     a = 1
@@ -367,7 +422,11 @@ let fails = @testset NoThrowTestSet begin
         @test typeof(1) <: typeof("julia")
         # 29 - Fail - assignment
         @test (i = length([1, 2])) == 3
-        # 30 - 33 - Fail - wrong message
+        # 30 - Fail - symbol comparison
+        @test 1 + 2 == :sym
+        # 31 - Fail - symbol in function call
+        @test isequal(1 + 2, :sym)
+        # 32 - 35 - Fail - wrong message
         @test_throws "A test" error("a test")
         @test_throws r"sqrt\([Cc]omplx" sqrt(-1)
         @test_throws str->occursin("a T", str) error("a test")
@@ -522,22 +581,31 @@ let fails = @testset NoThrowTestSet begin
         @test occursin("Evaluated: 2 == 3", str)
     end
 
+    # Test that symbols are printed with : prefix
     let str = sprint(show, fails[30])
+        @test occursin("Evaluated: 3 == :sym", str)
+    end
+
+    let str = sprint(show, fails[31])
+        @test occursin("Evaluated: isequal(3, :sym)", str)
+    end
+
+    let str = sprint(show, fails[32])
         @test occursin("Expected: \"A test\"", str)
         @test occursin("Message: \"a test\"", str)
     end
 
-    let str = sprint(show, fails[31])
+    let str = sprint(show, fails[33])
         @test occursin("Expected: r\"sqrt\\([Cc]omplx\"", str)
         @test occursin(r"Message: .*Try sqrt\(Complex", str)
     end
 
-    let str = sprint(show, fails[32])
+    let str = sprint(show, fails[34])
         @test occursin("Expected: < match function >", str)
         @test occursin("Message: \"a test\"", str)
     end
 
-    let str = sprint(show, fails[33])
+    let str = sprint(show, fails[35])
         @test occursin("Expected: [\"BoundsError\", \"acquire\", \"1-element\", \"at index [2]\"]", str)
         @test occursin(r"Message: \"BoundsError.* 1-element.*at index \[2\]", str)
     end

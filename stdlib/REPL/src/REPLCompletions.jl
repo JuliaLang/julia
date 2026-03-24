@@ -527,13 +527,13 @@ struct REPLInterpreter <: CC.AbstractInterpreter
     world::UInt
     inf_params::CC.InferenceParams
     opt_params::CC.OptimizationParams
-    inf_cache::Vector{CC.InferenceResult}
+    inf_cache::CC.InferenceCache
     function REPLInterpreter(limit_aggressive_inference::Bool=false;
                              world::UInt = Base.get_world_counter(),
                              inf_params::CC.InferenceParams = CC.InferenceParams(;
                                  aggressive_constant_propagation=true),
                              opt_params::CC.OptimizationParams = CC.OptimizationParams(),
-                             inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[])
+                             inf_cache::CC.InferenceCache = CC.InferenceCache())
         return new(limit_aggressive_inference, world, inf_params, opt_params, inf_cache)
     end
 end
@@ -1136,7 +1136,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     if (n = find_parent(cur, K"importpath")) !== nothing
         # Given input lines like `using Foo|`, `import Foo, Bar|` and `using Foo.Bar, Baz, |`:
         # Let's look only for packages and modules we can reach from here
-        if prefix == nothing
+        if prefix === nothing
             complete_loading_candidates!(suggestions, s)
             return sort_suggestions(), r, true
         end

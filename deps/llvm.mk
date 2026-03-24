@@ -334,7 +334,7 @@ $(eval $(call staged-install, \
 
 clean-llvm:
 	-rm -f $(LLVM_BUILDDIR_withtype)/build-configured $(LLVM_BUILDDIR_withtype)/build-compiled
-	-$(MAKE) -C $(LLVM_BUILDDIR_withtype) clean
+	-if [ -d $(LLVM_BUILDDIR_withtype) ]; then $(MAKE) -C $(LLVM_BUILDDIR_withtype) clean; fi
 
 get-llvm: $(LLVM_SRC_FILE)
 extract-llvm: $(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted

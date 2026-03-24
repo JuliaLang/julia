@@ -1114,8 +1114,20 @@ end
 function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
     ir::IRCode, idx::Int, stmt::Expr, @nospecialize(info), flag::UInt32,
     sig::Signature, state::InliningState)
+    # InvokeCICallInfo indicates that `abstract_invoke` already analyzed the call
+    # and determined it is of the form `invoke(f, ::CodeInstance, args...)`
+    # where the argtypes and worldages are valid for the context, and the invoke
+    # pointer is set. Therefore, we can simply transform this into an
+    # `Expr(:invoke, ...)`
+    if info isa InvokeCICallInfo
+        stmt.head = :invoke
+        stmt.args = [info.edge, stmt.args[2], stmt.args[4:end]...]
+        # Transformed to :invoke, now handle it as such
+        handle_invoke_expr!(todo, ir, idx, stmt, info, flag, sig, state)
+        return nothing
+    end
     nspl = nsplit(info)
-    nspl == 0 && return nothing # e.g. InvokeCICallInfo
+    nspl == 0 && return nothing
     @assert nspl == 1
     mresult = getsplit(info, 1)
     match = mresult.matches[1]

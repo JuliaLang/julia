@@ -573,7 +573,7 @@ minmax(x,y) = isless(y, x) ? (y, x) : (x, y)
 
 The identity function. Returns its argument.
 
-See also: [`one`](@ref), [`oneunit`](@ref), and [`LinearAlgebra`](@ref man-linalg)'s `I`.
+See also [`one`](@ref), [`oneunit`](@ref), [`LinearAlgebra.I`](@ref).
 
 # Examples
 ```jldoctest
@@ -816,7 +816,7 @@ end
 Remainder from Euclidean division, returning a value of the same sign as `x`, and smaller in
 magnitude than `y`. This value is always exact.
 
-See also: [`div`](@ref), [`mod`](@ref), [`mod1`](@ref), [`divrem`](@ref).
+See also [`div`](@ref), [`mod`](@ref), [`mod1`](@ref), [`divrem`](@ref).
 
 # Examples
 ```jldoctest
@@ -843,7 +843,7 @@ const % = rem
 The quotient from Euclidean (integer) division. Generally equivalent
 to a mathematical operation x/y without a fractional part.
 
-See also: [`cld`](@ref), [`fld`](@ref), [`rem`](@ref), [`divrem`](@ref).
+See also [`cld`](@ref), [`fld`](@ref), [`rem`](@ref), [`divrem`](@ref).
 
 # Examples
 ```jldoctest
@@ -1202,6 +1202,19 @@ end
 (f::Fix{1})(arg; kws...) = f.f(f.x, arg; kws...)
 (f::Fix{2})(arg; kws...) = f.f(arg, f.x; kws...)
 
+function Base.show(io::IO, fix::Fix{N}) where {N}
+    constr = Fix{N}
+    callable = fix.f
+    fixed_argument = fix.x
+    show(io, constr)
+    print(io, '(')
+    show(io, callable)
+    print(io, ',')
+    print(io, ' ')
+    show(io, fixed_argument)
+    print(io, ')')
+end
+
 """
 Alias for `Fix{1}`. See [`Fix`](@ref Base.Fix).
 """
@@ -1449,7 +1462,7 @@ corresponding position in `collection`. To get a vector indicating whether each 
 in `items` is in `collection`, wrap `collection` in a tuple or a `Ref` like this:
 `in.(items, Ref(collection))` or `items .∈ Ref(collection)`.
 
-See also: [`∉`](@ref), [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
+See also [`∉`](@ref), [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
 
 # Examples
 ```jldoctest

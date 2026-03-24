@@ -6,7 +6,7 @@ const whitespace = " \t\r"
 Skip any leading whitespace. Returns io.
 If `newlines=true` then also skip line ends.
 """
-function skipwhitespace(io::IO; newlines = true)
+function skipwhitespace(io::IO; newlines::Bool = true)
     while !eof(io)
         c = peek(io, Char)
         c in whitespace || (newlines && c == '\n') || break
@@ -34,9 +34,9 @@ end
 Return true if the line contains only (and, unless allowempty,
 at least one of) the characters given.
 """
-function linecontains(io::IO, chars; allow_whitespace = true,
-                                     eat = true,
-                                     allowempty = false)
+function linecontains(io::IO, chars; allow_whitespace::Bool = true,
+                                     eat::Bool = true,
+                                     allowempty::Bool = false)
     start = position(io)
     l = readline(io)
     length(l) == 0 && return allowempty
@@ -51,8 +51,8 @@ function linecontains(io::IO, chars; allow_whitespace = true,
     return result
 end
 
-blankline(io::IO; eat = true) =
-    linecontains(io, "",
+blankline(io::IO; eat::Bool = true) =
+    linecontains(io, "";
                  allow_whitespace = true,
                  allowempty = true,
                  eat = eat)
@@ -62,7 +62,7 @@ Test if the stream starts with the given string.
 `eat` specifies whether to advance on success (true by default).
 `padding` specifies whether leading whitespace should be ignored.
 """
-function startswith(stream::IO, s::AbstractString; eat = true, padding = false, newlines = true)
+function startswith(stream::IO, s::AbstractString; eat::Bool = true, padding::Bool = false, newlines::Bool = true)
     start = position(stream)
     padding && skipwhitespace(stream, newlines = newlines)
     result = true
@@ -74,8 +74,8 @@ function startswith(stream::IO, s::AbstractString; eat = true, padding = false, 
     return result
 end
 
-function startswith(stream::IO, c::AbstractChar; eat = true)
-    if !eof(stream) && peek(stream) == UInt8(c)
+function startswith(stream::IO, c::AbstractChar; eat::Bool = true)
+    if !eof(stream) && peek(stream, Char) == c
         eat && read(stream, Char)
         return true
     else
@@ -87,7 +87,7 @@ function startswith(stream::IO, ss::Vector{<:AbstractString}; kws...)
     any(s->startswith(stream, s; kws...), ss)
 end
 
-function matchstart(stream::IO, r::Regex; eat = true, padding = false)
+function matchstart(stream::IO, r::Regex; eat::Bool = true, padding::Bool = false)
     @assert Base.startswith(r.pattern, "^")
     start = position(stream)
     padding && skipwhitespace(stream)
@@ -122,7 +122,7 @@ Consume the standard allowed markdown indent of
 three spaces. Returns false if there are more than
 three present.
 """
-function eatindent(io::IO, n = 3)
+function eatindent(io::IO, n::Int = 3)
     withstream(io) do
         m = 0
         while startswith(io, ' ') m += 1 end
@@ -136,7 +136,7 @@ The delimiter is consumed but not included.
 Returns nothing and resets the stream if delim is
 not found.
 """
-function readuntil(stream::IO, delimiter; newlines = false, match = nothing)
+function readuntil(stream::IO, delimiter; newlines::Bool = false, match = nothing)
     withstream(stream) do
         buffer = IOBuffer()
         count = 0
@@ -169,7 +169,7 @@ i.e. `*word word*` but not `*word * word`.
 `repeat` specifies whether the delimiter can be repeated.
 Escaped delimiters are not yet supported.
 """
-function parse_inline_wrapper(stream::IO, delimiter::AbstractString; rep = false)
+function parse_inline_wrapper(stream::IO, delimiter::AbstractString; rep::Bool = false)
     delimiter, nmin = string(delimiter[1]), length(delimiter)
     withstream(stream) do
         if position(stream) >= 1

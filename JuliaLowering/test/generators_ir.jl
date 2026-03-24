@@ -128,9 +128,9 @@ LoweringError:
 #---------------------
 1   (call core.svec)
 2   (call core.svec)
-3   (call JuliaLowering.eval_closure_type TestMod :#->##5 %₁ %₂)
+3   (call JuliaLowering.eval_closure_type TestMod :#->##4 %₁ %₂)
 4   latestworld
-5   TestMod.#->##5
+5   TestMod.#->##4
 6   (call core.svec %₅ core.Any)
 7   (call core.svec)
 8   SourceLocation::1:2
@@ -150,7 +150,7 @@ LoweringError:
     11  TestMod.body
     12  (return %₁₁)
 11  latestworld
-12  TestMod.#->##5
+12  TestMod.#->##4
 13  (new %₁₂)
 14  TestMod.iter
 15  (call top.Generator %₁₃ %₁₄)
@@ -162,9 +162,9 @@ LoweringError:
 #---------------------
 1   (call core.svec)
 2   (call core.svec)
-3   (call JuliaLowering.eval_closure_type TestMod :#->##6 %₁ %₂)
+3   (call JuliaLowering.eval_closure_type TestMod :#->##5 %₁ %₂)
 4   latestworld
-5   TestMod.#->##6
+5   TestMod.#->##5
 6   (call core.svec %₅ core.Any)
 7   (call core.svec)
 8   SourceLocation::1:4
@@ -174,7 +174,7 @@ LoweringError:
     1   (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree (return x)))
     2   (return %₁)
 11  latestworld
-12  TestMod.#->##6
+12  TestMod.#->##5
 13  (new %₁₂)
 14  TestMod.iter
 15  (call top.Generator %₁₃ %₁₄)
@@ -194,7 +194,7 @@ LoweringError:
 #---------------------
 1   (call core.svec)
 2   (call core.svec)
-3   (call JuliaLowering.eval_closure_type TestMod :#->##7 %₁ %₂)
+3   (call JuliaLowering.eval_closure_type TestMod :#->##6 %₁ %₂)
 4   latestworld
 5   (call core.svec)
 6   (call core.svec)
@@ -212,7 +212,7 @@ LoweringError:
     3   slot₃/x
     4   (return %₃)
 15  latestworld
-16  TestMod.#->##7
+16  TestMod.#->##6
 17  (call core.svec %₁₆ core.Any)
 18  (call core.svec)
 19  SourceLocation::1:2
@@ -226,7 +226,7 @@ LoweringError:
     5   (call top.Generator %₂ %₄)
     6   (return %₅)
 22  latestworld
-23  TestMod.#->##7
+23  TestMod.#->##6
 24  (new %₂₃)
 25  TestMod.:
 26  (call %₂₅ 1 3)

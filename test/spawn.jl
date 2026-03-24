@@ -544,6 +544,13 @@ end
 
 @test Base.shell_split("\"\\\\\"") == ["\\"]
 
+let roundtrip(s) = first(Base.shell_split(Base.shell_escape(s))) == s
+    @test roundtrip("foo'bar\\\$baz")
+    @test roundtrip("foo'bar\\\"baz")
+    @test roundtrip("foo'bar\\\\baz")
+    @test roundtrip("foo'bar\\\\")
+end
+
 # Test failing commands
 failing_cmd = `$catcmd _doesnt_exist__111_`
 failing_pipeline = pipeline(failing_cmd, stderr=devnull) # make quiet for tests

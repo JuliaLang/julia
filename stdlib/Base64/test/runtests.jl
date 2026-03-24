@@ -9,6 +9,8 @@ using Base64:
     base64decode,
     stringmime
 
+@test isempty(Test.detect_closure_boxes(Base64))
+
 const inputText = "Man is distinguished, not only by his reason, but by this singular passion from other animals, which is a lust of the mind, that by a perseverance of delight in the continued and indefatigable generation of knowledge, exceeds the short vehemence of any carnal pleasure."
 const encodedMaxLine76 = """
 TWFuIGlzIGRpc3Rpbmd1aXNoZWQsIG5vdCBvbmx5IGJ5IGhpcyByZWFzb24sIGJ1dCBieSB0aGlz

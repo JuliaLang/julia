@@ -1,5 +1,3 @@
-@testset "Type definitions" begin
-
 test_mod = Module(:TestMod)
 
 Base.eval(test_mod, :(struct XX{S,T,U,W} end))
@@ -174,8 +172,105 @@ let v = Base.Vector{test_mod.S5}(test_mod.S5(1,1))
     @test v[1] === test_mod.S5(1,1)
 end
 
+# Likely not set in stone (the behaviour is odd here), but test to detect changes
+@testset "when default inner ctors are generated" begin
+    local function test_has_inner_ctor(t)
+        @test t(0) isa t
+        @test t(0).field == 0
+        @test_throws MethodError t(nothing)
+    end
+
+    local function test_no_inner_ctor(t)
+        @test_throws MethodError t(0)
+    end
+
+    @test JL.include_string(test_mod, raw"""
+        struct DefaultInnerCtors1
+        field::Int
+        end
+    """) === nothing
+    test_has_inner_ctor(test_mod.DefaultInnerCtors1)
+
+    @test JL.include_string(test_mod, raw"""
+        struct DefaultInnerCtors2
+        "docs"
+        field::Int
+        end
+    """) === nothing
+    test_has_inner_ctor(test_mod.DefaultInnerCtors2)
+
+    @test JL.include_string(test_mod, raw"""
+        struct DefaultInnerCtors3
+        "docs with interpolation $(999)"
+        field::Int
+        end
+    """) === nothing
+    test_has_inner_ctor(test_mod.DefaultInnerCtors3)
+
+    @test JL.include_string(test_mod, raw"""
+        struct DefaultInnerCtors4
+        "docs with interpolation $(999)"
+        "docs with interpolation $(999)"
+        field::Int
+        "docs with interpolation $(999)"
+        "docs with interpolation $(999)"
+        end
+    """) === nothing
+    test_has_inner_ctor(test_mod.DefaultInnerCtors4)
+
+    @test JL.include_string(test_mod, raw"""
+        struct DefaultInnerCtors5
+        field::Int
+        0
+        end
+    """) === nothing
+    test_has_inner_ctor(test_mod.DefaultInnerCtors5)
+
+    @test JL.include_string(test_mod, raw"""
+        struct DefaultInnerCtors6
+        field::Int
+        :inert_sym
+        end
+    """) === nothing
+    test_has_inner_ctor(test_mod.DefaultInnerCtors6)
+
+    @test JL.include_string(test_mod, raw"""
+        struct NoDefaultInnerCtors1
+        field::Int
+        identity(1)
+        end
+    """) === nothing
+    test_no_inner_ctor(test_mod.NoDefaultInnerCtors1)
+
+    @test JL.include_string(test_mod, raw"""
+        struct NoDefaultInnerCtors2
+        field::Int
+        ()->()
+        end
+    """) === nothing
+    test_no_inner_ctor(test_mod.NoDefaultInnerCtors2)
+
+    @test JL.include_string(test_mod, raw"""
+        struct NoDefaultInnerCtors3
+        field::Int
+        NoDefaultInnerCtors3(not,default,too,many,args) = new(1)
+        end
+    """) === nothing
+    test_no_inner_ctor(test_mod.NoDefaultInnerCtors3)
+    @test length(methods(test_mod.NoDefaultInnerCtors3)) == 1
+
+    @test JL.include_string(test_mod, raw"""
+        struct NoDefaultInnerCtors4
+        field::Int
+        :(inert + code)
+        end
+    """) === nothing
+    test_no_inner_ctor(test_mod.NoDefaultInnerCtors4)
+end
+
 # User defined inner constructors and helper functions for structs without type params
 @test JuliaLowering.include_string(test_mod, """
+"struct docs"
 struct S6
     x
     S6_f() = new(42)
@@ -184,7 +279,7 @@ struct S6
     S6() = S6_f()
     S6(x) = new(x)
 end
-""") === nothing
+"""; expr_compat_mode=true) === nothing
 let s = test_mod.S6()
     @test s isa test_mod.S6
     @test s.x === 42
@@ -193,7 +288,7 @@ let s = test_mod.S6(2)
     @test s isa test_mod.S6
     @test s.x === 2
 end
-@test docstrings_equal(@doc(test_mod.S6), Markdown.doc"some docs")
+@test docstrings_equal(@doc(test_mod.S6), Markdown.doc"struct docs")
 
 # User defined inner constructors and helper functions for structs with type params
 @test JuliaLowering.include_string(test_mod, """
@@ -321,4 +416,173 @@ const Bar{T,V} = Foo{T,V,1}
 """)
 @test test_mod.Bar == (test_mod.Foo{T,V,1} where {T,V})
 
+# Global function with new() inside struct
+# See https://github.com/JuliaLang/JuliaLowering.jl/issues/131
+JuliaLowering.include_string(test_mod, """
+struct S131
+    x
+    global function make_s131()
+        new(42)
+    end
 end
+""")
+@test test_mod.make_s131() isa test_mod.S131
+@test test_mod.make_s131().x == 42
+
+JuliaLowering.include_string(test_mod, """
+struct S131b{T}
+    x::T
+    "documented global function"
+    global function make_s131b()
+        new{Int}(100)
+    end
+end
+""")
+@test test_mod.make_s131b() isa test_mod.S131b{Int}
+@test test_mod.make_s131b().x == 100
+
+# Inner constructor with local variable shadowing type parameter
+# See https://github.com/aviatesk/JETLS.jl/issues/508
+@test JuliaLowering.include_string(test_mod, """
+struct ShadowTypeParam{T}
+    x::T
+    function ShadowTypeParam(x)
+        T = typeof(x)  # This should be a new local variable, not capture the type param
+        return new{T}(x)
+    end
+end
+""") === nothing
+let s = test_mod.ShadowTypeParam(42)
+    @test s isa test_mod.ShadowTypeParam{Int}
+    @test s.x === 42
+end
+let s = test_mod.ShadowTypeParam("hello")
+    @test s isa test_mod.ShadowTypeParam{String}
+    @test s.x === "hello"
+end
+
+# Inner kwarg constructor
+@test JuliaLowering.include_string(test_mod, """
+struct CheckConfig
+    field::Int
+    function CheckConfig(parg::String; kw::Int = 4)
+        new(length(parg) + kw)
+    end
+    function CheckConfig(optarg1=1, optarg2=10; kw1, kw2 = 1000)
+        new(optarg1+optarg2+kw1+kw2)
+    end
+    function CheckConfig(optarg1=1, optarg2=10; kw1, kw2 = 1000)
+        new(optarg1+optarg2+kw1+kw2)
+    end
+end
+""") === nothing
+
+@test isdefined(test_mod, :CheckConfig)
+
+let s = test_mod.CheckConfig("")
+    @test s isa test_mod.CheckConfig
+    @test s.field == 4
+end
+let s = test_mod.CheckConfig("";kw=5)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 5
+end
+let s = test_mod.CheckConfig(;kw1=100)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 1111
+end
+let s = test_mod.CheckConfig(;kw1=100, kw2=0)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 111
+end
+let s = test_mod.CheckConfig(0;kw1=100, kw2=0)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 110
+end
+let s = test_mod.CheckConfig(0,0;kw1=100)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 1100
+end
+
+let s = test_mod.CheckConfig(;kw1=100)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 1111
+end
+let s = test_mod.CheckConfig(;kw1=100, kw2=0)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 111
+end
+let s = test_mod.CheckConfig(0;kw1=100, kw2=0)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 110
+end
+let s = test_mod.CheckConfig(0,0;kw1=100)
+    @test s isa test_mod.CheckConfig
+    @test s.field == 1100
+end
+
+# typegroup: basic mutual recursion
+@test JuliaLowering.include_string(test_mod, """
+typegroup
+    struct TG_Node
+        edges::Vector{TG_Edge}
+    end
+    struct TG_Edge
+        from::TG_Node
+        to::TG_Node
+    end
+end
+"""; version=v"1.14") === nothing
+@test fieldtype(test_mod.TG_Node, :edges) == Vector{test_mod.TG_Edge}
+@test fieldtype(test_mod.TG_Edge, :from) == test_mod.TG_Node
+@test fieldtype(test_mod.TG_Edge, :to) == test_mod.TG_Node
+let n1 = test_mod.TG_Node(test_mod.TG_Edge[]),
+    n2 = test_mod.TG_Node(test_mod.TG_Edge[]),
+    e = test_mod.TG_Edge(n1, n2)
+    push!(n1.edges, e)
+    @test n1.edges[1].to === n2
+end
+
+# typegroup: parametric mutual recursion
+@test JuliaLowering.include_string(test_mod, """
+typegroup
+    struct TG_PNode{T}
+        data::T
+        edges::Vector{TG_PEdge{T}}
+    end
+    struct TG_PEdge{T}
+        from::TG_PNode{T}
+        to::TG_PNode{T}
+    end
+end
+"""; version=v"1.14") === nothing
+@test fieldtype(test_mod.TG_PNode{Int}, :edges) == Vector{test_mod.TG_PEdge{Int}}
+@test fieldtype(test_mod.TG_PEdge{String}, :from) == test_mod.TG_PNode{String}
+
+# typegroup: mutable structs
+@test JuliaLowering.include_string(test_mod, """
+typegroup
+    mutable struct TG_MNode
+        edges::Vector{TG_MEdge}
+    end
+    mutable struct TG_MEdge
+        from::TG_MNode
+        to::TG_MNode
+    end
+end
+"""; version=v"1.14") === nothing
+@test ismutabletype(test_mod.TG_MNode)
+@test ismutabletype(test_mod.TG_MEdge)
+
+# typegroup: supertype referencing incomplete type
+@test JuliaLowering.include_string(test_mod, """
+typegroup
+    struct TG_SuperA <: AbstractVector{TG_SuperB}
+        data::Vector{TG_SuperB}
+    end
+    struct TG_SuperB
+        a::TG_SuperA
+    end
+end
+"""; version=v"1.14") === nothing
+@test test_mod.TG_SuperA <: AbstractVector{test_mod.TG_SuperB}

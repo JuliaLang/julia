@@ -1587,6 +1587,11 @@ end
         t = Bottom
         for i in 1:length(ftypes)
             ft1 = unwrapva(ftypes[i])
+            # Malformed Vararg types like `NTuple{<:Any, 3}` have non-Type components
+            # (e.g., `3`). Skip these since `fieldtype` would throw at runtime.
+            if !(isa(ft1, Type) || isa(ft1, TypeVar))
+                continue
+            end
             exactft1 = exact || (!has_free_typevars(ft1) && u.name !== Tuple.name)
             ft1 = rewrap_unionall(ft1, s)
             if exactft1
@@ -1626,8 +1631,8 @@ end
     else
         ft = ftypes[fld]
     end
-    if !isa(ft, Type) && !isa(ft, TypeVar)
-        return Const(ft)
+    if !(isa(ft, Type) || isa(ft, TypeVar))
+        return Bottom # see non-`Const` case above
     end
 
     exactft = exact || (!has_free_typevars(ft) && u.name !== Tuple.name)
@@ -2566,7 +2571,6 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     # _apply_iterate,
     # Core._call_in_world_total,
     # Core._compute_sparams,
-    # Core._defaultctors,
     # Core._equiv_typedef,
     Core._expr,
     # Core._primitivetype,
@@ -2786,7 +2790,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
                            sv::Union{AbsIntState, Nothing})
     𝕃ᵢ = typeinf_lattice(interp)
     # Early constant evaluation for foldable builtins with all const args
-    if isa(f, IntrinsicFunction) ? is_pure_intrinsic_infer(f) : (f in _PURE_BUILTINS || (f in _CONSISTENT_BUILTINS && f in _EFFECT_FREE_BUILTINS))
+    if isa(f, IntrinsicFunction) ? is_pure_intrinsic_infer(f) : (contains_is(_PURE_BUILTINS, f) || (contains_is(_CONSISTENT_BUILTINS, f) && contains_is(_EFFECT_FREE_BUILTINS, f)))
         if is_all_const_arg(argtypes, 1)
             argvals = collect_const_args(argtypes, 1)
             try

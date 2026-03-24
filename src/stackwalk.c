@@ -16,6 +16,7 @@
 #ifdef _OS_WINDOWS_
 #include <winternl.h>
 uv_mutex_t jl_in_stackwalk;
+uv_mutex_t jl_dll_notify_lock;
 #define jl_unw_get(context) (RtlCaptureContext(context), 0)
 #elif !defined(JL_DISABLE_LIBUNWIND)
 #define jl_unw_get(context) unw_getcontext(context)
@@ -494,6 +495,16 @@ typedef const LDR_DLL_NOTIFICATION_DATA *PCLDR_DLL_NOTIFICATION_DATA;
 #define LDR_DLL_NOTIFICATION_REASON_LOADED   1
 #define LDR_DLL_NOTIFICATION_REASON_UNLOADED 2
 
+typedef struct dll_notification_event {
+    ULONG      NotificationReason;
+    wchar_t   *FullDllName;
+    wchar_t   *BaseDllName;
+    uintptr_t  DllBase;
+    ULONG      SizeOfImage;
+    struct dll_notification_event *next;
+} dll_notification_event_t;
+static dll_notification_event_t *dll_notify_queue = NULL;
+
 // Forward declarations for ntdll functions
 typedef VOID CALLBACK (*PLDR_DLL_NOTIFICATION_FUNCTION)(
   ULONG                       NotificationReason,
@@ -503,6 +514,56 @@ typedef VOID CALLBACK (*PLDR_DLL_NOTIFICATION_FUNCTION)(
 NTSTATUS NTAPI LdrRegisterDllNotification(ULONG Flags, PLDR_DLL_NOTIFICATION_FUNCTION NotificationFunction, PVOID Context, PVOID *Cookie);
 NTSTATUS NTAPI LdrUnregisterDllNotification(PVOID Cookie);
 
+// caller should hold jl_in_stackwalk and jl_dll_notify_lock locks
+void jl_profile_process_dll_events(void) JL_NOTSAFEPOINT
+{
+    dll_notification_event_t *event = dll_notify_queue;
+    while (event) {
+        if (event->NotificationReason == LDR_DLL_NOTIFICATION_REASON_LOADED) {
+            SymLoadModuleExW(GetCurrentProcess(), NULL,
+                             event->FullDllName,
+                             event->BaseDllName,
+                             event->DllBase,
+                             event->SizeOfImage,
+                             NULL,
+                             0);
+            free(event->FullDllName);
+            free(event->BaseDllName);
+        }
+        else if (event->NotificationReason == LDR_DLL_NOTIFICATION_REASON_UNLOADED) {
+            // if this unload event has an earlier load event in the queue, process neither
+            //
+            // this ensures that we do not try to process DLL symbols for a module that was
+            // already unloaded, or which is concurrently unloading
+            int prior_enqueued_load_of_same_module = 0;
+            dll_notification_event_t *prior_event = event;
+            while (prior_event->next) {
+                if (prior_event->next->DllBase == event->DllBase) {
+                    assert(prior_event->next->NotificationReason == LDR_DLL_NOTIFICATION_REASON_LOADED);
+                    prior_enqueued_load_of_same_module = 1;
+                    break;
+                }
+                prior_event = prior_event->next;
+            }
+            if (prior_enqueued_load_of_same_module) {
+                // skip processing for the prior load event and this unload event
+                dll_notification_event_t *load_event = prior_event->next;
+                prior_event->next = load_event->next;
+                free(load_event->FullDllName);
+                free(load_event->BaseDllName);
+                free(load_event);
+            } else {
+                SymUnloadModule64(GetCurrentProcess(), event->DllBase);
+            }
+        }
+
+        dll_notification_event_t *next = event->next;
+        free(event);
+        event = next;
+    }
+    dll_notify_queue = NULL;
+}
+
 // Callback for LdrRegisterDllNotification
 static VOID CALLBACK dll_notification_callback(
     ULONG NotificationReason,
@@ -510,29 +571,37 @@ static VOID CALLBACK dll_notification_callback(
     PVOID Context)
 {
     (void)Context;
-    uv_mutex_lock(&jl_in_stackwalk);
-    // Store DLL information and update symbol handler based on notification reason
+
+    dll_notification_event_t *event = (dll_notification_event_t*)malloc(sizeof(dll_notification_event_t));
     if (NotificationReason == LDR_DLL_NOTIFICATION_REASON_LOADED) {
         const LDR_DLL_LOADED_NOTIFICATION_DATA *data = &NotificationData->Loaded;
-        SymLoadModuleExW(GetCurrentProcess(), NULL,
-                         data->FullDllName->Buffer,
-                         data->BaseDllName->Buffer,
-                         (uintptr_t)data->DllBase,
-                         data->SizeOfImage,
-                         NULL,
-                         0);
+        event->FullDllName = _wcsdup(data->FullDllName->Buffer);
+        event->BaseDllName = _wcsdup(data->BaseDllName->Buffer);
+        event->DllBase = (uintptr_t)data->DllBase;
+        event->SizeOfImage = data->SizeOfImage;
     }
     else if (NotificationReason == LDR_DLL_NOTIFICATION_REASON_UNLOADED) {
-        const LDR_DLL_UNLOADED_NOTIFICATION_DATA *data = &NotificationData->Unloaded;
-        SymUnloadModule64(GetCurrentProcess(), (uintptr_t)data->DllBase);
+        event->DllBase = (uintptr_t)NotificationData->Unloaded.DllBase;
     }
-    uv_mutex_unlock(&jl_in_stackwalk);
+
+    // This lock guards both the data structure, as well as the possibility
+    // that a DLL is about to unloaded that is concurrently being processed
+    // by `SymLoadModuleExW`
+    uv_mutex_lock(&jl_dll_notify_lock);
+
+    event->NotificationReason = NotificationReason;
+    event->next = dll_notify_queue;
+    dll_notify_queue = event;
+
+    uv_mutex_unlock(&jl_dll_notify_lock);
+    return; // process later
 }
 
 // Initialize stackwalk infrastructure (DLL tracking and profiling)
 void jl_init_stackwalk(void)
 {
     uv_mutex_init(&jl_in_stackwalk);
+    uv_mutex_init(&jl_dll_notify_lock);
     SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_IGNORE_CVREC);
     if (!SymInitialize(GetCurrentProcess(), "", 1))
         jl_safe_printf("WARNING: failed to initialize stack walk info\n");
@@ -542,6 +611,10 @@ void jl_init_stackwalk(void)
 // Finalize stackwalk infrastructure
 void jl_fin_stackwalk(void)
 {
+    // To avoid deadlocks (due to suspending the main thread during `ExitProcess()`)
+    // and other misbehavior (due to missed DLL notifications during exit), take the
+    // profile lock here to effectively disable any active profiling threads.
+    jl_lock_profile_wr();
     if (dll_notification_cookie) {
         LdrUnregisterDllNotification(dll_notification_cookie);
         dll_notification_cookie = NULL;
@@ -559,6 +632,7 @@ JL_DLLEXPORT void jl_set_profile_abort_ptr(_Atomic(int) *abort_ptr) JL_NOTSAFEPO
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context)
 {
     int result;
+
 #if !defined(_CPU_X86_64_)
     memset(&cursor->stackframe, 0, sizeof(cursor->stackframe));
     cursor->stackframe.AddrPC.Offset = Context->Eip;

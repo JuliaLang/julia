@@ -12,8 +12,10 @@ mutable struct SyntaxGraph{Attrs}
     attributes::Attrs
 end
 
-SyntaxGraph() = SyntaxGraph{Dict{Symbol,Any}}(Vector{UnitRange{Int}}(),
-                                              Vector{NodeId}(), Dict{Symbol,Any}())
+SyntaxGraph() = ensure_required_attributes!(
+    SyntaxGraph{Dict{Symbol,Any}}(
+        Vector{UnitRange{Int}}(),
+        Vector{NodeId}(), Dict{Symbol,Any}()))
 
 # "Freeze" attribute names and types, encoding them in the type of the returned
 # SyntaxGraph.
@@ -43,6 +45,8 @@ function attrdefs(graph::SyntaxGraph)
     [(k=>typeof(v).parameters[2]) for (k, v) in pairs(graph.attributes)]
 end
 
+copy_attrs(g::SyntaxGraph) = SyntaxGraph(g.edge_ranges, g.edges, copy(g.attributes))
+
 function Base.show(io::IO, ::MIME"text/plain", graph::SyntaxGraph)
     print(io, typeof(graph),
           " with $(length(graph.edge_ranges)) vertices, $(length(graph.edges)) edges, and attributes:\n")
@@ -68,7 +72,7 @@ function ensure_attributes!(graph::SyntaxGraph; kws...)
 end
 
 function ensure_attributes(graph::SyntaxGraph{<:Dict}; kws...)
-    g = unfreeze_attrs(graph)
+    g = copy_attrs(graph)
     ensure_attributes!(g; kws...)
 end
 
@@ -77,6 +81,14 @@ function ensure_attributes(graph::SyntaxGraph{<:NamedTuple}; kws...)
     ensure_attributes!(g; kws...)
     freeze_attrs(g)
 end
+
+ensure_required_attributes!(g::SyntaxGraph) = ensure_attributes!(
+    g,
+    kind=Kind,
+    source=SourceAttrType,
+    syntax_flags=UInt16,
+    value=Any,
+    name_val=String)
 
 function delete_attributes!(graph::SyntaxGraph{<:Dict}, attr_names::Symbol...)
     for name in attr_names
@@ -196,14 +208,30 @@ struct SyntaxTree{Attrs}
     _id::NodeId
 end
 
+# fallback printing
+function node_string(ex::SyntaxTree, depth=2)
+    out = "(_id="*string(ex._id)
+    for n in sort!(attrnames(ex))
+        out *= ", "*string(n)*"="*repr(getproperty(ex, n))
+    end
+    if is_leaf(ex)
+        out *= ", leaf"
+    elseif depth > 1
+        out *= ", children=["
+        for c in children(ex)
+            out *= "\n"*node_string(c, depth-1)
+        end
+        out *= "]"
+    end
+    out *= ")"
+end
+
 function Base.getproperty(ex::SyntaxTree, name::Symbol)
     name === :_graph && return getfield(ex, :_graph)
     name === :_id  && return getfield(ex, :_id)
     _id = getfield(ex, :_id)
     return get(getproperty(getfield(ex, :_graph), name), _id) do
-        attrstr = join(["\n    $n = $(getproperty(ex, n))"
-                        for n in attrnames(ex)], ",")
-        error("Property `$name[$_id]` not found. Available attributes:$attrstr")
+        error("Property `$name` not defined on node: $(node_string(ex))")
     end
 end
 
@@ -356,12 +384,11 @@ function provenance(ex::SyntaxTree)
     end
 end
 
-
 function _sourceref(sources, id)
     i = 1
     while true
         i += 1
-        s = sources[id]
+        s = sources[id]::SourceAttrType
         if s isa NodeId
             id = s
         else
@@ -371,8 +398,8 @@ function _sourceref(sources, id)
 end
 
 function sourceref(ex::SyntaxTree)
-    sources = ex._graph.source
-    id::NodeId = ex._id
+    sources = ex._graph.source::Dict{NodeId,SourceAttrType}
+    id = ex._id
     while true
         s, _ = _sourceref(sources, id)
         if s isa Tuple
@@ -399,7 +426,7 @@ function _flattened_provenance(refs, graph, sources, id)
 end
 
 function flattened_provenance(ex::SyntaxTree)
-    refs = SyntaxList(ex)
+    refs = SyntaxList(ex._graph)
     _flattened_provenance(refs, ex._graph, ex._graph.source, ex._id)
     return reverse(refs)
 end
@@ -424,7 +451,7 @@ function is_ancestor(ex, ancestor)
     end
 end
 
-const SourceAttrType = Union{SourceRef,LineNumberNode,NodeId,Tuple}
+const SourceAttrType = Union{SourceRef,LineNumberNode,NodeId,Tuple{Vararg{NodeId}}}
 
 function reparent(ctx, ex::SyntaxTree)
     # Ensure `ex` has the same parent graph, in a somewhat loose sense.
@@ -445,6 +472,12 @@ syntax_graph(ex::SyntaxTree) = ex._graph
 sourcefile(ex::SyntaxTree) = sourcefile(sourceref(ex))
 byte_range(ex::SyntaxTree) = byte_range(sourceref(ex))
 
+function sourcetext(ex::SyntaxTree)
+    sf = sourcefile(ex)
+    sf isa LineNumberNode && return SubString("")
+    view(sf, byte_range(ex))
+end
+
 #-------------------------------------------------------------------------------
 # Lightweight vector of nodes ids with associated pointer to graph stored separately.
 mutable struct SyntaxList{Attrs, NodeIdVecType} <: AbstractVector{SyntaxTree}
@@ -457,7 +490,8 @@ function SyntaxList(graph::SyntaxGraph{T}, ids::AbstractVector{NodeId}) where {T
 end
 
 SyntaxList(graph::SyntaxGraph) = SyntaxList(graph, Vector{NodeId}())
-SyntaxList(ctx) = SyntaxList(syntax_graph(ctx))
+SyntaxList(st::SyntaxTree, rest::SyntaxTree...) =
+    SyntaxList(st._graph, tree_ids(st, rest...))
 
 tree_ids(sts::SyntaxTree...) = NodeId[st._id for st in sts]
 
@@ -571,14 +605,13 @@ end
 # Would like the following to be an overload of Base.map() ... but need
 # somewhat arcane trickery to ensure that this only tries to collect into a
 # SyntaxList when `f` yields a SyntaxTree.
-#
-# function mapsyntax(f, exs::SyntaxList)
-#     out = SyntaxList(syntax_graph(exs))
-#     for ex in exs
-#         push!(out, f(ex))
-#     end
-#     out
-# end
+function mapsyntax(f, exs::SyntaxList)
+    out = SyntaxList(syntax_graph(exs))
+    for ex in exs
+        push!(out, f(ex))
+    end
+    out
+end
 
 
 #-------------------------------------------------------------------------------
@@ -659,7 +692,7 @@ function mapchildren(f::Function, ctx, ex::SyntaxTree, do_map_child::Function)
             if newchild == e
                 continue
             else
-                cs = SyntaxList(ctx)
+                cs = SyntaxList(syntax_graph(ctx))
                 append!(cs, orig_children[1:i-1])
             end
         end
@@ -845,30 +878,33 @@ function prune(graph1_a::SyntaxGraph, entrypoints_a::Vector{NodeId})
 
     # Resolve provenance.  Tricky to avoid dangling `.source` references.
     resolved_sources = Dict{NodeId, SourceAttrType}() # graph1 id => graph2 src
-    function get_resolved!(id1::NodeId)
-        out = get(resolved_sources, id1, nothing)
-        if isnothing(out)
-            src1 = graph1.source[id1]
-            out = if haskey(map12, src1)
-                map12[src1]
-            elseif src1 isa NodeId
-                get_resolved!(src1)
-            elseif src1 isa Tuple
-                map(get_resolved!, src1)
-            else
-                src1
-            end
-            resolved_sources[id1] = out
-        end
-        return out
-    end
 
     for (n2, n1) in enumerate(nodes1)
-        graph2.source[n2] = get_resolved!(n1)
+        graph2.source[n2] = _prune_get_resolved!(n1, graph1, map12, resolved_sources)
     end
 
     # The first n entries in nodes1 were our entrypoints, unique from unaliasing
     return SyntaxList(graph2, 1:length(entrypoints))
+end
+
+function _prune_get_resolved!(id1::NodeId, graph1::SyntaxGraph,
+                              map12::Dict{NodeId, Int},
+                              resolved_sources::Dict{NodeId, SourceAttrType})
+    out = get(resolved_sources, id1, nothing)
+    if isnothing(out)
+        src1 = graph1.source[id1]
+        out = if haskey(map12, src1)
+            map12[src1]
+        elseif src1 isa NodeId
+            _prune_get_resolved!(src1, graph1, map12, resolved_sources)
+        elseif src1 isa Tuple
+            map(s -> _prune_get_resolved!(s, graph1, map12, resolved_sources), src1)
+        else
+            src1
+        end
+        resolved_sources[id1] = out
+    end
+    return out
 end
 
 """
@@ -970,8 +1006,8 @@ function _stm(line::LineNumberNode, st, pats; debug=false)
     _stm_check_usage(pats)
     # We leave most code untouched, so the user probably wants esc(output)
     st_gs, result_gs, k_gs, nc_gs = gensym.("st", "result", "k", "nc")
-    out_blk = Expr(:let, Expr(:block, :($st_gs = $st::SyntaxTree),
-                              :($result_gs = nothing),
+    out_blk = Expr(:let, Expr(:block, :($st_gs = $st::$SyntaxTree),
+                              :($result_gs),
                               :($k_gs = $kind($st_gs)),
                               :($nc_gs = $numchildren($st_gs))),
                    Expr(:if, false, nothing))
@@ -1026,7 +1062,7 @@ end
 
 function _stm_matches_wrapper(p::Expr, st_ex, debug)
     st_gs, k_gs, nc_gs = gensym.("st", "k", "nc")
-    Expr(:let, Expr(:block, :($st_gs = $st_ex),
+    Expr(:let, Expr(:block, :($st_gs = $st_ex::$SyntaxTree),
                           :($k_gs = $kind($st_gs)),
                           :($nc_gs = $numchildren($st_gs))),
                _stm_matches(p, st_gs, k_gs, nc_gs, debug))
@@ -1092,47 +1128,49 @@ function _stm_assigns(p, st_rhs_expr; assigns=Expr(:block))
 end
 
 # Check for correct pattern syntax.  Not needed outside of development.
-function _stm_check_usage(pats::Expr)
-    function _stm_check_pattern(p; syms=Set{Symbol}())
-        if Meta.isexpr(p, :(...), 1)
-            p = p.args[1]
-            @assert(p isa Symbol, "Expected symbol before `...` in $p")
-        end
-        if p isa Symbol
-            # No support for duplicate syms for now (user is either looking for
-            # some form of equality we don't implement, or they made a mistake)
-            dup = p in syms && p !== :_
-            push!(syms, p)
-            @assert(!dup, "invalid duplicate non-underscore identifier $p")
-            return nothing
-        elseif Meta.isexpr(p, :vect)
-            @assert(length(p.args) === 1,
-                    "use spaces, not commas, in @stm []-patterns")
-        elseif Meta.isexpr(p, :hcat)
-            @assert(length(p.args) >= 2)
-        elseif Meta.isexpr(p, :vcat)
-            p = _stm_vcat_to_hcat(p)
-            @assert(length(p.args) >= 2)
-        else
-            @assert(false, "malformed pattern $p")
-        end
-        @assert(count(x->Meta.isexpr(x, :(...)), p.args[2:end]) <= 1,
-                "Multiple `...` in a pattern is ambiguous")
-
-        # This exact `K"kind"` syntax is not necessary since the kind can't be
-        # provided by a variable, but requiring [K"kinds"] is consistent with
-        # `@ast` and allows us to implement list matching later.
-        @assert(Meta.isexpr(p.args[1], :macrocall, 3) &&
-            p.args[1].args[1] === Symbol("@K_str") &&
-            p.args[1].args[3] isa String, "first pattern elt must be K\"\"")
-
-        for subp in p.args[2:end]
-            _stm_check_pattern(subp; syms)
-        end
+function _stm_check_pattern(p, syms::Set{Symbol})
+    if Meta.isexpr(p, :(...), 1)
+        p = p.args[1]
+        @assert(p isa Symbol, "Expected symbol before `...` in $p")
     end
+    if p isa Symbol
+        # No support for duplicate syms for now (user is either looking for
+        # some form of equality we don't implement, or they made a mistake)
+        dup = p in syms && p !== :_
+        push!(syms, p)
+        @assert(!dup, "invalid duplicate non-underscore identifier $p")
+        return nothing
+    elseif Meta.isexpr(p, :vect)
+        @assert(length(p.args) === 1,
+                "use spaces, not commas, in @stm []-patterns")
+    elseif Meta.isexpr(p, :hcat)
+        @assert(length(p.args) >= 2)
+    elseif Meta.isexpr(p, :vcat)
+        p = _stm_vcat_to_hcat(p)
+        @assert(length(p.args) >= 2)
+    else
+        @assert(false, "malformed pattern $p")
+    end
+    @assert(count(x->Meta.isexpr(x, :(...)), p.args[2:end]) <= 1,
+            "Multiple `...` in a pattern is ambiguous")
 
+    # This exact `K"kind"` syntax is not necessary since the kind can't be
+    # provided by a variable, but requiring [K"kinds"] is consistent with
+    # `@ast` and allows us to implement list matching later.
+    @assert(Meta.isexpr(p.args[1], :macrocall, 3) &&
+        p.args[1].args[1] === Symbol("@K_str") &&
+        p.args[1].args[3] isa String, "first pattern elt must be K\"\"")
+
+    for subp in p.args[2:end]
+        _stm_check_pattern(subp, syms)
+    end
+    return nothing
+end
+
+function _stm_check_usage(pats::Expr)
     @assert Meta.isexpr(pats, :block) "Usage: @stm st begin; ...; end"
-    for pcr in filter(e->!isa(e, LineNumberNode), pats.args)
+    for pcr in pats.args
+        pcr isa LineNumberNode && continue
         @assert(Meta.isexpr(pcr, :(->), 2), "Expected pat -> res, got malformed case: $pcr")
         if Meta.isexpr(pcr.args[1], :tuple)
             @assert(length(pcr.args[1].args) === 2,
@@ -1144,17 +1182,15 @@ function _stm_check_usage(pats::Expr)
         else
             p = pcr.args[1]
         end
-        _stm_check_pattern(p)
+        _stm_check_pattern(p, Set{Symbol}())
     end
 end
 
 #-------------------------------------------------------------------------------
-# RawGreenNode->SyntaxTree
-# WIP: expr_structure param will be deleted
+# RawGreenNode->SyntaxTree1
 
 function build_tree(::Type{SyntaxTree}, stream::ParseStream;
-                    filename=nothing, first_line=1,
-                    expr_structure=false)
+                    filename=nothing, first_line=1)
     cursor = RedTreeCursor(stream)
     graph = SyntaxGraph()
     sf = SourceFile(stream; filename, first_line)
@@ -1162,7 +1198,7 @@ function build_tree(::Type{SyntaxTree}, stream::ParseStream;
     cs = SyntaxList(graph)
     for c in reverse_toplevel_siblings(cursor)
         is_trivia(c) && !is_error(c) && continue
-        push!(cs, SyntaxTree(graph, sf, c; expr_structure))
+        push!(cs, SyntaxTree(graph, sf, c))
     end
     # There may be multiple non-trivia toplevel nodes (e.g. parse error)
     length(cs) === 1 && return only(cs)
@@ -1173,7 +1209,7 @@ function build_tree(::Type{SyntaxTree}, stream::ParseStream;
     return SyntaxTree(graph, id)
 end
 
-function SyntaxTree(graph::SyntaxGraph, sf::SourceFile, cursor::RedTreeCursor; expr_structure)
+function SyntaxTree(graph::SyntaxGraph, sf::SourceFile, cursor::RedTreeCursor)
     ensure_attributes!(graph, kind=Kind, syntax_flags=UInt16,
                        source=SourceAttrType, value=Any, name_val=String)
     green_id = GC.@preserve sf begin
@@ -1182,17 +1218,11 @@ function SyntaxTree(graph::SyntaxGraph, sf::SourceFile, cursor::RedTreeCursor; e
         _insert_green(graph, sf, txtbuf, offset, cursor)
     end
     gst = SyntaxTree(graph, green_id)
-    if expr_structure
-        out = _green_to_est(gst, 0, gst)
-    else
-        out = _green_to_ast(K"None", gst)
-    end
+    out = _green_to_est(gst, 0, gst)
     @assert !isnothing(out) "SyntaxTree requires >0 nontrivia nodes"
     return out
 end
 
-# TODO: Do we really need all trivia?  K"parens" can be good to keep, but things
-# like K"(" and whitespace might not be useful.
 function _insert_green(graph::SyntaxGraph, sf::SourceFile,
                        txtbuf::Vector{UInt8}, offset::Int,
                        cursor::RedTreeCursor)
@@ -1217,76 +1247,6 @@ function _insert_green(graph::SyntaxGraph, sf::SourceFile,
     end
     return id
 end
-
-# Leaves are shared.  Unlike `mapchildren`, doesn't bother checking for
-# unchanged children so internal nodes can be shared, since the likelihood of
-# not deleting trivia under an internal node is practically zero.
-function _green_to_ast(parent::Kind, ex::SyntaxTree; eq_to_kw=false)
-    is_trivia(ex) && !is_error(ex) && return nothing
-    graph = syntax_graph(ex)
-    k = kind(ex)
-    if k === K"ref" ||
-        (k in KSet"call dotcall" && (
-            is_prefix_call(ex) || is_prefix_op_call(ex) && numchildren(ex) > 2))
-        cs = SyntaxList(ex)
-        for c in children(ex)
-            c2 = _green_to_ast(k, c; eq_to_kw=length(cs)>0)
-            !isnothing(c2) && push!(cs, c2)
-        end
-        mknode(ex, cs)
-    elseif k === K"parameters"
-        eq_to_kw = parent != K"vect"   && parent != K"curly" &&
-                   parent != K"braces" && parent != K"ref"
-        mknode(ex, _map_green_to_ast(k, children(ex); eq_to_kw))
-    elseif k === K"parens"
-        cs = _map_green_to_ast(parent, children(ex); eq_to_kw)
-        length(cs) === 1 ? cs[1] : mknode(ex, cs)
-    elseif k in KSet"var char"
-        cs = _map_green_to_ast(parent, children(ex))
-        length(cs) === 1 ? cs[1] : mknode(ex, cs)
-    elseif k === K"=" && eq_to_kw
-        setattr!(mknode(ex, _map_green_to_ast(k, children(ex))),
-                 :kind, K"kw")
-    elseif k === K"CmdMacroName" || k === K"StrMacroName"
-        name = lower_identifier_name(ex.name_val, k)
-        setattr!(newleaf(graph, ex, K"Identifier"),
-                 :name_val, name)
-    elseif k === K"macro_name"
-        # M.@x parses to (. M (macro_name x))
-        # @M.x parses to (macro_name (. M x))
-        # We want (. M @x) (both identifiers) in either case
-        cs = _map_green_to_ast(k, children(ex))
-        if length(cs) !== 1 || !(kind(cs[1]) in KSet". Identifier")
-            return mknode(ex, cs)
-        end
-        id = cs[1]
-        mname_raw = (kind(id) === K"." ? id[2] : id).name_val
-        mac_id = setattr!(newleaf(graph, ex, K"Identifier"), :name_val,
-                          lower_identifier_name(mname_raw, K"macro_name"))
-        if kind(id) === K"."
-            mknode(ex, tree_ids(id[1], mac_id))
-        else
-            mac_id
-        end
-    elseif is_leaf(ex)
-        return ex
-    else
-        mknode(ex, _map_green_to_ast(k, children(ex)))
-    end
-end
-
-function _map_green_to_ast(parent::Kind, cs::SyntaxList; eq_to_kw=false)
-    out = SyntaxList(cs)
-    for c in cs
-        c2 = _green_to_ast(parent, c; eq_to_kw)
-        !isnothing(c2) && push!(out, c2)
-    end
-    return out
-end
-
-#-------------------------------------------------------------------------------
-# WIP: RawGreenNode->EST.  This will replace `_green_to_ast` above, and could
-# replace `node_to_expr` later.
 
 """
 Convert green `st` to a SyntaxTree with Expr structure.  `parent_i` is the final
@@ -1339,6 +1299,9 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             arg = valleaf(replace(sourcetext(st), '_'=>""))
             ret_cids = tree_ids(mac, coreref("nothing"), arg)
             newnode(graph, st, K"macrocall", ret_cids)
+        elseif hasattr(st, :name_val) && !(kind(st) in KSet"Identifier core")
+            # certain kinds should really be identifiers.  known: &, |, :
+            symleaf(st.name_val)
         else
             st
         end
@@ -1552,7 +1515,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         g_out = _green_to_est(st, 1, popfirst!(cs))
         for c in Iterators.reverse(cs)
             gen_cs = let rest = kind(c) === K"iteration" ?
-                preprocessed_green_children(c) : SyntaxList(graph, tree_ids(c))
+                preprocessed_green_children(c) : SyntaxList(c)
                 rest = _map_green_to_est(st, rest; undef_parent=true)
                 pushfirst!(rest, g_out)
             end
@@ -1616,7 +1579,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             return kind(out) in KSet"Identifier = ::" ? out :
                 mknode(st, tree_ids(out))
         elseif kind(parent) === K"struct" && parent_i === 3
-            cs_tmp = SyntaxList(cs)
+            cs_tmp = SyntaxList(graph)
             for c in cs
                 kind(c) === K"doc" ?
                     append!(cs_tmp, preprocessed_green_children(c)) :
@@ -1661,6 +1624,9 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         because_call = parent_i > 1 && (p_k == K"ref" ||
             p_k in KSet"call dotcall" && is_prefix_call(parent))
         ret_k = because_params || because_call ? K"kw" : K"="
+    elseif k in KSet"var char parens" && n_cs === 1
+        # Reachable if this is the top node
+        return _green_to_est(parent, parent_i, cs[1])
     end
 
     # Recurse on `cs`.  If no children change, just return `st`.
@@ -1689,6 +1655,8 @@ function preprocessed_green_children(st::SyntaxTree)
             inner_cs = preprocessed_green_children(cs[i])
             if length(inner_cs) === 1
                 cs[i] = inner_cs[1]
+            else
+                break
             end
         end
     end
@@ -1732,7 +1700,7 @@ end
 # Converting children-first (as _string_to_Expr does) would make this much
 # harder by converting literal strings without the parent's knowledge
 function _string_to_est(st::SyntaxTree, cs::SyntaxList; unwrap_literal)
-    ret_cs = SyntaxList(st)
+    ret_cs = SyntaxList(st._graph)
     literal_k = kind(st) === K"cmdstring" ? K"CmdString" : K"String"
     prev_str = cur_str = false
     next_str = length(cs) > 0 && kind(cs[1]) === literal_k

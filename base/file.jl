@@ -769,7 +769,7 @@ function _win_mkstemp(temppath::AbstractString)
                     tempp, temppfx, UInt32(0), tname)
     windowserror("GetTempFileName", uunique == 0)
     lentname = something(findfirst(iszero, tname))
-    @assert lentname > 0
+    @assert lentname > 0 "unexpected index"
     resize!(tname, lentname - 1)
     return transcode(String, tname)
 end
@@ -867,7 +867,7 @@ See also: [`mktemp`](@ref), [`mkdir`](@ref).
 """
 function mktempdir(parent::AbstractString=tempdir();
     prefix::AbstractString=temp_prefix, cleanup::Bool=true)
-    if isempty(parent) || occursin(path_separator_re, parent[end:end])
+    if isempty(parent) || isseparator(last(parent))
         # append a path_separator only if parent didn't already have one
         tpath = "$(parent)$(prefix)XXXXXX"
     else
@@ -1396,7 +1396,7 @@ function readlink(path::AbstractString)
         if ret < 0
             uv_fs_req_cleanup(req)
             uv_error("readlink($(repr(path)))", ret)
-            @assert false
+            @assert false "unexpected uv readlink error"
         end
         tgt = unsafe_string(ccall(:jl_uv_fs_t_ptr, Cstring, (Ptr{Cvoid},), req))
         uv_fs_req_cleanup(req)

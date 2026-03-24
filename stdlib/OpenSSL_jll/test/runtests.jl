@@ -6,5 +6,5 @@ using Test, Libdl, OpenSSL_jll
     major = ccall((:OPENSSL_version_major, libcrypto), Cuint, ())
     minor = ccall((:OPENSSL_version_minor, libcrypto), Cuint, ())
     patch = ccall((:OPENSSL_version_patch, libcrypto), Cuint, ())
-    @test VersionNumber(major, minor, patch) == v"3.5.4"
+    @test VersionNumber(major, minor, patch) == v"3.5.5"
 end

@@ -230,7 +230,7 @@ end
             @test cmp_sn2(Tw(xw+yw), astuple(x+y)..., slopbits)
             @test cmp_sn2(Tw(xw-yw), astuple(x-y)..., slopbits)
             @test cmp_sn2(Tw(xw*yw), astuple(x*y)..., slopbits)
-            @test cmp_sn2(Tw(xw/yw), astuple(x/y)..., slopbits+1) # extra bit because division is hard
+            @test cmp_sn2(Tw(xw/yw), astuple(x/y)..., slopbits+1) # see #59140 for justification for the `+1`
             y = rand(T)
             yw = widen(widen(y))
             @test cmp_sn2(Tw(xw+yw), astuple(x+y)..., slopbits)

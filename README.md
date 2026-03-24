@@ -62,6 +62,8 @@ documentation improvements, tests, and performance enhancements.
 
 New contributors are encouraged to start by reading [CONTRIBUTING.md](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md).
 
+> [!IMPORTANT]
+> If your pull request contains substantial contributions from a generative AI tool, please disclose so with details, and review all changes before opening. This also applies to other content, such as issues, discussions, and comments.
 
 ### Learning Julia
 
@@ -101,9 +103,9 @@ Then, acquire the source code by cloning the git repository:
 
 and then use the command prompt to change into the resulting julia directory. By default, you will be building the latest unstable version of
 Julia. However, most users should use the [most recent stable version](https://github.com/JuliaLang/julia/releases)
-of Julia. You can get this version by running:
+of Julia. You can get this version by running: (replace `[tag]` with the desired tag)
 
-    git checkout v1.12.2
+    git checkout [tag]
 
 To build the `julia` executable, run `make` from within the julia directory.
 

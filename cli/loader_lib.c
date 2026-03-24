@@ -126,7 +126,7 @@ static void * lookup_symbol(const void * lib_handle, const char * symbol_name) {
 }
 
 #if defined(_OS_WINDOWS_)
-void win32_formatmessage(DWORD code, char *reason, int len) {
+static char *win32_formatmessage(DWORD code) {
     DWORD res;
     LPWSTR errmsg;
     res = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER |
@@ -145,9 +145,9 @@ void win32_formatmessage(DWORD code, char *reason, int len) {
                            NULL, code,
                            0, (LPWSTR)&errmsg, 0, NULL);
     }
-    res = WideCharToMultiByte(CP_UTF8, 0, errmsg, -1, reason, len, NULL, NULL);
-    reason[len - 1] = '\0';
+    char *utf8msg = wchar_to_utf8(errmsg);
     LocalFree(errmsg);
+    return utf8msg;
 }
 #endif
 
@@ -169,9 +169,9 @@ JL_DLLEXPORT const char * jl_get_libdir()
         DWORD err = GetLastError();
         jl_loader_print_stderr3("ERROR: could not locate library \"", LIBJULIA_NAME, "\"\n");
 
-        char msg[2048];
-        win32_formatmessage(err, msg, sizeof(msg));
+        char *msg = win32_formatmessage(err);
         jl_loader_print_stderr(msg);
+        free(msg);
         exit(1);
     }
 

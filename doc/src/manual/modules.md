@@ -163,6 +163,16 @@ You can combine multiple `using` and `import` statements of the same kind in a c
 julia> using LinearAlgebra, Random
 ```
 
+This is currently equivalent to the following:
+
+```jldoctest module_manual
+julia> using LinearAlgebra; using Random
+```
+
+However, this might change in future Julia versions to loading packages in parallel.
+Generally speaking, if something breaks when changing `using A, B` to `using B, A`
+that suggests a bug somewhere.
+
 ### `using` and `import` with specific identifiers, and adding methods
 
 When `using ModuleName:` or `import ModuleName:` is followed by a comma-separated list of names, the module is loaded, but *only those specific names are brought into the namespace* by the statement. For example,
@@ -627,7 +637,7 @@ Other known potential failure scenarios include:
    Note that `objectid` (which works by hashing the memory pointer) has similar issues (see notes
    on `Dict` usage below).
 
-   One alternative is to use a macro to capture [`@__MODULE__`](@ref) and store it alone with the current `counter` value,
+   One alternative is to use a macro to capture [`@__MODULE__`](@ref) and store it along with the current `counter` value,
    however, it may be better to redesign the code to not depend on this global state.
 2. Associative collections (such as `Dict` and `Set`) need to be re-hashed in `__init__`. (In the
    future, a mechanism may be provided to register an initializer function.)

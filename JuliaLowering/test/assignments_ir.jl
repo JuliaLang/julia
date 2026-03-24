@@ -161,7 +161,7 @@ a.(b) = rhs
 #---------------------
 LoweringError:
 a.(b) = rhs
-└───┘ ── invalid dot call syntax on left hand side of assignment
+└───┘ ── dotcall syntax not valid here
 
 ########################################
 # Error: Invalid lhs in `=`
@@ -225,7 +225,7 @@ LoweringError:
 #---------------------
 LoweringError:
 1 = rhs
-╙ ── invalid assignment location
+╙ ── invalid syntax in left-hand side of assignment
 
 ########################################
 # Basic updating assignment
@@ -337,6 +337,14 @@ end
 13  (return %₁₀)
 
 ########################################
+# Error: invalid LHS: block
+begin; x; end = 1
+#---------------------
+LoweringError:
+begin; x; end = 1
+└───────────┘ ── invalid syntax in left-hand side of assignment
+
+########################################
 # Error: Updating assignment with invalid left hand side
 f() += y
 #---------------------
@@ -350,4 +358,4 @@ f() += y
 #---------------------
 LoweringError:
 (if false end, b) += 2
-└───────────────┘ ── invalid multiple assignment location
+#└──────────┘ ── invalid syntax in left-hand side of assignment

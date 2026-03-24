@@ -10,6 +10,8 @@ function _register_kinds()
             "atomic"
             # Flag for @generated parts of a function
             "generated"
+            # Like (function call body) but (generated_function call gen nongen)
+            "generated_function"
             # Temporary rooting of identifiers (GC.@preserve)
             "gc_preserve"
             "gc_preserve_begin"
@@ -22,8 +24,10 @@ function _register_kinds()
             "inline"
             "noinline"
             "loopinfo"
-            # Call into foreign code. Emitted by `@ccall`
+            # Call into foreign code
             "foreigncall"
+            # ccall convention
+            "cconv"
             # Special form for constructing a function callable from C
             "cfunction"
             # Special form emitted by `Base.Experimental.@opaque`
@@ -36,9 +40,11 @@ function _register_kinds()
             # be passed through lowering in a similar way to `isdefined`
             "throw_undef_if_not"
             # named labels for `@label` and `@goto`
-            "symbolic_label"
+            "symboliclabel"
             # Goto named label
-            "symbolic_goto"
+            "symbolicgoto"
+            # Labeled block for `@label name expr` (block break)
+            "symbolicblock"
             # Internal initializer for struct types, for inner constructors/functions
             "new"
             "splatnew"
@@ -48,6 +54,9 @@ function _register_kinds()
             # Used for converting the old-style macro hygienic-scope form (gone
             # after macro expansion).
             "hygienic-scope"
+            # Only produced by flisp macro expansion (which Core.@doc (cursed)
+            # invokes manually)
+            "copyast"
             # An expression which will eventually be evaluated "statically" in
             # the context of a CodeInfo and thus allows access only to globals
             # and static parameters. Used for ccall, cfunction, cglobal
@@ -56,6 +65,7 @@ function _register_kinds()
             "islocal"
             "isglobal"
             "locals"
+            "thisfunction"
         "END_EXTENSION_KINDS"
 
         # The following kinds are internal to lowering
@@ -67,7 +77,6 @@ function _register_kinds()
             "BindingId"
             # Various heads harvested from flisp lowering.
             # (TODO: May or may not need all these - assess later)
-            "break_block"
             # Like block, but introduces a lexical scope; used during scope resolution.
             "scope_block"
             # Equivalent to Expr(:softscope).  If found in the top-level thunk,
@@ -129,6 +138,9 @@ function _register_kinds()
             "constdecl"
             # Returned from statements that should error if the result is used.
             "unused_only"
+            # Pre-lowered SSA value reference from Expr(:ssavalue, N).
+            # Translated to a BindingId during desugaring.
+            "ssavalue"
         "END_LOWERING_KINDS"
 
         # The following kinds are emitted by lowering and used in Julia's untyped IR

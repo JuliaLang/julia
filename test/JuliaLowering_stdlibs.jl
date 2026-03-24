@@ -1,16 +1,7 @@
 import Libdl
 
 # known precompilation failures under JL
-const INCOMPATIBLE_STDLIBS = String[
-    "LibGit2", # op isa Symbol (JuliaLang/JuliaLowering.jl#126)
-    "SparseArrays", # type-alias bug (JuliaLang/JuliaLowering.jl#123)
-    "TOML", # @invokelatest / QuoteNode bug
-    "Test", # nested + destructured args splat (JuliaLang/JuliaLowering.jl#133)
-    "REPL", # infinite softscope (in REPL code)
-    "Pkg", # depends on TOML
-    "SuiteSparse", # depends on SparseArrays
-    "LazyArtifacts", # depends on Pkg
-]
+const INCOMPATIBLE_STDLIBS = String[]
 
 const JULIA_EXECUTABLE = Base.unsafe_string(Base.JLOptions().julia_bin)
 const JULIA_CPU_TARGET = get(ENV, "JULIA_CPU_TARGET", Base.unsafe_string(Base.JLOptions().cpu_target))

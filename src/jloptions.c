@@ -672,7 +672,7 @@ restart_switch:
             else if (!strcmp(optarg,"existing"))
                 jl_options.use_pkgimages = JL_OPTIONS_USE_PKGIMAGES_EXISTING;
             else
-                jl_errorf("julia: invalid argument to --pkgimages={yes|no} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --pkgimages={yes|no|existing} (%s)", optarg);
             break;
         case 'C': // cpu-target
             jl_options.cpu_target = strdup(optarg);
