@@ -224,6 +224,7 @@ function node_string(ex::SyntaxTree, depth=2)
         out *= "]"
     end
     out *= ")"
+    return out
 end
 
 function Base.getproperty(ex::SyntaxTree, name::Symbol)
@@ -258,7 +259,7 @@ function Base.getindex(ex::SyntaxTree, r::UnitRange)
     SyntaxList(ex._graph, children(ex._graph, ex._id, r))
 end
 
-Base.firstindex(ex::SyntaxTree) = 1
+Base.firstindex(::SyntaxTree) = 1
 Base.lastindex(ex::SyntaxTree) = numchildren(ex)
 
 function Base.:≈(ex1::SyntaxTree, ex2::SyntaxTree)
@@ -348,16 +349,16 @@ byte_range(src::SourceRef) = src.first_byte:src.last_byte
 # TODO: Adding these methods to support LineNumberNode is kind of hacky but we
 # can remove these after JuliaLowering becomes self-bootstrapping for macros
 # and we a proper SourceRef for @ast's @HERE form.
-byte_range(src::LineNumberNode) = 0:0
+byte_range(::LineNumberNode) = 0:0
 source_location(src::LineNumberNode) = (src.line, 0)
 source_location(::Type{LineNumberNode}, src::LineNumberNode) = src
 source_line(src::LineNumberNode) = src.line
 # The follow somewhat strange cases are for where LineNumberNode is standing in
 # for SourceFile because we've only got Expr-based provenance info
 sourcefile(src::LineNumberNode) = src
-sourcetext(src::LineNumberNode) = SubString("")
-source_location(src::LineNumberNode, byte_index::Integer) = (src.line, 0)
-source_location(::Type{LineNumberNode}, src::LineNumberNode, byte_index::Integer) = src
+sourcetext(::LineNumberNode) = SubString("")
+source_location(src::LineNumberNode, _byte_index::Integer) = (src.line, 0)
+source_location(::Type{LineNumberNode}, src::LineNumberNode, _byte_index::Integer) = src
 filename(src::LineNumberNode) = string(src.file)
 
 function highlight(io::IO, src::LineNumberNode; note="")
@@ -724,7 +725,7 @@ function mapchildren(f::Function, ctx, ex::SyntaxTree,
 end
 
 function mapchildren(f::Function, ctx, ex::SyntaxTree)
-    mapchildren(f, ctx, ex, i->true)
+    mapchildren(f, ctx, ex, _->true)
 end
 
 
@@ -1702,7 +1703,7 @@ end
 function _string_to_est(st::SyntaxTree, cs::SyntaxList; unwrap_literal)
     ret_cs = SyntaxList(st._graph)
     literal_k = kind(st) === K"cmdstring" ? K"CmdString" : K"String"
-    prev_str = cur_str = false
+    cur_str = false
     next_str = length(cs) > 0 && kind(cs[1]) === literal_k
     buf = IOBuffer()
     for i in eachindex(cs)

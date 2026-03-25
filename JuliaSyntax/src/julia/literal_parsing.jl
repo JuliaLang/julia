@@ -212,7 +212,7 @@ function unescape_raw_string(io::IO, txtbuf::Vector{UInt8},
             # Backslashes before a delimiter must also be escaped
             nbackslash = div(nbackslash,2)
         end
-        for k = 1:nbackslash
+        for _ = 1:nbackslash
             write(io, u8"\\")
         end
         i = j
@@ -268,7 +268,7 @@ function unescape_julia_string(io::IO, txtbuf::Vector{UInt8},
                 i += 1
             end
             if k == 1 || n > 0x10ffff
-                u = m == 4 ? u8"u" : u8"U"
+                m == 4 ? u8"u" : u8"U"
                 msg = (m == 2) ? "invalid hex escape sequence" :
                                  "invalid unicode escape sequence"
                 emit_diagnostic(diagnostics, escstart:i, error=msg)
