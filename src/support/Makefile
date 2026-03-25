@@ -19,7 +19,7 @@ SRCS += _setjmp.win64
 endif
 endif
 
-HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h
+HEADERS := $(wildcard *.h) $(wildcard *.inc) $(LIBUV_INC)/uv.h
 
 OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
