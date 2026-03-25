@@ -2719,7 +2719,7 @@ struct D14919 <: Function; end
 @test B14919()() == "It's a brand new world"
 @test C14919()() == D14919()() == "Boo."
 
-let ex_t = ErrorException, ex_r = r"cannot add methods to builtin function"
+let ex_t = ErrorException, ex_r = r"cannot add methods to protected operator"
     for f in (:(Core.Any), :(Core.Function), :(Core.Builtin), :(Base.Callable), :(Union{Nothing,F} where F), :(typeof(Core.getfield)), :(Core.IntrinsicFunction))
         @test_throws ex_t @eval (::$f)() = 1
         @test_throws ex_r @eval (::$f)() = 1
@@ -2730,6 +2730,8 @@ let ex_t = ErrorException, ex_r = r"cannot add methods to builtin function"
         @test_throws ex_t @eval $f() = 1
         @test_throws ex_r @eval $f() = 1
     end
+    @test_throws ex_t @eval Base.:(!==)(a::Int, b::Int) = a * b
+    @test_throws ex_r @eval Base.:(!==)(a::Int, b::Int) = a * b
 end
 
 # issue #33370
