@@ -23,6 +23,8 @@ using Core: @doc
 using Base:
     cld, fld, resize!, IndexCartesian, Checked
 using .Checked: checked_mul
+using Base: @noinline
+using Base: statically_known_iterator_length
 
 import Base:
     first, last,
@@ -1260,27 +1262,52 @@ IteratorEltype(::Type{Flatten{Tuple{}}}) = IteratorEltype(Tuple{})
 _flatteneltype(I, ::HasEltype) = IteratorEltype(eltype(I))
 _flatteneltype(I, et) = EltypeUnknown()
 
-flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{Union{}}, slurp...) = HasLength() # length==0
-flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:NTuple{N,Any}}) where {N} = HasLength()
-flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Tuple}) = SizeUnknown()
-flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Number}) = HasLength()
-flatten_iteratorsize(a, b) = SizeUnknown()
-
-_flatten_iteratorsize(sz, ::EltypeUnknown, I) = SizeUnknown()
-_flatten_iteratorsize(sz, ::HasEltype, I) = flatten_iteratorsize(sz, eltype(I))
-_flatten_iteratorsize(sz, ::HasEltype, ::Type{Tuple{}}) = HasLength()
-
-IteratorSize(::Type{Flatten{I}}) where {I} = _flatten_iteratorsize(IteratorSize(I), IteratorEltype(I), I)
-
-flatten_length(f, T::Type{Union{}}, slurp...) = 0
-function flatten_length(f, T::Type{<:NTuple{N,Any}}) where {N}
-    return N * length(f.it)
-end
-flatten_length(f, ::Type{<:Number}) = length(f.it)
-flatten_length(f, T) = throw(ArgumentError(
+@noinline function throw_flatten_length()
+    throw(ArgumentError(
     "Iterates of the argument to Flatten are not known to have constant length"))
-length(f::Flatten{I}) where {I} = flatten_length(f, eltype(I))
-length(f::Flatten{Tuple{}}) = 0
+end
+
+function length(f::Flatten)
+    it = f.it
+    # Flattened length is zero when `it` is known to be empty. Handle that case for
+    # iterators statically known to be empty.
+    if it === ()
+        return 0
+    end
+    elt = eltype(it)
+    # NB: even though `eltype(it) <: Union{}` implies `it` does not have any valid
+    # elements, in such a case `it` may still have `undef` elements, and thus
+    # nonzero `length`.
+    if elt <: Union{}
+        throw_flatten_length()
+    end
+    len_elem = statically_known_iterator_length(elt)
+    if len_elem !== nothing
+        # The length of each element is known to be `len_elem`.
+        return len_elem * length(it)
+    end
+    throw_flatten_length()
+end
+
+function IteratorSize(::Type{Flatten{I}}) where {I}
+    if I <: Union{}
+        return SizeUnknown()
+    end
+    if I <: Tuple{}
+        return HasLength()
+    end
+    s = IteratorSize(I)
+    elt = eltype(I)
+    if (
+        (s isa Union{HasShape, HasLength}) &&
+        !(elt <: Union{}) &&
+        (statically_known_iterator_length(elt) isa Int)
+    )
+        HasLength()
+    else
+        SizeUnknown()
+    end
+end
 
 @propagate_inbounds function iterate(fl::Flatten)
     it_result = iterate(fl.it)

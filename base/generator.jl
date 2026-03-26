@@ -131,3 +131,19 @@ IteratorEltype(::Type{Union{}}, slurp...) = throw(ArgumentError("Union{} does no
 IteratorEltype(::Type{Any}) = EltypeUnknown()
 
 IteratorEltype(::Type{Generator{I,T}}) where {I,T} = EltypeUnknown()
+
+function statically_known_iterator_length(type::Type)
+    # Handle subtypes of `Tuple` with known length.
+    if type isa (Type{<:NTuple{N, Any}} where {N})
+        return _counttuple(type)::Int
+    end
+    # Any iterator shaped like a zero-dimensional array has length one.
+    if IteratorSize(type) === HasShape{0}()
+        return 1
+    end
+    # Any instance of `Pair` has length two.
+    if type <: Pair
+        return 2
+    end
+    nothing
+end

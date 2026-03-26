@@ -554,6 +554,22 @@ end
     @test (@inferred Base.IteratorSize(Base.Flatten((i for i=1:2) for j=1:1))) == Base.SizeUnknown()
     @test (@inferred Base.IteratorSize(Base.Flatten((1,2)))) == Base.HasLength()
     @test (@inferred Base.IteratorSize(Base.Flatten(1:2:4))) == Base.HasLength()
+    @test (@inferred Base.IteratorSize(Base.Flatten(()))) == Base.HasLength()
+    @test (@inferred Base.IteratorSize(Base.Flatten((Ref("a"), Ref("b"))))) == Base.HasLength()
+    @test (@inferred Base.IteratorSize(Base.Flatten([Ref("a"), Ref("b")]))) == Base.HasLength()  # elements shaped like zero-dimensional arrays
+    @test (@inferred Base.IteratorSize(Base.Flatten([(1 => 2), (3 => 4)]))) == Base.HasLength()  # `Pair` elements
+    @test (@inferred Base.IteratorSize(Base.Flatten([(1, 2), (3, 4)]))) == Base.HasLength()  # `Tuple` elements
+end
+
+@testset "length(::Flatten)" begin
+    @test_throws ArgumentError length(Iterators.flatten(Vector{Union{}}(undef, 3)))  # issue #61416
+    @test 2 === @inferred length(Iterators.flatten((1, 2)))
+    @test 2 === @inferred length(Iterators.flatten(1:2:4))
+    @test 0 === @inferred length(Iterators.flatten(()))
+    @test 2 === @inferred length(Iterators.flatten((Ref("a"), Ref("b"))))
+    @test 2 === @inferred length(Iterators.flatten([Ref("a"), Ref("b")]))
+    @test 4 === @inferred length(Iterators.flatten([(1 => 2), (3 => 4)]))
+    @test 4 === @inferred length(Iterators.flatten([(1, 2), (3, 4)]))
 end
 
 @test (@inferred Base.IteratorEltype(Base.Flatten((i for i=1:2) for j=1:1))) == Base.EltypeUnknown()
