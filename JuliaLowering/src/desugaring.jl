@@ -2416,7 +2416,8 @@ end
 # - one wrapper per optional positional arg
 # - one containing the body
 # - possibly one generated method
-function method_def_expr(ctx, src, mtable, sparams, argl, body, rett)
+function method_def_expr(ctx, src, mtable, sparams, argl, body,
+                         rett=@ast(ctx, src, "Any"::K"core"))
     @jl_assert length(argl) > 0 src
     @jl_assert kind(argl[end]) !== K"parameters" src argl[end]
     if length(pos_opt_args(argl)) > 0
@@ -2568,7 +2569,7 @@ function optional_positional_defs(ctx, src, mtable, sparams, argl, body, rett)
         end
         push!(methods, method_def_expr(
             ctx, src, mtable, used_typevars(passed, sparams),
-            passed, wrapper_body, rett))
+            passed, wrapper_body))
         push!(passed, opt_decls[i])
     end
     if length(opt) + length(req) < length(argl)
@@ -2638,7 +2639,9 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
         newsym(ctx, argl[1], reserve_module_binding_i(ctx.mod, mangled))
     end
     # (1) Body method.  This contains the actual function body, and requires
-    # every possible default to be filled.
+    # (1) Body method.  This contains the actual function body, and requires
+    # every possible default to be filled.  `rett` is only passed here since it
+    # can reference any argument.
     mdefs1 = let arg1 = @ast ctx m1_name [K"::" m1_name [K"function_type" m1_name]]
         nkw = @ast ctx kws [K"meta" "nkw"::K"Symbol" numchildren(kws)::K"Value"]
         method_def_expr(
@@ -2660,7 +2663,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
         end
         method_def_expr(
             ctx, src, mtable, positional_sparams, pargl,
-            @ast(ctx, src, [K"block" [K"return" body2]]), rett)
+            @ast(ctx, src, [K"block" [K"return" body2]]))
     end
     # (3) Core.kwcall(arg2::NamedTuple, pargl...) methods (one per optarg).
     # - for each kwarg:
@@ -2749,7 +2752,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
             arg2 = @ast ctx arg2_name [K"::" arg2_name "NamedTuple"::K"core"]
             method_def_expr(
                 ctx, src, mtable, positional_sparams,
-                SyntaxList(arg1, arg2, pargl...), kwcall_body, rett)
+                SyntaxList(arg1, arg2, pargl...), kwcall_body)
         end
     end
     @ast ctx src [K"block"
