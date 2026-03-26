@@ -65,7 +65,7 @@ SRCS := \
 	simplevector runtime_intrinsics precompile jloptions mtarraylist \
 	threading scheduler stackwalk null_sysimage \
 	method jlapi signal-handling safepoint timing subtype rtutils \
-	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage runtime_ccall engine \
+	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage runtime_ccall \
 	$(GC_SRCS)
 
 RT_LLVMLINK :=
@@ -80,7 +80,7 @@ GC_CODEGEN_SRCS += llvm-final-gc-lowering-mmtk
 else
 GC_CODEGEN_SRCS += llvm-final-gc-lowering-stock
 endif
-CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
+CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop engine \
 	llvm-pass-helpers llvm-ptls llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt llvm-alloc-helpers cgmemmgr llvm-remove-addrspaces \
 	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures llvm-expand-atomic-modify \

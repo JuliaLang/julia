@@ -518,6 +518,10 @@
     YY(jl_dump_function_ir) \
     YY(jl_dump_method_asm) \
     YY(jl_emit_codeinst_to_jit) \
+    YY(jl_engine_reserve) \
+    YY(jl_engine_fulfill) \
+    YY(jl_engine_hasreserved) \
+    YY(jl_engine_sweep) \
     YY(jl_get_llvmf_defn) \
     YY(jl_get_llvm_function) \
     YY(jl_get_llvm_module) \

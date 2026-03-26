@@ -161,3 +161,11 @@ JL_DLLEXPORT const char JLJITGetGlobalPrefix_fallback(void* JIT) UNAVAILABLE
 JL_DLLEXPORT const char *JLJITGetDataLayoutString_fallback(void* JIT) UNAVAILABLE
 
 JL_DLLEXPORT void* JLJITGetIRCompileLayer_fallback(void* JIT) UNAVAILABLE
+
+JL_DLLEXPORT jl_code_instance_t *jl_engine_reserve_fallback(jl_method_instance_t *mi, jl_value_t *owner) UNAVAILABLE
+
+JL_DLLEXPORT void jl_engine_fulfill_fallback(jl_code_instance_t *ci, jl_code_info_t *src) UNAVAILABLE
+
+JL_DLLEXPORT int jl_engine_hasreserved_fallback(jl_method_instance_t *mi, jl_value_t *owner) UNAVAILABLE
+
+JL_DLLEXPORT void jl_engine_sweep_fallback(jl_ptls_t *gc_all_tls_states) { }

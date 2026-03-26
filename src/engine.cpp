@@ -57,7 +57,7 @@ static SmallVector<InferKey, 0> Awaiting; // (this could be merged into ptls als
 extern "C" {
 #endif
 
-jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner)
+JL_DLLEXPORT_CODEGEN jl_code_instance_t *jl_engine_reserve_impl(jl_method_instance_t *m, jl_value_t *owner)
 {
     jl_task_t *ct = jl_current_task;
     ct->ptls->engine_nqueued++; // disables finalizers until inference is finished on this method graph
@@ -103,7 +103,7 @@ jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner
     return ci;
 }
 
-int jl_engine_hasreserved(jl_method_instance_t *m, jl_value_t *owner)
+JL_DLLEXPORT_CODEGEN int jl_engine_hasreserved_impl(jl_method_instance_t *m, jl_value_t *owner)
 {
     jl_task_t *ct = jl_current_task;
     InferKey key = {m, owner};
@@ -117,7 +117,7 @@ STATIC_INLINE int gc_marked(uintptr_t bits) JL_NOTSAFEPOINT
     return (bits & GC_MARKED) != 0;
 }
 
-void jl_engine_sweep(jl_ptls_t *gc_all_tls_states)
+JL_DLLEXPORT_CODEGEN void jl_engine_sweep_impl(jl_ptls_t *gc_all_tls_states)
 {
     std::unique_lock lock(engine_lock);
     bool any = false;
@@ -135,7 +135,7 @@ void jl_engine_sweep(jl_ptls_t *gc_all_tls_states)
         engine_wait.notify_all();
 }
 
-void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src)
+JL_DLLEXPORT_CODEGEN void jl_engine_fulfill_impl(jl_code_instance_t *ci, jl_code_info_t *src)
 {
     jl_task_t *ct = jl_current_task;
     std::unique_lock lock(engine_lock);
