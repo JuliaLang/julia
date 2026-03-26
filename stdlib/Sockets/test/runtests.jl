@@ -175,7 +175,7 @@ defaultport = rand(2000:4000)
         wait(tsk)
     end
 
-    mktempdir() do tmpdir
+       mktempdir() do tmpdir
         socketname = Sys.iswindows() ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
         local nconn = 0
         srv = listen(socketname)
@@ -192,7 +192,37 @@ defaultport = rand(2000:4000)
         wait(t)
         @test read(conn, String) == ""
     end
+
+    @static if !Sys.iswindows()
+        @testset "Unix domain socket half-close preserves writeability" begin
+            dir  = mktempdir()
+            sock = joinpath(dir, "halfclose.sock")
+
+            server = listen(sock)
+
+            t = Threads.@spawn begin
+                c = accept(server)
+                read(c, String)          # peer shutdown(SHUT_WR)
+                write(c, "pong\n")       # MUST still succeed
+                flush(c)
+                close(c)
+                close(server)
+                :ok
+            end
+
+            out = read(pipeline(
+                `socat -t 1 - UNIX-CONNECT:$sock`,
+                stdin = IOBuffer("ping\n"),
+            ), String)
+
+            srv = fetch(t)
+
+            @test out == "pong\n"
+            @test srv == :ok
+        end
+    end
 end
+
 
 @testset "getsockname errors" begin
     sock = TCPSocket()
