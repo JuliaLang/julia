@@ -2533,6 +2533,35 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
 
     pgcstack = getPGCstack(F);
     if (pgcstack) {
+      // Before LocalScan, widen memory effects on calls marked with
+      // "julia.safepoint". These had optimistic attributes (e.g.
+      // memory(argmem: read)) applied from IPO purity to enable pre-GC
+      // optimizations (GVN/CSE). Now that those passes have run, restore
+      // full memory effects so LocalScan correctly identifies them as
+      // safepoints and post-GC passes (DSE, GVN) cannot reorder or
+      // eliminate GC frame stores across them.
+      for (auto &BB : F) {
+          for (auto &I : BB) {
+              if (auto *CI = dyn_cast<CallInst>(&I)) {
+                  if (Function *Callee = CI->getCalledFunction()) {
+                      if (Callee->hasFnAttribute("julia.safepoint")) {
+                          CI->setMemoryEffects(MemoryEffects::unknown());
+                          // Also strip the optimistic memory attr from the
+                          // declaration so post-GC passes can't use it either.
+                          if (Callee->isDeclaration()) {
+                              Callee->setMemoryEffects(MemoryEffects::unknown());
+                              // Strip readnone from gcstack param (added for
+                              // notaskstate functions to enable LICM).
+                              for (unsigned i = 0; i < Callee->arg_size(); i++) {
+                                  if (Callee->hasParamAttribute(i, "gcstack"))
+                                      Callee->removeParamAttr(i, Attribute::ReadNone);
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+      }
       State S = LocalScan(F);
       // If there is no safepoint after the first reachable def, then we don't need any roots (even those for allocas)
       if (std::any_of(S.BBStates.begin(), S.BBStates.end(),

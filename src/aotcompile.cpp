@@ -2475,6 +2475,14 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                 if (!jl_options.image_codegen) {
                     optimizeDLSyms(output.get_module());
                 }
+                // Apply ipo_purity_bits as LLVM attributes before optimization so
+                // that GVN and other passes can exploit them (e.g. CSE duplicate
+                // calls to a consistent+effect_free function).
+                if (decls->specptr) {
+                    jl_code_instance_t *ci = jl_atomic_load_relaxed(&mi->cache);
+                    if (ci)
+                        add_fn_attrs_for_effects(decls->specptr, jl_atomic_load_relaxed(&ci->ipo_purity_bits), /*is_definition=*/true);
+                }
                 assert(!verifyLLVMIR(output.get_module()));
                 if (optimize) {
                     auto opts = OptimizationOptions::defaults();

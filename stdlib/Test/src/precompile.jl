@@ -9,7 +9,6 @@ let
             @test 1 ≈ 1.0000000000000001
         end
     end
-
     redirect_stdout(example_payload, devnull)
 end
 end

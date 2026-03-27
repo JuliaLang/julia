@@ -9,6 +9,7 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
+#include <llvm/IR/Attributes.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/PassTimingInfo.h>
@@ -74,6 +75,86 @@ DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeModule, LLVMOrcThreadSafeModul
 void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis) JL_NOTSAFEPOINT;
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M) JL_NOTSAFEPOINT;
 DataLayout jl_create_datalayout(TargetMachine &TM) JL_NOTSAFEPOINT;
+
+// Translate Julia inferred effects (ipo_purity_bits encoding from effects.jl)
+// into LLVM function attributes.
+// Bit layout (sync with Compiler/src/effects.jl encode_effects):
+//   consistent=bits[2:0], effect_free=bits[4:3], nothrow=bit5, terminates=bit6
+// When is_definition=true, the memory attribute is omitted because function
+// bodies may write GC root slots through pgcstack, which conflicts with
+// memory(argmem: read). Call-site declarations are safe because the callee's
+// stack-local GC frame writes are invisible to the caller.
+//
+// Call-site declarations always get the "julia.safepoint" attribute, since
+// all Julia function calls may trigger GC. LateLowerGCFrame uses this to
+// widen optimistic memory effects (e.g. memory(argmem: read)) before
+// safepoint analysis, so that post-GC passes (DSE, GVN) cannot reorder
+// or eliminate GC frame stores across these calls.
+inline void add_fn_attrs_for_effects(Function *F, uint32_t effects, bool is_definition = false) JL_NOTSAFEPOINT
+{
+    // effects=0 is the uninitialized default (e.g. jl_new_codeinst_uninit).
+    // Because ALWAYS_TRUE is encoded as 0x00, effects=0 falsely decodes as
+    // consistent=true, effect_free=true, etc. Skip entirely to avoid
+    // applying incorrect attributes.
+    if (effects == 0)
+        return;
+    bool is_consistent   = (effects & 0x07u) == 0u;
+    bool is_effect_free  = ((effects >> 3) & 0x03u) == 0u;
+    bool is_nothrow      = (effects >> 5) & 0x01u;
+    bool is_terminates   = (effects >> 6) & 0x01u;
+    bool is_notaskstate  = (effects >> 7) & 0x01u;
+    AttrBuilder attrs(F->getContext());
+    // All Julia function calls may trigger GC. Mark call-site declarations
+    // so LateLowerGCFrame can widen any optimistic memory effects before
+    // safepoint analysis runs.
+    if (!is_definition)
+        attrs.addAttribute("julia.safepoint");
+    // nounwind is safe because Julia uses setjmp/longjmp exception handling,
+    // not LLVM invoke/landingpad, so no LLVM unwind edges exist to break.
+    if (is_nothrow) {
+        attrs.addAttribute(Attribute::NoUnwind);
+        // On platforms without mandatory unwind tables (e.g. Linux ELF),
+        // nounwind alone lets LLVM omit .eh_frame entries. Julia's runtime
+        // needs these for GC stack scanning, profiling, and backtraces via
+        // libunwind, so force async unwind tables on definitions.
+        if (is_definition && !F->hasUWTable())
+            attrs.addUWTableAttr(llvm::UWTableKind::Async);
+    }
+    // mustprogress: the function won't loop forever. Safe for any
+    // function that terminates (even if it might throw).
+    if (is_terminates)
+        attrs.addAttribute(Attribute::MustProgress);
+    // willreturn: the function will return to its caller. Requires
+    // nothrow because Julia exceptions (setjmp/longjmp) are not a
+    // "return" from LLVM's perspective.
+    if (is_nothrow && is_terminates)
+        attrs.addAttribute(Attribute::WillReturn);
+    if (!is_definition && is_consistent && is_effect_free) {
+        FunctionType *ft = F->getFunctionType();
+        bool has_user_ptr = ft->getReturnType()->isPointerTy();
+        if (!has_user_ptr) {
+            for (unsigned i = 0; i < ft->getNumParams(); i++) {
+                if (ft->getParamType(i)->isPointerTy()) {
+                    if (F->hasParamAttribute(i, "gcstack")) {
+                        if (is_notaskstate)
+                            F->addParamAttr(i, Attribute::ReadNone);
+                        continue;
+                    }
+                    has_user_ptr = true;
+                    break;
+                }
+            }
+        }
+        if (!has_user_ptr) {
+            attrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref));
+            // speculatable: safe to execute even if the result is unused.
+            // Requires the function to be pure, terminating, and non-throwing.
+            if (is_nothrow && is_terminates)
+                attrs.addAttribute(Attribute::Speculatable);
+        }
+    }
+    F->addFnAttrs(attrs);
+}
 
 struct OptimizationOptions {
     bool lower_intrinsics;

@@ -1114,3 +1114,30 @@ loop_preserve_any_ea(10)
     ir = get_llvm(f_srettest, Tuple{Float32}, true, true, true)
     @test occursin(r"sret\([^)]+\) align \d+", ir)
 end
+
+# ipo_purity_bits are translated into LLVM function attributes
+@testset "effects to LLVM attributes" begin
+    function get_llvm_gcstack(@nospecialize(f), @nospecialize(t))
+        params = Base.CodegenParams(safepoint_on_entry=false, gcstack_arg=true, debug_info_level=Cint(2))
+        d = InteractiveUtils._dump_function(InteractiveUtils.ArgInfo(f, t), false, false, true, true, :att, false, :none, false, "", params)
+        sprint(print, d)
+    end
+    # Pure integer function: nounwind+willreturn on definition; memory attr
+    # is only applied at call sites (not on definitions, where GC frame
+    # writes through pgcstack would conflict with read-only).
+    @noinline f_effects_pure(x::Int, y::Int) = x + y
+    f_effects_pure(1, 2)
+    ir = get_llvm(f_effects_pure, Tuple{Int, Int}, true, true, false)
+    @test occursin("nounwind", ir)
+    @test occursin("willreturn", ir)
+    # Same function with gcstack_arg=true
+    ir_gc = get_llvm_gcstack(f_effects_pure, Tuple{Int, Int})
+    @test occursin("nounwind", ir_gc)
+    @test occursin("willreturn", ir_gc)
+    # Pointer-returning function: nounwind+willreturn but NO memory attr
+    @noinline f_effects_ptr(x::Vector{Int}) = x
+    f_effects_ptr(Int[])
+    ir_ptr = get_llvm(f_effects_ptr, Tuple{Vector{Int}}, true, true, false)
+    @test occursin("nounwind willreturn", ir_ptr)
+    @test !occursin("memory(", ir_ptr)
+end
