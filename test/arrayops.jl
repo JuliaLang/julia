@@ -3300,6 +3300,8 @@ end
                 end
             end
         end
+    end
+end
 
 @testset "conditionally-throwing version of `checkbounds` should return `nothing` if it returns" begin
     # can not just set `typ = Any` because that would include the predicate (non-throwing) methods of `checkbounds`, because `Type{Bool} <: Any`
