@@ -132,26 +132,48 @@ escape_microsoft_c_args(cmd::Cmd) =
 escape_microsoft_c_args(io::IO, cmd::Cmd) =
     escape_microsoft_c_args(io::IO, cmd.exec...)
 
-# Patterns that indicate a sensitive environment variable name (case-insensitive).
-const _SENSITIVE_ENV_PATTERNS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "PASSWD", "CREDENTIAL", "CRED", "AUTH", "PRIVATE")
+# Patterns that indicate a sensitive environment variable name.
+# Matched as whole components after splitting on non-alphanumeric characters,
+# so e.g. "PAT" matches "GITHUB_PAT" but not "PATH".
+const SENSITIVE_ENV_PATTERNS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "PASSWD",
+                                "CREDENTIAL", "CRED", "AUTH", "PRIVATE",
+                                "JWT", "PAT", "PASS", "PW")
 
-function _is_sensitive_env_name(name::AbstractString)
+function is_sensitive_env_name(name::AbstractString)
     uname = uppercase(name)
-    return any(p -> occursin(p, uname), _SENSITIVE_ENV_PATTERNS)
+    parts = eachsplit(uname, r"[^A-Za-z0-9]+")
+    return any(part -> part in SENSITIVE_ENV_PATTERNS, parts)
 end
 
-function _show_env(io::IO, env::Vector{String})
-    show_values = get(io, :show_env_values, false)::Bool
+function get_show_env_mode(io::IO)
+    val = get(io, :show_env, :_unset)
+    if val !== :_unset
+        return val::Symbol
+    end
+    envval = get(ENV, "JULIA_SHOW_ENV", nothing)
+    envval === nothing && return :redact
+    envval = lowercase(envval)
+    envval == "all" && return :all
+    envval == "none" && return :none
+    envval == "keys" && return :keys
+    return :redact
+end
+
+function show_env(io::IO, env::Vector{String})
+    mode = get_show_env_mode(io)
     print(io, "[")
     for (i, e) in enumerate(env)
         i > 1 && print(io, ", ")
         eqidx = findnext('=', e, 2)
-        if eqidx === nothing || show_values
+        if eqidx === nothing || mode === :all
             show(io, e)
-        else
+        elseif mode === :keys
             key = e[1:prevind(e, eqidx)]
-            if _is_sensitive_env_name(key)
-                show(io, string(key, "=***"))
+            show(io, key)
+        else  # :redact
+            key = e[1:prevind(e, eqidx)]
+            if is_sensitive_env_name(key)
+                show(io, key)
             else
                 show(io, e)
             end
@@ -161,7 +183,8 @@ function _show_env(io::IO, env::Vector{String})
 end
 
 function show(io::IO, cmd::Cmd)
-    print_env = cmd.env !== nothing
+    env_mode = cmd.env !== nothing ? get_show_env_mode(io) : nothing
+    print_env = cmd.env !== nothing && env_mode !== :none
     print_dir = !isempty(cmd.dir)
     print_uid = cmd.uid !== nothing
     print_gid = cmd.gid !== nothing
@@ -190,7 +213,7 @@ function show(io::IO, cmd::Cmd)
         print(io, ")")
     end
     if print_env || print_dir
-        print_env && (print(io, ","); _show_env(io, cmd.env))
+        print_env && (print(io, ","); show_env(io, cmd.env))
         print_dir && (print(io, "; dir="); show(io, cmd.dir))
         print(io, ")")
     end
@@ -315,10 +338,16 @@ The `dir` keyword argument can be used to specify a working directory for the co
 `dir` defaults to the currently set `dir` for `command` (which is the current working
 directory if not specified already).
 
-!!! note
-    When displaying a `Cmd`, environment variables whose names match sensitive patterns
-    (e.g. containing "KEY", "TOKEN", "SECRET", "PASSWORD", "AUTH") have their values
-    redacted. Use `repr(cmd, context=:show_env_values=>true)` to show all values.
+!!! warning
+    The display redaction behavior (including the `:show_env` IOContext key
+    and `JULIA_SHOW_ENV` environment variable) is experimental and may change
+    in a non-breaking release of Julia.
+
+When displaying a `Cmd`, environment variables whose names match sensitive patterns
+(e.g. containing "KEY", "TOKEN", "SECRET", "PASSWORD", "AUTH", "JWT", "PAT") have
+their values hidden. The display mode can be controlled via the `JULIA_SHOW_ENV`
+environment variable or the `:show_env` IOContext key (which takes precedence),
+with values `:none`, `:keys`, `:redact` (default), or `:all`.
 
 See also [`Cmd`](@ref), [`addenv`](@ref), [`ENV`](@ref), [`pwd`](@ref).
 """
