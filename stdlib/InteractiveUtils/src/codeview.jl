@@ -54,7 +54,7 @@ function warntype_type_printer(io::IO; @nospecialize(type), used::Bool, show_typ
     str = "::$type"
     if !highlighting[:warntype]
         print(io, str)
-    elseif type isa Union && is_expected_union(type)
+    elseif type isa Union && Base.Compiler.IRShow.is_expected_union(type)
         Base.emphasize(io, str, Base.warn_color()) # more mild user notification
     elseif type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
         Base.emphasize(io, str)
@@ -62,18 +62,6 @@ function warntype_type_printer(io::IO; @nospecialize(type), used::Bool, show_typ
         Base.printstyled(io, str, color=:cyan) # show the "good" type
     end
     return nothing
-end
-
-# True if one can be pretty certain that the compiler handles this union well,
-# i.e. must be small with concrete types.
-function is_expected_union(u::Union)
-    Base.unionlen(u) < 4 || return false
-    for x in Base.uniontypes(u)
-        if !Base.isdispatchelem(x) || x == Core.Box
-            return false
-        end
-    end
-    return true
 end
 
 function print_warntype_codeinfo(io::IO, src::Core.CodeInfo, @nospecialize(rettype), nargs::Int; lineprinter, label_dynamic_calls)
@@ -159,7 +147,8 @@ characteristics of a particular type is an implementation detail of the compiler
 concern, so some types may be colored red even if they do not impact performance.
 Small unions of concrete types are usually not a concern, so these are highlighted in yellow.
 
-Keyword argument `debuginfo` may be one of `:source` or `:none` (default), to specify the verbosity of code comments.
+Keyword argument `debuginfo` may be one of `:source`, `:none` or `:default`, to specify the verbosity of code comments.
+Unless the user changes `Base.IRShow.default_debuginfo[]`, the value `:default` is equivalent to `:source`.
 
 See the [`@code_warntype`](@ref man-code-warntype) section in the Performance Tips page of the manual for more information.
 
@@ -177,7 +166,7 @@ function code_warntype(io::IO, arginfo::ArgInfo;
     if arginfo.oc !== nothing
         (; oc, tt) = arginfo
         isa(oc.source, Method) && (nargs = oc.source.nargs)
-        print_warntype_codeinfo(io, Base.code_typed_opaque_closure(oc, tt)[1]..., nargs;
+        print_warntype_codeinfo(io, Base.code_typed_opaque_closure(oc, tt; optimize, interp)[1]..., nargs;
                                 lineprinter, label_dynamic_calls = optimize)
         return nothing
     end
@@ -201,7 +190,8 @@ function code_warntype(io::IO, arginfo::ArgInfo;
 end
 code_warntype(io::IO, @nospecialize(f), @nospecialize(tt=Base.default_tt(f)); kwargs...) = code_warntype(io, ArgInfo(f, tt); kwargs...)
 code_warntype(io::IO, @nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}); kwargs...) = code_warntype(io, ArgInfo(argtypes); kwargs...)
-code_warntype(args...; kwargs...) = (@nospecialize; code_warntype(stdout, args...; kwargs...))
+code_warntype(f; kwargs...) = (@nospecialize; code_warntype(stdout, f; kwargs...))
+code_warntype(f, argtypes; kwargs...) = (@nospecialize; code_warntype(stdout, f, argtypes; kwargs...))
 
 using Base: CodegenParams
 
@@ -217,6 +207,7 @@ const OC_MISMATCH_WARNING =
 function _dump_function(arginfo::ArgInfo, native::Bool, wrapper::Bool,
                         raw::Bool, dump_module::Bool, syntax::Symbol,
                         optimize::Bool, debuginfo::Symbol, binary::Bool,
+                        llvm_options::String="",
                         params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=raw, gcstack_arg=raw))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     warning = ""
@@ -273,7 +264,7 @@ function _dump_function(arginfo::ArgInfo, native::Bool, wrapper::Bool,
             src, rt = Base.get_oc_code_rt(nothing, arginfo.oc, arginfo.tt, true)
         end
         src isa Core.CodeInfo || error("failed to infer source for $mi")
-        str = _dump_function_llvm(mi, src, wrapper, !raw, dump_module, optimize, debuginfo, params)
+        str = _dump_function_llvm(mi, src, wrapper, !raw, dump_module, optimize, debuginfo, llvm_options, params)
     end
     str = warning * str
     return str
@@ -291,6 +282,7 @@ end
 struct LLVMFDump
     tsm::Ptr{Cvoid} # opaque
     f::Ptr{Cvoid} # opaque
+    pass_output::Cstring # LLVM pass instrumentation output (lifetime managed by jl_dump_function_ir or jl_dump_function_asm)
 end
 
 function _dump_function_native_assembly(mi::Core.MethodInstance, src::Core.CodeInfo,
@@ -298,7 +290,7 @@ function _dump_function_native_assembly(mi::Core.MethodInstance, src::Core.CodeI
                                         binary::Bool, raw::Bool, params::CodegenParams)
     llvmf_dump = Ref{LLVMFDump}()
     @ccall jl_get_llvmf_defn(llvmf_dump::Ptr{LLVMFDump}, mi::Any, src::Any, wrapper::Bool,
-                             true::Bool, params::CodegenParams)::Cvoid
+                             true::Bool, ""::Cstring, params::CodegenParams)::Cvoid
     llvmf_dump[].f == C_NULL && error("could not compile the specified method")
     str = @ccall jl_dump_function_asm(llvmf_dump::Ptr{LLVMFDump}, false::Bool,
                                       syntax::Ptr{UInt8}, debuginfo::Ptr{UInt8},
@@ -310,18 +302,21 @@ function _dump_function_llvm(
         mi::Core.MethodInstance, src::Core.CodeInfo, wrapper::Bool,
         strip_ir_metadata::Bool, dump_module::Bool,
         optimize::Bool, debuginfo::Symbol,
+        llvm_options::String,
         params::CodegenParams)
     llvmf_dump = Ref{LLVMFDump}()
     @ccall jl_get_llvmf_defn(llvmf_dump::Ptr{LLVMFDump}, mi::Any, src::Any,
-                             wrapper::Bool, optimize::Bool, params::CodegenParams)::Cvoid
+                             wrapper::Bool, optimize::Bool, llvm_options::Cstring,
+                             params::CodegenParams)::Cvoid
     llvmf_dump[].f == C_NULL && error("could not compile the specified method")
+    # jl_dump_function_ir handles pass_output internally (prepends it and frees it)
     str = @ccall jl_dump_function_ir(llvmf_dump::Ptr{LLVMFDump}, strip_ir_metadata::Bool,
                                      dump_module::Bool, debuginfo::Ptr{UInt8})::Ref{String}
     return str
 end
 
 """
-    code_llvm([io=stdout,], f, types; raw=false, dump_module=false, optimize=true, debuginfo=:default)
+    code_llvm([io=stdout,], f, types; raw=false, dump_module=false, optimize=true, debuginfo=:default, llvm_options="")
 
 Prints the LLVM bitcodes generated for running the method matching the given generic
 function and type signature to `io`.
@@ -331,12 +326,22 @@ All metadata and dbg.* calls are removed from the printed bitcode. For the full 
 To dump the entire module that encapsulates the function (with declarations), set the `dump_module` keyword to true.
 Keyword argument `debuginfo` may be one of source (default) or none, to specify the verbosity of code comments.
 
+The `llvm_options` keyword argument allows passing LLVM options to control the optimization pipeline output.
+Supported options include:
+- `-print-after-all`: Print IR after each pass
+- `-print-before-all`: Print IR before each pass
+- `-print-after=<passname>`: Print IR after a specific pass (e.g., `-print-after=InstCombinePass`). Comma-separated lists and repeated flags are supported.
+- `-print-before=<passname>`: Print IR before a specific pass. Comma-separated lists and repeated flags are supported.
+- `-print-module-scope`: Print entire module instead of just the function
+- `-filter-print-funcs=<name>`: Only print IR for functions matching the name
+
 See also: [`@code_llvm`](@ref), [`code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref), [`code_native`](@ref).
 """
 function code_llvm(io::IO, arginfo::ArgInfo;
                    raw::Bool=false, dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default,
+                   llvm_options::String="",
                    params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=raw, gcstack_arg=raw))
-    d = _dump_function(arginfo, false, false, raw, dump_module, :intel, optimize, debuginfo, false, params)
+    d = _dump_function(arginfo, false, false, raw, dump_module, :intel, optimize, debuginfo, false, llvm_options, params)
     if highlighting[:llvm] && get(io, :color, false)::Bool
         print_llvm(io, d)
     else
@@ -348,24 +353,25 @@ code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f)); kwa
 code_llvm(args...; kwargs...) = (@nospecialize; code_llvm(stdout, args...; kwargs...))
 
 """
-    code_native([io=stdout,], f, types; syntax=:intel, debuginfo=:default, binary=false, dump_module=true)
+    code_native([io=stdout,], f, types; syntax=:intel, debuginfo=:default, binary=false, dump_module=true, raw=false)
 
 Prints the native assembly instructions generated for running the method matching the given
 generic function and type signature to `io`.
 
 * Set assembly syntax by setting `syntax` to `:intel` (default) for intel syntax or `:att` for AT&T syntax.
-* Specify verbosity of code comments by setting `debuginfo` to `:source` (default) or `:none`.
+* Specify verbosity of code comments by setting `debuginfo` to `:source` (equivalently, `:default`) or `:none`.
 * If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
 * If `dump_module` is `false`, do not print metadata such as rodata or directives.
-* If `raw` is `false`, uninteresting instructions (like the safepoint function prologue) are elided.
+* If `raw` is `false` (default), uninteresting instructions (like the safepoint function prologue) are elided.
 
 See also: [`@code_native`](@ref), [`code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref), [`code_llvm`](@ref).
 """
 function code_native(io::IO, arginfo::ArgInfo;
                      dump_module::Bool=true, syntax::Symbol=:intel, raw::Bool=false,
                      debuginfo::Symbol=:default, binary::Bool=false,
+                     llvm_options::String="",
                      params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=raw, gcstack_arg=raw))
-    d = _dump_function(arginfo, true, false, raw, dump_module, syntax, true, debuginfo, binary, params)
+    d = _dump_function(arginfo, true, false, raw, dump_module, syntax, true, debuginfo, binary, llvm_options, params)
     if highlighting[:native] && get(io, :color, false)::Bool
         print_native(io, d)
     else

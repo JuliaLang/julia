@@ -6,10 +6,9 @@ Low level module for mmap (memory mapping of files).
 module Mmap
 
 import Base: OS_HANDLE, INVALID_OS_HANDLE
+using Base.Sys: PAGESIZE
 
 export mmap
-
-const PAGESIZE = Int(Sys.isunix() ? ccall(:jl_getpagesize, Clong, ()) : ccall(:jl_getallocationgranularity, Clong, ()))
 
 # for mmaps not backed by files
 mutable struct Anonymous <: IO
@@ -199,7 +198,7 @@ function mmap(io::IO,
         overflow && throw(ArgumentError("requested size prod($((len, dims...))) too large, would overflow typeof(size(T)) == $(typeof(len))"))
     end
     len >= 0 || throw(ArgumentError("requested size must be ≥ 0, got $len"))
-    len == 0 && return Array{T}(undef, ntuple(x->0,Val(N)))
+    len == 0 && return Array{T}(undef, dims)
     len < typemax(Int) - PAGESIZE || throw(ArgumentError("requested size must be < $(typemax(Int)-PAGESIZE), got $len"))
 
     offset >= 0 || throw(ArgumentError("requested offset must be ≥ 0, got $offset"))

@@ -1,7 +1,6 @@
 # Iteration utilities
 
 ```@docs
-Base.Iterators.Stateful
 Base.Iterators.zip
 Base.Iterators.enumerate
 Base.Iterators.rest
@@ -23,4 +22,7 @@ Base.Iterators.accumulate
 Base.Iterators.reverse
 Base.Iterators.only
 Base.Iterators.peel
+Base.Iterators.Stateful
 ```
+
+User-provided packages in the Julia ecosystem provide iterator-related functionality not offered in `Iterators`. In particular, have a look at [IterTools.jl](https://github.com/JuliaCollections/IterTools.jl).

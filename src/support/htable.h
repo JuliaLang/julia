@@ -18,12 +18,13 @@ extern "C" {
 //   key   = table[2*i]
 //   value = table[2*i+1]
 // where `2*i < size`. An empty slot at index `i` is indicated with
-// `value == HT_NOTFOUND`.
+// `value == HT_NOTFOUND`. `count` is the number of live entries.
 //
 // `_space` is reserved space for efficiently allocating small tables.
 typedef struct {
     size_t size;
     void **table;
+    size_t count;
     void *_space[HT_N_INLINE];
 } htable_t;
 
@@ -33,10 +34,10 @@ typedef struct {
 // initialize hash table, reserving space for `size` expected number of
 // elements. (Expect `h->size > size` for efficient occupancy factor.)
 htable_t *htable_new(htable_t *h, size_t size) JL_NOTSAFEPOINT;
-void htable_free(htable_t *h);
+void htable_free(htable_t *h) JL_NOTSAFEPOINT;
 
 // clear and (possibly) change size
-void htable_reset(htable_t *h, size_t sz);
+void htable_reset(htable_t *h, size_t sz) JL_NOTSAFEPOINT;
 
 // Lookup and mutation. See htable.inc for detail.
 #define HTPROT(HTNAME)                                                  \

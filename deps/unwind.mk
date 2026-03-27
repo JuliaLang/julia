@@ -39,14 +39,10 @@ $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-disable-initial-exec-tls.patch-app
 	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f -u -l < $(SRCDIR)/patches/libunwind-disable-initial-exec-tls.patch
 	echo 1 > $@
 
-$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-missing-parameter-names.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-disable-initial-exec-tls.patch-applied
-	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f -u -l < $(SRCDIR)/patches/libunwind-missing-parameter-names.patch
-	echo 1 > $@
-
 # note minidebuginfo requires liblzma, which we do not have a source build for
 # (it will be enabled in BinaryBuilder-based downloads however)
 # since https://github.com/JuliaPackaging/Yggdrasil/commit/0149e021be9badcb331007c62442a4f554f3003c
-$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-missing-parameter-names.patch-applied
+$(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-disable-initial-exec-tls.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" LDFLAGS="$(LDFLAGS) $(LIBUNWIND_LDFLAGS)" --enable-shared --disable-minidebuginfo --disable-tests --enable-debug_frame --enable-zlibdebuginfo --disable-conservative-checks --enable-per-thread-cache
@@ -68,7 +64,7 @@ $(eval $(call staged-install, \
 
 clean-unwind:
 	-rm -f $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/libunwind-$(UNWIND_VER) clean
+	-if [ -d $(BUILDDIR)/libunwind-$(UNWIND_VER) ]; then $(MAKE) -C $(BUILDDIR)/libunwind-$(UNWIND_VER) clean; fi
 
 distclean-unwind:
 	rm -rf $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz \
@@ -146,7 +142,7 @@ $(eval $(call staged-install, \
 clean-llvmunwind:
 	-rm -f $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-compiled
 	rm -rf $(build_includedir)/mach-o/ $(build_includedir)/unwind.h $(build_includedir)/libunwind.h
-	-$(MAKE) -C $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER) clean
+	-if [ -d $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER) ]; then $(MAKE) -C $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER) clean; fi
 
 distclean-llvmunwind:
 	rm -rf $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER).tar.xz \

@@ -612,7 +612,8 @@ end
 function alloc_request(buffer::IOBuffer, recommended_size::UInt)
     ensureroom(buffer, recommended_size)
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
-    nb = min(length(buffer.data), buffer.maxsize + get_offset(buffer)) - ptr + 1
+    start_offset = ptr - 1
+    nb = max(0, min(length(buffer.data) - start_offset, buffer.maxsize - (start_offset - get_offset(buffer))))
     return (Ptr{Cvoid}(pointer(buffer.data, ptr)), nb)
 end
 
@@ -917,8 +918,8 @@ readbytes!(s::LibuvStream, a::Vector{UInt8}, nb = length(a)) = readbytes!(s, a, 
 function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
     iolock_begin()
     sbuf = s.buffer
-    @assert sbuf.seekable == false
-    @assert sbuf.maxsize >= nb
+    @assert sbuf.seekable == false "buffer should not be seekable"
+    @assert sbuf.maxsize >= nb "insufficient buffer size"
 
     function wait_locked(s, buf, nb)
         while bytesavailable(buf) < nb
@@ -965,8 +966,8 @@ end
 function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
     iolock_begin()
     sbuf = s.buffer
-    @assert sbuf.seekable == false
-    @assert sbuf.maxsize >= nb
+    @assert sbuf.seekable == false "buffer should not be seekable"
+    @assert sbuf.maxsize >= nb "insufficient buffer size"
 
     function wait_locked(s, buf, nb)
         while bytesavailable(buf) < nb
@@ -1001,7 +1002,7 @@ end
 function read(this::LibuvStream, ::Type{UInt8})
     iolock_begin()
     sbuf = this.buffer
-    @assert sbuf.seekable == false
+    @assert sbuf.seekable == false "buffer should not be seekable"
     while bytesavailable(sbuf) < 1
         iolock_end()
         eof(this) && throw(EOFError())
@@ -1016,7 +1017,7 @@ function readavailable(this::LibuvStream)
     wait_readnb(this, 1) # unlike the other `read` family of functions, this one doesn't guarantee error reporting
     iolock_begin()
     buf = this.buffer
-    @assert buf.seekable == false
+    @assert buf.seekable == false "buffer should not be seekable"
     bytes = take!(buf)
     iolock_end()
     return bytes
@@ -1025,7 +1026,7 @@ end
 function copyuntil(out::IO, x::LibuvStream, c::UInt8; keep::Bool=false)
     iolock_begin()
     buf = x.buffer
-    @assert buf.seekable == false
+    @assert buf.seekable == false "buffer should not be seekable"
     if !occursin(c, buf) # fast path checks first
         x.readerror === nothing || throw(x.readerror)
         if isopen(x) && x.status != StatusEOF
@@ -1244,7 +1245,15 @@ function _redirect_io_libc(stream, unix_fd::Int)
                 -10 - unix_fd, Libc._get_osfhandle(posix_fd))
         end
     end
-    dup(posix_fd, RawFD(unix_fd))
+    GC.@preserve stream dup(posix_fd, RawFD(unix_fd))
+    nothing
+end
+function _redirect_io_cglobal(handle::Union{LibuvStream, IOStream, Nothing}, unix_fd::Int)
+    c_sym = unix_fd == 0 ? cglobal(:jl_uv_stdin, Ptr{Cvoid}) :
+            unix_fd == 1 ? cglobal(:jl_uv_stdout, Ptr{Cvoid}) :
+            unix_fd == 2 ? cglobal(:jl_uv_stderr, Ptr{Cvoid}) :
+            C_NULL
+    c_sym == C_NULL || unsafe_store!(c_sym, handle === nothing ? Ptr{Cvoid}(unix_fd) : handle.handle)
     nothing
 end
 function _redirect_io_global(io, unix_fd::Int)
@@ -1255,11 +1264,7 @@ function _redirect_io_global(io, unix_fd::Int)
 end
 function (f::RedirectStdStream)(handle::Union{LibuvStream, IOStream})
     _redirect_io_libc(handle, f.unix_fd)
-    c_sym = f.unix_fd == 0 ? cglobal(:jl_uv_stdin, Ptr{Cvoid}) :
-            f.unix_fd == 1 ? cglobal(:jl_uv_stdout, Ptr{Cvoid}) :
-            f.unix_fd == 2 ? cglobal(:jl_uv_stderr, Ptr{Cvoid}) :
-            C_NULL
-    c_sym == C_NULL || unsafe_store!(c_sym, handle.handle)
+    _redirect_io_cglobal(handle, f.unix_fd)
     _redirect_io_global(handle, f.unix_fd)
     return handle
 end
@@ -1268,6 +1273,7 @@ function (f::RedirectStdStream)(::DevNull)
     handle = open(nulldev, write=f.writable)
     _redirect_io_libc(handle, f.unix_fd)
     close(handle) # handle has been dup'ed in _redirect_io_libc
+    _redirect_io_cglobal(nothing, f.unix_fd)
     _redirect_io_global(devnull, f.unix_fd)
     return devnull
 end
@@ -1557,7 +1563,7 @@ function readavailable(this::BufferStream)
     bytes = lock(this.cond) do
         wait_readnb(this, 1)
         buf = this.buffer
-        @assert buf.seekable == false
+        @assert buf.seekable == false "buffer should not be seekable"
         take!(buf)
     end
     return bytes
@@ -1573,8 +1579,8 @@ end
 
 function readbytes!(s::BufferStream, a::Vector{UInt8}, nb::Int)
     sbuf = s.buffer
-    @assert sbuf.seekable == false
-    @assert sbuf.maxsize >= nb
+    @assert sbuf.seekable == false "buffer should not be seekable"
+    @assert sbuf.maxsize >= nb "insufficient buffer size"
 
     function wait_locked(s, buf, nb)
         while bytesavailable(buf) < nb

@@ -21,11 +21,7 @@ artifact_dir::String = ""
 libunwind_path::String = ""
 const libunwind = LazyLibrary(
     BundledLazyLibraryPath("libunwind.so.8"),
-    dependencies = if Sys.isfreebsd()
-        LazyLibrary[libz]
-    else
-        LazyLibrary[libgcc_s, libz]
-    end
+    dependencies = LazyLibrary[libz]
 )
 
 function eager_mode()

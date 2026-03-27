@@ -41,14 +41,21 @@ static void **HTNAME##_lookup_bp_r(htable_t *h, void *key, void *ctx)   \
             if (EQFUNC(key, tab[index], ctx))                           \
                 return &tab[index+1];                                   \
                                                                         \
-            index = (index+2) & (sz-1);                                 \
             iter++;                                                     \
+            index = (index + iter*2) & (sz-1);                          \
             if (iter > maxprobe)                                        \
-                break;                                                  \
+                break; /* grow if probe took too long */                \
         } while (index != orig);                                        \
+                                                                        \
+        /* grow if table is at least 75% full */                        \
+        if (empty_slot != -1) {                                         \
+            if (h->count * 4 >= hash_size(h) * 3)                       \
+                empty_slot = -1;                                        \
+        }                                                               \
                                                                         \
         if (empty_slot != -1) {                                         \
             tab[empty_slot] = key;                                      \
+            h->count++;                                                 \
             return &tab[empty_slot+1];                                  \
         }                                                               \
                                                                         \
@@ -72,6 +79,7 @@ static void **HTNAME##_lookup_bp_r(htable_t *h, void *key, void *ctx)   \
             tab[i] = HT_NOTFOUND;                                       \
         h->table = tab;                                                 \
         h->size = newsz;                                                \
+        h->count = 0;                                                   \
         for (i = 0; i < sz; i += 2) {                                   \
             if (ol[i+1] != HT_NOTFOUND) {                               \
                 (*HTNAME##_lookup_bp_r(h, ol[i], ctx)) = ol[i+1];       \
@@ -118,8 +126,9 @@ static void **HTNAME##_peek_bp_r(htable_t *h, void *key, void *ctx)     \
         if (EQFUNC(key, tab[index], ctx))                               \
             return &tab[index+1];                                       \
                                                                         \
-        index = (index+2) & (sz-1);                                     \
         iter++;                                                         \
+        /* quadratic (triangular) probing */                            \
+        index = (index + iter*2) & (sz-1);                              \
         if (iter > maxprobe)                                            \
             break;                                                      \
     } while (index != orig);                                            \
@@ -145,6 +154,7 @@ _STATIC int HTNAME##_remove_r(htable_t *h, void *key, void *ctx)        \
     void **bp = HTNAME##_peek_bp_r(h, key, ctx);                        \
     if (bp != NULL) {                                                   \
         *bp = HT_NOTFOUND;                                              \
+        h->count--;                                                     \
         return 1;                                                       \
     }                                                                   \
     return 0;                                                           \

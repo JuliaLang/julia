@@ -14,7 +14,7 @@ export CursorNode, char_range, char_last, children_nt, find_delim, seek_pos
 struct CursorData <: AbstractSyntaxData
     source::SourceFile
     raw::GreenNode{SyntaxHead}
-    position::Int
+    byte_end::Int
     index::Int
     index_nt::Int # nth non-trivia in parent
     val::Any
@@ -34,10 +34,10 @@ end
 function _to_CursorNode(source::SourceFile, txtbuf::Vector{UInt8}, offset::Int,
                         raw::GreenNode{SyntaxHead},
                         position::Int, index::Int=-1, index_nt::Int=-1)
+    byte_end = position + span(raw) - 1
     if is_leaf(raw)
-        valrange = position:position + span(raw) - 1
-        val = parse_julia_literal(txtbuf, head(raw), valrange .+ offset)
-        return CursorNode(nothing, nothing, CursorData(source, raw, position, index, index_nt, val))
+        val = parse_julia_literal(txtbuf, head(raw), position:byte_end .+ offset)
+        return CursorNode(nothing, nothing, CursorData(source, raw, byte_end, index, index_nt, val))
     else
         cs = CursorNode[]
         pos = position
@@ -47,7 +47,7 @@ function _to_CursorNode(source::SourceFile, txtbuf::Vector{UInt8}, offset::Int,
             pos += Int(rawchild.span)
             i_nt += !is_trivia(rawchild)
         end
-        node = CursorNode(nothing, cs, CursorData(source, raw, position, index, index_nt, nothing))
+        node = CursorNode(nothing, cs, CursorData(source, raw, byte_end, index, index_nt, nothing))
         for c in cs
             c.parent = node
         end
@@ -65,16 +65,14 @@ end
 Base.show(io::IO, node::CursorNode) = show(io, MIME("text/plain"), node.raw)
 Base.show(io::IO, mime::MIME{Symbol("text/plain")}, node::CursorNode) = show(io, mime, node.raw)
 
-function Base.Expr(node::CursorNode)
-    (; filename, first_line) = node.source
-    src = SourceFile(node.source[byte_range(node)]; filename, first_line)
-    Expr(SyntaxNode(src, node.raw))
-end
+Base.JuliaSyntax._expr_leaf_val(node::CursorNode, _...) = node.val
+Base.Expr(node::CursorNode) = Base.JuliaSyntax.to_expr(node)
 
-char_range(node) = node.position:char_last(node)
-char_last(node) = thisind(node.source, node.position + span(node) - 1)
+char_range(node::CursorNode) = char_first(node):char_last(node)
+char_first(node::CursorNode) = Int(node.byte_end) - Int(node.raw.span) + 1
+char_last(node::CursorNode) = thisind(node.source, node.byte_end)
 
-children_nt(node) = [n for n in children(node) if !is_trivia(n)]
+children_nt(node::CursorNode) = [n for n in children(node) if !is_trivia(n)]
 
 function seek_pos(node, pos)
     pos in byte_range(node) || return nothing
@@ -97,13 +95,13 @@ end
 # Return the character range between left_kind and right_kind in node.  The left
 # delimiter must be present, while the range will extend to the rest of the node
 # if the right delimiter is missing.
-function find_delim(node, left_kind, right_kind)
+function find_delim(node::CursorNode, left_kind::Kind, right_kind::Kind)
     cs = children(node)
     left = findfirst(c -> kind(c) == left_kind, cs)
     left !== nothing || return nothing, nothing
     right = findlast(c -> kind(c) == right_kind, cs)
     closed = right !== nothing && right != left
-    right = closed ? thisind(node.source, cs[right].position - 1) : char_last(node)
+    right = closed ? thisind(node.source, char_first(cs[right]) - 1) : char_last(node)
     left = nextind(node.source, char_last(cs[left]))
     return left:right, closed
 end

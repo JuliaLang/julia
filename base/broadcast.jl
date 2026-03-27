@@ -264,6 +264,17 @@ Base.LinearIndices(bc::Broadcasted{<:Any,<:Tuple{Any}}) = LinearIndices(axes(bc)
 
 Base.ndims(bc::Broadcasted) = ndims(typeof(bc))
 Base.ndims(::Type{<:Broadcasted{<:Any,<:NTuple{N,Any}}}) where {N} = N
+Base.ndims(BC::Type{<:Broadcasted{<:Any,Nothing}}) = _maxndims(argtype(BC))
+function Base.ndims(BC::Type{<:Broadcasted{<:AbstractArrayStyle{N},Nothing}}) where {N}
+    N isa Int ? N : _maxndims(argtype(BC))
+end
+_maxndims(::Type{Tuple{}}) = 0
+_maxndims(::Type{Tuple{T}}) where {T} = T <: Tuple ? 1 : Int(ndims(T))::Int
+function _maxndims(Args::Type{<:Tuple{T,Vararg}}) where {T}
+    m = T <: Tuple ? 1 : Int(ndims(T))::Int
+    n = _maxndims(Base.tuple_type_tail(Args))
+    max(m, n)
+end
 
 Base.size(bc::Broadcasted) = map(length, axes(bc))
 Base.length(bc::Broadcasted) = prod(size(bc))
@@ -280,20 +291,6 @@ Base.@propagate_inbounds function Base.iterate(bc::Broadcasted, s)
 end
 
 Base.IteratorSize(::Type{T}) where {T<:Broadcasted} = Base.HasShape{ndims(T)}()
-Base.ndims(BC::Type{<:Broadcasted{<:Any,Nothing}}) = _maxndims_broadcasted(BC)
-# the `AbstractArrayStyle` type parameter is required to be either equal to `Any` or be an `Int` value
-Base.ndims(BC::Type{<:Broadcasted{<:AbstractArrayStyle{Any},Nothing}}) = _maxndims_broadcasted(BC)
-Base.ndims(::Type{<:Broadcasted{<:AbstractArrayStyle{N},Nothing}}) where {N} = N::Int
-
-function _maxndims_broadcasted(BC::Type{<:Broadcasted})
-    _maxndims(fieldtype(BC, :args))
-end
-_maxndims(::Type{T}) where {T<:Tuple} = reduce(max, ntuple(n -> (F = fieldtype(T, n); F <: Tuple ? 1 : ndims(F)), Base._counttuple(T)))
-_maxndims(::Type{<:Tuple{T}}) where {T} = T <: Tuple ? 1 : ndims(T)
-function _maxndims(::Type{<:Tuple{T, S}}) where {T, S}
-    return max(T <: Tuple ? 1 : ndims(T), S <: Tuple ? 1 : ndims(S))
-end
-
 Base.IteratorEltype(::Type{<:Broadcasted}) = Base.EltypeUnknown()
 
 ## Instantiation fills in the "missing" fields in Broadcasted.
@@ -507,7 +504,7 @@ combine_axes(A) = axes(A)
 """
     broadcast_shape(As...)::Tuple
 
-Determine the result axes for broadcasting across all axes (size Tuples) in `As`.
+Determine the result axes for broadcasting across all axes (size `Tuple`s) in `As`.
 
 ```jldoctest
 julia> Broadcast.broadcast_shape((1,2), (2,1))
@@ -633,11 +630,15 @@ to_index(::Tuple{}) = CartesianIndex()
 to_index(Is::Tuple{Any}) = Is[1]
 to_index(Is::Tuple) = CartesianIndex(Is)
 
-@inline Base.checkbounds(bc::Broadcasted, I::CartesianIndex) =
+@inline function Base.checkbounds(bc::Broadcasted, I::CartesianIndex)
     Base.checkbounds_indices(Bool, axes(bc), (I,)) || Base.throw_boundserror(bc, (I,))
+    nothing
+end
 
-@inline Base.checkbounds(bc::Broadcasted, I::Integer) =
+@inline function Base.checkbounds(bc::Broadcasted, I::Integer)
     Base.checkindex(Bool, eachindex(IndexLinear(), bc), I) || Base.throw_boundserror(bc, (I,))
+    nothing
+end
 
 
 """
@@ -875,9 +876,9 @@ broadcast!(f::Tf, dest, As::Vararg{Any,N}) where {Tf,N} = (materialize!(dest, br
 """
     broadcast_preserving_zero_d(f, As...)
 
-Like [`broadcast`](@ref), except in the case of a 0-dimensional result where it returns a 0-dimensional container
+Like [`broadcast`](@ref), except in the case of a 0-dimensional result where it returns a 0-dimensional container.
 
-Broadcast automatically unwraps zero-dimensional results to be just the element itself,
+`broadcast` automatically unwraps zero-dimensional results to be just the element itself,
 but in some cases it is necessary to always return a container — even in the 0-dimensional case.
 """
 @inline function broadcast_preserving_zero_d(f, As...)
@@ -891,7 +892,7 @@ end
 """
     Broadcast.materialize(bc)
 
-Take a lazy `Broadcasted` object and compute the result
+Take a lazy `Broadcasted` object and compute the result.
 """
 @inline materialize(bc::Broadcasted) = copy(instantiate(bc))
 materialize(x) = x

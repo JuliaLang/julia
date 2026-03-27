@@ -6,6 +6,7 @@ using ..Compiler: _findsup, store_backedges, JLOptions, get_world_counter,
     morespecific, RefValue, get_require_world, Vector, IdDict
 using .Core: CodeInstance, MethodInstance
 
+const CI_FLAGS_NATIVE_CACHE_VALID = 0b1000
 const WORLD_AGE_REVALIDATION_SENTINEL::UInt = 1
 const _jl_debug_method_invalidation = RefValue{Union{Nothing,Vector{Any}}}(nothing)
 debug_method_invalidation(onoff::Bool) =
@@ -53,8 +54,7 @@ end
 function VerifyMethodInitialState(codeinst::CodeInstance)
     mi = get_ci_mi(codeinst)
     def = mi.def::Method
-    callees = codeinst.edges
-    VerifyMethodInitialState(codeinst, mi, def, callees)
+    VerifyMethodInitialState(codeinst, mi, def, codeinst.edges)
 end
 
 function VerifyMethodWorkState(dummy_cause::CodeInstance)
@@ -68,54 +68,43 @@ end
 
 # Restore backedges to external targets
 # `edges` = [caller1, ...], the list of worklist-owned code instances internally
-# `ext_ci_list` = [caller1, ...], the list of worklist-owned code instances externally
-function insert_backedges(edges::Vector{Any}, ext_ci_list::Union{Nothing,Vector{Any}}, extext_methods::Vector{Any}, internal_methods::Vector{Any})
+function insert_backedges(internal_methods::Vector{Any})
     # determine which CodeInstance objects are still valid in our image
     # to enable any applicable new codes
     backedges_only = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
-    scan_new_methods!(extext_methods, internal_methods, backedges_only)
+    scan_new_methods!(internal_methods, backedges_only)
     workspace = VerifyMethodWorkspace()
-    _insert_backedges(edges, workspace)
-    if ext_ci_list !== nothing
-        _insert_backedges(ext_ci_list, workspace, #=external=#true)
-    end
+    scan_new_code!(internal_methods, workspace)
+    nothing
 end
 
-function _insert_backedges(edges::Vector{Any}, workspace::VerifyMethodWorkspace, external::Bool=false)
-    for i = 1:length(edges)
-        codeinst = edges[i]::CodeInstance
+function scan_new_code!(internal_methods::Vector{Any}, workspace::VerifyMethodWorkspace)
+    for i = 1:length(internal_methods)
+        codeinst = internal_methods[i]
+        codeinst isa CodeInstance || continue
+        # codeinst.owner === nothing || continue
         validation_world = get_world_counter()
         verify_method_graph(codeinst, validation_world, workspace)
         # After validation, under the world_counter_lock, set max_world to typemax(UInt) for all dependencies
         # (recursively). From that point onward the ordinary backedge mechanism is responsible for maintaining
         # validity.
         @ccall jl_promote_ci_to_current(codeinst::Any, validation_world::UInt)::Cvoid
-        minvalid = codeinst.min_world
-        maxvalid = codeinst.max_world
-        # Finally, if this CI is still valid in some world age and belongs to an external method(specialization),
-        # poke it that mi's cache
-        if maxvalid ≥ minvalid && external
-            caller = get_ci_mi(codeinst)
-            @assert isdefined(codeinst, :inferred) # See #53586, #53109
-            inferred = @ccall jl_rettype_inferred(
-                codeinst.owner::Any, caller::Any, minvalid::UInt, maxvalid::UInt)::Any
-            if inferred !== nothing
-                # We already got a code instance for this world age range from
-                # somewhere else - we don't need this one.
-            else
-                @ccall jl_mi_cache_insert(caller::Any, codeinst::Any)::Cvoid
-            end
-        end
     end
 end
 
 function verify_method_graph(codeinst::CodeInstance, validation_world::UInt, workspace::VerifyMethodWorkspace)
-    @assert isempty(workspace.stack); @assert isempty(workspace.visiting);
-    @assert isempty(workspace.initial_states); @assert isempty(workspace.work_states); @assert isempty(workspace.result_states)
+    @assert isempty(workspace.stack) "workspace corrupted"
+    @assert isempty(workspace.visiting) "workspace corrupted"
+    @assert isempty(workspace.initial_states) "workspace corrupted"
+    @assert isempty(workspace.work_states) "workspace corrupted"
+    @assert isempty(workspace.result_states) "workspace corrupted"
     child_cycle, minworld, maxworld = verify_method(codeinst, validation_world, workspace)
     @assert child_cycle == 0
-    @assert isempty(workspace.stack); @assert isempty(workspace.visiting);
-    @assert isempty(workspace.initial_states); @assert isempty(workspace.work_states); @assert isempty(workspace.result_states)
+    @assert isempty(workspace.stack) "workspace corrupted"
+    @assert isempty(workspace.visiting) "workspace corrupted"
+    @assert isempty(workspace.initial_states) "workspace corrupted"
+    @assert isempty(workspace.work_states) "workspace corrupted"
+    @assert isempty(workspace.result_states) "workspace corrupted"
     nothing
 end
 
@@ -197,10 +186,8 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                 continue
             end
 
-            minworld, maxworld = get_require_world(), validation_world
-
             if haskey(workspace.visiting, initial.codeinst)
-                workspace.result_states[current_depth] = VerifyMethodResultState(workspace.visiting[initial.codeinst], minworld, maxworld)
+                workspace.result_states[current_depth] = VerifyMethodResultState(workspace.visiting[initial.codeinst], UInt(1), validation_world)
                 workspace.work_states[current_depth] = VerifyMethodWorkState(work.depth, work.cause, work.recursive_index, :return_to_parent)
                 continue
             end
@@ -208,6 +195,9 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
             push!(workspace.stack, initial.codeinst)
             depth = length(workspace.stack)
             workspace.visiting[initial.codeinst] = depth
+
+            # unable to backdate before require_world, since Bindings are not able to track that information
+            minworld, maxworld = get_require_world(), validation_world
 
             # Check for invalidation of GlobalRef edges
             if (initial.def.did_scan_source & 0x1) == 0x0
@@ -229,7 +219,7 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                 while j <= length(initial.callees)
                     local min_valid2::UInt, max_valid2::UInt
                     edge = initial.callees[j]
-                    @assert !(edge isa Method)
+                    @assert !(edge isa Method) "unexpected Method edge indicates corrupt edges list creation"
 
                     if edge isa CodeInstance
                         # Convert CodeInstance to MethodInstance for validation (like original)
@@ -333,12 +323,16 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                     child = pop!(workspace.stack)
                     if result.result_maxworld ≠ 0
                         @atomic :monotonic child.min_world = result.result_minworld
+                        # Finally, if this CI is still valid in some world age and marked as valid in the native cache, poke it in that mi's cache now
+                        if child.flags & CI_FLAGS_NATIVE_CACHE_VALID == CI_FLAGS_NATIVE_CACHE_VALID
+                            @ccall jl_mi_cache_insert(get_ci_mi(child)::Any, child::Any)::Cvoid
+                        end
                     end
                     @atomic :monotonic child.max_world = result.result_maxworld
-                    if result.result_maxworld == validation_world && validation_world == get_world_counter()
+                    if result.result_maxworld == validation_world && validation_world == get_world_counter() && isdefined(child, :edges)
                         store_backedges(child, child.edges)
                     end
-                    @assert workspace.visiting[child] == length(workspace.stack) + 1
+                    @assert workspace.visiting[child] == length(workspace.stack) + 1 "internal error maintaining workspace"
                     delete!(workspace.visiting, child)
                     invalidations = _jl_debug_method_invalidation[]
                     if invalidations !== nothing && result.result_maxworld < validation_world
@@ -500,7 +494,7 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                 # Fast path is legal when fully_covers=true
                 if fully_covers && !iszero(mi.dispatch_status & METHOD_SIG_LATEST_ONLY)
                     minworld = meth.primary_world
-                    @assert minworld ≤ world
+                    @assert minworld ≤ world "expected method not present in verification world"
                     maxworld = typemax(UInt)
                     return minworld, maxworld
                 end
@@ -508,7 +502,7 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
             # Fast path is legal when fully_covers=true
             if fully_covers && !iszero(meth.dispatch_status & METHOD_SIG_LATEST_ONLY)
                 minworld = meth.primary_world
-                @assert minworld ≤ world
+                @assert minworld ≤ world "expected method not present in verification world"
                 maxworld = typemax(UInt)
                 return minworld, maxworld
             end
@@ -566,7 +560,7 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
             end
             if interference_fast_path_success
                 # All interference sets are covered by expecteds, can return success
-                @assert interference_minworld ≤ world
+                @assert interference_minworld ≤ world "expected method not present in verification world"
                 maxworld = typemax(UInt)
                 return interference_minworld, maxworld
             end
@@ -627,13 +621,13 @@ const METHOD_SIG_LATEST_WHICH = 0x1
 const METHOD_SIG_LATEST_ONLY = 0x2
 
 function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UInt, matches::Vector{Any})
-    @assert invokesig isa Type
+    @assert invokesig isa Type "corrupt edges list"
     local minworld::UInt, maxworld::UInt
     empty!(matches)
     if invokesig === expected.sig && !iszero(expected.dispatch_status & METHOD_SIG_LATEST_WHICH)
         # the invoke match is `expected` for `expected->sig`, unless `expected` is replaced
         minworld = expected.primary_world
-        @assert minworld ≤ world
+        @assert minworld ≤ world "expected method not present in verification world"
         maxworld = typemax(UInt)
     else
         mt = get_methodtable(expected)
@@ -658,7 +652,7 @@ function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UIn
 end
 
 # Wrapper to call insert_backedges in typeinf_world for external calls
-function insert_backedges_typeinf(edges::Vector{Any}, ext_ci_list::Union{Nothing,Vector{Any}}, extext_methods::Vector{Any}, internal_methods::Vector{Any})
-    args = Any[insert_backedges, edges, ext_ci_list, extext_methods, internal_methods]
+function insert_backedges_typeinf(internal_methods::Vector{Any})
+    args = Any[insert_backedges, internal_methods]
     return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Any}, Cint), args, length(args))
 end

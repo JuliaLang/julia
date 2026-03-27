@@ -113,13 +113,20 @@ end
         syncd = Task[io.t for io in stdio if io isa SyncCloseFD]
         handle = Libc.malloc(_sizeof_uv_process)
         disassociate_julia_struct(handle)
-        (; exec, flags, env, dir) = cmd
+        (; exec, flags, env, dir, uid, gid) = cmd
         flags ⊻= UV_PROCESS_WINDOWS_DISABLE_EXACT_NAME # libuv inverts the default for this, so flip this bit now
+        if uid !== nothing
+            flags |= UV_PROCESS_SETUID
+        end
+        if gid !== nothing
+            flags |= UV_PROCESS_SETGID
+        end
         iolock_begin()
         err = ccall(:jl_spawn, Int32,
                   (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid},
                    Ptr{Tuple{Cint, UInt}}, Int,
-                   UInt32, Ptr{Cstring}, Cstring, Ptr{Bool}, Csize_t, Ptr{Cvoid}),
+                   UInt32, Ptr{Cstring}, Cstring, Ptr{Bool}, Csize_t,
+                   UInt32, UInt32, Ptr{Cvoid}),
             file, exec, loop, handle,
             iohandles, length(iohandles),
             flags,
@@ -127,19 +134,20 @@ end
             isempty(dir) ? C_NULL : dir,
             cpumask === nothing ? C_NULL : cpumask,
             cpumask === nothing ? 0 : length(cpumask),
+            uid === nothing ? typemax(UInt32) : uid,
+            gid === nothing ? typemax(UInt32) : gid,
             @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32)))
         if err == 0
             pp = Process(cmd, handle, syncd)
             associate_julia_struct(handle, pp)
+            iolock_end()
+            return pp
         else
             ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), handle) # will call free on handle eventually
+            iolock_end()
+            throw(_UVError("could not spawn " * repr(cmd), err))
         end
-        iolock_end()
     end
-    if err != 0
-        throw(_UVError("could not spawn " * repr(cmd), err))
-    end
-    return pp
 end
 
 _spawn(cmds::AbstractCmd) = _spawn(cmds, SpawnIOs())
@@ -548,7 +556,7 @@ const SIGPIPE = 13 # !windows
 const SIGTERM = 15
 
 function test_success(proc::Process)
-    @assert process_exited(proc)
+    @assert process_exited(proc) "process did not exit successfully"
     if proc.exitcode < 0
         #TODO: this codepath is not currently tested
         throw(_UVError("could not start process " * repr(proc.cmd), proc.exitcode))
@@ -626,7 +634,7 @@ permissions).
 function kill(p::Process, signum::Integer=SIGTERM)
     iolock_begin()
     if process_running(p)
-        @assert p.handle != C_NULL
+        @assert p.handle != C_NULL "invalid handle"
         err = ccall(:uv_process_kill, Int32, (Ptr{Cvoid}, Int32), p.handle, signum)
         if err != 0 && err != UV_ESRCH
             throw(_UVError("kill", err))

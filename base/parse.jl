@@ -299,7 +299,7 @@ function tryparse_internal(::Type{Float32}, s::SubString{String}, startpos::Int,
                           (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset+startpos-1, endpos-startpos+1)
     hasvalue ? val : nothing
 end
-tryparse(::Type{T}, s::AbstractString) where {T<:Union{Float32,Float64}} = tryparse(T, String(s))
+tryparse(::Type{T}, s::AbstractString) where {T<:Union{Float32,Float64}} = tryparse(T, String(s)::String)
 tryparse(::Type{Float16}, s::AbstractString) =
     convert(Union{Float16, Nothing}, tryparse(Float32, s))
 tryparse_internal(::Type{Float16}, s::AbstractString, startpos::Int, endpos::Int) =

@@ -544,6 +544,13 @@ end
 
 @test Base.shell_split("\"\\\\\"") == ["\\"]
 
+let roundtrip(s) = first(Base.shell_split(Base.shell_escape(s))) == s
+    @test roundtrip("foo'bar\\\$baz")
+    @test roundtrip("foo'bar\\\"baz")
+    @test roundtrip("foo'bar\\\\baz")
+    @test roundtrip("foo'bar\\\\")
+end
+
 # Test failing commands
 failing_cmd = `$catcmd _doesnt_exist__111_`
 failing_pipeline = pipeline(failing_cmd, stderr=devnull) # make quiet for tests
@@ -586,6 +593,18 @@ end
 @test Cmd(`foo`, env=("A"=>true,)).env    == ["A=true"]
 @test Cmd(`foo`, env=["A"=>true]).env     == ["A=true"]
 @test Cmd(`foo`, env=nothing).env         === nothing
+
+# uid/gid - exercise code path with current effective ids (doesn't test privilege change)
+if !Sys.iswindows()
+    @test success(setuid(setgid(`$(Base.julia_cmd()) -e "exit(0)"`, Libc.getegid()), Libc.geteuid()))
+    # test show method for uid/gid
+    cmd_gid = setgid(`echo test`, 1000)
+    @test string(cmd_gid) == "setgid(`echo test`, 1000)"
+    cmd_uid = setuid(`echo test`, 1001)
+    @test string(cmd_uid) == "setuid(`echo test`, 1001)"
+    cmd_both = setuid(setgid(`echo test`, 1000), 1001)
+    @test string(cmd_both) == "setgid(setuid(`echo test`, 1001), 1000)"
+end
 
 # test for interpolation of Cmd
 let c = setenv(`x`, "A"=>true)
@@ -1052,6 +1071,11 @@ end
     args = split("-l /tmp")
     @assert eltype(args) != String
     @test Cmd(["ls", args...]) == `ls -l /tmp`
+end
+
+let buf = IOBuffer()
+    run(pipeline(`$(Base.julia_cmd()) -e 'println(Base.PipeEndpoint(RawFD(3)), "Hello")'`, 3=>buf))
+    @test String(take!(buf)) == "Hello\n"
 end
 
 # Test passing a pipe server as an addition fd

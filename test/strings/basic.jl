@@ -8,6 +8,17 @@ using Random
     @test String("abc!") == "abc!"
     @test String(0x61:0x63) == "abc"
 
+    # reinterpret arrays
+    v = [0x61,0x62,0x63,0x21]
+    v32 = copy(reinterpret(UInt32, v))
+    @test String(reinterpret(UInt8, v32)) == "abc!" && !isempty(v32)
+    @test 1 == @allocations String(reinterpret(UInt8, v32))
+    m32 = v32.ref.mem
+    @test String(reinterpret(UInt8, m32)) == "abc!" && !isempty(m32)
+    @test 1 == @allocations String(reinterpret(UInt8, m32))
+    @test String(reinterpret(UInt8, Tuple{UInt8, UInt64}[])) == ""
+    @test_throws Base.PaddingError String(reinterpret(UInt8, [(0x41, 0x4141414141414141)]))
+
     # Check that resizing empty source vector does not corrupt string
     b = IOBuffer()
     @inferred write(b, "ab")
@@ -402,7 +413,7 @@ end
 end
 # test AbstractString functions at beginning of string.jl
 struct tstStringType <: AbstractString
-    data::Array{UInt8,1}
+    data::Vector{UInt8}
 end
 @testset "AbstractString functions" begin
     tstr = tstStringType(unsafe_wrap(Vector{UInt8},"12"))
@@ -1193,12 +1204,10 @@ end
     apple_uint8 = Vector{UInt8}("Apple")
     @test apple_uint8 == [0x41, 0x70, 0x70, 0x6c, 0x65]
 
-    apple_uint8 = Array{UInt8}("Apple")
-    @test apple_uint8 == [0x41, 0x70, 0x70, 0x6c, 0x65]
-
-    Base.String(::tstStringType) = "Test"
+    Base.codeunit(::tstStringType) = UInt8
+    Base.codeunits(t::tstStringType) = t.data
     abstract_apple = tstStringType(apple_uint8)
-    @test hash(abstract_apple, UInt(1)) == hash("Test", UInt(1))
+    @test hash(abstract_apple, UInt(1)) == hash("Apple", UInt(1))
 
     @test length("abc", 1, 3) == length("abc", UInt(1), UInt(3))
 
@@ -1250,16 +1259,16 @@ end
                    (hash, (String,UInt)),
                    (hash, (Char,UInt)),]
         e = Base.infer_effects(f, Ts)
-        @test Core.Compiler.is_foldable(e) || (f, Ts)
-        @test Core.Compiler.is_removable_if_unused(e) || (f, Ts)
+        @test Core.Compiler.is_foldable(e) context=(f, Ts)
+        @test Core.Compiler.is_removable_if_unused(e) context=(f, Ts)
     end
     for (f, Ts) in [(^, (String, Int)),
                    (^, (Char, Int)),
                    (codeunit, (String, Int)),
                    ]
         e = Base.infer_effects(f, Ts)
-        @test Core.Compiler.is_foldable(e) || (f, Ts)
-        @test !Core.Compiler.is_removable_if_unused(e) || (f, Ts)
+        @test Core.Compiler.is_foldable(e) context=(f, Ts)
+        @test !Core.Compiler.is_removable_if_unused(e) context=(f, Ts)
     end
     # Substrings don't have any nice effects because the compiler can
     # invent fake indices leading to out of bounds
@@ -1269,8 +1278,8 @@ end
                    (hash, (SubString{String},UInt)),
                    ]
         e = Base.infer_effects(f, Ts)
-        @test !Core.Compiler.is_foldable(e) || (f, Ts)
-        @test !Core.Compiler.is_removable_if_unused(e) || (f, Ts)
+        @test !Core.Compiler.is_foldable(e) context=(f, Ts)
+        @test !Core.Compiler.is_removable_if_unused(e) context=(f, Ts)
     end
     @test_throws ArgumentError Symbol("a\0a")
 

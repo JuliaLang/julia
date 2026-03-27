@@ -48,7 +48,6 @@ function bootstrap!()
             end
         end
         starttime = time()
-        methods = Any[]
         world = get_world_counter()
         for f in fs
             if isa(f, DataType) && f.name === typename(Tuple)

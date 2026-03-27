@@ -30,6 +30,7 @@ include(path::String) = include(Base, path)
 
 struct IncludeInto <: Function
     m::Module
+    IncludeInto(m::Module) = new(m)
 end
 (this::IncludeInto)(fname::AbstractString) = include(this.m, fname)
 
@@ -61,7 +62,7 @@ function setproperty!(x, f::Symbol, v)
     return setfield!(x, f, val)
 end
 
-typeof(function getproperty end).name.constprop_heuristic = Core.FORCE_CONST_PROP
+typeof(function getproperty end).name.constprop_heuristic = or_int(Core.FORCE_CONST_PROP, Core.DISABLE_SEMI_CONCRETE_EVAL)
 typeof(function setproperty! end).name.constprop_heuristic = Core.FORCE_CONST_PROP
 
 dotgetproperty(x, f) = getproperty(x, f)
@@ -140,6 +141,20 @@ import Core: @doc, @__doc__, WrappedException, @int128_str, @uint128_str, @big_s
 
 # Export list
 include("exports.jl")
+
+function set_syntax_version end
+_topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
+function _setup_module!(mod::Module, Core.@nospecialize syntax_ver)
+    # using Base
+    Core._using(mod, _topmod(mod), UInt8(0))
+    Core.declare_const(mod, :include, IncludeInto(mod))
+    Core.declare_const(mod, :eval, Core.EvalInto(mod))
+    if syntax_ver === nothing
+        return nothing
+    end
+    set_syntax_version(mod, syntax_ver)
+    return nothing
+end
 
 # core docsystem
 include("docs/core.jl")

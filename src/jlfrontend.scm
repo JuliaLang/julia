@@ -139,8 +139,7 @@
 (define (toplevel-only-expr? e)
   (and (pair? e)
        (or (memq (car e) '(toplevel line module export public
-                                    error incomplete))
-           (and (memq (car e) '(global const)) (every symbol? (cdr e))))))
+                                    error incomplete)))))
 
 (define *in-lowering* #f)
 
@@ -187,12 +186,6 @@
 (define (jl-expand-macroscope expr)
   (error-wrap (lambda ()
                 (julia-expand-macroscope expr))))
-
-(define (jl-default-inner-ctor-body field-kinds file line)
-  (lower-to-thunk- (default-inner-ctor-body (cdr field-kinds) file line) file line))
-
-(define (jl-default-outer-ctor-body args file line)
-  (lower-to-thunk- (default-outer-ctor-body (cadr args) (caddr args) (cadddr args) file line) file line))
 
 ; run whole frontend on a string. useful for testing.
 (define (fe str)

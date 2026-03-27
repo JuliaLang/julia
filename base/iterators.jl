@@ -16,7 +16,7 @@ using .Base:
     (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
     tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString,
-    afoldl, mod1
+    afoldl, mod1, @default_eltype
 using .Core
 using Core: @doc
 
@@ -1176,6 +1176,8 @@ end
     next === nothing && return nothing
     restnext = _piterate(rest...)
     restnext === nothing && return nothing
+    VS = @default_eltype(iter1)
+    next = Pair{VS, typeof(next[2])}(next[1], next[2])
     return (next, restnext...)
 end
 @inline function iterate(P::ProductIterator)
@@ -1188,8 +1190,8 @@ end
 @inline _piterate1(::Tuple{}, ::Tuple{}) = nothing
 @inline function _piterate1(iters, states)
     iter1 = first(iters)
-    next = iterate(iter1, first(states)[2])
-    restnext = tail(states)
+    state1, restnext... = states
+    next = iterate(iter1, state1[2])
     if next === nothing
         isdone(iter1) === true && return nothing
         restnext = _piterate1(tail(iters), restnext)
@@ -1197,6 +1199,7 @@ end
         next = iterate(iter1)
         next === nothing && return nothing
     end
+    next = Pair{fieldtype(typeof(state1), 1), typeof(next[2])}(next[1], next[2])
     return (next, restnext...)
 end
 @inline function iterate(P::ProductIterator, states)

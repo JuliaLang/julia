@@ -4,6 +4,15 @@ using Test, Core.IR
 
 include("setup_Compiler.jl")
 
+@testset "stdio validation" begin
+    for s in (:stdout, :stderr, :print, :println, :write)
+        @test getglobal(Compiler, s) === getglobal(Core, s)
+        @test isconst(Compiler, s)
+    end
+    @test Compiler.stdin === devnull
+    @test isconst(Compiler, :stdin)
+end
+
 function f22938(a, b, x...)
     nothing
     nothing

@@ -96,6 +96,7 @@ iterate(s::LazyString, i::Integer) = iterate(String(s), i)
 isequal(a::LazyString, b::LazyString) = isequal(String(a), String(b))
 ==(a::LazyString, b::LazyString) = (String(a) == String(b))
 ncodeunits(s::LazyString) = ncodeunits(String(s))
-codeunit(s::LazyString) = codeunit(String(s))
+codeunit(s::LazyString) = codeunit("") # returns UInt8
 codeunit(s::LazyString, i::Integer) = codeunit(String(s), i)
+codeunits(s::LazyString) = codeunits(String(s))
 isvalid(s::LazyString, i::Integer) = isvalid(String(s), i)

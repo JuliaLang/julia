@@ -19,6 +19,13 @@ area(c::Circle) = pi*c.radius^2
 
 sum_areas(v::Vector{Shape}) = sum(area, v)
 
+mutable struct Foo; x::Int; end
+const storage = Foo[]
+function add_one(x::Cint)::Cint
+    push!(storage, Foo(x))
+    return x + 1
+end
+
 function @main(args::Vector{String})::Cint
     println(Core.stdout, str())
     println(Core.stdout, PROGRAM_FILE)
@@ -38,6 +45,12 @@ function @main(args::Vector{String})::Cint
     d = mapreduce(x -> x^2, +, sorted_arr)
     # e = reduce(xor, rand(Int, 10))
 
+    for i = 1:10
+        # https://github.com/JuliaLang/julia/issues/60846
+        add_one(Cint(i))
+        GC.gc()
+    end
+
     try
         sock = connect("localhost", 4900)
         if isopen(sock)
@@ -47,6 +60,8 @@ function @main(args::Vector{String})::Cint
         end
     catch
     end
+
+    Base.donotdelete(reshape([1,2,3],:,1,1))
 
     return 0
 end

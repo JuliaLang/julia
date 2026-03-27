@@ -71,3 +71,23 @@ Base.similar(A::WrapperArray, ::Type{T}, dims::Dims) where T = similar(A.parent,
 Base.cconvert(::Type{Ptr{T}}, A::WrapperArray{T}) where {T} = Base.cconvert(Ptr{T}, A.parent)
 Base.strides(A::WrapperArray) = strides(A.parent)
 Base.elsize(::Type{WrapperArray{T,N,A}}) where {T,N,A<:AbstractArray{T,N}} = Base.elsize(A)
+
+# An array type with heterogenous axis types
+struct TestAxis{N}
+    len::Int
+end
+Base.length(a::TestAxis) = a.len
+Base.iterate(::TestAxis{N}) where N = (1, 1)
+Base.iterate(a::TestAxis{N}, state) where N = state < a.len ? (state+1, state+1) : nothing
+Base.firstindex(a::TestAxis) = 1
+Base.lastindex(a::TestAxis) = a.len
+Base.getindex(::TestAxis, i::Int) = i
+
+struct HeterogeneousAxisArray{T,N} <: AbstractArray{T,N}
+    data::Array{T,N}
+end
+Base.size(A::HeterogeneousAxisArray) = size(A.data)
+Base.getindex(A::HeterogeneousAxisArray, i::Int...) = A.data[i...]
+Base.setindex!(A::HeterogeneousAxisArray, v, i::Int...) = (A.data[i...] = v)
+Base.axes(A::HeterogeneousAxisArray{T,2}) where T = (TestAxis{1}(size(A.data, 1)), TestAxis{2}(size(A.data, 2)))
+Base.reshape(A::HeterogeneousAxisArray, ax) = reshape(A.data, map(length, ax))
