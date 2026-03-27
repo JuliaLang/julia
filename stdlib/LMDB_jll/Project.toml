@@ -1,0 +1,15 @@
+name = "LMDB_jll"
+uuid = "6206cf0b-f360-5984-af49-5437264c140e"
+version = "0.9.33+0"
+
+[deps]
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+
+[compat]
+julia = "1.6"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

@@ -121,6 +121,14 @@ version = "20.1.8+0"
     [deps.LLD_jll.syntax]
     julia_version = "1.13.0"
 
+[[deps.LMDB_jll]]
+deps = ["Libdl"]
+uuid = "6206cf0b-f360-5984-af49-5437264c140e"
+version = "0.9.33+0"
+
+    [deps.LMDB_jll.syntax]
+    julia_version = "1.6.0"
+
 [[deps.LLVMLibUnwind_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "47c5dbc3-30ba-59ef-96a6-123e260183d9"

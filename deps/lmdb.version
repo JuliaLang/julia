@@ -1,0 +1,8 @@
+# -*- makefile -*-
+## jll artifact
+LMDB_JLL_NAME := LMDB
+
+## source build
+LMDB_VER := 0.9.33
+LMDB_BRANCH=LMDB_0.9.33
+LMDB_SHA1=d2adb990dc37b15e2e37c0d8c03c7e525f4a92ee
