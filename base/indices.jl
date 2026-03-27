@@ -217,7 +217,7 @@ _nnprod() = 1
 _nnprod(i::Integer, I::Integer...) =
     (i == -1) ? _nnprod(I...) : i * _nnprod(I...)
 
-_trailing_dropped(I::Integer...) = true
+_trailing_dropped() = true
 _trailing_dropped(i::Integer, I::Integer...)  = (i == -1) && _trailing_dropped(I...)
 
 _shapes_match(::Bool, ::Tuple{}) = true
