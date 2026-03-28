@@ -2230,7 +2230,7 @@ function hvcat(rows::Tuple{Vararg{Int}}, xs::T...) where T<:Number
     a
 end
 
-function hvcat_fill!(a::Array, xs::Tuple)
+function _hvcat_fill_loop!(a::Array, xs::Tuple)
     nr, nc = size(a,1), size(a,2)
     len = length(xs)
     if nr*nc != len
@@ -2244,6 +2244,34 @@ function hvcat_fill!(a::Array, xs::Tuple)
         end
     end
     a
+end
+
+hvcat_fill!(a::Array, xs::Tuple{T, Vararg{T}}) where {T} = _hvcat_fill_loop!(a, xs)
+
+function hvcat_fill!(a::Array, xs::Tuple)
+    if @generated
+        N = fieldcount(xs)
+        return quote
+            nr = size(a, 1)
+            nc = size(a, 2)
+            if nr*nc != $N
+                throw(ArgumentError("argument count $($N) does not match specified shape $((nr,nc))"))
+            end
+            i::Int = 1
+            j::Int = 1
+            @nexprs $N k -> begin
+                @inbounds a[i, j] = xs[k]
+                j += 1
+                if j > nc
+                    i += 1
+                    j = 1
+                end
+            end
+            a
+        end
+    else
+        _hvcat_fill_loop!(a, xs)
+    end
 end
 
 hvcat(rows::Tuple{Vararg{Int}}, xs::Number...) = typed_hvcat(promote_typeof(xs...), rows, xs...)
