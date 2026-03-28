@@ -39,7 +39,7 @@ end
 # never inserted as an opaque `K"Value"`. Note no LineNumberNode, which appears
 # unwrapped in a macrocall (possibly generated functions too, TODO check)
 isa_lowering_ast_node(@nospecialize(e)) =
-    e isa Symbol || e isa QuoteNode || e isa Expr # || e isa GlobalRef
+    e isa Symbol || e isa QuoteNode || e isa Expr || e isa GlobalRef
 
 function is_expr_value(st::SyntaxTree)
     k = kind(st)
@@ -97,8 +97,9 @@ function _expr_to_est(graph::SyntaxGraph, @nospecialize(e), src::LineNumberNode)
         else
             newnode(graph, old_src, st_k, cs)
         end
-    # elseif e isa GlobalRef
-        # TODO: Better-behaved as K"globalref", but lowering doesn't know this
+    elseif e isa GlobalRef
+        # Represent globalref as K"Identifier" with :mod attribute
+        setattr!(newleaf(graph, src, K"Identifier", string(e.name)), :mod, e.mod)
     else
         # We may want additional special cases for other types where
         # `Base.isa_ast_node(e)`, but `K"Value"` should be fine for most, since
@@ -121,9 +122,12 @@ function est_to_expr(st::SyntaxTree, suppress_linenodes=false)
     k = kind(st)
     return if k === K"core" && numchildren(st) === 0 && st.name_val === "nothing"
         nothing
-    elseif is_leaf(st) && hasattr(st, :name_val)
+    elseif kind(st) === K"Identifier"
         n = Symbol(st.name_val)
-        hasattr(st, :scope_layer) ? Expr(:scope_layer, n, st.scope_layer) : n
+        mod = get(st, :mod, nothing)
+        !isnothing(mod) ? GlobalRef(mod, n) :
+            hasattr(st, :scope_layer) ? Expr(:scope_layer, n, st.scope_layer) :
+            n
     elseif is_leaf(st) && is_expr_value(st)
         v = st.value
         # Let `st.value isa Symbol` (or other AST node).  Since we enforce that

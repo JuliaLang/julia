@@ -676,6 +676,26 @@ end
     # dispatching to the body function.
     @test_throws MethodError values(test_mod.f_kw_type_errors(1; a="str", b=10))
 
+    # Return type annotation using default argument names
+    # The return type must be evaluated in a scope where keyword args are bound.
+    JuliaLowering.include_string(test_mod, """
+    function f_default_rett(T::Type=Int)::Vector{T}
+        T[1,2,3]
+    end
+    """)
+    @test test_mod.f_default_rett() isa Vector{Int}
+    @test test_mod.f_default_rett(Float64) isa Vector{Float64}
+
+    # Return type annotation using keyword argument names
+    # The return type must be evaluated in a scope where keyword args are bound.
+    JuliaLowering.include_string(test_mod, """
+    function f_kw_rett(; T::Type=Int)::Vector{T}
+        T[1,2,3]
+    end
+    """)
+    @test test_mod.f_kw_rett() isa Vector{Int}
+    @test test_mod.f_kw_rett(T=Float64) isa Vector{Float64}
+
     # Throwing of UndefKeywordError
     JuliaLowering.include_string(test_mod, """
     function f_kw_no_default(; x)

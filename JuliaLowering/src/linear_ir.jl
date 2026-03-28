@@ -1222,7 +1222,6 @@ end
 ensure_linearization_attributes!(graph) = ensure_attributes!(
     ensure_scope_attributes!(graph),
     slots=Vector{Slot},
-    mod=Module,
     id=Int)
 
 """

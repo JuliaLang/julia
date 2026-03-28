@@ -680,7 +680,41 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param);
 
 static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param, int limit_slow);
 
-// subtype for variable bounds consistency check. needs its own forall/exists environment.
+// Check whether env (variable bounds: lb/ub) changed compared to saved env.
+static int env_unchanged(jl_stenv_t *e, jl_savedenv_t *se) JL_NOTSAFEPOINT
+{
+    jl_value_t **roots = NULL;
+    if (se->gcframe.nroots == JL_GC_ENCODE_PUSHARGS(1)) {
+        jl_svec_t *sv = (jl_svec_t*)se->roots[0];
+        assert(jl_is_svec(sv));
+        roots = jl_svec_data(sv);
+    }
+    else if (se->gcframe.nroots) {
+        roots = se->roots;
+    }
+    if (!roots)
+        return 1; // no vars to compare
+    jl_varbinding_t *v = e->vars;
+    int i = 0;
+    while (v != NULL) {
+        if (v->lb != roots[i] || v->ub != roots[i + 1])
+            return 0;
+        i += 3; // lb, ub, innervars
+        v = v->prev;
+    }
+    return 1;
+}
+
+// Subtype check for variable bounds consistency.
+// Needs its own forall/exists environment.
+//
+// Right-side Union choices made during bounds checks can leak into
+// the shared Runions statestack, causing O(2^N) iteration in
+// exists_subtype when many Union-bounded parameters are present.
+// To prevent this, we monitor whether the env (variable bounds)
+// changes during the check. If it does not, the Union choices are
+// purely internal and we reset Runions.more to its previous value,
+// preventing the outer loop from iterating over those choices.
 static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
     if (jl_is_long(x) && jl_is_long(y))
@@ -695,8 +729,16 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         return 1;
     if (x == (jl_value_t*)jl_any_type && jl_is_datatype(y))
         return 0;
+    if (obviously_in_union(y, x))
+        return 1;
     jl_saved_unionstate_t oldLunions; push_unionstate(&oldLunions, &e->Lunions);
+    int16_t oldRmore = e->Runions.more;
+    jl_savedenv_t se;
+    save_env(e, &se, 1);
     int sub = local_forall_exists_subtype(x, y, e, 0, 1);
+    if (env_unchanged(e, &se))
+        e->Runions.more = oldRmore;
+    free_env(&se);
     pop_unionstate(&e->Lunions, &oldLunions);
     return sub;
 }

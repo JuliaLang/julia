@@ -363,7 +363,7 @@ end
     end
 end
 
-@testset "all non-call assignment forms within `const`" begin
+@testset "all non-call non-globalref assignment forms within `const`" begin
     # prohibited by parsing as of writing this, so hard to make into an IR test
     ex = Expr(:const, Expr(:(.=), :x, 1))
     @test_throws LoweringError jl_lower(test_mod, ex)
@@ -495,4 +495,196 @@ end
         @test getproperty(test_mod, sym2) == (2, 22, 222)
         @test getproperty(test_mod, sym3) == 3
     end
+end
+
+gr_mod = Module()
+
+@testset "GlobalRef as an identifier" begin
+    # gr = 1
+    @gensym sym
+    @test 1 == jl_eval(test_mod, Expr(:(=), GlobalRef(gr_mod, sym), 1))
+    @test Base.isdefinedglobal(gr_mod, sym)
+    @test getproperty(gr_mod, sym) == 1
+    @test !Base.isdefinedglobal(test_mod, sym)
+    # test gr as a value
+    @test 1 == jl_eval(test_mod, Expr(:block, GlobalRef(gr_mod, sym)))
+
+    # gr1 = gr2 = gr3 = gr4 = 1
+    @gensym sym1 sym2 sym3 sym4
+    @test 1 == jl_eval(
+        test_mod,
+        Expr(:(=), GlobalRef(gr_mod, sym1),
+             Expr(:(=), GlobalRef(gr_mod, sym2),
+                  Expr(:(=), GlobalRef(gr_mod, sym3),
+                       Expr(:(=), GlobalRef(gr_mod, sym4), 1)))))
+    @test Base.isdefinedglobal(gr_mod, sym1)
+    @test Base.isdefinedglobal(gr_mod, sym2)
+    @test Base.isdefinedglobal(gr_mod, sym3)
+    @test Base.isdefinedglobal(gr_mod, sym4)
+    @test getproperty(gr_mod, sym1) == 1
+    @test getproperty(gr_mod, sym2) == 1
+    @test getproperty(gr_mod, sym3) == 1
+    @test getproperty(gr_mod, sym4) == 1
+    @test !Base.isdefinedglobal(test_mod, sym1)
+    @test !Base.isdefinedglobal(test_mod, sym2)
+    @test !Base.isdefinedglobal(test_mod, sym3)
+    @test !Base.isdefinedglobal(test_mod, sym4)
+
+    # gr += 5
+    @gensym sym
+    jl_eval(test_mod, Expr(:(=), GlobalRef(gr_mod, sym), 10))
+    @test 15 == jl_eval(
+        test_mod, Expr(:(+=), GlobalRef(gr_mod, sym), 5))
+    @test getproperty(gr_mod, sym) == 15
+
+    # (gr1, gr2) = (1, 2)
+    @gensym sym1 sym2
+    @test (1, 2) == jl_eval(
+        test_mod, Expr(:(=),
+                       Expr(:tuple, GlobalRef(gr_mod, sym1), GlobalRef(gr_mod, sym2)),
+                       Expr(:call, :tuple, 1, 2)))
+    @test getproperty(gr_mod, sym1) == 1
+    @test getproperty(gr_mod, sym2) == 2
+    @test !Base.isdefinedglobal(test_mod, sym1)
+
+    # global gr::Int = 1
+    @gensym sym
+    @test 1 == jl_eval(
+        test_mod, Expr(:global,
+                       Expr(:(=),
+                            Expr(:(::), GlobalRef(gr_mod, sym), Int),
+                            1)))
+    @test Base.isdefinedglobal(gr_mod, sym)
+    @test Core.get_binding_type(gr_mod, sym) == Int
+    @test getproperty(gr_mod, sym) == 1
+    @test !Base.isdefinedglobal(test_mod, sym)
+
+    # global gr::Int
+    @gensym sym
+    @test nothing == jl_eval(
+        test_mod, Expr(:global, Expr(:(::), GlobalRef(gr_mod, sym), Int)))
+    @test Core.get_binding_type(gr_mod, sym) == Int
+
+    # const gr = 1
+    @gensym sym
+    @test 1 == jl_eval(
+        test_mod, Expr(:const, Expr(:(=), GlobalRef(gr_mod, sym), 1)))
+    @test Base.isdefinedglobal(gr_mod, sym)
+    @test getproperty(gr_mod, sym) == 1
+    @test Base.binding_kind(gr_mod, sym) == Base.PARTITION_KIND_CONST
+    @test !Base.isdefinedglobal(test_mod, sym)
+
+    # const gr::Int = 42
+    @gensym sym
+    @test 42 == jl_eval(
+        test_mod, Expr(:const,
+                       Expr(:(=),
+                            Expr(:(::), GlobalRef(gr_mod, sym), Int),
+                            42)))
+    @test Base.isdefinedglobal(gr_mod, sym)
+    @test getproperty(gr_mod, sym) == 42
+    @test Base.binding_kind(gr_mod, sym) == Base.PARTITION_KIND_CONST
+    @test !Base.isdefinedglobal(test_mod, sym)
+
+    # local gr (error)
+    @gensym sym
+    @test_throws LoweringError jl_eval(
+        test_mod, Expr(:local, GlobalRef(gr_mod, sym)))
+    @test_throws LoweringError jl_eval(
+        test_mod, Expr(:let, Expr(:block, Expr(:(=), GlobalRef(gr_mod, sym), 1))))
+    @test !Base.isdefinedglobal(test_mod, sym)
+
+    # function gr end
+    @gensym sym
+    @test jl_eval(test_mod, Expr(:function, GlobalRef(gr_mod, sym))) isa Function
+    @test Base.isdefinedglobal(gr_mod, sym)
+    @test getproperty(gr_mod, sym) isa Function
+    @test !Base.isdefinedglobal(test_mod, sym)
+
+    # function gr(x); x; end
+    @gensym sym
+    @test jl_eval(test_mod, Expr(:function,
+                                 Expr(:call, GlobalRef(gr_mod, sym), :x),
+                                 Expr(:block, :x))) isa Function
+    @test Base.isdefinedglobal(gr_mod, sym)
+    @test getproperty(gr_mod, sym)(1) == 1
+    @test !Base.isdefinedglobal(test_mod, sym)
+
+    # function gr(x;kw1,kw2=2); x; end
+    @gensym sym
+    @test jl_eval(test_mod, Expr(:function,
+                                 Expr(:call,
+                                      GlobalRef(gr_mod, sym),
+                                      Expr(:parameters, :kw1, Expr(:kw, :kw2, 2)),
+                                      :x),
+                                 Expr(:block,
+                                      Expr(:tuple, :x, :kw1, :kw2)))) isa Function
+    @test Base.isdefinedglobal(gr_mod, sym)
+    @test getproperty(gr_mod, sym)(0;kw1=1) == (0,1,2)
+    @test getproperty(gr_mod, sym)(0;kw1=1,kw2=20) == (0,1,20)
+    @test !Base.isdefinedglobal(test_mod, sym)
+
+    # gr inner function (let) should act like global inner function
+    @gensym sym
+    @test jl_eval(
+        test_mod,
+        Expr(:let,
+             Expr(:block, Expr(:(=), :a, 1), Expr(:(=), :b, 2)),
+             Expr(:block,
+                  Expr(:function, Expr(:call, GlobalRef(gr_mod, sym), :c),
+                       Expr(:block, Expr(:tuple, :a, :b, :c)))))) isa Function
+    @test Base.isdefinedglobal(gr_mod, sym)
+    @test !Base.isdefinedglobal(test_mod, sym)
+    @test getproperty(gr_mod, sym)(3) == (1,2,3)
+
+    # error: gr inner function (function) should act like global inner function
+    @gensym sym outer_f
+    @test_throws LoweringError jl_eval(
+        test_mod,
+        Expr(:function, Expr(:call, outer_f),
+             Expr(:block,
+                  Expr(:function, Expr(:call, GlobalRef(gr_mod, sym)),
+                       Expr(:block)))))
+
+    # error: begin; local gr = 1; end
+    # (note: flisp allows this)
+    @gensym sym
+    @test_throws "cannot use GlobalRef as local identifier" jl_eval(
+        test_mod, Expr(:block,
+                       Expr(:local, Expr(:(=), GlobalRef(gr_mod, sym), 1))))
+    @test !Base.isdefinedglobal(test_mod, sym)
+    @test !Base.isdefinedglobal(gr_mod, sym)
+
+    # error: let gr = 1; end
+    # (note: flisp allows this)
+    @gensym sym
+    @test_throws "cannot use GlobalRef as local identifier" jl_eval(
+        test_mod, Expr(:let,
+                       Expr(:block, Expr(:(=), GlobalRef(gr_mod, sym), 1)),
+                       Expr(:block)))
+
+    # error: for gr = 1:3
+    # (note: flisp allows this)
+    @gensym sym
+    @test_throws "cannot use GlobalRef as local identifier" jl_eval(
+        test_mod, Expr(:for,
+                       Expr(:(=), GlobalRef(gr_mod, sym),
+                            Expr(:call, :(:), 1, 3)),
+                       Expr(:block)))
+
+    # error: function f(gr); end
+    @gensym sym
+    @test_throws "cannot use GlobalRef as local identifier" jl_eval(
+        test_mod, Expr(:function,
+                       Expr(:call, :fname, GlobalRef(gr_mod, sym)),
+                       Expr(:block)))
+
+
+    # error: try/catch with GlobalRef catch var
+    @gensym sym
+    @test_throws "cannot use GlobalRef as local identifier" jl_eval(
+        test_mod, Expr(:try,
+                       Expr(:block, Expr(:call, :error, "oops")),
+                       GlobalRef(gr_mod, sym),
+                       Expr(:block, GlobalRef(gr_mod, sym))))
 end

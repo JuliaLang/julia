@@ -395,7 +395,6 @@ vst1_local_arg(vcx, st) = @stm st begin
 end
 
 vst1_global_arg(vcx, st) = @stm st begin
-    ([K"Value"], when=(st.value isa GlobalRef)) -> pass
     [K"function" _...] -> vcx.toplevel ?
         vst1_function(vcx, st) :
         @fail(st, "global function needs to be placed at top level, or use eval")
@@ -520,11 +519,10 @@ vst1_symdecl(vcx, st) = @stm st begin
     _ -> @fail(st, "expected identifier or `identifier::type`")
 end
 
-# TODO: globalref might not be valid everywhere; check usage of this function
+# TODO: globalref (identifier with .mod) might not be valid everywhere; check
+# usage of this function
 vst1_ident(vcx, st; lhs=false) = @stm st begin
     [K"Identifier"] -> _ident_str(vcx, st, st.name_val; lhs)
-    ([K"Value"], when=(st.value isa GlobalRef)) ->
-        _ident_str(vcx, st, string(st.value.name); lhs)
     _ -> @fail(st, "expected identifier")
 end
 function _ident_str(vcx, st, s::String; lhs=false)
@@ -930,7 +928,6 @@ vst1_assign_lhs(vcx, st; in_const=false, in_tuple=false) = @stm st begin
 end
 vst1_assign_lhs_nontuple(vcx, st; in_const=false, in_tuple=false) = @stm st begin
     [K"ssavalue" [K"Value"]] -> in_const ? @fail(st, "cannot declare ssavalue const") : pass()
-    ([K"Value"], when=(st.value isa GlobalRef)) -> pass()
     (_, when=(is_eventually_call(st))) ->
         vst1_function_calldecl(vcx, st)
     [K"::" x t] ->
@@ -1272,7 +1269,6 @@ vst2_ident_val(vcx, st) = @stm st begin
     [K"BindingId"] -> pass()
     [K"core"] -> pass()
     [K"top"] -> pass()
-    ([K"Value"], when=st.value isa GlobalRef) -> pass()
     _ -> @fail(st, "expected identifier (val)")
 end
 

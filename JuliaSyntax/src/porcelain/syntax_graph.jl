@@ -88,7 +88,8 @@ ensure_required_attributes!(g::SyntaxGraph) = ensure_attributes!(
     source=SourceAttrType,
     syntax_flags=UInt16,
     value=Any,
-    name_val=String)
+    name_val=String,
+    mod=Module)
 
 function delete_attributes!(graph::SyntaxGraph{<:Dict}, attr_names::Symbol...)
     for name in attr_names
@@ -1289,6 +1290,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
     k = kind(st)
     coreref(s::String) = setattr!(newleaf(graph, st, K"core"), :name_val, s)
     symleaf(s::String) = setattr!(newleaf(graph, st, K"Identifier"), :name_val, s)
+    core_globalref(s::String) = setattr!(symleaf(s), :mod, Core)
     valleaf(@nospecialize(v)) = setattr!(newleaf(graph, st, K"Value"), :value, v)
 
     if is_leaf(st)
@@ -1302,7 +1304,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             # which added this to match flisp parsing text->Expr.
             macname = v isa Int128 ? "@int128_str" :
                 v isa UInt128 ? "@uint128_str" : "@big_str"
-            mac = valleaf(GlobalRef(Core, Symbol(macname)))
+            mac = core_globalref(macname)
             arg = valleaf(replace(sourcetext(st), '_'=>""))
             ret_cids = tree_ids(mac, coreref("nothing"), arg)
             newnode(graph, st, K"macrocall", ret_cids)
@@ -1327,7 +1329,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         cmd_arg = _string_to_est(st, cs; unwrap_literal=true)
         loc_st = valleaf(source_location(LineNumberNode, st))
         return newnode(graph, st, K"macrocall", tree_ids(
-            valleaf(GlobalRef(Core, Symbol("@cmd"))), loc_st, cmd_arg))
+            core_globalref("@cmd"), loc_st, cmd_arg))
     elseif k === K"macro_name" && n_cs === 1
         # "M.@x" => (. M (macro_name x)) => (. M @x)
         # "@M.x" => (macro_name (. M x)) => (. M @x)
@@ -1389,7 +1391,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         # (doc str obj) => (macrocall Core.@doc lno str obj)
         ret_k = K"macrocall"
         pushfirst!(cs, valleaf(source_location(LineNumberNode, st)))
-        pushfirst!(cs, valleaf(GlobalRef(Core, Symbol("@doc"))))
+        pushfirst!(cs, core_globalref("@doc"))
     elseif k === K"dotcall" || k === K"call" && n_cs > 0
         if is_infix_op_call(st) || is_postfix_op_call(st)
             cs[2], cs[1] = cs[1], cs[2]

@@ -1048,17 +1048,10 @@ end
 7   SourceLocation::1:10
 8   (call core.svec %₅ %₆ %₇)
 9   --- method TestMod.f %₈
-    slots: [slot₁/#self#(called) slot₂/tmp(!read)]
+    slots: [slot₁/#self#(called)]
     1   TestMod.default_x
-    2   TestMod.T
-    3   (= slot₂/tmp (call slot₁/#self# %₁))
-    4   (call core.isa slot₂/tmp %₂)
-    5   (gotoifnot %₄ label₇)
-    6   (goto label₉)
-    7   (call top.convert %₂ slot₂/tmp)
-    8   (= slot₂/tmp (call core.typeassert %₇ %₂))
-    9   slot₂/tmp
-    10  (return %₉)
+    2   (call slot₁/#self# %₁)
+    3   (return %₂)
 10  latestworld
 11  TestMod.f
 12  (call core.Typeof %₁₁)
