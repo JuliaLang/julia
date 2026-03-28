@@ -29,6 +29,7 @@
 #include "platform.h"
 #include "llvm-codegen-shared.h"
 #include "llvm-version.h"
+#include "objcache.h"
 #include <stack>
 #include <queue>
 #include <tuple>
@@ -919,6 +920,8 @@ private:
 
     std::mutex llvm_printing_mutex{};
     SmallVector<std::function<void()>, 0> PrintLLVMTimers;
+
+    ObjCache OCache{};
 
     _Atomic(size_t) jit_bytes_size{0};
     _Atomic(size_t) jitcounter{0};

@@ -890,20 +890,14 @@ public:
         auto &ES = R->getExecutionSession();
         jl_task_t *ct = jl_current_task;
 
-        // TODO: Tell GCChecker that materialize can have safepoints.
-#ifndef __clang_analyzer__
-        {
-            uint8_t state = jl_gc_unsafe_enter(ct->ptls);
-            JIT.optimizeDLSyms(*Out.module); // May safepoint
-            jl_gc_unsafe_leave(ct->ptls, state);
-        }
-#endif
         std::unique_ptr<MemoryBuffer> Obj;
         uint64_t start_time = jl_hrtime();
         {
             TimeTraceScope CompileScope("JIT Compile", Out.module->getModuleIdentifier());
-            JIT.optimizeModule(*Out.module);
-            Obj = JIT.compileModule(*Out.module);
+            Obj = JIT.OCache.get(*Out.module, [this](){
+                JIT.optimizeModule(*Out.module);
+                return JIT.compileModule(*Out.module);
+            });
             if (!Obj) {
                 R->failMaterialization();
                 return;
@@ -2380,7 +2374,6 @@ void JuliaOJIT::optimizeModule(Module &M)
 {
     selectOptLevel(M);
     (*Optimizers)(M);
-    (*JITPointers)(M);
 }
 
 std::unique_ptr<MemoryBuffer> JuliaOJIT::compileModule(Module &M)
