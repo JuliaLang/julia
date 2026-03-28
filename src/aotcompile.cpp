@@ -2466,6 +2466,8 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                 if (!jl_options.image_codegen) {
                     optimizeDLSyms(output.get_module());
                 }
+                // Apply ipo_purity_bits as LLVM attributes before optimization so
+                // that GVN and other passes can exploit them (e.g. CSE duplicate)
                 assert(!verifyLLVMIR(output.get_module()));
                 if (optimize) {
                     auto opts = OptimizationOptions::defaults();
