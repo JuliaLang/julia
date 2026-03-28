@@ -616,3 +616,14 @@ end
 # Test that the hash function works without world age issues
 @test hash(bar59429, UInt(0)) isa UInt
 end
+
+# jl_eval_thunk should update the world after resolving definition effects but
+# before "actually running" the thunk as some such code - such as that
+# computing the return type of a ccall - may have arbitrary side effects. (Note
+# it's not clear there's any valid use for such side effects in clean code but
+# the runtime should still handle it gracefully.)
+rettype_with_side_effect() = eval(:(rettype_side_effect = "blah"; Cint))
+let
+    @test rettype_side_effect == "blah"
+    ccall(:strlen, rettype_with_side_effect(), (Cstring,), "xx")
+end

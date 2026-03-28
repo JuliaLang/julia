@@ -164,7 +164,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
                 end
                 inferred_result = maybe_compress_codeinfo(interp, mi, inferred_result)
             elseif ci.owner === nothing
-                # The global cache can only handle objects that codegen understands
+                # The global cache can only handle objects that codegen understands (nothing or CodeInfo)
                 inferred_result = nothing
             end
         else
@@ -671,12 +671,14 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
         # A parent may be cached still, but not this intermediate work:
         # we can throw everything else away now. Caching anything can confuse later
         # heuristics to consider it worth trying to pursue compiling this further and
-        # finding infinite work as a result. Avoiding caching helps to ensure there is only
-        # a finite amount of work that can be discovered later (although potentially still a
-        # large multiplier on it).
+        # finding infinite work as a result. Avoiding global caching helps to ensure there
+        # is only a finite amount of work that can be discovered later (although potentially
+        # still a large multiplier on it). We still allow local caching so that tombstoned
+        # entries can be found by `constprop_cache_lookup` to prevent re-attempting the same
+        # const-prop work that would hit the same limit.
         result.src = nothing
         result.tombstone = true
-        me.cache_mode = CACHE_MODE_NULL
+        me.cache_mode &= ~CACHE_MODE_GLOBAL
         set_inlineable!(src, false)
     else
         # annotate fulltree with type information,
@@ -888,10 +890,10 @@ end
 
 # annotate types of all symbols in AST, preparing for optimization
 function type_annotate!(::AbstractInterpreter, sv::InferenceState)
-    # widen `Conditional`s from `slottypes`
+    # widen slot wrappers from `slottypes`
     slottypes = sv.slottypes
     for i = 1:length(slottypes)
-        slottypes[i] = widenconditional(slottypes[i])
+        slottypes[i] = widenslotwrapper(slottypes[i])
     end
 
     # compute the required type for each slot
@@ -924,13 +926,14 @@ function type_annotate!(::AbstractInterpreter, sv::InferenceState)
         end
     end
 
-    # widen slot wrappers (`Conditional` and `MustAlias`) in `bb_vartables`
-    for varstate in sv.bb_vartables
-        if varstate !== nothing
+    # widen slot wrappers (`Conditional` and `MustAlias`) in `bb_states`
+    for bbstate in sv.bb_states
+        if bbstate !== nothing
+            vartable = bbstate.vartable
             for slot in 1:nslots
-                vt = varstate[slot]
+                vt = vartable[slot]
                 widened_type = widenslotwrapper(ignorelimited(vt.typ))
-                varstate[slot] = VarState(widened_type, vt.undef)
+                vartable[slot] = VarState(widened_type, vt.ssadef, vt.undef)
             end
         end
     end
@@ -1104,6 +1107,39 @@ function codeinst_as_edge(interp::AbstractInterpreter, sv::InferenceState, @nosp
     return ci
 end
 
+function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, result::InferenceResult,
+                                    method::Method, edge_ci::Union{Nothing,CodeInstance},
+                                    edgecycle::Bool, edgelimited::Bool)
+    mresult = Future{MethodCallResult}()
+    push!(caller.tasks, function get_infer_result(interp, caller)
+        update_valid_age!(caller, get_inference_world(interp), frame.valid_worlds)
+        isinferred = is_inferred(frame)
+        effects = nothing
+        edge = nothing
+        call_result = nothing
+        if isinferred
+            edge = result.ci
+            if edge_ci isa CodeInstance && codeinst_edges_sub(edge_ci, edge.min_world, edge.max_world, edge.edges)
+                edge = edge_ci # override the edge for tracking invalidation
+            end
+            result.ci_as_edge = edge # override the edge for tracking purposes
+            effects = result.ipo_effects # effects are adjusted already within `finish` for ipo_effects
+            call_result = result
+        else
+            effects = adjust_effects(effects_for_cycle(frame.ipo_effects), method)
+            add_cycle_backedge!(caller, frame)
+        end
+        bestguess = frame.bestguess
+        exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
+        # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
+        # note that this result is cached globally exclusively, so we can use this local result destructively
+        mresult[] = MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects,
+            edge, edgecycle, edgelimited, call_result)
+        return true
+    end)
+    return mresult
+end
+
 # compute (and cache) an inferred AST and return the current best estimate of the result type
 function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, caller::AbsIntState, edgecycle::Bool, edgelimited::Bool)
     mi = specialize_method(method, atype, sparams)
@@ -1204,35 +1240,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         assign_parentchild!(frame, caller)
         # the actual inference task for this edge is going to be scheduled within `typeinf_local` via the callstack queue
         # while splitting off the rest of the work for this caller into a separate workq thunk
-        let mresult = Future{MethodCallResult}()
-            push!(caller.tasks, function get_infer_result(interp, caller)
-                update_valid_age!(caller, get_inference_world(interp), frame.valid_worlds)
-                local isinferred = is_inferred(frame)
-                local effects
-                local edge = nothing
-                local call_result = nothing
-                if isinferred
-                    edge = result.ci
-                    if edge_ci isa CodeInstance && codeinst_edges_sub(edge_ci, edge.min_world, edge.max_world, edge.edges)
-                        edge = edge_ci # override the edge for tracking invalidation
-                    end
-                    result.ci_as_edge = edge # override the edge for tracking purposes
-                    effects = result.ipo_effects # effects are adjusted already within `finish` for ipo_effects
-                    call_result = result
-                else
-                    effects = adjust_effects(effects_for_cycle(frame.ipo_effects), method)
-                    add_cycle_backedge!(caller, frame)
-                end
-                local bestguess = frame.bestguess
-                local exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
-                # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
-                # note that this result is cached globally exclusively, so we can use this local result destructively
-                mresult[] = MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects,
-                    edge, edgecycle, edgelimited, call_result)
-                return true
-            end)
-            return mresult
-        end
+        return _schedule_edge_infer_task!(caller, frame, result, method, edge_ci, edgecycle, edgelimited)
     elseif frame === true
         # unresolvable cycle
         add_remark!(interp, caller, "[typeinf_edge] Unresolvable cycle")
@@ -1835,7 +1843,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
 end
 
 const _verify_trim_world_age = RefValue{UInt}(typemax(UInt))
-verify_typeinf_trim(codeinfos::Vector{Any}, onlywarn::Bool) = Core._call_in_world(_verify_trim_world_age[], verify_typeinf_trim, stdout, codeinfos, onlywarn)
+verify_typeinf_trim(codeinfos::Vector{Any}, onlywarn::Bool) = Core._call_in_world(_verify_trim_world_age[], verify_typeinf_trim, Base.stderr, codeinfos, onlywarn)
 
 function return_type(@nospecialize(f), t::DataType) # this method has a special tfunc
     world = tls_world_age()

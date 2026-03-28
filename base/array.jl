@@ -540,7 +540,7 @@ julia> v2
  []
 ```
 
-See also: [`fill!`](@ref), [`zeros`](@ref), [`ones`](@ref), [`similar`](@ref).
+See also [`fill!`](@ref), [`zeros`](@ref), [`ones`](@ref), [`similar`](@ref).
 
 # Examples
 ```jldoctest
@@ -878,6 +878,29 @@ function setindex_widen_up_to(dest::AbstractArray{T}, el, i) where T
     return new
 end
 
+# Batch-widen an array given (index => value) pairs that don't fit the current element type.
+function setindices_widen_up_to(dest::AbstractArray, widen_buffers::Vector{Vector{Pair{Int, Any}}})
+    widen_pairs = reduce(vcat, widen_buffers; init=Pair{Int,Any}[])
+    isempty(widen_pairs) && return dest
+    new_T = eltype(dest)
+    for p in widen_pairs
+        new_T = promote_typejoin(new_T, typeof(p.second))
+    end
+    new_T === eltype(dest) && return dest
+    # Function barrier: specializes on new_T so the compiler sees
+    # concrete element types for both source and destination arrays.
+    return _setindices_widen_up_to(new_T, dest, widen_pairs)
+end
+
+function _setindices_widen_up_to(::Type{T}, dest::AbstractArray, widen_pairs::Vector{Pair{Int, Any}}) where T
+    new = similar(dest, T)
+    copyto!(new, dest)
+    for (idx, val) in widen_pairs
+        @inbounds new[idx] = val
+    end
+    return new
+end
+
 function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
     # collect to dest array, checking the type of each result. if a result does not
     # match, widen the result type and re-dispatch.
@@ -1021,7 +1044,7 @@ function setindex!(A::Array{T}, x, i::Int) where {T}
 end
 function _setindex!(A::Array{T}, x::T, i::Int) where {T}
     @_noub_if_noinbounds_meta
-    @boundscheck checkbounds(Bool, A, i) || throw_boundserror(A, (i,))
+    @boundscheck checkbounds(A, i)
     memoryrefset!(memoryrefnew(A.ref, i, false), x, :not_atomic, false)
     return A
 end
@@ -1632,7 +1655,7 @@ Remove an item in `collection` and return it. If `collection` is an
 ordered container, the last item is returned; for unordered containers,
 an arbitrary element is returned.
 
-See also: [`popfirst!`](@ref), [`popat!`](@ref), [`delete!`](@ref), [`deleteat!`](@ref), [`splice!`](@ref), and [`push!`](@ref).
+See also [`popfirst!`](@ref), [`popat!`](@ref), [`delete!`](@ref), [`deleteat!`](@ref), [`splice!`](@ref), [`push!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1683,7 +1706,7 @@ are shifted to fill the resulting gap.
 When `i` is not a valid index for `a`, return `default`, or throw an error if
 `default` is not specified.
 
-See also: [`pop!`](@ref), [`popfirst!`](@ref), [`deleteat!`](@ref), [`splice!`](@ref).
+See also [`pop!`](@ref), [`popfirst!`](@ref), [`deleteat!`](@ref), [`splice!`](@ref).
 
 !!! compat "Julia 1.5"
     This function is available as of Julia 1.5.
@@ -1777,7 +1800,7 @@ Remove the first `item` from `collection`.
 
 This function is called `shift` in many other programming languages.
 
-See also: [`pop!`](@ref), [`popat!`](@ref), [`delete!`](@ref).
+See also [`pop!`](@ref), [`popat!`](@ref), [`delete!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1817,7 +1840,7 @@ end
 Insert an `item` into `a` at the given `index`. `index` is the index of `item` in
 the resulting `a`.
 
-See also: [`push!`](@ref), [`replace`](@ref), [`popat!`](@ref), [`splice!`](@ref).
+See also [`push!`](@ref), [`replace`](@ref), [`popat!`](@ref), [`splice!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1852,7 +1875,7 @@ end
 Remove the item at the given `i` and return the modified `a`. Subsequent items
 are shifted to fill the resulting gap.
 
-See also: [`keepat!`](@ref), [`delete!`](@ref), [`popat!`](@ref), [`splice!`](@ref).
+See also [`keepat!`](@ref), [`delete!`](@ref), [`popat!`](@ref), [`splice!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1993,7 +2016,7 @@ Subsequent items are shifted left to fill the resulting gap.
 If specified, replacement values from an ordered
 collection will be spliced in place of the removed item.
 
-See also: [`replace`](@ref), [`delete!`](@ref), [`deleteat!`](@ref), [`pop!`](@ref), [`popat!`](@ref).
+See also [`replace`](@ref), [`delete!`](@ref), [`deleteat!`](@ref), [`pop!`](@ref), [`popat!`](@ref).
 
 # Examples
 ```jldoctest
@@ -2326,7 +2349,7 @@ function vcat(arrays::Vector{T}...) where T
     nd = 1
     for a in arrays
         na = length(a)
-        @assert nd + na <= 1 + length(arr) # Concurrent modification of arrays?
+        @assert nd + na <= 1 + length(arr) "Concurrent modification of arrays?"
         unsafe_copyto!(arr, nd, a, 1, na)
         nd += na
     end
@@ -2382,7 +2405,7 @@ To search for other kinds of values, pass a predicate as the first argument.
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
-See also: [`findall`](@ref), [`findnext`](@ref), [`findlast`](@ref), [`searchsortedfirst`](@ref).
+See also [`findall`](@ref), [`findnext`](@ref), [`findlast`](@ref), [`searchsortedfirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -2532,7 +2555,7 @@ or `nothing` if not found.
 Indices are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
-See also: [`findnext`](@ref), [`findfirst`](@ref), [`findall`](@ref).
+See also [`findnext`](@ref), [`findfirst`](@ref), [`findall`](@ref).
 
 # Examples
 ```jldoctest
@@ -2568,7 +2591,7 @@ Return `nothing` if there is no `true` value in `A`.
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
-See also: [`findfirst`](@ref), [`findprev`](@ref), [`findall`](@ref).
+See also [`findfirst`](@ref), [`findprev`](@ref), [`findall`](@ref).
 
 # Examples
 ```jldoctest
@@ -2774,7 +2797,7 @@ To search for other kinds of values, pass a predicate as the first argument.
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
-See also: [`findfirst`](@ref), [`searchsorted`](@ref).
+See also [`findfirst`](@ref), [`searchsorted`](@ref).
 
 # Examples
 ```jldoctest
@@ -2834,7 +2857,7 @@ Return an array containing the first index in `b` for
 each value in `a` that is a member of `b`. The output
 array contains `nothing` wherever `a` is not a member of `b`.
 
-See also: [`sortperm`](@ref), [`findfirst`](@ref).
+See also [`sortperm`](@ref), [`findfirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -2949,10 +2972,11 @@ end
 
 function indcopy(sz::Dims, I::Tuple{Vararg{RangeIndex}})
     n = length(I)
-    s = sz[n]
+    _s = sz[n]
     for i = n+1:length(sz)
-        s *= sz[i]
+        _s *= sz[i]
     end
+    s = _s
     dst::typeof(I) = ntuple(i-> _findin(I[i], i < n ? (1:sz[i]) : (1:s)), n)::typeof(I)
     src::typeof(I) = ntuple(i-> I[i][_findin(I[i], i < n ? (1:sz[i]) : (1:s))], n)::typeof(I)
     dst, src
@@ -2969,7 +2993,7 @@ The function `f` is passed one argument.
 !!! compat "Julia 1.4"
     Support for `a` as a tuple requires at least Julia 1.4.
 
-See also: [`filter!`](@ref), [`Iterators.filter`](@ref).
+See also [`filter!`](@ref), [`Iterators.filter`](@ref).
 
 # Examples
 ```jldoctest

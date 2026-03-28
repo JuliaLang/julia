@@ -138,7 +138,7 @@ for (fname, sz) in ((:jump_128, 128), (:jump_192, 192))
 
         This can be used to generate `2^$($seq_pow)` non-overlapping subsequences for parallel computations.
 
-        See also: [`$($fname)`](@ref), [`$($see_other!)`](@ref)
+        See also [`$($fname)`](@ref), [`$($see_other!)`](@ref).
 
         # Examples
         ```julia-repl
@@ -159,7 +159,7 @@ for (fname, sz) in ((:jump_128, 128), (:jump_192, 192))
 
         This can be used to generate `2^$($seq_pow)` non-overlapping subsequences for parallel computations.
 
-        See also: [`$($fname!)`](@ref), [`$($see_other)`](@ref)
+        See also [`$($fname!)`](@ref), [`$($see_other)`](@ref).
 
         # Examples
         ```julia-repl

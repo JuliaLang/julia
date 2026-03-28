@@ -305,7 +305,7 @@ with the `catdoc` function, which can of course be overridden for custom types.
 
 ## Advanced Usage
 
-The `@doc` macro associates its first argument with its second in a per-module dictionary called
+The [`@doc`](@ref Core.@doc) macro associates its first argument with its second in a per-module dictionary called
 `META`.
 
 To make it easier to write documentation, the parser treats the macro name `@doc` specially:
@@ -320,7 +320,8 @@ Therefore the following syntax is parsed as a 2-argument call to `@doc`:
 f(x) = x
 ```
 
-This makes it possible to use expressions other than normal string literals (such as the `raw""` string macro) as a docstring.
+This makes it possible to use expressions other than normal string literals (such as the
+[`raw"..."`](@ref @raw_str) string macro) as a docstring.
 
 When used for retrieving documentation, the `@doc` macro (or equally, the `doc` function) will
 search all `META` dictionaries for metadata relevant to the given object and return it. The returned
@@ -409,10 +410,10 @@ In the following examples `"..."` is used to illustrate an arbitrary docstring.
 
 ### `$` and `\` characters
 
-The `$` and `\` characters are still parsed as string interpolation or start of an escape sequence
-in docstrings too. The `raw""` string macro together with the `@doc` macro can be used to avoid
-having to escape them. This is handy when the docstrings include LaTeX or Julia source code examples
-containing interpolation:
+The `$` and `\` characters are still parsed as string interpolation or start of an escape
+sequence in docstrings too. The [`raw"..."`](@ref @raw_str) string macro together with the
+[`@doc`](@ref Core.@doc) macro can be used to avoid having to escape them. This is handy
+when the docstrings include LaTeX or Julia source code examples containing interpolation:
 
 ````julia
 @doc raw"""

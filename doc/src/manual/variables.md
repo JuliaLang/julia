@@ -108,7 +108,8 @@ digits (0-9 and other characters in categories Nd/No), as well as other Unicode 
 and other modifying marks (categories Mn/Mc/Me/Sk), some punctuation connectors (category Pc),
 primes, and a few other characters.
 
-Operators like `+` are also valid identifiers, but are parsed specially. In some contexts, operators
+[Operators](@ref Operator-Precedence-and-Associativity) like `+` are also valid identifiers, but
+are parsed specially. In some contexts, operators
 can be used just like variables; for example `(+)` refers to the addition function, and `(+) = f`
 will reassign it. Most of the Unicode infix operators (in category Sm), such as `⊕`, are parsed
 as infix operators and are available for user-defined methods (e.g. you can use `const ⊗ = kron`
@@ -117,7 +118,6 @@ primes, and sub/superscripts, e.g. `+̂ₐ″` is parsed as an infix operator wi
 A space is required between an operator that ends with a subscript/superscript letter and a subsequent
 variable name. For example, if `+ᵃ` is an operator, then `+ᵃx` must be written as `+ᵃ x` to distinguish
 it from `+ ᵃx` where `ᵃx` is the variable name.
-
 
 A particular class of variable names is one that contains only underscores. These identifiers are write-only. I.e. they can only be assigned values, which are immediately discarded, and their values cannot be used in any way.
 

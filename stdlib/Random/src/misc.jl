@@ -70,7 +70,7 @@ function randstring end
 let b = UInt8['0':'9';'A':'Z';'a':'z']
     global randstring
 
-    function randstring(r::AbstractRNG, chars=b, n::Integer=8)
+    function randstring(r::AbstractRNG, chars, n::Int)
         T = eltype(chars)
         if T === UInt8
             str = Base._string_n(n)
@@ -83,9 +83,18 @@ let b = UInt8['0':'9';'A':'Z';'a':'z']
         end
     end
 
-    randstring(r::AbstractRNG, n::Integer) = randstring(r, b, n)
-    randstring(chars=b, n::Integer=8) = randstring(default_rng(), chars, n)
-    randstring(n::Integer) = randstring(default_rng(), b, n)
+    # Zero-arg methods:
+    randstring() = randstring(default_rng(), b, 8)
+    # One-arg methods:
+    randstring(r::AbstractRNG) = randstring(r, b, 8)
+    randstring(chars) = randstring(default_rng(), chars, 8)
+    randstring(n::Integer) = randstring(default_rng(), b, convert(Int, n))
+    # Two-arg methods:
+    randstring(r::AbstractRNG, chars) = randstring(r, chars, 8)
+    randstring(r::AbstractRNG, n::Integer) = randstring(r, b, convert(Int, n))
+    randstring(chars, n::Integer) = randstring(default_rng(), chars, convert(Int, n))
+    # Three-arg methods:
+    randstring(r::AbstractRNG, chars, n::Integer) = randstring(r, chars, convert(Int, n))
 end
 
 

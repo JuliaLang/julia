@@ -117,7 +117,6 @@ JL_DLLEXPORT ssize_t ios_fillbuf(ios_t *s);
 /* stream creation */
 JL_DLLEXPORT
 ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int trunc) JL_NOTSAFEPOINT;
-JL_DLLEXPORT ios_t *ios_mkstemp(ios_t *f, char *fname);
 JL_DLLEXPORT ios_t *ios_mem(ios_t *s, size_t initsize) JL_NOTSAFEPOINT;
 ios_t *ios_str(ios_t *s, char *str);
 ios_t *ios_static_buffer(ios_t *s, char *buf, size_t sz);
@@ -144,7 +143,7 @@ JL_DLLEXPORT void ios_purge(ios_t *s);
 
 /* stdio-style functions */
 #define IOS_EOF (-1)
-JL_DLLEXPORT int ios_putc(int c, ios_t *s);
+JL_DLLEXPORT int ios_putc(int c, ios_t *s) JL_NOTSAFEPOINT;
 //wint_t ios_putwc(ios_t *s, wchar_t wc);
 JL_DLLEXPORT int ios_getc(ios_t *s);
 JL_DLLEXPORT int ios_peekc(ios_t *s);

@@ -4,11 +4,6 @@
 // Note that this file is `#include`d by "signal-handling.c"
 #include <mmsystem.h> // hidden by LEAN_AND_MEAN
 
-// Loader lock functions from ntdll
-// See https://devblogs.microsoft.com/oldnewthing/20140808-00/?p=293
-extern NTSTATUS NTAPI LdrLockLoaderLock(ULONG Flags, ULONG *State, ULONG_PTR *Cookie);
-extern NTSTATUS NTAPI LdrUnlockLoaderLock(ULONG Flags, ULONG_PTR Cookie);
-
 static const size_t sig_stack_size = 131072; // 128k reserved for backtrace_fiber for stack overflow handling
 
 // Copied from MINGW_FLOAT_H which may not be found due to a collision with the builtin gcc float.h
@@ -425,9 +420,7 @@ static void CALLBACK profile_timeout_cb(PVOID lpParam, BOOLEAN TimerOrWaitFired)
     profile_timeout_data_t *data = (profile_timeout_data_t*)lpParam;
     if (TimerOrWaitFired && data != NULL && data->abort_ptr != NULL) {
         // Timeout reached, signal an abort should occur
-        // jl_safe_fprintf(ios_safe_stderr, "profile_timeout_cb called.\n");
         if (jl_atomic_exchange(data->abort_ptr, 2) == 1) {
-            // jl_safe_fprintf(ios_safe_stderr, "profile_timeout_cb jl_thread_resume.\n");
             jl_thread_resume(data->tid);
             data->tid = -1;
         }
@@ -475,7 +468,10 @@ int jl_thread_suspend(int16_t tid, bt_context_t *ctx)
 {
     jl_lock_profile(); // prevent concurrent mutation
     uv_mutex_lock(&jl_in_stackwalk); // prevent multi-threaded dbghelp calls
+    uv_mutex_lock(&jl_dll_notify_lock);
+    jl_profile_process_dll_events();
     int success = jl_thread_suspend_and_get_state(tid, 0, ctx);
+    uv_mutex_unlock(&jl_dll_notify_lock);
     uv_mutex_unlock(&jl_in_stackwalk);
     jl_unlock_profile();
     return success;
@@ -517,11 +513,6 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                     jl_profile_stop_timer();
                     break;
                 }
-                if (!jl_thread_suspend(tid, &c))
-                    continue;
-                jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-                jl_task_t *t2 = jl_atomic_load_relaxed(&ptls->current_task);
-                int state = jl_atomic_load_relaxed(&ptls->sleep_check_state) == 0 ? PROFILE_STATE_THREAD_NOT_SLEEPING : PROFILE_STATE_THREAD_SLEEPING;
 
                 // Set up timeout handler for stackwalk
 #ifdef _CPU_X86_64_
@@ -539,17 +530,25 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 }
 #endif
 
+                if (!jl_thread_suspend(tid, &c))
+                    continue;
+
+                jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+                jl_task_t *t2 = jl_atomic_load_relaxed(&ptls->current_task);
+                int state = jl_atomic_load_relaxed(&ptls->sleep_check_state) == 0 ? PROFILE_STATE_THREAD_NOT_SLEEPING : PROFILE_STATE_THREAD_SLEEPING;
+
                 // Get backtrace data
                 profile_bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur,
                         profile_bt_size_max - profile_bt_size_cur - 1, &c, NULL);
+
 #ifdef _CPU_X86_64_
                 // Clear abort pointer from TLS
                 jl_set_profile_abort_ptr(NULL);
+                if (timeout_data.tid != -1)
+                    jl_thread_resume(tid);
                 // Wait for callback to complete or cancel before continuing
                 if (hTimer != NULL)
                     DeleteTimerQueueTimer(hTimerQueue, hTimer, INVALID_HANDLE_VALUE);
-                if (timeout_data.tid != -1)
-                    jl_thread_resume(tid);
 #else
                 jl_thread_resume(tid);
 #endif
