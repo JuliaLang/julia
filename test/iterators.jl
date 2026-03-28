@@ -559,6 +559,7 @@ end
     @test (@inferred Base.IteratorSize(Base.Flatten([Ref("a"), Ref("b")]))) == Base.HasLength()  # elements shaped like zero-dimensional arrays
     @test (@inferred Base.IteratorSize(Base.Flatten([(1 => 2), (3 => 4)]))) == Base.HasLength()  # `Pair` elements
     @test (@inferred Base.IteratorSize(Base.Flatten([(1, 2), (3, 4)]))) == Base.HasLength()  # `Tuple` elements
+    @test (@inferred Base.IteratorSize(Base.Flatten(Vector{Union{}}(undef, 3)))) == Base.SizeUnknown()
 end
 
 @testset "length(::Flatten)" begin
