@@ -574,7 +574,8 @@ struct DataTypeLayout
     # arrayelem_isatomic : 1;
     # arrayelem_islocked : 1;
     # isbitsegal : 1;
-    # padding : 8;
+    # unused_bits : 3;
+    # padding : 5;
 end
 
 """

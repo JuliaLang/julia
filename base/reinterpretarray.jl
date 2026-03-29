@@ -770,6 +770,11 @@ end
 """
 @assume_effects :foldable function padding(T::DataType, baseoffset::Int = 0)
     pads = Padding[]
+    if isprimitivetype(T)
+        Core.bitsizeof(T) % 8 == 0 || throw(ArgumentError(LazyString(
+            "padding cannot be computed for non-byte-aligned primitive type ", T)))
+        return Core.svec()
+    end
     last_end::Int = baseoffset
     for i = 1:fieldcount(T)
         offset = baseoffset + Int(fieldoffset(T, i))
@@ -829,11 +834,29 @@ end
 end
 
 @assume_effects :foldable function packedsize(::Type{T}) where T
+    if isprimitivetype(T)
+        Core.bitsizeof(T) % 8 == 0 || throw(ArgumentError(LazyString(
+            "packed size cannot be computed for non-byte-aligned primitive type ", T)))
+        return Core.bitsizeof(T) >> 3
+    end
     pads = padding(T)
     return sizeof(T) - sum((p.size for p ∈ pads), init = 0)
 end
 
-@assume_effects :foldable ispacked(::Type{T}) where T = isempty(padding(T))
+@assume_effects :foldable function ispacked(::Type{T}) where T
+    isprimitivetype(T) && return Core.bitsizeof(T) == sizeof(T) * 8
+    return isempty(padding(T))
+end
+
+@assume_effects :foldable function has_bit_padding(::Type{T}) where T
+    if isprimitivetype(T)
+        return Core.bitsizeof(T) % 8 != 0
+    end
+    for i in 1:fieldcount(T)
+        has_bit_padding(fieldtype(T, i)) && return true
+    end
+    return false
+end
 
 function _copytopacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
     writeoffset = 0
@@ -871,6 +894,10 @@ end
     # handle non-primitive types
     isbitstype(Out) || throw(ArgumentError("Target type for `reinterpret` must be isbits"))
     isbitstype(In) || throw(ArgumentError("Source type for `reinterpret` must be isbits"))
+    has_bit_padding(Out) && throw(ArgumentError(LazyString(
+        "cannot `reinterpret` type ", Out, " containing non-byte-aligned primitive fields")))
+    has_bit_padding(In) && throw(ArgumentError(LazyString(
+        "cannot `reinterpret` type ", In, " containing non-byte-aligned primitive fields")))
     inpackedsize = packedsize(In)
     outpackedsize = packedsize(Out)
     inpackedsize == outpackedsize ||

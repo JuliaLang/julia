@@ -213,21 +213,23 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_data
                 APFloat(lt->getFltSemantics(), APInt(64, data64)));
     }
     if (lt->isFloatingPointTy() || lt->isIntegerTy() || lt->isPointerTy()) {
-        int nb = jl_datatype_size(bt);
-        APInt val(8 * nb, 0);
+        int nbytes = jl_datatype_size(bt);
+        APInt val(jl_datatype_nbits(bt), 0);
         void *bits = const_cast<uint64_t*>(val.getRawData());
         assert(sys::IsLittleEndianHost);
-        memcpy(bits, ptr, nb);
+        memcpy(bits, ptr, nbytes);
+        if (nbytes > 0)
+            ((uint8_t*)bits)[nbytes - 1] &= (uint8_t)(0xff >> jl_datatype_unusedbits(bt));
         if (lt->isFloatingPointTy()) {
             return ConstantFP::get(ctx.builder.getContext(),
                     APFloat(lt->getFltSemantics(), val));
         }
         if (lt->isPointerTy()) {
-            Type *Ty = IntegerType::get(ctx.builder.getContext(), 8 * nb);
+            Type *Ty = IntegerType::get(ctx.builder.getContext(), nbytes * 8);
             Constant *addr = ConstantInt::get(Ty, val);
             return ConstantExpr::getIntToPtr(addr, lt);
         }
-        assert(cast<IntegerType>(lt)->getBitWidth() == 8u * nb);
+        assert(cast<IntegerType>(lt)->getBitWidth() == val.getBitWidth());
         return ConstantInt::get(lt, val);
     }
 
@@ -564,6 +566,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
 
     Type *llvmt = bitstype_to_llvm((jl_value_t*)bt, ctx.builder.getContext(), true);
     uint32_t nb = jl_datatype_size(bt);
+    uint32_t nbits = jl_datatype_nbits(bt);
 
     Value *bt_value_rt = NULL;
     if (!jl_is_concrete_type((jl_value_t*)bt)) {
@@ -574,30 +577,19 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
     // Examine the second argument //
     bool isboxed;
     Type *vxt = julia_type_to_llvm(ctx, v.typ, &isboxed);
-    if (!jl_is_primitivetype(v.typ) || jl_datatype_size(v.typ) != nb) {
+    if (!jl_is_primitivetype(v.typ)) {
         Value *typ = emit_typeof(ctx, v, false, false);
-        if (!jl_is_primitivetype(v.typ)) {
-            if (jl_is_datatype(v.typ) && !jl_is_abstracttype(v.typ)) {
-                emit_error(ctx, "bitcast: value not a primitive type");
-                return jl_cgval_t();
-            }
-            else {
-                Value *isprimitive = emit_datatype_isprimitivetype(ctx, typ);
-                error_unless(ctx, isprimitive, "bitcast: value not a primitive type");
-            }
-        }
         if (jl_is_datatype(v.typ) && !jl_is_abstracttype(v.typ)) {
-            emit_error(ctx, "bitcast: argument size does not match size of target type");
+            emit_error(ctx, "bitcast: value not a primitive type");
             return jl_cgval_t();
         }
-        else {
-            Value *size = emit_datatype_size(ctx, typ);
-            auto sizecheck = ctx.builder.CreateICmpEQ(size, ConstantInt::get(size->getType(), nb));
-            setName(ctx.emission_context, sizecheck, "sizecheck");
-            error_unless(ctx,
-                    sizecheck,
-                    "bitcast: argument size does not match size of target type");
-        }
+        Value *isprimitive = emit_datatype_isprimitivetype(ctx, typ);
+        error_unless(ctx, isprimitive, "bitcast: value not a primitive type");
+        return emit_runtime_call(ctx, bitcast, argv, 2);
+    }
+    if (jl_datatype_nbits((jl_datatype_t*)v.typ) != nbits) {
+        emit_error(ctx, "bitcast: argument bitsize does not match bitsize of target type");
+        return jl_cgval_t();
     }
 
     assert(!v.isghost);

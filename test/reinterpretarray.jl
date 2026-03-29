@@ -692,3 +692,58 @@ end
     @test reinterpret(reshape, UInt8, fill(x)) == [0x67, 0x45, 0x23, 0x01, 0xef, 0xcd, 0xab, 0x00]
     @test reinterpret(reshape, UInt8, [x]) == [0x67; 0x45; 0x23; 0x01; 0xef; 0xcd; 0xab; 0x00;;]
 end
+
+@testset "primitive reinterpret alignment" begin
+    primitive type RUInt24 24 end
+    primitive type RUInt40 40 end
+    primitive type RUInt48 48 end
+    primitive type RUInt17 17 end
+    primitive type RUInt23 23 end
+    primitive type RUInt63 63 end
+
+    @test Base.ispacked(RUInt24)
+    @test Base.ispacked(RUInt40)
+    @test Base.ispacked(RUInt48)
+    @test !Base.datatype_haspadding(RUInt24)
+    @test !Base.datatype_haspadding(RUInt40)
+    @test !Base.datatype_haspadding(RUInt48)
+    @test Base.packedsize(RUInt24) == 3
+    @test Base.packedsize(RUInt40) == 5
+    @test Base.packedsize(RUInt48) == 6
+    @test !Base.ispacked(RUInt17)
+    @test !Base.ispacked(RUInt23)
+    @test !Base.ispacked(RUInt63)
+    @test Base.datatype_haspadding(RUInt17)
+    @test Base.datatype_haspadding(RUInt23)
+    @test Base.datatype_haspadding(RUInt63)
+
+    r24 = reinterpret(RUInt24, (0xaa, 0xbb, 0xcc))
+    @test reinterpret(NTuple{3, UInt8}, r24) === (0xaa, 0xbb, 0xcc)
+
+    r40 = reinterpret(RUInt40, (0x01, 0x02, 0x03, 0x04, 0x05))
+    @test reinterpret(NTuple{5, UInt8}, r40) === (0x01, 0x02, 0x03, 0x04, 0x05)
+
+    r48 = reinterpret(RUInt48, (0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f))
+    @test reinterpret(NTuple{6, UInt8}, r48) === (0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f)
+
+    @test_throws ArgumentError Base.padding(RUInt17)
+    @test_throws ArgumentError Base.packedsize(RUInt17)
+    @test_throws ArgumentError Base.padding(RUInt23)
+    @test_throws ArgumentError Base.packedsize(RUInt23)
+    @test_throws ArgumentError Base.padding(RUInt63)
+    @test_throws ArgumentError Base.packedsize(RUInt63)
+
+    @test_throws ArgumentError reinterpret(RUInt17, (0x01, 0x02, 0x03))
+    @test_throws ArgumentError reinterpret(RUInt23, (0x01, 0x02, 0x03))
+    @test_throws ArgumentError reinterpret(RUInt63, ntuple(i -> UInt8(i), 8))
+
+    struct RHasUInt17
+        x::RUInt17
+        y::UInt8
+    end
+    @test_throws ArgumentError reinterpret(RHasUInt17, (0x01, 0x02, 0x03, 0x04))
+    @test_throws ArgumentError reinterpret(
+        NTuple{4, UInt8},
+        RHasUInt17(Core.Intrinsics.trunc_int(RUInt17, UInt32(1)), 0x02),
+    )
+end

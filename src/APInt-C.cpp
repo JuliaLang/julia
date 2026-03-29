@@ -390,8 +390,7 @@ extern "C" JL_DLLEXPORT
 void LLVMSItoFP(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr) {
     double val;
     { // end scope before jl_error call
-        unsigned numbytes = jl_datatype_size(ty);
-        unsigned numbits = numbytes * host_char_bit;
+        unsigned numbits = jl_datatype_nbits(ty);
         CREATE(a)
         val = a.roundToDouble(true);
     }
@@ -411,8 +410,7 @@ extern "C" JL_DLLEXPORT
 void LLVMUItoFP(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerPart *pr) {
     double val;
     { // end scope before jl_error call
-        unsigned numbytes = jl_datatype_size(ty);
-        unsigned numbits = numbytes * host_char_bit;
+        unsigned numbits = jl_datatype_nbits(ty);
         CREATE(a)
         val = a.roundToDouble(false);
     }
@@ -430,19 +428,23 @@ void LLVMUItoFP(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *oty, integerP
 
 extern "C" JL_DLLEXPORT
 void LLVMSExt(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *otys, integerPart *pr) {
-    unsigned inumbytes = jl_datatype_size(ty);
+    unsigned inumbits = jl_datatype_nbits(ty);
+    unsigned onumbits = jl_datatype_nbits(otys);
+    unsigned inumbytes = (inumbits + host_char_bit - 1) / host_char_bit;
     unsigned onumbytes = jl_datatype_size(otys);
-    if (!(onumbytes > inumbytes))
+    if (!(onumbits > inumbits))
         jl_error("SExt: output bitsize must be > input bitsize");
-    unsigned inumbits = inumbytes * host_char_bit;
-    int bits = (0 - inumbits) % host_char_bit;
+    unsigned bits = (host_char_bit - (inumbits % host_char_bit)) % host_char_bit;
     int signbit = (inumbits - 1) % host_char_bit;
     int sign = ((unsigned char*)pa)[inumbytes - 1] & (1 << signbit) ? -1 : 0;
-    // copy over the input bytes
+    // copy over the meaningful input bytes
     memcpy(pr, pa, inumbytes);
     if (bits) {
-        // sign-extend the partial byte
-        ((signed char*)pr)[inumbytes - 1] = ((signed char*)pa)[inumbytes - 1] << bits >> bits;
+        // sign-extend the partial byte.
+        unsigned char byte = ((unsigned char*)pa)[inumbytes - 1];
+        ((unsigned char*)pr)[inumbytes - 1] = sign
+            ? (byte | (unsigned char)(0xFF << (host_char_bit - bits)))
+            : (byte & (unsigned char)(0xFF >> bits));
     }
     // sign-extend the rest of the bytes
     memset((char*)pr + inumbytes, sign, onumbytes - inumbytes);
@@ -450,13 +452,14 @@ void LLVMSExt(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *otys, integerPa
 
 extern "C" JL_DLLEXPORT
 void LLVMZExt(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *otys, integerPart *pr) {
-    unsigned inumbytes = jl_datatype_size(ty);
+    unsigned inumbits = jl_datatype_nbits(ty);
+    unsigned onumbits = jl_datatype_nbits(otys);
+    unsigned inumbytes = (inumbits + host_char_bit - 1) / host_char_bit;
     unsigned onumbytes = jl_datatype_size(otys);
-    if (!(onumbytes > inumbytes))
+    if (!(onumbits > inumbits))
         jl_error("ZExt: output bitsize must be > input bitsize");
-    unsigned inumbits = inumbytes * host_char_bit;
-    int bits = (0 - inumbits) % host_char_bit;
-    // copy over the input bytes
+    unsigned bits = (host_char_bit - (inumbits % host_char_bit)) % host_char_bit;
+    // copy over the meaningful input bytes
     memcpy(pr, pa, inumbytes);
     if (bits) {
         // zero the remaining bits of the partial byte
@@ -468,11 +471,17 @@ void LLVMZExt(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *otys, integerPa
 
 extern "C" JL_DLLEXPORT
 void LLVMTrunc(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *otys, integerPart *pr) {
-    unsigned inumbytes = jl_datatype_size(ty);
-    unsigned onumbytes = jl_datatype_size(otys);
-    if (!(onumbytes < inumbytes))
+    unsigned inumbits = jl_datatype_nbits(ty);
+    unsigned onumbits = jl_datatype_nbits(otys);
+    unsigned onumbytes_storage = jl_datatype_size(otys);
+    unsigned onumbytes_value = (onumbits + host_char_bit - 1) / host_char_bit;
+    if (!(onumbits < inumbits))
         jl_error("Trunc: output bitsize must be < input bitsize");
-    memcpy(pr, pa, onumbytes);
+    memcpy(pr, pa, onumbytes_value);
+    if (onumbits % host_char_bit)
+        ((unsigned char*)pr)[onumbytes_value - 1] &= (1 << (onumbits % host_char_bit)) - 1;
+    if (onumbytes_value < onumbytes_storage)
+        memset((char*)pr + onumbytes_value, 0, onumbytes_storage - onumbytes_value);
 }
 
 extern "C" JL_DLLEXPORT
