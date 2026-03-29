@@ -2246,8 +2246,6 @@ function _hvcat_fill_loop!(a::Array, xs::Tuple)
     a
 end
 
-hvcat_fill!(a::Array, xs::Tuple{T, Vararg{T}}) where {T} = _hvcat_fill_loop!(a, xs)
-
 function hvcat_fill!(a::Array, xs::Tuple)
     if @generated
         N = fieldcount(xs)
@@ -2527,7 +2525,7 @@ function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, xs::Num
     return A
 end
 
-function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
+function _hvncat_fill_loop!(A::Array, row_first::Bool, xs::Tuple)
     nr, nc = size(A, 1), size(A, 2)
     na = prod(size(A)[3:end])
     len = length(xs)
@@ -2553,6 +2551,50 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
         for k ∈ eachindex(xs)
             @inbounds A[k] = xs[k]
         end
+    end
+end
+
+function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
+    if @generated
+        N = fieldcount(xs)
+        return quote
+            nr = size(A, 1)
+            nc = size(A, 2)
+            nrc = nr * nc
+            na = prod(size(A)[3:end])
+            if nrc * na != $N
+                throw(ArgumentError("argument count $($N) does not match specified shape $(size(A))"))
+            end
+            if row_first
+                d::Int = 1
+                i::Int = 1
+                dd::Int = 0
+                Ai::Int = dd + i
+                j::Int = 1
+                @nexprs $N k -> begin
+                    @inbounds A[Ai] = xs[k]
+                    j += 1
+                    Ai += nr
+                    if j > nc
+                        j = 1
+                        i += 1
+                        if i > nr
+                            i = 1
+                            d += 1
+                            dd = nrc * (d - 1)
+                        end
+                        Ai = dd + i
+                    end
+                end
+            else
+                @nexprs $N k -> begin
+                    @inbounds A[k] = xs[k]
+                end
+            end
+            A
+        end
+    else
+        _hvncat_fill_loop!(A, row_first, xs)
     end
 end
 

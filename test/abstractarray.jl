@@ -836,9 +836,17 @@ function test_cat(::Type{TestAbstractArray})
     @test [zeros(1, 0) zeros(1,0); zeros(0,0) zeros(0, 0)] == Matrix{Float64}(undef, 1, 0)
 
     # type stability on internal iteration (#61426)
-    let a = Matrix{Float64}(undef, 2, 2)
-        Base.hvcat_fill!(a, (1, 2.0, 3, 4.0))
-        @test @allocated(Base.hvcat_fill!(a, (1, 2.0, 3, 4.0))) == 0
+    let
+        a1 = Matrix{Float64}(undef, 2, 2)
+        Base.hvcat_fill!(a1, (1, 2.0, 3, 4.0))
+        @test @allocated(Base.hvcat_fill!(a1, (1, 2.0, 3, 4.0))) == 0
+
+        a2 = Array{Float64, 3}(undef, 2, 3, 2)
+        xs = (1, 2.0, 3, 4.0, 5, 6.0, 7, 8.0, 9, 10.0, 11, 12.0)
+        Base.hvncat_fill!(a2, false, xs)
+        @test @allocated(Base.hvncat_fill!(a2, false, xs)) == 0
+        Base.hvncat_fill!(a2, true, xs)
+        @test @allocated(Base.hvncat_fill!(a2, true, xs)) == 0
     end
 end
 
