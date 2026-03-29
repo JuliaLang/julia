@@ -2593,7 +2593,7 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
                     @inbounds A[k] = xs[k]
                 end
             end
-            A
+            nothing
         end
     else
         _hvncat_fill_loop!(A, row_first, xs)
