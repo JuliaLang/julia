@@ -1683,10 +1683,29 @@ vcat(X::T...) where {T<:Number} = T[ X[i] for i=eachindex(X) ]
 hcat(X::T...) where {T}         = T[ X[j] for _=1:1, j=eachindex(X) ]
 hcat(X::T...) where {T<:Number} = T[ X[j] for _=1:1, j=eachindex(X) ]
 
-vcat(X::Number...) = hvcat_fill!(Vector{promote_typeof(X...)}(undef, length(X)), X)
-hcat(X::Number...) = hvcat_fill!(Matrix{promote_typeof(X...)}(undef, 1,length(X)), X)
-typed_vcat(::Type{T}, X::Number...) where {T} = hvcat_fill!(Vector{T}(undef, length(X)), X)
-typed_hcat(::Type{T}, X::Number...) where {T} = hvcat_fill!(Matrix{T}(undef, 1,length(X)), X)
+function vcat(X::Number...)
+    a = Vector{promote_typeof(X...)}(undef, length(X))
+    hvncat_fill!(a, false, X)
+    return a
+end
+
+function hcat(X::Number...)
+    a = Matrix{promote_typeof(X...)}(undef, 1, length(X))
+    hvncat_fill!(a, false, X)
+    return a
+end
+
+function typed_vcat(::Type{T}, X::Number...) where {T}
+    a = Vector{T}(undef, length(X))
+    hvncat_fill!(a, false, X)
+    return a
+end
+
+function typed_hcat(::Type{T}, X::Number...) where {T}
+    a = Matrix{T}(undef, 1, length(X))
+    hvncat_fill!(a, false, X)
+    return a
+end
 
 vcat(V::AbstractVector...) = typed_vcat(promote_eltype(V...), V...)
 vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
@@ -2230,49 +2249,6 @@ function hvcat(rows::Tuple{Vararg{Int}}, xs::T...) where T<:Number
     a
 end
 
-function _hvcat_fill_loop!(a::Array, xs::Tuple)
-    nr, nc = size(a,1), size(a,2)
-    len = length(xs)
-    if nr*nc != len
-        throw(ArgumentError("argument count $(len) does not match specified shape $((nr,nc))"))
-    end
-    k = 1
-    for i=1:nr
-        @inbounds for j=1:nc
-            a[i,j] = xs[k]
-            k += 1
-        end
-    end
-    a
-end
-
-function hvcat_fill!(a::Array, xs::Tuple)
-    if @generated
-        N = fieldcount(xs)
-        N > 32 && return :(return _hvcat_fill_loop!(a, xs))
-        return quote
-            nr = size(a, 1)
-            nc = size(a, 2)
-            if nr*nc != $N
-                throw(ArgumentError("argument count $($N) does not match specified shape $((nr,nc))"))
-            end
-            i::Int = 1
-            j::Int = 1
-            @nexprs $N k -> begin
-                @inbounds a[i, j] = xs[k]
-                j += 1
-                if j > nc
-                    i += 1
-                    j = 1
-                end
-            end
-            a
-        end
-    else
-        _hvcat_fill_loop!(a, xs)
-    end
-end
-
 hvcat(rows::Tuple{Vararg{Int}}, xs::Number...) = typed_hvcat(promote_typeof(xs...), rows, xs...)
 hvcat(rows::Tuple{Vararg{Int}}, xs...) = typed_hvcat(promote_eltypeof(xs...), rows, xs...)
 # the following method is needed to provide a more specific one compared to LinearAlgebra/uniformscaling.jl
@@ -2286,7 +2262,9 @@ function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...) where T
             throw(DimensionMismatch("row $(i) has mismatched number of columns (expected $nc, got $(rows[i]))"))
         end
     end
-    hvcat_fill!(Matrix{T}(undef, nr, nc), xs)
+    a = Matrix{T}(undef, nr, nc)
+    hvncat_fill!(a, true, xs)
+    return a
 end
 
 typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T = typed_hvncat(T, rows_to_dimshape(rows), true, as...)
@@ -2559,41 +2537,69 @@ function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
     if @generated
         N = fieldcount(xs)
         N > 32 && return :(return _hvncat_fill_loop!(A, row_first, xs))
-        return quote
-            nr = size(A, 1)
-            nc = size(A, 2)
-            nrc = nr * nc
-            na = prod(size(A)[3:end])
-            if nrc * na != $N
-                throw(ArgumentError("argument count $($N) does not match specified shape $(size(A))"))
-            end
-            if row_first
-                d::Int = 1
-                i::Int = 1
-                dd::Int = 0
-                Ai::Int = dd + i
-                j::Int = 1
-                @nexprs $N k -> begin
-                    @inbounds A[Ai] = xs[k]
-                    j += 1
-                    Ai += nr
-                    if j > nc
-                        j = 1
-                        i += 1
-                        if i > nr
-                            i = 1
-                            d += 1
-                            dd = nrc * (d - 1)
+        nd = ndims(A)
+        if nd <= 2
+            return quote
+                nr = size(A, 1)
+                nc = size(A, 2)
+                if nr*nc != $N
+                    throw(ArgumentError("argument count $($N) does not match specified shape $(size(A))"))
+                end
+                if row_first
+                    i::Int = 1
+                    j::Int = 1
+                    @nexprs $N k -> begin
+                        @inbounds A[i, j] = xs[k]
+                        j += 1
+                        if j > nc
+                            i += 1
+                            j = 1
                         end
-                        Ai = dd + i
+                    end
+                else
+                    @nexprs $N k -> begin
+                        @inbounds A[k] = xs[k]
                     end
                 end
-            else
-                @nexprs $N k -> begin
-                    @inbounds A[k] = xs[k]
-                end
+                nothing
             end
-            nothing
+        else
+            return quote
+                nr = size(A, 1)
+                nc = size(A, 2)
+                nrc = nr * nc
+                na = prod(size(A)[3:end])
+                if nrc * na != $N
+                    throw(ArgumentError("argument count $($N) does not match specified shape $(size(A))"))
+                end
+                if row_first
+                    d::Int = 1
+                    i::Int = 1
+                    dd::Int = 0
+                    Ai::Int = dd + i
+                    j::Int = 1
+                    @nexprs $N k -> begin
+                        @inbounds A[Ai] = xs[k]
+                        j += 1
+                        Ai += nr
+                        if j > nc
+                            j = 1
+                            i += 1
+                            if i > nr
+                                i = 1
+                                d += 1
+                                dd = nrc * (d - 1)
+                            end
+                            Ai = dd + i
+                        end
+                    end
+                else
+                    @nexprs $N k -> begin
+                        @inbounds A[k] = xs[k]
+                    end
+                end
+                nothing
+            end
         end
     else
         _hvncat_fill_loop!(A, row_first, xs)
