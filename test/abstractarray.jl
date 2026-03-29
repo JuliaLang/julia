@@ -843,9 +843,7 @@ function test_cat(::Type{TestAbstractArray})
 
         a2 = Array{Float64, 3}(undef, 2, 3, 2)
         xs = (1, 2.0, 3, 4.0, 5, 6.0, 7, 8.0, 9, 10.0, 11, 12.0)
-        Base.hvncat_fill!(a2, false, xs)
         @test @allocated(Base.hvncat_fill!(a2, false, xs)) == 0
-        Base.hvncat_fill!(a2, true, xs)
         @test @allocated(Base.hvncat_fill!(a2, true, xs)) == 0
     end
 end
