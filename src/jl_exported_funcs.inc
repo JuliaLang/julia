@@ -546,6 +546,7 @@
     YY(jl_get_function_id) \
     YY(jl_struct_to_llvm) \
     YY(jl_type_to_llvm) \
+    YY(jl_get_abi_type_impl) \
     YY(jl_getUnwindInfo) \
     YY(jl_get_libllvm) \
     YY(jl_register_passbuilder_callbacks) \
