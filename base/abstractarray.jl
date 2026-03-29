@@ -2249,6 +2249,7 @@ end
 function hvcat_fill!(a::Array, xs::Tuple)
     if @generated
         N = fieldcount(xs)
+        N > 32 && return :(return _hvcat_fill_loop!(a, xs))
         return quote
             nr = size(a, 1)
             nc = size(a, 2)
@@ -2557,6 +2558,7 @@ end
 function hvncat_fill!(A::Array, row_first::Bool, xs::Tuple)
     if @generated
         N = fieldcount(xs)
+        N > 32 && return :(return _hvncat_fill_loop!(A, row_first, xs))
         return quote
             nr = size(A, 1)
             nc = size(A, 2)
