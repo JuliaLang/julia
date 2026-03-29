@@ -197,7 +197,7 @@ The following is a complete list of command-line switches available when launchi
 |`--color={yes\|no\|auto*}`             |Enable or disable color text|
 |`--history-file={yes*\|no}`            |Load or save history|
 |`--depwarn={yes\|no*\|error}`          |Enable or disable syntax and method deprecation warnings (`error` turns warnings into errors)|
-|`--warn-overwrite={yes\|no*}`          |Enable or disable method overwrite warnings|
+|`--warn-overwrite={yes\|no\|auto*}`    |Enable or disable method overwrite warnings (`auto` warns for cross-module overwrites only)|
 |`--warn-scope={yes*\|no}`              |Enable or disable warning for ambiguous top-level scope|
 |`-C`, `--cpu-target <target>`          |Limit usage of CPU features up to `<target>`; set to `help` to see the available options|
 |`-O`, `--optimize={0\|1\|2*\|3}`       |Set the optimization level (level is 3 if `-O` is used without a level) ($)|

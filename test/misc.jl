@@ -81,7 +81,8 @@ end
 @test GC.enable(true) == false
 @test GC.enable(true)
 
-# PR #10984
+# modified PR #10984
+# --warn-overwrite: test yes/no/auto modes
 let
     redir_err = "redirect_stderr(stdout)"
     exename = Base.julia_cmd()
@@ -91,16 +92,48 @@ let
         A.f() = 1
         outer() = (g() = 1; g() = 2; g)
         """
+    # --warn-overwrite=yes: warn on all overwrites
     warning_str = read(`$exename --warn-overwrite=yes --startup-file=no -e $script`, String)
     @test warning_str == """
         WARNING: Method definition f() in module A at none:2 overwritten in module Main on the same line (check for duplicate calls to `include`).
         WARNING: Method definition f() in module Main at none:2 overwritten at none:3.
         WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
         """
+    # default (auto): warn on cross-module overwrites and anonymous functions
     warning_str = read(`$exename --startup-file=no -e $script`, String)
+    @test warning_str == """
+        WARNING: Method definition f() in module A at none:2 overwritten in module Main on the same line (check for duplicate calls to `include`).
+        WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
+        """
+    # --warn-overwrite=auto: same as default
+    warning_str = read(`$exename --warn-overwrite=auto --startup-file=no -e $script`, String)
+    @test warning_str == """
+        WARNING: Method definition f() in module A at none:2 overwritten in module Main on the same line (check for duplicate calls to `include`).
+        WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
+        """
+    # --warn-overwrite=no: only anonymous function overwrites are warned
+    warning_str = read(`$exename --warn-overwrite=no --startup-file=no -e $script`, String)
     @test warning_str == """
         WARNING: Method definition g() in module Main at none:4 overwritten on the same line.
         """
+    # same-module overwrite: no warning with auto
+    same_mod_script = """
+        $redir_err
+        f(x) = 5*x
+        f(x) = 2*x
+        """
+    warning_str = read(`$exename --startup-file=no -e $same_mod_script`, String)
+    @test warning_str == ""
+    # cross-module overwrite: warning with auto
+    cross_mod_script = """
+        $redir_err
+        module B; h(x) = 1; end
+        B.h(x) = 2
+        """
+    warning_str = read(`$exename --startup-file=no -e $cross_mod_script`, String)
+    @test contains(warning_str, "WARNING: Method definition h(")
+    @test contains(warning_str, "module B")
+    @test contains(warning_str, "module Main")
 end
 
 # Debugging tool: return the current state of the enable_finalizers counter.

@@ -124,7 +124,7 @@ JL_DLLEXPORT void jl_init_options(void)
 #endif
                         JL_OPTIONS_CHECK_BOUNDS_DEFAULT, // check_bounds
                         JL_OPTIONS_DEPWARN_OFF,    // deprecation warning
-                        0,    // method overwrite warning
+                        JL_OPTIONS_WARN_OVERWRITE_AUTO, // method overwrite warning
                         1,    // can_inline
                         JL_OPTIONS_POLLY_ON, // polly
                         NULL, // trace_compile
@@ -245,7 +245,8 @@ static const char opts[]  =
     // error and warning options
     " --depwarn={yes|no*|error}                     Enable or disable syntax and method deprecation\n"
     "                                               warnings (`error` turns warnings into errors)\n"
-    " --warn-overwrite={yes|no*}                    Enable or disable method overwrite warnings\n"
+    " --warn-overwrite={yes|no|auto*}               Enable or disable method overwrite warnings\n"
+    "                                               (`auto` warns for cross-module overwrites only)\n"
     " --warn-scope={yes*|no}                        Enable or disable warning for ambiguous top-level\n"
     "                                               scope\n\n"
 
@@ -928,8 +929,10 @@ restart_switch:
                 jl_options.warn_overwrite = JL_OPTIONS_WARN_OVERWRITE_ON;
             else if (!strcmp(optarg,"no"))
                 jl_options.warn_overwrite = JL_OPTIONS_WARN_OVERWRITE_OFF;
+            else if (!strcmp(optarg,"auto"))
+                jl_options.warn_overwrite = JL_OPTIONS_WARN_OVERWRITE_AUTO;
             else
-                jl_errorf("julia: invalid argument to --warn-overwrite={yes|no} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --warn-overwrite={yes|no|auto} (%s)", optarg);
             break;
         case opt_warn_scope:
             if (!strcmp(optarg,"yes"))
