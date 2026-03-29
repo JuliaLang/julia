@@ -1502,7 +1502,8 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         SmallVector<Type *, 0> argt(nargs);
         argt[0] = xtyp;
 
-        if (f == shl_int || f == lshr_int || f == ashr_int) {
+        if (f == shl_int || f == lshr_int || f == ashr_int ||
+            f == shl_int_native || f == lshr_int_native || f == ashr_int_native) {
             if (!jl_is_primitivetype(argv[1].typ))
                 return emit_runtime_call(ctx, f, argv, nargs);
             argt[1] = INTT(bitstype_to_llvm(argv[1].typ, ctx.builder.getContext(), true), DL);
@@ -1758,6 +1759,16 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
             return the_shr;
         }
     }
+
+    // Native shift intrinsics - compile directly to single CPU instructions
+    // without bounds checking. Shift amount >= bitwidth is undefined behavior.
+    case shl_int_native:
+        return ctx.builder.CreateShl(x, uint_cnvt(ctx, t, y));
+    case lshr_int_native:
+        return ctx.builder.CreateLShr(x, uint_cnvt(ctx, t, y));
+    case ashr_int_native:
+        return ctx.builder.CreateAShr(x, uint_cnvt(ctx, t, y));
+
     case bswap_int: {
 #if JL_LLVM_VERSION >= 200000
         FunctionCallee bswapintr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::bswap, ArrayRef<Type*>(t)); //TODO: Move to deduction guides
