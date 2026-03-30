@@ -33,7 +33,6 @@ htable_t *htable_new(htable_t *h, size_t size)
     }
     if (h->table == NULL)
         return NULL;
-    h->count = 0;
     size_t i;
     for (i = 0; i < size; i++)
         h->table[i] = HT_NOTFOUND;
@@ -60,7 +59,6 @@ void htable_reset(htable_t *h, size_t sz)
         size_t i, hsz = h->size;
         for (i = 0; i < hsz; i++)
             h->table[i] = HT_NOTFOUND;
-        h->count = 0;
     }
 }
 
