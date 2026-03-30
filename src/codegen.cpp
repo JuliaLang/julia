@@ -1223,6 +1223,7 @@ static const auto jl_blackbox_func = new JuliaFunction<>{
     },
     [](LLVMContext &C) {
         AttrBuilder FnAttrs(C);
+        FnAttrs.addMemoryAttr(MemoryEffects::none());
         FnAttrs.addAttribute(Attribute::NoUnwind);
         FnAttrs.addAttribute(Attribute::NoRecurse);
         FnAttrs.addAttribute(Attribute::WillReturn);
@@ -5285,26 +5286,29 @@ isdefined_unknown_idx:
             if (obj.V) {
                 Value *V = obj.V;
                 Type *Ty = V->getType();
-                if (Ty->isPointerTy() || obj.isboxed) {
-                    // For GC-tracked pointer types, emit a julia.blackbox intrinsic
-                    // call. This is opaque to all pre-GC-lowering LLVM passes
-                    // (no speculatable/memory(none)), so the value cannot be CSE'd
-                    // or treated as loop-invariant. The intrinsic is lowered to
-                    // inline asm on the raw pointer after GC frame expansion.
+                if (obj.isboxed) {
+                    // Boxed GC-tracked pointer: emit julia.blackbox intrinsic,
+                    // lowered to inline asm after GC frame expansion.
                     Function *BB = prepare_call(jl_blackbox_func);
                     Value *tracked = V;
                     if (Ty != JuliaType::get_prjlvalue_ty(ctx.builder.getContext()))
                         tracked = ctx.builder.CreateAddrSpaceCast(V, JuliaType::get_prjlvalue_ty(ctx.builder.getContext()));
                     Value *result = ctx.builder.CreateCall(BB, {tracked});
                     *ret = mark_julia_type(ctx, result, true, obj.typ);
-                } else {
-                    // For scalar types, emit an inline asm identity. The "=r,0"
-                    // constraint ties output to input in the same register,
-                    // making the value opaque to the optimizer.
+                } else if (Ty->isSingleValueType() && !Ty->isPointerTy()) {
+                    // Non-pointer scalar (int, float): fits in a register, use "=r,0".
                     FunctionType *AsmFTy = FunctionType::get(Ty, {Ty}, false);
                     InlineAsm *IA = InlineAsm::get(AsmFTy, "", "=r,0", /*hasSideEffects=*/false);
                     Value *result = ctx.builder.CreateCall(AsmFTy, IA, {V});
                     *ret = mark_julia_type(ctx, result, false, obj.typ);
+                } else {
+                    // Unboxed struct, or unboxed pointer (e.g. Ptr{T} passed
+                    // as addrspace(11)): clobber memory so LLVM can't assume
+                    // the value is invariant.
+                    FunctionType *VoidFTy = FunctionType::get(getVoidTy(ctx.builder.getContext()), false);
+                    InlineAsm *IA = InlineAsm::get(VoidFTy, "", "~{memory}", /*hasSideEffects=*/true);
+                    ctx.builder.CreateCall(VoidFTy, IA);
+                    *ret = obj;
                 }
             } else {
                 // Ghost type (e.g. Nothing) — pass through
