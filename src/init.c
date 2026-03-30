@@ -582,9 +582,14 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
 
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
+    if (jl_options.cpu_target[0] == '\0')
+        jl_error("Invalid target option: empty CPU name");
+
+    // Validate CPU target: check for unknown names, multiple targets, clone_all
+    jl_check_cpu_target(jl_options.cpu_target, jl_generating_output());
 
     // Parse image, perform relocations, and init JIT targets, etc.
-    jl_image_t parsed_image = jl_init_processor_sysimg(sysimage, jl_options.cpu_target);
+    jl_image_t parsed_image = jl_load_sysimg(sysimage, jl_options.cpu_target);
 
     jl_init_codegen();
 

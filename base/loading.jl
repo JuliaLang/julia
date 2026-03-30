@@ -1933,21 +1933,25 @@ end
 struct ImageTarget
     name::String
     flags::Int32
+    base::Int32
     ext_features::String
-    features_en::Vector{UInt8}
-    features_dis::Vector{UInt8}
+    features_en::String
+    features_dis::String
 end
 
 function parse_image_target(io::IO)
     flags = read(io, Int32)
-    nfeature = read(io, Int32)
-    feature_en = read(io, 4*nfeature)
-    feature_dis = read(io, 4*nfeature)
+    base = read(io, Int32)
+    nwords = read(io, Int32)  # number of uint64_t feature words
+    feature_en_raw = read(io, 8*nwords)
+    feature_dis_raw = read(io, 8*nwords)
     name_len = read(io, Int32)
     name = String(read(io, name_len))
     ext_features_len = read(io, Int32)
     ext_features = String(read(io, ext_features_len))
-    ImageTarget(name, flags, ext_features, feature_en, feature_dis)
+    features_en = @ccall jl_feature_bits_to_string(feature_en_raw::Ptr{UInt8}, nwords::Int32)::Ref{String}
+    features_dis = @ccall jl_feature_bits_to_string(feature_dis_raw::Ptr{UInt8}, nwords::Int32)::Ref{String}
+    ImageTarget(name, flags, base, ext_features, features_en, features_dis)
 end
 
 function parse_image_targets(targets::Vector{UInt8})
@@ -1965,51 +1969,18 @@ function current_image_targets()
     return parse_image_targets(targets)
 end
 
-struct FeatureName
-    name::Cstring
-    bit::UInt32 # bit index into a `uint32_t` array;
-    llvmver::UInt32 # 0 if it is available on the oldest LLVM version we support
-end
-
-function feature_names()
-    fnames = Ref{Ptr{FeatureName}}()
-    nf = Ref{Csize_t}()
-    @ccall jl_reflect_feature_names(fnames::Ptr{Ptr{FeatureName}}, nf::Ptr{Csize_t})::Cvoid
-    if fnames[] == C_NULL
-        @assert nf[] == 0
-        return Vector{FeatureName}(undef, 0)
-    end
-    Base.unsafe_wrap(Array, fnames[], nf[], own=false)
-end
-
-function test_feature(features::Vector{UInt8}, feat::FeatureName)
-    bitidx = feat.bit
-    u8idx = div(bitidx, 8) + 1
-    bit = bitidx % 8
-    return (features[u8idx] & (1 << bit)) != 0
-end
-
 function show(io::IO, it::ImageTarget)
     print(io, it.name)
     if !isempty(it.ext_features)
         print(io, ",", it.ext_features)
     end
-    print(io, "; flags=", it.flags)
-    print(io, "; features_en=(")
-    first = true
-    for feat in feature_names()
-        if test_feature(it.features_en, feat)
-            name = Base.unsafe_string(feat.name)
-            if first
-                first = false
-                print(io, name)
-            else
-                print(io, ", ", name)
-            end
-        end
+    if it.base >= 0
+        print(io, "; base=", it.base)
     end
-    print(io, ")")
-    # Is feature_dis useful?
+    print(io, "; flags=", it.flags)
+    if !isempty(it.features_en)
+        print(io, "; features_en=(", it.features_en, ")")
+    end
 end
 
 # should sync with the types of arguments of `stale_cachefile`
