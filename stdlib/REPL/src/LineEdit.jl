@@ -430,7 +430,7 @@ function complete_line(s::MIState)
     set_action!(s, :complete_line)
     st = state(s)
     repeats = s.key_repeats
-    async_get_completions(s; hint=false) do completions, reg, should_complete
+    async_get_completions(s; interactive=true) do completions, reg, should_complete
         if isempty(completions)
             beep(st)
             return false
@@ -491,7 +491,7 @@ function check_show_hint(s::MIState)
         clear_hint(st) && refresh_line(s)
         return
     end
-    async_get_completions(s; hint=true, mutex=s.hint_generation_lock) do named_completions, reg, should_complete
+    async_get_completions(s; interactive=false, mutex=s.hint_generation_lock) do named_completions, reg, should_complete
         isempty(named_completions) && return false
         completions = map(x -> x.completion, named_completions)
         # Don't complete for single chars, given e.g. `x` completes to `xor`
@@ -529,11 +529,11 @@ function clear_hint(s::ModeState)
 end
 
 # Generate completions with complete_line_named asynchronously, then invoke cb
-# with the results.  When hint=false, show a "…" indicator when completions take
-# longer than the 0.1s to generate, and set the last_action.  With hint=true,
-# don't show any indicator and don't touch last_action.  A mutex can be
-# provided, which will be taken while generating the completions.  This is used
-# to prevent multiple hints from being generated at once.
+# with the results.  When interactive=true, show a "…" indicator when
+# completions take longer than the 0.1s to generate, and set the last_action.
+# With interactive=false, don't show any indicator and don't touch last_action.
+# A mutex can be provided, which will be taken while generating the completions.
+# This is used to prevent multiple hints from being generated at once.
 function async_get_completions(cb, s::MIState; interactive::Bool,
                                mutex::Union{Nothing, ReentrantLock}=nothing)
     keys_pressed = s.n_keys_pressed
@@ -544,9 +544,7 @@ function async_get_completions(cb, s::MIState; interactive::Bool,
 
     aborted() = s.n_keys_pressed > keys_pressed || s.aborted
 
-    timer = if hint
-        nothing
-    else
+    timer = if interactive
         Timer(0.1) do _
             @lock s.line_modify_lock begin
                 (complete[] || aborted()) && return
@@ -554,6 +552,8 @@ function async_get_completions(cb, s::MIState; interactive::Bool,
                 refresh_line(s)
             end
         end
+    else
+        nothing
     end
 
     t = Threads.@spawn :default begin
@@ -563,7 +563,7 @@ function async_get_completions(cb, s::MIState; interactive::Bool,
                 # We check aborted() before generating completions so we don't
                 # wait on mutex if we would wake up and throw the results away.
                 (@lock s.line_modify_lock aborted()) && return
-                complete_line_named(c, st, mod; hint)
+                complete_line_named(c, st, mod; hint=!interactive)
             finally
                 mutex !== nothing && unlock(mutex)
             end
@@ -574,13 +574,13 @@ function async_get_completions(cb, s::MIState; interactive::Bool,
                 changed = clear_hint(st)
                 if cb(completions, reg, should_complete)
                     changed = true
-                    hint || (s.last_action = current_action)
+                    interactive && (s.last_action = current_action)
                 end
                 changed && refresh_line(s)
             end
         finally
             complete[] = true
-            if !hint
+            if interactive
                 close(timer)
             end
         end
@@ -942,7 +942,7 @@ function edit_move_right(m::MIState)
         refresh_line(s)
         return true
     else
-        async_get_completions(m; hint=false) do completions, reg, should_complete
+        async_get_completions(m; interactive=true) do completions, reg, should_complete
             if should_complete && eof(buf) && length(completions) == 1 && reg.second - reg.first > 1
                 # Replace word by completion
                 prev_pos = position(s)
