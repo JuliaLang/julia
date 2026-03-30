@@ -3998,6 +3998,41 @@ end
 Base.donotdelete
 
 """
+    Base.assume_variant(x) -> x
+
+This function returns `x`, but acts as an optimization barrier that prevents the
+compiler (both Julia and LLVM) from making assumptions about the returned value.
+In particular:
+
+- The return value is not assumed to be the same as the input for purposes of
+  common subexpression elimination or loop-invariant code motion.
+- The compiler may not constant-fold through this call.
+
+This is useful in benchmarking to prevent loop-invariant computations from being
+hoisted out of benchmark loops. Where [`donotdelete`](@ref) prevents the *result*
+from being deleted, `assume_variant` prevents the *computation* feeding into it
+from being moved or deduplicated.
+
+!!! compat "Julia 1.14"
+    This method was added in Julia 1.14.
+
+# Examples
+
+```julia
+function benchmark_loop(x, n)
+    for i in 1:n
+        # Without assume_variant, the compiler may compute cbrt(x) once
+        # and reuse the result for all iterations.
+        y = assume_variant(x)
+        z = cbrt(y)
+        donotdelete(z)
+    end
+end
+```
+"""
+Base.assume_variant
+
+"""
     Base.compilerbarrier(setting::Symbol, val)
 
 This function acts a compiler barrier at a specified compilation phase.

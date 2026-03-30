@@ -143,4 +143,5 @@ public
     runtests,
     text_colors,
     depwarn,
+    assume_variant,
     donotdelete

@@ -764,6 +764,7 @@ add_tfunc(atomic_pointerswap, 3, 3, atomic_pointerswap_tfunc, 5)
 add_tfunc(atomic_pointermodify, 4, 4, atomic_pointermodify_tfunc, 5)
 add_tfunc(atomic_pointerreplace, 5, 5, atomic_pointerreplace_tfunc, 5)
 add_tfunc(donotdelete, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->Nothing), 0)
+add_tfunc(assume_variant, 1, 1, @nospecs((𝕃::AbstractLattice, val)->val), 0)
 @nospecs function compilerbarrier_tfunc(𝕃::AbstractLattice, setting, val)
     # strongest barrier if a precise information isn't available at compiler time
     # XXX we may want to have "compile-time" error instead for such case
@@ -2326,6 +2327,9 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
         return get_binding_type_nothrow(𝕃, argtypes[1], argtypes[2])
     elseif f === donotdelete
         return true
+    elseif f === assume_variant
+        na == 1 || return false
+        return true
     elseif f === Core.finalizer
         2 <= na <= 4 || return false
         # Core.finalizer does no error checking - that's done in Base.finalizer
@@ -2583,6 +2587,7 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     apply_type,
     compilerbarrier,
     Core.current_scope,
+    assume_variant,
     donotdelete,
     Core.finalizer,
     Core.get_binding_type,
@@ -2666,6 +2671,9 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         return Effects(EFFECTS_TOTAL;
             consistent = (isa(setting, Const) && setting.val === :conditional) ? ALWAYS_TRUE : ALWAYS_FALSE,
             nothrow = compilerbarrier_nothrow(setting, nothing))
+    elseif f === assume_variant
+        length(argtypes) == 1 || return EFFECTS_THROWS
+        return Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE)
     elseif f === Core.current_scope
         nothrow = true
         if length(argtypes) != 0

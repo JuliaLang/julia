@@ -2170,6 +2170,12 @@ JL_CALLABLE(jl_f_donotdelete)
     return jl_nothing;
 }
 
+JL_CALLABLE(jl_f_assume_variant)
+{
+    JL_NARGS(assume_variant, 1, 1);
+    return args[0];
+}
+
 JL_CALLABLE(jl_f_compilerbarrier)
 {
     JL_NARGS(compilerbarrier, 2, 2);
