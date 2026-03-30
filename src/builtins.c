@@ -2178,8 +2178,8 @@ JL_CALLABLE(jl_f_compilerbarrier)
     if (!(setting == jl_symbol("type") ||
           setting == jl_symbol("const") ||
           setting == jl_symbol("conditional") ||
-          setting == jl_symbol("variant")))
-        jl_error("The first argument of `compilerbarrier` must be either of `:type`, `:const`, `:conditional` or `:variant`.");
+          setting == jl_symbol("blackbox")))
+        jl_error("The first argument of `compilerbarrier` must be either of `:type`, `:const`, `:conditional` or `:blackbox`.");
     jl_value_t *val = args[1];
     return val;
 }

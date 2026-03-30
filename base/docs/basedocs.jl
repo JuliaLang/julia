@@ -3998,22 +3998,24 @@ end
 Base.donotdelete
 
 """
-    Base.assume_variant(x) -> x
+    Base.blackbox(x) -> x
 
-This function returns `x`, but acts as an optimization barrier that prevents the
-compiler (both Julia and LLVM) from making assumptions about the returned value.
-This is equivalent to `compilerbarrier(:variant, x)`.
+This function returns `x` unchanged, but treats the returned value as if it
+came from an unknowable black-box source. The optimizer may not make any
+assumptions about the output: it cannot be constant-folded, CSE'd, or
+treated as loop-invariant.
+This is equivalent to `compilerbarrier(:blackbox, x)`.
 
-In particular:
-
-- The return value is not assumed to be the same as the input for purposes of
-  common subexpression elimination or loop-invariant code motion.
-- The compiler may not constant-fold through this call.
+For scalar types, this emits an opaque inline asm identity, tying the output
+register to the input and preventing the optimizer from tracking the value.
+For pointer and boxed types, where such an asm would be invalid due to GC
+provenance requirements, it emits a memory clobber instead — the same pointer
+is returned, but the optimizer must assume that loads through it may have changed.
 
 This is useful in benchmarking to prevent loop-invariant computations from being
-hoisted out of benchmark loops. Where [`donotdelete`](@ref) prevents the *result*
-from being deleted, `assume_variant` prevents the *computation* feeding into it
-from being moved or deduplicated.
+hoisted out of benchmark loops. The output of `blackbox(x)` is opaque, so
+any function call that depends on it must be re-executed each iteration.
+For preventing deletion of results, see [`donotdelete`](@ref).
 
 !!! compat "Julia 1.14"
     This method was added in Julia 1.14.
@@ -4023,16 +4025,16 @@ from being moved or deduplicated.
 ```julia
 function benchmark_loop(x, n)
     for i in 1:n
-        # Without assume_variant, the compiler may compute cbrt(x) once
+        # Without blackbox, the compiler may compute cbrt(x) once
         # and reuse the result for all iterations.
-        y = assume_variant(x)
+        y = blackbox(x)
         z = cbrt(y)
         donotdelete(z)
     end
 end
 ```
 """
-Base.assume_variant
+Base.blackbox
 
 """
     Base.compilerbarrier(setting::Symbol, val)
@@ -4050,9 +4052,9 @@ Currently either of the following `setting`s is allowed:
   * `:conditional`: the return type of this function call will be inferred with widening
     conditional information on `val` (see the example below)
 - Barriers on optimization:
-  * `:variant`: emit an opaque identity at the LLVM level, preventing loop-invariant
-    code motion and common subexpression elimination. See [`assume_variant`](@ref) for
-    a convenience wrapper.
+  * `:blackbox`: treat the returned value as if it came from an unknowable black-box
+    source, preventing CSE and loop-invariant code motion on any computation that
+    depends on it. See [`blackbox`](@ref) for a convenience wrapper.
 
 !!! note
     This function is expected to be used with `setting` known precisely at compile-time.

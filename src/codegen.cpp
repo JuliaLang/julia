@@ -5258,7 +5258,7 @@ isdefined_unknown_idx:
     else if (f == BUILTIN(compilerbarrier) && (nargs == 2)) {
         emit_typecheck(ctx, argv[1], (jl_value_t*)jl_symbol_type, "compilerbarrier");
         const jl_cgval_t &setting = argv[1];
-        if (setting.constant && setting.constant == (jl_value_t*)jl_symbol("variant")) {
+        if (setting.constant && setting.constant == (jl_value_t*)jl_symbol("blackbox")) {
             // Emit an inline asm identity that is opaque to the optimizer.
             // The "0" constraint ties output to input (same register),
             // preventing LICM from hoisting loop-invariant computations

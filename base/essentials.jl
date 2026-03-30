@@ -6,7 +6,7 @@ const Callable = Union{Function,Type}
 
 const Bottom = Union{}
 
-assume_variant(x) = compilerbarrier(:variant, x)
+blackbox(x) = compilerbarrier(:blackbox, x)
 
 # Define minimal array interface here to help code used in macros:
 size(a::Array) = getfield(a, :size)
