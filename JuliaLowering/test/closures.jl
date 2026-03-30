@@ -1,5 +1,3 @@
-@testset "Closures" begin
-
 test_mod = Module()
 
 # Capture assigned before closure
@@ -563,6 +561,4 @@ end
 let (f, response) = test_mod.f_update_outer_capture()
     @test f.response isa Core.Box
     @test response == 1
-end
-
 end

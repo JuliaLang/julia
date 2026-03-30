@@ -214,7 +214,7 @@ let raw_foreigncall_ex = Expr(
 
     # test flisp does this: it's unclear how much desugaring the user is
     # responsible for here
-    @test Core.eval(test_mod, reference_lower(test_mod, raw_foreigncall_ex)) == 11 + 18im
+    @test fl_eval(test_mod, raw_foreigncall_ex) == 11 + 18im
 
     @test JuliaLowering.eval(test_mod, JuliaLowering.expr_to_est(raw_foreigncall_ex)) == 11 + 18im
 end
@@ -243,21 +243,20 @@ end
 @test test_mod.ccall_with_sparams(Int) === 1
 @test test_mod.ccall_with_sparams(Float64) === 1.0
 
-# FIXME Currently JL cannot handle `@generated` functions, so the following test cases are commented out.
-# # Test that ccall can be passed static parameters in the function name
-# # Note that this only works with `@generated` functions from 1.13 onwards,
-# # where the function name can be evaluated at code generation time.
-# JuliaLowering.include_string(test_mod, raw"""
-# # In principle, may add other strlen-like functions here for different string
-# # types
-# ccallable_sptest_name(::Type{String}) = :strlen
-#
-# @generated function ccall_with_sparams_in_name(s::T) where {T}
-#     name = QuoteNode(ccallable_sptest_name(T))
-#     :(ccall($name, Csize_t, (Cstring,), s))
-# end
-# """)
-# @test test_mod.ccall_with_sparams_in_name("hii") == 3
+# Test that ccall can be passed static parameters in the function name
+# Note that this only works with `@generated` functions from 1.13 onwards,
+# where the function name can be evaluated at code generation time.
+JuliaLowering.include_string(test_mod, raw"""
+# In principle, may add other strlen-like functions here for different string
+# types
+ccallable_sptest_name(::Type{String}) = :strlen
+
+@generated function ccall_with_sparams_in_name(s::T) where {T}
+    name = QuoteNode(ccallable_sptest_name(T))
+    :(ccall($name, Csize_t, (Cstring,), s))
+end
+""")
+@test test_mod.ccall_with_sparams_in_name("hii") == 3
 
 @testset "CodeInfo: has_image_globalref" begin
     @test lower_str(test_mod, "x + y").args[1].has_image_globalref === false
@@ -419,6 +418,23 @@ emptyblock_result = JuliaLowering.eval(test_mod, Expr(:(=), :emptyblock_144, Exp
         `cmdstr$(["innerstr$(x...)"]...)`
     end
     """) == `cmdstrinnerstr123`
+end
+
+@testset "jl_assert" begin
+    st = @ast_ [K"function" "foo"::K"Identifier"]
+    err = try
+        JuliaLowering.@jl_assert(1 == 2, (st, "error message 1"), (st, "error message 2"))
+        nothing
+    catch err
+        err
+    end
+    @test err isa LoweringError
+    @test err.internal === true
+    @test length(err.sts) == 2
+    @test length(err.msgs) == 2
+    shown = sprint(show, err)
+    @test contains(shown, "error message 1")
+    @test contains(shown, "error message 2")
 end
 
 end

@@ -143,7 +143,7 @@ JL_DLLEXPORT void ios_purge(ios_t *s);
 
 /* stdio-style functions */
 #define IOS_EOF (-1)
-JL_DLLEXPORT int ios_putc(int c, ios_t *s);
+JL_DLLEXPORT int ios_putc(int c, ios_t *s) JL_NOTSAFEPOINT;
 //wint_t ios_putwc(ios_t *s, wchar_t wc);
 JL_DLLEXPORT int ios_getc(ios_t *s);
 JL_DLLEXPORT int ios_peekc(ios_t *s);

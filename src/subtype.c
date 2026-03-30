@@ -680,7 +680,41 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param);
 
 static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param, int limit_slow);
 
-// subtype for variable bounds consistency check. needs its own forall/exists environment.
+// Check whether env (variable bounds: lb/ub) changed compared to saved env.
+static int env_unchanged(jl_stenv_t *e, jl_savedenv_t *se) JL_NOTSAFEPOINT
+{
+    jl_value_t **roots = NULL;
+    if (se->gcframe.nroots == JL_GC_ENCODE_PUSHARGS(1)) {
+        jl_svec_t *sv = (jl_svec_t*)se->roots[0];
+        assert(jl_is_svec(sv));
+        roots = jl_svec_data(sv);
+    }
+    else if (se->gcframe.nroots) {
+        roots = se->roots;
+    }
+    if (!roots)
+        return 1; // no vars to compare
+    jl_varbinding_t *v = e->vars;
+    int i = 0;
+    while (v != NULL) {
+        if (v->lb != roots[i] || v->ub != roots[i + 1])
+            return 0;
+        i += 3; // lb, ub, innervars
+        v = v->prev;
+    }
+    return 1;
+}
+
+// Subtype check for variable bounds consistency.
+// Needs its own forall/exists environment.
+//
+// Right-side Union choices made during bounds checks can leak into
+// the shared Runions statestack, causing O(2^N) iteration in
+// exists_subtype when many Union-bounded parameters are present.
+// To prevent this, we monitor whether the env (variable bounds)
+// changes during the check. If it does not, the Union choices are
+// purely internal and we reset Runions.more to its previous value,
+// preventing the outer loop from iterating over those choices.
 static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
     if (jl_is_long(x) && jl_is_long(y))
@@ -695,8 +729,16 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         return 1;
     if (x == (jl_value_t*)jl_any_type && jl_is_datatype(y))
         return 0;
+    if (obviously_in_union(y, x))
+        return 1;
     jl_saved_unionstate_t oldLunions; push_unionstate(&oldLunions, &e->Lunions);
+    int16_t oldRmore = e->Runions.more;
+    jl_savedenv_t se;
+    save_env(e, &se, 1);
     int sub = local_forall_exists_subtype(x, y, e, 0, 1);
+    if (env_unchanged(e, &se))
+        e->Runions.more = oldRmore;
+    free_env(&se);
     pop_unionstate(&e->Lunions, &oldLunions);
     return sub;
 }
@@ -1997,9 +2039,9 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
     if (jl_is_unionall(y))
         y = jl_unwrap_unionall(y);
     if (x == (jl_value_t*)jl_typeofbottom_type->super)
-        x = (jl_value_t*)jl_typeofbottom_type; // supertype(typeof(Union{})) is equal to, although distinct from, itself
+        x = (jl_value_t*)jl_typeofbottom_type; // supertype(typeof(Union{})) is equal to, although distinct from, typeof(Union{})
     if (y == (jl_value_t*)jl_typeofbottom_type->super)
-        y = (jl_value_t*)jl_typeofbottom_type; // supertype(typeof(Union{})) is equal to, although distinct from, itself
+        y = (jl_value_t*)jl_typeofbottom_type; // supertype(typeof(Union{})) is equal to, although distinct from, typeof(Union{})
     if (x == y || y == (jl_value_t*)jl_any_type) {
         *subtype = 1;
         return 1;
@@ -2100,7 +2142,7 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
                 if (jl_is_type_type(y)) {
                     jl_value_t *t0 = jl_tparam0(y);
                     assert(!jl_is_type_type(x));
-                    if (jl_is_kind(x) && jl_is_typevar(t0))
+                    if ((jl_is_kind(x) && jl_is_typevar(t0)) || (x == (jl_value_t*)jl_typeofbottom_type))
                         return 0;
                     *subtype = 0;
                     return 1;
@@ -2311,6 +2353,8 @@ JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, 
         }
         return 1;
     }
+    if (jl_is_typeapp(x) || jl_is_typeapp(y))
+        jl_error("internal error: TypeApp in subtyping");
     int obvious_subtype = 2;
     if (jl_obvious_subtype(x, y, &obvious_subtype)) {
 #ifdef NDEBUG
@@ -2528,6 +2572,8 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
         return 1;
     if (jl_typetagof(x) < (jl_max_tags << 4) && jl_is_datatype(t) && jl_typetagis(x,((jl_datatype_t*)t)->smalltag << 4))
         return 1;
+    if (jl_is_typeapp(t))
+        jl_error("internal error: TypeApp in jl_isa");
     if (jl_is_type(x)) {
         if (t == (jl_value_t*)jl_type_type)
             return 1;
@@ -4646,6 +4692,8 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
         if (issubty && a == jl_bottom_type) *issubty = 1;
         return jl_bottom_type;
     }
+    if (jl_is_typeapp(a) || jl_is_typeapp(b))
+        jl_error("internal error: TypeApp in type intersection");
     int szb = jl_subtype_env_size(b);
     int sz = 0, i = 0;
     jl_value_t **env, **ans;

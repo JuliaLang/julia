@@ -1587,6 +1587,11 @@ end
         t = Bottom
         for i in 1:length(ftypes)
             ft1 = unwrapva(ftypes[i])
+            # Malformed Vararg types like `NTuple{<:Any, 3}` have non-Type components
+            # (e.g., `3`). Skip these since `fieldtype` would throw at runtime.
+            if !(isa(ft1, Type) || isa(ft1, TypeVar))
+                continue
+            end
             exactft1 = exact || (!has_free_typevars(ft1) && u.name !== Tuple.name)
             ft1 = rewrap_unionall(ft1, s)
             if exactft1
@@ -1626,8 +1631,8 @@ end
     else
         ft = ftypes[fld]
     end
-    if !isa(ft, Type) && !isa(ft, TypeVar)
-        return Const(ft)
+    if !(isa(ft, Type) || isa(ft, TypeVar))
+        return Bottom # see non-`Const` case above
     end
 
     exactft = exact || (!has_free_typevars(ft) && u.name !== Tuple.name)
@@ -2566,7 +2571,6 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     # _apply_iterate,
     # Core._call_in_world_total,
     # Core._compute_sparams,
-    # Core._defaultctors,
     # Core._equiv_typedef,
     Core._expr,
     # Core._primitivetype,
@@ -2786,7 +2790,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
                            sv::Union{AbsIntState, Nothing})
     𝕃ᵢ = typeinf_lattice(interp)
     # Early constant evaluation for foldable builtins with all const args
-    if isa(f, IntrinsicFunction) ? is_pure_intrinsic_infer(f) : (f in _PURE_BUILTINS || (f in _CONSISTENT_BUILTINS && f in _EFFECT_FREE_BUILTINS))
+    if isa(f, IntrinsicFunction) ? is_pure_intrinsic_infer(f) : (contains_is(_PURE_BUILTINS, f) || (contains_is(_CONSISTENT_BUILTINS, f) && contains_is(_EFFECT_FREE_BUILTINS, f)))
         if is_all_const_arg(argtypes, 1)
             argvals = collect_const_args(argtypes, 1)
             try
@@ -2976,14 +2980,20 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
             return ErrorException
         end
 
-        # fpext, fptrunc, fptoui, fptosi, uitofp, and sitofp have further
-        # restrictions on the allowed types.
+        # fpext, sext_int, zext_int, fptrunc, trunc_int, fptoui, fptosi, uitofp, and sitofp
+        # have further restrictions on the allowed types.
         if f === Intrinsics.fpext &&
             !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) > Core.sizeof(xty))
             return ErrorException
         end
+        if (f === Intrinsics.sext_int || f === Intrinsics.zext_int) && !(Core.sizeof(ty) > Core.sizeof(xty))
+            return ErrorException
+        end
         if f === Intrinsics.fptrunc &&
             !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) < Core.sizeof(xty))
+            return ErrorException
+        end
+        if f === Intrinsics.trunc_int && !(Core.sizeof(ty) < Core.sizeof(xty))
             return ErrorException
         end
         if (f === Intrinsics.fptoui || f === Intrinsics.fptosi) && !(xty <: CORE_FLOAT_TYPES)

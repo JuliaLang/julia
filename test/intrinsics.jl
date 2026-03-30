@@ -613,3 +613,7 @@ end
     end
     @test _pointerset_trigger(0) == (Int[1,2,3], 42, Int[1,2,3], 42)
 end
+
+# https://github.com/JuliaLang/julia/issues/61436
+tofloat(x) = Core.Intrinsics.uitofp(Float64, x)
+@test tofloat(UInt128(0)) == 0.0

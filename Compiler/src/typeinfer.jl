@@ -164,7 +164,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
                 end
                 inferred_result = maybe_compress_codeinfo(interp, mi, inferred_result)
             elseif ci.owner === nothing
-                # The global cache can only handle objects that codegen understands
+                # The global cache can only handle objects that codegen understands (nothing or CodeInfo)
                 inferred_result = nothing
             end
         else
@@ -671,12 +671,14 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
         # A parent may be cached still, but not this intermediate work:
         # we can throw everything else away now. Caching anything can confuse later
         # heuristics to consider it worth trying to pursue compiling this further and
-        # finding infinite work as a result. Avoiding caching helps to ensure there is only
-        # a finite amount of work that can be discovered later (although potentially still a
-        # large multiplier on it).
+        # finding infinite work as a result. Avoiding global caching helps to ensure there
+        # is only a finite amount of work that can be discovered later (although potentially
+        # still a large multiplier on it). We still allow local caching so that tombstoned
+        # entries can be found by `constprop_cache_lookup` to prevent re-attempting the same
+        # const-prop work that would hit the same limit.
         result.src = nothing
         result.tombstone = true
-        me.cache_mode = CACHE_MODE_NULL
+        me.cache_mode &= ~CACHE_MODE_GLOBAL
         set_inlineable!(src, false)
     else
         # annotate fulltree with type information,
@@ -888,10 +890,10 @@ end
 
 # annotate types of all symbols in AST, preparing for optimization
 function type_annotate!(::AbstractInterpreter, sv::InferenceState)
-    # widen `Conditional`s from `slottypes`
+    # widen slot wrappers from `slottypes`
     slottypes = sv.slottypes
     for i = 1:length(slottypes)
-        slottypes[i] = widenconditional(slottypes[i])
+        slottypes[i] = widenslotwrapper(slottypes[i])
     end
 
     # compute the required type for each slot
@@ -924,13 +926,14 @@ function type_annotate!(::AbstractInterpreter, sv::InferenceState)
         end
     end
 
-    # widen slot wrappers (`Conditional` and `MustAlias`) in `bb_vartables`
-    for varstate in sv.bb_vartables
-        if varstate !== nothing
+    # widen slot wrappers (`Conditional` and `MustAlias`) in `bb_states`
+    for bbstate in sv.bb_states
+        if bbstate !== nothing
+            vartable = bbstate.vartable
             for slot in 1:nslots
-                vt = varstate[slot]
+                vt = vartable[slot]
                 widened_type = widenslotwrapper(ignorelimited(vt.typ))
-                varstate[slot] = VarState(widened_type, vt.ssadef, vt.undef)
+                vartable[slot] = VarState(widened_type, vt.ssadef, vt.undef)
             end
         end
     end

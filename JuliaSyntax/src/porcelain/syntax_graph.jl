@@ -88,7 +88,8 @@ ensure_required_attributes!(g::SyntaxGraph) = ensure_attributes!(
     source=SourceAttrType,
     syntax_flags=UInt16,
     value=Any,
-    name_val=String)
+    name_val=String,
+    mod=Module)
 
 function delete_attributes!(graph::SyntaxGraph{<:Dict}, attr_names::Symbol...)
     for name in attr_names
@@ -208,14 +209,31 @@ struct SyntaxTree{Attrs}
     _id::NodeId
 end
 
+# fallback printing
+function node_string(ex::SyntaxTree, depth=2)
+    out = "(_id="*string(ex._id)
+    for n in sort!(attrnames(ex))
+        out *= ", "*string(n)*"="*repr(getproperty(ex, n))
+    end
+    if is_leaf(ex)
+        out *= ", leaf"
+    elseif depth > 1
+        out *= ", children=["
+        for c in children(ex)
+            out *= "\n"*node_string(c, depth-1)
+        end
+        out *= "]"
+    end
+    out *= ")"
+    return out
+end
+
 function Base.getproperty(ex::SyntaxTree, name::Symbol)
     name === :_graph && return getfield(ex, :_graph)
     name === :_id  && return getfield(ex, :_id)
     _id = getfield(ex, :_id)
     return get(getproperty(getfield(ex, :_graph), name), _id) do
-        attrstr = join(["\n    $n = $(getproperty(ex, n))"
-                        for n in attrnames(ex)], ",")
-        error("Property `$name[$_id]` not found. Available attributes:$attrstr")
+        error("Property `$name` not defined on node: $(node_string(ex))")
     end
 end
 
@@ -242,7 +260,7 @@ function Base.getindex(ex::SyntaxTree, r::UnitRange)
     SyntaxList(ex._graph, children(ex._graph, ex._id, r))
 end
 
-Base.firstindex(ex::SyntaxTree) = 1
+Base.firstindex(::SyntaxTree) = 1
 Base.lastindex(ex::SyntaxTree) = numchildren(ex)
 
 function Base.:≈(ex1::SyntaxTree, ex2::SyntaxTree)
@@ -321,27 +339,29 @@ end
 
 # Reference to bytes within a source file
 struct SourceRef
-    file::SourceFile
-    first_byte::Int
-    last_byte::Int
+    file::Base.RefValue{SourceFile}
+    first_byte::UInt32
+    last_byte::UInt32
 end
 
-sourcefile(src::SourceRef) = src.file
-byte_range(src::SourceRef) = src.first_byte:src.last_byte
+sourcefile(src::SourceRef) = src.file[]
+first_byte(src::SourceRef) = Int(src.first_byte)
+last_byte(src::SourceRef) = Int(src.last_byte)
+byte_range(src::SourceRef) = first_byte(src):last_byte(src)
 
 # TODO: Adding these methods to support LineNumberNode is kind of hacky but we
 # can remove these after JuliaLowering becomes self-bootstrapping for macros
 # and we a proper SourceRef for @ast's @HERE form.
-byte_range(src::LineNumberNode) = 0:0
+byte_range(::LineNumberNode) = 0:0
 source_location(src::LineNumberNode) = (src.line, 0)
 source_location(::Type{LineNumberNode}, src::LineNumberNode) = src
 source_line(src::LineNumberNode) = src.line
 # The follow somewhat strange cases are for where LineNumberNode is standing in
 # for SourceFile because we've only got Expr-based provenance info
 sourcefile(src::LineNumberNode) = src
-sourcetext(src::LineNumberNode) = SubString("")
-source_location(src::LineNumberNode, byte_index::Integer) = (src.line, 0)
-source_location(::Type{LineNumberNode}, src::LineNumberNode, byte_index::Integer) = src
+sourcetext(::LineNumberNode) = SubString("")
+source_location(src::LineNumberNode, _byte_index::Integer) = (src.line, 0)
+source_location(::Type{LineNumberNode}, src::LineNumberNode, _byte_index::Integer) = src
 filename(src::LineNumberNode) = string(src.file)
 
 function highlight(io::IO, src::LineNumberNode; note="")
@@ -349,7 +369,7 @@ function highlight(io::IO, src::LineNumberNode; note="")
 end
 
 function highlight(io::IO, src::SourceRef; kws...)
-    highlight(io, src.file, first_byte(src):last_byte(src); kws...)
+    highlight(io, sourcefile(src), first_byte(src):last_byte(src); kws...)
 end
 
 function Base.show(io::IO, ::MIME"text/plain", src::SourceRef)
@@ -410,7 +430,7 @@ function _flattened_provenance(refs, graph, sources, id)
 end
 
 function flattened_provenance(ex::SyntaxTree)
-    refs = SyntaxList(ex)
+    refs = SyntaxList(ex._graph)
     _flattened_provenance(refs, ex._graph, ex._graph.source, ex._id)
     return reverse(refs)
 end
@@ -456,6 +476,12 @@ syntax_graph(ex::SyntaxTree) = ex._graph
 sourcefile(ex::SyntaxTree) = sourcefile(sourceref(ex))
 byte_range(ex::SyntaxTree) = byte_range(sourceref(ex))
 
+function sourcetext(ex::SyntaxTree)
+    sf = sourcefile(ex)
+    sf isa LineNumberNode && return SubString("")
+    view(sf, byte_range(ex))
+end
+
 #-------------------------------------------------------------------------------
 # Lightweight vector of nodes ids with associated pointer to graph stored separately.
 mutable struct SyntaxList{Attrs, NodeIdVecType} <: AbstractVector{SyntaxTree}
@@ -468,7 +494,8 @@ function SyntaxList(graph::SyntaxGraph{T}, ids::AbstractVector{NodeId}) where {T
 end
 
 SyntaxList(graph::SyntaxGraph) = SyntaxList(graph, Vector{NodeId}())
-SyntaxList(ctx) = SyntaxList(syntax_graph(ctx))
+SyntaxList(st::SyntaxTree, rest::SyntaxTree...) =
+    SyntaxList(st._graph, tree_ids(st, rest...))
 
 tree_ids(sts::SyntaxTree...) = NodeId[st._id for st in sts]
 
@@ -579,9 +606,6 @@ function Base.filter(f, exs::SyntaxList)
     out
 end
 
-# Would like the following to be an overload of Base.map() ... but need
-# somewhat arcane trickery to ensure that this only tries to collect into a
-# SyntaxList when `f` yields a SyntaxTree.
 function mapsyntax(f, exs::SyntaxList)
     out = SyntaxList(syntax_graph(exs))
     for ex in exs
@@ -590,6 +614,13 @@ function mapsyntax(f, exs::SyntaxList)
     out
 end
 
+function mapindex(sl::SyntaxList, i::Int)
+    out = SyntaxList(syntax_graph(sl))
+    for st in sl
+        push!(out, getindex(st, i))
+    end
+    out
+end
 
 #-------------------------------------------------------------------------------
 # AST creation utilities
@@ -669,7 +700,7 @@ function mapchildren(f::Function, ctx, ex::SyntaxTree, do_map_child::Function)
             if newchild == e
                 continue
             else
-                cs = SyntaxList(ctx)
+                cs = SyntaxList(syntax_graph(ctx))
                 append!(cs, orig_children[1:i-1])
             end
         end
@@ -701,7 +732,7 @@ function mapchildren(f::Function, ctx, ex::SyntaxTree,
 end
 
 function mapchildren(f::Function, ctx, ex::SyntaxTree)
-    mapchildren(f, ctx, ex, i->true)
+    mapchildren(f, ctx, ex, _->true)
 end
 
 
@@ -1170,7 +1201,7 @@ function build_tree(::Type{SyntaxTree}, stream::ParseStream;
                     filename=nothing, first_line=1)
     cursor = RedTreeCursor(stream)
     graph = SyntaxGraph()
-    sf = SourceFile(stream; filename, first_line)
+    sf = Ref(SourceFile(stream; filename, first_line))
     source = SourceRef(sf, first_byte(stream), last_byte(stream))
     cs = SyntaxList(graph)
     for c in reverse_toplevel_siblings(cursor)
@@ -1186,12 +1217,12 @@ function build_tree(::Type{SyntaxTree}, stream::ParseStream;
     return SyntaxTree(graph, id)
 end
 
-function SyntaxTree(graph::SyntaxGraph, sf::SourceFile, cursor::RedTreeCursor)
+function SyntaxTree(graph::SyntaxGraph, sf::Base.RefValue{SourceFile}, cursor::RedTreeCursor)
     ensure_attributes!(graph, kind=Kind, syntax_flags=UInt16,
                        source=SourceAttrType, value=Any, name_val=String)
     green_id = GC.@preserve sf begin
-        raw_offset, txtbuf = _unsafe_wrap_substring(sf.code)
-        offset = raw_offset - sf.byte_offset
+        raw_offset, txtbuf = _unsafe_wrap_substring(sf[].code)
+        offset = raw_offset - sf[].byte_offset
         _insert_green(graph, sf, txtbuf, offset, cursor)
     end
     gst = SyntaxTree(graph, green_id)
@@ -1200,9 +1231,7 @@ function SyntaxTree(graph::SyntaxGraph, sf::SourceFile, cursor::RedTreeCursor)
     return out
 end
 
-# TODO: Do we really need all trivia?  K"parens" can be good to keep, but things
-# like K"(" and whitespace might not be useful.
-function _insert_green(graph::SyntaxGraph, sf::SourceFile,
+function _insert_green(graph::SyntaxGraph, sf::Base.RefValue{SourceFile},
                        txtbuf::Vector{UInt8}, offset::Int,
                        cursor::RedTreeCursor)
     id = new_id!(graph)
@@ -1261,6 +1290,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
     k = kind(st)
     coreref(s::String) = setattr!(newleaf(graph, st, K"core"), :name_val, s)
     symleaf(s::String) = setattr!(newleaf(graph, st, K"Identifier"), :name_val, s)
+    core_globalref(s::String) = setattr!(symleaf(s), :mod, Core)
     valleaf(@nospecialize(v)) = setattr!(newleaf(graph, st, K"Value"), :value, v)
 
     if is_leaf(st)
@@ -1274,7 +1304,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             # which added this to match flisp parsing text->Expr.
             macname = v isa Int128 ? "@int128_str" :
                 v isa UInt128 ? "@uint128_str" : "@big_str"
-            mac = valleaf(GlobalRef(Core, Symbol(macname)))
+            mac = core_globalref(macname)
             arg = valleaf(replace(sourcetext(st), '_'=>""))
             ret_cids = tree_ids(mac, coreref("nothing"), arg)
             newnode(graph, st, K"macrocall", ret_cids)
@@ -1299,7 +1329,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         cmd_arg = _string_to_est(st, cs; unwrap_literal=true)
         loc_st = valleaf(source_location(LineNumberNode, st))
         return newnode(graph, st, K"macrocall", tree_ids(
-            valleaf(GlobalRef(Core, Symbol("@cmd"))), loc_st, cmd_arg))
+            core_globalref("@cmd"), loc_st, cmd_arg))
     elseif k === K"macro_name" && n_cs === 1
         # "M.@x" => (. M (macro_name x)) => (. M @x)
         # "@M.x" => (macro_name (. M x)) => (. M @x)
@@ -1361,7 +1391,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         # (doc str obj) => (macrocall Core.@doc lno str obj)
         ret_k = K"macrocall"
         pushfirst!(cs, valleaf(source_location(LineNumberNode, st)))
-        pushfirst!(cs, valleaf(GlobalRef(Core, Symbol("@doc"))))
+        pushfirst!(cs, core_globalref("@doc"))
     elseif k === K"dotcall" || k === K"call" && n_cs > 0
         if is_infix_op_call(st) || is_postfix_op_call(st)
             cs[2], cs[1] = cs[1], cs[2]
@@ -1494,7 +1524,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
         g_out = _green_to_est(st, 1, popfirst!(cs))
         for c in Iterators.reverse(cs)
             gen_cs = let rest = kind(c) === K"iteration" ?
-                preprocessed_green_children(c) : SyntaxList(graph, tree_ids(c))
+                preprocessed_green_children(c) : SyntaxList(c)
                 rest = _map_green_to_est(st, rest; undef_parent=true)
                 pushfirst!(rest, g_out)
             end
@@ -1558,7 +1588,7 @@ function _green_to_est(parent::SyntaxTree, parent_i::Int,
             return kind(out) in KSet"Identifier = ::" ? out :
                 mknode(st, tree_ids(out))
         elseif kind(parent) === K"struct" && parent_i === 3
-            cs_tmp = SyntaxList(cs)
+            cs_tmp = SyntaxList(graph)
             for c in cs
                 kind(c) === K"doc" ?
                     append!(cs_tmp, preprocessed_green_children(c)) :
@@ -1679,9 +1709,9 @@ end
 # Converting children-first (as _string_to_Expr does) would make this much
 # harder by converting literal strings without the parent's knowledge
 function _string_to_est(st::SyntaxTree, cs::SyntaxList; unwrap_literal)
-    ret_cs = SyntaxList(st)
+    ret_cs = SyntaxList(st._graph)
     literal_k = kind(st) === K"cmdstring" ? K"CmdString" : K"String"
-    prev_str = cur_str = false
+    cur_str = false
     next_str = length(cs) > 0 && kind(cs[1]) === literal_k
     buf = IOBuffer()
     for i in eachindex(cs)

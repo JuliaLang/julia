@@ -1,4 +1,4 @@
-using .JuliaSyntax: SyntaxGraph, SyntaxTree, SyntaxList, freeze_attrs, unfreeze_attrs, ensure_attributes, ensure_attributes!, delete_attributes, copy_ast, attrdefs, @stm, NodeId, SourceRef, SourceAttrType, Kind
+using .JuliaSyntax: SyntaxGraph, SyntaxTree, SyntaxList, freeze_attrs, unfreeze_attrs, ensure_attributes, ensure_attributes!, delete_attributes, copy_ast, attrdefs, @stm, NodeId, SourceRef, SourceAttrType, Kind, syntax_graph
 
 @testset "SyntaxGraph attrs" begin
     st = parsestmt(SyntaxTree, "function foo end")
@@ -286,6 +286,35 @@ end
         st = JuliaSyntax.annotate_parent!(SyntaxTree(g, 1))
         @test chk_parent(st, nothing)
     end
+end
+
+@testset "SyntaxList" begin
+    st = parsestmt(SyntaxTree, "function foo end")
+    g = st._graph
+
+    # constructors
+    sl0 = SyntaxList(g)
+    @test sl0 isa SyntaxList
+    @test length(sl0) == 0
+    @test syntax_graph(sl0) == g
+
+    sl1_id = SyntaxList(g, st._id)
+    @test sl1_id isa SyntaxList
+    @test length(sl1_id) == 1
+    @test sl1_id[1] == st
+    @test syntax_graph(sl1_id) == g
+
+    sl1 = SyntaxList(st)
+    @test sl1 isa SyntaxList
+    @test length(sl1) == 1
+    @test sl1[1] == st
+    @test syntax_graph(sl1) == g
+
+    sl2 = SyntaxList(st, st)
+    @test sl2 isa SyntaxList
+    @test length(sl2) == 2
+    @test sl2[2] == st
+    @test syntax_graph(sl2) == g
 end
 
 @testset "@stm SyntaxTree pattern-matching" begin

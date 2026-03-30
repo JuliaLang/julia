@@ -25,14 +25,17 @@ struct JuliaTaskDispatcher : public TaskDispatcher {
     void dispatch(std::unique_ptr<Task> T) override;
     void shutdown() override;
     void work_until(future_base &F);
+
+protected:
+  void process_tasks(jl_unique_gcsafe_lock &Lock) JL_NOTSAFEPOINT_ENTER JL_NOTSAFEPOINT_LEAVE;
+
 private:
   /// C++ does not support non-static thread_local variables, so this needs to
   /// store both the task and the associated dispatcher queue so that shutdown
   /// can wait for the correct tasks to finish.
-  thread_local static SmallVector<std::pair<std::unique_ptr<Task>, JuliaTaskDispatcher*>> TaskQueue;
+  SmallVector<std::unique_ptr<Task>> TaskQueue;
   std::mutex DispatchMutex;
   std::condition_variable WorkFinishedCV;
-  SmallVector<future_base *> WaitingFutures;
 
 public:
 
@@ -65,14 +68,14 @@ class future_base {
 public:
   /// Check if the future is now ready with a value (precondition: get_promise()
   /// must have been called)
-  bool ready() const {
+  bool ready() const JL_NOTSAFEPOINT {
     if (!valid())
       report_fatal_error("ready() called before get_promise()");
     return state_->status_.load(std::memory_order_acquire) == FutureStatus::Ready;
   }
 
   /// Check if the future is in a valid state (not moved-from and get_promise() called)
-  bool valid() const { return state_ != nullptr; }
+  bool valid() const JL_NOTSAFEPOINT { return state_ != nullptr; }
 
   /// Wait for the future to be ready, helping with task dispatch
   void wait(JuliaTaskDispatcher &D) {
@@ -334,79 +337,41 @@ private:
 
 }; // class JuliaTaskDispatcher
 
-thread_local SmallVector<std::pair<std::unique_ptr<Task>, JuliaTaskDispatcher *>> JuliaTaskDispatcher::TaskQueue;
-
 void JuliaTaskDispatcher::dispatch(std::unique_ptr<Task> T) {
-  TaskQueue.push_back(std::pair(std::move(T), this));
+  std::unique_lock Lock{DispatchMutex};
+  TaskQueue.push_back(std::move(T));
 }
 
 void JuliaTaskDispatcher::shutdown() {
-  // Keep processing until no tasks belonging to this dispatcher remain
-  while (true) {
-    // Check if any task belongs to this dispatcher
-    auto it = std::find_if(
-        TaskQueue.begin(), TaskQueue.end(),
-        [this](const auto &TaskPair) { return TaskPair.second == this; });
-
-    // If no tasks belonging to this dispatcher, we're done
-    if (it == TaskQueue.end())
-      return;
-
-    // Create a future/promise pair to wait for completion of this task
-    future<void> taskFuture;
-    // Replace the task with a GenericNamedTask that wraps the original task
-    // with a notification of completion that this thread can work_until.
-    auto originalTask = std::move(it->first);
-    it->first = makeGenericNamedTask(
-        [originalTask = std::move(originalTask),
-         taskPromise = taskFuture.get_promise()]() {
-          originalTask->run();
-          taskPromise.set_value();
-        },
-        "Shutdown task marker");
-
-    // Wait for the task to complete
-    taskFuture.get(*this);
-  }
+  abort();
 }
 
 void JuliaTaskDispatcher::work_until(future_base &F) {
+  jl_unique_gcsafe_lock Lock{DispatchMutex};
   while (!F.ready()) {
-    // First, process any tasks in our local queue
-    // Process in LIFO order (most recently added first) to avoid deadlocks
-    // when tasks have dependencies on each other
-    while (!TaskQueue.empty()) {
-      {
-        auto TaskPair = std::move(TaskQueue.back());
-        TaskQueue.pop_back();
-        TaskPair.first->run();
-      }
+    process_tasks(Lock);
 
-      // Notify any threads that might be waiting for work to complete
-      {
-        std::lock_guard<std::mutex> Lock(DispatchMutex);
-        bool ShouldNotify = llvm::any_of(
-            WaitingFutures, [](future_base *F) { return F->ready(); });
-        if (ShouldNotify) {
-          WaitingFutures.clear();
-          WorkFinishedCV.notify_all();
-        }
-      }
-
-      // Check if our future is now ready
-      if (F.ready())
-        return;
-    }
+    // Check if our future is now ready
+    if (F.ready())
+      return;
 
     // If we get here, our queue is empty but the future isn't ready
     // We need to wait for other threads to finish work that should complete our
     // future
-    {
-      std::unique_lock<std::mutex> Lock(DispatchMutex);
-      WaitingFutures.push_back(&F);
-      WorkFinishedCV.wait(Lock, [&F]() { return F.ready(); });
-    }
+    Lock.wait(WorkFinishedCV);
   }
+}
+
+void JuliaTaskDispatcher::process_tasks(jl_unique_gcsafe_lock &Lock) {
+    while (!TaskQueue.empty()) {
+        auto T = TaskQueue.pop_back_val();
+
+        Lock.native.unlock();
+        T->run();
+        Lock.native.lock();
+
+        WorkFinishedCV.notify_all();
+    }
 }
 
 } // End namespace
@@ -424,7 +389,7 @@ safelookup(ExecutionSession &ES,
            const JITDylibSearchOrder &SearchOrder,
            SymbolLookupSet Symbols, LookupKind K = LookupKind::Static,
            SymbolState RequiredState = SymbolState::Ready,
-           RegisterDependenciesFunction RegisterDependencies = NoDependenciesToRegister) JL_NOTSAFEPOINT {
+           RegisterDependenciesFunction RegisterDependencies = NoDependenciesToRegister) {
   JuliaTaskDispatcher::future<MSVCPExpected<SymbolMap>> PromisedFuture;
   auto NotifyComplete = [PromisedResult = PromisedFuture.get_promise()](Expected<SymbolMap> R) {
     PromisedResult.set_value(std::move(R));
@@ -438,7 +403,7 @@ Expected<ExecutorSymbolDef>
 safelookup(ExecutionSession &ES,
            const JITDylibSearchOrder &SearchOrder,
            SymbolStringPtr Name,
-           SymbolState RequiredState = SymbolState::Ready) JL_NOTSAFEPOINT {
+           SymbolState RequiredState = SymbolState::Ready) {
   SymbolLookupSet Names({Name});
 
   if (auto ResultMap = safelookup(ES, SearchOrder, std::move(Names), LookupKind::Static,
@@ -453,13 +418,13 @@ safelookup(ExecutionSession &ES,
 Expected<ExecutorSymbolDef>
 safelookup(ExecutionSession &ES,
            ArrayRef<JITDylib *> SearchOrder, SymbolStringPtr Name,
-           SymbolState RequiredState = SymbolState::Ready) JL_NOTSAFEPOINT {
+           SymbolState RequiredState = SymbolState::Ready) {
   return safelookup(ES, makeJITDylibSearchOrder(SearchOrder), Name, RequiredState);
 }
 
 Expected<ExecutorSymbolDef>
 safelookup(ExecutionSession &ES,
            ArrayRef<JITDylib *> SearchOrder, StringRef Name,
-           SymbolState RequiredState = SymbolState::Ready) JL_NOTSAFEPOINT {
+           SymbolState RequiredState = SymbolState::Ready) {
   return safelookup(ES, SearchOrder, ES.intern(Name), RequiredState);
 }

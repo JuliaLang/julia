@@ -195,7 +195,6 @@ function validate_tokens(stream::ParseStream)
             # parse_int_literal
             # parse_uint_literal
         elseif k == K"Float" || k == K"Float32"
-            underflow0 = false
             if k == K"Float"
                 x, code = parse_float_literal(Float64, txtbuf, fbyte, nbyte)
                 # jl_strtod_c can return "underflow" even for valid cases such
@@ -287,7 +286,7 @@ function bump_split(stream::ParseStream, split_spec::Vararg{Any, N}) where {N}
     start_b = _next_byte(stream)
     toklen = tok.next_byte - start_b
     prev_b = start_b
-    for (i, (nbyte, k, f)) in enumerate(split_spec)
+    for (nbyte, k, f) in split_spec
         h = SyntaxHead(k, f)
         actual_nbyte = nbyte < 0 ? (toklen + nbyte) : nbyte
         orig_k = k == K"." ? K"." : kind(tok)
