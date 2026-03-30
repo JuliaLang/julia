@@ -153,7 +153,8 @@ static int sweep_reservations(htable_t *h, jl_ptls_t *gc_all_tls_states) JL_NOTS
         jl_code_instance_t *ci = info->ci;
         if (!gc_marked(jl_astaggedvalue(ci)->bits.gc)) {
             int16_t tid = info->tid;
-            h->table[i+1] = HT_NOTFOUND; // remove
+            h->table[i+1] = HT_NOTFOUND; // remove (tombstone)
+            h->live--;
             free(info);
             jl_ptls_t ptls2 = gc_all_tls_states[tid];
             ptls2->engine_nqueued--;

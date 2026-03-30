@@ -178,10 +178,11 @@ static int layout_eq(void *_l1, void *_l2, void *unused) JL_NOTSAFEPOINT
 }
 
 //HTPROT(layoutcache)
+static void **layoutcache_lookup_bp_r_impl(htable_t *h, void *key, void *ctx, int key_owned) JL_NOTSAFEPOINT;
 static void **layoutcache_lookup_bp_r(htable_t *h, void *key, void *ctx) JL_NOTSAFEPOINT;
 static void **layoutcache_peek_bp_r(htable_t *h, void *key, void *ctx) JL_NOTSAFEPOINT;
 HTPROT_R(layoutcache)
-HTIMPL_R(layoutcache, _hash_layout_djb2, layout_eq)
+HTIMPL_R(layoutcache, _hash_layout_djb2, layout_eq, _HTIMPL_IDENTITY_KEYALLOC, _HTIMPL_NOOP_KEYFREE)
 static htable_t layoutcache;
 static int layoutcache_initialized = 0;
 

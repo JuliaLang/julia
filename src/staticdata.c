@@ -448,11 +448,12 @@ static jl_value_t *get_replaceable_field(jl_value_t **addr, int mutabl) JL_GC_DI
 
 static uintptr_t jl_fptr_id(void *fptr)
 {
-    void **pbp = ptrhash_bp(&fptr_to_id, fptr);
-    if (*pbp == HT_NOTFOUND || fptr == NULL)
+    if (fptr == NULL)
         return 0;
-    else
-        return *(uintptr_t*)pbp;
+    void *val = ptrhash_get(&fptr_to_id, fptr);
+    if (val == HT_NOTFOUND)
+        return 0;
+    return (uintptr_t)val;
 }
 
 static int effects_foldable(uint32_t effects)
@@ -856,8 +857,8 @@ done_fields: ;
     // try to promote itself to be immediate)
     if (s->incremental && jl_is_datatype(v) && immediate && recursive) {
         jl_datatype_t *dt = (jl_datatype_t*)v;
-        void **bp = ptrhash_bp(&serialization_order, (void*)dt->super);
-        if (*bp != (void*)-2) {
+        void *bp = ptrhash_get(&serialization_order, (void*)dt->super);
+        if (bp != (void*)-2) {
             // if super is already on the stack of things to handle when this returns, do
             // not try to handle it now
             jl_queue_for_serialization_(s, (jl_value_t*)dt->super, 1, immediate);
