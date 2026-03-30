@@ -537,6 +537,7 @@ end
 function async_get_completions(cb, s::MIState; interactive::Bool,
                                mutex::Union{Nothing, ReentrantLock}=nothing)
     keys_pressed = s.n_keys_pressed
+    current_action = s.current_action
     st = state(s)
     c, mod = state(s).p.complete, s.active_module
     complete = Threads.Atomic{Bool}(false)
@@ -573,7 +574,7 @@ function async_get_completions(cb, s::MIState; interactive::Bool,
                 changed = clear_hint(st)
                 if cb(completions, reg, should_complete)
                     changed = true
-                    hint || (s.last_action = s.current_action)
+                    hint || (s.last_action = current_action)
                 end
                 changed && refresh_line(s)
             end
