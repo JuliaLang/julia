@@ -1,10 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core: CodeInfo, SimpleVector, donotdelete, assume_variant, compilerbarrier, memoryref, memoryrefnew, memoryrefget, memoryrefset!
+using Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, memoryref, memoryrefnew, memoryrefget, memoryrefset!
 
 const Callable = Union{Function,Type}
 
 const Bottom = Union{}
+
+assume_variant(x) = compilerbarrier(:variant, x)
 
 # Define minimal array interface here to help code used in macros:
 size(a::Array) = getfield(a, :size)

@@ -29,7 +29,6 @@ extern "C" {
     XX(compilerbarrier,"compilerbarrier") \
     XX(current_scope,"current_scope") \
     XX(donotdelete,"donotdelete") \
-    XX(assume_variant,"assume_variant") \
     XX(fieldtype,"fieldtype") \
     XX(finalizer,"finalizer") \
     XX(get_binding_type,"get_binding_type") \

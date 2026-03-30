@@ -4002,6 +4002,8 @@ Base.donotdelete
 
 This function returns `x`, but acts as an optimization barrier that prevents the
 compiler (both Julia and LLVM) from making assumptions about the returned value.
+This is equivalent to `compilerbarrier(:variant, x)`.
+
 In particular:
 
 - The return value is not assumed to be the same as the input for purposes of
@@ -4047,7 +4049,10 @@ Currently either of the following `setting`s is allowed:
     constant information on `val`
   * `:conditional`: the return type of this function call will be inferred with widening
     conditional information on `val` (see the example below)
-- Any barriers on optimization aren't implemented yet
+- Barriers on optimization:
+  * `:variant`: emit an opaque identity at the LLVM level, preventing loop-invariant
+    code motion and common subexpression elimination. See [`assume_variant`](@ref) for
+    a convenience wrapper.
 
 !!! note
     This function is expected to be used with `setting` known precisely at compile-time.

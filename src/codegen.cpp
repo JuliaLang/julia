@@ -5255,40 +5255,40 @@ isdefined_unknown_idx:
         return true;
     }
 
-    else if (f == BUILTIN(assume_variant) && nargs == 1) {
-        // Emit an inline asm identity that is opaque to the optimizer.
-        // The "0" constraint ties output to input (same register),
-        // preventing LICM from hoisting loop-invariant computations
-        // that feed into this value.
-        const jl_cgval_t &obj = argv[1];
-        if (obj.V) {
-            Value *V = obj.V;
-            Type *Ty = V->getType();
-            if (Ty->isPointerTy() || obj.isboxed) {
-                // For pointer/boxed types, we cannot use "=r,0" (illegal
-                // inttoptr for GC-tracked pointers). Instead, clobber memory
-                // so LLVM cannot assume the pointed-to value is invariant,
-                // and return the original pointer.
-                FunctionType *VoidFTy = FunctionType::get(getVoidTy(ctx.builder.getContext()), false);
-                InlineAsm *IA = InlineAsm::get(VoidFTy, "", "~{memory}", /*hasSideEffects=*/true);
-                ctx.builder.CreateCall(VoidFTy, IA);
-                *ret = obj;
-            } else {
-                FunctionType *AsmFTy = FunctionType::get(Ty, {Ty}, false);
-                InlineAsm *IA = InlineAsm::get(AsmFTy, "", "=r,0", /*hasSideEffects=*/true);
-                Value *result = ctx.builder.CreateCall(AsmFTy, IA, {V});
-                *ret = mark_julia_type(ctx, result, false, obj.typ);
-            }
-        } else {
-            // Ghost type (e.g. Nothing) — pass through
-            *ret = obj;
-        }
-        return true;
-    }
-
     else if (f == BUILTIN(compilerbarrier) && (nargs == 2)) {
         emit_typecheck(ctx, argv[1], (jl_value_t*)jl_symbol_type, "compilerbarrier");
-        *ret = argv[2];
+        const jl_cgval_t &setting = argv[1];
+        if (setting.constant && setting.constant == (jl_value_t*)jl_symbol("variant")) {
+            // Emit an inline asm identity that is opaque to the optimizer.
+            // The "0" constraint ties output to input (same register),
+            // preventing LICM from hoisting loop-invariant computations
+            // that feed into this value.
+            const jl_cgval_t &obj = argv[2];
+            if (obj.V) {
+                Value *V = obj.V;
+                Type *Ty = V->getType();
+                if (Ty->isPointerTy() || obj.isboxed) {
+                    // For pointer/boxed types, we cannot use "=r,0" (illegal
+                    // inttoptr for GC-tracked pointers). Instead, clobber memory
+                    // so LLVM cannot assume the pointed-to value is invariant,
+                    // and return the original pointer.
+                    FunctionType *VoidFTy = FunctionType::get(getVoidTy(ctx.builder.getContext()), false);
+                    InlineAsm *IA = InlineAsm::get(VoidFTy, "", "~{memory}", /*hasSideEffects=*/true);
+                    ctx.builder.CreateCall(VoidFTy, IA);
+                    *ret = obj;
+                } else {
+                    FunctionType *AsmFTy = FunctionType::get(Ty, {Ty}, false);
+                    InlineAsm *IA = InlineAsm::get(AsmFTy, "", "=r,0", /*hasSideEffects=*/true);
+                    Value *result = ctx.builder.CreateCall(AsmFTy, IA, {V});
+                    *ret = mark_julia_type(ctx, result, false, obj.typ);
+                }
+            } else {
+                // Ghost type (e.g. Nothing) — pass through
+                *ret = obj;
+            }
+        } else {
+            *ret = argv[2];
+        }
         return true;
     }
 
