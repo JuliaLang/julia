@@ -534,7 +534,7 @@ end
 # don't show any indicator and don't touch last_action.  A mutex can be
 # provided, which will be taken while generating the completions.  This is used
 # to prevent multiple hints from being generated at once.
-function async_get_completions(cb, s::MIState; hint::Bool,
+function async_get_completions(cb, s::MIState; interactive::Bool,
                                mutex::Union{Nothing, ReentrantLock}=nothing)
     keys_pressed = s.n_keys_pressed
     st = state(s)
@@ -947,7 +947,6 @@ function edit_move_right(m::MIState)
                 prev_pos = position(s)
                 push_undo(s)
                 edit_splice!(s, (prev_pos - reg.second + reg.first) => prev_pos, completions[1].completion)
-                refresh_line(s)
                 return true
             else
                 return false
