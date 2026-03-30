@@ -1136,6 +1136,9 @@ loop_preserve_any_ea(10)
     ir_struct = get_llvm(blackbox_struct, Tuple{BlackboxTestStruct})
     @test occursin("~{memory}", ir_struct)
     @test !occursin("jl_", strip_debug_calls(ir_struct))
+
+    # blackbox barriers Julia-level constprop: return type must be Int, not Const(42)
+    @test Base.return_types() do; Base.blackbox(42); end |> only === Int
 end
 
 # sret parameters must have an alignment attribute (required by LLVM LangRef).

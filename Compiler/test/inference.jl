@@ -5323,10 +5323,13 @@ for setting = (#=:type, :const,=# :conditional,)
         compilerbarrier($(QuoteNode(setting)), 42)
     end
 end
-# :blackbox preserves type information (unlike :type)
+# :blackbox preserves type information (unlike :type) but strips Const
 @test Base.return_types((Int,)) do a
     compilerbarrier(:blackbox, a)
 end |> only === Int
+@test Base.return_types() do
+    compilerbarrier(:blackbox, 42)
+end |> only === Int  # must not be Const(42)
 
 # https://github.com/JuliaLang/julia/issues/46426
 @noinline typebarrier() = Base.inferencebarrier(0.0)

@@ -777,7 +777,7 @@ add_tfunc(donotdelete, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->No
     elseif setting === :type
         return Any
     elseif setting === :blackbox
-        return val
+        return widenconst(val)
     else
         return Bottom
     end
