@@ -91,8 +91,7 @@ function asyncmap(f, c...; ntasks=0, batch_size=nothing)
     end
     # Narrow element type to try to match what `map` would return.
     if c1 isa AbstractArray
-        rv = ndims(c1) > 1 ? reshape(v, axes(c1)) : v
-        return collect_similar(c1, Generator(identity, rv))
+        return collect_similar(c1, Generator(identity, reshape(v, axes(c1))))
     elseif c1 isa Tuple
         return Tuple(map(identity, v))
     else
