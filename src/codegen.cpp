@@ -10435,6 +10435,15 @@ extern "C" void jl_init_llvm(void)
     if (clopt && clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "4", 1);
 
+    // When the platform doesn't support __int128, compiler-rt/libgcc do not
+    // provide the corresponding libcalls (e.g. __floattidf, __fixdfti), so we
+    // must expand FP conversions for integer types wider than 64 bits inline.
+#ifndef _HAS_INT128_
+    clopt = llvmopts.lookup("expand-fp-convert-bits");
+    if (clopt && clopt->getNumOccurrences() == 0)
+        cl::ProvidePositionalOption(clopt, "64", 1);
+#endif
+
     clopt = llvmopts.lookup("time-passes");
     if (clopt && clopt->getNumOccurrences() > 0)
         jl_is_timing_passes = 1;
