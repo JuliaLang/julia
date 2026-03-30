@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-gc-interface-passes.h"
+#include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/Casting.h"
 
@@ -1301,6 +1302,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         // Known functions emitted in codegen that are not safepoints
                         if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
                             callee == gc_preserve_end_func || callee == typeof_func ||
+                            callee == blackbox_func ||
                             callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
                             callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
                             callee->getName() == XSTR(jl_lock_field) || callee->getName() == XSTR(jl_unlock_field) ||
@@ -1952,6 +1954,27 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 ASCI->takeName(CI);
                 CI->replaceAllUsesWith(ASCI);
                 UpdatePtrNumbering(CI, ASCI, S);
+            } else if (blackbox_func != nullptr && callee == blackbox_func) {
+                // Lower julia.blackbox(ptr) to an "=r,0" inline asm on the raw
+                // untracked pointer. At this point GC frame lowering has already
+                // run, so there are no GC-tracked address spaces left and the
+                // register-tied asm is legal.
+                assert(CI->arg_size() == 1);
+                auto *input = CI->getOperand(0);
+                // Strip any remaining tracked/derived address space cast to get
+                // a plain pointer that the asm can accept.
+                auto *rawTy = llvm::PointerType::getUnqual(CI->getContext());
+                IRBuilder<> builder(CI);
+                builder.SetCurrentDebugLocation(CI->getDebugLoc());
+                Value *raw = builder.CreateAddrSpaceCast(input, rawTy);
+                FunctionType *AsmFTy = FunctionType::get(rawTy, {rawTy}, false);
+                InlineAsm *IA = InlineAsm::get(AsmFTy, "", "=r,0", /*hasSideEffects=*/false);
+                Value *result = builder.CreateCall(AsmFTy, IA, {raw});
+                // Cast back to the original output type
+                Value *out = builder.CreateAddrSpaceCast(result, CI->getType());
+                out->takeName(CI);
+                CI->replaceAllUsesWith(out);
+                UpdatePtrNumbering(CI, out, S);
             } else if (alloc_obj_func && callee == alloc_obj_func) {
                 assert(CI->arg_size() == 3);
 

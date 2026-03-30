@@ -1211,6 +1211,28 @@ static const auto jl_typeof_func = new JuliaFunction<>{
             {}); },
 };
 
+// `julia.blackbox` is an optimization barrier for GC-tracked pointer values.
+// It returns its argument unchanged, but is opaque to the optimizer: it cannot
+// be CSE'd, constant-folded, or treated as loop-invariant. Lowered to inline
+// asm after GC frame lowering (when the pointer is a raw non-tracked pointer).
+static const auto jl_blackbox_func = new JuliaFunction<>{
+    "julia.blackbox",
+    [](LLVMContext &C) {
+        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
+        return FunctionType::get(T_prjlvalue, {T_prjlvalue}, false);
+    },
+    [](LLVMContext &C) {
+        AttrBuilder FnAttrs(C);
+        FnAttrs.addAttribute(Attribute::NoUnwind);
+        FnAttrs.addAttribute(Attribute::NoRecurse);
+        FnAttrs.addAttribute(Attribute::WillReturn);
+        FnAttrs.addAttribute(Attribute::NoSync);
+        return AttributeList::get(C,
+            AttributeSet::get(C, FnAttrs),
+            Attributes(C, {Attribute::NonNull}),
+            {}); },
+};
+
 static const auto jl_write_barrier_func = new JuliaFunction<>{
     "julia.write_barrier",
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
@@ -5259,26 +5281,28 @@ isdefined_unknown_idx:
         emit_typecheck(ctx, argv[1], (jl_value_t*)jl_symbol_type, "compilerbarrier");
         const jl_cgval_t &setting = argv[1];
         if (setting.constant && setting.constant == (jl_value_t*)jl_symbol("blackbox")) {
-            // Emit an inline asm identity that is opaque to the optimizer.
-            // The "0" constraint ties output to input (same register),
-            // preventing LICM from hoisting loop-invariant computations
-            // that feed into this value.
             const jl_cgval_t &obj = argv[2];
             if (obj.V) {
                 Value *V = obj.V;
                 Type *Ty = V->getType();
                 if (Ty->isPointerTy() || obj.isboxed) {
-                    // For pointer/boxed types, we cannot use "=r,0" (illegal
-                    // inttoptr for GC-tracked pointers). Instead, clobber memory
-                    // so LLVM cannot assume the pointed-to value is invariant,
-                    // and return the original pointer.
-                    FunctionType *VoidFTy = FunctionType::get(getVoidTy(ctx.builder.getContext()), false);
-                    InlineAsm *IA = InlineAsm::get(VoidFTy, "", "~{memory}", /*hasSideEffects=*/true);
-                    ctx.builder.CreateCall(VoidFTy, IA);
-                    *ret = obj;
+                    // For GC-tracked pointer types, emit a julia.blackbox intrinsic
+                    // call. This is opaque to all pre-GC-lowering LLVM passes
+                    // (no speculatable/memory(none)), so the value cannot be CSE'd
+                    // or treated as loop-invariant. The intrinsic is lowered to
+                    // inline asm on the raw pointer after GC frame expansion.
+                    Function *BB = prepare_call(jl_blackbox_func);
+                    Value *tracked = V;
+                    if (Ty != JuliaType::get_prjlvalue_ty(ctx.builder.getContext()))
+                        tracked = ctx.builder.CreateAddrSpaceCast(V, JuliaType::get_prjlvalue_ty(ctx.builder.getContext()));
+                    Value *result = ctx.builder.CreateCall(BB, {tracked});
+                    *ret = mark_julia_type(ctx, result, true, obj.typ);
                 } else {
+                    // For scalar types, emit an inline asm identity. The "=r,0"
+                    // constraint ties output to input in the same register,
+                    // making the value opaque to the optimizer.
                     FunctionType *AsmFTy = FunctionType::get(Ty, {Ty}, false);
-                    InlineAsm *IA = InlineAsm::get(AsmFTy, "", "=r,0", /*hasSideEffects=*/true);
+                    InlineAsm *IA = InlineAsm::get(AsmFTy, "", "=r,0", /*hasSideEffects=*/false);
                     Value *result = ctx.builder.CreateCall(AsmFTy, IA, {V});
                     *ret = mark_julia_type(ctx, result, false, obj.typ);
                 }
