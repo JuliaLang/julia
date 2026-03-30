@@ -1511,30 +1511,43 @@ void jl_gc_queue_multiroot(const jl_value_t *parent, const void *ptr, jl_datatyp
 {
     const jl_datatype_layout_t *ly = dt->layout;
     uint32_t npointers = ly->npointers;
-    //if (npointers == 0) // this was checked by the caller
-    //    return;
-    jl_value_t *ptrf = ((jl_value_t**)ptr)[ly->first_ptr];
-    if (ptrf && (jl_astaggedvalue(ptrf)->bits.gc & 1) == 0) {
-        // this pointer was young, move the barrier back now
-        jl_gc_wb_back(parent);
-        return;
+    if (npointers > 0) {
+        jl_value_t *ptrf = ((jl_value_t**)ptr)[ly->first_ptr];
+        if (ptrf && (jl_astaggedvalue(ptrf)->bits.gc & 1) == 0) {
+            // this pointer was young, move the barrier back now
+            jl_gc_wb_back(parent);
+            return;
+        }
+        const uint8_t *ptrs8 = (const uint8_t *)jl_dt_layout_ptrs(ly);
+        const uint16_t *ptrs16 = (const uint16_t *)jl_dt_layout_ptrs(ly);
+        const uint32_t *ptrs32 = (const uint32_t*)jl_dt_layout_ptrs(ly);
+        for (size_t i = 1; i < npointers; i++) {
+            uint32_t fld;
+            if (ly->flags.fielddesc_type == 0) {
+                fld = ptrs8[i];
+            }
+            else if (ly->flags.fielddesc_type == 1) {
+                fld = ptrs16[i];
+            }
+            else {
+                assert(ly->flags.fielddesc_type == 2);
+                fld = ptrs32[i];
+            }
+            jl_value_t *ptrf = ((jl_value_t**)ptr)[fld];
+            if (ptrf && (jl_astaggedvalue(ptrf)->bits.gc & 1) == 0) {
+                // this pointer was young, move the barrier back now
+                jl_gc_wb_back(parent);
+                return;
+            }
+        }
     }
-    const uint8_t *ptrs8 = (const uint8_t *)jl_dt_layout_ptrs(ly);
-    const uint16_t *ptrs16 = (const uint16_t *)jl_dt_layout_ptrs(ly);
-    const uint32_t *ptrs32 = (const uint32_t*)jl_dt_layout_ptrs(ly);
-    for (size_t i = 1; i < npointers; i++) {
-        uint32_t fld;
-        if (ly->flags.fielddesc_type == 0) {
-            fld = ptrs8[i];
-        }
-        else if (ly->flags.fielddesc_type == 1) {
-            fld = ptrs16[i];
-        }
-        else {
-            assert(ly->flags.fielddesc_type == 2);
-            fld = ptrs32[i];
-        }
-        jl_value_t *ptrf = ((jl_value_t**)ptr)[fld];
+    uint32_t ntagged = ly->ntaggedptrs;
+    for (size_t i = 0; i < ntagged; i++) {
+        uint32_t fld = jl_taggedptr_offset(dt, i);
+        uintptr_t raw = ((uintptr_t*)ptr)[fld];
+        if (!jl_taggedptr_is_reference(raw))
+            continue;
+        jl_value_t *ptrf = (jl_value_t*)raw;
         if (ptrf && (jl_astaggedvalue(ptrf)->bits.gc & 1) == 0) {
             // this pointer was young, move the barrier back now
             jl_gc_wb_back(parent);
@@ -1804,6 +1817,33 @@ STATIC_INLINE jl_value_t *gc_mark_obj32(jl_ptls_t ptls, char *obj32_parent, uint
     }
     gc_mark_push_remset(ptls, (jl_value_t *)obj32_parent, nptr);
     return new_obj;
+}
+
+// Mark object tagged-pointer slots
+STATIC_INLINE uintptr_t gc_mark_obj_taggedptr(jl_ptls_t ptls, char *obj_parent, jl_datatype_t *vt,
+                           uintptr_t nptr, int push_remset) JL_NOTSAFEPOINT
+{
+    jl_gc_markqueue_t *mq = &ptls->gc_tls.mark_queue;
+    const jl_datatype_layout_t *layout = vt->layout;
+    uint32_t nt = layout->ntaggedptrs;
+    for (size_t i = 0; i < nt; i++) {
+        uint32_t fld = jl_taggedptr_offset(vt, i);
+        uintptr_t *slot = &((uintptr_t*)obj_parent)[fld];
+        uintptr_t raw = *slot;
+        if (!jl_taggedptr_is_reference(raw))
+            continue;
+        jl_value_t *new_obj = (jl_value_t*)raw;
+        verify_parent2("object", obj_parent, slot, "field(%d)",
+                        gc_slot_to_fieldidx(obj_parent, slot, vt));
+        gc_assert_parent_validity((jl_value_t*)obj_parent, new_obj);
+        gc_try_claim_and_push(mq, new_obj, &nptr);
+        if (__unlikely(gc_heap_snapshot_enabled && prev_sweep_full)) {
+            _gc_heap_snapshot_record_object_edge((jl_value_t*)obj_parent, new_obj, slot);
+        }
+    }
+    if (push_remset)
+        gc_mark_push_remset(ptls, (jl_value_t *)obj_parent, nptr);
+    return nptr;
 }
 
 // Mark object array
@@ -2483,9 +2523,19 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
             return;
         const jl_datatype_layout_t *layout = vt->layout;
         uint32_t npointers = layout->npointers;
-        if (npointers == 0)
+        uint32_t ntaggedptrs = layout->ntaggedptrs;
+        int tagged_had_young = 0;
+        if (npointers == 0 && ntaggedptrs == 0)
             return;
-        uintptr_t nptr = (npointers << 2 | (bits & GC_OLD));
+        if (ntaggedptrs > 0) {
+            uintptr_t tagged_nptr = ((npointers + ntaggedptrs) << 2 | (bits & GC_OLD));
+            tagged_nptr = gc_mark_obj_taggedptr(ptls, (char*)new_obj, vt, tagged_nptr, npointers == 0);
+            if (npointers == 0)
+                return;
+            tagged_had_young = tagged_nptr & 0x1;
+        }
+        uintptr_t nptr = ((npointers + ntaggedptrs) << 2 | (bits & GC_OLD));
+        nptr |= tagged_had_young;
         assert((layout->nfields > 0 || layout->flags.fielddesc_type == 3) &&
                "opaque types should have been handled specially");
         if (layout->flags.fielddesc_type == 0) {

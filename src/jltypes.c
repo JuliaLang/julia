@@ -2403,10 +2403,26 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
                 jl_type_error_rt("GenericMemory", "isatomic parameter", (jl_value_t*)jl_symbol_type, isatomic);
             invalid = 1;
         }
+        jl_value_t *eltype = jl_svecref(p, 1);
+        if (jl_is_datatype(eltype) &&
+            (jl_is_taggedpointer_type(eltype) ||
+             (((jl_datatype_t*)eltype)->layout != NULL && ((jl_datatype_t*)eltype)->layout->ntaggedptrs > 0))) {
+            if (!nothrow)
+                jl_error("GenericMemory element type cannot contain ImmediateOrRef in this prototype");
+            invalid = 1;
+        }
         jl_value_t *addrspace = jl_svecref(p, 2);
         if (!jl_is_typevar(addrspace) && !jl_is_addrspace(addrspace)) {
             if (!nothrow)
                 jl_type_error_rt("GenericMemory", "addrspace parameter", (jl_value_t*)jl_addrspace_type, addrspace);
+            invalid = 1;
+        }
+    }
+    else if (tn == jl_taggedpointer_typename) {
+        jl_value_t *eltype = jl_svecref(p, 0);
+        if (jl_is_type(eltype) && jl_stored_inline(eltype)) {
+            if (!nothrow)
+                jl_error("ImmediateOrRef parameter type must be represented as an ordinary boxed object in this prototype");
             invalid = 1;
         }
     }
@@ -3368,6 +3384,14 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_pointer_type = (jl_unionall_t*)jl_pointer_typename->wrapper;
     jl_value_t *pointer_void = jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_nothing_type);
     jl_voidpointer_type = (jl_datatype_t*)pointer_void;
+
+    tv = jl_svec1(tvar("T"));
+    jl_taggedpointer_typename =
+        jl_new_primitivetype((jl_value_t*)jl_symbol("ImmediateOrRef"), core,
+                             (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_ref_type, jl_svec_data(tv), 1),
+                             tv,
+                             64)->name;
+    jl_taggedpointer_type = (jl_unionall_t*)jl_taggedpointer_typename->wrapper;
 
     tv = jl_svec2(tvar("T"), tvar("N"));
     jl_abstractarray_type = (jl_unionall_t*)

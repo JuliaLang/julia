@@ -593,6 +593,7 @@ typedef struct {
     uint32_t size;
     uint32_t nfields;
     uint32_t npointers; // number of pointers embedded inside
+    uint32_t ntaggedptrs; // number of TaggedPtr slots embedded inside
     int32_t first_ptr; // index of the first pointer (or -1)
     uint16_t alignment; // strictest alignment over all fields
     struct { // combine these fields into a struct so that we can take addressof them
@@ -1487,6 +1488,10 @@ static inline const char *jl_dt_layout_ptrs(const jl_datatype_layout_t *l) JL_NO
 {
     return jl_dt_layout_fields(l) + jl_fielddesc_size(l->flags.fielddesc_type) * l->nfields;
 }
+static inline const char *jl_dt_layout_taggedptrs(const jl_datatype_layout_t *l) JL_NOTSAFEPOINT
+{
+    return jl_dt_layout_ptrs(l) + (l->first_ptr < 0 ? 0 : (l->npointers << l->flags.fielddesc_type));
+}
 
 #define DEFINE_FIELD_ACCESSORS(f)                                             \
     static inline uint32_t jl_field_##f(jl_datatype_t *st,                    \
@@ -1532,6 +1537,28 @@ static inline uint32_t jl_ptr_offset(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
         assert(ly->flags.fielddesc_type == 2);
         return ((const uint32_t*)ptrs)[i];
     }
+}
+
+static inline uint32_t jl_taggedptr_offset(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
+{
+    const jl_datatype_layout_t *ly = st->layout; // NOT jl_datatype_layout(st)
+    assert(i >= 0 && (size_t)i < ly->ntaggedptrs);
+    const void *ptrs = jl_dt_layout_taggedptrs(ly);
+    if (ly->flags.fielddesc_type == 0) {
+        return ((const uint8_t*)ptrs)[i];
+    }
+    else if (ly->flags.fielddesc_type == 1) {
+        return ((const uint16_t*)ptrs)[i];
+    }
+    else {
+        assert(ly->flags.fielddesc_type == 2);
+        return ((const uint32_t*)ptrs)[i];
+    }
+}
+
+static inline int jl_taggedptr_is_reference(uintptr_t raw) JL_NOTSAFEPOINT
+{
+    return raw != 0 && (raw & 1) == 0;
 }
 
 static inline int jl_field_isatomic(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
@@ -1744,6 +1771,12 @@ STATIC_INLINE int jl_is_llvmpointer_type(jl_value_t *t) JL_NOTSAFEPOINT
 {
     return (jl_is_datatype(t) &&
             ((jl_datatype_t*)(t))->name == jl_llvmpointer_typename);
+}
+
+STATIC_INLINE int jl_is_taggedpointer_type(jl_value_t *t) JL_NOTSAFEPOINT
+{
+    return (jl_is_datatype(t) &&
+            ((jl_datatype_t*)(t))->name == jl_taggedpointer_typename);
 }
 
 STATIC_INLINE int jl_is_abstract_ref_type(jl_value_t *t) JL_NOTSAFEPOINT

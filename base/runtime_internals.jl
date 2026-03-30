@@ -564,6 +564,7 @@ struct DataTypeLayout
     size::UInt32
     nfields::UInt32
     npointers::UInt32
+    ntaggedptrs::UInt32
     firstptr::Int32
     alignment::UInt16
     flags::UInt16
@@ -684,7 +685,10 @@ Can be called on any `isconcretetype`.
 """
 function datatype_pointerfree(dt::DataType)
     @_foldable_meta
-    return datatype_npointers(dt) == 0
+    layout_ptr = dt.layout::Ptr{Cvoid}
+    layout_ptr == C_NULL && throw(UndefRefError())
+    layout = unsafe_load(convert(Ptr{DataTypeLayout}, layout_ptr))
+    return layout.npointers == 0 && layout.ntaggedptrs == 0
 end
 
 """

@@ -2282,6 +2282,7 @@ static void emit_write_barrier(jl_codectx_t&, Value*, ArrayRef<Value*>);
 static void emit_write_barrier(jl_codectx_t&, Value*, Value*);
 static void emit_write_multibarrier(jl_codectx_t&, Value*, Value*, jl_value_t*);
 static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, const jl_cgval_t &x);
+static void emit_taggedptr_write_barrier(jl_codectx_t &ctx, Value *parent, Value *raw);
 
 SmallVector<unsigned, 0> first_ptr(Type *T)
 {
@@ -2559,6 +2560,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
     AllocaInst *intcast = nullptr;
     unsigned nb = 0;
     bool tracked_pointers = false;
+    bool tagged_ptr = !is_union && jl_is_taggedpointer_type(jltype);
     Value *r = nullptr;
     if (!is_union) {
         if (isboxed)
@@ -2968,34 +2970,44 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         ctx.builder.SetInsertPoint(DoneBB);
     if (needlock)
         emit_lockstate_value(ctx, needlock, false);
-    if (parent != NULL && tracked_pointers && (!isboxed || !type_is_permalloc(rhs.typ))) {
+    if (parent != NULL && (tracked_pointers || tagged_ptr) && (!isboxed || !type_is_permalloc(rhs.typ))) {
         if (op == StoreKind::Replace || op == StoreKind::SetOnce) {
             BasicBlock *BB = BasicBlock::Create(ctx.builder.getContext(), "xchg_wb", ctx.f);
             DoneBB = BasicBlock::Create(ctx.builder.getContext(), "done_xchg_wb", ctx.f);
             ctx.builder.CreateCondBr(Success, BB, DoneBB);
             ctx.builder.SetInsertPoint(BB);
         }
-        if (r) {
-            if (realelty != elty)
-                r = ctx.builder.Insert(CastInst::Create(Instruction::Trunc, r, realelty));
-            if (intcast) {
-                ctx.builder.CreateStore(r, intcast);
-                r = ctx.builder.CreateLoad(intcast_eltyp, intcast);
+        if (tracked_pointers) {
+            if (r) {
+                if (realelty != elty)
+                    r = ctx.builder.Insert(CastInst::Create(Instruction::Trunc, r, realelty));
+                if (intcast) {
+                    ctx.builder.CreateStore(r, intcast);
+                    r = ctx.builder.CreateLoad(intcast_eltyp, intcast);
+                }
+                else if (!isboxed && intcast_eltyp) {
+                    assert(op == StoreKind::Set);
+                    // setfield doesn't use intcast, so need to reload rhs with the correct type
+                    r = emit_unbox(ctx, intcast_eltyp, rhs);
+                }
+                if (!isboxed)
+                    emit_write_multibarrier(ctx, parent, r, rhs.typ);
+                else
+                    emit_write_barrier(ctx, parent, r);
             }
-            else if (!isboxed && intcast_eltyp) {
-                assert(op == StoreKind::Set);
-                // setfield doesn't use intcast, so need to reload rhs with the correct type
-                r = emit_unbox(ctx, intcast_eltyp, rhs);
+            else {
+                assert(!isboxed);
+                assert(!rhs.inline_roots.empty());
+                emit_write_multibarrier(ctx, parent, rhs);
             }
-            if (!isboxed)
-                emit_write_multibarrier(ctx, parent, r, rhs.typ);
-            else
-                emit_write_barrier(ctx, parent, r);
         }
-        else {
-            assert(!isboxed);
-            assert(!rhs.inline_roots.empty());
-            emit_write_multibarrier(ctx, parent, rhs);
+        if (tagged_ptr) {
+            Value *raw = r;
+            if (raw == nullptr) {
+                Type *rawty = intcast_eltyp ? intcast_eltyp : realelty;
+                raw = emit_unbox(ctx, rawty, rhs);
+            }
+            emit_taggedptr_write_barrier(ctx, parent, raw);
         }
         if (op == StoreKind::Replace || op == StoreKind::SetOnce) {
             ctx.builder.CreateBr(DoneBB);
@@ -4364,6 +4376,36 @@ static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, const jl_c
 {
     auto ptrs = get_gc_roots_for(ctx, x, true);
     emit_write_barrier(ctx, parent, ptrs);
+}
+
+static void emit_taggedptr_write_barrier(jl_codectx_t &ctx, Value *parent, Value *raw)
+{
+    Type *T_size = ctx.types().T_size;
+    if (raw->getType()->isPointerTy()) {
+        raw = ctx.builder.CreatePtrToInt(raw, T_size);
+    }
+    else {
+        assert(raw->getType()->isIntegerTy());
+        if (raw->getType() != T_size) {
+            if (raw->getType()->getIntegerBitWidth() > T_size->getIntegerBitWidth())
+                raw = ctx.builder.CreateTrunc(raw, T_size);
+            else
+                raw = ctx.builder.CreateZExt(raw, T_size);
+        }
+    }
+    Value *nonzero = ctx.builder.CreateICmpNE(raw, ConstantInt::get(T_size, 0));
+    Value *isptr = ctx.builder.CreateICmpEQ(
+        ctx.builder.CreateAnd(raw, ConstantInt::get(T_size, 1)),
+        ConstantInt::get(T_size, 0));
+    Value *isref = ctx.builder.CreateAnd(nonzero, isptr);
+
+    BasicBlock *wbBB = BasicBlock::Create(ctx.builder.getContext(), "taggedptr_wb", ctx.f);
+    BasicBlock *contBB = BasicBlock::Create(ctx.builder.getContext(), "taggedptr_wb_done", ctx.f);
+    ctx.builder.CreateCondBr(isref, wbBB, contBB);
+    ctx.builder.SetInsertPoint(wbBB);
+    emit_write_barrier(ctx, parent, ctx.builder.CreateIntToPtr(raw, ctx.types().T_pjlvalue));
+    ctx.builder.CreateBr(contBB);
+    ctx.builder.SetInsertPoint(contBB);
 }
 
 static jl_cgval_t emit_setfield(jl_codectx_t &ctx,

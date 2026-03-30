@@ -613,3 +613,107 @@ end
     end
     @test _pointerset_trigger(0) == (Int[1,2,3], 42, Int[1,2,3], 42)
 end
+
+# Ensure ImmediateOrRef can carry either references or tagged immediate words.
+@testset "ImmediateOrRef basic operations" begin
+    struct ImmediateOrRefInlineHolder
+        x::ImmediateOrRef{Any}
+    end
+    struct ImmediateOrRefPair
+        x::ImmediateOrRef{Any}
+        y::Int
+    end
+    mutable struct ImmediateOrRefMutablePair
+        x::ImmediateOrRef{Any}
+        y::Int
+    end
+
+    let tp = ImmediateOrRef{Any}(1)
+        @test isassigned(tp)
+        @test tp[] === 1
+        @test !Base.isimmediate(tp)
+        @test @inferred(isassigned(tp)) isa Bool
+        @test @inferred(Base.isimmediate(tp)) isa Bool
+        @test @inferred(Base.getrawvalue(tp)) isa UInt
+    end
+    let tp = ImmediateOrRef{String}("abc")
+        @test isassigned(tp)
+        @test !Base.isimmediate(tp)
+        @test tp[] === "abc"
+    end
+    let tp = Base._taggedptr_from_raw(ImmediateOrRef{Any}, UInt(0))
+        @test !isassigned(tp)
+        @test !Base.isimmediate(tp)
+        @test_throws UndefRefError tp[]
+    end
+    let tp = Base._taggedptr_from_raw(ImmediateOrRef{Any}, UInt(0x5))
+        @test !isassigned(tp)
+        @test Base.isimmediate(tp)
+        @test_throws ErrorException tp[]
+    end
+    let tp = ImmediateOrRef{Any}(1)
+        tp2 = Base.setrawvalue(tp, UInt(0x7))
+        @test @inferred(Base.setrawvalue(tp, UInt(0x7))) isa ImmediateOrRef{Any}
+        @test Base.isimmediate(tp2)
+        @test !isassigned(tp2)
+        tp3 = Base._taggedptr_setref(tp2, "abc")
+        @test isassigned(tp3)
+        @test !Base.isimmediate(tp3)
+        @test tp3[] === "abc"
+    end
+    @test sizeof(ImmediateOrRefPair) == 2sizeof(Int)
+    @test fieldoffset(ImmediateOrRefPair, 1) == 0
+    @test fieldoffset(ImmediateOrRefPair, 2) == sizeof(Int)
+    @test fieldoffset(ImmediateOrRefMutablePair, 1) == 0
+    @test fieldoffset(ImmediateOrRefMutablePair, 2) == sizeof(Int)
+    @test !Base.datatype_pointerfree(ImmediateOrRefPair)
+    @test !Base.datatype_pointerfree(ImmediateOrRefMutablePair)
+    let p = ImmediateOrRefPair(ImmediateOrRef{Any}(123), 7)
+        @test p.x[] === 123
+        @test p.y === 7
+    end
+    let p = ImmediateOrRefMutablePair(Base._taggedptr_from_raw(ImmediateOrRef{Any}, UInt(0x5)), 9)
+        @test Base.isimmediate(p.x)
+        @test p.y === 9
+    end
+    @test_throws ErrorException Memory{ImmediateOrRef{Any}}
+    @test_throws ErrorException Memory{ImmediateOrRef{Any}}(undef, 1)
+    @test_throws ErrorException Memory{ImmediateOrRefInlineHolder}
+    @test_throws ErrorException Memory{ImmediateOrRefInlineHolder}(undef, 1)
+    @test_throws ErrorException ImmediateOrRef{Int}
+    @test_throws ErrorException ImmediateOrRef{Int}(1)
+    @test_throws ErrorException Base._taggedptr_from_raw(ImmediateOrRef{Int}, UInt(0))
+    @test_throws ErrorException ImmediateOrRef{Tuple{Int,Int}}
+end
+
+# Check old->young barrier handling for ImmediateOrRef field stores.
+@testset "ImmediateOrRef field write barrier" begin
+    mutable struct ImmediateOrRefWBHolder
+        x::ImmediateOrRef{Any}
+    end
+    holder = ImmediateOrRefWBHolder(ImmediateOrRef{Any}())
+    GC.gc(true) # make holder old before writing young references into it
+
+    finalized = Ref(false)
+    obj = Int[1, 2, 3]
+    finalizer(obj) do _
+        finalized[] = true
+    end
+    holder.x = ImmediateOrRef{Any}(obj)
+    obj = nothing
+    for _ in 1:20
+        GC.gc(false)
+    end
+    @test !finalized[]
+    @test holder.x[] isa Vector{Int}
+    @test isassigned(holder.x)
+    @test !Base.isimmediate(holder.x)
+
+    holder.x = Base._taggedptr_from_raw(ImmediateOrRef{Any}, UInt(0x5))
+    for _ in 1:20
+        GC.gc(false)
+    end
+    @test !isassigned(holder.x)
+    @test Base.isimmediate(holder.x)
+    @test_throws ErrorException holder.x[]
+end

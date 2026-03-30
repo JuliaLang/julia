@@ -319,6 +319,7 @@ include("number.jl")
 include("int.jl")
 include("operators.jl")
 include("pointer.jl")
+include("immediateorref.jl")
 include("refvalue.jl")
 include("cmem.jl")
 

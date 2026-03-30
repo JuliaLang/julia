@@ -7,6 +7,73 @@ b = parse(BigInt,"123456789012345678901234567891")
 c = parse(BigInt,"246913578024691357802469135780")
 d = parse(BigInt,"-246913578024691357802469135780")
 ee = typemax(Int64)
+
+# Exercise a test-only FastBigInt-style wrapper that inlines small signed values in ImmediateOrRef.
+@testset "ImmediateOrRef BigInt prototype" begin
+    taggedbigint_min = -(Int64(1) << 62)
+    taggedbigint_max = (Int64(1) << 62) - 1
+
+    taggedbigint_raw(n::Int64) = (reinterpret(UInt64, n) << 1) | UInt(1)
+    taggedbigint_decode(raw::UInt) = reinterpret(Int64, raw) >> 1
+    taggedbigint_can_inline(n::Integer) = taggedbigint_min <= n <= taggedbigint_max
+
+    struct TaggedBigInt
+        x::ImmediateOrRef{BigInt}
+    end
+
+    function TaggedBigInt(n::Integer)
+        if taggedbigint_can_inline(n)
+            raw = taggedbigint_raw(Int64(n))
+            return TaggedBigInt(Base._taggedptr_from_raw(ImmediateOrRef{BigInt}, raw))
+        end
+        return TaggedBigInt(ImmediateOrRef{BigInt}(BigInt(n)))
+    end
+
+    function taggedbigint_value(x::TaggedBigInt)
+        tp = x.x
+        if Base.isimmediate(tp)
+            return BigInt(taggedbigint_decode(Base.getrawvalue(tp)))
+        end
+        return tp[]
+    end
+
+    Base.:+(a::TaggedBigInt, b::TaggedBigInt) = TaggedBigInt(taggedbigint_value(a) + taggedbigint_value(b))
+
+    small = TaggedBigInt(123)
+    @test Base.isimmediate(small.x)
+    @test taggedbigint_value(small) == BigInt(123)
+
+    negsmall = TaggedBigInt(-123)
+    @test Base.isimmediate(negsmall.x)
+    @test taggedbigint_value(negsmall) == BigInt(-123)
+
+    @test taggedbigint_value(TaggedBigInt(taggedbigint_min)) == BigInt(taggedbigint_min)
+    @test taggedbigint_value(TaggedBigInt(taggedbigint_max)) == BigInt(taggedbigint_max)
+
+    large = TaggedBigInt(big(1) << 100)
+    @test !Base.isimmediate(large.x)
+    @test isassigned(large.x)
+    @test taggedbigint_value(large) == big(1) << 100
+
+    @test Base.isimmediate((TaggedBigInt(40) + TaggedBigInt(2)).x)
+    @test taggedbigint_value(TaggedBigInt(40) + TaggedBigInt(2)) == BigInt(42)
+
+    mixed = TaggedBigInt((big(1) << 100) + 7) + TaggedBigInt(5)
+    @test !Base.isimmediate(mixed.x)
+    @test taggedbigint_value(mixed) == (big(1) << 100) + 12
+
+    io = IOBuffer()
+    serialize(io, (small, negsmall, large))
+    seekstart(io)
+    small2, negsmall2, large2 = deserialize(io)
+    @test taggedbigint_value(small2) == taggedbigint_value(small)
+    @test taggedbigint_value(negsmall2) == taggedbigint_value(negsmall)
+    @test taggedbigint_value(large2) == taggedbigint_value(large)
+    @test Base.isimmediate(small2.x)
+    @test Base.isimmediate(negsmall2.x)
+    @test !Base.isimmediate(large2.x)
+end
+
 @testset "basics" begin
     @test BigInt <: Signed
     @test big(1) isa Signed

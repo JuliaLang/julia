@@ -244,6 +244,7 @@ DevDocs = [
         "devdocs/types.md",
         "devdocs/ub.md",
         "devdocs/object.md",
+        "devdocs/taggedptr.md",
         "devdocs/eval.md",
         "devdocs/callconv.md",
         "devdocs/compiler.md",
