@@ -1049,9 +1049,13 @@ end |> Compiler.is_nothrow
 # Effects for :compilerbarrier
 f1_compilerbarrier(b) = Base.compilerbarrier(:type, b)
 f2_compilerbarrier(b) = Base.compilerbarrier(:conditional, b)
+f3_compilerbarrier(b) = Base.compilerbarrier(:blackbox, b)
 
 @test !Compiler.is_consistent(Base.infer_effects(f1_compilerbarrier, (Bool,)))
 @test Compiler.is_consistent(Base.infer_effects(f2_compilerbarrier, (Bool,)))
+# :blackbox is not consistent (prevents CSE/constant-folding) but is nothrow
+@test !Compiler.is_consistent(Base.infer_effects(f3_compilerbarrier, (Bool,)))
+@test Compiler.is_nothrow(Base.infer_effects(f3_compilerbarrier, (Bool,)))
 
 # Optimizer-refined effects
 function f1_optrefine(b)
