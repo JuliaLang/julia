@@ -4006,12 +4006,6 @@ assumptions about the output: it cannot be constant-folded, CSE'd, or
 treated as loop-invariant.
 This is equivalent to `compilerbarrier(:blackbox, x)`.
 
-For scalar types, this emits an opaque inline asm identity, tying the output
-register to the input and preventing the optimizer from tracking the value.
-For pointer and boxed types, where such an asm would be invalid due to GC
-provenance requirements, it emits a memory clobber instead — the same pointer
-is returned, but the optimizer must assume that loads through it may have changed.
-
 This is useful in benchmarking to prevent loop-invariant computations from being
 hoisted out of benchmark loops. The output of `blackbox(x)` is opaque, so
 any function call that depends on it must be re-executed each iteration.
