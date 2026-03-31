@@ -225,10 +225,12 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
         # TODO: Do we actually want unique names here? The C code in
         # `jl_new_code_info_from_ir` has logic to simplify gensym'd names and
         # use the empty string for compiler-generated bindings.
-        ni = get(slot_rename_inds, name, 0)
-        slot_rename_inds[name] = ni + 1
-        if ni > 0
-            name = "$name@$ni"
+        if name !== UNUSED
+            ni = get(slot_rename_inds, name, 0)
+            slot_rename_inds[name] = ni + 1
+            if ni > 0
+                name = "$name@$ni"
+            end
         end
         sname = Symbol(name)
         slotnames[i] = sname
@@ -327,12 +329,7 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
         ex.value
     elseif k == K"core"
         name = ex.name_val
-        if name == "cglobal"
-            # Inference expects cglobal as call argument to be `GlobalRef`,
-            # so we resolve that name as a symbol of `Core.Intrinsics` here.
-            # https://github.com/JuliaLang/julia/blob/7a8cd6e202f1d1216a6c0c0b928fb43a123cada8/Compiler/src/validation.jl#L87
-            GlobalRef(Core.Intrinsics, :cglobal)
-        elseif name == "nothing"
+        if name == "nothing"
             # Translate Core.nothing into literal `nothing`s (flisp uses a
             # special form (null) for this during desugaring, etc)
             nothing

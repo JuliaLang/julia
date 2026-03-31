@@ -470,9 +470,21 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                 ::K"TOMBSTONE" # <- function_decl should not be used in value position
             ]
         end
+    elseif k == K"method" && kind(ex[1]) === K"BindingId" &&
+            haskey(ctx.closure_bindings, ex[1].var_id)
+        # rm method table argument if it's a closure id, since it's unnecessary
+        # and requires the `(= id (new ...))` call to be lifted above the
+        # method.  flisp might be messing up overlays when it does this, since
+        # it removes all locals, not just closure ids.
+        @ast ctx ex [K"method"
+            "nothing"::K"core"(ex[1])
+            _convert_closures(ctx, ex[2])
+            _convert_closures(ctx, ex[3])]
     elseif k == K"function_type"
         func_name = ex[1]
         if kind(func_name) == K"BindingId" && get_binding(ctx, func_name).kind === :local
+            @jl_assert(haskey(ctx.closure_infos, func_name.var_id),
+                       (ex, "function_type of local without known closure type"))
             ctx.closure_infos[func_name.var_id].type_name
         else
             @ast ctx ex [K"call" "Typeof"::K"core" func_name]
@@ -486,12 +498,14 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                                     ctx.is_toplevel_seq_point, ctx.toplevel_pure, ctx.toplevel_stmts,
                                     ctx.closure_infos)
         body = map_cl_convert(ctx2, ex[2], false)
-        if !ctx.is_toplevel_seq_point
-            # Move methods out to a top-level sequence point.
-            push!(ctx.toplevel_stmts, body)
-            @ast ctx ex (::K"TOMBSTONE")
-        elseif is_closure
-            body
+        if is_closure
+            if ctx.is_toplevel_seq_point
+                body
+            else
+                # Move methods out to a top-level sequence point.
+                push!(ctx.toplevel_stmts, body)
+                @ast ctx ex (::K"TOMBSTONE")
+            end
         else
             @ast ctx ex [K"block"
                 body

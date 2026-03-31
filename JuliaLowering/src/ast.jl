@@ -355,7 +355,7 @@ function set_scope_layer(ctx, ex, layer_id, force)
 
     ex2 = if k == K"module" || k == K"toplevel" || k == K"inert" || k == K"inert_syntaxtree"
         mknode(ex, children(ex))
-    elseif k == K"."
+    elseif k == K"." && numchildren(ex) == 2
         cs = tree_ids(set_scope_layer(ctx, ex[1], layer_id, force), ex[2])
         mknode(ex, cs)
     elseif !is_leaf(ex)
@@ -419,13 +419,6 @@ name_hint(name) = CompileHints(:name_hint, name)
 
 #-------------------------------------------------------------------------------
 # Predicates and accessors working on expression trees
-
-# For historical reasons, `cglobal` and `ccall` are their own special
-# quasi-identifier-like syntax but with special handling inside lowering which
-# means they can't be used as normal identifiers.
-function is_ccall_or_cglobal(name::AbstractString)
-    return name == "ccall" || name == "cglobal"
-end
 
 function is_quoted(ex)
     kind(ex) in KSet"Symbol quote top core globalref break inert

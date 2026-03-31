@@ -1496,3 +1496,30 @@ function null_offset(offset)
     Ptr{UInt8}(C_NULL) + offset
 end
 @test null_offset(Int(100)) == Ptr{UInt8}(UInt(100))
+
+# https://github.com/JuliaLang/julia/issues/61435
+function catch_error_61435(f, x)
+    try
+        f(x)
+    catch
+        return :caught
+    end
+end
+let f = (x) -> Core.Intrinsics.sext_int(Int16, x)
+    @test Compiler.is_nothrow(Base.infer_effects(f, (Int8,)))
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (Int16,)))
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (Int32,)))
+    @test catch_error_61435(f, Int16(0)) === :caught
+end
+let f = (x) -> Core.Intrinsics.zext_int(UInt16, x)
+    @test Compiler.is_nothrow(Base.infer_effects(f, (UInt8,)))
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (UInt16,)))
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (UInt32,)))
+    @test catch_error_61435(f, UInt16(0)) === :caught
+end
+let f = (x) -> Core.Intrinsics.trunc_int(Int16, x)
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (Int8,)))
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (Int16,)))
+    @test Compiler.is_nothrow(Base.infer_effects(f, (Int32,)))
+    @test catch_error_61435(f, Int16(0)) === :caught
+end

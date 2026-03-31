@@ -130,6 +130,7 @@ end
     # should have similar conflict rules to arguments
     @testset "destructured-arg,destructured-arg/arg/local/sp/global" begin
         s = "function ((x,x)); end"
+        # this works in flisp; should it?
         @test_throws LoweringError JuliaLowering.include_string(test_mod, s)
         s = "function ((x,y),x); end"
         @test_throws LoweringError JuliaLowering.include_string(test_mod, s)

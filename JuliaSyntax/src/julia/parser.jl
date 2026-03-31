@@ -1572,7 +1572,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # A.@var"#" a ==> (macrocall (. A (macro_name (var #))) a)
             # @+x y       ==> (macrocall (macro_name +) x y)
             # A.@.x       ==> (macrocall (. A (macro_name .)) x)
-            processing_macro_name = maybe_parsed_macro_name(
+            maybe_parsed_macro_name(
                 ps, processing_macro_name, last_identifier_orig_kind, mark)
             let ps = with_space_sensitive(ps)
                 # Space separated macro arguments
@@ -2213,7 +2213,6 @@ function parse_if_elseif(ps, is_elseif=false, is_elseif_whitespace_err=false)
     else
         bump(ps, TRIVIA_FLAG)
     end
-    cond_mark = position(ps)
     if peek(ps) in KSet"NewlineWs end"
         # if end      ==>  (if (error) (block))
         # if \n end   ==>  (if (error) (block))
@@ -2275,7 +2274,6 @@ end
 # Parse function and macro definitions
 function parse_function_signature(ps::ParseState, is_function::Bool)
     is_anon_func = false
-    parsed_call = false
     needs_parse_call = true
 
     mark = position(ps)
@@ -2335,7 +2333,6 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
             end::NamedTuple{(:needs_parameters, :is_anon_func, :parsed_call, :needs_parse_call, :maybe_grouping_parens, :delim_flags),
                             Tuple{Bool, Bool, Bool, Bool, Bool, RawFlags}}
             is_anon_func = opts.is_anon_func
-            parsed_call = opts.parsed_call
             needs_parse_call = opts.needs_parse_call
             if is_anon_func
                 # function (x) body end ==>  (function (tuple-p x) (block body))
@@ -2806,7 +2803,6 @@ end
 # flisp: parse-iteration-spec
 function parse_iteration_spec(ps::ParseState)
     mark = position(ps)
-    k = peek(ps)
     # Handle `outer` contextual keyword
     parse_pipe_lt(with_space_sensitive(ps))
     if peek_behind(ps).orig_kind == K"outer"
@@ -2839,7 +2835,7 @@ end
 # generators
 function parse_iteration_specs(ps::ParseState)
     mark = position(ps)
-    n_iters = parse_comma_separated(ps, parse_iteration_spec)
+    _n_iters = parse_comma_separated(ps, parse_iteration_spec)
     emit(ps, mark, K"iteration")
 end
 
@@ -3210,8 +3206,7 @@ function parse_paren(ps::ParseState, check_identifiers=true, has_unary_prefix=fa
     mark = position(ps)
     @check peek(ps) == K"("
     bump(ps, TRIVIA_FLAG) # K"("
-    after_paren_mark = position(ps)
-    (isdot, tok) = peek_dotted_op_token(ps)
+    (_isdot, tok) = peek_dotted_op_token(ps)
     k = kind(tok)
     if k == K")"
         # ()  ==>  (tuple-p)
@@ -3300,7 +3295,6 @@ function parse_brackets(after_parse::F,
                     where_enabled=true,
                     whitespace_newline=true)
     params_positions = acquire_positions(ps.stream)
-    last_eq_before_semi = 0
     num_subexprs = 0
     num_semis = 0
     had_commas = false
@@ -3390,8 +3384,6 @@ function parse_string(ps::ParseState, raw::Bool)
     bump(ps, TRIVIA_FLAG)
     first_chunk = true
     n_nontrivia_chunks = 0
-    removed_initial_newline = false
-    had_interpolation = false
     prev_chunk_newline = false
     while true
         t = peek_full_token(ps)
@@ -3416,7 +3408,7 @@ function parse_string(ps::ParseState, raw::Bool)
                 # "hi$("ho")"     ==>  (string "hi" (parens (string "ho")))
                 m = position(ps)
                 bump(ps, TRIVIA_FLAG)
-                opts = parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
+                opts = parse_brackets(ps, K")") do had_commas, _had_splat, num_semis, num_subexprs
                     return (needs_parameters=false,
                             simple_interp=!had_commas && num_semis == 0 && num_subexprs == 1)
                 end::NamedTuple{(:needs_parameters, :simple_interp, :delim_flags), Tuple{Bool, Bool, RawFlags}}
@@ -3440,7 +3432,6 @@ function parse_string(ps::ParseState, raw::Bool)
             end
             first_chunk = false
             n_nontrivia_chunks += 1
-            had_interpolation = true
             prev_chunk_newline = false
         elseif k == string_chunk_kind
             if triplestr && first_chunk && span(t) <= 2 &&

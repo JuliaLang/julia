@@ -44,6 +44,10 @@ function _value_string(ex)
     return str
 end
 
+# Within JL, K"Placeholder" is used for never-read identifiers, but this magic
+# symbol is used in the IR (its write-only properties are enforced in codegen).
+const UNUSED = "#unused#"
+
 function _show_syntax_tree(io, ex, indent, show_kinds)
     nodestr = !is_leaf(ex) ? "[$(untokenize(head(ex)))]" : _value_string(ex)
 

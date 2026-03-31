@@ -10,8 +10,6 @@ function _register_kinds()
             "atomic"
             # Flag for @generated parts of a function
             "generated"
-            # Like (function call body) but (generated_function call gen nongen)
-            "generated_function"
             # Temporary rooting of identifiers (GC.@preserve)
             "gc_preserve"
             "gc_preserve_begin"
@@ -66,6 +64,7 @@ function _register_kinds()
             "isglobal"
             "locals"
             "thisfunction"
+            "overlay"
         "END_EXTENSION_KINDS"
 
         # The following kinds are internal to lowering
@@ -89,7 +88,13 @@ function _register_kinds()
             "always_defined"
             "_while"
             "_do_while"
+            # (_typevar name lb ub).  flisp usually uses 3-long lists for these,
+            # usually called `sparams`
+            "_typevar"
             "_typevars" # used for supplying already-allocated `TypeVar`s to `where`
+            # (_generated_body (quote gen) nongen) to allow arglist-related desugaring
+            # to occur before the methods are created
+            "_generated_body"
             "with_static_parameters"
             "top"
             "lambda"
@@ -141,6 +146,8 @@ function _register_kinds()
             # Pre-lowered SSA value reference from Expr(:ssavalue, N).
             # Translated to a BindingId during desugaring.
             "ssavalue"
+            # Token used by interpolate_ast to mark where `$` was
+            raw"_$"
         "END_LOWERING_KINDS"
 
         # The following kinds are emitted by lowering and used in Julia's untyped IR

@@ -1105,6 +1105,8 @@ function renumber_body(ctx, input_code, slot_rewrites)
         ex_out = nothing
         if k == K"=" && is_ssa(ctx, ex[1])
             lhs_id = ex[1].var_id
+            @jl_assert(!haskey(ssa_rewrites, lhs_id),
+                       (ex, "multiple assignments to ssavalue"))
             if is_ssa(ctx, ex[2])
                 # For SSA₁ = SSA₂, record that all uses of SSA₁ should be replaced by SSA₂
                 ssa_rewrites[lhs_id] = ssa_rewrites[ex[2].var_id]
@@ -1172,7 +1174,7 @@ function compile_lambda(outer_ctx, ex)
     for arg in children(lambda_args)
         if kind(arg) == K"Placeholder"
             # Unused functions arguments like: `_` or `::T`
-            push!(slots, Slot(arg.name_val, :argument, getmeta(arg, :nospecialize, false),
+            push!(slots, Slot(UNUSED, :argument, getmeta(arg, :nospecialize, false),
                               false, false, false, false))
         else
             @jl_assert kind(arg) == K"BindingId" ex arg
@@ -1220,7 +1222,6 @@ end
 ensure_linearization_attributes!(graph) = ensure_attributes!(
     ensure_scope_attributes!(graph),
     slots=Vector{Slot},
-    mod=Module,
     id=Int)
 
 """

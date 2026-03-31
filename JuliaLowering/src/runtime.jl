@@ -295,6 +295,16 @@ struct GeneratedFunctionStub
     spnames::Core.SimpleVector
 end
 
+function _gen_args_from_syms(ctx, src, layer, args)
+    out = SyntaxList(ctx.graph)
+    for a in args
+        id = newleaf(syntax_graph(ctx), src, K"Identifier", string(a))
+        id = _est_to_dst_ident(id) # support placeholders
+        push!(out, adopt_scope(id, layer))
+    end
+    out
+end
+
 # Call the `@generated` code generator function and wrap the results of the
 # expression into a CodeInfo.
 #
@@ -347,12 +357,8 @@ function (g::GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize a
 
     # Wrap expansion in a non-toplevel lambda and run scope resolution
     ex2 = @ast ctx2 ex0 [K"lambda"(is_toplevel_thunk=false, toplevel_pure=true)
-        [K"block"
-            (adopt_scope(string(n)::K"Identifier", layer) for n in g.argnames)...
-        ]
-        [K"block"
-            (adopt_scope(string(n)::K"Identifier", layer) for n in g.spnames)...
-        ]
+        [K"block" _gen_args_from_syms(ctx2, ex0, layer, g.argnames)...]
+        [K"block" _gen_args_from_syms(ctx2, ex0, layer, g.spnames)...]
         ex2
     ]
     ctx3, ex3 = resolve_scopes(ctx2, ex2)

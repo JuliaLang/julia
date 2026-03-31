@@ -2841,3 +2841,27 @@ let
     @test (r <: A) && (r <: B)
     @test r !== Union{}
 end
+
+# JETLS#509 — inference hang with Union-bounded parametric types
+# subtype_ccheck leaked right-side Union choices into the shared
+# Runions statestack, causing exponential state iteration when
+# multiple Union-bounded parameters share a common variable.
+struct JETLS509S{F, A<:Union{Ref{F},Val{F}}, B<:Union{Ref{F},Val{F}},
+                    C<:Union{Ref{F},Val{F}}, D<:Union{Ref{F},Val{F}},
+                    E<:Union{Ref{F},Val{F}}, G<:Union{Ref{F},Val{F}}}
+end
+JETLS509f(a::JETLS509S{F}, b::JETLS509S{F}, s::Union{Nothing,Ref{F}}=nothing) where {F} = 1
+let tt = Tuple{typeof(JETLS509f),
+        JETLS509S{F,A,B,C,D,E,G} where {
+            A<:Union{Ref{F},Val{F}}, B<:Union{Ref{F},Val{F}},
+            C<:Union{Ref{F},Val{F}}, D<:Union{Ref{F},Val{F}},
+            E<:Union{Ref{F},Val{F}}, G<:Union{Ref{F},Val{F}}},
+        JETLS509S{F,A,B,C,D,E,G} where {
+            A<:Union{Ref{F},Val{F}}, B<:Union{Ref{F},Val{F}},
+            C<:Union{Ref{F},Val{F}}, D<:Union{Ref{F},Val{F}},
+            E<:Union{Ref{F},Val{F}}, G<:Union{Ref{F},Val{F}}},
+    } where F
+    @test Base.code_typed_by_type(tt) isa Vector
+end
+@test !(Tuple{Union{Int16,Int8},Ref{Int16},Ref{Int16}} <: Tuple{<:Union{S,T},Ref{S},Ref{T}} where {S,T})
+@test !(Tuple{Ref{Int16},Ref{Int16},Union{Int16,Int8}} <: Tuple{Ref{S},Ref{T},<:Union{S,T}} where {S,T})

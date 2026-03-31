@@ -140,7 +140,7 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
             pos == :begin   ? (fb:fb-1) :
             pos == :end     ? (lb+1:lb) :
             error("Unknown position $pos")
-        highlight(io, src.file, byterange, note=exc.msg)
+        highlight(io, src.file[], byterange, note=exc.msg)
     end
     if !isnothing(exc.err)
         print(io, "\nCaused by:\n")
@@ -469,36 +469,9 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
                 :scope_layer, layerid)
     elseif is_leaf(ex)
         ex
-    elseif k in KSet"function =" && numchildren(ex) === 2
-        # The (if (generated) gen nongen) form is troublesome because everything
-        # surrounding it is implicitly quoted (with `gen` interpolated into it),
-        # so converting the function's AST before proper quoting is incorrect.
-        ex1 = mapchildren(e->expand_forms_1(ctx,e), ctx, ex)
-        (is_eventually_call(ex1[1]) && has_if_generated(ex1[2])) || return ex1
-        gen = expand_forms_1(ctx, expand_quote(
-            ctx, @ast ctx ex1 [K"block" split_generated(ex1[2], true)]))
-        nongen = split_generated(ex1[2], false)
-        @ast ctx ex1 [K"generated_function" ex1[1] gen nongen]
     else
         mapchildren(e->expand_forms_1(ctx,e), ctx, ex)
     end
-end
-
-has_if_generated(st::SyntaxTree) = JuliaSyntax.@stm st begin
-    (_, when=is_leaf(st)||is_quoted(st)) -> false
-    [K"function" _...] -> false
-    ([K"=" call _], when=is_eventually_call(call)) -> false
-    [K"if" [K"generated"] _ _] -> true
-    _ -> any(has_if_generated, children(st))
-end
-split_generated(st::SyntaxTree, gen_part) = JuliaSyntax.@stm st begin
-    (_, when=is_leaf(st)||is_quoted(st)) -> st
-    [K"if" [K"generated"] gen nongen] -> if gen_part
-        @ast(st._graph, st, [K"$" gen])
-    else
-        nongen
-    end
-    _ -> mapchildren(x->split_generated(x, gen_part), st._graph, st)
 end
 
 ensure_macro_attributes!(graph) = ensure_attributes!(
