@@ -2255,7 +2255,8 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
             };
             push_i32(specs.size());
             for (uint32_t i = 0; i < specs.size(); i++) {
-                push_i32(base_flags | (specs[i].flags & JL_TARGET_UNKNOWN_NAME));
+                // Preserve full flags (clone_all, base, etc.) plus veccall
+                push_i32(base_flags | specs[i].flags);
                 auto &specdata = specs[i].data;
                 data.insert(data.end(), specdata.begin(), specdata.end());
             }
