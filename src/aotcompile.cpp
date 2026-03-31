@@ -2047,6 +2047,7 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
         sysimgM.setOverrideStackAlignment(OverrideStackAlignment);
 
         int compression = jl_options.compress_sysimage ? 15 : 0;
+        uint32_t sysimg_checksum = jl_crc32c(0, z->buf, z->size);
         ArrayRef<char> sysimg_data{z->buf, (size_t)z->size};
         SmallVector<char, 0> compressed_data;
         if (compression) {
@@ -2075,6 +2076,10 @@ void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
         addComdat(new GlobalVariable(sysimgM, len->getType(), true,
                                      GlobalVariable::ExternalLinkage,
                                      len, "jl_system_image_size"), TheTriple);
+        Constant *checksum_val = ConstantInt::get(Type::getInt32Ty(Context), sysimg_checksum);
+        addComdat(new GlobalVariable(sysimgM, checksum_val->getType(), true,
+                                     GlobalVariable::ExternalLinkage,
+                                     checksum_val, "jl_system_image_checksum"), TheTriple);
 
         const char *unpack_func = compression ? "jl_image_unpack_zstd" : "jl_image_unpack_uncomp";
         auto unpack = new GlobalVariable(sysimgM, DL.getIntPtrType(Context), true,

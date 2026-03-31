@@ -3455,20 +3455,26 @@ static void jl_prefetch_system_image(const char *data, size_t size)
 JL_DLLEXPORT void jl_image_unpack_uncomp(void *handle, jl_image_buf_t *image)
 {
     size_t *plen;
+    uint32_t *pchecksum;
     jl_dlsym(handle, "jl_system_image_size", (void **)&plen, 1, 0);
     jl_dlsym(handle, "jl_system_image_data", (void **)&image->data, 1, 0);
     jl_dlsym(handle, "jl_image_pointers", (void**)&image->pointers, 1, 0);
+    jl_dlsym(handle, "jl_system_image_checksum", (void **)&pchecksum, 1, 0);
     image->size = *plen;
+    image->checksum = *pchecksum;
     jl_prefetch_system_image(image->data, image->size);
 }
 
 JL_DLLEXPORT void jl_image_unpack_zstd(void *handle, jl_image_buf_t *image)
 {
     size_t *plen;
+    uint32_t *pchecksum;
     const char *data;
     jl_dlsym(handle, "jl_system_image_size", (void **)&plen, 1, 0);
     jl_dlsym(handle, "jl_system_image_data", (void **)&data, 1, 0);
     jl_dlsym(handle, "jl_image_pointers", (void **)&image->pointers, 1, 0);
+    jl_dlsym(handle, "jl_system_image_checksum", (void **)&pchecksum, 1, 0);
+    image->checksum = *pchecksum;
     jl_prefetch_system_image(data, *plen);
     image->size = ZSTD_getFrameContentSize(data, *plen);
     size_t page_size = jl_getpagesize(); /* jl_page_size is not set yet when loading sysimg */
@@ -4301,7 +4307,7 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             sysimg = &f->buf[f->bpos];
         if (needs_permalloc)
             success = ios_readall(f, sysimg, len) == len;
-        if (!success || jl_crc32c(0, sysimg, len) != (uint32_t)checksum) {
+        if (!success) {
             restored = jl_get_exceptionf(jl_errorexception_type, "Error reading package image file.");
             JL_SIGATOMIC_END();
         }
@@ -4406,8 +4412,7 @@ JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf)
     JL_SIGATOMIC_BEGIN();
     ios_static_buffer(&f, (char *)buf.data, buf.size);
 
-    uint32_t checksum = jl_crc32c(0, buf.data, buf.size);
-    jl_restore_system_image_from_stream(&f, image, checksum);
+    jl_restore_system_image_from_stream(&f, image, buf.checksum);
 
     ios_close(&f);
     JL_SIGATOMIC_END();

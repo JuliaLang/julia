@@ -2167,6 +2167,7 @@ typedef struct {
     const char *data;
     size_t size;
     uint64_t base;
+    uint32_t checksum;
 } jl_image_buf_t;
 
 struct _jl_image_t;
