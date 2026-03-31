@@ -2937,12 +2937,12 @@ end
 # Type node budget for depth-limited type printing
 @testset "type node budget" begin
     @testset "default show produces full type output (no truncation)" begin
-        T = Vector{Vector{Vector{Vector{Int}}}}
+        T = Vector{Vector{Vector{Vector{Float64}}}}
         full = repr(T)
-        @test full == "Vector{Vector{Vector{Vector{Int64}}}}"
+        @test full == "Vector{Vector{Vector{Vector{Float64}}}}"
         @test !contains(full, "…")
 
-        T2 = Dict{String, Vector{Pair{Symbol, Int}}}
+        T2 = Dict{String, Vector{Pair{Symbol, Float64}}}
         @test !contains(repr(T2), "…")
 
         T3 = typeof(view([1,2,3], 1:2))
@@ -2952,8 +2952,8 @@ end
     end
 
     @testset "explicit :type_budget truncates" begin
-        T = Vector{Vector{Vector{Vector{Int}}}}
-        full = "Vector{Vector{Vector{Vector{Int64}}}}"
+        T = Vector{Vector{Vector{Vector{Float64}}}}
+        full = "Vector{Vector{Vector{Vector{Float64}}}}"
 
         str = sprint(show, T, context = :type_budget => Ref(100))
         @test str == full
@@ -2962,30 +2962,36 @@ end
         @test contains(str, "…")
         @test startswith(str, "Vector{")
         @test sizeof(str) < sizeof(full)
+
+        for i in 1:4
+            expected = "Vector{"^i * "…" * "}"^i
+            str = sprint(show, T, context = :type_budget => Ref(i))
+            @test str == expected
+        end
     end
 
     @testset "budget is shared across recursive calls" begin
-        T = Tuple{Vector{Int}, Dict{String, Float64}, Set{Symbol}}
+        T = Tuple{Vector{Float64}, Dict{String, Float32}, Set{Symbol}}
         buf = IOBuffer()
         io = IOContext(buf, :type_budget => Ref(5))
         show(io, T)
         str = String(take!(buf))
-        @test contains(str, "…")
+        @test str == "Tuple{Vector{Float64}, Dict{String, …}, …}"
     end
 
     @testset "no budget means no truncation" begin
-        T = Vector{Vector{Vector{Vector{Vector{Int}}}}}
+        T = Vector{Vector{Vector{Vector{Vector{Float64}}}}}
         buf = IOBuffer()
         io = IOContext(buf)
         show(io, T)
         str = String(take!(buf))
         @test !contains(str, "…")
-        @test str == "Vector{Vector{Vector{Vector{Vector{Int64}}}}}"
+        @test str == "Vector{Vector{Vector{Vector{Vector{Float64}}}}}"
     end
 
     @testset "plain Int budget auto-wraps in Ref" begin
-        T = Vector{Vector{Vector{Vector{Int}}}}
-        full = "Vector{Vector{Vector{Vector{Int64}}}}"
+        T = Vector{Vector{Vector{Vector{Float64}}}}
+        full = "Vector{Vector{Vector{Vector{Float64}}}}"
         str = sprint(show, T, context = :type_budget => 100)
         @test str == full
         str = sprint(show, T, context = :type_budget => 3)
@@ -2994,7 +3000,7 @@ end
     end
 
     @testset "Union types under budget" begin
-        T = Union{Int, Float64, String, Vector{Int}, Dict{String, Float64}}
+        T = Union{Float32, Float64, String, Vector{Float32}, Dict{String, Float64}}
         full = sprint(show, T)
         @test !contains(full, "…")
         str = sprint(show, T, context = :type_budget => 3)

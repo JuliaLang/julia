@@ -1001,7 +1001,7 @@ function _type_budget_init!(io::IO)
     end
     budget === nothing || return io
     get(io, :limit, false)::Bool || return io
-    return IOContext(io, :type_budget => Ref(displaysize(io)[2]))
+    return IOContext(io, :type_budget => Ref(clamp(displaysize(io)[2], 20, 200)))
 end
 
 function _type_budget_exceeded!(io::IO)
