@@ -671,9 +671,10 @@ function allequal(f, xs::Tuple)
         if n <= 32
             n <= 1 && return true
             checks = [:(isequal(val, f(getfield(xs, $i)))) for i in 2:n]
+            expr = foldr((a, b) -> :($a && $b), checks)
             return quote
                 val = f(getfield(xs, 1))
-                $(foldr((a, b) -> :($a && $b), checks))
+                $expr
             end
         else
             return :(return _allequal_loop(f, xs))
