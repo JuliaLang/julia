@@ -664,7 +664,6 @@ function _allequal_loop(f, xs::Tuple)
     return true
 end
 
-
 function allequal(f, xs::Tuple)
     if @generated
         n = fieldcount(xs)
