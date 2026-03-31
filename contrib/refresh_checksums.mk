@@ -25,7 +25,7 @@ NON_CLANG_TRIPLETS=$(filter-out %-darwin %-freebsd,$(TRIPLETS))
 
 # These are the projects currently using BinaryBuilder; both GCC-expanded and non-GCC-expanded:
 BB_PROJECTS=openssl libssh2 nghttp2 mpfr curl libgit2 pcre libuv unwind llvmunwind dsfmt objconv p7zip zlib zstd libsuitesparse openlibm blastrampoline libtracyclient mmtk_julia
-BB_GCC_EXPANDED_PROJECTS=openblas csl
+BB_GCC_EXPANDED_PROJECTS=openblas compilersupportlibraries
 BB_CXX_EXPANDED_PROJECTS=gmp llvm clang llvm-tools lld
 # These are non-BB source-only deps
 NON_BB_PROJECTS=patchelf mozillacert lapack libwhich utf8proc ittapi
@@ -100,9 +100,6 @@ all: checksum-doc-unicodedata
 pack-checksum-llvm-tools: | pack-checksum-llvm
 	@# nothing to do but disable the prefix rule
 pack-checksum-llvm: | checksum-llvm-tools
-pack-checksum-csl: | pack-checksum-compilersupportlibraries
-	@# nothing to do but disable the prefix rule
-pack-checksum-compilersupportlibraries: | checksum-csl
 pack-checksum-libsuitesparse: | pack-checksum-suitesparse
 	@# nothing to do but disable the prefix rule
 pack-checksum-suitesparse: | checksum-libsuitesparse
