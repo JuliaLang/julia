@@ -903,7 +903,7 @@ a matching function, or a value.
     The ability to specify anything other than a type or a value as `exception` requires Julia v1.8 or later.
 
 !!! compat "Julia 1.13"
-    The three-argument form `@test_throws extype pattern expr` requires Julia v1.12 or later.
+    The three-argument form `@test_throws extype pattern expr` requires Julia v1.13 or later.
 
 !!! compat "Julia 1.14"
     The `context` keyword argument requires at least Julia 1.14.
@@ -2653,6 +2653,9 @@ code, paired with the boxed variable names. Variable names are `:unknown` when a
 slot name cannot be resolved.
 
 See also [`detect_closure_boxes_all_modules`](@ref) to check all loaded modules.
+
+!!! compat "Julia 1.14"
+    This method requires Julia 1.14 or later.
 """
 function detect_closure_boxes(mods::Module...)
     @nospecialize
@@ -2723,12 +2726,15 @@ function detect_closure_boxes(mods::Module...)
 end
 
 """
-    ()
+    detect_closure_boxes_all_modules()
 
 Return a sorted `Vector{Pair{Method, Vector{Symbol}}}` of all methods in currently
 loaded modules that allocate `Core.Box` in their lowered code.
 
 See also [`detect_closure_boxes`](@ref) to check specific modules.
+
+!!! compat "Julia 1.14"
+    This method requires Julia 1.14 or later.
 """
 detect_closure_boxes_all_modules() = detect_closure_boxes(Base.loaded_modules_array()...)
 

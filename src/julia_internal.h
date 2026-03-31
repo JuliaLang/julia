@@ -516,11 +516,6 @@ extern tracer_cb jl_newmeth_tracer;
 void jl_call_tracer(tracer_cb callback, jl_value_t *tracee);
 void print_func_loc(JL_STREAM *s, jl_method_t *m);
 extern jl_array_t *_jl_debug_method_invalidation JL_GLOBALLY_ROOTED;
-JL_DLLEXPORT extern arraylist_t jl_linkage_blobs; // external linkage: sysimg/pkgimages
-JL_DLLEXPORT extern arraylist_t jl_image_relocs;  // external linkage: sysimg/pkgimages
-JL_DLLEXPORT extern arraylist_t jl_top_mods;  // external linkage: sysimg/pkgimages
-extern arraylist_t eytzinger_image_tree;
-extern arraylist_t eytzinger_idxs;
 
 extern JL_DLLEXPORT size_t jl_page_size;
 extern JL_DLLEXPORT size_t jl_hugepage_size;
@@ -757,7 +752,13 @@ void jl_gc_reset_alloc_count(void);
 uint32_t jl_get_gs_ctr(void);
 void jl_set_gs_ctr(uint32_t ctr);
 
-typedef struct _jl_static_show_config_t { uint8_t quiet; } jl_static_show_config_t;
+#define JL_STATIC_SHOW_VERBOSITY_MINIMAL 0
+#define JL_STATIC_SHOW_VERBOSITY_DEFAULT 1
+#define JL_STATIC_SHOW_VERBOSITY_FULL 2
+
+typedef struct _jl_static_show_config_t {
+    uint8_t verbosity;
+} jl_static_show_config_t;
 size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_config_t ctx) JL_NOTSAFEPOINT;
 
 STATIC_INLINE jl_value_t *undefref_check(jl_datatype_t *dt, jl_value_t *v) JL_NOTSAFEPOINT
@@ -799,10 +800,11 @@ typedef union {
 #define METHOD_SIG_LATEST_ONLY              0b0010
 #define METHOD_SIG_PRECOMPILE_MANY          0b0100
 
-JL_DLLEXPORT jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner);
-JL_DLLEXPORT void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src);
+void jl_init_engine(void);
 void jl_engine_sweep(jl_ptls_t *gc_all_tls_states) JL_NOTSAFEPOINT;
 int jl_engine_hasreserved(jl_method_instance_t *m, jl_value_t *owner) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner);
+JL_DLLEXPORT void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src);
 
 JL_DLLEXPORT jl_code_instance_t *jl_type_infer(jl_method_instance_t *li JL_PROPAGATES_ROOT, size_t world, uint8_t source_mode, uint8_t trim_mode);
 JL_DLLEXPORT jl_code_info_t *jl_gdbcodetyped1(jl_method_instance_t *mi, size_t world);
@@ -1064,6 +1066,8 @@ JL_DLLEXPORT jl_methcache_t *jl_method_get_cache(
 JL_DLLEXPORT int jl_pointer_egal(jl_value_t *t);
 JL_DLLEXPORT jl_value_t *jl_nth_slot_type(jl_value_t *sig JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 void jl_compute_field_offsets(jl_datatype_t *st);
+const char *jl_check_valid_supertype(jl_value_t *super);
+void jl_check_field_types(jl_svec_t *ftypes, jl_sym_t *type_name);
 void jl_module_run_initializer(jl_module_t *m);
 JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int alloc);
 JL_DLLEXPORT void jl_binding_deprecation_warning(jl_binding_t *b);
@@ -1316,6 +1320,18 @@ void jl_init_llvm(void);
 void jl_init_runtime_ccall(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_intrinsic_properties(void);
+void jl_init_staticdata(void);
+// TypeApp: immutable struct with head::Any, param::Any
+// Represents a single lazy type application step (like UnionAll for where bindings).
+typedef struct {
+    JL_DATA_TYPE
+    jl_value_t *head;
+    jl_value_t *param;
+} jl_typeapp_t;
+
+extern jl_datatype_t *jl_typeapp_type;
+JL_DLLEXPORT jl_value_t *jl_resolve_typegroup(jl_module_t *module, jl_svec_t *typevars, jl_svec_t *struct_infos);
+int jl_is_typeapp(jl_value_t *v) JL_NOTSAFEPOINT;
 void jl_init_tasks(void) JL_GC_DISABLED;
 void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo) JL_NOTSAFEPOINT;
 jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi);
@@ -1390,15 +1406,7 @@ JL_DLLEXPORT void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t
 extern pthread_mutex_t in_signal_lock;
 #endif
 
-void jl_set_gc_and_wait(jl_task_t *ct); // n.b. not used on _OS_DARWIN_
-
-// Query if a Julia object is if a permalloc region (due to part of a sys- pkg-image)
-STATIC_INLINE size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
-{
-    return jl_image_relocs.len;
-}
-
-size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
+void jl_set_gc_and_wait(jl_task_t *ct);
 
 // Query if this object is perm-allocated in an image.
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
@@ -1873,11 +1881,6 @@ JL_DLLEXPORT float julia_half_to_float(uint16_t param) JL_NOTSAFEPOINT;
 extern jl_mutex_t typecache_lock;
 extern jl_mutex_t world_counter_lock;
 
-#if defined(__APPLE__)
-void jl_mach_gc_end(void) JL_NOTSAFEPOINT;
-void jl_safepoint_resume_thread_mach(jl_ptls_t ptls2, int16_t tid2) JL_NOTSAFEPOINT;
-#endif
-
 // -- smallintset.c -- //
 
 typedef uint_t (*smallintset_hash)(size_t val, jl_value_t *data);
@@ -2100,8 +2103,9 @@ JL_DLLEXPORT enum jl_memory_order jl_get_atomic_order_checked(jl_sym_t *order, c
 
 struct _jl_image_fptrs_t;
 
-JL_DLLEXPORT void jl_write_coverage_data(const char*);
+void jl_init_coverage(void);
 void jl_write_malloc_log(void);
+JL_DLLEXPORT void jl_write_coverage_data(const char*);
 
 extern uv_mutex_t symtab_lock;
 jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
@@ -2167,17 +2171,18 @@ JL_DLLIMPORT void jl_emit_codeinst_to_jit(jl_code_instance_t *codeinst, jl_code_
 typedef struct {
     LLVMOrcThreadSafeModuleRef TSM;
     LLVMValueRef F;
+    char *pass_output;  // LLVM pass instrumentation output (freed by jl_dump_function_ir or jl_dump_function_asm)
 } jl_llvmf_dump_t;
 
 JL_DLLIMPORT jl_value_t *jl_dump_method_asm(jl_method_instance_t *linfo, size_t world,
         char emit_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary);
-JL_DLLIMPORT void jl_get_llvmf_defn(jl_llvmf_dump_t* dump, jl_method_instance_t *linfo, jl_code_info_t *src, char getwrapper, char optimize, const jl_cgparams_t params);
+JL_DLLIMPORT void jl_get_llvmf_defn(jl_llvmf_dump_t* dump, jl_method_instance_t *linfo, jl_code_info_t *src, char getwrapper, char optimize, const char *llvm_options, const jl_cgparams_t params);
 JL_DLLIMPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, char emit_mc, const char* asm_variant, const char *debuginfo, char binary);
 JL_DLLIMPORT jl_value_t *jl_dump_function_ir(jl_llvmf_dump_t *dump, char strip_ir_metadata, char dump_module, const char *debuginfo);
 JL_DLLIMPORT jl_value_t *jl_dump_function_asm(jl_llvmf_dump_t *dump, char emit_mc, const char* asm_variant, const char *debuginfo, char binary, char raw);
 
 typedef jl_value_t *(*jl_codeinstance_lookup_t)(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t min_world, size_t max_world);
-JL_DLLIMPORT void *jl_create_native(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int cache, size_t world, jl_array_t *mod_array JL_MAYBE_UNROOTED, jl_array_t *worklist JL_MAYBE_UNROOTED, int all, jl_array_t *module_init_order JL_MAYBE_UNROOTED);
+JL_DLLIMPORT void *jl_create_native(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int cache, size_t world, jl_array_t *mod_array JL_MAYBE_UNROOTED, jl_array_t *worklist JL_MAYBE_UNROOTED, int all, jl_array_t *module_init_order JL_MAYBE_UNROOTED, jl_array_t *ext_foreign_cis JL_MAYBE_UNROOTED);
 JL_DLLIMPORT void *jl_emit_native(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _external_linkage);
 JL_DLLIMPORT void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,

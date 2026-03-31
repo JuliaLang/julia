@@ -1,0 +1,25 @@
+# This file is machine-generated - editing it directly is not advised
+
+julia_version = "1.14.0-DEV"
+manifest_format = "2.1"
+project_hash = "491b0496f036790ab9001fcf6b38ae497256ad30"
+
+[[deps.Bar]]
+path = "Bar"
+uuid = "ab000000-0000-0000-0000-000000000002"
+version = "0.1.0"
+
+    [deps.Bar.syntax]
+    julia_version = "1.14.0-DEV.1886"
+
+[[deps.Foo]]
+path = "Foo"
+uuid = "ab000000-0000-0000-0000-000000000001"
+version = "0.1.0"
+weakdeps = ["Bar"]
+
+    [deps.Foo.extensions]
+    FooBarExt = "Bar"
+
+    [deps.Foo.syntax]
+    julia_version = "1.14.0-DEV.1886"

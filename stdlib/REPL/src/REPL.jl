@@ -710,7 +710,7 @@ mutable struct BasicREPL <: AbstractREPL
 end
 
 outstream(r::BasicREPL) = r.terminal
-hascolor(r::BasicREPL) = hascolor(r.terminal)
+hascolor(r::BasicREPL) = Terminals.hascolor(r.terminal)
 
 function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
     repl.frontend_task = current_task()

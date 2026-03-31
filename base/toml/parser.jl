@@ -1,12 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-"""
-`Base.TOML` is an undocumented internal part of Julia's TOML parser
-implementation.  Users should call the documented interface in the
-TOML.jl standard library instead (by `import TOML` or `using TOML`).
-"""
-module TOML
-
 using Base: IdSet
 
 # we parse DateTime into these internal structs,
@@ -79,6 +72,11 @@ mutable struct Parser{Dates}
     # actually defined
     defined_tables::IdSet{TOMLDict}
 
+    # Tables implicitly created as intermediates by dotted keys
+    # in key-value entries (e.g. `a` in `a.b = 1`).
+    # These cannot be reopened by [table] headers.
+    implicit_tables::IdSet{TOMLDict}
+
     # The table we will finally return to the user
     root::TOMLDict
 
@@ -102,6 +100,7 @@ function Parser{Dates}(str::String; filepath=nothing) where {Dates}
             IdSet{TOMLDict}(),    # inline_tables
             IdSet{Any}(),         # static_arrays
             IdSet{TOMLDict}(),    # defined_tables
+            IdSet{TOMLDict}(),    # implicit_tables
             root,
             filepath
         )
@@ -139,6 +138,7 @@ function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothin
     empty!(p.inline_tables)
     empty!(p.static_arrays)
     empty!(p.defined_tables)
+    empty!(p.implicit_tables)
     p.filepath = filepath
     startup(p)
     return p
@@ -214,6 +214,7 @@ end
     ErrUnexpectedEndString
     ErrInvalidEscapeCharacter
     ErrInvalidUnicodeScalar
+    ErrMultilineStringAsKey
 end
 
 const err_message = Dict(
@@ -247,6 +248,7 @@ const err_message = Dict(
     ErrOverflowError                        => "overflowed when parsing integer",
     ErrInvalidUnicodeScalar                 => "invalid unicode scalar",
     ErrInvalidEscapeCharacter               => "invalid escape character",
+    ErrMultilineStringAsKey                 => "multiline strings are not allowed as keys",
     ErrUnexpectedEofExpectedValue           => "unexpected end of file, expected a value",
     ErrSignInNonBase10Number                => "number not in base 10 is not allowed to have a sign",
 )
@@ -297,7 +299,7 @@ end
 # used to show the interval where an error happened
 # Right now, it is only called with a == b
 function point_to_line(str::AbstractString, a::Int, b::Int, context)
-    @assert b >= a
+    @assert b >= a "invalid range"
     a = thisind(str, a)
     b = thisind(str, b)
     pos = something(findprev('\n', str, prevind(str, a)), 0) + 1
@@ -486,17 +488,27 @@ function parse_toplevel(l::Parser)::Err{Nothing}
     end
 end
 
-function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, check=true)::Err{TOMLDict}
+function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, check=true, define_implicit=false)::Err{TOMLDict}
     for i in 1:length(dotted_keys)
         d = d::TOMLDict
         key = dotted_keys[i]
         d = get!(TOMLDict, d, key)
         if d isa Vector{Any}
+            isempty(d) && return ParserError(ErrArrayTreatedAsDictionary)
             d = d[end]
         elseif d isa Vector
             return ParserError(ErrKeyAlreadyHasValue)
         end
-        check && @try check_allowed_add_key(l, d, i == length(dotted_keys))
+        if check
+            # When called from parse_entry (define_implicit=true), check
+            # defined_tables for ALL intermediates to prevent appending to
+            # tables that were closed by a different [table] section.
+            check_def = define_implicit ? true : (i == length(dotted_keys))
+            @try check_allowed_add_key(l, d, check_def)
+        end
+        if define_implicit && d isa TOMLDict
+            push!(l.implicit_tables, d)
+        end
     end
     return d::TOMLDict
 end
@@ -523,6 +535,9 @@ function parse_table(l)
         return ParserError(ErrExpectedEndOfTable)
     end
     l.active_table = @try recurse_dict!(l, l.root, table_key)
+    if l.active_table in l.implicit_tables
+        return ParserError(ErrDuplicatedKey)
+    end
     push!(l.defined_tables, l.active_table)
     return
 end
@@ -558,13 +573,16 @@ function parse_entry(l::Parser, d)::Union{Nothing, ParserError}
         return ParserError(ErrExpectedEqualAfterKey)
     end
     if length(key) > 1
-        d = @try recurse_dict!(l, d, @view(key[1:end-1]))
+        d = @try recurse_dict!(l, d, @view(key[1:end-1]), true, true)
     end
     last_key_part = l.dotted_keys[end]
 
     v = get(d, last_key_part, nothing)
     if v !== nothing
         @try check_allowed_add_key(l, v)
+        if v isa TOMLDict && v in l.implicit_tables
+            return ParserError(ErrDuplicatedKey)
+        end
     end
 
     skip_ws(l)
@@ -607,9 +625,9 @@ function _parse_key(l::Parser)
         return ParserError(ErrEmptyBareKey)
     end
     keyval = if accept(l, '"')
-        @try parse_string_start(l, false)
+        @try parse_string_start(l, false; allow_multiline=false)
     elseif accept(l, '\'')
-        @try parse_string_start(l, true)
+        @try parse_string_start(l, true; allow_multiline=false)
     else
         set_marker!(l)
         if accept_batch(l, isvalid_barekey_char)
@@ -720,7 +738,7 @@ function parse_array(l::Parser{Dates})::Err{Vector} where Dates
         (Dates !== nothing && ((T === Dates.Date) || (T === Dates.Time) || (T === Dates.DateTime)))
         # do nothing, leave as Vector{Any}
         new = array
-    else @assert false end
+    else @assert false "unexpected type" end
     push!(l.static_arrays, new)
     return new
 end
@@ -733,18 +751,17 @@ end
 function parse_inline_table(l::Parser)::Err{TOMLDict}
     dict = TOMLDict()
     push!(l.inline_tables, dict)
-    skip_ws(l)
+    skip_ws_nl(l)
     accept(l, '}') && return dict
     while true
         @try parse_entry(l, dict)
-        # SPEC: No newlines are allowed between the curly braces unless they are valid within a value.
-        skip_ws(l)
+        # TOML v1.1: newlines and trailing commas are allowed in inline tables
+        skip_ws_nl(l)
         accept(l, '}') && return dict
         if accept(l, ',')
-            skip_ws(l)
-            if accept(l, '}')
-                return ParserError(ErrTrailingCommaInlineTable)
-            end
+            skip_ws_nl(l)
+            # Trailing comma is allowed in TOML v1.1
+            accept(l, '}') && return dict
         else
             return ParserError(ErrExpectedCommaBetweenItemsInlineTable)
         end
@@ -846,7 +863,16 @@ function parse_number_or_date_start(l::Parser)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_binary)
             ate && return parse_bin(l, contains_underscore)
         elseif accept(l, isdigit)
-            return parse_local_time(l)
+            # Could be a local time (00:30) or a zero-padded date (0001-01-01).
+            # Consume remaining digits, then check for ':' or '-'.
+            accept_batch(l, isdigit)
+            if peek(l) == ':'
+                return parse_local_time(l)
+            elseif peek(l) == '-'
+                return parse_datetime(l)
+            else
+                return ParserError(ErrLeadingZeroNotAllowedInteger)
+            end
         end
     end
 
@@ -983,8 +1009,10 @@ ok_end_value(c::Char) = iswhitespace(c) || c == '#' || c == EOF_CHAR || c == ']'
 accept_two(l, f::F) where {F} = accept_n(l, 2, f) || return(ParserError(ErrParsingDateTime))
 function parse_datetime(l)
     # Year has already been eaten when we reach here
+    year_start = l.marker
     year = @try parse_int(l, false)
-    year in 0:9999 || return ParserError(ErrParsingDateTime)
+    # SPEC: date-fullyear = 4DIGIT (exactly 4 digits required)
+    (l.prevpos - year_start) == 4 || return ParserError(ErrParsingDateTime)
 
     # Month
     accept(l, '-') || return ParserError(ErrParsingDateTime)
@@ -1060,6 +1088,8 @@ function try_return_date(p::Parser{Dates}, year, month, day) where Dates
 end
 
 function parse_local_time(l::Parser)
+    # SPEC: partial-time = time-hour ":" ... where time-hour = 2DIGIT
+    (l.prevpos - l.marker) == 2 || return ParserError(ErrParsingDateTime)
     h = @try parse_int(l, false)
     h in 0:23 || return ParserError(ErrParsingDateTime)
     _, m, s, ms = @try _parse_local_time(l, true)
@@ -1101,33 +1131,35 @@ function _parse_local_time(l::Parser, skip_hour=false)::Err{NTuple{4, Int64}}
     minute = parse_int(l, false)
     minute in 0:59 || return ParserError(ErrParsingDateTime)
 
-    accept(l, ':') || return ParserError(ErrParsingDateTime)
-
-    # second
-    set_marker!(l)
-    @try accept_two(l, isdigit)
-    second = parse_int(l, false)
-    second in 0:59 || return ParserError(ErrParsingDateTime)
-
-    # optional fractional second
+    # seconds are optional in TOML v1.1
+    second = Int64(0)
     millisecond = Int64(0)
-    if accept(l, '.')
+    if accept(l, ':')
+        # second
         set_marker!(l)
-        found_fractional_digit = false
-        for i in 1:3
-            found_fractional_digit |= accept(l, isdigit)
+        @try accept_two(l, isdigit)
+        second = parse_int(l, false)
+        second in 0:59 || return ParserError(ErrParsingDateTime)
+
+        # optional fractional second
+        if accept(l, '.')
+            set_marker!(l)
+            found_fractional_digit = false
+            for i in 1:3
+                found_fractional_digit |= accept(l, isdigit)
+            end
+            if !found_fractional_digit
+                return ParserError(ErrParsingDateTime)
+            end
+            # DateTime in base only manages 3 significant digits in fractional
+            # second. Interpret parsed digits as fractional seconds and scale to
+            # milliseconds precision (e.g., ".2" => 200ms, ".20" => 200ms).
+            ndigits = l.prevpos - l.marker
+            fractional_second = parse_int(l, false)::Int64
+            millisecond = fractional_second * 10^(3 - ndigits)
+            # Truncate off the rest eventual digits
+            accept_batch(l, isdigit)
         end
-        if !found_fractional_digit
-            return ParserError(ErrParsingDateTime)
-        end
-        # DateTime in base only manages 3 significant digits in fractional
-        # second. Interpret parsed digits as fractional seconds and scale to
-        # milliseconds precision (e.g., ".2" => 200ms, ".20" => 200ms).
-        ndigits = l.prevpos - l.marker
-        fractional_second = parse_int(l, false)::Int64
-        millisecond = fractional_second * 10^(3 - ndigits)
-        # Truncate off the rest eventual digits
-        accept_batch(l, isdigit)
     end
     return hour, minute, second, millisecond
 end
@@ -1137,13 +1169,16 @@ end
 # String #
 ##########
 
-function parse_string_start(l::Parser, quoted::Bool)::Err{String}
+function parse_string_start(l::Parser, quoted::Bool; allow_multiline::Bool=true)::Err{String}
     # Have eaten a `'` if `quoted` is true, otherwise have eaten a `"`
     multiline = false
     c = quoted ? '\'' : '"'
     if accept(l, c) # Eat second quote
         if !accept(l, c)
             return ""
+        end
+        if !allow_multiline
+            return ParserError(ErrMultilineStringAsKey)
         end
         accept(l, '\r') # Eat third quote
         accept(l, '\n') # Eat third quote
@@ -1191,8 +1226,9 @@ function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{St
                 start_chunk = l.prevpos
             else
                 c = eat_char(l) # eat the escaped character
-                if c == 'u'  || c == 'U'
-                    n = c == 'u' ? 4 : 6
+                if c == 'x' || c == 'u' || c == 'U'
+                    n = c == 'x' ? 2 :
+                        c == 'u' ? 4 : 8
                     set_marker!(l)
                     if !accept_n(l, n, isvalid_hex)
                         return ParserError(ErrInvalidUnicodeScalar)
@@ -1204,11 +1240,14 @@ function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{St
                     Any Unicode code point except high-surrogate and
                     low-surrogate code points.  In other words, the ranges of
                     integers 0 to D7FF16 and E00016 to 10FFFF16 inclusive.
+                    For \x, the range is 0x00-0xFF (U+0000-U+00FF).
                     =#
-                    if !(codepoint <= 0xD7FF || 0xE000 <= codepoint <= 0x10FFFF)
+                    if c == 'x'
+                        # \xHH is always valid (0x00-0xFF)
+                    elseif !(codepoint <= 0xD7FF || 0xE000 <= codepoint <= 0x10FFFF)
                         return ParserError(ErrInvalidUnicodeScalar)
                     end
-                elseif c != 'b' && c != 't' && c != 'n' && c != 'f' && c != 'r' && c != '"' && c!= '\\'
+                elseif c != 'b' && c != 't' && c != 'n' && c != 'f' && c != 'r' && c != 'e' && c != '"' && c!= '\\'
                     return ParserError(ErrInvalidEscapeCharacter)
                 end
                 contains_backslash = true
@@ -1232,6 +1271,4 @@ function take_chunks(l::Parser, unescape::Bool)::String
     end
     empty!(l.chunks)
     return unescape ? unescape_string(str) : str
-end
-
 end

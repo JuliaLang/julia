@@ -140,7 +140,7 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
             pos == :begin   ? (fb:fb-1) :
             pos == :end     ? (lb+1:lb) :
             error("Unknown position $pos")
-        highlight(io, src.file, byterange, note=exc.msg)
+        highlight(io, src.file[], byterange, note=exc.msg)
     end
     if !isnothing(exc.err)
         print(io, "\nCaused by:\n")
@@ -187,11 +187,11 @@ function eval_macro_name(ctx::MacroExpansionContext, mctx::MacroContext, ex0::Sy
             # `ex` might contain a nontrivial mix of scope layers so we can't
             # just `eval()` it, as it's already been partially lowered by this
             # point.  Instead, we repeat the latter parts of `lower()` here.
-            ctx2, ex2 = expand_forms_2(ctx, ex)
-            ctx3, ex3 = resolve_scopes(ctx2, ex2)
-            ctx4, ex4 = convert_closures(ctx3, ex3)
-            ctx5, ex5 = linearize_ir(ctx4, ex4)
-            expr_form = to_lowered_expr(ex5)
+             ctx2, ex2 = expand_forms_2(ctx, ex)
+             ctx3, ex3 = resolve_scopes(ctx2, ex2)
+             ctx4, ex4 = convert_closures(ctx3, ex3)
+            _ctx5, ex5 = linearize_ir(ctx4, ex4)
+            expr_form  = to_lowered_expr(ex5)
             ccall(:jl_toplevel_eval, Any, (Any, Any), mod, expr_form)
         end
     catch err
@@ -270,15 +270,24 @@ function fix_toplevel_expansion(ctx, ex::SyntaxTree, mod::Module, lnn::LineNumbe
 end
 
 function expand_macro(ctx, ex)
-    @assert kind(ex) == K"macrocall"
+    @jl_assert kind(ex) == K"macrocall" ex
 
     macname = ex[1]
     mctx = MacroContext(ctx.graph, ex, current_layer(ctx), ctx.expr_compat_mode)
     macfunc = eval_macro_name(ctx, mctx, macname)
     raw_args = ex[3:end]
-    macro_loc = let loc = source_location(LineNumberNode, ex)
+    macro_loc = if kind(ex[2]) === K"Value"
+        loc = ex[2].value
+        if loc isa LineNumberNode
         # Some macros, e.g. @cmd, don't play nicely with file == nothing
         isnothing(loc.file) ? LineNumberNode(loc.line, :none) : loc
+        elseif loc isa Core.MacroSource
+            loc.lno
+        else
+            LineNumberNode(0, :none)
+        end
+    else
+        LineNumberNode(0, :none)
     end
     # We use a specific well defined world age for the next checks and macro
     # expansion invocations. This avoids inconsistencies if the latest world
@@ -359,8 +368,6 @@ function expand_macro(ctx, ex)
         # method was defined (may be different from `parentmodule(macfunc)`)
         mod_for_ast = lookup_method_instance(macfunc, macro_args,
                                              ctx.macro_world).def.module
-        new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod_for_ast,
-                               current_layer_id(ctx), true, false)
         push_layer!(ctx, mod_for_ast)
         expanded = expand_forms_1(ctx, expanded)
         pop_layer!(ctx)
@@ -370,7 +377,7 @@ end
 
 _unpack_srcref(graph, srcref::SyntaxTree) = _node_id(graph, srcref)
 _unpack_srcref(graph, srcref::Tuple)      = _node_ids(graph, srcref...)
-_unpack_srcref(graph, srcref)             = srcref
+_unpack_srcref(_graph, srcref)            = srcref
 
 # Add a secondary source of provenance to each expression in the tree `ex`.
 function append_sourceref(ctx, ex, secondary_prov)
@@ -415,7 +422,9 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         out = mkleaf(ex)
         setattr!(out, :scope_layer, scope_layer)
     elseif k == K"escape"
-        @chk numchildren(ex) === 1 "`escape` requires one argument"
+        if numchildren(ex) !== 1
+            throw(LoweringError(ex, "`escape` requires one argument"))
+        end
         if length(ctx.scope_layer_stack) === 1
             throw(MacroExpansionError(ex, "`escape` node in outer context"))
         end
@@ -424,8 +433,9 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         push!(ctx.scope_layer_stack, top_layer)
         escaped_ex
     elseif k == K"hygienic-scope"
-        @chk(2 <= numchildren(ex) <= 3 && ex[2].value isa Module,
-             (ex,"`hygienic-scope` requires an AST and a module"))
+        if !(2 <= numchildren(ex) <= 3 && ex[2].value isa Module)
+            throw(LoweringError(ex,"`hygienic-scope` requires an AST and a module"))
+        end
         new_layer = ScopeLayer(length(ctx.scope_layers)+1, ex[2].value,
                                current_layer_id(ctx), true, false)
         push!(ctx.scope_layers, new_layer)
@@ -434,7 +444,9 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         pop!(ctx.scope_layer_stack)
         hyg_ex
     elseif k == K"quote"
-        @chk numchildren(ex) == 1
+        if numchildren(ex) !== 1
+            throw(LoweringError(ex,"`quote` expects one argument"))
+        end
         expand_forms_1(ctx, expand_quote(ctx, ex[1]))
     elseif k == K"macrocall"
         expand_macro(ctx, ex)
@@ -457,36 +469,9 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
                 :scope_layer, layerid)
     elseif is_leaf(ex)
         ex
-    elseif k in KSet"function =" && numchildren(ex) === 2
-        # The (if (generated) gen nongen) form is troublesome because everything
-        # surrounding it is implicitly quoted (with `gen` interpolated into it),
-        # so converting the function's AST before proper quoting is incorrect.
-        ex1 = mapchildren(e->expand_forms_1(ctx,e), ctx, ex)
-        (is_eventually_call(ex1[1]) && has_if_generated(ex1[2])) || return ex1
-        gen = expand_forms_1(ctx, expand_quote(
-            ctx, @ast ctx ex1 [K"block" split_generated(ex1[2], true)]))
-        nongen = split_generated(ex1[2], false)
-        @ast ctx ex1 [K"generated_function" ex1[1] gen nongen]
     else
         mapchildren(e->expand_forms_1(ctx,e), ctx, ex)
     end
-end
-
-has_if_generated(st::SyntaxTree) = JuliaSyntax.@stm st begin
-    (_, when=is_leaf(st)||is_quoted(st)) -> false
-    [K"function" _...] -> false
-    ([K"=" call _], when=is_eventually_call(call)) -> false
-    [K"if" [K"generated"] _ _] -> true
-    _ -> any(has_if_generated, children(st))
-end
-split_generated(st::SyntaxTree, gen_part) = JuliaSyntax.@stm st begin
-    (_, when=is_leaf(st)||is_quoted(st)) -> st
-    [K"if" [K"generated"] gen nongen] -> if gen_part
-        @ast(st._graph, st, [K"$" gen])
-    else
-        nongen
-    end
-    _ -> mapchildren(x->split_generated(x, gen_part), st._graph, st)
 end
 
 ensure_macro_attributes!(graph) = ensure_attributes!(

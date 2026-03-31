@@ -1399,6 +1399,9 @@ function show(io::IO, codeinst::Core.CodeInstance)
     else
         show_mi(io, def::MethodInstance)
     end
+    if codeinst.owner !== nothing
+        print(io, " (foreign)")
+    end
 end
 
 function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)
@@ -3373,7 +3376,7 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         print(io, "explicit `import` from ")
         print(io, partition_restriction(partition).globalref)
     else
-        @assert kind == PARTITION_KIND_GLOBAL
+        @assert kind == PARTITION_KIND_GLOBAL "unexpected partition kind"
         print(io, "global variable with type ")
         print(io, partition_restriction(partition))
     end

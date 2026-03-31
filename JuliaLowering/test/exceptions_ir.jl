@@ -249,12 +249,12 @@ end
 12  (gotoifnot %₁₁ label₁₄)
 13  (call top.rethrow)
 14  (goto label₁)
-15  (= slot₁/loop_exit_result core.nothing)
-16  (isdefined slot₁/loop_exit_result)
+15  (= slot₁/loop-exit_result core.nothing)
+16  (isdefined slot₁/loop-exit_result)
 17  (gotoifnot %₁₆ label₁₉)
 18  (goto label₂₀)
-19  (= slot₁/loop_exit_result core.nothing)
-20  slot₁/loop_exit_result
+19  (= slot₁/loop-exit_result core.nothing)
+20  slot₁/loop-exit_result
 21  (return %₂₀)
 
 ########################################
