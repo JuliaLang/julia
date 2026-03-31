@@ -291,6 +291,19 @@ function ExplicitEnv(envpath::String)
         end
     end
 
+    # Include deps from the overlay project, if configured.
+    # Overlay deps are treated as project deps so they are precompiled by default.
+    overlay_file = Base.overlay_project_file()
+    if overlay_file !== nothing
+        overlay_d = parsed_toml(overlay_file)
+        for (name, _uuid) in get(Dict{String, Any}, overlay_d, "deps")::Dict{String, Any}
+            uuid = UUID(_uuid::String)
+            project_deps[name] = uuid
+            workspace_deps[name] = uuid
+            names[uuid] = name
+        end
+    end
+
     return ExplicitEnv(envpath, project_deps, project_weakdeps, project_extras,
                        project_extensions, workspace_deps,
                        deps_expanded, weakdeps_expanded, extensions_expanded,

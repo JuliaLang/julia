@@ -719,6 +719,26 @@ function env_project_file(env::String)::Union{Bool,String}
     end
 end
 
+"""
+    overlay_project_file()::Union{Nothing, String}
+
+Return the path to the overlay project file, or `nothing` if no overlay is configured.
+The overlay project is configured via `ENV["JULIA_PKG_OVERLAY"]`.
+Paths starting with `@` are expanded via `load_path_expand`.
+"""
+function overlay_project_file()::Union{Nothing, String}
+    path = get(ENV, "JULIA_PKG_OVERLAY", nothing)
+    path === nothing && return nothing
+    if startswith(path, "@")
+        project_file = load_path_expand(path)
+        project_file isa String || return nothing
+        return project_file
+    end
+    project_file = env_project_file(abspath(path))
+    project_file isa String || return nothing
+    return project_file
+end
+
 function base_project(project_file)
     home_dir = abspath(homedir())
     project_dir = abspath(dirname(project_file))
@@ -837,6 +857,14 @@ function environment_deps_get(env::String, where::Union{Nothing,PkgId}, name::St
         if where === nothing && pkg.uuid === nothing
             # This is a top-level load - even though we didn't find the dependency
             # here, we still want to keep looking through the top-level environment stack.
+            # But first check the overlay project's deps.
+            overlay_file = overlay_project_file()
+            if overlay_file !== nothing
+                overlay_uuid = explicit_project_deps_get(overlay_file, name)
+                if overlay_uuid !== nothing
+                    return PkgId(overlay_uuid, name)
+                end
+            end
             return nothing
         end
         return pkg
