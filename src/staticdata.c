@@ -90,6 +90,7 @@ External links:
 
 #include "valgrind.h"
 #include "julia_assert.h"
+#include "eytzinger.h"
 
 static const size_t WORLD_AGE_REVALIDATION_SENTINEL = 0x1;
 JL_DLLEXPORT size_t jl_require_world = ~(size_t)0;
@@ -156,20 +157,20 @@ static arraylist_t serialization_queue;
 static arraylist_t layout_table;     // cache of `position(s)` for each `id` in `serialization_order`
 static arraylist_t object_worklist;  // used to mimic recursion by jl_serialize_reachable
 
-// Permanent list of void* (begin, end+1) pairs of system/package images we've loaded previously
-// together with their module build_ids (used for external linkage)
-// jl_linkage_blobs.items[2i:2i+1] correspond to build_ids[i]   (0-offset indexing)
-arraylist_t jl_linkage_blobs;
-arraylist_t jl_image_relocs;
-// Keep track of which image corresponds to which top module.
-arraylist_t jl_top_mods;
+// Track image locations and some associated metadata for all loaded sys / pkgimages.
+// (image_tree.ranges[i].data is an image_metadata_t* for build_ids[i])
+static eyt_tree_t image_tree;
+typedef struct {
+    uintptr_t base;          // base address of the image
+    void *relocs_base;       // reloc_t* for GC sweep
+    jl_module_t *top_mod;    // owning top-level module
+    size_t idx;              // range index in image_tree (for serialization)
+} image_metadata_t;
 
-// Eytzinger tree of images. Used for very fast jl_object_in_image queries
-// See https://algorithmica.org/en/eytzinger
-arraylist_t eytzinger_image_tree;
-arraylist_t eytzinger_idxs;
-static uintptr_t img_min;
-static uintptr_t img_max;
+void jl_init_staticdata(void)
+{
+    eyt_tree_init(&image_tree);
+}
 
 // HT_NOTFOUND is a valid integer ID, so we store the integer ids mangled.
 // This pair of functions mangles/demanges
@@ -186,125 +187,41 @@ static void *to_seroder_entry(size_t idx) JL_NOTSAFEPOINT
 static htable_t new_methtables;
 //static size_t precompilation_world;
 
-static int ptr_cmp(const void *l, const void *r) JL_NOTSAFEPOINT
+// Query if a Julia object is in a permalloc region (due to part of a sys- pkg-image)
+static size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
 {
-    uintptr_t left = *(const uintptr_t*)l;
-    uintptr_t right = *(const uintptr_t*)r;
-    return (left > right) - (left < right);
+    return image_tree.nranges;
 }
 
-// Build an eytzinger tree from a sorted array
-static int eytzinger(uintptr_t *src, uintptr_t *dest, size_t i, size_t k, size_t n) JL_NOTSAFEPOINT
-{
-    if (k <= n) {
-        i = eytzinger(src, dest, i, 2 * k, n);
-        dest[k-1] = src[i];
-        i++;
-        i = eytzinger(src, dest, i, 2 * k + 1, n);
-    }
-    return i;
-}
-
-static size_t eyt_obj_idx(jl_value_t *obj) JL_NOTSAFEPOINT
-{
-    size_t n = eytzinger_image_tree.len - 1;
-    if (n == 0)
-        return n;
-    assert(n % 2 == 0 && "Eytzinger tree not even length!");
-    uintptr_t cmp = (uintptr_t) obj;
-    if (cmp <= img_min || cmp > img_max)
-        return n;
-    uintptr_t *tree = (uintptr_t*)eytzinger_image_tree.items;
-    size_t k = 1;
-    // note that k preserves the history of how we got to the current node
-    while (k <= n) {
-        int greater = (cmp > tree[k - 1]);
-        k <<= 1;
-        k |= greater;
-    }
-    // Free to assume k is nonzero, since we start with k = 1
-    // and cmp > gc_img_min
-    // This shift does a fast revert of the path until we get
-    // to a node that evaluated less than cmp.
-    k >>= (__builtin_ctzll(k) + 1);
-    assert(k != 0);
-    assert(k <= n && "Eytzinger tree index out of bounds!");
-    assert(tree[k - 1] < cmp && "Failed to find lower bound for object!");
-    return k - 1;
-}
-
-//used in staticdata.c after we add an image
-void rebuild_image_blob_tree(void) JL_NOTSAFEPOINT
-{
-    size_t inc = 1 + jl_linkage_blobs.len - eytzinger_image_tree.len;
-    assert(eytzinger_idxs.len == eytzinger_image_tree.len);
-    assert(eytzinger_idxs.max == eytzinger_image_tree.max);
-    arraylist_grow(&eytzinger_idxs, inc);
-    arraylist_grow(&eytzinger_image_tree, inc);
-    eytzinger_idxs.items[eytzinger_idxs.len - 1] = (void*)jl_linkage_blobs.len;
-    eytzinger_image_tree.items[eytzinger_image_tree.len - 1] = (void*)1; // outside image
-    for (size_t i = 0; i < jl_linkage_blobs.len; i++) {
-        assert((uintptr_t) jl_linkage_blobs.items[i] % 4 == 0 && "Linkage blob not 4-byte aligned!");
-        // We abuse the pointer here a little so that a couple of properties are true:
-        // 1. a start and an end are never the same value. This simplifies the binary search.
-        // 2. ends are always after starts. This also simplifies the binary search.
-        // We assume that there exist no 0-size blobs, but that's a safe assumption
-        // since it means nothing could be there anyways
-        uintptr_t val = (uintptr_t) jl_linkage_blobs.items[i];
-        eytzinger_idxs.items[i] = (void*)(val + (i & 1));
-    }
-    qsort(eytzinger_idxs.items, eytzinger_idxs.len - 1, sizeof(void*), ptr_cmp);
-    img_min = (uintptr_t) eytzinger_idxs.items[0];
-    img_max = (uintptr_t) eytzinger_idxs.items[eytzinger_idxs.len - 2] + 1;
-    eytzinger((uintptr_t*)eytzinger_idxs.items, (uintptr_t*)eytzinger_image_tree.items, 0, 1, eytzinger_idxs.len - 1);
-    // Reuse the scratch memory to store the indices
-    // Still O(nlogn) because binary search
-    for (size_t i = 0; i < jl_linkage_blobs.len; i ++) {
-        uintptr_t val = (uintptr_t) jl_linkage_blobs.items[i];
-        // This is the same computation as in the prior for loop
-        uintptr_t eyt_val = val + (i & 1);
-        size_t eyt_idx = eyt_obj_idx((jl_value_t*)(eyt_val + 1)); assert(eyt_idx < eytzinger_idxs.len - 1);
-        assert(eytzinger_image_tree.items[eyt_idx] == (void*)eyt_val && "Eytzinger tree failed to find object!");
-        if (i & 1)
-            eytzinger_idxs.items[eyt_idx] = (void*)n_linkage_blobs();
-        else
-            eytzinger_idxs.items[eyt_idx] = (void*)(i / 2);
-    }
-}
-
-static int eyt_obj_in_img(jl_value_t *obj) JL_NOTSAFEPOINT
-{
-    assert((uintptr_t) obj % 4 == 0 && "Object not 4-byte aligned!");
-    int idx = eyt_obj_idx(obj);
-    // Now we use a tiny trick: tree[idx] & 1 is whether or not tree[idx] is a
-    // start (0) or an end (1) of a blob. If it's a start, then the object is
-    // in the image, otherwise it is not.
-    int in_image = ((uintptr_t)eytzinger_image_tree.items[idx] & 1) == 0;
-    return in_image;
-}
-
-size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
+static image_metadata_t *external_blob_metadata(jl_value_t *v) JL_NOTSAFEPOINT
 {
     assert((uintptr_t) v % 4 == 0 && "Object not 4-byte aligned!");
-    int eyt_idx = eyt_obj_idx(v);
-    // We fill the invalid slots with the length, so we can just return that
-    size_t idx = (size_t) eytzinger_idxs.items[eyt_idx];
-    return idx;
+    void *data = eyt_tree_find_data(&image_tree, (uintptr_t)v);
+    return data == EYT_NOTFOUND ? NULL : (image_metadata_t*)data;
+}
+
+static size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
+{
+    image_metadata_t *meta = external_blob_metadata(v);
+    return meta ? meta->idx : (size_t)-1;
 }
 
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
 {
-    return eyt_obj_in_img(obj);
+    if (obj == NULL)
+        return 0;
+    uint8_t in_image = jl_astaggedvalue(obj)->bits.in_image != 0;
+    assert((uintptr_t) obj % 4 == 0 && "Object not 4-byte aligned!");
+    assert(eyt_tree_is_in_range(&image_tree, (uintptr_t)obj) == in_image);
+    return in_image;
 }
 
-// Map an object to it's "owning" top module
+// Map an object to its "owning" top module
 JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT
 {
-    size_t idx = external_blob_index(v);
-    size_t lbids = n_linkage_blobs();
-    if (idx < lbids) {
-        return (jl_value_t*)jl_top_mods.items[idx];
-    }
+    image_metadata_t *meta = external_blob_metadata(v);
+    if (meta)
+        return (jl_value_t*)meta->top_mod;
     // The object is runtime allocated
     return (jl_value_t*)jl_nothing;
 }
@@ -341,7 +258,7 @@ typedef struct {
     // record of build_ids for all external linkages, in order of serialization for the current sysimg/pkgimg
     // conceptually, the base pointer for the jth externally-linked item is determined from
     //     i = findfirst(==(link_ids[j]), build_ids)
-    //     blob_base = jl_linkage_blobs.items[2i]                     # 0-offset indexing
+    //     blob_base = ((image_metadata_t*)image_tree.ranges[i].data)->base
     // We need separate lists since they are intermingled at creation but split when written.
     jl_array_t *link_ids_relocs;
     jl_array_t *link_ids_gctags;
@@ -1063,11 +980,12 @@ static void write_pointer(ios_t *s) JL_NOTSAFEPOINT
 // Records the buildid holding `v` and returns the tagged offset within the corresponding image
 static uintptr_t add_external_linkage(jl_serializer_state *s, jl_value_t *v, jl_array_t *link_ids) JL_GC_DISABLED
 {
-    size_t i = external_blob_index(v);
-    if (i < n_linkage_blobs()) {
+    image_metadata_t *meta = external_blob_metadata(v);
+    if (meta) {
+        size_t i = meta->idx;
         // We found the sysimg/pkg that this item links against
         // Compute the relocation code
-        size_t offset = (uintptr_t)v - (uintptr_t)jl_linkage_blobs.items[2*i];
+        size_t offset = (uintptr_t)v - meta->base;
         assert((offset % SYS_EXTERNAL_LINK_UNIT) == 0);
         offset /= SYS_EXTERNAL_LINK_UNIT;
         assert(n_linkage_blobs() == jl_array_nrows(s->buildid_depmods_idxs));
@@ -2013,8 +1931,9 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
 #endif
         assert(s->buildid_depmods_idxs && depsidx < jl_array_len(s->buildid_depmods_idxs));
         size_t i = jl_array_data(s->buildid_depmods_idxs, uint32_t)[depsidx];
-        assert(2*i < jl_linkage_blobs.len);
-        return (uintptr_t)jl_linkage_blobs.items[2*i] + offset*SYS_EXTERNAL_LINK_UNIT;
+        assert(i < image_tree.nranges);
+        image_metadata_t *meta = (image_metadata_t*)image_tree.ranges[i].data;
+        return meta->base + offset*SYS_EXTERNAL_LINK_UNIT;
     }
     case ExternalLinkage: {
         assert(link_ids);
@@ -2024,8 +1943,9 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         *link_index += 1;
         assert(depsidx < jl_array_len(s->buildid_depmods_idxs));
         size_t i = jl_array_data(s->buildid_depmods_idxs, uint32_t)[depsidx];
-        assert(2*i < jl_linkage_blobs.len);
-        return (uintptr_t)jl_linkage_blobs.items[2*i] + offset*SYS_EXTERNAL_LINK_UNIT;
+        assert(i < image_tree.nranges);
+        image_metadata_t *meta = (image_metadata_t*)image_tree.ranges[i].data;
+        return meta->base + offset*SYS_EXTERNAL_LINK_UNIT;
     }
     }
     abort();
@@ -2156,13 +2076,12 @@ void gc_sweep_sysimg(void) JL_NOTSAFEPOINT
     size_t nblobs = n_linkage_blobs();
     if (nblobs == 0)
         return;
-    assert(jl_linkage_blobs.len == 2*nblobs);
-    assert(jl_image_relocs.len == nblobs);
-    for (size_t i = 0; i < 2*nblobs; i+=2) {
-        reloc_t *relocs = (reloc_t*)jl_image_relocs.items[i>>1];
+    for (size_t i = 0; i < nblobs; i++) {
+        image_metadata_t *meta = (image_metadata_t*)image_tree.ranges[i].data;
+        reloc_t *relocs = (reloc_t*)meta->relocs_base;
         if (!relocs)
             continue;
-        uintptr_t base = (uintptr_t)jl_linkage_blobs.items[i];
+        uintptr_t base = meta->base;
         uintptr_t last_pos = 0;
         uint8_t *current = (uint8_t *)relocs;
         while (1) {
@@ -3663,7 +3582,6 @@ JL_DLLEXPORT jl_image_buf_t jl_set_sysimg_so(void *handle)
 // }
 #endif
 
-extern void rebuild_image_blob_tree(void);
 extern void export_jl_small_typeof(void);
 extern void export_jl_sysimg_globals(void);
 
@@ -3776,7 +3694,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     int en = jl_gc_enable(0);
     ios_t sysimg, const_data, symbols, relocs, gvar_record, fptr_record;
     jl_serializer_state s = {0};
-    s.incremental = restored != NULL; // jl_linkage_blobs.len > 0;
+    s.incremental = restored != NULL; // n_linkage_blobs() > 0;
     s.image = image;
     s.s = NULL;
     s.const_data = &const_data;
@@ -4290,11 +4208,12 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
 
     // Prepare for later external linkage against the sysimg
     // Also sets up images for protection against garbage collection
-    arraylist_push(&jl_linkage_blobs, (void*)image_base);
-    arraylist_push(&jl_linkage_blobs, (void*)(image_base + sizeof_sysimg));
-    arraylist_push(&jl_image_relocs, (void*)relocs_base);
+    image_metadata_t *meta = (image_metadata_t*)malloc_s(sizeof(image_metadata_t));
+    meta->base = (uintptr_t)image_base;
+    meta->relocs_base = (void*)relocs_base;
+    meta->idx = n_linkage_blobs();
     if (restored == NULL) {
-        arraylist_push(&jl_top_mods, (void*)jl_top_module);
+        meta->top_mod = jl_top_module;
     } else {
         size_t len = jl_array_nrows(*restored);
         assert(len > 0);
@@ -4303,16 +4222,20 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         // just returns a reference to the sysimage version, so we set it here.
         topmod->build_id.hi = checksum;
         assert(jl_is_module(topmod));
-        arraylist_push(&jl_top_mods, (void*)topmod);
+        meta->top_mod = topmod;
     }
+    eyt_tree_add_range(&image_tree,
+        (uintptr_t)image_base,
+        (uintptr_t)image_base + sizeof_sysimg,
+        (void*)meta);
     jl_timing_counter_inc(JL_TIMING_COUNTER_ImageSize, sizeof_sysimg + sizeof(uintptr_t));
-    rebuild_image_blob_tree();
 
-    // jl_printf(JL_STDOUT, "%ld blobs to link against\n", jl_linkage_blobs.len >> 1);
+    // jl_printf(JL_STDOUT, "%ld blobs to link against\n", image_tree.nranges);
     jl_gc_enable(en);
 
     if (s.incremental)
         jl_add_methods(*extext_methods);
+
 }
 
 static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_t *checksum, int64_t *dataendpos, int64_t *datastartpos)

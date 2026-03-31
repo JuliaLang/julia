@@ -288,7 +288,7 @@ ccall(:jl_toplevel_eval_in, Any, (Any, Any),
 function iterate end
 
 macro nospecialize(x)
-    _expr(:meta, :nospecialize, x)
+    _expr(:escape, _expr(:meta, :nospecialize, x))
 end
 Expr(@nospecialize args...) = _expr(args...)
 

@@ -59,6 +59,7 @@ struct JuliaPassContext {
     llvm::Function *gc_loaded_func;
     llvm::Function *alloc_obj_func;
     llvm::Function *typeof_func;
+    llvm::Function *blackbox_func;
     llvm::Function *write_barrier_func;
     llvm::Function *pop_handler_noexcept_func;
     llvm::Function *call_func;

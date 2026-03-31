@@ -2,10 +2,9 @@ module Tokenize
 
 export tokenize, untokenize
 
-using ..JuliaSyntax: JuliaSyntax, Kind, @K_str, @KSet_str, @callsite_inline
+using ..JuliaSyntax: @KSet_str, @K_str, @callsite_inline, Kind
 
-import ..JuliaSyntax: kind,
-    is_literal, is_contextual_keyword, is_word_operator
+import ..JuliaSyntax: is_contextual_keyword, is_literal, is_word_operator, kind
 
 #-------------------------------------------------------------------------------
 # Character-based predicates for tokenization
@@ -1082,6 +1081,7 @@ function lex_digit(l::Lexer, kind)
         end
         if is_bin_oct_hex_int
             pc = peekchar(l)
+            @assert @isdefined(had_digits)
             if !had_digits || isdigit(pc) || is_identifier_start_char(pc)
                 accept_batch(l, c->isdigit(c) || is_identifier_start_char(c))
                 # `0x` `0xg` `0x_` `0x-`

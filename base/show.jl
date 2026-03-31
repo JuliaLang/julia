@@ -1399,6 +1399,9 @@ function show(io::IO, codeinst::Core.CodeInstance)
     else
         show_mi(io, def::MethodInstance)
     end
+    if codeinst.owner !== nothing
+        print(io, " (foreign)")
+    end
 end
 
 function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)

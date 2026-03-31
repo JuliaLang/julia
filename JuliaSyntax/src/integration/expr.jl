@@ -76,8 +76,6 @@ reverse_nontrivia_children(cursor) = Iterators.filter(should_include_node, Itera
 # reference parser.
 function _string_to_Expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt32)
     ret = Expr(:string)
-    args2 = Any[]
-    i = 1
     it = reverse_nontrivia_children(cursor)
     r = iterate(it)
     while r !== nothing

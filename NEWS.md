@@ -44,12 +44,23 @@ Multi-threading changes
   - New functions `Threads.atomic_fence_heavy` and `Threads.atomic_fence_light` provide support for
     asymmetric atomic fences, speeding up atomic synchronization where one side of the synchronization
     runs significantly less often than the other ([#60311]).
+  - `Threads.@threads` now supports array comprehensions with syntax like `@threads [f(i) for i in 1:n]`,
+    filtered comprehensions like `@threads [f(i) for i in 1:n if condition(i)]`, typed comprehensions
+    like `@threads Float64[f(i) for i in 1:n]`, and multi-dimensional comprehensions like
+    `@threads [f(i,j) for i in 1:n, j in 1:m]` (preserves dimensions). All scheduling options
+    (`:static`, `:dynamic`, `:greedy`) are supported. Results preserve element order for `:static`
+    and `:dynamic` scheduling; `:greedy` does not guarantee order. Non-indexable iterators are
+    also supported. ([#59019])
 
 Build system changes
 --------------------
 
 New library functions
 ---------------------
+
+- `Base.generating_output()` has been made `public` (but not exported) to allow
+  checking whether the current process is performing compilation for a
+  pkgimage/sysimage ([#61224]).
 
 New library features
 --------------------

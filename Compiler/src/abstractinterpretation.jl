@@ -67,6 +67,7 @@ any_ambig(info::MethodMatchInfo) = any_ambig(info.results)
 any_ambig(m::MethodMatches) = any_ambig(m.info)
 fully_covering(info::MethodMatchInfo) = info.fullmatch
 fully_covering(m::MethodMatches) = fully_covering(m.info)
+multiple_methods(m::MethodMatches) = length(m.applicable) > 1
 
 struct UnionSplitMethodMatches
     applicable::Vector{MethodMatchTarget}
@@ -78,6 +79,17 @@ any_ambig(info::UnionSplitInfo) = any(any_ambig, info.split)
 any_ambig(m::UnionSplitMethodMatches) = any_ambig(m.info)
 fully_covering(info::UnionSplitInfo) = all(fully_covering, info.split)
 fully_covering(m::UnionSplitMethodMatches) = fully_covering(m.info)
+function multiple_methods(m::UnionSplitMethodMatches)
+    first_method = nothing
+    for target in m.applicable
+        if first_method === nothing
+            first_method = target.match.method
+        elseif target.match.method !== first_method
+            return true
+        end
+    end
+    return false
+end
 
 nmatches(info::MethodMatchInfo) = length(info.results)
 function nmatches(info::UnionSplitInfo)
@@ -143,7 +155,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
     # split the for loop off into a function, so that we can pause and restart it at will
     function infercalls(interp, sv)
         local napplicable = length(applicable)
-        local multiple_matches = napplicable > 1
+        local multiple_matches = multiple_methods(matches)
         while state.inferidx <= napplicable
             (; match, edges, call_results, edge_idx) = applicable[state.inferidx]
             local method = match.method
@@ -296,7 +308,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
             inferidx = SafeBox{Int}(1)
             function infercalls2(interp, sv)
                 local napplicable = length(applicable)
-                local multiple_matches = napplicable > 1
+                local multiple_matches = multiple_methods(matches)
                 while inferidx[] <= napplicable
                     (; match, call_results, edge_idx) = applicable[inferidx[]]
                     inferidx[] += 1
@@ -581,6 +593,34 @@ function collect_slot_refinements(𝕃ᵢ::AbstractLattice, applicable::Vector{M
                     slotrefinements = fill!(Vector{Any}(undef, length(sv.slottypes)), nothing)
                 end
                 slotrefinements[fidx] = sigt
+            end
+        elseif argtypes[i] isa MustAlias
+            alias = argtypes[i]::MustAlias
+            argt = alias.fldtyp
+            if isvarargtype(argt)
+                argt = unwrapva(argt)
+            end
+            sigt = Bottom
+            for j = 1:length(applicable)
+                (;match) = applicable[j]
+                valid_as_lattice(match.spec_types, true) || continue
+                sigt = sigt ⊔ fieldtype(match.spec_types, i)
+            end
+            if sigt ⊏ argt # i.e. signature type is strictly more specific than the field type
+                newtyp = form_mustalias_refinement(alias, sigt)
+                if newtyp !== nothing
+                    aidx = alias.slot
+                    if slotrefinements === nothing
+                        slotrefinements = fill!(Vector{Any}(undef, length(sv.slottypes)), nothing)
+                    end
+                    # TODO: if multiple MustAlias arguments refer to different fields
+                    # of the same slot, we only apply the first refinement. Merging
+                    # multiple PartialStruct refinements would require a meet operation
+                    # on PartialStruct, which is not currently implemented.
+                    if slotrefinements[aidx] === nothing
+                        slotrefinements[aidx] = newtyp
+                    end
+                end
             end
         end
     end
