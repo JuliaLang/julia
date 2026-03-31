@@ -3,6 +3,8 @@
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 
+import LinearAlgebra
+
 @testset "MissingException" begin
     @test sprint(showerror, MissingException("test")) == "MissingException: test"
 end
@@ -79,6 +81,20 @@ end
     @test (missing ≈ missing) === missing
     @test isapprox(missing, 1.0, atol=1e-6) === missing
     @test isapprox(1.0, missing, rtol=1e-6) === missing
+
+    let
+        excludelist = [
+            Tuple{typeof(isequal), T, T} where T<:LinearAlgebra.Factorization,
+            Tuple{typeof(isequal), T, T} where T<:Union{Float16, Float32, Float64},
+            Tuple{typeof(isequal), NamedTuple{n}, NamedTuple{n}} where n,
+        ]
+        a = copy(methods(isequal, Tuple{Any, Any}))
+        filter!(x -> x.sig ∉ excludelist, a)
+        b = [Tuple{x.sig.parameters[2:end]...} for x in a]
+        for x in b
+            @info "" x Base.return_types(isequal, x) join(Base.return_types(isequal, x), ",")
+        end
+    end
 
     @test all(==(Bool), Base.return_types(isequal, Tuple{Any,Any}))
 end
