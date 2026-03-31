@@ -1527,3 +1527,25 @@ let f = (x) -> Core.Intrinsics.trunc_int(Int16, x)
     @test Compiler.is_nothrow(Base.infer_effects(f, (Int32,)))
     @test catch_error_61435(f, Int16(0)) === :caught
 end
+
+# issue #57324
+module Issue57324
+struct T <: AbstractVector{Float64}
+    m::Memory{UInt64}
+end
+function f(w)
+    r = Base.OneTo(w.m[1])
+    setindex!(w, 0.0, r[1])
+end
+Base.setindex!(w::T, v, i::Int) = _setindex!(w, i)
+function _setindex!(w, i)
+    w.m[w.m[1]] = 0 > i ? nothing : 0
+    w
+end
+Base.size(::T) = (0,)
+end
+let effects = Base.infer_effects(Issue57324.f, (Issue57324.T,))
+    @test Compiler.is_terminates(effects)
+    @test Compiler.is_notaskstate(effects)
+    @test Compiler.is_nortcall(effects)
+end
