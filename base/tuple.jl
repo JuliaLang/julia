@@ -445,12 +445,16 @@ function tuple_type_tail(T::Type)
     end
 end
 
-(::Type{T})(x::Tuple) where {T<:Tuple} = x isa T ? x : convert(T, x)  # still use `convert` for tuples
+if ALLOW_CORE_PIRACY
 
-Tuple(x::Ref) = tuple(getindex(x))  # faster than iterator for one element
-Tuple(x::Array{T,0}) where {T} = tuple(getindex(x))
+    (::Type{T})(x::Tuple) where {T<:Tuple} = x isa T ? x : convert(T, x)  # still use `convert` for tuples
 
-(::Type{T})(itr) where {T<:Tuple} = _totuple(T, itr)
+    Tuple(x::Ref) = tuple(getindex(x))  # faster than iterator for one element
+    Tuple(x::Array{T,0}) where {T} = tuple(getindex(x))
+
+    (::Type{T})(itr) where {T<:Tuple} = _totuple(T, itr)
+
+end
 
 _totuple(::Type{Tuple{}}, itr, s...) = ()
 

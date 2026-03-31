@@ -141,7 +141,9 @@ function unsafe_convert(::Type{Ptr{Any}}, b::RefArray{Any})::Ptr{Any}
 end
 
 ###
-if is_primary_base_module
+
+if ALLOW_CORE_PIRACY
+
     Ref(x::Any) = RefValue(x)
     Ref{T}() where {T} = RefValue{T}() # Ref{T}()
     Ref{T}(x) where {T} = RefValue{T}(x) # Ref{T}(x)
@@ -171,6 +173,7 @@ if is_primary_base_module
         end
     end
     Ref(x::AbstractArray, i::Integer) = RefArray(x, i)
+
 end
 
 cconvert(::Type{Ptr{P}}, a::Array{<:Union{Ptr,Cwstring,Cstring}}) where {P<:Union{Ptr,Cwstring,Cstring}} = getfield(a, :ref)

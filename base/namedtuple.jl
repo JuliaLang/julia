@@ -112,43 +112,47 @@ julia> (; t.x)
 """
 Core.NamedTuple
 
-@eval function (NT::Type{NamedTuple{names,T}})(args::Tuple) where {names, T <: Tuple}
-    if length(args) != length(names::Tuple)
-        throw(ArgumentError("Wrong number of arguments to named tuple constructor."))
+if ALLOW_CORE_PIRACY
+
+    @eval function (NT::Type{NamedTuple{names,T}})(args::Tuple) where {names, T <: Tuple}
+        if length(args) != length(names::Tuple)
+            throw(ArgumentError("Wrong number of arguments to named tuple constructor."))
+        end
+        # Note T(args) might not return something of type T; e.g.
+        # Tuple{Type{Float64}}((Float64,)) returns a Tuple{DataType}
+        $(Expr(:splatnew, :NT, :(T(args))))
     end
-    # Note T(args) might not return something of type T; e.g.
-    # Tuple{Type{Float64}}((Float64,)) returns a Tuple{DataType}
-    $(Expr(:splatnew, :NT, :(T(args))))
-end
 
-function (NT::Type{NamedTuple{names, T}})(nt::NamedTuple) where {names, T <: Tuple}
-    if @generated
-        Expr(:new, :NT,
-             Any[ :(let Tn = fieldtype(NT, $n),
-                      ntn = getfield(nt, $(QuoteNode(names[n])))
-                      ntn isa Tn ? ntn : convert(Tn, ntn)
-                  end) for n in 1:length(names) ]...)
-    else
-        NT(map(Fix1(getfield, nt), names))
+    function (NT::Type{NamedTuple{names, T}})(nt::NamedTuple) where {names, T <: Tuple}
+        if @generated
+            Expr(:new, :NT,
+                 Any[ :(let Tn = fieldtype(NT, $n),
+                          ntn = getfield(nt, $(QuoteNode(names[n])))
+                          ntn isa Tn ? ntn : convert(Tn, ntn)
+                      end) for n in 1:length(names) ]...)
+        else
+            NT(map(Fix1(getfield, nt), names))
+        end
     end
-end
 
-function NamedTuple{names}(nt::NamedTuple) where {names}
-    if @generated
-        idx = Int[ fieldindex(nt, names[n]) for n in 1:length(names) ]
-        types = Tuple{(fieldtype(nt, idx[n]) for n in 1:length(idx))...}
-        Expr(:new, :(NamedTuple{names, $types}), Any[ :(getfield(nt, $(idx[n]))) for n in 1:length(idx) ]...)
-    else
-        length_names = length(names::Tuple)
-        types = Tuple{(fieldtype(typeof(nt), names[n]) for n in 1:length_names)...}
-        _new_NamedTuple(NamedTuple{names, types}, map(Fix1(getfield, nt), names))
+    function NamedTuple{names}(nt::NamedTuple) where {names}
+        if @generated
+            idx = Int[ fieldindex(nt, names[n]) for n in 1:length(names) ]
+            types = Tuple{(fieldtype(nt, idx[n]) for n in 1:length(idx))...}
+            Expr(:new, :(NamedTuple{names, $types}), Any[ :(getfield(nt, $(idx[n]))) for n in 1:length(idx) ]...)
+        else
+            length_names = length(names::Tuple)
+            types = Tuple{(fieldtype(typeof(nt), names[n]) for n in 1:length_names)...}
+            _new_NamedTuple(NamedTuple{names, types}, map(Fix1(getfield, nt), names))
+        end
     end
+
+    (NT::Type{NamedTuple{names, T}})(itr) where {names, T <: Tuple} = NT(T(itr))
+    (NT::Type{NamedTuple{names}})(itr) where {names} = NT(Tuple(itr))
+
+    NamedTuple(itr) = (; itr...)
+
 end
-
-(NT::Type{NamedTuple{names, T}})(itr) where {names, T <: Tuple} = NT(T(itr))
-(NT::Type{NamedTuple{names}})(itr) where {names} = NT(Tuple(itr))
-
-NamedTuple(itr) = (; itr...)
 
 # Like NamedTuple{names, T} as a constructor, but omits the additional
 # `convert` call, when the types are known to match the fields
@@ -192,8 +196,12 @@ function convert(::Type{NT}, nt::NamedTuple{names}) where {names, NT<:NamedTuple
     return NT1(T1(nt))::NT1::NT
 end
 
-Tuple(nt::NamedTuple) = (nt...,)
-(::Type{T})(nt::NamedTuple) where {T <: Tuple} = (t = Tuple(nt); t isa T ? t : convert(T, t)::T)
+if ALLOW_CORE_PIRACY
+
+    Tuple(nt::NamedTuple) = (nt...,)
+    (::Type{T})(nt::NamedTuple) where {T <: Tuple} = (t = Tuple(nt); t isa T ? t : convert(T, t)::T)
+
+end
 
 function show(io::IO, t::NamedTuple)
     n = nfields(t)

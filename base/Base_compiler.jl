@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module Base
+baremodule Base
 
 Core._import(Base, Core, :_eval_import, :_eval_import, true)
 Core._import(Base, Core, :_eval_using, :_eval_using, true)
@@ -37,6 +37,9 @@ end
 # from now on, this is now a top-module for resolving syntax
 const is_primary_base_module = ccall(:jl_module_parent, Ref{Module}, (Any,), Base) === Core.Main
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, is_primary_base_module)
+
+# if true, Base will define "pirated" methods over Core types (such as `Tuple(...) = ...`)
+const ALLOW_CORE_PIRACY = is_primary_base_module
 
 # The @inline/@noinline macros that can be applied to a function declaration are not available
 # until after array.jl, and so we will mark them within a function body instead.
