@@ -1177,8 +1177,17 @@ function _blackbox_licmloop(A::Vector{Float64}, x::Float64)
     end
     return A
 end
+function _blackbox_licmloop_simple(x::Float64)
+    for i in 1:5
+        y = Base.blackbox(x)
+        z = _pure_effects_licmcallee(y)
+        Base.donotdelete(z)
+    end
+    return nothing
+end
 _pure_effects_licmcallee(1.0); _pure_effects_licmloop(Float64[0.0], 1.0)
 _blackbox_licmloop(Float64[0.0], 1.0)
+_blackbox_licmloop_simple(1.0)
 @testset "effects to LLVM attributes" begin
     # CSE: duplicate fib call eliminated by GVN using memory(argmem: read)
     ir_bench = get_llvm(_bench_cse_test, Tuple{}, true, false, true)
@@ -1190,12 +1199,22 @@ _blackbox_licmloop(Float64[0.0], 1.0)
     @test occursin("willreturn", ir_attrs)
     @test occursin("memory(argmem: read)", ir_attrs)
 
-    # LICM: loop-invariant pure call hoisted out of loop
-    ir_licm = get_llvm(_pure_effects_licmloop, Tuple{Vector{Float64}, Float64}, true, false, true)
-    @test count(r"call\b.*@j__pure_effects_licmcallee", ir_licm) == 1
+    re_licmcall = r"call\b.*@j__pure_effects_licmcallee"
+    re_raw_arg = r"@j__pure_effects_licmcallee\w*\(double %\"x::Float64\"\)"
 
-    # blackbox prevents LICM: wrapping the argument makes it opaque, so the
-    # call is no longer considered loop-invariant and stays inside the loop
+    # LICM: loop-invariant pure call hoisted out of loop (takes raw argument)
+    ir_licm = get_llvm(_pure_effects_licmloop, Tuple{Vector{Float64}, Float64}, true, false, true)
+    @test count(re_licmcall, ir_licm) == 1
+    @test occursin(re_raw_arg, ir_licm)
+
+    # blackbox prevents LICM: the callee takes the asm barrier output instead
+    # of the raw argument, proving it depends on the barrier.
     ir_bb = get_llvm(_blackbox_licmloop, Tuple{Vector{Float64}, Float64}, true, false, true)
-    @test count(r"call\b.*@j__pure_effects_licmcallee", ir_bb) > 1
+    @test count(re_licmcall, ir_bb) == 1
+    @test !occursin(re_raw_arg, ir_bb)
+
+    # blackbox prevents LICM in a simple loop without memory writes
+    ir_bb_simple = get_llvm(_blackbox_licmloop_simple, Tuple{Float64}, true, false, true)
+    @test count(re_licmcall, ir_bb_simple) == 5  # unrolled, not hoisted
+    @test !occursin(re_raw_arg, ir_bb_simple)
 end
