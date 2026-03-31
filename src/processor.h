@@ -18,30 +18,6 @@ extern "C" {
 // Every image exports a `jl_image_pointers_t` as a global symbol `jl_image_pointers`.
 // This symbol acts as a root for all other code-related symbols in the image.
 
-enum {
-    // Clone all functions
-    JL_TARGET_CLONE_ALL = 1 << 1,
-    // Clone when there's scalar math operations that can benefit from target-specific
-    // optimizations. This includes `muladd`, `fma`, `fast`/`contract` flags.
-    JL_TARGET_CLONE_MATH = 1 << 2,
-    // Clone when the function has a loop
-    JL_TARGET_CLONE_LOOP = 1 << 3,
-    // Clone when the function uses any vectors
-    // When this is specified, the cloning pass should also record if any of the cloned functions
-    // used this in any function call (including the signature of the function itself)
-    JL_TARGET_CLONE_SIMD = 1 << 4,
-    // Optimize for size for this target
-    JL_TARGET_OPTSIZE = 1 << 6,
-    // Only optimize for size for this target
-    JL_TARGET_MINSIZE = 1 << 7,
-    // Clone when the function queries CPU features
-    JL_TARGET_CLONE_CPU = 1 << 8,
-    // Clone when the function uses fp16
-    JL_TARGET_CLONE_FLOAT16 = 1 << 9,
-    // Clone when the function uses bf16
-    JL_TARGET_CLONE_BFLOAT16 = 1 << 10,
-};
-
 // Feature indices come from the cpufeatures library's generated tables.
 // The actual constants are defined in base/features_h.jl (auto-generated).
 typedef uint32_t jl_cpu_feature_t;
@@ -238,6 +214,17 @@ extern jl_image_unpack_func_t *jl_image_unpack;
 #include <string>
 #include <vector>
 
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+#include <cpufeatures/target_tables_x86_64.h>
+#elif defined(__aarch64__) || defined(_M_ARM64)
+#include <cpufeatures/target_tables_aarch64.h>
+#elif defined(__riscv) && __riscv_xlen == 64
+#include <cpufeatures/target_tables_riscv64.h>
+#else
+#include <cpufeatures/target_tables_fallback.h>
+#endif
+#include <cpufeatures/target_parsing.h>
+
 // NOLINTBEGIN(clang-diagnostic-return-type-c-linkage)
 /**
  * Returns the CPU name and feature string to be used by LLVM JIT.
@@ -257,8 +244,11 @@ extern "C" JL_DLLEXPORT const std::pair<std::string,std::string> &jl_get_llvm_di
 struct jl_target_spec_t {
     std::string cpu_name;
     std::string cpu_features;
-    uint32_t flags;
     int base;
+    bool clone_all = false;
+    bool opt_size = false;
+    bool min_size = false;
+    tp::FeatureDiff diff;
 };
 
 struct jl_clone_targets_t {

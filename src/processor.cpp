@@ -316,16 +316,6 @@ static std::string get_host_feature_string()
 
 static std::vector<tp::LLVMTargetSpec> jit_targets;
 
-// Map FeatureDiff to Julia's JL_TARGET_CLONE_* flags
-static uint32_t diff_to_clone_flags(const tp::FeatureDiff &diff) {
-    uint32_t flags = JL_TARGET_CLONE_CPU | JL_TARGET_CLONE_LOOP;
-    if (diff.has_new_math)    flags |= JL_TARGET_CLONE_MATH;
-    if (diff.has_new_simd)    flags |= JL_TARGET_CLONE_SIMD;
-    if (diff.has_new_float16) flags |= JL_TARGET_CLONE_FLOAT16;
-    if (diff.has_new_bfloat16) flags |= JL_TARGET_CLONE_BFLOAT16;
-    return flags;
-}
-
 // If cpu_target starts with "sysimage", replace it with the target string
 // stored in the loaded sysimage. Otherwise return as-is.
 extern "C" std::string jl_expand_sysimage_keyword(const char *cpu_target) {
@@ -365,19 +355,9 @@ static void ensure_jit_target(const char *cpu_target, bool imaging)
     if (specs.empty())
         jl_error("No targets specified");
 
-    // Set clone flags from feature diffs
-    for (size_t i = 1; i < specs.size(); i++) {
-        if (specs[i].flags & tp::TF_CLONE_ALL) {
-            specs[i].flags |= JL_TARGET_CLONE_ALL;
-        } else {
-            specs[i].flags |= diff_to_clone_flags(specs[i].diff);
-        }
-    }
-
     for (auto &s : specs) {
-        CF_DEBUG("[cpufeatures]   target: name='%s' base=%d flags=0x%x features=%s\n",
-                 s.cpu_name.c_str(), s.base, s.flags,
-                 s.cpu_features.c_str());
+        CF_DEBUG("[cpufeatures]   target: name='%s' base=%d features=%s\n",
+                 s.cpu_name.c_str(), s.base, s.cpu_features.c_str());
         jit_targets.push_back(std::move(s));
     }
 }
@@ -702,15 +682,6 @@ jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
     if (specs.empty())
         jl_error("No targets specified");
 
-    // Set clone flags from feature diffs
-    for (size_t i = 1; i < specs.size(); i++) {
-        if (specs[i].flags & tp::TF_CLONE_ALL) {
-            specs[i].flags |= JL_TARGET_CLONE_ALL;
-        } else {
-            specs[i].flags |= diff_to_clone_flags(specs[i].diff);
-        }
-    }
-
     jl_clone_targets_t result;
 
     // Serialized blob for sysimage embedding
@@ -726,8 +697,11 @@ jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
             if (!ele.cpu_features.empty()) ele.cpu_features += ',';
             ele.cpu_features += s.ext_features;
         }
-        ele.flags = s.flags;
         ele.base = s.base;
+        ele.clone_all = (s.flags & tp::TF_CLONE_ALL) != 0;
+        ele.opt_size = (s.flags & tp::TF_OPTSIZE) != 0;
+        ele.min_size = (s.flags & tp::TF_MINSIZE) != 0;
+        ele.diff = s.diff;
         result.specs.push_back(std::move(ele));
     }
     return result;
