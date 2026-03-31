@@ -1171,7 +1171,14 @@ function _pure_effects_licmloop(A::Vector{Float64}, x::Float64)
     end
     return A
 end
+function _blackbox_licmloop(A::Vector{Float64}, x::Float64)
+    for i in eachindex(A)
+        A[i] = _pure_effects_licmcallee(Base.blackbox(x))
+    end
+    return A
+end
 _pure_effects_licmcallee(1.0); _pure_effects_licmloop(Float64[0.0], 1.0)
+_blackbox_licmloop(Float64[0.0], 1.0)
 @testset "effects to LLVM attributes" begin
     # CSE: duplicate fib call eliminated by GVN using memory(argmem: read)
     ir_bench = get_llvm(_bench_cse_test, Tuple{}, true, false, true)
@@ -1186,4 +1193,9 @@ _pure_effects_licmcallee(1.0); _pure_effects_licmloop(Float64[0.0], 1.0)
     # LICM: loop-invariant pure call hoisted out of loop
     ir_licm = get_llvm(_pure_effects_licmloop, Tuple{Vector{Float64}, Float64}, true, false, true)
     @test count(r"call\b.*@j__pure_effects_licmcallee", ir_licm) == 1
+
+    # blackbox prevents LICM: wrapping the argument makes it opaque, so the
+    # call is no longer considered loop-invariant and stays inside the loop
+    ir_bb = get_llvm(_blackbox_licmloop, Tuple{Vector{Float64}, Float64}, true, false, true)
+    @test count(r"call\b.*@j__pure_effects_licmcallee", ir_bb) > 1
 end
