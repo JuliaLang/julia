@@ -4002,8 +4002,8 @@ Base.donotdelete
 
 This function returns `x` unchanged, but treats the returned value as if it
 came from an unknowable black-box source. The optimizer may not make any
-assumptions about the output: it cannot be constant-folded, CSE'd, or
-treated as loop-invariant.
+assumptions about the output: it cannot be constant-folded, common-subexpression
+eliminated (CSE'd), or treated as loop-invariant.
 This is equivalent to `compilerbarrier(:blackbox, x)`.
 
 This is useful in benchmarking to prevent loop-invariant computations from being
@@ -4047,7 +4047,7 @@ Currently either of the following `setting`s is allowed:
     conditional information on `val` (see the example below)
 - Barriers on optimization:
   * `:blackbox`: treat the returned value as if it came from an unknowable black-box
-    source, preventing CSE and loop-invariant code motion on any computation that
+    source, preventing common-subexpression elimination (CSE) and loop-invariant code motion on any computation that
     depends on it. See [`blackbox`](@ref) for a convenience wrapper.
 
 !!! note
