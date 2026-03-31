@@ -5290,10 +5290,7 @@ isdefined_unknown_idx:
                     // Boxed GC-tracked pointer: emit julia.blackbox intrinsic,
                     // lowered to inline asm after GC frame expansion.
                     Function *BB = prepare_call(jl_blackbox_func);
-                    Value *tracked = V;
-                    if (Ty != JuliaType::get_prjlvalue_ty(ctx.builder.getContext()))
-                        tracked = ctx.builder.CreateAddrSpaceCast(V, JuliaType::get_prjlvalue_ty(ctx.builder.getContext()));
-                    Value *result = ctx.builder.CreateCall(BB, {tracked});
+                    Value *result = ctx.builder.CreateCall(BB, {boxed(ctx, obj)});
                     *ret = mark_julia_type(ctx, result, true, obj.typ);
                 } else if (Ty->isSingleValueType() && !Ty->isPointerTy()) {
                     // Non-pointer scalar (int, float): fits in a register, use "=r,0".
