@@ -8,8 +8,8 @@ JCXXFLAGS_COMMON += $(CXXFLAGS) $(JL_CXXFLAGS)
 JCPPFLAGS_COMMON += $(CPPFLAGS) $(JL_CPPFLAGS)
 JLDFLAGS += $(LDFLAGS) $(JL_LDFLAGS)
 
-SRCS := hashing timefuncs ptrhash operators utf8 ios htable bitvector \
-	int2str libsupportinit arraylist strtod rle
+SRCS := hashing timefuncs ptrhash strhash operators utf8 ios htable bitvector \
+	int2str libsupportinit arraylist strtod rle eytzinger
 ifeq ($(OS),WINNT)
 SRCS += asprintf strptime
 ifeq ($(ARCH),i686)
@@ -19,7 +19,7 @@ SRCS += _setjmp.win64
 endif
 endif
 
-HEADERS := $(wildcard *.h) $(LIBUV_INC)/uv.h
+HEADERS := $(wildcard *.h) $(wildcard *.inc) $(LIBUV_INC)/uv.h
 
 OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
@@ -80,7 +80,7 @@ INCLUDED_SUPPORT_FILES := hashing.c:MurmurHash3.c
 # Compilation database generation
 .PHONY: regenerate-compile_commands
 regenerate-compile_commands:
-	TMPFILE=$$(mktemp $(abspath $(BUILDDIR)/compile_commands.json.XXXXXX)); \
+	@TMPFILE=$$(mktemp $(abspath $(BUILDDIR)/compile_commands.json.XXXXXX)); \
 	{ \
 		CLANG_TOOLING_S_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(JCPPFLAGS) $(DEBUGFLAGS))"; \
 		CLANG_TOOLING_C_FLAGS="$$($(JULIAHOME)/contrib/escape_json.sh clang $(JCPPFLAGS) $(JCFLAGS) $(DEBUGFLAGS))"; \

@@ -123,6 +123,10 @@ julia-cli-release julia-cli-debug: julia-cli-% : julia-deps
 julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-src-% $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-% | $(build_private_libdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-$*
 
+.PHONY: julia-sysimg-JL-release julia-sysimg-JL-debug
+julia-sysimg-JL-release julia-sysimg-JL-debug : julia-sysimg-JL-% : julia-sysimg-% julia-stdlib | $(build_private_libdir)
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-JL-$*
+
 # Useful for cross-bootstrapping
 .PHONY: julia-sysbase-release julia-sysbase-debug
 julia-sysbase-release julia-sysbase-debug : julia-sysbase-% : julia-src-% $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-% | $(build_private_libdir)
@@ -147,12 +151,12 @@ docs: julia-sysimg-$(JULIA_BUILD_MODE) stdlibs-cache-$(JULIA_BUILD_MODE)
 docs-revise:
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/doc JULIA_EXECUTABLE='$(call spawn,$(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE))) --startup-file=no' revise=true
 
+WS_CHECK_PATTERNS = *.1 *.c *.cpp *.h *.inc *.jl *.lsp *.make *.md *.mk *.rst *.scm *.sh *.yml *Makefile
+
 .PHONY: check-whitespace
 check-whitespace:
 ifneq ($(NO_GIT), 1)
-	@# Append the directory containing the julia we just built to the end of `PATH`,
-	@# to give us the best chance of being able to run this check.
-	@PATH="$(PATH):$(dir $(JULIA_EXECUTABLE))" julia $(call cygpath_w,$(JULIAHOME)/contrib/check-whitespace.jl)
+	@git ls-files -- $(WS_CHECK_PATTERNS:%='%') | PATH="$(PATH):$(dir $(JULIA_EXECUTABLE))" julia $(call cygpath_w,$(JULIAHOME)/contrib/check-whitespace.jl) --stdin
 else
 	$(warn "Skipping whitespace check because git is unavailable")
 endif
@@ -160,9 +164,7 @@ endif
 .PHONY: fix-whitespace
 fix-whitespace:
 ifneq ($(NO_GIT), 1)
-	@# Append the directory containing the julia we just built to the end of `PATH`,
-	@# to give us the best chance of being able to run this check.
-	@PATH="$(PATH):$(dir $(JULIA_EXECUTABLE))" julia $(call cygpath_w,$(JULIAHOME)/contrib/check-whitespace.jl) --fix
+	@git ls-files -- $(WS_CHECK_PATTERNS:%='%') | PATH="$(PATH):$(dir $(JULIA_EXECUTABLE))" julia $(call cygpath_w,$(JULIAHOME)/contrib/check-whitespace.jl) --stdin --fix
 else
 	$(warn "Skipping whitespace fix because git is unavailable")
 endif
@@ -269,7 +271,7 @@ JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += zlib
 else
 JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += libz
 endif
-JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += libzstd
+JL_PRIVATE_LIBS-$(USE_SYSTEM_ZSTD) += libzstd
 JL_PRIVATE_EXES += zstd$(EXE) zstdmt$(EXE)
 ifeq ($(USE_LLVM_SHLIB),1)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM $(LLVM_SHARED_LIB_NAME)
@@ -714,7 +716,7 @@ clean: | $(CLEAN_TARGETS)
 .PHONY: cleanall
 cleanall: clean
 	@-$(MAKE) -C $(BUILDROOT)/src clean-flisp clean-support
-	@-$(MAKE) -C $(BUILDROOT)/deps clean-libuv
+	@-$(MAKE) -C $(BUILDROOT)/deps clean-libuv clean-utf8proc
 	-rm -fr $(build_prefix) $(build_staging)
 
 .PHONY: distcleanall

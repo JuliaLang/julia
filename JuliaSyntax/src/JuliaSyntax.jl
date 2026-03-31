@@ -12,18 +12,14 @@ end
 # Public API, in the order of docs/src/api.md
 
 # Parsing.
-export parsestmt,
-    parseall,
-    parseatom
+export parseall, parseatom, parsestmt
 
 @_public parse!,
     ParseStream,
     build_tree
 
 # Tokenization
-export tokenize,
-    Token,
-    untokenize
+export Token, tokenize, untokenize
 
 # Source file handling
 @_public sourcefile,
@@ -98,8 +94,11 @@ include("julia/literal_parsing.jl")
 
 # Tree data structures
 include("porcelain/green_node.jl")
-include("porcelain/syntax_tree.jl")
+include("porcelain/syntax_node.jl")
 include("integration/expr.jl")
+if VERSION >= v"1.12"
+    include("porcelain/syntax_graph.jl")
+end
 
 # Hooks to integrate the parser with Base
 include("integration/hooks.jl")

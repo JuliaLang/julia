@@ -1495,6 +1495,23 @@ mktempdir() do path
         @test "$(path_expected)$(sep)foo_dir$(sep)" in c
         @test "$(path_expected)$(sep)foo_file.txt" in c
     end
+
+    # Issue #60444: path completion should not delete text after the string (e.g. indexing)
+    let (c, r, res) = test_complete_pos("f(\"$(path)$(sep)foo|\")")
+        @test res
+        @test length(c) == 2
+        @test "$(path_expected)$(sep)foo_dir$(sep)" in c
+        @test "$(path_expected)$(sep)foo_file.txt" in c
+    end
+    let (c, r, res) = test_complete_pos("f(\"$(path)$(sep)foo|\")[1]")
+        @test res
+        @test length(c) == 2
+        @test "$(path_expected)$(sep)foo_dir$(sep)" in c
+        @test "$(path_expected)$(sep)foo_file.txt" in c
+        # Range should end at cursor position, not overwrite ")[1]"
+        pos = findfirst('|', "f(\"$(path)$(sep)foo|\")[1]") - 1
+        @test last(r) == pos
+    end
 end
 
 if Sys.iswindows()
@@ -1648,6 +1665,14 @@ test_dict_completion("test_repl_comp_customdict")
     let s = "test_dict_no_length["
         @test REPLCompletions.completions(s, sizeof(s), Main.CompletionFoo) isa Tuple
     end
+
+    # Issue #60444: completing dict keys should not overwrite input after cursor
+    let s = "test_dict[\"ab|c\"]"
+        c, r = test_complete_context_pos(s, Main.CompletionFoo)
+        @test "\"abc\"" in c
+        @test "\"abcd\"" in c
+        @test r == 11:13  # range ends at cursor, not at end of key
+    end
 end
 
 @testset "completion of string/cmd macros (#22577)" begin
@@ -1794,6 +1819,13 @@ end
     @test hasnokwsuggestions("CompletionFoo.kwtest5('a', 3, 5, unknownsplat...; xy")
     @test hasnokwsuggestions("CompletionFoo.kwtest5(3; somek")
     =#
+
+    # Issue #60444: completing keyword arguments should not overwrite input after cursor
+    let s = "CompletionFoo.kwtest3(a; foob|true)"
+        c, r = test_complete_pos(s)
+        @test c == ["foobar="]
+        @test r == 26:29
+    end
 end
 
 # Test completion in context

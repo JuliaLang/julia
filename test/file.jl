@@ -1782,7 +1782,7 @@ rm(dirwalk, recursive=true)
             @test issorted(readdir())
             @test issorted(Base.Filesystem._readdirx())
             @test map(o->o.name, Base.Filesystem._readdirx()) == readdir()
-            @test map(o->o.path, Base.Filesystem._readdirx()) == readdir(join=true)
+            @test map(joinpath, Base.Filesystem._readdirx()) == readdir(join=true)
             @test count(isfile, readdir(join=true)) == count(isfile, Base.Filesystem._readdirx())
         end
     end

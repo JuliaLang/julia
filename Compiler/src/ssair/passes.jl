@@ -361,20 +361,25 @@ function already_inserted(compact::IncrementalCompact, old::OldSSAValue)
     already_inserted_ssa(compact, compact.idx-1)(0, old)
 end
 
-function already_inserted_ssa(compact::IncrementalCompact, processed_idx::Int)
-    return function did_already_insert(phi_arg::Int, old::OldSSAValue)
-        id = old.id
-        if id <= length(compact.ir.stmts)
-            return id <= processed_idx
-        end
-        id -= length(compact.ir.stmts)
-        if id <= length(compact.ir.new_nodes)
-            return did_already_insert(phi_arg, OldSSAValue(compact.ir.new_nodes.info[id].pos))
-        end
-        id -= length(compact.ir.new_nodes)
-        @assert id <= length(compact.pending_nodes)
-        return !(id in compact.pending_perm)
+function _already_inserted_ssa(compact::IncrementalCompact, processed_idx::Int,
+                               phi_arg::Int, old::OldSSAValue)
+    id = old.id
+    if id <= length(compact.ir.stmts)
+        return id <= processed_idx
     end
+    id -= length(compact.ir.stmts)
+    if id <= length(compact.ir.new_nodes)
+        return _already_inserted_ssa(compact, processed_idx, phi_arg,
+                                     OldSSAValue(compact.ir.new_nodes.info[id].pos))
+    end
+    id -= length(compact.ir.new_nodes)
+    @assert id <= length(compact.pending_nodes)
+    return !(id in compact.pending_perm)
+end
+
+function already_inserted_ssa(compact::IncrementalCompact, processed_idx::Int)
+    return (phi_arg::Int, old::OldSSAValue) ->
+        _already_inserted_ssa(compact, processed_idx, phi_arg, old)
 end
 
 function is_pending(compact::IncrementalCompact, old::OldSSAValue)
@@ -627,7 +632,7 @@ function lift_comparison_leaves!(@specialize(tfunc),
 
     # perform lifting
     (lifted_val, nest) = perform_lifting!(compact,
-        visited_philikes, cmp, Bool, lifted_leaves::LiftedLeaves, val, nothing)
+        visited_philikes, cmp, nothing, Bool, lifted_leaves::LiftedLeaves, val, nothing)
 
     compact[idx] = (lifted_val::LiftedValue).val
 
@@ -776,6 +781,7 @@ end
 
 function perform_lifting!(compact::IncrementalCompact,
         visited_philikes::Vector{AnySSAValue}, @nospecialize(cache_key),
+        lifting_cache::Union{IdDict{Pair{AnySSAValue,Pair{Any,Any}}, AnySSAValue}, Nothing},
         @nospecialize(result_t), lifted_leaves::Union{LiftedLeaves, LiftedDefs}, @nospecialize(stmt_val),
         lazydomtree::Union{LazyDomtree,Nothing}, walker_callback::WalkerCallback = TrivialWalker())
     reverse_mapping = IdDict{AnySSAValue, Int}()
@@ -835,10 +841,30 @@ function perform_lifting!(compact::IncrementalCompact,
     # Insert PhiNodes
     nphilikes = length(visited_philikes)
     lifted_philikes = Vector{LiftedPhilike}(undef, nphilikes)
+    # The cache key includes stmt_val to distinguish liftings through the same phi
+    # node with different type constraints (e.g. direct access vs through a PiNode).
+    # stmt_val has not been walked yet at this point, so it reflects the original
+    # getfield argument and thus the type constraint used by collect_leaves.
+    local cache_key_with_val
+    if lifting_cache !== nothing
+        cache_key_with_val = Pair{Any,Any}(cache_key, stmt_val)
+    end
     for i = 1:nphilikes
         old_ssa = visited_philikes[i]
         old_inst = compact[old_ssa]
         old_node = old_inst[:stmt]::Union{PhiNode,Expr}
+        if lifting_cache !== nothing
+            ckey = Pair{AnySSAValue,Pair{Any,Any}}(old_ssa, cache_key_with_val)
+            if ckey in keys(lifting_cache)
+                ssa = lifting_cache[ckey]
+                if isa(old_node, PhiNode)
+                    lifted_philikes[i] = LiftedPhilike(ssa, old_node, false)
+                else
+                    lifted_philikes[i] = LiftedPhilike(ssa, IfElseCall(old_node), false)
+                end
+                continue
+            end
+        end
         if isa(old_node, PhiNode)
             new_node = PhiNode()
             ssa = insert_node!(compact, old_ssa, removable_if_unused(NewInstruction(new_node, result_t)))
@@ -855,6 +881,10 @@ function perform_lifting!(compact::IncrementalCompact,
 
             ssa = insert_node!(compact, old_ssa, new_inst, #= attach_after =# true)
             lifted_philikes[i] = LiftedPhilike(ssa, IfElseCall(new_node), true)
+        end
+        if lifting_cache !== nothing
+            ckey = Pair{AnySSAValue,Pair{Any,Any}}(old_ssa, cache_key_with_val)
+            lifting_cache[ckey] = ssa
         end
     end
 
@@ -1039,17 +1069,27 @@ function lift_keyvalue_get!(compact::IncrementalCompact, idx::Int, stmt::Expr, �
         result_t = tmerge(𝕃ₒ, result_t, argextype(v.val, compact))
     end
 
+    # Extract the wrapper type (e.g. Some{V}) from the inferred return type
+    # Union{Nothing, Some{V}} by subtracting Nothing. Bail out if the result
+    # is not a valid single-field concrete wrapper type.
+    get_rtype = widenconst(compact[SSAValue(idx)][:type])
+    wrapper_typ = typesubtract(get_rtype, Nothing, 0)
+    isconcretetype(wrapper_typ) || return
+    fieldcount(wrapper_typ) == 1 || return
+    ⊑(𝕃ₒ, result_t, fieldtype(wrapper_typ, 1)) || return
+
     (lifted_val, nest) = perform_lifting!(compact,
-        visited_philikes, key, result_t, lifted_leaves, collection, nothing,
+        visited_philikes, key, nothing, result_t, lifted_leaves, collection, nothing,
         KeyValueWalker(compact))
 
-    compact[idx] = lifted_val === nothing ? nothing : Expr(:call, GlobalRef(Core, :tuple), lifted_val.val)
-    finish_phi_nest!(compact, nest)
     if lifted_val !== nothing
-        if !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], tuple_tfunc(𝕃ₒ, Any[result_t]))
-            add_flag!(compact[SSAValue(idx)], IR_FLAG_REFINED)
-        end
+        compact[idx] = Expr(:new, wrapper_typ, lifted_val.val)
+        compact[SSAValue(idx)][:type] = wrapper_typ
+        add_flag!(compact[SSAValue(idx)], IR_FLAG_REFINED)
+    else
+        compact[idx] = nothing
     end
+    finish_phi_nest!(compact, nest)
 
     return
 end
@@ -1262,6 +1302,8 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
     defuses = nothing # will be initialized once we encounter mutability in order to reduce dynamic allocations
     # initialization of domtree is delayed to avoid the expensive computation in many cases
     lazydomtree = LazyDomtree(ir)
+    lifting_cache = IdDict{Pair{AnySSAValue,Pair{Any,Any}}, AnySSAValue}()
+    def_lifting_cache = IdDict{Pair{AnySSAValue,Pair{Any,Any}}, AnySSAValue}()
     scope_mapping::Union{Vector{SSAValue}, Nothing} = nothing
     for ((old_idx, idx), stmt) in compact
         # If we encounter any EnterNode with set :scope, propagate the current scope for all basic blocks, so
@@ -1496,7 +1538,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
 
         (lifted_val, nest) = perform_lifting!(compact,
-            visited_philikes, field, result_t, lifted_leaves, val, lazydomtree)
+            visited_philikes, field, lifting_cache, result_t, lifted_leaves, val, lazydomtree)
 
         should_delete_node = false
         line = compact[SSAValue(idx)][:line]
@@ -1525,7 +1567,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                     lifted_leaves_def[k] = v === nothing ? false : true
                 end
                 (def_val, nest) = perform_lifting!(compact,
-                    visited_philikes, field, Bool, lifted_leaves_def, val, lazydomtree)
+                    visited_philikes, field, def_lifting_cache, Bool, lifted_leaves_def, val, lazydomtree)
                 def_val = (def_val::LiftedValue).val
                 finish_phi_nest!(compact, nest)
             end
@@ -1647,6 +1689,25 @@ function reachable_blocks(cfg::CFG, from_bb::Int, to_bb::Int)
     return visited
 end
 
+function _update_finalizer_insert!(ir::IRCode, lazypostdomtree::LazyPostDomtree,
+                                   finalizer_idx::Int, insert_bb::Int,
+                                   insert_idx::Union{Int,Nothing}, x::Union{Int,SSAUse})
+    defuse_idx = x isa SSAUse ? x.idx : x
+    defuse_idx == finalizer_idx && return insert_bb, insert_idx
+    defuse_bb = block_for_inst(ir, defuse_idx)
+    new_insert_bb = nearest_common_dominator(get!(lazypostdomtree),
+        insert_bb, defuse_bb)
+    if new_insert_bb == insert_bb && insert_idx !== nothing
+        insert_idx = max(insert_idx::Int, defuse_idx)
+    elseif new_insert_bb == defuse_bb
+        insert_idx = defuse_idx
+    else
+        insert_idx = nothing
+    end
+    insert_bb = new_insert_bb
+    return insert_bb, insert_idx
+end
+
 function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, defuse::SSADefUse,
         inlining::InliningState, lazydomtree::LazyDomtree,
         lazypostdomtree::LazyPostDomtree, @nospecialize(info::CallInfo))
@@ -1668,24 +1729,12 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
     # Check #2: The insertion block for the finalizer is the post-dominator of all uses
     insert_bb::Int = finalizer_bb
     insert_idx::Union{Int,Nothing} = finalizer_idx
-    function note_defuse!(x::Union{Int,SSAUse})
-        defuse_idx = x isa SSAUse ? x.idx : x
-        defuse_idx == finalizer_idx && return nothing
-        defuse_bb = block_for_inst(ir, defuse_idx)
-        new_insert_bb = nearest_common_dominator(get!(lazypostdomtree),
-            insert_bb, defuse_bb)
-        if new_insert_bb == insert_bb && insert_idx !== nothing
-            insert_idx = max(insert_idx::Int, defuse_idx)
-        elseif new_insert_bb == defuse_bb
-            insert_idx = defuse_idx
-        else
-            insert_idx = nothing
-        end
-        insert_bb = new_insert_bb
-        nothing
+    for x in defuse.uses
+        insert_bb, insert_idx = _update_finalizer_insert!(ir, lazypostdomtree, finalizer_idx, insert_bb, insert_idx, x)
     end
-    foreach(note_defuse!, defuse.uses)
-    foreach(note_defuse!, defuse.defs)
+    for x in defuse.defs
+        insert_bb, insert_idx = _update_finalizer_insert!(ir, lazypostdomtree, finalizer_idx, insert_bb, insert_idx, x)
+    end
     insert_bb != 0 || return nothing # verify post-dominator of all uses exists
 
     if !OptimizationParams(inlining.interp).assume_fatal_throw

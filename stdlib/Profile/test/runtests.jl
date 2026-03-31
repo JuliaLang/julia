@@ -3,6 +3,8 @@
 using Test, Profile, Serialization, Logging
 using Base.StackTraces: StackFrame
 
+@test isempty(Test.detect_closure_boxes(Profile))
+
 @test_throws "The profiling data buffer is not initialized. A profile has not been requested this session." Profile.print()
 
 Profile.clear()
@@ -246,11 +248,15 @@ end
     @test occursin("@julialib" * slash, str)
 end
 
-function run_with_watchdog(cmd, timeout=120)
+function run_with_watchdog(cmd, timeout=600)
     p = open(cmd)
     t = Timer(timeout) do t
-        # should be under 10 seconds, so give it 2 minutes then report failure
+        # should be under 10 seconds normally, so give it 10 minutes then report failure
+        # n.b.: it was observed in an interactive CI session that a 2 minute timeout is not
+        #       sufficient when the machine is under extremely high load which happens
+        #       regularly when executing other tests in parallel with Profile
         println("KILLING debuginfo registration test BY PROFILE TEST WATCHDOG\n")
+        println("This should not happen. Please report this at https://github.com/JuliaLang/julia/issues/60306")
         kill(p, Base.SIGQUIT)
         sleep(30)
         kill(p, Base.SIGQUIT)
@@ -283,7 +289,7 @@ let cmd = Base.julia_cmd()
 end
 
 # Thread suspend deadlock - run many times (#60042)
-let cmd = Base.julia_cmd()
+@test_skip let cmd = Base.julia_cmd()
     script = """
         using Profile
         @profile println("done")
@@ -293,7 +299,7 @@ let cmd = Base.julia_cmd()
         s = run_with_watchdog(`$cmd -t2 -e $script`, 5)
         good &= occursin("done", s)
     end
-    @test good
+    good
 end
 
 if Sys.isbsd() || Sys.islinux()

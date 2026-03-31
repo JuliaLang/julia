@@ -55,7 +55,7 @@
             @test parsestmt("a;b") ==
                 Expr(:toplevel, :a, :b)
 
-            @test parsestmt("module A\n\nbody\nend") ==
+            @test parsestmt("module A\n\nbody\nend"; version=v"1.13") ==
                 Expr(:module,
                      true,
                      :A,
@@ -268,6 +268,16 @@
                                     1)))),
                  Expr(:block,
                       LineNumberNode(3)))
+
+        # short-form postfix function shouldn't introduce a block
+        @test parsestmt("x' = 1") ==
+            Expr(:(=),
+                 Expr(Symbol("'"), :x),
+                 1)
+        @test parsestmt("x' = A * x") ==
+            Expr(:(=),
+                 Expr(Symbol("'"), :x),
+                 Expr(:call, :*, :A, :x))
 
         # `.=` doesn't introduce short form functions
         @test parsestmt("f() .= xs") ==
@@ -761,6 +771,12 @@
             Expr(:struct, false, :A, Expr(:block, LineNumberNode(2), "doc", :a))
     end
 
+    @testset "typegroup" begin
+        @test parsestmt("typegroup\nstruct A\nend\nend", version=v"1.14") ==
+            Expr(:typegroup, Expr(:block, LineNumberNode(2),
+                Expr(:struct, false, :A, Expr(:block, LineNumberNode(2)))))
+    end
+
     @testset "export" begin
         @test parsestmt("export a") == Expr(:export, :a)
         @test parsestmt("export @a") == Expr(:export, Symbol("@a"))
@@ -798,9 +814,11 @@
     end
 
     @testset "module" begin
-        @test parsestmt("module A end") ==
+        @test parsestmt("module A end"; version=v"1.13") ==
             Expr(:module, true,  :A, Expr(:block, LineNumberNode(1), LineNumberNode(1)))
-        @test parsestmt("baremodule A end") ==
+        @test parsestmt("module A end"; version=v"1.14") ==
+            Expr(:module, v"1.14", true,  :A, Expr(:block, LineNumberNode(1), LineNumberNode(1)))
+        @test parsestmt("baremodule A end"; version=v"1.13") ==
             Expr(:module, false, :A, Expr(:block, LineNumberNode(1), LineNumberNode(1)))
     end
 

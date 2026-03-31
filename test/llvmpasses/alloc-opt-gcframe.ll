@@ -25,7 +25,8 @@ define {} addrspace(10)* @return_obj() {
 ; CHECK-LABEL: }{{$}}
 
 ; CHECK-LABEL: @return_load
-; CHECK: alloca i64
+; When the element type is known (i64), splitOnStack preserves it
+; CHECK: alloca i64, align 16
 ; CHECK-NOT: @julia.gc_alloc_obj
 ; CHECK-NOT: @jl_gc_small_alloc
 ; OPAQUE: call void @llvm.lifetime.start{{.*}}(i64 8, ptr
@@ -62,7 +63,7 @@ define void @ccall_obj(i8* %fptr) {
 ; CHECK-LABEL: }{{$}}
 
 ; CHECK-LABEL: @ccall_ptr
-; CHECK: alloca i64
+; CHECK: alloca i64, align 16
 ; OPAQUE: call ptr @julia.get_pgcstack()
 ; CHECK-NOT: @julia.gc_alloc_obj
 ; CHECK-NOT: @jl_gc_small_alloc
@@ -105,7 +106,7 @@ define void @ccall_unknown_bundle(i8* %fptr) {
 ; CHECK-LABEL: }{{$}}
 
 ; CHECK-LABEL: @lifetime_branches
-; CHECK: alloca i64
+; CHECK: alloca i64, align 16
 ; OPAQUE: call ptr @julia.get_pgcstack()
 ; CHECK: L1:
 ; CHECK-NEXT: call void @llvm.lifetime.start{{.*}}(i64 8,
@@ -166,7 +167,7 @@ define void @object_field({} addrspace(10)* %field) {
 ; CHECK-LABEL: }{{$}}
 
 ; CHECK-LABEL: @memcpy_opt
-; CHECK: alloca [16 x i8], align 16
+; CHECK: alloca [2 x i64], align 16
 ; OPAQUE: call ptr @julia.get_pgcstack()
 ; CHECK-NOT: @julia.gc_alloc_obj
 ; CHECK-NOT: @jl_gc_small_alloc

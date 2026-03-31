@@ -7,8 +7,16 @@
 
 include("interp.jl")
 
-@flavor julia [blocktex, blockinterp, hashheader, list, indentcode, fencedcode,
-               blockquote, admonition, footnote, github_table, horizontalrule, setextheader, paragraph,
+@flavor julia [blocktex, blockinterp,
+               fencedcode, horizontalrule, list, indentcode, blockquote, admonition, footnote, hashheader,
+               html_block, html_block_type7, github_table, setextheader, paragraph,
 
-               linebreak, escapes, tex, interp, en_or_em_dash, inline_code,
-               asterisk_bold, underscore_bold, asterisk_italic, underscore_italic, image, footnote_link, link, autolink]
+               # Backslash escapes do not work in code blocks, code spans, autolinks, or raw HTML
+               inline_code, autolink, html_inline,
+               linebreak, escapes, entity,
+               tex, interp,
+               en_or_em_dash,
+               double_tilde_strikethrough, tilde_strikethrough,
+               asterisk_bold, underscore_bold,
+               asterisk_italic, underscore_italic,
+               image, footnote_link, link]

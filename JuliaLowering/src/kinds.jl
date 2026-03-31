@@ -14,23 +14,18 @@ function _register_kinds()
             "gc_preserve"
             "gc_preserve_begin"
             "gc_preserve_end"
-            # A literal Julia value of any kind, as might be inserted into the
-            # AST during macro expansion
-            "Value"
             # A (quoted) `Symbol`
             "Symbol"
-            # QuoteNode; not quasiquote
-            "inert"
-            # Compiler metadata hints
-            "meta"
             # TODO: Use `meta` for inbounds and loopinfo etc?
             "inbounds"
             "boundscheck"
             "inline"
             "noinline"
             "loopinfo"
-            # Call into foreign code. Emitted by `@ccall`
+            # Call into foreign code
             "foreigncall"
+            # ccall convention
+            "cconv"
             # Special form for constructing a function callable from C
             "cfunction"
             # Special form emitted by `Base.Experimental.@opaque`
@@ -43,9 +38,11 @@ function _register_kinds()
             # be passed through lowering in a similar way to `isdefined`
             "throw_undef_if_not"
             # named labels for `@label` and `@goto`
-            "symbolic_label"
+            "symboliclabel"
             # Goto named label
-            "symbolic_goto"
+            "symbolicgoto"
+            # Labeled block for `@label name expr` (block break)
+            "symbolicblock"
             # Internal initializer for struct types, for inner constructors/functions
             "new"
             "splatnew"
@@ -53,19 +50,21 @@ function _register_kinds()
             # invocations during macro expansion (gone after macro expansion)
             "escape"
             # Used for converting the old-style macro hygienic-scope form (gone
-            # after macro expansion)
-            "hygienic_scope"
+            # after macro expansion).
+            "hygienic-scope"
+            # Only produced by flisp macro expansion (which Core.@doc (cursed)
+            # invokes manually)
+            "copyast"
             # An expression which will eventually be evaluated "statically" in
             # the context of a CodeInfo and thus allows access only to globals
             # and static parameters. Used for ccall, cfunction, cglobal
             # TODO: Use this for GeneratedFunctionStub also?
             "static_eval"
-            # Catch-all for additional syntax extensions without the need to
-            # extend `Kind`. Known extensions include:
-            #   locals, islocal, isglobal
-            # The content of an assertion is not considered to be quoted, so
-            # use K"Symbol" or K"inert" inside where necessary.
-            "extension"
+            "islocal"
+            "isglobal"
+            "locals"
+            "thisfunction"
+            "overlay"
         "END_EXTENSION_KINDS"
 
         # The following kinds are internal to lowering
@@ -77,18 +76,27 @@ function _register_kinds()
             "BindingId"
             # Various heads harvested from flisp lowering.
             # (TODO: May or may not need all these - assess later)
-            "break_block"
             # Like block, but introduces a lexical scope; used during scope resolution.
             "scope_block"
+            # Equivalent to Expr(:softscope).  If found in the top-level thunk,
+            # all enclosed neutral scopes become soft scopes.  :hardscope exists
+            # too, but is always produced inside scope-blocks, so we represent
+            # it with an attribute on our scope-blocks.
+            "softscope"
             # [K"always_defined" x] is an assertion that variable `x` is assigned before use
             # ('local-def in flisp implementation is K"local" plus K"always_defined"
             "always_defined"
             "_while"
             "_do_while"
+            # (_typevar name lb ub).  flisp usually uses 3-long lists for these,
+            # usually called `sparams`
+            "_typevar"
             "_typevars" # used for supplying already-allocated `TypeVar`s to `where`
+            # (_generated_body (quote gen) nongen) to allow arglist-related desugaring
+            # to occur before the methods are created
+            "_generated_body"
             "with_static_parameters"
             "top"
-            "core"
             "lambda"
             # "A source location literal" - a node which exists only to record
             # a sourceref
@@ -107,6 +115,8 @@ function _register_kinds()
             "_opaque_closure"
             # The enclosed statements must be executed at top level
             "toplevel_butfirst"
+            # like v = val, except that if `v` turns out global (either
+            # implicitly or by explicit `global`), it gains an implicit `const`
             "assign_or_constdecl_if_global"
             "moved_local"
             "label"
@@ -133,6 +143,11 @@ function _register_kinds()
             "constdecl"
             # Returned from statements that should error if the result is used.
             "unused_only"
+            # Pre-lowered SSA value reference from Expr(:ssavalue, N).
+            # Translated to a BindingId during desugaring.
+            "ssavalue"
+            # Token used by interpolate_ast to mark where `$` was
+            raw"_$"
         "END_LOWERING_KINDS"
 
         # The following kinds are emitted by lowering and used in Julia's untyped IR

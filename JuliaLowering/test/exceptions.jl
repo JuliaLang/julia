@@ -1,5 +1,3 @@
-@testset "try/catch" begin
-
 test_mod = Module()
 
 @test isempty(current_exceptions())
@@ -260,8 +258,6 @@ end
 
 @test isempty(current_exceptions())
 
-end
-
 #-------------------------------------------------------------------------------
 @testset "try/finally" begin
 
@@ -335,4 +331,20 @@ finally
 end
 """) == 2
 
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_try_catch_nospecialize(@nospecialize(cond))
+        try
+            cond && throw(ArgumentError(""))
+        catch
+            return 1
+        end
+        return 2
+    end
+    (
+        f_try_catch_nospecialize(true),
+        f_try_catch_nospecialize(false),
+    )
+end
+""") == (1,2)
 end

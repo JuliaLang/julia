@@ -28,7 +28,7 @@ end
 """
     capture_exception(ex, bt)::Exception
 
-Returns an exception, possibly incorporating information from a backtrace `bt`. Defaults to returning [`CapturedException(ex, bt)`](@ref).
+Return an exception, possibly incorporating information from a backtrace `bt`. Defaults to returning [`CapturedException(ex, bt)`](@ref).
 
 Used in [`asyncmap`](@ref) and [`asyncmap!`](@ref) to capture exceptions thrown during
 the user-supplied function call.
@@ -160,7 +160,7 @@ const task_state_failed   = UInt8(2)
         elseif st === task_state_failed
             return :failed
         else
-            @assert false
+            @assert false "unexpected state"
         end
     elseif field === :backtrace
         # TODO: this field name should be deprecated in 2.0

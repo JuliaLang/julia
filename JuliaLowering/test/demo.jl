@@ -3,7 +3,10 @@
 using JuliaSyntax
 using JuliaLowering
 
-using JuliaLowering: SyntaxGraph, SyntaxTree, ensure_attributes!, ensure_attributes, newnode!, setchildren!, is_leaf, @ast, numchildren, children, child, setattr!, sourceref, makenode, sourcetext, showprov, lookup_binding
+using JuliaSyntax: ensure_attributes
+using JuliaLowering: @ast, SyntaxGraph, SyntaxTree, child, children, is_leaf,
+    lookup_binding, makenode, newnode!, numchildren, setattr!, setchildren!, showprov,
+    sourceref
 
 using JuliaSyntaxFormatter
 
@@ -13,7 +16,7 @@ function var_kind(ctx, ex)
     if isnothing(id)
         return nothing
     end
-    binfo = lookup_binding(ctx, id)
+    binfo = get_binding(ctx, id)
     return binfo.kind == :local ?
         (binfo.is_captured ? :local_captured : :local) :
         binfo.kind
@@ -25,7 +28,7 @@ function var_mod(ctx, ex)
     if isnothing(id)
         return nothing
     end
-    return lookup_binding(ctx, id).mod
+    return get_binding(ctx, id).mod
 end
 
 function formatsrc(ex; kws...)
@@ -81,9 +84,9 @@ else
 eval(JuliaLowering.@SyntaxTree :(baremodule M
     using Base
 
-    using JuliaLowering: JuliaLowering, @ast, @chk, adopt_scope, MacroExpansionError, makenode
+    using JuliaLowering: @ast, @chk, JuliaLowering, MacroExpansionError, adopt_scope, makenode
     using JuliaSyntax
-    using JuliaLowering: @inert, @label, @goto, @islocal
+    using JuliaLowering: @goto, @inert, @islocal, @label
     using Base: @locals
 
     macro K_str(str)

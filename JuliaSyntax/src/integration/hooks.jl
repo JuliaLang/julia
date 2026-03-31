@@ -21,7 +21,6 @@ end
 # within its parent and the node itself.
 function first_tree_error(c::RedTreeCursor, error_cursor::GreenTreeCursor)
     @assert !is_leaf(c) && !is_error(c)
-    first_child = first_error = nothing
     it = reverse_nontrivia_children(c)
     r = iterate(it)
     local child
@@ -162,7 +161,7 @@ end
 # Debug log file for dumping parsed code
 const _debug_log = Ref{Union{Nothing,IO}}(nothing)
 
-function core_parser_hook(code, filename::String, lineno::Int, offset::Int, options::Symbol)
+function core_parser_hook(code, filename::String, lineno::Int, offset::Int, options::Symbol; syntax_version = v"1.13")
     try
         # TODO: Check that we do all this input wrangling without copying the
         # code buffer
@@ -184,7 +183,7 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
             write(_debug_log[], code)
         end
 
-        stream = ParseStream(code, offset+1)
+        stream = ParseStream(code, offset+1; version = syntax_version)
         if options === :statement || options === :atom
             # To copy the flisp parser driver:
             # * Parsing atoms      consumes leading trivia

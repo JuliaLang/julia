@@ -233,7 +233,7 @@ end
 
 function not_tfunc(𝕃::AbstractLattice, @nospecialize(b))
     if isa(b, Conditional)
-        return Conditional(b.slot, b.elsetype, b.thentype)
+        return Conditional(b.slot, b.ssadef, b.elsetype, b.thentype)
     elseif isa(b, Const)
         return Const(not_int(b.val))
     end
@@ -354,14 +354,14 @@ end
     if isa(x, Conditional)
         y = widenconditional(y)
         if isa(y, Const)
-            y.val === false && return Conditional(x.slot, x.elsetype, x.thentype)
+            y.val === false && return Conditional(x.slot, x.ssadef, x.elsetype, x.thentype)
             y.val === true && return x
             return Const(false)
         end
     elseif isa(y, Conditional)
         x = widenconditional(x)
         if isa(x, Const)
-            x.val === false && return Conditional(y.slot, y.elsetype, y.thentype)
+            x.val === false && return Conditional(y.slot, y.ssadef, y.elsetype, y.thentype)
             x.val === true && return y
             return Const(false)
         end
@@ -716,7 +716,7 @@ end
 @nospecs function pointerset_tfunc(𝕃::AbstractLattice, a, v, i, align)
     return a
 end
-@nospecs function atomic_fence_tfunc(𝕃::AbstractLattice, order)
+@nospecs function atomic_fence_tfunc(𝕃::AbstractLattice, order, syncscope)
     return Nothing
 end
 @nospecs function atomic_pointerref_tfunc(𝕃::AbstractLattice, a, order)
@@ -757,7 +757,7 @@ add_tfunc(add_ptr, 2, 2, pointerarith_tfunc, 1)
 add_tfunc(sub_ptr, 2, 2, pointerarith_tfunc, 1)
 add_tfunc(pointerref, 3, 3, pointerref_tfunc, 4)
 add_tfunc(pointerset, 4, 4, pointerset_tfunc, 5)
-add_tfunc(atomic_fence, 1, 1, atomic_fence_tfunc, 4)
+add_tfunc(atomic_fence, 2, 2, atomic_fence_tfunc, 4)
 add_tfunc(atomic_pointerref, 2, 2, atomic_pointerref_tfunc, 4)
 add_tfunc(atomic_pointerset, 3, 3, atomic_pointerset_tfunc, 5)
 add_tfunc(atomic_pointerswap, 3, 3, atomic_pointerswap_tfunc, 5)
@@ -776,6 +776,8 @@ add_tfunc(donotdelete, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->No
         return widenconditional(val)
     elseif setting === :type
         return Any
+    elseif setting === :blackbox
+        return widenconst(val)
     else
         return Bottom
     end
@@ -784,7 +786,7 @@ add_tfunc(compilerbarrier, 2, 2, compilerbarrier_tfunc, 5)
 add_tfunc(Core.finalizer, 2, 4, @nospecs((𝕃::AbstractLattice, args...)->Nothing), 5)
 
 @nospecs function compilerbarrier_nothrow(setting, val)
-    return isa(setting, Const) && contains_is((:type, :const, :conditional), setting.val)
+    return isa(setting, Const) && contains_is((:type, :const, :conditional, :blackbox), setting.val)
 end
 
 # more accurate typeof_tfunc for vararg tuples abstract only in length
@@ -1286,18 +1288,6 @@ end
     return rewrap_unionall(R, s00)
 end
 
-# checks if a field of this type is guaranteed to be defined to a value
-# and that access to an uninitialized field will cause an `UndefRefError` or return zero
-# - is_undefref_fieldtype(String) === true
-# - is_undefref_fieldtype(Integer) === true
-# - is_undefref_fieldtype(Any) === true
-# - is_undefref_fieldtype(Int) === false
-# - is_undefref_fieldtype(Union{Int32,Int64}) === false
-# - is_undefref_fieldtype(T) === false
-function is_undefref_fieldtype(@nospecialize ftyp)
-    return !has_free_typevars(ftyp) && !allocatedinline(ftyp)
-end
-
 @nospecs function setfield!_tfunc(𝕃::AbstractLattice, o, f, v, order)
     if !isvarargtype(order)
         hasintersect(widenconst(order), Symbol) || return Bottom
@@ -1376,7 +1366,7 @@ end
     return Bool
 end
 
-@nospecs function abstract_modifyop!(interp::AbstractInterpreter, ff, argtypes::Vector{Any}, si::StmtInfo, sv::AbsIntState)
+@nospecs function abstract_modifyop!(interp::AbstractInterpreter, ff, argtypes::Vector{Any}, si::StmtInfo, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     if ff === modifyfield!
         minargs = 5
         maxargs = 6
@@ -1437,7 +1427,7 @@ end
         # as well as compute the info for the method matches
         op = unwrapva(argtypes[op_argi])
         v = unwrapva(argtypes[v_argi])
-        callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), StmtInfo(true, si.saw_latestworld), sv, #=max_methods=#1)
+        callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), StmtInfo(true, si.saw_latestworld), vtypes, sv, #=max_methods=#1)
         TF = Core.Box(TF)
         RT = Core.Box(RT)
         return Future{CallMeta}(callinfo, interp, sv) do callinfo, interp, sv
@@ -1599,6 +1589,11 @@ end
         t = Bottom
         for i in 1:length(ftypes)
             ft1 = unwrapva(ftypes[i])
+            # Malformed Vararg types like `NTuple{<:Any, 3}` have non-Type components
+            # (e.g., `3`). Skip these since `fieldtype` would throw at runtime.
+            if !(isa(ft1, Type) || isa(ft1, TypeVar))
+                continue
+            end
             exactft1 = exact || (!has_free_typevars(ft1) && u.name !== Tuple.name)
             ft1 = rewrap_unionall(ft1, s)
             if exactft1
@@ -1638,8 +1633,8 @@ end
     else
         ft = ftypes[fld]
     end
-    if !isa(ft, Type) && !isa(ft, TypeVar)
-        return Const(ft)
+    if !(isa(ft, Type) || isa(ft, TypeVar))
+        return Bottom # see non-`Const` case above
     end
 
     exactft = exact || (!has_free_typevars(ft) && u.name !== Tuple.name)
@@ -2578,7 +2573,6 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     # _apply_iterate,
     # Core._call_in_world_total,
     # Core._compute_sparams,
-    # Core._defaultctors,
     # Core._equiv_typedef,
     Core._expr,
     # Core._primitivetype,
@@ -2798,7 +2792,7 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
                            sv::Union{AbsIntState, Nothing})
     𝕃ᵢ = typeinf_lattice(interp)
     # Early constant evaluation for foldable builtins with all const args
-    if isa(f, IntrinsicFunction) ? is_pure_intrinsic_infer(f) : (f in _PURE_BUILTINS || (f in _CONSISTENT_BUILTINS && f in _EFFECT_FREE_BUILTINS))
+    if isa(f, IntrinsicFunction) ? is_pure_intrinsic_infer(f) : (contains_is(_PURE_BUILTINS, f) || (contains_is(_CONSISTENT_BUILTINS, f) && contains_is(_EFFECT_FREE_BUILTINS, f)))
         if is_all_const_arg(argtypes, 1)
             argvals = collect_const_args(argtypes, 1)
             try
@@ -2988,14 +2982,20 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
             return ErrorException
         end
 
-        # fpext, fptrunc, fptoui, fptosi, uitofp, and sitofp have further
-        # restrictions on the allowed types.
+        # fpext, sext_int, zext_int, fptrunc, trunc_int, fptoui, fptosi, uitofp, and sitofp
+        # have further restrictions on the allowed types.
         if f === Intrinsics.fpext &&
             !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) > Core.sizeof(xty))
             return ErrorException
         end
+        if (f === Intrinsics.sext_int || f === Intrinsics.zext_int) && !(Core.sizeof(ty) > Core.sizeof(xty))
+            return ErrorException
+        end
         if f === Intrinsics.fptrunc &&
             !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) < Core.sizeof(xty))
+            return ErrorException
+        end
+        if f === Intrinsics.trunc_int && !(Core.sizeof(ty) < Core.sizeof(xty))
             return ErrorException
         end
         if (f === Intrinsics.fptoui || f === Intrinsics.fptosi) && !(xty <: CORE_FLOAT_TYPES)
@@ -3137,7 +3137,11 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
         old_restrict = sv.restrict_abstract_call_sites
         sv.restrict_abstract_call_sites = false
     end
-    call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, #=max_methods=#-1)
+    # TODO: Could pass vtypes here to enable Conditional/MustAlias refinements
+    # in return_type inference. Currently passing `nothing` which means any
+    # slot-dependent refinements will be widened. This is conservative but
+    # may miss some precision opportunities.
+    call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, nothing, sv, #=max_methods=#-1)
     tt = Core.Box(tt)
     return Future{CallMeta}(call, interp, sv) do call, _, sv
         if isa(sv, InferenceState)
