@@ -534,7 +534,9 @@ jl_value_t *jl_gc_small_alloc_noinline(jl_ptls_t ptls, int offset,
                                    int osize);
 jl_value_t *jl_gc_big_alloc_noinline(jl_ptls_t ptls, size_t allocsz);
 JL_DLLEXPORT int jl_gc_classify_pools(size_t sz, int *osize) JL_NOTSAFEPOINT;
-void gc_sweep_sysimg(void) JL_NOTSAFEPOINT;
+extern htable_t image_remset;
+extern arraylist_t image_remset_list;
+extern jl_mutex_t image_remset_lock;
 
 
 // pools are 16376 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)

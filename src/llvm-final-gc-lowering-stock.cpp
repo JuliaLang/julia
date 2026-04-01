@@ -52,11 +52,16 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
     auto parent = target->getArgOperand(0);
     IRBuilder<> builder(target);
     builder.SetCurrentDebugLocation(target->getDebugLoc());
-    auto parBits = builder.CreateAnd(EmitLoadTag(builder, T_size, parent, tbaa_tag), GC_OLD_MARKED, "parent_bits");
+    auto parTag = EmitLoadTag(builder, T_size, parent, tbaa_tag);
+    auto parBits = builder.CreateAnd(parTag, GC_OLD_MARKED, "parent_bits");
     auto parOldMarked = builder.CreateICmpEQ(parBits, ConstantInt::get(T_size, GC_OLD_MARKED), "parent_old_marked");
     auto mayTrigTerm = SplitBlockAndInsertIfThen(parOldMarked, target, false);
     builder.SetInsertPoint(mayTrigTerm);
     mayTrigTerm->getParent()->setName("may_trigger_wb");
+    // Image parents are never fully traced by the mark phase, so we must
+    // always trigger the write barrier regardless of the child's mark bits.
+    auto parInImage = builder.CreateAnd(parTag, ConstantInt::get(T_size, GC_IN_IMAGE), "parent_in_image");
+    auto parIsImage = builder.CreateICmpNE(parInImage, ConstantInt::get(T_size, 0), "parent_is_image");
     Value *anyChldNotMarked = NULL;
     for (unsigned i = 1; i < target->arg_size(); i++) {
         Value *child = target->getArgOperand(i);
@@ -65,9 +70,10 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
         anyChldNotMarked = anyChldNotMarked ? builder.CreateOr(anyChldNotMarked, chldNotMarked) : chldNotMarked;
     }
     assert(anyChldNotMarked); // handled by all_of test above
+    auto shouldTrigger = builder.CreateOr(parIsImage, anyChldNotMarked, "should_trigger_wb");
     MDBuilder MDB(parent->getContext());
     SmallVector<uint32_t, 2> Weights{1, 9};
-    auto trigTerm = SplitBlockAndInsertIfThen(anyChldNotMarked, mayTrigTerm, false,
+    auto trigTerm = SplitBlockAndInsertIfThen(shouldTrigger, mayTrigTerm, false,
                                                 MDB.createBranchWeights(Weights));
     trigTerm->getParent()->setName("trigger_wb");
     builder.SetInsertPoint(trigTerm);
