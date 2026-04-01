@@ -150,6 +150,23 @@ Array{UInt8}(s::String)  = Vector{UInt8}(codeunits(s))
 
 String(s::CodeUnits{UInt8,String}) = s.s
 
+"""
+    String(g::Base.Generator)
+
+Create a new `String` from a `Generator` by joining all elements.
+Each element is converted to a string via `print`, and the results are concatenated.
+
+# Examples
+```jldoctest
+julia> String(x for x in ['a', 'b', 'c'])
+"abc"
+
+julia> String(Iterators.map(identity, "hello"))
+"hello"
+```
+"""
+String(g::Generator) = join(g)
+
 ## low-level functions ##
 
 pointer(s::String) = unsafe_convert(Ptr{UInt8}, s)
