@@ -337,14 +337,14 @@ extern "C" std::string jl_expand_sysimage_keyword(const char *cpu_target) {
     return option;
 }
 
-static void ensure_jit_target(const char *cpu_target, bool imaging)
+static void init_jit_targets(const char *cpu_target, bool imaging)
 {
 
     if (!jit_targets.empty())
         return;
 
     auto target_str = jl_expand_sysimage_keyword(cpu_target);
-    CF_DEBUG("[cpufeatures] ensure_jit_target: '%s' imaging=%d\n",
+    CF_DEBUG("[cpufeatures] init_jit_targets: '%s' imaging=%d\n",
              target_str.c_str(), imaging);
 
     if (target_str.empty())
@@ -637,7 +637,7 @@ jl_image_t jl_load_pkgimg(jl_image_buf_t image)
 std::pair<std::string, std::string>
 jl_get_llvm_target(const char *cpu_target, bool imaging)
 {
-    ensure_jit_target(cpu_target, imaging);
+    init_jit_targets(cpu_target, imaging);
     auto &spec = jit_targets[0];
 
     std::string features = spec.cpu_features;
