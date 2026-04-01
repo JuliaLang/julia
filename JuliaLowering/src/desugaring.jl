@@ -3203,7 +3203,7 @@ function _collect_struct_fields(ctx, field_names, field_types, field_attrs, fiel
                 # Struct field
                 for prev in field_names
                     if prev.name_val == m.name.name_val
-                        throw(LoweringError(m.name, "duplicate field name: \"$(m.name.name_val)\" is not unique"))
+                        throw(LoweringError(m.name, "duplicate field name"))
                     end
                 end
                 push!(field_names, m.name)
