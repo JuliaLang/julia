@@ -2314,41 +2314,15 @@ static void jl_read_arraylist(ios_t *s, arraylist_t *list)
     ios_read(s, (char*)list->items, list_len * sizeof(void*));
 }
 
-void gc_sweep_sysimg(void)
-{
-    size_t nblobs = n_linkage_blobs();
-    if (nblobs == 0)
-        return;
-    assert(jl_linkage_blobs.len == 2*nblobs);
-    assert(jl_image_relocs.len == nblobs);
-    for (size_t i = 0; i < 2*nblobs; i+=2) {
-        reloc_t *relocs = (reloc_t*)jl_image_relocs.items[i>>1];
-        if (!relocs)
-            continue;
-        uintptr_t base = (uintptr_t)jl_linkage_blobs.items[i];
-        uintptr_t last_pos = 0;
-        uint8_t *current = (uint8_t *)relocs;
-        while (1) {
-            // Read the offset of the next object
-            size_t pos_diff = 0;
-            size_t cnt = 0;
-            while (1) {
-                int8_t c = *current++;
-                pos_diff |= ((size_t)c & 0x7F) << (7 * cnt++);
-                if ((c >> 7) == 0)
-                    break;
-            }
-            if (pos_diff == 0)
-                break;
-
-            uintptr_t pos = last_pos + pos_diff;
-            last_pos = pos;
-            jl_taggedvalue_t *o = (jl_taggedvalue_t *)(base + pos);
-            o->bits.gc = GC_OLD;
-            assert(o->bits.in_image == 1);
-        }
-    }
-}
+// Persistent set of image objects that reference non-image objects.
+// Processed as additional GC roots at the start of each full mark phase.
+// Maintained incrementally by jl_gc_queue_root when image objects are mutated.
+// Note: cross-heap refs created during pkgimage uniquing (types, method instances,
+// bindings) don't need tracking here because the uniqued objects are always rooted
+// through type caches, method specializations, or module binding tables.
+htable_t image_remset;
+arraylist_t image_remset_list;
+jl_mutex_t image_remset_lock;
 
 // jl_write_value and jl_read_value are used for storing Julia objects that are adjuncts to
 // the image proper. For example, new methods added to external callables require
@@ -3969,7 +3943,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     reloc_t *relocs_base = (reloc_t*)&relocs.buf[0];
 
     s.s = &sysimg;
-    jl_read_reloclist(&s, s.link_ids_gctags, GC_OLD | GC_IN_IMAGE); // gctags
+    jl_read_reloclist(&s, s.link_ids_gctags, GC_OLD_MARKED | GC_IN_IMAGE); // gctags
     size_t sizeof_tags = ios_pos(&relocs);
     (void)sizeof_tags;
     jl_read_reloclist(&s, s.link_ids_relocs, 0); // general relocs
@@ -4095,7 +4069,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
             arraylist_push(&cleanup_list, (void*)obj);
         }
         if (tag == 1)
-            *pfld = (uintptr_t)newobj | GC_OLD | GC_IN_IMAGE;
+            *pfld = (uintptr_t)newobj | GC_OLD_MARKED | GC_IN_IMAGE;
         else
             *pfld = (uintptr_t)newobj;
         assert(!(image_base < (char*)newobj && (char*)newobj <= image_base + sizeof_sysimg));
