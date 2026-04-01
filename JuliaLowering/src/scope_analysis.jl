@@ -147,10 +147,11 @@ function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol; kws...)
     nk = NameKey(ex)
     if bk === :global
         declaration_scope = top_scope(ctx)
-        mod = ctx.scope_layers[ex.scope_layer].mod
+        mod = hasattr(ex, :mod) ? ex.mod : ctx.scope_layers[ex.scope_layer].mod
     else
         declaration_scope = scope
-        mod = nothing
+        mod = hasattr(ex, :mod) ?
+            throw(LoweringError(ex, "cannot use GlobalRef as local identifier")) : nothing
     end
     is_internal = ctx.scope_layers[nk.layer].is_internal || getmeta(ex, :is_internal, false)
     b = _new_binding(ctx, ex, nk.name, bk; mod, is_internal, kws...)
@@ -214,23 +215,32 @@ function _find_scope_decls!(ctx, scope, ex)
         maybe_declare_in_scope!(ctx, scope, ex[1], var_k)
     elseif k === K"global" && kind(ex[1]) === K"Identifier"
         maybe_declare_in_scope!(ctx, scope, ex[1], :global)
-    elseif k in KSet"= constdecl assign_or_constdecl_if_global function_decl"
+    elseif k === K"function_decl"
         k1 = kind(ex[1])
         if k1 === K"BindingId"
             b = get_binding(ctx, ex[1])
-            if k === K"function_decl" && !b.is_ssa && b.kind !== :global
-                @jl_assert false (ex, "allow local BindingId as function name?")
-            end
+            @jl_assert b.is_ssa || b.kind === :global (
+                ex, "allow local BindingId as function name?")
+            get!(scope.binding_assignments, b.id, ex[1]._id)
+        elseif k1 === K"Identifier"
+            hasattr(ex[1], :mod) && maybe_declare_in_scope!(ctx, scope, ex[1], :global)
+            get!(scope.assignments, NameKey(ex[1]), ex[1]._id)
+        else
+            @jl_assert false (ex, "unknown kind in assignment")
+        end
+    elseif k in KSet"= constdecl assign_or_constdecl_if_global"
+        k1 = kind(ex[1])
+        if k1 === K"BindingId"
+            b = get_binding(ctx, ex[1])
             get!(scope.binding_assignments, b.id, ex[1]._id)
         elseif k1 === K"Identifier"
             get!(scope.assignments, NameKey(ex[1]), ex[1]._id)
         elseif k1 === K"Placeholder"
-            @jl_assert k !== K"function_decl" ex
+            # nothing to declare
         else
             @jl_assert false (ex, "unknown kind in assignment")
         end
-        if (k === K"=" || k === K"assign_or_constdecl_if_global" ||
-            k === K"constdecl" && numchildren(ex) == 2)
+        if !(k == K"constdecl" && numchildren(ex) == 1)
             _find_scope_decls!(ctx, scope, ex[2])
         end
     elseif needs_resolution(ex) && !(k in KSet"scope_block lambda method_defs")
@@ -250,7 +260,6 @@ function enter_scope!(ctx, ex)
     parent_id = (is_toplevel_thunk || isempty(ctx.scope_stack)) ?
         0 : ctx.scopes[ctx.scope_stack[end]].id
     scope = ScopeInfo(ctx, parent_id, ex)
-    lambda_scope = ctx.scopes[scope.lambda_id]
     push!(ctx.scope_stack, scope.id)
 
     #---------------------------------------------------------------------------
@@ -275,7 +284,7 @@ function enter_scope!(ctx, ex)
 
     #---------------------------------------------------------------------------
     # Find assignment targets, possibly introducing implicit locals and globals
-    for (bid, node_id) in sort!(collect(scope.binding_assignments))
+    for (bid, _node_id) in sort!(collect(scope.binding_assignments))
         # Mutable nameless bindings may be introduced in desugaring.  These
         # should be capturable, and may be local to the nearest lambda or
         # global.  Desugaring should ensure these are never used undef.

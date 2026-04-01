@@ -511,7 +511,7 @@ cglobal((:sym, lib), Int)
 1   TestMod.lib
 2   (call core.tuple :sym %₁)
 3   TestMod.Int
-4   (call core.cglobal %₂ %₃)
+4   (call (static_eval TestMod.cglobal) %₂ %₃)
 5   (return %₄)
 
 ########################################
@@ -521,7 +521,7 @@ cglobal(f(), Int)
 1   TestMod.f
 2   (call %₁)
 3   TestMod.Int
-4   (call core.cglobal %₂ %₃)
+4   (call (static_eval TestMod.cglobal) %₂ %₃)
 5   (return %₄)
 
 ########################################
@@ -538,7 +538,7 @@ cglobal = 10
 #---------------------
 LoweringError:
 cglobal = 10
-└─────┘ ── invalid assignment location
+└─────┘ ── invalid syntax in left-hand side of assignment
 
 ########################################
 # Error: assigning to `ccall`
@@ -546,7 +546,7 @@ ccall = 10
 #---------------------
 LoweringError:
 ccall = 10
-└───┘ ── invalid assignment location
+└───┘ ── invalid syntax in left-hand side of assignment
 
 ########################################
 # Error: assigning to `var"ccall"`
@@ -554,7 +554,7 @@ var"ccall" = 10
 #---------------------
 LoweringError:
 var"ccall" = 10
-#   └───┘ ── invalid assignment location
+#   └───┘ ── invalid syntax in left-hand side of assignment
 
 ########################################
 # Error: Invalid function name ccall
@@ -573,7 +573,7 @@ end
 #---------------------
 LoweringError:
 function A.ccall()
-#        └─────┘ ── Invalid function name
+#          └───┘ ── ccall is a reserved identifier
 end
 
 ########################################

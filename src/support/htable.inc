@@ -41,10 +41,10 @@ static void **HTNAME##_lookup_bp_r(htable_t *h, void *key, void *ctx)   \
             if (EQFUNC(key, tab[index], ctx))                           \
                 return &tab[index+1];                                   \
                                                                         \
-            index = (index+2) & (sz-1);                                 \
             iter++;                                                     \
+            index = (index + iter*2) & (sz-1);                          \
             if (iter > maxprobe)                                        \
-                break;                                                  \
+                break; /* grow if probe took too long */                \
         } while (index != orig);                                        \
                                                                         \
         if (empty_slot != -1) {                                         \
@@ -118,8 +118,9 @@ static void **HTNAME##_peek_bp_r(htable_t *h, void *key, void *ctx)     \
         if (EQFUNC(key, tab[index], ctx))                               \
             return &tab[index+1];                                       \
                                                                         \
-        index = (index+2) & (sz-1);                                     \
         iter++;                                                         \
+        /* quadratic (triangular) probing */                            \
+        index = (index + iter*2) & (sz-1);                              \
         if (iter > maxprobe)                                            \
             break;                                                      \
     } while (index != orig);                                            \

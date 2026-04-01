@@ -101,14 +101,6 @@ A where f() <: Y
 #       └─┘ ── expected identifier
 
 ########################################
-# Error: bad type bounds
-A where Y >: f()
-#---------------------
-LoweringError:
-A where Y >: f()
-#            └─┘ ── expected type name
-
-########################################
 # Simple type application
 X{A,B,C}
 #---------------------
@@ -827,16 +819,16 @@ end
 68  (call core.svec %₆₅ %₆₆ %₆₇)
 69  --- method core.nothing %₆₈
     slots: [slot₁/#ctor-self# slot₂/y slot₃/z slot₄/tmp(!read)]
-    1   TestMod.ReallyXIPromise
-    2   slot₁/#ctor-self#
-    3   TestMod.+
-    4   (call %₃ slot₂/y slot₃/z)
-    5   (= slot₄/tmp (new %₂ %₄))
-    6   (call core.isa slot₄/tmp %₁)
+    1   slot₁/#ctor-self#
+    2   TestMod.+
+    3   (call %₂ slot₂/y slot₃/z)
+    4   TestMod.ReallyXIPromise
+    5   (= slot₄/tmp (new %₁ %₃))
+    6   (call core.isa slot₄/tmp %₄)
     7   (gotoifnot %₆ label₉)
     8   (goto label₁₁)
-    9   (call top.convert %₁ slot₄/tmp)
-    10  (= slot₄/tmp (call core.typeassert %₉ %₁))
+    9   (call top.convert %₄ slot₄/tmp)
+    10  (= slot₄/tmp (call core.typeassert %₉ %₄))
     11  slot₄/tmp
     12  (return %₁₁)
 70  latestworld

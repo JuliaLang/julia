@@ -134,9 +134,9 @@ end
         end
         @testset let ex = Expr(:call, :collect_args, peq)
             @test fl_eval(test_mod, ex) == (:semicolon, :a=>1)
-            @test_broken jl_eval(test_mod, ex) == (:semicolon, :a=>1)
+            @test jl_eval(test_mod, ex) == (:semicolon, :a=>1)
             @test fl_eval(test_mod, outer_ab(ex)) == (0, 0)
-            @test_broken jl_eval(test_mod, outer_ab(ex)) == (0, 0)
+            @test jl_eval(test_mod, outer_ab(ex)) == (0, 0)
         end
         # `kw` always passes a kwarg and does not assign a value
         @testset let ex = Expr(:call, :collect_args, kw)
@@ -167,9 +167,9 @@ end
             end
             @testset let ex = Expr(:(.), :collect_args, Expr(:tuple, peq))
                 @test fl_eval(test_mod, ex) == (:semicolon, :a=>[1])
-                @test_broken jl_eval(test_mod, ex) == (:semicolon, :a=>[1])
+                @test jl_eval(test_mod, ex) == (:semicolon, :a=>[1])
                 @test fl_eval(test_mod, outer_ab(ex)) == (0, 0)
-                @test_broken jl_eval(test_mod, outer_ab(ex)) == (0, 0)
+                @test jl_eval(test_mod, outer_ab(ex)) == (0, 0)
             end
             @testset let ex = Expr(:(.), :collect_args, Expr(:tuple, kw))
                 @test fl_eval(test_mod, ex) == (:semicolon, :b=>2)
@@ -220,7 +220,7 @@ end
         end
         @testset let ex = Expr(:tuple, peq)
             @test fl_eval(test_mod, ex) == (a=1,)
-            @test_broken jl_eval(test_mod, ex) == (a=1,)
+            @test jl_eval(test_mod, ex) == (a=1,)
         end
         @testset let ex = Expr(:tuple, kw) # calls tuple constructor with kw
             @test_throws MethodError fl_eval(test_mod, ex)
@@ -277,7 +277,7 @@ end
             @test_throws ErrorException fl_eval(test_mod, ex)
             @test_throws LoweringError jl_eval(test_mod, ex)
         end
-        @testset let ex = Expr(:braces, kw) # calls braces constructor with kw
+        @testset let ex = Expr(:braces, kw)
             @test_throws ErrorException fl_eval(test_mod, ex)
             @test_throws LoweringError jl_eval(test_mod, ex)
         end

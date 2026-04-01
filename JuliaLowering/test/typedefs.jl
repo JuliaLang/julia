@@ -2,6 +2,55 @@ test_mod = Module(:TestMod)
 
 Base.eval(test_mod, :(struct XX{S,T,U,W} end))
 
+@testset "where" begin
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where T<:Number
+    """) == Vector{T} where T<:Number
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where T>:Int
+    """) == Vector{T} where T>:Int
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where Int<:T<:Number
+    """) == Vector{T} where Int<:T<:Number
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where Number>:T>:Int
+    """) == Vector{T} where Int<:T<:Number
+
+    # with nontrivial type bounds
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where {T<:(U where U<:(V where V<:Number))}
+    """) == Vector{T} where T<:Number
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where T<:(()->Number)()
+    """) == Vector{T} where T<:Number
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where (()->Int)()<:T<:(()->Number)()
+    """) == Vector{T} where Int<:T<:Number
+
+    # multi-layer
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where {A<:Any, B<:A, C>:B, C<:T<:C}
+    """) == Vector{T} where {A, B<:A, C>:B, C<:T<:C}
+    @test JuliaLowering.include_string(test_mod, """
+    Pair{T, A} where {A<:E<:D, A<:T<:E} where {A<:C<:B, A<:D<:C} where {A, B<:A}
+    """) == Pair{T, A} where {A, B<:A, A<:C<:B, A<:D<:C, A<:E<:D, A<:T<:E}
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where (()->U)()<:T<:(()->U)() where (()->Int)()<:U<:(()->Number)()
+    """) == Vector{T} where {Int<:U<:Number, U<:T<:U}
+
+    @testset "implicit whereparams" begin
+        @test JuliaLowering.include_string(test_mod, """
+        Vector{<:Number}
+        """) == Vector{<:Number}
+        @test JuliaLowering.include_string(test_mod, """
+        Vector{>:Number}
+        """) == Vector{>:Number}
+        @test JuliaLowering.include_string(test_mod, """
+        Vector{<:(()->Number)()}
+        """) == Vector{<:Number}
+    end
+end
+
 @test JuliaLowering.include_string(test_mod, """
 XX{Int, <:Integer, Float64, >:AbstractChar}
 """) == (test_mod.XX{Int, T, Float64, S} where {T <: Integer, S >: AbstractChar})

@@ -1,4 +1,4 @@
-attrsummary(name, value) = string(name)
+attrsummary(name, _value) = string(name)
 attrsummary(name, value::Number) = "$name=$value"
 attrsummary(name, value::LineNumberNode) = "$name=L$(value.line)"
 
@@ -45,6 +45,10 @@ function _value_string(ex)
     return str
 end
 
+# Within JL, K"Placeholder" is used for never-read identifiers, but this magic
+# symbol is used in the IR (its write-only properties are enforced in codegen).
+const UNUSED = "#unused#"
+
 function _show_syntax_tree(io, ex, indent, show_kinds)
     nodestr = !is_leaf(ex) ? "[$(untokenize(head(ex)))]" : _value_string(ex)
 
@@ -82,11 +86,9 @@ function _show_syntax_tree_sexpr(io, ex)
         end
     else
         print(io, "(", untokenize(head(ex)))
-        first = true
         for n in children(ex)
             print(io, ' ')
             _show_syntax_tree_sexpr(io, n)
-            first = false
         end
         print(io, ')')
     end
@@ -187,7 +189,7 @@ function _show_provtree(io::IO, ex::SyntaxTree, indent)
     end
 end
 
-function _show_provtree(io::IO, prov, indent)
+function _show_provtree(io::IO, prov, _indent)
     fn = filename(prov)
     line, _ = source_location(prov)
     printstyled(io, "@ $fn:$line\n", color=:light_black)
@@ -235,7 +237,6 @@ end
 function _find_method_lambda(ex, name)
     @jl_assert kind(ex) == K"code_info" ex
     # Heuristic search through outer thunk for the method in question.
-    method_found = false
     stmts = children(ex[1])
     for e in stmts
         if kind(e) == K"method" && numchildren(e) >= 2
@@ -409,16 +410,14 @@ macro SyntaxTree(ex_old)
     fname = isnothing(__source__.file) ? error("No current file") : String(__source__.file)
     if occursin(r"REPL\[\d+\]", fname)
         # Assume we should look at last history entry in REPL
-        try
+        text = try
             # Wow digging in like this is an awful hack but `@SyntaxTree` is
             # already a hack so let's go for it I guess 😆
-            text = Base.active_repl.mistate.interface.modes[1].hist.history[end]
-            if !occursin("@SyntaxTree", text)
-                error("Text not found in last REPL history line")
-            end
+            Base.active_repl.mistate.interface.modes[1].hist.history[end]
         catch
             error("Text not found in REPL history")
         end
+        occursin("@SyntaxTree", text) || error("Text not found in last REPL history line")
     else
         text = read(fname, String)
     end

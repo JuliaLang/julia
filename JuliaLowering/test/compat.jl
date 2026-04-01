@@ -5,7 +5,7 @@ const JL_DIR = joinpath(@__DIR__, "..")
 # copied from JuliaSyntax/test/parse_packages.jl
 function find_source_in_path(basedir)
     src_list = String[]
-    for (root, dirs, files) in walkdir(basedir)
+    for (root, _dirs, files) in walkdir(basedir)
         append!(src_list, (joinpath(root, f) for f in files
                                if endswith(f, ".jl") && (p = joinpath(root,f); !islink(p) && isfile(p))))
     end

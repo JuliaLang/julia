@@ -6,6 +6,8 @@ const Callable = Union{Function,Type}
 
 const Bottom = Union{}
 
+blackbox(x) = compilerbarrier(:blackbox, x)
+
 # Define minimal array interface here to help code used in macros:
 size(a::Array) = getfield(a, :size)
 length(t::AbstractArray) = (@inline; prod(size(t)))

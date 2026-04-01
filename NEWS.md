@@ -58,11 +58,20 @@ Build system changes
 New library functions
 ---------------------
 
+- `Base.generating_output()` has been made `public` (but not exported) to allow
+  checking whether the current process is performing compilation for a
+  pkgimage/sysimage ([#61224]).
+
 New library features
 --------------------
 
 * `IOContext` supports a new boolean `hexunsigned` option that allows for
   printing unsigned integers in decimal instead of hexadecimal ([#60267]).
+
+* Package precompilation now supports running precompilation in
+  a background task and has new interactive keyboard controls:
+  `c` to cleanly cancel immediately, `d` to detach, `i` for a profile peek,
+  `v` to toggle verbose mode showing elapsed time, CPU%, and memory usage, and `?` for help. ([#60943]).
 
 Standard library changes
 ------------------------
