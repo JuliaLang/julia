@@ -1585,6 +1585,7 @@ end
 
 function spawn_print_loop!(s::PrecompileSession)
     Threads.@spawn :samepool begin
+        cursor_disabled = false
         try
             wait(s.first_started)
             (isempty(s.pkg_queue) || s.interrupted_or_done) && return
@@ -1593,7 +1594,6 @@ function spawn_print_loop!(s::PrecompileSession)
                     printpkgstyle(s.logio, :Precompiling, s.target)
                 end
             end
-            cursor_disabled = false
             t = Timer(0; interval=1/10)
             anim_chars = ["◐","◓","◑","◒"]
             i = 1
@@ -1718,7 +1718,7 @@ function spawn_print_loop!(s::PrecompileSession)
                 wait(t)
             end
         finally
-            @isdefined(cursor_disabled) && cursor_disabled && print(s.logio, ansi_enablecursor)
+            cursor_disabled && print(s.logio, ansi_enablecursor)
         end
     end
 end
@@ -2369,34 +2369,40 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
     # Start print loop
     t_print = spawn_print_loop!(s)
 
-    if !_from_loading
-        @lock Base.require_lock begin
-            Base.LOADING_CACHE[] = Base.LoadingCache()
+    try
+        if !_from_loading
+            @lock Base.require_lock begin
+                Base.LOADING_CACHE[] = Base.LoadingCache()
+            end
         end
+        @debug "precompile: starting precompilation loop" graph.direct_deps graph.project_deps
+
+        # Initial pass
+        initial_tasks = spawn_precompile_tasks!(s;
+            direct_deps=graph.direct_deps, was_processed, configs, circular_deps,
+            requested_pkgids, pkg_names, requested_pkgs, from_loading=_from_loading)
+        append!(s.tasks, initial_tasks)
+
+        # Concurrent drainer for injected requests
+        drainer = drain_work_channel!(s, work_channel)
+
+        waitall(initial_tasks; failfast=false, throw=false)
+        @lock BG close(work_channel)
+        wait(drainer)
+        append!(s.tasks, s.injected_tasks)
+        waitall(s.injected_tasks; failfast=false, throw=false)
+        waitall(s.result_waiters; failfast=false, throw=false)
+
+        # Final output
+        s.interrupted_or_done = true
+        notify(s.first_started) # unblock print loop if nothing ever started (no-op case)
+        fancyprint && wait(t_print)
+        return report_precompile_results!(s)
+    finally
+        # Ensure print loop exits even on exception
+        s.interrupted_or_done = true
+        notify(s.first_started)
     end
-    @debug "precompile: starting precompilation loop" graph.direct_deps graph.project_deps
-
-    # Initial pass
-    initial_tasks = spawn_precompile_tasks!(s;
-        direct_deps=graph.direct_deps, was_processed, configs, circular_deps,
-        requested_pkgids, pkg_names, requested_pkgs, from_loading=_from_loading)
-    append!(s.tasks, initial_tasks)
-
-    # Concurrent drainer for injected requests
-    drainer = drain_work_channel!(s, work_channel)
-
-    waitall(initial_tasks; failfast=false, throw=false)
-    @lock BG close(work_channel)
-    wait(drainer)
-    append!(s.tasks, s.injected_tasks)
-    waitall(s.injected_tasks; failfast=false, throw=false)
-    waitall(s.result_waiters; failfast=false, throw=false)
-
-    # Final output
-    s.interrupted_or_done = true
-    notify(s.first_started) # unblock print loop if nothing ever started (no-op case)
-    fancyprint && wait(t_print)
-    return report_precompile_results!(s)
 end
 
 end
