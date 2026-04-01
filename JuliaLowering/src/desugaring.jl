@@ -3201,6 +3201,11 @@ function _collect_struct_fields(ctx, field_names, field_types, field_attrs, fiel
             m = _match_struct_field(e)
             if !isnothing(m)
                 # Struct field
+                for prev in field_names
+                    if prev.name_val == m.name.name_val
+                        throw(LoweringError(m.name, "duplicate field name: \"$(m.name.name_val)\" is not unique"))
+                    end
+                end
                 push!(field_names, m.name)
                 n = length(field_names)
                 push!(field_types, isnothing(m.type) ? @ast(ctx, e, "Any"::K"core") : m.type)

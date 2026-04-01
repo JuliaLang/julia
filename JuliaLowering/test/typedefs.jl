@@ -448,6 +448,11 @@ JuliaLowering.include_string(test_mod, "const orig_P36104 = P36104")
 JuliaLowering.include_string(test_mod, "primitive type P36104 16 end")
 @test test_mod.P36104 !== test_mod.orig_P36104
 
+# Duplicate field names should be rejected
+@test_throws LoweringError JuliaLowering.include_string(test_mod, "struct DupField; x; x; end")
+@test_throws LoweringError JuliaLowering.include_string(test_mod, "struct DupField2; x::Int; x::String; end")
+@test_throws LoweringError JuliaLowering.include_string(test_mod, "mutable struct DupField3; x; y; x; end")
+
 # Struct with outer constructor where one typevar is constrained by the other
 # See https://github.com/JuliaLang/julia/issues/27269)
 @test JuliaLowering.include_string(test_mod, """
