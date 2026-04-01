@@ -1978,11 +1978,14 @@ void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVe
 
         IRBuilder<> builder(CI);
         builder.SetCurrentDebugLocation(CI->getDebugLoc());
-        auto parBits = builder.CreateAnd(EmitLoadTag(builder, T_size, parent), GC_OLD_MARKED, "parent_bits");
+        auto parTag = EmitLoadTag(builder, T_size, parent);
+        auto parBits = builder.CreateAnd(parTag, GC_OLD_MARKED, "parent_bits");
         auto parOldMarked = builder.CreateICmpEQ(parBits, ConstantInt::get(T_size, GC_OLD_MARKED), "parent_old_marked");
         auto mayTrigTerm = SplitBlockAndInsertIfThen(parOldMarked, CI, false);
         builder.SetInsertPoint(mayTrigTerm);
         mayTrigTerm->getParent()->setName("may_trigger_wb");
+        auto parInImage = builder.CreateAnd(parTag, ConstantInt::get(T_size, GC_IN_IMAGE), "parent_in_image");
+        auto parIsImage = builder.CreateICmpNE(parInImage, ConstantInt::get(T_size, 0), "parent_is_image");
         Value *anyChldNotMarked = NULL;
         for (unsigned i = 1; i < CI->arg_size(); i++) {
             Value *child = CI->getArgOperand(i);
@@ -1991,9 +1994,10 @@ void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVe
             anyChldNotMarked = anyChldNotMarked ? builder.CreateOr(anyChldNotMarked, chldNotMarked) : chldNotMarked;
         }
         assert(anyChldNotMarked); // handled by all_of test above
+        auto shouldTrigger = builder.CreateOr(parIsImage, anyChldNotMarked, "should_trigger_wb");
         MDBuilder MDB(parent->getContext());
         SmallVector<uint32_t, 2> Weights{1, 9};
-        auto trigTerm = SplitBlockAndInsertIfThen(anyChldNotMarked, mayTrigTerm, false,
+        auto trigTerm = SplitBlockAndInsertIfThen(shouldTrigger, mayTrigTerm, false,
                                                   MDB.createBranchWeights(Weights));
         trigTerm->getParent()->setName("trigger_wb");
         builder.SetInsertPoint(trigTerm);

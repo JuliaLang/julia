@@ -745,13 +745,6 @@ void gc_time_pool_end(int sweep_full)
                    sweep_full ? "full" : "quick");
 }
 
-void gc_time_sysimg_end(uint64_t t0)
-{
-    double sweep_pool_sec = (jl_hrtime() - t0) / 1e9;
-    jl_safe_printf("GC sweep sysimg end %.2f ms\n",
-                   sweep_pool_sec * 1000);
-}
-
 static int64_t big_total;
 static int64_t big_freed;
 static int64_t big_reset;
