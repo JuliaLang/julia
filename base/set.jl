@@ -656,14 +656,36 @@ allequal(r::AbstractRange) = iszero(step(r)) || length(r) <= 1
 
 allequal(f, xs) = allequal(Generator(f, xs))
 
-function allequal(f, xs::Tuple)
-    length(xs) <= 1 && return true
-    f1 = f(xs[1])
-    for x in tail(xs)
-        isequal(f1, f(x)) || return false
+function _allequal_loop(f, xs::Tuple)
+    val = f(xs[1])
+    for i in 2:length(xs)
+        isequal(val, f(xs[i])) || return false
     end
     return true
 end
+
+function allequal(f, xs::Tuple)
+    if @generated
+        n = fieldcount(xs)
+        if n <= 32
+            n <= 1 && return true
+            checks = [:(isequal(val, f(getfield(xs, $i)))) for i in 2:n]
+            expr = foldr((a, b) -> :($a && $b), checks)
+            return quote
+                val = f(getfield(xs, 1))
+                $expr
+            end
+        else
+            return :(return _allequal_loop(f, xs))
+        end
+    else
+        length(xs) <= 1 && return true
+        return _allequal_loop(f, xs)
+    end
+end
+
+allequal(f, ::Tuple{}) = true
+allequal(xs::Tuple) = allequal(identity, xs)
 
 filter!(f, s::Set) = unsafe_filter!(f, s)
 

@@ -101,14 +101,6 @@ A where f() <: Y
 #       └─┘ ── expected identifier
 
 ########################################
-# Error: bad type bounds
-A where Y >: f()
-#---------------------
-LoweringError:
-A where Y >: f()
-#            └─┘ ── expected type name
-
-########################################
 # Simple type application
 X{A,B,C}
 #---------------------
@@ -171,7 +163,7 @@ X{S, T=w}
 #---------------------
 LoweringError:
 X{S, T=w}
-#   └──┘ ── misplaced assignment in type parameter list
+#   └──┘ ── assignment is not allowed in type parameter list
 
 ########################################
 # Simple abstract type definition
@@ -601,23 +593,26 @@ end
 25  (call core._typebody! %₂₂ %₇ %₂₄)
 26  (call core.declare_const TestMod :X %₂₅)
 27  latestworld
-28  (= slot₁/val core.nothing)
-29  (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree X))
-30  (call Base.Docs.Binding TestMod %₂₉)
-31  (call Core.svec "X docs\n")
-32  (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree a))
-33  (call Pair{Symbol, Any} %₃₂ "field a docs")
-34  (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree b))
-35  (call Pair{Symbol, Any} %₃₄ "field b docs")
-36  (call Dict{Symbol, Any} %₃₃ %₃₅)
-37  (call Pair :fields %₃₆)
-38  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod %₃₇)
-39  (call Base.Docs.docstr %₃₁ %₃₈)
-40  TestMod.Union
-41  (call core.apply_type %₄₀)
-42  (call Base.Docs.doc! TestMod %₃₀ %₃₉ %₄₁)
-43  slot₁/val
-44  (return %₄₃)
+28  TestMod.X
+29  SourceLocation:none:1:0
+30  (call top._defaultctors %₂₈ %₂₉)
+31  (= slot₁/val core.nothing)
+32  (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree X))
+33  (call Base.Docs.Binding TestMod %₃₂)
+34  (call Core.svec "X docs\n")
+35  (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree a))
+36  (call Pair{Symbol, Any} %₃₅ "field a docs")
+37  (call JuliaLowering.interpolate_ast SyntaxTree (inert_syntaxtree b))
+38  (call Pair{Symbol, Any} %₃₇ "field b docs")
+39  (call Dict{Symbol, Any} %₃₆ %₃₈)
+40  (call Pair :fields %₃₉)
+41  (call Dict{Symbol, Any} :path => "none" :linenumber => 1 :module => TestMod %₄₀)
+42  (call Base.Docs.docstr %₃₄ %₄₁)
+43  TestMod.Union
+44  (call core.apply_type %₄₃)
+45  (call Base.Docs.doc! TestMod %₃₃ %₄₂ %₄₄)
+46  slot₁/val
+47  (return %₄₆)
 
 ########################################
 # Struct with outer constructor
@@ -824,16 +819,16 @@ end
 68  (call core.svec %₆₅ %₆₆ %₆₇)
 69  --- method core.nothing %₆₈
     slots: [slot₁/#ctor-self# slot₂/y slot₃/z slot₄/tmp(!read)]
-    1   TestMod.ReallyXIPromise
-    2   slot₁/#ctor-self#
-    3   TestMod.+
-    4   (call %₃ slot₂/y slot₃/z)
-    5   (= slot₄/tmp (new %₂ %₄))
-    6   (call core.isa slot₄/tmp %₁)
+    1   slot₁/#ctor-self#
+    2   TestMod.+
+    3   (call %₂ slot₂/y slot₃/z)
+    4   TestMod.ReallyXIPromise
+    5   (= slot₄/tmp (new %₁ %₃))
+    6   (call core.isa slot₄/tmp %₄)
     7   (gotoifnot %₆ label₉)
     8   (goto label₁₁)
-    9   (call top.convert %₁ slot₄/tmp)
-    10  (= slot₄/tmp (call core.typeassert %₉ %₁))
+    9   (call top.convert %₄ slot₄/tmp)
+    10  (= slot₄/tmp (call core.typeassert %₉ %₄))
     11  slot₄/tmp
     12  (return %₁₁)
 70  latestworld

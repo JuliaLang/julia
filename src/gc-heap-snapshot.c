@@ -6,26 +6,19 @@
 #include "julia_internal.h"
 #include "julia_assert.h"
 
-#include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/SmallString.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/StringMap.h"
-#include "llvm/Support/FormatVariadic.h"
+#include "support/strhash.h"
+#include "support/ptrhash.h"
 
-using std::make_pair;
-using llvm::SmallVector;
-using llvm::StringMap;
-using llvm::DenseMap;
-using llvm::StringRef;
-using llvm::SmallString;
-using llvm::formatv;
+#include <stdio.h>
+#include <string.h>
 
 // https://stackoverflow.com/a/33799784/751061
-void print_str_escape_json(ios_t *stream, StringRef s)
+static void print_str_escape_json(ios_t *stream, const char *s, size_t len) JL_NOTSAFEPOINT
 {
     ios_putc('"', stream);
-    for (auto c = s.begin(); c != s.end(); c++) {
-        switch (*c) {
+    for (size_t i = 0; i < len; i++) {
+        char c = s[i];
+        switch (c) {
         case '"':  ios_write(stream, "\\\"", 2); break;
         case '\\': ios_write(stream, "\\\\", 2); break;
         case '\b': ios_write(stream, "\\b",  2); break;
@@ -34,11 +27,11 @@ void print_str_escape_json(ios_t *stream, StringRef s)
         case '\r': ios_write(stream, "\\r",  2); break;
         case '\t': ios_write(stream, "\\t",  2); break;
         default:
-            if (('\x00' <= *c) & (*c <= '\x1f')) {
-                ios_printf(stream, "\\u%04x", (int)*c);
+            if (('\x00' <= c) & (c <= '\x1f')) {
+                ios_printf(stream, "\\u%04x", (int)(unsigned char)c);
             }
             else {
-                ios_putc(*c, stream);
+                ios_putc(c, stream);
             }
         }
     }
@@ -51,19 +44,19 @@ void print_str_escape_json(ios_t *stream, StringRef s)
 //   [ "type", "name_or_index", "to_node" ]
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L2598-L2601
 
-struct Edge {
+typedef struct {
     uint8_t type; // These *must* match the Enums on the JS side; control interpretation of name_or_index.
     size_t name_or_index; // name of the field (for objects/modules) or index of array
     size_t from_node;  // This is a deviation from the .heapsnapshot format to support streaming.
     size_t to_node;
-};
+} Edge;
 
 // Nodes
 // "node_fields":
 //   [ "type", "name", "id", "self_size", "edge_count", "trace_node_id", "detachedness" ]
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L2568-L2575
 
-struct Node {
+typedef struct {
     uint8_t type; // index into snapshot->node_types
     size_t name;
     size_t id; // This should be a globally-unique counter, but we use the memory address
@@ -72,90 +65,107 @@ struct Node {
     // whether the from_node is attached or detached from the main application state
     // https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/include/v8-profiler.h#L739-L745
     uint8_t detachedness;  // 0 - unknown, 1 - attached, 2 - detached
+} Node;
 
-    ~Node() JL_NOTSAFEPOINT = default;
-};
+// String table: maps string contents to sequential IDs.
+// Stores internalized copies of the strings for later printing.
+// When used with serialization, strings are also written to a binary stream.
+typedef struct {
+    htable_t map;          // strhash: string -> (void*)(size_t)id
+    const char **strings;  // array of internalized string pointers (which are owned by `map`)
+    size_t *lengths;       // parallel array of string lengths
+    size_t count;
+    size_t cap;
+    size_t next_id;        // next ID to assign
+} string_table_t;
 
-class StringTable {
-protected:
-    StringMap<size_t> map;
-    SmallVector<StringRef, 0> strings;
-    size_t next_id;
+static void st_init(string_table_t *t) JL_NOTSAFEPOINT
+{
+    memset(t, 0, sizeof(string_table_t));
+    strhash_new(&t->map, 64);
+}
 
-public:
-    StringTable() JL_NOTSAFEPOINT : map(), strings(), next_id(0) {};
+static void st_destroy(string_table_t *t) JL_NOTSAFEPOINT
+{
+    strhash_free(&t->map);
+    free(t->strings);
+    free(t->lengths);
+}
 
-    size_t find_or_create_string_id(StringRef key) JL_NOTSAFEPOINT {
-        auto val = map.insert(make_pair(key, next_id));
-        if (val.second) {
-            strings.push_back(val.first->first());
-            next_id++;
-        }
-        return val.first->second;
+static size_t st_find_or_create(string_table_t *t, const char *key) JL_NOTSAFEPOINT
+{
+    // key must be NUL-terminated (strhash requires it)
+    void **bp = strhash_bp(&t->map, (void *)key);
+
+    if (*bp != HT_NOTFOUND)
+        return (size_t)*bp - (size_t)HT_NOTFOUND - 1;
+
+    size_t id = t->next_id++;
+    *bp = (void *)((size_t)HT_NOTFOUND + id + 1);
+
+    size_t len = strlen(key);
+
+    // Store a reference to the internalized key (owned by strhash)
+    if (t->count >= t->cap) {
+        t->cap = t->cap ? t->cap * 2 : 64;
+        t->strings = (const char **)realloc_s(t->strings, t->cap * sizeof(const char *));
+        t->lengths = (size_t *)realloc_s(t->lengths, t->cap * sizeof(size_t));
     }
+    // The key stored in the htable is the internalized copy (from strhash_bp's strdup)
+    // We can find it by looking one slot back from bp
+    t->strings[t->count] = (const char *)*(bp - 1);
+    t->lengths[t->count] = len;
+    t->count++;
 
-    void print_json_array(ios_t *stream, bool newlines) {
-        ios_printf(stream, "[");
-        bool first = true;
-        for (const auto &str : strings) {
-            if (first) {
-                first = false;
-            }
-            else {
-                ios_printf(stream, newlines ? ",\n" : ",");
-            }
-            print_str_escape_json(stream, str);
-        }
-        ios_printf(stream, "]");
+    return id;
+}
+
+static void st_print_json_array(string_table_t *t, ios_t *stream, int newlines) JL_NOTSAFEPOINT
+{
+    ios_printf(stream, "[");
+    for (size_t i = 0; i < t->count; i++) {
+        if (i > 0)
+            ios_printf(stream, newlines ? ",\n" : ",");
+        print_str_escape_json(stream, t->strings[i], t->lengths[i]);
     }
-};
+    ios_printf(stream, "]");
+}
 
-// a string table with partial strings in memory and all strings serialized to a file
-class SerializedStringTable: public StringTable {
-    public:
-
-    // serialize the string only if it's not already in the table
-    size_t serialize_if_necessary(ios_t *stream, StringRef key) JL_NOTSAFEPOINT {
-        auto val = map.insert(make_pair(key, next_id));
-        if (val.second) {
-            strings.push_back(val.first->first());
-            // persist the string size first, then the string itself
-            // so that we could read it back in the same order
-            size_t s_size = key.size();
-            ios_write(stream, reinterpret_cast<const char*>(&s_size), sizeof(size_t));
-            ios_write(stream, key.data(), s_size);
-            next_id++;
-        }
-        return val.first->second;
+// Serialize the string only if it's not already in the table
+static size_t st_find_or_serialize(string_table_t *t, ios_t *stream, const char *key) JL_NOTSAFEPOINT
+{
+    size_t len = strlen(key);
+    size_t old_count = t->count;
+    size_t id = st_find_or_create(t, key);
+    if (t->count > old_count) {
+        // New entry — persist the string
+        ios_write(stream, (const char *)&len, sizeof(size_t));
+        ios_write(stream, key, len);
     }
+    return id;
+}
 
-    // serialize the string without checking if it is in the table or not
-    // and return its index. This means that we might have duplicates in the
-    // output string file.
-    size_t serialize(ios_t *stream, StringRef key) JL_NOTSAFEPOINT {
-        size_t s_size = key.size();
-        ios_write(stream, reinterpret_cast<const char*>(&s_size), sizeof(size_t));
-        ios_write(stream, key.data(), s_size);
-        size_t current = next_id;
-        next_id++;
-        return current;
-    }
-};
+// Serialize the string unconditionally and return its index
+static size_t st_serialize(string_table_t *t, ios_t *stream, const char *key) JL_NOTSAFEPOINT
+{
+    size_t len = strlen(key);
+    ios_write(stream, (const char *)&len, sizeof(size_t));
+    ios_write(stream, key, len);
+    return t->next_id++;
+}
 
-struct HeapSnapshot {
+typedef struct {
     // names could be very large, so we keep them in a separate binary file
-    // and use a StringTable to keep track of the indices of frequently used strings
+    // and use a string table to keep track of the indices of frequently used strings
     // to reduce duplicates in the output file to some degree
-    SerializedStringTable names;
+    string_table_t names;
     // node types and edge types are very small and keep them in memory
-    StringTable node_types;
-    StringTable edge_types;
-    DenseMap<void *, size_t> node_ptr_to_index_map;
+    string_table_t node_types;
+    string_table_t edge_types;
+    htable_t node_ptr_to_index_map; // ptrhash: void* -> (void*)(size_t)index
 
-    size_t num_nodes = 0; // Since we stream out to files,
-    size_t num_edges = 0; // we need to track the counts here.
-
-    // Node internal_root;
+    size_t num_nodes; // Since we stream out to files,
+    size_t num_edges; // we need to track the counts here.
 
     // Used for streaming
     // Since nodes and edges are just one giant array of integers, we stream them as
@@ -168,42 +178,48 @@ struct HeapSnapshot {
     // the following file is written out as json data.
     ios_t *json;
 
-    size_t internal_root_idx = 0; // node index of the internal root node
-    size_t _gc_root_idx = 1; // node index of the GC roots node
-    size_t _gc_finlist_root_idx = 2; // node index of the GC finlist roots node
-};
+    size_t internal_root_idx; // node index of the internal root node
+    size_t _gc_root_idx; // node index of the GC roots node
+    size_t _gc_finlist_root_idx; // node index of the GC finlist roots node
+} HeapSnapshot;
 
 // global heap snapshot, mutated by garbage collector
 // when snapshotting is on.
 int gc_heap_snapshot_enabled = 0;
 int gc_heap_snapshot_redact_data = 0;
-HeapSnapshot *g_snapshot = nullptr;
+static HeapSnapshot *g_snapshot = NULL;
 // mutex for gc-heap-snapshot.
 jl_mutex_t heapsnapshot_lock;
 
-void final_serialize_heap_snapshot(ios_t *json, ios_t *strings, HeapSnapshot &snapshot, char all_one);
-void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one);
+static void final_serialize_heap_snapshot(ios_t *json, ios_t *strings, HeapSnapshot *snapshot, char all_one);
 static inline void _record_gc_edge(const char *edge_type,
                                    jl_value_t *a, jl_value_t *b, size_t name_or_index) JL_NOTSAFEPOINT;
-void _record_gc_just_edge(const char *edge_type, size_t from_idx, size_t to_idx, size_t name_or_idx) JL_NOTSAFEPOINT;
-void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT;
+static void _record_gc_just_edge(const char *edge_type, size_t from_idx, size_t to_idx, size_t name_or_idx) JL_NOTSAFEPOINT;
+static void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT;
 
 
 JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *nodes, ios_t *edges,
     ios_t *strings, ios_t *json, char all_one, char redact_data)
 {
     HeapSnapshot snapshot;
+    memset(&snapshot, 0, sizeof(snapshot));
+    st_init(&snapshot.node_types);
+    st_init(&snapshot.edge_types);
+    st_init(&snapshot.names);
+    htable_new(&snapshot.node_ptr_to_index_map, 1024);
     snapshot.nodes = nodes;
     snapshot.edges = edges;
     snapshot.strings = strings;
     snapshot.json = json;
+    snapshot._gc_root_idx = 1;
+    snapshot._gc_finlist_root_idx = 2;
 
     jl_mutex_lock(&heapsnapshot_lock);
 
     // Enable snapshotting
     g_snapshot = &snapshot;
     gc_heap_snapshot_redact_data = redact_data;
-    gc_heap_snapshot_enabled = true;
+    gc_heap_snapshot_enabled = 1;
 
     _add_synthetic_root_entries(&snapshot);
 
@@ -211,18 +227,24 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *nodes, ios_t *edges,
     jl_gc_collect(JL_GC_FULL);
 
     // Disable snapshotting
-    gc_heap_snapshot_enabled = false;
+    gc_heap_snapshot_enabled = 0;
     gc_heap_snapshot_redact_data = 0;
-    g_snapshot = nullptr;
+    g_snapshot = NULL;
 
     jl_mutex_unlock(&heapsnapshot_lock);
 
     // When we return, the snapshot is full
     // Dump the snapshot
-    final_serialize_heap_snapshot((ios_t*)json, (ios_t*)strings, snapshot, all_one);
+    final_serialize_heap_snapshot(json, strings, &snapshot, all_one);
+
+    // Cleanup
+    htable_free(&snapshot.node_ptr_to_index_map);
+    st_destroy(&snapshot.node_types);
+    st_destroy(&snapshot.edge_types);
+    st_destroy(&snapshot.names);
 }
 
-void serialize_node(HeapSnapshot *snapshot, const Node &node) JL_NOTSAFEPOINT
+static void serialize_node(HeapSnapshot *snapshot, Node node) JL_NOTSAFEPOINT
 {
     // ["type","name","id","self_size","edge_count","trace_node_id","detachedness"]
     ios_write(snapshot->nodes, (char*)&node.type, sizeof(node.type));
@@ -237,7 +259,7 @@ void serialize_node(HeapSnapshot *snapshot, const Node &node) JL_NOTSAFEPOINT
     g_snapshot->num_nodes += 1;
 }
 
-void serialize_edge(HeapSnapshot *snapshot, const Edge &edge) JL_NOTSAFEPOINT
+static void serialize_edge(HeapSnapshot *snapshot, Edge edge) JL_NOTSAFEPOINT
 {
     // ["type","name_or_index","to_node"]
     ios_write(snapshot->edges, (char*)&edge.type, sizeof(edge.type));
@@ -249,15 +271,30 @@ void serialize_edge(HeapSnapshot *snapshot, const Edge &edge) JL_NOTSAFEPOINT
     g_snapshot->num_edges += 1;
 }
 
+// Helper to insert into the pointer->index map, returning existing index if present.
+// Returns 1 if newly inserted, 0 if already present. *out_index is set either way.
+static int snapshot_insert_node(HeapSnapshot *snapshot, void *ptr, size_t *out_index) JL_NOTSAFEPOINT
+{
+    void **bp = ptrhash_bp(&snapshot->node_ptr_to_index_map, ptr);
+    if (*bp != HT_NOTFOUND) {
+        *out_index = (size_t)*bp - (size_t)HT_NOTFOUND - 1;
+        return 0; // already present
+    }
+    size_t idx = snapshot->num_nodes;
+    *bp = (void *)((size_t)HT_NOTFOUND + idx + 1);
+    *out_index = idx;
+    return 1; // newly inserted
+}
+
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L212
 // add synthetic nodes for the uber root, the GC roots, and the GC finalizer list roots
-void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT
+static void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT
 {
     // adds a node at id 0 which is the "uber root":
     // a synthetic node which points to all the GC roots.
-    Node internal_root{
-        (uint8_t)snapshot->node_types.find_or_create_string_id("synthetic"),
-        snapshot->names.serialize_if_necessary(snapshot->strings, ""), // name
+    Node internal_root = {
+        (uint8_t)st_find_or_create(&snapshot->node_types, "synthetic"),
+        st_find_or_serialize(&snapshot->names, snapshot->strings, ""), // name
         0, // id
         0, // size
         0, // size_t trace_node_id (unused)
@@ -267,18 +304,18 @@ void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT
 
     // Add a node for the GC roots
     snapshot->_gc_root_idx = snapshot->internal_root_idx + 1;
-    Node gc_roots{
-        (uint8_t)snapshot->node_types.find_or_create_string_id("synthetic"),
-        snapshot->names.serialize_if_necessary(snapshot->strings, "GC roots"), // name
+    Node gc_roots = {
+        (uint8_t)st_find_or_create(&snapshot->node_types, "synthetic"),
+        st_find_or_serialize(&snapshot->names, snapshot->strings, "GC roots"), // name
         snapshot->_gc_root_idx, // id
         0, // size
         0, // size_t trace_node_id (unused)
         0 // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
     };
     serialize_node(snapshot, gc_roots);
-    Edge root_to_gc_roots{
-        (uint8_t)snapshot->edge_types.find_or_create_string_id("internal"),
-        snapshot->names.serialize_if_necessary(snapshot->strings, "GC roots"), // edge label
+    Edge root_to_gc_roots = {
+        (uint8_t)st_find_or_create(&snapshot->edge_types, "internal"),
+        st_find_or_serialize(&snapshot->names, snapshot->strings, "GC roots"), // edge label
         snapshot->internal_root_idx, // from
         snapshot->_gc_root_idx // to
     };
@@ -286,18 +323,18 @@ void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT
 
     // add a node for the gc finalizer list roots
     snapshot->_gc_finlist_root_idx = snapshot->internal_root_idx + 2;
-    Node gc_finlist_roots{
-        (uint8_t)snapshot->node_types.find_or_create_string_id("synthetic"),
-        snapshot->names.serialize_if_necessary(snapshot->strings, "GC finalizer list roots"), // name
+    Node gc_finlist_roots = {
+        (uint8_t)st_find_or_create(&snapshot->node_types, "synthetic"),
+        st_find_or_serialize(&snapshot->names, snapshot->strings, "GC finalizer list roots"), // name
         snapshot->_gc_finlist_root_idx, // id
         0, // size
         0, // size_t trace_node_id (unused)
         0 // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
     };
     serialize_node(snapshot, gc_finlist_roots);
-    Edge root_to_gc_finlist_roots{
-        (uint8_t)snapshot->edge_types.find_or_create_string_id("internal"),
-        snapshot->names.serialize_if_necessary(snapshot->strings, "GC finalizer list roots"), // edge label
+    Edge root_to_gc_finlist_roots = {
+        (uint8_t)st_find_or_create(&snapshot->edge_types, "internal"),
+        st_find_or_serialize(&snapshot->names, snapshot->strings, "GC finalizer list roots"), // edge label
         snapshot->internal_root_idx, // from
         snapshot->_gc_finlist_root_idx // to
     };
@@ -308,18 +345,17 @@ void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT
 // returns the index of the new node
 size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
 {
-    auto val = g_snapshot->node_ptr_to_index_map.insert(make_pair(a, g_snapshot->num_nodes));
-    if (!val.second) {
-        return val.first->second;
-    }
+    size_t idx;
+    if (!snapshot_insert_node(g_snapshot, a, &idx))
+        return idx;
 
     ios_t str_;
-    bool ios_need_close = 0;
+    int ios_need_close = 0;
 
     // Insert a new Node
     size_t self_size = 0;
-    StringRef name = "<missing>";
-    StringRef node_type = "object";
+    const char *name = "<missing>";
+    const char *node_type = "object";
 
     jl_datatype_t *type = (jl_datatype_t*)jl_typeof(a);
 
@@ -331,7 +367,7 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
     else if (jl_is_symbol(a)) {
         node_type = "jl_sym_t";
         name = jl_symbol_name((jl_sym_t*)a);
-        self_size = name.size();
+        self_size = strlen(name);
     }
     else if (jl_is_simplevector(a)) {
         node_type = "jl_svec_t";
@@ -340,7 +376,7 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
     }
     else if (jl_is_module(a)) {
         node_type = "jl_module_t";
-        name = jl_symbol_name_(((_jl_module_t*)a)->name);
+        name = jl_symbol_name_(((jl_module_t*)a)->name);
         self_size = sizeof(jl_module_t);
     }
     else if (jl_is_task(a)) {
@@ -353,7 +389,8 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
         ios_mem(&str_, 0);
         JL_STREAM* str = (JL_STREAM*)&str_;
         jl_static_show(str, a);
-        name = StringRef((const char*)str_.buf, str_.size);
+        ios_putc('\0', &str_); // NUL-terminate
+        name = (const char*)str_.buf;
         node_type = "jl_datatype_t";
         self_size = sizeof(jl_datatype_t);
     }
@@ -362,7 +399,8 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
         ios_mem(&str_, 0);
         JL_STREAM* str = (JL_STREAM*)&str_;
         jl_static_show(str, (jl_value_t*)type);
-        name = StringRef((const char*)str_.buf, str_.size);
+        ios_putc('\0', &str_); // NUL-terminate
+        name = (const char*)str_.buf;
         node_type = "jl_array_t";
         self_size = sizeof(jl_array_t);
     }
@@ -384,13 +422,14 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
         ios_mem(&str_, 0);
         JL_STREAM* str = (JL_STREAM*)&str_;
         jl_static_show(str, (jl_value_t*)type);
-        node_type = StringRef((const char*)str_.buf, str_.size);
-        name = StringRef((const char*)str_.buf, str_.size);
+        ios_putc('\0', &str_); // NUL-terminate
+        node_type = (const char*)str_.buf;
+        name = (const char*)str_.buf;
     }
 
-    auto node = Node{
-        (uint8_t)g_snapshot->node_types.find_or_create_string_id(node_type), // size_t type;
-        g_snapshot->names.serialize(g_snapshot->strings, name), // size_t name;
+    Node node = {
+        (uint8_t)st_find_or_create(&g_snapshot->node_types, node_type), // size_t type;
+        st_serialize(&g_snapshot->names, g_snapshot->strings, name), // size_t name;
         (size_t)a,     // size_t id;
         // We add 1 to self-size for the type tag that all heap-allocated objects have.
         // Also because the Chrome Snapshot viewer ignores size-0 leaves!
@@ -403,19 +442,18 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
     if (ios_need_close)
         ios_close(&str_);
 
-    return val.first->second;
+    return idx;
 }
 
-static size_t record_pointer_to_gc_snapshot(void *a, size_t bytes, StringRef name) JL_NOTSAFEPOINT
+static size_t record_pointer_to_gc_snapshot(void *a, size_t bytes, const char *name) JL_NOTSAFEPOINT
 {
-    auto val = g_snapshot->node_ptr_to_index_map.insert(make_pair(a, g_snapshot->num_nodes));
-    if (!val.second) {
-        return val.first->second;
-    }
+    size_t idx;
+    if (!snapshot_insert_node(g_snapshot, a, &idx))
+        return idx;
 
-    auto node = Node{
-        (uint8_t)g_snapshot->node_types.find_or_create_string_id( "object"), // size_t type;
-        g_snapshot->names.serialize(g_snapshot->strings, name), // size_t name;
+    Node node = {
+        (uint8_t)st_find_or_create(&g_snapshot->node_types, "object"), // size_t type;
+        st_serialize(&g_snapshot->names, g_snapshot->strings, name), // size_t name;
         (size_t)a,     // size_t id;
         bytes,         // size_t self_size;
         0,             // size_t trace_node_id (unused)
@@ -423,34 +461,33 @@ static size_t record_pointer_to_gc_snapshot(void *a, size_t bytes, StringRef nam
     };
     serialize_node(g_snapshot, node);
 
-    return val.first->second;
+    return idx;
 }
 
-static SmallString<128> _fieldpath_for_slot(void *obj, void *slot) JL_NOTSAFEPOINT
+static void _fieldpath_for_slot(void *obj, void *slot, ios_t *result) JL_NOTSAFEPOINT
 {
-    SmallString<128> res;
     jl_datatype_t *objtype = (jl_datatype_t*)jl_typeof(obj);
 
     while (1) {
         int i = gc_slot_to_fieldidx(obj, slot, objtype);
 
         if (jl_is_tuple_type(objtype) || jl_is_namedtuple_type(objtype)) {
-            res += formatv("[{0}]", i).sstr<8>();
+            ios_printf(result, "[%d]", i);
         }
         else {
             jl_svec_t *field_names = jl_field_names(objtype);
             jl_sym_t *name = (jl_sym_t*)jl_svecref(field_names, i);
-            res += jl_symbol_name(name);
+            ios_puts(jl_symbol_name(name), result);
         }
 
         if (!jl_field_isptr(objtype, i)) {
             // Tail recurse
-            res += ".";
+            ios_putc('.', result);
             obj = (void*)((char*)obj + jl_field_offset(objtype, i));
             objtype = (jl_datatype_t*)jl_field_type_concrete(objtype, i);
         }
         else {
-            return res;
+            return;
         }
     }
 }
@@ -458,24 +495,25 @@ static SmallString<128> _fieldpath_for_slot(void *obj, void *slot) JL_NOTSAFEPOI
 void _gc_heap_snapshot_record_root(jl_value_t *root, char *name) JL_NOTSAFEPOINT
 {
     size_t to_node_idx = record_node_to_gc_snapshot(root);
-    auto edge_label = g_snapshot->names.serialize(g_snapshot->strings, name);
+    size_t edge_label = st_serialize(&g_snapshot->names, g_snapshot->strings, name);
 
     _record_gc_just_edge("internal", g_snapshot->internal_root_idx, to_node_idx, edge_label);
 }
 
 void _gc_heap_snapshot_record_gc_roots(jl_value_t *root, char *name) JL_NOTSAFEPOINT
 {
-    auto to_node_idx = record_node_to_gc_snapshot(root);
-    auto edge_label = g_snapshot->names.serialize(g_snapshot->strings, name);
+    size_t to_node_idx = record_node_to_gc_snapshot(root);
+    size_t edge_label = st_serialize(&g_snapshot->names, g_snapshot->strings, name);
 
     _record_gc_just_edge("internal", g_snapshot->_gc_root_idx, to_node_idx, edge_label);
 }
 
 void _gc_heap_snapshot_record_finlist(jl_value_t *obj, size_t index) JL_NOTSAFEPOINT
 {
-    auto to_node_idx = record_node_to_gc_snapshot(obj);
-    SmallString<16> ss = formatv("finlist-{0}", index);
-    auto edge_label = g_snapshot->names.serialize_if_necessary(g_snapshot->strings, ss);
+    size_t to_node_idx = record_node_to_gc_snapshot(obj);
+    char ss[32];
+    snprintf(ss, sizeof(ss), "finlist-%zu", index);
+    size_t edge_label = st_find_or_serialize(&g_snapshot->names, g_snapshot->strings, ss);
     _record_gc_just_edge("internal", g_snapshot->_gc_finlist_root_idx, to_node_idx, edge_label);
 }
 
@@ -485,14 +523,13 @@ void _gc_heap_snapshot_record_finlist(jl_value_t *obj, size_t index) JL_NOTSAFEP
 // Stack frame nodes point at the objects they have as local variables.
 size_t _record_stack_frame_node(HeapSnapshot *snapshot, void *frame) JL_NOTSAFEPOINT
 {
-    auto val = g_snapshot->node_ptr_to_index_map.insert(make_pair(frame, g_snapshot->num_nodes));
-    if (!val.second) {
-        return val.first->second;
-    }
+    size_t idx;
+    if (!snapshot_insert_node(g_snapshot, frame, &idx))
+        return idx;
 
-    auto node = Node{
-        (uint8_t)snapshot->node_types.find_or_create_string_id("synthetic"),
-        snapshot->names.serialize_if_necessary(snapshot->strings, "(stack frame)"), // name
+    Node node = {
+        (uint8_t)st_find_or_create(&snapshot->node_types, "synthetic"),
+        st_find_or_serialize(&snapshot->names, snapshot->strings, "(stack frame)"), // name
         (size_t)frame, // id
         1, // size
         0, // size_t trace_node_id (unused)
@@ -500,33 +537,33 @@ size_t _record_stack_frame_node(HeapSnapshot *snapshot, void *frame) JL_NOTSAFEP
     };
     serialize_node(snapshot, node);
 
-    return val.first->second;
+    return idx;
 }
 
 void _gc_heap_snapshot_record_frame_to_object_edge(void *from, jl_value_t *to) JL_NOTSAFEPOINT
 {
-    auto from_node_idx = _record_stack_frame_node(g_snapshot, (jl_gcframe_t*)from);
-    auto to_idx = record_node_to_gc_snapshot(to);
+    size_t from_node_idx = _record_stack_frame_node(g_snapshot, (jl_gcframe_t*)from);
+    size_t to_idx = record_node_to_gc_snapshot(to);
 
-    auto name_idx = g_snapshot->names.serialize_if_necessary(g_snapshot->strings, "local var");
+    size_t name_idx = st_find_or_serialize(&g_snapshot->names, g_snapshot->strings, "local var");
     _record_gc_just_edge("internal", from_node_idx, to_idx, name_idx);
 }
 
 void _gc_heap_snapshot_record_task_to_frame_edge(jl_task_t *from, void *to) JL_NOTSAFEPOINT
 {
-    auto from_node_idx = record_node_to_gc_snapshot((jl_value_t*)from);
-    auto to_node_idx = _record_stack_frame_node(g_snapshot, to);
+    size_t from_node_idx = record_node_to_gc_snapshot((jl_value_t*)from);
+    size_t to_node_idx = _record_stack_frame_node(g_snapshot, to);
 
-    auto name_idx = g_snapshot->names.serialize_if_necessary(g_snapshot->strings, "stack");
+    size_t name_idx = st_find_or_serialize(&g_snapshot->names, g_snapshot->strings, "stack");
     _record_gc_just_edge("internal", from_node_idx, to_node_idx, name_idx);
 }
 
 void _gc_heap_snapshot_record_frame_to_frame_edge(jl_gcframe_t *from, jl_gcframe_t *to) JL_NOTSAFEPOINT
 {
-    auto from_node_idx = _record_stack_frame_node(g_snapshot, from);
-    auto to_node_idx = _record_stack_frame_node(g_snapshot, to);
+    size_t from_node_idx = _record_stack_frame_node(g_snapshot, from);
+    size_t to_node_idx = _record_stack_frame_node(g_snapshot, to);
 
-    auto name_idx = g_snapshot->names.serialize_if_necessary(g_snapshot->strings, "next frame");
+    size_t name_idx = st_find_or_serialize(&g_snapshot->names, g_snapshot->strings, "next frame");
     _record_gc_just_edge("internal", from_node_idx, to_node_idx, name_idx);
 }
 
@@ -537,45 +574,49 @@ void _gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_
 
 void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void *slot) JL_NOTSAFEPOINT
 {
-    SmallString<128> path = _fieldpath_for_slot(from, slot);
-    _record_gc_edge("property", from, to,
-                    g_snapshot->names.serialize_if_necessary(g_snapshot->strings, path));
+    ios_t path;
+    ios_mem(&path, 128);
+    _fieldpath_for_slot(from, slot, &path);
+    ios_putc('\0', &path); // NUL-terminate for st_find_or_serialize
+    size_t name_idx = st_find_or_serialize(&g_snapshot->names, g_snapshot->strings, (const char *)path.buf);
+    ios_close(&path);
+    _record_gc_edge("property", from, to, name_idx);
 }
 
 void _gc_heap_snapshot_record_module_to_binding(jl_module_t *module, jl_value_t *bindings, jl_value_t *bindingkeyset) JL_NOTSAFEPOINT
 {
-    auto from_node_idx = record_node_to_gc_snapshot((jl_value_t*)module);
-    auto to_bindings_idx = record_node_to_gc_snapshot(bindings);
-    auto to_bindingkeyset_idx = record_node_to_gc_snapshot(bindingkeyset);
+    size_t from_node_idx = record_node_to_gc_snapshot((jl_value_t*)module);
+    size_t to_bindings_idx = record_node_to_gc_snapshot(bindings);
+    size_t to_bindingkeyset_idx = record_node_to_gc_snapshot(bindingkeyset);
 
     if (to_bindings_idx > 0) {
-        _record_gc_just_edge("internal", from_node_idx, to_bindings_idx, g_snapshot->names.serialize_if_necessary(g_snapshot->strings, "bindings"));
+        _record_gc_just_edge("internal", from_node_idx, to_bindings_idx, st_find_or_serialize(&g_snapshot->names, g_snapshot->strings, "bindings"));
     }
     if (to_bindingkeyset_idx > 0) {
-        _record_gc_just_edge("internal", from_node_idx, to_bindingkeyset_idx, g_snapshot->names.serialize_if_necessary(g_snapshot->strings, "bindingkeyset"));
+        _record_gc_just_edge("internal", from_node_idx, to_bindingkeyset_idx, st_find_or_serialize(&g_snapshot->names, g_snapshot->strings, "bindingkeyset"));
     }
  }
 
 void _gc_heap_snapshot_record_internal_array_edge(jl_value_t *from, jl_value_t *to) JL_NOTSAFEPOINT
 {
     _record_gc_edge("internal", from, to,
-                    g_snapshot->names.serialize_if_necessary(g_snapshot->strings, "<internal>"));
+                    st_find_or_serialize(&g_snapshot->names, g_snapshot->strings, "<internal>"));
 }
 
 void _gc_heap_snapshot_record_binding_partition_edge(jl_value_t *from, jl_value_t *to) JL_NOTSAFEPOINT
 {
     _record_gc_edge("binding", from, to,
-                    g_snapshot->names.serialize_if_necessary(g_snapshot->strings, "<binding>"));
+                    st_find_or_serialize(&g_snapshot->names, g_snapshot->strings, "<binding>"));
 }
 
 
 void _gc_heap_snapshot_record_foreign_memory_edge(jl_value_t *from, void* to, size_t bytes) JL_NOTSAFEPOINT
 {
-    size_t name_or_idx = g_snapshot->names.serialize_if_necessary(g_snapshot->strings, "<native>");
+    size_t name_or_idx = st_find_or_serialize(&g_snapshot->names, g_snapshot->strings, "<native>");
 
-    auto from_node_idx = record_node_to_gc_snapshot(from);
+    size_t from_node_idx = record_node_to_gc_snapshot(from);
     const char *alloc_kind = "<foreign memory - malloc>";
-    auto to_node_idx = record_pointer_to_gc_snapshot(to, bytes, alloc_kind);
+    size_t to_node_idx = record_pointer_to_gc_snapshot(to, bytes, alloc_kind);
 
     _record_gc_just_edge("hidden", from_node_idx, to_node_idx, name_or_idx);
 }
@@ -583,16 +624,16 @@ void _gc_heap_snapshot_record_foreign_memory_edge(jl_value_t *from, void* to, si
 static inline void _record_gc_edge(const char *edge_type, jl_value_t *a,
                                   jl_value_t *b, size_t name_or_idx) JL_NOTSAFEPOINT
 {
-    auto from_node_idx = record_node_to_gc_snapshot(a);
-    auto to_node_idx = record_node_to_gc_snapshot(b);
+    size_t from_node_idx = record_node_to_gc_snapshot(a);
+    size_t to_node_idx = record_node_to_gc_snapshot(b);
 
     _record_gc_just_edge(edge_type, from_node_idx, to_node_idx, name_or_idx);
 }
 
-void _record_gc_just_edge(const char *edge_type, size_t from_idx, size_t to_idx, size_t name_or_idx) JL_NOTSAFEPOINT
+static void _record_gc_just_edge(const char *edge_type, size_t from_idx, size_t to_idx, size_t name_or_idx) JL_NOTSAFEPOINT
 {
-    auto edge = Edge{
-        (uint8_t)g_snapshot->edge_types.find_or_create_string_id(edge_type),
+    Edge edge = {
+        (uint8_t)st_find_or_create(&g_snapshot->edge_types, edge_type),
         name_or_idx, // edge label
         from_idx, // from
         to_idx // to
@@ -601,7 +642,7 @@ void _record_gc_just_edge(const char *edge_type, size_t from_idx, size_t to_idx,
     serialize_edge(g_snapshot, edge);
 }
 
-void final_serialize_heap_snapshot(ios_t *json, ios_t *strings, HeapSnapshot &snapshot, char all_one)
+static void final_serialize_heap_snapshot(ios_t *json, ios_t *strings, HeapSnapshot *snapshot, char all_one)
 {
     // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L2567-L2567
     // also https://github.com/microsoft/vscode-v8-heap-tools/blob/c5b34396392397925ecbb4ecb904a27a2754f2c1/v8-heap-parser/src/decoder.rs#L43-L51
@@ -610,12 +651,12 @@ void final_serialize_heap_snapshot(ios_t *json, ios_t *strings, HeapSnapshot &sn
     ios_printf(json, "  \"meta\":{\n");
     ios_printf(json, "    \"node_fields\":[\"type\",\"name\",\"id\",\"self_size\",\"edge_count\",\"trace_node_id\",\"detachedness\"],\n");
     ios_printf(json, "    \"node_types\":[");
-    snapshot.node_types.print_json_array(json, false);
+    st_print_json_array(&snapshot->node_types, json, 0);
     ios_printf(json, ",");
     ios_printf(json, "\"string\", \"number\", \"number\", \"number\", \"number\", \"number\"],\n");
     ios_printf(json, "    \"edge_fields\":[\"type\",\"name_or_index\",\"to_node\"],\n");
     ios_printf(json, "    \"edge_types\":[");
-    snapshot.edge_types.print_json_array(json, false);
+    st_print_json_array(&snapshot->edge_types, json, 0);
     ios_printf(json, ",");
     ios_printf(json, "\"string_or_number\",\"from_node\"],\n");
     // not used. Required by microsoft/vscode-v8-heap-tools
@@ -626,8 +667,8 @@ void final_serialize_heap_snapshot(ios_t *json, ios_t *strings, HeapSnapshot &sn
     // end not used
     ios_printf(json, "  },\n"); // end "meta"
 
-    ios_printf(json, "  \"node_count\":%zu,\n", snapshot.num_nodes);
-    ios_printf(json, "  \"edge_count\":%zu,\n", snapshot.num_edges);
+    ios_printf(json, "  \"node_count\":%zu,\n", snapshot->num_nodes);
+    ios_printf(json, "  \"edge_count\":%zu,\n", snapshot->num_edges);
     ios_printf(json, "  \"trace_function_count\":0\n"); // not used. Required by microsoft/vscode-v8-heap-tools
     ios_printf(json, "}\n"); // end "snapshot"
 

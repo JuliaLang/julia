@@ -197,9 +197,9 @@ end
 function constprop_cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given_argtypes::Vector{Any}, cache::InferenceCache)
     nargtypes = length(given_argtypes)
     indices = get_indices(cache, mi)
+    found_tombstone = false
     for idx in indices
         cached_result = cache.results[idx]
-        cached_result.tombstone && continue # ignore deleted entries (due to LimitedAccuracy)
         cache_argtypes = cached_result.argtypes
         @assert length(cache_argtypes) == nargtypes "invalid `cache_argtypes` for `mi`"
         cache_overridden_by_const = cached_result.overridden_by_const
@@ -210,8 +210,15 @@ function constprop_cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given
                 @goto next_cache
             end
         end
+        # Don't return tombstoned entries as cache items: they represent rejected work
+        # (due to LimitedAccuracy). Instead, record that a tombstone was found so the
+        # caller can avoid re-attempting the same const-prop that would hit the same limit.
+        if cached_result.tombstone
+            found_tombstone = true
+            @goto next_cache
+        end
         return cached_result
         @label next_cache
     end
-    return nothing
+    return found_tombstone ? missing : nothing
 end
