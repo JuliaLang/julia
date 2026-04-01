@@ -244,19 +244,7 @@ static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, 
 #elif defined(__riscv) && __riscv_xlen == 64
 #include <cpufeatures/target_tables_riscv64.h>
 #else
-// Minimal fallback — no feature tracking
-#define TARGET_FEATURE_WORDS 1
-typedef struct { uint64_t bits[1]; } FeatureBits;
-static inline int feature_test(const FeatureBits *, unsigned) { return 0; }
-static inline void feature_set(FeatureBits *, unsigned) {}
-static const unsigned num_features = 0;
-typedef struct { const char *name; unsigned bit; FeatureBits implies; } FeatureEntry;
-static const FeatureEntry *feature_table = nullptr;
-typedef struct { const char *name; FeatureBits features; } CPUEntry;
-static const FeatureEntry *find_feature(const char *) { return nullptr; }
-static const CPUEntry *find_cpu(const char *) { return nullptr; }
-static void expand_implied(FeatureBits *) {}
-static const FeatureBits hw_feature_mask = {{0}};
+#include <cpufeatures/target_tables_fallback.h>
 #endif
 
 #include <cpufeatures/target_parsing.h>
