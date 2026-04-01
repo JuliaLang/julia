@@ -3057,6 +3057,7 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
     enable_bracketed_paste(term)
     try
         activate(prompt, s, term, term)
+        print(term, "\e[?25h") # ensure cursor is visible (DECTCEM)
         # Notify that prompt is ready for input
         if s.prompt_ready_event !== nothing
             notify(s.prompt_ready_event)
