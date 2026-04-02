@@ -1,5 +1,3 @@
-@testset "Scopes" begin
-
 test_mod = Module()
 
 #-------------------------------------------------------------------------------
@@ -132,6 +130,7 @@ end
     # should have similar conflict rules to arguments
     @testset "destructured-arg,destructured-arg/arg/local/sp/global" begin
         s = "function ((x,x)); end"
+        # this works in flisp; should it?
         @test_throws LoweringError JuliaLowering.include_string(test_mod, s)
         s = "function ((x,y),x); end"
         @test_throws LoweringError JuliaLowering.include_string(test_mod, s)
@@ -274,7 +273,7 @@ lhs_names = (:lname, :gname, :argname, :spname)
             @test_throws LoweringError expr_eval(tmp_test_mod, ex)
         else
             expected = results[lhs_i]
-            reference_ok = reference_eval(tmp_test_mod_2, ex) === expected
+            reference_ok = fl_eval(tmp_test_mod_2, ex) === expected
             !reference_ok && @error("flisp produced unexpected result; fix that or JL scope tests:\n",
                                    "expected $(expected_s(expected)), got $(expected_s(!expected))\n", ex)
             ok = expr_eval(tmp_test_mod, ex) === expected
@@ -370,6 +369,4 @@ end
     @test isdefined(test_mod, :c_nonlocal_2)
     JuliaLowering.include_string(test_mod, "macro_mod.@mesc const c_nonlocal_3 = 1"; expr_compat_mode=true)
     @test isdefined(test_mod, :c_nonlocal_3)
-end
-
 end

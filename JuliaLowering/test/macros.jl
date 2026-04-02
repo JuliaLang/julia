@@ -1,5 +1,3 @@
-@testset "macro tests" begin
-
 test_mod = Module(:macro_test)
 Base.eval(test_mod, :(const var"@ast" = $(JuliaLowering.var"@ast")))
 Base.eval(test_mod, :(const var"@K_str" = $(JuliaLowering.var"@K_str")))
@@ -117,7 +115,7 @@ M.@recursive 3
 
 ex = JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "M.@outer()", filename="foo.jl")
 ctx, expanded = JuliaLowering.expand_forms_1(test_mod, ex, false, Base.get_world_counter())
-@test JuliaLowering.sourcetext.(JuliaLowering.flattened_provenance(expanded[2])) == [
+@test JuliaSyntax.sourcetext.(JuliaLowering.flattened_provenance(expanded[2])) == [
     "M.@outer()"
     "@inner"
     "(y, z)"
@@ -882,6 +880,4 @@ end
     mac_ex = Expr(:macrocall, Symbol("@srcfile"), nothing)
     mac_st = JuliaLowering.expr_to_est(mac_ex, LineNumberNode(1, "badfile"))
     @test JuliaLowering.eval(test_mod, mac_st) == "none"
-end
-
 end

@@ -3352,3 +3352,10 @@ end
         @test v === typemin(v) === typemax(v)
     end
 end
+
+@testset "irrational negative integer power (#61284)" begin
+    p = -2 # test non literal power
+    for x in (π, ℯ, γ, catalan, φ)
+        @test x^p == float(x)^p
+    end
+end

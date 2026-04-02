@@ -1,5 +1,3 @@
-@testset "Syntax quoting & interpolation" begin
-
 test_mod = Module()
 
 ex = JuliaLowering.include_string(test_mod, """
@@ -276,6 +274,4 @@ end
         @eval Base.$x
     end
     """; expr_compat_mode=true) == Base.push!
-end
-
 end

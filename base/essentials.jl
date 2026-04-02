@@ -6,6 +6,8 @@ const Callable = Union{Function,Type}
 
 const Bottom = Union{}
 
+blackbox(x) = compilerbarrier(:blackbox, x)
+
 # Define minimal array interface here to help code used in macros:
 size(a::Array) = getfield(a, :size)
 length(t::AbstractArray) = (@inline; prod(size(t)))
@@ -124,7 +126,7 @@ macro nospecialize(vars...)
             var.head = :kw
         end
     end
-    return Expr(:meta, :nospecialize, vars...)
+    return Expr(:escape, Expr(:meta, :nospecialize, vars...))
 end
 
 """
@@ -141,7 +143,7 @@ macro specialize(vars...)
             var.head = :kw
         end
     end
-    return Expr(:meta, :specialize, vars...)
+    return Expr(:escape, Expr(:meta, :specialize, vars...))
 end
 
 """

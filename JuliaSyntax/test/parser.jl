@@ -1201,6 +1201,12 @@ parsestmt_test_specs = [
     "(x for x = xs a)"      =>  "(parens (generator x (iteration (in x xs))) (error-t a))"
     "(x for x = xs a, b)"   =>  "(parens (generator x (iteration (in x xs))) (error-t a ✘ b))"
     "f(x for x = xs a)"     =>  "(call f (generator x (iteration (in x xs))) (error-t a))"
+
+    # typegroup as identifier on older versions
+    ((v=v"1.12",), "typegroup = 3")  =>  "(= typegroup 3)"
+    ((v=v"1.12",), "let typegroup = 3 end")  =>  "(let (block (= typegroup 3)) (block))"
+    # typegroup error recovery on older versions (would be a syntax error anyway)
+    ((v=v"1.12",), "typegroup struct A end end")  =>  "(error (typegroup (block (struct A (block)))))"
 ]
 
 @testset "Parsestmt tests" begin

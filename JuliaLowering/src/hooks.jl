@@ -5,7 +5,7 @@ Returns an svec with the lowered code (usually expr) as its first element, and
 (until integration is less experimental) whatever we want after it
 """
 function core_lowering_hook(@nospecialize(code), mod::Module,
-                            file="none", line=0, world=typemax(Csize_t), warn=false)
+                            file="none", line=0, world=typemax(Csize_t), _warn=false)
     if !(code isa SyntaxTree || code isa Expr)
         # e.g. LineNumberNode, integer...
         return Core.svec(code)

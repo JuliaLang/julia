@@ -671,12 +671,14 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
         # A parent may be cached still, but not this intermediate work:
         # we can throw everything else away now. Caching anything can confuse later
         # heuristics to consider it worth trying to pursue compiling this further and
-        # finding infinite work as a result. Avoiding caching helps to ensure there is only
-        # a finite amount of work that can be discovered later (although potentially still a
-        # large multiplier on it).
+        # finding infinite work as a result. Avoiding global caching helps to ensure there
+        # is only a finite amount of work that can be discovered later (although potentially
+        # still a large multiplier on it). We still allow local caching so that tombstoned
+        # entries can be found by `constprop_cache_lookup` to prevent re-attempting the same
+        # const-prop work that would hit the same limit.
         result.src = nothing
         result.tombstone = true
-        me.cache_mode = CACHE_MODE_NULL
+        me.cache_mode &= ~CACHE_MODE_GLOBAL
         set_inlineable!(src, false)
     else
         # annotate fulltree with type information,

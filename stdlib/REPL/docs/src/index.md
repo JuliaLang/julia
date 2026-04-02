@@ -870,11 +870,13 @@ It is possible to get an interface which is similar to the IPython REPL and the 
 
 ```julia
 atreplinit() do repl
-    @eval import REPL
-    if !isdefined(repl, :interface)
-        repl.interface = REPL.setup_interface(repl)
+    @eval begin
+        import REPL
+        if !isdefined($repl, :interface)
+            $repl.interface = REPL.setup_interface($repl)
+        end
+        REPL.numbered_prompt!($repl)
     end
-    REPL.numbered_prompt!(repl)
 end
 ```
 
