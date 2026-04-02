@@ -249,7 +249,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"ssavalue" [K"Value"]] -> pass()
     [K"inert" _] -> pass()
     [K"inert_syntaxtree" _] -> pass()
-    [K"core"] -> st.name_val === "nothing" ? pass() :
+    [K"core"] -> getattr(String, st, :name_val) === "nothing" ? pass() :
         @fail(st, "zero-arg `core` is only used for `Core.nothing`")
     [K"core" [K"Identifier"]] -> pass()
     [K"top" [K"Identifier"]] -> pass()
@@ -283,8 +283,8 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         all(vst1, vcx, roots_args)
     [K"cfunction" [K"Value"] f rt at [K"inert" [K"Identifier"]]] ->
         vst1(vcx, f) & vst1(vcx, rt) & vst1(vcx, at)
-    [K"cconv" tup nreq] -> (get(tup, :value, nothing) isa Tuple &&
-        get(nreq, :value, nothing) isa Int) ? pass() :
+    [K"cconv" tup nreq] -> (getattr(Any, tup, :value, nothing) isa Tuple &&
+        getattr(Any, nreq, :value, nothing) isa Int) ? pass() :
         @fail(st, "expected (cconv convention_tuple n_req_args)")
     [K"tryfinally" t f] -> vst1(vcx, t) & vst1(vcx, f)
     [K"tryfinally" t f scope] -> vst1(vcx, t) & vst1(vcx, f) & vst1(vcx, scope)
@@ -304,7 +304,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         @fail(st, "can only be used inside a function") :
         !vcx.return_ok ?
         @fail(st, "current function not defined in comprehension or generator") : pass()
-    [K"unknown_head"] -> let head = st.name_val
+    [K"unknown_head"] -> let head = getattr(String, st, :name_val)
         head === "latestworld-if-toplevel" ? pass() :
             @fail(st, string("unknown expr head: ", head))
     end
@@ -329,7 +329,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"Placeholder"] ->
         @fail(st, "`Placeholder` kind not valid until desugaring")
     [K"unknown_head" _...] ->
-        @fail(st, string("unknown expr head: ", st.name_val))
+        @fail(st, string("unknown expr head: ", getattr(String, st, :name_val)))
     [K"$" x] -> @fail(st, raw"`$` expression outside string or quote")
     [K"continue" _...] ->
         @fail(st, "`continue` outside of a `while` or `for` loop")
@@ -352,17 +352,17 @@ end
 vst1_toplevel_only(vcx, st) = @stm st begin
     # body will be validated when lowered
     [K"module" [K"Value"] [K"Value"] [K"Identifier"] [K"block" xs...]] ->
-        !(st[1].value isa VersionNumber) ? @fail(st[1], "expected version") :
-        !(st[2].value isa Bool) ? @fail(st[2], "expected boolean bare flag") :
+        !(getattr(Any, st[1], :value) isa VersionNumber) ? @fail(st[1], "expected version") :
+        !(getattr(Any, st[2], :value) isa Bool) ? @fail(st[2], "expected boolean bare flag") :
         pass()
     [K"module" [K"Value"] [K"Identifier"] [K"block" xs...]] ->
-        !(st[1].value isa Bool) ? @fail(st[1], "expected boolean bare flag") :
+        !(getattr(Any, st[1], :value) isa Bool) ? @fail(st[1], "expected boolean bare flag") :
         pass()
     [K"macro" _...] ->
         vst1_macro(vcx, st)
     [K"struct" [K"Value"] sig [K"block" body...]] ->
         vst1_typesig(vcx, sig) & (
-            !(st[1].value isa Bool) ? @fail(st[1], "expected mutable flag") :
+            !(getattr(Any, st[1], :value) isa Bool) ? @fail(st[1], "expected mutable flag") :
                 all(vst1_struct_arg, vcx, body))
     [K"abstract" sig] ->
         vst1_typesig(vcx, sig)
@@ -471,7 +471,7 @@ end
 
 vst1_try_catchvar(_vcx, st) = @stm st begin
     [K"Identifier"] -> pass()
-    ([K"Value"], when=st.value===false) -> pass()
+    ([K"Value"], when=getattr(Any, st, :value)===false) -> pass()
 end
 
 # syntax TODO:
@@ -501,10 +501,10 @@ end
 vst1_simple_dot_rhs(vcx, st; lhs) = @stm st begin
     [K"inert" x] -> vst1_simple_dot_rhs(vcx, x; lhs)
     [K"Identifier"] -> vst1_ident(with(vcx; readable_underscore=true), st; lhs)
-    ([K"Value"], when=st.value isa String) ->
-        _ident_str(with(vcx; readable_underscore=true), st, st.value; lhs)
+    ([K"Value"], when=getattr(Any, st, :value) isa String) ->
+        _ident_str(with(vcx; readable_underscore=true), st, getattr(Any, st, :value); lhs)
     [K"String"] ->
-        _ident_str(with(vcx; readable_underscore=true), st, st.value; lhs)
+        _ident_str(with(vcx; readable_underscore=true), st, getattr(Any, st, :value); lhs)
     [K"tuple" _...] -> @fail(st, "dotcall syntax not valid here")
     _ -> @fail(st, "invalid `.` syntax")
 end
@@ -522,7 +522,7 @@ end
 # TODO: globalref (identifier with .mod) might not be valid everywhere; check
 # usage of this function
 vst1_ident(vcx, st; lhs=false) = @stm st begin
-    [K"Identifier"] -> _ident_str(vcx, st, st.name_val; lhs)
+    [K"Identifier"] -> _ident_str(vcx, st, getattr(String, st, :name_val); lhs)
     _ -> @fail(st, "expected identifier")
 end
 function _ident_str(vcx, st, s::String; lhs=false)
@@ -536,7 +536,7 @@ function _ident_str(vcx, st, s::String; lhs=false)
 end
 
 vst1_call(vcx, st) = @stm st begin
-    ([K"call" [K"Identifier"] args...], when=st[1].name_val==="cglobal") ->
+    ([K"call" [K"Identifier"] args...], when=getattr(String, st[1], :name_val)==="cglobal") ->
         (1 <= length(args) <= 2 ? pass() :
             @fail(st, "cglobal must have one or two arguments")) &
         all(vst1_call_arg, vcx, args)
@@ -575,7 +575,7 @@ vst1_call_kwarg(vcx, st) = @stm st begin
     [K"=" id val] -> vst1_ident(vcx, id; lhs=true) & vst1(vcx, val)
     [K"..." x] -> vst1(vcx, x)
     [K"." x [K"inert" id]] -> vst1(vcx, x) & vst1_ident(vcx, id; lhs=true)
-    ([K"call" [K"Identifier"] symval v], when=(st[1].name_val==="=>")) ->
+    ([K"call" [K"Identifier"] symval v], when=(getattr(String, st[1], :name_val)==="=>")) ->
         vst1(vcx, symval) & vst1(vcx, v)
     _ -> @fail(st, "expected identifier, `=`, or, `...` after semicolon")
 end
@@ -705,7 +705,7 @@ function _calldecl_positionals(vcx, params_meta, eq_is_kw)
     ok = Ref(pass())
     params = map(params_meta) do meta_p
         @stm meta_p begin
-            [K"meta" s p] -> let meta_s = get(s, :name_val, "")
+            [K"meta" s p] -> let meta_s = getattr(String, s, :name_val, "")
                 if !(meta_s in ("specialize", "nospecialize"))
                     ok[] &= @fail(p, "unrecognized meta function arg form")
                 end
@@ -829,7 +829,8 @@ vst1_typevar_decl(vcx, st) = @stm st begin
     [K">:" t old] ->
         vst1_ident(vcx, t; lhs=true) & vst1(vcx, old)
     ([K"comparison" val_l [K"Identifier"] t [K"Identifier"] val_r],
-     when=(st[2].name_val===st[4].name_val && st[2].name_val in ("<:", ">:"))) ->
+     when=(getattr(String, st[2], :name_val) === getattr(String, st[4], :name_val) &&
+           getattr(String, st[2], :name_val) in ("<:", ">:"))) ->
          vst1(vcx, val_l) &
          vst1_ident(vcx, t; lhs=true) &
          vst1(vcx, val_r)
@@ -879,7 +880,7 @@ end
 #
 # Note simple `op` and `.op` are calls to (dotted) identifiers, so this special
 # handling isn't necessary.
-vst1_dotted_or_op_assign(vcx, st) = let op_s = get(st, :name_val, "")
+vst1_dotted_or_op_assign(vcx, st) = let op_s = getattr(String, st, :name_val, "")::String
     @stm st begin
         [K".=" l r] -> vst1_dotassign_lhs(vcx, l) & vst1(vcx, r)
         (_, when=(!Base.isoperator(op_s))) -> unknown()
@@ -1059,7 +1060,7 @@ vst0_macrocall(vcx, st) = @stm st begin
     (_, when=!vcx.unexpanded) ->
         @fail(st, "macrocall not valid in AST after macro expansion")
     ([K"macrocall" name [K"Value"] args...],
-     when=(typeof(st[2].value) in (LineNumberNode, Core.MacroSource))) ->
+     when=(typeof(getattr(Any, st[2], :value)) in (LineNumberNode, Core.MacroSource))) ->
          pass()
     [K"macrocall" _...] ->
         @fail(st, "expected (macrocall name linenode args...)")
@@ -1103,9 +1104,8 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
         end
         return vr & @fail(st, err*"]")
     end
-    for a in (:kind, :source)
-        vr &= hasattr(st, a) ? pass() : @fail(st, string("needs attribute ", a))
-    end
+    vr &= hasattr(Kind, st, :kind) ? pass() : @fail(st, string("needs attribute ", a))
+    vr &= hasattr(SourceAttrType, st, :source) ? pass() : @fail(st, string("needs attribute ", a))
     if is_leaf(st)
         # Note some kinds can show up in non-leaves too
         required_attrs = @stm st begin
@@ -1141,7 +1141,7 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
         end
     end
     for a in required_attrs
-        vr &= hasattr(st, a) ? pass() : @fail(st, string("needs attribute ", a))
+        vr &= hasattr(Any, st, a) ? pass() : @fail(st, string("needs attribute ", a))
     end
     push!(parents, st._id)
     for c in children(st)
@@ -1179,7 +1179,7 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     latestworld latestworld_if_toplevel symbolicgoto symboliclabel TOMBSTONE
     """ ? pass() : @fail(st, "unrecognized leaf kind")
 
-    [K"call" [K"static_eval" cg] xs...] -> get(cg, :name_val, nothing) == "cglobal" ?
+    [K"call" [K"static_eval" cg] xs...] -> getattr(String, cg, :name_val, nothing) == "cglobal" ?
         all(vst2, vcx, xs) : @fail(st, "expected (call (static_eval cglobal) _...)")
     [K"call" xs...] -> all(vst2, vcx, xs)
     [K"block" xs...] -> all(vst2, vcx, xs)

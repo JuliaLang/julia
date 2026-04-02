@@ -36,7 +36,7 @@ end
 function captured_var_access(ctx, ex)
     cap_rewrite = ctx.capture_rewriting
     if cap_rewrite isa ClosureInfo
-        field_sym = cap_rewrite.field_names[cap_rewrite.field_inds[ex.var_id]]
+        field_sym = cap_rewrite.field_names[cap_rewrite.field_inds[getattr(IdTag, ex, :var_id)]]
         @ast ctx ex [K"call"
             "getfield"::K"core"
             binding_ex(ctx, current_lambda_bindings(ctx).self)
@@ -53,7 +53,7 @@ function captured_var_access(ctx, ex)
 end
 
 function get_box_contents(ctx::ClosureConversionCtx, var, box_ex)
-    undef_var = new_local_binding(ctx, var, get_binding(ctx, var.var_id).name;
+    undef_var = new_local_binding(ctx, var, get_binding(ctx, getattr(IdTag, var, :var_id)).name;
                                   is_used_undef=true)
     @ast ctx var [K"block"
         box := box_ex
@@ -389,8 +389,8 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             binfo.mod, binfo.name
         else
             # See note about using eval on Expr(:global/:const, GlobalRef(...))
-            @jl_assert ex[1].value isa GlobalRef ex[1]
-            ex[1].value.mod, String(ex[1].value.name)
+            @jl_assert getattr(Any, ex[1], :value) isa GlobalRef ex[1]
+            getattr(Any, ex[1], :value).mod, String(getattr(Any, ex[1], :value).name)
         end
         @ast ctx ex [K"unused_only" make_globaldecl(ctx, ex, mod, name, false)]
     elseif k == K"local"
@@ -408,7 +408,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
     elseif k == K"function_decl"
         func_name = ex[1]
         @jl_assert kind(func_name) == K"BindingId" ex
-        func_name_id = func_name.var_id
+        func_name_id = getattr(IdTag, func_name, :var_id)
         if haskey(ctx.closure_bindings, func_name_id)
             closure_info = get(ctx.closure_infos, func_name_id, nothing)
             needs_def = isnothing(closure_info)
@@ -471,7 +471,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             ]
         end
     elseif k == K"method" && kind(ex[1]) === K"BindingId" &&
-            haskey(ctx.closure_bindings, ex[1].var_id)
+            haskey(ctx.closure_bindings, getattr(IdTag, ex[1], :var_id))
         # rm method table argument if it's a closure id, since it's unnecessary
         # and requires the `(= id (new ...))` call to be lifted above the
         # method.  flisp might be messing up overlays when it does this, since
@@ -483,18 +483,18 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
     elseif k == K"function_type"
         func_name = ex[1]
         if kind(func_name) == K"BindingId" && get_binding(ctx, func_name).kind === :local
-            @jl_assert(haskey(ctx.closure_infos, func_name.var_id),
+            @jl_assert(haskey(ctx.closure_infos, getattr(IdTag, func_name, :var_id)),
                        (ex, "function_type of local without known closure type"))
-            ctx.closure_infos[func_name.var_id].type_name
+            ctx.closure_infos[getattr(IdTag, func_name, :var_id)].type_name
         else
             @ast ctx ex [K"call" "Typeof"::K"core" func_name]
         end
     elseif k == K"method_defs"
         name = ex[1]
         is_closure = kind(name) == K"BindingId" && get_binding(ctx, name).kind === :local
-        cap_rewrite = is_closure ? ctx.closure_infos[name.var_id] : nothing
+        cap_rewrite = is_closure ? ctx.closure_infos[getattr(IdTag, name, :var_id)] : nothing
         ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
-                                    ctx.closure_bindings, cap_rewrite, ex.lambda_bindings,
+                                    ctx.closure_bindings, cap_rewrite, getattr(LambdaBindings, ex, :lambda_bindings),
                                     ctx.is_toplevel_seq_point, ctx.toplevel_pure, ctx.toplevel_stmts,
                                     ctx.closure_infos)
         body = map_cl_convert(ctx2, ex[2], false)
@@ -513,7 +513,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             ]
         end
     elseif k == K"_opaque_closure"
-        closure_binds = ctx.closure_bindings[ex[1].var_id]
+        closure_binds = ctx.closure_bindings[getattr(IdTag, ex[1], :var_id)]
         field_syms, field_orig_bindings, field_inds, _field_is_box =
             closure_type_fields(ctx, ex, closure_binds, true)
 
@@ -553,7 +553,7 @@ end
 
 function closure_convert_lambda(ctx, ex)
     @jl_assert kind(ex) == K"lambda" ex
-    lambda_bindings = ex.lambda_bindings
+    lambda_bindings = getattr(LambdaBindings, ex, :lambda_bindings)
     interpolations = nothing
     if isnothing(ctx.capture_rewriting)
         # Global method which may capture locals
@@ -564,7 +564,7 @@ function closure_convert_lambda(ctx, ex)
     end
     ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
                                 ctx.closure_bindings, cap_rewrite, lambda_bindings,
-                                ex.is_toplevel_thunk, ctx.toplevel_pure && ex.toplevel_pure,
+                                getattr(Bool, ex, :is_toplevel_thunk), ctx.toplevel_pure && getattr(Bool, ex, :toplevel_pure),
                                 ctx.toplevel_stmts, ctx.closure_infos)
     lambda_children = SyntaxList(ctx)
     args = ex[1]
@@ -595,7 +595,7 @@ function closure_convert_lambda(ctx, ex)
         push!(lambda_children, _convert_closures(ctx2, ex[4]))
     end
 
-    lam = setattr!(mknode(ex, lambda_children), :lambda_bindings, lambda_bindings)
+    lam = setattr!(LambdaBindings, mknode(ex, lambda_children), :lambda_bindings, lambda_bindings)
     if !isnothing(interpolations) && !isempty(interpolations)
         @ast ctx ex [K"call"
             replace_captured_locals!::K"Value"
@@ -629,7 +629,7 @@ Invariants:
 ) where Attrs
     ctx_out = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
                                    ctx.closure_bindings, nothing,
-                                   ex.lambda_bindings,
+                                   getattr(LambdaBindings, ex, :lambda_bindings),
                                    false, true, SyntaxList(ctx.graph),
                                    Dict{IdTag,ClosureInfo{Attrs}}())
     ex_out = closure_convert_lambda(ctx_out, ex)

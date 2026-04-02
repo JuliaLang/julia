@@ -422,19 +422,29 @@ end
 
 @testset "jl_assert" begin
     st = @ast_ [K"function" "foo"::K"Identifier"]
-    err = try
-        JuliaLowering.@jl_assert(1 == 2, (st, "error message 1"), (st, "error message 2"))
-        nothing
-    catch err
-        err
+    if JL.DEBUG
+        err = try
+            JuliaLowering.@jl_assert(1 == 2, (st, "error message 1"), (st, "error message 2"))
+            nothing
+        catch err
+            err
+        end
+        @test err isa LoweringError
+        @test err.internal === true
+        @test length(err.sts) == 2
+        @test length(err.msgs) == 2
+        shown = sprint(show, err)
+        @test contains(shown, "error message 1")
+        @test contains(shown, "error message 2")
+    else
+        @test nothing !== try
+            JuliaLowering.@jl_assert false st
+        catch err
+            err
+        else
+            nothing
+        end
     end
-    @test err isa LoweringError
-    @test err.internal === true
-    @test length(err.sts) == 2
-    @test length(err.msgs) == 2
-    shown = sprint(show, err)
-    @test contains(shown, "error message 1")
-    @test contains(shown, "error message 2")
 end
 
 end

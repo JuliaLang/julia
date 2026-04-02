@@ -157,7 +157,7 @@ function _eval_dot(world::UInt, mod, ex::SyntaxTree)
         ex = ex[1]
     end
     kind(ex) in KSet"Identifier Symbol" && mod isa Module ?
-        Base.invoke_in_world(world, getproperty, mod, Symbol(ex.name_val)) :
+        Base.invoke_in_world(world, getproperty, mod, Symbol(getattr(String, ex, :name_val))) :
         nothing
 end
 
@@ -170,16 +170,17 @@ function eval_macro_name(ctx::MacroExpansionContext, mctx::MacroContext, ex0::Sy
     ex = expand_forms_1(ctx, ex0)
     try
         if kind(ex) === K"Value"
-            !(ex.value isa GlobalRef) ? ex.value :
+            v = getattr(Any, ex, :value)
+            !(v isa GlobalRef) ? v :
                 Base.invoke_in_world(ctx.macro_world, getglobal,
-                                     ex.value.mod, ex.value.name)
+                                     v.mod, v.name)
         elseif kind(ex) === K"Identifier"
-            layer = get(ex, :scope_layer, nothing)
+            layer = getattr(LayerId, ex, :scope_layer, nothing)
             if !isnothing(layer)
                 mod = ctx.scope_layers[layer].mod
             end
             Base.invoke_in_world(ctx.macro_world, getproperty,
-                                 mod, Symbol(ex.name_val))
+                                 mod, Symbol(getattr(String, ex, :name_val)))
         elseif kind(ex) === K"." &&
                 (ed = _eval_dot(ctx.macro_world, mod, ex); !isnothing(ed))
             ed
@@ -206,9 +207,9 @@ end
 # See also set_scope_layer()
 function set_macro_arg_hygiene(ctx, ex, layer_ids, layer_idx)
     k = kind(ex)
-    scope_layer = get(ex, :scope_layer, layer_ids[layer_idx])
+    scope_layer = getattr(LayerId, ex, :scope_layer, layer_ids[layer_idx])
     if is_leaf(ex)
-        setattr!(copy_node(ex), :scope_layer, scope_layer)
+        setattr!(LayerId, copy_node(ex), :scope_layer, scope_layer)
     else
         inner_layer_idx = k == K"escape" ? layer_idx - 1 : layer_idx
         if k == K"escape" && inner_layer_idx < 1
@@ -221,7 +222,7 @@ function set_macro_arg_hygiene(ctx, ex, layer_ids, layer_idx)
         end
         node = mapchildren(e->set_macro_arg_hygiene(
             ctx, e, layer_ids, inner_layer_idx), ctx, ex)
-        setattr!(node, :scope_layer, scope_layer)
+        setattr!(LayerId, node, :scope_layer, scope_layer)
     end
 end
 
@@ -277,7 +278,7 @@ function expand_macro(ctx, ex)
     macfunc = eval_macro_name(ctx, mctx, macname)
     raw_args = ex[3:end]
     macro_loc = if kind(ex[2]) === K"Value"
-        loc = ex[2].value
+        loc = getattr(Any, ex[2], :value)
         if loc isa LineNumberNode
         # Some macros, e.g. @cmd, don't play nicely with file == nothing
         isnothing(loc.file) ? LineNumberNode(loc.line, :none) : loc
@@ -312,7 +313,7 @@ function expand_macro(ctx, ex)
             rethrow(newexc)
         end
         if expanded isa SyntaxTree
-            if !is_compatible_graph(ctx, expanded)
+            if expanded._graph !== ctx.graph
                 # If the macro has produced syntax outside the macro context,
                 # copy it over. TODO: Do we expect this always to happen?  What
                 # is the API for access to the macro expansion context?
@@ -331,7 +332,7 @@ function expand_macro(ctx, ex)
         if length(raw_args) >= 1 && kind(raw_args[1]) === K"VERSION"
             # Hack: see jl_invoke_julia_macro.  We may see an extra argument
             # depending on who parsed this macrocall.
-            macro_args[1] = Core.MacroSource(macro_loc, raw_args[1].value)
+            macro_args[1] = Core.MacroSource(macro_loc, getattr(Any, raw_args[1], :value))
         end
 
         for arg in raw_args
@@ -386,13 +387,13 @@ function append_sourceref(ctx, ex, secondary_prov)
         if kind(ex) == K"macrocall"
             copy_node(ex)
         else
-            cs = map(e->append_sourceref(ctx, e, secondary_prov)._id, children(ex))
+            cs = mapsyntax(e->append_sourceref(ctx, e, secondary_prov)._id, children(ex))
             mknode(ex, cs)
         end
     else
         copy_node(ex)
     end
-    setattr!(out, :source, _unpack_srcref(syntax_graph(ctx), srcref))
+    setattr!(SourceAttrType, out, :source, _unpack_srcref(syntax_graph(ctx), srcref))
 end
 
 function remove_scope_layer!(ex)
@@ -401,7 +402,7 @@ function remove_scope_layer!(ex)
             remove_scope_layer!(c)
         end
     end
-    JuliaSyntax.deleteattr!(ex, :scope_layer)
+    JuliaSyntax.deleteattr!(LayerId, ex, :scope_layer)
     ex
 end
 
@@ -418,9 +419,9 @@ identifier with the expansion it came from.
 function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
     k = kind(ex)
     if k == K"Identifier"
-        scope_layer = get(ex, :scope_layer, current_layer_id(ctx))
+        scope_layer = getattr(LayerId, ex, :scope_layer, current_layer_id(ctx))
         out = mkleaf(ex)
-        setattr!(out, :scope_layer, scope_layer)
+        setattr!(LayerId, out, :scope_layer, scope_layer)
     elseif k == K"escape"
         if numchildren(ex) !== 1
             throw(LoweringError(ex, "`escape` requires one argument"))
@@ -433,10 +434,10 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         push!(ctx.scope_layer_stack, top_layer)
         escaped_ex
     elseif k == K"hygienic-scope"
-        if !(2 <= numchildren(ex) <= 3 && ex[2].value isa Module)
+        if !(2 <= numchildren(ex) <= 3 && getattr(Any, ex[2], :value) isa Module)
             throw(LoweringError(ex,"`hygienic-scope` requires an AST and a module"))
         end
-        new_layer = ScopeLayer(length(ctx.scope_layers)+1, ex[2].value,
+        new_layer = ScopeLayer(length(ctx.scope_layers)+1, getattr(Any, ex[2], :value),
                                current_layer_id(ctx), true, false)
         push!(ctx.scope_layers, new_layer)
         push!(ctx.scope_layer_stack, new_layer.id)
@@ -464,8 +465,8 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         # if this is a form that requires resolving some identifier, add the
         # scope layer.  if this is an unknown form to be cleaned up by AST
         # conversion, save the scope layer just in case.
-        layerid = get(ex, :scope_layer, current_layer_id(ctx))
-        setattr(mapchildren(e->expand_forms_1(ctx,e), ctx, ex),
+        layerid = getattr(LayerId, ex, :scope_layer, current_layer_id(ctx))
+        setattr(LayerId, mapchildren(e->expand_forms_1(ctx,e), ctx, ex),
                 :scope_layer, layerid)
     elseif is_leaf(ex)
         ex
@@ -474,13 +475,15 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
     end
 end
 
-ensure_macro_attributes!(graph) = ensure_attributes!(
-    graph;
-    var_id=IdTag,
-    scope_layer=LayerId,
-    __macro_ctx__=Nothing,
-    meta=CompileHints,
-    (DEBUG ? (:jl_source=>LineNumberNode,) : ())...)
+function ensure_macro_attributes!(graph)
+    g2 = ensure_attributes!(
+        graph;
+        var_id=IdTag,
+        scope_layer=LayerId,
+        __macro_ctx__=Nothing,
+        meta=CompileHints)
+    DEBUG ? ensure_attributes!(g2; jl_source=LineNumberNode) : g2
+end
 
 @fzone "JL: macroexpand" function expand_forms_1(mod::Module, ex::SyntaxTree, expr_compat_mode::Bool, macro_world::UInt)
     if kind(ex) == K"local"

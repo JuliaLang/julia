@@ -3,8 +3,8 @@
 using JuliaSyntax
 using JuliaLowering
 
-using JuliaSyntax: ensure_attributes
-using JuliaLowering: @ast, SyntaxGraph, SyntaxTree, child, children, is_leaf,
+using JuliaSyntax: ensure_attributes, getattr
+using JuliaLowering: @ast, IdTag, SyntaxGraph, SyntaxTree, child, children, is_leaf,
     lookup_binding, makenode, newnode!, numchildren, setattr!, setchildren!, showprov,
     sourceref
 
@@ -12,7 +12,7 @@ using JuliaSyntaxFormatter
 
 # Extract variable kind for highlighting purposes
 function var_kind(ctx, ex)
-    id = get(ex, :var_id, nothing)
+    id = getattr(IdTag, ex, :var_id, nothing)
     if isnothing(id)
         return nothing
     end
@@ -24,7 +24,7 @@ end
 
 # Extract module of globals for highlighting
 function var_mod(ctx, ex)
-    id = get(ex, :var_id, nothing)
+    id = getattr(IdTag, ex, :var_id, nothing)
     if isnothing(id)
         return nothing
     end
@@ -203,13 +203,13 @@ eval(JuliaLowering.@SyntaxTree :(baremodule M
     end
 
     macro K_str(str)
-        JuliaSyntax.Kind(str[1].value)
+        JuliaSyntax.Kind(getattr(Any, str[1], :value))
     end
 
     # Recursive macro call
     macro recursive(N)
         Nval = if kind(N) == K"Integer" || kind(N) == K"Value"
-            N.value
+            getattr(Any, N, :value)
         end
         if !(Nval isa Integer)
             throw(MacroExpansionError(N, "argument must be an integer"))

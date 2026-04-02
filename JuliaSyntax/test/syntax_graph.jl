@@ -1,52 +1,55 @@
-using .JuliaSyntax: SyntaxGraph, SyntaxTree, SyntaxList, freeze_attrs, unfreeze_attrs, ensure_attributes, ensure_attributes!, delete_attributes, copy_ast, attrdefs, @stm, NodeId, SourceRef, SourceAttrType, Kind, syntax_graph
+using .JuliaSyntax: SyntaxGraph, SyntaxTree, SyntaxList, ensure_attributes, ensure_attributes!, delete_attributes, copy_ast, attrdefs, @stm, NodeId, SourceRef, SourceAttrType, Kind, syntax_graph, getattr
 
 @testset "SyntaxGraph attrs" begin
-    st = parsestmt(SyntaxTree, "function foo end")
-    g_init = unfreeze_attrs(st._graph)
-    gf1 = freeze_attrs(g_init)
-    gu1 = unfreeze_attrs(gf1)
+    g_dict = SyntaxGraph()
+    g_nt = ensure_attributes(
+        SyntaxGraph(Vector{UnitRange{Int}}(), Vector{NodeId}(), (;)),
+        kind=Kind,
+        source=SourceAttrType,
+        syntax_flags=UInt16,
+        value=Any,
+        name_val=String,
+        mod=Module)
 
     # Check that a default graph has required attrs
-    g_empty = SyntaxGraph()
-    @test (:kind=>Kind) in attrdefs(g_empty)
-    @test (:source=>SourceAttrType) in attrdefs(g_empty)
-    @test (:value=>Any) in attrdefs(g_empty)
-    @test (:name_val=>String) in attrdefs(g_empty)
-
-    # Check that freeze/unfreeze do their jobs
-    @test gf1.attributes isa NamedTuple
-    @test gu1.attributes isa Dict
-    @test Set(keys(gf1.attributes)) == Set(keys(gu1.attributes))
+    @test (:kind=>Any) in attrdefs(g_dict)
+    @test (:source=>Any) in attrdefs(g_dict)
+    @test (:value=>Any) in attrdefs(g_dict)
+    @test (:name_val=>Any) in attrdefs(g_dict)
+    @test (:kind=>Kind) in attrdefs(g_nt)
+    @test (:source=>SourceAttrType) in attrdefs(g_nt)
+    @test (:value=>Any) in attrdefs(g_nt)
+    @test (:name_val=>String) in attrdefs(g_nt)
 
     # ensure_attributes
-    gf2 = ensure_attributes(gf1, test_attr=Symbol, foo=Type)
-    gu2 = ensure_attributes(gu1, test_attr=Symbol, foo=Type)
+    g_nt2 = ensure_attributes(g_nt, test_attr=Symbol, foo=Type)
+    g_dict2 = ensure_attributes(g_dict, test_attr=Symbol, foo=Type)
     # returns a graph with the same attribute storage
-    @test gf2.attributes isa NamedTuple
-    @test gu2.attributes isa Dict
+    @test g_nt2.attributes isa NamedTuple
+    @test g_dict2.attributes isa Dict
     # does its job
-    @test (:test_attr=>Symbol) in attrdefs(gf2)
-    @test (:foo=>Type) in attrdefs(gf2)
-    @test Set(keys(gf2.attributes)) == Set(keys(gu2.attributes))
+    @test (:test_attr=>Symbol) in attrdefs(g_nt2)
+    @test (:foo=>Type) in attrdefs(g_nt2)
+    @test Set(keys(g_nt2.attributes)) == Set(keys(g_dict2.attributes))
     # no mutation
-    @test !((:test_attr=>Symbol) in attrdefs(gf1))
-    @test !((:foo=>Type) in attrdefs(gf1))
-    @test Set(keys(gf1.attributes)) == Set(keys(gu1.attributes))
+    @test !((:test_attr=>Symbol) in attrdefs(g_nt))
+    @test !((:foo=>Type) in attrdefs(g_nt))
+    @test Set(keys(g_nt.attributes)) == Set(keys(g_dict.attributes))
 
     # delete_attributes
-    gf3 = delete_attributes(gf2, :test_attr, :foo)
-    gu3 = delete_attributes(gu2, :test_attr, :foo)
+    g_nt3 = delete_attributes(g_nt2, :test_attr, :foo)
+    g_dict3 = delete_attributes(g_dict2, :test_attr, :foo)
     # returns a graph with the same attribute storage
-    @test gf3.attributes isa NamedTuple
-    @test gu3.attributes isa Dict
+    @test g_nt3.attributes isa NamedTuple
+    @test g_dict3.attributes isa Dict
     # does its job
-    @test !((:test_attr=>Symbol) in attrdefs(gf3))
-    @test !((:foo=>Type) in attrdefs(gf3))
-    @test Set(keys(gf3.attributes)) == Set(keys(gu3.attributes))
+    @test !((:test_attr=>Symbol) in attrdefs(g_nt3))
+    @test !((:foo=>Type) in attrdefs(g_nt3))
+    @test Set(keys(g_nt3.attributes)) == Set(keys(g_dict3.attributes))
     # no mutation
-    @test (:test_attr=>Symbol) in attrdefs(gf2)
-    @test (:foo=>Type) in attrdefs(gf2)
-    @test Set(keys(gf2.attributes)) == Set(keys(gu2.attributes))
+    @test (:test_attr=>Symbol) in attrdefs(g_nt2)
+    @test (:foo=>Type) in attrdefs(g_nt2)
+    @test Set(keys(g_nt2.attributes)) == Set(keys(g_dict2.attributes))
 end
 
 @testset "SyntaxTree parsing" begin
@@ -60,15 +63,16 @@ end
 @testset "SyntaxTree utils" begin
     "For filling required attrs in graphs created by hand"
     function testgraph(edge_ranges, edges, more_attrs...)
-        kinds = Dict(map(i->(i=>K"block"), eachindex(edge_ranges)))
-        sources = Dict{Int, SourceAttrType}(
+        kinds = Dict{NodeId, Any}(map(i->(i=>K"block"), eachindex(edge_ranges)))
+        sources = Dict{NodeId, Any}(
             map(i->(i=>LineNumberNode(i)), eachindex(edge_ranges)))
-        orig = Dict(map(i->(i=>i), eachindex(edge_ranges)))
+        orig = Dict{NodeId, Any}(map(i->(i=>i), eachindex(edge_ranges)))
         SyntaxGraph(
             edge_ranges,
             edges,
-            Dict(:kind => kinds, :source => sources,
-                 :orig => orig, more_attrs...))
+            Dict{Symbol, Dict{NodeId, Any}}(
+                :kind => kinds, :source => sources,
+                :orig => orig, more_attrs...))
     end
 
     @testset "copy_ast" begin
@@ -86,18 +90,18 @@ end
         @test length(g.edge_ranges) === 18
         @test st._id != stcopy._id
         @test st ≈ stcopy
-        @test st.source !== stcopy.source
-        @test st.source[1] !== stcopy.source[1]
-        @test st.source[1][1] !== stcopy.source[1][1]
+        @test getattr(SourceAttrType, st, :source) !== getattr(SourceAttrType, stcopy, :source)
+        @test getattr(SourceAttrType, st, :source)[1] !== getattr(SourceAttrType, stcopy, :source)[1]
+        @test getattr(SourceAttrType, st, :source)[1][1] !== getattr(SourceAttrType, stcopy, :source)[1][1]
 
         stcopy2 = copy_ast(g, st; copy_source=false)
         # Only nodes 1-3 should be copied
         @test length(g.edge_ranges) === 21
         @test st._id != stcopy2._id
         @test st ≈ stcopy2
-        @test st.source === stcopy2.source
-        @test st.source[1] === stcopy2.source[1]
-        @test st.source[1][1] === stcopy2.source[1][1]
+        @test getattr(SourceAttrType, st, :source) === getattr(SourceAttrType, stcopy2, :source)
+        @test getattr(SourceAttrType, st, :source)[1] === getattr(SourceAttrType, stcopy2, :source)[1]
+        @test getattr(SourceAttrType, st, :source)[1][1] === getattr(SourceAttrType, stcopy2, :source)[1][1]
 
         # Copy into a new graph
         new_g = ensure_attributes!(SyntaxGraph(); attrdefs(g)...)
@@ -121,8 +125,8 @@ end
         @test length(stu._graph.edge_ranges) == 5
         @test length(stu._graph.edges) == 4
         # Properties of node 4 should be preserved
-        @test 4 == stu[1][1].orig == stu[2][1].orig
-        @test st[1][1].source == stu[1][1].source == stu[2][1].source
+        @test 4 == getattr(Any, stu[1][1], :orig) == getattr(Any, stu[2][1], :orig)
+        @test getattr(SourceAttrType, st[1][1], :source) == getattr(SourceAttrType, stu[1][1], :source) == getattr(SourceAttrType, stu[2][1], :source)
         @test stu[1][1]._id != stu[2][1]._id
 
         #           +-> 5
@@ -143,7 +147,7 @@ end
         @test length(stu._graph.edge_ranges) == 10
         @test length(stu._graph.edges) == 9
         # the four copies of node 6 should have attrs identical to the original and distinct ids
-        @test 6 == stu[1][2].orig == stu[2][1][1].orig == stu[3][1].orig == stu[3][2].orig
+        @test 6 == getattr(Any, stu[1][2], :orig) == getattr(Any, stu[2][1][1], :orig) == getattr(Any, stu[3][1], :orig) == getattr(Any, stu[3][2], :orig)
         @test stu[1][2]._id != stu[2][1][1]._id != stu[3][1]._id != stu[3][2]._id
 
         # 1 -+-> 2 ->-> 4 -+----> 5 ->-> 7
@@ -159,11 +163,11 @@ end
         @test length(stu._graph.edge_ranges) == 15
         @test length(stu._graph.edges) == 14
         # attrs of nodes 4-7
-        @test 4 == stu[1][1].orig == stu[2][1].orig
-        @test 5 == stu[1][1][1].orig == stu[2][1][1].orig
-        @test 6 == stu[1][1][2].orig == stu[2][1][2].orig == stu[2][2].orig
-        @test 7 == stu[1][1][1][1].orig == stu[1][1][2][1].orig ==
-            stu[2][1][1][1].orig == stu[2][1][2][1].orig == stu[2][2][1].orig
+        @test 4 == getattr(Any, stu[1][1], :orig) == getattr(Any, stu[2][1], :orig)
+        @test 5 == getattr(Any, stu[1][1][1], :orig) == getattr(Any, stu[2][1][1], :orig)
+        @test 6 == getattr(Any, stu[1][1][2], :orig) == getattr(Any, stu[2][1][2], :orig) == getattr(Any, stu[2][2], :orig)
+        @test 7 == getattr(Any, stu[1][1][1][1], :orig) == getattr(Any, stu[1][1][2][1], :orig) ==
+            getattr(Any, stu[2][1][1][1], :orig) == getattr(Any, stu[2][1][2][1], :orig) == getattr(Any, stu[2][2][1], :orig)
         # ensure no duplication
         @test stu[1][1][1][1]._id != stu[1][1][2][1]._id !=
             stu[2][1][1][1]._id != stu[2][1][2][1]._id != stu[2][2][1]._id
@@ -178,10 +182,10 @@ end
         stp = JuliaSyntax.prune(st)
         @test st ≈ stp
         @test length(stp._graph.edge_ranges) === 4
-        @test stp.source == LineNumberNode(1)
-        @test stp[1].source == LineNumberNode(2)
-        @test stp[2].source == LineNumberNode(3)
-        @test stp[2][1].source == LineNumberNode(4)
+        @test getattr(SourceAttrType, stp, :source) == LineNumberNode(1)
+        @test getattr(SourceAttrType, stp[1], :source) == LineNumberNode(2)
+        @test getattr(SourceAttrType, stp[2], :source) == LineNumberNode(3)
+        @test getattr(SourceAttrType, stp[2][1], :source) == LineNumberNode(4)
 
         # (also checks that the last prune didn't destroy the graph)
         # 1 -+-> 2         5 --> 6
@@ -191,7 +195,7 @@ end
         stp = JuliaSyntax.prune(st)
         @test st ≈ stp
         @test length(stp._graph.edge_ranges) === 1
-        @test stp.orig == 7
+        @test getattr(Any, stp, :orig) == 7
 
         # 1 -+->[2]->-> 4
         #    |      |
@@ -201,8 +205,8 @@ end
         stp = JuliaSyntax.prune(st)
         @test st ≈ stp
         @test length(stp._graph.edge_ranges) === 2
-        @test stp.orig == 2
-        @test stp[1].orig == 4
+        @test getattr(Any, stp, :orig) == 2
+        @test getattr(Any, stp[1], :orig) == 4
 
         #  9 -->[1]--> 5    src(1) = 2
         # 10 --> 2 --> 6    src(2) = 3
@@ -218,37 +222,37 @@ end
         @test st ≈ stp
         # 1, 5, 4, 8 should remain
         @test length(stp._graph.edge_ranges) === 4
-        @test stp.source isa NodeId
-        orig_4 = SyntaxTree(stp._graph, stp.source)
-        @test orig_4.source === LineNumberNode(4)
+        @test getattr(SourceAttrType, stp, :source) isa NodeId
+        orig_4 = SyntaxTree(stp._graph, getattr(SourceAttrType, stp, :source))
+        @test getattr(SourceAttrType, orig_4, :source) === LineNumberNode(4)
         @test numchildren(orig_4) === 1
-        @test orig_4[1].source === LineNumberNode(8)
-        @test stp[1].source === LineNumberNode(5)
+        @test getattr(SourceAttrType, orig_4[1], :source) === LineNumberNode(8)
+        @test getattr(SourceAttrType, stp[1], :source) === LineNumberNode(5)
 
         # Try again with node 3 explicitly marked reachable
         stp = JuliaSyntax.prune(st, keep=SyntaxList(g, NodeId[3, 4]))
         @test st ≈ stp
         # 1, 5, 4, 8, and now 3, 7 as well
         @test length(stp._graph.edge_ranges) === 6
-        @test stp.source isa NodeId
-        @test stp[1].source === LineNumberNode(5)
+        @test getattr(SourceAttrType, stp, :source) isa NodeId
+        @test getattr(SourceAttrType, stp[1], :source) === LineNumberNode(5)
 
-        orig_3 = SyntaxTree(stp._graph, stp.source)
-        @test orig_3.source isa NodeId
-        orig_4 = SyntaxTree(stp._graph, orig_3.source)
-        @test orig_4.source === LineNumberNode(4)
+        orig_3 = SyntaxTree(stp._graph, getattr(SourceAttrType, stp, :source))
+        @test getattr(SourceAttrType, orig_3, :source) isa NodeId
+        orig_4 = SyntaxTree(stp._graph, getattr(SourceAttrType, orig_3, :source))
+        @test getattr(SourceAttrType, orig_4, :source) === LineNumberNode(4)
 
         @test numchildren(orig_3) === 1
         @test numchildren(orig_4) === 1
-        @test orig_3[1].source === LineNumberNode(7)
-        @test orig_4[1].source === LineNumberNode(8)
+        @test getattr(SourceAttrType, orig_3[1], :source) === LineNumberNode(7)
+        @test getattr(SourceAttrType, orig_4[1], :source) === LineNumberNode(8)
 
         # Try again with no node provenance
         stp = JuliaSyntax.prune(st, keep=nothing)
         @test st ≈ stp
         @test length(stp._graph.edge_ranges) === 2
-        @test stp.source === LineNumberNode(4)
-        @test stp[1].source === LineNumberNode(5)
+        @test getattr(SourceAttrType, stp, :source) === LineNumberNode(4)
+        @test getattr(SourceAttrType, stp[1], :source) === LineNumberNode(5)
 
         # test with real parsed, then copied output---not many properties we can
         # check without fragile tests, but there are some.
@@ -260,29 +264,25 @@ end
         @test st0_dup2 ≈ stp
         @test length(stp._graph.edge_ranges) <
             length(st0_dup2._graph.edge_ranges)
-        @test stp.source isa NodeId
-        @test SyntaxTree(stp._graph, stp.source) ≈ st0
+        @test getattr(SourceAttrType, stp, :source) isa NodeId
+        @test SyntaxTree(stp._graph, getattr(SourceAttrType, stp, :source)) ≈ st0
         @test sourcetext(stp) == code
         # try without preserving st0
         stp = JuliaSyntax.prune(st0_dup2, keep=nothing)
         @test st0_dup2 ≈ stp
         @test length(stp._graph.edge_ranges) <
             length(st0_dup2._graph.edge_ranges)
-        @test stp.source isa SourceRef
+        @test getattr(SourceAttrType, stp, :source) isa SourceRef
         @test sourcetext(stp) == code
     end
 
     @testset "annotate_parent" begin
-        chk_parent(st, parent) = get(st, :parent, nothing) === parent &&
+        chk_parent(st, parent) = getattr(NodeId, st, :parent, nothing) === parent &&
             all(c->chk_parent(c, st._id), children(st))
         # 1 -+-> 2 ->-> 4 --> 5
         #    |      |
         #    +-> 3 -+
         g = testgraph([1:2, 3:3, 4:4, 5:5, 0:-1], [2, 3, 4, 4, 5])
-        st = JuliaSyntax.annotate_parent!(SyntaxTree(g, 1))
-        @test chk_parent(st, nothing)
-        # NamedTuple-based attrs
-        g = JuliaSyntax.freeze_attrs(testgraph([1:2, 3:3, 4:4, 5:5, 0:-1], [2, 3, 4, 4, 5]))
         st = JuliaSyntax.annotate_parent!(SyntaxTree(g, 1))
         @test chk_parent(st, nothing)
     end

@@ -72,14 +72,14 @@ function lower_step(iter, mod, world=Base.get_world_counter())
     elseif k == K"module"
         (version, notbare, name, body) = @stm ex begin
             [K"module" version nb_st name body] ->
-                (version.value, nb_st.value, name, body)
+                (getattr(Any, version, :value), getattr(Any, nb_st, :value), name, body)
             [K"module" nb_st name body] ->
-                (nothing, nb_st.value, name, body)
+                (nothing, getattr(Any, nb_st, :value), name, body)
         end
         if kind(name) != K"Identifier"
             throw(LoweringError(name, "Expected module name"))
         end
-        newmod_name = Symbol(name.name_val)
+        newmod_name = Symbol(getattr(String, name, :name_val))
         loc = source_location(LineNumberNode, ex)
         push!(iter.todo, (body, true, 1))
         return Core.svec(:begin_module, version, newmod_name, notbare, loc)
@@ -160,11 +160,11 @@ end
 function ir_debug_info_state(ex)
     e1 = first(flattened_provenance(ex))
     topfile = filename(e1)
-    [(topfile, [], Vector{Int32}())]
+    Tuple{String, Vector{Any}, Vector{Int32}}[(topfile, [], Vector{Int32}())]
 end
 
 function add_ir_debug_info!(current_codelocs_stack, stmt)
-    locstk = [(filename(e), source_location(e)[1]) for e in flattened_provenance(stmt)]
+    locstk = Tuple{String, Int32}[(filename(e), source_location(e)[1]) for e in flattened_provenance(stmt)]
     for j in 1:length(locstk)
         if j === 1 && current_codelocs_stack[j][1] != locstk[j][1]
             # dilemma: the filename stack here shares no prefix with that of the
@@ -326,10 +326,10 @@ end
 function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     k = kind(ex)
     if is_literal(k)
-        ex.value
+        getattr(Any, ex, :value)
     elseif k == K"core"
-        name = ex.name_val
-        if name == "nothing"
+        name = getattr(String, ex, :name_val)
+        if name === "nothing"
             # Translate Core.nothing into literal `nothing`s (flisp uses a
             # special form (null) for this during desugaring, etc)
             nothing
@@ -337,24 +337,24 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
             GlobalRef(Core, Symbol(name))
         end
     elseif k == K"top"
-        GlobalRef(Base, Symbol(ex.name_val))
+        GlobalRef(Base, Symbol(getattr(String, ex, :name_val)))
     elseif k == K"globalref"
-        GlobalRef(ex.mod, Symbol(ex.name_val))
+        GlobalRef(getattr(Module, ex, :mod), Symbol(getattr(String, ex, :name_val)))
     elseif k == K"Identifier"
         # Implicitly refers to name in parent module
         # TODO: Should we even have plain identifiers at this point or should
         # they all effectively be resolved into GlobalRef earlier?
-        Symbol(ex.name_val)
+        Symbol(getattr(String, ex, :name_val))
     elseif k == K"SourceLocation"
         QuoteNode(source_location(LineNumberNode, ex))
     elseif k == K"Symbol"
-        QuoteNode(Symbol(ex.name_val))
+        QuoteNode(Symbol(getattr(String, ex, :name_val)))
     elseif k == K"slot"
-        Core.SlotNumber(ex.var_id)
+        Core.SlotNumber(getattr(IdTag, ex, :var_id))
     elseif k == K"static_parameter"
-        Expr(:static_parameter, ex.var_id)
+        Expr(:static_parameter, getattr(IdTag, ex, :var_id))
     elseif k == K"SSAValue"
-        Core.SSAValue(ex.var_id + stmt_offset)
+        Core.SSAValue(getattr(IdTag, ex, :var_id) + stmt_offset)
     elseif k == K"return"
         Core.ReturnNode(_to_lowered_expr(ex[1], stmt_offset))
     elseif k == K"inert"
@@ -362,20 +362,20 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     elseif k == K"inert_syntaxtree"
         ex[1]
     elseif k == K"code_info"
-        ir = to_code_info(ex[1], ex.slots, ex.meta)
-        if ex.is_toplevel_thunk
+        ir = to_code_info(ex[1], getattr(Vector{Slot}, ex, :slots), getattr(CompileHints, ex, :meta))
+        if getattr(Bool, ex, :is_toplevel_thunk)
             Expr(:thunk, ir) # TODO: Maybe nice to just return a CodeInfo here?
         else
             ir
         end
     elseif k == K"Value"
-        ex.value isa LineNumberNode ? QuoteNode(ex.value) : ex.value
+        let v = getattr(Any, ex, :value); v isa LineNumberNode ? QuoteNode(v) : v; end
     elseif k == K"goto"
-        Core.GotoNode(ex[1].id + stmt_offset)
+        Core.GotoNode(getattr(Int, ex[1], :id) + stmt_offset)
     elseif k == K"gotoifnot"
-        Core.GotoIfNot(_to_lowered_expr(ex[1], stmt_offset), ex[2].id + stmt_offset)
+        Core.GotoIfNot(_to_lowered_expr(ex[1], stmt_offset), getattr(Int, ex[2], :id) + stmt_offset)
     elseif k == K"enter"
-        catch_idx = ex[1].id + stmt_offset
+        catch_idx = getattr(Int, ex[1], :id) + stmt_offset
         numchildren(ex) == 1 ?
             Core.EnterNode(catch_idx) :
             Core.EnterNode(catch_idx, _to_lowered_expr(ex[2], stmt_offset))

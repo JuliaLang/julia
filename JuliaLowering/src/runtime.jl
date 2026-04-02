@@ -115,7 +115,7 @@ function interpolate_ast(::Type{SyntaxTree}, ex::SyntaxTree, values...)
     graph = nothing
     for vals in values
         for v in vals
-            if v isa SyntaxTree && hasattr(syntax_graph(v), :__macro_ctx__)
+            if v isa SyntaxTree && hasattr(Nothing, syntax_graph(v), :__macro_ctx__)
                 graph = syntax_graph(v)
                 break
             end
