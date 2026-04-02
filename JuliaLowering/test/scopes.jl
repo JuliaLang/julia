@@ -343,6 +343,84 @@ end
     end
 end
 
+module ambiguous_local
+    global x::Int = 0
+end
+
+function resolve_and_get_bindings(
+        mod::Module, ex;
+        world::UInt = Base.get_world_counter(),
+        soft_scope::Union{Nothing,Bool} = nothing,
+    )
+    est = JuliaLowering.expr_to_est(ex)
+    ctx1, ex1 = JuliaLowering.expand_forms_1(mod, est, false, world)
+    ctx2, ex2 = JuliaLowering.expand_forms_2(ctx1, ex1)
+    ctx3, _ex3 = JuliaLowering.resolve_scopes(ctx2, ex2; soft_scope)
+    return ctx3.bindings.info
+end
+
+# When a toplevel assignment precedes a permeable scope (for/while/try) within
+# the same toplevel thunk (e.g. inside a begin block), the inner assignment
+# should be marked as ambiguous_local, just like the case where the global
+# already existed before the expression was lowered.
+@testset "is_ambiguous_local for toplevel-assigned globals in begin blocks" begin
+    # Assignment in for loop within begin block after toplevel assignment
+    let bindings = resolve_and_get_bindings(ambiguous_local, :(for _ = 1:10; x = 1; end))
+        binfo = only(filter(b->b.name=="x", bindings))
+        @test binfo.kind === :local
+        @test binfo.is_ambiguous_local
+    end
+
+    # while loop
+    let bindings = resolve_and_get_bindings(ambiguous_local, :(while x < 5; x += 1; break; end))
+        binfos = filter(b->b.name=="x", bindings)
+        @test length(binfos) == 2
+        lbinfo = only(filter(b->b.kind==:local, binfos))
+        @test lbinfo.is_ambiguous_local
+        gbinfo = only(filter(b->b.kind==:global, binfos))
+        @test !gbinfo.is_ambiguous_local
+    end
+
+    # No ambiguity inside a function (hard scope)
+    let bindings = resolve_and_get_bindings(ambiguous_local, :(function f()
+            for _ = 1:10
+                x = 1
+            end
+        end))
+        binfo = only(filter(b->b.name=="x", bindings))
+        @test binfo.kind === :local
+        @test !binfo.is_ambiguous_local
+    end
+
+    # No ambiguity when shadowing global variable does not exist
+    let bindings = resolve_and_get_bindings(ambiguous_local, :(for _ = 1:10; y = 1; end))
+        binfo = only(filter(b->b.name=="y", bindings))
+        @test !binfo.is_ambiguous_local
+    end
+
+    # Explicit `global` should not produce ambiguous local
+    let bindings = resolve_and_get_bindings(ambiguous_local, :(for _ = 1:10; global x = 1; end))
+        binfo = only(filter(b->b.name=="x", bindings))
+        @test binfo.kind === :global
+        @test !binfo.is_ambiguous_local
+    end
+
+    # Block containing global assignment
+    let bindings = resolve_and_get_bindings(Module(), quote
+            x = 0
+            for _ = 1:10
+                x = 1
+            end
+        end)
+        binfos = filter(b->b.name=="x", bindings)
+        @test length(binfos) == 2
+        lbinfo = only(filter(b->b.kind==:local, binfos))
+        @test lbinfo.is_ambiguous_local
+        gbinfo = only(filter(b->b.kind==:global, binfos))
+        @test !gbinfo.is_ambiguous_local
+    end
+end
+
 # Note: Certain flisp (un)hygiene behaviour is yet to be implemented.
 # In flisp, with no escaping:
 # - Top-level functions are unhygienic and declared in the macro's module

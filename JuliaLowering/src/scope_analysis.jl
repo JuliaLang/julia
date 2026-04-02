@@ -320,7 +320,7 @@ function enter_scope!(ctx, ex)
                 # assign-existing-global if this is an explicit global that
                 # isn't at top level, or if the soft scope exception applies
             else
-                declare_in_scope!(ctx, scope, ex, :local)
+                declare_in_scope!(ctx, scope, ex, :local; is_ambiguous_local = scope.is_permeable)
             end
         elseif b.kind === :static_parameter
             throw(LoweringError(ex, "cannot overwrite a static parameter"))
