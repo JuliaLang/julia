@@ -82,7 +82,7 @@ let
 end
 """)
 @test kind(ex) == K"Value"
-@test ex.value == 123
+@test getattr(Any, ex, :value) == 123
 
 # Test that interpolation with field access works
 # (the field name can be interpolated into
@@ -94,7 +94,7 @@ end
 """)
 @test kind(ex[2]) == K"inert"
 @test kind(ex[2][1]) == K"Identifier"
-@test ex[2][1].name_val == "a"
+@test getattr(String, ex[2][1], :name_val) == "a"
 
 # Test quoted property access syntax like `Core.:(foo)` and `Core.:(!==)`
 @test JuliaLowering.include_string(test_mod, """
@@ -178,7 +178,7 @@ end
 Base.eval(test_mod, :(xxx = 111))
 dinterp_eval = JuliaLowering.eval(test_mod, double_interp_ex)
 @test kind(dinterp_eval) == K"Value"
-@test dinterp_eval.value == 111
+@test getattr(Any, dinterp_eval, :value) == 111
 
 multi_interp_ex = JuliaLowering.include_string(test_mod, raw"""
 let

@@ -14,7 +14,7 @@ end
 
 function NameKey(ex::SyntaxTree)
     @jl_assert kind(ex) === K"Identifier" ex
-    NameKey(ex.name_val, ex.scope_layer)
+    NameKey(getattr(String, ex, :name_val), getattr(LayerId, ex, :scope_layer))
 end
 
 struct ScopeInfo
@@ -50,13 +50,13 @@ function ScopeInfo(ctx, parent_id, ex::SyntaxTree)
     if parent_id == 0
         @jl_assert kind(ex) === K"lambda" ex
         lambda_id = id
-        is_permeable = ex.is_toplevel_thunk
+        is_permeable = getattr(Bool, ex, :is_toplevel_thunk)
         is_lifted = false
     else
         parent = ctx.scopes[parent_id]
         lambda_id = kind(ex) === K"lambda" ? id : parent.lambda_id
         is_permeable = (kind(ex) === K"scope_block" &&
-            ex.scope_type === :neutral && parent_id !== 0 && parent.is_permeable)
+            getattr(Symbol, ex, :scope_type) === :neutral && parent_id !== 0 && parent.is_permeable)
         is_lifted = kind(ex) === K"method_defs" ||
             (kind(ex) !== K"lambda" && parent.is_lifted)
     end
@@ -113,7 +113,7 @@ _var_str(v) = v === :local ? "local variable" :
 # variable usually can't be two things in one scope, but flisp has quirks.
 function maybe_declare_in_scope!(ctx, scope::ScopeInfo, ex, new_k::Symbol)
     if kind(ex) === K"BindingId"
-        bid = ex.var_id
+        bid = getattr(IdTag, ex, :var_id)
         b = get_binding(ctx, bid)
         @jl_assert b.kind === new_k ex
         @jl_assert b.lambda_id !== 0 (ex, "cannot declare a BindingId in multiple scopes")
@@ -150,11 +150,11 @@ function declare_in_scope!(ctx, scope::ScopeInfo, ex, bk::Symbol; kws...)
     nk = NameKey(ex)
     if bk === :global
         declaration_scope = top_scope(ctx)
-        mod = hasattr(ex, :mod) ? ex.mod::Module :
-            ctx.scope_layers[ex.scope_layer::LayerId].mod
+        mod = hasattr(Module, ex, :mod) ? getattr(Module, ex, :mod) :
+            ctx.scope_layers[getattr(LayerId, ex, :scope_layer)].mod
     else
         declaration_scope = scope
-        mod = hasattr(ex, :mod) ?
+        mod = hasattr(Module, ex, :mod) ?
             throw(LoweringError(ex, "cannot use GlobalRef as local identifier")) : nothing
     end
     is_internal = ctx.scope_layers[nk.layer].is_internal ||
@@ -228,7 +228,7 @@ function _find_scope_decls!(ctx, scope, ex)
                 ex, "allow local BindingId as function name?")
             get!(scope.binding_assignments, b.id, ex[1]._id)
         elseif k1 === K"Identifier"
-            hasattr(ex[1], :mod) && maybe_declare_in_scope!(ctx, scope, ex[1], :global)
+            hasattr(Module, ex[1], :mod) && maybe_declare_in_scope!(ctx, scope, ex[1], :global)
             get!(scope.assignments, NameKey(ex[1]), ex[1]._id)
         else
             @jl_assert false (ex, "unknown kind in assignment")
@@ -261,7 +261,7 @@ end
 function enter_scope!(ctx, ex)
     @jl_assert kind(ex) in KSet"lambda scope_block method_defs" ex
     # Note that generated functions produce lambdas with this false
-    is_toplevel_thunk = kind(ex) === K"lambda" && ex.is_toplevel_thunk
+    is_toplevel_thunk = kind(ex) === K"lambda" && getattr(Bool, ex, :is_toplevel_thunk)
     parent_id = (is_toplevel_thunk || isempty(ctx.scope_stack)) ?
         0 : ctx.scopes[ctx.scope_stack[end]].id
     scope = ScopeInfo(ctx, parent_id, ex)
@@ -404,9 +404,9 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         self_id = if numchildren(arg_bindings) === 0
             0
         elseif getmeta(ex[1][1], :is_kwcall_self, false)
-            arg_bindings[3].var_id
+            getattr(IdTag, arg_bindings[3], :var_id)
         else
-            arg_bindings[1].var_id
+            getattr(IdTag, arg_bindings[1], :var_id)
         end
         lambda_bindings = LambdaBindings(self_id, newscope.id, newscope.locals_capt)
         body_stmts = SyntaxList(ctx)
@@ -422,8 +422,8 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
         pop!(ctx.scope_stack)
 
         @ast ctx ex [K"lambda"(;lambda_bindings=lambda_bindings,
-                               is_toplevel_thunk=ex.is_toplevel_thunk,
-                               toplevel_pure=ex.toplevel_pure)
+                               is_toplevel_thunk=getattr(Bool, ex, :is_toplevel_thunk),
+                               toplevel_pure=getattr(Bool, ex, :toplevel_pure))
             arg_bindings
             sparam_bindings
             [K"block"
@@ -546,7 +546,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree,
     elseif k == K"constdecl"
         resolved = mapchildren(e->_resolve_scopes(ctx, e, scope), ctx, ex)
         @jl_assert kind(resolved[1]) === K"BindingId" resolved[1]
-        if get_binding(ctx, resolved[1].var_id).kind === :local
+        if get_binding(ctx, getattr(IdTag, resolved[1], :var_id)).kind === :local
             throw(LoweringError(ex, "unsupported `const` declaration on local variable"))
         elseif !is_top_scope(enclosing_lambda(ctx, scope))
             throw(LoweringError(ex, "unsupported `const` inside function"))
@@ -595,7 +595,7 @@ struct VariableAnalysisContext{Attrs} <: AbstractLoweringContext
 end
 
 function init_closure_bindings!(ctx, fname)
-    func_name_id = fname.var_id
+    func_name_id = getattr(IdTag, fname, :var_id)
     @jl_assert get_binding(ctx, func_name_id).kind === :local fname
     get!(ctx.closure_bindings, func_name_id) do
         name_stack = Vector{String}()
@@ -612,7 +612,7 @@ end
 function find_any_local_binding(ctx, ex)
     k = kind(ex)
     if k == K"BindingId"
-        bkind = get_binding(ctx, ex.var_id).kind
+        bkind = get_binding(ctx, getattr(IdTag, ex, :var_id)).kind
         if bkind != :global && bkind != :static_parameter
             return ex
         end
@@ -713,12 +713,12 @@ function analyze_variables!(ctx, ex)
         analyze_variables!(ctx, ex[9])
         pop!(ctx.method_def_stack)
     elseif k == K"lambda"
-        lambda_bindings = ex.lambda_bindings
-        if !ex.is_toplevel_thunk && !isempty(ctx.method_def_stack)
+        lambda_bindings = getattr(LambdaBindings, ex, :lambda_bindings)
+        if !getattr(Bool, ex, :is_toplevel_thunk) && !isempty(ctx.method_def_stack)
             # Record all lambdas for the same closure type in one place
             func_name = last(ctx.method_def_stack)
             if kind(func_name) == K"BindingId"
-                func_name_id = func_name.var_id::IdTag
+                func_name_id = getattr(IdTag, func_name, :var_id)
                 if get_binding(ctx, func_name).kind === :local
                     push!(ctx.closure_bindings[func_name_id].lambdas, lambda_bindings)
                 end
@@ -771,7 +771,7 @@ enclosing lambda form and information about variables captured by closures.
                                   ctx.expr_compat_mode)
     ex2 = resolve_scopes(ctx2, ex)
     ctx3 = VariableAnalysisContext(graph, ctx2.bindings, ctx2.mod,
-                                   ctx2.scopes, ex2.lambda_bindings,
+                                   ctx2.scopes, getattr(LambdaBindings, ex2, :lambda_bindings),
                                    SyntaxList(graph),
                                    Dict{IdTag,ClosureBindings}())
     analyze_variables!(ctx3, ex2)

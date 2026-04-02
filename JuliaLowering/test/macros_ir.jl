@@ -16,17 +16,17 @@ module MacroMethods
 end
 
 macro strmac_str(ex, suff=nothing)
-    s = "$(ex.value) from strmac"
+    s = "$(JuliaSyntax.getattr(Any, ex, :value)) from strmac"
     if !isnothing(suff)
-        s = "$s with suffix $(suff.value)"
+        s = "$s with suffix $(JuliaSyntax.getattr(Any, suff, :value))"
     end
     s
 end
 
 macro cmdmac_cmd(ex, suff=nothing)
-    s = "$(ex.value) from cmdmac"
+    s = "$(JuliaSyntax.getattr(Any, ex, :value)) from cmdmac"
     if !isnothing(suff)
-        s = "$s with suffix $(suff.value)"
+        s = "$s with suffix $(JuliaSyntax.getattr(Any, suff, :value))"
     end
     s
 end

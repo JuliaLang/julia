@@ -15,11 +15,12 @@ import FileWatching
 using Markdown
 import REPL
 
-using .JuliaSyntax: SourceAttrType, new_id!, set_numeric_flags, sourcetext
+using .JuliaSyntax: SourceAttrType, getattr, new_id!, set_numeric_flags, sourcetext
 
-using .JuliaLowering: @ast, Bindings, Kind, LoweringError, MacroExpansionError, NodeId,
-    ScopeLayer, SourceRef, SyntaxGraph, SyntaxTree, children, flattened_provenance,
-    is_leaf, mapchildren, numchildren, setattr!, showprov, syntax_graph
+using .JuliaLowering: @ast, Bindings, IdTag, Kind, LayerId, LoweringError,
+    MacroExpansionError, NodeId, ScopeLayer, SourceRef, SyntaxGraph, SyntaxTree,
+    children, flattened_provenance, is_leaf, mapchildren, numchildren, setattr!,
+    showprov, syntax_graph
 
 function _ast_test_graph()
     JuliaLowering.ensure_desugaring_attributes!(
@@ -28,8 +29,8 @@ end
 
 function _source_node(graph, src)
     id = new_id!(graph)
-    setattr!(graph, id, :kind, K"TOMBSTONE")
-    setattr!(graph, id, :source, src)
+    setattr!(Kind, graph, id, :kind, K"TOMBSTONE")
+    setattr!(SourceAttrType, graph, id, :source, src)
     SyntaxTree(graph, id)
 end
 
@@ -55,11 +56,11 @@ function _format_as_ast_macro(io, ex, indent)
         println(io, indent, "]")
     else
         val_str = if k == K"Identifier" || k == K"core" || k == K"top"
-            repr(ex.name_val)
+            repr(getattr(String, ex, :name_val))
         elseif k == K"BindingId"
-            repr(ex.var_id)
+            repr(getattr(IdTag, ex, :var_id))
         else
-            repr(get(ex, :value, nothing))
+            repr(getattr(Any, ex, :value, nothing))
         end
         println(io, indent, val_str, "::", kind_str)
     end
@@ -138,6 +139,7 @@ end
 function setup_ir_test_module(preamble)
     test_mod = Module(:TestMod)
     Base.eval(test_mod, :(const JuliaLowering = $JuliaLowering))
+    Base.eval(test_mod, :(const JuliaSyntax = $(JuliaSyntax)))
     Base.eval(test_mod, :(const var"@ast_" = $(var"@ast_")))
     JuliaLowering.include_string(test_mod, preamble)
     test_mod
@@ -147,7 +149,7 @@ function format_ir_for_test(mod, case)
     ex = parsestmt(SyntaxTree, case.input)
     try
         if (kind(ex) == K"macrocall" && kind(ex[1]) == K"Identifier" &&
-            ex[1].name_val == "@ast_")
+            getattr(String, ex[1], :name_val) == "@ast_")
             # Total hack, until @ast_ can be implemented in terms of new-style
             # macros.
             ex = Base.eval(mod, JuliaLowering.est_to_expr(ex))

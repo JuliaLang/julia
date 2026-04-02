@@ -152,24 +152,24 @@ end
         # No initial line provided
         st = JuliaLowering.expr_to_est(ex)
         for i in length(st._graph.edge_ranges)
-            @test !isnothing(get(SyntaxTree(st._graph, i), :source, nothing))
+            @test !isnothing(getattr(SourceAttrType, SyntaxTree(st._graph, i), :source, nothing))
         end
-        @test let lnn = st[1].source;    lnn isa LineNumberNode && lnn.line === 123; end
-        @test let lnn = st[1][1].source; lnn isa LineNumberNode && lnn.line === 123; end
-        @test let lnn = st[1][2].source; lnn isa LineNumberNode && lnn.line === 456; end
-        @test let lnn = st[2].source;    lnn isa LineNumberNode && lnn.line === 456; end
-        @test let lnn = st[2][1].source; lnn isa LineNumberNode && lnn.line === 456; end
-        @test let lnn = st[2][2].source; lnn isa LineNumberNode && lnn.line === 456; end
+        @test let lnn = getattr(SourceAttrType, st[1], :source);    lnn isa LineNumberNode && lnn.line === 123; end
+        @test let lnn = getattr(SourceAttrType, st[1][1], :source); lnn isa LineNumberNode && lnn.line === 123; end
+        @test let lnn = getattr(SourceAttrType, st[1][2], :source); lnn isa LineNumberNode && lnn.line === 456; end
+        @test let lnn = getattr(SourceAttrType, st[2], :source);    lnn isa LineNumberNode && lnn.line === 456; end
+        @test let lnn = getattr(SourceAttrType, st[2][1], :source); lnn isa LineNumberNode && lnn.line === 456; end
+        @test let lnn = getattr(SourceAttrType, st[2][2], :source); lnn isa LineNumberNode && lnn.line === 456; end
 
         # Same tree, but provide an initial line
         st = JuliaLowering.expr_to_est(ex, LineNumberNode(789))
-        @test let lnn = st.source;       lnn isa LineNumberNode && lnn.line === 789; end
-        @test let lnn = st[1].source;    lnn isa LineNumberNode && lnn.line === 123; end
-        @test let lnn = st[1][1].source; lnn isa LineNumberNode && lnn.line === 123; end
-        @test let lnn = st[1][2].source; lnn isa LineNumberNode && lnn.line === 456; end
-        @test let lnn = st[2].source;    lnn isa LineNumberNode && lnn.line === 456; end
-        @test let lnn = st[2][1].source; lnn isa LineNumberNode && lnn.line === 456; end
-        @test let lnn = st[2][2].source; lnn isa LineNumberNode && lnn.line === 456; end
+        @test let lnn = getattr(SourceAttrType, st, :source);       lnn isa LineNumberNode && lnn.line === 789; end
+        @test let lnn = getattr(SourceAttrType, st[1], :source);    lnn isa LineNumberNode && lnn.line === 123; end
+        @test let lnn = getattr(SourceAttrType, st[1][1], :source); lnn isa LineNumberNode && lnn.line === 123; end
+        @test let lnn = getattr(SourceAttrType, st[1][2], :source); lnn isa LineNumberNode && lnn.line === 456; end
+        @test let lnn = getattr(SourceAttrType, st[2], :source);    lnn isa LineNumberNode && lnn.line === 456; end
+        @test let lnn = getattr(SourceAttrType, st[2][1], :source); lnn isa LineNumberNode && lnn.line === 456; end
+        @test let lnn = getattr(SourceAttrType, st[2][2], :source); lnn isa LineNumberNode && lnn.line === 456; end
 
         ex = parsestmt(Expr, """
         begin
@@ -198,16 +198,16 @@ end
             ]
         ]
 
-        @test let lnn = st.source;             lnn isa LineNumberNode && lnn.line === 1; end
-        @test let lnn = st[1].source;          lnn isa LineNumberNode && lnn.line === 2; end
-        @test let lnn = st[1][1].source;       lnn isa LineNumberNode && lnn.line === 2; end
-        @test let lnn = st[1][1][1].source;    lnn isa LineNumberNode && lnn.line === 3; end
-        @test let lnn = st[1][1][2].source;    lnn isa LineNumberNode && lnn.line === 4; end
-        @test let lnn = st[1][1][3].source;    lnn isa LineNumberNode && lnn.line === 5; end
-        @test let lnn = st[1][1][4].source;    lnn isa LineNumberNode && lnn.line === 6; end
-        @test let lnn = st[1][2].source;       lnn isa LineNumberNode && lnn.line === 6; end
-        @test let lnn = st[1][3].source;       lnn isa LineNumberNode && lnn.line === 6; end
-        @test let lnn = st[1][3][1].source;    lnn isa LineNumberNode && lnn.line === 8; end
+        @test let lnn = getattr(SourceAttrType, st, :source);             lnn isa LineNumberNode && lnn.line === 1; end
+        @test let lnn = getattr(SourceAttrType, st[1], :source);          lnn isa LineNumberNode && lnn.line === 2; end
+        @test let lnn = getattr(SourceAttrType, st[1][1], :source);       lnn isa LineNumberNode && lnn.line === 2; end
+        @test let lnn = getattr(SourceAttrType, st[1][1][1], :source);    lnn isa LineNumberNode && lnn.line === 3; end
+        @test let lnn = getattr(SourceAttrType, st[1][1][2], :source);    lnn isa LineNumberNode && lnn.line === 4; end
+        @test let lnn = getattr(SourceAttrType, st[1][1][3], :source);    lnn isa LineNumberNode && lnn.line === 5; end
+        @test let lnn = getattr(SourceAttrType, st[1][1][4], :source);    lnn isa LineNumberNode && lnn.line === 6; end
+        @test let lnn = getattr(SourceAttrType, st[1][2], :source);       lnn isa LineNumberNode && lnn.line === 6; end
+        @test let lnn = getattr(SourceAttrType, st[1][3], :source);       lnn isa LineNumberNode && lnn.line === 6; end
+        @test let lnn = getattr(SourceAttrType, st[1][3][1], :source);    lnn isa LineNumberNode && lnn.line === 8; end
 
         st_shortfunc = JuliaLowering.expr_to_est(
             Expr(:block,
@@ -222,7 +222,7 @@ end
                 "body"::K"Identifier"
             ]
         ]
-        @test let lnn = st_shortfunc[1][1].source; lnn isa LineNumberNode && lnn.line === 11; end
+        @test let lnn = getattr(SourceAttrType, st_shortfunc[1][1], :source); lnn isa LineNumberNode && lnn.line === 11; end
 
         st_shortfunc_2 = JuliaLowering.expr_to_est(
             Expr(:block,
@@ -239,7 +239,7 @@ end
                 [K"block" "body"::K"Identifier"]
             ]
         ]
-        @test let lnn = st_shortfunc_2[1][1].source; lnn isa LineNumberNode && lnn.line === 22; end
+        @test let lnn = getattr(SourceAttrType, st_shortfunc_2[1][1], :source); lnn isa LineNumberNode && lnn.line === 22; end
     end
 
     @testset "linenodes equal (modules and functions have extra)" begin
@@ -512,11 +512,11 @@ end
     # Expr(:ssavalue, N) should be converted to [K"ssavalue" N::K"Value"]
     st = JuliaLowering.expr_to_est(Expr(:ssavalue, 0))
     @test kind(st) === K"ssavalue"
-    @test st[1].value == 0
+    @test getattr(Any, st[1], :value) == 0
 
     st = JuliaLowering.expr_to_est(Expr(:ssavalue, 42))
     @test kind(st) === K"ssavalue"
-    @test st[1].value == 42
+    @test getattr(Any, st[1], :value) == 42
 
     # Roundtrip: ssavalue should convert back to Expr(:ssavalue, N)
     @test JL.est_to_expr(JuliaLowering.expr_to_est(Expr(:ssavalue, 5))) ==

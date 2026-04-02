@@ -4,28 +4,28 @@ attrsummary(name, value::LineNumberNode) = "$name=L$(value.line)"
 
 function _value_string(ex)
     k = kind(ex)
-    str = k == K"Identifier"  ? ex.name_val           :
-          k == K"Placeholder" ? ex.name_val           :
+    str = k == K"Identifier"  ? getattr(String, ex, :name_val)           :
+          k == K"Placeholder" ? getattr(String, ex, :name_val)           :
           k == K"SSAValue"    ? "%"                   :
           k == K"BindingId"   ? "#"                   :
           k == K"label"       ? "label"               :
-          k == K"core"        ? "core.$(ex.name_val)" :
-          k == K"top"         ? "top.$(ex.name_val)"  :
-          k == K"Symbol"      ? ":$(ex.name_val)" :
-          k == K"globalref"   ? "$(ex.mod).$(ex.name_val)" :
+          k == K"core"        ? "core.$(getattr(String, ex, :name_val))" :
+          k == K"top"         ? "top.$(getattr(String, ex, :name_val))"  :
+          k == K"Symbol"      ? ":$(getattr(String, ex, :name_val))" :
+          k == K"globalref"   ? "$(getattr(Module, ex, :mod)).$(getattr(String, ex, :name_val))" :
           k == K"slot"        ? "slot" :
           k == K"latestworld" ? "latestworld" :
           k == K"static_parameter" ? "static_parameter" :
-          k == K"symboliclabel" ? "label:$(ex.name_val)" :
-          k == K"symbolicgoto" ? "goto:$(ex.name_val)" :
+          k == K"symboliclabel" ? "label:$(getattr(String, ex, :name_val))" :
+          k == K"symbolicgoto" ? "goto:$(getattr(String, ex, :name_val))" :
           k == K"SourceLocation" ?
               "SourceLocation:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
-          k == K"Value" && ex.value isa SourceRef ?
+          k == K"Value" && getattr(Any, ex, :value) isa SourceRef ?
               "SourceRef:$(JuliaSyntax.filename(ex)):$(join(source_location(ex), ':'))" :
-              hasattr(ex, :value) ? repr(ex.value) : "::K\"$(untokenize(k))\""
-    id = get(ex, :var_id, nothing)
+              hasattr(Any, ex, :value) ? repr(getattr(Any, ex, :value)) : "::K\"$(untokenize(k))\""
+    id = getattr(IdTag, ex, :var_id, nothing)
     if isnothing(id)
-        id = get(ex, :id, nothing)
+        id = getattr(Int, ex, :id, nothing)
     end
     if !isnothing(id)
         idstr = subscript_str(id)
@@ -35,7 +35,7 @@ function _value_string(ex)
         p = provenance(ex)[1]
         while p isa SyntaxTree
             if kind(p) == K"Identifier"
-                str = "$(str)/$(p.name_val)"
+                str = "$(str)/$(getattr(String, p, :name_val))"
                 break
             end
             p = provenance(p)[1]
@@ -57,7 +57,7 @@ function _show_syntax_tree(io, ex, indent, show_kinds)
     end
 
     std_attrs = Set([:name_val,:value,:kind,:syntax_flags,:source,:var_id])
-    attrstr = join([attrsummary(n, getproperty(ex, n))
+    attrstr = join([attrsummary(n, getattr(Any, ex, n))
                     for n in JuliaSyntax.attrnames(ex) if n ∉ std_attrs], ",")
     treestr = string(rpad(treestr, 60), " │ $attrstr")
 
@@ -175,8 +175,8 @@ end
 
 function _show_provtree(io::IO, ex::SyntaxTree, indent)
     print(io, ex)
-    if hasattr(ex, :jl_source)
-        printstyled(io, " @$(ex.jl_source)", color=:light_black)
+    if hasattr(LineNumberNode, ex, :jl_source)
+        printstyled(io, " @$(getattr(LineNumberNode, ex, :jl_source))", color=:light_black)
     end
     print(io, "\n")
     prov = provenance(ex)
@@ -228,7 +228,7 @@ end
 
 function _deref_ssa(stmts, ex)
     while kind(ex) == K"SSAValue"
-        ex = stmts[ex.var_id]
+        ex = stmts[getattr(IdTag, ex, :var_id)]
     end
     ex
 end
@@ -244,7 +244,7 @@ function _find_method_lambda(ex, name)
             arg_types = _deref_ssa(stmts, sig[2])
             @jl_assert kind(arg_types) == K"call" ex
             self_type = _deref_ssa(stmts, arg_types[2])
-            if kind(self_type) == K"globalref" && occursin(name, self_type.name_val)
+            if kind(self_type) == K"globalref" && occursin(name, getattr(String, self_type, :name_val))
                 return e[3]
             end
         end
@@ -269,8 +269,8 @@ function _print_ir(io::IO, ex, indent)
     added_indent = "    "
     @jl_assert ((kind(ex) == K"lambda" || kind(ex) == K"code_info")
                 && kind(ex[1]) == K"block") ex
-    if !ex.is_toplevel_thunk && kind(ex) == K"code_info"
-        slots = ex.slots
+    if !getattr(Bool, ex, :is_toplevel_thunk) && kind(ex) == K"code_info"
+        slots = getattr(Vector{Slot}, ex, :slots)
         print(io, indent, "slots: [")
         for (i,slot) in enumerate(slots)
             print(io, "slot$(subscript_str(i))/$(slot.name)")
@@ -309,7 +309,7 @@ function _print_ir(io::IO, ex, indent)
             println(io)
             _print_ir(io, e[5], indent*added_indent)
         elseif kind(e) == K"code_info"
-            println(io, indent, lno, " --- ", e.is_toplevel_thunk ? "thunk" : "code_info")
+            println(io, indent, lno, " --- ", getattr(Bool, e, :is_toplevel_thunk) ? "thunk" : "code_info")
             _print_ir(io, e, indent*added_indent)
         else
             code = string(e)
@@ -352,7 +352,7 @@ function _find_SyntaxTree_macro(ex, line)
                         name = name[2]
                     end
                     @jl_assert kind(name) == K"Identifier" name
-                    name.name_val == "@SyntaxTree"
+                    getattr(String, name, :name_val) == "@SyntaxTree"
                 end
             # We find the node we're looking for. NB: Currently assuming a max
             # of one @SyntaxTree invocation per line. Though we could relax
@@ -428,7 +428,7 @@ macro SyntaxTree(ex_old)
     # 4. Do the first step of JuliaLowering's syntax lowering to get
     # syntax interpolations to work
     _, ex1 = expand_forms_1(__module__, ex, false, Base.tls_world_age())
-    @jl_assert kind(ex1) == K"call" && ex1[1].value == interpolate_ast ex1
+    @jl_assert kind(ex1) == K"call" && getattr(Any, ex1[1], :value) == interpolate_ast ex1
     Expr(:call, :interpolate_ast, SyntaxTree, ex1[3][1],
          map(e->_scope_layer_1_to_esc!(Expr(e)), ex1[4:end])...)
 end

@@ -104,7 +104,7 @@ end
 
 function _binding_id(ex::SyntaxTree)
     @jl_assert kind(ex) == K"BindingId" ex
-    ex.var_id::IdTag
+    getattr(IdTag, ex, :var_id)
 end
 
 function get_binding(bindings::Bindings, x)::BindingInfo

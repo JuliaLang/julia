@@ -66,7 +66,7 @@ module M
     end
 
     macro recursive(N)
-        Nval = N.value::Int
+        Nval = JuliaSyntax.getattr(Any, N, :value)::Int
         if Nval < 1
             return N
         end
@@ -155,8 +155,8 @@ call_world_arg_test = JuliaLowering.parsestmt(JuliaLowering.SyntaxTree, "@world_
         @ast_ 2::K"Value"
 
 # Layer parenting
-@test expanded[1].scope_layer == 2
-@test expanded[2][1].scope_layer == 3
+@test getattr(LayerId, expanded[1], :scope_layer) == 2
+@test getattr(LayerId, expanded[2][1], :scope_layer) == 3
 @test getfield.(ctx.scope_layers, :parent_layer) == [0,1,2]
 
 JuliaLowering.include_string(test_mod, """

@@ -171,7 +171,7 @@ function du_visit!(ctx, state::DefUseState, e)
     k = kind(e)
 
     if k == K"BindingId"
-        du_mark_used!(state, e.var_id)
+        du_mark_used!(state, getattr(IdTag, e, :var_id))
         return false
 
     elseif k == K"symboliclabel"
@@ -194,13 +194,13 @@ function du_visit!(ctx, state::DefUseState, e)
         has_label = du_visit!(ctx, state, e[2])
         lhs = e[1]
         if kind(lhs) == K"BindingId"
-            du_assign!(state, lhs.var_id)
+            du_assign!(state, getattr(IdTag, lhs, :var_id))
         end
         return has_label
 
     elseif k == K"lambda"
         # Check captures from nested lambda
-        nested_lb = e.lambda_bindings
+        nested_lb = getattr(LambdaBindings, e, :lambda_bindings)
         for (id, is_capt) in nested_lb.locals_capt
             if is_capt
                 du_mark_captured!(state, id)
@@ -216,7 +216,7 @@ function du_visit!(ctx, state::DefUseState, e)
         # a separate K"decl" node. So we only need to handle K"BindingId" here.
         for child in children(e)
             if kind(child) == K"BindingId"
-                du_declare!(state, child.var_id)
+                du_declare!(state, getattr(IdTag, child, :var_id))
             end
         end
         return false
@@ -303,7 +303,7 @@ function du_visit!(ctx, state::DefUseState, e)
 end
 
 function _analyze_lambda_vars!(ctx, ex)
-    lambda_bindings = ex.lambda_bindings
+    lambda_bindings = getattr(LambdaBindings, ex, :lambda_bindings)
 
     # Collect candidate variables: captured and single-assigned
     candidates = Set{IdTag}()

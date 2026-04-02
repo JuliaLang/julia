@@ -12,9 +12,9 @@ end
 # Translate a K"ssavalue" node from pre-lowered code into a normal SSA binding.
 # Uses ctx.ssa_mapping to ensure the same external SSA id maps to the same binding.
 function _resolve_ssavalue(ctx::DesugaringContext, ex)
-    binding_id = get!(ctx.ssa_mapping, ex[1].value) do
+    binding_id = get!(ctx.ssa_mapping, getattr(Any, ex[1], :value)) do
         s = ssavar(ctx, ex)
-        s.var_id
+        getattr(IdTag, s, :var_id)
     end
     binding_ex(ctx, binding_id)
 end
@@ -23,11 +23,11 @@ end
 # bindings (and hence ssa vars). See also `is_identifier_like()`
 function is_same_identifier_like(ex::SyntaxTree, y::SyntaxTree)
     return (kind(ex) == K"Identifier" && kind(y) == K"Identifier" && NameKey(ex) == NameKey(y)) ||
-           (kind(ex) == K"BindingId"  && kind(y) == K"BindingId"  && ex.var_id   == y.var_id)
+           (kind(ex) == K"BindingId"  && kind(y) == K"BindingId"  && getattr(IdTag, ex, :var_id)   == getattr(IdTag, y, :var_id))
 end
 
 function is_same_identifier_like(ex::SyntaxTree, name::AbstractString)
-    return kind(ex) == K"Identifier" && ex.name_val == name
+    return kind(ex) == K"Identifier" && getattr(String, ex, :name_val) == name
 end
 
 function contains_identifier(ex::SyntaxTree, idents::AbstractVector{<:SyntaxTree})
@@ -85,8 +85,8 @@ end
 # used outside of that scope (binding capture is OK).  This is the alternative.
 function newsym(ctx, src::SyntaxTree, name::String; unused=false)
     out = newleaf(ctx, src, unused ? K"Placeholder" : K"Identifier", name)
-    setattr!(out, :meta, get(src, :meta, nothing))
-    setattr!(out, :scope_layer, new_scope_layer(ctx))
+    setattr!(Any, out, :meta, getattr(CompileHints, src, :meta, nothing))
+    setattr!(LayerId, out, :scope_layer, new_scope_layer(ctx))
 end
 
 #-------------------------------------------------------------------------------
@@ -576,8 +576,8 @@ end
 # last index
 function replace_beginend(ctx, ex, arr, n, splats, is_last)
     k = kind(ex)
-    if k == K"Identifier" && ex.name_val in ("begin", "end")
-        indexfunc = @ast ctx ex (ex.name_val == "begin" ? "firstindex" : "lastindex")::K"top"
+    if k == K"Identifier" && getattr(String, ex, :name_val) in ("begin", "end")
+        indexfunc = @ast ctx ex (getattr(String, ex, :name_val) == "begin" ? "firstindex" : "lastindex")::K"top"
         if length(splats) == 0
             if is_last && n == 1
                 @ast ctx ex [K"call" indexfunc arr]
@@ -736,7 +736,7 @@ function expand_fuse_broadcast(ctx, ex)
             else
                 lhs
             end
-            if !(kind(rhs) == K"call" && kind(rhs[1]) == K"top" && rhs[1].name_val == "broadcasted")
+            if !(kind(rhs) == K"call" && kind(rhs[1]) == K"top" && getattr(String, rhs[1], :name_val) == "broadcasted")
                 # Ensure the rhs of .= is always wrapped in a call to `broadcasted()`
                 [K"call"(rhs)
                     "broadcasted"::K"top"
@@ -1500,7 +1500,7 @@ function expand_let(ctx, ex)
     bindings = ex[1]
     @jl_assert kind(bindings) == K"block" bindings
     blk = ex[2]
-    scope_type = get(ex, :scope_type, :hard)
+    scope_type = getattr(Symbol, ex, :scope_type, :hard)
     if numchildren(bindings) == 0
         return @ast ctx ex [K"scope_block"(scope_type=scope_type) blk]
     end
@@ -1661,7 +1661,7 @@ function expand_named_tuple(ctx, ex, kws; field_name="named tuple field",
         end
         if !isnothing(name) && !isnothing(value)
             if kind(name) == K"Symbol"
-                name_str = name.name_val
+                name_str = getattr(String, name, :name_val)
                 if name_str in name_strs
                     throw(LoweringError(name, "Repeated $field_name name"))
                 end
@@ -1855,7 +1855,7 @@ function expand_ccall(ctx, ex)
                     expanded_types...
                 ]
             ]
-            (cconv !== nothing && kind(cconv) === K"cconv" ? cconv[2].value :
+            (cconv !== nothing && kind(cconv) === K"cconv" ? getattr(Any, cconv[2], :value) :
                 isnothing(vararg_type) ? 0 :
                 length(arg_types))::K"Integer"
             if isnothing(cconv)
@@ -1908,9 +1908,9 @@ end
 
 function expand_call(ctx, ex)
     farg = ex[1]
-    if kind(farg) === K"Identifier" && farg.name_val === "ccall"
+    if kind(farg) === K"Identifier" && getattr(String, farg, :name_val) === "ccall"
         return expand_ccall(ctx, ex)
-    elseif kind(farg) === K"Identifier" && farg.name_val === "cglobal"
+    elseif kind(farg) === K"Identifier" && getattr(String, farg, :name_val) === "cglobal"
         return @ast ctx ex [K"call"
             [K"static_eval" ex[1]] # just so the globalref is inlined
             expand_forms_2(ctx, ex[2])
@@ -1927,7 +1927,7 @@ function expand_call(ctx, ex)
     if any(kind(arg) == K"..." for arg in args)
         # Splatting, eg, `f(a, xs..., b)`
         expand_splat(ctx, ex, expand_forms_2(ctx, farg), args)
-    elseif kind(farg) == K"Identifier" && farg.name_val === "include"
+    elseif kind(farg) == K"Identifier" && getattr(String, farg, :name_val) === "include"
         # world age special case
         r = ssavar(ctx, ex)
         @ast ctx ex [K"block"
@@ -2172,7 +2172,7 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
         # TODO: consider removing support for Expr(:global, GlobalRef(...)) and
         # other Exprs that cannot be produced by the parser (tested by
         # test/precompile.jl #50538).
-        ([K"Value"], when=ex.value isa GlobalRef) -> ex
+        ([K"Value"], when=getattr(Any, ex, :value) isa GlobalRef) -> ex
         [K"Placeholder"] -> nothing
         ([K"::" [K"Identifier"] t], when=type_decls) -> let x = ex[1]
             t2 = expand_forms_2(ctx, t)
@@ -2201,7 +2201,7 @@ function make_lhs_decls(ctx, stmts, declkind, declmeta, ex, type_decls=true)
 
     if !isnothing(declname)
         stmt = @ast ctx ex [declkind declname]
-        !isnothing(declmeta) && setattr!(stmt, :meta, declmeta)
+        !isnothing(declmeta) && setattr!(Any, stmt, :meta, declmeta)
         push!(stmts, stmt)
     end
     return nothing
@@ -2224,7 +2224,7 @@ function expand_decls(ctx, ex)
             [K"function" x _] -> x
         end
         # type decls are handled elsewhere unless simple
-        make_lhs_decls(ctx, stmts, declkind, get(ex, :meta, nothing), lhs, simple)
+        make_lhs_decls(ctx, stmts, declkind, getattr(CompileHints, ex, :meta, nothing), lhs, simple)
         simple || push!(stmts, expand_forms_2(ctx, c))
     end
     newnode(ctx, ex, K"block", stmts)
@@ -2456,9 +2456,9 @@ end
 
 function _expr_arg_sym(a)
     @jl_assert kind(a) === K"::" || kind(a) === K"_typevar" a
-    sym = setattr(a[1], :kind, K"Symbol")
+    sym = setattr(Kind, a[1], :kind, K"Symbol")
     if kind(a[1]) === K"Placeholder"
-        setattr!(sym, :name_val, UNUSED)
+        setattr!(String, sym, :name_val, UNUSED)
     end
     sym
 end
@@ -2477,7 +2477,7 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
             @ast(ctx, src, [K"::" arg1_name [K"function_type" gen_name]]),
             @ast(ctx, src, [K"::"
                 # TODO: correct scope layer?
-                "__context__"::K"Identifier"(scope_layer=get(mtable, :scope_layer, 1))
+                "__context__"::K"Identifier"(scope_layer=getattr(LayerId, mtable, :scope_layer, 1))
                 MacroContext::K"Value"
             ]),
             mapsyntax(_untyped_arg, sparams)...,
@@ -2604,7 +2604,7 @@ function expand_kw_args(ctx, kws)
         end
     end
     kw_names = mapindex(kw_decls, 1)
-    kw_syms = mapsyntax(x->setattr(x, :kind, K"Symbol"), kw_names)
+    kw_syms = mapsyntax(x->setattr(Kind, x, :kind, K"Symbol"), kw_names)
     restkw_list = isnothing(restkw) ? SyntaxList(ctx.graph) :
         SyntaxList(@ast ctx restkw [K"::"
             restkw [K"call" "pairs"::K"top" "NamedTuple"::K"core"]])
@@ -2634,7 +2634,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
     ordered_defaults = any(val->contains_identifier(val, kw_names), kw_defaults)
     positional_sparams = used_typevars(pargl, sparams)
 
-    m1_name = let n = is_core_nothing(mtable) ? "_" : mtable.name_val,
+    m1_name = let n = is_core_nothing(mtable) ? "_" : getattr(String, mtable, :name_val),
         mangled = string(startswith(n, '#') ? "" : "#kw_body#", n, "#")
         newsym(ctx, argl[1], reserve_module_binding_i(ctx.mod, mangled))
     end
@@ -2678,7 +2678,7 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
             use_ssa_kw_temps = !ordered_defaults &&
                 !any(val->contains_unquoted(e->kind(e) == K"=", val), kw_defaults)
         kw_temps = use_ssa_kw_temps ?
-            mapsyntax(x->ssavar(ctx, x, x.name_val), kw_names) : kw_names
+            mapsyntax(x->ssavar(ctx, x, getattr(String, x, :name_val)), kw_names) : kw_names
         tempslot = newsym(ctx, kws, "kwtmp")
         keyword_only_spnames = mapindex(unused_typevars(pargl, sparams), 1)
 
@@ -2832,7 +2832,7 @@ expand_function_arg(ctx, arg, used) = @stm arg begin
     [K"::" x t] ->
         @ast ctx arg [K"::" fix_argname(ctx, x, used) t]
     [K"::" t] -> let aname = newsym(ctx, arg, "#arg#"; unused=true)
-        setattr!(aname, :meta, get(arg, :meta, nothing))
+        setattr!(Any, aname, :meta, getattr(CompileHints, arg, :meta, nothing))
         @ast ctx arg [K"::" fix_argname(ctx, aname, used) t]
     end
     [K"kw" x v] ->
@@ -2948,8 +2948,8 @@ end
 function _make_macro_name(ctx, ex)
     k = kind(ex)
     if k == K"Identifier" || k == K"Symbol"
-        name = setattr!(mkleaf(ex), :kind, k)
-        name.name_val = "@$(ex.name_val)"
+        name = setattr!(Kind, mkleaf(ex), :kind, k)
+        setattr!(String, name, :name_val, "@$(getattr(String, ex, :name_val))")
         name
     elseif is_valid_modref(ex)
         @jl_assert numchildren(ex) == 2 ex
@@ -3019,8 +3019,8 @@ function typevar_bounds(ctx, ex)
     (name, lb, ub) = bounds = @stm ex begin
         [K"Identifier"] -> (ex, any, any)
         [K"Placeholder"] -> (ex, any, any)
-        ([K"comparison" lb op x _ ub], when=op.name_val==="<:") -> (x, lb, ub)
-        ([K"comparison" ub op x _ lb], when=op.name_val===">:") -> (x, lb, ub)
+        ([K"comparison" lb op x _ ub], when=getattr(String, op, :name_val)==="<:") -> (x, lb, ub)
+        ([K"comparison" ub op x _ lb], when=getattr(String, op, :name_val)===">:") -> (x, lb, ub)
         [K"<:" x ub] -> (x, any, ub)
         [K">:" x lb] -> (x, lb, any)
     end
@@ -3247,8 +3247,8 @@ end
 
 function _is_new_call(ex)
     kind(ex) == K"call" &&
-        ((kind(ex[1]) == K"Identifier" && ex[1].name_val == "new") ||
-         (kind(ex[1]) == K"curly" && kind(ex[1][1]) == K"Identifier" && ex[1][1].name_val == "new"))
+        ((kind(ex[1]) == K"Identifier" && getattr(String, ex[1], :name_val) == "new") ||
+         (kind(ex[1]) == K"curly" && kind(ex[1][1]) == K"Identifier" && getattr(String, ex[1][1], :name_val) == "new"))
 end
 
 # Rewrite constructor signature, returning extra information needed for
@@ -3272,7 +3272,7 @@ function rewrite_ctor_sig(ctx, sig, tname, global_tname, struct_typevars, wheres
         # constructor for X (rewrite it to `X{T}(...) where T`)
         ([K"call" [K"::" _ [K"where" _...]] args...], when=begin
              t, inner_wheres = flatten_wheres(ex[1][2])
-             isempty(wheres) && kind(t) === K"curly" && get(t[1], :name_val, "") == "Type"
+             isempty(wheres) && kind(t) === K"curly" && getattr(String, t[1], :name_val, "") == "Type"
          end) -> let
              append!(wheres, inner_wheres)
              ex2 = @ast ctx ex [K"call" t[2] args...]
@@ -3493,7 +3493,7 @@ function _insert_fieldtype_struct_shim(ctx, name, ex)
     if kind(ex) == K"." &&
         numchildren(ex) == 2 &&
         kind(ex[2]) == K"Symbol" &&
-        ex[2].name_val == name.name_val
+        getattr(String, ex[2], :name_val) == getattr(String, name, :name_val)
         @ast ctx ex [K"call" "struct_name_shim"::K"core" ex[1] ex[2] ctx.mod::K"Value" name]
     elseif numchildren(ex) > 0
         mapchildren(e->_insert_fieldtype_struct_shim(ctx, name, e), ctx, ex)
@@ -3514,7 +3514,7 @@ function _replace_type_constructors(ctx, ex)
         return ex
     end
     k = kind(ex)
-    if k == K"call" && numchildren(ex) >= 1 && kind(ex[1]) == K"core" && ex[1].name_val == "apply_type"
+    if k == K"call" && numchildren(ex) >= 1 && kind(ex[1]) == K"core" && getattr(String, ex[1], :name_val) == "apply_type"
         new_head = @ast ctx ex[1] "apply_type_or_typeapp"::K"core"
         new_children = SyntaxList(ctx)
         push!(new_children, new_head)
@@ -4004,7 +4004,7 @@ function expand_importpath(path)
             component = component[1]
         end
         @jl_assert kind(component) in (K"Identifier", K".") component
-        name = component.name_val
+        name = getattr(String, component, :name_val)
         is_dot = kind(component) == K"."
         if is_dot && !prev_was_dot
             throw(LoweringError(component, "invalid import path: `.` in identifier path"))
@@ -4042,7 +4042,7 @@ function expand_import_or_using(ctx, ex)
         if kind(spec) == K"as"
             @jl_assert numchildren(spec) == 2 spec
             @jl_assert kind(spec[2]) == K"Identifier" spec
-            as_name = Symbol(spec[2].name_val)
+            as_name = Symbol(getattr(String, spec[2], :name_val))
             path = QuoteNode(Expr(:as, expand_importpath(spec[1]), as_name))
         else
             path = QuoteNode(expand_importpath(spec))
@@ -4098,9 +4098,9 @@ function expand_public(ctx, ex)
     identifiers = String[]
     for e in children(ex)
         @jl_assert kind(e) == K"Identifier" (ex, "Expected identifier")
-        push!(identifiers, e.name_val)
+        push!(identifiers, getattr(String, e, :name_val))
     end
-    (e.name_val::K"String" for e in children(ex))
+    (getattr(String, e, :name_val)::K"String" for e in children(ex))
     @ast ctx ex [K"call"
         eval_public::K"Value"
         ctx.mod::K"Value"
@@ -4118,7 +4118,7 @@ function isquotedmacrocall(ex)
     let (f, ex) = (ex[1], ex[3])
         kind(f) == K"Value" || return false
         kind(ex) == K"inert" || return false
-        f.value === interpolate_ast || return false
+        getattr(Any, f, :value) === interpolate_ast || return false
         kind(ex[1]) == K"macrocall" || return false
         return true
     end
@@ -4129,7 +4129,7 @@ function expand_doc(ctx, ex, docex)
         expand_forms_2(ctx, @ast ctx docex [K"call"
             bind_static_docs!::K"Value"
             (kind(ex) === K"." ? ex[1] : ctx.mod::K"Value")
-            (kind(ex) === K"." ? ex[2] : ex).name_val::K"Symbol"
+            getattr(String, (kind(ex) === K"." ? ex[2] : ex), :name_val)::K"Symbol"
             docex[1]
             ::K"SourceLocation"(ex)
             Union{}::K"Value"
@@ -4225,7 +4225,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             [K"continue" [K"Placeholder"]] ->
                 @ast ctx ex [K"break" "loop-cont"::K"symboliclabel"]
             [K"continue" [K"Identifier"]] ->
-                @ast ctx ex [K"break" string(ex[1].name_val, "#cont")::K"symboliclabel"]
+                @ast ctx ex [K"break" string(getattr(String, ex[1], :name_val), "#cont")::K"symboliclabel"]
         end
     elseif k == K"comparison"
         expand_forms_2(ctx, expand_compare_chain(ctx, ex))
