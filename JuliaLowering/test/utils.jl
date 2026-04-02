@@ -82,12 +82,6 @@ format_as_ast_macro(ex) = format_as_ast_macro(stdout, ex)
 
 # Test tools
 
-function desugar(mod::Module, src::String)
-    ex = parsestmt(SyntaxTree, src, filename="foo.jl")
-    ctx = JuliaLowering.DesugaringContext(syntax_graph(ex), Bindings(), ScopeLayer[], mod)
-    JuliaLowering.expand_forms_2(ctx, ex)
-end
-
 function uncomment_description(desc)
     replace(desc, r"^# ?"m=>"")
 end

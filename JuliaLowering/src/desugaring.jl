@@ -7,6 +7,7 @@ struct DesugaringContext{Attrs} <: AbstractLoweringContext
     mod::Module
     expr_compat_mode::Bool
     ssa_mapping::Dict{Int, IdTag}
+    world::UInt
 end
 
 # Translate a K"ssavalue" node from pre-lowered code into a normal SSA binding.
@@ -4472,7 +4473,7 @@ ensure_desugaring_attributes!(graph) = ensure_attributes!(
     ex = reparent(graph, ex)
     ctx_out = DesugaringContext(graph, ctx.bindings, ctx.scope_layers,
                                 current_layer(ctx).mod, ctx.expr_compat_mode,
-                                Dict{Int, IdTag}())
+                                Dict{Int, IdTag}(), ctx.macro_world)
     vr = valid_st1(ex)
     # surface only one error until we have pretty-printing for multiple
     if !vr.ok
