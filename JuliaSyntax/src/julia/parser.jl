@@ -2860,7 +2860,10 @@ function parse_space_separated_exprs(ps::ParseState)
                 break
             end
         end
-        parse_eq(ps)
+        # Disable macro_whitespace_newline for sub-expressions so that only the
+        # outermost macro in a parenthesized context eats newline-separated args.
+        # E.g. in (@foo @bar x y\nz), z should be an arg of @foo not @bar.
+        parse_eq(ParseState(ps, macro_whitespace_newline=false))
         n_sep += 1
     end
     return n_sep

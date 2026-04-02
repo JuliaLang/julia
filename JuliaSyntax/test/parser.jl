@@ -369,9 +369,15 @@ tests = [
         "(@foo x\n y)"                             => "(parens (macrocall (macro_name foo) x y))"
         "(1 + @foo x\n y)"                         => "(parens (call-i 1 + (macrocall (macro_name foo) x y)))"
         "(@foo function bar()\n @baz \n x \n end)" => "(parens (macrocall (macro_name foo) (function (call bar) (block (macrocall (macro_name baz)) x))))"
+        "(@foo \n (@bar \n x))"                    => "(parens (macrocall (macro_name foo) (parens (macrocall (macro_name bar) x))))"
         # Don't change parsing rules for [] and {} cases!
         "[x, @foo y\n z]" => "(vect x (macrocall (macro_name foo) y) (error-t z))"
         "{@foo x\n y}"    => "(bracescat (macrocall (macro_name foo) x) y)"
+        # Nested macros: newline args belong to outer macro, not inner
+        "(@foo @bar x\n y)"     => "(parens (macrocall (macro_name foo) (macrocall (macro_name bar) x) y))"
+        "(@foo @bar x y\n z)"   => "(parens (macrocall (macro_name foo) (macrocall (macro_name bar) x y) z))"
+        # Commas in call args with macro on previous line still parse correctly
+        "f(a, b, @bar 1\n, 2)"  => "(call f a b (macrocall (macro_name bar) 1) 2)"
 
         # Macro names
         "@! x"  => "(macrocall (macro_name !) x)"
