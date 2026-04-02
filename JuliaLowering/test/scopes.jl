@@ -419,6 +419,21 @@ end
         gbinfo = only(filter(b->b.kind==:global, binfos))
         @test !gbinfo.is_ambiguous_local
     end
+
+    @testset "soft_scope kwarg override" begin
+        # Without soft_scope, x becomes an ambiguous local
+        let bindings = resolve_and_get_bindings(ambiguous_local, :(for _ = 1:10; x = 1; end))
+            binfo = only(filter(b->b.name=="x", bindings))
+            @test binfo.kind === :local
+            @test binfo.is_ambiguous_local
+        end
+        # With soft_scope=true, x stays global (no local created)
+        let bindings = resolve_and_get_bindings(ambiguous_local, :(for _ = 1:10; x = 1; end); soft_scope=true)
+            binfo = only(filter(b->b.name=="x", bindings))
+            @test binfo.kind === :global
+            @test !binfo.is_ambiguous_local
+        end
+    end
 end
 
 # Note: Certain flisp (un)hygiene behaviour is yet to be implemented.
