@@ -136,14 +136,26 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
 
             // intptr_t addr = (intptr_t) (void*) src;
             // uint8_t* meta_addr = (uint8_t*) (SIDE_METADATA_BASE_ADDRESS + (addr >> 6));
-            F.getParent()->getOrInsertGlobal("MMTK_SIDE_LOG_BIT_BASE_ADDRESS", i8_ptr_ty);
-            auto metadata_base_global = F.getParent()->getNamedGlobal("MMTK_SIDE_LOG_BIT_BASE_ADDRESS");
-            assert(metadata_base_global != nullptr);
-            auto metadata_base_ptr = builder.CreateAlignedLoad(
-                i8_ptr_ty,
-                metadata_base_global,
-                Align(sizeof(void *)),
-                "mmtk_side_log_bit_base");
+            Value *metadata_base_ptr;
+            if (jl_generating_output()) {
+                F.getParent()->getOrInsertGlobal("MMTK_SIDE_LOG_BIT_BASE_ADDRESS", i8_ptr_ty);
+                auto metadata_base_global = F.getParent()->getNamedGlobal("MMTK_SIDE_LOG_BIT_BASE_ADDRESS");
+                assert(metadata_base_global != nullptr);
+                auto metadata_base_load = builder.CreateAlignedLoad(
+                    i8_ptr_ty, metadata_base_global, Align(sizeof(void *)), "mmtk_side_log_bit_base");
+                metadata_base_load->setMetadata(llvm::LLVMContext::MD_tbaa, get_tbaa_const(F.getContext()));
+                metadata_base_load->setMetadata(llvm::LLVMContext::MD_invariant_load,
+                                                llvm::MDNode::get(F.getContext(), {}));
+                metadata_base_ptr = builder.CreateAlignedLoad(
+                    i8_ptr_ty,
+                    metadata_base_global,
+                    Align(sizeof(void *)),
+                    "mmtk_side_log_bit_base");
+            } else {
+                intptr_t metadata_base_address = reinterpret_cast<intptr_t>(MMTK_SIDE_LOG_BIT_BASE_ADDRESS);
+                auto metadata_base_val = ConstantInt::get(intptr_ty, metadata_base_address);
+                metadata_base_ptr = ConstantExpr::getIntToPtr(metadata_base_val, PointerType::get(i8_ty, 0));
+            }
 
             auto parent_val = builder.CreatePtrToInt(parent, intptr_ty);
             auto shr = builder.CreateLShr(parent_val, ConstantInt::get(intptr_ty, 6));
