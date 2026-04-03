@@ -26,6 +26,12 @@ function add_one(x::Cint)::Cint
     return x + 1
 end
 
+# Exercise task starters that are only reachable through task registration.
+module TrimTaskModule
+const task_ran = Ref(false)
+plain_entry()::Nothing = (task_ran[] = true; nothing)
+end
+
 function @main(args::Vector{String})::Cint
     println(Core.stdout, str())
     println(Core.stdout, PROGRAM_FILE)
@@ -62,6 +68,19 @@ function @main(args::Vector{String})::Cint
     end
 
     Base.donotdelete(reshape([1,2,3],:,1,1))
+
+    task = Task(TrimTaskModule.plain_entry)
+    schedule(task)
+    wait(task)
+    println(Core.stdout, TrimTaskModule.task_ran[])
+
+    spawned_ran = Ref(false)
+    spawned = Threads.@spawn begin
+        spawned_ran[] = true
+        nothing
+    end
+    wait(spawned)
+    println(Core.stdout, spawned_ran[])
 
     return 0
 end

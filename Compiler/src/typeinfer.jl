@@ -1656,6 +1656,23 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
             t, _, _, _ = instanceof_tfunc(argextype(stmt.args[1], ci, sptypes))
             t <: Function || continue
             atype = Tuple{t, Vararg}
+        elseif isexpr(stmt, :foreigncall)
+            foreigncall = stmt.args[1]
+            if isexpr(foreigncall, :tuple, 1)
+                foreigncall = foreigncall.args[1]
+                foreigncall isa String && (foreigncall = QuoteNode(Symbol(foreigncall)))
+                if foreigncall isa QuoteNode && foreigncall.value === :jl_new_task
+                    # Tasks defer invocation of their starter until the scheduler runs the task.
+                    # Enqueue the zero-argument starter body now so trim keeps it alive.
+                    length(stmt.args) >= 6 || continue
+                    starter = argextype(stmt.args[6], ci, sptypes)
+                    atype = argtypes_to_type(Any[starter])
+                else
+                    continue
+                end
+            else
+                continue
+            end
         else
             # TODO: handle other StmtInfo like OpaqueClosure?
             continue

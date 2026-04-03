@@ -19,6 +19,9 @@ let infos = Any[]
 end
 
 finalizer(@nospecialize(f), @nospecialize(o)) = Core.finalizer(f, o)
+task_register(@nospecialize(f)) = Task(f)
+task_register_concrete() = Task(task_callback)
+task_callback() = nothing
 
 let infos = typeinf_ext_toplevel(Any[Core.svec(Nothing, Tuple{typeof(finalizer), typeof(identity), Any})], [Base.get_world_counter()], TRIM_UNSAFE)
     errors, parents = get_verify_typeinf_trim(infos)
@@ -36,6 +39,24 @@ let infos = typeinf_ext_toplevel(Any[Core.svec(Nothing, Tuple{typeof(finalizer),
     @test occursin(r"o::Any"s, repr)
     @test occursin(r"::Nothing\n\nStacktrace:"s, repr)
     @test occursin(r"\[1\] finalizer\(f::Any, o::Any\)"s, repr)
+end
+
+let infos = typeinf_ext_toplevel(Any[Core.svec(Task, Tuple{typeof(task_register), Any})], [Base.get_world_counter()], TRIM_UNSAFE)
+    errors, parents = get_verify_typeinf_trim(infos)
+    @test !isempty(errors)
+
+    (warn, desc) = only(errors)
+    @test !warn
+    @test desc isa CallMissing
+    @test occursin("task start", desc.desc)
+    repr = sprint(verify_print_error, desc, parents, warn)
+    @test occursin(r"^unresolved task start registered from statement ccall\("s, repr)
+    @test occursin(r"task_register\(f::Any\)"s, repr)
+end
+
+let infos = typeinf_ext_toplevel(Any[Core.svec(Task, Tuple{typeof(task_register_concrete)})], [Base.get_world_counter()], TRIM_SAFE)
+    errors, parents = get_verify_typeinf_trim(infos)
+    @test isempty(errors)
 end
 
 # test that basic `cfunction` generation is allowed, when the dispatch target can be resolved
