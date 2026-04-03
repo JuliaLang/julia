@@ -642,6 +642,9 @@ SA_EXCEPTIONS-jloptions.c                   := -Xanalyzer -analyzer-config -Xana
  # clang doesn't understand that e->vars has the same value in save_env (NULL) and restore_env (assumed non-NULL)
 SA_EXCEPTIONS-subtype.c                     := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core.uninitialized.Assign;core.UndefinedBinaryOperatorResult"
 SA_EXCEPTIONS-codegen.c                     := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core"
+ # core.FixedAddressDereference is new in clang 21 and false-positives on LLVM ilist headers and gc_read_stack
+SA_EXCEPTIONS-llvm-alloc-opt.cpp            := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core.FixedAddressDereference"
+SA_EXCEPTIONS-gc-stock.c                    := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core.FixedAddressDereference"
  # these need to be annotated (and possibly fixed)
 SKIP_GC_CHECK := codegen.cpp rtutils.c
 
