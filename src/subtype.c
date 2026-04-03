@@ -3060,7 +3060,7 @@ static jl_value_t *omit_bad_union(jl_value_t *u, jl_tvar_t *t)
                     var = jl_new_typevar(var->name, var->lb, ub);
                     body = jl_substitute_var(body, ((jl_unionall_t *)u)->var, (jl_value_t *)var);
                 }
-                res = jl_new_struct(jl_unionall_type, var, body);
+                res = (jl_value_t*)jl_new_unionall(var, body);
             }
         }
         JL_GC_POP();
@@ -3285,9 +3285,9 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                     has_typevar_via_flatten_env(vb->lb, ivar, allvars, checked) ||
                     has_typevar_via_flatten_env(vb->ub, ivar, allvars, checked)) {
                     if (innerflag & 1)
-                        *btemp->lb = jl_new_struct(jl_unionall_type, vb->var, ilb);
+                        *btemp->lb = (jl_value_t*)jl_new_unionall(vb->var, ilb);
                     if (innerflag & 2)
-                        *btemp->ub = jl_new_struct(jl_unionall_type, vb->var, iub);
+                        *btemp->ub = (jl_value_t*)jl_new_unionall(vb->var, iub);
                 }
                 else {
                     assert(btemp->root != vb);
@@ -4938,7 +4938,7 @@ static jl_value_t *insert_nondiagonal(jl_value_t *type, jl_varbinding_t *troot, 
         JL_GC_PUSH3(&newbody, &newvar, &type);
         if (body == newbody || jl_has_typevar(newbody, var)) {
             if (body != newbody)
-                type = jl_new_struct(jl_unionall_type, var, newbody);
+                type = (jl_value_t*)jl_new_unionall(var, newbody);
             // n.b. we do not widen lb, since that would be the wrong direction
             newvar = insert_nondiagonal(var->ub, troot, widen2ub);
             if (newvar != var->ub) {

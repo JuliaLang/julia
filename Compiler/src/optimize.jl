@@ -337,7 +337,7 @@ function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src:
     # `Expr(:new)` of unknown type could raise arbitrary TypeError.
     typ, isexact = instanceof_tfunc(atyp, true)
     if !isexact
-        atyp = unwrap_unionall(widenconst(atyp))
+        atyp = peelall_unionall(widenconst(atyp)).second
         if isType(atyp) && isTypeDataType(atyp.parameters[1])
             typ = atyp.parameters[1]
         else

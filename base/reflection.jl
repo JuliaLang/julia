@@ -1116,8 +1116,9 @@ function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_c
     isempty(kwnames) && return hasmethod(f, t; world)
     t = to_tuple_type(t)
     ft = Core.Typeof(f)
-    u = unwrap_unionall(t)::DataType
-    tt = rewrap_unionall(Tuple{typeof(Core.kwcall), NamedTuple, ft, u.parameters...}, t)
+    (_hm_vars, _hm_u) = peelall_unionall(t)
+    _hm_new = Tuple{typeof(Core.kwcall), NamedTuple, ft, (_hm_u::DataType).parameters...}
+    tt = foldr_unionall(_hm_new, _hm_vars)
     match = ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world)
     match === nothing && return false
     kws = ccall(:jl_uncompress_argnames, Array{Symbol,1}, (Any,), (match::Method).slot_syms)

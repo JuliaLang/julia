@@ -15,7 +15,9 @@ const MAX_TYPEUNION_LENGTH = 3
 # no new values may be introduced, so the parameter `source` encodes the set of all values already present
 # the outermost tuple type is permitted to have up to `allowed_tuplelen` parameters
 function limit_type_size(@nospecialize(t), @nospecialize(compare), @nospecialize(source), allowed_tupledepth::Int, allowed_tuplelen::Int)
-    source = svec(unwrap_unionall(compare), unwrap_unionall(source))
+    _unwrapped_compare = peelall_unionall(compare).second
+    _unwrapped_source = peelall_unionall(source).second
+    source = svec(_unwrapped_compare, _unwrapped_source)
     source[1] === source[2] && (source = svec(source[1]))
     type_more_complex(t, compare, source, 1, allowed_tupledepth, allowed_tuplelen) || return t
     r = _limit_type_size(t, compare, source, 1, allowed_tuplelen)
@@ -52,7 +54,8 @@ function is_derived_type(@nospecialize(t), @nospecialize(c), mindepth::Int)
     elseif isa(c, UnionAll)
         # see if it is derived from the body
         # also handle the var here, since this construct bounds the mindepth to the smallest possible value
-        return is_derived_type(t, c.var.ub, mindepth) || is_derived_type(t, c.body, mindepth)
+        (cv, cb) = peel_unionall(c)
+        return is_derived_type(t, cv.ub, mindepth) || is_derived_type(t, cb, mindepth)
     elseif isa(c, DataType)
         if mindepth > 0
             mindepth -= 1
@@ -92,7 +95,7 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
     elseif isa(t, DataType) && isempty(t.parameters)
         return t # fast path: unparameterized are always simple
     else
-        ut = unwrap_unionall(t)
+        ut = peelall_unionall(t).second
         if is_derived_type_from_any(ut, sources, depth)
             return t # t isn't something new
         end
@@ -103,12 +106,13 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
     # then unwrap `t`
     # NOTE that `TypeVar` / `Vararg` are handled separately to catch the logic errors
     if isa(c, UnionAll)
-        return __limit_type_size(t, c.body, sources, depth, allowed_tuplelen)::Type
+        return __limit_type_size(t, peel_unionall(c)[2], sources, depth, allowed_tuplelen)::Type
     end
     if isa(t, UnionAll)
-        tbody = __limit_type_size(t.body, c, sources, depth, allowed_tuplelen)
-        tbody === t.body && return t
-        return UnionAll(t.var, tbody)::Type
+        (tv, tb) = peel_unionall(t)
+        tbody = __limit_type_size(tb, c, sources, depth, allowed_tuplelen)
+        tbody === tb && return t
+        return UnionAll(tv, tbody)::Type
     elseif isa(t, Union)
         if isa(c, Union)
             a = __limit_type_size(t.a, c.a, sources, depth, allowed_tuplelen)
@@ -119,7 +123,7 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
         if isType(t)
             # Type is fairly important, so do not widen it as fast as other types if avoidable
             tt = t.parameters[1]
-            ttu = unwrap_unionall(tt) # TODO: use argument_datatype(tt) after #50692 fixed
+            ttu = peelall_unionall(tt).second # TODO: use argument_datatype(tt) after #50692 fixed
             # must forbid nesting through this if we detect that potentially occurring
             # we already know !is_derived_type_from_any so refuse to recurse here
             if !isa(ttu, DataType)
@@ -228,7 +232,10 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         return false # Bottom is as simple as they come
     elseif isa(t, DataType) && isempty(t.parameters)
         return false # fastpath: unparameterized types are always finite
-    elseif is_derived_type_from_any(unwrap_unionall(t), sources, depth)
+    elseif begin
+            _ut = peelall_unionall(t).second
+            is_derived_type_from_any(_ut, sources, depth)
+        end
         return false # t isn't something new
     end
     # peel off wrappers
@@ -239,10 +246,10 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         if !isa(t, UnionAll) && tupledepth == 0
             return true
         end
-        c = unwrap_unionall(c)
+        c = peelall_unionall(c).second
     end
     if isa(t, UnionAll)
-        t = unwrap_unionall(t)
+        t = peelall_unionall(t).second
     end
     # rules for various comparison types
     if isa(c, TypeVar)
@@ -269,7 +276,7 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         if isType(t)
             # Type is fairly important, so do not widen it as fast as other types if avoidable
             tt = tP[1]
-            # ttu = unwrap_unionall(tt) # TODO: use argument_datatype(tt) after #50692 fixed
+            # ttu = tt; while ttu isa UnionAll; (_, ttu) = peel_unionall(ttu); end # TODO: use argument_datatype(tt) after #50692 fixed
             if isType(c)
                 ct = c.parameters[1]
             else
@@ -310,7 +317,7 @@ union_count_abstract(x::Union) = union_count_abstract(x.a) + union_count_abstrac
 union_count_abstract(@nospecialize(x)) = !isdispatchelem(x)
 
 function issimpleenoughtype(@nospecialize t)
-    ut = unwrap_unionall(t)
+    ut = peelall_unionall(t).second
     ut isa DataType && ut.name.wrapper == t && return true
     return max(unionlen(t), union_count_abstract(t) + 1) <= MAX_TYPEUNION_LENGTH &&
            unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
@@ -756,20 +763,20 @@ end
         return nothing # fast path
     end
     Any.name === aname && return aname
-    a = unwrap_unionall(aname.wrapper)
+    a = peelall_unionall(aname.wrapper).second
     heighta = 0
     while a !== Any
         heighta += 1
         a = a.super
     end
-    b = unwrap_unionall(bname.wrapper)
+    b = peelall_unionall(bname.wrapper).second
     heightb = 0
     while b !== Any
         b.name === aname && return aname
         heightb += 1
         b = b.super
     end
-    a = unwrap_unionall(aname.wrapper)
+    a = peelall_unionall(aname.wrapper).second
     while heighta > heightb
         a = a.super
         heighta -= 1
@@ -788,7 +795,7 @@ end
         # check that we will be able to analyze (and simplify) everything
         # bail if everything isn't a well-formed DataType
         ti = types[i]
-        uw = unwrap_unionall(ti)
+        uw = peelall_unionall(ti).second
         uw isa DataType || return Any
         ti <: uw.name.wrapper || return Any
         typenames[i] = uw.name
@@ -825,17 +832,22 @@ end
                         # try to widen Tuple slower: make a single non-concrete Tuple containing both
                         # converge the Tuple element-wise if they are the same length
                         # see 4ee2b41552a6bc95465c12ca66146d69b354317b, be59686f7613a2ccfd63491c7b354d0b16a95c05,
-                        widen = tuplemerge(unwrap_unionall(ti)::DataType, unwrap_unionall(tj)::DataType)
-                        widen = rewrap_unionall(rewrap_unionall(widen, ti), tj)
+                        _uwti = peelall_unionall(ti).second
+                        _uwtj = peelall_unionall(tj).second
+                        widen = tuplemerge(_uwti::DataType, _uwtj::DataType)
+                        # rewrap widen with ti's vars then tj's vars
+                        widen = foldr_unionall(widen, peelall_unionall(ti).first)
+                        widen = foldr_unionall(widen, peelall_unionall(tj).first)
                         simplify[j] = false
                     else
                         wr = ijname.wrapper
-                        uw = unwrap_unionall(wr)::DataType
-                        ui = unwrap_unionall(ti)::DataType
+                        (_wr_vars, uw) = peelall_unionall(wr)
+                        uw = uw::DataType
+                        ui = peelall_unionall(ti).second::DataType
                         while ui.name !== ijname
                             ui = ui.super
                         end
-                        uj = unwrap_unionall(tj)::DataType
+                        uj = peelall_unionall(tj).second::DataType
                         while uj.name !== ijname
                             uj = uj.super
                         end
@@ -852,7 +864,7 @@ end
                             end
                         end
                         if usep
-                            widen = rewrap_unionall(wr{p...}, wr)
+                            widen = foldr_unionall(wr{p...}, _wr_vars)
                             widen <: wr || (widen = wr) # sometimes there are cross-constraints on wr that we may lose in this process, but that would cause future calls to this to need to return Any, which is undesirable
                         end
                         simplify[j] = !usep
@@ -876,14 +888,15 @@ end
         issimpleenoughtype(ti) && continue
         if typenames[i] === Tuple.name
             # otherwise we need to do a simple version of tuplemerge for one element now
-            tip = (unwrap_unionall(ti)::DataType).parameters
+            (_ti_vars, _ti_body) = peelall_unionall(ti)
+            tip = (_ti_body::DataType).parameters
             lt = length(tip)
             p = Vector{Any}(undef, lt)
             for j = 1:lt
                 ui = tip[j]
                 p[j] = issimpleenoughtupleelem(unwrapva(ui)) ? ui : isvarargtype(ui) ? Vararg : Any
             end
-            types[i] = rewrap_unionall(Tuple{p...}, ti)
+            types[i] = foldr_unionall(Tuple{p...}, _ti_vars)
         else
             # this element is not simple enough yet, make it so now
             types[i] = typenames[i].wrapper
@@ -936,13 +949,13 @@ function tuplemerge(a::DataType, b::DataType)
                     if !hasfree && tail <: ti
                         tail = ti # widen to ti
                     else
-                        uw = unwrap_unionall(tail)
+                        uw = peelall_unionall(tail).second
                         if uw isa DataType && tail <: uw.name.wrapper
                             # widen tail to wrapper(tail)
                             tail = uw.name.wrapper
                             if !(ti <: tail)
                                 #assert !(tail <: ti)
-                                uw = unwrap_unionall(ti)
+                                uw = peelall_unionall(ti).second
                                 if uw isa DataType && ti <: uw.name.wrapper
                                     # widen ti to wrapper(ti)
                                     ti = uw.name.wrapper

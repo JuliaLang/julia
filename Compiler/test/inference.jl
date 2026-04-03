@@ -58,7 +58,9 @@ end
 
 mutable struct TS14009{T}; end
 let A = TS14009{TS14009{TS14009{TS14009{TS14009{T}}}}} where {T},
-    B = Base.rewrap_unionall(TS14009{Base.unwrap_unionall(A)}, A)
+    B = let (_vars, _body) = Base.peelall_unionall(A)
+        Base.foldr_unionall(TS14009{_body}, _vars)
+    end
 
     @test Compiler.Compiler.limit_type_size(B, A, A, 2, 2) == TS14009
 end
@@ -328,7 +330,7 @@ function g3182(t::DataType)
     # however the ::Type{T} method should still match at run time.
     return f3182(t)
 end
-@test g3182(Complex.body) == 0
+@test g3182(Base.peel_unionall(Complex).second) == 0
 
 
 # issue #5906
@@ -1564,7 +1566,7 @@ let nfields_tfunc(@nospecialize xs...) =
     @test nfields_tfunc(Int) === Const(0)
     @test nfields_tfunc(Complex) === Const(2)
     @test nfields_tfunc(Type{Type{Int}}) === Const(nfields(DataType))
-    @test nfields_tfunc(UnionAll) === Const(2)
+    @test nfields_tfunc(UnionAll) === Const(0)
     @test nfields_tfunc(DataType) === Const(nfields(DataType))
     @test nfields_tfunc(Type{Int}) === Const(nfields(DataType))
     @test nfields_tfunc(Type{Integer}) === Const(nfields(DataType))
@@ -2854,10 +2856,10 @@ let apply_type_tfunc = Compiler.apply_type_tfunc
     @test apply_type_tfunc(𝕃, Const(Issue47089), Const(Int), Const(Int), Const(Int)) === Union{}
     @test apply_type_tfunc(𝕃, Const(Issue47089), Const(String)) === Union{}
     @test apply_type_tfunc(𝕃, Const(Issue47089), Const(AbstractString)) === Union{}
-    @test apply_type_tfunc(𝕃, Const(Issue47089), Type{Ptr}, Type{Ptr{T}} where T) === Base.rewrap_unionall(Type{Issue47089.body.body}, Issue47089)
+    @test apply_type_tfunc(𝕃, Const(Issue47089), Type{Ptr}, Type{Ptr{T}} where T) === let (_vars, _body) = Base.peelall_unionall(Issue47089); Base.foldr_unionall(Type{_body}, _vars); end
     # check complexity size limiting
     @test apply_type_tfunc(𝕃, Const(Val), Type{Pair{Pair{Pair{Pair{A,B},C},D},E}} where {A,B,C,D,E}) == Type{Val{Pair{A, B}}} where {A, B}
-    @test apply_type_tfunc(𝕃, Const(Pair), Base.rewrap_unionall(Type{Pair.body.body},Pair), Type{Pair{Pair{Pair{Pair{A,B},C},D},E}} where {A,B,C,D,E}) == Type{Pair{Pair{A, B}, Pair{C, D}}} where {A, B, C, D}
+    @test apply_type_tfunc(𝕃, Const(Pair), let (_vars, _body) = Base.peelall_unionall(Pair); Base.foldr_unionall(Type{_body}, _vars); end, Type{Pair{Pair{Pair{Pair{A,B},C},D},E}} where {A,B,C,D,E}) == Type{Pair{Pair{A, B}, Pair{C, D}}} where {A, B, C, D}
     @test apply_type_tfunc(𝕃, Const(Val), Type{Union{Int,Pair{Pair{Pair{Pair{A,B},C},D},E}}} where {A,B,C,D,E}) == Type{Val{_A}} where _A
 end
 @test only(Base.return_types(keys, (Dict{String},))) == Base.KeySet{String, T} where T<:(Dict{String})
@@ -2869,8 +2871,10 @@ end
 let A = Tuple{A,B,C,D,E,F,G,H} where {A,B,C,D,E,F,G,H}
     B = Compiler.rename_unionall(A)
     for i in 1:8
-        @test A.var != B.var && (i == 1 ? A == B : A != B)
-        A, B = A.body, B.body
+        _pA = peel_unionall(A)
+        _pB = peel_unionall(B)
+        @test _pA.first != _pB.first && (i == 1 ? A == B : A != B)
+        A, B = _pA.second, _pB.second
     end
 end
 
@@ -3076,9 +3080,9 @@ let rt = Base.return_types(splat27434, (NamedTuple{(:x,), Tuple{T}} where T,))
 end
 
 # issue #27078
-f27078(T::Type{S}) where {S} = isa(T, UnionAll) ? f27078(T.body) : T
+f27078(T::Type{S}) where {S} = isa(T, UnionAll) ? f27078(peel_unionall(T).second) : T
 T27078 = Vector{Vector{T}} where T
-@test f27078(T27078) === T27078.body
+@test f27078(T27078) === peel_unionall(T27078).second
 
 # issue #28070
 g28070(f, args...) = f(args...)

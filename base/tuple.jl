@@ -289,21 +289,27 @@ end
 function _compute_eltype(@nospecialize t)
     @_total_meta
     has_free_typevars(t) && return Any
-    t´ = unwrap_unionall(t)
+    _ce_pa = peelall_unionall(t)
+    _ce_vars = getfield(_ce_pa, 1)
+    t´ = getfield(_ce_pa, 2)
     # Given t = Tuple{Vararg{S}} where S<:Real, the various
     # unwrapping/wrapping/va-handling here will return Real
     if t´ isa Union
-        return promote_typejoin(_compute_eltype(rewrap_unionall(t´.a, t)),
-                                _compute_eltype(rewrap_unionall(t´.b, t)))
+        _ce_a = foldr_unionall(t´.a, _ce_vars)
+        _ce_b = foldr_unionall(t´.b, _ce_vars)
+        return promote_typejoin(_compute_eltype(_ce_a),
+                                _compute_eltype(_ce_b))
     end
     p = (t´::DataType).parameters
     length(p) == 0 && return Union{}
-    elt = rewrap_unionall(unwrapva(p[1]), t)
+    _ce_elt = foldr_unionall(unwrapva(p[1]), _ce_vars)
+    elt = _ce_elt
     elt isa Type || return Union{} # Tuple{2} is legal as a Type, but the eltype is Union{} since it is uninhabited
     r = elt
     for i in 2:length(p)
         r === Any && return r # if we've already reached Any, it can't widen any more
-        elt = rewrap_unionall(unwrapva(p[i]), t)
+        _ce_elt = foldr_unionall(unwrapva(p[i]), _ce_vars)
+        elt = _ce_elt
         elt isa Type || return Union{} # Tuple{2} is legal as a Type, but the eltype is Union{} since it is uninhabited
         r = promote_typejoin(elt, r)
     end
@@ -431,13 +437,15 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 function tuple_type_tail(T::Type)
     @_foldable_meta # TODO: this method is wrong (and not :foldable)
     if isa(T, UnionAll)
-        return UnionAll(T.var, tuple_type_tail(T.body))
+        (var, body) = peel_unionall(T)
+        return UnionAll(var, tuple_type_tail(body))
     elseif isa(T, Union)
         return Union{tuple_type_tail(T.a), tuple_type_tail(T.b)}
     else
         T.name === Tuple.name || throw(MethodError(tuple_type_tail, (T,)))
         if isvatuple(T) && length(T.parameters) == 1
-            va = unwrap_unionall(T.parameters[1])::Core.TypeofVararg
+            va = getfield(peelall_unionall(T.parameters[1]), 2)
+            va = va::Core.TypeofVararg
             (isdefined(va, :N) && isa(va.N, Int)) || return T
             return Tuple{Vararg{va.T, va.N-1}}
         end

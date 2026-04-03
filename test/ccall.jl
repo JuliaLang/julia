@@ -1487,9 +1487,9 @@ end
              @eval f21104(::Type{T}) where {T} = ccall(:fn, Some{T}, ()))
 @test isempty(methods(f21104))
 @test_throws(ErrorException("ccall method definition: argument 1 type doesn't correspond to a C type"),
-             @eval if false; ccall(:fn, Cvoid, (Some.body,), Some(0)); end)
+             @eval if false; ccall(:fn, Cvoid, (peel_unionall(Some).second,), Some(0)); end)
 @test_throws(ErrorException("ccall method definition: return type doesn't correspond to a C type"),
-             @eval if false; ccall(:fn, Some.body, ()); end)
+             @eval if false; ccall(:fn, peel_unionall(Some).second, ()); end)
 @test_throws(ErrorException("ccall method definition: return type doesn't correspond to a C type"),
              @eval if false; ccall(:fn, Tuple, ()); end)
 ## TODO: lowering is broken on this (throws "syntax: ssavalue with no def")

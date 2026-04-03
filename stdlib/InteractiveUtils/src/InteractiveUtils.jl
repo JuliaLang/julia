@@ -16,8 +16,8 @@ export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, 
 
 import Base.Docs.apropos
 
-using Base: unsorted_names, unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, summarysize,
-    signature_type, format_bytes
+using Base: unsorted_names, isdeprecated, Bottom, summarysize,
+    signature_type, format_bytes, peel_unionall, peelall_unionall, foldr_unionall
 using Base.Libc
 using Markdown
 
@@ -214,15 +214,18 @@ See also: [`methods`](@ref).
 """
 function methodswith(@nospecialize(t::Type), @nospecialize(f::Base.Callable), meths = Method[]; supertypes::Bool=false)
     for d in methods(f)
+        # Peel the UnionAll to get the body and collect TypeVars for rewrapping
+        (_mw_vars, _mw_body) = peelall_unionall(d.sig)
         if any(function (x)
-                   let x = rewrap_unionall(x, d.sig)
+                   # Rewrap x with the collected TypeVars (skip Vararg which can't be wrapped)
+                   let x = isa(x, Core.TypeofVararg) ? x : foldr_unionall(x, _mw_vars)
                        (type_close_enough(x, t) ||
                         (supertypes ? (isa(x, Type) && t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
                          (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
                         x != Any)
                    end
                end,
-               unwrap_unionall(d.sig).parameters)
+               _mw_body.parameters)
             push!(meths, d)
         end
     end
@@ -254,7 +257,7 @@ end
 
 # subtypes
 function _subtypes_in!(mods::Array, @nospecialize(x::Type))
-    xt = unwrap_unionall(x)
+    xt = peelall_unionall(x).second
     if !isabstracttype(x) || !isa(xt, DataType)
         # Fast path
         return Type[]
@@ -266,7 +269,11 @@ function _subtypes_in!(mods::Array, @nospecialize(x::Type))
         for s in unsorted_names(m, all = true)
             if !isdeprecated(m, s) && isdefinedglobal(m, s)
                 t = getglobal(m, s)
-                dt = isa(t, UnionAll) ? unwrap_unionall(t) : t
+                if isa(t, UnionAll)
+                    dt = peelall_unionall(t).second
+                else
+                    dt = t
+                end
                 if isa(dt, DataType)
                     if dt.name.name === s && dt.name.module == m && supertype(dt).name == xt.name
                         ti = typeintersect(t, x)

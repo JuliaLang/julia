@@ -4,6 +4,7 @@ module Base
 
 Core._import(Base, Core, :_eval_import, :_eval_import, true)
 Core._import(Base, Core, :_eval_using, :_eval_using, true)
+Core._import(Base, Core, :peel_unionall, :peel_unionall, true)
 
 using .Core.Intrinsics, .Core.IR
 
@@ -229,7 +230,11 @@ include("options.jl")
 function Core.kwcall(kwargs::NamedTuple, ::typeof(invoke), f, T, args...)
     @inline
     # prepend kwargs and f to the invoked from the user
-    T = rewrap_unionall(Tuple{Core.Typeof(kwargs), Core.Typeof(f), (unwrap_unionall(T)::DataType).parameters...}, T)
+    _kwc_pa = peelall_unionall(T)
+    _kwc_vars = getfield(_kwc_pa, 1)
+    _kwc_u = getfield(_kwc_pa, 2)
+    _kwc_new = Tuple{Core.Typeof(kwargs), Core.Typeof(f), (_kwc_u::DataType).parameters...}
+    T = foldr_unionall(_kwc_new, _kwc_vars)
     return invoke(Core.kwcall, T, kwargs, f, args...)
 end
 # invoke does not have its own call cache, but kwcall for invoke does
@@ -242,7 +247,11 @@ function Core.kwcall(kwargs::NamedTuple, ::typeof(applicable), @nospecialize(arg
     return applicable(Core.kwcall, kwargs, args...)
 end
 function Core._hasmethod(@nospecialize(f), @nospecialize(t)) # this function has a special tfunc (TODO: make this a Builtin instead like applicable)
-    tt = rewrap_unionall(Tuple{Core.Typeof(f), (unwrap_unionall(t)::DataType).parameters...}, t)
+    _hm_pa = peelall_unionall(t)
+    _hm_vars = getfield(_hm_pa, 1)
+    _hm_u = getfield(_hm_pa, 2)
+    _hm_new = Tuple{Core.Typeof(f), (_hm_u::DataType).parameters...}
+    tt = foldr_unionall(_hm_new, _hm_vars)
     return Core._hasmethod(tt)
 end
 

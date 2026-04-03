@@ -2273,7 +2273,6 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
         // Symbols are always marked
         assert(vtag != (uintptr_t)jl_symbol_type && vtag != jl_symbol_tag << 4);
         if (vtag == (jl_datatype_tag << 4) ||
-            vtag == (jl_unionall_tag << 4) ||
             vtag == (jl_uniontype_tag << 4) ||
             vtag == (jl_tvar_tag << 4) ||
             vtag == (jl_vararg_tag << 4) ||
@@ -2304,6 +2303,15 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 uint32_t step = 1;
                 uintptr_t nptr = (l << 2) | (bits & GC_OLD);
                 gc_mark_objarray(ptls, objary_parent, objary_begin, objary_end, step, nptr);
+            }
+            else if (vtag == jl_unionall_tag << 4) {
+                if (update_meta)
+                    gc_setmark(ptls, o, bits, sizeof(jl_unionall_t));
+                jl_unionall_t *ua = (jl_unionall_t *)new_obj;
+                uintptr_t nptr = (2 << 2) | (bits & GC_OLD);
+                gc_try_claim_and_push(mq, (jl_value_t*)ua->var, &nptr);
+                gc_try_claim_and_push(mq, ua->body, &nptr);
+                gc_mark_push_remset(ptls, new_obj, nptr);
             }
             else if (vtag == jl_module_tag << 4) {
                 if (update_meta)

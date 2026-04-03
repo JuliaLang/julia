@@ -219,8 +219,12 @@ precompile_test_harness(false) do dir
 
               const x28297 = Result(missing)
 
-              const d29936a = UnionAll(Dict.var, UnionAll(Dict.body.var, Dict.body.body))
-              const d29936b = UnionAll(Dict.body.var, UnionAll(Dict.var, Dict.body.body))
+              const d29936a = let _dp = peel_unionall(Dict), _dp2 = peel_unionall(_dp.second)
+                  UnionAll(_dp.first, UnionAll(_dp2.first, _dp2.second))
+              end
+              const d29936b = let _dp = peel_unionall(Dict), _dp2 = peel_unionall(_dp.second)
+                  UnionAll(_dp2.first, UnionAll(_dp.first, _dp2.second))
+              end
 
               # issue #28998
               const x28998 = [missing, 2, missing, 6, missing,
@@ -512,7 +516,7 @@ precompile_test_harness(false) do dir
         @test Foo.some_linfo::Core.MethodInstance === some_linfo
 
         ft = Base.datatype_fieldtypes
-        PV = ft(Foo.Value18343{Some}.body)[1]
+        PV = ft(peel_unionall(Foo.Value18343{Some}).second)[1]
         VR = ft(PV)[1].parameters[1]
         @test ft(PV)[1] === Array{VR,1}
         @test pointer_from_objref(ft(PV)[1]) ===
@@ -1148,7 +1152,7 @@ precompile_test_harness("precompiletools") do dir
         m = which(Tuple{typeof(findfirst), Base.Fix2{typeof(==), T}, Vector{T}} where T)
         success = 0
         for mi in Base.specializations(m)
-            sig = Base.unwrap_unionall(mi.specTypes)
+            sig = peelall_unionall(mi.specTypes).second
             success += sig.parameters[3] === Vector{M.MyType}
         end
         @test success == 1

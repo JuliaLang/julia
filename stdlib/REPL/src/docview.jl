@@ -252,7 +252,9 @@ function doc(binding::Binding, sig::Type = Union{})
 end
 
 # Some additional convenience `doc` methods that take objects rather than `Binding`s.
-doc(obj::UnionAll) = doc(Base.unwrap_unionall(obj))
+function doc(obj::UnionAll)
+    doc(Base.peelall_unionall(obj).second)
+end
 doc(object, sig::Type = Union{}) = doc(aliasof(object, typeof(object)), sig)
 doc(object, sig...)              = doc(object, Tuple{sig...})
 
@@ -341,7 +343,7 @@ end
 
 function summarize(io::IO, TT::Type, binding::Binding)
     println(io, "# Summary")
-    T = Base.unwrap_unionall(TT)
+    T = Base.peelall_unionall(TT).second
     if T isa DataType
         println(io, "```")
         print(io,
@@ -366,7 +368,7 @@ function summarize(io::IO, TT::Type, binding::Binding)
             println(io, "# Subtypes")
             println(io, "```")
             for t in subt
-                println(io, Base.unwrap_unionall(t))
+                println(io, Base.peelall_unionall(t).second)
             end
             println(io, "```")
         end
@@ -380,8 +382,10 @@ function summarize(io::IO, TT::Type, binding::Binding)
     elseif T isa Union
         println(io, "`", binding, "` is of type `", typeof(TT), "`.\n")
         println(io, "# Union Composed of Types")
+        # Collect TypeVars from TT for rewrapping
+        _rw_vars = Base.peelall_unionall(TT).first
         for T1 in Base.uniontypes(T)
-            println(io, " - `", Base.rewrap_unionall(T1, TT), "`")
+            println(io, " - `", Base.foldr_unionall(T1, _rw_vars), "`")
         end
     else # unreachable?
         println(io, "`", binding, "` is of type `", typeof(TT), "`.\n")
@@ -691,7 +695,9 @@ function fielddoc(binding::Binding, field::Symbol)
 end
 
 # As with the additional `doc` methods, this converts an object to a `Binding` first.
-fielddoc(obj::UnionAll, field::Symbol) = fielddoc(Base.unwrap_unionall(obj), field)
+function fielddoc(obj::UnionAll, field::Symbol)
+    fielddoc(Base.peelall_unionall(obj).second, field)
+end
 fielddoc(object, field::Symbol) = fielddoc(aliasof(object, typeof(object)), field)
 
 

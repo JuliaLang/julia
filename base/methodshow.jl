@@ -53,12 +53,8 @@ function method_argnames(m::Method)
 end
 
 function arg_decl_parts(m::Method, html=false)
-    tv = Any[]
-    sig = m.sig
-    while isa(sig, UnionAll)
-        push!(tv, sig.var)
-        sig = sig.body
-    end
+    (sig_vars, sig) = peelall_unionall(m.sig)
+    tv = Any[sig_vars...]
     file, line = updated_methodloc(m)
     argnames = method_argnames(m)
     if length(argnames) >= m.nargs
@@ -80,7 +76,9 @@ end
 function kwarg_decl(m::Method, kwtype = nothing)
     if !(m.sig === Tuple || m.sig <: Tuple{Core.Builtin, Vararg}) # OpaqueClosure or Builtin
         kwtype = typeof(Core.kwcall)
-        sig = rewrap_unionall(Tuple{kwtype, NamedTuple, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
+        (_kw_vars, _kw_u) = peelall_unionall(m.sig)
+        _kw_new = Tuple{kwtype, NamedTuple, (_kw_u::DataType).parameters...}
+        sig = foldr_unionall(_kw_new, _kw_vars)
         kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, get_world_counter())
         if kwli !== nothing
             kwli = kwli::Method
@@ -306,7 +304,8 @@ function _modulecolor(method::Method)
     # method table is shared, we now need to distinguish "primary" methods by trying to
     # check if there is a primary `DataType` to identify it with. c.f. how `jl_method_def`
     # would derive this same information (for the name).
-    ft = argument_datatype((unwrap_unionall(method.sig)::DataType).parameters[1])
+    _mc_uw = peelall_unionall(method.sig).second
+    ft = argument_datatype((_mc_uw::DataType).parameters[1])
     # `ft` should be the type associated with the first argument in the method signature.
     # If it's `Type`, try to unwrap it again.
     if isType(ft)
@@ -425,7 +424,7 @@ end
 
 function show(io::IO, ::MIME"text/html", m::Method)
     tv, decls, file, line = arg_decl_parts(m, true)
-    sig = unwrap_unionall(m.sig)
+    sig = peelall_unionall(m.sig).second
     if sig <: Tuple{Core.Builtin, Vararg}
         print(io, m.name, "(...) in ", parentmodule(m))
         return

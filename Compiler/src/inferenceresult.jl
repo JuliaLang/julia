@@ -141,7 +141,8 @@ function va_process_argtypes(𝕃::AbstractLattice, given_argtypes::Vector{Any},
 end
 
 function most_general_argtypes(method::Union{Method,Nothing}, @nospecialize(specTypes))
-    mi_argtypes = Any[(unwrap_unionall(specTypes)::DataType).parameters...]
+    _uw_specTypes = peelall_unionall(specTypes).second
+    mi_argtypes = Any[(_uw_specTypes::DataType).parameters...]
     nargtypes = length(mi_argtypes)
     nargs = isa(method, Method) ? Int(method.nargs) : 0
     if length(mi_argtypes) < nargs && isvarargtype(mi_argtypes[end])
@@ -167,7 +168,7 @@ function most_general_argtypes(method::Union{Method,Nothing}, @nospecialize(spec
         elseif isconstType(atyp)
             atyp = Const(atyp.parameters[1])
         else
-            atyp = elim_free_typevars(rewrap_unionall(atyp, specTypes))
+            atyp = elim_free_typevars(foldr_unionall(atyp, peelall_unionall(specTypes).first))
         end
         mi_argtypes[i] = atyp
         if wasva

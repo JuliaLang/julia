@@ -951,6 +951,19 @@ JL_DLLEXPORT jl_value_t *jl_unwrap_unionall(jl_value_t *v JL_PROPAGATES_ROOT) JL
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u);
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall_(jl_value_t *t, jl_value_t *u);
 jl_value_t* jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype_t * y);
+
+STATIC_INLINE jl_unionall_t *jl_new_unionall(jl_tvar_t *v, jl_value_t *body)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_unionall_t *u = (jl_unionall_t*)jl_gc_alloc(ct->ptls, sizeof(jl_unionall_t), jl_unionall_type);
+    jl_set_typetagof((jl_value_t*)u, jl_unionall_tag, 0);
+    u->var = v;
+    jl_gc_wb_fresh(u, (jl_value_t*)v);
+    u->body = body;
+    jl_gc_wb_fresh(u, body);
+    return u;
+}
+
 int jl_count_union_components(jl_value_t *v);
 JL_DLLEXPORT jl_value_t *jl_nth_union_component(jl_value_t *v JL_PROPAGATES_ROOT, int i) JL_NOTSAFEPOINT;
 int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *nth) JL_NOTSAFEPOINT;

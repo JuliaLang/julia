@@ -458,7 +458,7 @@ end
         if isa(a, Const)
             widea = widenconst(a)::DataType
             wideb = widenconst(b)
-            wideb′ = unwrap_unionall(wideb)::DataType
+            wideb′ = peelall_unionall(wideb).second::DataType
             widea.name === wideb′.name || return false
             if wideb′.name === Tuple.name
                 # We can skip the subtype check if b is a Tuple, since in that

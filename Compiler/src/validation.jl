@@ -221,7 +221,7 @@ function validate_code!(errors::Vector{InvalidCodeError}, mi::Core.MethodInstanc
     else
         m = mi.def::Method
         mnargs = Int(m.nargs)
-        n_sig_params = length((unwrap_unionall(m.sig)::DataType).parameters)
+        n_sig_params = length((peelall_unionall(m.sig).second::DataType).parameters)
         if m.is_for_opaque_closure
             m.sig === Tuple || push!(errors, InvalidCodeError(INVALID_SIGNATURE_OPAQUE_CLOSURE, (m.sig, m.isva)))
         elseif (m.isva ? (n_sig_params < (mnargs - 1)) : (n_sig_params != mnargs))

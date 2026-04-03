@@ -2769,10 +2769,12 @@ function detect_unbound_args(mods...;
         for m in Base.MethodList(mt)
             is_in_mods(parentmodule(m), recursive, mods) || continue
             has_unbound_vars(m.sig) || continue
-            tuple_sig = Base.unwrap_unionall(m.sig)::DataType
+            (_ts_vars, _ts_u) = Base.peelall_unionall(m.sig)
+            tuple_sig = _ts_u::DataType
             if Base.isvatuple(tuple_sig)
                 params = tuple_sig.parameters[1:(end - 1)]
-                tuple_sig = Base.rewrap_unionall(Tuple{params...}, m.sig)
+                # Rewrap Tuple{params...} with the TypeVars from m.sig
+                tuple_sig = Base.foldr_unionall(Tuple{params...}, _ts_vars)
                 world = Base.get_world_counter()
                 mf = ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tuple_sig, nothing, world)
                 if mf !== nothing && mf !== m && mf.sig <: tuple_sig
@@ -2788,8 +2790,7 @@ end
 
 function has_unbound_vars(@nospecialize sig)
     while sig isa UnionAll
-        var = sig.var
-        sig = sig.body
+        (var, sig) = peel_unionall(sig)
         if !Core.Compiler.constrains_param(var, sig, #=covariant=#true, #=type_constrains=#true)
             return true
         end

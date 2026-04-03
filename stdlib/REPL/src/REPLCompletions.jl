@@ -760,7 +760,7 @@ function complete_any_methods(ex_org::Expr, callee_module::Module, context_modul
         filter!(out) do c
             isa(c, TextCompletion) && return false
             isa(c, MethodCompletion) || return true
-            sig = Base.unwrap_unionall(c.method.sig)::DataType
+            sig = Base.peelall_unionall(c.method.sig).second::DataType
             return !all(@nospecialize(T) -> T === Any || T === Vararg{Any}, sig.parameters[2:end])
         end
     end

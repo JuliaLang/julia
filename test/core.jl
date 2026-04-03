@@ -195,7 +195,7 @@ f11840(::DataType) = "DataType"
 f11840(::UnionAll) = "UnionAll"
 f11840(::Type{T}) where {T<:Tuple} = "Tuple"
 @test f11840(Type) == "UnionAll"
-@test f11840(Type.body) == "DataType"
+@test f11840(Base.peel_unionall(Type).second) == "DataType"
 @test f11840(Union{Int,Int8}) == "Type"
 @test f11840(Tuple) == "Tuple"
 @test f11840(TT11840) == "Tuple"
@@ -203,9 +203,9 @@ f11840(::Type{T}) where {T<:Tuple} = "Tuple"
 g11840(::DataType) = 1
 g11840(::Type) = 2
 g11840(sig::Type{T}) where {T<:Tuple} = 3
-@test g11840(Vector.body) == 1
+@test g11840(peel_unionall(Vector).second) == 1
 @test g11840(Vector) == 2
-@test g11840(Vector.body) == 1
+@test g11840(peel_unionall(Vector).second) == 1
 @test g11840(Vector) == 2
 @test g11840(Tuple) == 3
 @test g11840(TT11840) == 3
@@ -214,9 +214,9 @@ g11840b(::DataType) = 1
 g11840b(::Type) = 2
 g11840b(sig::Type{T}) where {T<:Tuple} = 3
 @test g11840b(Vector) == 2
-@test g11840b(Vector.body) == 1
+@test g11840b(peel_unionall(Vector).second) == 1
 @test g11840b(Vector) == 2
-@test g11840b(Vector.body) == 1
+@test g11840b(peel_unionall(Vector).second) == 1
 @test g11840b(Tuple) == 3
 @test g11840b(TT11840) == 3
 
@@ -225,10 +225,10 @@ h11840(::Type) = '2'
 h11840(::UnionAll) = '3'
 h11840(::Type{T}) where {T<:Tuple} = '4'
 @test h11840(Vector) == '3'
-@test h11840(Vector.body) == '1'
+@test h11840(peel_unionall(Vector).second) == '1'
 @test h11840(Vector) == '3'
 @test h11840(Union{Vector, Matrix}) == '2'
-@test h11840(Union{Vector.body, Matrix.body}) == '2'
+@test h11840(Union{peel_unionall(Vector).second, peel_unionall(Matrix).second}) == '2'
 @test h11840(Tuple) == '4'
 @test h11840(TT11840) == '4'
 
@@ -410,14 +410,14 @@ abstract type Qux_{T} <: Sup_{Qux_{Int},T} end
 @test ===(Qux_{Int}, Qux_{Char}.super.parameters[1])
 @test ===(Qux_{Char}.super.parameters[2], Char)
 
-@test Qux_.body.super.parameters[1].super <: Sup_
-@test ===(Qux_{Int}, Qux_.body.super.parameters[1].super.parameters[1])
-@test ===(Int, Qux_.body.super.parameters[1].super.parameters[2])
+@test Base.peel_unionall(Qux_).second.super.parameters[1].super <: Sup_
+@test ===(Qux_{Int}, Base.peel_unionall(Qux_).second.super.parameters[1].super.parameters[1])
+@test ===(Int, Base.peel_unionall(Qux_).second.super.parameters[1].super.parameters[2])
 
 mutable struct Foo_{T} x::Foo_{Int} end
 
-@test ===(Foo_.body.types[1], Foo_{Int})
-@test ===(Foo_.body.types[1].types[1], Foo_{Int})
+@test ===(peel_unionall(Foo_).second.types[1], Foo_{Int})
+@test ===(peel_unionall(Foo_).second.types[1].types[1], Foo_{Int})
 
 mutable struct Circ_{T} x::Circ_{T} end
 @test ===(Circ_{Int}, Circ_{Int}.types[1])
@@ -439,12 +439,12 @@ struct D21923{T,N}; v::D21923{T}; end
 # issue #22624, more circular definitions
 struct T22624{A,B,C}; v::Vector{T22624{Int64,A}}; end
 let ft = Base.datatype_fieldtypes
-    elT = T22624.body.body.body.types[1].parameters[1]
-    @test elT == T22624{Int64, T22624.var, C} where C
-    elT2 = ft(elT.body)[1].parameters[1]
+    elT = peelall_unionall(T22624).second.types[1].parameters[1]
+    @test elT == T22624{Int64, peel_unionall(T22624).first, C} where C
+    elT2 = ft(peel_unionall(elT).second)[1].parameters[1]
     @test elT2 == T22624{Int64, Int64, C} where C
-    @test ft(elT2.body)[1].parameters[1] === elT2
-    @test Base.isconcretetype(ft(elT2.body)[1])
+    @test ft(peel_unionall(elT2).second)[1].parameters[1] === elT2
+    @test Base.isconcretetype(ft(peel_unionall(elT2).second)[1])
 end
 struct S22624{A,B,C} <: Ref{S22624{Int,A}}; end
 @test sizeof(S22624) == sizeof(S22624{Int,Int,Int}) == 0
@@ -946,7 +946,7 @@ end
 # isassigned, issue #11167
 mutable struct Type11167{T,N} end
 function count11167()
-    let cache = Type11167.body.body.name.cache
+    let cache = peelall_unionall(Type11167).second.name.cache
         return count(!isnothing, cache)
     end
 end
@@ -1468,19 +1468,19 @@ let
     baar(x::Union) = 1
     baar(x::UnionAll) = 2
     @test baar(StridedArray) == 2
-    @test baar(Base.unwrap_unionall(StridedArray)) == 1
+    @test baar(peelall_unionall(StridedArray).second) == 1
     @test baar(Vector) == 2
-    @test baar(Vector.body) == 0
+    @test baar(peel_unionall(Vector).second) == 0
 
     boor(x) = 0
     boor(x::Union) = 1
     @test boor(StridedArray) == 0
-    @test boor(Base.unwrap_unionall(StridedArray)) == 1
+    @test boor(peelall_unionall(StridedArray).second) == 1
 
     # issue #1202
     foor(x::Union) = 1
     @test_throws MethodError foor(StridedArray)
-    @test foor(Base.unwrap_unionall(StridedArray)) == 1
+    @test foor(peelall_unionall(StridedArray).second) == 1
     @test_throws MethodError foor(StridedArray)
 end
 
@@ -3961,9 +3961,9 @@ end
 @test_throws ErrorException("invalid struct allocation") eval(Expr(:new, B))
 @test_throws ErrorException("invalid struct allocation") eval(Expr(:new, B, A(), A()))
 @test_throws TypeError("new", DataType, Complex) eval(Expr(:new, Complex))
-@test_throws TypeError("new", DataType, Complex.body) eval(Expr(:new, Complex.body))
+@test_throws TypeError("new", DataType, peel_unionall(Complex).second) eval(Expr(:new, peel_unionall(Complex).second))
 @test_throws TypeError("new", DataType, Complex) eval(Expr(:splatnew, Complex, ()))
-@test_throws TypeError("new", DataType, Complex.body) eval(Expr(:splatnew, Complex.body, ()))
+@test_throws TypeError("new", DataType, peel_unionall(Complex).second) eval(Expr(:splatnew, peel_unionall(Complex).second, ()))
 
 end
 
@@ -5077,14 +5077,14 @@ struct A12238{T} end
 mutable struct B12238{T,S}
     a::A12238{B12238{Int,S}}
 end
-@test B12238.body.body.types[1] === A12238{B12238{Int}.body}
+@test peelall_unionall(B12238).second.types[1] === A12238{peel_unionall(B12238{Int}).second}
 @test isa(A12238{B12238{Int}}.instance, A12238{B12238{Int}})
 let ft = Base.datatype_fieldtypes
-    @test !isdefined(ft(B12238.body.body)[1], :instance)  # has free type vars
+    @test !isdefined(ft(peelall_unionall(B12238).second)[1], :instance)  # has free type vars
 end
 
 # issue #54969
-@test !isdefined(Memory.body, :instance)
+@test !isdefined(peel_unionall(Memory).second, :instance)
 
 # `where` syntax in constructor definitions
 (A12238{T} where T<:Real)(x) = 0
@@ -5210,8 +5210,8 @@ mutable struct C16767{T}
     b::A16767{C16767{:a}}
 end
 let ft = Base.datatype_fieldtypes
-    @test ft(ft(B16767.body.types[1])[1].parameters[1])[1] === A16767{B16767.body}
-    @test ft(C16767.body.types[1].types[1].parameters[1])[1] === A16767{C16767{:a}}
+    @test ft(ft(peel_unionall(B16767).second.types[1])[1].parameters[1])[1] === A16767{peel_unionall(B16767).second}
+    @test ft(peel_unionall(C16767).second.types[1].types[1].parameters[1])[1] === A16767{C16767{:a}}
 end
 
 # issue #16340
@@ -7765,13 +7765,13 @@ struct T44614_3{L, N}
     param::NTuple{N, T44614_1}
     T44614_3(a::Tuple{T44614_2{L}}, pars::NTuple{N, T44614_1}) where {L, N} = new{L, N}(a, pars)
 end
-@test sizeof((T44614_2{L} where L).body) == 24
+@test sizeof(peel_unionall(T44614_2{L} where L).second) == 24
 let T = T44614_3{L,2} where L
     # these values are computable, but we currently don't know how to compute them properly
     ex = ErrorException("Argument is an incomplete T44614_3 type and does not have a definite size.")
-    @test_throws ex sizeof(T.body)
+    @test_throws ex sizeof(peel_unionall(T).second)
     @test_throws ex sizeof(T)
-    @test_throws BoundsError fieldoffset(T.body, 2)
+    @test_throws BoundsError fieldoffset(peel_unionall(T).second, 2)
     @test fieldoffset(T{1}, 2) == 24
 end
 
@@ -7844,9 +7844,9 @@ struct S36104{K,V}
     S36104{K,V}() where {K,V} = new()
     S36104{K,V}(x::S36104) where {K,V} = new(x)
 end
-@test !isdefined(Base.unwrap_unionall(Base.ImmutableDict).name, :partial)
-@test !isdefined(S36104.body.body.name, :partial)
-@test hasfield(typeof(S36104.body.body.name), :partial)
+@test !isdefined(peelall_unionall(Base.ImmutableDict).second.name, :partial)
+@test !isdefined(peelall_unionall(S36104).second.name, :partial)
+@test hasfield(typeof(peelall_unionall(S36104).second.name), :partial)
 struct S36104{K,V}   # check that redefining it works
     v::S36104{K,V}
     S36104{K,V}() where {K,V} = new()
@@ -7901,7 +7901,7 @@ function f37044(r)
     end
     return t.types
 end
-r37044 = Ref37044(A37044{Int}.body)
+r37044 = Ref37044(peel_unionall(A37044{Int}).second)
 @test f37044(r37044)[1] === Int
 
 a37265() = 0
@@ -8397,7 +8397,9 @@ let src = code_lowered(check_globalref_lowering)[1]
 end
 
 # Test correctness of widen_diagonal
-let widen_diagonal(x::UnionAll) = Base.rewrap_unionall(Base.widen_diagonal(Base.unwrap_unionall(x), x), x)
+let widen_diagonal(x::UnionAll) = let (_vars, _body) = peelall_unionall(x)
+        foldr_unionall(Base.widen_diagonal(_body, x), _vars)
+    end
     @test Tuple{Int,Float64} <: widen_diagonal(NTuple)
     @test Tuple{Int,Float64} <: widen_diagonal(Tuple{T,T} where {T})
     @test Tuple{Real,Int,Float64} <: widen_diagonal(Tuple{S,Vararg{T}} where {S, T<:S})

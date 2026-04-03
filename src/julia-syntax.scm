@@ -995,18 +995,7 @@
             (call (core _setsuper!) ,name ,super)
             (= ,hasprev (&& (call (core isdefinedglobal) (thismodule) (inert ,name) (false)) (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name)))
             (= ,prev (if ,hasprev (globalref (thismodule) ,name) (false)))
-            (if ,hasprev
-                ;; if this is compatible with an old definition, use the old parameters, but the
-                ;; new object. This will fail to capture recursive cases, but the call to typebody!
-                ;; below is permitted to choose either type definition to put into the binding table
-                (block ,@(if (pair? params)
-                              `((= (tuple ,@params) (|.|
-                                                    ,(foldl (lambda (_ x) `(|.| ,x (quote body)))
-                                                            prev
-                                                            params)
-                                                    (quote parameters))))
-                              '())))
-            (= ,newdef (call (core _typebody!) ,prev ,name (call (core svec) ,@(insert-struct-shim field-types name))))
+            (= ,newdef (call (core _typebody!) ,prev ,name (call (core svec) ,@(insert-struct-shim field-types name)) (call (core svec) ,@params)))
             (const (globalref (thismodule) ,name) ,newdef)
             (latestworld)
             (null))))

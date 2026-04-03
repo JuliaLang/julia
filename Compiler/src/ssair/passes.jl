@@ -420,7 +420,7 @@ function lift_leaves(compact::IncrementalCompact, field::Int,
                 lift_arg!(compact, leaf, cache_key, def, 1+field, lifted_leaves)
                 continue
             elseif isexpr(def, :new)
-                typ = unwrap_unionall(widenconst(types(compact)[leaf]))
+                typ = peelall_unionall(widenconst(types(compact)[leaf])).second
                 (isa(typ, DataType) && !isabstracttype(typ)) || return nothing
                 if ismutabletype(typ)
                     isconst(typ, field) || return nothing
@@ -1108,8 +1108,7 @@ end
     # TODO: More general structural analysis of the intersection
     sig = m.sig
     isa(sig, UnionAll) || return nothing
-    tvar = sig.var
-    sig = sig.body
+    (tvar, sig) = peel_unionall(sig)
     isa(sig, DataType) || return nothing
     sig.name === Tuple.name || return nothing
     sig_parameters = sig.parameters::SimpleVector
@@ -1148,11 +1147,10 @@ end
     isa(applyT, UnionAll) || return nothing
     # N.B.: At the moment we only lift the valI == 1 case, so we
     # only need to look at the outermost tvar.
-    applyTvar = applyT.var
-    applyTbody = applyT.body
+    (applyTvar, applyTbody) = peel_unionall(applyT)
 
-    arg = unwrap_unionall(arg)
-    applyTbody = unwrap_unionall(applyTbody)
+    arg = peelall_unionall(arg).second
+    applyTbody = peelall_unionall(applyTbody).second
 
     (isa(arg, DataType) && isa(applyTbody, DataType)) || return nothing
     applyTbody.name === arg.name || return nothing
@@ -1189,12 +1187,7 @@ function pattern_match_typeof(compact::IncrementalCompact, typ::DataType, fidx::
     isa(applyT, Const) || return false
 
     applyT = applyT.val
-    tvars = Any[]
-    while isa(applyT, UnionAll)
-        applyTvar = applyT.var
-        applyT = applyT.body
-        push!(tvars, applyTvar)
-    end
+    (tvars, applyT) = let _p = peelall_unionall(applyT); (Any[_p.first...], _p.second); end
 
     @assert applyT.name === typ.name
     fT = fieldtype(applyT, fidx)
@@ -1415,7 +1408,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                         push!(preserved, preserved_arg.id)
                         continue
                     elseif isexpr(def, :new)
-                        typ = unwrap_unionall(widenconst(argextype(SSAValue(defidx), compact)))
+                        typ = peelall_unionall(widenconst(argextype(SSAValue(defidx), compact))).second
                         if typ isa DataType && !ismutabletype(typ)
                             record_immutable_preserve!(new_preserves, def, compact)
                             push!(preserved, preserved_arg.id)
@@ -1815,7 +1808,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int,Tuple{SPCSet,SSADefUse}}
         # Find the type for this allocation
         defexpr = ir[SSAValue(defidx)][:stmt]
         isexpr(defexpr, :new) || continue
-        typ = unwrap_unionall(ir.stmts[defidx][:type])
+        typ = peelall_unionall(ir.stmts[defidx][:type]).second
         # Could still end up here if we tried to setfield! on an immutable, which would
         # error at runtime, but is not illegal to have in the IR.
         typ = widenconst(typ)

@@ -1784,9 +1784,9 @@ end
 @b28593
 @c28593
 
-@test A28593.var.name === :S
-@test B28593.var.name === :S
-@test C28593.var.name === :S
+@test peel_unionall(A28593).first.name === :S
+@test peel_unionall(B28593).first.name === :S
+@test peel_unionall(C28593).first.name === :S
 
 # issue #51899
 macro struct_macro_51899()

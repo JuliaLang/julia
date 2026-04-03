@@ -49,7 +49,7 @@ function compile_all_tvar_union(methsig)
             return false
         end
         idx[i] = 1
-        var = sigbody.var
+        (var, sigbody) = peel_unionall(sigbody)
         env[2*i - 1] = var
 
         # Get upper bound
@@ -63,7 +63,6 @@ function compile_all_tvar_union(methsig)
         end
 
         env[2*i] = tv
-        sigbody = sigbody.body
     end
 
     all_success = true
@@ -115,7 +114,7 @@ end
 
 # Port of _compile_all_union
 function compile_all_union(sig)
-    sigbody = unwrap_unionall(sig)::DataType
+    sigbody = peelall_unionall(sig).second::DataType
 
     if !isa(sigbody, Type) || !isa(sigbody, DataType)
         return compile_all_tvar_union(sig)
@@ -174,7 +173,7 @@ function compile_all_union(sig)
         # Reconstruct tuple type
         new_sigbody = Tuple{new_params...}
         # Rewrap in UnionAll if needed
-        methsig = rewrap_unionall(new_sigbody, sig)
+        methsig = foldr_unionall(new_sigbody, peelall_unionall(sig).first)
         success = compile_all_tvar_union(methsig)
         all_success = all_success && success
     end

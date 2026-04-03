@@ -190,7 +190,7 @@ function (ss::SummarySize)(obj::Module)
             if !isa(value, Module) || parentmodule(value) === obj
                 size += ss(value)::Int
                 if isa(value, UnionAll)
-                    value = unwrap_unionall(value)
+                    value = peelall_unionall(value).second
                 end
                 if isa(value, DataType) && parentmodule(value) === obj && nameof(value) === binding
                     # charge a TypeName to its module (but not to the type)

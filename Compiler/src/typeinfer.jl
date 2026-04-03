@@ -425,7 +425,7 @@ function inline_cost_model(interp::AbstractInterpreter, result::InferenceResult,
     @assert !(rt isa LimitedAccuracy)
     rt = widenslotwrapper(rt)
 
-    sig = unwrap_unionall(specTypes)
+    sig = peelall_unionall(specTypes).second
     if !(isa(sig, DataType) && sig.name === Tuple.name)
         return MAX_INLINE_COST
     end
@@ -1546,7 +1546,8 @@ end
 
 # compute (and cache) an inferred AST and return the inferred return type
 function typeinf_type(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector)
-    if contains_is(unwrap_unionall(atype).parameters, Union{})
+    _uw_atype = peelall_unionall(atype).second
+    if contains_is(_uw_atype.parameters, Union{})
         return Union{} # don't ask: it does weird and unnecessary things, if it occurs during bootstrap
     end
     return typeinf_type(interp, specialize_method(method, atype, sparams))
