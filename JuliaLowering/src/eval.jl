@@ -248,10 +248,10 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
             push!(nospecialize_slots, Core.SlotNumber(i))
         end
     end
-    if length(nospecialize_slots) == nargs - 1 # self arg
-        push!(stmts, Expr(:meta, :nospecialize))
-    elseif !isempty(nospecialize_slots)
-        push!(stmts, Expr(:meta, :nospecialize, nospecialize_slots...))
+    if !isempty(nospecialize_slots)
+        length(nospecialize_slots) == nargs - 1 ? # all args but self
+            push!(stmts, Expr(:meta, :nospecialize)) :
+            push!(stmts, Expr(:meta, :nospecialize, nospecialize_slots...))
     end
 
     stmt_offset = length(stmts)
