@@ -325,6 +325,81 @@ split_generated(st::SyntaxTree, gen_part) = @stm st begin
     _ -> mapchildren(x->split_generated(x, gen_part), st._graph, st)
 end
 
+# Set [no]specialize on a function parameter's identifier.  `meta` is a symbol
+# if we should set this arg's meta unconditionally, or a map identifier-string
+# to symbol if we should only do it for some identifiers (function body >0 arg
+# nospecialize), or nothing if we should just recurse to find meta forms.
+# Exceptions with unconditional meta: set meta on the tuple for a destructuring
+# arg, and the whole expression for (::T).
+function apply_arg_meta(st, meta::Union{Nothing, Symbol, Dict{String, Symbol}})
+    g = st._graph
+    k = kind(st)
+    if k == K"Identifier"
+        if meta isa Symbol
+            setmeta(st, meta, true)
+        elseif isnothing(meta)
+            st
+        else
+            sym = get(meta, st.name_val::String, nothing)
+            !isnothing(sym) ? setmeta(st, sym, true) : st
+        end
+    elseif k == K"Placeholder" || k == K"tuple" || k == K"::" && numchildren(st) == 1
+        meta isa Symbol ? setmeta(st, meta, true) : st
+    elseif k == K"..." || k == K"::" || k == K"=" || k == K"kw"
+        c1 = st[1]
+        out1 = apply_arg_meta(c1, meta)
+        c1 == out1 ? st : @ast g st [k out1 st[2:end]...]
+    elseif k == K"meta"
+        # not specified what to do here if we get conflicting
+        # specialize/nospecialize
+        meta2 = Symbol(st[1].name_val::String)
+        @jl_assert meta2 in (:specialize, :nospecialize) st
+        apply_arg_meta(st[2], meta2)
+    elseif k == K"parameters"
+        mapchildren(x->apply_arg_meta(x, meta), st._graph, st)
+    else
+        @jl_assert false st
+    end
+end
+
+function apply_arglist_meta(st, meta::Union{Nothing, Symbol, Dict{String, Symbol}})
+    g = st._graph
+    @stm st begin
+        [K"where" x tvs...] -> let fixed = apply_arglist_meta(x, meta)
+            fixed == x ? st : @ast g st [K"where" fixed tvs...]
+        end
+        [K"::" x t] ->  let fixed = apply_arglist_meta(x, meta)
+            fixed == x ? st : @ast g st [K"::" fixed t]
+        end
+        [K"call" f args...] -> mapchildren(x->
+            x == f ? f : apply_arg_meta(x, meta), st._graph, st)
+        [K"tuple" _...] -> mapchildren(x->apply_arg_meta(x, meta), st._graph, st)
+    end
+end
+
+# nothing if not found, or symbol if 0-arg [no]specialize, or dict arg->meta
+function collect_body_arg_meta(st)
+    out = nothing
+    for c in children(st)
+        k = kind(c)
+        @stm c begin
+            [K"meta" [K"Identifier"] idents...] -> begin
+                meta = Symbol(c[1].name_val::String)
+                meta in (:specialize, :nospecialize) || continue
+                length(idents) == 0 && return meta
+                isnothing(out) && (out = Dict{String, Symbol}())
+                for id in idents
+                    kind(id) === K"Identifier" && (out[id.name_val] = meta)
+                end
+            end
+            # Only leading meta statements are recognized in lowering.  Ideally
+            # meta after non-meta statements would be an error.
+            _ -> break
+        end
+    end
+    out
+end
+
 """
 Convert the Expr-like tree (EST) coming from macro expansion to the tree
 desugaring expects (DST), where some forms have SyntaxNode structure and others
@@ -446,6 +521,8 @@ function est_to_dst(st::SyntaxTree)
                      JS.flags(st) | JS.set_numeric_flags(dim.value))
         end
         ([K"=" l r], when=(is_eventually_call(l))) -> let
+            # no fix_arglist needed, since this func can't be anonymous
+            l = apply_arglist_meta(l, collect_body_arg_meta(r))
             if has_if_generated(r)
                 gen, nongen = split_generated(r, true), split_generated(r, false)
                 r2 = @ast g st [K"_generated_body" [K"quote" gen] rec(nongen)]
@@ -454,7 +531,8 @@ function est_to_dst(st::SyntaxTree)
             end
             @ast g st [K"function" rec(l) r2]
         end
-        [K"function" l r] -> let l = _dst_fix_arglist(l)
+        [K"function" l r] -> let
+            l = apply_arglist_meta(_dst_fix_arglist(l), collect_body_arg_meta(r))
             if has_if_generated(r)
                 gen, nongen = split_generated(r, true), split_generated(r, false)
                 r2 = @ast g st [K"_generated_body" [K"quote" gen] rec(nongen)]
@@ -463,7 +541,8 @@ function est_to_dst(st::SyntaxTree)
             end
             @ast g st [K"function" rec(l) r2]
         end
-        [K"->" l r] -> let l = _dst_fix_arglist(l)
+        [K"->" l r] -> let
+            l = apply_arglist_meta(_dst_fix_arglist(l), collect_body_arg_meta(r))
             if has_if_generated(r)
                 gen, nongen = split_generated(r, true), split_generated(r, false)
                 r2 = @ast g st [K"_generated_body" [K"quote" gen] rec(nongen)]
@@ -503,26 +582,14 @@ function est_to_dst(st::SyntaxTree)
         end
 
         #-----------------------------------------------------------------------
-        # Heads are not emitted from parsing
+        # Heads not emitted from parsing
         ([K"meta" [K"unknown_head" ps...]], when=st[1].name_val === "purity") ->
             @ast g st [K"meta" "purity"::K"Symbol"
                 Base.EffectsOverride([x.value for x in ps]...)::K"Value"]
         ([K"meta" s vs...],
-         when=(get(s, :name_val, "") in ("nospecialize", "specialize"))) -> let
-            if length(vs) === 0
-                @ast g st [K"meta" s=>K"Symbol"]
-            elseif length(vs) === 1
-                out = est_to_dst(vs[1])
-                setmeta(out, Symbol(s.name_val), true)
-            else
-                # Kick the can down the road (should only be simple atoms?)
-                out_cs = SyntaxList(g)
-                for v in vs
-                    push!(out_cs, @ast g v [K"meta" s=>K"Symbol" v])
-                end
-                @ast g st [K"block" out_cs...]
-            end
-        end
+         when=(meta=get(s, :name_val, "")::String; meta in ("nospecialize", "specialize"))) ->
+             # Should be handled in the function case
+             @ast g st "nothing"::K"core"
         [K"meta" syms...] ->
             @ast g st [K"meta" mapsyntax(
                 s->(kind(s) === K"Identifier" ? setattr(s, :kind, K"Symbol") : s),

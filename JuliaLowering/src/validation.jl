@@ -703,6 +703,16 @@ vst1_calldecl_name(vcx, st) = @stm st begin
     _ -> @fail(st, "invalid function name")
 end
 
+_is_arg_meta(st) = @stm st begin
+    [K"meta" s arg] -> let meta_s = get(s, :name_val, "")::String
+        kind(arg) === K"meta" ?
+            @fail(st, "invalid nested annotation") :
+        !(meta_s in ("specialize", "nospecialize")) ?
+            @fail(st, "unrecognized meta function arg form") : pass()
+    end
+    _ -> unknown()
+end
+
 # Check mandatory and optional positional params:
 # `[pparam* pparam_and_default* pparam_and_splatdefault? pparam_va?]`
 # TODO: add list matching to @stm
@@ -711,10 +721,8 @@ function _calldecl_positionals(vcx, params_meta, eq_is_kw)
     ok = Ref(pass())
     params = map(params_meta) do meta_p
         @stm meta_p begin
-            [K"meta" s p] -> let meta_s = get(s, :name_val, "")
-                if !(meta_s in ("specialize", "nospecialize"))
-                    ok[] &= @fail(p, "unrecognized meta function arg form")
-                end
+            [K"meta" s p] -> begin
+                ok[] &= _is_arg_meta(meta_p)
                 p
             end
             p -> p
@@ -781,8 +789,9 @@ vst1_pparam_simple_tuple(vcx, st) = @stm st begin
 end
 
 vst1_param(vcx, st) = @stm st begin
-    [K"Identifier"] -> pass()
-    [K"::" [K"Identifier"] t] -> vst1(with(vcx; readable_underscore=true), t)
+    [K"Identifier"] -> vst1_ident(vcx, st; lhs=true)
+    [K"::" id t] -> vst1_ident(vcx, id; lhs=true) &
+        vst1(with(vcx; readable_underscore=true), t)
     [K"::" t] -> vst1(with(vcx; readable_underscore=true), t)
     _ -> @fail(st, "expected identifier or `identifier::type`")
 end
@@ -808,12 +817,16 @@ end
 vst1_calldecl_kws(vcx, st) = @stm st begin
     [K"parameters" kws... [K"..." varkw]] ->
         all(vst1_param_kw, vcx, kws) & vst1_param_varkw(vcx, varkw)
+    [K"parameters" kws... [K"meta" _ [K"..." varkw]]] ->
+        all(vst1_param_kw, vcx, kws) &
+        _is_arg_meta(st[end]) &
+        vst1_param_varkw(vcx, varkw)
     [K"parameters" kws...] -> all(vst1_param_kw, vcx, kws)
     _ -> @fail(st, "malformed keyword parameters")
 end
 
 vst1_param_varkw(vcx, st) = @stm st begin
-    [K"Identifier"] -> pass()
+    [K"Identifier"] -> vst1_ident(vcx, st; lhs=true)
     [K"::" _...] ->
         @fail(st, "keyword parameter with `...` may not be given a type")
     _ -> @fail(st, "expected identifier")
@@ -822,6 +835,7 @@ end
 vst1_param_kw(vcx, st) = @stm st begin
     [K"kw" id val] ->
         vst1_param(vcx, id) & vst1(vcx, val)
+    [K"meta" s x] -> _is_arg_meta(st) & vst1_param_kw(vcx, x)
     [K"..." _...] ->
         @fail(st, "`...` may only be used for the final keyword parameter")
     _ -> vst1_param(vcx, st) |

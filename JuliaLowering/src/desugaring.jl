@@ -2641,7 +2641,6 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
         newsym(ctx, argl[1], reserve_module_binding_i(ctx.mod, mangled))
     end
     # (1) Body method.  This contains the actual function body, and requires
-    # (1) Body method.  This contains the actual function body, and requires
     # every possible default to be filled.  `rett` is only passed here since it
     # can reference any argument.
     mdefs1 = let arg1 = @ast ctx m1_name [K"::" m1_name [K"function_type" m1_name]]
@@ -2965,19 +2964,16 @@ end
 
 # flisp: expand-macro-def
 function expand_macro_def(ctx, ex)
-    @jl_assert numchildren(ex) >= 1 (ex,"invalid macro definition")
     if numchildren(ex) == 1
-        name = ex[1]
         # macro with zero methods
         # `macro m end`
-        return @ast ctx ex [K"function" _make_macro_name(ctx, name)]
+        return @ast ctx ex [K"function" _make_macro_name(ctx, ex[1])]
     end
-    # TODO: Making this manual pattern matching robust is such a pain!!!
-    sig = ex[1]
-    @jl_assert (kind(sig) == K"call" && numchildren(sig) >= 1) (sig, "invalid macro signature")
-    name = sig[1]
-    args = remove_empty_parameters(children(sig))
-    @jl_assert kind(args[end]) != K"parameters" (args[end], "macros cannot accept keyword arguments")
+    (sig, name, args) = @stm ex begin
+        [K"macro" [K"call" n a...] _] -> (ex[1], n, remove_empty_parameters(a))
+        _ -> @jl_assert false ex
+    end
+
     scope_ref = kind(name) == K"." ? name[1] : name
     if ctx.expr_compat_mode
         @ast ctx ex [K"function"
@@ -2992,7 +2988,7 @@ function expand_macro_def(ctx, ex)
                     adopt_scope(@ast(ctx, sig, "__module__"::K"Identifier"), scope_ref)
                     Module::K"Value"
                 ]
-                map(e->_apply_nospecialize(ctx, e), args[2:end])...
+                mapsyntax(e->apply_arg_meta(e, :nospecialize), args)...
             ]
             ex[2]
         ]
@@ -3006,7 +3002,7 @@ function expand_macro_def(ctx, ex)
                 ]
                 # flisp: We don't mark these @nospecialize because all arguments to
                 # new macros will be of type SyntaxTree
-                args[2:end]...
+                args...
             ]
             ex[2]
         ]

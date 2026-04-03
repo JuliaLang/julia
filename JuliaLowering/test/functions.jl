@@ -364,7 +364,29 @@ f_return_in_interpolation()
 
 end
 
-@testset "Slot flags" begin
+@testset "slotflags" begin
+    JuliaLowering.include_string(test_mod, """
+    function f_slotflags(x, y, f, z)
+        f() + x + y
+    end
+    """)
+    @test only(methods(test_mod.f_slotflags)).called == 0b0100
+end
+
+@testset "nospecialize" begin
+    # note f(a,b,c) means a is arg 1, not f
+    function test_arg_unspecialized(f::Function, arg_i::Int)
+        for m in methods(f)
+            arg_i > m.nargs-1 && return nothing
+            @test m.nospecialize & (1 << (arg_i-1)) != 0
+        end
+    end
+    function test_arg_specialized(f::Function, arg_i::Int)
+        for m in methods(f)
+            arg_i > m.nargs-1 && return nothing
+            @test m.nospecialize & (1 << (arg_i-1)) == 0
+        end
+    end
 
     @test JuliaLowering.include_string(test_mod, """
     begin
@@ -378,21 +400,6 @@ end
     # We dig into the internal of `Method` here to check which slots have been
     # flagged as nospecialize.
     @test only(methods(test_mod.f_nospecialize)).nospecialize == 0b10100
-
-    # @nospecialize on unnamed arguments (issue #44428)
-    JuliaLowering.include_string(test_mod, """
-    function f_nospecialize_unnamed(@nospecialize(::Any), @nospecialize(x::Any))
-        x
-    end
-    """)
-    @test only(methods(test_mod.f_nospecialize_unnamed)).nospecialize == 0b11
-
-    JuliaLowering.include_string(test_mod, """
-    function f_slotflags(x, y, f, z)
-        f() + x + y
-    end
-    """)
-    @test only(methods(test_mod.f_slotflags)).called == 0b0100
 
     # Branching combined with nospecialize meta in CodeInfo
     @test JuliaLowering.include_string(test_mod, """
@@ -465,7 +472,6 @@ end
     @test any(m -> m.nargs == 2 && m.nospecialize == 0b00, ms)
 
     # Body-level @nospecialize with default value in signature
-    # See the TODO comment in `optional_positional_defs!`
     @test JuliaLowering.include_string(test_mod, """
     begin
         function f_body_nospecialize_default(x, y=1)
@@ -478,20 +484,110 @@ end
     # The 2-arg method has nospecialize on y (bit 2), the 1-arg forwarding method has no y
     ms = collect(methods(test_mod.f_body_nospecialize_default))
     @test count(m -> m.nargs == 3 && m.nospecialize == -1, ms) == 1
-    @test_broken count(m -> m.nargs == 2 && m.nospecialize == -1, ms) == 1
+    @test count(m -> m.nargs == 2 && m.nospecialize == -1, ms) == 1
 
-    # Body-level @nospecialize for methods with keyword arguments
+    # body nospecialize into complex sig: all
     @test JuliaLowering.include_string(test_mod, """
-    function f_body_nospecialize_with_kwargs(a; kw=1)
-        @nospecialize a
-        (a, kw)
+    begin
+        function f_body_nospecialize_nontrivial_sig(x::T, y::Vector{<:U}=[])::Any where T where U
+            @nospecialize
+            (x, y)
+        end
+        (f_body_nospecialize_nontrivial_sig(10, [20]), f_body_nospecialize_nontrivial_sig(30))
     end
-    (f_body_nospecialize_with_kwargs(1; kw=2), f_body_nospecialize_with_kwargs(3))
-    """) == ((1,2), (3,1))
-    # Although not tested here, the keyword body method (`var"#f_body_nospecialize_with_kwargs#0"`)'s
-    # third argument (corresponding to `a`) should probably be nospecialized too.
-    @test_broken only(methods(test_mod.f_body_nospecialize_with_kwargs)).nospecialize == 1
-    @test_broken only(methods(Core.kwcall, (NamedTuple,typeof(test_mod.f_body_nospecialize_with_kwargs),Any))).nospecialize == 1 << 2
+    """) == ((10, [20]), (30, []))
+    test_arg_unspecialized(test_mod.f_body_nospecialize_nontrivial_sig, 1)
+    test_arg_unspecialized(test_mod.f_body_nospecialize_nontrivial_sig, 2)
+    # should be blanket-nospecialized
+    ms = collect(methods(test_mod.f_body_nospecialize_nontrivial_sig))
+    @test count(m -> m.nargs == 3 && m.nospecialize == -1, ms) == 1
+    @test count(m -> m.nargs == 2 && m.nospecialize == -1, ms) == 1
+
+    # body nospecialize into complex sig: by name
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_body_nospecialize_nontrivial_sig2(x::T, y::Vector{<:U}=[])::Any where T where U
+            @nospecialize x
+            (x, y)
+        end
+        (f_body_nospecialize_nontrivial_sig2(10, [20]), f_body_nospecialize_nontrivial_sig2(30))
+    end
+    """) == ((10, [20]), (30, []))
+    test_arg_unspecialized(test_mod.f_body_nospecialize_nontrivial_sig2, 1)
+    test_arg_specialized(test_mod.f_body_nospecialize_nontrivial_sig2, 2)
+
+    @testset "all positional arg forms" for arg0 in [:x, :(x::Type), :(::Type), :(_), :(_::Type)],
+        arg1 in [arg0, Expr(:..., arg0)],
+        arg2 in [arg1, Expr(:kw, arg1, :Int)],
+        expander in [fl_macroexpand, jl_macroexpand]
+
+        @testset let expanded = expander(
+            test_mod, :(function (specialized, @nospecialize($arg2))
+                            specialized
+                        end))
+            f = jl_eval(test_mod, expanded)
+            test_arg_specialized(f, 1)
+            test_arg_unspecialized(f, 2)
+        end
+
+        @testset let expanded = expander(
+            test_mod, :(function ($arg2,)
+                            @nospecialize
+                        end))
+            f = jl_eval(test_mod, expanded)
+            test_arg_unspecialized(f, 1)
+        end
+    end
+
+    @testset "kwargs" for expander in [fl_macroexpand, jl_macroexpand]
+        local f
+        @test (f = jl_eval(test_mod, expander(
+            test_mod, quote
+                function (@nospecialize(a); kw=1)
+                    (a, kw)
+                end
+            end))) isa Function
+        Core.@latestworld
+        @test f(1, kw=2) == (1,2) && f(3) == (3,1)
+        test_arg_unspecialized(f, 1)
+        @test only(methods(Core.kwcall, (NamedTuple,typeof(f),Any))).nospecialize == 1 << 2
+
+        # Body-level @nospecialize
+        @test (f = jl_eval(test_mod, expander(
+            test_mod, quote
+                function (a; kw=1)
+                    @nospecialize a
+                    (a, kw)
+                end
+            end))) isa Function
+        Core.@latestworld
+        @test f(1, kw=2) == (1,2) && f(3) == (3,1)
+        test_arg_unspecialized(f, 1)
+        @test only(methods(Core.kwcall, (NamedTuple,typeof(f),Any))).nospecialize == 1 << 2
+
+        # kw nospecialize.  TODO: The body method is local; how do we get it out
+        # for testing?
+        @test (f = jl_eval(test_mod, expander(
+            test_mod, quote
+                function (a; @nospecialize(kw=1))
+                    (a, kw)
+                end
+            end))) isa Function
+        Core.@latestworld
+        @test f(1, kw=2) == (1,2) && f(3) == (3,1)
+        test_arg_specialized(f, 1)
+
+        # kw... nospecialize (same TODO)
+        @test (f = jl_eval(test_mod, expander(
+            test_mod, quote
+                function (a; @nospecialize(kw...))
+                    (a, kw...)
+                end
+            end))) isa Function
+        Core.@latestworld
+        @test f(1, kw=2, a=3) == (1,:kw=>2,:a=>3)
+        test_arg_specialized(f, 1)
+    end
 end
 
 @testset "Keyword functions" begin

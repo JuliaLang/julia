@@ -965,7 +965,7 @@ function (_,((a,b)...)::Int); end
 #---------------------
 LoweringError:
 function (_,((a,b)...)::Int); end
-#           └─────────────┘ ── expected identifier or `identifier::type`
+#            └──────┘ ── expected identifier
 
 ########################################
 # Error: destructured arg with kw
@@ -1169,6 +1169,54 @@ end
 10  latestworld
 11  TestMod.f
 12  (return %₁₁)
+
+########################################
+# Error: nospecialize should be outermost expr in arg
+function f_bad_nospecialize(@nospecialize(x)=1); end
+#---------------------
+LoweringError:
+function f_bad_nospecialize(@nospecialize(x)=1); end
+#                           └──────────────┘ ── expected identifier or `identifier::type`
+
+########################################
+# Error: nospecialize should be outermost expr in arg
+function f_bad_nospecialize(;@nospecialize(x)=1); end
+#---------------------
+LoweringError:
+function f_bad_nospecialize(;@nospecialize(x)=1); end
+#                            └──────────────┘ ── expected identifier or `identifier::type`
+
+########################################
+# Error: nospecialize should be outermost expr in arg
+function f_bad_nospecialize(@nospecialize(x)...); end
+#---------------------
+LoweringError:
+function f_bad_nospecialize(@nospecialize(x)...); end
+#                           └──────────────┘ ── expected identifier or `identifier::type`
+
+########################################
+# Error: nospecialize should be outermost expr in arg
+function f_bad_nospecialize(;@nospecialize(x)...); end
+#---------------------
+LoweringError:
+function f_bad_nospecialize(;@nospecialize(x)...); end
+#                            └──────────────┘ ── expected identifier
+
+########################################
+# Error: nospecialize should be outermost expr in arg
+function f_bad_nospecialize(@nospecialize(x)::T); end
+#---------------------
+LoweringError:
+function f_bad_nospecialize(@nospecialize(x)::T); end
+#                           └──────────────┘ ── expected identifier
+
+########################################
+# Error: nospecialize should be outermost expr in arg
+function f_bad_nospecialize(;@nospecialize(x)::T); end
+#---------------------
+LoweringError:
+function f_bad_nospecialize(;@nospecialize(x)::T); end
+#                            └──────────────┘ ── expected identifier
 
 ########################################
 # Function return without arguments
@@ -1833,6 +1881,82 @@ function f_kw_sparams(x::X; a::A) where {X,Y,A}
 #                                          ╙ ── method definition declares type variable but does not use it in the type of any function parameter
     (X,A)
 end
+
+########################################
+# Keyword @nospecialize
+function f_kw_slurp(a,;kw1,kw2=2,restkw...)
+    @nospecialize
+end
+#---------------------
+1   (method TestMod.f_kw_slurp)
+2   latestworld
+3   (method TestMod.#kw_body#f_kw_slurp#1)
+4   latestworld
+5   TestMod.#kw_body#f_kw_slurp#1
+6   (call core.Typeof %₅)
+7   (call top.pairs core.NamedTuple)
+8   TestMod.f_kw_slurp
+9   (call core.Typeof %₈)
+10  (call core.svec %₆ core.Any core.Any %₇ %₉ core.Any)
+11  (call core.svec)
+12  SourceLocation::1:10
+13  (call core.svec %₁₀ %₁₁ %₁₂)
+14  --- method TestMod.#kw_body#f_kw_slurp#1 %₁₃
+    slots: [slot₁/#kw_body#f_kw_slurp#1(!read) slot₂/kw1(nospecialize,!read) slot₃/kw2(nospecialize,!read) slot₄/restkw(nospecialize,!read) slot₅/#self#(!read) slot₆/a(nospecialize,!read)]
+    1   (meta :nkw 3)
+    2   (return core.nothing)
+15  latestworld
+16  TestMod.f_kw_slurp
+17  (call core.Typeof %₁₆)
+18  (call core.svec %₁₇ core.Any)
+19  (call core.svec)
+20  SourceLocation::1:10
+21  (call core.svec %₁₈ %₁₉ %₂₀)
+22  --- method TestMod.f_kw_slurp %₂₁
+    slots: [slot₁/#self# slot₂/a(nospecialize)]
+    1   TestMod.#kw_body#f_kw_slurp#1
+    2   (call core.UndefKeywordError :kw1)
+    3   (call core.throw %₂)
+    4   (call core.NamedTuple)
+    5   (call top.pairs %₄)
+    6   (call %₁ %₃ 2 %₅ slot₁/#self# slot₂/a)
+    7   (return %₆)
+23  latestworld
+24  (call core.typeof core.kwcall)
+25  TestMod.f_kw_slurp
+26  (call core.Typeof %₂₅)
+27  (call core.svec %₂₄ core.NamedTuple %₂₆ core.Any)
+28  (call core.svec)
+29  SourceLocation::1:10
+30  (call core.svec %₂₇ %₂₈ %₂₉)
+31  --- method TestMod.f_kw_slurp %₃₀
+    slots: [slot₁/#unused#(!read) slot₂/kws slot₃/#self# slot₄/a(nospecialize) slot₅/kw1(!read) slot₆/kw2(!read) slot₇/kwtmp]
+    1   (newvar slot₅/kw1)
+    2   (newvar slot₆/kw2)
+    3   (newvar slot₇/kwtmp)
+    4   (call core.isdefined slot₂/kws :kw1)
+    5   (gotoifnot %₄ label₈)
+    6   (= slot₇/kwtmp (call core.getfield slot₂/kws :kw1))
+    7   (goto label₁₀)
+    8   (call core.UndefKeywordError :kw1)
+    9   (= slot₇/kwtmp (call core.throw %₈))
+    10  slot₇/kwtmp
+    11  (call core.isdefined slot₂/kws :kw2)
+    12  (gotoifnot %₁₁ label₁₅)
+    13  (= slot₇/kwtmp (call core.getfield slot₂/kws :kw2))
+    14  (goto label₁₆)
+    15  (= slot₇/kwtmp 2)
+    16  slot₇/kwtmp
+    17  (call core.tuple :kw1 :kw2)
+    18  (call core.apply_type core.NamedTuple %₁₇)
+    19  (call top.structdiff slot₂/kws %₁₈)
+    20  (call top.pairs %₁₉)
+    21  TestMod.#kw_body#f_kw_slurp#1
+    22  (call %₂₁ %₁₀ %₁₆ %₂₀ slot₃/#self# slot₄/a)
+    23  (return %₂₂)
+32  latestworld
+33  TestMod.f_kw_slurp
+34  (return %₃₃)
 
 ########################################
 # Error: argument unpacking in keywords

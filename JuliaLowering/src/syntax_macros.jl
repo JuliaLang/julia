@@ -15,33 +15,18 @@
 # `JuliaLowering.include()` or something. Then we'll be in the fun little world
 # of bootstrapping but it shouldn't be too painful :)
 
-function _apply_nospecialize(ctx, ex)
-    k = kind(ex)
-    if k == K"Identifier" || k == K"Placeholder" || k == K"tuple" ||
-        k == K"::" && numchildren(ex) == 1
-        setmeta(ex, :nospecialize, true)
-    elseif k == K"..." || k == K"::" || k == K"=" || k == K"kw"
-        # The @nospecialize macro is responsible for converting K"=" to K"kw".
-        # Desugaring uses this helper internally, so we may see K"kw" too.
-        if k == K"=" && numchildren(ex) === 2
-            k = K"kw"
-        end
-        @ast ctx ex [k _apply_nospecialize(ctx, ex[1]) ex[2:end]...]
-    else
-        throw(LoweringError(ex, "Invalid function argument"))
-    end
-end
-
 function Base.var"@nospecialize"(__context__::MacroContext, exs::SyntaxTree...)
     if length(exs) == 0
-        @ast __context__ __context__.macrocall [K"meta" "nospecialize"::K"Identifier"]
-    elseif length(exs) == 1
-        _apply_nospecialize(__context__, only(exs))
+        @ast __context__ __context__.macrocall [K"meta"
+            "nospecialize"::K"Identifier"]
+    elseif length(exs) == 1 && kind(exs[1]) === K"="
+        eq = exs[1]
+        @ast __context__ __context__.macrocall [K"meta"
+            "nospecialize"::K"Identifier" [K"kw"(eq) children(eq)...]]
     else
-        @ast __context__ __context__.macrocall [K"block"
-            map(ex->_apply_nospecialize(__context__, ex), exs)...
-        ]
-     end
+        @ast __context__ __context__.macrocall [K"meta"
+            "nospecialize"::K"Identifier" exs...]
+    end
 end
 
 # TODO: support all forms that the original supports

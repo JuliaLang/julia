@@ -199,7 +199,7 @@ cmdmac`hello`12345
 
 ########################################
 # @nospecialize (zero args)
-function foo()
+function foo(a)
     @nospecialize
 end
 #---------------------
@@ -207,14 +207,13 @@ end
 2   latestworld
 3   TestMod.foo
 4   (call core.Typeof %₃)
-5   (call core.svec %₄)
+5   (call core.svec %₄ core.Any)
 6   (call core.svec)
 7   SourceLocation::1:10
 8   (call core.svec %₅ %₆ %₇)
 9   --- method TestMod.foo %₈
-    slots: [slot₁/#self#(!read)]
-    1   (meta :nospecialize)
-    2   (return core.nothing)
+    slots: [slot₁/#self#(!read) slot₂/a(nospecialize,!read)]
+    1   (return core.nothing)
 10  latestworld
 11  TestMod.foo
 12  (return %₁₁)
@@ -236,10 +235,9 @@ end
 8   (call core.svec %₅ %₆ %₇)
 9   --- method TestMod.foo %₈
     slots: [slot₁/#self#(!read) slot₂/a(nospecialize) slot₃/b]
-    1   slot₂/a
-    2   TestMod.+
-    3   (call %₂ slot₂/a slot₃/b)
-    4   (return %₃)
+    1   TestMod.+
+    2   (call %₁ slot₂/a slot₃/b)
+    3   (return %₂)
 10  latestworld
 11  TestMod.foo
 12  (return %₁₁)
@@ -261,11 +259,9 @@ end
 8   (call core.svec %₅ %₆ %₇)
 9   --- method TestMod.foo %₈
     slots: [slot₁/#self#(!read) slot₂/x(nospecialize) slot₃/y slot₄/z(nospecialize)]
-    1   slot₂/x
-    2   slot₄/z
-    3   TestMod.+
-    4   (call %₃ slot₂/x slot₃/y slot₄/z)
-    5   (return %₄)
+    1   TestMod.+
+    2   (call %₁ slot₂/x slot₃/y slot₄/z)
+    3   (return %₂)
 10  latestworld
 11  TestMod.foo
 12  (return %₁₁)
