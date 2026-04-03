@@ -84,6 +84,7 @@ struct ScopeResolutionContext{Attrs} <: AbstractLoweringContext
     soft_assignable_globals::Set{NameKey}
     enable_soft_scopes::Bool
     expr_compat_mode::Bool
+    world::UInt
 end
 
 function contains_softscope_marker(ex)
@@ -299,7 +300,7 @@ function enter_scope!(ctx, ex)
                 push!(ctx.soft_assignable_globals, vk)
                 declare_in_scope!(ctx, top_scope(ctx), ex, :global)
             elseif scope.is_permeable && is_defined_and_owned_global(
-                ctx.scope_layers[vk.layer].mod, Symbol(vk.name))
+                ctx.scope_layers[vk.layer].mod, Symbol(vk.name), ctx.world)
                 # special soft scope rules: existing global variables are assigned to
                 if ctx.enable_soft_scopes
                     push!(ctx.soft_assignable_globals, vk)
@@ -320,7 +321,7 @@ function enter_scope!(ctx, ex)
                 # assign-existing-global if this is an explicit global that
                 # isn't at top level, or if the soft scope exception applies
             else
-                declare_in_scope!(ctx, scope, ex, :local)
+                declare_in_scope!(ctx, scope, ex, :local; is_ambiguous_local = scope.is_permeable)
             end
         elseif b.kind === :static_parameter
             throw(LoweringError(ex, "cannot overwrite a static parameter"))
@@ -756,14 +757,18 @@ metadata about each binding.
 This pass also records the set of binding IDs used locally within the
 enclosing lambda form and information about variables captured by closures.
 """
-@fzone "JL: resolve_scopes" function resolve_scopes(ctx::DesugaringContext, ex)
+@fzone "JL: resolve_scopes" function resolve_scopes(ctx::DesugaringContext, ex;
+                                                    soft_scope::Union{Nothing,Bool}=nothing,
+                                                    world::UInt=ctx.world)
     graph = ensure_scope_attributes!(copy_attrs(ctx.graph))
     ex = reparent(graph, ex)
+    enable_soft_scopes = soft_scope !== nothing ? soft_scope : contains_softscope_marker(ex)
     ctx2 = ScopeResolutionContext(graph, ctx.bindings, ctx.mod,
                                   Vector{ScopeInfo}(), Vector{ScopeId}(),
                                   ctx.scope_layers, Set{NameKey}(),
-                                  contains_softscope_marker(ex),
-                                  ctx.expr_compat_mode)
+                                  enable_soft_scopes,
+                                  ctx.expr_compat_mode,
+                                  world)
     ex2 = resolve_scopes(ctx2, ex)
     ctx3 = VariableAnalysisContext(graph, ctx2.bindings, ctx2.mod,
                                    ctx2.scopes, ex2.lambda_bindings,

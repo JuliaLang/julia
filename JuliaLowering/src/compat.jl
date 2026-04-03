@@ -539,6 +539,7 @@ function est_to_dst(st::SyntaxTree)
             [K"inert"(st[1]) ex]
         ]
         [K"symbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
+        [K"oldsymbolicgoto" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
         [K"symboliclabel" lab] -> setattr!(mkleaf(st), :name_val, lab.name_val)
         [K"symbolicblock" id body] -> if all(==('_'), id.name_val)
             @ast g st [K"symbolicblock" id=>K"Placeholder" rec(body)]

@@ -7,6 +7,7 @@ struct DesugaringContext{Attrs} <: AbstractLoweringContext
     mod::Module
     expr_compat_mode::Bool
     ssa_mapping::Dict{Int, IdTag}
+    world::UInt
 end
 
 # Translate a K"ssavalue" node from pre-lowered code into a normal SSA binding.
@@ -2118,6 +2119,7 @@ function expand_try(ctx, ex)
 
     if !isnothing(finally_)
         # TODO: check unmatched symbolic gotos in try.
+        # TODO: Disallow @goto from try/catch/else blocks when there's a finally clause
     end
 
     try_body = @ast ctx try_ [K"scope_block"(scope_type=:neutral) try_]
@@ -3201,6 +3203,11 @@ function _collect_struct_fields(ctx, field_names, field_types, field_attrs, fiel
             m = _match_struct_field(e)
             if !isnothing(m)
                 # Struct field
+                for prev in field_names
+                    if prev.name_val == m.name.name_val
+                        throw(LoweringError(m.name, "duplicate field name"))
+                    end
+                end
                 push!(field_names, m.name)
                 n = length(field_names)
                 push!(field_types, isnothing(m.type) ? @ast(ctx, e, "Any"::K"core") : m.type)
@@ -4467,7 +4474,7 @@ ensure_desugaring_attributes!(graph) = ensure_attributes!(
     ex = reparent(graph, ex)
     ctx_out = DesugaringContext(graph, ctx.bindings, ctx.scope_layers,
                                 current_layer(ctx).mod, ctx.expr_compat_mode,
-                                Dict{Int, IdTag}())
+                                Dict{Int, IdTag}(), ctx.macro_world)
     vr = valid_st1(ex)
     # surface only one error until we have pretty-printing for multiple
     if !vr.ok

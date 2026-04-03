@@ -1370,3 +1370,27 @@ end
 47  (call top._defaultctors %₄₅ %₄₆)
 48  latestworld
 49  (return core.nothing)
+
+########################################
+# Error: Duplicate field name in struct
+struct A; x; x; end
+#---------------------
+LoweringError:
+struct A; x; x; end
+#            ╙ ── duplicate field name
+
+########################################
+# Error: Duplicate field name with different types
+struct A; x::Int; x::String; end
+#---------------------
+LoweringError:
+struct A; x::Int; x::String; end
+#                 ╙ ── duplicate field name
+
+########################################
+# Error: Duplicate field name in mutable struct
+mutable struct A; x; y; x; end
+#---------------------
+LoweringError:
+mutable struct A; x; y; x; end
+#                       ╙ ── duplicate field name
