@@ -1,16 +1,17 @@
 # Non-incremental lowering API for non-toplevel non-module expressions.
 # May be removed?
 
-function lower(mod::Module, ex0; expr_compat_mode=false, world=Base.get_world_counter())
+function lower(mod::Module, ex0::SyntaxTree; expr_compat_mode::Bool=false, world::UInt=Base.get_world_counter(),
+               soft_scope::Union{Nothing,Bool}=nothing)
      ctx1, ex1 = expand_forms_1(  mod,  ex0, expr_compat_mode, world)
      ctx2, ex2 = expand_forms_2(  ctx1, ex1)
-     ctx3, ex3 = resolve_scopes(  ctx2, ex2)
+     ctx3, ex3 = resolve_scopes(  ctx2, ex2; soft_scope)
      ctx4, ex4 = convert_closures(ctx3, ex3)
     _ctx5, ex5 = linearize_ir(    ctx4, ex4)
     ex5
 end
 
-function macroexpand(mod::Module, ex; expr_compat_mode=false, world=Base.get_world_counter())
+function macroexpand(mod::Module, ex::SyntaxTree; expr_compat_mode::Bool=false, world::UInt=Base.get_world_counter())
     _ctx1, ex1 = expand_forms_1(mod, ex, expr_compat_mode, world)
     ex1
 end
@@ -37,12 +38,13 @@ struct LoweringIterator{Attrs}
     todo::Vector{Tuple{SyntaxTree{Attrs}, Bool, Int}}
 end
 
-function lower_init(ex::SyntaxTree{T};
-                    expr_compat_mode::Bool=false) where {T}
+function lower_init(ex::SyntaxTree{T}; expr_compat_mode::Bool=false) where {T}
     LoweringIterator{T}(expr_compat_mode, [(ex, false, 0)])
 end
 
-function lower_step(iter, mod, world=Base.get_world_counter())
+function lower_step(iter::LoweringIterator, mod::Module;
+                    world::UInt=Base.get_world_counter(),
+                    soft_scope::Union{Nothing,Bool}=nothing)
     if isempty(iter.todo)
         return Core.svec(:done)
     end
@@ -55,7 +57,7 @@ function lower_step(iter, mod, world=Base.get_world_counter())
         elseif is_module_body
             return Core.svec(:end_module)
         else
-            return lower_step(iter, mod)
+            return lower_step(iter, mod; soft_scope)
         end
     else
         ex = top_ex
@@ -68,7 +70,7 @@ function lower_step(iter, mod, world=Base.get_world_counter())
     end
     if k == K"toplevel"
         push!(iter.todo, (ex, false, 1))
-        return lower_step(iter, mod)
+        return lower_step(iter, mod; soft_scope)
     elseif k == K"module"
         (version, notbare, name, body) = @stm ex begin
             [K"module" version nb_st name body] ->
@@ -87,7 +89,7 @@ function lower_step(iter, mod, world=Base.get_world_counter())
         # Non macro expansion parts of lowering
         @assert @isdefined(ctx1) "Assertion to tell the compiler about the definedness of this variable"
          ctx2, ex2 = expand_forms_2(ctx1, ex)
-         ctx3, ex3 = resolve_scopes(ctx2, ex2)
+         ctx3, ex3 = resolve_scopes(ctx2, ex2; soft_scope)
          ctx4, ex4 = convert_closures(ctx3, ex3)
         _ctx5, ex5 = linearize_ir(ctx4, ex4)
         thunk = to_lowered_expr(ex5)
@@ -108,8 +110,8 @@ function codeinfo_has_image_globalref(@nospecialize(e))
     end
 end
 
-_CodeInfo_need_ver = v"1.12.0-DEV.512"
-if VERSION < _CodeInfo_need_ver
+const _CodeInfo_need_ver = v"1.12.0-DEV.512"
+@static if VERSION < _CodeInfo_need_ver
     function _CodeInfo(args...)
         error("Constructing a CodeInfo using JuliaLowering currently requires Julia version $_CodeInfo_need_ver or greater")
     end
@@ -461,21 +463,22 @@ end
 # Our version of eval - should be upstreamed though?
 @fzone "JL: eval" function eval(mod::Module, ex::SyntaxTree;
                                 macro_world::UInt=Base.get_world_counter(),
+                                soft_scope::Union{Nothing,Bool}=nothing,
                                 opts...)
     iter = lower_init(ex; opts...)
-    _eval(mod, iter)
+    _eval(mod, iter; soft_scope)
 end
 
 # Version of eval() taking `Expr` (or Expr tree leaves of any type)
-function eval(mod::Module, ex; opts...)
+function eval(mod::Module, @nospecialize(ex); opts...)
     eval(mod, expr_to_est(ex); opts...)
 end
 
-function _eval(mod, iter)
+function _eval(mod::Module, iter::LoweringIterator; soft_scope::Union{Nothing,Bool}=nothing)
     modules = Module[mod]
     result = nothing
     while true
-        thunk = lower_step(iter, modules[end])::Core.SimpleVector
+        thunk = lower_step(iter, modules[end]; soft_scope)::Core.SimpleVector
         type = thunk[1]::Symbol
         if type == :done
             break
