@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Float32/Float64 based on C implementations from FDLIBM (http://www.netlib.org/fdlibm/)
+# Float32/Float64 based on C implementations from FDLIBM (https://www.netlib.org/fdlibm/)
 # and FreeBSD:
 #
 ## ====================================================
@@ -21,6 +21,8 @@ Return the cube root of `x`, i.e. ``x^{1/3}``. Negative values are accepted
 (returning the negative real root when ``x < 0``).
 
 The prefix operator `∛` is equivalent to `cbrt`.
+
+See also [`sqrt`](@ref), [`fourthroot`](@ref).
 
 # Examples
 ```jldoctest

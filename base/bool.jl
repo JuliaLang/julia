@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Core: Bool
+
 # promote Bool to any other numeric type
 promote_rule(::Type{Bool}, ::Type{T}) where {T<:Number} = T
 
@@ -7,32 +9,6 @@ typemin(::Type{Bool}) = false
 typemax(::Type{Bool}) = true
 
 ## boolean operations ##
-
-"""
-    !(x)
-
-Boolean not. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
-returning [`missing`](@ref) if `x` is `missing`.
-
-See also [`~`](@ref) for bitwise not.
-
-# Examples
-```jldoctest
-julia> !true
-false
-
-julia> !false
-true
-
-julia> !missing
-missing
-
-julia> .![true false true]
-1×3 BitMatrix:
- 0  1  0
-```
-"""
-!(x::Bool) = not_int(x)
 
 (~)(x::Bool) = !x
 (&)(x::Bool, y::Bool) = and_int(x, y)
@@ -112,10 +88,11 @@ nand(x...) = ~(&)(x...)
 
 Bitwise nor (not or) of `x` and `y`. Implements
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
-returning [`missing`](@ref) if one of the arguments is `missing`.
+returning [`missing`](@ref) if one of the arguments is `missing` and the
+other is not `true`.
 
 The infix operation `a ⊽ b` is a synonym for `nor(a,b)`, and
-`⊽` can be typed by tab-completing `\\nor` or `\\veebar` in the Julia REPL.
+`⊽` can be typed by tab-completing `\\nor` or `\\barvee` in the Julia REPL.
 
 # Examples
 ```jldoctest
@@ -130,6 +107,9 @@ false
 
 julia> false ⊽ false
 true
+
+julia> false ⊽ missing
+missing
 
 julia> [true; true; false] .⊽ [true; false; false]
 3-element BitVector:
@@ -150,6 +130,7 @@ abs(x::Bool) = x
 abs2(x::Bool) = x
 iszero(x::Bool) = !x
 isone(x::Bool) = x
+ispositive(x::Bool) = x # could use fallback once #21712 is resolved
 
 <(x::Bool, y::Bool) = y&!x
 <=(x::Bool, y::Bool) = y|!x
@@ -180,3 +161,5 @@ end
 div(x::Bool, y::Bool) = y ? x : throw(DivideError())
 rem(x::Bool, y::Bool) = y ? false : throw(DivideError())
 mod(x::Bool, y::Bool) = rem(x,y)
+
+Bool(x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))

@@ -25,4 +25,7 @@ Base.getindex(A::ImmutableArray, i...) = getindex(A.data, i...)
 AbstractArray{T}(A::ImmutableArray) where {T} = ImmutableArray(AbstractArray{T}(A.data))
 AbstractArray{T,N}(A::ImmutableArray{S,N}) where {S,T,N} = ImmutableArray(AbstractArray{T,N}(A.data))
 
+Base.copy(A::ImmutableArray) = ImmutableArray(copy(A.data))
+Base.zero(A::ImmutableArray) = ImmutableArray(zero(A.data))
+
 end

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 mutable struct Pager{C} <: _ConfiguredMenu{C}
     lines::Vector{String}
     pagesize::Int
@@ -37,4 +39,4 @@ function pager(terminal, object)
     pager = Pager(String(take!(buffer)); pagesize = div(lines, 2))
     return request(terminal, pager)
 end
-pager(object) = pager(terminal, object)
+pager(object) = pager(default_terminal(), object)

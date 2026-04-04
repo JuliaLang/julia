@@ -4,7 +4,13 @@ using Test, Logging
 
 import Logging: min_enabled_level, shouldlog, handle_message
 
+@test isempty(Test.detect_closure_boxes(Logging))
+
 @noinline func1() = backtrace()
+
+# see "custom log macro" testset
+CustomLog = LogLevel(-500)
+macro customlog(exs...) Base.CoreLogging.logmsg_code((Base.CoreLogging.@_sourceinfo)..., esc(CustomLog), exs...) end
 
 @testset "Logging" begin
 
@@ -13,6 +19,13 @@ import Logging: min_enabled_level, shouldlog, handle_message
     @test :AbstractLogger in names(Logging, all=true)  # exported public type
     @test :Info in names(Logging, all=true)            # non-exported public constant
     @test :handle_message in names(Logging, all=true)  # non-exported public function
+end
+
+@testset "LogLevel compatibility with integers" begin
+    @test Logging.Debug + 1000 == Logging.Info
+    @test Logging.Warn - 1000 == Logging.Info
+    @test Logging.Info < 500
+    @test 500 < Logging.Warn
 end
 
 @testset "ConsoleLogger" begin
@@ -47,6 +60,15 @@ end
         end
     end
     @test String(take!(buf)) == ""
+
+    # Check that the AnnotatedString path works too
+    with_logger(logger) do
+        @info Base.AnnotatedString("test")
+    end
+    @test String(take!(buf)) ==
+    """
+    [ Info: test
+    """
 
     @testset "Default metadata formatting" begin
         @test Logging.default_metafmt(Logging.Debug, Base, :g, :i, expanduser("~/somefile.jl"), 42) ==
@@ -272,7 +294,68 @@ end
             AboveMaxLevel === Logging.AboveMaxLevel
         end
         """)
-    @test m.run()
+    @test invokelatest(m.run)
+end
+
+@testset "custom log macro" begin
+    @test_logs (CustomLog, "a") min_level=CustomLog @customlog "a"
+
+    buf = IOBuffer()
+    io = IOContext(buf, :displaysize=>(30,80), :color=>false)
+    logger = ConsoleLogger(io, CustomLog)
+
+    with_logger(logger) do
+        @customlog "a"
+    end
+    @test occursin("LogLevel(-500): a", String(take!(buf)))
+end
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(Logging)
+    @test isempty(undoc)
+end
+
+@testset "Logging when multithreaded" begin
+    n = 10000
+    cmd = `$(Base.julia_cmd()) -t4 --color=no $(joinpath(@__DIR__, "threads_exec.jl")) $n`
+    fname = tempname()
+    @testset "Thread safety" begin
+        f = open(fname, "w")
+        @test success(run(pipeline(cmd, stderr=f)))
+        close(f)
+    end
+
+    @testset "No tearing in log printing" begin
+        # Check for print tearing by verifying that each log entry starts and ends correctly
+        f = open(fname, "r")
+        entry_start = r"┌ (Info|Warning|Error): iteration"
+        entry_end = r"└ "
+
+        open_entries = 0
+        total_entries = 0
+        for line in eachline(fname)
+            starts = count(entry_start, line)
+            starts > 1 && error("Interleaved logs: Multiple log entries started on one line")
+            if starts == 1
+                startswith(line, entry_start) || error("Interleaved logs: Log entry started in the middle of a line")
+                open_entries += 1
+                total_entries += 1
+            end
+
+            ends = count(entry_end, line)
+            starts == 1 && ends == 1 && error("Interleaved logs: Log entry started and another ended on one line")
+            ends > 1 && error("Interleaved logs: Multiple log entries ended on one line")
+            if ends == 1
+                startswith(line, entry_end) || error("Interleaved logs: Log entry ended in the middle of a line")
+                open_entries -= 1
+            end
+            # Ensure no mismatched log entries
+            open_entries >= 0 || error("Interleaved logs")
+        end
+
+        @test open_entries == 0  # Ensure all entries closed properly
+        @test total_entries == n * 3  # Ensure all logs were printed (3 because @debug is hidden)
+    end
 end
 
 end

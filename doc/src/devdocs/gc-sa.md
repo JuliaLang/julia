@@ -2,13 +2,23 @@
 
 ## Running the analysis
 
-The analyzer plugin that drives the anlysis ships with julia. Its
+The analyzer plugin that drives the analysis ships with julia. Its
 source code can be found in `src/clangsa`. Running it requires
 the clang dependency to be build. Set the `BUILD_LLVM_CLANG` variable
 in your Make.user in order to build an appropriate version of clang.
 You may also want to use the prebuilt binaries using the
-`USE_BINARYBUILDER_LLVM` options. Afterwards, running the analysis
-over the source tree is as simple as running `make -C src analyzegc`.
+`USE_BINARYBUILDER_LLVM` options.
+
+Alternatively (or if these do not suffice), try
+
+```sh
+make -C src install-analysis-deps
+```
+
+from Julia's toplevel directory.
+
+
+Afterwards, running the analysis over the source tree is as simple as running `make -C src analyzegc`.
 
 ## General Overview
 
@@ -47,7 +57,7 @@ code base to make things work.
 
 ## GC Invariants
 
-There is two simple invariants correctness:
+There are two simple invariants for correctness:
 - All `GC_PUSH` calls need to be followed by an appropriate `GC_POP` (in practice we enforce this
   at the function level)
 - If a value was previously not rooted at any safepoint, it may no longer be referenced
@@ -91,7 +101,7 @@ we place on a given function are indeed correct given the implementation of said
 ## The analyzer annotations
 
 These annotations are found in src/support/analyzer_annotations.h.
-The are only active when the analyzer is being used and expand either
+They are only active when the analyzer is being used and expand either
 to nothing (for prototype annotations) or to no-ops (for function like annotations).
 
 ### `JL_NOTSAFEPOINT`

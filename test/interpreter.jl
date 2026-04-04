@@ -30,3 +30,25 @@ let p = Pipe(),
     wait(proc)
     close(p)
 end
+
+# Test generated function behavior in interpreter
+@test success(pipeline(`$(Base.julia_cmd()) --compile=min -E 'include("staged.jl")'`; stderr))
+
+# Test contextual execution mechanism in interpreter (#54360)
+let compiler_contextual_test = escape_string(joinpath(@__DIR__,"../Compiler/test/contextual.jl"))
+    @test success(pipeline(`$(Base.julia_cmd()) --compile=min -E "include(\"$compiler_contextual_test\")"`; stderr))
+end
+
+let code = """
+    f(args...) = args
+    f(1)
+    mi = first(Base.method_instances(f, Tuple{Int}, Base.get_world_counter()))
+    ci = ccall(:jl_new_codeinst, Ref{Core.CodeInstance},
+        (Any, Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
+        mi, nothing, Any, Any, nothing, nothing,
+        Int32(0), UInt(1), typemax(UInt), UInt32(0), nothing, nothing, Core.svec())
+    @assert invoke(f, ci, 42) === (42,)
+    print("ok")
+    """
+    @test read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String) == "ok"
+end

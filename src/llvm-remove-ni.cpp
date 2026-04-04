@@ -1,9 +1,11 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-version.h"
+#include "passes.h"
 
+#include <llvm/Pass.h>
 #include <llvm/IR/Module.h>
-#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/PassManager.h>
 #include <llvm/Support/Debug.h>
 
 #include "julia.h"
@@ -14,43 +16,29 @@ using namespace llvm;
 
 namespace {
 
-struct RemoveNIPass : public ModulePass {
-    static char ID;
-    RemoveNIPass() : ModulePass(ID) {};
-
-    bool runOnModule(Module &M)
-    {
-        auto dlstr = M.getDataLayoutStr();
-        auto nistart = dlstr.find("-ni:");
-        if (nistart == std::string::npos)
-            return false;
-        auto len = dlstr.size();
-        auto niend = nistart + 1;
-        for (; niend < len; niend++) {
-            if (dlstr[niend] == '-') {
-                break;
-            }
+static bool removeNI(Module &M) JL_NOTSAFEPOINT
+{
+    auto dlstr = M.getDataLayoutStr();
+    auto nistart = dlstr.find("-ni:");
+    if (nistart == std::string::npos)
+        return false;
+    auto len = dlstr.size();
+    auto niend = nistart + 1;
+    for (; niend < len; niend++) {
+        if (dlstr[niend] == '-') {
+            break;
         }
-        dlstr.erase(nistart, niend - nistart);
-        M.setDataLayout(dlstr);
-        return true;
     }
-};
-
-char RemoveNIPass::ID = 0;
-static RegisterPass<RemoveNIPass>
-        Y("RemoveNI",
-          "Remove non-integral address space.",
-          false,
-          false);
+    dlstr.erase(nistart, niend - nistart);
+    M.setDataLayout(dlstr);
+    return true;
+}
 }
 
-Pass *createRemoveNIPass()
+PreservedAnalyses RemoveNIPass::run(Module &M, ModuleAnalysisManager &AM)
 {
-    return new RemoveNIPass();
-}
-
-extern "C" JL_DLLEXPORT void LLVMExtraAddRemoveNIPass(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createRemoveNIPass());
+    if (removeNI(M)) {
+        return PreservedAnalyses::allInSet<CFGAnalyses>();
+    }
+    return PreservedAnalyses::all();
 }

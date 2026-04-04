@@ -2,9 +2,23 @@
 
 using Logging: Logging, AbstractLogger, LogLevel, Info, with_logger
 import Base: occursin
+using Base: @lock
 
 #-------------------------------------------------------------------------------
-# Log records
+"""
+    LogRecord
+
+Stores the results of a single log event. Fields:
+
+* `level`: the [`LogLevel`](@ref) of the log message
+* `message`: the textual content of the log message
+* `_module`: the module of the log event
+* `group`: the logging group (by default, the name of the file containing the log event)
+* `id`: the ID of the log event
+* `file`: the file containing the log event
+* `line`: the line within the file of the log event
+* `kwargs`: any keyword arguments passed to the log event
+"""
 struct LogRecord
     level
     message
@@ -22,25 +36,86 @@ struct Ignored ; end
 #-------------------------------------------------------------------------------
 # Logger with extra test-related state
 mutable struct TestLogger <: AbstractLogger
-    logs::Vector{LogRecord}
+    lock::ReentrantLock
+    logs::Vector{LogRecord}  # Guarded by lock.
     min_level::LogLevel
     catch_exceptions::Bool
-    shouldlog_args
+    # Note: shouldlog_args only maintains the info for the most recent log message, which
+    # may not be meaningful in a multithreaded program. See:
+    # https://github.com/JuliaLang/julia/pull/54497#discussion_r1603691606
+    shouldlog_args  # Guarded by lock.
+    message_limits::Dict{Any,Int}  # Guarded by lock.
+    respect_maxlog::Bool
 end
 
-TestLogger(; min_level=Info, catch_exceptions=false) =
-    TestLogger(LogRecord[], min_level, catch_exceptions, nothing)
+"""
+    TestLogger(; min_level=Info, catch_exceptions=false)
+
+Create a `TestLogger` which captures logged messages in its `logs::Vector{LogRecord}` field.
+
+Set `min_level` to control the `LogLevel`, `catch_exceptions` for whether or not exceptions
+thrown as part of log event generation should be caught, and `respect_maxlog` for whether
+or not to follow the convention of logging messages with `maxlog=n` for some integer `n` at
+most `n` times.
+
+See also: [`LogRecord`](@ref).
+
+## Examples
+
+```jldoctest
+julia> using Test, Logging
+
+julia> f() = @info "Hi" number=5;
+
+julia> test_logger = TestLogger();
+
+julia> with_logger(test_logger) do
+           f()
+           @info "Bye!"
+       end
+
+julia> @test test_logger.logs[1].message == "Hi"
+Test Passed
+
+julia> @test test_logger.logs[1].kwargs[:number] == 5
+Test Passed
+
+julia> @test test_logger.logs[2].message == "Bye!"
+Test Passed
+```
+"""
+TestLogger(; min_level=Info, catch_exceptions=false, respect_maxlog=true) =
+    TestLogger(ReentrantLock(), LogRecord[], min_level, catch_exceptions, nothing, Dict{Any, Int}(), respect_maxlog)
 Logging.min_enabled_level(logger::TestLogger) = logger.min_level
 
 function Logging.shouldlog(logger::TestLogger, level, _module, group, id)
-    logger.shouldlog_args = (level, _module, group, id)
-    true
+    @lock logger.lock begin
+        if get(logger.message_limits, id, 1) > 0
+            logger.shouldlog_args = (level, _module, group, id)
+            return true
+        else
+            return false
+        end
+    end
 end
 
 function Logging.handle_message(logger::TestLogger, level, msg, _module,
                                 group, id, file, line; kwargs...)
     @nospecialize
-    push!(logger.logs, LogRecord(level, msg, _module, group, id, file, line, kwargs))
+    if logger.respect_maxlog
+        maxlog = get(kwargs, :maxlog, nothing)
+        if maxlog isa Core.BuiltinInts
+            @lock logger.lock begin
+                remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
+                remaining == 0 && return
+                logger.message_limits[id] = remaining - 1
+            end
+        end
+    end
+    r = LogRecord(level, msg, _module, group, id, file, line, kwargs)
+    @lock logger.lock begin
+        push!(logger.logs, r)
+    end
 end
 
 # Catch exceptions for the test logger only if specified
@@ -49,7 +124,9 @@ Logging.catch_exceptions(logger::TestLogger) = logger.catch_exceptions
 function collect_test_logs(f; kwargs...)
     logger = TestLogger(; kwargs...)
     value = with_logger(f, logger)
-    logger.logs, value
+    @lock logger.lock begin
+        return copy(logger.logs), value
+    end
 end
 
 
@@ -57,9 +134,9 @@ end
 # Log testing tools
 
 # Failure result type for log testing
-mutable struct LogTestFailure <: Result
+struct LogTestFailure <: Result
     orig_expr
-    source::Union{Nothing,LineNumberNode}
+    source::LineNumberNode
     patterns
     logs
 end
@@ -86,12 +163,12 @@ function record(ts::DefaultTestSet, t::LogTestFailure)
     if TESTSET_PRINT_ENABLE[]
         printstyled(ts.description, ": ", color=:white)
         print(t)
-        Base.show_backtrace(stdout, scrub_backtrace(backtrace()))
+        Base.show_backtrace(stdout, scrub_backtrace(backtrace(), ts.file, extract_file(t.source)))
         println()
     end
     # Hack: convert to `Fail` so that test summarization works correctly
-    push!(ts.results, Fail(:test, t.orig_expr, t.logs, nothing, t.source))
-    t
+    push!(ts.results, Fail(:test, t.orig_expr, t.logs, nothing, nothing, t.source, false))
+    return t
 end
 
 """
@@ -156,39 +233,72 @@ patterns and set the `min_level` accordingly:
 
 If you want to test the absence of warnings (or error messages) in
 [`stderr`](@ref) which are not generated by `@warn`, see [`@test_nowarn`](@ref).
+
+# Keyword Arguments
+
+* `broken=cond`: if `cond==true`, indicates a test that should pass but currently
+  consistently fails.
+* `skip=cond`: if `cond==true`, marks a test that should not be executed but should
+  be included in test summary reporting as `Broken`.
+
+!!! compat "Julia 1.14"
+    The `broken` and `skip` keyword arguments require at least Julia 1.14.
 """
 macro test_logs(exs...)
     length(exs) >= 1 || throw(ArgumentError("""`@test_logs` needs at least one arguments.
                                Usage: `@test_logs [msgs...] expr_to_run`"""))
     patterns = Any[]
     kwargs = Any[]
+    kws = Any[]
     for e in exs[1:end-1]
         if e isa Expr && e.head === :(=)
-            push!(kwargs, esc(Expr(:kw, e.args...)))
+            if e.args[1] in (:broken, :skip)
+                push!(kws, e)
+            else
+                push!(kwargs, esc(Expr(:kw, e.args...)))
+            end
         else
             push!(patterns, esc(e))
         end
     end
+    broken, skip, _ = extract_broken_skip_kws(kws, "@test_logs")
     expression = exs[end]
     orig_expr = QuoteNode(expression)
     sourceloc = QuoteNode(__source__)
     Base.remove_linenums!(quote
-        let testres=nothing, value=nothing
-            try
-                didmatch,logs,value = match_logs($(patterns...); $(kwargs...)) do
-                    $(esc(expression))
+        if $(skip !== nothing && esc(skip))
+            Test.record(Test.get_testset(), Broken(:skipped, $orig_expr))
+            nothing
+        else
+            let testres=nothing, value=nothing
+                try
+                    didmatch,logs,value = match_logs($(patterns...); $(kwargs...)) do
+                        $(esc(expression))
+                    end
+                    if $(broken !== nothing && esc(broken))
+                        if didmatch
+                            testres = Error(:test_unbroken, $orig_expr, didmatch, nothing, $sourceloc)
+                        else
+                            testres = Broken(:test, $orig_expr)
+                        end
+                    else
+                        if didmatch
+                            testres = Pass(:test, $orig_expr, nothing, value, $sourceloc)
+                        else
+                            testres = LogTestFailure($orig_expr, $sourceloc,
+                                                     $(QuoteNode(exs[1:end-1])), logs)
+                        end
+                    end
+                catch e
+                    if $(broken !== nothing && esc(broken))
+                        testres = Broken(:test, $orig_expr)
+                    else
+                        testres = Error(:test_error, $orig_expr, e, Base.current_exceptions(), $sourceloc)
+                    end
                 end
-                if didmatch
-                    testres = Pass(:test, $orig_expr, nothing, value, $sourceloc)
-                else
-                    testres = LogTestFailure($orig_expr, $sourceloc,
-                                             $(QuoteNode(exs[1:end-1])), logs)
-                end
-            catch e
-                testres = Error(:test_error, $orig_expr, e, Base.current_exceptions(), $sourceloc)
+                Test.record(Test.get_testset(), testres)
+                value
             end
-            Test.record(Test.get_testset(), testres)
-            value
         end
     end)
 end
@@ -230,6 +340,8 @@ end
 
 """
     @test_deprecated [pattern] expression
+    @test_deprecated [pattern] expression broken=cond
+    @test_deprecated [pattern] expression skip=cond
 
 When `--depwarn=yes`, test that `expression` emits a deprecation warning and
 return the value of `expression`.  The log message string will be matched
@@ -237,6 +349,16 @@ against `pattern` which defaults to `r"deprecated"i`.
 
 When `--depwarn=no`, simply return the result of executing `expression`.  When
 `--depwarn=error`, check that an ErrorException is thrown.
+
+# Keyword Arguments
+
+* `broken=cond`: if `cond==true`, indicates a test that should pass but currently
+  consistently fails.
+* `skip=cond`: if `cond==true`, marks a test that should not be executed but should
+  be included in test summary reporting as `Broken`.
+
+!!! compat "Julia 1.14"
+    The `broken` and `skip` keyword arguments require at least Julia 1.14.
 
 # Examples
 
@@ -249,25 +371,83 @@ When `--depwarn=no`, simply return the result of executing `expression`.  When
 ```
 """
 macro test_deprecated(exs...)
-    1 <= length(exs) <= 2 || throw(ArgumentError("""`@test_deprecated` expects one or two arguments.
-                               Usage: `@test_deprecated [pattern] expr_to_run`"""))
-    pattern = length(exs) == 1 ? r"deprecated"i : esc(exs[1])
-    expression = esc(exs[end])
-    res = quote
-        dw = Base.JLOptions().depwarn
-        if dw == 2
-            # TODO: Remove --depwarn=error if possible and replace with a more
-            # flexible mechanism so we don't have to do this.
-            @test_throws ErrorException $expression
-        elseif dw == 1
-            @test_logs (:warn, $pattern, Ignored(), :depwarn) match_mode=:any $expression
+    # Parse arguments: [pattern] expression [broken=...] [skip=...]
+    length(exs) >= 1 || throw(ArgumentError("""`@test_deprecated` expects at least one argument.
+                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
+    pattern = r"deprecated"i
+    expression = nothing
+    kws = Any[]
+
+    # Helper to check if an expression is a string macro (like r"..." or s"...")
+    is_string_macro(e) = e isa Expr && e.head === :macrocall &&
+                         length(e.args) >= 1 && e.args[1] isa Symbol &&
+                         endswith(String(e.args[1]), "_str")
+
+    for (i, e) in enumerate(exs)
+        if e isa Expr && e.head === :(=)
+            if e.args[1] in (:broken, :skip)
+                push!(kws, e)
+            else
+                # This is the expression (like `f(x=1)`)
+                expression !== nothing && throw(ArgumentError("""`@test_deprecated` expects at most one expression.
+                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
+                expression = e
+            end
+        elseif e isa Expr && e.head === :call
+            # This is the expression (function call)
+            expression !== nothing && throw(ArgumentError("""`@test_deprecated` expects at most one expression.
+                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
+            expression = e
+        elseif e isa Expr && e.head === :macrocall && !is_string_macro(e)
+            # This is the expression (macro call, but not a string macro like r"...")
+            expression !== nothing && throw(ArgumentError("""`@test_deprecated` expects at most one expression.
+                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
+            expression = e
+        elseif i == 1 && (e isa Union{Regex, String, Symbol} || is_string_macro(e) ||
+                         (e isa Expr && e.head ∉ (:call, :macrocall)))
+            # First non-keyword argument that's a Regex, String, Symbol (variable), string macro,
+            # or non-call expression is the pattern
+            pattern = e
         else
-            $expression
+            # Assume it's the expression
+            expression !== nothing && throw(ArgumentError("""`@test_deprecated` expects at most one expression.
+                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
+            expression = e
+        end
+    end
+
+    expression === nothing && throw(ArgumentError("""`@test_deprecated` needs an expression to run.
+                               Usage: `@test_deprecated [pattern] expr_to_run [broken=cond] [skip=cond]`"""))
+
+    broken, skip, _ = extract_broken_skip_kws(kws, "@test_deprecated")
+
+    pattern_esc = esc(pattern)
+    expression_esc = esc(expression)
+    broken_esc = broken !== nothing ? esc(broken) : false
+    skip_esc = skip !== nothing ? esc(skip) : false
+
+    res = quote
+        if $skip_esc
+            Test.record(Test.get_testset(), Broken(:skipped, $(QuoteNode(expression))))
+            nothing
+        else
+            dw = Base.JLOptions().depwarn
+            if dw == 2
+                # TODO: Remove --depwarn=error if possible and replace with a more
+                # flexible mechanism so we don't have to do this.
+                @test_throws ErrorException $expression_esc broken=$broken_esc
+            elseif dw == 1
+                @test_logs (:warn, $pattern_esc, Ignored(), :depwarn) match_mode=:any broken=$broken_esc $expression_esc
+            else
+                $expression_esc
+            end
         end
     end
     # Propagate source code location of @test_logs to @test macro
     # FIXME: Use rewrite_sourceloc!() for this - see #22623
-    res.args[4].args[2].args[2].args[2] = __source__
-    res.args[4].args[3].args[2].args[2].args[2] = __source__
+    # Structure: res.args[2] = outer if, .args[3] = else block, .args[4] = inner if
+    # Inner if: .args[2] = @test_throws block, .args[3] = elseif with @test_logs
+    res.args[2].args[3].args[4].args[2].args[2].args[2] = __source__
+    res.args[2].args[3].args[4].args[3].args[2].args[2].args[2] = __source__
     res
 end

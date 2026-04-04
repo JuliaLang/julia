@@ -41,6 +41,7 @@
 #include <locale.h>
 #include <limits.h>
 #include <errno.h>
+#include <libgen.h> // defines dirname
 
 #include "platform.h"
 #include "libsupport.h"
@@ -49,13 +50,6 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
-#include <malloc.h>
-JL_DLLEXPORT char * dirname(char *);
-#else
-#include <libgen.h>
 #endif
 
 static const char *const builtin_names[] =
@@ -2402,6 +2396,7 @@ static void lisp_init(fl_context_t *fl_ctx, size_t initial_heapsize)
 #endif
 
     fl_ctx->jl_sym = symbol(fl_ctx, "julia_value");
+    fl_ctx->jl_char_sym = symbol(fl_ctx, "julia_char");
 
     fl_ctx->the_empty_vector = tagptr(alloc_words(fl_ctx, 1), TAG_VECTOR);
     vector_setsize(fl_ctx->the_empty_vector, 0);
