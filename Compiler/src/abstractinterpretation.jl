@@ -1362,6 +1362,7 @@ function const_prop_call(interp::AbstractInterpreter,
         cache_argtypes = matching_cache_argtypes(𝕃ᵢ, mi)
     end
     argtypes = matching_cache_argtypes(𝕃ᵢ, mi, forwarded_argtypes, cache_argtypes)
+    argtypes = get_nospecializeinfer_argtypes(argtypes, cache_argtypes, mi.def::Method)
     inf_result = constprop_cache_lookup(𝕃ᵢ, mi, argtypes, get_inference_cache(interp))
     if inf_result === missing
         # a previous const-prop attempt hit a cycle and produced a limited result;

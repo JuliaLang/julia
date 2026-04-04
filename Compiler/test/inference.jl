@@ -6784,4 +6784,18 @@ let result = code_typed(f_static_parameter_argument_position, Tuple{Type{Int}})
     @test result[1].second === Type{Int}
 end
 
+# aviatesk/JETLS.jl/issues/618
+Base.@nospecializeinfer function jetls618(a, @nospecialize(rest...))
+    if a > 0
+        z = a + length(rest)
+    else
+        z = 0
+    end
+    println(z)
+    return z
+end
+@test Base.infer_return_type() do
+    jetls618(1,2,3), jetls618(1,2,3,4)
+end == Tuple{Int,Int}
+
 end # module inference
