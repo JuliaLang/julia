@@ -29,7 +29,7 @@ using Test
     @test Dates.yearmonthday(730120) == (2000, 1, 1)
 end
 @testset "year/month/day" begin
-    # year, month, and day return the indivial components
+    # year, month, and day return the individual components
     # of yearmonthday, avoiding additional calculations when possible
     @test Dates.year(-1) == 0
     @test Dates.month(-1) == 12
@@ -153,7 +153,7 @@ end
     @test Dates.week(Dates.Date(2010, 1, 1)) == 53
     @test Dates.week(Dates.Date(2010, 1, 2)) == 53
     @test Dates.week(Dates.Date(2010, 1, 2)) == 53
-    # Tests from http://www.epochconverter.com/date-and-time/weeknumbers-by-year.php?year=1999
+    # Tests from https://www.epochconverter.com/date-and-time/weeknumbers-by-year.php?year=1999
     dt = Dates.DateTime(1999, 12, 27)
     dt1 = Dates.Date(1999, 12, 27)
     check = (52, 52, 52, 52, 52, 52, 52, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2)
@@ -163,7 +163,7 @@ end
         dt = dt + Dates.Day(1)
         dt1 = dt1 + Dates.Day(1)
     end
-    # Tests from http://www.epochconverter.com/date-and-time/weeknumbers-by-year.php?year=2000
+    # Tests from https://www.epochconverter.com/date-and-time/weeknumbers-by-year.php?year=2000
     dt = Dates.DateTime(2000, 12, 25)
     dt1 = Dates.Date(2000, 12, 25)
     for i = 1:21
@@ -172,7 +172,7 @@ end
         dt = dt + Dates.Day(1)
         dt1 = dt1 + Dates.Day(1)
     end
-    # Test from http://www.epochconverter.com/date-and-time/weeknumbers-by-year.php?year=2030
+    # Test from https://www.epochconverter.com/date-and-time/weeknumbers-by-year.php?year=2030
     dt = Dates.DateTime(2030, 12, 23)
     dt1 = Dates.Date(2030, 12, 23)
     for i = 1:21
@@ -181,7 +181,7 @@ end
         dt = dt + Dates.Day(1)
         dt1 = dt1 + Dates.Day(1)
     end
-    # Tests from http://www.epochconverter.com/date-and-time/weeknumbers-by-year.php?year=2004
+    # Tests from https://www.epochconverter.com/date-and-time/weeknumbers-by-year.php?year=2004
     dt = Dates.DateTime(2004, 12, 20)
     dt1 = Dates.Date(2004, 12, 20)
     check = (52, 52, 52, 52, 52, 52, 52, 53, 53, 53, 53, 53, 53, 53, 1, 1, 1, 1, 1, 1, 1)
@@ -191,6 +191,69 @@ end
         dt = dt + Dates.Day(1)
         dt1 = dt1 + Dates.Day(1)
     end
+end
+@testset "ISO year utils" begin
+    # Tests from https://www.epochconverter.com/weeks
+    @test Dates.weeksinyear(Dates.Year(2023)) == 52
+    @test Dates.weeksinyear(Dates.Year(2022)) == 52
+    @test Dates.weeksinyear(Dates.Year(2021)) == 52
+    @test Dates.weeksinyear(Dates.Year(2020)) == 53
+    @test Dates.weeksinyear(Dates.Year(2019)) == 52
+    @test Dates.weeksinyear(Dates.Year(2018)) == 52
+    @test Dates.weeksinyear(Dates.Year(2017)) == 52
+    @test Dates.weeksinyear(Dates.Year(2016)) == 52
+    @test Dates.weeksinyear(Dates.Year(2015)) == 53
+    @test Dates.weeksinyear(Dates.Year(2014)) == 52
+    @test Dates.weeksinyear(Dates.Year(2013)) == 52
+    @test Dates.weeksinyear(Dates.Year(2012)) == 52
+    @test Dates.weeksinyear(Dates.Year(2011)) == 52
+    @test Dates.weeksinyear(Dates.Year(2010)) == 52
+    @test Dates.weeksinyear(Dates.Year(2009)) == 53
+
+    # From python datetime isocalendar
+    @test Dates.isoweekdate(Dates.Date(2023, 03, 06)) == (2023, 10, 1)
+    @test Dates.isoweekdate(Dates.Date(2023, 03, 07)) == (2023, 10, 2)
+    @test Dates.isoweekdate(Dates.Date(2023, 03, 08)) == (2023, 10, 3)
+    @test Dates.isoweekdate(Dates.Date(2022, 12, 29)) == (2022, 52, 4)
+    @test Dates.isoweekdate(Dates.Date(2022, 12, 30)) == (2022, 52, 5)
+    @test Dates.isoweekdate(Dates.Date(2022, 12, 31)) == (2022, 52, 6)
+    @test Dates.isoweekdate(Dates.Date(2023, 01, 01)) == (2022, 52, 7)
+    @test Dates.isoweekdate(Dates.Date(2023, 01, 02)) == (2023, 1, 1)
+    @test Dates.isoweekdate(Dates.Date(2023, 01, 03)) == (2023, 1, 2)
+    @test Dates.isoweekdate(Dates.Date(2021, 12, 28)) == (2021, 52, 2)
+    @test Dates.isoweekdate(Dates.Date(2021, 12, 29)) == (2021, 52, 3)
+    @test Dates.isoweekdate(Dates.Date(2021, 12, 30)) == (2021, 52, 4)
+    @test Dates.isoweekdate(Dates.Date(2021, 12, 31)) == (2021, 52, 5)
+    @test Dates.isoweekdate(Dates.Date(2022, 01, 01)) == (2021, 52, 6)
+    @test Dates.isoweekdate(Dates.Date(2022, 01, 02)) == (2021, 52, 7)
+    @test Dates.isoweekdate(Dates.Date(2022, 01, 03)) == (2022, 1, 1)
+    @test Dates.isoweekdate(Dates.Date(2022, 01, 04)) == (2022, 1, 2)
+    @test Dates.isoweekdate(Dates.Date(2022, 01, 05)) == (2022, 1, 3)
+    @test Dates.isoweekdate(Dates.Date(2022, 01, 06)) == (2022, 1, 4)
+    @test Dates.isoweekdate(Dates.Date(2020, 12, 29)) == (2020, 53, 2)
+    @test Dates.isoweekdate(Dates.Date(2020, 12, 30)) == (2020, 53, 3)
+    @test Dates.isoweekdate(Dates.Date(2020, 12, 31)) == (2020, 53, 4)
+    @test Dates.isoweekdate(Dates.Date(2021, 01, 01)) == (2020, 53, 5)
+    @test Dates.isoweekdate(Dates.Date(2021, 01, 02)) == (2020, 53, 6)
+    @test Dates.isoweekdate(Dates.Date(2021, 01, 03)) == (2020, 53, 7)
+    @test Dates.isoweekdate(Dates.Date(2021, 01, 04)) == (2021, 1, 1)
+    @test Dates.isoweekdate(Dates.Date(2021, 01, 05)) == (2021, 1, 2)
+    @test Dates.isoweekdate(Dates.Date(2021, 12, 31)) == (2021, 52, 5)
+    @test Dates.isoweekdate(Dates.Date(2022, 01, 01)) == (2021, 52, 6)
+    @test Dates.isoweekdate(Dates.Date(2022, 01, 02)) == (2021, 52, 7)
+    @test Dates.isoweekdate(Dates.Date(2020, 12, 31)) == (2020, 53, 4)
+    @test Dates.isoweekdate(Dates.Date(2021, 01, 01)) == (2020, 53, 5)
+    @test Dates.isoweekdate(Dates.Date(2021, 01, 02)) == (2020, 53, 6)
+    @test Dates.isoweekdate(Dates.Date(2021, 12, 31)) == (2021, 52, 5)
+    @test Dates.isoweekdate(Dates.Date(2022, 01, 01)) == (2021, 52, 6)
+    @test Dates.isoweekdate(Dates.Date(2022, 01, 02)) == (2021, 52, 7)
+    @test Dates.isoweekdate(Dates.Date(2022, 01, 03)) == (2022, 1, 1)
+    @test Dates.isoweekdate(Dates.Date(2019, 12, 31)) == (2020, 1, 2)
+    @test Dates.isoweekdate(Dates.Date(2020, 01, 01)) == (2020, 1, 3)
+    @test Dates.isoweekdate(Dates.Date(2020, 01, 02)) == (2020, 1, 4)
+    @test Dates.isoweekdate(Dates.Date(2018, 12, 31)) == (2019, 1, 1)
+    @test Dates.isoweekdate(Dates.Date(2019, 01, 01)) == (2019, 1, 2)
+    @test Dates.isoweekdate(Dates.Date(2019, 01, 02)) == (2019, 1, 3)
 end
 @testset "Vectorized accessors" begin
     a = Dates.Date(2014, 1, 1)

@@ -1,0 +1,7 @@
+# -*- makefile -*-
+
+## jll artifact
+DSFMT_JLL_NAME := dSFMT
+
+## source build
+DSFMT_VER := 2.2.5

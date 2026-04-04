@@ -87,12 +87,10 @@ value_t fl_table(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     value_t nt;
     // prevent small tables from being added to finalizer list
     if (cnt <= HT_N_INLINE) {
-        fl_ctx->table_vtable.finalize = NULL;
-        nt = cvalue(fl_ctx, fl_ctx->tabletype, sizeof(htable_t));
-        fl_ctx->table_vtable.finalize = free_htable;
+        nt = cvalue_no_finalizer(fl_ctx, fl_ctx->tabletype, sizeof(htable_t));
     }
     else {
-        nt = cvalue(fl_ctx, fl_ctx->tabletype, 2*sizeof(void*));
+        nt = cvalue(fl_ctx, fl_ctx->tabletype, offsetof(htable_t, _space));
     }
     htable_t *h = (htable_t*)cv_data((cvalue_t*)ptr(nt));
     htable_new(h, cnt/2);
@@ -103,6 +101,12 @@ value_t fl_table(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
             equalhash_put_r(h, (void*)k, (void*)arg, (void*)fl_ctx);
         else
             k = arg;
+    }
+    if (cnt <= HT_N_INLINE && h->table != &h->_space[0]) {
+        // We expected to use the inline table, but we ended up outgrowing it.
+        // Make sure to register the finalizer.
+        add_finalizer(fl_ctx, (cvalue_t*)ptr(nt));
+        ((cvalue_t*)ptr(nt))->len = offsetof(htable_t, _space);
     }
     return nt;
 }
@@ -118,7 +122,7 @@ value_t fl_table_put(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
     if (table0 == &h->_space[0] && h->table != &h->_space[0]) {
         cvalue_t *cv = (cvalue_t*)ptr(args[0]);
         add_finalizer(fl_ctx, cv);
-        cv->len = 2*sizeof(void*);
+        cv->len = offsetof(htable_t, _space);
     }
     return args[0];
 }

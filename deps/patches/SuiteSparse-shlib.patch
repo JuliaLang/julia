@@ -1,0 +1,43 @@
+--- a/SuiteSparse_config/SuiteSparse_config.mk	2018-12-22 22:15:58.000000000 -0500
++++ b/SuiteSparse_config/SuiteSparse_config.mk	2019-02-28 01:40:51.768394370 -0500
+@@ -357,8 +357,8 @@
+     #---------------------------------------------------------------------------
+ 
+     ifeq ($(UNAME),Linux)
+-        # add the realtime library, librt, and SuiteSparse/lib
+-        LDLIBS += -lrt -Wl,-rpath=$(INSTALL_LIB)
++        # add the posix realtime extensions library: librt
++        LDLIBS += -lrt
+     endif
+ 
+     #---------------------------------------------------------------------------
+@@ -447,11 +447,14 @@
+ SO_OPTS = $(LDFLAGS)
+ 
+ ifeq ($(UNAME),Windows)
+-    # Cygwin Make on Windows (untested)
++    # Cygwin Make on Windows
+     AR_TARGET = $(LIBRARY).lib
+-    SO_PLAIN  = $(LIBRARY).dll
++    SO_TARGET  = $(LIBRARY).dll
++    # The following two links are just garbage copies of the real target
++    # they aren't actually supported by this OS
+     SO_MAIN   = $(LIBRARY).$(SO_VERSION).dll
+-    SO_TARGET = $(LIBRARY).$(VERSION).dll
++    SO_PLAIN = $(LIBRARY).$(VERSION).dll
++    SO_OPTS  += -shared
+     SO_INSTALL_NAME = echo
+ else
+     # Mac or Linux/Unix
+@@ -472,8 +475,9 @@
+         SO_PLAIN  = $(LIBRARY).so
+         SO_MAIN   = $(LIBRARY).so.$(SO_VERSION)
+         SO_TARGET = $(LIBRARY).so.$(VERSION)
+-        SO_OPTS  += -shared -Wl,-soname -Wl,$(SO_MAIN) -Wl,--no-undefined
+-        # Linux/Unix *.so files can be moved without modification:
++        SO_OPTS  += -shared -Wl,-soname -Wl,$(SO_MAIN) -Wl,--no-undefined \
++                     -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
++        # Use rpath ORIGIN so that Linux/Unix *.so files can be moved without modification:
+         SO_INSTALL_NAME = echo
+     endif
+ endif

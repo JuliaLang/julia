@@ -2,9 +2,9 @@
 {
    msync unwind
    Memcheck:Param
-   msync(start)
+   write(buf)
    ...
-   obj:*/libpthread*.so
+   fun:validate_mem
    ...
-   fun:rec_backtrace_ctx
+   fun:rec_backtrace
 }

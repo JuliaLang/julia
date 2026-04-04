@@ -1,0 +1,18 @@
+# This file is machine-generated - editing it directly is not advised
+
+julia_version = "1.12.0-DEV"
+manifest_format = "2.0"
+project_hash = "51ade905d618e4aa369bc869841376219cc36cb1"
+
+[[deps.ProjectPath]]
+deps = ["ProjectPathDep"]
+path = "."
+entryfile = "CustomPath.jl"
+uuid = "32833bde-7fc1-4d28-8365-9d01e1bcbc1b"
+version = "0.1.0"
+
+[[deps.ProjectPathDep]]
+path = "ProjectPathDep"
+entryfile = "CustomPath.jl"
+uuid = "f18633fc-8799-43ff-aa06-99ed830dc572"
+version = "0.1.0"

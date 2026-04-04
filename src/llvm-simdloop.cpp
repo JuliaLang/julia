@@ -1,104 +1,99 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#define DEBUG_TYPE "lower_simd_loop"
-#undef DEBUG
-
-// This file defines two entry points:
-//     global function annotateSimdLoop: mark a loop as a SIMD loop.
-//     createLowerSimdLoopPass: construct LLVM for lowering a marked loop later.
-
 #include "llvm-version.h"
-#include "support/dtypes.h"
-#include <llvm/Analysis/LoopPass.h>
-#include <llvm/IR/Instructions.h>
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Metadata.h>
-#include <llvm/Support/Debug.h>
+#include "passes.h"
 
-#include <cstdio>
+// This file defines a LLVM pass that:
+// 1. Set's loop information in form of metadata
+// 2. If the metadata contains `julia.simdloop` finds reduction chains and marks
+//    floating-point operations as fast-math. `See enableUnsafeAlgebraIfReduction`.
+// 3. If the metadata contains `julia.ivdep` marks all memory accesses in the loop
+//    as independent of each other.
+//
+// The pass hinges on a call to a marker function that has metadata attached to it.
+
+#include "support/dtypes.h"
+
+#include <llvm-c/Core.h>
+#include <llvm-c/Types.h>
+
+#include <llvm/ADT/Statistic.h>
+#include <llvm/Analysis/LoopPass.h>
+#include <llvm/Analysis/OptimizationRemarkEmitter.h>
+#include <llvm/Analysis/MemorySSA.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/Metadata.h>
+#include <llvm/IR/Verifier.h>
+#include <llvm/Support/Debug.h>
 
 #include "julia_assert.h"
 
-namespace llvm {
+#define DEBUG_TYPE "lower_simd_loop"
 
-// simd loop
-static unsigned simd_loop_mdkind = 0;
-static MDNode *simd_loop_md = NULL;
+using namespace llvm;
 
-/// Mark loop as a SIMD loop.  Return false if loop cannot be marked.
-/// incr should be the basic block that increments the loop counter.
-bool annotateSimdLoop(BasicBlock *incr)
+STATISTIC(TotalMarkedLoops, "Total number of loops marked with simdloop");
+STATISTIC(IVDepLoops, "Number of loops with no loop-carried dependencies");
+STATISTIC(SimdLoops, "Number of loops with SIMD instructions");
+STATISTIC(IVDepInstructions, "Number of instructions marked ivdep");
+STATISTIC(ReductionChains, "Number of reduction chains folded");
+STATISTIC(ReductionChainLength, "Total sum of instructions folded from reduction chain");
+STATISTIC(MaxChainLength, "Max length of reduction chain");
+STATISTIC(AddChains, "Addition reduction chains");
+STATISTIC(MulChains, "Multiply reduction chains");
+STATISTIC(TotalContracted, "Total number of multiplies marked for FMA");
+
+#ifndef __clang_gcanalyzer__
+#define REMARK(remark) ORE.emit(remark)
+#else
+#define REMARK(remark) (void) 0;
+#endif
+namespace {
+
+/**
+ * Combine
+ * ```
+ * %v0 = fmul ... %a, %b
+ * %v = fadd contract ... %v0, %c
+ * ```
+ * to
+ * %v0 = fmul contract ... %a, %b
+ * %v = fadd contract ... %v0, %c
+ * when `%v0` has no other use
+ */
+
+static bool checkCombine(Value *maybeMul, Loop &L, OptimizationRemarkEmitter &ORE) JL_NOTSAFEPOINT
 {
-    DEBUG(dbgs() << "LSL: annotating simd_loop\n");
-    // Lazy initialization
-    if (!simd_loop_mdkind) {
-        simd_loop_mdkind = incr->getContext().getMDKindID("simd_loop");
-        simd_loop_md = MDNode::get(incr->getContext(), ArrayRef<Metadata*>());
+    auto mulOp = dyn_cast<Instruction>(maybeMul);
+    if (!mulOp || mulOp->getOpcode() != Instruction::FMul)
+        return false;
+    if (!L.contains(mulOp))
+        return false;
+    if (!mulOp->hasOneUse()) {
+        LLVM_DEBUG(dbgs() << "mulOp has multiple uses: " << *maybeMul << "\n");
+        REMARK([&](){
+            return OptimizationRemarkMissed(DEBUG_TYPE, "Multiuse FMul", mulOp)
+                << "fmul had multiple uses " << ore::NV("fmul", mulOp);
+        });
+        return false;
     }
-    // Ideally, the decoration would go on the block itself, but LLVM 3.3 does not
-    // support putting metadata on blocks.  So instead, put the decoration on the last
-    // Add instruction, which (somewhat riskily) is assumed to be the loop increment.
-    for (BasicBlock::reverse_iterator ri = incr->rbegin(); ri!=incr->rend(); ++ri) {
-        Instruction& i = *ri;
-        unsigned op = i.getOpcode();
-        if (op==Instruction::Add) {
-            if (i.getType()->isIntegerTy()) {
-                DEBUG(dbgs() << "LSL: setting simd_loop metadata\n");
-                i.setMetadata(simd_loop_mdkind, simd_loop_md);
-                return true;
-            }
-            else {
-                return false;
-            }
-        }
+    // On 5.0+ we only need to mark the mulOp as contract and the backend will do the work for us.
+    auto fmf = mulOp->getFastMathFlags();
+    if (!fmf.allowContract()) {
+        LLVM_DEBUG(dbgs() << "Marking mulOp for FMA: " << *maybeMul << "\n");
+        REMARK([&](){
+            return OptimizationRemark(DEBUG_TYPE, "Marked for FMA", mulOp)
+                << "marked for fma " << ore::NV("fmul", mulOp);
+        });
+        ++TotalContracted;
+        fmf.setAllowContract(true);
+        mulOp->copyFastMathFlags(fmf);
+        return true;
     }
     return false;
 }
 
-/// This pass should run after reduction variables have been converted to phi nodes,
-/// otherwise floating-point reductions might not be recognized as such and
-/// prevent SIMDization.
-struct LowerSIMDLoop : public ModulePass {
-    static char ID;
-    LowerSIMDLoop() : ModulePass(ID)
-    {
-    }
-
-    protected:
-    void getAnalysisUsage(AnalysisUsage &AU) const override
-    {
-        ModulePass::getAnalysisUsage(AU);
-        AU.addRequired<LoopInfoWrapperPass>();
-        AU.addPreserved<LoopInfoWrapperPass>();
-        AU.setPreservesCFG();
-    }
-
-    private:
-    bool runOnModule(Module &M) override;
-
-    bool markSIMDLoop(Module &M, Function *marker, bool ivdep);
-
-    /// Check if loop has "simd_loop" annotation.
-    /// If present, the annotation is an MDNode attached to an instruction in the loop's latch.
-    bool hasSIMDLoopMetadata( Loop *L) const;
-
-    /// If Phi is part of a reduction cycle of FAdd, FSub, FMul or FDiv,
-    /// mark the ops as permitting reassociation/commuting.
-    /// As of LLVM 4.0, FDiv is not handled by the loop vectorizer
-    void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const;
-};
-
-bool LowerSIMDLoop::hasSIMDLoopMetadata(Loop *L) const
-{
-    // Note: If a loop has 0 or multiple latch blocks, it's probably not a simd_loop anyway.
-    if (BasicBlock *latch = L->getLoopLatch())
-        for (BasicBlock::iterator II = latch->begin(), EE = latch->end(); II!=EE; ++II)
-            if (II->getMetadata(simd_loop_mdkind))
-                return true;
-    return false;
-}
-
-static unsigned getReduceOpcode(Instruction *J, Instruction *operand)
+static unsigned getReduceOpcode(Instruction *J, Instruction *operand) JL_NOTSAFEPOINT
 {
     switch (J->getOpcode()) {
     case Instruction::FSub:
@@ -118,7 +113,10 @@ static unsigned getReduceOpcode(Instruction *J, Instruction *operand)
     }
 }
 
-void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const
+/// If Phi is part of a reduction cycle of FAdd, FSub, FMul or FDiv,
+/// mark the ops as permitting reassociation/commuting.
+/// As of LLVM 4.0, FDiv is not handled by the loop vectorizer
+static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop &L, OptimizationRemarkEmitter &ORE, ScalarEvolution *SE) JL_NOTSAFEPOINT
 {
     typedef SmallVector<Instruction*, 8> chainVector;
     chainVector chain;
@@ -129,16 +127,24 @@ void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const
         // Find the user of instruction I that is within loop L.
         for (User *UI : I->users()) { /*}*/
             Instruction *U = cast<Instruction>(UI);
-            if (L->contains(U)) {
+            if (L.contains(U)) {
                 if (J) {
-                    DEBUG(dbgs() << "LSL: not a reduction var because op has two internal uses: " << *I << "\n");
+                    LLVM_DEBUG(dbgs() << "LSL: not a reduction var because op has two internal uses: " << *I << "\n");
+                    REMARK([&]() {
+                        return OptimizationRemarkMissed(DEBUG_TYPE, "NotReductionVar", U)
+                               << "not a reduction variable because operation has two internal uses";
+                    });
                     return;
                 }
                 J = U;
             }
         }
         if (!J) {
-            DEBUG(dbgs() << "LSL: chain prematurely terminated at " << *I << "\n");
+            LLVM_DEBUG(dbgs() << "LSL: chain prematurely terminated at " << *I << "\n");
+            REMARK([&]() {
+                return OptimizationRemarkMissed(DEBUG_TYPE, "ChainPrematurelyTerminated", I)
+                       << "chain prematurely terminated at " << ore::NV("Instruction", I);
+            });
             return;
         }
         if (J == Phi) {
@@ -148,7 +154,11 @@ void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const
         if (opcode) {
             // Check that arithmetic op matches prior arithmetic ops in the chain.
             if (getReduceOpcode(J, I) != opcode) {
-                DEBUG(dbgs() << "LSL: chain broke at " << *J << " because of wrong opcode\n");
+                LLVM_DEBUG(dbgs() << "LSL: chain broke at " << *J << " because of wrong opcode\n");
+                REMARK([&](){
+                    return OptimizationRemarkMissed(DEBUG_TYPE, "ChainBroke", J)
+                           << "chain broke at " << ore::NV("Instruction", J) << " because of wrong opcode";
+                });
                 return;
             }
         }
@@ -156,103 +166,169 @@ void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const
             // First arithmetic op in the chain.
             opcode = getReduceOpcode(J, I);
             if (!opcode) {
-                DEBUG(dbgs() << "LSL: first arithmetic op in chain is uninteresting" << *J << "\n");
+                LLVM_DEBUG(dbgs() << "LSL: first arithmetic op in chain is uninteresting" << *J << "\n");
+                REMARK([&]() {
+                    return OptimizationRemarkMissed(DEBUG_TYPE, "FirstArithmeticOpInChainIsUninteresting", J)
+                           << "first arithmetic op in chain is uninteresting";
+                });
                 return;
             }
         }
         chain.push_back(J);
     }
-    for (chainVector::const_iterator K=chain.begin(); K!=chain.end(); ++K) {
-        DEBUG(dbgs() << "LSL: marking " << **K << "\n");
-        (*K)->setFast(true);
+    switch (opcode) {
+        case Instruction::FAdd:
+            ++AddChains;
+            break;
+        case Instruction::FMul:
+            ++MulChains;
+            break;
     }
-}
-
-bool LowerSIMDLoop::runOnModule(Module &M)
-{
-    Function *simdloop_marker = M.getFunction("julia.simdloop_marker");
-    Function *simdivdep_marker = M.getFunction("julia.simdivdep_marker");
-
-    bool Changed = false;
-    if (simdloop_marker)
-        Changed |= markSIMDLoop(M, simdloop_marker, false);
-
-    if (simdivdep_marker)
-        Changed |= markSIMDLoop(M, simdivdep_marker, true);
-
-    return Changed;
-}
-
-bool LowerSIMDLoop::markSIMDLoop(Module &M, Function *marker, bool ivdep)
-{
-    bool Changed = false;
-    std::vector<Instruction*> ToDelete;
-    for (User *U : marker->users()) {
-        Instruction *I = cast<Instruction>(U);
-        ToDelete.push_back(I);
-        LoopInfo &LI = getAnalysis<LoopInfoWrapperPass>(*I->getParent()->getParent()).getLoopInfo();
-        Loop *L = LI.getLoopFor(I->getParent());
-        I->removeFromParent();
-        if (!L)
-            continue;
-
-        DEBUG(dbgs() << "LSL: simd_loop found\n");
-        DEBUG(dbgs() << "LSL: ivdep is: " << ivdep << "\n");
-        BasicBlock *Lh = L->getHeader();
-        DEBUG(dbgs() << "LSL: loop header: " << *Lh << "\n");
-        MDNode *n = L->getLoopID();
-        if (!n) {
-            // Loop does not have a LoopID yet, so give it one.
-            n = MDNode::get(Lh->getContext(), ArrayRef<Metadata *>(NULL));
-            n->replaceOperandWith(0, n);
-            L->setLoopID(n);
-        }
-
-        assert(L->getLoopID());
-
-        MDNode *m = MDNode::get(Lh->getContext(), ArrayRef<Metadata *>(n));
-
-        // If ivdep is true we assume that there is no memory dependency between loop iterations
-        // This is a fairly strong assumption and does often not hold true for generic code.
-        if (ivdep) {
-            // Mark memory references so that Loop::isAnnotatedParallel will return true for this loop.
-            for (BasicBlock *BB : L->blocks()) {
-               for (Instruction &I : *BB) {
-                   if (I.mayReadOrWriteMemory()) {
-                       I.setMetadata(LLVMContext::MD_mem_parallel_loop_access, m);
-                   }
-               }
+    ++ReductionChains;
+    int length = 0;
+    for (chainVector::const_iterator K=chain.begin(); K!=chain.end(); ++K) {
+        LLVM_DEBUG(dbgs() << "LSL: marking " << **K << "\n");
+        REMARK([&]() {
+            return OptimizationRemark(DEBUG_TYPE, "MarkedUnsafeAlgebra", *K)
+                   << "marked unsafe algebra on " << ore::NV("Instruction", *K);
+        });
+        (*K)->setHasAllowReassoc(true);
+        (*K)->setHasAllowContract(true);
+        switch ((*K)->getOpcode()) {
+            case Instruction::FAdd: {
+                if (!(*K)->hasAllowContract())
+                    continue;
+                // (*K)->getOperand(0)->print(dbgs());
+                // (*K)->getOperand(1)->print(dbgs());
+                checkCombine((*K)->getOperand(0), L, ORE);
+                checkCombine((*K)->getOperand(1), L, ORE);
+                break;
             }
-            assert(L->isAnnotatedParallel());
-        }
+            case Instruction::FSub: {
+                if (!(*K)->hasAllowContract())
+                    continue;
+                // (*K)->getOperand(0)->print(dbgs());
+                // (*K)->getOperand(1)->print(dbgs());
+                checkCombine((*K)->getOperand(0), L, ORE);
+                checkCombine((*K)->getOperand(1), L, ORE);
+                break;
+            }
+            default:
+                break;
+            }
+        if (SE)
+            SE->forgetValue(*K);
+        ++length;
+    }
+    ReductionChainLength += length;
+    MaxChainLength.updateMax(length);
+}
 
+static bool processLoop(Loop &L, OptimizationRemarkEmitter &ORE, ScalarEvolution *SE) JL_NOTSAFEPOINT
+{
+    MDNode *LoopID = L.getLoopID();
+    if (!LoopID)
+        return false;
+    bool simd = false;
+    bool ivdep = false;
+
+    BasicBlock *Lh = L.getHeader();
+    LLVM_DEBUG(dbgs() << "LSL: loop header: " << *Lh << "\n");
+
+    SmallVector<Metadata*, 4> MDs(1);
+    // First Operand is self-reference
+    // Drop `julia.` prefixes
+    for (unsigned i = 1, ie = LoopID->getNumOperands(); i < ie; ++i) {
+        Metadata *Op = LoopID->getOperand(i);
+        const MDString *S = dyn_cast<MDString>(Op);
+        if (S) {
+            LLVM_DEBUG(dbgs() << "LSL: found " << S->getString() << "\n");
+            if (S->getString().starts_with("julia")) {
+                if (S->getString() == "julia.simdloop")
+                    simd = true;
+                if (S->getString() == "julia.ivdep")
+                    ivdep = true;
+                continue;
+            }
+        }
+        MDs.push_back(Op);
+    }
+
+    LLVM_DEBUG(dbgs() << "LSL: simd: " << simd << " ivdep: " << ivdep << "\n");
+    if (!simd && !ivdep)
+        return false;
+    ++TotalMarkedLoops;
+    LLVMContext &Context = L.getHeader()->getContext();
+    LoopID = MDNode::get(Context, MDs);
+    // Set operand 0 to refer to the loop id itself
+    LoopID->replaceOperandWith(0, LoopID);
+    L.setLoopID(LoopID);
+
+    REMARK([&]() {
+        return OptimizationRemarkAnalysis(DEBUG_TYPE, "Loop SIMD Flags", L.getStartLoc(), L.getHeader())
+            << "Loop marked for SIMD vectorization with flags { \"simd\": " << (simd ? "true" : "false") << ", \"ivdep\": " << (ivdep ? "true" : "false") << " }";
+    });
+
+    // If ivdep is true we assume that there is no memory dependency between loop iterations
+    // This is a fairly strong assumption and does often not hold true for generic code.
+    if (ivdep) {
+        ++IVDepLoops;
+        MDNode *m = MDNode::get(Lh->getContext(), ArrayRef<Metadata *>(LoopID));
+        // Mark memory references so that Loop::isAnnotatedParallel will return true for this loop.
+        for (BasicBlock *BB : L.blocks()) {
+            for (Instruction &I : *BB) {
+                if (I.mayReadOrWriteMemory()) {
+                    ++IVDepInstructions;
+                    I.setMetadata(LLVMContext::MD_mem_parallel_loop_access, m);
+                }
+            }
+        }
+        assert(L.isAnnotatedParallel());
+    }
+
+    if (simd) {
+        ++SimdLoops;
         // Mark floating-point reductions as okay to reassociate/commute.
         for (BasicBlock::iterator I = Lh->begin(), E = Lh->end(); I != E; ++I) {
             if (PHINode *Phi = dyn_cast<PHINode>(I))
-                enableUnsafeAlgebraIfReduction(Phi, L);
+                enableUnsafeAlgebraIfReduction(Phi, L, ORE, SE);
             else
                 break;
         }
 
-        Changed = true;
+        if (SE)
+            SE->forgetLoopDispositions();
     }
 
-    for (Instruction *I : ToDelete)
-        I->deleteValue();
-    marker->eraseFromParent();
-
-    return Changed;
+#ifdef JL_VERIFY_PASSES
+    assert(!verifyLLVMIR(L));
+#endif
+    return true;
 }
 
-char LowerSIMDLoop::ID = 0;
+} // end anonymous namespace
 
-static RegisterPass<LowerSIMDLoop> X("LowerSIMDLoop", "LowerSIMDLoop Pass",
-                                     false /* Only looks at CFG */,
-                                     false /* Analysis Pass */);
 
-JL_DLLEXPORT Pass *createLowerSimdLoopPass()
+/// This pass should run after reduction variables have been converted to phi nodes,
+/// otherwise floating-point reductions might not be recognized as such and
+/// prevent SIMDization.
+
+
+PreservedAnalyses LowerSIMDLoopPass::run(Loop &L, LoopAnalysisManager &AM,
+                          LoopStandardAnalysisResults &AR, LPMUpdater &U)
+
 {
-    return new LowerSIMDLoop();
-}
+    OptimizationRemarkEmitter ORE(L.getHeader()->getParent());
+    if (processLoop(L, ORE, &AR.SE)) {
+#ifdef JL_DEBUG_BUILD
+        if (AR.MSSA)
+            AR.MSSA->verifyMemorySSA();
+#endif
+        auto preserved = getLoopPassPreservedAnalyses();
+        preserved.preserveSet<CFGAnalyses>();
+        preserved.preserve<MemorySSAAnalysis>();
+        return preserved;
+    }
 
-} // namespace llvm
+    return PreservedAnalyses::all();
+}

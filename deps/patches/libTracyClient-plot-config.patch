@@ -1,0 +1,57 @@
+commit 7151c6afd9cc40877325c64bd19bcff7211fbd59
+Author: Bartosz Taudul <wolf@nereid.pl>
+Date:   Wed Mar 8 23:18:36 2023 +0100
+
+    Add support for configuring plots to C API.
+
+diff --git a/public/client/TracyProfiler.cpp b/public/client/TracyProfiler.cpp
+index 6104a7ed..38b5ea13 100644
+--- a/public/client/TracyProfiler.cpp
++++ b/public/client/TracyProfiler.cpp
+@@ -4149,6 +4149,7 @@ TRACY_API void ___tracy_emit_frame_image( const void* image, uint16_t w, uint16_
+ TRACY_API void ___tracy_emit_plot( const char* name, double val ) { tracy::Profiler::PlotData( name, val ); }
+ TRACY_API void ___tracy_emit_plot_float( const char* name, float val ) { tracy::Profiler::PlotData( name, val ); }
+ TRACY_API void ___tracy_emit_plot_int( const char* name, int64_t val ) { tracy::Profiler::PlotData( name, val ); }
++TRACY_API void ___tracy_emit_plot_config( const char* name, int type, int step, int fill, uint32_t color ) { tracy::Profiler::ConfigurePlot( name, tracy::PlotFormatType(type), step, fill, color ); }
+ TRACY_API void ___tracy_emit_message( const char* txt, size_t size, int callstack ) { tracy::Profiler::Message( txt, size, callstack ); }
+ TRACY_API void ___tracy_emit_messageL( const char* txt, int callstack ) { tracy::Profiler::Message( txt, callstack ); }
+ TRACY_API void ___tracy_emit_messageC( const char* txt, size_t size, uint32_t color, int callstack ) { tracy::Profiler::MessageColor( txt, size, color, callstack ); }
+diff --git a/public/tracy/TracyC.h b/public/tracy/TracyC.h
+index bedf5e16..736b51ed 100644
+--- a/public/tracy/TracyC.h
++++ b/public/tracy/TracyC.h
+@@ -11,6 +11,13 @@
+ extern "C" {
+ #endif
+
++enum TracyPlotFormatEnum
++{
++    TracyPlotFormatNumber,
++    TracyPlotFormatMemory,
++    TracyPlotFormatPercentage,
++};
++
+ TRACY_API void ___tracy_set_thread_name( const char* name );
+
+ #define TracyCSetThreadName( name ) ___tracy_set_thread_name( name );
+@@ -60,6 +67,8 @@ typedef const void* TracyCZoneCtx;
+ #define TracyCPlot(x,y)
+ #define TracyCPlotF(x,y)
+ #define TracyCPlotI(x,y)
++#define TracyCPlotConfig(x,y,z,w,a)
++
+ #define TracyCMessage(x,y)
+ #define TracyCMessageL(x)
+ #define TracyCMessageC(x,y,z)
+@@ -289,11 +298,13 @@ TRACY_API void ___tracy_emit_frame_image( const void* image, uint16_t w, uint16_
+ TRACY_API void ___tracy_emit_plot( const char* name, double val );
+ TRACY_API void ___tracy_emit_plot_float( const char* name, float val );
+ TRACY_API void ___tracy_emit_plot_int( const char* name, int64_t val );
++TRACY_API void ___tracy_emit_plot_config( const char* name, int type, int step, int fill, uint32_t color );
+ TRACY_API void ___tracy_emit_message_appinfo( const char* txt, size_t size );
+
+ #define TracyCPlot( name, val ) ___tracy_emit_plot( name, val );
+ #define TracyCPlotF( name, val ) ___tracy_emit_plot_float( name, val );
+ #define TracyCPlotI( name, val ) ___tracy_emit_plot_int( name, val );
++#define TracyCPlotConfig( name, type, step, fill, color ) ___tracy_emit_plot_config( name, type, step, fill, color );
+ #define TracyCAppInfo( txt, size ) ___tracy_emit_message_appinfo( txt, size );

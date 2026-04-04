@@ -518,7 +518,7 @@ static void print_string(fl_context_t *fl_ctx, ios_t *f, char *str, size_t sz)
     }
     else {
         while (i < sz) {
-            size_t n = u8_escape(buf, sizeof(buf), str, &i, sz, 1, 0);
+            size_t n = u8_escape(buf, sizeof(buf), str, &i, sz, "\"", 0);
             outsn(fl_ctx, buf, f, n-1);
         }
     }
@@ -639,13 +639,14 @@ static void cvalue_printdata(fl_context_t *fl_ctx, ios_t *f, void *data,
             // These states should be context independent.
             static size_t (*volatile jl_static_print)(ios_t*, void*) = NULL;
             static volatile int init = 0;
+            // XXX: use uv_once
             if (init == 0) {
 #if defined(RTLD_SELF)
                 jl_static_print = (size_t (*)(ios_t*, void*))
-                    (uintptr_t)dlsym(RTLD_SELF, "jl_static_show");
+                    (uintptr_t)dlsym(RTLD_SELF, "ijl_static_show");
 #elif defined(RTLD_DEFAULT)
                 jl_static_print = (size_t (*)(ios_t*, void*))
-                    (uintptr_t)dlsym(RTLD_DEFAULT, "jl_static_show");
+                    (uintptr_t)dlsym(RTLD_DEFAULT, "ijl_static_show");
 #elif defined(_OS_WINDOWS_)
                 HMODULE handle;
                 if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
@@ -653,7 +654,7 @@ static void cvalue_printdata(fl_context_t *fl_ctx, ios_t *f, void *data,
                                        (LPCWSTR)(&cvalue_printdata),
                                        &handle)) {
                     jl_static_print = (size_t (*)(ios_t*, void*))
-                        (uintptr_t)GetProcAddress(handle, "jl_static_show");
+                        (uintptr_t)GetProcAddress(handle, "ijl_static_show");
                 }
 #endif
                 init = 1;

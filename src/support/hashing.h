@@ -12,9 +12,9 @@ extern "C" {
 #endif
 
 uint_t nextipow2(uint_t i) JL_NOTSAFEPOINT;
-JL_DLLEXPORT uint32_t int32hash(uint32_t a) JL_NOTSAFEPOINT;
-JL_DLLEXPORT uint64_t int64hash(uint64_t key) JL_NOTSAFEPOINT;
-JL_DLLEXPORT uint32_t int64to32hash(uint64_t key) JL_NOTSAFEPOINT;
+uint32_t int32hash(uint32_t a) JL_NOTSAFEPOINT;
+uint64_t int64hash(uint64_t key) JL_NOTSAFEPOINT;
+uint32_t int64to32hash(uint64_t key) JL_NOTSAFEPOINT;
 #ifdef _P64
 #define inthash int64hash
 #else

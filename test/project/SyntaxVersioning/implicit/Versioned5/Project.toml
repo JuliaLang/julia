@@ -1,0 +1,5 @@
+name = "Versioned5"
+uuid = "1805a4d1-8cc9-402d-b9fb-3f94ad9a89b5"
+
+[compat]
+julia = "1.14 - 2"

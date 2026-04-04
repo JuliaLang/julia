@@ -18,10 +18,10 @@ signature.
   * LLVM scalars and vectors are passed by value.
   * LLVM aggregates (arrays and structs) are passed by reference.
 
-A small return values is returned as LLVM return values. A large return values is returned via
+A small return value is returned as LLVM return values. A large return value is returned via
 the "structure return" (`sret`) convention, where the caller provides a pointer to a return slot.
 
-An argument or return values that is a homogeneous tuple is sometimes represented as an LLVM vector
+An argument or return value that is a homogeneous tuple is sometimes represented as an LLVM vector
 instead of an LLVM array.
 
 ## JL Call Convention
