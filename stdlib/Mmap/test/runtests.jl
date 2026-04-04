@@ -360,7 +360,6 @@ end
 GC.gc()
 rm(file)
 
-
 # test for #58982 - mmap with primitive types
 file = tempname()
 primitive type PrimType9Bytes 9*8 end
@@ -377,4 +376,3 @@ rm(file)
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(Mmap))
 end
-
