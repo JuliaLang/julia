@@ -18,7 +18,7 @@ using .JuliaSyntax: @KSet_str, @stm, Kind, NodeId, SourceAttrType, SourceRef, Sy
     flags, flattened_provenance, has_flags, hasattr, head, highlight, is_compatible_graph,
     is_leaf, is_literal, kind, last_byte, mapchildren, mapsyntax, mkleaf, mknode, newleaf,
     newnode, node_string, numchildren, provenance, reparent, setattr, setattr!,
-    source_location, sourcefile, sourceref, syntax_graph, tree_ids
+    source_location, sourcefile, sourceref, syntax_graph, tree_ids, mapindex
 
 const DEBUG = true
 

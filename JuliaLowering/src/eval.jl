@@ -160,11 +160,11 @@ end
 function ir_debug_info_state(ex)
     e1 = first(flattened_provenance(ex))
     topfile = filename(e1)
-    [(topfile, [], Vector{Int32}())]
+    Tuple{String, Vector{Any}, Vector{Int32}}[(topfile, [], Vector{Int32}())]
 end
 
 function add_ir_debug_info!(current_codelocs_stack, stmt)
-    locstk = [(filename(e), source_location(e)[1]) for e in flattened_provenance(stmt)]
+    locstk = Tuple{String, Int32}[(filename(e), source_location(e)[1]) for e in flattened_provenance(stmt)]
     for j in 1:length(locstk)
         if j === 1 && current_codelocs_stack[j][1] != locstk[j][1]
             # dilemma: the filename stack here shares no prefix with that of the
@@ -225,10 +225,12 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
         # TODO: Do we actually want unique names here? The C code in
         # `jl_new_code_info_from_ir` has logic to simplify gensym'd names and
         # use the empty string for compiler-generated bindings.
-        ni = get(slot_rename_inds, name, 0)
-        slot_rename_inds[name] = ni + 1
-        if ni > 0
-            name = "$name@$ni"
+        if name !== UNUSED
+            ni = get(slot_rename_inds, name, 0)
+            slot_rename_inds[name] = ni + 1
+            if ni > 0
+                name = "$name@$ni"
+            end
         end
         sname = Symbol(name)
         slotnames[i] = sname
@@ -326,13 +328,8 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     if is_literal(k)
         ex.value
     elseif k == K"core"
-        name = ex.name_val
-        if name == "cglobal"
-            # Inference expects cglobal as call argument to be `GlobalRef`,
-            # so we resolve that name as a symbol of `Core.Intrinsics` here.
-            # https://github.com/JuliaLang/julia/blob/7a8cd6e202f1d1216a6c0c0b928fb43a123cada8/Compiler/src/validation.jl#L87
-            GlobalRef(Core.Intrinsics, :cglobal)
-        elseif name == "nothing"
+        name = ex.name_val::String
+        if name === "nothing"
             # Translate Core.nothing into literal `nothing`s (flisp uses a
             # special form (null) for this during desugaring, etc)
             nothing
@@ -340,24 +337,24 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
             GlobalRef(Core, Symbol(name))
         end
     elseif k == K"top"
-        GlobalRef(Base, Symbol(ex.name_val))
+        GlobalRef(Base, Symbol(ex.name_val::String))
     elseif k == K"globalref"
-        GlobalRef(ex.mod, Symbol(ex.name_val))
+        GlobalRef(ex.mod::Module, Symbol(ex.name_val::String))
     elseif k == K"Identifier"
         # Implicitly refers to name in parent module
         # TODO: Should we even have plain identifiers at this point or should
         # they all effectively be resolved into GlobalRef earlier?
-        Symbol(ex.name_val)
+        Symbol(ex.name_val::String)
     elseif k == K"SourceLocation"
         QuoteNode(source_location(LineNumberNode, ex))
     elseif k == K"Symbol"
-        QuoteNode(Symbol(ex.name_val))
+        QuoteNode(Symbol(ex.name_val::String))
     elseif k == K"slot"
-        Core.SlotNumber(ex.var_id)
+        Core.SlotNumber(ex.var_id::IdTag)
     elseif k == K"static_parameter"
-        Expr(:static_parameter, ex.var_id)
+        Expr(:static_parameter, ex.var_id::IdTag)
     elseif k == K"SSAValue"
-        Core.SSAValue(ex.var_id + stmt_offset)
+        Core.SSAValue(ex.var_id::IdTag + stmt_offset)
     elseif k == K"return"
         Core.ReturnNode(_to_lowered_expr(ex[1], stmt_offset))
     elseif k == K"inert"

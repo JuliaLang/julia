@@ -3998,6 +3998,39 @@ end
 Base.donotdelete
 
 """
+    Base.blackbox(x) -> x
+
+This function returns `x` unchanged, but treats the returned value as if it
+came from an unknowable black-box source. The optimizer may not make any
+assumptions about the output: it cannot be constant-folded, common-subexpression
+eliminated (CSE'd), or treated as loop-invariant.
+This is equivalent to `compilerbarrier(:blackbox, x)`.
+
+This is useful in benchmarking to prevent loop-invariant computations from being
+hoisted out of benchmark loops. The output of `blackbox(x)` is opaque, so
+any function call that depends on it must be re-executed each iteration.
+For preventing deletion of results, see [`donotdelete`](@ref).
+
+!!! compat "Julia 1.14"
+    This method was added in Julia 1.14.
+
+# Examples
+
+```julia
+function benchmark_loop(x, n)
+    for i in 1:n
+        # Without blackbox, the compiler may compute cbrt(x) once
+        # and reuse the result for all iterations.
+        y = blackbox(x)
+        z = cbrt(y)
+        donotdelete(z)
+    end
+end
+```
+"""
+Base.blackbox
+
+"""
     Base.compilerbarrier(setting::Symbol, val)
 
 This function acts a compiler barrier at a specified compilation phase.
@@ -4012,7 +4045,10 @@ Currently either of the following `setting`s is allowed:
     constant information on `val`
   * `:conditional`: the return type of this function call will be inferred with widening
     conditional information on `val` (see the example below)
-- Any barriers on optimization aren't implemented yet
+- Barriers on optimization:
+  * `:blackbox`: treat the returned value as if it came from an unknowable black-box
+    source, preventing common-subexpression elimination (CSE) and loop-invariant code motion on any computation that
+    depends on it. See [`blackbox`](@ref) for a convenience wrapper.
 
 !!! note
     This function is expected to be used with `setting` known precisely at compile-time.

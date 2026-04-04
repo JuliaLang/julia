@@ -140,7 +140,7 @@ function Base.showerror(io::IO, exc::MacroExpansionError)
             pos == :begin   ? (fb:fb-1) :
             pos == :end     ? (lb+1:lb) :
             error("Unknown position $pos")
-        highlight(io, src.file, byterange, note=exc.msg)
+        highlight(io, src.file[], byterange, note=exc.msg)
     end
     if !isnothing(exc.err)
         print(io, "\nCaused by:\n")
@@ -312,7 +312,7 @@ function expand_macro(ctx, ex)
             rethrow(newexc)
         end
         if expanded isa SyntaxTree
-            if !is_compatible_graph(ctx, expanded)
+            if expanded._graph !== ctx.graph
                 # If the macro has produced syntax outside the macro context,
                 # copy it over. TODO: Do we expect this always to happen?  What
                 # is the API for access to the macro expansion context?
@@ -386,7 +386,7 @@ function append_sourceref(ctx, ex, secondary_prov)
         if kind(ex) == K"macrocall"
             copy_node(ex)
         else
-            cs = map(e->append_sourceref(ctx, e, secondary_prov)._id, children(ex))
+            cs = mapsyntax(e->append_sourceref(ctx, e, secondary_prov)._id, children(ex))
             mknode(ex, cs)
         end
     else
@@ -469,45 +469,20 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
                 :scope_layer, layerid)
     elseif is_leaf(ex)
         ex
-    elseif k in KSet"function =" && numchildren(ex) === 2
-        # The (if (generated) gen nongen) form is troublesome because everything
-        # surrounding it is implicitly quoted (with `gen` interpolated into it),
-        # so converting the function's AST before proper quoting is incorrect.
-        ex1 = mapchildren(e->expand_forms_1(ctx,e), ctx, ex)
-        (is_eventually_call(ex1[1]) && has_if_generated(ex1[2])) || return ex1
-        gen = expand_forms_1(ctx, expand_quote(
-            ctx, @ast ctx ex1 [K"block" split_generated(ex1[2], true)]))
-        nongen = split_generated(ex1[2], false)
-        @ast ctx ex1 [K"generated_function" ex1[1] gen nongen]
     else
         mapchildren(e->expand_forms_1(ctx,e), ctx, ex)
     end
 end
 
-has_if_generated(st::SyntaxTree) = JuliaSyntax.@stm st begin
-    (_, when=is_leaf(st)||is_quoted(st)) -> false
-    [K"function" _...] -> false
-    ([K"=" call _], when=is_eventually_call(call)) -> false
-    [K"if" [K"generated"] _ _] -> true
-    _ -> any(has_if_generated, children(st))
+function ensure_macro_attributes!(graph)
+    g2 = ensure_attributes!(
+        graph;
+        var_id=IdTag,
+        scope_layer=LayerId,
+        __macro_ctx__=Nothing,
+        meta=CompileHints)
+    DEBUG ? ensure_attributes!(g2; jl_source=LineNumberNode) : g2
 end
-split_generated(st::SyntaxTree, gen_part) = JuliaSyntax.@stm st begin
-    (_, when=is_leaf(st)||is_quoted(st)) -> st
-    [K"if" [K"generated"] gen nongen] -> if gen_part
-        @ast(st._graph, st, [K"$" gen])
-    else
-        nongen
-    end
-    _ -> mapchildren(x->split_generated(x, gen_part), st._graph, st)
-end
-
-ensure_macro_attributes!(graph) = ensure_attributes!(
-    graph;
-    var_id=IdTag,
-    scope_layer=LayerId,
-    __macro_ctx__=Nothing,
-    meta=CompileHints,
-    (DEBUG ? (:jl_source=>LineNumberNode,) : ())...)
 
 @fzone "JL: macroexpand" function expand_forms_1(mod::Module, ex::SyntaxTree, expr_compat_mode::Bool, macro_world::UInt)
     if kind(ex) == K"local"

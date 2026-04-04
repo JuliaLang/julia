@@ -776,6 +776,8 @@ add_tfunc(donotdelete, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->No
         return widenconditional(val)
     elseif setting === :type
         return Any
+    elseif setting === :blackbox
+        return widenconst(val)
     else
         return Bottom
     end
@@ -784,7 +786,7 @@ add_tfunc(compilerbarrier, 2, 2, compilerbarrier_tfunc, 5)
 add_tfunc(Core.finalizer, 2, 4, @nospecs((𝕃::AbstractLattice, args...)->Nothing), 5)
 
 @nospecs function compilerbarrier_nothrow(setting, val)
-    return isa(setting, Const) && contains_is((:type, :const, :conditional), setting.val)
+    return isa(setting, Const) && contains_is((:type, :const, :conditional, :blackbox), setting.val)
 end
 
 # more accurate typeof_tfunc for vararg tuples abstract only in length
@@ -2980,14 +2982,20 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
             return ErrorException
         end
 
-        # fpext, fptrunc, fptoui, fptosi, uitofp, and sitofp have further
-        # restrictions on the allowed types.
+        # fpext, sext_int, zext_int, fptrunc, trunc_int, fptoui, fptosi, uitofp, and sitofp
+        # have further restrictions on the allowed types.
         if f === Intrinsics.fpext &&
             !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) > Core.sizeof(xty))
             return ErrorException
         end
+        if (f === Intrinsics.sext_int || f === Intrinsics.zext_int) && !(Core.sizeof(ty) > Core.sizeof(xty))
+            return ErrorException
+        end
         if f === Intrinsics.fptrunc &&
             !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) < Core.sizeof(xty))
+            return ErrorException
+        end
+        if f === Intrinsics.trunc_int && !(Core.sizeof(ty) < Core.sizeof(xty))
             return ErrorException
         end
         if (f === Intrinsics.fptoui || f === Intrinsics.fptosi) && !(xty <: CORE_FLOAT_TYPES)

@@ -2,6 +2,55 @@ test_mod = Module(:TestMod)
 
 Base.eval(test_mod, :(struct XX{S,T,U,W} end))
 
+@testset "where" begin
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where T<:Number
+    """) == Vector{T} where T<:Number
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where T>:Int
+    """) == Vector{T} where T>:Int
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where Int<:T<:Number
+    """) == Vector{T} where Int<:T<:Number
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where Number>:T>:Int
+    """) == Vector{T} where Int<:T<:Number
+
+    # with nontrivial type bounds
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where {T<:(U where U<:(V where V<:Number))}
+    """) == Vector{T} where T<:Number
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where T<:(()->Number)()
+    """) == Vector{T} where T<:Number
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where (()->Int)()<:T<:(()->Number)()
+    """) == Vector{T} where Int<:T<:Number
+
+    # multi-layer
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where {A<:Any, B<:A, C>:B, C<:T<:C}
+    """) == Vector{T} where {A, B<:A, C>:B, C<:T<:C}
+    @test JuliaLowering.include_string(test_mod, """
+    Pair{T, A} where {A<:E<:D, A<:T<:E} where {A<:C<:B, A<:D<:C} where {A, B<:A}
+    """) == Pair{T, A} where {A, B<:A, A<:C<:B, A<:D<:C, A<:E<:D, A<:T<:E}
+    @test JuliaLowering.include_string(test_mod, """
+    Vector{T} where (()->U)()<:T<:(()->U)() where (()->Int)()<:U<:(()->Number)()
+    """) == Vector{T} where {Int<:U<:Number, U<:T<:U}
+
+    @testset "implicit whereparams" begin
+        @test JuliaLowering.include_string(test_mod, """
+        Vector{<:Number}
+        """) == Vector{<:Number}
+        @test JuliaLowering.include_string(test_mod, """
+        Vector{>:Number}
+        """) == Vector{>:Number}
+        @test JuliaLowering.include_string(test_mod, """
+        Vector{<:(()->Number)()}
+        """) == Vector{<:Number}
+    end
+end
+
 @test JuliaLowering.include_string(test_mod, """
 XX{Int, <:Integer, Float64, >:AbstractChar}
 """) == (test_mod.XX{Int, T, Float64, S} where {T <: Integer, S >: AbstractChar})
@@ -398,6 +447,11 @@ JuliaLowering.include_string(test_mod, "primitive type P36104 8 end")
 JuliaLowering.include_string(test_mod, "const orig_P36104 = P36104")
 JuliaLowering.include_string(test_mod, "primitive type P36104 16 end")
 @test test_mod.P36104 !== test_mod.orig_P36104
+
+# Duplicate field names should be rejected
+@test_throws LoweringError JuliaLowering.include_string(test_mod, "struct DupField; x; x; end")
+@test_throws LoweringError JuliaLowering.include_string(test_mod, "struct DupField2; x::Int; x::String; end")
+@test_throws LoweringError JuliaLowering.include_string(test_mod, "mutable struct DupField3; x; y; x; end")
 
 # Struct with outer constructor where one typevar is constrained by the other
 # See https://github.com/JuliaLang/julia/issues/27269)

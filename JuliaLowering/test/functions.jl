@@ -236,7 +236,7 @@ end
 f_return_in_interpolation()
 """) === 123
 
-@testset "Default positional arguments" begin
+@testset "Optional positional arguments" begin
     @test JuliaLowering.include_string(test_mod, """
     begin
         function f_def_simple(x=1, y=2, z=x)
@@ -246,6 +246,38 @@ f_return_in_interpolation()
         (f_def_simple(), f_def_simple(10), f_def_simple(10,20), f_def_simple(10,20,30))
     end
     """) == ((1,2,1), (10,2,10), (10,20,10), (10,20,30))
+
+    # anon forms
+    @test JL.include_string(test_mod, "((x=1,y=2,z=3,va...)->(x,y,z,va))()") == (1,2,3,())
+    @test JL.include_string(test_mod, "((x=1,y=2,z=3,va...)->(x,y,z,va))(0)") == (0,2,3,())
+    @test JL.include_string(test_mod, "((x=1,y=2,z=3,va...)->(x,y,z,va))(0,0)") == (0,0,3,())
+    @test JL.include_string(test_mod, "((x=1,y=2,z=3,va...)->(x,y,z,va))(0,0,0)") == (0,0,0,())
+    @test JL.include_string(test_mod, "((x=1,y=2,z=3,va...)->(x,y,z,va))(0,0,0,0)") == (0,0,0,(0,))
+    @test JL.include_string(test_mod, "(function (x=1,y=2,z=3,va...); (x,y,z,va); end)()") == (1,2,3,())
+    @test JL.include_string(test_mod, "(function (x=1,y=2,z=3,va...); (x,y,z,va); end)(0)") == (0,2,3,())
+    @test JL.include_string(test_mod, "(function (x=1,y=2,z=3,va...); (x,y,z,va); end)(0,0)") == (0,0,3,())
+    @test JL.include_string(test_mod, "(function (x=1,y=2,z=3,va...); (x,y,z,va); end)(0,0,0)") == (0,0,0,())
+    @test JL.include_string(test_mod, "(function (x=1,y=2,z=3,va...); (x,y,z,va); end)(0,0,0,0)") == (0,0,0,(0,))
+
+    # defaults containing previous args
+    @test JL.include_string(test_mod, "((x=1,y=x,z=x,va...=x)->(x,y,z,va))()") == (1,1,1,(1,))
+    @test JL.include_string(test_mod, "((x=1,y=x,z=x,va...=x)->(x,y,z,va))(2)") == (2,2,2,(2,))
+    @test JL.include_string(test_mod, "((x=1,y=x,z=y+x,va...=z+y+x)->(x,y,z,va))()") == (1,1,2,(4,))
+    @test JL.include_string(test_mod, "((x=1,y=x,z=y+x,va...=z+y+x)->(x,y,z,va))(2)") == (2,2,4,(8,))
+    # defaults containing previous sparams
+    @test JL.include_string(test_mod, "(((x::T=1,y=T) where T)->(x,y,T))()") == (1, Int, Int)
+    @test JL.include_string(test_mod, "(((x::T=1,y=T) where T)->(x,y,T))(true)") == (true, Bool, Bool)
+    @test JL.include_string(test_mod, "(((x::Type{T}=Vector{Int},y=T) where T)->(x,y,T))()") ==
+        (Vector{Int}, Vector{Int}, Vector{Int})
+    @test JL.include_string(test_mod, "(((x::Type{T}=Vector{Int},y=T) where T)->(x,y,T))(Bool)") ==
+        (Bool, Bool, Bool)
+    # https://github.com/JuliaLang/JuliaLowering.jl/issues/158
+    @test JL.include_string(
+        test_mod, "(((::Type{T}=Vector{UInt8}, sz=Base.aligned_sizeof(eltype(T))) where T)->sz)()") ==
+            1
+    @test JL.include_string(
+        test_mod, "(((::Type{T}=Vector{UInt8}, sz=Base.aligned_sizeof(eltype(T))) where T)->sz)(Int32)") ==
+            4
 
     @test JuliaLowering.include_string(test_mod, """
     begin
@@ -500,6 +532,62 @@ end
         @test exc.args == ((; not_present=100), test_mod.f_kw_simple, 20, 1.0)
     end
 
+    @testset "anonymous forms" begin
+        f = JL.include_string(test_mod, "function (;kw); kw; end")
+        @test f(;kw=1) == 1
+        @test_throws UndefKeywordError f(;)
+        @test_throws MethodError f(1)
+        f = JL.include_string(test_mod, "function (;kw::Int); kw; end")
+        @test f(;kw=1) == 1
+        @test_throws TypeError f(;kw=1.1)
+        @test_throws UndefKeywordError f(;)
+        @test_throws MethodError f(1)
+        f = JL.include_string(test_mod, "function (;kw=2); kw; end")
+        @test f(;kw=1) == 1
+        @test f(;) == 2
+        @test_throws MethodError f(1)
+        f = JL.include_string(test_mod, "function (;kw::Int=2); kw; end")
+        @test f(;kw=1) == 1
+        @test f(;) == 2
+        @test_throws TypeError f(;kw=1.1)
+        @test_throws MethodError f(1)
+        f = JL.include_string(test_mod, "function (;kw...); kw; end")
+        @test f(;kw=1) isa Base.Pairs
+        @test (f(;kw=1))[:kw] == 1
+        exkw = (;k3=3)
+        @test f(;k1=1, k2=2, exkw...) isa Base.Pairs
+        @test (f(;k1=1, k2=2, exkw...))[:k1] == 1
+        @test (f(;k1=1, k2=2, exkw...))[:k2] == 2
+        @test (f(;k1=1, k2=2, exkw...))[:k3] == 3
+        # ->
+        f = JL.include_string(test_mod, "(;kw)->kw")
+        @test f(;kw=1) == 1
+        @test_throws UndefKeywordError f(;)
+        @test_throws MethodError f(1)
+        f = JL.include_string(test_mod, "(;kw::Int)->kw")
+        @test f(;kw=1) == 1
+        @test_throws TypeError f(;kw=1.1)
+        @test_throws UndefKeywordError f(;)
+        @test_throws MethodError f(1)
+        f = JL.include_string(test_mod, "(;kw=2)->kw")
+        @test f(;kw=1) == 1
+        @test f(;) == 2
+        @test_throws MethodError f(1)
+        f = JL.include_string(test_mod, "(;kw::Int=2)->kw")
+        @test f(;kw=1) == 1
+        @test f(;) == 2
+        @test_throws TypeError f(;kw=1.1)
+        @test_throws MethodError f(1)
+        f = JL.include_string(test_mod, "(;kw...)->kw")
+        @test f(;kw=1) isa Base.Pairs
+        @test (f(;kw=1))[:kw] == 1
+        exkw = (;k3=3)
+        @test f(;k1=1, k2=2, exkw...) isa Base.Pairs
+        @test (f(;k1=1, k2=2, exkw...))[:k1] == 1
+        @test (f(;k1=1, k2=2, exkw...))[:k2] == 2
+        @test (f(;k1=1, k2=2, exkw...))[:k3] == 3
+    end
+
     # Slurping of positional args with keywords
     JuliaLowering.include_string(test_mod, """
     function f_pos_slurp_with_kws(z, args...; x=1,y=2)
@@ -550,6 +638,21 @@ end
     @test values(test_mod.f_kw_default_dependencies(x = 10)) === (10, 10, :outer, :aaa_kw, :aaa_kw)
     @test values(test_mod.f_kw_default_dependencies(x = 10, aaa=:blah)) === (10, 10, :outer, :blah, :blah)
 
+    # depend on positional args
+    @test JuliaLowering.include_string(test_mod, """
+    function f_kw_pos_dependencies(p1, o1=1, va...; kw1=p1, kw2=o1, kw3=va)
+        (p1, o1, va..., kw1, kw2, kw3...)
+    end
+    """) isa Function
+    @test test_mod.f_kw_pos_dependencies('p', 'o', 'v', 'v') ==
+        ('p', 'o', 'v', 'v', 'p', 'o', 'v', 'v')
+    @test test_mod.f_kw_pos_dependencies('p', 'o', 'v') ==
+        ('p', 'o', 'v', 'p', 'o', 'v')
+    @test test_mod.f_kw_pos_dependencies('p', 'o') ==
+        ('p', 'o', 'p', 'o')
+    @test test_mod.f_kw_pos_dependencies('p') ==
+        ('p', 1, 'p', 1)
+
     # Keywords with static parameters
     JuliaLowering.include_string(test_mod, """
     function f_kw_sparams(x::X, y::Y; a::A, b::B) where {X,Y,A,B}
@@ -572,6 +675,26 @@ end
     # The following is only a method error as we can't infer `F` prior to
     # dispatching to the body function.
     @test_throws MethodError values(test_mod.f_kw_type_errors(1; a="str", b=10))
+
+    # Return type annotation using default argument names
+    # The return type must be evaluated in a scope where keyword args are bound.
+    JuliaLowering.include_string(test_mod, """
+    function f_default_rett(T::Type=Int)::Vector{T}
+        T[1,2,3]
+    end
+    """)
+    @test test_mod.f_default_rett() isa Vector{Int}
+    @test test_mod.f_default_rett(Float64) isa Vector{Float64}
+
+    # Return type annotation using keyword argument names
+    # The return type must be evaluated in a scope where keyword args are bound.
+    JuliaLowering.include_string(test_mod, """
+    function f_kw_rett(; T::Type=Int)::Vector{T}
+        T[1,2,3]
+    end
+    """)
+    @test test_mod.f_kw_rett() isa Vector{Int}
+    @test test_mod.f_kw_rett(T=Float64) isa Vector{Float64}
 
     # Throwing of UndefKeywordError
     JuliaLowering.include_string(test_mod, """
@@ -636,6 +759,67 @@ end
     @test f(100) isa Function
     @test f(100)(2) == 103
     @test f(100)(2;kw=2) == 104
+
+    @testset "complex arg types requiring temporaries" begin
+        @test JL.include_string(
+            test_mod, """
+            let f = function (x::Vector{<:Number};kw=[2])
+                        (x,kw)
+                    end
+                f([1]), f([1], kw=[0])
+            end
+        """) == (([1], [2]), ([1], [0]))
+        @test JL.include_string(
+            test_mod, """
+            let f = function (x::Vector{<:Number}, o1=10, o2=20;kw=[2])
+                        (x,kw,o1,o2)
+                    end
+                f([1]), f([1], kw=[0])
+            end
+        """) == (([1], [2], 10, 20), ([1], [0], 10, 20))
+        @test JL.include_string(
+            test_mod, """
+            let f = function (x;kw::Vector{<:Number}=x)
+                        (x,kw)
+                    end
+                f([1]), f([1], kw=[0])
+            end
+        """) == (([1], [1]), ([1], [0]))
+        @test JL.include_string(
+            test_mod, """
+            let f = function (x, o1=10, o2=20;kw::Vector{<:Number}=x)
+                        (x,kw,o1,o2)
+                    end
+                f([1]), f([1], kw=[0])
+            end
+        """) == (([1], [1], 10, 20), ([1], [0], 10, 20))
+        @test JL.include_string(
+            test_mod, """
+            let f = function (o1::Vector{<:Number}=[10];kw=1)
+                        (kw,o1)
+                    end
+                f(), f([1]), f(;kw=2), f([1]; kw=2)
+            end
+        """) == ((1, [10]), (1, [1]), (2, [10]), (2, [1]))
+    end
+
+    @testset "destructured args" begin
+        @test JL.include_string(
+            test_mod, "(function ((d1,d2);kw); [d1,d2,kw]; end)((1,2);kw=3)") == [1,2,3]
+        # with kw default
+        @test JL.include_string(
+            test_mod, "(function ((d1,d2);kw=4); [d1,d2,kw]; end)((1,2);kw=3)") == [1,2,3]
+        @test JL.include_string(
+            test_mod, "(function ((d1,d2);kw=4); [d1,d2,kw]; end)((1,2))") == [1,2,4]
+        # flisp doesn't do this either
+        @test_broken JL.include_string(
+            test_mod, "(function ((d1,d2);kw1=d1); [d1,d2,kw1]; end)((1,2))") == [1,2,1]
+        # with kw deps
+        @test JL.include_string(
+            test_mod, "(function ((d1,d2);kw1=1,kw2=kw1); [d1,d2,kw1,kw2]; end)((1,2);kw1=9)") == [1,2,9,9]
+        @test JL.include_string(
+            test_mod, "(function ((d1,d2);kw1=1,kw2=kw1); [d1,d2,kw1,kw2]; end)((1,2);kw1=9,kw2=10)") == [1,2,9,10]
+    end
 end
 
 @testset "pre-desugared arg::Vararg" begin
@@ -839,6 +1023,44 @@ end
               (3, (4,5)))
 end
 
+@testset "first-arg destructuring" begin
+    @eval test_mod struct XY; x; y; end
+    Core.@latestworld
+    xy = test_mod.XY(1,2)
+    @test JL.include_string(test_mod, "((;x,y)::XY)(arg) = (x,y,arg)") === nothing
+    Core.@latestworld
+    @test xy(3) == (1,2,3)
+
+    @eval test_mod begin
+        struct XYVec; val::Core.SimpleVector; end
+        Base.iterate(x::XYVec) = Base.iterate(x.val)
+        Base.iterate(x::XYVec, i) = Base.iterate(x.val, i)
+    end
+    xy = test_mod.XYVec(Core.svec(1,2,999))
+    @test JL.include_string(test_mod, "((x,y)::XYVec)(arg) = (x,y,arg)") === nothing
+    Core.@latestworld
+    @test xy(3) == (1,2,3)
+
+    # `...`
+    xy = test_mod.XYVec(Core.svec(1,2,9,9,9))
+    @test JL.include_string(test_mod, "((x,y,rest...)::XYVec)() = (x,y,rest...,)") === nothing
+    Core.@latestworld
+    @test xy() == (1,2,9,9,9)
+
+    xy = test_mod.XYVec(Core.svec(1,9,9,9,2))
+    @test JL.include_string(test_mod, "((x,rest...,y)::XYVec)(a1,a2) = (x,rest...,y,a1,a2)") === nothing
+    Core.@latestworld
+    @test xy(0,0) == (1,9,9,9,2,0,0)
+end
+
+@testset "first arg `where`" begin
+    @eval test_mod struct A12238{T} end
+    Core.@latestworld
+    @test_broken JL.include_string(test_mod, "(A12238{T} where T<:Real)(x) = 0") === nothing
+    @test_broken test_mod.A12238{<:Real}(0) == 0
+    # @test_throws MethodError test_mod.A12238{<:Integer}(0)
+end
+
 @testset "Write-only placeholder function arguments" begin
     # positional arguments may be duplicate placeholders.  keyword arguments can
     # contain placeholders, but they must be unique
@@ -869,6 +1091,43 @@ end
             @test JuliaLowering.include_string(test_mod, f_lam_str) isa Function
         end
     end
+end
+
+@testset "Badly-parsed anonymous forms (fix_arglist)" begin
+    @test JL.include_string(test_mod, "(()->nothing)()") == nothing
+    @test JL.include_string(test_mod, "((a...)->(a...,))(1,2,3)") == (1,2,3)
+    @test JL.include_string(test_mod, "((a::Int)->(a))(1)") == 1
+    @test JL.include_string(test_mod, "((a::Int...)->(a...,))(1,2,3)") == (1,2,3)
+    @test JL.include_string(test_mod, "((;)->nothing)()") == nothing
+    @test JL.include_string(test_mod, "((a;)->a)(1)") == 1
+    @test JL.include_string(test_mod, "((a;b=2)->(a,b))(1)") == (1,2)
+    @test JL.include_string(test_mod, "((a;b=2)->(a,b))(1;b=3)") == (1,3)
+    @test JL.include_string(test_mod, "((a=0;b=2)->(a,b))()") == (0,2)
+    @test JL.include_string(test_mod, "((a=0;b=2)->(a,b))(1)") == (1,2)
+    @test JL.include_string(test_mod, "((a=0;b=2)->(a,b))(;b=3)") == (0,3)
+    @test JL.include_string(test_mod, "((a=0;b=2)->(a,b))(1;b=3)") == (1,3)
+    @test_throws LoweringError JL.include_string(test_mod, "(a=0;b=2;c=3)->nothing")
+
+    # try again with `where`
+    @test JL.include_string(test_mod, "(((a::T...)      where T<:U where U<:Any) ->(a...,))(1,2,3)") == (1,2,3)
+    @test JL.include_string(test_mod, "(((a::T;)        where T<:U where U<:Any) ->a)(1)") == 1
+    @test JL.include_string(test_mod, "(((a::T;b=2)     where T<:U where U<:Any) ->(a,b))(1)") == (1,2)
+    @test JL.include_string(test_mod, "(((a::T;b=2)     where T<:U where U<:Any) ->(a,b))(1;b=3)") == (1,3)
+    @test JL.include_string(test_mod, "(((a::T=0;b=2)   where T<:U where U<:Any) ->(a,b))()") == (0,2)
+    @test JL.include_string(test_mod, "(((a::T=0;b=2)   where T<:U where U<:Any) ->(a,b))(1)") == (1,2)
+    @test JL.include_string(test_mod, "(((a::T=0;b=2)   where T<:U where U<:Any) ->(a,b))(;b=3)") == (0,3)
+    @test JL.include_string(test_mod, "(((a::T=0;b=2)   where T<:U where U<:Any) ->(a,b))(1;b=3)") == (1,3)
+    @test_throws LoweringError JL.include_string(test_mod, "(a=0;b=2;c=3)->nothing")
+
+    # `...` is the only real bad form with (function (tuple _...) _) forms
+    @test JL.include_string(test_mod, "(function (a...); (a...,); end)(1,2,3)") == (1,2,3)
+    # test with where: need empty tv list to avoid unused sparam warning
+    ex = Expr(:call,
+              Expr(:function, Expr(:where, Expr(:where, Expr(:..., :a))),
+                   Expr(:block, Expr(:tuple, Expr(:..., :a)))),
+              1,2,3)
+    @test jl_eval(test_mod, ex) == (1,2,3)
+    @test JL.include_string(test_mod, "(function (a::T) where T<:U where U<:Any; a; end)(1)") == 1
 end
 
 @testset "Assigned-to arguments" begin
@@ -908,6 +1167,106 @@ end
 end
 
 @testset "Generated functions" begin; for expr_compat_mode in (false, true)
+    local genfunc_s, genfunc_f
+    @test JuliaLowering.include_string(test_mod, raw"""
+    begin
+        @generated function f_gen_trivial(x)
+            x
+        end
+
+        f_gen_trivial(1), f_gen_trivial(Int[1])
+    end
+    """; expr_compat_mode) == (Int, Vector{Int})
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    begin
+        function f_gen_trivial_if(x)
+            if @generated
+                x
+            else
+                :($x, "nongen")
+            end
+        end
+
+        f_gen_trivial_if(1), f_gen_trivial_if(Int[1])
+    end
+    """; expr_compat_mode) == (Int, Vector{Int})
+
+    @testset "anonymous forms" begin
+        @test JuliaLowering.include_string(test_mod, """
+        let
+            f = @generated function (x); x; end
+            f(1), f(Int[1])
+        end
+        """; expr_compat_mode) == (Int, Vector{Int})
+        @test JuliaLowering.include_string(test_mod, """
+        let
+            f = (x)->(if @generated(); x; else; "nongen"; end)
+            f(1), f(Int[1])
+        end
+        """; expr_compat_mode) == (Int, Vector{Int})
+    end
+
+    @testset "destructured args" begin
+        genfunc_s = raw"""
+        function ((d1,d2)::T) where {T}
+            if @generated
+                :($T, "gen")
+            else
+                :($T, "nongen")
+            end
+        end
+        """
+        @test (genfunc_f = JL.include_string(test_mod, genfunc_s; expr_compat_mode)) isa Function
+        @test_broken genfunc_f((1,2)) == (Tuple{Int, Int}, "gen")
+    end
+
+    @testset "keyword args" begin
+        genfunc_f = JL.include_string(test_mod, raw"""
+        function (parg::Tuple{T}; kw) where {T}
+            if @generated
+                :($parg, $T, $kw, "gen")
+            else
+                :($parg, $T, $kw, "nongen")
+            end
+        end
+        """; expr_compat_mode)
+
+        @test genfunc_f((1,); kw=1) ==
+                (Tuple{Int}, Int, Int, "gen")
+        @test_throws UndefKeywordError genfunc_f((1,))
+
+        genfunc_f = JL.include_string(test_mod, raw"""
+        function (parg::Tuple{T}; kw::Vector{T}) where {T}
+            if @generated
+                :($parg, $T, $kw, "gen")
+            else
+                :($parg, $T, $kw, "nongen")
+            end
+        end
+        """; expr_compat_mode)
+
+        @test genfunc_f((1,); kw=[1]) == (Tuple{Int}, Int, Vector{Int}, "gen")
+        @test_throws UndefKeywordError genfunc_f((1,))
+        @test_throws TypeError genfunc_f((1,); kw=1)
+
+        genfunc_f = JL.include_string(test_mod, raw"""
+        function (; kw::T, rkw...) where {T}
+            if @generated
+                :($T, $kw, $rkw, "gen")
+            else
+                :($T, $kw, $rkw, "nongen")
+            end
+        end
+        """; expr_compat_mode)
+
+        @test genfunc_f(; kw=1) ==
+            (Int, Int, Base.Pairs{Symbol, Union{}, Nothing, @NamedTuple{}}, "gen")
+        @test genfunc_f(; kw=1, kw2=2) ==
+            (Int, Int, Base.Pairs{Symbol, Int, Nothing, @NamedTuple{kw2::Int}}, "gen")
+        @test_throws UndefKeywordError genfunc_f()
+    end
+
     @test JuliaLowering.include_string(test_mod, raw"""
     begin
         @generated function f_gen(x::NTuple{N,T}) where {N,T}
@@ -1104,4 +1463,33 @@ end
         x
     end
     """) == [0,4,6,0]
+end
+
+@testset "method table overlays" begin
+    OverlayModule = Module()
+
+    @eval OverlayModule Base.Experimental.@MethodTable mt
+    @test_broken JL.include_string(OverlayModule, """
+        Base.Experimental.@overlay mt function sin(x::Float64); 1; end
+    """) isa Method
+    @test_broken JL.include_string(OverlayModule, """
+        Base.Experimental.@overlay mt cos(x::Float64) = 2
+    """) isa Method
+    @test_broken JL.include_string(OverlayModule, """
+        Base.Experimental.@overlay mt tan(x::T) where {T} = 3
+    """) isa Method
+
+    let ms = Base._methods_by_ftype(
+        Tuple{typeof(sin), Float64}, nothing, 1, Base.get_world_counter())
+        @test only(ms).method.module === Base.Math
+    end
+    let ms = Base._methods_by_ftype(
+        Tuple{typeof(sin), Float64}, OverlayModule.mt, 1, Base.get_world_counter())
+        @test only(ms).method.module === OverlayModule
+    end
+    let ms = Base._methods_by_ftype(
+        Tuple{typeof(sin), Int}, OverlayModule.mt, 1, Base.get_world_counter())
+        @test isempty(ms)
+    end
+
 end

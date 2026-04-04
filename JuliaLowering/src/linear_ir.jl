@@ -192,7 +192,7 @@ function compile_pop_exception(ctx, srcref, src_tokens, dest_tokens)
     # dest_tokens when src_tokens is the same or nested within dest_tokens.
     # It's enough to check the token on the top of the dest stack.
     n = length(dest_tokens)
-    jump_ok = n == 0 || (n <= length(src_tokens) && dest_tokens[n].var_id == src_tokens[n].var_id)
+    jump_ok = n == 0 || (n <= length(src_tokens) && _binding_id(dest_tokens[n]) == _binding_id(src_tokens[n]))
     jump_ok || throw(LoweringError(srcref, "Attempt to jump into catch block"))
     if n < length(src_tokens)
         @ast ctx srcref [K"pop_exception" src_tokens[n+1]]
@@ -203,7 +203,7 @@ end
 
 function compile_leave_handler(ctx, srcref, src_tokens, dest_tokens)
     n = length(dest_tokens)
-    jump_ok = n == 0 || (n <= length(src_tokens) && dest_tokens[n].var_id == src_tokens[n].var_id)
+    jump_ok = n == 0 || (n <= length(src_tokens) && _binding_id(dest_tokens[n]) == _binding_id(src_tokens[n]))
     jump_ok || throw(LoweringError(srcref, "Attempt to jump into try block"))
     if n < length(src_tokens)
         @ast ctx srcref [K"leave" src_tokens[n+1:end]...]
@@ -358,7 +358,7 @@ end
 # `op` may be either K"=" (where global assignments are converted to setglobal!)
 # or K"constdecl".  flisp: emit-assignment-or-setglobal
 function emit_simple_assignment(ctx, srcref, lhs, rhs, op=K"=")
-    binfo = get_binding(ctx, lhs.var_id)
+    binfo = get_binding(ctx, lhs)
     if binfo.kind == :global
         emit(ctx, @ast ctx srcref [
             K"call"
@@ -774,7 +774,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         elseif needs_value
             throw(LoweringError(ex, "misplaced label in value position"))
         end
-    elseif k == K"symbolicgoto"
+    elseif k == K"symbolicgoto" || k == K"oldsymbolicgoto"
         push!(ctx.symbolic_jump_origins, JumpOrigin(ex, length(ctx.code)+1, ctx))
         emit(ctx, newleaf(ctx, ex, K"TOMBSTONE")) # ? pop_exception
         emit(ctx, newleaf(ctx, ex, K"TOMBSTONE")) # ? leave
@@ -935,7 +935,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     elseif k == K"newvar"
         @jl_assert !needs_value ex
         is_duplicate = !isempty(ctx.code) &&
-            (e = last(ctx.code); kind(e) == K"newvar" && e[1].var_id == ex[1].var_id)
+            (e = last(ctx.code); kind(e) == K"newvar" && _binding_id(e[1]) == _binding_id(ex[1]))
         if !is_duplicate
             # TODO: also exclude deleted vars
             emit(ctx, ex)
@@ -962,7 +962,7 @@ function _remove_vars_with_isdefined_check!(vars, ex)
     if is_leaf(ex) || is_quoted(ex) || kind(ex) == K"static_eval"
         return
     elseif kind(ex) == K"isdefined"
-        delete!(vars, ex[1].var_id)
+        delete!(vars, ex[1].var_id::IdTag)
     else
         for e in children(ex)
             _remove_vars_with_isdefined_check!(vars, e)
@@ -987,14 +987,14 @@ function unnecessary_newvar_ids(ctx, stmts)
         _remove_vars_with_isdefined_check!(vars, ex)
         k = kind(ex)
         if k == K"newvar"
-            id = ex[1].var_id
+            id = _binding_id(ex[1])
             if !get_binding(ctx, id).is_captured
                 push!(vars, id)
             end
         elseif k == K"goto" || k == K"gotoifnot" || (k == K"=" && kind(ex[2]) == K"enter")
             empty!(vars)
         elseif k == K"="
-            id = ex[1].var_id
+            id = _binding_id(ex[1])
             if id in vars
                 delete!(vars, id)
                 push!(ids_assigned_before_branch, id)
@@ -1042,7 +1042,7 @@ function compile_body(ctx::LinearIRContext, ex)
     # Filter out unnecessary newvar nodes
     ids_assigned_before_branch = unnecessary_newvar_ids(ctx, ctx.code)
     filter!(ctx.code) do ex
-        !(kind(ex) == K"newvar" && ex[1].var_id in ids_assigned_before_branch)
+        !(kind(ex) == K"newvar" && _binding_id(ex[1]) in ids_assigned_before_branch)
     end
 end
 
@@ -1053,7 +1053,7 @@ end
 function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
     k = kind(ex)
     if k == K"BindingId"
-        id = ex.var_id
+        id = _binding_id(ex)
         if haskey(ssa_rewrites, id)
             setattr!(newleaf(ctx, ex, K"SSAValue"), :var_id, ssa_rewrites[id])
         else
@@ -1084,7 +1084,7 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
     elseif is_literal(k) || is_quoted(k)
         ex
     elseif k == K"label"
-        @ast ctx ex label_table[ex.id]::K"label"
+        @ast ctx ex label_table[ex.id::Int]::K"label"
     elseif k == K"code_info"
         ex
     else
@@ -1104,10 +1104,12 @@ function renumber_body(ctx, input_code, slot_rewrites)
         k = kind(ex)
         ex_out = nothing
         if k == K"=" && is_ssa(ctx, ex[1])
-            lhs_id = ex[1].var_id
+            lhs_id = _binding_id(ex[1])
+            @jl_assert(!haskey(ssa_rewrites, lhs_id),
+                       (ex, "multiple assignments to ssavalue"))
             if is_ssa(ctx, ex[2])
                 # For SSA₁ = SSA₂, record that all uses of SSA₁ should be replaced by SSA₂
-                ssa_rewrites[lhs_id] = ssa_rewrites[ex[2].var_id]
+                ssa_rewrites[lhs_id] = ssa_rewrites[_binding_id(ex[2])]
             else
                 # Otherwise, record which `code` index this SSA value refers to
                 ssa_rewrites[lhs_id] = length(code) + 1
@@ -1154,11 +1156,10 @@ function compile_lambda(outer_ctx, ex)
     for arg in children(lambda_args)
         kind(arg) == K"Placeholder" && continue
         @jl_assert kind(arg) == K"BindingId" ex
-        id = arg.var_id
-        binfo = get_binding(ctx, id)
+        binfo = get_binding(ctx, arg)
         if binfo.is_assigned
             @jl_assert !haskey(ctx.argmap, binfo.id) ex arg
-            ctx.argmap[binfo.id] = new_local_binding(ctx, binding_ex(ctx, binfo), binfo.name).var_id
+            ctx.argmap[binfo.id] = _binding_id(new_local_binding(ctx, binding_ex(ctx, binfo), binfo.name))
         end
     end
     compile_body(ctx, ex[3])
@@ -1172,7 +1173,7 @@ function compile_lambda(outer_ctx, ex)
     for arg in children(lambda_args)
         if kind(arg) == K"Placeholder"
             # Unused functions arguments like: `_` or `::T`
-            push!(slots, Slot(arg.name_val, :argument, getmeta(arg, :nospecialize, false),
+            push!(slots, Slot(UNUSED, :argument, getmeta(arg, :nospecialize, false),
                               false, false, false, false))
         else
             @jl_assert kind(arg) == K"BindingId" ex arg
@@ -1220,7 +1221,6 @@ end
 ensure_linearization_attributes!(graph) = ensure_attributes!(
     ensure_scope_attributes!(graph),
     slots=Vector{Slot},
-    mod=Module,
     id=Int)
 
 """
