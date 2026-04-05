@@ -680,7 +680,9 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param);
 
 static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param, int limit_slow);
 
-// Check whether env (variable bounds: lb/ub) changed compared to saved env.
+static int is_leaf_typevar(jl_tvar_t *v) JL_NOTSAFEPOINT;
+
+// Check whether env (variable bounds & diagonality) changed compared to saved env.
 static int env_unchanged(jl_stenv_t *e, jl_savedenv_t *se) JL_NOTSAFEPOINT
 {
     jl_value_t **roots = NULL;
@@ -692,29 +694,24 @@ static int env_unchanged(jl_stenv_t *e, jl_savedenv_t *se) JL_NOTSAFEPOINT
     else if (se->gcframe.nroots) {
         roots = se->roots;
     }
-    if (!roots)
-        return 1; // no vars to compare
     jl_varbinding_t *v = e->vars;
-    int i = 0;
+    int i = 0, j = 1;
     while (v != NULL) {
-        if (v->lb != roots[i] || v->ub != roots[i + 1])
-            return 0;
+        assert(roots != NULL);
+        if (v->existential) {
+            if (v->lb != roots[i] || v->ub != roots[i + 1])
+                return 0; // check if bounds changed
+            if (is_leaf_typevar(v->var) && v->occurs_inv == 0 && v->occurs_cov > 1 && se->buf[j] <= 1)
+                return 0; // check if a variable became digonal from non-diagonal
+        }
         i += 3; // lb, ub, innervars
+        j += 3;
         v = v->prev;
     }
     return 1;
 }
 
-// Subtype check for variable bounds consistency.
-// Needs its own forall/exists environment.
-//
-// Right-side Union choices made during bounds checks can leak into
-// the shared Runions statestack, causing O(2^N) iteration in
-// exists_subtype when many Union-bounded parameters are present.
-// To prevent this, we monitor whether the env (variable bounds)
-// changes during the check. If it does not, the Union choices are
-// purely internal and we reset Runions.more to its previous value,
-// preventing the outer loop from iterating over those choices.
+// subtype for variable bounds consistency check. needs its own forall/exists environment.
 static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
     if (jl_is_long(x) && jl_is_long(y))
@@ -732,13 +729,7 @@ static int subtype_ccheck(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     if (obviously_in_union(y, x))
         return 1;
     jl_saved_unionstate_t oldLunions; push_unionstate(&oldLunions, &e->Lunions);
-    int16_t oldRmore = e->Runions.more;
-    jl_savedenv_t se;
-    save_env(e, &se, 1);
     int sub = local_forall_exists_subtype(x, y, e, 0, 1);
-    if (env_unchanged(e, &se))
-        e->Runions.more = oldRmore;
-    free_env(&se);
     pop_unionstate(&e->Lunions, &oldLunions);
     return sub;
 }
@@ -1763,8 +1754,6 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
                 break;
             if (limited || e->Runions.more == oldRmore) {
                 // re-save env and freeze the ∃decision for previous ∀Union
-                // Note: We could ignore the rest `∃Union` decisions if `x` and `y`
-                // contain no ∃ typevar, as they have no effect on env.
                 ini_count = count;
                 push_unionstate(&latestLunions, &e->Lunions);
                 re_save_env(e, &se, 1);
@@ -1780,7 +1769,9 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     }
     if (!sub)
         assert(e->Runions.more == oldRmore);
-    else if (limited)
+    else if (e->Runions.more > oldRmore && (limited || env_unchanged(e, &se)))
+        // Ignore the rest ∃Union decisions if env is unchanged/limited.
+        // As otherwise it might cause combinatorial explosion without making any difference to the result.
         e->Runions.more = oldRmore;
     free_env(&se);
     return sub;
