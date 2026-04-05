@@ -676,7 +676,7 @@ Wrap an expression in a [`Task`](@ref) and add it to the local machine's schedul
 You can interpolate a variable `x` into an `@async` block using `\$x`. Doing so
 isolates the asynchronous code from later changes to the _variable_, but note
 that interpolation does not [`copy`](@ref) the variable's value and therefore
-mutations to `x` will still be visible in the interpolated value. 
+mutations to `x` will still be visible in the interpolated value.
 
 # Examples
 ```jldoctest
