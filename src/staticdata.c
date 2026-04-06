@@ -900,7 +900,7 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
     // Items that require postorder traversal must visit their children prior to insertion into
     // the worklist/serialization_order (and also before their first use)
     if (s->incremental && !immediate) {
-        if (jl_is_datatype(t) && needs_uniquing(v, s->query_cache))
+        if (jl_is_datatype(v) && needs_uniquing(v, s->query_cache))
             immediate = 1;
         if (jl_is_datatype_singleton((jl_datatype_t*)t) && needs_uniquing(v, s->query_cache))
             immediate = 1;
