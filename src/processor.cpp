@@ -228,9 +228,6 @@ static inline jl_image_t load_sysimg_target(jl_image_buf_t image, F &&callback, 
 
 } // namespace
 
-
-// This file is a part of Julia. License is MIT: https://julialang.org/license
-
 // Unified processor detection and dispatch using the cpufeatures library.
 // Replaces processor_x86.cpp, processor_arm.cpp, and processor_fallback.cpp.
 // No hand-maintained CPU/feature tables — all data comes from LLVM TableGen
@@ -627,14 +624,9 @@ jl_get_llvm_target(const char *cpu_target, bool imaging)
 {
     init_jit_targets(cpu_target, imaging);
     auto &spec = jit_targets[0];
-
-    std::string features = spec.cpu_features;
-    if (!spec.ext_features.empty()) {
-        if (!features.empty()) features += ',';
-        features += spec.ext_features;
-    }
-
-    return {spec.cpu_name, std::move(features)};
+    CF_DEBUG("[cpufeatures] jl_get_llvm_target: cpu='%s' features='%s'\n",
+             spec.cpu_name.c_str(), spec.cpu_features.c_str());
+    return {spec.cpu_name, spec.cpu_features};
 }
 #endif
 
@@ -662,8 +654,6 @@ const std::pair<std::string, std::string> &jl_get_llvm_disasm_target(void)
 #ifndef __clang_gcanalyzer__
 jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
 {
-
-
     auto target_str = jl_expand_sysimage_keyword(cpu_target);
     auto specs = tp::resolve_targets_for_llvm(target_str);
 
@@ -681,10 +671,6 @@ jl_clone_targets_t jl_get_llvm_clone_targets(const char *cpu_target)
         jl_target_spec_t ele;
         ele.cpu_name = s.cpu_name;
         ele.cpu_features = s.cpu_features;
-        if (!s.ext_features.empty()) {
-            if (!ele.cpu_features.empty()) ele.cpu_features += ',';
-            ele.cpu_features += s.ext_features;
-        }
         ele.base = s.base;
         ele.clone_all = (s.flags & tp::TF_CLONE_ALL) != 0;
         ele.opt_size = (s.flags & tp::TF_OPTSIZE) != 0;

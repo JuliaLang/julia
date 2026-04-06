@@ -170,19 +170,8 @@ const ISAs_by_family = Dict(
         "a64fx" => "a64fx",
         "apple_m1" => "apple-a14",
     ]),
-    "armv6l" => _make_isa_list("aarch64", [
-        "arm1176jzfs" => "",
-    ]),
-    "armv7l" => _make_isa_list("aarch64", [
-        "armv7l" => "",
-        "armv7l+neon" => "",
-        "armv7l+neon+vfpv4" => "",
-    ]),
     "riscv64" => _make_isa_list("riscv64", [
         "riscv64" => "",
-    ]),
-    "powerpc64le" => _make_isa_list("powerpc64le", [
-        "power8" => "",
     ]),
 )
 
