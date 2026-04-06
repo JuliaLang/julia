@@ -244,11 +244,11 @@ function to_code_info(ex::SyntaxTree, slots::Vector{Slot}, meta::CompileHints)
             # Ideally this should be a slot flag instead
             i > nargs && throw(LoweringError(
                 ex, "@nospecialize annotation applied to a non-argument"))
-            add_ir_debug_info!(current_codelocs_stack, ex)
             push!(nospecialize_slots, Core.SlotNumber(i))
         end
     end
     if !isempty(nospecialize_slots)
+        add_ir_debug_info!(current_codelocs_stack, ex)
         length(nospecialize_slots) == nargs - 1 ? # all args but self
             push!(stmts, Expr(:meta, :nospecialize)) :
             push!(stmts, Expr(:meta, :nospecialize, nospecialize_slots...))
