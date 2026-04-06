@@ -226,12 +226,6 @@ function emit_leave_handler(ctx::LinearIRContext, srcref, dest_tokens)
     end
 end
 
-function emit_jump(ctx, srcref, target::JumpTarget)
-    emit_pop_exception(ctx, srcref, target.catch_token_stack)
-    emit_leave_handler(ctx, srcref, target.handler_token_stack)
-    emit(ctx, @ast ctx srcref [K"goto" target.label])
-end
-
 # Enter the current finally block, either through the landing pad (on_exit ==
 # :rethrow) or via a jump (on_exit ∈ (:return, :break)).
 #
@@ -244,7 +238,9 @@ function enter_finally_block(ctx, srcref, on_exit, value)
     tag = length(handler.exit_actions)
     emit(ctx, @ast ctx srcref [K"=" handler.tagvar tag::K"Integer"])
     if on_exit != :rethrow
-        emit_jump(ctx, srcref, handler.target)
+        emit_pop_exception(ctx, srcref, handler.target.catch_token_stack)
+        emit_leave_handler(ctx, srcref, handler.target.handler_token_stack[1:end-1])
+        emit(ctx, @ast ctx srcref [K"goto" handler.target.label])
     end
 end
 
@@ -262,7 +258,7 @@ function _actually_return(ctx, ex)
     if !simple_ret_val
         ex = emit_assign_tmp(ctx, ex, "return_tmp")
     end
-    emit_pop_exception(ctx, ex, ())
+    emit_pop_exception(ctx, ex, SyntaxList(ctx.graph))
     emit(ctx, @ast ctx ex [K"return" ex])
     return nothing
 end
@@ -351,8 +347,11 @@ function emit_break(ctx, ex)
             enter_finally_block(ctx, ex, :break, ex)
             return
         end
+    else
+        emit_pop_exception(ctx, ex, target.catch_token_stack)
+        emit_leave_handler(ctx, ex, target.handler_token_stack)
+        emit(ctx, @ast ctx ex [K"goto" target.label])
     end
-    emit_jump(ctx, ex, target)
 end
 
 # `op` may be either K"=" (where global assignments are converted to setglobal!)
@@ -513,6 +512,7 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         handler_token
         [K"enter" catch_label enter_scope_arg...]
     ])
+    push!(ctx.handler_token_stack, handler_token)
     if has_finally_block
         # TODO: Trivial finally block optimization from JuliaLang/julia#52593 (or
         # support a special form for @with)?
@@ -521,7 +521,6 @@ function compile_try(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         push!(ctx.finally_handlers, finally_handler)
         emit(ctx, @ast ctx finally_block [K"=" finally_handler.tagvar (-1)::K"Integer"])
     end
-    push!(ctx.handler_token_stack, handler_token)
 
     # Try block code.
     try_val = compile(ctx, try_block, needs_value, false)
