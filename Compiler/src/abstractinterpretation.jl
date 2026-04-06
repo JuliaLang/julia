@@ -3142,7 +3142,11 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
 end
 
 function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, sv::AbsIntState)
-    if e.head === :call && length(e.args) ≥ 1
+    if e.head === :static_parameter
+        rt = abstract_eval_static_parameter(interp, e, sv)
+        merge_effects!(interp, sv, rt.effects)
+        return rt.rt
+    elseif e.head === :call && length(e.args) ≥ 1
         # TODO: We still have non-linearized cglobal
         @assert e.args[1] === Core.tuple || e.args[1] === GlobalRef(Core, :tuple)
     else
