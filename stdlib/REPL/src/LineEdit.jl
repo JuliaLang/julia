@@ -428,37 +428,12 @@ end
 # Prompt Completions & Hints
 function complete_line(s::MIState)
     set_action!(s, :complete_line)
-    st = state(s)
-    repeats = s.key_repeats
-    async_get_completions(s; interactive=true) do completions, reg, should_complete
-        if isempty(completions)
-            beep(st)
-            return false
-        end
-        if !should_complete
-            # should_complete is false for cases where we only want to show
-            # a list of possible completions but not complete, e.g. foo(\t
-            show_completions(st, completions)
-        elseif length(completions) == 1
-            # Replace word by completion
-            push_undo(st)
-            edit_splice!(st, reg, completions[1].completion)
-        else
-            p = common_prefix(completions)
-            partial = content(st, reg.first => min(bufend(st), reg.first + sizeof(p)))
-            if !isempty(p) && p != partial
-                # All possible completions share the same prefix, so we might as
-                # well complete that.
-                push_undo(st)
-                edit_splice!(st, reg, p)
-            elseif repeats > 0
-                show_completions(st, completions)
-            end
-        end
-        return true
+    if complete_line(state(s), s.key_repeats, s.active_module)
+        return refresh_line(s)
+    else
+        beep(s)
+        return :ignore
     end
-
-    return :ignore
 end
 
 # Old complete_line return type: Vector{String},          String, Bool
@@ -484,16 +459,44 @@ end
 # pressed a key since the hint generation was requested
 function check_show_hint(s::MIState)
     st = state(s)
+
+    this_key_i = s.n_keys_pressed
+    next_key_pressed() = @lock s.line_modify_lock s.n_keys_pressed > this_key_i
+    function lock_clear_hint()
+        @lock s.line_modify_lock begin
+            next_key_pressed() || s.aborted || clear_hint(st) && refresh_line(s)
+        end
+    end
+
     if !options(st).hint_tab_completes || !eof(buffer(st))
         # only generate hints if enabled and at the end of the line
         # TODO: maybe show hints for insertions at other positions
         # Requires making space for them earlier in refresh_multi_line
-        clear_hint(st) && refresh_line(s)
+        lock_clear_hint()
         return
     end
-    async_get_completions(s; interactive=false, mutex=s.hint_generation_lock) do named_completions, reg, should_complete
-        isempty(named_completions) && return false
+    t_completion = Threads.@spawn :default begin
+        named_completions, reg, should_complete = nothing, nothing, nothing
+
+        # only allow one task to generate hints at a time and check around lock
+        # if the user has pressed a key since the hint was requested, to skip old completions
+        next_key_pressed() && return
+        @lock s.hint_generation_lock begin
+            next_key_pressed() && return
+            named_completions, reg, should_complete = try
+                complete_line_named(st.p.complete, st, s.active_module; hint = true)
+            catch
+                lock_clear_hint()
+                return
+            end
+        end
+        next_key_pressed() && return
+
         completions = map(x -> x.completion, named_completions)
+        if isempty(completions)
+            lock_clear_hint()
+            return
+        end
         # Don't complete for single chars, given e.g. `x` completes to `xor`
         if reg.second - reg.first > 1 && should_complete
             singlecompletion = length(completions) == 1
@@ -509,14 +512,21 @@ function check_show_hint(s::MIState)
                     # index of p from which to start providing the hint
                     startind = nextind(p, startind)
                     hint = p[startind:end]
-                    st.hint = hint
-                    return true
+                    next_key_pressed() && return
+                    @lock s.line_modify_lock begin
+                        if !s.aborted
+                            state(s).hint = hint
+                            refresh_line(s)
+                        end
+                    end
+                    return
                 end
             end
         end
-        return false
+        lock_clear_hint()
     end
-    nothing
+    Base.errormonitor(t_completion)
+    return
 end
 
 function clear_hint(s::ModeState)
@@ -528,65 +538,30 @@ function clear_hint(s::ModeState)
     end
 end
 
-# Generate completions with complete_line_named asynchronously, then invoke cb
-# with the results.  When interactive=true, show a "…" indicator when
-# completions take longer than the 0.1s to generate, and set the last_action.
-# With interactive=false, don't show any indicator and don't touch last_action.
-# A mutex can be provided, which will be taken while generating the completions.
-# This is used to prevent multiple hints from being generated at once.
-function async_get_completions(cb, s::MIState; interactive::Bool,
-                               mutex::Union{Nothing, ReentrantLock}=nothing)
-    keys_pressed = s.n_keys_pressed
-    current_action = s.current_action
-    st = state(s)
-    c, mod = state(s).p.complete, s.active_module
-    complete = Threads.Atomic{Bool}(false)
-
-    aborted() = s.n_keys_pressed > keys_pressed || s.aborted
-
-    timer = if interactive
-        Timer(0.1) do _
-            @lock s.line_modify_lock begin
-                (complete[] || aborted()) && return
-                st.hint = "…"
-                refresh_line(s)
-            end
-        end
+function complete_line(s::PromptState, repeats::Int, mod::Module; hint::Bool=false)
+    completions, reg, should_complete = complete_line_named(s.p.complete, s, mod; hint)
+    isempty(completions) && return false
+    if !should_complete
+        # should_complete is false for cases where we only want to show
+        # a list of possible completions but not complete, e.g. foo(\t
+        show_completions(s, completions)
+    elseif length(completions) == 1
+        # Replace word by completion
+        push_undo(s)
+        edit_splice!(s, reg, completions[1].completion)
     else
-        nothing
-    end
-
-    t = Threads.@spawn :default begin
-        try
-            completions, reg, should_complete = try
-                mutex !== nothing && lock(mutex)
-                # We check aborted() before generating completions so we don't
-                # wait on mutex if we would wake up and throw the results away.
-                (@lock s.line_modify_lock aborted()) && return
-                complete_line_named(c, st, mod; hint=!interactive)
-            finally
-                mutex !== nothing && unlock(mutex)
-            end
-
-            @lock s.line_modify_lock begin
-                complete[] = true
-                aborted() && return
-                changed = clear_hint(st)
-                if cb(completions, reg, should_complete)
-                    changed = true
-                    interactive && (s.last_action = current_action)
-                end
-                changed && refresh_line(s)
-            end
-        finally
-            complete[] = true
-            if interactive
-                close(timer)
-            end
+        p = common_prefix(completions)
+        partial = content(s, reg.first => min(bufend(s), reg.first + sizeof(p)))
+        if !isempty(p) && p != partial
+            # All possible completions share the same prefix, so we might as
+            # well complete that.
+            push_undo(s)
+            edit_splice!(s, reg, p)
+        elseif repeats > 0
+            show_completions(s, completions)
         end
     end
-    errormonitor(t)
-    nothing
+    return true
 end
 
 function clear_input_area(terminal::AbstractTerminal, s::PromptState)
@@ -942,18 +917,17 @@ function edit_move_right(m::MIState)
         refresh_line(s)
         return true
     else
-        async_get_completions(m; interactive=true) do completions, reg, should_complete
-            if should_complete && eof(buf) && length(completions) == 1 && reg.second - reg.first > 1
-                # Replace word by completion
-                prev_pos = position(s)
-                push_undo(s)
-                edit_splice!(s, (prev_pos - reg.second + reg.first) => prev_pos, completions[1].completion)
-                return true
-            else
-                return false
-            end
+        completions, reg, should_complete = complete_line(s.p.complete, s, m.active_module)
+        if should_complete && eof(buf) && length(completions) == 1 && reg.second - reg.first > 1
+            # Replace word by completion
+            prev_pos = position(s)
+            push_undo(s)
+            edit_splice!(s, (prev_pos - reg.second + reg.first) => prev_pos, completions[1].completion)
+            refresh_line(state(s))
+            return true
+        else
+            return false
         end
-        return false
     end
 end
 
