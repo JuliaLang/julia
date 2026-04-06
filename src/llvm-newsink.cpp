@@ -111,7 +111,6 @@ struct NewSinkState {
     PostDominatorTree &PDT;
     LoopInfo &LI;
     AliasAnalysis &AA;
-    BatchAAResults BatchAA; // Caches AA queries
     MemorySSA &MSSA;
     MemorySSAUpdater MSSAUpdater; // Keeps MSSA consistent after modifications
     const TargetLibraryInfo &TLI;
@@ -119,6 +118,9 @@ struct NewSinkState {
 
     // Precomputed: blocks where all paths lead to unreachable
     SmallPtrSet<BasicBlock *, 16> NoReturnBlocks;
+
+    // Set when SplitCriticalEdge is called during a run
+    bool SplitCriticalEdges = false;
 
     NewSinkState(Function &F, DominatorTree &DT, PostDominatorTree &PDT,
                  LoopInfo &LI, AliasAnalysis &AA, MemorySSA &MSSA,
@@ -128,7 +130,6 @@ struct NewSinkState {
         PDT(PDT),
         LI(LI),
         AA(AA),
-        BatchAA(AA),
         MSSA(MSSA),
         MSSAUpdater(&MSSA),
         TLI(TLI),
@@ -195,8 +196,6 @@ void NewSinkState::collectNoReturnBlocks()
             if (!DT.isReachableFromEntry(Pred))
                 continue;
             if (NoReturnBlocks.count(Pred))
-                continue;
-            if (succ_empty(Pred))
                 continue;
 
             if (llvm::all_of(successors(Pred), [&](BasicBlock *Succ) {
@@ -308,6 +307,9 @@ BasicBlock *NewSinkState::canSinkMemoryWriteToSuccessor(Instruction *WriteInst,
     if (!MaybeLoc)
         return nullptr;
     MemoryLocation WriteLoc = *MaybeLoc;
+
+    // Fresh BatchAA per query to avoid stale cached results across iterations
+    BatchAAResults BatchAA(AA);
 
     BasicBlock *CurrentBB = WriteInst->getParent();
     assert(llvm::is_contained(successors(CurrentBB), TargetSucc) &&
@@ -660,6 +662,7 @@ BasicBlock *NewSinkState::findSinkTargetForWrite(Instruction *I)
         auto *NewBB = SplitCriticalEdge(CurrentBB, Target, Options);
         if (!NewBB)
             return nullptr;
+        SplitCriticalEdges = true;
         LLVM_DEBUG(dbgs() << "NewSink:   Split critical edge: "
                           << CurrentBB->getName() << " -> " << NewBB->getName()
                           << " -> " << Target->getName() << "\n");
@@ -715,9 +718,14 @@ bool NewSinkState::canSinkInstruction(Instruction *I) const
             return false;
     }
 
+    // Side effects other than memory writes (e.g. volatile reads, traps)
+    // cannot be sunk since they have observable ordering constraints.
     if (I->mayHaveSideEffects() && !I->mayWriteToMemory())
         return false;
 
+    // Memory writes with a known destination go through the MSSA-based path.
+    // Writes without a known destination (e.g. calls writing to unknown
+    // locations) fall through to the final check and are rejected.
     if (isMemoryWrite(I))
         return isSinkableMemoryWrite(I);
 
@@ -871,7 +879,8 @@ PreservedAnalyses NewSinkPass::run(Function &F, FunctionAnalysisManager &AM)
     assert(!verifyLLVMIR(F));
 #endif
     PreservedAnalyses PA;
-    PA.preserveSet<CFGAnalyses>();
+    if (!State.SplitCriticalEdges)
+        PA.preserveSet<CFGAnalyses>();
     PA.preserve<MemorySSAAnalysis>();
     return PA;
 }

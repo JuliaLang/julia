@@ -85,6 +85,26 @@ handler:
   ret i64 %state
 }
 
+; A plain load must also not sink past a returns_twice call.
+define i64 @test_no_sink_load_past_returns_twice(ptr %buf, ptr %p) {
+; CHECK-LABEL: @test_no_sink_load_past_returns_twice
+; CHECK: entry:
+; CHECK: %state = load i64, ptr %p, align 8
+; CHECK: call i32 @pure_setjmp(ptr %buf)
+entry:
+  %state = load i64, ptr %p, align 8
+  %r = call i32 @pure_setjmp(ptr %buf) #3
+  %cmp = icmp eq i32 %r, 0
+  br i1 %cmp, label %normal, label %handler
+
+normal:
+  ret i64 0
+
+handler:
+  call void @use(i64 %state)
+  ret i64 %state
+}
+
 ; memory(read) call must not be sunk past a readwrite call.
 
 declare void @modify_state(ptr)
