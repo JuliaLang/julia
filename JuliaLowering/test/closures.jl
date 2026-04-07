@@ -576,3 +576,42 @@ let (f, foo) = test_mod.f_box_regression147()
     @test !(f.foo isa Core.Box)
     @test f.foo === foo
 end
+
+# Any `let` variables marked always-defined && assigned-once are known to
+# dominate their scope, so they should not be boxed even in the presence
+# of `@label`
+JuliaLowering.include_string(test_mod, """
+function f_let_capture_with_label()
+    for x in [1,2,3]
+        let x = x
+            if false
+                @goto done
+                @label done # force the binding analysis to give up
+            else
+                return (() -> x,)
+            end
+        end
+    end
+end
+""")
+let (f,) = test_mod.f_let_capture_with_label()
+    @test !(f.x isa Core.Box)
+    @test f.x == 1
+end
+
+JuliaLowering.include_string(test_mod, """
+function f_arg_reassign_with_label(x)
+    g() = x
+    if false
+        @goto done
+        @label done
+    end
+    x = 1
+    return (g, x)
+end
+""")
+let (g, x) = test_mod.f_arg_reassign_with_label(42)
+    @test g.x isa Core.Box
+    @test g() == 1
+    @test x == 1
+end

@@ -73,7 +73,7 @@ mutable struct DefUseState
     const args::Set{IdTag}
 
     function DefUseState(ctx, candidates)
-        unused = candidates
+        unused = copy(candidates)
         live = Set{IdTag}()
         seen = Set{IdTag}()
         decl = Set{IdTag}()
@@ -345,6 +345,21 @@ function _analyze_lambda_vars!(ctx, ex)
             b = get_binding(ctx, id)
             b.unboxed = true
             b.is_always_defined = true
+        end
+    end
+
+    # A single (scope-dominating) assignment implies unboxed even if we gave up above
+    for id in candidates
+        b = get_binding(ctx, id)
+        # XXX: This uses is-always-defined to imply that the assignment is defined
+        #      everywhere in its scope, which then implies that the one definition
+        #      executes only once dynamically.
+        #      (i.e. it forbids single-assignment to `x` in an inner loop)
+        #
+        #      If this flag becomes broader and only considers definedness-at-use
+        #      then this check (taken from `julia-syntax.scm`) becomes unsound.
+        if b.kind === :local && b.is_always_defined && b.is_assigned_once
+            b.unboxed = true
         end
     end
 end
