@@ -16,17 +16,19 @@ using CompileFn = llvm::unique_function<std::unique_ptr<llvm::MemoryBuffer>()>;
 
 class ObjCache {
 public:
-    ObjCache();
+    ObjCache() = default;
     std::unique_ptr<llvm::MemoryBuffer> get(llvm::Module &M, CompileFn Compile);
 
 protected:
     void writerThread();
+    void initDB();
 
 private:
+    std::atomic<bool> Initialized = false;
     MDB_env *Env = nullptr;
     uv_thread_t WriterThread;
     std::vector<std::pair<llvm::ModuleHash, std::unique_ptr<llvm::MemoryBuffer>>> ObjQueue;
-    std::mutex QueueMutex;
+    std::mutex Mutex;
     std::condition_variable QueueCond;
 };
 

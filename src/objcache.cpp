@@ -1,6 +1,7 @@
 #include "objcache.h"
 
 #include <chrono>
+#include <llvm/Support/FileSystem.h>
 
 #include "julia.h"
 
@@ -19,6 +20,19 @@ static FILE *getLogFile()
 
 static FILE *LogFile = getLogFile();
 
+static const char *getCachePath()
+{
+    if (jl_base_module == nullptr)
+        return nullptr;
+    jl_value_t *DepotPath = jl_get_global(jl_base_module, jl_symbol("DEPOT_PATH"));
+    if (!DepotPath || !jl_is_array(DepotPath) || jl_array_len(DepotPath) < 1)
+        return nullptr;
+    jl_value_t *DepotStr = jl_array_ptr_ref(DepotPath, 0);
+    if (!jl_is_string(DepotStr))
+        return nullptr;
+    return jl_string_ptr(DepotStr);
+}
+
 class MDBMemoryBuffer : public llvm::MemoryBuffer {
 public:
     MDBMemoryBuffer(MDB_txn *Txn, llvm::StringRef Data) : Txn(Txn), Data(Data) {}
@@ -29,49 +43,77 @@ private:
     llvm::StringRef Data;
 };
 
-static void checkMDB(int Err)
+static int checkMDB(int Err)
 {
     if (Err == 0)
-        return;
+        return Err;
     jl_printf(JL_STDERR, "objcache error: %s\n", mdb_strerror(Err));
+    return Err;
 }
 
-ObjCache::ObjCache()
+void ObjCache::initDB()
 {
-    const char *Enable = getenv("JULIA_OBJCACHE");
-    if (!Enable || strcmp(Enable, "1"))
+    std::unique_lock<std::mutex> Lock{Mutex};
+    std::string Path;
+    if (Initialized.load(memory_order_relaxed))
         return;
 
-    if (int Err = mdb_env_create(&Env)) {
-        checkMDB(Err);
+    const char *Enable = getenv("JULIA_OBJCACHE");
+    const char *DepotPath = getCachePath();
+    if (!DepotPath || !Enable || strcmp(Enable, "1"))
+        goto done;
+
+    if (checkMDB(mdb_env_create(&Env))) {
         Env = nullptr;
-        return;
+        goto done;
     }
     checkMDB(mdb_env_set_maxreaders(Env, 510));
-    if (int Err = mdb_env_open(Env, "objcache", 0, 0640)) {
-        checkMDB(Err);
+    checkMDB(mdb_env_set_maxdbs(Env, 128));
+    Path = (llvm::Twine(DepotPath) + "/cache/v" + llvm::Twine(JULIA_VERSION_MAJOR) + "." +
+            llvm::Twine(JULIA_VERSION_MINOR))
+               .str();
+    llvm::sys::fs::create_directories(Path);
+    if (checkMDB(mdb_env_open(Env, Path.c_str(), 0, 0640))) {
         mdb_env_close(Env);
         Env = nullptr;
-        return;
+        goto done;
     }
-    checkMDB(mdb_env_set_mapsize(Env, 4ULL << 30));
+    checkMDB(mdb_env_set_mapsize(Env, 8ULL << 30)); // 8 GiB maximum
+
+    MDB_txn *Txn;
+    MDB_dbi Dbi;
+    if (checkMDB(mdb_txn_begin(Env, nullptr, 0, &Txn)))
+        goto done;
+    if (checkMDB(mdb_dbi_open(Txn, "objcache", MDB_CREATE, &Dbi)))
+        goto done;
+    if (checkMDB(mdb_txn_commit(Txn)))
+        goto done;
 
     uv_thread_create(
         &WriterThread, [](void *arg) { static_cast<ObjCache *>(arg)->writerThread(); },
         this);
+
+done:
+    Initialized.store(true, memory_order_relaxed);
+    return;
 }
 
 static size_t NWrite = 0, NRead = 0, NMiss = 0, NHit = 0;
 
 __attribute__((destructor)) static void dump_stats()
 {
-    jl_printf(JL_STDERR,
-              "cache read : %zu\ncache write: %zu\ncache hit  : %zu\ncache miss : %zu\n",
-              NRead, NWrite, NHit, NMiss);
+    if (LogFile)
+        jl_printf(
+            JL_STDERR,
+            "cache read : %zu\ncache write: %zu\ncache hit  : %zu\ncache miss : %zu\n",
+            NRead, NWrite, NHit, NMiss);
 }
 
 std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Compile)
 {
+    if (!Initialized.load(memory_order_relaxed))
+        initDB();
+
     if (!Env)
         return Compile();
 
@@ -101,7 +143,7 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
     }
 
     MDB_dbi Dbi;
-    if (int Err = mdb_dbi_open(Txn, nullptr, 0, &Dbi)) {
+    if (int Err = mdb_dbi_open(Txn, "objcache", 0, &Dbi)) {
         checkMDB(Err);
         mdb_txn_abort(Txn);
         return Compile();
@@ -124,12 +166,12 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
             std::chrono::duration<double, std::milli>(Clock::now() - CompileStart).count();
 
         if (LogFile)
-            fprintf(LogFile, "lookup,%s,%.3f,miss,%.3f,%zu,%zu\n", KeyBuf.begin(),
-                    LookupMs, CompileMs, Obj->getBufferSize(), Weight);
+            fprintf(LogFile, "lookup,%s,%.3f,miss,%.3f,%zu,%zu\n", KeyBuf.begin(), LookupMs,
+                    CompileMs, Obj->getBufferSize(), Weight);
 
         auto ObjCopy = llvm::MemoryBuffer::getMemBufferCopy(Obj->getBuffer());
         {
-            std::unique_lock<std::mutex> Lock{QueueMutex};
+            std::unique_lock<std::mutex> Lock{Mutex};
             ObjQueue.push_back({ModHash, std::move(ObjCopy)});
         }
         QueueCond.notify_one();
@@ -160,7 +202,7 @@ void ObjCache::writerThread()
     while (1) {
         LocalQueue.clear();
         {
-            std::unique_lock Lock{QueueMutex};
+            std::unique_lock Lock{Mutex};
             QueueCond.wait(Lock, [this]() { return !ObjQueue.empty(); });
             std::swap(LocalQueue, ObjQueue);
         }
@@ -172,7 +214,7 @@ void ObjCache::writerThread()
         }
 
         MDB_dbi Dbi;
-        if (int Err = mdb_dbi_open(Txn, nullptr, 0, &Dbi)) {
+        if (int Err = mdb_dbi_open(Txn, "objcache", 0, &Dbi)) {
             checkMDB(Err);
             mdb_txn_abort(Txn);
             continue;
