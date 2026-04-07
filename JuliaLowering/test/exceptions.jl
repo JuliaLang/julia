@@ -389,6 +389,49 @@ end
     end
     """) broken=true
 
+    # continue inside for/try/finally must run the finally block
+    @test JuliaLowering.include_string(test_mod, """
+    buf = []
+    for x in [1,2,3]
+        try
+            push!(buf, ("try", x))
+            continue
+        finally
+            push!(buf, ("finally", x))
+        end
+    end
+    buf
+    """) == [("try",1), ("finally",1), ("try",2), ("finally",2), ("try",3), ("finally",3)]
+
+    # break inside for/try/finally must run the finally block
+    @test JuliaLowering.include_string(test_mod, """
+    buf = []
+    for x in [1,2,3]
+        try
+            push!(buf, ("try", x))
+            break
+        finally
+            push!(buf, ("finally", x))
+        end
+    end
+    buf
+    """) == [("try",1), ("finally",1)]
+
+    # break/continue inside a loop that stays within the try block should not run finally
+    @test JuliaLowering.include_string(test_mod, """
+    buf = []
+    try
+        for x in [1,2,3]
+            x == 2 && continue
+            x == 3 && break
+            push!(buf, x)
+        end
+    finally
+        push!(buf, "finally")
+    end
+    buf
+    """) == [1, "finally"]
+
     # Test that @goto within try/catch/else is allowed when there's no finally
     @test JuliaLowering.include_string(test_mod, """
     function f()

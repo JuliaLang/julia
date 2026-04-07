@@ -347,7 +347,7 @@ function emit_break(ctx, ex)
     end
     if !isempty(ctx.finally_handlers)
         handler = last(ctx.finally_handlers)
-        if length(target.handler_token_stack) < length(handler.target.handler_token_stack)
+        if length(target.handler_token_stack) <= length(handler.target.handler_token_stack)
             enter_finally_block(ctx, ex, :break, ex)
             return
         end
