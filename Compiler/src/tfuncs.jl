@@ -95,7 +95,7 @@ add_tfunc(Core.throw_methoderror, 1, INT_INF, @nospecs((𝕃::AbstractLattice, x
 # if isexact is false, the actual runtime type may (will) be a subtype of t
 # if isconcrete is true, the actual runtime type is definitely concrete (unreachable if not valid as a typeof)
 # if istype is true, the actual runtime value will definitely be a type (e.g. this is false for Union{Type{Int}, Int})
-function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(troot) = t)
+function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(troot = t))
     if isa(t, Const)
         if isa(t.val, Type) && valid_as_lattice(t.val, astag)
             return t.val, true, isconcretetype(t.val), true
