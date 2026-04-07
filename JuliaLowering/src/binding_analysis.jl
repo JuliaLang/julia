@@ -300,9 +300,9 @@ function du_visit!(ctx, state::DefUseState, e)
         return has_label
 
     elseif is_leaf(e) || is_quoted(e) ||
-        k in KSet"local meta inbounds boundscheck noinline loopinfo decl
-            with_static_parameters toplevel_butfirst global globalref
-            constdecl atomic isdefined toplevel module error
+        k in KSet"local always_defined meta inbounds boundscheck noinline
+            loopinfo decl with_static_parameters toplevel_butfirst global
+            globalref constdecl atomic isdefined toplevel module error
             gc_preserve_begin gc_preserve_end export public inline"
 
         # Forms that don't interact with locals or affect control flow (likely more than is necessary).
