@@ -151,14 +151,14 @@ mutable struct BackgroundPrecompileState
     work_channel::Channel{PrecompileRequest}  # channel for injecting requests into running task
     verbose::Bool  # show PIDs and CPU% for each worker
     detachable::Bool  # whether the monitor can be detached
-    cancel_confirming::Bool  # waiting for Enter to confirm cancel
-    cancel_confirm_deadline::Float64  # time() deadline for cancel confirmation
+    confirming::Symbol  # :none, :cancel, or :info — action awaiting Enter to confirm
+    confirm_deadline::Float64  # time() deadline for confirmation
 end
 Base.lock(f, bg::BackgroundPrecompileState) = lock(f, bg.lock)
 Base.lock(bg::BackgroundPrecompileState) = lock(bg.lock)
 Base.unlock(bg::BackgroundPrecompileState) = unlock(bg.lock)
 
-const BG = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Dict{PkgId, Int}(), Set{PkgId}(), Threads.Condition(), Channel{PrecompileRequest}(Inf), false, false, false, 0.0)
+const BG = BackgroundPrecompileState(nothing, false, false, false, nothing, nothing, nothing, nothing, ReentrantLock(), Threads.Condition(), Channel{Int32}[], Dict{PkgId, Int}(), Set{PkgId}(), Threads.Condition(), Channel{PrecompileRequest}(Inf), false, false, :none, 0.0)
 
 ## Constants and formatting utilities
 
@@ -918,7 +918,8 @@ precompilation:
     precompilation continues in the background.
   - **`i`** — Info. Sends a profiling signal (SIGINFO on macOS/BSD, SIGUSR1 on
     Linux) to subprocesses, triggering a profile peek without interrupting
-    compilation.
+    compilation. Prompts for Enter to confirm; ignored after 5 seconds or if any
+    other key is pressed.
   - **`v`** — Toggle verbose mode. Shows elapsed time and worker PID for each actively
     compiling package, plus CPU% and memory (RSS) on Linux and macOS.
   - **`?`/`h`** — Show keyboard shortcut help.
@@ -1019,17 +1020,22 @@ const register_atexit_hook = Base.OncePerProcess{Nothing}() do
     nothing
 end
 
+const _confirm_messages = Dict{Symbol, String}(
+    :cancel => "cancel precompilation",
+    :info   => "send profiling signal",
+)
+
 function keyboard_tip(s::BackgroundPrecompileState)
     s.monitoring || return "", :default
-    color = s.cancel_confirming ? Base.info_color() : :default
-    if s.cancel_confirming
-        remaining = max(0, ceil(Int, s.cancel_confirm_deadline - time()))
-        return "Press Enter to cancel precompilation (ignoring in $(remaining)s)", color
+    if s.confirming !== :none
+        remaining = max(0, ceil(Int, s.confirm_deadline - time()))
+        msg = get(_confirm_messages, s.confirming, string(s.confirming))
+        return "Press Enter to $(msg) (ignoring in $(remaining)s)", Base.info_color()
     end
     if s.detachable
-        return "Press `?` for help, `c` to cancel, `d` to detach.", color
+        return "Press `?` for help, `c` to cancel, `d` to detach.", :default
     else
-        return "Press `?` for help, `c` to cancel.", color
+        return "Press `?` for help, `c` to cancel.", :default
     end
 end
 
@@ -1079,11 +1085,23 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
             trylock(stdin.raw_lock) || return
             @lock BG begin
                 BG.detachable = detachable
-                BG.cancel_confirming = false
+                BG.confirming = :none
             end
+            buffered_input = UInt8[]
             try
                 term = Base.Terminals.TTYTerminal(get(ENV, "TERM", "dumb"), stdin, stdout, stderr)
                 Base.Terminals.raw!(term, true)
+                # Drain any pre-existing input (e.g. pasted or pre-typed text)
+                # before entering the key listener. This avoids accidentally
+                # triggering menu actions from stale input (see #61520).
+                # The drained bytes are replayed into stdin on exit.
+                # We must start_reading + yield first so libuv delivers any
+                # bytes sitting in the kernel tty buffer into stdin.buffer.
+                Base.start_reading(stdin)
+                yield()
+                while bytesavailable(stdin) > 0
+                    push!(buffered_input, read(stdin, UInt8))
+                end
                 try
                     while true
                         completed = @lock BG (BG.completed_at !== nothing)
@@ -1097,26 +1115,26 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                         end
                         bytesavailable(stdin) > 0 || continue
                         c = read(stdin, Char)
-                        # If waiting for cancel confirmation, Enter confirms, anything else aborts
-                        cancel_confirmed = @lock BG begin
-                            if BG.cancel_confirming
-                                BG.cancel_confirming = false
-                                c in ('\r', '\n')
-                            else
-                                false
-                            end
+                        # If waiting for confirmation, Enter confirms, anything else aborts
+                        confirmed_action = @lock BG begin
+                            prev = BG.confirming
+                            BG.confirming = :none
+                            (prev !== :none && c in ('\r', '\n')) ? prev : :none
                         end
-                        if cancel_confirmed
+                        if confirmed_action == :cancel
                             cancel_requested[] = true
                             println(io)
                             @lock BG BG.cancel_requested = true
                             broadcast_signal(Base.SIGKILL)
                             break
+                        elseif confirmed_action == :info
+                            broadcast_signal(Sys.isapple() ? Base.SIGINFO : Base.SIGUSR1)
+                            continue
                         end
                         if c in ('c', 'C')
                             @lock BG begin
-                                BG.cancel_confirming = true
-                                BG.cancel_confirm_deadline = time() + 5.0
+                                BG.confirming = :cancel
+                                BG.confirm_deadline = time() + 5.0
                             end
                         elseif detachable && c in ('d', 'D', 'q', 'Q', ']')
                             exit_requested[] = true
@@ -1129,7 +1147,10 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                             broadcast_signal(Base.SIGINT)
                             break
                         elseif c in ('i', 'I')
-                            broadcast_signal(Sys.isapple() ? Base.SIGINFO : Base.SIGUSR1)
+                            @lock BG begin
+                                BG.confirming = :info
+                                BG.confirm_deadline = time() + 5.0
+                            end
                         elseif c in ('v', 'V')
                             @lock BG BG.verbose = !BG.verbose
                         elseif c in ('?', 'h', 'H')
@@ -1139,7 +1160,7 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                                 if detachable
                                     println(io, "    d/q/]   Detach (precompilation continues in background)", ansi_cleartoendofline)
                                 end
-                                println(io, "    i       Send profiling signal to subprocesses", ansi_cleartoendofline)
+                                println(io, "    i       Send profiling signal to subprocesses (press Enter to confirm)", ansi_cleartoendofline)
                                 fields = Sys.iswindows() ? "elapsed time and PID" : "elapsed time, PID, CPU% and memory"
                                 println(io, "    v       Toggle verbose mode (show $(fields) for each worker)", ansi_cleartoendofline)
                                 println(io, "    Ctrl-C  Interrupt (sends SIGINT, shows output)", ansi_cleartoendofline)
@@ -1155,10 +1176,19 @@ function monitor_background_precompile(io::IO = stderr, detachable::Bool = true,
                 exit_requested[] = true
                 rethrow()
             finally
-                Base.reseteof(stdin)
-                @lock BG begin
-                    BG.cancel_confirming = false
+                # Replay any buffered input back into stdin so the REPL
+                # (or whatever reads stdin next) sees it as typed text.
+                if !isempty(buffered_input)
+                    lock(stdin.cond)
+                    try
+                        write(stdin.buffer, buffered_input)
+                        notify(stdin.cond)
+                    finally
+                        unlock(stdin.cond)
+                    end
                 end
+                Base.reseteof(stdin)
+                @lock BG BG.confirming = :none
                 unlock(stdin.raw_lock)
             end
         finally
@@ -1624,8 +1654,8 @@ function spawn_print_loop!(s::PrecompileSession)
                     i_local = i
                     final_loop_local = final_loop
                     tip, tip_color = @lock BG begin
-                        if BG.cancel_confirming && time() >= BG.cancel_confirm_deadline
-                            BG.cancel_confirming = false
+                        if BG.confirming !== :none && time() >= BG.confirm_deadline
+                            BG.confirming = :none
                         end
                         keyboard_tip(BG)
                     end
