@@ -450,8 +450,7 @@ function est_to_dst(st::SyntaxTree)
                 r3 -> @ast g st [K"." rec(l) r3]
             end
         end
-        [K"inert" [K"Identifier"]] -> @ast g st st[1]=>K"Symbol"
-        # [K"quote" [K"Identifier"]] -> @ast g st st[1]=>K"Symbol"
+        ([K"inert" [K"Identifier"]], when=!hasattr(st[1], :mod)) -> @ast g st st[1]=>K"Symbol"
         [K"inert" _] -> st
         [K"inert_syntaxtree" _] -> st
         [K"module" _...] -> st

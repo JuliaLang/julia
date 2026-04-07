@@ -881,3 +881,28 @@ end
     mac_st = JuliaLowering.expr_to_est(mac_ex, LineNumberNode(1, "badfile"))
     @test JuliaLowering.eval(test_mod, mac_st) == "none"
 end
+
+@testset "macro QuoteNode + inert behavior" begin
+    Base.include_string(test_mod, raw"""
+    macro quoted_gr()
+        QuoteNode(GlobalRef(Base, :dontresolveme))
+    end
+    """)
+    let gr = JuliaLowering.include_string(test_mod, "@quoted_gr")
+        @test gr.mod === Base
+        @test gr.name === :dontresolveme
+    end
+end
+
+@testset "Base macros" begin
+    jl_eval(test_mod,
+            :(function test_invokelatest()
+                  @eval invokelatest_target(x, y) = x + y
+                  out = @invokelatest(invokelatest_target(1, 2))
+                  Base.delete_binding(@__MODULE__, :invokelatest_target)
+                  out
+              end))
+    # the following test needs to define this to be effective
+    @test_throws UndefVarError JuliaLowering.include_string(test_mod, "invokelatest_target(1,2)")
+    @test JuliaLowering.include_string(test_mod, "test_invokelatest()") === 3
+end
