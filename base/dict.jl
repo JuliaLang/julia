@@ -877,6 +877,9 @@ true
 julia> Base.setindex(Base.ImmutableDict(:a => 1), 2, :b) == Base.ImmutableDict(:a => 1, :b => 2)
 true
 ```
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
 """
 function setindex(d::ImmutableDict, value, key)
     ImmutableDict(d, key => value)

@@ -208,6 +208,9 @@ julia> bar() = nameof(@__FUNCTION__);
 julia> bar()
 :bar
 ```
+
+!!! compat "Julia 1.13"
+    This macro requires at least Julia 1.13.
 """
 macro __FUNCTION__()
     Expr(:thisfunction)
