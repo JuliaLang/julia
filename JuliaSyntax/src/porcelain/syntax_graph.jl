@@ -208,7 +208,7 @@ end
 # fallback printing
 function node_string(ex::SyntaxTree, depth=2)
     out = "(_id="*string(ex._id)
-    for n in sort!(attrnames(ex))
+    for n in sort!(collect(attrnames(ex)))
         out *= ", "*string(n)*"="*repr(getproperty(ex, n))
     end
     if is_leaf(ex)
@@ -283,7 +283,7 @@ end
 
 function attrnames(ex::SyntaxTree)
     attrs = ex._graph.attributes
-    Symbol[name for (name, value) in pairs(attrs) if haskey(value, ex._id)]
+    (name::Symbol for (name, value) in pairs(attrs) if haskey(value, ex._id))
 end
 
 function copy_node(ex::SyntaxTree)
