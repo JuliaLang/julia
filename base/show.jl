@@ -1,6 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using .Compiler: has_typevar
 using .Meta: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator,
             is_id_start_char, is_id_char, _isoperator, is_syntactic_operator, is_valid_identifier,
             is_unary_and_binary_operator
@@ -1400,6 +1399,9 @@ function show(io::IO, codeinst::Core.CodeInstance)
     else
         show_mi(io, def::MethodInstance)
     end
+    if codeinst.owner !== nothing
+        print(io, " (foreign)")
+    end
 end
 
 function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)
@@ -1950,6 +1952,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif (head in expr_infix_any && nargs==2)
         func_prec = operator_precedence(head)
         head_ = head in expr_infix_wide ? " $head " : head
+        if head == :-> && is_expr(args[1], :...)
+            args = Any[Expr(:tuple, args[1]), args[2]]
+        end
         if func_prec <= prec
             show_enclosed_list(io, '(', args, head_, ')', indent, func_prec, quote_level, true)
         else
@@ -3371,7 +3376,7 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         print(io, "explicit `import` from ")
         print(io, partition_restriction(partition).globalref)
     else
-        @assert kind == PARTITION_KIND_GLOBAL
+        @assert kind == PARTITION_KIND_GLOBAL "unexpected partition kind"
         print(io, "global variable with type ")
         print(io, partition_restriction(partition))
     end

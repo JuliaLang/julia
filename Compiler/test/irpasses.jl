@@ -1500,9 +1500,9 @@ let code = Any[
     interp = Compiler.NativeInterpreter()
     sv = Compiler.OptimizationState(mi, src, interp)
     # (_4 !== nothing) conditional narrows the type, triggering PiNodes
-    sv.bb_vartables[#= block_id =# 3][#= slot_id =# 4] = VarState(Bool, #= def =# 5, #= maybe_undef =# false)
-    sv.bb_vartables[#= block_id =# 4][#= slot_id =# 4] = VarState(Bool, #= def =# 7, #= maybe_undef =# false)
-    sv.bb_vartables[#= block_id =# 5][#= slot_id =# 4] = VarState(Bool, #= def =# 7, #= maybe_undef =# false)
+    sv.bb_states[#=block_id=#3].vartable[#=slot_id=#4] = VarState(Bool, #=def=#5, #=maybe_undef=#false)
+    sv.bb_states[#=block_id=#4].vartable[#=slot_id=#4] = VarState(Bool, #=def=#7, #=maybe_undef=#false)
+    sv.bb_states[#=block_id=#5].vartable[#=slot_id=#4] = VarState(Bool, #=def=#7, #=maybe_undef=#false)
 
     ir = Compiler.convert_to_ircode(src, sv)
     ir = Compiler.slot2reg(ir, src, sv)
@@ -2149,4 +2149,20 @@ let rf = (acc, x) -> ifelse(x > acc[1], (x,), (acc[1],))
     @test f_57827(rf, (0.0,), 1) === (1,)
     ir = first(only(Base.code_ircode(f_57827, (typeof(rf), Tuple{Float64}, Int64); optimize_until="CC: SROA")))
     @test ir isa Compiler.IRCode
+end
+
+# Test that SROA lifting cache deduplicates phi nodes when multiple
+# getfield calls access the same field of the same phi node.
+struct LiftCachePoint
+    x::Float64
+    y::Float64
+end
+let src = code_typed1((Bool,)) do cond
+        p = cond ? LiftCachePoint(1.0, 2.0) : LiftCachePoint(3.0, 4.0)
+        return abs(p.x) + p.x * 2.0
+    end
+    @test count(isnew, src.code) == 0
+    @test !any(iscall((src, getfield)), src.code)
+    # the lifting cache should deduplicate: only 1 phi for `p.x`, not 2
+    @test count(x -> isa(x, Core.PhiNode), src.code) == 1
 end

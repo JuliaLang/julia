@@ -946,9 +946,8 @@ g21054(>:) = >:2
 @test g21054(-) == -2
 
 # issue #21168
-@test_loweringerror(:(a.[1]), "invalid syntax \"a.[1]\"", broken)
-@test_loweringerror(:(a.[1]), "invalid syntax \"a.[1]\"", broken)
-@test_loweringerror(:(a.{1}), "invalid syntax \"a.{1}\"", broken)
+@test_parseerror "a.[1]"
+@test_parseerror "a.{1}"
 
 # Issue #21225
 let abstr = Meta.parse("abstract type X end")
@@ -1516,10 +1515,7 @@ end
 @test c27964(8) == (8, 2)
 
 # issue #26739
-let exc = try Core.eval(@__MODULE__, :(sin.[1])) catch exc ; exc end
-    @test_broken exc isa ErrorException
-    @test_broken startswith(exc.msg, "syntax: invalid syntax \"sin.[1]\"")
-end
+@test_parseerror "sin.[1]"
 
 # issue #26873
 f26873 = 0
@@ -1531,10 +1527,10 @@ catch e
     @test e.error isa MethodError
 end
 
-@test_loweringerror(:(if true; break; end for i = 1:1), "break or continue outside loop")
-@test_loweringerror(:([if true; break; end for i = 1:1]), "break or continue outside loop")
+@test_loweringerror(:(if true; break; end for i = 1:1), "`break` must be used inside a `while`, `for` loop, or `@label` block")
+@test_loweringerror(:([if true; break; end for i = 1:1]), "`break` must be used inside a `while`, `for` loop, or `@label` block")
 @test_loweringerror(:(Int[if true; break; end for i = 1:1]), "break or continue outside loop")
-@test_loweringerror(:([if true; continue; end for i = 1:1]), "break or continue outside loop")
+@test_loweringerror(:([if true; continue; end for i = 1:1]), "`continue` must be used inside a `while` or `for` loop")
 @test_loweringerror(:(Int[if true; continue; end for i = 1:1]), "break or continue outside loop")
 
 @test_loweringerror(:(return 0 for i=1:2), "\"return\" not allowed inside comprehension or generator")

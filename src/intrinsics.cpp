@@ -863,17 +863,17 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_data);
         ai.decorateInst(store);
     }
-    else if (!x.inline_roots.empty()) {
-        recombine_value(ctx, e, thePtr, jl_aliasinfo_t(), Align(align_nb), false);
-    }
-    else if (x.ispointer()) {
+    else if (!x.inline_roots.empty() || x.ispointer()) {
         uint64_t size = jl_datatype_size(ety);
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(ctx.types().T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
         setName(ctx.emission_context, im1, "pointerset_offset");
         auto gep = emit_ptrgep(ctx, thePtr, im1);
         setName(ctx.emission_context, gep, "pointerset_ptr");
-        emit_memcpy(ctx, gep, jl_aliasinfo_t::fromTBAA(ctx, nullptr), x, size, Align(align_nb), Align(julia_alignment(ety)));
+        if (!x.inline_roots.empty())
+            recombine_value(ctx, x, gep, jl_aliasinfo_t(), Align(align_nb), false);
+        else
+            emit_memcpy(ctx, gep, jl_aliasinfo_t::fromTBAA(ctx, nullptr), x, size, Align(align_nb), Align(julia_alignment(ety)));
     }
     else {
         bool isboxed;

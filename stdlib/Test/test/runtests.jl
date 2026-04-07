@@ -422,7 +422,11 @@ let fails = @testset NoThrowTestSet begin
         @test typeof(1) <: typeof("julia")
         # 29 - Fail - assignment
         @test (i = length([1, 2])) == 3
-        # 30 - 33 - Fail - wrong message
+        # 30 - Fail - symbol comparison
+        @test 1 + 2 == :sym
+        # 31 - Fail - symbol in function call
+        @test isequal(1 + 2, :sym)
+        # 32 - 35 - Fail - wrong message
         @test_throws "A test" error("a test")
         @test_throws r"sqrt\([Cc]omplx" sqrt(-1)
         @test_throws str->occursin("a T", str) error("a test")
@@ -577,22 +581,31 @@ let fails = @testset NoThrowTestSet begin
         @test occursin("Evaluated: 2 == 3", str)
     end
 
+    # Test that symbols are printed with : prefix
     let str = sprint(show, fails[30])
+        @test occursin("Evaluated: 3 == :sym", str)
+    end
+
+    let str = sprint(show, fails[31])
+        @test occursin("Evaluated: isequal(3, :sym)", str)
+    end
+
+    let str = sprint(show, fails[32])
         @test occursin("Expected: \"A test\"", str)
         @test occursin("Message: \"a test\"", str)
     end
 
-    let str = sprint(show, fails[31])
+    let str = sprint(show, fails[33])
         @test occursin("Expected: r\"sqrt\\([Cc]omplx\"", str)
         @test occursin(r"Message: .*Try sqrt\(Complex", str)
     end
 
-    let str = sprint(show, fails[32])
+    let str = sprint(show, fails[34])
         @test occursin("Expected: < match function >", str)
         @test occursin("Message: \"a test\"", str)
     end
 
-    let str = sprint(show, fails[33])
+    let str = sprint(show, fails[35])
         @test occursin("Expected: [\"BoundsError\", \"acquire\", \"1-element\", \"at index [2]\"]", str)
         @test occursin(r"Message: \"BoundsError.* 1-element.*at index \[2\]", str)
     end

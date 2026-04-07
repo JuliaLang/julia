@@ -248,6 +248,38 @@ end
 19  (return 1)
 
 ########################################
+# Error: const ref
+const x[] = 1
+#---------------------
+LoweringError:
+const x[] = 1
+#     └─┘ ── cannot declare this form constant
+
+########################################
+# Error: const setproperty
+const Main.x = 1
+#---------------------
+LoweringError:
+const Main.x = 1
+#     └────┘ ── cannot declare this form constant
+
+########################################
+# Error: const ref, tuple-nested
+const (a, (b, x[])) = (1, (2, 3))
+#---------------------
+LoweringError:
+const (a, (b, x[])) = (1, (2, 3))
+#             └─┘ ── cannot declare this form constant
+
+########################################
+# Error: const setproperty, tuple-nested
+const (a, (b, x.y)) = (1, (2, 3))
+#---------------------
+LoweringError:
+const (a, (b, x.y)) = (1, (2, 3))
+#             └─┘ ── cannot declare this form constant
+
+########################################
 # Error: Const not supported on locals
 const local x = 1
 #---------------------
@@ -265,6 +297,50 @@ LoweringError:
 let
     const x = 1
 #        └────┘ ── unsupported `const` declaration on local variable
+end
+
+########################################
+# Error: Const not supported on locals
+begin
+    local x
+    const x = 1
+end
+#---------------------
+LoweringError:
+begin
+    local x
+    const x = 1
+#        └────┘ ── unsupported `const` declaration on local variable
+end
+
+########################################
+# Error: local in let first arg
+let local a = 1
+end
+#---------------------
+LoweringError:
+let local a = 1
+#   └─────────┘ ── expected identifier or assignment
+end
+
+########################################
+# Error: global in let first arg
+let global a = 1
+end
+#---------------------
+LoweringError:
+let global a = 1
+#   └──────────┘ ── expected identifier or assignment
+end
+
+########################################
+# Error: const in let first arg
+let const a = 1
+end
+#---------------------
+LoweringError:
+let const a = 1
+#   └─────────┘ ── expected identifier or assignment
 end
 
 ########################################
@@ -291,7 +367,7 @@ end
 6   (call core.svec)
 7   SourceLocation::1:10
 8   (call core.svec %₅ %₆ %₇)
-9   --- method core.nothing %₈
+9   --- method TestMod.f %₈
     slots: [slot₁/#self#(!read) slot₂/x slot₃/tmp(!read) slot₄/tmp(!read) slot₅/x(!read)]
     1   (= slot₅/x slot₂/x)
     2   1
@@ -374,7 +450,7 @@ end
 8   (call core.svec)
 9   SourceLocation::1:10
 10  (call core.svec %₇ %₈ %₉)
-11  --- method core.nothing %₁₀
+11  --- method TestMod.f %₁₀
     slots: [slot₁/#self#(!read)]
     1   TestMod.x
     2   TestMod.Int
@@ -404,7 +480,7 @@ end
 10  (call core.svec)
 11  SourceLocation::1:10
 12  (call core.svec %₉ %₁₀ %₁₁)
-13  --- method core.nothing %₁₂
+13  --- method TestMod.f %₁₂
     slots: [slot₁/#self#(!read) slot₂/tmp(!read)]
     1   TestMod.+
     2   TestMod.x
@@ -440,7 +516,7 @@ end
 8   (call core.svec)
 9   SourceLocation::1:10
 10  (call core.svec %₇ %₈ %₉)
-11  --- method core.nothing %₁₀
+11  --- method TestMod.f %₁₀
     slots: [slot₁/#self#(!read)]
     1   TestMod.x
     2   TestMod.+

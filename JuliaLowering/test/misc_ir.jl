@@ -35,6 +35,10 @@ x."b"
 #---------------------
 LoweringError:
 #= line 1 =# - invalid syntax: unknown form `.` or number of arguments 3
+Expression:
+  (. x a 3)
+Containing expressions:
+  (. x a 3)
 
 ########################################
 # Error: Placeholder value used
@@ -253,6 +257,10 @@ LoweringError:
 #---------------------
 LoweringError:
 #= line 1 =# - expected (if cond body) or (if cond body else)
+Expression:
+  (if)
+Containing expressions:
+  (if)
 
 ########################################
 # Error: @atomic in wrong position
@@ -262,6 +270,10 @@ end
 #---------------------
 LoweringError:
 #= none:2 =# - unimplemented or unsupported `atomic` declaration
+Expression:
+  (atomic x)
+Containing expressions:
+  (let (block) (block (atomic x)))
 
 ########################################
 # GC.@preserve support

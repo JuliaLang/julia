@@ -28,6 +28,7 @@ end
 # library handle pointer must not be NULL
 @test_throws ArgumentError Libdl.dlsym(C_NULL, :foo)
 @test_throws ArgumentError Libdl.dlsym_e(C_NULL, :foo)
+@test_throws ArgumentError Libdl.dlpath(C_NULL)
 
 # Find the library directory by finding the path of libjulia-internal (or libjulia-internal-debug,
 # as the case may be) to get the private library directory

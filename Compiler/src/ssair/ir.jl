@@ -527,42 +527,69 @@ end
 struct OOBToken end; const OOB_TOKEN = OOBToken()
 struct UndefToken end; const UNDEF_TOKEN = UndefToken()
 
-@noinline function _useref_getindex(@nospecialize(stmt), op::Int)
+# Split into op==1 and op>1 cases to avoid redundant comparisons. Most IR node
+# types only have a single operand, so the op==1 path can return directly without
+# checking `op == 1 || return OOB_TOKEN` for each type. The op>1 path only needs
+# to handle Expr, PhiNode, and PhiCNode which can have multiple operands.
+function _useref_getindex(@nospecialize(stmt), op::Int)
+    if op == 1
+        return _useref_getindex_op1(stmt)
+    else
+        return _useref_getindex_opN(stmt, op)
+    end
+end
+
+@noinline function _useref_getindex_op1(@nospecialize(stmt))
     if isa(stmt, Expr) && stmt.head === :(=)
         rhs = stmt.args[2]
-        if isa(rhs, Expr)
-            if is_relevant_expr(rhs)
-                op > length(rhs.args) && return OOB_TOKEN
-                return rhs.args[op]
-            end
+        if isa(rhs, Expr) && is_relevant_expr(rhs)
+            length(rhs.args) < 1 && return OOB_TOKEN
+            return rhs.args[1]
         end
-        op == 1 || return OOB_TOKEN
         return rhs
     elseif isa(stmt, Expr) # @assert is_relevant_expr(stmt)
-        op > length(stmt.args) && return OOB_TOKEN
-        return stmt.args[op]
+        length(stmt.args) < 1 && return OOB_TOKEN
+        return stmt.args[1]
     elseif isa(stmt, GotoIfNot)
-        op == 1 || return OOB_TOKEN
         return stmt.cond
     elseif isa(stmt, ReturnNode)
         isdefined(stmt, :val) || return OOB_TOKEN
-        op == 1 || return OOB_TOKEN
         return stmt.val
     elseif isa(stmt, EnterNode)
         isdefined(stmt, :scope) || return OOB_TOKEN
-        op == 1 || return OOB_TOKEN
         return stmt.scope
     elseif isa(stmt, PiNode)
         isdefined(stmt, :val) || return OOB_TOKEN
-        op == 1 || return OOB_TOKEN
         return stmt.val
     elseif isa(stmt, Union{AnySSAValue, GlobalRef})
-        op == 1 || return OOB_TOKEN
         return stmt
     elseif isa(stmt, UpsilonNode)
         isdefined(stmt, :val) || return OOB_TOKEN
-        op == 1 || return OOB_TOKEN
         return stmt.val
+    elseif isa(stmt, PhiNode)
+        length(stmt.values) < 1 && return OOB_TOKEN
+        isassigned(stmt.values, 1) || return UNDEF_TOKEN
+        return stmt.values[1]
+    elseif isa(stmt, PhiCNode)
+        length(stmt.values) < 1 && return OOB_TOKEN
+        isassigned(stmt.values, 1) || return UNDEF_TOKEN
+        return stmt.values[1]
+    else
+        return OOB_TOKEN
+    end
+end
+
+@noinline function _useref_getindex_opN(@nospecialize(stmt), op::Int)
+    if isa(stmt, Expr) && stmt.head === :(=)
+        rhs = stmt.args[2]
+        if isa(rhs, Expr) && is_relevant_expr(rhs)
+            op > length(rhs.args) && return OOB_TOKEN
+            return rhs.args[op]
+        end
+        return OOB_TOKEN
+    elseif isa(stmt, Expr) # @assert is_relevant_expr(stmt)
+        op > length(stmt.args) && return OOB_TOKEN
+        return stmt.args[op]
     elseif isa(stmt, PhiNode)
         op > length(stmt.values) && return OOB_TOKEN
         isassigned(stmt.values, op) || return UNDEF_TOKEN
@@ -704,9 +731,9 @@ function CFGTransformState!(blocks::Vector{BasicBlock}, allow_cfg_transforms::Bo
     if allow_cfg_transforms
         bb_rename = Vector{Int}(undef, length(blocks))
         cur_bb = 1
-        domtree = construct_domtree(blocks)
+        dfs = DFS(blocks)
         for i = 1:length(bb_rename)
-            if bb_unreachable(domtree, i)
+            if i != 1 && dfs.to_pre[i] == 0 # if i is unreachable
                 bb_rename[i] = -1
             else
                 bb_rename[i] = cur_bb

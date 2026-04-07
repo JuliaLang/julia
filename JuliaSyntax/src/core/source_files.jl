@@ -286,7 +286,6 @@ function _print_marker_line(io, prefix_str, str, underline, singleline, color,
         indent = "#" * (first(indent) == '\t' ? indent : indent[nextind(indent,1):end])
     end
 
-    midchar = '─'
     startstr, endstr, singlestart = underline ? ("└","┘","╙") : ("┌","┐","╓")
 
     markline =

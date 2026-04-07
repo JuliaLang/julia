@@ -242,6 +242,7 @@ DevDocs = [
         "devdocs/init.md",
         "devdocs/ast.md",
         "devdocs/types.md",
+        "devdocs/ub.md",
         "devdocs/object.md",
         "devdocs/eval.md",
         "devdocs/callconv.md",
@@ -382,19 +383,6 @@ DocMeta.setdocmeta!(
     maybe_revise(:(;;));
     recursive=true,
 )
-# Use current Julia version's syntax for Base and Core doctests
-DocMeta.setdocmeta!(
-    Base,
-    :DocTestSyntax,
-    VERSION;
-    recursive=true, warn=false,
-)
-DocMeta.setdocmeta!(
-    Core,
-    :DocTestSyntax,
-    VERSION;
-    recursive=true, warn=false,
-)
 DocMeta.setdocmeta!(
     Base.BinaryPlatforms,
     :DocTestSetup,
@@ -439,6 +427,7 @@ makedocs(
     authors   = "The Julia Project",
     pages     = PAGES,
     remotes   = documenter_stdlib_remotes,
+    meta      = Dict(:DocTestSyntax => VERSION),
 )
 
 # Update URLs to external stdlibs (JuliaLang/julia#43199)
