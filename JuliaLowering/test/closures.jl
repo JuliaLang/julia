@@ -577,6 +577,22 @@ let (f, foo) = test_mod.f_box_regression147()
     @test f.foo === foo
 end
 
+# The internal "helper" of an (inner) kwargs function should not be boxed.
+JuliaLowering.include_string(test_mod, """
+function f_kwbody_box()
+    function inner(x; verbose=false)
+        return verbose ? x : nothing
+    end
+    return (inner, inner(1; verbose=true))
+end
+""")
+let (inner, result) = test_mod.f_kwbody_box()
+    @test result == 1
+    # The kw body closure should be captured directly, not through a Box
+    kw_body_field = only(filter(f -> startswith(string(f), "#kw_body#"), fieldnames(typeof(inner))))
+    @test !(getfield(inner, kw_body_field) isa Core.Box)
+end
+
 # Any `let` variables marked always-defined && assigned-once are known to
 # dominate their scope, so they should not be boxed even in the presence
 # of `@label`
