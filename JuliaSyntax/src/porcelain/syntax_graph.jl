@@ -283,7 +283,7 @@ end
 
 function attrnames(ex::SyntaxTree)
     attrs = ex._graph.attributes
-    [name for (name, value) in pairs(attrs) if haskey(value, ex._id)]
+    Symbol[name for (name, value) in pairs(attrs) if haskey(value, ex._id)]
 end
 
 function copy_node(ex::SyntaxTree)
