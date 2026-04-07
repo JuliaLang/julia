@@ -1,6 +1,23 @@
 #include "objcache.h"
 
+#include <chrono>
+
 #include "julia.h"
+
+static FILE *getLogFile()
+{
+    const char *Path = getenv("JULIA_OBJCACHE_LOG");
+    if (!Path)
+        return nullptr;
+    FILE *F = fopen(Path, "a");
+    if (!F) {
+        jl_printf(JL_STDERR, "objcache: failed to open log file %s\n", Path);
+        return nullptr;
+    }
+    return F;
+}
+
+static FILE *LogFile = getLogFile();
 
 class MDBMemoryBuffer : public llvm::MemoryBuffer {
 public:
@@ -54,12 +71,24 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
     if (!Env)
         return Compile();
 
+    size_t Weight = 0;
+    for (auto &F : M.functions())
+        for (auto &BB : F)
+            Weight += BB.size();
+
+    using Clock = std::chrono::steady_clock;
+
+    auto LookupStart = Clock::now();
+
     llvm::raw_null_ostream OS;
     llvm::BitcodeWriter BW{OS};
     llvm::ModuleHash ModHash;
+    llvm::SmallVector<char, 2 * sizeof ModHash + 1> KeyBuf;
     BW.writeModule(M, false, nullptr, true, &ModHash);
     BW.writeSymtab();
     BW.writeStrtab();
+    llvm::toHex({(uint8_t *)&ModHash[0], sizeof ModHash}, true, KeyBuf);
+    KeyBuf[KeyBuf.size() - 1] = 0;
 
     MDB_txn *Txn;
     if (int Err = mdb_txn_begin(Env, nullptr, MDB_RDONLY | MDB_NOSYNC, &Txn)) {
@@ -74,14 +103,25 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
         return Compile();
     }
 
-    MDB_val Key{ModHash.size(), ModHash.data()};
+    MDB_val Key{ModHash.size() * sizeof ModHash[0], ModHash.data()};
     MDB_val Data;
     if (int Err = mdb_get(Txn, Dbi, &Key, &Data)) {
         if (Err != MDB_NOTFOUND)
             checkMDB(Err);
         mdb_txn_abort(Txn);
+
+        double LookupMs =
+            std::chrono::duration<double, std::milli>(Clock::now() - LookupStart).count();
+
         ++NMiss;
+        auto CompileStart = Clock::now();
         auto Obj = Compile();
+        double CompileMs =
+            std::chrono::duration<double, std::milli>(Clock::now() - CompileStart).count();
+
+        if (LogFile)
+            fprintf(LogFile, "lookup,%s,%.3f,miss,%.3f,%zu,%zu\n", KeyBuf.begin(),
+                    LookupMs, CompileMs, Obj->getBufferSize(), Weight);
 
         auto ObjCopy = llvm::MemoryBuffer::getMemBufferCopy(Obj->getBuffer());
         {
@@ -99,6 +139,13 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
     NRead += Buf->getBufferSize();
 
     mdb_txn_abort(Txn);
+
+    double LookupMs =
+        std::chrono::duration<double, std::milli>(Clock::now() - LookupStart).count();
+    if (LogFile)
+        fprintf(LogFile, "lookup,%s,%.3f,hit,%zu,%zu\n", KeyBuf.begin(), LookupMs,
+                Buf->getBufferSize(), Weight);
+
     return Buf;
 }
 
@@ -127,13 +174,25 @@ void ObjCache::writerThread()
             continue;
         }
 
+        using Clock = std::chrono::steady_clock;
 
         for (auto &[ModHash, Obj] : LocalQueue) {
+            llvm::SmallVector<char, 2 * sizeof ModHash + 1> KeyBuf;
+            llvm::toHex({(uint8_t *)&ModHash[0], sizeof ModHash}, true, KeyBuf);
+            KeyBuf[KeyBuf.size() - 1] = 0;
+
             MDB_val Key{ModHash.size(), ModHash.data()};
             MDB_val Data{Obj->getBufferSize(), (void *)Obj->getBufferStart()};
+            auto WriteStart = Clock::now();
             if (int Err = mdb_put(Txn, Dbi, &Key, &Data, 0))
                 checkMDB(Err);
             NWrite += Obj->getBufferSize();
+            double WriteMs =
+                std::chrono::duration<double, std::milli>(Clock::now() - WriteStart)
+                    .count();
+            if (LogFile)
+                fprintf(LogFile, "write,%s,%.3f,%zu\n", KeyBuf.begin(), WriteMs,
+                        Obj->getBufferSize());
             auto _ = std::move(Obj);
         }
 
