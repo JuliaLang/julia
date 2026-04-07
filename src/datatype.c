@@ -148,7 +148,7 @@ static uint32_t _hash_layout_djb2(uintptr_t _layout, void *unused) JL_NOTSAFEPOI
     size_t fields_size = layout->nfields * jl_fielddesc_size(layout->flags.fielddesc_type);
     const char *pointers = jl_dt_layout_ptrs(layout);
     assert(pointers);
-    size_t pointers_size = layout->first_ptr < 0 ? 0 : (layout->npointers << layout->flags.fielddesc_type);
+    size_t pointers_size = layout->first_ptr < 0 ? 0 : (layout->npointers * jl_fielddesc_ptr_size(layout->flags.fielddesc_type));
 
     uint_t hash = 5381;
     hash = _hash_djb2(hash, (char *)layout, own_size);
@@ -171,7 +171,7 @@ static int layout_eq(void *_l1, void *_l2, void *unused) JL_NOTSAFEPOINT
         return 0;
     const char *p1 = jl_dt_layout_ptrs(l1);
     const char *p2 = jl_dt_layout_ptrs(l2);
-    size_t pointers_size = l1->first_ptr < 0 ? 0 : (l1->npointers << l1->flags.fielddesc_type);
+    size_t pointers_size = l1->first_ptr < 0 ? 0 : (l1->npointers * jl_fielddesc_ptr_size(l1->flags.fielddesc_type));
     if (memcmp(p1, p2, pointers_size))
         return 0;
     return 1;
@@ -199,7 +199,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
     assert(alignment); // should have been verified by caller
 
     // compute the smallest fielddesc type that can hold the layout description
-    int fielddesc_type = 0;
+    int fielddesc_type = JL_FIELDDESC_8;
     uint32_t max_size = 0;
     uint32_t max_offset = 0;
     if (nfields > 0) {
@@ -215,9 +215,9 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
     jl_fielddesc16_t maxdesc16 = { 0, max_size, max_offset };
     jl_fielddesc32_t maxdesc32 = { 0, max_size, max_offset };
     if (maxdesc8.size != max_size || maxdesc8.offset != max_offset) {
-        fielddesc_type = 1;
+        fielddesc_type = JL_FIELDDESC_16;
         if (maxdesc16.size != max_size || maxdesc16.offset != max_offset) {
-            fielddesc_type = 2;
+            fielddesc_type = JL_FIELDDESC_32;
             if (maxdesc32.size != max_size || maxdesc32.offset != max_offset) {
                 assert(0); // should have been verified by caller
             }
@@ -227,7 +227,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
 
     // allocate a new descriptor, on the stack if possible.
     size_t fields_size = nfields * jl_fielddesc_size(fielddesc_type);
-    size_t pointers_size = first_ptr < 0 ? 0 : (npointers << fielddesc_type);
+    size_t pointers_size = first_ptr < 0 ? 0 : (npointers * jl_fielddesc_ptr_size(fielddesc_type));
     size_t flddesc_sz = sizeof(jl_datatype_layout_t) + fields_size + pointers_size;
     int should_malloc = flddesc_sz >= jl_page_size;
     jl_datatype_layout_t *mallocmem = (jl_datatype_layout_t *)(should_malloc ? malloc(flddesc_sz) : NULL);
@@ -253,12 +253,12 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
     jl_fielddesc16_t *desc16 = (jl_fielddesc16_t *)jl_dt_layout_fields(flddesc);
     jl_fielddesc32_t *desc32 = (jl_fielddesc32_t *)jl_dt_layout_fields(flddesc);
     for (size_t i = 0; i < nfields; i++) {
-        if (fielddesc_type == 0) {
+        if (fielddesc_type == JL_FIELDDESC_8) {
             desc8[i].offset = desc[i].offset;
             desc8[i].size = desc[i].size;
             desc8[i].isptr = desc[i].isptr;
         }
-        else if (fielddesc_type == 1) {
+        else if (fielddesc_type == JL_FIELDDESC_16) {
             desc16[i].offset = desc[i].offset;
             desc16[i].size = desc[i].size;
             desc16[i].isptr = desc[i].isptr;
@@ -274,10 +274,10 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
         uint16_t *ptrs16 = (uint16_t *)jl_dt_layout_ptrs(flddesc);
         uint32_t *ptrs32 = (uint32_t *)jl_dt_layout_ptrs(flddesc);
         for (size_t i = 0; i < npointers; i++) {
-            if (fielddesc_type == 0) {
+            if (fielddesc_type == JL_FIELDDESC_8) {
                 ptrs8[i] = pointers[i];
             }
-            else if (fielddesc_type == 1) {
+            else if (fielddesc_type == JL_FIELDDESC_16) {
                 ptrs16[i] = pointers[i];
             }
             else {
@@ -384,7 +384,9 @@ int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree)
                 return 0;
             if (ty->name->n_uninitialized != 0)
                 return 0;
-            if (ty->layout->flags.fielddesc_type > 1) // GC only implements support for 8 and 16 (not array32)
+            jl_fielddesc_type_t fielddesc_type = (jl_fielddesc_type_t)ty->layout->flags.fielddesc_type;
+            if (fielddesc_type != JL_FIELDDESC_8 && fielddesc_type != JL_FIELDDESC_16)
+                // GC inlinealloc array support only handles compact Julia layouts.
                 return 0;
         }
         return 1;
@@ -561,10 +563,12 @@ void jl_get_genericmemory_layout(jl_datatype_t *st)
             if (el_layout->first_ptr >= 0) {
                 first_ptr = el_layout->first_ptr;
                 npointers = el_layout->npointers;
-                if (el_layout->flags.fielddesc_type == 2 && !needlock) {
+                if (el_layout->flags.fielddesc_type == JL_FIELDDESC_32 && !needlock) {
                     pointers = (uint32_t*)jl_dt_layout_ptrs(el_layout);
                 }
                 else {
+                    assert(el_layout->flags.fielddesc_type != JL_FIELDDESC_FOREIGN);
+                    // Array element layouts need explicit pointer offsets.
                     pointers = (uint32_t*)alloca(npointers * sizeof(uint32_t));
                     for (int j = 0; j < npointers; j++) {
                         pointers[j] = jl_ptr_offset((jl_datatype_t*)eltype, j);
@@ -1049,7 +1053,7 @@ JL_DLLEXPORT jl_datatype_t * jl_new_foreign_type(jl_sym_t *name,
     layout->npointers = haspointers;
     layout->flags.haspadding = 1;
     layout->flags.isbitsegal = 0;
-    layout->flags.fielddesc_type = 3;
+    layout->flags.fielddesc_type = JL_FIELDDESC_FOREIGN;
     layout->flags.padding = 0;
     layout->flags.arrayelem_isboxed = 0;
     layout->flags.arrayelem_isunion = 0;
@@ -1086,7 +1090,7 @@ JL_DLLEXPORT int jl_reinit_foreign_type(jl_datatype_t *dt,
 
 JL_DLLEXPORT int jl_is_foreign_type(jl_datatype_t *dt)
 {
-    return jl_is_datatype(dt) && dt->layout && dt->layout->flags.fielddesc_type == 3;
+    return jl_is_datatype(dt) && dt->layout && dt->layout->flags.fielddesc_type == JL_FIELDDESC_FOREIGN;
 }
 
 // bits constructors ----------------------------------------------------------
@@ -2366,7 +2370,7 @@ jl_value_t *get_nth_pointer(jl_value_t *v, size_t i)
     uint32_t npointers = ly->npointers;
     if (i >= npointers)
         jl_bounds_error_int(v, i);
-    if (ly->flags.fielddesc_type == 3) {
+    if (ly->flags.fielddesc_type == JL_FIELDDESC_FOREIGN) {
         // Foreign types can report that they contain pointers for GC purposes,
         // but they do not expose an inline pointer-offset table to enumerate.
         return NULL;
@@ -2375,9 +2379,9 @@ jl_value_t *get_nth_pointer(jl_value_t *v, size_t i)
     const uint16_t *ptrs16 = (const uint16_t *)jl_dt_layout_ptrs(ly);
     const uint32_t *ptrs32 = (const uint32_t*)jl_dt_layout_ptrs(ly);
     uint32_t fld;
-    if (ly->flags.fielddesc_type == 0)
+    if (ly->flags.fielddesc_type == JL_FIELDDESC_8)
         fld = ptrs8[i];
-    else if (ly->flags.fielddesc_type == 1)
+    else if (ly->flags.fielddesc_type == JL_FIELDDESC_16)
         fld = ptrs16[i];
     else
         fld = ptrs32[i];
