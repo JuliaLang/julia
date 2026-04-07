@@ -185,14 +185,6 @@ function vect(X...)
     return T[X...]
 end
 
-size(a::Array, d::Integer) = size(a, Int(d)::Int)
-function size(a::Array, d::Int)
-    d < 1 && error("arraysize: dimension out of range")
-    sz = getfield(a, :size)
-    return d > length(sz) ? 1 : getfield(sz, d, false) # @inbounds
-end
-size(a::Array) = getfield(a, :size)
-
 asize_from(a::Array, n) = n > ndims(a) ? () : (size(a,n), asize_from(a, n+1)...)
 
 allocatedinline(@nospecialize T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
@@ -327,18 +319,50 @@ copyto!(dest::Array{T}, src::Array{T}) where {T} = _copyto2arg!(dest, src)
 copyto!(dest::Array{T}, src::Memory{T}) where {T} = _copyto2arg!(dest, src)
 copyto!(dest::Memory{T}, src::Array{T}) where {T} = _copyto2arg!(dest, src)
 
-# N.B: The generic definition in multidimensional.jl covers, this, this is just here
-# for bootstrapping purposes.
-function fill!(dest::Array{T}, x) where T
+# N.B: This generic definition in for multidimensional arrays is here instead of
+# `multidimensional.jl` for bootstrapping purposes.
+"""
+    fill!(A, x)
+
+Fill array `A` with the value `x`. If `x` is an object reference, all elements will refer to
+the same object. `fill!(A, Foo())` will return `A` filled with the result of evaluating
+`Foo()` once.
+
+# Examples
+```jldoctest
+julia> A = zeros(2,3)
+2×3 Matrix{Float64}:
+ 0.0  0.0  0.0
+ 0.0  0.0  0.0
+
+julia> fill!(A, 2.)
+2×3 Matrix{Float64}:
+ 2.0  2.0  2.0
+ 2.0  2.0  2.0
+
+julia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(undef, 3), a); a[1] = 2; A
+3-element Vector{Vector{Int64}}:
+ [2, 1, 1]
+ [2, 1, 1]
+ [2, 1, 1]
+
+julia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(undef, 3), f())
+3-element Vector{Int64}:
+ 1
+ 1
+ 1
+```
+"""
+function fill!(A::AbstractArray{T}, x) where T
     @inline
-    x = x isa T ? x : convert(T, x)::T
-    return _fill!(dest, x)
+    xT = x isa T ? x : convert(T, x)::T
+    return _fill!(A, xT)
 end
-function _fill!(dest::Array{T}, x::T) where T
-    for i in eachindex(dest)
-        dest[i] = x
+function _fill!(A::AbstractArray{T}, x::T) where T
+    for i in eachindex(A)
+        A[i] = x
     end
-    return dest
+    return A
 end
 
 """
@@ -375,13 +399,14 @@ end
 
 ## Constructors ##
 
-similar(a::Array{T,1}) where {T}                    = Vector{T}(undef, size(a,1))
-similar(a::Array{T,2}) where {T}                    = Matrix{T}(undef, size(a,1), size(a,2))
-similar(a::Array{T,1}, S::Type) where {T}           = Vector{S}(undef, size(a,1))
-similar(a::Array{T,2}, S::Type) where {T}           = Matrix{S}(undef, size(a,1), size(a,2))
+similar(a::Vector{T}) where {T}                    = Vector{T}(undef, size(a,1))
+similar(a::Matrix{T}) where {T}                    = Matrix{T}(undef, size(a,1), size(a,2))
+similar(a::Vector{T}, S::Type) where {T}           = Vector{S}(undef, size(a,1))
+similar(a::Matrix{T}, S::Type) where {T}           = Matrix{S}(undef, size(a,1), size(a,2))
 similar(a::Array{T}, m::Int) where {T}              = Vector{T}(undef, m)
 similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(undef, dims)
 similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(undef, dims)
+similar(::Type{Array{T,N}}, dims::Dims) where {T,N} = similar(Array{T}, dims)
 
 # T[x...] constructs Array{T,1}
 """
@@ -515,7 +540,7 @@ julia> v2
  []
 ```
 
-See also: [`fill!`](@ref), [`zeros`](@ref), [`ones`](@ref), [`similar`](@ref).
+See also [`fill!`](@ref), [`zeros`](@ref), [`ones`](@ref), [`similar`](@ref).
 
 # Examples
 ```jldoctest
@@ -647,7 +672,7 @@ julia> collect(Float64, 1:2:5)
 collect(::Type{T}, itr) where {T} = _collect(T, itr, IteratorSize(itr))
 
 _collect(::Type{T}, itr, isz::Union{HasLength,HasShape}) where {T} =
-    copyto!(_array_for(T, isz, _similar_shape(itr, isz)), itr)
+    copyto!(_array_for_inner(T, isz, _similar_shape(itr, isz)), itr)
 function _collect(::Type{T}, itr, isz::SizeUnknown) where T
     a = Vector{T}()
     for x in itr
@@ -671,12 +696,12 @@ _similar_for(c::AbstractArray, ::Type{T}, itr, ::HasShape, axs) where {T} =
     similar(c, T, axs)
 
 # make a collection appropriate for collecting `itr::Generator`
-_array_for(::Type{T}, ::SizeUnknown, ::Nothing) where {T} = Vector{T}(undef, 0)
-_array_for(::Type{T}, ::HasLength, len::Integer) where {T} = Vector{T}(undef, Int(len))
-_array_for(::Type{T}, ::HasShape{N}, axs) where {T,N} = similar(Array{T,N}, axs)
+_array_for_inner(::Type{T}, ::SizeUnknown, ::Nothing) where {T} = Vector{T}(undef, 0)
+_array_for_inner(::Type{T}, ::HasLength, len::Integer) where {T} = Vector{T}(undef, Int(len))
+_array_for_inner(::Type{T}, ::HasShape{N}, axs) where {T,N} = similar(Array{T,N}, axs)
 
 # used by syntax lowering for simple typed comprehensions
-_array_for(::Type{T}, itr, isz) where {T} = _array_for(T, isz, _similar_shape(itr, isz))
+_array_for(::Type{T}, itr, isz) where {T} = _array_for_inner(T, isz, _similar_shape(itr, isz))
 
 
 """
@@ -802,10 +827,10 @@ function collect(itr::Generator)
         shp = _similar_shape(itr, isz)
         y = iterate(itr)
         if y === nothing
-            return _array_for(et, isz, shp)
+            return _array_for_inner(et, isz, shp)
         end
         v1, st = y
-        dest = _array_for(typeof(v1), isz, shp)
+        dest = _array_for_inner(typeof(v1), isz, shp)
         # The typeassert gives inference a helping hand on the element type and dimensionality
         # (work-around for #28382)
         et′ = et <: Type ? Type : et
@@ -850,6 +875,29 @@ function setindex_widen_up_to(dest::AbstractArray{T}, el, i) where T
     f = first(LinearIndices(dest))
     copyto!(new, first(LinearIndices(new)), dest, f, i-f)
     @inbounds new[i] = el
+    return new
+end
+
+# Batch-widen an array given (index => value) pairs that don't fit the current element type.
+function setindices_widen_up_to(dest::AbstractArray, widen_buffers::Vector{Vector{Pair{Int, Any}}})
+    widen_pairs = reduce(vcat, widen_buffers; init=Pair{Int,Any}[])
+    isempty(widen_pairs) && return dest
+    new_T = eltype(dest)
+    for p in widen_pairs
+        new_T = promote_typejoin(new_T, typeof(p.second))
+    end
+    new_T === eltype(dest) && return dest
+    # Function barrier: specializes on new_T so the compiler sees
+    # concrete element types for both source and destination arrays.
+    return _setindices_widen_up_to(new_T, dest, widen_pairs)
+end
+
+function _setindices_widen_up_to(::Type{T}, dest::AbstractArray, widen_pairs::Vector{Pair{Int, Any}}) where T
+    new = similar(dest, T)
+    copyto!(new, dest)
+    for (idx, val) in widen_pairs
+        @inbounds new[idx] = val
+    end
     return new
 end
 
@@ -996,7 +1044,7 @@ function setindex!(A::Array{T}, x, i::Int) where {T}
 end
 function _setindex!(A::Array{T}, x::T, i::Int) where {T}
     @_noub_if_noinbounds_meta
-    @boundscheck checkbounds(Bool, A, i) || throw_boundserror(A, (i,))
+    @boundscheck checkbounds(A, i)
     memoryrefset!(memoryrefnew(A.ref, i, false), x, :not_atomic, false)
     return A
 end
@@ -1062,14 +1110,14 @@ end
 # Specifically we are wasting ~10% of memory for small arrays
 # by not picking memory sizes that max out a GC pool
 function overallocation(maxsize)
-    maxsize < 8 && return 8;
-    # compute maxsize = maxsize + 4*maxsize^(7/8) + maxsize/8
+    # compute maxsize = maxsize + 3*maxsize^(7/8) + maxsize/8
     # for small n, we grow faster than O(n)
     # for large n, we grow at O(n/8)
     # and as we reach O(memory) for memory>>1MB,
     # this means we end by adding about 10% of memory each time
+    # most commonly, this will take steps of 0-3-9-34 or 1-4-16-66 or 2-8-33
     exp2 = sizeof(maxsize) * 8 - Core.Intrinsics.ctlz_int(maxsize)
-    maxsize += (1 << div(exp2 * 7, 8)) * 4 + div(maxsize, 8)
+    maxsize += (1 << div(exp2 * 7, 8)) * 3 + div(maxsize, 8)
     return maxsize
 end
 
@@ -1116,16 +1164,16 @@ function _growbeg!(a::Vector, delta::Integer)
     delta == 0 && return # avoid attempting to index off the end
     delta >= 0 || throw(ArgumentError("grow requires delta >= 0"))
     ref = a.ref
-    mem = ref.mem
     len = length(a)
     offset = memoryrefoffset(ref)
     newlen = len + delta
-    setfield!(a, :size, (newlen,))
     # if offset is far enough advanced to fit data in existing memory without copying
     if delta <= offset - 1
         setfield!(a, :ref, @inbounds memoryref(ref, 1 - delta))
+        setfield!(a, :size, (newlen,))
     else
         @noinline _growbeg_internal!(a, delta, len)
+        setfield!(a, :size, (newlen,))
     end
     return
 end
@@ -1175,11 +1223,11 @@ function _growend!(a::Vector, delta::Integer)
     len = length(a)
     newlen = len + delta
     offset = memoryrefoffset(ref)
-    setfield!(a, :size, (newlen,))
     newmemlen = offset + newlen - 1
     if memlen < newmemlen
         @noinline _growend_internal!(a, delta, len)
     end
+    setfield!(a, :size, (newlen,))
     return
 end
 
@@ -1197,7 +1245,6 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
     memlen = length(mem)
     newlen = len + delta
     offset = memoryrefoffset(ref)
-    setfield!(a, :size, (newlen,))
     newmemlen = offset + newlen - 1
 
     # which side would we rather grow into?
@@ -1207,11 +1254,13 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
         newref = @inbounds memoryref(mem, offset - delta)
         unsafe_copyto!(newref, ref, i)
         setfield!(a, :ref, newref)
+        setfield!(a, :size, (newlen,))
         for j in i:i+delta-1
             @inbounds _unsetindex!(a, j)
         end
     elseif !prefer_start && memlen >= newmemlen
         unsafe_copyto!(mem, offset - 1 + delta + i, mem, offset - 1 + i, len - i + 1)
+        setfield!(a, :size, (newlen,))
         for j in i:i+delta-1
             @inbounds _unsetindex!(a, j)
         end
@@ -1225,6 +1274,7 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
         unsafe_copyto!(newref, ref, i-1)
         unsafe_copyto!(newmem, newoffset + delta + i - 1, mem, offset + i - 1, len - i + 1)
         setfield!(a, :ref, newref)
+        setfield!(a, :size, (newlen,))
     end
 end
 
@@ -1232,22 +1282,30 @@ end
 function _deletebeg!(a::Vector, delta::Integer)
     delta = Int(delta)
     len = length(a)
-    0 <= delta <= len || throw(ArgumentError("_deletebeg! requires delta in 0:length(a)"))
+    # See comment in _deleteend!
+    if unsigned(delta) > unsigned(len)
+        throw(ArgumentError("_deletebeg! requires delta in 0:length(a)"))
+    end
     for i in 1:delta
         @inbounds _unsetindex!(a, i)
     end
     newlen = len - delta
+    setfield!(a, :size, (newlen,))
     if newlen != 0 # if newlen==0 we could accidentally index past the memory
         newref = @inbounds memoryref(a.ref, delta + 1)
         setfield!(a, :ref, newref)
     end
-    setfield!(a, :size, (newlen,))
     return
 end
 function _deleteend!(a::Vector, delta::Integer)
     delta = Int(delta)
     len = length(a)
-    0 <= delta <= len || throw(ArgumentError("_deleteend! requires delta in 0:length(a)"))
+    # Do the comparison unsigned, to so the compiler knows `len` cannot be negative.
+    # This works because if delta is negative, it will overflow and still trigger.
+    # This enables the compiler to skip the check sometimes.
+    if unsigned(delta) > unsigned(len)
+        throw(ArgumentError("_deleteend! requires delta in 0:length(a)"))
+    end
     newlen = len - delta
     for i in newlen+1:len
         @inbounds _unsetindex!(a, i)
@@ -1384,7 +1442,6 @@ append!(a::AbstractVector, iter...) = (foreach(v -> append!(a, v), iter); a)
 
 function _append!(a::AbstractVector, ::Union{HasLength,HasShape}, iter)
     n = Int(length(iter))::Int
-    i = lastindex(a)
     sizehint!(a, length(a) + n; shrink=false)
     for item in iter
         push!(a, item)
@@ -1500,7 +1557,10 @@ function resize!(a::Vector, nl_::Integer)
     nl = Int(nl_)::Int
     l = length(a)
     if nl > l
-        _growend!(a, nl-l)
+        # Since l is positive, if nl > l, both are positive, and so nl-l is also
+        # positive. But the compiler does not know that, so we mask out top bit.
+        # This allows the compiler to skip the check
+        _growend!(a, (nl-l) & typemax(Int))
     elseif nl != l
         if nl < 0
             _throw_argerror("new length must be ≥ 0")
@@ -1595,7 +1655,7 @@ Remove an item in `collection` and return it. If `collection` is an
 ordered container, the last item is returned; for unordered containers,
 an arbitrary element is returned.
 
-See also: [`popfirst!`](@ref), [`popat!`](@ref), [`delete!`](@ref), [`deleteat!`](@ref), [`splice!`](@ref), and [`push!`](@ref).
+See also [`popfirst!`](@ref), [`popat!`](@ref), [`delete!`](@ref), [`deleteat!`](@ref), [`splice!`](@ref), [`push!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1646,7 +1706,7 @@ are shifted to fill the resulting gap.
 When `i` is not a valid index for `a`, return `default`, or throw an error if
 `default` is not specified.
 
-See also: [`pop!`](@ref), [`popfirst!`](@ref), [`deleteat!`](@ref), [`splice!`](@ref).
+See also [`pop!`](@ref), [`popfirst!`](@ref), [`deleteat!`](@ref), [`splice!`](@ref).
 
 !!! compat "Julia 1.5"
     This function is available as of Julia 1.5.
@@ -1725,7 +1785,6 @@ function pushfirst!(a::Vector{Any}, @nospecialize x)
 end
 function pushfirst!(a::Vector{Any}, @nospecialize x...)
     @_terminates_locally_meta
-    na = length(a)
     nx = length(x)
     _growbeg!(a, nx)
     @_safeindex for i = 1:nx
@@ -1741,7 +1800,7 @@ Remove the first `item` from `collection`.
 
 This function is called `shift` in many other programming languages.
 
-See also: [`pop!`](@ref), [`popat!`](@ref), [`delete!`](@ref).
+See also [`pop!`](@ref), [`popat!`](@ref), [`delete!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1781,7 +1840,7 @@ end
 Insert an `item` into `a` at the given `index`. `index` is the index of `item` in
 the resulting `a`.
 
-See also: [`push!`](@ref), [`replace`](@ref), [`popat!`](@ref), [`splice!`](@ref).
+See also [`push!`](@ref), [`replace`](@ref), [`popat!`](@ref), [`splice!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1796,12 +1855,12 @@ julia> insert!(Any[1:6;], 3, "here")
  6
 ```
 """
-function insert!(a::Array{T,1}, i::Integer, item) where T
+function insert!(a::Vector{T}, i::Integer, item) where T
     @_propagate_inbounds_meta
     item = item isa T ? item : convert(T, item)::T
     return _insert!(a, i, item)
 end
-function _insert!(a::Array{T,1}, i::Integer, item::T) where T
+function _insert!(a::Vector{T}, i::Integer, item::T) where T
     @_noub_meta
     # Throw convert error before changing the shape of the array
     _growat!(a, i, 1)
@@ -1816,7 +1875,7 @@ end
 Remove the item at the given `i` and return the modified `a`. Subsequent items
 are shifted to fill the resulting gap.
 
-See also: [`keepat!`](@ref), [`delete!`](@ref), [`popat!`](@ref), [`splice!`](@ref).
+See also [`keepat!`](@ref), [`delete!`](@ref), [`popat!`](@ref), [`splice!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1839,7 +1898,6 @@ function deleteat!(a::Vector, r::AbstractUnitRange{<:Integer})
     if eltype(r) === Bool
         return invoke(deleteat!, Tuple{Vector, AbstractVector{Bool}}, a, r)
     else
-        n = length(a)
         f = first(r)
         f isa Bool && depwarn("passing Bool as an index is deprecated", :deleteat!)
         isempty(r) || _deleteat!(a, f, length(r))
@@ -1958,7 +2016,7 @@ Subsequent items are shifted left to fill the resulting gap.
 If specified, replacement values from an ordered
 collection will be spliced in place of the removed item.
 
-See also: [`replace`](@ref), [`delete!`](@ref), [`deleteat!`](@ref), [`pop!`](@ref), [`popat!`](@ref).
+See also [`replace`](@ref), [`delete!`](@ref), [`deleteat!`](@ref), [`pop!`](@ref), [`popat!`](@ref).
 
 # Examples
 ```jldoctest
@@ -2202,7 +2260,7 @@ end
 # 1d special cases of reverse(A; dims) and reverse!(A; dims):
 for (f,_f) in ((:reverse,:_reverse), (:reverse!,:_reverse!))
     @eval begin
-        $f(A::AbstractVector; dims=:) = $_f(A, dims)
+        $f(A::AbstractVector; dims::D=:) where {D} = $_f(A, dims)
         $_f(A::AbstractVector, ::Colon) = $f(A, firstindex(A), lastindex(A))
         $_f(A::AbstractVector, dim::Tuple{Integer}) = $_f(A, first(dim))
         function $_f(A::AbstractVector, dim::Integer)
@@ -2291,7 +2349,7 @@ function vcat(arrays::Vector{T}...) where T
     nd = 1
     for a in arrays
         na = length(a)
-        @assert nd + na <= 1 + length(arr) # Concurrent modification of arrays?
+        @assert nd + na <= 1 + length(arr) "Concurrent modification of arrays?"
         unsafe_copyto!(arr, nd, a, 1, na)
         nd += na
     end
@@ -2347,7 +2405,7 @@ To search for other kinds of values, pass a predicate as the first argument.
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
-See also: [`findall`](@ref), [`findnext`](@ref), [`findlast`](@ref), [`searchsortedfirst`](@ref).
+See also [`findall`](@ref), [`findnext`](@ref), [`findlast`](@ref), [`searchsortedfirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -2497,7 +2555,7 @@ or `nothing` if not found.
 Indices are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
-See also: [`findnext`](@ref), [`findfirst`](@ref), [`findall`](@ref).
+See also [`findnext`](@ref), [`findfirst`](@ref), [`findall`](@ref).
 
 # Examples
 ```jldoctest
@@ -2533,7 +2591,7 @@ Return `nothing` if there is no `true` value in `A`.
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
-See also: [`findfirst`](@ref), [`findprev`](@ref), [`findall`](@ref).
+See also [`findfirst`](@ref), [`findprev`](@ref), [`findall`](@ref).
 
 # Examples
 ```jldoctest
@@ -2739,7 +2797,7 @@ To search for other kinds of values, pass a predicate as the first argument.
 Indices or keys are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
 
-See also: [`findfirst`](@ref), [`searchsorted`](@ref).
+See also [`findfirst`](@ref), [`searchsorted`](@ref).
 
 # Examples
 ```jldoctest
@@ -2799,7 +2857,7 @@ Return an array containing the first index in `b` for
 each value in `a` that is a member of `b`. The output
 array contains `nothing` wherever `a` is not a member of `b`.
 
-See also: [`sortperm`](@ref), [`findfirst`](@ref).
+See also [`sortperm`](@ref), [`findfirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -2914,10 +2972,11 @@ end
 
 function indcopy(sz::Dims, I::Tuple{Vararg{RangeIndex}})
     n = length(I)
-    s = sz[n]
+    _s = sz[n]
     for i = n+1:length(sz)
-        s *= sz[i]
+        _s *= sz[i]
     end
+    s = _s
     dst::typeof(I) = ntuple(i-> _findin(I[i], i < n ? (1:sz[i]) : (1:s)), n)::typeof(I)
     src::typeof(I) = ntuple(i-> I[i][_findin(I[i], i < n ? (1:sz[i]) : (1:s))], n)::typeof(I)
     dst, src
@@ -2934,7 +2993,7 @@ The function `f` is passed one argument.
 !!! compat "Julia 1.4"
     Support for `a` as a tuple requires at least Julia 1.4.
 
-See also: [`filter!`](@ref), [`Iterators.filter`](@ref).
+See also [`filter!`](@ref), [`Iterators.filter`](@ref).
 
 # Examples
 ```jldoctest
@@ -3133,14 +3192,17 @@ setdiff!(  v::AbstractVector, itrs...) = _shrink!(setdiff!, v, itrs)
 
 vectorfilter(T::Type, f, v) = T[x for x in v if f(x)]
 
-function _shrink(shrinker!::F, itr, itrs) where F
+function intersect(itr, itrs...)
     T = promote_eltype(itr, itrs...)
-    keep = shrinker!(Set{T}(itr), itrs...)
+    keep = intersect!(Set{T}(itr), itrs...)
     vectorfilter(T, _shrink_filter!(keep), itr)
 end
 
-intersect(itr, itrs...) = _shrink(intersect!, itr, itrs)
-setdiff(  itr, itrs...) = _shrink(setdiff!, itr, itrs)
+function setdiff(itr, itrs...)
+    T = eltype(itr)
+    keep = setdiff!(Set{T}(itr), itrs...)
+    vectorfilter(T, _shrink_filter!(keep), itr)
+end
 
 function intersect(v::AbstractVector, r::AbstractRange)
     T = promote_eltype(v, r)

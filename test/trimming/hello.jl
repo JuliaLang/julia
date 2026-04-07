@@ -1,10 +1,6 @@
-world::String = "world!"
-const str = OncePerProcess{String}() do
-    return "Hello, " * world
-end
+# Test that minimal executable size stays low
 
 function @main(args::Vector{String})::Cint
-    println(Core.stdout, str())
-    foreach(x->println(Core.stdout, x), args)
+    println(Core.stdout, "Hello, world!")
     return 0
 end

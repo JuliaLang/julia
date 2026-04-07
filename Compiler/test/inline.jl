@@ -631,10 +631,12 @@ g41299(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)
 
 # https://github.com/JuliaLang/julia/issues/42078
 # idempotency of callsite inlining
-function getcache(mi::Core.MethodInstance)
+function getcacheci(mi::Core.MethodInstance)
     cache = Compiler.code_cache(Compiler.NativeInterpreter())
     codeinst = Compiler.get(cache, mi, nothing)
-    return isnothing(codeinst) ? nothing : codeinst
+    codeinst === nothing && return nothing
+    codeinst isa Compiler.InferenceResult && (codeinst = codeinst.ci)
+    return codeinst
 end
 @noinline f42078(a) = sum(sincos(a))
 let
@@ -652,7 +654,7 @@ let
     end
     let # make sure to discard the inferred source
         mi = only(methods(f42078)).specializations::Core.MethodInstance
-        codeinst = getcache(mi)::Core.CodeInstance
+        codeinst = getcacheci(mi)::Core.CodeInstance
         @atomic codeinst.inferred = nothing
     end
 
@@ -1731,7 +1733,7 @@ let src = code_typed1(with_unmatched_typeparam)
             break
         end
     end
-    @test isnothing(found) || (source=src, statement=found)
+    @test isnothing(found) context=(; source=src, statement=found)
 end
 
 function twice_sitofp(x::Int, y::Int)
@@ -1856,7 +1858,7 @@ let i::Int, continue_::Bool
     i = findfirst(isinvoke(:func_mul_int), ir.stmts.stmt)
     @test i !== nothing
     # now delete the callsite flag, and see the second inlining pass can inline the call
-    @eval Compiler $ir.stmts[$i][:flag] &= ~IR_FLAG_NOINLINE
+    ir.stmts[i][:flag] &= ~Compiler.IR_FLAG_NOINLINE
     inlining = Compiler.InliningState(interp)
     ir = Compiler.ssa_inlining_pass!(ir, inlining, false)
     @test findfirst(isinvoke(:func_mul_int), ir.stmts.stmt) === nothing
@@ -1879,22 +1881,12 @@ let i::Int, continue_::Bool
     ir, = only(Base.code_ircode(multi_inlining2, (Int,Int); optimize_until="CC: INLINING", interp))
     i = findfirst(isinvoke(:func_mul_int), ir.stmts.stmt)
     @test i !== nothing
-    # now delete the callsite flag, and see the second inlining pass can inline the call
-    @eval Compiler $ir.stmts[$i][:flag] &= ~IR_FLAG_NOINLINE
+    # now delete the callsite flag, and see the second inlining pass does not inline the call, since inference recorded it should not
+    ir.stmts[i][:flag] &= ~Compiler.IR_FLAG_NOINLINE
     inlining = Compiler.InliningState(interp)
     ir = Compiler.ssa_inlining_pass!(ir, inlining, false)
-    @test findfirst(isinvoke(:func_mul_int), ir.stmts.stmt) === nothing
-    @test (i = findfirst(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.stmt)) !== nothing
-    lins = Compiler.IRShow.buildLineInfoNode(ir.debuginfo, nothing, i)
-    @test_broken (continue_ = length(lins) == 3) # see TODO in `ir_inline_linetable!`
-    if continue_
-        def1 = lins[1].method
-        @test def1 isa Core.MethodInstance && def1.def.name === :multi_inlining2
-        def2 = lins[2].method
-        @test def2 isa Core.MethodInstance && def2.def.name === :call_func_mul_int
-        def3 = lins[3].method
-        @test def3 isa Core.MethodInstance && def3.def.name === :call_func_mul_int
-    end
+    @test findfirst(isinvoke(:func_mul_int), ir.stmts.stmt) !== nothing
+    @test findfirst(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.stmt) === nothing
 end
 
 # Test special purpose inliner for Core.ifelse
@@ -2312,6 +2304,62 @@ end
 g_noinline_invoke(x) = f_noinline_invoke(x)
 let src = code_typed1(g_noinline_invoke, (Union{Symbol,Nothing},))
     @test !any(@nospecialize(x)->isa(x,GlobalRef), src.code)
+end
+
+path = Ref{Symbol}(:unknown)
+function f59018_generator(x)
+    if @generated
+        if x isa DataType && x.name === Type.body.name
+            path[] = :generator
+            return Core.sizeof(x.parameters[1])
+        end
+    else
+        path[] = :fallback
+        return Core.sizeof(x.parameters[1])
+    end
+end
+f59018() = f59018_generator(Base.inferencebarrier(Int64))
+let src = code_typed1(f59018, ())
+    # We should hit a dynamic dispatch, because not enough information
+    # is available to expand the generator during compilation.
+    @test iscall((src, f59018_generator), src.code[end - 1])
+    @test path[] === :unknown
+    @test f59018() === 8
+    @test path[] === :generator
+end
+
+# https://github.com/JuliaLang/julia/issues/58915
+f58915(nt) = @inline Base.setindex(nt, 2, :next)
+# This function should fully-inline, i.e. it should have only built-in / intrinsic calls
+# and no invokes or dynamic calls of user code
+let src = code_typed1(f58915, Tuple{@NamedTuple{next::UInt32,prev::UInt32}})
+    # Any calls should be built-in calls
+    @test count(iscall(f->!isa(singleton_type(argextype(f, src)), Core.Builtin)), src.code) == 0
+    # There should be no invoke at all
+    @test count(isinvoke(Returns(true)), src.code) == 0
+end
+
+# https://github.com/JuliaLang/julia/issues/58915#issuecomment-3061421895
+let src = code_typed1(Base.setindex, (@NamedTuple{next::UInt32,prev::UInt32}, Int, Symbol))
+    @test count(isinvoke(:merge_fallback), src.code) == 0
+    @test count(iscall((src, Base.merge_fallback)), src.code) == 0
+end
+
+# @nospecialize annotation on uunamed arguments
+# https://github.com/JuliaLang/julia/issues/44428
+@noinline _issue44428_1(@nospecialize _::Any) = println(Base.inferencebarrier(0))
+@noinline _issue44428_2(@nospecialize ::Any) = println(Base.inferencebarrier(0))
+@noinline _issue44428_3(@nospecialize _) = println(Base.inferencebarrier(0))
+function issue44428(x)
+    _issue44428_1(x)
+    _issue44428_2(x)
+    _issue44428_3(x)
+end
+let src = code_typed1(issue44428, (Any,))
+    @test count(isinvoke(:_issue44428_1), src.code) == 1
+    @test count(isinvoke(:_issue44428_2), src.code) == 1
+    @test count(isinvoke(:_issue44428_3), src.code) == 1
+    @test count(x->Meta.isexpr(x,:call), src.code) == 0
 end
 
 end # module inline_tests

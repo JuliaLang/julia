@@ -367,10 +367,11 @@ JL_DLLEXPORT void jl_gc_enable_finalizers(jl_task_t *ct, int on)
         JL_CATCH {
             jl_printf((JL_STREAM*)STDERR_FILENO, "WARNING: GC finalizers already enabled on this thread.\n");
             // Only print the backtrace once, to avoid spamming the logs
-            static int backtrace_printed = 0;
-            if (backtrace_printed == 0) {
-                backtrace_printed = 1;
-                jlbacktrace(); // written to STDERR_FILENO
+            static _Atomic(int) backtrace_printed = 0;
+            if (jl_atomic_load_relaxed(&backtrace_printed) == 0) {
+              if (jl_atomic_exchange_relaxed(&backtrace_printed, 1) == 0) {
+                  jlbacktrace(); // written to STDERR_FILENO
+              }
             }
         }
         return;
@@ -623,6 +624,11 @@ int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
     else if (vt == jl_simplevector_type) {
         start = (char*)jl_svec_data(obj);
         len = jl_svec_len(obj);
+    }
+    else if (vt->name == jl_genericmemory_typename) {
+        jl_genericmemory_t *mem = (jl_genericmemory_t*)obj;
+        start = (char*)mem->ptr;
+        len = mem->length;
     }
     if (slot < start || slot >= start + elsize * len)
         return -1;

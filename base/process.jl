@@ -84,7 +84,7 @@ function _uv_hook_close(proc::Process)
     nothing
 end
 
-const SpawnIO  = Union{IO, RawFD, OS_HANDLE, SyncCloseFD} # internal copy of Redirectable, removing FileRedirect and adding SyncCloseFD
+const SpawnIO  = Union{IO, IOServer, RawFD, OS_HANDLE, SyncCloseFD} # internal copy of Redirectable, removing FileRedirect and adding SyncCloseFD
 const SpawnIOs = Memory{SpawnIO} # convenience name for readability (used for dispatch also to clearly distinguish from Vector{Redirectable})
 
 function as_cpumask(cpus::Vector{UInt16})
@@ -113,13 +113,20 @@ end
         syncd = Task[io.t for io in stdio if io isa SyncCloseFD]
         handle = Libc.malloc(_sizeof_uv_process)
         disassociate_julia_struct(handle)
-        (; exec, flags, env, dir) = cmd
+        (; exec, flags, env, dir, uid, gid) = cmd
         flags ⊻= UV_PROCESS_WINDOWS_DISABLE_EXACT_NAME # libuv inverts the default for this, so flip this bit now
+        if uid !== nothing
+            flags |= UV_PROCESS_SETUID
+        end
+        if gid !== nothing
+            flags |= UV_PROCESS_SETGID
+        end
         iolock_begin()
         err = ccall(:jl_spawn, Int32,
                   (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid},
                    Ptr{Tuple{Cint, UInt}}, Int,
-                   UInt32, Ptr{Cstring}, Cstring, Ptr{Bool}, Csize_t, Ptr{Cvoid}),
+                   UInt32, Ptr{Cstring}, Cstring, Ptr{Bool}, Csize_t,
+                   UInt32, UInt32, Ptr{Cvoid}),
             file, exec, loop, handle,
             iohandles, length(iohandles),
             flags,
@@ -127,19 +134,20 @@ end
             isempty(dir) ? C_NULL : dir,
             cpumask === nothing ? C_NULL : cpumask,
             cpumask === nothing ? 0 : length(cpumask),
+            uid === nothing ? typemax(UInt32) : uid,
+            gid === nothing ? typemax(UInt32) : gid,
             @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32)))
         if err == 0
             pp = Process(cmd, handle, syncd)
             associate_julia_struct(handle, pp)
+            iolock_end()
+            return pp
         else
             ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), handle) # will call free on handle eventually
+            iolock_end()
+            throw(_UVError("could not spawn " * repr(cmd), err))
         end
-        iolock_end()
     end
-    if err != 0
-        throw(_UVError("could not spawn " * repr(cmd), err))
-    end
-    return pp
 end
 
 _spawn(cmds::AbstractCmd) = _spawn(cmds, SpawnIOs())
@@ -341,13 +349,13 @@ close_stdio(stdio::SyncCloseFD) = close_stdio(stdio.fd)
 
 spawn_opts_swallow(stdios::StdIOSet) = Redirectable[stdios...]
 spawn_opts_inherit(stdios::StdIOSet) = Redirectable[stdios...]
-spawn_opts_swallow(in::Redirectable=devnull, out::Redirectable=devnull, err::Redirectable=devnull) =
-    Redirectable[in, out, err]
+spawn_opts_swallow(in::Redirectable=devnull, out::Redirectable=devnull, err::Redirectable=devnull, extra::Redirectable...) =
+    Redirectable[in, out, err, extra...]
 # pass original descriptors to child processes by default, because we might
 # have already exhausted and closed the libuv object for our standard streams.
 # ref issue #8529
-spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::Redirectable=RawFD(2)) =
-    Redirectable[in, out, err]
+spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::Redirectable=RawFD(2), extra::Redirectable...) =
+    Redirectable[in, out, err, extra...]
 
 function eachline(cmd::AbstractCmd; keep::Bool=false)
     out = PipeEndpoint()
@@ -544,11 +552,13 @@ const SIGHUP  = 1
 const SIGINT  = 2
 const SIGQUIT = 3 # !windows
 const SIGKILL = 9
+const SIGUSR1 = Sys.isapple() ? 30 : 10 # !windows
 const SIGPIPE = 13 # !windows
 const SIGTERM = 15
+const SIGINFO = 29 # apple/BSD only; use SIGUSR1 on linux
 
 function test_success(proc::Process)
-    @assert process_exited(proc)
+    @assert process_exited(proc) "process did not exit successfully"
     if proc.exitcode < 0
         #TODO: this codepath is not currently tested
         throw(_UVError("could not start process " * repr(proc.cmd), proc.exitcode))
@@ -626,7 +636,7 @@ permissions).
 function kill(p::Process, signum::Integer=SIGTERM)
     iolock_begin()
     if process_running(p)
-        @assert p.handle != C_NULL
+        @assert p.handle != C_NULL "invalid handle"
         err = ccall(:uv_process_kill, Int32, (Ptr{Cvoid}, Int32), p.handle, signum)
         if err != 0 && err != UV_ESRCH
             throw(_UVError("kill", err))

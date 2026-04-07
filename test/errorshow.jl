@@ -5,13 +5,20 @@ using Random, LinearAlgebra
 # For curmod_*
 include("testenv.jl")
 
-# re-register only the error hints that are being tested here (
-Base.Experimental.register_error_hint(Base.noncallable_number_hint_handler, MethodError)
-Base.Experimental.register_error_hint(Base.string_concatenation_hint_handler, MethodError)
-Base.Experimental.register_error_hint(Base.methods_on_iterable, MethodError)
-Base.Experimental.register_error_hint(Base.nonsetable_type_hint_handler, MethodError)
-Base.Experimental.register_error_hint(Base.fielderror_listfields_hint_handler, FieldError)
-Base.Experimental.register_error_hint(Base.fielderror_dict_hint_handler, FieldError)
+# re-register only the error hints that are being tested here,
+# but only if they aren't already registered (they are in the sysimage)
+function _register_if_missing(@nospecialize(handler), @nospecialize(exct::Type))
+    list = get(Base.Experimental._hint_handlers, Core.typename(exct), nothing)
+    if list === nothing || !any(((_, h),) -> h === handler, list)
+        Base.Experimental.register_error_hint(handler, exct)
+    end
+end
+_register_if_missing(Base.noncallable_number_hint_handler, MethodError)
+_register_if_missing(Base.string_concatenation_hint_handler, MethodError)
+_register_if_missing(Base.methods_on_iterable, MethodError)
+_register_if_missing(Base.nonsetable_type_hint_handler, MethodError)
+_register_if_missing(Base.fielderror_listfields_hint_handler, FieldError)
+_register_if_missing(Base.fielderror_dict_hint_handler, FieldError)
 @testset "SystemError" begin
     err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
     errs = sprint(Base.showerror, err)
@@ -181,9 +188,10 @@ error_out3 = String(take!(buf))
 @test occursin("method_c6(; x) got unsupported keyword argument \"y\"$cmod$cfile$(c6line + 1)", error_out)
 @test occursin("method_c6(!Matched::Any; y)$cmod$cfile$(c6line + 2)", error_out)
 @test occursin("method_c6(::Any; y) got unsupported keyword argument \"x\"$cmod$cfile$(c6line + 2)", error_out1)
-@test occursin("method_c6_in_module(; x) got unsupported keyword argument \"y\"$cmod$cfile$(c6mline + 2)", error_out2)
-@test occursin("method_c6_in_module(!Matched::Any; y)$cmod$cfile$(c6mline + 3)", error_out2)
-@test occursin("method_c6_in_module(::Any; y) got unsupported keyword argument \"x\"$cmod$cfile$(c6mline + 3)", error_out3)
+c6mmod = "\n   @ $(Base.parentmodule_before_main(TestKWError))"
+@test occursin("method_c6_in_module(; x) got unsupported keyword argument \"y\"$c6mmod$cfile$(c6mline + 2)", error_out2)
+@test occursin("method_c6_in_module(!Matched::Any; y)$c6mmod$cfile$(c6mline + 3)", error_out2)
+@test occursin("method_c6_in_module(::Any; y) got unsupported keyword argument \"x\"$c6mmod$cfile$(c6mline + 3)", error_out3)
 
 c7line = @__LINE__() + 1
 method_c7(a, b; kargs...) = a
@@ -372,7 +380,7 @@ let undefvar
     err_str = @except_str Vector{Any}(undef, 1)[1] UndefRefError
     @test err_str == "UndefRefError: access to undefined reference"
     err_str = @except_str undefvar UndefVarError
-    @test err_str == "UndefVarError: `undefvar` not defined in local scope"
+    @test startswith(err_str, "UndefVarError: `undefvar` not defined in local scope")
     err_str = @except_str read(IOBuffer(), UInt8) EOFError
     @test err_str == "EOFError: read end of file"
     err_str = @except_str Dict()[:doesnotexist] KeyError
@@ -740,7 +748,7 @@ let err_str
     @test occursin(Regex("MethodError: no method matching one\\(::.*HasNoOne; value::$(Int)\\)"), err_str)
     @test occursin("`one` doesn't take keyword arguments, that would be silly", err_str)
 end
-pop!(Base.Experimental._hint_handlers[MethodError])  # order is undefined, don't copy this
+pop!(Base.Experimental._hint_handlers[Core.typename(MethodError)])  # order is undefined, don't copy this
 
 function busted_hint(io, exc, notarg)  # wrong number of args
     print(io, "\nI don't have a hint for you, sorry")
@@ -752,7 +760,7 @@ catch ex
     io = IOBuffer()
     @test_logs (:error, "Hint-handler busted_hint for DomainError in $(@__MODULE__) caused an error") showerror(io, ex)
 end
-pop!(Base.Experimental._hint_handlers[DomainError])  # order is undefined, don't copy this
+pop!(Base.Experimental._hint_handlers[Core.typename(DomainError)])  # order is undefined, don't copy this
 
 struct ANumber <: Number end
 let err_str = @except_str ANumber()(3 + 4) MethodError
@@ -878,22 +886,22 @@ end
     @test lstrip(lstrip(output[5])[4:end])[1:3] == "[2]"
     @test occursin("g28442b", output[5])
 
-    @test startswith(lstrip(output[8]), "┌┌ ")
-    @test occursin("h28442b", output[8])
-    @test startswith(lstrip(output[10]), "├├ ")
-    @test occursin("g28442b", output[10])
-
-    @test startswith(lstrip(output[13]), "├┌ ")
-    @test occursin("f28442b", output[13])
-    @test startswith(lstrip(output[15]), "├├ ")
-    @test occursin("g28442b", output[15])
-
-    @test occursin("f28442b", output[19])
-
     is_windows_32_bit = Sys.iswindows() && (Sys.WORD_SIZE == 32)
     if is_windows_32_bit
         # Assuming tests are broken on 32-bit Windows as above, no need to repeat loose tests here.
     else
+        @test startswith(lstrip(output[8]), "┌┌ ")
+        @test occursin("h28442b", output[8])
+        @test startswith(lstrip(output[10]), "├├ ")
+        @test occursin("g28442b", output[10])
+
+        @test startswith(lstrip(output[13]), "├┌ ")
+        @test occursin("f28442b", output[13])
+        @test startswith(lstrip(output[15]), "├├ ")
+        @test occursin("g28442b", output[15])
+
+        @test occursin("f28442b", output[19])
+
         @test occursin("repeated 10 times", output[7])
         @test lstrip(lstrip(output[8])[7:end])[1:4] == "[21]"
         @test lstrip(lstrip(output[10])[7:end])[1:4] == "[22]"
@@ -1475,4 +1483,59 @@ let err_str
     f56325 = x->x+1
     err_str = @except_str f56325(1,2) MethodError
     @test occursin("The anonymous function", err_str)
+end
+
+# Test that error hints catch abstract exception supertypes (issue #58367)
+
+module Hinterland
+
+abstract type AbstractHintableException <: Exception end
+struct ConcreteHintableException <: AbstractHintableException end
+gonnathrow() = throw(ConcreteHintableException())
+
+function Base.showerror(io::IO, exc::ConcreteHintableException)
+    print(io, "This is my exception")
+    Base.Experimental.show_error_hints(io, exc)
+end
+
+function __init__()
+    Base.Experimental.register_error_hint(ConcreteHintableException) do io, exc
+        print(io, "\nThis hint caught my concrete exception type")
+    end
+    Base.Experimental.register_error_hint(AbstractHintableException) do io, exc
+        print(io, "\nThis other hint caught my abstract exception supertype")
+    end
+end
+
+end
+
+@testset "Hints for abstract exception supertypes" begin
+    exc = try
+        Hinterland.gonnathrow()
+    catch e
+        e
+    end
+    exc_print = sprint(Base.showerror, exc)
+    @test occursin("This hint caught my concrete exception type", exc_print)
+    @test occursin("This other hint caught my abstract exception supertype", exc_print)
+end
+
+@testset "MemoryRef BoundsError summary" begin
+    mem = Memory{Int}(undef, 10)
+    ref = memoryref(mem, 9)
+    err_str = @except_str memoryref(ref, 3) BoundsError
+    @test occursin("MemoryRef", err_str)
+    @test occursin("2-element", err_str)
+    @test occursin(" at index [3]", err_str)
+
+    ref2 = memoryref(mem, 10)
+    err_str2 = @except_str memoryref(ref2, 2) BoundsError
+    @test occursin("MemoryRef", err_str2)
+    @test occursin("1-element", err_str2)
+
+    memA = AtomicMemory{Int}(undef, 4)
+    refA = memoryref(memA, 4)
+    err_strA = @except_str memoryref(refA, 2) BoundsError
+    @test occursin("AtomicMemoryRef", err_strA)
+    @test occursin("1-element", err_strA)
 end

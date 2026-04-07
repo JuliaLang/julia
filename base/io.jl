@@ -3,6 +3,13 @@
 # Generic IO stubs -- all subtypes should implement these (if meaningful)
 
 """
+    IO
+
+Abstract supertype for input/output types.
+"""
+IO
+
+"""
     EOFError()
 
 No more data was available to read from a file or stream.
@@ -24,7 +31,9 @@ struct SystemError <: Exception
 end
 
 lock(::IO) = nothing
+typeof(lock).name.max_methods = UInt8(1)
 unlock(::IO) = nothing
+typeof(unlock).name.max_methods = UInt8(1)
 
 """
     reseteof(io)

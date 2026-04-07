@@ -21,7 +21,7 @@ function contains_is(itr, @nospecialize(x))
     return false
 end
 
-anymap(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i in 1:length(a) ]
+anymap(f::Function, a::Vector{Any}) = Any[ f(a[i]) for i in 1:length(a) ]
 
 ############
 # inlining #
@@ -167,9 +167,8 @@ isa_compileable_sig(@nospecialize(atype), sparams::SimpleVector, method::Method)
     !iszero(ccall(:jl_isa_compileable_sig, Int32, (Any, Any, Any), atype, sparams, method))
 
 isa_compileable_sig(m::MethodInstance) = (def = m.def; !isa(def, Method) || isa_compileable_sig(m.specTypes, m.sparam_vals, def))
-isa_compileable_sig(m::ABIOverride) = false
+isa_compileable_sig(::ABIOverride) = false
 
-has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v) != 0
 
 """
     is_declared_inline(method::Method)::Bool
@@ -269,7 +268,7 @@ function foreach_anyssa(@specialize(f), @nospecialize(stmt))
 end
 
 function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
-    uses = BitSet[ BitSet() for i = 1:nvals ]
+    uses = BitSet[ BitSet() for _ = 1:nvals ]
     for line in 1:length(body)
         e = body[line]
         if isa(e, ReturnNode)

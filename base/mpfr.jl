@@ -990,9 +990,7 @@ end
 # Utility functions
 ==(x::BigFloat, y::BigFloat) = ccall((:mpfr_equal_p, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), x, y) != 0
 <=(x::BigFloat, y::BigFloat) = ccall((:mpfr_lessequal_p, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), x, y) != 0
->=(x::BigFloat, y::BigFloat) = ccall((:mpfr_greaterequal_p, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), x, y) != 0
 <(x::BigFloat, y::BigFloat) = ccall((:mpfr_less_p, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), x, y) != 0
->(x::BigFloat, y::BigFloat) = ccall((:mpfr_greater_p, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}), x, y) != 0
 
 function cmp(x::BigFloat, y::BigInt)
     isnan(x) && return 1
@@ -1256,7 +1254,7 @@ function _prettify_bigfloat(s::String)::String
         else
             neg = startswith(int, '-')
             neg == true && (int = lstrip(int, '-'))
-            @assert length(int) == 1
+            @assert length(int) == 1 "length(int) != 1"
             string(neg ? '-' : "", '0', '.', '0'^(-expo-1), int, frac == "0" ? "" : frac)
         end
     else

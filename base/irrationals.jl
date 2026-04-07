@@ -200,6 +200,8 @@ for op in Symbol[:+, :-, :*, :/, :^]
 end
 *(x::Bool, y::AbstractIrrational) = ifelse(x, Float64(y), 0.0)
 
+^(x::AbstractIrrational, y::Integer) = float(x)^y
+
 round(x::Irrational, r::RoundingMode) = round(float(x), r)
 
 """
@@ -253,7 +255,7 @@ function irrational(sym, val, def)
     bigconvert = isa(def,Symbol) ? quote
         function Base.BigFloat(::Irrational{$qsym}, r::MPFR.MPFRRoundingMode=Rounding.rounding_raw(BigFloat); precision=precision(BigFloat))
             c = BigFloat(;precision=precision)
-            ccall(($(string("mpfr_const_", def)), :libmpfr),
+            ccall(($(string("mpfr_const_", def)), Base.MPFR.libmpfr),
                   Cint, (Ref{BigFloat}, MPFR.MPFRRoundingMode), c, r)
             return c
         end

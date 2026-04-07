@@ -48,7 +48,7 @@ end
 
 @propagate_inbounds SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
 @propagate_inbounds SubString(s::T, i::Int, j::Int, v::Val{:noshift}) where {T<:AbstractString} = SubString{T}(s, i, j, v)
-@propagate_inbounds SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s)) = SubString(s, Int(i), Int(j))
+@propagate_inbounds SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s)) = SubString(s, Int(i)::Int, Int(j)::Int)
 @propagate_inbounds SubString(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, first(r), last(r))
 
 @propagate_inbounds function SubString(s::SubString, i::Int, j::Int)
@@ -109,8 +109,8 @@ function isvalid(s::SubString, i::Integer)
     @inbounds return ib && isvalid(s.string, s.offset + i)::Bool
 end
 
-thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
-nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
+@propagate_inbounds thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
+@propagate_inbounds nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
 
 parent(s::SubString) = s.string
 parentindices(s::SubString) = (s.offset + 1 : thisind(s.string, s.offset + s.ncodeunits),)

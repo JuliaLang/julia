@@ -197,6 +197,9 @@ function parse(::Type{IPv4}, str::AbstractString)
     fields = split(str,'.')
     i = 1
     ret = 0
+    if length(fields) != 4
+        throw(ArgumentError("IPv4 addresses must be specified as a dotted quad"))
+    end
     for f in fields
         if isempty(f)
             throw(ArgumentError("empty field in IPv4 address"))
@@ -206,17 +209,10 @@ function parse(::Type{IPv4}, str::AbstractString)
         else
             r = parse(Int, f, base = 10)
         end
-        if i != length(fields)
-            if r < 0 || r > 255
-                throw(ArgumentError("IPv4 field out of range (must be 0-255)"))
-            end
-            ret |= UInt32(r) << ((4-i)*8)
-        else
-            if r > ((UInt64(1)<<((5-length(fields))*8))-1)
-                throw(ArgumentError("IPv4 field too large"))
-            end
-            ret |= r
+        if r < 0 || r > 255
+            throw(ArgumentError("IPv4 field out of range (must be 0-255)"))
         end
+        ret |= UInt32(r) << ((4-i)*8)
         i+=1
     end
     IPv4(ret)

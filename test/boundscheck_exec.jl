@@ -318,8 +318,7 @@ if bc_opt == bc_default
     for T in [Memory] # This requires changing the pointer_from_objref to something llvm sees through
         for ET in [Int, Float32, Union{Int, Float64}]
             no_allocate(T{ET}) #compile
-            # allocations aren't removed for Union eltypes which they theoretically could be eventually
-            test_alloc(T{ET}, broken=(ET==Union{Int, Float64}))
+            test_alloc(T{ET})
         end
     end
     function f() # this was causing a bug on an in progress version of #55913.
@@ -349,8 +348,9 @@ if bc_opt == bc_default
         m2 = Memory{Int}(undef,n)
         m1 === m2
     end
-    no_alias_prove(1)
-    @test (@allocated no_alias_prove(5)) == 0
+    no_alias_prove5() = no_alias_prove(5)
+    no_alias_prove5()
+    @test (@allocated no_alias_prove5()) == 0
 end
 
 @testset "automatic boundscheck elision for iteration on some important types" begin

@@ -9,6 +9,7 @@ MMTK_VARS := MMTK_PLAN=$(MMTK_PLAN) MMTK_MOVING=$(MMTK_MOVING)
 ifneq ($(USE_BINARYBUILDER_MMTK_JULIA),1)
 $(eval $(call git-external,mmtk_julia,MMTK_JULIA,,,$(BUILDDIR)))
 get-mmtk_julia: $(MMTK_JULIA_SRC_FILE)
+.PHONY: get-mmtk_julia
 
 # Download the binding, build it from source
 ifeq (${MMTK_JULIA_DIR},$(BUILDROOT)/usr/lib/mmtk_julia)
@@ -33,6 +34,23 @@ compile-mmtk_julia: $(BUILDROOT)/usr/lib/libmmtk_julia.so
 fastcheck-mmtk_julia: #none
 check-mmtk_julia: compile-mmtk_julia
 
+.PHONY: extract-mmtk_julia
+.PHONY: configure-mmtk_julia
+.PHONY: compile-mmtk_julia
+.PHONY: fastcheck-mmtk_julia
+.PHONY: check-mmtk_julia
+.PHONY: clean-mmtk_julia
+.PHONY: distclean-mmtk_julia
+
+clean-mmtk_julia:
+	-rm -f $(BUILDDIR)/$(MMTK_JULIA_SRC_DIR)/build-compiled
+	-rm -f $(BUILDROOT)/usr/lib/libmmtk_julia.so
+	-if [ -n "$(MMTK_JULIA_DIR)" ] && [ -d "$(MMTK_JULIA_DIR)" ]; then $(PROJECT_DIRS) $(MMTK_VARS) $(MAKE) -C $(MMTK_JULIA_DIR) clean; fi
+
+distclean-mmtk_julia:
+	-rm -rf $(BUILDDIR)/$(MMTK_JULIA_SRC_DIR)
+	-rm -f $(MMTK_JULIA_SRC_FILE)
+
 $(eval $(call symlink_install,mmtk_julia,$$(MMTK_JULIA_SRC_DIR),$$(BUILDROOT)/usr/lib))
 
 # In this case, there is a custom version of the binding in MMTK_JULIA_DIR
@@ -42,19 +60,28 @@ else
 PROJECT_DIRS := JULIA_PATH=$(JULIAHOME) JULIA_BUILDROOT=$(BUILDROOT) MMTK_JULIA_DIR=$(MMTK_JULIA_DIR)
 MMTK_JULIA_LIB_PATH=$(MMTK_JULIA_DIR)/mmtk/target/$(MMTK_BUILD)
 
+.PHONY: install-mmtk_julia
 install-mmtk_julia: compile-mmtk_julia $(build_prefix)/manifest/mmtk_julia
 
+.PHONY: compile-mmtk_julia
 compile-mmtk_julia: $(BUILDROOT)/usr/lib/libmmtk_julia.so
 
+.PHONY: version-check-mmtk_julia
 version-check-mmtk_julia: $(MMTK_JULIA_DIR)/mmtk/target/$(MMTK_BUILD)/libmmtk_julia.so
 
-# NB: This will NOT run `cargo build` if there are changes in the Rust source files
-# inside the binding repo. However the target below should remake the symlink if there
-# are changes in the libmmtk_julia.so from the custom MMTK_JULIA_DIR folder
-$(BUILDROOT)/usr/lib/libmmtk_julia.so: $(MMTK_JULIA_DIR)/mmtk/target/$(MMTK_BUILD)/libmmtk_julia.so
+.PHONY: clean-mmtk_julia
+.PHONY: distclean-mmtk_julia
+
+clean-mmtk_julia:
+	-rm -f $(BUILDROOT)/usr/lib/libmmtk_julia.so
+	-if [ -n "$(MMTK_JULIA_DIR)" ] && [ -d "$(MMTK_JULIA_DIR)" ]; then $(PROJECT_DIRS) $(MMTK_VARS) $(MAKE) -C $(MMTK_JULIA_DIR) clean; fi
+
+distclean-mmtk_julia: clean-mmtk_julia
+
+$(BUILDROOT)/usr/lib/libmmtk_julia.so: make-binding
 	@ln -sf $(MMTK_JULIA_DIR)/mmtk/target/$(MMTK_BUILD)/libmmtk_julia.so $@
 
-$(MMTK_JULIA_DIR)/mmtk/target/$(MMTK_BUILD)/libmmtk_julia.so:
+make-binding:
 	@$(PROJECT_DIRS) $(MMTK_VARS) $(MAKE) -C $(MMTK_JULIA_DIR) $(MMTK_BUILD)
 
 MMTK_JULIA_VER := mmtk_julia_custom
@@ -62,6 +89,7 @@ MMTK_JULIA_VER := mmtk_julia_custom
 UNINSTALL_mmtk_julia := $(MMTK_JULIA_VER) manual_mmtk_julia
 
 define manual_mmtk_julia
+.PHONY: uninstall-mmtk_julia
 uninstall-mmtk_julia:
 	-rm -f $(build_prefix)/manifest/mmtk_julia
 	-rm -f $(BUILDROOT)/usr/lib/libmmtk_julia.so
@@ -91,7 +119,16 @@ else
 LIB_PATH_MOVING := moving
 endif
 
+.PHONY: version-check-mmtk_julia
 version-check-mmtk_julia: $(BUILDROOT)/usr/lib/libmmtk_julia.so
+
+.PHONY: clean-mmtk_julia
+.PHONY: distclean-mmtk_julia
+
+clean-mmtk_julia:
+	-rm -f $(BUILDROOT)/usr/lib/libmmtk_julia.so
+
+distclean-mmtk_julia: clean-mmtk_julia
 
 $(BUILDROOT)/usr/lib/libmmtk_julia.so: get-mmtk_julia
 	@ln -sf $(BUILDROOT)/usr/lib/$(LIB_PATH_PLAN)/$(LIB_PATH_MOVING)/$(MMTK_BUILD)/libmmtk_julia.so $@

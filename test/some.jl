@@ -3,7 +3,7 @@
 ## promote()
 
 @test promote_type(Some{Int}, Some{Float64}) == Some
-@test promote_type(Some{Int}, Some{Real}) == Some{Real}
+@test promote_type(Some{Int}, Some{Real}) == Some
 @test promote_type(Some{Int}, Nothing) == Union{Some{Int},Nothing}
 
 ## convert()

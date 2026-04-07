@@ -3,6 +3,8 @@
 using Test, Random, Serialization, Base64
 using Base.ScopedValues: with
 
+@test isempty(Test.detect_closure_boxes(Serialization))
+
 # Check that serializer hasn't gone out-of-frame
 @test Serialization.sertag(Symbol) == 1
 @test Serialization.sertag(()) == 68
@@ -657,6 +659,18 @@ end
     @test l2.parts === ()
 end
 
+@testset "Core.IntrinsicFunction" begin
+    create_serialization_stream() do s
+        serialize(s, Core.Intrinsics.add_int)
+        serialize(s, Core.Intrinsics.xor_int)
+        serialize(s, Core.Intrinsics.sub_float)
+        seekstart(s)
+        @test deserialize(s) === Core.Intrinsics.add_int
+        @test deserialize(s) === Core.Intrinsics.xor_int
+        @test deserialize(s) === Core.Intrinsics.sub_float
+    end
+end
+
 @testset "Docstrings" begin
     undoc = Docs.undocumented_names(Serialization)
     @test_broken isempty(undoc)
@@ -672,4 +686,35 @@ if Int === Int64
              end)
         @test @invokelatest(Main.f111_to_112(16)) == 256
     end
+end
+
+@testset "MemoryRef" begin
+    old_m = Memory{Int}(undef, 10)
+    for i in 1:10
+        old_m[i] = i^2
+    end
+    old_x = memoryref(old_m, 5)
+    @test old_x[] == 25
+    old_d = Dict(:x => old_x)
+
+    old_str = sprint(serialize, old_d)
+    new_d = deserialize(IOBuffer(old_str))
+
+    @test new_d[:x] isa MemoryRef
+    @test new_d[:x][] == 25
+end
+
+@testset "Memory" begin
+    old_m = Memory{Int}(undef, 10)
+    for i in 1:10
+        old_m[i] = i^3
+    end
+    @test old_m[5] == 125
+    old_d = Dict(:m => old_m)
+
+    old_str = sprint(serialize, old_d)
+    new_d = deserialize(IOBuffer(old_str))
+
+    @test new_d[:m] isa Memory
+    @test new_d[:m][5] == 125
 end

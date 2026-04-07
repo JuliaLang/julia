@@ -22,7 +22,7 @@ end
 # The tests below assume a certain format and safepoint_on_entry=true breaks that.
 function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
     params = Base.CodegenParams(safepoint_on_entry=false, gcstack_arg = false, debug_info_level=Cint(2))
-    d = InteractiveUtils._dump_function(InteractiveUtils.ArgInfo(f, t), false, false, raw, dump_module, :att, optimize, :none, false, params)
+    d = InteractiveUtils._dump_function(InteractiveUtils.ArgInfo(f, t), false, false, raw, dump_module, :att, optimize, :none, false, "", params)
     sprint(print, d)
 end
 
@@ -134,14 +134,14 @@ if !is_debug_build && opt_level > 0
     # Array
     test_loads_no_call(strip_debug_calls(get_llvm(sizeof, Tuple{Vector{Int}})), [Iptr])
     # As long as the eltype is known we don't need to load the elsize, but do need to check isvector
-    @test_skip test_loads_no_call(strip_debug_calls(get_llvm(sizeof, Tuple{Array{Any}})), ["atomic $Iptr", "ptr", "ptr", Iptr, Iptr, "ptr",  Iptr])
+    @test_skip test_loads_no_call(strip_debug_calls(get_llvm(sizeof, Tuple{Array{Any}})), ["atomic volatile $Iptr", "ptr", "ptr", Iptr, Iptr, "ptr",  Iptr])
     # Memory
     test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory{Int}})), [Iptr])
     # As long as the eltype is known we don't need to load the elsize
     test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory{Any}})), [Iptr])
     # Check that we load the elsize and isunion from the typeof layout
-    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic $Iptr", "ptr", "i32", "i16"])
-    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic $Iptr", "ptr", "i32", "i16"])
+    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic volatile $Iptr", "ptr", "i32", "i16"])
+    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic volatile $Iptr", "ptr", "i32", "i16"])
     # Primitive Type size should be folded to a constant
     test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Ptr})), String[])
 
@@ -1074,4 +1074,81 @@ let io = IOBuffer()
     code_llvm(io, (x, y) -> (@atomic x[1] = y; nothing), (AtomicMemory{Pair{Any,Any}}, Pair{Any,Any},), raw=true, optimize=false)
     str = String(take!(io))
     @test occursin("julia.write_barrier", str)
+end
+
+# Test phi node codegen for union types with inline roots
+function union_phi_inline_roots(x::Bool)
+    if x
+        return ("Q8", 1)
+    else
+        return ("Q10", Ref(5))
+    end
+end
+@test union_phi_inline_roots(true) === ("Q8", 1)
+
+mutable struct AnyBoxEA val::Any end
+function preserve_any_ea(x)
+    b = AnyBoxEA(x)
+    GC.@preserve b begin
+        return b.val
+    end
+end
+function loop_preserve_any_ea(n)
+    s = "v"
+    for _ in 1:n
+        s = preserve_any_ea(s)::String
+    end
+    s
+end
+loop_preserve_any_ea(10)
+@test (@allocated loop_preserve_any_ea(10)) == 0
+
+# blackbox compiles to zero-cost inline asm, not a runtime call
+@testset "blackbox codegen" begin
+    # Scalar blackbox: should produce inline asm, no call
+    blackbox_int(x::Int) = Base.blackbox(x)
+    ir_int = get_llvm(blackbox_int, Tuple{Int})
+    @test !occursin("call ", strip_debug_calls(ir_int)) || occursin("asm", ir_int)
+    @test !occursin("jl_", ir_int)
+
+    # Pointer/boxed blackbox: should produce julia.blackbox intrinsic (lowered to asm after GC)
+    blackbox_str(x::String) = Base.blackbox(x)
+    ir_str = get_llvm(blackbox_str, Tuple{String}, true, false, false)
+    @test occursin("julia.blackbox", ir_str)
+
+    # blackbox preserves value identity at runtime
+    @test Base.blackbox(42) == 42
+    @test Base.blackbox([1,2,3]) == [1,2,3]
+
+    # blackbox does not allocate for isbits types
+    @test (@allocated Base.blackbox(42)) == 0
+
+    # No gc frame needed for scalar blackbox
+    @test !occursin("%gcframe", get_llvm(blackbox_int, Tuple{Int}))
+
+    # Struct blackbox: uses memory clobber for unboxed aggregates
+    struct BlackboxTestStruct
+        a::Float64
+        b::Float64
+    end
+    blackbox_struct(x::BlackboxTestStruct) = Base.blackbox(x)
+    @test blackbox_struct(BlackboxTestStruct(1.0, 2.0)) == BlackboxTestStruct(1.0, 2.0)
+    ir_struct = get_llvm(blackbox_struct, Tuple{BlackboxTestStruct})
+    @test occursin("~{memory}", ir_struct)
+    @test !occursin("jl_", strip_debug_calls(ir_struct))
+
+    # blackbox barriers Julia-level constprop: return type must be Int, not Const(42)
+    @test Base.return_types() do; Base.blackbox(42); end |> only === Int
+end
+
+# sret parameters must have an alignment attribute (required by LLVM LangRef).
+@testset "sret alignment attribute" begin
+    struct SretAlignTest
+        a::Float32
+        b::Float32
+        c::Float32
+    end
+    @noinline f_srettest(x::Float32) = SretAlignTest(x, x+1, x+2)
+    ir = get_llvm(f_srettest, Tuple{Float32}, true, true, true)
+    @test occursin(r"sret\([^)]+\) align \d+", ir)
 end

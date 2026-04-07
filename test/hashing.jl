@@ -37,6 +37,7 @@ for T = types[2:end], x = vals
     a = coerce(T, x)
     @test hash(a, zero(UInt)) == invoke(hash, Tuple{Real, UInt}, a, zero(UInt))
     @test hash(a, one(UInt)) == invoke(hash, Tuple{Real, UInt}, a, one(UInt))
+    @test hash(a) == hash(complex(a))
 end
 
 let collides = 0
@@ -314,10 +315,38 @@ struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
     @test hash(5//3) == hash(big(5)//3)
 end
 
+@testset "`Pair`" begin
+    @test (@inferred hash(0 => 1)) === (@inferred hash(false => true))
+    @test hash(0 => 1, UInt(0)) != hash(0 => 1, UInt(1))
+    let (x, y, z) = (1, 3, 7)
+        h = UInt(9)
+        @test hash(x => (y => z), h) != hash((x => y) => z, h)
+    end
+end
+
 @testset "concrete eval type hash" begin
     @test Core.Compiler.is_foldable_nothrow(Base.infer_effects(hash, Tuple{Type{Int}, UInt}))
 
     f(h...) = hash(Char, h...);
     src = only(code_typed(f, Tuple{UInt}))[1]
     @test count(stmt -> Meta.isexpr(stmt, :foreigncall), src.code) == 0
+end
+
+@testset "hash_bytes consistency" begin
+    # Test that hash_bytes(::Array), hash_bytes(Generator(identity, Array)), and hash_bytes(pointer(Array)) return the same values
+
+    for n in 0:1000
+        b = rand(UInt8, n)
+        a = Base.Generator(identity, b)
+
+        # Test hash_bytes(::Array) vs hash_bytes(pointer(Array))
+        hash_array = Base.hash_bytes(b, UInt64(Base.HASH_SEED), Base.HASH_SECRET)
+        hash_pointer = Base.hash_bytes(pointer(b), length(b), UInt64(Base.HASH_SEED), Base.HASH_SECRET)
+        @test hash_array isa UInt64
+        @test hash_array === hash_pointer
+
+        # Test hash_bytes(Generator(identity, Array)) vs hash_bytes(pointer(Array))
+        hash_generator = Base.hash_bytes(a, UInt64(Base.HASH_SEED), Base.HASH_SECRET)
+        @test hash_generator === hash_pointer
+    end
 end

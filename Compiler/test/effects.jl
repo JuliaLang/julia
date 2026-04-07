@@ -266,6 +266,9 @@ end |> Compiler.is_consistent
 @test Base.infer_effects() do
     Maybe{String}()[]
 end |> Compiler.is_consistent
+@test Base.infer_effects() do
+    Maybe{Some{Base.RefValue{Int}}}()
+end |> Compiler.is_consistent
 let f() = Maybe{String}()[]
     @test Base.return_types() do
         f() # this call should be concrete evaluated
@@ -1046,9 +1049,13 @@ end |> Compiler.is_nothrow
 # Effects for :compilerbarrier
 f1_compilerbarrier(b) = Base.compilerbarrier(:type, b)
 f2_compilerbarrier(b) = Base.compilerbarrier(:conditional, b)
+f3_compilerbarrier(b) = Base.compilerbarrier(:blackbox, b)
 
 @test !Compiler.is_consistent(Base.infer_effects(f1_compilerbarrier, (Bool,)))
 @test Compiler.is_consistent(Base.infer_effects(f2_compilerbarrier, (Bool,)))
+# :blackbox is not consistent (prevents CSE/constant-folding) but is nothrow
+@test !Compiler.is_consistent(Base.infer_effects(f3_compilerbarrier, (Bool,)))
+@test Compiler.is_nothrow(Base.infer_effects(f3_compilerbarrier, (Bool,)))
 
 # Optimizer-refined effects
 function f1_optrefine(b)
@@ -1440,6 +1447,11 @@ let effects = Base.infer_effects(Core.Intrinsics.pointerset, Tuple{Vararg{Any}})
     @test Compiler.is_consistent(effects)
     @test !Compiler.is_effect_free(effects)
 end
+@test Compiler.intrinsic_nothrow(Core.Intrinsics.add_ptr, Any[Ptr{Int}, UInt])
+@test Compiler.intrinsic_nothrow(Core.Intrinsics.sub_ptr, Any[Ptr{Int}, UInt])
+@test !Compiler.intrinsic_nothrow(Core.Intrinsics.add_ptr, Any[UInt, UInt])
+@test !Compiler.intrinsic_nothrow(Core.Intrinsics.sub_ptr, Any[UInt, UInt])
+@test Compiler.is_nothrow(Base.infer_effects(+, Tuple{Ptr{UInt8}, UInt}))
 # effects modeling for atomic intrinsics
 # these functions especially need to be marked !effect_free since they imply synchronization
 for atomicfunc = Any[
@@ -1474,8 +1486,66 @@ end
 let effects = Base.infer_effects((Core.SimpleVector,Int); optimize=false) do svec, i
         Core._svec_ref(svec, i)
     end
-    @test !Compiler.is_consistent(effects)
+    @test Compiler.is_consistent(effects)
     @test Compiler.is_effect_free(effects)
     @test !Compiler.is_nothrow(effects)
     @test Compiler.is_terminates(effects)
+end
+
+@test Compiler.is_nothrow(Base.infer_effects(length, (Core.SimpleVector,)))
+
+
+# https://github.com/JuliaLang/julia/issues/60009
+function null_offset(offset)
+    Ptr{UInt8}(C_NULL) + offset
+end
+@test null_offset(Int(100)) == Ptr{UInt8}(UInt(100))
+
+# https://github.com/JuliaLang/julia/issues/61435
+function catch_error_61435(f, x)
+    try
+        f(x)
+    catch
+        return :caught
+    end
+end
+let f = (x) -> Core.Intrinsics.sext_int(Int16, x)
+    @test Compiler.is_nothrow(Base.infer_effects(f, (Int8,)))
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (Int16,)))
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (Int32,)))
+    @test catch_error_61435(f, Int16(0)) === :caught
+end
+let f = (x) -> Core.Intrinsics.zext_int(UInt16, x)
+    @test Compiler.is_nothrow(Base.infer_effects(f, (UInt8,)))
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (UInt16,)))
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (UInt32,)))
+    @test catch_error_61435(f, UInt16(0)) === :caught
+end
+let f = (x) -> Core.Intrinsics.trunc_int(Int16, x)
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (Int8,)))
+    @test !Compiler.is_nothrow(Base.infer_effects(f, (Int16,)))
+    @test Compiler.is_nothrow(Base.infer_effects(f, (Int32,)))
+    @test catch_error_61435(f, Int16(0)) === :caught
+end
+
+# issue #57324
+module Issue57324
+struct T <: AbstractVector{Float64}
+    m::Memory{UInt64}
+end
+function f(w)
+    r = Base.OneTo(w.m[1])
+    setindex!(w, 0.0, r[1])
+end
+Base.setindex!(w::T, v, i::Int) = _setindex!(w, i)
+function _setindex!(w, i)
+    w.m[w.m[1]] = 0 > i ? nothing : 0
+    w
+end
+Base.size(::T) = (0,)
+end
+let effects = Base.infer_effects(Issue57324.f, (Issue57324.T,))
+    @test Compiler.is_terminates(effects)
+    @test Compiler.is_notaskstate(effects)
+    @test Compiler.is_nortcall(effects)
 end

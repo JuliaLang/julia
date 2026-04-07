@@ -51,8 +51,6 @@ function print(io::IO, xs...)
     return nothing
 end
 
-setfield!(typeof(print).name, :max_args, Int32(10), :monotonic)
-
 """
     println([io::IO], xs...)
 
@@ -75,8 +73,6 @@ julia> takestring!(io)
 ```
 """
 println(io::IO, xs...) = print(io, xs..., "\n")
-
-setfield!(typeof(println).name, :max_args, Int32(10), :monotonic)
 ## conversion of general objects to strings ##
 
 """
@@ -148,7 +144,6 @@ function print_to_string(xs...)
     end
     takestring!(s)
 end
-setfield!(typeof(print_to_string).name, :max_args, Int32(10), :monotonic)
 
 function string_with_env(env, xs...)
     if isempty(xs)
@@ -178,7 +173,7 @@ highly efficient, then it may make sense to add a method to `string` and
 define `print(io::IO, x::MyType) = print(io, string(x))` to ensure the
 functions are consistent.
 
-See also: [`String`](@ref), [`repr`](@ref), [`sprint`](@ref), [`show`](@ref @show).
+See also [`String`](@ref), [`repr`](@ref), [`sprint`](@ref), [`show`](@ref @show).
 
 # Examples
 ```jldoctest
@@ -596,9 +591,9 @@ end
 Create a raw string without interpolation and unescaping.
 The exception is that quotation marks still must be escaped. Backslashes
 escape both quotation marks and other backslashes, but only when a sequence
-of backslashes precedes a quote character. Thus, 2n backslashes followed by
-a quote encodes n backslashes and the end of the literal while 2n+1 backslashes
-followed by a quote encodes n backslashes followed by a quote character.
+of backslashes precedes a quote character. Thus, ``2n`` backslashes followed by
+a quote encode ``n`` backslashes and the end of the literal while ``2n+1`` backslashes
+followed by a quote encode ``n`` backslashes followed by a quote character.
 
 # Examples
 ```jldoctest

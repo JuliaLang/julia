@@ -236,9 +236,9 @@ These expressions are represented as `LineNumberNode`s in Julia.
 ### Macros
 
 Macro hygiene is represented through the expression head pair `escape` and `hygienic-scope`.
-The result of a macro expansion is automatically wrapped in `(hygienic-scope block module)`,
+The result of a macro expansion is automatically wrapped in `(hygienic-scope block module [lno])`,
 to represent the result of the new scope. The user can insert `(escape block)` inside
-to interpolate code from the caller.
+to interpolate code from the caller. The lno is the `__source__` argument of the macro, if included.
 
 
 ## Lowered form

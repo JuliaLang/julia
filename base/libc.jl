@@ -266,9 +266,39 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
         throw(ArgumentError("invalid arguments"))
     end
     @static if Sys.isapple()
+        function shouldcallmktime(s::AbstractString)
+            # Equivalent to !occursin(r"([^%]|^)%(a|A|j|w|Ow)"a, s), but
+            # without regex since this is not available yet
+
+            c = Base.utf8units(s)
+            N = length(c)
+            i = findfirst(==(UInt8('%')), c)
+
+            while true
+                isnothing(i) && break
+                i >= N && break
+
+                # Ignore % following after another %
+                if i == firstindex(c) || c[i-1] != UInt8('%')
+                    # Detect %a, %A, %j, %w, %Ow
+                    if c[i+1] in b"aAjw"
+                        return false
+                    end
+                    if (checkbounds(Bool, c, i+2) &&
+                        c[i+1] == UInt8('O') &&
+                        c[i+2] == UInt8('w')
+                    )
+                        return false
+                    end
+                end
+
+                i = findnext(==(UInt8('%')), c, i+1)
+            end
+            return true
+        end
         # if we didn't explicitly parse the weekday or year day, use mktime
         # to fill them in automatically.
-        if !occursin(r"([^%]|^)%(a|A|j|w|Ow)"a, fmt)
+        if shouldcallmktime(fmt)
             ccall(:mktime, Int, (Ref{TmStruct},), tm)
         end
     end
@@ -280,7 +310,7 @@ end
 """
     time(t::TmStruct)::Float64
 
-Converts a `TmStruct` struct to a number of seconds since the epoch.
+Convert a `TmStruct` struct to a number of seconds since the epoch.
 """
 time(tm::TmStruct) = Float64(ccall(:mktime, Int, (Ref{TmStruct},), tm))
 
@@ -574,6 +604,7 @@ end
 
 getuid() = ccall(:jl_getuid, Culong, ())
 geteuid() = ccall(:jl_geteuid, Culong, ())
+getegid() = Sys.iswindows() ? Culong(-1) : ccall(:getegid, Culong, ())
 
 # Include dlopen()/dlpath() code
 include("libdl.jl")

@@ -582,7 +582,7 @@ However, future calls to `tryeval` will continue to see the definition of `newfu
 
 You may want to try this for yourself to see how it works.
 
-The implementation of this behavior is a "world age counter", which is further described in the [Worldage](@ref man-worldage)
+The implementation of this behavior is a "world age counter", which is further described in the [World Age](@ref World-age-in-general)
 manual chapter.
 
 ## Design Patterns with Parametric Methods
@@ -915,7 +915,7 @@ with keyword arguments processed after the matching method is identified.
 ## Function-like objects
 
 Methods are associated with types, so it is possible to make any arbitrary Julia object "callable"
-by adding methods to its type. (Such "callable" objects are sometimes called "functors.")
+by adding methods to its type.
 
 For example, you can define a type that stores the coefficients of a polynomial, but behaves like
 a function evaluating the polynomial:

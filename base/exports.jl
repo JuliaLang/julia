@@ -837,6 +837,7 @@ export
     gensym,
     @kwdef,
     macroexpand,
+    macroexpand!,
     @macroexpand1,
     @macroexpand,
     parse,
@@ -1028,6 +1029,8 @@ export
     setenv,
     addenv,
     setcpuaffinity,
+    setuid,
+    setgid,
     success,
     withenv,
 

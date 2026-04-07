@@ -118,15 +118,15 @@ wc265_41332a = Task(tls_world_age)
     global wc265_41332d = Task(tls_world_age)
     nothing
 end)()
-@test wc265 + 12 == get_world_counter() == tls_world_age()
+@test wc265 + 11 == get_world_counter() == tls_world_age()
 schedule(wc265_41332a)
 schedule(wc265_41332b)
 schedule(wc265_41332c)
 schedule(wc265_41332d)
 @test wc265 + 1 == fetch(wc265_41332a)
-@test wc265 + 10 == fetch(wc265_41332b)
-@test wc265 + 12 == fetch(wc265_41332c)
-@test wc265 + 10 == fetch(wc265_41332d)
+@test wc265 + 9 == fetch(wc265_41332b)
+@test wc265 + 11 == fetch(wc265_41332c)
+@test wc265 + 9 == fetch(wc265_41332d)
 chnls, tasks = Base.channeled_tasks(2, wfunc)
 t265 = tasks[1]
 
@@ -597,4 +597,33 @@ function f()
     Core._eval_import(true, @__MODULE__, nothing, Expr(:., :Random))
 end
 end
-@test_throws ErrorException("importing Random into M57965 conflicts with an existing global") M57965.f()s
+@test_throws ErrorException("importing Random into M57965 conflicts with an existing global") M57965.f()
+
+# issue #59429 - world age semantics with toplevel in macros
+module M59429
+using Test
+macro new_enum(T::Symbol, args...)
+   esc(quote
+      @enum $T $(args...)
+      function Base.hash(x::$T, h::UInt)
+        rand(UInt)
+      end
+    end)
+end
+
+@new_enum Foo59429 bar59429 baz59429
+
+# Test that the hash function works without world age issues
+@test hash(bar59429, UInt(0)) isa UInt
+end
+
+# jl_eval_thunk should update the world after resolving definition effects but
+# before "actually running" the thunk as some such code - such as that
+# computing the return type of a ccall - may have arbitrary side effects. (Note
+# it's not clear there's any valid use for such side effects in clean code but
+# the runtime should still handle it gracefully.)
+rettype_with_side_effect() = eval(:(rettype_side_effect = "blah"; Cint))
+let
+    @test rettype_side_effect == "blah"
+    ccall(:strlen, rettype_with_side_effect(), (Cstring,), "xx")
+end

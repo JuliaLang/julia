@@ -36,7 +36,7 @@ Since [libblastrampoline](https://github.com/staticfloat/libblastrampoline) by d
 uses `RTLD_DEEPBIND`, we need to set the environment variable `LBT_USE_RTLD_DEEPBIND=0`
 when using a sanitizer.
 
-To use one of of the sanitizers set `SANITIZE=1` and then the appropriate flag for the sanitizer you
+To use one of the sanitizers set `SANITIZE=1` and then the appropriate flag for the sanitizer you
 want to use.
 
 On macOS, this might need some extra flags also to work. Altogether, it might

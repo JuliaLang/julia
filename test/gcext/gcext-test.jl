@@ -2,7 +2,6 @@
 
 # tests the output of the embedding example is correct
 using Test
-using Pkg
 
 if Sys.iswindows()
     # libjulia needs to be in the same directory as the embedding executable or in path

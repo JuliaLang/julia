@@ -526,5 +526,5 @@ considered more specific. However, `morespecific` does get a bonus for length: i
 `Tuple{Int,Int}` is more specific than `Tuple{Int,Vararg{Int}}`.
 
 Additionally, if 2 methods are defined with identical signatures, per type-equal, then they
-will instead by compared by order of addition, such that the later method is more specific
+will instead be compared by order of addition, such that the later method is more specific
 than the earlier one.
