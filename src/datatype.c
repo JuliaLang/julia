@@ -2366,6 +2366,11 @@ jl_value_t *get_nth_pointer(jl_value_t *v, size_t i)
     uint32_t npointers = ly->npointers;
     if (i >= npointers)
         jl_bounds_error_int(v, i);
+    if (ly->flags.fielddesc_type == 3) {
+        // Foreign types can report that they contain pointers for GC purposes,
+        // but they do not expose an inline pointer-offset table to enumerate.
+        return NULL;
+    }
     const uint8_t *ptrs8 = (const uint8_t *)jl_dt_layout_ptrs(ly);
     const uint16_t *ptrs16 = (const uint16_t *)jl_dt_layout_ptrs(ly);
     const uint32_t *ptrs32 = (const uint32_t*)jl_dt_layout_ptrs(ly);
