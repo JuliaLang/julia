@@ -38,6 +38,10 @@ static void checkMDB(int Err)
 
 ObjCache::ObjCache()
 {
+    const char *Enable = getenv("JULIA_OBJCACHE");
+    if (!Enable || strcmp(Enable, "1"))
+        return;
+
     if (int Err = mdb_env_create(&Env)) {
         checkMDB(Err);
         Env = nullptr;
