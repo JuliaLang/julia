@@ -1,5 +1,3 @@
-@testset "Miscellaneous" begin
-
 test_mod = Module()
 
 # Blocks
@@ -214,7 +212,7 @@ let raw_foreigncall_ex = Expr(
 
     # test flisp does this: it's unclear how much desugaring the user is
     # responsible for here
-    @test Core.eval(test_mod, reference_lower(test_mod, raw_foreigncall_ex)) == 11 + 18im
+    @test fl_eval(test_mod, raw_foreigncall_ex) == 11 + 18im
 
     @test JuliaLowering.eval(test_mod, JuliaLowering.expr_to_est(raw_foreigncall_ex)) == 11 + 18im
 end
@@ -243,25 +241,76 @@ end
 @test test_mod.ccall_with_sparams(Int) === 1
 @test test_mod.ccall_with_sparams(Float64) === 1.0
 
-# FIXME Currently JL cannot handle `@generated` functions, so the following test cases are commented out.
-# # Test that ccall can be passed static parameters in the function name
-# # Note that this only works with `@generated` functions from 1.13 onwards,
-# # where the function name can be evaluated at code generation time.
-# JuliaLowering.include_string(test_mod, raw"""
-# # In principle, may add other strlen-like functions here for different string
-# # types
-# ccallable_sptest_name(::Type{String}) = :strlen
-#
-# @generated function ccall_with_sparams_in_name(s::T) where {T}
-#     name = QuoteNode(ccallable_sptest_name(T))
-#     :(ccall($name, Csize_t, (Cstring,), s))
-# end
-# """)
-# @test test_mod.ccall_with_sparams_in_name("hii") == 3
+# Test that ccall can be passed static parameters in the function name
+# Note that this only works with `@generated` functions from 1.13 onwards,
+# where the function name can be evaluated at code generation time.
+JuliaLowering.include_string(test_mod, raw"""
+# In principle, may add other strlen-like functions here for different string
+# types
+ccallable_sptest_name(::Type{String}) = :strlen
+
+@generated function ccall_with_sparams_in_name(s::T) where {T}
+    name = QuoteNode(ccallable_sptest_name(T))
+    :(ccall($name, Csize_t, (Cstring,), s))
+end
+""")
+@test test_mod.ccall_with_sparams_in_name("hii") == 3
 
 @testset "CodeInfo: has_image_globalref" begin
     @test lower_str(test_mod, "x + y").args[1].has_image_globalref === false
     @test lower_str(Main, "x + y").args[1].has_image_globalref === true
+end
+
+baremodule baremod
+macro int128_str(x);  error("baremod macro; expected call to Core macro"); end
+macro uint128_str(x); error("baremod macro; expected call to Core macro"); end
+macro big_str(x);     error("baremod macro; expected call to Core macro"); end
+macro cmd(x);         error("baremod macro; expected call to Core macro"); end
+macro doc(x, y);      error("baremod macro; expected call to Core macro"); end
+global nothing = "baremod.nothing; expected core nothing"
+end
+@testset "globalrefs inserted by parsing" begin
+    local jl_s_eval = x->JuliaLowering.include_string(baremod, x; expr_compat_mode=true)
+    local fl_s_eval = x->fl_eval(baremod, JuliaSyntax.parsestmt(Expr, x; filename="file"))
+
+    let s = "100000000000000000000000000000"
+        @test jl_s_eval(s) == fl_s_eval(s)
+    end
+    let s = "0x100000000000000000000000000000"
+        @test jl_s_eval(s) == fl_s_eval(s)
+    end
+    let s = "10000000000000000000000000000000000000000000000000000000000000000"
+        @test jl_s_eval(s) == fl_s_eval(s)
+    end
+    let s = "`ls`"
+        @test jl_s_eval(s) == fl_s_eval(s)
+    end
+
+    let s = """
+            "foo" function fl_documented_function(); fl_documented_function; end
+            """
+        @test fl_s_eval(s) isa Function
+    end
+    @test baremod.fl_documented_function() == baremod.fl_documented_function
+    let s = """
+            "foo" function jl_documented_function(); jl_documented_function; end
+            """
+        @test jl_s_eval(s) isa Function
+    end
+    @test baremod.jl_documented_function() == baremod.jl_documented_function
+
+    let s = """
+            function fl_ret_nothing(); return; end
+            """
+        @test fl_s_eval(s) isa Function
+    end
+    @test baremod.fl_ret_nothing() == Core.nothing
+    let s = """
+            function jl_ret_nothing(); return; end
+            """
+        @test fl_s_eval(s) isa Function
+    end
+    @test baremod.jl_ret_nothing() == Core.nothing
 end
 
 @testset "docstrings: doc-only expressions" begin
@@ -350,4 +399,140 @@ end
 emptyblock_result = JuliaLowering.eval(test_mod, Expr(:(=), :emptyblock_144, Expr(:block)))
 @test emptyblock_result == nothing
 
+@testset "string forms" begin
+    @test JuliaLowering.include_string(test_mod, raw"""
+        "str"
+    """) == "str"
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = 1
+        "str$x"
+    end
+    """) == "str1"
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = 1
+        "str$(x)"
+    end
+    """) == "str1"
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = [1,2,3]
+        "str$(x...)"
+    end
+    """) == "str123"
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = [1,2,3]
+        "str$(x)"
+    end
+    """) == "str[1, 2, 3]"
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = [1,2,3]
+        "str$("innerstr$(x...)")"
+    end
+    """) == "strinnerstr123"
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = [1,2,3]
+        "str$(["innerstr$(x...)"]...)"
+    end
+    """) == "strinnerstr123"
+
+    # cmds
+    @test JuliaLowering.include_string(test_mod, raw"""
+        `cmdstr`
+    """) == `cmdstr`
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = 1
+        `cmdstr$x`
+    end
+    """) == `cmdstr1`
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = 1
+        `cmdstr$(x)`
+    end
+    """) == `cmdstr1`
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = [1,2,3]
+        `cmdstr$(x...)`
+    end
+    """) == `cmdstr123`
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = [1,2,3]
+        `cmdstr$(x)`
+    end
+    """) == `cmdstr1 cmdstr2 cmdstr3`
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = [1,2,3]
+        `cmdstr$("innerstr$(x...)")`
+    end
+    """) == `cmdstrinnerstr123`
+    @test JuliaLowering.include_string(test_mod, raw"""
+    let x = [1,2,3]
+        `cmdstr$(["innerstr$(x...)"]...)`
+    end
+    """) == `cmdstrinnerstr123`
+end
+
+let op_mod = Module(:opmod, false)
+    @testset "operators" for run in [
+            s->fl_eval(op_mod, JuliaSyntax.parseall(Expr, s)),
+            s->JuliaLowering.include_string(op_mod, s; expr_compat_mode=true),
+            s->JuliaLowering.include_string(op_mod, s; expr_compat_mode=false)]
+
+        @testset "unary prefix (no parens needed)" for op in String["⋆", "±", "∓", "~", "!", "¬", "√", "∛", "∜"]
+            @test run("$(op)x = (x,)") isa Function
+            Core.@latestworld
+            @test run(op) isa Function
+            @test run("$(op)1") == (1,)
+            @test run("""
+                let $(op)x = (x,x)
+                    $(op)1
+                end """) == (1,1)
+        end
+        @testset "prefix" for op in String["..", "+", "-", "⋆", "±", "∓", "~", "!", "¬", "√", "∛", "∜"]
+            @test run("$op(a,b,c) = 3") isa Function
+            Core.@latestworld
+            @test run(op) isa Function
+            @test run("$op(1,2,3)") == 3
+            @test run("""
+                let $op(a,b,c) = (c,b,a)
+                    $op(1,2,3)
+                end """) == (3,2,1)
+        end
+        @testset "infix" for op in String["&", "|", "+", "-", ":", ".."]
+            @test run("a$(op)b = (a,b)") isa Function
+            Core.@latestworld
+            @test run(op) isa Function
+            @test run("var\"$op\"(1,2)") == (1,2)
+            @test run("1$(op)2") == (1,2)
+            @test run("""
+                let a$(op)b = (b,a)
+                    1$(op)2
+                end """) == (2,1)
+        end
+    end
+end
+
+@testset "jl_assert" begin
+    st = @ast_ [K"function" "foo"::K"Identifier"]
+    if JL.DEBUG
+        err = try
+            JuliaLowering.@jl_assert(1 == 2, (st, "error message 1"), (st, "error message 2"))
+            nothing
+        catch err
+            err
+        end
+        @test err isa LoweringError
+        @test err.internal === true
+        @test length(err.sts) == 2
+        @test length(err.msgs) == 2
+        shown = sprint(show, err)
+        @test contains(shown, "error message 1")
+        @test contains(shown, "error message 2")
+    else
+        @test nothing !== try
+            JuliaLowering.@jl_assert false st
+        catch err
+            err
+        else
+            nothing
+        end
+    end
 end

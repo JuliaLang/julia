@@ -183,7 +183,7 @@ function _print_matrix(io, @nospecialize(X::AbstractVecOrMat), pre, sep, post, h
     screenwidth -= length(pre)::Int + length(post)::Int
     presp = repeat(" ", length(pre)::Int)  # indent each row to match pre string
     postsp = ""
-    @assert textwidth(hdots) == textwidth(ddots)
+    @assert textwidth(hdots) == textwidth(ddots) "hdots and ddots must have same textwidth"
     sepsize = length(sep)::Int
     m, n = length(rowsA), length(colsA)
     # To figure out alignments, only need to look at as many rows as could
@@ -290,7 +290,7 @@ function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Functio
     reached_last_d = false
     for I in Is
         idxs = I.I
-        @label _ begin
+        @label entry begin
             if limit
                 for i = 1:nd
                     ii = idxs[i]
@@ -308,16 +308,16 @@ function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Functio
                                 szj = length(axs[j+2])
                                 indj = tailinds[j]
                                 if szj>10 && first(indj)+2 < idxs[j] <= last(indj)-3
-                                    break _
+                                    break entry
                                 end
                             end
                             print(io, ";"^(i+2))
                             print(io, " \u2026 ")
                             show_full && print(io, "\n\n")
-                            break _
+                            break entry
                         end
                         if ind[firstindex(ind)+2] < ii <= ind[end-3]
-                            break _
+                            break entry
                         end
                     end
                 end
@@ -422,7 +422,7 @@ _show_nonempty(io::IO, X::AbstractMatrix, prefix::String) =
     _show_nonempty(io, inferencebarrier(X), prefix, false, axes(X))
 
 function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String, drop_brackets::Bool, axs::Tuple{AbstractUnitRange,AbstractUnitRange})
-    @assert !isempty(X)
+    @assert !isempty(X) "X should be non-empty"
     limit = get(io, :limit, false)::Bool
     indr, indc = axs
     nr, nc = length(indr), length(indc)

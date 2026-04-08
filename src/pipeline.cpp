@@ -11,11 +11,14 @@
 
 // analysis passes
 #include <llvm/Analysis/Passes.h>
+#include <llvm/Support/CommandLine.h>
 #include <llvm/Analysis/BasicAliasAnalysis.h>
 #include <llvm/Analysis/GlobalsModRef.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/Analysis/TypeBasedAliasAnalysis.h>
 #include <llvm/Analysis/ScopedNoAliasAA.h>
+#include <llvm/Analysis/LoopInfo.h>
+#include <llvm/Analysis/LazyCallGraph.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/Verifier.h>
@@ -738,8 +741,72 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
     }
 }
 
-NewPM::NewPM(std::unique_ptr<TargetMachine> TM, OptimizationLevel O, OptimizationOptions options) :
-    TM(std::move(TM)), O(O), options(options), TimePasses() {}
+// Parse LLVM-style option string into PrintOptions using LLVM's tokenizer
+void parseLLVMOptions(const char *options, PrintOptions &out) JL_NOTSAFEPOINT {
+    if (!options || options[0] == '\0')
+        return;
+
+    // Tokenize the options string using LLVM's GNU command line tokenizer
+    BumpPtrAllocator Alloc;
+    StringSaver Saver(Alloc);
+    SmallVector<const char *, 16> Argv;
+    cl::TokenizeGNUCommandLine(options, Saver, Argv);
+
+    // Helper to match an option and get its value
+    // option should include trailing "=" (e.g., "-print-after=")
+    // Returns the value if matched, empty StringRef if no match
+    // Supports both "-option=value" and "-option value" syntax
+    auto getNextValue = [&](size_t &idx, StringRef Arg, StringRef option) JL_NOTSAFEPOINT -> StringRef {
+        StringRef optionName = option.drop_back(); // remove trailing "="
+        // Check for "-option=value" syntax
+        if (Arg.starts_with(option)) {
+            return Arg.substr(option.size());
+        }
+        // Check for "-option value" syntax (exact match on option name)
+        if (Arg == optionName) {
+            if (idx + 1 < Argv.size()) {
+                return StringRef(Argv[++idx]);
+            }
+            raw_string_ostream err_stream(out.error);
+            err_stream << "Warning: " << optionName << " requires a value\n";
+        }
+        return StringRef();
+    };
+
+    // Helper to split a comma-separated value and append to a vector
+    auto addCommaSeparated = [](SmallVector<std::string, 1> &vec, StringRef val) JL_NOTSAFEPOINT {
+        SmallVector<StringRef, 4> parts;
+        val.split(parts, ',', /*MaxSplit=*/-1, /*KeepEmpty=*/false);
+        for (auto &part : parts) {
+            vec.push_back(part.str());
+        }
+    };
+
+    // Process each token
+    for (size_t i = 0; i < Argv.size(); ++i) {
+        StringRef Arg(Argv[i]);
+
+        if (Arg == "-print-after-all") {
+            out.print_after_all = true;
+        } else if (Arg == "-print-before-all") {
+            out.print_before_all = true;
+        } else if (Arg == "-print-module-scope") {
+            out.print_module_scope = true;
+        } else if (StringRef val = getNextValue(i, Arg, "-print-after="); !val.empty()) {
+            addCommaSeparated(out.print_after, val);
+        } else if (StringRef val = getNextValue(i, Arg, "-print-before="); !val.empty()) {
+            addCommaSeparated(out.print_before, val);
+        } else if (StringRef val = getNextValue(i, Arg, "-filter-print-funcs="); !val.empty()) {
+            addCommaSeparated(out.filter_print_funcs, val);
+        } else {
+            raw_string_ostream err_stream(out.error);
+            err_stream << "Warning: unknown llvm_options flag: " << Arg << "\n";
+        }
+    }
+}
+
+NewPM::NewPM(std::unique_ptr<TargetMachine> TM, OptimizationLevel O, OptimizationOptions options, PrintOptions print_options) :
+    TM(std::move(TM)), O(O), options(options), print_options(print_options), TimePasses() {}
 
 
 NewPM::~NewPM() = default;
@@ -762,14 +829,136 @@ AnalysisManagers::AnalysisManagers(PassBuilder &PB) : LAM(), FAM(), CGAM(), MAM(
 
 AnalysisManagers::~AnalysisManagers() = default;
 
+// Helper to unwrap IR from Any to a specific type
+template <typename IRType>
+static const IRType *unwrapIR(Any IR) JL_NOTSAFEPOINT {
+    const IRType *const *IRPtr = llvm::any_cast<const IRType *>(&IR);
+    return IRPtr ? *IRPtr : nullptr;
+}
+
+// Helper to print IR from Any
+static void printIR(raw_ostream &OS, Any IR) JL_NOTSAFEPOINT {
+    if (const auto *M = unwrapIR<Module>(IR)) {
+        M->print(OS, nullptr);
+    } else if (const auto *F = unwrapIR<Function>(IR)) {
+        F->print(OS);
+    } else if (const auto *L = unwrapIR<Loop>(IR)) {
+        L->print(OS);
+    } else if (const auto *SCC = unwrapIR<LazyCallGraph::SCC>(IR)) {
+        for (auto &CGN : *SCC) {
+            Function &F = CGN.getFunction();
+            F.print(OS);
+        }
+    } else {
+        OS << "Unknown IR type\n";
+    }
+}
+
 void NewPM::run(Module &M) {
     //We must recreate the analysis managers every time
     //so that analyses from previous runs of the pass manager
     //do not hang around for the next run
-    StandardInstrumentations SI(M.getContext(),false);
+    StandardInstrumentations SI(M.getContext(), /*DebugLogging=*/false);
     PassInstrumentationCallbacks PIC;
     adjustPIC(PIC);
     TimePasses.registerCallbacks(PIC);
+
+    // Register print callbacks if print options are set
+    raw_ostream &OS = print_options.out ? *print_options.out : errs();
+
+    // Print any errors from option parsing
+    if (!print_options.error.empty()) {
+        OS << print_options.error;
+    }
+
+    bool should_print = print_options.print_before_all || print_options.print_after_all ||
+                        !print_options.print_before.empty() || !print_options.print_after.empty();
+
+    // Helper to check if PassID matches any name in a list
+    auto matchesAny = [](StringRef PassID, const SmallVector<std::string, 1> &names) JL_NOTSAFEPOINT -> bool {
+        for (const auto &name : names) {
+            if (PassID.contains(name))
+                return true;
+        }
+        return false;
+    };
+
+    if (should_print) {
+        if (print_options.print_before_all || !print_options.print_before.empty()) {
+            PIC.registerBeforeNonSkippedPassCallback(
+                [this, &OS, &M, &matchesAny](StringRef PassID, Any IR) {
+                    bool should_print_pass = print_options.print_before_all ||
+                        matchesAny(PassID, print_options.print_before);
+                    if (!should_print_pass)
+                        return;
+
+                    // Check function filter if set
+                    if (!print_options.filter_print_funcs.empty()) {
+                        const Function *F = unwrapIR<Function>(IR);
+                        if (!F) {
+                            if (const auto *L = unwrapIR<Loop>(IR))
+                                F = L->getHeader()->getParent();
+                        }
+                        if (!F)
+                            return;
+                        bool matched = false;
+                        for (const auto &filter : print_options.filter_print_funcs) {
+                            if (F->getName().contains(filter)) {
+                                matched = true;
+                                break;
+                            }
+                        }
+                        if (!matched)
+                            return;
+                    }
+
+                    OS << "*** IR Dump Before " << PassID << " ***\n";
+                    if (print_options.print_module_scope) {
+                        M.print(OS, nullptr);
+                    } else {
+                        printIR(OS, IR);
+                    }
+                });
+        }
+
+        if (print_options.print_after_all || !print_options.print_after.empty()) {
+            PIC.registerAfterPassCallback(
+                [this, &OS, &M, &matchesAny](StringRef PassID, Any IR, const PreservedAnalyses &) {
+                    bool should_print_pass = print_options.print_after_all ||
+                        matchesAny(PassID, print_options.print_after);
+                    if (!should_print_pass)
+                        return;
+
+                    // Check function filter if set
+                    if (!print_options.filter_print_funcs.empty()) {
+                        const Function *F = unwrapIR<Function>(IR);
+                        if (!F) {
+                            if (const auto *L = unwrapIR<Loop>(IR))
+                                F = L->getHeader()->getParent();
+                        }
+                        if (!F)
+                            return;
+                        bool matched = false;
+                        for (const auto &filter : print_options.filter_print_funcs) {
+                            if (F->getName().contains(filter)) {
+                                matched = true;
+                                break;
+                            }
+                        }
+                        if (!matched)
+                            return;
+                    }
+
+                    OS << "*** IR Dump After " << PassID << " ***\n";
+                    if (print_options.print_module_scope) {
+                        M.print(OS, nullptr);
+                    } else {
+                        printIR(OS, IR);
+                    }
+                });
+        }
+    }
+
     FunctionAnalysisManager FAM(createFAM(O, *TM.get()));
     LoopAnalysisManager LAM;
     CGSCCAnalysisManager CGAM;

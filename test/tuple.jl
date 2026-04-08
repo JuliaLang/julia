@@ -882,5 +882,13 @@ end
     end
 end
 
+@testset "isassigned" begin
+    t = (1, 2, 3)
+    @test isassigned(t, 0) === false
+    @test isassigned(t, 1) === true
+    @test isassigned(t, 3) === true
+    @test isassigned(t, 4) === false
+end
+
 @test NTuple == Base.infer_return_type(reverse, Tuple{NTuple})
 @test Tuple{Vararg{Int}} == Base.infer_return_type(reverse, Tuple{Tuple{Vararg{Int}}})

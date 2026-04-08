@@ -1,5 +1,3 @@
-@testset "Scopes" begin
-
 test_mod = Module()
 
 #-------------------------------------------------------------------------------
@@ -98,6 +96,7 @@ end
     # worth replicating this behaviour.  We would likely need to copy the way
     # flisp nests an extra scope block in every lambda.
     @testset "arg,global" begin
+        local f
         s = "function (a); global a = 1; a; end"
         @test_broken f = JuliaLowering.include_string(test_mod, s)
         @test_broken f isa Function
@@ -105,6 +104,7 @@ end
         @test_broken isdefinedglobal(test_mod, :a)
     end
     @testset "sparam,global" begin
+        local f
         s = "function (a::s) where {s}; global s = 1; s; end"
         @test_broken f = JuliaLowering.include_string(test_mod, s)
         @test_broken f isa Function
@@ -130,6 +130,7 @@ end
     # should have similar conflict rules to arguments
     @testset "destructured-arg,destructured-arg/arg/local/sp/global" begin
         s = "function ((x,x)); end"
+        # this works in flisp; should it?
         @test_throws LoweringError JuliaLowering.include_string(test_mod, s)
         s = "function ((x,y),x); end"
         @test_throws LoweringError JuliaLowering.include_string(test_mod, s)
@@ -272,7 +273,7 @@ lhs_names = (:lname, :gname, :argname, :spname)
             @test_throws LoweringError expr_eval(tmp_test_mod, ex)
         else
             expected = results[lhs_i]
-            reference_ok = reference_eval(tmp_test_mod_2, ex) === expected
+            reference_ok = fl_eval(tmp_test_mod_2, ex) === expected
             !reference_ok && @error("flisp produced unexpected result; fix that or JL scope tests:\n",
                                    "expected $(expected_s(expected)), got $(expected_s(!expected))\n", ex)
             ok = expr_eval(tmp_test_mod, ex) === expected
@@ -342,6 +343,148 @@ end
     end
 end
 
+module ambiguous_local
+    global x::Int = 0
+end
+
+function resolve_and_get_bindings(
+        mod::Module, ex;
+        world::UInt = Base.get_world_counter(),
+        soft_scope::Union{Nothing,Bool} = nothing,
+    )
+    est = JuliaLowering.expr_to_est(ex)
+    ctx1, ex1 = JuliaLowering.expand_forms_1(mod, est, false, world)
+    ctx2, ex2 = JuliaLowering.expand_forms_2(ctx1, ex1)
+    ctx3, _ = JuliaLowering.resolve_scopes(ctx2, ex2; soft_scope)
+    return ctx3.bindings.info
+end
+
+@testset "is_ambiguous_local" begin
+    # Assignment in for loop within begin block after toplevel assignment
+    let bindings = resolve_and_get_bindings(ambiguous_local, :(for _ = 1:10; x = 1; end))
+        binfo = only(filter(b->b.name=="x", bindings))
+        @test binfo.kind === :local
+        @test binfo.is_ambiguous_local
+    end
+
+    # while loop
+    let bindings = resolve_and_get_bindings(ambiguous_local, :(while x < 5; x += 1; break; end))
+        binfos = filter(b->b.name=="x", bindings)
+        @test length(binfos) == 2
+        binfo = only(filter(b->b.kind==:local, binfos))
+        @test binfo.is_ambiguous_local
+        @test count(b->b.kind==:global, binfos) == 1
+    end
+
+    # No ambiguity inside a function (hard scope)
+    let bindings = resolve_and_get_bindings(ambiguous_local, :(function f()
+            for _ = 1:10
+                x = 1
+            end
+        end))
+        binfo = only(filter(b->b.name=="x", bindings))
+        @test binfo.kind === :local
+        @test !binfo.is_ambiguous_local
+    end
+
+    # No ambiguity when shadowing global variable does not exist
+    let bindings = resolve_and_get_bindings(ambiguous_local, :(for _ = 1:10; y = 1; end))
+        binfo = only(filter(b->b.name=="y", bindings))
+        @test binfo.kind === :local
+        @test !binfo.is_ambiguous_local
+    end
+
+    # Explicit `global` should not produce ambiguous local
+    let bindings = resolve_and_get_bindings(ambiguous_local, :(for _ = 1:10; global x = 1; end))
+        binfo = only(filter(b->b.name=="x", bindings))
+        @test binfo.kind === :global
+    end
+
+    # Block containing a toplevel assignment preceding a permeable scope
+    let bindings = resolve_and_get_bindings(Module(), quote
+            x = 0
+            for _ = 1:10
+                x = 1
+            end
+        end)
+        binfos = filter(b->b.name=="x", bindings)
+        @test length(binfos) == 2
+        binfo = only(filter(b->b.kind==:local, binfos))
+        @test binfo.is_ambiguous_local
+        @test count(b->b.kind==:global, binfos) == 1
+    end
+    # Block containing a permeable scope followed by a toplevel assignment
+    let bindings = resolve_and_get_bindings(Module(), quote
+            for _ = 1:10
+                x = 1
+            end
+            x = 0
+        end)
+        binfos = filter(b->b.name=="x", bindings)
+        @test length(binfos) == 2
+        binfo = only(filter(b->b.kind==:local, binfos))
+        @test binfo.is_ambiguous_local
+        @test count(b->b.kind==:global, binfos) == 1
+    end
+
+    # For some reason, flisp can avoid ambiguity when there is an additional `global` annotation.
+    # JuliaLowering may want to follow suit, but it would be better to first decide on the details of this behaviour.
+    let bindings = resolve_and_get_bindings(Module(), quote
+            global x = 0
+            for _ = 1:10
+                x = 1
+            end
+        end)
+        binfos = filter(b->b.name=="x", bindings)
+        @test length(binfos) == 2
+        binfo = only(filter(b->b.kind==:local, binfos))
+        @test_broken !binfo.is_ambiguous_local
+        @test count(b->b.kind==:global, binfos) == 1
+    end
+    let bindings = resolve_and_get_bindings(Module(), quote
+            for _ = 1:10
+                x = 1
+            end
+            global x = 0
+        end)
+        binfos = filter(b->b.name=="x", bindings)
+        @test length(binfos) == 2
+        binfo = only(filter(b->b.kind==:local, binfos))
+        @test_broken !binfo.is_ambiguous_local
+        @test count(b->b.kind==:global, binfos) == 1
+    end
+
+    @testset "soft_scope kwarg override" begin
+        # Without soft_scope, x becomes an ambiguous local
+        let bindings = resolve_and_get_bindings(ambiguous_local, :(for _ = 1:10; x = 1; end))
+            binfo = only(filter(b->b.name=="x", bindings))
+            @test binfo.kind === :local
+            @test binfo.is_ambiguous_local
+        end
+        # With soft_scope=true, x stays global (no local created)
+        let bindings = resolve_and_get_bindings(ambiguous_local, :(for _ = 1:10; x = 1; end); soft_scope=true)
+            binfo = only(filter(b->b.name=="x", bindings))
+            @test binfo.kind === :global
+        end
+    end
+
+    @testset "world-age propagation" begin
+        let m = Module()
+            Core.eval(m, :(global x = 0))
+            bindings = resolve_and_get_bindings(m, :(for _ = 1:10; x = 1; end); world=Base.get_world_counter())
+            binfo = only(filter(b->b.name=="x", bindings))
+            @test binfo.kind === :local
+            @test binfo.is_ambiguous_local
+        end
+        let m = Module()
+            Core.eval(m, :(global x = 0))
+            bindings = resolve_and_get_bindings(m, :(for _ = 1:10; x = 1; end); world=Base.get_world_counter(), soft_scope=true)
+            binfo = only(filter(b->b.name=="x", bindings))
+            @test binfo.kind === :global
+        end
+    end
+end
+
 # Note: Certain flisp (un)hygiene behaviour is yet to be implemented.
 # In flisp, with no escaping:
 # - Top-level functions are unhygienic and declared in the macro's module
@@ -368,6 +511,4 @@ end
     @test isdefined(test_mod, :c_nonlocal_2)
     JuliaLowering.include_string(test_mod, "macro_mod.@mesc const c_nonlocal_3 = 1"; expr_compat_mode=true)
     @test isdefined(test_mod, :c_nonlocal_3)
-end
-
 end
