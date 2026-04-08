@@ -3478,7 +3478,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             emit_lockstate_value(ctx, needlock, false);
         return ret;
     }
-    else if (isa<UndefValue>(strct.V)) {
+    else if (isa<UndefValue>(strct.V) || isa<PoisonValue>(strct.V)) {
         return jl_cgval_t();
     }
     else {
@@ -3692,7 +3692,7 @@ static jl_value_t *static_constant_instance(const llvm::DataLayout &DL, Constant
     assert(constant != NULL && jl_is_concrete_type(jt));
     jl_datatype_t *jst = (jl_datatype_t*)jt;
 
-    if (isa<UndefValue>(constant))
+    if (isa<UndefValue>(constant) || isa<PoisonValue>(constant))
         return NULL;
 
     if (ConstantInt *cint = dyn_cast<ConstantInt>(constant)) {
@@ -3883,7 +3883,7 @@ static Value *compute_box_tindex(jl_codectx_t &ctx, const jl_cgval_t &val, jl_va
 static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *typ, bool maybenull=false)
 {
     if (val.typ == jl_bottom_type)
-        return UndefValue::get(getInt8Ty(ctx.builder.getContext()));
+        return PoisonValue::get(getInt8Ty(ctx.builder.getContext()));
     if (val.constant)
         return ConstantInt::get(getInt8Ty(ctx.builder.getContext()), get_box_tindex((jl_datatype_t*)jl_typeof(val.constant), typ));
     if (val.TIndex)
@@ -4098,8 +4098,8 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
 {
     jl_value_t *jt = vinfo.typ;
     if (jt == jl_bottom_type || jt == NULL)
-        // We have an undef value on a (hopefully) dead branch
-        return UndefValue::get(ctx.types().T_prjlvalue);
+        // We have a poison value on a (hopefully) dead branch
+        return PoisonValue::get(ctx.types().T_prjlvalue);
     if (vinfo.constant)
         return track_pjlvalue(ctx, literal_pointer_val(ctx, vinfo.constant));
     // This can happen in early bootstrap for `gc_preserve_begin` return value.
@@ -4156,9 +4156,10 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
 static void emit_unionmove(jl_codectx_t &ctx, Value *dest, jl_value_t *desttype,
         MDNode *tbaa_dst, const jl_cgval_t &src, Value *tindex, Value *skip, bool isVolatile)
 {
-    if (AllocaInst *ai = dyn_cast<AllocaInst>(dest))
-        // TODO: make this a lifetime_end & dereferenceable annotation?
-        ctx.builder.CreateAlignedStore(UndefValue::get(ai->getAllocatedType()), ai, ai->getAlign());
+    if (isa<AllocaInst>(dest)) {
+        ctx.builder.CreateLifetimeEnd(dest);
+        ctx.builder.CreateLifetimeStart(dest);
+    }
     auto dest_ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa_dst);
     if (src.constant) {
         jl_value_t *typ = jl_typeof(src.constant);
@@ -4439,7 +4440,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                     strct = Constant::getNullValue(lt);
                 }
                 else {
-                    strct = UndefValue::get(lt);
+                    strct = PoisonValue::get(lt);
                     if (nargs < nf)
                         strct = ctx.builder.CreateFreeze(strct); // Change this to zero initialize instead?
                 }
@@ -4692,7 +4693,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
         bool isboxed;
         Type *lt = julia_type_to_llvm(ctx, ty, &isboxed);
         assert(!isboxed);
-        return mark_julia_type(ctx, ctx.builder.CreateFreeze(UndefValue::get(lt)), false, ty);
+        return mark_julia_type(ctx, ctx.builder.CreateFreeze(PoisonValue::get(lt)), false, ty);
     }
 }
 

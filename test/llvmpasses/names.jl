@@ -81,10 +81,10 @@ function fmemory(nel)
     return Memory{Int64}(undef,nel)
 end
 # CHECK-LABEL: define {{(swiftcc )?}}double @julia_f1
-# CHECK-SAME: double %"a::Float64"
-# CHECK-SAME: double %"b::Float64"
-# CHECK-SAME: double %"c::Float64"
-# CHECK-SAME: double %"d::Float64"
+# CHECK-SAME: double noundef %"a::Float64"
+# CHECK-SAME: double noundef %"b::Float64"
+# CHECK-SAME: double noundef %"c::Float64"
+# CHECK-SAME: double noundef %"d::Float64"
 
 # CHECK: fadd double
 # CHECK-DAG: %"a::Float64"
@@ -106,31 +106,31 @@ end
 emit(f1, Float64, Float64, Float64, Float64)
 
 # CHECK: define {{(swiftcc )?}}double @julia_f2
-# CHECK-SAME: double %"a::Float64"
-# CHECK-SAME: double %"b::Float64"
-# CHECK-SAME: double %"c::Float64"
-# CHECK-SAME: double %"d::Float64"
-# CHECK-SAME: double %"e[1]::Float64"
+# CHECK-SAME: double noundef %"a::Float64"
+# CHECK-SAME: double noundef %"b::Float64"
+# CHECK-SAME: double noundef %"c::Float64"
+# CHECK-SAME: double noundef %"d::Float64"
+# CHECK-SAME: double noundef %"e[1]::Float64"
 emit(f2, Float64, Float64, Float64, Float64, Float64)
 
 # CHECK: define {{(swiftcc )?}}double @julia_f2
-# CHECK-SAME: double %"a::Float64"
-# CHECK-SAME: double %"b::Float64"
-# CHECK-SAME: double %"c::Float64"
-# CHECK-SAME: double %"d::Float64"
-# CHECK-SAME: double %"e[1]::Float64"
-# CHECK-SAME: double %"e[2]::Float64"
+# CHECK-SAME: double noundef %"a::Float64"
+# CHECK-SAME: double noundef %"b::Float64"
+# CHECK-SAME: double noundef %"c::Float64"
+# CHECK-SAME: double noundef %"d::Float64"
+# CHECK-SAME: double noundef %"e[1]::Float64"
+# CHECK-SAME: double noundef %"e[2]::Float64"
 emit(f2, Float64, Float64, Float64, Float64, Float64, Float64)
 
 
 # CHECK: define {{(swiftcc )?}}double @julia_f2
-# CHECK-SAME: double %"a::Float64"
-# CHECK-SAME: double %"b::Float64"
-# CHECK-SAME: double %"c::Float64"
-# CHECK-SAME: double %"d::Float64"
-# CHECK-SAME: double %"e[1]::Float64"
-# CHECK-SAME: double %"e[2]::Float64"
-# CHECK-SAME: double %"e[3]::Float64"
+# CHECK-SAME: double noundef %"a::Float64"
+# CHECK-SAME: double noundef %"b::Float64"
+# CHECK-SAME: double noundef %"c::Float64"
+# CHECK-SAME: double noundef %"d::Float64"
+# CHECK-SAME: double noundef %"e[1]::Float64"
+# CHECK-SAME: double noundef %"e[2]::Float64"
+# CHECK-SAME: double noundef %"e[3]::Float64"
 emit(f2, Float64, Float64, Float64, Float64, Float64, Float64, Float64)
 
 # CHECK: define {{(swiftcc )?}}nonnull ptr @julia_f5

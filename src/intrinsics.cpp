@@ -328,7 +328,7 @@ static Constant *undef_value_for_type(Type *T) {
         // make sure gc pointers (including ptr_phi of union-split) are initialized to NULL
         undef = Constant::getNullValue(T);
     else
-        undef = UndefValue::get(T);
+        undef = PoisonValue::get(T);
     return undef;
 }
 
