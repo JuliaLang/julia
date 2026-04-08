@@ -300,7 +300,7 @@ function Base.show(io::IO, t::Error)
         println(io, " Unexpected Pass")
         println(io, " Expression: ", t.orig_expr)
         if t.context !== nothing
-            println(io, "     Context: ", t.context)
+            println(io, "    Context: ", t.context)
         end
         print(io, " Got correct result, please change to @test if no longer broken.")
     elseif t.test_type === :nontest_error
