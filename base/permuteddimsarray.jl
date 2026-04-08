@@ -51,7 +51,7 @@ Base.axes(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = genperm(axes(parent
 Base.has_offset_axes(A::PermutedDimsArray) = Base.has_offset_axes(A.parent)
 Base.similar(A::PermutedDimsArray, T::Type, dims::Base.Dims) = similar(parent(A), T, dims)
 Base.dataids(A::PermutedDimsArray) = Base.dataids(parent(A))
-Base.unaliascopy(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = PermutedDimsArray(copy(parent(A)), perm)
+Base.unaliascopy(A::PermutedDimsArray) = typeof(A)(Base.unaliascopy(parent(A)))
 Base.cconvert(::Type{Ptr{T}}, A::PermutedDimsArray{T}) where {T} = Base.cconvert(Ptr{T}, parent(A))
 
 # It's OK to return a pointer to the first element, and indeed quite
