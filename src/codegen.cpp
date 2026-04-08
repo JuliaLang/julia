@@ -357,6 +357,9 @@ struct jl_tbaacache_t {
     MDNode *tbaa_ptrarraybuf_scalar; // scalar type node for boxed array data (parent for per-eltype nodes)
     bool initialized;
     std::map<jl_datatype_t*, MDNode*> tbaa_per_type; // per-concrete-type access tags
+    std::map<jl_datatype_t*, MDNode*> tbaa_per_type_scalar; // per-concrete-type scalar type nodes
+    std::map<jl_datatype_t*, MDNode*> tbaa_per_type_struct; // per-concrete-type struct type nodes
+    std::map<std::pair<jl_datatype_t*, unsigned>, MDNode*> tbaa_per_field; // per-(type, field_idx) access tags
     std::map<jl_datatype_t*, MDNode*> tbaa_per_arraybuf; // per-element-type POD array data tags
     std::map<jl_datatype_t*, MDNode*> tbaa_per_ptrarraybuf; // per-element-type boxed array data tags
 
@@ -383,19 +386,87 @@ struct jl_tbaacache_t {
         return false;
     }
 
-    // Get or create a per-concrete-type TBAA access tag
-    MDNode *get_tbaa_for_type(jl_datatype_t *dt) {
+    // Get or create the TBAA scalar type node for a concrete type
+    MDNode *get_tbaa_scalar_for_type(jl_datatype_t *dt) {
         assert(dt->isconcretetype);
-        auto it = tbaa_per_type.find(dt);
-        if (it != tbaa_per_type.end())
+        auto it = tbaa_per_type_scalar.find(dt);
+        if (it != tbaa_per_type_scalar.end())
             return it->second;
         MDNode *parent_scalar = dt->name->mutabl ? tbaa_mutab_scalar : tbaa_immut_scalar;
         MDBuilder mbuilder(tbaa_root->getContext());
         std::string name = "jtbaa_";
         name += jl_symbol_name(dt->name->name);
         MDNode *scalar = mbuilder.createTBAAScalarTypeNode(name, parent_scalar);
+        tbaa_per_type_scalar[dt] = scalar;
+        return scalar;
+    }
+
+    // Get or create a per-concrete-type TBAA access tag (whole-object access)
+    MDNode *get_tbaa_for_type(jl_datatype_t *dt) {
+        assert(dt->isconcretetype);
+        auto it = tbaa_per_type.find(dt);
+        if (it != tbaa_per_type.end())
+            return it->second;
+        MDNode *scalar = get_tbaa_scalar_for_type(dt);
+        MDBuilder mbuilder(tbaa_root->getContext());
         MDNode *tag = mbuilder.createTBAAStructTagNode(scalar, scalar, 0);
         tbaa_per_type[dt] = tag;
+        return tag;
+    }
+
+    // Get or create a TBAA struct type node for a concrete type's field layout
+    MDNode *get_tbaa_struct_type(jl_datatype_t *dt) {
+        assert(dt->isconcretetype && dt->layout);
+        auto it = tbaa_per_type_struct.find(dt);
+        if (it != tbaa_per_type_struct.end())
+            return it->second;
+        MDBuilder mbuilder(tbaa_root->getContext());
+        uint32_t nfields = jl_datatype_nfields(dt);
+        SmallVector<std::pair<MDNode*, uint64_t>, 4> fields;
+        for (uint32_t i = 0; i < nfields; i++) {
+            jl_value_t *fty = jl_field_type(dt, i);
+            MDNode *field_scalar;
+            if (jl_field_isptr(dt, i)) {
+                // Pointer (boxed) fields — use the generic mutab scalar
+                // since the actual pointed-to type is not known at the memory level
+                field_scalar = tbaa_mutab_scalar;
+            } else if (jl_is_datatype(fty) && ((jl_datatype_t*)fty)->isconcretetype) {
+                field_scalar = get_tbaa_scalar_for_type((jl_datatype_t*)fty);
+            } else {
+                // Abstract/union field type — use the type's own scalar as fallback
+                field_scalar = get_tbaa_scalar_for_type(dt);
+            }
+            fields.push_back({field_scalar, jl_field_offset(dt, i)});
+        }
+        std::string name = "jtbaa_struct_";
+        name += jl_symbol_name(dt->name->name);
+        MDNode *struct_type = mbuilder.createTBAAStructTypeNode(name, fields);
+        tbaa_per_type_struct[dt] = struct_type;
+        return struct_type;
+    }
+
+    // Get or create a struct-path TBAA access tag for a specific field
+    MDNode *get_tbaa_for_field(jl_datatype_t *dt, unsigned idx) {
+        assert(dt->isconcretetype && dt->layout);
+        assert(idx < jl_datatype_nfields(dt));
+        auto key = std::make_pair(dt, idx);
+        auto it = tbaa_per_field.find(key);
+        if (it != tbaa_per_field.end())
+            return it->second;
+        MDNode *struct_type = get_tbaa_struct_type(dt);
+        jl_value_t *fty = jl_field_type(dt, idx);
+        MDNode *field_scalar;
+        if (jl_field_isptr(dt, idx)) {
+            field_scalar = tbaa_mutab_scalar;
+        } else if (jl_is_datatype(fty) && ((jl_datatype_t*)fty)->isconcretetype) {
+            field_scalar = get_tbaa_scalar_for_type((jl_datatype_t*)fty);
+        } else {
+            field_scalar = get_tbaa_scalar_for_type(dt);
+        }
+        uint64_t offset = jl_field_offset(dt, idx);
+        MDBuilder mbuilder(tbaa_root->getContext());
+        MDNode *tag = mbuilder.createTBAAStructTagNode(struct_type, field_scalar, offset);
+        tbaa_per_field[key] = tag;
         return tag;
     }
 

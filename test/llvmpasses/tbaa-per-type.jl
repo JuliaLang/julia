@@ -4,7 +4,7 @@
 # RUN: cat %t/module.ll | FileCheck %s
 
 ## Test that per-type TBAA metadata is emitted for concrete struct types
-## and array element types.
+## (including struct-path TBAA for field access) and array element types.
 
 include(joinpath("..", "testhelpers", "llvmpasses.jl"))
 
@@ -14,8 +14,9 @@ mutable struct MutBar1; y::Int; end
 function different_mutable_types(a::MutFoo1, b::MutBar1, val::Int)
     a.x = val
     return b.y
-# CHECK: store i64 %{{.*}}, {{.*}} !tbaa [[TBAA_FOO:![0-9]+]]
-# CHECK: load i64, {{.*}} !tbaa [[TBAA_BAR:![0-9]+]]
+# Struct-path access tags: {struct_type, field_scalar, offset}
+# CHECK: store i64 %{{.*}}, {{.*}} !tbaa [[TBAA_FOO_X:![0-9]+]]
+# CHECK: load i64, {{.*}} !tbaa [[TBAA_BAR_Y:![0-9]+]]
 end
 
 # CHECK-LABEL: @julia_array_different_eltypes
@@ -26,16 +27,17 @@ function array_different_eltypes(a::Vector{Int64}, b::Vector{Float64}, val::Int6
 # CHECK: load double, {{.*}} !tbaa [[TBAA_ARRAYBUF_FLOAT:![0-9]+]]
 end
 
-# Verify the TBAA hierarchy: per-type nodes are children of jtbaa_mutab,
-# and per-element-type array nodes are children of jtbaa_arraybuf.
+# Verify struct-path TBAA: field access tags reference struct type nodes
+# MutFoo1.x: {struct_MutFoo1, Int64_scalar, offset 0}
+# CHECK-DAG: [[TBAA_FOO_X]] = !{[[STRUCT_FOO:![0-9]+]], [[INT_SCALAR:![0-9]+]], i64 0}
+# CHECK-DAG: [[STRUCT_FOO]] = !{!"jtbaa_struct_MutFoo1", [[INT_SCALAR]], i64 0}
+# CHECK-DAG: [[INT_SCALAR]] = !{!"jtbaa_Int64", [[IMMUT_SCALAR:![0-9]+]], i64 0}
 
-# CHECK-DAG: [[TBAA_FOO]] = !{[[FOO_SCALAR:![0-9]+]], [[FOO_SCALAR]], i64 0}
-# CHECK-DAG: [[FOO_SCALAR]] = !{!"jtbaa_MutFoo1", [[MUTAB_SCALAR:![0-9]+]], i64 0}
-# CHECK-DAG: [[MUTAB_SCALAR]] = !{!"jtbaa_mutab", [[VALUE_SCALAR:![0-9]+]], i64 0}
+# MutBar1.y: {struct_MutBar1, Int64_scalar, offset 0}
+# CHECK-DAG: [[TBAA_BAR_Y]] = !{[[STRUCT_BAR:![0-9]+]], [[INT_SCALAR]], i64 0}
+# CHECK-DAG: [[STRUCT_BAR]] = !{!"jtbaa_struct_MutBar1", [[INT_SCALAR]], i64 0}
 
-# CHECK-DAG: [[TBAA_BAR]] = !{[[BAR_SCALAR:![0-9]+]], [[BAR_SCALAR]], i64 0}
-# CHECK-DAG: [[BAR_SCALAR]] = !{!"jtbaa_MutBar1", [[MUTAB_SCALAR]], i64 0}
-
+# Array element types are children of jtbaa_arraybuf
 # CHECK-DAG: [[TBAA_ARRAYBUF_INT]] = !{[[ARRAYBUF_INT_SCALAR:![0-9]+]], [[ARRAYBUF_INT_SCALAR]], i64 0}
 # CHECK-DAG: [[ARRAYBUF_INT_SCALAR]] = !{!"jtbaa_arraybuf_Int64", [[ARRAYBUF_SCALAR:![0-9]+]], i64 0}
 # CHECK-DAG: [[ARRAYBUF_SCALAR]] = !{!"jtbaa_arraybuf", [[DATA_SCALAR:![0-9]+]], i64 0}
