@@ -188,7 +188,8 @@ function printpkgstyle(io, header, msg; color=:green)
     end
 end
 
-timing_string(t) = string(lpad(round(t * 1e3, digits = 1), 9), " ms")
+_timing_string(t) = string(lpad(round(t, digits = 1), 9), " s")
+
 
 function color_string(cstr::String, col::Union{Int64, Symbol}, hascolor)
     if hascolor
