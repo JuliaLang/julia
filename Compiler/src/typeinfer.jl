@@ -1896,14 +1896,20 @@ end
 # collect a list of all code that is needed along with CodeInstance to codegen it fully
 function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vector{VarState};
                          invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
-                         enqueue_unprepared_invokes::Bool = false)
+                         enqueue_unprepared_invokes::Bool = false,
+                         external_linkage::Bool = false)
     src = ci.code
     for i = 1:length(src)
         stmt = src[i]
         isexpr(stmt, :(=)) && (stmt = stmt.args[2])
         if isexpr(stmt, :invoke) || isexpr(stmt, :invoke_modify)
             edge = stmt.args[1]
+            # If this CodeInstance is already compiled in the image, and we can
+            # link to it, we should do that instead of compiling it again.  With
+            # invoke_modify, we need to compile it regardless.
             if edge isa CodeInstance && has_valid_abi_sparams(get_ci_mi(edge)) &&
+                    (isexpr(stmt, :invoke_modify) ||
+                     !(external_linkage && ci_from_image(edge) && ci_has_invoke(edge))) &&
                     (enqueue_unprepared_invokes ||
                      ci_has_invoke(edge) || ci_has_source(workqueue.interp, edge) ||
                      !iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), get_ci_mi(edge), edge)))
@@ -2114,7 +2120,6 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
         elseif item isa CodeInstance
             callee = item
             isinspected(workqueue, callee) && continue
-            external_linkage && ci_from_image(callee) && ci_has_invoke(callee) && continue
             mi = get_ci_mi(callee)
             if !has_valid_abi_sparams(mi)
                 markinspected!(workqueue, callee)
@@ -2141,7 +2146,7 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             if src isa CodeInfo
                 sptypes = sptypes_from_meth_instance(mi)
                 collectinvokes!(workqueue, src, sptypes; invokelatest_queue,
-                                enqueue_unprepared_invokes)
+                                enqueue_unprepared_invokes, external_linkage)
                 # try to reuse an existing CodeInstance from before to avoid making duplicates in the cache
                 if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
                     cached = find_equivalent_cached_ci(
