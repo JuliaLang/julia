@@ -2736,10 +2736,8 @@ function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::V
         startindex = CartesianIndex(ntuple(i -> offsets[i] + 1, Val(N)))
         if isa(a, AbstractArray)
             if !isempty(a)
-                if length(a) > 4
-                    endindex = CartesianIndex(ntuple(i -> offsets[i] + cat_size(a, i), Val(N)))
-                    @inbounds A[startindex:endindex] = a
-                else
+                if isa(a, Array) && length(a) ≤ 4
+                    # Optimization for small iterable arrays
                     for ai ∈ a
                         @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdimsprod, N)
                         @inbounds A[Ai] = ai
@@ -2749,6 +2747,9 @@ function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::V
                             inneroffsets[j] = 0
                         end
                     end
+                else
+                    endindex = CartesianIndex(ntuple(i -> offsets[i] + cat_size(a, i), Val(N)))
+                    @inbounds A[startindex:endindex] = a
                 end
             end
         else
