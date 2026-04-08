@@ -3682,7 +3682,7 @@ static void init_bits_value(jl_codectx_t &ctx, Value *newv, Value *v, MDNode *tb
 
 static void init_bits_cgval(jl_codectx_t &ctx, Value *newv, const jl_cgval_t &v)
 {
-    MDNode *tbaa = jl_is_mutable(v.typ) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut;
+    MDNode *tbaa = best_tbaa(ctx.tbaa(), v.typ);
     unsigned alignment = julia_alignment(v.typ);
     unsigned newv_align = std::max(alignment, (unsigned)sizeof(void*));
     newv = maybe_decay_tracked(ctx, newv);

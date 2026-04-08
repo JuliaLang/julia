@@ -351,7 +351,14 @@ struct jl_tbaacache_t {
     MDNode *tbaa_memorylen;      // The length in a jl_genericmemory_t
     MDNode *tbaa_memoryown;      // The owner in a foreign jl_genericmemory_t
     MDNode *tbaa_const;      // Memory that is immutable by the time LLVM can see it
+    MDNode *tbaa_mutab_scalar;   // scalar type node for mutable types (parent for per-type nodes)
+    MDNode *tbaa_immut_scalar;   // scalar type node for immutable types (parent for per-type nodes)
+    MDNode *tbaa_arraybuf_scalar;    // scalar type node for POD array data (parent for per-eltype nodes)
+    MDNode *tbaa_ptrarraybuf_scalar; // scalar type node for boxed array data (parent for per-eltype nodes)
     bool initialized;
+    std::map<jl_datatype_t*, MDNode*> tbaa_per_type; // per-concrete-type access tags
+    std::map<jl_datatype_t*, MDNode*> tbaa_per_arraybuf; // per-element-type POD array data tags
+    std::map<jl_datatype_t*, MDNode*> tbaa_per_ptrarraybuf; // per-element-type boxed array data tags
 
     jl_tbaacache_t(): tbaa_root(nullptr), tbaa_gcframe(nullptr), tbaa_stack(nullptr),
                     tbaa_unionselbyte(nullptr), tbaa_data(nullptr), tbaa_binding(nullptr),
@@ -359,7 +366,54 @@ struct jl_tbaacache_t {
                     tbaa_immut(nullptr), tbaa_ptrarraybuf(nullptr), tbaa_arraybuf(nullptr),
                     tbaa_array(nullptr), tbaa_arrayptr(nullptr), tbaa_arraysize(nullptr),
                     tbaa_arrayselbyte(nullptr), tbaa_memoryptr(nullptr), tbaa_memorylen(nullptr), tbaa_memoryown(nullptr),
-                    tbaa_const(nullptr), initialized(false) {}
+                    tbaa_const(nullptr), tbaa_mutab_scalar(nullptr), tbaa_immut_scalar(nullptr),
+                    tbaa_arraybuf_scalar(nullptr), tbaa_ptrarraybuf_scalar(nullptr),
+                    initialized(false) {}
+
+    // Check if a TBAA access tag is tbaa_immut or a per-type child of it
+    bool is_tbaa_immut_descendant(MDNode *tag) const {
+        if (tag == tbaa_immut) return true;
+        if (!tag) return false;
+        MDNode *scalar = cast<MDNode>(tag->getOperand(1));
+        if (scalar->getNumOperands() >= 2) {
+            MDNode *parent = dyn_cast<MDNode>(scalar->getOperand(1));
+            if (parent == tbaa_immut_scalar)
+                return true;
+        }
+        return false;
+    }
+
+    // Get or create a per-concrete-type TBAA access tag
+    MDNode *get_tbaa_for_type(jl_datatype_t *dt) {
+        assert(dt->isconcretetype);
+        auto it = tbaa_per_type.find(dt);
+        if (it != tbaa_per_type.end())
+            return it->second;
+        MDNode *parent_scalar = dt->name->mutabl ? tbaa_mutab_scalar : tbaa_immut_scalar;
+        MDBuilder mbuilder(tbaa_root->getContext());
+        std::string name = "jtbaa_";
+        name += jl_symbol_name(dt->name->name);
+        MDNode *scalar = mbuilder.createTBAAScalarTypeNode(name, parent_scalar);
+        MDNode *tag = mbuilder.createTBAAStructTagNode(scalar, scalar, 0);
+        tbaa_per_type[dt] = tag;
+        return tag;
+    }
+
+    // Get or create a per-element-type TBAA access tag for array buffer data
+    MDNode *get_tbaa_for_arraybuf(jl_datatype_t *ety, bool isboxed) {
+        auto &cache = isboxed ? tbaa_per_ptrarraybuf : tbaa_per_arraybuf;
+        auto it = cache.find(ety);
+        if (it != cache.end())
+            return it->second;
+        MDNode *parent_scalar = isboxed ? tbaa_ptrarraybuf_scalar : tbaa_arraybuf_scalar;
+        MDBuilder mbuilder(tbaa_root->getContext());
+        std::string name = isboxed ? "jtbaa_ptrarraybuf_" : "jtbaa_arraybuf_";
+        name += jl_symbol_name(ety->name->name);
+        MDNode *scalar = mbuilder.createTBAAScalarTypeNode(name, parent_scalar);
+        MDNode *tag = mbuilder.createTBAAStructTagNode(scalar, scalar, 0);
+        cache[ety] = tag;
+        return tag;
+    }
 
     auto tbaa_make_child(MDBuilder &mbuilder, const char *name, MDNode *parent = nullptr, bool isConstant = false) {
         MDNode *scalar = mbuilder.createTBAAScalarTypeNode(name, parent ? parent : tbaa_root);
@@ -386,13 +440,15 @@ struct jl_tbaacache_t {
         MDNode *tbaa_value_scalar;
         std::tie(tbaa_value, tbaa_value_scalar) =
             tbaa_make_child(mbuilder, "jtbaa_value", tbaa_data_scalar);
-        MDNode *tbaa_mutab_scalar;
         std::tie(tbaa_mutab, tbaa_mutab_scalar) =
             tbaa_make_child(mbuilder, "jtbaa_mutab", tbaa_value_scalar);
         tbaa_datatype = tbaa_make_child(mbuilder, "jtbaa_datatype", tbaa_mutab_scalar).first;
-        tbaa_immut = tbaa_make_child(mbuilder, "jtbaa_immut", tbaa_value_scalar).first;
-        tbaa_arraybuf = tbaa_make_child(mbuilder, "jtbaa_arraybuf", tbaa_data_scalar).first;
-        tbaa_ptrarraybuf = tbaa_make_child(mbuilder, "jtbaa_ptrarraybuf", tbaa_data_scalar).first;
+        std::tie(tbaa_immut, tbaa_immut_scalar) =
+            tbaa_make_child(mbuilder, "jtbaa_immut", tbaa_value_scalar);
+        std::tie(tbaa_arraybuf, tbaa_arraybuf_scalar) =
+            tbaa_make_child(mbuilder, "jtbaa_arraybuf", tbaa_data_scalar);
+        std::tie(tbaa_ptrarraybuf, tbaa_ptrarraybuf_scalar) =
+            tbaa_make_child(mbuilder, "jtbaa_ptrarraybuf", tbaa_data_scalar);
         MDNode *tbaa_array_scalar;
         std::tie(tbaa_array, tbaa_array_scalar) = tbaa_make_child(mbuilder, "jtbaa_array");
         tbaa_arrayptr = tbaa_make_child(mbuilder, "jtbaa_arrayptr", tbaa_array_scalar).first;
@@ -1633,7 +1689,10 @@ static MDNode *best_tbaa(jl_tbaacache_t &tbaa_cache, jl_value_t *jt) {
         return tbaa_cache.tbaa_array;
     // If we're here, we know all subtypes are (im)mutable, even if we
     // don't know what the exact type is
-    return jl_is_mutable(jt) ? tbaa_cache.tbaa_mutab : tbaa_cache.tbaa_immut;
+    jl_datatype_t *dt = (jl_datatype_t*)jt;
+    if (dt->isconcretetype)
+        return tbaa_cache.get_tbaa_for_type(dt);
+    return dt->name->mutabl ? tbaa_cache.tbaa_mutab : tbaa_cache.tbaa_immut;
 }
 
 // tracks whether codegen is currently able to simply stack-allocate this type
@@ -4285,10 +4344,13 @@ static bool emit_f_opmemory(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             data_owner = emit_memoryref_mem(ctx, ref, layout);
         }
     }
+    MDNode *array_tbaa = (jl_is_datatype(ety) && ((jl_datatype_t*)ety)->isconcretetype)
+        ? ctx.tbaa().get_tbaa_for_arraybuf((jl_datatype_t*)ety, isboxed)
+        : (isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf);
     *ret = typed_store(ctx,
                 ptr,
                 val, cmp, ety,
-                isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf,
+                array_tbaa,
                 isunion ? nullptr : ctx.noalias().aliasscope.current,
                 data_owner,
                 isboxed,
@@ -4622,7 +4684,10 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     data = ctx.builder.CreateInBoundsGEP(AT, data, idx0);
                 }
                 ptindex = emit_ptrgep(ctx, ptindex, idx0);
-                *ret = typed_load(ctx, data, NULL, ety, ctx.tbaa().tbaa_arraybuf, nullptr, false,
+                MDNode *arraybuf_tbaa = (jl_is_datatype(ety) && ((jl_datatype_t*)ety)->isconcretetype)
+                    ? ctx.tbaa().get_tbaa_for_arraybuf((jl_datatype_t*)ety, false)
+                    : ctx.tbaa().tbaa_arraybuf;
+                *ret = typed_load(ctx, data, NULL, ety, arraybuf_tbaa, nullptr, false,
                         AtomicOrdering::NotAtomic, false, 0, nullptr, ptindex, ctx.tbaa().tbaa_arrayselbyte);
             }
             else {
@@ -4635,8 +4700,11 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     ptr = emit_ptrgep(ctx, ptr, LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT));
                     emit_lockstate_value(ctx, lock, true);
                 }
+                MDNode *arraybuf_tbaa2 = (jl_is_datatype(ety) && ((jl_datatype_t*)ety)->isconcretetype)
+                    ? ctx.tbaa().get_tbaa_for_arraybuf((jl_datatype_t*)ety, isboxed)
+                    : (isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf);
                 *ret = typed_load(ctx, ptr, nullptr, ety,
-                        isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf,
+                        arraybuf_tbaa2,
                         ctx.noalias().aliasscope.current,
                         isboxed, Order, maybenull, al);
                 if (needlock) {
@@ -4728,7 +4796,10 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     elem = emit_ptrgep(ctx, elem, LLT_ALIGN(sizeof(jl_mutex_t), JL_SMALL_BYTE_ALIGNMENT));
                 // emit this using the same type as BUILTIN(memoryrefget)
                 // so that LLVM may be able to load-load forward them and fold the result
-                auto tbaa = isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf;
+                jl_value_t *ety_isassigned = jl_tparam1(jl_unwrap_unionall(ref.typ));
+                auto tbaa = (jl_is_datatype(ety_isassigned) && ((jl_datatype_t*)ety_isassigned)->isconcretetype)
+                    ? ctx.tbaa().get_tbaa_for_arraybuf((jl_datatype_t*)ety_isassigned, isboxed)
+                    : (isboxed ? ctx.tbaa().tbaa_ptrarraybuf : ctx.tbaa().tbaa_arraybuf);
                 jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
                 LoadInst *fldv = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, elem, ctx.types().alignof_ptr);
                 fldv->setOrdering(Order);
@@ -9104,7 +9175,7 @@ static jl_llvm_functions_t
             if (isboxed)
                 maybe_mark_argument_dereferenceable(param, argType);
             theArg = mark_julia_type(ctx, Arg, isboxed, argType);
-            if (theArg.tbaa == ctx.tbaa().tbaa_immut)
+            if (ctx.tbaa().is_tbaa_immut_descendant(theArg.tbaa))
                 theArg.tbaa = ctx.tbaa().tbaa_const;
         }
         attrs[Arg->getArgNo()] = AttributeSet::get(Arg->getContext(), param); // function declaration attributes

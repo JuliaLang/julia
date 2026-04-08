@@ -1224,7 +1224,7 @@ static Value *box_ccall_result(jl_codectx_t &ctx, Value *result, Value *runtime_
     const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
     unsigned nb = DL.getTypeStoreSize(result->getType());
     unsigned align = sizeof(void*); // Allocations are at least pointer aligned
-    MDNode *tbaa = jl_is_mutable(rt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut;
+    MDNode *tbaa = best_tbaa(ctx.tbaa(), rt);
     Value *strct = emit_allocobj(ctx, nb, runtime_dt, true, align);
     setName(ctx.emission_context, strct, "ccall_result_box");
     init_bits_value(ctx, strct, result, tbaa);
@@ -2319,7 +2319,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             if (static_rt) {
                 Value *strct = emit_allocobj(ctx, (jl_datatype_t*)rt, true);
                 setName(ctx.emission_context, strct, "ccall_ret_box");
-                MDNode *tbaa = jl_is_mutable(rt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut;
+                MDNode *tbaa = best_tbaa(ctx.tbaa(), rt);
                 Align boxalign(julia_alignment(rt));
                 // copy the data from the return value to the new struct
                 const DataLayout &DL = ctx.builder.GetInsertBlock()->getModule()->getDataLayout();
