@@ -385,6 +385,25 @@ end
     """) == [("try", 1), ("finally", 1)]
     @test isempty(current_exceptions())
 
+    # break/continue in loop in try -> loop-cont, loop-exit -> finally
+    @test JuliaLowering.include_string(test_mod, """
+    let out = [], x = 1
+        try
+            for outer x in 1:100
+                push!(out, ("try", x))
+                x > 2 && break
+                continue
+                push!(out, ("bad", x))
+            end
+        $maybe_catch
+        finally
+            push!(out, ("finally", x))
+        end
+        out
+    end
+    """) == [("try", 1), ("try", 2), ("try", 3), ("finally", 3)]
+    @test isempty(current_exceptions())
+
     # continue in finally -> loop-cont
     @test JuliaLowering.include_string(test_mod, """
     let out = []
