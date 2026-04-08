@@ -227,6 +227,9 @@ julia> canonicalize(Dates.CompoundPeriod(Dates.Month(1), Dates.Week(-2)))
 julia> canonicalize(Dates.Minute(50000))
 4 weeks, 6 days, 17 hours, 20 minutes
 ```
+
+!!! compat "Julia 1.6"
+    Prior to Julia 1.6, the argument of `canonicalize` could only be a `CompoundPeriod`.
 """
 canonicalize(x::Period) = canonicalize(CompoundPeriod(x))
 function canonicalize(x::CompoundPeriod)
