@@ -1950,31 +1950,16 @@ end
 #-------------------------------------------------------------------------------
 
 function expand_dot(ctx, ex)
-    if numchildren(ex) == 1
+    @stm ex begin
         # eg, `f = .+`
         # Upstream TODO: Remove the (. +) representation and replace with use
         # of DOTOP_FLAG? This way, `K"."` will be exclusively used for
         # getproperty.
-        @ast ctx ex [K"call"
-            "BroadcastFunction"::K"top"
-            ex[1]
-        ]
-    elseif numchildren(ex) == 2
-        # eg, `x.a` syntax
-        rhs = ex[2]
-        # Required to support the possibly dubious syntax `a."b"`. See
-        # https://github.com/JuliaLang/julia/issues/26873
-        # Syntax edition TODO: reconsider this; possibly restrict to only K"String"?
-        if !(kind(rhs) == K"string" || is_leaf(rhs))
-            throw(LoweringError(rhs, "Unrecognized field access syntax"))
+        [K"." op] -> @ast ctx ex [K"call" "BroadcastFunction"::K"top" op]
+        [K"." l r] -> begin
+            @jl_assert is_leaf(r) || kind(r) in KSet"inert inert_syntaxtree" ex
+            @ast ctx ex [K"call" "getproperty"::K"top" l r]
         end
-        @ast ctx ex [K"call"
-            "getproperty"::K"top"
-            ex[1]
-            rhs
-        ]
-    else
-        @jl_assert false (ex, "`.` form requires either one or two children")
     end
 end
 

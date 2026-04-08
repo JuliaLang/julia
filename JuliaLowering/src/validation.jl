@@ -165,15 +165,13 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"call" _...] -> vst1_call(vcx, st)
     [K"'" x] -> vst1(vcx, x)
     [K"." f [K"tuple" _...]] -> vst1_dotcall(vcx, st)
+    [K"." l r] -> vst1(vcx, l) & vst1_dot_getproperty_rhs(vcx, r)
+    [K"." x] -> vst1(vcx, x) # BroadcastFunction(x)
     [K"do" call lam] ->
         (vst1_call(vcx, call) | vst1_dotcall(vcx, call) | vst0_macrocall(vcx, call)) &
         vst1_lam(vcx, lam)
     [K"=" _...] -> vst1_assign(vcx, st)
     (_, when=(vr=vst1_dotted_or_op_assign(vcx, st); is_known(vr))) -> vr
-    ([K"." l r], when=kind(r)!==K"tuple") ->
-        vst1(vcx, l) & vst1_simple_dot_rhs(vcx, r; lhs=false)
-    [K"." x] ->
-        vst1(vcx, x) # BroadcastFunction(x)
     [K"return" val] -> vcx.return_ok ?
         vst1(vcx, val) :
         @fail(st, "`return` not allowed inside comprehension or generator")
@@ -486,26 +484,32 @@ vst1_const_assign(vcx, st) = @stm st begin
     _ -> @fail(st, "expected assignment after `const`")
 end
 
+# syntax TODO: all-underscore variables may be read from with dot syntax
+vst1_dot_getproperty_rhs(vcx, st) = @stm st begin
+    [K"inert" x] -> pass()
+    [K"inert_syntaxtree" x] -> pass()
+    [K"Identifier"] -> pass()
+    (_, when=is_expr_value(st)) -> pass()
+    _ -> @fail(st, "invalid `.` syntax")
+end
+
 # We can't validate A.B in general (usually lowers to getproperty), but it shows
 # up in a number of syntax special cases where we can. (flisp: sym-ref?)
 vst1_calldecl_dot_name(vcx, st) = @stm st begin
     [K"." l r] ->
         vst1_calldecl_dot_name(vcx, l) &
-        vst1_simple_dot_rhs(vcx, r; lhs=true) |
+        vst1_dot_definition_rhs(vcx, r) |
         @fail(st, "invalid `.` form")
     [K"Value"] -> pass()
     i -> vst1_ident(vcx, i)
 end
 
-# syntax TODO: all-underscore variables may be read from with dot syntax
-# syntax TODO: disallow string
-vst1_simple_dot_rhs(vcx, st; lhs) = @stm st begin
-    [K"inert" x] -> vst1_simple_dot_rhs(vcx, x; lhs)
-    [K"Identifier"] -> vst1_ident(with(vcx; readable_underscore=true), st; lhs)
-    ([K"Value"], when=st.value isa String) ->
-        _ident_str(with(vcx; readable_underscore=true), st, st.value; lhs)
-    [K"String"] ->
-        _ident_str(with(vcx; readable_underscore=true), st, st.value; lhs)
+vst1_dot_definition_rhs(vcx, st) = @stm st begin
+    [K"inert" x] -> vst1_dot_definition_rhs(vcx, x)
+    [K"inert_syntaxtree" x] ->  vst1_dot_definition_rhs(vcx, x)
+    [K"Identifier"] -> vst1_ident(vcx, st; lhs=true)
+    ([K"Value"], when=st.value isa String) -> _ident_str(vcx, st, st.value; lhs=true)
+    [K"String"] -> _ident_str(vcx, st, st.value; lhs=true)
     [K"tuple" _...] -> @fail(st, "dotcall syntax not valid here")
     _ -> @fail(st, "invalid `.` syntax")
 end
@@ -576,6 +580,7 @@ vst1_call_kwarg(vcx, st) = @stm st begin
     [K"=" id val] -> vst1_ident(vcx, id; lhs=true) & vst1(vcx, val)
     [K"..." x] -> vst1(vcx, x)
     [K"." x [K"inert" id]] -> vst1(vcx, x) & vst1_ident(vcx, id; lhs=true)
+    [K"." x [K"inert_syntaxtree" id]] -> vst1(vcx, x) & vst1_ident(vcx, id; lhs=true)
     ([K"call" [K"Identifier"] symval v], when=(st[1].name_val==="=>")) ->
         vst1(vcx, symval) & vst1(vcx, v)
     _ -> @fail(st, "expected identifier, `=`, or, `...` after semicolon")
@@ -954,7 +959,7 @@ vst1_assign_lhs_nontuple(vcx, st; in_const=false, in_tuple=false) = @stm st begi
         vst1_assign_lhs(vcx, x; in_const, in_tuple) & vst1(vcx, t)
     [K"." x y] ->
         in_const ? @fail(st, "cannot declare this form constant") :
-        vst1(vcx, x) & vst1_simple_dot_rhs(vcx, y; lhs=true)
+        vst1(vcx, x) & vst1_dot_definition_rhs(vcx, y)
     [K"ref" x is...] ->
         in_const ? @fail(st, "cannot declare this form constant") :
         vst1(vcx, x) & all(vst1_splat_or_val, vcx, is)
