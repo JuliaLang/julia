@@ -389,8 +389,9 @@ end
     @test JuliaLowering.include_string(test_mod, """
     let out = [], x = 1
         try
+            push!(out, ("try", x))
             for outer x in 1:100
-                push!(out, ("try", x))
+                push!(out, ("loop", x))
                 x > 2 && break
                 continue
                 push!(out, ("bad", x))
@@ -401,7 +402,27 @@ end
         end
         out
     end
-    """) == [("try", 1), ("try", 2), ("try", 3), ("finally", 3)]
+    """) == [("try", 1), ("loop", 1), ("loop", 2), ("loop", 3), ("finally", 3)]
+    @test isempty(current_exceptions())
+
+    # break/continue in loop in finally -> loop-cont, loop-exit
+    @test JuliaLowering.include_string(test_mod, """
+    let out = [], x = 1
+        try
+            push!(out, ("try", x))
+        $maybe_catch
+        finally
+            for outer x in 1:100
+                push!(out, ("loop", x))
+                x > 2 && break
+                continue
+                push!(out, ("bad", x))
+            end
+            push!(out, ("finally", x))
+        end
+        out
+    end
+    """) == [("try", 1), ("loop", 1), ("loop", 2), ("loop", 3), ("finally", 3)]
     @test isempty(current_exceptions())
 
     # continue in finally -> loop-cont
