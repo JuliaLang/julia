@@ -20,7 +20,6 @@ public
     Fix2,
     Generator,
     ImmutableDict,
-    setindex,
     OneTo,
     Pairs,
     LogRange,

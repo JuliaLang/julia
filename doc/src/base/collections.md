@@ -219,7 +219,6 @@ Base.Dict
 Base.IdDict
 Base.WeakKeyDict
 Base.ImmutableDict
-Base.setindex(::Base.ImmutableDict, ::Any, ::Any)
 Base.PersistentDict
 Base.haskey
 Base.get
