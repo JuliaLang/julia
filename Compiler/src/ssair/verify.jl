@@ -81,11 +81,9 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             # Allow a tuple literal in symbol position for foreigncall - this
             # is syntax for a literal value or globalref - it is interpreted in
             # global scope by codegen.
-        elseif !is_value_pos_expr_head(op.head)
-            if !allow_frontend_forms || op.head !== :opaque_closure_method
-                @verify_error "Expr not allowed in value position"
-                raise_error()
-            end
+        elseif !allow_frontend_forms || op.head !== :opaque_closure_method
+            @verify_error "Expr not allowed in value position"
+            raise_error()
         end
     elseif isa(op, Union{OldSSAValue, NewSSAValue})
         @verify_error "At statement %$use_idx: Left over SSA marker ($op)"
@@ -381,9 +379,12 @@ function verify_ir(ir::IRCode, print::Bool=true,
                         @verify_error "malformed isdefined"
                         raise_error()
                     end
-                    if stmt.args[1] isa GlobalRef
-                        # undefined GlobalRef is OK in isdefined
-                        continue
+                    let v = stmt.args[1]
+                        # a GlobalRef or static_parameter isdefined check does
+                        # not evaluate its argument
+                        if v isa GlobalRef || isexpr(v, :static_parameter)
+                            continue
+                        end
                     end
                 elseif stmt.head === :throw_undef_if_not
                     if length(stmt.args) > 3
@@ -401,10 +402,6 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     continue
                 elseif stmt.head === :foreigncall
                     isforeigncall = true
-                elseif stmt.head === :isdefined && length(stmt.args) == 1 &&
-                        isexpr(stmt.args[1], :static_parameter)
-                    # a GlobalRef or static_parameter isdefined check does not evaluate its argument
-                    continue
                 elseif stmt.head === :call
                     f = stmt.args[1]
                     if f isa GlobalRef && f.name === :cglobal
