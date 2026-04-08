@@ -2757,8 +2757,8 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, p
         end
     end
     @ast ctx src [K"block"
-        is_core_nothing(mtable) ? nothing : [K"function_decl" mtable]
         [K"function_decl" m1_name]
+        is_core_nothing(mtable) ? nothing : [K"function_decl" mtable]
         [K"method_defs" m1_name mdefs1]
         [K"method_defs" mtable mdefs2]
         [K"method_defs" mtable mdefs3]

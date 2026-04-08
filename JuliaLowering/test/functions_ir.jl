@@ -1344,9 +1344,9 @@ function f_kw_simple(a::Int=1, b::Float64=1.0; x::Char='a', y::Bool=true)
     (a, b, x, y)
 end
 #---------------------
-1   (method TestMod.f_kw_simple)
+1   (method TestMod.#kw_body#f_kw_simple#0)
 2   latestworld
-3   (method TestMod.#kw_body#f_kw_simple#0)
+3   (method TestMod.f_kw_simple)
 4   latestworld
 5   TestMod.#kw_body#f_kw_simple#0
 6   (call core.Typeof %₅)
@@ -1493,9 +1493,9 @@ end
 # underscore kwargs apart from `_...` are probably not intended to work anyway
 function f_kw_placeholders(; _=1, _=2); end
 #---------------------
-1   (method TestMod.f_kw_placeholders)
+1   (method TestMod.#kw_body#f_kw_placeholders#0)
 2   latestworld
-3   (method TestMod.#kw_body#f_kw_placeholders#0)
+3   (method TestMod.f_kw_placeholders)
 4   latestworld
 5   TestMod.#kw_body#f_kw_placeholders#0
 6   (call core.Typeof %₅)
@@ -1564,9 +1564,9 @@ function f_kw_slurp_simple(; all_kws...)
     all_kws
 end
 #---------------------
-1   (method TestMod.f_kw_slurp_simple)
+1   (method TestMod.#kw_body#f_kw_slurp_simple#0)
 2   latestworld
-3   (method TestMod.#kw_body#f_kw_slurp_simple#0)
+3   (method TestMod.f_kw_slurp_simple)
 4   latestworld
 5   TestMod.#kw_body#f_kw_slurp_simple#0
 6   (call core.Typeof %₅)
@@ -1620,9 +1620,9 @@ function f_kw_slurp(; x=x_default, non_x_kws...)
     all_kws
 end
 #---------------------
-1   (method TestMod.f_kw_slurp)
+1   (method TestMod.#kw_body#f_kw_slurp#0)
 2   latestworld
-3   (method TestMod.#kw_body#f_kw_slurp#0)
+3   (method TestMod.f_kw_slurp)
 4   latestworld
 5   TestMod.#kw_body#f_kw_slurp#0
 6   (call core.Typeof %₅)
@@ -1692,9 +1692,9 @@ function f_kw_slurp_dep(; a=1, b=a, kws...)
     (a, b, kws)
 end
 #---------------------
-1   (method TestMod.f_kw_slurp_dep)
+1   (method TestMod.#kw_body#f_kw_slurp_dep#0)
 2   latestworld
-3   (method TestMod.#kw_body#f_kw_slurp_dep#0)
+3   (method TestMod.f_kw_slurp_dep)
 4   latestworld
 5   TestMod.#kw_body#f_kw_slurp_dep#0
 6   (call core.Typeof %₅)
@@ -1775,9 +1775,9 @@ function f_kw_sparams(x::X; a::A=a_def, b::X=b_def) where {X,A}
     (X,A)
 end
 #---------------------
-1   (method TestMod.f_kw_sparams)
+1   (method TestMod.#kw_body#f_kw_sparams#0)
 2   latestworld
-3   (method TestMod.#kw_body#f_kw_sparams#0)
+3   (method TestMod.f_kw_sparams)
 4   latestworld
 5   (= slot₁/X (call core.TypeVar :X))
 6   (= slot₂/A (call core.TypeVar :A))
@@ -1888,9 +1888,9 @@ function f_kw_slurp(a,;kw1,kw2=2,restkw...)
     @nospecialize
 end
 #---------------------
-1   (method TestMod.f_kw_slurp)
+1   (method TestMod.#kw_body#f_kw_slurp#1)
 2   latestworld
-3   (method TestMod.#kw_body#f_kw_slurp#1)
+3   (method TestMod.f_kw_slurp)
 4   latestworld
 5   TestMod.#kw_body#f_kw_slurp#1
 6   (call core.Typeof %₅)

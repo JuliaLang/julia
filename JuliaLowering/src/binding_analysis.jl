@@ -73,7 +73,7 @@ mutable struct DefUseState
     const args::Set{IdTag}
 
     function DefUseState(ctx, candidates)
-        unused = candidates
+        unused = copy(candidates)
         live = Set{IdTag}()
         seen = Set{IdTag}()
         decl = Set{IdTag}()
@@ -229,7 +229,23 @@ function du_visit!(ctx, state::DefUseState, e)
         end
         return false
 
-    elseif k == K"method_defs" || k == K"function_decl"
+    elseif k == K"function_decl"
+        # [function_decl] defines and instantiates the closure type and assigns
+        # it to its first argument (but only once per unique first argument).
+        func_id = e[1].var_id
+        @assert kind(e[1]) == K"BindingId"
+        func_id in state.seen && return false
+        if haskey(ctx.closure_bindings, func_id)
+            for lam in ctx.closure_bindings[func_id].lambdas
+                for (id, capt) in lam.locals_capt
+                    du_mark_captured!(state, id)
+                end
+            end
+        end
+        du_assign!(state, func_id)
+        return false
+
+    elseif k == K"method_defs"
         # Process nested lambdas within
         has_label = false
         for child in children(e)
@@ -284,9 +300,9 @@ function du_visit!(ctx, state::DefUseState, e)
         return has_label
 
     elseif is_leaf(e) || is_quoted(e) ||
-        k in KSet"local meta inbounds boundscheck noinline loopinfo decl
-            with_static_parameters toplevel_butfirst global globalref
-            constdecl atomic isdefined toplevel module error
+        k in KSet"local always_defined meta inbounds boundscheck noinline
+            loopinfo decl with_static_parameters toplevel_butfirst global
+            globalref constdecl atomic isdefined toplevel module error
             gc_preserve_begin gc_preserve_end export public inline"
 
         # Forms that don't interact with locals or affect control flow (likely more than is necessary).
@@ -329,6 +345,21 @@ function _analyze_lambda_vars!(ctx, ex)
             b = get_binding(ctx, id)
             b.unboxed = true
             b.is_always_defined = true
+        end
+    end
+
+    # A single (scope-dominating) assignment implies unboxed even if we gave up above
+    for id in candidates
+        b = get_binding(ctx, id)
+        # XXX: This uses is-always-defined to imply that the assignment is defined
+        #      everywhere in its scope, which then implies that the one definition
+        #      executes only once dynamically.
+        #      (i.e. it forbids single-assignment to `x` in an inner loop)
+        #
+        #      If this flag becomes broader and only considers definedness-at-use
+        #      then this check (taken from `julia-syntax.scm`) becomes unsound.
+        if b.kind === :local && b.is_always_defined && b.is_assigned_once
+            b.unboxed = true
         end
     end
 end
