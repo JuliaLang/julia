@@ -2402,6 +2402,30 @@ end
         @test recorded_error2.context !== nothing
         @test occursin("(x, y) = (42, \"hello\")", recorded_error2.context)
     end
+
+    # Unexpected pass (broken=true) should show context before "Got correct result" message
+    @testset "context shown for unexpected pass in context testset" begin
+        mock_parent4 = MockParentTestSet()
+        ctx_ts4 = Test.ContextTestSet(mock_parent4, :x, 42)
+
+        unbroken_result = Test.Error(:test_unbroken, "x != 99", "true", "", nothing, LineNumberNode(1, :test))
+        Test.record(ctx_ts4, unbroken_result)
+
+        @test length(mock_parent4.results) == 1
+        recorded = mock_parent4.results[1]
+        @test recorded isa Test.Error
+        @test recorded.context !== nothing
+        @test occursin("x = 42", recorded.context)
+
+        str = sprint(show, recorded)
+        @test occursin("Unexpected Pass", str)
+        @test occursin("Context:", str)
+        @test occursin("x = 42", str)
+        # Context should appear before "Got correct result"
+        ctx_pos = findfirst("Context:", str)
+        got_pos = findfirst("Got correct result", str)
+        @test first(ctx_pos) < first(got_pos)
+    end
 end
 
 @testset "io argument for Test output functions" begin
