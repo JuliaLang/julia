@@ -328,8 +328,6 @@ function expand_macro(ctx, ex)
                 # is the API for access to the macro expansion context?
                 expanded = copy_ast(ctx, expanded)
             end
-        elseif isnothing(expanded)
-            expanded = @ast ctx ex "nothing"::K"core"
         else
             expanded = @ast ctx ex expanded::K"Value"
         end

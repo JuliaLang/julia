@@ -282,6 +282,18 @@ end
 
     @test fl_eval(test_mod, Expr(:block, quoted)) == form
     @test jl_eval(test_mod, Expr(:block, quoted); expr_compat_mode) == form
+
+end
+
+@testset "self-quoting forms, interpolated into quote, expr compat" for
+    form in [1, true, "string", [], nothing, :symbol],
+    quoted in [Expr(:quote, form), Expr(:inert, form), QuoteNode(form)]
+
+    @test fl_eval(test_mod, Expr(:quote, Expr(:$, quoted))) == form
+    @test jl_eval(test_mod, Expr(:quote, Expr(:$, quoted)); expr_compat_mode=true) == form
+
+    # Just to track behaviour
+    @test jl_eval(test_mod, Expr(:quote, Expr(:$, quoted)); expr_compat_mode=false) isa SyntaxTree
 end
 
 # (. l r) should pass lowering only when r is one of:

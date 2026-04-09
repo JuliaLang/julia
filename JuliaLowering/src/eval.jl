@@ -337,15 +337,10 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
     k = kind(ex)
     if is_literal(k)
         ex.value
+    elseif k == K"nothing"
+        nothing
     elseif k == K"core"
-        name = ex.name_val::String
-        if name === "nothing"
-            # Translate Core.nothing into literal `nothing`s (flisp uses a
-            # special form (null) for this during desugaring, etc)
-            nothing
-        else
-            GlobalRef(Core, Symbol(name))
-        end
+        GlobalRef(Core, Symbol(ex.name_val::String))
     elseif k == K"top"
         GlobalRef(Base, Symbol(ex.name_val::String))
     elseif k == K"globalref"

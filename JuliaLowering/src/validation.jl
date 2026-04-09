@@ -247,8 +247,6 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     [K"ssavalue" [K"Value"]] -> pass()
     [K"inert" _] -> pass()
     [K"inert_syntaxtree" _] -> pass()
-    [K"core"] -> st.name_val === "nothing" ? pass() :
-        @fail(st, "zero-arg `core` is only used for `Core.nothing`")
     [K"core" [K"Identifier"]] -> pass()
     [K"top" [K"Identifier"]] -> pass()
     [K"meta" _...] -> pass() # TODO
@@ -1149,6 +1147,7 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
             [K"slot"] -> (:var_id,)
             [K"static_parameter"] -> (:var_id,)
             [K"SSAValue"] -> (:var_id,)
+            [K"nothing"] -> ()
             [K"TOMBSTONE"] -> ()
             [K"SourceLocation"] -> ()
             [K"latestworld"] -> ()
@@ -1199,7 +1198,7 @@ end
 
 vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     (_, when=is_leaf(st)) -> kind(st) in KSet"""
-    Identifier BindingId Placeholder
+    Identifier BindingId Placeholder nothing
     Bool Char Float Float32 BinInt OctInt HexInt Integer
     SourceLocation String Symbol Value core top
     latestworld latestworld_if_toplevel symbolicgoto oldsymbolicgoto symboliclabel TOMBSTONE
@@ -1240,9 +1239,11 @@ vst2(vcx::Validation2Context, st::SyntaxTree) = @stm st begin
     [K"function_type" x] -> vst2(vcx, x)
     [K"method" name meta lam] -> !vcx.in_method_defs ?
         @fail(st, "method outside of method_defs") :
-        vst2_ident_val(vcx, name) & vst2(vcx, meta) & vst2_lam(vcx, lam)
+        (kind(name) === K"nothing" ? pass() : vst2_ident_val(vcx, name)) &
+        vst2(vcx, meta) & vst2_lam(vcx, lam)
     [K"method_defs" id body] ->
-        vst2_ident_val(vcx, id) & vst2(with(vcx; in_method_defs=true), body)
+        (kind(id) === K"nothing" ? pass() : vst2_ident_val(vcx, id)) &
+        vst2(with(vcx; in_method_defs=true), body)
     [K"new" t args...] -> vst2(vcx, t) & all(vst2, vcx, args)
     [K"splatnew" t arg] -> vst2(vcx, t) & vst2(vcx, arg)
     [K"softscope"] -> pass()
