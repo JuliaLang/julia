@@ -396,6 +396,9 @@ end
 
 function objectdoc(__source__, __module__, str, def, expr, sig = :(Union{}))
     @nospecialize str def expr sig
+    if isexpr(expr, :function) && isexpr((expr::Expr).args[1], :tuple)
+        return docerror(expr)
+    end
     binding = esc(bindingexpr(namify(expr)))
     docstr  = esc(docexpr(__source__, __module__, lazy_iterpolate(str), metadata(__source__, __module__, expr, false)))
     # Store the result of the definition and return it after documenting
