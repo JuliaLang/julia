@@ -34,10 +34,11 @@ function rstrip_shell(s::AbstractString)
 end)
 
 # Scan from position `start` in string `s` (after an opening `{`) to find the
-# matching `}`. Returns `(found_close, has_comma, has_space)`.
+# matching `}`. Returns `(found_close, has_comma, has_dotdot, has_space)`.
 function _scan_brace(s, start)
     depth = 1
     has_comma = false
+    has_dotdot = false
     has_space = false
     pos = start
     @inbounds while pos <= lastindex(s)
@@ -69,17 +70,85 @@ function _scan_brace(s, start)
             end
         elseif isspace(c)
             has_space = true
+        elseif c == '.' && depth == 1 && pos < lastindex(s) && s[nextind(s, pos)] == '.'
+            has_dotdot = true
+            pos = nextind(s, pos)  # skip second dot
         elseif c == '{'
             depth += 1
         elseif c == '}'
             depth -= 1
-            depth == 0 && return (true, has_comma, has_space)
+            depth == 0 && return (true, has_comma, has_dotdot, has_space)
         elseif c == ',' && depth == 1
             has_comma = true
         end
         pos = nextind(s, pos)
     end
-    return (false, false, false)
+    return (false, false, false, false)
+end
+
+# Expand a brace range pattern like "1..10", "a..z", "1..10..2", or "01..10".
+# Returns a tuple of strings, or `nothing` if the content is not a valid range.
+function _brace_range_expand(content::AbstractString)
+    parts = split(content, "..")
+    (length(parts) == 2 || length(parts) == 3) || return nothing
+    a_str, b_str = parts[1], parts[2]
+    step_str = length(parts) == 3 ? parts[3] : nothing
+
+    # Character range: single ASCII letter endpoints, both same case
+    if length(a_str) == 1 && length(b_str) == 1
+        a_ch, b_ch = a_str[1], b_str[1]
+        if isletter(a_ch) && isletter(b_ch) && isascii(a_ch) && isascii(b_ch)
+            if isuppercase(a_ch) != isuppercase(b_ch)
+                return nothing  # cross-case ranges like {a..Z} are an error
+            end
+            step = 1
+            if step_str !== nothing
+                step = tryparse(Int, step_str)
+                step === nothing && return nothing
+                step == 0 && return nothing
+            end
+            step = a_ch <= b_ch ? step : -step
+            return Tuple(string(c) for c in a_ch:step:b_ch)
+        end
+    end
+
+    # Integer range
+    a = tryparse(Int, a_str)
+    b = tryparse(Int, b_str)
+    (a === nothing || b === nothing) && return nothing
+    step = 1
+    if step_str !== nothing
+        step = tryparse(Int, step_str)
+        step === nothing && return nothing
+        step == 0 && return nothing
+    end
+    step = a <= b ? step : -step
+
+    # Explicit plus sign: if either endpoint starts with +, show + on positive values.
+    show_plus = (a_str[1] == '+') || (b_str[1] == '+')
+
+    # Zero-padding: if either endpoint has leading zeros (including after a
+    # sign character), pad all values to the same total width (matching bash/zsh).
+    _has_leading_zero(s) = (length(s) > 1 && s[1] == '0') ||
+                           (length(s) > 2 && s[1] in ('-', '+') && s[2] == '0')
+    pad = (_has_leading_zero(a_str) || _has_leading_zero(b_str)) ?
+        max(length(a_str), length(b_str)) : 0
+
+    if pad > 0
+        return Tuple(let s = string(abs(n))
+            if n < 0
+                "-" * lpad(s, pad - 1, '0')
+            elseif show_plus
+                "+" * lpad(s, pad - 1, '0')
+            else
+                lpad(s, pad, '0')
+            end
+        end for n in a:step:b)
+    elseif show_plus
+        return Tuple((n < 0 ? string(n) : "+" * string(n)) for n in a:step:b)
+    else
+        return Tuple(string(n) for n in a:step:b)
+    end
 end
 
 # Convert a list of parts (strings and expressions) for one brace alternative
@@ -347,8 +416,28 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
                 # The tuple integrates with arg_gen's Cartesian product, so
                 # `pre{a,b}suf` generates arguments "preasuf" and "prebsuf".
                 i = consume_upto!(arg, s, i, j)
-                found_close, has_comma, has_space = _scan_brace(s, i)
-                if found_close && has_comma && has_space
+                found_close, has_comma, has_dotdot, has_space = _scan_brace(s, i)
+                if found_close && has_dotdot && !has_comma
+                    # Range expansion: {1..10}, {a..z}, {1..10..2}, {01..10}
+                    # Extract the raw content between { and }, advance past }.
+                    brace_content = ""
+                    while !isempty(st)
+                        (bp, bc) = peek(st)::P
+                        if bc == '}'
+                            brace_content = String(s[i:prevind(s, bp)::Int])
+                            popfirst!(st)
+                            break
+                        end
+                        popfirst!(st)
+                    end
+                    i = something(peek(st), (lastindex(s)::Int+1) => '\0').first::Int
+                    expanded = _brace_range_expand(brace_content)
+                    if expanded === nothing
+                        error("parsing command `$str`: invalid brace range expansion {$brace_content}")
+                    end
+                    push!(arg, Expr(:tuple, expanded...))
+                    word_has_special = true
+                elseif found_close && has_comma && has_space
                     error("parsing command `$str`: unquoted space inside braces")
                 elseif !(found_close && has_comma)
                     # Not a valid brace expansion (no matching } or no comma):
