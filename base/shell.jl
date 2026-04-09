@@ -2,7 +2,12 @@
 
 ## shell-like command parsing ##
 
-const shell_special = "#{}()[]<>|&*?;"
+const shell_special = "#()[]<>|&*?;"
+
+# Characters that need quoting in backtick display.  Includes {} so that a Cmd
+# with literal braces round-trips correctly (they would otherwise be
+# brace-expanded when the displayed string is re-parsed).
+const _shell_display_special = shell_special * "{}"
 
 (@doc raw"""
     rstrip_shell(s::AbstractString)
@@ -27,6 +32,72 @@ function rstrip_shell(s::AbstractString)
     end
     SubString(s, 1, 0)
 end)
+
+# Scan from position `start` in string `s` (after an opening `{`) to find the
+# matching `}`. Returns `(found_close, has_comma, has_space)`.
+function _scan_brace(s, start)
+    depth = 1
+    has_comma = false
+    has_space = false
+    pos = start
+    @inbounds while pos <= lastindex(s)
+        c = s[pos]
+        if c == '\\'
+            pos = nextind(s, pos)  # skip escaped char
+        elseif c == '\''
+            # skip single-quoted content
+            pos = nextind(s, pos)
+            while pos <= lastindex(s) && s[pos] != '\''
+                pos = nextind(s, pos)
+            end
+        elseif c == '"'
+            # skip double-quoted content
+            pos = nextind(s, pos)
+            while pos <= lastindex(s)
+                s[pos] == '"' && break
+                s[pos] == '\\' && (pos = nextind(s, pos))
+                pos = nextind(s, pos)
+            end
+        elseif c == '$' && pos < lastindex(s) && s[nextind(s, pos)] == '('
+            # skip $(expr) — count parentheses
+            pos = nextind(s, nextind(s, pos))
+            pdepth = 1
+            while pos <= lastindex(s) && pdepth > 0
+                s[pos] == '(' && (pdepth += 1)
+                s[pos] == ')' && (pdepth -= 1)
+                pdepth > 0 && (pos = nextind(s, pos))
+            end
+        elseif isspace(c)
+            has_space = true
+        elseif c == '{'
+            depth += 1
+        elseif c == '}'
+            depth -= 1
+            depth == 0 && return (true, has_comma, has_space)
+        elseif c == ',' && depth == 1
+            has_comma = true
+        end
+        pos = nextind(s, pos)
+    end
+    return (false, false, false)
+end
+
+# Convert a list of parts (strings and expressions) for one brace alternative
+# into a single expression suitable for inclusion in a tuple.
+function _brace_alt_expr(parts)
+    if isempty(parts)
+        return ""
+    end
+    all_strings = all(p -> isa(p, AbstractString), parts)
+    if all_strings
+        return String(join(parts))
+    elseif length(parts) == 1
+        return parts[1]
+    else
+        cleaned = Any[isa(p, AbstractString) ? String(p) : p for p in parts]
+        return Expr(:call, GlobalRef(Base, :cmd_interpolate), cleaned...)
+    end
+end
 
 shell_parse(str::AbstractString, interpolate::Bool=true;
             special::AbstractString="", filename="none") =
@@ -271,6 +342,97 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
                     push!(arg, :(let _u = string($(user_parts...)); isempty(_u) ? "~" : expanduser(string('~', _u)) end))
                 end
                 i = user_end
+            elseif interpolate && !in_single_quotes && !in_double_quotes && c == '{'
+                # Brace expansion: {alt1,alt2,...} produces a tuple of alternatives.
+                # The tuple integrates with arg_gen's Cartesian product, so
+                # `pre{a,b}suf` generates arguments "preasuf" and "prebsuf".
+                i = consume_upto!(arg, s, i, j)
+                found_close, has_comma, has_space = _scan_brace(s, i)
+                if found_close && has_comma && has_space
+                    error("parsing command `$str`: unquoted space inside braces")
+                elseif !(found_close && has_comma)
+                    # Not a valid brace expansion (no matching } or no comma):
+                    # treat the { as a literal character.
+                    push!(arg, "{")
+                else
+                    word_has_special = true
+                    alts = Any[]
+                    alt_parts = Any[]
+                    alt_i = i   # start of current literal segment
+                    bsq = false # single quotes within brace content
+                    bdq = false # double quotes within brace content
+                    bdepth = 0  # nested brace depth
+                    while !isempty(st)
+                        (bp, bc) = peek(st)::P
+                        if bsq
+                            # In single quotes: everything is literal until closing '
+                            popfirst!(st)
+                            if bc == '\''
+                                push_nonempty!(alt_parts, s[alt_i:prevind(s, bp)::Int])
+                                bsq = false
+                                alt_i = something(peek(st), (lastindex(s)::Int+1) => '\0').first::Int
+                            end
+                        elseif !bdq && bc == '\''
+                            push_nonempty!(alt_parts, s[alt_i:prevind(s, bp)::Int])
+                            popfirst!(st)
+                            bsq = true
+                            alt_i = something(peek(st), (lastindex(s)::Int+1) => '\0').first::Int
+                        elseif bc == '"'
+                            push_nonempty!(alt_parts, s[alt_i:prevind(s, bp)::Int])
+                            popfirst!(st)
+                            bdq = !bdq
+                            alt_i = something(peek(st), (lastindex(s)::Int+1) => '\0').first::Int
+                        elseif !bsq && bc == '$'
+                            push_nonempty!(alt_parts, s[alt_i:prevind(s, bp)::Int])
+                            popfirst!(st)
+                            result = parse_dollar_interp(st, s)
+                            push!(alt_parts, result[1])
+                            last_arg = result[3]
+                            update_last_arg = true
+                            s = result[2]
+                            alt_i = firstindex(s)
+                        elseif !bsq && bc == '\\'
+                            push_nonempty!(alt_parts, s[alt_i:prevind(s, bp)::Int])
+                            popfirst!(st)  # consume \
+                            if bdq
+                                if !isempty(st) && (peek(st)::P).second in ('"', '$', '\\')
+                                    alt_i = (peek(st)::P).first::Int
+                                    popfirst!(st)
+                                else
+                                    push!(alt_parts, "\\")
+                                    alt_i = something(peek(st), (lastindex(s)::Int+1) => '\0').first::Int
+                                end
+                            else
+                                isempty(st) && error("parsing command `$str`: dangling backslash in brace expansion")
+                                alt_i = (peek(st)::P).first::Int
+                                popfirst!(st)
+                            end
+                        elseif !bsq && !bdq && bc == '{'
+                            bdepth += 1
+                            popfirst!(st)
+                        elseif !bsq && !bdq && bc == '}' && bdepth > 0
+                            bdepth -= 1
+                            popfirst!(st)
+                        elseif !bsq && !bdq && bc == '}' && bdepth == 0
+                            # End of brace expansion
+                            push_nonempty!(alt_parts, s[alt_i:prevind(s, bp)::Int])
+                            push!(alts, _brace_alt_expr(alt_parts))
+                            popfirst!(st)
+                            break
+                        elseif !bsq && !bdq && bc == ',' && bdepth == 0
+                            # Alternative separator
+                            push_nonempty!(alt_parts, s[alt_i:prevind(s, bp)::Int])
+                            push!(alts, _brace_alt_expr(alt_parts))
+                            empty!(alt_parts)
+                            popfirst!(st)
+                            alt_i = something(peek(st), (lastindex(s)::Int+1) => '\0').first::Int
+                        else
+                            popfirst!(st)
+                        end
+                    end
+                    i = something(peek(st), (lastindex(s)::Int+1) => '\0').first::Int
+                    push!(arg, Expr(:tuple, alts...))
+                end
             elseif !in_single_quotes && !in_double_quotes && c in special
                 error("parsing command `$str`: special characters \"$special\" must be quoted in commands")
             end

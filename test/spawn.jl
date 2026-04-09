@@ -594,6 +594,41 @@ withenv("OLDPWD" => nothing) do
     end
 end
 
+# Brace expansion in backtick commands
+@test `{a,b,c}` == Cmd(["a", "b", "c"])
+@test `echo {a,b,c}` == Cmd(["echo", "a", "b", "c"])
+@test `{a,b}.txt` == Cmd(["a.txt", "b.txt"])
+@test `echo {a,b}.txt` == Cmd(["echo", "a.txt", "b.txt"])
+@test `{a,b}.{x,y}` == Cmd(["a.x", "a.y", "b.x", "b.y"])
+@test `echo pre{a,b}suf` == Cmd(["echo", "preasuf", "prebsuf"])
+@test `{a,b} {c,d}` == Cmd(["a", "b", "c", "d"])
+@test `{a,,c}` == Cmd(["a", "", "c"])  # empty alternative
+let x = "foo"
+    @test `{$x,bar}` == Cmd(["foo", "bar"])
+    @test `{$x,bar}.txt` == Cmd(["foo.txt", "bar.txt"])
+end
+let xs = "a b"
+    @test `{$xs,c}` == Cmd(["a b", "c"])  # interpolated value is not word-split
+end
+@test `{"hello world",bye}` == Cmd(["hello world", "bye"])  # quoted space in braces ok
+@test_throws "unquoted space inside braces" eval(:(`{a b,c}`))  # unquoted space is an error
+@test `{a\,b,c}` == Cmd(["a,b", "c"])  # escaped comma
+@test `'{a,b}'` == Cmd(["{a,b}"])       # braces in single quotes: no expansion
+@test `"{a,b}"` == Cmd(["{a,b}"])       # braces in double quotes: no expansion
+@test `{a}` == Cmd(["{a}"])             # single item: no expansion (literal)
+@test `{}` == Cmd(["{}"])               # empty braces: no expansion (literal)
+@test `x{y}z` == Cmd(["x{y}z"])        # no comma: literal
+@test `{a,{b,c},d}` == Cmd(["a", "{b,c}", "d"])  # nested braces: inner not expanded
+# brace expansion works through shell mode path
+let echostr = Base.shell_escape(echocmd)
+    mktempdir() do dir
+        f = joinpath(dir, "out.txt")
+        fstr = Base.shell_escape(f)
+        shell_mode_run("$echostr {a,b,c} > $fstr")
+        @test read(f, String) == "a b c\n"
+    end
+end
+
 # Pipeline and redirection operators in backtick command literals
 (!Sys.iswindows() || havebb) &&
 mktempdir() do dir
