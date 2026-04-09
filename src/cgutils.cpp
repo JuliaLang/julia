@@ -3364,9 +3364,17 @@ static MDNode *best_field_tbaa(jl_codectx_t &ctx, const jl_cgval_t &strct, jl_da
     if (strct.V && jl_field_isconst(jt, idx) && isLoadFromConstGV(strct.V))
         return ctx.tbaa().tbaa_const; //TODO: it seems odd to have a field with a tbaa that doesn't alias it's containing struct's tbaa
                                       //Does the fact that this is marked as constant make this fine?
-    // Use struct-path TBAA for concrete types with known layout
-    if (jt->isconcretetype && jt->layout && !jl_is_genericmemory_type((jl_value_t*)jt) && !jl_is_array_type((jl_value_t*)jt))
-        return ctx.tbaa().get_tbaa_for_field(jt, idx);
+    // Use struct-path TBAA for concrete types with known layout, but only
+    // when the struct's TBAA is already a per-type tag in the data subtree.
+    // If the struct is on the stack (tbaa_stack) or in another region, the
+    // struct-path tag would be in the data subtree, causing fromTBAA() to
+    // assign Region::data with !noalias{stack} — which is wrong for stack memory.
+    if (jt->isconcretetype && jt->layout &&
+        !jl_is_genericmemory_type((jl_value_t*)jt) && !jl_is_array_type((jl_value_t*)jt)) {
+        auto it = ctx.tbaa().tbaa_per_type.find(jt);
+        if (it != ctx.tbaa().tbaa_per_type.end() && tbaa == it->second)
+            return ctx.tbaa().get_tbaa_for_field(jt, idx);
+    }
     return tbaa;
 }
 
