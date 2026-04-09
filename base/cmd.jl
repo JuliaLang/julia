@@ -135,9 +135,9 @@ escape_microsoft_c_args(io::IO, cmd::Cmd) =
 # Patterns that indicate a sensitive environment variable name.
 # Matched as whole components after splitting on non-alphanumeric characters,
 # so e.g. "PAT" matches "GITHUB_PAT" but not "PATH".
-const SENSITIVE_ENV_PATTERNS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "PASSWD",
-                                "CREDENTIAL", "CRED", "AUTH", "PRIVATE",
-                                "JWT", "PAT", "PASS", "PW")
+const SENSITIVE_ENV_PATTERNS = ("KEY", "TOKEN", "SECRET", "JWT", "PAT",
+                                "PASSWORD", "PASSWD", "PASS", "PWD", "PW",
+                                "CREDENTIAL", "CRED", "AUTH", "PRIVATE", "PRIV")
 
 function is_sensitive_env_name(name::AbstractString)
     uname = uppercase(name)
