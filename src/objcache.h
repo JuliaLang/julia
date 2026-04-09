@@ -3,6 +3,7 @@
 #ifndef JL_OBJCACHE_H
 #define JL_OBJCACHE_H
 
+#include <atomic>
 #include <condition_variable>
 
 #include <llvm/ADT/FunctionExtras.h>
