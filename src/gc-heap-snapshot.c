@@ -567,9 +567,12 @@ void _gc_heap_snapshot_record_frame_to_frame_edge(jl_gcframe_t *from, jl_gcframe
     _record_gc_just_edge("internal", from_node_idx, to_node_idx, name_idx);
 }
 
-void _gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index) JL_NOTSAFEPOINT
+void _gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index)
 {
-    _record_gc_edge("element", from, to, index);
+    char name[32];
+    snprintf(name, sizeof(name), "[%zu]", index);
+
+    _record_gc_edge(name, from, to, index);
 }
 
 void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void *slot) JL_NOTSAFEPOINT
