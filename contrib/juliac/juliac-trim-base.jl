@@ -84,6 +84,29 @@ end
     setfield!(typeof(print).name, :max_args, Int32(10), :monotonic)
     setfield!(typeof(println).name, :max_args, Int32(10), :monotonic)
     setfield!(typeof(print_to_string).name, :max_args, Int32(10), :monotonic)
+
+    # not `--trim`-compatible if these resolve to a Varargs{...} specialization, primarily
+    # due to `Core._apply_iterate` having no dispatch-resolved form (#57830)
+    setfield!(typeof(_cat).name, :max_args, Int32(10), :monotonic)
+    setfield!(typeof(__cat).name, :max_args, Int32(10), :monotonic)
+    setfield!(typeof(__cat_offset!).name, :max_args, Int32(10), :monotonic)
+    setfield!(typeof(cat_size_shape).name, :max_args, Int32(10), :monotonic)
+    setfield!(typeof(_cat_size_shape).name, :max_args, Int32(10), :monotonic)
+
+    # vcat / hcat / hvcat / hvncat / cat all use this
+    unwrap_val(dims) = dims
+    unwrap_val(::Val{dims}) where dims = dims
+    function _cat_t(dims, ::Type{T}, X::Vararg{AbstractArray,N}) where {T,N}
+        @inline
+        Ndims = maximum(map(ndims, X))
+        catdims = ntuple(in(unwrap_val(dims)), Val(Ndims))
+        shape = cat_size_shape(catdims, X...)
+        A = cat_similar(X[1], T, shape)
+        if count(!iszero, catdims)::Int > 1
+            fill!(A, zero(T))
+        end
+        return __cat(A, shape, catdims, X...)
+    end
 end
 @eval Base.Sys begin
     __init_build() = nothing # VersionNumber parsing is not supported yet
