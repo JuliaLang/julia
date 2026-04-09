@@ -151,8 +151,14 @@ end
     end
 
     (src, _) = only(code_typed(sum27403, Tuple{Vector{Int}}))
+    is_bounds_throw_invoke_target(@nospecialize(callee)) =
+        callee === Base.throw_boundserror ||
+        callee == Core.GlobalRef(Base, :throw_boundserror) ||
+        callee == Core.GlobalRef(Base, :_throw_boundserror_indices) ||
+        (callee isa Core.MethodInstance && (callee.def.def.name === :throw_boundserror ||
+                                            callee.def.def.name === :_throw_boundserror_indices))
     @test !any(src.code) do x
-        x isa Expr && x.head === :invoke && !(x.args[2] in (Core.GlobalRef(Base, :throw_boundserror), Base.throw_boundserror))
+        x isa Expr && x.head === :invoke && !is_bounds_throw_invoke_target(x.args[2])
     end
 end
 
