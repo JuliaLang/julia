@@ -203,7 +203,7 @@ function show(io::IO, cmd::Cmd)
         replace(sprint(context=io) do io
             with_output_color(:underline, io) do io
                 # A leading `~` would be expanded when the command is parsed back.
-                print_shell_word(io, arg, startswith(arg, '~') ? shell_special * '~' : shell_special)
+                print_shell_word(io, arg, startswith(arg, '~') ? _shell_display_special * '~' : _shell_display_special)
             end
         end, '`' => "\\`")
     end, ' ')
