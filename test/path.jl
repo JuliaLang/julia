@@ -137,6 +137,7 @@
         @test normpath(S(joinpath("foo",".","..","..","bar"))) == "..$(sep)bar"
         @test normpath(S(joinpath("foo","..",".","..","bar"))) == "..$(sep)bar"
         @test normpath(S(joinpath("foo","..","..",".","bar"))) == "..$(sep)bar"
+        @test normpath(normpath(S(joinpath("a", "..", "b", ".", "c")))) == normpath(S(joinpath("a", "..", "b", ".", "c")))
     end
     @test relpath(S(joinpath("foo","bar")), S("foo")) == "bar"
 

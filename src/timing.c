@@ -605,7 +605,7 @@ JL_DLLEXPORT void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_
     ios_mem(&buf, IOS_INLSIZE);
     buf.growable = 0; // Restrict to inline buffer to avoid allocation
 
-    jl_static_show_config_t config = { /* quiet */ 1 };
+    jl_static_show_config_t config = { /* verbosity */ JL_STATIC_SHOW_VERBOSITY_MINIMAL };
     jl_static_show_func_sig_((JL_STREAM*)&buf, v, config);
     _jl_timing_show_buf(cur_block, &buf);
 #endif

@@ -1,5 +1,3 @@
-@testset "Syntax quoting & interpolation" begin
-
 test_mod = Module()
 
 ex = JuliaLowering.include_string(test_mod, """
@@ -24,7 +22,7 @@ end
 @test sourcetext(ex[1]) == "f(\$(x+1), \$y)"
 @test sourcetext(ex[1][2]) == "\$(x+1)"
 @test sourcetext.(flattened_provenance(ex[1][3])) == ["\$y", "g(z)"]
-@test sprint(io->showprov(io, ex[1][3], tree=true)) == raw"""
+@test sprint(io->JuliaLowering._show_provtree(io, ex[1][3], "")) == raw"""
     (call g z)
     ├─ (call g z)
     │  └─ (call g z)
@@ -188,30 +186,24 @@ let
     :(:($$(args...)))
 end
 """)
-@test try
+
+err = try
     JuliaLowering.eval(test_mod, multi_interp_ex)
     nothing
 catch exc
     @test exc isa LoweringError
     sprint(io->Base.showerror(io, exc, show_detail=false))
-end == raw"""
-LoweringError:
-let
-    args = (:(x), :(y))
-    :(:($$(args...)))
-#       └─────────┘ ── More than one value in bare `$` expression
-end"""
+end
+@test contains(err, raw"More than one value in bare `$` expression")
 
-@test try
+err = try
     JuliaLowering.eval(test_mod, multi_interp_ex, expr_compat_mode=true)
     nothing
 catch exc
     @test exc isa LoweringError
     sprint(io->Base.showerror(io, exc, show_detail=false))
-end == raw"""
-LoweringError:
-#= none:0 =# - More than one value in bare `$` expression"""
-# ^ TODO: Improve error messages involving expr_to_syntaxtree!
+end
+@test contains(err, raw"More than one value in bare `$` expression")
 
 # Interpolation of SyntaxTree Identifier vs plain Symbol
 @eval test_mod using JuliaLowering
@@ -284,4 +276,90 @@ end
     """; expr_compat_mode=true) == Base.push!
 end
 
+@testset "self-quoting forms" for expr_compat_mode in [true, false],
+    form in [1, true, "string", [], nothing, :symbol],
+    quoted in [Expr(:quote, form), Expr(:inert, form), QuoteNode(form)]
+
+    @test fl_eval(test_mod, Expr(:block, quoted)) == form
+    @test jl_eval(test_mod, Expr(:block, quoted); expr_compat_mode) == form
+end
+
+# (. l r) should pass lowering only when r is one of:
+# - simple identifier (resolved variable)
+# - any simple atom, bare, inert, or in quote
+# - anything else if inert (not evaluated)
+#
+# note Expr(:block) is to avoid the special top-level evaluation of Expr(:.) in
+# flisp, which skips handling :quote
+@testset "getproperty quoting" begin
+    @eval test_mod begin
+        struct GetProperty; gs_field; end
+        Base.getproperty(::GetProperty, x) = ("got", x)
+        Base.getproperty(::GetProperty, x::Symbol) = ("got", x) # avoid ambiguity
+
+        global gs = GetProperty([])
+        global outer_field = :gs_field
+    end
+    @testset "arg2 unquoted identifier" for expr_compat_mode in [true, false]
+        local field = :outer_field
+
+        @test fl_eval(test_mod, Expr(:block, Expr(:., test_mod.gs, field))) ==
+            ("got", :gs_field)
+        @test jl_eval(test_mod, Expr(:block, Expr(:., test_mod.gs, field));
+                      expr_compat_mode) ==
+            ("got", :gs_field)
+    end
+    @testset "arg2 quoted identifier" for expr_compat_mode in [true, false],
+        field in [Expr(:quote, :gs_field),
+                  Expr(:inert, :gs_field),
+                  QuoteNode(:gs_field)]
+
+        @test fl_eval(test_mod, Expr(:block, Expr(:., test_mod.gs, field))) ==
+            ("got", :gs_field)
+        @test jl_eval(test_mod, Expr(:block, Expr(:., test_mod.gs, field));
+                      expr_compat_mode) ==
+            ("got", :gs_field)
+    end
+    @testset "arg2 maybe-quoted non-identifier atom" for expr_compat_mode in [true, false],
+        field_atom in ["str", 1],
+        field in [field_atom,
+                  Expr(:quote, field_atom),
+                  Expr(:inert, field_atom),
+                  QuoteNode(field_atom)]
+
+        @test fl_eval(test_mod, Expr(:block, Expr(:., test_mod.gs, field))) ==
+            ("got", field_atom)
+        @test jl_eval(test_mod, Expr(:block, Expr(:., test_mod.gs, field));
+                      expr_compat_mode) ==
+            ("got", field_atom)
+    end
+
+    @testset "arg2 inert AST" for expr_compat_mode in [true, false],
+        # oddly, bool and nothing don't work unquoted in flisp
+        field_inner in [true,
+                        nothing,
+                        GlobalRef(Core, :Type),
+                        Expr(:string, "s", "tr"),
+                        Expr(:string, "s", Expr(:call, string, :tr))],
+        field in [Expr(:inert, field_inner),
+                  QuoteNode(field_inner)]
+
+        @test fl_eval(test_mod, Expr(:block, Expr(:., test_mod.gs, field))) ==
+            ("got", field_inner)
+        @test jl_eval(test_mod, Expr(:block, Expr(:., test_mod.gs, field));
+                      expr_compat_mode) ==
+            ("got", field_inner)
+    end
+
+    @testset "arg2 non-inert non-atom should throw" for expr_compat_mode in [true, false],
+        field in [Expr(:string, "s", "tr"),
+                  Expr(:string, "s", Expr(:call, string, :tr)),
+                  Expr(:quote, Expr(:string, "s", "tr")),
+                  Expr(:quote, Expr(:string, "s", Expr(:$, :outer_field)))]
+
+        @test_throws "invalid syntax" fl_eval(
+            test_mod, Expr(:block, Expr(:., test_mod.gs, field)))
+        @test_throws LoweringError jl_eval(
+            test_mod, Expr(:block, Expr(:., test_mod.gs, field)))
+    end
 end

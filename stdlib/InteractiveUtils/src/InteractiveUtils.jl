@@ -11,12 +11,12 @@ Base.Experimental.@optlevel 1
 
 export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, varinfo,
     versioninfo, subtypes, supertypes, @which, @edit, @less, @functionloc, @code_warntype,
-    @code_typed, @code_lowered, @code_llvm, @code_native, @time_imports, clipboard, @trace_compile, @trace_dispatch,
-    @activate
+    @code_typed, @code_lowered, @code_llvm, @code_native, @time_imports, clipboard,
+    has_system_clipboard, @trace_compile, @trace_dispatch, @activate
 
 import Base.Docs.apropos
 
-using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, summarysize,
+using Base: unsorted_names, unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, summarysize,
     signature_type, format_bytes
 using Base.Libc
 using Markdown
@@ -263,7 +263,7 @@ function _subtypes_in!(mods::Array, @nospecialize(x::Type))
     while !isempty(mods)
         m = pop!(mods)
         xt = xt::DataType
-        for s in names(m, all = true)
+        for s in unsorted_names(m, all = true)
             if !isdeprecated(m, s) && isdefinedglobal(m, s)
                 t = getglobal(m, s)
                 dt = isa(t, UnionAll) ? unwrap_unionall(t) : t

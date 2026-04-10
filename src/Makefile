@@ -65,7 +65,7 @@ SRCS := \
 	simplevector runtime_intrinsics precompile jloptions mtarraylist \
 	threading scheduler stackwalk null_sysimage \
 	method jlapi signal-handling safepoint timing subtype rtutils \
-	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage runtime_ccall engine \
+	crc32c APInt processor ircode opaque_closure codegen-stubs coverage runtime_ccall engine \
 	$(GC_SRCS)
 
 RT_LLVMLINK :=
@@ -561,7 +561,7 @@ INCLUDED_C_FILES := \
 	crc32c.c:crc32c-tables.c \
 	signal-handling.c:signals-win.c \
 	signal-handling.c:signals-unix.c \
-	signal-handling.c:mach_excServer.c \
+	signal-handling.c:mig/mach_excServer.c \
 	signal-handling.c:signals-mach.c \
 	staticdata.c:staticdata_utils.c \
 	staticdata.c:precompile_utils.c

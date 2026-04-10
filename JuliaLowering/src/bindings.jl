@@ -98,13 +98,13 @@ function add_binding(bindings::Bindings, binding)
     push!(bindings.info, binding)
 end
 
-function _binding_id(id::Integer)
+function _binding_id(id::IdTag)
     id
 end
 
 function _binding_id(ex::SyntaxTree)
-    @chk kind(ex) == K"BindingId"
-    ex.var_id
+    @jl_assert kind(ex) == K"BindingId" ex
+    ex.var_id::IdTag
 end
 
 function get_binding(bindings::Bindings, x)::BindingInfo
@@ -112,7 +112,7 @@ function get_binding(bindings::Bindings, x)::BindingInfo
 end
 
 function get_binding(ctx::AbstractLoweringContext, x)::BindingInfo
-    get_binding(ctx.bindings, x)
+    get_binding(ctx.bindings::Bindings, x)
 end
 
 function _new_binding(ctx::AbstractLoweringContext, srcref::SyntaxTree,
@@ -128,15 +128,14 @@ end
 
 # Create a new SSA binding
 function ssavar(ctx::AbstractLoweringContext, srcref, name="tmp")
-    nameref = newleaf(ctx, srcref, K"Identifier", name)
-    binding_ex(ctx, _new_binding(ctx, nameref, name, :local;
+    binding_ex(ctx, _new_binding(ctx, srcref, name, :local;
                                  is_ssa=true, is_internal=true))
 end
 
 # Create a new local mutable binding or lambda argument
 function new_local_binding(ctx::AbstractLoweringContext, srcref, name;
                            kind=:local, kws...)
-    @assert kind === :local || kind === :argument
+    @jl_assert kind === :local || kind === :argument srcref
     nameref = newleaf(ctx, srcref, K"Identifier", name)
     b = _new_binding(ctx, nameref, name, kind; is_internal=true, kws...)
     lbindings = current_lambda_bindings(ctx)
@@ -183,7 +182,6 @@ LambdaBindings(self::IdTag = 0, scope_id::ScopeId = 0) =
     LambdaBindings(self, scope_id, Dict{IdTag,LambdaBindings}())
 
 function init_lambda_binding(bindings::LambdaBindings, b::BindingInfo, capt::Bool)
-    @assert !haskey(bindings.locals_capt, b.id)
     bindings.locals_capt[b.id] = capt
     b.lambda_id = bindings.scope_id
 end

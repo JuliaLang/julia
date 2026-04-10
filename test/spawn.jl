@@ -606,6 +606,84 @@ if !Sys.iswindows()
     @test string(cmd_both) == "setgid(setuid(`echo test`, 1001), 1000)"
 end
 
+# test redaction of sensitive env vars in Cmd display
+@testset "Cmd env display redaction" begin
+    cmd = setenv(`echo`, "API_KEY" => "secret123", "PATH" => "/usr/bin",
+                 "DATABASE_PASSWORD" => "hunter2", "GITHUB_PAT" => "ghp_abc",
+                 "DB_PW" => "pass", "MY_JWT" => "eyJ", "MONKEY" => "banana")
+
+    # default :redact mode — sensitive keys only, non-sensitive with values
+    s = repr(cmd)
+    @test contains(s, "\"API_KEY\"")
+    @test contains(s, "\"DATABASE_PASSWORD\"")
+    @test contains(s, "\"GITHUB_PAT\"")
+    @test contains(s, "\"DB_PW\"")
+    @test contains(s, "\"MY_JWT\"")
+    @test !contains(s, "secret123")
+    @test !contains(s, "hunter2")
+    @test !contains(s, "ghp_abc")
+    @test contains(s, "PATH=/usr/bin")
+    @test contains(s, "MONKEY=banana")
+
+    # component matching avoids false positives
+    @test !Base.is_sensitive_env_name("PATH")
+    @test !Base.is_sensitive_env_name("MONKEY")
+    @test !Base.is_sensitive_env_name("SPAWN")
+    @test Base.is_sensitive_env_name("API_KEY")
+    @test Base.is_sensitive_env_name("GITHUB_PAT")
+    @test Base.is_sensitive_env_name("DB_PW")
+    @test Base.is_sensitive_env_name("AUTH_TOKEN")
+
+    # :all mode — show all values
+    s_all = repr(cmd, context=:show_env=>:all)
+    @test contains(s_all, "secret123")
+    @test contains(s_all, "hunter2")
+    @test contains(s_all, "ghp_abc")
+    @test contains(s_all, "PATH=/usr/bin")
+
+    # :keys mode — all vars show key only
+    s_keys = repr(cmd, context=:show_env=>:keys)
+    @test contains(s_keys, "\"API_KEY\"")
+    @test contains(s_keys, "\"PATH\"")
+    @test !contains(s_keys, "/usr/bin")
+    @test !contains(s_keys, "secret123")
+
+    # :none mode — no env block
+    s_none = repr(cmd, context=:show_env=>:none)
+    @test !contains(s_none, "setenv")
+    @test contains(s_none, "`echo`")
+
+    # :none mode with dir still shows dir
+    cmd_dir = setenv(`echo`, "API_KEY" => "secret"; dir="/tmp")
+    s_none_dir = repr(cmd_dir, context=:show_env=>:none)
+    @test contains(s_none_dir, "setenv")
+    @test contains(s_none_dir, "dir=")
+    @test !contains(s_none_dir, "API_KEY")
+
+    # JULIA_SHOW_ENV env var
+    withenv("JULIA_SHOW_ENV" => "all") do
+        s = repr(cmd)
+        @test contains(s, "secret123")
+        @test contains(s, "hunter2")
+    end
+    withenv("JULIA_SHOW_ENV" => "none") do
+        s = repr(cmd)
+        @test !contains(s, "setenv")
+    end
+    withenv("JULIA_SHOW_ENV" => "keys") do
+        s = repr(cmd)
+        @test !contains(s, "/usr/bin")
+        @test contains(s, "\"PATH\"")
+    end
+
+    # IOContext overrides env var
+    withenv("JULIA_SHOW_ENV" => "all") do
+        s = repr(cmd, context=:show_env=>:redact)
+        @test !contains(s, "secret123")
+        @test contains(s, "PATH=/usr/bin")
+    end
+end
+
 # test for interpolation of Cmd
 let c = setenv(`x`, "A"=>true)
     @test (`$c a`).env == String["A=true"]
