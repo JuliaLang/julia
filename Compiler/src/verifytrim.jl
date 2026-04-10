@@ -407,7 +407,21 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                     foreigncall = QuoteNode(Symbol(foreigncall))
                 end
                 if foreigncall isa QuoteNode
-                    if foreigncall.value in runtime_functions
+                    if foreigncall.value === :jl_new_task
+                        # Task starters are invoked later from the scheduler via jl_apply.
+                        # Require that trim already covered the zero-argument starter body.
+                        length(stmt.args) >= 6 || continue
+                        starter = argextype(stmt.args[6], codeinfo, sptypes)
+                        atype = argtypes_to_type(Any[starter])
+
+                        mi = compileable_specialization_for_call(interp, atype)
+                        if mi !== nothing
+                            ci = get(caches, mi, nothing)
+                            ci isa CodeInstance && continue
+                        end
+
+                        error = "unresolved task start registered"
+                    elseif foreigncall.value in runtime_functions
                         error = "disallowed ccall into a runtime function"
                     end
                 else
