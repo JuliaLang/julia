@@ -78,7 +78,7 @@ void ObjCache::initDB()
         Env = nullptr;
         goto done;
     }
-    checkMDB(mdb_env_set_mapsize(Env, 8ULL << 30)); // 8 GiB maximum
+    checkMDB(mdb_env_set_mapsize(Env, (size_t)1 << 30)); // 1 GiB maximum
 
     MDB_txn *Txn;
     MDB_dbi Dbi;
