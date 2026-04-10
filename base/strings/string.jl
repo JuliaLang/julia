@@ -591,8 +591,7 @@ end
     return length_continued(s, 1, ncodeunits(s), ncodeunits(s))
 end
 
-# effects needed because @inbounds
-@assume_effects :consistent :effect_free @inline function length(s::Union{String, StringView}, i::Int, j::Int)
+@inline function _length(s::Union{String, StringView}, i::Int, j::Int)
     @boundscheck begin
         0 < i ≤ ncodeunits(s)+1 || throw(BoundsError(s, i))
         0 ≤ j < ncodeunits(s)+1 || throw(BoundsError(s, j))
@@ -601,6 +600,15 @@ end
     @inbounds i, k = thisind(s, i), i
     c = j - i + (i == k)
     @inbounds length_continued(s, i, j, c)
+end
+
+# effects needed because @inbounds
+@assume_effects :consistent :effect_free @inline function length(s::String, i::Int, j::Int)
+	_length(s, i, j)
+end
+
+@assume_effects :effect_free @inline function length(s::StringView, i::Int, j::Int)
+	_length(s, i, j)
 end
 
 @assume_effects :terminates_locally @inline @propagate_inbounds function length_continued(s::Union{String, StringView}, i::Int, n::Int, c::Int)

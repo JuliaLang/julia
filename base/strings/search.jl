@@ -41,7 +41,7 @@ end
 # This holds even in the presence of invalid UTF8
 is_standalone_byte(x::UInt8) = (x < 0x80) | (x > 0xf7)
 
-last_byteindex(x::Union{String, SubString{String}}) = ncodeunits(x)
+last_byteindex(x::DenseUTF8String) = ncodeunits(x)
 last_byteindex(x::DenseUInt8OrInt8) = lastindex(x)
 
 # Internal type - lazy iterator over positions of char in string
@@ -211,7 +211,7 @@ end
 
 function findprev(
     pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
-    s::DenseUTF8String,
+    s::UTF8String,
     i::Integer,
 )
     # TODO: Redesign these strange rules for errors, see #54584
@@ -268,13 +268,13 @@ end
 function findprev(::typeof(iszero), a::DenseUInt8OrInt8, i::Integer)
     i = Int(i)::Int
     @boundscheck i > Int(lastindex(a))::Int && throw(BoundsError(a, i))
-    i < Int(firstindex(i))::Int && return nothing
+    i < Int(firstindex(a))::Int && return nothing
     memrchr(a, zero(eltype(a)), i)
 end
 
 function findall(
     pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
-    s::DenseUTF8String,
+    s::UTF8String,
 )
     iter = FwCharPosIter(s, pred.x)
     return if is_standalone_byte(iter.last_char_byte)
@@ -388,7 +388,7 @@ end
 _nthbyte(s::DenseUTF8String, i) = codeunit(s, i)
 _nthbyte(t::AbstractVector, index) = t[index + (firstindex(t)-1)]
 
-function _searchindex(s::Union{String, SubString{String}}, t::Union{String, SubString{String}}, i::Integer)
+function _searchindex(s::DenseUTF8String, t::DenseUTF8String, i::Integer)
     # Check for fast case of a single byte
     lastindex(t) == 1 && return something(findnext(isequal(t[1]), s, i), 0)
     _searchindex(codeunits(s), codeunits(t), i)
@@ -698,7 +698,7 @@ function _rsearchindex(s::AbstractString,
     end
 end
 
-function _rsearchindex(s::Union{String, SubString{String}}, t::Union{String, SubString{String}}, i::Integer)
+function _rsearchindex(s::DenseUTF8String, t::DenseUTF8String, i::Integer)
     # Check for fast case of a single byte
     if lastindex(t) == 1
         return something(findprev(isequal(t[1]), s, i), 0)
