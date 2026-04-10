@@ -587,8 +587,21 @@ end
 end
 
 # nothrow because we know the start and end indices are valid
-@assume_effects :nothrow function length(s::Union{String, StringView})
+@assume_effects :nothrow function length(s::String)
     return length_continued(s, 1, ncodeunits(s), ncodeunits(s))
+end
+
+function length(s::StringView)
+    return length_continued(s, 1, ncodeunits(s), ncodeunits(s))
+end
+
+# effects needed because @inbounds
+@assume_effects :consistent :effect_free @inline function length(s::String, i::Int, j::Int)
+    _length(s, i, j)
+end
+
+@inline function length(s::StringView, i::Int, j::Int)
+    _length(s, i, j)
 end
 
 @inline function _length(s::Union{String, StringView}, i::Int, j::Int)
@@ -602,16 +615,16 @@ end
     @inbounds length_continued(s, i, j, c)
 end
 
-# effects needed because @inbounds
-@assume_effects :consistent :effect_free @inline function length(s::String, i::Int, j::Int)
-	_length(s, i, j)
+@assume_effects :terminates_locally @inline @propagate_inbounds function length_continued(s::String, i::Int, n::Int, c::Int)
+    _length_continued(s, i, n, c)
 end
 
-@assume_effects :effect_free @inline function length(s::StringView, i::Int, j::Int)
-	_length(s, i, j)
+@assume_effects :terminates_locally @inline @propagate_inbounds function length_continued(s::StringView, i::Int, n::Int, c::Int)
+    _length_continued(s, i, n, c)
 end
 
-@assume_effects :terminates_locally @inline @propagate_inbounds function length_continued(s::Union{String, StringView}, i::Int, n::Int, c::Int)
+
+@inline @propagate_inbounds function _length_continued(s::Union{String, StringView}, i::Int, n::Int, c::Int)
     i < n || return c
     b = codeunit(s, i)
     while true

@@ -74,6 +74,15 @@
         @test c == "foobar"
     end
 
+    @testset "Mutation tracking" begin
+        # Docstring: "v may be mutated, which will be reflected"
+        v = UInt8[0x61, 0x62, 0x63]
+        s = StringView(v)
+        push!(v, 0x64)
+        @test ncodeunits(s) == 4
+        @test s == "abcd"
+    end
+
     @testset "Basic properties" begin
         for v in Any[
                 [0x61, 0x62, 0x63],
@@ -402,6 +411,11 @@
         @test findnext(r"[aeiou]+", s, 1) == 2:3
         @test findnext(r"[aeiou]+", ss, 1) == 1:2
 
+        # findnext(::Regex) returning a match at a non-first position
+        @test findnext(r"bar", StringView(b"foo bar"), 1) == 5:7
+        @test findnext(r"bar", StringView(b"foo bar"), 5) == 5:7
+        @test findnext(r"bar", SubString(StringView(b"xxfoo barxx"), 3, 9), 1) == 5:7
+
         sv = StringView(codeunits("foo 1234 bar"))
         m = match(r"[0-9]+", sv)
         @test m isa RegexMatch
@@ -421,6 +435,15 @@
         @test !haskey(m, "foo")
         @test (m[:a], m[2], m["b"]) == ("x", "y", "z")
         @test keys(m) == ["a", 2, "b"]
+    end
+
+    @testset "tryparse_internal with startpos/endpos" begin
+        # tryparse_internal pointer math on StringView and SubString{StringView}
+        sv = StringView(Vector{UInt8}("xx3.14yy"))
+        @test Base.tryparse_internal(Float64, sv, 3, 6) == 3.14
+        @test Base.tryparse_internal(Float32, sv, 3, 6) == 3.14f0
+        ssv = SubString(StringView(Vector{UInt8}("  2.5  ")), 3, 5)
+        @test Base.tryparse_internal(Float64, ssv, 1, 3) == 2.5
     end
 
     @testset "Parsing floats" begin
@@ -570,6 +593,8 @@
         @test chomp(StringView(UInt8[0x0a])) == ""
         @test chomp(StringView(b"test\n")) == "test"
         @test chomp(StringView(codeunits("foo\n\n"))) == "foo\n"
+        @test chomp(SubString(StringView(Vector{UInt8}("ab\r\n")))) == "ab"
+        @test chomp(SubString(StringView(Vector{UInt8}("xxab\r\nxx")), 3, 6)) == "ab"
     end
 
     @testset "write and print" begin
@@ -621,4 +646,12 @@
         end
     end
 
+    @testset "length with indices" begin
+        sv = StringView(collect(codeunits("αβγ")))
+        @test length(sv, 1, 6) == 3
+        @test length(sv, 3, 4) == 1
+        @test length(sv, 3, 2) == 0
+        ss = SubString(sv, 1, 3)
+        @test length(ss) == 2
+    end
 end # testset "StringViews"
