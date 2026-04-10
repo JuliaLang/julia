@@ -615,7 +615,7 @@ end
     @inbounds length_continued(s, i, j, c)
 end
 
-@assume_effects :terminates_locally @inline @propagate_inbounds function length_continued(s::String, i::Int, n::Int, c::Int)
+@assume_effects :terminates_globally @inline @propagate_inbounds function length_continued(s::String, i::Int, n::Int, c::Int)
     _length_continued(s, i, n, c)
 end
 
