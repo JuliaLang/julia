@@ -2362,4 +2362,14 @@ let src = code_typed1(issue44428, (Any,))
     @test count(x->Meta.isexpr(x,:call), src.code) == 0
 end
 
+# issue #61552
+let mi = Compiler.specialize_method(only(methods(ndims, (Matrix{Float64},))),
+        Tuple{typeof(ndims), Matrix{Float64}}, Core.svec())
+    codeinst = getcacheci(mi)::Core.CodeInstance
+    @test Compiler.use_const_api(codeinst)
+    @test codeinst.inferred === nothing
+    interp = Compiler.NativeInterpreter()
+    @test Compiler.ci_get_source(interp, codeinst) isa Core.CodeInfo
+end
+
 end # module inline_tests
