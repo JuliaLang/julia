@@ -2,6 +2,8 @@
 
 using Test, Printf
 
+@test isempty(Test.detect_closure_boxes(Printf))
+
 @testset "Printf" begin
 
 @testset "%p" begin

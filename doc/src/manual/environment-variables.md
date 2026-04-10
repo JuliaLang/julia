@@ -130,25 +130,33 @@ environment variable or if it must have a value, set it to the string `:`.
 
 ### [`JULIA_DEPOT_PATH`](@id JULIA_DEPOT_PATH)
 
-The [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) environment variable is used to populate the global Julia
-[`DEPOT_PATH`](@ref) variable, which controls where the package manager, as well
-as Julia's code loading mechanisms, look for package registries, installed
-packages, named environments, repo clones, cached compiled package images,
-configuration files, and the default location of the REPL's history file.
+The [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) environment variable is used to populate the
+global Julia [`DEPOT_PATH`](@ref) variable, which controls where the package manager, as well
+as Julia's code loading mechanisms, look for package registries, installed packages, named
+environments, repo clones, cached compiled package images, configuration files, and the default
+location of the REPL's history file.
 
 Unlike the shell `PATH` variable but similar to [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH),
-empty entries in [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) are expanded to the default
-value of `DEPOT_PATH`, excluding the user depot. This allows easy overriding of the user
-depot, while still retaining access to resources that are bundled with Julia, like cache
-files, artifacts, etc. For example, to switch the user depot to `/foo/bar` just do
+empty entries in [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) have special behavior:
+- At the end, it is expanded to the default value of `DEPOT_PATH`, *excluding* the user depot.
+- At the start, it is expanded to the default value of `DEPOT_PATH`, *including* the user depot.
+This allows easy overriding of the user depot, while still retaining access to resources that
+are bundled with Julia, like cache files, artifacts, etc. For example, to switch the user depot
+to `/foo/bar` use a trailing `:`
 ```sh
 export JULIA_DEPOT_PATH="/foo/bar:"
 ```
-All package operations, like cloning registrise or installing packages, will now write to
+All package operations, like cloning registries or installing packages, will now write to
 `/foo/bar`, but since the empty entry is expanded to the default system depot, any bundled
 resources will still be available. If you really only want to use the depot at `/foo/bar`,
 and not load any bundled resources, simply set the environment variable to `/foo/bar`
 without the trailing colon.
+
+To append a depot at the end of the full default list, including the default user depot, use a
+leading `:`
+```sh
+export JULIA_DEPOT_PATH=":/foo/bar"
+```
 
 There are two exceptions to the above rule. First, if [`JULIA_DEPOT_PATH`](@ref
 JULIA_DEPOT_PATH) is set to the empty string, it expands to an empty `DEPOT_PATH` array. In
@@ -389,8 +397,28 @@ during image compilation. Defaults to 0.
 ### [`JULIA_EXCLUSIVE`](@id JULIA_EXCLUSIVE)
 
 If set to anything besides `0`, then Julia's thread policy is consistent with
-running on a dedicated machine: the master thread is on proc 0, and threads are
-affinitized. Otherwise, Julia lets the operating system handle thread policy.
+running on a dedicated machine: each thread in the default threadpool is
+affinitized.  [Interactive threads](@ref man-threadpools) remain under the
+control of the operating system scheduler.
+
+Otherwise, Julia lets the operating system handle thread policy.
+
+## Garbage Collection
+
+### [`JULIA_HEAP_SIZE_HINT`](@id JULIA_HEAP_SIZE_HINT)
+
+Environment variable equivalent to the `--heap-size-hint=<size>[<unit>]` command line option.
+
+Forces garbage collection if memory usage is higher than the given value. The value may be specified as a number of bytes, optionally in units of:
+
+    - B  (bytes)
+    - K  (kibibytes)
+    - M  (mebibytes)
+    - G  (gibibytes)
+    - T  (tebibytes)
+    - %  (percentage of physical memory)
+
+For example, `JULIA_HEAP_SIZE_HINT=1G` would provide a 1 GB heap size hint to the garbage collector.
 
 ## REPL formatting
 
@@ -451,9 +479,15 @@ stored in memory.
 
 Valid values for [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) can be obtained by executing `julia -C help`.
 
+To get the CPU target string that was used to build the current system image,
+use [`Sys.sysimage_target()`](@ref). This can be useful for reproducing
+the same system image or understanding what CPU features were enabled during compilation.
+
 Setting [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) is important for heterogeneous compute systems where processors of
 distinct types or features may be present. This is commonly encountered in high performance
-computing (HPC) clusters since the component nodes may be using distinct processors.
+computing (HPC) clusters since the component nodes may be using distinct processors. In this case,
+you may want to use the `sysimage` CPU target to maintain the same configuration as the sysimage.
+See below for more details.
 
 The CPU target string is a list of strings separated by `;` each string starts with a CPU
 or architecture name and followed by an optional list of features separated by `,`.
@@ -461,14 +495,26 @@ A `generic` or empty CPU name means the basic required feature set of the target
 which is at least the architecture the C/C++ runtime is compiled with. Each string
 is interpreted by LLVM.
 
+!!! note
+    Package images can only target the same or more specific CPU features than
+    their base system image.
+
 A few special features are supported:
-1. `clone_all`
+
+1. `sysimage`
+
+     A special keyword that can be used as a CPU target name, which will be replaced
+     with the CPU target string that was used to build the current system image. This allows
+     you to specify CPU targets that build upon or extend the current sysimage's target, which
+     is particularly helpful for creating package images that are as flexible as the sysimage.
+
+2. `clone_all`
 
      This forces the target to have all functions in sysimg cloned.
      When used in negative form (i.e. `-clone_all`), this disables full clone that's
      enabled by default for certain targets.
 
-2. `base([0-9]*)`
+3. `base([0-9]*)`
 
      This specifies the (0-based) base target index. The base target is the target
      that the current target is based on, i.e. the functions that are not being cloned
@@ -476,11 +522,11 @@ A few special features are supported:
      fully cloned (as if `clone_all` is specified for it) if it is not the default target (0).
      The index can only be smaller than the current index.
 
-3. `opt_size`
+4. `opt_size`
 
      Optimize for size with minimum performance impact. Clang/GCC's `-Os`.
 
-4. `min_size`
+5. `min_size`
 
      Optimize only for size. Clang's `-Oz`.
 
@@ -490,6 +536,15 @@ A few special features are supported:
 ### [`JULIA_DEBUG`](@id JULIA_DEBUG)
 
 Enable debug logging for a file or module, see [`Logging`](@ref man-logging) for more information.
+
+### CI Debug Environment Variables
+
+Julia automatically enables verbose debugging options when certain continuous integration (CI) debug environment variables are set. This improves the debugging experience when CI jobs are re-run with debug logging enabled, by automatically:
+
+- Enabling `--trace-eval` (location mode) to show expressions being evaluated
+- Setting `JULIA_TEST_VERBOSE=true` to enable verbose test output
+
+This allows developers to get detailed debugging information from CI runs without modifying their scripts or workflow files.
 
 ### [`JULIA_PROFILE_PEEK_HEAP_SNAPSHOT`](@id JULIA_PROFILE_PEEK_HEAP_SNAPSHOT)
 
@@ -501,17 +556,6 @@ See [Triggered During Execution](@ref).
 Allows you to enable or disable zones for a specific Julia run.
 For instance, setting the variable to `+GC,-INFERENCE` will enable the `GC` zones and disable
 the `INFERENCE` zones. See [Dynamically Enabling and Disabling Zones](@ref).
-
-### [`JULIA_GC_NO_GENERATIONAL`](@id JULIA_GC_NO_GENERATIONAL)
-
-If set to anything besides `0`, then the Julia garbage collector never performs
-"quick sweeps" of memory.
-
-!!! note
-
-    This environment variable only has an effect if Julia was compiled with
-    garbage-collection debugging (that is, if `WITH_GC_DEBUG_ENV` is set to `1`
-    in the build configuration).
 
 ### [`JULIA_GC_WAIT_FOR_DEBUGGER`](@id JULIA_GC_WAIT_FOR_DEBUGGER)
 

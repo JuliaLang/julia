@@ -5,11 +5,24 @@ Julia provides explicit support for some external tracing profilers, enabling yo
 The currently supported profilers are:
 - [Tracy](https://github.com/wolfpld/tracy)
 - [Intel VTune (ITTAPI)](https://github.com/intel/ittapi)
+- [Apple Instruments](#Apple-Instruments-(OSLog)) (macOS only)
 
 ### Adding New Zones
 
+#### From C/C++ code
+
 To add new zones, use the `JL_TIMING` macro. You can find numerous examples throughout the codebase by searching for `JL_TIMING`. To add a new type of zone
 you add it to `JL_TIMING_OWNERS` (and possibly `JL_TIMING_EVENTS`).
+
+#### From Julia code
+
+The `Compiler.@zone` macro can be used to add a zone from Julia code, it is used as:
+
+```julia
+Compiler.@zone "ZONE NAME" begin
+    ...
+end
+```
 
 ### Dynamically Enabling and Disabling Zones
 
@@ -102,3 +115,32 @@ Note that the Julia JIT runtime does not yet have integration for Tracy's symbol
 ## Intel VTune (ITTAPI) Profiler
 
 *This section is yet to be written.*
+
+## Apple Instruments (OSLog)
+
+On macOS, Julia can emit [os_signpost](https://developer.apple.com/documentation/os/recording-performance-data#Review-Signposts-in-Instruments) intervals that are visible in Apple Instruments. Each timing zone appears as a signpost interval in the Instruments timeline, grouped by subsystem (e.g. `GC`, `INFERENCE`, `CODEGEN`).
+
+### Building Julia with OSLog support
+
+Add the following to your `Make.user` file:
+
+```
+WITH_APPLE_OSLOG := 1
+```
+
+### Profiling Julia with Instruments
+
+1. Open Instruments.app (included with Xcode).
+2. Create a new trace document and add the **os_signpost** instrument.
+3. Select the Julia process as the target, or launch Julia directly from Instruments.
+4. Record the trace. Julia's timing zones will appear as signpost intervals grouped under the subsystem names defined in the runtime (e.g. `JL_TIMING_GC`, `JL_TIMING_INFERENCE`).
+
+You can also record a trace from the command line using `xctrace`:
+
+```
+xctrace record --template 'Logging' --output my_julia_trace.trace --launch -- ./julia -e '...'
+```
+
+The resulting `.trace` file can be opened in Instruments for analysis (e.g. with `open my_julia_trace.trace`).
+
+![Typical Instruments usage](os_signpost.png)

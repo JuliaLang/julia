@@ -1,0 +1,19 @@
+# This file is machine-generated - editing it directly is not advised
+
+julia_version = "1.14.0-DEV"
+manifest_format = "2.1"
+
+[[deps.VersionedDep1]]
+path = "VersionedDep1"
+uuid = "f08855a0-36cb-4a32-8ae5-a227b709c612"
+syntax.julia_version = "1.13.0"
+
+[[deps.VersionedDep2]]
+path = "VersionedDep2"
+uuid = "e127e659-a899-4a00-b565-5b74face18ba"
+syntax.julia_version = "1.14.0"
+
+[[deps.VersionedDep3]]
+path = "VersionedDep3"
+uuid = "6ae26a88-8a9e-4c29-a00a-ea2b9a48e6e1"
+syntax.julia_version = "1.0.0"

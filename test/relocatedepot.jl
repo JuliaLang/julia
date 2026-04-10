@@ -1,7 +1,10 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Test
 
 
 include("testenv.jl")
+include("tempdepot.jl")
 
 
 function test_harness(@nospecialize(fn); empty_load_path=true, empty_depot_path=true)
@@ -26,26 +29,48 @@ end
 
 if !test_relocated_depot
 
-    @testset "insert @depot tag in path" begin
+    @testset "edge cases when inserting @depot tag in path" begin
 
+        # insert @depot only once for first match
         test_harness() do
-            mktempdir() do dir
+            mkdepottempdir() do dir
                 pushfirst!(DEPOT_PATH, dir)
-                path = dir*dir
-                @test Base.replace_depot_path(path) == "@depot"*dir
+                if Sys.iswindows()
+                    # dirs start with a drive letter instead of a path separator
+                    path = dir*Base.Filesystem.pathsep()*dir
+                    @test Base.replace_depot_path(path) == "@depot"*Base.Filesystem.pathsep()*dir
+                else
+                    path = dir*dir
+                    @test Base.replace_depot_path(path) == "@depot"*dir
+                end
+            end
+
+            # 55340
+            empty!(DEPOT_PATH)
+            mkdepottempdir() do dir
+                jlrc = joinpath(dir, "julia-rc2")
+                jl   = joinpath(dir, "julia")
+                mkdir(jl)
+                push!(DEPOT_PATH, jl)
+                @test Base.replace_depot_path(jl) == "@depot"
+                @test Base.replace_depot_path(string(jl,Base.Filesystem.pathsep())) ==
+                            string("@depot",Base.Filesystem.pathsep())
+                @test Base.replace_depot_path(jlrc) != "@depot-rc2"
+                @test Base.replace_depot_path(jlrc) == jlrc
             end
         end
 
+        # deal with and without trailing path separators
         test_harness() do
-            mktempdir() do dir
+            mkdepottempdir() do dir
                 pushfirst!(DEPOT_PATH, dir)
                 path = joinpath(dir, "foo")
                 if isdirpath(DEPOT_PATH[1])
                     DEPOT_PATH[1] = dirname(DEPOT_PATH[1]) # strip trailing pathsep
                 end
-                tag = joinpath("@depot", "") # append a pathsep
+                tag = string("@depot", Base.Filesystem.pathsep())
                 @test startswith(Base.replace_depot_path(path), tag)
-                DEPOT_PATH[1] = joinpath(DEPOT_PATH[1], "") # append a pathsep
+                DEPOT_PATH[1] = string(DEPOT_PATH[1], Base.Filesystem.pathsep())
                 @test startswith(Base.replace_depot_path(path), tag)
                 popfirst!(DEPOT_PATH)
                 @test !startswith(Base.replace_depot_path(path), tag)
@@ -152,7 +177,7 @@ if !test_relocated_depot
         # add them as include_dependency()s to a new pkg Foo, which will be precompiled into depot3.
         # After loading the include_dependency()s of Foo should refer to depot1 depot2 each.
         test_harness() do
-            mktempdir() do depot1
+            mkdepottempdir() do depot1
                 # precompile Example in depot1
                 example1_root = joinpath(depot1, "Example1")
                 mkpath(joinpath(example1_root, "src"))
@@ -172,7 +197,7 @@ if !test_relocated_depot
                 end
                 pushfirst!(LOAD_PATH, depot1); pushfirst!(DEPOT_PATH, depot1)
                 pkg = Base.identify_package("Example1"); Base.require(pkg)
-                mktempdir() do depot2
+                mkdepottempdir() do depot2
                     # precompile Example in depot2
                     example2_root = joinpath(depot2, "Example2")
                     mkpath(joinpath(example2_root, "src"))
@@ -192,7 +217,7 @@ if !test_relocated_depot
                     end
                     pushfirst!(LOAD_PATH, depot2); pushfirst!(DEPOT_PATH, depot2)
                     pkg = Base.identify_package("Example2"); Base.require(pkg)
-                    mktempdir() do depot3
+                    mkdepottempdir() do depot3
                         # precompile Foo in depot3
                         open(joinpath(depot3, "Module52161.jl"), write=true) do io
                             println(io, """

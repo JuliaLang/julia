@@ -2,7 +2,7 @@
 
 module MultiplicativeInverses
 
-import Base: div, divrem, rem, unsigned
+import Base: div, divrem, mul_hi, rem, unsigned, mod
 using  Base: IndexLinear, IndexCartesian, tail
 export multiplicativeinverse
 
@@ -134,33 +134,13 @@ struct UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
 end
 UnsignedMultiplicativeInverse(x::Unsigned) = UnsignedMultiplicativeInverse{typeof(x)}(x)
 
-# Returns the higher half of the product a*b
-function _mul_high(a::T, b::T) where {T<:Union{Signed, Unsigned}}
-    ((widen(a)*b) >>> (sizeof(a)*8)) % T
-end
-
-function _mul_high(a::UInt128, b::UInt128)
-    shift = sizeof(a)*4
-    mask = typemax(UInt128) >> shift
-    a1, a2 = a >>> shift, a & mask
-    b1, b2 = b >>> shift, b & mask
-    a1b1, a1b2, a2b1, a2b2 = a1*b1, a1*b2, a2*b1, a2*b2
-    carry = ((a1b2 & mask) + (a2b1 & mask) + (a2b2 >>> shift)) >>> shift
-    a1b1 + (a1b2 >>> shift) + (a2b1 >>> shift) + carry
-end
-function _mul_high(a::Int128, b::Int128)
-    shift = sizeof(a)*8 - 1
-    t1, t2 = (a >> shift) & b % UInt128, (b >> shift) & a % UInt128
-    (_mul_high(a % UInt128, b % UInt128) - t1 - t2) % Int128
-end
-
 function div(a::T, b::SignedMultiplicativeInverse{T}) where T
-    x = _mul_high(a, b.multiplier)
+    x = mul_hi(a, b.multiplier)
     x += (a*b.addmul) % T
     ifelse(abs(b.divisor) == 1, a*b.divisor, (signbit(x) + (x >> b.shift)) % T)
 end
 function div(a::T, b::UnsignedMultiplicativeInverse{T}) where T
-    x = _mul_high(a, b.multiplier)
+    x = mul_hi(a, b.multiplier)
     x = ifelse(b.add, convert(T, convert(T, (convert(T, a - x) >>> 1)) + x), x)
     ifelse(b.divisor == 1, a, x >>> b.shift)
 end
@@ -171,6 +151,13 @@ rem(a::T, b::MultiplicativeInverse{T}) where {T} =
 function divrem(a::T, b::MultiplicativeInverse{T}) where T
     d = div(a, b)
     (d, a - d*b.divisor)
+end
+
+mod(a::T, b::UnsignedMultiplicativeInverse{T}) where {T} = rem(a, b)
+
+function mod(a::T, b::SignedMultiplicativeInverse{T}) where {T}
+    r = rem(a, b)
+    return (iszero(r) || signbit(r) == signbit(b.divisor)) ? r : r + b.divisor
 end
 
 multiplicativeinverse(x::Signed) = SignedMultiplicativeInverse(x)

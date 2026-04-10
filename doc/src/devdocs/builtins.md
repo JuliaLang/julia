@@ -1,12 +1,25 @@
 # [Core.Builtins](@id lib-builtins)
 
-## Builtin Function APIs
+The following builtin functions are considered unstable, but provide the basic
+definitions for what defines the abilities and behaviors of a Julia
+program. They are typically accessed through a higher level generic API.
 
-The following Builtin function APIs are considered unstable, but provide the basic
-definitions for what defines the abilities and behaviors of a Julia program. They are
-typically accessed through a higher level generic API.
+## Raw access to memory
 
 ```@docs
+Core.Intrinsics.pointerref
+Core.Intrinsics.pointerset
+Core.Intrinsics.atomic_pointerref
+Core.Intrinsics.atomic_pointerset
+Core.Intrinsics.atomic_pointerswap
+Core.Intrinsics.atomic_pointermodify
+Core.Intrinsics.atomic_pointerreplace
+```
+
+## Managed memory
+
+```@docs
+Core.memorynew
 Core.memoryrefnew
 Core.memoryrefoffset
 Core.memoryrefget
@@ -16,13 +29,20 @@ Core.memoryrefswap!
 Core.memoryrefmodify!
 Core.memoryrefreplace!
 Core.memoryrefsetonce!
-Core.Intrinsics.atomic_pointerref
-Core.Intrinsics.atomic_pointerset
-Core.Intrinsics.atomic_pointerswap
-Core.Intrinsics.atomic_pointermodify
-Core.Intrinsics.atomic_pointerreplace
+```
+
+## Module bindings
+
+```@docs
 Core.get_binding_type
+```
+
+## Other
+
+```@docs
 Core.IntrinsicFunction
 Core.Intrinsics
 Core.IR
+Base.quoted
+Base.isa_ast_node
 ```

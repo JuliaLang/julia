@@ -155,7 +155,7 @@ jl_sym_t *jl_symbol(const char *str);
 Functions and MethodInstance:
 
 ```c
-jl_function_t *jl_new_generic_function(jl_sym_t *name);
+jl_value_t *jl_new_generic_function(jl_sym_t *name);
 jl_method_instance_t *jl_new_method_instance(jl_value_t *ast, jl_tuple_t *sparams);
 ```
 

@@ -18,6 +18,9 @@
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
 
+#define STR(csym)           #csym
+#define XSTR(csym)          STR(csym)
+
 using namespace llvm;
 
 JuliaPassContext::JuliaPassContext()
@@ -28,7 +31,7 @@ JuliaPassContext::JuliaPassContext()
         pgcstack_getter(nullptr), adoptthread_func(nullptr), gc_flush_func(nullptr),
         gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
         pointer_from_objref_func(nullptr), gc_loaded_func(nullptr), alloc_obj_func(nullptr),
-        typeof_func(nullptr), write_barrier_func(nullptr), pop_handler_noexcept_func(nullptr),
+        typeof_func(nullptr), blackbox_func(nullptr), write_barrier_func(nullptr), pop_handler_noexcept_func(nullptr),
         call_func(nullptr), call2_func(nullptr), call3_func(nullptr), module(nullptr)
 {
 }
@@ -52,6 +55,7 @@ void JuliaPassContext::initFunctions(Module &M)
     pointer_from_objref_func = M.getFunction("julia.pointer_from_objref");
     gc_loaded_func = M.getFunction("julia.gc_loaded");
     typeof_func = M.getFunction("julia.typeof");
+    blackbox_func = M.getFunction("julia.blackbox");
     write_barrier_func = M.getFunction("julia.write_barrier");
     alloc_obj_func = M.getFunction("julia.gc_alloc_obj");
     pop_handler_noexcept_func = M.getFunction(XSTR(jl_pop_handler_noexcept));
@@ -72,17 +76,24 @@ void JuliaPassContext::initAll(Module &M)
     T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
 }
 
-llvm::CallInst *JuliaPassContext::getPGCstack(llvm::Function &F) const
+llvm::Value *JuliaPassContext::getPGCstack(llvm::Function &F) const
 {
-    if (!pgcstack_getter && !adoptthread_func)
-        return nullptr;
-    for (auto &I : F.getEntryBlock()) {
-        if (CallInst *callInst = dyn_cast<CallInst>(&I)) {
-            Value *callee = callInst->getCalledOperand();
-            if ((pgcstack_getter && callee == pgcstack_getter) ||
-                (adoptthread_func && callee == adoptthread_func)) {
-                return callInst;
+    if (pgcstack_getter || adoptthread_func) {
+        for (auto &I : F.getEntryBlock()) {
+            if (CallInst *callInst = dyn_cast<CallInst>(&I)) {
+                Value *callee = callInst->getCalledOperand();
+                if ((pgcstack_getter && callee == pgcstack_getter) ||
+                    (adoptthread_func && callee == adoptthread_func)) {
+                    return callInst;
+                }
             }
+        }
+    }
+    for (auto &arg : F.args()) {
+        // Check for the "gcstack" attribute
+        AttributeSet attrs = F.getAttributes().getParamAttrs(arg.getArgNo());
+        if (attrs.hasAttribute("gcstack")) {
+            return &arg;
         }
     }
     return nullptr;
@@ -129,9 +140,7 @@ namespace jl_intrinsics {
     static Function *addGCAllocAttributes(Function *target)
     {
         auto FnAttrs = AttrBuilder(target->getContext());
-#if JL_LLVM_VERSION >= 160000
         FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | MemoryEffects::inaccessibleMemOnly(ModRefInfo::ModRef));
-#endif
         FnAttrs.addAllocKindAttr(AllocFnKind::Alloc);
         FnAttrs.addAttribute(Attribute::WillReturn);
         FnAttrs.addAttribute(Attribute::NoUnwind);
@@ -228,11 +237,7 @@ namespace jl_intrinsics {
                     false),
                 Function::ExternalLinkage,
                 QUEUE_GC_ROOT_NAME);
-#if JL_LLVM_VERSION >= 160000
             intrinsic->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
-#else
-            intrinsic->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
-#endif
             return intrinsic;
         });
 
@@ -240,7 +245,7 @@ namespace jl_intrinsics {
         SAFEPOINT_NAME,
         [](Type *T_size) {
             auto &ctx = T_size->getContext();
-            auto T_psize = T_size->getPointerTo();
+            auto T_psize = PointerType::getUnqual(ctx);
             auto intrinsic = Function::Create(
                 FunctionType::get(
                     Type::getVoidTy(ctx),
@@ -248,11 +253,7 @@ namespace jl_intrinsics {
                     false),
                 Function::ExternalLinkage,
                 SAFEPOINT_NAME);
-#if JL_LLVM_VERSION >= 160000
             intrinsic->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
-#else
-            intrinsic->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
-#endif
             return intrinsic;
         });
 }
@@ -309,11 +310,7 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_QUEUE_ROOT_NAME);
-#if JL_LLVM_VERSION >= 160000
             func->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
-#else
-            func->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
-#endif
             return func;
         });
 
@@ -334,11 +331,4 @@ namespace jl_well_known {
             allocTypedFunc->addFnAttr(Attribute::getWithAllocSizeArgs(ctx, 1, None));
             return addGCAllocAttributes(allocTypedFunc);
         });
-}
-
-void setName(llvm::Value *V, const llvm::Twine &Name, int debug_info)
-{
-    if (debug_info >= 2 && !llvm::isa<llvm::Constant>(V)) {
-        V->setName(Name);
-    }
 }

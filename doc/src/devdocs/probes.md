@@ -177,8 +177,8 @@ It's sometimes useful to know when a task is spawning other tasks. This is very
 easy to see with `rt__new__task`. The first argument to the probe, `parent`, is
 the existing task which is creating a new task. This means that if you know the
 address of the task you want to monitor, you can easily just look at the tasks
-that that specific task spawned. Let's see how to do this; first let's start a
-Julia session and get the PID and REPL's task address:
+that were spawned by that specific task. Let's see how to do this; first let's
+start a Julia session and get the PID and REPL's task address:
 
 ```
 > julia

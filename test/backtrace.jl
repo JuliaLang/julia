@@ -237,7 +237,7 @@ let trace = try
     end
     @test trace[1].func === Symbol("top-level scope")
     @test trace[1].file === :a_filename
-    @test trace[1].line == 3
+    @test trace[1].line in (2, 3)
 end
 
 # issue #45171
@@ -375,4 +375,8 @@ end
     @test ptr2 < sp[2]
     @test sp[1] < ptr1
     @test all(diff(Int128.(UInt.(sp))) .> 0)
+end
+
+@testset "`lookup` return type inference" begin
+    @test Vector{StackTraces.StackFrame} === Base.infer_return_type(lookup)
 end

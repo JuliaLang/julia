@@ -23,6 +23,11 @@ where `T` is the type to be specialized for, and `dict` keeps track of objects c
 so far within the recursion. Within the definition, `deepcopy_internal` should be used
 in place of `deepcopy`, and the `dict` variable should be
 updated as appropriate before returning.
+
+!!! warning
+    It is better to avoid this function in favor of custom `copy` methods or use-case-specific
+    copying functions. `deepcopy` is slow and can easily copy too many objects, or generate an
+    object that violates invariants, since it does not respect abstraction boundaries.
 """
 function deepcopy(@nospecialize x)
     isbitstype(typeof(x)) && return x
@@ -120,11 +125,14 @@ function _deepcopy_memory_t(@nospecialize(x::Memory), T, stackdict::IdDict)
     end
     return dest
 end
-@eval function deepcopy_internal(x::Array{T, N}, stackdict::IdDict) where {T, N}
+function deepcopy_internal(x::Array{T, N}, stackdict::IdDict) where {T, N}
     if haskey(stackdict, x)
         return stackdict[x]::typeof(x)
     end
-    stackdict[x] = $(Expr(:new, :(Array{T, N}), :(deepcopy_internal(x.ref, stackdict)), :(x.size)))
+    y = stackdict[x] = Array{T, N}(undef, ntuple(Returns(0), Val{N}()))
+    setfield!(y, :ref, deepcopy_internal(x.ref, stackdict))
+    setfield!(y, :size, x.size)
+    y
 end
 function deepcopy_internal(x::GenericMemoryRef, stackdict::IdDict)
     if haskey(stackdict, x)

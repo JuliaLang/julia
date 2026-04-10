@@ -3,8 +3,10 @@
 export threadid, nthreads, @threads, @spawn,
        threadpool, nthreadpools
 
+public Condition, threadpoolsize, ngcthreads
+
 """
-    Threads.threadid([t::Task]) -> Int
+    Threads.threadid([t::Task])::Int
 
 Get the ID number of the current thread of execution, or the thread of task
 `t`. The master thread has ID `1`.
@@ -35,7 +37,7 @@ threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 
 # lower bound on the largest threadid()
 """
-    Threads.maxthreadid() -> Int
+    Threads.maxthreadid()::Int
 
 Get a lower bound on the number of threads (across all thread pools) available
 to the Julia process, with atomic-acquire semantics. The result will always be
@@ -45,7 +47,7 @@ any task you were able to observe before calling `maxthreadid`.
 maxthreadid() = Int(Core.Intrinsics.atomic_pointerref(cglobal(:jl_n_threads, Cint), :acquire))
 
 """
-    Threads.nthreads(:default | :interactive) -> Int
+    Threads.nthreads(:default | :interactive)::Int
 
 Get the current number of threads within the specified thread pool. The threads in `:interactive`
 have id numbers `1:nthreads(:interactive)`, and the threads in `:default` have id numbers in
@@ -87,9 +89,9 @@ function _sym_to_tpid(tp::Symbol)
 end
 
 """
-    Threads.threadpool(tid = threadid()) -> Symbol
+    Threads.threadpool(tid = threadid())::Symbol
 
-Returns the specified thread's threadpool; either `:default`, `:interactive`, or `:foreign`.
+Return the specified thread's threadpool; either `:default`, `:interactive`, or `:foreign`.
 """
 function threadpool(tid = threadid())
     tpid = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1)
@@ -97,9 +99,9 @@ function threadpool(tid = threadid())
 end
 
 """
-    Threads.threadpooldescription(tid = threadid()) -> String
+    Threads.threadpooldescription(tid = threadid())::String
 
-Returns the specified thread's threadpool name with extended description where appropriate.
+Return the specified thread's threadpool name with extended description where appropriate.
 """
 function threadpooldescription(tid = threadid())
     threadpool_name = threadpool(tid)
@@ -115,14 +117,14 @@ function threadpooldescription(tid = threadid())
 end
 
 """
-    Threads.nthreadpools() -> Int
+    Threads.nthreadpools()::Int
 
-Returns the number of threadpools currently configured.
+Return the number of threadpools currently configured.
 """
 nthreadpools() = Int(unsafe_load(cglobal(:jl_n_threadpools, Cint)))
 
 """
-    Threads.threadpoolsize(pool::Symbol = :default) -> Int
+    Threads.threadpoolsize(pool::Symbol = :default)::Int
 
 Get the number of threads available to the default thread pool (or to the
 specified thread pool).
@@ -145,7 +147,7 @@ end
 """
     threadpooltids(pool::Symbol)
 
-Returns a vector of IDs of threads in the given pool.
+Return a vector of IDs of threads in the given pool.
 """
 function threadpooltids(pool::Symbol)
     ni = _nthreads_in_pool(Int8(0))
@@ -159,9 +161,9 @@ function threadpooltids(pool::Symbol)
 end
 
 """
-    Threads.ngcthreads() -> Int
+    Threads.ngcthreads()::Int
 
-Returns the number of GC threads currently configured.
+Return the number of GC threads currently configured.
 This includes both mark threads and concurrent sweep threads.
 """
 ngcthreads() = Int(unsafe_load(cglobal(:jl_n_gcthreads, Cint))) + 1
@@ -171,27 +173,43 @@ function threading_run(fun, static)
     n = threadpoolsize()
     tid_offset = threadpoolsize(:interactive)
     tasks = Vector{Task}(undef, n)
-    for i = 1:n
-        t = Task(() -> fun(i)) # pass in tid
-        t.sticky = static
-        if static
-            ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
-        else
-            # TODO: this should be the current pool (except interactive) if there
-            # are ever more than two pools.
-            _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default))
-            @assert _result == 1
+    try
+        for i = 1:n
+            t = Task(() -> fun(i)) # pass in tid
+            t.sticky = static
+            if static
+                ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
+            else
+                # TODO: this should be the current pool (except interactive) if there
+                # are ever more than two pools.
+                _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default))
+                @assert _result == 1 "_result != 1"
+            end
+            tasks[i] = t
+            schedule(t)
         end
-        tasks[i] = t
-        schedule(t)
+        for i = 1:n
+            Base._wait(tasks[i])
+        end
+    finally
+        ccall(:jl_exit_threaded_region, Cvoid, ())
     end
-    for i = 1:n
-        Base._wait(tasks[i])
-    end
-    ccall(:jl_exit_threaded_region, Cvoid, ())
     failed_tasks = filter!(istaskfailed, tasks)
     if !isempty(failed_tasks)
         throw(CompositeException(map(TaskFailedException, failed_tasks)))
+    end
+end
+
+# Helper to generate threading run code with schedule checking
+function _threading_run_expr(schedule)
+    quote
+        if $(schedule === :greedy || schedule === :dynamic || schedule === :default)
+            threading_run(threadsfor_fun, false)
+        elseif ccall(:jl_in_threaded_region, Cint, ()) != 0 # :static
+            error("`@threads :static` cannot be used concurrently or nested")
+        else # :static
+            threading_run(threadsfor_fun, true)
+        end
     end
 end
 
@@ -207,20 +225,225 @@ function _threadsfor(iter, lbody, schedule)
     quote
         local threadsfor_fun
         $func
-        if $(schedule === :greedy || schedule === :dynamic || schedule === :default)
-            threading_run(threadsfor_fun, false)
-        elseif ccall(:jl_in_threaded_region, Cint, ()) != 0 # :static
-            error("`@threads :static` cannot be used concurrently or nested")
-        else # :static
-            threading_run(threadsfor_fun, true)
-        end
+        $(_threading_run_expr(schedule))
         nothing
     end
 end
 
+function _threadsfor_multi_iterator(body, iterators, condition, schedule, dims, result_type)
+    vars = [iter.args[1] for iter in iterators]
+    ranges = [iter.args[2] for iter in iterators]
+
+    tuple_var = gensym("iter_tuple")
+    assignments = [:($(vars[i]) = $(tuple_var)[$i]) for i in 1:length(vars)]
+    # Use let blocks so destructured variables are local to each iteration,
+    # avoiding data races when multiple threads execute the body concurrently.
+    new_body = Expr(:let, Expr(:block, assignments...), body)
+    new_condition = if condition === true
+        true
+    else
+        Expr(:let, Expr(:block, assignments...), condition)
+    end
+
+    product_expr = :(Iterators.product($(ranges...)))
+    synthetic_iter = :($(tuple_var) = $(product_expr))
+
+    return _threadsfor_single_iterator(new_body, synthetic_iter, new_condition, schedule, dims; result_type)
+end
+
+function _threadsfor_comprehension(gen::Expr, schedule, result_type=nothing)
+    @assert gen.head === :generator
+
+    body = gen.args[1]
+
+    # Check if the second arg is a filter (handles both single and multi-loop with filters)
+    iter_or_filter = gen.args[2]
+    if isa(iter_or_filter, Expr) && iter_or_filter.head === :filter
+        condition = iter_or_filter.args[1]
+        iterators = iter_or_filter.args[2:end]
+
+        if length(iterators) == 1
+            return _threadsfor_single_iterator(body, iterators[1], condition, schedule; result_type)
+        else
+            return _threadsfor_multi_iterator(body, iterators, condition, schedule, nothing, result_type)
+        end
+    elseif length(gen.args) > 2
+        iterators = gen.args[2:end]
+        ranges = [iter.args[2] for iter in iterators]
+        # Use axes to preserve offset index spaces (e.g. OffsetArrays)
+        dims_expr = :(tuple($([:(axes($(esc(r)), 1)) for r in ranges]...)))
+        return _threadsfor_multi_iterator(body, iterators, true, schedule, dims_expr, result_type)
+    else
+        return _threadsfor_single_iterator(body, iter_or_filter, true, schedule; result_type)
+    end
+end
+
+function _threadsfor_single_iterator(body, iterator, condition, schedule, dims=nothing; result_type=nothing)
+    lidx = iterator.args[1]
+    range = iterator.args[2]
+    esc_range = esc(range)
+    esc_lidx = esc(lidx)
+    esc_body = esc(body)
+    esc_condition = condition === true ? true : esc(condition)
+
+    # Fast path: no filter and not greedy — pre-allocate and write directly
+    if condition === true && schedule !== :greedy
+        return _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule, dims, result_type)
+    end
+
+    func = if schedule === :greedy
+        greedy_comprehension_func(esc_range, esc_lidx, esc_body, esc_condition)
+    else
+        default_comprehension_func(esc_range, esc_lidx, esc_body, esc_condition, result_type)
+    end
+
+    result_expr = if schedule === :greedy
+        # Greedy: collect values in arrival order (no ordering guarantee)
+        if result_type !== nothing
+            esc_result_type = esc(result_type)
+            quote
+                close(result_channel)
+                vals = collect(result_channel)
+                isempty(vals) ? $esc_result_type[] : $esc_result_type[v for v in vals]
+            end
+        else
+            quote
+                close(result_channel)
+                collect(result_channel)
+            end
+        end
+    else
+        # Default/static: thread-local buffers, vcat in tid order preserves iteration order.
+        # For the untyped case, we try vcat first (fast bulk copies). If the buffers have
+        # a Union or Any element type — indicating a type-unstable body — we fall back to
+        # grow_to! which replicates serial's promote_typejoin widening.
+        if result_type !== nothing
+            esc_result_type = esc(result_type)
+            quote
+                vcat(result_channel...)::Vector{$esc_result_type}
+            end
+        else
+            quote
+                let _bufs = result_channel
+                    _ET = eltype(eltype(_bufs))
+                    if isconcretetype(_ET)
+                        # All buffers have a concrete element type (from promote_op inference
+                        # or a uniform body). Use bulk vcat — same result as grow_to! here.
+                        vcat(_bufs...)
+                    else
+                        # Type-unstable body: grow_to! discovers the correct widened type,
+                        # matching the return type of the equivalent serial comprehension.
+                        Base.grow_to!(Any[], Iterators.flatten(_bufs))
+                    end
+                end
+            end
+        end
+    end
+
+    # If dims is provided, reshape the result to match original comprehension dimensions
+    if dims !== nothing
+        result_expr = quote
+            let flat_result = $result_expr
+                reshape(flat_result, $(dims))
+            end
+        end
+    end
+
+    quote
+        local threadsfor_fun
+        local result_channel = $func
+        $(_threading_run_expr(schedule))
+        $result_expr
+    end
+end
+
+# Fast path for non-filtered, non-greedy comprehensions: pre-allocate and write directly.
+# Non-AbstractArray iterators (e.g. Iterators.flatten) are collected into a Vector
+# because the parallel work distribution indexes into items with r[i].
+# AbstractArrays and Tuples are used directly to preserve their index space (e.g. OffsetArrays).
+function _threadsfor_comprehension_fast(esc_range, esc_lidx, esc_body, schedule, dims, result_type)
+    work_dist = _work_distribution_code()
+    wrap_final = dims !== nothing ? (x -> :(reshape($x, $dims))) : identity
+
+    if result_type !== nothing
+        # Typed path: pre-allocate with known element type
+        esc_result_type = esc(result_type)
+        return quote
+            let iter = $esc_range
+            local items = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
+            local niter = length(items)
+            local result = similar(Vector{$esc_result_type}, axes(items))
+            if niter > 0
+                let items = items, result = result
+                local threadsfor_fun
+                function threadsfor_fun(tid = 1)
+                    # Reads: items, tid. Defines: r, loop_first, loop_last.
+                    $work_dist
+                    for i = loop_first:loop_last
+                        local $esc_lidx = @inbounds r[i]
+                        @inbounds result[i] = $esc_body
+                    end
+                end
+                $(_threading_run_expr(schedule))
+                end
+            end
+            $(wrap_final(:(result)))
+            end
+        end
+    else
+        # Untyped path: evaluate first element to determine result type,
+        # then fill in parallel with the body expression inlined directly
+        # in the closure. This avoids boxing that occurs when calling a
+        # lambda whose return type is a Union across closure boundaries.
+        return quote
+            let iter = $esc_range
+            local items = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
+            local niter = length(items)
+            if niter == 0
+                $(wrap_final(:(similar(Vector{Any}, axes(items)))))
+            else
+                local _skip = firstindex(items)
+                local $esc_lidx = @inbounds items[_skip]
+                local _probe_val = $esc_body
+                local result = similar(Vector{typeof(_probe_val)}, axes(items))
+                @inbounds result[_skip] = _probe_val
+                if niter > 1
+                    local _npool = threadpoolsize()
+                    local _widen_buffers = [Pair{Int,Any}[] for _ in 1:_npool]
+                    let items = items, result = result, _widen_buffers = _widen_buffers,
+                        _skip = _skip
+                    local threadsfor_fun
+                    function threadsfor_fun(tid = 1)
+                        # Reads: items, tid. Defines: r, loop_first, loop_last.
+                        $work_dist
+                        local _T = eltype(result)
+                        local _my_widen = _widen_buffers[tid]
+                        for i = loop_first:loop_last
+                            i == _skip && continue
+                            local $esc_lidx = @inbounds r[i]
+                            local _val = $esc_body
+                            if _val isa _T
+                                @inbounds result[i] = _val
+                            else
+                                push!(_my_widen, i => _val)
+                            end
+                        end
+                    end
+                    $(_threading_run_expr(schedule))
+                    end
+                    result = Base.setindices_widen_up_to(result, _widen_buffers)
+                end
+                $(wrap_final(:(result)))
+            end
+            end
+        end
+    end
+end
+
+
 function greedy_func(itr, lidx, lbody)
     quote
-        let c = Channel{eltype($itr)}(0,spawn=true) do ch
+        let c = Channel{eltype($itr)}(threadpoolsize(), spawn=true) do ch
             for item in $itr
                 put!(ch, item)
             end
@@ -235,41 +458,66 @@ function greedy_func(itr, lidx, lbody)
     end
 end
 
-function default_func(itr, lidx, lbody)
+function greedy_comprehension_func(itr, esc_lidx, esc_body, esc_condition)
     quote
-        let range = $itr
-        function threadsfor_fun(tid = 1; onethread = false)
-            r = range # Load into local variable
-            lenr = length(r)
-            # divide loop iterations among threads
-            if onethread
-                tid = 1
-                len, rem = lenr, 0
+        let c = Channel{eltype($itr)}(threadpoolsize(), spawn=true) do ch
+                for item in $itr
+                    put!(ch, item)
+                end
+            end
+            result_channel = Channel{Any}(Inf)
+
+            function threadsfor_fun(tid)
+                for item in c
+                    local $esc_lidx = item
+                    if $esc_condition
+                        put!(result_channel, $esc_body)
+                    end
+                end
+            end
+            result_channel
+        end
+    end
+end
+
+# Helper function to generate work distribution code
+function _work_distribution_code()
+    quote
+        r = items # Load into local variable
+        lenr = length(r)
+        # divide loop iterations among threads
+        len, rem = divrem(lenr, threadpoolsize())
+        # not enough iterations for all the threads?
+        if len == 0
+            if tid > rem
+                return
+            end
+            len, rem = 1, 0
+        end
+        # compute this thread's iterations
+        loop_first = firstindex(r) + ((tid-1) * len)
+        loop_last = loop_first + len - 1
+        # distribute remaining iterations evenly
+        if rem > 0
+            if tid <= rem
+                loop_first = loop_first + (tid-1)
+                loop_last = loop_last + tid
             else
-                len, rem = divrem(lenr, threadpoolsize())
+                loop_first = loop_first + rem
+                loop_last = loop_last + rem
             end
-            # not enough iterations for all the threads?
-            if len == 0
-                if tid > rem
-                    return
-                end
-                len, rem = 1, 0
-            end
-            # compute this thread's iterations
-            f = firstindex(r) + ((tid-1) * len)
-            l = f + len - 1
-            # distribute remaining iterations evenly
-            if rem > 0
-                if tid <= rem
-                    f = f + (tid-1)
-                    l = l + tid
-                else
-                    f = f + rem
-                    l = l + rem
-                end
-            end
-            # run this thread's iterations
-            for i = f:l
+        end
+    end
+end
+
+function default_func(itr, lidx, lbody)
+    work_dist = _work_distribution_code()
+    quote
+        let items = $itr
+        function threadsfor_fun(tid = 1)
+            # Reads: items, tid. Defines: r, loop_first, loop_last.
+            $work_dist
+            for i = loop_first:loop_last
                 local $(esc(lidx)) = @inbounds r[i]
                 $(esc(lbody))
             end
@@ -278,15 +526,67 @@ function default_func(itr, lidx, lbody)
     end
 end
 
+function default_comprehension_func(itr, esc_lidx, esc_body, esc_condition, result_type=nothing)
+    work_dist = _work_distribution_code()
+    if result_type !== nothing
+        # Typed comprehension: element type known at macro expansion time.
+        buf_init = :($(esc(result_type))[])
+        buf_type_setup = :()
+    else
+        # Untyped comprehension: use promote_op to pre-type the per-task buffers,
+        # avoiding boxing in the parallel phase for type-stable bodies.
+        # The result is flattened through grow_to! so the final element type matches
+        # serial's runtime promote_typejoin widening rather than the static promote_op type.
+        _ET = gensym(:ET)
+        buf_type_setup = :(local $_ET = Base.promote_op($esc_lidx -> $esc_body, eltype(items)))
+        buf_init = :($_ET[])
+    end
+    quote
+        let iter = $itr
+        local items = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
+        local _npool = threadpoolsize()
+        $buf_type_setup
+        # One buffer per task-id; tasks process contiguous ranges so concatenating
+        # in tid order preserves iteration order without a sort step.
+        local local_bufs = [$buf_init for _ in 1:_npool]
+
+        function threadsfor_fun(tid = 1)
+            # Reads: items, tid. Defines: r, loop_first, loop_last.
+            $work_dist
+            local buf = local_bufs[tid]
+            for i = loop_first:loop_last
+                local $esc_lidx = @inbounds r[i]
+                if $esc_condition
+                    push!(buf, $esc_body)
+                end
+            end
+        end
+        local_bufs  # Return per-task buffers to be vcat'd after threading_run
+        end
+    end
+end
+
 """
     Threads.@threads [schedule] for ... end
+    Threads.@threads [schedule] [expr for ... end]
+    Threads.@threads [schedule] T[expr for ... end]
 
-A macro to execute a `for` loop in parallel. The iteration space is distributed to
+A macro to execute a `for` loop or array comprehension in parallel. The iteration space is distributed to
 coarse-grained tasks. This policy can be specified by the `schedule` argument. The
 execution of the loop waits for the evaluation of all iterations.
 
+For `for` loops, the macro executes the loop body in parallel but does not return a value.
+For array comprehensions, the macro executes the comprehension in parallel and returns
+the collected results as an array.
+
+Tasks spawned by `@threads` are scheduled on the `:default` threadpool. This means that
+`@threads` will not use threads from the `:interactive` threadpool, even if called from
+the main thread or from a task in the interactive pool. The `:default` threadpool is
+intended for compute-intensive parallel workloads.
+
 See also: [`@spawn`](@ref Threads.@spawn) and
 `pmap` in [`Distributed`](@ref man-distributed).
+For more information on threadpools, see the chapter on [threadpools](@ref man-threadpools).
 
 # Extended help
 
@@ -369,6 +669,8 @@ thread other than 1.
 
 ## Examples
 
+### For loops
+
 To illustrate of the different scheduling strategies, consider the following function
 `busywait` containing a non-yielding timed loop that runs for a given number of seconds.
 
@@ -398,6 +700,81 @@ julia> @time begin
 
 The `:dynamic` example takes 2 seconds since one of the non-occupied threads is able
 to run two of the 1-second iterations to complete the for loop.
+
+### Array comprehensions
+
+The `@threads` macro also supports array comprehensions, which return the collected results.
+Array comprehensions preserve element order for `:static` and `:dynamic` (default) scheduling.
+The `:greedy` scheduler does not guarantee element order, since tasks consume work items as
+they become available. Multi-dimensional comprehensions preserve the dimensions of the
+original comprehension (e.g., `[f(i,j) for i in 1:n, j in 1:m]` returns an `n×m` matrix).
+Typed comprehensions (`T[expr for ...]`) are also supported and return an array with the
+specified element type.
+
+For non-filtered comprehensions with non-`:greedy` scheduling, a fast path is used that
+pre-allocates the result array and writes directly by index, avoiding Channel overhead.
+
+!!! tip "Performance tip"
+    For best performance, use typed comprehensions (`T[expr for ...]`) when the element type
+    is known. Untyped comprehensions infer the type from the first result; if later results
+    have incompatible types, a type-widening path is used which may be slower.
+
+!!! warning
+    The body expression of a threaded comprehension may execute on any thread and may
+    migrate between threads. Do not rely on [`threadid()`](@ref Threads.threadid) or
+    [`task_local_storage()`](@ref) returning consistent values within the body expression.
+
+```julia-repl
+julia> Threads.@threads [i^2 for i in 1:5] # Simple comprehension
+5-element Vector{Int64}:
+   1
+   4
+   9
+  16
+  25
+
+julia> Threads.@threads [i^2 for i in 1:5 if iseven(i)] # Filtered comprehension
+2-element Vector{Int64}:
+   4
+  16
+
+julia> Threads.@threads [i + j for i in 1:3, j in 1:3] # Multiple loops
+3×3 Matrix{Int64}:
+ 2  3  4
+ 3  4  5
+ 4  5  6
+
+julia> Threads.@threads Float64[i^2 for i in 1:5] # Typed comprehension
+5-element Vector{Float64}:
+  1.0
+  4.0
+  9.0
+ 16.0
+ 25.0
+```
+
+When the iterator doesn't have a known length, such as a channel, the `:greedy` scheduling
+option can be used.
+```julia-repl
+julia> c = Channel(5, spawn=true) do ch
+           foreach(i -> put!(ch, i), 1:5)
+       end;
+
+julia> Threads.@threads :greedy [i^2 for i in c if iseven(i)]
+2-element Vector{Int64}:
+  4
+ 16
+
+julia> # Non-indexable iterators are also supported
+       Threads.@threads [i for i in Iterators.flatten([1:3, 4:6])]
+6-element Vector{Int64}:
+ 1
+ 2
+ 3
+ 4
+ 5
+ 6
+```
 """
 macro threads(args...)
     na = length(args)
@@ -418,13 +795,22 @@ macro threads(args...)
     else
         throw(ArgumentError("wrong number of arguments in @threads"))
     end
-    if !(isa(ex, Expr) && ex.head === :for)
-        throw(ArgumentError("@threads requires a `for` loop expression"))
+    if isa(ex, Expr) && (ex.head === :comprehension || ex.head === :typed_comprehension)
+        # Handle array comprehensions (typed and untyped)
+        if ex.head === :typed_comprehension
+            return _threadsfor_comprehension(ex.args[2], sched, ex.args[1])
+        else
+            return _threadsfor_comprehension(ex.args[1], sched)
+        end
+    elseif isa(ex, Expr) && ex.head === :for
+        # Handle for loops
+        if !(ex.args[1] isa Expr && ex.args[1].head === :(=))
+            throw(ArgumentError("nested outer loops are not currently supported by @threads"))
+        end
+        return _threadsfor(ex.args[1], ex.args[2], sched)
+    else
+        throw(ArgumentError("@threads requires a `for` loop or comprehension expression"))
     end
-    if !(ex.args[1] isa Expr && ex.args[1].head === :(=))
-        throw(ArgumentError("nested outer loops are not currently supported by @threads"))
-    end
-    return _threadsfor(ex.args[1], ex.args[2], sched)
 end
 
 function _spawn_set_thrpool(t::Task, tp::Symbol)
@@ -433,15 +819,16 @@ function _spawn_set_thrpool(t::Task, tp::Symbol)
         tpid = _sym_to_tpid(:default)
     end
     _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, tpid)
-    @assert _result == 1
+    @assert _result == 1 "_result != 1"
     nothing
 end
 
 """
-    Threads.@spawn [:default|:interactive] expr
+    Threads.@spawn [:default|:interactive|:samepool] expr
 
 Create a [`Task`](@ref) and [`schedule`](@ref) it to run on any available
-thread in the specified threadpool (`:default` if unspecified). The task is
+thread in the specified threadpool: `:default`, `:interactive`, or `:samepool`
+to use the same as the caller. `:default` is used if unspecified. The task is
 allocated to a thread once one becomes available. To wait for the task to
 finish, call [`wait`](@ref) on the result of this macro, or call
 [`fetch`](@ref) to wait and then obtain its return value.
@@ -466,6 +853,9 @@ the variable's value in the current task.
 !!! compat "Julia 1.9"
     A threadpool may be specified as of Julia 1.9.
 
+!!! compat "Julia 1.12"
+    The same threadpool may be specified as of Julia 1.12.
+
 # Examples
 ```julia-repl
 julia> t() = println("Hello from ", Threads.threadid());
@@ -484,7 +874,7 @@ macro spawn(args...)
         ttype, ex = args
         if ttype isa QuoteNode
             ttype = ttype.value
-            if ttype !== :interactive && ttype !== :default
+            if !in(ttype, (:interactive, :default, :samepool))
                 throw(ArgumentError(LazyString("unsupported threadpool in @spawn: ", ttype)))
             end
             tp = QuoteNode(ttype)
@@ -505,7 +895,11 @@ macro spawn(args...)
         let $(letargs...)
             local task = Task($thunk)
             task.sticky = false
-            _spawn_set_thrpool(task, $(esc(tp)))
+            local tp = $(esc(tp))
+            if tp == :samepool
+                tp = Threads.threadpool()
+            end
+            _spawn_set_thrpool(task, tp)
             if $(Expr(:islocal, var))
                 put!($var, task)
             end

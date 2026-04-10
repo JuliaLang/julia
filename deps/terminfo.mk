@@ -22,8 +22,8 @@ $(BUILDDIR)/TermInfoDB-v$(TERMINFO_VER)/build-checked: $(BUILDDIR)/TermInfoDB-v$
 	echo 1 > $@
 
 define TERMINFO_INSTALL
-	mkdir -p $2/$$(build_datarootdir)
-	cp -R $1/terminfo $2/$$(build_datarootdir)
+	mkdir -p $2/$$(build_datarootdir)/julia
+	cp -R $1/terminfo $2/$$(build_datarootdir)/julia/
 endef
 $(eval $(call staged-install, \
 	terminfo,TermInfoDB-v$(TERMINFO_VER), \

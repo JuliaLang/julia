@@ -644,6 +644,7 @@ end
     @test !allunique((NaN, NaN))
     # Known length 1, need not evaluate:
     @test allunique(error(x) for x in [1])
+    # @test_opt allunique(Int[])
 end
 
 @testset "allunique(f, xs)" begin
@@ -691,6 +692,7 @@ end
     @test allequal(error(x) for x in [1])
     # Empty, but !haslength:
     @test allequal(error(x) for x in 1:3 if false)
+    @test @allocated(allequal((1, 1, 1, 1, 1, 1, 1, 2.0))) == 0
 end
 
 @testset "allequal(f, xs)" begin
@@ -1036,6 +1038,8 @@ end
     @test !isempty(A)
     A = empty!(A)
     @test isempty(A)
+    @test isnothing(sizehint!(A, 10))
+    @test Base.copymutable(A) == copy(A)
 end
 
 @testset "⊊, ⊋" begin
