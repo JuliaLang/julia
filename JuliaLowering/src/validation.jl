@@ -1155,7 +1155,7 @@ function _assert_syntaxtree(st::SyntaxTree, parents::Vector{NodeId}, vr)
             [K"latestworld_if_toplevel"] -> ()
             (_, when=JuliaSyntax.is_literal(st)) -> (:value,)
             (_, when=JuliaSyntax.is_trivia(st)) -> () # green tree only
-            (_, when=JuliaSyntax.is_operator(st)) -> (:name_val) # TODO: remove
+            (_, when=JuliaSyntax.is_operator(st)) -> (:name_val,) # TODO: remove
             _ -> return vr & @fail(st, "unrecognized leaf kind")
         end
     else

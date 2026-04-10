@@ -373,6 +373,9 @@ function _to_lowered_expr(ex::SyntaxTree, stmt_offset::Int)
             ir
         end
     elseif k == K"Value"
+        # TODO: we still do this in ccall, import
+        # @jl_assert !isa_lowering_ast_node(ex.value) (
+        #     ex, "smuggling AST through Value is asking for trouble; find a SyntaxTree representation")
         ex.value isa LineNumberNode ? QuoteNode(ex.value) : ex.value
     elseif k == K"goto"
         Core.GotoNode(ex[1].id + stmt_offset)
