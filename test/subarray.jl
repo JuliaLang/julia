@@ -1130,6 +1130,18 @@ end
     expected = collect(P)
     copyto!(A, P)
     @test A == expected
+
+    A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
+    P = PermutedDimsArray(A, (2, 1))
+    expected = collect(A)
+    copyto!(P, A)
+    @test P == expected
+
+    M = fill(-1.0, 4, 4)
+    P = PermutedDimsArray(view(M, 1:2, 1:2), (2, 1))
+    @test_throws BoundsError copyto!(P, ones(Int, 3, 3))
+    @test all(==(-1.0), M[3:4, :])
+    @test all(==(-1.0), M[:, 3:4])
 end
 
 @test @views quote var"begin" + var"end" end isa Expr

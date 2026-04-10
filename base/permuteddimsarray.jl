@@ -290,11 +290,12 @@ function permutedims!(dest, src::AbstractArray, perm)
     return dest
 end
 
-function Base.copyto!(dest::PermutedDimsArray{T,N}, src::AbstractArray{T,N}) where {T,N}
+function Base.copyto!(dest::PermutedDimsArray, src::AbstractArray)
+    isempty(src) && return dest
     checkbounds(dest, axes(src)...)
-    _copy!(dest, src)
+    src′ = Base.unalias(dest, src)
+    _copy!(dest, src′)
 end
-Base.copyto!(dest::PermutedDimsArray, src::AbstractArray) = _copy!(dest, src)
 
 function _copy!(P::PermutedDimsArray{T,N,perm}, src) where {T,N,perm}
     # If dest/src are "close to dense," then it pays to be cache-friendly.
