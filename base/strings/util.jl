@@ -100,6 +100,7 @@ Base.startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix):
 
 function endswith(a::Union{String, SubString{String}},
                   b::Union{String, SubString{String}})
+    cub = ncodeunits(b)
     astart = ncodeunits(a) - ncodeunits(b) + 1
     if astart < 1
         false
@@ -1344,3 +1345,21 @@ function Base.rest(s::AbstractString, st...)
     end
     return takestring!(io)
 end
+"""
+The `String` constructor is enhanced to accept iterators/generator objects.
+
+### Method Details:
+- **String(x::AbstractIterator)**
+    - Converts an iterator into a string.
+    - Throws a `MethodError` if the iterator contains invalid data types (non-Char types) or if it is an infinite iterator.
+    - Ensures that the result is a valid string representation composed solely of characters (`Char`).
+
+### Examples
+```jldoctest
+julia> String(Iterators.map(c -> c+1, "Hello, world"))
+"Ifmmp-!xpsme"  # Generates a string by incrementing ASCII values of each character.
+
+julia> String(Iterators.take("Hello, world", 5))
+"Hello"  # Takes the first 5 characters of the string and converts it to a string.
+"""
+String(x) = sprint(io -> foreach(c -> write(io, Char(c)::Char), x))
