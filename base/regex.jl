@@ -481,7 +481,7 @@ end
 
 match(r::Regex, s::AbstractString) = match(r, s, firstindex(s))
 match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
-    "regex matching is only available for the String and AnnotatedString types; use String(s) to convert"
+    "regex matching is only available for some dense (memory backed strings); use String(s) to convert s to String"
 ))
 
 function findnext(re::Regex, str::DenseUTF8String, idx::Integer)

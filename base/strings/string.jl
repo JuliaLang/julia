@@ -619,7 +619,7 @@ end
     _length_continued(s, i, n, c)
 end
 
-@assume_effects :terminates_locally @inline @propagate_inbounds function length_continued(s::StringView, i::Int, n::Int, c::Int)
+@inline @propagate_inbounds function length_continued(s::StringView, i::Int, n::Int, c::Int)
     _length_continued(s, i, n, c)
 end
 
