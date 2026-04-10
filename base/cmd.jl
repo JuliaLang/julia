@@ -651,5 +651,11 @@ Process(`echo 1`, ProcessExited(0))
 """
 macro cmd(str::String)
     cmd_ex = shell_parse(str, special=shell_special, filename=String(__source__.file))[1]
-    return :(cmd_gen($(esc(cmd_ex))))
+    if Meta.isexpr(cmd_ex, :tuple)
+        return :(cmd_gen($(esc(cmd_ex))))
+    else
+        # Pipeline/redirect expression: GlobalRefs inside are already resolved to Base.
+        # esc() ensures $interpolations inside are evaluated in the caller's scope.
+        return esc(cmd_ex)
+    end
 end

@@ -48,6 +48,17 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
     i = firstindex(s)
     st = Iterators.Stateful(pairs(s))
     update_last_arg = false # true after spaces or interpolate
+    word_has_special = false # true if current word contains any quoted/escaped content
+
+    # Pipeline/redirection state (used only when interpolate=true).
+    # pipeline_parts accumulates completed segments as (seg_tuple, stdin, stdout, stdout_append, stderr, stderr_append).
+    pipeline_parts = []
+    seg_stdin = nothing        # stdin redirect expression for current segment
+    seg_stdout = nothing       # stdout redirect expression for current segment
+    seg_stdout_append = false  # true if stdout redirect is >> (append mode)
+    seg_stderr = nothing       # stderr redirect expression for current segment
+    seg_stderr_append = false  # true if stderr redirect is >> (append mode)
+    redirect_mode = :none      # :none | :stdin | :stdout | :stderr
 
     function push_nonempty!(list, x)
         if !isa(x,AbstractString) || !isempty(x)
@@ -80,15 +91,24 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
             # Disallow var"#" syntax in cmd interpolations.
             # TODO: Allow only identifiers after the $ for consistency with
             # string interpolation syntax (see #3150)
-            ex, j = :var, stpos+3
+            atom, j = :var, stpos+3
         else
             # use parseatom instead of parse to respect filename (#28188)
-            ex, j = Meta.parseatom(s, stpos, filename=filename)
+            atom, j = Meta.parseatom(s, stpos, filename=filename)
         end
         interp_pos = stpos + s.offset
         s = SubString(s, j)
         Iterators.reset!(st, pairs(s))
-        return ex, s, interp_pos
+        return atom, s, interp_pos
+    end
+
+    # Convert a word (list of string/expr parts) to a redirect filename expression.
+    function redirect_word_expr(word)
+        if length(word) == 1 && isa(word[1], AbstractString)
+            return String(word[1])
+        else
+            return Expr(:call, GlobalRef(Base, :cmd_interpolate), word...)
+        end
     end
 
     for (j, c) in st
@@ -96,7 +116,19 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
         if !in_single_quotes && !in_double_quotes && isspace(c)
             update_last_arg = true
             i = consume_upto!(arg, s, i, j)
-            append_2to1!(args, arg)
+            if redirect_mode != :none && (!isempty(arg) || word_has_special)
+                # This word is the redirect filename.
+                re = redirect_word_expr(arg)
+                if redirect_mode === :stdin; seg_stdin = re
+                elseif redirect_mode === :stdout; seg_stdout = re
+                else; seg_stderr = re; end
+                empty!(arg)
+                redirect_mode = :none
+            elseif redirect_mode == :none && (!isempty(arg) || word_has_special)
+                append_2to1!(args, arg)
+            end
+            word_has_special = false
+            # else: in redirect_mode but arg empty — still waiting for the filename.
             while !isempty(st)
                 # We've made sure above that we don't end in whitespace,
                 # so updating `i` here is ok
@@ -112,6 +144,61 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
             update_last_arg = true
             push!(arg, result[1])
             i = firstindex(s)
+        elseif interpolate && !in_single_quotes && !in_double_quotes && c == '|'
+            # Pipeline operator: finalize current word/redirect, then save segment.
+            i = consume_upto!(arg, s, i, j)
+            if redirect_mode != :none && (!isempty(arg) || word_has_special)
+                re = redirect_word_expr(arg)
+                if redirect_mode === :stdin; seg_stdin = re
+                elseif redirect_mode === :stdout; seg_stdout = re
+                else; seg_stderr = re; end
+                empty!(arg)
+                redirect_mode = :none
+            elseif redirect_mode == :none && (!isempty(arg) || word_has_special)
+                append_2to1!(args, arg)
+            end
+            seg_tuple = Expr(:tuple)
+            for a in args; push!(seg_tuple.args, Expr(:tuple, a...)); end
+            push!(pipeline_parts, (seg_tuple, seg_stdin, seg_stdout, seg_stdout_append,
+                                   seg_stderr, seg_stderr_append))
+            empty!(args)
+            seg_stdin = nothing; seg_stdout = nothing; seg_stdout_append = false
+            seg_stderr = nothing; seg_stderr_append = false; redirect_mode = :none
+            word_has_special = false
+            update_last_arg = true
+        elseif interpolate && !in_single_quotes && !in_double_quotes && (c == '<' || c == '>')
+            # Redirection operator: finalize any pending word, then set redirect mode.
+            # A pure-integer word immediately before the operator is an fd number (e.g. 2>).
+            i = consume_upto!(arg, s, i, j)
+            fd = nothing
+            if !word_has_special && length(arg) == 1 && isa(arg[1], AbstractString) &&
+                    !isempty(arg[1]::AbstractString) && all(isdigit, arg[1]::AbstractString)
+                fd = parse(Int, arg[1]::AbstractString)
+                empty!(arg)
+                word_has_special = false
+            elseif !isempty(arg)
+                append_2to1!(args, arg)
+            end
+            if c == '>'
+                append = false
+                if !isempty(st) && (peek(st)::P).second == '>'
+                    popfirst!(st)  # consume second >
+                    append = true
+                    i = something(peek(st), lastindex(s)::Int+1 => '\0').first::Int
+                end
+                if fd === nothing || fd == 1
+                    redirect_mode = :stdout; seg_stdout_append = append
+                elseif fd == 2
+                    redirect_mode = :stderr; seg_stderr_append = append
+                else
+                    error("parsing command `$str`: unsupported fd $fd in redirection")
+                end
+            else  # '<'
+                (fd === nothing || fd == 0) ||
+                    error("parsing command `$str`: unsupported fd $fd in redirection")
+                redirect_mode = :stdin
+            end
+            update_last_arg = true
         else
             if update_last_arg
                 last_arg = i + s.offset
@@ -119,11 +206,14 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
             end
             if !in_double_quotes && c == '\''
                 in_single_quotes = !in_single_quotes
+                word_has_special = true
                 i = consume_upto!(arg, s, i, j)
             elseif !in_single_quotes && c == '"'
                 in_double_quotes = !in_double_quotes
+                word_has_special = true
                 i = consume_upto!(arg, s, i, j)
             elseif !in_single_quotes && c == '\\'
+                word_has_special = true
                 if !isempty(st) && (peek(st)::P)[2] in ('\n', '\r')
                     i = consume_upto!(arg, s, i, j) + 1
                     if popfirst!(st)[2] == '\r' && (peek(st)::P)[2] == '\n'
@@ -150,14 +240,15 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
                     c == '~' && i == j && isempty(arg)
                 # Tilde expansion: `~` or `~username` at start of a word.
                 # Collect the username, which may include $interpolations (e.g. `~$user`).
-                # Stop at /, whitespace, or uninterpolable chars (quotes, backslash).
+                # Stop at /, whitespace, uninterpolable chars (quotes, backslash), or operators.
                 i = consume_upto!(arg, s, i, j)  # i now points past the ~
                 user_parts = []
                 user_lit_start = i
                 while !isempty(st)
                     nxt = peek(st)::P
                     nc = nxt[2]
-                    (nc == '/' || isspace(nc) || nc == '\'' || nc == '"' || nc == '\\') && break
+                    (nc == '/' || isspace(nc) || nc == '\'' || nc == '"' || nc == '\\' ||
+                     nc == '|' || nc == '<' || nc == '>') && break
                     if nc == '$'
                         push_nonempty!(user_parts, s[user_lit_start:prevind(s, nxt[1])])
                         popfirst!(st)  # consume $
@@ -190,16 +281,72 @@ function __repl_entry_shell_parse(str::AbstractString, interpolate::Bool, specia
     if in_double_quotes; error("unterminated double quote"); end
 
     push_nonempty!(arg, s[i:end])
-    append_2to1!(args, arg)
+    if interpolate && redirect_mode != :none
+        isempty(arg) && error("parsing command `$str`: redirect operator without filename")
+        re = redirect_word_expr(arg)
+        if redirect_mode === :stdin; seg_stdin = re
+        elseif redirect_mode === :stdout; seg_stdout = re
+        else; seg_stderr = re; end
+        empty!(arg)
+    elseif !isempty(arg) || word_has_special
+        append_2to1!(args, arg)
+    end
 
     interpolate || return args, last_arg
 
-    # construct an expression
-    expr = Expr(:tuple)
-    for arg in args
-        push!(expr.args, Expr(:tuple, arg...))
+    # If no pipeline operators and no redirects: return existing tuple format (backward compat).
+    if isempty(pipeline_parts) && seg_stdin === nothing && seg_stdout === nothing &&
+            seg_stderr === nothing
+        ex = Expr(:tuple)
+        for arg in args
+            push!(ex.args, Expr(:tuple, arg...))
+        end
+        return ex, last_arg
     end
-    return expr, last_arg
+
+    # Build a cmd_gen(seg_tuple) expression, wrapped in pipeline() calls for each redirect.
+    # stdin and stdout (with its append flag) are combined into one call; stderr is separate
+    # so that different append modes can be handled independently.
+    function build_seg_expr(seg_tuple, s_in, s_out, s_out_app, s_err, s_err_app)
+        cmd_ex = Expr(:call, GlobalRef(Base, :cmd_gen), seg_tuple)
+        if s_in !== nothing || s_out !== nothing
+            kwargs = Any[]
+            s_in !== nothing && push!(kwargs, Expr(:kw, :stdin, s_in))
+            s_out !== nothing && push!(kwargs, Expr(:kw, :stdout, s_out))
+            s_out_app && push!(kwargs, Expr(:kw, :append, true))
+            cmd_ex = Expr(:call, GlobalRef(Base, :pipeline), Expr(:parameters, kwargs...), cmd_ex)
+        end
+        if s_err !== nothing
+            kwargs = Any[Expr(:kw, :stderr, s_err)]
+            s_err_app && push!(kwargs, Expr(:kw, :append, true))
+            cmd_ex = Expr(:call, GlobalRef(Base, :pipeline), Expr(:parameters, kwargs...), cmd_ex)
+        end
+        return cmd_ex
+    end
+
+    # Build the final segment's tuple.
+    final_seg_tuple = Expr(:tuple)
+    for a in args; push!(final_seg_tuple.args, Expr(:tuple, a...)); end
+
+    if isempty(pipeline_parts)
+        # Only redirects, no pipes.
+        return build_seg_expr(final_seg_tuple, seg_stdin, seg_stdout, seg_stdout_append,
+                              seg_stderr, seg_stderr_append), last_arg
+    end
+
+    # Chain pipeline segments left-to-right: pipeline(seg1, pipeline(seg2, seg3, ...)).
+    (s0_args, s0_in, s0_out, s0_out_app, s0_err, s0_err_app) = pipeline_parts[1]
+    result = build_seg_expr(s0_args, s0_in, s0_out, s0_out_app, s0_err, s0_err_app)
+    for k in 2:length(pipeline_parts)
+        (sk_args, sk_in, sk_out, sk_out_app, sk_err, sk_err_app) = pipeline_parts[k]
+        result = Expr(:call, GlobalRef(Base, :pipeline), result,
+                      build_seg_expr(sk_args, sk_in, sk_out, sk_out_app, sk_err, sk_err_app))
+    end
+    result = Expr(:call, GlobalRef(Base, :pipeline), result,
+                  build_seg_expr(final_seg_tuple, seg_stdin, seg_stdout, seg_stdout_append,
+                                 seg_stderr, seg_stderr_append))
+
+    return result, last_arg
 end
 
 """

@@ -80,6 +80,16 @@ if Sys.iswindows()
     end
 end
 
+# Simulate what the REPL shell mode does: parse the line, dispatch
+# simple commands through cmd_gen, and call repl_cmd.
+function shell_mode_run(line::String; stdout=nothing)
+    cmd_ex = Base.shell_parse(line)[1]
+    if Meta.isexpr(cmd_ex, :tuple)
+        cmd_ex = :(Base.cmd_gen($cmd_ex))
+    end
+    eval(:(Base.repl_cmd($cmd_ex, $(something(stdout, devnull)))))
+end
+
 #### Examples used in the manual ####
 
 @test read(`$echocmd hello \| sort`, String) == "hello | sort\n"
@@ -567,21 +577,107 @@ if !Sys.iswindows()
     @test `~$name` == Cmd(["~"])
 end
 
-# Tilde expansion in shell mode via repl_cmd
+# Tilde expansion in shell mode
 withenv("OLDPWD" => nothing) do
     mktempdir() do dir
         # cd \~ goes to a directory literally named "~", not home
         cd(dir) do
             mkdir("~") # literal tilde directory
-            Base.repl_cmd(@cmd("cd \\~"), devnull)
+            shell_mode_run("cd \\~")
             @test samefile(pwd(), joinpath(dir, "~"))
         end
         # cd ~ goes to home directory
         cd(dir) do
-            Base.repl_cmd(@cmd("cd ~"), devnull)
+            shell_mode_run("cd ~")
             @test samefile(pwd(), homedir())
         end
     end
+end
+
+# Pipeline and redirection operators in backtick command literals
+(!Sys.iswindows() || havebb) &&
+mktempdir() do dir
+    outfile = joinpath(dir, "out.txt")
+    infile  = joinpath(dir, "in.txt")
+
+    # Pipe: `cmd1 | cmd2` lowers to pipeline(cmd1, cmd2)
+    @test read(`$echocmd hello | $catcmd`, String) == "hello\n"
+    @test success(`$echocmd hello | $catcmd`)
+
+    # Three-stage pipe
+    @test read(`$echocmd hello | $catcmd | $catcmd`, String) == "hello\n"
+
+    # Stdout redirect: `cmd > file`
+    run(`$echocmd hello > $outfile`)
+    @test read(outfile, String) == "hello\n"
+
+    # Stdin redirect: `cmd < file`
+    @test read(`$catcmd < $outfile`, String) == "hello\n"
+
+    # Append redirect: `cmd >> file`
+    run(`$echocmd world >> $outfile`)
+    @test read(outfile, String) == "hello\nworld\n"
+
+    # Pipe with stdout redirect: `cmd1 | cmd2 > file`
+    run(`$echocmd piped | $catcmd > $outfile`)
+    @test read(outfile, String) == "piped\n"
+
+    # Interpolated filename in redirect
+    run(`$echocmd interp > $outfile`)
+    @test read(outfile, String) == "interp\n"
+
+    # Interpolated arg in pipe
+    word = "interp_arg"
+    @test read(`$echocmd $word | $catcmd`, String) == "interp_arg\n"
+
+    # Operators inside quotes are literal characters, not pipeline operators
+    @test `$echocmd '|'`  == Cmd([echocmd.exec..., "|"])
+    @test `$echocmd '>'`  == Cmd([echocmd.exec..., ">"])
+    @test `$echocmd '<'`  == Cmd([echocmd.exec..., "<"])
+    @test `$echocmd '>>'` == Cmd([echocmd.exec..., ">>"])
+
+    # No spacing around operators: cmd>file, cmd<file
+    run(`$echocmd nospace>$outfile`)
+    @test read(outfile, String) == "nospace\n"
+    write(infile, "nospace_in\n")
+    @test read(`$catcmd<$infile`, String) == "nospace_in\n"
+
+    # Explicit fd prefixes: 1> (stdout), 0< (stdin), 2> (stderr)
+    run(`$echocmd explicit1 1> $outfile`)
+    @test read(outfile, String) == "explicit1\n"
+    @test read(`$catcmd 0< $outfile`, String) == "explicit1\n"
+    errfile = joinpath(dir, "err.txt")
+    run(`$shcmd -c 'echo errout >&2' 2> $errfile`)
+    @test read(errfile, String) == "errout\n"
+    run(`$shcmd -c 'echo errout2 >&2' 2>> $errfile`)
+    @test read(errfile, String) == "errout\nerrout2\n"
+
+    # Quoted integer before > is not an fd specifier (stdout redirect, arg "2")
+    run(`$echocmd '2' > $outfile`)
+    @test read(outfile, String) == "2\n"
+
+    # simple commands still return Cmd (not wrapped in pipeline)
+    @test `$echocmd hello` isa Cmd
+    @test Meta.isexpr(Base.shell_parse("echo hello")[1], :tuple)
+
+    # Shell mode end-to-end tests
+    # Use shell-escaped commands and paths so that shell_parse handles
+    # Windows busybox paths and backslash-containing file paths correctly.
+    echostr = Base.shell_escape(echocmd)
+    catstr = Base.shell_escape(catcmd)
+    outstr = Base.shell_escape(outfile)
+    # pipe in shell mode
+    shell_mode_run("$echostr hello | $catstr > $outstr")
+    @test read(outfile, String) == "hello\n"
+    # redirect in shell mode
+    shell_mode_run("$echostr shell_mode > $outstr")
+    @test read(outfile, String) == "shell_mode\n"
+    # pipe + redirect in shell mode
+    shell_mode_run("$echostr shell_pipe | $catstr > $outstr")
+    @test read(outfile, String) == "shell_pipe\n"
+    # simple command in shell mode still works
+    shell_mode_run("$echostr simple > $outstr")
+    @test read(outfile, String) == "simple\n"
 end
 
 let roundtrip(s) = first(Base.shell_split(Base.shell_escape(s))) == s
