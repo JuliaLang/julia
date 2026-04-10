@@ -15,6 +15,26 @@ Base.Sys.loadavg()
 foo_fma() = Core.Intrinsics.have_fma(Int64)
 @test ccall(:jl_cpu_has_fma, Bool, (Cint,), 64) == foo_fma()
 
+# `xsave` is independent of AVX (Intel SDM Vol. 1 §13.1, CPUID.01H:ECX[26]).
+# CPUs like Intel Atom (Goldmont through Tremont) support `xsave` without AVX.
+# Verify that --cpu-target=tremont reports `xsave` features via jl_test_cpu_feature.
+if Sys.ARCH === :x86_64
+    @testset "XSAVE detected independently of AVX" begin
+        code = """
+            BITS = Dict(26=>"xsave", 224=>"xsaveopt", 225=>"xsavec", 227=>"xsaves")
+            vals = [ccall(:jl_test_cpu_feature, Int32, (Int32,), b) for b in sort(collect(keys(BITS)))]
+            print(join(vals, ","))
+        """
+        cmd = `$(Base.julia_cmd(; cpu_target="tremont")) --startup-file=no -e $code`
+        out = read(cmd, String)
+        xsave, xsaveopt, xsavec, xsaves = parse.(Int, split(out, ","))
+        @test xsave != 0
+        @test xsaveopt != 0
+        @test xsavec != 0
+        @test xsaves != 0
+    end
+end
+
 if Sys.isunix()
     mktempdir() do tempdir
         firstdir = joinpath(tempdir, "first")

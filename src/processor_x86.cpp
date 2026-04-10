@@ -606,8 +606,9 @@ template<typename T>
 static inline void features_disable_avx(T &features)
 {
     using namespace Feature;
-    unset_bits(features, avx, Feature::fma, f16c, xsave, avx2, xop, fma4,
-               xsaveopt, xsavec, xsaves, vaes, vpclmulqdq);
+    // Remove features that require AVX encoding, i.e. not something like xsave.
+    unset_bits(features, avx, Feature::fma, f16c, avx2, xop, fma4,
+               vaes, vpclmulqdq);
 }
 
 template<typename T>
