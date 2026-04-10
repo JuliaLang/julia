@@ -1,7 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "gc-common.h"
-#include "gc-stock.h"
 #include "threading.h"
 #ifndef _OS_WINDOWS_
 #  include <sys/resource.h>
@@ -20,9 +19,6 @@
 #  define MAX_STACK_MAPPINGS 500
 # endif
 #endif
-
-// number of stacks to always keep available per pool
-#define MIN_STACK_MAPPINGS_PER_POOL 5
 
 const size_t jl_guard_size = (4096 * 8);
 static _Atomic(uint32_t) num_stack_mappings = 0;
@@ -201,99 +197,6 @@ JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner) JL_NOTSAFEPO
         mtarraylist_push(live_tasks, owner);
     }
     return stk;
-}
-
-void sweep_stack_pool_loop(void) JL_NOTSAFEPOINT
-{
-    // Stack sweeping algorithm:
-    //    // deallocate stacks if we have too many sitting around unused
-    //    for (stk in halfof(free_stacks))
-    //        free_stack(stk, pool_sz);
-    //    // then sweep the task stacks
-    //    for (t in live_tasks)
-    //        if (!gc-marked(t))
-    //            stkbuf = t->stkbuf
-    //            bufsz = t->bufsz
-    //            if (stkbuf)
-    //                push(free_stacks[sz], stkbuf)
-    jl_atomic_fetch_add(&gc_n_threads_sweeping_stacks, 1);
-    while (1) {
-        int i = jl_atomic_fetch_add_relaxed(&gc_ptls_sweep_idx, -1);
-        if (i < 0)
-            break;
-        jl_ptls_t ptls2 = gc_all_tls_states[i];
-        if (ptls2 == NULL)
-            continue;
-        assert(gc_n_threads);
-        // free half of stacks that remain unused since last sweep
-        if (i == jl_atomic_load_relaxed(&gc_stack_free_idx)) {
-            for (int p = 0; p < JL_N_STACK_POOLS; p++) {
-                small_arraylist_t *al = &ptls2->gc_tls_common.heap.free_stacks[p];
-                size_t n_to_free;
-                if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
-                    n_to_free = al->len; // not alive yet or dead, so it does not need these anymore
-                }
-                else if (al->len > MIN_STACK_MAPPINGS_PER_POOL) {
-                    n_to_free = al->len / 2;
-                    if (n_to_free > (al->len - MIN_STACK_MAPPINGS_PER_POOL))
-                        n_to_free = al->len - MIN_STACK_MAPPINGS_PER_POOL;
-                }
-                else {
-                    n_to_free = 0;
-                }
-                for (int n = 0; n < n_to_free; n++) {
-                    void *stk = small_arraylist_pop(al);
-                    free_stack(stk, pool_sizes[p]);
-                }
-                if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
-                    small_arraylist_free(al);
-                }
-            }
-        }
-        if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
-            small_arraylist_free(ptls2->gc_tls_common.heap.free_stacks);
-        }
-
-        small_arraylist_t *live_tasks = &ptls2->gc_tls_common.heap.live_tasks;
-        size_t n = 0;
-        size_t ndel = 0;
-        size_t l = live_tasks->len;
-        void **lst = live_tasks->items;
-        if (l == 0)
-            continue;
-        while (1) {
-            jl_task_t *t = (jl_task_t*)lst[n];
-            assert(jl_is_task(t));
-            if (gc_marked(jl_astaggedvalue(t)->bits.gc)) {
-                if (t->ctx.stkbuf == NULL)
-                    ndel++; // jl_release_task_stack called
-                else
-                    n++;
-            }
-            else {
-                ndel++;
-                void *stkbuf = t->ctx.stkbuf;
-                size_t bufsz = t->ctx.bufsz;
-                if (stkbuf) {
-                    t->ctx.stkbuf = NULL;
-                    _jl_free_stack(ptls2, stkbuf, bufsz);
-                }
-#ifdef _COMPILER_TSAN_ENABLED_
-                if (t->ctx.tsan_state) {
-                    __tsan_destroy_fiber(t->ctx.tsan_state);
-                    t->ctx.tsan_state = NULL;
-                }
-#endif
-            }
-            if (n >= l - ndel)
-                break;
-            void *tmp = lst[n];
-            lst[n] = lst[n + ndel];
-            lst[n + ndel] = tmp;
-        }
-        live_tasks->len -= ndel;
-    }
-    jl_atomic_fetch_add(&gc_n_threads_sweeping_stacks, -1);
 }
 
 // Builds a list of the live tasks. Racy: `live_tasks` can expand at any time.

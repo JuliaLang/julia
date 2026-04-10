@@ -495,3 +495,16 @@ end
         end
     end
 end
+
+@testset "Rounding to floating point types with RoundFromZero #55820" begin
+    @testset "Testing float types: $f" for f ∈ (Float16, Float32, Float64, BigFloat)
+        @testset "Testing value types: $t" for t ∈ (Bool, Rational{Int8})
+            @test iszero(f(zero(t), RoundFromZero))
+        end
+    end
+    @test Float16(100000, RoundToZero) === floatmax(Float16)
+    @test Float16(100000, RoundFromZero) === Inf16
+    @test Float16(-100000, RoundToZero) === -floatmax(Float16)
+    @test Float16(-100000, RoundFromZero) === -Inf16
+    @test Float32(nextfloat(0.0), RoundFromZero) === nextfloat(0.0f0)
+end

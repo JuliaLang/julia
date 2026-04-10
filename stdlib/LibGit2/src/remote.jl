@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString) -> GitRemote
+    GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString)::GitRemote
 
 Look up a remote git repository using its name and URL. Uses the default fetch refspec.
 
@@ -21,7 +21,7 @@ function GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractStr
 end
 
 """
-    GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString, fetch_spec::AbstractString) -> GitRemote
+    GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString, fetch_spec::AbstractString)::GitRemote
 
 Look up a remote git repository using the repository's name and URL,
 as well as specifications for how to fetch from the remote
@@ -44,7 +44,7 @@ function GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractStr
 end
 
 """
-    GitRemoteAnon(repo::GitRepo, url::AbstractString) -> GitRemote
+    GitRemoteAnon(repo::GitRepo, url::AbstractString)::GitRemote
 
 Look up a remote git repository using only its URL, not its name.
 
@@ -64,7 +64,7 @@ function GitRemoteAnon(repo::GitRepo, url::AbstractString)
 end
 
 """
-    GitRemoteDetached(url::AbstractString) -> GitRemote
+    GitRemoteDetached(url::AbstractString)::GitRemote
 
 Create a remote without a connected local repo.
 """
@@ -77,7 +77,7 @@ function GitRemoteDetached(url::AbstractString)
 end
 
 """
-    lookup_remote(repo::GitRepo, remote_name::AbstractString) -> Union{GitRemote, Nothing}
+    lookup_remote(repo::GitRepo, remote_name::AbstractString)::Union{GitRemote, Nothing}
 
 Determine if the `remote_name` specified exists within the `repo`. Return
 either a [`GitRemote`](@ref) to the remote name if it exists, or [`nothing`](@ref)
@@ -195,7 +195,7 @@ function name(rmt::GitRemote)
 end
 
 """
-    fetch_refspecs(rmt::GitRemote) -> Vector{String}
+    fetch_refspecs(rmt::GitRemote)::Vector{String}
 
 Get the *fetch* refspecs for the specified `rmt`. These refspecs contain
 information about which branch(es) to fetch from.
@@ -221,7 +221,7 @@ function fetch_refspecs(rmt::GitRemote)
 end
 
 """
-    push_refspecs(rmt::GitRemote) -> Vector{String}
+    push_refspecs(rmt::GitRemote)::Vector{String}
 
 Get the *push* refspecs for the specified `rmt`. These refspecs contain
 information about which branch(es) to push to.
@@ -346,7 +346,7 @@ function push(rmt::GitRemote, refspecs::Vector{<:AbstractString};
 end
 
 """
-    remote_delete(repo::GitRepo, remote_name::AbstractString) -> Nothing
+    remote_delete(repo::GitRepo, remote_name::AbstractString) -> nothing
 
 Delete the `remote_name` from the git `repo`.
 """
@@ -479,7 +479,7 @@ function default_branch(rmt::GitRemote)
 end
 
 """
-    ls(rmt::GitRemote) -> Vector{GitRemoteHead}
+    ls(rmt::GitRemote)::Vector{GitRemoteHead}
 
 Get the remote repository's reference advertisement list.
 

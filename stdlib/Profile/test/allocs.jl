@@ -8,6 +8,11 @@ let iobuf = IOBuffer()
     end
 end
 
+# Issue #57103: This test does not work with MMTk because of fastpath
+# allocation which never calls the allocation profiler.
+# TODO: We should port these observability tools (e.g. allocation
+# profiler and heap snapshot) to MMTk
+@static if Base.USING_STOCK_GC
 @testset "alloc profiler doesn't segfault" begin
     res = Allocs.@profile sample_rate=1.0 begin
         # test the allocations during compilation
@@ -177,4 +182,5 @@ end
     @test 3 <= length(prof.allocs) <= 10
     @test length([a for a in prof.allocs if a.type === Allocs.BufferType]) == 1
     @test length([a for a in prof.allocs if a.type === Memory{Int}]) >= 2
+end
 end

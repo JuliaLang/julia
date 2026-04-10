@@ -24,7 +24,7 @@ function Base.setindex(x::OffsetDenseArray, v, i::Integer)
     x.x[i - x.offset] = v
 end
 
-IndexStyle(::Type{<:OffsetDenseArray}) = Base.IndexLinear()
+Base.IndexStyle(::Type{<:OffsetDenseArray}) = Base.IndexLinear()
 Base.axes(x::OffsetDenseArray) = (x.offset + 1 : x.offset + length(x.x),)
 Base.keys(x::OffsetDenseArray) = only(axes(x))
 

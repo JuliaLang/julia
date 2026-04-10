@@ -1,7 +1,9 @@
+# -*- makefile -*-
+
 ## jll artifact
 OPENLIBM_JLL_NAME := OpenLibm
 
 ## source build
-OPENLIBM_VER := 0.8.1
-OPENLIBM_BRANCH=v0.8.1
-OPENLIBM_SHA1=ae2d91698508701c83cab83714d42a1146dccf85
+OPENLIBM_VER := 0.8.7
+OPENLIBM_BRANCH=v0.8.7
+OPENLIBM_SHA1=9fbeafcd4f1b6ef6aa3946c1c8faead50f38a94d

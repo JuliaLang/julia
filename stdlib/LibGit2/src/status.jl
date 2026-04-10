@@ -39,7 +39,7 @@ function Base.getindex(status::GitStatus, i::Integer)
 end
 
 """
-    LibGit2.status(repo::GitRepo, path::String) -> Union{Cuint, Cvoid}
+    LibGit2.status(repo::GitRepo, path::String)::Union{Cuint, Cvoid}
 
 Lookup the status of the file at `path` in the git
 repository `repo`. For instance, this can be used

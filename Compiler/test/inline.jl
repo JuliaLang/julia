@@ -1,9 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module inline_tests
+
 using Test
 using Base.Meta
 using Core: ReturnNode
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 include("newinterp.jl")
 
@@ -121,7 +124,7 @@ f29083(;μ,σ) = μ + σ*randn()
 g29083() = f29083(μ=2.0,σ=0.1)
 let c = code_typed(g29083, ())[1][1].code
     # make sure no call to kwfunc remains
-    @test !any(e->(isa(e,Expr) && (e.head === :invoke && e.args[1].def.name === :kwfunc)), c)
+    @test !any(e->(isa(e,Expr) && (e.head === :invoke && e.args[1].def.def.name === :kwfunc)), c)
 end
 
 @testset "issue #19122: [no]inline of short func. def. with return type annotation" begin
@@ -149,7 +152,7 @@ end
 
     (src, _) = only(code_typed(sum27403, Tuple{Vector{Int}}))
     @test !any(src.code) do x
-        x isa Expr && x.head === :invoke && x.args[2] !== Core.GlobalRef(Base, :throw_boundserror)
+        x isa Expr && x.head === :invoke && !(x.args[2] in (Core.GlobalRef(Base, :throw_boundserror), Base.throw_boundserror))
     end
 end
 
@@ -276,7 +279,7 @@ f34900(x, y::Int) = y
 f34900(x::Int, y::Int) = invoke(f34900, Tuple{Int, Any}, x, y)
 @test fully_eliminated(f34900, Tuple{Int, Int}; retval=Core.Argument(2))
 
-using Core.Compiler: is_declared_inline, is_declared_noinline
+using .Compiler: is_declared_inline, is_declared_noinline
 
 @testset "is_declared_[no]inline" begin
     @test is_declared_inline(only(methods(@inline x -> x)))
@@ -297,7 +300,7 @@ using Core.Compiler: is_declared_inline, is_declared_noinline
     @test !is_declared_noinline(only(methods() do x x end))
 end
 
-using Core.Compiler: is_inlineable, set_inlineable!
+using .Compiler: is_inlineable, set_inlineable!
 
 @testset "basic set_inlineable! functionality" begin
     ci = code_typed1() do
@@ -313,7 +316,7 @@ end
 const _a_global_array = [1]
 f_inline_global_getindex() = _a_global_array[1]
 let ci = code_typed(f_inline_global_getindex, Tuple{})[1].first
-    @test any(x->(isexpr(x, :call) && x.args[1] === GlobalRef(Base, :memoryrefget)), ci.code)
+    @test any(x->(isexpr(x, :call) && x.args[1] in (GlobalRef(Base, :memoryrefget), Base.memoryrefget)), ci.code)
 end
 
 # Issue #29114 & #36087 - Inlining of non-tuple splats
@@ -345,8 +348,8 @@ struct NonIsBitsDimsUndef
     dims::NTuple{N, Int} where N
     NonIsBitsDimsUndef() = new()
 end
-@test Core.Compiler.is_inlineable_constant(NonIsBitsDimsUndef())
-@test !Core.Compiler.is_inlineable_constant((("a"^1000, "b"^1000), nothing))
+@test Compiler.is_inlineable_constant(NonIsBitsDimsUndef())
+@test !Compiler.is_inlineable_constant((("a"^1000, "b"^1000), nothing))
 
 # More nothrow modeling for apply_type
 f_apply_type_typeof(x) = (Ref{typeof(x)}; nothing)
@@ -628,10 +631,12 @@ g41299(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)
 
 # https://github.com/JuliaLang/julia/issues/42078
 # idempotency of callsite inlining
-function getcache(mi::Core.MethodInstance)
-    cache = Core.Compiler.code_cache(Core.Compiler.NativeInterpreter())
-    codeinst = Core.Compiler.get(cache, mi, nothing)
-    return isnothing(codeinst) ? nothing : codeinst
+function getcacheci(mi::Core.MethodInstance)
+    cache = Compiler.code_cache(Compiler.NativeInterpreter())
+    codeinst = Compiler.get(cache, mi, nothing)
+    codeinst === nothing && return nothing
+    codeinst isa Compiler.InferenceResult && (codeinst = codeinst.ci)
+    return codeinst
 end
 @noinline f42078(a) = sum(sincos(a))
 let
@@ -649,7 +654,7 @@ let
     end
     let # make sure to discard the inferred source
         mi = only(methods(f42078)).specializations::Core.MethodInstance
-        codeinst = getcache(mi)::Core.CodeInstance
+        codeinst = getcacheci(mi)::Core.CodeInstance
         @atomic codeinst.inferred = nothing
     end
 
@@ -723,7 +728,7 @@ mktempdir() do dir
                 ci, rt = only(code_typed(issue42246))
                 if any(ci.code) do stmt
                        Meta.isexpr(stmt, :invoke) &&
-                       stmt.args[1].def.name === nameof(IOBuffer)
+                       stmt.args[1].def.def.name === nameof(IOBuffer)
                    end
                     exit(0)
                 else
@@ -965,7 +970,7 @@ let # aggressive inlining of single, abstract method match
 end
 
 @inline isGoodType2(cnd, @nospecialize x::Type) =
-    x !== Any && !(@noinline (cnd ? Core.Compiler.isType : _has_free_typevars)(x))
+    x !== Any && !(@noinline (cnd ? Compiler.isType : _has_free_typevars)(x))
 let # aggressive inlining of single, abstract method match (with constant-prop'ed)
     src = code_typed((Type, Any,)) do x, y
         isGoodType2(true, x), isGoodType2(true, y)
@@ -1203,7 +1208,7 @@ end
 end
 
 # Test that inlining doesn't accidentally delete a bad return_type call
-f_bad_return_type() = Core.Compiler.return_type(+, 1, 2)
+f_bad_return_type() = Compiler.return_type(+, 1, 2)
 @test_throws MethodError f_bad_return_type()
 
 # Test that inlining doesn't leave useless globalrefs around
@@ -1218,7 +1223,7 @@ end
 # Test that we can inline a finalizer for a struct that does not otherwise escape
 @noinline nothrow_side_effect(x) =
     Base.@assume_effects :total !:effect_free @ccall jl_(x::Any)::Cvoid
-@test Core.Compiler.is_finalizer_inlineable(Base.infer_effects(nothrow_side_effect, (Nothing,)))
+@test Compiler.is_finalizer_inlineable(Base.infer_effects(nothrow_side_effect, (Nothing,)))
 
 mutable struct DoAllocNoEscape
     function DoAllocNoEscape()
@@ -1403,7 +1408,7 @@ init_finalization_count!() = FINALIZATION_COUNT[] = 0
 get_finalization_count() = FINALIZATION_COUNT[]
 @noinline add_finalization_count!(x) = FINALIZATION_COUNT[] += x
 @noinline Base.@assume_effects :nothrow safeprint(io::IO, x...) = (@nospecialize; print(io, x...))
-@test Core.Compiler.is_finalizer_inlineable(Base.infer_effects(add_finalization_count!, (Int,)))
+@test Compiler.is_finalizer_inlineable(Base.infer_effects(add_finalization_count!, (Int,)))
 
 mutable struct DoAllocWithField
     x::Int
@@ -1634,7 +1639,7 @@ end
             let effects = Base.infer_effects((Vector{T}, T)) do xs, x
                     $f(xs, x)
                 end
-                @test Core.Compiler.Core.Compiler.is_terminates(effects)
+                @test Compiler.Compiler.is_terminates(effects)
             end
             let src = code_typed1((Vector{T}, T, T)) do xs, x, y
                     $f(xs, x, y)
@@ -1651,7 +1656,7 @@ end
     end
 end
 
-using Core.Compiler: is_declared_inline, is_declared_noinline
+using .Compiler: is_declared_inline, is_declared_noinline
 
 # https://github.com/JuliaLang/julia/issues/45050
 @testset "propagate :meta annotations to keyword sorter methods" begin
@@ -1665,12 +1670,12 @@ using Core.Compiler: is_declared_inline, is_declared_noinline
         @test is_declared_noinline(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
     end
     let Base.@constprop :aggressive f(::Any; x::Int=1) = 2x
-        @test Core.Compiler.is_aggressive_constprop(only(methods(f)))
-        @test Core.Compiler.is_aggressive_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
+        @test Compiler.is_aggressive_constprop(only(methods(f)))
+        @test Compiler.is_aggressive_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
     end
     let Base.@constprop :none f(::Any; x::Int=1) = 2x
-        @test Core.Compiler.is_no_constprop(only(methods(f)))
-        @test Core.Compiler.is_no_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
+        @test Compiler.is_no_constprop(only(methods(f)))
+        @test Compiler.is_no_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
     end
     # @nospecialize
     let f(@nospecialize(A::Any); x::Int=1) = 2x
@@ -1683,19 +1688,19 @@ using Core.Compiler: is_declared_inline, is_declared_noinline
     end
     # Base.@assume_effects
     let Base.@assume_effects :notaskstate f(::Any; x::Int=1) = 2x
-        @test Core.Compiler.decode_effects_override(only(methods(f)).purity).notaskstate
-        @test Core.Compiler.decode_effects_override(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).purity).notaskstate
+        @test Compiler.decode_effects_override(only(methods(f)).purity).notaskstate
+        @test Compiler.decode_effects_override(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).purity).notaskstate
     end
     # propagate multiple metadata also
     let @inline Base.@assume_effects :notaskstate Base.@constprop :aggressive f(::Any; x::Int=1) = (@nospecialize; 2x)
         @test is_declared_inline(only(methods(f)))
-        @test Core.Compiler.is_aggressive_constprop(only(methods(f)))
+        @test Compiler.is_aggressive_constprop(only(methods(f)))
         @test is_declared_inline(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
-        @test Core.Compiler.is_aggressive_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
+        @test Compiler.is_aggressive_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
         @test only(methods(f)).nospecialize == -1
         @test only(methods(Core.kwcall, (Any, typeof(f), Vararg))).nospecialize == -1
-        @test Core.Compiler.decode_effects_override(only(methods(f)).purity).notaskstate
-        @test Core.Compiler.decode_effects_override(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).purity).notaskstate
+        @test Compiler.decode_effects_override(only(methods(f)).purity).notaskstate
+        @test Compiler.decode_effects_override(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).purity).notaskstate
     end
 end
 
@@ -1728,7 +1733,7 @@ let src = code_typed1(with_unmatched_typeparam)
             break
         end
     end
-    @test isnothing(found) || (source=src, statement=found)
+    @test isnothing(found) context=(; source=src, statement=found)
 end
 
 function twice_sitofp(x::Int, y::Int)
@@ -1766,9 +1771,10 @@ end
 
 # Test getfield modeling of Type{Ref{_A}} where _A
 let getfield_tfunc(@nospecialize xs...) =
-        Core.Compiler.getfield_tfunc(Core.Compiler.fallback_lattice, xs...)
+        Compiler.getfield_tfunc(Compiler.fallback_lattice, xs...)
     @test getfield_tfunc(Type, Core.Const(:parameters)) !== Union{}
     @test !isa(getfield_tfunc(Type{Tuple{Union{Int, Float64}, Int}}, Core.Const(:name)), Core.Const)
+    @test !isa(getfield_tfunc(Type{Tuple{Any}}, Core.Const(:name)), Core.Const)
 end
 @test fully_eliminated(Base.ismutable, Tuple{Base.RefValue})
 
@@ -1797,7 +1803,7 @@ end
 
 isinvokemodify(y) = @nospecialize(x) -> isinvokemodify(y, x)
 isinvokemodify(sym::Symbol, @nospecialize(x)) = isinvokemodify(mi->mi.def.name===sym, x)
-isinvokemodify(pred::Function, @nospecialize(x)) = isexpr(x, :invoke_modify) && pred(x.args[1]::MethodInstance)
+isinvokemodify(pred::Function, @nospecialize(x)) = isexpr(x, :invoke_modify) && pred((x.args[1]::CodeInstance).def)
 
 mutable struct Atomic{T}
     @atomic x::T
@@ -1846,18 +1852,18 @@ end
 func_mul_int(a::Int, b::Int) = Core.Intrinsics.mul_int(a, b)
 multi_inlining1(a::Int, b::Int) = @noinline func_mul_int(a, b)
 let i::Int, continue_::Bool
-    interp = Core.Compiler.NativeInterpreter()
+    interp = Compiler.NativeInterpreter()
     # check if callsite `@noinline` annotation works
-    ir, = only(Base.code_ircode(multi_inlining1, (Int,Int); optimize_until="inlining", interp))
+    ir, = only(Base.code_ircode(multi_inlining1, (Int,Int); optimize_until="CC: INLINING", interp))
     i = findfirst(isinvoke(:func_mul_int), ir.stmts.stmt)
     @test i !== nothing
     # now delete the callsite flag, and see the second inlining pass can inline the call
-    @eval Core.Compiler $ir.stmts[$i][:flag] &= ~IR_FLAG_NOINLINE
-    inlining = Core.Compiler.InliningState(interp)
-    ir = Core.Compiler.ssa_inlining_pass!(ir, inlining, false)
+    ir.stmts[i][:flag] &= ~Compiler.IR_FLAG_NOINLINE
+    inlining = Compiler.InliningState(interp)
+    ir = Compiler.ssa_inlining_pass!(ir, inlining, false)
     @test findfirst(isinvoke(:func_mul_int), ir.stmts.stmt) === nothing
     @test (i = findfirst(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.stmt)) !== nothing
-    lins = Base.IRShow.buildLineInfoNode(ir.debuginfo, nothing, i)
+    lins = Compiler.IRShow.buildLineInfoNode(ir.debuginfo, nothing, i)
     @test (continue_ = length(lins) == 2) # :multi_inlining1 -> :func_mul_int
     if continue_
         def1 = lins[1].method
@@ -1870,27 +1876,17 @@ end
 call_func_mul_int(a::Int, b::Int) = @noinline func_mul_int(a, b)
 multi_inlining2(a::Int, b::Int) = call_func_mul_int(a, b)
 let i::Int, continue_::Bool
-    interp = Core.Compiler.NativeInterpreter()
+    interp = Compiler.NativeInterpreter()
     # check if callsite `@noinline` annotation works
-    ir, = only(Base.code_ircode(multi_inlining2, (Int,Int); optimize_until="inlining", interp))
+    ir, = only(Base.code_ircode(multi_inlining2, (Int,Int); optimize_until="CC: INLINING", interp))
     i = findfirst(isinvoke(:func_mul_int), ir.stmts.stmt)
     @test i !== nothing
-    # now delete the callsite flag, and see the second inlining pass can inline the call
-    @eval Core.Compiler $ir.stmts[$i][:flag] &= ~IR_FLAG_NOINLINE
-    inlining = Core.Compiler.InliningState(interp)
-    ir = Core.Compiler.ssa_inlining_pass!(ir, inlining, false)
-    @test findfirst(isinvoke(:func_mul_int), ir.stmts.stmt) === nothing
-    @test (i = findfirst(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.stmt)) !== nothing
-    lins = Base.IRShow.buildLineInfoNode(ir.debuginfo, nothing, i)
-    @test_broken (continue_ = length(lins) == 3) # see TODO in `ir_inline_linetable!`
-    if continue_
-        def1 = lins[1].method
-        @test def1 isa Core.MethodInstance && def1.def.name === :multi_inlining2
-        def2 = lins[2].method
-        @test def2 isa Core.MethodInstance && def2.def.name === :call_func_mul_int
-        def3 = lins[3].method
-        @test def3 isa Core.MethodInstance && def3.def.name === :call_func_mul_int
-    end
+    # now delete the callsite flag, and see the second inlining pass does not inline the call, since inference recorded it should not
+    ir.stmts[i][:flag] &= ~Compiler.IR_FLAG_NOINLINE
+    inlining = Compiler.InliningState(interp)
+    ir = Compiler.ssa_inlining_pass!(ir, inlining, false)
+    @test findfirst(isinvoke(:func_mul_int), ir.stmts.stmt) !== nothing
+    @test findfirst(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.stmt) === nothing
 end
 
 # Test special purpose inliner for Core.ifelse
@@ -1915,30 +1911,30 @@ end
 
 # optimize away `NamedTuple`s used for handling `@nospecialize`d keyword-argument
 # https://github.com/JuliaLang/julia/pull/47059
-abstract type CallInfo end
-struct NewInstruction
+abstract type TestCallInfo end
+struct TestNewInstruction
     stmt::Any
     type::Any
-    info::CallInfo
+    info::TestCallInfo
     line::Int32
     flag::UInt8
-    function NewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info::CallInfo),
+    function TestNewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info::TestCallInfo),
                             line::Int32, flag::UInt8)
         return new(stmt, type, info, line, flag)
     end
 end
 @nospecialize
-function NewInstruction(newinst::NewInstruction;
+function TestNewInstruction(newinst::TestNewInstruction;
     stmt=newinst.stmt,
     type=newinst.type,
-    info::CallInfo=newinst.info,
+    info::TestCallInfo=newinst.info,
     line::Int32=newinst.line,
     flag::UInt8=newinst.flag)
-    return NewInstruction(stmt, type, info, line, flag)
+    return TestNewInstruction(stmt, type, info, line, flag)
 end
 @specialize
-let src = code_typed1((NewInstruction,Any,Any,CallInfo)) do newinst, stmt, type, info
-        NewInstruction(newinst; stmt, type, info)
+let src = code_typed1((TestNewInstruction,Any,Any,TestCallInfo)) do newinst, stmt, type, info
+        TestNewInstruction(newinst; stmt, type, info)
     end
     @test count(issplatnew, src.code) == 0
     @test count(iscall((src,NamedTuple)), src.code) == 0
@@ -2111,7 +2107,7 @@ for run_finalizer_escape_test in (run_finalizer_escape_test1, run_finalizer_esca
     global finalizer_escape::Int = 0
 
     let src = code_typed1(run_finalizer_escape_test, Tuple{Bool, Bool})
-        @test any(x->isexpr(x, :(=)), src.code)
+        @test any(iscall((src, Core.setglobal!)), src.code)
     end
 
     let
@@ -2122,8 +2118,8 @@ end
 
 # `compilesig_invokes` inlining option
 @newinterp NoCompileSigInvokes
-Core.Compiler.OptimizationParams(::NoCompileSigInvokes) =
-    Core.Compiler.OptimizationParams(; compilesig_invokes=false)
+Compiler.OptimizationParams(::NoCompileSigInvokes) =
+    Compiler.OptimizationParams(; compilesig_invokes=false)
 @noinline no_compile_sig_invokes(@nospecialize x) = (x !== Any && !Base.has_free_typevars(x))
 # test the single dispatch candidate case
 let src = code_typed1((Type,)) do x
@@ -2131,7 +2127,7 @@ let src = code_typed1((Type,)) do x
     end
     @test count(src.code) do @nospecialize x
         isinvoke(:no_compile_sig_invokes, x) &&
-        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),Any}
+        (x.args[1]::Core.CodeInstance).def.specTypes == Tuple{typeof(no_compile_sig_invokes),Any}
     end == 1
 end
 let src = code_typed1((Type,); interp=NoCompileSigInvokes()) do x
@@ -2139,7 +2135,7 @@ let src = code_typed1((Type,); interp=NoCompileSigInvokes()) do x
     end
     @test count(src.code) do @nospecialize x
         isinvoke(:no_compile_sig_invokes, x) &&
-        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),Type}
+        (x.args[1]::Core.CodeInstance).def.specTypes == Tuple{typeof(no_compile_sig_invokes),Type}
     end == 1
 end
 # test the union split case
@@ -2148,7 +2144,7 @@ let src = code_typed1((Union{DataType,UnionAll},)) do x
     end
     @test count(src.code) do @nospecialize x
         isinvoke(:no_compile_sig_invokes, x) &&
-        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),Any}
+        (x.args[1]::Core.CodeInstance).def.specTypes == Tuple{typeof(no_compile_sig_invokes),Any}
     end == 2
 end
 let src = code_typed1((Union{DataType,UnionAll},); interp=NoCompileSigInvokes()) do x
@@ -2156,11 +2152,11 @@ let src = code_typed1((Union{DataType,UnionAll},); interp=NoCompileSigInvokes())
     end
     @test count(src.code) do @nospecialize x
         isinvoke(:no_compile_sig_invokes, x) &&
-        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),DataType}
+        (x.args[1]::Core.CodeInstance).def.specTypes == Tuple{typeof(no_compile_sig_invokes),DataType}
     end == 1
     @test count(src.code) do @nospecialize x
         isinvoke(:no_compile_sig_invokes, x) &&
-        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),UnionAll}
+        (x.args[1]::Core.CodeInstance).def.specTypes == Tuple{typeof(no_compile_sig_invokes),UnionAll}
     end == 1
 end
 
@@ -2207,7 +2203,7 @@ function issue53062(cond)
         return -1
     end
 end
-@test !Core.Compiler.is_nothrow(Base.infer_effects(issue53062, (Bool,)))
+@test !Compiler.is_nothrow(Base.infer_effects(issue53062, (Bool,)))
 @test issue53062(false) == -1
 @test_throws MethodError issue53062(true)
 
@@ -2216,7 +2212,7 @@ struct Issue52644
 end
 issue52644(::DataType) = :DataType
 issue52644(::UnionAll) = :UnionAll
-let ir = Base.code_ircode((Issue52644,); optimize_until="Inlining") do t
+let ir = Base.code_ircode((Issue52644,); optimize_until="CC: INLINING") do t
         issue52644(t.tuple)
     end |> only |> first
     ir.argtypes[1] = Tuple{}
@@ -2225,7 +2221,7 @@ let ir = Base.code_ircode((Issue52644,); optimize_until="Inlining") do t
     @test irfunc(Issue52644(Tuple{<:Integer})) === :UnionAll
 end
 issue52644_single(x::DataType) = :DataType
-let ir = Base.code_ircode((Issue52644,); optimize_until="Inlining") do t
+let ir = Base.code_ircode((Issue52644,); optimize_until="CC: INLINING") do t
         issue52644_single(t.tuple)
     end |> only |> first
     ir.argtypes[1] = Tuple{}
@@ -2309,3 +2305,61 @@ g_noinline_invoke(x) = f_noinline_invoke(x)
 let src = code_typed1(g_noinline_invoke, (Union{Symbol,Nothing},))
     @test !any(@nospecialize(x)->isa(x,GlobalRef), src.code)
 end
+
+path = Ref{Symbol}(:unknown)
+function f59018_generator(x)
+    if @generated
+        if x isa DataType && x.name === Type.body.name
+            path[] = :generator
+            return Core.sizeof(x.parameters[1])
+        end
+    else
+        path[] = :fallback
+        return Core.sizeof(x.parameters[1])
+    end
+end
+f59018() = f59018_generator(Base.inferencebarrier(Int64))
+let src = code_typed1(f59018, ())
+    # We should hit a dynamic dispatch, because not enough information
+    # is available to expand the generator during compilation.
+    @test iscall((src, f59018_generator), src.code[end - 1])
+    @test path[] === :unknown
+    @test f59018() === 8
+    @test path[] === :generator
+end
+
+# https://github.com/JuliaLang/julia/issues/58915
+f58915(nt) = @inline Base.setindex(nt, 2, :next)
+# This function should fully-inline, i.e. it should have only built-in / intrinsic calls
+# and no invokes or dynamic calls of user code
+let src = code_typed1(f58915, Tuple{@NamedTuple{next::UInt32,prev::UInt32}})
+    # Any calls should be built-in calls
+    @test count(iscall(f->!isa(singleton_type(argextype(f, src)), Core.Builtin)), src.code) == 0
+    # There should be no invoke at all
+    @test count(isinvoke(Returns(true)), src.code) == 0
+end
+
+# https://github.com/JuliaLang/julia/issues/58915#issuecomment-3061421895
+let src = code_typed1(Base.setindex, (@NamedTuple{next::UInt32,prev::UInt32}, Int, Symbol))
+    @test count(isinvoke(:merge_fallback), src.code) == 0
+    @test count(iscall((src, Base.merge_fallback)), src.code) == 0
+end
+
+# @nospecialize annotation on uunamed arguments
+# https://github.com/JuliaLang/julia/issues/44428
+@noinline _issue44428_1(@nospecialize _::Any) = println(Base.inferencebarrier(0))
+@noinline _issue44428_2(@nospecialize ::Any) = println(Base.inferencebarrier(0))
+@noinline _issue44428_3(@nospecialize _) = println(Base.inferencebarrier(0))
+function issue44428(x)
+    _issue44428_1(x)
+    _issue44428_2(x)
+    _issue44428_3(x)
+end
+let src = code_typed1(issue44428, (Any,))
+    @test count(isinvoke(:_issue44428_1), src.code) == 1
+    @test count(isinvoke(:_issue44428_2), src.code) == 1
+    @test count(isinvoke(:_issue44428_3), src.code) == 1
+    @test count(x->Meta.isexpr(x,:call), src.code) == 0
+end
+
+end # module inline_tests

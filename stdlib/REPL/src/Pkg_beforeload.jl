@@ -1,7 +1,9 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 ## Pkg stuff needed before Pkg has loaded
 
 const Pkg_pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
-load_pkg() = Base.require_stdlib(Pkg_pkgid, "REPLExt")
+load_pkg() = Base.require_stdlib(Pkg_pkgid, "REPLExt", REPL)
 
 ## Below here copied/tweaked from Pkg Types.jl so that the dummy Pkg prompt
 # can populate the env correctly before Pkg loads

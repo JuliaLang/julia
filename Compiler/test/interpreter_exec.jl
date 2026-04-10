@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # tests that interpreter matches codegen
+include("setup_Compiler.jl")
+
 using Test
 using Core.IR
 
@@ -21,9 +23,9 @@ let m = Meta.@lower 1 + 1
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = nstmts
-    src.ssaflags = fill(UInt8(0x00), nstmts)
+    src.ssaflags = fill(zero(UInt32), nstmts)
     src.debuginfo = Core.DebugInfo(:none)
-    Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
+    Compiler.verify_ir(Compiler.inflate_ir(src))
     global test29262 = true
     @test :a === @eval $m
     global test29262 = false
@@ -61,10 +63,10 @@ let m = Meta.@lower 1 + 1
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = nstmts
-    src.ssaflags = fill(UInt8(0x00), nstmts)
+    src.ssaflags = fill(zero(UInt32), nstmts)
     src.debuginfo = Core.DebugInfo(:none)
     m.args[1] = copy(src)
-    Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
+    Compiler.verify_ir(Compiler.inflate_ir(src))
     global test29262 = true
     @test (:b, :a, :c, :c) === @eval $m
     m.args[1] = copy(src)
@@ -101,9 +103,9 @@ let m = Meta.@lower 1 + 1
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = nstmts
-    src.ssaflags = fill(UInt8(0x00), nstmts)
+    src.ssaflags = fill(zero(UInt32), nstmts)
     src.debuginfo = Core.DebugInfo(:none)
-    Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
+    Compiler.verify_ir(Compiler.inflate_ir(src))
     global test29262 = true
     @test :a === @eval $m
     global test29262 = false

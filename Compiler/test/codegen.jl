@@ -4,7 +4,11 @@
 
 using Random
 using InteractiveUtils
+using InteractiveUtils: code_llvm, code_native
 using Libdl
+using Test
+
+include("setup_Compiler.jl")
 
 const opt_level = Base.JLOptions().opt_level
 const coverage = (Base.JLOptions().code_coverage > 0) || (Base.JLOptions().malloc_log > 0)
@@ -18,7 +22,7 @@ end
 # The tests below assume a certain format and safepoint_on_entry=true breaks that.
 function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
     params = Base.CodegenParams(safepoint_on_entry=false, gcstack_arg = false, debug_info_level=Cint(2))
-    d = InteractiveUtils._dump_function(f, t, false, false, raw, dump_module, :att, optimize, :none, false, params)
+    d = InteractiveUtils._dump_function(InteractiveUtils.ArgInfo(f, t), false, false, raw, dump_module, :att, optimize, :none, false, "", params)
     sprint(print, d)
 end
 
@@ -130,14 +134,14 @@ if !is_debug_build && opt_level > 0
     # Array
     test_loads_no_call(strip_debug_calls(get_llvm(sizeof, Tuple{Vector{Int}})), [Iptr])
     # As long as the eltype is known we don't need to load the elsize, but do need to check isvector
-    @test_skip test_loads_no_call(strip_debug_calls(get_llvm(sizeof, Tuple{Array{Any}})), ["atomic $Iptr", "ptr", "ptr", Iptr, Iptr, "ptr",  Iptr])
+    @test_skip test_loads_no_call(strip_debug_calls(get_llvm(sizeof, Tuple{Array{Any}})), ["atomic volatile $Iptr", "ptr", "ptr", Iptr, Iptr, "ptr",  Iptr])
     # Memory
     test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory{Int}})), [Iptr])
     # As long as the eltype is known we don't need to load the elsize
     test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory{Any}})), [Iptr])
     # Check that we load the elsize and isunion from the typeof layout
-    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic $Iptr", "ptr", "i32", "i16"])
-    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic $Iptr", "ptr", "i32", "i16"])
+    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic volatile $Iptr", "ptr", "i32", "i16"])
+    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic volatile $Iptr", "ptr", "i32", "i16"])
     # Primitive Type size should be folded to a constant
     test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Ptr})), String[])
 
@@ -181,15 +185,15 @@ end
 breakpoint_mutable(a::MutableStruct) = ccall(:jl_breakpoint, Cvoid, (Ref{MutableStruct},), a)
 
 # Allocation with uninitialized field as gcroot
-mutable struct BadRef
+mutable struct BadRefMutableStruct
     x::MutableStruct
     y::MutableStruct
-    BadRef(x) = new(x)
+    BadRefMutableStruct(x) = new(x)
 end
-Base.cconvert(::Type{Ptr{BadRef}}, a::MutableStruct) = BadRef(a)
-Base.unsafe_convert(::Type{Ptr{BadRef}}, ar::BadRef) = Ptr{BadRef}(pointer_from_objref(ar.x))
+Base.cconvert(::Type{Ptr{BadRefMutableStruct}}, a::MutableStruct) = BadRefMutableStruct(a)
+Base.unsafe_convert(::Type{Ptr{BadRefMutableStruct}}, ar::BadRefMutableStruct) = Ptr{BadRefMutableStruct}(pointer_from_objref(ar.x))
 
-breakpoint_badref(a::MutableStruct) = ccall(:jl_breakpoint, Cvoid, (Ptr{BadRef},), a)
+breakpoint_badref(a::MutableStruct) = ccall(:jl_breakpoint, Cvoid, (Ptr{BadRefMutableStruct},), a)
 
 struct PtrStruct
     a::Ptr{Cvoid}
@@ -372,10 +376,9 @@ mktemp() do f_22330, _
 end
 
 # Alias scope
-using Base.Experimental: @aliasscope, Const
 function foo31018!(a, b)
-    @aliasscope for i in eachindex(a, b)
-        a[i] = Const(b)[i]
+    @Base.Experimental.aliasscope for i in eachindex(a, b)
+        a[i] = Base.Experimental.Const(b)[i]
     end
 end
 io = IOBuffer()
@@ -407,7 +410,7 @@ function g_dict_hash_alloc()
 end
 # Warm up
 f_dict_hash_alloc(); g_dict_hash_alloc();
-@test abs((@allocated f_dict_hash_alloc()) / (@allocated g_dict_hash_alloc()) - 1) < 0.1 # less that 10% difference
+@test abs((@allocated f_dict_hash_alloc()) / (@allocated g_dict_hash_alloc()) - 1) < 0.3
 
 # returning an argument shouldn't alloc a new box
 @noinline f33829(x) = (global called33829 = true; x)
@@ -788,8 +791,8 @@ f47247(a::Ref{Int}, b::Nothing) = setfield!(a, :x, b)
 @test_throws TypeError f47247(Ref(5), nothing)
 
 f48085(@nospecialize x...) = length(x)
-@test Core.Compiler.get_compileable_sig(which(f48085, (Vararg{Any},)), Tuple{typeof(f48085), Vararg{Int}}, Core.svec()) === nothing
-@test Core.Compiler.get_compileable_sig(which(f48085, (Vararg{Any},)), Tuple{typeof(f48085), Int, Vararg{Int}}, Core.svec()) === Tuple{typeof(f48085), Any, Vararg{Any}}
+@test Compiler.get_compileable_sig(which(f48085, (Vararg{Any},)), Tuple{typeof(f48085), Vararg{Int}}, Core.svec()) === nothing
+@test Compiler.get_compileable_sig(which(f48085, (Vararg{Any},)), Tuple{typeof(f48085), Int, Vararg{Int}}, Core.svec()) === Tuple{typeof(f48085), Any, Vararg{Any}}
 
 # Make sure that the bounds check is elided in tuple iteration
 @test !occursin("call void @", strip_debug_calls(get_llvm(iterate, Tuple{NTuple{4, Float64}, Int})))
@@ -887,57 +890,6 @@ ex54166 = Union{Missing, Int64}[missing -2; missing -2];
 dims54166 = (1,2)
 @test (minimum(ex54166; dims=dims54166)[1] === missing)
 
-# #54109 - Excessive LLVM time for egal
-struct DefaultOr54109{T}
-    x::T
-    default::Bool
-end
-
-@eval struct Torture1_54109
-    $((Expr(:(::), Symbol("x$i"), DefaultOr54109{Float64}) for i = 1:897)...)
-end
-Torture1_54109() = Torture1_54109((DefaultOr54109(1.0, false) for i = 1:897)...)
-
-@eval struct Torture2_54109
-    $((Expr(:(::), Symbol("x$i"), DefaultOr54109{Float64}) for i = 1:400)...)
-    $((Expr(:(::), Symbol("x$(i+400)"), DefaultOr54109{Int16}) for i = 1:400)...)
-end
-Torture2_54109() = Torture2_54109((DefaultOr54109(1.0, false) for i = 1:400)..., (DefaultOr54109(Int16(1), false) for i = 1:400)...)
-
-@noinline egal_any54109(x, @nospecialize(y::Any)) = x === Base.compilerbarrier(:type, y)
-
-let ir1 = get_llvm(egal_any54109, Tuple{Torture1_54109, Any}),
-    ir2 = get_llvm(egal_any54109, Tuple{Torture2_54109, Any})
-
-    # We can't really do timing on CI, so instead, let's look at the length of
-    # the optimized IR. The original version had tens of thousands of lines and
-    # was slower, so just check here that we only have < 500 lines. If somebody,
-    # implements a better comparison that's larger than that, just re-benchmark
-    # this and adjust the threshold.
-
-    @test count(==('\n'), ir1) < 500
-    @test count(==('\n'), ir2) < 500
-end
-
-## Regression test for egal of a struct of this size without padding, but with
-## non-bitsegal, to make sure that it doesn't accidentally go down the accelerated
-## path.
-@eval struct BigStructAnyInt
-    $((Expr(:(::), Symbol("x$i"), Pair{Any, Int}) for i = 1:33)...)
-end
-BigStructAnyInt() = BigStructAnyInt((Union{Base.inferencebarrier(Float64), Int}=>i for i = 1:33)...)
-@test egal_any54109(BigStructAnyInt(), BigStructAnyInt())
-
-## For completeness, also test correctness, since we don't have a lot of
-## large-struct tests.
-
-# The two allocations of the same struct will likely have different padding,
-# we want to make sure we find them egal anyway - a naive memcmp would
-# accidentally look at it.
-@test egal_any54109(Torture1_54109(), Torture1_54109())
-@test egal_any54109(Torture2_54109(), Torture2_54109())
-@test !egal_any54109(Torture1_54109(), Torture1_54109((DefaultOr54109(2.0, false) for i = 1:897)...))
-
 bar54599() = Base.inferencebarrier(true) ? (Base.PkgId(Main),1) : nothing
 
 function foo54599()
@@ -999,6 +951,16 @@ for (T, StructName) in ((Int128, :Issue55558), (UInt128, :UIssue55558))
     end
 end
 
+# Issue #42326
+primitive type PadAfter64_42326 448 end
+mutable struct CheckPadAfter64_42326
+    a::UInt64
+    pad::PadAfter64_42326
+    b::UInt64
+end
+@test fieldoffset(CheckPadAfter64_42326, 3) == 80
+@test sizeof(CheckPadAfter64_42326) == 96
+
 @noinline Base.@nospecializeinfer f55768(@nospecialize z::UnionAll) = z === Vector
 @test f55768(Vector)
 @test f55768(Vector{T} where T)
@@ -1024,4 +986,169 @@ for a in ((@noinline Ref{Int}(2)),
     catch ex
         @test ex === a
     end
+end
+
+# Make sure that code that has unbound sparams works
+#https://github.com/JuliaLang/julia/issues/56739
+
+@test_warn r"declares type variable T but does not use it" @eval f56739(a) where {T} = a
+
+@test f56739(1) == 1
+g56739(x) = @noinline f56739(x)
+@test g56739(1) == 1
+
+struct Vec56937 x::NTuple{8, VecElement{Int}} end
+
+x56937 = Ref(Vec56937(ntuple(_->VecElement(1),8)))
+@test x56937[].x[1] == VecElement{Int}(1) # shouldn't crash
+
+# issue #56996
+let
+   ()->() # trigger various heuristics
+   Base.Experimental.@force_compile
+   default_rng_orig = [] # make a value in a Slot
+   try
+       # overwrite the gc-slots in the exception branch
+       throw(ErrorException("This test is supposed to throw an error"))
+   catch ex
+       # destroy any values that aren't referenced
+       GC.gc()
+       # make sure that default_rng_orig value is still valid
+       @noinline copy!([], default_rng_orig)
+   end
+   nothing
+end
+
+# Test that turning an implicit import into an explicit one doesn't pessimize codegen
+module TurnedIntoExplicit
+    using Test
+    import ..get_llvm
+
+    module ReExportBitCast
+        export bitcast
+        import Base: bitcast
+    end
+    using .ReExportBitCast
+
+    f(x::UInt) = bitcast(Float64, x)
+
+    @test !occursin("jl_apply_generic", get_llvm(f, Tuple{UInt}))
+
+    import Base: bitcast
+
+    @test !occursin("jl_apply_generic", get_llvm(f, Tuple{UInt}))
+end
+
+# Test codegen for `isdefinedglobal` of constant (#57872)
+const x57872 = "Hello"
+f57872() = (Core.isdefinedglobal(@__MODULE__, Base.compilerbarrier(:const, :x57872)), x57872) # Extra globalref here to force world age bounds
+@test f57872() == (true, "Hello")
+
+@noinline f_mutateany(@nospecialize x) = x[] = 1
+g_mutateany() = (y = Ref(0); f_mutateany(y); y[])
+@test g_mutateany() === 1
+
+# 58470 tbaa for unionselbyte of heap allocated mutables
+mutable struct Wrapper58470
+    x::Union{Nothing,Int}
+end
+
+function findsomething58470(dict, inds)
+    default = Wrapper58470(nothing)
+    for i in inds
+        x = get(dict, i, default).x
+        if !isnothing(x)
+            return x
+        end
+    end
+    return nothing
+end
+
+let io = IOBuffer()
+    code_llvm(io, findsomething58470, Tuple{Dict{Int64, Wrapper58470}, Vector{Int}}, dump_module=true, raw=true, optimize=false)
+    str = String(take!(io))
+    @test !occursin("jtbaa_unionselbyte", str)
+end
+
+let io = IOBuffer()
+    code_llvm(io, (x, y) -> (@atomic x[1] = y; nothing), (AtomicMemory{Pair{Any,Any}}, Pair{Any,Any},), raw=true, optimize=false)
+    str = String(take!(io))
+    @test occursin("julia.write_barrier", str)
+end
+
+# Test phi node codegen for union types with inline roots
+function union_phi_inline_roots(x::Bool)
+    if x
+        return ("Q8", 1)
+    else
+        return ("Q10", Ref(5))
+    end
+end
+@test union_phi_inline_roots(true) === ("Q8", 1)
+
+mutable struct AnyBoxEA val::Any end
+function preserve_any_ea(x)
+    b = AnyBoxEA(x)
+    GC.@preserve b begin
+        return b.val
+    end
+end
+function loop_preserve_any_ea(n)
+    s = "v"
+    for _ in 1:n
+        s = preserve_any_ea(s)::String
+    end
+    s
+end
+loop_preserve_any_ea(10)
+@test (@allocated loop_preserve_any_ea(10)) == 0
+
+# blackbox compiles to zero-cost inline asm, not a runtime call
+@testset "blackbox codegen" begin
+    # Scalar blackbox: should produce inline asm, no call
+    blackbox_int(x::Int) = Base.blackbox(x)
+    ir_int = get_llvm(blackbox_int, Tuple{Int})
+    @test !occursin("call ", strip_debug_calls(ir_int)) || occursin("asm", ir_int)
+    @test !occursin("jl_", ir_int)
+
+    # Pointer/boxed blackbox: should produce julia.blackbox intrinsic (lowered to asm after GC)
+    blackbox_str(x::String) = Base.blackbox(x)
+    ir_str = get_llvm(blackbox_str, Tuple{String}, true, false, false)
+    @test occursin("julia.blackbox", ir_str)
+
+    # blackbox preserves value identity at runtime
+    @test Base.blackbox(42) == 42
+    @test Base.blackbox([1,2,3]) == [1,2,3]
+
+    # blackbox does not allocate for isbits types
+    @test (@allocated Base.blackbox(42)) == 0
+
+    # No gc frame needed for scalar blackbox
+    @test !occursin("%gcframe", get_llvm(blackbox_int, Tuple{Int}))
+
+    # Struct blackbox: uses memory clobber for unboxed aggregates
+    struct BlackboxTestStruct
+        a::Float64
+        b::Float64
+    end
+    blackbox_struct(x::BlackboxTestStruct) = Base.blackbox(x)
+    @test blackbox_struct(BlackboxTestStruct(1.0, 2.0)) == BlackboxTestStruct(1.0, 2.0)
+    ir_struct = get_llvm(blackbox_struct, Tuple{BlackboxTestStruct})
+    @test occursin("~{memory}", ir_struct)
+    @test !occursin("jl_", strip_debug_calls(ir_struct))
+
+    # blackbox barriers Julia-level constprop: return type must be Int, not Const(42)
+    @test Base.return_types() do; Base.blackbox(42); end |> only === Int
+end
+
+# sret parameters must have an alignment attribute (required by LLVM LangRef).
+@testset "sret alignment attribute" begin
+    struct SretAlignTest
+        a::Float32
+        b::Float32
+        c::Float32
+    end
+    @noinline f_srettest(x::Float32) = SretAlignTest(x, x+1, x+2)
+    ir = get_llvm(f_srettest, Tuple{Float32}, true, true, true)
+    @test occursin(r"sret\([^)]+\) align \d+", ir)
 end

@@ -5,7 +5,7 @@
 
 #define AL_N_INLINE 29
 
-#define SMALL_AL_N_INLINE 6
+#define SMALL_AL_N_INLINE 5
 
 #ifdef __cplusplus
 extern "C" {
@@ -13,7 +13,7 @@ extern "C" {
 
 #include "analyzer_annotations.h"
 
-typedef struct {
+typedef struct { // 32 words
     size_t len;
     size_t max;
     void **items;
@@ -27,9 +27,9 @@ JL_DLLEXPORT void arraylist_push(arraylist_t *a, void *elt) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void *arraylist_pop(arraylist_t *a) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void arraylist_grow(arraylist_t *a, size_t n) JL_NOTSAFEPOINT;
 
-typedef struct {
-    uint32_t len;
-    uint32_t max;
+typedef struct { // 8 words
+    size_t len;
+    size_t max;
     void **items;
     void *_space[SMALL_AL_N_INLINE];
 } small_arraylist_t;

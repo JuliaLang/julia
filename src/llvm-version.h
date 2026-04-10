@@ -10,12 +10,8 @@
 #define JL_LLVM_VERSION (LLVM_VERSION_MAJOR * 10000 + LLVM_VERSION_MINOR * 100 \
                         + LLVM_VERSION_PATCH)
 
-#if JL_LLVM_VERSION < 150000
-    #error Only LLVM versions >= 15.0.0 are supported by Julia
-#endif
-
-#if JL_LLVM_VERSION >= 160000
-    #define JL_LLVM_OPAQUE_POINTERS 1
+#if JL_LLVM_VERSION < 170000
+    #error Only LLVM versions >= 17.0.0 are supported by Julia
 #endif
 
 #if JL_LLVM_VERSION < 19000 && defined(_CPU_RISCV64_)

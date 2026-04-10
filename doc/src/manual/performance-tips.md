@@ -3,6 +3,13 @@
 In the following sections, we briefly go through a few techniques that can help make your Julia
 code run as fast as possible.
 
+## [Table of contents](@id man-performance-tips-toc)
+
+```@contents
+Pages = ["performance-tips.md"]
+Depth = 3
+```
+
 ## General advice
 
 ### Performance critical code should be inside a function
@@ -51,14 +58,16 @@ Passing arguments to functions is better style. It leads to more reusable code a
 
 In the following REPL session:
 
-```julia-repl
+```jldoctest
 julia> x = 1.0
+1.0
 ```
 
 is equivalent to:
 
-```julia-repl
+```jldoctest
 julia> global x = 1.0
+1.0
 ```
 
 so all the performance issues discussed previously apply.
@@ -106,6 +115,8 @@ problem with type-stability or creating many small temporary arrays.
 Consequently, in addition to the allocation itself, it's very likely
 that the code generated for your function is far from optimal. Take such indications seriously
 and follow the advice below.
+
+For more information about memory management and garbage collection in Julia, see [Memory Management and Garbage Collection](@ref man-memory-management).
 
 In this particular case, the memory allocation is due to the usage of a type-unstable global variable `x`, so if we instead pass `x` as an argument to the function it no longer allocates memory
 (the remaining allocation reported below is due to running the `@time` macro in global scope)
@@ -530,7 +541,7 @@ of type `Array{Any}`). But, if you're using one of these structures and happen t
 of an element, it helps to share this knowledge with the compiler:
 
 ```julia
-function foo(a::Array{Any,1})
+function foo(a::Vector{Any})
     x = a[1]::Int32
     b = x+1
     ...
@@ -640,6 +651,29 @@ would not normally specialize that method call. You need to check the
 [method internals](@ref ast-lowered-method) if you want to see whether specializations are generated
 when argument types are changed, i.e., if `Base.specializations(@which f(...))` contains specializations
 for the argument in question.
+
+Note that in the presence of keywords and optional positional arguments, you may need to force specialization of a method argument
+even though the method is called in the body. This is due to how Julia rewrites method with default arguments. If we consider:
+
+```julia
+g(f, x=1) = f(...)
+```
+
+the method argument `f` is here clearly used within the method `g`. However, julia will rewrite this as:
+
+```julia
+g(f, x) = f(...)
+g(f) = g(f, 1)
+```
+
+With this rewrite, the second method that passes along the default argument value does no longer use `f`, calling `g(f)` may therefore not specialize on `f`.
+Writing the original definition as
+
+```julia
+g(f::F, x=1) where {F} = f(...)
+```
+
+would solve this.
 
 ### Write "type-stable" functions
 
@@ -908,6 +942,40 @@ In the mean time, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
 insertion of `let` statements as in `abmult3`.
 
+#### Use `@__FUNCTION__` for recursive closures
+
+For recursive closures specifically, the [`@__FUNCTION__`](@ref) macro can avoid both type instability and boxing.
+
+First, let's see the unoptimized version:
+
+```julia
+function make_fib_unoptimized()
+    fib(n) = n <= 1 ? 1 : fib(n - 1) + fib(n - 2)  # fib is boxed
+    return fib
+end
+```
+
+The `fib` function is boxed, meaning the return type is inferred as `Any`:
+
+```julia
+@code_warntype make_fib_unoptimized()
+```
+
+Now, to eliminate this type instability, we can instead use `@__FUNCTION__` to refer to the concrete function object:
+
+```julia
+function make_fib_optimized()
+    fib(n) = n <= 1 ? 1 : (@__FUNCTION__)(n - 1) + (@__FUNCTION__)(n - 2)
+    return fib
+end
+```
+
+This gives us a concrete return type:
+
+```julia
+@code_warntype make_fib_optimized()
+```
+
 
 ### [Types with values-as-parameters](@id man-performance-value-type)
 
@@ -1005,7 +1073,7 @@ Once one learns to appreciate multiple dispatch, there's an understandable tende
 and try to use it for everything. For example, you might imagine using it to store information,
 e.g.
 
-```
+```julia
 struct Car{Make, Model}
     year::Int
     ...more fields...
@@ -1036,7 +1104,7 @@ JIT-compilation machinery to basically execute the equivalent of a switch statem
 lookup in your own code.
 
 Some run-time benchmarks comparing (1) type dispatch, (2) dictionary lookup, and (3) a "switch"
-statement can be found [on the mailing list](https://groups.google.com/forum/#!msg/julia-users/jUMu9A3QKQQ/qjgVWr7vAwAJ).
+statement can be found [on discourse](https://discourse.julialang.org/t/suggestion-updating-the-dispatch-vs-dict-switch-benchmark-link-in-the-manual/132159).
 
 Perhaps even worse than the run-time impact is the compile-time impact: Julia will compile specialized
 functions for each different `Car{Make, Model}`; if you have hundreds or thousands of such types,
@@ -1058,12 +1126,12 @@ the output. As a trivial example, compare
 
 ```jldoctest prealloc
 julia> function xinc(x)
-           return [x, x+1, x+2]
+           return [x + i for i  in 1:3000]
        end;
 
 julia> function loopinc()
            y = 0
-           for i = 1:10^7
+           for i = 1:10^5
                ret = xinc(i)
                y += ret[2]
            end
@@ -1075,16 +1143,16 @@ with
 
 ```jldoctest prealloc
 julia> function xinc!(ret::AbstractVector{T}, x::T) where T
-           ret[1] = x
-           ret[2] = x+1
-           ret[3] = x+2
+           for i in 1:3000
+               ret[i] = x+i
+           end
            nothing
        end;
 
 julia> function loopinc_prealloc()
-           ret = Vector{Int}(undef, 3)
+           ret = Vector{Int}(undef, 3000)
            y = 0
-           for i = 1:10^7
+           for i = 1:10^5
                xinc!(ret, i)
                y += ret[2]
            end
@@ -1096,12 +1164,12 @@ Timing results:
 
 ```jldoctest prealloc; filter = r"[0-9\.]+ seconds \(.*?\)"
 julia> @time loopinc()
-  0.529894 seconds (40.00 M allocations: 1.490 GiB, 12.14% gc time)
-50000015000000
+  0.297454 seconds (200.00 k allocations: 2.239 GiB, 39.80% gc time)
+5000250000
 
 julia> @time loopinc_prealloc()
-  0.030850 seconds (6 allocations: 288 bytes)
-50000015000000
+  0.009410 seconds (2 allocations: 23.477 KiB)
+5000250000
 ```
 
 Preallocation has other advantages, for example by allowing the caller to control the "output"
@@ -1210,7 +1278,7 @@ define a separate function for each vectorized operation.
 ### [Fewer dots: Unfuse certain intermediate broadcasts](@id man-performance-unfuse)
 
 The dot loop fusion mentioned above enables concise and idiomatic code to express highly performant operations. However, it is important to remember that the fused operation will be computed at every iteration of the broadcast. This means that in some situations, particularly in the presence of composed or multidimensional broadcasts, an expression with dot calls may be computing a function more times than intended. As an example, say we want to build a random matrix whose rows have Euclidean norm one. We might write something like the following:
-```
+```julia-repl
 julia> x = rand(1000, 1000);
 
 julia> d = sum(abs2, x; dims=2);
@@ -1221,7 +1289,7 @@ julia> @time x ./= sqrt.(d);
 This will work. However, this expression will actually recompute `sqrt(d[i])` for *every* element in the row `x[i, :]`, meaning that many more square roots are computed than necessary. To see precisely over which indices the broadcast will iterate, we can call `Broadcast.combine_axes` on the arguments of the fused expression. This will return a tuple of ranges whose entries correspond to the axes of iteration; the product of lengths of these ranges will be the total number of calls to the fused operation.
 
 It follows that when some components of the broadcast expression are constant along an axis—like the `sqrt` along the second dimension in the preceding example—there is potential for a performance improvement by forcibly "unfusing" those components, i.e. allocating the result of the broadcasted operation in advance and reusing the cached value along its constant axis. Some such potential approaches are to use temporary variables, wrap components of a dot expression in `identity`, or use an equivalent intrinsically vectorized (but non-fused) function.
-```
+```julia-repl
 julia> @time let s = sqrt.(d); x ./= s end;
   0.000809 seconds (5 allocations: 8.031 KiB)
 
@@ -1401,7 +1469,7 @@ Please refer to their respective documentations (especially because they have di
 The first time a julia method is called it (and any methods it calls, or ones that can be statically determined) will be
 compiled. The [`@time`](@ref) macro family illustrates this.
 
-```
+```julia-repl
 julia> foo() = rand(2,2) * rand(2,2)
 foo (generic function with 1 method)
 
@@ -1473,7 +1541,7 @@ Further, note the `Statistics` extension `SparseArraysExt` has been activated be
 tree. i.e. see `0.4 ms  Statistics → SparseArraysExt`.
 
 This report gives a good opportunity to review whether the cost of dependency load time is worth the functionality it brings.
-Also the `Pkg` utility `why` can be used to report why a an indirect dependency exists.
+Also the `Pkg` utility `why` can be used to report why an indirect dependency exists.
 
 ```
 (CustomPackage) pkg> why FFMPEG_jll
@@ -1489,7 +1557,7 @@ compiled is to use the julia args `--trace-compile=stderr --trace-compile-timing
 statement each time a method is compiled, along with how long compilation took. The InteractiveUtils macro
 [`@trace_compile`](@ref) provides a way to enable those args for a specific call. So a call for a complete report report would look like:
 
-```
+```julia-repl
 julia> @time @time_imports @trace_compile using CustomPackage
 ...
 ```
@@ -1499,10 +1567,40 @@ Note the `--startup-file=no` which helps isolate the test from packages you may 
 More analysis of the reasons for recompilation can be achieved with the
 [`SnoopCompile`](https://github.com/timholy/SnoopCompile.jl) package.
 
+### Tracing expression evaluation
+
+If you need to understand what code is being evaluated during test or script execution,
+you can use the `--trace-eval` command-line option or the [`Base.TRACE_EVAL`](@ref) global control to trace the outermost expressions being evaluated (top-level statements). Note this does not individually report the contents of function calls or code blocks:
+
+```bash
+# Show only location information during evaluation
+julia --trace-eval=loc script.jl
+
+# Show full expressions being evaluated
+julia --trace-eval=full script.jl
+```
+
+You can also control this programmatically:
+
+```julia
+# Enable full expression tracing
+Base.TRACE_EVAL = :full
+
+# Show only locations
+Base.TRACE_EVAL = :loc
+
+# Disable tracing
+Base.TRACE_EVAL = :no
+
+# Reset to use command-line setting
+Base.TRACE_EVAL = nothing
+```
+
+
 ### Reducing precompilation time
 
 If package precompilation is taking a long time, one option is to set the following internal and then precompile.
-```
+```julia-repl
 julia> Base.PRECOMPILE_TRACE_COMPILE[] = "stderr"
 
 pkg> precompile
@@ -1513,6 +1611,18 @@ so will show which methods are precompiled and how long they took to precompile.
 
 There are also profiling options such as [using the external profiler Tracy to profile the precompilation process](@ref Profiling-package-precompilation-with-Tracy).
 
+### Keyboard controls during precompilation
+
+When package precompilation is running interactively, the following keyboard controls are available:
+
+  * **`c`** — Cancel via killing the subprocesses. Prompts for Enter to confirm (ignored after 5 seconds).
+  * **`d`** — Detach. Returns to the REPL while precompilation continues in the background
+    (only available when precompilation was started by Pkg or with `detachable=true`).
+  * **`i`** — Info. Sends a profiling signal to subprocesses for a profile peek without
+    interrupting compilation.
+  * **`v`** — Toggle verbose mode. Shows elapsed time and worker PID for each actively
+    compiling package, plus CPU% and memory (RSS) on Linux and macOS.
+  * **Ctrl-C** — Interrupt. Sends SIGINT to subprocesses and displays their output.
 
 ## Miscellaneous
 
@@ -1659,7 +1769,7 @@ main()
 
 On a computer with a 2.7 GHz Intel Core i7 processor, this produces:
 
-```
+```bash
 $ julia wave.jl;
   1.207814709 seconds
 4.443986180758249
@@ -1690,7 +1800,7 @@ in generated code by using Julia's [`code_native`](@ref) function.
 
 Note that `@fastmath` also assumes that `NaN`s will not occur during the computation, which can lead to surprising behavior:
 
-```julia-repl
+```jldoctest
 julia> f(x) = isnan(x);
 
 julia> f(NaN)

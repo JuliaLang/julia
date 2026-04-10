@@ -161,7 +161,7 @@ runtime initialization functions of external C libraries and initializing global
 that involve pointers returned by external libraries.
 See the [manual section about modules](@ref modules) for more details.
 
-See also: [`OncePerProcess`](@ref).
+See also [`OncePerProcess`](@ref).
 
 # Examples
 ```julia
@@ -339,7 +339,6 @@ See the [manual section on variable scoping](@ref scope-of-variables) for more i
 
 See also [`for`](@ref).
 
-
 # Examples
 ```jldoctest
 julia> function f()
@@ -406,11 +405,11 @@ Assigning `a` to `b` does not create a copy of `b`; instead use [`copy`](@ref) o
 
 ```jldoctest
 julia> b = [1]; a = b; b[1] = 2; a
-1-element Array{Int64, 1}:
+1-element Vector{Int64}:
  2
 
 julia> b = [1]; a = copy(b); b[1] = 2; a
-1-element Array{Int64, 1}:
+1-element Vector{Int64}:
  1
 
 ```
@@ -420,7 +419,7 @@ julia> function f!(x); x[:] .+= 1; end
 f! (generic function with 1 method)
 
 julia> a = [1]; f!(a); a
-1-element Array{Int64, 1}:
+1-element Vector{Int64}:
  2
 
 ```
@@ -439,7 +438,7 @@ julia> a, b
 Assignment can operate on multiple variables in series, and will return the value of the right-hand-most expression:
 ```jldoctest
 julia> a = [1]; b = [2]; c = [3]; a = b = c
-1-element Array{Int64, 1}:
+1-element Vector{Int64}:
  3
 
 julia> b[1] = 2; a, b, c
@@ -449,11 +448,11 @@ julia> b[1] = 2; a, b, c
 Assignment at out-of-bounds indices does not grow a collection. If the collection is a [`Vector`](@ref) it can instead be grown with [`push!`](@ref) or [`append!`](@ref).
 ```jldoctest
 julia> a = [1, 1]; a[3] = 2
-ERROR: BoundsError: attempt to access 2-element Array{Int64, 1} at index [3]
+ERROR: BoundsError: attempt to access 2-element Vector{Int64} at index [3]
 [...]
 
 julia> push!(a, 2, 3)
-4-element Array{Int64, 1}:
+4-element Vector{Int64}:
  1
  1
  2
@@ -467,7 +466,7 @@ ERROR: DimensionMismatch: tried to assign 0 elements to 1 destinations
 [...]
 
 julia> filter!(x -> x > 1, a) # in-place & thus more efficient than a = a[a .> 1]
-2-element Array{Int64, 1}:
+2-element Vector{Int64}:
  2
  3
 
@@ -490,14 +489,14 @@ assignment expression is converted into a single loop.
 julia> A = zeros(4, 4); B = [1, 2, 3, 4];
 
 julia> A .= B
-4×4 Array{Float64, 2}:
+4×4 Matrix{Float64}:
  1.0  1.0  1.0  1.0
  2.0  2.0  2.0  2.0
  3.0  3.0  3.0  3.0
  4.0  4.0  4.0  4.0
 
 julia> A
-4×4 Array{Float64, 2}:
+4×4 Matrix{Float64}:
  1.0  1.0  1.0  1.0
  2.0  2.0  2.0  2.0
  3.0  3.0  3.0  3.0
@@ -744,7 +743,7 @@ Quote an expression `expr`, returning the abstract syntax tree (AST) of `expr`.
 The AST may be of type `Expr`, `Symbol`, or a literal value.
 The syntax `:identifier` evaluates to a `Symbol`.
 
-See also: [`Expr`](@ref), [`Symbol`](@ref), [`Meta.parse`](@ref)
+See also [`Expr`](@ref), [`Symbol`](@ref), [`Meta.parse`](@ref).
 
 # Examples
 ```jldoctest
@@ -1018,12 +1017,12 @@ collection or the last index of a dimension of an array.
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64, 2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> A[end, :]
-2-element Array{Int64, 1}:
+2-element Vector{Int64}:
  3
  4
 ```
@@ -1062,6 +1061,20 @@ end
 
 The syntax `catch e` (where `e` is any variable) assigns the thrown
 exception object to the given variable within the `catch` block.
+
+```julia
+try
+    a_dangerous_operation()
+catch e
+    if isa(e, EOFError)
+        @warn "The operation failed - EOF."
+    elseif isa(e, OutOfMemoryError)
+        @warn "The operation failed - OOM."
+    else
+        rethrow() # ensure other exceptions can bubble up the call stack
+    end
+end
+```
 
 The power of the `try`/`catch` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling functions.
@@ -1118,13 +1131,51 @@ normally), [`close(f)`](@ref) will be executed. If the `try` block exits due to 
 the exception will continue propagating. A `catch` block may be combined with `try` and
 `finally` as well. In this case the `finally` block will run after `catch` has handled
 the error.
+
+When evaluating a `try/catch/else/finally` expression, the value of the entire
+expression is the value of the last block executed, excluding the `finally`
+block. For example:
+
+```jldoctest
+julia> try
+           1
+       finally
+           2
+       end
+1
+
+julia> try
+           error("")
+       catch
+           1
+       else
+           2
+       finally
+           3
+       end
+1
+
+julia> try
+           0
+       catch
+           1
+       else
+           2
+       finally
+           3
+       end
+2
+```
 """
 kw"finally"
 
 """
     break
 
-Break out of a loop immediately.
+Break out of the innermost loop or [`@label`](@ref) block immediately.
+
+`break` exits the innermost breakable scope, which may be a `for` or `while` loop, or
+an `@label` block.
 
 # Examples
 ```jldoctest
@@ -1142,6 +1193,23 @@ julia> while true
 4
 5
 ```
+
+Labeled break can be used to exit early from a labeled block created with [`@label`](@ref).
+
+```jldoctest
+julia> result = @label myblock begin
+           for i in 1:10
+               if i > 5
+                   break myblock i * 2
+               end
+           end
+           0
+       end
+12
+```
+
+!!! compat "Julia 1.14"
+    Labeled `break` requires Julia 1.14.
 """
 kw"break"
 
@@ -1160,6 +1228,28 @@ julia> for i = 1:6
 3
 5
 ```
+
+Labeled continue can be used to skip to the next iteration of a labeled loop created with [`@label`](@ref).
+
+```jldoctest
+julia> for i in 1:3
+           @label inner for j in 1:3
+               if j == 2
+                   continue inner
+               end
+               println((i, j))
+           end
+       end
+(1, 1)
+(1, 3)
+(2, 1)
+(2, 3)
+(3, 1)
+(3, 3)
+```
+
+!!! compat "Julia 1.14"
+    Labeled `continue` requires Julia 1.14.
 """
 kw"continue"
 
@@ -1340,7 +1430,7 @@ Note that if `y` is an expression, it is only evaluated when `x` is `false`, whi
 Also, `y` does not need to have a boolean value.  This means that `(condition) || (statement)` can be used as shorthand for
 `if !(condition); statement; end` for an arbitrary `statement`.
 
-See also: [`|`](@ref), [`xor`](@ref), [`&&`](@ref).
+See also [`|`](@ref), [`xor`](@ref), [`&&`](@ref).
 
 # Examples
 ```jldoctest
@@ -1396,8 +1486,6 @@ a tuple of types. All types, as well as the LLVM code, should be specified as li
 not as variables or expressions (it may be necessary to use `@eval` to generate these
 literals).
 
-[Opaque pointers](https://llvm.org/docs/OpaquePointers.html) (written as `ptr`) are not allowed in the LLVM code.
-
 See
 [`test/llvmcall.jl`](https://github.com/JuliaLang/julia/blob/v$VERSION/test/llvmcall.jl)
 for usage examples.
@@ -1429,12 +1517,12 @@ collection or the first index of a dimension of an array. For example,
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> A[begin, :]
-2-element Array{Int64,1}:
+2-element Matrix{Int64}:
  1
  2
 ```
@@ -1515,7 +1603,7 @@ kw"new"
 """
     where
 
-The `where` keyword creates a type that is an iterated union of other types, over all
+The `where` keyword creates a [`UnionAll`](@ref) type, which may be thought of as an iterated union of other types, over all
 values of some variable. For example `Vector{T} where T<:Real` includes all [`Vector`](@ref)s
 where the element type is some kind of `Real` number.
 
@@ -1590,7 +1678,7 @@ devnull
 
 A type with no fields that is the type of [`nothing`](@ref).
 
-See also: [`isnothing`](@ref), [`Some`](@ref), [`Missing`](@ref).
+See also [`isnothing`](@ref), [`Some`](@ref), [`Missing`](@ref).
 """
 Nothing
 
@@ -1602,7 +1690,7 @@ The singleton instance of type [`Nothing`](@ref), used by convention when there 
 
 A return value of `nothing` is not displayed by the REPL and similar interactive environments.
 
-See also: [`isnothing`](@ref), [`something`](@ref), [`missing`](@ref).
+See also [`isnothing`](@ref), [`something`](@ref), [`missing`](@ref).
 """
 nothing
 
@@ -1905,7 +1993,7 @@ recurses infinitely.
 StackOverflowError
 
 """
-    nfields(x) -> Int
+    nfields(x)::Int
 
 Get the number of fields in the given object.
 
@@ -2007,7 +2095,7 @@ to let `InterruptException` be thrown by CTRL+C during the execution.
 InterruptException
 
 """
-    applicable(f, args...) -> Bool
+    applicable(f, args...)::Bool
 
 Determine whether the given generic function has a method applicable to the given arguments.
 
@@ -2030,20 +2118,48 @@ applicable
 
 """
     invoke(f, argtypes::Type, args...; kwargs...)
+    invoke(f, argtypes::Method, args...; kwargs...)
+    invoke(f, argtypes::CodeInstance, args...; kwargs...)
 
 Invoke a method for the given generic function `f` matching the specified types `argtypes` on the
 specified arguments `args` and passing the keyword arguments `kwargs`. The arguments `args` must
 conform with the specified types in `argtypes`, i.e. conversion is not automatically performed.
 This method allows invoking a method other than the most specific matching method, which is useful
 when the behavior of a more general definition is explicitly needed (often as part of the
-implementation of a more specific method of the same function).
+implementation of a more specific method of the same function). However, because this means
+the runtime must do more work, `invoke` is generally also slower--sometimes significantly
+so--than doing normal dispatch with a regular call.
 
-Be careful when using `invoke` for functions that you don't write.  What definition is used
+Be careful when using `invoke` for functions that you don't write. What definition is used
 for given `argtypes` is an implementation detail unless the function is explicitly states
 that calling with certain `argtypes` is a part of public API.  For example, the change
 between `f1` and `f2` in the example below is usually considered compatible because the
 change is invisible by the caller with a normal (non-`invoke`) call.  However, the change is
 visible if you use `invoke`.
+
+# Passing a `Method` instead of a signature
+The `argtypes` argument may be a `Method`, in which case the ordinary method table lookup is
+bypassed entirely and the given method is invoked directly. Needing this feature is uncommon.
+Note in particular that the specified `Method` may be entirely unreachable from ordinary dispatch
+(or ordinary invoke), e.g. because it was replaced or fully covered by more specific methods.
+If the method is part of the ordinary method table, this call behaves similar
+to `invoke(f, method.sig, args...)`.
+
+!!! compat "Julia 1.12"
+    Passing a `Method` requires Julia 1.12.
+
+# Passing a `CodeInstance` instead of a signature
+The `argtypes` argument may be a `CodeInstance`, bypassing both method lookup and specialization.
+The semantics of this invocation are similar to a function pointer call of the `CodeInstance`'s
+`invoke` pointer. It is an error to invoke a `CodeInstance` with arguments that do not match its
+parent `MethodInstance` or from a world age not included in the `min_world`/`max_world` range.
+It is undefined behavior to invoke a `CodeInstance` whose behavior does not match the constraints
+specified in its fields. For some code instances with `owner !== nothing` (i.e. those generated
+by external compilers), it may be an error to invoke them after passing through precompilation.
+This is an advanced interface intended for use with external compiler plugins.
+
+!!! compat "Julia 1.12"
+    Passing a `CodeInstance` requires Julia 1.12.
 
 # Examples
 ```jldoctest
@@ -2077,7 +2193,7 @@ Integer
 invoke
 
 """
-    isa(x, type) -> Bool
+    isa(x, type)::Bool
 
 Determine whether `x` is of the given `type`. Can also be used as an infix operator, e.g.
 `x isa type`.
@@ -2370,7 +2486,7 @@ iteration over characters.
 Symbol
 
 """
-    Symbol(x...) -> Symbol
+    Symbol(x...)::Symbol
 
 Create a [`Symbol`](@ref) by concatenating the string representations of the arguments together.
 
@@ -2407,15 +2523,20 @@ julia> Tuple(Real[1, 2, pi])  # takes a collection
 tuple
 
 """
-    getfield(value, name::Symbol, [order::Symbol])
-    getfield(value, i::Int, [order::Symbol])
+    getfield(value, name::Symbol, [order::Symbol], [boundscheck::Bool=true])
+    getfield(value, i::Int, [order::Symbol], [boundscheck::Bool=true])
 
-Extract a field from a composite `value` by name or position. Optionally, an
-ordering can be defined for the operation. If the field was declared `@atomic`,
-the specification is strongly recommended to be compatible with the stores to
-that location. Otherwise, if not declared as `@atomic`, this parameter must be
-`:not_atomic` if specified.
-See also [`getproperty`](@ref Base.getproperty) and [`fieldnames`](@ref).
+Extract a field from a composite `value` by name or position.
+
+Optionally, an ordering can be defined for the operation.
+If the field was declared `@atomic`, the specification is strongly recommended to be
+compatible with the stores to that location.
+Otherwise, if not declared as `@atomic`, this parameter must be `:not_atomic` if specified.
+
+The bounds check may be disabled, in which case the behavior of this function is
+undefined if `i` is out of bounds.
+
+See also [`getproperty`](@ref Base.getproperty), [`fieldnames`](@ref).
 
 # Examples
 ```jldoctest
@@ -2443,6 +2564,7 @@ mutable and `x` must be a subtype of `fieldtype(typeof(value), name)`.
 Additionally, an ordering can be specified for this operation. If the field was
 declared `@atomic`, this specification is mandatory. Otherwise, if not declared
 as `@atomic`, it must be `:not_atomic` if specified.
+
 See also [`setproperty!`](@ref Base.setproperty!).
 
 # Examples
@@ -2483,8 +2605,8 @@ Atomically perform the operations to simultaneously get and set a field:
 swapfield!
 
 """
-    modifyfield!(value, name::Symbol, op, x, [order::Symbol]) -> Pair
-    modifyfield!(value, i::Int, op, x, [order::Symbol]) -> Pair
+    modifyfield!(value, name::Symbol, op, x, [order::Symbol])::Pair
+    modifyfield!(value, i::Int, op, x, [order::Symbol])::Pair
 
 Atomically perform the operations to get and set a field after applying
 the function `op`.
@@ -2499,6 +2621,9 @@ optimized to the appropriate hardware instruction, otherwise it'll use a loop.
 
 !!! compat "Julia 1.7"
     This function requires Julia 1.7 or later.
+
+See also [`modifyproperty!`](@ref Base.modifyproperty!),
+[`setfield!`](@ref Base.setfield!).
 """
 modifyfield!
 
@@ -2523,6 +2648,10 @@ instruction, otherwise it'll use a loop.
 
 !!! compat "Julia 1.7"
     This function requires Julia 1.7 or later.
+
+See also [`replaceproperty!`](@ref Base.replaceproperty!),
+[`setfield!`](@ref Base.setfield!),
+[`setfieldonce!`](@ref Base.setfieldonce!).
 """
 replacefield!
 
@@ -2541,6 +2670,10 @@ a given value, only if it was previously not set.
 
 !!! compat "Julia 1.11"
     This function requires Julia 1.11 or later.
+
+See also [`setpropertyonce!`](@ref Base.setpropertyonce!),
+[`setfield!`](@ref Base.setfield!),
+[`replacefield!`](@ref Base.replacefield!).
 """
 setfieldonce!
 
@@ -2564,7 +2697,7 @@ Most users should not have to call this function directly -- The
 !!! compat "Julia 1.9"
     This function requires Julia 1.9 or later.
 
-See also [`getproperty`](@ref Base.getproperty) and [`setglobal!`](@ref).
+See also [`getproperty`](@ref Base.getproperty), [`setglobal!`](@ref).
 
 # Examples
 ```jldoctest
@@ -2603,7 +2736,7 @@ cases.
 !!! compat "Julia 1.9"
     This function requires Julia 1.9 or later.
 
-See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
+See also [`setproperty!`](@ref Base.setproperty!), [`getglobal`](@ref)
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*\\n.*)*"
@@ -2645,12 +2778,12 @@ Atomically perform the operations to simultaneously get and set a global.
 !!! compat "Julia 1.11"
     This function requires Julia 1.11 or later.
 
-See also [`swapproperty!`](@ref Base.swapproperty!) and [`setglobal!`](@ref).
+See also [`swapproperty!`](@ref Base.swapproperty!), [`setglobal!`](@ref).
 """
 swapglobal!
 
 """
-    modifyglobal!(module::Module, name::Symbol, op, x, [order::Symbol=:monotonic]) -> Pair
+    modifyglobal!(module::Module, name::Symbol, op, x, [order::Symbol=:monotonic])::Pair
 
 Atomically perform the operations to get and set a global after applying
 the function `op`.
@@ -2658,7 +2791,7 @@ the function `op`.
 !!! compat "Julia 1.11"
     This function requires Julia 1.11 or later.
 
-See also [`modifyproperty!`](@ref Base.modifyproperty!) and [`setglobal!`](@ref).
+See also [`modifyproperty!`](@ref Base.modifyproperty!), [`setglobal!`](@ref).
 """
 modifyglobal!
 
@@ -2672,7 +2805,7 @@ a given value.
 !!! compat "Julia 1.11"
     This function requires Julia 1.11 or later.
 
-See also [`replaceproperty!`](@ref Base.replaceproperty!) and [`setglobal!`](@ref).
+See also [`replaceproperty!`](@ref Base.replaceproperty!), [`setglobal!`](@ref).
 """
 replaceglobal!
 
@@ -2686,9 +2819,74 @@ a given value, only if it was previously not set.
 !!! compat "Julia 1.11"
     This function requires Julia 1.11 or later.
 
-See also [`setpropertyonce!`](@ref Base.setpropertyonce!) and [`setglobal!`](@ref).
+See also [`setpropertyonce!`](@ref Base.setpropertyonce!), [`setglobal!`](@ref).
 """
 setglobalonce!
+
+"""
+    declare_global(module::Module, name::Symbol, strong::Bool=false, [ty::Type])
+
+Declare the global `name` in module `module`.  If `ty` is given, declares a
+"strong" global, which cannot be replaced with a constant binding, otherwise
+declares a weak global.
+
+See also [`global`](@ref), [`setglobal!`](@ref), [`get_binding_type`](@ref Core.get_binding_type).
+"""
+Core.declare_global
+
+"""
+    declare_const(module::Module, name::Symbol, [x])
+
+Create or replace the constant `name` in `module` with the new value `x`.  When
+replacing, `x` does not need to have the same type as the original constant.
+
+When `x` is not given, `name` becomes an undefined constant; it cannot be read
+or written to, but can be redefined.
+
+Unlike the syntax `const`, calling this function does not insert `Core.@latestworld` to update the world age of the current frame:
+```
+julia> begin
+           const x = 1
+           println(x)
+           const x = 2
+           println(x)
+           Core.declare_const(Main, :x, 3)
+           println(x)
+           Core.@latestworld
+           println(x)
+       end
+1
+2
+2
+3
+```
+
+!!! compat "Julia 1.12"
+    This function requires Julia 1.12 or later.  Redefining constants on earlier
+    versions of Julia is unpredictable.
+
+See also [`const`](@ref).
+"""
+Core.declare_const
+
+"""
+   _import(to::Module, from::Module, asname::Symbol, [sym::Symbol, imported::Bool])
+
+With all five arguments, imports `sym` from module `from` into `to` with name
+`asname`.  `imported` is true for bindings created with `import` (set it to
+false for `using A: ...`).
+
+With only the first three arguments, creates a binding for the module `from`
+with name `asname` in `to`.
+"""
+Core._import
+
+"""
+   _using(to::Module, from::Module)
+
+Add `from` to the usings list of `to`.
+"""
+Core._using
 
 """
     typeof(x)
@@ -2726,6 +2924,9 @@ compatible with the stores to that location. Otherwise, if not declared as
 
 To test whether an array element is defined, use [`isassigned`](@ref) instead.
 
+The global variable variant is supported for compatibility with older julia
+releases. For new code, prefer [`isdefinedglobal`](@ref).
+
 See also [`@isdefined`](@ref).
 
 # Examples
@@ -2752,6 +2953,40 @@ false
 ```
 """
 isdefined
+
+
+"""
+    isdefinedglobal(m::Module, s::Symbol, [allow_import::Bool=true, [order::Symbol=:unordered]])
+
+Tests whether a global variable `s` is defined in module `m` (in the current world age).
+A variable is considered defined if and only if a value may be read from this global variable
+and an access will not throw. This includes both constants and global variables that have
+a value set.
+
+If `allow_import` is `false`, the global variable must be defined inside `m`
+and may not be imported from another module.
+
+!!! compat "Julia 1.12"
+    This function requires Julia 1.12 or later.
+
+See also [`@isdefined`](@ref).
+
+# Examples
+```jldoctest
+julia> isdefinedglobal(Base, :sum)
+true
+
+julia> isdefinedglobal(Base, :NonExistentMethod)
+false
+
+julia> isdefinedglobal(Base, :sum, false)
+true
+
+julia> isdefinedglobal(Main, :sum, false)
+false
+```
+"""
+isdefinedglobal
 
 """
     Memory{T}(undef, n)
@@ -2798,7 +3033,7 @@ Construct an uninitialized [`Vector{T}`](@ref) of length `n`.
 # Examples
 ```julia-repl
 julia> Vector{Float64}(undef, 3)
-3-element Array{Float64, 1}:
+3-element Vector{Float64}:
  6.90966e-310
  6.90966e-310
  6.90966e-310
@@ -2848,7 +3083,7 @@ Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`.
 # Examples
 ```julia-repl
 julia> Matrix{Float64}(undef, 2, 3)
-2×3 Array{Float64, 2}:
+2×3 Matrix{Float64}:
  2.36365e-314  2.28473e-314    5.0e-324
  2.26704e-314  2.26711e-314  NaN
 
@@ -2980,13 +3215,14 @@ Array{T,N}(::Missing, dims)
     UndefInitializer
 
 Singleton type used in array initialization, indicating the array-constructor-caller
-would like an uninitialized array. See also [`undef`](@ref),
-an alias for `UndefInitializer()`.
+would like an uninitialized array.
+
+See also [`undef`](@ref), an alias for `UndefInitializer()`.
 
 # Examples
 ```julia-repl
 julia> Array{Float64, 1}(UndefInitializer(), 3)
-3-element Array{Float64, 1}:
+3-element Vector{Float64}:
  2.2752528595e-314
  2.202942107e-314
  2.275252907e-314
@@ -3001,7 +3237,7 @@ Alias for `UndefInitializer()`, which constructs an instance of the singleton ty
 [`UndefInitializer`](@ref), used in array initialization to indicate the
 array-constructor-caller would like an uninitialized array.
 
-See also: [`missing`](@ref), [`similar`](@ref).
+See also [`missing`](@ref), [`similar`](@ref).
 
 # Examples
 ```julia-repl
@@ -3017,7 +3253,7 @@ undef
 """
     Ptr{T}()
 
-Creates a null pointer to type `T`.
+Create a null pointer to type `T`.
 """
 Ptr{T}()
 
@@ -3056,7 +3292,7 @@ true
 
 Unary minus operator.
 
-See also: [`abs`](@ref), [`flipsign`](@ref).
+See also [`abs`](@ref), [`flipsign`](@ref).
 
 # Examples
 ```jldoctest
@@ -3191,7 +3427,7 @@ AssertionError
 """
     LoadError(file::AbstractString, line::Int, error)
 
-An error occurred while [`include`](@ref Base.include)ing, [`require`](@ref Base.require)ing, or [`using`](@ref) a file. The error specifics
+An error occurred while [`include`](@ref Base.include)ing, [`import`](@ref)ing, or [`using`](@ref) a file. The error specifics
 should be available in the `.error` field.
 
 !!! compat "Julia 1.7"
@@ -3496,7 +3732,7 @@ Also note that using methods is often preferable. See also this style guide docu
 for more information: [Prefer exported methods over direct field access](@ref).
 
 See also [`getfield`](@ref Core.getfield),
-[`propertynames`](@ref Base.propertynames) and
+[`propertynames`](@ref Base.propertynames),
 [`setproperty!`](@ref Base.setproperty!).
 """
 Base.getproperty
@@ -3509,12 +3745,12 @@ The syntax `a.b = c` calls `setproperty!(a, :b, c)`.
 The syntax `@atomic order a.b = c` calls `setproperty!(a, :b, c, :order)`
 and the syntax `@atomic a.b = c` calls `setproperty!(a, :b, c, :sequentially_consistent)`.
 
+See also [`setfield!`](@ref Core.setfield!),
+[`propertynames`](@ref Base.propertynames),
+[`getproperty`](@ref Base.getproperty).
+
 !!! compat "Julia 1.8"
     `setproperty!` on modules requires at least Julia 1.8.
-
-See also [`setfield!`](@ref Core.setfield!),
-[`propertynames`](@ref Base.propertynames) and
-[`getproperty`](@ref Base.getproperty).
 """
 Base.setproperty!
 
@@ -3524,8 +3760,8 @@ Base.setproperty!
 The syntax `@atomic a.b, _ = c, a.b` returns `(c, swapproperty!(a, :b, c, :sequentially_consistent))`,
 where there must be one `getproperty` expression common to both sides.
 
-See also [`swapfield!`](@ref Core.swapfield!)
-and [`setproperty!`](@ref Base.setproperty!).
+See also [`swapfield!`](@ref Core.swapfield!),
+[`setproperty!`](@ref Base.setproperty!).
 """
 Base.swapproperty!
 
@@ -3541,8 +3777,8 @@ Invocation of `op(getproperty(x, f), v)` must return a value that can be stored 
 [`setproperty!`](@ref Base.setproperty!), the `convert` function is not called
 automatically.
 
-See also [`modifyfield!`](@ref Core.modifyfield!)
-and [`setproperty!`](@ref Base.setproperty!).
+See also [`modifyfield!`](@ref Core.modifyfield!),
+[`setproperty!`](@ref Base.setproperty!).
 """
 Base.modifyproperty!
 
@@ -3553,7 +3789,7 @@ Perform a compare-and-swap operation on `x.f` from `expected` to `desired`, per
 egal. The syntax `@atomicreplace x.f expected => desired` can be used instead
 of the function call form.
 
-See also [`replacefield!`](@ref Core.replacefield!)
+See also [`replacefield!`](@ref Core.replacefield!),
 [`setproperty!`](@ref Base.setproperty!),
 [`setpropertyonce!`](@ref Base.setpropertyonce!).
 """
@@ -3565,12 +3801,12 @@ Base.replaceproperty!
 Perform a compare-and-swap operation on `x.f` to set it to `value` if previously unset.
 The syntax `@atomiconce x.f = value` can be used instead of the function call form.
 
-See also [`setfieldonce!`](@ref Core.replacefield!),
-[`setproperty!`](@ref Base.setproperty!),
-[`replaceproperty!`](@ref Base.replaceproperty!).
-
 !!! compat "Julia 1.11"
     This function requires Julia 1.11 or later.
+
+See also [`setfieldonce!`](@ref Core.setfieldonce!),
+[`setproperty!`](@ref Base.setproperty!),
+[`replaceproperty!`](@ref Base.replaceproperty!).
 """
 Base.setpropertyonce!
 
@@ -3708,7 +3944,7 @@ Unsafe pointer operations are compatible with loading and storing pointers decla
 `_Atomic` and `std::atomic` type in C11 and C++23 respectively. An error may be thrown if
 there is not support for atomically loading the Julia type `T`.
 
-See also: [`unsafe_load`](@ref), [`unsafe_modify!`](@ref), [`unsafe_replace!`](@ref), [`unsafe_store!`](@ref), [`unsafe_swap!`](@ref)
+See also [`unsafe_load`](@ref), [`unsafe_modify!`](@ref), [`unsafe_replace!`](@ref), [`unsafe_store!`](@ref), [`unsafe_swap!`](@ref)
 """
 kw"atomic"
 
@@ -3762,6 +3998,39 @@ end
 Base.donotdelete
 
 """
+    Base.blackbox(x) -> x
+
+This function returns `x` unchanged, but treats the returned value as if it
+came from an unknowable black-box source. The optimizer may not make any
+assumptions about the output: it cannot be constant-folded, common-subexpression
+eliminated (CSE'd), or treated as loop-invariant.
+This is equivalent to `compilerbarrier(:blackbox, x)`.
+
+This is useful in benchmarking to prevent loop-invariant computations from being
+hoisted out of benchmark loops. The output of `blackbox(x)` is opaque, so
+any function call that depends on it must be re-executed each iteration.
+For preventing deletion of results, see [`donotdelete`](@ref).
+
+!!! compat "Julia 1.14"
+    This method was added in Julia 1.14.
+
+# Examples
+
+```julia
+function benchmark_loop(x, n)
+    for i in 1:n
+        # Without blackbox, the compiler may compute cbrt(x) once
+        # and reuse the result for all iterations.
+        y = blackbox(x)
+        z = cbrt(y)
+        donotdelete(z)
+    end
+end
+```
+"""
+Base.blackbox
+
+"""
     Base.compilerbarrier(setting::Symbol, val)
 
 This function acts a compiler barrier at a specified compilation phase.
@@ -3776,7 +4045,10 @@ Currently either of the following `setting`s is allowed:
     constant information on `val`
   * `:conditional`: the return type of this function call will be inferred with widening
     conditional information on `val` (see the example below)
-- Any barriers on optimization aren't implemented yet
+- Barriers on optimization:
+  * `:blackbox`: treat the returned value as if it came from an unknowable black-box
+    source, preventing common-subexpression elimination (CSE) and loop-invariant code motion on any computation that
+    depends on it. See [`blackbox`](@ref) for a convenience wrapper.
 
 !!! note
     This function is expected to be used with `setting` known precisely at compile-time.

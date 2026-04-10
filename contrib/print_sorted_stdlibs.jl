@@ -12,12 +12,13 @@ function check_flag(flag)
 end
 
 if check_flag("--help") || check_flag("-h")
-    println("Usage: julia print_sorted_stdlibs.jl [stdlib_dir] [--exclude-jlls] [--exclude-sysimage]")
+    println("Usage: julia print_sorted_stdlibs.jl [stdlib_dir] [--exclude-jlls] [--exclude-sysimage] [--only-sysimg]")
 end
 
 # Allow users to ask for JLL or no JLLs
 exclude_jlls = check_flag("--exclude-jlls")
 exclude_sysimage = check_flag("--exclude-sysimage")
+only_sysimage = check_flag("--only-sysimg")
 
 # Default to the `stdlib/vX.Y` directory
 STDLIB_DIR = get(ARGS, 1, joinpath(@__DIR__, "..", "usr", "share", "julia", "stdlib"))
@@ -81,9 +82,19 @@ if exclude_jlls
     filter!(p -> !endswith(p, "_jll"), sorted_projects)
 end
 
-if exclude_sysimage
-    loaded_modules = Set(map(k->k.name, collect(keys(Base.loaded_modules))))
-    filter!(p->!in(p, loaded_modules), sorted_projects)
+if only_sysimage && exclude_sysimage
+    println(stderr, "Warning: --only-sysimg and --exclude-sysimage are mutually exclusive. Prioritizing --only-sysimg.")
+    exclude_sysimage = false
+end
+
+if only_sysimage || exclude_sysimage
+    loaded_modules_set = Set(map(k->k.name, collect(keys(Base.loaded_modules))))
+
+    if only_sysimage
+        filter!(p -> in(p, loaded_modules_set), sorted_projects)
+    else
+        filter!(p -> !in(p, loaded_modules_set), sorted_projects)
+    end
 end
 
 # Print out sorted projects, ready to be pasted into `sysimg.jl`
@@ -91,6 +102,9 @@ last_depth = 0
 println("    # Stdlibs sorted in dependency, then alphabetical, order by contrib/print_sorted_stdlibs.jl")
 if exclude_jlls
     println("    # Run with the `--exclude-jlls` option to filter out all JLL packages")
+end
+if only_sysimage
+    println("    # Run with the `--only-sysimg` option to filter for only packages included in the system image")
 end
 if exclude_sysimage
     println("    # Run with the `--exclude-sysimage` option to filter out all packages included in the system image")

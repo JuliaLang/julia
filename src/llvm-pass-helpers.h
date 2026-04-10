@@ -59,6 +59,7 @@ struct JuliaPassContext {
     llvm::Function *gc_loaded_func;
     llvm::Function *alloc_obj_func;
     llvm::Function *typeof_func;
+    llvm::Function *blackbox_func;
     llvm::Function *write_barrier_func;
     llvm::Function *pop_handler_noexcept_func;
     llvm::Function *call_func;
@@ -85,8 +86,9 @@ struct JuliaPassContext {
 
     // Gets a call to the `julia.get_pgcstack' intrinsic in the entry
     // point of the given function, if there exists such a call.
+    // Otherwise, gets a swiftself argument, if there exists such an argument.
     // Otherwise, `nullptr` is returned.
-    llvm::CallInst *getPGCstack(llvm::Function &F) const;
+    llvm::Value *getPGCstack(llvm::Function &F) const;
 
     // Gets the intrinsic or well-known function that conforms to
     // the given description if it exists in the module. If not,

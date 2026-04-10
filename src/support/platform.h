@@ -35,12 +35,12 @@
 *                               Compiler                                       *
 *******************************************************************************/
 
-#if defined(__clang__)
+#if defined(_MSC_VER)
+#define _COMPILER_MICROSOFT_
+#elif defined(__clang__)
 #define _COMPILER_CLANG_
 #elif defined(__GNUC__)
 #define _COMPILER_GCC_
-#elif defined(_MSC_VER)
-#define _COMPILER_MICROSOFT_
 #else
 #error Unsupported compiler
 #endif
@@ -134,6 +134,10 @@
 #    define _P32
 #else
 #  error pointer size not known for your platform / compiler
+#endif
+
+#if defined(__LP64__) || defined(__wasm__) || defined(__mips64) || defined(__riscv) || defined(_WIN64)
+#define _HAS_INT128_
 #endif
 
 #endif /* !PLATFORM_H */

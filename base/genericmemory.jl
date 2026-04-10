@@ -10,7 +10,7 @@ Fixed-size [`DenseVector{T}`](@ref DenseVector).
 `kind` can currently be either `:not_atomic` or `:atomic`. For details on what `:atomic` implies, see [`AtomicMemory`](@ref)
 
 `addrspace` can currently only be set to `Core.CPU`. It is designed to permit extension by other systems such as GPUs, which might define values such as:
-```
+```julia
 module CUDA
 const Generic = bitcast(Core.AddrSpace{CUDA}, 0)
 const Global = bitcast(Core.AddrSpace{CUDA}, 1)
@@ -61,16 +61,30 @@ AtomicMemory
 
 using Core: memoryrefoffset, memoryref_isassigned # import more functions which were not essential
 
-size(a::GenericMemory, d::Int) =
-    d < 1 ? error("dimension out of range") :
-    d == 1 ? length(a) :
-    1
-size(a::GenericMemory, d::Integer) =  size(a, convert(Int, d))
-size(a::GenericMemory) = (length(a),)
-
 IndexStyle(::Type{<:GenericMemory}) = IndexLinear()
 
 parent(ref::GenericMemoryRef) = ref.mem
+
+"""
+    memoryindex(ref::GenericMemoryRef)::Int
+
+Get the 1-based index of `ref` in its `GenericMemory`.
+
+# Examples
+```jldoctest
+julia> mem = Memory{String}(undef, 10);
+
+julia> ref = Base.memoryindex(memoryref(mem, 3))
+3
+
+julia> Base.memoryindex(memoryref(Memory{Nothing}(undef, 10), 8))
+8
+```
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
+"""
+memoryindex(ref::GenericMemoryRef) = memoryrefoffset(ref)
 
 pointer(mem::GenericMemoryRef) = unsafe_convert(Ptr{Cvoid}, mem) # no bounds check, even for empty array
 
@@ -106,7 +120,7 @@ sizeof(a::GenericMemory) = Core.sizeof(a)
 # multi arg case will be overwritten later. This is needed for bootstrapping
 function isassigned(a::GenericMemory, i::Int)
     @inline
-    @boundscheck (i - 1)%UInt < length(a)%UInt || return false
+    @boundscheck checkbounds(Bool, a, i) || return false
     return @inbounds memoryref_isassigned(memoryref(a, i), default_access_order(a), false)
 end
 
@@ -144,6 +158,7 @@ function unsafe_copyto!(dest::Memory{T}, doffs, src::Memory{T}, soffs, n) where{
     return dest
 end
 
+#fallback method when types don't match
 function unsafe_copyto!(dest::Memory, doffs, src::Memory, soffs, n)
     @_terminates_locally_meta
     n == 0 && return dest
@@ -171,7 +186,13 @@ function unsafe_copyto!(dest::Memory, doffs, src::Memory, soffs, n)
     return dest
 end
 
-copy(a::T) where {T<:Memory} = ccall(:jl_genericmemory_copy, Ref{T}, (Any,), a)
+function copy(a::T) where {T<:Memory}
+    # `copy` only throws when the size exceeds the max allocation size,
+    # but since we're copying an existing array, we're guaranteed that this will not happen.
+    @_nothrow_meta
+    newmem = T(undef, length(a))
+    @inbounds unsafe_copyto!(newmem, 1, a, 1, length(a))
+end
 
 copyto!(dest::Memory, src::Memory) = copyto!(dest, 1, src, 1, length(src))
 function copyto!(dest::Memory, doffs::Integer, src::Memory, soffs::Integer, n::Integer)
@@ -215,10 +236,6 @@ promote_rule(a::Type{Memory{T}}, b::Type{Memory{S}}) where {T,S} = el_same(promo
 Memory{T}(x::AbstractArray{S,1}) where {T,S} = copyto_axcheck!(Memory{T}(undef, size(x)), x)
 
 ## copying iterators to containers
-
-## Iteration ##
-
-iterate(A::Memory, i=1) = (@inline; (i - 1)%UInt < length(A)%UInt ? (@inbounds A[i], i + 1) : nothing)
 
 ## Indexing: getindex ##
 
