@@ -158,7 +158,7 @@ idxmask(::Type{<:Union{Int64,UInt64}}) = 1
 idxmask(::Type{<:Union{Int128,UInt128}}) = 0
 
 
-mt_avail(r::MersenneTwister, ::Type{T}) where {T<:BitInteger} =
+mt_avail(r::MersenneTwister, T::Type{<:BitInteger}) =
     r.idxI >> logsizeof(T)
 
 function mt_setfull!(r::MersenneTwister, ::Type{<:BitInteger})
@@ -195,12 +195,12 @@ end
 
 mt_setempty!(r::MersenneTwister, ::Type{<:BitInteger}) = r.idxI = 0
 
-function reserve1(r::MersenneTwister, ::Type{T}) where T<:BitInteger
+function reserve1(r::MersenneTwister, T::Type{<:BitInteger})
     r.idxI < sizeof(T) && mt_setfull!(r, T)
     nothing
 end
 
-function mt_pop!(r::MersenneTwister, ::Type{T}) where T<:BitInteger
+function mt_pop!(r::MersenneTwister, T::Type{<:BitInteger})
     reserve1(r, T)
     r.idxI -= sizeof(T)
     i = r.idxI
@@ -209,7 +209,7 @@ function mt_pop!(r::MersenneTwister, ::Type{T}) where T<:BitInteger
     (x128 >> (i128 * (sizeof(T) << 3))) % T
 end
 
-function mt_pop!(r::MersenneTwister, ::Type{T}) where {T<:Union{Int128,UInt128}}
+function mt_pop!(r::MersenneTwister, T::Type{<:Union{Int128,UInt128}})
     reserve1(r, T)
     idx = r.idxI >> 4
     r.idxI = idx << 4 - 16

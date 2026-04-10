@@ -38,7 +38,7 @@ IdSet{T}(itr) where {T} = union!(IdSet{T}(), itr)
 IdSet() = IdSet{Any}()
 
 copymutable(s::IdSet) = typeof(s)(s)
-emptymutable(s::IdSet{T}, ::Type{U}=T) where {T,U} = IdSet{U}()
+emptymutable(s::IdSet{T}, U::Type=T) where {T} = IdSet{U}()
 copy(s::IdSet) = typeof(s)(s)
 
 haskey(s::IdSet, @nospecialize(key)) = ccall(:jl_idset_peek_bp, Int, (Any, Any, Any), s.list, s.idxs, key) != -1

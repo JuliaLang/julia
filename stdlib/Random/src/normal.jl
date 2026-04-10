@@ -117,7 +117,7 @@ randn(rng::AbstractRNG, ::Type{Complex{T}}) where {T<:AbstractFloat} =
 
 
 ### fallback randn for float types defining rand:
-function randn(rng::AbstractRNG, ::Type{T}) where {T<:AbstractFloat}
+function randn(rng::AbstractRNG, T::Type{<:AbstractFloat})
     # Marsaglia polar variant of Box–Muller transform:
     while true
         x, y = 2rand(rng, T)-1, 2rand(rng, T)-1
@@ -173,7 +173,7 @@ end
 end
 
 ### fallback randexp for float types defining rand:
-randexp(rng::AbstractRNG, ::Type{T}) where {T<:AbstractFloat} =
+randexp(rng::AbstractRNG, T::Type{<:AbstractFloat}) =
     -log1p(-rand(rng, T))
 
 ## arrays & other scalar methods
@@ -222,7 +222,7 @@ for randfun in [:randn, :randexp]
     @eval begin
         # scalars
         $randfun(rng::AbstractRNG, T::BitFloatType) = convert(T, $randfun(rng))
-        $randfun(::Type{T}) where {T} = $randfun(default_rng(), T)
+        $randfun(T::Type) = $randfun(default_rng(), T)
 
         # filling arrays
         function $randfun!(rng::AbstractRNG, A::AbstractArray{T}) where T
@@ -266,12 +266,12 @@ for randfun in [:randn, :randexp]
         $randfun!(A::AbstractArray) = $randfun!(default_rng(), A)
 
         # generating arrays
-        $randfun(rng::AbstractRNG, ::Type{T}, dims::Dims                     ) where {T} = $randfun!(rng, Array{T}(undef, dims))
+        $randfun(rng::AbstractRNG, T::Type, dims::Dims                     ) = $randfun!(rng, Array{T}(undef, dims))
         # Note that this method explicitly does not define $randfun(rng, T),
         # in order to prevent an infinite recursion.
-        $randfun(rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...) where {T} = $randfun!(rng, Array{T}(undef, dim1, dims...))
-        $randfun(                  ::Type{T}, dims::Dims                     ) where {T} = $randfun(default_rng(), T, dims)
-        $randfun(                  ::Type{T}, dims::Integer...               ) where {T} = $randfun(default_rng(), T, dims...)
+        $randfun(rng::AbstractRNG, T::Type, dim1::Integer, dims::Integer...) = $randfun!(rng, Array{T}(undef, dim1, dims...))
+        $randfun(                  T::Type, dims::Dims                     ) = $randfun(default_rng(), T, dims)
+        $randfun(                  T::Type, dims::Integer...               ) = $randfun(default_rng(), T, dims...)
         $randfun(rng::AbstractRNG,            dims::Dims                     )           = $randfun(rng, Float64, dims)
         $randfun(rng::AbstractRNG,            dims::Integer...               )           = $randfun(rng, Float64, dims...)
         $randfun(                             dims::Dims                     )           = $randfun(default_rng(), Float64, dims)

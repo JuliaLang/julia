@@ -44,7 +44,7 @@ abstract type AbstractRNG end
 
 Base.broadcastable(x::AbstractRNG) = Ref(x)
 
-gentype(::Type{X}) where {X} = eltype(X)
+gentype(X::Type) = eltype(X)
 gentype(x) = gentype(typeof(x))
 
 
@@ -79,7 +79,7 @@ uint_sup(::Type{<:Union{UInt2x52,UInt2x52Raw}}) = UInt128
 for UI = (:UInt10, :UInt10Raw, :UInt23, :UInt23Raw, :UInt52, :UInt52Raw,
           :UInt104, :UInt104Raw, :UInt2x52, :UInt2x52Raw)
     @eval begin
-        $UI(::Type{T}=uint_sup($UI)) where {T} = $UI{T}()
+        $UI(T::Type=uint_sup($UI)) = $UI{T}()
         # useful for defining rand generically:
         uint_default(::$UI) = $UI{uint_sup($UI)}()
     end
@@ -98,8 +98,8 @@ const FloatInterval_64 = FloatInterval{Float64}
 const CloseOpen01_64   = CloseOpen01{Float64}
 const CloseOpen12_64   = CloseOpen12{Float64}
 
-CloseOpen01(::Type{T}=Float64) where {T<:AbstractFloat} = CloseOpen01{T}()
-CloseOpen12(::Type{T}=Float64) where {T<:AbstractFloat} = CloseOpen12{T}()
+CloseOpen01(T::Type{<:AbstractFloat}=Float64) = CloseOpen01{T}()
+CloseOpen12(T::Type{<:AbstractFloat}=Float64) = CloseOpen12{T}()
 
 gentype(::Type{<:FloatInterval{T}}) where {T<:AbstractFloat} = T
 
@@ -141,7 +141,7 @@ the amount of precomputation, if applicable.
 pre-computed values without defining extra types for only this purpose.
 """
 Sampler(rng::AbstractRNG, x, r::Repetition=Val(Inf)) = Sampler(typeof(rng), x, r)
-Sampler(rng::AbstractRNG, ::Type{X}, r::Repetition=Val(Inf)) where {X} =
+Sampler(rng::AbstractRNG, X::Type, r::Repetition=Val(Inf)) =
     Sampler(typeof(rng), X, r)
 
 # this method is necessary to prevent rand(rng::AbstractRNG, X) from
@@ -150,8 +150,8 @@ Sampler(T::Type{<:AbstractRNG}, sp::Sampler, r::Repetition) =
     throw(MethodError(Sampler, (T, sp, r)))
 
 # default shortcut for the general case
-Sampler(::Type{RNG}, X) where {RNG<:AbstractRNG} = Sampler(RNG, X, Val(Inf))
-Sampler(::Type{RNG}, ::Type{X}) where {RNG<:AbstractRNG,X} = Sampler(RNG, X, Val(Inf))
+Sampler(RNG::Type{<:AbstractRNG}, X) = Sampler(RNG, X, Val(Inf))
+Sampler(RNG::Type{<:AbstractRNG}, X::Type) = Sampler(RNG, X, Val(Inf))
 
 #### pre-defined useful Sampler types
 
@@ -163,7 +163,7 @@ when called with types.
 """
 struct SamplerType{T} <: Sampler{T} end
 
-Sampler(::Type{<:AbstractRNG}, ::Type{T}, ::Repetition) where {T} = SamplerType{T}()
+Sampler(::Type{<:AbstractRNG}, T::Type, ::Repetition) = SamplerType{T}()
 
 Base.getindex(::SamplerType{T}) where {T} = T
 
@@ -246,7 +246,7 @@ rand(rng::AbstractRNG, sp::Masked) = rand(rng, sp.s) & sp.mask
 
 struct UniformT{T} <: Sampler{T} end
 
-uniform(::Type{T}) where {T} = UniformT{T}()
+uniform(T::Type) = UniformT{T}()
 
 rand(rng::AbstractRNG, ::UniformT{T}) where {T} = rand(rng, T)
 
@@ -262,18 +262,18 @@ rand(rng::AbstractRNG, ::UniformT{T}) where {T} = rand(rng, T)
 rand(rng::AbstractRNG, X)                                           = rand(rng, Sampler(rng, X, Val(1)))
 # this is needed to disambiguate
 rand(rng::AbstractRNG, X::Dims)                                     = rand(rng, Sampler(rng, X, Val(1)))
-rand(rng::AbstractRNG=default_rng(), ::Type{X}=Float64) where {X}   = rand(rng, Sampler(rng, X, Val(1)))::X
+rand(rng::AbstractRNG=default_rng(), X::Type=Float64)               = rand(rng, Sampler(rng, X, Val(1)))::X
 
 rand(X)                   = rand(default_rng(), X)
-rand(::Type{X}) where {X} = rand(default_rng(), X)
+rand(X::Type) = rand(default_rng(), X)
 
 #### arrays
 
 rand!(A::AbstractArray{T}, X) where {T}             = rand!(default_rng(), A, X)
-rand!(A::AbstractArray{T}, ::Type{X}=T) where {T,X} = rand!(default_rng(), A, X)
+rand!(A::AbstractArray{T}, X::Type=T) where {T} = rand!(default_rng(), A, X)
 
 rand!(rng::AbstractRNG, A::AbstractArray{T}, X) where {T}             = rand!(rng, A, Sampler(rng, X))
-rand!(rng::AbstractRNG, A::AbstractArray{T}, ::Type{X}=T) where {T,X} = rand!(rng, A, Sampler(rng, X))
+rand!(rng::AbstractRNG, A::AbstractArray{T}, X::Type=T) where {T} = rand!(rng, A, Sampler(rng, X))
 
 function rand!(rng::AbstractRNG, A::AbstractArray{T}, sp::Sampler) where T
     for i in eachindex(A)
@@ -294,11 +294,11 @@ rand(                X, d::Integer, dims::Integer...) = rand(X, Dims((d, dims...
 # rand(r, ()) would match both this method and rand(r, dims::Dims)
 # moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
 
-rand(r::AbstractRNG, ::Type{X}, dims::Dims) where {X} = rand!(r, Array{X}(undef, dims), X)
-rand(                ::Type{X}, dims::Dims) where {X} = rand(default_rng(), X, dims)
+rand(r::AbstractRNG, X::Type, dims::Dims) = rand!(r, Array{X}(undef, dims), X)
+rand(                X::Type, dims::Dims) = rand(default_rng(), X, dims)
 
-rand(r::AbstractRNG, ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(r, X, Dims((d, dims...)))
-rand(                ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(X, Dims((d, dims...)))
+rand(r::AbstractRNG, X::Type, d::Integer, dims::Integer...) = rand(r, X, Dims((d, dims...)))
+rand(                X::Type, d::Integer, dims::Integer...) = rand(X, Dims((d, dims...)))
 
 
 ### UnsafeView

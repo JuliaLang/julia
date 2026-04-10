@@ -20,7 +20,7 @@ const C_NULL = bitcast(Ptr{Cvoid}, 0)
 # TODO: deprecate these conversions. C doesn't even allow them.
 
 # pointer to integer
-convert(::Type{T}, x::Ptr) where {T<:Integer} = T(UInt(x))::T
+convert(T::Type{<:Integer}, x::Ptr) = T(UInt(x))::T
 
 # integer to pointer
 convert(::Type{Ptr{T}}, x::Union{Int,UInt}) where {T} = Ptr{T}(x)

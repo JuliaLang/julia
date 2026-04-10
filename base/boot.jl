@@ -345,7 +345,7 @@ const MemoryRef{T} = GenericMemoryRef{:not_atomic, T, CPU}
 # so the methods and ccall's in Core aren't permitted to use convert
 convert(::Type{Any}, @nospecialize(x)) = x
 convert(::Type{T}, x::T) where {T} = x
-cconvert(::Type{T}, x) where {T} = convert(T, x)
+cconvert(T::Type, x) = convert(T, x)
 unsafe_convert(::Type{T}, x::T) where {T} = x
 
 # will be inserted by the frontend for closures
@@ -936,7 +936,7 @@ end
 # n.b. This function exists for CUDA to overload to configure error behavior (see #48097)
 throw_inexacterror(func::Symbol, to, val) = throw(InexactError(func, to, val))
 
-function check_sign_bit(::Type{To}, x) where {To}
+function check_sign_bit(To::Type, x)
     @inline
     # the top bit is the sign bit of x but "sign bit" sounds better in stacktraces
     # n.b. if x is signed, then sizeof(x) === sizeof(To), otherwise sizeof(x) >= sizeof(To)
@@ -944,7 +944,7 @@ function check_sign_bit(::Type{To}, x) where {To}
     x
 end
 
-function checked_trunc_sint(::Type{To}, x::From) where {To,From}
+function checked_trunc_sint(To::Type, x::From) where {From}
     @inline
     y = trunc_int(To, x)
     back = sext_int(From, y)
@@ -952,7 +952,7 @@ function checked_trunc_sint(::Type{To}, x::From) where {To,From}
     y
 end
 
-function checked_trunc_uint(::Type{To}, x::From) where {To,From}
+function checked_trunc_uint(To::Type, x::From) where {From}
     @inline
     y = trunc_int(To, x)
     back = zext_int(From, y)

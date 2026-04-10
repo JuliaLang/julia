@@ -817,21 +817,21 @@ julia> similar(falses(10), Float64, 2, 4)
 See also [`undef`](@ref), [`isassigned`](@ref).
 """
 similar(a::AbstractArray{T}) where {T}                             = similar(a, T)
-similar(a::AbstractArray, ::Type{T}) where {T}                     = similar(a, T, axes(a))
+similar(a::AbstractArray, T::Type)                                 = similar(a, T, axes(a))
 similar(a::AbstractArray{T}, dims::Tuple) where {T}                = similar(a, T, dims)
 similar(a::AbstractArray{T}, dims::DimOrInd...) where {T}          = similar(a, T, dims)
-similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, T, dims)
+similar(a::AbstractArray, T::Type, dims::DimOrInd...)              = similar(a, T, dims)
 # Similar supports specifying dims as either Integers or AbstractUnitRanges or any mixed combination
 # thereof. Ideally, we'd just convert Integers to OneTos and then call a canonical method with the axes,
 # but we don't want to require all AbstractArray subtypes to dispatch on Base.OneTo. So instead we
 # define this method to convert supported axes to Ints, with the expectation that an offset array
 # package will define a method with dims::Tuple{Union{Integer, UnitRange}, Vararg{Union{Integer, UnitRange}}}
-similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, AbstractOneTo}, Vararg{Union{Integer, AbstractOneTo}}}) where {T} = similar(a, T, to_shape(dims))
+similar(a::AbstractArray, T::Type, dims::Tuple{Union{Integer, AbstractOneTo}, Vararg{Union{Integer, AbstractOneTo}}}) = similar(a, T, to_shape(dims))
 # legacy method for packages that specialize similar(A::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo, CustomAxis}, Vararg{Union{Integer, OneTo, CustomAxis}}}
 # leaving this method in ensures that Base owns the more specific method
-similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T} = similar(a, T, to_shape(dims))
+similar(a::AbstractArray, T::Type, dims::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) = similar(a, T, to_shape(dims))
 # similar creates an Array by default
-similar(a::AbstractArray, ::Type{T}, dims::Dims{N}) where {T,N}    = Array{T,N}(undef, dims)
+similar(a::AbstractArray, T::Type, dims::Dims{N}) where {N}        = Array{T,N}(undef, dims)
 
 to_shape(::Tuple{}) = ()
 to_shape(dims::Dims) = dims
@@ -866,11 +866,11 @@ indices of the result will match `A`.
 would create a 1-dimensional logical array whose indices match those
 of the columns of `A`.
 """
-similar(::Type{T}, dims::DimOrInd...) where {T<:AbstractArray} = similar(T, dims)
-similar(::Type{T}, shape::Tuple{Union{Integer, AbstractOneTo}, Vararg{Union{Integer, AbstractOneTo}}}) where {T<:AbstractArray} = similar(T, to_shape(shape))
+similar(T::Type{<:AbstractArray}, dims::DimOrInd...) = similar(T, dims)
+similar(T::Type{<:AbstractArray}, shape::Tuple{Union{Integer, AbstractOneTo}, Vararg{Union{Integer, AbstractOneTo}}}) = similar(T, to_shape(shape))
 # legacy method for packages that specialize similar(::Type{T}, dims::Tuple{Union{Integer, OneTo, CustomAxis}, Vararg{Union{Integer, OneTo, CustomAxis}})
-similar(::Type{T}, shape::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T<:AbstractArray} = similar(T, to_shape(shape))
-similar(::Type{T}, dims::Dims) where {T<:AbstractArray} = T(undef, dims)
+similar(T::Type{<:AbstractArray}, shape::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) = similar(T, to_shape(shape))
+similar(T::Type{<:AbstractArray}, dims::Dims) = T(undef, dims)
 
 """
     empty(v::AbstractVector, [eltype])
@@ -893,7 +893,7 @@ empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = similar(a, U, 0)
 
 # like empty, but should return a mutable collection, a Vector by default
 emptymutable(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
-emptymutable(itr, ::Type{U}) where {U} = Vector{U}()
+emptymutable(itr, U::Type) = Vector{U}()
 
 """
     copy!(dst, src) -> dst
@@ -1255,10 +1255,10 @@ isempty(a::AbstractArray) = (length(a) == 0)
 
 ## range conversions ##
 
-map(::Type{T}, r::StepRange) where {T<:Real} = T(r.start):T(r.step):T(last(r))
-map(::Type{T}, r::UnitRange) where {T<:Real} = T(r.start):T(last(r))
-map(::Type{T}, r::StepRangeLen) where {T<:AbstractFloat} = convert(StepRangeLen{T}, r)
-function map(::Type{T}, r::LinRange) where T<:AbstractFloat
+map(T::Type{<:Real}, r::StepRange) = T(r.start):T(r.step):T(last(r))
+map(T::Type{<:Real}, r::UnitRange) = T(r.start):T(last(r))
+map(T::Type{<:AbstractFloat}, r::StepRangeLen) = convert(StepRangeLen{T}, r)
+function map(T::Type{<:AbstractFloat}, r::LinRange)
     LinRange(T(r.start), T(r.stop), length(r))
 end
 
@@ -1661,22 +1661,22 @@ eltypeof(x::AbstractArray) = eltype(x)
 promote_eltypeof() = error()
 promote_eltypeof(v1) = eltypeof(v1)
 promote_eltypeof(v1, v2) = promote_type(eltypeof(v1), eltypeof(v2))
-promote_eltypeof(v1, v2, vs...) = (@inline; afoldl(((::Type{T}, y) where {T}) -> promote_type(T, eltypeof(y)), promote_eltypeof(v1, v2), vs...))
+promote_eltypeof(v1, v2, vs...) = (@inline; afoldl((T::Type, y) -> promote_type(T, eltypeof(y)), promote_eltypeof(v1, v2), vs...))
 promote_eltypeof(v1::T, vs::T...) where {T} = eltypeof(v1)
 promote_eltypeof(v1::AbstractArray{T}, vs::AbstractArray{T}...) where {T} = T
 
 promote_eltype() = error()
 promote_eltype(v1) = eltype(v1)
 promote_eltype(v1, v2) = promote_type(eltype(v1), eltype(v2))
-promote_eltype(v1, v2, vs...) = (@inline; afoldl(((::Type{T}, y) where {T}) -> promote_type(T, eltype(y)), promote_eltype(v1, v2), vs...))
+promote_eltype(v1, v2, vs...) = (@inline; afoldl((T::Type, y) -> promote_type(T, eltype(y)), promote_eltype(v1, v2), vs...))
 promote_eltype(v1::T, vs::T...) where {T} = eltype(T)
 promote_eltype(v1::AbstractArray{T}, vs::AbstractArray{T}...) where {T} = T
 
 #TODO: ERROR CHECK
 _cat(catdim::Int) = Vector{Any}()
 
-typed_vcat(::Type{T}) where {T} = Vector{T}()
-typed_hcat(::Type{T}) where {T} = Vector{T}()
+typed_vcat(T::Type) = Vector{T}()
+typed_hcat(T::Type) = Vector{T}()
 
 ## cat: special cases
 vcat(X::T...) where {T}         = T[ X[i] for i=eachindex(X) ]
@@ -1686,8 +1686,8 @@ hcat(X::T...) where {T<:Number} = T[ X[j] for _=1:1, j=eachindex(X) ]
 
 vcat(X::Number...) = hvcat_fill!(Vector{promote_typeof(X...)}(undef, length(X)), X)
 hcat(X::Number...) = hvcat_fill!(Matrix{promote_typeof(X...)}(undef, 1,length(X)), X)
-typed_vcat(::Type{T}, X::Number...) where {T} = hvcat_fill!(Vector{T}(undef, length(X)), X)
-typed_hcat(::Type{T}, X::Number...) where {T} = hvcat_fill!(Matrix{T}(undef, 1,length(X)), X)
+typed_vcat(T::Type, X::Number...) = hvcat_fill!(Vector{T}(undef, length(X)), X)
+typed_hcat(T::Type, X::Number...) = hvcat_fill!(Matrix{T}(undef, 1,length(X)), X)
 
 vcat(V::AbstractVector...) = typed_vcat(promote_eltype(V...), V...)
 vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
@@ -1697,8 +1697,8 @@ vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
 # but that solution currently fails (see #27188 and #27224)
 AbstractVecOrTuple{T} = Union{AbstractVector{<:T}, Tuple{Vararg{T}}}
 
-_typed_vcat_similar(V, ::Type{T}, n) where T = similar(V[1], T, n)
-_typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T =
+_typed_vcat_similar(V, T::Type, n) = similar(V[1], T, n)
+_typed_vcat(T::Type, V::AbstractVecOrTuple{AbstractVector}) =
     _typed_vcat!(_typed_vcat_similar(V, T, sum(map(length, V))), V)
 
 function _typed_vcat!(a::AbstractVector{T}, V::AbstractVecOrTuple{AbstractVector}) where T
@@ -1712,7 +1712,7 @@ function _typed_vcat!(a::AbstractVector{T}, V::AbstractVecOrTuple{AbstractVector
     a
 end
 
-typed_hcat(::Type{T}, A::AbstractVecOrMat...) where {T} = _typed_hcat(T, A)
+typed_hcat(T::Type, A::AbstractVecOrMat...) = _typed_hcat(T, A)
 
 # Catch indexing errors like v[i +1] (instead of v[i+1] or v[i + 1]), where indexing is
 # interpreted as a typed concatenation. (issue #49676)
@@ -1725,7 +1725,7 @@ typed_hcat(::AbstractArray, other...) = throw(ArgumentError("It is unclear wheth
 hcat(A::AbstractVecOrMat...) = typed_hcat(promote_eltype(A...), A...)
 hcat(A::AbstractVecOrMat{T}...) where {T} = typed_hcat(T, A...)
 
-function _typed_hcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
+function _typed_hcat(T::Type, A::AbstractVecOrTuple{AbstractVecOrMat})
     nargs = length(A)
     nrows = size(A[1], 1)
     ncols = 0
@@ -1762,7 +1762,7 @@ end
 vcat(A::AbstractVecOrMat...) = typed_vcat(promote_eltype(A...), A...)
 vcat(A::AbstractVecOrMat{T}...) where {T} = typed_vcat(T, A...)
 
-function _typed_vcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
+function _typed_vcat(T::Type, A::AbstractVecOrTuple{AbstractVecOrMat})
     nargs = length(A)
     nrows = sum(a->size(a, 1), A)::Int
     ncols = size(A[1], 2)
@@ -1782,7 +1782,7 @@ function _typed_vcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
     return B
 end
 
-typed_vcat(::Type{T}, A::AbstractVecOrMat...) where {T} = _typed_vcat(T, A)
+typed_vcat(T::Type, A::AbstractVecOrMat...) = _typed_vcat(T, A)
 
 reduce(::typeof(vcat), A::AbstractVector{<:AbstractVecOrMat}) =
     _typed_vcat(mapreduce(eltype, promote_type, A), A)
@@ -1807,10 +1807,10 @@ cat_ndims(a::AbstractArray) = ndims(a)
 cat_indices(A, d) = OneTo(1)
 cat_indices(A::AbstractArray, d) = axes(A, d)
 
-cat_similar(A, ::Type{T}, shape::Tuple) where T = Array{T}(undef, shape)
-cat_similar(A, ::Type{T}, shape::Vector) where T = Array{T}(undef, shape...)
-cat_similar(A::Array, ::Type{T}, shape::Tuple) where T = Array{T}(undef, shape)
-cat_similar(A::Array, ::Type{T}, shape::Vector) where T = Array{T}(undef, shape...)
+cat_similar(A, T::Type, shape::Tuple) = Array{T}(undef, shape)
+cat_similar(A, T::Type, shape::Vector) = Array{T}(undef, shape...)
+cat_similar(A::Array, T::Type, shape::Tuple) = Array{T}(undef, shape)
+cat_similar(A::Array, T::Type, shape::Vector) = Array{T}(undef, shape...)
 cat_similar(A::AbstractArray, T::Type, shape::Tuple) = similar(A, T, shape)
 cat_similar(A::AbstractArray, T::Type, shape::Vector) = similar(A, T, shape...)
 
@@ -1864,7 +1864,7 @@ end
 
 _cat(dims, X...) = _cat_t(dims, promote_eltypeof(X...), X...)
 
-@inline function _cat_t(dims, ::Type{T}, X...) where {T}
+@inline function _cat_t(dims, T::Type, X...)
     catdims = dims2cat(dims)
     shape = cat_size_shape(catdims, X...)
     A = cat_similar(X[1], T, shape)
@@ -1875,7 +1875,7 @@ _cat(dims, X...) = _cat_t(dims, promote_eltypeof(X...), X...)
 end
 # this version of `cat_t` is not very kind for inference and so its usage should be avoided,
 # nevertheless it is here just for compat after https://github.com/JuliaLang/julia/pull/45028
-@inline cat_t(::Type{T}, X...; dims) where {T} = _cat_t(dims, T, X...)
+@inline cat_t(T::Type, X...; dims) = _cat_t(dims, T, X...)
 
 # Why isn't this called `__cat!`?
 __cat(A, shape, catdims, X...) = __cat_offset!(A, shape, catdims, ntuple(Returns(0), length(shape)), X...)
@@ -2012,8 +2012,8 @@ julia> hcat([1.1, 9.9], Matrix(undef, 2, 0))  # hcat with empty 2×0 Matrix
 """
 hcat(X...) = cat(X...; dims=Val(2))
 
-typed_vcat(::Type{T}, X...) where T = _cat_t(Val(1), T, X...)
-typed_hcat(::Type{T}, X...) where T = _cat_t(Val(2), T, X...)
+typed_vcat(T::Type, X...) = _cat_t(Val(1), T, X...)
+typed_hcat(T::Type, X...) = _cat_t(Val(2), T, X...)
 
 """
     cat(A...; dims)
@@ -2205,10 +2205,10 @@ hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractArray...) = typed_hvcat(promote_elty
 hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractArray{T}...) where {T} = typed_hvcat(T, rows, xs...)
 
 rows_to_dimshape(rows::Tuple{Vararg{Int}}) = all(==(rows[1]), rows) ? (length(rows), rows[1]) : (rows, (sum(rows),))
-typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat...) where T = typed_hvncat(T, rows_to_dimshape(rows), true, as...)
+typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat...) = typed_hvncat(T, rows_to_dimshape(rows), true, as...)
 
 hvcat(rows::Tuple{Vararg{Int}}) = []
-typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}) where {T} = Vector{T}()
+typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}) = Vector{T}()
 
 function hvcat(rows::Tuple{Vararg{Int}}, xs::T...) where T<:Number
     nr = length(rows)
@@ -2252,7 +2252,7 @@ hvcat(rows::Tuple{Vararg{Int}}, xs...) = typed_hvcat(promote_eltypeof(xs...), ro
 # the following method is needed to provide a more specific one compared to LinearAlgebra/uniformscaling.jl
 hvcat(rows::Tuple{Vararg{Int}}, xs::Union{AbstractArray,Number}...) = typed_hvcat(promote_eltypeof(xs...), rows, xs...)
 
-function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...) where T
+function typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, xs::Number...)
     nr = length(rows)
     nc = rows[1]
     for i = 2:nr
@@ -2263,7 +2263,7 @@ function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...) where T
     hvcat_fill!(Matrix{T}(undef, nr, nc), xs)
 end
 
-typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T = typed_hvncat(T, rows_to_dimshape(rows), true, as...)
+typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, as...) = typed_hvncat(T, rows_to_dimshape(rows), true, as...)
 
 ## N-dimensional concatenation ##
 
@@ -2382,7 +2382,7 @@ _typed_hvncat_0d_only_one() =
 # `@constprop :aggressive` here to form constant `Val(dim)` type to get type stability
 @constprop :aggressive _typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...) # catches from _hvncat type promoters
 
-function _typed_hvncat(::Type{T}, ::Val{N}) where {T, N}
+function _typed_hvncat(T::Type, ::Val{N}) where {N}
     N < 0 &&
         throw(ArgumentError("concatenation dimension must be non-negative"))
     return Array{T, N}(undef, ntuple(Returns(0), Val(N)))
@@ -2394,7 +2394,7 @@ function _typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N
     return reshape(T[xs...], (ntuple(Returns(1), Val(N - 1))..., length(xs)))
 end
 
-function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
+function _typed_hvncat(T::Type, ::Val{N}, as::AbstractArray...) where {N}
     # optimization for arrays that can be concatenated by copying them linearly into the destination
     # conditions: the elements must all have 1-length dimensions above N
     length(as) > 0 ||
@@ -2429,7 +2429,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
     return A
 end
 
-function _typed_hvncat(::Type{T}, ::Val{N}, as...) where {T, N}
+function _typed_hvncat(T::Type, ::Val{N}, as...) where {N}
     length(as) > 0 ||
         throw(ArgumentError("must have at least one element"))
     N < 0 &&
@@ -2472,7 +2472,7 @@ _typed_hvncat(T::Type, ::Tuple{}, ::Bool, x::Number...) = _typed_hvncat(T, Val(0
 _typed_hvncat(T::Type, dims::Tuple{Int}, ::Bool, as...) = _typed_hvncat_1d(T, dims[1], Val(false), as...)
 _typed_hvncat(T::Type, dims::Tuple{Int}, ::Bool, as::Number...) = _typed_hvncat_1d(T, dims[1], Val(false), as...)
 
-function _typed_hvncat_1d(::Type{T}, ds::Int, ::Val{row_first}, as...) where {T, row_first}
+function _typed_hvncat_1d(T::Type, ds::Int, ::Val{row_first}, as...) where {row_first}
     lengthas = length(as)
     ds > 0 ||
         throw(ArgumentError("`dimsshape` argument must consist of positive integers"))
@@ -2485,7 +2485,7 @@ function _typed_hvncat_1d(::Type{T}, ds::Int, ::Val{row_first}, as...) where {T,
     end
 end
 
-function _typed_hvncat(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, xs::Number...) where {T, N}
+function _typed_hvncat(T::Type, dims::NTuple{N, Int}, row_first::Bool, xs::Number...) where {N}
     all(>(0), dims) ||
         throw(ArgumentError("`dims` argument must contain positive integers"))
     A = Array{T, N}(undef, dims...)
@@ -2533,7 +2533,7 @@ function _typed_hvncat(T::Type, dims::NTuple{N, Int}, row_first::Bool, as...) wh
     return _typed_hvncat_dims(T, (dims..., ntuple(Returns(1), nd - N)...), row_first, as)
 end
 
-function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as::Tuple) where {T, N}
+function _typed_hvncat_dims(T::Type, dims::NTuple{N, Int}, row_first::Bool, as::Tuple) where {N}
     length(as) > 0 ||
         throw(ArgumentError("must have at least one element"))
     all(>(0), dims) ||
@@ -2642,7 +2642,7 @@ function _typed_hvncat(T::Type, shape::NTuple{N, Tuple}, row_first::Bool, as...)
     return _typed_hvncat_shape(T, (shape..., ntuple(Returns(shape[end]), nd - N)...), row_first, as)
 end
 
-function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::Tuple) where {T, N}
+function _typed_hvncat_shape(T::Type, shape::NTuple{N, Tuple}, row_first, as::Tuple) where {N}
     length(as) > 0 ||
         throw(ArgumentError("must have at least one element"))
     all(>(0), tuple((shape...)...)) ||
@@ -2914,7 +2914,7 @@ function _stack(dims::D, ::Union{HasShape, HasLength}, iter) where {D}
     end
 end
 
-function _typed_stack(::Colon, ::Type{T}, ::Type{S}, A, Aax=_iterator_axes(A)) where {T, S}
+function _typed_stack(::Colon, T::Type, S::Type, A, Aax=_iterator_axes(A))
     xit = iterate(A)
     nothing === xit && return _empty_stack(:, T, S, A)
     x1, _ = xit
@@ -2937,21 +2937,21 @@ _iterator_axes(x, ::HasLength) = (OneTo(length(x)),)
 _iterator_axes(x, ::IteratorSize) = axes(x)
 
 # For some dims values, stack(A; dims) == stack(vec(A)), and the : path will be faster
-_typed_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S} =
+_typed_stack(dims::Integer, T::Type, S::Type, A) =
     _typed_stack(dims, T, S, IteratorSize(S), A)
-function _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::HasShape{N}, A) where {T,S,N}
+function _typed_stack(dims::Integer, T::Type, S::Type, ::HasShape{N}, A) where {N}
     if dims == N+1
         _typed_stack(:, T, S, A, (_vec_axis(A),))
     else
         _dim_stack(dims, T, S, A)
     end
 end
-_typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::IteratorSize, A) where {T,S} =
+_typed_stack(dims::Integer, T::Type, S::Type, ::IteratorSize, A) =
     _dim_stack(dims, T, S, A)
 
 _vec_axis(A, ax=_iterator_axes(A)) = length(ax) == 1 ? only(ax) : OneTo(prod(length, ax; init=1))
 
-@constprop :aggressive function _dim_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S}
+@constprop :aggressive function _dim_stack(dims::Integer, T::Type, S::Type, A)
     xit = Iterators.peel(A)
     nothing === xit && return _empty_stack(dims, T, S, A)
     x1, xrest = xit

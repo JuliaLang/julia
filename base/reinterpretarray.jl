@@ -178,8 +178,8 @@ julia> reinterpret(reshape, Int, a)             # the result is a matrix
 """
 reinterpret(::typeof(reshape), T::Type, a::AbstractArray)
 
-reinterpret(::Type{T}, a::NonReshapedReinterpretArray) where {T} = reinterpret(T, a.parent)
-reinterpret(::typeof(reshape), ::Type{T}, a::ReshapedReinterpretArray) where {T} = reinterpret(reshape, T, a.parent)
+reinterpret(T::Type, a::NonReshapedReinterpretArray) = reinterpret(T, a.parent)
+reinterpret(::typeof(reshape), T::Type, a::ReshapedReinterpretArray) = reinterpret(reshape, T, a.parent)
 
 # Definition of StridedArray
 StridedFastContiguousSubArray{T,N,A<:DenseArray} = FastContiguousSubArray{T,N,A}
@@ -828,12 +828,12 @@ end
     padding(Out) == padding(In)
 end
 
-@assume_effects :foldable function packedsize(::Type{T}) where T
+@assume_effects :foldable function packedsize(T::Type)
     pads = padding(T)
     return sizeof(T) - sum((p.size for p ∈ pads), init = 0)
 end
 
-@assume_effects :foldable ispacked(::Type{T}) where T = isempty(padding(T))
+@assume_effects :foldable ispacked(T::Type) = isempty(padding(T))
 
 function _copytopacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
     writeoffset = 0

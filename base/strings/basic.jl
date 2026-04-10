@@ -225,7 +225,7 @@ Symbol(s::AbstractString) = Symbol(String(s)::String)
 Symbol(x...) = Symbol(string(x...))
 
 convert(::Type{T}, s::T) where {T<:AbstractString} = s
-convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)::T
+convert(T::Type{<:AbstractString}, s::AbstractString) = T(s)::T
 
 ## summary ##
 

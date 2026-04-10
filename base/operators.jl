@@ -952,7 +952,7 @@ julia> widen(1.5f0)
 ```
 """
 widen(x::T) where {T} = convert(widen(T), x)
-widen(x::Type{T}) where {T} = throw(MethodError(widen, (T,)))
+widen(x::Type) = throw(MethodError(widen, (x,)))
 widen(x::Type{Union{}}, slurp...) = throw(MethodError(widen, (Union{},)))
 
 # function pipelining
@@ -980,7 +980,7 @@ julia> [0 1; 2 3] .|> (x -> x^2) |> sum
 |>(x, f) = f(x)
 
 _stable_typeof(x) = typeof(x)
-_stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
+_stable_typeof(T::Type) = Type{T}
 
 """
     f = Returns(value)
@@ -1109,7 +1109,7 @@ call_composed(fs::Tuple{Any}, x, kw) = fs[1](x...; kw...)
 
 struct Constructor{F} <: Function end
 (::Constructor{F})(args...; kw...) where {F} = (@inline; F(args...; kw...))
-maybeconstructor(::Type{F}) where {F} = Constructor{F}()
+maybeconstructor(F::Type) = Constructor{F}()
 maybeconstructor(f) = f
 
 ∘(f) = f

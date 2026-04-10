@@ -165,6 +165,6 @@ Base.haskey(t::TTYTerminal, key) = haskey(pipe_writer(t), key)
 Base.getindex(t::TTYTerminal, key) = getindex(pipe_writer(t), key)
 Base.get(t::TTYTerminal, key, default) = get(pipe_writer(t), key, default)
 
-Base.peek(t::TTYTerminal, ::Type{T}) where {T} = peek(t.in_stream, T)::T
+Base.peek(t::TTYTerminal, T::Type) = peek(t.in_stream, T)::T
 
 end # module

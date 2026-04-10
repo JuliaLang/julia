@@ -126,7 +126,7 @@ const EXECUTE_MASK      =
 
 const UNSET = ~Csize_t(0)  # Indicates that an output vector element is unset
 
-function info(regex::Ptr{Cvoid}, what::Integer, ::Type{T}) where T
+function info(regex::Ptr{Cvoid}, what::Integer, T::Type)
     buf = RefValue{T}()
     ret = ccall((:pcre2_pattern_info_8, PCRE_LIB), Cint,
                 (Ptr{Cvoid}, UInt32, Ptr{Cvoid}),

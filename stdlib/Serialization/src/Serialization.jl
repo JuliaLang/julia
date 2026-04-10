@@ -1731,7 +1731,7 @@ function serialize(s::AbstractSerializer, lock::Base.AbstractLock)
     nothing
 end
 
-function deserialize(s::AbstractSerializer, ::Type{T}) where T<:Base.AbstractLock
+function deserialize(s::AbstractSerializer, T::Type{<:Base.AbstractLock})
     lock = T()
     deserialize_cycle(s, lock)
     return lock
@@ -1743,7 +1743,7 @@ function serialize(s::AbstractSerializer, cond::Base.GenericCondition)
     nothing
 end
 
-function deserialize(s::AbstractSerializer, ::Type{T}) where T<:Base.GenericCondition
+function deserialize(s::AbstractSerializer, T::Type{<:Base.GenericCondition})
     lock = deserialize(s)
     cond = T(lock)
     deserialize_cycle(s, cond)

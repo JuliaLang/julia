@@ -116,7 +116,7 @@ Dict(ps::Pair...)                  = Dict(ps)
 
 Dict(kv) = dict_with_eltype((K, V) -> Dict{K, V}, kv, eltype(kv))
 
-empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
+empty(a::AbstractDict, K::Type, V::Type) = Dict{K, V}()
 
 # Gets 7 most significant bits from the hash (hsh), first bit is 1
 _shorthash7(hsh::UInt) = (hsh >> (8sizeof(UInt)-7))%UInt8 | 0x80
@@ -858,7 +858,7 @@ function iterate(d::ImmutableDict{K,V}, t=d) where {K, V}
 end
 length(t::ImmutableDict) = count(Returns(true), t)
 isempty(t::ImmutableDict) = !isdefined(t, :parent)
-empty(::ImmutableDict, ::Type{K}, ::Type{V}) where {K, V} = ImmutableDict{K,V}()
+empty(::ImmutableDict, K::Type, V::Type) = ImmutableDict{K,V}()
 
 """
     setindex(d::ImmutableDict, value, key)
@@ -883,7 +883,7 @@ function setindex(d::ImmutableDict, value, key)
 end
 
 _similar_for(c::AbstractDict, ::Type{Pair{K,V}}, itr, isz, len) where {K, V} = empty(c, K, V)
-_similar_for(c::AbstractDict, ::Type{T}, itr, isz, len) where {T} =
+_similar_for(c::AbstractDict, T::Type, itr, isz, len) =
     throw(ArgumentError("for AbstractDicts, similar requires an element type of Pair;\n  if calling map, consider a comprehension instead"))
 
 
@@ -1059,6 +1059,6 @@ iterate(dict::PersistentDict, state=nothing) = HAMT.iterate(dict.trie, state)
 
 length(dict::PersistentDict) = HAMT.length(dict.trie)
 isempty(dict::PersistentDict) = HAMT.isempty(dict.trie)
-empty(::PersistentDict, ::Type{K}, ::Type{V}) where {K, V} = PersistentDict{K, V}()
+empty(::PersistentDict, K::Type, V::Type) = PersistentDict{K, V}()
 
 @propagate_inbounds Iterators.only(dict::PersistentDict) = Iterators._only(dict, first)

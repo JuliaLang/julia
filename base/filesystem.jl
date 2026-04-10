@@ -295,7 +295,7 @@ function read(f::File, ::Type{Char})
     return reinterpret(Char, c)
 end
 
-read(f::File, ::Type{T}) where {T<:AbstractChar} = T(read(f, Char)) # fallback
+read(f::File, T::Type{<:AbstractChar}) = T(read(f, Char)) # fallback
 
 function unsafe_read(f::File, p::Ptr{UInt8}, nel::UInt)
     check_open(f)

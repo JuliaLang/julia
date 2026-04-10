@@ -164,7 +164,7 @@ function exponent_raw_max end
 """
 IEEE 754 definition of the minimum exponent.
 """
-ieee754_exponent_min(::Type{T}) where {T<:IEEEFloat} = Int(1 - exponent_max(T))::Int
+ieee754_exponent_min(T::Type{<:IEEEFloat}) = Int(1 - exponent_max(T))::Int
 
 exponent_min(::Type{Float16}) = ieee754_exponent_min(Float16)
 exponent_min(::Type{Float32}) = ieee754_exponent_min(Float32)
@@ -389,8 +389,8 @@ julia> float(Int)
 Float64
 ```
 """
-float(::Type{T}) where {T<:Number} = typeof(float(zero(T)))
-float(::Type{T}) where {T<:AbstractFloat} = T
+float(T::Type{<:Number}) = typeof(float(zero(T)))
+float(T::Type{<:AbstractFloat}) = T
 float(::Type{Union{}}, slurp...) = Union{}
 
 """
@@ -469,7 +469,7 @@ rounds_up(x, ::RoundingMode{:Down}) = false
 rounds_up(x, ::RoundingMode{:Up}) = true
 rounds_up(x, ::RoundingMode{:ToZero}) = signbit(x)
 rounds_up(x, ::RoundingMode{:FromZero}) = !signbit(x)
-function _round_convert(::Type{T}, x_integer, x, r::Union{RoundingMode{:ToZero}, RoundingMode{:FromZero}, RoundingMode{:Up}, RoundingMode{:Down}}) where {T<:AbstractFloat}
+function _round_convert(T::Type{<:AbstractFloat}, x_integer, x, r::Union{RoundingMode{:ToZero}, RoundingMode{:FromZero}, RoundingMode{:Up}, RoundingMode{:Down}})
     x_t = convert(T, x_integer)
     if rounds_up(x, r)
         x_t < x ? nextfloat(x_t) : x_t
@@ -803,7 +803,7 @@ function _precision(x, base::Integer)
     p = _precision_with_base_2(x)
     return base == 2 ? Int(p) : floor(Int, p / log2(base))
 end
-precision(::Type{T}; base::Integer=2) where {T<:AbstractFloat} = _precision(T, base)
+precision(T::Type{<:AbstractFloat}; base::Integer=2) = _precision(T, base)
 precision(::T; base::Integer=2) where {T<:AbstractFloat} = precision(T; base)
 
 

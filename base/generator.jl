@@ -36,9 +36,9 @@ end
 
 Generator(f, I1, I2, Is...) = Generator(splat(f), zip(I1, I2, Is...))
 
-Generator(::Type{T}, iter::I) where {T,I} = Generator{I,Type{T}}(T, iter)
+Generator(T::Type, iter::I) where {I} = Generator{I,Type{T}}(T, iter)
 
-Generator(::Type{T}, I1, I2, Is...) where {T} = Generator(splat(T), zip(I1, I2, Is...))
+Generator(T::Type, I1, I2, Is...) = Generator(splat(T), zip(I1, I2, Is...))
 
 function iterate(g::Generator, s...)
     @inline

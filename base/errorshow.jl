@@ -409,7 +409,7 @@ function showerror(io::IO, exc::FieldError)
     Base.Experimental.show_error_hints(io, exc)
 end
 
-striptype(::Type{T}) where {T} = T
+striptype(T::Type) = T
 striptype(::Any) = nothing
 
 function showerror_ambiguous(io::IO, meths, f, args::Type)

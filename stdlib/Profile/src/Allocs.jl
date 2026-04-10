@@ -283,7 +283,7 @@ function Profile.print(io::IO, data::AllocResults, fmt::ProfileFormat, format::S
 end
 
 
-function parse_flat(::Type{T}, data::Vector{Alloc}, C::Bool) where T
+function parse_flat(T::Type, data::Vector{Alloc}, C::Bool)
     lilist = StackFrame[]
     n = Int[]
     m = Int[]

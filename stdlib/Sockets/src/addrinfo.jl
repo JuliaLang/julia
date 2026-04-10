@@ -261,7 +261,7 @@ const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32
 Get an IP address of the local machine, preferring IPv4 over IPv6. Throws if no
 addresses are available.
 
-    getipaddr(addr_type::Type{T}) where T<:IPAddr -> T
+    getipaddr(addr_type::Type{<:IPAddr}) -> IPAddr
 
 Get an IP address of the local machine of the specified type. Throws if no
 addresses of the specified type are available.
@@ -280,7 +280,7 @@ ip"fe80::9731:35af:e1c5:6e49"
 
 See also [`getipaddrs`](@ref).
 """
-function getipaddr(addr_type::Type{T}) where T<:IPAddr
+function getipaddr(addr_type::Type{<:IPAddr})
     addrs = getipaddrs(addr_type)
     isempty(addrs) && error("No networking interface available")
 
@@ -293,7 +293,7 @@ getipaddr() = getipaddr(IPAddr)
 
 
 """
-    getipaddrs(addr_type::Type{T}=IPAddr; loopback::Bool=false) where T<:IPAddr -> Vector{T}
+    getipaddrs(addr_type::Type{<:IPAddr}=IPAddr; loopback::Bool=false) -> Vector{<:IPAddr}
 
 Get the IP addresses of the local machine.
 
@@ -323,8 +323,8 @@ julia> getipaddrs(IPv6)
 
 See also [`islinklocaladdr`](@ref).
 """
-function getipaddrs(addr_type::Type{T}=IPAddr; loopback::Bool=false) where T<:IPAddr
-    addresses = T[]
+function getipaddrs(addr_type::Type{<:IPAddr}=IPAddr; loopback::Bool=false)
+    addresses = addr_type[]
     addr_ref = Ref{Ptr{UInt8}}(C_NULL)
     count_ref = Ref{Int32}(1)
     lo_present = false
@@ -340,9 +340,9 @@ function getipaddrs(addr_type::Type{T}=IPAddr; loopback::Bool=false) where T<:IP
             end
         end
         sockaddr = ccall(:jl_uv_interface_address_sockaddr, Ptr{Cvoid}, (Ptr{UInt8},), current_addr)
-        if IPv4 <: T && ccall(:jl_sockaddr_is_ip4, Int32, (Ptr{Cvoid},), sockaddr) == 1
+        if IPv4 <: addr_type && ccall(:jl_sockaddr_is_ip4, Int32, (Ptr{Cvoid},), sockaddr) == 1
             push!(addresses, IPv4(ntoh(ccall(:jl_sockaddr_host4, UInt32, (Ptr{Cvoid},), sockaddr))))
-        elseif IPv6 <: T && ccall(:jl_sockaddr_is_ip6, Int32, (Ptr{Cvoid},), sockaddr) == 1
+        elseif IPv6 <: addr_type && ccall(:jl_sockaddr_is_ip6, Int32, (Ptr{Cvoid},), sockaddr) == 1
             addr6 = Ref{UInt128}()
             scope_id = ccall(:jl_sockaddr_host6, UInt32, (Ptr{Cvoid}, Ref{UInt128},), sockaddr, addr6)
             push!(addresses, IPv6(ntoh(addr6[])))

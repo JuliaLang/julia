@@ -1500,7 +1500,7 @@ unmark(x::LibuvStream)   = unmark(x.buffer)
 reset(x::LibuvStream)    = reset(x.buffer)
 ismarked(x::LibuvStream) = ismarked(x.buffer)
 
-function peek(s::LibuvStream, ::Type{T}) where T
+function peek(s::LibuvStream, T::Type)
     mark(s)
     try read(s, T)
     finally

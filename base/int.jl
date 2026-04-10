@@ -76,7 +76,7 @@ signed(::Type{UInt16}) = Int16
 signed(::Type{UInt32}) = Int32
 signed(::Type{UInt64}) = Int64
 signed(::Type{UInt128}) = Int128
-signed(::Type{T}) where {T<:Signed} = T
+signed(T::Type{<:Signed}) = T
 
 ## integer comparisons ##
 
@@ -666,9 +666,9 @@ rem(x::Signed, ::Type{Unsigned}) = x % unsigned(typeof(x))
 rem(x::Unsigned, ::Type{Signed}) = x % signed(typeof(x))
 rem(x::Integer, T::Type{<:Integer}) = convert(T, x)  # `x % T` falls back to `convert`
 rem(x::Integer, ::Type{Bool}) = ((x & 1) != 0)
-mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
+mod(x::Integer, T::Type{<:Integer}) = rem(x, T)
 
-unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
+unsafe_trunc(T::Type{<:Integer}, x::Integer) = rem(x, T)
 
 ## integer construction ##
 

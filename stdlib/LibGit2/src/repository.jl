@@ -283,7 +283,7 @@ then `obj` will be peeled until the type changes.
 - A `GitTag` will be peeled to the object it references.
 - A `GitCommit` will be peeled to a `GitTree`.
 """
-function peel(::Type{T}, obj::GitObject) where T<:GitObject
+function peel(T::Type{<:GitObject}, obj::GitObject)
     ensure_initialized()
     new_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
 

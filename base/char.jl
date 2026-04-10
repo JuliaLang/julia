@@ -210,12 +210,12 @@ end
 end
 
 convert(::Type{AbstractChar}, x::Number) = Char(x) # default to Char
-convert(::Type{T}, x::Number) where {T<:AbstractChar} = T(x)::T
-convert(::Type{T}, x::AbstractChar) where {T<:Number} = T(x)::T
-convert(::Type{T}, c::AbstractChar) where {T<:AbstractChar} = T(c)::T
+convert(T::Type{<:AbstractChar}, x::Number) = T(x)::T
+convert(T::Type{<:Number}, x::AbstractChar) = T(x)::T
+convert(T::Type{<:AbstractChar}, c::AbstractChar) = T(c)::T
 convert(::Type{T}, c::T) where {T<:AbstractChar} = c
 
-rem(x::AbstractChar, ::Type{T}) where {T<:Number} = rem(codepoint(x), T)
+rem(x::AbstractChar, T::Type{<:Number}) = rem(codepoint(x), T)
 
 typemax(::Type{Char}) = bitcast(Char, typemax(UInt32))
 typemin(::Type{Char}) = bitcast(Char, typemin(UInt32))
@@ -233,7 +233,7 @@ getindex(c::AbstractChar, i::Integer) = i == 1 ? c : throw(BoundsError())
 getindex(c::AbstractChar, I::Integer...) = all(x -> x == 1, I) ? c : throw(BoundsError())
 first(c::AbstractChar) = c
 last(c::AbstractChar) = c
-eltype(::Type{T}) where {T<:AbstractChar} = T
+eltype(T::Type{<:AbstractChar}) = T
 
 iterate(c::AbstractChar, done=false) = done ? nothing : (c, true)
 isempty(c::AbstractChar) = false
@@ -248,7 +248,7 @@ hash(x::Char, h::UInt) =
 isless(x::AbstractChar, y::AbstractChar) = isless(Char(x)::Char, Char(y)::Char)
 ==(x::AbstractChar, y::AbstractChar) = Char(x)::Char == Char(y)::Char
 hash(x::AbstractChar, h::UInt) = hash(Char(x)::Char, h)
-widen(::Type{T}) where {T<:AbstractChar} = T
+widen(T::Type{<:AbstractChar}) = T
 
 @inline -(x::AbstractChar, y::AbstractChar) = Int(x) - Int(y)
 @inline function -(x::T, y::Integer) where {T<:AbstractChar}

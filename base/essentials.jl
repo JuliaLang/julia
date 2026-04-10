@@ -646,7 +646,7 @@ import Core: typename
 _tuple_error(T::Type, x) = (@noinline; throw(MethodError(convert, (T, x))))
 
 convert(::Type{T}, x::T) where {T<:Tuple} = x
-function convert(::Type{T}, x::NTuple{N,Any}) where {N, T<:Tuple}
+function convert(T::Type{<:Tuple}, x::NTuple{N,Any}) where {N}
     # First see if there could be any conversion of the input type that'd be a subtype of the output.
     # If not, we'll throw an explicit MethodError (otherwise, it might throw a typeassert).
     if typeintersect(NTuple{N,Any}, T) === Union{}
@@ -732,12 +732,12 @@ Neither `convert` nor `cconvert` should take a Julia object and turn it into a `
 """
 function cconvert end
 
-cconvert(::Type{T}, x) where {T} = x isa T ? x : convert(T, x) # do the conversion eagerly in most cases
+cconvert(T::Type, x) = x isa T ? x : convert(T, x) # do the conversion eagerly in most cases
 cconvert(::Type{Union{}}, x...) = convert(Union{}, x...)
 cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_convert
 unsafe_convert(::Type{T}, x::T) where {T} = x # unsafe_convert (like convert) defaults to assuming the convert occurred
 unsafe_convert(::Type{T}, x::T) where {T<:Ptr} = x  # to resolve ambiguity with the next method
-unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
+unsafe_convert(P::Type{<:Ptr}, x::Ptr) = convert(P, x)
 unsafe_convert(::Type{Ptr{UInt8}}, s::String) = ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s)
 unsafe_convert(::Type{Ptr{Int8}}, s::String) = ccall(:jl_string_ptr, Ptr{Int8}, (Any,), s)
 
@@ -775,7 +775,7 @@ julia> reinterpret(Tuple{UInt16, UInt8}, (0x01, 0x0203))
     may result without additional validation.
 
 """
-function reinterpret(::Type{Out}, x) where {Out}
+function reinterpret(Out::Type, x)
     @inline
     if isprimitivetype(Out) && isprimitivetype(typeof(x))
         return bitcast(Out, x)

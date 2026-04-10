@@ -329,7 +329,7 @@ with reduction `op` over an empty array with element type of `T`.
 This should only be defined in unambiguous cases; for example,
 
 ```julia
-Base.reduce_empty(::typeof(+), ::Type{T}) where T = zero(T)
+Base.reduce_empty(::typeof(+), T::Type) = zero(T)
 ```
 
 is justified (the sum of zero elements is zero), whereas
@@ -338,26 +338,26 @@ is generally ambiguous, and especially so when the element type is unknown).
 
 As an alternative, consider supplying an `init` value to the reducer.
 """
-reduce_empty(::typeof(+), ::Type{T}) where {T} = zero(T)
+reduce_empty(::typeof(+), T::Type) = zero(T)
 reduce_empty(::typeof(+), ::Type{Bool}) = zero(Int)
-reduce_empty(::typeof(*), ::Type{T}) where {T} = one(T)
+reduce_empty(::typeof(*), T::Type) = one(T)
 reduce_empty(::typeof(*), ::Type{<:AbstractChar}) = ""
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
-reduce_empty(::typeof(and_all), ::Type{T}) where {T} = true
-reduce_empty(::typeof(or_any), ::Type{T}) where {T} = false
+reduce_empty(::typeof(and_all), ::Type) = true
+reduce_empty(::typeof(or_any), ::Type) = false
 
-reduce_empty(::typeof(add_sum), ::Type{T}) where {T} = reduce_empty(+, T)
-reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:BitSignedSmall}  = zero(Int)
-reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:BitUnsignedSmall} = zero(UInt)
-reduce_empty(::typeof(mul_prod), ::Type{T}) where {T} = reduce_empty(*, T)
-reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:BitSignedSmall}  = one(Int)
-reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:BitUnsignedSmall} = one(UInt)
+reduce_empty(::typeof(add_sum), T::Type) = reduce_empty(+, T)
+reduce_empty(::typeof(add_sum), ::Type{<:BitSignedSmall})  = zero(Int)
+reduce_empty(::typeof(add_sum), ::Type{<:BitUnsignedSmall}) = zero(UInt)
+reduce_empty(::typeof(mul_prod), T::Type) = reduce_empty(*, T)
+reduce_empty(::typeof(mul_prod), ::Type{<:BitSignedSmall})  = one(Int)
+reduce_empty(::typeof(mul_prod), ::Type{<:BitUnsignedSmall}) = one(UInt)
 
-reduce_empty(op::BottomRF, ::Type{T}) where {T} = reduce_empty(op.rf, T)
-reduce_empty(op::MappingRF, ::Type{T}) where {T} = mapreduce_empty(op.f, op.rf, T)
-reduce_empty(op::FilteringRF, ::Type{T}) where {T} = reduce_empty(op.rf, T)
-reduce_empty(op::FlipArgs, ::Type{T}) where {T} = reduce_empty(op.f, T)
+reduce_empty(op::BottomRF, T::Type) = reduce_empty(op.rf, T)
+reduce_empty(op::MappingRF, T::Type) = mapreduce_empty(op.f, op.rf, T)
+reduce_empty(op::FilteringRF, T::Type) = reduce_empty(op.rf, T)
+reduce_empty(op::FlipArgs, T::Type) = reduce_empty(op.f, T)
 
 """
     Base.mapreduce_empty(f, op, T)
@@ -801,7 +801,7 @@ extrema(f, itr; kw...) = mapreduce(ExtremaMap(f), _extrema_rf, itr; kw...)
 struct ExtremaMap{F} <: Function
     f::F
 end
-ExtremaMap(::Type{T}) where {T} = ExtremaMap{Type{T}}(T)
+ExtremaMap(T::Type) = ExtremaMap{Type{T}}(T)
 @inline (f::ExtremaMap)(x) = (y = f.f(x); (y, y))
 
 @inline _extrema_rf((min1, max1), (min2, max2)) = (min(min1, min2), max(max1, max2))

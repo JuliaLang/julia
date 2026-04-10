@@ -41,7 +41,7 @@ The largest consecutive integer representable in the given floating-point type `
 also does not exceed the maximum integer representable by the integer type `S`.  Equivalently,
 it is the minimum of `maxintfloat(T)` and [`typemax(S)`](@ref).
 """
-maxintfloat(::Type{S}, ::Type{T}) where {S<:AbstractFloat, T<:Integer} = min(maxintfloat(S), S(typemax(T)))
+maxintfloat(S::Type{<:AbstractFloat}, T::Type{<:Integer}) = min(maxintfloat(S), S(typemax(T)))
 maxintfloat() = maxintfloat(Float64)
 
 isinteger(x::AbstractFloat) = iszero(x - trunc(x)) # note: x == trunc(x) would be incorrect for x=Inf
@@ -261,7 +261,7 @@ This is equivalent to `!isapprox(x,y)` (see [`isapprox`](@ref)).
 ≉(args...; kws...) = !≈(args...; kws...)
 
 # default tolerance arguments
-rtoldefault(::Type{T}) where {T<:AbstractFloat} = sqrt(eps(T))
+rtoldefault(T::Type{<:AbstractFloat}) = sqrt(eps(T))
 rtoldefault(::Type{<:Real}) = 0
 function rtoldefault(x::Union{T,Type{T}}, y::Union{S,Type{S}}, atol::Real) where {T<:Number,S<:Number}
     rtol = max(rtoldefault(real(T)),rtoldefault(real(S)))

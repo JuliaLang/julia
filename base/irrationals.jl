@@ -28,8 +28,8 @@ See also [`AbstractIrrational`](@ref).
 """
 struct Irrational{sym} <: AbstractIrrational end
 
-typemin(::Type{T}) where {T<:Irrational} = T()
-typemax(::Type{T}) where {T<:Irrational} = T()
+typemin(T::Type{<:Irrational}) = T()
+typemax(T::Type{<:Irrational}) = T()
 
 show(io::IO, x::Irrational{sym}) where {sym} = print(io, sym)
 
@@ -44,9 +44,9 @@ end
 promote_rule(::Type{<:AbstractIrrational}, ::Type{Float16}) = Float16
 promote_rule(::Type{<:AbstractIrrational}, ::Type{Float32}) = Float32
 promote_rule(::Type{<:AbstractIrrational}, ::Type{<:AbstractIrrational}) = Float64
-promote_rule(::Type{<:AbstractIrrational}, ::Type{T}) where {T<:Real} = promote_type(Float64, T)
+promote_rule(::Type{<:AbstractIrrational}, T::Type{<:Real}) = promote_type(Float64, T)
 
-function promote_rule(::Type{S}, ::Type{T}) where {S<:AbstractIrrational,T<:Number}
+function promote_rule(S::Type{<:AbstractIrrational}, T::Type{<:Number})
     U = promote_type(S, real(T))
     if S <: U
         # prevent infinite recursion
@@ -60,7 +60,7 @@ AbstractFloat(x::AbstractIrrational) = Float64(x)::Float64
 Float16(x::AbstractIrrational) = Float16(Float32(x)::Float32)
 Complex{T}(x::AbstractIrrational) where {T<:Real} = Complex{T}(T(x))
 
-function _irrational_to_rational_at_current_precision(::Type{T}, x::AbstractIrrational) where {T <: Integer}
+function _irrational_to_rational_at_current_precision(T::Type{<:Integer}, x::AbstractIrrational)
     bx = BigFloat(x)
     r = rationalize(T, bx, tol = 0)
     if abs(BigFloat(r) - bx) > eps(bx)
@@ -69,13 +69,13 @@ function _irrational_to_rational_at_current_precision(::Type{T}, x::AbstractIrra
         nothing  # Error is too small, repeat with greater precision.
     end
 end
-function _irrational_to_rational_at_precision(::Type{T}, x::AbstractIrrational, p::Int) where {T <: Integer}
+function _irrational_to_rational_at_precision(T::Type{<:Integer}, x::AbstractIrrational, p::Int)
     f = let x = x
         () -> _irrational_to_rational_at_current_precision(T, x)
     end
     setprecision(f, BigFloat, p)
 end
-function _irrational_to_rational_at_current_rounding_mode(::Type{T}, x::AbstractIrrational) where {T <: Integer}
+function _irrational_to_rational_at_current_rounding_mode(T::Type{<:Integer}, x::AbstractIrrational)
     if T <: BigInt
         _throw_argument_error_irrational_to_rational_bigint()  # avoid infinite loop
     end
@@ -88,7 +88,7 @@ function _irrational_to_rational_at_current_rounding_mode(::Type{T}, x::Abstract
         p += 32
     end
 end
-function _irrational_to_rational(::Type{T}, x::AbstractIrrational) where {T <: Integer}
+function _irrational_to_rational(T::Type{<:Integer}, x::AbstractIrrational)
     f = let x = x
         () -> _irrational_to_rational_at_current_rounding_mode(T, x)
     end
@@ -98,7 +98,7 @@ Rational{T}(x::AbstractIrrational) where {T<:Integer} = _irrational_to_rational(
 _throw_argument_error_irrational_to_rational_bigint() = throw(ArgumentError("Cannot convert an AbstractIrrational to a Rational{BigInt}: use rationalize(BigInt, x) instead"))
 Rational{BigInt}(::AbstractIrrational) = _throw_argument_error_irrational_to_rational_bigint()
 
-function _irrational_to_float(::Type{T}, x::AbstractIrrational, r::RoundingMode) where T<:Union{Float32,Float64}
+function _irrational_to_float(T::Type{<:Union{Float32,Float64}}, x::AbstractIrrational, r::RoundingMode)
     setprecision(BigFloat, 256) do
         T(BigFloat(x)::BigFloat, r)
     end
@@ -141,10 +141,10 @@ end
 <=(x::AbstractFloat, y::AbstractIrrational) = x < y
 
 # Irrational vs Rational
-function _rationalize_irrational(::Type{T}, x::AbstractIrrational, tol::Real) where {T<:Integer}
+function _rationalize_irrational(T::Type{<:Integer}, x::AbstractIrrational, tol::Real)
     return rationalize(T, big(x), tol=tol)
 end
-function rationalize(::Type{T}, x::AbstractIrrational; tol::Real=0) where {T<:Integer}
+function rationalize(T::Type{<:Integer}, x::AbstractIrrational; tol::Real=0)
     return _rationalize_irrational(T, x, tol)
 end
 function _lessrational(rx::Rational, x::AbstractIrrational)
@@ -184,7 +184,7 @@ isone(::AbstractIrrational) = false
 
 hash(x::Irrational, h::UInt) = 3h - objectid(x)
 
-widen(::Type{T}) where {T<:Irrational} = T
+widen(T::Type{<:Irrational}) = T
 
 zero(::AbstractIrrational) = false
 zero(::Type{<:AbstractIrrational}) = false

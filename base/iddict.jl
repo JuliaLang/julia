@@ -56,7 +56,7 @@ IdDict(ps::Pair...)                            = IdDict{Any,Any}(ps)
 
 IdDict(kv) = dict_with_eltype((K, V) -> IdDict{K, V}, kv, eltype(kv))
 
-empty(d::IdDict, ::Type{K}, ::Type{V}) where {K, V} = IdDict{K,V}()
+empty(d::IdDict, K::Type, V::Type) = IdDict{K,V}()
 
 function rehash!(d::IdDict, newsz::Integer = length(d.ht)%UInt)
     d.ht = ccall(:jl_idtable_rehash, Memory{Any}, (Any, Csize_t), d.ht, newsz)

@@ -2271,7 +2271,7 @@ uint_unmap(::Type{T}, u::T, ::ForwardOrdering) where T <: Unsigned = u
 
 uint_map(x::Signed, ::ForwardOrdering) =
     unsigned(xor(x, typemin(x)))
-uint_unmap(::Type{T}, u::Unsigned, ::ForwardOrdering) where T <: Signed =
+uint_unmap(T::Type{<:Signed}, u::Unsigned, ::ForwardOrdering) =
     xor(signed(u), typemin(T))
 
 UIntMappable(T::BitIntegerType, ::ForwardOrdering) = unsigned(T)

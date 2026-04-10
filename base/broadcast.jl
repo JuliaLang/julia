@@ -100,7 +100,7 @@ DefaultArrayStyle{M}(::Val{N}) where {N,M} = DefaultArrayStyle{N}()
 const DefaultVectorStyle = DefaultArrayStyle{1}
 const DefaultMatrixStyle = DefaultArrayStyle{2}
 BroadcastStyle(::Type{<:AbstractArray{T,N}}) where {T,N} = DefaultArrayStyle{N}()
-BroadcastStyle(::Type{T}) where {T} = DefaultArrayStyle{ndims(T)}()
+BroadcastStyle(T::Type) = DefaultArrayStyle{ndims(T)}()
 
 # `ArrayConflict` is an internal type signaling that two or more different `AbstractArrayStyle`
 # objects were supplied as arguments, and that no rule was defined for resolving the
@@ -224,13 +224,13 @@ function Base.show(io::IO, bc::Broadcasted{Style}) where {Style}
 end
 
 ## Allocating the output container
-Base.similar(bc::Broadcasted, ::Type{T}) where {T} = similar(bc, T, axes(bc))
-Base.similar(::Broadcasted{DefaultArrayStyle{N}}, ::Type{ElType}, dims) where {N,ElType} =
+Base.similar(bc::Broadcasted, T::Type) = similar(bc, T, axes(bc))
+Base.similar(::Broadcasted{DefaultArrayStyle{N}}, ElType::Type, dims) where {N} =
     similar(Array{ElType, length(dims)}, dims)
 Base.similar(::Broadcasted{DefaultArrayStyle{N}}, ::Type{Bool}, dims) where N =
     similar(BitArray, dims)
 # In cases of conflict we fall back on Array
-Base.similar(::Broadcasted{ArrayConflict}, ::Type{ElType}, dims) where ElType =
+Base.similar(::Broadcasted{ArrayConflict}, ElType::Type, dims) =
     similar(Array{ElType, length(dims)}, dims)
 Base.similar(::Broadcasted{ArrayConflict}, ::Type{Bool}, dims) =
     similar(BitArray, dims)
@@ -247,7 +247,7 @@ BroadcastStyle(::Type{<:Broadcasted{Style}}) where {Style} = Style()
 BroadcastStyle(::Type{<:Broadcasted{S}}) where {S<:Union{Nothing,Unknown}} =
     throw(ArgumentError("Broadcasted{Unknown} wrappers do not have a style assigned"))
 
-argtype(::Type{BC}) where {BC<:Broadcasted} = fieldtype(BC, :args)
+argtype(BC::Type{<:Broadcasted}) = fieldtype(BC, :args)
 argtype(bc::Broadcasted) = argtype(typeof(bc))
 
 @inline Base.eachindex(bc::Broadcasted) = eachindex(IndexStyle(bc), bc)
@@ -290,7 +290,7 @@ Base.@propagate_inbounds function Base.iterate(bc::Broadcasted, s)
     return (bc[i], (s[1], newstate))
 end
 
-Base.IteratorSize(::Type{T}) where {T<:Broadcasted} = Base.HasShape{ndims(T)}()
+Base.IteratorSize(T::Type{<:Broadcasted}) = Base.HasShape{ndims(T)}()
 Base.IteratorEltype(::Type{<:Broadcasted}) = Base.EltypeUnknown()
 
 ## Instantiation fills in the "missing" fields in Broadcasted.
@@ -730,7 +730,7 @@ Base.RefValue{String}("hello")
 ```
 """
 broadcastable(x::Union{Symbol,AbstractString,Function,UndefInitializer,Nothing,RoundingMode,Missing,Val,Ptr,AbstractPattern,Pair,IO,CartesianIndex}) = Ref(x)
-broadcastable(::Type{T}) where {T} = Ref{Type{T}}(T)
+broadcastable(T::Type) = Ref{Type{T}}(T)
 broadcastable(x::Union{AbstractArray,Number,AbstractChar,Ref,Tuple,Broadcasted}) = x
 # Default to collecting iterables — which will error for non-iterables
 broadcastable(x) = collect(x)

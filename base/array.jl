@@ -430,7 +430,7 @@ julia> getindex(Int8, 1, 2, 3)
  3
 ```
 """
-function getindex(::Type{T}, vals...) where T
+function getindex(T::Type, vals...)
     @inline
     @_effect_free_terminates_locally_meta
     a = Vector{T}(undef, length(vals))
@@ -619,20 +619,20 @@ function ones end
 for (fname, felt) in ((:zeros, :zero), (:ones, :one))
     @eval begin
         $fname(dims::DimOrInd...) = $fname(dims)
-        $fname(::Type{T}, dims::DimOrInd...) where {T} = $fname(T, dims)
+        $fname(T::Type, dims::DimOrInd...) = $fname(T, dims)
         $fname(dims::Tuple{Vararg{DimOrInd}}) = $fname(Float64, dims)
-        $fname(::Type{T}, dims::NTuple{N, Union{Integer, OneTo}}) where {T,N} = $fname(T, map(to_dim, dims))
-        function $fname(::Type{T}, dims::NTuple{N, Integer}) where {T,N}
+        $fname(T::Type, dims::NTuple{N, Union{Integer, OneTo}}) where {N} = $fname(T, map(to_dim, dims))
+        function $fname(T::Type, dims::NTuple{N, Integer}) where {N}
             a = Array{T,N}(undef, dims)
             fill!(a, $felt(T))
             return a
         end
-        function $fname(::Type{T}, dims::Tuple{}) where {T}
+        function $fname(T::Type, dims::Tuple{})
             a = Array{T}(undef)
             fill!(a, $felt(T))
             return a
         end
-        function $fname(::Type{T}, dims::NTuple{N, DimOrInd}) where {T,N}
+        function $fname(T::Type, dims::NTuple{N, DimOrInd}) where {N}
             a = similar(Array{T,N}, dims)
             fill!(a, $felt(T))
             return a
@@ -642,7 +642,7 @@ end
 
 ## Conversions ##
 
-convert(::Type{T}, a::AbstractArray) where {T<:Array} = a isa T ? a : T(a)::T
+convert(T::Type{<:Array}, a::AbstractArray) = a isa T ? a : T(a)::T
 
 promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
 
@@ -669,11 +669,11 @@ julia> collect(Float64, 1:2:5)
  5.0
 ```
 """
-collect(::Type{T}, itr) where {T} = _collect(T, itr, IteratorSize(itr))
+collect(T::Type, itr) = _collect(T, itr, IteratorSize(itr))
 
-_collect(::Type{T}, itr, isz::Union{HasLength,HasShape}) where {T} =
+_collect(T::Type, itr, isz::Union{HasLength,HasShape}) =
     copyto!(_array_for_inner(T, isz, _similar_shape(itr, isz)), itr)
-function _collect(::Type{T}, itr, isz::SizeUnknown) where T
+function _collect(T::Type, itr, isz::SizeUnknown)
     a = Vector{T}()
     for x in itr
         push!(a, x)
@@ -682,26 +682,26 @@ function _collect(::Type{T}, itr, isz::SizeUnknown) where T
 end
 
 # make a collection similar to `c` and appropriate for collecting `itr`
-_similar_for(c, ::Type{T}, itr, isz, shp) where {T} = similar(c, T)
+_similar_for(c, T::Type, itr, isz, shp) = similar(c, T)
 
 _similar_shape(itr, ::SizeUnknown) = nothing
 _similar_shape(itr, ::HasLength) = length(itr)::Integer
 _similar_shape(itr, ::HasShape) = axes(itr)
 
-_similar_for(c::AbstractArray, ::Type{T}, itr, ::SizeUnknown, ::Nothing) where {T} =
+_similar_for(c::AbstractArray, T::Type, itr, ::SizeUnknown, ::Nothing) =
     similar(c, T, 0)
-_similar_for(c::AbstractArray, ::Type{T}, itr, ::HasLength, len::Integer) where {T} =
+_similar_for(c::AbstractArray, T::Type, itr, ::HasLength, len::Integer) =
     similar(c, T, len)
-_similar_for(c::AbstractArray, ::Type{T}, itr, ::HasShape, axs) where {T} =
+_similar_for(c::AbstractArray, T::Type, itr, ::HasShape, axs) =
     similar(c, T, axs)
 
 # make a collection appropriate for collecting `itr::Generator`
-_array_for_inner(::Type{T}, ::SizeUnknown, ::Nothing) where {T} = Vector{T}(undef, 0)
-_array_for_inner(::Type{T}, ::HasLength, len::Integer) where {T} = Vector{T}(undef, Int(len))
-_array_for_inner(::Type{T}, ::HasShape{N}, axs) where {T,N} = similar(Array{T,N}, axs)
+_array_for_inner(T::Type, ::SizeUnknown, ::Nothing) = Vector{T}(undef, 0)
+_array_for_inner(T::Type, ::HasLength, len::Integer) = Vector{T}(undef, Int(len))
+_array_for_inner(T::Type, ::HasShape{N}, axs) where {N} = similar(Array{T,N}, axs)
 
 # used by syntax lowering for simple typed comprehensions
-_array_for(::Type{T}, itr, isz) where {T} = _array_for_inner(T, isz, _similar_shape(itr, isz))
+_array_for(T::Type, itr, isz) = _array_for_inner(T, isz, _similar_shape(itr, isz))
 
 
 """
