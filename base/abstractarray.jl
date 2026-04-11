@@ -1120,18 +1120,21 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
+    @_propagate_inbounds_meta
     copyto!(dest, dstart, src, first(LinearIndices(src)), length(src))
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer)
+    @_propagate_inbounds_meta
     srcinds = LinearIndices(src)
-    checkbounds(Bool, srcinds, sstart) || throw(BoundsError(src, sstart))
+    @boundscheck checkbounds(Bool, srcinds, sstart) || throw(BoundsError(src, sstart))
     copyto!(dest, dstart, src, sstart, last(srcinds)-sstart+1)
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer,
                  src::AbstractArray, sstart::Integer,
                  n::Integer)
+    @inline
     n == 0 && return dest
     n < 0 && throw(ArgumentError(LazyString("tried to copy n=",
         n," elements, but n should be non-negative")))
@@ -1146,13 +1149,28 @@ function copyto!(dest::AbstractArray, dstart::Integer,
 end
 
 function copyto!(dest::AbstractArray{T,N}, dstart::NTuple{N,Integer}, src::AbstractArray) where {T,N}
-    copyto!(dest, dstart, src, ntuple(i -> first(axes(src, i)), Val(N)))
+    @_propagate_inbounds_meta
+    copyto!(dest, dstart, src,
+            ntuple(i -> first(axes(src, i)), Val(N)),
+            ntuple(i -> size(src, i), Val(N)))
 end
 
 function copyto!(dest::AbstractArray{T,N}, dstart::NTuple{N,Integer},
                  src::AbstractArray, sstart::NTuple{N,Integer}) where {T,N}
-    isempty(src) && return dest
-    n = ntuple(i -> size(src, i), Val(N))
+    @_propagate_inbounds_meta
+    @boundscheck all(ntuple(i -> sstart[i] in axes(src, i), Val(N))) ||
+        throw(BoundsError(src, sstart))
+    copyto!(dest, dstart, src, sstart,
+            ntuple(i -> last(axes(src, i)) - sstart[i] + 1, Val(N)))
+end
+
+function copyto!(dest::AbstractArray{T,N}, dstart::NTuple{N,Integer},
+                 src::AbstractArray, sstart::NTuple{N,Integer},
+                 n::NTuple{N,Integer}) where {T,N}
+    @inline
+    all(>=(0), n) || throw(ArgumentError(LazyString("tried to copy with n=",
+        n,", but all entries should be non-negative")))
+    any(==(0), n) && return dest
     @boundscheck checkbounds(dest, CartesianIndex(dstart))
     @boundscheck checkbounds(dest, CartesianIndex(ntuple(i -> dstart[i] + n[i] - 1, Val(N))))
     @boundscheck checkbounds(src, CartesianIndex(sstart))
@@ -1162,7 +1180,7 @@ function copyto!(dest::AbstractArray{T,N}, dstart::NTuple{N,Integer},
     return dest
 end
 
-function _copyto_srcread!(::IndexLinear, dest::AbstractArray{T,N}, dstart, src, sstart, n) where {T,N}
+@inline function _copyto_srcread!(::IndexLinear, dest::AbstractArray{T,N}, dstart, src, sstart, n) where {T,N}
     k = LinearIndices(src)[sstart...]
     @inbounds for I in CartesianIndices(n)
         dest[ntuple(i -> dstart[i] + I[i] - 1, Val(N))...] = src[k]
@@ -1170,7 +1188,7 @@ function _copyto_srcread!(::IndexLinear, dest::AbstractArray{T,N}, dstart, src, 
     end
 end
 
-function _copyto_srcread!(::IndexCartesian, dest::AbstractArray{T,N}, dstart, src, sstart, n) where {T,N}
+@inline function _copyto_srcread!(::IndexCartesian, dest::AbstractArray{T,N}, dstart, src, sstart, n) where {T,N}
     @inbounds for I in CartesianIndices(n)
         dest[ntuple(i -> dstart[i] + I[i] - 1, Val(N))...] = src[ntuple(i -> sstart[i] + I[i] - 1, Val(N))...]
     end
