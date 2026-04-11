@@ -615,16 +615,16 @@ end
     @inbounds length_continued(s, i, j, c)
 end
 
-@assume_effects :terminates_globally @inline @propagate_inbounds function length_continued(s::String, i::Int, n::Int, c::Int)
+@assume_effects :terminates_globally @propagate_inbounds function length_continued(s::String, i::Int, n::Int, c::Int)
     _length_continued(s, i, n, c)
 end
 
-@inline @propagate_inbounds function length_continued(s::StringView, i::Int, n::Int, c::Int)
+@propagate_inbounds function length_continued(s::StringView, i::Int, n::Int, c::Int)
     _length_continued(s, i, n, c)
 end
 
 
-@inline @propagate_inbounds function _length_continued(s::Union{String, StringView}, i::Int, n::Int, c::Int)
+@propagate_inbounds function _length_continued(s::Union{String, StringView}, i::Int, n::Int, c::Int)
     i < n || return c
     b = codeunit(s, i)
     while true

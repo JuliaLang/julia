@@ -41,9 +41,6 @@ end
 # This holds even in the presence of invalid UTF8
 is_standalone_byte(x::UInt8) = (x < 0x80) | (x > 0xf7)
 
-last_byteindex(x::DenseUTF8String) = ncodeunits(x)
-last_byteindex(x::DenseUInt8OrInt8) = lastindex(x)
-
 # Internal type - lazy iterator over positions of char in string
 struct FwCharPosIter{S}
     string::S # S is assumed to be either String, StringView or SubString of those

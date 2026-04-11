@@ -26,7 +26,7 @@ unsafe_convert(::Type{Ptr{Int8}}, s::DenseStringViewAndSub) = convert(Ptr{Int8},
 cconvert(::Type{Ptr{UInt8}}, s::DenseStringViewAndSub) = s
 cconvert(::Type{Ptr{Int8}}, s::DenseStringViewAndSub) = s
 
-function Base.reverse(s::StringViewAndSub)
+function reverse(s::StringViewAndSub)
     mem = Memory{UInt8}(undef, ncodeunits(s))
     offs = sizeof(s) + 1
     for c in s
