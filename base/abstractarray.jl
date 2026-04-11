@@ -1156,15 +1156,6 @@ function copyto!(dest::AbstractArray{T,N}, dstart::NTuple{N,Integer}, src::Abstr
 end
 
 function copyto!(dest::AbstractArray{T,N}, dstart::NTuple{N,Integer},
-                 src::AbstractArray, sstart::NTuple{N,Integer}) where {T,N}
-    @_propagate_inbounds_meta
-    @boundscheck all(ntuple(i -> sstart[i] in axes(src, i), Val(N))) ||
-        throw(BoundsError(src, sstart))
-    copyto!(dest, dstart, src, sstart,
-            ntuple(i -> last(axes(src, i)) - sstart[i] + 1, Val(N)))
-end
-
-function copyto!(dest::AbstractArray{T,N}, dstart::NTuple{N,Integer},
                  src::AbstractArray, sstart::NTuple{N,Integer},
                  n::NTuple{N,Integer}) where {T,N}
     @inline
@@ -2782,7 +2773,7 @@ function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::V
     for a ∈ as
         if isa(a, AbstractArray)
             if !isempty(a)
-                @inbounds copyto!(A, ntuple(i -> offsets[i] + 1, Val(N)), a, ntuple(i -> first(axes(a, i)), Val(N)))
+                @inbounds copyto!(A, ntuple(i -> offsets[i] + 1, Val(N)), a)
             end
         else
             @inbounds A[CartesianIndex(ntuple(i -> offsets[i] + 1, Val(N)))] = a
